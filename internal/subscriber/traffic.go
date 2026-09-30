@@ -75,6 +75,9 @@ func RecordTrafficTx(tx *gorm.DB, batchID string, entries []TrafficEntry, now ti
 			}
 		}
 	}
+	if err := RecordChangesTx(tx, result.Exhausted, false, now); err != nil {
+		return TrafficResult{}, err
+	}
 	return result, record(tx, batchID, "record_traffic", 0, result, now)
 }
 
@@ -97,6 +100,9 @@ func ResetTrafficTx(tx *gorm.DB, requestID string, userIDs []uint, now time.Time
 			return ResetResult{}, update.Error
 		}
 		result.Reset = update.RowsAffected
+		if err := RecordChangesTx(tx, userIDs, false, now); err != nil {
+			return ResetResult{}, err
+		}
 	}
 	var owner uint
 	if len(userIDs) == 1 {

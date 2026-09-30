@@ -39,7 +39,7 @@ import (
 // Models every identity case needs in both databases.
 var Models = []any{
 	&model.User{}, &model.UserMFA{}, &model.MFALoginAttempt{}, &model.SystemConfig{}, &model.InviteCode{},
-	&model.IdentityAccountLink{}, &model.IdentityAuthority{}, &model.IdentityRevocation{}, &model.Plan{},
+	&model.IdentityAccountLink{}, &model.IdentityAuthority{}, &model.IdentityRevocation{}, &model.Plan{}, &model.SubscriberRequest{}, &model.SubscriberChange{},
 }
 
 const tablePrefix = "idp_"

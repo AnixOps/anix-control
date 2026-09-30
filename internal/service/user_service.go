@@ -97,10 +97,7 @@ func (s *UserService) GetActiveUsers() ([]model.User, error) {
 // groupID 为 nil 时返回所有有效用户，否则返回指定分组的用户
 func (s *UserService) GetActiveUsersForNode(groupID *uint) ([]*model.User, error) {
 	var users []*model.User
-	query := s.db.Preload("Plan").
-		Where("banned = 0").
-		Where("(expired_at IS NULL OR expired_at > ?)", time.Now().Unix()).
-		Where("(u + d) < transfer_enable")
+	query := subscriber.Active(s.db.Preload("Plan"), time.Now())
 
 	if groupID != nil {
 		query = query.Where("group_id = ?", *groupID)
@@ -210,7 +207,12 @@ func (s *UserService) GetList(params UserListParams) (*UserListResult, error) {
 
 // Create 创建用户
 func (s *UserService) Create(user *model.User) error {
-	return s.db.Create(user).Error
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(user).Error; err != nil {
+			return err
+		}
+		return subscriber.RecordChangesTx(tx, []uint{user.ID}, false, time.Now())
+	})
 }
 
 // revokingUserFields are the user columns whose change ends the user's
@@ -257,6 +259,11 @@ func UpdateUserTxWithTokenVersion(tx *gorm.DB, id uint, updates map[string]any, 
 	}
 	if err := tx.Model(&model.User{}).Where("id = ?", id).Updates(updates).Error; err != nil {
 		return nil, err
+	}
+	if subscriber.TouchesNodeFields(updates) {
+		if err := subscriber.RecordChangesTx(tx, []uint{id}, false, time.Now()); err != nil {
+			return nil, err
+		}
 	}
 	if reason == "" {
 		return nil, nil
@@ -331,6 +338,9 @@ func DeleteUserTx(tx *gorm.DB, id uint) (authn.Revocation, error) {
 	}
 	if res.RowsAffected == 0 {
 		return revocation, ErrUserNotFound
+	}
+	if err := subscriber.RecordChangesTx(tx, []uint{id}, true, time.Now()); err != nil {
+		return revocation, err
 	}
 	return revocation, authn.Write(tx, revocation)
 }

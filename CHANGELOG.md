@@ -360,6 +360,14 @@
     - Updates run in user-id order, which removes a deadlock risk between
       concurrent node reports.
     - A batch id makes a report apply once.
+  - **Subscriber directory and change log (F2c).**
+    - `subscriber.Active` defines the subscribers a node serves; UniProxy and
+      v2board gRPC user lists use it.
+    - `v4_kernel_subscriber_change` records every change that can alter a
+      node's user list: entitlements, ban, uuid, traffic exhaustion or reset,
+      creation and deletion. It is pruned after 7 days.
+    - New kernel view `kapi_subscriber_entitlement_v1` exposes entitlements
+      and counters, without token or uuid.
 
 - The kernel side of the identity module, `KernelIdentity` (N9). It is served
   on the local package bridge and on the module listener.

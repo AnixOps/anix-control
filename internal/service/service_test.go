@@ -71,6 +71,7 @@ func (s *ServiceTestSuite) SetupSuite() {
 			&model.Event{},
 			&model.UserSubscriptionGroup{},
 			&model.SubscriberRequest{},
+			&model.SubscriberChange{},
 			&model.PlanSubscriptionGroup{},
 			&model.ForwardNode{},
 			&model.ForwardRule{},

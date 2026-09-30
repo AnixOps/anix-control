@@ -9,9 +9,11 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/service"
+	"github.com/AnixOps/anix-control/v4/internal/subscriber"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"golang.org/x/crypto/bcrypt"
+	"gorm.io/gorm"
 )
 
 // BuildInfo is set via ldflags at build time.
@@ -105,7 +107,12 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 		user.DeviceLimit = req.DeviceLimit
 	}
 
-	if err := db.Create(user).Error; err != nil {
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(user).Error; err != nil {
+			return err
+		}
+		return subscriber.RecordChangesTx(tx, []uint{user.ID}, false, time.Now())
+	}); err != nil {
 		panelError(c, "创建用户失败: "+err.Error())
 		return
 	}

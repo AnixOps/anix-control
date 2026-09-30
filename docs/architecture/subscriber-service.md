@@ -1,7 +1,7 @@
 # Subscriber Service (KernelSubscriber)
 
-Status: the contract is defined (`sdk/api/kernelsubscriber/v1`), and F2a and
-F2b are in place. F2c and F2d follow.
+Status: the contract is defined (`sdk/api/kernelsubscriber/v1`), and F2a–F2c
+are in place. F2d (serving the contract) follows.
 
 ## Why
 
@@ -83,9 +83,11 @@ package and generation.
 - **Active subscribers.** A subscriber is active when:
   - `banned = 0`;
   - `expired_at` is null or in the future;
-  - `u + d < transfer_enable`, or `transfer_enable = 0`;
-  - they are in one of the requested groups, through the primary group or a
-    subscription group.
+  - `u + d < transfer_enable`: a zero limit serves nothing, as node user
+    lists always have;
+  - their primary group (`v2_user.group_id`) is one of the requested groups,
+    as today's node lists filter. Subscription groups serve subscription
+    links, not node lists.
 - **Change feed.**
   - `v4_kernel_subscriber_change` is an append-only log (cursor, user id,
     kind), written in the same transaction as any change that can alter
@@ -127,7 +129,16 @@ package and generation.
   - `RecordNodeTrafficReport`, forward flow accounting and the monthly reset
     worker go through `RecordTraffic` and `ResetTraffic` semantics, with batch
     idempotency.
-- **F2c. Directory and change feed.**
+- **F2c. Directory and change feed** (in place).
+  - `subscriber.Active` is the one definition of an active subscriber; node
+    user lists (UniProxy and v2board gRPC) use it.
+  - The change log is `v4_kernel_subscriber_change`. It is written by the
+    engine (entitlement, exhaustion, reset), by `UpdateUserTx` when a
+    node-relevant column changes, and on user creation and deletion.
+  - A kernel worker prunes it hourly after 7 days. `ChangesAfter` answers
+    resync for older cursors.
+  - The view `kapi_subscriber_entitlement_v1` is added.
+  - Originally planned scope:
   - `GetActiveUsersForNode`, the v2board gRPC `UserService` and UniProxy user
     lists read `ListActiveSubscribers`.
   - The change log feeds `UserChanges`.

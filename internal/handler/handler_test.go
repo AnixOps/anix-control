@@ -126,6 +126,7 @@ func initTestDB() *gorm.DB {
 		&model.LoadBalancer{},
 		&model.UserSubscriptionGroup{},
 		&model.SubscriberRequest{},
+		&model.SubscriberChange{},
 		&model.PlanSubscriptionGroup{},
 		&model.Event{},
 		&model.SubscriptionGroup{},

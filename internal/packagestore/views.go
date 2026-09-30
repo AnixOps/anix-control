@@ -21,6 +21,13 @@ var KernelAPIViews = []KernelAPIView{
 		Name:  "kapi_user_directory_v1",
 		Query: "SELECT id, email, is_admin, is_staff, banned, plan_id, group_id, expired_at, created_at FROM v2_user",
 	},
+	{
+		// Entitlements and traffic counters (docs/architecture/subscriber-service.md);
+		// no token or uuid.
+		Name: "kapi_subscriber_entitlement_v1",
+		Query: "SELECT id, plan_id, group_id, expired_at, transfer_enable, u, d, speed_limit, device_limit, " +
+			"flow_reset_time, banned, balance, commission_balance FROM v2_user",
+	},
 }
 
 // EnsureKernelAPIViews creates the kernel API views that do not exist yet.

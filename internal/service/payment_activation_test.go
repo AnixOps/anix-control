@@ -18,7 +18,7 @@ func paymentActivationDB(t *testing.T) *gorm.DB {
 	require.NoError(t, err)
 	sqlDB.SetMaxOpenConns(1)
 	require.NoError(t, db.AutoMigrate(&model.PaymentGateway{}, &model.PaymentRecord{}, &model.Order{}, &model.Plan{},
-		&model.PlanSubscriptionGroup{}, &model.User{}, &model.UserSubscriptionGroup{}, &model.SubscriberRequest{}))
+		&model.PlanSubscriptionGroup{}, &model.User{}, &model.UserSubscriptionGroup{}, &model.SubscriberRequest{}, &model.SubscriberChange{}))
 	return db
 }
 

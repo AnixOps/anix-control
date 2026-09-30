@@ -18,7 +18,7 @@ func openDB(t *testing.T) *gorm.DB {
 	sqlDB, err := db.DB()
 	require.NoError(t, err)
 	sqlDB.SetMaxOpenConns(1)
-	require.NoError(t, db.AutoMigrate(&model.User{}, &model.UserSubscriptionGroup{}, &model.SubscriberRequest{}))
+	require.NoError(t, db.AutoMigrate(&model.User{}, &model.UserSubscriptionGroup{}, &model.SubscriberRequest{}, &model.SubscriberChange{}))
 	return db
 }
 

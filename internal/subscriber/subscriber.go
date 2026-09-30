@@ -139,6 +139,9 @@ func ApplyEntitlementTx(tx *gorm.DB, e Entitlement, now time.Time) (EntitlementR
 	if err := tx.Model(&model.User{}).Where("id = ?", e.UserID).Updates(updates).Error; err != nil {
 		return EntitlementResult{}, err
 	}
+	if err := RecordChangesTx(tx, []uint{e.UserID}, false, now); err != nil {
+		return EntitlementResult{}, err
+	}
 	if !e.KeepSubscriptionGroups {
 		if err := tx.Where("user_id = ?", e.UserID).Delete(&model.UserSubscriptionGroup{}).Error; err != nil {
 			return EntitlementResult{}, err
