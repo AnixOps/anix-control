@@ -1,0 +1,15 @@
+{
+  "format": "anixops.migrations/v1",
+  "migrations": [
+    {
+      "id": "001_notes",
+      "path": "migrations/001_notes.sql"
+    },
+    {
+      "id": "002_seed",
+      "path": "migrations/002_seed.sql"
+    }
+  ],
+  "package_id": "storage-fixture",
+  "version": "__ANIXOPS_PACKAGE_VERSION__"
+}

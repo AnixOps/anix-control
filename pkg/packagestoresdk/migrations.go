@@ -50,9 +50,28 @@ type migrationEntry struct {
 type MigrationResult struct {
 	// Applied lists the steps this run applied, in order.
 	Applied []string
-	// StateDigest is the SHA-256 of every applied step ("id:sha256\n",
-	// sorted by id) after the run.
-	StateDigest string
+	// StepsDigest is StepsDigest of the index's steps, all of which are
+	// applied when the run succeeds. The kernel compares it with the digest of
+	// the verified index in the package artifact.
+	StepsDigest string
+}
+
+// MigrationStep identifies one migration script by its id and SHA-256.
+type MigrationStep struct {
+	ID     string
+	SHA256 string
+}
+
+// StepsDigest is the SHA-256 over "id:sha256\n" lines of steps sorted by id,
+// with lowercase hex digests.
+func StepsDigest(steps []MigrationStep) string {
+	sorted := append([]MigrationStep(nil), steps...)
+	sort.Slice(sorted, func(i, j int) bool { return sorted[i].ID < sorted[j].ID })
+	hash := sha256.New()
+	for _, step := range sorted {
+		_, _ = fmt.Fprintf(hash, "%s:%s\n", step.ID, strings.ToLower(step.SHA256))
+	}
+	return hex.EncodeToString(hash.Sum(nil))
 }
 
 // RunEmbeddedMigrations applies the steps of the migration index at
@@ -75,6 +94,7 @@ func RunEmbeddedMigrations(ctx context.Context, store *Store, fsys fs.FS, indexP
 		return MigrationResult{}, fmt.Errorf("create migration state: %w", err)
 	}
 	var result MigrationResult
+	identities := make([]MigrationStep, 0, len(steps))
 	for _, step := range steps {
 		applied, err := applyMigrationStep(db, store, state, step)
 		if err != nil {
@@ -83,9 +103,10 @@ func RunEmbeddedMigrations(ctx context.Context, store *Store, fsys fs.FS, indexP
 		if applied {
 			result.Applied = append(result.Applied, step.id)
 		}
+		identities = append(identities, MigrationStep{ID: step.id, SHA256: step.digest})
 	}
-	result.StateDigest, err = MigrationStateDigest(ctx, store)
-	return result, err
+	result.StepsDigest = StepsDigest(identities)
+	return result, nil
 }
 
 type migrationStep struct {
@@ -165,20 +186,4 @@ func applyMigrationStep(db *gorm.DB, store *Store, state string, step migrationS
 		return tx.Table(state).Create(&migrationStateRow{ID: step.id, SHA256: step.digest, AppliedAt: time.Now().Unix()}).Error
 	})
 	return applied, err
-}
-
-// MigrationStateDigest summarizes the applied steps: SHA-256 over
-// "id:sha256\n" lines sorted by id. Before any step ran it is the SHA-256
-// of empty input.
-func MigrationStateDigest(ctx context.Context, store *Store) (string, error) {
-	var rows []migrationStateRow
-	if err := store.DB.WithContext(ctx).Table(store.Table(StateTable)).Find(&rows).Error; err != nil {
-		return "", err
-	}
-	sort.Slice(rows, func(i, j int) bool { return rows[i].ID < rows[j].ID })
-	hash := sha256.New()
-	for _, row := range rows {
-		_, _ = fmt.Fprintf(hash, "%s:%s\n", row.ID, strings.ToLower(row.SHA256))
-	}
-	return hex.EncodeToString(hash.Sum(nil)), nil
 }

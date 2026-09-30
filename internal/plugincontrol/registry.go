@@ -66,11 +66,28 @@ type ArtifactRefResolver func(context.Context, string, string) (pluginhost.Artif
 type HostLifecycleDispatcher struct {
 	hosts     pluginhost.Manager
 	artifacts ArtifactRefResolver
+	migrator  HostMigrator
+}
+
+// HostMigrator runs a package's migrations in its freshly started host.
+// service.PackageHostMigrator implements it on the migration ledger.
+type HostMigrator interface {
+	MigrateStartedHost(ctx context.Context, ref pluginhost.ArtifactRef, generation uint64) error
 }
 
 func NewHostLifecycleDispatcher(hosts pluginhost.Manager, artifacts ArtifactRefResolver) *HostLifecycleDispatcher {
 	return &HostLifecycleDispatcher{hosts: hosts, artifacts: artifacts}
 }
+
+// WithMigrator makes every host start run the package's migrations before
+// the lifecycle operation succeeds.
+func (d *HostLifecycleDispatcher) WithMigrator(migrator HostMigrator) *HostLifecycleDispatcher {
+	d.migrator = migrator
+	return d
+}
+
+// migrationStopTimeout bounds stopping a host whose migration failed.
+const migrationStopTimeout = 30 * time.Second
 
 var _ LifecycleDispatcher = (*HostLifecycleDispatcher)(nil)
 
@@ -133,6 +150,17 @@ func (d *HostLifecycleDispatcher) startResolvedHost(ctx context.Context, pluginI
 	}
 	if err := d.hosts.Start(ctx, ref, generation); err != nil {
 		return nil, err
+	}
+	if d.migrator != nil {
+		if err := d.migrator.MigrateStartedHost(ctx, ref, generation); err != nil {
+			// A host must not serve a schema its migrations did not reach.
+			stopContext, cancel := context.WithTimeout(context.WithoutCancel(ctx), migrationStopTimeout)
+			defer cancel()
+			if stopErr := d.hosts.Stop(stopContext, pluginID, version, generation); stopErr != nil && !errors.Is(stopErr, pluginhost.ErrHostNotFound) {
+				return nil, fmt.Errorf("package migration failed: %w (stopping the host also failed: %v)", err, stopErr)
+			}
+			return nil, fmt.Errorf("package migration failed: %w", err)
+		}
 	}
 	return json.RawMessage(`{}`), nil
 }

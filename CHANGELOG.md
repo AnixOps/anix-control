@@ -258,6 +258,29 @@
 
 ### Added
 
+- Package migrations run through the migration ledger when a storage
+  package's host starts (M3).
+  - **Scope.** Applies to releases that declare `kernel.storage.v1`. After
+    `plugin.install`, `enable`, `update` or `rollback` starts the host, the
+    dispatcher runs the release's migration index before the operation
+    succeeds.
+  - **Ledger.** There is one run per lifecycle generation, with id
+    `index.<index digest>`. Upgrades record an `operator-managed:` backup
+    reference.
+  - **Host side.** The host applies its embedded index through
+    `packagestoresdk.IndexMigrator`, the new
+    `pluginhostsdk.RouterConfig.IndexMigration` hook, and reports
+    `packagestoresdk.StepsDigest`.
+  - **Check.** The kernel requires that digest to match the verified index
+    of the artifact.
+  - **Failures and restarts.** A failed migration stops the host and fails
+    the operation. A Control restart confirms the recorded run instead of
+    migrating again.
+  - **Other packages.** Packages without the capability, including all
+    v4.0.0 packages and identity-platform, are unaffected.
+  - **Test fixture.** `internal/tests/packagefixture/storagehost` is a real
+    host binary used by the end-to-end tests on SQLite and PostgreSQL.
+
 - Per-package database storage and the `LeaseStorage` bridge RPC (M3).
   - **Roles.** On PostgreSQL, `internal/packagestore` gives every package a
     login role `anix_pkg_<id>` (NOINHERIT, 4 connections, member of the
@@ -281,8 +304,9 @@
     non-secret `v2_user` columns. It is created at startup; a failure is
     logged and does not stop Control.
   - **SDK.** `packagebridgesdk.Client.LeaseStorage` and
-    `pkg/packagestoresdk` (`Open`, `Store.Table`, `RunEmbeddedMigrations`
-    with per-step digests and a `schema_migrations` state table).
+    `pkg/packagestoresdk` (`Open`, `SharedOpener`, `Store.Table`,
+    `RunEmbeddedMigrations` with per-step digests and a `schema_migrations`
+    state table).
   - **CI.** The new job `package-storage-postgres` runs the grant tests as a
     non-superuser `CREATEROLE` role. It also runs the PostgreSQL package
     rollout tests, which no job ran before.

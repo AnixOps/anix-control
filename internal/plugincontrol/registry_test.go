@@ -2,6 +2,7 @@ package plugincontrol
 
 import (
 	"context"
+	"errors"
 	"net/http"
 	"net/url"
 	"testing"
@@ -56,6 +57,37 @@ func TestHostLifecycleDispatcherTreatsAbsentOlderHostAsDisabled(t *testing.T) {
 
 	require.NoError(t, err)
 	require.Zero(t, hosts.stops)
+}
+
+type recordingHostMigrator struct {
+	refs []pluginhost.ArtifactRef
+	err  error
+}
+
+func (m *recordingHostMigrator) MigrateStartedHost(_ context.Context, ref pluginhost.ArtifactRef, _ uint64) error {
+	m.refs = append(m.refs, ref)
+	return m.err
+}
+
+func TestHostLifecycleDispatcherMigratesAfterStartAndStopsOnFailure(t *testing.T) {
+	ref := pluginhost.ArtifactRef{PackageID: "knowledge", Version: "4.1.0", Storage: true}
+	resolve := func(context.Context, string, string) (pluginhost.ArtifactRef, error) { return ref, nil }
+
+	hosts := &recordingHostManager{}
+	migrator := &recordingHostMigrator{}
+	dispatcher := NewHostLifecycleDispatcher(hosts, resolve).WithMigrator(migrator)
+	_, err := dispatcher.ExecuteLifecycle(context.Background(), "knowledge", "4.1.0", LifecycleRequest{Kind: "plugin.enable", Generation: 9})
+	require.NoError(t, err)
+	require.Len(t, hosts.starts, 1)
+	require.Equal(t, []pluginhost.ArtifactRef{ref}, migrator.refs)
+	require.Zero(t, hosts.stops)
+
+	hosts = &recordingHostManager{}
+	migrator = &recordingHostMigrator{err: errors.New("script failed")}
+	dispatcher = NewHostLifecycleDispatcher(hosts, resolve).WithMigrator(migrator)
+	_, err = dispatcher.ExecuteLifecycle(context.Background(), "knowledge", "4.1.0", LifecycleRequest{Kind: "plugin.update", Generation: 10})
+	require.ErrorContains(t, err, "package migration failed: script failed")
+	require.Equal(t, 1, hosts.stops, "a host whose migration failed does not keep serving")
 }
 
 type recordedHostStart struct {
