@@ -225,8 +225,9 @@ package kernel tables exist yet.
 
 ### What Changes At Startup
 
-With `env: production`, the server skips `AutoMigrate` and only runs its
-`Ensure*` schema helpers. From an alpha.6/alpha.7 schema they add exactly five
+With `env: production`, the server never alters existing tables: it creates
+only missing tables and then runs its `Ensure*` schema helpers (`anix-control
+migrate` runs the same step and exits). From an alpha.6/alpha.7 schema they add exactly five
 tables and their indexes: `v4_kernel_package_backup_reference`,
 `v4_kernel_package_migration_run`, `v4_kernel_package_rollout_lock`,
 `v4_kernel_package_route_generation`, and

@@ -165,12 +165,28 @@ docker compose logs -f anix-control
 
 The runtime flow is now:
 
-1. resolve `config/config.yaml`
+1. resolve the config file (or use the built-in defaults) and apply `ANIX_CONTROL_*` variables
 2. load app config and `forward_runtime`
 3. normalize sqlite path, frontend path, and ansible runtime paths
 4. initialize database
-5. run `InitForwardRuntimeSystemConfig`
+5. prepare the database (below), including `InitForwardRuntimeSystemConfig`
 6. persist the parsed runtime snapshot into `v2_system_config`
+
+Database preparation runs under a PostgreSQL advisory lock, so several Control
+processes starting together (a rolling update, or `migrate` next to a server)
+run it one at a time:
+
+- `env: development` / `test`: full `AutoMigrate` of the application models.
+- other environments: an empty database gets the full schema; an existing one
+  only gets tables it does not have. Existing tables, columns and indexes are
+  never altered.
+- then the `Ensure*` schema helpers, the plugin trust root, the identity
+  package bootstrap import, and the default admin, subscription group, plan
+  and authorized key seeds.
+
+`anix-control migrate [flags]` runs only this preparation and exits (status 0
+on success). Use it as a one-shot Compose service or Kubernetes Job before the
+server starts; the server repeats it idempotently.
 
 When the alpha plugin profile is enabled, startup also exposes the signed
 package APIs, starts the durable Control lifecycle worker, and dispatches ready
@@ -184,8 +200,8 @@ their prerequisites, stop startup before any listener opens. Once the gRPC
 listener is up, a later failure (for example the API port already in use) runs
 the normal shutdown below and exits with status 1.
 
-On SIGINT or SIGTERM, Control shuts down in this order: `/health` on the
-frontend server returns 503, HTTP servers drain for up to 30s, background
+On SIGINT or SIGTERM, Control shuts down in this order: `/readyz` and
+`/health` return 503 (see below), HTTP servers drain for up to 30s, background
 workers are cancelled and awaited for up to 15s, the gRPC server stops (up to
 10s), Control plugin hosts stop (up to 15s), then the cache and database close.
 A clean shutdown exits with status 0. A second signal forces an immediate exit

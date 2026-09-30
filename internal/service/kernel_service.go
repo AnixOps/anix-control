@@ -1637,6 +1637,10 @@ func resolvePluginControlEntrypoint(manifest PluginManifest, artifact []byte) ([
 	return entrypoint, selected.SHA256, nil
 }
 
+// PluginArtifactCopyPrefix names the per-process package copies created
+// under the Control plugin artifact directory.
+const PluginArtifactCopyPrefix = ".anix-package-"
+
 // MaterializePluginControlArtifact writes the verified immutable release bytes
 // and the signed v2 Control entrypoint into a private caller-owned directory.
 // Task 3's lifecycle dispatcher consumes the resulting ArtifactRef; it still
@@ -1699,7 +1703,7 @@ func MaterializePluginControlArtifact(db *gorm.DB, publicKey ed25519.PublicKey, 
 	if err := os.MkdirAll(absoluteRoot, 0o700); err != nil {
 		return pluginhost.ArtifactRef{}, fmt.Errorf("create plugin artifact destination: %w", err)
 	}
-	directory, err := os.MkdirTemp(absoluteRoot, ".anix-package-")
+	directory, err := os.MkdirTemp(absoluteRoot, PluginArtifactCopyPrefix)
 	if err != nil {
 		return pluginhost.ArtifactRef{}, fmt.Errorf("create plugin artifact directory: %w", err)
 	}
