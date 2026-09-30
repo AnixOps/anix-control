@@ -10,6 +10,7 @@ from pathlib import Path
 SCRIPT = Path(__file__).resolve().parent / "check_package_boundaries.sh"
 MODULE = "github.com/AnixOps/anix-control/v4"
 SDK_MODULE = "github.com/AnixOps/anix-control/sdk"
+IDENTITY_MODULE = "github.com/AnixOps/anix-control/identity"
 
 
 class PackageBoundariesTest(unittest.TestCase):
@@ -67,6 +68,25 @@ class PackageBoundariesTest(unittest.TestCase):
         self.assertNotEqual(0, result.returncode)
         self.assertIn("the SDK module depends on the kernel module", result.stderr)
         self.assertIn(f"{MODULE}/kernelapi", result.stderr)
+
+    def test_rejects_an_identity_module_that_depends_on_the_kernel_module(self) -> None:
+        result = self.run_gate({
+            "packages/demo/control/main.go": "package main\n\nfunc main() {}\n",
+            "kernelapi/api.go": "package kernelapi\n\nconst Version = 4\n",
+            "identity/go.mod": f"module {IDENTITY_MODULE}\n\ngo 1.22\n\nrequire {MODULE} v4.0.0\n\nreplace {MODULE} => ../\n",
+            "identity/token/token.go": f"package token\n\nimport \"{MODULE}/kernelapi\"\n\nconst Version = kernelapi.Version\n",
+        })
+        self.assertNotEqual(0, result.returncode)
+        self.assertIn("the identity module depends on the kernel module", result.stderr)
+
+    def test_counts_identity_packages(self) -> None:
+        result = self.run_gate({
+            "packages/demo/control/main.go": "package main\n\nfunc main() {}\n",
+            "identity/go.mod": f"module {IDENTITY_MODULE}\n\ngo 1.22\n",
+            "identity/token/token.go": "package token\n\nconst Issuer = \"anixops-identity\"\n",
+        })
+        self.assertEqual(0, result.returncode, result.stderr)
+        self.assertIn("1 identity packages", result.stdout)
 
 
 if __name__ == "__main__":
