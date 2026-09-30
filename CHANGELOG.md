@@ -402,6 +402,16 @@
     `ImportAccountsRequest.deleted_user_id`).
   - **Bootstrap.** No default administrator is created once identity is
     authoritative.
+  - **Acceptance.** The Compose modules smoke now drives the whole move
+    against the remote identity module:
+    - import, cutover and an EdDSA login;
+    - a ban that revokes within 5 seconds, and a logout that ends one
+      session;
+    - a rollback, after which a natively created user logs in through the
+      legacy handler;
+    - a second cutover and finalize, after which HS256 tokens are refused.
+  - **Runbook.** `docs/UPGRADE.md` gains "Moving Logins To The Identity
+    Module" (prerequisites, cutover, rollback window, finalize).
   - **Package migrations** gain the `__PKG_NAME_PREFIX__` token everywhere
     identity's migrations are applied in tests.
 - Rollback-safe native identity routes, and logout (N12a).
