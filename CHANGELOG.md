@@ -357,6 +357,9 @@
 
 ### Fixed
 
+- The edge and release image jobs pin `sigstore/cosign-installer@v4.1.2`:
+  the action publishes no floating `v4` tag, so the jobs failed to start.
+
 - Periodic traffic resets now run at most once per calendar day.
   - The forward flow reset and node monthly reset workers also run at every
     start, so restarting the server (or a rescheduled container) on a reset
