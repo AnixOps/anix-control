@@ -483,6 +483,7 @@ type ImportAccountsRequest struct {
 	//	*ImportAccountsRequest_Header
 	//	*ImportAccountsRequest_Account
 	//	*ImportAccountsRequest_InviteCode
+	//	*ImportAccountsRequest_DeletedUserId
 	Value         isImportAccountsRequest_Value `protobuf_oneof:"value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -552,6 +553,15 @@ func (x *ImportAccountsRequest) GetInviteCode() *ImportedInviteCode {
 	return nil
 }
 
+func (x *ImportAccountsRequest) GetDeletedUserId() uint64 {
+	if x != nil {
+		if x, ok := x.Value.(*ImportAccountsRequest_DeletedUserId); ok {
+			return x.DeletedUserId
+		}
+	}
+	return 0
+}
+
 type isImportAccountsRequest_Value interface {
 	isImportAccountsRequest_Value()
 }
@@ -568,11 +578,19 @@ type ImportAccountsRequest_InviteCode struct {
 	InviteCode *ImportedInviteCode `protobuf:"bytes,3,opt,name=invite_code,json=inviteCode,proto3,oneof"`
 }
 
+type ImportAccountsRequest_DeletedUserId struct {
+	// deleted_user_id names an account whose subscriber the product deleted
+	// since the previous import; identity deletes it too.
+	DeletedUserId uint64 `protobuf:"varint,4,opt,name=deleted_user_id,json=deletedUserId,proto3,oneof"`
+}
+
 func (*ImportAccountsRequest_Header) isImportAccountsRequest_Value() {}
 
 func (*ImportAccountsRequest_Account) isImportAccountsRequest_Value() {}
 
 func (*ImportAccountsRequest_InviteCode) isImportAccountsRequest_Value() {}
+
+func (*ImportAccountsRequest_DeletedUserId) isImportAccountsRequest_Value() {}
 
 type ImportHeader struct {
 	state    protoimpl.MessageState `protogen:"open.v1"`
@@ -873,10 +891,12 @@ func (x *ImportedInviteCode) GetCreatedAtUnix() int64 {
 }
 
 type ImportAccountsResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Accounts      uint64                 `protobuf:"varint,1,opt,name=accounts,proto3" json:"accounts,omitempty"`
-	InviteCodes   uint64                 `protobuf:"varint,2,opt,name=invite_codes,json=inviteCodes,proto3" json:"invite_codes,omitempty"`
-	Checkpoint    string                 `protobuf:"bytes,3,opt,name=checkpoint,proto3" json:"checkpoint,omitempty"`
+	state       protoimpl.MessageState `protogen:"open.v1"`
+	Accounts    uint64                 `protobuf:"varint,1,opt,name=accounts,proto3" json:"accounts,omitempty"`
+	InviteCodes uint64                 `protobuf:"varint,2,opt,name=invite_codes,json=inviteCodes,proto3" json:"invite_codes,omitempty"`
+	Checkpoint  string                 `protobuf:"bytes,3,opt,name=checkpoint,proto3" json:"checkpoint,omitempty"`
+	// deleted counts the deleted_user_id messages applied.
+	Deleted       uint64 `protobuf:"varint,4,opt,name=deleted,proto3" json:"deleted,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -930,6 +950,13 @@ func (x *ImportAccountsResponse) GetCheckpoint() string {
 		return x.Checkpoint
 	}
 	return ""
+}
+
+func (x *ImportAccountsResponse) GetDeleted() uint64 {
+	if x != nil {
+		return x.Deleted
+	}
+	return 0
 }
 
 type ExportAccountsRequest struct {
@@ -1019,12 +1046,13 @@ const file_api_identity_v1_identity_proto_rawDesc = "" +
 	"\x17BatchGetAccountsRequest\x12\x19\n" +
 	"\buser_ids\x18\x01 \x03(\x04R\auserIds\"T\n" +
 	"\x18BatchGetAccountsResponse\x128\n" +
-	"\baccounts\x18\x01 \x03(\v2\x1c.anixops.identity.v1.AccountR\baccounts\"\xeb\x01\n" +
+	"\baccounts\x18\x01 \x03(\v2\x1c.anixops.identity.v1.AccountR\baccounts\"\x95\x02\n" +
 	"\x15ImportAccountsRequest\x12;\n" +
 	"\x06header\x18\x01 \x01(\v2!.anixops.identity.v1.ImportHeaderH\x00R\x06header\x12@\n" +
 	"\aaccount\x18\x02 \x01(\v2$.anixops.identity.v1.ImportedAccountH\x00R\aaccount\x12J\n" +
 	"\vinvite_code\x18\x03 \x01(\v2'.anixops.identity.v1.ImportedInviteCodeH\x00R\n" +
-	"inviteCodeB\a\n" +
+	"inviteCode\x12(\n" +
+	"\x0fdeleted_user_id\x18\x04 \x01(\x04H\x00R\rdeletedUserIdB\a\n" +
 	"\x05value\"a\n" +
 	"\fImportHeader\x12\x1b\n" +
 	"\timport_id\x18\x01 \x01(\tR\bimportId\x12\x14\n" +
@@ -1052,13 +1080,14 @@ const file_api_identity_v1_identity_proto_rawDesc = "" +
 	"\auser_id\x18\x01 \x01(\x04R\x06userId\x12\x12\n" +
 	"\x04code\x18\x02 \x01(\tR\x04code\x12\x12\n" +
 	"\x04used\x18\x03 \x01(\bR\x04used\x12&\n" +
-	"\x0fcreated_at_unix\x18\x04 \x01(\x03R\rcreatedAtUnix\"w\n" +
+	"\x0fcreated_at_unix\x18\x04 \x01(\x03R\rcreatedAtUnix\"\x91\x01\n" +
 	"\x16ImportAccountsResponse\x12\x1a\n" +
 	"\baccounts\x18\x01 \x01(\x04R\baccounts\x12!\n" +
 	"\finvite_codes\x18\x02 \x01(\x04R\vinviteCodes\x12\x1e\n" +
 	"\n" +
 	"checkpoint\x18\x03 \x01(\tR\n" +
-	"checkpoint\"R\n" +
+	"checkpoint\x12\x18\n" +
+	"\adeleted\x18\x04 \x01(\x04R\adeleted\"R\n" +
 	"\x15ExportAccountsRequest\x12#\n" +
 	"\rafter_version\x18\x01 \x01(\x04R\fafterVersion\x12\x14\n" +
 	"\x05limit\x18\x02 \x01(\rR\x05limit*\xa0\x01\n" +
@@ -1137,6 +1166,7 @@ func file_api_identity_v1_identity_proto_init() {
 		(*ImportAccountsRequest_Header)(nil),
 		(*ImportAccountsRequest_Account)(nil),
 		(*ImportAccountsRequest_InviteCode)(nil),
+		(*ImportAccountsRequest_DeletedUserId)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{

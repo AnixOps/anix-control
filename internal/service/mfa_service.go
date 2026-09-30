@@ -151,7 +151,13 @@ func (s *MFAService) DisableMFA(userID uint, password string) error {
 		return fmt.Errorf("invalid password")
 	}
 
-	return s.db.Where("user_id = ?", userID).Delete(&model.UserMFA{}).Error
+	// Touching the user lets a delta identity import see the removal.
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Where("user_id = ?", userID).Delete(&model.UserMFA{}).Error; err != nil {
+			return err
+		}
+		return tx.Model(&model.User{}).Where("id = ?", userID).Update("updated_at", time.Now()).Error
+	})
 }
 
 // VerifyTOTP 验证TOTP代码

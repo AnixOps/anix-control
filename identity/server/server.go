@@ -25,7 +25,7 @@ type KeySource interface {
 
 // AccountStore holds the identity accounts.
 type AccountStore interface {
-	Import(ctx context.Context, importID, checkpoint string, accounts []account.Imported) (account.ImportResult, error)
+	Import(ctx context.Context, importID, checkpoint string, batch account.ImportBatch) (account.ImportResult, error)
 	Get(ctx context.Context, userIDs []uint64) ([]account.Account, error)
 	ChangedAfter(ctx context.Context, version uint64, limit int) ([]account.Account, error)
 }
@@ -124,7 +124,7 @@ func (s *Server) ImportAccounts(stream grpc.ClientStreamingServer[identityv1.Imp
 	if header == nil || header.GetImportId() == "" {
 		return status.Error(codes.InvalidArgument, "an import starts with a header naming the import")
 	}
-	var accounts []account.Imported
+	var batch account.ImportBatch
 	for {
 		message, err := stream.Recv()
 		if errors.Is(err, io.EOF) {
@@ -135,20 +135,28 @@ func (s *Server) ImportAccounts(stream grpc.ClientStreamingServer[identityv1.Imp
 		}
 		switch value := message.GetValue().(type) {
 		case *identityv1.ImportAccountsRequest_Account:
-			if len(accounts) == MaxImportAccounts {
+			if len(batch.Accounts)+len(batch.Deleted) == MaxImportAccounts {
 				return status.Errorf(codes.ResourceExhausted, "an import batch holds at most %d accounts", MaxImportAccounts)
 			}
-			accounts = append(accounts, importedAccount(value.Account))
+			batch.Accounts = append(batch.Accounts, importedAccount(value.Account))
+		case *identityv1.ImportAccountsRequest_DeletedUserId:
+			if len(batch.Accounts)+len(batch.Deleted) == MaxImportAccounts {
+				return status.Errorf(codes.ResourceExhausted, "an import batch holds at most %d accounts", MaxImportAccounts)
+			}
+			if value.DeletedUserId == 0 {
+				return status.Error(codes.InvalidArgument, "a deletion names a user id")
+			}
+			batch.Deleted = append(batch.Deleted, value.DeletedUserId)
 		default:
-			return status.Error(codes.InvalidArgument, "an import sends one header, then accounts")
+			return status.Error(codes.InvalidArgument, "an import sends one header, then accounts and deletions")
 		}
 	}
-	result, err := s.Accounts.Import(stream.Context(), header.GetImportId(), header.GetCheckpoint(), accounts)
+	result, err := s.Accounts.Import(stream.Context(), header.GetImportId(), header.GetCheckpoint(), batch)
 	if err != nil {
 		return status.Errorf(codes.InvalidArgument, "import: %v", err)
 	}
 	return stream.SendAndClose(&identityv1.ImportAccountsResponse{
-		Accounts: result.Accounts, Checkpoint: header.GetCheckpoint(),
+		Accounts: result.Accounts, Deleted: result.Deleted, Checkpoint: header.GetCheckpoint(),
 	})
 }
 

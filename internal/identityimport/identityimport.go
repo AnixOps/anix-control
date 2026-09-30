@@ -2,7 +2,9 @@
 // identity columns and v2_user_mfa) into the identity module
 // with IdentityService.ImportAccounts. The kernel drives it: batches are
 // checkpointed in v4_kernel_identity_authority so an interrupted import
-// resumes, and a delta import re-sends what changed since the previous one.
+// resumes, and a delta import re-sends what changed since the previous one:
+// users or their MFA row updated since, and deletions (linked users whose
+// v2_user row is gone), which every import finishes with.
 // Identity never reads v2_user.password itself. Invite codes stay with Control:
 // registration consumes them through KernelIdentity.
 package identityimport
@@ -43,12 +45,16 @@ type Checkpoint struct {
 	// UserCursor is the last user id sent.
 	UserCursor uint `json:"user_cursor"`
 	UsersDone  bool `json:"users_done"`
+	// DeletionsDone is set once identity deleted every account whose
+	// subscriber is gone.
+	DeletionsDone bool `json:"deletions_done"`
 	// Since is the lower bound of a delta import: the start of the
 	// previous completed import.
 	Since       int64  `json:"since"`
 	StartedAt   int64  `json:"started_at"`
 	CompletedAt int64  `json:"completed_at"`
 	Accounts    uint64 `json:"accounts"`
+	Deleted     uint64 `json:"deleted"`
 	LastError   string `json:"last_error,omitempty"`
 }
 
@@ -150,6 +156,16 @@ func (i *Importer) Run(ctx context.Context, delta bool) (Checkpoint, error) {
 			return checkpoint, err
 		}
 	}
+	for !checkpoint.DeletionsDone {
+		done, err := i.deletionBatch(ctx, client, &checkpoint)
+		if err != nil {
+			return i.fail(ctx, checkpoint, err)
+		}
+		checkpoint.DeletionsDone = done
+		if err := i.save(ctx, checkpoint); err != nil {
+			return checkpoint, err
+		}
+	}
 	checkpoint.CompletedAt = i.now().Unix()
 	return checkpoint, i.save(ctx, checkpoint)
 }
@@ -188,7 +204,11 @@ func (i *Importer) userBatch(ctx context.Context, client identityv1.IdentityServ
 		Select("id", "email", "password", "password_algo", "password_salt", "is_admin", "is_staff", "banned", "invite_user_id", "created_at", "updated_at").
 		Where("id > ?", checkpoint.UserCursor)
 	if checkpoint.Delta {
-		query = query.Where("updated_at >= ?", time.Unix(checkpoint.Since, 0))
+		// Legacy MFA changes touch only v2_user_mfa; disabling MFA deletes
+		// its row and touches v2_user.
+		since := time.Unix(checkpoint.Since, 0)
+		changedMFA := i.DB.Model(&model.UserMFA{}).Select("user_id").Where("updated_at >= ?", since)
+		query = query.Where("(updated_at >= ? OR id IN (?))", since, changedMFA)
 	}
 	var users []model.User
 	if err := query.Order("id").Limit(i.batchSize()).Find(&users).Error; err != nil {
@@ -258,8 +278,49 @@ func (i *Importer) userBatch(ctx context.Context, client identityv1.IdentityServ
 	return false, nil
 }
 
+// deletionBatch tells identity about linked users whose v2_user row is gone
+// and drops their links; it reports true when none are left.
+func (i *Importer) deletionBatch(ctx context.Context, client identityv1.IdentityServiceClient, checkpoint *Checkpoint) (bool, error) {
+	var ids []uint
+	if err := i.DB.WithContext(ctx).Model(&model.IdentityAccountLink{}).
+		Where("user_id NOT IN (?)", i.DB.Model(&model.User{}).Select("id")).
+		Order("user_id").Limit(i.batchSize()).Pluck("user_id", &ids).Error; err != nil {
+		return false, fmt.Errorf("read deleted users: %w", err)
+	}
+	if len(ids) == 0 {
+		return true, nil
+	}
+	stream, err := client.ImportAccounts(ctx)
+	if err != nil {
+		return false, fmt.Errorf("open import: %w", err)
+	}
+	if err := stream.Send(header(checkpoint)); err != nil {
+		return false, fmt.Errorf("send import header: %w", err)
+	}
+	for _, id := range ids {
+		if err := stream.Send(&identityv1.ImportAccountsRequest{Value: &identityv1.ImportAccountsRequest_DeletedUserId{DeletedUserId: uint64(id)}}); err != nil {
+			return false, fmt.Errorf("send deletion of %d: %w", id, err)
+		}
+	}
+	response, err := stream.CloseAndRecv()
+	if err != nil {
+		return false, fmt.Errorf("import deletions: %w", err)
+	}
+	if response.GetDeleted() != uint64(len(ids)) {
+		return false, fmt.Errorf("identity applied %d of %d deletions", response.GetDeleted(), len(ids))
+	}
+	if err := i.DB.WithContext(ctx).Where("user_id IN ?", ids).Delete(&model.IdentityAccountLink{}).Error; err != nil {
+		return false, fmt.Errorf("unlink deleted users: %w", err)
+	}
+	checkpoint.Deleted += response.GetDeleted()
+	return false, nil
+}
+
 func header(checkpoint *Checkpoint) *identityv1.ImportAccountsRequest {
 	position := fmt.Sprintf("users:%d", checkpoint.UserCursor)
+	if checkpoint.UsersDone {
+		position = "deletions"
+	}
 	return &identityv1.ImportAccountsRequest{Value: &identityv1.ImportAccountsRequest_Header{Header: &identityv1.ImportHeader{
 		ImportId: checkpoint.ImportID, Delta: checkpoint.Delta, Checkpoint: position,
 	}}}

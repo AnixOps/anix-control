@@ -375,6 +375,45 @@
     - **Discovery:** the OpenID discovery document.
   - CI and the local gates tidy, vet, test, race-test, lint, scan and
     vulnerability-check the new module.
+- Identity cutover, rollback and finalize (N12b, `internal/identitycutover`).
+  Each is recorded in the new table `v4_kernel_identity_cutover`.
+  - **Cutover.** `POST /api/v4/kernel/identity/cutover` runs in the
+    background (`GET /api/v4/kernel/identity` follows it).
+    - It catches identity up with a delta import, then pauses group A: the
+      v2 gateway answers 503 with `Retry-After` and lets dispatched requests
+      finish.
+    - It imports the last changes, then switches the authority to
+      `identity` and group A to native in one transaction.
+    - It waits until the identity host serves group A natively, and
+      switches both back if the host does not within 30 seconds.
+  - **Rollback.** `POST /api/v4/kernel/identity/rollback` returns group A to
+    the legacy handlers until finalize.
+  - **Finalize.** `POST /api/v4/kernel/identity/finalize`, a day after the
+    cutover or with `{"force": true}`:
+    - makes legacy passwords unusable and empties `v2_user_mfa`;
+    - stops the mirror;
+    - makes Control refuse HS256 tokens, also after restarts.
+  - **Consistency.** Configuration writes that would make group A partly
+    native, native before the cutover, or legacy while identity is
+    authoritative are refused.
+  - **Complete deltas.** Delta imports now also carry legacy MFA changes
+    (disabling MFA touches the user). Every import deletes the identity
+    accounts of deleted subscribers (new
+    `ImportAccountsRequest.deleted_user_id`).
+  - **Bootstrap.** No default administrator is created once identity is
+    authoritative.
+  - **Acceptance.** The Compose modules smoke now drives the whole move
+    against the remote identity module:
+    - import, cutover and an EdDSA login;
+    - a ban that revokes within 5 seconds, and a logout that ends one
+      session;
+    - a rollback, after which a natively created user logs in through the
+      legacy handler;
+    - a second cutover and finalize, after which HS256 tokens are refused.
+  - **Runbook.** `docs/UPGRADE.md` gains "Moving Logins To The Identity
+    Module" (prerequisites, cutover, rollback window, finalize).
+  - **Package migrations** gain the `__PKG_NAME_PREFIX__` token everywhere
+    identity's migrations are applied in tests.
 - Rollback-safe native identity routes, and logout (N12a).
   - **Legacy mirror.** Until finalize, every native change the legacy routes
     read is mirrored into `v2_user` and `v2_user_mfa`, so switching group A

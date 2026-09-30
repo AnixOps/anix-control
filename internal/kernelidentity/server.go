@@ -32,7 +32,7 @@ import (
 
 // UnusableLegacyPassword is stored in v2_user.password for accounts whose
 // credentials live in identity. It never matches a password.
-const UnusableLegacyPassword = "!identity"
+const UnusableLegacyPassword = model.UnusableLegacyPassword
 
 // Authorizer admits a calling host to KernelIdentity.
 type Authorizer interface {

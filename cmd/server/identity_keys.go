@@ -2,14 +2,21 @@ package main
 
 import (
 	"context"
+	"crypto/ed25519"
+	"errors"
 	"fmt"
 	"log"
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/authn"
+	compatv2 "github.com/AnixOps/anix-control/v4/internal/compat/v2"
+	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
+	"github.com/AnixOps/anix-control/v4/internal/identitycutover"
 	"github.com/AnixOps/anix-control/v4/internal/identityimport"
 	"github.com/AnixOps/anix-control/v4/internal/identitykeys"
+	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/service"
 	"google.golang.org/grpc"
 )
 
@@ -27,6 +34,15 @@ func (rt *serverRuntime) startIdentityKeys() error {
 	}
 	authn.SetDefaultIdentityKeys(keys)
 	identityimport.SetDefault(nil, database.Get())
+	identitycutover.SetDefault(nil)
+	state, err := service.IdentityAuthorityState(database.Get())
+	if err != nil {
+		return fmt.Errorf("read the identity authority: %w", err)
+	}
+	if state == model.IdentityAuthorityFinalized {
+		// Only identity issues tokens once the legacy credentials are gone.
+		authn.RefuseLegacyTokens()
+	}
 	hosts := rt.controlPluginHosts
 	if hosts == nil {
 		return nil
@@ -43,8 +59,33 @@ func (rt *serverRuntime) startIdentityKeys() error {
 	rt.workers.Go("identity token key refresher", func(ctx context.Context) {
 		keys.Run(ctx, identityKeyRefresh, connect, report)
 	})
-	runner := identityimport.NewRunner(&identityimport.Importer{DB: database.Get(), Connect: connect}, log.Printf)
+	importer := &identityimport.Importer{DB: database.Get(), Connect: connect}
+	runner := identityimport.NewRunner(importer, log.Printf)
 	identityimport.SetDefault(runner, database.Get())
 	rt.workers.Go("identity account importer", runner.Serve)
+	identitycutover.SetDefault(&identitycutover.Service{
+		DB: database.Get(), Importer: importer, Hosts: hosts, Freeze: compatv2.DefaultRouteFreeze(),
+		PublicKey: func() (ed25519.PublicKey, error) {
+			cfg := config.Get()
+			if cfg == nil || cfg.Plugins.OfficialPublicKey == "" {
+				return nil, service.ErrPluginTrustRootRequired
+			}
+			return service.ParseOfficialPluginPublicKey(cfg.Plugins.OfficialPublicKey)
+		},
+		RefreshKeys: func(ctx context.Context) error {
+			conn, err := connect()
+			if err != nil {
+				return err
+			}
+			if err := keys.Refresh(ctx, conn); err != nil {
+				return err
+			}
+			if len(keys.KeySet()) == 0 {
+				return errors.New("identity publishes no token keys (is identity.kek set?)")
+			}
+			return nil
+		},
+		OnFinalized: authn.RefuseLegacyTokens,
+	})
 	return nil
 }

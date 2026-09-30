@@ -78,6 +78,9 @@ message ImportAccountsRequest {
     ImportHeader header = 1;
     ImportedAccount account = 2;
     ImportedInviteCode invite_code = 3;
+    // deleted_user_id names an account whose subscriber the product deleted
+    // since the previous import; identity deletes it too.
+    uint64 deleted_user_id = 4;
   }
 }
 
@@ -118,6 +121,8 @@ message ImportAccountsResponse {
   uint64 accounts = 1;
   uint64 invite_codes = 2;
   string checkpoint = 3;
+  // deleted counts the deleted_user_id messages applied.
+  uint64 deleted = 4;
 }
 
 message ExportAccountsRequest {

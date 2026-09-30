@@ -17,8 +17,10 @@ import (
 	"github.com/AnixOps/anix-control/sdk/packagebridgesdk"
 	"github.com/AnixOps/anix-control/sdk/packagestoresdk"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/crypto/bcrypt"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/credentials/insecure"
@@ -181,6 +183,7 @@ func TestDeltaImportSendsOnlyChanges(t *testing.T) {
 	require.NoError(t, f.kernel.Model(&model.User{}).Where("id = ?", 3).
 		Updates(map[string]any{"banned": 0, "updated_at": later}).Error)
 	require.NoError(t, f.kernel.Model(&model.User{}).Where("id IN ?", []uint{1, 2}).Update("updated_at", start.Add(-time.Hour)).Error)
+	require.NoError(t, f.kernel.Model(&model.UserMFA{}).Where("1 = 1").Update("updated_at", start.Add(-time.Hour)).Error)
 
 	delta, err := f.importer.Run(ctx, true)
 	require.NoError(t, err)
@@ -190,6 +193,45 @@ func TestDeltaImportSendsOnlyChanges(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, accounts[0].Banned)
 	require.Equal(t, uint64(2), accounts[0].Version)
+}
+
+// A delta also carries what v2_user.updated_at does not show: MFA changes
+// and deleted users.
+func TestDeltaImportCarriesMFAChangesAndDeletions(t *testing.T) {
+	f := newFixture(t)
+	f.seed(t)
+	require.NoError(t, f.kernel.Create(&model.User{ID: 4, Email: "gone@example.test", Password: "$2a$10$gone", UUID: "u4", Token: "t4"}).Error)
+	ctx := context.Background()
+	start := time.Now().Add(-time.Hour)
+	f.importer.Now = func() time.Time { return start }
+	_, err := f.importer.Run(ctx, false)
+	require.NoError(t, err)
+	require.NoError(t, f.kernel.Model(&model.User{}).Where("1 = 1").Update("updated_at", start.Add(-time.Hour)).Error)
+	require.NoError(t, f.kernel.Model(&model.UserMFA{}).Where("1 = 1").Update("updated_at", start.Add(-time.Hour)).Error)
+
+	f.importer.Now = time.Now
+	// User 1 enables MFA (only v2_user_mfa changes), user 2 disables it
+	// (the legacy service deletes the row and touches the user), and user 4
+	// is deleted.
+	require.NoError(t, f.kernel.Create(&model.UserMFA{UserID: 1, Enabled: true, TOTPSecret: "KRSXG5CTMVRXEZLU"}).Error)
+	hash, err := bcrypt.GenerateFromPassword([]byte("secret1"), bcrypt.MinCost)
+	require.NoError(t, err)
+	require.NoError(t, f.kernel.Model(&model.User{}).Where("id = ?", 2).UpdateColumn("password", string(hash)).Error)
+	require.NoError(t, service.NewMFAService(f.kernel, nil).DisableMFA(2, "secret1"))
+	require.NoError(t, f.kernel.Delete(&model.User{}, 4).Error)
+
+	delta, err := f.importer.Run(ctx, true)
+	require.NoError(t, err)
+	require.Equal(t, uint64(2), delta.Accounts)
+	require.Equal(t, uint64(1), delta.Deleted)
+	accounts, err := f.store.Get(ctx, []uint64{1, 2, 4})
+	require.NoError(t, err)
+	require.Len(t, accounts, 2, "the deleted user's account is gone")
+	require.True(t, accounts[0].MFAEnabled)
+	require.False(t, accounts[1].MFAEnabled)
+	var links int64
+	require.NoError(t, f.kernel.Model(&model.IdentityAccountLink{}).Where("user_id = ?", 4).Count(&links).Error)
+	require.Zero(t, links)
 }
 
 func TestImportsStopOnceIdentityIsAuthoritative(t *testing.T) {

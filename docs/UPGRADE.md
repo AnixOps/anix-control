@@ -409,6 +409,81 @@ If a release requires schema/data changes:
 For SQLite-to-PostgreSQL migration, use
 [`reference/sqlite-to-postgres-migration.md`](reference/sqlite-to-postgres-migration.md).
 
+## Moving Logins To The Identity Module
+
+From 4.1 the identity module can own accounts, passwords, MFA and token
+signing (`docs/architecture/identity-service.md`). Nothing moves until an
+administrator runs the cutover. Until finalize, a rollback is one API call.
+
+### Before You Start
+
+- **Package storage.** identity-platform keeps its tables in its own package
+  storage.
+  - On PostgreSQL, the kernel database role needs `CREATEROLE`: it creates the
+    package role and schema.
+  - A remote identity module needs PostgreSQL.
+- **Identity key.** Set the identity key-encryption key: `identity.kek` in
+  `config.yaml` for a local host, `ANIX_IDENTITY_KEK_FILE` for a module
+  container. It is 32 random bytes, base64 or hex.
+  - Every identity replica needs the same key.
+  - Back it up with the database. Without it, identity cannot unseal its
+    signing keys or users' TOTP secrets.
+  - Without a key, identity publishes no token keys and the cutover refuses
+    to start.
+- **Settings.** The `auth.*` settings (registration policy, attempt limits,
+  MFA configuration) are copied into identity the first time a native route
+  needs them. After that, change them through the admin API. `config.yaml`
+  no longer applies to them.
+- **Backup.** Take a database backup. Finalize removes the legacy password
+  hashes and cannot be undone.
+
+### Cutover
+
+All calls are administrator calls. `GET /api/v4/kernel/identity` reports the
+state, the import progress, the latest cutover or rollback, and the last
+events.
+
+1. **Full import.** `POST /api/v4/kernel/identity/import` with `{}`. Wait
+   until `import.completed_at` is set. The state is now `importing`, and the
+   legacy handlers still serve logins.
+2. **Cutover.** `POST /api/v4/kernel/identity/cutover`. It runs in the
+   background:
+   - it imports recent changes;
+   - it pauses login, registration, MFA and admin account writes: clients
+     get 503 with `Retry-After` for a few seconds;
+   - it imports the last changes and switches those routes to the identity
+     module.
+
+   If the identity host does not take over within 30 seconds, nothing
+   changes and `authority_change.error` says why.
+3. **Check.** A new login returns a token signed by identity (`alg`
+   `EdDSA`).
+   - Clients need no change.
+   - Tokens issued before the cutover keep working until they expire or
+     until finalize.
+   - Control publishes the keys at `/api/v4/identity/jwks.json`.
+   - `POST /api/v4/identity/logout` ends one session.
+
+### Rollback Window
+
+Until finalize, `POST /api/v4/kernel/identity/rollback` returns logins to the
+legacy handlers. Identity mirrors password hashes and TOTP secrets back, so
+accounts created or changed after the cutover keep working. Backup codes
+generated after the cutover are not mirrored: those users use TOTP or
+regenerate codes. A later cutover imports what changed meanwhile.
+
+### Finalize
+
+Run it after at least a day on identity, once no rollback is expected:
+`POST /api/v4/kernel/identity/finalize` (`{"force": true}` skips the day).
+
+- Legacy password hashes become unusable and `v2_user_mfa` is emptied.
+- Control stops accepting the tokens it signed itself (HS256).
+- There is no rollback afterwards. Restoring the backup also restores the old
+  state.
+- Control no longer creates a default administrator. Create administrators
+  through the admin API.
+
 ## Rollback
 
 Rollback should restore the exact previous artifact and config set.

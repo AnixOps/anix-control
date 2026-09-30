@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/utils"
 	"github.com/glebarez/sqlite"
@@ -58,6 +59,24 @@ func TestVerifyAcceptsTheKernelsHS256Tokens(t *testing.T) {
 	require.Equal(t, uint(7), claims.UserID)
 	require.True(t, claims.IsAdmin)
 	require.NotEmpty(t, claims.SessionID, "new tokens carry a session id")
+}
+
+func TestTheDefaultVerifierRefusesLegacyTokensAfterFinalize(t *testing.T) {
+	previous := config.Get()
+	config.Set(&config.Config{JWT: config.JWTConfig{Secret: testSecret}})
+	t.Cleanup(func() {
+		config.Set(previous)
+		legacyTokensRefused.Store(false)
+	})
+	token, err := utils.GenerateToken(7, "user@example.test", false, testSecret, 3600)
+	require.NoError(t, err)
+	_, err = Default().Verify(context.Background(), token)
+	require.NoError(t, err)
+
+	RefuseLegacyTokens()
+	require.True(t, LegacyTokensRefused())
+	_, err = Default().Verify(context.Background(), token)
+	require.ErrorIs(t, err, ErrInvalidToken)
 }
 
 func TestVerifyPinsTheAlgorithmAndRequiredClaims(t *testing.T) {

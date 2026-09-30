@@ -5,7 +5,9 @@
 # identity-platform as a separate container, then logs in through the v2 API:
 # the request travels kernel gateway -> remote identity module over mTLS ->
 # package bridge -> kernel. The identity package is built and signed with a
-# throwaway key that the kernel is told to trust.
+# throwaway key that the kernel is told to trust. It then hands logins to the
+# identity module (import, cutover), checks native login, revocation and
+# logout, rolls back, cuts over again and finalizes.
 #
 # Required environment:
 #   CONTROL_IMAGE     Control image (for example the Dockerfile "source" target)
@@ -115,4 +117,80 @@ for _ in $(seq 1 40); do
   sleep 3
 done
 test "${logged_in}" = 1 || { echo "login after the module restart failed: ${response:-}"; exit 1; }
+
+echo "== identity cutover: import, cutover, native login, revocation, logout, rollback, finalize"
+base=http://127.0.0.1:8080
+# call METHOD PATH TOKEN [BODY]: prints the HTTP status; the body lands in ${work}/body.
+call() {
+  local args=(-sS -o "${work}/body" -w '%{http_code}' -X "$1" -H 'Content-Type: application/json')
+  [[ -n "$3" ]] && args+=(-H "Authorization: Bearer $3")
+  [[ -n "${4:-}" ]] && args+=(-d "$4")
+  curl "${args[@]}" "${base}$2"
+}
+# field EXPR: evaluates EXPR against the last body, bound to d.
+field() { python3 -c 'import json,sys; d=json.load(open(sys.argv[1])); print(eval(sys.argv[2]))' "${work}/body" "$1"; }
+token_alg() { python3 -c 'import base64,json,sys; h=sys.argv[1].split(".")[0]; print(json.loads(base64.urlsafe_b64decode(h+"="*(-len(h)%4)))["alg"])' "$1"; }
+login_as() {
+  test "$(call POST /api/v2/login "" "{\"email\":\"$1\",\"password\":\"$2\"}")" = 200
+  test "$(field 'd["code"]')" = 0 || { cat "${work}/body"; return 1; }
+  field 'd["data"]["token"]'
+}
+# await EXPR: polls GET /api/v4/kernel/identity until EXPR holds.
+await() {
+  for _ in $(seq 1 60); do
+    if [[ "$(call GET /api/v4/kernel/identity "${admin}")" == 200 && "$(field "$1")" == True ]]; then return 0; fi
+    sleep 2
+  done
+  echo "identity status never satisfied $1:"; cat "${work}/body"; return 1
+}
+admin_password=ModuleSmoke-0123456789
+admin="$(login_as admin@example.test "${admin_password}")"
+test "$(token_alg "${admin}")" = HS256
+
+test "$(call POST /api/v4/kernel/identity/import "${admin}" '{}')" = 202
+await 'd["data"]["import"]["completed_at"] > 0 and d["data"]["state"] == "importing"'
+test "$(call POST /api/v4/kernel/identity/cutover "${admin}")" = 202
+await 'd["data"]["authority_change"] is not None and not d["data"]["authority_change"]["running"]'
+test "$(field 'd["data"]["authority_change"].get("error", "")')" = "" || { cat "${work}/body"; exit 1; }
+test "$(field 'd["data"]["state"]')" = identity
+echo "cutover: ok"
+
+native="$(login_as admin@example.test "${admin_password}")"
+test "$(token_alg "${native}")" = EdDSA
+test "$(call GET /api/v2/user/profile "${native}")" = 200
+test "$(call GET /api/v2/user/profile "${admin}")" = 200 # legacy tokens work until finalize
+echo "native login with an identity token: ok"
+
+test "$(call POST /api/v2/admin/users "${native}" '{"email":"member@example.test","password":"Member-0123456789"}')" = 200
+member_id="$(field 'd["data"]["id"]')"
+member="$(login_as member@example.test Member-0123456789)"
+test "$(call GET /api/v2/user/profile "${member}")" = 200
+test "$(call POST "/api/v2/admin/users/${member_id}/ban" "${native}")" = 200
+revoked=0
+for _ in $(seq 1 5); do
+  if [[ "$(call GET /api/v2/user/profile "${member}")" == 401 ]]; then revoked=1; break; fi
+  sleep 1
+done
+test "${revoked}" = 1 || { echo "a banned member's token still works"; exit 1; }
+test "$(call POST "/api/v2/admin/users/${member_id}/unban" "${native}")" = 200
+echo "ban revokes within 5 seconds: ok"
+
+session="$(login_as admin@example.test "${admin_password}")"
+test "$(call POST /api/v4/identity/logout "${session}")" = 200
+test "$(call GET /api/v2/user/profile "${session}")" = 401
+test "$(call GET /api/v2/user/profile "${native}")" = 200
+echo "logout ends one session: ok"
+
+test "$(call POST /api/v4/kernel/identity/rollback "${native}")" = 202
+await 'd["data"]["state"] == "importing" and not d["data"]["authority_change"]["running"]'
+legacy="$(login_as member@example.test Member-0123456789)"
+test "$(token_alg "${legacy}")" = HS256
+echo "rollback: the natively created member logs in through the legacy handler: ok"
+
+test "$(call POST /api/v4/kernel/identity/cutover "${admin}")" = 202
+await 'd["data"]["state"] == "identity" and not d["data"]["authority_change"]["running"]'
+test "$(call POST /api/v4/kernel/identity/finalize "${native}" '{"force":true}')" = 200
+test "$(call GET /api/v2/user/profile "${admin}")" = 401 # HS256 is refused after finalize
+test "$(token_alg "$(login_as member@example.test Member-0123456789)")" = EdDSA
+echo "finalize: ok"
 echo "modules compose smoke: ok"
