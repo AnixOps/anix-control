@@ -236,6 +236,22 @@ type ServerConfig struct {
 	WriteTimeout   int        `yaml:"write_timeout"`
 	TrustedProxies []string   `yaml:"trusted_proxies"`
 	CORS           CORSConfig `yaml:"cors"`
+	// ShutdownDrainDelay is how long the server keeps accepting requests after
+	// /readyz starts failing on shutdown, so load balancers and Kubernetes
+	// endpoints stop routing to it first (Go duration, e.g. "5s"; empty = 0).
+	ShutdownDrainDelay string `yaml:"shutdown_drain_delay"`
+}
+
+// DrainDelay returns the parsed server.shutdown_drain_delay (0 when unset).
+func (s ServerConfig) DrainDelay() (time.Duration, error) {
+	if strings.TrimSpace(s.ShutdownDrainDelay) == "" {
+		return 0, nil
+	}
+	delay, err := time.ParseDuration(strings.TrimSpace(s.ShutdownDrainDelay))
+	if err != nil || delay < 0 || delay > 5*time.Minute {
+		return 0, fmt.Errorf("invalid server.shutdown_drain_delay %q: use a duration between 0 and 5m", s.ShutdownDrainDelay)
+	}
+	return delay, nil
 }
 
 // CORSConfig defines Cross-Origin Resource Sharing settings.
@@ -286,6 +302,9 @@ type CacheConfig struct {
 
 // LogConfig defines log settings.
 type LogConfig struct {
+	// Format is "text" (default: the historical plain log lines) or "json"
+	// (one JSON object per line on stdout, for container log collectors).
+	Format     string `yaml:"format"`
 	Level      string `yaml:"level"`
 	Output     string `yaml:"output"`
 	FilePath   string `yaml:"file_path"`
@@ -360,6 +379,14 @@ func load(path string, environ []string) (*Config, error) {
 	}
 	if err := loaded.Database.validateConnectionSettings(); err != nil {
 		return nil, err
+	}
+	if _, err := loaded.Server.DrainDelay(); err != nil {
+		return nil, err
+	}
+	switch loaded.Log.Format {
+	case "", "text", "json":
+	default:
+		return nil, fmt.Errorf("invalid log.format %q: use text or json", loaded.Log.Format)
 	}
 	return loaded, nil
 }

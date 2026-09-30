@@ -3,6 +3,7 @@ package middleware
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"github.com/AnixOps/anix-control/v4/internal/logging"
 	"net/http"
 	"strconv"
 	"strings"
@@ -333,6 +334,9 @@ func CORS() gin.HandlerFunc {
 
 // Logger 鏃ュ織涓棿浠?
 func Logger() gin.HandlerFunc {
+	if logging.JSON() {
+		return logging.AccessLog()
+	}
 	return gin.Logger()
 }
 

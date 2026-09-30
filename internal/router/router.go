@@ -5,6 +5,7 @@ import (
 
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/handler"
+	"github.com/AnixOps/anix-control/v4/internal/health"
 	"github.com/AnixOps/anix-control/v4/internal/middleware"
 	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
 	"github.com/gin-gonic/gin"
@@ -41,7 +42,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	r.Use(middleware.Recovery())
 
 	// 速率限制器 (测试模式跳过)
-	exemptPaths := []string{"/health", "/metrics", "/swagger/"}
+	exemptPaths := []string{"/health", "/livez", "/readyz", "/metrics", "/swagger/"}
 	adminLimiter := middleware.NewRateLimiter(10, 20,
 		middleware.WithExemptPaths(exemptPaths),
 		middleware.WithTTL(5*time.Minute),
@@ -84,9 +85,11 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	// @Produce json
 	// @Success 200 {object} map[string]string
 	// @Router /health [get]
-	r.GET("/health", func(c *gin.Context) {
-		c.JSON(200, gin.H{"status": "ok"})
-	})
+	// /livez and /readyz are the container probes; /health keeps its response
+	// shape and fails while the server drains.
+	r.GET("/livez", health.Default.Live)
+	r.GET("/readyz", health.Default.Ready)
+	r.GET("/health", health.Default.Health)
 
 	// Prometheus 指标
 	metricsHandler := handler.NewMetricsHandler()

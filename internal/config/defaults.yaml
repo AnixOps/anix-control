@@ -9,6 +9,8 @@ server:
   mode: "release"
   read_timeout: 30
   write_timeout: 30
+  # Keep serving for this long after /readyz starts failing on shutdown.
+  shutdown_drain_delay: "5s"
   trusted_proxies: ["127.0.0.1", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
   cors:
     allowed_origins: []
@@ -32,6 +34,9 @@ database:
   max_idle_conns: 10
   max_open_conns: 50
   conn_max_lifetime: 3600
+log:
+  format: "text"
+  level: "info"
 jwt:
   expire: 86400
 auth:
