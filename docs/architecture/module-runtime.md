@@ -233,6 +233,22 @@ Remote modules require PostgreSQL; a remote lease on SQLite is refused.
 lease from the kernel before they connect, so a pool picks up a rotated role
 password instead of failing.
 
+**Deployment.**
+- **Image.** `Dockerfile.module` builds one module image per package: the
+  package's own host, or the generic host. The base is distroless and the
+  image runs as uid 65532.
+  - `go_dev` publishes `ghcr.io/anixops/anix-module-identity-platform:edge`
+    and `:sha-<commit>`, signed with cosign.
+- **Compose.** The `docker-compose.modules.yml` overlay; see
+  [`config/deploy/compose/modules.md`](../../config/deploy/compose/modules.md).
+- **Kubernetes.** The Helm chart's `moduleRuntime` and `modules` values; see
+  [the chart README](../../config/deploy/helm/anix-control/README.md#network-modules).
+- **Operator CLI.** `anix-control module runtime list|set <plugin-id>
+  <local|remote>` selects the runtime; it applies when Control next starts
+  the package.
+- **Smoke tests in CI.** `config/scripts/modules_compose_smoke.sh` and
+  `modules_kind_smoke.sh` log in through the module.
+
 ## SDK module
 
 The contracts and SDKs form their own Go module,
@@ -278,6 +294,9 @@ client certificate and `Bind`. What runs is enforced outside the kernel:
 - Modules may run several replicas.
 - Everything is additive: new RPCs, fields and tables only. v4.0.0 hosts and
   their strict request-metadata decoding keep working in the `local` runtime.
+- The signed manifest does not carry `control_runtime` yet, and releases do
+  not publish module images yet. Until then, pin module images by digest from
+  the `go_dev` builds, and verify them with `cosign verify`.
 
 ## Delivery
 

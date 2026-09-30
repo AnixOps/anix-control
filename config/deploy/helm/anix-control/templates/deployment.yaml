@@ -1,3 +1,4 @@
+{{- include "anix-control.validateModuleRuntime" . }}
 {{- if ne (int .Values.replicaCount) 1 }}
 {{- fail "replicaCount must be 1: multi-replica Control is not supported yet (see docs/architecture/container-deployment.md)" }}
 {{- end }}
@@ -78,6 +79,11 @@ spec:
             {{- if .Values.grpc.enabled }}
             - name: grpc
               containerPort: 50051
+              protocol: TCP
+            {{- end }}
+            {{- if .Values.moduleRuntime.enabled }}
+            - name: modules
+              containerPort: {{ .Values.moduleRuntime.port }}
               protocol: TCP
             {{- end }}
           startupProbe:

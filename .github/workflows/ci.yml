@@ -465,6 +465,12 @@ jobs:
       - name: Checkout code
         uses: actions/checkout@v7
 
+      - name: Setup Go for the package builder
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v4
 
@@ -483,6 +489,20 @@ jobs:
             COMMIT=${{ github.sha }}
           cache-from: type=gha,scope=docker-smoke
           cache-to: type=gha,scope=docker-smoke,mode=max
+
+      - name: Build the identity-platform module image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.module
+          load: true
+          push: false
+          tags: anix-module-identity-platform:ci
+          build-args: |
+            PACKAGE_ID=identity-platform
+            PACKAGE_VERSION=4.0.0
+          cache-from: type=gha,scope=module-image
+          cache-to: type=gha,scope=module-image,mode=max
 
       - name: Run the image as a container deployment would
         shell: bash
@@ -559,6 +579,16 @@ jobs:
           test "$(docker inspect -f '{{.State.ExitCode}}' "${control_id}")" = 0
           "${compose[@]}" down
 
+      - name: Run identity-platform as a network module with Compose
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker run --rm --network host -e PGPASSWORD=postgres postgres:16 \
+            psql -h 127.0.0.1 -U postgres -d anix_control_smoke -c 'CREATE DATABASE anix_control_modules'
+          CONTROL_IMAGE=anix-control:ci IDENTITY_IMAGE=anix-module-identity-platform:ci \
+            DB_HOST=host.docker.internal DB_PORT=5432 DB_USER=postgres DB_PASSWORD=postgres DB_NAME=anix_control_modules \
+            config/scripts/modules_compose_smoke.sh
+
   helm-chart:
     name: Helm Chart Checks
     runs-on: ubuntu-latest
@@ -596,6 +626,18 @@ jobs:
           if helm template ci "${chart}" >/dev/null 2>&1; then
             echo "missing secrets must be rejected"; exit 1
           fi
+          modules=(--set secrets.files.module_ca_kek=ANIX_CONTROL_MODULE_RUNTIME_CA_KEK --set secrets.values.module_ca_kek=z
+            --set moduleRuntime.enabled=true --set moduleRuntime.networkPolicy.enabled=true
+            --set modules.identity-platform.enabled=true --set modules.identity-platform.image.repository=anix-module-identity-platform
+            --set modules.identity-platform.trustBundleConfigMap=ca --set modules.identity-platform.enrollmentSecret=enrollment)
+          helm lint --strict "${chart}" "${secrets[@]}" "${modules[@]}"
+          helm template ci "${chart}" "${secrets[@]}" "${modules[@]}" | kubeconform -strict -summary -kubernetes-version 1.30.0
+          if helm template ci "${chart}" "${secrets[@]}" --set moduleRuntime.enabled=true >/dev/null 2>&1; then
+            echo "moduleRuntime without a CA key must be rejected"; exit 1
+          fi
+          if helm template ci "${chart}" "${secrets[@]}" "${modules[@]}" --set moduleRuntime.enabled=false >/dev/null 2>&1; then
+            echo "modules without moduleRuntime must be rejected"; exit 1
+          fi
 
   kubernetes-smoke:
     name: Kubernetes Smoke
@@ -630,6 +672,25 @@ jobs:
             VERSION=ci
             COMMIT=${{ github.sha }}
           cache-from: type=gha,scope=docker-smoke
+
+      - name: Build the identity-platform module image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.module
+          load: true
+          push: false
+          tags: anix-module-identity-platform:ci
+          build-args: |
+            PACKAGE_ID=identity-platform
+            PACKAGE_VERSION=4.0.0
+          cache-from: type=gha,scope=module-image
+
+      - name: Setup Go for the package builder
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
 
       - name: Install the chart against an in-cluster PostgreSQL
         shell: bash
@@ -699,6 +760,15 @@ jobs:
           kubectl -n anix get pods
           helm uninstall control --namespace anix --wait
 
+      - name: Run identity-platform as a network module Deployment
+        shell: bash
+        run: |
+          set -euo pipefail
+          kubectl -n anix exec deployment/postgresql -- psql -U anix_control -d anix_control -c 'CREATE DATABASE anix_modules'
+          CONTROL_IMAGE=anix-control:ci IDENTITY_IMAGE=anix-module-identity-platform:ci KIND_CLUSTER=anix-control \
+            NAMESPACE=anix DB_PASSWORD=ci-db-password DB_NAME=anix_modules \
+            config/scripts/modules_kind_smoke.sh
+
       - name: Dump cluster state on failure
         if: failure()
         shell: bash
@@ -706,6 +776,7 @@ jobs:
           kubectl -n anix get all || true
           kubectl -n anix describe pods || true
           kubectl -n anix logs deployment/control-anix-control --all-containers --tail=200 || true
+          kubectl -n anix logs -l app.kubernetes.io/name=anix-module --prefix --tail=200 || true
 
   backend-test:
     name: Backend Tests
@@ -2047,6 +2118,38 @@ jobs:
         env:
           DIGEST: ${{ steps.build.outputs.digest }}
         run: cosign sign --yes "${IMAGE}@${DIGEST}"
+
+      - name: Read the identity-platform package version
+        id: identity
+        shell: bash
+        run: echo "version=$(jq -r .version packages/identity-platform/manifest.template.json)" >> "${GITHUB_OUTPUT}"
+
+      # The network module image (Dockerfile.module); see
+      # docs/architecture/module-runtime.md.
+      - name: Build and push the edge identity-platform module image
+        id: identity-image
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.module
+          platforms: linux/amd64,linux/arm64
+          push: true
+          provenance: mode=max
+          sbom: true
+          tags: |
+            ghcr.io/anixops/anix-module-identity-platform:edge
+            ghcr.io/anixops/anix-module-identity-platform:sha-${{ github.sha }}
+          build-args: |
+            PACKAGE_ID=identity-platform
+            PACKAGE_VERSION=${{ steps.identity.outputs.version }}
+          cache-from: type=gha,scope=module-edge
+          cache-to: type=gha,scope=module-edge,mode=max
+
+      - name: Sign the edge module image digest
+        shell: bash
+        env:
+          DIGEST: ${{ steps.identity-image.outputs.digest }}
+        run: cosign sign --yes "ghcr.io/anixops/anix-module-identity-platform@${DIGEST}"
 
   release:
     name: Create Release

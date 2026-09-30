@@ -1,0 +1,81 @@
+# AnixOps Control: network modules overlay for docker-compose.prod.yml.
+#
+# Runs identity-platform as its own service instead of a child process of
+# Control. Guide: config/deploy/compose/modules.md. In short:
+#
+#   c="docker compose -f docker-compose.prod.yml -f docker-compose.modules.yml"
+#   openssl rand -base64 32 | install -m 0400 -o 10001 -g 10001 /dev/stdin secrets/module_ca_kek
+#   $c run --rm -T migrate                                       # creates the module CA
+#   $c run --rm -T --no-deps migrate module ca bundle \
+#     | install -m 0444 /dev/stdin secrets/module_ca_bundle
+#   $c run --rm -T --no-deps migrate module token create -package identity-platform -reusable -ttl 8760h \
+#     | jq -r .credential | install -m 0400 -o 65532 -g 65532 /dev/stdin secrets/identity_enrollment
+#   $c run --rm -T --no-deps migrate module runtime set identity-platform remote
+#   export ANIX_MODULE_IDENTITY_IMAGE=ghcr.io/anixops/anix-module-identity-platform@sha256:<digest>
+#   $c up -d
+
+x-module-runtime: &module-runtime
+  ANIX_CONTROL_MODULE_RUNTIME_ENABLED: "true"
+  ANIX_CONTROL_MODULE_RUNTIME_CA_KEK_FILE: /run/secrets/module_ca_kek
+  ANIX_CONTROL_MODULE_RUNTIME_LISTEN: ":7443"
+  ANIX_CONTROL_MODULE_RUNTIME_CLUSTER: ${ANIX_MODULE_CLUSTER:-default}
+
+services:
+  migrate:
+    environment: *module-runtime
+    secrets:
+      - module_ca_kek
+
+  control:
+    environment:
+      <<: *module-runtime
+      # PostgreSQL address that modules use for their storage leases, when it
+      # differs from Control's own (for example host.docker.internal).
+      ANIX_CONTROL_MODULE_RUNTIME_DATABASE_HOST: ${ANIX_MODULE_DATABASE_HOST:-}
+    secrets:
+      - module_ca_kek
+
+  identity:
+    image: ${ANIX_MODULE_IDENTITY_IMAGE:?set ANIX_MODULE_IDENTITY_IMAGE to the identity-platform module image}
+    environment:
+      ANIX_MODULE_KERNEL_ADDR: control:7443
+      ANIX_MODULE_CLUSTER: ${ANIX_MODULE_CLUSTER:-default}
+      ANIX_MODULE_INSTANCE_ID: identity
+      ANIX_MODULE_ADVERTISE_ADDR: identity:7000
+      ANIX_MODULE_TRUST_BUNDLE_FILE: /run/secrets/module_ca_bundle
+      ANIX_MODULE_ENROLL_CREDENTIAL_FILE: /run/secrets/identity_enrollment
+    secrets:
+      - module_ca_bundle
+      - identity_enrollment
+    volumes:
+      # The module's key and certificates survive restarts; the enrollment
+      # credential is needed again only after they expire.
+      - identity-state:/var/lib/anix-module
+    depends_on:
+      control:
+        condition: service_started
+    restart: unless-stopped
+    read_only: true
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    stop_grace_period: 40s
+    extra_hosts:
+      - host.docker.internal:host-gateway
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+volumes:
+  identity-state:
+
+secrets:
+  module_ca_kek:
+    file: ${ANIX_CONTROL_SECRETS_DIR:-./secrets}/module_ca_kek
+  module_ca_bundle:
+    file: ${ANIX_CONTROL_SECRETS_DIR:-./secrets}/module_ca_bundle
+  identity_enrollment:
+    file: ${ANIX_CONTROL_SECRETS_DIR:-./secrets}/identity_enrollment

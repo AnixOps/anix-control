@@ -1,0 +1,48 @@
+# syntax=docker/dockerfile:1
+#
+# AnixOps network module image: one package host running as its own service
+# (ANIX_MODULE_MODE=remote). See docs/architecture/module-runtime.md.
+#
+#   docker build -f Dockerfile.module --build-arg PACKAGE_ID=identity-platform \
+#     --build-arg PACKAGE_VERSION=4.0.0 -t anix-module-identity-platform .
+#
+# Packages with their own host (packages/<id>/control) build it; the others
+# build the generic host (packages/shared/controlhost).
+
+ARG GO_IMAGE=golang:1.26.8-alpine@sha256:8ac98ca534ac3f51e1f420a1dd2c15e74c75cfa0f23f3ad27eb5d7236c349a0c
+ARG RUNTIME_IMAGE=gcr.io/distroless/static-debian12:nonroot@sha256:afa5c872c891853ca7fcf1f12c3edb23f7eeef36189728842dd51042ff57f7ab
+
+FROM --platform=$BUILDPLATFORM ${GO_IMAGE} AS builder
+WORKDIR /src
+COPY go.mod go.sum ./
+COPY sdk/go.mod sdk/go.sum ./sdk/
+RUN go mod download
+COPY . .
+ARG TARGETOS=linux
+ARG TARGETARCH
+ARG PACKAGE_ID
+ARG PACKAGE_VERSION
+RUN test -n "${PACKAGE_ID}" && test -n "${PACKAGE_VERSION}" \
+    && source="./packages/shared/controlhost" \
+    && if [ -d "./packages/${PACKAGE_ID}/control" ]; then source="./packages/${PACKAGE_ID}/control"; fi \
+    && CGO_ENABLED=0 GOOS=${TARGETOS} GOARCH=${TARGETARCH} go build -trimpath \
+        -ldflags="-s -w -X main.packageID=${PACKAGE_ID} -X main.packageVersion=${PACKAGE_VERSION}" \
+        -o /out/module "${source}" \
+    && mkdir -p /out/state/certs
+
+FROM ${RUNTIME_IMAGE}
+ARG PACKAGE_ID
+ARG PACKAGE_VERSION
+LABEL org.opencontainers.image.title="anix-module-${PACKAGE_ID}" \
+      org.opencontainers.image.version="${PACKAGE_VERSION}" \
+      org.opencontainers.image.source="https://github.com/AnixOps/anix-control"
+COPY --from=builder /out/module /module
+# A new named volume at /var/lib/anix-module inherits this owner.
+COPY --from=builder --chown=65532:65532 /out/state /var/lib/anix-module
+ENV ANIX_MODULE_MODE=remote \
+    ANIX_MODULE_LISTEN_ADDR=:7000 \
+    ANIX_MODULE_HEALTH_ADDR=:8081 \
+    ANIX_MODULE_CERT_DIR=/var/lib/anix-module/certs
+USER 65532:65532
+EXPOSE 7000 8081
+ENTRYPOINT ["/module"]
