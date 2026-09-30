@@ -250,6 +250,13 @@ func (s *UserService) Update(id uint, updates map[string]any) error {
 // sessions it also records the revocation and returns it; apply it with
 // authn.Remember after the commit.
 func UpdateUserTx(tx *gorm.DB, id uint, updates map[string]any) (*authn.Revocation, error) {
+	return UpdateUserTxWithTokenVersion(tx, id, updates, 0)
+}
+
+// UpdateUserTxWithTokenVersion is UpdateUserTx for a change identity made:
+// tokenVersion, when positive, is the account's new token version, so the
+// revocation ends identity tokens by version rather than by time.
+func UpdateUserTxWithTokenVersion(tx *gorm.DB, id uint, updates map[string]any, tokenVersion uint64) (*authn.Revocation, error) {
 	reason, err := sessionEndingChange(tx, id, updates)
 	if err != nil {
 		return nil, err
@@ -261,6 +268,7 @@ func UpdateUserTx(tx *gorm.DB, id uint, updates map[string]any) (*authn.Revocati
 		return nil, nil
 	}
 	revocation := authn.UserRevocation(id, reason)
+	revocation.TokenVersion = tokenVersion
 	if err := authn.Write(tx, revocation); err != nil {
 		return nil, err
 	}

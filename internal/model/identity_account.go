@@ -6,11 +6,14 @@ import "time"
 // subscriber (v2_user row) it owns. ProjectionVersion is the last account
 // version applied to the v2_user identity columns; older ones are ignored.
 type IdentityAccountLink struct {
-	UserID            uint      `gorm:"primaryKey;autoIncrement:false" json:"user_id"`
-	AccountUUID       string    `gorm:"size:36;not null;uniqueIndex" json:"account_uuid"`
-	ProjectionVersion uint64    `gorm:"not null;default:0" json:"projection_version"`
-	CreatedAt         time.Time `gorm:"not null" json:"created_at"`
-	UpdatedAt         time.Time `gorm:"not null" json:"updated_at"`
+	UserID            uint   `gorm:"primaryKey;autoIncrement:false" json:"user_id"`
+	AccountUUID       string `gorm:"size:36;not null;uniqueIndex" json:"account_uuid"`
+	ProjectionVersion uint64 `gorm:"not null;default:0" json:"projection_version"`
+	// TokenVersion is the highest identity token version projected. A
+	// session-ending projection revokes by token version only above it.
+	TokenVersion uint64    `gorm:"not null;default:0" json:"token_version"`
+	CreatedAt    time.Time `gorm:"not null" json:"created_at"`
+	UpdatedAt    time.Time `gorm:"not null" json:"updated_at"`
 }
 
 func (IdentityAccountLink) TableName() string { return "v4_kernel_identity_account" }

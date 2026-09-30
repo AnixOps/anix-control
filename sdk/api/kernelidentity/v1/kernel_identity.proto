@@ -89,6 +89,11 @@ message ApplyAccountProjectionRequest {
   // legacy_mirror carries credentials back into the legacy tables until the
   // identity cutover is finalized, so a rollback to legacy routes works.
   LegacyCredentialMirror legacy_mirror = 7;
+  // token_version is the account's token version after the change. When the
+  // change ends sessions and token_version is above the last one projected,
+  // identity tokens with a smaller tv claim stop working and tokens issued
+  // afterwards, even within the same second, keep working.
+  uint64 token_version = 8;
 }
 
 message LegacyCredentialMirror {
@@ -113,7 +118,9 @@ message DeleteSubscriberResponse {}
 
 message PublishRevocationRequest {
   uint64 user_id = 1;
-  // token_version: tokens with a smaller tv claim stop working.
+  // token_version: identity tokens with a smaller tv claim stop working; the
+  // kernel's own tokens, which carry none, stop working if issued until
+  // not_before (now when not_before is unset).
   uint64 token_version = 2;
   // not_before_unix: tokens issued before it stop working.
   int64 not_before_unix = 3;

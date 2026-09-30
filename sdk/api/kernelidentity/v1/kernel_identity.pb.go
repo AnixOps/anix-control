@@ -363,7 +363,12 @@ type ApplyAccountProjectionRequest struct {
 	Banned  bool                   `protobuf:"varint,6,opt,name=banned,proto3" json:"banned,omitempty"`
 	// legacy_mirror carries credentials back into the legacy tables until the
 	// identity cutover is finalized, so a rollback to legacy routes works.
-	LegacyMirror  *LegacyCredentialMirror `protobuf:"bytes,7,opt,name=legacy_mirror,json=legacyMirror,proto3" json:"legacy_mirror,omitempty"`
+	LegacyMirror *LegacyCredentialMirror `protobuf:"bytes,7,opt,name=legacy_mirror,json=legacyMirror,proto3" json:"legacy_mirror,omitempty"`
+	// token_version is the account's token version after the change. When the
+	// change ends sessions and token_version is above the last one projected,
+	// identity tokens with a smaller tv claim stop working and tokens issued
+	// afterwards, even within the same second, keep working.
+	TokenVersion  uint64 `protobuf:"varint,8,opt,name=token_version,json=tokenVersion,proto3" json:"token_version,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -445,6 +450,13 @@ func (x *ApplyAccountProjectionRequest) GetLegacyMirror() *LegacyCredentialMirro
 		return x.LegacyMirror
 	}
 	return nil
+}
+
+func (x *ApplyAccountProjectionRequest) GetTokenVersion() uint64 {
+	if x != nil {
+		return x.TokenVersion
+	}
+	return 0
 }
 
 type LegacyCredentialMirror struct {
@@ -666,7 +678,9 @@ func (*DeleteSubscriberResponse) Descriptor() ([]byte, []int) {
 type PublishRevocationRequest struct {
 	state  protoimpl.MessageState `protogen:"open.v1"`
 	UserId uint64                 `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
-	// token_version: tokens with a smaller tv claim stop working.
+	// token_version: identity tokens with a smaller tv claim stop working; the
+	// kernel's own tokens, which carry none, stop working if issued until
+	// not_before (now when not_before is unset).
 	TokenVersion uint64 `protobuf:"varint,2,opt,name=token_version,json=tokenVersion,proto3" json:"token_version,omitempty"`
 	// not_before_unix: tokens issued before it stop working.
 	NotBeforeUnix int64 `protobuf:"varint,3,opt,name=not_before_unix,json=notBeforeUnix,proto3" json:"not_before_unix,omitempty"`
@@ -1014,7 +1028,7 @@ const file_api_kernelidentity_v1_kernel_identity_proto_rawDesc = "" +
 	"\x17UpdateSubscriberRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x04R\x06userId\x12+\n" +
 	"\x11entitlements_json\x18\x02 \x01(\fR\x10entitlementsJson\"\x1a\n" +
-	"\x18UpdateSubscriberResponse\"\x8e\x02\n" +
+	"\x18UpdateSubscriberResponse\"\xb3\x02\n" +
 	"\x1dApplyAccountProjectionRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x04R\x06userId\x12\x18\n" +
 	"\aversion\x18\x02 \x01(\x04R\aversion\x12\x14\n" +
@@ -1022,7 +1036,8 @@ const file_api_kernelidentity_v1_kernel_identity_proto_rawDesc = "" +
 	"\bis_admin\x18\x04 \x01(\bR\aisAdmin\x12\x19\n" +
 	"\bis_staff\x18\x05 \x01(\bR\aisStaff\x12\x16\n" +
 	"\x06banned\x18\x06 \x01(\bR\x06banned\x12V\n" +
-	"\rlegacy_mirror\x18\a \x01(\v21.anixops.kernelidentity.v1.LegacyCredentialMirrorR\flegacyMirror\"\xf7\x01\n" +
+	"\rlegacy_mirror\x18\a \x01(\v21.anixops.kernelidentity.v1.LegacyCredentialMirrorR\flegacyMirror\x12#\n" +
+	"\rtoken_version\x18\b \x01(\x04R\ftokenVersion\"\xf7\x01\n" +
 	"\x16LegacyCredentialMirror\x12#\n" +
 	"\rpassword_hash\x18\x01 \x01(\tR\fpasswordHash\x12#\n" +
 	"\rpassword_algo\x18\x02 \x01(\tR\fpasswordAlgo\x12#\n" +

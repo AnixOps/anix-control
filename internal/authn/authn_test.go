@@ -192,3 +192,37 @@ func TestReloadPicksUpOtherWritersAndPrunes(t *testing.T) {
 	require.Equal(t, int64(1), users, "a revocation older than any token lifetime is pruned")
 	require.Zero(t, sessions, "an expired session revocation is pruned")
 }
+
+// Identity tokens follow the token version: one identity issues right after
+// a versioned revocation, within the same second, keeps working, while the
+// kernel's own tokens of that second stop working.
+func TestVersionedRevocationsSpareIdentityTokensIssuedAfterThem(t *testing.T) {
+	ctx := context.Background()
+	db := testDB(t)
+	store := NewStore(db, 25*time.Hour)
+	now := time.Now().Truncate(time.Second).Add(500 * time.Millisecond)
+	identity := func(tokenVersion uint64, issuedAt time.Time) *utils.Claims {
+		claims := legacyClaims(7, issuedAt)
+		claims.TokenVersion = tokenVersion
+		return claims
+	}
+
+	require.NoError(t, store.Publish(ctx, Revocation{UserID: 7, TokenVersion: 3, NotBefore: now, Reason: "user is_admin changed"}))
+	require.True(t, store.Revoked(identity(2, now.Add(-time.Minute))), "an older token version")
+	require.False(t, store.Revoked(identity(3, now)), "issued after the change, in the same second")
+	require.True(t, store.Revoked(legacyClaims(7, now)), "kernel tokens of that second")
+	require.False(t, store.Revoked(legacyClaims(7, now.Add(time.Second))), "later kernel tokens")
+
+	// Without a token version a revocation bounds identity tokens by time.
+	later := now.Add(time.Minute)
+	require.NoError(t, store.Publish(ctx, Revocation{UserID: 7, NotBefore: later, Reason: "user deleted"}))
+	require.True(t, store.Revoked(identity(3, later)))
+	require.False(t, store.Revoked(identity(3, later.Add(time.Second))))
+
+	reloaded := NewStore(db, 25*time.Hour)
+	require.NoError(t, reloaded.Reload(ctx))
+	require.True(t, reloaded.Revoked(identity(2, later.Add(time.Second))), "the token version survives a reload")
+	require.True(t, reloaded.Revoked(identity(3, later)), "the identity bound survives a reload")
+	require.False(t, reloaded.Revoked(identity(3, later.Add(time.Second))))
+	require.True(t, reloaded.Revoked(legacyClaims(7, later)))
+}

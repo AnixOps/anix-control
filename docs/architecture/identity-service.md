@@ -94,8 +94,20 @@ lists that read the `v2_user` projection.
   - Revocations made in the process apply at once.
   - Others arrive within 5 s through a reload, which also prunes rows that can
     no longer match an unexpired token.
-- **Second precision.** `iat` has one-second precision, so a token issued in
-  the revocation's own second is revoked too.
+- **Second precision.** `iat` has one-second precision, so a time-based
+  revocation also revokes a token issued in its own second.
+- **By token version for identity tokens.**
+  - A session-ending change identity projects carries the account's new token
+    version (`ApplyAccountProjectionRequest.token_version`).
+  - The kernel then ends identity tokens whose `tv` claim is lower, so a
+    token issued right after the change works, even within the same second.
+  - The kernel's own HS256 tokens carry no `tv` and are still ended by time.
+  - A version that did not rise above the last one projected
+    (`v4_kernel_identity_account.token_version`) falls back to time, so a
+    revocation cannot be missed.
+  - Revocations without a token version (delete, or legacy changes after a
+    rollback) bound identity tokens by time
+    (`v4_kernel_identity_revocation.identity_not_before`).
 
 ## Data split
 

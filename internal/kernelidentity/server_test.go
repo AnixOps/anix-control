@@ -14,6 +14,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/AnixOps/anix-control/v4/internal/utils"
+	"github.com/golang-jwt/jwt/v5"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -349,4 +350,40 @@ func TestCreateSubscriberMirrorsCredentialsWithoutRevoking(t *testing.T) {
 	var late model.User
 	require.NoError(t, f.db.Take(&late, response.GetUserId()).Error)
 	require.Equal(t, UnusableLegacyPassword, late.Password, "after finalize nothing is mirrored")
+}
+
+// A session-ending change from identity carries the account's new token
+// version: identity tokens are then revoked by version, so one issued right
+// after the change works. A version that did not rise falls back to time.
+func TestSessionEndingProjectionRevokesIdentityTokensByVersion(t *testing.T) {
+	f := newFixture(t)
+	id := f.createSubscriber(t, accountA, "tv@example.test")
+	identityToken := func(tokenVersion uint64) *utils.Claims {
+		return &utils.Claims{UserID: id, TokenVersion: tokenVersion, RegisteredClaims: jwt.RegisteredClaims{IssuedAt: jwt.NewNumericDate(time.Now())}}
+	}
+	apply := func(version uint64, banned bool, tokenVersion uint64) {
+		_, err := f.server.ApplyAccountProjection(context.Background(), &kernelidentityv1.ApplyAccountProjectionRequest{
+			UserId: uint64(id), Version: version, Email: "tv@example.test", Banned: banned, TokenVersion: tokenVersion,
+		})
+		require.NoError(t, err)
+	}
+	store := authn.DefaultStore()
+
+	apply(2, true, 2)
+	require.True(t, store.Revoked(identityToken(1)), "tokens of the old version end")
+	require.False(t, store.Revoked(identityToken(2)), "a token of the new version, even from the same second, works")
+	var row model.IdentityRevocation
+	require.NoError(t, f.db.Take(&row, "user_id = ?", id).Error)
+	require.Equal(t, uint64(2), row.TokenVersion)
+	require.Nil(t, row.IdentityNotBefore)
+
+	// A session-ending change whose token version did not rise cannot be
+	// trusted to end identity tokens by version: it ends them by time.
+	apply(3, false, 2)
+	require.True(t, store.Revoked(identityToken(2)))
+	require.NoError(t, f.db.Take(&row, "user_id = ?", id).Error)
+	require.NotNil(t, row.IdentityNotBefore)
+	var link model.IdentityAccountLink
+	require.NoError(t, f.db.Take(&link, "user_id = ?", id).Error)
+	require.Equal(t, uint64(2), link.TokenVersion)
 }
