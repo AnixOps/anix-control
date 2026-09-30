@@ -607,6 +607,10 @@ func (rt *serverRuntime) start(cfg *config.Config, intervals pluginPollIntervals
 		log.Printf("Control plugin host supervision enabled (poll interval %s, reconciliation operations %d)", intervals.control, queued)
 	}
 
+	if err := rt.startIdentityKeys(); err != nil {
+		return err
+	}
+
 	if !cfg.Plugins.ControlExecutionEnabled {
 		// Without package execution the listener still serves ModulePKI.
 		if err := rt.startModuleRuntime(cfg, nil); err != nil {

@@ -229,7 +229,7 @@ func StreamAuthInterceptor(apiToken, jwtSecret string) grpc.StreamServerIntercep
 func validateToken(token, apiToken, jwtSecret string) (bool, *utils.Claims, string) {
 	// 优先尝试 JWT 验证（如果 token 看起来像 JWT 且配置了 secret）
 	if jwtSecret != "" && strings.Contains(token, ".") {
-		verifier := authn.Verifier{Secret: func() string { return jwtSecret }, Revocations: authn.DefaultStore()}
+		verifier := authn.Verifier{Secret: func() string { return jwtSecret }, Revocations: authn.DefaultStore(), IdentityKeys: authn.DefaultIdentityKeys()}
 		claims, err := verifier.Verify(context.Background(), token)
 		if err == nil {
 			return true, claims, ""

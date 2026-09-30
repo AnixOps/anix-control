@@ -203,7 +203,11 @@ instance's generation.
       signing keys in the package's storage, sealed under `ANIX_IDENTITY_KEK`,
       which Control passes to a local host from `identity.kek`; rotation in
       the host; `GetTokenKeys`), then the kernel's key pull, JWKS and EdDSA
-      verification;
+      verification (in place: `internal/identitykeys` pulls every 5 minutes
+      and when a token names an unknown `kid`, persists the keys in
+      `v4_kernel_identity_token_key`, and `internal/authn` accepts EdDSA
+      tokens for `aud=anix-control` beside the HS256 ones, through the same
+      revocation store; `GET /api/v4/identity/jwks.json` publishes them);
     - 10c: the kernel-led account import.
 11. Group A native handlers with parity tests.
 12. Cutover, revocation push and finalize.

@@ -730,6 +730,11 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 
 	// API v4 exposes the package route gateway and module PKI administration.
 	// Its admission model is identical to v3.
+	// Public: the identity token keys Control accepts (JWKS).
+	identityPublic := r.Group("/api/v4/identity")
+	identityPublic.Use(publicLimiter.Middleware())
+	identityPublic.GET("/jwks.json", handler.IdentityJWKS)
+
 	v4 := r.Group("/api/v4")
 	v4.Use(adminLimiter.Middleware())
 	v4.Use(middleware.JWTAuth())
