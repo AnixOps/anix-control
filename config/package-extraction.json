@@ -798,7 +798,7 @@
       "path": "/api/v2/admin/notification/logs",
       "package_id": "notification",
       "route_id": "notification.admin.notification.logs.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -806,7 +806,7 @@
       "path": "/api/v2/admin/notification/templates",
       "package_id": "notification",
       "route_id": "notification.admin.notification.templates.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -814,7 +814,7 @@
       "path": "/api/v2/admin/notification/templates",
       "package_id": "notification",
       "route_id": "notification.admin.notification.templates.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -822,7 +822,7 @@
       "path": "/api/v2/admin/notification/templates/:id",
       "package_id": "notification",
       "route_id": "notification.admin.notification.templates.id.delete",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -830,7 +830,7 @@
       "path": "/api/v2/admin/notification/templates/:id",
       "package_id": "notification",
       "route_id": "notification.admin.notification.templates.id.put",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1302,7 +1302,7 @@
       "path": "/api/v2/admin/telegram/bot",
       "package_id": "notification",
       "route_id": "notification.admin.telegram.bot.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1310,7 +1310,7 @@
       "path": "/api/v2/admin/telegram/bot",
       "package_id": "notification",
       "route_id": "notification.admin.telegram.bot.put",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1318,7 +1318,7 @@
       "path": "/api/v2/admin/telegram/broadcast",
       "package_id": "notification",
       "route_id": "notification.admin.telegram.broadcast.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1326,7 +1326,7 @@
       "path": "/api/v2/admin/telegram/notify",
       "package_id": "notification",
       "route_id": "notification.admin.telegram.notify.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1334,7 +1334,7 @@
       "path": "/api/v2/admin/telegram/users",
       "package_id": "notification",
       "route_id": "notification.admin.telegram.users.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1342,7 +1342,7 @@
       "path": "/api/v2/admin/telegram/users/:id/notify",
       "package_id": "notification",
       "route_id": "notification.admin.telegram.users.id.notify.put",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1350,7 +1350,7 @@
       "path": "/api/v2/admin/telegram/webhook",
       "package_id": "notification",
       "route_id": "notification.admin.telegram.webhook.delete",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -2158,7 +2158,7 @@
       "path": "/api/v2/user/notifications",
       "package_id": "notification",
       "route_id": "notification.user.notifications.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -2166,7 +2166,7 @@
       "path": "/api/v2/user/notifications/:id/read",
       "package_id": "notification",
       "route_id": "notification.user.notifications.id.read.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -2174,7 +2174,7 @@
       "path": "/api/v2/user/notifications/read-all",
       "package_id": "notification",
       "route_id": "notification.user.notifications.read_all.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -2182,7 +2182,7 @@
       "path": "/api/v2/user/notifications/unread-count",
       "package_id": "notification",
       "route_id": "notification.user.notifications.unread_count.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -2278,7 +2278,7 @@
       "path": "/api/v2/user/telegram/notify",
       "package_id": "notification",
       "route_id": "notification.user.telegram.notify.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -2286,7 +2286,7 @@
       "path": "/api/v2/user/telegram/status",
       "package_id": "notification",
       "route_id": "notification.user.telegram.status.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -2294,7 +2294,7 @@
       "path": "/api/v2/user/telegram/unbind",
       "package_id": "notification",
       "route_id": "notification.user.telegram.unbind.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {

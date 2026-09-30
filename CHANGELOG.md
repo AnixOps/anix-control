@@ -418,6 +418,14 @@
   routes natively on `v2_ticket` and `v2_ticket_message`, adopted in place.
   `internal/tests/ticketcompat` proves byte parity on SQLite and PostgreSQL,
   and the PostgreSQL run is part of CI.
+- **Notification module on adopted tables.** `packages/notification` serves
+  19 of its 24 routes natively on the `v2_notification_*` and `v2_telegram_*`
+  tables, adopted in place, and reads members' e-mail addresses through
+  `kapi_user_directory_v1`. The Telegram Bot API calls those routes make are
+  ported into the package. `internal/tests/notificationcompat` proves byte
+  parity on SQLite and PostgreSQL, and the PostgreSQL run is part of CI. The
+  e-mail configuration and test send, setting the webhook, and the public
+  Telegram webhook stay bridged.
 
 - The kernel side of the identity module, `KernelIdentity` (N9). It is served
   on the local package bridge and on the module listener.
