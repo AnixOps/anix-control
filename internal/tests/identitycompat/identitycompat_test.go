@@ -61,6 +61,22 @@ func (k kernel) ResolveActorAccess(ctx context.Context, in *kernelidentityv1.Res
 	return k.server.ResolveActorAccess(ctx, in)
 }
 
+func (k kernel) UpdateSubscriber(ctx context.Context, in *kernelidentityv1.UpdateSubscriberRequest, _ ...grpc.CallOption) (*kernelidentityv1.UpdateSubscriberResponse, error) {
+	return k.server.UpdateSubscriber(ctx, in)
+}
+
+func (k kernel) ApplyAccountProjection(ctx context.Context, in *kernelidentityv1.ApplyAccountProjectionRequest, _ ...grpc.CallOption) (*kernelidentityv1.ApplyAccountProjectionResponse, error) {
+	return k.server.ApplyAccountProjection(ctx, in)
+}
+
+func (k kernel) DeleteSubscriber(ctx context.Context, in *kernelidentityv1.DeleteSubscriberRequest, _ ...grpc.CallOption) (*kernelidentityv1.DeleteSubscriberResponse, error) {
+	return k.server.DeleteSubscriber(ctx, in)
+}
+
+func (k kernel) GetSubscriber(ctx context.Context, in *kernelidentityv1.GetSubscriberRequest, _ ...grpc.CallOption) (*kernelidentityv1.GetSubscriberResponse, error) {
+	return k.server.GetSubscriber(ctx, in)
+}
+
 func (k kernel) GetIdentitySettings(ctx context.Context, in *kernelidentityv1.GetIdentitySettingsRequest, _ ...grpc.CallOption) (*kernelidentityv1.GetIdentitySettingsResponse, error) {
 	return k.server.GetIdentitySettings(ctx, in)
 }

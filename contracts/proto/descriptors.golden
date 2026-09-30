@@ -135,10 +135,14 @@ field anixops.kernelidentity.v1.CreateSubscriberRequest.account_uuid = 1 optiona
 field anixops.kernelidentity.v1.CreateSubscriberRequest.email = 2 optional string
 field anixops.kernelidentity.v1.CreateSubscriberRequest.invite_code = 4 optional string
 field anixops.kernelidentity.v1.CreateSubscriberRequest.invite_user_id = 3 optional uint64
+field anixops.kernelidentity.v1.CreateSubscriberRequest.is_admin = 5 optional bool
+field anixops.kernelidentity.v1.CreateSubscriberRequest.is_staff = 6 optional bool
 field anixops.kernelidentity.v1.CreateSubscriberResponse.created = 2 optional bool
 field anixops.kernelidentity.v1.CreateSubscriberResponse.user_id = 1 optional uint64
 field anixops.kernelidentity.v1.DeleteSubscriberRequest.user_id = 1 optional uint64
 field anixops.kernelidentity.v1.GetIdentitySettingsResponse.settings_json = 1 optional bytes
+field anixops.kernelidentity.v1.GetSubscriberRequest.user_id = 1 optional uint64
+field anixops.kernelidentity.v1.GetSubscriberResponse.subscriber_json = 1 optional bytes
 field anixops.kernelidentity.v1.LegacyCredentialMirror.backup_code_hashes = 6 repeated string
 field anixops.kernelidentity.v1.LegacyCredentialMirror.mfa_enabled = 4 optional bool
 field anixops.kernelidentity.v1.LegacyCredentialMirror.password_algo = 2 optional string
@@ -337,6 +341,7 @@ rpc anixops.kernelidentity.v1.KernelIdentity.ApplyAccountProjection(anixops.kern
 rpc anixops.kernelidentity.v1.KernelIdentity.CreateSubscriber(anixops.kernelidentity.v1.CreateSubscriberRequest) returns (anixops.kernelidentity.v1.CreateSubscriberResponse)
 rpc anixops.kernelidentity.v1.KernelIdentity.DeleteSubscriber(anixops.kernelidentity.v1.DeleteSubscriberRequest) returns (anixops.kernelidentity.v1.DeleteSubscriberResponse)
 rpc anixops.kernelidentity.v1.KernelIdentity.GetIdentitySettings(anixops.kernelidentity.v1.GetIdentitySettingsRequest) returns (anixops.kernelidentity.v1.GetIdentitySettingsResponse)
+rpc anixops.kernelidentity.v1.KernelIdentity.GetSubscriber(anixops.kernelidentity.v1.GetSubscriberRequest) returns (anixops.kernelidentity.v1.GetSubscriberResponse)
 rpc anixops.kernelidentity.v1.KernelIdentity.PublishRevocation(anixops.kernelidentity.v1.PublishRevocationRequest) returns (anixops.kernelidentity.v1.PublishRevocationResponse)
 rpc anixops.kernelidentity.v1.KernelIdentity.ResolveActorAccess(anixops.kernelidentity.v1.ResolveActorAccessRequest) returns (anixops.kernelidentity.v1.ResolveActorAccessResponse)
 rpc anixops.kernelidentity.v1.KernelIdentity.UpdateSubscriber(anixops.kernelidentity.v1.UpdateSubscriberRequest) returns (anixops.kernelidentity.v1.UpdateSubscriberResponse)

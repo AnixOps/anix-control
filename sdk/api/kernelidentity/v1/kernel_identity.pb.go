@@ -21,6 +21,95 @@ const (
 	_ = protoimpl.EnforceVersion(protoimpl.MaxVersion - 20)
 )
 
+type GetSubscriberRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        uint64                 `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSubscriberRequest) Reset() {
+	*x = GetSubscriberRequest{}
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[0]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSubscriberRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSubscriberRequest) ProtoMessage() {}
+
+func (x *GetSubscriberRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[0]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSubscriberRequest.ProtoReflect.Descriptor instead.
+func (*GetSubscriberRequest) Descriptor() ([]byte, []int) {
+	return file_api_kernelidentity_v1_kernel_identity_proto_rawDescGZIP(), []int{0}
+}
+
+func (x *GetSubscriberRequest) GetUserId() uint64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+type GetSubscriberResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// subscriber_json is the v2 user object, without credentials.
+	SubscriberJson []byte `protobuf:"bytes,1,opt,name=subscriber_json,json=subscriberJson,proto3" json:"subscriber_json,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GetSubscriberResponse) Reset() {
+	*x = GetSubscriberResponse{}
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[1]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSubscriberResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSubscriberResponse) ProtoMessage() {}
+
+func (x *GetSubscriberResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[1]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSubscriberResponse.ProtoReflect.Descriptor instead.
+func (*GetSubscriberResponse) Descriptor() ([]byte, []int) {
+	return file_api_kernelidentity_v1_kernel_identity_proto_rawDescGZIP(), []int{1}
+}
+
+func (x *GetSubscriberResponse) GetSubscriberJson() []byte {
+	if x != nil {
+		return x.SubscriberJson
+	}
+	return nil
+}
+
 type CreateSubscriberRequest struct {
 	state        protoimpl.MessageState `protogen:"open.v1"`
 	AccountUuid  string                 `protobuf:"bytes,1,opt,name=account_uuid,json=accountUuid,proto3" json:"account_uuid,omitempty"`
@@ -29,14 +118,18 @@ type CreateSubscriberRequest struct {
 	// invite_code, when set, is validated and consumed together with the new
 	// subscriber: the code's owner becomes the inviter. Codes stay with the
 	// kernel. Refusals are FailedPrecondition with the v2 message.
-	InviteCode    string `protobuf:"bytes,4,opt,name=invite_code,json=inviteCode,proto3" json:"invite_code,omitempty"`
+	InviteCode string `protobuf:"bytes,4,opt,name=invite_code,json=inviteCode,proto3" json:"invite_code,omitempty"`
+	// is_admin and is_staff set the new subscriber's projected flags, for
+	// accounts an administrator creates.
+	IsAdmin       bool `protobuf:"varint,5,opt,name=is_admin,json=isAdmin,proto3" json:"is_admin,omitempty"`
+	IsStaff       bool `protobuf:"varint,6,opt,name=is_staff,json=isStaff,proto3" json:"is_staff,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
 
 func (x *CreateSubscriberRequest) Reset() {
 	*x = CreateSubscriberRequest{}
-	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[0]
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[2]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -48,7 +141,7 @@ func (x *CreateSubscriberRequest) String() string {
 func (*CreateSubscriberRequest) ProtoMessage() {}
 
 func (x *CreateSubscriberRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[0]
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[2]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -61,7 +154,7 @@ func (x *CreateSubscriberRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateSubscriberRequest.ProtoReflect.Descriptor instead.
 func (*CreateSubscriberRequest) Descriptor() ([]byte, []int) {
-	return file_api_kernelidentity_v1_kernel_identity_proto_rawDescGZIP(), []int{0}
+	return file_api_kernelidentity_v1_kernel_identity_proto_rawDescGZIP(), []int{2}
 }
 
 func (x *CreateSubscriberRequest) GetAccountUuid() string {
@@ -92,6 +185,20 @@ func (x *CreateSubscriberRequest) GetInviteCode() string {
 	return ""
 }
 
+func (x *CreateSubscriberRequest) GetIsAdmin() bool {
+	if x != nil {
+		return x.IsAdmin
+	}
+	return false
+}
+
+func (x *CreateSubscriberRequest) GetIsStaff() bool {
+	if x != nil {
+		return x.IsStaff
+	}
+	return false
+}
+
 type CreateSubscriberResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	UserId        uint64                 `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
@@ -102,7 +209,7 @@ type CreateSubscriberResponse struct {
 
 func (x *CreateSubscriberResponse) Reset() {
 	*x = CreateSubscriberResponse{}
-	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[1]
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[3]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -114,7 +221,7 @@ func (x *CreateSubscriberResponse) String() string {
 func (*CreateSubscriberResponse) ProtoMessage() {}
 
 func (x *CreateSubscriberResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[1]
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[3]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -127,7 +234,7 @@ func (x *CreateSubscriberResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CreateSubscriberResponse.ProtoReflect.Descriptor instead.
 func (*CreateSubscriberResponse) Descriptor() ([]byte, []int) {
-	return file_api_kernelidentity_v1_kernel_identity_proto_rawDescGZIP(), []int{1}
+	return file_api_kernelidentity_v1_kernel_identity_proto_rawDescGZIP(), []int{3}
 }
 
 func (x *CreateSubscriberResponse) GetUserId() uint64 {
@@ -157,7 +264,7 @@ type UpdateSubscriberRequest struct {
 
 func (x *UpdateSubscriberRequest) Reset() {
 	*x = UpdateSubscriberRequest{}
-	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[2]
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[4]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -169,7 +276,7 @@ func (x *UpdateSubscriberRequest) String() string {
 func (*UpdateSubscriberRequest) ProtoMessage() {}
 
 func (x *UpdateSubscriberRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[2]
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[4]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -182,7 +289,7 @@ func (x *UpdateSubscriberRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateSubscriberRequest.ProtoReflect.Descriptor instead.
 func (*UpdateSubscriberRequest) Descriptor() ([]byte, []int) {
-	return file_api_kernelidentity_v1_kernel_identity_proto_rawDescGZIP(), []int{2}
+	return file_api_kernelidentity_v1_kernel_identity_proto_rawDescGZIP(), []int{4}
 }
 
 func (x *UpdateSubscriberRequest) GetUserId() uint64 {
@@ -207,7 +314,7 @@ type UpdateSubscriberResponse struct {
 
 func (x *UpdateSubscriberResponse) Reset() {
 	*x = UpdateSubscriberResponse{}
-	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[3]
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[5]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -219,7 +326,7 @@ func (x *UpdateSubscriberResponse) String() string {
 func (*UpdateSubscriberResponse) ProtoMessage() {}
 
 func (x *UpdateSubscriberResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[3]
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[5]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -232,7 +339,7 @@ func (x *UpdateSubscriberResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use UpdateSubscriberResponse.ProtoReflect.Descriptor instead.
 func (*UpdateSubscriberResponse) Descriptor() ([]byte, []int) {
-	return file_api_kernelidentity_v1_kernel_identity_proto_rawDescGZIP(), []int{3}
+	return file_api_kernelidentity_v1_kernel_identity_proto_rawDescGZIP(), []int{5}
 }
 
 type ApplyAccountProjectionRequest struct {
@@ -252,7 +359,7 @@ type ApplyAccountProjectionRequest struct {
 
 func (x *ApplyAccountProjectionRequest) Reset() {
 	*x = ApplyAccountProjectionRequest{}
-	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[4]
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[6]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -264,7 +371,7 @@ func (x *ApplyAccountProjectionRequest) String() string {
 func (*ApplyAccountProjectionRequest) ProtoMessage() {}
 
 func (x *ApplyAccountProjectionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[4]
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[6]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -277,7 +384,7 @@ func (x *ApplyAccountProjectionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApplyAccountProjectionRequest.ProtoReflect.Descriptor instead.
 func (*ApplyAccountProjectionRequest) Descriptor() ([]byte, []int) {
-	return file_api_kernelidentity_v1_kernel_identity_proto_rawDescGZIP(), []int{4}
+	return file_api_kernelidentity_v1_kernel_identity_proto_rawDescGZIP(), []int{6}
 }
 
 func (x *ApplyAccountProjectionRequest) GetUserId() uint64 {
@@ -343,7 +450,7 @@ type LegacyCredentialMirror struct {
 
 func (x *LegacyCredentialMirror) Reset() {
 	*x = LegacyCredentialMirror{}
-	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[5]
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[7]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -355,7 +462,7 @@ func (x *LegacyCredentialMirror) String() string {
 func (*LegacyCredentialMirror) ProtoMessage() {}
 
 func (x *LegacyCredentialMirror) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[5]
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[7]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -368,7 +475,7 @@ func (x *LegacyCredentialMirror) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LegacyCredentialMirror.ProtoReflect.Descriptor instead.
 func (*LegacyCredentialMirror) Descriptor() ([]byte, []int) {
-	return file_api_kernelidentity_v1_kernel_identity_proto_rawDescGZIP(), []int{5}
+	return file_api_kernelidentity_v1_kernel_identity_proto_rawDescGZIP(), []int{7}
 }
 
 func (x *LegacyCredentialMirror) GetPasswordHash() string {
@@ -423,7 +530,7 @@ type ApplyAccountProjectionResponse struct {
 
 func (x *ApplyAccountProjectionResponse) Reset() {
 	*x = ApplyAccountProjectionResponse{}
-	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[6]
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[8]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -435,7 +542,7 @@ func (x *ApplyAccountProjectionResponse) String() string {
 func (*ApplyAccountProjectionResponse) ProtoMessage() {}
 
 func (x *ApplyAccountProjectionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[6]
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[8]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -448,7 +555,7 @@ func (x *ApplyAccountProjectionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ApplyAccountProjectionResponse.ProtoReflect.Descriptor instead.
 func (*ApplyAccountProjectionResponse) Descriptor() ([]byte, []int) {
-	return file_api_kernelidentity_v1_kernel_identity_proto_rawDescGZIP(), []int{6}
+	return file_api_kernelidentity_v1_kernel_identity_proto_rawDescGZIP(), []int{8}
 }
 
 func (x *ApplyAccountProjectionResponse) GetApplied() bool {
@@ -474,7 +581,7 @@ type DeleteSubscriberRequest struct {
 
 func (x *DeleteSubscriberRequest) Reset() {
 	*x = DeleteSubscriberRequest{}
-	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[7]
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[9]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -486,7 +593,7 @@ func (x *DeleteSubscriberRequest) String() string {
 func (*DeleteSubscriberRequest) ProtoMessage() {}
 
 func (x *DeleteSubscriberRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[7]
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[9]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -499,7 +606,7 @@ func (x *DeleteSubscriberRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteSubscriberRequest.ProtoReflect.Descriptor instead.
 func (*DeleteSubscriberRequest) Descriptor() ([]byte, []int) {
-	return file_api_kernelidentity_v1_kernel_identity_proto_rawDescGZIP(), []int{7}
+	return file_api_kernelidentity_v1_kernel_identity_proto_rawDescGZIP(), []int{9}
 }
 
 func (x *DeleteSubscriberRequest) GetUserId() uint64 {
@@ -517,7 +624,7 @@ type DeleteSubscriberResponse struct {
 
 func (x *DeleteSubscriberResponse) Reset() {
 	*x = DeleteSubscriberResponse{}
-	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[8]
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[10]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -529,7 +636,7 @@ func (x *DeleteSubscriberResponse) String() string {
 func (*DeleteSubscriberResponse) ProtoMessage() {}
 
 func (x *DeleteSubscriberResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[8]
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[10]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -542,7 +649,7 @@ func (x *DeleteSubscriberResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DeleteSubscriberResponse.ProtoReflect.Descriptor instead.
 func (*DeleteSubscriberResponse) Descriptor() ([]byte, []int) {
-	return file_api_kernelidentity_v1_kernel_identity_proto_rawDescGZIP(), []int{8}
+	return file_api_kernelidentity_v1_kernel_identity_proto_rawDescGZIP(), []int{10}
 }
 
 type PublishRevocationRequest struct {
@@ -562,7 +669,7 @@ type PublishRevocationRequest struct {
 
 func (x *PublishRevocationRequest) Reset() {
 	*x = PublishRevocationRequest{}
-	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[9]
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[11]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -574,7 +681,7 @@ func (x *PublishRevocationRequest) String() string {
 func (*PublishRevocationRequest) ProtoMessage() {}
 
 func (x *PublishRevocationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[9]
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[11]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -587,7 +694,7 @@ func (x *PublishRevocationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublishRevocationRequest.ProtoReflect.Descriptor instead.
 func (*PublishRevocationRequest) Descriptor() ([]byte, []int) {
-	return file_api_kernelidentity_v1_kernel_identity_proto_rawDescGZIP(), []int{9}
+	return file_api_kernelidentity_v1_kernel_identity_proto_rawDescGZIP(), []int{11}
 }
 
 func (x *PublishRevocationRequest) GetUserId() uint64 {
@@ -640,7 +747,7 @@ type PublishRevocationResponse struct {
 
 func (x *PublishRevocationResponse) Reset() {
 	*x = PublishRevocationResponse{}
-	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[10]
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[12]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -652,7 +759,7 @@ func (x *PublishRevocationResponse) String() string {
 func (*PublishRevocationResponse) ProtoMessage() {}
 
 func (x *PublishRevocationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[10]
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[12]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -665,7 +772,7 @@ func (x *PublishRevocationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use PublishRevocationResponse.ProtoReflect.Descriptor instead.
 func (*PublishRevocationResponse) Descriptor() ([]byte, []int) {
-	return file_api_kernelidentity_v1_kernel_identity_proto_rawDescGZIP(), []int{10}
+	return file_api_kernelidentity_v1_kernel_identity_proto_rawDescGZIP(), []int{12}
 }
 
 type ResolveActorAccessRequest struct {
@@ -678,7 +785,7 @@ type ResolveActorAccessRequest struct {
 
 func (x *ResolveActorAccessRequest) Reset() {
 	*x = ResolveActorAccessRequest{}
-	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[11]
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[13]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -690,7 +797,7 @@ func (x *ResolveActorAccessRequest) String() string {
 func (*ResolveActorAccessRequest) ProtoMessage() {}
 
 func (x *ResolveActorAccessRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[11]
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[13]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -703,7 +810,7 @@ func (x *ResolveActorAccessRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveActorAccessRequest.ProtoReflect.Descriptor instead.
 func (*ResolveActorAccessRequest) Descriptor() ([]byte, []int) {
-	return file_api_kernelidentity_v1_kernel_identity_proto_rawDescGZIP(), []int{11}
+	return file_api_kernelidentity_v1_kernel_identity_proto_rawDescGZIP(), []int{13}
 }
 
 func (x *ResolveActorAccessRequest) GetUserId() uint64 {
@@ -734,7 +841,7 @@ type ResolveActorAccessResponse struct {
 
 func (x *ResolveActorAccessResponse) Reset() {
 	*x = ResolveActorAccessResponse{}
-	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[12]
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[14]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -746,7 +853,7 @@ func (x *ResolveActorAccessResponse) String() string {
 func (*ResolveActorAccessResponse) ProtoMessage() {}
 
 func (x *ResolveActorAccessResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[12]
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[14]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -759,7 +866,7 @@ func (x *ResolveActorAccessResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ResolveActorAccessResponse.ProtoReflect.Descriptor instead.
 func (*ResolveActorAccessResponse) Descriptor() ([]byte, []int) {
-	return file_api_kernelidentity_v1_kernel_identity_proto_rawDescGZIP(), []int{12}
+	return file_api_kernelidentity_v1_kernel_identity_proto_rawDescGZIP(), []int{14}
 }
 
 func (x *ResolveActorAccessResponse) GetPermissionMode() string {
@@ -798,7 +905,7 @@ type GetIdentitySettingsRequest struct {
 
 func (x *GetIdentitySettingsRequest) Reset() {
 	*x = GetIdentitySettingsRequest{}
-	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[13]
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[15]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -810,7 +917,7 @@ func (x *GetIdentitySettingsRequest) String() string {
 func (*GetIdentitySettingsRequest) ProtoMessage() {}
 
 func (x *GetIdentitySettingsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[13]
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[15]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -823,7 +930,7 @@ func (x *GetIdentitySettingsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetIdentitySettingsRequest.ProtoReflect.Descriptor instead.
 func (*GetIdentitySettingsRequest) Descriptor() ([]byte, []int) {
-	return file_api_kernelidentity_v1_kernel_identity_proto_rawDescGZIP(), []int{13}
+	return file_api_kernelidentity_v1_kernel_identity_proto_rawDescGZIP(), []int{15}
 }
 
 type GetIdentitySettingsResponse struct {
@@ -837,7 +944,7 @@ type GetIdentitySettingsResponse struct {
 
 func (x *GetIdentitySettingsResponse) Reset() {
 	*x = GetIdentitySettingsResponse{}
-	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[14]
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[16]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -849,7 +956,7 @@ func (x *GetIdentitySettingsResponse) String() string {
 func (*GetIdentitySettingsResponse) ProtoMessage() {}
 
 func (x *GetIdentitySettingsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[14]
+	mi := &file_api_kernelidentity_v1_kernel_identity_proto_msgTypes[16]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -862,7 +969,7 @@ func (x *GetIdentitySettingsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetIdentitySettingsResponse.ProtoReflect.Descriptor instead.
 func (*GetIdentitySettingsResponse) Descriptor() ([]byte, []int) {
-	return file_api_kernelidentity_v1_kernel_identity_proto_rawDescGZIP(), []int{14}
+	return file_api_kernelidentity_v1_kernel_identity_proto_rawDescGZIP(), []int{16}
 }
 
 func (x *GetIdentitySettingsResponse) GetSettingsJson() []byte {
@@ -876,13 +983,19 @@ var File_api_kernelidentity_v1_kernel_identity_proto protoreflect.FileDescriptor
 
 const file_api_kernelidentity_v1_kernel_identity_proto_rawDesc = "" +
 	"\n" +
-	"+api/kernelidentity/v1/kernel_identity.proto\x12\x19anixops.kernelidentity.v1\"\x99\x01\n" +
+	"+api/kernelidentity/v1/kernel_identity.proto\x12\x19anixops.kernelidentity.v1\"/\n" +
+	"\x14GetSubscriberRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\x04R\x06userId\"@\n" +
+	"\x15GetSubscriberResponse\x12'\n" +
+	"\x0fsubscriber_json\x18\x01 \x01(\fR\x0esubscriberJson\"\xcf\x01\n" +
 	"\x17CreateSubscriberRequest\x12!\n" +
 	"\faccount_uuid\x18\x01 \x01(\tR\vaccountUuid\x12\x14\n" +
 	"\x05email\x18\x02 \x01(\tR\x05email\x12$\n" +
 	"\x0einvite_user_id\x18\x03 \x01(\x04R\finviteUserId\x12\x1f\n" +
 	"\vinvite_code\x18\x04 \x01(\tR\n" +
-	"inviteCode\"M\n" +
+	"inviteCode\x12\x19\n" +
+	"\bis_admin\x18\x05 \x01(\bR\aisAdmin\x12\x19\n" +
+	"\bis_staff\x18\x06 \x01(\bR\aisStaff\"M\n" +
 	"\x18CreateSubscriberResponse\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x04R\x06userId\x12\x18\n" +
 	"\acreated\x18\x02 \x01(\bR\acreated\"_\n" +
@@ -932,7 +1045,7 @@ const file_api_kernelidentity_v1_kernel_identity_proto_rawDesc = "" +
 	"\funrestricted\x18\x04 \x01(\bR\funrestricted\"\x1c\n" +
 	"\x1aGetIdentitySettingsRequest\"B\n" +
 	"\x1bGetIdentitySettingsResponse\x12#\n" +
-	"\rsettings_json\x18\x01 \x01(\fR\fsettingsJson2\xa2\a\n" +
+	"\rsettings_json\x18\x01 \x01(\fR\fsettingsJson2\x96\b\n" +
 	"\x0eKernelIdentity\x12{\n" +
 	"\x10CreateSubscriber\x122.anixops.kernelidentity.v1.CreateSubscriberRequest\x1a3.anixops.kernelidentity.v1.CreateSubscriberResponse\x12{\n" +
 	"\x10UpdateSubscriber\x122.anixops.kernelidentity.v1.UpdateSubscriberRequest\x1a3.anixops.kernelidentity.v1.UpdateSubscriberResponse\x12\x8d\x01\n" +
@@ -940,7 +1053,8 @@ const file_api_kernelidentity_v1_kernel_identity_proto_rawDesc = "" +
 	"\x10DeleteSubscriber\x122.anixops.kernelidentity.v1.DeleteSubscriberRequest\x1a3.anixops.kernelidentity.v1.DeleteSubscriberResponse\x12~\n" +
 	"\x11PublishRevocation\x123.anixops.kernelidentity.v1.PublishRevocationRequest\x1a4.anixops.kernelidentity.v1.PublishRevocationResponse\x12\x81\x01\n" +
 	"\x12ResolveActorAccess\x124.anixops.kernelidentity.v1.ResolveActorAccessRequest\x1a5.anixops.kernelidentity.v1.ResolveActorAccessResponse\x12\x84\x01\n" +
-	"\x13GetIdentitySettings\x125.anixops.kernelidentity.v1.GetIdentitySettingsRequest\x1a6.anixops.kernelidentity.v1.GetIdentitySettingsResponseBLZJgithub.com/AnixOps/anix-control/sdk/api/kernelidentity/v1;kernelidentityv1b\x06proto3"
+	"\x13GetIdentitySettings\x125.anixops.kernelidentity.v1.GetIdentitySettingsRequest\x1a6.anixops.kernelidentity.v1.GetIdentitySettingsResponse\x12r\n" +
+	"\rGetSubscriber\x12/.anixops.kernelidentity.v1.GetSubscriberRequest\x1a0.anixops.kernelidentity.v1.GetSubscriberResponseBLZJgithub.com/AnixOps/anix-control/sdk/api/kernelidentity/v1;kernelidentityv1b\x06proto3"
 
 var (
 	file_api_kernelidentity_v1_kernel_identity_proto_rawDescOnce sync.Once
@@ -954,42 +1068,46 @@ func file_api_kernelidentity_v1_kernel_identity_proto_rawDescGZIP() []byte {
 	return file_api_kernelidentity_v1_kernel_identity_proto_rawDescData
 }
 
-var file_api_kernelidentity_v1_kernel_identity_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_api_kernelidentity_v1_kernel_identity_proto_msgTypes = make([]protoimpl.MessageInfo, 17)
 var file_api_kernelidentity_v1_kernel_identity_proto_goTypes = []any{
-	(*CreateSubscriberRequest)(nil),        // 0: anixops.kernelidentity.v1.CreateSubscriberRequest
-	(*CreateSubscriberResponse)(nil),       // 1: anixops.kernelidentity.v1.CreateSubscriberResponse
-	(*UpdateSubscriberRequest)(nil),        // 2: anixops.kernelidentity.v1.UpdateSubscriberRequest
-	(*UpdateSubscriberResponse)(nil),       // 3: anixops.kernelidentity.v1.UpdateSubscriberResponse
-	(*ApplyAccountProjectionRequest)(nil),  // 4: anixops.kernelidentity.v1.ApplyAccountProjectionRequest
-	(*LegacyCredentialMirror)(nil),         // 5: anixops.kernelidentity.v1.LegacyCredentialMirror
-	(*ApplyAccountProjectionResponse)(nil), // 6: anixops.kernelidentity.v1.ApplyAccountProjectionResponse
-	(*DeleteSubscriberRequest)(nil),        // 7: anixops.kernelidentity.v1.DeleteSubscriberRequest
-	(*DeleteSubscriberResponse)(nil),       // 8: anixops.kernelidentity.v1.DeleteSubscriberResponse
-	(*PublishRevocationRequest)(nil),       // 9: anixops.kernelidentity.v1.PublishRevocationRequest
-	(*PublishRevocationResponse)(nil),      // 10: anixops.kernelidentity.v1.PublishRevocationResponse
-	(*ResolveActorAccessRequest)(nil),      // 11: anixops.kernelidentity.v1.ResolveActorAccessRequest
-	(*ResolveActorAccessResponse)(nil),     // 12: anixops.kernelidentity.v1.ResolveActorAccessResponse
-	(*GetIdentitySettingsRequest)(nil),     // 13: anixops.kernelidentity.v1.GetIdentitySettingsRequest
-	(*GetIdentitySettingsResponse)(nil),    // 14: anixops.kernelidentity.v1.GetIdentitySettingsResponse
+	(*GetSubscriberRequest)(nil),           // 0: anixops.kernelidentity.v1.GetSubscriberRequest
+	(*GetSubscriberResponse)(nil),          // 1: anixops.kernelidentity.v1.GetSubscriberResponse
+	(*CreateSubscriberRequest)(nil),        // 2: anixops.kernelidentity.v1.CreateSubscriberRequest
+	(*CreateSubscriberResponse)(nil),       // 3: anixops.kernelidentity.v1.CreateSubscriberResponse
+	(*UpdateSubscriberRequest)(nil),        // 4: anixops.kernelidentity.v1.UpdateSubscriberRequest
+	(*UpdateSubscriberResponse)(nil),       // 5: anixops.kernelidentity.v1.UpdateSubscriberResponse
+	(*ApplyAccountProjectionRequest)(nil),  // 6: anixops.kernelidentity.v1.ApplyAccountProjectionRequest
+	(*LegacyCredentialMirror)(nil),         // 7: anixops.kernelidentity.v1.LegacyCredentialMirror
+	(*ApplyAccountProjectionResponse)(nil), // 8: anixops.kernelidentity.v1.ApplyAccountProjectionResponse
+	(*DeleteSubscriberRequest)(nil),        // 9: anixops.kernelidentity.v1.DeleteSubscriberRequest
+	(*DeleteSubscriberResponse)(nil),       // 10: anixops.kernelidentity.v1.DeleteSubscriberResponse
+	(*PublishRevocationRequest)(nil),       // 11: anixops.kernelidentity.v1.PublishRevocationRequest
+	(*PublishRevocationResponse)(nil),      // 12: anixops.kernelidentity.v1.PublishRevocationResponse
+	(*ResolveActorAccessRequest)(nil),      // 13: anixops.kernelidentity.v1.ResolveActorAccessRequest
+	(*ResolveActorAccessResponse)(nil),     // 14: anixops.kernelidentity.v1.ResolveActorAccessResponse
+	(*GetIdentitySettingsRequest)(nil),     // 15: anixops.kernelidentity.v1.GetIdentitySettingsRequest
+	(*GetIdentitySettingsResponse)(nil),    // 16: anixops.kernelidentity.v1.GetIdentitySettingsResponse
 }
 var file_api_kernelidentity_v1_kernel_identity_proto_depIdxs = []int32{
-	5,  // 0: anixops.kernelidentity.v1.ApplyAccountProjectionRequest.legacy_mirror:type_name -> anixops.kernelidentity.v1.LegacyCredentialMirror
-	0,  // 1: anixops.kernelidentity.v1.KernelIdentity.CreateSubscriber:input_type -> anixops.kernelidentity.v1.CreateSubscriberRequest
-	2,  // 2: anixops.kernelidentity.v1.KernelIdentity.UpdateSubscriber:input_type -> anixops.kernelidentity.v1.UpdateSubscriberRequest
-	4,  // 3: anixops.kernelidentity.v1.KernelIdentity.ApplyAccountProjection:input_type -> anixops.kernelidentity.v1.ApplyAccountProjectionRequest
-	7,  // 4: anixops.kernelidentity.v1.KernelIdentity.DeleteSubscriber:input_type -> anixops.kernelidentity.v1.DeleteSubscriberRequest
-	9,  // 5: anixops.kernelidentity.v1.KernelIdentity.PublishRevocation:input_type -> anixops.kernelidentity.v1.PublishRevocationRequest
-	11, // 6: anixops.kernelidentity.v1.KernelIdentity.ResolveActorAccess:input_type -> anixops.kernelidentity.v1.ResolveActorAccessRequest
-	13, // 7: anixops.kernelidentity.v1.KernelIdentity.GetIdentitySettings:input_type -> anixops.kernelidentity.v1.GetIdentitySettingsRequest
-	1,  // 8: anixops.kernelidentity.v1.KernelIdentity.CreateSubscriber:output_type -> anixops.kernelidentity.v1.CreateSubscriberResponse
-	3,  // 9: anixops.kernelidentity.v1.KernelIdentity.UpdateSubscriber:output_type -> anixops.kernelidentity.v1.UpdateSubscriberResponse
-	6,  // 10: anixops.kernelidentity.v1.KernelIdentity.ApplyAccountProjection:output_type -> anixops.kernelidentity.v1.ApplyAccountProjectionResponse
-	8,  // 11: anixops.kernelidentity.v1.KernelIdentity.DeleteSubscriber:output_type -> anixops.kernelidentity.v1.DeleteSubscriberResponse
-	10, // 12: anixops.kernelidentity.v1.KernelIdentity.PublishRevocation:output_type -> anixops.kernelidentity.v1.PublishRevocationResponse
-	12, // 13: anixops.kernelidentity.v1.KernelIdentity.ResolveActorAccess:output_type -> anixops.kernelidentity.v1.ResolveActorAccessResponse
-	14, // 14: anixops.kernelidentity.v1.KernelIdentity.GetIdentitySettings:output_type -> anixops.kernelidentity.v1.GetIdentitySettingsResponse
-	8,  // [8:15] is the sub-list for method output_type
-	1,  // [1:8] is the sub-list for method input_type
+	7,  // 0: anixops.kernelidentity.v1.ApplyAccountProjectionRequest.legacy_mirror:type_name -> anixops.kernelidentity.v1.LegacyCredentialMirror
+	2,  // 1: anixops.kernelidentity.v1.KernelIdentity.CreateSubscriber:input_type -> anixops.kernelidentity.v1.CreateSubscriberRequest
+	4,  // 2: anixops.kernelidentity.v1.KernelIdentity.UpdateSubscriber:input_type -> anixops.kernelidentity.v1.UpdateSubscriberRequest
+	6,  // 3: anixops.kernelidentity.v1.KernelIdentity.ApplyAccountProjection:input_type -> anixops.kernelidentity.v1.ApplyAccountProjectionRequest
+	9,  // 4: anixops.kernelidentity.v1.KernelIdentity.DeleteSubscriber:input_type -> anixops.kernelidentity.v1.DeleteSubscriberRequest
+	11, // 5: anixops.kernelidentity.v1.KernelIdentity.PublishRevocation:input_type -> anixops.kernelidentity.v1.PublishRevocationRequest
+	13, // 6: anixops.kernelidentity.v1.KernelIdentity.ResolveActorAccess:input_type -> anixops.kernelidentity.v1.ResolveActorAccessRequest
+	15, // 7: anixops.kernelidentity.v1.KernelIdentity.GetIdentitySettings:input_type -> anixops.kernelidentity.v1.GetIdentitySettingsRequest
+	0,  // 8: anixops.kernelidentity.v1.KernelIdentity.GetSubscriber:input_type -> anixops.kernelidentity.v1.GetSubscriberRequest
+	3,  // 9: anixops.kernelidentity.v1.KernelIdentity.CreateSubscriber:output_type -> anixops.kernelidentity.v1.CreateSubscriberResponse
+	5,  // 10: anixops.kernelidentity.v1.KernelIdentity.UpdateSubscriber:output_type -> anixops.kernelidentity.v1.UpdateSubscriberResponse
+	8,  // 11: anixops.kernelidentity.v1.KernelIdentity.ApplyAccountProjection:output_type -> anixops.kernelidentity.v1.ApplyAccountProjectionResponse
+	10, // 12: anixops.kernelidentity.v1.KernelIdentity.DeleteSubscriber:output_type -> anixops.kernelidentity.v1.DeleteSubscriberResponse
+	12, // 13: anixops.kernelidentity.v1.KernelIdentity.PublishRevocation:output_type -> anixops.kernelidentity.v1.PublishRevocationResponse
+	14, // 14: anixops.kernelidentity.v1.KernelIdentity.ResolveActorAccess:output_type -> anixops.kernelidentity.v1.ResolveActorAccessResponse
+	16, // 15: anixops.kernelidentity.v1.KernelIdentity.GetIdentitySettings:output_type -> anixops.kernelidentity.v1.GetIdentitySettingsResponse
+	1,  // 16: anixops.kernelidentity.v1.KernelIdentity.GetSubscriber:output_type -> anixops.kernelidentity.v1.GetSubscriberResponse
+	9,  // [9:17] is the sub-list for method output_type
+	1,  // [1:9] is the sub-list for method input_type
 	1,  // [1:1] is the sub-list for extension type_name
 	1,  // [1:1] is the sub-list for extension extendee
 	0,  // [0:1] is the sub-list for field type_name
@@ -1006,7 +1124,7 @@ func file_api_kernelidentity_v1_kernel_identity_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_kernelidentity_v1_kernel_identity_proto_rawDesc), len(file_api_kernelidentity_v1_kernel_identity_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   15,
+			NumMessages:   17,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

@@ -22,6 +22,9 @@ const (
 	password   = "correct-horse"
 )
 
+// expiredAt is one past instant for both databases of a case.
+var expiredAt = time.Now().Add(-time.Hour).Unix()
+
 func loginRoute() packagecompat.Route {
 	return packagecompat.Route{
 		Method: "POST", Pattern: "/api/v2/login", RouteID: "identity.auth.login", Models: Models,
@@ -60,7 +63,7 @@ func hash(t testing.TB, plain string) string {
 func seedUsers(change func(*config.Config), mutate func(t testing.TB, db *gorm.DB)) func(t testing.TB, db *gorm.DB) {
 	return func(t testing.TB, db *gorm.DB) {
 		configure(change)
-		past := time.Now().Add(-time.Hour).Unix()
+		past := expiredAt
 		users := []model.User{
 			{ID: 1, Email: "admin@example.test", Password: hash(t, password), UUID: "u1", Token: "t1", IsAdmin: 1},
 			{ID: 2, Email: "member@example.test", Password: hash(t, password), UUID: "u2", Token: "t2"},

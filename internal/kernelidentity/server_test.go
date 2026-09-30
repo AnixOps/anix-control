@@ -87,7 +87,7 @@ func TestCreateSubscriberIsIdempotentOnTheAccount(t *testing.T) {
 
 	var user model.User
 	require.NoError(t, f.db.Take(&user, first.GetUserId()).Error)
-	require.Equal(t, "new@example.test", user.Email)
+	require.Equal(t, "New@Example.test", user.Email, "identity decides normalization; the kernel keeps the email")
 	require.Equal(t, UnusableLegacyPassword, user.Password, "identity owns the credentials")
 	require.NotEmpty(t, user.UUID)
 	require.NotEmpty(t, user.Token)
@@ -99,7 +99,7 @@ func TestCreateSubscriberIsIdempotentOnTheAccount(t *testing.T) {
 	require.Equal(t, first.GetUserId(), again.GetUserId())
 
 	_, err = f.server.CreateSubscriber(context.Background(), &kernelidentityv1.CreateSubscriberRequest{
-		AccountUuid: "5d1c7a2b-3e4f-4a5b-8c6d-7e8f9a0b1c2d", Email: "new@example.test",
+		AccountUuid: "5d1c7a2b-3e4f-4a5b-8c6d-7e8f9a0b1c2d", Email: "New@Example.test",
 	})
 	requireCode(t, err, codes.AlreadyExists)
 	_, err = f.server.CreateSubscriber(context.Background(), &kernelidentityv1.CreateSubscriberRequest{AccountUuid: "not-a-uuid", Email: "x@example.test"})
@@ -311,4 +311,17 @@ func TestCreateSubscriberConsumesTheInviteCode(t *testing.T) {
 		AccountUuid: "99999999-2222-4333-8444-555555555555", Email: "other@example.test", InviteCode: "OPEN",
 	})
 	requireCode(t, err, codes.FailedPrecondition)
+}
+
+func TestGetSubscriberShowsTheV2UserWithoutCredentials(t *testing.T) {
+	f := newFixture(t)
+	id := f.createSubscriber(t, accountA, "shown@example.test")
+	response, err := f.server.GetSubscriber(context.Background(), &kernelidentityv1.GetSubscriberRequest{UserId: uint64(id)})
+	require.NoError(t, err)
+	var shown map[string]any
+	require.NoError(t, json.Unmarshal(response.GetSubscriberJson(), &shown))
+	require.Equal(t, "shown@example.test", shown["email"])
+	require.NotContains(t, shown, "password")
+	_, err = f.server.GetSubscriber(context.Background(), &kernelidentityv1.GetSubscriberRequest{UserId: 999})
+	requireCode(t, err, codes.NotFound)
 }
