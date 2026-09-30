@@ -181,3 +181,48 @@ func TestNewFactoryUsesTheRegisteredWebSocketRouteResolver(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []byte("echo:ping"), frame.Data)
 }
+
+type movedRouteResolverStub struct {
+	resolved []string
+}
+
+func (s *movedRouteResolverStub) Resolve(packageID, routeID, operation string) (packagebridge.OperationHandler, bool) {
+	s.resolved = append(s.resolved, packageID+" "+routeID+" "+operation)
+	if packageID != "platform" {
+		return nil, false
+	}
+	return func(context.Context, packagebridge.Call) (packagebridge.Response, error) {
+		return packagebridge.Response{StatusCode: http.StatusAccepted}, nil
+	}, true
+}
+
+func TestMovedRouteOperationsRunTheNewOwnersHandler(t *testing.T) {
+	resolver := &movedRouteResolverStub{}
+	operations := movedRouteOperations(resolver)
+	require.Len(t, operations, 21)
+
+	var configs, reset packagebridge.Operation
+	for _, operation := range operations {
+		require.Equal(t, packageID, operation.PackageID)
+		require.Equal(t, operation.RouteID, operation.Name)
+		switch operation.RouteID {
+		case "identity.admin.system.configs.get":
+			configs = operation
+		case "identity.user.reset.post":
+			reset = operation
+		}
+	}
+
+	response, err := configs.Handler(context.Background(), packagebridge.Call{})
+	require.NoError(t, err)
+	require.Equal(t, uint32(http.StatusAccepted), response.StatusCode)
+
+	// The new owner's handler is not registered: the old id is rejected
+	// rather than served by anything else.
+	_, err = reset.Handler(context.Background(), packagebridge.Call{})
+	require.ErrorIs(t, err, packagebridge.ErrCapabilityRejected)
+	require.Equal(t, []string{
+		"platform platform.admin.system.configs.get platform.admin.system.configs.get",
+		"forward forward.user.reset.post forward.user.reset.post",
+	}, resolver.resolved)
+}

@@ -16,6 +16,8 @@ ALLOWED_METHODS = frozenset({"GET", "POST", "PUT", "PATCH", "HEAD", "OPTIONS", "
 ALLOWED_OWNERS = frozenset(
     {
         "identity-platform",
+        "platform",
+        "affiliate",
         "machine-telemetry",
         "subscription",
         "knowledge",
@@ -35,6 +37,8 @@ ALLOWED_OWNERS = frozenset(
 )
 OWNER_ROUTE_PREFIXES = {
     "identity-platform": ("identity.",),
+    "platform": ("platform.",),
+    "affiliate": ("affiliate.",),
     "machine-telemetry": ("telemetry.",),
     "subscription": ("subscription.",),
     "knowledge": ("knowledge.",),

@@ -437,8 +437,31 @@ func TestAllCataloguedV2RoutesResolveThroughTheirPackageBridge(t *testing.T) {
 			require.NotNil(t, operation)
 		})
 	}
-	require.Equal(t, 45, identityRoutes)
-	require.Equal(t, 247, bridgedRoutes)
+	require.Equal(t, 24, identityRoutes)
+	require.Equal(t, 268, bridgedRoutes)
+}
+
+// Old identity-platform releases still declare the routes that moved to
+// platform, affiliate and forward. Their old ids stay callable and run the
+// new owner's handler.
+func TestMovedV2RoutesKeepTheirOldIdentityRouteIDs(t *testing.T) {
+	_, cfg, _ := setupV2PackageRouter(t)
+	identityAllowlist, err := identitybridge.NewAllowlist(cfg)
+	require.NoError(t, err)
+	catalog := map[string]v2PackageRouteCatalogRow{}
+	for _, route := range loadV2PackageRouteCatalog(t) {
+		catalog[route.Method+" "+route.Path] = route
+	}
+	moved := compatv2.MovedRoutes()
+	require.Len(t, moved, 21)
+	for _, route := range moved {
+		entry, ok := catalog[route.Method+" "+route.LegacyPath]
+		require.True(t, ok, route.LegacyPath)
+		require.Equal(t, route.ToPackage, entry.Owner)
+		require.Equal(t, route.ToRoute, entry.RouteID)
+		require.True(t, identityAllowlist.Allows(route.FromPackage, route.FromRoute, route.FromRoute), route.FromRoute)
+		require.False(t, identityAllowlist.Allows(route.ToPackage, route.FromRoute, route.FromRoute), route.FromRoute)
+	}
 }
 
 func TestV2PackageRouterFixturesAreIsolated(t *testing.T) {
@@ -1181,7 +1204,7 @@ func TestEveryCataloguedV2RouteResolvesToItsOwnRouteID(t *testing.T) {
 	require.True(t, ok)
 	routeFiles, err := filepath.Glob(filepath.Join(filepath.Dir(sourceFile), "..", "..", "packages", "*", "compat", "v2-routes.json"))
 	require.NoError(t, err)
-	require.Len(t, routeFiles, 16)
+	require.Len(t, routeFiles, 18)
 	for _, routeFile := range routeFiles {
 		raw, err := os.ReadFile(routeFile)
 		require.NoError(t, err)

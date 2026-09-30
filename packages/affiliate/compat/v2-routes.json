@@ -1,0 +1,62 @@
+{
+  "api_version": "v2",
+  "package_id": "affiliate",
+  "routes": [
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/invite/config",
+      "package_route": "affiliate.admin.invite.config.get",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "PUT",
+      "legacy_path": "/api/v2/admin/invite/config",
+      "package_route": "affiliate.admin.invite.config.put",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/invite/stats",
+      "package_route": "affiliate.admin.invite.stats.get",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/admin/invite/withdrawals",
+      "package_route": "affiliate.admin.invite.withdrawals.get",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/invite/withdrawals/:id/process",
+      "package_route": "affiliate.admin.invite.withdrawals.id.process.post",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/user/invite/commissions",
+      "package_route": "affiliate.user.invite.commissions.get",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/user/invite/withdraw",
+      "package_route": "affiliate.user.invite.withdraw.post",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
+      "legacy_path": "/api/v2/user/invite/withdrawals",
+      "package_route": "affiliate.user.invite.withdrawals.get",
+      "envelope": "panel",
+      "transport": "http"
+    }
+  ]
+}

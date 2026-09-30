@@ -269,6 +269,8 @@ func main() {
         self.assertEqual(
             [
                 ("identity-platform", ("control",)),
+                ("platform", ("control",)),
+                ("affiliate", ("control",)),
                 ("subscription", ("control",)),
                 ("proxy-node", ("control",)),
                 ("plan", ("control",)),
@@ -733,8 +735,8 @@ func main() {
 
             artifacts = sorted(output.glob("*.anxp"))
             sboms = sorted(output.glob("*.sbom.spdx.json"))
-            self.assertEqual(16, len(artifacts))
-            self.assertEqual(16, len(sboms))
+            self.assertEqual(18, len(artifacts))
+            self.assertEqual(18, len(sboms))
             self.assertIn(output / "identity-platform-4.0.0.anxp", artifacts)
 
             for artifact_path in artifacts:

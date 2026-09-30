@@ -551,8 +551,8 @@
   {
     "method": "GET",
     "path": "/api/v2/admin/invite/config",
-    "owner": "identity-platform",
-    "route_id": "identity.admin.invite.config.get",
+    "owner": "affiliate",
+    "route_id": "affiliate.admin.invite.config.get",
     "envelope": "panel",
     "middleware_group": "admin",
     "transport": "http"
@@ -560,8 +560,8 @@
   {
     "method": "PUT",
     "path": "/api/v2/admin/invite/config",
-    "owner": "identity-platform",
-    "route_id": "identity.admin.invite.config.put",
+    "owner": "affiliate",
+    "route_id": "affiliate.admin.invite.config.put",
     "envelope": "panel",
     "middleware_group": "admin",
     "transport": "http"
@@ -569,8 +569,8 @@
   {
     "method": "GET",
     "path": "/api/v2/admin/invite/stats",
-    "owner": "identity-platform",
-    "route_id": "identity.admin.invite.stats.get",
+    "owner": "affiliate",
+    "route_id": "affiliate.admin.invite.stats.get",
     "envelope": "panel",
     "middleware_group": "admin",
     "transport": "http"
@@ -578,8 +578,8 @@
   {
     "method": "GET",
     "path": "/api/v2/admin/invite/withdrawals",
-    "owner": "identity-platform",
-    "route_id": "identity.admin.invite.withdrawals.get",
+    "owner": "affiliate",
+    "route_id": "affiliate.admin.invite.withdrawals.get",
     "envelope": "panel",
     "middleware_group": "admin",
     "transport": "http"
@@ -587,8 +587,8 @@
   {
     "method": "POST",
     "path": "/api/v2/admin/invite/withdrawals/:id/process",
-    "owner": "identity-platform",
-    "route_id": "identity.admin.invite.withdrawals.id.process.post",
+    "owner": "affiliate",
+    "route_id": "affiliate.admin.invite.withdrawals.id.process.post",
     "envelope": "panel",
     "middleware_group": "admin",
     "transport": "http"
@@ -1334,8 +1334,8 @@
   {
     "method": "GET",
     "path": "/api/v2/admin/system/audit-logs",
-    "owner": "identity-platform",
-    "route_id": "identity.admin.system.audit_logs.get",
+    "owner": "platform",
+    "route_id": "platform.admin.system.audit_logs.get",
     "envelope": "panel",
     "middleware_group": "admin",
     "transport": "http"
@@ -1343,8 +1343,8 @@
   {
     "method": "POST",
     "path": "/api/v2/admin/system/backup",
-    "owner": "identity-platform",
-    "route_id": "identity.admin.system.backup.post",
+    "owner": "platform",
+    "route_id": "platform.admin.system.backup.post",
     "envelope": "panel",
     "middleware_group": "admin",
     "transport": "http"
@@ -1352,8 +1352,8 @@
   {
     "method": "GET",
     "path": "/api/v2/admin/system/backup/config",
-    "owner": "identity-platform",
-    "route_id": "identity.admin.system.backup.config.get",
+    "owner": "platform",
+    "route_id": "platform.admin.system.backup.config.get",
     "envelope": "panel",
     "middleware_group": "admin",
     "transport": "http"
@@ -1361,8 +1361,8 @@
   {
     "method": "PUT",
     "path": "/api/v2/admin/system/backup/config",
-    "owner": "identity-platform",
-    "route_id": "identity.admin.system.backup.config.put",
+    "owner": "platform",
+    "route_id": "platform.admin.system.backup.config.put",
     "envelope": "panel",
     "middleware_group": "admin",
     "transport": "http"
@@ -1370,8 +1370,8 @@
   {
     "method": "GET",
     "path": "/api/v2/admin/system/backup/stats",
-    "owner": "identity-platform",
-    "route_id": "identity.admin.system.backup.stats.get",
+    "owner": "platform",
+    "route_id": "platform.admin.system.backup.stats.get",
     "envelope": "panel",
     "middleware_group": "admin",
     "transport": "http"
@@ -1379,8 +1379,8 @@
   {
     "method": "GET",
     "path": "/api/v2/admin/system/backups",
-    "owner": "identity-platform",
-    "route_id": "identity.admin.system.backups.get",
+    "owner": "platform",
+    "route_id": "platform.admin.system.backups.get",
     "envelope": "panel",
     "middleware_group": "admin",
     "transport": "http"
@@ -1388,8 +1388,8 @@
   {
     "method": "DELETE",
     "path": "/api/v2/admin/system/backups/:id",
-    "owner": "identity-platform",
-    "route_id": "identity.admin.system.backups.id.delete",
+    "owner": "platform",
+    "route_id": "platform.admin.system.backups.id.delete",
     "envelope": "panel",
     "middleware_group": "admin",
     "transport": "http"
@@ -1397,8 +1397,8 @@
   {
     "method": "POST",
     "path": "/api/v2/admin/system/backups/:id/restore",
-    "owner": "identity-platform",
-    "route_id": "identity.admin.system.backups.id.restore.post",
+    "owner": "platform",
+    "route_id": "platform.admin.system.backups.id.restore.post",
     "envelope": "panel",
     "middleware_group": "admin",
     "transport": "http"
@@ -1406,8 +1406,8 @@
   {
     "method": "GET",
     "path": "/api/v2/admin/system/configs",
-    "owner": "identity-platform",
-    "route_id": "identity.admin.system.configs.get",
+    "owner": "platform",
+    "route_id": "platform.admin.system.configs.get",
     "envelope": "panel",
     "middleware_group": "admin",
     "transport": "http"
@@ -1415,8 +1415,8 @@
   {
     "method": "DELETE",
     "path": "/api/v2/admin/system/configs/:key",
-    "owner": "identity-platform",
-    "route_id": "identity.admin.system.configs.key.delete",
+    "owner": "platform",
+    "route_id": "platform.admin.system.configs.key.delete",
     "envelope": "panel",
     "middleware_group": "admin",
     "transport": "http"
@@ -1424,8 +1424,8 @@
   {
     "method": "GET",
     "path": "/api/v2/admin/system/configs/:key",
-    "owner": "identity-platform",
-    "route_id": "identity.admin.system.configs.key.get",
+    "owner": "platform",
+    "route_id": "platform.admin.system.configs.key.get",
     "envelope": "panel",
     "middleware_group": "admin",
     "transport": "http"
@@ -1433,8 +1433,8 @@
   {
     "method": "PUT",
     "path": "/api/v2/admin/system/configs/:key",
-    "owner": "identity-platform",
-    "route_id": "identity.admin.system.configs.key.put",
+    "owner": "platform",
+    "route_id": "platform.admin.system.configs.key.put",
     "envelope": "panel",
     "middleware_group": "admin",
     "transport": "http"
@@ -2315,8 +2315,8 @@
   {
     "method": "GET",
     "path": "/api/v2/user/invite/commissions",
-    "owner": "identity-platform",
-    "route_id": "identity.user.invite.commissions.get",
+    "owner": "affiliate",
+    "route_id": "affiliate.user.invite.commissions.get",
     "envelope": "panel",
     "middleware_group": "user",
     "transport": "http"
@@ -2333,8 +2333,8 @@
   {
     "method": "POST",
     "path": "/api/v2/user/invite/withdraw",
-    "owner": "identity-platform",
-    "route_id": "identity.user.invite.withdraw.post",
+    "owner": "affiliate",
+    "route_id": "affiliate.user.invite.withdraw.post",
     "envelope": "panel",
     "middleware_group": "user",
     "transport": "http"
@@ -2342,8 +2342,8 @@
   {
     "method": "GET",
     "path": "/api/v2/user/invite/withdrawals",
-    "owner": "identity-platform",
-    "route_id": "identity.user.invite.withdrawals.get",
+    "owner": "affiliate",
+    "route_id": "affiliate.user.invite.withdrawals.get",
     "envelope": "panel",
     "middleware_group": "user",
     "transport": "http"
@@ -2540,8 +2540,8 @@
   {
     "method": "POST",
     "path": "/api/v2/user/reset",
-    "owner": "identity-platform",
-    "route_id": "identity.user.reset.post",
+    "owner": "forward",
+    "route_id": "forward.user.reset.post",
     "envelope": "panel",
     "middleware_group": "admin",
     "transport": "http"

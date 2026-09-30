@@ -429,29 +429,30 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.PUT("/notification/email/config", registeredPackageRoute(v2PackageGateway.Serve, "notification", "notification.admin.notification.email.config.put", notificationHandler.UpdateEmailConfig))
 
 			// ========== 邀请返利管理 ==========
-			admin.GET("/invite/config", v2PackageGateway.Serve)
-			admin.PUT("/invite/config", v2PackageGateway.Serve)
-			admin.GET("/invite/stats", v2PackageGateway.Serve)
-			admin.GET("/invite/withdrawals", v2PackageGateway.Serve)
-			admin.POST("/invite/withdrawals/:id/process", v2PackageGateway.Serve)
+			affiliateHandler := handler.NewInviteHandler()
+			admin.GET("/invite/config", registeredPackageRoute(v2PackageGateway.Serve, "affiliate", "affiliate.admin.invite.config.get", affiliateHandler.GetConfig))
+			admin.PUT("/invite/config", registeredPackageRoute(v2PackageGateway.Serve, "affiliate", "affiliate.admin.invite.config.put", affiliateHandler.UpdateConfig))
+			admin.GET("/invite/stats", registeredPackageRoute(v2PackageGateway.Serve, "affiliate", "affiliate.admin.invite.stats.get", affiliateHandler.GetInviteStats))
+			admin.GET("/invite/withdrawals", registeredPackageRoute(v2PackageGateway.Serve, "affiliate", "affiliate.admin.invite.withdrawals.get", affiliateHandler.GetWithdrawals))
+			admin.POST("/invite/withdrawals/:id/process", registeredPackageRoute(v2PackageGateway.Serve, "affiliate", "affiliate.admin.invite.withdrawals.id.process.post", affiliateHandler.ProcessWithdraw))
 
 			// ========== 系统配置管理 ==========
 			systemHandler := handler.NewSystemHandler()
-			admin.GET("/system/configs", v2PackageGateway.Serve)
-			admin.GET("/system/configs/:key", v2PackageGateway.Serve)
+			admin.GET("/system/configs", registeredPackageRoute(v2PackageGateway.Serve, "platform", "platform.admin.system.configs.get", systemHandler.GetConfigs))
+			admin.GET("/system/configs/:key", registeredPackageRoute(v2PackageGateway.Serve, "platform", "platform.admin.system.configs.key.get", systemHandler.GetConfig))
 			admin.GET("/system/subscription-settings", registeredPackageRoute(v2PackageGateway.Serve, "subscription", "subscription.admin.system.subscription_settings.get", systemHandler.GetSubscriptionSettings))
-			admin.PUT("/system/configs/:key", v2PackageGateway.Serve)
-			admin.DELETE("/system/configs/:key", v2PackageGateway.Serve)
-			admin.GET("/system/audit-logs", v2PackageGateway.Serve)
+			admin.PUT("/system/configs/:key", registeredPackageRoute(v2PackageGateway.Serve, "platform", "platform.admin.system.configs.key.put", systemHandler.SetConfig))
+			admin.DELETE("/system/configs/:key", registeredPackageRoute(v2PackageGateway.Serve, "platform", "platform.admin.system.configs.key.delete", systemHandler.DeleteConfig))
+			admin.GET("/system/audit-logs", registeredPackageRoute(v2PackageGateway.Serve, "platform", "platform.admin.system.audit_logs.get", systemHandler.GetAuditLogs))
 
 			// ========== 备份管理 ==========
-			admin.GET("/system/backup/config", v2PackageGateway.Serve)
-			admin.PUT("/system/backup/config", v2PackageGateway.Serve)
-			admin.POST("/system/backup", v2PackageGateway.Serve)
-			admin.GET("/system/backups", v2PackageGateway.Serve)
-			admin.GET("/system/backup/stats", v2PackageGateway.Serve)
-			admin.DELETE("/system/backups/:id", v2PackageGateway.Serve)
-			admin.POST("/system/backups/:id/restore", v2PackageGateway.Serve)
+			admin.GET("/system/backup/config", registeredPackageRoute(v2PackageGateway.Serve, "platform", "platform.admin.system.backup.config.get", systemHandler.GetBackupConfig))
+			admin.PUT("/system/backup/config", registeredPackageRoute(v2PackageGateway.Serve, "platform", "platform.admin.system.backup.config.put", systemHandler.UpdateBackupConfig))
+			admin.POST("/system/backup", registeredPackageRoute(v2PackageGateway.Serve, "platform", "platform.admin.system.backup.post", systemHandler.CreateBackup))
+			admin.GET("/system/backups", registeredPackageRoute(v2PackageGateway.Serve, "platform", "platform.admin.system.backups.get", systemHandler.ListBackups))
+			admin.GET("/system/backup/stats", registeredPackageRoute(v2PackageGateway.Serve, "platform", "platform.admin.system.backup.stats.get", systemHandler.GetBackupStats))
+			admin.DELETE("/system/backups/:id", registeredPackageRoute(v2PackageGateway.Serve, "platform", "platform.admin.system.backups.id.delete", systemHandler.DeleteBackup))
+			admin.POST("/system/backups/:id/restore", registeredPackageRoute(v2PackageGateway.Serve, "platform", "platform.admin.system.backups.id.restore.post", systemHandler.RestoreBackup))
 
 			// ========== 负载均衡管理 ==========
 			lbHandler := handler.NewLoadBalancerHandler()
@@ -474,7 +475,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			{
 				forwardCompatHandler := handler.NewForwardHandler()
 				speedLimitHandler := handler.NewSpeedLimitHandler()
-				adminCompat.POST("/user/reset", v2PackageGateway.Serve)
+				adminCompat.POST("/user/reset", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.user.reset.post", handler.NewAdminHandler().ResetCompatFlow))
 				adminCompat.POST("/speed-limit/create", registeredPackageRoute(v2PackageGateway.Serve, "plan", "plan.speed_limit.create.post", speedLimitHandler.CreatePanelSpeedLimit))
 				adminCompat.POST("/speed-limit/list", registeredPackageRoute(v2PackageGateway.Serve, "plan", "plan.speed_limit.list.post", speedLimitHandler.ListPanelSpeedLimits))
 				adminCompat.POST("/speed-limit/update", registeredPackageRoute(v2PackageGateway.Serve, "plan", "plan.speed_limit.update.post", speedLimitHandler.UpdatePanelSpeedLimit))
@@ -532,9 +533,10 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			// 用户邀请
 			authUser.GET("/user/invite", v2PackageGateway.Serve)
 			authUser.POST("/user/invite/generate", v2PackageGateway.Serve)
-			authUser.GET("/user/invite/commissions", v2PackageGateway.Serve)
-			authUser.POST("/user/invite/withdraw", v2PackageGateway.Serve)
-			authUser.GET("/user/invite/withdrawals", v2PackageGateway.Serve)
+			userAffiliateHandler := handler.NewInviteHandler()
+			authUser.GET("/user/invite/commissions", registeredPackageRoute(v2PackageGateway.Serve, "affiliate", "affiliate.user.invite.commissions.get", userAffiliateHandler.GetCommissionRecords))
+			authUser.POST("/user/invite/withdraw", registeredPackageRoute(v2PackageGateway.Serve, "affiliate", "affiliate.user.invite.withdraw.post", userAffiliateHandler.RequestWithdraw))
+			authUser.GET("/user/invite/withdrawals", registeredPackageRoute(v2PackageGateway.Serve, "affiliate", "affiliate.user.invite.withdrawals.get", userAffiliateHandler.GetWithdrawRecords))
 		}
 
 		// Telegram Webhook (公开)
