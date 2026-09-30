@@ -24,6 +24,7 @@ server:
     allowed_headers: ["Content-Type", "Authorization", "X-API-Key"]
     allow_credentials: false
     max_age: 86400
+  # shutdown_drain_delay: "5s"   # keep serving after /readyz fails on shutdown
 
 frontend:
   enable: true
@@ -53,6 +54,7 @@ cache:
   # redis_db: 0
 
 log:
+  format: "text"                # text | json (one JSON object per line on stdout)
   level: "info"
   output: "stdout"
   file_path: "./logs/v2board.log"

@@ -149,3 +149,22 @@ func TestPathFromEnvTrimsTheConfiguredPath(t *testing.T) {
 	t.Setenv(ConfigPathEnv, "")
 	assert.Empty(t, PathFromEnv())
 }
+
+func TestLoadValidatesDrainDelayAndLogFormat(t *testing.T) {
+	loaded, err := load("", nil)
+	require.NoError(t, err)
+	delay, err := loaded.Server.DrainDelay()
+	require.NoError(t, err)
+	assert.Equal(t, "5s", delay.String(), "container default")
+
+	_, err = load("", []string{"ANIX_CONTROL_SERVER_SHUTDOWN_DRAIN_DELAY=soon"})
+	require.ErrorContains(t, err, "shutdown_drain_delay")
+	_, err = load("", []string{"ANIX_CONTROL_SERVER_SHUTDOWN_DRAIN_DELAY=10m"})
+	require.ErrorContains(t, err, "shutdown_drain_delay")
+	_, err = load("", []string{"ANIX_CONTROL_LOG_FORMAT=xml"})
+	require.ErrorContains(t, err, "log.format")
+
+	zero, err := (ServerConfig{}).DrainDelay()
+	require.NoError(t, err)
+	assert.Zero(t, zero)
+}

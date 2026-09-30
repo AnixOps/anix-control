@@ -501,6 +501,21 @@ func TestSetup_HealthEndpoint(t *testing.T) {
 	assert.Contains(t, w.Body.String(), "ok")
 }
 
+func TestSetup_ContainerProbesNeedNoCredentials(t *testing.T) {
+	r, _ := setupTestRouter(t)
+	defer teardownTestRouter(t)
+
+	for path, want := range map[string]int{"/livez": http.StatusOK, "/readyz": http.StatusServiceUnavailable} {
+		req, _ := http.NewRequest("GET", path, nil)
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		// The test process never finishes server startup, so /readyz reports
+		// "starting"; either way the probe answers without authentication.
+		assert.Equal(t, want, w.Code, path)
+		assert.NotContains(t, w.Body.String(), "Unauthorized", path)
+	}
+}
+
 func TestSetup_V3KernelAccessGroupsRequireAdminAndPersistScope(t *testing.T) {
 	r, cfg := setupTestRouter(t)
 	defer teardownTestRouter(t)

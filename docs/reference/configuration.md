@@ -47,6 +47,14 @@ production`, API on `0.0.0.0:8080`, UI on `3000`, PostgreSQL
 temporary host directories, gRPC disabled. In production `jwt.secret` is
 required and must not be a template value, or the server refuses to start.
 
+Container-related settings:
+
+| Key | Default | Notes |
+|------|------|------|
+| `server.shutdown_drain_delay` | empty (`5s` in built-in defaults) | time to keep serving after `/readyz` starts failing on shutdown; at most `5m` |
+| `log.format` | `text` | `json` writes one JSON object per line to stdout (standard log lines, access logs, GORM); `text` keeps the historical output |
+| `log.level` | `info` | minimum level for structured records in `json` format; standard log lines are always written |
+
 PostgreSQL connection settings:
 
 | Key | Default | Notes |

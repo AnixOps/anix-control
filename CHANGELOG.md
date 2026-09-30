@@ -161,6 +161,24 @@
 
 ### Added
 
+- Container probes on both the API and UI servers:
+  - `/livez`: the process answers.
+  - `/readyz`: startup finished, not draining, and the database answers a
+    ping.
+  - `/health` keeps its response shape. The API server's copy now also
+    returns `503 {"status":"draining"}` during shutdown, like the UI
+    server's.
+- `server.shutdown_drain_delay`: time to keep serving after readiness starts
+  failing on shutdown, so load balancers and Kubernetes endpoints stop routing
+  first. The default is 0; the built-in container defaults use `5s`.
+- `log.format: json`: one JSON object per line on stdout for standard log
+  lines, slog records, HTTP access logs (path without query string) and GORM.
+  `log.level` filters structured records; standard log lines are always
+  written. `text` (the default) keeps the historical output.
+- When the frontend directory is missing and cannot be created (for example on
+  a read-only root filesystem), the server now logs a warning instead of
+  failing to start.
+
 - Configuration can now come from the environment, for container deployments.
   - Every scalar or list key has an `ANIX_CONTROL_<PATH>` variable, for
     example `ANIX_CONTROL_DATABASE_PASSWORD` or `ANIX_CONTROL_JWT_SECRET`.

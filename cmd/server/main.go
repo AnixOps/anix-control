@@ -17,7 +17,6 @@ import (
 	"strconv"
 	"strings"
 	"sync"
-	"sync/atomic"
 	"syscall"
 	"text/tabwriter"
 	"time"
@@ -30,7 +29,9 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	grpcserver "github.com/AnixOps/anix-control/v4/internal/grpc"
 	"github.com/AnixOps/anix-control/v4/internal/handler"
+	"github.com/AnixOps/anix-control/v4/internal/health"
 	"github.com/AnixOps/anix-control/v4/internal/identitybridge"
+	"github.com/AnixOps/anix-control/v4/internal/logging"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	_ "github.com/AnixOps/anix-control/v4/internal/payment/gateways" // register payment gateway plugins
 	"github.com/AnixOps/anix-control/v4/internal/plugincontrol"
@@ -292,20 +293,6 @@ func applyTrustedProxies(r *gin.Engine, proxies []string) error {
 	return r.SetTrustedProxies(normalized)
 }
 
-// draining is set to 1 during graceful shutdown so /health returns 503.
-var draining atomic.Int64
-
-func healthHandler() gin.HandlerFunc {
-	return func(c *gin.Context) {
-		if draining.Load() == 1 {
-			c.Header("Retry-After", "30")
-			c.JSON(http.StatusServiceUnavailable, gin.H{"status": "draining"})
-			return
-		}
-		c.JSON(http.StatusOK, gin.H{"status": "ok"})
-	}
-}
-
 func shouldStartForwardAgentBridgeWorker(cfg *config.Config) bool {
 	if cfg == nil {
 		return false
@@ -368,6 +355,7 @@ func run() int {
 	if err := cfg.ValidateForServer(); err != nil {
 		log.Fatalf("Invalid config: %v", err)
 	}
+	logging.Setup(cfg.Log)
 
 	// 打印环境信息
 	driver := strings.ToLower(cfg.Database.Driver)
@@ -401,6 +389,9 @@ func run() int {
 	// 初始化数据库
 	if err := database.Init(&cfg.Database); err != nil {
 		log.Fatalf("Failed to init database: %v", err)
+	}
+	if sqlDB, err := database.Get().DB(); err == nil {
+		health.Default.SetDatabasePinger(sqlDB.PingContext)
 	}
 	defer func() {
 		if err := database.Close(); err != nil {
@@ -580,16 +571,19 @@ func run() int {
 
 	// 从这里开始已有组件在运行：之后的错误不再 log.Fatal，而是走同一套有序关闭，
 	// 清理完成后以非零状态码退出。
+	drainDelay, _ := cfg.Server.DrainDelay() // validated by config.Load
 	rt := &serverRuntime{
-		grpcSrv: grpcSrv,
-		workers: newBackgroundWorkers(rootCtx),
-		fatal:   newFatalErrors(),
+		grpcSrv:    grpcSrv,
+		workers:    newBackgroundWorkers(rootCtx),
+		fatal:      newFatalErrors(),
+		drainDelay: drainDelay,
 	}
 	exitCode := 0
 	if err := rt.start(cfg, pollIntervals); err != nil {
 		log.Printf("Startup failed, shutting down: %v", err)
 		exitCode = 1
 	} else {
+		health.Default.MarkStarted()
 		select {
 		case <-rootCtx.Done():
 			log.Println("Shutdown signal received, draining in-flight requests...")
@@ -663,6 +657,7 @@ type serverRuntime struct {
 	apiSrv      *http.Server
 	frontendSrv *http.Server
 	servers     sync.WaitGroup
+	drainDelay  time.Duration
 }
 
 // start launches plugin hosts, background workers and HTTP servers. On error
@@ -808,8 +803,9 @@ func (rt *serverRuntime) start(cfg *config.Config, intervals pluginPollIntervals
 // plugin hosts. Each blocking step has its own bound. The database and cache
 // are closed afterwards by run's deferred calls.
 func (rt *serverRuntime) shutdown(stopSignals context.CancelFunc) {
-	// Mark servers as draining so /health returns 503 to load balancers.
-	draining.Store(1)
+	// Mark servers as draining so /readyz and /health return 503 to load
+	// balancers; /livez keeps succeeding.
+	health.Default.MarkDraining()
 
 	// A second signal forces an immediate exit. Register it before releasing
 	// the root signal context so no signal falls through to the default
@@ -822,6 +818,13 @@ func (rt *serverRuntime) shutdown(stopSignals context.CancelFunc) {
 		log.Println("Second signal received, forcing immediate exit")
 		os.Exit(1)
 	}()
+
+	// Keep accepting requests while load balancers notice the failing
+	// readiness probe, then stop the listeners.
+	if rt.drainDelay > 0 {
+		log.Printf("Draining: waiting %s before closing listeners", rt.drainDelay)
+		time.Sleep(rt.drainDelay)
+	}
 
 	// Shutdown HTTP servers (drains in-flight requests).
 	httpCtx, cancelHTTP := context.WithTimeout(context.Background(), shutdownTimeout)
@@ -1043,13 +1046,13 @@ func newFrontendServer(cfg *config.Config) (*http.Server, error) {
 
 	// 检查前端目录是否存在
 	if _, err := os.Stat(frontendPath); os.IsNotExist(err) {
-		log.Printf("Frontend directory '%s' not found, creating...", frontendPath)
+		log.Printf("Frontend directory '%s' not found, creating a placeholder...", frontendPath)
+		// A read-only root filesystem (containers) cannot hold the placeholder;
+		// the API keeps working and the UI answers 404 until assets exist.
 		if err := os.MkdirAll(frontendPath, 0o750); err != nil {
-			return nil, fmt.Errorf("create frontend directory %q: %w", frontendPath, err)
-		}
-		// 创建默认的 index.html
-		if err := createDefaultIndex(frontendPath); err != nil {
-			return nil, fmt.Errorf("create default frontend index in %q: %w", frontendPath, err)
+			log.Printf("Warning: cannot create frontend directory %q: %v", frontendPath, err)
+		} else if err := createDefaultIndex(frontendPath); err != nil {
+			log.Printf("Warning: cannot create default frontend index in %q: %v", frontendPath, err)
 		}
 	}
 
@@ -1059,8 +1062,8 @@ func newFrontendServer(cfg *config.Config) (*http.Server, error) {
 	}
 	r.Use(gin.Recovery())
 
-	// Health check with draining awareness.
-	r.GET("/health", healthHandler())
+	// Probes with draining awareness (/livez, /readyz, /health).
+	health.Default.Register(r)
 
 	// API 代理 - 将 /api 请求转发到 API 服务器
 	apiTarget := frontendAPIProxyTarget(cfg)

@@ -2,6 +2,8 @@ package database
 
 import (
 	"fmt"
+	"github.com/AnixOps/anix-control/v4/internal/logging"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -66,8 +68,16 @@ func Init(cfg *config.DatabaseConfig) error {
 		logLevel = logger.Warn
 	}
 
+	gormLogger := logger.Default
+	if logging.JSON() {
+		// Same settings as logger.Default, written through the JSON handler.
+		gormLogger = logger.New(log.New(logging.StdWriter(), "", 0), logger.Config{
+			SlowThreshold: 200 * time.Millisecond,
+			LogLevel:      logger.Warn,
+		})
+	}
 	db, err = gorm.Open(dialector, &gorm.Config{
-		Logger: logger.Default.LogMode(logLevel),
+		Logger: gormLogger.LogMode(logLevel),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to connect database: %w", err)

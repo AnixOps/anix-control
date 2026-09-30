@@ -191,6 +191,24 @@ workers are cancelled and awaited for up to 15s, the gRPC server stops (up to
 A clean shutdown exits with status 0. A second signal forces an immediate exit
 with status 1.
 
+### Probes And Shutdown
+
+Both the API server (`server.port`) and the UI server (`frontend.port`) answer:
+
+| Path | Meaning |
+|------|------|
+| `/livez` | the process answers HTTP; use as the liveness probe |
+| `/readyz` | startup finished, shutdown has not begun, and the database answers a ping (2 s bound); use as the readiness probe and Docker `HEALTHCHECK` |
+| `/health` | legacy check: `{"status":"ok"}`, or `503 {"status":"draining"}` during shutdown |
+
+On `SIGTERM` the server marks itself draining (`/readyz` and `/health` fail,
+`/livez` keeps succeeding), keeps serving for `server.shutdown_drain_delay`
+(default `0`; `5s` in the built-in container defaults) so load balancers stop
+routing to it, then closes the listeners and drains in-flight requests (30 s),
+stops background workers (15 s), gRPC (10 s) and plugin hosts (15 s). Allow at
+least 90 s of termination grace (`stop_grace_period`,
+`terminationGracePeriodSeconds`).
+
 ## 6. Runtime Tuning
 
 If you need to change runtime behavior, edit `config/config.yaml.forward_runtime` before startup. That now includes:
