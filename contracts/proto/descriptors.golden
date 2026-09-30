@@ -4,6 +4,13 @@ enum anixops.identity.v1.TokenKeyState.TOKEN_KEY_STATE_NEXT = 1
 enum anixops.identity.v1.TokenKeyState.TOKEN_KEY_STATE_RETIRED = 3
 enum anixops.identity.v1.TokenKeyState.TOKEN_KEY_STATE_REVOKED = 4
 enum anixops.identity.v1.TokenKeyState.TOKEN_KEY_STATE_UNSPECIFIED = 0
+enum anixops.kernelsubscriber.v1.BalanceKind.BALANCE_KIND_ACCOUNT = 1
+enum anixops.kernelsubscriber.v1.BalanceKind.BALANCE_KIND_COMMISSION = 2
+enum anixops.kernelsubscriber.v1.BalanceKind.BALANCE_KIND_UNSPECIFIED = 0
+enum anixops.kernelsubscriber.v1.ChangeKind.CHANGE_KIND_REMOVE = 2
+enum anixops.kernelsubscriber.v1.ChangeKind.CHANGE_KIND_RESYNC = 3
+enum anixops.kernelsubscriber.v1.ChangeKind.CHANGE_KIND_UNSPECIFIED = 0
+enum anixops.kernelsubscriber.v1.ChangeKind.CHANGE_KIND_UPSERT = 1
 enum v2board.ConfigChangeNotification.ChangeType.NODE_CONFIG = 1
 enum v2board.ConfigChangeNotification.ChangeType.PROTOCOL_CONFIG = 3
 enum v2board.ConfigChangeNotification.ChangeType.UNKNOWN = 0
@@ -167,6 +174,92 @@ field anixops.kernelidentity.v1.ResolveActorAccessResponse.restricted_plugins = 
 field anixops.kernelidentity.v1.ResolveActorAccessResponse.unrestricted = 4 optional bool
 field anixops.kernelidentity.v1.UpdateSubscriberRequest.entitlements_json = 2 optional bytes
 field anixops.kernelidentity.v1.UpdateSubscriberRequest.user_id = 1 optional uint64
+field anixops.kernelsubscriber.v1.AdjustBalanceRequest.amount_cents = 4 optional int64
+field anixops.kernelsubscriber.v1.AdjustBalanceRequest.kind = 3 optional anixops.kernelsubscriber.v1.BalanceKind
+field anixops.kernelsubscriber.v1.AdjustBalanceRequest.reason = 5 optional string
+field anixops.kernelsubscriber.v1.AdjustBalanceRequest.request_id = 1 optional string
+field anixops.kernelsubscriber.v1.AdjustBalanceRequest.user_id = 2 optional uint64
+field anixops.kernelsubscriber.v1.AdjustBalanceResponse.applied = 1 optional bool
+field anixops.kernelsubscriber.v1.AdjustBalanceResponse.balance_cents = 2 optional int64
+field anixops.kernelsubscriber.v1.AdjustEntitlementRequest.clear_expiry = 11 optional bool
+field anixops.kernelsubscriber.v1.AdjustEntitlementRequest.device_limit = 8 optional int32
+field anixops.kernelsubscriber.v1.AdjustEntitlementRequest.expires_at_unix = 5 optional int64
+field anixops.kernelsubscriber.v1.AdjustEntitlementRequest.flow_reset_day = 9 optional int64
+field anixops.kernelsubscriber.v1.AdjustEntitlementRequest.group_id = 4 optional uint64
+field anixops.kernelsubscriber.v1.AdjustEntitlementRequest.plan_id = 3 optional uint64
+field anixops.kernelsubscriber.v1.AdjustEntitlementRequest.reason = 12 optional string
+field anixops.kernelsubscriber.v1.AdjustEntitlementRequest.remark = 10 optional string
+field anixops.kernelsubscriber.v1.AdjustEntitlementRequest.request_id = 1 optional string
+field anixops.kernelsubscriber.v1.AdjustEntitlementRequest.speed_limit_mbps = 7 optional int64
+field anixops.kernelsubscriber.v1.AdjustEntitlementRequest.transfer_bytes = 6 optional int64
+field anixops.kernelsubscriber.v1.AdjustEntitlementRequest.user_id = 2 optional uint64
+field anixops.kernelsubscriber.v1.AdjustEntitlementResponse.applied = 1 optional bool
+field anixops.kernelsubscriber.v1.ApplyEntitlementRequest.expires_at_unix = 5 optional int64 oneof expiry
+field anixops.kernelsubscriber.v1.ApplyEntitlementRequest.period = 4 optional anixops.kernelsubscriber.v1.Period oneof expiry
+field anixops.kernelsubscriber.v1.ApplyEntitlementRequest.plan = 3 optional anixops.kernelsubscriber.v1.PlanSnapshot
+field anixops.kernelsubscriber.v1.ApplyEntitlementRequest.reason = 8 optional string
+field anixops.kernelsubscriber.v1.ApplyEntitlementRequest.renew_same_plan = 6 optional bool
+field anixops.kernelsubscriber.v1.ApplyEntitlementRequest.request_id = 1 optional string
+field anixops.kernelsubscriber.v1.ApplyEntitlementRequest.reset_traffic = 7 optional bool
+field anixops.kernelsubscriber.v1.ApplyEntitlementRequest.user_id = 2 optional uint64
+field anixops.kernelsubscriber.v1.ApplyEntitlementResponse.applied = 1 optional bool
+field anixops.kernelsubscriber.v1.ApplyEntitlementResponse.expires_at_unix = 2 optional int64
+field anixops.kernelsubscriber.v1.GetSubscribersRequest.user_ids = 1 repeated uint64
+field anixops.kernelsubscriber.v1.GetSubscribersResponse.subscribers = 1 repeated anixops.kernelsubscriber.v1.Subscriber
+field anixops.kernelsubscriber.v1.ListActiveSubscribersRequest.after_user_id = 2 optional uint64
+field anixops.kernelsubscriber.v1.ListActiveSubscribersRequest.group_ids = 1 repeated uint64
+field anixops.kernelsubscriber.v1.ListActiveSubscribersRequest.limit = 3 optional uint32
+field anixops.kernelsubscriber.v1.ListActiveSubscribersResponse.cursor = 2 optional uint64
+field anixops.kernelsubscriber.v1.ListActiveSubscribersResponse.done = 3 optional bool
+field anixops.kernelsubscriber.v1.ListActiveSubscribersResponse.subscribers = 1 repeated anixops.kernelsubscriber.v1.Subscriber
+field anixops.kernelsubscriber.v1.LookupBySubscriptionTokenRequest.token = 1 optional string
+field anixops.kernelsubscriber.v1.LookupBySubscriptionTokenResponse.found = 1 optional bool
+field anixops.kernelsubscriber.v1.LookupBySubscriptionTokenResponse.subscriber = 2 optional anixops.kernelsubscriber.v1.Subscriber
+field anixops.kernelsubscriber.v1.Period.days = 2 optional int32
+field anixops.kernelsubscriber.v1.Period.months = 1 optional int32
+field anixops.kernelsubscriber.v1.PlanSnapshot.device_limit = 6 optional int32
+field anixops.kernelsubscriber.v1.PlanSnapshot.group_id = 2 optional uint64
+field anixops.kernelsubscriber.v1.PlanSnapshot.plan_id = 1 optional uint64
+field anixops.kernelsubscriber.v1.PlanSnapshot.speed_limit_mbps = 5 optional int64
+field anixops.kernelsubscriber.v1.PlanSnapshot.subscription_group_ids = 3 repeated uint64
+field anixops.kernelsubscriber.v1.PlanSnapshot.transfer_bytes = 4 optional uint64
+field anixops.kernelsubscriber.v1.RecordTrafficRequest.batch_id = 1 optional string
+field anixops.kernelsubscriber.v1.RecordTrafficRequest.entries = 3 repeated anixops.kernelsubscriber.v1.TrafficEntry
+field anixops.kernelsubscriber.v1.RecordTrafficRequest.rate = 4 optional double
+field anixops.kernelsubscriber.v1.RecordTrafficRequest.source = 2 optional string
+field anixops.kernelsubscriber.v1.RecordTrafficResponse.applied = 1 optional bool
+field anixops.kernelsubscriber.v1.RecordTrafficResponse.exhausted_user_ids = 2 repeated uint64
+field anixops.kernelsubscriber.v1.ResetCredentialsRequest.proxy_uuid = 4 optional bool
+field anixops.kernelsubscriber.v1.ResetCredentialsRequest.request_id = 1 optional string
+field anixops.kernelsubscriber.v1.ResetCredentialsRequest.subscription_token = 3 optional bool
+field anixops.kernelsubscriber.v1.ResetCredentialsRequest.user_id = 2 optional uint64
+field anixops.kernelsubscriber.v1.ResetCredentialsResponse.applied = 1 optional bool
+field anixops.kernelsubscriber.v1.ResetTrafficRequest.reason = 3 optional string
+field anixops.kernelsubscriber.v1.ResetTrafficRequest.request_id = 1 optional string
+field anixops.kernelsubscriber.v1.ResetTrafficRequest.user_ids = 2 repeated uint64
+field anixops.kernelsubscriber.v1.ResetTrafficResponse.applied = 1 optional bool
+field anixops.kernelsubscriber.v1.ResetTrafficResponse.reset = 2 optional uint64
+field anixops.kernelsubscriber.v1.Subscriber.banned = 12 optional bool
+field anixops.kernelsubscriber.v1.Subscriber.device_limit = 11 optional int32
+field anixops.kernelsubscriber.v1.Subscriber.download_bytes = 9 optional uint64
+field anixops.kernelsubscriber.v1.Subscriber.expires_at_unix = 6 optional int64
+field anixops.kernelsubscriber.v1.Subscriber.flow_reset_day = 13 optional int64
+field anixops.kernelsubscriber.v1.Subscriber.group_id = 4 optional uint64
+field anixops.kernelsubscriber.v1.Subscriber.plan_id = 3 optional uint64
+field anixops.kernelsubscriber.v1.Subscriber.speed_limit_mbps = 10 optional int64
+field anixops.kernelsubscriber.v1.Subscriber.subscription_group_ids = 5 repeated uint64
+field anixops.kernelsubscriber.v1.Subscriber.transfer_bytes = 7 optional uint64
+field anixops.kernelsubscriber.v1.Subscriber.upload_bytes = 8 optional uint64
+field anixops.kernelsubscriber.v1.Subscriber.user_id = 1 optional uint64
+field anixops.kernelsubscriber.v1.Subscriber.uuid = 2 optional string
+field anixops.kernelsubscriber.v1.SubscriberChange.cursor = 1 optional uint64
+field anixops.kernelsubscriber.v1.SubscriberChange.kind = 2 optional anixops.kernelsubscriber.v1.ChangeKind
+field anixops.kernelsubscriber.v1.SubscriberChange.subscriber = 4 optional anixops.kernelsubscriber.v1.Subscriber
+field anixops.kernelsubscriber.v1.SubscriberChange.user_id = 3 optional uint64
+field anixops.kernelsubscriber.v1.TrafficEntry.download_bytes = 3 optional uint64
+field anixops.kernelsubscriber.v1.TrafficEntry.upload_bytes = 2 optional uint64
+field anixops.kernelsubscriber.v1.TrafficEntry.user_id = 1 optional uint64
+field anixops.kernelsubscriber.v1.WatchSubscriberChangesRequest.after_cursor = 1 optional uint64
 field anixops.modulepki.v1.EnrollRequest.cluster = 3 optional string
 field anixops.modulepki.v1.EnrollRequest.csr_der = 4 optional bytes
 field anixops.modulepki.v1.EnrollRequest.enrollment_credential = 1 optional string
@@ -349,6 +442,16 @@ rpc anixops.kernelidentity.v1.KernelIdentity.GetSubscriber(anixops.kernelidentit
 rpc anixops.kernelidentity.v1.KernelIdentity.PublishRevocation(anixops.kernelidentity.v1.PublishRevocationRequest) returns (anixops.kernelidentity.v1.PublishRevocationResponse)
 rpc anixops.kernelidentity.v1.KernelIdentity.ResolveActorAccess(anixops.kernelidentity.v1.ResolveActorAccessRequest) returns (anixops.kernelidentity.v1.ResolveActorAccessResponse)
 rpc anixops.kernelidentity.v1.KernelIdentity.UpdateSubscriber(anixops.kernelidentity.v1.UpdateSubscriberRequest) returns (anixops.kernelidentity.v1.UpdateSubscriberResponse)
+rpc anixops.kernelsubscriber.v1.KernelSubscriber.AdjustBalance(anixops.kernelsubscriber.v1.AdjustBalanceRequest) returns (anixops.kernelsubscriber.v1.AdjustBalanceResponse)
+rpc anixops.kernelsubscriber.v1.KernelSubscriber.AdjustEntitlement(anixops.kernelsubscriber.v1.AdjustEntitlementRequest) returns (anixops.kernelsubscriber.v1.AdjustEntitlementResponse)
+rpc anixops.kernelsubscriber.v1.KernelSubscriber.ApplyEntitlement(anixops.kernelsubscriber.v1.ApplyEntitlementRequest) returns (anixops.kernelsubscriber.v1.ApplyEntitlementResponse)
+rpc anixops.kernelsubscriber.v1.KernelSubscriber.GetSubscribers(anixops.kernelsubscriber.v1.GetSubscribersRequest) returns (anixops.kernelsubscriber.v1.GetSubscribersResponse)
+rpc anixops.kernelsubscriber.v1.KernelSubscriber.ListActiveSubscribers(anixops.kernelsubscriber.v1.ListActiveSubscribersRequest) returns (anixops.kernelsubscriber.v1.ListActiveSubscribersResponse)
+rpc anixops.kernelsubscriber.v1.KernelSubscriber.LookupBySubscriptionToken(anixops.kernelsubscriber.v1.LookupBySubscriptionTokenRequest) returns (anixops.kernelsubscriber.v1.LookupBySubscriptionTokenResponse)
+rpc anixops.kernelsubscriber.v1.KernelSubscriber.RecordTraffic(anixops.kernelsubscriber.v1.RecordTrafficRequest) returns (anixops.kernelsubscriber.v1.RecordTrafficResponse)
+rpc anixops.kernelsubscriber.v1.KernelSubscriber.ResetCredentials(anixops.kernelsubscriber.v1.ResetCredentialsRequest) returns (anixops.kernelsubscriber.v1.ResetCredentialsResponse)
+rpc anixops.kernelsubscriber.v1.KernelSubscriber.ResetTraffic(anixops.kernelsubscriber.v1.ResetTrafficRequest) returns (anixops.kernelsubscriber.v1.ResetTrafficResponse)
+rpc anixops.kernelsubscriber.v1.KernelSubscriber.WatchSubscriberChanges(anixops.kernelsubscriber.v1.WatchSubscriberChangesRequest) returns (stream anixops.kernelsubscriber.v1.SubscriberChange)
 rpc anixops.modulepki.v1.ModulePKI.Enroll(anixops.modulepki.v1.EnrollRequest) returns (anixops.modulepki.v1.EnrollResponse)
 rpc anixops.modulepki.v1.ModulePKI.GetTrustBundle(anixops.modulepki.v1.GetTrustBundleRequest) returns (anixops.modulepki.v1.GetTrustBundleResponse)
 rpc anixops.modulepki.v1.ModulePKI.Renew(anixops.modulepki.v1.RenewRequest) returns (anixops.modulepki.v1.RenewResponse)

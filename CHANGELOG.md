@@ -334,6 +334,19 @@
 
 ### Added
 
+- **Subscriber contract (F2).** `KernelSubscriber`
+  (`sdk/api/kernelsubscriber/v1`, design in
+  `docs/architecture/subscriber-service.md`) is the kernel's contract for
+  shared subscriber state: entitlements, traffic counters, subscription
+  credentials, balances, and a directory with a change feed for node user
+  lists.
+  - Domain modules will call it instead of writing `v2_user`, per capability
+    family (`kernel.subscriber.{entitlements,traffic,credentials,balance,directory}.v1`).
+  - Writes are idempotent by request id.
+  - This change adds the contract only, registered in the proto
+    compatibility and drift checks. The implementation follows in steps
+    F2a–F2d.
+
 - The kernel side of the identity module, `KernelIdentity` (N9). It is served
   on the local package bridge and on the module listener.
   - **Capability.** A new `kernel.identity.v1` capability. Only the current
