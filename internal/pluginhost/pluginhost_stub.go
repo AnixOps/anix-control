@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
+	"github.com/AnixOps/anix-control/v4/pkg/moduletls"
 )
 
 var (
@@ -288,3 +289,25 @@ var _ Manager = (*Supervisor)(nil)
 var _ MigrationManager = (*Supervisor)(nil)
 var _ WebSocketManager = (*Supervisor)(nil)
 var _ HostStatsProvider = (*Supervisor)(nil)
+
+// RemoteInstances lists the module instances bound to a generation.
+type RemoteInstances interface {
+	Instances(packageID string, generation uint64) []packagebridge.BoundInstance
+}
+
+// RemoteConfig enables the remote runtime of a Supervisor.
+type RemoteConfig struct {
+	Instances   RemoteInstances
+	TLS         moduletls.Source
+	Cluster     string
+	IsRemote    func(ctx context.Context, packageID string) (bool, error)
+	BindTimeout time.Duration
+}
+
+// EnableRemote is unavailable without Unix package hosts.
+func (m *Supervisor) EnableRemote(RemoteConfig) error { return ErrHostUnavailable }
+
+// BindInstance admits no remote instance without Unix package hosts.
+func (m *Supervisor) BindInstance(context.Context, packagebridge.InstanceBinding) (*packagebridge.GenerationSession, error) {
+	return nil, packagebridge.ErrNotRemote
+}

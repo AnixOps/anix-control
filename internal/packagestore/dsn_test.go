@@ -55,3 +55,16 @@ func TestScramVerifierFormat(t *testing.T) {
 	require.Len(t, password, 32)
 	require.NotContains(t, verifier, password)
 }
+
+func TestPackageDSNForRemoteHolders(t *testing.T) {
+	kernel := `host='localhost' hostaddr='127.0.0.1' port='5432' dbname='v2board' user='kernel' password='k'`
+	dsn, err := packageDSNWithHost(kernel, "postgres.anix.svc:6432", "u", "p", "a")
+	require.NoError(t, err)
+	require.Equal(t, `dbname='v2board' host='postgres.anix.svc' port='6432' user='u' password='p' application_name='a'`, dsn)
+	dsn, err = packageDSNWithHost(kernel, "db.internal", "u", "p", "a")
+	require.NoError(t, err)
+	require.Equal(t, `dbname='v2board' host='db.internal' port='5432' user='u' password='p' application_name='a'`, dsn)
+	dsn, err = packageDSNWithHost(kernel, "[fd00::5]:5433", "u", "p", "a")
+	require.NoError(t, err)
+	require.Contains(t, dsn, `host='fd00::5' port='5433'`)
+}

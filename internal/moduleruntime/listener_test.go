@@ -71,11 +71,13 @@ type listenerFixture struct {
 	kernel     moduletls.Source
 	generation *packagebridge.GenerationSession
 	binder     *fakeBinder
+	bridge     *packagebridge.ModuleBridge
 	clock      *mutableClock
 	calls      chan packagebridge.Call
 }
 
-func newListenerFixture(t *testing.T) *listenerFixture {
+// newPKIFixture creates the kernel CA and its TLS identity.
+func newPKIFixture(t *testing.T) *listenerFixture {
 	t.Helper()
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "kernel.db")+"?_pragma=busy_timeout(10000)"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
@@ -88,7 +90,29 @@ func newListenerFixture(t *testing.T) *listenerFixture {
 	require.NoError(t, authority.Ensure(context.Background()))
 	kernel, err := authority.KernelTLS(context.Background(), time.Minute)
 	require.NoError(t, err)
+	return &listenerFixture{authority: authority, kernel: kernel}
+}
 
+// serve runs the module listener with the fixture's bridge.
+func (f *listenerFixture) serve(t *testing.T) {
+	t.Helper()
+	listener, err := net.Listen("tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	ctx, cancel := context.WithCancel(context.Background())
+	served := make(chan error, 1)
+	go func() {
+		served <- (&Listener{TLS: f.kernel, Cluster: "prod", PKI: f.authority, Bridge: f.bridge}).Serve(ctx, listener)
+	}()
+	t.Cleanup(func() {
+		cancel()
+		require.NoError(t, <-served)
+	})
+	f.address = listener.Addr().String()
+}
+
+func newListenerFixture(t *testing.T) *listenerFixture {
+	t.Helper()
+	fixture := newPKIFixture(t)
 	calls := make(chan packagebridge.Call, 4)
 	allowlist, err := packagebridge.NewAllowlistWithFallback(nil, packagebridge.Operation{
 		PackageID: "knowledge", RouteID: "knowledge.article.list", Name: "knowledge.article.list",
@@ -104,19 +128,9 @@ func newListenerFixture(t *testing.T) *listenerFixture {
 	clock := &mutableClock{now: time.Now()}
 	bridge, err := packagebridge.NewModuleBridge(binder, packagebridge.ModuleBridgeOptions{Cluster: "prod", Now: clock.Now})
 	require.NoError(t, err)
-
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	ctx, cancel := context.WithCancel(context.Background())
-	served := make(chan error, 1)
-	go func() {
-		served <- (&Listener{TLS: kernel, Cluster: "prod", PKI: authority, Bridge: bridge}).Serve(ctx, listener)
-	}()
-	t.Cleanup(func() {
-		cancel()
-		require.NoError(t, <-served)
-	})
-	return &listenerFixture{authority: authority, address: listener.Addr().String(), kernel: kernel, generation: generation, binder: binder, clock: clock, calls: calls}
+	fixture.generation, fixture.binder, fixture.bridge, fixture.clock, fixture.calls = generation, binder, bridge, clock, calls
+	fixture.serve(t)
+	return fixture
 }
 
 // enroll returns a client certificate for packageID and the enrollment id.

@@ -46,7 +46,22 @@ the transport from the environment.
 | Integrity | the kernel executes only bytes it hashed | signed manifest pins the image digest (`control_runtime`); enforced by cosign and an admission policy, not by the kernel |
 | Storage | PostgreSQL role or shared SQLite file | PostgreSQL only |
 
-Existing packages keep the `local` runtime. `remote` is opt-in per installation.
+Existing packages keep the `local` runtime. `remote` is opt-in per package:
+- `PUT /api/v4/kernel/modules/runtimes/:plugin_id` with `{"runtime":"remote"}`
+  selects it; `GET /api/v4/kernel/modules/runtimes` lists the choices.
+- Remote requires `module_runtime.enabled` and PostgreSQL.
+- The change applies at the package's next lifecycle operation.
+
+Remote hosts live inside the same host `Supervisor` as local ones.
+- **Instance pool.** Their client spreads calls over the instances bound to
+  the generation:
+  - calls go round-robin;
+  - an instance whose call fails at the transport is ejected for 10 s;
+  - health is cached for 2 s, so the per-frame WebSocket checks stay off
+    the network.
+- **Shared code.** Dispatch, WebSocket relays, migrations through the
+  ledger, health polling and fencing use the same code for both
+  runtimes.
 
 ## PKI
 
@@ -113,8 +128,9 @@ Status: implemented in the kernel.
 - **`packagebridge.GenerationSession`** is the per-generation state.
 - **Session token.** The token travels in `x-anix-bridge-session` as unpadded
   base64url.
-- **Binder.** The binder that admits remote installations comes with the remote
-  runtime manager; until then every `Bind` answers `FailedPrecondition`.
+- **Binder.** The host `Supervisor` is the binder. It admits an instance only
+  to the starting or active remote generation of its package at the same
+  version.
 
 1. **Bind.** A remote instance calls `KernelPackageBridge.Bind` with:
    - package id and version;
@@ -147,10 +163,17 @@ socketpair is one transport of it.
 
 ## Lifecycle without signals
 
-- **Install / update.** The kernel keeps routing to generation G until at
-  least one G+1 instance has bound. It then runs the package migrations
-  through one G+1 instance (the same ledger as local hosts) and switches
-  routing to G+1.
+- **Install / update.** `Start` registers the new generation for binding and
+  waits (`module_runtime.bind_timeout`, default 2 m) until an instance has
+  bound and answers `Health` with the lease it bound with. Only then does it
+  retire the previous host.
+  - **New version.** The previous generation keeps serving while the new
+    pods start.
+  - **Same version** (re-enable, restart reconciliation). The previous
+    generation is fenced first, so its instances rebind to the new one
+    within a heartbeat.
+  - **Migrations.** Package migrations then run through one instance, with
+    the same ledger as local hosts.
 - **Disable / stop.** Fence the generation, then `Drain` every instance.
 - **Resume.** `ControlPackageHost.Resume` undoes a drain. Remote processes
   cannot be restarted by the kernel, so drains are reversible.
@@ -162,11 +185,16 @@ socketpair is one transport of it.
 
 ## Storage
 
-Remote modules require PostgreSQL. `LeaseStorage` credentials are cached per
-generation, because every lease rotates the role password and several pods
-share one role. The SDK leases again when PostgreSQL rejects the password
-(`28P01`). `module_runtime.database_host` sets the database address modules
-use when it differs from the kernel's.
+Remote modules require PostgreSQL; a remote lease on SQLite is refused.
+- **Shared lease.** The kernel caches one `LeaseStorage` lease per package
+  generation and grants. Every lease rotates the role password, and the
+  replicas of a generation share one role, so a new replica reuses the
+  cached lease instead of invalidating the others.
+- **Re-leasing.** The SDK leases again when PostgreSQL rejects the password
+  (`28P01`).
+- **Database address.** `module_runtime.database_host` (`host` or
+  `host:port`) is the database address in remote leases when it differs
+  from the kernel's.
 
 ## Trust boundary
 

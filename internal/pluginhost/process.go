@@ -121,8 +121,13 @@ func startHostProcess(ctx context.Context, runtimeRoot *runtimeRoot, ref Artifac
 	}
 	host := &hostProcess{
 		packageID: ref.PackageID, version: ref.Version, generation: generation, ref: ref,
-		runtimeDir: directory, socketPath: socketPath, command: command, waitDone: make(chan struct{}), bridge: bridge,
+		runtimeDir: directory, socketPath: socketPath, command: command, waitDone: make(chan struct{}),
 		stopGrace: options.stopGrace, maxResponseBytes: normalizeMaxResponseBytes(options.maxResponseBytes),
+	}
+	// Assign only a real session: a typed nil would make the interface
+	// non-nil and every Mint fail.
+	if bridge != nil {
+		host.bridge = bridge
 	}
 	go func() {
 		host.waitErr = command.Wait()

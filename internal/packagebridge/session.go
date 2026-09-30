@@ -100,6 +100,9 @@ type HostIdentity struct {
 	PackageID  string
 	Version    string
 	Generation uint64
+	// Remote marks a generation served by network module instances rather
+	// than a local child process.
+	Remote bool
 }
 
 // Request is kernel-derived request state retained behind a capability. A
@@ -213,6 +216,21 @@ func (f *Factory) WithSessionOptions(options SessionOptions) *Factory {
 		f.options = options
 	}
 	return f
+}
+
+// GenerationSessionFactory creates bridge state for remote generations,
+// which have no socketpair.
+type GenerationSessionFactory interface {
+	NewGenerationSession(HostIdentity) (*GenerationSession, error)
+}
+
+// NewGenerationSession returns the transport-independent state of a remote
+// generation with the factory's operations and limits.
+func (f *Factory) NewGenerationSession(identity HostIdentity) (*GenerationSession, error) {
+	if f == nil {
+		return nil, ErrBridgeClosed
+	}
+	return NewGenerationSession(identity, f.allowlist, f.options, f.webSocketResolver)
 }
 
 func (f *Factory) NewSession(identity HostIdentity) (*Session, *os.File, error) {

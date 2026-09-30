@@ -566,6 +566,10 @@ func (rt *serverRuntime) start(cfg *config.Config, intervals pluginPollIntervals
 		}
 		rt.controlPluginHosts = hosts
 		pluginhost.SetDefaultManager(hosts)
+		// Remote packages must be known before reconciliation starts hosts.
+		if err := rt.startModuleRuntime(cfg, hosts); err != nil {
+			return err
+		}
 		// Read route modes and shadow counters from package hosts for metrics.
 		rt.workers.Go("plugin host health poller", func(ctx context.Context) {
 			hosts.PollHealth(ctx, pluginHostHealthPollInterval)
@@ -595,8 +599,11 @@ func (rt *serverRuntime) start(cfg *config.Config, intervals pluginPollIntervals
 		log.Printf("Control plugin host supervision enabled (poll interval %s, reconciliation operations %d)", intervals.control, queued)
 	}
 
-	if err := rt.startModuleRuntime(cfg, nil); err != nil {
-		return err
+	if !cfg.Plugins.ControlExecutionEnabled {
+		// Without package execution the listener still serves ModulePKI.
+		if err := rt.startModuleRuntime(cfg, nil); err != nil {
+			return err
+		}
 	}
 
 	// Periodic resets, stats collection, latency probing and the forward job

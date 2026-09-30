@@ -61,3 +61,21 @@ type ModuleCertificate struct {
 }
 
 func (ModuleCertificate) TableName() string { return "v4_kernel_module_certificate" }
+
+// Package runtimes.
+const (
+	PluginRuntimeLocal  = "local"
+	PluginRuntimeRemote = "remote"
+)
+
+// PluginRuntime selects how the kernel runs a Control package: as a local
+// child process (the default, also when no row exists) or from network module
+// instances. A change applies at the package's next lifecycle operation.
+type PluginRuntime struct {
+	PluginID  string    `gorm:"primaryKey;size:120" json:"plugin_id"`
+	Runtime   string    `gorm:"size:16;not null" json:"runtime"`
+	UpdatedBy uint      `json:"updated_by"`
+	UpdatedAt time.Time `json:"updated_at"`
+}
+
+func (PluginRuntime) TableName() string { return "v4_kernel_plugin_runtime" }

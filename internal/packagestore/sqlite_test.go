@@ -85,3 +85,23 @@ func TestStorageNames(t *testing.T) {
 	require.Equal(t, "pkg_identity_platform", SchemaName("identity-platform"))
 	require.Equal(t, "pkg_identity_platform_", TablePrefix("identity-platform"))
 }
+
+func TestLeaseCacheSharesOneLeasePerGeneration(t *testing.T) {
+	db, path := openSQLiteKernel(t)
+	store := Store{DB: db, Driver: "sqlite", DSN: path, Leases: NewLeaseCache()}
+	ctx := context.Background()
+	holder := Holder{PackageID: "knowledge", Version: "4.1.0", Generation: 3}
+	first, err := store.Lease(ctx, holder, Grants{Storage: true})
+	require.NoError(t, err)
+	second, err := store.Lease(ctx, holder, Grants{Storage: true})
+	require.NoError(t, err)
+	require.Equal(t, first, second, "replicas of one generation share the lease")
+
+	holder.Generation = 4
+	next, err := store.Lease(ctx, holder, Grants{Storage: true})
+	require.NoError(t, err)
+	require.EqualValues(t, 2, next.LeaseGeneration, "a new generation leases again")
+
+	_, err = store.Lease(ctx, Holder{PackageID: "knowledge", Version: "4.1.0", Generation: 4, Remote: true}, Grants{Storage: true})
+	require.ErrorContains(t, err, "need PostgreSQL")
+}

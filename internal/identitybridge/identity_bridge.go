@@ -71,7 +71,10 @@ func newHostOperations(cfg *config.Config) (service.PackageHostOperations, error
 	if err != nil {
 		return operations, err
 	}
-	operations.Storage = &packagestore.Store{DB: db, Driver: cfg.Database.Driver, DSN: source}
+	operations.Storage = &packagestore.Store{
+		DB: db, Driver: cfg.Database.Driver, DSN: source,
+		RemoteDatabaseHost: cfg.ModuleRuntime.DatabaseHost, Leases: packagestore.NewLeaseCache(),
+	}
 	return operations, nil
 }
 

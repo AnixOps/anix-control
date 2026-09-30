@@ -81,7 +81,11 @@ func (s Store) leasePostgres(ctx context.Context, holder Holder, grants Grants) 
 	if err != nil {
 		return Lease{}, err
 	}
-	dsn, err := packageDSN(s.DSN, role, password, "anix-pkg-"+holder.PackageID)
+	host := ""
+	if holder.Remote {
+		host = s.RemoteDatabaseHost
+	}
+	dsn, err := packageDSNWithHost(s.DSN, host, role, password, "anix-pkg-"+holder.PackageID)
 	if err != nil {
 		return Lease{}, err
 	}
