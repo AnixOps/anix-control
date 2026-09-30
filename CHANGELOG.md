@@ -624,6 +624,11 @@
 
 ### Fixed
 
+- The web frontend depends on axios 1.20.0. axios up to 1.19.0 is affected
+  by newly published advisories (prototype-pollution gadgets, ReDoS, HTTP/2
+  proxy bypass and DoS), which made `npm audit` fail the Frontend Build
+  check.
+
 - Configuration changes to a Control package no longer fail. Its `plugin.configure`
   operation completes immediately, because hosts pull the configuration. Before
   this, the host lifecycle dispatcher rejected the operation as unsupported.
