@@ -34,8 +34,9 @@ complete.
 V4 keeps REST/UniProxy, the legacy panel-node gRPC services, and existing
 WebSocket paths available as compatibility surfaces. A fresh plugin-only
 deployment must bootstrap the signed `identity-platform` package from the
-verified release evidence before enabling Control package execution; the V4
-release installer performs that verified bootstrap automatically. Operators
+verified release evidence before enabling Control package execution; the
+release container image ships that package and imports it on first start, and
+the V4 release installer performs the same verified bootstrap. Operators
 should retain the documented rollback plan throughout rollout. Package hosts
 may invoke narrowly scoped, kernel-owned compatibility bridge operations to
 preserve established route semantics; there is no direct HTTP fallback when a
@@ -49,9 +50,10 @@ signed package is unavailable.
 - Concrete backlog: [`TODO.md`](TODO.md)
 - Changelog: [`CHANGELOG.md`](CHANGELOG.md)
 - Brand and artifact migration: [`docs/BRAND_MIGRATION.md`](docs/BRAND_MIGRATION.md)
-- Deployment guide: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
+- Deployment guide (containers first): [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
+- Container design and multi-replica status: [`docs/architecture/container-deployment.md`](docs/architecture/container-deployment.md)
 - Upgrade runbook: [`docs/UPGRADE.md`](docs/UPGRADE.md)
-- Native release install: [`docs/guide/release-installation.md`](docs/guide/release-installation.md)
+- Native systemd install (frozen): [`docs/guide/release-installation.md`](docs/guide/release-installation.md)
 - Legacy migration plan: [`docs/guide/legacy-migration.md`](docs/guide/legacy-migration.md)
 - Manual intervention requirements:
   [`docs/manual-intervention.md`](docs/manual-intervention.md)
@@ -73,10 +75,17 @@ bash config/deploy/clean_local_build_artifacts.sh --dry-run
 bash config/deploy/clean_local_build_artifacts.sh --dry-run --include-deploy-backups
 ```
 
-## Release Install
+## Install
 
-Production installation downloads checked GitHub Release assets and does not
-clone the repository or build on the target host. Pin the production tag:
+Containers are the primary deployment. Each release publishes a signed,
+multi-architecture image `ghcr.io/anixops/anix-control` (digest in the release
+`docker-image.txt`) that needs no config file: run it with
+`docker-compose.prod.yml` and an external PostgreSQL, or with the Helm chart in
+`config/deploy/helm/anix-control`. Steps: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
+
+The native systemd installer is frozen (it keeps working, without new
+features). It downloads checked GitHub Release assets and does not clone the
+repository or build on the target host. Pin the production tag:
 
 ```bash
 export VERSION=v4.0.0
@@ -87,7 +96,7 @@ sudo bash /tmp/anix-control-install.sh install --version "${VERSION}" --admin-em
 rm -f /tmp/anix-control-install.sh
 ```
 
-See the [release installation guide](docs/guide/release-installation.md) for
+See the [release installation guide](docs/guide/release-installation.md) for the systemd path's
 reverse proxy, update, rollback, and security steps. Existing panel or foreign
 panel migrations must follow the [legacy migration plan](docs/guide/legacy-migration.md).
 

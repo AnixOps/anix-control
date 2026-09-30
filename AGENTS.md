@@ -63,6 +63,8 @@ GOWORK=off go test ./... -count=1 -p=1        # what Go Quality Gates runs
 GOWORK=off go test ./cmd/server -count=1      # reads Dockerfile, ci.yml, deploy_panel.sh
 make run              # isolated dev instance: API 127.0.0.1:19080, UI :19000, gRPC :50052
 make build            # frontend (web/public) + backend (build/anix-control)
+make docker-build     # container image, Dockerfile "source" target (anix-control:dev)
+docker compose up -d --build   # development stack with a throwaway PostgreSQL
 make test             # unit tests (./internal/..., -race)
 make test-grpc        # internal/grpc with coverage
 make test-e2e         # internal/tests/e2e
@@ -133,11 +135,25 @@ A release tag `vX.Y.Z[-alpha|-beta|-rc.N]` must match every surface checked by
   by `config/deploy/check_release_build_policy.sh`.
 - If you change release steps in `ci.yml`, update
   `config/scripts/check_release_workflow.sh` in the same PR.
-- `scripts/install.sh` installs from GitHub Releases and resolves
-  `releases/latest` when no version is pinned, so the latest release must
-  always be a Control release. Control Center tags (`control-center-v*`) are
-  never marked latest. Operator docs: `docs/guide/release-installation.md`,
-  `docs/DEPLOYMENT.md`, `docs/UPGRADE.md`.
+- Containers are the primary deployment. The release `docker` job builds the
+  `Dockerfile` `release` target from the release binaries, frontend and signed
+  identity package, and publishes `ghcr.io/anixops/anix-control` (linux/amd64
+  and linux/arm64, SBOM, provenance, cosign keyless signature, digest in
+  `docker-image.txt`); `check_release_workflow.sh` enforces this. Pushes to
+  `go_dev` publish `:edge`. Deployment assets: `docker-compose.prod.yml` and
+  `config/deploy/compose/` (external PostgreSQL), `config/deploy/helm/anix-control`
+  (single replica), `docker-compose.yml` (development). Container design and
+  multi-replica blockers: `docs/architecture/container-deployment.md`.
+- Configuration for containers is `ANIX_CONTROL_*` environment variables
+  (`docs/reference/environment-variables.md`, generated and checked by
+  `TestEnvironmentVariableReferenceIsCurrent`). A new config key changes that
+  file: regenerate it in the same PR.
+- `scripts/install.sh` (systemd) is frozen: keep it working, add no features.
+  It installs from GitHub Releases and resolves `releases/latest` when no
+  version is pinned, so the latest release must always be a Control release.
+  Control Center tags (`control-center-v*`) are never marked latest. Operator
+  docs: `docs/DEPLOYMENT.md`, `docs/UPGRADE.md`,
+  `docs/guide/release-installation.md`.
 
 ## Flux-panel Clone Guardrails
 

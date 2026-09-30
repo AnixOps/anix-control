@@ -203,5 +203,6 @@ func TestElectorStopsWorkWhenRenewalsFail(t *testing.T) {
 	case <-time.After(5 * time.Second):
 		t.Fatal("work kept running without a renewed lease")
 	}
-	assert.False(t, elector.IsLeader())
+	// Leadership is cleared after the work returns.
+	require.Eventually(t, func() bool { return !elector.IsLeader() }, 2*time.Second, 10*time.Millisecond)
 }

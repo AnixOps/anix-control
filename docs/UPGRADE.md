@@ -244,7 +244,10 @@ directly, so proxy clients and nodes are not affected by this window.
 
 1. Verify the release evidence bundle and download the sixteen `v4.0.0`
    packages: `.anxp`, `.manifest.json` and `.manifest.sig` for each.
-2. Configure `identity_bootstrap_package_dir` and
+2. Containers: the release image already contains the identity package and
+   enables package execution by default, so start `docker-compose.prod.yml`
+   (see [Docker Compose Upgrade](#docker-compose-upgrade)) and continue with
+   step 3. Native installs: configure `identity_bootstrap_package_dir` and
    `control_execution_enabled: true` as described in
    [Plugin-Only Bootstrap And Execution](#plugin-only-bootstrap-and-execution),
    then start the new binary. `identity-platform` is imported on first start,

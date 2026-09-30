@@ -66,6 +66,17 @@
 
 ### Changed
 
+- Documentation now treats containers as the primary deployment.
+  - README, `docs/README.md`, `docs/control-boundary.md`,
+    `docs/features.md`, AGENTS.md and the UPGRADE alpha section point to the
+    Compose and Helm paths first. The systemd installer is marked frozen in
+    the release installation guide, and `scripts/install.sh` prints a notice.
+  - New `docs/reference/environment-variables.md` lists all `ANIX_CONTROL_*`
+    variables. It is generated from the configuration structure and kept
+    current by `TestEnvironmentVariableReferenceIsCurrent`.
+  - `TODO.md` now aims the production upgrade at containers and tracks the
+    multi-replica (HA) work.
+
 - Rewrote `docker-compose.prod.yml` for container-first production.
   - It runs only Control against an external PostgreSQL: a one-shot
     `migrate` service, then `control`.
@@ -377,6 +388,10 @@
   and Ansible group-variable/template propagation.
 
 ### Fixed
+
+- `TestElectorStopsWorkWhenRenewalsFail` waits for the leader flag to clear
+  instead of reading it the moment the work returns; it failed under the race
+  detector.
 
 - The edge and release image jobs pin `sigstore/cosign-installer@v4.1.2`:
   the action publishes no floating `v4` tag, so the jobs failed to start.

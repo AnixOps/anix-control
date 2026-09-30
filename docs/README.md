@@ -25,8 +25,9 @@ Use this tree like NodeX:
 
 ## Install, Upgrade, And Operate
 
-- Native release install: [`guide/release-installation.md`](guide/release-installation.md)
-- Deployment guide: [`DEPLOYMENT.md`](DEPLOYMENT.md)
+- Deployment guide (Docker Compose, Kubernetes): [`DEPLOYMENT.md`](DEPLOYMENT.md)
+- Container design and multi-replica status: [`architecture/container-deployment.md`](architecture/container-deployment.md)
+- Native systemd install (frozen): [`guide/release-installation.md`](guide/release-installation.md)
 - Upgrade runbook: [`UPGRADE.md`](UPGRADE.md)
 - V4 plugin-only upgrade: [`guide/v4-plugin-only-upgrade.md`](guide/v4-plugin-only-upgrade.md)
 - V4 plugin-only rollback: [`guide/v4-plugin-only-rollback.md`](guide/v4-plugin-only-rollback.md)
@@ -40,6 +41,7 @@ Use this tree like NodeX:
 ## Startup And Configuration
 
 - Docker quickstart: [`reference/quickstart.md`](reference/quickstart.md)
+- Environment variables (`ANIX_CONTROL_*`): [`reference/environment-variables.md`](reference/environment-variables.md)
 - Exact startup flow: [`reference/startup-config.md`](reference/startup-config.md)
 - Config source-of-truth: [`reference/configuration.md`](reference/configuration.md)
 - Repository layout: [`reference/repository-layout.md`](reference/repository-layout.md)

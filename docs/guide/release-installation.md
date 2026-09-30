@@ -5,10 +5,13 @@ downloads a single installer script, the matching binary archive, the frontend
 archive, and `SHA256SUMS.txt`. It does not clone the repository and it does not
 run `go build`, `npm`, or Docker image builds on the server.
 
+> **Frozen path.** Containers are the primary deployment
+> ([`../DEPLOYMENT.md`](../DEPLOYMENT.md)): Docker Compose with an external
+> PostgreSQL, or the Helm chart. This systemd installer keeps working for
+> existing hosts but gets no new features. Do not mix both models on one host.
+
 The supported native-install targets are Linux `amd64` and Linux `arm64` hosts
-with systemd. For Docker or PostgreSQL deployments, use the existing
-[`../DEPLOYMENT.md`](../DEPLOYMENT.md) and [`../UPGRADE.md`](../UPGRADE.md)
-runbooks instead of mixing deployment models on the same host.
+with systemd. Upgrades are in [`../UPGRADE.md`](../UPGRADE.md).
 
 ## Before You Start
 

@@ -244,3 +244,22 @@ func PathFromEnv() string {
 	value, _ := os.LookupEnv(ConfigPathEnv)
 	return strings.TrimSpace(value)
 }
+
+// EnvMarkdownTable renders the variable reference table of
+// docs/reference/environment-variables.md from cfg (the built-in defaults).
+func EnvMarkdownTable(cfg *Config) string {
+	var builder strings.Builder
+	builder.WriteString("| Variable | Key | Type | Built-in default |\n")
+	builder.WriteString("|----------|-----|------|------------------|\n")
+	for _, variable := range EnvVars(cfg) {
+		value := "`" + variable.Default + "`"
+		switch {
+		case variable.Secret:
+			value = "secret, no default"
+		case variable.Default == "":
+			value = ""
+		}
+		_, _ = fmt.Fprintf(&builder, "| `%s` | `%s` | %s | %s |\n", variable.Name, variable.Path, variable.Type, value)
+	}
+	return builder.String()
+}
