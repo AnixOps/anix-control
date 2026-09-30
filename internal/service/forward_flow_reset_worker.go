@@ -8,6 +8,7 @@ import (
 
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/subscriber"
 	"gorm.io/gorm"
 )
 
@@ -135,13 +136,15 @@ func (w *ForwardFlowResetWorker) resetUserTraffic(tx *gorm.DB, currentDay, lastD
 		return nil
 	}
 
+	ids := make([]uint, 0, len(users))
+	for _, user := range users {
+		ids = append(ids, user.ID)
+	}
+	if _, err := subscriber.ResetTrafficTx(tx, "", ids, time.Now()); err != nil {
+		return fmt.Errorf("reset user flow: %w", err)
+	}
+	// Legacy Flux databases also carry per-user in_flow/out_flow columns.
 	updates := make(map[string]any)
-	if tx.Migrator().HasColumn(&model.User{}, "u") {
-		updates["u"] = 0
-	}
-	if tx.Migrator().HasColumn(&model.User{}, "d") {
-		updates["d"] = 0
-	}
 	if tx.Migrator().HasColumn(&model.User{}, "in_flow") {
 		updates["in_flow"] = 0
 	}

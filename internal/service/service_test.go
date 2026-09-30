@@ -70,6 +70,8 @@ func (s *ServiceTestSuite) SetupSuite() {
 			&model.AuthorizedKey{},
 			&model.Event{},
 			&model.UserSubscriptionGroup{},
+			&model.SubscriberRequest{},
+			&model.SubscriberChange{},
 			&model.PlanSubscriptionGroup{},
 			&model.ForwardNode{},
 			&model.ForwardRule{},

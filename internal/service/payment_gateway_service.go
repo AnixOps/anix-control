@@ -5,6 +5,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"log"
 	"math"
 	"time"
 
@@ -302,6 +303,15 @@ func (s *PaymentGatewayService) markOrderPaid(tradeNo string, gatewayTradeNo str
 				"paid_at": paidAt,
 			}).Error; err != nil {
 				return err
+			}
+			// A paid order activates its plan at once. The activation runs in
+			// a savepoint: if it fails, the payment stays recorded and the
+			// order stays paid for an administrator to complete.
+			orderID := *record.OrderID
+			if err := tx.Transaction(func(inner *gorm.DB) error {
+				return completeOrderTx(inner, orderID, now)
+			}); err != nil {
+				log.Printf("payment %s: order %d is paid but was not activated: %v", tradeNo, orderID, err)
 			}
 		}
 

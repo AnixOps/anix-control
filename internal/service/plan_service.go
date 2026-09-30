@@ -7,6 +7,7 @@ import (
 
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/subscriber"
 	"gorm.io/gorm"
 )
 
@@ -123,33 +124,15 @@ func (s *PlanService) AssignToUser(planID, userID uint, expireAt *int64) error {
 			return err
 		}
 
-		var user model.User
-		if err := tx.Select("id").First(&user, userID).Error; err != nil {
-			if errors.Is(err, gorm.ErrRecordNotFound) {
+		// An administrator's assignment resets traffic, keeps the
+		// subscription groups and changes the expiry only when given.
+		if _, err := subscriber.ApplyEntitlementTx(tx, subscriber.Entitlement{
+			UserID: userID, Plan: subscriber.PlanSnapshotFromPlan(plan, nil), ExpiresAt: expireAt,
+			ResetTraffic: true, KeepSubscriptionGroups: true,
+		}, time.Now()); err != nil {
+			if errors.Is(err, subscriber.ErrSubscriberNotFound) {
 				return ErrPlanUserNotFound
 			}
-			return err
-		}
-
-		// 更新用户
-		updates := map[string]any{
-			"plan_id":         plan.ID,
-			"group_id":        plan.GroupID,
-			"transfer_enable": plan.TransferEnable * 1073741824,
-			"u":               0,
-			"d":               0,
-		}
-		if expireAt != nil {
-			updates["expired_at"] = *expireAt
-		}
-		if plan.SpeedLimit != nil {
-			updates["speed_limit"] = *plan.SpeedLimit
-		}
-		if plan.DeviceLimit != nil {
-			updates["device_limit"] = *plan.DeviceLimit
-		}
-
-		if err := tx.Model(&model.User{}).Where("id = ?", userID).Updates(updates).Error; err != nil {
 			return err
 		}
 

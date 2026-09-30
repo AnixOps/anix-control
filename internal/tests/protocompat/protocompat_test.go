@@ -18,6 +18,7 @@ import (
 
 	_ "github.com/AnixOps/anix-control/sdk/api/identity/v1"
 	_ "github.com/AnixOps/anix-control/sdk/api/kernelidentity/v1"
+	_ "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1"
 	_ "github.com/AnixOps/anix-control/sdk/api/modulepki/v1"
 	_ "github.com/AnixOps/anix-control/sdk/api/packagebridge/v1"
 	_ "github.com/AnixOps/anix-control/sdk/api/pluginhost/v1"
@@ -34,6 +35,7 @@ var contractPackages = []string{
 	"anix.pluginhost.v1",
 	"anixops.identity.v1",
 	"anixops.kernelidentity.v1",
+	"anixops.kernelsubscriber.v1",
 	"anixops.modulepki.v1",
 	"anixops.packagebridge.v1",
 	"v2board",

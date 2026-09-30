@@ -498,6 +498,6 @@ func KernelModels() []any {
 		&PackageMigrationRun{}, &PackageValidationResult{}, &PackageRouteGeneration{}, &PackageBackupReference{}, &PackageRolloutLock{},
 		&PackageStorage{}, &ServiceCA{}, &ModuleEnrollment{}, &ModuleCertificate{}, &PluginRuntime{},
 		&IdentityRevocation{}, &IdentitySessionRevocation{}, &IdentityAccountLink{}, &IdentityAuthority{},
-		&IdentityTokenKey{}, &IdentityCutoverEvent{},
+		&IdentityTokenKey{}, &IdentityCutoverEvent{}, &SubscriberRequest{}, &SubscriberChange{},
 	}
 }

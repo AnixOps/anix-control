@@ -10,6 +10,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/cache"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/subscriber"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -227,16 +228,12 @@ func (s *ServerService) RecordNodeTrafficReport(serverType model.ServerType, nod
 				return err
 			}
 		}
+		entries := make([]subscriber.TrafficEntry, 0, len(userTraffics))
 		for userID, traffic := range userTraffics {
-			if err := tx.Model(&model.User{}).Where("id = ?", userID).
-				Updates(map[string]any{
-					"u": gorm.Expr("u + ?", traffic[0]),
-					"d": gorm.Expr("d + ?", traffic[1]),
-				}).Error; err != nil {
-				return err
-			}
+			entries = append(entries, subscriber.TrafficEntry{UserID: userID, Upload: traffic[0], Download: traffic[1]})
 		}
-		return nil
+		_, err := subscriber.RecordTrafficTx(tx, "", entries, time.Unix(now, 0))
+		return err
 	})
 }
 

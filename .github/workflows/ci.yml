@@ -291,7 +291,7 @@ jobs:
           bash api/grpc/gen.sh
           git diff --exit-code -- api/grpc/v2boardpb
           test -z "$(git ls-files --others --exclude-standard -- api/grpc/v2boardpb)"
-          contracts=(pluginhost packagebridge modulepki identity kernelidentity)
+          contracts=(pluginhost packagebridge modulepki identity kernelidentity kernelsubscriber)
           for contract in "${contracts[@]}"; do
             bash "sdk/api/${contract}/gen.sh"
           done

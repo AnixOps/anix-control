@@ -1,0 +1,265 @@
+syntax = "proto3";
+
+package anixops.kernelsubscriber.v1;
+
+option go_package = "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1;kernelsubscriberv1";
+
+// KernelSubscriber is the kernel's contract for subscriber state that many
+// domains share: entitlements (plan, group, traffic, limits, expiry),
+// traffic counters, subscription credentials and balances, all in v2_user
+// and v2_user_subscription_group. The kernel stays their only writer;
+// domain modules (plan, order, payment, subscription, proxy-node, forward,
+// affiliate, identity) call this contract instead of writing the tables.
+//
+// It is served on the module listener and the local package bridge to
+// official packages, per method family, by capability:
+//   - kernel.subscriber.entitlements.v1: ApplyEntitlement, AdjustEntitlement
+//   - kernel.subscriber.traffic.v1: RecordTraffic, ResetTraffic
+//   - kernel.subscriber.credentials.v1: ResetCredentials
+//   - kernel.subscriber.balance.v1: AdjustBalance
+//   - kernel.subscriber.directory.v1: GetSubscribers, LookupBySubscriptionToken,
+//     ListActiveSubscribers, WatchSubscriberChanges
+//
+// Every write that can be retried carries a request_id; the kernel applies
+// each request_id once and answers a repeat with the first result.
+service KernelSubscriber {
+  // ApplyEntitlement activates or renews a plan for a subscriber, as a
+  // completed order or an administrator's assignment does. The caller
+  // supplies the plan snapshot; the kernel computes the expiry under the
+  // subscriber's row lock.
+  rpc ApplyEntitlement(ApplyEntitlementRequest) returns (ApplyEntitlementResponse);
+  // AdjustEntitlement sets individual entitlement fields, as the v2 admin
+  // user update does. Absent fields are left unchanged.
+  rpc AdjustEntitlement(AdjustEntitlementRequest) returns (AdjustEntitlementResponse);
+  // RecordTraffic adds reported upload and download bytes to subscribers'
+  // counters. A batch is applied once.
+  rpc RecordTraffic(RecordTrafficRequest) returns (RecordTrafficResponse);
+  // ResetTraffic zeroes subscribers' counters (monthly reset, admin reset).
+  rpc ResetTraffic(ResetTrafficRequest) returns (ResetTrafficResponse);
+  // ResetCredentials issues a new subscription token and/or proxy uuid.
+  rpc ResetCredentials(ResetCredentialsRequest) returns (ResetCredentialsResponse);
+  // AdjustBalance changes a balance by a signed amount in cents.
+  rpc AdjustBalance(AdjustBalanceRequest) returns (AdjustBalanceResponse);
+  rpc GetSubscribers(GetSubscribersRequest) returns (GetSubscribersResponse);
+  // LookupBySubscriptionToken resolves a subscription link's token.
+  rpc LookupBySubscriptionToken(LookupBySubscriptionTokenRequest) returns (LookupBySubscriptionTokenResponse);
+  // ListActiveSubscribers pages through the subscribers a node serves:
+  // not banned, not expired, within their traffic, in one of the groups.
+  rpc ListActiveSubscribers(ListActiveSubscribersRequest) returns (ListActiveSubscribersResponse);
+  // WatchSubscriberChanges streams changes that can alter what a node
+  // serves, after a cursor. Clients resume from the last cursor they saw
+  // and re-list when told their cursor is too old.
+  rpc WatchSubscriberChanges(WatchSubscriberChangesRequest) returns (stream SubscriberChange);
+}
+
+// PlanSnapshot is what an entitlement grants, as the plan module knows it
+// at purchase time.
+message PlanSnapshot {
+  uint64 plan_id = 1;
+  // group_id is the primary node group (v2_user.group_id).
+  uint64 group_id = 2;
+  // subscription_group_ids replace the subscriber's subscription groups.
+  repeated uint64 subscription_group_ids = 3;
+  uint64 transfer_bytes = 4;
+  // speed_limit_mbps and device_limit are left unchanged when absent.
+  optional int64 speed_limit_mbps = 5;
+  optional int32 device_limit = 6;
+}
+
+// Period is how long an entitlement lasts. A zero period with expires_at
+// unset means no expiry change.
+message Period {
+  int32 months = 1;
+  int32 days = 2;
+}
+
+message ApplyEntitlementRequest {
+  // request_id is unique per grant, e.g. "order:<trade_no>".
+  string request_id = 1;
+  uint64 user_id = 2;
+  PlanSnapshot plan = 3;
+  oneof expiry {
+    // period extends from now, or, with renew_same_plan, from the current
+    // expiry when the subscriber holds the same plan and it has not expired.
+    Period period = 4;
+    // expires_at_unix sets the expiry exactly (administrator assignment).
+    int64 expires_at_unix = 5;
+  }
+  bool renew_same_plan = 6;
+  // reset_traffic zeroes the traffic counters, as a purchase does.
+  bool reset_traffic = 7;
+  string reason = 8;
+  // keep_subscription_groups leaves the subscriber's subscription groups
+  // unchanged instead of replacing them with the plan's (administrator
+  // assignment, as in v2).
+  bool keep_subscription_groups = 9;
+}
+
+message ApplyEntitlementResponse {
+  // applied is false when request_id was applied before; the other fields
+  // then describe that first application.
+  bool applied = 1;
+  int64 expires_at_unix = 2;
+}
+
+message AdjustEntitlementRequest {
+  string request_id = 1;
+  uint64 user_id = 2;
+  optional uint64 plan_id = 3;
+  optional uint64 group_id = 4;
+  optional int64 expires_at_unix = 5;
+  optional int64 transfer_bytes = 6;
+  optional int64 speed_limit_mbps = 7;
+  optional int32 device_limit = 8;
+  optional int64 flow_reset_day = 9;
+  optional string remark = 10;
+  // clear_expiry removes the expiry (never expires); it wins over
+  // expires_at_unix.
+  bool clear_expiry = 11;
+  string reason = 12;
+}
+
+message AdjustEntitlementResponse {
+  bool applied = 1;
+}
+
+message TrafficEntry {
+  uint64 user_id = 1;
+  uint64 upload_bytes = 2;
+  uint64 download_bytes = 3;
+}
+
+message RecordTrafficRequest {
+  // batch_id is unique per report, e.g. "node:<id>:<sequence>".
+  string batch_id = 1;
+  // source names the reporter, e.g. "node:12" or "forward:tunnel:3".
+  string source = 2;
+  repeated TrafficEntry entries = 3;
+  // rate multiplies the bytes counted (node traffic rate); 1 when unset.
+  double rate = 4;
+}
+
+message RecordTrafficResponse {
+  bool applied = 1;
+  // exhausted lists subscribers who crossed their transfer limit with this
+  // batch; they also appear in WatchSubscriberChanges.
+  repeated uint64 exhausted_user_ids = 2;
+}
+
+message ResetTrafficRequest {
+  string request_id = 1;
+  repeated uint64 user_ids = 2;
+  string reason = 3;
+}
+
+message ResetTrafficResponse {
+  bool applied = 1;
+  uint64 reset = 2;
+}
+
+message ResetCredentialsRequest {
+  string request_id = 1;
+  uint64 user_id = 2;
+  bool subscription_token = 3;
+  bool proxy_uuid = 4;
+}
+
+message ResetCredentialsResponse {
+  bool applied = 1;
+}
+
+enum BalanceKind {
+  BALANCE_KIND_UNSPECIFIED = 0;
+  BALANCE_KIND_ACCOUNT = 1;
+  BALANCE_KIND_COMMISSION = 2;
+}
+
+message AdjustBalanceRequest {
+  string request_id = 1;
+  uint64 user_id = 2;
+  BalanceKind kind = 3;
+  // amount_cents is added; a negative amount that would take the balance
+  // below zero is refused (FailedPrecondition).
+  int64 amount_cents = 4;
+  string reason = 5;
+}
+
+message AdjustBalanceResponse {
+  bool applied = 1;
+  int64 balance_cents = 2;
+}
+
+// Subscriber is what domain modules may read about a subscriber. It carries
+// no identity credentials; uuid is included for node user lists.
+message Subscriber {
+  uint64 user_id = 1;
+  string uuid = 2;
+  uint64 plan_id = 3;
+  uint64 group_id = 4;
+  repeated uint64 subscription_group_ids = 5;
+  // expires_at_unix is 0 when the subscription never expires.
+  int64 expires_at_unix = 6;
+  uint64 transfer_bytes = 7;
+  uint64 upload_bytes = 8;
+  uint64 download_bytes = 9;
+  optional int64 speed_limit_mbps = 10;
+  optional int32 device_limit = 11;
+  bool banned = 12;
+  int64 flow_reset_day = 13;
+}
+
+message GetSubscribersRequest {
+  repeated uint64 user_ids = 1;
+}
+
+message GetSubscribersResponse {
+  repeated Subscriber subscribers = 1;
+}
+
+message LookupBySubscriptionTokenRequest {
+  string token = 1;
+}
+
+message LookupBySubscriptionTokenResponse {
+  // found is false for an unknown token; subscriber is then empty.
+  bool found = 1;
+  Subscriber subscriber = 2;
+}
+
+message ListActiveSubscribersRequest {
+  repeated uint64 group_ids = 1;
+  // after_user_id pages by user id; 0 starts at the beginning.
+  uint64 after_user_id = 2;
+  uint32 limit = 3;
+}
+
+message ListActiveSubscribersResponse {
+  repeated Subscriber subscribers = 1;
+  // cursor is the change cursor at the time of the listing: watch from it
+  // to follow later changes.
+  uint64 cursor = 2;
+  bool done = 3;
+}
+
+message WatchSubscriberChangesRequest {
+  uint64 after_cursor = 1;
+}
+
+enum ChangeKind {
+  CHANGE_KIND_UNSPECIFIED = 0;
+  // UPSERT: the subscriber is (or stays) active with these fields.
+  CHANGE_KIND_UPSERT = 1;
+  // REMOVE: the subscriber is no longer active (banned, expired, out of
+  // traffic, deleted).
+  CHANGE_KIND_REMOVE = 2;
+  // RESYNC: the cursor is too old; list again.
+  CHANGE_KIND_RESYNC = 3;
+}
+
+message SubscriberChange {
+  uint64 cursor = 1;
+  ChangeKind kind = 2;
+  uint64 user_id = 3;
+  // subscriber is set for UPSERT.
+  Subscriber subscriber = 4;
+}

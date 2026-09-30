@@ -8,6 +8,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/authn"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/subscriber"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -96,10 +97,7 @@ func (s *UserService) GetActiveUsers() ([]model.User, error) {
 // groupID 为 nil 时返回所有有效用户，否则返回指定分组的用户
 func (s *UserService) GetActiveUsersForNode(groupID *uint) ([]*model.User, error) {
 	var users []*model.User
-	query := s.db.Preload("Plan").
-		Where("banned = 0").
-		Where("(expired_at IS NULL OR expired_at > ?)", time.Now().Unix()).
-		Where("(u + d) < transfer_enable")
+	query := subscriber.Active(s.db.Preload("Plan"), time.Now())
 
 	if groupID != nil {
 		query = query.Where("group_id = ?", *groupID)
@@ -114,12 +112,10 @@ func (s *UserService) UpdateTraffic(userID uint, upload, download int64) error {
 	if err := ValidateTrafficDelta(upload, download); err != nil {
 		return err
 	}
-	return s.db.Model(&model.User{}).
-		Where("id = ?", userID).
-		Updates(map[string]any{
-			"u": gorm.Expr("u + ?", upload),
-			"d": gorm.Expr("d + ?", download),
-		}).Error
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		_, err := subscriber.RecordTrafficTx(tx, "", []subscriber.TrafficEntry{{UserID: userID, Upload: upload, Download: download}}, time.Now())
+		return err
+	})
 }
 
 // BatchUpdateTraffic 批量更新用户流量
@@ -130,18 +126,13 @@ func (s *UserService) BatchUpdateTraffic(traffics map[uint][2]int64) error {
 		}
 	}
 
+	entries := make([]subscriber.TrafficEntry, 0, len(traffics))
+	for userID, traffic := range traffics {
+		entries = append(entries, subscriber.TrafficEntry{UserID: userID, Upload: traffic[0], Download: traffic[1]})
+	}
 	return s.db.Transaction(func(tx *gorm.DB) error {
-		for userID, traffic := range traffics {
-			if err := tx.Model(&model.User{}).
-				Where("id = ?", userID).
-				Updates(map[string]any{
-					"u": gorm.Expr("u + ?", traffic[0]),
-					"d": gorm.Expr("d + ?", traffic[1]),
-				}).Error; err != nil {
-				return err
-			}
-		}
-		return nil
+		_, err := subscriber.RecordTrafficTx(tx, "", entries, time.Now())
+		return err
 	})
 }
 
@@ -216,7 +207,12 @@ func (s *UserService) GetList(params UserListParams) (*UserListResult, error) {
 
 // Create 创建用户
 func (s *UserService) Create(user *model.User) error {
-	return s.db.Create(user).Error
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(user).Error; err != nil {
+			return err
+		}
+		return subscriber.RecordChangesTx(tx, []uint{user.ID}, false, time.Now())
+	})
 }
 
 // revokingUserFields are the user columns whose change ends the user's
@@ -263,6 +259,11 @@ func UpdateUserTxWithTokenVersion(tx *gorm.DB, id uint, updates map[string]any, 
 	}
 	if err := tx.Model(&model.User{}).Where("id = ?", id).Updates(updates).Error; err != nil {
 		return nil, err
+	}
+	if subscriber.TouchesNodeFields(updates) {
+		if err := subscriber.RecordChangesTx(tx, []uint{id}, false, time.Now()); err != nil {
+			return nil, err
+		}
 	}
 	if reason == "" {
 		return nil, nil
@@ -338,6 +339,9 @@ func DeleteUserTx(tx *gorm.DB, id uint) (authn.Revocation, error) {
 	if res.RowsAffected == 0 {
 		return revocation, ErrUserNotFound
 	}
+	if err := subscriber.RecordChangesTx(tx, []uint{id}, true, time.Now()); err != nil {
+		return revocation, err
+	}
 	return revocation, authn.Write(tx, revocation)
 }
 
@@ -353,7 +357,13 @@ func (s *UserService) Unban(id uint) error {
 
 // ResetTraffic 重置用户流量
 func (s *UserService) ResetTraffic(id uint) error {
-	return s.Update(id, map[string]any{"u": 0, "d": 0})
+	if err := s.ensureUserExists(id); err != nil {
+		return err
+	}
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		_, err := subscriber.ResetTrafficTx(tx, "", []uint{id}, time.Now())
+		return err
+	})
 }
 
 // ResetToken 为用户重新生成订阅 token, 让旧的 /s/<token> 链接立即失效。
