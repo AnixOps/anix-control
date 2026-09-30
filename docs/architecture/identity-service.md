@@ -12,8 +12,12 @@ the identity module (`identity-platform`), the first network module on the
   through `internal/identitybridge` back into the kernel handlers
   `handler/auth.go`, `user.go`, `admin.go`, `mfa.go`, `invite.go` and
   `system*.go`.
-- **Tokens.** HS256 with a shared secret (`internal/utils/jwt.go`). There is no
-  algorithm pinning, no issuer or audience check, and no revocation.
+- **Tokens.** HS256 with a shared secret (`internal/utils/jwt.go`), checked in
+  one place, `internal/authn` (step 8):
+  - the algorithm is pinned to HS256, and `iss=v2board`, `exp` and `iat` are
+    required;
+  - new tokens carry a session id (`sid`);
+  - revocations are enforced (see below).
 - **Data.** `v2_user` mixes identity columns (email, password, is_admin,
   is_staff, banned) with subscriber and entitlement columns (plan, traffic,
   expiry, limits, balance). About 20 other kernel files read those identity
@@ -78,6 +82,20 @@ on:
 Restrictive changes are projected to the kernel before identity commits them.
 A banned user is therefore rejected within seconds, including by node user
 lists that read the `v2_user` projection.
+
+**In place since step 8** (`internal/authn`):
+- **Kernel-side triggers.**
+  - The kernel's own user changes revoke in the same transaction: ban, and a
+    changed password, email, admin flag or ban flag through `UserService.Update`.
+  - Deleting a user also revokes.
+  - A form that resends unchanged values revokes nothing.
+- **Caching.** The HTTP middleware, the monitor WebSocket and the gRPC
+  interceptor check the in-memory cache.
+  - Revocations made in the process apply at once.
+  - Others arrive within 5 s through a reload, which also prunes rows that can
+    no longer match an unexpired token.
+- **Second precision.** `iat` has one-second precision, so a token issued in
+  the revocation's own second is revoked too.
 
 ## Data split
 

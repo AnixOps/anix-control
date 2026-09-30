@@ -3,6 +3,7 @@ package middleware
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"github.com/AnixOps/anix-control/v4/internal/authn"
 	"github.com/AnixOps/anix-control/v4/internal/logging"
 	"net/http"
 	"strconv"
@@ -12,7 +13,6 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
-	"github.com/AnixOps/anix-control/v4/internal/utils"
 	"github.com/gin-gonic/gin"
 )
 
@@ -172,7 +172,7 @@ func JWTAuth() gin.HandlerFunc {
 			token = strings.TrimPrefix(authHeader, "Bearer ")
 		}
 
-		claims, err := utils.ParseToken(token)
+		claims, err := authn.Default().Verify(c.Request.Context(), token)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"message": "session expired, please login again",

@@ -3,7 +3,6 @@ package utils
 import (
 	"testing"
 
-	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -219,34 +218,4 @@ func TestParseTokenWithSecret_Expired(t *testing.T) {
 
 	_, err = ParseTokenWithSecret(token, "test-secret")
 	assert.Error(t, err)
-}
-
-func TestParseToken(t *testing.T) {
-	// Setup config
-	cfg := &config.Config{
-		JWT: config.JWTConfig{
-			Secret: "test-jwt-secret",
-			Expire: 3600,
-		},
-	}
-	config.Set(cfg)
-
-	// Generate token
-	token, err := GenerateToken(1, "test@example.com", true, cfg.JWT.Secret, cfg.JWT.Expire)
-	require.NoError(t, err)
-
-	// Parse using config secret
-	claims, err := ParseToken(token)
-	require.NoError(t, err)
-	assert.Equal(t, uint(1), claims.UserID)
-	assert.True(t, claims.IsAdmin)
-}
-
-func TestParseToken_NoConfig(t *testing.T) {
-	// Clear config
-	config.Set(nil)
-
-	_, err := ParseToken("some-token")
-	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "config not loaded")
 }

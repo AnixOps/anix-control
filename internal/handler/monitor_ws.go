@@ -8,6 +8,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/AnixOps/anix-control/v4/internal/authn"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/AnixOps/anix-control/v4/internal/utils"
@@ -94,7 +95,7 @@ func (h *MonitorWSHandler) HandleMonitorWS(c *gin.Context) {
 	// 验证 token（WebSocket 连接也可能通过 query 参数传 token）
 	token := c.Query("token")
 	if token != "" {
-		claims, err := utils.ParseToken(token)
+		claims, err := authn.Default().Verify(c.Request.Context(), token)
 		if err != nil || !claims.IsAdmin {
 			c.JSON(http.StatusUnauthorized, gin.H{"message": "unauthorized"})
 			return

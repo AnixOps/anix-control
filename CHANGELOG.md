@@ -2,6 +2,25 @@
 
 ## Unreleased
 
+### Security
+
+- User access tokens are verified in one place, `internal/authn`, and can be
+  revoked (N8). It covers the HTTP middleware, the admin monitor WebSocket
+  and the gRPC interceptor.
+  - **Pinning.** The algorithm is pinned to HS256, which closes the
+    algorithm-confusion gap. `iss`, `exp` and `iat` are required.
+  - **Session id.** New tokens carry a session id (`sid`); the login
+    response is unchanged.
+  - **Revocation tables.** New tables `v4_kernel_identity_revocation`
+    (per user: `not_before`, `token_version`) and
+    `v4_kernel_identity_session_revocation` (session denylist). They are
+    cached in memory and reloaded every 5 s.
+  - **Triggers.** Banning or deleting a user, or changing their password,
+    email, admin flag or ban flag, revokes that user's existing tokens at
+    once. Before, a banned user's token kept working until it expired (24 h
+    by default). Updates that resend unchanged values revoke nothing.
+  - `utils.ParseToken` is removed; use `authn.Default().Verify`.
+
 ### Removed
 
 - The legacy source/Docker Compose installer in the root `install.sh`

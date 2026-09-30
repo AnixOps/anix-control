@@ -83,7 +83,7 @@ func TestEnsureWireGuardPeerSchema(t *testing.T) {
 func TestUserDeleteRemovesWireGuardPeers(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{})
 	require.NoError(t, err)
-	require.NoError(t, db.AutoMigrate(&model.User{}, &model.WireGuardPeer{}))
+	require.NoError(t, db.AutoMigrate(&model.User{}, &model.WireGuardPeer{}, &model.IdentityRevocation{}))
 	require.NoError(t, db.Create(&model.User{ID: 901, Email: "wireguard-delete@example.com"}).Error)
 	require.NoError(t, db.Create(&model.WireGuardPeer{
 		NodeProtocolID: 10,
