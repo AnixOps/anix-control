@@ -245,11 +245,16 @@ type HostStats struct {
 	UnexpectedExits uint64
 	Restarts        uint64
 	Failures        uint64
+
+	HealthDetailsJSON string
+	HealthCheckedAt   time.Time
 }
 
 type HostStatsProvider interface {
 	Stats() []HostStats
 }
+
+func (*Supervisor) PollHealth(context.Context, time.Duration) {}
 
 func (*Supervisor) Stats() []HostStats {
 	return nil

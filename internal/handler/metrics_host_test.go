@@ -102,3 +102,52 @@ func (s *MetricsHandlerTestSuite) TestGetMetrics_IncludesPluginHostStatsWhenSupe
 	assert.Contains(s.T(), body, `anixops_plugin_host_restarts_total{package="knowledge"} 1`)
 	assert.Contains(s.T(), body, `anixops_plugin_host_state{package="knowledge",state="restarting"} 1`)
 }
+
+func (s *MetricsHandlerTestSuite) TestWritePackageRouteMetrics() {
+	var body strings.Builder
+	writePackageRouteMetrics(&body, []pluginhost.HostStats{
+		{PackageID: "ticket"},
+		{PackageID: "broken", HealthDetailsJSON: `not json`},
+		{PackageID: "knowledge", HealthDetailsJSON: `{"bridge":"required","config":{"status":"ok","revision":4},"routes":{
+			"knowledge.article.list":{"mode":"shadow","effective":"shadow","shadow_total":9,"shadow_mismatch":2,"shadow_errors":1,"shadow_skipped":3},
+			"knowledge.article.detail":{"mode":"native","effective":"legacy","mode_unsupported":true}}}`},
+		{PackageID: "identity-platform", HealthDetailsJSON: `{"bridge":"required","config":{"status":"unsupported"}}`},
+	})
+	assert.Equal(s.T(), `# HELP anixops_package_config_status Route-mode configuration status reported by each package host (1 for the current status).
+# TYPE anixops_package_config_status gauge
+anixops_package_config_status{package="identity-platform",status="unsupported"} 1
+anixops_package_config_status{package="knowledge",status="ok"} 1
+# HELP anixops_package_route_mode Configured and effective mode of package routes that are not legacy or have native traffic.
+# TYPE anixops_package_route_mode gauge
+anixops_package_route_mode{package="knowledge",route="knowledge.article.detail",mode="native",effective="legacy"} 1
+anixops_package_route_mode{package="knowledge",route="knowledge.article.list",mode="shadow",effective="shadow"} 1
+# HELP anixops_package_native_requests_total Requests answered by a package-native route.
+# TYPE anixops_package_native_requests_total counter
+anixops_package_native_requests_total{package="knowledge",route="knowledge.article.detail"} 0
+anixops_package_native_requests_total{package="knowledge",route="knowledge.article.list"} 0
+# HELP anixops_package_native_errors_total Package-native route requests that failed.
+# TYPE anixops_package_native_errors_total counter
+anixops_package_native_errors_total{package="knowledge",route="knowledge.article.detail"} 0
+anixops_package_native_errors_total{package="knowledge",route="knowledge.article.list"} 0
+# HELP anixops_package_shadow_requests_total Completed shadow comparisons of package-native routes.
+# TYPE anixops_package_shadow_requests_total counter
+anixops_package_shadow_requests_total{package="knowledge",route="knowledge.article.detail"} 0
+anixops_package_shadow_requests_total{package="knowledge",route="knowledge.article.list"} 9
+# HELP anixops_package_shadow_mismatches_total Shadow comparisons whose native answer differed from legacy.
+# TYPE anixops_package_shadow_mismatches_total counter
+anixops_package_shadow_mismatches_total{package="knowledge",route="knowledge.article.detail"} 0
+anixops_package_shadow_mismatches_total{package="knowledge",route="knowledge.article.list"} 2
+# HELP anixops_package_shadow_errors_total Shadow runs whose native implementation failed.
+# TYPE anixops_package_shadow_errors_total counter
+anixops_package_shadow_errors_total{package="knowledge",route="knowledge.article.detail"} 0
+anixops_package_shadow_errors_total{package="knowledge",route="knowledge.article.list"} 1
+# HELP anixops_package_shadow_skipped_total Shadow runs skipped because all shadow slots were busy.
+# TYPE anixops_package_shadow_skipped_total counter
+anixops_package_shadow_skipped_total{package="knowledge",route="knowledge.article.detail"} 0
+anixops_package_shadow_skipped_total{package="knowledge",route="knowledge.article.list"} 3
+`, body.String())
+
+	body.Reset()
+	writePackageRouteMetrics(&body, []pluginhost.HostStats{{PackageID: "ticket"}})
+	assert.Empty(s.T(), body.String(), "hosts without health details export no route series")
+}

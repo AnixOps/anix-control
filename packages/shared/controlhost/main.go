@@ -53,7 +53,14 @@ func run() error {
 	if err != nil {
 		return err
 	}
-	service := newGenericService(bridge, leaseID)
+	service, err := newGenericService(packageID, bridge, leaseID)
+	if err != nil {
+		return err
+	}
+	// Poll the installation's route modes for the life of the host.
+	routerContext, stopRouter := context.WithCancel(context.Background())
+	defer stopRouter()
+	go service.Run(routerContext)
 	maxResponseBytes, err := pluginhostsdk.MaxResponseBytesFromEnvironment()
 	if err != nil {
 		return err

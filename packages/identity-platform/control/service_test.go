@@ -17,6 +17,10 @@ type bridgeStub struct {
 	response   packagebridgesdk.Response
 }
 
+func (s *bridgeStub) GetPackageConfig(context.Context) (packagebridgesdk.PackageConfig, error) {
+	return packagebridgesdk.PackageConfig{}, packagebridgesdk.ErrSessionOperationUnsupported
+}
+
 func (s *bridgeStub) Invoke(_ context.Context, capability []byte, operation string, payload []byte) (packagebridgesdk.Response, error) {
 	s.capability = append([]byte(nil), capability...)
 	s.operation = operation
@@ -30,7 +34,8 @@ func TestIdentityServiceDispatchesLoginOnlyThroughBridgeCapability(t *testing.T)
 		Body:       []byte(`{"code":0,"msg":"操作成功","ts":1,"data":{"token":"issued"}}`),
 		Headers:    []packagebridgesdk.Header{{Name: "Retry-After", Value: "1"}},
 	}}
-	service := newIdentityService(bridge, "lease-1")
+	service, err := newIdentityService(bridge, "lease-1")
+	require.NoError(t, err)
 	capability := make([]byte, 32)
 	response, err := service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
 		RouteID: "identity.auth.login", RequestBody: []byte(`{"email":"u@example.test","password":"secret"}`),
@@ -46,8 +51,9 @@ func TestIdentityServiceDispatchesLoginOnlyThroughBridgeCapability(t *testing.T)
 }
 
 func TestIdentityServiceRejectsUnknownRoutesAndMissingCapability(t *testing.T) {
-	service := newIdentityService(&bridgeStub{}, "lease-1")
-	_, err := service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{RouteID: "identity.admin.users.list"})
+	service, err := newIdentityService(&bridgeStub{}, "lease-1")
+	require.NoError(t, err)
+	_, err = service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{RouteID: "identity.admin.users.list"})
 	require.Error(t, err)
 
 	_, err = service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{RouteID: "identity.auth.login"})
@@ -56,9 +62,10 @@ func TestIdentityServiceRejectsUnknownRoutesAndMissingCapability(t *testing.T) {
 
 func TestIdentityServiceDispatchesDeclaredAdministrativeRouteThroughBridge(t *testing.T) {
 	bridge := &bridgeStub{response: packagebridgesdk.Response{StatusCode: 200, Body: []byte(`{"code":0,"msg":"操作成功","ts":1,"data":[]}`)}}
-	service := newIdentityService(bridge, "lease-1")
+	service, err := newIdentityService(bridge, "lease-1")
+	require.NoError(t, err)
 	capability := make([]byte, 32)
-	_, err := service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
+	_, err = service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
 		RouteID: "identity.admin.users.get", BridgeCapability: capability,
 	})
 
@@ -67,7 +74,7 @@ func TestIdentityServiceDispatchesDeclaredAdministrativeRouteThroughBridge(t *te
 }
 
 func TestNilIdentityServiceHealthIsUnhealthyWithoutPanicking(t *testing.T) {
-	var service *identityService
+	var service *pluginhostsdk.Router
 
 	response, err := service.Health(context.Background())
 
@@ -78,7 +85,8 @@ func TestNilIdentityServiceHealthIsUnhealthyWithoutPanicking(t *testing.T) {
 
 func TestIdentityServiceRunsMigrationOnlyThroughBridgeCapability(t *testing.T) {
 	bridge := &bridgeStub{response: packagebridgesdk.Response{StatusCode: 200, Body: []byte(`{"checkpoint":"identity-platform/001","validation_digest":"migration-digest","complete":true}`)}}
-	service := newIdentityService(bridge, "lease-1")
+	service, err := newIdentityService(bridge, "lease-1")
+	require.NoError(t, err)
 	capability := make([]byte, 32)
 
 	response, err := service.Migrate(context.Background(), pluginhostsdk.MigrationRequest{
