@@ -5,8 +5,9 @@
 # Control pod, switches identity-platform to the remote runtime and runs it as
 # its own Deployment (two replicas, NetworkPolicy on), then logs in through the
 # v2 API. Deleting the module pods checks that new pods enroll again with the
-# reusable credential. The identity package is signed with a throwaway key and
-# baked into a test Control image.
+# reusable credential. It then runs the identity cutover acceptance
+# (identity_cutover_acceptance.sh) against the two replicas. The identity
+# package is signed with a throwaway key and baked into a test Control image.
 #
 # Required environment:
 #   CONTROL_IMAGE   Control image built locally (the Dockerfile "source" target)
@@ -137,5 +138,9 @@ echo "== replace the module pods: new pods enroll again and bind"
 k delete pod -l "${module_selector}" --wait=true >/dev/null
 k rollout status "deployment/${fullname}-module-identity-platform" --timeout=6m
 wait_for_login
+
+# Two module replicas: the cutover must switch both before group A resumes.
+BASE_URL=http://127.0.0.1:18090 ADMIN_EMAIL=admin@example.test ADMIN_PASSWORD=ModuleSmoke-0123456789 \
+  bash "${repo_root}/config/scripts/identity_cutover_acceptance.sh"
 helm uninstall "${release}" --namespace "${NAMESPACE}" --wait >/dev/null
 echo "modules kind smoke: ok"

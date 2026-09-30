@@ -375,6 +375,15 @@
     - **Discovery:** the OpenID discovery document.
   - CI and the local gates tidy, vet, test, race-test, lint, scan and
     vulnerability-check the new module.
+- Identity acceptance on Compose and kind (N13).
+  - **Shared flow.** The cutover acceptance is now
+    `config/scripts/identity_cutover_acceptance.sh`: import, cutover, native
+    login, ban and demotion revoking within 5 seconds, logout, rollback,
+    second cutover and finalize.
+  - **Kind.** The kind modules smoke runs it against two identity replicas.
+  - **Compose.** The Compose modules smoke runs it, then stops the identity
+    module: new logins fail while issued identity tokens still verify from
+    the keys Control persisted.
 - Identity cutover, rollback and finalize (N12b, `internal/identitycutover`).
   Each is recorded in the new table `v4_kernel_identity_cutover`.
   - **Cutover.** `POST /api/v4/kernel/identity/cutover` runs in the
