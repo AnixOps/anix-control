@@ -11,6 +11,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/lease"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/packagestore"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"gorm.io/gorm"
 )
@@ -133,6 +134,11 @@ func bootstrapDatabase(ctx context.Context, cfg *config.Config, env string) erro
 		if err := step.run(db); err != nil {
 			return fmt.Errorf("ensure %s: %w", step.name, err)
 		}
+	}
+	// Kernel API views only serve package storage leases: a failure must not
+	// stop Control, it only fails leases that ask for the missing view.
+	if err := packagestore.EnsureKernelAPIViews(db); err != nil {
+		log.Printf("Kernel API views were not created: %v. Package storage leases that grant them will fail.", err)
 	}
 	if err := ensureConfiguredPluginTrustRoot(db, cfg.Plugins.OfficialPublicKey); err != nil {
 		return fmt.Errorf("apply configured plugin trust root: %w", err)

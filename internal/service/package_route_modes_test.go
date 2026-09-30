@@ -26,6 +26,11 @@ const routeModeTestRoutes = `{"api_version":"v2","package_id":"knowledge","route
 // "knowledge" with routeModeTestRoutes and returns its installation.
 func seedRouteModeRelease(t *testing.T, db *gorm.DB, schema string) (ed25519.PublicKey, model.PluginInstallation) {
 	t.Helper()
+	return seedKnowledgeRelease(t, db, schema, nil)
+}
+
+func seedKnowledgeRelease(t *testing.T, db *gorm.DB, schema string, capabilities []string) (ed25519.PublicKey, model.PluginInstallation) {
+	t.Helper()
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
 	entrypoint := []byte("#!/bin/sh\nexit 0\n")
@@ -42,6 +47,7 @@ func seedRouteModeRelease(t *testing.T, db *gorm.DB, schema string) (ed25519.Pub
 		Migrations:          &PluginMigrations{Index: "migrations/index.json", SHA256: digest(migrations)},
 		CompatibilityRoutes: &PluginCompatibilityRoutes{Path: "compat/v2-routes.json", SHA256: digest(routes)},
 		RouteContractDigest: digest(routes),
+		Capabilities:        capabilities,
 	}
 	if schema != "" {
 		manifest.ConfigSchema = json.RawMessage(schema)

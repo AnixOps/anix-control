@@ -258,6 +258,35 @@
 
 ### Added
 
+- Per-package database storage and the `LeaseStorage` bridge RPC (M3).
+  - **Roles.** On PostgreSQL, `internal/packagestore` gives every package a
+    login role `anix_pkg_<id>` (NOINHERIT, 4 connections, member of the
+    privilege-less group `anix_packages`) and a kernel-owned schema
+    `pkg_<id>` in which the role creates its own tables.
+  - **Grants.** Grants come only from the signed manifest:
+    `kernel.storage.adopt:<table>` grants DML on the table and its sequences,
+    and `kernel.view:<view>` grants `SELECT`. Each lease replaces the
+    previous grants, so a dropped capability is revoked.
+  - **Leases.** Hosts call the new session-scoped RPC `LeaseStorage`.
+    - It is fenced like `GetPackageConfig`.
+    - It returns a connection string for the package role only. Each lease
+      rotates the password through a SCRAM verifier computed by the kernel.
+    - The kernel's database role needs `CREATEROLE`; without it leases fail
+      with an explicit error.
+    - SQLite shares the kernel's file with a `pkg_<id>_` table prefix and
+      provides no isolation.
+  - **Ledger.** The new kernel table `v4_kernel_package_storage` records each
+    package's role, schema, grants and lease generation.
+  - **View.** The kernel API view `kapi_user_directory_v1` exposes
+    non-secret `v2_user` columns. It is created at startup; a failure is
+    logged and does not stop Control.
+  - **SDK.** `packagebridgesdk.Client.LeaseStorage` and
+    `pkg/packagestoresdk` (`Open`, `Store.Table`, `RunEmbeddedMigrations`
+    with per-step digests and a `schema_migrations` state table).
+  - **CI.** The new job `package-storage-postgres` runs the grant tests as a
+    non-superuser `CREATEROLE` role. It also runs the PostgreSQL package
+    rollout tests, which no job ran before.
+
 - A per-route package router in the host SDK (M3).
   - **Router.** `pkg/pluginhostsdk.Router` polls `GetPackageConfig` every
     5 s and serves each route in `legacy`, `shadow` or `native` mode.

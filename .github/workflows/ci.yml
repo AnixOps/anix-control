@@ -775,6 +775,46 @@ jobs:
           POSTGRES_TEST_DSN: host=127.0.0.1 user=postgres password=postgres dbname=v2board_test port=5432 sslmode=disable TimeZone=UTC
         run: go test -v ./internal/service ./internal/lease ./cmd/server -run 'TestStatsServicePostgres|TestPostgres' -count=1
 
+  package-storage-postgres:
+    name: Package Storage PostgreSQL
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: anix_package_test
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d anix_package_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      # Production runs the kernel as a non-superuser role with CREATEROLE.
+      - name: Create the kernel database role
+        run: |
+          docker run --rm --network host -e PGPASSWORD=postgres postgres:16 \
+            psql -h 127.0.0.1 -U postgres -d anix_package_test -v ON_ERROR_STOP=1 \
+            -c "CREATE ROLE anix_kernel LOGIN CREATEROLE PASSWORD 'kernel'" \
+            -c "ALTER DATABASE anix_package_test OWNER TO anix_kernel"
+
+      - name: Run package storage and rollout PostgreSQL tests
+        env:
+          ANIX_TEST_POSTGRES_DSN: host=127.0.0.1 port=5432 user=anix_kernel password=kernel dbname=anix_package_test sslmode=disable TimeZone=UTC
+        run: go test -p 1 -v -count=1 ./internal/packagestore ./pkg/packagestoresdk ./internal/tests/integration
+
   migration-dry-run-test:
     name: SQLite to PostgreSQL Dry Run
     runs-on: ubuntu-latest

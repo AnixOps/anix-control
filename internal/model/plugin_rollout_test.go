@@ -14,6 +14,7 @@ func TestPackageRolloutModelsUseKernelOwnedTables(t *testing.T) {
 		PackageRouteGeneration{}:  "v4_kernel_package_route_generation",
 		PackageBackupReference{}:  "v4_kernel_package_backup_reference",
 		PackageRolloutLock{}:      "v4_kernel_package_rollout_lock",
+		PackageStorage{}:          "v4_kernel_package_storage",
 	}
 
 	registered := make(map[reflect.Type]bool)

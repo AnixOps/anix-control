@@ -34,10 +34,7 @@ func Init(cfg *config.DatabaseConfig) error {
 	switch cfg.Driver {
 	case "sqlite", "sqlite3", "":
 		// SQLite 涓洪粯璁ゆ暟鎹簱
-		dbPath := cfg.Database
-		if dbPath == "" {
-			dbPath = "config/data/v2board.db"
-		}
+		dbPath := SQLitePath(cfg)
 
 		// 纭繚鐩綍瀛樺湪
 		dir := filepath.Dir(dbPath)
@@ -104,6 +101,35 @@ func Init(cfg *config.DatabaseConfig) error {
 
 	initialized = true
 	return nil
+}
+
+// DefaultSQLitePath is the SQLite database file used when none is configured.
+const DefaultSQLitePath = "config/data/v2board.db"
+
+// SQLitePath returns the configured SQLite database file.
+func SQLitePath(cfg *config.DatabaseConfig) string {
+	if cfg == nil || cfg.Database == "" {
+		return DefaultSQLitePath
+	}
+	return cfg.Database
+}
+
+// PackageStorageSource returns what package storage derives package
+// connections from: the kernel's PostgreSQL connection string, or the
+// absolute path of the SQLite database file. It holds kernel credentials and
+// must stay in the kernel.
+func PackageStorageSource(cfg *config.DatabaseConfig) (string, error) {
+	if cfg == nil {
+		return "", fmt.Errorf("database configuration is required")
+	}
+	switch cfg.Driver {
+	case "postgres", "postgresql":
+		return PostgresDSN(cfg), nil
+	case "sqlite", "sqlite3", "":
+		return filepath.Abs(SQLitePath(cfg))
+	default:
+		return "", fmt.Errorf("unsupported database driver: %s", cfg.Driver)
+	}
 }
 
 func sqliteConnectionString(databasePath string) string {

@@ -99,6 +99,12 @@ legacy route.
 - New kernel model `v4_kernel_package_storage` records role, schema, granted
   tables, and lease generation.
 
+Status (2026-09-30): implemented. `internal/packagestore`, `LeaseStorage`,
+`pkg/packagestoresdk`, `v4_kernel_package_storage`, `kapi_user_directory_v1`
+and the CI job `package-storage-postgres` are in place. Column-level grants
+are not implemented yet. The migration runner is not yet wired into host
+start (M3 PR 5).
+
 ### 3.2 Per-route modes
 
 - Each route has a mode `legacy` | `shadow` | `native`, stored in the package's
@@ -159,14 +165,14 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
 
 ## 4. Security Invariants
 
-**Amended invariant (PLANNED, lands with `LeaseStorage`):** a package host never
-receives **kernel** credentials — the kernel DSN, JWT signing key, or full
-Control configuration. It may lease its own per-package least-privilege role.
-`plugin-kernel-contract.md` must be updated in the same change.
+**Amended invariant (CURRENT since M3):** a package host never receives
+**kernel** credentials — the kernel DSN, JWT signing key, or full Control
+configuration. It may lease its own per-package least-privilege role; see
+`plugin-kernel-contract.md`, "Package Storage".
 
 **Session-scoped RPCs (CURRENT since M3):** besides the per-request
 `Invoke`/`OpenWebSocket`, a host may call named session operations
-(`GetPackageConfig`; `LeaseStorage` follows) without a capability. They are
+(`GetPackageConfig`, `LeaseStorage`) without a capability. They are
 authorized by the session identity (package id, version, lifecycle
 generation bound to the inherited socketpair) and fenced against the current
 installation on every call; see `plugin-kernel-contract.md`, "Package
