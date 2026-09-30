@@ -2,5 +2,5 @@
   "format": "anixops.migrations/v1",
   "migrations": [],
   "package_id": "order",
-  "version": "4.0.0"
+  "version": "__ANIXOPS_PACKAGE_VERSION__"
 }

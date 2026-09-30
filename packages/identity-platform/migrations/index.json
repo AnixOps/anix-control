@@ -7,5 +7,5 @@
     }
   ],
   "package_id": "identity-platform",
-  "version": "4.0.0"
+  "version": "__ANIXOPS_PACKAGE_VERSION__"
 }

@@ -80,7 +80,7 @@ type registeredRelease struct {
 func (f *signedRouteFixture) registerRelease(tb testing.TB, packageID, version, routes string, payloadBytes int) registeredRelease {
 	tb.Helper()
 	entrypoint := []byte("#!/bin/sh\nexit 0\n")
-	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[]}`)
+	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[],"package_id":"` + packageID + `","version":"` + version + `"}`)
 	files := []struct {
 		name string
 		data []byte

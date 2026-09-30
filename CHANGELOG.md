@@ -66,6 +66,27 @@
 
 ### Changed
 
+- Package migration indexes are materialized per release.
+  - Source `packages/*/migrations/index.json` files use the
+    `__ANIXOPS_PACKAGE_VERSION__` token.
+  - `build_package.py` writes the build version and a SHA-256 for every step
+    script into the packaged index. It also rejects unknown index fields,
+    source-provided digests and malformed step ids.
+  - Packages built for any tag other than `v4.0.0` previously failed: the
+    source index was pinned to `4.0.0` and had to equal the build version.
+- The kernel now parses and verifies the migration index when it materializes
+  a Control artifact. It checks the index digest, the package and version,
+  every step id and path, and every step digest. The verified steps are
+  exposed on the artifact reference so package migrations can be run through
+  the ledger. v4.0.0 indexes without step digests stay valid.
+- Manifest `capabilities` are validated by Control.
+  - Names are lowercase and unique.
+  - In the `kernel.` namespace only the listed forms are accepted:
+    `kernel.observed-state`, `kernel.storage.v1`,
+    `kernel.storage.adopt:<table>` and `kernel.view:kapi_<name>_v<N>`.
+  - Kernel and identity tables cannot be adopted.
+  - See `docs/architecture/plugin-kernel-contract.md`.
+
 - Documentation now treats containers as the primary deployment.
   - README, `docs/README.md`, `docs/control-boundary.md`,
     `docs/features.md`, AGENTS.md and the UPGRADE alpha section point to the

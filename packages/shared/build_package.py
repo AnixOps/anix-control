@@ -12,6 +12,7 @@ import hmac
 import io
 import json
 import os
+import re
 import shutil
 import stat
 import subprocess
@@ -35,6 +36,8 @@ ED25519_PUBLIC_KEY_BYTES = 32
 ED25519_SPKI_PREFIX = bytes.fromhex("302a300506032b6570032100")
 SAFE_SEGMENT_CHARACTERS = frozenset("abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789._+-")
 WEBUI_VERSION_TOKEN = b"__ANIXOPS_PACKAGE_VERSION__"
+MIGRATION_VERSION_TOKEN = "__ANIXOPS_PACKAGE_VERSION__"
+MIGRATION_ID_PATTERN = re.compile(r"[0-9a-z][0-9a-z_]{0,63}")
 ENTRYPOINT_INDEX_FORMAT = "anixops.package-entrypoints/v1"
 CONTROL_ENTRYPOINT_INDEX_PATH = "bin/control-entrypoints.json"
 AGENT_ENTRYPOINT_INDEX_PATH = "agent/entrypoints.json"
@@ -468,6 +471,13 @@ def source_compatibility_routes(package_id: str) -> bytes:
 
 
 def source_migrations(package_id: str, version: str) -> tuple[bytes, list[ArchiveEntry]]:
+    """Materialize the migration index for one release.
+
+    The source index names the package and lists ordered steps; its version is
+    the __ANIXOPS_PACKAGE_VERSION__ token (or the build version itself). The
+    packaged index records the build version and the SHA-256 of every step
+    script, so the kernel can verify each step it runs.
+    """
     source_root = package_root(package_id)
     index_path = source_root / "migrations" / "index.json"
     if not index_path.is_file():
@@ -475,23 +485,40 @@ def source_migrations(package_id: str, version: str) -> tuple[bytes, list[Archiv
     index = load_json(index_path, f"{package_id} migrations index")
     if (
         not isinstance(index, dict)
+        or set(index) != {"format", "migrations", "package_id", "version"}
         or index.get("format") != "anixops.migrations/v1"
         or index.get("package_id") != package_id
-        or index.get("version") != version
+        or index.get("version") not in (MIGRATION_VERSION_TOKEN, version)
         or not isinstance(index.get("migrations"), list)
     ):
         raise PackageBuildError(f"{package_id} migrations index is invalid")
     entries: list[ArchiveEntry] = []
-    seen: set[str] = set()
+    packaged: list[dict[str, str]] = []
+    seen_paths: set[str] = set()
+    seen_ids: set[str] = set()
     for migration in index["migrations"]:
-        if not isinstance(migration, dict) or not isinstance(migration.get("id"), str):
+        if not isinstance(migration, dict) or set(migration) != {"id", "path"} or not isinstance(migration.get("id"), str):
             raise PackageBuildError(f"{package_id} migration entry is invalid")
+        migration_id = migration["id"]
+        if not MIGRATION_ID_PATTERN.fullmatch(migration_id) or migration_id in seen_ids:
+            raise PackageBuildError(f"{package_id} migration id {migration_id!r} is invalid or duplicated")
         relative_path = require_relative_path(migration.get("path"), f"{package_id} migration")
-        if not relative_path.startswith("migrations/") or relative_path == "migrations/index.json" or relative_path in seen:
+        if not relative_path.startswith("migrations/") or relative_path == "migrations/index.json" or relative_path in seen_paths:
             raise PackageBuildError(f"{package_id} migration path is invalid")
-        seen.add(relative_path)
-        entries.append(ArchiveEntry(relative_path, read_source(source_root / relative_path, f"{package_id} {relative_path}"), 0o644))
-    return read_source(index_path, f"{package_id} migrations index"), entries
+        seen_ids.add(migration_id)
+        seen_paths.add(relative_path)
+        script = read_source(source_root / relative_path, f"{package_id} {relative_path}")
+        entries.append(ArchiveEntry(relative_path, script, 0o644))
+        packaged.append({"id": migration_id, "path": relative_path, "sha256": hashlib.sha256(script).hexdigest()})
+    materialized = pretty_json(
+        {
+            "format": "anixops.migrations/v1",
+            "migrations": packaged,
+            "package_id": package_id,
+            "version": version,
+        }
+    )
+    return materialized, entries
 
 
 def package_entries(

@@ -108,7 +108,7 @@ func TestMaterializePluginControlArtifactUsesSignedV2Entrypoint(t *testing.T) {
 	require.NoError(t, err)
 
 	controlEntrypoint := []byte("#!/bin/sh\nexit 0\n")
-	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[]}`)
+	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[],"package_id":"materialized-v2-package","version":"4.0.0"}`)
 	routes := []byte(`{"api_version":"v2","routes":[]}`)
 	artifact := kernelTestV2Package(t, map[string][]byte{
 		"bin/control-host":      controlEntrypoint,
@@ -273,7 +273,7 @@ func TestMaterializePluginControlArtifactSelectsIndexedPlatformEntrypoint(t *tes
 	sort.Slice(entries, func(left, right int) bool { return entries[left]["architecture"] < entries[right]["architecture"] })
 	index, err := json.Marshal(map[string]any{"format": "anixops.package-entrypoints/v1", "entries": entries})
 	require.NoError(t, err)
-	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[]}`)
+	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[],"package_id":"indexed-control-package","version":"4.0.0"}`)
 	routes := []byte(`{"api_version":"v2","routes":[]}`)
 	artifact := kernelTestV2Package(t, map[string][]byte{
 		"bin/control-entrypoints.json": index,
@@ -342,7 +342,7 @@ func TestMaterializePluginControlArtifactSelectsGzipIndexedPlatformEntrypoint(t 
 		"architecture": platform, "path": selectedPath, "sha256": kernelTestArtifactSHA256(selectedEntrypoint),
 	}}})
 	require.NoError(t, err)
-	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[]}`)
+	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[],"package_id":"gzip-indexed-control","version":"4.0.0"}`)
 	routes := []byte(`{"api_version":"v2","routes":[]}`)
 	artifact := kernelTestV2GzipPackage(t, map[string][]byte{
 		"bin/control-entrypoints.json": index,
