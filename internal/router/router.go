@@ -734,6 +734,9 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	identityPublic := r.Group("/api/v4/identity")
 	identityPublic.Use(publicLimiter.Middleware())
 	identityPublic.GET("/jwks.json", handler.IdentityJWKS)
+	identityUser := r.Group("/api/v4/identity")
+	identityUser.Use(userLimiter.Middleware(), middleware.JWTAuth())
+	identityUser.POST("/logout", handler.IdentityLogout)
 
 	v4 := r.Group("/api/v4")
 	v4.Use(adminLimiter.Middleware())

@@ -184,6 +184,10 @@ func JWTAuth() gin.HandlerFunc {
 		c.Set("user_id", claims.UserID)
 		c.Set("email", claims.Email)
 		c.Set("is_admin", claims.IsAdmin)
+		c.Set("session_id", claims.SessionID)
+		if claims.ExpiresAt != nil {
+			c.Set("token_expires_at", claims.ExpiresAt.Time)
+		}
 
 		c.Next()
 	}

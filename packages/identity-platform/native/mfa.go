@@ -340,6 +340,9 @@ func (s *Service) SetupTOTP(ctx context.Context, request pluginhostsdk.NativeReq
 	if err != nil {
 		return s.panelError(err.Error())
 	}
+	if err := s.mirrorMFA(ctx, stores, users[0].UserID); err != nil {
+		return s.panelError(err.Error())
+	}
 	return s.panel(map[string]any{"secret": setup.Secret, "url": setup.URL, "qr_code": setup.QRCode, "backup_codes": setup.BackupCodes})
 }
 
@@ -356,6 +359,9 @@ func (s *Service) EnableTOTP(ctx context.Context, request pluginhostsdk.NativeRe
 		return s.panelError(err.Error())
 	}
 	if err := stores.Accounts.EnableTOTP(ctx, uint64(request.Principal.ActorID), req.Code); err != nil {
+		return s.panelError(err.Error())
+	}
+	if err := s.mirrorMFA(ctx, stores, uint64(request.Principal.ActorID)); err != nil {
 		return s.panelError(err.Error())
 	}
 	return s.panel(map[string]any{"message": "MFA enabled successfully"})
@@ -384,6 +390,9 @@ func (s *Service) DisableMFA(ctx context.Context, request pluginhostsdk.NativeRe
 		return s.panelError("invalid password")
 	}
 	if err := stores.Accounts.DisableMFA(ctx, users[0].UserID); err != nil {
+		return s.panelError(err.Error())
+	}
+	if err := s.mirrorMFA(ctx, stores, users[0].UserID); err != nil {
 		return s.panelError(err.Error())
 	}
 	return s.panel(map[string]any{"message": "MFA disabled successfully"})

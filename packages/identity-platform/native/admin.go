@@ -53,6 +53,7 @@ func (s *Service) CreateUser(ctx context.Context, request pluginhostsdk.NativeRe
 	accountUUID := uuid.NewString()
 	created, err := s.Kernel.CreateSubscriber(ctx, &kernelidentityv1.CreateSubscriberRequest{
 		AccountUuid: accountUUID, Email: req.Email, IsAdmin: req.IsAdmin != 0,
+		LegacyMirror: &kernelidentityv1.LegacyCredentialMirror{PasswordHash: string(hash)},
 	})
 	if err != nil {
 		return failed(err)
@@ -98,6 +99,16 @@ func (s *Service) updateSubscriber(ctx context.Context, userID uint64, entitleme
 	}
 	_, err = s.Kernel.UpdateSubscriber(ctx, &kernelidentityv1.UpdateSubscriberRequest{UserId: userID, EntitlementsJson: encoded})
 	return err
+}
+
+// mirrorMFA mirrors an account's second factor to Control's legacy tables
+// after it changed, so switching back to the legacy routes keeps it.
+func (s *Service) mirrorMFA(ctx context.Context, stores *Stores, userID uint64) error {
+	touched, err := stores.Accounts.Touch(ctx, userID)
+	if err != nil {
+		return err
+	}
+	return s.project(ctx, stores, touched, true)
 }
 
 // project writes an account's identity fields into Control's projection.

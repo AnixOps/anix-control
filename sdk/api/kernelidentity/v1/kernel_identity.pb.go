@@ -121,8 +121,12 @@ type CreateSubscriberRequest struct {
 	InviteCode string `protobuf:"bytes,4,opt,name=invite_code,json=inviteCode,proto3" json:"invite_code,omitempty"`
 	// is_admin and is_staff set the new subscriber's projected flags, for
 	// accounts an administrator creates.
-	IsAdmin       bool `protobuf:"varint,5,opt,name=is_admin,json=isAdmin,proto3" json:"is_admin,omitempty"`
-	IsStaff       bool `protobuf:"varint,6,opt,name=is_staff,json=isStaff,proto3" json:"is_staff,omitempty"`
+	IsAdmin bool `protobuf:"varint,5,opt,name=is_admin,json=isAdmin,proto3" json:"is_admin,omitempty"`
+	IsStaff bool `protobuf:"varint,6,opt,name=is_staff,json=isStaff,proto3" json:"is_staff,omitempty"`
+	// legacy_mirror sets the new subscriber's legacy credentials (until the
+	// authority is finalized), so switching back to the legacy routes keeps
+	// the account usable. Being part of the creation, it revokes nothing.
+	LegacyMirror  *LegacyCredentialMirror `protobuf:"bytes,7,opt,name=legacy_mirror,json=legacyMirror,proto3" json:"legacy_mirror,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -197,6 +201,13 @@ func (x *CreateSubscriberRequest) GetIsStaff() bool {
 		return x.IsStaff
 	}
 	return false
+}
+
+func (x *CreateSubscriberRequest) GetLegacyMirror() *LegacyCredentialMirror {
+	if x != nil {
+		return x.LegacyMirror
+	}
+	return nil
 }
 
 type CreateSubscriberResponse struct {
@@ -987,7 +998,7 @@ const file_api_kernelidentity_v1_kernel_identity_proto_rawDesc = "" +
 	"\x14GetSubscriberRequest\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x04R\x06userId\"@\n" +
 	"\x15GetSubscriberResponse\x12'\n" +
-	"\x0fsubscriber_json\x18\x01 \x01(\fR\x0esubscriberJson\"\xcf\x01\n" +
+	"\x0fsubscriber_json\x18\x01 \x01(\fR\x0esubscriberJson\"\xa7\x02\n" +
 	"\x17CreateSubscriberRequest\x12!\n" +
 	"\faccount_uuid\x18\x01 \x01(\tR\vaccountUuid\x12\x14\n" +
 	"\x05email\x18\x02 \x01(\tR\x05email\x12$\n" +
@@ -995,7 +1006,8 @@ const file_api_kernelidentity_v1_kernel_identity_proto_rawDesc = "" +
 	"\vinvite_code\x18\x04 \x01(\tR\n" +
 	"inviteCode\x12\x19\n" +
 	"\bis_admin\x18\x05 \x01(\bR\aisAdmin\x12\x19\n" +
-	"\bis_staff\x18\x06 \x01(\bR\aisStaff\"M\n" +
+	"\bis_staff\x18\x06 \x01(\bR\aisStaff\x12V\n" +
+	"\rlegacy_mirror\x18\a \x01(\v21.anixops.kernelidentity.v1.LegacyCredentialMirrorR\flegacyMirror\"M\n" +
 	"\x18CreateSubscriberResponse\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x04R\x06userId\x12\x18\n" +
 	"\acreated\x18\x02 \x01(\bR\acreated\"_\n" +
@@ -1089,28 +1101,29 @@ var file_api_kernelidentity_v1_kernel_identity_proto_goTypes = []any{
 	(*GetIdentitySettingsResponse)(nil),    // 16: anixops.kernelidentity.v1.GetIdentitySettingsResponse
 }
 var file_api_kernelidentity_v1_kernel_identity_proto_depIdxs = []int32{
-	7,  // 0: anixops.kernelidentity.v1.ApplyAccountProjectionRequest.legacy_mirror:type_name -> anixops.kernelidentity.v1.LegacyCredentialMirror
-	2,  // 1: anixops.kernelidentity.v1.KernelIdentity.CreateSubscriber:input_type -> anixops.kernelidentity.v1.CreateSubscriberRequest
-	4,  // 2: anixops.kernelidentity.v1.KernelIdentity.UpdateSubscriber:input_type -> anixops.kernelidentity.v1.UpdateSubscriberRequest
-	6,  // 3: anixops.kernelidentity.v1.KernelIdentity.ApplyAccountProjection:input_type -> anixops.kernelidentity.v1.ApplyAccountProjectionRequest
-	9,  // 4: anixops.kernelidentity.v1.KernelIdentity.DeleteSubscriber:input_type -> anixops.kernelidentity.v1.DeleteSubscriberRequest
-	11, // 5: anixops.kernelidentity.v1.KernelIdentity.PublishRevocation:input_type -> anixops.kernelidentity.v1.PublishRevocationRequest
-	13, // 6: anixops.kernelidentity.v1.KernelIdentity.ResolveActorAccess:input_type -> anixops.kernelidentity.v1.ResolveActorAccessRequest
-	15, // 7: anixops.kernelidentity.v1.KernelIdentity.GetIdentitySettings:input_type -> anixops.kernelidentity.v1.GetIdentitySettingsRequest
-	0,  // 8: anixops.kernelidentity.v1.KernelIdentity.GetSubscriber:input_type -> anixops.kernelidentity.v1.GetSubscriberRequest
-	3,  // 9: anixops.kernelidentity.v1.KernelIdentity.CreateSubscriber:output_type -> anixops.kernelidentity.v1.CreateSubscriberResponse
-	5,  // 10: anixops.kernelidentity.v1.KernelIdentity.UpdateSubscriber:output_type -> anixops.kernelidentity.v1.UpdateSubscriberResponse
-	8,  // 11: anixops.kernelidentity.v1.KernelIdentity.ApplyAccountProjection:output_type -> anixops.kernelidentity.v1.ApplyAccountProjectionResponse
-	10, // 12: anixops.kernelidentity.v1.KernelIdentity.DeleteSubscriber:output_type -> anixops.kernelidentity.v1.DeleteSubscriberResponse
-	12, // 13: anixops.kernelidentity.v1.KernelIdentity.PublishRevocation:output_type -> anixops.kernelidentity.v1.PublishRevocationResponse
-	14, // 14: anixops.kernelidentity.v1.KernelIdentity.ResolveActorAccess:output_type -> anixops.kernelidentity.v1.ResolveActorAccessResponse
-	16, // 15: anixops.kernelidentity.v1.KernelIdentity.GetIdentitySettings:output_type -> anixops.kernelidentity.v1.GetIdentitySettingsResponse
-	1,  // 16: anixops.kernelidentity.v1.KernelIdentity.GetSubscriber:output_type -> anixops.kernelidentity.v1.GetSubscriberResponse
-	9,  // [9:17] is the sub-list for method output_type
-	1,  // [1:9] is the sub-list for method input_type
-	1,  // [1:1] is the sub-list for extension type_name
-	1,  // [1:1] is the sub-list for extension extendee
-	0,  // [0:1] is the sub-list for field type_name
+	7,  // 0: anixops.kernelidentity.v1.CreateSubscriberRequest.legacy_mirror:type_name -> anixops.kernelidentity.v1.LegacyCredentialMirror
+	7,  // 1: anixops.kernelidentity.v1.ApplyAccountProjectionRequest.legacy_mirror:type_name -> anixops.kernelidentity.v1.LegacyCredentialMirror
+	2,  // 2: anixops.kernelidentity.v1.KernelIdentity.CreateSubscriber:input_type -> anixops.kernelidentity.v1.CreateSubscriberRequest
+	4,  // 3: anixops.kernelidentity.v1.KernelIdentity.UpdateSubscriber:input_type -> anixops.kernelidentity.v1.UpdateSubscriberRequest
+	6,  // 4: anixops.kernelidentity.v1.KernelIdentity.ApplyAccountProjection:input_type -> anixops.kernelidentity.v1.ApplyAccountProjectionRequest
+	9,  // 5: anixops.kernelidentity.v1.KernelIdentity.DeleteSubscriber:input_type -> anixops.kernelidentity.v1.DeleteSubscriberRequest
+	11, // 6: anixops.kernelidentity.v1.KernelIdentity.PublishRevocation:input_type -> anixops.kernelidentity.v1.PublishRevocationRequest
+	13, // 7: anixops.kernelidentity.v1.KernelIdentity.ResolveActorAccess:input_type -> anixops.kernelidentity.v1.ResolveActorAccessRequest
+	15, // 8: anixops.kernelidentity.v1.KernelIdentity.GetIdentitySettings:input_type -> anixops.kernelidentity.v1.GetIdentitySettingsRequest
+	0,  // 9: anixops.kernelidentity.v1.KernelIdentity.GetSubscriber:input_type -> anixops.kernelidentity.v1.GetSubscriberRequest
+	3,  // 10: anixops.kernelidentity.v1.KernelIdentity.CreateSubscriber:output_type -> anixops.kernelidentity.v1.CreateSubscriberResponse
+	5,  // 11: anixops.kernelidentity.v1.KernelIdentity.UpdateSubscriber:output_type -> anixops.kernelidentity.v1.UpdateSubscriberResponse
+	8,  // 12: anixops.kernelidentity.v1.KernelIdentity.ApplyAccountProjection:output_type -> anixops.kernelidentity.v1.ApplyAccountProjectionResponse
+	10, // 13: anixops.kernelidentity.v1.KernelIdentity.DeleteSubscriber:output_type -> anixops.kernelidentity.v1.DeleteSubscriberResponse
+	12, // 14: anixops.kernelidentity.v1.KernelIdentity.PublishRevocation:output_type -> anixops.kernelidentity.v1.PublishRevocationResponse
+	14, // 15: anixops.kernelidentity.v1.KernelIdentity.ResolveActorAccess:output_type -> anixops.kernelidentity.v1.ResolveActorAccessResponse
+	16, // 16: anixops.kernelidentity.v1.KernelIdentity.GetIdentitySettings:output_type -> anixops.kernelidentity.v1.GetIdentitySettingsResponse
+	1,  // 17: anixops.kernelidentity.v1.KernelIdentity.GetSubscriber:output_type -> anixops.kernelidentity.v1.GetSubscriberResponse
+	10, // [10:18] is the sub-list for method output_type
+	2,  // [2:10] is the sub-list for method input_type
+	2,  // [2:2] is the sub-list for extension type_name
+	2,  // [2:2] is the sub-list for extension extendee
+	0,  // [0:2] is the sub-list for field type_name
 }
 
 func init() { file_api_kernelidentity_v1_kernel_identity_proto_init() }

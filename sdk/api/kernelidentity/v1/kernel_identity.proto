@@ -58,6 +58,10 @@ message CreateSubscriberRequest {
   // accounts an administrator creates.
   bool is_admin = 5;
   bool is_staff = 6;
+  // legacy_mirror sets the new subscriber's legacy credentials (until the
+  // authority is finalized), so switching back to the legacy routes keeps
+  // the account usable. Being part of the creation, it revokes nothing.
+  LegacyCredentialMirror legacy_mirror = 7;
 }
 
 message CreateSubscriberResponse {

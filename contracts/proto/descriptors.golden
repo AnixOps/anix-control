@@ -137,6 +137,7 @@ field anixops.kernelidentity.v1.CreateSubscriberRequest.invite_code = 4 optional
 field anixops.kernelidentity.v1.CreateSubscriberRequest.invite_user_id = 3 optional uint64
 field anixops.kernelidentity.v1.CreateSubscriberRequest.is_admin = 5 optional bool
 field anixops.kernelidentity.v1.CreateSubscriberRequest.is_staff = 6 optional bool
+field anixops.kernelidentity.v1.CreateSubscriberRequest.legacy_mirror = 7 optional anixops.kernelidentity.v1.LegacyCredentialMirror
 field anixops.kernelidentity.v1.CreateSubscriberResponse.created = 2 optional bool
 field anixops.kernelidentity.v1.CreateSubscriberResponse.user_id = 1 optional uint64
 field anixops.kernelidentity.v1.DeleteSubscriberRequest.user_id = 1 optional uint64

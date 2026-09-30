@@ -325,3 +325,28 @@ func TestGetSubscriberShowsTheV2UserWithoutCredentials(t *testing.T) {
 	_, err = f.server.GetSubscriber(context.Background(), &kernelidentityv1.GetSubscriberRequest{UserId: 999})
 	requireCode(t, err, codes.NotFound)
 }
+
+func TestCreateSubscriberMirrorsCredentialsWithoutRevoking(t *testing.T) {
+	f := newFixture(t)
+	response, err := f.server.CreateSubscriber(context.Background(), &kernelidentityv1.CreateSubscriberRequest{
+		AccountUuid: accountA, Email: "mirrored@example.test",
+		LegacyMirror: &kernelidentityv1.LegacyCredentialMirror{PasswordHash: "$2a$10$mirrored"},
+	})
+	require.NoError(t, err)
+	var user model.User
+	require.NoError(t, f.db.Take(&user, response.GetUserId()).Error)
+	require.Equal(t, "$2a$10$mirrored", user.Password, "the legacy password works after a rollback")
+	var revocations int64
+	require.NoError(t, f.db.Model(&model.IdentityRevocation{}).Count(&revocations).Error)
+	require.Zero(t, revocations, "a new subscriber's first token must stay valid")
+
+	require.NoError(t, f.db.Create(&model.IdentityAuthority{ID: 1, State: model.IdentityAuthorityFinalized, UpdatedAt: time.Now()}).Error)
+	response, err = f.server.CreateSubscriber(context.Background(), &kernelidentityv1.CreateSubscriberRequest{
+		AccountUuid: "11111111-2222-4333-8444-555555555555", Email: "late@example.test",
+		LegacyMirror: &kernelidentityv1.LegacyCredentialMirror{PasswordHash: "$2a$10$late"},
+	})
+	require.NoError(t, err)
+	var late model.User
+	require.NoError(t, f.db.Take(&late, response.GetUserId()).Error)
+	require.Equal(t, UnusableLegacyPassword, late.Password, "after finalize nothing is mirrored")
+}
