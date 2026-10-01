@@ -12,6 +12,7 @@ import (
 
 	"github.com/AnixOps/anix-control/v4/internal/agentws"
 	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
+	"github.com/AnixOps/anix-control/v4/internal/sealedsecrets"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -23,6 +24,13 @@ const (
 
 type Dispatcher interface {
 	Dispatch(context.Context, pluginhost.DispatchInput) (pluginhost.DispatchOutput, error)
+}
+
+// LegacyDispatcher serves a request with the kernel's legacy handler for
+// its route without the package host (pluginhost.Supervisor). The gateway
+// uses it when it cannot seal a request's node secrets.
+type LegacyDispatcher interface {
+	DispatchLegacy(context.Context, pluginhost.DispatchInput) (pluginhost.DispatchOutput, error)
 }
 
 // Gateway is the unary v2 compatibility boundary. It has no legacy handler
@@ -37,6 +45,10 @@ type Gateway struct {
 	Metrics *GatewayMetrics
 	// Freeze pauses routes; nil selects DefaultRouteFreeze.
 	Freeze *RouteFreeze
+	// Sealer seals the node secrets of the routes in
+	// config/node-secret-fields.json and expands the handles shown in their
+	// answers; nil selects sealedsecrets.DefaultSealer.
+	Sealer *sealedsecrets.Sealer
 }
 
 func (g Gateway) Serve(c *gin.Context) {
@@ -78,25 +90,104 @@ func (g Gateway) serve(c *gin.Context) (Route, string) {
 	deadline := requestDeadline(c.Request.Context(), g.timeout())
 	dispatchContext, cancel := context.WithDeadline(c.Request.Context(), deadline)
 	defer cancel()
-	response, err := g.Dispatcher.Dispatch(dispatchContext, pluginhost.DispatchInput{
+	input := pluginhost.DispatchInput{
 		PackageID: route.PackageID, Version: route.Version, Generation: route.Generation,
 		RequestID: requestID(c), IdempotencyKey: c.GetHeader("Idempotency-Key"), RouteID: route.PackageRoute,
 		Method: c.Request.Method, Body: body, PrincipalJSON: principal, Metadata: requestMetadata(c), Deadline: deadline,
-	})
-	if err != nil {
-		switch {
-		case errors.Is(err, pluginhost.ErrResponseTooLarge):
-			return route, writeGatewayError(c, http.StatusBadGateway, codePluginResponseTooLarge, "plugin response exceeds its limit")
-		case errors.Is(err, pluginhost.ErrHostIncompatible):
-			return route, writeGatewayError(c, http.StatusBadGateway, codePluginHostIncompatible, "plugin host is incompatible")
-		default:
-			return route, writeGatewayError(c, http.StatusBadGateway, codePluginHostUnavailable, "plugin host is unavailable")
+	}
+	sealer := g.sealer()
+	sealedKey := ""
+	if sealer.Listed(route.PackageRoute) {
+		// The package host reads the body with every node secret sealed; the
+		// bridge capability keeps the original for the legacy handler. The
+		// route is sealed in every mode: the kernel cannot tell when the
+		// host's polled mode leaves legacy.
+		sealed, err := sealer.SealRequest(sealedsecrets.RequestInput{
+			PackageID: route.PackageID, Generation: route.Generation, RequestID: input.RequestID, RouteID: route.PackageRoute,
+			Deadline: deadline, Body: body, PathParams: input.Metadata.PathParams, BodyLimit: g.bodyLimit(),
+		})
+		if err != nil {
+			return g.serveLegacy(c, dispatchContext, route, input, sealedReason(err))
 		}
+		defer sealer.Release(sealed.Key)
+		input.Body, input.BridgeBody, input.SealedRequest = sealed.Body, body, sealed.Key
+		sealedKey = sealed.Key
+		if sealed.Count > 0 {
+			g.metrics().ObserveSealed(route.PackageID, route.PackageRoute, sealedStageRequest, sealedResultSealed, "")
+		}
+	}
+	response, err := g.Dispatcher.Dispatch(dispatchContext, input)
+	if err != nil {
+		return route, writeDispatchError(c, err)
+	}
+	expanded, count, err := sealer.ExpandAnswer(sealedKey, route.PackageRoute, response.Body, answerHeaders(response.Headers))
+	if err != nil {
+		// A handle never reaches a client, and the native handler may have
+		// acted: the request is not served again.
+		g.metrics().ObserveSealed(route.PackageID, route.PackageRoute, sealedStageAnswer, sealedResultRefused, sealedReason(err))
+		return route, writeGatewayError(c, http.StatusBadGateway, codeSealedSecretRefused, "plugin answer holds a sealed secret handle it cannot show")
+	}
+	if count > 0 {
+		response.Body = expanded
+		g.metrics().ObserveSealed(route.PackageID, route.PackageRoute, sealedStageAnswer, sealedResultExpanded, "")
 	}
 	if err := writePackageResponse(c, route, response); err != nil {
 		return route, writeGatewayError(c, http.StatusBadGateway, codePluginHostIncompatible, err.Error())
 	}
 	return route, ""
+}
+
+// serveLegacy serves a request whose node secrets could not be sealed with
+// the kernel's legacy handler, without the package host, so no secret
+// reaches the package. Without one it is refused.
+func (g Gateway) serveLegacy(c *gin.Context, ctx context.Context, route Route, input pluginhost.DispatchInput, reason string) (Route, string) {
+	legacy, ok := g.Dispatcher.(LegacyDispatcher)
+	if !ok {
+		g.metrics().ObserveSealed(route.PackageID, route.PackageRoute, sealedStageRequest, sealedResultRefused, reason)
+		return route, writeGatewayError(c, http.StatusServiceUnavailable, codeSealedSecretUnavailable, "package route cannot seal its node secrets")
+	}
+	response, err := legacy.DispatchLegacy(ctx, input)
+	if errors.Is(err, pluginhost.ErrLegacyUnavailable) {
+		g.metrics().ObserveSealed(route.PackageID, route.PackageRoute, sealedStageRequest, sealedResultRefused, reason)
+		return route, writeGatewayError(c, http.StatusServiceUnavailable, codeSealedSecretUnavailable, "package route cannot seal its node secrets")
+	}
+	g.metrics().ObserveSealed(route.PackageID, route.PackageRoute, sealedStageRequest, sealedResultLegacy, reason)
+	if err != nil {
+		return route, writeDispatchError(c, err)
+	}
+	if err := writePackageResponse(c, route, response); err != nil {
+		return route, writeGatewayError(c, http.StatusBadGateway, codePluginHostIncompatible, err.Error())
+	}
+	return route, ""
+}
+
+func writeDispatchError(c *gin.Context, err error) string {
+	switch {
+	case errors.Is(err, pluginhost.ErrResponseTooLarge):
+		return writeGatewayError(c, http.StatusBadGateway, codePluginResponseTooLarge, "plugin response exceeds its limit")
+	case errors.Is(err, pluginhost.ErrHostIncompatible):
+		return writeGatewayError(c, http.StatusBadGateway, codePluginHostIncompatible, "plugin host is incompatible")
+	default:
+		return writeGatewayError(c, http.StatusBadGateway, codePluginHostUnavailable, "plugin host is unavailable")
+	}
+}
+
+func answerHeaders(headers []pluginhost.Header) []sealedsecrets.Header {
+	if len(headers) == 0 {
+		return nil
+	}
+	converted := make([]sealedsecrets.Header, len(headers))
+	for index, header := range headers {
+		converted[index] = sealedsecrets.Header{Name: header.Name, Value: header.Value}
+	}
+	return converted
+}
+
+func (g Gateway) sealer() *sealedsecrets.Sealer {
+	if g.Sealer == nil {
+		return sealedsecrets.DefaultSealer()
+	}
+	return g.Sealer
 }
 
 func (g Gateway) metrics() *GatewayMetrics {

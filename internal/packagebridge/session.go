@@ -132,13 +132,19 @@ type HostIdentity struct {
 // Request is kernel-derived request state retained behind a capability. A
 // package never supplies these values to the bridge RPC.
 type Request struct {
-	RequestID     string
-	RouteID       string
-	Method        string
+	RequestID string
+	RouteID   string
+	Method    string
+	// Body is the request as the client sent it: the legacy handler reads
+	// it, also when the package host read a body with sealed secrets.
 	Body          []byte
 	PrincipalJSON []byte
 	MetadataJSON  []byte
 	Deadline      time.Time
+	// SealedRequest names the request's sealed secrets
+	// (internal/sealedsecrets): a KernelNodeOps call bound to this
+	// capability resolves only them. Empty when nothing was sealed.
+	SealedRequest string
 }
 
 // Call is delivered only after a capability, package identity, route, and
@@ -446,9 +452,11 @@ func NewSessionWithOptions(identity HostIdentity, handler *Allowlist, options Se
 		return nil, nil, fmt.Errorf("close package bridge parent descriptor: %w", closeErr)
 	}
 
+	serverOptions := append(panicrecovery.ServerOptions(), grpc.MaxRecvMsgSize(options.receiveMessageLimit()))
+	serverOptions = append(serverOptions, generation.serverOptions()...)
 	session := &Session{
 		GenerationSession: generation, listener: newSingleConnListener(parentConnection),
-		server: grpc.NewServer(append(panicrecovery.ServerOptions(), grpc.MaxRecvMsgSize(options.receiveMessageLimit()))...),
+		server: grpc.NewServer(serverOptions...),
 	}
 	packagebridgev1.RegisterKernelPackageBridgeServer(session.server, session)
 	if options.KernelIdentity != nil {
@@ -635,6 +643,56 @@ func (s *GenerationSession) takeWebSocket(raw []byte, operation string) (capabil
 		return capability{}, nil, ErrCapabilityRejected
 	}
 	return issued, handler, nil
+}
+
+// Peek returns the request a live capability was minted for, without
+// consuming it: minted by this generation, not yet consumed or revoked, and
+// before its deadline. KernelNodeOps verifies request bindings with it.
+func (s *GenerationSession) Peek(raw []byte) (Request, bool) {
+	if s == nil || len(raw) != capabilityBytes {
+		return Request{}, false
+	}
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if s.closed {
+		return Request{}, false
+	}
+	issued, ok := s.capabilities[string(raw)]
+	if !ok || !issued.request.Deadline.After(time.Now()) {
+		return Request{}, false
+	}
+	return cloneRequest(issued.request), true
+}
+
+// ServeLegacy runs the kernel's legacy operation for a request without a
+// capability and without the package host: the v2 gateway's fail-closed
+// path when a request's secrets cannot be sealed. The operation must be one
+// the generation's allowlist binds to the request's route, as for a
+// capability.
+func (s *GenerationSession) ServeLegacy(ctx context.Context, request Request, operation string) (Response, error) {
+	if s == nil {
+		return Response{}, ErrBridgeClosed
+	}
+	s.mu.Lock()
+	closed, handler, identity, limit := s.closed, s.handler, s.identity, s.maxResponseBody
+	s.mu.Unlock()
+	if closed {
+		return Response{}, ErrBridgeClosed
+	}
+	if !safeIdentifier(request.RequestID) || !safeIdentifier(request.RouteID) || !safeIdentifier(operation) ||
+		request.Deadline.IsZero() || !request.Deadline.After(time.Now()) || !handler.Allows(identity.PackageID, request.RouteID, operation) {
+		return Response{}, ErrCapabilityRejected
+	}
+	callContext, cancel := context.WithDeadline(withResponseLimit(ctx, limit), request.Deadline)
+	defer cancel()
+	response, err := handler.Invoke(callContext, Call{Host: identity, Request: cloneRequest(request), Operation: operation})
+	if err != nil {
+		return Response{}, err
+	}
+	if err := validateResponse(response, limit); err != nil {
+		return Response{}, err
+	}
+	return response, nil
 }
 
 // Revoke removes an unconsumed capability once the outer package-host

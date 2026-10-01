@@ -50,6 +50,17 @@ BRIDGED_ROUTES_DECLARATION = "var bridgedRoutes = map[string]struct{}{"
 EXTRACTION_LEGACY_SOURCES = frozenset({"router", "identity-bridge", "none"})
 
 
+# config/node-secret-fields.json: the kernel-owned list of the routes and
+# fields whose node secrets the v2 gateway seals (node-ops-service.md section
+# 3.7). The kernel embeds and parses it (internal/sealedsecrets); this gate
+# ties it to the extraction map.
+NODE_SECRET_FIELDS_FORMAT = "anixops.node-secret-fields/v1"
+NODE_SECRET_FIELDS_ROOT_FIELDS = frozenset({"format", "routes"})
+NODE_SECRET_ROUTE_FIELDS = frozenset({"route_id", "target", "request", "answer"})
+NODE_SECRET_TARGET_KINDS = frozenset({"proxy", "forward", "protocol", "clean_agent", "registration_key", "none"})
+NODE_SECRET_REQUEST_KINDS = frozenset({"value", "document"})
+
+
 class PluginOnlyRouteError(CatalogError):
     pass
 
@@ -458,6 +469,87 @@ def validate_declarations(catalog: Iterable[CatalogRoute], declarations: Iterabl
             )
 
 
+def _pointer_tokens(pointer: Any, context: str) -> list[str]:
+    if not isinstance(pointer, str) or not pointer.startswith("/") or pointer == "/":
+        raise PluginOnlyRouteError(f"{context} pointer must be a JSON pointer to a field")
+    tokens = pointer[1:].split("/")
+    for token in tokens:
+        if token == "" or "~" in token.replace("~0", "").replace("~1", ""):
+            raise PluginOnlyRouteError(f"{context} pointer {pointer!r} is not a valid JSON pointer")
+    return tokens
+
+
+def validate_node_secret_fields(path: Path, extraction: dict[tuple[str, str], ExtractionRoute]) -> int:
+    """Check the node secret field list: its shape, and every route id
+    against the extraction map. Returns the number of listed routes."""
+    document = load_json_object(path, "node secret field list")
+    require_exact_fields(document, NODE_SECRET_FIELDS_ROOT_FIELDS, "node secret field list")
+    if document["format"] != NODE_SECRET_FIELDS_FORMAT:
+        raise PluginOnlyRouteError(f"node secret field list format must be {NODE_SECRET_FIELDS_FORMAT}")
+    rows = document["routes"]
+    if not isinstance(rows, list):
+        raise PluginOnlyRouteError("node secret field list field routes must be an array")
+    by_route_id = {route.route_id: route for route in extraction.values()}
+    seen: set[str] = set()
+    for index, row in enumerate(rows):
+        context = f"node secret field list row {index + 1}"
+        if not isinstance(row, dict):
+            raise PluginOnlyRouteError(f"{context} must be an object")
+        unknown = set(row) - NODE_SECRET_ROUTE_FIELDS
+        if unknown or "route_id" not in row or "target" not in row:
+            raise PluginOnlyRouteError(f"{context} must have route_id, target and request or answer fields only")
+        route_id = require_string(row, "route_id", context)
+        context = f"node secret field list route {route_id!r}"
+        if route_id in seen:
+            raise PluginOnlyRouteError(f"{context} is listed twice")
+        seen.add(route_id)
+        route = by_route_id.get(route_id)
+        if route is None:
+            raise PluginOnlyRouteError(f"{context} is not a route of the package extraction map")
+        target = row["target"]
+        if not isinstance(target, dict) or set(target) - {"kind", "path_param", "new"}:
+            raise PluginOnlyRouteError(f"{context} target must be an object of kind, path_param and new")
+        kind = target.get("kind")
+        if kind not in NODE_SECRET_TARGET_KINDS:
+            raise PluginOnlyRouteError(f"{context} target kind {kind!r} is unknown")
+        path_param = target.get("path_param", "")
+        new = target.get("new", False)
+        if not isinstance(path_param, str) or not isinstance(new, bool):
+            raise PluginOnlyRouteError(f"{context} target path_param must be a string and new a boolean")
+        if kind == "none":
+            if path_param or new:
+                raise PluginOnlyRouteError(f"{context} target of kind none has no path parameter")
+        elif bool(path_param) == new:
+            raise PluginOnlyRouteError(f"{context} target names a path parameter or is new, not both")
+        if path_param and f":{path_param}" not in route.path.split("/"):
+            raise PluginOnlyRouteError(f"{context} target path parameter {path_param!r} is not in {route.path}")
+        request = row.get("request", [])
+        answer = row.get("answer", [])
+        if not isinstance(request, list) or not isinstance(answer, list) or not (request or answer):
+            raise PluginOnlyRouteError(f"{context} lists request or answer fields")
+        pointers: set[str] = set()
+        for field in request:
+            if not isinstance(field, dict) or set(field) != {"pointer", "kind"}:
+                raise PluginOnlyRouteError(f"{context} request fields have a pointer and a kind")
+            tokens = _pointer_tokens(field["pointer"], context)
+            folded = "/".join(token.lower().replace("_", "").replace("-", "") for token in tokens)
+            if folded in pointers:
+                raise PluginOnlyRouteError(f"{context} request pointer {field['pointer']!r} is listed twice")
+            pointers.add(folded)
+            if field["kind"] not in NODE_SECRET_REQUEST_KINDS:
+                raise PluginOnlyRouteError(f"{context} request field kind {field['kind']!r} is unknown")
+        names: set[str] = set()
+        for field in answer:
+            if not isinstance(field, dict) or set(field) != {"pointer", "name"}:
+                raise PluginOnlyRouteError(f"{context} answer fields have a pointer and a name")
+            _pointer_tokens(field["pointer"], context)
+            name = field["name"]
+            if not isinstance(name, str) or not name.strip() or name in names:
+                raise PluginOnlyRouteError(f"{context} answer field {field['pointer']!r} needs a name of its own")
+            names.add(name)
+    return len(seen)
+
+
 def parse_arguments() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description="enforce signed package-only ownership for every /api/v2 route")
     parser.add_argument("--catalog", type=Path, default=REPO_ROOT / "config" / "v2-package-route-catalog.json")
@@ -466,6 +558,7 @@ def parse_arguments() -> argparse.Namespace:
     parser.add_argument("--expected-route-count", type=int, default=EXPECTED_V4_ROUTE_COUNT)
     parser.add_argument("--extraction", type=Path, default=REPO_ROOT / "config" / "package-extraction.json")
     parser.add_argument("--identity-bridge", type=Path, default=REPO_ROOT / "internal" / "identitybridge")
+    parser.add_argument("--node-secret-fields", type=Path, default=REPO_ROOT / "config" / "node-secret-fields.json")
     return parser.parse_args()
 
 
@@ -481,6 +574,7 @@ def main() -> int:
             )
         extraction = load_extraction(arguments.extraction)
         validate_extraction(catalog, extraction, arguments.packages_root)
+        sealed_routes = validate_node_secret_fields(arguments.node_secret_fields, extraction)
         inventory = inventory_from_go(arguments.router)
         validate_catalog_against_inventory(catalog, inventory)
         validate_gateway_handlers(catalog, inventory, extraction, identity_bridge_route_ids(arguments.identity_bridge))
@@ -492,7 +586,7 @@ def main() -> int:
 
     modes = {mode: sum(1 for route in extraction.values() if route.mode == mode) for mode in sorted(EXTRACTION_MODES)}
     summary = ", ".join(f"{count} {mode}" for mode, count in modes.items())
-    print(f"plugin-only v2 route gate passed ({len(catalog)} routes: {summary})")
+    print(f"plugin-only v2 route gate passed ({len(catalog)} routes: {summary}; {sealed_routes} with node secret fields)")
     return 0
 
 

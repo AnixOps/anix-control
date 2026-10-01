@@ -3,8 +3,10 @@
 Status: DESIGN (2026-10-01), decided (section 10). NO-1 is implemented:
 the kernel serves the contract `sdk/api/kernelnodeops/v1`
 (`anixops.kernelnodeops.v1`), which is binding (section 3.10), with its
-ledger, but executes no operation kind yet (section 3.11). This is phase 3
-of the 2026-10 plan, done together with Agent line A2.
+ledger, but executes no operation kind yet (section 3.11). NO-4 is
+implemented: the gateway seals node secrets into handles, and the kernel
+verifies request bindings (section 3.7). This is phase 3 of the 2026-10
+plan, done together with Agent line A2.
 
 > 中文摘要：剩余桥接路由里，有 83 条在等“内核代办节点操作”和“节点凭据外置”，
 > 另有 7 条在等节点/Agent 通道的决定。本文给出三件事的设计：
@@ -23,6 +25,8 @@ of the 2026-10 plan, done together with Agent line A2.
 >
 > 进度：NO-1 已完成。内核已提供 KernelNodeOps 契约和操作台账，契约自此定稿，只增不改。
 > 但还没有任何操作类型可执行：提交这类操作会得到 `UNIMPLEMENTED`，且不留任何记录（第 3.11 节）。
+> NO-4 已完成：对 `config/node-secret-fields.json` 列出的路由，网关把请求里的节点密钥换成一次性句柄，
+> 应答里只还原为本请求生成的句柄；无法替换时由内核的旧处理器直接应答，模块看不到这个请求（第 3.7 节）。
 
 ## Contents
 
@@ -362,6 +366,123 @@ A package learns everything it needs and never a secret.
      fails closed.
    - **Shadow mode.** The legacy side gets the original body, and the
      comparison masks handles.
+
+   **What NO-4 built** (`internal/sealedsecrets`, the gateway in
+   `internal/compat/v2`, the binding in `internal/packagebridge` and
+   `internal/kernelnodeops`):
+
+   - **The field list.** `config/node-secret-fields.json` names, per route
+     id, a target and the fields of each direction. The kernel binary embeds
+     it (`config.NodeSecretFields`). The route gate
+     (`check_plugin_only_routes.py`) checks every route id against
+     `package-extraction.json`, and each path parameter target against the
+     route's path.
+
+     | Route | Request fields | Answer fields | Target |
+     |---|---|---|---|
+     | `POST /admin/nodes` | `/raw_config` (document) | `/data/api_key`, `/data/secret` | new proxy node |
+     | `PUT /admin/nodes/:id` | `/raw_config` (document) | | proxy node `:id` |
+     | `PUT /admin/nodes/:id/raw-config` | `/raw_config` (document) | | proxy node `:id` |
+     | `POST /admin/nodes/validate-config` | `/raw_config` (document) | | none: never resolves |
+     | `POST /admin/nodes/:id/protocols` | the five protocol columns (documents) | | new protocol |
+     | `PUT /admin/nodes/:id/protocols/:protocol_id` | the five protocol columns (documents) | | protocol `:protocol_id` |
+     | `POST /admin/forward/nodes` | `/api_token` (value) | `/data/api_token` | new forward node |
+     | `PUT /admin/forward/nodes/:id` | `/api_token` (value) | | forward node `:id` |
+     | `POST /admin/auth-keys`, `POST /internal/auth-keys` | | `/data/key` | new registration key |
+     | `POST /admin/forward/agents` | | `/data/token` | new clean agent |
+
+   - **Handles.**
+     - **Format.** A handle is `anix-sealed:v1:` followed by 43 unpadded
+       base64url characters, 32 random bytes (`v2compat.IsSealedHandle`).
+     - **Binding.** Each is bound to its request (a random key the bridge
+       capability carries, the package generation, the request id and the
+       route), the route's target and its field.
+     - **Use.** A handle resolves once, all of a resolution or none.
+     - **Lifetime.** It lives in kernel memory only (`sealedsecrets.Store`)
+       and dies when the gateway finishes the request, or at its deadline.
+   - **Substitution.**
+     - **Which values.** In a listed route's body the gateway seals:
+       - each listed value field;
+       - in each listed document, inline or as a JSON string, every value
+         under a key `IsNodeSecretKey` marks;
+       - anywhere else in the body, every value under such a key.
+
+       A non-empty array under a secret key is sealed whole, as the masked
+       answers hide it.
+     - **Spelling.** Member names match a listed field whatever their case,
+       underscores or hyphens, as the legacy handlers bind them.
+     - **What passes.** The placeholder, empty values and null pass.
+     - **The rest of the body.** Only the sealed values are rewritten; every
+       other byte stays as sent.
+     - **Legacy reads the original.** The host reads the sealed body. The
+       bridge capability keeps the original for the legacy handler
+       (`DispatchInput.BridgeBody`).
+   - **Field names.** A handle's field is the listed pointer as the list
+     spells it, followed in a document by the secret's own pointer, for
+     example `/reality_settings/private_key`.
+   - **Targets.** A target is the resource named by a path parameter. A
+     route that creates its resource binds its target at the first
+     resolution: every later one in the request must name the same resource.
+   - **Bindings are verified.** `SubmitOperation` verifies a request
+     binding on the session the call arrived on, local or module listener
+     (`packagebridge.BoundRequest`).
+     - The capability must be live: minted for the calling generation, not
+       consumed, revoked or expired.
+     - Anything else is `PERMISSION_DENIED` before `Prepare`, and nothing is
+       recorded.
+     - A `Preparer` gets the verified binding as `Submission.Request`, with
+       the request id, the route and the actor. It resolves handles with
+       `Submission.Unseal`.
+   - **Generated secrets.** An executor mints a handle with
+     `Run.Reveal(name, value)`, for a name the route's answer lists; the
+     value is also scrubbed from the operation's texts.
+     - The ledger stores the result with each `SecretHandle`'s field and
+       expiry, never its handle.
+     - The handles are answered once, to the submitting call bound to the
+       same request.
+   - **The ledger never holds a handle.** A request id, reason or operation
+     holding one is refused (`INVALID_ARGUMENT`, or `INTERNAL` when a
+     `Preparer` left one). The canonical form keeps only the bare prefix
+     where a `SecretRef` was (section 3.4).
+   - **Expansion.**
+     - The gateway expands a handle only at a listed answer field, under its
+       name, minted for this request, once.
+     - Any other handle of a request in flight anywhere in the answer or its
+       headers is refused with 502 `sealed_secret_refused`, and the request
+       is not served again.
+     - A string with a handle's shape that is no live handle, outside a
+       listed field, is data and passes.
+   - **Fail closed.**
+     - **Legacy fallback.** A request whose secrets cannot be sealed is
+       served by the kernel's legacy handler without the package host
+       (`pluginhost.Supervisor.DispatchLegacy`). That covers a body that is
+       not JSON, a value field that is not a string, a target parameter that
+       is not an id, a sealed body over the request limit, or an unavailable
+       field list.
+     - **Refusal.** A route without a legacy handler is refused with 503
+       `sealed_secret_unavailable`.
+     - **Metric.** Both are counted in
+       `anixops_v2_gateway_sealed_secrets_total{package,route,stage,result,reason}`,
+       with fixed labels and no handle.
+   - **Shadow mode.**
+     - The SDK router gives a shadow run no binding (`NativeRequest.Binding`
+       is nil). Its request's capability is consumed by the legacy answer,
+       and its handles die with the request, so they never resolve.
+     - The shadow comparison (`v2compat.EqualForCompare`) masks handles on
+       both sides: a handle matches any string the other answer shows there.
+     - `packagecompat` compares the same way.
+   - **Deviations from the design above.**
+     - **Every mode is sealed.** A listed route is sealed in every mode,
+       legacy included, not only in native and shadow. The host polls its
+       mode, so the kernel cannot tell when it leaves legacy, and the legacy
+       handler reads the original anyway.
+     - **The fallback skips the host.** It runs in the kernel, so the
+       package never sees an unsealed request.
+     - **Handles are never echoed.** A request's own handle is not expanded
+       in its answer: an executor reveals what an answer shows.
+     - **Not listed.** `POST /admin/forward/test-connection` (gost-mesh,
+       native-flagged) is not listed: its native handler dials gost with the
+       typed token.
 5. **No call reveals a stored secret.** No KernelNodeOps call answers an
    existing credential's value, even as a handle. The one route whose answer
    is a stored secret, `GET /admin/nodes/:id/credentials`, is
@@ -540,9 +661,12 @@ NO-1.
 - `Run.UseSecret` names the credentials whose values are scrubbed from the
   outcome.
 - `Outcome` is one of `Succeeded`, `Failed`, `Cancelled` or `FanOut`.
-- An optional `Preparer.Prepare` runs in the submitting call: it verifies
-  the request binding, resolves handles and captures deletions (NO-4,
-  NO-5, NO-7).
+- An optional `Preparer.Prepare` runs in the submitting call: it uses the
+  verified request binding (`Submission.Request`), resolves handles
+  (`Submission.Unseal`) and captures deletions (NO-4, NO-5, NO-7).
+- `Run.Request` is the verified binding while its request is live, and
+  `Run.Reveal` mints the handle of a generated secret for its answer
+  (section 3.7).
 - The context ends at the operation's deadline, or when it is cancelled.
 
 **Details the sections above leave open, as NO-1 settles them:**
@@ -608,7 +732,11 @@ NO-1.
   dropped; the operation keeps its state and gets an `INTERNAL` error
   saying so.
 - **Request bindings.** A binding is passed to a `Preparer` and never
-  stored. NO-1 does not verify bindings; NO-4 does.
+  stored. Since NO-4 the kernel verifies it on the session the call arrived
+  on: a binding that names no live request of the calling package is
+  `PERMISSION_DENIED` before anything is prepared or recorded (section
+  3.7). The binding is kept in memory for the operation's executor until
+  its request ends, and is lost on a restart.
 - **Split phases.** `GetCapabilities.tables` answers `LEGACY` for the seven
   tables of section 4.1 until NO-2 plugs in the split state.
 
@@ -1262,7 +1390,7 @@ handlers ship `native-flagged`, and operators choose the runtime mode.
 | NO-1 | Contract engine: the capability grammar, `internal/kernelnodeops` (Submit, Get, List, Watch, Cancel, GetCapabilities), `v4_kernel_node_operation` and its events, served on the bridge and the module listener, `bridgecontract` tests, `GET /api/v4/kernel/node-operations`. **The contract becomes binding.** Done: section 3.11 | NO-0 | control | L |
 | NO-2 | Split P1: the new secret tables, `internal/nodesecrets` as the one writer, dual-write in every writer, `node-secrets backfill` and `verify`, the split state table | NO-0 | control | L |
 | NO-3 | Split P2: every reader through `nodesecrets` with fallback and metrics; validate on build, report-only | NO-2 | control | L |
-| NO-4 | Sealed secret handles: gateway substitution and expansion, `config/node-secret-fields.json`, shadow-mode handling, fail-closed tests | NO-1 | control | M |
+| NO-4 | Sealed secret handles: gateway substitution and expansion, `config/node-secret-fields.json`, shadow-mode handling, fail-closed tests. Done: section 3.7 | NO-1 | control | M |
 | NO-5 | Credential and secret operations: `IssueCredential`, `RevokeCredential`, registration keys, `IssueCleanAgent`, `PutSecretDocument`, `RetireNode`, `RetireProtocol`, `ValidateNodeConfig`; the legacy handlers move onto the same functions | NO-1, NO-3, NO-4 | control | L |
 | NO-6 | Node configuration and agents: `SyncNode` with `v4_kernel_node_desired_config`, `AgentControlOperation`, `RunAgentDiagnostic`, the agent session RPCs; the durable dispatcher takes node kinds | NO-1 | control | L |
 | NO-7 | Forward operations: `ApplyForward`, `ApplyTunnel`, `SyncForwardBackend`, `ApplyLegacyRule` over the existing executors; job payloads without tokens and the payload scrub; endpoint pinning | NO-1, NO-3 | control | L |
@@ -1357,13 +1485,20 @@ it up to A2-3.
   - `unsplit`.
   - A redaction round trip: the stored redacted document equals today's
     masked answer.
-- **Sealed handles.**
-  - Every listed route and field is substituted.
-  - The placeholder and empty values are kept.
-  - A handle from another request, route or target is refused.
-  - Expansion happens only in the bound answer.
-  - The fail-closed fallback to legacy.
-  - Shadow comparison with handles masked.
+- **Sealed handles** (NO-4).
+  - **Where.** `internal/sealedsecrets`, the gateway tests in
+    `internal/compat/v2`, and `internal/tests/sealedhandles` end to end:
+    through a real bridge session, the SDK router and the KernelNodeOps
+    server.
+  - **What.**
+    - Every listed route and field is substituted.
+    - The placeholder and empty values are kept.
+    - A handle from another request, route, target or field is refused.
+    - Expansion happens only in the bound answer.
+    - The fail-closed fallback to legacy.
+    - Shadow comparison with handles masked.
+    - A walk proves that no value under an `IsNodeSecretKey` key reaches a
+      package on any listed route.
 - **Cross-repo E2E** (`ANIXOPS_CROSS_REPO_E2E=1`, the existing harness in
   `internal/grpc/*cross_repo_e2e_test.go`). A pinned anix-agent build:
   - enrolls with its API key and reconnects with mTLS;

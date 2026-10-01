@@ -24,18 +24,20 @@ type moduleKernelNodeOps struct {
 	provider KernelNodeOpsProvider
 }
 
-func (m *moduleKernelNodeOps) caller(ctx context.Context) (kernelnodeopsv1.KernelNodeOpsServer, error) {
+// caller resolves the bound instance's server, and a context that carries
+// its generation, on which request bindings are verified.
+func (m *moduleKernelNodeOps) caller(ctx context.Context) (kernelnodeopsv1.KernelNodeOpsServer, context.Context, error) {
 	instance, err := m.bridge.instance(ctx, false)
 	if err != nil {
-		return nil, err
+		return nil, ctx, err
 	}
-	return m.provider(instance.generation.identity), nil
+	return m.provider(instance.generation.identity), withGeneration(ctx, instance.generation), nil
 }
 
 // callNodeOps resolves the caller and runs one unary method on it.
 func callNodeOps[Request, Response any](m *moduleKernelNodeOps, ctx context.Context, request Request,
 	method func(kernelnodeopsv1.KernelNodeOpsServer, context.Context, Request) (Response, error)) (Response, error) {
-	server, err := m.caller(ctx)
+	server, ctx, err := m.caller(ctx)
 	if err != nil {
 		var zero Response
 		return zero, err
@@ -56,7 +58,7 @@ func (m *moduleKernelNodeOps) ListOperations(ctx context.Context, request *kerne
 }
 
 func (m *moduleKernelNodeOps) WatchOperations(request *kernelnodeopsv1.WatchOperationsRequest, stream grpc.ServerStreamingServer[kernelnodeopsv1.OperationEvent]) error {
-	server, err := m.caller(stream.Context())
+	server, _, err := m.caller(stream.Context())
 	if err != nil {
 		return err
 	}

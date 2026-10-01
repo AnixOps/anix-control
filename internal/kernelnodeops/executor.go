@@ -10,6 +10,7 @@ import (
 
 	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
 	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
+	"github.com/AnixOps/anix-control/v4/internal/sealedsecrets"
 )
 
 // Executor carries out the operations of one kind (node-ops-service.md
@@ -32,11 +33,12 @@ type ExecutorFunc func(ctx context.Context, run *Run) Outcome
 func (f ExecutorFunc) Execute(ctx context.Context, run *Run) Outcome { return f(ctx, run) }
 
 // Preparer is implemented by executors that must act in the submitting
-// call, before the operation is recorded: verify the request binding,
-// resolve sealed handles, capture what a deletion removes. Prepare may
-// replace submission.Operation; the canonical form of what it leaves is
-// stored and executed. An error refuses the submission and records
-// nothing; a gRPC status error is answered as it is.
+// call, before the operation is recorded: use the verified request binding,
+// resolve sealed handles (Submission.Unseal), capture what a deletion
+// removes. Prepare may replace submission.Operation; the canonical form of
+// what it leaves is stored and executed, and must hold no sealed handle.
+// An error refuses the submission and records nothing; a gRPC status error
+// is answered as it is.
 type Preparer interface {
 	Prepare(ctx context.Context, submission *Submission) error
 }
@@ -49,7 +51,14 @@ type Submission struct {
 	// Binding is the request binding's bridge capability; it is never
 	// stored.
 	Binding []byte
+	// Request is the verified request binding: the live v2 request the
+	// package is serving. Nil when the submission carries no binding; a
+	// binding that names no live request of the package is refused before
+	// Prepare.
+	Request *BoundRequest
 	Targets []*kernelnodeopsv1.NodeRef
+
+	store *sealedsecrets.Store
 }
 
 // Registry maps operation kinds to their executors. A kind without one is
@@ -124,6 +133,10 @@ type Run struct {
 	Targets   []*kernelnodeopsv1.NodeRef
 	Attempt   uint32
 	Deadline  time.Time
+	// Request is the submission's verified request binding while its
+	// request is live: nil when it carried none, the request ended, or the
+	// kernel restarted since. Reveal mints handles for it.
+	Request *BoundRequest
 
 	engine  *Engine
 	mu      sync.Mutex

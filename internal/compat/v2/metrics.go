@@ -1,12 +1,15 @@
 package v2
 
 import (
+	"errors"
 	"io"
 	"sort"
 	"strconv"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/AnixOps/anix-control/v4/internal/sealedsecrets"
 )
 
 // Gateway error codes. They are the complete, fixed set of values for the
@@ -22,6 +25,8 @@ const (
 	codePluginResponseTooLarge       = "plugin_response_too_large"
 	codePluginRequestInvalid         = "plugin_request_invalid"
 	codePackageRouteFrozen           = "package_route_frozen"
+	codeSealedSecretUnavailable      = "sealed_secret_unavailable"
+	codeSealedSecretRefused          = "sealed_secret_refused"
 	metricsUnresolvedPackage         = "unresolved"
 	metricsUnresolvedRoute           = "unresolved"
 	metricsOverflowLabel             = "_overflow"
@@ -43,6 +48,49 @@ type GatewayMetrics struct {
 	requests    map[requestSeries]uint64
 	errors      map[errorSeries]uint64
 	latency     map[string]*latencyHistogram
+	sealed      map[sealedSeries]uint64
+}
+
+// sealedSeries counts the gateway's sealed secret handling. Every label is
+// from a fixed set or a verified route declaration; no handle, secret or
+// field ever becomes one.
+type sealedSeries struct {
+	packageID string
+	route     string
+	stage     string
+	result    string
+	reason    string
+}
+
+// Sealed secret stages, results and reasons: the fixed label values of
+// anixops_v2_gateway_sealed_secrets_total.
+const (
+	sealedStageRequest   = "request"
+	sealedStageAnswer    = "answer"
+	sealedResultSealed   = "sealed"
+	sealedResultExpanded = "expanded"
+	sealedResultLegacy   = "legacy_fallback"
+	sealedResultRefused  = "refused"
+)
+
+// sealedReason is the fixed label of a substitution or expansion failure.
+func sealedReason(err error) string {
+	switch {
+	case errors.Is(err, sealedsecrets.ErrFieldsUnavailable):
+		return "fields_unavailable"
+	case errors.Is(err, sealedsecrets.ErrNotJSON):
+		return "not_json"
+	case errors.Is(err, sealedsecrets.ErrValueNotString):
+		return "value_not_string"
+	case errors.Is(err, sealedsecrets.ErrTargetInvalid):
+		return "target_invalid"
+	case errors.Is(err, sealedsecrets.ErrTooLarge):
+		return "too_large"
+	case errors.Is(err, sealedsecrets.ErrAnswerHandle):
+		return "answer_handle"
+	default:
+		return "store"
+	}
 }
 
 type requestSeries struct {
@@ -76,7 +124,26 @@ func NewGatewayMetrics() *GatewayMetrics {
 		requests:    make(map[requestSeries]uint64),
 		errors:      make(map[errorSeries]uint64),
 		latency:     make(map[string]*latencyHistogram),
+		sealed:      make(map[sealedSeries]uint64),
 	}
+}
+
+// ObserveSealed records the gateway's handling of one request's or answer's
+// sealed secrets.
+func (m *GatewayMetrics) ObserveSealed(packageID, routeID, stage, result, reason string) {
+	if m == nil {
+		return
+	}
+	if reason == "" {
+		reason = "none"
+	}
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	series := sealedSeries{packageID: packageID, route: routeID, stage: stage, result: result, reason: reason}
+	if _, exists := m.sealed[series]; !exists && len(m.sealed) >= m.seriesLimit {
+		series.packageID, series.route = metricsOverflowLabel, metricsOverflowLabel
+	}
+	m.sealed[series]++
 }
 
 // Observe records one completed gateway request. errorCode is empty for a
@@ -196,6 +263,34 @@ func (m *GatewayMetrics) WritePrometheus(writer io.Writer) error {
 		builder.WriteString("anixops_v2_gateway_request_duration_seconds_sum{" + label + "} " + strconv.FormatFloat(histogram.sum, 'g', -1, 64) + "\n")
 		builder.WriteString("anixops_v2_gateway_request_duration_seconds_count{" + label + "} " + strconv.FormatUint(histogram.count, 10) + "\n")
 	}
+	sealed := make([]sealedSeries, 0, len(m.sealed))
+	for series := range m.sealed {
+		sealed = append(sealed, series)
+	}
+	sort.Slice(sealed, func(i, j int) bool {
+		a, b := sealed[i], sealed[j]
+		if a.packageID != b.packageID {
+			return a.packageID < b.packageID
+		}
+		if a.route != b.route {
+			return a.route < b.route
+		}
+		if a.stage != b.stage {
+			return a.stage < b.stage
+		}
+		if a.result != b.result {
+			return a.result < b.result
+		}
+		return a.reason < b.reason
+	})
+	builder.WriteString("# HELP anixops_v2_gateway_sealed_secrets_total Node secrets the v2 gateway sealed in requests and expanded in answers, and the requests it served legacy or refused because it could not.\n")
+	builder.WriteString("# TYPE anixops_v2_gateway_sealed_secrets_total counter\n")
+	for _, series := range sealed {
+		builder.WriteString("anixops_v2_gateway_sealed_secrets_total{package=\"" + escapeLabel(series.packageID) +
+			"\",route=\"" + escapeLabel(series.route) + "\",stage=\"" + series.stage + "\",result=\"" + series.result +
+			"\",reason=\"" + series.reason + "\"} " + strconv.FormatUint(m.sealed[series], 10) + "\n")
+	}
+
 	m.mu.Unlock()
 	_, err := io.WriteString(writer, builder.String())
 	return err

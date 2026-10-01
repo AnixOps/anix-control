@@ -102,6 +102,9 @@ class PluginOnlyRoutesTest(unittest.TestCase):
             (package_root / "control" / "main.go").write_text(package_host_source, encoding="utf-8")
         (root / "identitybridge").mkdir()
         (root / "identitybridge" / "bridge.go").write_text(identity_bridge_source, encoding="utf-8")
+        (root / "node-secret-fields.json").write_text(
+            json.dumps({"format": "anixops.node-secret-fields/v1", "routes": []}), encoding="utf-8"
+        )
         if handler is None:
             handler = (
                 f'registeredPackageWebSocketRoute(v2WebSocketGateway.Serve, "{owner}", "{route_id}", legacyHandler, nil)'
@@ -155,6 +158,8 @@ GROUP
                 str(catalog.parent / "extraction.json"),
                 "--identity-bridge",
                 str(catalog.parent / "identitybridge"),
+                "--node-secret-fields",
+                str(catalog.parent / "node-secret-fields.json"),
             ],
             cwd=REPO_ROOT,
             check=False,
@@ -421,6 +426,53 @@ GROUP
             missing = self.run_gate(catalog, router, packages_root)
         self.assertIn("package extraction mismatch", mismatch.stderr)
         self.assertIn("missing package extraction row", missing.stderr)
+
+    def test_node_secret_fields_name_routes_of_the_extraction_map(self) -> None:
+        listed = {
+            "route_id": "knowledge.article.list",
+            "target": {"kind": "proxy", "new": True},
+            "request": [{"pointer": "/raw_config", "kind": "document"}],
+            "answer": [{"pointer": "/data/api_key", "name": "api_key"}],
+        }
+        cases = {
+            "accepted": (listed, None),
+            "unknown route": ({**listed, "route_id": "knowledge.other"}, "is not a route of the package extraction map"),
+            "unknown target": ({**listed, "target": {"kind": "user", "new": True}}, "target kind 'user' is unknown"),
+            "both targets": ({**listed, "target": {"kind": "proxy", "new": True, "path_param": "id"}}, "not both"),
+            "missing parameter": ({**listed, "target": {"kind": "proxy", "path_param": "id"}}, "is not in /api/v2/user/knowledge"),
+            "no fields": ({"route_id": "knowledge.article.list", "target": {"kind": "none"}}, "lists request or answer fields"),
+            "bad pointer": ({**listed, "request": [{"pointer": "raw_config", "kind": "document"}]}, "must be a JSON pointer"),
+            "spelled twice": (
+                {**listed, "request": [{"pointer": "/raw_config", "kind": "document"}, {"pointer": "/RawConfig", "kind": "value"}]},
+                "is listed twice",
+            ),
+            "field kind": ({**listed, "request": [{"pointer": "/raw_config", "kind": "blob"}]}, "kind 'blob' is unknown"),
+            "answer name": ({**listed, "answer": [{"pointer": "/data/a", "name": ""}]}, "needs a name of its own"),
+            "unknown member": ({**listed, "extra": 1}, "must have route_id, target"),
+        }
+        for name, (row, message) in cases.items():
+            with self.subTest(name), tempfile.TemporaryDirectory() as temporary:
+                catalog, router, packages_root = self.write_fixture(Path(temporary))
+                (catalog.parent / "node-secret-fields.json").write_text(
+                    json.dumps({"format": "anixops.node-secret-fields/v1", "routes": [row]}), encoding="utf-8"
+                )
+                result = self.run_gate(catalog, router, packages_root)
+                if message is None:
+                    self.assertEqual(0, result.returncode, result.stderr)
+                    self.assertIn("1 with node secret fields", result.stdout)
+                else:
+                    self.assertNotEqual(0, result.returncode)
+                    self.assertIn(message, result.stderr)
+        with tempfile.TemporaryDirectory() as temporary:
+            catalog, router, packages_root = self.write_fixture(Path(temporary))
+            (catalog.parent / "node-secret-fields.json").write_text(
+                json.dumps({"format": "anixops.node-secret-fields/v1", "routes": [listed, listed]}), encoding="utf-8"
+            )
+            twice = self.run_gate(catalog, router, packages_root)
+            (catalog.parent / "node-secret-fields.json").write_text(json.dumps({"format": "other", "routes": []}), encoding="utf-8")
+            wrong_format = self.run_gate(catalog, router, packages_root)
+        self.assertIn("is listed twice", twice.stderr)
+        self.assertIn("format must be anixops.node-secret-fields/v1", wrong_format.stderr)
 
 
 if __name__ == "__main__":

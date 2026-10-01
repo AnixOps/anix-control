@@ -67,6 +67,14 @@ type DispatchInput struct {
 	Metadata         RequestMetadata
 	BridgeCapability []byte
 	Deadline         time.Time
+	// BridgeBody is the body the bridge capability retains for the
+	// kernel's legacy handler when the host reads another one: the request
+	// as the client sent it, while Body has its node secrets sealed. Nil
+	// retains Body.
+	BridgeBody []byte
+	// SealedRequest names the request's sealed secrets; the capability
+	// carries it so that KernelNodeOps resolves them for this request only.
+	SealedRequest string
 }
 
 type RequestMetadata struct {

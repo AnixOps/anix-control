@@ -29,6 +29,8 @@ func TestGatewayMetricsRenderPrometheusText(t *testing.T) {
 	metrics.Observe("knowledge", "knowledge.article.list", http.StatusOK, "", 200*time.Millisecond)
 	metrics.Observe("knowledge", "knowledge.article.list", http.StatusBadGateway, codePluginResponseTooLarge, 20*time.Second)
 	metrics.Observe("", "", http.StatusNotFound, codeRouteNotFound, time.Millisecond)
+	metrics.ObserveSealed("proxy-node", "proxy.admin.nodes.post", sealedStageRequest, sealedResultLegacy, "not_json")
+	metrics.ObserveSealed("proxy-node", "proxy.admin.nodes.post", sealedStageAnswer, sealedResultExpanded, "")
 
 	require.Equal(t, `# HELP anixops_v2_gateway_requests_total Requests handled by the v2 package gateways.
 # TYPE anixops_v2_gateway_requests_total counter
@@ -61,6 +63,10 @@ anixops_v2_gateway_request_duration_seconds_bucket{package="unresolved",le="10"}
 anixops_v2_gateway_request_duration_seconds_bucket{package="unresolved",le="+Inf"} 1
 anixops_v2_gateway_request_duration_seconds_sum{package="unresolved"} 0.001
 anixops_v2_gateway_request_duration_seconds_count{package="unresolved"} 1
+# HELP anixops_v2_gateway_sealed_secrets_total Node secrets the v2 gateway sealed in requests and expanded in answers, and the requests it served legacy or refused because it could not.
+# TYPE anixops_v2_gateway_sealed_secrets_total counter
+anixops_v2_gateway_sealed_secrets_total{package="proxy-node",route="proxy.admin.nodes.post",stage="answer",result="expanded",reason="none"} 1
+anixops_v2_gateway_sealed_secrets_total{package="proxy-node",route="proxy.admin.nodes.post",stage="request",result="legacy_fallback",reason="not_json"} 1
 `, renderGatewayMetrics(t, metrics))
 }
 
