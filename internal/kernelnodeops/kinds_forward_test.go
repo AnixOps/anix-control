@@ -86,14 +86,21 @@ func (n *fakeNodeX) received() []string {
 	return out
 }
 
-func (n *fakeNodeX) waitStarted(t *testing.T) string {
+// waitStarted waits until NodeX receives a request whose body contains
+// marker; earlier requests' events are skipped.
+func (n *fakeNodeX) waitStarted(t *testing.T, marker string) string {
 	t.Helper()
-	select {
-	case body := <-n.started:
-		return body
-	case <-time.After(10 * time.Second):
-		require.FailNow(t, "NodeX was not called")
-		return ""
+	deadline := time.After(10 * time.Second)
+	for {
+		select {
+		case body := <-n.started:
+			if strings.Contains(body, marker) {
+				return body
+			}
+		case <-deadline:
+			require.FailNow(t, "NodeX was not called", marker)
+			return ""
+		}
 	}
 }
 
@@ -285,7 +292,7 @@ func TestApplyForwardTimesOutAndCancels(t *testing.T) {
 		h.rename(t, 41, "hang")
 		h.engine.Timeout = time.Minute
 		submitted := submit(t, client, "forward.apply:41:hang", applyForward(41, kernelnodeopsv1.ForwardAction_FORWARD_ACTION_UPDATE)).GetOperation()
-		h.nodex.waitStarted(t)
+		h.nodex.waitStarted(t, `"id":41`)
 		_, err := client.CancelOperation(context.Background(), &kernelnodeopsv1.CancelOperationRequest{OperationId: submitted.GetOperationId(), Reason: "operator"})
 		require.NoError(t, err)
 		op = eventually(t, get(t, client, submitted.GetOperationId()), inState(cancelled))
@@ -303,7 +310,7 @@ func TestConcurrentForwardOperationsAreSuperseded(t *testing.T) {
 		h.rename(t, 40, "slow")
 
 		first := submit(t, client, "forward.apply:40:1", applyForward(40, kernelnodeopsv1.ForwardAction_FORWARD_ACTION_CREATE)).GetOperation()
-		h.nodex.waitStarted(t)
+		h.nodex.waitStarted(t, `"action":"create"`)
 		update := submit(t, client, "forward.apply:40:2", applyForward(40, kernelnodeopsv1.ForwardAction_FORWARD_ACTION_UPDATE)).GetOperation()
 		pause := submit(t, client, "forward.apply:40:3", applyForward(40, kernelnodeopsv1.ForwardAction_FORWARD_ACTION_PAUSE)).GetOperation()
 		require.Equal(t, superseded, get(t, client, update.GetOperationId())().GetState())

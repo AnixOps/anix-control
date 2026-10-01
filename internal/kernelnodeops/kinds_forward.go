@@ -159,6 +159,11 @@ func (f *Forward) applyForward(ctx context.Context, run *Run) Outcome {
 	}
 	acceptance := Acceptance{Channel: backendChannel(outcome.Backend), ForwardRuntimeJobID: uint64(outcome.JobID)}
 	if acceptErr := run.Accept(ctx, acceptance); acceptErr != nil {
+		if ctx.Err() != nil {
+			// Stopped while the node answered: what the runtime recorded
+			// stands, and the operation ends cancelled or timed out.
+			return applyOutcome(ctx, acceptErr, forwardApplyResult(outcome.Backend, outcome.Status, outcome.Message, outcome.JobID, f.now())).WithChannel(acceptance.Channel)
+		}
 		if !errors.Is(acceptErr, ErrOperationEnded) {
 			return Failed(kernelnodeopsv1.ErrorCode_ERROR_CODE_INTERNAL, "recording the runtime job failed", true).WithChannel(acceptance.Channel)
 		}
