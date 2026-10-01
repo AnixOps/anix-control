@@ -10,7 +10,8 @@
 //   - kapi_subscriber_entitlement_v1 for the caller's commission balance;
 //   - kapi_affiliate_settings_v1, the one non-secret row of the protected
 //     v2_system_config that holds the affiliate's frontend settings (code
-//     prefix and length, withdrawal fee and methods).
+//     prefix and length, withdrawal fee and methods), which the package
+//     writes through KernelSettings.
 //
 // The commission balance lives in v2_user, which the kernel owns. A
 // withdrawal debits it and a rejected one is refunded through the kernel's
@@ -33,10 +34,13 @@
 // leaves it rejected for an administrator to reconcile with the ledger.
 // Neither path can pay out or refund an amount that was never debited.
 //
-// Updating the configuration (PUT /api/v2/admin/invite/config) has no
-// native handler and stays bridged: it writes the settings row of the
-// protected v2_system_config, which no package may adopt and no contract
-// writes.
+// Updating the configuration (PUT /api/v2/admin/invite/config) writes the
+// adopted v2_invite_config, then the frontend settings through the kernel's
+// KernelSettings contract (namespace invite, kernel.settings.invite.write.v1):
+// the settings row of the protected v2_system_config stays the kernel's to
+// write, and the write makes the kernel's invite services reload the
+// configuration they keep in memory. A host without the contract leaves the
+// route legacy.
 package native
 
 import (
@@ -169,6 +173,12 @@ type Service struct {
 	// that change a commission balance have no native handler and stay
 	// legacy.
 	Subscriber Subscriber
+	// KernelSettings is the kernel's KernelSettings; without it updating
+	// the configuration has no native handler and stays legacy.
+	KernelSettings KernelSettings
+	// NewToken names a request that carries neither an Idempotency-Key
+	// nor a request id; it defaults to a random UUID.
+	NewToken func() string
 	// Now defaults to time.Now.
 	Now func() time.Time
 }
@@ -191,6 +201,9 @@ func (s *Service) Handlers() map[string]pluginhostsdk.NativeHandler {
 	if s.Subscriber != nil {
 		handlers[WithdrawRouteID] = s.UserWithdraw
 		handlers[ProcessRouteID] = s.AdminProcessWithdrawal
+	}
+	if s.KernelSettings != nil {
+		handlers[ConfigUpdateRouteID] = s.AdminUpdateConfig
 	}
 	return handlers
 }

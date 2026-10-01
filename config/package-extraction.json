@@ -502,7 +502,7 @@
       "path": "/api/v2/admin/invite/config",
       "package_id": "affiliate",
       "route_id": "affiliate.admin.invite.config.put",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {

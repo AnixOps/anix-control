@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	kernelsettingsv1 "github.com/AnixOps/anix-control/sdk/api/kernelsettings/v1"
 	kernelsubscriberv1 "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1"
 	"github.com/AnixOps/anix-control/sdk/packagebridgesdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
@@ -108,7 +109,9 @@ func TestAffiliateHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) {
 		RouteID: "identity.user.invite.generate.post", BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
 	})
 	require.Error(t, err)
-	handlers := (&native.Service{Subscriber: kernelsubscriberv1.NewKernelSubscriberClient(nil)}).Handlers()
+	handlers := (&native.Service{
+		Subscriber: kernelsubscriberv1.NewKernelSubscriberClient(nil), KernelSettings: kernelsettingsv1.NewKernelSettingsClient(nil),
+	}).Handlers()
 	require.Len(t, handlers, len(affiliateRoutes))
 	for route := range affiliateRoutes {
 		require.Contains(t, handlers, route, "every native route has a handler")
@@ -120,6 +123,7 @@ func TestAffiliateHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) {
 	withoutSubscriber := (&native.Service{}).Handlers()
 	require.NotContains(t, withoutSubscriber, native.WithdrawRouteID, "without KernelSubscriber balance changes stay legacy")
 	require.NotContains(t, withoutSubscriber, native.ProcessRouteID, "without KernelSubscriber balance changes stay legacy")
+	require.NotContains(t, withoutSubscriber, native.ConfigUpdateRouteID, "without KernelSettings the configuration update stays legacy")
 }
 
 // The host accepts exactly the package's declared compatibility routes.
@@ -161,6 +165,9 @@ func TestAffiliateManifestCapabilities(t *testing.T) {
 		"kernel.storage.v1", "kernel.storage.adopt:v2_commission_record", "kernel.storage.adopt:v2_commission_withdraw",
 		"kernel.storage.adopt:v2_invite_config", "kernel.view:kapi_user_referral_v1", "kernel.view:kapi_subscriber_entitlement_v1",
 		"kernel.view:kapi_affiliate_settings_v1", "kernel.subscriber.balance.v1",
+		// The frontend settings are written through KernelSettings; they
+		// are read through kapi_affiliate_settings_v1.
+		"kernel.settings.invite.write.v1",
 	}, manifest.Capabilities)
 }
 
