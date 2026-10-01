@@ -141,6 +141,12 @@ func (s *AgentHandlerTestSuite) SetupTest() {
 	s.router = gin.New()
 }
 
+// authenticate adds testNode's credentials, which the agent routes require.
+func (s *AgentHandlerTestSuite) authenticate(req *http.Request) {
+	req.Header.Set("X-Node-ID", strconv.FormatUint(uint64(s.testNode.ID), 10))
+	req.Header.Set("X-API-Key", s.testNode.APIToken)
+}
+
 func (s *AgentHandlerTestSuite) newAckingAgentHandler() (*AgentHandler, <-chan error, func()) {
 	handler := NewAgentHandler()
 	handler.ackTimeout = 500 * time.Millisecond
@@ -319,6 +325,7 @@ func (s *AgentHandlerTestSuite) TestAgentHeartbeat_Success() {
 
 	req, _ = http.NewRequest("POST", "/api/v2/agent/heartbeat", bytes.NewReader(jsonHbBody))
 	req.Header.Set("Content-Type", "application/json")
+	s.authenticate(req)
 
 	w = httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
@@ -332,6 +339,7 @@ func (s *AgentHandlerTestSuite) TestAgentHeartbeat_InvalidBody() {
 
 	req, _ := http.NewRequest("POST", "/api/v2/agent/heartbeat", bytes.NewReader([]byte("invalid")))
 	req.Header.Set("Content-Type", "application/json")
+	s.authenticate(req)
 
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
@@ -345,7 +353,8 @@ func (s *AgentHandlerTestSuite) TestAgentGetTasks() {
 	handler := NewAgentHandler()
 	s.router.GET("/api/v2/agent/tasks", handler.AgentGetTasks)
 
-	req, _ := http.NewRequest("GET", "/api/v2/agent/tasks?node_id=1", nil)
+	req, _ := http.NewRequest("GET", "/api/v2/agent/tasks", nil)
+	s.authenticate(req)
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
@@ -374,6 +383,7 @@ func (s *AgentHandlerTestSuite) TestAgentReportResult_Success() {
 
 	req, _ := http.NewRequest("POST", "/api/v2/agent/result", bytes.NewReader(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
+	s.authenticate(req)
 
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
@@ -387,6 +397,7 @@ func (s *AgentHandlerTestSuite) TestAgentReportResult_InvalidBody() {
 
 	req, _ := http.NewRequest("POST", "/api/v2/agent/result", bytes.NewReader([]byte("invalid")))
 	req.Header.Set("Content-Type", "application/json")
+	s.authenticate(req)
 
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
@@ -411,6 +422,7 @@ func (s *AgentHandlerTestSuite) TestAgentMonitor_Success() {
 
 	req, _ := http.NewRequest("POST", "/api/v2/agent/monitor", bytes.NewReader(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
+	s.authenticate(req)
 
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
@@ -433,6 +445,7 @@ func (s *AgentHandlerTestSuite) TestGetMonitor_Success() {
 
 	req, _ := http.NewRequest("POST", "/api/v2/agent/monitor", bytes.NewReader(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
+	s.authenticate(req)
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 	assert.Equal(s.T(), http.StatusOK, w.Code)
@@ -477,6 +490,7 @@ func (s *AgentHandlerTestSuite) TestGetTaskResult_Success() {
 	jsonBody, _ := json.Marshal(resultBody)
 	req, _ := http.NewRequest("POST", "/api/v2/agent/result", bytes.NewReader(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
+	s.authenticate(req)
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 	assert.Equal(s.T(), http.StatusOK, w.Code)
@@ -676,6 +690,29 @@ func (s *AgentHandlerTestSuite) TestCreateTask_Success() {
 	assert.NotContains(s.T(), resp, "error")
 
 	s.Require().NoError(<-ackDone)
+}
+
+// A task goes to the agent with the type in the body; only diagnostic tasks
+// are sent, as for ExecuteCommand. Any other type was sent as given.
+func (s *AgentHandlerTestSuite) TestCreateTask_RefusesOtherTaskTypes() {
+	handler, _, cleanup := s.newAckingAgentHandler()
+	defer cleanup()
+	s.router.POST("/admin/agent/tasks", handler.CreateTask)
+
+	for _, taskType := range []string{"forward", "shell", "Diagnostic", ""} {
+		body, _ := json.Marshal(map[string]any{
+			"node_id": s.testNode.ID, "type": taskType, "action": "service_restart",
+			"params": map[string]any{"service": "gost"},
+		})
+		req, _ := http.NewRequest("POST", "/admin/agent/tasks", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		s.router.ServeHTTP(w, req)
+		assert.Equal(s.T(), http.StatusBadRequest, w.Code, "%q: %s", taskType, w.Body.String())
+	}
+	var tasks int64
+	s.Require().NoError(s.db.Model(&model.AgentDiagnosticTask{}).Count(&tasks).Error)
+	assert.Zero(s.T(), tasks, "a task of another type was created")
 }
 
 func (s *AgentHandlerTestSuite) TestCreateTask_InvalidBody() {

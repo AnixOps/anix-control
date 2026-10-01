@@ -4,6 +4,32 @@
 
 ### Security
 
+- The agent HTTP routes authenticate the node. `POST /api/v2/agent/heartbeat`,
+  `GET /api/v2/agent/tasks`, `POST /api/v2/agent/result` and
+  `POST /api/v2/agent/monitor` took a node id from the body or query and
+  checked nothing, so anyone could:
+  - mark any proxy or forward node online;
+  - take a node's queued diagnostic and forward bridge tasks, which the real
+    agent then never received;
+  - complete any task with a forged result: a forward runtime job and its
+    forward's runtime state, or a diagnostic result shown to administrators
+    (and create such results for any task id);
+  - store monitoring data for any node id in the kernel's memory.
+
+  They now require the credentials the agent WebSocket takes (`X-Node-ID` and
+  `X-API-Key`, or the `node_id` and `api_key` or `token` query), checked in
+  the kernel before the package gateway (`AgentHandler.RequireAgentNode`); the
+  credentials never reach the package host, which gets the verified node.
+  A node reports and polls only for itself: a body naming another node is
+  `403`, and a result for another node's task is `404` and changes nothing.
+  A heartbeat or monitoring report marks the node online in the table that
+  authenticated it; without a live connection a proxy node's report used to
+  mark the forward node with the same id online. See `docs/UPGRADE.md`.
+- An administrator's agent task goes out only as a diagnostic task.
+  `POST /api/v2/admin/agent/tasks` checked the action and params against the
+  diagnostic whitelist but sent the body's `type` to the agent as given;
+  `POST /api/v2/admin/agent/execute` already fixed it to `diagnostic`. Any
+  other type is now refused with `400`.
 - Node and node protocol writes save only their own columns.
   - **Nested objects.** `POST /api/v2/admin/nodes` and
     `POST /api/v2/admin/nodes/:id/protocols` bound the body to the kernel
@@ -1453,6 +1479,9 @@
   tunnel, and the forward was applied there again, while its port bindings
   moved to the new tunnel's node; the old node's port was then free for
   another forward. The forward is now saved without its associations.
+- Deleting a node protocol, or a node, removes the protocols' subscription
+  group links. On PostgreSQL deleting a linked protocol or its node failed on
+  the foreign key; on SQLite the links were left behind.
 - Deleting a subscription group removes its node protocol links. On
   PostgreSQL deleting a group with links failed on the foreign key; on SQLite
   the links were left behind.

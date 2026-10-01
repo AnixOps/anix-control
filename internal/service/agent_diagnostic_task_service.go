@@ -2,12 +2,17 @@ package service
 
 import (
 	"encoding/json"
+	"errors"
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"gorm.io/gorm"
 )
+
+// ErrAgentDiagnosticTaskOfAnotherNode is CompleteTask's answer to a result
+// for a task that belongs to another node.
+var ErrAgentDiagnosticTaskOfAnotherNode = errors.New("diagnostic task belongs to another node")
 
 // AgentDiagnosticTaskService 负责白名单诊断任务的持久化，取代 AgentHandler 里原来的
 // taskResults sync.Map，使任务结果在面板进程重启后仍可查询。
@@ -89,7 +94,14 @@ func (s *AgentDiagnosticTaskService) PullPendingTasks(nodeID uint) ([]model.Agen
 
 // CompleteTask 写入任务的最终执行结果。如果 task_id 尚无记录（例如 agent 直接
 // 上报、面板端没有先建任务），则补建一条 completed/failed 记录，保持幂等可查询。
+//
+// nodeID is the authenticated node that reports: it completes only its own
+// tasks, and a task of another node is refused with
+// ErrAgentDiagnosticTaskOfAnotherNode instead of being taken over.
 func (s *AgentDiagnosticTaskService) CompleteTask(taskID string, nodeID uint, action string, success bool, output string, errMsg string, durationMS int64) error {
+	if nodeID == 0 {
+		return errors.New("diagnostic task result needs the reporting node")
+	}
 	status := model.AgentDiagnosticTaskStatusCompleted
 	if !success {
 		status = model.AgentDiagnosticTaskStatusFailed
@@ -103,21 +115,25 @@ func (s *AgentDiagnosticTaskService) CompleteTask(taskID string, nodeID uint, ac
 		"duration_ms": durationMS,
 		"updated_at":  time.Now(),
 	}
-	if nodeID != 0 {
-		updates["node_id"] = nodeID
-	}
 	if action != "" {
 		updates["action"] = action
 	}
 
 	result := s.db.Model(&model.AgentDiagnosticTask{}).
-		Where("task_id = ?", taskID).
+		Where("task_id = ? AND node_id = ?", taskID, nodeID).
 		Updates(updates)
 	if result.Error != nil {
 		return result.Error
 	}
 	if result.RowsAffected > 0 {
 		return nil
+	}
+	var others int64
+	if err := s.db.Model(&model.AgentDiagnosticTask{}).Where("task_id = ?", taskID).Count(&others).Error; err != nil {
+		return err
+	}
+	if others > 0 {
+		return ErrAgentDiagnosticTaskOfAnotherNode
 	}
 
 	return s.db.Create(&model.AgentDiagnosticTask{

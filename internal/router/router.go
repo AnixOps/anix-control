@@ -604,15 +604,17 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			uniproxyV1.POST("/alive", h.PushAlive)
 		}
 
-		// Agent API (NAT 后节点主动连接)
+		// Agent API (NAT 后节点主动连接). Registration checks the token in its
+		// body and the WebSocket in its preflight; the other routes require
+		// the node's credentials (RequireAgentNode) before the gateway.
 		agentPublic := v2.Group("/agent")
 		agentPublic.Use(userLimiter.Middleware())
 		{
 			agentPublic.POST("/register", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.agent.register.post", agentHandler.AgentRegister))
-			agentPublic.POST("/heartbeat", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.agent.heartbeat.post", agentHandler.AgentHeartbeat))
-			agentPublic.GET("/tasks", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.agent.tasks.get", agentHandler.AgentGetTasks))
-			agentPublic.POST("/result", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.agent.result.post", agentHandler.AgentReportResult))
-			agentPublic.POST("/monitor", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.agent.monitor.post", agentHandler.AgentMonitor))
+			agentPublic.POST("/heartbeat", agentHandler.RequireAgentNode, registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.agent.heartbeat.post", agentHandler.AgentHeartbeat))
+			agentPublic.GET("/tasks", agentHandler.RequireAgentNode, registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.agent.tasks.get", agentHandler.AgentGetTasks))
+			agentPublic.POST("/result", agentHandler.RequireAgentNode, registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.agent.result.post", agentHandler.AgentReportResult))
+			agentPublic.POST("/monitor", agentHandler.RequireAgentNode, registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.agent.monitor.post", agentHandler.AgentMonitor))
 			agentPublic.GET("/ws", registeredPackageWebSocketRoute(v2WebSocketGateway.Serve, "protocol-runtime", "protocol.agent.ws.get", agentHandler.AgentWebSocketUnified, agentHandler.PrepareWebSocketBridge))
 		}
 

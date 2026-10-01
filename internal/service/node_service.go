@@ -308,6 +308,9 @@ func (s *NodeService) DeleteNode(id uint) error {
 			if err := deleteWireGuardPeers(tx, "node_protocol_id IN ?", protocolIDs); err != nil {
 				return err
 			}
+			if err := deleteProtocolGroupLinks(tx, protocolIDs...); err != nil {
+				return err
+			}
 		}
 		if err := tx.Where("node_id = ?", id).Delete(&model.NodeProtocol{}).Error; err != nil {
 			return err
@@ -703,8 +706,21 @@ func (s *NodeService) DeleteProtocol(id uint) error {
 		if err := deleteWireGuardPeers(tx, "node_protocol_id = ?", id); err != nil {
 			return err
 		}
+		if err := deleteProtocolGroupLinks(tx, id); err != nil {
+			return err
+		}
 		return tx.Delete(&model.NodeProtocol{}, id).Error
 	})
+}
+
+// deleteProtocolGroupLinks removes the subscription group links of protocols
+// that are being deleted. They reference the protocol: PostgreSQL refused to
+// delete a linked protocol (or its node), and SQLite kept orphan links.
+func deleteProtocolGroupLinks(tx *gorm.DB, protocolIDs ...uint) error {
+	if !tx.Migrator().HasTable("v2_subscription_group_node_protocols") {
+		return nil
+	}
+	return tx.Exec("DELETE FROM v2_subscription_group_node_protocols WHERE node_protocol_id IN ?", protocolIDs).Error
 }
 
 func normalizeProtocolUpdates(updates map[string]any) (map[string]any, error) {
