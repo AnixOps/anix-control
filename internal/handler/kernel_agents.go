@@ -61,7 +61,7 @@ func (h *AgentPKIHandler) CreateEnrollmentToken(c *gin.Context) {
 	pki, err := h.pki()
 	switch {
 	case errors.Is(err, agentpki.ErrDisabled):
-		kernelError(c, http.StatusConflict, "agent_pki_disabled", agentpki.ErrDisabled.Error())
+		kernelError(c, http.StatusConflict, "agent_pki_disabled", err.Error())
 		return
 	case err != nil:
 		kernelError(c, http.StatusServiceUnavailable, "agent_pki_unavailable", "the agent PKI is unavailable")

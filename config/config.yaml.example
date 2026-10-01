@@ -237,7 +237,8 @@ grpc:
 # optional: verify a certificate when an agent presents one, else accept the
 # node API key; preferred: same, with a deprecation header for API keys;
 # required: the Agent services take certificates only. preferred and required
-# need grpc.tls_cert_file and the built-in module PKI (module_runtime).
+# need grpc.tls_cert_file and the built-in CA (module_runtime.ca_kek; the
+# module runtime itself may stay disabled).
 agent_control:
   mtls: "optional"
 

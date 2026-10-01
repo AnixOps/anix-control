@@ -17,6 +17,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
 	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
 	"github.com/AnixOps/anix-control/v4/internal/service"
+	"gorm.io/gorm"
 )
 
 // moduleCAMaintenanceInterval is how often the kernel promotes a rotated
@@ -106,12 +107,24 @@ func (rt *serverRuntime) startModuleRuntime(cfg *config.Config, hosts *pluginhos
 		}
 	})
 	rt.workers.Go("module bridge session sweeper", bridge.Run)
-	if authority != nil {
-		rt.workers.Go("module CA maintenance", func(ctx context.Context) {
-			maintainModuleCA(ctx, authority)
-		})
-	}
 	log.Printf("Module runtime listening on %s (cluster %s, %s PKI)", listener.Addr(), cluster, settings.PKIOrDefault())
+	return nil
+}
+
+// startKernelCAMaintenance runs the built-in CA's maintenance. The CA signs
+// module and agent certificates, so it runs whenever the CA is configured
+// (module_runtime.ca_kek), with or without the module listener.
+func (rt *serverRuntime) startKernelCAMaintenance(cfg *config.Config, db *gorm.DB) error {
+	authority, err := modulepki.FromConfig(cfg.ModuleRuntime, db)
+	if errors.Is(err, modulepki.ErrBuiltinPKIDisabled) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("built-in CA: %w", err)
+	}
+	rt.workers.Go("module CA maintenance", func(ctx context.Context) {
+		maintainModuleCA(ctx, authority)
+	})
 	return nil
 }
 

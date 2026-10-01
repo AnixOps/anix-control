@@ -10,6 +10,7 @@ import (
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/v4/internal/agentpki"
+	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/modulepki"
 	"github.com/stretchr/testify/assert"
@@ -412,4 +413,23 @@ func TestNewValidatesOptions(t *testing.T) {
 	require.Error(t, err)
 	_, err = agentpki.FromConfig(nil, nil)
 	require.True(t, errors.Is(err, agentpki.ErrDisabled))
+}
+
+func TestFromConfigUsesTheCAAlone(t *testing.T) {
+	db := openSQLiteForConfig(t)
+	cfg := &config.Config{ModuleRuntime: config.ModuleRuntimeConfig{
+		CAKEK: "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=", Cluster: "edge",
+	}}
+	pki, err := agentpki.FromConfig(cfg, db)
+	require.NoError(t, err, "the module runtime need not be enabled")
+	assert.Equal(t, "edge", pki.Cluster())
+	assert.Equal(t, agentpki.DefaultCertificateLifetime, pki.Lifetime())
+
+	external := &config.Config{ModuleRuntime: config.ModuleRuntimeConfig{Enabled: true, PKI: config.ModulePKIExternal}}
+	_, err = agentpki.FromConfig(external, db)
+	require.ErrorIs(t, err, agentpki.ErrExternalPKI)
+	require.ErrorIs(t, err, agentpki.ErrDisabled)
+	_, err = agentpki.FromConfig(&config.Config{}, db)
+	require.ErrorIs(t, err, agentpki.ErrDisabled)
+	require.NotErrorIs(t, err, agentpki.ErrExternalPKI)
 }

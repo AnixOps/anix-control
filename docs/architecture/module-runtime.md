@@ -75,7 +75,10 @@ that serves `ModulePKI` arrives with `Bind`.
   - The CA certificate carries a name constraint: only `spiffe://anixops/...`
     URIs can chain to it.
   - The kernel creates the CA at startup (under the bootstrap lock) when
-    `module_runtime.enabled` is true and `module_runtime.pki` is `builtin`.
+    `module_runtime.pki` is `builtin` and `module_runtime.ca_kek` is set.
+    The CA does not need the module listener: with
+    `module_runtime.enabled: false` it still signs agent certificates
+    ("Agent PKI" below), and its rotation maintenance runs either way.
   - Rotation keeps a `current` and a `next` CA. The trust bundle carries
     both, and issuing switches to `next` only after one full certificate
     lifetime.
@@ -185,7 +188,7 @@ gRPC listener (`grpc.*`, port 50051), not on the module listener.
   | `required` (v5) | the Agent services refuse the call; `Enroll` accepts only enrollment credentials. The v2board services keep the legacy credential for third-party node software (the F3 decision) |
 
   `preferred` and `required` need `grpc.tls_cert_file`/`grpc.tls_key_file`
-  and the built-in module PKI; the kernel refuses to start without them.
+  and the built-in CA; the kernel refuses to start without them.
 - **Revocation.** Every certificate is recorded in
   `v4_kernel_agent_certificate` (serial, node kind and id, enrollment,
   issuer, `not_after`, `revoked_at`). Disabling a proxy node, replacing a
@@ -194,12 +197,17 @@ gRPC listener (`grpc.*`, port 50051), not on the module listener.
   the same transaction. The listener answers revocation from a cache of at
   most 30 s; revocations in the same process apply at once. Expired records
   are pruned hourly.
-- **Requirements.** Agent enrollment needs the built-in module PKI
-  (`module_runtime.enabled: true`, `pki: builtin`, `ca_kek`). Without it
-  `Enroll` answers `FailedPrecondition`, client certificates are not
-  requested, and `optional` behaves exactly as before. Client certificates
-  need the listener's own TLS: behind a TLS-terminating proxy they do not
-  reach Control.
+- **Requirements.** Agent enrollment needs only the built-in CA:
+  `module_runtime.ca_kek` with `module_runtime.pki: builtin` (the default).
+  `module_runtime.enabled` may stay `false`; the module listener (`:7443`)
+  and the remote runtime then stay off, and `module_runtime.cluster` still
+  names the cluster in agent SPIFFE IDs. With `pki: external` the kernel
+  holds no CA key, so agent enrollment is off (`optional` only; the other
+  modes refuse to start). Without the CA, `Enroll` answers
+  `FailedPrecondition`, client certificates are not requested, and
+  `optional` behaves exactly as before. Client certificates need the
+  listener's own TLS: behind a TLS-terminating proxy they do not reach
+  Control.
 
 ## Bind, sessions and fencing
 

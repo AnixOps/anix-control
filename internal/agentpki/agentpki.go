@@ -48,10 +48,13 @@ const (
 )
 
 var (
-	// ErrDisabled means the kernel does not run the built-in module CA
-	// (module_runtime.enabled with pki: builtin), which signs agent
-	// certificates.
-	ErrDisabled = errors.New("agent enrollment needs the built-in module PKI (module_runtime.enabled with pki: builtin)")
+	// ErrDisabled means the kernel does not run the built-in CA, which signs
+	// agent certificates. It needs module_runtime.ca_kek with pki builtin;
+	// the module listener (module_runtime.enabled) need not run.
+	ErrDisabled = errors.New("agent enrollment needs the built-in CA (module_runtime.ca_kek with module_runtime.pki: builtin)")
+	// ErrExternalPKI is ErrDisabled with module_runtime.pki external: the
+	// kernel holds no CA key, so it cannot issue agent certificates.
+	ErrExternalPKI = fmt.Errorf("%w: module_runtime.pki is external, so the kernel holds no CA key to issue agent certificates", ErrDisabled)
 	// ErrEnrollmentRejected is the single answer to any unusable bootstrap
 	// credential, so credentials cannot be probed.
 	ErrEnrollmentRejected = errors.New("agent enrollment rejected")
@@ -119,10 +122,15 @@ func New(opts Options) (*Service, error) {
 	}, nil
 }
 
-// FromConfig returns the agent PKI of the built-in module CA, or ErrDisabled.
+// FromConfig returns the agent PKI of the built-in CA, or ErrDisabled
+// (ErrExternalPKI with an external PKI). It does not need the module
+// runtime: module_runtime.ca_kek alone configures the CA.
 func FromConfig(cfg *config.Config, db *gorm.DB) (*Service, error) {
 	if cfg == nil {
 		return nil, ErrDisabled
+	}
+	if cfg.ModuleRuntime.PKIOrDefault() == config.ModulePKIExternal {
+		return nil, ErrExternalPKI
 	}
 	authority, err := modulepki.FromConfig(cfg.ModuleRuntime, db)
 	if errors.Is(err, modulepki.ErrBuiltinPKIDisabled) {

@@ -282,10 +282,13 @@ agent_control:
 | `required` | are refused by the Agent services; `Enroll` takes only one-time enrollment credentials |
 
 - Agents get certificates from `anix.agent.v1.AgentEnrollment`, signed by the
-  built-in module CA (`module_runtime.enabled: true`, `pki: builtin`). Without
-  it, `optional` behaves exactly as before.
+  built-in CA. It needs only `module_runtime.ca_kek`
+  (`ANIX_CONTROL_MODULE_RUNTIME_CA_KEK`, 32 bytes, base64 or hex) with
+  `module_runtime.pki: builtin`; `module_runtime.enabled` and the module
+  listener are not needed. Without the CA, or with `pki: external`,
+  `optional` behaves exactly as before.
 - `preferred` and `required` need `grpc.tls_cert_file`, `grpc.tls_key_file`
-  and the built-in module PKI; startup fails otherwise.
+  and the built-in CA; startup fails otherwise.
 - Enrollment credentials: `anix-control agent token create -node proxy-12`
   or `POST /api/v4/kernel/agents/enrollment-tokens`. Details in
   [`../architecture/module-runtime.md`](../architecture/module-runtime.md#agent-pki).

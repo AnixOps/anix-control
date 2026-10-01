@@ -607,6 +607,11 @@
     unchanged), `preferred` (a legacy control stream is answered with
     `x-anix-auth-deprecated`) or `required` (certificates only on the Agent
     services).
+  - Agent enrollment needs only the built-in CA: `module_runtime.ca_kek`
+    with `pki: builtin`. `module_runtime.enabled` and the `:7443` module
+    listener are not needed; the kernel now creates the CA, and runs its
+    rotation maintenance, whenever `ca_kek` is set. With `pki: external`
+    agent enrollment is off. See `docs/UPGRADE.md`.
   - New tables `v4_kernel_agent_enrollment` and
     `v4_kernel_agent_certificate`, protected from package adoption.
     Disabling or deleting a node and replacing a forward node's token revoke

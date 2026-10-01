@@ -55,8 +55,9 @@ type AgentControlConfig struct {
 	// (legacy credentials still work; the control stream answers them with
 	// a deprecation header) or "required" (the Agent services accept
 	// certificates only).
-	// Certificates come from AgentEnrollment and need the built-in module
-	// PKI and grpc.tls_cert_file.
+	// Certificates come from AgentEnrollment and need the built-in CA
+	// (module_runtime.ca_kek with pki builtin; module_runtime.enabled is not
+	// needed) and grpc.tls_cert_file.
 	MTLS string `yaml:"mtls"`
 }
 
@@ -509,7 +510,8 @@ func (c *Config) ValidateForServer() error {
 
 // validateAgentControl checks agent_control.mtls. Modes other than optional
 // need what verifies client certificates: TLS on the gRPC listener and the
-// built-in module CA that signs agent certificates.
+// built-in CA that signs agent certificates (module_runtime.ca_kek with pki
+// builtin; the module listener need not run).
 func (c *Config) validateAgentControl() error {
 	mode := c.AgentControl.MTLSOrDefault()
 	switch mode {
@@ -525,8 +527,11 @@ func (c *Config) validateAgentControl() error {
 	if strings.TrimSpace(c.GRPC.TLSCertFile) == "" || strings.TrimSpace(c.GRPC.TLSKeyFile) == "" {
 		return fmt.Errorf("agent_control.mtls %q needs TLS on the gRPC listener (grpc.tls_cert_file and grpc.tls_key_file)", mode)
 	}
-	if !c.ModuleRuntime.Enabled || c.ModuleRuntime.PKIOrDefault() != ModulePKIBuiltin {
-		return fmt.Errorf("agent_control.mtls %q needs the built-in module PKI (module_runtime.enabled with pki: builtin), which signs agent certificates", mode)
+	if c.ModuleRuntime.PKIOrDefault() != ModulePKIBuiltin {
+		return fmt.Errorf("agent_control.mtls %q needs the built-in CA: with module_runtime.pki %q the kernel holds no CA key to issue agent certificates", mode, c.ModuleRuntime.PKIOrDefault())
+	}
+	if strings.TrimSpace(c.ModuleRuntime.CAKEK) == "" {
+		return fmt.Errorf("agent_control.mtls %q needs the built-in CA, which signs agent certificates: set module_runtime.ca_kek (%sMODULE_RUNTIME_CA_KEK); module_runtime.enabled is not needed", mode, EnvPrefix)
 	}
 	return nil
 }
@@ -589,6 +594,14 @@ func (m ModuleRuntimeConfig) PKIOrDefault() string {
 		return ModulePKIBuiltin
 	}
 	return strings.TrimSpace(m.PKI)
+}
+
+// BuiltinCA reports whether the kernel runs its built-in CA: pki is builtin
+// and either the module runtime is enabled (which requires ca_kek) or
+// ca_kek is set. The CA does not depend on the module listener: agent
+// enrollment uses it with module_runtime.enabled false.
+func (m ModuleRuntimeConfig) BuiltinCA() bool {
+	return m.PKIOrDefault() == ModulePKIBuiltin && (m.Enabled || strings.TrimSpace(m.CAKEK) != "")
 }
 
 // CertLifetimeOrDefault returns the configured certificate lifetime, 24h when

@@ -582,6 +582,9 @@ func (rt *serverRuntime) start(cfg *config.Config, intervals pluginPollIntervals
 	rt.startSubscriberChangePruner()
 	rt.startOrderPaymentReconciler()
 	rt.startAgentPKIMaintenance()
+	if err := rt.startKernelCAMaintenance(cfg, database.Get()); err != nil {
+		return err
+	}
 	pluginhost.SetDefaultManager(nil)
 	if cfg.Plugins.ControlExecutionEnabled {
 		hosts, err := newControlPluginHostManager(cfg)

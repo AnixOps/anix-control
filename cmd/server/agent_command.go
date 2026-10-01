@@ -22,7 +22,8 @@ const agentCommandUsage = `usage:
 token create prints a one-time agent enrollment credential (anixagt_...)
 bound to the node, valid for at most 7 days. The agent presents it to
 AgentEnrollment.Enroll on the gRPC listener. Agent enrollment needs the
-built-in module PKI (module_runtime.enabled with pki: builtin).
+built-in CA (module_runtime.ca_kek with pki: builtin); the module runtime
+need not be enabled.
 
 The config file comes from ANIX_CONTROL_CONFIG or config/config.yaml.`
 
@@ -89,14 +90,18 @@ func (rt *serverRuntime) startAgentPKIMaintenance() {
 }
 
 // agentPKIForGRPC returns the agent PKI the gRPC listener verifies client
-// certificates with: nil, with a notice, when the built-in module PKI is
-// off, which agent_control.mtls optional allows.
+// certificates with: nil when the built-in CA is off (or the PKI is
+// external), which agent_control.mtls optional allows. It needs the CA
+// only, not the module runtime or its listener.
 func agentPKIForGRPC(cfg *config.Config, db *gorm.DB) (*agentpki.Service, error) {
 	pki, err := agentpki.FromConfig(cfg, db)
 	switch {
 	case errors.Is(err, agentpki.ErrDisabled):
 		if mode := cfg.AgentControl.MTLSOrDefault(); mode != config.AgentMTLSOptional {
 			return nil, fmt.Errorf("agent_control.mtls %q: %w", mode, err)
+		}
+		if errors.Is(err, agentpki.ErrExternalPKI) {
+			log.Printf("Agent enrollment is off: %v", err)
 		}
 		return nil, nil
 	case err != nil:

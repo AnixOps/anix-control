@@ -115,6 +115,17 @@ func openPostgres(t *testing.T) *gorm.DB {
 	return db
 }
 
+// openSQLiteForConfig opens an empty in-memory database.
+func openSQLiteForConfig(t *testing.T) *gorm.DB {
+	t.Helper()
+	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	require.NoError(t, err)
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = sqlDB.Close() })
+	return db
+}
+
 func newFixture(t *testing.T, db *gorm.DB) *fixture {
 	t.Helper()
 	require.NoError(t, db.AutoMigrate(testModels...))
