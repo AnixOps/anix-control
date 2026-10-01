@@ -12,19 +12,32 @@
 // status) only: a payment is created for the caller's own pending order and
 // its exact total.
 //
-// The four callback routes have no native handler and stay bridged: a paid
-// callback marks the payment record and the gateway statistics, marks the
-// order paid and completes it, in one kernel transaction; the order is the
-// order package's, and there is no contract for those writes yet. The
-// PayPal webhook also calls PayPal's API to verify a delivery.
+// The four callback routes (the gateway callback, the x402 callback, the
+// Stripe and PayPal webhooks) verify the provider's signature with the
+// gateway's secrets, as the kernel's do (signatures.go). A paid callback
+// then takes two steps (callbacks.go, docs/architecture/order-service.md):
+//  1. the package marks its payment record paid and adds it to its
+//     gateway's statistics, in one transaction on its own tables;
+//  2. the kernel applies the paid record to its order
+//     (KernelOrder.CompleteOrderPayment, kernel.order.complete.v1): it
+//     re-checks that the record pays the order, marks the order paid and
+//     completes it, in one transaction, once per trade number.
+//
+// Every repeat of a callback whose record is already paid takes step 2
+// again, so a failure between the steps converges on the provider's next
+// delivery; an order is never paid without a paid record. Without a bridge
+// connection the callbacks have no native handler and stay legacy.
 package native
 
 import (
 	"context"
+	"net/http"
 	"time"
 
+	kernelorderv1 "github.com/AnixOps/anix-control/sdk/api/kernelorder/v1"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/AnixOps/anix-control/sdk/v2compat"
+	"google.golang.org/grpc"
 	"gorm.io/gorm"
 )
 
@@ -149,18 +162,29 @@ type BillingOrder struct {
 // TableName is the kernel view.
 func (BillingOrder) TableName() string { return "kapi_order_billing_v1" }
 
+// OrderCompleter is the part of KernelOrder the callbacks call.
+type OrderCompleter interface {
+	CompleteOrderPayment(ctx context.Context, in *kernelorderv1.CompleteOrderPaymentRequest, opts ...grpc.CallOption) (*kernelorderv1.CompleteOrderPaymentResponse, error)
+}
+
 // Service holds what the native routes need.
 type Service struct {
 	// Open returns the package's storage connection, on which the adopted
 	// tables and the granted view are visible.
 	Open func(ctx context.Context) (*gorm.DB, error)
+	// Orders is the kernel's KernelOrder; without it the callbacks have no
+	// native handler and stay legacy.
+	Orders OrderCompleter
+	// HTTPClient calls PayPal's API to verify a webhook delivery; nil uses
+	// a client with the kernel's 10-second timeout.
+	HTTPClient *http.Client
 	// Now defaults to time.Now.
 	Now func() time.Time
 }
 
 // Handlers returns the native handlers by route id.
 func (s *Service) Handlers() map[string]pluginhostsdk.NativeHandler {
-	return map[string]pluginhostsdk.NativeHandler{
+	handlers := map[string]pluginhostsdk.NativeHandler{
 		"payment.admin.payment.gateways.get":            s.AdminGateways,
 		"payment.admin.payment.gateways.post":           s.AdminCreateGateway,
 		"payment.admin.payment.gateways.id.put":         s.AdminUpdateGateway,
@@ -178,6 +202,13 @@ func (s *Service) Handlers() map[string]pluginhostsdk.NativeHandler {
 		"payment.payment.x402.check.id.get":             s.X402CheckPayment,
 		"payment.payment.fiat.create.post":              s.FiatCreatePayment,
 	}
+	if s.Orders != nil {
+		handlers[CallbackRouteID] = s.PaymentCallback
+		handlers[X402CallbackRouteID] = s.X402Callback
+		handlers[StripeWebhookRouteID] = s.StripeWebhook
+		handlers[PayPalWebhookRouteID] = s.PayPalWebhook
+	}
+	return handlers
 }
 
 func (s *Service) now() time.Time {

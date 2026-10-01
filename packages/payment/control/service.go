@@ -4,9 +4,11 @@ import (
 	"context"
 	"log"
 
+	kernelorderv1 "github.com/AnixOps/anix-control/sdk/api/kernelorder/v1"
 	"github.com/AnixOps/anix-control/sdk/packagestoresdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/AnixOps/anix-control/v4/packages/payment/native"
+	"google.golang.org/grpc"
 	"gorm.io/gorm"
 )
 
@@ -20,8 +22,9 @@ type paymentBridge interface {
 // paymentRoutes have a native handler on the adopted v2_payment_gateway,
 // v2_payment_record and v2_payment tables and the order view; such a route
 // serves natively once the kernel sets its mode, and falls back to the
-// legacy handler otherwise. The routes in bridgedRoutes always relay to the
-// legacy handler.
+// legacy handler otherwise. The callbacks complete orders through the
+// kernel's KernelOrder over the bridge connection (local socket or module
+// listener); a bridge without one leaves them legacy.
 func newPaymentService(bridge paymentBridge, leaseID string) (*pluginhostsdk.Router, error) {
 	storage := packagestoresdk.SharedOpener(bridge)
 	service := &native.Service{Open: func(ctx context.Context) (*gorm.DB, error) {
@@ -31,19 +34,23 @@ func newPaymentService(bridge paymentBridge, leaseID string) (*pluginhostsdk.Rou
 		}
 		return store.DB.WithContext(ctx), nil
 	}}
+	if conn, ok := bridge.(interface {
+		Conn() grpc.ClientConnInterface
+	}); ok && conn.Conn() != nil {
+		service.Orders = kernelorderv1.NewKernelOrderClient(conn.Conn())
+	}
 	return pluginhostsdk.NewRouter(pluginhostsdk.RouterConfig{
 		PackageID: "payment", LeaseID: leaseID, Bridge: bridge, Logf: log.Printf,
 		AllowRoute: func(routeID string) bool {
-			_, nativeRoute := paymentRoutes[routeID]
-			_, bridgedRoute := bridgedRoutes[routeID]
-			return nativeRoute || bridgedRoute
+			_, allowed := paymentRoutes[routeID]
+			return allowed
 		},
 		Native: service.Handlers(),
 	})
 }
 
-// paymentRoutes are the package's compatibility routes with a native
-// handler.
+// paymentRoutes are the package's compatibility routes, each with a native
+// handler; the callbacks' need the bridge connection.
 var paymentRoutes = map[string]struct{}{
 	"payment.admin.payment.gateways.get":            {},
 	"payment.admin.payment.gateways.post":           {},
@@ -61,19 +68,8 @@ var paymentRoutes = map[string]struct{}{
 	"payment.payment.x402.create.post":              {},
 	"payment.payment.x402.check.id.get":             {},
 	"payment.payment.fiat.create.post":              {},
-}
-
-// bridgedRoutes are the package's compatibility routes without a native
-// handler; they always relay to the kernel's legacy handler. A paid
-// callback or webhook marks the payment record and the gateway statistics,
-// marks the order paid and completes it (granting its plan), all in one
-// kernel transaction. The order is the order package's table and there is
-// no contract for those writes yet, so the callbacks stay with the kernel,
-// and with them the provider signature checks. The PayPal webhook also calls
-// PayPal's API to verify each delivery.
-var bridgedRoutes = map[string]struct{}{
-	"payment.callback":                    {},
-	"payment.payment.x402.callback.post":  {},
-	"payment.payment.stripe.webhook.post": {},
-	"payment.payment.paypal.webhook.post": {},
+	"payment.callback":                              {},
+	"payment.payment.x402.callback.post":            {},
+	"payment.payment.stripe.webhook.post":           {},
+	"payment.payment.paypal.webhook.post":           {},
 }

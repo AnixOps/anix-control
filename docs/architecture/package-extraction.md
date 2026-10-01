@@ -28,11 +28,11 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   WebSocket routes use `registeredPackageWebSocketRoute`.
 - `config/package-extraction.json` records each route's extraction mode
   (`bridged`, `native-flagged` or `native`) and where its legacy handler lives
-  (`router`, `identity-bridge` or `none`). 160 routes are `native-flagged`:
+  (`router`, `identity-bridge` or `none`). 164 routes are `native-flagged`:
   identity-platform (22: group A's 15, the profile, dashboard, user detail,
   user list and user statistics, and the traffic and subscription resets),
   affiliate (8), forward (17), gost-mesh (3), knowledge (6), machine-telemetry
-  (2), notification (22), order (13), payment (16), plan (7), platform (5),
+  (2), notification (22), order (13), payment (20), plan (7), platform (5),
   protocol-runtime (3), proxy-node (7), subscription (20), ticket (8) and
   wireguard (1). The rest are `bridged`. The identity routes are
   `identity-bridge`. `check_plugin_only_routes.py` enforces the map against
@@ -288,11 +288,18 @@ refresh of the kernel's in-memory copies.
     one. The parity cases include other users' orders, orders whose plan or
     buyer was deleted, and every list filter and paging edge.
 - **Payment (in place).** 16 of 20 routes run on the adopted
+  - The kernel keeps writing `v2_order`: it marks orders paid and completes
+    them for the payment callbacks, legacy or through `KernelOrder`
+    (`order-service.md`), and the dashboard and invite statistics read it.
+  - The four order list and detail routes stay bridged. Their answers embed
+    the buyer's whole `v2_user` row, subscription token and proxy UUID
+    included, which no kernel view may expose.
+- **Payment (in place).** All 20 routes run on the adopted
   `v2_payment_gateway`, `v2_payment_record` and `v2_payment` tables, proved
   by `internal/tests/paymentcompat`: gateway administration, payment records
   and statistics, the user's channels, payments and their status, the method
-  list, and the x402 and fiat payment creation (stubs that call no provider,
-  on both sides).
+  list, the x402 and fiat payment creation (stubs that call no provider, on
+  both sides), and the four provider callbacks.
   - Payment owns the gateways and so holds their secrets (merchant keys,
     webhook secrets) through the adopted `v2_payment_gateway`. Its
     administrator answers show them as `********`, as the kernel's do.
@@ -307,6 +314,25 @@ refresh of the kernel's in-memory copies.
     signature checks stay with them, and the PayPal webhook calls PayPal's
     API to verify each delivery.
 - **Affiliate (in place).** All 8 routes run on the adopted
+    the Stripe and PayPal webhooks) verify the provider's signature with the
+    gateway's secrets, as the kernel's do; the PayPal webhook calls PayPal's
+    API for it. A paid callback takes two steps (`order-service.md`):
+    1. the module marks the record paid and adds it to the gateway's
+       statistics, in one transaction on its tables;
+    2. the kernel applies the paid record to its order through
+       `KernelOrder.CompleteOrderPayment` (`kernel.order.complete.v1`): it
+       re-checks that the record pays the order (the record's user, a pending
+       order, the amount covering its total), marks it paid and completes it
+       with `order:<id>`, in one transaction, once per trade number.
+
+    A repeat of a callback whose record is already paid runs step 2 again, so
+    a failure between the steps converges and no order is paid without a
+    paid record. The kernel's legacy callbacks call the same function in
+    their single transaction. If step 2 fails, the module's callback fails
+    (502) so the provider delivers again; the kernel's answers its own
+    error. The parity test runs the real KernelOrder server: 78 callback
+    cases on SQLite and PostgreSQL each.
+- **Affiliate (in place).** 7 of 8 routes run on the adopted
   `v2_commission_record`, `v2_commission_withdraw` and `v2_invite_config`
   tables, proved by `internal/tests/affiliatecompat`: the user's commissions,
   withdrawals and withdrawal request, and the administrator's withdrawal
@@ -938,9 +964,8 @@ Next quarter, in dependency order:
    grant on `v2_order(status, paid_at)`, replay payment-callback fixtures.
    A successful callback marks the payment and order paid and completes the
    order (owner decision, 2026-09-30, `subscriber-service.md`). Order (9 of
-   13 routes) and payment (16 of 20) are in place (section 3.4); the
-   callbacks, which write the payment and the order in one transaction, are
-   not.
+   13 routes) and payment (20 of 20) are in place (section 3.4); the
+   callbacks complete orders through `KernelOrder` (`order-service.md`).
 3. subscription + proxy-node (56 routes plus parser and gRPC): map
    `/s/:token` and UniProxy v1 through a kernel-side `Gateway.ServeRoute`.
 4. forward (79 routes, ~12k lines of forward handler/service code, 6 workers).

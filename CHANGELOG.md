@@ -642,6 +642,24 @@
     and nothing is recorded.
   - It is served on local package bridge sessions and the module listener,
     to official packages only, authorized on every call.
+- **Payment module: the provider callbacks.** `packages/payment` now serves
+  all 20 of its routes natively and declares `kernel.order.complete.v1`:
+  `POST /api/v2/payment/callback/:type` (EPay), the x402 callback, and the
+  Stripe and PayPal webhooks. Without a bridge connection they stay legacy.
+  - The provider signature checks are ported as is, with the gateways'
+    secrets from the adopted `v2_payment_gateway`. The PayPal webhook calls
+    PayPal's API from the payment host.
+  - A paid callback records the payment and the gateway statistics in the
+    module's tables, commits, then asks `KernelOrder` to complete the
+    order. A repeat of a paid payment asks again, so a failure between the
+    steps converges on the provider's next delivery, and no order is paid
+    without a paid payment. If the kernel cannot be reached the callback
+    fails with 502, so the provider delivers it again.
+  - `internal/tests/paymentcompat` runs the real `KernelOrder` server in
+    process. It proves byte parity and the same payment records, gateway
+    statistics, orders, subscribers, request ledger and change log on SQLite
+    and PostgreSQL (78 callback cases each), with PayPal's API faked on
+    both sides. 151 of 292 routes are now `native-flagged`.
 - **Subscription group membership in `KernelSubscriber`.** The contract
   gains `GrantSubscriptionGroup`, `RevokeSubscriptionGroup` and
   `RemoveSubscriptionGroupMembers`, under the new capability
