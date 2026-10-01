@@ -4,6 +4,32 @@
 
 ### Security
 
+- A payment can no longer activate an order it does not pay.
+  `POST /api/v2/user/payment/create` took any `order_id` with any amount the
+  gateway allowed, and a paid callback marked that order paid and assigned
+  its plan: a user could pay the gateway minimum for any plan, or attach
+  another user's order.
+  - **Creation.** With an `order_id`, the order must be the caller's, still
+    pending, and the amount its total to the cent. Otherwise the answer is
+    `订单不存在`, `订单已支付或已取消` or `支付金额与订单金额不符`.
+    `/api/v2/payment/x402/create` and `/api/v2/payment/fiat/create` also
+    answer `订单不存在` for another user's order; their amounts already
+    came from the order.
+  - **Callbacks.** A paid callback for a record created before this fix that
+    names another user's order, or pays less than its total, records the
+    payment but leaves the order unpaid and its plan unassigned. Such a
+    payment is logged for an administrator.
+- Users see only their own payment records. `GET /api/v2/payment/x402/check/:id`
+  (by trade number or numeric id) and `GET /api/v2/user/payment/status/:trade_no`
+  answered any user's record; another user's record is now `支付记录不存在`.
+  The public `GET /api/v2/payment/status/:trade_no` is unchanged.
+- Administrators' payment gateway responses no longer carry secrets. The
+  gateway list, create and update answers showed the whole `config`, with
+  EPay's `key`, Stripe's `secret_key` and `webhook_secret`, PayPal's
+  `client_secret` and similar values. These now read `********`.
+  - A configuration saved back with `********` keeps the stored secret, so
+    the admin page's edit form works unchanged.
+  - A configuration that is not a JSON object is shown as `********` whole.
 - The administrator audit trail no longer records credentials. The audit
   middleware stored the raw body of every administrator write request in
   `v2_audit_log.request_body` (up to 4 KiB) and logged its first 512 bytes.

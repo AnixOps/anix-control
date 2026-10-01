@@ -1343,7 +1343,10 @@ func (s *PaymentGatewayExtendedTestSuite) TestGetPaymentStatus_Success() {
 	s.db.Create(record)
 
 	handler := NewPaymentGatewayHandler()
-	s.router.GET("/payment/status/:trade_no", handler.GetPaymentStatus)
+	s.router.GET("/payment/status/:trade_no", func(c *gin.Context) {
+		c.Set("user_id", s.testUser.ID)
+		handler.GetPaymentStatus(c)
+	})
 
 	req, _ := http.NewRequest("GET", "/payment/status/PAY-STATUS-001", nil)
 	w := httptest.NewRecorder()

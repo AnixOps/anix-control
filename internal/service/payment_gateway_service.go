@@ -4,6 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"math"
@@ -16,6 +17,61 @@ import (
 // PaymentGatewayService 支付网关服务
 type PaymentGatewayService struct {
 	db *gorm.DB
+}
+
+// Errors of CheckOrderPayable, in the messages the payment routes answer.
+var (
+	ErrPaymentOrderNotFound   = errors.New("订单不存在")
+	ErrPaymentOrderNotPending = errors.New("订单已支付或已取消")
+	ErrPaymentAmountMismatch  = errors.New("支付金额与订单金额不符")
+)
+
+// AmountPaysOrder reports whether amount (yuan) is an order's total (cents)
+// to the cent.
+func AmountPaysOrder(amount float64, totalCents int64) bool {
+	return math.Round(amount*100) == float64(totalCents)
+}
+
+// CheckOrderPayable checks that a payment of amount (yuan) that userID
+// creates for orderID pays it: the order is the caller's, still pending, and
+// the amount is its total. A payment record names the order it pays, and a
+// successful callback marks that order paid and activates it, so a record
+// may not name another user's order or pay less than its total.
+func (s *PaymentGatewayService) CheckOrderPayable(orderID, userID uint, amount float64) error {
+	var order model.Order
+	if err := s.db.Select("id", "user_id", "status", "total_amount").Where("id = ?", orderID).Take(&order).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return ErrPaymentOrderNotFound
+		}
+		return err
+	}
+	if order.UserID != userID {
+		return ErrPaymentOrderNotFound
+	}
+	if order.Status != 0 {
+		return ErrPaymentOrderNotPending
+	}
+	if !AmountPaysOrder(amount, order.TotalAmount) {
+		return ErrPaymentAmountMismatch
+	}
+	return nil
+}
+
+// recordPaysOrder reports whether a payment record pays its order: the
+// order exists, belongs to the record's user and costs no more than the
+// record's amount. Records created before CheckOrderPayable could name any
+// order with any amount; their payment is still recorded, but such an order
+// is left unchanged.
+func recordPaysOrder(tx *gorm.DB, record model.PaymentRecord, orderID uint) (bool, error) {
+	var order model.Order
+	err := tx.Select("id", "user_id", "total_amount").Where("id = ?", orderID).Take(&order).Error
+	switch {
+	case errors.Is(err, gorm.ErrRecordNotFound):
+		return false, nil
+	case err != nil:
+		return false, err
+	}
+	return order.UserID == record.UserID && math.Round(record.Amount*100) >= float64(order.TotalAmount), nil
 }
 
 func paymentGatewayEnabledTypes() []string {
@@ -297,6 +353,14 @@ func (s *PaymentGatewayService) markOrderPaid(tradeNo string, gatewayTradeNo str
 
 		// 更新关联订单状态
 		if record.OrderID != nil {
+			pays, err := recordPaysOrder(tx, record, *record.OrderID)
+			if err != nil {
+				return err
+			}
+			if !pays {
+				log.Printf("payment %s does not pay order %d (another user's order, a lower amount or no such order); the order is left unchanged", tradeNo, *record.OrderID)
+				return nil
+			}
 			paidAt := time.Now().Unix()
 			if err := tx.Model(&model.Order{}).Where("id = ?", *record.OrderID).Updates(map[string]any{
 				"status":  1, // paid

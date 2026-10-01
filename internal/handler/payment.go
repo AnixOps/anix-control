@@ -108,6 +108,11 @@ func (h *PaymentHandler) X402CreatePayment(c *gin.Context) {
 		panelError(c, "数据库错误")
 		return
 	}
+	if order.UserID != c.GetUint("user_id") {
+		// Another user's order is answered as a missing one.
+		panelError(c, "订单不存在")
+		return
+	}
 
 	if order.Status != 0 { // 0: pending
 		panelError(c, "订单已支付或已取消")
@@ -287,6 +292,10 @@ func (h *PaymentHandler) X402CheckPayment(c *gin.Context) {
 			payment, err = h.getPaymentRecordByID(id)
 		}
 	}
+	if err == nil && payment.UserID != c.GetUint("user_id") {
+		// Another user's payment is answered as a missing one.
+		err = gorm.ErrRecordNotFound
+	}
 
 	if err != nil {
 		if err == gorm.ErrRecordNotFound || payment == nil {
@@ -350,6 +359,11 @@ func (h *PaymentHandler) FiatCreatePayment(c *gin.Context) {
 		}
 		log.Printf("fiat payment order lookup failed: %v", err)
 		panelError(c, "数据库错误")
+		return
+	}
+	if order.UserID != c.GetUint("user_id") {
+		// Another user's order is answered as a missing one.
+		panelError(c, "订单不存在")
 		return
 	}
 
