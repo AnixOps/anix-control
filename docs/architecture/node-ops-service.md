@@ -836,6 +836,70 @@ in `internal/service/node_credential_ops.go`; `nodesecrets.Retire`):
   round trip over the bridge (`bridgecontract`); the typed and generated
   secrets through the real gateway, bridge and executors
   (`internal/tests/sealedhandles`).
+**What NO-6 implements: node configuration and agents.** The kernel
+executes `node.sync` (nodeconfig), `agent.operation` (agents) and
+`agent.diagnostic` (diagnose), and serves the agent session RPCs.
+`GetCapabilities.kinds` lists the three.
+
+- **The dispatcher takes node kinds.** `internal/agentstreams.Streams` is
+  the kernel's view of the Agent Control streams by node kind;
+  `internal/grpc.AgentStreams` implements it over the proxy and forward
+  managers, since their ids overlap. The executors dispatch through it and
+  follow the agent's observed states until the terminal one (the
+  acknowledgement moves the operation to `RUNNING` with the stream
+  revision in `node_revision`; `SUCCEEDED`, `FAILED` and `SUPERSEDED` end
+  it; a cancellation sends `operation.cancel`; the deadline ends it
+  `TIMED_OUT` and a late report is evidence only). The NodeOps ledger is
+  the durable record of these dispatches: `v3_kernel_operation` stays the
+  plugin operations' (its rows and `v3_kernel_node_operation_revision` key
+  by proxy node id only, and the kernel never alters a table), so
+  `kernel_operation_id` stays empty for them. After a kernel restart the
+  engine's recovery applies: `node.sync` runs again, the others end
+  `FAILED` (retryable).
+- **`node.sync`.** `kernelnodeops.SyncNode` rebuilds the node's desired
+  configuration (section 5.5), stores it, drops the kernel's node cache,
+  and, when the node's agent holds a stream, pushes `node.reload` through
+  the existing control-stream operation path once the hash changed or the
+  sync is forced. A node on the legacy transports ends `SUCCEEDED` on
+  `LEGACY_PULL`: its next periodic pull reads the stored configuration.
+  `NodeSyncResult` carries the channel, `config_hash`, `config_revision`
+  (field 8, added), `changed`, and the push's operation id, revision and
+  acknowledgement.
+- **`agent.operation`.** `kernelnodeops.DispatchAgentOperation`: the three
+  kinds, the acknowledgement wait bounded by `timeout_seconds` (10 s by
+  default, 60 s at most), then the terminal state. A node without a
+  stream is `NODE_OFFLINE`; a kind the agent does not advertise is
+  `CAPABILITY_MISSING`; a refused acknowledgement is `AGENT_REJECTED` with
+  the agent's reason; a stream that closes before the acknowledgement is
+  `NODE_OFFLINE` (retryable).
+- **`agent.diagnostic`.** `kernelnodeops.RunAgentDiagnostic` validates the
+  action against the whitelist (parameters normalized), writes the task
+  row, then sends the task: as an `agent.diagnostic` operation (payload
+  `{"task": ...}`, the WebSocket's `task.assign` payload) to an agent that
+  advertises the capability of that name, else on the node's WebSocket
+  with the legacy task message as the fallback (`AGENT_WEBSOCKET`). The
+  stream path completes the task row from the agent's report
+  (`state_json`: `success`, `output`, `error`, `duration_ms`).
+- **Agent session RPCs.** `ListAgentSessions` (both transports, both
+  node kinds, ordered by node kind, id and transport), `GetAgentSession`
+  and `GetAgentMonitor` for a proxy node, to holders of
+  `kernel.nodeops.agents.v1`. A session shows its node, transport,
+  version, instance, capabilities, times, revisions and the identity it
+  authenticated by (the SPIFFE ID, or `api-key`); never a key, token or
+  certificate. What an agent reported (system information, observed
+  states, monitor snapshots) is scrubbed like a result.
+- **The legacy routes** `POST /admin/nodes/:id/sync`,
+  `POST /admin/nodes/:id/agent-control/operations`,
+  `POST /admin/agent/tasks` and `POST /admin/agent/execute` call the same
+  functions and answer the same bytes (`internal/handler`'s parity tests
+  pin them); the sync route writes the desired configuration row too.
+- **Tests.** `internal/tests/fakeagent` is the scripted Agent Control
+  client of section 9 against the real listener (API key and
+  certificate), and `internal/tests/nodeopsagent` runs the executors and
+  the RPCs on SQLite and PostgreSQL: the stream and legacy paths, the
+  agent's refusals and failures, a disconnect before and after the
+  acknowledgement, a replaced session, cancellation, the deadline, and a
+  walk of every answer for the fixture's credentials.
 
 ## 4. Node credential split
 
@@ -1264,9 +1328,23 @@ advertised them.
 
 - **Configuration.** `v4_kernel_node_desired_config` holds each node's
   desired revision and hash.
+  - **The table (NO-6).** One row per node kind and id: `revision`
+    (starts at 1, grows by one when the hash changes, never otherwise),
+    `config_hash` (the SHA-256 of the canonical document: sorted keys,
+    no whitespace, so the same configuration always has the same hash),
+    `format` (`anixops.nodeconfig/v1`), `config_json` (the document, with
+    the node's protocol secrets: the table is protected and no call
+    answers it), `excluded_protocols` and `built_at`. A proxy node's
+    document is its node row, raw configuration and enabled protocols
+    through the kernel's builder (`service.BuildNodeProtocolConfig`, the
+    source UniProxy and the gRPC node service share); a forward node's is
+    its node row, legacy rules and tunnels. Two writers of one node are
+    serialized by the row's revision. `kernelnodeops.BuildDesiredConfig`,
+    `StoreDesiredConfig` and `LoadDesiredConfig` are the API A2-3 reads.
   - **Rebuilds.** `SyncNode` and every kernel write that changes what a
     node runs rebuild it: the protocols, the raw configuration, the
-    node's secrets.
+    node's secrets. NO-6 rebuilds on `SyncNode`; the kernel writes follow
+    with A2-3.
   - **Pushes.**
     - When the hash changed, the kernel pushes a `ConfigSnapshot` to a
       connected agent.

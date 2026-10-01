@@ -508,6 +508,38 @@
     rotated (`replace`) or retired with the node.
   - `nodesecrets.Retire` removes the split rows of legacy rows their owner
     is about to delete; `nodesecrets.ReplacePositions` is exported.
+- KernelNodeOps executes the node configuration and agent kinds
+  (`docs/architecture/node-ops-service.md` sections 3.11 and 5.5, NO-6):
+  - `SyncNode` (`node.sync`) rebuilds a node's desired configuration from
+    its rows into the new protected table `v4_kernel_node_desired_config`
+    (one row per node kind and id: a monotonic revision, the SHA-256 of
+    the canonical document, the document), drops the kernel's node cache,
+    and pushes `node.reload` to an agent on the Agent Control stream when
+    the configuration changed or the sync is forced; a node on the legacy
+    transports keeps the stored configuration for its next pull
+    (`LEGACY_PULL`). `NodeSyncResult` gains `config_revision` (field 8).
+  - `AgentControlOperation` (`agent.operation`) sends `agent.ping`,
+    `node.reload` or `users.reload` on the stream and ends with the agent's
+    terminal state; `RunAgentDiagnostic` (`agent.diagnostic`) sends a
+    whitelisted diagnostic task as an `agent.diagnostic` operation to an
+    agent that advertises it, else on the node's WebSocket with the legacy
+    fallback, and completes the task row from the agent's report.
+  - `ListAgentSessions`, `GetAgentSession` and `GetAgentMonitor` answer
+    the live sessions of both transports and both node kinds with the
+    identity each authenticated by (SPIFFE ID or `api-key`), never a
+    credential; what an agent reported is scrubbed.
+  - `GetCapabilities` lists the three kinds. The dispatcher takes node
+    kinds: `internal/grpc.AgentStreams` routes proxy and forward nodes to
+    their own Agent Control managers (`internal/agentstreams`).
+  - The legacy routes `POST /admin/nodes/:id/sync`,
+    `POST /admin/nodes/:id/agent-control/operations`,
+    `POST /admin/agent/tasks` and `POST /admin/agent/execute` run on the
+    same functions and answer the same bytes; the sync route now writes
+    the desired configuration row too.
+  - `internal/tests/fakeagent`: a scripted Agent Control client against
+    the real listener (Hello, acknowledgements, observed states, refusals,
+    replays, a replaced session), and `internal/tests/nodeopsagent`, the
+    executors' tests on SQLite and PostgreSQL.
 - **Sealed secret handles (NO-4)** (`internal/sealedsecrets`,
   `docs/architecture/node-ops-service.md` section 3.7). A package host no
   longer reads a node secret an administrator types, or one shown once in
