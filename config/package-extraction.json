@@ -1198,8 +1198,9 @@
       "path": "/api/v2/admin/system/backup",
       "package_id": "platform",
       "route_id": "platform.admin.system.backup.post",
-      "mode": "bridged",
-      "legacy": "router"
+      "mode": "kernel-owned",
+      "legacy": "router",
+      "reason": "writes an archive of the kernel's database and files to the kernel's disk"
     },
     {
       "method": "GET",
@@ -1238,56 +1239,63 @@
       "path": "/api/v2/admin/system/backups/:id",
       "package_id": "platform",
       "route_id": "platform.admin.system.backups.id.delete",
-      "mode": "bridged",
-      "legacy": "router"
+      "mode": "kernel-owned",
+      "legacy": "router",
+      "reason": "removes a backup archive from the kernel's disk"
     },
     {
       "method": "POST",
       "path": "/api/v2/admin/system/backups/:id/restore",
       "package_id": "platform",
       "route_id": "platform.admin.system.backups.id.restore.post",
-      "mode": "bridged",
-      "legacy": "router"
+      "mode": "kernel-owned",
+      "legacy": "router",
+      "reason": "restores the kernel's database and files from an archive on the kernel's disk"
     },
     {
       "method": "GET",
       "path": "/api/v2/admin/system/configs",
       "package_id": "platform",
       "route_id": "platform.admin.system.configs.get",
-      "mode": "bridged",
-      "legacy": "router"
+      "mode": "kernel-owned",
+      "legacy": "router",
+      "reason": "lists every key of v2_system_config; no package gets a settings grant over every namespace (settings-service.md)"
     },
     {
       "method": "DELETE",
       "path": "/api/v2/admin/system/configs/:key",
       "package_id": "platform",
       "route_id": "platform.admin.system.configs.key.delete",
-      "mode": "bridged",
-      "legacy": "router"
+      "mode": "kernel-owned",
+      "legacy": "router",
+      "reason": "deletes any key of v2_system_config; no package gets a grant over every namespace (settings-service.md)"
     },
     {
       "method": "GET",
       "path": "/api/v2/admin/system/configs/:key",
       "package_id": "platform",
       "route_id": "platform.admin.system.configs.key.get",
-      "mode": "bridged",
-      "legacy": "router"
+      "mode": "kernel-owned",
+      "legacy": "router",
+      "reason": "reads any key of v2_system_config, secrets in clear; no package gets a grant over every namespace (settings-service.md)"
     },
     {
       "method": "PUT",
       "path": "/api/v2/admin/system/configs/:key",
       "package_id": "platform",
       "route_id": "platform.admin.system.configs.key.put",
-      "mode": "bridged",
-      "legacy": "router"
+      "mode": "kernel-owned",
+      "legacy": "router",
+      "reason": "writes any key of v2_system_config; no package gets a grant over every namespace (settings-service.md)"
     },
     {
       "method": "GET",
       "path": "/api/v2/admin/system/info",
       "package_id": "machine-telemetry",
       "route_id": "telemetry.admin.system.info.get",
-      "mode": "bridged",
-      "legacy": "router"
+      "mode": "kernel-owned",
+      "legacy": "router",
+      "reason": "the kernel binary's own build metadata (version, build time, commit)"
     },
     {
       "method": "GET",
@@ -1574,56 +1582,63 @@
       "path": "/api/v2/admin/ws/monitor",
       "package_id": "machine-telemetry",
       "route_id": "telemetry.admin.ws.monitor.get",
-      "mode": "bridged",
-      "legacy": "router"
+      "mode": "kernel-owned",
+      "legacy": "router",
+      "reason": "WebSocket route: package hosts always relay WebSockets to the kernel"
     },
     {
       "method": "POST",
       "path": "/api/v2/agent/heartbeat",
       "package_id": "protocol-runtime",
       "route_id": "protocol.agent.heartbeat.post",
-      "mode": "bridged",
-      "legacy": "router"
+      "mode": "kernel-owned",
+      "legacy": "router",
+      "reason": "agent channel: node credentials checked in the kernel; marks the agent seen in its in-memory registry"
     },
     {
       "method": "POST",
       "path": "/api/v2/agent/monitor",
       "package_id": "protocol-runtime",
       "route_id": "protocol.agent.monitor.post",
-      "mode": "bridged",
-      "legacy": "router"
+      "mode": "kernel-owned",
+      "legacy": "router",
+      "reason": "agent channel: stores the authenticated node's monitoring snapshot in the kernel's memory"
     },
     {
       "method": "POST",
       "path": "/api/v2/agent/register",
       "package_id": "protocol-runtime",
       "route_id": "protocol.agent.register.post",
-      "mode": "bridged",
-      "legacy": "router"
+      "mode": "kernel-owned",
+      "legacy": "router",
+      "reason": "agent channel: checks the node's token and records the connection in the kernel's agent registry"
     },
     {
       "method": "POST",
       "path": "/api/v2/agent/result",
       "package_id": "protocol-runtime",
       "route_id": "protocol.agent.result.post",
-      "mode": "bridged",
-      "legacy": "router"
+      "mode": "kernel-owned",
+      "legacy": "router",
+      "reason": "agent channel: the authenticated node completes its tasks and runtime jobs in the kernel"
     },
     {
       "method": "GET",
       "path": "/api/v2/agent/tasks",
       "package_id": "protocol-runtime",
       "route_id": "protocol.agent.tasks.get",
-      "mode": "bridged",
-      "legacy": "router"
+      "mode": "kernel-owned",
+      "legacy": "router",
+      "reason": "agent channel: hands the authenticated node its diagnostic tasks, bridge tasks and runtime jobs"
     },
     {
       "method": "GET",
       "path": "/api/v2/agent/ws",
       "package_id": "protocol-runtime",
       "route_id": "protocol.agent.ws.get",
-      "mode": "bridged",
-      "legacy": "router"
+      "mode": "kernel-owned",
+      "legacy": "router",
+      "reason": "agent WebSocket: a connection the kernel authenticates, holds and pushes to; WebSockets always relay"
     },
     {
       "method": "POST",
@@ -1806,8 +1821,9 @@
       "path": "/api/v2/node/ws",
       "package_id": "proxy-node",
       "route_id": "proxy.node.ws.get",
-      "mode": "bridged",
-      "legacy": "router"
+      "mode": "kernel-owned",
+      "legacy": "router",
+      "reason": "node agent WebSocket: a connection the kernel authenticates, holds and pushes to; WebSockets always relay"
     },
     {
       "method": "POST",

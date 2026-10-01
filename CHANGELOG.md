@@ -321,6 +321,31 @@
   - Users created in the same second keep a stable order
     (`created_at DESC, id DESC`); pages could repeat or skip them.
 
+- **Extraction map: `kernel-owned` routes.** `config/package-extraction.json`
+  has a fourth mode, `kernel-owned`, for routes that stay in the kernel by
+  design; `bridged` now means only "not yet". Each `kernel-owned` row
+  carries a one-line `reason`. Nothing changes at runtime: these routes are
+  registered and relayed as before. 16 routes are `kernel-owned`, 112
+  `bridged` and 164 `native-flagged`:
+  - platform: the generic system configuration routes (no package gets a
+    settings grant over every namespace) and backup creation, deletion and
+    restore (archives on the kernel's disk);
+  - machine-telemetry: the system information and the monitoring WebSocket;
+  - protocol-runtime: the agent channel (registration, heartbeat, task poll,
+    result, monitor and the WebSocket);
+  - proxy-node: the node agent WebSocket.
+
+  `check_plugin_only_routes.py` accepts a `reason` only on `kernel-owned`
+  rows and now checks the package hosts too: a `bridged` or `kernel-owned`
+  route must be in its host's `bridgedRoutes` and named nowhere else in its
+  package, so it has no native handler, and a `native-flagged` or `native`
+  route must not be in `bridgedRoutes`.
+  `docs/architecture/package-extraction.md` has a refreshed status: route
+  counts per package and mode, what unblocks each group of `bridged`
+  routes, the kernel contracts (KernelIdentity, KernelSubscriber,
+  KernelSettings, KernelOrder), the protected tables and the `kapi_*`
+  views. Text that earlier merges duplicated in its section 3.4 is removed.
+
 ### Added
 
 - **KernelSettings contract** (`sdk/api/kernelsettings/v1`,
