@@ -1103,6 +1103,43 @@ adopted table wait for that table to be finalized on an installation (section
 Call names below are `SubmitOperation` kinds unless they are RPCs. "wait T"
 means `wait: TERMINAL` and "wait A" means `wait: ACCEPTED`.
 
+**Diagnoses, as NO-8 built them.** The kernel executes `CheckEndpoints`,
+`CollectNodeStats`, `DiagnoseForward` and `DiagnoseTunnel`
+(`kernelnodeops.Diagnosis`), and `GetCapabilities` lists them.
+
+- **One implementation.** The executors and the legacy routes run the same
+  functions from Control (`internal/service/forward_diagnosis.go`), so a
+  result is what the route computes. The routes' answers are pinned byte for
+  byte (`TestForwardDiagnosisAnswers`, written before the move).
+- **Probes.** An operation's probes run in its executor, at most 8 at a
+  time (`service.DiagnosisProbes`), under the operation's deadline and
+  cancellation. They are not fan-out children: one operation answers one
+  report, as the routes need. A stopped operation keeps the probes that
+  completed, and a stopped endpoint check records nothing.
+- **Outcomes.** Failed probes are the result, not a failed operation. A
+  node, forward or tunnel deleted since the submission is `TARGET_GONE`; a
+  gost node without an API or metrics port is `VALIDATION_FAILED`.
+- **Statistics.** The kernel chooses the source: an Ansible machine's
+  counters (`LOCAL_ANSIBLE`), else the node's gost metrics (`CONTROL_DIAL`).
+  Nothing is recorded, as in the legacy sync.
+- **Endpoint checks.** `record_status` writes what the forward node check
+  writes. The legacy load balancer check differs. After each check it saves
+  the node's row as it was loaded before the check, which overwrites the
+  check's last check, latency and uptime. It marks the node online unless
+  the check returned an error, and an unreachable node is not an error.
+  M3-2 decides whether its native route reproduces that.
+- **Private targets.** Until NO-4 verifies request bindings, the kernel
+  cannot tell an administrator's `DiagnoseForward` from a user's. It checks
+  every forward's targets as a user's (public addresses only, the #84
+  guard). An administrator's diagnosis of a private target therefore stays
+  on the legacy route until then.
+- **Vantage (D10).** Every check and diagnosis carries a `VantageReport`.
+  The node vantage is selected when `CONTROL` was not requested and the
+  agent of every node concerned advertises `diag.v1` (`AgentDirectory`).
+  The kernel does not run diagnoses on agents before A2-5, so it dials from
+  Control and says so in the report. No forward node holds an Agent Control
+  session before A2-1, so the kernel's directory is empty for now.
+
 ### 6.1 forward (59)
 
 **Forward nodes (8): native.** These are rows of `v2_forward_node`. Forward

@@ -583,6 +583,39 @@
   - Contract tests on SQLite and PostgreSQL, and SDK bridge contract tests
     over the local bridge and the module listener.
 
+- **KernelNodeOps diagnoses (NO-8)** (`internal/kernelnodeops`,
+  `docs/architecture/node-ops-service.md` section 6). The kernel executes the
+  diagnose family's `CheckEndpoints`, `CollectNodeStats`, `DiagnoseForward`
+  and `DiagnoseTunnel`, and `GetCapabilities` lists them. No route switches
+  to native; M3 does that.
+  - **One implementation.** The executors run the legacy routes' code from
+    Control (`internal/service/forward_diagnosis.go`): the forward node and
+    Ansible machine checks, the node statistics (a gost node's metrics, an
+    Ansible machine's counters), and the forward and tunnel diagnoses. The
+    routes' answers are unchanged byte for byte
+    (`TestForwardDiagnosisAnswers`, written before the move). The legacy
+    forward and tunnel diagnoses now probe their targets concurrently, at
+    most 8 at a time, and stop when the request ends.
+  - **Results.** Typed and scrubbed: the nodes' tokens and every value at a
+    secret key are masked. Failed probes are part of the result, not a
+    failed operation. A node, forward or tunnel deleted since the submission
+    is `TARGET_GONE`. Deadlines and cancellation stop the dials, and a
+    stopped endpoint check records nothing.
+  - **No private targets for a package.** `DiagnoseForward` checks every
+    target as a user's: public addresses only, as the #84 guard does. The
+    kernel cannot tell an administrator's request from a user's until it
+    verifies request bindings (NO-4).
+  - **Vantage (D10).** Control by default, the node when the agent of every
+    node concerned advertises `diag.v1`. Agents do not run diagnoses before
+    A2-5, so the kernel still dials from Control and says so in the result.
+  - **Contract additions.** `VantageReport` (in `EndpointCheck` and
+    `DiagnosisResult`), `ServiceTraffic`, and `NodeStatsResult.services` and
+    `current_connections`. The proto golden file grows by 11 elements.
+  - Tests on SQLite and PostgreSQL: each executor against a fake network and
+    a fake gost metrics endpoint (success, partial failure, timeout,
+    cancellation, the private-target refusals, a secret walk), and a bridge
+    contract round trip.
+
 - **The administrator dashboard and the user's subscription summary run
   natively, from the kernel's caches** (`docs/architecture/kernel-caches.md`).
   The kernel answers both routes from a cache in its memory, with the time
