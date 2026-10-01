@@ -227,3 +227,17 @@ func TestSubscriptionViewsShowWhatTheSubscriptionPackageNeeds(t *testing.T) {
 		require.Equal(t, want, columns, view)
 	}
 }
+
+// kapi_node_status_v1 shows a node's status, last check and traffic, and
+// none of its credentials.
+func TestNodeStatusViewShowsNoCredentials(t *testing.T) {
+	db, _ := openSQLiteKernel(t)
+	exists, err := viewExists(db, "kapi_node_status_v1")
+	require.NoError(t, err)
+	require.False(t, exists, "no view without v2_node")
+	require.NoError(t, db.AutoMigrate(&model.Node{}))
+	require.NoError(t, EnsureKernelAPIViews(db))
+	var columns []string
+	require.NoError(t, db.Raw("SELECT name FROM pragma_table_info('kapi_node_status_v1') ORDER BY cid").Scan(&columns).Error)
+	require.Equal(t, []string{"id", "status", "last_check_at", "total_upload", "total_download"}, columns)
+}

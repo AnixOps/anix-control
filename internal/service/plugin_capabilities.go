@@ -39,7 +39,14 @@ var (
 	adoptableTablePattern  = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
 	kernelAPIViewPattern   = regexp.MustCompile(`^kapi_[a-z][a-z0-9_]*_v[1-9][0-9]*$`)
 	protectedTablePrefixes = []string{"v2_user", "v3_kernel_", "v4_kernel_", "identity_", "kapi_", "pg_"}
-	protectedTables        = map[string]bool{"v2_system_config": true, "v2_audit_log": true, "v2_operation_log": true}
+	protectedTables        = map[string]bool{
+		"v2_system_config": true, "v2_audit_log": true, "v2_operation_log": true,
+		// Node credentials: v2_node holds each node's API key, key hash and
+		// secret, which the kernel's node authentication checks, and
+		// v2_authorized_key the registration keys that mint them. A
+		// package that could read or write them could act as any node.
+		"v2_node": true, "v2_authorized_key": true,
+	}
 )
 
 // PackageStorageGrants is what the storage capabilities of a verified manifest

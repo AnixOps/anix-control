@@ -566,7 +566,7 @@
       "path": "/api/v2/admin/loadbalancers",
       "package_id": "proxy-node",
       "route_id": "proxy.loadbalancer.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -574,7 +574,7 @@
       "path": "/api/v2/admin/loadbalancers",
       "package_id": "proxy-node",
       "route_id": "proxy.loadbalancer.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -582,7 +582,7 @@
       "path": "/api/v2/admin/loadbalancers/:id",
       "package_id": "proxy-node",
       "route_id": "proxy.loadbalancer.id.delete",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -590,7 +590,7 @@
       "path": "/api/v2/admin/loadbalancers/:id",
       "package_id": "proxy-node",
       "route_id": "proxy.loadbalancer.id.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -598,7 +598,7 @@
       "path": "/api/v2/admin/loadbalancers/:id",
       "package_id": "proxy-node",
       "route_id": "proxy.loadbalancer.id.put",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -702,7 +702,7 @@
       "path": "/api/v2/admin/nodes/:id/logs",
       "package_id": "proxy-node",
       "route_id": "proxy.admin.nodes.id.logs.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -766,7 +766,7 @@
       "path": "/api/v2/admin/nodes/stats",
       "package_id": "proxy-node",
       "route_id": "proxy.admin.nodes.stats.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {

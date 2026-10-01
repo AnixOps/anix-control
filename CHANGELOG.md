@@ -713,6 +713,29 @@
     PostgreSQL (104 cases each) and the same groups, templates and links,
     and that the bound types mirror the kernel model. The PostgreSQL run is
     part of CI.
+- **Proxy node module.** `packages/proxy-node` has its own host and serves
+  7 of its 31 routes natively: the load balancer list, detail, creation,
+  update and deletion, the node statistics and a node's runtime logs.
+  - It runs on `v2_load_balancer` and `v2_node_log`, adopted in place. The
+    node statistics, and whether a node exists, come from the new kernel
+    view `kapi_node_status_v1` (each node's id, status, last check and
+    traffic counters, no credentials).
+  - `v2_node` and `v2_authorized_key` are now protected kernel tables that
+    no package may adopt. `v2_node` holds each node's API key, key hash and
+    secret, which the kernel's node authentication checks, and
+    `v2_authorized_key` the registration keys that mint them; a package
+    that could read or write them could act as any node and read every
+    subscriber's proxy credentials from UniProxy.
+  - The other 24 routes stay bridged, with the reason in the host's route
+    map: node CRUD, credentials and raw configuration (node credentials,
+    and protocols with Reality private keys in the answers), configuration
+    validation (the kernel's WireGuard validator), authorization keys,
+    registration, heartbeat and runtime health, the agent WebSocket,
+    UniProxy, and the load balancer statistics and health check (forward
+    nodes).
+  - `internal/tests/proxynodecompat` proves byte parity on SQLite and
+    PostgreSQL (56 cases each) and the same load balancer rows. The
+    PostgreSQL run is part of CI.
 
 - The kernel side of the identity module, `KernelIdentity` (N9). It is served
   on the local package bridge and on the module listener.
