@@ -1413,6 +1413,13 @@
 
 ### Fixed
 
+- Moving a forward to another tunnel now moves it.
+  `POST /api/v2/forward/update` and `POST /api/v2/admin/forward/update`
+  saved the forward with the tunnel it was loaded with, and GORM set
+  `tunnel_id` back to that tunnel. The answer and the row kept the old
+  tunnel, and the forward was applied there again, while its port bindings
+  moved to the new tunnel's node; the old node's port was then free for
+  another forward. The forward is now saved without its associations.
 - Deleting a subscription group removes its node protocol links. On
   PostgreSQL deleting a group with links failed on the foreign key; on SQLite
   the links were left behind.

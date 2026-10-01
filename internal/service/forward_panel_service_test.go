@@ -1941,6 +1941,56 @@ func (s *PanelForwardServiceTestSuite) TestUpdateForward_RollsBackWhenBindingCon
 	}
 }
 
+// The forward was saved with the tunnel it was loaded with, which set
+// tunnel_id back to the old tunnel: a forward never moved, while its port
+// bindings moved to the new tunnel's node.
+func (s *PanelForwardServiceTestSuite) TestUpdateForward_MovesTheForwardToAnotherTunnel() {
+	db := database.Get()
+	user := &model.User{
+		Email:          "panel-forward-move@example.com",
+		Password:       "hash",
+		Token:          "panel-forward-move-token",
+		UUID:           "panel-forward-move-uuid",
+		TransferEnable: bytesPerGiB,
+	}
+	nodeA := s.createForwardNode("Move Relay A", "10.0.7.1", model.ForwardNodeStatusOnline)
+	nodeB := s.createForwardNode("Move Relay B", "10.0.7.2", model.ForwardNodeStatusOnline)
+	tunnelA := &model.ForwardTunnel{Name: "Move Tunnel A", InNodeID: nodeA.ID, InIP: nodeA.Host, Type: 1, Protocol: "tcp", Status: model.ForwardTunnelStatusActive}
+	tunnelB := &model.ForwardTunnel{Name: "Move Tunnel B", InNodeID: nodeB.ID, InIP: nodeB.Host, Type: 1, Protocol: "tcp", Status: model.ForwardTunnelStatusActive}
+	s.Require().NoError(db.Create(user).Error)
+	s.Require().NoError(db.Create(tunnelA).Error)
+	s.Require().NoError(db.Create(tunnelB).Error)
+	for _, tunnelID := range []uint{tunnelA.ID, tunnelB.ID} {
+		s.Require().NoError(db.Create(&model.ForwardUserTunnel{UserID: user.ID, TunnelID: tunnelID, Status: model.ForwardUserTunnelStatusActive}).Error)
+	}
+	forward := &model.Forward{
+		UserID: user.ID, UserName: user.Email, Name: "Moving Forward", TunnelID: tunnelA.ID, InPort: 10001,
+		RemoteAddr: "move.example:443", Status: model.ForwardStatusPaused,
+	}
+	s.Require().NoError(db.Create(forward).Error)
+
+	inPort := 10002
+	item, err := s.svc.UpdateForward(user.ID, false, PanelForwardUpdateInput{
+		ID: forward.ID, Name: forward.Name, TunnelID: tunnelB.ID, InPort: &inPort, RemoteAddr: forward.RemoteAddr, Strategy: "fifo",
+	})
+	s.Require().NoError(err)
+	s.Equal(tunnelB.ID, item.TunnelID)
+	s.Equal("Move Tunnel B", item.TunnelName)
+	s.Equal(nodeB.Host, item.InIP)
+
+	var stored model.Forward
+	s.Require().NoError(db.First(&stored, forward.ID).Error)
+	s.Equal(tunnelB.ID, stored.TunnelID, "the forward stayed on its old tunnel")
+	s.Equal(inPort, stored.InPort)
+	var bindings []model.ForwardPortBinding
+	s.Require().NoError(db.Where("forward_id = ?", forward.ID).Find(&bindings).Error)
+	s.Require().Len(bindings, 1)
+	s.Equal(nodeB.ID, bindings[0].NodeID)
+	var tunnels []model.ForwardTunnel
+	s.Require().NoError(db.Where("id IN ?", []uint{tunnelA.ID, tunnelB.ID}).Order("id").Find(&tunnels).Error)
+	s.Equal([]string{"Move Tunnel A", "Move Tunnel B"}, []string{tunnels[0].Name, tunnels[1].Name}, "the tunnels are unchanged")
+}
+
 func (s *PanelForwardServiceTestSuite) TestUpdateForward_AdminChangingTunnelRevalidatesTargetUserGrant() {
 	db := database.Get()
 
