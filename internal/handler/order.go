@@ -7,7 +7,6 @@ import (
 
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/gin-gonic/gin"
-	"gorm.io/gorm"
 )
 
 // OrderHandler 用户端订单处理器
@@ -22,11 +21,13 @@ func NewOrderHandler() *OrderHandler {
 	}
 }
 
-// GetOrders 获取用户自己的订单
+// GetOrders 获取用户自己的订单: each with its plan's id and name, none with
+// the buyer. The page size is clamped as on the administrator's list.
 func (h *OrderHandler) GetOrders(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "10"))
+	page, pageSize = ClampPagination(page, pageSize)
 
 	res, err := h.orderService.GetUserOrders(userID, page, pageSize)
 	if err != nil {
@@ -67,7 +68,8 @@ func (h *OrderHandler) SaveOrder(c *gin.Context) {
 	panelSuccess(c, order)
 }
 
-// GetOrderDetail 获取订单详情
+// GetOrderDetail 获取订单详情: the caller's own order with its plan's id and
+// name. Another user's order is "not found", as an unknown one.
 func (h *OrderHandler) GetOrderDetail(c *gin.Context) {
 	userID := c.GetUint("user_id")
 	id, err := strconv.ParseUint(c.Param("id"), 10, 32)
@@ -76,9 +78,9 @@ func (h *OrderHandler) GetOrderDetail(c *gin.Context) {
 		return
 	}
 
-	order, err := h.orderService.GetByID(uint(id))
-	if err != nil || order.UserID != userID {
-		if err != nil && !errors.Is(err, gorm.ErrRecordNotFound) {
+	order, err := h.orderService.GetUserView(userID, uint(id))
+	if err != nil {
+		if !errors.Is(err, service.ErrOrderNotFound) {
 			log.Printf("user order detail lookup failed: %v", err)
 		}
 		panelError(c, "订单不存在")

@@ -149,6 +149,29 @@
   server in process. It proves byte parity, the same memberships, request
   ledger and change log on SQLite and PostgreSQL (173 cases each). 147 of
   292 routes are now `native-flagged`.
+- **Breaking for v2 API clients: the order list and detail answers no
+  longer embed the buyer's and the plan's rows.**
+  `GET /api/v2/admin/orders`, `GET /api/v2/admin/orders/:id`,
+  `GET /api/v2/user/order` and `GET /api/v2/user/order/:id` embedded the
+  buyer's whole `v2_user` row, with its subscription token and proxy UUID,
+  and the whole `v2_plan` row. Each order now carries its own fields, `plan`
+  as `{id, name}` and, for administrators only, `user` as `{id, email}`; a
+  plan or buyer that no longer exists is left out, as before.
+  - The bundled frontend reads only those fields and needs no change.
+    `docs/UPGRADE.md` lists every field that disappears and where to read it
+    instead.
+  - The user's order list clamps `page_size` as the administrator's does
+    (1 to 100, default 20 for 0 or less): a negative size listed every order
+    and 0 none.
+  - A user's order detail looks the order up by id and owner, and a request
+    without a user names no one; another user's order stays "not found".
+
+### Fixed
+
+- The administrator's order list filtered by `email` always failed: the
+  joined `v2_user` made `created_at` ambiguous in the ordering. The filter is
+  now a subquery, and orders created in the same second keep a stable order
+  (`created_at DESC, id DESC`).
 
 ## 4.1.0-rc.1 - 2026-10-01
 

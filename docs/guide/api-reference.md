@@ -171,8 +171,27 @@ DELETE /api/v2/admin/users/:id
 # 获取订单列表
 GET /api/v2/admin/orders?page=1&page_size=20&trade_no=&email=
 
+# 订单详情
+GET /api/v2/admin/orders/:id
+
 # 订单统计
 GET /api/v2/admin/orders/stats
+```
+
+Each order in the list (`data.list`) and the detail (`data`) carries the
+order's own fields, its plan as `{id, name}` and its buyer as `{id, email}`;
+a plan or buyer that no longer exists is left out. The user's routes
+(`GET /api/v2/user/order`, `GET /api/v2/user/order/:id`) answer the caller's
+own orders the same way, without `user`. No answer carries the buyer's
+subscription token or UUID (`docs/UPGRADE.md`).
+
+```json
+{
+  "id": 12, "user_id": 3, "plan_id": 2, "trade_no": "20261001120000ABCD1234",
+  "period": "month", "total_amount": 3000, "status": 0, "...": "the other order fields",
+  "user": {"id": 3, "email": "buyer@example.com"},
+  "plan": {"id": 2, "name": "Pro"}
+}
 ```
 
 ### 节点管理
