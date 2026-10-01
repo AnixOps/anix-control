@@ -12,6 +12,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/branding"
 	compatv2 "github.com/AnixOps/anix-control/v4/internal/compat/v2"
 	"github.com/AnixOps/anix-control/v4/internal/database"
+	controlgrpc "github.com/AnixOps/anix-control/v4/internal/grpc"
 	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
 	"github.com/gin-gonic/gin"
@@ -145,6 +146,8 @@ v2board_go_gc_duration_seconds ` + formatFloat(float64(m.PauseTotalNs)/1e9) + `
 	// Node credential split: dual_read fallbacks and validate-on-build
 	// findings of this process.
 	nodesecrets.WritePrometheus(&body)
+	// User deltas on the Agent Control stream.
+	controlgrpc.WriteAgentUsersPrometheus(&body)
 
 	c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(body.String()))
 }

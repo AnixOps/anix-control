@@ -94,17 +94,24 @@ func (s *UserService) GetActiveUsers() ([]model.User, error) {
 	return users, err
 }
 
+// ActiveUsersForNodeQuery restricts a v2_user query to the users a node
+// serves: the active subscribers (subscriber.Active) of the node's plan
+// group, or every active subscriber when groupID is nil. The legacy user
+// pulls (UniProxy user, v2board GetUsers) and the Agent Control user deltas
+// read the same query, so a node gets the same set on either transport.
+func ActiveUsersForNodeQuery(db *gorm.DB, groupID *uint, now time.Time) *gorm.DB {
+	query := subscriber.Active(db, now)
+	if groupID != nil {
+		query = query.Where("group_id = ?", *groupID)
+	}
+	return query
+}
+
 // GetActiveUsersForNode 获取节点可用的有效用户
 // groupID 为 nil 时返回所有有效用户，否则返回指定分组的用户
 func (s *UserService) GetActiveUsersForNode(groupID *uint) ([]*model.User, error) {
 	var users []*model.User
-	query := subscriber.Active(s.db.Preload("Plan"), time.Now())
-
-	if groupID != nil {
-		query = query.Where("group_id = ?", *groupID)
-	}
-
-	err := query.Find(&users).Error
+	err := ActiveUsersForNodeQuery(s.db.Preload("Plan"), groupID, time.Now()).Find(&users).Error
 	return users, err
 }
 

@@ -370,14 +370,22 @@ func (s *UserGRPCServer) GetUsers(ctx context.Context, req *pb.UserListRequest) 
 }
 
 func (s *UserGRPCServer) buildWireGuardUserExtras(ctx context.Context, nodeID uint, users []*model.User) (map[uint]map[string]string, bool, error) {
+	return wireGuardUserExtras(s.nodeService, nodeID, requestedNodeType(ctx), users)
+}
+
+// wireGuardUserExtras builds the per-user WireGuard peer fields a node's user
+// list carries when the protocol the request selects (preferred, or the first
+// enabled one) is WireGuard. The second result is true for an exit protocol,
+// which serves no users. The user deltas of the Agent Control stream and the
+// v2board GetUsers answer share it.
+func wireGuardUserExtras(nodeService *service.NodeService, nodeID uint, preferred string, users []*model.User) (map[uint]map[string]string, bool, error) {
 	if nodeID == 0 || len(users) == 0 {
 		return nil, false, nil
 	}
-	protocols, err := s.nodeService.GetProtocols(nodeID)
+	protocols, err := nodeService.GetProtocols(nodeID)
 	if err != nil {
 		return nil, false, err
 	}
-	preferred := requestedNodeType(ctx)
 	protocol := selectNodeProtocolForRequest(protocols, preferred)
 	if protocol == nil {
 		if err := requireRequestedProtocol(preferred); err != nil {

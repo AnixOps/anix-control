@@ -7,6 +7,7 @@ import (
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
+	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
@@ -43,15 +44,16 @@ func openDataPlaneSession(t *testing.T, environment *agentControlTestEnvironment
 	return stream, helloAck
 }
 
-// The server does not serve the data plane yet: an Agent that advertises it
-// gets an ordinary session, no server capabilities and nothing but the
-// existing payloads.
-func TestAgentControlServerAdvertisesNoDataPlane(t *testing.T) {
+// The server serves users.v1 of the data plane (A2-4) and nothing else yet:
+// an Agent that advertises the whole data plane negotiates users only, and
+// no ConfigSnapshot is pushed for its revision.
+func TestAgentControlServerAdvertisesUsersOnly(t *testing.T) {
 	environment := newAgentControlTestEnvironment(t)
+	requireAutoMigrate(t, &model.User{}, &model.SubscriberChange{})
 	stream, helloAck := openDataPlaneSession(t, environment)
 	require.NotEmpty(t, helloAck.SessionId)
-	assert.Empty(t, helloAck.ServerCapabilities)
-	for _, capability := range []string{agentcontrol.CapabilityConfig, agentcontrol.CapabilityUsers, agentcontrol.CapabilityReports} {
+	assert.True(t, agentcontrol.Negotiated(dataPlaneCapabilities(), helloAck.ServerCapabilities, agentcontrol.CapabilityUsers))
+	for _, capability := range []string{agentcontrol.CapabilityConfig, agentcontrol.CapabilityReports} {
 		assert.False(t, agentcontrol.Negotiated(dataPlaneCapabilities(), helloAck.ServerCapabilities, capability), capability)
 	}
 
@@ -59,9 +61,9 @@ func TestAgentControlServerAdvertisesNoDataPlane(t *testing.T) {
 	require.True(t, connected)
 	assert.Contains(t, snapshot.Capabilities, agentcontrol.CapabilityReports)
 
-	// The next message after the HelloAck answers this heartbeat: no
-	// ConfigSnapshot or UserDelta was pushed for the Hello's revision and
-	// cursor.
+	// The Hello's cursor (1234) is ahead of the empty change log, so the
+	// node's (empty) user set is sent as a full resync; the heartbeat ack
+	// and that one page are the only messages, in either order.
 	require.NoError(t, stream.Send(&agentv1pb.AgentToControl{
 		RequestId:    "heartbeat-request",
 		NodeId:       uint32(environment.node.ID),
@@ -70,10 +72,26 @@ func TestAgentControlServerAdvertisesNoDataPlane(t *testing.T) {
 			Heartbeat: &agentv1pb.Heartbeat{SessionId: helloAck.SessionId, UptimeSeconds: 1},
 		},
 	}))
-	message, err := stream.Recv()
-	require.NoError(t, err)
-	require.NotNil(t, message.GetHeartbeatAck(), "got %T", message.Payload)
-	assert.Equal(t, "heartbeat-request", message.RequestId)
+	var heartbeatAcks, userDeltas int
+	for i := 0; i < 2; i++ {
+		message, err := stream.Recv()
+		require.NoError(t, err)
+		switch payload := message.Payload.(type) {
+		case *agentv1pb.ControlToAgent_HeartbeatAck:
+			heartbeatAcks++
+			assert.Equal(t, "heartbeat-request", message.RequestId)
+		case *agentv1pb.ControlToAgent_Users:
+			userDeltas++
+			assert.True(t, payload.Users.Full)
+			assert.True(t, payload.Users.LastPage)
+			assert.Zero(t, payload.Users.Cursor)
+			assert.Empty(t, payload.Users.Upserts)
+		default:
+			t.Fatalf("unexpected payload %T", message.Payload)
+		}
+	}
+	assert.Equal(t, 1, heartbeatAcks)
+	assert.Equal(t, 1, userDeltas)
 	require.NoError(t, stream.CloseSend())
 }
 

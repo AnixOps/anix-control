@@ -534,6 +534,23 @@
     - a walk of `IsNodeSecretKey` keys through every listed route, end to
       end over a real bridge session (`internal/tests/sealedhandles`).
 
+- User deltas on the Agent Control stream (A2-4, `users.v1`). Control now
+  lists `users.v1` in `HelloAck.server_capabilities` for proxy nodes and,
+  to an Agent whose `Hello` lists it too, sends `UserDelta` payloads from
+  the subscriber change log (`v4_kernel_subscriber_change`): on connect the
+  changes after `Hello.users_cursor`, or a paged full resync when the
+  cursor is 0, ahead of the log or older than its 7-day retention (also
+  when rows are pruned mid-session); then a delta per batch of changes as
+  the log advances, bounded to 500 users or changes a message. A node gets
+  the same users as from the legacy pulls (UniProxy `user`, v2board
+  `GetUsers`): the three now share `service.ActiveUsersForNodeQuery`. A
+  `NodeUser` carries the id, uuid, limits and WireGuard peer fields only,
+  never the e-mail, password hash or subscription token. Agents without
+  `users.v1` get nothing new. `/metrics` adds
+  `anixops_agent_user_deltas_sent_total{kind}`,
+  `anixops_agent_user_resyncs_total{reason}`,
+  `anixops_agent_users_sessions` and `anixops_agent_users_cursor_lag`.
+  See `sdk/api/agent/v1/PROTOCOL.md`, "Data plane".
 - **Agent stream data-plane contract** (`sdk/api/agent/v1/PROTOCOL.md`, "Data
   plane"). `anix.agent.v1` gains the payloads that will carry each node's
   configuration, users and reports on the Agent Control stream instead of
