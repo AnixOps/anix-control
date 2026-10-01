@@ -4,6 +4,12 @@
 
 ### Security
 
+- The PayPal webhook marks a payment paid only for a completed capture of
+  the record's amount and currency. It treated `CHECKOUT.ORDER.APPROVED`
+  as paid, although an approved checkout has collected nothing until it is
+  captured, and it did not compare the captured amount.
+  `CHECKOUT.ORDER.COMPLETED` is acknowledged without effect; its captures
+  arrive as `PAYMENT.CAPTURE.COMPLETED`.
 - A payment can no longer activate an order it does not pay.
   `POST /api/v2/user/payment/create` took any `order_id` with any amount the
   gateway allowed, and a paid callback marked that order paid and assigned

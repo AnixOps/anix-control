@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/database"
@@ -624,6 +625,11 @@ func (h *PaymentHandler) PayPalWebhook(c *gin.Context) {
 				} `json:"payments"`
 			} `json:"purchase_units"`
 			CustomID string `json:"custom_id"` // 用于传递 trade_no
+			// Amount is a capture's amount (PAYMENT.CAPTURE.COMPLETED).
+			Amount struct {
+				Value    string `json:"value"`
+				Currency string `json:"currency_code"`
+			} `json:"amount"`
 		} `json:"resource"`
 	}
 
@@ -635,15 +641,23 @@ func (h *PaymentHandler) PayPalWebhook(c *gin.Context) {
 	rawBody := string(body)
 	tradeNo := event.Resource.CustomID
 
+	// Only captured money pays: CHECKOUT.ORDER.APPROVED means the buyer
+	// approved, and nothing is collected until the order is captured.
 	switch event.EventType {
-	case "CHECKOUT.ORDER.APPROVED", "PAYMENT.CAPTURE.COMPLETED":
+	case "PAYMENT.CAPTURE.COMPLETED":
 		// 支付成功
 		if tradeNo == "" {
 			c.JSON(http.StatusOK, gin.H{"received": true, "message": "no custom_id in resource"})
 			return
 		}
+		paid, err := h.paypalCapturedAmount(tradeNo, event.Resource.Amount.Value, event.Resource.Amount.Currency)
+		if err != nil {
+			log.Printf("PayPal capture for trade_no=%s not applied: %v", tradeNo, err)
+			c.JSON(http.StatusOK, gin.H{"received": true, "message": "capture not applied: " + err.Error()})
+			return
+		}
 
-		if err := h.gatewayService.MarkOrderPaid(tradeNo, event.Resource.ID, rawBody); err != nil {
+		if err := h.gatewayService.MarkOrderPaidWithAmount(tradeNo, event.Resource.ID, rawBody, &paid); err != nil {
 			c.JSON(http.StatusOK, gin.H{"received": true, "message": "already processed or error: " + err.Error()})
 			return
 		}
@@ -651,13 +665,7 @@ func (h *PaymentHandler) PayPalWebhook(c *gin.Context) {
 		c.JSON(http.StatusOK, gin.H{"received": true})
 
 	case "CHECKOUT.ORDER.COMPLETED":
-		// 订单已完成
-		if tradeNo != "" {
-			if err := h.gatewayService.MarkOrderPaid(tradeNo, event.Resource.ID, rawBody); err != nil {
-				c.JSON(http.StatusOK, gin.H{"received": true})
-				return
-			}
-		}
+		// 订单已完成: its captures follow as PAYMENT.CAPTURE.COMPLETED.
 		c.JSON(http.StatusOK, gin.H{"received": true})
 
 	case "CHECKOUT.ORDER.PROCESSING", "PAYMENT.CAPTURE.DENIED":
@@ -680,6 +688,23 @@ func (h *PaymentHandler) PayPalWebhook(c *gin.Context) {
 		// 其他事件，记录日志
 		c.JSON(http.StatusOK, gin.H{"received": true, "message": "event type not handled: " + event.EventType})
 	}
+}
+
+// paypalCapturedAmount checks a capture's amount and currency against the
+// payment record and returns the amount for MarkOrderPaidWithAmount.
+func (h *PaymentHandler) paypalCapturedAmount(tradeNo, value, currency string) (float64, error) {
+	amount, err := strconv.ParseFloat(strings.TrimSpace(value), 64)
+	if err != nil {
+		return 0, fmt.Errorf("capture amount %q is not a number", value)
+	}
+	record, err := h.gatewayService.GetRecordByTradeNo(tradeNo)
+	if err != nil {
+		return 0, fmt.Errorf("payment record: %w", err)
+	}
+	if record.Currency != "" && !strings.EqualFold(record.Currency, strings.TrimSpace(currency)) {
+		return 0, fmt.Errorf("capture currency %q is not %s", currency, record.Currency)
+	}
+	return amount, nil
 }
 
 // ====== 通用支付接口 ======
