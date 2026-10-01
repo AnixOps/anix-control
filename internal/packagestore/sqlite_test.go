@@ -174,3 +174,33 @@ func TestOrderBillingViewShowsWhatAPaymentNeeds(t *testing.T) {
 	require.NoError(t, db.Raw("SELECT name FROM pragma_table_info('kapi_order_billing_v1') ORDER BY cid").Scan(&columns).Error)
 	require.Equal(t, []string{"id", "user_id", "total_amount", "status"}, columns)
 }
+
+// kapi_user_referral_v1 shows who invited whom, and nothing else of v2_user.
+func TestReferralViewShowsWhoInvitedWhom(t *testing.T) {
+	db, _ := openSQLiteKernel(t)
+	var columns []string
+	require.NoError(t, db.Raw("SELECT name FROM pragma_table_info('kapi_user_referral_v1') ORDER BY cid").Scan(&columns).Error)
+	require.Equal(t, []string{"id", "invite_user_id"}, columns)
+}
+
+// kapi_affiliate_settings_v1 shows the value of the affiliate settings key
+// and no other system configuration row.
+func TestAffiliateSettingsViewShowsOneKey(t *testing.T) {
+	db, _ := openSQLiteKernel(t)
+	exists, err := viewExists(db, "kapi_affiliate_settings_v1")
+	require.NoError(t, err)
+	require.False(t, exists, "no view without v2_system_config")
+	require.NoError(t, db.AutoMigrate(&model.SystemConfig{}))
+	require.NoError(t, EnsureKernelAPIViews(db))
+	require.NoError(t, db.Create(&[]model.SystemConfig{
+		{Key: "smtp.password", Value: "smtp-secret"},
+		{Key: InviteSettingsKey, Value: `{"code_prefix":"AFF"}`},
+		{Key: InviteSettingsKey + ".copy", Value: "other"},
+	}).Error)
+	var columns []string
+	require.NoError(t, db.Raw("SELECT name FROM pragma_table_info('kapi_affiliate_settings_v1') ORDER BY cid").Scan(&columns).Error)
+	require.Equal(t, []string{"value"}, columns)
+	var values []string
+	require.NoError(t, db.Raw("SELECT value FROM kapi_affiliate_settings_v1").Scan(&values).Error)
+	require.Equal(t, []string{`{"code_prefix":"AFF"}`}, values)
+}

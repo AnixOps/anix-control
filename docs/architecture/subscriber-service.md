@@ -80,6 +80,14 @@ package and generation.
   covers the request's `Idempotency-Key` (else its request id) and the
   expiry. The kernel's legacy handler derives the same id, so a retry applies
   once whichever side serves it, and a new request is a new grant.
+- **Commission withdrawals.** A withdrawal debits `commission_balance` with
+  `AdjustBalance` (kind `COMMISSION`), `request_id = "affiliate.withdraw:<withdrawal id>"`;
+  rejecting it refunds the amount with
+  `request_id = "affiliate.withdraw.refund:<withdrawal id>"`. The kernel's
+  legacy handlers use the same ids through `subscriber.AdjustBalanceTx`, in
+  the withdrawal's own transaction; the affiliate module calls the contract
+  (`packages/affiliate/native`). A debit below zero is refused under the
+  row lock, so concurrent withdrawals cannot overdraw.
 - **RecordTraffic.**
   - Adds `(upload, download) × rate` to each subscriber's counters in one
     transaction.

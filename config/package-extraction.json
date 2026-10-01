@@ -494,7 +494,7 @@
       "path": "/api/v2/admin/invite/config",
       "package_id": "affiliate",
       "route_id": "affiliate.admin.invite.config.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -510,7 +510,7 @@
       "path": "/api/v2/admin/invite/stats",
       "package_id": "affiliate",
       "route_id": "affiliate.admin.invite.stats.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -518,7 +518,7 @@
       "path": "/api/v2/admin/invite/withdrawals",
       "package_id": "affiliate",
       "route_id": "affiliate.admin.invite.withdrawals.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -526,7 +526,7 @@
       "path": "/api/v2/admin/invite/withdrawals/:id/process",
       "package_id": "affiliate",
       "route_id": "affiliate.admin.invite.withdrawals.id.process.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -2062,7 +2062,7 @@
       "path": "/api/v2/user/invite/commissions",
       "package_id": "affiliate",
       "route_id": "affiliate.user.invite.commissions.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -2078,7 +2078,7 @@
       "path": "/api/v2/user/invite/withdraw",
       "package_id": "affiliate",
       "route_id": "affiliate.user.invite.withdraw.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -2086,7 +2086,7 @@
       "path": "/api/v2/user/invite/withdrawals",
       "package_id": "affiliate",
       "route_id": "affiliate.user.invite.withdrawals.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {

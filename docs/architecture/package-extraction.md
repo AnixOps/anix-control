@@ -28,11 +28,12 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   WebSocket routes use `registeredPackageWebSocketRoute`.
 - `config/package-extraction.json` records each route's extraction mode
   (`bridged`, `native-flagged` or `native`) and where its legacy handler lives
-  (`router`, `identity-bridge` or `none`). 84 routes are `native-flagged`:
-  identity's group A (15), knowledge (6), notification (19), order (9),
-  payment (16), plan (7), platform (4) and ticket (8). The rest are `bridged`.
-  The identity routes are `identity-bridge`. `check_plugin_only_routes.py`
-  enforces the map against the router and the identity bridge.
+  (`router`, `identity-bridge` or `none`). 91 routes are `native-flagged`:
+  identity's group A (15), affiliate (7), knowledge (6), notification (19),
+  order (9), payment (16), plan (7), platform (4) and ticket (8). The rest are
+  `bridged`. The identity routes are `identity-bridge`.
+  `check_plugin_only_routes.py` enforces the map against the router and the
+  identity bridge.
 - Request path: gin middleware -> `compatv2` gateway -> route resolution
   (`internal/compat/v2/registry.go`, `verifiedRouteSource`) -> package host
   process over Unix gRPC -> package bridge (FD 4) -> **the legacy in-kernel
@@ -271,6 +272,40 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
     table, and there is no contract for those writes yet. The provider
     signature checks stay with them, and the PayPal webhook calls PayPal's
     API to verify each delivery.
+- **Affiliate (in place).** 7 of 8 routes run on the adopted
+  `v2_commission_record`, `v2_commission_withdraw` and `v2_invite_config`
+  tables, proved by `internal/tests/affiliatecompat`: the user's commissions,
+  withdrawals and withdrawal request, and the administrator's withdrawal
+  list and decisions, invite statistics and configuration.
+  - Other domains are read through views: `kapi_user_referral_v1` (who
+    invited whom) for the statistics, `kapi_subscriber_entitlement_v1` for
+    the caller's commission balance, and `kapi_affiliate_settings_v1` for
+    the frontend settings (code prefix and length, withdrawal fee and
+    methods).
+  - `kapi_affiliate_settings_v1` shows one row of the protected
+    `v2_system_config`: the value of `invite.frontend.config`, a key the
+    kernel does not treat as sensitive and shows its administrators in
+    clear. On PostgreSQL it is a `security_barrier` view, so a function in
+    the package's own query cannot see the rows its filter hides; a test
+    shows a secret leaking without the barrier.
+  - The commission balance is the kernel's (`v2_user.commission_balance`).
+    A withdrawal debits it and a rejection refunds it through
+    `KernelSubscriber.AdjustBalance` (`kernel.subscriber.balance.v1`, kind
+    `COMMISSION`; no contract change), with the ledger ids the kernel's
+    legacy handlers use: `affiliate.withdraw:<id>` and
+    `affiliate.withdraw.refund:<id>`.
+  - The kernel writes a withdrawal and its debit, or a rejection and its
+    refund, in one transaction; the module cannot. A withdrawal is first a
+    reservation (status `-1`) that no decision accepts, and becomes pending
+    once debited; a refused debit removes it, and an unknown outcome leaves
+    it for an administrator (`?status=-1`) to reconcile with the ledger. A
+    rejection claims the pending withdrawal, then refunds it; a refused
+    refund puts it back to pending, and an unknown outcome leaves it
+    rejected with a failed answer. No path pays out or refunds an amount
+    that was not debited.
+  - Updating the configuration stays bridged. It writes
+    `invite.frontend.config` into `v2_system_config`, which no package may
+    adopt and no contract writes.
 - The kernel publishes read-only views `kapi_*`, created at startup by
   `EnsureKernelAPIViews` (first `kapi_user_directory_v1`, then
   `kapi_system_audit_log_v1`, the `v2_operation_log` rows of module
@@ -278,10 +313,12 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
   through `kapi_*` views or typed operations.
   `EnsureKernelAPIViews` (`kapi_user_directory_v1`,
   `kapi_subscriber_entitlement_v1`, `kapi_plan_catalog_v1`,
-  `kapi_plan_subscription_group_v1`, `kapi_order_billing_v1`). Packages
+  `kapi_plan_subscription_group_v1`, `kapi_order_billing_v1`,
+  `kapi_user_referral_v1`, `kapi_affiliate_settings_v1`). Packages
   read other domains only
   through `kapi_*` views or typed operations. A view whose source table does
-  not exist is left out.
+  not exist is left out. A view that filters rows is a PostgreSQL
+  `security_barrier` view.
 
 ### 3.5 Isolation switch and SQLite
 
@@ -427,7 +464,7 @@ shapes; the first extraction step adopts the existing `v2_*` tables in place.
 | machine-telemetry, nftables-forward, gost-mesh, nat-egress (T12) | 5 / 0 / 3 / 0 | keep runtime semantics; add v2 entrypoint, generation, `RuntimeStatus` reports | — | Agent-target runtime packages |
 | identity-platform | 24 | stays bridged until the identity cutover | — | Only migrations move to the lease |
 | platform | 12 | system configuration, audit, backup | — | Moved from identity-platform after v4.0.0; bridged |
-| affiliate | 8 | commissions, withdrawals, invite statistics and configuration | — | Moved from identity-platform after v4.0.0; bridged |
+| affiliate | 8 | commissions, withdrawals, invite statistics and configuration | — | Moved from identity-platform after v4.0.0; 7 native-flagged (section 3.4), the configuration update bridged |
 
 ## 7. Rollout Record Semantics (T5)
 
