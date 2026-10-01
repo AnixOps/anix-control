@@ -13,6 +13,7 @@ import (
 
 	kernelsubscriberv1 "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1"
 	"github.com/AnixOps/anix-control/v4/internal/authn"
+	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/AnixOps/anix-control/v4/internal/subscriber"
@@ -46,6 +47,9 @@ type Server struct {
 	Authorizer Authorizer
 	// Now defaults to time.Now.
 	Now func() time.Time
+	// Config returns the configuration the subscription summary's link
+	// settings read (app.subscribe_path); it defaults to config.Get.
+	Config func() *config.Config
 }
 
 // For returns the KernelSubscriber server that host reaches; it has the

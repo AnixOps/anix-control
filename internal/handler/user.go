@@ -66,7 +66,10 @@ func (h *UserHandler) GetSubscription(c *gin.Context) {
 	// 检查是否强制刷新
 	forceRefresh := c.Query("refresh") == "true"
 
-	sub, err := h.statsService.GetUserSubscription(uid, forceRefresh)
+	// The subscription package answers it through
+	// KernelSubscriber.GetSubscriptionSummary, which calls the same
+	// function on the same cache.
+	sub, err := h.statsService.UserSubscriptionSummary(uid, forceRefresh, h.configService, h.cfg)
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			panelError(c, "用户不存在")
@@ -76,10 +79,6 @@ func (h *UserHandler) GetSubscription(c *gin.Context) {
 		panelError(c, "获取订阅信息失败")
 		return
 	}
-
-	settings := service.GetSubscriptionSettings(h.configService, h.cfg)
-	sub.SubscribePath = settings.SubscribePath
-	sub.SubscribeDomains = settings.SubscribeDomains
 
 	panelSuccess(c, sub)
 }

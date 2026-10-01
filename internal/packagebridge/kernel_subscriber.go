@@ -79,6 +79,22 @@ func (m *moduleKernelSubscriber) ListActiveSubscribers(ctx context.Context, requ
 	return call(m, ctx, request, kernelsubscriberv1.KernelSubscriberServer.ListActiveSubscribers)
 }
 
+func (m *moduleKernelSubscriber) GrantSubscriptionGroup(ctx context.Context, request *kernelsubscriberv1.GrantSubscriptionGroupRequest) (*kernelsubscriberv1.GrantSubscriptionGroupResponse, error) {
+	return call(m, ctx, request, kernelsubscriberv1.KernelSubscriberServer.GrantSubscriptionGroup)
+}
+
+func (m *moduleKernelSubscriber) RevokeSubscriptionGroup(ctx context.Context, request *kernelsubscriberv1.RevokeSubscriptionGroupRequest) (*kernelsubscriberv1.RevokeSubscriptionGroupResponse, error) {
+	return call(m, ctx, request, kernelsubscriberv1.KernelSubscriberServer.RevokeSubscriptionGroup)
+}
+
+func (m *moduleKernelSubscriber) RemoveSubscriptionGroupMembers(ctx context.Context, request *kernelsubscriberv1.RemoveSubscriptionGroupMembersRequest) (*kernelsubscriberv1.RemoveSubscriptionGroupMembersResponse, error) {
+	return call(m, ctx, request, kernelsubscriberv1.KernelSubscriberServer.RemoveSubscriptionGroupMembers)
+}
+
+func (m *moduleKernelSubscriber) GetSubscriptionSummary(ctx context.Context, request *kernelsubscriberv1.GetSubscriptionSummaryRequest) (*kernelsubscriberv1.GetSubscriptionSummaryResponse, error) {
+	return call(m, ctx, request, kernelsubscriberv1.KernelSubscriberServer.GetSubscriptionSummary)
+}
+
 func (m *moduleKernelSubscriber) WatchSubscriberChanges(request *kernelsubscriberv1.WatchSubscriberChangesRequest, stream grpc.ServerStreamingServer[kernelsubscriberv1.SubscriberChange]) error {
 	server, err := m.caller(stream.Context())
 	if err != nil {

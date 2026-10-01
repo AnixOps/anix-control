@@ -18,6 +18,7 @@ import (
 	kernelorderv1 "github.com/AnixOps/anix-control/sdk/api/kernelorder/v1"
 	kernelsettingsv1 "github.com/AnixOps/anix-control/sdk/api/kernelsettings/v1"
 	kernelsubscriberv1 "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1"
+	kerneltelemetryv1 "github.com/AnixOps/anix-control/sdk/api/kerneltelemetry/v1"
 	modulepkiv1 "github.com/AnixOps/anix-control/sdk/api/modulepki/v1"
 	packagebridgev1 "github.com/AnixOps/anix-control/sdk/api/packagebridge/v1"
 	"github.com/AnixOps/anix-control/sdk/moduletls"
@@ -86,6 +87,20 @@ type listenerFixture struct {
 	subscriberHosts chan packagebridge.HostIdentity
 	// settingsHosts records the host identity KernelSettings calls ran as.
 	settingsHosts chan packagebridge.HostIdentity
+	// telemetryHosts records the host identity KernelTelemetry calls ran as.
+	telemetryHosts chan packagebridge.HostIdentity
+}
+
+// telemetryRecorder answers GetDashboard and records the calling host.
+type telemetryRecorder struct {
+	kerneltelemetryv1.UnimplementedKernelTelemetryServer
+	host  packagebridge.HostIdentity
+	hosts chan packagebridge.HostIdentity
+}
+
+func (r telemetryRecorder) GetDashboard(context.Context, *kerneltelemetryv1.GetDashboardRequest) (*kerneltelemetryv1.GetDashboardResponse, error) {
+	r.hosts <- r.host
+	return &kerneltelemetryv1.GetDashboardResponse{TotalUsers: 3}, nil
 }
 
 // settingsRecorder answers GetSettings and records the calling host.
@@ -181,6 +196,9 @@ func (f *listenerFixture) serve(t *testing.T) {
 			KernelSettings: func(host packagebridge.HostIdentity) kernelsettingsv1.KernelSettingsServer {
 				return settingsRecorder{host: host, hosts: f.settingsHosts}
 			},
+			KernelTelemetry: func(host packagebridge.HostIdentity) kerneltelemetryv1.KernelTelemetryServer {
+				return telemetryRecorder{host: host, hosts: f.telemetryHosts}
+			},
 		}).Serve(ctx, listener)
 	}()
 	t.Cleanup(func() {
@@ -213,6 +231,7 @@ func newListenerFixture(t *testing.T) *listenerFixture {
 	fixture.identityHosts = make(chan packagebridge.HostIdentity, 4)
 	fixture.subscriberHosts = make(chan packagebridge.HostIdentity, 4)
 	fixture.settingsHosts = make(chan packagebridge.HostIdentity, 4)
+	fixture.telemetryHosts = make(chan packagebridge.HostIdentity, 4)
 	fixture.serve(t)
 	return fixture
 }
@@ -486,4 +505,26 @@ func TestKernelSettingsIsServedToBoundInstancesOnly(t *testing.T) {
 	require.NoError(t, fixture.generation.Close())
 	_, err = settings.GetSettings(session, &kernelsettingsv1.GetSettingsRequest{Namespace: "mail"})
 	require.Equal(t, codes.PermissionDenied, status.Code(err), "a fenced generation loses KernelSettings too")
+}
+
+// KernelTelemetry on the module listener runs as the bound instance's
+// generation and needs a bridge session.
+func TestKernelTelemetryIsServedToBoundInstancesOnly(t *testing.T) {
+	fixture := newListenerFixture(t)
+	certificate, _ := fixture.enroll(t, "knowledge")
+	connection := fixture.dial(t, certificate)
+	telemetry := kerneltelemetryv1.NewKernelTelemetryClient(connection)
+
+	_, err := telemetry.GetDashboard(context.Background(), &kerneltelemetryv1.GetDashboardRequest{})
+	require.Equal(t, codes.Unauthenticated, status.Code(err), "no bridge session")
+
+	session := bind(t, packagebridgev1.NewKernelPackageBridgeClient(connection), "pod-a")
+	response, err := telemetry.GetDashboard(session, &kerneltelemetryv1.GetDashboardRequest{Refresh: true})
+	require.NoError(t, err)
+	require.EqualValues(t, 3, response.GetTotalUsers())
+	require.Equal(t, packagebridge.HostIdentity{PackageID: "knowledge", Version: "4.1.0", Generation: 9}, <-fixture.telemetryHosts)
+
+	require.NoError(t, fixture.generation.Close())
+	_, err = telemetry.GetDashboard(session, &kerneltelemetryv1.GetDashboardRequest{})
+	require.Equal(t, codes.PermissionDenied, status.Code(err), "a fenced generation loses KernelTelemetry too")
 }

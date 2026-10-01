@@ -2129,6 +2129,227 @@ func (x *RemoveSubscriptionGroupMembersResponse) GetRemoved() uint64 {
 	return 0
 }
 
+type GetSubscriptionSummaryRequest struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	UserId uint64                 `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	// refresh rebuilds the summary from the database and replaces the cached
+	// one, as the v2 route's refresh=true does.
+	Refresh       bool `protobuf:"varint,2,opt,name=refresh,proto3" json:"refresh,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSubscriptionSummaryRequest) Reset() {
+	*x = GetSubscriptionSummaryRequest{}
+	mi := &file_api_kernelsubscriber_v1_kernel_subscriber_proto_msgTypes[30]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSubscriptionSummaryRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSubscriptionSummaryRequest) ProtoMessage() {}
+
+func (x *GetSubscriptionSummaryRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_kernelsubscriber_v1_kernel_subscriber_proto_msgTypes[30]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSubscriptionSummaryRequest.ProtoReflect.Descriptor instead.
+func (*GetSubscriptionSummaryRequest) Descriptor() ([]byte, []int) {
+	return file_api_kernelsubscriber_v1_kernel_subscriber_proto_rawDescGZIP(), []int{30}
+}
+
+func (x *GetSubscriptionSummaryRequest) GetUserId() uint64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+func (x *GetSubscriptionSummaryRequest) GetRefresh() bool {
+	if x != nil {
+		return x.Refresh
+	}
+	return false
+}
+
+// GetSubscriptionSummaryResponse is the summary, field for field the
+// kernel's service.UserSubscription. Traffic is in bytes.
+type GetSubscriptionSummaryResponse struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	UserId uint64                 `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Email  string                 `protobuf:"bytes,2,opt,name=email,proto3" json:"email,omitempty"`
+	// plan_id is unset when the subscriber has no plan; it stays set when the
+	// plan was deleted (plan_name is then "无套餐").
+	PlanId          *uint64 `protobuf:"varint,3,opt,name=plan_id,json=planId,proto3,oneof" json:"plan_id,omitempty"`
+	PlanName        string  `protobuf:"bytes,4,opt,name=plan_name,json=planName,proto3" json:"plan_name,omitempty"`
+	TransferEnable  int64   `protobuf:"varint,5,opt,name=transfer_enable,json=transferEnable,proto3" json:"transfer_enable,omitempty"`
+	UsedTraffic     int64   `protobuf:"varint,6,opt,name=used_traffic,json=usedTraffic,proto3" json:"used_traffic,omitempty"`
+	UploadTraffic   int64   `protobuf:"varint,7,opt,name=upload_traffic,json=uploadTraffic,proto3" json:"upload_traffic,omitempty"`
+	DownloadTraffic int64   `protobuf:"varint,8,opt,name=download_traffic,json=downloadTraffic,proto3" json:"download_traffic,omitempty"`
+	// expired_at is 0 when the subscription never expires.
+	ExpiredAt int64 `protobuf:"varint,9,opt,name=expired_at,json=expiredAt,proto3" json:"expired_at,omitempty"`
+	IsExpired bool  `protobuf:"varint,10,opt,name=is_expired,json=isExpired,proto3" json:"is_expired,omitempty"`
+	// days_remaining is -1 when the subscription never expires.
+	DaysRemaining int64   `protobuf:"varint,11,opt,name=days_remaining,json=daysRemaining,proto3" json:"days_remaining,omitempty"`
+	UsagePercent  float64 `protobuf:"fixed64,12,opt,name=usage_percent,json=usagePercent,proto3" json:"usage_percent,omitempty"`
+	// subscribe_path and subscribe_domains are the subscription link
+	// settings, read on every call.
+	SubscribePath    string   `protobuf:"bytes,13,opt,name=subscribe_path,json=subscribePath,proto3" json:"subscribe_path,omitempty"`
+	SubscribeDomains []string `protobuf:"bytes,14,rep,name=subscribe_domains,json=subscribeDomains,proto3" json:"subscribe_domains,omitempty"`
+	// cached_at is when the kernel built the summary: RFC 3339 with its
+	// fraction and offset, as encoding/json writes the kernel's time, so a
+	// module answers it byte for byte.
+	CachedAt      string `protobuf:"bytes,15,opt,name=cached_at,json=cachedAt,proto3" json:"cached_at,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetSubscriptionSummaryResponse) Reset() {
+	*x = GetSubscriptionSummaryResponse{}
+	mi := &file_api_kernelsubscriber_v1_kernel_subscriber_proto_msgTypes[31]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetSubscriptionSummaryResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetSubscriptionSummaryResponse) ProtoMessage() {}
+
+func (x *GetSubscriptionSummaryResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_kernelsubscriber_v1_kernel_subscriber_proto_msgTypes[31]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetSubscriptionSummaryResponse.ProtoReflect.Descriptor instead.
+func (*GetSubscriptionSummaryResponse) Descriptor() ([]byte, []int) {
+	return file_api_kernelsubscriber_v1_kernel_subscriber_proto_rawDescGZIP(), []int{31}
+}
+
+func (x *GetSubscriptionSummaryResponse) GetUserId() uint64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+func (x *GetSubscriptionSummaryResponse) GetEmail() string {
+	if x != nil {
+		return x.Email
+	}
+	return ""
+}
+
+func (x *GetSubscriptionSummaryResponse) GetPlanId() uint64 {
+	if x != nil && x.PlanId != nil {
+		return *x.PlanId
+	}
+	return 0
+}
+
+func (x *GetSubscriptionSummaryResponse) GetPlanName() string {
+	if x != nil {
+		return x.PlanName
+	}
+	return ""
+}
+
+func (x *GetSubscriptionSummaryResponse) GetTransferEnable() int64 {
+	if x != nil {
+		return x.TransferEnable
+	}
+	return 0
+}
+
+func (x *GetSubscriptionSummaryResponse) GetUsedTraffic() int64 {
+	if x != nil {
+		return x.UsedTraffic
+	}
+	return 0
+}
+
+func (x *GetSubscriptionSummaryResponse) GetUploadTraffic() int64 {
+	if x != nil {
+		return x.UploadTraffic
+	}
+	return 0
+}
+
+func (x *GetSubscriptionSummaryResponse) GetDownloadTraffic() int64 {
+	if x != nil {
+		return x.DownloadTraffic
+	}
+	return 0
+}
+
+func (x *GetSubscriptionSummaryResponse) GetExpiredAt() int64 {
+	if x != nil {
+		return x.ExpiredAt
+	}
+	return 0
+}
+
+func (x *GetSubscriptionSummaryResponse) GetIsExpired() bool {
+	if x != nil {
+		return x.IsExpired
+	}
+	return false
+}
+
+func (x *GetSubscriptionSummaryResponse) GetDaysRemaining() int64 {
+	if x != nil {
+		return x.DaysRemaining
+	}
+	return 0
+}
+
+func (x *GetSubscriptionSummaryResponse) GetUsagePercent() float64 {
+	if x != nil {
+		return x.UsagePercent
+	}
+	return 0
+}
+
+func (x *GetSubscriptionSummaryResponse) GetSubscribePath() string {
+	if x != nil {
+		return x.SubscribePath
+	}
+	return ""
+}
+
+func (x *GetSubscriptionSummaryResponse) GetSubscribeDomains() []string {
+	if x != nil {
+		return x.SubscribeDomains
+	}
+	return nil
+}
+
+func (x *GetSubscriptionSummaryResponse) GetCachedAt() string {
+	if x != nil {
+		return x.CachedAt
+	}
+	return ""
+}
+
 var File_api_kernelsubscriber_v1_kernel_subscriber_proto protoreflect.FileDescriptor
 
 const file_api_kernelsubscriber_v1_kernel_subscriber_proto_rawDesc = "" +
@@ -2303,7 +2524,31 @@ const file_api_kernelsubscriber_v1_kernel_subscriber_proto_rawDesc = "" +
 	"\x06reason\x18\x03 \x01(\tR\x06reason\"\\\n" +
 	"&RemoveSubscriptionGroupMembersResponse\x12\x18\n" +
 	"\aapplied\x18\x01 \x01(\bR\aapplied\x12\x18\n" +
-	"\aremoved\x18\x02 \x01(\x04R\aremoved*b\n" +
+	"\aremoved\x18\x02 \x01(\x04R\aremoved\"R\n" +
+	"\x1dGetSubscriptionSummaryRequest\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\x04R\x06userId\x12\x18\n" +
+	"\arefresh\x18\x02 \x01(\bR\arefresh\"\xaf\x04\n" +
+	"\x1eGetSubscriptionSummaryResponse\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\x04R\x06userId\x12\x14\n" +
+	"\x05email\x18\x02 \x01(\tR\x05email\x12\x1c\n" +
+	"\aplan_id\x18\x03 \x01(\x04H\x00R\x06planId\x88\x01\x01\x12\x1b\n" +
+	"\tplan_name\x18\x04 \x01(\tR\bplanName\x12'\n" +
+	"\x0ftransfer_enable\x18\x05 \x01(\x03R\x0etransferEnable\x12!\n" +
+	"\fused_traffic\x18\x06 \x01(\x03R\vusedTraffic\x12%\n" +
+	"\x0eupload_traffic\x18\a \x01(\x03R\ruploadTraffic\x12)\n" +
+	"\x10download_traffic\x18\b \x01(\x03R\x0fdownloadTraffic\x12\x1d\n" +
+	"\n" +
+	"expired_at\x18\t \x01(\x03R\texpiredAt\x12\x1d\n" +
+	"\n" +
+	"is_expired\x18\n" +
+	" \x01(\bR\tisExpired\x12%\n" +
+	"\x0edays_remaining\x18\v \x01(\x03R\rdaysRemaining\x12#\n" +
+	"\rusage_percent\x18\f \x01(\x01R\fusagePercent\x12%\n" +
+	"\x0esubscribe_path\x18\r \x01(\tR\rsubscribePath\x12+\n" +
+	"\x11subscribe_domains\x18\x0e \x03(\tR\x10subscribeDomains\x12\x1b\n" +
+	"\tcached_at\x18\x0f \x01(\tR\bcachedAtB\n" +
+	"\n" +
+	"\b_plan_id*b\n" +
 	"\vBalanceKind\x12\x1c\n" +
 	"\x18BALANCE_KIND_UNSPECIFIED\x10\x00\x12\x18\n" +
 	"\x14BALANCE_KIND_ACCOUNT\x10\x01\x12\x1b\n" +
@@ -2313,7 +2558,7 @@ const file_api_kernelsubscriber_v1_kernel_subscriber_proto_rawDesc = "" +
 	"\x17CHANGE_KIND_UNSPECIFIED\x10\x00\x12\x16\n" +
 	"\x12CHANGE_KIND_UPSERT\x10\x01\x12\x16\n" +
 	"\x12CHANGE_KIND_REMOVE\x10\x02\x12\x16\n" +
-	"\x12CHANGE_KIND_RESYNC\x10\x032\x86\x0e\n" +
+	"\x12CHANGE_KIND_RESYNC\x10\x032\x9a\x0f\n" +
 	"\x10KernelSubscriber\x12\x7f\n" +
 	"\x10ApplyEntitlement\x124.anixops.kernelsubscriber.v1.ApplyEntitlementRequest\x1a5.anixops.kernelsubscriber.v1.ApplyEntitlementResponse\x12\x82\x01\n" +
 	"\x11AdjustEntitlement\x125.anixops.kernelsubscriber.v1.AdjustEntitlementRequest\x1a6.anixops.kernelsubscriber.v1.AdjustEntitlementResponse\x12v\n" +
@@ -2327,7 +2572,8 @@ const file_api_kernelsubscriber_v1_kernel_subscriber_proto_rawDesc = "" +
 	"\x16WatchSubscriberChanges\x12:.anixops.kernelsubscriber.v1.WatchSubscriberChangesRequest\x1a-.anixops.kernelsubscriber.v1.SubscriberChange0\x01\x12\x91\x01\n" +
 	"\x16GrantSubscriptionGroup\x12:.anixops.kernelsubscriber.v1.GrantSubscriptionGroupRequest\x1a;.anixops.kernelsubscriber.v1.GrantSubscriptionGroupResponse\x12\x94\x01\n" +
 	"\x17RevokeSubscriptionGroup\x12;.anixops.kernelsubscriber.v1.RevokeSubscriptionGroupRequest\x1a<.anixops.kernelsubscriber.v1.RevokeSubscriptionGroupResponse\x12\xa9\x01\n" +
-	"\x1eRemoveSubscriptionGroupMembers\x12B.anixops.kernelsubscriber.v1.RemoveSubscriptionGroupMembersRequest\x1aC.anixops.kernelsubscriber.v1.RemoveSubscriptionGroupMembersResponseBPZNgithub.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1;kernelsubscriberv1b\x06proto3"
+	"\x1eRemoveSubscriptionGroupMembers\x12B.anixops.kernelsubscriber.v1.RemoveSubscriptionGroupMembersRequest\x1aC.anixops.kernelsubscriber.v1.RemoveSubscriptionGroupMembersResponse\x12\x91\x01\n" +
+	"\x16GetSubscriptionSummary\x12:.anixops.kernelsubscriber.v1.GetSubscriptionSummaryRequest\x1a;.anixops.kernelsubscriber.v1.GetSubscriptionSummaryResponseBPZNgithub.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1;kernelsubscriberv1b\x06proto3"
 
 var (
 	file_api_kernelsubscriber_v1_kernel_subscriber_proto_rawDescOnce sync.Once
@@ -2342,7 +2588,7 @@ func file_api_kernelsubscriber_v1_kernel_subscriber_proto_rawDescGZIP() []byte {
 }
 
 var file_api_kernelsubscriber_v1_kernel_subscriber_proto_enumTypes = make([]protoimpl.EnumInfo, 2)
-var file_api_kernelsubscriber_v1_kernel_subscriber_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
+var file_api_kernelsubscriber_v1_kernel_subscriber_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
 var file_api_kernelsubscriber_v1_kernel_subscriber_proto_goTypes = []any{
 	(BalanceKind)(0),                               // 0: anixops.kernelsubscriber.v1.BalanceKind
 	(ChangeKind)(0),                                // 1: anixops.kernelsubscriber.v1.ChangeKind
@@ -2376,6 +2622,8 @@ var file_api_kernelsubscriber_v1_kernel_subscriber_proto_goTypes = []any{
 	(*RevokeSubscriptionGroupResponse)(nil),        // 29: anixops.kernelsubscriber.v1.RevokeSubscriptionGroupResponse
 	(*RemoveSubscriptionGroupMembersRequest)(nil),  // 30: anixops.kernelsubscriber.v1.RemoveSubscriptionGroupMembersRequest
 	(*RemoveSubscriptionGroupMembersResponse)(nil), // 31: anixops.kernelsubscriber.v1.RemoveSubscriptionGroupMembersResponse
+	(*GetSubscriptionSummaryRequest)(nil),          // 32: anixops.kernelsubscriber.v1.GetSubscriptionSummaryRequest
+	(*GetSubscriptionSummaryResponse)(nil),         // 33: anixops.kernelsubscriber.v1.GetSubscriptionSummaryResponse
 }
 var file_api_kernelsubscriber_v1_kernel_subscriber_proto_depIdxs = []int32{
 	2,  // 0: anixops.kernelsubscriber.v1.ApplyEntitlementRequest.plan:type_name -> anixops.kernelsubscriber.v1.PlanSnapshot
@@ -2400,21 +2648,23 @@ var file_api_kernelsubscriber_v1_kernel_subscriber_proto_depIdxs = []int32{
 	26, // 19: anixops.kernelsubscriber.v1.KernelSubscriber.GrantSubscriptionGroup:input_type -> anixops.kernelsubscriber.v1.GrantSubscriptionGroupRequest
 	28, // 20: anixops.kernelsubscriber.v1.KernelSubscriber.RevokeSubscriptionGroup:input_type -> anixops.kernelsubscriber.v1.RevokeSubscriptionGroupRequest
 	30, // 21: anixops.kernelsubscriber.v1.KernelSubscriber.RemoveSubscriptionGroupMembers:input_type -> anixops.kernelsubscriber.v1.RemoveSubscriptionGroupMembersRequest
-	5,  // 22: anixops.kernelsubscriber.v1.KernelSubscriber.ApplyEntitlement:output_type -> anixops.kernelsubscriber.v1.ApplyEntitlementResponse
-	7,  // 23: anixops.kernelsubscriber.v1.KernelSubscriber.AdjustEntitlement:output_type -> anixops.kernelsubscriber.v1.AdjustEntitlementResponse
-	10, // 24: anixops.kernelsubscriber.v1.KernelSubscriber.RecordTraffic:output_type -> anixops.kernelsubscriber.v1.RecordTrafficResponse
-	12, // 25: anixops.kernelsubscriber.v1.KernelSubscriber.ResetTraffic:output_type -> anixops.kernelsubscriber.v1.ResetTrafficResponse
-	14, // 26: anixops.kernelsubscriber.v1.KernelSubscriber.ResetCredentials:output_type -> anixops.kernelsubscriber.v1.ResetCredentialsResponse
-	16, // 27: anixops.kernelsubscriber.v1.KernelSubscriber.AdjustBalance:output_type -> anixops.kernelsubscriber.v1.AdjustBalanceResponse
-	19, // 28: anixops.kernelsubscriber.v1.KernelSubscriber.GetSubscribers:output_type -> anixops.kernelsubscriber.v1.GetSubscribersResponse
-	21, // 29: anixops.kernelsubscriber.v1.KernelSubscriber.LookupBySubscriptionToken:output_type -> anixops.kernelsubscriber.v1.LookupBySubscriptionTokenResponse
-	23, // 30: anixops.kernelsubscriber.v1.KernelSubscriber.ListActiveSubscribers:output_type -> anixops.kernelsubscriber.v1.ListActiveSubscribersResponse
-	25, // 31: anixops.kernelsubscriber.v1.KernelSubscriber.WatchSubscriberChanges:output_type -> anixops.kernelsubscriber.v1.SubscriberChange
-	27, // 32: anixops.kernelsubscriber.v1.KernelSubscriber.GrantSubscriptionGroup:output_type -> anixops.kernelsubscriber.v1.GrantSubscriptionGroupResponse
-	29, // 33: anixops.kernelsubscriber.v1.KernelSubscriber.RevokeSubscriptionGroup:output_type -> anixops.kernelsubscriber.v1.RevokeSubscriptionGroupResponse
-	31, // 34: anixops.kernelsubscriber.v1.KernelSubscriber.RemoveSubscriptionGroupMembers:output_type -> anixops.kernelsubscriber.v1.RemoveSubscriptionGroupMembersResponse
-	22, // [22:35] is the sub-list for method output_type
-	9,  // [9:22] is the sub-list for method input_type
+	32, // 22: anixops.kernelsubscriber.v1.KernelSubscriber.GetSubscriptionSummary:input_type -> anixops.kernelsubscriber.v1.GetSubscriptionSummaryRequest
+	5,  // 23: anixops.kernelsubscriber.v1.KernelSubscriber.ApplyEntitlement:output_type -> anixops.kernelsubscriber.v1.ApplyEntitlementResponse
+	7,  // 24: anixops.kernelsubscriber.v1.KernelSubscriber.AdjustEntitlement:output_type -> anixops.kernelsubscriber.v1.AdjustEntitlementResponse
+	10, // 25: anixops.kernelsubscriber.v1.KernelSubscriber.RecordTraffic:output_type -> anixops.kernelsubscriber.v1.RecordTrafficResponse
+	12, // 26: anixops.kernelsubscriber.v1.KernelSubscriber.ResetTraffic:output_type -> anixops.kernelsubscriber.v1.ResetTrafficResponse
+	14, // 27: anixops.kernelsubscriber.v1.KernelSubscriber.ResetCredentials:output_type -> anixops.kernelsubscriber.v1.ResetCredentialsResponse
+	16, // 28: anixops.kernelsubscriber.v1.KernelSubscriber.AdjustBalance:output_type -> anixops.kernelsubscriber.v1.AdjustBalanceResponse
+	19, // 29: anixops.kernelsubscriber.v1.KernelSubscriber.GetSubscribers:output_type -> anixops.kernelsubscriber.v1.GetSubscribersResponse
+	21, // 30: anixops.kernelsubscriber.v1.KernelSubscriber.LookupBySubscriptionToken:output_type -> anixops.kernelsubscriber.v1.LookupBySubscriptionTokenResponse
+	23, // 31: anixops.kernelsubscriber.v1.KernelSubscriber.ListActiveSubscribers:output_type -> anixops.kernelsubscriber.v1.ListActiveSubscribersResponse
+	25, // 32: anixops.kernelsubscriber.v1.KernelSubscriber.WatchSubscriberChanges:output_type -> anixops.kernelsubscriber.v1.SubscriberChange
+	27, // 33: anixops.kernelsubscriber.v1.KernelSubscriber.GrantSubscriptionGroup:output_type -> anixops.kernelsubscriber.v1.GrantSubscriptionGroupResponse
+	29, // 34: anixops.kernelsubscriber.v1.KernelSubscriber.RevokeSubscriptionGroup:output_type -> anixops.kernelsubscriber.v1.RevokeSubscriptionGroupResponse
+	31, // 35: anixops.kernelsubscriber.v1.KernelSubscriber.RemoveSubscriptionGroupMembers:output_type -> anixops.kernelsubscriber.v1.RemoveSubscriptionGroupMembersResponse
+	33, // 36: anixops.kernelsubscriber.v1.KernelSubscriber.GetSubscriptionSummary:output_type -> anixops.kernelsubscriber.v1.GetSubscriptionSummaryResponse
+	23, // [23:37] is the sub-list for method output_type
+	9,  // [9:23] is the sub-list for method input_type
 	9,  // [9:9] is the sub-list for extension type_name
 	9,  // [9:9] is the sub-list for extension extendee
 	0,  // [0:9] is the sub-list for field type_name
@@ -2433,13 +2683,14 @@ func file_api_kernelsubscriber_v1_kernel_subscriber_proto_init() {
 	file_api_kernelsubscriber_v1_kernel_subscriber_proto_msgTypes[4].OneofWrappers = []any{}
 	file_api_kernelsubscriber_v1_kernel_subscriber_proto_msgTypes[15].OneofWrappers = []any{}
 	file_api_kernelsubscriber_v1_kernel_subscriber_proto_msgTypes[24].OneofWrappers = []any{}
+	file_api_kernelsubscriber_v1_kernel_subscriber_proto_msgTypes[31].OneofWrappers = []any{}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_kernelsubscriber_v1_kernel_subscriber_proto_rawDesc), len(file_api_kernelsubscriber_v1_kernel_subscriber_proto_rawDesc)),
 			NumEnums:      2,
-			NumMessages:   30,
+			NumMessages:   32,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

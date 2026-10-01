@@ -14,7 +14,8 @@
     "telemetry.read",
     "kernel.storage.v1",
     "kernel.view:kapi_traffic_log_v1",
-    "kernel.view:kapi_user_directory_v1"
+    "kernel.view:kapi_user_directory_v1",
+    "kernel.telemetry.dashboard.v1"
   ],
   "dependencies": [],
   "conflicts": [],

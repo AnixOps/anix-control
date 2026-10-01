@@ -22,7 +22,7 @@ Use this tree like NodeX:
 - Order completion contract for the payment callbacks: [`architecture/order-service.md`](architecture/order-service.md)
 - Network module runtime (mTLS, module PKI, remote runtime): [`architecture/module-runtime.md`](architecture/module-runtime.md)
 - Identity service design (login and credentials as a module): [`architecture/identity-service.md`](architecture/identity-service.md)
-- Kernel contracts for modules: subscriber state [`architecture/subscriber-service.md`](architecture/subscriber-service.md), system settings [`architecture/settings-service.md`](architecture/settings-service.md)
+- Kernel contracts for modules: subscriber state [`architecture/subscriber-service.md`](architecture/subscriber-service.md), system settings [`architecture/settings-service.md`](architecture/settings-service.md), the kernel's cached answers [`architecture/kernel-caches.md`](architecture/kernel-caches.md)
 - Control Center merge record (`control-center/`): [`CONTROL-CENTER-MERGE-PLAN.md`](CONTROL-CENTER-MERGE-PLAN.md)
 - Open backlog: [`../TODO.md`](../TODO.md)
 - Change history: [`../CHANGELOG.md`](../CHANGELOG.md)

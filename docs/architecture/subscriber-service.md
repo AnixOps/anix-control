@@ -46,6 +46,7 @@ what it uses:
 | `kernel.subscriber.balance.v1` | AdjustBalance | affiliate, payment |
 | `kernel.subscriber.directory.v1` | GetSubscribers, LookupBySubscriptionToken, ListActiveSubscribers, WatchSubscriberChanges | subscription, proxy-node, forward |
 | `kernel.subscriber.groups.v1` | GrantSubscriptionGroup, RevokeSubscriptionGroup, RemoveSubscriptionGroupMembers | subscription |
+| `kernel.subscriber.summary.v1` | GetSubscriptionSummary | subscription |
 
 As with `kernel.identity.v1`, only packages signed by the official root can
 hold them. The kernel authorizes every call against the calling session's
@@ -136,6 +137,16 @@ package and generation.
 
   The ledger methods are `grant_subscription_group`,
   `revoke_subscription_group` and `remove_group_members` (user 0).
+- **Subscription summary.** `GetSubscriptionSummary` answers one
+  subscriber's summary as `GET /api/v2/user/subscription` shows it: e-mail,
+  plan, traffic, expiry, the subscription link settings and `cached_at`, and
+  no token, uuid or key. It calls `StatsService.UserSubscriptionSummary`,
+  the function the legacy handler calls. That function reads the kernel's
+  30-second cache entry, which the legacy user dashboard reads too, and
+  `refresh` rebuilds it. A module therefore answers the entry and
+  `cached_at` the legacy handler would. The module keeps no copy and
+  invalidates nothing ([`kernel-caches.md`](kernel-caches.md)). An unknown
+  subscriber is `NotFound`.
 - **RecordTraffic.**
   - Adds `(upload, download) × rate` to each subscriber's counters in one
     transaction.

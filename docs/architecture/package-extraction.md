@@ -10,8 +10,8 @@ open work in [`../../TODO.md`](../../TODO.md).
 
 > 中文摘要：v4.0.0 的「插件化」只到路由层；本文定义「一个领域真正住在插件里」
 > 的验收标准、目标机制（存储租约 + 按路由模式 + 类型化内核操作，均已实现）、
-> 保留下来的旧计划约束，以及 M0–M4 里程碑。292 条 v2 路由中，164 条
-> `native-flagged`，112 条 `bridged`（待契约），16 条 `kernel-owned`（按设计留在内核）。
+> 保留下来的旧计划约束，以及 M0–M4 里程碑。292 条 v2 路由中，166 条
+> `native-flagged`，110 条 `bridged`（待契约），16 条 `kernel-owned`（按设计留在内核）。
 
 Markers used below: **CURRENT** = true in the tree today; **PLANNED** = accepted
 design, not implemented yet; **HISTORICAL** = preserved from a retired plan for
@@ -30,14 +30,14 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
 - `config/package-extraction.json` records each route's extraction mode
   (`bridged`, `kernel-owned`, `native-flagged` or `native`; section 3.2) and
   where its legacy handler lives
-  (`router`, `identity-bridge` or `none`). 164 routes are `native-flagged`:
+  (`router`, `identity-bridge` or `none`). 166 routes are `native-flagged`:
   identity-platform (22: group A's 15, the profile, dashboard, user detail,
   user list and user statistics, and the traffic and subscription resets),
   affiliate (8), forward (17), gost-mesh (3), knowledge (6), machine-telemetry
-  (2), notification (22), order (13), payment (20), plan (7), platform (5),
-  protocol-runtime (3), proxy-node (7), subscription (20), ticket (8) and
+  (3), notification (22), order (13), payment (20), plan (7), platform (5),
+  protocol-runtime (3), proxy-node (7), subscription (21), ticket (8) and
   wireguard (1). 16 routes are `kernel-owned`: they stay in the kernel by
-  design, and each row says why. The other 112 are `bridged` until a kernel
+  design, and each row says why. The other 110 are `bridged` until a kernel
   contract lets their package serve them (section 3.2 lists what unblocks
   them). None is `native` yet. The identity routes are `identity-bridge`.
   `check_plugin_only_routes.py` enforces the map against the router, the
@@ -87,7 +87,7 @@ Route modes per package (2026-10-01):
 | gost-mesh | 3 | 0 | 0 |
 | identity-platform | 22 | 2 | 0 |
 | knowledge | 6 | 0 | 0 |
-| machine-telemetry | 2 | 1 | 2 |
+| machine-telemetry | 3 | 0 | 2 |
 | notification | 22 | 2 | 0 |
 | order | 13 | 0 | 0 |
 | payment | 20 | 0 | 0 |
@@ -95,10 +95,10 @@ Route modes per package (2026-10-01):
 | platform | 5 | 0 | 7 |
 | protocol-runtime | 3 | 11 | 6 |
 | proxy-node | 7 | 23 | 1 |
-| subscription | 20 | 5 | 0 |
+| subscription | 21 | 4 | 0 |
 | ticket | 8 | 0 | 0 |
 | wireguard | 1 | 0 | 0 |
-| **all** | **164** | **112** | **16** |
+| **all** | **166** | **110** | **16** |
 
 Reusable pieces that already exist:
 
@@ -192,9 +192,9 @@ by `check_plugin_only_routes.py` (counts in section 1).
 
 | Mode | Meaning | Routes |
 |---|---|---|
-| `native-flagged` | the package host has a native handler, proved by a parity test; the legacy handler stays, so every runtime mode works | 164 |
+| `native-flagged` | the package host has a native handler, proved by a parity test; the legacy handler stays, so every runtime mode works | 166 |
 | `native` | the legacy handler is deleted and the host answers alone | 0 |
-| `bridged` | the host only relays, until a kernel contract lets the package serve the route | 112 |
+| `bridged` | the host only relays, until a kernel contract lets the package serve the route | 110 |
 | `kernel-owned` | the host only relays, by design: the route stays in the kernel, and the row's `reason` says why | 16 |
 
 A `bridged` or `kernel-owned` route is registered and relayed alike: it is
@@ -221,11 +221,11 @@ What unblocks the `bridged` routes:
 | Open decision: whether UniProxy and the subscription renderer stay in the kernel | UniProxy (5) and the subscription preview | 6 |
 | Moving to forward (an update also needs KernelNodeOps) | the speed-limit routes | 5 |
 | A proxy node view with parent and load | forward observability targets, trend and topology | 3 |
-| Cache invalidation events | the dashboard (also the online set) and a user's subscription summary | 2 |
 | The request's scheme and host passed to hosts | setting the Telegram webhook; the clean agent install script | 2 |
 | Invite codes moving to affiliate | the user's invite codes and their generation | 2 |
 | A contract read of a member's subscription link | the public Telegram webhook (`/sub`) | 1 |
 | A KernelSettings namespace for the subscription link (with `app.subscribe_path`) | the subscription link settings | 1 |
+| Kernel caches (done, no invalidation events needed): the kernel keeps both caches and answers them through `KernelTelemetry.GetDashboard` and `KernelSubscriber.GetSubscriptionSummary`, so both modes answer the same entry and `cached_at` ([`kernel-caches.md`](kernel-caches.md)) | none left: the dashboard (the online set crosses as a count) and a user's subscription summary are `native-flagged` | 0 |
 
 Status (2026-10-01): every installation runs every route `legacy` unless an
 operator sets another mode; no route is `native` yet.
@@ -241,9 +241,10 @@ legacy handler or package, serves it.
 | Contract | Capabilities | Holders |
 |---|---|---|
 | KernelIdentity ([`identity-service.md`](identity-service.md)) | `kernel.identity.v1` | identity-platform |
-| KernelSubscriber ([`subscriber-service.md`](subscriber-service.md)): entitlements, traffic, credentials, balance, directory, subscription groups | `kernel.subscriber.<family>.v1` | plan and order (entitlements), identity-platform and forward (resets), affiliate (balance), subscription (groups) |
+| KernelSubscriber ([`subscriber-service.md`](subscriber-service.md)): entitlements, traffic, credentials, balance, directory, subscription groups, the subscription summary the kernel caches | `kernel.subscriber.<family>.v1` | plan and order (entitlements), identity-platform and forward (resets), affiliate (balance), subscription (groups, summary) |
 | KernelSettings ([`settings-service.md`](settings-service.md)): settings per namespace, secrets masked without the namespace's `secrets` capability | `kernel.settings.<namespace>.<read\|write\|secrets>.v1` | notification (`mail`), affiliate (`invite`), gost-mesh (`nodex`), platform (`backup`) |
 | KernelOrder ([`order-service.md`](order-service.md)): a paid payment record completes its order | `kernel.order.complete.v1` | payment |
+| KernelTelemetry ([`kernel-caches.md`](kernel-caches.md)): the administrator dashboard's snapshot from the kernel's cache, the online users as a count | `kernel.telemetry.dashboard.v1` | machine-telemetry |
 
 The planned `kernel.entitlement.apply.v1` became
 `KernelSubscriber.ApplyEntitlement`.
@@ -469,7 +470,9 @@ The planned `kernel.entitlement.apply.v1` became
       does.
     - The plugin permissions come from `ResolveActorAccess`.
     - The dashboard is computed on every request; the kernel cached it for
-      30 seconds.
+      30 seconds. The kernel's dashboard no longer shows the subscription
+      link settings, which a summary read used to write into its cached
+      entry ([`kernel-caches.md`](kernel-caches.md)); identity's never did.
   - **User directory:** the administrator's user list and statistics
     (`native.UserDirectory`, [identity-service.md](identity-service.md#user-directory)).
     - One query on identity-platform's own storage joins its `account`
@@ -503,13 +506,14 @@ The planned `kernel.entitlement.apply.v1` became
     answer adds the commission balance and invite statistics that join the
     order and affiliate packages' tables. They belong with the affiliate
     package.
-- **Subscription (in place).** 20 of 25 routes run on the adopted
+- **Subscription (in place).** 21 of 25 routes run on the adopted
   `v2_subscription_group`, `v2_subscription_template`,
   `v2_plan_subscription_group` and `v2_subscription_group_node_protocols`
   tables, proved by `internal/tests/subscriptioncompat`: groups (list, read,
   create, update, delete) and templates (list, read, create, update,
   delete), a group's node protocol links, a plan's groups, a user's groups
-  (list, grant, take away), the statistics and the two static lists. The
+  (list, grant, take away), the statistics, the two static lists, and the
+  user's subscription summary. The
   subscription link endpoints (`/s/:token`,
   `/api/v1/client/subscribe`) are kernel routes outside the package gate and
   stay in the kernel with the renderer.
@@ -553,7 +557,16 @@ The planned `kernel.entitlement.apply.v1` became
     call the same engine functions, so both sides write the same
     memberships, request ledger and change log. Without a bridge connection
     these routes stay legacy.
-  - Five routes stay bridged:
+  - **The user's subscription summary comes from the kernel's cache.** The
+    kernel caches each user's summary for 30 seconds, an entry its legacy
+    user dashboard reads too, and adds the subscription link settings on
+    every request. The module reads the entry through
+    `KernelSubscriber.GetSubscriptionSummary` (`kernel.subscriber.summary.v1`,
+    [`kernel-caches.md`](kernel-caches.md)), the function the legacy
+    handler calls. Both modes therefore answer the same entry with the same
+    `cached_at`, and `refresh=true` rebuilds it. The answer carries no
+    token or UUID. Without a bridge connection the route stays legacy.
+  - Four routes stay bridged:
     - a group's protocols and the protocol pool: they answer whole
       `v2_node_protocol` and `v2_node` rows, Reality private keys and custom
       configuration included, which no view may carry;
@@ -561,9 +574,7 @@ The planned `kernel.entitlement.apply.v1` became
       the nodes, and the WireGuard peers it creates;
     - the subscription link settings: `app.subscribe_path` is process
       configuration and `app.subscribe_domains` lives in the protected
-      `v2_system_config`;
-    - the user's subscription summary: served from the kernel's 30-second
-      cache, with its `cached_at`, which a native answer cannot share.
+      `v2_system_config`.
 - **Proxy node (in place).** 7 of proxy-node's 31 routes run natively,
   proved by `internal/tests/proxynodecompat`: the load balancer list,
   detail, creation, update and deletion on the adopted `v2_load_balancer`
@@ -712,9 +723,10 @@ The planned `kernel.entitlement.apply.v1` became
       node status in `v2_node` and `v2_forward_node`, connections in the
       kernel's memory, and the forward package's bridge tasks and runtime
       jobs.
-- **Machine telemetry (in place).** 2 of machine-telemetry's 5 routes run
+- **Machine telemetry (in place).** 3 of machine-telemetry's 5 routes run
   natively, proved by `internal/tests/machinetelemetrycompat`: the
-  administrator's hourly traffic series and user traffic ranking.
+  administrator's hourly traffic series, the user traffic ranking and the
+  dashboard.
   - The package adopts no table. It reads the traffic log through the new
     `kapi_traffic_log_v1` (the user, bytes, rate and time of each node
     traffic report in `v2_server_log`, no node or credential) and e-mail
@@ -724,12 +736,17 @@ The planned `kernel.entitlement.apply.v1` became
     charts, so it only reads it.
   - The hourly buckets are local hours, as the kernel's; the kernel passes
     its time zone to the host.
-  - **Stay bridged** (the dashboard) or **kernel-owned** (the other two),
-    with the reason in the host's route map:
-    - the dashboard: it counts users (the protected `v2_user`), orders,
-      revenue and the legacy server tables, takes the online users from the
-      alive set UniProxy keeps in the kernel's cache, and answers a snapshot
-      the kernel caches for 60 seconds;
+  - **The dashboard comes from the kernel's cache.** The snapshot counts
+    users (the protected `v2_user`), orders, revenue and the legacy server
+    tables, and takes the online users from the alive set in the kernel's
+    memory. The kernel caches it for 60 seconds. The module reads it
+    through `KernelTelemetry.GetDashboard` (`kernel.telemetry.dashboard.v1`,
+    [`kernel-caches.md`](kernel-caches.md)), the function the legacy
+    handler calls, so both modes answer the same snapshot and `cached_at`,
+    and `refresh=true` rebuilds it. The online set leaves the kernel only
+    as a count. Without a bridge connection the route stays legacy.
+  - **Kernel-owned** (the other two), with the reason in the host's route
+    map:
     - the system information: the kernel binary's own build metadata;
     - the monitoring WebSocket: the kernel's node list from the protected
       `v2_node`; WebSocket routes always relay to the kernel.

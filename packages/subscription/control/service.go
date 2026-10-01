@@ -25,10 +25,11 @@ type subscriptionBridge interface {
 // v2_plan_subscription_group and v2_subscription_group_node_protocols tables
 // and the plan, user, membership, entitlement and node views; such a route
 // serves natively once the kernel sets its mode, and falls back to the
-// legacy handler otherwise. Deleting a group and granting or taking away a
-// user's group call the kernel's KernelSubscriber over the bridge connection
-// (local socket or module listener); a bridge without one leaves them
-// legacy. The routes in bridgedRoutes always relay to the legacy handler.
+// legacy handler otherwise. Deleting a group, granting or taking away a
+// user's group and the user's subscription summary call the kernel's
+// KernelSubscriber over the bridge connection (local socket or module
+// listener); a bridge without one leaves them legacy. The routes in
+// bridgedRoutes always relay to the legacy handler.
 func newSubscriptionService(bridge subscriptionBridge, leaseID string) (*pluginhostsdk.Router, error) {
 	storage := packagestoresdk.SharedOpener(bridge)
 	service := &native.Service{Open: func(ctx context.Context) (*gorm.DB, error) {
@@ -77,6 +78,7 @@ var subscriptionRoutes = map[string]struct{}{
 	"subscription.admin.subscription.users.user_id.groups.post":            {},
 	"subscription.admin.subscription.users.user_id.groups.group_id.delete": {},
 	"subscription.admin.subscription.stats.get":                            {},
+	"subscription.user.subscription.get":                                   {},
 }
 
 // bridgedRoutes are the package's compatibility routes without a native
@@ -97,9 +99,4 @@ var bridgedRoutes = map[string]struct{}{
 	// configuration (app.subscribe_path) with app.subscribe_domains in the
 	// protected v2_system_config; a package can see neither.
 	"subscription.admin.system.subscription_settings.get": {},
-	// A user's subscription summary is served from the kernel's cache
-	// (30 seconds, in memory or Redis, with the time it was cached in the
-	// answer), which a native answer cannot share, and carries the
-	// subscription link settings above.
-	"subscription.user.subscription.get": {},
 }

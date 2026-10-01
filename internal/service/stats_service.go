@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/cache"
+	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"gorm.io/gorm"
@@ -106,6 +107,15 @@ func NewStatsService() *StatsService {
 	return statsServiceInstance
 }
 
+// NewStatsServiceOn returns a StatsService on db. The kernel contracts that
+// answer the cached dashboard and subscription summaries
+// (internal/kerneltelemetry, internal/kernelsubscriber) build one on their
+// own database; the caches are the kernel's, shared with the legacy
+// handlers whichever database handle reads them.
+func NewStatsServiceOn(db *gorm.DB) *StatsService {
+	return &StatsService{db: db}
+}
+
 // GetDashboardStats 获取仪表盘统计 (优先从缓存读取)
 func (s *StatsService) GetDashboardStats(forceRefresh bool) (*DashboardStats, error) {
 	// 尝试从缓存获取
@@ -152,6 +162,23 @@ func (s *StatsService) GetUserSubscription(userID uint, forceRefresh bool) (*Use
 	}
 
 	return sub, nil
+}
+
+// UserSubscriptionSummary is the answer of GET /api/v2/user/subscription:
+// the user's cached summary (GetUserSubscription) with the subscription
+// link settings, which are read on every call and not cached. It answers a
+// copy, so the cached entry, which the user dashboard answers too, never
+// carries the link settings and no request writes to it.
+func (s *StatsService) UserSubscriptionSummary(userID uint, forceRefresh bool, configService *SystemConfigService, cfg *config.Config) (*UserSubscription, error) {
+	cached, err := s.GetUserSubscription(userID, forceRefresh)
+	if err != nil {
+		return nil, err
+	}
+	summary := *cached
+	settings := GetSubscriptionSettings(configService, cfg)
+	summary.SubscribePath = settings.SubscribePath
+	summary.SubscribeDomains = settings.SubscribeDomains
+	return &summary, nil
 }
 
 // ========== 私有方法 ==========
