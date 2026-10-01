@@ -12,6 +12,8 @@
 // state, which only the kernel writes: granting a user a group, taking it
 // away and deleting a group's members go through KernelSubscriber
 // (kernel.subscriber.groups.v1), and without it those routes stay legacy.
+// So does the user's subscription summary, which the kernel caches and
+// answers through KernelSubscriber (kernel.subscriber.summary.v1).
 //
 // Other domains are read through kernel views only:
 //   - kapi_plan_catalog_v1 for whether a plan exists;
@@ -22,7 +24,7 @@
 //   - kapi_node_protocol_v1 and kapi_node_heartbeat_v1 for which node a
 //     protocol belongs to and when it last reported.
 //
-// Five routes have no native handler and stay bridged; see bridgedRoutes in
+// Four routes have no native handler and stay bridged; see bridgedRoutes in
 // packages/subscription/control.
 package native
 
@@ -51,8 +53,8 @@ type Service struct {
 	// tables and the granted views are visible.
 	Open func(ctx context.Context) (*gorm.DB, error)
 	// Subscriber is the kernel's KernelSubscriber; without it the routes
-	// that change subscription group membership have no native handler and
-	// stay legacy.
+	// that change subscription group membership and the user's
+	// subscription summary have no native handler and stay legacy.
 	Subscriber Subscriber
 	// Now defaults to time.Now.
 	Now func() time.Time
@@ -86,6 +88,7 @@ func (s *Service) Handlers() map[string]pluginhostsdk.NativeHandler {
 		handlers[DeleteGroupRouteID] = s.DeleteGroup
 		handlers[GrantUserGroupRouteID] = s.GrantUserGroup
 		handlers[RevokeUserGroupRouteID] = s.RevokeUserGroup
+		handlers[SummaryRouteID] = s.Summary
 	}
 	return handlers
 }

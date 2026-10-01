@@ -102,7 +102,7 @@
       "path": "/api/v2/admin/dashboard",
       "package_id": "machine-telemetry",
       "route_id": "telemetry.admin.dashboard.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -2286,7 +2286,7 @@
       "path": "/api/v2/user/subscription",
       "package_id": "subscription",
       "route_id": "subscription.user.subscription.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {

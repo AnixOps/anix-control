@@ -19,13 +19,16 @@ import (
 	"gorm.io/gorm"
 )
 
-// Subscriber is the part of KernelSubscriber the native routes call
-// (kernel.subscriber.groups.v1): v2_user_subscription_group is subscriber
-// state, and the kernel is its only writer.
+// Subscriber is the part of KernelSubscriber the native routes call: the
+// membership family (kernel.subscriber.groups.v1), since
+// v2_user_subscription_group is subscriber state the kernel alone writes,
+// and the subscription summary (kernel.subscriber.summary.v1), which the
+// kernel caches.
 type Subscriber interface {
 	GrantSubscriptionGroup(ctx context.Context, in *kernelsubscriberv1.GrantSubscriptionGroupRequest, opts ...grpc.CallOption) (*kernelsubscriberv1.GrantSubscriptionGroupResponse, error)
 	RevokeSubscriptionGroup(ctx context.Context, in *kernelsubscriberv1.RevokeSubscriptionGroupRequest, opts ...grpc.CallOption) (*kernelsubscriberv1.RevokeSubscriptionGroupResponse, error)
 	RemoveSubscriptionGroupMembers(ctx context.Context, in *kernelsubscriberv1.RemoveSubscriptionGroupMembersRequest, opts ...grpc.CallOption) (*kernelsubscriberv1.RemoveSubscriptionGroupMembersResponse, error)
+	GetSubscriptionSummary(ctx context.Context, in *kernelsubscriberv1.GetSubscriptionSummaryRequest, opts ...grpc.CallOption) (*kernelsubscriberv1.GetSubscriptionSummaryResponse, error)
 }
 
 // The routes that change subscription group membership; they have a native

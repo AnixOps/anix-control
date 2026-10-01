@@ -364,6 +364,35 @@
 
 ### Added
 
+- **The administrator dashboard and the user's subscription summary run
+  natively, from the kernel's caches** (`docs/architecture/kernel-caches.md`).
+  The kernel answers both routes from a cache in its memory, with the time
+  it built the answer (`cached_at`), so they had stayed bridged. The kernel
+  now keeps both caches and modules read them through typed contract
+  methods, so legacy and native answers are the same entry. No invalidation
+  event is needed, because no module holds a copy.
+  - New contract **KernelTelemetry** (`sdk/api/kerneltelemetry/v1`,
+    `anixops.kerneltelemetry.v1`). `GetDashboard` answers the dashboard
+    snapshot the kernel caches for 60 seconds; `refresh` rebuilds it. The
+    online users cross only as a count. Capability
+    `kernel.telemetry.dashboard.v1`, held by machine-telemetry.
+  - New method **`KernelSubscriber.GetSubscriptionSummary`**, family
+    `kernel.subscriber.summary.v1`, held by subscription. It answers one
+    subscriber's summary, which the kernel caches for 30 seconds, with the
+    subscription link settings, and no token or UUID.
+  - Both are served on local bridge sessions and on the module listener,
+    for official packages only, and authorized on every call. They add only
+    new methods, messages and fields: the proto golden file grows, and
+    `kerneltelemetry` joins the CI generated-code check.
+  - `GET /api/v2/admin/dashboard` (machine-telemetry) and
+    `GET /api/v2/user/subscription` (subscription) are `native-flagged`,
+    which makes 166 of 292. A host without a bridge connection keeps them
+    legacy.
+  - Parity runs on SQLite and PostgreSQL against the real kernel servers:
+    15 dashboard cases and 21 summary cases. They compare the answers byte
+    for byte, including a cached entry's `cached_at`, and the cache entry
+    each side leaves.
+
 - **KernelSettings contract** (`sdk/api/kernelsettings/v1`,
   `docs/architecture/settings-service.md`). Official packages read and write
   system settings per namespace instead of the protected `v2_system_config`
@@ -697,6 +726,20 @@
     so both sides of a case see the same answer.
 
 ### Fixed
+
+- The legacy user dashboard no longer shows the subscription link settings.
+  `GET /api/v2/user/subscription` wrote `subscribe_path` and
+  `subscribe_domains` into the user's cached summary, and
+  `GET /api/v2/user/dashboard` answers that same entry. For up to 30
+  seconds after a summary read, the dashboard therefore showed them, and
+  concurrent requests wrote the entry while others encoded it. The summary
+  now answers a copy. identity's native dashboard never showed them.
+- Network modules can change subscription group memberships. The module
+  listener did not forward `KernelSubscriber.GrantSubscriptionGroup`,
+  `RevokeSubscriptionGroup` or `RemoveSubscriptionGroupMembers`. A
+  subscription module running as a network module got `Unimplemented` for
+  the native membership routes, where a local host was served. A test now
+  checks that the listener forwards every method of every contract.
 
 - E-mail and invite configuration writes record an audit entry. `PUT
   /api/v2/admin/notification/email/config` and `PUT

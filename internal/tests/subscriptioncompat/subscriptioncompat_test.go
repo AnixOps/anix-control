@@ -5,10 +5,11 @@
 //
 // The native side reads the plan, entitlement, membership and node views the
 // kernel publishes (packagestore.EnsureKernelAPIViews) and writes only the
-// adopted subscription tables. Membership changes reach the real
-// KernelSubscriber server (internal/kernelsubscriber) in process over gRPC,
-// on the native side's database, so both sides end with the same
-// memberships, request ledger and change log.
+// adopted subscription tables. Membership changes and the user's
+// subscription summary reach the real KernelSubscriber server
+// (internal/kernelsubscriber) in process over gRPC, on the native side's
+// database, so both sides end with the same memberships, request ledger and
+// change log, and the same kernel cache.
 package subscriptioncompat
 
 import (
@@ -68,13 +69,13 @@ func route(method, pattern, routeID string, legacy func(*handler.SubscriptionAdm
 // as.
 var subscriptionHost = packagebridge.HostIdentity{PackageID: "subscription", Version: "4.0.0", Generation: 1}
 
-// groupsOnly authorizes what the subscription package's signed release
-// declares of KernelSubscriber: the membership family, for the
-// subscription host.
-type groupsOnly struct{}
+// declared authorizes what the subscription package's signed release
+// declares of KernelSubscriber: the membership family and the subscription
+// summary, for the subscription host.
+type declared struct{}
 
-func (groupsOnly) AuthorizeCapability(_ context.Context, host packagebridge.HostIdentity, capability string) error {
-	if host == subscriptionHost && capability == service.CapabilitySubscriberGroups {
+func (declared) AuthorizeCapability(_ context.Context, host packagebridge.HostIdentity, capability string) error {
+	if host == subscriptionHost && (capability == service.CapabilitySubscriberGroups || capability == service.CapabilitySubscriberSummary) {
 		return nil
 	}
 	return service.ErrCapabilityNotAuthorized
@@ -85,7 +86,7 @@ func (groupsOnly) AuthorizeCapability(_ context.Context, host packagebridge.Host
 // bridge.
 func kernelSubscriber(t *testing.T, db *gorm.DB) kernelsubscriberv1.KernelSubscriberClient {
 	t.Helper()
-	server := &kernelsubscriber.Server{DB: db, Authorizer: groupsOnly{}}
+	server := &kernelsubscriber.Server{DB: db, Authorizer: declared{}}
 	listener := bufconn.Listen(1 << 20)
 	grpcServer := grpc.NewServer()
 	kernelsubscriberv1.RegisterKernelSubscriberServer(grpcServer, server.For(subscriptionHost))

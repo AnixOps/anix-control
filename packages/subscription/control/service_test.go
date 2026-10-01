@@ -122,8 +122,8 @@ func TestSubscriptionHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) 
 		require.NotContains(t, subscriptionRoutes, route)
 	}
 	withoutSubscriber := (&native.Service{}).Handlers()
-	for _, route := range []string{native.DeleteGroupRouteID, native.GrantUserGroupRouteID, native.RevokeUserGroupRouteID} {
-		require.NotContains(t, withoutSubscriber, route, "without KernelSubscriber membership changes stay legacy")
+	for _, route := range []string{native.DeleteGroupRouteID, native.GrantUserGroupRouteID, native.RevokeUserGroupRouteID, native.SummaryRouteID} {
+		require.NotContains(t, withoutSubscriber, route, "without KernelSubscriber membership changes and the summary stay legacy")
 	}
 }
 
@@ -154,8 +154,9 @@ func TestSubscriptionHostRoutesAreThePackageRoutes(t *testing.T) {
 
 // The package adopts its four tables and reads the plan, entitlement,
 // membership and node views. It adopts no v2_user* table, reads no user
-// directory (e-mail addresses) and no node or protocol settings, and of
-// KernelSubscriber calls only the subscription group membership family.
+// directory view (e-mail addresses; the summary carries the caller's own)
+// and no node or protocol settings, and of KernelSubscriber calls only the
+// subscription group membership family and the subscription summary.
 func TestSubscriptionManifestCapabilities(t *testing.T) {
 	raw, err := os.ReadFile("../manifest.template.json")
 	require.NoError(t, err)
@@ -168,6 +169,7 @@ func TestSubscriptionManifestCapabilities(t *testing.T) {
 		"kernel.storage.adopt:v2_plan_subscription_group", "kernel.storage.adopt:v2_subscription_group_node_protocols",
 		"kernel.view:kapi_plan_catalog_v1", "kernel.view:kapi_subscriber_entitlement_v1", "kernel.view:kapi_user_subscription_group_v1",
 		"kernel.view:kapi_node_protocol_v1", "kernel.view:kapi_node_heartbeat_v1", "kernel.subscriber.groups.v1",
+		"kernel.subscriber.summary.v1",
 	}, manifest.Capabilities)
 }
 

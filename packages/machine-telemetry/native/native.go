@@ -1,17 +1,18 @@
-// Package native implements two of the machine-telemetry package's routes in
-// the package itself: the administrator's hourly traffic series and user
-// traffic ranking. They read the kernel's traffic log through the read-only
-// kernel view kapi_traffic_log_v1 (the user, bytes, rate and time of each
-// node traffic report in v2_server_log), and users' e-mail addresses through
-// kapi_user_directory_v1. The kernel writes the log when a node reports
-// traffic; the package never writes it. Responses are byte-compatible with
-// the legacy handlers (internal/tests/machinetelemetrycompat).
+// Package native implements three of the machine-telemetry package's routes
+// in the package itself: the administrator's hourly traffic series and user
+// traffic ranking, and the dashboard. The traffic routes read the kernel's
+// traffic log through the read-only kernel view kapi_traffic_log_v1 (the
+// user, bytes, rate and time of each node traffic report in v2_server_log),
+// and users' e-mail addresses through kapi_user_directory_v1. The kernel
+// writes the log when a node reports traffic; the package never writes it.
+// The dashboard is the snapshot the kernel caches, read through
+// KernelTelemetry (kernel.telemetry.dashboard.v1); without that contract it
+// stays legacy. Responses are byte-compatible with the legacy handlers
+// (internal/tests/machinetelemetrycompat).
 //
-// Three routes stay bridged; the reasons are in the host's bridgedRoutes
-// (packages/machine-telemetry/control/service.go): the dashboard (counts over
-// five domains, the online users the kernel keeps in its cache, and a
-// snapshot the kernel caches), the system information (the kernel binary's
-// build metadata) and the monitoring WebSocket.
+// Two routes are kernel-owned; the reasons are in the host's bridgedRoutes
+// (packages/machine-telemetry/control/service.go): the system information
+// (the kernel binary's build metadata) and the monitoring WebSocket.
 package native
 
 import (
@@ -29,6 +30,9 @@ type Service struct {
 	// Open returns the package's storage connection, on which the
 	// kapi_traffic_log_v1 and kapi_user_directory_v1 views are visible.
 	Open func(ctx context.Context) (*gorm.DB, error)
+	// Telemetry is the kernel's KernelTelemetry; without it the dashboard
+	// has no native handler and stays legacy.
+	Telemetry Telemetry
 	// Now defaults to time.Now. The hourly buckets are in the local time
 	// zone, as the kernel's; the kernel passes its TZ to the host.
 	Now func() time.Time
@@ -36,10 +40,14 @@ type Service struct {
 
 // Handlers returns the native handlers by route id.
 func (s *Service) Handlers() map[string]pluginhostsdk.NativeHandler {
-	return map[string]pluginhostsdk.NativeHandler{
+	handlers := map[string]pluginhostsdk.NativeHandler{
 		"telemetry.admin.traffic.hourly.get":       s.HourlyTraffic,
 		"telemetry.admin.traffic.user_ranking.get": s.UserTrafficRanking,
 	}
+	if s.Telemetry != nil {
+		handlers[DashboardRouteID] = s.Dashboard
+	}
+	return handlers
 }
 
 func (s *Service) now() time.Time {
