@@ -113,6 +113,13 @@ enum v2board.UserChangeNotification.ChangeType.TRAFFIC_RESET = 4
 enum v2board.UserChangeNotification.ChangeType.UNBANNED = 6
 enum v2board.UserChangeNotification.ChangeType.UNKNOWN = 0
 enum v2board.UserChangeNotification.ChangeType.UPDATED = 2
+field anix.agent.v1.AgentCertificate.certificate_der = 1 optional bytes
+field anix.agent.v1.AgentCertificate.node = 4 optional string
+field anix.agent.v1.AgentCertificate.not_after_unix = 6 optional int64
+field anix.agent.v1.AgentCertificate.renew_after_unix = 7 optional int64
+field anix.agent.v1.AgentCertificate.serial = 5 optional string
+field anix.agent.v1.AgentCertificate.spiffe_id = 3 optional string
+field anix.agent.v1.AgentCertificate.trust_bundle_der = 2 repeated bytes
 field anix.agent.v1.AgentToControl.config_status = 14 optional anix.agent.v1.ConfigStatus oneof payload
 field anix.agent.v1.AgentToControl.heartbeat = 11 optional anix.agent.v1.Heartbeat oneof payload
 field anix.agent.v1.AgentToControl.hello = 10 optional anix.agent.v1.Hello oneof payload
@@ -153,6 +160,12 @@ field anix.agent.v1.DesiredOperation.kind = 2 optional string
 field anix.agent.v1.DesiredOperation.operation_id = 1 optional string
 field anix.agent.v1.DesiredOperation.payload_json = 4 optional bytes
 field anix.agent.v1.DesiredOperation.revision = 3 optional uint64
+field anix.agent.v1.EnrollAgentRequest.agent_version = 3 optional string
+field anix.agent.v1.EnrollAgentRequest.csr_der = 1 optional bytes
+field anix.agent.v1.EnrollAgentRequest.enrollment_credential = 2 optional string
+field anix.agent.v1.EnrollAgentRequest.instance_id = 4 optional string
+field anix.agent.v1.EnrollAgentResponse.certificate = 1 optional anix.agent.v1.AgentCertificate
+field anix.agent.v1.GetAgentTrustBundleResponse.trust_bundle_der = 1 repeated bytes
 field anix.agent.v1.Heartbeat.MetricsEntry.key = 1 optional string
 field anix.agent.v1.Heartbeat.MetricsEntry.value = 2 optional double
 field anix.agent.v1.Heartbeat.metrics = 4 repeated map<string,double>
@@ -224,6 +237,8 @@ field anix.agent.v1.PluginObservedState.version = 2 optional string
 field anix.agent.v1.PluginRuleCounter.bytes = 3 optional uint64
 field anix.agent.v1.PluginRuleCounter.packets = 2 optional uint64
 field anix.agent.v1.PluginRuleCounter.rule_id = 1 optional string
+field anix.agent.v1.RenewAgentCertificateRequest.csr_der = 1 optional bytes
+field anix.agent.v1.RenewAgentCertificateResponse.certificate = 1 optional anix.agent.v1.AgentCertificate
 field anix.agent.v1.ReportAck.applied = 2 optional bool
 field anix.agent.v1.ReportAck.batch_id = 1 optional string
 field anix.agent.v1.ReportAck.error = 3 optional string
@@ -983,6 +998,9 @@ field v2board.UserListResponse.total = 2 optional int64
 field v2board.UserListResponse.updated_at = 3 optional int64
 field v2board.UserListResponse.users = 1 repeated v2board.UserInfo
 rpc anix.agent.v1.AgentControlService.ControlStream(stream anix.agent.v1.AgentToControl) returns (stream anix.agent.v1.ControlToAgent)
+rpc anix.agent.v1.AgentEnrollment.Enroll(anix.agent.v1.EnrollAgentRequest) returns (anix.agent.v1.EnrollAgentResponse)
+rpc anix.agent.v1.AgentEnrollment.GetTrustBundle(anix.agent.v1.GetAgentTrustBundleRequest) returns (anix.agent.v1.GetAgentTrustBundleResponse)
+rpc anix.agent.v1.AgentEnrollment.Renew(anix.agent.v1.RenewAgentCertificateRequest) returns (anix.agent.v1.RenewAgentCertificateResponse)
 rpc anix.pluginhost.v1.ControlPackageHost.Dispatch(anix.pluginhost.v1.DispatchRequest) returns (anix.pluginhost.v1.DispatchResponse)
 rpc anix.pluginhost.v1.ControlPackageHost.Drain(anix.pluginhost.v1.DrainRequest) returns (anix.pluginhost.v1.DrainResponse)
 rpc anix.pluginhost.v1.ControlPackageHost.Health(anix.pluginhost.v1.HealthRequest) returns (anix.pluginhost.v1.HealthResponse)

@@ -582,6 +582,36 @@
     singleton worker runs the dispatcher and prunes hourly.
   - Contract tests on SQLite and PostgreSQL, and SDK bridge contract tests
     over the local bridge and the module listener.
+- **Agent PKI: mTLS client certificates for AnixOps Agents (A2-1)**
+  (`docs/architecture/module-runtime.md`, "Agent PKI"). The module CA now
+  also signs agent certificates whose one URI SAN names the node,
+  `spiffe://anixops/<cluster>/agent/proxy-<id>` or `.../forward-<id>`. They
+  last 7 days and renew at two thirds; the kernel ignores the CSR's subject.
+  - New service **`anix.agent.v1.AgentEnrollment`** (`Enroll`, `Renew`,
+    `GetTrustBundle`) in its own file, `agent_enrollment.proto`, so
+    `agent.proto`'s descriptor stays the v1.1.0 one. It is served on the
+    agent listener (port 50051). SDK helpers for agent identities and the
+    metadata keys are in `sdk/agentcontrol`.
+  - Bootstraps: the node credential an agent already has (`x-node-id` with
+    `x-api-key`, or a forward node's token with `x-node-kind: forward`), a
+    node bound by a registration key the same way, or a one-time
+    `anixagt_...` enrollment credential (at most 7 days, stored hashed) from
+    `POST /api/v4/kernel/agents/enrollment-tokens` or
+    `anix-control agent token create -node proxy-12`. Each credential issue
+    and each enrollment is written to the operation log.
+  - The listener verifies a client certificate when one is presented and
+    takes the node from it, for proxy and forward nodes; forward nodes can
+    now open the control stream. Envelope `node_id`s and v2board request
+    `node_id`s must name the certificate's node.
+  - New key `agent_control.mtls`: `optional` (default; legacy agents work
+    unchanged), `preferred` (a legacy control stream is answered with
+    `x-anix-auth-deprecated`) or `required` (certificates only on the Agent
+    services).
+  - New tables `v4_kernel_agent_enrollment` and
+    `v4_kernel_agent_certificate`, protected from package adoption.
+    Disabling or deleting a node and replacing a forward node's token revoke
+    its certificates; the listener refuses revoked serials through a cache
+    of at most 30 s, and an open stream ends at its next heartbeat.
 
 - **The administrator dashboard and the user's subscription summary run
   natively, from the kernel's caches** (`docs/architecture/kernel-caches.md`).

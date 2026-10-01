@@ -1,0 +1,81 @@
+syntax = "proto3";
+
+package anix.agent.v1;
+
+option go_package = "github.com/AnixOps/anix-control/sdk/api/agent/v1;agentv1pb";
+
+// AgentEnrollment issues the mTLS client certificates of AnixOps Agents. It is
+// served on Control's node-facing agent listener, next to
+// AgentControlService. It lives in its own file so the descriptor of
+// agent.proto, which Agents in the field run, stays unchanged.
+//
+// A certificate carries exactly one URI SAN naming the node:
+//
+//   spiffe://anixops/<cluster>/agent/proxy-<id>     a proxy node (v2_node)
+//   spiffe://anixops/<cluster>/agent/forward-<id>   a forward node (v2_forward_node)
+//
+// Control ignores the subject and SANs of the CSR and issues the identity of
+// the node the bootstrap credential authenticated.
+service AgentEnrollment {
+  // Enroll exchanges a bootstrap credential and a CSR for the node's first
+  // certificate. The credential is one of:
+  //   - the node credential an agent already has, as metadata: x-node-id and
+  //     x-api-key (a proxy node's API key), with x-node-kind "forward" for a
+  //     forward node's token;
+  //   - enrollment_credential, a one-time anixagt_ credential bound to a node.
+  rpc Enroll(EnrollAgentRequest) returns (EnrollAgentResponse);
+  // Renew issues a new certificate to the holder of a valid one, presented as
+  // the TLS client certificate.
+  rpc Renew(RenewAgentCertificateRequest) returns (RenewAgentCertificateResponse);
+  // GetTrustBundle returns the CA certificates that sign agent certificates.
+  // It requires a valid agent client certificate.
+  rpc GetTrustBundle(GetAgentTrustBundleRequest) returns (GetAgentTrustBundleResponse);
+}
+
+message EnrollAgentRequest {
+  // csr_der is a PKCS#10 request in DER. Only its public key is used.
+  bytes csr_der = 1;
+  // enrollment_credential is a one-time anixagt_ credential. Leave it empty
+  // to authenticate with the node credential in metadata.
+  string enrollment_credential = 2;
+  // agent_version and instance_id are recorded with the enrollment.
+  string agent_version = 3;
+  string instance_id = 4;
+}
+
+message EnrollAgentResponse {
+  AgentCertificate certificate = 1;
+}
+
+message RenewAgentCertificateRequest {
+  // csr_der is a PKCS#10 request in DER for the new key pair.
+  bytes csr_der = 1;
+}
+
+message RenewAgentCertificateResponse {
+  AgentCertificate certificate = 1;
+}
+
+message GetAgentTrustBundleRequest {}
+
+message GetAgentTrustBundleResponse {
+  // trust_bundle_der holds every CA certificate that may have signed a valid
+  // agent certificate: the current and next CAs, and retired CAs until the
+  // certificates they signed have expired.
+  repeated bytes trust_bundle_der = 1;
+}
+
+message AgentCertificate {
+  bytes certificate_der = 1;
+  repeated bytes trust_bundle_der = 2;
+  // spiffe_id is the certificate's URI SAN.
+  string spiffe_id = 3;
+  // node is "proxy-<id>" or "forward-<id>".
+  string node = 4;
+  // serial is the certificate serial number, lowercase hex.
+  string serial = 5;
+  int64 not_after_unix = 6;
+  // renew_after_unix is when the agent should renew: two thirds of the
+  // lifetime.
+  int64 renew_after_unix = 7;
+}

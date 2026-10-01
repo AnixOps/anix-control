@@ -10,6 +10,8 @@ import (
 	"net"
 	"time"
 
+	"github.com/AnixOps/anix-control/sdk/agentcontrol"
+	"github.com/AnixOps/anix-control/v4/internal/agentpki"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"gorm.io/gorm"
@@ -36,23 +38,37 @@ func (s *ForwardNodeService) Create(node *model.ForwardNode) error {
 	})
 }
 
-// Update 更新节点
+// Update 更新节点. A changed token or a disabled node revokes the node's
+// agent certificates.
 func (s *ForwardNodeService) Update(node *model.ForwardNode) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
+		reason, err := forwardNodeAgentRevocation(tx, node)
+		if err != nil {
+			return err
+		}
 		if err := tx.Save(node).Error; err != nil {
 			return err
 		}
-		return nodesecrets.Sync(tx, nodesecrets.TableForwardNode, node.ID)
+		if err := nodesecrets.Sync(tx, nodesecrets.TableForwardNode, node.ID); err != nil {
+			return err
+		}
+		if reason == "" {
+			return nil
+		}
+		return revokeNodeAgents(tx, agentcontrol.NodeKindForward, node.ID, reason)
 	})
 }
 
-// Delete 删除节点
+// Delete 删除节点 and revoke its agent certificates.
 func (s *ForwardNodeService) Delete(id uint) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		if err := tx.Delete(&model.ForwardNode{}, id).Error; err != nil {
 			return err
 		}
-		return nodesecrets.Sync(tx, nodesecrets.TableForwardNode, id)
+		if err := nodesecrets.Sync(tx, nodesecrets.TableForwardNode, id); err != nil {
+			return err
+		}
+		return revokeNodeAgents(tx, agentcontrol.NodeKindForward, id, agentpki.RevokeReasonNodeDeleted)
 	})
 }
 

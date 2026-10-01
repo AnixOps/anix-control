@@ -43,6 +43,36 @@ type Config struct {
 	GRPC           GRPCConfig           `yaml:"grpc"`
 	ModuleRuntime  ModuleRuntimeConfig  `yaml:"module_runtime"`
 	Identity       IdentityConfig       `yaml:"identity"`
+	AgentControl   AgentControlConfig   `yaml:"agent_control"`
+}
+
+// AgentControlConfig configures how AnixOps Agents authenticate on the
+// node-facing gRPC listener (grpc.*).
+type AgentControlConfig struct {
+	// MTLS selects the client certificate mode of the agent listener:
+	// "optional" (default: a client certificate is verified when given,
+	// otherwise the legacy node credential authenticates), "preferred"
+	// (legacy credentials still work; the control stream answers them with
+	// a deprecation header) or "required" (the Agent services accept
+	// certificates only).
+	// Certificates come from AgentEnrollment and need the built-in module
+	// PKI and grpc.tls_cert_file.
+	MTLS string `yaml:"mtls"`
+}
+
+// Agent listener client certificate modes (agent_control.mtls).
+const (
+	AgentMTLSOptional  = "optional"
+	AgentMTLSPreferred = "preferred"
+	AgentMTLSRequired  = "required"
+)
+
+// MTLSOrDefault returns the configured mode, "optional" when empty.
+func (a AgentControlConfig) MTLSOrDefault() string {
+	if mode := strings.ToLower(strings.TrimSpace(a.MTLS)); mode != "" {
+		return mode
+	}
+	return AgentMTLSOptional
 }
 
 // IdentityConfig configures the identity module when Control runs it as a
@@ -462,6 +492,9 @@ func (c *Config) ValidateForServer() error {
 	if err := c.ModuleRuntime.validate(); err != nil {
 		return err
 	}
+	if err := c.validateAgentControl(); err != nil {
+		return err
+	}
 	if c.Env == "production" {
 		secret := strings.TrimSpace(c.JWT.Secret)
 		if secret == "" {
@@ -470,6 +503,30 @@ func (c *Config) ValidateForServer() error {
 		if placeholderJWTSecrets[secret] {
 			return fmt.Errorf("jwt.secret still has the template value; generate a random secret")
 		}
+	}
+	return nil
+}
+
+// validateAgentControl checks agent_control.mtls. Modes other than optional
+// need what verifies client certificates: TLS on the gRPC listener and the
+// built-in module CA that signs agent certificates.
+func (c *Config) validateAgentControl() error {
+	mode := c.AgentControl.MTLSOrDefault()
+	switch mode {
+	case AgentMTLSOptional:
+		return nil
+	case AgentMTLSPreferred, AgentMTLSRequired:
+	default:
+		return fmt.Errorf("agent_control.mtls must be %q, %q or %q", AgentMTLSOptional, AgentMTLSPreferred, AgentMTLSRequired)
+	}
+	if !c.GRPC.Enable {
+		return nil
+	}
+	if strings.TrimSpace(c.GRPC.TLSCertFile) == "" || strings.TrimSpace(c.GRPC.TLSKeyFile) == "" {
+		return fmt.Errorf("agent_control.mtls %q needs TLS on the gRPC listener (grpc.tls_cert_file and grpc.tls_key_file)", mode)
+	}
+	if !c.ModuleRuntime.Enabled || c.ModuleRuntime.PKIOrDefault() != ModulePKIBuiltin {
+		return fmt.Errorf("agent_control.mtls %q needs the built-in module PKI (module_runtime.enabled with pki: builtin), which signs agent certificates", mode)
 	}
 	return nil
 }

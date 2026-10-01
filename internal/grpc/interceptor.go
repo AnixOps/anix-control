@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/v4/internal/authn"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/service"
@@ -139,10 +140,28 @@ func authenticateNode(ctx context.Context) (nodeID uint32, authed bool, err erro
 // AuthInterceptor 认证拦截器: 先校验节点自身 x-api-key, 否则回退到全局
 // API Token / JWT 两种认证方式 (管理端/兼容旧调用)
 func AuthInterceptor(apiToken, jwtSecret string) grpc.UnaryServerInterceptor {
+	return AuthInterceptorWithAgents(apiToken, jwtSecret, nil)
+}
+
+// AuthInterceptorWithAgents is AuthInterceptor on a listener that accepts
+// agent client certificates. The Agent services authenticate in their
+// handlers. On the v2board services a client certificate, when presented,
+// must be a proxy node's agent certificate and authenticates the call; the
+// request's node_id must name that node. Without a certificate the legacy
+// credentials apply, whatever agent_control.mtls says: third-party node
+// software keeps using them.
+func AuthInterceptorWithAgents(apiToken, jwtSecret string, agents *AgentAuthenticator) grpc.UnaryServerInterceptor {
 	return func(ctx context.Context, req any, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
 		// 健康检查和节点注册不需要认证 (注册时节点还没有 api key)
-		if strings.Contains(info.FullMethod, "HealthService") || strings.HasSuffix(info.FullMethod, "/Register") {
+		if strings.Contains(info.FullMethod, "HealthService") || strings.HasSuffix(info.FullMethod, "/Register") ||
+			strings.HasPrefix(info.FullMethod, agentServicePrefix) {
 			return handler(ctx, req)
+		}
+
+		if principal, ok, err := v2boardCertificatePrincipal(ctx, agents); err != nil {
+			return nil, err
+		} else if ok {
+			return handler(withNodeCaller(ctx, principal.Node.ID), req)
 		}
 
 		if nodeID, authed, err := authenticateNode(ctx); err != nil {
@@ -186,10 +205,25 @@ func AuthInterceptor(apiToken, jwtSecret string) grpc.UnaryServerInterceptor {
 // StreamAuthInterceptor 流式认证拦截器: 先校验节点自身 x-api-key, 否则回退到
 // 全局 API Token / JWT 两种认证方式 (管理端/兼容旧调用)
 func StreamAuthInterceptor(apiToken, jwtSecret string) grpc.StreamServerInterceptor {
+	return StreamAuthInterceptorWithAgents(apiToken, jwtSecret, nil)
+}
+
+// StreamAuthInterceptorWithAgents is StreamAuthInterceptor on a listener
+// that accepts agent client certificates; see AuthInterceptorWithAgents.
+// Every message of a certificate-authenticated v2board stream must carry
+// the certificate's node_id.
+func StreamAuthInterceptorWithAgents(apiToken, jwtSecret string, agents *AgentAuthenticator) grpc.StreamServerInterceptor {
 	return func(srv any, ss grpc.ServerStream, info *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
-		// 健康检查不需要认证
-		if strings.Contains(info.FullMethod, "HealthService") {
+		// 健康检查不需要认证; the Agent services authenticate in their
+		// handlers (certificate or node API key, per agent_control.mtls).
+		if strings.Contains(info.FullMethod, "HealthService") || strings.HasPrefix(info.FullMethod, agentServicePrefix) {
 			return handler(srv, ss)
+		}
+
+		if principal, ok, err := v2boardCertificatePrincipal(ss.Context(), agents); err != nil {
+			return err
+		} else if ok {
+			return handler(srv, &streamWithContext{ServerStream: ss, ctx: withNodeCaller(ss.Context(), principal.Node.ID)})
 		}
 
 		if nodeID, authed, err := authenticateNode(ss.Context()); err != nil {
@@ -230,6 +264,19 @@ func StreamAuthInterceptor(apiToken, jwtSecret string) grpc.StreamServerIntercep
 		}
 		return handler(srv, wrapped)
 	}
+}
+
+// v2boardCertificatePrincipal authenticates a v2board call by client
+// certificate: only a proxy node's agent certificate is accepted there.
+func v2boardCertificatePrincipal(ctx context.Context, agents *AgentAuthenticator) (agentPrincipal, bool, error) {
+	principal, ok, err := agents.certificatePrincipal(ctx)
+	if err != nil || !ok {
+		return agentPrincipal{}, false, err
+	}
+	if principal.Node.Kind != agentcontrol.NodeKindProxy {
+		return agentPrincipal{}, false, status.Error(codes.PermissionDenied, "only proxy node certificates may call the v2board services")
+	}
+	return principal, true, nil
 }
 
 // validateToken 验证 token，支持 JWT 和 API Token 两种方式

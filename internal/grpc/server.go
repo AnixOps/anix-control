@@ -9,6 +9,7 @@ import (
 
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	pb "github.com/AnixOps/anix-control/v4/api/grpc/v2boardpb"
+	"github.com/AnixOps/anix-control/v4/internal/agentpki"
 	"github.com/AnixOps/anix-control/v4/internal/panicrecovery"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials"
@@ -36,6 +37,13 @@ type ServerConfig struct {
 	MaxConnectionIdle time.Duration
 	// 最大连接年龄
 	MaxConnectionAge time.Duration
+	// AgentPKI verifies agent client certificates and serves
+	// AgentEnrollment; nil when the built-in module PKI is off. Client
+	// certificates need TLS (TLSCertFile).
+	AgentPKI *agentpki.Service
+	// AgentMTLS is agent_control.mtls: optional (default), preferred or
+	// required.
+	AgentMTLS string
 }
 
 // DefaultServerConfig 默认配置
@@ -55,6 +63,24 @@ type Server struct {
 	config     *ServerConfig
 	grpcServer *grpc.Server
 	listener   net.Listener
+}
+
+// agentAuthenticator returns how agents authenticate on this listener.
+func (s *Server) agentAuthenticator() *AgentAuthenticator {
+	return &AgentAuthenticator{PKI: s.config.AgentPKI, Mode: s.config.AgentMTLS}
+}
+
+// tlsConfig is the listener's TLS configuration. With the agent PKI the
+// server asks for a client certificate but never requires one in the
+// handshake: agents enroll without one, and legacy agents have none. The
+// Agent services and the interceptors verify a presented certificate
+// against the agent trust bundle, which changes with CA rotation.
+func (s *Server) tlsConfig(cert tls.Certificate) *tls.Config {
+	config := &tls.Config{Certificates: []tls.Certificate{cert}}
+	if s.config.AgentPKI != nil {
+		config.ClientAuth = tls.RequestClientCert
+	}
+	return config
 }
 
 // NewServer 创建 gRPC 服务器
@@ -108,9 +134,7 @@ func (s *Server) Start() error {
 		if err != nil {
 			return fmt.Errorf("failed to load gRPC TLS cert/key: %w", err)
 		}
-		opts = append(opts, grpc.Creds(credentials.NewTLS(&tls.Config{
-			Certificates: []tls.Certificate{cert},
-		})))
+		opts = append(opts, grpc.Creds(credentials.NewTLS(s.tlsConfig(cert))))
 	}
 
 	// 创建 gRPC 服务器
@@ -122,7 +146,9 @@ func (s *Server) Start() error {
 	pb.RegisterUserServiceServer(s.grpcServer, NewUserGRPCServer())
 	pb.RegisterTrafficServiceServer(s.grpcServer, NewTrafficGRPCServer())
 	pb.RegisterHealthServiceServer(s.grpcServer, NewHealthGRPCServer())
-	agentv1pb.RegisterAgentControlServiceServer(s.grpcServer, NewAgentControlGRPCServer(nil))
+	agents := s.agentAuthenticator()
+	agentv1pb.RegisterAgentControlServiceServer(s.grpcServer, NewAgentControlGRPCServer(nil).WithAuthenticator(agents))
+	agentv1pb.RegisterAgentEnrollmentServer(s.grpcServer, NewAgentEnrollmentGRPCServer(agents))
 
 	// 启动服务器
 	go func() {
@@ -142,6 +168,12 @@ func (s *Server) Stop() {
 		s.grpcServer.GracefulStop()
 		slog.Info("gRPC server stopped", "component", "grpc")
 	}
+}
+
+// AgentPKI returns the agent PKI the listener verifies client certificates
+// with, nil when the built-in module PKI is off.
+func (s *Server) AgentPKI() *agentpki.Service {
+	return s.config.AgentPKI
 }
 
 // GetAgentControlManager returns the Agent-first desired/observed connection manager.
@@ -167,7 +199,8 @@ func (s *Server) interceptorChains() ([]grpc.UnaryServerInterceptor, []grpc.Stre
 	// 不能因为没配置全局 api_token/JWT 就完全跳过认证 (那样任何人接上
 	// gRPC 端口都能冒充任意 node_id 上报数据)。api_token/JWT 仅用于给
 	// 没有节点 key 的旧版调用方或管理端做兼容回退。
-	interceptors = append(interceptors, AuthInterceptor(s.config.APIToken, s.config.JWTSecret))
-	streamInterceptors = append(streamInterceptors, StreamAuthInterceptor(s.config.APIToken, s.config.JWTSecret))
+	agents := s.agentAuthenticator()
+	interceptors = append(interceptors, AuthInterceptorWithAgents(s.config.APIToken, s.config.JWTSecret, agents))
+	streamInterceptors = append(streamInterceptors, StreamAuthInterceptorWithAgents(s.config.APIToken, s.config.JWTSecret, agents))
 	return interceptors, streamInterceptors
 }

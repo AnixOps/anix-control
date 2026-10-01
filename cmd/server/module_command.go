@@ -31,15 +31,26 @@ func moduleUsageError() error {
 	return fmt.Errorf("invalid module command\n%s", moduleCommandUsage)
 }
 
-// takeModuleCommand removes a leading "module" argument and returns the
-// arguments after it; nil means the process is not running a module command.
-func takeModuleCommand() []string {
-	if len(os.Args) > 1 && os.Args[1] == "module" {
-		arguments := append([]string{}, os.Args[2:]...)
+// takeAdminCommand removes a leading "module" or "agent" command and returns
+// it with its arguments; nil means the process is not running one.
+func takeAdminCommand() []string {
+	if len(os.Args) > 1 && (os.Args[1] == "module" || os.Args[1] == "agent") {
+		arguments := append([]string{}, os.Args[1:]...)
 		os.Args = os.Args[:1]
 		return arguments
 	}
 	return nil
+}
+
+// runAdminCommand runs a command taken by takeAdminCommand.
+func runAdminCommand(ctx context.Context, cfg *config.Config, db *gorm.DB, arguments []string, stdout io.Writer) error {
+	if len(arguments) > 0 && arguments[0] == "agent" {
+		return runAgentCommand(ctx, cfg, db, arguments[1:], stdout)
+	}
+	if len(arguments) > 0 && arguments[0] == "module" {
+		return runModuleCommand(ctx, cfg, db, arguments[1:], stdout)
+	}
+	return moduleUsageError()
 }
 
 // runModuleCommand administers the built-in module PKI from the command line.

@@ -233,6 +233,14 @@ grpc:
   tls_cert_file: ""
   tls_key_file: ""
 
+# Agent client certificates on the gRPC listener (AgentEnrollment).
+# optional: verify a certificate when an agent presents one, else accept the
+# node API key; preferred: same, with a deprecation header for API keys;
+# required: the Agent services take certificates only. preferred and required
+# need grpc.tls_cert_file and the built-in module PKI (module_runtime).
+agent_control:
+  mtls: "optional"
+
 admin:
   email: "control@anixops.com"
   # Leave empty to generate and print a one-time random bootstrap password.
