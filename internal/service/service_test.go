@@ -555,6 +555,44 @@ func (s *NodeServiceTestSuite) TestProtocolCRUD() {
 	assert.NoError(s.T(), err)
 }
 
+// linkedProtocol creates a node with a protocol linked to a subscription
+// group.
+func (s *NodeServiceTestSuite) linkedProtocol(name string) (*model.Node, *model.NodeProtocol, *model.SubscriptionGroup) {
+	node := &model.Node{Name: name, Host: name + ".example.test", APIKey: name + "-key"}
+	s.Require().NoError(database.GetDB().Create(node).Error)
+	protocol := &model.NodeProtocol{NodeID: node.ID, Name: name + "-vless", Type: model.ProtocolVLESS, Port: 443}
+	s.Require().NoError(database.GetDB().Create(protocol).Error)
+	group := &model.SubscriptionGroup{Name: name + "-group", Enable: 1, Protocols: []model.NodeProtocol{*protocol}}
+	s.Require().NoError(database.GetDB().Create(group).Error)
+	s.Require().EqualValues(1, s.protocolLinks(protocol.ID))
+	return node, protocol, group
+}
+
+func (s *NodeServiceTestSuite) protocolLinks(protocolID uint) int64 {
+	var links int64
+	s.Require().NoError(database.GetDB().Table("v2_subscription_group_node_protocols").Where("node_protocol_id = ?", protocolID).Count(&links).Error)
+	return links
+}
+
+// Deleting a protocol removes its subscription group links: PostgreSQL
+// refused to delete a linked protocol, and SQLite kept orphan links.
+func (s *NodeServiceTestSuite) TestDeleteProtocolRemovesGroupLinks() {
+	_, protocol, group := s.linkedProtocol("protocol-delete")
+	s.Require().NoError(s.svc.DeleteProtocol(protocol.ID))
+	s.Zero(s.protocolLinks(protocol.ID))
+	var kept model.SubscriptionGroup
+	s.NoError(database.GetDB().First(&kept, group.ID).Error, "the group itself stays")
+}
+
+// Deleting a node removes its protocols' subscription group links too.
+func (s *NodeServiceTestSuite) TestDeleteNodeRemovesItsProtocolsGroupLinks() {
+	node, protocol, _ := s.linkedProtocol("node-delete")
+	_, other, _ := s.linkedProtocol("node-kept")
+	s.Require().NoError(s.svc.DeleteNode(node.ID))
+	s.Zero(s.protocolLinks(protocol.ID))
+	s.EqualValues(1, s.protocolLinks(other.ID), "another node's links stay")
+}
+
 func TestNodeService(t *testing.T) {
 	suite.Run(t, new(NodeServiceTestSuite))
 }

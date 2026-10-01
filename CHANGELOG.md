@@ -1441,6 +1441,9 @@
   tunnel, and the forward was applied there again, while its port bindings
   moved to the new tunnel's node; the old node's port was then free for
   another forward. The forward is now saved without its associations.
+- Deleting a node protocol, or a node, removes the protocols' subscription
+  group links. On PostgreSQL deleting a linked protocol or its node failed on
+  the foreign key; on SQLite the links were left behind.
 - Deleting a subscription group removes its node protocol links. On
   PostgreSQL deleting a group with links failed on the foreign key; on SQLite
   the links were left behind.
