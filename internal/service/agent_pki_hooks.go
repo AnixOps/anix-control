@@ -7,6 +7,7 @@ import (
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/v4/internal/agentpki"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"gorm.io/gorm"
 )
 
@@ -47,8 +48,10 @@ func forwardNodeAgentRevocation(tx *gorm.DB, node *model.ForwardNode) (string, e
 		}
 		return "", err
 	}
+	// The stored token is read through the node credential split, so a
+	// change is seen whichever form holds it.
 	switch {
-	case stored.APIToken != node.APIToken:
+	case nodesecrets.ForwardNodeToken(tx, &stored) != node.APIToken:
 		return agentpki.RevokeReasonCredentialsReplaced, nil
 	case !node.Enabled:
 		return agentpki.RevokeReasonNodeDisabled, nil

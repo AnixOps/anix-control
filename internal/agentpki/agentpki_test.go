@@ -13,6 +13,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/modulepki"
+	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -432,4 +433,71 @@ func TestFromConfigUsesTheCAAlone(t *testing.T) {
 	_, err = agentpki.FromConfig(&config.Config{}, db)
 	require.ErrorIs(t, err, agentpki.ErrDisabled)
 	require.NotErrorIs(t, err, agentpki.ErrExternalPKI)
+}
+
+// TestEnrollReadsNodeCredentialsByPhase: the enrollment bootstrap reads node
+// keys and forward tokens through the node credential split. In dual_read
+// a key whose legacy column holds a tombstone but whose new row is valid
+// enrolls; a valid legacy column without a new row falls back and counts
+// the metric. In dual_write only the legacy columns count.
+func TestEnrollReadsNodeCredentialsByPhase(t *testing.T) {
+	forEachDatabase(t, func(t *testing.T, f *fixture) {
+		ctx := t.Context()
+		// The fixture has the node tables only.
+		tables := []string{nodesecrets.TableNode, nodesecrets.TableForwardNode}
+		require.NoError(t, nodesecrets.EnsureSchema(f.db))
+		_, err := nodesecrets.Backfill(ctx, f.db, nodesecrets.BackfillOptions{Tables: tables})
+		require.NoError(t, err)
+		_, err = nodesecrets.Verify(ctx, f.db, nodesecrets.VerifyOptions{Tables: tables})
+		require.NoError(t, err)
+		proxyBootstrap := agentpki.Bootstrap{Method: model.AgentEnrollmentMethodNodeAPIKey, Node: f.proxyNode(), Secret: f.proxyKey}
+		forwardBootstrap := agentpki.Bootstrap{Method: model.AgentEnrollmentMethodForwardToken, Node: f.forwardNode(), Secret: f.forwardToken}
+		setPhase := func(phase string) {
+			_, err := nodesecrets.SetPhase(ctx, f.db, nodesecrets.PhaseOptions{Tables: tables, Phase: phase, Actor: "test"})
+			require.NoError(t, err)
+		}
+
+		// Only the new tables hold the secrets, as after P3.
+		require.NoError(t, f.db.Model(&model.Node{}).Where("id = ?", f.proxy.ID).
+			UpdateColumns(map[string]any{"api_key": nodesecrets.Tombstone(uint64(f.proxy.ID)), "api_key_hash": ""}).Error)
+		require.NoError(t, f.db.Model(&model.ForwardNode{}).Where("id = ?", f.forward.ID).UpdateColumn("api_token", "").Error)
+		keyFallbacks := nodesecrets.FallbackCount(nodesecrets.TableNode, nodesecrets.KindNodeAPIKey, "")
+		tokenFallbacks := nodesecrets.FallbackCount(nodesecrets.TableForwardNode, nodesecrets.KindForwardNodeToken, "")
+
+		setPhase(nodesecrets.PhaseDualRead)
+		issued, err := f.enroll(t, proxyBootstrap)
+		require.NoError(t, err)
+		requireNodeCertificate(t, f, issued, f.proxyNode())
+		issued, err = f.enroll(t, forwardBootstrap)
+		require.NoError(t, err)
+		requireNodeCertificate(t, f, issued, f.forwardNode())
+		require.Equal(t, keyFallbacks, nodesecrets.FallbackCount(nodesecrets.TableNode, nodesecrets.KindNodeAPIKey, ""))
+		require.Equal(t, tokenFallbacks, nodesecrets.FallbackCount(nodesecrets.TableForwardNode, nodesecrets.KindForwardNodeToken, ""))
+		// The tombstone itself never enrolls.
+		_, err = f.enroll(t, agentpki.Bootstrap{Method: model.AgentEnrollmentMethodNodeAPIKey, Node: f.proxyNode(), Secret: nodesecrets.Tombstone(uint64(f.proxy.ID))})
+		require.ErrorIs(t, err, agentpki.ErrEnrollmentRejected)
+
+		// In dual_write the legacy columns are the only ones read.
+		setPhase(nodesecrets.PhaseDualWrite)
+		_, err = f.enroll(t, proxyBootstrap)
+		require.ErrorIs(t, err, agentpki.ErrEnrollmentRejected)
+		_, err = f.enroll(t, forwardBootstrap)
+		require.ErrorIs(t, err, agentpki.ErrEnrollmentRejected)
+
+		// The reverse: valid legacy columns and no new row fall back, and
+		// count it.
+		require.NoError(t, f.db.Model(&model.Node{}).Where("id = ?", f.proxy.ID).
+			UpdateColumns(map[string]any{"api_key": f.proxyKey, "api_key_hash": sha256Hex(f.proxyKey)}).Error)
+		require.NoError(t, f.db.Model(&model.ForwardNode{}).Where("id = ?", f.forward.ID).UpdateColumn("api_token", f.forwardToken).Error)
+		require.NoError(t, f.db.Where("subject_kind IN ?", []string{nodesecrets.SubjectProxy, nodesecrets.SubjectForward}).Delete(&model.NodeCredential{}).Error)
+		setPhase(nodesecrets.PhaseDualRead)
+		issued, err = f.enroll(t, proxyBootstrap)
+		require.NoError(t, err)
+		requireNodeCertificate(t, f, issued, f.proxyNode())
+		issued, err = f.enroll(t, forwardBootstrap)
+		require.NoError(t, err)
+		requireNodeCertificate(t, f, issued, f.forwardNode())
+		require.Equal(t, keyFallbacks+1, nodesecrets.FallbackCount(nodesecrets.TableNode, nodesecrets.KindNodeAPIKey, nodesecrets.FallbackMissing))
+		require.Equal(t, tokenFallbacks+1, nodesecrets.FallbackCount(nodesecrets.TableForwardNode, nodesecrets.KindForwardNodeToken, nodesecrets.FallbackMissing))
+	})
 }

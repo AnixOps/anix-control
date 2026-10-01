@@ -633,6 +633,8 @@
     - Protocol secrets in `BuildNodeProtocolConfig` and the subscription
       renderer, raw configurations in UniProxy, WireGuard peer keys, and
       `GET /admin/nodes/:id/credentials`.
+    - The agent enrollment bootstrap (a node API key or a forward token) and
+      the forward node update's token-change check.
   - **Phases.** In `dual_write` the readers read the legacy columns as
     before and never the new tables. In `dual_read` they read the new
     tables.
@@ -675,6 +677,8 @@
       excluding; the tombstone guard.
     - An older binary's legacy-only reads still authenticate every node
       after `dual_read`.
+    - An agent enrolls in `dual_read` with a key whose legacy column is a
+      tombstone; a missing new row falls back and counts.
 
 - **The administrator dashboard and the user's subscription summary run
   natively, from the kernel's caches** (`docs/architecture/kernel-caches.md`).

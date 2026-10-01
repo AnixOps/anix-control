@@ -727,6 +727,10 @@ gate (NO-9) refuses any other kernel read of a moved column.
     configuration) and in the subscription renderer; the raw configuration
     in UniProxy; WireGuard peer keys in subscriptions and in the node's user
     list; the administrators' credentials route.
+  - The A2-1 enrollment bootstrap (`agentpki.Enroll` with a node API key or
+    a forward token), and the forward node update's token-change check that
+    revokes agent certificates. The listener's legacy stream path shares
+    `GetNodeByAPIKey`.
 - **The rule.** Phases are read from `v4_kernel_node_secret_split` and
   cached for 5 seconds per process.
   - In `dual_write` a reader reads the legacy column exactly as before and
@@ -772,8 +776,8 @@ gate (NO-9) refuses any other kernel read of a moved column.
   - The forward node inventory filter (`api_token = ''`) is a presence check,
     not a read of a value. It moves to `kapi_node_credential_status_v1` with
     the tombstones in NO-9.
-  - The A2-1 enrollment bootstrap reads node keys through
-    `NodeAPIKeyMatches` and `NodeByAPIKey` once it lands.
+  - Enrollment has no registration-key method; registration keys are read
+    only by `RegisterNode`.
 
 **Rollback:**
 
