@@ -566,6 +566,46 @@ node `403`, and a result for another node's task `404`. `anix-agent` uses
 the WebSocket and is not affected; a custom agent or script that polls
 these routes must send the credentials.
 
+### The Node gRPC Listener Needs A Node Key
+
+With `grpc.api_token` empty (the default), the node gRPC listener
+(`grpc.*`, port 50051) let through any caller that sent an `authorization`
+header, whatever its value, and answered it for any node: node
+configurations with their protocol keys, user UUIDs, traffic, status and
+log reports. It now authenticates only:
+
+- a node's own API key, in `x-api-key` with the node's id in `x-node-id`, as
+  V2bX and anix-agent send them. The call acts for that node only: a request
+  whose `node_id` names another node is answered `PermissionDenied`, and a
+  stream that sends one ends;
+- `grpc.api_token`, when it is set, as `authorization: Bearer <token>`. It is
+  the administrator's token and acts for any node;
+- without credentials, `HealthService` and `NodeService/Register`, as
+  before.
+
+A caller without a node key, such as a script or probe that sent a made-up
+token, is now answered `Unauthenticated`. Give it a node's API key, or set
+`grpc.api_token` (`ANIX_CONTROL_GRPC_API_TOKEN`) to a generated secret and
+send that. After the upgrade, refused calls show in the log as
+`grpc unary request` or `grpc stream request` lines with
+`code=Unauthenticated` or `code=PermissionDenied`.
+
+Disabled nodes:
+
+- A disabled node's API key is refused on the listener (`PermissionDenied`,
+  `node is disabled`), as the HTTP node API and the Agent control stream
+  already refused it. A status stream that is open when the node is
+  disabled ends at its next report.
+- Heartbeats no longer re-enable a disabled node. Every heartbeat (gRPC,
+  UniProxy over HTTP, the agent WebSocket and its HTTP routes) records
+  `last_check_at` and sets a pending or offline node online, as before, but
+  leaves a disabled node disabled, and the administrator's node list shows
+  it disabled. A node an agent had silently re-enabled stays enabled after
+  the upgrade: check the nodes that should be disabled and disable them
+  again.
+- UniProxy over HTTP still answers a disabled node's polling; only the
+  status is kept.
+
 ### Order Lists And Details No Longer Embed The Buyer And Plan Rows
 
 The four order list and detail routes embedded the buyer's whole `v2_user`

@@ -56,7 +56,7 @@ func (s *StreamBidirectionalTestSuite) SetupSuite() {
 	require.NoError(s.T(), err)
 	s.addr = lis.Addr().String()
 
-	s.server = grpc.NewServer()
+	s.server = grpc.NewServer(adminCallerServerOptionsForTest()...)
 	pb.RegisterNodeServiceServer(s.server, NewNodeGRPCServer())
 	pb.RegisterUserServiceServer(s.server, NewUserGRPCServer())
 	pb.RegisterTrafficServiceServer(s.server, NewTrafficGRPCServer())

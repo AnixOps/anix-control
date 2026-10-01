@@ -28,7 +28,7 @@ func (panickingHealthServer) Watch(*healthpb.HealthCheckRequest, healthpb.Health
 }
 
 func TestNodeServerInterceptorChainsRecoverHandlerPanics(t *testing.T) {
-	unary, stream := NewServer(&ServerConfig{}).interceptorChains()
+	unary, stream := NewServer(&ServerConfig{APIToken: "test"}).interceptorChains()
 	listener := bufconn.Listen(1 << 20)
 	server := grpc.NewServer(grpc.ChainUnaryInterceptor(unary...), grpc.ChainStreamInterceptor(stream...))
 	healthpb.RegisterHealthServer(server, panickingHealthServer{})
@@ -42,8 +42,8 @@ func TestNodeServerInterceptorChainsRecoverHandlerPanics(t *testing.T) {
 	require.NoError(t, err)
 	t.Cleanup(func() { require.NoError(t, connection.Close()) })
 	client := healthpb.NewHealthClient(connection)
-	// No global token is configured, so any bearer token passes the auth
-	// interceptor and the call reaches the panicking handler.
+	// The global token passes the auth interceptor and the call reaches the
+	// panicking handler.
 	ctx := metadata.AppendToOutgoingContext(context.Background(), "authorization", "Bearer test")
 
 	for range 2 {

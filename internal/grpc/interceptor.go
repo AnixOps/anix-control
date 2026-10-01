@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"crypto/subtle"
 	"log/slog"
 	"strconv"
 	"strings"
@@ -9,6 +10,7 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/authn"
+	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/AnixOps/anix-control/v4/internal/utils"
 	"google.golang.org/grpc"
@@ -99,32 +101,39 @@ func GetConnectionManager() *NodeConnectionManager {
 // APIKeyHash 校验, 且 x-node-id 必须与 key 对应的节点一致, 防止一个节点的
 // key 被拿来冒充另一个 node_id。Register 方法没有 key (节点还没注册), 由
 // 调用方跳过。
-func authenticateNode(ctx context.Context) (authed bool, errMsg string) {
+//
+// authed is false with a nil error when the call carries no node key. A
+// disabled node is refused (PermissionDenied), as the HTTP node API and the
+// Agent control stream refuse it.
+func authenticateNode(ctx context.Context) (nodeID uint32, authed bool, err error) {
 	md, ok := metadata.FromIncomingContext(ctx)
 	if !ok {
-		return false, ""
+		return 0, false, nil
 	}
 	keys := md.Get("x-api-key")
 	if len(keys) == 0 || keys[0] == "" {
-		return false, ""
+		return 0, false, nil
 	}
 	ids := md.Get("x-node-id")
 	if len(ids) == 0 {
-		return false, "missing x-node-id"
+		return 0, false, status.Error(codes.Unauthenticated, "missing x-node-id")
 	}
-	nodeID, err := strconv.ParseUint(ids[0], 10, 32)
-	if err != nil {
-		return false, "invalid x-node-id"
+	claimed, parseErr := strconv.ParseUint(ids[0], 10, 32)
+	if parseErr != nil || claimed == 0 {
+		return 0, false, status.Error(codes.Unauthenticated, "invalid x-node-id")
 	}
 
-	node, err := service.NewNodeService().GetNodeByAPIKey(keys[0])
-	if err != nil {
-		return false, "invalid node api key"
+	node, lookupErr := service.NewNodeService().GetNodeByAPIKey(keys[0])
+	if lookupErr != nil {
+		return 0, false, status.Error(codes.Unauthenticated, "invalid node api key")
 	}
-	if uint64(node.ID) != nodeID {
-		return false, "node api key does not match x-node-id"
+	if uint64(node.ID) != claimed {
+		return 0, false, status.Error(codes.Unauthenticated, "node api key does not match x-node-id")
 	}
-	return true, ""
+	if node.Status == model.NodeStatusDisabled {
+		return 0, false, status.Error(codes.PermissionDenied, "node is disabled")
+	}
+	return uint32(claimed), true, nil
 }
 
 // AuthInterceptor 认证拦截器: 先校验节点自身 x-api-key, 否则回退到全局
@@ -136,10 +145,10 @@ func AuthInterceptor(apiToken, jwtSecret string) grpc.UnaryServerInterceptor {
 			return handler(ctx, req)
 		}
 
-		if authed, errMsg := authenticateNode(ctx); authed {
-			return handler(ctx, req)
-		} else if errMsg != "" {
-			return nil, status.Error(codes.Unauthenticated, errMsg)
+		if nodeID, authed, err := authenticateNode(ctx); err != nil {
+			return nil, err
+		} else if authed {
+			return handler(withNodeCaller(ctx, nodeID), req)
 		}
 
 		// 从 metadata 获取 token
@@ -161,6 +170,7 @@ func AuthInterceptor(apiToken, jwtSecret string) grpc.UnaryServerInterceptor {
 		if !authed {
 			return nil, status.Error(codes.Unauthenticated, err)
 		}
+		ctx = withAdminCaller(ctx)
 
 		// 如果 JWT 解析成功，将用户信息放入上下文
 		if claims != nil {
@@ -182,10 +192,10 @@ func StreamAuthInterceptor(apiToken, jwtSecret string) grpc.StreamServerIntercep
 			return handler(srv, ss)
 		}
 
-		if authed, errMsg := authenticateNode(ss.Context()); authed {
-			return handler(srv, ss)
-		} else if errMsg != "" {
-			return status.Error(codes.Unauthenticated, errMsg)
+		if nodeID, authed, err := authenticateNode(ss.Context()); err != nil {
+			return err
+		} else if authed {
+			return handler(srv, &streamWithContext{ServerStream: ss, ctx: withNodeCaller(ss.Context(), nodeID)})
 		}
 
 		// 从 metadata 获取 token
@@ -208,30 +218,36 @@ func StreamAuthInterceptor(apiToken, jwtSecret string) grpc.StreamServerIntercep
 			return status.Error(codes.Unauthenticated, errStr)
 		}
 
+		wrapped := &streamWithContext{
+			ServerStream: ss,
+			ctx:          withAdminCaller(ss.Context()),
+		}
 		// 如果 JWT 解析成功，将用户信息放入流上下文
 		if claims != nil {
-			wrapped := &streamWithContext{
-				ServerStream: ss,
-				ctx:          ss.Context(),
-			}
 			wrapped.ctx = SetUserIDToContext(wrapped.ctx, claims.UserID)
 			wrapped.ctx = SetUserEmailToContext(wrapped.ctx, claims.Email)
 			wrapped.ctx = SetUserAdminToContext(wrapped.ctx, claims.IsAdmin)
-			return handler(srv, wrapped)
 		}
-
-		return handler(srv, ss)
+		return handler(srv, wrapped)
 	}
 }
 
 // validateToken 验证 token，支持 JWT 和 API Token 两种方式
 // 返回: (是否认证通过, JWT claims(如果不是JWT则为nil), 错误信息)
+//
+// Both authenticate an administrator, who may act for any node: the
+// global grpc.api_token, or the JWT of an administrator (a user's login
+// JWT is refused). With neither configured every token is refused, and
+// only node API keys authenticate.
 func validateToken(token, apiToken, jwtSecret string) (bool, *utils.Claims, string) {
 	// 优先尝试 JWT 验证（如果 token 看起来像 JWT 且配置了 secret）
 	if jwtSecret != "" && strings.Contains(token, ".") {
 		verifier := authn.Verifier{Secret: func() string { return jwtSecret }, Revocations: authn.DefaultStore(), IdentityKeys: authn.DefaultIdentityKeys()}
 		claims, err := verifier.Verify(context.Background(), token)
 		if err == nil {
+			if !claims.IsAdmin {
+				return false, nil, "an administrator token is required"
+			}
 			return true, claims, ""
 		}
 		// JWT 验证失败，如果同时配置了 API Token 则回退
@@ -241,12 +257,7 @@ func validateToken(token, apiToken, jwtSecret string) (bool, *utils.Claims, stri
 	}
 
 	// API Token 验证
-	if apiToken != "" && token == apiToken {
-		return true, nil, ""
-	}
-
-	if apiToken == "" && jwtSecret == "" {
-		// 没有配置任何认证，放行
+	if apiToken != "" && subtle.ConstantTimeCompare([]byte(token), []byte(apiToken)) == 1 {
 		return true, nil, ""
 	}
 

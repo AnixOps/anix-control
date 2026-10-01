@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"log/slog"
 	"time"
@@ -69,6 +70,9 @@ func (s *NodeGRPCServer) Register(ctx context.Context, req *pb.NodeRegisterReque
 
 // GetConfig 获取节点配置
 func (s *NodeGRPCServer) GetConfig(ctx context.Context, req *pb.NodeConfigRequest) (*pb.NodeConfigResponse, error) {
+	if err := requireCallerNode(ctx, req.NodeId); err != nil {
+		return nil, err
+	}
 	if err := s.nodeService.UpdateLastCheckAt(uint(req.NodeId)); err != nil {
 		slog.Warn("failed to update node heartbeat before config fetch", "component", "grpc", "method", "GetConfig", "node_id", req.NodeId, "error", err)
 	}
@@ -149,6 +153,9 @@ func requireRequestedProtocol(preferred string) error {
 
 // ReportStatus 上报节点状态
 func (s *NodeGRPCServer) ReportStatus(ctx context.Context, req *pb.NodeStatusRequest) (*pb.StatusResponse, error) {
+	if err := requireCallerNode(ctx, req.NodeId); err != nil {
+		return nil, err
+	}
 	heartbeatReq := &model.NodeHeartbeatRequest{
 		CPUUsage:    req.CpuUsage,
 		MemoryUsage: req.MemoryUsage,
@@ -190,6 +197,9 @@ func (s *NodeGRPCServer) StatusStream(stream pb.NodeService_StatusStreamServer) 
 		if err != nil {
 			return err
 		}
+		if err := requireCallerNode(stream.Context(), req.NodeId); err != nil {
+			return err
+		}
 
 		// 首次连接时记录节点ID
 		if nodeID == 0 {
@@ -219,6 +229,11 @@ func (s *NodeGRPCServer) StatusStream(stream pb.NodeService_StatusStreamServer) 
 
 		// 检查是否有配置变更需要推送
 		configResp, err := s.checkConfigChangesWithContext(stream.Context(), req.NodeId)
+		if errors.Is(err, errNodeDisabled) {
+			// The node was disabled while its stream was open: end the
+			// stream, and its reconnection is refused.
+			return status.Error(codes.PermissionDenied, "node is disabled")
+		}
 		if err == nil && configResp != nil {
 			if err := stream.Send(configResp); err != nil {
 				slog.Warn("failed to send config update", "component", "grpc", "method", "StatusStream", "node_id", req.NodeId, "error", err)
@@ -227,10 +242,17 @@ func (s *NodeGRPCServer) StatusStream(stream pb.NodeService_StatusStreamServer) 
 	}
 }
 
+// errNodeDisabled is checkConfigChangesWithContext's answer for a disabled
+// node, which gets no configuration.
+var errNodeDisabled = errors.New("node is disabled")
+
 func (s *NodeGRPCServer) checkConfigChangesWithContext(ctx context.Context, nodeID uint32) (*pb.NodeConfigResponse, error) {
 	node, err := s.nodeService.GetNode(uint(nodeID))
 	if err != nil {
 		return nil, err
+	}
+	if node.Status == model.NodeStatusDisabled {
+		return nil, errNodeDisabled
 	}
 
 	currentVer := node.UpdatedAt.Unix()
@@ -302,6 +324,9 @@ func NewUserGRPCServer() *UserGRPCServer {
 
 // GetUsers 获取用户列表
 func (s *UserGRPCServer) GetUsers(ctx context.Context, req *pb.UserListRequest) (*pb.UserListResponse, error) {
+	if err := requireCallerNode(ctx, req.NodeId); err != nil {
+		return nil, err
+	}
 	_ = s.nodeService.UpdateLastCheckAt(uint(req.NodeId))
 
 	// 获取节点信息以确定分组
@@ -411,6 +436,9 @@ func NewTrafficGRPCServer() *TrafficGRPCServer {
 
 // ReportTraffic 批量上报流量
 func (s *TrafficGRPCServer) ReportTraffic(ctx context.Context, req *pb.TrafficReportRequest) (*pb.TrafficReportResponse, error) {
+	if err := requireCallerNode(ctx, req.NodeId); err != nil {
+		return nil, err
+	}
 	// 更新节点心跳
 	if err := s.nodeService.UpdateLastCheckAt(uint(req.NodeId)); err != nil {
 		slog.Warn("failed to update node heartbeat before traffic report", "component", "grpc", "method", "ReportTraffic", "node_id", req.NodeId, "error", err)
@@ -447,6 +475,9 @@ func (s *TrafficGRPCServer) ReportTraffic(ctx context.Context, req *pb.TrafficRe
 
 // ReportOnline 上报在线状态
 func (s *TrafficGRPCServer) ReportOnline(ctx context.Context, req *pb.OnlineReportRequest) (*pb.StatusResponse, error) {
+	if err := requireCallerNode(ctx, req.NodeId); err != nil {
+		return nil, err
+	}
 	// 更新节点心跳
 	if err := s.nodeService.UpdateLastCheckAt(uint(req.NodeId)); err != nil {
 		slog.Warn("failed to update node heartbeat before online report", "component", "grpc", "method", "ReportOnline", "node_id", req.NodeId, "error", err)
@@ -478,6 +509,11 @@ func (s *TrafficGRPCServer) TrafficStream(stream pb.TrafficService_TrafficStream
 			return err
 		}
 
+		// 另一个节点的上报结束整个流, 而不是被逐条忽略
+		if err := requireCallerNode(stream.Context(), req.NodeId); err != nil {
+			return err
+		}
+
 		// 处理流量上报
 		resp, err := s.ReportTraffic(stream.Context(), req)
 		if err != nil {
@@ -497,6 +533,11 @@ func (s *TrafficGRPCServer) OnlineStream(stream pb.TrafficService_OnlineStreamSe
 	for {
 		req, err := stream.Recv()
 		if err != nil {
+			return err
+		}
+
+		// 另一个节点的上报结束整个流, 而不是被逐条忽略
+		if err := requireCallerNode(stream.Context(), req.NodeId); err != nil {
 			return err
 		}
 

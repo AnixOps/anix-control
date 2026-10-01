@@ -16,6 +16,8 @@ func TestValidateTokenAuthenticationModes(t *testing.T) {
 	require.NoError(t, err)
 	otherSecretToken, err := utils.GenerateToken(7, "admin@example.com", true, "a-different-secret-value-1234567890", 3600)
 	require.NoError(t, err)
+	userToken, err := utils.GenerateToken(8, "user@example.com", false, secret, 3600)
+	require.NoError(t, err)
 
 	tests := []struct {
 		name       string
@@ -33,7 +35,10 @@ func TestValidateTokenAuthenticationModes(t *testing.T) {
 		{name: "API token only", token: "api-token", apiToken: "api-token", wantOK: true},
 		{name: "wrong API token", token: "nope", apiToken: "api-token", wantReason: "invalid token"},
 		{name: "non-JWT token with JWT secret only", token: "no-dots", jwtSecret: secret, wantReason: "invalid token"},
-		{name: "no authentication configured", token: "anything", wantOK: true},
+		{name: "user JWT is refused", token: userToken, jwtSecret: secret, wantReason: "an administrator token is required"},
+		{name: "user JWT is refused with an API token configured", token: userToken, apiToken: "api-token", jwtSecret: secret, wantReason: "an administrator token is required"},
+		{name: "no authentication configured refuses every token", token: "anything", wantReason: "invalid token"},
+		{name: "no authentication configured refuses an empty token", token: "", wantReason: "invalid token"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {

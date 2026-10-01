@@ -208,6 +208,13 @@ func (s *NodeLogGRPCServer) ReportLogs(ctx context.Context, req *dynamicpb.Messa
 	if nodeID == 0 {
 		return nil, status.Error(codes.InvalidArgument, "node_id is required")
 	}
+	requestNodeID, err := uintToUint32("node_id", nodeID)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, err.Error())
+	}
+	if err := requireCallerNode(ctx, requestNodeID); err != nil {
+		return nil, err
+	}
 
 	logValues := req.Get(nodeLogBatchLogsField).List()
 	inputs := make([]service.NodeLogInput, 0, logValues.Len())

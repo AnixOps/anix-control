@@ -54,7 +54,7 @@ func (s *GRPCTestSuite) SetupSuite() {
 	assert.NoError(s.T(), err)
 	s.addr = lis.Addr().String()
 
-	s.server = grpc.NewServer()
+	s.server = grpc.NewServer(adminCallerServerOptionsForTest()...)
 	pb.RegisterNodeServiceServer(s.server, NewNodeGRPCServer())
 	pb.RegisterUserServiceServer(s.server, NewUserGRPCServer())
 	pb.RegisterTrafficServiceServer(s.server, NewTrafficGRPCServer())
@@ -365,7 +365,7 @@ func (s *GRPCIntegrationSuite) SetupSuite() {
 	assert.NoError(s.T(), err)
 	s.addr = lis.Addr().String()
 
-	s.server = grpc.NewServer()
+	s.server = grpc.NewServer(adminCallerServerOptionsForTest()...)
 	pb.RegisterNodeServiceServer(s.server, NewNodeGRPCServer())
 	pb.RegisterUserServiceServer(s.server, NewUserGRPCServer())
 	pb.RegisterTrafficServiceServer(s.server, NewTrafficGRPCServer())
@@ -968,7 +968,7 @@ func (s *GRPCStreamSuite) SetupSuite() {
 	assert.NoError(s.T(), err)
 	s.addr = lis.Addr().String()
 
-	s.server = grpc.NewServer()
+	s.server = grpc.NewServer(adminCallerServerOptionsForTest()...)
 	pb.RegisterNodeServiceServer(s.server, NewNodeGRPCServer())
 	pb.RegisterUserServiceServer(s.server, NewUserGRPCServer())
 	pb.RegisterTrafficServiceServer(s.server, NewTrafficGRPCServer())
@@ -1435,7 +1435,7 @@ func TestReportStatus_WithNode(t *testing.T) {
 	assert.NoError(t, err)
 	addr := lis.Addr().String()
 
-	server := grpc.NewServer()
+	server := grpc.NewServer(adminCallerServerOptionsForTest()...)
 	pb.RegisterNodeServiceServer(server, NewNodeGRPCServer())
 
 	serverErr := serveGRPCServerForTest(t, server, lis)
@@ -1521,7 +1521,7 @@ func TestGetConfig_WithMultipleProtocols(t *testing.T) {
 	assert.NoError(t, err)
 	addr := lis.Addr().String()
 
-	server := grpc.NewServer()
+	server := grpc.NewServer(adminCallerServerOptionsForTest()...)
 	pb.RegisterNodeServiceServer(server, NewNodeGRPCServer())
 
 	serverErr := serveGRPCServerForTest(t, server, lis)

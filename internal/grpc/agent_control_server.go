@@ -818,12 +818,10 @@ func (s *AgentControlGRPCServer) recordHeartbeatPluginObservations(nodeID uint, 
 }
 
 func authenticatedStreamNodeID(ctx context.Context) (uint32, error) {
-	authed, authErr := authenticateNode(ctx)
-	if !authed {
-		if authErr == "" {
-			authErr = "node api key is required"
-		}
-		return 0, status.Error(codes.Unauthenticated, authErr)
+	if _, authed, err := authenticateNode(ctx); err != nil {
+		return 0, err
+	} else if !authed {
+		return 0, status.Error(codes.Unauthenticated, "node api key is required")
 	}
 
 	md, ok := metadata.FromIncomingContext(ctx)

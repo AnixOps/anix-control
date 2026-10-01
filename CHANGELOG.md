@@ -4,6 +4,35 @@
 
 ### Security
 
+- The node gRPC listener no longer lets in callers without a node key when
+  `grpc.api_token` is empty, the default. It accepted any `authorization`
+  header, so anyone who reached port 50051 could read every node's
+  configuration and protocol keys (`NodeService.GetConfig`), every user's
+  UUID (`UserService.GetUsers`), and report traffic, status, online users and
+  logs for any node. See `docs/UPGRADE.md`.
+  - Without credentials only `HealthService` and `NodeService/Register`
+    answer. A node authenticates with its API key (`x-api-key` and
+    `x-node-id`); `grpc.api_token`, when set, is the administrator's token.
+  - A node key now acts only for its node. `GetConfig`, `ReportStatus`,
+    `StatusStream`, `ReportLogs`, `GetUsers`, `ReportTraffic`,
+    `ReportOnline`, `TrafficStream` and `OnlineStream` compare the request's
+    `node_id` with the authenticated node and answer `PermissionDenied` (a
+    stream ends) when they differ; one node's key read another node's
+    configuration and users. The interceptors record the authenticated node
+    in the call's context for the handlers. `grpc.api_token` acts for any
+    node.
+  - The listener's JWT path accepts only an administrator's JWT. The server
+    never configures its secret, so it is unused; a user's login JWT would
+    have read node configurations.
+  - A disabled node's key is refused (`PermissionDenied`), as the HTTP node
+    API and the Agent control stream refuse it; a status stream open when
+    the node is disabled ends at its next report.
+  - Heartbeats no longer re-enable a disabled node. gRPC config fetches and
+    reports, UniProxy polling, the agent WebSocket and the agent HTTP routes
+    set the node online, which undid an administrator's disable while its
+    agent ran. They still record `last_check_at` and set a pending or offline
+    node online, and the administrator's node list shows a disabled node as
+    disabled.
 - SQL logs no longer contain the values bound to statements. With
   `database.log_level: info`, the example configuration's level, GORM logged
   every statement with its values: node API keys and secrets, tokens,

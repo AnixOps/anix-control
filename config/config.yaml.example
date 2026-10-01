@@ -221,8 +221,9 @@ forward_runtime:
     retention_days: 7           # buckets older than this are purged hourly
 
 # Node-facing gRPC server. The development template binds loopback only.
-# Per-node x-api-key/x-node-id auth is always enforced regardless of api_token.
-# api_token (optional) is a fallback for callers with no node key (e.g. legacy/admin).
+# Nodes authenticate with their own x-api-key/x-node-id and act only for
+# themselves. api_token (optional) is the administrator's token for callers
+# with no node key and acts for any node; left empty, such callers are refused.
 # Before accepting remote Agents, configure TLS and change host deliberately.
 grpc:
   enabled: true
