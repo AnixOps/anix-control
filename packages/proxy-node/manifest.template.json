@@ -7,7 +7,7 @@
   "targets": ["control"],
   "architectures": [],
   "artifact_sha256": "GENERATED_AT_BUILD",
-  "capabilities": [],
+  "capabilities": ["kernel.storage.v1", "kernel.storage.adopt:v2_load_balancer", "kernel.storage.adopt:v2_node_log", "kernel.view:kapi_node_status_v1"],
   "dependencies": [],
   "conflicts": [],
   "permissions": ["proxy-node.view", "proxy-node.api"],

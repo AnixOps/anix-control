@@ -576,3 +576,44 @@ func TestPostgresSubscriptionGrants(t *testing.T) {
 }
 
 func ptr[T any](value T) *T { return &value }
+
+// A role granted kapi_node_status_v1 reads a node's status and traffic, and
+// can neither read a node's credentials, nor v2_node itself, nor change it
+// through the view.
+func TestPostgresNodeStatusViewHidesNodeCredentials(t *testing.T) {
+	kernel, kernelDSN := openPostgresKernel(t)
+	require.NoError(t, kernel.AutoMigrate(&model.Node{}))
+	require.NoError(t, EnsureKernelAPIViews(kernel))
+	suffix := randomSuffix(t)
+	packageID := "pkgtest-" + suffix
+	t.Cleanup(func() { dropPackageStorage(t, kernel, packageID) })
+	checked := int64(1_790_000_000)
+	node := model.Node{Name: "node-" + suffix, Host: "node.example.test", APIKey: "key-" + suffix, APIKeyHash: "hash-" + suffix,
+		Secret: "secret-" + suffix, Status: model.NodeStatusOnline, LastCheckAt: &checked, TotalUpload: 7, TotalDownload: 9}
+	require.NoError(t, kernel.Create(&node).Error)
+	t.Cleanup(func() { _ = kernel.Delete(&model.Node{}, node.ID).Error })
+
+	store := Store{DB: kernel, Driver: "postgres", DSN: kernelDSN}
+	lease, err := store.Lease(context.Background(), Holder{PackageID: packageID, Version: "4.1.0", Generation: 1},
+		Grants{Storage: true, Views: []string{"kapi_node_status_v1"}})
+	require.NoError(t, err)
+	pkg := openPostgres(t, lease.DSN)
+	var rows []struct {
+		Status        int
+		LastCheckAt   int64
+		TotalUpload   int64
+		TotalDownload int64
+	}
+	require.NoError(t, pkg.Raw("SELECT status, last_check_at, total_upload, total_download FROM kapi_node_status_v1 WHERE id = ?", node.ID).Scan(&rows).Error)
+	require.Len(t, rows, 1)
+	require.Equal(t, int(model.NodeStatusOnline), rows[0].Status)
+	require.Equal(t, checked, rows[0].LastCheckAt)
+	require.Equal(t, int64(7), rows[0].TotalUpload)
+	for _, column := range []string{"api_key", "api_key_hash", "secret", "raw_config"} {
+		var values []string
+		require.ErrorContains(t, pkg.Raw("SELECT "+column+" FROM kapi_node_status_v1").Scan(&values).Error, "does not exist", column)
+	}
+	var count int64
+	requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM v2_node").Scan(&count).Error)
+	requirePermissionDenied(t, pkg.Exec("UPDATE kapi_node_status_v1 SET status = 3 WHERE id = ?", node.ID).Error)
+}

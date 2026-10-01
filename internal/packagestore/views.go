@@ -27,7 +27,8 @@ type KernelAPIView struct {
 const InviteSettingsKey = "invite.frontend.config"
 
 // KernelAPIViews lists every kernel API view. They expose only the columns a
-// package may read: never password hashes, tokens or subscription UUIDs.
+// package may read: never password hashes, tokens, subscription UUIDs or
+// node credentials.
 var KernelAPIViews = []KernelAPIView{
 	{
 		Name:   "kapi_user_directory_v1",
@@ -113,6 +114,15 @@ var KernelAPIViews = []KernelAPIView{
 		Name:   "kapi_node_heartbeat_v1",
 		Source: "v2_node",
 		Query:  "SELECT id, last_check_at FROM v2_node",
+	},
+	{
+		// What the proxy-node package reads of a node: its status, last
+		// check and traffic counters, for the node statistics and to know
+		// that a node exists. Never its API key, key hash or shared secret,
+		// which the kernel's node authentication checks.
+		Name:   "kapi_node_status_v1",
+		Source: "v2_node",
+		Query:  "SELECT id, status, last_check_at, total_upload, total_download FROM v2_node",
 	},
 }
 

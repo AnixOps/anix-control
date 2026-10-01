@@ -28,15 +28,13 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   WebSocket routes use `registeredPackageWebSocketRoute`.
 - `config/package-extraction.json` records each route's extraction mode
   (`bridged`, `native-flagged` or `native`) and where its legacy handler lives
-  (`router`, `identity-bridge` or `none`). 113 routes are `native-flagged`:
+  (`router`, `identity-bridge` or `none`). 120 routes are `native-flagged`:
   identity-platform (20: group A's 15, the profile, dashboard and user
   detail, and the traffic and subscription resets), affiliate (7), knowledge
   (6), notification (19), order (9), payment (16), plan (7), platform (4),
-  subscription (17) and ticket (8). The rest are `bridged`. The identity
-  routes are `identity-bridge`. `check_plugin_only_routes.py` enforces the
-  map against the router and the identity bridge.
-  `check_plugin_only_routes.py` enforces the map against the router and the
-  identity bridge.
+  proxy-node (7), subscription (17) and ticket (8). The rest are `bridged`.
+  The identity routes are `identity-bridge`. `check_plugin_only_routes.py`
+  enforces the map against the router and the identity bridge.
 - Request path: gin middleware -> `compatv2` gateway -> route resolution
   (`internal/compat/v2/registry.go`, `verifiedRouteSource`) -> package host
   process over Unix gRPC -> package bridge (FD 4) -> **the legacy in-kernel
@@ -62,7 +60,9 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   all still served through the identity bridge. `internal/compat/v2/moved_routes.go`
   lists the moves: the kernel accepts the old route ids from old
   identity-platform releases and, while both packages declare a route,
-  prefers the new owner. There are now 18 packages, 17 of them on the generic
+  prefers the new owner. There are now 18 packages. Ten have their own host
+  (affiliate, identity-platform, knowledge, notification, order, payment,
+  plan, platform, proxy-node and ticket); the other eight run the generic
   host.
 - The 4.0 stage exit condition "production requests no longer reach coupled
   legacy handlers" was **not** met. Business tables (`v2_*`), handlers,
@@ -401,6 +401,51 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
       `v2_system_config`;
     - the user's subscription summary: served from the kernel's 30-second
       cache, with its `cached_at`, which a native answer cannot share.
+- **Proxy node (in place).** 7 of proxy-node's 31 routes run natively,
+  proved by `internal/tests/proxynodecompat`: the load balancer list,
+  detail, creation, update and deletion on the adopted `v2_load_balancer`
+  (only these routes use it), a node's runtime logs on the adopted
+  `v2_node_log` (the kernel's agent control writes it), and the node
+  statistics.
+  - **Node credentials stay in the kernel.** proxy-node owns the node
+    domain, but `v2_node` also holds each node's API key, key hash and
+    shared secret, which the kernel's node authentication checks: the node
+    API, UniProxy, the agent WebSocket and gRPC control stream, and agent
+    package downloads. A package that could read or write those columns
+    could act as any node, read every subscriber's proxy UUID from the
+    UniProxy user list, or let in a node of its choosing. Owning the domain
+    is not owning that boundary. Until column-level grants (section 3.1)
+    can withhold the credential columns, or node authentication moves into
+    the module behind a contract, `v2_node` and `v2_authorized_key` (the
+    registration keys, stored in clear, that mint node credentials) are
+    protected kernel tables (`service.protectedTables`).
+  - The statistics, and whether a node exists for its logs, come from
+    `kapi_node_status_v1`: each node's id, status, last check and traffic
+    counters.
+  - `v2_node_protocol` (Reality private keys, protocol settings, custom
+    configurations) is not proxy-node's: the protocol routes belong to
+    protocol-runtime, whose extraction decides whether it may hold those
+    keys, as payment holds its gateways' secrets.
+  - **Stay bridged** (24, with the reason in the host's route map):
+    - node list, detail, creation, update, deletion, credentials and raw
+      configuration: they read or write the node credentials, the list and
+      detail embed each node's protocols with their Reality private keys,
+      the raw configuration carries WireGuard private keys, an update
+      clears the kernel's in-memory node cache, and a deletion removes the
+      node's protocols and WireGuard peers in one transaction;
+    - configuration validation: no table, but the kernel's WireGuard
+      protocol validator, which the protocol routes share;
+    - the authorization keys: the list answers each key in clear, and the
+      kernel's HTTP and gRPC registration read them;
+    - registration, heartbeat and runtime health: authenticated or minted
+      node credentials, and writes to `v2_node`;
+    - the agent WebSocket, a live connection the kernel holds and pushes
+      to, and UniProxy: node-authenticated, with every eligible
+      subscriber's UUID in the user list, subscriber traffic in a push and
+      the online list in the kernel's in-memory cache;
+    - the load balancer statistics and health check: they read the forward
+      package's `v2_forward_node`, and the check probes each forward node
+      and writes its status.
 - The kernel publishes read-only views `kapi_*`, created at startup by
   `EnsureKernelAPIViews` (first `kapi_user_directory_v1`, then
   `kapi_system_audit_log_v1`, the `v2_operation_log` rows of module
@@ -412,6 +457,7 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
   `kapi_user_referral_v1`, `kapi_affiliate_settings_v1`,
   `kapi_user_subscription_group_v1`, `kapi_node_protocol_v1`,
   `kapi_node_heartbeat_v1`). Packages
+  `kapi_node_status_v1`). Packages
   read other domains only
   through `kapi_*` views or typed operations. A view whose source table does
   not exist is left out. A view that filters rows is a PostgreSQL
