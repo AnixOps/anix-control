@@ -68,12 +68,22 @@ func NodeAuth() gin.HandlerFunc {
 			return
 		}
 
+		// A node an administrator disabled gets no configuration and no
+		// users, as on the /node API and the gRPC listener. Its polling is
+		// refused before the heartbeat, so it is not recorded as seen either.
+		if node.Status == model.NodeStatusDisabled {
+			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
+				"error": "node disabled",
+			})
+			return
+		}
+
 		c.Set("node_id", node.ID)
 		c.Set("node", &node)
 
 		// 刷新节点心跳: 所有 UniProxy 轮询请求 (config/user/push/alive) 都经过本中间件,
 		// 在此统一更新 last_check_at, 避免节点带 node_type 时心跳不更新导致误判离线。
-		// 心跳不会把管理员禁用的节点改回在线。
+		// 心跳不会把管理员禁用的节点改回在线 (禁用节点已在上面被拒绝)。
 		db.Model(&model.Node{}).Where("id = ?", node.ID).Updates(map[string]any{
 			"last_check_at": time.Now().Unix(),
 			"status":        service.NodeHeartbeatStatus(),

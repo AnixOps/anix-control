@@ -4,6 +4,12 @@
 
 ### Security
 
+- UniProxy over HTTP refuses a disabled node. A node an administrator
+  disabled kept polling its configuration and users over
+  `/api/v1/server/UniProxy/*` (and the `/api/v2` alias), so disabling a
+  node did not stop it serving. `NodeAuth` now answers 403
+  (`{"error":"node disabled"}`) before the heartbeat, as the HTTP node API
+  and the gRPC listener do.
 - The node gRPC listener no longer lets in callers without a node key when
   `grpc.api_token` is empty, the default. It accepted any `authorization`
   header, so anyone who reached port 50051 could read every node's
