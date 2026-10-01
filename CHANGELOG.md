@@ -40,6 +40,10 @@
     read of a moved credential column outside `internal/nodesecrets`, but
     for reasoned exceptions.
 
+### Fixed
+
+- Tests: the node gRPC listener's binding tests read a refused stream's status from `Recv` when `Send` returns `io.EOF`, instead of failing intermittently with `Unknown`.
+
 ## 4.1.0-rc.2 - 2026-10-01
 
 4.1.0-rc.2 is the second 4.1.0 release candidate. It brings thirteen

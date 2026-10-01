@@ -2,6 +2,8 @@ package grpc
 
 import (
 	"context"
+	"errors"
+	"io"
 	"net"
 	"strconv"
 	"testing"
@@ -108,26 +110,32 @@ func nodeScopedCallsForTest(ctx context.Context, conn *grpc.ClientConn, nodeID u
 
 	if stream, err := nodes.StatusStream(ctx); err != nil {
 		errs["StatusStream"] = err
-	} else if err := stream.Send(&pb.NodeStatusRequest{NodeId: nodeID}); err != nil {
-		errs["StatusStream"] = err
 	} else {
-		_, errs["StatusStream"] = stream.Recv()
+		errs["StatusStream"] = firstStreamReplyErrForTest(stream, &pb.NodeStatusRequest{NodeId: nodeID})
 	}
 	if stream, err := traffic.TrafficStream(ctx); err != nil {
 		errs["TrafficStream"] = err
-	} else if err := stream.Send(&pb.TrafficReportRequest{NodeId: nodeID}); err != nil {
-		errs["TrafficStream"] = err
 	} else {
-		_, errs["TrafficStream"] = stream.Recv()
+		errs["TrafficStream"] = firstStreamReplyErrForTest(stream, &pb.TrafficReportRequest{NodeId: nodeID})
 	}
 	if stream, err := traffic.OnlineStream(ctx); err != nil {
 		errs["OnlineStream"] = err
-	} else if err := stream.Send(&pb.OnlineReportRequest{NodeId: nodeID}); err != nil {
-		errs["OnlineStream"] = err
 	} else {
-		_, errs["OnlineStream"] = stream.Recv()
+		errs["OnlineStream"] = firstStreamReplyErrForTest(stream, &pb.OnlineReportRequest{NodeId: nodeID})
 	}
 	return errs
+}
+
+// firstStreamReplyErrForTest sends request on stream and returns the error
+// of its first reply. A stream the server refuses can end before the
+// request is written: Send then returns io.EOF and the stream's status is
+// only observable through RecvMsg.
+func firstStreamReplyErrForTest[Req, Res any](stream grpc.BidiStreamingClient[Req, Res], request *Req) error {
+	if err := stream.Send(request); err != nil && !errors.Is(err, io.EOF) {
+		return err
+	}
+	_, err := stream.Recv()
+	return err
 }
 
 func requireCodesForTest(t *testing.T, want codes.Code, errs map[string]error) {
