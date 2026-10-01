@@ -21,6 +21,10 @@ const syncBatch = 500
 //   - A deleted row, or a secret that is gone, takes its rows away.
 //   - A tombstone or the placeholder in a legacy column leaves the new row
 //     as it is: the secret has moved there.
+//   - In a finalized table (P3), the legacy columns of the rows then get
+//     their tombstones and redacted documents (section 4.4): a writer's
+//     secret reaches the new tables only. The phase is read in tx,
+//     uncached.
 //
 // Sync does nothing when the split tables do not exist.
 func Sync(tx *gorm.DB, table string, ids ...uint) error {
@@ -42,7 +46,18 @@ func Sync(tx *gorm.DB, table string, ids ...uint) error {
 			subjects = append(subjects, uint64(id))
 		}
 	}
-	_, err = syncRows(tx, spec, subjects, SourceDualWrite, false, time.Now().UTC())
+	now := time.Now().UTC()
+	if _, err := syncRows(tx, spec, subjects, SourceDualWrite, false, now); err != nil {
+		return err
+	}
+	// A finalized table keeps no secret in its legacy columns: what the
+	// writer just wrote there moved to the new tables above, and is
+	// replaced by its tombstone or redacted form in the same transaction.
+	phase, err := tablePhaseInTx(tx, table)
+	if err != nil || phase != PhaseFinalized {
+		return err
+	}
+	_, err = tombstoneRows(tx, spec, subjects, false, now)
 	return err
 }
 

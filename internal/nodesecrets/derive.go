@@ -69,6 +69,16 @@ func (d *derivation) addPositions(ownerID uint64, column string, document *strin
 	}
 }
 
+// addPeerKey adds a WireGuard peer's key; a tombstone keeps the new row.
+func (d *derivation) addPeerKey(ownerID uint64, column, value string) {
+	switch {
+	case IsTombstone(value):
+		d.keptSecrets[secretKey{OwnerID: ownerID, Column: column}] = true
+	case value != "":
+		d.secrets = append(d.secrets, secretEntry{OwnerID: ownerID, Column: column, Value: value})
+	}
+}
+
 // tableSpec says which rows of the new tables a legacy table owns, and how
 // its rows are derived.
 type tableSpec struct {
@@ -147,7 +157,10 @@ func deriveNodes(tx *gorm.DB, ids []uint64, lock bool) (*derivation, error) {
 				SubjectID: id, Kind: KindNodeAPIKey, KeyHash: keyHash, Value: row.APIKey, Status: StatusActive,
 			})
 		}
-		if row.Secret != "" {
+		switch {
+		case IsTombstone(row.Secret):
+			d.keptCredentials[credentialKey{SubjectID: id, Kind: KindNodeSharedSecret}] = true
+		case row.Secret != "":
 			d.credentials = append(d.credentials, credentialEntry{
 				SubjectID: id, Kind: KindNodeSharedSecret, KeyHash: hashSecret(row.Secret), Value: row.Secret, Status: StatusActive,
 			})
@@ -269,12 +282,8 @@ func deriveWireGuardPeers(tx *gorm.DB, ids []uint64, lock bool) (*derivation, er
 	d := newDerivation()
 	for _, row := range rows {
 		id := uint64(row.ID)
-		if row.PrivateKey != "" {
-			d.secrets = append(d.secrets, secretEntry{OwnerID: id, Column: "private_key", Value: row.PrivateKey})
-		}
-		if row.PresharedKey != "" {
-			d.secrets = append(d.secrets, secretEntry{OwnerID: id, Column: "preshared_key", Value: row.PresharedKey})
-		}
+		d.addPeerKey(id, "private_key", row.PrivateKey)
+		d.addPeerKey(id, "preshared_key", row.PresharedKey)
 	}
 	return d, nil
 }

@@ -128,18 +128,41 @@ type UnpinnedForwardNode struct {
 // after the backfill.
 func ForwardNodesWithoutAPIPort(ctx context.Context, db *gorm.DB) ([]UnpinnedForwardNode, error) {
 	var rows []model.ForwardNode
-	if err := newSession(db).WithContext(ctx).Select("id", "name", "api_token").
-		Where("(api_port IS NULL OR api_port <= 0) AND api_token IS NOT NULL AND api_token <> ''").Order("id").Find(&rows).Error; err != nil {
+	condition, args := ForwardNodeTokenPresent(db)
+	if err := newSession(db).WithContext(ctx).Model(&model.ForwardNode{}).Select("id", "name").
+		Where("(api_port IS NULL OR api_port <= 0)").Where(condition, args...).Order("id").Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	nodes := make([]UnpinnedForwardNode, 0, len(rows))
 	for i := range rows {
-		if Unusable(ForwardNodeToken(db, &rows[i])) {
-			continue
-		}
 		nodes = append(nodes, UnpinnedForwardNode{ID: rows[i].ID, Name: rows[i].Name})
 	}
 	return nodes, nil
+}
+
+// ForwardNodeTokenPresent answers a condition, with its arguments, for a
+// query on v2_forward_node that holds for the forward nodes that have a
+// token: the forward node inventory and the status command ask whether a
+// node has one, not what it is.
+//
+//   - In phase dual_read and finalized, a node has a token when it has a
+//     live credential row (forward_node_token, active, with a value): the
+//     legacy column holds a tombstone once finalized.
+//   - Before, the legacy column holds a usable value: neither empty, nor a
+//     tombstone, nor the placeholder.
+func ForwardNodeTokenPresent(db *gorm.DB) (string, []any) {
+	if readsNew(db, TableForwardNode) && SplitInstalled(db) {
+		return "EXISTS (SELECT 1 FROM v4_kernel_node_credential c WHERE c.subject_kind = ? AND c.subject_id = v2_forward_node.id " +
+			"AND c.kind = ? AND c.status = ? AND c.value <> '')", []any{SubjectForward, KindForwardNodeToken, StatusActive}
+	}
+	return "(v2_forward_node.api_token IS NOT NULL AND v2_forward_node.api_token <> '' AND v2_forward_node.api_token NOT LIKE ? " +
+		"AND v2_forward_node.api_token <> ?)", []any{tombstonePrefix + "%", Placeholder}
+}
+
+// ForwardNodeTokenAbsent is the negation of ForwardNodeTokenPresent.
+func ForwardNodeTokenAbsent(db *gorm.DB) (string, []any) {
+	condition, args := ForwardNodeTokenPresent(db)
+	return "NOT " + condition, args
 }
 
 var pins counterSet // table, kind, reason

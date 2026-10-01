@@ -308,13 +308,14 @@ jobs:
       - name: Verify Agent SDK dependency boundary
         run: bash config/scripts/check_agent_sdk_dependency.sh
 
-      - name: Check plugin-only route, worker and package boundary gates and script tests
+      - name: Check plugin-only route, worker, package boundary and moved column gates and script tests
         env:
           GOWORK: 'off'
         run: |
           python3 config/scripts/check_plugin_only_routes.py
           python3 config/scripts/check_plugin_only_workers.py
           bash config/scripts/check_package_boundaries.sh
+          bash config/scripts/check_moved_columns.sh
           python3 -m unittest discover -s config/scripts -p '*_test.py'
 
       - name: Check gofmt

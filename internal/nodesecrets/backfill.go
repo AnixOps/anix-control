@@ -185,6 +185,12 @@ func pruneOrphans(tx *gorm.DB, spec tableSpec) (int64, error) {
 		}
 		pruned += result.RowsAffected
 	}
+	legacy := tx.Session(&gorm.Session{NewDB: true}).Table(spec.table).Select("1").
+		Where(spec.table + ".id = v4_kernel_protocol_secret.owner_id")
+	if err := tx.Where("scope = ? AND column_name LIKE ?", scopeLegacyOriginal, spec.table+".%").
+		Where("NOT EXISTS (?)", legacy).Delete(&model.ProtocolSecret{}).Error; err != nil {
+		return pruned, err
+	}
 	return pruned, nil
 }
 

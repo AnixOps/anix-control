@@ -789,7 +789,9 @@ NO-1.
   3.7). The binding is kept in memory for the operation's executor until
   its request ends, and is lost on a restart.
 - **Split phases.** `GetCapabilities.tables` answers `LEGACY` for the seven
-  tables of section 4.1 until NO-2 plugs in the split state.
+  tables of section 4.1 until the split state is plugged in. Since NO-9 it
+  is (`SplitPhasesFrom`): each split table's phase, `FINALIZED` only once
+  finalize completed, and `LEGACY` for `v2_forward_runtime_job`.
 
 **What NO-5 built** (`internal/kernelnodeops` `kinds_credentials.go`,
 `kinds_retire.go`, `kinds_secrets.go`, `validate.go`; the shared functions
@@ -869,8 +871,9 @@ in `internal/service/node_credential_ops.go`; `nodesecrets.Retire`):
   table, as the protocol and raw configuration routes write it; the result
   is the redacted document (`RedactNodeSecretsJSON`, the bytes the masked
   answers show) with the counts of secrets stored, kept and cleared. A
-  document with only placeholders needs no binding. Finalized tables (P3,
-  NO-9) will write the redacted document to the legacy column instead.
+  document with only placeholders needs no binding. In a finalized table
+  (P3) the writer's `Sync` then rewrites the legacy column to the redacted
+  document (NO-9).
 - **ValidateNodeConfig.** Runs `ValidateRawNodeConfig` (the route's
   decoding, WireGuard check and `server_port` warning, answered as an issue
   at `/server_port`) or `ValidateNodeProtocol` on a protocol row's document.
@@ -1087,7 +1090,7 @@ ships NO-2. Every later phase is an operator command, never a release.
 | **P0 legacy** (today) | old columns | old columns | n/a | (default) |
 | **P1 dual-write** | old columns and new tables, in one transaction, through one writer (`internal/nodesecrets`) | old columns | yes | the release that ships NO-2: dual-write is always on, and a backfill copies the existing rows (`anix-control node-secrets backfill`, idempotent, in batches by id, checkpointed) |
 | **P2 dual-read** | both | new tables. A missing or mismatching row falls back to the old column and counts `anixops_node_secrets_fallback_total{table,kind,reason}` | yes | `anix-control node-secrets verify`: the digests over every secret of the old and new forms match; then `anix-control node-secrets phase <table\|all> dual_read` |
-| **P3 finalized** | new tables only; old columns get tombstones (section 4.4) | new tables only | **no** (restore from backup) | `anix-control node-secrets finalize --table <t>`, after a zero fallback count. It rewrites every old secret to its tombstone or redacted form in batches, verifies, and records `finalized_at` |
+| **P3 finalized** | new tables only; old columns get tombstones (section 4.4) | new tables only | **no**: `unsplit` first (or restore from backup) | `anix-control node-secrets finalize -confirm <table\|all>`, after a zero fallback count. It rewrites every old secret to its tombstone or redacted form in batches, verifies, and records `finalized_at` |
 | **P4 adopted** | packages write the credential-free columns | | | a package release that declares `kernel.storage.adopt:<table>` (section 4.6) |
 
 **Every kernel writer goes through the single writer from P1 on:**
@@ -1179,10 +1182,85 @@ gate (NO-9) refuses any other kernel read of a moved column.
   exits 3 on a finding.
 - **Not moved.**
   - The forward node inventory filter (`api_token = ''`) is a presence check,
-    not a read of a value. It moves to `kapi_node_credential_status_v1` with
-    the tombstones in NO-9.
+    not a read of a value. NO-9 moved it (below).
   - Enrollment has no registration-key method; registration keys are read
     only by `RegisterNode`.
+
+**Built in NO-9: finalize and unsplit** (`internal/nodesecrets`
+`finalize.go`, `tombstone.go`; `anix-control node-secrets finalize` and
+`unsplit`; the procedure is in `docs/UPGRADE.md`). Nothing runs them by
+themselves; production finalize waits for the owner (D6).
+
+- **finalize** needs `-confirm`, phase `dual_read` and the dual_read gate's
+  verification (the latest verify matched, within `VerifyMaxAge`); one
+  refused table refuses all, and a refusal changes nothing.
+  - It sets the phase to `finalized` with `finalized_at` empty, in one
+    audited transaction (`finalize_started`). From then on the readers read
+    the new tables only and every writer's `Sync` writes tombstones.
+  - It rewrites the legacy rows in batches by id. Each batch is one
+    transaction that locks its rows, brings the new tables in line with them
+    (as `backfill`), then writes the tombstones of section 4.4. Already
+    finalized values are skipped, so it is idempotent.
+  - A pass that rewrites nothing records `finalized_at` (`finalized`).
+    Three passes at most; a writer of an older binary still writing secrets
+    makes it stop and say so.
+  - An interrupted finalize (`finalized`, no `finalized_at`) resumes when
+    run again, without a new verification.
+- **Unique indexes.** Every tombstone is `!moved:<row id>`, unique per row.
+  A row that already holds `!moved:<another row's id>` (an import, a
+  package's insert) would collide: the batch stops with
+  `ErrTombstoneCollision`, naming both row ids, and rolls back.
+- **The writers of a finalized table** are unchanged: `Sync` reads the phase
+  in its transaction, uncached, derives the new rows from what the writer
+  wrote, then rewrites those legacy rows to their finalized form. A
+  tombstone or the placeholder written back (a row loaded and saved) keeps
+  the secret; an empty value removes it.
+- **The readers** of a finalized table never fall back. A literal secret in
+  a finalized JSON column (written past the writers) is ignored: the
+  position takes the new table's value, or the placeholder.
+- **verify** of a finalized table compares by presence: every secret a
+  tombstone or placeholder stands for has its new row, and a secret still in
+  a legacy column is a difference.
+- **unsplit** needs `-confirm` and phase `finalized` (or `dual_read`, to
+  resume). It refuses a table a package's storage lease adopted unless
+  `-adopted-ok`. It moves the phase to `dual_read` and drops the views that
+  exist only after finalize in one transaction, writes the secrets back in
+  batches, and verifies. JSON columns get their original bytes back:
+  finalize keeps each original document (and the empty key hash of an old
+  row) in `v4_kernel_protocol_secret`, scope `legacy_original`, which no
+  reader reads and which goes with its row. The round trip is byte for byte.
+- **An older binary after finalize.** Readers of this and the P2 releases
+  refuse the tombstones on the legacy path, so a binary reading the legacy
+  columns fails closed (tested). Binaries before P2 compared the legacy
+  columns directly and would accept a presented tombstone, and P2 writers
+  would write secrets back: `docs/UPGRADE.md` requires every process on
+  this release before finalize, and `unsplit` before a downgrade.
+- **The moved reader.** The forward node inventory and the status command
+  ask whether a node has a token through
+  `nodesecrets.ForwardNodeTokenPresent`: a live credential row (active, with
+  a value) in `dual_read` and `finalized`, the usable legacy value before.
+  Other reads that skipped the split moved too: the default registration key
+  from the environment (`RegistrationKeyExists`), the diagnosis scrubber's
+  tokens, and the forward node update's token-change check (a tombstone
+  saved back is no change).
+- **The static gate** (`config/scripts/check_moved_columns.sh`, in CI and
+  the gate list) type-checks `./internal/...` and `./cmd/...` and refuses a
+  read of a moved credential field (`model.Node.APIKey`, `.APIKeyHash`,
+  `.Secret`, `model.AuthorizedKey.Key`, `.KeyHash`,
+  `model.ForwardNode.APIToken`, `model.ForwardCleanAgent.Token`,
+  `model.WireGuardPeer.PrivateKey`, `.PresharedKey`), or a moved column
+  named in a gorm call's SQL, outside `internal/nodesecrets`. Writes, tests,
+  `internal/model`, `cmd/migrate` and `cmd/sqlite2postgres` are allowed;
+  every other exception is listed with its reason, and a stale one fails.
+  The JSON settings columns are not gated: their non-secret parts are read
+  everywhere, and their secret positions come from `ResolveProtocols`.
+- **Conditional adoption.** A manifest may declare
+  `kernel.storage.adopt:` for `v2_node`, `v2_node_protocol` and
+  `v2_forward_node`; `service.EffectiveStorageGrants` honours it at the
+  lease only once `nodesecrets.AdoptionAllowed` (finalized, with
+  `finalized_at`), and leaves the views of section 4.6 out until they
+  exist. `GetCapabilities.tables` answers each table's phase
+  (`SplitPhasesFrom`), `FINALIZED` only once `finalized_at` is recorded.
 
 **Rollback:**
 
@@ -1219,13 +1297,23 @@ second row. Tombstones are unique and non-empty, and can never authenticate.
 |---|---|---|
 | `v2_node.api_key` (unique) | `!moved:<node id>` | the kernel looks up `v4_kernel_node_credential.key_hash`; `!` never occurs in generated keys |
 | `v2_node.api_key_hash` | `""` | no SHA-256 is empty; nothing reads it after P3 |
-| `v2_node.secret` | `""` | |
+| `v2_node.secret` | `!moved:<node id>` | a tombstone signs nothing (`Unusable`) |
 | `v2_authorized_key.key` (unique) | `!moved:<key id>` | |
 | `v2_authorized_key.key_hash` | `""` | |
-| `v2_forward_node.api_token` | `""` | "has a token" now comes from `kapi_node_credential_status_v1` |
+| `v2_forward_node.api_token` | `!moved:<node id>` | "has a token" comes from the credential row (`ForwardNodeTokenPresent`, `kapi_node_credential_status_v1`) |
 | `v2_forward_clean_agent.token` (unique, not null) | `!moved:<agent id>` | |
-| `v2_wireguard_peer.private_key`, `.preshared_key` | `""` | |
+| `v2_wireguard_peer.private_key`, `.preshared_key` | `!moved:<peer id>` | the renderer reads peer keys from `v4_kernel_protocol_secret` |
 | JSON secret columns | the redacted document: `RedactNodeSecretsJSON` of the original, with `********` at every secret position | the builder takes secret positions from `v4_kernel_protocol_secret` only (section 3.8) |
+
+NO-9 changed three rows of this table from `""` to `!moved:<id>`
+(`v2_node.secret`, `v2_forward_node.api_token`, the peer keys). An empty
+value is a writer's "no secret" (an Ansible machine's cleared token), so a
+writer of a finalized table could not tell a tombstone from a removal. An
+empty shared secret would sign every request for a binary on the legacy
+path, and P2 writers delete the credential behind an empty column. A
+non-empty tombstone keeps all three cases apart, and every reader since P2
+refuses it. Decided by the owner, 2026-10-01: `!moved:<id>` for every moved
+secret column.
 
 Two more rules:
 
@@ -1271,10 +1359,15 @@ packages read them through views or change them through operations:
 - `v2_forward_runtime_job`: the kernel's executors claim and complete
   jobs;
 - `v2_forward_agent_bridge_task`;
-- `v2_wireguard_peer`: the subscription renderer creates peers.
+- `v2_wireguard_peer`: the subscription renderer creates peers. It stays
+  protected and non-adoptable after finalize too (decided by the owner,
+  2026-10-01); packages read peers through `kapi_wireguard_peer_v1`.
 
 **New views.** Each is created by `EnsureKernelAPIViews`, and only once its
-source table is finalized, where the view depends on it:
+source table is finalized, where the view depends on it (NO-9: every view
+below but `kapi_forward_runtime_job_v1`, which waits for a record that the
+payload scrub completed; `kapi_node_credential_status_v1` once any credential
+table is finalized; unsplit drops the others again):
 
 | View | Source | Columns |
 |---|---|---|
@@ -1861,7 +1954,7 @@ handlers ship `native-flagged`, and operators choose the runtime mode.
 | NO-6 | Node configuration and agents: `SyncNode` with `v4_kernel_node_desired_config`, `AgentControlOperation`, `RunAgentDiagnostic`, the agent session RPCs; the durable dispatcher takes node kinds | NO-1 | control | L |
 | NO-7 | Forward operations: `ApplyForward`, `ApplyTunnel`, `SyncForwardBackend`, `ApplyLegacyRule` over the existing executors; job payloads without tokens and the payload scrub; endpoint pinning | NO-1, NO-3 | control | L |
 | NO-8 | Diagnosis: `CheckEndpoints`, `CollectNodeStats`, `DiagnoseForward`, `DiagnoseTunnel` (Control vantage; node vantage after A2-5) | NO-1 | control | M |
-| NO-9 | Split P3: `node-secrets finalize` and `unsplit`, conditional adoption, the new views, the static gate on moved columns | NO-3, NO-5, NO-7 | control | M |
+| NO-9 | Split P3: `node-secrets finalize` and `unsplit`, conditional adoption, the new views, the static gate on moved columns. Done: section 4.3 | NO-3, NO-5, NO-7 | control | M |
 | M3-1 | protocol-runtime: 11 routes native, `protocolruntimecompat` with fake agents | NO-4, NO-5, NO-6, NO-9 | control | M |
 | M3-2 | proxy-node: 14 routes native | NO-4, NO-5, NO-6, NO-8, NO-9 | control | L |
 | M3-3 | subscription: 2 routes native | NO-9 | control | S |

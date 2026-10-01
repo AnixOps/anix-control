@@ -49,9 +49,10 @@ func forwardNodeAgentRevocation(tx *gorm.DB, node *model.ForwardNode) (string, e
 		return "", err
 	}
 	// The stored token is read through the node credential split, so a
-	// change is seen whichever form holds it.
+	// change is seen whichever form holds it. A tombstone in the row being
+	// saved (a finalized table's, loaded and saved back) keeps the token.
 	switch {
-	case nodesecrets.ForwardNodeToken(tx, &stored) != node.APIToken:
+	case !nodesecrets.IsTombstone(node.APIToken) && nodesecrets.ForwardNodeToken(tx, &stored) != node.APIToken:
 		return agentpki.RevokeReasonCredentialsReplaced, nil
 	case !node.Enabled:
 		return agentpki.RevokeReasonNodeDisabled, nil

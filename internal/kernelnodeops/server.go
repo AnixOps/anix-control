@@ -67,8 +67,8 @@ type Authorizer interface {
 type Server struct {
 	Engine     *Engine
 	Authorizer Authorizer
-	// SplitPhases answers the node credential split's phase per table. Nil
-	// answers LEGACY for every table: nothing is split before NO-2.
+	// SplitPhases answers the node credential split's phase per table
+	// (SplitPhasesFrom). Nil answers LEGACY for every table.
 	SplitPhases func(ctx context.Context) ([]*kernelnodeopsv1.TableSplitState, error)
 	// Agents are the live agent sessions the session RPCs answer; nil reads
 	// the defaults registered with UseAgentStreams and UseWebSocketAgents.

@@ -89,6 +89,13 @@ func TestManifestCapabilityGrammar(t *testing.T) {
 		{CapabilityStorage, "kernel.storage.adopt:v2_node_log", "kernel.view:kapi_node_status_v1"},
 		{CapabilityStorage, "kernel.storage.adopt:v2_forward_tunnel", "kernel.view:kapi_forward_node_v1", CapabilitySubscriberTraffic},
 		{CapabilityIdentity, CapabilityStorage},
+		// The credential-free remainder of the split tables
+		// (node-ops-service.md section 4.6): the manifest is accepted, and
+		// a lease honours the grant only once the table is finalized
+		// (EffectiveStorageGrants).
+		{CapabilityStorage, "kernel.storage.adopt:v2_node", "kernel.view:kapi_node_credential_status_v1"},
+		{CapabilityStorage, "kernel.storage.adopt:v2_node_protocol", "kernel.view:kapi_node_public_v1"},
+		{CapabilityStorage, "kernel.storage.adopt:v2_forward_node", "kernel.view:kapi_forward_clean_agent_v1"},
 	}
 	for _, capabilities := range valid {
 		assert.NoError(t, validateManifestCapabilities(capabilities), "%v", capabilities)
@@ -102,17 +109,14 @@ func TestManifestCapabilityGrammar(t *testing.T) {
 		"adopt kernel table":         {CapabilityStorage, "kernel.storage.adopt:v4_kernel_lease"},
 		"adopt identity table":       {CapabilityStorage, "kernel.storage.adopt:identity_platform_projection"},
 		"adopt system config":        {CapabilityStorage, "kernel.storage.adopt:v2_system_config"},
-		"adopt forward node tokens":  {CapabilityStorage, "kernel.storage.adopt:v2_forward_node"},
 		"adopt clean agent tokens":   {CapabilityStorage, "kernel.storage.adopt:v2_forward_clean_agent"},
 		"adopt forward runtime jobs": {CapabilityStorage, "kernel.storage.adopt:v2_forward_runtime_job"},
-		"adopt node credentials":     {CapabilityStorage, "kernel.storage.adopt:v2_node"},
 		"adopt registration keys":    {CapabilityStorage, "kernel.storage.adopt:v2_authorized_key"},
 		"adopt a view":               {CapabilityStorage, "kernel.storage.adopt:kapi_user_directory_v1"},
 		"bad table name":             {CapabilityStorage, "kernel.storage.adopt:V2-Knowledge"},
 		"bad view name":              {CapabilityStorage, "kernel.view:v2_user"},
 		"duplicate":                  {"telemetry.read", "telemetry.read"},
 		"malformed":                  {"Telemetry Read"},
-		"adopt node protocols":       {CapabilityStorage, "kernel.storage.adopt:v2_node_protocol"},
 		"adopt wireguard peers":      {CapabilityStorage, "kernel.storage.adopt:v2_wireguard_peer"},
 		"adopt split credentials":    {CapabilityStorage, "kernel.storage.adopt:v4_kernel_node_credential"},
 		"adopt split secrets":        {CapabilityStorage, "kernel.storage.adopt:v4_kernel_protocol_secret"},

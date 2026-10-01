@@ -44,64 +44,12 @@ func IsNodeSecretKey(key string) bool {
 // are checked, and so are the objects in arrays. A value without a secret is
 // returned unchanged, and one that is not JSON is replaced whole, since it
 // cannot be told apart.
+//
+// The rule is nodesecrets.Redact, which also writes the documents a
+// finalized table keeps (section 4.4), so the stored redacted document and
+// this answer are the same bytes.
 func RedactNodeSecretsJSON(config string) string {
-	if strings.TrimSpace(config) == "" {
-		return config
-	}
-	value, ok := decodeNodeSecretJSON(config)
-	if !ok {
-		return NodeSecretPlaceholder
-	}
-	redacted, changed := redactNodeSecretValue(value)
-	if !changed {
-		return config
-	}
-	return encodeNodeSecretJSON(redacted)
-}
-
-func redactNodeSecretValue(value any) (any, bool) {
-	changed := false
-	switch typed := value.(type) {
-	case map[string]any:
-		for key, item := range typed {
-			if object, ok := item.(map[string]any); ok {
-				if _, nested := redactNodeSecretValue(object); nested {
-					changed = true
-				}
-				continue
-			}
-			if IsNodeSecretKey(key) && hasNodeSecretValue(item) {
-				typed[key] = NodeSecretPlaceholder
-				changed = true
-				continue
-			}
-			if _, nested := redactNodeSecretValue(item); nested {
-				changed = true
-			}
-		}
-	case []any:
-		for _, item := range typed {
-			if _, nested := redactNodeSecretValue(item); nested {
-				changed = true
-			}
-		}
-	}
-	return value, changed
-}
-
-// hasNodeSecretValue reports whether a value under a secret key holds
-// something to hide: a non-empty string or a non-empty array. An empty
-// string, an empty array or null shows that no secret is set, and numbers
-// and booleans (a flag such as password_required) are shown as they are.
-func hasNodeSecretValue(value any) bool {
-	switch typed := value.(type) {
-	case string:
-		return strings.TrimSpace(typed) != ""
-	case []any:
-		return len(typed) > 0
-	default:
-		return false
-	}
+	return nodesecrets.Redact(config)
 }
 
 // KeepNodeSecretsJSON returns an incoming node protocol setting or raw
