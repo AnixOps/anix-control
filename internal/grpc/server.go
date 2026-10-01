@@ -161,6 +161,15 @@ func (s *Server) Start() error {
 	return nil
 }
 
+// Addr returns the address the started listener is bound to, for a
+// configured port of 0.
+func (s *Server) Addr() string {
+	if s.listener == nil {
+		return ""
+	}
+	return s.listener.Addr().String()
+}
+
 // Stop 停止服务器
 func (s *Server) Stop() {
 	if s.grpcServer != nil {

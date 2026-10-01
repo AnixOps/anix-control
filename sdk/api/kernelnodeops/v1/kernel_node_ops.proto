@@ -616,6 +616,9 @@ message NodeSyncResult {
   bool changed = 6;
   // excluded counts the protocols left out because they failed validation.
   uint32 excluded_protocols = 7;
+  // config_revision is the desired configuration's revision
+  // (v4_kernel_node_desired_config): it grows when config_hash changes.
+  uint64 config_revision = 8;
 }
 
 message RetireResult {

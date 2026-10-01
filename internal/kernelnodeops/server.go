@@ -70,6 +70,9 @@ type Server struct {
 	// SplitPhases answers the node credential split's phase per table. Nil
 	// answers LEGACY for every table: nothing is split before NO-2.
 	SplitPhases func(ctx context.Context) ([]*kernelnodeopsv1.TableSplitState, error)
+	// Agents are the live agent sessions the session RPCs answer; nil reads
+	// the defaults registered with UseAgentStreams and UseWebSocketAgents.
+	Agents *AgentSources
 }
 
 // For returns the KernelNodeOps server that host reaches; it has the shape

@@ -10,6 +10,7 @@ import (
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/v4/internal/agentpki"
+	"github.com/AnixOps/anix-control/v4/internal/agentstreams"
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/modulepki"
 	"google.golang.org/grpc"
@@ -60,10 +61,20 @@ func (a *AgentAuthenticator) pki() *agentpki.Service {
 type agentPrincipal struct {
 	Node agentcontrol.AgentNode
 	// Certificate is true when a client certificate authenticated the call;
-	// Serial and NotAfter describe it.
+	// Serial, NotAfter and SPIFFEID describe it.
 	Certificate bool
 	Serial      string
 	NotAfter    time.Time
+	SPIFFEID    string
+}
+
+// identity names how the agent authenticated: its SPIFFE ID, or the node
+// key (agentstreams.IdentityAPIKey). Never the credential itself.
+func (p agentPrincipal) identity() string {
+	if p.Certificate && p.SPIFFEID != "" {
+		return p.SPIFFEID
+	}
+	return agentstreams.IdentityAPIKey
 }
 
 // recheck tells whether a long-lived stream authenticated by certificate
@@ -140,6 +151,7 @@ func (a *AgentAuthenticator) certificatePrincipal(ctx context.Context) (agentPri
 	}
 	return agentPrincipal{
 		Node: identity.Node, Certificate: true, Serial: modulepki.SerialString(leaf.SerialNumber), NotAfter: leaf.NotAfter,
+		SPIFFEID: identity.String(),
 	}, true, nil
 }
 

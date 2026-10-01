@@ -3510,8 +3510,11 @@ type NodeSyncResult struct {
 	Changed bool `protobuf:"varint,6,opt,name=changed,proto3" json:"changed,omitempty"`
 	// excluded counts the protocols left out because they failed validation.
 	ExcludedProtocols uint32 `protobuf:"varint,7,opt,name=excluded_protocols,json=excludedProtocols,proto3" json:"excluded_protocols,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	// config_revision is the desired configuration's revision
+	// (v4_kernel_node_desired_config): it grows when config_hash changes.
+	ConfigRevision uint64 `protobuf:"varint,8,opt,name=config_revision,json=configRevision,proto3" json:"config_revision,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *NodeSyncResult) Reset() {
@@ -3589,6 +3592,13 @@ func (x *NodeSyncResult) GetChanged() bool {
 func (x *NodeSyncResult) GetExcludedProtocols() uint32 {
 	if x != nil {
 		return x.ExcludedProtocols
+	}
+	return 0
+}
+
+func (x *NodeSyncResult) GetConfigRevision() uint64 {
+	if x != nil {
+		return x.ConfigRevision
 	}
 	return 0
 }
@@ -6057,7 +6067,7 @@ const file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDesc = "" +
 	"\x13accepted_at_unix_ms\x18\x03 \x01(\x03R\x10acceptedAtUnixMs\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x04 \x01(\tR\tsessionId\x12\x1a\n" +
-	"\brevision\x18\x05 \x01(\x04R\brevision\"\xb7\x02\n" +
+	"\brevision\x18\x05 \x01(\x04R\brevision\"\xe0\x02\n" +
 	"\x0eNodeSyncResult\x12;\n" +
 	"\achannel\x18\x01 \x01(\x0e2!.anixops.kernelnodeops.v1.ChannelR\achannel\x12,\n" +
 	"\x12agent_operation_id\x18\x02 \x01(\tR\x10agentOperationId\x12\x1a\n" +
@@ -6066,7 +6076,8 @@ const file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDesc = "" +
 	"\vconfig_hash\x18\x05 \x01(\tR\n" +
 	"configHash\x12\x18\n" +
 	"\achanged\x18\x06 \x01(\bR\achanged\x12-\n" +
-	"\x12excluded_protocols\x18\a \x01(\rR\x11excludedProtocols\"\x8b\x02\n" +
+	"\x12excluded_protocols\x18\a \x01(\rR\x11excludedProtocols\x12'\n" +
+	"\x0fconfig_revision\x18\b \x01(\x04R\x0econfigRevision\"\x8b\x02\n" +
 	"\fRetireResult\x12/\n" +
 	"\x13credentials_revoked\x18\x01 \x01(\rR\x12credentialsRevoked\x12'\n" +
 	"\x0fsecrets_deleted\x18\x02 \x01(\rR\x0esecretsDeleted\x126\n" +
