@@ -281,8 +281,10 @@ func deleteWireGuardPeersCounted(tx *gorm.DB, query string, args ...any) (int64,
 	return count, deleteWireGuardPeers(tx, query, args...)
 }
 
-// deleteProtocolGroupLinksCounted is deleteProtocolGroupLinks reporting how
-// many links it removed.
+// deleteProtocolGroupLinksCounted removes the subscription group links of
+// protocols that are being deleted and reports how many. They reference the
+// protocol: PostgreSQL refused to delete a linked protocol (or its node),
+// and SQLite kept orphan links.
 func deleteProtocolGroupLinksCounted(tx *gorm.DB, protocolIDs ...uint) (int64, error) {
 	if !tx.Migrator().HasTable("v2_subscription_group_node_protocols") {
 		return 0, nil

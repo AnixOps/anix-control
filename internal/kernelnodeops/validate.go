@@ -128,7 +128,7 @@ func standIns(document string) (string, error) {
 		}
 		return private, public
 	}
-	replaced := standIn(root, "", keys)
+	replaced := standIn(root, keys)
 	encoded, err := json.Marshal(replaced)
 	if err != nil {
 		return "", err
@@ -141,7 +141,7 @@ func masked(value string) bool {
 }
 
 // standIn walks a decoded document.
-func standIn(value any, key string, keys func() (string, string)) any {
+func standIn(value any, keys func() (string, string)) any {
 	switch typed := value.(type) {
 	case map[string]any:
 		pairPublic := false
@@ -155,7 +155,7 @@ func standIn(value any, key string, keys func() (string, string)) any {
 				}
 				continue
 			}
-			typed[child] = standIn(item, child, keys)
+			typed[child] = standIn(item, keys)
 		}
 		if pairPublic {
 			_, public := keys()
@@ -168,7 +168,7 @@ func standIn(value any, key string, keys func() (string, string)) any {
 		return typed
 	case []any:
 		for index, item := range typed {
-			typed[index] = standIn(item, key, keys)
+			typed[index] = standIn(item, keys)
 		}
 		return typed
 	case string:

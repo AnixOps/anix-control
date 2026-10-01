@@ -793,16 +793,6 @@ func (s *NodeService) DeleteProtocol(id uint) error {
 	})
 }
 
-// deleteProtocolGroupLinks removes the subscription group links of protocols
-// that are being deleted. They reference the protocol: PostgreSQL refused to
-// delete a linked protocol (or its node), and SQLite kept orphan links.
-func deleteProtocolGroupLinks(tx *gorm.DB, protocolIDs ...uint) error {
-	if !tx.Migrator().HasTable("v2_subscription_group_node_protocols") {
-		return nil
-	}
-	return tx.Exec("DELETE FROM v2_subscription_group_node_protocols WHERE node_protocol_id IN ?", protocolIDs).Error
-}
-
 func normalizeProtocolUpdates(updates map[string]any) (map[string]any, error) {
 	normalized := make(map[string]any, len(updates))
 	for key, value := range updates {
