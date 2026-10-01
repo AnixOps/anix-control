@@ -79,6 +79,25 @@ describe('System runtime configuration', () => {
     expect(adminApi.setSystemConfig).not.toHaveBeenCalled()
   })
 
+  it('shows a masked NodeX token as configured without putting it in the commands', async () => {
+    const configMap = {
+      'forward.runtime.nodex_mode': { value: true },
+      'forward.runtime_backend': { value: 'gost' },
+      'forward.runtime.nodex.base_url': { value: 'https://nodex.internal' },
+      'forward.runtime.nodex.token': { value: '********', display_value: '********', sensitive: true, has_value: true }
+    }
+    adminApi.getSystemConfig.mockImplementation((key) => Promise.resolve({ data: configMap[key] ?? { value: '' } }))
+
+    const wrapper = mountSystem()
+    await flushPromises()
+
+    expect(wrapper.vm.runtimeNodeXToken).toBe('********')
+    expect(wrapper.vm.runtimeOperatorToken).toBe('<FORWARD_API_TOKEN>')
+    expect(wrapper.vm.runtimeDisplayedCommands.bash.join('\n')).toContain('Bearer <FORWARD_API_TOKEN>')
+    expect(wrapper.vm.runtimeDisplayedCommands.bash.join('\n')).not.toContain('********')
+    expect(adminApi.setSystemConfig).not.toHaveBeenCalled()
+  })
+
   it('loads runtime and config list data from panel envelope responses', async () => {
     const configMap = {
       'forward.runtime.nodex_mode': { value: false },

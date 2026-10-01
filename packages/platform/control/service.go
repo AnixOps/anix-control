@@ -65,10 +65,10 @@ var platformRoutes = map[string]struct{}{
 // handler; they always relay to the kernel's legacy handler.
 //   - The system configuration routes work on any key of v2_system_config,
 //     a protected kernel table. KernelSettings reaches the keys of a
-//     namespace only, and the package holds no grant over every key: the
-//     single-key answer returns secrets in clear, and a write can point an
-//     address the kernel sends a secret to (the NodeX or SMTP host)
-//     anywhere (docs/architecture/settings-service.md).
+//     namespace only, and the package holds no grant over every key, which
+//     would amount to every secret: the answers mask secrets, but a write
+//     can point an address the kernel sends a secret to (the NodeX or SMTP
+//     host) anywhere (docs/architecture/settings-service.md).
 //   - Creating, deleting and restoring a backup write, remove and restore
 //     archives of the database and files on the kernel's disk.
 var bridgedRoutes = map[string]struct{}{

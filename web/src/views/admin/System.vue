@@ -645,6 +645,7 @@ import {
   deleteLoadBalancer, runHealthCheck, listForwardRuntimeJobs, getForwardRuntimeStatus, runForwardRuntimeDoctor
 } from '@/api/admin'
 import { humanizeForwardRuntimeBackend } from '@/utils/forwardRuntime'
+import { isMaskedSecret } from '@/constants/secrets'
 
 const { t, formatDateTime, translateLiteral } = useAppI18n()
 
@@ -763,7 +764,11 @@ const runtimeDoctorSummary = ref(null)
 
 const defaultNodeXBaseUrl = 'http://127.0.0.1:18081'
 const runtimeOperatorBaseUrl = computed(() => runtimeNodeXBaseUrl.value?.trim() || defaultNodeXBaseUrl)
-const runtimeOperatorToken = computed(() => runtimeNodeXToken.value?.trim() || '<FORWARD_API_TOKEN>')
+// A stored token reads MASKED_SECRET; the commands show a placeholder then.
+const runtimeOperatorToken = computed(() => {
+  const token = runtimeNodeXToken.value?.trim() || ''
+  return token && !isMaskedSecret(token) ? token : '<FORWARD_API_TOKEN>'
+})
 const runtimeOperatorReferences = computed(() => ([
   t('runtime.workbench.references.panelRuntimeDoc'),
   t('runtime.workbench.references.panelRelayOnboarding'),

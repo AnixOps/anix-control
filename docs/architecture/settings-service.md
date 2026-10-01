@@ -190,20 +190,20 @@ network modules that is the module's network, not Control's.
 **Kept bridged: the generic system configuration routes** (platform: list,
 get, put, delete `/api/v2/admin/system/configs[/:key]`). They work on any
 key of `v2_system_config`. A native version needs a grant over every key,
-and that grant is every secret, held at all times:
+and that grant amounts to every secret, held at all times:
 
-- the single-key answer returns secrets in clear (all but the masked
-  fields), so it needs every namespace's `secrets`;
-- a write can point the NodeX or SMTP address anywhere, which reads the
+- the answers mask secrets (`********`, the single-key answer as the list,
+  and fields such as the SMTP password inside a JSON value), but a write can
+  point the NodeX or SMTP address anywhere, which reads the
   secret the kernel sends there;
 - the routes reach keys other domains own (identity's
   `security.mfa.config`, forward's runtime backend, the scheduler markers).
 
-Bridged, a secret passes through the platform host only in the answer to an
-administrator's own request, as the kernel answers it. An `all` namespace
-for official packages would remove four bridged routes at the price of a
-standing grant over every secret and every domain's settings; it is not
-granted. The backup creation, deletion and restore stay kernel-owned
+Bridged, the platform host relays the kernel's answers, which mask
+secrets; a secret passes through it only in an administrator's own write.
+An `all` namespace for official packages would remove four bridged routes
+at the price of a standing grant over every secret and every domain's
+settings; it is not granted. The backup creation, deletion and restore stay kernel-owned
 (archives on the kernel's disk).
 
 Forward has no runtime settings write route: its runtime backend is read

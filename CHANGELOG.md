@@ -88,6 +88,22 @@
     issued for one forward node` or `forward node not found`, and issues
     nothing; the token is bound to the node at issue. Tokens issued earlier
     without a node keep working and bind on their first registration.
+- The single-key system configuration answer no longer returns secrets.
+  `GET /api/v2/admin/system/configs/:key` answered a sensitive value in
+  clear, such as the NodeX token (`forward.runtime.nodex.token`), the SMTP
+  password, or any key whose name marks a token, secret, password or key.
+  It now masks it as the list already did: `value` and `display_value` read
+  `********` when a value is stored (`""` when none is), with `sensitive`
+  and `has_value`. `PUT /api/v2/admin/system/configs/:key` answers masked
+  too, as before.
+  - Saving `********` back keeps the stored value, as before; a new value
+    replaces it. Saving `********` for a secret that is not stored is now
+    refused (`value is required`) instead of storing the placeholder.
+  - The NodeX page and the runtime workbench keep a stored token: the field
+    shows `********`, saving keeps it, and the commands they show use
+    `<FORWARD_API_TOKEN>` instead of the token. The forward setup wizard
+    works as before. The routes stay bridged to the kernel; there is no
+    native handler. See `docs/UPGRADE.md`.
 
 ### Changed
 

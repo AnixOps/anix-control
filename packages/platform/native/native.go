@@ -20,10 +20,10 @@
 //   - The system configuration routes (list, get, set, delete) work on any
 //     key of v2_system_config, a protected kernel table. KernelSettings
 //     reaches only the keys of a namespace, and a grant over every key
-//     would hold every secret: the single-key answer returns secrets in
-//     clear, and writing an address (the NodeX or SMTP host) next to a
-//     secret the kernel sends there amounts to reading it. Their reason is
-//     in docs/architecture/settings-service.md.
+//     would amount to every secret: the answers mask secrets, but writing
+//     an address (the NodeX or SMTP host) next to a secret the kernel sends
+//     there amounts to reading it. Their reason is in
+//     docs/architecture/settings-service.md.
 //   - Creating, deleting and restoring a backup write, remove and restore
 //     archives of the whole database and the kernel's files on the kernel's
 //     disk (restoring closes the kernel's database connection), and record

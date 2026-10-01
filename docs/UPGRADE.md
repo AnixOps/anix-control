@@ -673,6 +673,26 @@ nodes need nothing.
   still answers a node's API key and secret, for the deployment helper and
   Ansible. Each read is now recorded in `v2_audit_log` with action `reveal`.
 
+### System Configuration Secrets Read As `********`
+
+`GET /api/v2/admin/system/configs/:key` now masks a sensitive value as the
+list (`GET /api/v2/admin/system/configs`) already did: a key whose name
+contains `token`, `secret`, `password`, `passwd`, `private_key`, `api_key`,
+`access_key` or `client_secret` (in any case, with or without the
+underscore) reads `********` in `value` and `display_value` when a value is
+stored, and `""` when none is; `sensitive` and `has_value` say which. The
+kernel and the packages granted a namespace's secrets still read the real
+values, so nothing that uses the NodeX token, the SMTP password or another
+secret changes.
+
+- **Editing.** Saving `********` back keeps the stored value, and a new
+  value replaces it, as before. The NodeX page shows a stored token as
+  `********` and keeps it when saved; its commands show
+  `<FORWARD_API_TOKEN>` instead of the token. Saving `********` for a
+  secret that is not stored is refused (`value is required`).
+- **Scripts.** A script that read a secret from this route must keep its
+  own copy. A script that reads a value and writes it back keeps working.
+
 ### The Administrator's User List No Longer Shows Subscription Tokens
 
 `GET /api/v2/admin/users` answered every listed user's whole `v2_user` row,
