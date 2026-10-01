@@ -683,8 +683,8 @@ func (h *ForwardHandler) GetUserRules(c *gin.Context) {
 }
 
 // CreateUserRule godoc
-// @Summary 用户创建转发规则
-// @Description 用户创建自己的转发规则
+// @Summary 管理员创建自己的旧版转发规则
+// @Description 旧版转发规则只能由管理员创建或修改：规则直接运行在所选中转和落地节点上，用户的隧道权限不覆盖它们。普通用户收到错误，应通过已授权的隧道创建转发 (/forward/create)。
 // @Tags 用户端
 // @Accept json
 // @Produce json
@@ -695,6 +695,11 @@ func (h *ForwardHandler) GetUserRules(c *gin.Context) {
 // @Router /user/forward/rules [post]
 func (h *ForwardHandler) CreateUserRule(c *gin.Context) {
 	userID := c.GetUint("user_id")
+	isAdmin := c.GetBool("is_admin")
+	if !isAdmin {
+		panelError(c, service.ErrForwardRuleAdminOnly.Error())
+		return
+	}
 
 	var req service.CreateRuleRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -702,7 +707,7 @@ func (h *ForwardHandler) CreateUserRule(c *gin.Context) {
 		return
 	}
 
-	rule, err := h.ruleService.CreateRuleForUser(userID, &req)
+	rule, err := h.ruleService.CreateRuleForUser(userID, isAdmin, &req)
 	if err != nil {
 		panelError(c, err.Error())
 		return

@@ -88,6 +88,35 @@ func (s *ForwardSecurityTestSuite) TestUserRulesHideNodeTokens() {
 	s.Equal("relay-secret-token", relay.APIToken)
 }
 
+// POST /api/v2/user/forward/rules let any user create a legacy rule on any
+// relay and exit node, to any target. Only an administrator creates one now;
+// a user still lists their own rules.
+func (s *ForwardSecurityTestSuite) TestOnlyAdministratorsCreateLegacyRules() {
+	create := NewForwardHandler().CreateUserRule
+	body := fmt.Sprintf(`{"name":"mine","relay_node_id":%d,"exit_node_id":%d,"protocol":"tcp","target_host":"10.0.0.1","target_port":22}`, s.relay.ID, s.exit.ID)
+	for name, w := range map[string]*httptest.ResponseRecorder{
+		"a rule":        s.serve("POST", "/user/forward/rules", "/user/forward/rules", body, nil, s.user.ID, false, create),
+		"an empty body": s.serve("POST", "/user/forward/rules", "/user/forward/rules", "", nil, s.user.ID, false, create),
+	} {
+		s.Require().Equal(http.StatusOK, w.Code, w.Body.String())
+		resp := decodePanelTestResponse(s.T(), w)
+		s.Equal(float64(-1), resp["code"], name)
+		s.Equal("only administrators can create or change legacy forward rules; forward through your tunnels instead", resp["msg"], name)
+	}
+	var count int64
+	s.Require().NoError(s.db.Model(&model.ForwardRule{}).Count(&count).Error)
+	s.Zero(count, "a user's rule was stored")
+
+	// An administrator creates one, and the user lists theirs.
+	w := s.serve("POST", "/user/forward/rules", "/user/forward/rules", body, nil, 999, true, create)
+	s.Require().Equal(float64(0), decodePanelTestResponse(s.T(), w)["code"], w.Body.String())
+	s.createRule(&s.user.ID, 20001)
+	w = s.serve("GET", "/user/forward/rules", "/user/forward/rules", "", nil, s.user.ID, false, NewForwardHandler().GetUserRules)
+	resp := decodePanelTestResponse(s.T(), w)
+	s.Require().Equal(float64(0), resp["code"], w.Body.String())
+	s.Len(resp["data"].([]any), 1)
+}
+
 // GET /api/v2/forward/agent/rules is a public route and answered anyone with
 // the rules of any node: every user's listen ports and targets.
 func (s *ForwardSecurityTestSuite) TestAgentRulesNeedTheForwardNodeToken() {

@@ -425,7 +425,7 @@ the keyless node.
 ### Forward Node Tokens
 
 Earlier builds showed a user the API tokens of the relay and exit nodes of
-their forward rules (`GET /api/v2/user/forward/rules`), and any user can
+their forward rules (`GET /api/v2/user/forward/rules`), and any user could
 create such a rule. A forward node's token authenticates its agent. If users
 had rules, give the forward nodes new tokens from their edit form
 (`PUT /api/v2/admin/forward/nodes/:id` with `api_token`) and update their
@@ -440,6 +440,35 @@ WHERE r.user_id IS NOT NULL;
 `GET /api/v2/forward/agent/rules` now answers only a forward node that sends
 its id (`node_id` or `X-Node-ID`) and its token (`X-API-Key`, `api_key` or
 `token`); it answered anyone before.
+
+### Legacy Forward Rules Are Administrator-Only
+
+Users can no longer create or change legacy forward rules.
+`POST /api/v2/user/forward/rules`, the only user write on them, answers a
+user with the panel error "only administrators can create or change legacy
+forward rules; forward through your tunnels instead" and stores nothing; an
+administrator's call still creates a rule. It let any user create a rule on
+any relay and exit node, to any target. No user entitlement covers a legacy
+rule: tunnel permissions grant tunnels, while a rule names its nodes, is not
+counted in a permission's forward or traffic quota, carries the limits its
+creator chose, and keeps running when a permission ends. Users forward
+through the tunnels they are granted (`POST /api/v2/forward/create`); the web
+panel never called the rule route. `GET /api/v2/user/forward/rules` still
+lists a user's rules, read-only.
+
+Rules that users created before the upgrade are kept and keep running. List
+them (read-only):
+
+```sql
+SELECT id, user_id, name, relay_node_id, exit_node_id, listen_port, target_host, target_port, enabled
+FROM v2_forward_rule WHERE user_id IS NOT NULL ORDER BY id;
+```
+
+Only an administrator can now disable, change or delete one
+(`POST /api/v2/admin/forward/rules/:id/toggle`,
+`PUT /api/v2/admin/forward/rules/:id` or
+`DELETE /api/v2/admin/forward/rules/:id`), which also updates the nodes.
+Rotate the tokens of the nodes they used, as the previous section says.
 
 ### Agent HTTP Routes Need The Node's Credentials
 

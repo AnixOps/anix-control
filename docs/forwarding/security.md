@@ -25,6 +25,11 @@ Current route-level controls:
 
 - User forward routes require JWT authentication.
 - Admin routes require JWT plus admin authorization.
+- Legacy forward rules are administrator-only. `POST /api/v2/user/forward/rules`
+  refuses users in the handler and the service
+  (`ForwardRuleService.CreateRuleForUser`); no user grant covers a legacy
+  rule's relay and exit nodes. `GET /api/v2/user/forward/rules` stays a
+  user's read-only list.
 - Internal traffic routes require application token authentication.
 - Legacy `/flow/upload` requires application token authentication.
 - Clean-agent register/heartbeat/report require an agent token.
