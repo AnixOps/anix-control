@@ -17,6 +17,10 @@ const (
 	// CapabilityReports: the Agent sends TrafficReport, LogBatch and
 	// NodeStatus, and Control answers reports with ReportAck.
 	CapabilityReports = "reports"
+	// CapabilityDiag: the Agent runs node-side diagnostics (diag.*
+	// operations), so Control may choose the node as a vantage. It adds no
+	// payload; Control records it on the session.
+	CapabilityDiag = "diag"
 )
 
 // Negotiated reports whether a data-plane capability is in use on a session:

@@ -55,9 +55,14 @@ type AgentControlConnection struct {
 	LastSeen     time.Time
 	DesiredRev   uint64
 	ObservedRev  uint64
-	stream       agentv1pb.AgentControlService_ControlStreamServer
-	sendMu       sync.Mutex
-	stateMu      sync.RWMutex
+	// ServerCapabilities is what the HelloAck advertised to this agent
+	// (serverCapabilities); Diagnostics is whether it advertised diag.v1,
+	// for NO-8's vantage selection.
+	ServerCapabilities []*agentv1pb.Capability
+	Diagnostics        bool
+	stream             agentv1pb.AgentControlService_ControlStreamServer
+	sendMu             sync.Mutex
+	stateMu            sync.RWMutex
 }
 
 func (c *AgentControlConnection) send(message *agentv1pb.ControlToAgent) error {
@@ -86,6 +91,12 @@ type AgentControlSnapshot struct {
 	LastSeen     time.Time `json:"last_seen"`
 	DesiredRev   uint64    `json:"desired_revision"`
 	ObservedRev  uint64    `json:"observed_revision"`
+	// ServerCapabilities are the data-plane features the HelloAck advertised
+	// to the agent (users.v1, reports.v1); one is in use only when
+	// Capabilities lists it too. Diagnostics is whether the agent advertised
+	// diag.v1, so a diagnostic may run from the node's vantage.
+	ServerCapabilities []string `json:"server_capabilities"`
+	Diagnostics        bool     `json:"diagnostics"`
 }
 
 // AgentControlManager owns live streams and correlates desired operations with ACKs.
@@ -187,15 +198,17 @@ func (m *AgentControlManager) Connection(nodeID uint32) (AgentControlSnapshot, b
 		}
 	}
 	return AgentControlSnapshot{
-		NodeID:       connection.NodeID,
-		SessionID:    connection.SessionID,
-		AgentVersion: connection.AgentVersion,
-		InstanceID:   connection.InstanceID,
-		Capabilities: capabilities,
-		ConnectedAt:  connection.ConnectedAt,
-		LastSeen:     connection.LastSeen,
-		DesiredRev:   connection.DesiredRev,
-		ObservedRev:  connection.ObservedRev,
+		NodeID:             connection.NodeID,
+		SessionID:          connection.SessionID,
+		AgentVersion:       connection.AgentVersion,
+		InstanceID:         connection.InstanceID,
+		Capabilities:       capabilities,
+		ConnectedAt:        connection.ConnectedAt,
+		LastSeen:           connection.LastSeen,
+		DesiredRev:         connection.DesiredRev,
+		ObservedRev:        connection.ObservedRev,
+		ServerCapabilities: capabilityVersions(connection.ServerCapabilities),
+		Diagnostics:        connection.Diagnostics,
 	}, true
 }
 
@@ -590,6 +603,7 @@ type AgentControlGRPCServer struct {
 	forwardManager           *AgentControlManager
 	auth                     *AgentAuthenticator
 	nodeService              *service.NodeService
+	reports                  *agentReportSinks
 	heartbeatIntervalSeconds uint32
 }
 
@@ -601,6 +615,7 @@ func NewAgentControlGRPCServer(manager *AgentControlManager) *AgentControlGRPCSe
 		manager:                  manager,
 		forwardManager:           GetForwardAgentControlManager(),
 		nodeService:              service.NewNodeService(),
+		reports:                  newAgentReportSinks(),
 		heartbeatIntervalSeconds: defaultAgentHeartbeatIntervalSeconds,
 	}
 }
@@ -679,12 +694,13 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 		ObservedRev:  first.Revision,
 		stream:       stream,
 	}
+	connection.ServerCapabilities = s.serverCapabilities(agentNode, hello.Capabilities)
+	connection.Diagnostics = agentcontrol.HasCapabilityVersion(hello.Capabilities, agentcontrol.CapabilityDiag, agentcontrol.CapabilityVersionV1)
 
 	if err := s.touchNode(agentNode); err != nil {
 		slog.Warn("failed to persist agent hello heartbeat", "component", "agent-control", "node", agentNode.String(), "error", err)
 	}
 
-	serverCapabilities := s.serverCapabilities(agentNode)
 	if err := connection.send(&agentv1pb.ControlToAgent{
 		RequestId:    first.RequestId,
 		NodeId:       nodeID,
@@ -696,7 +712,7 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 				ServerTimeUnixMs:         time.Now().UnixMilli(),
 				HeartbeatIntervalSeconds: s.heartbeatIntervalSeconds,
 				DesiredRevision:          desiredRevision,
-				ServerCapabilities:       serverCapabilities,
+				ServerCapabilities:       cloneCapabilities(connection.ServerCapabilities),
 			},
 		},
 	}); err != nil {
@@ -708,7 +724,7 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 	defer manager.unregister(connection)
 	// The data plane, per negotiated capability (PROTOCOL.md, "Data plane").
 	// Each sender stops before the connection is unregistered.
-	if agentcontrol.Negotiated(hello.Capabilities, serverCapabilities, agentcontrol.CapabilityUsers) {
+	if agentcontrol.Negotiated(hello.Capabilities, connection.ServerCapabilities, agentcontrol.CapabilityUsers) {
 		stopUserDeltas := s.startUserDeltas(stream.Context(), connection, agentNode, hello.UsersCursor)
 		defer stopUserDeltas()
 	}
@@ -787,12 +803,10 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 			return status.Error(codes.InvalidArgument, "hello may only be sent once")
 		case *agentv1pb.AgentToControl_ConfigStatus:
 			return unnegotiatedPayload("config_status", agentcontrol.CapabilityConfig)
-		case *agentv1pb.AgentToControl_Traffic:
-			return unnegotiatedPayload("traffic", agentcontrol.CapabilityReports)
-		case *agentv1pb.AgentToControl_Logs:
-			return unnegotiatedPayload("logs", agentcontrol.CapabilityReports)
-		case *agentv1pb.AgentToControl_Status:
-			return unnegotiatedPayload("status", agentcontrol.CapabilityReports)
+		case *agentv1pb.AgentToControl_Traffic, *agentv1pb.AgentToControl_Logs, *agentv1pb.AgentToControl_Status:
+			if err := s.handleReport(manager, connection, agentNode, message); err != nil {
+				return err
+			}
 		default:
 			return status.Error(codes.InvalidArgument, "control message payload is required")
 		}
@@ -924,23 +938,27 @@ func authenticatedStreamNodeID(ctx context.Context) (uint32, error) {
 }
 
 // serverCapabilities lists the data-plane features this Control serves to
-// node, HelloAck.server_capabilities (PROTOCOL.md, "Data plane"). Each
-// feature appends its capability here; a payload is sent on a session only
-// when the Agent's Hello lists the capability too (agentcontrol.Negotiated).
-func (s *AgentControlGRPCServer) serverCapabilities(node agentcontrol.AgentNode) []*agentv1pb.Capability {
+// node, HelloAck.server_capabilities (PROTOCOL.md, "Data plane"), given the
+// Agent's Hello capabilities. Each feature appends its capability here; a
+// payload is sent on a session only when the Agent's Hello lists the
+// capability too (agentcontrol.Negotiated).
+func (s *AgentControlGRPCServer) serverCapabilities(node agentcontrol.AgentNode, agent []*agentv1pb.Capability) []*agentv1pb.Capability {
 	var capabilities []*agentv1pb.Capability
 	if s.servesUserDeltas(node) {
 		capabilities = append(capabilities, &agentv1pb.Capability{Name: agentcontrol.CapabilityUsers, Version: agentcontrol.CapabilityVersionV1})
+	}
+	if s.servesReports(node, agent) {
+		capabilities = append(capabilities, &agentv1pb.Capability{Name: agentcontrol.CapabilityReports, Version: agentcontrol.CapabilityVersionV1})
 	}
 	return capabilities
 }
 
 // unnegotiatedPayload rejects a data-plane payload (PROTOCOL.md, "Data
 // plane"). An Agent sends one only when HelloAck.server_capabilities lists its
-// capability, and this server lists none of these. The answer is InvalidArgument,
-// ending the stream, as from a Control built before these payloads existed:
-// there they arrive as an unknown payload ("control message payload is
-// required").
+// capability, and this server did not list it on the session. The answer is
+// InvalidArgument, ending the stream, as from a Control built before these
+// payloads existed: there they arrive as an unknown payload ("control
+// message payload is required").
 func unnegotiatedPayload(payload, capability string) error {
 	return status.Errorf(codes.InvalidArgument,
 		"control message payload %s requires the %s.%s server capability, which this server does not advertise",
@@ -955,6 +973,18 @@ func cloneCapabilities(capabilities []*agentv1pb.Capability) []*agentv1pb.Capabi
 		}
 	}
 	return cloned
+}
+
+// capabilityVersions writes capabilities as name.version, as PROTOCOL.md
+// does (reports.v1).
+func capabilityVersions(capabilities []*agentv1pb.Capability) []string {
+	names := make([]string, 0, len(capabilities))
+	for _, capability := range capabilities {
+		if capability != nil && capability.Name != "" {
+			names = append(names, capability.Name+"."+capability.Version)
+		}
+	}
+	return names
 }
 
 func connectionSupportsOperation(connection *AgentControlConnection, kind string) bool {

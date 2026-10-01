@@ -533,6 +533,36 @@
       shadow comparison;
     - a walk of `IsNodeSecretKey` keys through every listed route, end to
       end over a real bridge session (`internal/tests/sealedhandles`).
+- **Reports on the Agent Control stream (A2-5)** (`sdk/api/agent/v1/PROTOCOL.md`,
+  "Reports"). When an agent's `Hello` lists `reports.v1`, the kernel
+  advertises it back in `HelloAck.server_capabilities` and accepts
+  `TrafficReport`, `LogBatch` and `NodeStatus` on the stream, for the
+  stream's node (a proxy node; forward-node reports join with A5). Agents
+  without `reports.v1`, and every agent in the field, keep the legacy paths
+  and today's `InvalidArgument` for the payloads.
+  - Traffic is counted through the transaction the legacy `ReportTraffic`
+    and the UniProxy push use (`v2_server_log`, the node's counters, the
+    server stats and the subscriber ledger), with the node's rate, so a byte
+    counts once whichever path carried it. Online IPs replace the node's
+    alive set, the one `ReportOnline` feeds, and `online_users`. Logs go
+    into `v2_node_log` as `ReportLogs` records them, with the runtime health
+    a WireGuard entry carries. A `NodeStatus` writes the heartbeat, system
+    and runtime-health columns `ReportStatus` writes.
+  - A `TrafficReport` or `LogBatch` is applied at most once per node and
+    batch id. The new table `v4_kernel_agent_report_batch` (protected from
+    package adoption, pruned after 7 days) is claimed in the transaction that
+    applies the batch. `ReportAck` answers each: `applied: true` when this
+    delivery recorded it; `applied: false` without an error for a batch a
+    committed delivery recorded before, which is not counted again;
+    `applied: false` with an error for a batch refused for good (no batch
+    id, or one over 128 bytes; a missing `user_id`; bytes beyond the
+    counter range; `fields_json` that is not JSON; a node that no longer
+    exists). A batch the kernel cannot record for now (the database failed)
+    gets no acknowledgement and the stream stays open, so the agent's spool
+    resends it. `NodeStatus` is never acknowledged.
+  - `diag.v1` in the `Hello` is recorded on the session
+    (`AgentControlSnapshot.diagnostics`, with `server_capabilities`), for the
+    diagnosis vantage of NO-8. No diagnostic is sent yet.
 
 - User deltas on the Agent Control stream (A2-4, `users.v1`). Control now
   lists `users.v1` in `HelloAck.server_capabilities` for proxy nodes and,

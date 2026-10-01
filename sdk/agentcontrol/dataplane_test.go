@@ -11,6 +11,7 @@ func TestDataPlaneCapabilityNames(t *testing.T) {
 		CapabilityConfig:  "config",
 		CapabilityUsers:   "users",
 		CapabilityReports: "reports",
+		CapabilityDiag:    "diag",
 	} {
 		if name != want {
 			t.Fatalf("capability = %q, want %q", name, want)

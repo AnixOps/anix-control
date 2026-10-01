@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/AnixOps/anix-control/v4/internal/agentreports"
 	"github.com/AnixOps/anix-control/v4/internal/cache"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
@@ -184,22 +185,73 @@ func (s *ServerService) RecordNodeTrafficReport(serverType model.ServerType, nod
 	if len(traffics) == 0 {
 		return nil
 	}
-	rate = normalizeTrafficRate(rate)
+	plan, err := planNodeTrafficReport(serverType, nodeID, traffics, rate, time.Now())
+	if err != nil {
+		return err
+	}
+	return s.db.Transaction(plan.applyTx)
+}
 
-	logs := make([]model.TrafficLog, 0, len(traffics))
-	userTraffics := make(map[uint][2]int64, len(traffics))
-	var totalUpload, totalDownload int64
-	now := time.Now().Unix()
+// RecordAgentTrafficReport applies a TrafficReport batch from the Agent
+// Control stream (reports.v1) exactly as RecordNodeTrafficReport applies the
+// legacy report of the same node, once per node and batch id: the batch
+// record (internal/agentreports) is claimed in the transaction that applies
+// the traffic. It reports whether this call applied the batch; false means a
+// committed transaction applied it before, and nothing was counted again.
+func (s *ServerService) RecordAgentTrafficReport(nodeKind string, nodeID uint, batchID string, traffics map[uint][2]int64, rate float64) (bool, error) {
+	now := time.Now()
+	var plan *nodeTrafficReportPlan
+	if len(traffics) > 0 {
+		var err error
+		plan, err = planNodeTrafficReport(model.ServerType("node"), nodeID, traffics, rate, now)
+		if err != nil {
+			return false, err
+		}
+	}
+	applied := false
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		seen, err := agentreports.ClaimTx(tx, nodeKind, nodeID, batchID, agentreports.KindTraffic, now)
+		if err != nil || seen {
+			return err
+		}
+		applied = true
+		if plan == nil {
+			return nil
+		}
+		return plan.applyTx(tx)
+	})
+	return applied, err
+}
+
+// nodeTrafficReportPlan is a validated node traffic report, ready to apply
+// in one transaction.
+type nodeTrafficReportPlan struct {
+	serverType           model.ServerType
+	nodeID               uint
+	logs                 []model.TrafficLog
+	entries              []subscriber.TrafficEntry
+	totalUpload          int64
+	totalDownload        int64
+	now                  int64
+	dayStart, monthStart int64
+}
+
+func planNodeTrafficReport(serverType model.ServerType, nodeID uint, traffics map[uint][2]int64, rate float64, at time.Time) (*nodeTrafficReportPlan, error) {
+	rate = normalizeTrafficRate(rate)
+	now := at.Unix()
+	plan := &nodeTrafficReportPlan{serverType: serverType, nodeID: nodeID, now: now}
+	plan.logs = make([]model.TrafficLog, 0, len(traffics))
+	plan.entries = make([]subscriber.TrafficEntry, 0, len(traffics))
 	for userID, traffic := range traffics {
 		if err := ValidateTrafficDelta(traffic[0], traffic[1]); err != nil {
-			return err
+			return nil, err
 		}
 		upload := int64(float64(traffic[0]) * rate)
 		download := int64(float64(traffic[1]) * rate)
-		userTraffics[userID] = [2]int64{upload, download}
-		totalUpload += upload
-		totalDownload += download
-		logs = append(logs, model.TrafficLog{
+		plan.entries = append(plan.entries, subscriber.TrafficEntry{UserID: userID, Upload: upload, Download: download})
+		plan.totalUpload += upload
+		plan.totalDownload += download
+		plan.logs = append(plan.logs, model.TrafficLog{
 			UserID:     userID,
 			ServerID:   nodeID,
 			ServerType: string(serverType),
@@ -209,32 +261,30 @@ func (s *ServerService) RecordNodeTrafficReport(serverType model.ServerType, nod
 			LogAt:      now,
 		})
 	}
-
 	dayStart := time.Unix(now, 0).In(time.Local)
 	dayStart = time.Date(dayStart.Year(), dayStart.Month(), dayStart.Day(), 0, 0, 0, 0, time.Local)
-	monthStart := time.Date(dayStart.Year(), dayStart.Month(), 1, 0, 0, 0, 0, time.Local)
-	return s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.CreateInBatches(logs, 100).Error; err != nil {
+	plan.dayStart = dayStart.Unix()
+	plan.monthStart = time.Date(dayStart.Year(), dayStart.Month(), 1, 0, 0, 0, 0, time.Local).Unix()
+	return plan, nil
+}
+
+func (p *nodeTrafficReportPlan) applyTx(tx *gorm.DB) error {
+	if err := tx.CreateInBatches(p.logs, 100).Error; err != nil {
+		return err
+	}
+	if p.totalUpload > 0 || p.totalDownload > 0 {
+		if err := accumulateTrafficTx(tx, p.nodeID, p.totalUpload, p.totalDownload, false); err != nil {
 			return err
 		}
-		if totalUpload > 0 || totalDownload > 0 {
-			if err := accumulateTrafficTx(tx, nodeID, totalUpload, totalDownload, false); err != nil {
-				return err
-			}
-			if err := recordServerStatTx(tx, serverType, nodeID, totalUpload, totalDownload, "d", dayStart.Unix()); err != nil {
-				return err
-			}
-			if err := recordServerStatTx(tx, serverType, nodeID, totalUpload, totalDownload, "m", monthStart.Unix()); err != nil {
-				return err
-			}
+		if err := recordServerStatTx(tx, p.serverType, p.nodeID, p.totalUpload, p.totalDownload, "d", p.dayStart); err != nil {
+			return err
 		}
-		entries := make([]subscriber.TrafficEntry, 0, len(userTraffics))
-		for userID, traffic := range userTraffics {
-			entries = append(entries, subscriber.TrafficEntry{UserID: userID, Upload: traffic[0], Download: traffic[1]})
+		if err := recordServerStatTx(tx, p.serverType, p.nodeID, p.totalUpload, p.totalDownload, "m", p.monthStart); err != nil {
+			return err
 		}
-		_, err := subscriber.RecordTrafficTx(tx, "", entries, time.Unix(now, 0))
-		return err
-	})
+	}
+	_, err := subscriber.RecordTrafficTx(tx, "", p.entries, time.Unix(p.now, 0))
+	return err
 }
 
 // RecordServerStat 记录节点汇总统计，用于面板中的服务器统计表。

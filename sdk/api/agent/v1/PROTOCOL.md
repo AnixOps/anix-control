@@ -102,15 +102,21 @@ are additions to `anix.agent.v1`:
     transports.
 - Older Agents send none of these capabilities or `Hello` fields and skip
   `server_capabilities`, so nothing changes for them.
-- Control serves `users.v1` to proxy nodes (`server_capabilities` lists it
-  for them; a forward node has no user list and is offered nothing).
-  `config.v1` and `reports.v1` are not served yet. An Agent that sends
-  `config_status`, `traffic`, `logs` or `status` anyway gets
-  `InvalidArgument`, naming the capability it lacks, and the stream ends.
-  A Control built before these payloads existed answers them the same way, as
-  an unknown payload ("control message payload is required").
+- Control serves `users.v1` and `reports.v1`, to proxy nodes (`v2_node`):
+  `server_capabilities` lists `users.v1` for every proxy node (a forward node
+  has no user list and is offered nothing), and `reports.v1` when the
+  Agent's `Hello` lists it too (a forward node's stream is not offered it
+  yet; its reports join with the forward plugins). `config.v1` is not served
+  yet. An Agent that sends a payload the session did not negotiate
+  (`config_status`; or `traffic`, `logs` or `status` without `reports.v1` in
+  both lists) gets `InvalidArgument`, naming the capability it lacks, and
+  the stream ends. A Control built before these payloads existed answers
+  them the same way, as an unknown payload ("control message payload is
+  required").
 - `diag.v1` is reserved for node-side diagnostics (`diag.*` operations). It
-  adds no payload; its rules come with those operations.
+  adds no payload; its rules come with those operations. Control records
+  that the Agent advertised it on the session, so a diagnostic may run from
+  the node's vantage once those operations exist.
 
 ### Delivery
 
@@ -163,19 +169,39 @@ are additions to `anix.agent.v1`:
     `LogBatch` carries runtime logs; `fields_json` holds no secrets.
   - Each has a `batch_id`, unique per node and kept when resent:
     `node:<kind>-<id>:<boot id>:<sequence>`, with `<kind>` `proxy` or
-    `forward`. Control records a batch once.
-  - Control answers each with a `ReportAck` for its `batch_id`:
+    `forward`; at most 128 bytes. Control records a batch once per node,
+    in the transaction that applies it, and remembers it for 7 days, longer
+    than any spool keeps a batch.
+  - Control applies a report where the node's legacy report goes, so a byte
+    counts once whichever path carried it: `users` through the transaction
+    of the legacy traffic report (the traffic log, the node's counters, the
+    server statistics and the subscriber counters, at the node's rate);
+    `online` replaces the node's whole alive set, as the legacy online
+    report does, so a report without `online` entries clears it; `entries`
+    into the node log, as the legacy log batch; `NodeStatus` into the
+    node's heartbeat, system and runtime-health columns, as the legacy
+    status report and runtime-health report.
+  - Control answers each `TrafficReport` and `LogBatch` with a `ReportAck`
+    for its `batch_id`, with the `request_id` of the message it answers:
     - `applied: true` when this delivery recorded it;
-    - `applied: false` and no `error` when Control had recorded it before;
-    - `applied: false` and an `error` when Control refuses it for good.
+    - `applied: false` and no `error` when a committed delivery had
+      recorded it before; nothing is counted again;
+    - `applied: false` and an `error` when Control refuses it for good: no
+      `batch_id` or one over 128 bytes, a `user_id` of 0, bytes beyond the
+      64-bit counter range, `fields_json` that is not JSON, or a node that
+      no longer exists.
 
     In each case the Agent drops the batch from its spool. Control sends no
-    `ReportAck` for a batch it cannot record for now, and the Agent resends
-    it later.
+    `ReportAck` for a batch it cannot record for now (its database failed),
+    and keeps the stream open; the Agent resends the batch later. A refused
+    or unrecorded batch is not remembered, so a resend after the fault is
+    applied.
   - A batch stays on the stream: the Agent never resends it over a legacy
     transport, which has no batch ids and could count it twice.
   - `NodeStatus` is the node's system and runtime health. Each replaces the
     previous one, and Control does not acknowledge it.
+  - A report whose envelope `node_id` is not the stream's node ends the
+    stream with `PermissionDenied`, as any other message does.
 
 The checked-in Go files are generated, not handwritten. From the repository
 root, run:
