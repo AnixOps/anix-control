@@ -48,6 +48,11 @@ var (
 
 var seeded = time.Date(2026, 9, 1, 8, 0, 0, 0, time.UTC)
 
+// paidToday is when order 2 was paid: today, for the revenue statistics.
+// It is taken once, so both sides of a case seed the same time, which the
+// order answers show.
+var paidToday = time.Now().Unix()
+
 // orderHost is the identity the kernel serves the order host as.
 var orderHost = packagebridge.HostIdentity{PackageID: "order", Version: "4.0.0", Generation: 1}
 
@@ -155,7 +160,6 @@ func seed(t testing.TB, db *gorm.DB) {
 		coupon(7, "MINUS", 1, 50, ptr(-1), 4, 1_600_000_000, 2_000_000_000),
 		coupon(8, "ZERO", 1, 10, ptr(0), 9, 1_600_000_000, 2_000_000_000),
 	}).Error)
-	paidToday := time.Now().Unix()
 	order := func(id, user, plan uint, period string, status int, total int64, paidAt *int64) model.Order {
 		return model.Order{
 			ID: id, UserID: user, PlanID: plan, Type: 1, Period: period, TradeNo: fmt.Sprintf("T%d", id), TotalAmount: total,
@@ -497,4 +501,81 @@ func TestSaveOrderParity(t *testing.T) {
 			{Name: "the hidden plan does not sell " + period, Path: "/api/v2/user/order/save", Principal: newcomer, Body: []byte(`{"plan_id":3,"period":"` + period + `"}`)},
 		})
 	}
+}
+
+// The order list and detail answers carry the order, its plan's id and name
+// and, for an administrator, its buyer's id and e-mail: the native side
+// reads them from kapi_plan_name_v1 and kapi_user_directory_v1. A user sees
+// only their own orders.
+func TestOrderListParity(t *testing.T) {
+	list := route(t, "GET", "/api/v2/admin/orders", native.AdminOrdersRouteID, admins((*handler.AdminHandler).GetOrderList))
+	read(t, list, []packagecompat.Case{
+		{Name: "every order newest first", Path: "/api/v2/admin/orders", Principal: admin},
+		{Name: "a page", Path: "/api/v2/admin/orders?page=2&page_size=3", Principal: admin},
+		{Name: "a page beyond the last", Path: "/api/v2/admin/orders?page=9", Principal: admin},
+		{Name: "page zero", Path: "/api/v2/admin/orders?page=0&page_size=2", Principal: admin},
+		{Name: "a page size beyond the maximum", Path: "/api/v2/admin/orders?page_size=1000", Principal: admin},
+		{Name: "a page size that is not a number", Path: "/api/v2/admin/orders?page_size=x", Principal: admin},
+		{Name: "empty page parameters", Path: "/api/v2/admin/orders?page=&page_size=", Principal: admin},
+		{Name: "by buyer", Path: "/api/v2/admin/orders?user_id=3", Principal: admin},
+		{Name: "by a buyer id that does not parse", Path: "/api/v2/admin/orders?user_id=x", Principal: admin, Seed: seedOrphans},
+		{Name: "by status", Path: "/api/v2/admin/orders?status=0", Principal: admin},
+		{Name: "by a status that does not parse", Path: "/api/v2/admin/orders?status=paid", Principal: admin},
+		{Name: "by type", Path: "/api/v2/admin/orders?type=1", Principal: admin},
+		{Name: "by trade number", Path: "/api/v2/admin/orders?trade_no=T3", Principal: admin},
+		{Name: "by the start of the e-mail", Path: "/api/v2/admin/orders?email=newcomer", Principal: admin},
+		{Name: "by the middle of the e-mail", Path: "/api/v2/admin/orders?email=comer@", Principal: admin},
+		{Name: "by an e-mail no buyer has", Path: "/api/v2/admin/orders?email=nobody", Principal: admin},
+		{Name: "an e-mail with a wildcard", Path: "/api/v2/admin/orders?email=%25example", Principal: admin},
+		{Name: "every filter", Path: "/api/v2/admin/orders?user_id=3&status=0&type=1&trade_no=T6&email=newcomer", Principal: admin},
+		{Name: "orders whose plan or buyer no longer exists", Path: "/api/v2/admin/orders", Principal: admin, Seed: seedOrphans},
+		{Name: "no orders", Path: "/api/v2/admin/orders", Principal: admin, Seed: empty},
+	})
+	mine := route(t, "GET", "/api/v2/user/order", native.UserOrdersRouteID, orders((*handler.OrderHandler).GetOrders))
+	read(t, mine, []packagecompat.Case{
+		{Name: "the caller's orders", Path: "/api/v2/user/order", Principal: buyer},
+		{Name: "another caller's orders", Path: "/api/v2/user/order", Principal: newcomer},
+		{Name: "a caller without orders", Path: "/api/v2/user/order", Principal: admin},
+		{Name: "query parameters cannot widen the list", Path: "/api/v2/user/order?user_id=2&email=buyer&status=0", Principal: newcomer},
+		{Name: "a page", Path: "/api/v2/user/order?page=2&page_size=2", Principal: newcomer},
+		{Name: "a page size beyond the maximum", Path: "/api/v2/user/order?page_size=1000", Principal: newcomer},
+		{Name: "a negative page size", Path: "/api/v2/user/order?page_size=-1", Principal: newcomer},
+		{Name: "page size zero", Path: "/api/v2/user/order?page_size=0", Principal: newcomer},
+		{Name: "a negative page", Path: "/api/v2/user/order?page=-2&page_size=1", Principal: newcomer},
+		{Name: "no caller", Path: "/api/v2/user/order", Principal: pluginhostsdk.Principal{}, Seed: seedOrphans},
+		{Name: "an order whose plan no longer exists", Path: "/api/v2/user/order", Principal: newcomer, Seed: seedOrphans},
+		{Name: "a caller whose account is gone", Path: "/api/v2/user/order", Principal: pluginhostsdk.Principal{ActorID: 99}, Seed: seedOrphans},
+		{Name: "no orders", Path: "/api/v2/user/order", Principal: buyer, Seed: empty},
+	})
+}
+
+func TestOrderDetailParity(t *testing.T) {
+	detail := route(t, "GET", "/api/v2/admin/orders/:id", native.AdminOrderRouteID, admins((*handler.AdminHandler).GetOrder))
+	read(t, detail, []packagecompat.Case{
+		{Name: "an order with its plan and buyer", Path: "/api/v2/admin/orders/1", Principal: admin},
+		{Name: "a completed order", Path: "/api/v2/admin/orders/3", Principal: admin},
+		{Name: "unknown order", Path: "/api/v2/admin/orders/99", Principal: admin},
+		{Name: "order zero", Path: "/api/v2/admin/orders/0", Principal: admin},
+		{Name: "id that is not a number", Path: "/api/v2/admin/orders/x", Principal: admin},
+		{Name: "id that is a condition", Path: "/api/v2/admin/orders/0%20OR%201=1", Principal: admin},
+		{Name: "id beyond 32 bits", Path: "/api/v2/admin/orders/4294967296", Principal: admin},
+		{Name: "a buyer who no longer exists", Path: "/api/v2/admin/orders/20", Principal: admin, Seed: seedOrphans},
+		{Name: "a plan that no longer exists", Path: "/api/v2/admin/orders/21", Principal: admin, Seed: seedOrphans},
+		{Name: "an order without a buyer", Path: "/api/v2/admin/orders/22", Principal: admin, Seed: seedOrphans},
+	})
+	mine := route(t, "GET", "/api/v2/user/order/:id", native.UserOrderRouteID, orders((*handler.OrderHandler).GetOrderDetail))
+	read(t, mine, []packagecompat.Case{
+		{Name: "the caller's order", Path: "/api/v2/user/order/1", Principal: buyer},
+		{Name: "the caller's completed order", Path: "/api/v2/user/order/3", Principal: newcomer},
+		{Name: "another user's order", Path: "/api/v2/user/order/2", Principal: buyer},
+		{Name: "an administrator's own route shows only their orders", Path: "/api/v2/user/order/1", Principal: admin},
+		{Name: "unknown order", Path: "/api/v2/user/order/99", Principal: buyer},
+		{Name: "order zero", Path: "/api/v2/user/order/0", Principal: buyer},
+		{Name: "id that is not a number", Path: "/api/v2/user/order/x", Principal: buyer},
+		{Name: "id that is a condition", Path: "/api/v2/user/order/1%20OR%201=1", Principal: buyer},
+		{Name: "id beyond 32 bits", Path: "/api/v2/user/order/4294967297", Principal: buyer},
+		{Name: "an order without a buyer and no caller", Path: "/api/v2/user/order/22", Principal: pluginhostsdk.Principal{}, Seed: seedOrphans},
+		{Name: "the caller's order whose plan no longer exists", Path: "/api/v2/user/order/21", Principal: newcomer, Seed: seedOrphans},
+		{Name: "a caller whose account is gone", Path: "/api/v2/user/order/20", Principal: pluginhostsdk.Principal{ActorID: 99}, Seed: seedOrphans},
+	})
 }

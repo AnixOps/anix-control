@@ -364,6 +364,36 @@ func TestPostgresPlanViewsAreReadOnly(t *testing.T) {
 	requirePermissionDenied(t, pkg.Exec("DELETE FROM kapi_plan_subscription_group_v1 WHERE plan_id = ?", plan.ID).Error)
 }
 
+// A role granted kapi_plan_name_v1 reads a plan's id and name, and neither
+// its prices nor v2_plan itself, nor can it change a plan through the view.
+func TestPostgresPlanNameViewIsReadOnly(t *testing.T) {
+	kernel, kernelDSN := openPostgresKernel(t)
+	require.NoError(t, kernel.AutoMigrate(&model.Plan{}))
+	require.NoError(t, EnsureKernelAPIViews(kernel))
+	suffix := randomSuffix(t)
+	packageID := "pkgtest-" + suffix
+	t.Cleanup(func() { dropPackageStorage(t, kernel, packageID) })
+	price := int64(1000)
+	plan := model.Plan{Name: "name-" + suffix, MonthPrice: &price}
+	require.NoError(t, kernel.Create(&plan).Error)
+	t.Cleanup(func() { _ = kernel.Delete(&model.Plan{}, plan.ID).Error })
+
+	store := Store{DB: kernel, Driver: "postgres", DSN: kernelDSN}
+	lease, err := store.Lease(context.Background(), Holder{PackageID: packageID, Version: "4.1.0", Generation: 1},
+		Grants{Storage: true, Views: []string{"kapi_plan_name_v1"}})
+	require.NoError(t, err)
+	pkg := openPostgres(t, lease.DSN)
+	var names []string
+	require.NoError(t, pkg.Raw("SELECT name FROM kapi_plan_name_v1 WHERE id = ?", plan.ID).Scan(&names).Error)
+	require.Equal(t, []string{"name-" + suffix}, names)
+	var prices []int64
+	require.ErrorContains(t, pkg.Raw("SELECT month_price FROM kapi_plan_name_v1").Scan(&prices).Error, "does not exist")
+	var count int64
+	requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM v2_plan").Scan(&count).Error)
+	requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM kapi_plan_catalog_v1").Scan(&count).Error)
+	requirePermissionDenied(t, pkg.Exec("UPDATE kapi_plan_name_v1 SET name = 'x' WHERE id = ?", plan.ID).Error)
+}
+
 // A role granted kapi_order_billing_v1 reads an order's buyer, total and
 // status, and can neither read v2_order itself nor change it through the
 // view.

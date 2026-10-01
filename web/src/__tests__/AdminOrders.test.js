@@ -75,6 +75,68 @@ describe('Admin Orders', () => {
     wrapper.unmount()
   })
 
+  // The administrator's order answers carry user as {id, email} and plan as
+  // {id, name}; the detail modal shows the list row.
+  it('renders the buyer and plan of the slim order answer', async () => {
+    adminApi.getOrderList.mockResolvedValueOnce({
+      code: 0,
+      msg: '操作成功',
+      ts: 1783526400000,
+      data: {
+        total: 2,
+        list: [
+          {
+            id: 12,
+            user_id: 3,
+            plan_id: 2,
+            type: 2,
+            trade_no: 'SLIM012',
+            period: 'quarter',
+            total_amount: 8000,
+            status: 1,
+            paid_at: 1700000000,
+            callback_no: 'CB-12',
+            created_at: '2026-09-01T08:00:00Z',
+            user: { id: 3, email: 'buyer@example.test' },
+            plan: { id: 2, name: 'Pro' }
+          },
+          {
+            id: 13,
+            user_id: 99,
+            plan_id: 404,
+            trade_no: 'GONE013',
+            period: 'month',
+            total_amount: 1000,
+            status: 0,
+            created_at: '2026-09-01T09:00:00Z'
+          }
+        ]
+      }
+    })
+
+    const wrapper = mount(Orders)
+    await flushPromises()
+
+    const rows = wrapper.findAll('tbody tr')
+    expect(rows).toHaveLength(2)
+    const cells = rows[0].findAll('td').map(cell => cell.text())
+    expect(cells[1]).toBe('buyer@example.test')
+    expect(cells[2]).toBe('Pro')
+    const orphan = rows[1].findAll('td').map(cell => cell.text())
+    expect(orphan[1]).toBe('-')
+    expect(orphan[2]).toBe('-')
+
+    await wrapper.vm.viewDetail(wrapper.vm.orders[0])
+    await flushPromises()
+    const detail = wrapper.find('.modal-body').text()
+    expect(detail).toContain('SLIM012')
+    expect(detail).toContain('buyer@example.test')
+    expect(detail).toContain('Pro')
+    expect(detail).toContain('CB-12')
+
+    wrapper.unmount()
+  })
+
   it('renders order stats from legacy, panel envelope, and nested payloads', async () => {
     adminApi.getOrderStats
       .mockResolvedValueOnce({

@@ -28,11 +28,11 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   WebSocket routes use `registeredPackageWebSocketRoute`.
 - `config/package-extraction.json` records each route's extraction mode
   (`bridged`, `native-flagged` or `native`) and where its legacy handler lives
-  (`router`, `identity-bridge` or `none`). 147 routes are `native-flagged`:
+  (`router`, `identity-bridge` or `none`). 151 routes are `native-flagged`:
   identity-platform (20: group A's 15, the profile, dashboard and user detail,
   and the traffic and subscription resets), affiliate (7), forward (17),
   gost-mesh (1), knowledge (6), machine-telemetry (2), notification (19),
-  order (9), payment (16), plan (7), platform (4), protocol-runtime (3),
+  order (13), payment (16), plan (7), platform (4), protocol-runtime (3),
   proxy-node (7), subscription (20), ticket (8) and wireguard (1). The rest
   are `bridged`. The identity routes are `identity-bridge`.
   `check_plugin_only_routes.py` enforces the map against the router and the
@@ -231,15 +231,17 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
   - The subscription module checks a plan through `kapi_plan_catalog_v1`;
     the kernel's subscription renderer, which stays in the kernel, still
     reads `v2_plan` directly.
-- **Order (in place).** 9 of 13 routes run on the adopted `v2_order` and
+- **Order (in place).** All 13 routes run on the adopted `v2_order` and
   `v2_coupon` tables, proved by `internal/tests/ordercompat`: the coupon
-  routes, order statistics, status changes, cancellation, "mark paid" and
-  the user's order creation.
+  routes, order statistics, status changes, cancellation, "mark paid", the
+  user's order creation, and the administrator's and user's order lists and
+  details.
   - Other domains are read through views: `kapi_plan_catalog_v1` (a plan's
     prices, group, transfer and limits), `kapi_plan_subscription_group_v1`
-    (the subscription groups a plan grants) and `kapi_user_directory_v1`
-    (the buyer's current plan, which makes an order new, a renewal or an
-    upgrade).
+    (the subscription groups a plan grants), `kapi_plan_name_v1` (a plan's
+    name, for the order answers) and `kapi_user_directory_v1` (the buyer's
+    current plan, which makes an order new, a renewal or an upgrade, and the
+    buyer's e-mail in an administrator's order answers).
   - "Mark paid" completes the order through
     `KernelSubscriber.ApplyEntitlement` (`kernel.subscriber.entitlements.v1`)
     with `request_id = "order:<order id>"`, the id the kernel's completion and
@@ -256,9 +258,16 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
     an affiliate contract first.
   - The kernel keeps writing `v2_order`: the payment callbacks mark orders
     paid and complete them, and the dashboard and invite statistics read it.
-  - The four order list and detail routes stay bridged. Their answers embed
-    the buyer's whole `v2_user` row, subscription token and proxy UUID
-    included, which no kernel view may expose.
+  - The order list and detail answers carry the order, its plan's `id` and
+    `name` and, for an administrator, its buyer's `id` and `email`. They
+    embedded the buyer's whole `v2_user` row, subscription token and proxy
+    UUID included, which no kernel view may expose, and the whole `v2_plan`
+    row; the routes stayed bridged until the kernel's answers were slimmed to
+    what the frontend reads (`docs/UPGRADE.md` lists the dropped fields).
+    A user's list and detail are the caller's own orders: the owner is part
+    of the query, and another user's order is "not found", as an unknown
+    one. The parity cases include other users' orders, orders whose plan or
+    buyer was deleted, and every list filter and paging edge.
 - **Payment (in place).** 16 of 20 routes run on the adopted
   `v2_payment_gateway`, `v2_payment_record` and `v2_payment` tables, proved
   by `internal/tests/paymentcompat`: gateway administration, payment records
@@ -603,24 +612,17 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
   The parity test masks the random keys and checks on both sides that each
   answer is a fresh X25519 pair.
 - The kernel publishes read-only views `kapi_*`, created at startup by
-  `EnsureKernelAPIViews` (first `kapi_user_directory_v1`, then
-  `kapi_system_audit_log_v1`, the `v2_operation_log` rows of module
-  `system`; later `kapi_plan_catalog_v1`). Packages read other domains only
-  through `kapi_*` views or typed operations.
-  `EnsureKernelAPIViews` (`kapi_user_directory_v1`,
-  `kapi_subscriber_entitlement_v1`, `kapi_plan_catalog_v1`,
-  `kapi_plan_subscription_group_v1`, `kapi_order_billing_v1`,
-  `kapi_user_referral_v1`, `kapi_affiliate_settings_v1`,
-  `kapi_user_subscription_group_v1`, `kapi_node_protocol_v1`,
-  `kapi_node_heartbeat_v1`). Packages
-  `kapi_node_status_v1`). Packages
-  `kapi_forward_node_v1`, `kapi_forward_runtime_settings_v1`). Packages
-  `kapi_node_heartbeat_v1`, `kapi_node_status_v1`, `kapi_traffic_log_v1`).
-  Packages
-  read other domains only
-  through `kapi_*` views or typed operations. A view whose source table does
-  not exist is left out. A view that filters rows is a PostgreSQL
-  `security_barrier` view.
+  `EnsureKernelAPIViews`: `kapi_user_directory_v1`,
+  `kapi_system_audit_log_v1` (the `v2_operation_log` rows of module
+  `system`), `kapi_subscriber_entitlement_v1`, `kapi_plan_catalog_v1`,
+  `kapi_plan_name_v1`, `kapi_plan_subscription_group_v1`,
+  `kapi_order_billing_v1`, `kapi_user_referral_v1`, `kapi_traffic_log_v1`,
+  `kapi_affiliate_settings_v1`, `kapi_user_subscription_group_v1`,
+  `kapi_node_protocol_v1`, `kapi_node_heartbeat_v1`, `kapi_node_status_v1`,
+  `kapi_forward_node_v1` and `kapi_forward_runtime_settings_v1`. Packages
+  read other domains only through `kapi_*` views or typed operations. A view
+  whose source table does not exist is left out. A view that filters rows is
+  a PostgreSQL `security_barrier` view.
 
 ### 3.5 Isolation switch and SQLite
 

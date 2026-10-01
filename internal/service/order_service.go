@@ -41,14 +41,45 @@ type OrderListParams struct {
 	OrderBy  string
 }
 
-// OrderListResult 订单列表结果
-type OrderListResult struct {
-	Total int64         `json:"total"`
-	List  []model.Order `json:"list"`
+// OrderPlanRef names an order's plan in the order list and detail answers.
+type OrderPlanRef struct {
+	ID   uint   `json:"id"`
+	Name string `json:"name"`
 }
 
-// GetList 获取订单列表
+// OrderBuyerRef names an order's buyer in an administrator's order list and
+// detail answers.
+type OrderBuyerRef struct {
+	ID    uint   `json:"id"`
+	Email string `json:"email"`
+}
+
+// OrderView is an order as the order list and detail routes answer it: the
+// order's own columns, its plan's id and name, and, for an administrator,
+// its buyer's id and e-mail. A plan or buyer that no longer exists is left
+// out. The answers used to embed the buyer's whole v2_user row
+// (subscription token and UUID included) and the whole v2_plan row.
+type OrderView struct {
+	model.Order
+	// User and Plan shadow the relations of model.Order, which are never
+	// loaded here.
+	User *OrderBuyerRef `json:"user,omitempty"`
+	Plan *OrderPlanRef  `json:"plan,omitempty"`
+}
+
+// OrderListResult 订单列表结果
+type OrderListResult struct {
+	Total int64       `json:"total"`
+	List  []OrderView `json:"list"`
+}
+
+// GetList is an administrator's order list, newest first, each order with
+// its buyer.
 func (s *OrderService) GetList(params OrderListParams) (*OrderListResult, error) {
+	return s.list(params, true)
+}
+
+func (s *OrderService) list(params OrderListParams, withBuyer bool) (*OrderListResult, error) {
 	var orders []model.Order
 	var total int64
 
@@ -68,8 +99,10 @@ func (s *OrderService) GetList(params OrderListParams) (*OrderListResult, error)
 		query = query.Where("trade_no = ?", params.TradeNo)
 	}
 	if params.Email != "" {
-		query = query.Joins("JOIN v2_user ON v2_user.id = v2_order.user_id").
-			Where("v2_user.email LIKE ?", "%"+params.Email+"%")
+		// A subquery, not a join: the joined v2_user made created_at
+		// ambiguous in the ordering, and the filter always failed.
+		query = query.Where("user_id IN (?)",
+			s.db.Model(&model.User{}).Select("id").Where("email LIKE ?", "%"+params.Email+"%"))
 	}
 
 	// 获取总数
@@ -77,42 +110,116 @@ func (s *OrderService) GetList(params OrderListParams) (*OrderListResult, error)
 		return nil, err
 	}
 
-	// 排序
-	orderBy := "created_at DESC"
+	// 排序: orders created in the same second keep a stable order.
+	orderBy := "created_at DESC, id DESC"
 	if params.OrderBy != "" {
 		orderBy = params.OrderBy
 	}
 
 	// 分页
 	offset := (params.Page - 1) * params.PageSize
-	if err := query.Preload("User").Preload("Plan").
+	if err := query.
 		Order(orderBy).
 		Offset(offset).
 		Limit(params.PageSize).
 		Find(&orders).Error; err != nil {
 		return nil, err
 	}
-
+	views, err := s.views(orders, withBuyer)
+	if err != nil {
+		return nil, err
+	}
 	return &OrderListResult{
 		Total: total,
-		List:  orders,
+		List:  views,
 	}, nil
 }
 
-// GetByID 根据ID获取订单
+// views names each order's plan and, withBuyer, its buyer: their id and
+// name or e-mail, never the rest of their rows.
+func (s *OrderService) views(orders []model.Order, withBuyer bool) ([]OrderView, error) {
+	planIDs := make([]uint, 0, len(orders))
+	userIDs := make([]uint, 0, len(orders))
+	for _, order := range orders {
+		planIDs = append(planIDs, order.PlanID)
+		userIDs = append(userIDs, order.UserID)
+	}
+	plans := map[uint]*OrderPlanRef{}
+	if len(planIDs) > 0 {
+		var rows []OrderPlanRef
+		if err := s.db.Model(&model.Plan{}).Select("id", "name").Where("id IN ?", planIDs).Find(&rows).Error; err != nil {
+			return nil, err
+		}
+		for i := range rows {
+			plans[rows[i].ID] = &rows[i]
+		}
+	}
+	buyers := map[uint]*OrderBuyerRef{}
+	if withBuyer && len(userIDs) > 0 {
+		var rows []OrderBuyerRef
+		if err := s.db.Model(&model.User{}).Select("id", "email").Where("id IN ?", userIDs).Find(&rows).Error; err != nil {
+			return nil, err
+		}
+		for i := range rows {
+			buyers[rows[i].ID] = &rows[i]
+		}
+	}
+	views := make([]OrderView, 0, len(orders))
+	for _, order := range orders {
+		order.User, order.Plan = nil, nil
+		views = append(views, OrderView{Order: order, User: buyers[order.UserID], Plan: plans[order.PlanID]})
+	}
+	return views, nil
+}
+
+// GetByID 根据ID获取订单, without its plan or buyer.
 func (s *OrderService) GetByID(id uint) (*model.Order, error) {
 	if id == 0 {
 		return nil, ErrOrderNotFound
 	}
 
 	var order model.Order
-	if err := s.db.Preload("User").Preload("Plan").First(&order, id).Error; err != nil {
+	if err := s.db.First(&order, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrOrderNotFound
 		}
 		return nil, err
 	}
 	return &order, nil
+}
+
+// GetAdminView is an administrator's order detail: the order with its plan
+// and buyer.
+func (s *OrderService) GetAdminView(id uint) (*OrderView, error) {
+	order, err := s.GetByID(id)
+	if err != nil {
+		return nil, err
+	}
+	views, err := s.views([]model.Order{*order}, true)
+	if err != nil {
+		return nil, err
+	}
+	return &views[0], nil
+}
+
+// GetUserView is a user's order detail: the order, if it is the user's,
+// with its plan. Another user's order is ErrOrderNotFound, as an unknown one.
+func (s *OrderService) GetUserView(userID, id uint) (*OrderView, error) {
+	if userID == 0 || id == 0 {
+		return nil, ErrOrderNotFound
+	}
+	var order model.Order
+	if err := s.db.Where("user_id = ?", userID).First(&order, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrOrderNotFound
+		}
+		return nil, err
+	}
+	views, err := s.views([]model.Order{order}, false)
+	if err != nil {
+		return nil, err
+	}
+	return &views[0], nil
 }
 
 // CreateOrderParams 创建订单参数
@@ -313,13 +420,17 @@ func completeOrderTx(tx *gorm.DB, orderID uint, now time.Time) error {
 	return tx.Model(&order).Update("status", 3).Error
 }
 
-// GetUserOrders 获取用户订单
+// GetUserOrders is a user's own orders, newest first, each with its plan
+// and without the buyer. A user id of zero names no one and has no orders.
 func (s *OrderService) GetUserOrders(userID uint, page, pageSize int) (*OrderListResult, error) {
-	return s.GetList(OrderListParams{
+	if userID == 0 {
+		return &OrderListResult{List: []OrderView{}}, nil
+	}
+	return s.list(OrderListParams{
 		Page:     page,
 		PageSize: pageSize,
 		UserID:   &userID,
-	})
+	}, false)
 }
 
 // GetStats 获取订单统计

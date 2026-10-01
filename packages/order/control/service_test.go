@@ -85,7 +85,7 @@ func dispatch(t *testing.T, service *pluginhostsdk.Router, route string, request
 }
 
 // Until the kernel sets a route's mode, the host relays it to the legacy
-// handler, bridged routes always; routes outside the package are refused.
+// handler; routes outside the package are refused.
 func TestOrderHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) {
 	bridge := &bridgeStub{}
 	service, err := newOrderService(bridge, "lease-1")
@@ -104,10 +104,6 @@ func TestOrderHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) {
 	require.Len(t, handlers, len(orderRoutes))
 	for route := range orderRoutes {
 		require.Contains(t, handlers, route, "every native route has a handler")
-	}
-	for route := range bridgedRoutes {
-		require.NotContains(t, handlers, route, "a bridged route has no native handler")
-		require.NotContains(t, orderRoutes, route)
 	}
 	require.NotContains(t, (&native.Service{}).Handlers(), native.MarkPaidRouteID, "without KernelSubscriber completion stays legacy")
 }
@@ -129,9 +125,6 @@ func TestOrderHostRoutesAreThePackageRoutes(t *testing.T) {
 	for route := range orderRoutes {
 		got = append(got, route)
 	}
-	for route := range bridgedRoutes {
-		got = append(got, route)
-	}
 	sort.Strings(want)
 	sort.Strings(got)
 	require.Equal(t, want, got)
@@ -139,6 +132,7 @@ func TestOrderHostRoutesAreThePackageRoutes(t *testing.T) {
 
 // The package adopts its two tables, reads the plan and user views, and may
 // apply entitlements; it neither adopts nor reads v2_user or v2_plan.
+// kapi_plan_name_v1 names an order's plan; kapi_user_directory_v1 its buyer.
 func TestOrderManifestCapabilities(t *testing.T) {
 	raw, err := os.ReadFile("../manifest.template.json")
 	require.NoError(t, err)
@@ -148,8 +142,8 @@ func TestOrderManifestCapabilities(t *testing.T) {
 	require.NoError(t, json.Unmarshal(raw, &manifest))
 	require.ElementsMatch(t, []string{
 		"kernel.storage.v1", "kernel.storage.adopt:v2_order", "kernel.storage.adopt:v2_coupon",
-		"kernel.view:kapi_plan_catalog_v1", "kernel.view:kapi_plan_subscription_group_v1", "kernel.view:kapi_user_directory_v1",
-		"kernel.subscriber.entitlements.v1",
+		"kernel.view:kapi_plan_catalog_v1", "kernel.view:kapi_plan_name_v1", "kernel.view:kapi_plan_subscription_group_v1",
+		"kernel.view:kapi_user_directory_v1", "kernel.subscriber.entitlements.v1",
 	}, manifest.Capabilities)
 }
 
@@ -231,4 +225,77 @@ func TestOrderHostCompletesThroughKernelSubscriberOverTheBridge(t *testing.T) {
 	dispatch(t, service, native.MarkPaidRouteID, request)
 	require.Len(t, recorder.grants, 2)
 	require.Equal(t, "order:5", recorder.grants[1].GetRequestId())
+}
+
+// Served natively, a user's order list and detail show only the caller's
+// orders, with their plan's id and name and no buyer; an administrator's
+// detail adds the buyer's id and e-mail. Nothing reaches the legacy handler.
+func TestOrderHostServesOnlyTheCallersOrders(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "control.db")
+	db, err := gorm.Open(sqlite.Open(path), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		if sqlDB, err := db.DB(); err == nil {
+			_ = sqlDB.Close()
+		}
+	})
+	// Tables stand in for the kernel views here.
+	require.NoError(t, db.AutoMigrate(&native.Order{}, &native.PlanName{}, &native.Buyer{}))
+	require.NoError(t, db.Create(&native.PlanName{ID: 7, Name: "Pro"}).Error)
+	require.NoError(t, db.Create(&[]native.Buyer{{ID: 2, Email: "buyer@example.test"}, {ID: 3, Email: "other@example.test"}}).Error)
+	require.NoError(t, db.Create(&[]native.Order{
+		{ID: 5, UserID: 2, PlanID: 7, Period: "month", TradeNo: "T5", TotalAmount: 3000},
+		{ID: 6, UserID: 3, PlanID: 7, Period: "month", TradeNo: "T6", TotalAmount: 3000},
+	}).Error)
+
+	routes := []string{native.AdminOrderRouteID, native.UserOrdersRouteID, native.UserOrderRouteID}
+	modes := map[string]string{}
+	for _, route := range routes {
+		modes[route] = "native"
+	}
+	stub := &bridgeStub{
+		modes: modes,
+		lease: packagebridgesdk.StorageLease{Driver: "sqlite", DSN: path, TablePrefix: "pkg_order_", AdoptedTables: []string{"v2_coupon", "v2_order"}},
+	}
+	service, err := newOrderService(stub, "lease-1")
+	require.NoError(t, err)
+	service.Refresh(context.Background())
+	for _, route := range routes {
+		_, effective := service.Mode(route)
+		require.Equal(t, "native", effective, route)
+	}
+	call := func(route, principal, path string, params map[string]string) map[string]any {
+		t.Helper()
+		response := dispatch(t, service, route, pluginhostsdk.DispatchRequest{
+			Method: "GET", PrincipalJSON: []byte(principal),
+			Metadata: pluginhostsdk.RequestMetadata{Path: path, PathParams: params},
+		})
+		require.EqualValues(t, 200, response.StatusCode)
+		var answer map[string]any
+		require.NoError(t, json.Unmarshal(response.ResponseBody, &answer), "%s", response.ResponseBody)
+		require.NotContains(t, string(response.ResponseBody), "token")
+		return answer
+	}
+	buyer := `{"actor_id":2}`
+
+	list := call(native.UserOrdersRouteID, buyer, "/api/v2/user/order", nil)["data"].(map[string]any)
+	require.EqualValues(t, 1, list["total"])
+	orders := list["list"].([]any)
+	require.Len(t, orders, 1)
+	own := orders[0].(map[string]any)
+	require.Equal(t, "T5", own["trade_no"])
+	require.Equal(t, map[string]any{"id": float64(7), "name": "Pro"}, own["plan"])
+	require.NotContains(t, own, "user")
+
+	detail := call(native.UserOrderRouteID, buyer, "/api/v2/user/order/5", map[string]string{"id": "5"})
+	require.EqualValues(t, 0, detail["code"])
+	require.NotContains(t, detail["data"], "user")
+	foreign := call(native.UserOrderRouteID, buyer, "/api/v2/user/order/6", map[string]string{"id": "6"})
+	require.EqualValues(t, -1, foreign["code"])
+	require.Equal(t, "订单不存在", foreign["msg"], "another user's order is not found")
+	require.Nil(t, foreign["data"])
+
+	administrator := call(native.AdminOrderRouteID, `{"actor_id":1,"admin":true}`, "/api/v2/admin/orders/6", map[string]string{"id": "6"})
+	require.Equal(t, map[string]any{"id": float64(3), "email": "other@example.test"}, administrator["data"].(map[string]any)["user"])
+	require.Empty(t, stub.operation, "native routes do not reach the legacy handler")
 }

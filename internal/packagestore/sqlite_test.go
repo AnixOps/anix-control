@@ -159,6 +159,8 @@ func TestPlanViewsShowWhatAnOrderNeeds(t *testing.T) {
 	}, columns)
 	require.NoError(t, db.Raw("SELECT name FROM pragma_table_info('kapi_plan_subscription_group_v1') ORDER BY cid").Scan(&columns).Error)
 	require.Equal(t, []string{"plan_id", "group_id"}, columns)
+	require.NoError(t, db.Raw("SELECT name FROM pragma_table_info('kapi_plan_name_v1') ORDER BY cid").Scan(&columns).Error)
+	require.Equal(t, []string{"id", "name"}, columns, "an order's plan by name; no price, content or limit")
 }
 
 // kapi_order_billing_v1 shows a payment whose order it is, what it costs

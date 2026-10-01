@@ -219,7 +219,8 @@ tables and their indexes: `v4_kernel_package_backup_reference`,
 `v4_kernel_package_validation_result`, plus the read-only `kapi_*` views:
 `kapi_user_directory_v1`, `kapi_subscriber_entitlement_v1` and
 `kapi_user_referral_v1` over `v2_user`, `kapi_system_audit_log_v1` over
-`v2_operation_log`, `kapi_plan_catalog_v1` over `v2_plan`,
+`v2_operation_log`, `kapi_plan_catalog_v1` and `kapi_plan_name_v1` over
+`v2_plan`,
 `kapi_plan_subscription_group_v1` over `v2_plan_subscription_group`,
 `kapi_order_billing_v1` over `v2_order`, `kapi_affiliate_settings_v1` over
 one row of `v2_system_config`, `kapi_user_subscription_group_v1` over
@@ -564,6 +565,51 @@ query). A request without them is answered `401`, a body naming another
 node `403`, and a result for another node's task `404`. `anix-agent` uses
 the WebSocket and is not affected; a custom agent or script that polls
 these routes must send the credentials.
+
+### Order Lists And Details No Longer Embed The Buyer And Plan Rows
+
+The four order list and detail routes embedded the buyer's whole `v2_user`
+row (subscription token and proxy UUID included) and the whole `v2_plan`
+row. They now carry the order, its plan's `id` and `name`, and, for an
+administrator, the buyer's `id` and `email`. The bundled frontend reads only
+those; an API client that read anything else of `user` or `plan` must change.
+
+| Route | `user` | `plan` |
+|-------|--------|--------|
+| `GET /api/v2/admin/orders` (each `list` item), `GET /api/v2/admin/orders/:id` | `{id, email}` | `{id, name}` |
+| `GET /api/v2/user/order` (each `list` item), `GET /api/v2/user/order/:id` | removed | `{id, name}` |
+
+The order's own fields are unchanged. A plan or buyer that no longer exists
+is left out, as before. The fields that disappear:
+
+- From `user`: `invite_user_id`, `telegram_id`, `balance`, `discount`,
+  `commission_type`, `commission_rate`, `commission_balance`, `token`, `uuid`,
+  `device_limit`, `speed_limit`, `flowResetTime`, `transfer_enable`, `u`, `d`,
+  `plan_id`, `group_id`, `expired_at`, `banned`, `remark_content`,
+  `is_admin`, `is_staff`, `last_login_at`, `created_at` and `updated_at`. The
+  user routes drop `user` altogether, `id` and `email` included. Password
+  hashes were never serialized.
+- From `plan`: `group_id`, `transfer_enable`, `speed_limit`, `device_limit`,
+  `content`, `show`, `sort`, `renew`, `reset_price`, `reset_traffic_method`,
+  `capacity_limit`, the seven prices (`month_price`, `quarter_price`,
+  `half_year_price`, `year_price`, `two_year_price`, `three_year_price`,
+  `onetime_price`), `created_at` and `updated_at`.
+
+Read them where they belong: a user's own account from
+`GET /api/v2/user/profile` and `GET /api/v2/user/subscription`, a buyer from
+`GET /api/v2/admin/users/:id`, and a plan from `GET /api/v2/user/plan` or
+`GET /api/v2/admin/plans/:id`.
+
+Two more changes come with it. The administrator's `email` filter now
+works: it always failed with an ambiguous `created_at`. The user's
+`page_size` is clamped as the administrator's (1 to 100, default 20 for 0 or
+less); a negative size used to list every order and 0 none.
+
+The `order` package can serve these routes natively (`native-flagged`). It
+reads the plan name from the new view `kapi_plan_name_v1` and the buyer's
+e-mail from `kapi_user_directory_v1`, so its signed release declares
+`kernel.view:kapi_plan_name_v1`: install that release before switching the
+routes to `native`.
 
 ### Audit Request Bodies Written Before The Redaction Fix
 

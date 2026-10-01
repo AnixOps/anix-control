@@ -676,6 +676,8 @@ func (h *AdminHandler) GetUserStats(c *gin.Context) {
 // ====== 订单管理 ======
 
 // GetOrderList godoc
+// Each order carries its plan's id and name and its buyer's id and e-mail
+// (service.OrderView), never the rest of their rows.
 // @Summary 获取订单列表
 // @Description 管理员获取订单列表，支持分页和筛选
 // @Tags 管理端-订单
@@ -736,6 +738,8 @@ func (h *AdminHandler) GetOrderList(c *gin.Context) {
 }
 
 // GetOrder godoc
+// The order with its plan's id and name and its buyer's id and e-mail
+// (service.OrderView).
 // @Summary 获取订单详情
 // @Description 管理员获取指定订单的详细信息
 // @Tags 管理端-订单
@@ -754,7 +758,7 @@ func (h *AdminHandler) GetOrder(c *gin.Context) {
 		return
 	}
 
-	order, err := h.orderService.GetByID(uint(id))
+	order, err := h.orderService.GetAdminView(uint(id))
 	if err != nil {
 		panelAdminOrderError(c, "获取订单失败", err)
 		return

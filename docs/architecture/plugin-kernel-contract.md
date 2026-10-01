@@ -255,8 +255,9 @@ never changed once published. `kapi_user_directory_v1` exposes `id`, `email`,
 `system` (the audit trail of configuration and backup changes, which records
 whether a secret is set, never its value). `kapi_plan_catalog_v1` exposes
 what an order needs of a plan (`id`, `group_id`, `transfer_enable`,
-`speed_limit`, `device_limit` and the seven period prices of `v2_plan`), and
-`kapi_plan_subscription_group_v1` the `plan_id` and `group_id` of
+`speed_limit`, `device_limit` and the seven period prices of `v2_plan`),
+`kapi_plan_name_v1` a plan's `id` and `name` (which the order answers show),
+and `kapi_plan_subscription_group_v1` the `plan_id` and `group_id` of
 `v2_plan_subscription_group`. `kapi_order_billing_v1` exposes what a payment
 needs of an order: `id`, `user_id`, `total_amount` and `status` of
 `v2_order`. `kapi_user_referral_v1` exposes `id` and `invite_user_id` of

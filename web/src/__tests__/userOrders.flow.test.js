@@ -23,7 +23,7 @@ describe('User Orders flow', () => {
           {
             id: 1,
             trade_no: 'ORD-100',
-            plan: { name: 'Pro' },
+            plan: { id: 2, name: 'Pro' },
             period: 'month',
             total_amount: 12345,
             status: 0,
@@ -32,7 +32,7 @@ describe('User Orders flow', () => {
           {
             id: 2,
             trade_no: 'ORD-101',
-            plan: { name: 'Plus' },
+            plan: { id: 3, name: 'Plus' },
             period: 'quarter',
             total_amount: 67890,
             status: 1,
@@ -97,7 +97,7 @@ describe('User Orders flow', () => {
         status: 2,
         created_at: '2026-04-05T02:00:00.000Z',
         paid_at: 1710003600,
-        plan: { name: 'Enterprise' },
+        plan: { id: 4, name: 'Enterprise' },
       },
     })
 
@@ -118,6 +118,60 @@ describe('User Orders flow', () => {
     expect(wrapper.find('.detail-grid').text()).toContain('ORD-200')
     expect(wrapper.find('.detail-grid').text()).toContain('Enterprise')
     expect(wrapper.find('.detail-grid').text()).toContain('2500.00')
+  })
+
+  // The order answers carry plan as {id, name} and no buyer; an order whose
+  // plan no longer exists has no plan.
+  it('renders the slim order answer and an order without a plan', async () => {
+    mockGetOrders.mockResolvedValue({
+      code: 0,
+      msg: '操作成功',
+      ts: 1783536000000,
+      data: {
+        total: 2,
+        list: [
+          {
+            id: 7,
+            user_id: 3,
+            plan_id: 2,
+            trade_no: 'ORD-300',
+            period: 'month',
+            total_amount: 3000,
+            discount_amount: 0,
+            status: 3,
+            paid_at: 1700000000,
+            created_at: '2026-09-01T08:00:00Z',
+            plan: { id: 2, name: 'Pro' },
+          },
+          {
+            id: 8,
+            user_id: 3,
+            plan_id: 404,
+            trade_no: 'ORD-301',
+            period: 'month',
+            total_amount: 1000,
+            status: 0,
+            created_at: '2026-09-01T09:00:00Z',
+          },
+        ],
+      },
+    })
+
+    const wrapper = mount(Orders, {
+      global: {
+        stubs: {
+          'router-link': true,
+        },
+      },
+    })
+    await flushPromises()
+
+    const rows = wrapper.findAll('tbody tr')
+    expect(rows).toHaveLength(2)
+    expect(rows[0].text()).toContain('Pro')
+    expect(rows[0].find('.status-badge').classes()).toContain('completed')
+    expect(rows[1].text()).not.toContain('Pro')
+    expect(rows[1].text()).not.toContain('undefined')
   })
 
   it('shows empty state when no orders are returned', async () => {
