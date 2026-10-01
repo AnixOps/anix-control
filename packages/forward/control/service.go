@@ -154,8 +154,7 @@ var bridgedRoutes = map[string]struct{}{
 	"forward.speed_limit.update.post": {},
 	// Legacy rules: every change is pushed to NodeX with the nodes' API
 	// tokens. The administrator's answers embed the full node rows, tokens
-	// included, which kapi_forward_node_v1 does not show. The agents' rule
-	// list authenticates a forward node by its API token.
+	// included, which kapi_forward_node_v1 does not show.
 	"forward.admin.forward.rules.get":            {},
 	"forward.admin.forward.rules.post":           {},
 	"forward.admin.forward.rules.id.get":         {},
@@ -163,12 +162,13 @@ var bridgedRoutes = map[string]struct{}{
 	"forward.admin.forward.rules.id.delete":      {},
 	"forward.admin.forward.rules.id.toggle.post": {},
 	"forward.user.forward.rules.post":            {},
-	"forward.forward.agent.rules.get":            {},
-	// Runtime status and diagnosis read the protected v2_system_config
-	// (NodeX address and token, Ansible settings), call NodeX and inspect
-	// files on Control's disk. The job list shows job payloads, which carry
-	// node API tokens (v2_forward_runtime_job is protected).
-	"forward.admin.forward.runtime.jobs.get":   {},
+	// The job list shows job payloads, which carry node API tokens
+	// (v2_forward_runtime_job is protected).
+	"forward.admin.forward.runtime.jobs.get": {},
+	// Kernel-owned (D4): runtime status and diagnosis describe the kernel's
+	// own executors. They read the protected v2_system_config (NodeX address
+	// and token, Ansible settings), call NodeX and inspect files on
+	// Control's disk; they stay until the runtime moves to agents (A5).
 	"forward.admin.forward.runtime.status.get": {},
 	"forward.admin.forward.runtime.doctor.get": {},
 	"forward.admin.forward.local.status.get":   {},
@@ -180,25 +180,30 @@ var bridgedRoutes = map[string]struct{}{
 	"forward.admin.forward.observability.trend.get":    {},
 	"forward.admin.forward.observability.topology.get": {},
 	// Clean agents: v2_forward_clean_agent holds each agent's token, which
-	// authenticates it (a protected table). Registration, heartbeat and
-	// report authenticate an agent, claim runtime jobs and record their
-	// results and traffic. The install script's panel URL is Control's
-	// forward_runtime.clean_agent.public_url when it is set, process
-	// configuration no package can read, else the request's scheme and host
-	// (which the kernel now sends): without the setting a native script
-	// could differ from the kernel's.
+	// authenticates it (a protected table). The install script's panel URL
+	// is Control's forward_runtime.clean_agent.public_url when it is set,
+	// process configuration no package can read, else the request's scheme
+	// and host (which the kernel now sends): without the setting a native
+	// script could differ from the kernel's.
 	"forward.admin.forward.agents.get":            {},
 	"forward.admin.forward.agents.post":           {},
 	"forward.admin.forward.agents.id.revoke.post": {},
 	"forward.forward_agent.install_sh.get":        {},
-	"forward.forward_agent.register.post":         {},
-	"forward.forward_agent.heartbeat.post":        {},
-	"forward.forward_agent.report.post":           {},
-	// Flow accounting: the forward's counters, the subscriber's traffic
-	// (subscriber.RecordTrafficTx) and the permission's traffic change in
-	// one kernel transaction under a per-forward lock in Control's memory,
-	// and a subscriber or permission that runs out pauses its forwards on
-	// their nodes.
+	// Kernel-owned (D3): the agent channel. Registration, heartbeat and
+	// report authenticate a clean agent, claim runtime jobs and record
+	// their results and traffic; the agents' rule list authenticates a
+	// forward node by its API token. A2 replaces them (enrollment, rules
+	// pushed on the stream), and 5.0 removes them (D8).
+	"forward.forward_agent.register.post":  {},
+	"forward.forward_agent.heartbeat.post": {},
+	"forward.forward_agent.report.post":    {},
+	"forward.forward.agent.rules.get":      {},
+	// Kernel-owned (D4): flow accounting. The forward's counters, the
+	// subscriber's traffic (subscriber.RecordTrafficTx) and the
+	// permission's traffic change in one kernel transaction under a
+	// per-forward lock in Control's memory, and a subscriber or permission
+	// that runs out pauses its forwards on their nodes. The callers send no
+	// batch id, so the transaction cannot be split into idempotent steps.
 	"forward.internal.forward.traffic.upload.post":   {},
 	"forward.internal.forward.traffic.report.post":   {},
 	"forward.internal.forward.traffic.snapshot.post": {},

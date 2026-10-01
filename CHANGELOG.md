@@ -409,6 +409,26 @@
   KernelSettings, KernelOrder), the protected tables and the `kapi_*`
   views. Text that earlier merges duplicated in its section 3.4 is removed.
 
+- **Extraction map: 15 node routes are `kernel-owned`.** The owner accepted
+  decisions D3 and D4 of `docs/architecture/node-ops-service.md`, and the
+  routes its section 6 keeps in the kernel are now `kernel-owned` in
+  `config/package-extraction.json`, each with its reason. Nothing changes
+  at runtime: they are registered and relayed as before. 31 routes are
+  `kernel-owned`, 95 `bridged` and 166 `native-flagged`.
+  - forward (11): the runtime status and doctor (the kernel's own
+    executors, until the runtime moves to agents, A5); flow upload, report
+    and snapshot (one kernel transaction, as the callers send no batch id);
+    clean agent registration, heartbeat and report, and the agents' rule
+    list (the agent channel, removed in 5.0).
+  - proxy-node (4): the node credentials display (no contract call reveals
+    a stored secret); node registration, heartbeat and runtime health (the
+    node channel, removed in 5.0).
+
+  The package hosts list them in `bridgedRoutes` as before, now commented as
+  kernel-owned. `docs/architecture/package-extraction.md` updates its counts
+  and drops the open-decision row from its section 3.2 blockers; 75 routes
+  wait on KernelNodeOps.
+
 ### Added
 
 - **The administrator dashboard and the user's subscription summary run
