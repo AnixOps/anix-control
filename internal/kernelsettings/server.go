@@ -291,7 +291,7 @@ func (h *hostServer) PutSettings(ctx context.Context, request *kernelsettingsv1.
 	if err := checkKeys(namespace, keys, namespace.Storage != service.SettingsInBackupConfig); err != nil {
 		return nil, err
 	}
-	actor, err := auditActor(request.GetActor())
+	actor, err := auditActor(db, request.GetActor())
 	if err != nil {
 		return nil, err
 	}
@@ -451,7 +451,7 @@ func (h *hostServer) DeleteSettings(ctx context.Context, request *kernelsettings
 	if err := checkKeys(namespace, request.GetKeys(), true); err != nil {
 		return nil, err
 	}
-	actor, err := auditActor(request.GetActor())
+	actor, err := auditActor(db, request.GetActor())
 	if err != nil {
 		return nil, err
 	}
@@ -496,9 +496,10 @@ func (h *hostServer) DeleteSettings(ctx context.Context, request *kernelsettings
 }
 
 // auditActor is the caller's actor as the audit trail records it. The
-// kernel's legacy handlers, called through the package bridge, record no
-// username: the bridge passes the actor's id only.
-func auditActor(actor *kernelsettingsv1.Actor) (service.SettingsAuditActor, error) {
+// username is the user's e-mail, looked up by id before the write's
+// transaction, as the kernel's legacy handlers look it up when the package
+// bridge relays a request with the actor's id only.
+func auditActor(db *gorm.DB, actor *kernelsettingsv1.Actor) (service.SettingsAuditActor, error) {
 	var result service.SettingsAuditActor
 	if actor == nil {
 		return result, nil
@@ -509,6 +510,7 @@ func auditActor(actor *kernelsettingsv1.Actor) (service.SettingsAuditActor, erro
 		}
 		id := uint(actor.GetUserId())
 		result.UserID = &id
+		result.Username = service.AuditUsername(db, result.UserID)
 	}
 	result.IP = strings.TrimSpace(actor.GetClientIp())
 	if result.IP != "" && net.ParseIP(result.IP) == nil {

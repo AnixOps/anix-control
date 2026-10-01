@@ -18,8 +18,9 @@ import (
 
 // InviteHandler 閭€璇峰鐞嗗櫒
 type InviteHandler struct {
-	inviteService *service.InviteService
-	configService *service.SystemConfigService
+	inviteService       *service.InviteService
+	configService       *service.SystemConfigService
+	operationLogService *service.OperationLogService
 }
 
 const inviteFrontendConfigKey = "invite.frontend.config"
@@ -244,8 +245,9 @@ func inviteWithdrawalResponse(record model.CommissionWithdraw) gin.H {
 func NewInviteHandler() *InviteHandler {
 	db := database.Get()
 	return &InviteHandler{
-		inviteService: service.NewInviteService(db),
-		configService: service.NewSystemConfigService(db),
+		inviteService:       service.NewInviteService(db),
+		configService:       service.NewSystemConfigService(db),
+		operationLogService: service.NewOperationLogService(db),
 	}
 }
 
@@ -701,10 +703,18 @@ func (h *InviteHandler) UpdateConfig(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	var existingFrontend *model.SystemConfig
+	if h.configService != nil {
+		if existingFrontend, err = h.configService.GetEntry(inviteFrontendConfigKey); err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+			return
+		}
+	}
 	if err := h.saveFrontendConfig(frontendCfg); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
+	recordSettingsAudit(c, h.configService, h.operationLogService, inviteFrontendConfigKey, existingFrontend == nil, false)
 
 	panelSuccess(c, inviteConfigResponse(&cfg, frontendCfg))
 }

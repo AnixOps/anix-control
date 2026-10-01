@@ -27,7 +27,7 @@ func backupConfigUpdate(t *testing.T) packagecompat.Route {
 	return packagecompat.Route{
 		Method: "PUT", Pattern: "/api/v2/admin/system/backup/config", RouteID: native.BackupConfigUpdateRouteID,
 		Legacy: system((*handler.SystemHandler).UpdateBackupConfig),
-		Models: []any{&model.OperationLog{}, &model.BackupConfig{}, &model.BackupRecord{}, &model.SettingsRequest{}},
+		Models: []any{&model.OperationLog{}, &model.BackupConfig{}, &model.BackupRecord{}, &model.SettingsRequest{}, &model.User{}},
 		Native: func(db *gorm.DB) pluginhostsdk.NativeHandler {
 			service := &native.Service{
 				Open: func(ctx context.Context) (*gorm.DB, error) { return db.WithContext(ctx), nil },
@@ -91,8 +91,17 @@ var storedS3 = model.BackupConfig{
 	S3AccessKey: "AKIAEXAMPLE", S3SecretKey: "wJalrXUtnFEMI",
 }
 
+// withAdmin also writes the administrator the requests run as: the audit
+// entries name them by e-mail, on both sides.
+func withAdmin(seed func(testing.TB, *gorm.DB)) func(testing.TB, *gorm.DB) {
+	return func(t testing.TB, db *gorm.DB) {
+		require.NoError(t, db.Create(&model.User{ID: 1, Email: "admin@example.test", Token: "t1", UUID: "u1", IsAdmin: 1}).Error)
+		seed(t, db)
+	}
+}
+
 func TestBackupConfigUpdateRouteParity(t *testing.T) {
-	stored := warm(seedBackupConfig(storedS3))
+	stored := warm(withAdmin(seedBackupConfig(storedS3)))
 	clock := []string{"data.updated_at"}
 	created := []string{"data.created_at", "data.updated_at"}
 	for _, c := range []packagecompat.Case{

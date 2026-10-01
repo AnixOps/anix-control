@@ -116,10 +116,37 @@ func contextString(c *gin.Context, key string) string {
 }
 
 // settingsAuditActor is the request's actor as the audit trail records it.
+// A request the package bridge relays carries the actor's id only; its
+// username is then the user's e-mail, as KernelSettings records it.
 func settingsAuditActor(c *gin.Context) service.SettingsAuditActor {
-	return service.SettingsAuditActor{
+	actor := service.SettingsAuditActor{
 		UserID: contextUint(c, "user_id"), Username: contextString(c, "email"),
 		IP: c.ClientIP(), UserAgent: c.Request.UserAgent(),
+	}
+	if actor.Username == "" {
+		actor.Username = service.AuditUsername(database.GetDB(), actor.UserID)
+	}
+	return actor
+}
+
+// recordSettingsAudit records the system configuration audit entry of a
+// key a dedicated handler (the e-mail and invite configuration) wrote: the
+// entry the system configuration handler and KernelSettings record.
+func recordSettingsAudit(c *gin.Context, configs *service.SystemConfigService, operations *service.OperationLogService, key string, created, preserveExisting bool) {
+	if configs == nil || operations == nil {
+		return
+	}
+	saved, err := configs.GetEntry(key)
+	if err != nil || saved == nil {
+		log.Printf("record system config audit failed for key=%s: saved entry not found: %v", key, err)
+		return
+	}
+	action := "update"
+	if created {
+		action = "create"
+	}
+	if err := operations.Record(service.SystemConfigAuditInput(settingsAuditActor(c), action, saved, preserveExisting)); err != nil {
+		log.Printf("record system config audit failed for key=%s: %v", key, err)
 	}
 }
 
@@ -280,16 +307,17 @@ func (h *SystemHandler) recordBackupRecordAudit(c *gin.Context, action string, r
 		return
 	}
 
+	actor := settingsAuditActor(c)
 	if err := h.operationLogService.Record(&service.OperationLogInput{
-		UserID:     contextUint(c, "user_id"),
-		Username:   contextString(c, "email"),
+		UserID:     actor.UserID,
+		Username:   actor.Username,
 		Action:     action,
 		Module:     "system",
 		TargetType: "backup_record",
 		TargetID:   backupRecordTargetID(record),
 		Content:    backupRecordAuditContent(record),
-		IP:         c.ClientIP(),
-		UserAgent:  c.Request.UserAgent(),
+		IP:         actor.IP,
+		UserAgent:  actor.UserAgent,
 		Status:     1,
 	}); err != nil {
 		log.Printf("record backup record audit failed: %v", err)

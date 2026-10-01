@@ -276,24 +276,52 @@ func TestPutValidatesBeforeWriting(t *testing.T) {
 	require.Empty(t, audits(t, db))
 }
 
-// The e-mail and invite configuration handlers record no audit entry, and
-// neither do their namespaces' writes.
-func TestMailAndInviteWritesRecordNoAudit(t *testing.T) {
+// E-mail and invite configuration writes record the system configuration
+// handler's entry per key, as their kernel handlers now do: the masked
+// password is named, never its value. The username is the actor's e-mail.
+func TestMailAndInviteWritesRecordTheSystemConfigAudit(t *testing.T) {
 	ctx := context.Background()
 	db, server := fixture(t, capabilities("mail", service.SettingsAccessWrite).with(capabilities("invite", service.SettingsAccessWrite)))
-	_, err := server.PutSettings(ctx, &kernelsettingsv1.PutSettingsRequest{Namespace: "mail", RequestId: "m", Entries: []*kernelsettingsv1.SettingEntry{
-		{Key: "notification.email.config", Value: `{"host":"smtp.example"}`, Type: "json", Group: "notification", Remark: "Email notification config"},
+	require.NoError(t, db.AutoMigrate(&model.User{}))
+	require.NoError(t, db.Create(&model.User{ID: 7, Email: "admin@example.test", Password: "x", UUID: "u-7", Token: "t-7"}).Error)
+	actor := &kernelsettingsv1.Actor{UserId: ptr(uint64(7)), ClientIp: "192.0.2.4", UserAgent: "ua/1"}
+	_, err := server.PutSettings(ctx, &kernelsettingsv1.PutSettingsRequest{Namespace: "mail", RequestId: "m", Actor: actor, Entries: []*kernelsettingsv1.SettingEntry{
+		{Key: "notification.email.config", Value: `{"host":"smtp.example","password":"********"}`, Type: "json", Group: "notification", Remark: "Email notification config"},
 	}})
 	require.NoError(t, err)
-	_, err = server.PutSettings(ctx, &kernelsettingsv1.PutSettingsRequest{Namespace: "invite", RequestId: "i", Entries: []*kernelsettingsv1.SettingEntry{
+	_, err = server.PutSettings(ctx, &kernelsettingsv1.PutSettingsRequest{Namespace: "invite", RequestId: "i", Actor: actor, Entries: []*kernelsettingsv1.SettingEntry{
 		{Key: "invite.frontend.config", Value: `{"code_prefix":"NEW"}`, Type: "json", Group: "invite", Remark: "Invite frontend configuration fields"},
 	}})
 	require.NoError(t, err)
-	require.Empty(t, audits(t, db))
+	_, err = server.PutSettings(ctx, &kernelsettingsv1.PutSettingsRequest{Namespace: "mail", RequestId: "m2", Entries: []*kernelsettingsv1.SettingEntry{
+		{Key: "notification.email.sender", Value: "x"},
+	}})
+	require.NoError(t, err)
+
 	var stored model.SystemConfig
 	require.NoError(t, db.Where("key = ?", "notification.email.config").Take(&stored).Error)
-	require.Equal(t, `{"host":"smtp.example"}`, stored.Value)
+	require.Equal(t, `{"host":"smtp.example","password":"smtp-secret"}`, stored.Value)
 	require.Equal(t, "Email notification config", stored.Remark)
+
+	entries := audits(t, db)
+	require.Len(t, entries, 3)
+	for _, entry := range entries[:2] {
+		require.Equal(t, "system", entry.Module)
+		require.Equal(t, "system_config", entry.TargetType)
+		require.Equal(t, "update", entry.Action)
+		require.Equal(t, uint(7), *entry.UserID)
+		require.Equal(t, "admin@example.test", entry.Username)
+		require.Equal(t, "192.0.2.4", entry.IP)
+		require.Equal(t, "ua/1", entry.UserAgent)
+		require.NotContains(t, entry.Content, "smtp-secret")
+	}
+	require.Equal(t, stored.ID, *entries[0].TargetID)
+	require.JSONEq(t, `{"key":"notification.email.config","group":"notification","type":"json","sensitive":false,"has_value":true,
+		"preserve_existing":true,"masked_fields":["password"],"masked_fields_with_value":["password"]}`, entries[0].Content)
+	require.JSONEq(t, `{"key":"invite.frontend.config","group":"invite","type":"json","sensitive":false,"has_value":true,"preserve_existing":false}`, entries[1].Content)
+	require.Equal(t, "create", entries[2].Action)
+	require.Nil(t, entries[2].UserID)
+	require.Empty(t, entries[2].Username, "no actor, no user")
 }
 
 // The e-mail configuration's password is a masked field: a write that

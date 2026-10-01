@@ -144,6 +144,26 @@ func KeepSystemConfigFields(key, incoming, stored string) (value string, kept bo
 	return spliceJSONMembers(incoming, members, replacements), kept
 }
 
+// maskedFieldsWithValue names the masked fields of key's value that hold
+// a value, in the order SystemConfigMaskedFields lists them; none for a
+// value that is not a JSON object.
+func maskedFieldsWithValue(key, value string) []string {
+	set := []string{}
+	members, ok := jsonObjectMembers(value)
+	if !ok {
+		return set
+	}
+	for _, field := range systemConfigMaskedFields[key] {
+		for _, member := range members {
+			if member.name == field && maskedFieldHasValue(member.raw) {
+				set = append(set, field)
+				break
+			}
+		}
+	}
+	return set
+}
+
 // storedField re-encodes a stored field as encoding/json writes it, so a
 // kept secret is stored exactly as a handler that decoded and re-encoded
 // the configuration stores it.

@@ -643,6 +643,24 @@
 
 ### Fixed
 
+- E-mail and invite configuration writes record an audit entry. `PUT
+  /api/v2/admin/notification/email/config` and `PUT
+  /api/v2/admin/invite/config` (legacy and native) wrote
+  `v2_system_config` without a `v2_operation_log` entry, unlike every other
+  system write. They now record the system configuration entry for the key
+  they write (`notification.email.config`, `invite.frontend.config`):
+  module `system`, `create` or `update`, target `system_config`, and
+  content naming the key, its group and type, whether it has a value and
+  whether the stored SMTP password was kept, and, for the e-mail
+  configuration, `"masked_fields":["password"]` with
+  `masked_fields_with_value` saying whether a password is set; never a
+  value. The legacy handlers and KernelSettings (namespaces `mail` and
+  `invite`) build it with the same function, so both write the same row.
+- Audit entries written through the package bridge name the user. A legacy
+  system handler the bridge relays to gets the actor's id only, so its
+  `v2_operation_log` rows (system and backup configuration, backups, and
+  now the e-mail and invite configuration) and the KernelSettings rows had
+  an empty username. Both now record the user's e-mail, looked up by id.
 - The administrator's order list filtered by `email` always failed: the
   joined `v2_user` made `created_at` ambiguous in the ordering. The filter is
   now a subquery, and orders created in the same second keep a stable order

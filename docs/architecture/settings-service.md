@@ -29,8 +29,8 @@ through no call.
 
 | Namespace | Keys | Storage | Audit entry per write | Declared secrets |
 |---|---|---|---|---|
-| `mail` | `notification.email.*` | `v2_system_config` | none, as the e-mail configuration handler | `notification.email.config` (its JSON holds the SMTP password) |
-| `invite` | `invite.*` | `v2_system_config` | none, as the invite configuration handler | none |
+| `mail` | `notification.email.*` | `v2_system_config` | `system_config`, as the e-mail configuration handler | `notification.email.config` (its JSON holds the SMTP password) |
+| `invite` | `invite.*` | `v2_system_config` | `system_config`, as the invite configuration handler | none |
 | `nodex` | `forward.runtime.nodex.*` | `v2_system_config` | `system_config`, as the system configuration handler | none (the token is caught by name) |
 | `forward-runtime` | `forward.runtime_backend`, `forward.runtime.nodex_mode`, `forward.runtime.ansible.*`, `forward.runtime.iptables_ansible.*`, `forward.ansible.*` | `v2_system_config` | `system_config` | none |
 | `backup` | `backup.<field>`: `enabled`, `auto_backup`, `schedule`, `retention_days`, `backup_database`, `backup_files`, `storage_type`, `storage_path`, `s3_bucket`, `s3_region`, `s3_endpoint`, `s3_access_key`, `s3_secret_key` | the first `v2_backup_config` row | `backup_config`, as the backup configuration handler | none (the S3 keys are caught by name) |
@@ -105,9 +105,16 @@ declares it.
   - the namespace's audit entries, built by the same functions the legacy
     handlers call (`service.SystemConfigAuditInput`,
     `service.BackupConfigAuditInput`): module `system`, the actor's user id,
-    client IP and user agent (cut to the 255-character column), and no
-    username, as the legacy handlers record it when they are reached
-    through the package bridge;
+    client IP and user agent (cut to the 255-character column), and the
+    username: the user's e-mail, looked up by id
+    (`service.AuditUsername`), as the legacy handlers look it up when the
+    package bridge relays a request with the actor's id only. A
+    `system_config` entry names the key, its group and type, whether it is
+    sensitive and has a value, whether a stored secret was kept
+    (`preserve_existing`) and, for a value with masked fields, those fields
+    (`masked_fields`) and the ones set (`masked_fields_with_value`); never
+    a value. The e-mail and invite configuration handlers record the same
+    entry for the key they write;
   - the request ledger row.
 - **Backup writes** read the first row, creating the defaults when there is
   none, apply the fields in the entries, save the whole row and record one
@@ -162,9 +169,9 @@ and the kernel's in-memory copies:
 | Route | Package | Parity cases |
 |---|---|---|
 | `GET /api/v2/admin/notification/email/config` | notification | 10 |
-| `PUT /api/v2/admin/notification/email/config` | notification | 19 |
+| `PUT /api/v2/admin/notification/email/config` | notification | 21 |
 | `POST /api/v2/admin/notification/test` | notification | 15, against a test SMTP server |
-| `PUT /api/v2/admin/invite/config` | affiliate | 33 |
+| `PUT /api/v2/admin/invite/config` | affiliate | 34 |
 | `GET /api/v2/admin/forward/nodex/status` | gost-mesh | 21, against test NodeX servers |
 | `GET /api/v2/admin/forward/nodex/doctor` | gost-mesh | 21 |
 | `PUT /api/v2/admin/system/backup/config` | platform | 14 |

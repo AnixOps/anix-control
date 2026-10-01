@@ -253,8 +253,8 @@ func (s *Service) AdminEmailConfig(ctx context.Context, _ pluginhostsdk.NativeRe
 // placeholder keeps the stored one, and an absent encryption the stored
 // one. The kernel writes the value through KernelSettings (namespace mail);
 // a kept password is sent as the placeholder, which the kernel replaces
-// with the stored one. Its own handler records no audit entry, and neither
-// does the contract for this namespace.
+// with the stored one. The kernel records the system configuration audit
+// entry its own handler records, in the same transaction.
 func (s *Service) AdminUpdateEmailConfig(ctx context.Context, request pluginhostsdk.NativeRequest) (pluginhostsdk.NativeResponse, error) {
 	var req map[string]any
 	if err := binding.JSON.BindBody(request.Body, &req); err != nil {
