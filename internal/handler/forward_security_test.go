@@ -271,6 +271,31 @@ func (s *ForwardSecurityTestSuite) TestUserForwardTargetsMustBePublic() {
 	s.Equal(float64(0), resp["code"], resp)
 }
 
+// A clean agent's token registered under any node id and then claimed that
+// node's jobs. The token stays bound to its node: another node is 403.
+func (s *ForwardSecurityTestSuite) TestCleanAgentCannotRegisterUnderAnotherNode() {
+	s.Require().NoError(s.db.AutoMigrate(&model.ForwardCleanAgent{}))
+	s.Require().NoError(s.db.Exec("DELETE FROM v2_forward_clean_agent").Error)
+	agent := &model.ForwardCleanAgent{Name: "relay-agent", NodeID: &s.relay.ID, Token: "v2fa_relay-agent-token"}
+	s.Require().NoError(s.db.Create(agent).Error)
+	register := NewForwardCleanAgentHandler().Register
+	post := func(body string) *httptest.ResponseRecorder {
+		return s.serve("POST", "/forward-agent/register", "/forward-agent/register", body, map[string]string{"X-Agent-Token": agent.Token}, 0, false, register)
+	}
+
+	w := post(fmt.Sprintf(`{"nodeId":%d,"hostname":"elsewhere"}`, s.exit.ID))
+	s.Equal(http.StatusForbidden, w.Code, w.Body.String())
+	s.JSONEq(`{"code":-1,"msg":"agent is bound to another node","data":null}`, w.Body.String())
+	var stored model.ForwardCleanAgent
+	s.Require().NoError(s.db.First(&stored, agent.ID).Error)
+	s.Equal(s.relay.ID, *stored.NodeID)
+	s.Empty(stored.Hostname)
+
+	w = post(fmt.Sprintf(`{"nodeId":%d}`, s.relay.ID))
+	s.Equal(http.StatusOK, w.Code, w.Body.String())
+	s.Contains(w.Body.String(), fmt.Sprintf(`"nodeId":%d`, s.relay.ID))
+}
+
 func TestForwardSecurity(t *testing.T) {
 	suite.Run(t, new(ForwardSecurityTestSuite))
 }

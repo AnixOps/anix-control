@@ -43,6 +43,9 @@ forward_runtime:
 - Only type `1` port-forward tunnels are supported.
 - The target agent is selected by the tunnel execution node ID.
 - The agent record stores `nodeId`; it only claims pending jobs for that node.
+- The token is bound to that node: the `nodeId` it was created with, or the
+  first one it registers with. Registering under another node is refused
+  (`403`, `agent is bound to another node`); a new token moves an agent.
 - Jobs remain pending until an online agent pulls them.
 
 ## Agent Authentication

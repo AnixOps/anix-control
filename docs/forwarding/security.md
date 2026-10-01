@@ -133,6 +133,10 @@ Controls that must remain true:
 - Agent tokens are generated from cryptographic randomness.
 - Register, heartbeat, and report reject missing or invalid tokens.
 - Revoked agents cannot heartbeat.
+- An agent token is bound to its node: the node it was issued for, or the
+  first one it registers with. Registration under another node is refused, so
+  a token cannot move to another node and claim its jobs, whose payloads
+  carry that node's API token.
 - Heartbeat only claims pending `clean_agent` jobs for the agent node.
 - Report only updates a job claimed by the same agent.
 - Negative traffic values are rejected.

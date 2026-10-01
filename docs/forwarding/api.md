@@ -400,6 +400,12 @@ Register request:
 }
 ```
 
+A token is bound to one node: the `nodeId` it was created with or, when it
+was created without one, the `nodeId` of its first registration that names
+one. A registration naming another node is answered `403` with
+`agent is bound to another node` and changes nothing; one without `nodeId`
+keeps the binding. Moving an agent to another node takes a new token.
+
 Heartbeat request:
 
 ```json

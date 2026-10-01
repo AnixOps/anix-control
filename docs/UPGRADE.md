@@ -509,6 +509,38 @@ Pause or delete an unwanted one as an administrator
 (`POST /api/v2/admin/forward/pause` or `/api/v2/admin/forward/delete`), which
 also removes it from the node.
 
+### Clean Agents Are Bound To Their Node
+
+A clean agent's token is now bound to one forward node: the node it was
+issued for or, for a token issued without a node, the node of its first
+registration that names one. `POST /api/v2/forward-agent/register` with
+another `nodeId` is answered `403` (`agent is bound to another node`); a
+registration without `nodeId` keeps the binding. Earlier builds moved the
+agent to whatever node a registration named, so any token could take another
+node's jobs.
+
+- Each agent's current `node_id` becomes its binding at the upgrade. Before
+  or right after upgrading, check that every live agent is on the node it
+  serves (read-only):
+
+  ```sql
+  SELECT a.id, a.name, a.node_id, n.name AS node_name, a.hostname, a.public_ip, a.status, a.last_seen
+  FROM v2_forward_clean_agent a LEFT JOIN v2_forward_node n ON n.id = a.node_id
+  WHERE a.status <> -1 ORDER BY a.node_id, a.id;
+  ```
+
+  Revoke an agent whose node, host or address is wrong
+  (`POST /api/v2/admin/forward/agents/:id/revoke`), issue a new token with
+  the right `nodeId`, and rotate the API token of any node whose jobs it may
+  have claimed.
+- An agent whose configuration names a different node than its token now
+  fails to register. Fix its `node_id` setting, or issue a token for the
+  node it should serve. Moving an agent to another node always takes a new
+  token.
+- Issue tokens with a `nodeId`. A token issued without one is bound by its
+  first registration, so whoever holds it first chooses the node.
+- The binding uses the existing `node_id` column: no migration.
+
 ### Agent HTTP Routes Need The Node's Credentials
 
 `POST /api/v2/agent/heartbeat`, `GET /api/v2/agent/tasks`,

@@ -21,6 +21,9 @@ const (
 var (
 	ErrForwardCleanAgentUnauthorized = errors.New("invalid forward clean agent credentials")
 	ErrForwardCleanAgentRevoked      = errors.New("forward clean agent revoked")
+	// ErrForwardCleanAgentNodeMismatch refuses an agent's registration
+	// under a node other than the one its token is bound to.
+	ErrForwardCleanAgentNodeMismatch = errors.New("forward clean agent is bound to another node")
 )
 
 type ForwardCleanAgentService struct {
@@ -149,6 +152,16 @@ func (s *ForwardCleanAgentService) RevokeAgent(id uint) error {
 	return nil
 }
 
+// Register marks an agent online and binds its token to a node.
+//
+// A token is bound to the node it was issued for (CreateToken's nodeId) or,
+// when it was issued without one, to the node of its first registration
+// that names one. A heartbeat claims the pending jobs of the agent's node,
+// and their payloads carry the node's API token, so a token that could
+// register again under another node could take that node's jobs and
+// credentials. A registration naming another node is refused
+// (ErrForwardCleanAgentNodeMismatch) and changes nothing; one naming no node
+// keeps the binding. Binding to another node takes a new token.
 func (s *ForwardCleanAgentService) Register(input ForwardCleanAgentRegisterInput) (*model.ForwardCleanAgent, error) {
 	token := strings.TrimSpace(input.Token)
 	if token == "" {
@@ -166,14 +179,29 @@ func (s *ForwardCleanAgentService) Register(input ForwardCleanAgentRegisterInput
 		return nil, ErrForwardCleanAgentRevoked
 	}
 
+	requested := normalizeOptionalUint(input.NodeID)
+	if requested != nil && normalizeOptionalUint(agent.NodeID) == nil {
+		// The first registration that names a node binds the token. Only an
+		// unbound row is updated, so of two concurrent first registrations
+		// one binds and the other is refused below.
+		if err := s.db.Model(&model.ForwardCleanAgent{}).
+			Where("id = ? AND (node_id IS NULL OR node_id = 0)", agent.ID).
+			Update("node_id", *requested).Error; err != nil {
+			return nil, err
+		}
+		if err := s.db.First(&agent, agent.ID).Error; err != nil {
+			return nil, err
+		}
+	}
+	if bound := normalizeOptionalUint(agent.NodeID); requested != nil && (bound == nil || *bound != *requested) {
+		return nil, ErrForwardCleanAgentNodeMismatch
+	}
+
 	now := time.Now()
 	updates := cleanAgentInfoUpdates(input.Name, input.Version, input.Hostname, input.OS, input.Arch, input.Kernel, input.PublicIP, input.PrivateIP, input.Capabilities)
 	updates["status"] = model.ForwardCleanAgentStatusOnline
 	updates["last_seen"] = &now
 	updates["last_error"] = ""
-	if nodeID := normalizeOptionalUint(input.NodeID); nodeID != nil {
-		updates["node_id"] = nodeID
-	}
 
 	if err := s.db.Model(&model.ForwardCleanAgent{}).Where("id = ?", agent.ID).Updates(updates).Error; err != nil {
 		return nil, err

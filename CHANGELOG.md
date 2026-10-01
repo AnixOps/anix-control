@@ -53,6 +53,17 @@
   Administrators' forwards are not checked, and tunnels are administrator
   routes. A user's diagnosis now also refuses the loopback names and numeric
   forms without asking DNS. See `docs/UPGRADE.md`.
+- A clean agent's token is bound to its node.
+  `POST /api/v2/forward-agent/register` set the agent's node to the body's
+  `nodeId`, so the token of any clean agent could register under any node id
+  and then claim that node's pending runtime jobs on its heartbeat, whose
+  payloads carry the node's API token. A token is now bound to the node it
+  was issued for (`POST /api/v2/admin/forward/agents` with `nodeId`) or,
+  when issued without one, to the node of its first registration that names
+  one. A registration naming another node is `403`
+  (`agent is bound to another node`) and changes nothing; one without
+  `nodeId` keeps the binding. The binding uses the existing `node_id`
+  column, so there is no migration. See `docs/UPGRADE.md`.
 
 ### Changed
 

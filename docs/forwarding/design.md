@@ -137,7 +137,9 @@ Backend name: `clean_agent`.
 Execution chain:
 
 1. Admin creates an agent token.
-2. Agent registers and heartbeats against `/api/v2/forward-agent/*`.
+2. Agent registers and heartbeats against `/api/v2/forward-agent/*`. Its token
+   is bound to the node it was issued for, or the first node it registers
+   with; registering under another node is refused.
 3. Panel queues clean-agent runtime jobs.
 4. Agent heartbeat claims pending jobs for its node.
 5. Agent reports success, failure, and optional traffic deltas.
