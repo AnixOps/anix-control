@@ -4,11 +4,54 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"errors"
+	"fmt"
+	"math"
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/subscriber"
 	"gorm.io/gorm"
 )
+
+// Withdrawal errors. Their messages are the v2 answers.
+var (
+	// ErrWithdrawAmountNotWhole: the commission balance is a whole number
+	// of cents, so a withdrawal is too.
+	ErrWithdrawAmountNotWhole = errors.New("amount must be a whole number")
+	// ErrWithdrawalProcessed: the withdrawal is no longer pending, because
+	// another decision processed it first.
+	ErrWithdrawalProcessed = errors.New("withdrawal already processed")
+)
+
+// maxWithdrawCents bounds a withdrawal or refund amount to integers a
+// float64 holds exactly.
+const maxWithdrawCents = 1 << 53
+
+// WithdrawDebitRequestID names a withdrawal's debit of the commission
+// balance in the subscriber request ledger (v4_kernel_subscriber_request).
+// The affiliate package's native route uses the same id.
+func WithdrawDebitRequestID(withdrawID uint) string {
+	return fmt.Sprintf("affiliate.withdraw:%d", withdrawID)
+}
+
+// WithdrawRefundRequestID names the refund of a rejected withdrawal, so a
+// withdrawal is refunded once.
+func WithdrawRefundRequestID(withdrawID uint) string {
+	return fmt.Sprintf("affiliate.withdraw.refund:%d", withdrawID)
+}
+
+// WithdrawRefundCents is what rejecting a withdrawal returns to the
+// commission balance. Withdrawals are whole amounts; one stored with a
+// fraction, possible before they had to be, is refunded its whole part,
+// which is what its debit took on PostgreSQL: the driver truncated the
+// amount bound to "commission_balance - ?".
+func WithdrawRefundCents(amount float64) (int64, bool) {
+	whole := math.Trunc(amount)
+	if math.IsNaN(whole) || whole < 0 || whole > maxWithdrawCents {
+		return 0, false
+	}
+	return int64(whole), true
+}
 
 // InviteService 邀请服务
 type InviteService struct {
@@ -31,7 +74,17 @@ func (s *InviteService) GetConfig() (*model.InviteConfig, error) {
 	if s.config != nil {
 		return s.config, nil
 	}
+	cfg, err := s.loadConfig()
+	if err != nil {
+		return nil, err
+	}
+	s.config = cfg
+	return cfg, nil
+}
 
+// loadConfig reads the configuration from the database, creating the
+// default one when there is none.
+func (s *InviteService) loadConfig() (*model.InviteConfig, error) {
 	var cfg model.InviteConfig
 	err := s.db.First(&cfg).Error
 	if err == gorm.ErrRecordNotFound {
@@ -53,7 +106,6 @@ func (s *InviteService) GetConfig() (*model.InviteConfig, error) {
 	} else if err != nil {
 		return nil, err
 	}
-	s.config = &cfg
 	return &cfg, nil
 }
 
@@ -166,9 +218,17 @@ func (s *InviteService) GetCommissionRecords(userID uint, page, pageSize int) ([
 	return records, total, err
 }
 
-// RequestWithdraw 申请提现
+// RequestWithdraw 申请提现. The amount is a whole number in the commission
+// balance's unit (cents) and at least the configured minimum, read for each
+// request so an administrator's change applies at once. The withdrawal and
+// its debit (WithdrawDebitRequestID) are one transaction, and the debit is
+// taken under the subscriber's row lock and refused below zero
+// (subscriber.AdjustBalanceTx), so concurrent requests cannot overdraw.
 func (s *InviteService) RequestWithdraw(userID uint, amount float64, method, account, name string) (*model.CommissionWithdraw, error) {
-	cfg, _ := s.GetConfig()
+	if amount != math.Trunc(amount) {
+		return nil, ErrWithdrawAmountNotWhole
+	}
+	cfg, _ := s.loadConfig()
 	if cfg != nil && amount < cfg.CommissionMinAmount {
 		return nil, errors.New("amount below minimum")
 	}
@@ -178,8 +238,8 @@ func (s *InviteService) RequestWithdraw(userID uint, amount float64, method, acc
 	s.db.Model(&model.User{}).Where("id = ?", userID).
 		Select("commission_balance").Scan(&balance)
 
-	if amount > balance {
-		return nil, errors.New("insufficient balance")
+	if amount > balance || amount > maxWithdrawCents {
+		return nil, subscriber.ErrInsufficientBalance
 	}
 
 	withdraw := &model.CommissionWithdraw{
@@ -190,22 +250,71 @@ func (s *InviteService) RequestWithdraw(userID uint, amount float64, method, acc
 		Name:    name,
 		Status:  0,
 	}
-
-	tx := s.db.Begin()
-	if err := tx.Create(withdraw).Error; err != nil {
-		tx.Rollback()
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(withdraw).Error; err != nil {
+			return err
+		}
+		// 扣除余额
+		debit, err := subscriber.AdjustBalanceTx(tx, WithdrawDebitRequestID(withdraw.ID), userID,
+			subscriber.BalanceCommission, -int64(amount), time.Now())
+		if err != nil {
+			return err
+		}
+		if !debit.Applied {
+			return fmt.Errorf("withdrawal %d was debited before", withdraw.ID)
+		}
+		return nil
+	})
+	if err != nil {
 		return nil, err
 	}
-
-	// 扣除余额
-	if err := tx.Model(&model.User{}).Where("id = ?", userID).
-		Update("commission_balance", gorm.Expr("commission_balance - ?", amount)).Error; err != nil {
-		tx.Rollback()
-		return nil, err
-	}
-
-	tx.Commit()
 	return withdraw, nil
+}
+
+// ProcessWithdraw approves (status 1) or rejects (status 2) a withdrawal
+// that is still pending, as of now. The decision applies only while the
+// withdrawal is pending, so of two concurrent decisions one fails with
+// ErrWithdrawalProcessed. A rejection returns the amount to the commission
+// balance in the same transaction, once (WithdrawRefundRequestID); if that
+// fails, nothing changes. A withdrawal whose user no longer exists has no
+// one to refund and is rejected all the same. withdraw is updated on
+// success.
+func (s *InviteService) ProcessWithdraw(withdraw *model.CommissionWithdraw, status int, remark string, now time.Time) error {
+	var refund int64
+	if status == 2 {
+		cents, ok := WithdrawRefundCents(withdraw.Amount)
+		if !ok {
+			return fmt.Errorf("withdrawal %d amount %v cannot be refunded", withdraw.ID, withdraw.Amount)
+		}
+		refund = cents
+	}
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		claimed := tx.Model(&model.CommissionWithdraw{}).Where("id = ? AND status = ?", withdraw.ID, 0).
+			Updates(map[string]any{"status": status, "remark": remark, "processed_at": now, "updated_at": now})
+		if claimed.Error != nil {
+			return claimed.Error
+		}
+		if claimed.RowsAffected == 0 {
+			return ErrWithdrawalProcessed
+		}
+		if status != 2 {
+			return nil
+		}
+		_, err := subscriber.AdjustBalanceTx(tx, WithdrawRefundRequestID(withdraw.ID), withdraw.UserID,
+			subscriber.BalanceCommission, refund, now)
+		if errors.Is(err, subscriber.ErrSubscriberNotFound) {
+			return nil
+		}
+		return err
+	})
+	if err != nil {
+		return err
+	}
+	withdraw.Status = status
+	withdraw.Remark = remark
+	withdraw.ProcessedAt = &now
+	withdraw.UpdatedAt = now
+	return nil
 }
 
 // GetWithdrawRecords 获取提现记录

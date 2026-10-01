@@ -4,12 +4,51 @@
 
 ### Security
 
+- Kernel API views that filter rows are PostgreSQL security barriers.
+  `kapi_system_audit_log_v1` shows only the `system` rows of
+  `v2_operation_log`, but a package could define a cheap function, which the
+  planner may run before the view's filter, and see every module's audit
+  rows. Such views are now created `WITH (security_barrier)`, and an existing
+  one is altered to be a barrier at startup.
 - The PayPal webhook marks a payment paid only for a completed capture of
   the record's amount and currency. It treated `CHECKOUT.ORDER.APPROVED`
   as paid, although an approved checkout has collected nothing until it is
   captured, and it did not compare the captured amount.
   `CHECKOUT.ORDER.COMPLETED` is acknowledged without effect; its captures
   arrive as `PAYMENT.CAPTURE.COMPLETED`.
+- Commission withdrawals can no longer overdraw or be refunded twice.
+  - **Overdraw.** `POST /api/v2/user/invite/withdraw` checked the commission
+    balance before its transaction and then subtracted the amount
+    unconditionally, so concurrent requests could take the balance below
+    zero. The withdrawal and its debit are now one transaction, and the debit
+    is taken under the subscriber's row lock and refused below zero
+    (`subscriber.AdjustBalanceTx`, ledger id `affiliate.withdraw:<id>`).
+  - **Fractions.** The commission balance is a whole number of cents, but a
+    withdrawal took any amount from 1. On PostgreSQL the driver truncated the
+    amount bound to `commission_balance - ?`, so a withdrawal of 1.99 debited
+    1 and its approval paid out 1.99; SQLite stored a fraction in the
+    integer column. A fractional amount is now
+    `amount must be a whole number`.
+  - **Double processing.** `POST /api/v2/admin/invite/withdrawals/:id/process`
+    read the withdrawal, then saved the decision unconditionally, so two
+    concurrent decisions both applied and a rejection refunded twice. A
+    decision now applies only while the withdrawal is pending; the other is
+    `withdrawal already processed`.
+  - **Refunds.** A rejection's refund was a separate write whose failure was
+    only logged, leaving the withdrawal rejected and the amount lost. The
+    refund is now part of the decision (ledger id
+    `affiliate.withdraw.refund:<id>`): if it fails, the answer is
+    `failed to process withdrawal` and the withdrawal stays pending. A
+    pending withdrawal stored with a fraction is refunded its whole part,
+    which is what PostgreSQL debited; one whose user no longer exists is
+    rejected without a refund, as before.
+  - **Upgrade note.** Pending withdrawals with a fractional `amount` were
+    debited only their whole part on PostgreSQL. Review them
+    (`GET /api/v2/admin/invite/withdrawals?status=pending`) before approving
+    them.
+  - **Minimum.** The handler serving users kept the configuration it first
+    read, so an administrator's new minimum withdrawal applied only after a
+    restart. Each withdrawal now reads it.
 - A payment can no longer activate an order it does not pay.
   `POST /api/v2/user/payment/create` took any `order_id` with any amount the
   gateway allowed, and a paid callback marked that order paid and assigned
@@ -1153,6 +1192,9 @@
 
 ### Fixed
 
+- `kapi_subscriber_entitlement_v1` is created again. It named no source
+  table, so the check that skips a view whose source table does not exist
+  left it out. A test now requires every view to name its source.
 - The subscriber request ledger (`v4_kernel_subscriber_request`) is now pruned
   after 90 days, as the subscriber contract documents, by the same hourly
   worker as the change log. Before, it was never pruned.

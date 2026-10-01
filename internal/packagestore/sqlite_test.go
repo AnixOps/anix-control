@@ -3,6 +3,7 @@ package packagestore
 import (
 	"context"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -80,6 +81,17 @@ func TestSystemAuditLogViewShowsOnlyTheSystemModule(t *testing.T) {
 	var modules []string
 	require.NoError(t, db.Raw("SELECT module FROM kapi_system_audit_log_v1").Scan(&modules).Error)
 	require.Equal(t, []string{"system"}, modules)
+}
+
+// Every view names the table it reads, or EnsureKernelAPIViews leaves it
+// out; a view that filters rows is a RowFilter view, so PostgreSQL makes it
+// a security barrier.
+func TestKernelAPIViewsDeclareSourceAndRowFilter(t *testing.T) {
+	for _, view := range KernelAPIViews {
+		require.NotEmpty(t, view.Source, view.Name)
+		require.Contains(t, view.Query, "FROM "+view.Source, view.Name)
+		require.Equal(t, strings.Contains(strings.ToUpper(view.Query), " WHERE "), view.RowFilter, view.Name)
+	}
 }
 
 func TestLeaseRejectsUndeclaredOrUnknownStorage(t *testing.T) {
