@@ -124,7 +124,7 @@ forms are accepted:
 | `kernel.identity.v1` | the `KernelIdentity` contract: subscribers, the account projection, revocations; honoured only for official AnixOps packages, checked on every call |
 | `kernel.subscriber.entitlements.v1`, `.traffic.v1`, `.credentials.v1`, `.balance.v1`, `.directory.v1` | one method family each of the `KernelSubscriber` contract (`subscriber-service.md`): plan activation and entitlement edits, traffic ledger, credential resets, balances, directory and change feed; honoured only for official AnixOps packages, checked on every call |
 | `kernel.storage.v1` | a per-package database role and schema (storage lease) |
-| `kernel.storage.adopt:<table>` | read/write on an existing table, adopted in place; requires `kernel.storage.v1`; kernel and identity tables (`v2_user*`, `v2_system_config`, `v2_audit_log`, `v2_operation_log`, `v3_kernel_*`, `v4_kernel_*`, `identity_*`, `kapi_*`) and the node credential tables (`v2_node`, `v2_authorized_key`) cannot be adopted |
+| `kernel.storage.adopt:<table>` | read/write on an existing table, adopted in place; requires `kernel.storage.v1`; kernel and identity tables (`v2_user*`, `v2_system_config`, `v2_audit_log`, `v2_operation_log`, `v3_kernel_*`, `v4_kernel_*`, `identity_*`, `kapi_*`) and the node and forward agent credential tables (`v2_node`, `v2_authorized_key`, `v2_forward_node`, `v2_forward_clean_agent`, `v2_forward_runtime_job`) cannot be adopted |
 | `kernel.view:kapi_<name>_v<N>` | read access to a kernel API view; requires `kernel.storage.v1` |
 
 The packaged migration index (`migrations/index.json`, format
@@ -270,7 +270,13 @@ groups a subscriber holds and until when. `kapi_node_protocol_v1` exposes
 and `last_check_at` of `v2_node`; neither shows an address, a key or any
 settings. `kapi_node_status_v1` exposes `id`, `status`, `last_check_at`,
 `total_upload` and `total_download` of `v2_node`, and none of a node's
-credentials. A view that filters rows is created `WITH
+credentials. `kapi_forward_node_v1` exposes every column of
+`v2_forward_node` but `api_token`, which authenticates the node's agent.
+`kapi_forward_runtime_settings_v1` exposes `key` and `value` of the three
+`v2_system_config` rows that choose the forward runtime backend
+(`forward.runtime.nodex_mode`, `forward.runtime_backend`,
+`forward.runtime.ansible.backend`) and no other row. A view that filters rows
+is created `WITH
 (security_barrier)` on PostgreSQL, so a package's own functions never see the
 rows it hides. If a view cannot be created, or its source table does not
 exist, startup continues and leases that grant it fail.

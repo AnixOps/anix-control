@@ -86,27 +86,31 @@ func TestManifestCapabilityGrammar(t *testing.T) {
 		{CapabilityStorage},
 		{CapabilityStorage, "kernel.storage.adopt:v2_knowledge", "kernel.view:kapi_user_directory_v1"},
 		{CapabilityStorage, "kernel.storage.adopt:v2_node_log", "kernel.view:kapi_node_status_v1"},
+		{CapabilityStorage, "kernel.storage.adopt:v2_forward_tunnel", "kernel.view:kapi_forward_node_v1", CapabilitySubscriberTraffic},
 		{CapabilityIdentity, CapabilityStorage},
 	}
 	for _, capabilities := range valid {
 		assert.NoError(t, validateManifestCapabilities(capabilities), "%v", capabilities)
 	}
 	invalid := map[string][]string{
-		"unknown kernel capability": {"kernel.admin"},
-		"unknown identity version":  {"kernel.identity.v2"},
-		"adopt without storage":     {"kernel.storage.adopt:v2_knowledge"},
-		"view without storage":      {"kernel.view:kapi_user_directory_v1"},
-		"adopt users table":         {CapabilityStorage, "kernel.storage.adopt:v2_user"},
-		"adopt kernel table":        {CapabilityStorage, "kernel.storage.adopt:v4_kernel_lease"},
-		"adopt identity table":      {CapabilityStorage, "kernel.storage.adopt:identity_platform_projection"},
-		"adopt system config":       {CapabilityStorage, "kernel.storage.adopt:v2_system_config"},
-		"adopt node credentials":    {CapabilityStorage, "kernel.storage.adopt:v2_node"},
-		"adopt registration keys":   {CapabilityStorage, "kernel.storage.adopt:v2_authorized_key"},
-		"adopt a view":              {CapabilityStorage, "kernel.storage.adopt:kapi_user_directory_v1"},
-		"bad table name":            {CapabilityStorage, "kernel.storage.adopt:V2-Knowledge"},
-		"bad view name":             {CapabilityStorage, "kernel.view:v2_user"},
-		"duplicate":                 {"telemetry.read", "telemetry.read"},
-		"malformed":                 {"Telemetry Read"},
+		"unknown kernel capability":  {"kernel.admin"},
+		"unknown identity version":   {"kernel.identity.v2"},
+		"adopt without storage":      {"kernel.storage.adopt:v2_knowledge"},
+		"view without storage":       {"kernel.view:kapi_user_directory_v1"},
+		"adopt users table":          {CapabilityStorage, "kernel.storage.adopt:v2_user"},
+		"adopt kernel table":         {CapabilityStorage, "kernel.storage.adopt:v4_kernel_lease"},
+		"adopt identity table":       {CapabilityStorage, "kernel.storage.adopt:identity_platform_projection"},
+		"adopt system config":        {CapabilityStorage, "kernel.storage.adopt:v2_system_config"},
+		"adopt forward node tokens":  {CapabilityStorage, "kernel.storage.adopt:v2_forward_node"},
+		"adopt clean agent tokens":   {CapabilityStorage, "kernel.storage.adopt:v2_forward_clean_agent"},
+		"adopt forward runtime jobs": {CapabilityStorage, "kernel.storage.adopt:v2_forward_runtime_job"},
+		"adopt node credentials":     {CapabilityStorage, "kernel.storage.adopt:v2_node"},
+		"adopt registration keys":    {CapabilityStorage, "kernel.storage.adopt:v2_authorized_key"},
+		"adopt a view":               {CapabilityStorage, "kernel.storage.adopt:kapi_user_directory_v1"},
+		"bad table name":             {CapabilityStorage, "kernel.storage.adopt:V2-Knowledge"},
+		"bad view name":              {CapabilityStorage, "kernel.view:v2_user"},
+		"duplicate":                  {"telemetry.read", "telemetry.read"},
+		"malformed":                  {"Telemetry Read"},
 	}
 	for name, capabilities := range invalid {
 		assert.Error(t, validateManifestCapabilities(capabilities), name)

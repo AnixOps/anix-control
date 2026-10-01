@@ -2,6 +2,7 @@ package packagestore
 
 import (
 	"fmt"
+	"strings"
 
 	"gorm.io/gorm"
 )
@@ -124,6 +125,34 @@ var KernelAPIViews = []KernelAPIView{
 		Source: "v2_node",
 		Query:  "SELECT id, status, last_check_at, total_upload, total_download FROM v2_node",
 	},
+	{
+		// What the forward package reads of a forward node: everything but
+		// its API token, which authenticates the node's agent. The forward
+		// node routes themselves stay in the kernel.
+		Name:   "kapi_forward_node_v1",
+		Source: "v2_forward_node",
+		Query: "SELECT id, name, type, host, port, api_port, metrics_port, region, isp, datacenter, bandwidth, status, " +
+			"last_check, latency, load, uptime, tags, weight, max_conn, enabled, total_upload, total_download, current_conn, " +
+			"created_at, updated_at FROM v2_forward_node",
+	},
+	{
+		// The system configuration keys that choose the forward runtime
+		// backend (NodeX mode, the backend, the local Ansible backend):
+		// names of backends and a switch, none of them secret. The NodeX
+		// address and token and the Ansible settings are other rows, which
+		// this view does not show.
+		Name:   "kapi_forward_runtime_settings_v1",
+		Source: "v2_system_config",
+		Query: "SELECT key, value FROM v2_system_config WHERE key IN ('" +
+			strings.Join(ForwardRuntimeSettingKeys, "', '") + "')",
+		RowFilter: true,
+	},
+}
+
+// ForwardRuntimeSettingKeys are the system configuration keys
+// kapi_forward_runtime_settings_v1 shows.
+var ForwardRuntimeSettingKeys = []string{
+	"forward.runtime.nodex_mode", "forward.runtime_backend", "forward.runtime.ansible.backend",
 }
 
 // EnsureKernelAPIViews creates the kernel API views that do not exist yet.

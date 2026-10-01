@@ -224,7 +224,9 @@ tables and their indexes: `v4_kernel_package_backup_reference`,
 `kapi_order_billing_v1` over `v2_order`, `kapi_affiliate_settings_v1` over
 one row of `v2_system_config`, `kapi_user_subscription_group_v1` over
 `v2_user_subscription_group`, `kapi_node_protocol_v1` over `v2_node_protocol`,
-and `kapi_node_heartbeat_v1` and `kapi_node_status_v1` over `v2_node`. No
+`kapi_node_heartbeat_v1` and `kapi_node_status_v1` over `v2_node`,
+`kapi_forward_node_v1` over `v2_forward_node` and
+`kapi_forward_runtime_settings_v1` over three rows of `v2_system_config`. No
 existing table, column or index changes.
 
 Package storage leases additionally need `CREATEROLE` on the Control

@@ -617,3 +617,72 @@ func TestPostgresNodeStatusViewHidesNodeCredentials(t *testing.T) {
 	requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM v2_node").Scan(&count).Error)
 	requirePermissionDenied(t, pkg.Exec("UPDATE kapi_node_status_v1 SET status = 3 WHERE id = ?", node.ID).Error)
 }
+
+// A package granted the forward views reads forward nodes without their API
+// tokens and only the backend keys of the system configuration, and neither
+// source table. The settings view is a security barrier.
+func TestPostgresForwardViewsHideTokensAndOtherKeys(t *testing.T) {
+	kernel, kernelDSN := openPostgresKernel(t)
+	require.NoError(t, kernel.AutoMigrate(&model.SystemConfig{}, &model.ForwardNode{}))
+	// Views are immutable once created; recreate these so the test sees the
+	// current definitions.
+	require.NoError(t, kernel.Exec("DROP VIEW IF EXISTS kapi_forward_node_v1").Error)
+	require.NoError(t, kernel.Exec("DROP VIEW IF EXISTS kapi_forward_runtime_settings_v1").Error)
+	require.NoError(t, EnsureKernelAPIViews(kernel))
+	suffix := randomSuffix(t)
+	packageID := "pkgtest-" + suffix
+	t.Cleanup(func() { dropPackageStorage(t, kernel, packageID) })
+	token := "node-secret-" + suffix
+	node := model.ForwardNode{Name: "relay-" + suffix, Type: "relay", Host: "198.51.100.1", Port: 443, APIToken: token}
+	require.NoError(t, kernel.Create(&node).Error)
+	t.Cleanup(func() { _ = kernel.Delete(&model.ForwardNode{}, node.ID).Error })
+	secretKey := "forward.runtime.nodex.token." + suffix
+	keys := []string{secretKey, "forward.runtime_backend"}
+	require.NoError(t, kernel.Where("key IN ?", keys).Delete(&model.SystemConfig{}).Error)
+	require.NoError(t, kernel.Create(&[]model.SystemConfig{
+		{Key: secretKey, Value: "nodex-secret-" + suffix},
+		{Key: "forward.runtime_backend", Value: "gost-" + suffix},
+	}).Error)
+	t.Cleanup(func() { _ = kernel.Where("key IN ?", keys).Delete(&model.SystemConfig{}).Error })
+
+	store := Store{DB: kernel, Driver: "postgres", DSN: kernelDSN}
+	lease, err := store.Lease(context.Background(), Holder{PackageID: packageID, Version: "4.1.0", Generation: 1},
+		Grants{Storage: true, Views: []string{"kapi_forward_node_v1", "kapi_forward_runtime_settings_v1"}})
+	require.NoError(t, err)
+	pkg := openPostgres(t, lease.DSN)
+
+	var hosts []string
+	require.NoError(t, pkg.Raw("SELECT host FROM kapi_forward_node_v1 WHERE id = ?", node.ID).Scan(&hosts).Error)
+	require.Equal(t, []string{"198.51.100.1"}, hosts)
+	var tokens []string
+	require.Error(t, pkg.Raw("SELECT api_token FROM kapi_forward_node_v1").Scan(&tokens).Error, "the view has no token column")
+	var count int64
+	requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM v2_forward_node").Scan(&count).Error)
+	requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM v2_system_config").Scan(&count).Error)
+	requirePermissionDenied(t, pkg.Exec("UPDATE kapi_forward_runtime_settings_v1 SET value = 'x'").Error)
+
+	var values []string
+	require.NoError(t, pkg.Raw("SELECT value FROM kapi_forward_runtime_settings_v1 WHERE key = 'forward.runtime_backend'").Scan(&values).Error)
+	require.Equal(t, []string{"gost-" + suffix}, values)
+
+	// A cheap function in the package's own schema records every value it
+	// is shown; the view is a security barrier, so it never sees the NodeX
+	// token.
+	require.NoError(t, pkg.Exec("CREATE TABLE seen (value text)").Error)
+	require.NoError(t, pkg.Exec(`CREATE FUNCTION peek(v text) RETURNS boolean LANGUAGE plpgsql COST 0.0000001 AS $$
+		BEGIN INSERT INTO seen VALUES (v); RETURN true; END $$`).Error)
+	var seen []string
+	require.NoError(t, pkg.Transaction(func(tx *gorm.DB) error {
+		for _, setting := range []string{"enable_indexscan", "enable_bitmapscan", "enable_indexonlyscan"} {
+			if err := tx.Exec("SET LOCAL " + setting + " = off").Error; err != nil {
+				return err
+			}
+		}
+		if err := tx.Raw("SELECT value FROM kapi_forward_runtime_settings_v1 WHERE peek(value)").Scan(&values).Error; err != nil {
+			return err
+		}
+		return tx.Raw("SELECT value FROM seen").Scan(&seen).Error
+	}))
+	require.NotContains(t, seen, "nodex-secret-"+suffix)
+	require.Contains(t, seen, "gost-"+suffix)
+}

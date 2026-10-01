@@ -96,6 +96,14 @@ package and generation.
   handlers derive the same ids, so a retry applies once whichever side
   serves it. `ResetCredentials` and `AdjustEntitlement` answer `NotFound`
   for a subscriber that does not exist and record nothing.
+- **Forward traffic reset.** The Flux-style `POST /api/v2/user/reset`
+  (type 1) resets a subscriber's traffic with `ResetTraffic`,
+  `request_id = "forward.reset_traffic:<user_id>:<digest>"` (the request's
+  `Idempotency-Key`, else its request id), in the kernel's legacy handler
+  and in the forward module (`packages/forward/native`). Forward flow
+  accounting stays in the kernel: a forward's counters, the subscriber's
+  traffic (`subscriber.RecordTrafficTx`) and the tunnel permission's traffic
+  change in one transaction, and exhaustion pauses forwards on their nodes.
 - **RecordTraffic.**
   - Adds `(upload, download) × rate` to each subscriber's counters in one
     transaction.

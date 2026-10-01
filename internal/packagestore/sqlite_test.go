@@ -241,3 +241,56 @@ func TestNodeStatusViewShowsNoCredentials(t *testing.T) {
 	require.NoError(t, db.Raw("SELECT name FROM pragma_table_info('kapi_node_status_v1') ORDER BY cid").Scan(&columns).Error)
 	require.Equal(t, []string{"id", "status", "last_check_at", "total_upload", "total_download"}, columns)
 }
+
+// kapi_forward_node_v1 shows every column of a forward node but its API
+// token, which authenticates the node's agent.
+func TestForwardNodeViewShowsNoToken(t *testing.T) {
+	db, _ := openSQLiteKernel(t)
+	exists, err := viewExists(db, "kapi_forward_node_v1")
+	require.NoError(t, err)
+	require.False(t, exists, "no view without v2_forward_node")
+	require.NoError(t, db.AutoMigrate(&model.ForwardNode{}))
+	require.NoError(t, EnsureKernelAPIViews(db))
+	require.NoError(t, db.Create(&model.ForwardNode{Name: "relay", Type: "relay", Host: "198.51.100.1", Port: 443, APIToken: "node-secret"}).Error)
+
+	var tableColumns, viewColumns []string
+	require.NoError(t, db.Raw("SELECT name FROM pragma_table_info('v2_forward_node') ORDER BY cid").Scan(&tableColumns).Error)
+	require.NoError(t, db.Raw("SELECT name FROM pragma_table_info('kapi_forward_node_v1') ORDER BY cid").Scan(&viewColumns).Error)
+	require.Contains(t, tableColumns, "api_token")
+	var withoutToken []string
+	for _, column := range tableColumns {
+		if column != "api_token" {
+			withoutToken = append(withoutToken, column)
+		}
+	}
+	require.Equal(t, withoutToken, viewColumns)
+	var hosts []string
+	require.NoError(t, db.Raw("SELECT host FROM kapi_forward_node_v1").Scan(&hosts).Error)
+	require.Equal(t, []string{"198.51.100.1"}, hosts)
+}
+
+// kapi_forward_runtime_settings_v1 shows the keys that choose the forward
+// runtime backend and no other system configuration row, the NodeX token
+// included.
+func TestForwardRuntimeSettingsViewShowsTheBackendKeys(t *testing.T) {
+	db, _ := openSQLiteKernel(t)
+	require.NoError(t, db.AutoMigrate(&model.SystemConfig{}))
+	require.NoError(t, EnsureKernelAPIViews(db))
+	require.NoError(t, db.Create(&[]model.SystemConfig{
+		{Key: "forward.runtime.nodex.token", Value: "nodex-secret"},
+		{Key: "forward.runtime.nodex.base_url", Value: "https://nodex.internal"},
+		{Key: "forward.runtime.nodex_mode", Value: "true"},
+		{Key: "forward.runtime_backend", Value: "gost"},
+		{Key: "forward.runtime.ansible.backend", Value: "nftables_ansible"},
+		{Key: "forward.runtime.ansible.config", Value: `{"inventory":"x"}`},
+		{Key: "smtp.password", Value: "smtp-secret"},
+	}).Error)
+	var columns []string
+	require.NoError(t, db.Raw("SELECT name FROM pragma_table_info('kapi_forward_runtime_settings_v1') ORDER BY cid").Scan(&columns).Error)
+	require.Equal(t, []string{"key", "value"}, columns)
+	var rows []struct{ Key, Value string }
+	require.NoError(t, db.Raw("SELECT key, value FROM kapi_forward_runtime_settings_v1 ORDER BY key").Scan(&rows).Error)
+	require.Equal(t, []struct{ Key, Value string }{
+		{"forward.runtime.ansible.backend", "nftables_ansible"}, {"forward.runtime.nodex_mode", "true"}, {"forward.runtime_backend", "gost"},
+	}, rows)
+}

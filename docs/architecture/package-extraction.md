@@ -28,13 +28,14 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   WebSocket routes use `registeredPackageWebSocketRoute`.
 - `config/package-extraction.json` records each route's extraction mode
   (`bridged`, `native-flagged` or `native`) and where its legacy handler lives
-  (`router`, `identity-bridge` or `none`). 120 routes are `native-flagged`:
-  identity-platform (20: group A's 15, the profile, dashboard and user
-  detail, and the traffic and subscription resets), affiliate (7), knowledge
-  (6), notification (19), order (9), payment (16), plan (7), platform (4),
-  proxy-node (7), subscription (17) and ticket (8). The rest are `bridged`.
-  The identity routes are `identity-bridge`. `check_plugin_only_routes.py`
-  enforces the map against the router and the identity bridge.
+  (`router`, `identity-bridge` or `none`). 137 routes are `native-flagged`:
+  identity-platform (20: group A's 15, the profile, dashboard and user detail,
+  and the traffic and subscription resets), affiliate (7), forward (17),
+  knowledge (6), notification (19), order (9), payment (16), plan (7),
+  platform (4), proxy-node (7), subscription (17) and ticket (8). The rest are
+  `bridged`. The identity routes are `identity-bridge`.
+  `check_plugin_only_routes.py` enforces the map against the router and the
+  identity bridge.
 - Request path: gin middleware -> `compatv2` gateway -> route resolution
   (`internal/compat/v2/registry.go`, `verifiedRouteSource`) -> package host
   process over Unix gRPC -> package bridge (FD 4) -> **the legacy in-kernel
@@ -446,6 +447,60 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
     - the load balancer statistics and health check: they read the forward
       package's `v2_forward_node`, and the check probes each forward node
       and writes its status.
+- **Forward (in place).** 17 of 80 routes run on the adopted `v2_forward`,
+  `v2_forward_tunnel`, `v2_forward_user_tunnel`, `v2_speed_limit`,
+  `v2_forward_rule` and `v2_forward_latency_bucket` tables, proved by
+  `internal/tests/forwardcompat`:
+  - the forward lists and their display order (user and administrator);
+  - the tunnel list, creation and the deletion of an unused tunnel, and the
+    tunnels a forward may use;
+  - granting and listing tunnel permissions (the list raises a
+    permission's traffic to its forwards' totals, as the kernel does);
+  - a forward's ingress latencies, the node statistics and the user's
+    legacy rules;
+  - the administrator's `POST /api/v2/user/reset`: type 1 resets a
+    subscriber's traffic through `KernelSubscriber.ResetTraffic`
+    (`kernel.subscriber.traffic.v1`), with the request id
+    `forward.reset_traffic:<user>:<digest>` that the legacy handler now
+    derives too; type 2 a permission's traffic.
+
+  None of them changes what a node runs: a tunnel or a permission alone runs
+  nothing, the display order is not part of a forward's runtime payload, and
+  the kernel's forward runtime re-reads these rows on every use.
+  - Forward nodes are read through `kapi_forward_node_v1` (every column but
+    `api_token`), the runtime backend through
+    `kapi_forward_runtime_settings_v1` (three keys of the protected
+    `v2_system_config`, a security barrier), users through
+    `kapi_user_directory_v1` and their speed limit through
+    `kapi_subscriber_entitlement_v1`.
+  - `v2_forward_node`, `v2_forward_clean_agent` and
+    `v2_forward_runtime_job` are protected kernel tables no manifest may
+    adopt. A forward node's API token authenticates its agent (WebSocket,
+    gRPC and REST), a clean agent's token authenticates it, and clean agent
+    jobs carry the node's API token in their payloads: a package holding
+    them could act as any forward node or agent.
+  - **Stay bridged (63):**
+    - forward nodes and Ansible machines (`v2_forward_node`; the answers
+      show tokens to administrators, the kernel's gost manager caches each
+      node's address and token, the checks and statistics sync reach the
+      node over the network);
+    - every forward change, pause, resume, deletion and diagnosis, the
+      backend sync, the tunnel update and diagnosis, and permission removal
+      and updates: they apply forwards on their nodes (NodeX, a local
+      Ansible job or a clean agent job) or dial from Control;
+    - the legacy rules other than the user's list (pushed to NodeX with the
+      nodes' tokens; the administrator's answers embed the nodes' tokens)
+      and the agents' rule list (node token authentication);
+    - runtime status, diagnosis and jobs (the protected NodeX and Ansible
+      settings, NodeX calls, Control's disk, job payloads with tokens);
+    - the observability targets, trend and topology, which read the proxy
+      nodes of `v2_node`;
+    - clean agents and their registration, heartbeat, report and install
+      script (agent tokens, job claims, the request's host);
+    - flow upload, report and snapshot: the forward's counters, the
+      subscriber's traffic and the permission's traffic change in one kernel
+      transaction under a per-forward lock in Control's memory, and
+      exhaustion pauses forwards on their nodes.
 - The kernel publishes read-only views `kapi_*`, created at startup by
   `EnsureKernelAPIViews` (first `kapi_user_directory_v1`, then
   `kapi_system_audit_log_v1`, the `v2_operation_log` rows of module
@@ -458,6 +513,7 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
   `kapi_user_subscription_group_v1`, `kapi_node_protocol_v1`,
   `kapi_node_heartbeat_v1`). Packages
   `kapi_node_status_v1`). Packages
+  `kapi_forward_node_v1`, `kapi_forward_runtime_settings_v1`). Packages
   read other domains only
   through `kapi_*` views or typed operations. A view whose source table does
   not exist is left out. A view that filters rows is a PostgreSQL
@@ -601,7 +657,7 @@ shapes; the first extraction step adopts the existing `v2_*` tables in place.
 | payment (T9) | 20 | `payment.initiate`, `payment.callback`, `payment.reconcile` | `v4_payment_record`, `_callback`, `_outbox` | Receipt stored before transition; exactly-once per gateway event; one-time secret lease |
 | subscription (T10) | 25 | `subscription.render`, `subscription.usage.read` | `v4_subscription_group`, `_template`, `_usage` | Byte-identical output incl. content type and cache headers |
 | proxy-node (T10) | 31 | `proxy-node.register`, `.config.deliver`, `.user.deliver`, `.traffic.report` | `v4_proxy_node`, `_config`, `_user`, `_usage` | Delivery becomes a versioned Agent operation; kernel gRPC transport-only |
-| forward (T11) | 80 | `forward.rule.create/update`, `forward.tunnel.assign`, `forward.observation.read`, `forward.agent.apply` | `v4_forward_rule`, `_tunnel`, `_assignment`, `_observation`, `_outbox` | Assignment + Agent op atomic, rolled back on Agent reject; 6 kernel workers move to the package |
+| forward (T11) | 80 | `forward.rule.create/update`, `forward.tunnel.assign`, `forward.observation.read`, `forward.agent.apply` | `v4_forward_rule`, `_tunnel`, `_assignment`, `_observation`, `_outbox` | Assignment + Agent op atomic, rolled back on Agent reject; 6 kernel workers move to the package; 17 native-flagged (section 3.4), the rest bridged |
 | wireguard (T12) | 1 | peer lifecycle, generated config | package migration (names not fixed) | Needs anix-agent revival |
 | protocol-runtime (T12) | 20 | protocol composition, runtime-adapter selection, Agent task/monitor | package migration (names not fixed) | Needs anix-agent revival |
 | machine-telemetry, nftables-forward, gost-mesh, nat-egress (T12) | 5 / 0 / 3 / 0 | keep runtime semantics; add v2 entrypoint, generation, `RuntimeStatus` reports | — | Agent-target runtime packages |
