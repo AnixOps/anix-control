@@ -697,6 +697,29 @@ from `kapi_plan_name_v1`, so its signed release declares
 `kernel.view:kapi_subscriber_entitlement_v1` and
 `kernel.view:kapi_plan_name_v1`: install that release before switching the
 routes to `native`.
+### Paid Callbacks Complete Pending Orders Only
+
+A paid payment callback marks its order paid and completes it only while the
+order is pending. A payment that arrives for an order that was cancelled,
+completed, or paid by another payment is recorded (the payment reads paid)
+and the order is left as it is. Before, such an order was marked paid and
+completed again. The reason is logged and kept in
+`v4_kernel_subscriber_request` under `payment:<trade_no>`.
+
+- **Review.** Paid payments whose order did not complete need a refund or an
+  administrator's "mark paid":
+
+  ```sql
+  SELECT r.trade_no, r.order_id, o.status
+  FROM v2_payment_record r JOIN v2_order o ON o.id = r.order_id
+  WHERE r.status = 1 AND o.status NOT IN (1, 3);
+  ```
+
+- **Native callbacks.** The payment module can serve the four callback
+  routes itself (`docs/architecture/order-service.md`). The PayPal webhook
+  then verifies deliveries from the payment host, which needs outbound HTTPS
+  to `api-m.paypal.com` (or `api-m.sandbox.paypal.com`). The callback URLs
+  stay the same.
 
 ## Moving Logins To The Identity Module
 

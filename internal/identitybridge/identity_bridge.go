@@ -19,6 +19,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/handler"
 	"github.com/AnixOps/anix-control/v4/internal/kernelidentity"
+	"github.com/AnixOps/anix-control/v4/internal/kernelorder"
 	"github.com/AnixOps/anix-control/v4/internal/kernelsettings"
 	"github.com/AnixOps/anix-control/v4/internal/kernelsubscriber"
 	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
@@ -58,8 +59,24 @@ func NewFactory(cfg *config.Config) (packagebridge.SessionFactory, error) {
 		HostOperations:       operations,
 		KernelIdentity:       kernelIdentity(operations),
 		KernelSubscriber:     kernelSubscriber(operations),
+		KernelOrder:          kernelOrder(operations),
 		KernelSettings:       kernelSettings(operations),
 	}), nil
+}
+
+// NewKernelOrder returns the KernelOrder provider for the module listener;
+// local sessions get the same one from NewFactory.
+func NewKernelOrder(cfg *config.Config) (packagebridge.KernelOrderProvider, error) {
+	operations, err := newHostOperations(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return kernelOrder(operations), nil
+}
+
+func kernelOrder(operations service.PackageHostOperations) packagebridge.KernelOrderProvider {
+	server := &kernelorder.Server{DB: operations.DB, Authorizer: operations}
+	return server.For
 }
 
 // NewKernelSettings returns the KernelSettings provider for the module

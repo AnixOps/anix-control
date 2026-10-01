@@ -236,8 +236,10 @@ func (h *PaymentHandler) X402Callback(c *gin.Context) {
 		return
 	}
 
-	// 防止重复处理
+	// 防止重复处理. A repeat of a paid payment finishes its order if that
+	// was left pending (FinishPaidOrder), as every callback's repeat does.
 	if payment.Status != model.PaymentStatusPending {
+		h.gatewayService.FinishPaidOrder(*payment)
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "already processed"})
 		return
 	}

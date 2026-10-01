@@ -19,6 +19,10 @@ const (
 	// CapabilityIdentity lets the official identity package call the
 	// KernelIdentity contract (subscribers, account projection, revocation).
 	CapabilityIdentity = "kernel.identity.v1"
+	// CapabilityOrderComplete lets an official package call
+	// KernelOrder.CompleteOrderPayment (order-service.md): a paid payment
+	// record marks its order paid and completes it.
+	CapabilityOrderComplete = "kernel.order.complete.v1"
 	// The KernelSubscriber method families (subscriber-service.md): each
 	// lets an official package call one part of the subscriber contract.
 	CapabilitySubscriberEntitlements = "kernel.subscriber.entitlements.v1"
@@ -115,7 +119,7 @@ func validateManifestCapabilities(capabilities []string) error {
 			continue
 		}
 		switch {
-		case capability == CapabilityObservedState, capability == CapabilityIdentity,
+		case capability == CapabilityObservedState, capability == CapabilityIdentity, capability == CapabilityOrderComplete,
 			capability == CapabilitySubscriberEntitlements, capability == CapabilitySubscriberTraffic,
 			capability == CapabilitySubscriberCredentials, capability == CapabilitySubscriberBalance,
 			capability == CapabilitySubscriberDirectory, capability == CapabilitySubscriberGroups:

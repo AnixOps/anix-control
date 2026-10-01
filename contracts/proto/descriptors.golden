@@ -10,6 +10,10 @@ enum anixops.identity.v1.TokenKeyState.TOKEN_KEY_STATE_NEXT = 1
 enum anixops.identity.v1.TokenKeyState.TOKEN_KEY_STATE_RETIRED = 3
 enum anixops.identity.v1.TokenKeyState.TOKEN_KEY_STATE_REVOKED = 4
 enum anixops.identity.v1.TokenKeyState.TOKEN_KEY_STATE_UNSPECIFIED = 0
+enum anixops.kernelorder.v1.OrderPaymentOutcome.ORDER_PAYMENT_OUTCOME_COMPLETED = 1
+enum anixops.kernelorder.v1.OrderPaymentOutcome.ORDER_PAYMENT_OUTCOME_PAID = 2
+enum anixops.kernelorder.v1.OrderPaymentOutcome.ORDER_PAYMENT_OUTCOME_REFUSED = 3
+enum anixops.kernelorder.v1.OrderPaymentOutcome.ORDER_PAYMENT_OUTCOME_UNSPECIFIED = 0
 enum anixops.kernelsubscriber.v1.BalanceKind.BALANCE_KIND_ACCOUNT = 1
 enum anixops.kernelsubscriber.v1.BalanceKind.BALANCE_KIND_COMMISSION = 2
 enum anixops.kernelsubscriber.v1.BalanceKind.BALANCE_KIND_UNSPECIFIED = 0
@@ -251,6 +255,12 @@ field anixops.kernelidentity.v1.ResolveActorAccessResponse.restricted_plugins = 
 field anixops.kernelidentity.v1.ResolveActorAccessResponse.unrestricted = 4 optional bool
 field anixops.kernelidentity.v1.UpdateSubscriberRequest.entitlements_json = 2 optional bytes
 field anixops.kernelidentity.v1.UpdateSubscriberRequest.user_id = 1 optional uint64
+field anixops.kernelorder.v1.CompleteOrderPaymentRequest.order_id = 2 optional uint64
+field anixops.kernelorder.v1.CompleteOrderPaymentRequest.trade_no = 1 optional string
+field anixops.kernelorder.v1.CompleteOrderPaymentResponse.applied = 1 optional bool
+field anixops.kernelorder.v1.CompleteOrderPaymentResponse.order_id = 2 optional uint64
+field anixops.kernelorder.v1.CompleteOrderPaymentResponse.outcome = 3 optional anixops.kernelorder.v1.OrderPaymentOutcome
+field anixops.kernelorder.v1.CompleteOrderPaymentResponse.reason = 4 optional string
 field anixops.kernelsettings.v1.Actor.client_ip = 2 optional string
 field anixops.kernelsettings.v1.Actor.user_agent = 3 optional string
 field anixops.kernelsettings.v1.Actor.user_id = 1 optional uint64
@@ -577,6 +587,7 @@ rpc anixops.kernelidentity.v1.KernelIdentity.GetSubscriber(anixops.kernelidentit
 rpc anixops.kernelidentity.v1.KernelIdentity.PublishRevocation(anixops.kernelidentity.v1.PublishRevocationRequest) returns (anixops.kernelidentity.v1.PublishRevocationResponse)
 rpc anixops.kernelidentity.v1.KernelIdentity.ResolveActorAccess(anixops.kernelidentity.v1.ResolveActorAccessRequest) returns (anixops.kernelidentity.v1.ResolveActorAccessResponse)
 rpc anixops.kernelidentity.v1.KernelIdentity.UpdateSubscriber(anixops.kernelidentity.v1.UpdateSubscriberRequest) returns (anixops.kernelidentity.v1.UpdateSubscriberResponse)
+rpc anixops.kernelorder.v1.KernelOrder.CompleteOrderPayment(anixops.kernelorder.v1.CompleteOrderPaymentRequest) returns (anixops.kernelorder.v1.CompleteOrderPaymentResponse)
 rpc anixops.kernelsettings.v1.KernelSettings.DeleteSettings(anixops.kernelsettings.v1.DeleteSettingsRequest) returns (anixops.kernelsettings.v1.DeleteSettingsResponse)
 rpc anixops.kernelsettings.v1.KernelSettings.GetSettings(anixops.kernelsettings.v1.GetSettingsRequest) returns (anixops.kernelsettings.v1.GetSettingsResponse)
 rpc anixops.kernelsettings.v1.KernelSettings.PutSettings(anixops.kernelsettings.v1.PutSettingsRequest) returns (anixops.kernelsettings.v1.PutSettingsResponse)

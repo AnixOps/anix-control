@@ -61,6 +61,7 @@ CLASS_PATTERNS: dict[str, tuple[str, ...]] = {
         "packages/*/native/*",
         "internal/handler/*",
         "internal/kernelsubscriber/*",
+        "internal/kernelorder/*",
         "internal/kernelsettings/*",
         "sdk/v2compat/*",
         "packages/identity-platform/*",

@@ -75,7 +75,9 @@ package and generation.
   `request_id = "order:<order id>"`, in the same flow. An administrator's
   "mark paid" completes an order with the same id, in the kernel or in the
   order module (`kernel.subscriber.entitlements.v1`), so an order's plan is
-  granted once whichever path completes it.
+  granted once whichever path completes it. The payment module's callbacks
+  reach the kernel's completion through `KernelOrder.CompleteOrderPayment`
+  (`order-service.md`).
 - **Administrator assignment.** The plan module applies it with
   `request_id = "plan.assign:<plan_id>:<user_id>:<digest>"`. The digest
   covers the request's `Idempotency-Key` (else its request id) and the
