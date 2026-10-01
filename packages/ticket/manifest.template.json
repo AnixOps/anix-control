@@ -7,7 +7,7 @@
   "targets": ["control"],
   "architectures": [],
   "artifact_sha256": "GENERATED_AT_BUILD",
-  "capabilities": [],
+  "capabilities": ["kernel.storage.v1", "kernel.storage.adopt:v2_ticket", "kernel.storage.adopt:v2_ticket_message"],
   "dependencies": [],
   "conflicts": [],
   "permissions": ["ticket.view", "ticket.api"],
