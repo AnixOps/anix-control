@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 4.1.0-rc.1 - 2026-10-01
+
 ### Security
 
 - The agent HTTP routes authenticate the node. `POST /api/v2/agent/heartbeat`,
