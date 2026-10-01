@@ -394,6 +394,23 @@ If a release requires schema/data changes:
 For SQLite-to-PostgreSQL migration, use
 [`reference/sqlite-to-postgres-migration.md`](reference/sqlite-to-postgres-migration.md).
 
+### Audit Request Bodies Written Before The Redaction Fix
+
+Earlier builds stored the raw body of every administrator write request in
+`v2_audit_log.request_body`, and logged the start of it. Those bodies can
+hold user passwords, payment gateway keys, SMTP and S3 credentials, and bot
+tokens. New rows are redacted; the upgrade does not rewrite old rows.
+
+After taking a backup, an operator who wants the old bodies gone can clear
+them. Adjust the cut-off to the upgrade time:
+
+```sql
+UPDATE v2_audit_log SET request_body = '' WHERE created_at < '2026-10-01';
+```
+
+Rotate any credential that was set through the administrator API while the
+old build ran, and apply the same care to log files kept from that time.
+
 ## Moving Logins To The Identity Module
 
 From 4.1 the identity module can own accounts, passwords, MFA and token

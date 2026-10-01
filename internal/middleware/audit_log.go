@@ -76,7 +76,7 @@ func AuditLog() gin.HandlerFunc {
 		isV3 := strings.HasPrefix(c.Request.URL.Path, auditLogPrefixV3)
 		var capture *auditBodyCapture
 		if !isV3 && c.Request.Body != nil && c.Request.ContentLength != 0 {
-			capture = &auditBodyCapture{ReadCloser: c.Request.Body, limit: maxBodyDBLength}
+			capture = &auditBodyCapture{ReadCloser: c.Request.Body, limit: auditCaptureLimit}
 			c.Request.Body = capture
 		}
 
@@ -101,9 +101,11 @@ func AuditLog() gin.HandlerFunc {
 		// Let the actual handler run
 		c.Next()
 
+		// Admin bodies carry passwords, gateway keys and tokens: only the
+		// redacted form reaches the log and the audit table.
 		var reqBody string
 		if capture != nil {
-			reqBody = capture.buf.String()
+			reqBody = redactAuditBody(capture.buf.Bytes(), c.Request.URL.Path)
 		}
 
 		duration := time.Since(startTime).Milliseconds()
