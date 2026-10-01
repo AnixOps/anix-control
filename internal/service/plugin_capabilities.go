@@ -46,6 +46,17 @@ var (
 		// v2_authorized_key the registration keys that mint them. A
 		// package that could read or write them could act as any node.
 		"v2_node": true, "v2_authorized_key": true,
+		// Node runtime secrets: v2_node_protocol holds each protocol's
+		// Reality private key, WireGuard server private key and custom
+		// configuration, and the kernel builds every node's configuration
+		// (UniProxy, the gRPC node service) and every subscription from its
+		// rows without validating them again: its protocol validator runs on
+		// its own writes only. v2_wireguard_peer holds every user's
+		// WireGuard private and preshared keys. A package that could read
+		// them could impersonate the nodes, and one that could write
+		// v2_node_protocol could push unvalidated configuration to every
+		// node.
+		"v2_node_protocol": true, "v2_wireguard_peer": true,
 	}
 )
 

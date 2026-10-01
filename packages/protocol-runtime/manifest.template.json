@@ -7,7 +7,7 @@
   "targets": ["control"],
   "architectures": [],
   "artifact_sha256": "GENERATED_AT_BUILD",
-  "capabilities": [],
+  "capabilities": ["kernel.storage.v1", "kernel.storage.adopt:v2_agent_diagnostic_task"],
   "dependencies": [],
   "conflicts": [],
   "permissions": ["protocol-runtime.view", "protocol-runtime.api"],

@@ -814,6 +814,25 @@
   - `internal/tests/proxynodecompat` proves byte parity on SQLite and
     PostgreSQL (56 cases each) and the same load balancer rows. The
     PostgreSQL run is part of CI.
+- **Protocol runtime module.** `packages/protocol-runtime` has its own host
+  and serves 3 of its 20 routes natively: the protocol templates and the
+  administrator's diagnostic task history and detail.
+  - It runs on `v2_agent_diagnostic_task`, adopted in place. The agents'
+    HTTP poll now checks a pending task against the diagnostic whitelist
+    again before handing it out, so a task written outside the kernel's
+    checks fails instead.
+  - `v2_node_protocol` (Reality and WireGuard server private keys, custom
+    configurations, the rows the kernel builds node configurations from
+    without validating them again) and `v2_wireguard_peer` (users' WireGuard
+    keys) are now protected kernel tables that no package may adopt. The
+    protocol routes stay bridged.
+  - The other 17 routes stay bridged, with the reason in the host's route
+    map: node protocols, Agent Control (the kernel's gRPC control streams),
+    the administrator's agent list, monitoring and tasks (the agents' live
+    connections in the kernel's memory), and the agent routes (node
+    credentials, node status, forward bridge tasks).
+  - `internal/tests/protocolruntimecompat` proves byte parity on SQLite and
+    PostgreSQL (22 cases each). The PostgreSQL run is part of CI.
 
 - The kernel side of the identity module, `KernelIdentity` (N9). It is served
   on the local package bridge and on the module listener.
