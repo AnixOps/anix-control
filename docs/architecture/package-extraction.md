@@ -28,11 +28,11 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   WebSocket routes use `registeredPackageWebSocketRoute`.
 - `config/package-extraction.json` records each route's extraction mode
   (`bridged`, `native-flagged` or `native`) and where its legacy handler lives
-  (`router`, `identity-bridge` or `none`). 59 routes are `native-flagged`:
-  identity's group A (15), knowledge (6), notification (19), plan (7),
-  platform (4) and ticket (8). The rest are `bridged`. The identity routes are
-  `identity-bridge`. `check_plugin_only_routes.py` enforces the map against
-  the router and the identity bridge.
+  (`router`, `identity-bridge` or `none`). 68 routes are `native-flagged`:
+  identity's group A (15), knowledge (6), notification (19), order (9), plan
+  (7), platform (4) and ticket (8). The rest are `bridged`. The identity
+  routes are `identity-bridge`. `check_plugin_only_routes.py` enforces the map
+  against the router and the identity bridge.
 - Request path: gin middleware -> `compatv2` gateway -> route resolution
   (`internal/compat/v2/registry.go`, `verifiedRouteSource`) -> package host
   process over Unix gRPC -> package bridge (FD 4) -> **the legacy in-kernel
@@ -222,13 +222,46 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
     limits: their rows name forward tunnels, they read
     `v2_forward_tunnel` and `v2_forward_user_tunnel`, and an update
     re-pushes forwards to nodes. They join forward later.
-  - Order and subscription still read `v2_plan` directly; they need
-    `kapi_plan_catalog_v1` when they move.
+  - Subscription still reads `v2_plan` directly; it needs
+    `kapi_plan_catalog_v1` when it moves.
+- **Order (in place).** 9 of 13 routes run on the adopted `v2_order` and
+  `v2_coupon` tables, proved by `internal/tests/ordercompat`: the coupon
+  routes, order statistics, status changes, cancellation, "mark paid" and
+  the user's order creation.
+  - Other domains are read through views: `kapi_plan_catalog_v1` (a plan's
+    prices, group, transfer and limits), `kapi_plan_subscription_group_v1`
+    (the subscription groups a plan grants) and `kapi_user_directory_v1`
+    (the buyer's current plan, which makes an order new, a renewal or an
+    upgrade).
+  - "Mark paid" completes the order through
+    `KernelSubscriber.ApplyEntitlement` (`kernel.subscriber.entitlements.v1`)
+    with `request_id = "order:<order id>"`, the id the kernel's completion and
+    the payment callbacks use, so a plan is granted once whichever path
+    completes the order. The kernel grants and completes in one transaction
+    under the order's row lock. The module grants first, then marks the order
+    completed; if that last write fails, the order stays paid with its plan
+    granted, and a retry completes it without granting again. The parity test
+    runs the real KernelSubscriber server and compares the orders,
+    subscribers, subscription groups, request ledger and change log.
+  - Completion pays no affiliate commission and sends no notification, in
+    the kernel as in the module: `InviteService.AddCommission` and
+    `NotifyOrderPaid` have no caller. Paying commission on completion needs
+    an affiliate contract first.
+  - The kernel keeps writing `v2_order`: the payment callbacks mark orders
+    paid and complete them, and the dashboard and invite statistics read it.
+  - The four order list and detail routes stay bridged. Their answers embed
+    the buyer's whole `v2_user` row, subscription token and proxy UUID
+    included, which no kernel view may expose.
 - The kernel publishes read-only views `kapi_*`, created at startup by
   `EnsureKernelAPIViews` (first `kapi_user_directory_v1`, then
   `kapi_system_audit_log_v1`, the `v2_operation_log` rows of module
   `system`; later `kapi_plan_catalog_v1`). Packages read other domains only
   through `kapi_*` views or typed operations.
+  `EnsureKernelAPIViews` (`kapi_user_directory_v1`,
+  `kapi_subscriber_entitlement_v1`, `kapi_plan_catalog_v1`,
+  `kapi_plan_subscription_group_v1`). Packages read other domains only
+  through `kapi_*` views or typed operations. A view whose source table does
+  not exist is left out.
 
 ### 3.5 Isolation switch and SQLite
 
@@ -505,10 +538,10 @@ Next quarter, in dependency order:
 1. notification (24 routes): SMTP/Telegram sending moves into the host.
 2. order + payment together (33 routes): keep one transaction, column-level
    grant on `v2_order(status, paid_at)`, replay payment-callback fixtures.
-   Today a successful callback only marks the payment and order paid
-   (`internal/service/payment_gateway_service.go`); it never calls
-   `OrderService.Complete`, so no plan is assigned. Decide that explicitly;
-   do not change it silently during migration.
+   A successful callback marks the payment and order paid and completes the
+   order (owner decision, 2026-09-30, `subscriber-service.md`). Order is in
+   place (9 of 13 routes, section 3.4); the callbacks, which write the
+   payment and the order in one transaction, are not.
 3. subscription + proxy-node (56 routes plus parser and gRPC): map
    `/s/:token` and UniProxy v1 through a kernel-side `Gateway.ServeRoute`.
 4. forward (79 routes, ~12k lines of forward handler/service code, 6 workers).

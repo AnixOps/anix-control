@@ -78,7 +78,7 @@
       "path": "/api/v2/admin/coupon",
       "package_id": "order",
       "route_id": "order.admin.coupon.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -86,7 +86,7 @@
       "path": "/api/v2/admin/coupon",
       "package_id": "order",
       "route_id": "order.admin.coupon.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -94,7 +94,7 @@
       "path": "/api/v2/admin/coupon/:id",
       "package_id": "order",
       "route_id": "order.admin.coupon.id.delete",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -862,7 +862,7 @@
       "path": "/api/v2/admin/orders/:id/cancel",
       "package_id": "order",
       "route_id": "order.admin.orders.id.cancel.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -870,7 +870,7 @@
       "path": "/api/v2/admin/orders/:id/paid",
       "package_id": "order",
       "route_id": "order.admin.orders.id.paid.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -878,7 +878,7 @@
       "path": "/api/v2/admin/orders/:id/status",
       "package_id": "order",
       "route_id": "order.admin.orders.id.status.put",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -886,7 +886,7 @@
       "path": "/api/v2/admin/orders/stats",
       "package_id": "order",
       "route_id": "order.admin.orders.stats.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -2022,7 +2022,7 @@
       "path": "/api/v2/user/coupon/check",
       "package_id": "order",
       "route_id": "order.user.coupon.check.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -2206,7 +2206,7 @@
       "path": "/api/v2/user/order/save",
       "package_id": "order",
       "route_id": "order.user.order.save.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {

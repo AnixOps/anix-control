@@ -152,6 +152,7 @@ def self_test() -> None:
     check(["internal/service/forward_panel_flow.go"], {"code", "db", "forward"})
     check(["internal/grpc/node_server.go"], {"code", "agent"})
     check(["packages/knowledge/compat/v2-routes.json"], {"code", "packages"})
+    check(["packages/order/native/orders.go"], {"code", "db", "packages"})
     check(["packages/identity-platform/native/auth.go"], {"code", "db", "modules", "packages"})
     check([".github/workflows/ci.yml"], everything)
     check(["go.sum"], everything)

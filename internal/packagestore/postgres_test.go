@@ -324,3 +324,42 @@ func TestPostgresRemoteReplicasShareOneLease(t *testing.T) {
 	require.NoError(t, fresh.Exec("SELECT 1").Error)
 	require.EqualValues(t, 1, second.LeaseGeneration)
 }
+
+// A role granted the plan views reads the plan catalog and its subscription
+// groups and nothing else of v2_plan, and cannot change them through the
+// views.
+func TestPostgresPlanViewsAreReadOnly(t *testing.T) {
+	kernel, kernelDSN := openPostgresKernel(t)
+	require.NoError(t, kernel.AutoMigrate(&model.Plan{}, &model.PlanSubscriptionGroup{}))
+	require.NoError(t, EnsureKernelAPIViews(kernel))
+	suffix := randomSuffix(t)
+	packageID := "pkgtest-" + suffix
+	t.Cleanup(func() { dropPackageStorage(t, kernel, packageID) })
+	price := int64(1000)
+	plan := model.Plan{Name: "catalog-" + suffix, GroupID: 3, TransferEnable: 10, MonthPrice: &price}
+	require.NoError(t, kernel.Create(&plan).Error)
+	t.Cleanup(func() { _ = kernel.Delete(&model.Plan{}, plan.ID).Error })
+	group := model.SubscriptionGroup{Name: "catalog-" + suffix}
+	require.NoError(t, kernel.Create(&group).Error)
+	t.Cleanup(func() { _ = kernel.Delete(&model.SubscriptionGroup{}, group.ID).Error })
+	require.NoError(t, kernel.Create(&model.PlanSubscriptionGroup{PlanID: plan.ID, GroupID: group.ID}).Error)
+	t.Cleanup(func() { _ = kernel.Where("plan_id = ?", plan.ID).Delete(&model.PlanSubscriptionGroup{}).Error })
+
+	store := Store{DB: kernel, Driver: "postgres", DSN: kernelDSN}
+	lease, err := store.Lease(context.Background(), Holder{PackageID: packageID, Version: "4.1.0", Generation: 1},
+		Grants{Storage: true, Views: []string{"kapi_plan_catalog_v1", "kapi_plan_subscription_group_v1"}})
+	require.NoError(t, err)
+	pkg := openPostgres(t, lease.DSN)
+	var prices []int64
+	require.NoError(t, pkg.Raw("SELECT month_price FROM kapi_plan_catalog_v1 WHERE id = ?", plan.ID).Scan(&prices).Error)
+	require.Equal(t, []int64{1000}, prices)
+	var groups []uint
+	require.NoError(t, pkg.Raw("SELECT group_id FROM kapi_plan_subscription_group_v1 WHERE plan_id = ?", plan.ID).Scan(&groups).Error)
+	require.Equal(t, []uint{group.ID}, groups)
+	var names []string
+	require.ErrorContains(t, pkg.Raw("SELECT name FROM kapi_plan_catalog_v1").Scan(&names).Error, "does not exist")
+	var count int64
+	requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM v2_plan").Scan(&count).Error)
+	requirePermissionDenied(t, pkg.Exec("UPDATE kapi_plan_catalog_v1 SET month_price = 1 WHERE id = ?", plan.ID).Error)
+	requirePermissionDenied(t, pkg.Exec("DELETE FROM kapi_plan_subscription_group_v1 WHERE plan_id = ?", plan.ID).Error)
+}

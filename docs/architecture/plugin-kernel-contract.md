@@ -252,9 +252,12 @@ never changed once published. `kapi_user_directory_v1` exposes `id`, `email`,
 `created_at` of `v2_user`, and no password hash, token or UUID.
 `kapi_system_audit_log_v1` exposes the `v2_operation_log` rows of module
 `system` (the audit trail of configuration and backup changes, which records
-whether a secret is set, never its value). If a view cannot be created, or
-its source table does not exist, startup continues and leases that grant it
-fail.
+whether a secret is set, never its value). `kapi_plan_catalog_v1` exposes
+what an order needs of a plan (`id`, `group_id`, `transfer_enable`,
+`speed_limit`, `device_limit` and the seven period prices of `v2_plan`), and
+`kapi_plan_subscription_group_v1` the `plan_id` and `group_id` of
+`v2_plan_subscription_group`. If a view cannot be created, or its source
+table does not exist, startup continues and leases that grant it fail.
 
 `sdk/packagestoresdk` is the host side:
 

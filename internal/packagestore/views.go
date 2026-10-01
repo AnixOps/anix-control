@@ -48,6 +48,21 @@ var KernelAPIViews = []KernelAPIView{
 		Query: "SELECT id, plan_id, group_id, expired_at, transfer_enable, u, d, speed_limit, device_limit, " +
 			"flow_reset_time, banned, balance, commission_balance FROM v2_user",
 	},
+	{
+		// What an order needs of a plan: its prices, to price an order, and
+		// what it grants (group, transfer in GiB, limits), to complete one.
+		Name:   "kapi_plan_catalog_v1",
+		Source: "v2_plan",
+		Query: "SELECT id, group_id, transfer_enable, speed_limit, device_limit, month_price, quarter_price, " +
+			"half_year_price, year_price, two_year_price, three_year_price, onetime_price FROM v2_plan",
+	},
+	{
+		// The subscription groups a plan grants, which a completed order
+		// gives the subscriber.
+		Name:   "kapi_plan_subscription_group_v1",
+		Source: "v2_plan_subscription_group",
+		Query:  "SELECT plan_id, group_id FROM v2_plan_subscription_group",
+	},
 }
 
 // EnsureKernelAPIViews creates the kernel API views that do not exist yet.

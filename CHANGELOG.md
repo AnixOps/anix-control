@@ -534,6 +534,28 @@
   - The five `/api/v2/speed-limit/*` routes stay bridged: they are forward
     limits on forward tunnels and join the forward package later.
   - The parity harness can send request headers (`Case.RequestHeaders`).
+- **Order module.** `packages/order` has its own host and serves 9 of its 13
+  routes natively: the coupon routes, order statistics, status changes,
+  cancellation, "mark paid" and the user's order creation.
+  - It runs on `v2_order` and `v2_coupon`, adopted in place. Plans are read
+    through the new kernel views `kapi_plan_catalog_v1` and
+    `kapi_plan_subscription_group_v1`, the buyer's current plan through
+    `kapi_user_directory_v1`.
+  - "Mark paid" completes the order through
+    `KernelSubscriber.ApplyEntitlement` (`kernel.subscriber.entitlements.v1`)
+    with the kernel's request id `order:<order id>`, so a plan is granted once
+    whichever side completes the order. The package never writes `v2_user`.
+    Completion pays no commission and sends no notification, as in the
+    kernel.
+  - The four order list and detail routes stay bridged: their answers embed
+    the buyer's `v2_user` row with its subscription token and UUID.
+  - `internal/tests/ordercompat` proves byte parity on SQLite and
+    PostgreSQL, and the same orders, coupons, subscribers, request ledger and
+    change log, against the real KernelSubscriber server. The PostgreSQL run
+    is part of CI, and a change under `packages/*/native` now runs the
+    PostgreSQL jobs in the pull request lane.
+  - `EnsureKernelAPIViews` leaves out a view whose source table does not
+    exist.
 
 - The kernel side of the identity module, `KernelIdentity` (N9). It is served
   on the local package bridge and on the module listener.
