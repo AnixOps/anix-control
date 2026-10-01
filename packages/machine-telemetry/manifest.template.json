@@ -11,7 +11,10 @@
   "architectures": [],
   "artifact_sha256": "__ARTIFACT_SHA256__",
   "capabilities": [
-    "telemetry.read"
+    "telemetry.read",
+    "kernel.storage.v1",
+    "kernel.view:kapi_traffic_log_v1",
+    "kernel.view:kapi_user_directory_v1"
   ],
   "dependencies": [],
   "conflicts": [],

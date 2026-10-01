@@ -814,6 +814,48 @@
   - `internal/tests/proxynodecompat` proves byte parity on SQLite and
     PostgreSQL (56 cases each) and the same load balancer rows. The
     PostgreSQL run is part of CI.
+- **Protocol runtime module.** `packages/protocol-runtime` has its own host
+  and serves 3 of its 20 routes natively: the protocol templates and the
+  administrator's diagnostic task history and detail.
+  - It runs on `v2_agent_diagnostic_task`, adopted in place. The agents'
+    HTTP poll now checks a pending task against the diagnostic whitelist
+    again before handing it out, so a task written outside the kernel's
+    checks fails instead.
+  - `v2_node_protocol` (Reality and WireGuard server private keys, custom
+    configurations, the rows the kernel builds node configurations from
+    without validating them again) and `v2_wireguard_peer` (users' WireGuard
+    keys) are now protected kernel tables that no package may adopt. The
+    protocol routes stay bridged.
+  - The other 17 routes stay bridged, with the reason in the host's route
+    map: node protocols, Agent Control (the kernel's gRPC control streams),
+    the administrator's agent list, monitoring and tasks (the agents' live
+    connections in the kernel's memory), and the agent routes (node
+    credentials, node status, forward bridge tasks).
+  - `internal/tests/protocolruntimecompat` proves byte parity on SQLite and
+    PostgreSQL (22 cases each). The PostgreSQL run is part of CI.
+- **Machine telemetry module.** `packages/machine-telemetry` has its own host
+  and serves 2 of its 5 routes natively: the administrator's hourly traffic
+  series and user traffic ranking.
+  - It adopts no table: the traffic log comes from the new kernel view
+    `kapi_traffic_log_v1` (`user_id`, `u`, `d`, `rate` and `log_at` of
+    `v2_server_log`), e-mail addresses from `kapi_user_directory_v1`.
+  - The dashboard (users, orders and the online set in the kernel's cache,
+    cached itself), the system information (the kernel binary's build
+    metadata) and the monitoring WebSocket stay bridged.
+  - `internal/tests/machinetelemetrycompat` proves byte parity on SQLite and
+    PostgreSQL (42 cases each). The PostgreSQL run is part of CI.
+- **Gost mesh module.** `packages/gost-mesh` has its own host and serves 1
+  of its 3 routes natively: the administrator's gost API connection test,
+  which reads no table. The NodeX runtime status and diagnosis stay bridged:
+  they use the NodeX token in the protected `v2_system_config`.
+  `internal/tests/gostmeshcompat` proves byte parity (23 cases) against test
+  gost APIs that answer, refuse, fail, answer what the client cannot decode,
+  or do not listen. The PostgreSQL run is part of CI.
+- **WireGuard module.** `packages/wireguard` has its own host and serves its
+  one route natively: the administrator's WireGuard server keypair, which
+  reads and stores nothing. `internal/tests/wireguardcompat` proves the same
+  answer with the random keys masked, and that both sides answer a fresh
+  X25519 pair. The PostgreSQL run is part of CI.
 
 - The kernel side of the identity module, `KernelIdentity` (N9). It is served
   on the local package bridge and on the module listener.

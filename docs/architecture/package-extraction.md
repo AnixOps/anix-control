@@ -28,12 +28,13 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   WebSocket routes use `registeredPackageWebSocketRoute`.
 - `config/package-extraction.json` records each route's extraction mode
   (`bridged`, `native-flagged` or `native`) and where its legacy handler lives
-  (`router`, `identity-bridge` or `none`). 137 routes are `native-flagged`:
+  (`router`, `identity-bridge` or `none`). 144 routes are `native-flagged`:
   identity-platform (20: group A's 15, the profile, dashboard and user detail,
   and the traffic and subscription resets), affiliate (7), forward (17),
-  knowledge (6), notification (19), order (9), payment (16), plan (7),
-  platform (4), proxy-node (7), subscription (17) and ticket (8). The rest are
-  `bridged`. The identity routes are `identity-bridge`.
+  gost-mesh (1), knowledge (6), machine-telemetry (2), notification (19),
+  order (9), payment (16), plan (7), platform (4), protocol-runtime (3),
+  proxy-node (7), subscription (17), ticket (8) and wireguard (1). The rest
+  are `bridged`. The identity routes are `identity-bridge`.
   `check_plugin_only_routes.py` enforces the map against the router and the
   identity bridge.
 - Request path: gin middleware -> `compatv2` gateway -> route resolution
@@ -501,6 +502,89 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
       subscriber's traffic and the permission's traffic change in one kernel
       transaction under a per-forward lock in Control's memory, and
       exhaustion pauses forwards on their nodes.
+- **Protocol runtime (in place).** 3 of protocol-runtime's 20 routes run
+  natively, proved by `internal/tests/protocolruntimecompat`: the protocol
+  templates (static data) and the administrator's diagnostic task history
+  and detail on the adopted `v2_agent_diagnostic_task`.
+  - The kernel keeps writing that table: creating a task, the agents' polls
+    and results. Since a package may now write it too, the agents' HTTP poll
+    checks every pending task against the diagnostic whitelist again before
+    an agent gets it (`AgentDiagnosticTaskService.PullPendingTasks`); a task
+    off the whitelist fails.
+  - **Reality and WireGuard keys stay in the kernel.** `v2_node_protocol`
+    and `v2_wireguard_peer` are protected kernel tables
+    (`service.protectedTables`), and the protocol routes stay bridged.
+    - `v2_node_protocol` holds each protocol's Reality private key,
+      WireGuard server private key and custom configuration, and
+      `v2_wireguard_peer` every user's WireGuard private and preshared keys.
+      Whoever holds them can impersonate a node to its clients.
+    - The kernel builds every node's configuration (UniProxy, the gRPC node
+      service) and every subscription from `v2_node_protocol`, and validates
+      a protocol only when its own routes write it. A package that could
+      write the table could push unvalidated configuration (WireGuard relay
+      files, interfaces, routing tables) to every node.
+    - Column-level grants (section 3.1) do not exist, so the secrets cannot
+      be withheld from an adopting package. Payment holds its gateways'
+      secrets because the payment domain uses them; the protocol keys are
+      used by the kernel's node configuration and subscription rendering,
+      not by these routes.
+    - A bridged answer still passes through the package host, so the host
+      sees the keys of the protocols an administrator opens or saves. The
+      protection removes standing access to every key and every write, not
+      that relay.
+  - **Stay bridged** (17, with the reason in the host's route map):
+    - the node protocol list, creation, update and deletion: the protected
+      `v2_node_protocol`; the list answers the keys in clear (the
+      administrator's editor round-trips them), and a deletion also deletes
+      the protocol's WireGuard peers and subscription group links;
+    - node synchronization, Agent Control status and operations: the gRPC
+      control streams the kernel's Agent Control manager holds, and the
+      protected `v2_node`;
+    - the administrator's agent list, monitoring data, task creation and
+      command execution: the agents' live WebSocket connections and reports
+      in the kernel's memory; creating a task sends it over the connection
+      and waits for the acknowledgement;
+    - the agent routes (registration, heartbeat, task poll, result, monitor,
+      WebSocket): node credentials checked in the kernel, node status in
+      `v2_node` and `v2_forward_node`, connections in the kernel's memory,
+      and the forward package's bridge tasks and runtime jobs.
+- **Machine telemetry (in place).** 2 of machine-telemetry's 5 routes run
+  natively, proved by `internal/tests/machinetelemetrycompat`: the
+  administrator's hourly traffic series and user traffic ranking.
+  - The package adopts no table. It reads the traffic log through the new
+    `kapi_traffic_log_v1` (the user, bytes, rate and time of each node
+    traffic report in `v2_server_log`, no node or credential) and e-mail
+    addresses through `kapi_user_directory_v1`. The kernel writes the log
+    when a node reports traffic, in the transaction that counts the
+    subscriber's traffic; a package that could write it would change the
+    charts, so it only reads it.
+  - The hourly buckets are local hours, as the kernel's; the kernel passes
+    its time zone to the host.
+  - **Stay bridged** (3, with the reason in the host's route map):
+    - the dashboard: it counts users (the protected `v2_user`), orders,
+      revenue and the legacy server tables, takes the online users from the
+      alive set UniProxy keeps in the kernel's cache, and answers a snapshot
+      the kernel caches for 60 seconds;
+    - the system information: the kernel binary's own build metadata;
+    - the monitoring WebSocket: the kernel's node list from the protected
+      `v2_node`; WebSocket routes always relay to the kernel.
+- **Gost mesh (in place).** 1 of gost-mesh's 3 routes runs natively, proved
+  by `internal/tests/gostmeshcompat`: the administrator's gost API
+  connection test. It reads no table: it calls the gost API at the host and
+  port in the request, with the token in the request, as the kernel's
+  handler does, and answers the same errors. The NodeX runtime status and
+  diagnosis stay bridged: they read the NodeX address and shared token from
+  the protected `v2_system_config` (the token is a secret no view shows) and
+  call NodeX with it.
+- **WireGuard (in place).** wireguard's one route runs natively, proved by
+  `internal/tests/wireguardcompat`: the administrator's server keypair for
+  the protocol form. It reads and stores nothing; the administrator saves
+  the private key into a protocol through protocol-runtime's bridged routes
+  on the protected `v2_node_protocol`. The answer carries a private key
+  either way: a bridged answer passes through the package host too, so
+  generating it in the package gives the package nothing it did not see.
+  The parity test masks the random keys and checks on both sides that each
+  answer is a fresh X25519 pair.
 - The kernel publishes read-only views `kapi_*`, created at startup by
   `EnsureKernelAPIViews` (first `kapi_user_directory_v1`, then
   `kapi_system_audit_log_v1`, the `v2_operation_log` rows of module
@@ -514,6 +598,8 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
   `kapi_node_heartbeat_v1`). Packages
   `kapi_node_status_v1`). Packages
   `kapi_forward_node_v1`, `kapi_forward_runtime_settings_v1`). Packages
+  `kapi_node_heartbeat_v1`, `kapi_node_status_v1`, `kapi_traffic_log_v1`).
+  Packages
   read other domains only
   through `kapi_*` views or typed operations. A view whose source table does
   not exist is left out. A view that filters rows is a PostgreSQL

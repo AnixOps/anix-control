@@ -175,6 +175,20 @@ func TestOrderBillingViewShowsWhatAPaymentNeeds(t *testing.T) {
 	require.Equal(t, []string{"id", "user_id", "total_amount", "status"}, columns)
 }
 
+// kapi_traffic_log_v1 shows each traffic report's user, bytes, rate and
+// time, and nothing else of v2_server_log.
+func TestTrafficLogViewShowsTheTrafficCharts(t *testing.T) {
+	db, _ := openSQLiteKernel(t)
+	exists, err := viewExists(db, "kapi_traffic_log_v1")
+	require.NoError(t, err)
+	require.False(t, exists, "no view without v2_server_log")
+	require.NoError(t, db.AutoMigrate(&model.TrafficLog{}))
+	require.NoError(t, EnsureKernelAPIViews(db))
+	var columns []string
+	require.NoError(t, db.Raw("SELECT name FROM pragma_table_info('kapi_traffic_log_v1') ORDER BY cid").Scan(&columns).Error)
+	require.Equal(t, []string{"user_id", "u", "d", "rate", "log_at"}, columns)
+}
+
 // kapi_user_referral_v1 shows who invited whom, and nothing else of v2_user.
 func TestReferralViewShowsWhoInvitedWhom(t *testing.T) {
 	db, _ := openSQLiteKernel(t)

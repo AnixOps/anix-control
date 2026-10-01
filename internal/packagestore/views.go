@@ -84,6 +84,14 @@ var KernelAPIViews = []KernelAPIView{
 		Query:  "SELECT id, invite_user_id FROM v2_user",
 	},
 	{
+		// Each node traffic report's bytes per user, its rate and when it
+		// was logged, for the machine-telemetry package's traffic charts and
+		// ranking. No node, token or credential.
+		Name:   "kapi_traffic_log_v1",
+		Source: "v2_server_log",
+		Query:  "SELECT user_id, u, d, rate, log_at FROM v2_server_log",
+	},
+	{
 		// The affiliate's frontend settings (code prefix and length,
 		// withdrawal fee and methods): the value of one system
 		// configuration key, which the kernel does not treat as sensitive.

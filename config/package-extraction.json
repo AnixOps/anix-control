@@ -30,7 +30,7 @@
       "path": "/api/v2/admin/agent/tasks",
       "package_id": "protocol-runtime",
       "route_id": "protocol.admin.agent.tasks.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -46,7 +46,7 @@
       "path": "/api/v2/admin/agent/tasks/:task_id",
       "package_id": "protocol-runtime",
       "route_id": "protocol.admin.agent.tasks.task_id.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -470,7 +470,7 @@
       "path": "/api/v2/admin/forward/test-connection",
       "package_id": "gost-mesh",
       "route_id": "gost.admin.forward.test_connection.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -998,7 +998,7 @@
       "path": "/api/v2/admin/protocol-templates",
       "package_id": "protocol-runtime",
       "route_id": "protocol.admin.protocol_templates.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1390,7 +1390,7 @@
       "path": "/api/v2/admin/traffic/hourly",
       "package_id": "machine-telemetry",
       "route_id": "telemetry.admin.traffic.hourly.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1398,7 +1398,7 @@
       "path": "/api/v2/admin/traffic/user-ranking",
       "package_id": "machine-telemetry",
       "route_id": "telemetry.admin.traffic.user_ranking.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1566,7 +1566,7 @@
       "path": "/api/v2/admin/wireguard/keypair",
       "package_id": "wireguard",
       "route_id": "wireguard.admin.wireguard.keypair.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {

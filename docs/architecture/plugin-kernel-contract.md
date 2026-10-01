@@ -124,7 +124,7 @@ forms are accepted:
 | `kernel.identity.v1` | the `KernelIdentity` contract: subscribers, the account projection, revocations; honoured only for official AnixOps packages, checked on every call |
 | `kernel.subscriber.entitlements.v1`, `.traffic.v1`, `.credentials.v1`, `.balance.v1`, `.directory.v1` | one method family each of the `KernelSubscriber` contract (`subscriber-service.md`): plan activation and entitlement edits, traffic ledger, credential resets, balances, directory and change feed; honoured only for official AnixOps packages, checked on every call |
 | `kernel.storage.v1` | a per-package database role and schema (storage lease) |
-| `kernel.storage.adopt:<table>` | read/write on an existing table, adopted in place; requires `kernel.storage.v1`; kernel and identity tables (`v2_user*`, `v2_system_config`, `v2_audit_log`, `v2_operation_log`, `v3_kernel_*`, `v4_kernel_*`, `identity_*`, `kapi_*`) and the node and forward agent credential tables (`v2_node`, `v2_authorized_key`, `v2_forward_node`, `v2_forward_clean_agent`, `v2_forward_runtime_job`) cannot be adopted |
+| `kernel.storage.adopt:<table>` | read/write on an existing table, adopted in place; requires `kernel.storage.v1`; kernel and identity tables (`v2_user*`, `v2_system_config`, `v2_audit_log`, `v2_operation_log`, `v3_kernel_*`, `v4_kernel_*`, `identity_*`, `kapi_*`) the node and forward agent credential tables (`v2_node`, `v2_authorized_key`, `v2_forward_node`, `v2_forward_clean_agent`, `v2_forward_runtime_job`) and the node runtime secret tables (`v2_node_protocol`, `v2_wireguard_peer`) cannot be adopted |
 | `kernel.view:kapi_<name>_v<N>` | read access to a kernel API view; requires `kernel.storage.v1` |
 
 The packaged migration index (`migrations/index.json`, format
@@ -275,8 +275,10 @@ credentials. `kapi_forward_node_v1` exposes every column of
 `kapi_forward_runtime_settings_v1` exposes `key` and `value` of the three
 `v2_system_config` rows that choose the forward runtime backend
 (`forward.runtime.nodex_mode`, `forward.runtime_backend`,
-`forward.runtime.ansible.backend`) and no other row. A view that filters rows
-is created `WITH
+`forward.runtime.ansible.backend`) and no other row. `kapi_traffic_log_v1`
+exposes `user_id`, `u`, `d`, `rate` and `log_at` of `v2_server_log`: each
+node traffic report's bytes per user, for traffic charts. A view that filters
+rows is created `WITH
 (security_barrier)` on PostgreSQL, so a package's own functions never see the
 rows it hides. If a view cannot be created, or its source table does not
 exist, startup continues and leases that grant it fail.

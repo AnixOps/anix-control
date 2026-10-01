@@ -84,6 +84,7 @@ func TestManifestCapabilityGrammar(t *testing.T) {
 		{"telemetry.read"},
 		{"forward.gost.mesh", "plugin.runtime-state", "kernel.observed-state"},
 		{CapabilityStorage},
+		{CapabilityStorage, "kernel.storage.adopt:v2_agent_diagnostic_task"},
 		{CapabilityStorage, "kernel.storage.adopt:v2_knowledge", "kernel.view:kapi_user_directory_v1"},
 		{CapabilityStorage, "kernel.storage.adopt:v2_node_log", "kernel.view:kapi_node_status_v1"},
 		{CapabilityStorage, "kernel.storage.adopt:v2_forward_tunnel", "kernel.view:kapi_forward_node_v1", CapabilitySubscriberTraffic},
@@ -111,6 +112,8 @@ func TestManifestCapabilityGrammar(t *testing.T) {
 		"bad view name":              {CapabilityStorage, "kernel.view:v2_user"},
 		"duplicate":                  {"telemetry.read", "telemetry.read"},
 		"malformed":                  {"Telemetry Read"},
+		"adopt node protocols":       {CapabilityStorage, "kernel.storage.adopt:v2_node_protocol"},
+		"adopt wireguard peers":      {CapabilityStorage, "kernel.storage.adopt:v2_wireguard_peer"},
 	}
 	for name, capabilities := range invalid {
 		assert.Error(t, validateManifestCapabilities(capabilities), name)
