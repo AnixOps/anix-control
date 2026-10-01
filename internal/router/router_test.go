@@ -844,7 +844,9 @@ func TestSetup_SecurityHeadersAndRequestID(t *testing.T) {
 	r, _ := setupTestRouter(t)
 	defer teardownTestRouter(t)
 
+	// A trusted reverse proxy (loopback by default) reports https.
 	req, _ := http.NewRequest("GET", "/health", nil)
+	req.RemoteAddr = "127.0.0.1:41000"
 	req.Header.Set("X-Forwarded-Proto", "https")
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
@@ -857,6 +859,14 @@ func TestSetup_SecurityHeadersAndRequestID(t *testing.T) {
 	assert.Equal(t, "none", w.Header().Get("X-Permitted-Cross-Domain-Policies"))
 	assert.Contains(t, w.Header().Get("Permissions-Policy"), "camera=()")
 	assert.Equal(t, "max-age=63072000; includeSubDomains; preload", w.Header().Get("Strict-Transport-Security"))
+
+	// Any other client's X-Forwarded-Proto is ignored.
+	req, _ = http.NewRequest("GET", "/health", nil)
+	req.RemoteAddr = "203.0.113.7:41000"
+	req.Header.Set("X-Forwarded-Proto", "https")
+	w = httptest.NewRecorder()
+	r.ServeHTTP(w, req)
+	assert.Empty(t, w.Header().Get("Strict-Transport-Security"))
 }
 
 func TestSetup_RequestIDHonorsInboundHeader(t *testing.T) {

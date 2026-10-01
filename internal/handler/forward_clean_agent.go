@@ -10,6 +10,7 @@ import (
 
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
+	"github.com/AnixOps/anix-control/v4/internal/requestorigin"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -192,15 +193,10 @@ func resolveCleanAgentPublicURL(c *gin.Context) string {
 		}
 	}
 
-	scheme := strings.TrimSpace(c.GetHeader("X-Forwarded-Proto"))
-	if scheme == "" {
-		if c.Request.TLS != nil {
-			scheme = "https"
-		} else {
-			scheme = "http"
-		}
-	}
-	return fmt.Sprintf("%s://%s", scheme, c.Request.Host)
+	// Without the setting, the request's origin: X-Forwarded-Proto/Host
+	// count only from a trusted reverse proxy (server.trusted_proxies), and
+	// an invalid host leaves the script's placeholder URL.
+	return requestorigin.Resolve(c.Request).BaseURL()
 }
 
 func defaultCleanAgentHeartbeatInterval() int {

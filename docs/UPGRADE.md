@@ -1161,9 +1161,87 @@ transports.
 
 ## Upgrading Past 4.1.0-rc.2
 
-These notes are for the release after 4.1.0-rc.2. Upgrading changes no
-phase of the node credential split; the section below is an operator
-procedure for later, under the owner's approval.
+These notes are for the release after 4.1.0-rc.2 (4.1.0-rc.3). **One
+change needs action before you upgrade: list your reverse proxies in
+`server.trusted_proxies`** (next section). Upgrading changes no phase of the
+node credential split; the section after it is an operator procedure for
+later, under the owner's approval.
+
+### Reverse Proxies Must Be In `server.trusted_proxies` (Security)
+
+Control now reads `X-Forwarded-Proto`, `X-Forwarded-Host`,
+`X-Forwarded-For` and `X-Real-IP` only when the TCP peer is listed in
+`server.trusted_proxies` (`ANIX_CONTROL_SERVER_TRUSTED_PROXIES`). From any
+other peer they are ignored: the scheme comes from the connection (TLS or
+not), the host from the `Host` header, the client IP from the peer address
+(`CHANGELOG.md`, Unreleased, Security).
+
+Before, any client could set the scheme and host of the links Control hands
+out (clean agent install script, subscription links, Telegram webhook, the
+`request_scheme`/`request_host` package hosts receive), and the built-in
+default trusted every private address (`10.0.0.0/8`, `172.16.0.0/12`,
+`192.168.0.0/16`) for the client IP.
+
+**Defaults now:**
+
+| Where | `trusted_proxies` |
+|---|---|
+| unset, container defaults, `config/config*.yaml*` templates | `127.0.0.1/32,::1/128` (loopback only) |
+| `config/deploy/compose/control.env.example` | `127.0.0.1/32,::1/128,172.16.0.0/12` (Docker bridge gateway for a proxy on the host) |
+| Helm `values.yaml` | `127.0.0.1/32,::1/128` plus the private ranges: narrow them to the ingress controller's pod CIDR |
+| explicit `[]` or an empty variable | no proxy |
+
+**What to do before upgrading:**
+
+1. Find the address your reverse proxy connects to Control from (the peer
+   Control sees): `127.0.0.1` for Nginx/Caddy on the same host; the Docker
+   bridge gateway for a proxy on the host in front of the Compose
+   deployment; the proxy container's network for Traefik; the ingress
+   controller pod CIDR on Kubernetes.
+2. If it is not loopback, set it, keeping loopback (a list replaces the
+   default, and Control's own UI port proxies `/api` over loopback):
+
+   ```bash
+   ANIX_CONTROL_SERVER_TRUSTED_PROXIES=127.0.0.1/32,::1/128,10.0.5.20
+   ```
+
+   or in `config.yaml`:
+
+   ```yaml
+   server:
+     trusted_proxies: ["127.0.0.1/32", "::1/128", "10.0.5.20"]
+   ```
+
+3. If you set the old private-range list yourself (it was in
+   `config/config.prod.yaml`), replace it with the proxy's real addresses:
+   every listed address can choose the client IP and the links' host.
+4. Configure the public addresses so links do not depend on requests at all:
+   `forward_runtime.clean_agent.public_url`, the subscription domains
+   (`app.subscribe_domains`), and pass `url` when setting the Telegram
+   webhook.
+5. Make the proxy set (overwrite) `X-Forwarded-Proto` and
+   `X-Forwarded-Host`; Control uses the last value. Examples for Nginx,
+   Caddy, Traefik and Kubernetes ingress: `docs/DEPLOYMENT.md`, section 6.1
+   "Reverse proxies".
+
+An invalid entry (not an IP or CIDR) stops Control at startup with
+`server.trusted_proxies: invalid trusted proxy ...`.
+
+**Symptoms of a missing proxy after the upgrade:** install scripts,
+subscription links or the Telegram webhook show `http://` or an internal
+address, HSTS is not sent, and logs, audit entries and rate limits see the
+proxy's address instead of the client's. Add the proxy and restart.
+
+**Check** from a host that is not a proxy (the output must not name
+`evil.example`):
+
+```bash
+curl -s -H 'X-Forwarded-Host: evil.example' -H 'X-Forwarded-Proto: https' \
+  http://<control>:8080/api/v2/forward-agent/install.sh | grep PANEL_URL
+```
+
+**Rollback:** the setting is read by older releases too (for the client IP
+only), so it can stay when you go back.
 
 ### Finalizing The Node Credential Split (Phase P3)
 

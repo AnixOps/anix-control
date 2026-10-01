@@ -13,6 +13,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/requestorigin"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -141,35 +142,23 @@ func (h *SubscribeHandler) GetLegacySubscription(c *gin.Context) {
 	h.GetSubscription(c)
 }
 
+// buildSubscribeURL is the subscription link handed back in client configs.
+// The host is a configured subscription domain (app.subscribe_domains) when
+// there is one; otherwise, as the scheme, it comes from the request, where
+// X-Forwarded-Proto/Host count only from a trusted reverse proxy
+// (server.trusted_proxies). Without a valid host it is "" and the formatter
+// uses its placeholder.
 func (h *SubscribeHandler) buildSubscribeURL(c *gin.Context) string {
-	scheme := "http"
-	if c.Request.TLS != nil {
-		scheme = "https"
+	origin := requestorigin.Resolve(c.Request)
+	host := h.resolveSubscribeHost(origin.Host)
+	if host == "" {
+		return ""
 	}
-
-	if forwardedProto := c.GetHeader("X-Forwarded-Proto"); forwardedProto != "" {
-		first := strings.TrimSpace(strings.Split(forwardedProto, ",")[0])
-		if first != "" {
-			scheme = strings.ToLower(first)
-		}
-	}
-
-	host := c.Request.Host
-	if forwardedHost := c.GetHeader("X-Forwarded-Host"); forwardedHost != "" {
-		host = strings.TrimSpace(strings.Split(forwardedHost, ",")[0])
-	}
-
-	host = h.resolveSubscribeHost(host)
-	return fmt.Sprintf("%s://%s%s", scheme, host, c.Request.URL.RequestURI())
+	return fmt.Sprintf("%s://%s%s", origin.Scheme, host, c.Request.URL.RequestURI())
 }
 
 func (h *SubscribeHandler) buildSubscribeDomain(c *gin.Context) string {
-	host := c.Request.Host
-	if forwardedHost := c.GetHeader("X-Forwarded-Host"); forwardedHost != "" {
-		host = strings.TrimSpace(strings.Split(forwardedHost, ",")[0])
-	}
-
-	host = h.resolveSubscribeHost(host)
+	host := h.resolveSubscribeHost(requestorigin.Resolve(c.Request).Host)
 
 	if parsedHost, _, err := net.SplitHostPort(host); err == nil {
 		return parsedHost

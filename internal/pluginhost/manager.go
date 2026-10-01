@@ -66,9 +66,11 @@ type RequestMetadata struct {
 	NodeID                           uint                `json:"node_id,omitempty"`
 	TrustedAgentWebSocketAuth        bool                `json:"trusted_agent_websocket_auth,omitempty"`
 	TrustedAgentWebSocketForwardNode bool                `json:"trusted_agent_websocket_forward_node,omitempty"`
-	// Host and TLS describe the original request address: the Host header,
-	// kept only when it is a plain host[:port] (validPackageRequestHost), and
-	// whether the connection was TLS. They are never request metadata JSON
+	// Host and TLS describe the original request address as
+	// internal/requestorigin resolves it: the Host header and whether the
+	// connection was TLS, or X-Forwarded-Host/Proto when the peer is a
+	// trusted reverse proxy (server.trusted_proxies). Host is kept only when
+	// it is a plain host[:port] (validPackageRequestHost). They are never request metadata JSON
 	// keys, because hosts built with the v4.0.0 SDK reject unknown keys. The
 	// kernel's bridge snapshot carries them as "host" and "tls", and package
 	// hosts receive them as the DispatchRequest and WebSocketOpen fields

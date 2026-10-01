@@ -117,6 +117,46 @@ func TestRequestMetadataCarriesTheOriginalRequestAddress(t *testing.T) {
 	require.False(t, metadata.TLS)
 }
 
+// The request_scheme, request_host and client address package hosts receive
+// come from internal/requestorigin: a client's forwarding headers are ignored
+// unless its connection comes from a trusted proxy (loopback by default), and
+// the headers themselves never reach the package.
+func TestRequestMetadataTrustsForwardingHeadersOnlyFromTrustedProxies(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	router := gin.New()
+	var metadata pluginhost.RequestMetadata
+	router.GET("/api/v2/forward-agent/install.sh", func(c *gin.Context) {
+		metadata = requestMetadata(c)
+		c.Status(http.StatusNoContent)
+	})
+	send := func(peer string) {
+		request := httptest.NewRequest(http.MethodGet, "http://panel.example.test/api/v2/forward-agent/install.sh", nil)
+		request.RemoteAddr = peer
+		request.Header.Set("X-Forwarded-Proto", "https")
+		request.Header.Set("X-Forwarded-Host", "evil.example")
+		request.Header.Set("X-Forwarded-For", "198.51.100.66")
+		request.Header.Set("X-Real-IP", "198.51.100.67")
+		request.Header.Set("Forwarded", "for=198.51.100.68;host=evil.example;proto=https")
+		request.Header.Set("X-Trace", "kept")
+		router.ServeHTTP(httptest.NewRecorder(), request)
+	}
+
+	send("203.0.113.9:40000")
+	require.Equal(t, "panel.example.test", metadata.Host)
+	require.False(t, metadata.TLS)
+	require.Equal(t, "203.0.113.9", metadata.ClientIP)
+	require.Equal(t, []string{"kept"}, metadata.Headers["X-Trace"])
+	for _, name := range []string{"X-Forwarded-Proto", "X-Forwarded-Host", "X-Forwarded-For", "X-Real-Ip", "Forwarded"} {
+		require.NotContains(t, metadata.Headers, name)
+	}
+
+	send("127.0.0.1:40000")
+	require.Equal(t, "evil.example", metadata.Host)
+	require.True(t, metadata.TLS)
+	require.Equal(t, "198.51.100.66", metadata.ClientIP)
+	require.NotContains(t, metadata.Headers, "X-Forwarded-Proto")
+}
+
 func TestGatewayFailsClosedWhenPackageIsDisabled(t *testing.T) {
 	gin.SetMode(gin.TestMode)
 	gateway := Gateway{Registry: NewRegistry(registrySourceStub{err: ErrPackageUnavailable})}

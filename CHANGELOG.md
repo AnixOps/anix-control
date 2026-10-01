@@ -45,6 +45,50 @@
 - Tests: the node gRPC listener's binding tests read a refused stream's status from `Recv` when `Send` returns `io.EOF`, instead of failing intermittently with `Unknown`.
 - Tests: the bridge contract tests' SQLite databases use `_txlock=immediate` and are closed, waiting for every connection, before their temporary directory is removed, instead of failing intermittently with "directory not empty".
 
+### Security
+
+- **Forwarding headers are trusted only from configured reverse proxies**
+  (`internal/requestorigin`, `docs/UPGRADE.md`, `docs/DEPLOYMENT.md`
+  section 6.1). Control took the request's scheme and host from
+  `X-Forwarded-Proto`/`X-Forwarded-Host` sent by any client, and built links
+  from them.
+  - **Affected.** Every deployment a client can reach directly, not only
+    through its proxy: a published port, a LoadBalancer or NodePort
+    Service, a peer in the same network. Up to 4.1.0-rc.2.
+  - **What an attacker could do.** Make Control emit links to a host of
+    their choosing: the clean agent install script's panel URL (when
+    `forward_runtime.clean_agent.public_url` is unset), subscription links
+    (when no subscription domain is set), the default Telegram webhook URL,
+    and the `request_scheme`/`request_host` package hosts receive. A shared
+    cache or a victim's request carrying the header then hands out a script
+    that downloads from the attacker's panel. HSTS could also be forced on a
+    plain-HTTP origin. The client IP behind rate limits, login throttling and
+    audit logs could be set with `X-Forwarded-For` from any private address
+    (the old default list), and from any client on routes bridged to legacy
+    handlers, whose engine trusted every proxy.
+  - **Now.** `X-Forwarded-Proto`, `X-Forwarded-Host`, `X-Forwarded-For` and
+    `X-Real-IP` count only when the TCP peer is in `server.trusted_proxies`
+    (`ANIX_CONTROL_SERVER_TRUSTED_PROXIES`), for the links and for gin's
+    `ClientIP()` alike. Otherwise the connection decides: https over TLS,
+    the `Host` header, the peer address. The forwarded host must be a valid
+    `host[:port]` and the scheme `http` or `https`; the last value (the
+    nearest proxy's) is used. A configured public address still wins:
+    `forward_runtime.clean_agent.public_url`, `app.subscribe_domains`, a
+    webhook `url`. The kernel resolves the origin once and passes no
+    forwarding header to package hosts or bridged handlers; the notification
+    package no longer reads `X-Forwarded-Proto`. The UI server's `/api` proxy
+    replaces a client's forwarding headers with what it resolved, and sends
+    the public host as `Host`.
+  - **Default** `127.0.0.1/32,::1/128` (was `127.0.0.1` plus `10.0.0.0/8`,
+    `172.16.0.0/12` and `192.168.0.0/16`); an empty list trusts none; an
+    invalid entry stops startup. The Compose example keeps the Docker bridge
+    range for a proxy on the host; the Helm chart keeps the private ranges
+    for the ingress controller, to be narrowed to its pod CIDR.
+  - **Operators must** add a reverse proxy that is not on the same host (or
+    container) to `server.trusted_proxies` before upgrading, keeping
+    loopback; otherwise links come out as `http://` or an internal address
+    and logs show the proxy's IP. Also set the public addresses above.
+
 ## 4.1.0-rc.2 - 2026-10-01
 
 4.1.0-rc.2 is the second 4.1.0 release candidate. It brings thirteen

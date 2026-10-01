@@ -37,6 +37,7 @@ import (
 	_ "github.com/AnixOps/anix-control/v4/internal/payment/gateways" // register payment gateway plugins
 	"github.com/AnixOps/anix-control/v4/internal/plugincontrol"
 	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
+	"github.com/AnixOps/anix-control/v4/internal/requestorigin"
 	"github.com/AnixOps/anix-control/v4/internal/router"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/gin-gonic/gin"
@@ -294,20 +295,21 @@ func resolveForwardRuntimePaths(cfg *config.Config, resolvedConfigPath string) {
 	}
 }
 
+// applyTrustedProxies installs server.trusted_proxies: on the gin engine,
+// so Context.ClientIP honours X-Forwarded-For/X-Real-IP only from those
+// proxies, and as the process-wide requestorigin policy, which decides
+// whether X-Forwarded-Proto/Host are read. A nil list (the key unset) is the
+// loopback default; an empty list trusts no proxy.
 func applyTrustedProxies(r *gin.Engine, proxies []string) error {
-	normalized := make([]string, 0, len(proxies))
-	for _, proxy := range proxies {
-		value := strings.TrimSpace(proxy)
-		if value != "" {
-			normalized = append(normalized, value)
-		}
+	policy, err := requestorigin.NewPolicy(proxies)
+	if err != nil {
+		return err
 	}
-
-	if len(normalized) == 0 {
-		return r.SetTrustedProxies(nil)
+	if err := policy.ApplyTo(r); err != nil {
+		return err
 	}
-
-	return r.SetTrustedProxies(normalized)
+	requestorigin.SetDefault(policy)
+	return nil
 }
 
 func shouldStartForwardAgentBridgeWorker(cfg *config.Config) bool {
@@ -1189,11 +1191,35 @@ func proxyAPI(c *gin.Context, target string) {
 		}
 	}
 
-	// 修改请求
+	// This server is a reverse proxy in front of the API listener, which
+	// trusts it as a loopback peer: pass on only what it resolved itself.
+	// A client's forwarding headers are dropped, unless this server's own
+	// peer is a trusted proxy, whose X-Forwarded-For chain is kept (the
+	// reverse proxy appends this peer to it).
+	origin := requestorigin.Resolve(c.Request)
+	trustedPeer := requestorigin.Default().TrustedPeer(c.Request)
+	for name := range c.Request.Header {
+		if !requestorigin.IsForwardingHeader(name) {
+			continue
+		}
+		if trustedPeer && http.CanonicalHeaderKey(name) == requestorigin.HeaderForwardedFor {
+			continue
+		}
+		c.Request.Header.Del(name)
+	}
+	c.Request.Header.Set(requestorigin.HeaderForwardedProto, origin.Scheme)
+	if origin.Host != "" {
+		c.Request.Header.Set(requestorigin.HeaderForwardedHost, origin.Host)
+	}
+
 	c.Request.URL.Host = targetURL.Host
 	c.Request.URL.Scheme = targetURL.Scheme
-	c.Request.Header.Set("X-Forwarded-Host", c.Request.Header.Get("Host"))
+	// Keep the resolved public host as Host too, so the API listener sees
+	// it even where loopback is not a trusted proxy.
 	c.Request.Host = targetURL.Host
+	if origin.Host != "" {
+		c.Request.Host = origin.Host
+	}
 
 	proxy.ServeHTTP(c.Writer, c.Request)
 }

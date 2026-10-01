@@ -154,7 +154,7 @@ This table is generated from the code and checked by
 | `ANIX_CONTROL_SERVER_PORT` | `server.port` | int | `8080` |
 | `ANIX_CONTROL_SERVER_READ_TIMEOUT` | `server.read_timeout` | int | `30` |
 | `ANIX_CONTROL_SERVER_SHUTDOWN_DRAIN_DELAY` | `server.shutdown_drain_delay` | string | `5s` |
-| `ANIX_CONTROL_SERVER_TRUSTED_PROXIES` | `server.trusted_proxies` | list | `127.0.0.1,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16` |
+| `ANIX_CONTROL_SERVER_TRUSTED_PROXIES` | `server.trusted_proxies` | list | `127.0.0.1/32,::1/128` |
 | `ANIX_CONTROL_SERVER_WRITE_TIMEOUT` | `server.write_timeout` | int | `30` |
 | `ANIX_CONTROL_TLS_CERT_FILE` | `tls.cert_file` | string |  |
 | `ANIX_CONTROL_TLS_DOMAIN` | `tls.domain` | string |  |

@@ -49,7 +49,7 @@ loopback 或受控私网使用明文；公网部署必须配置 `grpc.tls_cert_f
 3. 本地开发部署
 4. 生产环境部署建议
 5. 关键配置说明
-6. TLS/HTTPS
+6. TLS/HTTPS（6.1 Reverse proxies / `server.trusted_proxies`）
 7. 监控与日志
 8. 备份与恢复
 9. 常见故障排查
@@ -413,6 +413,114 @@ sudo certbot certonly --standalone -d panel.example.com
 
 - `/etc/letsencrypt/live/panel.example.com/fullchain.pem`
 - `/etc/letsencrypt/live/panel.example.com/privkey.pem`
+
+### 6.1 Reverse proxies：反向代理与 `server.trusted_proxies`
+
+**从 4.1.0-rc.3 起，Control 只信任 `server.trusted_proxies`
+（`ANIX_CONTROL_SERVER_TRUSTED_PROXIES`）中列出的反向代理发来的转发头。**
+TCP 对端不在列表内时，`X-Forwarded-Proto`、`X-Forwarded-Host`、
+`X-Forwarded-For`、`X-Real-IP` 一律忽略，scheme / host / 客户端 IP 取自连接本身
+（TLS 连接为 https，`Host` 头，对端地址）。`Forwarded`（RFC 7239）不读取。
+
+这些值决定 Control 发出的链接：clean agent 安装脚本中的面板地址、订阅链接、
+Telegram webhook 地址、发给 package host 的 `request_scheme`/`request_host`，
+以及限流、登录节流和审计日志使用的客户端 IP。
+
+| 设置 | 含义 |
+|---|---|
+| 未设置（默认） | `127.0.0.1/32,::1/128`：只信任本机代理（含 Control 自带的 UI 端口 3000，它把 `/api` 转发到 API 端口） |
+| `[]` / 空环境变量 | 不信任任何代理 |
+| IP 或 CIDR 列表 | 只信任这些地址；**会替换默认值**，本机代理仍需要时请保留 `127.0.0.1/32,::1/128` |
+
+规则：
+
+- 代理必须**覆盖**（set）而不是追加 `X-Forwarded-Proto`/`X-Forwarded-Host`；
+  有多个值时 Control 取最后一个（最近一层代理写入的值）。
+- `X-Forwarded-Host` 必须是合法的 `host[:port]`（无 scheme、路径、空格或 CRLF），
+  否则忽略；`X-Forwarded-Proto` 只接受 `http`/`https`。
+- `X-Forwarded-For` 从右向左跳过可信代理，取第一个不可信地址（与 gin 的
+  `ClientIP()` 一致）。
+- 配置了公开地址时优先使用配置，请求只是后备：
+  `forward_runtime.clean_agent.public_url`（安装脚本）、系统设置
+  `app.subscribe_domains`（订阅链接的 host）、Telegram webhook 请求体中的 `url`。
+  生产环境建议都配置上。
+- 列表中的每个地址都能伪造客户端 IP 和链接 host：只列出真正的代理，
+  不要把整个内网或 `0.0.0.0/0` 放进去。
+
+**Nginx（与 Control 同机）**：默认值即可。
+
+```nginx
+server {
+    listen 443 ssl;
+    server_name panel.example.com;
+    location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host              $host;
+        proxy_set_header X-Forwarded-Host  $host;
+        proxy_set_header X-Forwarded-Proto $scheme;
+        proxy_set_header X-Forwarded-For   $proxy_add_x_forwarded_for;
+    }
+}
+```
+
+Nginx 在另一台主机（例如 `10.0.5.20`）上时：
+
+```bash
+ANIX_CONTROL_SERVER_TRUSTED_PROXIES=127.0.0.1/32,::1/128,10.0.5.20
+```
+
+**Caddy**：Caddy 自动设置 `X-Forwarded-For/Proto/Host`，并覆盖来自不可信客户端的同名头。
+
+```caddyfile
+panel.example.com {
+    reverse_proxy 127.0.0.1:3000
+}
+```
+
+**Traefik（Docker）**：Traefik 默认设置 `X-Forwarded-*`，并丢弃来自不在
+`entryPoints.<name>.forwardedHeaders.trustedIPs` 中客户端的同名头。给共享网络固定子网，
+再把 Traefik 所在子网（或固定的容器 IP）加入 Control：
+
+```yaml
+networks:
+  edge:
+    ipam:
+      config:
+        - subnet: 172.30.0.0/24
+```
+
+```bash
+ANIX_CONTROL_SERVER_TRUSTED_PROXIES=127.0.0.1/32,::1/128,172.30.0.0/24
+```
+
+**Docker Compose（`docker-compose.prod.yml`）**：端口默认只发布在宿主机 `127.0.0.1`，
+宿主机上的代理经 Docker 网桥网关到达容器，对端是网关地址（`172.16.0.0/12` 范围内）。
+`config/deploy/compose/control.env.example` 已包含 `172.16.0.0/12`；可收窄为
+`docker network inspect anix-control_default` 中的网关地址。若直接把 Control
+发布到公网地址（`ANIX_CONTROL_BIND=0.0.0.0`）且前面没有代理，请改回
+`127.0.0.1/32,::1/128`。
+
+**Kubernetes（Helm + Ingress）**：对端是 Ingress Controller 的 Pod IP。chart 默认值
+信任 `127.0.0.1/32,::1/128` 和三个私有网段；请收窄为集群的 Pod CIDR 或 Ingress
+Controller 所在网段（`kubectl get nodes -o jsonpath='{.items[*].spec.podCIDR}'`）。
+ingress-nginx 默认（`use-forwarded-headers: "false"`）会覆盖 `X-Forwarded-Proto/Host`。
+不要在信任私有网段的同时把 Service 以 `LoadBalancer`/`NodePort` 直接暴露。
+
+```bash
+helm upgrade control config/deploy/helm/anix-control -n anix --reuse-values \
+  --set-string config.ANIX_CONTROL_SERVER_TRUSTED_PROXIES='127.0.0.1/32\,::1/128\,10.244.0.0/16'
+```
+
+**检查**：从一台不在列表中的机器直接访问 Control，伪造的头不得出现在输出中：
+
+```bash
+curl -s -H 'X-Forwarded-Host: evil.example' -H 'X-Forwarded-Proto: https' \
+  http://<control 地址>:8080/api/v2/forward-agent/install.sh | grep PANEL_URL
+# 期望：PANEL_URL 为 public_url 或你访问时使用的地址，而不是 https://evil.example
+```
+
+经由代理访问时链接变成 `http://` 或内部地址，说明代理的地址不在
+`server.trusted_proxies` 中（或代理没有设置 `X-Forwarded-Proto`）。
 
 ---
 

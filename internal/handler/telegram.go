@@ -13,6 +13,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/branding"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/requestorigin"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -126,16 +127,6 @@ func telegramUserBindingResponse(user *model.TelegramUser) gin.H {
 		"created_at":     user.CreatedAt,
 		"updated_at":     user.UpdatedAt,
 	}
-}
-
-func requestScheme(c *gin.Context) string {
-	if proto := strings.TrimSpace(c.GetHeader("X-Forwarded-Proto")); proto != "" {
-		return proto
-	}
-	if c.Request.TLS != nil {
-		return "https"
-	}
-	return "http"
 }
 
 func parseTelegramID(raw any) (int64, error) {
@@ -307,7 +298,14 @@ func (h *TelegramHandler) SetWebhook(c *gin.Context) {
 
 	webhookURL := strings.TrimSpace(req.URL)
 	if webhookURL == "" {
-		webhookURL = fmt.Sprintf("%s://%s/api/v2/telegram/webhook", requestScheme(c), c.Request.Host)
+		// The request's origin: X-Forwarded-Proto/Host count only from a
+		// trusted reverse proxy (server.trusted_proxies).
+		base := requestorigin.Resolve(c.Request).BaseURL()
+		if base == "" {
+			panelError(c, "cannot determine this panel's address from the request; pass url")
+			return
+		}
+		webhookURL = base + "/api/v2/telegram/webhook"
 	}
 
 	if err := h.botService.SetWebhook(webhookURL); err != nil {

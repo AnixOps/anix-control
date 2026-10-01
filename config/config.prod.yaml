@@ -10,14 +10,14 @@ server:
   mode: "release"
   read_timeout: 30
   write_timeout: 30
-  # 可信代理列表 (用于获取真实 IP，如在 Nginx/Cloudflare 后面)
-  # Only trust forwarded client IP headers from these reverse proxies/load balancers.
-  # If the API is exposed directly, keep this list empty.
+  # 可信代理列表：只有来自这些反向代理的 X-Forwarded-For/Proto/Host 才会生效
+  # Reverse proxies (IPs or CIDRs) whose X-Forwarded-For, X-Forwarded-Proto and
+  # X-Forwarded-Host are honoured; from any other peer they are ignored.
+  # Loopback covers an Nginx/Caddy on this host. Add a proxy on another host
+  # by its address; [] trusts none. See docs/DEPLOYMENT.md "Reverse proxies".
   trusted_proxies:
-    - "127.0.0.1"
-    - "10.0.0.0/8"
-    - "172.16.0.0/12"
-    - "192.168.0.0/16"
+    - "127.0.0.1/32"
+    - "::1/128"
   # HTTP CORS and WebSocket Origin allowlist. Set this to your real panel/admin
   # origins when browsers connect from a different host.
   cors:

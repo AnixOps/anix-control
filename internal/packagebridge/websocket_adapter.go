@@ -44,7 +44,12 @@ func NewWebSocketAdapter(handler gin.HandlerFunc) WebSocketOperationHandler {
 		defer func() { _ = serverConnection.Close() }()
 		defer func() { _ = clientConnection.Close() }()
 		responseWriter := newBridgeWebSocketResponseWriter(serverConnection)
-		ginContext, _ := gin.CreateTestContext(responseWriter)
+		ginContext, engine := gin.CreateTestContext(responseWriter)
+		// ClientIP is the address the kernel resolved (RemoteAddr): the
+		// bridge engine trusts no proxy header.
+		if err := engine.SetTrustedProxies(nil); err != nil {
+			return ErrCapabilityRejected
+		}
 		ginContext.Request = request
 		ginContext.Set("request_id", call.Request.RequestID)
 		ginContext.Set("user_id", principal.ActorID)

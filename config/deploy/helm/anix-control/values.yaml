@@ -26,7 +26,17 @@ config:
   ANIX_CONTROL_ADMIN_EMAIL: admin@example.com
   ANIX_CONTROL_LOG_FORMAT: json
   ANIX_CONTROL_SERVER_SHUTDOWN_DRAIN_DELAY: 5s
-  ANIX_CONTROL_SERVER_TRUSTED_PROXIES: "10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
+  # Reverse proxies whose X-Forwarded-For/Proto/Host Control honours; from
+  # any other peer they are ignored (links in install scripts, subscriptions
+  # and webhooks then use the connection's scheme and Host). With the chart's
+  # Ingress the peer is the ingress controller pod: narrow this to your
+  # cluster's pod CIDR (kubectl get nodes -o jsonpath='{.items[*].spec.podCIDR}';
+  # e.g. 10.244.0.0/16 flannel/kubeadm, 10.42.0.0/16 k3s) or the controller's
+  # pod range. Loopback is kept for the UI server, which proxies /api to the
+  # API port inside the pod. Every address listed here can set the client IP
+  # and the links' host, so do not expose the Service directly (LoadBalancer or
+  # NodePort) while private ranges are trusted. docs/DEPLOYMENT.md "Reverse proxies".
+  ANIX_CONTROL_SERVER_TRUSTED_PROXIES: "127.0.0.1/32,::1/128,10.0.0.0/8,172.16.0.0/12,192.168.0.0/16"
   TZ: Asia/Shanghai
 
 # Secrets, mounted as files and passed as ANIX_CONTROL_<NAME>_FILE.

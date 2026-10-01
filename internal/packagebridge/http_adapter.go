@@ -18,6 +18,7 @@ import (
 
 	"github.com/AnixOps/anix-control/v4/internal/agentws"
 	"github.com/AnixOps/anix-control/v4/internal/panicrecovery"
+	"github.com/AnixOps/anix-control/v4/internal/requestorigin"
 	"github.com/gin-gonic/gin"
 )
 
@@ -62,7 +63,12 @@ func NewHTTPAdapter(handler gin.HandlerFunc) OperationHandler {
 			return Response{}, ErrCapabilityRejected
 		}
 		recorder := httptest.NewRecorder()
-		ginContext, _ := gin.CreateTestContext(recorder)
+		ginContext, engine := gin.CreateTestContext(recorder)
+		// ClientIP is the address the kernel resolved (RemoteAddr): the
+		// bridge engine trusts no proxy header.
+		if err := engine.SetTrustedProxies(nil); err != nil {
+			return Response{}, ErrCapabilityRejected
+		}
 		ginContext.Request = request
 		ginContext.Set("request_id", call.Request.RequestID)
 		ginContext.Set("user_id", principal.ActorID)
@@ -232,6 +238,12 @@ func bridgeHTTPRequest(ctx context.Context, request Request, metadata httpReques
 		httpRequest.RemoteAddr = net.JoinHostPort(metadata.ClientIP, "0")
 	}
 	for name, values := range metadata.Headers {
+		// The kernel resolved the original scheme, host and client address
+		// (Host, TLS, ClientIP above) from the proxies it trusts; forwarding
+		// headers must not let a legacy handler re-derive them.
+		if requestorigin.IsForwardingHeader(name) {
+			continue
+		}
 		for _, value := range values {
 			httpRequest.Header.Add(name, value)
 		}

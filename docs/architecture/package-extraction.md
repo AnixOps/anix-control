@@ -247,9 +247,11 @@ v4.0.0 SDK decode with `DisallowUnknownFields`: those hosts skip the fields,
 so no metadata version is needed. A host can tell a kernel that predates
 them by the empty scheme; a native handler that needs them then returns
 `pluginhostsdk.ErrNativeUnavailable`, and the router answers from the legacy
-handler (in shadow mode the comparison is skipped). `X-Forwarded-Proto` is
-not folded into the scheme: a route whose legacy handler honours it (the
-Telegram webhook) reads it from the forwarded request headers, as before.
+handler (in shadow mode the comparison is skipped). Since 4.1.0-rc.3 the
+kernel resolves scheme and host with `internal/requestorigin`:
+`X-Forwarded-Proto`/`X-Forwarded-Host` are folded in only when the peer is
+a trusted proxy (`server.trusted_proxies`), and no forwarding header is
+passed to package hosts or bridged handlers.
 
 Status (2026-10-01): every installation runs every route `legacy` unless an
 operator sets another mode; no route is `native` yet.
@@ -393,8 +395,8 @@ The planned `kernel.entitlement.apply.v1` became
     mail each side delivers.
   - Setting the webhook without a `url` points it at
     `<scheme>://<host>/api/v2/telegram/webhook` of the administrator's
-    request: the scheme is `X-Forwarded-Proto` when set, else the request
-    scheme the kernel sends, and the host the request host it sends
+    request: the request scheme and host the kernel sends (forwarding
+    headers count only from a trusted proxy, `internal/requestorigin`)
     (section 3.2, "Request address"). The parity test answers the Bot API
     calls of both sides and compares them.
   - One stays bridged: the public webhook (`/sub` needs the subscription

@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/branding"
+	"github.com/AnixOps/anix-control/v4/internal/requestorigin"
 	"gopkg.in/yaml.v3"
 )
 
@@ -311,7 +312,7 @@ type ServerConfig struct {
 	Mode           string     `yaml:"mode"`
 	ReadTimeout    int        `yaml:"read_timeout"`
 	WriteTimeout   int        `yaml:"write_timeout"`
-	TrustedProxies []string   `yaml:"trusted_proxies"`
+	TrustedProxies []string   `yaml:"trusted_proxies"` // proxies whose X-Forwarded-* count (internal/requestorigin); nil = loopback, empty = none
 	CORS           CORSConfig `yaml:"cors"`
 	// ShutdownDrainDelay is how long the server keeps accepting requests after
 	// /readyz starts failing on shutdown, so load balancers and Kubernetes
@@ -459,6 +460,9 @@ func load(path string, environ []string) (*Config, error) {
 	}
 	if _, err := loaded.Server.DrainDelay(); err != nil {
 		return nil, err
+	}
+	if _, err := requestorigin.NewPolicy(loaded.Server.TrustedProxies); err != nil {
+		return nil, fmt.Errorf("server.trusted_proxies: %w", err)
 	}
 	switch loaded.Log.Format {
 	case "", "text", "json":

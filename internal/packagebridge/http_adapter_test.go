@@ -110,6 +110,30 @@ func TestHTTPAdapterRestoresTheOriginalRequestAddress(t *testing.T) {
 	require.ErrorIs(t, err, ErrCapabilityRejected)
 }
 
+// The kernel resolved the original scheme, host and client address; the
+// legacy handler sees exactly those, even when a snapshot carries forwarding
+// headers (the bridge engine trusts no proxy and drops them).
+func TestHTTPAdapterIgnoresForwardingHeaders(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	adapter := NewHTTPAdapter(func(c *gin.Context) {
+		c.JSON(200, gin.H{"host": c.Request.Host, "tls": c.Request.TLS != nil, "ip": c.ClientIP(),
+			"xfp": c.GetHeader("X-Forwarded-Proto"), "xfh": c.GetHeader("X-Forwarded-Host"), "trace": c.GetHeader("X-Trace")})
+	})
+	response, err := adapter(context.Background(), Call{
+		Host: HostIdentity{PackageID: "forward", Version: "4.0.0", Generation: 7},
+		Request: Request{
+			RequestID: "request-forwarded", RouteID: "forward.forward_agent.install_sh.get", Method: "GET",
+			PrincipalJSON: []byte(`{"actor_id":0,"admin":false,"package_id":"forward"}`),
+			MetadataJSON: []byte(`{"path":"/api/v2/forward-agent/install.sh","host":"panel.example.test","client_ip":"127.0.0.1",` +
+				`"headers":{"X-Forwarded-Proto":["https"],"X-Forwarded-Host":["evil.example"],"X-Forwarded-For":["198.51.100.66"],"X-Real-Ip":["198.51.100.67"],"X-Trace":["kept"]}}`),
+			Deadline: time.Now().Add(time.Second),
+		},
+		Operation: "forward.forward_agent.install_sh.get",
+	})
+	require.NoError(t, err)
+	require.JSONEq(t, `{"host":"panel.example.test","tls":false,"ip":"127.0.0.1","xfp":"","xfh":"","trace":"kept"}`, string(response.Body))
+}
+
 // The agent node identity the kernel verified before the gateway reaches the
 // legacy agent handler as trusted, which the agent HTTP routes require.
 func TestHTTPAdapterRelaysTheKernelVerifiedAgentNode(t *testing.T) {
