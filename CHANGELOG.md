@@ -393,6 +393,37 @@
     for byte, including a cached entry's `cached_at`, and the cache entry
     each side leaves.
 
+- **Design: node operations, the node credential split and Agent A2**
+  (`docs/architecture/node-ops-service.md`), with a draft contract
+  `sdk/api/kernelnodeops/v1` (`anixops.kernelnodeops.v1`). Nothing changes
+  in behaviour: no kernel serves the contract, and the kernel accepts none
+  of its `kernel.nodeops.*` capabilities.
+  - **KernelNodeOps.** Packages would request typed, idempotent node
+    operations: apply a forward, sync a node, check endpoints, run an agent
+    diagnostic, issue a credential. The kernel holds the credentials and
+    agent connections and answers receipts and results. The design covers
+    the request-id ledger, polling and a watch stream, a capability per
+    operation family, generation fencing, and sealed secret handles, so a
+    package never sees a token or private key.
+  - **Node credential split.** Credentials and secrets would move out of
+    `v2_node`, `v2_authorized_key`, `v2_forward_node`,
+    `v2_forward_clean_agent`, `v2_node_protocol` and `v2_wireguard_peer`
+    into new protected tables, in the phases dual-write, backfill,
+    dual-read and finalize, without altering any existing table.
+    proxy-node, protocol-runtime and forward could then adopt the
+    credential-free tables.
+  - **Agent A2.** One mTLS Agent Control stream for configuration, users,
+    traffic and logs, with agent certificates from the module PKI
+    (`spiffe://anixops/<cluster>/agent/<node>`). The REST, WebSocket and
+    v2board gRPC transports would stay for one major version.
+  - **Route plan.** The 83 routes waiting on node operations and the 7
+    waiting on the agent channel decision: 75 to go native and 15 to be
+    marked kernel-owned. The document also gives the PR sequence (Control
+    and anix-agent), the risks, the test strategy, and the decisions the
+    owner must make.
+  - **The draft contract.** It is unreleased and may change until the first
+    kernel change that serves it. It is in the proto golden file and in the
+    CI generated-code check.
 - **KernelSettings contract** (`sdk/api/kernelsettings/v1`,
   `docs/architecture/settings-service.md`). Official packages read and write
   system settings per namespace instead of the protected `v2_system_config`

@@ -265,7 +265,11 @@ The planned `kernel.entitlement.apply.v1` became
   sync its protocols, run a diagnosis); the kernel holds the credentials,
   dispatches over the Agent Control stream and answers the outcome,
   idempotently. Node credentials move to a protected table of their own, so
-  a package can adopt the rest of `v2_node`.
+  a package can adopt the rest of `v2_node`. The design, with the node
+  credential split, Agent A2 and the plan for the 83 + 7 routes, is
+  [`node-ops-service.md`](node-ops-service.md). Its draft contract
+  `sdk/api/kernelnodeops/v1` is unreleased: no kernel serves it and no
+  manifest may declare its capabilities yet.
 
 ### 3.4 In-place adoption and kernel views
 
