@@ -155,9 +155,10 @@ func TestNodeAuth_UpdatesHeartbeat(t *testing.T) {
 	assert.True(t, updated.IsOnline(), "节点应被判定为在线")
 }
 
-// TestNodeAuth_HeartbeatKeepsDisabledNode: a disabled node's UniProxy
-// polling refreshes last_check_at but never re-enables the node.
-func TestNodeAuth_HeartbeatKeepsDisabledNode(t *testing.T) {
+// TestNodeAuth_RefusesDisabledNode: a disabled node's UniProxy polling is
+// refused with 403 before the heartbeat, so the node stays disabled and is
+// not recorded as seen, as on the /node API and the gRPC listener.
+func TestNodeAuth_RefusesDisabledNode(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()
 
@@ -173,9 +174,11 @@ func TestNodeAuth_HeartbeatKeepsDisabledNode(t *testing.T) {
 	}
 	require.NoError(t, database.GetDB().Create(node).Error)
 
+	reached := false
 	router := gin.New()
 	router.Use(NodeAuth())
 	router.GET("/test", func(c *gin.Context) {
+		reached = true
 		c.JSON(http.StatusOK, gin.H{"message": "ok"})
 	})
 
@@ -184,10 +187,14 @@ func TestNodeAuth_HeartbeatKeepsDisabledNode(t *testing.T) {
 	w := httptest.NewRecorder()
 	router.ServeHTTP(w, req)
 
+	assert.Equal(t, http.StatusForbidden, w.Code)
+	assert.JSONEq(t, `{"error":"node disabled"}`, w.Body.String())
+	assert.False(t, reached, "a disabled node must not reach the UniProxy handler")
+
 	var updated model.Node
 	require.NoError(t, database.GetDB().First(&updated, node.ID).Error)
 	require.NotNil(t, updated.LastCheckAt)
-	assert.Greater(t, *updated.LastCheckAt, stale)
+	assert.Equal(t, stale, *updated.LastCheckAt)
 	assert.Equal(t, model.NodeStatusDisabled, updated.Status)
 }
 

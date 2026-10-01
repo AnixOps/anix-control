@@ -603,8 +603,10 @@ Disabled nodes:
   it disabled. A node an agent had silently re-enabled stays enabled after
   the upgrade: check the nodes that should be disabled and disable them
   again.
-- UniProxy over HTTP still answers a disabled node's polling; only the
-  status is kept.
+- UniProxy over HTTP refuses a disabled node's polling with 403
+  (`{"error":"node disabled"}`) before the heartbeat, as the HTTP node API
+  and the gRPC listener do. A disabled V2bX or XrayR node therefore gets no
+  configuration and no users until an administrator enables it again.
 
 ### Order Lists And Details No Longer Embed The Buyer And Plan Rows
 
