@@ -251,6 +251,43 @@ field anixops.kernelidentity.v1.ResolveActorAccessResponse.restricted_plugins = 
 field anixops.kernelidentity.v1.ResolveActorAccessResponse.unrestricted = 4 optional bool
 field anixops.kernelidentity.v1.UpdateSubscriberRequest.entitlements_json = 2 optional bytes
 field anixops.kernelidentity.v1.UpdateSubscriberRequest.user_id = 1 optional uint64
+field anixops.kernelsettings.v1.Actor.client_ip = 2 optional string
+field anixops.kernelsettings.v1.Actor.user_agent = 3 optional string
+field anixops.kernelsettings.v1.Actor.user_id = 1 optional uint64
+field anixops.kernelsettings.v1.DeleteSettingsRequest.actor = 4 optional anixops.kernelsettings.v1.Actor
+field anixops.kernelsettings.v1.DeleteSettingsRequest.keys = 3 repeated string
+field anixops.kernelsettings.v1.DeleteSettingsRequest.namespace = 1 optional string
+field anixops.kernelsettings.v1.DeleteSettingsRequest.request_id = 2 optional string
+field anixops.kernelsettings.v1.DeleteSettingsResponse.applied = 1 optional bool
+field anixops.kernelsettings.v1.DeleteSettingsResponse.changes = 2 repeated anixops.kernelsettings.v1.SettingChange
+field anixops.kernelsettings.v1.GetSettingsRequest.keys = 2 repeated string
+field anixops.kernelsettings.v1.GetSettingsRequest.namespace = 1 optional string
+field anixops.kernelsettings.v1.GetSettingsResponse.settings = 1 repeated anixops.kernelsettings.v1.Setting
+field anixops.kernelsettings.v1.PutSettingsRequest.actor = 4 optional anixops.kernelsettings.v1.Actor
+field anixops.kernelsettings.v1.PutSettingsRequest.entries = 3 repeated anixops.kernelsettings.v1.SettingEntry
+field anixops.kernelsettings.v1.PutSettingsRequest.namespace = 1 optional string
+field anixops.kernelsettings.v1.PutSettingsRequest.request_id = 2 optional string
+field anixops.kernelsettings.v1.PutSettingsResponse.applied = 1 optional bool
+field anixops.kernelsettings.v1.PutSettingsResponse.changes = 2 repeated anixops.kernelsettings.v1.SettingChange
+field anixops.kernelsettings.v1.Setting.group = 8 optional string
+field anixops.kernelsettings.v1.Setting.has_value = 6 optional bool
+field anixops.kernelsettings.v1.Setting.key = 1 optional string
+field anixops.kernelsettings.v1.Setting.masked = 5 optional bool
+field anixops.kernelsettings.v1.Setting.remark = 9 optional string
+field anixops.kernelsettings.v1.Setting.secret = 4 optional bool
+field anixops.kernelsettings.v1.Setting.stored = 3 optional bool
+field anixops.kernelsettings.v1.Setting.type = 7 optional string
+field anixops.kernelsettings.v1.Setting.value = 2 optional string
+field anixops.kernelsettings.v1.SettingChange.created = 2 optional bool
+field anixops.kernelsettings.v1.SettingChange.deleted = 4 optional bool
+field anixops.kernelsettings.v1.SettingChange.kept = 3 optional bool
+field anixops.kernelsettings.v1.SettingChange.key = 1 optional string
+field anixops.kernelsettings.v1.SettingEntry.group = 5 optional string
+field anixops.kernelsettings.v1.SettingEntry.keep = 3 optional bool
+field anixops.kernelsettings.v1.SettingEntry.key = 1 optional string
+field anixops.kernelsettings.v1.SettingEntry.remark = 6 optional string
+field anixops.kernelsettings.v1.SettingEntry.type = 4 optional string
+field anixops.kernelsettings.v1.SettingEntry.value = 2 optional string
 field anixops.kernelsubscriber.v1.AdjustBalanceRequest.amount_cents = 4 optional int64
 field anixops.kernelsubscriber.v1.AdjustBalanceRequest.kind = 3 optional anixops.kernelsubscriber.v1.BalanceKind
 field anixops.kernelsubscriber.v1.AdjustBalanceRequest.reason = 5 optional string
@@ -540,6 +577,9 @@ rpc anixops.kernelidentity.v1.KernelIdentity.GetSubscriber(anixops.kernelidentit
 rpc anixops.kernelidentity.v1.KernelIdentity.PublishRevocation(anixops.kernelidentity.v1.PublishRevocationRequest) returns (anixops.kernelidentity.v1.PublishRevocationResponse)
 rpc anixops.kernelidentity.v1.KernelIdentity.ResolveActorAccess(anixops.kernelidentity.v1.ResolveActorAccessRequest) returns (anixops.kernelidentity.v1.ResolveActorAccessResponse)
 rpc anixops.kernelidentity.v1.KernelIdentity.UpdateSubscriber(anixops.kernelidentity.v1.UpdateSubscriberRequest) returns (anixops.kernelidentity.v1.UpdateSubscriberResponse)
+rpc anixops.kernelsettings.v1.KernelSettings.DeleteSettings(anixops.kernelsettings.v1.DeleteSettingsRequest) returns (anixops.kernelsettings.v1.DeleteSettingsResponse)
+rpc anixops.kernelsettings.v1.KernelSettings.GetSettings(anixops.kernelsettings.v1.GetSettingsRequest) returns (anixops.kernelsettings.v1.GetSettingsResponse)
+rpc anixops.kernelsettings.v1.KernelSettings.PutSettings(anixops.kernelsettings.v1.PutSettingsRequest) returns (anixops.kernelsettings.v1.PutSettingsResponse)
 rpc anixops.kernelsubscriber.v1.KernelSubscriber.AdjustBalance(anixops.kernelsubscriber.v1.AdjustBalanceRequest) returns (anixops.kernelsubscriber.v1.AdjustBalanceResponse)
 rpc anixops.kernelsubscriber.v1.KernelSubscriber.AdjustEntitlement(anixops.kernelsubscriber.v1.AdjustEntitlementRequest) returns (anixops.kernelsubscriber.v1.AdjustEntitlementResponse)
 rpc anixops.kernelsubscriber.v1.KernelSubscriber.ApplyEntitlement(anixops.kernelsubscriber.v1.ApplyEntitlementRequest) returns (anixops.kernelsubscriber.v1.ApplyEntitlementResponse)

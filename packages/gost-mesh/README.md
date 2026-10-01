@@ -21,6 +21,10 @@ TUIC. The signed capabilities also declare tunnel health, policy routing,
 `plugin.runtime-state`, and `plugin.cleanup`. The last two capabilities require
 the Agent Supervisor to retain a private ownership journal and invoke the signed
 cleanup entrypoint after crashes, disable, update, rollback, or Agent restart.
+The Control host declares `kernel.settings.nodex.read.v1` and
+`kernel.settings.nodex.secrets.v1`: the NodeX runtime status and diagnosis read
+the NodeX address and shared token through the kernel's KernelSettings contract
+(`docs/architecture/settings-service.md`).
 
 ## Configuration
 

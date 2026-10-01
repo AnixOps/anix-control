@@ -8,13 +8,22 @@ import (
 	"testing"
 	"time"
 
+	kernelsettingsv1 "github.com/AnixOps/anix-control/sdk/api/kernelsettings/v1"
 	"github.com/AnixOps/anix-control/sdk/packagebridgesdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/AnixOps/anix-control/v4/packages/platform/native"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
 )
 
 type bridgeStub struct{ operation string }
+
+// settingsStub stands for the kernel's KernelSettings.
+type settingsStub struct{}
+
+func (settingsStub) PutSettings(context.Context, *kernelsettingsv1.PutSettingsRequest, ...grpc.CallOption) (*kernelsettingsv1.PutSettingsResponse, error) {
+	return &kernelsettingsv1.PutSettingsResponse{Applied: true}, nil
+}
 
 func (s *bridgeStub) LeaseStorage(context.Context) (packagebridgesdk.StorageLease, error) {
 	return packagebridgesdk.StorageLease{}, packagebridgesdk.ErrSessionOperationUnsupported
@@ -48,8 +57,10 @@ func TestPlatformHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) {
 		RouteID: "ticket.user.ticket.get", BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
 	})
 	require.Error(t, err)
-	handlers := (&native.Service{}).Handlers()
+	handlers := (&native.Service{Settings: settingsStub{}}).Handlers()
 	require.Len(t, handlers, len(platformRoutes))
+	require.NotContains(t, (&native.Service{}).Handlers(), native.BackupConfigUpdateRouteID,
+		"without KernelSettings the backup configuration update stays legacy")
 	for route := range platformRoutes {
 		require.Contains(t, handlers, route, "every native route has a handler")
 	}
@@ -82,4 +93,21 @@ func TestPlatformHostRoutesAreThePackageRoutes(t *testing.T) {
 	sort.Strings(want)
 	sort.Strings(got)
 	require.Equal(t, want, got)
+}
+
+// The release declares exactly these kernel grants.
+func TestPlatformManifestCapabilities(t *testing.T) {
+	raw, err := os.ReadFile("../manifest.template.json")
+	require.NoError(t, err)
+	var manifest struct {
+		Capabilities []string `json:"capabilities"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &manifest))
+	require.ElementsMatch(t, []string{
+		"kernel.storage.v1", "kernel.storage.adopt:v2_backup_config", "kernel.storage.adopt:v2_backup_record",
+		"kernel.view:kapi_system_audit_log_v1",
+		// Only the backup namespace: the generic system configuration
+		// routes stay bridged (docs/architecture/settings-service.md).
+		"kernel.settings.backup.write.v1",
+	}, manifest.Capabilities)
 }

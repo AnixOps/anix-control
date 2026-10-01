@@ -15,6 +15,7 @@ import (
 	"time"
 
 	kernelidentityv1 "github.com/AnixOps/anix-control/sdk/api/kernelidentity/v1"
+	kernelsettingsv1 "github.com/AnixOps/anix-control/sdk/api/kernelsettings/v1"
 	kernelsubscriberv1 "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1"
 	modulepkiv1 "github.com/AnixOps/anix-control/sdk/api/modulepki/v1"
 	packagebridgev1 "github.com/AnixOps/anix-control/sdk/api/packagebridge/v1"
@@ -80,6 +81,20 @@ type listenerFixture struct {
 	identityHosts chan packagebridge.HostIdentity
 	// subscriberHosts records the host identity KernelSubscriber calls ran as.
 	subscriberHosts chan packagebridge.HostIdentity
+	// settingsHosts records the host identity KernelSettings calls ran as.
+	settingsHosts chan packagebridge.HostIdentity
+}
+
+// settingsRecorder answers GetSettings and records the calling host.
+type settingsRecorder struct {
+	kernelsettingsv1.UnimplementedKernelSettingsServer
+	host  packagebridge.HostIdentity
+	hosts chan packagebridge.HostIdentity
+}
+
+func (r settingsRecorder) GetSettings(context.Context, *kernelsettingsv1.GetSettingsRequest) (*kernelsettingsv1.GetSettingsResponse, error) {
+	r.hosts <- r.host
+	return &kernelsettingsv1.GetSettingsResponse{}, nil
 }
 
 // subscriberRecorder answers GetSubscribers and WatchSubscriberChanges and
@@ -145,6 +160,9 @@ func (f *listenerFixture) serve(t *testing.T) {
 			KernelSubscriber: func(host packagebridge.HostIdentity) kernelsubscriberv1.KernelSubscriberServer {
 				return subscriberRecorder{host: host, hosts: f.subscriberHosts}
 			},
+			KernelSettings: func(host packagebridge.HostIdentity) kernelsettingsv1.KernelSettingsServer {
+				return settingsRecorder{host: host, hosts: f.settingsHosts}
+			},
 		}).Serve(ctx, listener)
 	}()
 	t.Cleanup(func() {
@@ -175,6 +193,7 @@ func newListenerFixture(t *testing.T) *listenerFixture {
 	fixture.generation, fixture.binder, fixture.bridge, fixture.clock, fixture.calls = generation, binder, bridge, clock, calls
 	fixture.identityHosts = make(chan packagebridge.HostIdentity, 4)
 	fixture.subscriberHosts = make(chan packagebridge.HostIdentity, 4)
+	fixture.settingsHosts = make(chan packagebridge.HostIdentity, 4)
 	fixture.serve(t)
 	return fixture
 }
@@ -404,4 +423,25 @@ func TestKernelSubscriberIsServedToBoundInstancesOnly(t *testing.T) {
 	require.NoError(t, fixture.generation.Close())
 	_, err = subscribers.GetSubscribers(session, &kernelsubscriberv1.GetSubscribersRequest{})
 	require.Equal(t, codes.PermissionDenied, status.Code(err), "a fenced generation loses KernelSubscriber too")
+}
+
+// KernelSettings on the module listener runs as the bound instance's
+// generation and needs a bridge session.
+func TestKernelSettingsIsServedToBoundInstancesOnly(t *testing.T) {
+	fixture := newListenerFixture(t)
+	certificate, _ := fixture.enroll(t, "knowledge")
+	connection := fixture.dial(t, certificate)
+	settings := kernelsettingsv1.NewKernelSettingsClient(connection)
+
+	_, err := settings.GetSettings(context.Background(), &kernelsettingsv1.GetSettingsRequest{Namespace: "mail"})
+	require.Equal(t, codes.Unauthenticated, status.Code(err), "no bridge session")
+
+	session := bind(t, packagebridgev1.NewKernelPackageBridgeClient(connection), "pod-a")
+	_, err = settings.GetSettings(session, &kernelsettingsv1.GetSettingsRequest{Namespace: "mail"})
+	require.NoError(t, err)
+	require.Equal(t, packagebridge.HostIdentity{PackageID: "knowledge", Version: "4.1.0", Generation: 9}, <-fixture.settingsHosts)
+
+	require.NoError(t, fixture.generation.Close())
+	_, err = settings.GetSettings(session, &kernelsettingsv1.GetSettingsRequest{Namespace: "mail"})
+	require.Equal(t, codes.PermissionDenied, status.Code(err), "a fenced generation loses KernelSettings too")
 }

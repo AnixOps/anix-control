@@ -16,6 +16,7 @@ import (
 	"time"
 
 	kernelidentityv1 "github.com/AnixOps/anix-control/sdk/api/kernelidentity/v1"
+	kernelsettingsv1 "github.com/AnixOps/anix-control/sdk/api/kernelsettings/v1"
 	kernelsubscriberv1 "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1"
 	packagebridgev1 "github.com/AnixOps/anix-control/sdk/api/packagebridge/v1"
 	"github.com/AnixOps/anix-control/v4/internal/panicrecovery"
@@ -65,6 +66,9 @@ type SessionOptions struct {
 	// KernelSubscriber, when set, serves the KernelSubscriber contract on
 	// the session, authorized per capability on every call.
 	KernelSubscriber KernelSubscriberProvider
+	// KernelSettings, when set, serves the KernelSettings contract on the
+	// session, authorized per namespace capability on every call.
+	KernelSettings KernelSettingsProvider
 }
 
 func (o SessionOptions) responseLimit() int64 {
@@ -440,6 +444,9 @@ func NewSessionWithOptions(identity HostIdentity, handler *Allowlist, options Se
 	}
 	if options.KernelSubscriber != nil {
 		kernelsubscriberv1.RegisterKernelSubscriberServer(session.server, options.KernelSubscriber(identity))
+	}
+	if options.KernelSettings != nil {
+		kernelsettingsv1.RegisterKernelSettingsServer(session.server, options.KernelSettings(identity))
 	}
 	server, listener := session.server, session.listener
 	go func() { _ = server.Serve(listener) }()

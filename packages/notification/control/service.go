@@ -4,9 +4,11 @@ import (
 	"context"
 	"log"
 
+	kernelsettingsv1 "github.com/AnixOps/anix-control/sdk/api/kernelsettings/v1"
 	"github.com/AnixOps/anix-control/sdk/packagestoresdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/AnixOps/anix-control/v4/packages/notification/native"
+	"google.golang.org/grpc"
 	"gorm.io/gorm"
 )
 
@@ -19,8 +21,11 @@ type notificationBridge interface {
 
 // newNotificationService returns the notification host's router. The routes
 // in notificationRoutes have a native handler on the adopted notification and
-// Telegram tables; such a route serves natively once the kernel sets its
-// mode, and falls back to the legacy handler otherwise. The routes in
+// Telegram tables and the kernel's KernelSettings; such a route serves
+// natively once the kernel sets its mode, and falls back to the legacy
+// handler otherwise. The e-mail configuration and test send call
+// KernelSettings over the bridge connection (local socket or module
+// listener); a bridge without one leaves them legacy. The routes in
 // bridgedRoutes always relay to the legacy handler.
 func newNotificationService(bridge notificationBridge, leaseID string) (*pluginhostsdk.Router, error) {
 	storage := packagestoresdk.SharedOpener(bridge)
@@ -31,6 +36,11 @@ func newNotificationService(bridge notificationBridge, leaseID string) (*pluginh
 		}
 		return store.DB.WithContext(ctx), nil
 	}}
+	if conn, ok := bridge.(interface {
+		Conn() grpc.ClientConnInterface
+	}); ok && conn.Conn() != nil {
+		service.Settings = kernelsettingsv1.NewKernelSettingsClient(conn.Conn())
+	}
 	return pluginhostsdk.NewRouter(pluginhostsdk.RouterConfig{
 		PackageID: "notification", LeaseID: leaseID, Bridge: bridge, Logf: log.Printf,
 		AllowRoute: func(routeID string) bool {
@@ -45,6 +55,9 @@ func newNotificationService(bridge notificationBridge, leaseID string) (*pluginh
 // notificationRoutes are the package's compatibility routes with a native
 // handler.
 var notificationRoutes = map[string]struct{}{
+	"notification.admin.notification.email.config.get":    {},
+	"notification.admin.notification.email.config.put":    {},
+	"notification.admin.notification.test.post":           {},
 	"notification.admin.notification.logs.get":            {},
 	"notification.admin.notification.templates.get":       {},
 	"notification.admin.notification.templates.post":      {},
@@ -68,16 +81,11 @@ var notificationRoutes = map[string]struct{}{
 
 // bridgedRoutes are the package's compatibility routes without a native
 // handler; they always relay to the kernel's legacy handler.
-//   - The e-mail configuration and the test send keep their settings in the
-//     kernel's v2_system_config, which the package does not own.
 //   - Setting the webhook defaults its URL to the request's scheme and host,
 //     which the kernel does not send to package hosts.
 //   - The public Telegram webhook answers /sub with the member's
 //     subscription token, which no kernel view exposes.
 var bridgedRoutes = map[string]struct{}{
-	"notification.admin.notification.email.config.get": {},
-	"notification.admin.notification.email.config.put": {},
-	"notification.admin.notification.test.post":        {},
-	"notification.admin.telegram.webhook.post":         {},
-	"notification.telegram.webhook.post":               {},
+	"notification.admin.telegram.webhook.post": {},
+	"notification.telegram.webhook.post":       {},
 }

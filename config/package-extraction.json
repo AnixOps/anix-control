@@ -318,7 +318,7 @@
       "path": "/api/v2/admin/forward/nodex/doctor",
       "package_id": "gost-mesh",
       "route_id": "gost.admin.forward.nodex.doctor.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -326,7 +326,7 @@
       "path": "/api/v2/admin/forward/nodex/status",
       "package_id": "gost-mesh",
       "route_id": "gost.admin.forward.nodex.status.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -502,7 +502,7 @@
       "path": "/api/v2/admin/invite/config",
       "package_id": "affiliate",
       "route_id": "affiliate.admin.invite.config.put",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -782,7 +782,7 @@
       "path": "/api/v2/admin/notification/email/config",
       "package_id": "notification",
       "route_id": "notification.admin.notification.email.config.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -790,7 +790,7 @@
       "path": "/api/v2/admin/notification/email/config",
       "package_id": "notification",
       "route_id": "notification.admin.notification.email.config.put",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -838,7 +838,7 @@
       "path": "/api/v2/admin/notification/test",
       "package_id": "notification",
       "route_id": "notification.admin.notification.test.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1214,7 +1214,7 @@
       "path": "/api/v2/admin/system/backup/config",
       "package_id": "platform",
       "route_id": "platform.admin.system.backup.config.put",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {

@@ -695,7 +695,9 @@ func (h *InviteHandler) UpdateConfig(c *gin.Context) {
 		frontendCfg.WithdrawMethods = methods
 	}
 
-	if err := database.Get().Save(&cfg).Error; err != nil {
+	// SaveConfig keeps cfg as this handler's copy; every other copy of the
+	// invite settings reloads.
+	if err := h.inviteService.SaveConfig(&cfg); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -704,7 +706,6 @@ func (h *InviteHandler) UpdateConfig(c *gin.Context) {
 		return
 	}
 
-	h.inviteService.SetConfig(&cfg)
 	panelSuccess(c, inviteConfigResponse(&cfg, frontendCfg))
 }
 

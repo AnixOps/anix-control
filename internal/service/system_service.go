@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/config"
@@ -17,9 +18,16 @@ import (
 	"gorm.io/gorm"
 )
 
+// BackupService runs backups. It keeps the backup configuration in memory
+// and reloads it when the backup settings namespace changed
+// (SettingsGeneration), so a change made through KernelSettings or another
+// BackupService reaches it before its next backup.
 type BackupService struct {
-	db     *gorm.DB
-	config *model.BackupConfig
+	db *gorm.DB
+
+	mu               sync.Mutex
+	config           *model.BackupConfig
+	configGeneration uint64
 }
 
 type sqliteDatabaseEntry struct {
@@ -49,23 +57,47 @@ func NewBackupService(db *gorm.DB) *BackupService {
 	return &BackupService{db: db}
 }
 
+// GetConfig returns the backup configuration: the copy in memory while the
+// backup settings namespace has not changed since it was loaded, else the
+// first row, created with the defaults when there is none.
 func (s *BackupService) GetConfig() (*model.BackupConfig, error) {
-	if s.config != nil {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	// The generation is read before the row, so a change committed after
+	// the read moves it past the copy's.
+	generation := SettingsGeneration(SettingsNamespaceBackup)
+	if s.config != nil && s.configGeneration == generation {
 		return s.config, nil
 	}
+	cfg, err := LoadBackupConfig(s.db)
+	if err != nil {
+		return nil, err
+	}
+	s.config, s.configGeneration = cfg, generation
+	return cfg, nil
+}
 
+// DefaultBackupConfig is the backup configuration the kernel creates when
+// there is none.
+func DefaultBackupConfig() model.BackupConfig {
+	return model.BackupConfig{
+		Enabled:        false,
+		AutoBackup:     false,
+		RetentionDays:  7,
+		BackupDatabase: true,
+		StorageType:    "local",
+		StoragePath:    "backups",
+	}
+}
+
+// LoadBackupConfig reads the first backup configuration row, creating it
+// with the defaults when there is none.
+func LoadBackupConfig(db *gorm.DB) (*model.BackupConfig, error) {
 	var cfg model.BackupConfig
-	err := s.db.First(&cfg).Error
+	err := db.First(&cfg).Error
 	if err == gorm.ErrRecordNotFound {
-		cfg = model.BackupConfig{
-			Enabled:        false,
-			AutoBackup:     false,
-			RetentionDays:  7,
-			BackupDatabase: true,
-			StorageType:    "local",
-			StoragePath:    "backups",
-		}
-		if createErr := s.db.Create(&cfg).Error; createErr != nil {
+		cfg = DefaultBackupConfig()
+		if createErr := db.Create(&cfg).Error; createErr != nil {
 			return nil, createErr
 		}
 		err = nil
@@ -73,16 +105,24 @@ func (s *BackupService) GetConfig() (*model.BackupConfig, error) {
 	if err != nil {
 		return nil, err
 	}
-
-	s.config = &cfg
 	return &cfg, nil
 }
 
+// UpdateConfig saves cfg and makes it the configuration in memory. Every
+// other copy of the backup settings reloads.
 func (s *BackupService) UpdateConfig(cfg *model.BackupConfig) error {
+	before := SettingsGeneration(SettingsNamespaceBackup)
 	if err := s.db.Save(cfg).Error; err != nil {
 		return err
 	}
-	s.config = cfg
+	generation, keep := BumpSettingsGenerationAfter(SettingsNamespaceBackup, before)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if keep {
+		s.config, s.configGeneration = cfg, generation
+	} else {
+		s.config = nil
+	}
 	return nil
 }
 

@@ -1,0 +1,159 @@
+syntax = "proto3";
+
+package anixops.kernelsettings.v1;
+
+option go_package = "github.com/AnixOps/anix-control/sdk/api/kernelsettings/v1;kernelsettingsv1";
+
+// KernelSettings is the kernel's contract for system settings: the rows of
+// the protected v2_system_config table and the backup configuration row of
+// v2_backup_config. The kernel stays their only writer; official packages
+// read and change them through this contract instead of the tables
+// (docs/architecture/settings-service.md).
+//
+// Settings are grouped in namespaces. The kernel maps every key to at most
+// one namespace through its own table of keys and key prefixes; a key
+// outside the namespace a call names is refused, and a key in no namespace
+// is reachable through no call. Namespaces in this version:
+//   - mail: notification.email.* (the SMTP delivery configuration);
+//   - invite: invite.* (the affiliate's frontend settings);
+//   - nodex: forward.runtime.nodex.* (the NodeX control plane address,
+//     shared token and timeout);
+//   - forward-runtime: forward.runtime_backend, forward.runtime.nodex_mode
+//     and the forward.runtime.ansible.*, forward.runtime.iptables_ansible.*
+//     and forward.ansible.* keys;
+//   - backup: backup.<field>, the fields of the backup configuration row
+//     (enabled, auto_backup, schedule, retention_days, backup_database,
+//     backup_files, storage_type, storage_path, s3_bucket, s3_region,
+//     s3_endpoint, s3_access_key, s3_secret_key).
+//
+// It is served on the module listener and the local package bridge to
+// official packages, per namespace, by capability:
+//   - kernel.settings.<namespace>.read.v1: GetSettings;
+//   - kernel.settings.<namespace>.write.v1: PutSettings, DeleteSettings;
+//   - kernel.settings.<namespace>.secrets.v1: GetSettings answers secret
+//     values in clear; requires the read capability.
+//
+// A secret is a key the kernel masks for its administrators (a name with
+// token, secret, password, private_key, api_key or access_key in it) or a
+// key the namespace declares secret (notification.email.config, whose JSON
+// value holds the SMTP password). Without the secrets capability a secret
+// reads as the placeholder "********" when it has a value, and as "" when it
+// has none.
+//
+// Writes run in the kernel, in one transaction with the audit entries the
+// kernel's own handlers record for the same change, and refresh the copies
+// of the namespace the kernel keeps in memory before they return. Every
+// write carries a request_id; the kernel applies each request_id once and
+// answers a repeat with the first result.
+service KernelSettings {
+  // GetSettings reads keys of one namespace. With no keys it answers every
+  // stored key of the namespace, by key.
+  rpc GetSettings(GetSettingsRequest) returns (GetSettingsResponse);
+  // PutSettings creates or changes keys of one namespace. A backup write
+  // with no entries saves the row as it is and records its audit entry, as
+  // the kernel's handler does for a request that changes nothing; other
+  // namespaces need at least one entry.
+  rpc PutSettings(PutSettingsRequest) returns (PutSettingsResponse);
+  // DeleteSettings removes keys of one namespace. The backup namespace's
+  // fields cannot be deleted (FailedPrecondition).
+  rpc DeleteSettings(DeleteSettingsRequest) returns (DeleteSettingsResponse);
+}
+
+// Setting is one key as the caller may see it.
+message Setting {
+  string key = 1;
+  // value is the stored value. For a secret the caller may not read it is
+  // the placeholder "********" when has_value, else "".
+  string value = 2;
+  // stored is false for a key with no stored value; value is then "", or
+  // the kernel's default for a backup field.
+  bool stored = 3;
+  bool secret = 4;
+  // masked is true when value is the placeholder or "" in place of a
+  // secret.
+  bool masked = 5;
+  // has_value: the stored value is not blank.
+  bool has_value = 6;
+  // type, group and remark are the v2_system_config row's metadata; empty
+  // for backup fields.
+  string type = 7;
+  string group = 8;
+  string remark = 9;
+}
+
+message GetSettingsRequest {
+  string namespace = 1;
+  repeated string keys = 2;
+}
+
+message GetSettingsResponse {
+  // settings are in the order of the requested keys, or by key.
+  repeated Setting settings = 1;
+}
+
+// Actor is who asked for a change, as the kernel's audit trail records it:
+// the administrator the kernel authenticated for the HTTP request the
+// package serves, and that request's client address and user agent.
+message Actor {
+  // user_id is unset for a change no user asked for.
+  optional uint64 user_id = 1;
+  string client_ip = 2;
+  string user_agent = 3;
+}
+
+// SettingEntry is one key to write.
+message SettingEntry {
+  string key = 1;
+  string value = 2;
+  // keep leaves the stored value unchanged. A secret whose value is the
+  // placeholder "********" is kept as well. A kept key with no stored value
+  // is not created.
+  bool keep = 3;
+  // type, group and remark are stored with a v2_system_config key; empty
+  // leaves the stored one (a new key's type defaults to "string"). They
+  // must be empty for backup fields.
+  string type = 4;
+  string group = 5;
+  string remark = 6;
+}
+
+message PutSettingsRequest {
+  string namespace = 1;
+  // request_id is unique per change, at most 128 bytes, e.g.
+  // "platform.backup_config:<digest>".
+  string request_id = 2;
+  repeated SettingEntry entries = 3;
+  Actor actor = 4;
+}
+
+// SettingChange is what a write did to one key.
+message SettingChange {
+  string key = 1;
+  // created: the key had no stored value.
+  bool created = 2;
+  // kept: the stored value was kept (keep, or a secret's placeholder).
+  bool kept = 3;
+  // deleted: DeleteSettings removed a stored key.
+  bool deleted = 4;
+}
+
+message PutSettingsResponse {
+  // applied is false when request_id was applied before; changes then
+  // describe that first application.
+  bool applied = 1;
+  repeated SettingChange changes = 2;
+}
+
+message DeleteSettingsRequest {
+  string namespace = 1;
+  string request_id = 2;
+  repeated string keys = 3;
+  Actor actor = 4;
+}
+
+message DeleteSettingsResponse {
+  bool applied = 1;
+  // changes lists every requested key; deleted is false for a key that was
+  // not stored.
+  repeated SettingChange changes = 2;
+}

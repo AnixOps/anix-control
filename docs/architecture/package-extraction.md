@@ -28,11 +28,11 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   WebSocket routes use `registeredPackageWebSocketRoute`.
 - `config/package-extraction.json` records each route's extraction mode
   (`bridged`, `native-flagged` or `native`) and where its legacy handler lives
-  (`router`, `identity-bridge` or `none`). 151 routes are `native-flagged`:
+  (`router`, `identity-bridge` or `none`). 158 routes are `native-flagged`:
   identity-platform (20: group A's 15, the profile, dashboard and user detail,
-  and the traffic and subscription resets), affiliate (7), forward (17),
-  gost-mesh (1), knowledge (6), machine-telemetry (2), notification (19),
-  order (13), payment (16), plan (7), platform (4), protocol-runtime (3),
+  and the traffic and subscription resets), affiliate (8), forward (17),
+  gost-mesh (3), knowledge (6), machine-telemetry (2), notification (22),
+  order (13), payment (16), plan (7), platform (5), protocol-runtime (3),
   proxy-node (7), subscription (20), ticket (8) and wireguard (1). The rest
   are `bridged`. The identity routes are `identity-bridge`.
   `check_plugin_only_routes.py` enforces the map against the router and the
@@ -168,6 +168,15 @@ assignment and order fulfilment, executed exactly once via an idempotency
 table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
 `OrderService.Complete`.
 
+The contracts in place: KernelIdentity
+([`identity-service.md`](identity-service.md)), KernelSubscriber
+([`subscriber-service.md`](subscriber-service.md)) and KernelSettings
+([`settings-service.md`](settings-service.md)), which serves the settings
+in the protected `v2_system_config` and the backup configuration row per
+namespace, masks secrets for packages without the namespace's secrets
+capability, and writes with the legacy handlers' audit entries and a
+refresh of the kernel's in-memory copies.
+
 ### 3.4 In-place adoption and kernel views
 
 - Existing tables are adopted in place by grant: no copy, no dual write. The
@@ -192,25 +201,35 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
   `v2_ticket_message`, proved by `internal/tests/ticketcompat`. The admin
   list's legacy preload of the user is not needed: only `user_id` is
   returned.
-- **Notification (in place).** 19 of 24 routes on the adopted
+- **Notification (in place).** 22 of 24 routes on the adopted
   `v2_notification_template`, `v2_notification_log`, `v2_telegram_bot` and
-  `v2_telegram_user` tables, proved by
+  `v2_telegram_user` tables and the kernel's KernelSettings, proved by
   `internal/tests/notificationcompat`; binding e-mails come from
-  `kapi_user_directory_v1`. Five stay bridged: the e-mail configuration and
-  test send (settings in `v2_system_config`), setting the webhook (needs the
-  request host) and the public webhook (`/sub` needs the subscription token).
-- **Platform (in place).** 4 of 12 routes: the backup configuration, list
+  `kapi_user_directory_v1`.
+  - The e-mail configuration (GET and PUT) and the test send read and write
+    `notification.email.config` through KernelSettings, namespace `mail`
+    ([`settings-service.md`](settings-service.md)). Its value holds the SMTP
+    password: the package reads it in clear (`kernel.settings.mail.secrets.v1`)
+    because the GET answers it, as the kernel's handler does, and the test
+    e-mail is sent from the package host. The parity test runs a test SMTP
+    server and compares the mail each side delivers.
+  - Two stay bridged: setting the webhook (needs the request host) and the
+    public webhook (`/sub` needs the subscription token).
+- **Platform (in place).** 5 of 12 routes: the backup configuration, list
   and statistics on the adopted `v2_backup_config` and `v2_backup_record`
-  tables, and the system audit log through `kapi_system_audit_log_v1`, proved
-  by `internal/tests/platformcompat`. Eight stay bridged:
-  - the system configuration routes: `v2_system_config` is a protected
-    kernel table, its values include secrets, and its writes record audit
-    entries in the protected `v2_operation_log`;
-  - updating the backup configuration: it records an audit entry and
-    refreshes the copy the kernel's backup service keeps in memory, which
-    backup creation reads;
-  - creating, deleting and restoring backups: archives of the database and
-    files on the kernel's disk.
+  tables, the system audit log through `kapi_system_audit_log_v1`, and the
+  backup configuration update through KernelSettings (namespace `backup`),
+  proved by `internal/tests/platformcompat`.
+  - The update is written by the kernel: it saves the row, records the
+    audit entry its handler records and makes the backup service reload
+    the copy it keeps in memory, which backup creation reads. The parity
+    test compares the rows, the audit entries and that copy.
+  - Seven stay bridged:
+    - the system configuration routes: they reach every key of the
+      protected `v2_system_config`, and a grant over every key holds every
+      secret ([`settings-service.md`](settings-service.md#routes));
+    - creating, deleting and restoring backups: archives of the database
+      and files on the kernel's disk.
 - **Plan (in place).** The first module that changes shared subscriber
   state. 7 of 12 routes run on the adopted `v2_plan` and `v2_event` tables,
   proved by `internal/tests/plancompat`.
@@ -287,7 +306,7 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
     table, and there is no contract for those writes yet. The provider
     signature checks stay with them, and the PayPal webhook calls PayPal's
     API to verify each delivery.
-- **Affiliate (in place).** 7 of 8 routes run on the adopted
+- **Affiliate (in place).** All 8 routes run on the adopted
   `v2_commission_record`, `v2_commission_withdraw` and `v2_invite_config`
   tables, proved by `internal/tests/affiliatecompat`: the user's commissions,
   withdrawals and withdrawal request, and the administrator's withdrawal
@@ -318,9 +337,11 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
     refund puts it back to pending, and an unknown outcome leaves it
     rejected with a failed answer. No path pays out or refunds an amount
     that was not debited.
-  - Updating the configuration stays bridged. It writes
-    `invite.frontend.config` into `v2_system_config`, which no package may
-    adopt and no contract writes.
+  - Updating the configuration (8 of 8 routes now) writes the adopted
+    `v2_invite_config`, then `invite.frontend.config` through KernelSettings
+    (namespace `invite`), which makes the kernel's invite services reload
+    the configuration they keep in memory. Neither path records an audit
+    entry.
 - **Identity leftovers (in place).** 5 of identity-platform's 9 routes
   outside group A run natively, proved by `internal/tests/identitycompat`
   (byte parity and the same Control state, on SQLite and PostgreSQL).
@@ -594,14 +615,16 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
     - the system information: the kernel binary's own build metadata;
     - the monitoring WebSocket: the kernel's node list from the protected
       `v2_node`; WebSocket routes always relay to the kernel.
-- **Gost mesh (in place).** 1 of gost-mesh's 3 routes runs natively, proved
-  by `internal/tests/gostmeshcompat`: the administrator's gost API
-  connection test. It reads no table: it calls the gost API at the host and
-  port in the request, with the token in the request, as the kernel's
-  handler does, and answers the same errors. The NodeX runtime status and
-  diagnosis stay bridged: they read the NodeX address and shared token from
-  the protected `v2_system_config` (the token is a secret no view shows) and
-  call NodeX with it.
+- **Gost mesh (in place).** All 3 of gost-mesh's routes run natively,
+  proved by `internal/tests/gostmeshcompat`.
+  - The administrator's gost API connection test reads no table: it calls
+    the gost API at the host and port in the request, with the token in the
+    request, as the kernel's handler does, and answers the same errors.
+  - The NodeX runtime status and diagnosis read the NodeX address, shared
+    token and timeout through KernelSettings (namespace `nodex`; the token
+    in clear with `kernel.settings.nodex.secrets.v1`) and call NodeX from
+    the package host. The parity test runs test NodeX servers that answer,
+    refuse the token, fail or answer what does not decode.
 - **WireGuard (in place).** wireguard's one route runs natively, proved by
   `internal/tests/wireguardcompat`: the administrator's server keypair for
   the protocol form. It reads and stores nothing; the administrator saves

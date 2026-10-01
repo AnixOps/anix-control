@@ -35,12 +35,17 @@ const (
 	// capabilityViewPrefix grants read access to a kernel API view:
 	// kernel.view:kapi_<name>_v<N>.
 	capabilityViewPrefix = "kernel.view:"
+	// capabilitySettingsPrefix starts the KernelSettings capabilities,
+	// kernel.settings.<namespace>.<read|write|secrets>.v1
+	// (settings-service.md); see SettingsCapability.
+	capabilitySettingsPrefix = "kernel.settings."
 )
 
 var (
 	capabilityNamePattern  = regexp.MustCompile(`^[a-z][a-z0-9._:-]{0,127}$`)
 	adoptableTablePattern  = regexp.MustCompile(`^[a-z][a-z0-9_]{0,62}$`)
 	kernelAPIViewPattern   = regexp.MustCompile(`^kapi_[a-z][a-z0-9_]*_v[1-9][0-9]*$`)
+	settingsCapability     = regexp.MustCompile(`^kernel\.settings\.([a-z][a-z0-9-]*)\.(read|write|secrets)\.v1$`)
 	protectedTablePrefixes = []string{"v2_user", "v3_kernel_", "v4_kernel_", "identity_", "kapi_", "pg_"}
 	protectedTables        = map[string]bool{
 		"v2_system_config": true, "v2_audit_log": true, "v2_operation_log": true,
@@ -96,6 +101,8 @@ func validateManifestCapabilities(capabilities []string) error {
 	seen := make(map[string]struct{}, len(capabilities))
 	storage := false
 	needsStorage := ""
+	settingsRead := map[string]bool{}
+	var settingsSecrets []string
 	for _, capability := range capabilities {
 		if !capabilityNamePattern.MatchString(capability) {
 			return fmt.Errorf("capability %q is not a valid capability name", capability)
@@ -129,12 +136,32 @@ func validateManifestCapabilities(capabilities []string) error {
 				return fmt.Errorf("capability %q must name a kapi_<name>_v<N> view", capability)
 			}
 			needsStorage = capability
+		case strings.HasPrefix(capability, capabilitySettingsPrefix):
+			match := settingsCapability.FindStringSubmatch(capability)
+			if match == nil {
+				return fmt.Errorf("capability %q must be kernel.settings.<namespace>.<read|write|secrets>.v1", capability)
+			}
+			if _, known := LookupSettingsNamespace(match[1]); !known {
+				return fmt.Errorf("capability %q names an unknown settings namespace", capability)
+			}
+			switch match[2] {
+			case SettingsAccessRead:
+				settingsRead[match[1]] = true
+			case SettingsAccessSecrets:
+				settingsSecrets = append(settingsSecrets, match[1])
+			}
 		default:
 			return fmt.Errorf("unknown kernel capability %q", capability)
 		}
 	}
 	if needsStorage != "" && !storage {
 		return fmt.Errorf("capability %q requires %s", needsStorage, CapabilityStorage)
+	}
+	for _, namespace := range settingsSecrets {
+		if !settingsRead[namespace] {
+			return fmt.Errorf("capability %q requires %s", SettingsCapability(namespace, SettingsAccessSecrets),
+				SettingsCapability(namespace, SettingsAccessRead))
+		}
 	}
 	return nil
 }

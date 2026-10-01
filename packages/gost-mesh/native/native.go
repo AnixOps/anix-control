@@ -1,11 +1,17 @@
-// Package native implements one of the gost-mesh package's routes in the
-// package itself: the administrator's gost API connection test, which calls
-// the gost API of the host and port the administrator names, with the token
-// the administrator gives, and reads no table. Responses are byte-compatible
-// with the legacy handler (internal/tests/gostmeshcompat).
+// Package native implements the gost-mesh package's routes in the package
+// itself:
+//   - the administrator's gost API connection test, which calls the gost API
+//     of the host and port the administrator names, with the token the
+//     administrator gives, and reads no table;
+//   - the NodeX runtime status and diagnosis, which read the NodeX control
+//     plane's address, shared token and timeout through the kernel's
+//     KernelSettings contract (namespace nodex; the token, a secret, in
+//     clear with kernel.settings.nodex.secrets.v1) and call NodeX's health
+//     and runtime status endpoints with that token from the package host.
 //
-// The NodeX runtime status and diagnosis stay bridged; the reason is in the
-// host's bridgedRoutes (packages/gost-mesh/control/service.go).
+// Responses are byte-compatible with the legacy handlers
+// (internal/tests/gostmeshcompat). A host without KernelSettings leaves the
+// NodeX routes legacy.
 package native
 
 import (
@@ -23,15 +29,23 @@ import (
 
 // Service holds what the native routes need.
 type Service struct {
+	// Settings is the kernel's KernelSettings; without it the NodeX status
+	// and diagnosis have no native handler and stay legacy.
+	Settings Settings
 	// Now defaults to time.Now.
 	Now func() time.Time
 }
 
 // Handlers returns the native handlers by route id.
 func (s *Service) Handlers() map[string]pluginhostsdk.NativeHandler {
-	return map[string]pluginhostsdk.NativeHandler{
+	handlers := map[string]pluginhostsdk.NativeHandler{
 		"gost.admin.forward.test_connection.post": s.TestConnection,
 	}
+	if s.Settings != nil {
+		handlers[NodeXStatusRouteID] = s.NodeXStatus
+		handlers[NodeXDoctorRouteID] = s.NodeXDoctor
+	}
+	return handlers
 }
 
 func (s *Service) now() time.Time {
