@@ -318,12 +318,8 @@ func (h *NodeHandler) UpdateNode(c *gin.Context) {
 		return
 	}
 
-	// 禁止更新敏感字段
-	delete(updates, "id")
-	delete(updates, "api_key")
-	delete(updates, "api_key_hash")
-	delete(updates, "secret")
-
+	// The service never updates the node's id or credentials (id, api_key,
+	// api_key_hash, secret), in any spelling.
 	if err := h.nodeService.UpdateNode(uint(id), updates); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "更新失败"})
 		return
@@ -724,9 +720,7 @@ func (h *NodeHandler) UpdateProtocol(c *gin.Context) {
 		return
 	}
 
-	delete(updates, "id")
-	delete(updates, "node_id")
-
+	// The service never updates the protocol's id or node, in any spelling.
 	if err := h.nodeService.UpdateProtocol(uint(protocolID), updates); err != nil {
 		status := http.StatusInternalServerError
 		if errors.Is(err, service.ErrInvalidNodeProtocol) {
