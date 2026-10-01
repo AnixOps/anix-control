@@ -1,3 +1,5 @@
+import { isCommercialEdition } from '@/composables/useEdition'
+
 const PAGE_TITLE_KEYS = {
   '/login': 'pageTitles.auth.login',
   '/user/dashboard': 'pageTitles.user.dashboard',
@@ -45,8 +47,13 @@ const DESCRIPTION_RULES = [
   { prefix: '/login', key: 'app.meta.loginDescription' }
 ]
 
+// The community edition names plans subscription templates.
+const COMMUNITY_PAGE_TITLE_KEYS = {
+  '/admin/plans': 'pageTitles.admin.subscriptionTemplates'
+}
+
 export function resolveRoutePageTitle(t, path, fallback = '') {
-  const key = PAGE_TITLE_KEYS[path]
+  const key = (!isCommercialEdition() && COMMUNITY_PAGE_TITLE_KEYS[path]) || PAGE_TITLE_KEYS[path]
   return key ? t(key) : fallback
 }
 

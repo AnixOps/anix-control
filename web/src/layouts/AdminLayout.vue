@@ -108,6 +108,7 @@ import ThemeToggle from '@/components/common/ThemeToggle.vue'
 import { resolveRoutePageTitle } from '@/utils/pageMeta'
 import { getSystemInfo } from '@/api/admin'
 import { adminExtensionMenus } from '@/extensions/runtime'
+import { extensionMenuAllowed, filterByEdition, isCommercialEdition, loadEdition } from '@/composables/useEdition'
 import {
   WEBUI_MENU_FALLBACK_PARENT,
   WEBUI_MENU_PARENT_REGISTRY,
@@ -171,9 +172,19 @@ function compareExtensionMenus(left, right) {
     String(left.id || '').localeCompare(String(right.id || ''))
 }
 
+// filterSections drops the menu entries the edition does not serve
+// (`edition: 'commercial'`).
+function filterSections(sections) {
+  return sections.map(section => ({
+    ...section,
+    items: filterByEdition(section.items),
+    ...(section.advancedItems ? { advancedItems: filterByEdition(section.advancedItems) } : {})
+  }))
+}
+
 const navSections = computed(() => {
   const extensionMenusByParent = new Map(WEBUI_MENU_PARENT_REGISTRY.map(parent => [parent, []]))
-  for (const item of adminExtensionMenus.value.filter(menu => userStore.hasPermission(menu.permission))) {
+  for (const item of adminExtensionMenus.value.filter(menu => userStore.hasPermission(menu.permission) && extensionMenuAllowed(menu))) {
     const parent = normalizeWebUIMenuParent(item.parent)
     extensionMenusByParent.get(parent).push({ ...item, parent })
   }
@@ -185,7 +196,7 @@ const navSections = computed(() => {
       : []
   })
 
-  return [
+  return filterSections([
     {
       id: 'overview',
       label: t('layout.admin.sections.overview'),
@@ -200,15 +211,15 @@ const navSections = computed(() => {
       label: t('layout.admin.sections.business'),
       items: [
         { to: '/admin/users', icon: 'users', label: t('layout.admin.nav.users') },
-        { to: '/admin/orders', icon: 'orders', label: t('layout.admin.nav.orders') },
+        { to: '/admin/orders', icon: 'orders', label: t('layout.admin.nav.orders'), edition: 'commercial' },
         { to: '/admin/tickets', icon: 'tickets', label: t('layout.admin.nav.tickets') }
       ],
       advancedItems: [
         { to: '/admin/subscriptions', icon: 'subscriptions', label: t('layout.admin.nav.subscriptions') },
-        { to: '/admin/plans', icon: 'plans', label: t('layout.admin.nav.plans') },
-        { to: '/admin/coupons', icon: 'coupons', label: t('layout.admin.nav.coupons') },
-        { to: '/admin/invite', icon: 'invite', label: t('layout.admin.nav.invite') },
-        { to: '/admin/payment', icon: 'payment', label: t('layout.admin.nav.payment') },
+        { to: '/admin/plans', icon: 'plans', label: isCommercialEdition() ? t('layout.admin.nav.plans') : t('layout.admin.nav.subscriptionTemplates') },
+        { to: '/admin/coupons', icon: 'coupons', label: t('layout.admin.nav.coupons'), edition: 'commercial' },
+        { to: '/admin/invite', icon: 'invite', label: t('layout.admin.nav.invite'), edition: 'commercial' },
+        { to: '/admin/payment', icon: 'payment', label: t('layout.admin.nav.payment'), edition: 'commercial' },
         { to: '/admin/knowledge', icon: 'knowledge', label: t('layout.admin.nav.knowledge') }
       ]
     },
@@ -249,7 +260,7 @@ const navSections = computed(() => {
         { to: '/admin/notifications', icon: 'system', label: t('layout.admin.nav.notifications') }
       ]
     }
-  ]
+  ])
 })
 
 const pageTitle = computed(() => {
@@ -422,6 +433,7 @@ let tabletMediaQuery
 let useWindowResizeListener = false
 
 onMounted(() => {
+  void loadEdition()
   updateTime()
   timer = setInterval(updateTime, 60000)
   if (typeof window !== 'undefined' && window.matchMedia) {

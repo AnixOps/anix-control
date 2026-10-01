@@ -4,6 +4,7 @@ import { createPinia, setActivePinia } from 'pinia'
 import { nextTick } from 'vue'
 import Login from '@/views/Login.vue'
 import { useUserStore } from '@/stores/user'
+import { setEdition } from '@/composables/useEdition'
 
 const mockLogin = vi.hoisted(() => vi.fn())
 const mockRegister = vi.hoisted(() => vi.fn())
@@ -63,7 +64,30 @@ describe('Login.vue', () => {
     // Actual behavior depends on implementation
   })
 
+  it('does not ask for an invite code when registration does not require one', async () => {
+    setEdition('community', { requireInvite: false })
+    mockRegister.mockResolvedValue({ data: { token: 'registered-token', is_admin: false, user_id: 8, email: 'open@example.com' } })
+    const wrapper = mount(Login, {
+      global: {
+        stubs: ['router-link'],
+      },
+    })
+
+    wrapper.vm.isRegisterMode = true
+    await nextTick()
+
+    expect(wrapper.find('#invite-code').exists()).toBe(false)
+    await wrapper.find('#email').setValue('open@example.com')
+    await wrapper.find('#password').setValue('password123')
+    await wrapper.find('#confirm-password').setValue('password123')
+    await wrapper.find('form').trigger('submit.prevent')
+    await flushPromises()
+
+    expect(mockRegister).toHaveBeenCalledWith({ email: 'open@example.com', password: 'password123' })
+  })
+
   it('submits invite code when registering', async () => {
+    setEdition('community', { requireInvite: true })
     mockRegister.mockResolvedValue({
       data: {
         token: 'registered-token',

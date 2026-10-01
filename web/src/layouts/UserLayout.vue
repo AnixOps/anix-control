@@ -82,6 +82,7 @@ import { useAppI18n } from '@/composables/useAppI18n'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import ThemeToggle from '@/components/common/ThemeToggle.vue'
 import { resolveRoutePageTitle } from '@/utils/pageMeta'
+import { filterByEdition, loadEdition } from '@/composables/useEdition'
 
 const router = useRouter()
 const route = useRoute()
@@ -89,13 +90,13 @@ const userStore = useUserStore()
 const { t } = useAppI18n()
 const sidebarOpen = ref(false)
 
-const navItems = computed(() => ([
+const navItems = computed(() => filterByEdition([
   { to: '/user/dashboard', label: t('layout.user.nav.dashboard'), icon: 'DB' },
   { to: '/user/subscribe', label: t('layout.user.nav.subscribe'), icon: 'SB' },
   { to: '/user/knowledge', label: t('layout.user.nav.knowledge'), icon: 'KB' },
   { to: '/user/tickets', label: t('layout.user.nav.tickets'), icon: 'TK' },
-  { to: '/user/plans', label: t('layout.user.nav.plans'), icon: 'PL' },
-  { to: '/user/orders', label: t('layout.user.nav.orders'), icon: 'OR' }
+  { to: '/user/plans', label: t('layout.user.nav.plans'), icon: 'PL', edition: 'commercial' },
+  { to: '/user/orders', label: t('layout.user.nav.orders'), icon: 'OR', edition: 'commercial' }
 ]))
 
 const pageTitle = computed(() => resolveRoutePageTitle(t, route.path, t('layout.user.brand')))
@@ -106,6 +107,7 @@ function logout() {
 }
 
 onMounted(() => {
+  void loadEdition()
   if (userStore.isLoggedIn) {
     userStore.getUserInfo()
   }

@@ -202,6 +202,7 @@ export default {
       subscriptions: 'Subscriptions',
       orders: 'Orders',
       plans: 'Plans',
+      subscriptionTemplates: 'Subscription templates',
       tickets: 'Tickets',
       coupons: 'Coupons',
       knowledge: 'Knowledge Base',
@@ -268,6 +269,7 @@ export default {
         nodes: 'Nodes',
         subscriptions: 'Subscriptions',
         plans: 'Plans',
+        subscriptionTemplates: 'Subscription templates',
         coupons: 'Coupons',
         invite: 'Invite Rewards',
         payment: 'Payment',
@@ -2628,6 +2630,38 @@ export default {
       saveSuccess: 'Saved successfully',
       saveFailed: 'Save failed: {message}',
       saveFailedShort: 'Save failed'
+    }
+  },
+  adminTemplates: {
+    title: 'Subscription templates',
+    subtitle: 'Free subscription templates: traffic quota, speed and device limits, and the subscription groups they grant. Assign one to a user to apply it.',
+    actions: {
+      create: 'Create template'
+    },
+    empty: {
+      noData: 'No subscription templates'
+    },
+    planModal: {
+      createTitle: 'Create subscription template',
+      editTitle: 'Edit subscription template',
+      fields: {
+        name: 'Template name'
+      },
+      placeholders: {
+        name: 'Enter template name'
+      }
+    },
+    assignModal: {
+      title: 'Assign subscription template'
+    },
+    groupModal: {
+      title: 'Template groups - {name}',
+      description: 'Select the subscription groups this template grants.'
+    },
+    messages: {
+      loadFailed: 'Failed to load subscription templates',
+      deleteConfirm: 'Delete this subscription template?',
+      nameRequired: 'Please enter a template name'
     }
   },
   adminPlans: {

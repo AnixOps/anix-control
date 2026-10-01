@@ -4,6 +4,7 @@ import { reactive, nextTick } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import { useUserStore } from '@/stores/user'
 import AdminLayout from '@/layouts/AdminLayout.vue'
+import { setEdition } from '@/composables/useEdition'
 
 const mockPush = vi.fn()
 const mockRoute = reactive({ path: '/admin/dashboard' })
@@ -372,7 +373,8 @@ describe('AdminLayout.vue', () => {
     wrapper.unmount()
   })
 
-  it('contains all admin menu routes in sidebar', () => {
+  it('contains all admin menu routes in sidebar in the commercial edition', () => {
+    setEdition('commercial')
     const wrapper = mount(AdminLayout, {
       global: {
         stubs: {
@@ -388,6 +390,37 @@ describe('AdminLayout.vue', () => {
     const links = wrapper.findAll('a.menu-link').map(link => link.attributes('data-to'))
 
     expect(links).toEqual(expect.arrayContaining(adminMenuPaths))
+  })
+
+  it('hides the commercial menu entries in the community edition', () => {
+    setEdition('community')
+    const userStore = useUserStore()
+    userStore.login('admin-token', { id: 1, is_admin: true, permissions: ['payment.view', 'example.view'] })
+    mockAdminExtensionMenus.value = [
+      { pluginID: 'payment', id: 'payment.main', parent: 'services', label: 'Payment', icon: 'credit-card', to: '/admin/extensions/payment', permission: 'payment.view', order: 140 },
+      { pluginID: 'example', id: 'example.main', parent: 'services', label: 'Example Service', icon: 'EX', to: '/admin/extensions/example', permission: 'example.view', order: 100 },
+    ]
+    const wrapper = mount(AdminLayout, {
+      global: {
+        stubs: {
+          'router-link': {
+            props: ['to'],
+            template: '<a class="menu-link" :data-to="to"><slot /></a>',
+          },
+          'router-view': true,
+        },
+      },
+    })
+
+    const links = wrapper.findAll('a.menu-link').map(link => link.attributes('data-to'))
+    const commercialPaths = ['/admin/orders', '/admin/coupons', '/admin/invite', '/admin/payment', '/admin/extensions/payment']
+    for (const path of commercialPaths) {
+      expect(links).not.toContain(path)
+    }
+    expect(links).toEqual(expect.arrayContaining(adminMenuPaths.filter(path => !commercialPaths.includes(path))))
+    expect(links).toContain('/admin/extensions/example')
+    const templates = wrapper.get('a.menu-link[data-to="/admin/plans"]')
+    expect(templates.text()).toContain('Subscription templates')
   })
 
   it('projects enabled extension menus and titles without changing core navigation', () => {

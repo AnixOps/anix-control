@@ -1,5 +1,16 @@
 import { config } from '@vue/test-utils'
 import { afterEach, beforeAll, beforeEach, vi } from 'vitest'
+import { resetEdition } from '@/composables/useEdition'
+
+// No test reaches the backend for the public configuration: the edition is
+// community unless a test calls setEdition (or mocks getPublicConfig).
+vi.mock('@/api/public', () => ({
+  getPublicConfig: vi.fn(async () => ({
+    edition: 'community',
+    hidden_packages: ['affiliate', 'order', 'payment'],
+    registration: { enabled: true, require_invite: false }
+  }))
+}))
 config.global.plugins = []
 config.global.mocks = {
   $router: {
@@ -53,6 +64,7 @@ beforeAll(async () => {
 })
 
 beforeEach(async () => {
+  resetEdition()
   localStorage.clear()
   sessionStorage.clear()
   localStorage.setItem('app.locale', 'en')

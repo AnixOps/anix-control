@@ -56,6 +56,10 @@ export function useAppI18n() {
     return i18n.global.t(...args)
   }
 
+  function te(key) {
+    return i18n.global.te(key)
+  }
+
   function formatDate(value, options = {}) {
     const date = normalizeDateInput(value)
     if (!date) {
@@ -94,6 +98,7 @@ export function useAppI18n() {
     localeOptions,
     supportedLocales: SUPPORTED_LOCALES,
     t,
+    te,
     switchLocale,
     toggleLocale,
     formatDate,

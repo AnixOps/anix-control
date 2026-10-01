@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import Dashboard from '@/views/admin/Dashboard.vue'
 import { setLocale } from '@/i18n'
+import { setEdition } from '@/composables/useEdition'
 
 const adminApi = vi.hoisted(() => ({
   getDashboard: vi.fn()
@@ -41,6 +42,7 @@ describe('Admin Dashboard', () => {
   })
 
   it('renders legacy dashboard payloads', async () => {
+    setEdition('commercial')
     adminApi.getDashboard.mockResolvedValue({ data: dashboardStats })
 
     const wrapper = mount(Dashboard)
@@ -56,6 +58,7 @@ describe('Admin Dashboard', () => {
   })
 
   it('renders panel envelope dashboard payloads', async () => {
+    setEdition('commercial')
     adminApi.getDashboard.mockResolvedValue({
       code: 0,
       msg: '操作成功',
@@ -70,6 +73,22 @@ describe('Admin Dashboard', () => {
     expect(wrapper.text()).toContain('27')
     expect(wrapper.text()).toContain('¥123.45')
     expect(wrapper.text()).toContain('4.00 KB')
+
+    wrapper.unmount()
+  })
+
+  it('shows no revenue or orders in the community edition', async () => {
+    setEdition('community')
+    adminApi.getDashboard.mockResolvedValue({ data: dashboardStats })
+
+    const wrapper = mount(Dashboard)
+    await flushPromises()
+
+    expect(wrapper.text()).toContain('42')
+    expect(wrapper.text()).toContain('4.00 KB')
+    expect(wrapper.text()).not.toContain('¥')
+    expect(wrapper.text()).not.toContain('123.45')
+    expect(wrapper.findAll('.metric-card')).toHaveLength(3)
 
     wrapper.unmount()
   })

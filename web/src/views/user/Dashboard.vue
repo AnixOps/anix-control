@@ -65,6 +65,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { getSubscription } from '@/api/user'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { filterByEdition } from '@/composables/useEdition'
 
 const { t, formatDate, formatDateTime } = useAppI18n()
 const sub = ref({})
@@ -93,9 +94,9 @@ const progressClass = computed(() => {
 
 const remainingPercent = computed(() => Math.max(0, 100 - (sub.value.usage_percent || 0)).toFixed(1))
 
-const quickActions = computed(() => ([
+const quickActions = computed(() => filterByEdition([
   { to: '/user/subscribe', icon: 'SB', label: t('user.dashboard.quickActions.subscribe') },
-  { to: '/user/orders', icon: 'OR', label: t('user.dashboard.quickActions.orders') },
+  { to: '/user/orders', icon: 'OR', label: t('user.dashboard.quickActions.orders'), edition: 'commercial' },
   { to: '/user/tickets', icon: 'TK', label: t('user.dashboard.quickActions.tickets') },
   { to: '/user/knowledge', icon: 'KB', label: t('user.dashboard.quickActions.knowledge') }
 ]))

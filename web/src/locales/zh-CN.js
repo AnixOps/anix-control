@@ -204,6 +204,7 @@ export default {
       subscriptions: '订阅管理',
       orders: '订单管理',
       plans: '套餐管理',
+      subscriptionTemplates: '订阅模板',
       tickets: '工单管理',
       coupons: '优惠券管理',
       knowledge: '知识库管理',
@@ -270,6 +271,7 @@ export default {
         nodes: '节点管理',
         subscriptions: '订阅管理',
         plans: '套餐管理',
+        subscriptionTemplates: '订阅模板',
         coupons: '优惠券管理',
         invite: '邀请返利管理',
         payment: '支付网关',
@@ -2629,6 +2631,38 @@ export default {
       saveSuccess: '\u4fdd\u5b58\u6210\u529f',
       saveFailed: '\u4fdd\u5b58\u5931\u8d25: {message}',
       saveFailedShort: '\u4fdd\u5b58\u5931\u8d25'
+    }
+  },
+  adminTemplates: {
+    title: '订阅模板',
+    subtitle: '免费的订阅模板：流量额度、速率和设备限制，以及授予的订阅分组。分配给用户即可生效。',
+    actions: {
+      create: '新增模板'
+    },
+    empty: {
+      noData: '暂无订阅模板'
+    },
+    planModal: {
+      createTitle: '新增订阅模板',
+      editTitle: '编辑订阅模板',
+      fields: {
+        name: '模板名称'
+      },
+      placeholders: {
+        name: '请输入模板名称'
+      }
+    },
+    assignModal: {
+      title: '分配订阅模板'
+    },
+    groupModal: {
+      title: '模板分组 - {name}',
+      description: '选择该模板授予的订阅分组。'
+    },
+    messages: {
+      loadFailed: '加载订阅模板失败',
+      deleteConfirm: '确定删除该订阅模板？',
+      nameRequired: '请输入模板名称'
     }
   },
   adminPlans: {

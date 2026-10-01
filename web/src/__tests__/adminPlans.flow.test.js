@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import Plans from '@/views/admin/Plans.vue'
+import { setEdition } from '@/composables/useEdition'
 
 const mockGetPlans = vi.fn()
 const mockGetPlanGroups = vi.fn()
@@ -165,5 +166,57 @@ describe('Admin Plans flow', () => {
 
     expect(alertSpy).toHaveBeenCalledWith(expect.stringContaining('用户不存在'))
     expect(wrapper.vm.showAssign).toBe(true)
+  })
+
+  it('manages free subscription templates without prices in the community edition', async () => {
+    setEdition('community')
+    const plan = { id: 5, name: 'Starter', transfer_enable: 50, speed_limit: 0, device_limit: 0, month_price: 990 }
+    mockGetPlans.mockResolvedValue({ data: [plan] })
+
+    const wrapper = mount(Plans)
+    await flushPromises()
+
+    expect(wrapper.find('h1').text()).toBe('Subscription templates')
+    expect(wrapper.text()).not.toContain('Monthly price')
+    expect(wrapper.text()).not.toContain('990')
+
+    wrapper.vm.openCreateModal()
+    await nextTick()
+    expect(wrapper.find('[data-test="plan-month-price-field"]').exists()).toBe(false)
+    expect(wrapper.text()).toContain('Create subscription template')
+    wrapper.vm.form.name = 'Template'
+    wrapper.vm.form.transfer_enable = 100
+    await wrapper.find('[data-test="plan-save-button"]').trigger('click')
+    await flushPromises()
+    expect(mockCreatePlan).toHaveBeenCalledWith(expect.objectContaining({ name: 'Template', transfer_enable: 100, month_price: null }))
+
+    // Editing a template sends a stored price back unchanged.
+    wrapper.vm.edit(plan)
+    await nextTick()
+    await wrapper.find('[data-test="plan-save-button"]').trigger('click')
+    await flushPromises()
+    expect(mockUpdatePlan).toHaveBeenCalledWith(5, expect.objectContaining({ month_price: 990 }))
+
+    wrapper.vm.openAssign(plan)
+    wrapper.vm.assignForm.user_id = 7
+    await wrapper.vm.assign()
+    await flushPromises()
+    expect(mockAssignPlanToUser).toHaveBeenCalled()
+  })
+
+  it('shows plan prices in the commercial edition', async () => {
+    setEdition('commercial')
+    const plan = { id: 6, name: 'Pro', transfer_enable: 50, speed_limit: 0, device_limit: 0, month_price: 1990 }
+    mockGetPlans.mockResolvedValue({ data: [plan] })
+
+    const wrapper = mount(Plans)
+    await flushPromises()
+
+    expect(wrapper.find('h1').text()).toBe('Plan Management')
+    expect(wrapper.text()).toContain('Monthly price')
+    expect(wrapper.text()).toContain('1990')
+    wrapper.vm.openCreateModal()
+    await nextTick()
+    expect(wrapper.find('[data-test="plan-month-price-field"]').exists()).toBe(true)
   })
 })

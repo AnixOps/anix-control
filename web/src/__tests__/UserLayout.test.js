@@ -4,6 +4,7 @@ import { reactive } from 'vue'
 import { createPinia, setActivePinia } from 'pinia'
 import { useUserStore } from '@/stores/user'
 import UserLayout from '@/layouts/UserLayout.vue'
+import { setEdition } from '@/composables/useEdition'
 
 const mockPush = vi.fn()
 const mockRoute = reactive({ path: '/user/dashboard' })
@@ -53,7 +54,28 @@ describe('UserLayout.vue', () => {
     expect(wrapper.find('main.main-content').attributes('tabindex')).toBe('-1')
   })
 
-  it('contains all user menu routes', () => {
+  it('hides plans and orders in the community edition', () => {
+    setEdition('community')
+    const wrapper = mount(UserLayout, {
+      global: {
+        stubs: {
+          'router-link': {
+            props: ['to'],
+            template: '<a class="menu-link" :data-to="to"><slot /></a>',
+          },
+          'router-view': true,
+        },
+      },
+    })
+
+    const links = wrapper.findAll('a.menu-link').map(link => link.attributes('data-to'))
+    expect(links).toEqual(expect.arrayContaining(['/user/dashboard', '/user/subscribe', '/user/knowledge', '/user/tickets']))
+    expect(links).not.toContain('/user/plans')
+    expect(links).not.toContain('/user/orders')
+  })
+
+  it('contains all user menu routes in the commercial edition', () => {
+    setEdition('commercial')
     const expectedPaths = [
       '/user/dashboard',
       '/user/subscribe',
