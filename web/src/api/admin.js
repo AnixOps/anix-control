@@ -49,6 +49,15 @@ export function getUserList(params) {
   })
 }
 
+// The user list shows no subscription token: read it, with the rest of the
+// user's row, from the user detail.
+export function getAdminUser(id) {
+  return request({
+    url: `/admin/users/${id}`,
+    method: 'get'
+  })
+}
+
 export function getUserStats() {
   return request({
     url: '/admin/users/stats',

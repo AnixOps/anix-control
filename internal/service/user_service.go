@@ -149,13 +149,46 @@ type UserListParams struct {
 
 // UserListResult 用户列表结果
 type UserListResult struct {
-	Total int64        `json:"total"`
-	List  []model.User `json:"list"`
+	Total int64          `json:"total"`
+	List  []UserListItem `json:"list"`
 }
 
-// GetList 获取用户列表
+// UserListItem is one user in the administrator's list: the account
+// (e-mail, administrator, staff and ban flags) and the subscription summary
+// (plan, group, traffic, limits, reset day, expiry, balances), the columns
+// of kapi_user_directory_v1 and kapi_subscriber_entitlement_v1. It carries
+// no credential: the subscription token and proxy uuid, and the rest of the
+// row, are read one user at a time from GET /api/v2/admin/users/:id.
+// identity-platform's native list answers the same fields
+// (packages/identity-platform/native/directory.go).
+type UserListItem struct {
+	ID                uint      `json:"id"`
+	Email             string    `json:"email"`
+	Balance           int64     `json:"balance"`
+	CommissionBalance int64     `json:"commission_balance"`
+	DeviceLimit       *int      `json:"device_limit"`
+	SpeedLimit        *int64    `json:"speed_limit"`
+	FlowResetTime     int64     `json:"flowResetTime"`
+	TransferEnable    int64     `json:"transfer_enable"`
+	U                 int64     `json:"u"`
+	D                 int64     `json:"d"`
+	PlanID            *uint     `json:"plan_id"`
+	GroupID           *uint     `json:"group_id"`
+	ExpiredAt         *int64    `json:"expired_at"`
+	Banned            int       `json:"banned"`
+	IsAdmin           int       `json:"is_admin"`
+	IsStaff           int       `json:"is_staff"`
+	CreatedAt         time.Time `json:"created_at"`
+}
+
+// userListColumns are the v2_user columns of a UserListItem.
+const userListColumns = "id, email, balance, commission_balance, device_limit, speed_limit, flow_reset_time, transfer_enable, " +
+	"u, d, plan_id, group_id, expired_at, banned, is_admin, is_staff, created_at"
+
+// GetList 获取用户列表. Users created in the same instant keep a stable
+// order (created_at DESC, id DESC), so pages neither repeat nor skip a user.
 func (s *UserService) GetList(params UserListParams) (*UserListResult, error) {
-	var users []model.User
+	users := []UserListItem{}
 	var total int64
 
 	query := s.db.Model(&model.User{})
@@ -185,14 +218,14 @@ func (s *UserService) GetList(params UserListParams) (*UserListResult, error) {
 	}
 
 	// 排序
-	orderBy := "created_at DESC"
+	orderBy := "created_at DESC, id DESC"
 	if params.OrderBy != "" {
 		orderBy = params.OrderBy
 	}
 
 	// 分页
 	offset := (params.Page - 1) * params.PageSize
-	if err := query.Preload("Plan").
+	if err := query.Select(userListColumns).
 		Order(orderBy).
 		Offset(offset).
 		Limit(params.PageSize).

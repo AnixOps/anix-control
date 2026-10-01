@@ -34,6 +34,10 @@ describe('admin api mapping', () => {
         expected: { url: '/admin/users', method: 'get', params: { page: 1 } },
       },
       {
+        call: () => adminApi.getAdminUser(12),
+        expected: { url: '/admin/users/12', method: 'get' },
+      },
+      {
         call: () => adminApi.getUserStats(),
         expected: { url: '/admin/users/stats', method: 'get' },
       },

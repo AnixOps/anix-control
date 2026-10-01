@@ -2916,6 +2916,7 @@ export default {
       resetFailed: '重置失败',
       userFlowReset: '用户流量已重置',
       tunnelFlowReset: '隧道流量已重置',
+      fetchUserFailed: '获取用户详情失败',
       noToken: '该用户没有订阅 token',
       subscribeCopied: '订阅链接已复制到剪贴板',
       copyManual: '自动复制失败，请手动复制以下订阅链接：',

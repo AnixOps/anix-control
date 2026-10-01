@@ -165,6 +165,23 @@ PUT /api/v2/admin/users/:id
 DELETE /api/v2/admin/users/:id
 ```
 
+The list (`data.list`, with `data.total`) filters by `email` (substring),
+`plan_id` and `status` (`active`, `expired`, `banned`), newest first
+(`created_at DESC, id DESC`). Each user carries the account and the
+subscription summary, never the subscription token or proxy UUID; read
+those, the remark and the plan row from `GET /api/v2/admin/users/:id`, one
+user at a time (`docs/UPGRADE.md`).
+
+```json
+{
+  "id": 3, "email": "user@example.com", "balance": 0, "commission_balance": 0,
+  "device_limit": 2, "speed_limit": null, "flowResetTime": 0,
+  "transfer_enable": 107374182400, "u": 1024, "d": 4096,
+  "plan_id": 2, "group_id": 1, "expired_at": 1798761600,
+  "banned": 0, "is_admin": 0, "is_staff": 0, "created_at": "2026-09-01T08:00:00Z"
+}
+```
+
 ### 订单管理
 
 ```http

@@ -308,6 +308,25 @@
   `Idempotency-Key`, else its request id). A retry therefore applies once
   whichever side serves it, and a retried removal answers success rather
   than "用户订阅分组不存在".
+- **Breaking for v2 API clients: the administrator's user list no longer
+  shows subscription tokens.** `GET /api/v2/admin/users` answered every
+  listed user's whole `v2_user` row, subscription token and proxy UUID
+  included, with the plan's row. Each user in `data.list` now carries only
+  the account and the subscription summary.
+  - **Removed fields:** `token`, `uuid`, `plan` (the plan row),
+    `invite_user_id`, `telegram_id`, `discount`, `commission_type`,
+    `commission_rate`, `remark_content`, `last_login_at` and `updated_at`.
+  - **Kept:** `id`, `email`, `balance`, `commission_balance`,
+    `device_limit`, `speed_limit`, `flowResetTime`, `transfer_enable`, `u`,
+    `d`, `plan_id`, `group_id`, `expired_at`, `banned`, `is_admin`,
+    `is_staff` and `created_at`.
+  - `GET /api/v2/admin/users/:id` still answers one user's whole row, token
+    included. The administrator's page now reads the token from it to copy
+    a subscription link, fills the edit form from it (the remark is no
+    longer in the list), and names plans from `GET /api/v2/admin/plans`.
+    `docs/UPGRADE.md` lists the change.
+  - Users created in the same second keep a stable order
+    (`created_at DESC, id DESC`); pages could repeat or skip them.
 
 ### Fixed
 

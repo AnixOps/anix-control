@@ -12,13 +12,17 @@ const mockGetSubscriptionGroups = vi.fn()
 const mockGetSubscriptionSettings = vi.fn()
 const mockGetTrafficHourly = vi.fn()
 const mockResetUserSubscribe = vi.fn()
+const mockGetAdminUser = vi.fn()
+const mockGetPlans = vi.fn()
 
 vi.mock('@/api/admin', () => ({
   assignAdminUserTunnel: vi.fn(),
   banUser: (...args) => mockBanUser(...args),
   createUser: (...args) => mockCreateUser(...args),
+  getAdminUser: (...args) => mockGetAdminUser(...args),
   getAdminUserTunnelList: vi.fn(),
   getForwardTunnels: vi.fn(),
+  getPlans: (...args) => mockGetPlans(...args),
   getSpeedLimitList: vi.fn(),
   getSubscriptionGroups: (...args) => mockGetSubscriptionGroups(...args),
   getSubscriptionSettings: (...args) => mockGetSubscriptionSettings(...args),
@@ -45,6 +49,8 @@ describe('Admin Users flow', () => {
     mockGetSubscriptionSettings.mockReset()
     mockGetTrafficHourly.mockReset()
     mockResetUserSubscribe.mockReset()
+    mockGetAdminUser.mockReset()
+    mockGetPlans.mockReset()
     vi.spyOn(window, 'alert').mockImplementation(() => {})
     vi.spyOn(window, 'confirm').mockReturnValue(true)
 
@@ -57,6 +63,8 @@ describe('Admin Users flow', () => {
     mockUpdateUser.mockResolvedValue({})
     mockBanUser.mockResolvedValue({})
     mockCreateUser.mockResolvedValue({})
+    mockGetAdminUser.mockResolvedValue({ code: 0, msg: '操作成功', data: {}, ts: 1783526400000 })
+    mockGetPlans.mockResolvedValue({ code: 0, msg: '操作成功', data: [], ts: 1783526400000 })
   })
 
   afterEach(() => {
@@ -82,7 +90,7 @@ describe('Admin Users flow', () => {
 
     expect(wrapper.text()).toContain('20 Mbps / 2 devices')
 
-    wrapper.vm.editUser(user)
+    await wrapper.vm.editUser(user)
     await nextTick()
 
     await wrapper.find('[data-test="user-speed-limit-input"]').setValue('80')
@@ -258,7 +266,7 @@ describe('Admin Users flow', () => {
     const wrapper = mount(Users)
     await flushPromises()
 
-    wrapper.vm.editUser(user)
+    await wrapper.vm.editUser(user)
     await wrapper.vm.saveUser()
     await flushPromises()
 
@@ -304,5 +312,93 @@ describe('Admin Users flow', () => {
 
     expect(window.alert).toHaveBeenCalledWith('用户不存在')
     expect(mockResetUserSubscribe).toHaveBeenCalledWith(406)
+  })
+
+  it('names each user\'s plan from the plan list, which the user list no longer embeds', async () => {
+    mockGetUserList.mockResolvedValue({
+      data: {
+        list: [
+          { id: 1, email: 'pro@example.com', plan_id: 7, banned: 0 },
+          { id: 2, email: 'gone@example.com', plan_id: 99, banned: 0 },
+          { id: 3, email: 'none@example.com', plan_id: null, banned: 0 },
+        ],
+        total: 3,
+      },
+    })
+    mockGetPlans.mockResolvedValue({ code: 0, msg: '操作成功', data: [{ id: 7, name: 'Pro' }], ts: 1783526400000 })
+
+    const wrapper = mount(Users)
+    await flushPromises()
+
+    const planCells = wrapper.findAll('tbody tr').map(row => row.findAll('td')[2]?.text())
+    expect(planCells).toEqual(['Pro', '-', '-'])
+  })
+
+  it('copies the subscription link with the token of the user detail', async () => {
+    const user = { id: 8, email: 'copy@example.com', banned: 0 }
+    mockGetUserList.mockResolvedValue({ data: { list: [user], total: 1 } })
+    mockGetAdminUser.mockResolvedValueOnce({ code: 0, msg: '操作成功', data: { id: 8, token: 'detail-token' }, ts: 1783526400000 })
+    const writeText = vi.fn().mockResolvedValue(undefined)
+    const clipboard = Object.getOwnPropertyDescriptor(navigator, 'clipboard')
+    const secure = Object.getOwnPropertyDescriptor(window, 'isSecureContext')
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText }, configurable: true })
+    Object.defineProperty(window, 'isSecureContext', { value: true, configurable: true })
+
+    try {
+      const wrapper = mount(Users)
+      await flushPromises()
+      await wrapper.vm.copySubscribe(user)
+      await flushPromises()
+
+      expect(mockGetAdminUser).toHaveBeenCalledWith(8)
+      expect(writeText).toHaveBeenCalledWith(`${window.location.protocol}//${window.location.host}/s/detail-token`)
+      expect(window.alert).toHaveBeenCalledWith('Subscription link copied to clipboard')
+    } finally {
+      if (clipboard) Object.defineProperty(navigator, 'clipboard', clipboard)
+      else delete navigator.clipboard
+      if (secure) Object.defineProperty(window, 'isSecureContext', secure)
+      else delete window.isSecureContext
+    }
+  })
+
+  it('reports a user without a token and a detail that fails to load', async () => {
+    const user = { id: 9, email: 'none@example.com', banned: 0 }
+    mockGetUserList.mockResolvedValue({ data: { list: [user], total: 1 } })
+    mockGetAdminUser
+      .mockResolvedValueOnce({ code: 0, msg: '操作成功', data: { id: 9, token: '' }, ts: 1783526400000 })
+      .mockResolvedValueOnce({ code: -1, msg: '用户不存在', data: null, ts: 1783526400000 })
+
+    const wrapper = mount(Users)
+    await flushPromises()
+    await wrapper.vm.copySubscribe(user)
+    await wrapper.vm.copySubscribe(user)
+    await flushPromises()
+
+    expect(window.alert).toHaveBeenCalledWith('This user has no subscription token')
+    expect(window.alert).toHaveBeenCalledWith('用户不存在')
+  })
+
+  it('fills the edit form from the user detail, remark included', async () => {
+    const user = { id: 10, email: 'edit@example.com', balance: 5, banned: 0 }
+    mockGetUserList.mockResolvedValue({ data: { list: [user], total: 1 } })
+    mockGetAdminUser.mockResolvedValueOnce({
+      code: 0, msg: '操作成功', data: { id: 10, email: 'edit@example.com', balance: 7, remark_content: 'vip' }, ts: 1783526400000,
+    })
+
+    const wrapper = mount(Users)
+    await flushPromises()
+    await wrapper.vm.editUser(user)
+    await flushPromises()
+
+    expect(mockGetAdminUser).toHaveBeenCalledWith(10)
+    expect(wrapper.vm.editingUser.remark_content).toBe('vip')
+    expect(wrapper.vm.editingUser.balance).toBe(7)
+
+    mockGetAdminUser.mockRejectedValueOnce(new Error('offline'))
+    vi.spyOn(console, 'error').mockImplementation(() => {})
+    await wrapper.vm.editUser(user)
+    expect(wrapper.vm.editingUser.balance).toBe(5)
+    expect(wrapper.vm.editingUser.remark_content).toBeUndefined()
+    expect(wrapper.vm.showEditModal).toBe(true)
   })
 })

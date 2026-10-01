@@ -656,6 +656,34 @@ nodes need nothing.
   still answers a node's API key and secret, for the deployment helper and
   Ansible. Each read is now recorded in `v2_audit_log` with action `reveal`.
 
+### The Administrator's User List No Longer Shows Subscription Tokens
+
+`GET /api/v2/admin/users` answered every listed user's whole `v2_user` row,
+the subscription token and proxy UUID included, with the plan's row. Each
+user in `data.list` now carries only the account and the subscription
+summary; `total` and the query parameters are unchanged.
+
+- **Kept:** `id`, `email`, `balance`, `commission_balance`, `device_limit`,
+  `speed_limit`, `flowResetTime`, `transfer_enable`, `u`, `d`, `plan_id`,
+  `group_id`, `expired_at`, `banned`, `is_admin`, `is_staff` and
+  `created_at`.
+- **Removed:** `token`, `uuid`, `plan` (the whole plan row), `invite_user_id`,
+  `telegram_id`, `discount`, `commission_type`, `commission_rate`,
+  `remark_content`, `last_login_at` and `updated_at`. Password hashes were
+  never serialized.
+- **Where to read them.** `GET /api/v2/admin/users/:id` still answers one
+  user's whole row, token, UUID, remark and plan included. A plan's name is
+  in `GET /api/v2/admin/plans`.
+- **Order.** Users created in the same second now keep a stable order
+  (`created_at DESC, id DESC`), so pages no longer repeat or skip them.
+
+The bundled administrator page reads the token from the user detail when it
+copies a subscription link, fills the edit form from the user detail, and
+names plans from the plan list; it needs no other change. Control Center's
+v2board plugin passes the answer through unchanged. A script that read
+tokens from the list must read `GET /api/v2/admin/users/:id` per user.
+`GET /api/v2/admin/users/stats` is unchanged.
+
 ## Moving Logins To The Identity Module
 
 From 4.1 the identity module can own accounts, passwords, MFA and token
