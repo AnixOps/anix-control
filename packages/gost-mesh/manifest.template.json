@@ -17,7 +17,9 @@
     "forward.tunnel.health",
     "forward.route.policy",
     "plugin.runtime-state",
-    "plugin.cleanup"
+    "plugin.cleanup",
+    "kernel.settings.nodex.read.v1",
+    "kernel.settings.nodex.secrets.v1"
   ],
   "dependencies": [],
   "conflicts": [],

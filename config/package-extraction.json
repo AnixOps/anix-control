@@ -318,7 +318,7 @@
       "path": "/api/v2/admin/forward/nodex/doctor",
       "package_id": "gost-mesh",
       "route_id": "gost.admin.forward.nodex.doctor.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -326,7 +326,7 @@
       "path": "/api/v2/admin/forward/nodex/status",
       "package_id": "gost-mesh",
       "route_id": "gost.admin.forward.nodex.status.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {

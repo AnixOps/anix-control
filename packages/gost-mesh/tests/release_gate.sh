@@ -139,6 +139,7 @@ manifest_path, artifact_path, gost_sha256 = sys.argv[1:]
 expected_capabilities = [
     "forward.gost.mesh", "forward.tunnel.wss", "forward.tunnel.quic",
     "forward.tunnel.health", "forward.route.policy", "plugin.runtime-state", "plugin.cleanup",
+    "kernel.settings.nodex.read.v1", "kernel.settings.nodex.secrets.v1",
 ]
 expected_permissions = [
     "gost-mesh.view", "gost-mesh.api", "gost-mesh.network-admin", "gost-mesh.process-exec",
