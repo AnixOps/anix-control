@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"gorm.io/gorm"
 )
 
@@ -24,19 +25,35 @@ func NewForwardNodeService(db *gorm.DB) *ForwardNodeService {
 	return &ForwardNodeService{db: db}
 }
 
-// Create 创建节点
+// Create 创建节点. The node's token is written to the split tables in the
+// same transaction (nodesecrets.Sync), as by Update and Delete.
 func (s *ForwardNodeService) Create(node *model.ForwardNode) error {
-	return s.db.Create(node).Error
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(node).Error; err != nil {
+			return err
+		}
+		return nodesecrets.Sync(tx, nodesecrets.TableForwardNode, node.ID)
+	})
 }
 
 // Update 更新节点
 func (s *ForwardNodeService) Update(node *model.ForwardNode) error {
-	return s.db.Save(node).Error
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Save(node).Error; err != nil {
+			return err
+		}
+		return nodesecrets.Sync(tx, nodesecrets.TableForwardNode, node.ID)
+	})
 }
 
 // Delete 删除节点
 func (s *ForwardNodeService) Delete(id uint) error {
-	return s.db.Delete(&model.ForwardNode{}, id).Error
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Delete(&model.ForwardNode{}, id).Error; err != nil {
+			return err
+		}
+		return nodesecrets.Sync(tx, nodesecrets.TableForwardNode, id)
+	})
 }
 
 // GetByID 根据ID获取节点

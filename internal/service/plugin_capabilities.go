@@ -77,6 +77,13 @@ var (
 		// v2_node_protocol could push unvalidated configuration to every
 		// node.
 		"v2_node_protocol": true, "v2_wireguard_peer": true,
+		// The node credential split (node-ops-service.md, section 4): the
+		// credentials and protocol secrets moved out of the tables above,
+		// in clear, and the split's state. The v4_kernel_ prefix protects
+		// them already; they are named so that no future exception to the
+		// prefix (a finalized table becoming adoptable) can reach them.
+		"v4_kernel_node_credential": true, "v4_kernel_protocol_secret": true,
+		"v4_kernel_node_secret_split": true,
 	}
 )
 

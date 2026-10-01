@@ -17,6 +17,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/cache"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -151,7 +152,13 @@ func (s *NodeService) CreateNode(node *model.Node) error {
 			TLS:       0,
 			Transport: &defaultTransport,
 		}
-		return tx.Create(protocol).Error
+		if err := tx.Create(protocol).Error; err != nil {
+			return err
+		}
+		if err := nodesecrets.Sync(tx, nodesecrets.TableNode, node.ID); err != nil {
+			return err
+		}
+		return nodesecrets.Sync(tx, nodesecrets.TableNodeProtocol, protocol.ID)
 	})
 }
 
@@ -181,7 +188,12 @@ func (s *NodeService) UpdateNode(id uint, updates map[string]any) error {
 	_ = cache.Delete(nodeCacheKey(id))
 	_ = cache.Delete(CacheKeyNodeList)
 
-	return s.db.Model(&model.Node{}).Where("id = ?", id).Updates(updates).Error
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.Node{}).Where("id = ?", id).Updates(updates).Error; err != nil {
+			return err
+		}
+		return nodesecrets.Sync(tx, nodesecrets.TableNode, id)
+	})
 }
 
 // keepNodeRawConfigUpdate gives a raw configuration update the stored
@@ -347,7 +359,13 @@ func (s *NodeService) DeleteNode(id uint) error {
 		if err := tx.Where("node_id = ?", id).Delete(&model.NodeProtocol{}).Error; err != nil {
 			return err
 		}
-		return tx.Delete(&model.Node{}, id).Error
+		if err := nodesecrets.Sync(tx, nodesecrets.TableNodeProtocol, protocolIDs...); err != nil {
+			return err
+		}
+		if err := tx.Delete(&model.Node{}, id).Error; err != nil {
+			return err
+		}
+		return nodesecrets.Sync(tx, nodesecrets.TableNode, id)
 	})
 }
 
@@ -447,6 +465,17 @@ func (s *NodeService) RegisterNode(req *model.NodeRegisterRequest, clientIP stri
 			return errors.New("更新密钥使用计数失败")
 		}
 
+		// The node's credentials, its protocol and the key it used, in
+		// the split tables too.
+		for _, write := range []struct {
+			table string
+			id    uint
+		}{{nodesecrets.TableNode, node.ID}, {nodesecrets.TableNodeProtocol, protocol.ID}, {nodesecrets.TableAuthorizedKey, authKey.ID}} {
+			if err := nodesecrets.Sync(tx, write.table, write.id); err != nil {
+				log.Printf("[node] register: saving the split credentials failed: %v", err)
+				return errors.New("保存节点凭据失败")
+			}
+		}
 		return nil
 	}); err != nil {
 		return nil, err
@@ -686,7 +715,12 @@ func (s *NodeService) CreateProtocol(protocol *model.NodeProtocol) error {
 		return err
 	}
 
-	return s.db.Omit(clause.Associations).Create(protocol).Error
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Omit(clause.Associations).Create(protocol).Error; err != nil {
+			return err
+		}
+		return nodesecrets.Sync(tx, nodesecrets.TableNodeProtocol, protocol.ID)
+	})
 }
 
 // UpdateProtocol 更新协议. The protocol's id and node are never updated, and
@@ -733,7 +767,12 @@ func (s *NodeService) UpdateProtocol(id uint, updates map[string]any) error {
 		return err
 	}
 
-	return s.db.Model(&model.NodeProtocol{}).Where("id = ?", id).Updates(normalized).Error
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Model(&model.NodeProtocol{}).Where("id = ?", id).Updates(normalized).Error; err != nil {
+			return err
+		}
+		return nodesecrets.Sync(tx, nodesecrets.TableNodeProtocol, id)
+	})
 }
 
 // DeleteProtocol 删除协议
@@ -745,7 +784,10 @@ func (s *NodeService) DeleteProtocol(id uint) error {
 		if err := deleteProtocolGroupLinks(tx, id); err != nil {
 			return err
 		}
-		return tx.Delete(&model.NodeProtocol{}, id).Error
+		if err := tx.Delete(&model.NodeProtocol{}, id).Error; err != nil {
+			return err
+		}
+		return nodesecrets.Sync(tx, nodesecrets.TableNodeProtocol, id)
 	})
 }
 
@@ -817,7 +859,12 @@ func (s *NodeService) GenerateAuthKey(name string, expireDays int) (*model.Autho
 		authKey.ExpireAt = &expireAt
 	}
 
-	if err := s.db.Create(authKey).Error; err != nil {
+	if err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Create(authKey).Error; err != nil {
+			return err
+		}
+		return nodesecrets.Sync(tx, nodesecrets.TableAuthorizedKey, authKey.ID)
+	}); err != nil {
 		return nil, "", err
 	}
 
@@ -835,7 +882,12 @@ func (s *NodeService) GetAuthKeys() ([]model.AuthorizedKey, error) {
 
 // DeleteAuthKey 删除授权密钥
 func (s *NodeService) DeleteAuthKey(id uint) error {
-	return s.db.Delete(&model.AuthorizedKey{}, id).Error
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Delete(&model.AuthorizedKey{}, id).Error; err != nil {
+			return err
+		}
+		return nodesecrets.Sync(tx, nodesecrets.TableAuthorizedKey, id)
+	})
 }
 
 // ========== 统计 ==========
@@ -896,27 +948,36 @@ func InitDefaultAuthKeyFromEnv() {
 	}
 
 	// 2. 如果存在同名"Default (from env)"，删除旧的（环境变量已改变，需要更新）
-	var existingIDs []uint
-	db.Model(&model.AuthorizedKey{}).
-		Where("name = ?", "Default (from env)").
-		Pluck("id", &existingIDs)
-	if len(existingIDs) > 0 {
-		log.Printf("Removing old default auth key (name matches, content changed)...")
-		for _, id := range existingIDs {
-			db.Delete(&model.AuthorizedKey{}, id)
-		}
-	}
-
-	// 3. 创建新的授权密钥
-	log.Println("Creating default auth key from environment...")
+	// 3. 创建新的授权密钥. The old keys go and the new one is created, with
+	// their split copies, in one transaction.
 	authKey := &model.AuthorizedKey{
 		Name:    "Default (from env)",
 		Key:     defaultKey,
 		KeyHash: keyHash,
 		Used:    0,
 	}
-
-	if err := db.Create(authKey).Error; err != nil {
+	if err := db.Transaction(func(tx *gorm.DB) error {
+		var existingIDs []uint
+		if err := tx.Model(&model.AuthorizedKey{}).
+			Where("name = ?", "Default (from env)").
+			Pluck("id", &existingIDs).Error; err != nil {
+			return err
+		}
+		if len(existingIDs) > 0 {
+			log.Printf("Removing old default auth key (name matches, content changed)...")
+			if err := tx.Delete(&model.AuthorizedKey{}, existingIDs).Error; err != nil {
+				return err
+			}
+			if err := nodesecrets.Sync(tx, nodesecrets.TableAuthorizedKey, existingIDs...); err != nil {
+				return err
+			}
+		}
+		log.Println("Creating default auth key from environment...")
+		if err := tx.Create(authKey).Error; err != nil {
+			return err
+		}
+		return nodesecrets.Sync(tx, nodesecrets.TableAuthorizedKey, authKey.ID)
+	}); err != nil {
 		log.Printf("Failed to create default auth key: %v", err)
 		return
 	}

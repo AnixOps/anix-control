@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 )
 
 // NodeSecretPlaceholder stands for a node secret in the administrator's
@@ -30,31 +31,11 @@ var nodeProtocolSecretColumns = []string{"settings", "tls_settings", "transport_
 // preshared_key, Shadowsocks' server_key, psk and password, the Hysteria2
 // obfs-password and auth, and any other *_key, password, passwd, pass,
 // secret, token, credential or seed. Public keys, Reality's short_id and the
-// paths of key files (key_file, wss_key_file) are not secrets.
+// paths of key files (key_file, wss_key_file) are not secrets. The rule is
+// nodesecrets.IsSecretKey, which also places the secrets the credential
+// split moves.
 func IsNodeSecretKey(key string) bool {
-	compact := strings.ToLower(strings.TrimSpace(key))
-	compact = strings.NewReplacer("_", "", "-", "", ".", "", " ", "").Replace(compact)
-	if compact == "" {
-		return false
-	}
-	if strings.Contains(compact, "public") || strings.Contains(compact, "publishable") ||
-		compact == "shortid" || compact == "shortids" ||
-		strings.HasSuffix(compact, "file") || strings.HasSuffix(compact, "path") {
-		return false
-	}
-	switch compact {
-	case "psk", "pass", "auth", "authstr", "seed":
-		return true
-	}
-	if strings.HasSuffix(compact, "key") || strings.HasSuffix(compact, "keys") {
-		return true
-	}
-	for _, marker := range []string{"secret", "password", "passwd", "token", "credential"} {
-		if strings.Contains(compact, marker) {
-			return true
-		}
-	}
-	return false
+	return nodesecrets.IsSecretKey(key)
 }
 
 // RedactNodeSecretsJSON replaces the secret values of a node protocol

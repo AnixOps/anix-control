@@ -794,6 +794,55 @@ granted once, or the payment is refused and the order left as it is.
   `Order payment reconciler:`, and a line per completed order and per
   failure. Payments paid more than 90 days ago are left as they are.
 
+### Node Credentials Are Also Kept In The Split Tables (Phase P1)
+
+This release starts the node credential split
+(`docs/architecture/node-ops-service.md`, section 4) at phase P1,
+dual-write. At start Control creates three new tables, and alters no
+existing one:
+
+- `v4_kernel_node_credential`: node API keys and shared secrets,
+  registration keys, forward node tokens (with the `host:api_port` they are
+  pinned to) and clean agent tokens;
+- `v4_kernel_protocol_secret`: the secrets inside node protocol settings
+  and raw configurations (by JSON pointer), and WireGuard peer keys;
+- `v4_kernel_node_secret_split`: each table's phase (`dual_write`) and the
+  outcome of the commands below.
+
+Every kernel write of a credential or secret (node creation, update and
+deletion, registration, registration keys, forward nodes, clean agents,
+protocols, WireGuard peers and their rotation) now also writes these
+tables, in the same transaction. Nothing reads them yet: every reader still
+uses the legacy columns, which keep every value. An older binary therefore
+works as before after a rollback; writes it makes do not reach the new
+tables, so run `backfill` again after upgrading again.
+
+The values are stored in clear, like the legacy columns, and the tables are
+protected: no package can adopt them. Database backups and dumps hold them,
+as they hold the legacy columns.
+
+After the upgrade, copy the existing rows and compare both forms. Each
+command prints JSON with counts and digests and never a secret; run it with
+the server's configuration (`ANIX_CONTROL_CONFIG` or `-config`):
+
+```bash
+anix-control node-secrets backfill   # idempotent; resumes an interrupted pass
+anix-control node-secrets verify     # exit 3 when the forms differ
+anix-control node-secrets status     # phase, backfill progress, last verify
+```
+
+- `backfill` works table by table in batches by id (`-batch 500`), one
+  transaction per batch, and records its progress, so it can run while
+  Control serves. `-table v2_node,v2_node_protocol` limits it; `-restart`
+  starts a new pass instead of resuming. Running it again changes nothing.
+- `verify` reads both forms in one snapshot and names up to `-samples 20`
+  differing secrets per table by subject and kind or JSON pointer
+  (`missing`, `extra`, `different`). A difference after a completed backfill
+  means a write bypassed Control's writers; `backfill` repairs it.
+- The phase stays `dual_write`. Nothing depends on these commands in this
+  release; the next phase, where readers move to the new tables with a
+  fallback, will require a matching `verify` first.
+
 ## Moving Logins To The Identity Module
 
 From 4.1 the identity module can own accounts, passwords, MFA and token

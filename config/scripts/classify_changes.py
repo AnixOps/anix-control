@@ -64,6 +64,8 @@ CLASS_PATTERNS: dict[str, tuple[str, ...]] = {
         "internal/kernelorder/*",
         "internal/kernelsettings/*",
         "internal/kerneltelemetry/*",
+        # The node credential split's writer and its PostgreSQL tests.
+        "internal/nodesecrets/*",
         "sdk/v2compat/*",
         "packages/identity-platform/*",
         "identity/*",

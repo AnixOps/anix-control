@@ -16,6 +16,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"gorm.io/gorm"
 )
 
@@ -134,6 +135,11 @@ func ensureTargetIsSafe(db *gorm.DB, reset bool) error {
 			if err := db.Exec(fmt.Sprintf("DELETE FROM %s", table)).Error; err != nil {
 				return fmt.Errorf("reset table %s: %w", table, err)
 			}
+		}
+		// The deleted nodes' and protocols' copies in the node credential
+		// split tables go too.
+		if _, err := nodesecrets.Prune(db, nodesecrets.TableNode, nodesecrets.TableNodeProtocol); err != nil {
+			return fmt.Errorf("reset node secret split tables: %w", err)
 		}
 		return nil
 	}

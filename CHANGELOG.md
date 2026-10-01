@@ -438,6 +438,46 @@
     that a removed, renamed or renumbered field fails. The proto golden file
     grows by 55 elements. The manual SDK Sync workflow runs the renamed
     `TestDescriptorExtendsExternalAgentSDK`.
+- **Node credential split, phase P1: dual-write** (the KernelNodeOps design,
+  `docs/architecture/node-ops-service.md`, section 4; NO-2). Node
+  credentials and protocol secrets are now also kept in new protected
+  tables, as the first step towards packages adopting the credential-free
+  node tables. No existing table is altered, and nothing reads the new
+  tables yet.
+  - New tables, created at start: `v4_kernel_node_credential` (node API
+    keys and shared secrets, registration keys, forward node tokens with the
+    `host:api_port` they are pinned to, clean agent tokens; one current
+    version per credential, replaced versions retired with their value
+    cleared), `v4_kernel_protocol_secret` (the secrets inside protocol
+    settings and raw configurations by JSON pointer, WireGuard peer keys)
+    and `v4_kernel_node_secret_split` (each table's phase, `dual_write`, and
+    the backfill and verify outcomes). Values are in clear, like the legacy
+    columns (decision D5). The tables are protected: `service.protectedTables`
+    names them, so no manifest can adopt them.
+  - `internal/nodesecrets` is their one writer. Every kernel writer of a
+    moved column calls it in the transaction of its legacy write, and it
+    derives the new rows from the legacy rows just written, so a failure
+    leaves neither: node creation, update (raw configuration) and deletion,
+    registration, registration key creation, use, deletion and the
+    `NODE_DEFAULT_AUTH_KEY` seed, forward node creation, update and
+    deletion, clean agent tokens and revocation, protocol creation, update
+    and deletion, WireGuard peer creation, rotation (`wgrotate`) and
+    deletion (with their protocol, node or user), and the XBoard import
+    (`cmd/migrate`).
+  - New commands `anix-control node-secrets backfill` (idempotent, in
+    batches by id, resumable), `verify` (compares SHA-256 digests over every
+    secret of both forms in one snapshot; exits 3 on a difference and names
+    the differing secrets by subject or JSON pointer, never by value) and
+    `status`. The phase stays `dual_write`; see `docs/UPGRADE.md`.
+  - `service.IsNodeSecretKey` is now `nodesecrets.IsSecretKey`, so the
+    administrator's masks and the split place secrets by one rule; a test
+    proves the stored positions restore every masked document.
+  - Tests on SQLite and PostgreSQL (`internal/nodesecrets`,
+    `internal/tests/nodesecretsplit`, both on the CI PostgreSQL line):
+    backfill then verify with equal digests, detected mismatches,
+    dual-write from each writer, a failed split write rolling back the
+    legacy write, tombstones against the unique indexes, idempotent
+    re-runs, and the legacy readers authenticating every node afterwards.
 
 - **The administrator dashboard and the user's subscription summary run
   natively, from the kernel's caches** (`docs/architecture/kernel-caches.md`).

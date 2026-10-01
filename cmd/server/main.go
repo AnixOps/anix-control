@@ -342,6 +342,9 @@ func main() {
 func run() int {
 	migrateOnly := takeMigrateCommand()
 	moduleArguments := takeModuleCommand()
+	nodeSecretsArguments := takeNodeSecretsCommand()
+	// Module and node-secrets commands print JSON on stdout.
+	jsonCommand := moduleArguments != nil || nodeSecretsArguments != nil
 	flag.Parse()
 	if printEnv {
 		if err := writeEnvTable(os.Stdout); err != nil {
@@ -365,7 +368,7 @@ func run() int {
 	syncBuildInfo()
 	// Module commands print JSON on stdout, so the banner goes to stderr.
 	banner := os.Stdout
-	if moduleArguments != nil {
+	if jsonCommand {
 		banner = os.Stderr
 	}
 	_, _ = fmt.Fprintf(banner, "%s v%s (build: %s)\n", branding.ControlName, version, buildTime)
@@ -375,12 +378,12 @@ func run() int {
 	if err != nil {
 		log.Fatalf("Failed to load config: %v", err)
 	}
-	if !migrateOnly && moduleArguments == nil {
+	if !migrateOnly && !jsonCommand {
 		if err := cfg.ValidateForServer(); err != nil {
 			log.Fatalf("Invalid config: %v", err)
 		}
 	}
-	if moduleArguments != nil {
+	if jsonCommand {
 		// Module commands print their result on stdout; logs go to stderr.
 		logging.SetupTo(cfg.Log, os.Stderr)
 	} else {
@@ -439,6 +442,16 @@ func run() int {
 	if moduleArguments != nil {
 		if err := runModuleCommand(context.Background(), cfg, database.Get(), moduleArguments, os.Stdout); err != nil {
 			log.Printf("module: %v", err)
+			return 2
+		}
+		return 0
+	}
+	if nodeSecretsArguments != nil {
+		if err := runNodeSecretsCommand(context.Background(), database.Get(), nodeSecretsArguments, os.Stdout); err != nil {
+			log.Printf("node-secrets: %v", err)
+			if errors.Is(err, errNodeSecretsMismatch) {
+				return 3
+			}
 			return 2
 		}
 		return 0
