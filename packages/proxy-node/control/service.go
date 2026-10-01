@@ -78,7 +78,8 @@ var proxyNodeRoutes = map[string]struct{}{
 //     cache.
 //   - Node deletion removes the node's protocols and WireGuard peers in one
 //     kernel transaction.
-//   - Node credentials answer the API key and secret.
+//   - Node credentials answer the API key and secret. Kernel-owned (D4): no
+//     contract call reveals a stored secret.
 //   - The raw configuration is the node's runtime configuration, WireGuard
 //     private keys included; its update writes v2_node.
 //   - Configuration validation reads no table, but it runs the kernel's
@@ -91,7 +92,8 @@ var proxyNodeRoutes = map[string]struct{}{
 //   - Node registration, heartbeat and runtime health: a registration mints
 //     node credentials; the others are authenticated by the node's API key
 //     in the kernel and write v2_node, the heartbeat also adding traffic up
-//     the node's parent chain.
+//     the node's parent chain. Kernel-owned (D3): A2 replaces them with
+//     enrollment and stream reports, and 5.0 removes them (D8).
 //   - The agent WebSocket is a live connection the kernel holds and pushes
 //     to.
 //   - UniProxy: node-authenticated; the user list carries every eligible

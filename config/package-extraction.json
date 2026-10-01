@@ -238,16 +238,18 @@
       "path": "/api/v2/admin/forward/local/doctor",
       "package_id": "forward",
       "route_id": "forward.admin.forward.local.doctor.get",
-      "mode": "bridged",
-      "legacy": "router"
+      "mode": "kernel-owned",
+      "legacy": "router",
+      "reason": "diagnoses the kernel's local Ansible executor (paths and files on Control's disk); kept until the runtime moves to agents (A5, D4)"
     },
     {
       "method": "GET",
       "path": "/api/v2/admin/forward/local/status",
       "package_id": "forward",
       "route_id": "forward.admin.forward.local.status.get",
-      "mode": "bridged",
-      "legacy": "router"
+      "mode": "kernel-owned",
+      "legacy": "router",
+      "reason": "status of the kernel's local Ansible executor (paths and files on Control's disk); kept until the runtime moves to agents (A5, D4)"
     },
     {
       "method": "GET",
@@ -430,8 +432,9 @@
       "path": "/api/v2/admin/forward/runtime/doctor",
       "package_id": "forward",
       "route_id": "forward.admin.forward.runtime.doctor.get",
-      "mode": "bridged",
-      "legacy": "router"
+      "mode": "kernel-owned",
+      "legacy": "router",
+      "reason": "diagnoses the kernel's own forward executors (NodeX client, Ansible settings, job queue); kept until the runtime moves to agents (A5, D4)"
     },
     {
       "method": "GET",
@@ -446,8 +449,9 @@
       "path": "/api/v2/admin/forward/runtime/status",
       "package_id": "forward",
       "route_id": "forward.admin.forward.runtime.status.get",
-      "mode": "bridged",
-      "legacy": "router"
+      "mode": "kernel-owned",
+      "legacy": "router",
+      "reason": "status of the kernel's own forward executors (NodeX client, Ansible settings, job queue); kept until the runtime moves to agents (A5, D4)"
     },
     {
       "method": "GET",
@@ -694,8 +698,9 @@
       "path": "/api/v2/admin/nodes/:id/credentials",
       "package_id": "proxy-node",
       "route_id": "proxy.admin.nodes.id.credentials.get",
-      "mode": "bridged",
-      "legacy": "router"
+      "mode": "kernel-owned",
+      "legacy": "router",
+      "reason": "answers the node's stored API key and secret, and no contract call reveals a stored secret (node-ops-service.md 3.7, D4)"
     },
     {
       "method": "GET",
@@ -1645,8 +1650,9 @@
       "path": "/api/v2/forward-agent/heartbeat",
       "package_id": "forward",
       "route_id": "forward.forward_agent.heartbeat.post",
-      "mode": "bridged",
-      "legacy": "router"
+      "mode": "kernel-owned",
+      "legacy": "router",
+      "reason": "clean agent channel: the token-authenticated agent claims runtime jobs from the kernel; removed in 5.0 (D3/D8)"
     },
     {
       "method": "GET",
@@ -1661,24 +1667,27 @@
       "path": "/api/v2/forward-agent/register",
       "package_id": "forward",
       "route_id": "forward.forward_agent.register.post",
-      "mode": "bridged",
-      "legacy": "router"
+      "mode": "kernel-owned",
+      "legacy": "router",
+      "reason": "clean agent channel: authenticates the agent's token and records it in the kernel; replaced by A2 enrollment, removed in 5.0 (D3/D8)"
     },
     {
       "method": "POST",
       "path": "/api/v2/forward-agent/report",
       "package_id": "forward",
       "route_id": "forward.forward_agent.report.post",
-      "mode": "bridged",
-      "legacy": "router"
+      "mode": "kernel-owned",
+      "legacy": "router",
+      "reason": "clean agent channel: the token-authenticated agent completes its runtime jobs and reports traffic in the kernel; removed in 5.0 (D3/D8)"
     },
     {
       "method": "GET",
       "path": "/api/v2/forward/agent/rules",
       "package_id": "forward",
       "route_id": "forward.forward.agent.rules.get",
-      "mode": "bridged",
-      "legacy": "router"
+      "mode": "kernel-owned",
+      "legacy": "router",
+      "reason": "agent channel: authenticated by a forward node's API token in the kernel; A2 pushes the rules instead, removed in 5.0 (D3/D8)"
     },
     {
       "method": "POST",
@@ -1765,24 +1774,27 @@
       "path": "/api/v2/internal/forward/traffic/report",
       "package_id": "forward",
       "route_id": "forward.internal.forward.traffic.report.post",
-      "mode": "bridged",
-      "legacy": "router"
+      "mode": "kernel-owned",
+      "legacy": "router",
+      "reason": "flow report: forward, subscriber and permission traffic change in one kernel transaction, as callers send no batch id; until A2 batches (D4)"
     },
     {
       "method": "POST",
       "path": "/api/v2/internal/forward/traffic/snapshot",
       "package_id": "forward",
       "route_id": "forward.internal.forward.traffic.snapshot.post",
-      "mode": "bridged",
-      "legacy": "router"
+      "mode": "kernel-owned",
+      "legacy": "router",
+      "reason": "flow snapshot: forward, subscriber and permission traffic change in one kernel transaction, as callers send no batch id; until A2 batches (D4)"
     },
     {
       "method": "POST",
       "path": "/api/v2/internal/forward/traffic/upload",
       "package_id": "forward",
       "route_id": "forward.internal.forward.traffic.upload.post",
-      "mode": "bridged",
-      "legacy": "router"
+      "mode": "kernel-owned",
+      "legacy": "router",
+      "reason": "flow upload: forward, subscriber and permission traffic change in one kernel transaction, as callers send no batch id; until A2 batches (D4)"
     },
     {
       "method": "POST",
@@ -1797,24 +1809,27 @@
       "path": "/api/v2/node/heartbeat",
       "package_id": "proxy-node",
       "route_id": "proxy.node.heartbeat.post",
-      "mode": "bridged",
-      "legacy": "router"
+      "mode": "kernel-owned",
+      "legacy": "router",
+      "reason": "node channel: authenticated by the node's API key in the kernel, writes v2_node and parent traffic; removed in 5.0 (D3/D8)"
     },
     {
       "method": "POST",
       "path": "/api/v2/node/register",
       "package_id": "proxy-node",
       "route_id": "proxy.node.register.post",
-      "mode": "bridged",
-      "legacy": "router"
+      "mode": "kernel-owned",
+      "legacy": "router",
+      "reason": "node channel: a registration key mints the node's credentials in the kernel; replaced by A2 enrollment, removed in 5.0 (D3/D8)"
     },
     {
       "method": "POST",
       "path": "/api/v2/node/runtime-health",
       "package_id": "proxy-node",
       "route_id": "proxy.node.runtime_health.post",
-      "mode": "bridged",
-      "legacy": "router"
+      "mode": "kernel-owned",
+      "legacy": "router",
+      "reason": "node channel: authenticated by the node's API key in the kernel, writes the node's runtime health; removed in 5.0 (D3/D8)"
     },
     {
       "method": "GET",

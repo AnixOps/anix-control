@@ -10,8 +10,8 @@ open work in [`../../TODO.md`](../../TODO.md).
 
 > 中文摘要：v4.0.0 的「插件化」只到路由层；本文定义「一个领域真正住在插件里」
 > 的验收标准、目标机制（存储租约 + 按路由模式 + 类型化内核操作，均已实现）、
-> 保留下来的旧计划约束，以及 M0–M4 里程碑。292 条 v2 路由中，171 条
-> `native-flagged`，105 条 `bridged`（待契约），16 条 `kernel-owned`（按设计留在内核）。
+> 保留下来的旧计划约束，以及 M0–M4 里程碑。292 条 v2 路由中，173 条
+> `native-flagged`，88 条 `bridged`（待契约），31 条 `kernel-owned`（按设计留在内核）。
 
 Markers used below: **CURRENT** = true in the tree today; **PLANNED** = accepted
 design, not implemented yet; **HISTORICAL** = preserved from a retired plan for
@@ -36,8 +36,8 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   affiliate (10), forward (21), gost-mesh (3), knowledge (6),
   machine-telemetry (3), notification (23), order (13), payment (20), plan
   (7), platform (5), protocol-runtime (3), proxy-node (7), subscription (21),
-  ticket (8) and wireguard (1). 16 routes are `kernel-owned`: they stay in the
-  kernel by design, and each row says why. The other 103 are `bridged` until a
+  ticket (8) and wireguard (1). 31 routes are `kernel-owned`: they stay in the
+  kernel by design, and each row says why. The other 88 are `bridged` until a
   kernel contract lets their package serve them (section 3.2 lists what
   unblocks them). None is `native` yet. The identity routes are
   `identity-bridge`. `check_plugin_only_routes.py` enforces the map against
@@ -84,7 +84,7 @@ Route modes per package (2026-10-01):
 | Package | `native-flagged` | `bridged` | `kernel-owned` |
 |---|---|---|---|
 | affiliate | 10 | 0 | 0 |
-| forward | 21 | 64 | 0 |
+| forward | 21 | 53 | 11 |
 | gost-mesh | 3 | 0 | 0 |
 | identity-platform | 22 | 0 | 0 |
 | knowledge | 6 | 0 | 0 |
@@ -95,10 +95,11 @@ Route modes per package (2026-10-01):
 | plan | 7 | 0 | 0 |
 | platform | 5 | 0 | 7 |
 | protocol-runtime | 3 | 11 | 6 |
-| proxy-node | 7 | 23 | 1 |
+| proxy-node | 7 | 19 | 5 |
 | subscription | 21 | 4 | 0 |
 | ticket | 8 | 0 | 0 |
 | wireguard | 1 | 0 | 0 |
+| **all** | **173** | **88** | **31** |
 
 Reusable pieces that already exist:
 
@@ -194,8 +195,8 @@ by `check_plugin_only_routes.py` (counts in section 1).
 |---|---|---|
 | `native-flagged` | the package host has a native handler, proved by a parity test; the legacy handler stays, so every runtime mode works | 173 |
 | `native` | the legacy handler is deleted and the host answers alone | 0 |
-| `bridged` | the host only relays, until a kernel contract lets the package serve the route | 103 |
-| `kernel-owned` | the host only relays, by design: the route stays in the kernel, and the row's `reason` says why | 16 |
+| `bridged` | the host only relays, until a kernel contract lets the package serve the route | 88 |
+| `kernel-owned` | the host only relays, by design: the route stays in the kernel, and the row's `reason` says why | 31 |
 
 A `bridged` or `kernel-owned` route is registered and relayed alike: it is
 in its host's `bridgedRoutes`, and no other source of its package names it,
@@ -210,14 +211,23 @@ so it has no native handler. The `kernel-owned` routes:
 - protocol-runtime: the agent channel (registration, heartbeat, task poll,
   result, monitor and the WebSocket): node credentials checked in the
   kernel, connections and reports in its memory;
-- proxy-node: the node agent WebSocket.
+- forward, decided in [`node-ops-service.md`](node-ops-service.md#6-route-mapping)
+  (D3 and D4): the runtime status and doctor (the kernel's own executors,
+  until the runtime moves to agents, A5), flow accounting (one kernel
+  transaction; the callers send no batch id) and the agent channel (clean
+  agent registration, heartbeat and report, and the agents' rule list);
+- proxy-node: the node credentials display (no contract call reveals a
+  stored secret, D4), node registration, heartbeat and runtime health (D3)
+  and the node agent WebSocket.
+
+5.0 removes the agent and node channel routes of forward, protocol-runtime
+and proxy-node (D8).
 
 What unblocks the `bridged` routes:
 
 | Unblocked by | Routes | Count |
 |---|---|---|
-| KernelNodeOps and the node credential split (section 3.3) | forward: nodes, Ansible machines, clean agent tokens, every change applied on a node (a speed limit update included), runtime status and jobs, flow accounting; proxy-node: node administration, credentials, raw configuration, authorization keys, load balancer checks; protocol-runtime: node protocols, sync, Agent Control and agent operations; subscription: a group's protocols and the protocol pool | 84 |
-| Open decision: `kernel-owned`, or a package behind node authentication in the kernel | node registration, heartbeat and runtime health; clean agent registration, heartbeat and report; the agents' forward rule list | 7 |
+| KernelNodeOps and the node credential split (section 3.3) | forward: nodes, Ansible machines, clean agent tokens, every change applied on a node (a speed limit update included), runtime jobs; proxy-node: node administration, raw configuration, authorization keys, load balancer checks; protocol-runtime: node protocols, sync, Agent Control and agent operations; subscription: a group's protocols and the protocol pool | 76 |
 | Open decision: whether UniProxy and the subscription renderer stay in the kernel | UniProxy (5) and the subscription preview | 6 |
 | A proxy node view with parent and load | forward observability targets, trend and topology | 3 |
 | A read of Control's process configuration `forward_runtime.clean_agent.public_url` (a KernelSettings-style namespace, or the host's environment) | the clean agent install script: its panel URL is that setting when set, else the request's scheme and host | 1 |
@@ -649,20 +659,22 @@ The planned `kernel.entitlement.apply.v1` became
     configurations) is not proxy-node's: the protocol routes belong to
     protocol-runtime, whose extraction decides whether it may hold those
     keys, as payment holds its gateways' secrets.
-  - **Stay bridged** (23) or **kernel-owned** (the agent WebSocket), with
+  - **Stay bridged** (19) or **kernel-owned** (5: the credentials,
+    registration, heartbeat, runtime health and the agent WebSocket), with
     the reason in the host's route map:
-    - node list, detail, creation, update, deletion, credentials and raw
-      configuration: they read or write the node credentials, the list and
-      detail embed each node's protocols with their Reality private keys,
-      the raw configuration carries WireGuard private keys, an update
+    - node list, detail, creation, update, deletion, credentials
+      (`kernel-owned`, D4) and raw configuration: they read or write the
+      node credentials, the list and detail embed each node's protocols
+      with their Reality private keys, the raw configuration carries
+      WireGuard private keys, an update
       clears the kernel's in-memory node cache, and a deletion removes the
       node's protocols and WireGuard peers in one transaction;
     - configuration validation: no table, but the kernel's WireGuard
       protocol validator, which the protocol routes share;
     - the authorization keys: the list answers each key in clear, and the
       kernel's HTTP and gRPC registration read them;
-    - registration, heartbeat and runtime health: authenticated or minted
-      node credentials, and writes to `v2_node`;
+    - registration, heartbeat and runtime health (`kernel-owned`, D3):
+      authenticated or minted node credentials, and writes to `v2_node`;
     - the agent WebSocket (`kernel-owned`), a live connection the kernel
       holds and pushes to, and UniProxy: node-authenticated, with every
       eligible subscriber's UUID in the user list, subscriber traffic in a
@@ -709,7 +721,8 @@ The planned `kernel.entitlement.apply.v1` became
     gRPC and REST), a clean agent's token authenticates it, and clean agent
     jobs carry the node's API token in their payloads: a package holding
     them could act as any forward node or agent.
-  - **Stay bridged (64):**
+  - **Stay bridged (53) or kernel-owned (11: D3 and D4 in
+    [`node-ops-service.md`](node-ops-service.md#6-route-mapping)):**
     - forward nodes and Ansible machines (`v2_forward_node`; the answers
       show tokens to administrators, the kernel's gost manager caches each
       node's address and token, the checks and statistics sync reach the
@@ -721,20 +734,21 @@ The planned `kernel.entitlement.apply.v1` became
       Control;
     - the legacy rules other than the user's list (pushed to NodeX with the
       nodes' tokens; the administrator's answers embed the nodes' tokens)
-      and the agents' rule list (node token authentication);
+      and the agents' rule list (node token authentication; `kernel-owned`);
     - runtime status, diagnosis and jobs (the protected NodeX and Ansible
-      settings, NodeX calls, Control's disk, job payloads with tokens);
+      settings, NodeX calls, Control's disk, job payloads with tokens); the
+      status and diagnosis are `kernel-owned`;
     - the observability targets, trend and topology, which read the proxy
       nodes of `v2_node`;
     - clean agents and their registration, heartbeat, report and install
       script (agent tokens, job claims; the script's panel URL is Control's
       `forward_runtime.clean_agent.public_url` when set, process
       configuration no package can read, else the request's scheme and
-      host);
-    - flow upload, report and snapshot: the forward's counters, the
-      subscriber's traffic and the permission's traffic change in one kernel
-      transaction under a per-forward lock in Control's memory, and
-      exhaustion pauses forwards on their nodes.
+      host); registration, heartbeat and report are `kernel-owned`;
+    - flow upload, report and snapshot (`kernel-owned`): the forward's
+      counters, the subscriber's traffic and the permission's traffic
+      change in one kernel transaction under a per-forward lock in
+      Control's memory, and exhaustion pauses forwards on their nodes.
 - **Protocol runtime (in place).** 3 of protocol-runtime's 20 routes run
   natively, proved by `internal/tests/protocolruntimecompat`: the protocol
   templates (static data) and the administrator's diagnostic task history
