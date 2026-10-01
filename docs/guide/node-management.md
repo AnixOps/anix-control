@@ -187,6 +187,9 @@ POST /api/v2/admin/auth-keys
 }
 ```
 
+应答中的 `key` 只返回这一次，请当场复制（节点页「授权密钥」弹窗中的「生成密钥」同理）。
+`GET /api/v2/admin/auth-keys` 中的 `key` 显示为 `********`。
+
 ### 查看节点列表
 
 ```bash

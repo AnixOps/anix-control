@@ -205,10 +205,20 @@ PUT /api/v2/admin/nodes/:id/protocols/:protocol_id
 DELETE /api/v2/admin/nodes/:id/protocols/:protocol_id
 ```
 
+管理端应答不再明文返回节点密钥：协议 `settings`、`tls_settings`、
+`transport_settings`、`reality_settings`、`custom_config` 中名称表示密钥的字段
+（Reality/TLS `private_key`、WireGuard `server_private_key`、`server_key`、
+`password`、`obfs-password`、`psk`、`token` 等）以及节点 `raw_config` 中的密钥都显示为
+`********`；公钥和 Reality `short_id` 照常显示。更新时原样提交 `********` 即保留已存的值，
+提交新值则替换。节点自身仍通过 UniProxy / gRPC 拿到真实配置。
+
+`GET /api/v2/admin/nodes/:id/credentials` 返回单个节点的 `api_key` / `secret`
+（部署助手和 Ansible 使用），每次读取都记入审计日志（action `reveal`）。
+
 ### 授权密钥管理
 
 ```http
-# 获取密钥列表
+# 获取密钥列表（key 显示为 ********）
 GET /api/v2/admin/auth-keys
 
 # 生成密钥
@@ -221,6 +231,9 @@ POST /api/v2/admin/auth-keys
 # 删除密钥
 DELETE /api/v2/admin/auth-keys/:id
 ```
+
+授权密钥只在 `POST /api/v2/admin/auth-keys` 的应答中返回一次，请当场复制；
+列表中的 `key` 显示为 `********`，节点注册按密钥哈希校验，不受影响。
 
 ### Flux user/tunnel compatibility
 

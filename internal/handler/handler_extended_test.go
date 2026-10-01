@@ -1588,7 +1588,7 @@ func (s *NodeRawConfigTestSuite) SetupTest() {
 		Port:      443,
 		APIKey:    "test-key",
 		Status:    1,
-		RawConfig: strPtr(`{"key":"value"}`),
+		RawConfig: strPtr(`{"log_level":"value"}`),
 	}
 	s.db.Create(s.testNode)
 
@@ -1610,7 +1610,7 @@ func (s *NodeRawConfigTestSuite) TestGetNodeRawConfig() {
 	assert.Equal(s.T(), float64(s.testNode.ID), data["node_id"])
 	assert.Equal(s.T(), s.testNode.Name, data["name"])
 	rawConfig := data["raw_config"].(map[string]any)
-	assert.Equal(s.T(), "value", rawConfig["key"])
+	assert.Equal(s.T(), "value", rawConfig["log_level"])
 	assert.NotContains(s.T(), resp, "error")
 }
 

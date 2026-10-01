@@ -72,6 +72,10 @@ func (h *ForwardHandler) ListNodes(c *gin.Context) {
 		panelError(c, err.Error())
 		return
 	}
+	// A node's API token is shown once, when the node is created.
+	for _, node := range nodes {
+		service.MaskForwardNodeToken(node)
+	}
 
 	panelSuccess(c, gin.H{
 		"list":      nodes,
@@ -115,7 +119,8 @@ func (h *ForwardHandler) CreateNode(c *gin.Context) {
 		Enabled:     true,
 	}
 
-	if req.APIToken != "" {
+	// A token sent as the masked placeholder is no token: one is generated.
+	if req.APIToken != "" && req.APIToken != service.NodeSecretPlaceholder {
 		node.APIToken = req.APIToken
 	} else {
 		token, err := h.nodeService.GenerateAPIToken()
@@ -136,6 +141,7 @@ func (h *ForwardHandler) CreateNode(c *gin.Context) {
 		return
 	}
 
+	// The token is shown in this answer only; later answers mask it.
 	panelSuccess(c, node)
 }
 
@@ -156,6 +162,7 @@ func (h *ForwardHandler) GetNode(c *gin.Context) {
 	if !ok {
 		return
 	}
+	service.MaskForwardNodeToken(node)
 
 	panelSuccess(c, node)
 }
@@ -202,7 +209,8 @@ func (h *ForwardHandler) UpdateNode(c *gin.Context) {
 	if req.APIPort > 0 {
 		node.APIPort = req.APIPort
 	}
-	if req.APIToken != "" {
+	// An empty token, or the masked placeholder, keeps the stored one.
+	if req.APIToken != "" && req.APIToken != service.NodeSecretPlaceholder {
 		node.APIToken = req.APIToken
 	}
 	if req.MetricsPort > 0 {
@@ -236,6 +244,7 @@ func (h *ForwardHandler) UpdateNode(c *gin.Context) {
 		panelError(c, err.Error())
 		return
 	}
+	service.MaskForwardNodeToken(node)
 
 	panelSuccess(c, node)
 }
@@ -367,6 +376,10 @@ func (h *ForwardHandler) ListRules(c *gin.Context) {
 		panelError(c, err.Error())
 		return
 	}
+	// The relay and exit nodes are shown with masked API tokens.
+	for _, rule := range rules {
+		service.MaskForwardRuleNodeTokens(rule)
+	}
 
 	panelSuccess(c, gin.H{
 		"list":      rules,
@@ -420,6 +433,7 @@ func (h *ForwardHandler) CreateRule(c *gin.Context) {
 		panelError(c, err.Error())
 		return
 	}
+	service.MaskForwardRuleNodeTokens(rule)
 
 	panelSuccess(c, rule)
 }
@@ -448,6 +462,7 @@ func (h *ForwardHandler) GetRule(c *gin.Context) {
 		panelError(c, "rule not found")
 		return
 	}
+	service.MaskForwardRuleNodeTokens(rule)
 
 	panelSuccess(c, rule)
 }
@@ -524,6 +539,7 @@ func (h *ForwardHandler) UpdateRule(c *gin.Context) {
 		panelError(c, err.Error())
 		return
 	}
+	service.MaskForwardRuleNodeTokens(rule)
 
 	panelSuccess(c, rule)
 }

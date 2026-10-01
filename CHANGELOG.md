@@ -60,6 +60,50 @@
     code is created.
   - No other path creates a user's codes; an administrator's generation,
     if one is added, is not limited (`InviteService.GenerateInviteCode`).
+- Administrator answers no longer show node secrets in clear; they read
+  `********`, the placeholder of system configuration and payment gateway
+  secrets.
+  - **Node protocols.** The node list and detail,
+    `GET /api/v2/admin/nodes/:id/protocols`, the answer of
+    `POST /api/v2/admin/nodes/:id/protocols`, and a subscription group's
+    protocols and the protocol pool
+    (`GET /api/v2/admin/subscription/groups/:id/protocols`,
+    `GET /api/v2/admin/subscription/protocols/available`) showed whole
+    `v2_node_protocol` rows: Reality and TLS private keys, WireGuard server
+    private keys, Shadowsocks server keys, Hysteria2 obfuscation and auth
+    passwords, and tokens in a custom configuration. A setting whose name
+    marks a secret (`*_key` except public keys and key file paths,
+    `password`, `psk`, `auth`, `token`, `secret`, `credential`, `seed`) now
+    reads `********` in `settings`, `tls_settings`, `transport_settings`,
+    `reality_settings` and `custom_config`. Public keys and Reality's
+    `short_id` are still shown. A node's raw configuration (`raw_config` in
+    the node answers and `GET /api/v2/admin/nodes/:id/raw-config`) is masked
+    the same way.
+  - **Saving back.** A protocol update, a raw configuration update and a
+    node update that send `********` keep the stored secret, and a new value
+    replaces it, so the protocol editor keeps working. A new protocol has
+    nothing stored, so `********` in it is stored empty.
+  - **Registration keys.** `GET /api/v2/admin/auth-keys` showed every node
+    registration key. Keys now read `********`. `POST /api/v2/admin/auth-keys`
+    still answers the new key, once, and the node page's Auth Key dialog can
+    now generate one.
+  - **Forward node tokens.** `GET /api/v2/admin/forward/nodes[/:id]`, the
+    answer of `PUT /api/v2/admin/forward/nodes/:id`, and the relay and exit
+    nodes in the admin forward rule answers showed every node's `api_token`,
+    which authenticates the node's agent. It now reads `********`.
+    `POST /api/v2/admin/forward/nodes` answers it once, and the forward node
+    page and the setup wizard show a generated token after creating the
+    node. An update that sends an empty token or `********` keeps the stored
+    token.
+  - **Proxy node credentials.** A proxy node's `api_key` and `secret` were
+    already left out of the node answers.
+    `GET /api/v2/admin/nodes/:id/credentials` still answers them, for the
+    deployment helper and Ansible, and the audit log now records every read
+    of it, as action `reveal`.
+
+  Nodes and agents are not affected: UniProxy, the gRPC node service and
+  the forward agent routes read the stored values. None of these routes has
+  a native package handler. See `docs/UPGRADE.md`.
 
 ## 4.1.0-rc.1 - 2026-10-01
 

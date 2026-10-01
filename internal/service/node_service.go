@@ -156,7 +156,9 @@ func (s *NodeService) CreateNode(node *model.Node) error {
 }
 
 // UpdateNode 更新节点. The node's id and credentials are never updated, and
-// a new parent is checked whatever spelling names it (see columnUpdates).
+// a new parent is checked whatever spelling names it (see columnUpdates). A
+// raw configuration secret sent as NodeSecretPlaceholder keeps its stored
+// value.
 func (s *NodeService) UpdateNode(id uint, updates map[string]any) error {
 	updates, err := columnUpdates(s.db, &model.Node{}, updates, "id", "api_key", "api_key_hash", "secret")
 	if err != nil {
@@ -171,12 +173,42 @@ func (s *NodeService) UpdateNode(id uint, updates map[string]any) error {
 			return err
 		}
 	}
+	if err := s.keepNodeRawConfigUpdate(id, updates); err != nil {
+		return err
+	}
 
 	// 清除缓存
 	_ = cache.Delete(nodeCacheKey(id))
 	_ = cache.Delete(CacheKeyNodeList)
 
 	return s.db.Model(&model.Node{}).Where("id = ?", id).Updates(updates).Error
+}
+
+// keepNodeRawConfigUpdate gives a raw configuration update the stored
+// values of the secrets it sends as NodeSecretPlaceholder, as the
+// administrator's answers show them (see KeepNodeSecretsJSON).
+func (s *NodeService) keepNodeRawConfigUpdate(id uint, updates map[string]any) error {
+	var text string
+	switch value := updates["raw_config"].(type) {
+	case string:
+		text = value
+	case *string:
+		if value == nil {
+			return nil
+		}
+		text = *value
+	default:
+		return nil
+	}
+	if !strings.Contains(text, NodeSecretPlaceholder) {
+		return nil
+	}
+	var stored model.Node
+	if err := s.db.Select("id", "raw_config").Where("id = ?", id).Limit(1).Find(&stored).Error; err != nil {
+		return err
+	}
+	updates["raw_config"] = KeepNodeRawConfig(text, stored.RawConfig)
+	return nil
 }
 
 // parentIDUpdate reads the parent of a node update: null, a JSON number or
@@ -637,7 +669,8 @@ func (s *NodeService) GetProtocol(id uint) (*model.NodeProtocol, error) {
 // CreateProtocol 创建协议, its own columns only (see CreateNode): a
 // protocol body's "node" created a node without an API key and moved the
 // protocol to it, and its "subscription_groups" were created and linked.
-// Linking protocols to groups has its own route.
+// Linking protocols to groups has its own route. A secret sent as
+// NodeSecretPlaceholder is stored empty, since nothing is stored yet.
 func (s *NodeService) CreateProtocol(protocol *model.NodeProtocol) error {
 	protocol.ID = 0
 	protocol.Node = nil
@@ -648,6 +681,7 @@ func (s *NodeService) CreateProtocol(protocol *model.NodeProtocol) error {
 	if err := s.db.First(&node, protocol.NodeID).Error; err != nil {
 		return errors.New("节点不存在")
 	}
+	keepNodeProtocolSecrets(protocol)
 	if err := ValidateNodeProtocol(protocol); err != nil {
 		return err
 	}
@@ -657,7 +691,8 @@ func (s *NodeService) CreateProtocol(protocol *model.NodeProtocol) error {
 
 // UpdateProtocol 更新协议. The protocol's id and node are never updated, and
 // the update is checked with the values it writes, whatever spelling names
-// them (see columnUpdates).
+// them (see columnUpdates). A secret sent as NodeSecretPlaceholder, as the
+// administrator's answers show it, keeps its stored value.
 func (s *NodeService) UpdateProtocol(id uint, updates map[string]any) error {
 	var current model.NodeProtocol
 	if err := s.db.First(&current, id).Error; err != nil {
@@ -672,6 +707,7 @@ func (s *NodeService) UpdateProtocol(id uint, updates map[string]any) error {
 	if err != nil {
 		return err
 	}
+	keepNodeProtocolSecretUpdates(normalized, &current)
 	currentJSON, err := json.Marshal(current)
 	if err != nil {
 		return err

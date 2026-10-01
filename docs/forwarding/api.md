@@ -277,6 +277,11 @@ Base path: `/api/v2/admin`
 `ForwardNode` online status is only coarse TCP reachability to `host:port`.
 Runtime attachment must be verified through runtime jobs and relay state.
 
+A node's `api_token` reads `********` in every answer except the one of
+`POST /forward/nodes`, which shows it once. `PUT /forward/nodes/:id` with an
+empty `api_token` or `********` keeps the stored token. The relay and exit
+nodes in the legacy rule answers below are masked the same way.
+
 ## Admin Legacy Rule Routes
 
 Base path: `/api/v2/admin`
