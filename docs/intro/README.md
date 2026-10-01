@@ -52,10 +52,11 @@ important parts, in request order:
   the host protocol (`sdk/api/pluginhost/v1`) and `sdk/packagebridgesdk` to call
   the bridge protocol (`sdk/api/packagebridge/v1`).
 - **Nodes**: the node runtime is `anix-agent` (separate repository
-  `AnixOps/anix-agent`). Control imports only
-  `github.com/AnixOps/anix-agent/sdk` and talks to agents over gRPC: the
-  `anix.agent.v1` control stream for signed package lifecycle work, plus the
-  legacy `v2board` panel-node services and UniProxy HTTP for compatibility.
+  `AnixOps/anix-agent`). Control imports no anix-agent module; it owns the
+  Agent contract in its SDK module (`sdk/api/agent/v1`) and talks to agents
+  over gRPC: the `anix.agent.v1` control stream for signed package lifecycle
+  work, plus the legacy `v2board` panel-node services and UniProxy HTTP for
+  compatibility.
 - **Control Center** (`control-center/`): a separate Go module, web, Flutter,
   and Cloudflare Workers app that manages plugins through `/api/v2/login` and
   `/api/v3`.

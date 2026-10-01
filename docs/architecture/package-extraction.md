@@ -697,7 +697,9 @@ package list is now sixteen with `identity-platform`):
 - SQLite and PostgreSQL both pass clean bootstrap, upgrade, backup/restore,
   and reverse-upgrade rehearsals.
 - Agent changes ship as a tagged `github.com/AnixOps/anix-agent/sdk`; no
-  submodules either way.
+  submodules either way. (Superseded: the Agent contract now lives in
+  `github.com/AnixOps/anix-control/sdk`, and `anix-agent/sdk` is frozen at
+  v1.1.0.)
 
 From `2026-07-19-v2-full-package-cutover.md`, Global Constraints (condensed):
 

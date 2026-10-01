@@ -11,6 +11,14 @@ on:
 permissions:
   contents: read
 
+# The Agent contract (anix.agent.v1) lives in this repository's SDK module,
+# github.com/AnixOps/anix-control/sdk. During the transition anix-agent may
+# still build against its own SDK, github.com/AnixOps/anix-agent/sdk (frozen at
+# v1.1.0). The job reads anix-agent's go.mod and checks whichever applies:
+# - requires anix-agent/sdk: its agent descriptor must stay identical to
+#   Control's except for go_package;
+# - requires anix-control/sdk: anix-agent builds and tests against this
+#   checkout's ./anix-control/sdk through a go.work replace.
 jobs:
   sdk-sync:
     runs-on: ubuntu-latest
@@ -34,23 +42,113 @@ jobs:
           agent_go="$(readlink -f "$(command -v go)")"
           echo "ANIXOPS_AGENT_GO=${agent_go}" >> "$GITHUB_ENV"
 
-      - name: Initialize workspace
+      - name: Detect the Agent contract source
+        id: contract
+        shell: bash
         run: |
-          go work init ./anix-control ./anix-agent ./anix-agent/sdk
-          sdk_module="github.com/AnixOps/anix-agent/sdk"
-          for module_file in anix-agent/go.mod anix-control/go.mod; do
-            sdk_version="$(awk -v module="${sdk_module}" '$1 == module { print $2; exit }' "${module_file}")"
-            if [[ -n "${sdk_version}" ]]; then
-              go work edit "-replace=${sdk_module}@${sdk_version}=./anix-agent/sdk"
-            fi
-          done
+          requirement_version() {
+            go mod edit -json anix-agent/go.mod \
+              | jq -r --arg module "$1" '.Require[]? | select(.Path == $module) | .Version'
+          }
+          agent_sdk_version="$(requirement_version github.com/AnixOps/anix-agent/sdk)"
+          control_sdk_version="$(requirement_version github.com/AnixOps/anix-control/sdk)"
+          if [[ -z "${agent_sdk_version}" && -z "${control_sdk_version}" ]]; then
+            echo "::error::anix-agent requires neither github.com/AnixOps/anix-agent/sdk nor github.com/AnixOps/anix-control/sdk"
+            exit 1
+          fi
+          echo "anix-agent/sdk: ${agent_sdk_version:-not required}"
+          echo "anix-control/sdk: ${control_sdk_version:-not required}"
+          {
+            echo "agent_sdk_version=${agent_sdk_version}"
+            echo "control_sdk_version=${control_sdk_version}"
+          } >> "$GITHUB_OUTPUT"
 
-      - name: Test SDK and Agent
+      - name: Initialize workspace
+        shell: bash
+        env:
+          AGENT_SDK_VERSION: ${{ steps.contract.outputs.agent_sdk_version }}
+          CONTROL_SDK_VERSION: ${{ steps.contract.outputs.control_sdk_version }}
         run: |
-          cd anix-agent/sdk
-          GOWORK="$GITHUB_WORKSPACE/go.work" go test ./... -count=1
-          cd ..
-          GOEXPERIMENT=jsonv2 GOWORK="$GITHUB_WORKSPACE/go.work" go test ./api/agent ./node -count=1
+          go work init ./anix-control ./anix-agent
+          if [[ -n "${CONTROL_SDK_VERSION}" ]]; then
+            go work edit "-replace=github.com/AnixOps/anix-control/sdk=./anix-control/sdk"
+          fi
+          if [[ -n "${AGENT_SDK_VERSION}" ]]; then
+            go work use ./anix-agent/sdk
+            go work edit "-replace=github.com/AnixOps/anix-agent/sdk@${AGENT_SDK_VERSION}=./anix-agent/sdk"
+          fi
+          cat go.work
+
+      - name: Verify the Agent SDK contract matches Control's
+        if: steps.contract.outputs.agent_sdk_version != ''
+        shell: bash
+        run: |
+          dump_dir="${RUNNER_TEMP}/agent-sdk-descriptor"
+          descriptor="${RUNNER_TEMP}/agent-sdk-descriptor.binpb"
+          mkdir -p "${dump_dir}"
+          cat > "${dump_dir}/go.mod" <<EOF
+          module anixops.local/agentsdkdescriptor
+
+          go 1.25.0
+
+          require github.com/AnixOps/anix-agent/sdk v0.0.0
+
+          replace github.com/AnixOps/anix-agent/sdk => ${GITHUB_WORKSPACE}/anix-agent/sdk
+          EOF
+          cat > "${dump_dir}/main.go" <<'EOF'
+          // Writes the anix.agent.v1 file descriptor that anix-agent's SDK
+          // compiles in, serialized deterministically.
+          package main
+
+          import (
+            "log"
+            "os"
+
+            _ "github.com/AnixOps/anix-agent/sdk/api/grpc/agent/v1"
+            "google.golang.org/protobuf/proto"
+            "google.golang.org/protobuf/reflect/protodesc"
+            "google.golang.org/protobuf/reflect/protoregistry"
+          )
+
+          func main() {
+            service, err := protoregistry.GlobalFiles.FindDescriptorByName("anix.agent.v1.AgentControlService")
+            if err != nil {
+              log.Fatal(err)
+            }
+            raw, err := proto.MarshalOptions{Deterministic: true}.Marshal(protodesc.ToFileDescriptorProto(service.ParentFile()))
+            if err != nil {
+              log.Fatal(err)
+            }
+            if err := os.WriteFile(os.Args[1], raw, 0o600); err != nil {
+              log.Fatal(err)
+            }
+          }
+          EOF
+          (cd "${dump_dir}" && GOWORK=off go mod tidy && GOWORK=off go run . "${descriptor}")
+          cd anix-control/sdk
+          ANIXOPS_AGENT_SDK_DESCRIPTOR="${descriptor}" GOWORK=off \
+            go test ./api/agent/v1 -run '^TestDescriptorMatchesExternalAgentSDK$' -count=1 -v | tee "${RUNNER_TEMP}/descriptor-test.log"
+          grep -q -- '--- PASS: TestDescriptorMatchesExternalAgentSDK' "${RUNNER_TEMP}/descriptor-test.log"
+
+      - name: Test Agent SDK
+        if: steps.contract.outputs.agent_sdk_version != ''
+        working-directory: anix-agent/sdk
+        env:
+          GOWORK: ${{ github.workspace }}/go.work
+        run: go test ./... -count=1
+
+      - name: Test Agent
+        working-directory: anix-agent
+        shell: bash
+        env:
+          GOEXPERIMENT: jsonv2
+          GOWORK: ${{ github.workspace }}/go.work
+        run: |
+          # The Agent packages that use the contract. Not ./...: in this shared
+          # workspace Control's newer dependencies break anix-agent's quic-go forks.
+          packages=(./api/agent ./node ./plugin ./cmd/agent-control-fixture)
+          go vet "${packages[@]}"
+          go test "${packages[@]}" -count=1
 
       - uses: actions/setup-go@v6
         with:

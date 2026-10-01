@@ -254,9 +254,23 @@ password instead of failing.
 The contracts and SDKs form their own Go module,
 `github.com/AnixOps/anix-control/sdk`, in `sdk/`:
 
-- **Contracts:** `sdk/api/{pluginhost,packagebridge,modulepki,identity,kernelidentity}/v1`.
+- **Contracts:** `sdk/api/{pluginhost,packagebridge,modulepki,identity,kernelidentity,agent}/v1`.
 - **SDKs:** `sdk/moduletls`, `sdk/pluginhostsdk`, `sdk/packagebridgesdk`,
   `sdk/modulesdk`, `sdk/packagestoresdk`, `sdk/v2compat`.
+- **Agent contract:** `sdk/api/agent/v1` (the `anix.agent.v1` control stream,
+  Go package `agentv1pb`, described in its `PROTOCOL.md`), with the helpers
+  `sdk/agentcontrol` (protocol constants, capability checks) and
+  `sdk/plugincontrol` (package operation and runtime status types).
+
+**Agent contract source of truth.** The Agent contract moved here from
+`github.com/AnixOps/anix-agent/sdk`, which is frozen at v1.1.0 and gets no new
+releases. Only `option go_package` changed, so Agents built against that SDK
+keep working: `sdk/api/agent/v1/agent_descriptor_test.go` proves the file
+descriptor equals v1.1.0's apart from `go_package`. Control imports no
+anix-agent module (`config/scripts/check_agent_sdk_dependency.sh`). anix-agent
+switches to this module in its own change; until then the manual `SDK Sync`
+workflow (`.github/workflows/sdk-sync.yml`) checks that its SDK's descriptor
+still matches, and afterwards it builds anix-agent against this checkout's SDK.
 
 **Independence from the kernel.** The module has no dependency on the kernel
 module: Go forbids it from importing the kernel's `internal/` packages, and

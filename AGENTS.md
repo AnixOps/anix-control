@@ -10,8 +10,9 @@ file short and enforceable; put explanations in `docs/`.
   with the Vue 3 + Vite admin/user frontend in `web/`. The Go toolchain is
   pinned in `go.mod` and in `ci.yml` (`GO_VERSION`).
 - `sdk/` is a second Go module, `github.com/AnixOps/anix-control/sdk`: the
-  AnixOps protocol contracts (`sdk/api/*`) and the SDKs modules and other
-  services build on. The kernel uses it through `replace => ./sdk`; it must
+  AnixOps protocol contracts (`sdk/api/*`, including the Agent contract
+  `sdk/api/agent/v1`) and the SDKs modules and other services build on. The
+  kernel uses it through `replace => ./sdk`; it must
   never depend on the kernel module (`check_package_boundaries.sh`). Run its
   checks with `go -C sdk build ./...`, `go -C sdk vet ./...` and
   `go -C sdk test ./...`.
@@ -40,9 +41,13 @@ file short and enforceable; put explanations in `docs/`.
   and `/flow/upload` directly. Do not change their response shapes without
   compatibility tests.
 - The node runtime is `anix-agent` (separate repository `AnixOps/anix-agent`).
-  Control may import only `github.com/AnixOps/anix-agent/sdk`
-  (`config/scripts/check_agent_sdk_dependency.sh`) and talks to agents over
-  gRPC. Cross-repository golden fixtures live in `contracts/`.
+  Control talks to agents over gRPC. The Agent contract (`anix.agent.v1`) is
+  owned here, in `sdk/api/agent/v1`, `sdk/agentcontrol` and `sdk/plugincontrol`.
+  Agents in the field run it, so changes must be additive
+  (`internal/tests/protocompat`). Control imports no anix-agent module:
+  `github.com/AnixOps/anix-agent/sdk` is frozen at v1.1.0
+  (`config/scripts/check_agent_sdk_dependency.sh`).
+  Cross-repository golden fixtures live in `contracts/`.
 - `control-center/` is a separate app; see the Control Center section.
 - Status sources: `docs/features.md` (feature register), `TODO.md` (open work),
   `CHANGELOG.md` (history). A route or UI existing is not proof a feature is
@@ -117,7 +122,7 @@ bash config/scripts/check_release_workflow.sh
 python3 config/scripts/check_release_version.py --self-test
 GOWORK=off python3 config/scripts/check_plugin_only_routes.py      # 292 /api/v2 routes vs catalog and packages
 GOWORK=off python3 -m unittest discover -s config/scripts -p '*_test.py'
-for c in pluginhost packagebridge modulepki identity kernelidentity; do bash sdk/api/$c/gen.sh; done  # needs protoc 29.2; then git diff must be empty
+for c in pluginhost packagebridge modulepki identity kernelidentity agent; do bash sdk/api/$c/gen.sh; done  # needs protoc 29.2; then git diff must be empty
 GOWORK=off go test ./internal/tests/protocompat                     # contracts may only grow
 ```
 
