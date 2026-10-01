@@ -2133,6 +2133,27 @@ func (s *SubscriptionServiceTestSuite) TestDeleteGroup() {
 	assert.Error(s.T(), err)
 }
 
+// Deleting a group removes its node protocol links: PostgreSQL refused to
+// delete a linked group, and SQLite kept orphan links.
+func (s *SubscriptionServiceTestSuite) TestDeleteGroupRemovesProtocolLinks() {
+	node := &model.Node{Name: "edge", Host: "edge.example.test", APIKey: "group-delete-key"}
+	s.Require().NoError(database.GetDB().Create(node).Error)
+	protocol := &model.NodeProtocol{NodeID: node.ID, Name: "vless", Type: model.ProtocolVLESS, Port: 443}
+	s.Require().NoError(database.GetDB().Create(protocol).Error)
+	group := &model.SubscriptionGroup{Name: "linked", Enable: 1, Protocols: []model.NodeProtocol{*protocol}}
+	s.Require().NoError(database.GetDB().Create(group).Error)
+	var links int64
+	s.Require().NoError(database.GetDB().Table("v2_subscription_group_node_protocols").Where("subscription_group_id = ?", group.ID).Count(&links).Error)
+	s.Require().EqualValues(1, links)
+
+	s.Require().NoError(s.svc.DeleteGroup(group.ID))
+
+	s.Require().NoError(database.GetDB().Table("v2_subscription_group_node_protocols").Where("subscription_group_id = ?", group.ID).Count(&links).Error)
+	s.Zero(links)
+	var kept model.NodeProtocol
+	s.NoError(database.GetDB().First(&kept, protocol.ID).Error, "the protocol itself stays")
+}
+
 func (s *SubscriptionServiceTestSuite) TestDeleteGroup_NotFound() {
 	err := s.svc.DeleteGroup(99999)
 	assert.Error(s.T(), err)

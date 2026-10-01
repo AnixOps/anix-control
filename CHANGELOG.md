@@ -1322,6 +1322,9 @@
 
 ### Fixed
 
+- Deleting a subscription group removes its node protocol links. On
+  PostgreSQL deleting a group with links failed on the foreign key; on SQLite
+  the links were left behind.
 - `kapi_subscriber_entitlement_v1` is created again. It named no source
   table, so the check that skips a view whose source table does not exist
   left it out. A test now requires every view to name its source.
