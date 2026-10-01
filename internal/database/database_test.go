@@ -9,16 +9,16 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestSQLiteConnectionStringEnablesBusyTimeoutAndWALForFileDatabases(t *testing.T) {
+func TestSQLiteConnectionStringEnablesBusyTimeoutImmediateTransactionsAndWALForFileDatabases(t *testing.T) {
 	assert.Equal(t,
-		"/var/lib/anixops/control.db?_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)",
+		"/var/lib/anixops/control.db?_pragma=busy_timeout(5000)&_txlock=immediate&_pragma=journal_mode(WAL)",
 		sqliteConnectionString("/var/lib/anixops/control.db"),
 	)
 	assert.Equal(t,
-		"/var/lib/anixops/control.db?cache=shared&_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)",
+		"/var/lib/anixops/control.db?cache=shared&_pragma=busy_timeout(5000)&_txlock=immediate&_pragma=journal_mode(WAL)",
 		sqliteConnectionString("/var/lib/anixops/control.db?cache=shared"),
 	)
-	assert.Equal(t, ":memory:?_pragma=busy_timeout(5000)", sqliteConnectionString(":memory:"))
+	assert.Equal(t, ":memory:?_pragma=busy_timeout(5000)&_txlock=immediate", sqliteConnectionString(":memory:"))
 }
 
 func closeDatabase(t testing.TB) {

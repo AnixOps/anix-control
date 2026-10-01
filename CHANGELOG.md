@@ -2,6 +2,27 @@
 
 ## Unreleased
 
+### Fixed
+
+- SQLite deployments no longer fail writes with "database is locked" under
+  concurrent load. A transaction that read before it wrote could not
+  upgrade to a writer once another connection had committed after its read
+  began, and SQLite failed it at once instead of waiting out
+  `busy_timeout`. Control and package storage now open SQLite with
+  `_txlock=immediate`, so every transaction waits for the write lock at
+  `BEGIN`.
+- On PostgreSQL, Agents and subscriber watchers no longer miss subscriber
+  changes. Change log ids are taken at insert but become visible at commit,
+  so a later id could commit first; a consumer then moved its cursor past
+  the earlier row and never read it. Writers of the change log now take a
+  transaction-scoped advisory lock, so they commit in id order.
+- Moving a node to another group now records subscriber changes. A node's
+  users follow its group, but nothing was written to the change log, so an
+  Agent kept serving the old group's users and only picked up the new
+  group's one by one as they changed, or at its next resync. Updating a
+  node's `group_id` now records a change for each active user of the old
+  and the new group (every active user when either is "all").
+
 ## 4.1.0-rc.5 - 2026-10-02
 
 4.1.0-rc.5 is the fifth 4.1.0 release candidate and completes the UI

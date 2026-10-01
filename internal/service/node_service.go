@@ -18,6 +18,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
+	"github.com/AnixOps/anix-control/v4/internal/subscriber"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -185,11 +186,43 @@ func (s *NodeService) UpdateNode(id uint, updates map[string]any) error {
 	_ = cache.Delete(CacheKeyNodeList)
 
 	return s.db.Transaction(func(tx *gorm.DB) error {
+		_, groupChanges := updates["group_id"]
+		var previousGroup *uint
+		if groupChanges {
+			var err error
+			if previousGroup, err = lockNodeGroupTx(tx, id); err != nil {
+				return err
+			}
+		}
 		if err := updateNodeColumnsTx(tx, id, updates); err != nil {
 			return err
 		}
-		return revokeProxyNodeAgentsIfDisabled(tx, id, updates)
+		if err := revokeProxyNodeAgentsIfDisabled(tx, id, updates); err != nil {
+			return err
+		}
+		if !groupChanges {
+			return nil
+		}
+		nextGroup, err := lockNodeGroupTx(tx, id)
+		if err != nil {
+			return err
+		}
+		return subscriber.RecordNodeGroupChangeTx(tx, previousGroup, nextGroup, time.Now())
 	})
+}
+
+// lockNodeGroupTx reads the node's group under its row lock, so that
+// concurrent group changes record the groups they actually move between.
+// A node that does not exist has no group.
+func lockNodeGroupTx(tx *gorm.DB, id uint) (*uint, error) {
+	var nodes []model.Node
+	if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Select("id", "group_id").Where("id = ?", id).Limit(1).Find(&nodes).Error; err != nil {
+		return nil, err
+	}
+	if len(nodes) == 0 {
+		return nil, nil
+	}
+	return nodes[0].GroupID, nil
 }
 
 // keepNodeRawConfigUpdate gives a raw configuration update the stored

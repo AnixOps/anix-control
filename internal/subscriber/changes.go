@@ -47,7 +47,55 @@ func RecordChangesTx(tx *gorm.DB, userIDs []uint, deleted bool, now time.Time) e
 	if len(rows) == 0 {
 		return nil
 	}
+	if err := lockChangeLogTx(tx); err != nil {
+		return err
+	}
 	return tx.CreateInBatches(&rows, changeBatch).Error
+}
+
+// lockChangeLogTx makes the change log's writers commit in id order, which
+// consumers rely on: they read the rows after their cursor and move it to
+// the last id read. A PostgreSQL sequence hands out ids when rows are
+// inserted, not when they commit, so without the lock a later id could
+// commit first, a consumer move past the earlier one, and that row, once
+// committed, never be read. The transaction-scoped advisory lock is held
+// until commit or rollback, so the next writer takes its ids after this one
+// is visible. SQLite has a single writer already. Record changes after the
+// transaction's other row locks: a writer waits here holding what it locked.
+func lockChangeLogTx(tx *gorm.DB) error {
+	if tx.Name() != "postgres" {
+		return nil
+	}
+	return tx.Exec("SELECT pg_advisory_xact_lock(hashtext(?))", model.SubscriberChange{}.TableName()).Error
+}
+
+// RecordNodeGroupChangeTx appends a change for each active subscriber a
+// node served or now serves when its group moves from previous to next (nil
+// is every subscriber). The node's users are derived from its group, so a
+// watcher of the node would otherwise keep the old group's users and never
+// get the new group's until each of them changed: the changes make it
+// re-read those subscribers on the node, adding the new group's and
+// removing the old group's. Nothing is recorded when the group is the same.
+func RecordNodeGroupChangeTx(tx *gorm.DB, previous, next *uint, now time.Time) error {
+	if sameGroup(previous, next) {
+		return nil
+	}
+	query := Active(tx.Model(&model.User{}), now)
+	if previous != nil && next != nil {
+		query = query.Where("group_id IN ?", []uint{*previous, *next})
+	}
+	var affected []uint
+	if err := query.Order("id").Pluck("id", &affected).Error; err != nil {
+		return err
+	}
+	return RecordChangesTx(tx, affected, false, now)
+}
+
+func sameGroup(a, b *uint) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return *a == *b
 }
 
 // ChangesAfter returns up to limit changes after cursor. resync is true when
