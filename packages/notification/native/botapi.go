@@ -51,6 +51,29 @@ func sendMessage(db *gorm.DB, chatID int64, text string) error {
 	return err
 }
 
+// setWebhook is TelegramBotService.SetWebhook: it points the bot's webhook
+// at webhookURL and records it.
+func setWebhook(db *gorm.DB, webhookURL string) error {
+	bot, err := firstBot(db)
+	if err != nil {
+		return err
+	}
+
+	url := fmt.Sprintf("%s/bot%s/setWebhook", telegramAPIBase, bot.Token)
+	payload := map[string]any{
+		"url": webhookURL,
+	}
+
+	_, err = botAPIRequest(url, payload)
+	if err != nil {
+		return err
+	}
+
+	bot.WebhookURL = webhookURL
+	bot.WebhookSet = true
+	return db.Save(bot).Error
+}
+
 // deleteWebhook is TelegramBotService.DeleteWebhook: it removes the bot's
 // webhook and records that none is set.
 func deleteWebhook(db *gorm.DB) error {

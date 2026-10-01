@@ -12,8 +12,9 @@ import (
 )
 
 // Package hosts built with the v4.0.0 SDK decode request metadata with
-// DisallowUnknownFields, so the original request address must reach only the
-// kernel's bridge snapshot.
+// DisallowUnknownFields, so the original request address is never a key of
+// the metadata JSON: the kernel's bridge snapshot carries it, and hosts get
+// it as DispatchRequest fields of their own (request_scheme, request_host).
 func TestRequestAddressReachesOnlyTheBridgeSnapshot(t *testing.T) {
 	metadata := RequestMetadata{Path: "/api/v2/forward-agent/install.sh", ClientIP: "198.51.100.7", Host: "panel.example.test:8443", TLS: true}
 

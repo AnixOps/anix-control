@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"log"
 	"strconv"
 	"strings"
@@ -346,6 +347,73 @@ func (s *Service) AdminUpdateBot(ctx context.Context, request pluginhostsdk.Nati
 	}
 
 	return s.panel(telegramBotResponse(bot))
+}
+
+// SetWebhookRequest is the kernel's SetWebhookRequest. Its name and tags are
+// the kernel's, so binding and validation errors read the same.
+type SetWebhookRequest struct {
+	URL string `json:"url" binding:"omitempty,url,max=512"`
+}
+
+// SetWebhookRouteID is POST /api/v2/admin/telegram/webhook.
+const SetWebhookRouteID = "notification.admin.telegram.webhook.post"
+
+// AdminSetWebhook is POST /api/v2/admin/telegram/webhook: it calls the Bot
+// API's setWebhook and records the webhook. Without a url in the body the
+// webhook is this Control's /api/v2/telegram/webhook, at the scheme and host
+// of the administrator's request, as the kernel's handler builds it:
+//   - the scheme is the X-Forwarded-Proto request header when one is set,
+//     else the connection's (the scheme the kernel sends: https over TLS);
+//   - the host is the request's Host, which the kernel sends when it is a
+//     plain host[:port].
+//
+// A kernel that sends no request scheme or host leaves the request to the
+// legacy handler (pluginhostsdk.ErrNativeUnavailable), which builds the URL
+// from what the kernel's bridge saw.
+func (s *Service) AdminSetWebhook(ctx context.Context, request pluginhostsdk.NativeRequest) (pluginhostsdk.NativeResponse, error) {
+	var req SetWebhookRequest
+	if err := binding.JSON.BindBody(request.Body, &req); err != nil && !errors.Is(err, io.EOF) {
+		return s.panelError(err.Error())
+	}
+
+	webhookURL := strings.TrimSpace(req.URL)
+	if webhookURL == "" {
+		scheme, host, ok := requestOrigin(request.Metadata)
+		if !ok {
+			return pluginhostsdk.NativeResponse{}, pluginhostsdk.ErrNativeUnavailable
+		}
+		webhookURL = fmt.Sprintf("%s://%s/api/v2/telegram/webhook", scheme, host)
+	}
+
+	db, err := s.Open(ctx)
+	if err != nil {
+		return s.panelError(err.Error())
+	}
+	if err := setWebhook(db, webhookURL); err != nil {
+		return s.panelError(err.Error())
+	}
+
+	return s.panel(map[string]any{
+		"message": "webhook set successfully",
+		"url":     webhookURL,
+	})
+}
+
+// requestOrigin is the kernel's requestScheme and c.Request.Host: the
+// X-Forwarded-Proto header when it is set, else the scheme the kernel saw,
+// and the request's host. It is false when the kernel sent no scheme or
+// host.
+func requestOrigin(metadata pluginhostsdk.RequestMetadata) (string, string, bool) {
+	if metadata.Scheme == "" || metadata.Host == "" {
+		return "", "", false
+	}
+	scheme := metadata.Scheme
+	if values := metadata.Headers["X-Forwarded-Proto"]; len(values) > 0 {
+		if proto := strings.TrimSpace(values[0]); proto != "" {
+			scheme = proto
+		}
+	}
+	return scheme, metadata.Host, true
 }
 
 // AdminDeleteWebhook is DELETE /api/v2/admin/telegram/webhook: it calls the

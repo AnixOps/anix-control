@@ -65,6 +65,8 @@ func (c *hostClient) Dispatch(ctx context.Context, input DispatchInput) (Dispatc
 		DeadlineUnixMillis:  input.Deadline.UnixMilli(),
 		RequestMetadataJson: metadata,
 		BridgeCapability:    append([]byte(nil), input.BridgeCapability...),
+		RequestScheme:       requestScheme(input.Metadata),
+		RequestHost:         input.Metadata.Host,
 	})
 	if err != nil {
 		return DispatchOutput{}, hostClientError(err)
@@ -102,11 +104,24 @@ func (c *hostClient) OpenWebSocket(ctx context.Context, input WebSocketInput) (w
 		DeadlineUnixMillis:  input.Deadline.UnixMilli(),
 		RequestMetadataJson: metadata,
 		BridgeCapability:    append([]byte(nil), input.BridgeCapability...),
+		RequestScheme:       requestScheme(input.Metadata),
+		RequestHost:         input.Metadata.Host,
 	}}}); err != nil {
 		_ = stream.CloseSend()
 		return nil, hostClientError(err)
 	}
 	return &webSocketClientStream{stream: stream}, nil
+}
+
+// requestScheme is the original request's scheme as the kernel received it:
+// "https" when the connection was TLS, else "http". Forwarding headers are
+// not consulted; a host that honours X-Forwarded-Proto as a legacy handler
+// does reads it from the forwarded request headers.
+func requestScheme(metadata RequestMetadata) string {
+	if metadata.TLS {
+		return "https"
+	}
+	return "http"
 }
 
 // marshalBridgeRequestMetadata encodes the kernel-side bridge snapshot, which

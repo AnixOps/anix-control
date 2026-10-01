@@ -140,6 +140,37 @@ func TestRouterFallsBackToLegacyWithoutANativeImplementation(t *testing.T) {
 	assert.True(t, route.Unsupported)
 }
 
+// A native handler that cannot serve a request (here: the kernel sent no
+// request address) defers to the legacy handler in native mode and is not
+// compared in shadow mode.
+func TestRouterAnswersFromLegacyWhenTheNativeHandlerIsUnavailable(t *testing.T) {
+	bridge := &routerBridgeFake{}
+	bridge.setConfig(map[string]string{"knowledge.admin.knowledge.post": RouteModeNative, "knowledge.article.list": RouteModeShadow}, nil)
+	unavailable := func(_ context.Context, request NativeRequest) (NativeResponse, error) {
+		if request.Metadata.Scheme == "" {
+			return NativeResponse{}, ErrNativeUnavailable
+		}
+		return NativeResponse{Body: []byte(`{"native":true}`)}, nil
+	}
+	router := newTestRouter(t, bridge, map[string]NativeHandler{"knowledge.admin.knowledge.post": unavailable, "knowledge.article.list": unavailable})
+	router.Refresh(context.Background())
+
+	response, err := dispatch(t, router, "knowledge.admin.knowledge.post", "POST")
+	require.NoError(t, err)
+	assert.Equal(t, legacyBody, string(response.ResponseBody))
+	assert.Equal(t, []string{"knowledge.admin.knowledge.post"}, bridge.invocations())
+	route := healthDetails(t, router).Routes["knowledge.admin.knowledge.post"]
+	assert.Zero(t, route.Native, "a deferred request is not a native answer")
+	assert.Zero(t, route.NativeErrors, "a deferred request is not a native error")
+
+	_, err = dispatch(t, router, "knowledge.article.list", "GET")
+	require.NoError(t, err)
+	require.Eventually(t, func() bool { return healthDetails(t, router).Routes["knowledge.article.list"].ShadowSkipped == 1 }, time.Second, 5*time.Millisecond)
+	shadow := healthDetails(t, router).Routes["knowledge.article.list"]
+	assert.Zero(t, shadow.ShadowErrors)
+	assert.Zero(t, shadow.ShadowMismatch)
+}
+
 func TestRouterShadowAnswersFromLegacyAndCountsMismatches(t *testing.T) {
 	bridge := &routerBridgeFake{}
 	bridge.setConfig(map[string]string{"knowledge.article.list": RouteModeShadow, "knowledge.user.knowledge.id.get": RouteModeShadow}, nil)

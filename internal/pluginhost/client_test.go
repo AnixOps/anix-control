@@ -75,8 +75,40 @@ func TestClientDispatchesRequestMetadataOverUnixSocket(t *testing.T) {
 	select {
 	case request := <-host.requests:
 		require.JSONEq(t, `{"path":"/api/v2/user/knowledge","query":{"tag":["stable","v4"]},"path_params":{"article_id":"42"}}`, string(request.GetRequestMetadataJson()))
+		require.Equal(t, "http", request.GetRequestScheme())
+		require.Empty(t, request.GetRequestHost())
 	case <-ctx.Done():
 		t.Fatal("host did not receive request metadata")
+	}
+}
+
+// The original request's scheme and host reach the host as DispatchRequest
+// fields of their own; the metadata JSON keeps only the keys v4.0.0 hosts
+// accept.
+func TestClientDispatchesTheRequestAddressOutsideTheMetadataJSON(t *testing.T) {
+	host := &metadataDispatchHostServer{requests: make(chan *pluginhostv1.DispatchRequest, 1)}
+	socketPath := startTestHostServerWithService(t, host)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	client, err := dialHostClient(ctx, socketPath)
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, client.Close()) })
+
+	_, err = client.Dispatch(ctx, DispatchInput{
+		PackageID: "notification", Version: "4.1.0", Generation: 3, RequestID: "request-address",
+		RouteID: "notification.admin.telegram.webhook.post", Method: "POST", PrincipalJSON: []byte(`{"actor_id":1}`),
+		Metadata: RequestMetadata{Path: "/api/v2/admin/telegram/webhook", Host: "panel.example.test:8443", TLS: true},
+		Deadline: time.Now().Add(time.Second),
+	})
+	require.NoError(t, err)
+
+	select {
+	case request := <-host.requests:
+		require.JSONEq(t, `{"path":"/api/v2/admin/telegram/webhook"}`, string(request.GetRequestMetadataJson()))
+		require.Equal(t, "https", request.GetRequestScheme())
+		require.Equal(t, "panel.example.test:8443", request.GetRequestHost())
+	case <-ctx.Done():
+		t.Fatal("host did not receive the request address")
 	}
 }
 
@@ -110,6 +142,7 @@ func TestWebSocketRelaySendsVerifiedOpenBeforeData(t *testing.T) {
 		require.Equal(t, uint64(9), open.GetRouteGeneration())
 		require.Equal(t, "telemetry.monitor.ws", open.GetRouteId())
 		require.JSONEq(t, `{"path":"/api/v2/admin/ws/monitor"}`, string(open.GetRequestMetadataJson()))
+		require.Equal(t, "http", open.GetRequestScheme())
 	case <-ctx.Done():
 		t.Fatal("host did not receive the verified WebSocket opening frame")
 	}

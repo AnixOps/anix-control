@@ -75,6 +75,13 @@ func PanelJSON(panel v2compat.Panel) (NativeResponse, error) {
 // in a background shadow run would otherwise terminate the host process.
 var ErrNativeRoutePanicked = errors.New("native route panicked")
 
+// ErrNativeUnavailable is what a native handler returns when it cannot
+// answer this request as the legacy handler would, for example because the
+// kernel did not send request metadata the handler needs (an older kernel
+// sends no request scheme and host). The router then answers from the
+// legacy handler in native mode, and skips the comparison in shadow mode.
+var ErrNativeUnavailable = errors.New("native route cannot serve this request")
+
 // RouterBridge is the part of the package bridge client the router uses.
 type RouterBridge interface {
 	Invoke(ctx context.Context, capability []byte, operation string, payload []byte) (packagebridgesdk.Response, error)
@@ -251,6 +258,9 @@ func (r *Router) Dispatch(ctx context.Context, request DispatchRequest) (Dispatc
 	switch mode {
 	case RouteModeNative:
 		response, err := r.runNative(ctx, request)
+		if errors.Is(err, ErrNativeUnavailable) {
+			return r.invokeLegacy(ctx, request)
+		}
 		r.count(request.RouteID, func(stats *routeStatistics) {
 			stats.Native++
 			if err != nil {
@@ -331,6 +341,10 @@ func (r *Router) startShadow(request DispatchRequest, legacy DispatchResponse) {
 		ctx, cancel := context.WithTimeout(context.Background(), r.config.ShadowTimeout)
 		defer cancel()
 		native, err := r.runNative(ctx, request)
+		if errors.Is(err, ErrNativeUnavailable) {
+			r.count(request.RouteID, func(stats *routeStatistics) { stats.ShadowSkipped++ })
+			return
+		}
 		matched := err == nil && r.config.Compare(NativeResponse{StatusCode: legacy.StatusCode, Body: legacy.ResponseBody, Headers: legacy.Headers}, native)
 		now := r.config.Now().Unix()
 		r.count(request.RouteID, func(stats *routeStatistics) {

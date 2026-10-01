@@ -1366,7 +1366,7 @@
       "path": "/api/v2/admin/telegram/webhook",
       "package_id": "notification",
       "route_id": "notification.admin.telegram.webhook.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {

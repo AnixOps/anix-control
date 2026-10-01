@@ -70,6 +70,35 @@ func TestServerDispatchRejectsInvalidEnvelope(t *testing.T) {
 			},
 			wantCode: codes.InvalidArgument,
 		},
+		{
+			// The request address is never a metadata key.
+			name: "request host in the metadata JSON",
+			mutate: func(request *pluginhostv1.DispatchRequest) {
+				request.RequestMetadataJson = []byte(`{"path":"/api/v2/user/knowledge","host":"panel.example.test"}`)
+			},
+			wantCode: codes.InvalidArgument,
+		},
+		{
+			name: "unknown request scheme",
+			mutate: func(request *pluginhostv1.DispatchRequest) {
+				request.RequestScheme, request.RequestHost = "ftp", "panel.example.test"
+			},
+			wantCode: codes.InvalidArgument,
+		},
+		{
+			name: "request host without a scheme",
+			mutate: func(request *pluginhostv1.DispatchRequest) {
+				request.RequestHost = "panel.example.test"
+			},
+			wantCode: codes.InvalidArgument,
+		},
+		{
+			name: "request host that is not an authority",
+			mutate: func(request *pluginhostv1.DispatchRequest) {
+				request.RequestScheme, request.RequestHost = "https", "panel.example.test/evil?x="
+			},
+			wantCode: codes.InvalidArgument,
+		},
 	}
 
 	for _, test := range tests {
@@ -411,3 +440,34 @@ func (s *testWebSocketServerStream) SetTrailer(metadata.MD) {}
 func (s *testWebSocketServerStream) SendMsg(any) error { return nil }
 
 func (s *testWebSocketServerStream) RecvMsg(any) error { return io.EOF }
+
+// The kernel sends the original request's scheme and host as fields of
+// their own; they reach the package as Metadata.Scheme and Metadata.Host,
+// next to the metadata JSON, which keeps the v4.0.0 keys.
+func TestServerDispatchPassesTheRequestAddress(t *testing.T) {
+	for _, test := range []struct {
+		name, scheme, host string
+	}{
+		{name: "https with a port", scheme: "https", host: "panel.example.test:8443"},
+		{name: "http on an IPv6 literal", scheme: "http", host: "[2001:db8::1]:8080"},
+		{name: "a kernel that sends no host", scheme: "http"},
+		{name: "a kernel that predates the fields"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			var received RequestMetadata
+			server := newTestServer(t, &testPackage{
+				dispatch: func(_ context.Context, request DispatchRequest) (DispatchResponse, error) {
+					received = request.Metadata
+					return DispatchResponse{StatusCode: http.StatusNoContent}, nil
+				},
+			}, 16)
+			request := validDispatchRequest()
+			request.RequestScheme, request.RequestHost = test.scheme, test.host
+			_, err := server.Dispatch(context.Background(), request)
+			require.NoError(t, err)
+			require.Equal(t, test.scheme, received.Scheme)
+			require.Equal(t, test.host, received.Host)
+			require.Equal(t, "/api/v2/user/knowledge", received.Path)
+		})
+	}
+}

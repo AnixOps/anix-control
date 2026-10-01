@@ -182,8 +182,11 @@ var bridgedRoutes = map[string]struct{}{
 	// Clean agents: v2_forward_clean_agent holds each agent's token, which
 	// authenticates it (a protected table). Registration, heartbeat and
 	// report authenticate an agent, claim runtime jobs and record their
-	// results and traffic; the install script is built from the request's
-	// host or Control's configured public URL.
+	// results and traffic. The install script's panel URL is Control's
+	// forward_runtime.clean_agent.public_url when it is set, process
+	// configuration no package can read, else the request's scheme and host
+	// (which the kernel now sends): without the setting a native script
+	// could differ from the kernel's.
 	"forward.admin.forward.agents.get":            {},
 	"forward.admin.forward.agents.post":           {},
 	"forward.admin.forward.agents.id.revoke.post": {},

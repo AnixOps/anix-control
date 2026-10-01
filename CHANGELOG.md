@@ -471,6 +471,36 @@
   - **The draft contract.** It is unreleased and may change until the first
     kernel change that serves it. It is in the proto golden file and in the
     CI generated-code check.
+- **Package hosts receive the request's scheme and host; the Telegram
+  webhook is set natively.**
+  - The kernel sends the original request's scheme (`https` when the
+    connection was TLS, else `http`) and host (the `Host` header, only when
+    it is a plain `host[:port]`) to package hosts as the new
+    `DispatchRequest` and `WebSocketOpen` fields `request_scheme` and
+    `request_host`; the SDK shows them as `RequestMetadata.Scheme` and
+    `Host`. These are the values the kernel's bridge already gave the legacy
+    handlers; no forwarding header is trusted beyond what those handlers
+    read. They are protobuf fields, not request metadata JSON keys: hosts
+    built with the v4.0.0 SDK decode that JSON strictly and skip unknown
+    protobuf fields, so they keep working and no metadata version is needed.
+    The SDK refuses a scheme other than `http` or `https` and a host that is
+    not an authority.
+  - `pluginhostsdk.ErrNativeUnavailable`: a native handler that cannot
+    answer a request as the legacy handler would (for example, an older
+    kernel sent no request address) returns it, and the router answers from
+    the legacy handler; in shadow mode the comparison is skipped.
+  - `POST /api/v2/admin/telegram/webhook` runs natively in the notification
+    package: without a `url` it points the webhook at the request's
+    `/api/v2/telegram/webhook`, with `X-Forwarded-Proto` honoured as the
+    kernel's handler does. `internal/tests/notificationcompat` proves byte
+    parity, the same bot row and the same Bot API calls on SQLite and
+    PostgreSQL (16 cases each). The parity harness sends each case's host
+    and TLS state to both sides.
+  - `GET /api/v2/forward-agent/install.sh` stays bridged: its panel URL is
+    Control's `forward_runtime.clean_agent.public_url` when set, process
+    configuration no package can read, and only otherwise the request's
+    scheme and host.
+  - Extraction map: 171 `native-flagged`, 105 `bridged`, 16 `kernel-owned`.
 - **KernelSettings contract** (`sdk/api/kernelsettings/v1`,
   `docs/architecture/settings-service.md`). Official packages read and write
   system settings per namespace instead of the protected `v2_system_config`

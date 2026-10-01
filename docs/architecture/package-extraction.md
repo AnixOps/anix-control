@@ -10,8 +10,8 @@ open work in [`../../TODO.md`](../../TODO.md).
 
 > 中文摘要：v4.0.0 的「插件化」只到路由层；本文定义「一个领域真正住在插件里」
 > 的验收标准、目标机制（存储租约 + 按路由模式 + 类型化内核操作，均已实现）、
-> 保留下来的旧计划约束，以及 M0–M4 里程碑。292 条 v2 路由中，170 条
-> `native-flagged`，106 条 `bridged`（待契约），16 条 `kernel-owned`（按设计留在内核）。
+> 保留下来的旧计划约束，以及 M0–M4 里程碑。292 条 v2 路由中，171 条
+> `native-flagged`，105 条 `bridged`（待契约），16 条 `kernel-owned`（按设计留在内核）。
 
 Markers used below: **CURRENT** = true in the tree today; **PLANNED** = accepted
 design, not implemented yet; **HISTORICAL** = preserved from a retired plan for
@@ -30,14 +30,14 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
 - `config/package-extraction.json` records each route's extraction mode
   (`bridged`, `kernel-owned`, `native-flagged` or `native`; section 3.2) and
   where its legacy handler lives
-  (`router`, `identity-bridge` or `none`). 172 routes are `native-flagged`:
+  (`router`, `identity-bridge` or `none`). 173 routes are `native-flagged`:
   identity-platform (22: group A's 15, the profile, dashboard, user detail,
   user list and user statistics, and the traffic and subscription resets),
   affiliate (10), forward (21), gost-mesh (3), knowledge (6),
-  machine-telemetry (3), notification (22), order (13), payment (20), plan
+  machine-telemetry (3), notification (23), order (13), payment (20), plan
   (7), platform (5), protocol-runtime (3), proxy-node (7), subscription (21),
   ticket (8) and wireguard (1). 16 routes are `kernel-owned`: they stay in the
-  kernel by design, and each row says why. The other 104 are `bridged` until a
+  kernel by design, and each row says why. The other 103 are `bridged` until a
   kernel contract lets their package serve them (section 3.2 lists what
   unblocks them). None is `native` yet. The identity routes are
   `identity-bridge`. `check_plugin_only_routes.py` enforces the map against
@@ -89,7 +89,7 @@ Route modes per package (2026-10-01):
 | identity-platform | 22 | 0 | 0 |
 | knowledge | 6 | 0 | 0 |
 | machine-telemetry | 3 | 0 | 2 |
-| notification | 22 | 2 | 0 |
+| notification | 23 | 1 | 0 |
 | order | 13 | 0 | 0 |
 | payment | 20 | 0 | 0 |
 | plan | 7 | 0 | 0 |
@@ -99,7 +99,6 @@ Route modes per package (2026-10-01):
 | subscription | 21 | 4 | 0 |
 | ticket | 8 | 0 | 0 |
 | wireguard | 1 | 0 | 0 |
-| **all** | **170** | **106** | **16** |
 
 Reusable pieces that already exist:
 
@@ -193,9 +192,9 @@ by `check_plugin_only_routes.py` (counts in section 1).
 
 | Mode | Meaning | Routes |
 |---|---|---|
-| `native-flagged` | the package host has a native handler, proved by a parity test; the legacy handler stays, so every runtime mode works | 170 |
+| `native-flagged` | the package host has a native handler, proved by a parity test; the legacy handler stays, so every runtime mode works | 173 |
 | `native` | the legacy handler is deleted and the host answers alone | 0 |
-| `bridged` | the host only relays, until a kernel contract lets the package serve the route | 106 |
+| `bridged` | the host only relays, until a kernel contract lets the package serve the route | 103 |
 | `kernel-owned` | the host only relays, by design: the route stays in the kernel, and the row's `reason` says why | 16 |
 
 A `bridged` or `kernel-owned` route is registered and relayed alike: it is
@@ -221,10 +220,26 @@ What unblocks the `bridged` routes:
 | Open decision: `kernel-owned`, or a package behind node authentication in the kernel | node registration, heartbeat and runtime health; clean agent registration, heartbeat and report; the agents' forward rule list | 7 |
 | Open decision: whether UniProxy and the subscription renderer stay in the kernel | UniProxy (5) and the subscription preview | 6 |
 | A proxy node view with parent and load | forward observability targets, trend and topology | 3 |
-| The request's scheme and host passed to hosts | setting the Telegram webhook; the clean agent install script | 2 |
+| A read of Control's process configuration `forward_runtime.clean_agent.public_url` (a KernelSettings-style namespace, or the host's environment) | the clean agent install script: its panel URL is that setting when set, else the request's scheme and host | 1 |
 | A contract read of a member's subscription link | the public Telegram webhook (`/sub`) | 1 |
 | A KernelSettings namespace for the subscription link (with `app.subscribe_path`) | the subscription link settings | 1 |
 | Kernel caches (done, no invalidation events needed): the kernel keeps both caches and answers them through `KernelTelemetry.GetDashboard` and `KernelSubscriber.GetSubscriptionSummary`, so both modes answer the same entry and `cached_at` ([`kernel-caches.md`](kernel-caches.md)) | none left: the dashboard (the online set crosses as a count) and a user's subscription summary are `native-flagged` | 0 |
+
+**Request address** (CURRENT). Hosts receive the original request's scheme
+and host, so a native route can build absolute URLs as its legacy handler
+does: the kernel sends `request_scheme` (`https` when the connection was TLS,
+else `http`) and `request_host` (the `Host` header, only when it is a plain
+`host[:port]`) as fields of `DispatchRequest` and `WebSocketOpen`, which the
+SDK exposes as `RequestMetadata.Scheme` and `Host`. They are the values the
+kernel's bridge already passed to the legacy handlers. They are new protobuf
+fields, not keys of the request metadata JSON, which hosts built with the
+v4.0.0 SDK decode with `DisallowUnknownFields`: those hosts skip the fields,
+so no metadata version is needed. A host can tell a kernel that predates
+them by the empty scheme; a native handler that needs them then returns
+`pluginhostsdk.ErrNativeUnavailable`, and the router answers from the legacy
+handler (in shadow mode the comparison is skipped). `X-Forwarded-Proto` is
+not folded into the scheme: a route whose legacy handler honours it (the
+Telegram webhook) reads it from the forwarded request headers, as before.
 
 Status (2026-10-01): every installation runs every route `legacy` unless an
 operator sets another mode; no route is `native` yet.
@@ -294,7 +309,7 @@ The planned `kernel.entitlement.apply.v1` became
   `v2_ticket_message`, proved by `internal/tests/ticketcompat`. The admin
   list's legacy preload of the user is not needed: only `user_id` is
   returned.
-- **Notification (in place).** 22 of 24 routes on the adopted
+- **Notification (in place).** 23 of 24 routes on the adopted
   `v2_notification_template`, `v2_notification_log`, `v2_telegram_bot` and
   `v2_telegram_user` tables and the kernel's KernelSettings, proved by
   `internal/tests/notificationcompat`; binding e-mails come from
@@ -307,8 +322,14 @@ The planned `kernel.entitlement.apply.v1` became
     as the kernel's handler does, and an update that keeps it sends the
     placeholder. The parity test runs a test SMTP server and compares the
     mail each side delivers.
-  - Two stay bridged: setting the webhook (needs the request host) and the
-    public webhook (`/sub` needs the subscription token).
+  - Setting the webhook without a `url` points it at
+    `<scheme>://<host>/api/v2/telegram/webhook` of the administrator's
+    request: the scheme is `X-Forwarded-Proto` when set, else the request
+    scheme the kernel sends, and the host the request host it sends
+    (section 3.2, "Request address"). The parity test answers the Bot API
+    calls of both sides and compares them.
+  - One stays bridged: the public webhook (`/sub` needs the subscription
+    token).
 - **Platform (in place).** 5 of 12 routes: the backup list and statistics
   on the adopted `v2_backup_record` table, the system audit log through
   `kapi_system_audit_log_v1`, and the backup configuration (GET and PUT)
@@ -706,7 +727,10 @@ The planned `kernel.entitlement.apply.v1` became
     - the observability targets, trend and topology, which read the proxy
       nodes of `v2_node`;
     - clean agents and their registration, heartbeat, report and install
-      script (agent tokens, job claims, the request's host);
+      script (agent tokens, job claims; the script's panel URL is Control's
+      `forward_runtime.clean_agent.public_url` when set, process
+      configuration no package can read, else the request's scheme and
+      host);
     - flow upload, report and snapshot: the forward's counters, the
       subscriber's traffic and the permission's traffic change in one kernel
       transaction under a per-forward lock in Control's memory, and
