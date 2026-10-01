@@ -988,7 +988,11 @@ every agent keeps authenticating with its node API key as before.
   `v4_kernel_agent_certificate` (created at startup), the gRPC service
   `anix.agent.v1.AgentEnrollment` on the agent listener,
   `POST /api/v4/kernel/agents/enrollment-tokens` and
-  `anix-control agent token create -node proxy-12`.
+  `anix-control agent token create -node proxy-12`. KernelNodeOps also
+  creates `v4_kernel_node_desired_config` at startup: each node's desired
+  configuration with its revision and hash, written by the administrator's
+  node sync (`docs/architecture/node-ops-service.md`, section 5.5). Nothing
+  is required of operators.
 - **To let agents enroll.** Set `module_runtime.ca_kek`
   (`ANIX_CONTROL_MODULE_RUNTIME_CA_KEK`, 32 random bytes as base64 or hex;
   keep it secret and backed up) and TLS on the gRPC listener

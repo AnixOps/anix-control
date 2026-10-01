@@ -20,7 +20,10 @@ func TestNodeOpsCapabilityGrammar(t *testing.T) {
 	} {
 		require.ErrorContains(t, validateManifestCapabilities([]string{capability}), "unknown kernel capability", capability)
 	}
-	for _, table := range []string{"v4_kernel_node_operation", "v4_kernel_node_operation_event", "v4_kernel_node_operation_target"} {
+	for _, table := range []string{
+		"v4_kernel_node_operation", "v4_kernel_node_operation_event", "v4_kernel_node_operation_target",
+		"v4_kernel_node_desired_config",
+	} {
 		require.True(t, protectedKernelTable(table), table)
 		require.True(t, protectedTables[table], "listed by name: %s", table)
 		require.Error(t, validateManifestCapabilities([]string{CapabilityStorage, "kernel.storage.adopt:" + table}), table)

@@ -307,6 +307,13 @@ func nodeCacheKey(id uint) string {
 	return CacheKeyNode + strconv.FormatUint(uint64(id), 10)
 }
 
+// DropNodeCache forgets what the kernel caches about a proxy node: its row
+// and the node list. The next read loads the rows as they are.
+func DropNodeCache(id uint) {
+	_ = cache.Delete(nodeCacheKey(id))
+	_ = cache.Delete(CacheKeyNodeList)
+}
+
 // validateParentID 防止把节点的父节点设置成会形成环的节点(即父节点链条里
 // 已经包含自己), 否则 accumulateTraffic 的 seen 保护只是兜底, 真正的父子
 // 树结构会被破坏。

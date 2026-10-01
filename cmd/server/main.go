@@ -31,6 +31,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/handler"
 	"github.com/AnixOps/anix-control/v4/internal/health"
 	"github.com/AnixOps/anix-control/v4/internal/identitybridge"
+	"github.com/AnixOps/anix-control/v4/internal/kernelnodeops"
 	"github.com/AnixOps/anix-control/v4/internal/lease"
 	"github.com/AnixOps/anix-control/v4/internal/logging"
 	_ "github.com/AnixOps/anix-control/v4/internal/payment/gateways" // register payment gateway plugins
@@ -480,6 +481,13 @@ func run() int {
 	}
 	if grpcSrv != nil {
 		log.Printf("gRPC server listening on %s", grpcAddr)
+	}
+	// KernelNodeOps dispatches node operations on the Agent Control streams
+	// of both node kinds (node-ops-service.md section 3.8) and serves the
+	// node configuration and agent kinds (section 3.11, NO-6).
+	kernelnodeops.UseAgentStreams(grpcserver.GetAgentStreams())
+	if err := kernelnodeops.RegisterNodeOperationExecutors(kernelnodeops.DefaultExecutors, nil); err != nil {
+		log.Fatalf("Failed to register kernel node operations: %v", err)
 	}
 
 	// 从这里开始已有组件在运行：之后的错误不再 log.Fatal，而是走同一套有序关闭，

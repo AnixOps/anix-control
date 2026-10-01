@@ -7,6 +7,9 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/AnixOps/anix-control/sdk/agentcontrol"
+	"github.com/AnixOps/anix-control/v4/internal/database"
+	"github.com/AnixOps/anix-control/v4/internal/kernelnodeops"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/gin-gonic/gin"
@@ -811,33 +814,30 @@ func (h *NodeHandler) SyncProtocol(c *gin.Context) {
 		return
 	}
 
-	if h.agentControl != nil {
-		if _, connected := h.agentControl.Connection(uint32(nodeID)); connected {
-			ack, operation, dispatchErr := h.dispatchAgentControlOperation(
-				c.Request.Context(),
-				uint32(nodeID),
-				"",
-				"node.reload",
-				nil,
-				defaultAgentControlOperationTimeout,
-			)
-			if dispatchErr != nil {
-				c.JSON(http.StatusBadGateway, gin.H{"message": "Agent Control 同步下发失败", "error": dispatchErr.Error()})
-				return
-			}
-			panelSuccess(c, gin.H{
-				"message":      "同步操作已由 AnixOps Agent 接收",
-				"transport":    "agent-control-grpc",
-				"operation_id": operation.OperationId,
-				"revision":     operation.Revision,
-				"ack":          ack,
-			})
+	// The sync is kernelnodeops.SyncNode, the function the node.sync
+	// executor runs: it rebuilds and stores the node's desired
+	// configuration, then pushes node.reload to an agent on the Control
+	// stream; a node on the legacy transports pulls it.
+	sync, err := kernelnodeops.SyncNode(c.Request.Context(), database.Get(), h.streams(),
+		agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: uint32(nodeID)},
+		kernelnodeops.SyncNodeOptions{Force: true, AckTimeout: defaultAgentControlOperationTimeout})
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"message": "同步失败"})
+		return
+	}
+	sync.Release()
+	if sync.Pushed {
+		if sync.DispatchErr != nil {
+			c.JSON(http.StatusBadGateway, gin.H{"message": "Agent Control 同步下发失败", "error": sync.DispatchErr.Error()})
 			return
 		}
-	}
-
-	if err := h.nodeService.SyncProtocolToNode(uint(nodeID)); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"message": "同步失败"})
+		panelSuccess(c, gin.H{
+			"message":      "同步操作已由 AnixOps Agent 接收",
+			"transport":    "agent-control-grpc",
+			"operation_id": sync.Desired.OperationId,
+			"revision":     sync.Desired.Revision,
+			"ack":          sync.Ack,
+		})
 		return
 	}
 

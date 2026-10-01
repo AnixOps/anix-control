@@ -174,6 +174,12 @@ func (r *Run) UseSecret(values ...string) {
 	}
 }
 
+// DB returns the kernel database the operation is recorded in.
+func (r *Run) DB() *gorm.DB { return r.engine.DB }
+
+// now is the engine's clock.
+func (r *Run) now() time.Time { return r.engine.now() }
+
 func (r *Run) usedSecrets() []string {
 	r.mu.Lock()
 	defer r.mu.Unlock()

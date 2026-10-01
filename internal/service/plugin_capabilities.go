@@ -102,6 +102,12 @@ var (
 		// write it could make a batch count twice, or never. Protected by
 		// the prefix; named so the rule survives a prefix change.
 		"v4_kernel_agent_report_batch": true,
+		// Desired node configurations (node-ops-service.md section 5.5):
+		// each node's built configuration, with its protocol secrets, and
+		// the revision and hash the agents' ConfigStatus names. A package
+		// that could read it would read every node's keys; one that could
+		// write it could push a configuration of its own.
+		"v4_kernel_node_desired_config": true,
 	}
 )
 

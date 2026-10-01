@@ -24,10 +24,15 @@ type fakeNodeAgentControl struct {
 	ack       *agentv1pb.OperationAck
 	err       error
 	received  *agentv1pb.DesiredOperation
+	// ackFromOperation names the ack after the dispatched operation.
+	ackFromOperation bool
 }
 
 func (f *fakeNodeAgentControl) DispatchOperation(_ context.Context, _ uint32, operation *agentv1pb.DesiredOperation) (*agentv1pb.OperationAck, error) {
 	f.received = operation
+	if f.ackFromOperation && f.ack != nil {
+		f.ack.OperationId = operation.OperationId
+	}
 	if f.ack == nil && f.err == nil {
 		f.ack = &agentv1pb.OperationAck{OperationId: operation.OperationId, Accepted: true, Revision: 7}
 	}

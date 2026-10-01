@@ -60,9 +60,12 @@ type AgentControlConnection struct {
 	// for NO-8's vantage selection.
 	ServerCapabilities []*agentv1pb.Capability
 	Diagnostics        bool
-	stream             agentv1pb.AgentControlService_ControlStreamServer
-	sendMu             sync.Mutex
-	stateMu            sync.RWMutex
+	// Identity is the authenticated identity: the agent's SPIFFE ID, or
+	// agentstreams.IdentityAPIKey for a node key or forward token.
+	Identity string
+	stream   agentv1pb.AgentControlService_ControlStreamServer
+	sendMu   sync.Mutex
+	stateMu  sync.RWMutex
 }
 
 func (c *AgentControlConnection) send(message *agentv1pb.ControlToAgent) error {
@@ -692,6 +695,7 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 		LastSeen:     now,
 		DesiredRev:   desiredRevision,
 		ObservedRev:  first.Revision,
+		Identity:     principal.identity(),
 		stream:       stream,
 	}
 	connection.ServerCapabilities = s.serverCapabilities(agentNode, hello.Capabilities)

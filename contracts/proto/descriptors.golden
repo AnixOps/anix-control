@@ -534,6 +534,7 @@ field anixops.kernelnodeops.v1.NodeSyncResult.agent_operation_id = 2 optional st
 field anixops.kernelnodeops.v1.NodeSyncResult.changed = 6 optional bool
 field anixops.kernelnodeops.v1.NodeSyncResult.channel = 1 optional anixops.kernelnodeops.v1.Channel
 field anixops.kernelnodeops.v1.NodeSyncResult.config_hash = 5 optional string
+field anixops.kernelnodeops.v1.NodeSyncResult.config_revision = 8 optional uint64
 field anixops.kernelnodeops.v1.NodeSyncResult.excluded_protocols = 7 optional uint32
 field anixops.kernelnodeops.v1.NodeSyncResult.revision = 3 optional uint64
 field anixops.kernelnodeops.v1.ObservedOperation.agent_operation_id = 1 optional string
