@@ -1113,6 +1113,7 @@ type OperationSpec struct {
 	//	*OperationSpec_DiagnoseForward
 	//	*OperationSpec_DiagnoseTunnel
 	//	*OperationSpec_RunAgentDiagnostic
+	//	*OperationSpec_TestForwardBackend
 	//	*OperationSpec_AgentControlOperation
 	//	*OperationSpec_IssueCredential
 	//	*OperationSpec_RevokeCredential
@@ -1278,6 +1279,15 @@ func (x *OperationSpec) GetRunAgentDiagnostic() *RunAgentDiagnostic {
 	return nil
 }
 
+func (x *OperationSpec) GetTestForwardBackend() *TestForwardBackend {
+	if x != nil {
+		if x, ok := x.Operation.(*OperationSpec_TestForwardBackend); ok {
+			return x.TestForwardBackend
+		}
+	}
+	return nil
+}
+
 func (x *OperationSpec) GetAgentControlOperation() *AgentControlOperation {
 	if x != nil {
 		if x, ok := x.Operation.(*OperationSpec_AgentControlOperation); ok {
@@ -1391,6 +1401,10 @@ type OperationSpec_RunAgentDiagnostic struct {
 	RunAgentDiagnostic *RunAgentDiagnostic `protobuf:"bytes,34,opt,name=run_agent_diagnostic,json=runAgentDiagnostic,proto3,oneof"`
 }
 
+type OperationSpec_TestForwardBackend struct {
+	TestForwardBackend *TestForwardBackend `protobuf:"bytes,35,opt,name=test_forward_backend,json=testForwardBackend,proto3,oneof"`
+}
+
 type OperationSpec_AgentControlOperation struct {
 	// Agent family.
 	AgentControlOperation *AgentControlOperation `protobuf:"bytes,40,opt,name=agent_control_operation,json=agentControlOperation,proto3,oneof"`
@@ -1442,6 +1456,8 @@ func (*OperationSpec_DiagnoseForward) isOperationSpec_Operation() {}
 func (*OperationSpec_DiagnoseTunnel) isOperationSpec_Operation() {}
 
 func (*OperationSpec_RunAgentDiagnostic) isOperationSpec_Operation() {}
+
+func (*OperationSpec_TestForwardBackend) isOperationSpec_Operation() {}
 
 func (*OperationSpec_AgentControlOperation) isOperationSpec_Operation() {}
 
@@ -1571,7 +1587,11 @@ func (x *ApplyTunnel) GetReasons() []string {
 // SyncForwardBackend re-applies every active forward, as the administrator's
 // backend sync does. It fans out into one ApplyForward SYNC per forward.
 type SyncForwardBackend struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// backend is the runtime backend to move the forwards to (gost,
+	// nftables_ansible, iptables_ansible or clean_agent); empty means the
+	// backend in force. Forwards already on it are left alone.
+	Backend       string `protobuf:"bytes,1,opt,name=backend,proto3" json:"backend,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1604,6 +1624,13 @@ func (x *SyncForwardBackend) ProtoReflect() protoreflect.Message {
 // Deprecated: Use SyncForwardBackend.ProtoReflect.Descriptor instead.
 func (*SyncForwardBackend) Descriptor() ([]byte, []int) {
 	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *SyncForwardBackend) GetBackend() string {
+	if x != nil {
+		return x.Backend
+	}
+	return ""
 }
 
 // ApplyLegacyRule pushes one legacy forward rule (v2_forward_rule) to its
@@ -2123,6 +2150,72 @@ func (x *DiagnoseTunnel) GetVantage() Vantage {
 	return Vantage_VANTAGE_UNSPECIFIED
 }
 
+// TestForwardBackend tests a gost API from the kernel with a token the
+// administrator typed, as POST /admin/forward/test-connection does: whether
+// the API at host:api_port answers its service list to the token. The token
+// is a sealed handle of the bound request; the package never sees it, and
+// the kernel presents it to that address once. An unreachable or refusing
+// API is the result, not a failed operation.
+type TestForwardBackend struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Host          string                 `protobuf:"bytes,1,opt,name=host,proto3" json:"host,omitempty"`
+	ApiPort       int32                  `protobuf:"varint,2,opt,name=api_port,json=apiPort,proto3" json:"api_port,omitempty"`
+	Token         *SecretRef             `protobuf:"bytes,3,opt,name=token,proto3" json:"token,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *TestForwardBackend) Reset() {
+	*x = TestForwardBackend{}
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TestForwardBackend) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TestForwardBackend) ProtoMessage() {}
+
+func (x *TestForwardBackend) ProtoReflect() protoreflect.Message {
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TestForwardBackend.ProtoReflect.Descriptor instead.
+func (*TestForwardBackend) Descriptor() ([]byte, []int) {
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *TestForwardBackend) GetHost() string {
+	if x != nil {
+		return x.Host
+	}
+	return ""
+}
+
+func (x *TestForwardBackend) GetApiPort() int32 {
+	if x != nil {
+		return x.ApiPort
+	}
+	return 0
+}
+
+func (x *TestForwardBackend) GetToken() *SecretRef {
+	if x != nil {
+		return x.Token
+	}
+	return nil
+}
+
 // RunAgentDiagnostic sends one whitelisted diagnostic action to a node's
 // agent (the kernel's diagnostic whitelist normalizes the parameters),
 // records the task in v2_agent_diagnostic_task and waits for the agent's
@@ -2139,7 +2232,7 @@ type RunAgentDiagnostic struct {
 
 func (x *RunAgentDiagnostic) Reset() {
 	*x = RunAgentDiagnostic{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[17]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[18]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2151,7 +2244,7 @@ func (x *RunAgentDiagnostic) String() string {
 func (*RunAgentDiagnostic) ProtoMessage() {}
 
 func (x *RunAgentDiagnostic) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[17]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[18]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2164,7 +2257,7 @@ func (x *RunAgentDiagnostic) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RunAgentDiagnostic.ProtoReflect.Descriptor instead.
 func (*RunAgentDiagnostic) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{17}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{18}
 }
 
 func (x *RunAgentDiagnostic) GetNodeId() uint64 {
@@ -2212,7 +2305,7 @@ type AgentControlOperation struct {
 
 func (x *AgentControlOperation) Reset() {
 	*x = AgentControlOperation{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[18]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[19]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2224,7 +2317,7 @@ func (x *AgentControlOperation) String() string {
 func (*AgentControlOperation) ProtoMessage() {}
 
 func (x *AgentControlOperation) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[18]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[19]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2237,7 +2330,7 @@ func (x *AgentControlOperation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentControlOperation.ProtoReflect.Descriptor instead.
 func (*AgentControlOperation) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{18}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{19}
 }
 
 func (x *AgentControlOperation) GetNodeId() uint64 {
@@ -2297,7 +2390,7 @@ type IssueCredential struct {
 
 func (x *IssueCredential) Reset() {
 	*x = IssueCredential{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[19]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[20]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2309,7 +2402,7 @@ func (x *IssueCredential) String() string {
 func (*IssueCredential) ProtoMessage() {}
 
 func (x *IssueCredential) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[19]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[20]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2322,7 +2415,7 @@ func (x *IssueCredential) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IssueCredential.ProtoReflect.Descriptor instead.
 func (*IssueCredential) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{19}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{20}
 }
 
 func (x *IssueCredential) GetSubject() *NodeRef {
@@ -2366,7 +2459,7 @@ type RevokeCredential struct {
 
 func (x *RevokeCredential) Reset() {
 	*x = RevokeCredential{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[20]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[21]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2378,7 +2471,7 @@ func (x *RevokeCredential) String() string {
 func (*RevokeCredential) ProtoMessage() {}
 
 func (x *RevokeCredential) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[20]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[21]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2391,7 +2484,7 @@ func (x *RevokeCredential) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeCredential.ProtoReflect.Descriptor instead.
 func (*RevokeCredential) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{20}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{21}
 }
 
 func (x *RevokeCredential) GetSubject() *NodeRef {
@@ -2422,7 +2515,7 @@ type IssueRegistrationKey struct {
 
 func (x *IssueRegistrationKey) Reset() {
 	*x = IssueRegistrationKey{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[21]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[22]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2434,7 +2527,7 @@ func (x *IssueRegistrationKey) String() string {
 func (*IssueRegistrationKey) ProtoMessage() {}
 
 func (x *IssueRegistrationKey) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[21]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[22]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2447,7 +2540,7 @@ func (x *IssueRegistrationKey) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IssueRegistrationKey.ProtoReflect.Descriptor instead.
 func (*IssueRegistrationKey) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{21}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{22}
 }
 
 func (x *IssueRegistrationKey) GetName() string {
@@ -2473,7 +2566,7 @@ type RevokeRegistrationKey struct {
 
 func (x *RevokeRegistrationKey) Reset() {
 	*x = RevokeRegistrationKey{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[22]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[23]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2485,7 +2578,7 @@ func (x *RevokeRegistrationKey) String() string {
 func (*RevokeRegistrationKey) ProtoMessage() {}
 
 func (x *RevokeRegistrationKey) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[22]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[23]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2498,7 +2591,7 @@ func (x *RevokeRegistrationKey) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RevokeRegistrationKey.ProtoReflect.Descriptor instead.
 func (*RevokeRegistrationKey) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{22}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{23}
 }
 
 func (x *RevokeRegistrationKey) GetKeyId() uint64 {
@@ -2522,7 +2615,7 @@ type IssueCleanAgent struct {
 
 func (x *IssueCleanAgent) Reset() {
 	*x = IssueCleanAgent{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[23]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[24]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2534,7 +2627,7 @@ func (x *IssueCleanAgent) String() string {
 func (*IssueCleanAgent) ProtoMessage() {}
 
 func (x *IssueCleanAgent) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[23]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[24]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2547,7 +2640,7 @@ func (x *IssueCleanAgent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use IssueCleanAgent.ProtoReflect.Descriptor instead.
 func (*IssueCleanAgent) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{23}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{24}
 }
 
 func (x *IssueCleanAgent) GetName() string {
@@ -2585,7 +2678,7 @@ type SubmitOperationRequest struct {
 
 func (x *SubmitOperationRequest) Reset() {
 	*x = SubmitOperationRequest{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[24]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[25]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2597,7 +2690,7 @@ func (x *SubmitOperationRequest) String() string {
 func (*SubmitOperationRequest) ProtoMessage() {}
 
 func (x *SubmitOperationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[24]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[25]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2610,7 +2703,7 @@ func (x *SubmitOperationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubmitOperationRequest.ProtoReflect.Descriptor instead.
 func (*SubmitOperationRequest) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{24}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{25}
 }
 
 func (x *SubmitOperationRequest) GetRequestId() string {
@@ -2667,7 +2760,7 @@ type SubmitOperationResponse struct {
 
 func (x *SubmitOperationResponse) Reset() {
 	*x = SubmitOperationResponse{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[25]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[26]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2679,7 +2772,7 @@ func (x *SubmitOperationResponse) String() string {
 func (*SubmitOperationResponse) ProtoMessage() {}
 
 func (x *SubmitOperationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[25]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[26]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2692,7 +2785,7 @@ func (x *SubmitOperationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SubmitOperationResponse.ProtoReflect.Descriptor instead.
 func (*SubmitOperationResponse) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{25}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{26}
 }
 
 func (x *SubmitOperationResponse) GetApplied() bool {
@@ -2722,7 +2815,7 @@ type OperationError struct {
 
 func (x *OperationError) Reset() {
 	*x = OperationError{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[26]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[27]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2734,7 +2827,7 @@ func (x *OperationError) String() string {
 func (*OperationError) ProtoMessage() {}
 
 func (x *OperationError) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[26]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[27]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2747,7 +2840,7 @@ func (x *OperationError) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OperationError.ProtoReflect.Descriptor instead.
 func (*OperationError) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{26}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{27}
 }
 
 func (x *OperationError) GetCode() ErrorCode {
@@ -2804,7 +2897,7 @@ type Operation struct {
 
 func (x *Operation) Reset() {
 	*x = Operation{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[27]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[28]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2816,7 +2909,7 @@ func (x *Operation) String() string {
 func (*Operation) ProtoMessage() {}
 
 func (x *Operation) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[27]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[28]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -2829,7 +2922,7 @@ func (x *Operation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use Operation.ProtoReflect.Descriptor instead.
 func (*Operation) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{27}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{28}
 }
 
 func (x *Operation) GetOperationId() string {
@@ -2979,7 +3072,7 @@ type FanOut struct {
 
 func (x *FanOut) Reset() {
 	*x = FanOut{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[28]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[29]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -2991,7 +3084,7 @@ func (x *FanOut) String() string {
 func (*FanOut) ProtoMessage() {}
 
 func (x *FanOut) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[28]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[29]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3004,7 +3097,7 @@ func (x *FanOut) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use FanOut.ProtoReflect.Descriptor instead.
 func (*FanOut) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{28}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{29}
 }
 
 func (x *FanOut) GetTotal() uint32 {
@@ -3051,6 +3144,7 @@ type OperationResult struct {
 	//	*OperationResult_NodeStats
 	//	*OperationResult_Diagnosis
 	//	*OperationResult_AgentDiagnostic
+	//	*OperationResult_ForwardBackendTest
 	//	*OperationResult_AgentOperation
 	//	*OperationResult_Credential
 	//	*OperationResult_RegistrationKey
@@ -3061,7 +3155,7 @@ type OperationResult struct {
 
 func (x *OperationResult) Reset() {
 	*x = OperationResult{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[29]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[30]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3073,7 +3167,7 @@ func (x *OperationResult) String() string {
 func (*OperationResult) ProtoMessage() {}
 
 func (x *OperationResult) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[29]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[30]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3086,7 +3180,7 @@ func (x *OperationResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OperationResult.ProtoReflect.Descriptor instead.
 func (*OperationResult) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{29}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{30}
 }
 
 func (x *OperationResult) GetResult() isOperationResult_Result {
@@ -3177,6 +3271,15 @@ func (x *OperationResult) GetAgentDiagnostic() *AgentDiagnosticResult {
 	return nil
 }
 
+func (x *OperationResult) GetForwardBackendTest() *ForwardBackendTestResult {
+	if x != nil {
+		if x, ok := x.Result.(*OperationResult_ForwardBackendTest); ok {
+			return x.ForwardBackendTest
+		}
+	}
+	return nil
+}
+
 func (x *OperationResult) GetAgentOperation() *AgentOperationResult {
 	if x != nil {
 		if x, ok := x.Result.(*OperationResult_AgentOperation); ok {
@@ -3244,6 +3347,10 @@ type OperationResult_AgentDiagnostic struct {
 	AgentDiagnostic *AgentDiagnosticResult `protobuf:"bytes,33,opt,name=agent_diagnostic,json=agentDiagnostic,proto3,oneof"`
 }
 
+type OperationResult_ForwardBackendTest struct {
+	ForwardBackendTest *ForwardBackendTestResult `protobuf:"bytes,34,opt,name=forward_backend_test,json=forwardBackendTest,proto3,oneof"`
+}
+
 type OperationResult_AgentOperation struct {
 	AgentOperation *AgentOperationResult `protobuf:"bytes,40,opt,name=agent_operation,json=agentOperation,proto3,oneof"`
 }
@@ -3274,6 +3381,8 @@ func (*OperationResult_Diagnosis) isOperationResult_Result() {}
 
 func (*OperationResult_AgentDiagnostic) isOperationResult_Result() {}
 
+func (*OperationResult_ForwardBackendTest) isOperationResult_Result() {}
+
 func (*OperationResult_AgentOperation) isOperationResult_Result() {}
 
 func (*OperationResult_Credential) isOperationResult_Result() {}
@@ -3298,7 +3407,7 @@ type ForwardApplyResult struct {
 
 func (x *ForwardApplyResult) Reset() {
 	*x = ForwardApplyResult{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[30]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[31]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3310,7 +3419,7 @@ func (x *ForwardApplyResult) String() string {
 func (*ForwardApplyResult) ProtoMessage() {}
 
 func (x *ForwardApplyResult) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[30]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[31]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3323,7 +3432,7 @@ func (x *ForwardApplyResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ForwardApplyResult.ProtoReflect.Descriptor instead.
 func (*ForwardApplyResult) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{30}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{31}
 }
 
 func (x *ForwardApplyResult) GetBackend() string {
@@ -3372,7 +3481,7 @@ type LegacyRuleResult struct {
 
 func (x *LegacyRuleResult) Reset() {
 	*x = LegacyRuleResult{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[31]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[32]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3384,7 +3493,7 @@ func (x *LegacyRuleResult) String() string {
 func (*LegacyRuleResult) ProtoMessage() {}
 
 func (x *LegacyRuleResult) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[31]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[32]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3397,7 +3506,7 @@ func (x *LegacyRuleResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use LegacyRuleResult.ProtoReflect.Descriptor instead.
 func (*LegacyRuleResult) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{31}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{32}
 }
 
 func (x *LegacyRuleResult) GetAppliedOnRelay() bool {
@@ -3421,6 +3530,68 @@ func (x *LegacyRuleResult) GetMessage() string {
 	return ""
 }
 
+// ForwardBackendTestResult is what the connection test found, as the legacy
+// route answers it.
+type ForwardBackendTestResult struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Success       bool                   `protobuf:"varint,1,opt,name=success,proto3" json:"success,omitempty"`
+	Message       string                 `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	ServiceCount  int32                  `protobuf:"varint,3,opt,name=service_count,json=serviceCount,proto3" json:"service_count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ForwardBackendTestResult) Reset() {
+	*x = ForwardBackendTestResult{}
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[33]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ForwardBackendTestResult) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ForwardBackendTestResult) ProtoMessage() {}
+
+func (x *ForwardBackendTestResult) ProtoReflect() protoreflect.Message {
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[33]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ForwardBackendTestResult.ProtoReflect.Descriptor instead.
+func (*ForwardBackendTestResult) Descriptor() ([]byte, []int) {
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{33}
+}
+
+func (x *ForwardBackendTestResult) GetSuccess() bool {
+	if x != nil {
+		return x.Success
+	}
+	return false
+}
+
+func (x *ForwardBackendTestResult) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *ForwardBackendTestResult) GetServiceCount() int32 {
+	if x != nil {
+		return x.ServiceCount
+	}
+	return 0
+}
+
 type AgentAck struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	Accepted         bool                   `protobuf:"varint,1,opt,name=accepted,proto3" json:"accepted,omitempty"`
@@ -3434,7 +3605,7 @@ type AgentAck struct {
 
 func (x *AgentAck) Reset() {
 	*x = AgentAck{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[32]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[34]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3446,7 +3617,7 @@ func (x *AgentAck) String() string {
 func (*AgentAck) ProtoMessage() {}
 
 func (x *AgentAck) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[32]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[34]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3459,7 +3630,7 @@ func (x *AgentAck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentAck.ProtoReflect.Descriptor instead.
 func (*AgentAck) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{32}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{34}
 }
 
 func (x *AgentAck) GetAccepted() bool {
@@ -3519,7 +3690,7 @@ type NodeSyncResult struct {
 
 func (x *NodeSyncResult) Reset() {
 	*x = NodeSyncResult{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[33]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[35]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3531,7 +3702,7 @@ func (x *NodeSyncResult) String() string {
 func (*NodeSyncResult) ProtoMessage() {}
 
 func (x *NodeSyncResult) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[33]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[35]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3544,7 +3715,7 @@ func (x *NodeSyncResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeSyncResult.ProtoReflect.Descriptor instead.
 func (*NodeSyncResult) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{33}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{35}
 }
 
 func (x *NodeSyncResult) GetChannel() Channel {
@@ -3616,7 +3787,7 @@ type RetireResult struct {
 
 func (x *RetireResult) Reset() {
 	*x = RetireResult{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[34]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[36]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3628,7 +3799,7 @@ func (x *RetireResult) String() string {
 func (*RetireResult) ProtoMessage() {}
 
 func (x *RetireResult) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[34]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[36]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3641,7 +3812,7 @@ func (x *RetireResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RetireResult.ProtoReflect.Descriptor instead.
 func (*RetireResult) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{34}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{36}
 }
 
 func (x *RetireResult) GetCredentialsRevoked() uint32 {
@@ -3692,7 +3863,7 @@ type SecretDocumentResult struct {
 
 func (x *SecretDocumentResult) Reset() {
 	*x = SecretDocumentResult{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[35]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[37]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3704,7 +3875,7 @@ func (x *SecretDocumentResult) String() string {
 func (*SecretDocumentResult) ProtoMessage() {}
 
 func (x *SecretDocumentResult) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[35]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[37]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3717,7 +3888,7 @@ func (x *SecretDocumentResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use SecretDocumentResult.ProtoReflect.Descriptor instead.
 func (*SecretDocumentResult) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{35}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{37}
 }
 
 func (x *SecretDocumentResult) GetRedactedJson() []byte {
@@ -3772,7 +3943,7 @@ type VantageReport struct {
 
 func (x *VantageReport) Reset() {
 	*x = VantageReport{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[36]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[38]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3784,7 +3955,7 @@ func (x *VantageReport) String() string {
 func (*VantageReport) ProtoMessage() {}
 
 func (x *VantageReport) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[36]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[38]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3797,7 +3968,7 @@ func (x *VantageReport) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use VantageReport.ProtoReflect.Descriptor instead.
 func (*VantageReport) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{36}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{38}
 }
 
 func (x *VantageReport) GetRequested() Vantage {
@@ -3843,7 +4014,7 @@ type EndpointCheck struct {
 
 func (x *EndpointCheck) Reset() {
 	*x = EndpointCheck{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[37]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[39]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3855,7 +4026,7 @@ func (x *EndpointCheck) String() string {
 func (*EndpointCheck) ProtoMessage() {}
 
 func (x *EndpointCheck) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[37]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[39]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3868,7 +4039,7 @@ func (x *EndpointCheck) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EndpointCheck.ProtoReflect.Descriptor instead.
 func (*EndpointCheck) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{37}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{39}
 }
 
 func (x *EndpointCheck) GetNode() *NodeRef {
@@ -3922,7 +4093,7 @@ type EndpointCheckResult struct {
 
 func (x *EndpointCheckResult) Reset() {
 	*x = EndpointCheckResult{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[38]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[40]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3934,7 +4105,7 @@ func (x *EndpointCheckResult) String() string {
 func (*EndpointCheckResult) ProtoMessage() {}
 
 func (x *EndpointCheckResult) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[38]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[40]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3947,7 +4118,7 @@ func (x *EndpointCheckResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use EndpointCheckResult.ProtoReflect.Descriptor instead.
 func (*EndpointCheckResult) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{38}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{40}
 }
 
 func (x *EndpointCheckResult) GetChecks() []*EndpointCheck {
@@ -3972,7 +4143,7 @@ type ServiceTraffic struct {
 
 func (x *ServiceTraffic) Reset() {
 	*x = ServiceTraffic{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[39]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[41]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -3984,7 +4155,7 @@ func (x *ServiceTraffic) String() string {
 func (*ServiceTraffic) ProtoMessage() {}
 
 func (x *ServiceTraffic) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[39]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[41]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -3997,7 +4168,7 @@ func (x *ServiceTraffic) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ServiceTraffic.ProtoReflect.Descriptor instead.
 func (*ServiceTraffic) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{39}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{41}
 }
 
 func (x *ServiceTraffic) GetService() string {
@@ -4043,7 +4214,7 @@ type NodeStatsResult struct {
 
 func (x *NodeStatsResult) Reset() {
 	*x = NodeStatsResult{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[40]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[42]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4055,7 +4226,7 @@ func (x *NodeStatsResult) String() string {
 func (*NodeStatsResult) ProtoMessage() {}
 
 func (x *NodeStatsResult) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[40]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[42]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4068,7 +4239,7 @@ func (x *NodeStatsResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use NodeStatsResult.ProtoReflect.Descriptor instead.
 func (*NodeStatsResult) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{40}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{42}
 }
 
 func (x *NodeStatsResult) GetNode() *NodeRef {
@@ -4132,7 +4303,7 @@ type DiagnosisOutcome struct {
 
 func (x *DiagnosisOutcome) Reset() {
 	*x = DiagnosisOutcome{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[41]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[43]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4144,7 +4315,7 @@ func (x *DiagnosisOutcome) String() string {
 func (*DiagnosisOutcome) ProtoMessage() {}
 
 func (x *DiagnosisOutcome) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[41]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[43]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4157,7 +4328,7 @@ func (x *DiagnosisOutcome) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiagnosisOutcome.ProtoReflect.Descriptor instead.
 func (*DiagnosisOutcome) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{41}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{43}
 }
 
 func (x *DiagnosisOutcome) GetSuccess() bool {
@@ -4234,7 +4405,7 @@ type DiagnosisResult struct {
 
 func (x *DiagnosisResult) Reset() {
 	*x = DiagnosisResult{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[42]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[44]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4246,7 +4417,7 @@ func (x *DiagnosisResult) String() string {
 func (*DiagnosisResult) ProtoMessage() {}
 
 func (x *DiagnosisResult) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[42]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[44]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4259,7 +4430,7 @@ func (x *DiagnosisResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use DiagnosisResult.ProtoReflect.Descriptor instead.
 func (*DiagnosisResult) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{42}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{44}
 }
 
 func (x *DiagnosisResult) GetOutcomes() []*DiagnosisOutcome {
@@ -4292,7 +4463,7 @@ type AgentDiagnosticResult struct {
 
 func (x *AgentDiagnosticResult) Reset() {
 	*x = AgentDiagnosticResult{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[43]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[45]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4304,7 +4475,7 @@ func (x *AgentDiagnosticResult) String() string {
 func (*AgentDiagnosticResult) ProtoMessage() {}
 
 func (x *AgentDiagnosticResult) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[43]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[45]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4317,7 +4488,7 @@ func (x *AgentDiagnosticResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentDiagnosticResult.ProtoReflect.Descriptor instead.
 func (*AgentDiagnosticResult) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{43}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{45}
 }
 
 func (x *AgentDiagnosticResult) GetTaskId() string {
@@ -4373,7 +4544,7 @@ type AgentOperationResult struct {
 
 func (x *AgentOperationResult) Reset() {
 	*x = AgentOperationResult{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[44]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[46]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4385,7 +4556,7 @@ func (x *AgentOperationResult) String() string {
 func (*AgentOperationResult) ProtoMessage() {}
 
 func (x *AgentOperationResult) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[44]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[46]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4398,7 +4569,7 @@ func (x *AgentOperationResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentOperationResult.ProtoReflect.Descriptor instead.
 func (*AgentOperationResult) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{44}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{46}
 }
 
 func (x *AgentOperationResult) GetAgentOperationId() string {
@@ -4435,7 +4606,7 @@ type CredentialResult struct {
 
 func (x *CredentialResult) Reset() {
 	*x = CredentialResult{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[45]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[47]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4447,7 +4618,7 @@ func (x *CredentialResult) String() string {
 func (*CredentialResult) ProtoMessage() {}
 
 func (x *CredentialResult) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[45]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[47]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4460,7 +4631,7 @@ func (x *CredentialResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CredentialResult.ProtoReflect.Descriptor instead.
 func (*CredentialResult) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{45}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{47}
 }
 
 func (x *CredentialResult) GetSubject() *NodeRef {
@@ -4510,7 +4681,7 @@ type RegistrationKeyResult struct {
 
 func (x *RegistrationKeyResult) Reset() {
 	*x = RegistrationKeyResult{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[46]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[48]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4522,7 +4693,7 @@ func (x *RegistrationKeyResult) String() string {
 func (*RegistrationKeyResult) ProtoMessage() {}
 
 func (x *RegistrationKeyResult) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[46]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[48]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4535,7 +4706,7 @@ func (x *RegistrationKeyResult) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use RegistrationKeyResult.ProtoReflect.Descriptor instead.
 func (*RegistrationKeyResult) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{46}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{48}
 }
 
 func (x *RegistrationKeyResult) GetKeyId() uint64 {
@@ -4579,7 +4750,7 @@ type GetOperationRequest struct {
 
 func (x *GetOperationRequest) Reset() {
 	*x = GetOperationRequest{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[47]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[49]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4591,7 +4762,7 @@ func (x *GetOperationRequest) String() string {
 func (*GetOperationRequest) ProtoMessage() {}
 
 func (x *GetOperationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[47]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[49]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4604,7 +4775,7 @@ func (x *GetOperationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetOperationRequest.ProtoReflect.Descriptor instead.
 func (*GetOperationRequest) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{47}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{49}
 }
 
 func (x *GetOperationRequest) GetSelector() isGetOperationRequest_Selector {
@@ -4657,7 +4828,7 @@ type GetOperationResponse struct {
 
 func (x *GetOperationResponse) Reset() {
 	*x = GetOperationResponse{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[48]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[50]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4669,7 +4840,7 @@ func (x *GetOperationResponse) String() string {
 func (*GetOperationResponse) ProtoMessage() {}
 
 func (x *GetOperationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[48]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[50]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4682,7 +4853,7 @@ func (x *GetOperationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetOperationResponse.ProtoReflect.Descriptor instead.
 func (*GetOperationResponse) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{48}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{50}
 }
 
 func (x *GetOperationResponse) GetOperation() *Operation {
@@ -4706,7 +4877,7 @@ type ListOperationsRequest struct {
 
 func (x *ListOperationsRequest) Reset() {
 	*x = ListOperationsRequest{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[49]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[51]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4718,7 +4889,7 @@ func (x *ListOperationsRequest) String() string {
 func (*ListOperationsRequest) ProtoMessage() {}
 
 func (x *ListOperationsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[49]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[51]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4731,7 +4902,7 @@ func (x *ListOperationsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListOperationsRequest.ProtoReflect.Descriptor instead.
 func (*ListOperationsRequest) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{49}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{51}
 }
 
 func (x *ListOperationsRequest) GetFamilies() []OperationFamily {
@@ -4779,7 +4950,7 @@ type ListOperationsResponse struct {
 
 func (x *ListOperationsResponse) Reset() {
 	*x = ListOperationsResponse{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[50]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[52]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4791,7 +4962,7 @@ func (x *ListOperationsResponse) String() string {
 func (*ListOperationsResponse) ProtoMessage() {}
 
 func (x *ListOperationsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[50]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[52]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4804,7 +4975,7 @@ func (x *ListOperationsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListOperationsResponse.ProtoReflect.Descriptor instead.
 func (*ListOperationsResponse) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{50}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{52}
 }
 
 func (x *ListOperationsResponse) GetOperations() []*Operation {
@@ -4831,7 +5002,7 @@ type WatchOperationsRequest struct {
 
 func (x *WatchOperationsRequest) Reset() {
 	*x = WatchOperationsRequest{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[51]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[53]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4843,7 +5014,7 @@ func (x *WatchOperationsRequest) String() string {
 func (*WatchOperationsRequest) ProtoMessage() {}
 
 func (x *WatchOperationsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[51]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[53]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4856,7 +5027,7 @@ func (x *WatchOperationsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use WatchOperationsRequest.ProtoReflect.Descriptor instead.
 func (*WatchOperationsRequest) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{51}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{53}
 }
 
 func (x *WatchOperationsRequest) GetAfterCursor() uint64 {
@@ -4884,7 +5055,7 @@ type OperationEvent struct {
 
 func (x *OperationEvent) Reset() {
 	*x = OperationEvent{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[52]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[54]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4896,7 +5067,7 @@ func (x *OperationEvent) String() string {
 func (*OperationEvent) ProtoMessage() {}
 
 func (x *OperationEvent) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[52]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[54]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4909,7 +5080,7 @@ func (x *OperationEvent) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use OperationEvent.ProtoReflect.Descriptor instead.
 func (*OperationEvent) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{52}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{54}
 }
 
 func (x *OperationEvent) GetCursor() uint64 {
@@ -4943,7 +5114,7 @@ type CancelOperationRequest struct {
 
 func (x *CancelOperationRequest) Reset() {
 	*x = CancelOperationRequest{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[53]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[55]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -4955,7 +5126,7 @@ func (x *CancelOperationRequest) String() string {
 func (*CancelOperationRequest) ProtoMessage() {}
 
 func (x *CancelOperationRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[53]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[55]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -4968,7 +5139,7 @@ func (x *CancelOperationRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelOperationRequest.ProtoReflect.Descriptor instead.
 func (*CancelOperationRequest) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{53}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{55}
 }
 
 func (x *CancelOperationRequest) GetOperationId() string {
@@ -4994,7 +5165,7 @@ type CancelOperationResponse struct {
 
 func (x *CancelOperationResponse) Reset() {
 	*x = CancelOperationResponse{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[54]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[56]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5006,7 +5177,7 @@ func (x *CancelOperationResponse) String() string {
 func (*CancelOperationResponse) ProtoMessage() {}
 
 func (x *CancelOperationResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[54]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[56]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5019,7 +5190,7 @@ func (x *CancelOperationResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use CancelOperationResponse.ProtoReflect.Descriptor instead.
 func (*CancelOperationResponse) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{54}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{56}
 }
 
 func (x *CancelOperationResponse) GetOperation() *Operation {
@@ -5045,7 +5216,7 @@ type ValidateNodeConfigRequest struct {
 
 func (x *ValidateNodeConfigRequest) Reset() {
 	*x = ValidateNodeConfigRequest{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[55]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[57]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5057,7 +5228,7 @@ func (x *ValidateNodeConfigRequest) String() string {
 func (*ValidateNodeConfigRequest) ProtoMessage() {}
 
 func (x *ValidateNodeConfigRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[55]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[57]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5070,7 +5241,7 @@ func (x *ValidateNodeConfigRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateNodeConfigRequest.ProtoReflect.Descriptor instead.
 func (*ValidateNodeConfigRequest) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{55}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{57}
 }
 
 func (x *ValidateNodeConfigRequest) GetKind() NodeConfigKind {
@@ -5105,7 +5276,7 @@ type ValidationIssue struct {
 
 func (x *ValidationIssue) Reset() {
 	*x = ValidationIssue{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[56]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[58]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5117,7 +5288,7 @@ func (x *ValidationIssue) String() string {
 func (*ValidationIssue) ProtoMessage() {}
 
 func (x *ValidationIssue) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[56]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[58]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5130,7 +5301,7 @@ func (x *ValidationIssue) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidationIssue.ProtoReflect.Descriptor instead.
 func (*ValidationIssue) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{56}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{58}
 }
 
 func (x *ValidationIssue) GetPath() string {
@@ -5160,7 +5331,7 @@ type ValidateNodeConfigResponse struct {
 
 func (x *ValidateNodeConfigResponse) Reset() {
 	*x = ValidateNodeConfigResponse{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[57]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[59]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5172,7 +5343,7 @@ func (x *ValidateNodeConfigResponse) String() string {
 func (*ValidateNodeConfigResponse) ProtoMessage() {}
 
 func (x *ValidateNodeConfigResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[57]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[59]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5185,7 +5356,7 @@ func (x *ValidateNodeConfigResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ValidateNodeConfigResponse.ProtoReflect.Descriptor instead.
 func (*ValidateNodeConfigResponse) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{57}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{59}
 }
 
 func (x *ValidateNodeConfigResponse) GetValid() bool {
@@ -5232,7 +5403,7 @@ type AgentSession struct {
 
 func (x *AgentSession) Reset() {
 	*x = AgentSession{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[58]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[60]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5244,7 +5415,7 @@ func (x *AgentSession) String() string {
 func (*AgentSession) ProtoMessage() {}
 
 func (x *AgentSession) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[58]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[60]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5257,7 +5428,7 @@ func (x *AgentSession) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use AgentSession.ProtoReflect.Descriptor instead.
 func (*AgentSession) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{58}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{60}
 }
 
 func (x *AgentSession) GetNode() *NodeRef {
@@ -5353,7 +5524,7 @@ type ListAgentSessionsRequest struct {
 
 func (x *ListAgentSessionsRequest) Reset() {
 	*x = ListAgentSessionsRequest{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[59]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[61]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5365,7 +5536,7 @@ func (x *ListAgentSessionsRequest) String() string {
 func (*ListAgentSessionsRequest) ProtoMessage() {}
 
 func (x *ListAgentSessionsRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[59]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[61]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5378,7 +5549,7 @@ func (x *ListAgentSessionsRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAgentSessionsRequest.ProtoReflect.Descriptor instead.
 func (*ListAgentSessionsRequest) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{59}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{61}
 }
 
 func (x *ListAgentSessionsRequest) GetTransport() AgentTransport {
@@ -5397,7 +5568,7 @@ type ListAgentSessionsResponse struct {
 
 func (x *ListAgentSessionsResponse) Reset() {
 	*x = ListAgentSessionsResponse{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[60]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[62]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5409,7 +5580,7 @@ func (x *ListAgentSessionsResponse) String() string {
 func (*ListAgentSessionsResponse) ProtoMessage() {}
 
 func (x *ListAgentSessionsResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[60]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[62]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5422,7 +5593,7 @@ func (x *ListAgentSessionsResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ListAgentSessionsResponse.ProtoReflect.Descriptor instead.
 func (*ListAgentSessionsResponse) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{60}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{62}
 }
 
 func (x *ListAgentSessionsResponse) GetSessions() []*AgentSession {
@@ -5441,7 +5612,7 @@ type GetAgentSessionRequest struct {
 
 func (x *GetAgentSessionRequest) Reset() {
 	*x = GetAgentSessionRequest{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[61]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[63]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5453,7 +5624,7 @@ func (x *GetAgentSessionRequest) String() string {
 func (*GetAgentSessionRequest) ProtoMessage() {}
 
 func (x *GetAgentSessionRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[61]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[63]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5466,7 +5637,7 @@ func (x *GetAgentSessionRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAgentSessionRequest.ProtoReflect.Descriptor instead.
 func (*GetAgentSessionRequest) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{61}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{63}
 }
 
 func (x *GetAgentSessionRequest) GetNodeId() uint64 {
@@ -5493,7 +5664,7 @@ type ObservedOperation struct {
 
 func (x *ObservedOperation) Reset() {
 	*x = ObservedOperation{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[62]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[64]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5505,7 +5676,7 @@ func (x *ObservedOperation) String() string {
 func (*ObservedOperation) ProtoMessage() {}
 
 func (x *ObservedOperation) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[62]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[64]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5518,7 +5689,7 @@ func (x *ObservedOperation) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use ObservedOperation.ProtoReflect.Descriptor instead.
 func (*ObservedOperation) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{62}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{64}
 }
 
 func (x *ObservedOperation) GetAgentOperationId() string {
@@ -5581,7 +5752,7 @@ type GetAgentSessionResponse struct {
 
 func (x *GetAgentSessionResponse) Reset() {
 	*x = GetAgentSessionResponse{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[63]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[65]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5593,7 +5764,7 @@ func (x *GetAgentSessionResponse) String() string {
 func (*GetAgentSessionResponse) ProtoMessage() {}
 
 func (x *GetAgentSessionResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[63]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[65]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5606,7 +5777,7 @@ func (x *GetAgentSessionResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAgentSessionResponse.ProtoReflect.Descriptor instead.
 func (*GetAgentSessionResponse) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{63}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{65}
 }
 
 func (x *GetAgentSessionResponse) GetConnected() bool {
@@ -5639,7 +5810,7 @@ type GetAgentMonitorRequest struct {
 
 func (x *GetAgentMonitorRequest) Reset() {
 	*x = GetAgentMonitorRequest{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[64]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[66]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5651,7 +5822,7 @@ func (x *GetAgentMonitorRequest) String() string {
 func (*GetAgentMonitorRequest) ProtoMessage() {}
 
 func (x *GetAgentMonitorRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[64]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[66]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5664,7 +5835,7 @@ func (x *GetAgentMonitorRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAgentMonitorRequest.ProtoReflect.Descriptor instead.
 func (*GetAgentMonitorRequest) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{64}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{66}
 }
 
 func (x *GetAgentMonitorRequest) GetNodeId() uint64 {
@@ -5685,7 +5856,7 @@ type GetAgentMonitorResponse struct {
 
 func (x *GetAgentMonitorResponse) Reset() {
 	*x = GetAgentMonitorResponse{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[65]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[67]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5697,7 +5868,7 @@ func (x *GetAgentMonitorResponse) String() string {
 func (*GetAgentMonitorResponse) ProtoMessage() {}
 
 func (x *GetAgentMonitorResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[65]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[67]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5710,7 +5881,7 @@ func (x *GetAgentMonitorResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetAgentMonitorResponse.ProtoReflect.Descriptor instead.
 func (*GetAgentMonitorResponse) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{65}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{67}
 }
 
 func (x *GetAgentMonitorResponse) GetFound() bool {
@@ -5742,7 +5913,7 @@ type GetCapabilitiesRequest struct {
 
 func (x *GetCapabilitiesRequest) Reset() {
 	*x = GetCapabilitiesRequest{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[66]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[68]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5754,7 +5925,7 @@ func (x *GetCapabilitiesRequest) String() string {
 func (*GetCapabilitiesRequest) ProtoMessage() {}
 
 func (x *GetCapabilitiesRequest) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[66]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[68]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5767,7 +5938,7 @@ func (x *GetCapabilitiesRequest) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCapabilitiesRequest.ProtoReflect.Descriptor instead.
 func (*GetCapabilitiesRequest) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{66}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{68}
 }
 
 type TableSplitState struct {
@@ -5780,7 +5951,7 @@ type TableSplitState struct {
 
 func (x *TableSplitState) Reset() {
 	*x = TableSplitState{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[67]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[69]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5792,7 +5963,7 @@ func (x *TableSplitState) String() string {
 func (*TableSplitState) ProtoMessage() {}
 
 func (x *TableSplitState) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[67]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[69]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5805,7 +5976,7 @@ func (x *TableSplitState) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use TableSplitState.ProtoReflect.Descriptor instead.
 func (*TableSplitState) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{67}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{69}
 }
 
 func (x *TableSplitState) GetTable() string {
@@ -5834,7 +6005,7 @@ type GetCapabilitiesResponse struct {
 
 func (x *GetCapabilitiesResponse) Reset() {
 	*x = GetCapabilitiesResponse{}
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[68]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[70]
 	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 	ms.StoreMessageInfo(mi)
 }
@@ -5846,7 +6017,7 @@ func (x *GetCapabilitiesResponse) String() string {
 func (*GetCapabilitiesResponse) ProtoMessage() {}
 
 func (x *GetCapabilitiesResponse) ProtoReflect() protoreflect.Message {
-	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[68]
+	mi := &file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[70]
 	if x != nil {
 		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
 		if ms.LoadMessageInfo() == nil {
@@ -5859,7 +6030,7 @@ func (x *GetCapabilitiesResponse) ProtoReflect() protoreflect.Message {
 
 // Deprecated: Use GetCapabilitiesResponse.ProtoReflect.Descriptor instead.
 func (*GetCapabilitiesResponse) Descriptor() ([]byte, []int) {
-	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{68}
+	return file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP(), []int{70}
 }
 
 func (x *GetCapabilitiesResponse) GetGrantedFamilies() []OperationFamily {
@@ -5898,7 +6069,7 @@ const file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDesc = "" +
 	"\fSecretHandle\x12\x14\n" +
 	"\x05field\x18\x01 \x01(\tR\x05field\x12\x16\n" +
 	"\x06handle\x18\x02 \x01(\tR\x06handle\x12+\n" +
-	"\x12expires_at_unix_ms\x18\x03 \x01(\x03R\x0fexpiresAtUnixMs\"\xbc\r\n" +
+	"\x12expires_at_unix_ms\x18\x03 \x01(\x03R\x0fexpiresAtUnixMs\"\x9e\x0e\n" +
 	"\rOperationSpec\x12M\n" +
 	"\rapply_forward\x18\n" +
 	" \x01(\v2&.anixops.kernelnodeops.v1.ApplyForwardH\x00R\fapplyForward\x12J\n" +
@@ -5914,7 +6085,8 @@ const file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDesc = "" +
 	"\x12collect_node_stats\x18\x1f \x01(\v2*.anixops.kernelnodeops.v1.CollectNodeStatsH\x00R\x10collectNodeStats\x12V\n" +
 	"\x10diagnose_forward\x18  \x01(\v2).anixops.kernelnodeops.v1.DiagnoseForwardH\x00R\x0fdiagnoseForward\x12S\n" +
 	"\x0fdiagnose_tunnel\x18! \x01(\v2(.anixops.kernelnodeops.v1.DiagnoseTunnelH\x00R\x0ediagnoseTunnel\x12`\n" +
-	"\x14run_agent_diagnostic\x18\" \x01(\v2,.anixops.kernelnodeops.v1.RunAgentDiagnosticH\x00R\x12runAgentDiagnostic\x12i\n" +
+	"\x14run_agent_diagnostic\x18\" \x01(\v2,.anixops.kernelnodeops.v1.RunAgentDiagnosticH\x00R\x12runAgentDiagnostic\x12`\n" +
+	"\x14test_forward_backend\x18# \x01(\v2,.anixops.kernelnodeops.v1.TestForwardBackendH\x00R\x12testForwardBackend\x12i\n" +
 	"\x17agent_control_operation\x18( \x01(\v2/.anixops.kernelnodeops.v1.AgentControlOperationH\x00R\x15agentControlOperation\x12V\n" +
 	"\x10issue_credential\x182 \x01(\v2).anixops.kernelnodeops.v1.IssueCredentialH\x00R\x0fissueCredential\x12Y\n" +
 	"\x11revoke_credential\x183 \x01(\v2*.anixops.kernelnodeops.v1.RevokeCredentialH\x00R\x10revokeCredential\x12f\n" +
@@ -5928,8 +6100,9 @@ const file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDesc = "" +
 	"\x06action\x18\x02 \x01(\x0e2'.anixops.kernelnodeops.v1.ForwardActionR\x06action\"D\n" +
 	"\vApplyTunnel\x12\x1b\n" +
 	"\ttunnel_id\x18\x01 \x01(\x04R\btunnelId\x12\x18\n" +
-	"\areasons\x18\x02 \x03(\tR\areasons\"\x14\n" +
-	"\x12SyncForwardBackend\"k\n" +
+	"\areasons\x18\x02 \x03(\tR\areasons\".\n" +
+	"\x12SyncForwardBackend\x12\x18\n" +
+	"\abackend\x18\x01 \x01(\tR\abackend\"k\n" +
 	"\x0fApplyLegacyRule\x12\x17\n" +
 	"\arule_id\x18\x01 \x01(\x04R\x06ruleId\x12?\n" +
 	"\x06action\x18\x02 \x01(\x0e2'.anixops.kernelnodeops.v1.ForwardActionR\x06action\"q\n" +
@@ -5960,7 +6133,11 @@ const file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDesc = "" +
 	"\avantage\x18\x02 \x01(\x0e2!.anixops.kernelnodeops.v1.VantageR\avantage\"j\n" +
 	"\x0eDiagnoseTunnel\x12\x1b\n" +
 	"\ttunnel_id\x18\x01 \x01(\x04R\btunnelId\x12;\n" +
-	"\avantage\x18\x02 \x01(\x0e2!.anixops.kernelnodeops.v1.VantageR\avantage\"\x8f\x01\n" +
+	"\avantage\x18\x02 \x01(\x0e2!.anixops.kernelnodeops.v1.VantageR\avantage\"~\n" +
+	"\x12TestForwardBackend\x12\x12\n" +
+	"\x04host\x18\x01 \x01(\tR\x04host\x12\x19\n" +
+	"\bapi_port\x18\x02 \x01(\x05R\aapiPort\x129\n" +
+	"\x05token\x18\x03 \x01(\v2#.anixops.kernelnodeops.v1.SecretRefR\x05token\"\x8f\x01\n" +
 	"\x12RunAgentDiagnostic\x12\x17\n" +
 	"\anode_id\x18\x01 \x01(\x04R\x06nodeId\x12\x16\n" +
 	"\x06action\x18\x02 \x01(\tR\x06action\x12\x1f\n" +
@@ -6031,7 +6208,7 @@ const file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDesc = "" +
 	"\x05total\x18\x01 \x01(\rR\x05total\x12\x1c\n" +
 	"\tsucceeded\x18\x02 \x01(\rR\tsucceeded\x12\x16\n" +
 	"\x06failed\x18\x03 \x01(\rR\x06failed\x12\x18\n" +
-	"\apending\x18\x04 \x01(\rR\apending\"\xf9\a\n" +
+	"\apending\x18\x04 \x01(\rR\apending\"\xe1\b\n" +
 	"\x0fOperationResult\x12S\n" +
 	"\rforward_apply\x18\n" +
 	" \x01(\v2,.anixops.kernelnodeops.v1.ForwardApplyResultH\x00R\fforwardApply\x12M\n" +
@@ -6044,7 +6221,8 @@ const file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDesc = "" +
 	"\n" +
 	"node_stats\x18\x1f \x01(\v2).anixops.kernelnodeops.v1.NodeStatsResultH\x00R\tnodeStats\x12I\n" +
 	"\tdiagnosis\x18  \x01(\v2).anixops.kernelnodeops.v1.DiagnosisResultH\x00R\tdiagnosis\x12\\\n" +
-	"\x10agent_diagnostic\x18! \x01(\v2/.anixops.kernelnodeops.v1.AgentDiagnosticResultH\x00R\x0fagentDiagnostic\x12Y\n" +
+	"\x10agent_diagnostic\x18! \x01(\v2/.anixops.kernelnodeops.v1.AgentDiagnosticResultH\x00R\x0fagentDiagnostic\x12f\n" +
+	"\x14forward_backend_test\x18\" \x01(\v22.anixops.kernelnodeops.v1.ForwardBackendTestResultH\x00R\x12forwardBackendTest\x12Y\n" +
 	"\x0fagent_operation\x18( \x01(\v2..anixops.kernelnodeops.v1.AgentOperationResultH\x00R\x0eagentOperation\x12L\n" +
 	"\n" +
 	"credential\x182 \x01(\v2*.anixops.kernelnodeops.v1.CredentialResultH\x00R\n" +
@@ -6060,7 +6238,11 @@ const file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDesc = "" +
 	"\x10LegacyRuleResult\x12(\n" +
 	"\x10applied_on_relay\x18\x01 \x01(\bR\x0eappliedOnRelay\x12&\n" +
 	"\x0fapplied_on_exit\x18\x02 \x01(\bR\rappliedOnExit\x12\x18\n" +
-	"\amessage\x18\x03 \x01(\tR\amessage\"\xa6\x01\n" +
+	"\amessage\x18\x03 \x01(\tR\amessage\"s\n" +
+	"\x18ForwardBackendTestResult\x12\x18\n" +
+	"\asuccess\x18\x01 \x01(\bR\asuccess\x12\x18\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12#\n" +
+	"\rservice_count\x18\x03 \x01(\x05R\fserviceCount\"\xa6\x01\n" +
 	"\bAgentAck\x12\x1a\n" +
 	"\baccepted\x18\x01 \x01(\bR\baccepted\x12\x14\n" +
 	"\x05error\x18\x02 \x01(\tR\x05error\x12-\n" +
@@ -6366,7 +6548,7 @@ func file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDescGZIP() []byte {
 }
 
 var file_api_kernelnodeops_v1_kernel_node_ops_proto_enumTypes = make([]protoimpl.EnumInfo, 14)
-var file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes = make([]protoimpl.MessageInfo, 69)
+var file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes = make([]protoimpl.MessageInfo, 71)
 var file_api_kernelnodeops_v1_kernel_node_ops_proto_goTypes = []any{
 	(NodeKind)(0),                      // 0: anixops.kernelnodeops.v1.NodeKind
 	(OperationFamily)(0),               // 1: anixops.kernelnodeops.v1.OperationFamily
@@ -6399,58 +6581,60 @@ var file_api_kernelnodeops_v1_kernel_node_ops_proto_goTypes = []any{
 	(*CollectNodeStats)(nil),           // 28: anixops.kernelnodeops.v1.CollectNodeStats
 	(*DiagnoseForward)(nil),            // 29: anixops.kernelnodeops.v1.DiagnoseForward
 	(*DiagnoseTunnel)(nil),             // 30: anixops.kernelnodeops.v1.DiagnoseTunnel
-	(*RunAgentDiagnostic)(nil),         // 31: anixops.kernelnodeops.v1.RunAgentDiagnostic
-	(*AgentControlOperation)(nil),      // 32: anixops.kernelnodeops.v1.AgentControlOperation
-	(*IssueCredential)(nil),            // 33: anixops.kernelnodeops.v1.IssueCredential
-	(*RevokeCredential)(nil),           // 34: anixops.kernelnodeops.v1.RevokeCredential
-	(*IssueRegistrationKey)(nil),       // 35: anixops.kernelnodeops.v1.IssueRegistrationKey
-	(*RevokeRegistrationKey)(nil),      // 36: anixops.kernelnodeops.v1.RevokeRegistrationKey
-	(*IssueCleanAgent)(nil),            // 37: anixops.kernelnodeops.v1.IssueCleanAgent
-	(*SubmitOperationRequest)(nil),     // 38: anixops.kernelnodeops.v1.SubmitOperationRequest
-	(*SubmitOperationResponse)(nil),    // 39: anixops.kernelnodeops.v1.SubmitOperationResponse
-	(*OperationError)(nil),             // 40: anixops.kernelnodeops.v1.OperationError
-	(*Operation)(nil),                  // 41: anixops.kernelnodeops.v1.Operation
-	(*FanOut)(nil),                     // 42: anixops.kernelnodeops.v1.FanOut
-	(*OperationResult)(nil),            // 43: anixops.kernelnodeops.v1.OperationResult
-	(*ForwardApplyResult)(nil),         // 44: anixops.kernelnodeops.v1.ForwardApplyResult
-	(*LegacyRuleResult)(nil),           // 45: anixops.kernelnodeops.v1.LegacyRuleResult
-	(*AgentAck)(nil),                   // 46: anixops.kernelnodeops.v1.AgentAck
-	(*NodeSyncResult)(nil),             // 47: anixops.kernelnodeops.v1.NodeSyncResult
-	(*RetireResult)(nil),               // 48: anixops.kernelnodeops.v1.RetireResult
-	(*SecretDocumentResult)(nil),       // 49: anixops.kernelnodeops.v1.SecretDocumentResult
-	(*VantageReport)(nil),              // 50: anixops.kernelnodeops.v1.VantageReport
-	(*EndpointCheck)(nil),              // 51: anixops.kernelnodeops.v1.EndpointCheck
-	(*EndpointCheckResult)(nil),        // 52: anixops.kernelnodeops.v1.EndpointCheckResult
-	(*ServiceTraffic)(nil),             // 53: anixops.kernelnodeops.v1.ServiceTraffic
-	(*NodeStatsResult)(nil),            // 54: anixops.kernelnodeops.v1.NodeStatsResult
-	(*DiagnosisOutcome)(nil),           // 55: anixops.kernelnodeops.v1.DiagnosisOutcome
-	(*DiagnosisResult)(nil),            // 56: anixops.kernelnodeops.v1.DiagnosisResult
-	(*AgentDiagnosticResult)(nil),      // 57: anixops.kernelnodeops.v1.AgentDiagnosticResult
-	(*AgentOperationResult)(nil),       // 58: anixops.kernelnodeops.v1.AgentOperationResult
-	(*CredentialResult)(nil),           // 59: anixops.kernelnodeops.v1.CredentialResult
-	(*RegistrationKeyResult)(nil),      // 60: anixops.kernelnodeops.v1.RegistrationKeyResult
-	(*GetOperationRequest)(nil),        // 61: anixops.kernelnodeops.v1.GetOperationRequest
-	(*GetOperationResponse)(nil),       // 62: anixops.kernelnodeops.v1.GetOperationResponse
-	(*ListOperationsRequest)(nil),      // 63: anixops.kernelnodeops.v1.ListOperationsRequest
-	(*ListOperationsResponse)(nil),     // 64: anixops.kernelnodeops.v1.ListOperationsResponse
-	(*WatchOperationsRequest)(nil),     // 65: anixops.kernelnodeops.v1.WatchOperationsRequest
-	(*OperationEvent)(nil),             // 66: anixops.kernelnodeops.v1.OperationEvent
-	(*CancelOperationRequest)(nil),     // 67: anixops.kernelnodeops.v1.CancelOperationRequest
-	(*CancelOperationResponse)(nil),    // 68: anixops.kernelnodeops.v1.CancelOperationResponse
-	(*ValidateNodeConfigRequest)(nil),  // 69: anixops.kernelnodeops.v1.ValidateNodeConfigRequest
-	(*ValidationIssue)(nil),            // 70: anixops.kernelnodeops.v1.ValidationIssue
-	(*ValidateNodeConfigResponse)(nil), // 71: anixops.kernelnodeops.v1.ValidateNodeConfigResponse
-	(*AgentSession)(nil),               // 72: anixops.kernelnodeops.v1.AgentSession
-	(*ListAgentSessionsRequest)(nil),   // 73: anixops.kernelnodeops.v1.ListAgentSessionsRequest
-	(*ListAgentSessionsResponse)(nil),  // 74: anixops.kernelnodeops.v1.ListAgentSessionsResponse
-	(*GetAgentSessionRequest)(nil),     // 75: anixops.kernelnodeops.v1.GetAgentSessionRequest
-	(*ObservedOperation)(nil),          // 76: anixops.kernelnodeops.v1.ObservedOperation
-	(*GetAgentSessionResponse)(nil),    // 77: anixops.kernelnodeops.v1.GetAgentSessionResponse
-	(*GetAgentMonitorRequest)(nil),     // 78: anixops.kernelnodeops.v1.GetAgentMonitorRequest
-	(*GetAgentMonitorResponse)(nil),    // 79: anixops.kernelnodeops.v1.GetAgentMonitorResponse
-	(*GetCapabilitiesRequest)(nil),     // 80: anixops.kernelnodeops.v1.GetCapabilitiesRequest
-	(*TableSplitState)(nil),            // 81: anixops.kernelnodeops.v1.TableSplitState
-	(*GetCapabilitiesResponse)(nil),    // 82: anixops.kernelnodeops.v1.GetCapabilitiesResponse
+	(*TestForwardBackend)(nil),         // 31: anixops.kernelnodeops.v1.TestForwardBackend
+	(*RunAgentDiagnostic)(nil),         // 32: anixops.kernelnodeops.v1.RunAgentDiagnostic
+	(*AgentControlOperation)(nil),      // 33: anixops.kernelnodeops.v1.AgentControlOperation
+	(*IssueCredential)(nil),            // 34: anixops.kernelnodeops.v1.IssueCredential
+	(*RevokeCredential)(nil),           // 35: anixops.kernelnodeops.v1.RevokeCredential
+	(*IssueRegistrationKey)(nil),       // 36: anixops.kernelnodeops.v1.IssueRegistrationKey
+	(*RevokeRegistrationKey)(nil),      // 37: anixops.kernelnodeops.v1.RevokeRegistrationKey
+	(*IssueCleanAgent)(nil),            // 38: anixops.kernelnodeops.v1.IssueCleanAgent
+	(*SubmitOperationRequest)(nil),     // 39: anixops.kernelnodeops.v1.SubmitOperationRequest
+	(*SubmitOperationResponse)(nil),    // 40: anixops.kernelnodeops.v1.SubmitOperationResponse
+	(*OperationError)(nil),             // 41: anixops.kernelnodeops.v1.OperationError
+	(*Operation)(nil),                  // 42: anixops.kernelnodeops.v1.Operation
+	(*FanOut)(nil),                     // 43: anixops.kernelnodeops.v1.FanOut
+	(*OperationResult)(nil),            // 44: anixops.kernelnodeops.v1.OperationResult
+	(*ForwardApplyResult)(nil),         // 45: anixops.kernelnodeops.v1.ForwardApplyResult
+	(*LegacyRuleResult)(nil),           // 46: anixops.kernelnodeops.v1.LegacyRuleResult
+	(*ForwardBackendTestResult)(nil),   // 47: anixops.kernelnodeops.v1.ForwardBackendTestResult
+	(*AgentAck)(nil),                   // 48: anixops.kernelnodeops.v1.AgentAck
+	(*NodeSyncResult)(nil),             // 49: anixops.kernelnodeops.v1.NodeSyncResult
+	(*RetireResult)(nil),               // 50: anixops.kernelnodeops.v1.RetireResult
+	(*SecretDocumentResult)(nil),       // 51: anixops.kernelnodeops.v1.SecretDocumentResult
+	(*VantageReport)(nil),              // 52: anixops.kernelnodeops.v1.VantageReport
+	(*EndpointCheck)(nil),              // 53: anixops.kernelnodeops.v1.EndpointCheck
+	(*EndpointCheckResult)(nil),        // 54: anixops.kernelnodeops.v1.EndpointCheckResult
+	(*ServiceTraffic)(nil),             // 55: anixops.kernelnodeops.v1.ServiceTraffic
+	(*NodeStatsResult)(nil),            // 56: anixops.kernelnodeops.v1.NodeStatsResult
+	(*DiagnosisOutcome)(nil),           // 57: anixops.kernelnodeops.v1.DiagnosisOutcome
+	(*DiagnosisResult)(nil),            // 58: anixops.kernelnodeops.v1.DiagnosisResult
+	(*AgentDiagnosticResult)(nil),      // 59: anixops.kernelnodeops.v1.AgentDiagnosticResult
+	(*AgentOperationResult)(nil),       // 60: anixops.kernelnodeops.v1.AgentOperationResult
+	(*CredentialResult)(nil),           // 61: anixops.kernelnodeops.v1.CredentialResult
+	(*RegistrationKeyResult)(nil),      // 62: anixops.kernelnodeops.v1.RegistrationKeyResult
+	(*GetOperationRequest)(nil),        // 63: anixops.kernelnodeops.v1.GetOperationRequest
+	(*GetOperationResponse)(nil),       // 64: anixops.kernelnodeops.v1.GetOperationResponse
+	(*ListOperationsRequest)(nil),      // 65: anixops.kernelnodeops.v1.ListOperationsRequest
+	(*ListOperationsResponse)(nil),     // 66: anixops.kernelnodeops.v1.ListOperationsResponse
+	(*WatchOperationsRequest)(nil),     // 67: anixops.kernelnodeops.v1.WatchOperationsRequest
+	(*OperationEvent)(nil),             // 68: anixops.kernelnodeops.v1.OperationEvent
+	(*CancelOperationRequest)(nil),     // 69: anixops.kernelnodeops.v1.CancelOperationRequest
+	(*CancelOperationResponse)(nil),    // 70: anixops.kernelnodeops.v1.CancelOperationResponse
+	(*ValidateNodeConfigRequest)(nil),  // 71: anixops.kernelnodeops.v1.ValidateNodeConfigRequest
+	(*ValidationIssue)(nil),            // 72: anixops.kernelnodeops.v1.ValidationIssue
+	(*ValidateNodeConfigResponse)(nil), // 73: anixops.kernelnodeops.v1.ValidateNodeConfigResponse
+	(*AgentSession)(nil),               // 74: anixops.kernelnodeops.v1.AgentSession
+	(*ListAgentSessionsRequest)(nil),   // 75: anixops.kernelnodeops.v1.ListAgentSessionsRequest
+	(*ListAgentSessionsResponse)(nil),  // 76: anixops.kernelnodeops.v1.ListAgentSessionsResponse
+	(*GetAgentSessionRequest)(nil),     // 77: anixops.kernelnodeops.v1.GetAgentSessionRequest
+	(*ObservedOperation)(nil),          // 78: anixops.kernelnodeops.v1.ObservedOperation
+	(*GetAgentSessionResponse)(nil),    // 79: anixops.kernelnodeops.v1.GetAgentSessionResponse
+	(*GetAgentMonitorRequest)(nil),     // 80: anixops.kernelnodeops.v1.GetAgentMonitorRequest
+	(*GetAgentMonitorResponse)(nil),    // 81: anixops.kernelnodeops.v1.GetAgentMonitorResponse
+	(*GetCapabilitiesRequest)(nil),     // 82: anixops.kernelnodeops.v1.GetCapabilitiesRequest
+	(*TableSplitState)(nil),            // 83: anixops.kernelnodeops.v1.TableSplitState
+	(*GetCapabilitiesResponse)(nil),    // 84: anixops.kernelnodeops.v1.GetCapabilitiesResponse
 }
 var file_api_kernelnodeops_v1_kernel_node_ops_proto_depIdxs = []int32{
 	0,   // 0: anixops.kernelnodeops.v1.NodeRef.kind:type_name -> anixops.kernelnodeops.v1.NodeKind
@@ -6466,115 +6650,118 @@ var file_api_kernelnodeops_v1_kernel_node_ops_proto_depIdxs = []int32{
 	28,  // 10: anixops.kernelnodeops.v1.OperationSpec.collect_node_stats:type_name -> anixops.kernelnodeops.v1.CollectNodeStats
 	29,  // 11: anixops.kernelnodeops.v1.OperationSpec.diagnose_forward:type_name -> anixops.kernelnodeops.v1.DiagnoseForward
 	30,  // 12: anixops.kernelnodeops.v1.OperationSpec.diagnose_tunnel:type_name -> anixops.kernelnodeops.v1.DiagnoseTunnel
-	31,  // 13: anixops.kernelnodeops.v1.OperationSpec.run_agent_diagnostic:type_name -> anixops.kernelnodeops.v1.RunAgentDiagnostic
-	32,  // 14: anixops.kernelnodeops.v1.OperationSpec.agent_control_operation:type_name -> anixops.kernelnodeops.v1.AgentControlOperation
-	33,  // 15: anixops.kernelnodeops.v1.OperationSpec.issue_credential:type_name -> anixops.kernelnodeops.v1.IssueCredential
-	34,  // 16: anixops.kernelnodeops.v1.OperationSpec.revoke_credential:type_name -> anixops.kernelnodeops.v1.RevokeCredential
-	35,  // 17: anixops.kernelnodeops.v1.OperationSpec.issue_registration_key:type_name -> anixops.kernelnodeops.v1.IssueRegistrationKey
-	36,  // 18: anixops.kernelnodeops.v1.OperationSpec.revoke_registration_key:type_name -> anixops.kernelnodeops.v1.RevokeRegistrationKey
-	37,  // 19: anixops.kernelnodeops.v1.OperationSpec.issue_clean_agent:type_name -> anixops.kernelnodeops.v1.IssueCleanAgent
-	2,   // 20: anixops.kernelnodeops.v1.ApplyForward.action:type_name -> anixops.kernelnodeops.v1.ForwardAction
-	2,   // 21: anixops.kernelnodeops.v1.ApplyLegacyRule.action:type_name -> anixops.kernelnodeops.v1.ForwardAction
-	14,  // 22: anixops.kernelnodeops.v1.SyncNode.node:type_name -> anixops.kernelnodeops.v1.NodeRef
-	14,  // 23: anixops.kernelnodeops.v1.RetireNode.node:type_name -> anixops.kernelnodeops.v1.NodeRef
-	3,   // 24: anixops.kernelnodeops.v1.PutSecretDocument.scope:type_name -> anixops.kernelnodeops.v1.SecretScope
-	14,  // 25: anixops.kernelnodeops.v1.CheckEndpoints.nodes:type_name -> anixops.kernelnodeops.v1.NodeRef
-	4,   // 26: anixops.kernelnodeops.v1.CheckEndpoints.vantage:type_name -> anixops.kernelnodeops.v1.Vantage
-	14,  // 27: anixops.kernelnodeops.v1.CollectNodeStats.node:type_name -> anixops.kernelnodeops.v1.NodeRef
-	4,   // 28: anixops.kernelnodeops.v1.DiagnoseForward.vantage:type_name -> anixops.kernelnodeops.v1.Vantage
-	4,   // 29: anixops.kernelnodeops.v1.DiagnoseTunnel.vantage:type_name -> anixops.kernelnodeops.v1.Vantage
-	14,  // 30: anixops.kernelnodeops.v1.IssueCredential.subject:type_name -> anixops.kernelnodeops.v1.NodeRef
-	5,   // 31: anixops.kernelnodeops.v1.IssueCredential.kind:type_name -> anixops.kernelnodeops.v1.CredentialKind
-	16,  // 32: anixops.kernelnodeops.v1.IssueCredential.value:type_name -> anixops.kernelnodeops.v1.SecretRef
-	14,  // 33: anixops.kernelnodeops.v1.RevokeCredential.subject:type_name -> anixops.kernelnodeops.v1.NodeRef
-	5,   // 34: anixops.kernelnodeops.v1.RevokeCredential.kind:type_name -> anixops.kernelnodeops.v1.CredentialKind
-	18,  // 35: anixops.kernelnodeops.v1.SubmitOperationRequest.operation:type_name -> anixops.kernelnodeops.v1.OperationSpec
-	6,   // 36: anixops.kernelnodeops.v1.SubmitOperationRequest.wait:type_name -> anixops.kernelnodeops.v1.WaitMode
-	15,  // 37: anixops.kernelnodeops.v1.SubmitOperationRequest.request:type_name -> anixops.kernelnodeops.v1.RequestBinding
-	41,  // 38: anixops.kernelnodeops.v1.SubmitOperationResponse.operation:type_name -> anixops.kernelnodeops.v1.Operation
-	9,   // 39: anixops.kernelnodeops.v1.OperationError.code:type_name -> anixops.kernelnodeops.v1.ErrorCode
-	1,   // 40: anixops.kernelnodeops.v1.Operation.family:type_name -> anixops.kernelnodeops.v1.OperationFamily
-	14,  // 41: anixops.kernelnodeops.v1.Operation.targets:type_name -> anixops.kernelnodeops.v1.NodeRef
-	7,   // 42: anixops.kernelnodeops.v1.Operation.state:type_name -> anixops.kernelnodeops.v1.OperationState
-	8,   // 43: anixops.kernelnodeops.v1.Operation.channel:type_name -> anixops.kernelnodeops.v1.Channel
-	42,  // 44: anixops.kernelnodeops.v1.Operation.fan_out:type_name -> anixops.kernelnodeops.v1.FanOut
-	43,  // 45: anixops.kernelnodeops.v1.Operation.result:type_name -> anixops.kernelnodeops.v1.OperationResult
-	40,  // 46: anixops.kernelnodeops.v1.Operation.error:type_name -> anixops.kernelnodeops.v1.OperationError
-	44,  // 47: anixops.kernelnodeops.v1.OperationResult.forward_apply:type_name -> anixops.kernelnodeops.v1.ForwardApplyResult
-	45,  // 48: anixops.kernelnodeops.v1.OperationResult.legacy_rule:type_name -> anixops.kernelnodeops.v1.LegacyRuleResult
-	47,  // 49: anixops.kernelnodeops.v1.OperationResult.node_sync:type_name -> anixops.kernelnodeops.v1.NodeSyncResult
-	48,  // 50: anixops.kernelnodeops.v1.OperationResult.retire:type_name -> anixops.kernelnodeops.v1.RetireResult
-	49,  // 51: anixops.kernelnodeops.v1.OperationResult.secret_document:type_name -> anixops.kernelnodeops.v1.SecretDocumentResult
-	52,  // 52: anixops.kernelnodeops.v1.OperationResult.endpoint_check:type_name -> anixops.kernelnodeops.v1.EndpointCheckResult
-	54,  // 53: anixops.kernelnodeops.v1.OperationResult.node_stats:type_name -> anixops.kernelnodeops.v1.NodeStatsResult
-	56,  // 54: anixops.kernelnodeops.v1.OperationResult.diagnosis:type_name -> anixops.kernelnodeops.v1.DiagnosisResult
-	57,  // 55: anixops.kernelnodeops.v1.OperationResult.agent_diagnostic:type_name -> anixops.kernelnodeops.v1.AgentDiagnosticResult
-	58,  // 56: anixops.kernelnodeops.v1.OperationResult.agent_operation:type_name -> anixops.kernelnodeops.v1.AgentOperationResult
-	59,  // 57: anixops.kernelnodeops.v1.OperationResult.credential:type_name -> anixops.kernelnodeops.v1.CredentialResult
-	60,  // 58: anixops.kernelnodeops.v1.OperationResult.registration_key:type_name -> anixops.kernelnodeops.v1.RegistrationKeyResult
-	8,   // 59: anixops.kernelnodeops.v1.NodeSyncResult.channel:type_name -> anixops.kernelnodeops.v1.Channel
-	46,  // 60: anixops.kernelnodeops.v1.NodeSyncResult.ack:type_name -> anixops.kernelnodeops.v1.AgentAck
-	4,   // 61: anixops.kernelnodeops.v1.VantageReport.requested:type_name -> anixops.kernelnodeops.v1.Vantage
-	4,   // 62: anixops.kernelnodeops.v1.VantageReport.selected:type_name -> anixops.kernelnodeops.v1.Vantage
-	4,   // 63: anixops.kernelnodeops.v1.VantageReport.used:type_name -> anixops.kernelnodeops.v1.Vantage
-	14,  // 64: anixops.kernelnodeops.v1.EndpointCheck.node:type_name -> anixops.kernelnodeops.v1.NodeRef
-	50,  // 65: anixops.kernelnodeops.v1.EndpointCheck.vantage:type_name -> anixops.kernelnodeops.v1.VantageReport
-	51,  // 66: anixops.kernelnodeops.v1.EndpointCheckResult.checks:type_name -> anixops.kernelnodeops.v1.EndpointCheck
-	14,  // 67: anixops.kernelnodeops.v1.NodeStatsResult.node:type_name -> anixops.kernelnodeops.v1.NodeRef
-	53,  // 68: anixops.kernelnodeops.v1.NodeStatsResult.services:type_name -> anixops.kernelnodeops.v1.ServiceTraffic
-	55,  // 69: anixops.kernelnodeops.v1.DiagnosisResult.outcomes:type_name -> anixops.kernelnodeops.v1.DiagnosisOutcome
-	50,  // 70: anixops.kernelnodeops.v1.DiagnosisResult.vantage:type_name -> anixops.kernelnodeops.v1.VantageReport
-	46,  // 71: anixops.kernelnodeops.v1.AgentDiagnosticResult.ack:type_name -> anixops.kernelnodeops.v1.AgentAck
-	46,  // 72: anixops.kernelnodeops.v1.AgentOperationResult.ack:type_name -> anixops.kernelnodeops.v1.AgentAck
-	14,  // 73: anixops.kernelnodeops.v1.CredentialResult.subject:type_name -> anixops.kernelnodeops.v1.NodeRef
-	5,   // 74: anixops.kernelnodeops.v1.CredentialResult.kind:type_name -> anixops.kernelnodeops.v1.CredentialKind
-	17,  // 75: anixops.kernelnodeops.v1.CredentialResult.reveal:type_name -> anixops.kernelnodeops.v1.SecretHandle
-	17,  // 76: anixops.kernelnodeops.v1.RegistrationKeyResult.reveal:type_name -> anixops.kernelnodeops.v1.SecretHandle
-	41,  // 77: anixops.kernelnodeops.v1.GetOperationResponse.operation:type_name -> anixops.kernelnodeops.v1.Operation
-	1,   // 78: anixops.kernelnodeops.v1.ListOperationsRequest.families:type_name -> anixops.kernelnodeops.v1.OperationFamily
-	7,   // 79: anixops.kernelnodeops.v1.ListOperationsRequest.states:type_name -> anixops.kernelnodeops.v1.OperationState
-	14,  // 80: anixops.kernelnodeops.v1.ListOperationsRequest.target:type_name -> anixops.kernelnodeops.v1.NodeRef
-	41,  // 81: anixops.kernelnodeops.v1.ListOperationsResponse.operations:type_name -> anixops.kernelnodeops.v1.Operation
-	1,   // 82: anixops.kernelnodeops.v1.WatchOperationsRequest.families:type_name -> anixops.kernelnodeops.v1.OperationFamily
-	10,  // 83: anixops.kernelnodeops.v1.OperationEvent.kind:type_name -> anixops.kernelnodeops.v1.OperationEventKind
-	41,  // 84: anixops.kernelnodeops.v1.OperationEvent.operation:type_name -> anixops.kernelnodeops.v1.Operation
-	41,  // 85: anixops.kernelnodeops.v1.CancelOperationResponse.operation:type_name -> anixops.kernelnodeops.v1.Operation
-	11,  // 86: anixops.kernelnodeops.v1.ValidateNodeConfigRequest.kind:type_name -> anixops.kernelnodeops.v1.NodeConfigKind
-	70,  // 87: anixops.kernelnodeops.v1.ValidateNodeConfigResponse.issues:type_name -> anixops.kernelnodeops.v1.ValidationIssue
-	14,  // 88: anixops.kernelnodeops.v1.AgentSession.node:type_name -> anixops.kernelnodeops.v1.NodeRef
-	12,  // 89: anixops.kernelnodeops.v1.AgentSession.transport:type_name -> anixops.kernelnodeops.v1.AgentTransport
-	12,  // 90: anixops.kernelnodeops.v1.ListAgentSessionsRequest.transport:type_name -> anixops.kernelnodeops.v1.AgentTransport
-	72,  // 91: anixops.kernelnodeops.v1.ListAgentSessionsResponse.sessions:type_name -> anixops.kernelnodeops.v1.AgentSession
-	72,  // 92: anixops.kernelnodeops.v1.GetAgentSessionResponse.session:type_name -> anixops.kernelnodeops.v1.AgentSession
-	76,  // 93: anixops.kernelnodeops.v1.GetAgentSessionResponse.observed:type_name -> anixops.kernelnodeops.v1.ObservedOperation
-	13,  // 94: anixops.kernelnodeops.v1.TableSplitState.phase:type_name -> anixops.kernelnodeops.v1.SecretSplitPhase
-	1,   // 95: anixops.kernelnodeops.v1.GetCapabilitiesResponse.granted_families:type_name -> anixops.kernelnodeops.v1.OperationFamily
-	81,  // 96: anixops.kernelnodeops.v1.GetCapabilitiesResponse.tables:type_name -> anixops.kernelnodeops.v1.TableSplitState
-	38,  // 97: anixops.kernelnodeops.v1.KernelNodeOps.SubmitOperation:input_type -> anixops.kernelnodeops.v1.SubmitOperationRequest
-	61,  // 98: anixops.kernelnodeops.v1.KernelNodeOps.GetOperation:input_type -> anixops.kernelnodeops.v1.GetOperationRequest
-	63,  // 99: anixops.kernelnodeops.v1.KernelNodeOps.ListOperations:input_type -> anixops.kernelnodeops.v1.ListOperationsRequest
-	65,  // 100: anixops.kernelnodeops.v1.KernelNodeOps.WatchOperations:input_type -> anixops.kernelnodeops.v1.WatchOperationsRequest
-	67,  // 101: anixops.kernelnodeops.v1.KernelNodeOps.CancelOperation:input_type -> anixops.kernelnodeops.v1.CancelOperationRequest
-	69,  // 102: anixops.kernelnodeops.v1.KernelNodeOps.ValidateNodeConfig:input_type -> anixops.kernelnodeops.v1.ValidateNodeConfigRequest
-	73,  // 103: anixops.kernelnodeops.v1.KernelNodeOps.ListAgentSessions:input_type -> anixops.kernelnodeops.v1.ListAgentSessionsRequest
-	75,  // 104: anixops.kernelnodeops.v1.KernelNodeOps.GetAgentSession:input_type -> anixops.kernelnodeops.v1.GetAgentSessionRequest
-	78,  // 105: anixops.kernelnodeops.v1.KernelNodeOps.GetAgentMonitor:input_type -> anixops.kernelnodeops.v1.GetAgentMonitorRequest
-	80,  // 106: anixops.kernelnodeops.v1.KernelNodeOps.GetCapabilities:input_type -> anixops.kernelnodeops.v1.GetCapabilitiesRequest
-	39,  // 107: anixops.kernelnodeops.v1.KernelNodeOps.SubmitOperation:output_type -> anixops.kernelnodeops.v1.SubmitOperationResponse
-	62,  // 108: anixops.kernelnodeops.v1.KernelNodeOps.GetOperation:output_type -> anixops.kernelnodeops.v1.GetOperationResponse
-	64,  // 109: anixops.kernelnodeops.v1.KernelNodeOps.ListOperations:output_type -> anixops.kernelnodeops.v1.ListOperationsResponse
-	66,  // 110: anixops.kernelnodeops.v1.KernelNodeOps.WatchOperations:output_type -> anixops.kernelnodeops.v1.OperationEvent
-	68,  // 111: anixops.kernelnodeops.v1.KernelNodeOps.CancelOperation:output_type -> anixops.kernelnodeops.v1.CancelOperationResponse
-	71,  // 112: anixops.kernelnodeops.v1.KernelNodeOps.ValidateNodeConfig:output_type -> anixops.kernelnodeops.v1.ValidateNodeConfigResponse
-	74,  // 113: anixops.kernelnodeops.v1.KernelNodeOps.ListAgentSessions:output_type -> anixops.kernelnodeops.v1.ListAgentSessionsResponse
-	77,  // 114: anixops.kernelnodeops.v1.KernelNodeOps.GetAgentSession:output_type -> anixops.kernelnodeops.v1.GetAgentSessionResponse
-	79,  // 115: anixops.kernelnodeops.v1.KernelNodeOps.GetAgentMonitor:output_type -> anixops.kernelnodeops.v1.GetAgentMonitorResponse
-	82,  // 116: anixops.kernelnodeops.v1.KernelNodeOps.GetCapabilities:output_type -> anixops.kernelnodeops.v1.GetCapabilitiesResponse
-	107, // [107:117] is the sub-list for method output_type
-	97,  // [97:107] is the sub-list for method input_type
-	97,  // [97:97] is the sub-list for extension type_name
-	97,  // [97:97] is the sub-list for extension extendee
-	0,   // [0:97] is the sub-list for field type_name
+	32,  // 13: anixops.kernelnodeops.v1.OperationSpec.run_agent_diagnostic:type_name -> anixops.kernelnodeops.v1.RunAgentDiagnostic
+	31,  // 14: anixops.kernelnodeops.v1.OperationSpec.test_forward_backend:type_name -> anixops.kernelnodeops.v1.TestForwardBackend
+	33,  // 15: anixops.kernelnodeops.v1.OperationSpec.agent_control_operation:type_name -> anixops.kernelnodeops.v1.AgentControlOperation
+	34,  // 16: anixops.kernelnodeops.v1.OperationSpec.issue_credential:type_name -> anixops.kernelnodeops.v1.IssueCredential
+	35,  // 17: anixops.kernelnodeops.v1.OperationSpec.revoke_credential:type_name -> anixops.kernelnodeops.v1.RevokeCredential
+	36,  // 18: anixops.kernelnodeops.v1.OperationSpec.issue_registration_key:type_name -> anixops.kernelnodeops.v1.IssueRegistrationKey
+	37,  // 19: anixops.kernelnodeops.v1.OperationSpec.revoke_registration_key:type_name -> anixops.kernelnodeops.v1.RevokeRegistrationKey
+	38,  // 20: anixops.kernelnodeops.v1.OperationSpec.issue_clean_agent:type_name -> anixops.kernelnodeops.v1.IssueCleanAgent
+	2,   // 21: anixops.kernelnodeops.v1.ApplyForward.action:type_name -> anixops.kernelnodeops.v1.ForwardAction
+	2,   // 22: anixops.kernelnodeops.v1.ApplyLegacyRule.action:type_name -> anixops.kernelnodeops.v1.ForwardAction
+	14,  // 23: anixops.kernelnodeops.v1.SyncNode.node:type_name -> anixops.kernelnodeops.v1.NodeRef
+	14,  // 24: anixops.kernelnodeops.v1.RetireNode.node:type_name -> anixops.kernelnodeops.v1.NodeRef
+	3,   // 25: anixops.kernelnodeops.v1.PutSecretDocument.scope:type_name -> anixops.kernelnodeops.v1.SecretScope
+	14,  // 26: anixops.kernelnodeops.v1.CheckEndpoints.nodes:type_name -> anixops.kernelnodeops.v1.NodeRef
+	4,   // 27: anixops.kernelnodeops.v1.CheckEndpoints.vantage:type_name -> anixops.kernelnodeops.v1.Vantage
+	14,  // 28: anixops.kernelnodeops.v1.CollectNodeStats.node:type_name -> anixops.kernelnodeops.v1.NodeRef
+	4,   // 29: anixops.kernelnodeops.v1.DiagnoseForward.vantage:type_name -> anixops.kernelnodeops.v1.Vantage
+	4,   // 30: anixops.kernelnodeops.v1.DiagnoseTunnel.vantage:type_name -> anixops.kernelnodeops.v1.Vantage
+	16,  // 31: anixops.kernelnodeops.v1.TestForwardBackend.token:type_name -> anixops.kernelnodeops.v1.SecretRef
+	14,  // 32: anixops.kernelnodeops.v1.IssueCredential.subject:type_name -> anixops.kernelnodeops.v1.NodeRef
+	5,   // 33: anixops.kernelnodeops.v1.IssueCredential.kind:type_name -> anixops.kernelnodeops.v1.CredentialKind
+	16,  // 34: anixops.kernelnodeops.v1.IssueCredential.value:type_name -> anixops.kernelnodeops.v1.SecretRef
+	14,  // 35: anixops.kernelnodeops.v1.RevokeCredential.subject:type_name -> anixops.kernelnodeops.v1.NodeRef
+	5,   // 36: anixops.kernelnodeops.v1.RevokeCredential.kind:type_name -> anixops.kernelnodeops.v1.CredentialKind
+	18,  // 37: anixops.kernelnodeops.v1.SubmitOperationRequest.operation:type_name -> anixops.kernelnodeops.v1.OperationSpec
+	6,   // 38: anixops.kernelnodeops.v1.SubmitOperationRequest.wait:type_name -> anixops.kernelnodeops.v1.WaitMode
+	15,  // 39: anixops.kernelnodeops.v1.SubmitOperationRequest.request:type_name -> anixops.kernelnodeops.v1.RequestBinding
+	42,  // 40: anixops.kernelnodeops.v1.SubmitOperationResponse.operation:type_name -> anixops.kernelnodeops.v1.Operation
+	9,   // 41: anixops.kernelnodeops.v1.OperationError.code:type_name -> anixops.kernelnodeops.v1.ErrorCode
+	1,   // 42: anixops.kernelnodeops.v1.Operation.family:type_name -> anixops.kernelnodeops.v1.OperationFamily
+	14,  // 43: anixops.kernelnodeops.v1.Operation.targets:type_name -> anixops.kernelnodeops.v1.NodeRef
+	7,   // 44: anixops.kernelnodeops.v1.Operation.state:type_name -> anixops.kernelnodeops.v1.OperationState
+	8,   // 45: anixops.kernelnodeops.v1.Operation.channel:type_name -> anixops.kernelnodeops.v1.Channel
+	43,  // 46: anixops.kernelnodeops.v1.Operation.fan_out:type_name -> anixops.kernelnodeops.v1.FanOut
+	44,  // 47: anixops.kernelnodeops.v1.Operation.result:type_name -> anixops.kernelnodeops.v1.OperationResult
+	41,  // 48: anixops.kernelnodeops.v1.Operation.error:type_name -> anixops.kernelnodeops.v1.OperationError
+	45,  // 49: anixops.kernelnodeops.v1.OperationResult.forward_apply:type_name -> anixops.kernelnodeops.v1.ForwardApplyResult
+	46,  // 50: anixops.kernelnodeops.v1.OperationResult.legacy_rule:type_name -> anixops.kernelnodeops.v1.LegacyRuleResult
+	49,  // 51: anixops.kernelnodeops.v1.OperationResult.node_sync:type_name -> anixops.kernelnodeops.v1.NodeSyncResult
+	50,  // 52: anixops.kernelnodeops.v1.OperationResult.retire:type_name -> anixops.kernelnodeops.v1.RetireResult
+	51,  // 53: anixops.kernelnodeops.v1.OperationResult.secret_document:type_name -> anixops.kernelnodeops.v1.SecretDocumentResult
+	54,  // 54: anixops.kernelnodeops.v1.OperationResult.endpoint_check:type_name -> anixops.kernelnodeops.v1.EndpointCheckResult
+	56,  // 55: anixops.kernelnodeops.v1.OperationResult.node_stats:type_name -> anixops.kernelnodeops.v1.NodeStatsResult
+	58,  // 56: anixops.kernelnodeops.v1.OperationResult.diagnosis:type_name -> anixops.kernelnodeops.v1.DiagnosisResult
+	59,  // 57: anixops.kernelnodeops.v1.OperationResult.agent_diagnostic:type_name -> anixops.kernelnodeops.v1.AgentDiagnosticResult
+	47,  // 58: anixops.kernelnodeops.v1.OperationResult.forward_backend_test:type_name -> anixops.kernelnodeops.v1.ForwardBackendTestResult
+	60,  // 59: anixops.kernelnodeops.v1.OperationResult.agent_operation:type_name -> anixops.kernelnodeops.v1.AgentOperationResult
+	61,  // 60: anixops.kernelnodeops.v1.OperationResult.credential:type_name -> anixops.kernelnodeops.v1.CredentialResult
+	62,  // 61: anixops.kernelnodeops.v1.OperationResult.registration_key:type_name -> anixops.kernelnodeops.v1.RegistrationKeyResult
+	8,   // 62: anixops.kernelnodeops.v1.NodeSyncResult.channel:type_name -> anixops.kernelnodeops.v1.Channel
+	48,  // 63: anixops.kernelnodeops.v1.NodeSyncResult.ack:type_name -> anixops.kernelnodeops.v1.AgentAck
+	4,   // 64: anixops.kernelnodeops.v1.VantageReport.requested:type_name -> anixops.kernelnodeops.v1.Vantage
+	4,   // 65: anixops.kernelnodeops.v1.VantageReport.selected:type_name -> anixops.kernelnodeops.v1.Vantage
+	4,   // 66: anixops.kernelnodeops.v1.VantageReport.used:type_name -> anixops.kernelnodeops.v1.Vantage
+	14,  // 67: anixops.kernelnodeops.v1.EndpointCheck.node:type_name -> anixops.kernelnodeops.v1.NodeRef
+	52,  // 68: anixops.kernelnodeops.v1.EndpointCheck.vantage:type_name -> anixops.kernelnodeops.v1.VantageReport
+	53,  // 69: anixops.kernelnodeops.v1.EndpointCheckResult.checks:type_name -> anixops.kernelnodeops.v1.EndpointCheck
+	14,  // 70: anixops.kernelnodeops.v1.NodeStatsResult.node:type_name -> anixops.kernelnodeops.v1.NodeRef
+	55,  // 71: anixops.kernelnodeops.v1.NodeStatsResult.services:type_name -> anixops.kernelnodeops.v1.ServiceTraffic
+	57,  // 72: anixops.kernelnodeops.v1.DiagnosisResult.outcomes:type_name -> anixops.kernelnodeops.v1.DiagnosisOutcome
+	52,  // 73: anixops.kernelnodeops.v1.DiagnosisResult.vantage:type_name -> anixops.kernelnodeops.v1.VantageReport
+	48,  // 74: anixops.kernelnodeops.v1.AgentDiagnosticResult.ack:type_name -> anixops.kernelnodeops.v1.AgentAck
+	48,  // 75: anixops.kernelnodeops.v1.AgentOperationResult.ack:type_name -> anixops.kernelnodeops.v1.AgentAck
+	14,  // 76: anixops.kernelnodeops.v1.CredentialResult.subject:type_name -> anixops.kernelnodeops.v1.NodeRef
+	5,   // 77: anixops.kernelnodeops.v1.CredentialResult.kind:type_name -> anixops.kernelnodeops.v1.CredentialKind
+	17,  // 78: anixops.kernelnodeops.v1.CredentialResult.reveal:type_name -> anixops.kernelnodeops.v1.SecretHandle
+	17,  // 79: anixops.kernelnodeops.v1.RegistrationKeyResult.reveal:type_name -> anixops.kernelnodeops.v1.SecretHandle
+	42,  // 80: anixops.kernelnodeops.v1.GetOperationResponse.operation:type_name -> anixops.kernelnodeops.v1.Operation
+	1,   // 81: anixops.kernelnodeops.v1.ListOperationsRequest.families:type_name -> anixops.kernelnodeops.v1.OperationFamily
+	7,   // 82: anixops.kernelnodeops.v1.ListOperationsRequest.states:type_name -> anixops.kernelnodeops.v1.OperationState
+	14,  // 83: anixops.kernelnodeops.v1.ListOperationsRequest.target:type_name -> anixops.kernelnodeops.v1.NodeRef
+	42,  // 84: anixops.kernelnodeops.v1.ListOperationsResponse.operations:type_name -> anixops.kernelnodeops.v1.Operation
+	1,   // 85: anixops.kernelnodeops.v1.WatchOperationsRequest.families:type_name -> anixops.kernelnodeops.v1.OperationFamily
+	10,  // 86: anixops.kernelnodeops.v1.OperationEvent.kind:type_name -> anixops.kernelnodeops.v1.OperationEventKind
+	42,  // 87: anixops.kernelnodeops.v1.OperationEvent.operation:type_name -> anixops.kernelnodeops.v1.Operation
+	42,  // 88: anixops.kernelnodeops.v1.CancelOperationResponse.operation:type_name -> anixops.kernelnodeops.v1.Operation
+	11,  // 89: anixops.kernelnodeops.v1.ValidateNodeConfigRequest.kind:type_name -> anixops.kernelnodeops.v1.NodeConfigKind
+	72,  // 90: anixops.kernelnodeops.v1.ValidateNodeConfigResponse.issues:type_name -> anixops.kernelnodeops.v1.ValidationIssue
+	14,  // 91: anixops.kernelnodeops.v1.AgentSession.node:type_name -> anixops.kernelnodeops.v1.NodeRef
+	12,  // 92: anixops.kernelnodeops.v1.AgentSession.transport:type_name -> anixops.kernelnodeops.v1.AgentTransport
+	12,  // 93: anixops.kernelnodeops.v1.ListAgentSessionsRequest.transport:type_name -> anixops.kernelnodeops.v1.AgentTransport
+	74,  // 94: anixops.kernelnodeops.v1.ListAgentSessionsResponse.sessions:type_name -> anixops.kernelnodeops.v1.AgentSession
+	74,  // 95: anixops.kernelnodeops.v1.GetAgentSessionResponse.session:type_name -> anixops.kernelnodeops.v1.AgentSession
+	78,  // 96: anixops.kernelnodeops.v1.GetAgentSessionResponse.observed:type_name -> anixops.kernelnodeops.v1.ObservedOperation
+	13,  // 97: anixops.kernelnodeops.v1.TableSplitState.phase:type_name -> anixops.kernelnodeops.v1.SecretSplitPhase
+	1,   // 98: anixops.kernelnodeops.v1.GetCapabilitiesResponse.granted_families:type_name -> anixops.kernelnodeops.v1.OperationFamily
+	83,  // 99: anixops.kernelnodeops.v1.GetCapabilitiesResponse.tables:type_name -> anixops.kernelnodeops.v1.TableSplitState
+	39,  // 100: anixops.kernelnodeops.v1.KernelNodeOps.SubmitOperation:input_type -> anixops.kernelnodeops.v1.SubmitOperationRequest
+	63,  // 101: anixops.kernelnodeops.v1.KernelNodeOps.GetOperation:input_type -> anixops.kernelnodeops.v1.GetOperationRequest
+	65,  // 102: anixops.kernelnodeops.v1.KernelNodeOps.ListOperations:input_type -> anixops.kernelnodeops.v1.ListOperationsRequest
+	67,  // 103: anixops.kernelnodeops.v1.KernelNodeOps.WatchOperations:input_type -> anixops.kernelnodeops.v1.WatchOperationsRequest
+	69,  // 104: anixops.kernelnodeops.v1.KernelNodeOps.CancelOperation:input_type -> anixops.kernelnodeops.v1.CancelOperationRequest
+	71,  // 105: anixops.kernelnodeops.v1.KernelNodeOps.ValidateNodeConfig:input_type -> anixops.kernelnodeops.v1.ValidateNodeConfigRequest
+	75,  // 106: anixops.kernelnodeops.v1.KernelNodeOps.ListAgentSessions:input_type -> anixops.kernelnodeops.v1.ListAgentSessionsRequest
+	77,  // 107: anixops.kernelnodeops.v1.KernelNodeOps.GetAgentSession:input_type -> anixops.kernelnodeops.v1.GetAgentSessionRequest
+	80,  // 108: anixops.kernelnodeops.v1.KernelNodeOps.GetAgentMonitor:input_type -> anixops.kernelnodeops.v1.GetAgentMonitorRequest
+	82,  // 109: anixops.kernelnodeops.v1.KernelNodeOps.GetCapabilities:input_type -> anixops.kernelnodeops.v1.GetCapabilitiesRequest
+	40,  // 110: anixops.kernelnodeops.v1.KernelNodeOps.SubmitOperation:output_type -> anixops.kernelnodeops.v1.SubmitOperationResponse
+	64,  // 111: anixops.kernelnodeops.v1.KernelNodeOps.GetOperation:output_type -> anixops.kernelnodeops.v1.GetOperationResponse
+	66,  // 112: anixops.kernelnodeops.v1.KernelNodeOps.ListOperations:output_type -> anixops.kernelnodeops.v1.ListOperationsResponse
+	68,  // 113: anixops.kernelnodeops.v1.KernelNodeOps.WatchOperations:output_type -> anixops.kernelnodeops.v1.OperationEvent
+	70,  // 114: anixops.kernelnodeops.v1.KernelNodeOps.CancelOperation:output_type -> anixops.kernelnodeops.v1.CancelOperationResponse
+	73,  // 115: anixops.kernelnodeops.v1.KernelNodeOps.ValidateNodeConfig:output_type -> anixops.kernelnodeops.v1.ValidateNodeConfigResponse
+	76,  // 116: anixops.kernelnodeops.v1.KernelNodeOps.ListAgentSessions:output_type -> anixops.kernelnodeops.v1.ListAgentSessionsResponse
+	79,  // 117: anixops.kernelnodeops.v1.KernelNodeOps.GetAgentSession:output_type -> anixops.kernelnodeops.v1.GetAgentSessionResponse
+	81,  // 118: anixops.kernelnodeops.v1.KernelNodeOps.GetAgentMonitor:output_type -> anixops.kernelnodeops.v1.GetAgentMonitorResponse
+	84,  // 119: anixops.kernelnodeops.v1.KernelNodeOps.GetCapabilities:output_type -> anixops.kernelnodeops.v1.GetCapabilitiesResponse
+	110, // [110:120] is the sub-list for method output_type
+	100, // [100:110] is the sub-list for method input_type
+	100, // [100:100] is the sub-list for extension type_name
+	100, // [100:100] is the sub-list for extension extendee
+	0,   // [0:100] is the sub-list for field type_name
 }
 
 func init() { file_api_kernelnodeops_v1_kernel_node_ops_proto_init() }
@@ -6596,6 +6783,7 @@ func file_api_kernelnodeops_v1_kernel_node_ops_proto_init() {
 		(*OperationSpec_DiagnoseForward)(nil),
 		(*OperationSpec_DiagnoseTunnel)(nil),
 		(*OperationSpec_RunAgentDiagnostic)(nil),
+		(*OperationSpec_TestForwardBackend)(nil),
 		(*OperationSpec_AgentControlOperation)(nil),
 		(*OperationSpec_IssueCredential)(nil),
 		(*OperationSpec_RevokeCredential)(nil),
@@ -6603,7 +6791,7 @@ func file_api_kernelnodeops_v1_kernel_node_ops_proto_init() {
 		(*OperationSpec_RevokeRegistrationKey)(nil),
 		(*OperationSpec_IssueCleanAgent)(nil),
 	}
-	file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[29].OneofWrappers = []any{
+	file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[30].OneofWrappers = []any{
 		(*OperationResult_ForwardApply)(nil),
 		(*OperationResult_LegacyRule)(nil),
 		(*OperationResult_NodeSync)(nil),
@@ -6613,11 +6801,12 @@ func file_api_kernelnodeops_v1_kernel_node_ops_proto_init() {
 		(*OperationResult_NodeStats)(nil),
 		(*OperationResult_Diagnosis)(nil),
 		(*OperationResult_AgentDiagnostic)(nil),
+		(*OperationResult_ForwardBackendTest)(nil),
 		(*OperationResult_AgentOperation)(nil),
 		(*OperationResult_Credential)(nil),
 		(*OperationResult_RegistrationKey)(nil),
 	}
-	file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[47].OneofWrappers = []any{
+	file_api_kernelnodeops_v1_kernel_node_ops_proto_msgTypes[49].OneofWrappers = []any{
 		(*GetOperationRequest_OperationId)(nil),
 		(*GetOperationRequest_RequestId)(nil),
 	}
@@ -6627,7 +6816,7 @@ func file_api_kernelnodeops_v1_kernel_node_ops_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDesc), len(file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDesc)),
 			NumEnums:      14,
-			NumMessages:   69,
+			NumMessages:   71,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

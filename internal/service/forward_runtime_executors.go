@@ -83,6 +83,7 @@ func (e *gostForwardExecutor) run(ctx context.Context, ec forwardRuntimeExecCont
 			Backend: backend,
 			Status:  model.ForwardRuntimeJobStatusSuccess,
 			Message: "gost runtime skipped because ingress node is not configured",
+			JobID:   job.ID,
 		}
 		completedAt := time.Now()
 		if err := s.db.Model(&model.ForwardRuntimeJob{}).Where("id = ?", job.ID).Updates(map[string]any{
@@ -96,8 +97,15 @@ func (e *gostForwardExecutor) run(ctx context.Context, ec forwardRuntimeExecCont
 		return result, nil
 	}
 
-	execResult, execErr := s.client.Execute(ctx, ec.req)
+	// The stored payload carries no token; the request NodeX receives
+	// does, resolved now and only for the node's pinned endpoint.
+	var execResult *nodeXForwardExecuteResult
+	req, execErr := withForwardNodeTokens(s.db, ec.req)
+	if execErr == nil {
+		execResult, execErr = s.client.Execute(ctx, req)
+	}
 	result := buildPanelForwardRuntimeResult(backend, ec.action, execResult, execErr)
+	result.JobID = job.ID
 	if execErr == nil && result.Status == model.ForwardRuntimeJobStatusFailed {
 		execErr = errors.New(result.Message)
 	}

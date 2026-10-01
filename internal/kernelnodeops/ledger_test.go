@@ -178,13 +178,16 @@ func sampleOperation(kindName string) *kernelnodeopsv1.OperationSpec {
 		KindDiagnoseNodeStats:  {Operation: &kernelnodeopsv1.OperationSpec_CollectNodeStats{CollectNodeStats: &kernelnodeopsv1.CollectNodeStats{Node: nodeRef(forwardKind, 10)}}},
 		KindDiagnoseForward:    {Operation: &kernelnodeopsv1.OperationSpec_DiagnoseForward{DiagnoseForward: &kernelnodeopsv1.DiagnoseForward{ForwardId: 40}}},
 		KindDiagnoseTunnel:     {Operation: &kernelnodeopsv1.OperationSpec_DiagnoseTunnel{DiagnoseTunnel: &kernelnodeopsv1.DiagnoseTunnel{TunnelId: 30}}},
-		KindAgentDiagnostic:    {Operation: &kernelnodeopsv1.OperationSpec_RunAgentDiagnostic{RunAgentDiagnostic: &kernelnodeopsv1.RunAgentDiagnostic{NodeId: 1, Action: "ping", ParamsJson: []byte(`{"host":"1.1.1.1"}`)}}},
-		KindAgentOperation:     agentOperation(1, "node.reload"),
-		KindCredentialIssue:    issueCredential(nodeRef(proxyKind, 1), kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_UNSPECIFIED, ""),
-		KindCredentialRevoke:   {Operation: &kernelnodeopsv1.OperationSpec_RevokeCredential{RevokeCredential: &kernelnodeopsv1.RevokeCredential{Subject: nodeRef(kernelnodeopsv1.NodeKind_NODE_KIND_CLEAN_AGENT, 20)}}},
-		KindRegKeyIssue:        {Operation: &kernelnodeopsv1.OperationSpec_IssueRegistrationKey{IssueRegistrationKey: &kernelnodeopsv1.IssueRegistrationKey{Name: "edge"}}},
-		KindRegKeyRevoke:       {Operation: &kernelnodeopsv1.OperationSpec_RevokeRegistrationKey{RevokeRegistrationKey: &kernelnodeopsv1.RevokeRegistrationKey{KeyId: 60}}},
-		KindCleanAgentIssue:    {Operation: &kernelnodeopsv1.OperationSpec_IssueCleanAgent{IssueCleanAgent: &kernelnodeopsv1.IssueCleanAgent{Name: "agent", ForwardNodeId: 10}}},
+		KindDiagnoseForwardBackend: {Operation: &kernelnodeopsv1.OperationSpec_TestForwardBackend{TestForwardBackend: &kernelnodeopsv1.TestForwardBackend{
+			Host: "198.51.100.10", ApiPort: 18080, Token: &kernelnodeopsv1.SecretRef{Handle: SealedPrefix + "x"},
+		}}},
+		KindAgentDiagnostic:  {Operation: &kernelnodeopsv1.OperationSpec_RunAgentDiagnostic{RunAgentDiagnostic: &kernelnodeopsv1.RunAgentDiagnostic{NodeId: 1, Action: "ping", ParamsJson: []byte(`{"host":"1.1.1.1"}`)}}},
+		KindAgentOperation:   agentOperation(1, "node.reload"),
+		KindCredentialIssue:  issueCredential(nodeRef(proxyKind, 1), kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_UNSPECIFIED, ""),
+		KindCredentialRevoke: {Operation: &kernelnodeopsv1.OperationSpec_RevokeCredential{RevokeCredential: &kernelnodeopsv1.RevokeCredential{Subject: nodeRef(kernelnodeopsv1.NodeKind_NODE_KIND_CLEAN_AGENT, 20)}}},
+		KindRegKeyIssue:      {Operation: &kernelnodeopsv1.OperationSpec_IssueRegistrationKey{IssueRegistrationKey: &kernelnodeopsv1.IssueRegistrationKey{Name: "edge"}}},
+		KindRegKeyRevoke:     {Operation: &kernelnodeopsv1.OperationSpec_RevokeRegistrationKey{RevokeRegistrationKey: &kernelnodeopsv1.RevokeRegistrationKey{KeyId: 60}}},
+		KindCleanAgentIssue:  {Operation: &kernelnodeopsv1.OperationSpec_IssueCleanAgent{IssueCleanAgent: &kernelnodeopsv1.IssueCleanAgent{Name: "agent", ForwardNodeId: 10}}},
 	}
 	return samples[kindName]
 }
@@ -197,7 +200,7 @@ func TestEveryKindAcceptsItsSample(t *testing.T) {
 		for _, kindName := range KnownKinds() {
 			h.serve(kindName, newScript(succeed))
 		}
-		require.Len(t, KnownKinds(), 19)
+		require.Len(t, KnownKinds(), 20)
 		forward := h.client(forwardHost, allFamilies())
 		for _, kindName := range KnownKinds() {
 			response := submit(t, forward, "sample:"+kindName, sampleOperation(kindName))
@@ -262,6 +265,9 @@ func TestMalformedSubmissionsAreRefused(t *testing.T) {
 			"registration time":  {Operation: &kernelnodeopsv1.OperationSpec_IssueRegistrationKey{IssueRegistrationKey: &kernelnodeopsv1.IssueRegistrationKey{ExpiresAtUnix: -1}}},
 			"clean agent name":   {Operation: &kernelnodeopsv1.OperationSpec_IssueCleanAgent{IssueCleanAgent: &kernelnodeopsv1.IssueCleanAgent{ForwardNodeId: 10}}},
 			"empty sealed value": issueCredential(nodeRef(forwardKind, 10), kernelnodeopsv1.CredentialKind_CREDENTIAL_KIND_FORWARD_NODE_TOKEN, SealedPrefix),
+			"backend name":       {Operation: &kernelnodeopsv1.OperationSpec_SyncForwardBackend{SyncForwardBackend: &kernelnodeopsv1.SyncForwardBackend{Backend: "docker"}}},
+			"test host":          {Operation: &kernelnodeopsv1.OperationSpec_TestForwardBackend{TestForwardBackend: &kernelnodeopsv1.TestForwardBackend{ApiPort: 1}}},
+			"test token clear":   {Operation: &kernelnodeopsv1.OperationSpec_TestForwardBackend{TestForwardBackend: &kernelnodeopsv1.TestForwardBackend{Host: "h", ApiPort: 1, Token: &kernelnodeopsv1.SecretRef{Handle: "typed"}}}},
 		}
 		for name, spec := range invalid {
 			refuse(name, codes.InvalidArgument, &kernelnodeopsv1.SubmitOperationRequest{RequestId: "invalid:" + name, Operation: spec})

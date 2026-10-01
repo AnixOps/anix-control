@@ -1798,6 +1798,9 @@ func (s *PanelForwardService) ListRuntimeJobs(filter PanelRuntimeJobFilter) ([]m
 
 	var jobs []model.ForwardRuntimeJob
 	err := query.Limit(limit).Find(&jobs).Error
+	// Payloads written before NO-7 carry a node token until the start-up
+	// pass has rewritten them; the answer never does.
+	scrubForwardRuntimeJobs(jobs)
 	return jobs, err
 }
 
@@ -1857,7 +1860,58 @@ func buildPanelForwardItem(record *model.Forward) PanelForwardListItem {
 	return item
 }
 
+// ForwardRuntimeOutcome is what applying a forward on its node reported:
+// the backend in force, the runtime status and message the forward's row
+// records, whether the work was queued (a job backend), and the runtime job
+// row the change recorded.
+type ForwardRuntimeOutcome struct {
+	Backend string
+	Status  int
+	Message string
+	Async   bool
+	JobID   uint
+}
+
+// GetForwardWithTunnel loads a panel forward with its tunnel, for the
+// runtime: ErrPanelForwardNotFound when there is none.
+func (s *PanelForwardService) GetForwardWithTunnel(id uint) (*model.Forward, error) {
+	var record model.Forward
+	if err := s.db.Preload("Tunnel").First(&record, id).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return nil, ErrPanelForwardNotFound
+		}
+		return nil, err
+	}
+	return &record, nil
+}
+
+// ActiveTunnelForwardIDs lists the active forwards of a tunnel, oldest
+// first: what a tunnel change re-applies.
+func (s *PanelForwardService) ActiveTunnelForwardIDs(tunnelID uint) ([]uint, error) {
+	var ids []uint
+	err := s.db.Model(&model.Forward{}).Where("tunnel_id = ? AND status = ?", tunnelID, model.ForwardStatusActive).Order("id ASC").Pluck("id", &ids).Error
+	return ids, err
+}
+
+// ApplyForwardRuntime applies one action for a forward on its node through
+// the runtime backend in force (NodeX synchronously, or a local Ansible or
+// clean agent job) and records the runtime columns of the forward's row,
+// as every legacy forward change does. The legacy routes and the
+// KernelNodeOps forward.apply executor run it alike; the status column is
+// the caller's.
+func (s *PanelForwardService) ApplyForwardRuntime(ctx context.Context, record *model.Forward, action string) (*ForwardRuntimeOutcome, error) {
+	result, err := s.syncForwardRuntimeContext(ctx, record, action)
+	if result == nil {
+		return nil, err
+	}
+	return &ForwardRuntimeOutcome{Backend: result.Backend, Status: result.Status, Message: result.Message, Async: result.Async, JobID: result.JobID}, err
+}
+
 func (s *PanelForwardService) syncForwardRuntime(record *model.Forward, action string) (*panelForwardRuntimeResult, error) {
+	return s.syncForwardRuntimeContext(context.Background(), record, action)
+}
+
+func (s *PanelForwardService) syncForwardRuntimeContext(ctx context.Context, record *model.Forward, action string) (*panelForwardRuntimeResult, error) {
 	if record == nil {
 		return nil, errors.New("forward record is required")
 	}
@@ -1869,7 +1923,7 @@ func (s *PanelForwardService) syncForwardRuntime(record *model.Forward, action s
 		return nil, err
 	}
 
-	result, err := s.runtimeService.Apply(context.Background(), action, record, &tunnel)
+	result, err := s.runtimeService.Apply(ctx, action, record, &tunnel)
 	if result != nil {
 		record.RuntimeBackend = result.Backend
 		record.RuntimeStatus = result.Status

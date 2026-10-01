@@ -1,0 +1,133 @@
+package nodesecrets
+
+import (
+	"errors"
+	"log/slog"
+	"net"
+	"strconv"
+
+	"github.com/AnixOps/anix-control/v4/internal/model"
+	"gorm.io/gorm"
+)
+
+// Endpoint pinning of forward node tokens (node-ops-service.md section 3.8,
+// decision D12). An address is a credential: whoever can write a forward
+// node's host or api_port could point the kernel's next NodeX or gost call,
+// which carries the node's token, at an address of their own. So the token
+// is pinned to the endpoint it was bound to, host:api_port as recorded in
+// v4_kernel_node_credential.endpoint by the kernel's own forward node
+// writers (Sync), and the kernel presents it only there.
+
+// ErrEndpointUnconfirmed is a forward node whose address no longer matches
+// the endpoint its token is pinned to: the kernel does not present the
+// token there until an administrator's own forward node update confirms the
+// address (ENDPOINT_UNCONFIRMED). Its text names no address and no value.
+var ErrEndpointUnconfirmed = errors.New("the forward node's address is not the one its token is pinned to; an administrator's forward node update confirms it")
+
+// Pin reasons, for the counter.
+const (
+	// PinUnconfirmed: the row's address differs from the pinned endpoint.
+	PinUnconfirmed = "unconfirmed"
+	// PinUnpinned: the token has no pin yet (no credential row; the
+	// backfill has not run), so it was presented as before the split.
+	PinUnpinned = "unpinned"
+)
+
+// ForwardNodeEndpoint is the address a forward node's token is pinned to:
+// its management API, host:api_port. A node without a host or an API port
+// has no endpoint, so its token is pinned to nothing and never presented.
+func ForwardNodeEndpoint(node *model.ForwardNode) string {
+	if node == nil {
+		return ""
+	}
+	return forwardNodeEndpoint(node.Host, node.APIPort)
+}
+
+// ForwardNodeTokenAt answers the API token of the forward node node for a
+// call to the node's management API at the node's current address, or
+// ErrEndpointUnconfirmed when the kernel must not present it there.
+//
+// The rule: the token is presented only when the row's current
+// host:api_port is the endpoint its credential row is pinned to, and both
+// are set. A node whose API port was removed, or added after the pin, or
+// whose host changed, is unconfirmed. The pin moves only through the
+// kernel's own forward node writers, which an administrator's
+// PUT /admin/forward/nodes/:id drives (Sync re-derives it from the row).
+//
+// Before the backfill a node has no credential row and so no pin, and a
+// database without the split tables has none: the token is presented as
+// before the split, and the read is counted
+// (anixops_node_secrets_pin_total{reason="unpinned"}). The rule applies in
+// every phase: the pin is the kernel's record, not a secret.
+func ForwardNodeTokenAt(db *gorm.DB, node *model.ForwardNode) (string, error) {
+	if node == nil {
+		return "", nil
+	}
+	token := ForwardNodeToken(db, node)
+	if token == "" {
+		return "", nil
+	}
+	subject := subjectName(uint64(node.ID))
+	if !SplitInstalled(db) {
+		recordPin(PinUnpinned, subject)
+		return token, nil
+	}
+	row, err := currentCredential(db, SubjectForward, uint64(node.ID), KindForwardNodeToken)
+	if err != nil {
+		return "", err
+	}
+	if row == nil {
+		recordPin(PinUnpinned, subject)
+		return token, nil
+	}
+	// endpointEqual is false when either endpoint is unset: a node without
+	// an API port, now or when it was pinned, is unconfirmed.
+	if !endpointEqual(row.Endpoint, ForwardNodeEndpoint(node)) {
+		recordPin(PinUnconfirmed, subject)
+		return "", ErrEndpointUnconfirmed
+	}
+	return token, nil
+}
+
+// endpointEqual compares two host:port endpoints as addresses: the same
+// host spelling (the pin is derived from the row, so no normalization is
+// wanted beyond the port's), and the same port.
+func endpointEqual(pinned, current string) bool {
+	pinnedHost, pinnedPort, err := net.SplitHostPort(pinned)
+	if err != nil {
+		return false
+	}
+	currentHost, currentPort, err := net.SplitHostPort(current)
+	if err != nil {
+		return false
+	}
+	pinnedNumber, err := strconv.Atoi(pinnedPort)
+	if err != nil {
+		return false
+	}
+	currentNumber, err := strconv.Atoi(currentPort)
+	if err != nil {
+		return false
+	}
+	return pinnedHost == currentHost && pinnedNumber == currentNumber && pinnedNumber > 0
+}
+
+var pins counterSet // table, kind, reason
+
+// recordPin counts a forward node token read that found no pin or an
+// unconfirmed address, and logs the latter once per subject.
+func recordPin(reason, subject string) {
+	pins.add([3]string{TableForwardNode, KindForwardNodeToken, reason})
+	if reason == PinUnconfirmed && firstLog("pin "+subject) {
+		slog.Warn("forward node token not presented: the node's address is not its pinned endpoint",
+			"component", "nodesecrets", "table", TableForwardNode, "subject", subject)
+	}
+}
+
+// PinCount answers how many forward node token reads ended for reason in
+// this process; an empty reason counts every reason.
+func PinCount(reason string) uint64 {
+	return pins.get(func(labels [3]string) bool {
+		return reason == "" || labels[2] == reason
+	})
+}

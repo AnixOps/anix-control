@@ -389,7 +389,7 @@ func TestNoNodeSecretReachesAPackageOnAnyListedRoute(t *testing.T) {
 		}
 		assert.Contains(t, string(received.Body), `pub`, id)
 	}
-	assert.Len(t, walked, 8)
+	assert.Len(t, walked, 9)
 	assert.Zero(t, h.store.Pending())
 	assert.Empty(t, h.viaLegacy, "every walked request was sealed, none fell back")
 }

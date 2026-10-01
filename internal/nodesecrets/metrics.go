@@ -194,4 +194,7 @@ func WritePrometheus(body *strings.Builder) {
 	body.WriteString("# HELP anixops_node_secrets_invalid_total Node configuration builds that used a secret failing validation; reported, not excluded (D7).\n")
 	body.WriteString("# TYPE anixops_node_secrets_invalid_total counter\n")
 	invalids.write(body, "anixops_node_secrets_invalid_total", [3]string{"table", "type", "reason"})
+	body.WriteString("# HELP anixops_node_secrets_pin_total Forward node token reads that found no endpoint pin, or an address the pin does not confirm (section 3.8).\n")
+	body.WriteString("# TYPE anixops_node_secrets_pin_total counter\n")
+	pins.write(body, "anixops_node_secrets_pin_total", [3]string{"table", "kind", "reason"})
 }

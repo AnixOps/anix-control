@@ -4,6 +4,25 @@
 
 ### Security
 
+- **The gost API connection test runs in the kernel.**
+  `POST /api/v2/admin/forward/test-connection` (gost-mesh, native-flagged)
+  dialled the gost API from the package host with the token the
+  administrator typed. The route is now listed in
+  `config/node-secret-fields.json` (target kind `dial`): the gateway seals
+  the token into a handle, the package's native handler submits
+  `TestForwardBackend` (`diagnose.forward_backend`, capability
+  `kernel.nodeops.diagnose.v1`) with its request binding, and the kernel
+  dials with its own gost client. The package never sees the token, the
+  ledger holds neither token nor handle, and the answer is byte for byte
+  the legacy one (`gostmeshcompat`, through the real gateway, sealer,
+  bridge session and router). A request that is not an administrator's
+  dials public addresses only; a shadow run submits nothing; a host
+  without KernelNodeOps keeps the route legacy.
+- **Forward runtime job payloads and NodeX requests carry no stored
+  token.** See the NO-7 entry under Added: new job rows hold no node token,
+  old rows are scrubbed at start, readers scrub meanwhile, and a forward
+  node's token is presented only at its pinned endpoint.
+
 - UniProxy over HTTP refuses a disabled node. A node an administrator
   disabled kept polling its configuration and users over
   `/api/v1/server/UniProxy/*` (and the `/api/v2` alias), so disabling a
@@ -540,6 +559,56 @@
     the real listener (Hello, acknowledgements, observed states, refusals,
     replays, a replaced session), and `internal/tests/nodeopsagent`, the
     executors' tests on SQLite and PostgreSQL.
+- **KernelNodeOps forward operations (NO-7)** (`internal/kernelnodeops`,
+  `docs/architecture/node-ops-service.md` sections 3.8, 3.11 and 6.1). The
+  kernel executes the forward family's `ApplyForward`, `ApplyTunnel`,
+  `SyncForwardBackend` and `ApplyLegacyRule`, and `GetCapabilities` lists
+  them. No forward route switches to native; M3-4 and M3-5 do that.
+  - **One implementation.** The executors run the legacy routes' code over
+    the executors the kernel has: NodeX for the gost backend and the legacy
+    rules, the local Ansible job executor and the clean agent job queue.
+    The legacy routes call the same functions
+    (`PanelForwardService.ApplyForwardRuntime`,
+    `ForwardRuleService.ApplyRuntime`), and their answers and what they
+    send NodeX are unchanged byte for byte (`TestForwardOperationsAnswers`,
+    written before the move).
+  - **Operations name resources.** `forward.apply` reads the forward and
+    its tunnel when it runs, applies the action through the backend in
+    force for the forward and records the forward's runtime columns; the
+    status column stays the package's. On the gost backend NodeX answers
+    in the operation; on a job backend the operation is accepted when the
+    job is queued (its id in the receipt) and ends with the job.
+    `FORCE_DELETE` succeeds whatever the node answered; a forward gone
+    since the submission is `TARGET_GONE`.
+  - **Fan-outs.** `forward.tunnel` creates one `forward.apply UPDATE` per
+    active forward of the tunnel. `forward.sync_backend` takes its target
+    from the new `SyncForwardBackend.backend` field (the backend in force
+    when empty), records the target on each forward and creates one
+    `forward.apply SYNC` per forward.
+  - **Legacy rules.** `forward.legacy_rule` pushes the row through NodeX
+    with both nodes' tokens resolved at send time.
+  - **Job payloads without tokens.** A `v2_forward_runtime_job` payload no
+    longer holds the ingress node's token: the kernel resolves it when it
+    sends a request to NodeX. A start-up pass in the singleton worker
+    process scrubs the rows written before this release, and every reader
+    (a clean agent's claim, the administrator's job list) serves old rows
+    scrubbed meanwhile. See `docs/UPGRADE.md`.
+  - **Endpoint pinning (D12).** A forward node's token is presented only at
+    the endpoint it is pinned to, `host:api_port` as the kernel's own
+    forward node writers recorded it; any other address, and a node
+    without an API port, is `ENDPOINT_UNCONFIRMED`, with nothing sent. The
+    administrator's forward node update moves the pin. A node not yet
+    backfilled is unpinned and counted in
+    `anixops_node_secrets_pin_total{reason}`.
+  - **Contract additions.** `SyncForwardBackend.backend`,
+    `TestForwardBackend` (operation 35) and `ForwardBackendTestResult`
+    (result 34). The proto golden file grows by 9 elements.
+  - Tests on SQLite and PostgreSQL: each executor against a fake NodeX, a
+    fake `ansible-playbook`, and a clean agent claiming and reporting jobs
+    (success, failure, timeout, cancellation, a fenced generation,
+    supersession on one forward), the fan-outs, the pin rule, the payload
+    scrub, a secret walk and a bridge contract round trip.
+
 - **Sealed secret handles (NO-4)** (`internal/sealedsecrets`,
   `docs/architecture/node-ops-service.md` section 3.7). A package host no
   longer reads a node secret an administrator types, or one shown once in

@@ -180,6 +180,7 @@ message OperationSpec {
     DiagnoseForward diagnose_forward = 32;
     DiagnoseTunnel diagnose_tunnel = 33;
     RunAgentDiagnostic run_agent_diagnostic = 34;
+    TestForwardBackend test_forward_backend = 35;
     // Agent family.
     AgentControlOperation agent_control_operation = 40;
     // Credential family.
@@ -229,7 +230,12 @@ message ApplyTunnel {
 
 // SyncForwardBackend re-applies every active forward, as the administrator's
 // backend sync does. It fans out into one ApplyForward SYNC per forward.
-message SyncForwardBackend {}
+message SyncForwardBackend {
+  // backend is the runtime backend to move the forwards to (gost,
+  // nftables_ansible, iptables_ansible or clean_agent); empty means the
+  // backend in force. Forwards already on it are left alone.
+  string backend = 1;
+}
 
 // ApplyLegacyRule pushes one legacy forward rule (v2_forward_rule) to its
 // relay and exit nodes through NodeX.
@@ -335,6 +341,18 @@ message DiagnoseForward {
 message DiagnoseTunnel {
   uint64 tunnel_id = 1;
   Vantage vantage = 2;
+}
+
+// TestForwardBackend tests a gost API from the kernel with a token the
+// administrator typed, as POST /admin/forward/test-connection does: whether
+// the API at host:api_port answers its service list to the token. The token
+// is a sealed handle of the bound request; the package never sees it, and
+// the kernel presents it to that address once. An unreachable or refusing
+// API is the result, not a failed operation.
+message TestForwardBackend {
+  string host = 1;
+  int32 api_port = 2;
+  SecretRef token = 3;
 }
 
 // RunAgentDiagnostic sends one whitelisted diagnostic action to a node's
@@ -571,6 +589,7 @@ message OperationResult {
     NodeStatsResult node_stats = 31;
     DiagnosisResult diagnosis = 32;
     AgentDiagnosticResult agent_diagnostic = 33;
+    ForwardBackendTestResult forward_backend_test = 34;
     AgentOperationResult agent_operation = 40;
     CredentialResult credential = 50;
     RegistrationKeyResult registration_key = 51;
@@ -594,6 +613,14 @@ message LegacyRuleResult {
   bool applied_on_relay = 1;
   bool applied_on_exit = 2;
   string message = 3;
+}
+
+// ForwardBackendTestResult is what the connection test found, as the legacy
+// route answers it.
+message ForwardBackendTestResult {
+  bool success = 1;
+  string message = 2;
+  int32 service_count = 3;
 }
 
 message AgentAck {

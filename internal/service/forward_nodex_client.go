@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"gorm.io/gorm"
 )
 
 const (
@@ -153,13 +154,78 @@ type nodeXLegacyForwardRulePayload struct {
 	Enabled    bool   `json:"enabled"`
 }
 
+// nodeXForwardNodePayload is a forward node as NodeX receives it. APIToken
+// is set only on the request the kernel sends (withForwardNodeTokens): a
+// stored job payload carries none (forward_runtime_job_payload.go).
 type nodeXForwardNodePayload struct {
 	ID       uint   `json:"id"`
 	Name     string `json:"name"`
 	Host     string `json:"host"`
 	Port     int    `json:"port"`
 	APIPort  int    `json:"apiPort"`
-	APIToken string `json:"apiToken"`
+	APIToken string `json:"apiToken,omitempty"`
+}
+
+// withForwardNodeTokens is req with the tokens of its nodes resolved for
+// the call about to be made: the ingress node of a panel forward on the
+// gost backend, and the relay and exit nodes of a legacy rule. Each token
+// is presented only at the node's pinned endpoint
+// (ErrForwardNodeEndpointUnconfirmed otherwise). Job backends carry no
+// node token: the executor on the node authenticates with its own.
+func withForwardNodeTokens(db *gorm.DB, req nodeXForwardExecuteRequest) (nodeXForwardExecuteRequest, error) {
+	if req.PanelForward != nil && req.Backend == model.ForwardRuntimeBackendGost {
+		var err error
+		if req, err = withIngressNodeToken(db, req); err != nil {
+			return req, err
+		}
+	}
+	if req.LegacyRule != nil {
+		rule := *req.LegacyRule
+		if err := resolveForwardNodeToken(db, &rule.RelayNode); err != nil {
+			return req, err
+		}
+		if err := resolveForwardNodeToken(db, &rule.ExitNode); err != nil {
+			return req, err
+		}
+		req.LegacyRule = &rule
+	}
+	return req, nil
+}
+
+// withIngressNodeToken is req with its panel forward's ingress node token
+// resolved, whatever the backend: the bridge worker sends it to NodeX with
+// a clean agent job's translation request, as the stored payload once did.
+func withIngressNodeToken(db *gorm.DB, req nodeXForwardExecuteRequest) (nodeXForwardExecuteRequest, error) {
+	if req.PanelForward == nil {
+		return req, nil
+	}
+	forward := *req.PanelForward
+	if err := resolveForwardNodeToken(db, &forward.IngressNode); err != nil {
+		return req, err
+	}
+	req.PanelForward = &forward
+	return req, nil
+}
+
+// resolveForwardNodeToken fills a node payload's token for the call about
+// to be made, at the node's pinned endpoint only.
+func resolveForwardNodeToken(db *gorm.DB, payload *nodeXForwardNodePayload) error {
+	if payload.ID == 0 {
+		return nil
+	}
+	var node model.ForwardNode
+	if err := db.First(&node, payload.ID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return fmt.Errorf("forward node %d not found", payload.ID)
+		}
+		return err
+	}
+	token, err := ForwardNodeAPIToken(db, &node)
+	if err != nil {
+		return err
+	}
+	payload.APIToken = token
+	return nil
 }
 
 func newNodeXForwardRuntimeClient(configService *SystemConfigService) *nodeXForwardRuntimeClient {

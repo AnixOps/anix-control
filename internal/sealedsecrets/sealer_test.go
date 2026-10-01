@@ -140,7 +140,7 @@ func TestEveryListedRouteAndFieldIsSubstituted(t *testing.T) {
 		}
 		assert.Equal(t, len(handles(sealed.Body)), sealed.Count, id)
 	}
-	assert.Equal(t, 8, requestRoutes, "the request routes of node-ops-service.md section 6")
+	assert.Equal(t, 9, requestRoutes, "the request routes of node-ops-service.md sections 3.7 and 6")
 }
 
 // The placeholder keeps the stored secret, and empty values carry none:

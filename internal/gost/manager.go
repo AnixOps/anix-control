@@ -2,6 +2,7 @@ package gost
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -49,10 +50,17 @@ func (m *Manager) createClient(node *model.ForwardNode) (*Client, error) {
 		metricsHost = fmt.Sprintf("http://%s:%d", node.Host, node.MetricsPort)
 	}
 
+	// The token is presented only at the node's pinned endpoint
+	// (node-ops-service.md section 3.8): an unconfirmed address gets a
+	// client without it, which still reads the metrics endpoint.
+	token, err := nodesecrets.ForwardNodeTokenAt(m.db, node)
+	if err != nil && !errors.Is(err, nodesecrets.ErrEndpointUnconfirmed) {
+		return nil, err
+	}
 	client := NewClient(&Config{
 		Host:        fmt.Sprintf("http://%s:%d", node.Host, node.APIPort),
 		MetricsHost: metricsHost,
-		APIToken:    nodesecrets.ForwardNodeToken(m.db, node),
+		APIToken:    token,
 	})
 
 	m.clients.Store(node.ID, client)

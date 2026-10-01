@@ -174,16 +174,24 @@ func (w *ForwardAgentBridgeWorker) dispatchClaimedJob(ctx context.Context, job *
 	if err := json.Unmarshal([]byte(job.Payload), &payload); err != nil {
 		return w.finishJobFailure(job, "invalid clean_agent payload: "+err.Error())
 	}
+	// The stored payload carries no token (a row written before NO-7 is
+	// scrubbed at start); NodeX gets the ingress node's token with the
+	// translation request only, and only for the node's pinned endpoint.
+	payload, err := withIngressNodeToken(w.queryDB(), payload)
+	if err != nil {
+		return w.finishJobFailure(job, "NodeX translate failed: "+err.Error())
+	}
 
 	task, err := w.nodex.Translate(ctx, job.ID, *job.NodeID, payload)
 	if err != nil {
 		return w.finishJobFailure(job, "NodeX translate failed: "+err.Error())
 	}
 
+	// The stored task parameters never hold a credential NodeX copied in.
 	paramsJSON := "{}"
 	if len(task.Params) > 0 {
 		if encoded, marshalErr := json.Marshal(task.Params); marshalErr == nil {
-			paramsJSON = string(encoded)
+			paramsJSON, _ = ScrubForwardRuntimeJobPayload(string(encoded))
 		}
 	}
 

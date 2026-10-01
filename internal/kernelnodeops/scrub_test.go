@@ -53,7 +53,7 @@ func resultCases(t *testing.T) []*kernelnodeopsv1.OperationResult {
 		result.ProtoReflect().Set(field, result.ProtoReflect().NewField(field))
 		cases = append(cases, result)
 	}
-	require.Len(t, cases, 12, "a result type was added: it is covered by this walk")
+	require.Len(t, cases, 13, "a result type was added: it is covered by this walk")
 	return cases
 }
 
@@ -153,7 +153,7 @@ func TestResultsNeverCarrySecrets(t *testing.T) {
 			}
 		}
 	}
-	require.Equal(t, 10, withText)
+	require.Equal(t, 11, withText)
 	require.Greater(t, checked, 5000)
 }
 

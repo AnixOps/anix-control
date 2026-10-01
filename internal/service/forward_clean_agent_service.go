@@ -477,9 +477,13 @@ func normalizeForwardCleanAgentReportStatus(input ForwardCleanAgentReportInput) 
 	return status, message
 }
 
+// buildForwardCleanAgentAction is a claimed job as the agent receives it.
+// The payload is served without a node token: a payload written before
+// NO-7 is scrubbed here until the start-up pass has rewritten it.
 func buildForwardCleanAgentAction(job *model.ForwardRuntimeJob) ForwardCleanAgentAction {
 	payload := json.RawMessage("{}")
-	if trimmed := strings.TrimSpace(job.Payload); trimmed != "" {
+	stored, _ := ScrubForwardRuntimeJobPayload(job.Payload)
+	if trimmed := strings.TrimSpace(stored); trimmed != "" {
 		payload = json.RawMessage(trimmed)
 	}
 	return ForwardCleanAgentAction{

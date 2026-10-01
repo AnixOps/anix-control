@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
 	kernelsettingsv1 "github.com/AnixOps/anix-control/sdk/api/kernelsettings/v1"
 	"github.com/AnixOps/anix-control/sdk/packagebridgesdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
@@ -50,11 +51,12 @@ func TestGostMeshHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) {
 		RouteID: "ticket.user.ticket.get", BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
 	})
 	require.Error(t, err)
-	handlers := (&native.Service{Settings: kernelsettingsv1.NewKernelSettingsClient(nil)}).Handlers()
+	handlers := (&native.Service{Settings: kernelsettingsv1.NewKernelSettingsClient(nil), NodeOps: kernelnodeopsv1.NewKernelNodeOpsClient(nil)}).Handlers()
 	require.Len(t, handlers, len(gostMeshRoutes))
 	withoutSettings := (&native.Service{}).Handlers()
 	require.NotContains(t, withoutSettings, native.NodeXStatusRouteID, "without KernelSettings the NodeX routes stay legacy")
 	require.NotContains(t, withoutSettings, native.NodeXDoctorRouteID, "without KernelSettings the NodeX routes stay legacy")
+	require.NotContains(t, withoutSettings, native.TestConnectionRouteID, "without KernelNodeOps the connection test stays legacy")
 	for route := range gostMeshRoutes {
 		require.Contains(t, handlers, route, "every native route has a handler")
 	}
