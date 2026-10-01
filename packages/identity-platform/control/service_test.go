@@ -95,7 +95,7 @@ func TestIdentityServiceDispatchesDeclaredAdministrativeRouteThroughBridge(t *te
 	})
 
 	require.NoError(t, err)
-	require.Equal(t, "identity.admin.users.get", bridge.operation)
+	require.Equal(t, "identity.admin.users.get", bridge.operation, "a route with no native mode relays to the legacy handler")
 }
 
 func TestNilIdentityServiceHealthIsUnhealthyWithoutPanicking(t *testing.T) {
@@ -169,9 +169,11 @@ func TestIdentityHostNativeHandlersAreTheNativeRoutes(t *testing.T) {
 	require.Contains(t, withoutSubscriber, native.ProfileRouteID)
 }
 
-// identity-platform reads the user directory view (login's expiry check)
-// and may reset traffic and subscription credentials; it holds no other
-// subscriber family and adopts no kernel table.
+// identity-platform reads the user directory view (login's expiry check,
+// the administrator's user directory), the entitlement view (the
+// directory's subscription summary) and the plan name view (the directory's
+// plans), and may reset traffic and subscription credentials; it holds no
+// other subscriber family and adopts no kernel table.
 func TestIdentityManifestCapabilities(t *testing.T) {
 	raw, err := os.ReadFile("../manifest.template.json")
 	require.NoError(t, err)
@@ -180,8 +182,8 @@ func TestIdentityManifestCapabilities(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(raw, &manifest))
 	require.ElementsMatch(t, []string{
-		"kernel.identity.v1", "kernel.storage.v1", "kernel.view:kapi_user_directory_v1",
-		"kernel.subscriber.traffic.v1", "kernel.subscriber.credentials.v1",
+		"kernel.identity.v1", "kernel.storage.v1", "kernel.view:kapi_user_directory_v1", "kernel.view:kapi_subscriber_entitlement_v1",
+		"kernel.view:kapi_plan_name_v1", "kernel.subscriber.traffic.v1", "kernel.subscriber.credentials.v1",
 	}, manifest.Capabilities)
 }
 
@@ -288,9 +290,12 @@ func TestIdentityHostResetsThroughKernelSubscriberOverTheBridge(t *testing.T) {
 	require.Equal(t, native.ResetRequestID("reset_traffic", 2, "key-1"), recorder.traffic[0].GetRequestId())
 	require.Equal(t, []uint64{2}, recorder.traffic[0].GetUserIds())
 
-	// The bridged list still relays to the legacy handler.
-	dispatchRoute(t, host.Router, "identity.admin.users.get", pluginhostsdk.DispatchRequest{Method: "GET"})
-	require.Equal(t, "identity.admin.users.get", storage.operation)
+	// The bridged invite list still relays to the legacy handler, and so
+	// does the user list while its mode is legacy.
+	dispatchRoute(t, host.Router, "identity.user.invite.get", pluginhostsdk.DispatchRequest{Method: "GET"})
+	require.Equal(t, "identity.user.invite.get", storage.operation)
+	dispatchRoute(t, host.Router, native.AdminUsersRouteID, pluginhostsdk.DispatchRequest{Method: "GET"})
+	require.Equal(t, native.AdminUsersRouteID, storage.operation)
 }
 
 func dispatchRoute(t *testing.T, router *pluginhostsdk.Router, route string, request pluginhostsdk.DispatchRequest) pluginhostsdk.DispatchResponse {

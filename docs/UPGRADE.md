@@ -656,6 +656,48 @@ nodes need nothing.
   still answers a node's API key and secret, for the deployment helper and
   Ansible. Each read is now recorded in `v2_audit_log` with action `reveal`.
 
+### The Administrator's User List No Longer Shows Subscription Tokens
+
+`GET /api/v2/admin/users` answered every listed user's whole `v2_user` row,
+the subscription token and proxy UUID included, with the plan's whole row.
+Each user in `data.list` now carries only the account, the subscription
+summary and its plan's `id` and `name`; `total` and the query parameters
+are unchanged.
+
+- **Kept:** `id`, `email`, `balance`, `commission_balance`, `device_limit`,
+  `speed_limit`, `flowResetTime`, `transfer_enable`, `u`, `d`, `plan_id`,
+  `group_id`, `expired_at`, `banned`, `is_admin`, `is_staff` and
+  `created_at`.
+- **Slimmed:** `plan` is `{id, name}`, as in the order answers. A user
+  without a plan, or whose plan no longer exists, has no `plan`, as before.
+  The rest of the plan row is gone: `group_id`, `transfer_enable`,
+  `speed_limit`, `device_limit`, `content`, `show`, `sort`, `renew`,
+  `reset_price`, `reset_traffic_method`, `capacity_limit`, the seven prices,
+  `created_at` and `updated_at`.
+- **Removed:** `token`, `uuid`, `invite_user_id`, `telegram_id`, `discount`,
+  `commission_type`, `commission_rate`, `remark_content`, `last_login_at`
+  and `updated_at`. Password hashes were never serialized.
+- **Where to read them.** `GET /api/v2/admin/users/:id` still answers one
+  user's whole row, token, UUID, remark and plan included. A whole plan is
+  in `GET /api/v2/admin/plans/:id`.
+- **Order.** Users created in the same second now keep a stable order
+  (`created_at DESC, id DESC`), so pages no longer repeat or skip them.
+
+The bundled administrator page reads the token from the user detail when it
+copies a subscription link and fills the edit form from the user detail; it
+still names plans with `plan.name`. Control Center's
+v2board plugin passes the answer through unchanged. A script that read
+tokens from the list must read `GET /api/v2/admin/users/:id` per user.
+`GET /api/v2/admin/users/stats` is unchanged.
+
+The identity module can serve both routes natively (`native-flagged`) once
+identity is authoritative (see the next section). It reads the subscription
+summary from the view `kapi_subscriber_entitlement_v1` and the plan names
+from `kapi_plan_name_v1`, so its signed release declares
+`kernel.view:kapi_subscriber_entitlement_v1` and
+`kernel.view:kapi_plan_name_v1`: install that release before switching the
+routes to `native`.
+
 ## Moving Logins To The Identity Module
 
 From 4.1 the identity module can own accounts, passwords, MFA and token

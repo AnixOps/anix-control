@@ -122,6 +122,9 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 }
 
 // GetUserList godoc
+// Each user carries the account and subscription summary
+// (service.UserListItem), never the subscription token or proxy uuid, which
+// the user detail answers for one user.
 // @Summary 获取用户列表
 // @Description 管理员获取用户列表
 // @Tags 管理端-用户

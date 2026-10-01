@@ -1486,7 +1486,7 @@
       "path": "/api/v2/admin/users",
       "package_id": "identity-platform",
       "route_id": "identity.admin.users.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "identity-bridge"
     },
     {
@@ -1558,7 +1558,7 @@
       "path": "/api/v2/admin/users/stats",
       "package_id": "identity-platform",
       "route_id": "identity.admin.users.stats.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "identity-bridge"
     },
     {

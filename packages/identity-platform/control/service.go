@@ -25,8 +25,12 @@ const identityMigrationRoute = "migration.identity-platform.001_identity_platfor
 //   - group A (login, registration, MFA, the admin MFA configuration and the
 //     administrator's account writes) switches with the identity cutover;
 //   - the account reads (profile, dashboard, the administrator's user
-//     detail) read identity's accounts, so the kernel lets them leave
-//     legacy only while identity is authoritative;
+//     detail, user list and user statistics) read identity's accounts, so
+//     the kernel lets them leave legacy only while identity is
+//     authoritative. The list and the statistics search identity's
+//     accounts together with Control's subscriber views
+//     (kapi_user_directory_v1, kapi_subscriber_entitlement_v1) in one query
+//     on the package's own storage (native.UserDirectory);
 //   - the administrator's traffic and subscription resets change only the
 //     subscriber, through KernelSubscriber, and switch at any time.
 var identityRoutes = map[string]struct{}{
@@ -39,7 +43,9 @@ var identityRoutes = map[string]struct{}{
 	"identity.admin.users.id.reset_subscribe.post":   {},
 	"identity.admin.users.id.reset_traffic.post":     {},
 	"identity.admin.users.id.unban.post":             {},
+	"identity.admin.users.get":                       {},
 	"identity.admin.users.post":                      {},
+	"identity.admin.users.stats.get":                 {},
 	"identity.auth.login":                            {},
 	"identity.auth.register":                         {},
 	"identity.user.dashboard.get":                    {},
@@ -53,22 +59,13 @@ var identityRoutes = map[string]struct{}{
 }
 
 // bridgedRoutes are the package's compatibility routes without a native
-// handler; they always relay to the kernel's legacy handler:
-//   - the administrator's user list filters, orders and pages one query over
-//     identity's ban flag and the subscriber's expiry and plan together,
-//     and shows every listed user's subscription token and proxy uuid;
-//     identity's store and Control's subscribers cannot answer it as one
-//     query, and no contract lists subscribers with their credentials;
-//   - the user statistics count active users, who are not banned (identity)
-//     and not expired (subscriber), in one predicate over both;
-//   - the user's invite codes and their generation are affiliate data, not
-//     identity's: Control keeps the codes (v2_invite_code, which
-//     registration consumes inside Control), and the answer adds the
-//     commission balance and the invite statistics, which join orders and
-//     commission records of the order and affiliate packages.
+// handler; they always relay to the kernel's legacy handler. The user's
+// invite codes and their generation are affiliate data, not identity's:
+// Control keeps the codes (v2_invite_code, which registration consumes
+// inside Control), and the answer adds the commission balance and the
+// invite statistics, which join orders and commission records of the order
+// and affiliate packages.
 var bridgedRoutes = map[string]struct{}{
-	"identity.admin.users.get":           {},
-	"identity.admin.users.stats.get":     {},
 	"identity.user.invite.generate.post": {},
 	"identity.user.invite.get":           {},
 }

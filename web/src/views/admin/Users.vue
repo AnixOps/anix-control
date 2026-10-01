@@ -273,7 +273,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import {
   assignAdminUserTunnel, banUser, createUser, getAdminUserTunnelList, getForwardTunnels, getSpeedLimitList,
-  getTrafficHourly,
+  getAdminUser, getTrafficHourly,
   getSubscriptionSettings,
   getUserList, getUserStats, removeAdminUserTunnel, resetUserSubscribe, resetUserTraffic, resetUserTunnelTraffic,
   unbanUser, updateAdminUserTunnel, updateUser
@@ -414,12 +414,27 @@ const fetchUsers = async () => {
 const fetchStats = async () => {
   try { stats.value = getResData(await getUserStats()) || {} } catch (err) { console.error(t('adminUsers.messages.fetchStatsFailed'), err) }
 }
-const editUser = (user) => {
+// fetchUserDetail reads one user's whole row (remark, subscription token)
+// from the user detail; the list carries only the account and subscription
+// summary.
+const fetchUserDetail = async (id) => {
+  const detail = getResData(await getAdminUser(id), t('adminUsers.messages.fetchUserFailed'))
+  return detail && typeof detail === 'object' ? detail : {}
+}
+const editUser = async (user) => {
+  let detail = {}
+  try {
+    detail = await fetchUserDetail(user.id)
+  } catch (err) {
+    // The list row still fills the form; a remark not loaded is not sent.
+    console.error(t('adminUsers.messages.fetchUserFailed'), err)
+  }
+  const merged = { ...user, ...detail }
   editingUser.value = {
-    ...user,
-    flowResetTime: Number(user?.flowResetTime || 0),
-    speed_limit: Number(user?.speed_limit || 0),
-    device_limit: Number(user?.device_limit || 0)
+    ...merged,
+    flowResetTime: Number(merged?.flowResetTime || 0),
+    speed_limit: Number(merged?.speed_limit || 0),
+    device_limit: Number(merged?.device_limit || 0)
   }
   showEditModal.value = true
 }
@@ -503,11 +518,18 @@ const readSubscriptionSettings = (res) => {
 }
 
 const copySubscribe = async (user) => {
-  if (!user.token) {
+  let token = ''
+  try {
+    token = (await fetchUserDetail(user.id)).token || ''
+  } catch (err) {
+    notify(readApiError(err, t('adminUsers.messages.fetchUserFailed')))
+    return
+  }
+  if (!token) {
     notify(t('adminUsers.messages.noToken'))
     return
   }
-  const url = buildSubscribeUrl(user)
+  const url = buildSubscribeUrl({ token })
   if (await copyToClipboard(url)) {
     notify(t('adminUsers.messages.subscribeCopied'))
   } else {

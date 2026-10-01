@@ -65,7 +65,8 @@ var KernelAPIViews = []KernelAPIView{
 	},
 	{
 		// A plan's name, which the order list and detail answers show
-		// next to the order. No price, content or limit.
+		// next to the order and the administrator's user list next to the
+		// user. No price, content or limit.
 		Name:   "kapi_plan_name_v1",
 		Source: "v2_plan",
 		Query:  "SELECT id, name FROM v2_plan",

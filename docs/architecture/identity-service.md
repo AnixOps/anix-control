@@ -176,19 +176,20 @@ instance's generation.
   byte-compatible with v2 (panel envelope, Chinese error strings,
   `Retry-After`, the MFA response shapes and the permission fields). Parity is
   proven with `internal/tests/packagecompat`.
-- **Account reads, native on their own (in place):** the profile, the
-  dashboard and the admin user detail take the account from identity's store
-  and the subscriber, token included, from `KernelIdentity.GetSubscriber`,
-  one user per call. They leave legacy mode only while identity is
-  authoritative, and the rollback returns them to legacy; they are not part
-  of group A.
+- **Account reads, native on their own (in place):**
+  - the profile, the dashboard and the admin user detail take the account
+    from identity's store and the subscriber, token included, from
+    `KernelIdentity.GetSubscriber`, one user per call;
+  - the admin user list and statistics search the
+    [user directory](#user-directory): identity's accounts joined with
+    Control's subscriber views, with no token.
+
+  They leave legacy mode only while identity is authoritative, and the
+  rollback returns them to legacy; they are not part of group A.
 - **Resets, native at any time (in place):** the admin traffic and
   subscription resets change only the subscriber, through
   `KernelSubscriber.ResetTraffic` and `ResetCredentials`.
-- **Stay bridged:** the admin user list and stats, whose one query mixes
-  identity's ban flag with the subscriber's expiry (the list also shows
-  every user's subscription token), and the user's invite routes, which are
-  affiliate data.
+- **Stay bridged:** the user's invite routes, which are affiliate data.
 - **Moved to other packages, still bridged (done, step 7):**
   - system configuration, audit and backup (12 routes) → new package
     `platform`;
@@ -205,6 +206,69 @@ instance's generation.
   - **Upgrade order.** Install `platform` and `affiliate`, and upgrade
     `forward`, before upgrading identity-platform: the routes then keep
     serving throughout.
+
+## User directory
+
+The administrator's user list (`GET /api/v2/admin/users`) and statistics
+(`GET /api/v2/admin/users/stats`) filter, order, page and count users by
+fields of both owners: e-mail and the ban flag are identity's, plan and
+expiry Control's. "Active", for example, is not banned (identity) and not
+expired (Control).
+
+- **Choice: identity serves the search, joining Control's views in its own
+  storage (in place, `native.UserDirectory`).**
+  - identity-platform's storage role reads kernel API views on the same
+    database: `kapi_user_directory_v1` (which subscribers exist, since when,
+    and Control's projection of the identity fields),
+    `kapi_subscriber_entitlement_v1` (plan, group, traffic, limits, reset
+    day, expiry and balances) and `kapi_plan_name_v1` (a plan's name).
+    None shows a token or UUID. The package declares
+    `kernel.view:kapi_subscriber_entitlement_v1` and
+    `kernel.view:kapi_plan_name_v1` for this.
+  - One SQL statement joins the views with identity's `account` table.
+    The database filters, orders, pages and counts; nothing is materialized
+    in the module.
+  - Identity's account gives e-mail, administrator, staff and ban flags.
+    A subscriber identity has no account for keeps Control's fields, as the
+    user detail does. The rows are Control's subscribers, as v2 listed them.
+- **Rejected.**
+  - *A kernel-side search RPC over the projection.* It would answer
+    Control's projection of the identity fields, which the account reads
+    deliberately do not use, and it needs a new contract family for one
+    caller.
+  - *A two-phase query.* A predicate over both owners has no page boundary
+    in either store alone. Paging would need one side's whole id set,
+    intersected in memory, and the total and the page would come from
+    different reads.
+- **Consistent paging.**
+  - The total and the page are read in one read-only transaction (repeatable
+    read on PostgreSQL), so a page always agrees with its total.
+  - The order `created_at DESC, id DESC` is total, so pages neither repeat
+    nor skip users created in the same instant. The legacy handler gained
+    the same tie-break; it ordered by `created_at` alone.
+- **Statistics.** One statement over the same join counts:
+  - all users;
+  - active: not banned, and no expiry or one after now;
+  - expired: an expiry at or before now;
+  - banned;
+  - new today: created since midnight UTC.
+- **Authority.** Both routes read identity's accounts. They are in
+  `service.IdentityAccountReadRoutes`: native or shadow only while identity
+  is authoritative, back to legacy on a rollback.
+- **No subscription tokens in the list.**
+  - Each user is `id`, `email`, `balance`, `commission_balance`,
+    `device_limit`, `speed_limit`, `flowResetTime`, `transfer_enable`, `u`,
+    `d`, `plan_id`, `group_id`, `expired_at`, `banned`, `is_admin`,
+    `is_staff` and `created_at`, with `plan` as `{id, name}` while the plan
+    exists (as in the order answers), in legacy and native mode alike.
+  - The token, proxy UUID, remark and the rest of the row come from the
+    user detail, one user at a time (`KernelIdentity.GetSubscriber`). The
+    administrator's page calls it to copy a subscription link or edit a
+    user.
+  - `docs/UPGRADE.md` lists the removed fields.
+- **No new identity API.** The search serves identity-platform's own
+  routes. `IdentityService` is unchanged until another module needs the
+  directory.
 
 ## Failure behaviour
 
@@ -365,11 +429,18 @@ instance's generation.
       any time. Their request ids, `identity.reset_traffic:<user>:<digest>`
       and `identity.reset_subscribe:<user>:<digest>`, are the legacy
       handlers' too, so a retry applies once whichever side serves it.
-    - **Stay bridged.** The admin user list and statistics, and the user's
-      invite code list and generation (affiliate data; Control keeps the
-      codes).
+    - **Stay bridged.** The user's invite code list and generation
+      (affiliate data; Control keeps the codes).
     - `internal/tests/identitycompat` proves the parity, and that the reads
       answer identity's account rather than the projection.
+15. The administrator's user directory (in place): the user list and
+    statistics search identity's accounts with Control's subscriber views
+    (see [User directory](#user-directory)).
+    - The list answers no subscription token or UUID, in either mode.
+    - `internal/tests/identitycompat` proves byte parity with the legacy
+      handlers on SQLite and PostgreSQL, and that the answers follow
+      identity's account rather than the projection.
+    - A PostgreSQL test runs the search as the package's own role.
 
 Deferred:
 - deleting the legacy identity handlers (after finalize and the rollback

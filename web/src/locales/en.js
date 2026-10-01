@@ -2915,6 +2915,7 @@ export default {
       resetFailed: 'Reset failed',
       userFlowReset: 'User traffic reset successfully',
       tunnelFlowReset: 'Tunnel traffic reset successfully',
+      fetchUserFailed: 'Failed to load the user',
       noToken: 'This user has no subscription token',
       subscribeCopied: 'Subscription link copied to clipboard',
       copyManual: 'Auto-copy failed, please copy the subscription link manually:',

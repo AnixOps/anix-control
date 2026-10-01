@@ -28,15 +28,15 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   WebSocket routes use `registeredPackageWebSocketRoute`.
 - `config/package-extraction.json` records each route's extraction mode
   (`bridged`, `native-flagged` or `native`) and where its legacy handler lives
-  (`router`, `identity-bridge` or `none`). 158 routes are `native-flagged`:
-  identity-platform (20: group A's 15, the profile, dashboard and user detail,
-  and the traffic and subscription resets), affiliate (8), forward (17),
-  gost-mesh (3), knowledge (6), machine-telemetry (2), notification (22),
-  order (13), payment (16), plan (7), platform (5), protocol-runtime (3),
-  proxy-node (7), subscription (20), ticket (8) and wireguard (1). The rest
-  are `bridged`. The identity routes are `identity-bridge`.
-  `check_plugin_only_routes.py` enforces the map against the router and the
-  identity bridge.
+  (`router`, `identity-bridge` or `none`). 160 routes are `native-flagged`:
+  identity-platform (22: group A's 15, the profile, dashboard, user detail,
+  user list and user statistics, and the traffic and subscription resets),
+  affiliate (8), forward (17), gost-mesh (3), knowledge (6), machine-telemetry
+  (2), notification (22), order (13), payment (16), plan (7), platform (5),
+  protocol-runtime (3), proxy-node (7), subscription (20), ticket (8) and
+  wireguard (1). The rest are `bridged`. The identity routes are
+  `identity-bridge`. `check_plugin_only_routes.py` enforces the map against
+  the router and the identity bridge.
 - Request path: gin middleware -> `compatv2` gateway -> route resolution
   (`internal/compat/v2/registry.go`, `verifiedRouteSource`) -> package host
   process over Unix gRPC -> package bridge (FD 4) -> **the legacy in-kernel
@@ -343,14 +343,18 @@ refresh of the kernel's in-memory copies.
     the configuration they keep in memory. Neither path records an audit
     entry.
 - **Identity leftovers (in place).** 5 of identity-platform's 9 routes
+  - Updating the configuration stays bridged. It writes
+    `invite.frontend.config` into `v2_system_config`, which no package may
+    adopt and no contract writes.
+- **Identity leftovers (in place).** 7 of identity-platform's 9 routes
   outside group A run natively, proved by `internal/tests/identitycompat`
   (byte parity and the same Control state, on SQLite and PostgreSQL).
   identity-platform adopts no kernel table.
   - **Account reads:** the user's profile and dashboard and the
-    administrator's user detail.
+    administrator's user detail, user list and user statistics.
     - The account (email, administrator, staff and ban flags) comes from
       identity's own store. Identity's store is current only while identity
-      is authoritative, so the kernel lets these three routes leave legacy
+      is authoritative, so the kernel lets these five routes leave legacy
       mode (shadow or native) only then
       (`service.IdentityAccountReadRoutes`). The rollback returns them to
       legacy with group A. The cutover leaves them to the operator: they are
@@ -364,6 +368,20 @@ refresh of the kernel's in-memory copies.
     - The plugin permissions come from `ResolveActorAccess`.
     - The dashboard is computed on every request; the kernel cached it for
       30 seconds.
+  - **User directory:** the administrator's user list and statistics
+    (`native.UserDirectory`, [identity-service.md](identity-service.md#user-directory)).
+    - One query on identity-platform's own storage joins its `account`
+      table with `kapi_user_directory_v1` and the newly declared
+      `kapi_subscriber_entitlement_v1` and `kapi_plan_name_v1`. It filters
+      by e-mail, plan and status ("active" is not banned in identity and
+      not expired in Control), orders by `created_at DESC, id DESC`, pages
+      and counts.
+    - The total and the page come from one read-only, repeatable-read
+      transaction, so they agree.
+    - The list no longer shows any user's subscription token or proxy UUID,
+      in legacy mode either: each user is the account, the subscription
+      summary and its plan as `{id, name}`. The token is read for one user
+      from the user detail (`docs/UPGRADE.md` lists the removed fields).
   - **Resets:** the administrator's traffic reset and subscription reset.
     - They change only the subscriber, through
       `KernelSubscriber.ResetTraffic` (`kernel.subscriber.traffic.v1`) and
@@ -377,18 +395,12 @@ refresh of the kernel's in-memory copies.
       answers the token the first one issued.
     - `ResetCredentials` and `AdjustEntitlement` now refuse a subscriber
       that does not exist (`NotFound`) instead of recording an empty change.
-  - **Stay bridged:**
-    - the administrator's user list: it filters, orders and pages one
-      query over identity's ban flag and email and the subscriber's expiry
-      and plan, and shows every listed user's subscription token and proxy
-      uuid, which no contract lists;
-    - the user statistics: "active" means not banned (identity) and not
-      expired (subscriber), one predicate over both stores;
-    - the user's invite codes and their generation: affiliate data, not
-      identity's. Control keeps the codes (`v2_invite_code`, which
-      registration consumes inside Control), and the answer adds the
-      commission balance and invite statistics that join the order and
-      affiliate packages' tables. They belong with the affiliate package.
+  - **Stay bridged:** the user's invite codes and their generation. They
+    are affiliate data, not identity's. Control keeps the codes
+    (`v2_invite_code`, which registration consumes inside Control), and the
+    answer adds the commission balance and invite statistics that join the
+    order and affiliate packages' tables. They belong with the affiliate
+    package.
 - **Subscription (in place).** 20 of 25 routes run on the adopted
   `v2_subscription_group`, `v2_subscription_template`,
   `v2_plan_subscription_group` and `v2_subscription_group_node_protocols`
@@ -791,7 +803,7 @@ shapes; the first extraction step adopts the existing `v2_*` tables in place.
 | wireguard (T12) | 1 | peer lifecycle, generated config | package migration (names not fixed) | Needs anix-agent revival |
 | protocol-runtime (T12) | 20 | protocol composition, runtime-adapter selection, Agent task/monitor | package migration (names not fixed) | Needs anix-agent revival |
 | machine-telemetry, nftables-forward, gost-mesh, nat-egress (T12) | 5 / 0 / 3 / 0 | keep runtime semantics; add v2 entrypoint, generation, `RuntimeStatus` reports | — | Agent-target runtime packages |
-| identity-platform | 24 | stays bridged until the identity cutover | — | Only migrations move to the lease |
+| identity-platform | 24 | group A switches with the identity cutover | — | 22 native-flagged (section 3.4); the two invite routes bridged |
 | platform | 12 | system configuration, audit, backup | — | Moved from identity-platform after v4.0.0; bridged |
 | affiliate | 8 | commissions, withdrawals, invite statistics and configuration | — | Moved from identity-platform after v4.0.0; 7 native-flagged (section 3.4), the configuration update bridged |
 
