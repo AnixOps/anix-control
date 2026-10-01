@@ -669,6 +669,39 @@
     ledger and configuration, against the real KernelSubscriber server. The
     PostgreSQL run is part of CI. The parity harness now tells a path its
     route does not match from a 404 the handler answers.
+- **Forward module.** `packages/forward` has its own host and serves 17 of
+  its 80 routes natively: the forward lists and display order, the tunnel
+  list, creation and the deletion of an unused tunnel, the tunnels a
+  forward may use, granting and listing tunnel permissions, a forward's
+  ingress latencies, the node statistics, the user's legacy rules and the
+  administrator's `POST /api/v2/user/reset`.
+  - It runs on `v2_forward`, `v2_forward_tunnel`, `v2_forward_user_tunnel`,
+    `v2_speed_limit`, `v2_forward_rule` and `v2_forward_latency_bucket`,
+    adopted in place. None of its native routes changes what a node runs.
+  - Forward nodes are read through the new `kapi_forward_node_v1` (every
+    column but `api_token`), the runtime backend through the new
+    `kapi_forward_runtime_settings_v1` (three keys of `v2_system_config`, a
+    `security_barrier` view), users through `kapi_user_directory_v1` and
+    their speed limit through `kapi_subscriber_entitlement_v1`.
+  - `v2_forward_node`, `v2_forward_clean_agent` and `v2_forward_runtime_job`
+    are now protected kernel tables that no package may adopt: they hold
+    the forward nodes' API tokens, the clean agents' tokens, and clean agent
+    jobs whose payloads carry a node's token.
+  - The subscriber traffic reset (`POST /api/v2/user/reset`, type 1) goes
+    through `KernelSubscriber.ResetTraffic` (`kernel.subscriber.traffic.v1`).
+    Its request id is `forward.reset_traffic:<user>:<digest>`, a digest of
+    the request's `Idempotency-Key` (else its request id); the legacy
+    handler now derives and records the same id, so a retry applies once
+    whichever side serves it.
+  - The other 63 routes stay bridged, with the reason in the host's route
+    map: forward nodes and Ansible machines (node tokens, the kernel's gost
+    client cache, probes), every change that applies forwards or legacy
+    rules on nodes, diagnoses, runtime status and jobs, the observability
+    routes that read `v2_node`, clean agents, and flow accounting.
+  - `internal/tests/forwardcompat` proves byte parity on SQLite and
+    PostgreSQL (167 cases each) and the same forwards, tunnels,
+    permissions, counters, request ledger and change log, against the real
+    KernelSubscriber server. The PostgreSQL run is part of CI.
 - **Identity routes outside group A.** identity-platform serves 5 of the 9
   natively: the user's profile and dashboard, and the administrator's user
   detail, traffic reset and subscription reset.

@@ -230,7 +230,7 @@
       "path": "/api/v2/admin/forward/list",
       "package_id": "forward",
       "route_id": "forward.admin.forward.list.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -334,7 +334,7 @@
       "path": "/api/v2/admin/forward/observability/multi-ingress",
       "package_id": "forward",
       "route_id": "forward.admin.forward.observability.multi_ingress.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -454,7 +454,7 @@
       "path": "/api/v2/admin/forward/stats",
       "package_id": "forward",
       "route_id": "forward.admin.forward.stats.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -486,7 +486,7 @@
       "path": "/api/v2/admin/forward/update-order",
       "package_id": "forward",
       "route_id": "forward.admin.forward.update_order.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1406,7 +1406,7 @@
       "path": "/api/v2/admin/tunnel/create",
       "package_id": "forward",
       "route_id": "forward.admin.tunnel.create.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1414,7 +1414,7 @@
       "path": "/api/v2/admin/tunnel/delete",
       "package_id": "forward",
       "route_id": "forward.admin.tunnel.delete.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1430,7 +1430,7 @@
       "path": "/api/v2/admin/tunnel/list",
       "package_id": "forward",
       "route_id": "forward.admin.tunnel.list.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1446,7 +1446,7 @@
       "path": "/api/v2/admin/tunnel/user/assign",
       "package_id": "forward",
       "route_id": "forward.admin.tunnel.user.assign.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1454,7 +1454,7 @@
       "path": "/api/v2/admin/tunnel/user/list",
       "package_id": "forward",
       "route_id": "forward.admin.tunnel.user.list.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1470,7 +1470,7 @@
       "path": "/api/v2/admin/tunnel/user/tunnel",
       "package_id": "forward",
       "route_id": "forward.admin.tunnel.user.tunnel.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1702,7 +1702,7 @@
       "path": "/api/v2/forward/list",
       "package_id": "forward",
       "route_id": "forward.forward.list.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1734,7 +1734,7 @@
       "path": "/api/v2/forward/update-order",
       "package_id": "forward",
       "route_id": "forward.forward.update_order.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1982,7 +1982,7 @@
       "path": "/api/v2/tunnel/user/assign",
       "package_id": "forward",
       "route_id": "forward.tunnel.user.assign.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1990,7 +1990,7 @@
       "path": "/api/v2/tunnel/user/list",
       "package_id": "forward",
       "route_id": "forward.tunnel.user.list.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -2006,7 +2006,7 @@
       "path": "/api/v2/tunnel/user/tunnel",
       "package_id": "forward",
       "route_id": "forward.tunnel.user.tunnel.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -2038,7 +2038,7 @@
       "path": "/api/v2/user/forward/rules",
       "package_id": "forward",
       "route_id": "forward.user.forward.rules.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -2262,7 +2262,7 @@
       "path": "/api/v2/user/reset",
       "package_id": "forward",
       "route_id": "forward.user.reset.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {

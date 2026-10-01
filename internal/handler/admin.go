@@ -378,6 +378,11 @@ func (h *AdminHandler) ResetUserSubscribe(c *gin.Context) {
 	panelSuccess(c, gin.H{"token": newToken})
 }
 
+// ResetCompatFlow is the Flux-style POST /api/v2/user/reset: type 1 zeroes a
+// subscriber's traffic, under service.ForwardUserResetRequestID in the
+// subscriber request ledger so that a retry applies once whichever side
+// serves it (the forward package serves the route natively too); type 2
+// zeroes a tunnel permission's traffic and that of its forwards.
 func (h *AdminHandler) ResetCompatFlow(c *gin.Context) {
 	var req compatResetFlowRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -388,7 +393,7 @@ func (h *AdminHandler) ResetCompatFlow(c *gin.Context) {
 	var err error
 	switch req.Type {
 	case 1:
-		err = h.userService.ResetTraffic(req.ID, "")
+		err = h.userService.ResetTraffic(req.ID, service.ForwardUserResetRequestID(req.ID, assignmentToken(c)))
 	case 2:
 		err = h.forwardService.ResetUserTunnelTraffic(req.ID)
 	default:

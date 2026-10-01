@@ -125,8 +125,20 @@ func validateManifestCapabilities(capabilities []string) error {
 	return nil
 }
 
+// forwardCredentialTables hold the credentials the kernel's forward agent
+// authentication checks, or copies of them; a package that could read or
+// write them could act as any forward node or clean agent:
+//   - v2_forward_node holds each forward node's API token, which
+//     authenticates the node's agent (WebSocket, gRPC and REST);
+//   - v2_forward_clean_agent holds each clean agent's token;
+//   - v2_forward_runtime_job holds clean agent jobs, whose payloads carry
+//     the node's API token.
+var forwardCredentialTables = map[string]bool{
+	"v2_forward_node": true, "v2_forward_clean_agent": true, "v2_forward_runtime_job": true,
+}
+
 func protectedKernelTable(table string) bool {
-	if protectedTables[table] {
+	if protectedTables[table] || forwardCredentialTables[table] {
 		return true
 	}
 	for _, prefix := range protectedTablePrefixes {

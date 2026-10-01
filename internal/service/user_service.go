@@ -421,6 +421,17 @@ func AdminUserResetRequestID(kind string, userID uint, token string) string {
 	return fmt.Sprintf("identity.%s:%d:%x", kind, userID, sum[:12])
 }
 
+// ForwardUserResetRequestID names an administrator's subscriber traffic
+// reset through the Flux-style POST /api/v2/user/reset (type 1) in the
+// subscriber request ledger, so a retried request is applied once. token
+// identifies the HTTP request, as for AdminUserResetRequestID. The forward
+// package's native handler derives the same id (packages/forward/native),
+// so a retry is recognized whichever side serves it.
+func ForwardUserResetRequestID(userID uint, token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return fmt.Sprintf("forward.reset_traffic:%d:%x", userID, sum[:12])
+}
+
 // UpdateUserOnceTx applies updates to an existing user through UpdateUserTx
 // once per request id, recording it in the subscriber request ledger: a
 // repeated id changes nothing and reports applied false. A user that does
