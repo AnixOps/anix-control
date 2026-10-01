@@ -22,7 +22,7 @@ func TestNodeOpsCapabilityGrammar(t *testing.T) {
 	}
 	for _, table := range []string{
 		"v4_kernel_node_operation", "v4_kernel_node_operation_event", "v4_kernel_node_operation_target",
-		"v4_kernel_node_desired_config",
+		"v4_kernel_node_desired_config", "v4_kernel_node_config_status",
 	} {
 		require.True(t, protectedKernelTable(table), table)
 		require.True(t, protectedTables[table], "listed by name: %s", table)

@@ -108,6 +108,11 @@ var (
 		// that could read it would read every node's keys; one that could
 		// write it could push a configuration of its own.
 		"v4_kernel_node_desired_config": true,
+		// Applied node configurations (A2-3): what each node's agent last
+		// reported in ConfigStatus, and the revision the kernel verified as
+		// applied. A package that could write it could make a node look
+		// converged on a configuration it never ran.
+		"v4_kernel_node_config_status": true,
 	}
 )
 

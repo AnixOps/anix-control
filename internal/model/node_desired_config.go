@@ -5,8 +5,9 @@ import "time"
 // KernelNodeDesiredConfig is a node's desired configuration
 // (docs/architecture/node-ops-service.md section 5.5): the configuration
 // the kernel built from the node's rows, with the revision and hash that
-// every push and every agent's ConfigStatus name. SyncNode and the kernel
-// writes that change what a node runs rebuild it. The revision grows only
+// every push and every agent's ConfigStatus name. SyncNode rebuilds it,
+// and so does the Agent Control stream for an agent with config.v1 (at its
+// Hello and about once a minute). The revision grows only
 // when the hash changes, so the same configuration keeps its revision.
 //
 // The document holds the node's runtime secrets (protocol keys): the table

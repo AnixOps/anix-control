@@ -102,15 +102,16 @@ are additions to `anix.agent.v1`:
     transports.
 - Older Agents send none of these capabilities or `Hello` fields and skip
   `server_capabilities`, so nothing changes for them.
-- Control serves `users.v1` and `reports.v1`, to proxy nodes (`v2_node`):
-  `server_capabilities` lists `users.v1` for every proxy node (a forward node
-  has no user list and is offered nothing), and `reports.v1` when the
-  Agent's `Hello` lists it too (a forward node's stream is not offered it
-  yet; its reports join with the forward plugins). `config.v1` is not served
-  yet. An Agent that sends a payload the session did not negotiate
-  (`config_status`; or `traffic`, `logs` or `status` without `reports.v1` in
-  both lists) gets `InvalidArgument`, naming the capability it lacks, and
-  the stream ends. A Control built before these payloads existed answers
+- Control serves `config.v1`, `users.v1` and `reports.v1`.
+  `server_capabilities` lists `config.v1` when the Agent's `Hello` lists it,
+  for proxy and forward nodes; `users.v1` for every proxy node (`v2_node`; a
+  forward node has no user list and is not offered it); and `reports.v1`
+  when the Agent's `Hello` lists it too, for proxy nodes (a forward node's
+  stream is not offered it yet; its reports join with the forward plugins).
+  An Agent that sends a payload the session did not negotiate
+  (`config_status` without `config.v1`, or `traffic`, `logs` or `status`
+  without `reports.v1`, in both lists) gets `InvalidArgument`, naming the
+  capability it lacks, and the stream ends. A Control built before these payloads existed answers
   them the same way, as an unknown payload ("control message payload is
   required").
 - `diag.v1` is reserved for node-side diagnostics (`diag.*` operations). It
@@ -121,13 +122,57 @@ are additions to `anix.agent.v1`:
 ### Delivery
 
 - **Configuration** (`config.v1`). A `ConfigSnapshot` is the node's whole
-  configuration at `config_revision`. `config_hash` is the lowercase hex
-  SHA-256 of the exact `config_json` bytes, and `format` names their schema.
-  - Control sends one after `HelloAck` when `Hello.config_revision` is
-    older, and whenever the node's desired configuration changes.
-  - The Agent answers each with `ConfigStatus`: `applied`, or an `error`
-    (also for a hash mismatch or an unknown `format`). A failure becomes the
-    node's runtime health.
+  configuration at `config_revision`: Control's desired configuration of the
+  node, as stored. `config_hash` is the lowercase hex SHA-256 of the exact
+  `config_json` bytes, and `format` names their schema
+  (`anixops.nodeconfig/v1`). The revision grows by one each time the hash
+  changes, and only then.
+  - **What it carries.** The document of a proxy node holds its node row,
+    `raw_config`, its enabled `protocols` (each `config` is what the v2board
+    `GetConfig` of that type renders) and `legacy_pull`: `default`, the
+    UniProxy configuration answer for no `node_type`, and `types`, the
+    answer for each node type the node serves, by normalized type. A pull
+    that UniProxy would refuse is left out. An Agent that applied
+    `legacy_pull` runs what the legacy pull would have given it. A forward
+    node's document holds its node row, `legacy_rules` (the rules
+    `GET /api/v2/forward/agent/rules` serves, with the node's role) and
+    `tunnels`. A snapshot carries no secret the legacy pulls do not send
+    the node, and never the node's API key, secret or token.
+  - **When Control sends one.**
+    - After `HelloAck`, when `Hello.config_revision` is not the desired
+      revision: 0 (none), older, or newer (a revision from another
+      database). The desired configuration is rebuilt from the node's rows
+      first. Same revision: nothing is sent.
+    - When an administrator's node sync (`node.sync`, the legacy sync
+      route) stores a changed configuration, is forced, or finds that the
+      Agent has not applied the stored one. Such an Agent is not sent
+      `node.reload`; an Agent without `config.v1` still is.
+    - When a rebuild from the node's rows, about once a minute per session,
+      moves the revision.
+
+    A session is never sent a revision older than one it was already sent.
+    A snapshot of the revision the Agent has may be sent again (a forced
+    sync).
+  - **The answer.** The Agent answers each snapshot with `ConfigStatus` of
+    its `config_revision` and `config_hash`: `applied`, or `applied: false`
+    with an `error` (also for a hash mismatch or an unknown `format`).
+    `config_revision` is required; a status without one, or without the
+    payload, ends the stream with `InvalidArgument`. Control records the
+    last status per node and judges it against the desired configuration:
+    `applied` or `failed` when it names the desired revision and hash,
+    `stale` for an older revision, `mismatch` otherwise. Only an applied
+    status naming the desired revision and hash becomes the node's applied
+    revision.
+  - **Node syncs.** A `node.sync` that pushed a snapshot ends on the
+    Agent's `ConfigStatus` for that revision and hash, from any session of
+    the node: applied ends it `SUCCEEDED`; not applied ends it `FAILED` with
+    the Agent's `error`. A stale or mismatched status does not end it. A
+    status that Control verified as applied at a newer revision ends it
+    too: the node runs a newer desired configuration. An Agent that
+    reconnects is sent the snapshot again by the `Hello` rule, so it can
+    answer on the new session.
+  - The Agent sends the revision it applied as `Hello.config_revision` on
+    its next connection.
   - A snapshot replaces what the Agent runs, so a lost or repeated snapshot
     is harmless.
 - **Users** (`users.v1`). A `UserDelta` carries the changes after the

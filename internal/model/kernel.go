@@ -501,6 +501,6 @@ func KernelModels() []any {
 		&IdentityTokenKey{}, &IdentityCutoverEvent{}, &SubscriberRequest{}, &SubscriberChange{}, &SettingsRequest{},
 		&NodeCredential{}, &ProtocolSecret{}, &NodeSecretSplit{},
 		&KernelNodeOperation{}, &KernelNodeOperationTarget{}, &KernelNodeOperationEvent{},
-		&AgentEnrollment{}, &AgentCertificate{}, &AgentReportBatch{}, &KernelNodeDesiredConfig{},
+		&AgentEnrollment{}, &AgentCertificate{}, &AgentReportBatch{}, &KernelNodeDesiredConfig{}, &KernelNodeConfigStatus{},
 	}
 }

@@ -94,105 +94,11 @@ func (h *UniProxyHandler) GetConfig(c *gin.Context) {
 	h.sendConfigResponse(c, config)
 }
 
+// buildNewNodeConfig is the node's answer, built by
+// service.BuildUniProxyNodeConfig, which the Agent Control stream's
+// configuration snapshots carry too.
 func (h *UniProxyHandler) buildNewNodeConfig(nodeID uint, preferredType string) (map[string]any, error) {
-	node, err := h.nodeService.GetNode(nodeID)
-	if err != nil {
-		return nil, err
-	}
-
-	preferredType = normalizeNodeType(preferredType)
-	config := make(map[string]any)
-
-	if node.RawConfig != nil && *node.RawConfig != "" {
-		h.nodeService.PrepareNodeRawConfig(node)
-		if err := json.Unmarshal([]byte(*node.RawConfig), &config); err != nil {
-			return nil, fmt.Errorf("invalid raw_config JSON: %v", err)
-		}
-		if config == nil {
-			return nil, fmt.Errorf("raw_config must be a JSON object")
-		}
-		if preferredType != "" {
-			rawType := normalizeNodeType(stringValue(config["node_type"]))
-			if rawType == "" {
-				rawType = normalizeNodeType(stringValue(config["type"]))
-			}
-			if rawType != preferredType {
-				return nil, fmt.Errorf("raw_config protocol %q does not match requested protocol %q", rawType, preferredType)
-			}
-		}
-		if err := service.ValidateWireGuardRuntimeConfig(config); err != nil {
-			return nil, err
-		}
-		h.ensureBaseConfig(config)
-		return config, nil
-	}
-
-	protocols, _ := h.nodeService.GetProtocols(nodeID)
-	if len(protocols) > 0 {
-		protocol := selectNodeProtocol(protocols, preferredType)
-		if protocol != nil {
-			h.buildConfigFromProtocol(config, node, protocol)
-			return config, nil
-		}
-		if preferredType != "" {
-			return nil, fmt.Errorf("protocol %s not found for node %d", preferredType, nodeID)
-		}
-	}
-
-	if preferredType != "" {
-		return nil, fmt.Errorf("protocol %s not found for node %d", preferredType, nodeID)
-	}
-
-	h.buildMinimalConfig(config, node)
-	return config, nil
-}
-
-func (h *UniProxyHandler) ensureBaseConfig(config map[string]any) {
-	if _, ok := config["node_type"]; !ok {
-		if protocolType, exists := config["type"]; exists {
-			config["node_type"] = protocolType
-		} else {
-			config["node_type"] = "vless"
-		}
-	}
-	if _, ok := config["type"]; !ok {
-		config["type"] = config["node_type"]
-	}
-	if _, ok := config["send_through"]; !ok {
-		config["send_through"] = "0.0.0.0"
-	}
-	if _, ok := config["routes"]; !ok {
-		config["routes"] = []any{}
-	}
-	if _, ok := config["base_config"]; !ok {
-		config["base_config"] = map[string]any{
-			"push_interval": 60,
-			"pull_interval": 60,
-		}
-	}
-}
-
-func (h *UniProxyHandler) buildMinimalConfig(config map[string]any, node *model.Node) {
-	config["node_type"] = "vless"
-	config["type"] = "vless"
-	config["server_port"] = node.Port
-	config["host"] = node.Host
-	config["server_name"] = node.Host
-	config["send_through"] = "0.0.0.0"
-	config["routes"] = []any{}
-	config["base_config"] = map[string]any{
-		"push_interval": 60,
-		"pull_interval": 60,
-	}
-	config["_no_protocol"] = true
-}
-
-func (h *UniProxyHandler) buildConfigFromProtocol(config map[string]any, node *model.Node, protocol *model.NodeProtocol) {
-	// 配置构建的唯一真源在 service.BuildNodeProtocolConfig, gRPC 也走同一套,
-	// 避免 SS2022 server_key / reality / tls_settings 等字段两处不一致。
-	for k, v := range service.BuildNodeProtocolConfig(node, protocol) {
-		config[k] = v
-	}
+	return h.nodeService.BuildUniProxyConfig(nodeID, preferredType)
 }
 
 func (h *UniProxyHandler) sendConfigResponse(c *gin.Context, config map[string]any) {

@@ -14,9 +14,10 @@ import (
 	"gorm.io/gorm"
 )
 
-// NodeReloadOperation is the Agent Control operation a node sync sends: the
-// agent re-reads its configuration (after A2-3, the kernel pushes a
-// ConfigSnapshot instead).
+// NodeReloadOperation is the Agent Control operation a node sync sends to
+// an agent without config.v1: the agent re-reads its configuration over the
+// legacy transport. An agent that negotiated config.v1 is pushed a
+// ConfigSnapshot instead (A2-3).
 const NodeReloadOperation = "node.reload"
 
 // SyncNodeOptions adjust a node sync.
@@ -43,21 +44,30 @@ type NodeSync struct {
 	// true when its hash moved (and its revision grew).
 	Stored  model.KernelNodeDesiredConfig
 	Changed bool
-	// Pushed is true when a node.reload went out on the stream: the
-	// configuration changed, or the sync was forced.
+	// Pushed is true when a node.reload or a ConfigSnapshot went out on
+	// the stream: the configuration changed, the sync was forced, or (for
+	// a snapshot) the agent had not applied the stored configuration.
 	Pushed bool
-	// Desired, Ack and DispatchErr describe the push.
+	// Desired and Ack describe a node.reload push; Snapshot and SessionID
+	// a ConfigSnapshot push (the agent negotiated config.v1). DispatchErr
+	// is why either push failed.
 	Desired     *agentv1pb.DesiredOperation
 	Ack         *agentv1pb.OperationAck
+	Snapshot    *agentv1pb.ConfigSnapshot
+	SessionID   string
 	DispatchErr error
 	stream      *streamDispatch
+	config      *configPush
 }
 
 // SyncNode rebuilds and stores a node's desired configuration from its
 // rows, drops what the kernel caches about the node, and, when the node's
-// agent holds an Agent Control stream, pushes a node.reload through the
-// existing control-stream operation path once the configuration changed or
-// opts.Force is set. Nodes on the legacy transports keep their stored
+// agent holds an Agent Control stream, pushes the configuration: a
+// ConfigSnapshot when the agent negotiated config.v1 (once the
+// configuration changed, opts.Force is set, or the agent has not applied
+// the stored configuration), else a node.reload through the existing
+// control-stream operation path (once the configuration changed or
+// opts.Force is set). Nodes on the legacy transports keep their stored
 // configuration for their next pull. The legacy sync route and the
 // node.sync executor call it. ErrNodeGone when the node does not exist.
 func SyncNode(ctx context.Context, db *gorm.DB, streams agentstreams.Streams, node agentcontrol.AgentNode, opts SyncNodeOptions) (*NodeSync, error) {
@@ -90,6 +100,9 @@ func SyncNode(ctx context.Context, db *gorm.DB, streams agentstreams.Streams, no
 		}
 		return sync, nil
 	}
+	if configStreams, ok := streams.(agentstreams.ConfigStreams); ok && configStreams.ConfigNegotiated(node) {
+		return sync, sync.pushSnapshot(ctx, db, configStreams, opts.Force)
+	}
 	if !changed && !opts.Force {
 		return sync, nil
 	}
@@ -106,11 +119,37 @@ func SyncNode(ctx context.Context, db *gorm.DB, streams agentstreams.Streams, no
 	return sync, nil
 }
 
-// Release stops following the pushed operation's observed states; a caller
-// that answers at the acknowledgement calls it.
+// pushSnapshot pushes the stored configuration as a ConfigSnapshot to an
+// agent that negotiated config.v1, unless it is unchanged, not forced, and
+// verified applied already.
+func (s *NodeSync) pushSnapshot(ctx context.Context, db *gorm.DB, streams agentstreams.ConfigStreams, force bool) error {
+	if !s.Changed && !force {
+		applied, err := appliedDesired(ctx, db, s.Node, s.Stored)
+		if err != nil {
+			return err
+		}
+		if applied {
+			return nil
+		}
+	}
+	s.Pushed = true
+	s.config = pushConfig(ctx, streams, s.Node, ConfigSnapshotOf(s.Stored))
+	s.Snapshot, s.SessionID, s.DispatchErr = s.config.Snapshot, s.config.SessionID, s.config.Err
+	return nil
+}
+
+// Release stops following the pushed operation's observed states, or the
+// pushed snapshot's ConfigStatus; a caller that answers at the
+// acknowledgement (or the send) calls it.
 func (s *NodeSync) Release() {
-	if s != nil && s.stream != nil {
+	if s == nil {
+		return
+	}
+	if s.stream != nil {
 		s.stream.release()
+	}
+	if s.config != nil {
+		s.config.release()
 	}
 }
 
@@ -144,6 +183,9 @@ func (x nodeSyncExecutor) Execute(ctx context.Context, run *Run) Outcome {
 	if sync.DispatchErr != nil {
 		return streamFailure(sync.DispatchErr).WithResult(result).WithChannel(sync.Channel)
 	}
+	if sync.Snapshot != nil {
+		return awaitSnapshotStatus(ctx, run, sync, result)
+	}
 	nodeSync := result.GetNodeSync()
 	nodeSync.AgentOperationId, nodeSync.Revision, nodeSync.Ack = sync.Desired.GetOperationId(), sync.Ack.GetRevision(), agentAck(sync.Ack)
 	if err := run.Accept(ctx, Acceptance{Channel: sync.Channel, NodeRevision: sync.Ack.GetRevision()}); err != nil {
@@ -157,6 +199,36 @@ func (x nodeSyncExecutor) Execute(ctx context.Context, run *Run) Outcome {
 		return awaitFailure(err).WithResult(result)
 	}
 	return observedOutcome(observed, result)
+}
+
+// awaitSnapshotStatus ends a node.sync that pushed a ConfigSnapshot on the
+// agent's ConfigStatus: SUCCEEDED when the agent applied the snapshot's
+// revision and hash, FAILED with the agent's error when it could not. The
+// operation runs (node_revision is the configuration revision) until then
+// or until its deadline. The result's ack is the status: accepted is
+// applied, with the session and revision that answered.
+func awaitSnapshotStatus(ctx context.Context, run *Run, sync *NodeSync, result *kernelnodeopsv1.OperationResult) Outcome {
+	nodeSync := result.GetNodeSync()
+	nodeSync.Revision = sync.Snapshot.GetConfigRevision()
+	if err := run.Accept(ctx, Acceptance{Channel: sync.Channel, NodeRevision: sync.Snapshot.GetConfigRevision()}); err != nil {
+		return ended(err)
+	}
+	report, err := sync.config.awaitStatus(ctx)
+	if err != nil {
+		return awaitFailure(err).WithResult(result)
+	}
+	status := report.Status
+	nodeSync.Ack = &kernelnodeopsv1.AgentAck{
+		Accepted: status.GetApplied(), Error: status.GetError(), SessionId: report.SessionID, Revision: status.GetConfigRevision(),
+	}
+	if status.GetApplied() {
+		return Succeeded(result)
+	}
+	message := status.GetError()
+	if message == "" {
+		message = "the agent could not apply the configuration"
+	}
+	return Failed(kernelnodeopsv1.ErrorCode_ERROR_CODE_BACKEND_FAILED, message, true).WithResult(result)
 }
 
 // ended is the outcome when the operation ended (cancelled or timed out)

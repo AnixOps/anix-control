@@ -148,6 +148,8 @@ v2board_go_gc_duration_seconds ` + formatFloat(float64(m.PauseTotalNs)/1e9) + `
 	nodesecrets.WritePrometheus(&body)
 	// User deltas on the Agent Control stream.
 	controlgrpc.WriteAgentUsersPrometheus(&body)
+	// Configuration push on the Agent Control stream.
+	controlgrpc.WriteAgentConfigPrometheus(&body)
 
 	c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(body.String()))
 }

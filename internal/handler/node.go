@@ -816,8 +816,9 @@ func (h *NodeHandler) SyncProtocol(c *gin.Context) {
 
 	// The sync is kernelnodeops.SyncNode, the function the node.sync
 	// executor runs: it rebuilds and stores the node's desired
-	// configuration, then pushes node.reload to an agent on the Control
-	// stream; a node on the legacy transports pulls it.
+	// configuration, then pushes it to an agent on the Control stream (a
+	// ConfigSnapshot with config.v1, else node.reload); a node on the
+	// legacy transports pulls it.
 	sync, err := kernelnodeops.SyncNode(c.Request.Context(), database.Get(), h.streams(),
 		agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: uint32(nodeID)},
 		kernelnodeops.SyncNodeOptions{Force: true, AckTimeout: defaultAgentControlOperationTimeout})
@@ -829,6 +830,18 @@ func (h *NodeHandler) SyncProtocol(c *gin.Context) {
 	if sync.Pushed {
 		if sync.DispatchErr != nil {
 			c.JSON(http.StatusBadGateway, gin.H{"message": "Agent Control 同步下发失败", "error": sync.DispatchErr.Error()})
+			return
+		}
+		if sync.Snapshot != nil {
+			// The agent negotiated config.v1: the configuration went out
+			// as a snapshot, which the agent answers with ConfigStatus
+			// (recorded as the node's applied revision).
+			panelSuccess(c, gin.H{
+				"message":         "配置快照已通过 AnixOps Agent Control 下发",
+				"transport":       "agent-control-grpc",
+				"config_revision": sync.Snapshot.GetConfigRevision(),
+				"config_hash":     sync.Snapshot.GetConfigHash(),
+			})
 			return
 		}
 		panelSuccess(c, gin.H{

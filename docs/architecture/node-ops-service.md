@@ -864,7 +864,9 @@ executes `node.sync` (nodeconfig), `agent.operation` (agents) and
   `LEGACY_PULL`: its next periodic pull reads the stored configuration.
   `NodeSyncResult` carries the channel, `config_hash`, `config_revision`
   (field 8, added), `changed`, and the push's operation id, revision and
-  acknowledgement.
+  acknowledgement. Since A2-3 an agent that negotiated `config.v1` is
+  pushed a `ConfigSnapshot` instead of `node.reload`, and the operation
+  ends on its `ConfigStatus` (section 5.5).
 - **`agent.operation`.** `kernelnodeops.DispatchAgentOperation`: the three
   kinds, the acknowledgement wait bounded by `timeout_seconds` (10 s by
   default, 60 s at most), then the terminal state. A node without a
@@ -1341,16 +1343,65 @@ advertised them.
     its node row, legacy rules and tunnels. Two writers of one node are
     serialized by the row's revision. `kernelnodeops.BuildDesiredConfig`,
     `StoreDesiredConfig` and `LoadDesiredConfig` are the API A2-3 reads.
-  - **Rebuilds.** `SyncNode` and every kernel write that changes what a
-    node runs rebuild it: the protocols, the raw configuration, the
-    node's secrets. NO-6 rebuilds on `SyncNode`; the kernel writes follow
-    with A2-3.
-  - **Pushes.**
-    - When the hash changed, the kernel pushes a `ConfigSnapshot` to a
-      connected agent.
-    - On `Hello`, it pushes when the agent's `config_revision` is older.
-  - **The agent's answer.** The agent answers `ConfigStatus`; a failure
-    there becomes the node's runtime health.
+  - **Rebuilds.** `SyncNode` rebuilds it (NO-6). For an agent on the
+    stream with `config.v1`, A2-3 also rebuilds it at the agent's `Hello`
+    and about once a minute while the session lasts
+    (`kernelnodeops.RefreshDesiredConfig`: built, and stored only when the
+    hash moved). The kernel writes that change what a node runs (the
+    protocols, the raw configuration, the node's secrets) thus reach the
+    agent within a minute, as they reach the legacy pull; they do not
+    rebuild it themselves.
+  - **What the document carries (A2-3).** A proxy node's document also
+    holds `legacy_pull`: the UniProxy answer for no node type
+    (`default`) and for each type the node serves (`types`), from
+    `service.BuildUniProxyNodeConfig`, which the UniProxy handler calls
+    too. Each protocol's `config` is the v2board `GetConfig` source, and
+    `raw_config` is read through the node credential split as UniProxy
+    reads it. So the snapshot carries what the legacy pulls give the node,
+    and no other secret (`internal/tests/nodeopsagent` compares the two
+    byte for byte and walks every secret-named key). The forward document
+    is unchanged; its `legacy_rules` are what
+    `GET /api/v2/forward/agent/rules` serves, with the node's role.
+  - **Pushes (A2-3, `config.v1`).** The kernel sends the stored row as a
+    `ConfigSnapshot` (`kernelnodeops.ConfigSnapshotOf`) only to an agent
+    whose `Hello` listed `config.v1`, and lists `config.v1` in
+    `HelloAck.server_capabilities` for proxy and forward nodes:
+    - on `Hello`, when the agent's `config_revision` is not the desired
+      revision (none, older, or newer from another database), after the
+      rebuild; the same revision is sent nothing;
+    - on `node.sync` (the executor and the legacy sync route), when the
+      configuration changed, the sync is forced, or the agent has not
+      applied the stored revision. Such an agent is not sent
+      `node.reload`; agents without `config.v1` still are;
+    - when the per-session rebuild moves the revision.
+
+    A session is never sent a revision older than one it was sent
+    (`AgentControlConnection.sendConfig`).
+  - **The agent's answer.** The agent answers `ConfigStatus`. The kernel
+    records the last one per node in `v4_kernel_node_config_status` (new,
+    protected; `kernelnodeops.RecordConfigStatus`) with its verdict:
+    `applied` or `failed` when it names the desired revision and hash,
+    `stale` for an older revision, `mismatch` otherwise. Only a verified
+    applied status moves the row's `applied_revision` and `applied_hash`,
+    the node's applied revision. A failure is logged and recorded there; it
+    does not write the node's runtime-health columns yet.
+  - **`node.sync` ends on the answer.** On a `config.v1` agent the
+    operation runs at the configuration revision (`node_revision`) and
+    ends on the `ConfigStatus` that names the pushed revision and hash,
+    from any session of the node: `SUCCEEDED` when applied, `FAILED`
+    (`BACKEND_FAILED`, retryable) with the agent's error otherwise. A stale
+    or mismatched status is recorded and does not end it; a status verified
+    as applied at a newer revision does (the node runs a newer desired
+    configuration). The result's `ack` is the status (accepted is applied,
+    with the answering session and revision). An agent that reconnects
+    meanwhile is sent the snapshot again by the `Hello` rule and answers on
+    its new session. Without an answer the deadline ends it `TIMED_OUT`.
+  - **Metrics.** `anixops_agent_config_snapshots_sent_total{trigger}`
+    (`hello`, `sync`, `refresh`),
+    `anixops_agent_config_statuses_total{result}` (the verdicts, and
+    `unrecorded` when the database failed), and
+    `anixops_agent_config_lagging_nodes` (nodes whose applied revision is
+    behind the desired one).
   - **Level-triggered.** A snapshot is the whole configuration, so a lost or
     repeated snapshot is harmless. Deltas are a later optimization (the
     "incremental config" TODO).
@@ -1684,7 +1735,7 @@ handlers ship `native-flagged`, and operators choose the runtime mode.
 | M3-5 | forward: changes, tunnels, permissions, legacy rules (28 routes) | NO-7, NO-8 | control | L |
 | A2-1 | Agent PKI: `v4_kernel_agent_enrollment` and `_certificate`, the `AgentEnrollment` service, optional client certificates on the agent listener, the SAN as node identity (including forward nodes on the stream), enrollment admin API and CLI | none | control | L |
 | A2-2 | Stream data-plane contract: the additive `agent.proto` payloads, the descriptor test as a superset, the golden | none | control | S |
-| A2-3 | Configuration push: snapshots from the desired configuration, `Hello` reconcile, `ConfigStatus` | A2-2, NO-6 | control | M |
+| A2-3 | Configuration push: snapshots from the desired configuration, `Hello` reconcile, `ConfigStatus`. Done: section 5.5 | A2-2, NO-6 | control | M |
 | A2-4 | User deltas from the subscriber change log, cursor, paged resync | A2-2 | control | M |
 | A2-5 | Reports: traffic, online, logs and status with batch ids, `ReportAck`, `diag.*` for the node vantage | A2-2 | control | M |
 | A2-6 | Transition: transport inventory, deprecation headers and metrics, the `agent_control.mtls` modes | A2-1 to A2-5 | control | S |
