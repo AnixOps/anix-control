@@ -3592,6 +3592,8 @@ type PaymentHandlerTestSuite struct {
 func (s *PaymentHandlerTestSuite) SetupTest() {
 	s.HandlerTestSuite.SetupTest()
 	s.router = gin.New()
+	// The caller is user 1, who owns order 1 and payment ORDER123.
+	s.router.Use(func(c *gin.Context) { c.Set("user_id", uint(1)) })
 
 	// Create a test order for payment tests
 	order := &model.Order{

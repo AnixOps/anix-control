@@ -90,6 +90,9 @@ func (h *PaymentGatewayHandler) ListGateways(c *gin.Context) {
 		panelError(c, err.Error())
 		return
 	}
+	for _, gateway := range gateways {
+		gateway.Config = redactGatewayConfig(gateway.Config)
+	}
 
 	panelSuccess(c, gin.H{
 		"list":  gateways,
@@ -133,13 +136,14 @@ func (h *PaymentGatewayHandler) CreateGateway(c *gin.Context) {
 		panelError(c, "invalid config")
 		return
 	}
-	gateway.Config = config
+	gateway.Config = keepGatewaySecrets(config, "")
 
 	if err := h.gatewayService.Create(gateway); err != nil {
 		panelError(c, err.Error())
 		return
 	}
 
+	gateway.Config = redactGatewayConfig(gateway.Config)
 	panelSuccess(c, gateway)
 }
 
@@ -191,7 +195,7 @@ func (h *PaymentGatewayHandler) UpdateGateway(c *gin.Context) {
 			panelError(c, "invalid config")
 			return
 		}
-		gateway.Config = config
+		gateway.Config = keepGatewaySecrets(config, gateway.Config)
 	}
 	if req.FeeRate != nil {
 		gateway.FeeRate = *req.FeeRate
@@ -217,6 +221,7 @@ func (h *PaymentGatewayHandler) UpdateGateway(c *gin.Context) {
 		return
 	}
 
+	gateway.Config = redactGatewayConfig(gateway.Config)
 	panelSuccess(c, gateway)
 }
 
@@ -512,6 +517,21 @@ func (h *PaymentGatewayHandler) CreatePayment(c *gin.Context) {
 		return
 	}
 
+	// A payment for an order pays the caller's own pending order, in full.
+	if req.OrderID != nil {
+		if err := h.gatewayService.CheckOrderPayable(*req.OrderID, userID, req.Amount); err != nil {
+			switch {
+			case errors.Is(err, service.ErrPaymentOrderNotFound), errors.Is(err, service.ErrPaymentOrderNotPending),
+				errors.Is(err, service.ErrPaymentAmountMismatch):
+				panelError(c, err.Error())
+			default:
+				log.Printf("payment order lookup failed: %v", err)
+				panelError(c, "数据库错误")
+			}
+			return
+		}
+	}
+
 	// 计算手续费
 	feeAmount := h.gatewayService.CalculateFee(gateway, req.Amount)
 	actualAmount := req.Amount + feeAmount
@@ -564,6 +584,10 @@ func (h *PaymentGatewayHandler) GetPaymentStatus(c *gin.Context) {
 	tradeNo := c.Param("trade_no")
 
 	record, err := h.gatewayService.GetRecordByTradeNo(tradeNo)
+	if err == nil && record.UserID != c.GetUint("user_id") {
+		// Another user's payment is answered as a missing one.
+		err = gorm.ErrRecordNotFound
+	}
 	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			panelError(c, "支付记录不存在")
