@@ -210,9 +210,10 @@ refresh of the kernel's in-memory copies.
     `notification.email.config` through KernelSettings, namespace `mail`
     ([`settings-service.md`](settings-service.md)). Its value holds the SMTP
     password: the package reads it in clear (`kernel.settings.mail.secrets.v1`)
-    because the GET answers it, as the kernel's handler does, and the test
-    e-mail is sent from the package host. The parity test runs a test SMTP
-    server and compares the mail each side delivers.
+    because the test e-mail is sent from the package host; the GET masks it
+    as the kernel's handler does, and an update that keeps it sends the
+    placeholder. The parity test runs a test SMTP server and compares the
+    mail each side delivers.
   - Two stay bridged: setting the webhook (needs the request host) and the
     public webhook (`/sub` needs the subscription token).
 - **Platform (in place).** 5 of 12 routes: the backup configuration, list

@@ -34,7 +34,30 @@ const (
 	// emailConfigKey holds the configuration as one JSON value, the SMTP
 	// password included.
 	emailConfigKey = "notification.email.config"
+	// secretPlaceholder is the kernel's service.SensitiveSystemConfigPlaceholder:
+	// administrators see it instead of the SMTP password, and a value sent
+	// with it keeps the stored password.
+	secretPlaceholder = "********"
 )
+
+// maskPassword is the SMTP password as an administrator's answer shows it:
+// the placeholder when one is set, else "".
+func maskPassword(password string) string {
+	if strings.TrimSpace(password) == "" {
+		return ""
+	}
+	return secretPlaceholder
+}
+
+// newPassword is the password an update sets: a string that is neither
+// blank nor the placeholder. Anything else keeps the stored one.
+func newPassword(req map[string]any) (string, bool) {
+	password, ok := req["password"].(string)
+	if !ok || strings.TrimSpace(password) == "" || password == secretPlaceholder {
+		return "", false
+	}
+	return password, true
+}
 
 // Route ids of the routes that read or write the e-mail configuration.
 const (
@@ -206,8 +229,8 @@ func (s *Service) loadEmailConfig(ctx context.Context) (*EmailConfig, error) {
 }
 
 // AdminEmailConfig is GET /api/v2/admin/notification/email/config: the
-// stored configuration over the defaults. Like the kernel's handler it
-// answers the SMTP password in clear.
+// stored configuration over the defaults, with the SMTP password masked as
+// the kernel's handler masks it.
 func (s *Service) AdminEmailConfig(ctx context.Context, _ pluginhostsdk.NativeRequest) (pluginhostsdk.NativeResponse, error) {
 	cfg, err := s.loadEmailConfig(ctx)
 	if err != nil {
@@ -217,7 +240,7 @@ func (s *Service) AdminEmailConfig(ctx context.Context, _ pluginhostsdk.NativeRe
 		"host":            cfg.Host,
 		"port":            cfg.Port,
 		"username":        cfg.Username,
-		"password":        cfg.Password,
+		"password":        maskPassword(cfg.Password),
 		"from_address":    cfg.FromAddress,
 		"from_name":       cfg.FromName,
 		"encryption":      emailEncryptionBool(cfg.Encryption),
@@ -226,11 +249,12 @@ func (s *Service) AdminEmailConfig(ctx context.Context, _ pluginhostsdk.NativeRe
 }
 
 // AdminUpdateEmailConfig is PUT /api/v2/admin/notification/email/config:
-// host, port and sender address are required; a blank password keeps the
-// stored one, and an absent encryption the stored one. The kernel writes
-// the value through KernelSettings (namespace mail); its own handler
-// records no audit entry, and neither does the contract for this
-// namespace.
+// host, port and sender address are required; a blank password or the
+// placeholder keeps the stored one, and an absent encryption the stored
+// one. The kernel writes the value through KernelSettings (namespace mail);
+// a kept password is sent as the placeholder, which the kernel replaces
+// with the stored one. Its own handler records no audit entry, and neither
+// does the contract for this namespace.
 func (s *Service) AdminUpdateEmailConfig(ctx context.Context, request pluginhostsdk.NativeRequest) (pluginhostsdk.NativeResponse, error) {
 	var req map[string]any
 	if err := binding.JSON.BindBody(request.Body, &req); err != nil {
@@ -254,7 +278,7 @@ func (s *Service) AdminUpdateEmailConfig(ctx context.Context, request pluginhost
 	}
 
 	cfg := &EmailConfig{
-		Host: host, Port: port, Username: parseStringField(req, "username"), Password: existing.Password,
+		Host: host, Port: port, Username: parseStringField(req, "username"),
 		FromAddress: fromAddress, FromName: parseStringField(req, "from_name"), Encryption: existing.Encryption,
 	}
 	if cfg.FromName == "" {
@@ -263,10 +287,11 @@ func (s *Service) AdminUpdateEmailConfig(ctx context.Context, request pluginhost
 	if cfg.FromName == "" {
 		cfg.FromName = controlName
 	}
-	if passwordRaw, ok := req["password"]; ok {
-		if password, ok := passwordRaw.(string); ok && strings.TrimSpace(password) != "" {
-			cfg.Password = password
-		}
+	if password, ok := newPassword(req); ok {
+		cfg.Password = password
+	} else if existing.Password != "" {
+		// The kernel keeps the stored password.
+		cfg.Password = secretPlaceholder
 	}
 	hasEncryption := false
 	if encRaw, ok := req["encryption_type"]; ok {
@@ -290,8 +315,8 @@ func (s *Service) AdminUpdateEmailConfig(ctx context.Context, request pluginhost
 		cfg.Encryption = "none"
 	}
 
-	// The value keeps the password, as the kernel stores it; KernelSettings
-	// keeps the key a secret.
+	// The value holds a new password, as the kernel stores it, or the
+	// placeholder for the stored one; KernelSettings keeps the key a secret.
 	value, err := json.Marshal(cfg) // #nosec G117 -- the SMTP configuration is stored with its password, a declared KernelSettings secret.
 	if err != nil {
 		return s.panelError(err.Error())

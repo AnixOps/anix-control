@@ -58,7 +58,7 @@ Holders:
 
 | Package | Capabilities | Why |
 |---|---|---|
-| notification | `mail.read`, `mail.write`, `mail.secrets` | answers the SMTP password to administrators, as the kernel's handler does, and sends the test e-mail itself |
+| notification | `mail.read`, `mail.write`, `mail.secrets` | sends the test e-mail itself, with the stored SMTP password; administrators see it masked |
 | affiliate | `invite.write` | writes the frontend settings; it reads them through `kapi_affiliate_settings_v1` |
 | gost-mesh | `nodex.read`, `nodex.secrets` | calls NodeX with the shared token |
 | platform | `backup.write` | writes the backup configuration; it reads the adopted row |
@@ -83,6 +83,18 @@ declares it.
   placeholder, leaves the stored value: the placeholder is never stored for
   a secret. Its metadata (type, group, remark) still applies. A kept key
   with no stored value is not created.
+- **Masked fields.** A JSON value can hold a secret its key's name does not
+  reveal: the SMTP password, field `password` of
+  `notification.email.config` (`service.SystemConfigMaskedFields`). The
+  kernel's administrator answers (the e-mail configuration and the generic
+  system configuration routes) show the value with that field as
+  `********` and the rest as stored; the key is not sensitive as a whole,
+  so an administrator still edits the value. A write, through the
+  contract or the kernel's handlers, that sends the field as the
+  placeholder keeps the stored field (`""` when none is stored); the rest
+  of the value is written as sent. The notification package reads the
+  value in clear (`mail.secrets`) for the test e-mail and masks it in its
+  own answer, and sends the placeholder when an update keeps the password.
 
 ## Semantics
 
@@ -149,8 +161,8 @@ and the kernel's in-memory copies:
 
 | Route | Package | Parity cases |
 |---|---|---|
-| `GET /api/v2/admin/notification/email/config` | notification | 8 |
-| `PUT /api/v2/admin/notification/email/config` | notification | 13 |
+| `GET /api/v2/admin/notification/email/config` | notification | 10 |
+| `PUT /api/v2/admin/notification/email/config` | notification | 19 |
 | `POST /api/v2/admin/notification/test` | notification | 15, against a test SMTP server |
 | `PUT /api/v2/admin/invite/config` | affiliate | 33 |
 | `GET /api/v2/admin/forward/nodex/status` | gost-mesh | 21, against test NodeX servers |
@@ -166,8 +178,8 @@ get, put, delete `/api/v2/admin/system/configs[/:key]`). They work on any
 key of `v2_system_config`. A native version needs a grant over every key,
 and that grant is every secret, held at all times:
 
-- the single-key answer returns secrets in clear, so it needs every
-  namespace's `secrets`;
+- the single-key answer returns secrets in clear (all but the masked
+  fields), so it needs every namespace's `secrets`;
 - a write can point the NodeX or SMTP address anywhere, which reads the
   secret the kernel sends there;
 - the routes reach keys other domains own (identity's

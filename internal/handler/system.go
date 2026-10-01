@@ -29,7 +29,9 @@ func systemConfigResponse(cfg *model.SystemConfig, maskSensitive bool) gin.H {
 	}
 
 	displayValue, sensitive, hasValue := service.MaskSystemConfigValue(cfg.Key, cfg.Value)
-	value := cfg.Value
+	// A secret inside a JSON value (the SMTP password) is masked in every
+	// answer; a sensitive key's whole value only where asked.
+	value := service.MaskSystemConfigFields(cfg.Key, cfg.Value)
 	if maskSensitive && sensitive {
 		value = displayValue
 	}
@@ -458,6 +460,16 @@ func (h *SystemHandler) SetConfig(c *gin.Context) {
 			return
 		}
 		value = existingEntry.Value
+	}
+
+	// A masked field sent back as the placeholder keeps its stored secret.
+	storedValue := ""
+	if existingEntry != nil {
+		storedValue = existingEntry.Value
+	}
+	value, keptFields := service.KeepSystemConfigFields(key, value, storedValue)
+	if keptFields {
+		preserveExisting = true
 	}
 
 	if err := h.configService.Set(key, value, req.Type, req.Group, remark); err != nil {

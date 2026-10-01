@@ -115,7 +115,9 @@
             <input
               v-model="emailConfig.password"
               type="password"
-              :placeholder="t('adminNotifications.email.placeholders.password')"
+              :placeholder="emailPasswordStored
+                ? t('adminNotifications.email.placeholders.passwordStored')
+                : t('adminNotifications.email.placeholders.password')"
             />
           </div>
         </div>
@@ -303,6 +305,7 @@ import {
   updateNotificationTemplate
 } from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { isMaskedSecret } from '@/constants/secrets'
 
 const { t, formatDateTime } = useAppI18n()
 
@@ -340,6 +343,9 @@ const emailConfig = ref({
   from_address: '',
   encryption: true
 })
+// The API answers a stored SMTP password as ********. The field then starts
+// empty, and saving it empty keeps the stored password.
+const emailPasswordStored = ref(false)
 
 function createTemplateForm(source = {}) {
   return {
@@ -456,7 +462,12 @@ const fetchEmailSettings = async () => {
     const res = await getEmailConfig()
     const payload = readNotificationPayload(res, 'adminNotifications.messages.fetchEmailConfigFailed')
     if (payload && typeof payload === 'object') {
-      emailConfig.value = { ...emailConfig.value, ...payload }
+      const next = { ...emailConfig.value, ...payload }
+      emailPasswordStored.value = isMaskedSecret(payload.password)
+      if (emailPasswordStored.value) {
+        next.password = ''
+      }
+      emailConfig.value = next
     }
   } catch (error) {
     console.error(t('adminNotifications.messages.fetchEmailConfigFailed'), error)

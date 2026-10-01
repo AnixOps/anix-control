@@ -253,6 +253,11 @@ DELETE /api/v2/admin/nodes/:id/protocols/:protocol_id
 `GET /api/v2/admin/nodes/:id/credentials` 返回单个节点的 `api_key` / `secret`
 （部署助手和 Ansible 使用），每次读取都记入审计日志（action `reveal`）。
 
+SMTP 密码同样不再明文返回：`GET /api/v2/admin/notification/email/config` 的
+`password`，以及系统配置列表、单项读取和更新应答中 `notification.email.config`
+值里的 `password` 字段，已设置时显示为 `********`（未设置为空）。更新时提交
+`********`（或在邮件配置接口中留空）即保留已存的密码，提交新值则替换。测试邮件仍使用已存的密码。
+
 ### 授权密钥管理
 
 ```http

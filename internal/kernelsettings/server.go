@@ -367,8 +367,18 @@ func putSystemConfig(tx *gorm.DB, namespace service.SettingsNamespace, entries [
 			continue
 		}
 		value := entry.GetValue()
+		preserved := keep
 		if keep {
 			value = existing.Value
+		} else {
+			// A masked field sent as the placeholder (the SMTP password in
+			// the e-mail configuration) keeps its stored secret, as the
+			// kernel's handlers keep it.
+			stored := ""
+			if existing != nil {
+				stored = existing.Value
+			}
+			value, preserved = service.KeepSystemConfigFields(key, value, stored)
 		}
 		if err := configs.Set(key, value, entry.GetType(), entry.GetGroup(), entry.GetRemark()); err != nil {
 			return nil, err
@@ -385,7 +395,7 @@ func putSystemConfig(tx *gorm.DB, namespace service.SettingsNamespace, entries [
 		if existing == nil {
 			action = "create"
 		}
-		if err := operations.Record(service.SystemConfigAuditInput(actor, action, saved, keep)); err != nil {
+		if err := operations.Record(service.SystemConfigAuditInput(actor, action, saved, preserved)); err != nil {
 			return nil, err
 		}
 	}

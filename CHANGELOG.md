@@ -4,6 +4,25 @@
 
 ### Security
 
+- The SMTP password is no longer answered in clear to administrators.
+  `GET /api/v2/admin/notification/email/config` (legacy and native) answered
+  it as stored, and the system configuration list, single-key read and
+  update answer showed it inside the `notification.email.config` value: the
+  key's name does not mark it secret. The password now reads `********` when
+  one is set (`""` when none is) in all of these answers; the rest of the
+  value is shown as stored.
+  - Saving keeps it: an e-mail configuration update with the placeholder (or,
+    as before, a blank password) and a system configuration update whose
+    value carries `"password":"********"` keep the stored password, and a
+    new value replaces it. KernelSettings applies the same rule to a
+    `mail` namespace write, and the notification package sends the
+    placeholder when an update keeps the password.
+  - The test e-mail still uses the stored password: the notification package
+    keeps `kernel.settings.mail.secrets.v1`; only answers to administrators
+    are masked.
+  - The e-mail settings page starts the password field empty with
+    "Password stored; leave blank to keep it". See `docs/UPGRADE.md`.
+
 - The x402 callback marks a payment paid only when it pays the payment's
   token and at least its amount. `POST /api/v2/payment/x402/callback`
   verified the confirmation service's signature but never compared the

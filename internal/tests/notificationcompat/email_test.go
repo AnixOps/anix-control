@@ -101,7 +101,9 @@ func mailCases(t *testing.T, r packagecompat.Route, cases []packagecompat.Case) 
 func TestEmailConfigReadRouteParity(t *testing.T) {
 	path := "/api/v2/admin/notification/email/config"
 	mailCases(t, mailRoute(t, "GET", path, native.EmailConfigGetRouteID, notifications((*handler.NotificationHandler).GetEmailConfig)), []packagecompat.Case{
-		{Name: "stored configuration, password in clear", Path: path, Seed: emailConfig(storedEmail)},
+		{Name: "stored configuration, password masked", Path: path, Seed: emailConfig(storedEmail)},
+		{Name: "a blank password reads empty", Path: path, Seed: emailConfig(`{"host":"h","password":"   "}`)},
+		{Name: "a stored placeholder reads masked", Path: path, Seed: emailConfig(`{"host":"h","password":"********"}`)},
 		{Name: "no configuration: the defaults", Path: path, Seed: otherSettings},
 		{Name: "a blank value: the defaults", Path: path, Seed: emailConfig("   ")},
 		{Name: "encryption_type wins over encryption", Path: path, Seed: emailConfig(`{"host":" h ","port":"25","encryption":"ssl","encryption_type":false}`)},
@@ -119,6 +121,12 @@ func TestEmailConfigUpdateRouteParity(t *testing.T) {
 			"from_address":"a@new.test","from_name":"New","encryption_type":"starttls"}`)},
 		{Name: "a blank password keeps the stored one", Path: path, Seed: emailConfig(storedEmail), Body: []byte(`{"host":"smtp.example.test","port":"2525","password":"  ","from_address":"b@example.test"}`)},
 		{Name: "no password, no sender name, no encryption: the stored ones", Path: path, Seed: emailConfig(storedEmail), Body: []byte(`{"host":"h","port":25,"from_address":"c@example.test"}`)},
+		{Name: "the placeholder keeps the stored password", Path: path, Seed: emailConfig(storedEmail), Body: []byte(`{"host":"h","port":25,"password":"********","from_address":"c@example.test"}`)},
+		{Name: "a new password replaces the stored one", Path: path, Seed: emailConfig(storedEmail), Body: []byte(`{"host":"h","port":25,"password":"rotated <&>","from_address":"c@example.test"}`)},
+		{Name: "the placeholder with no stored password stores none", Path: path, Seed: otherSettings, Body: []byte(`{"host":"h","port":25,"password":"********","from_address":"c@example.test"}`)},
+		{Name: "a kept password is stored as the handler writes it", Path: path, Seed: emailConfig(`{"from_address":"x@example.test", "password" : "p<w>&d"}`), Body: []byte(`{"host":"h","port":25,"from_address":"c@example.test"}`)},
+		{Name: "a password of another type is no password", Path: path, Seed: emailConfig(`{"password":7}`), Body: []byte(`{"host":"h","port":25,"password":"********","from_address":"c@example.test"}`)},
+		{Name: "a blank stored password is kept blank", Path: path, Seed: emailConfig(`{"password":"  "}`), Body: []byte(`{"host":"h","port":25,"from_address":"c@example.test"}`)},
 		{Name: "encryption as a boolean", Path: path, Seed: emailConfig(storedEmail), Body: []byte(`{"host":"h","port":25,"from_address":"c@example.test","encryption":false}`)},
 		{Name: "an HTML-looking sender name", Path: path, Seed: otherSettings, Body: []byte(`{"host":"h","port":25,"from_address":"d@example.test","from_name":"<Anix & Co>"}`)},
 		{Name: "an invalid encryption_type", Path: path, Seed: emailConfig(storedEmail), Body: []byte(`{"host":"h","port":25,"from_address":"e@example.test","encryption_type":"rot13"}`)},

@@ -296,6 +296,31 @@ func TestMailAndInviteWritesRecordNoAudit(t *testing.T) {
 	require.Equal(t, "Email notification config", stored.Remark)
 }
 
+// The e-mail configuration's password is a masked field: a write that
+// sends it as the placeholder keeps the stored password, and a new one
+// replaces it.
+func TestMailWriteKeepsThePasswordSentAsThePlaceholder(t *testing.T) {
+	ctx := context.Background()
+	db, server := fixture(t, capabilities("mail", service.SettingsAccessWrite))
+	put := func(id, value string) {
+		_, err := server.PutSettings(ctx, &kernelsettingsv1.PutSettingsRequest{Namespace: "mail", RequestId: id, Entries: []*kernelsettingsv1.SettingEntry{
+			{Key: "notification.email.config", Value: value, Type: "json"},
+		}})
+		require.NoError(t, err)
+	}
+	stored := func() string {
+		var row model.SystemConfig
+		require.NoError(t, db.Where("key = ?", "notification.email.config").Take(&row).Error)
+		return row.Value
+	}
+	put("keep", `{"host":"smtp.new","password":"********"}`)
+	require.Equal(t, `{"host":"smtp.new","password":"smtp-secret"}`, stored())
+	put("rotate", `{"host":"smtp.new","password":"rotated"}`)
+	require.Equal(t, `{"host":"smtp.new","password":"rotated"}`, stored())
+	put("whole", "********")
+	require.Equal(t, `{"host":"smtp.new","password":"rotated"}`, stored(), "the placeholder for the whole secret keeps it")
+}
+
 func TestDeleteRemovesNamespaceKeysWithTheirAudit(t *testing.T) {
 	ctx := context.Background()
 	db, server := fixture(t, capabilities("nodex", service.SettingsAccessWrite).with(capabilities("backup", service.SettingsAccessWrite)))

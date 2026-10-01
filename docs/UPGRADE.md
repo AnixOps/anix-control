@@ -628,6 +628,23 @@ UPDATE v2_audit_log SET request_body = '' WHERE created_at < '2026-10-01';
 Rotate any credential that was set through the administrator API while the
 old build ran, and apply the same care to log files kept from that time.
 
+### The SMTP Password Reads As `********`
+
+The administrator API no longer answers the SMTP password in clear:
+`GET /api/v2/admin/notification/email/config` answers `password` as
+`********` when one is stored, and the system configuration routes show the
+`notification.email.config` value with `"password":"********"`. The test
+e-mail still uses the stored password, so mail delivery needs nothing.
+
+- **Panel.** Notifications, Email starts the password field empty with
+  "Password stored; leave blank to keep it". Saving with the field empty
+  keeps the stored password; typing a new one replaces it. Editing
+  `notification.email.config` under System, Configuration shows the
+  placeholder in the value; saving it as shown keeps the password.
+- **Scripts.** A script that reads the e-mail configuration (either route)
+  and writes it back keeps the password: the placeholder is kept. A script
+  that read the password from these answers must keep its own copy.
+
 ### Node Secrets Read As `********` In Administrator Answers
 
 The administrator API no longer answers node secrets in clear: protocol
