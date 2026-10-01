@@ -227,8 +227,7 @@ func (s *Service) PublicPaymentStatus(ctx context.Context, request pluginhostsdk
 }
 
 // PaymentMethods is GET /api/v2/payment/methods: the fixed method list,
-// each enabled when an enabled v2_payment row names its provider; crypto is
-// enabled while no row is enabled at all.
+// each enabled when an enabled v2_payment row names its provider.
 func (s *Service) PaymentMethods(ctx context.Context, _ pluginhostsdk.NativeRequest) (pluginhostsdk.NativeResponse, error) {
 	var configs []Payment
 	if db, err := s.Open(ctx); err != nil {
@@ -293,6 +292,12 @@ func (s *Service) X402CreatePayment(ctx context.Context, request pluginhostsdk.N
 	if err != nil {
 		log.Printf("x402 payment order lookup failed: %v", err)
 		return s.panelError("数据库错误")
+	}
+	// x402 is an internal play coin: it is usable only when an enabled
+	// v2_payment row names it, and refused like a disabled gateway otherwise.
+	var x402Enabled int64
+	if err := db.Model(&Payment{}).Where("provider = ? AND enable = ?", "x402", 1).Count(&x402Enabled).Error; err != nil || x402Enabled == 0 {
+		return s.panelError("gateway is disabled")
 	}
 	order, message := s.payableOrder(db, req.OrderID, request.Principal.ActorID, "x402")
 	if message != "" {

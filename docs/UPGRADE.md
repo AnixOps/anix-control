@@ -1304,8 +1304,10 @@ What the community edition does (`docs/features.md`, "Product editions"):
   builds are published (`build_package.py --all --edition commercial`).
 
 x402 changes in both editions: `GET /api/v2/payment/methods` no longer
-reports x402 as enabled when no payment method is configured. Enable it
-explicitly with an enabled x402 payment configuration if you rely on it.
+reports x402 as enabled when no payment method is configured, and
+`POST /api/v2/payment/x402/create` answers `gateway is disabled` unless an
+enabled x402 payment configuration exists. Enable it explicitly if you rely
+on it.
 
 To switch back later, set `commercial` and restart; nothing else is needed.
 

@@ -45,6 +45,8 @@ func (s *PaymentOwnershipTestSuite) SetupTest() {
 	s.Require().NoError(s.db.Create(s.plan).Error)
 	s.order = &model.Order{TradeNo: "ORDER-BUYER", UserID: s.buyer.ID, PlanID: s.plan.ID, Period: "month", TotalAmount: 10000}
 	s.Require().NoError(s.db.Create(s.order).Error)
+	s.Require().NoError(s.db.AutoMigrate(&model.Payment{}))
+	s.Require().NoError(s.db.Create(&model.Payment{Name: "x402", Method: "crypto", Provider: "x402", Enable: 1}).Error)
 	s.gateway = &model.PaymentGateway{
 		Name: "EPay", Type: model.PaymentGatewayEPay, Enabled: true, MinAmount: 1, MaxAmount: 10000,
 		Config: `{"api_url":"https://pay.example.test","pid":"1001","key":"` + epayTestKey + `"}`,

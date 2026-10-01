@@ -3595,6 +3595,9 @@ func (s *PaymentHandlerTestSuite) SetupTest() {
 	s.router = gin.New()
 	// The caller is user 1, who owns order 1 and payment ORDER123.
 	s.router.Use(func(c *gin.Context) { c.Set("user_id", uint(1)) })
+	// x402 is usable only while an enabled payment configuration names it.
+	s.Require().NoError(database.Get().AutoMigrate(&model.Payment{}))
+	s.Require().NoError(database.Get().Create(&model.Payment{Name: "x402", Method: "crypto", Provider: "x402", Enable: 1}).Error)
 
 	// Create a test order for payment tests
 	order := &model.Order{
@@ -3683,6 +3686,28 @@ func (s *PaymentHandlerTestSuite) TestGetPaymentMethods_X402IsNotEnabledByDefaul
 
 	require.NoError(s.T(), database.Get().Create(&model.Payment{Name: "x402", Method: "crypto", Provider: "x402", Enable: 1}).Error)
 	assert.Equal(s.T(), true, x402Enabled(), "x402 configured and enabled")
+}
+
+func (s *PaymentHandlerTestSuite) TestX402CreatePayment_RefusedUnlessEnabled() {
+	handler := NewPaymentHandler()
+	s.router.POST("/x402/create-disabled", handler.X402CreatePayment)
+	create := func() *httptest.ResponseRecorder {
+		body, _ := json.Marshal(map[string]any{"order_id": 1, "token": "ETH", "network": "sepolia"})
+		req, _ := http.NewRequest("POST", "/x402/create-disabled", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		s.router.ServeHTTP(w, req)
+		return w
+	}
+
+	require.NoError(s.T(), database.Get().Model(&model.Payment{}).Where("provider = ?", "x402").Update("enable", 0).Error)
+	s.assertPaymentPanelError(create(), "gateway is disabled")
+
+	require.NoError(s.T(), database.Get().Where("1 = 1").Delete(&model.Payment{}).Error)
+	s.assertPaymentPanelError(create(), "gateway is disabled")
+	var records int64
+	require.NoError(s.T(), database.Get().Model(&model.PaymentRecord{}).Where("provider = ?", "x402").Count(&records).Error)
+	assert.Zero(s.T(), records, "a refused x402 payment creates no record")
 }
 
 func (s *PaymentHandlerTestSuite) TestX402CreatePayment_Success() {

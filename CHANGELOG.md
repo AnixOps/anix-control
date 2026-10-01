@@ -74,7 +74,10 @@
   - **x402 is never enabled by default.** `GET /api/v2/payment/methods`
     reported x402 as enabled when no payment method was configured; it is
     now enabled only by an enabled x402 payment configuration, in either
-    edition.
+    edition, and `POST /api/v2/payment/x402/create` refuses with
+    `gateway is disabled` (the disabled-gateway answer) without one.
+  - The administrator's user list calls the plan column "Subscription
+    template" (订阅模板) in the community edition.
 
 ### Fixed
 
