@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### Security
+
+- The x402 callback marks a payment paid only when it pays the payment's
+  token and at least its amount. `POST /api/v2/payment/x402/callback`
+  verified the confirmation service's signature but never compared the
+  signed `amount` and `token` with the payment, so a confirmed transfer of
+  any amount in any token paid the order.
+  - The amount is compared in the unit `POST /api/v2/payment/x402/create`
+    asks for: whole tokens (not base units such as wei), the record's
+    `actual_amount`, shown with eight decimals. More is accepted.
+  - The token must be the payment's (the record's `currency`, any case) and,
+    when the x402 gateway sets `accept_tokens`, one of those.
+  - The check runs in the transaction that marks the payment paid. A refused
+    callback changes nothing and is answered `200`
+    `{"status":"ok","message":"payment not applied: ..."}`, like the other
+    callbacks that change nothing, so it is not redelivered.
+  - Known gaps: a payment created without a `token` is stored with the
+    column default currency `CNY` while its amount is a token amount, so no
+    callback pays it; and the token amount is still the create route's
+    placeholder conversion (order total in cents / 10^8), not an exchange
+    rate.
+
 ### Changed
 
 - The Agent contract (`anix.agent.v1`) now lives in Control's SDK module,

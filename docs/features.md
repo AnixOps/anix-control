@@ -86,7 +86,7 @@ source of truth.
 | Subscription | Multi-format subscription output | Implemented | V2Ray, Clash/Stash, Surge, Shadowrocket, Sing-box paths | Continue parser/formatter compatibility tests. |
 | Payment | Public payment methods and status | Implemented | `/api/v2/payment/methods`, `/payment/status/:trade_no` | None known. |
 | Payment | EPay callback plugin | Implemented | `/api/v2/payment/callback/epay` | Keep signature and amount verification tests. |
-| Payment | X402 create/check/callback | Partial | `/payment/x402/*` | Current chain/provider behavior needs production integration evidence. |
+| Payment | X402 create/check/callback | Partial | `/payment/x402/*` | Current chain/provider behavior needs production integration evidence. A callback pays only in the payment's token and at least its amount; the token amount is a placeholder conversion (total / 10^8), and a payment created without a token cannot be paid. |
 | Payment | Stripe and PayPal webhooks | Partial | `/payment/stripe/webhook`, `/payment/paypal/webhook` | Checkout/order creation is still mocked/stubbed. |
 | Payment | Alipay, WeChat, USDT live callbacks | Planned | Config structs and gateway type constants exist; service blocks enable/use until implementations exist | Add callback implementations and tests before enabling. |
 | Forwarding | Flux-compatible forward CRUD and ordering | Partial | `/api/v2/forward/*`, admin Forward page | Remaining Flux parity and runtime edge cases. |

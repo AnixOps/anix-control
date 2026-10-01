@@ -8,7 +8,9 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"math/big"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -253,7 +255,14 @@ func (h *PaymentHandler) X402Callback(c *gin.Context) {
 	txHash := callbackData.TxHash
 	switch callbackData.Status {
 	case "confirmed", "success":
-		if err := h.gatewayService.MarkOrderPaid(callbackData.TradeNo, txHash, rawBody); err != nil {
+		covers := x402PaymentCovers(callbackData.Token, callbackData.Amount, h.x402AcceptTokens())
+		if err := h.gatewayService.MarkOrderPaidIfCovered(callbackData.TradeNo, txHash, rawBody, covers); err != nil {
+			if errors.Is(err, service.ErrPaymentNotCovered) {
+				// Refused for good: acknowledged, so it is not redelivered.
+				log.Printf("X402 callback for trade_no=%s: %v", callbackData.TradeNo, err)
+				c.JSON(http.StatusOK, gin.H{"status": "ok", "message": err.Error()})
+				return
+			}
 			c.JSON(http.StatusInternalServerError, gin.H{"message": "更新支付状态失败", "error": err.Error()})
 			return
 		}
@@ -275,6 +284,81 @@ func (h *PaymentHandler) X402Callback(c *gin.Context) {
 	default:
 		c.JSON(http.StatusOK, gin.H{"status": "ok", "message": "pending"})
 	}
+}
+
+// x402AcceptTokens returns the enabled x402 gateway's accept_tokens; an
+// empty list accepts any token.
+func (h *PaymentHandler) x402AcceptTokens() []string {
+	gateway, err := h.gatewayService.GetByType(model.PaymentGatewayX402)
+	if err != nil || gateway == nil {
+		return nil
+	}
+	cfg, err := h.gatewayService.ParseConfig(gateway)
+	if err != nil {
+		return nil
+	}
+	if x402, ok := cfg.(*model.X402Config); ok {
+		return x402.AcceptTokens
+	}
+	return nil
+}
+
+// x402Decimal is a callback amount: a plain non-negative decimal number.
+var x402Decimal = regexp.MustCompile(`^[0-9]+(\.[0-9]+)?$`)
+
+// x402AmountDecimals is the precision X402CreatePayment shows the amount
+// to pay with ("amount" and the QR code's "value").
+const x402AmountDecimals = 8
+
+// x402PaymentCovers checks a confirmed x402 callback against its payment
+// record, inside the transaction that marks it paid.
+//
+// X402CreatePayment stores the token the buyer chose in Currency and the
+// amount of that token to pay in ActualAmount, and shows that amount with
+// eight decimals. The callback's amount is in the same unit: whole tokens
+// as a decimal string, not base units such as wei. The callback pays only
+// in the record's token, which the gateway must accept when its
+// accept_tokens is set, and only at least the amount shown; more is
+// accepted. A record created without a token has the column default
+// currency (CNY) and a token amount of no named token, so no token
+// callback can pay it.
+func x402PaymentCovers(token, amount string, acceptTokens []string) func(model.PaymentRecord) error {
+	token = strings.TrimSpace(token)
+	amount = strings.TrimSpace(amount)
+	return func(record model.PaymentRecord) error {
+		expectedToken := strings.TrimSpace(record.Currency)
+		if expectedToken == "" || !strings.EqualFold(token, expectedToken) {
+			return fmt.Errorf("%w: token %q is not the payment's %q", service.ErrPaymentNotCovered, token, expectedToken)
+		}
+		if len(acceptTokens) > 0 && !containsFold(acceptTokens, token) {
+			return fmt.Errorf("%w: token %q is not accepted by the x402 gateway", service.ErrPaymentNotCovered, token)
+		}
+		if !x402Decimal.MatchString(amount) {
+			return fmt.Errorf("%w: amount %q is not a decimal number", service.ErrPaymentNotCovered, amount)
+		}
+		paid, ok := new(big.Rat).SetString(amount)
+		if !ok {
+			return fmt.Errorf("%w: amount %q is not a decimal number", service.ErrPaymentNotCovered, amount)
+		}
+		expected := strconv.FormatFloat(record.ActualAmount, 'f', x402AmountDecimals, 64)
+		want, ok := new(big.Rat).SetString(expected)
+		if !ok {
+			return fmt.Errorf("%w: the payment's amount %v is not a number", service.ErrPaymentNotCovered, record.ActualAmount)
+		}
+		if paid.Cmp(want) < 0 {
+			return fmt.Errorf("%w: amount %s is below the payment's %s %s", service.ErrPaymentNotCovered, amount, expected, expectedToken)
+		}
+		return nil
+	}
+}
+
+func containsFold(values []string, value string) bool {
+	for _, v := range values {
+		if strings.EqualFold(strings.TrimSpace(v), value) {
+			return true
+		}
+	}
+	return false
 }
 
 // X402CheckPayment 查询 X402 支付状态
