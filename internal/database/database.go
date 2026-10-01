@@ -65,16 +65,15 @@ func Init(cfg *config.DatabaseConfig) error {
 		logLevel = logger.Warn
 	}
 
-	gormLogger := logger.Default
+	// logger.Default's writer, or the JSON handler's.
+	var sqlLogWriter logger.Writer = log.New(os.Stdout, "\r\n", log.LstdFlags)
+	colorful := true
 	if logging.JSON() {
-		// Same settings as logger.Default, written through the JSON handler.
-		gormLogger = logger.New(log.New(logging.StdWriter(), "", 0), logger.Config{
-			SlowThreshold: 200 * time.Millisecond,
-			LogLevel:      logger.Warn,
-		})
+		sqlLogWriter = log.New(logging.StdWriter(), "", 0)
+		colorful = false
 	}
 	db, err = gorm.Open(dialector, &gorm.Config{
-		Logger: gormLogger.LogMode(logLevel),
+		Logger: newSQLLogger(sqlLogWriter, colorful, logLevel),
 	})
 	if err != nil {
 		return fmt.Errorf("failed to connect database: %w", err)
@@ -101,6 +100,20 @@ func Init(cfg *config.DatabaseConfig) error {
 
 	initialized = true
 	return nil
+}
+
+// newSQLLogger returns GORM's SQL logger: logger.Default's settings at the
+// configured level. It logs each statement with its placeholders and never
+// the bound values (ParameterizedQueries): those are node API keys, tokens,
+// password hashes and subscription UUIDs, and database.log_level: info logs
+// every statement.
+func newSQLLogger(writer logger.Writer, colorful bool, level logger.LogLevel) logger.Interface {
+	return logger.New(writer, logger.Config{
+		SlowThreshold:        200 * time.Millisecond,
+		LogLevel:             level,
+		Colorful:             colorful,
+		ParameterizedQueries: true,
+	})
 }
 
 // DefaultSQLitePath is the SQLite database file used when none is configured.

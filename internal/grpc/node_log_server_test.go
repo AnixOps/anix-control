@@ -71,12 +71,12 @@ func TestNodeLogGRPCServerReportLogsValidationAndNotFound(t *testing.T) {
 
 	srv := NewNodeLogGRPCServer()
 
-	_, err := srv.ReportLogs(context.Background(), nodeLogRequestForTest(0))
+	_, err := srv.ReportLogs(withAdminCaller(context.Background()), nodeLogRequestForTest(0))
 	require.Error(t, err)
 	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 
 	req := nodeLogRequestForTest(404, nodeLogEntryForTest("node is missing", time.Now().Unix()))
-	_, err = srv.ReportLogs(context.Background(), req)
+	_, err = srv.ReportLogs(withAdminCaller(context.Background()), req)
 	require.Error(t, err)
 	assert.Equal(t, codes.NotFound, status.Code(err))
 }
@@ -96,7 +96,7 @@ func TestNodeLogGRPCServerReportLogsPersistsNonBlankEntries(t *testing.T) {
 		nodeLogEntryForTest("   ", time.Now().Unix()),
 	)
 
-	resp, err := srv.ReportLogs(context.Background(), req)
+	resp, err := srv.ReportLogs(withAdminCaller(context.Background()), req)
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	assert.True(t, resp.Success)
@@ -125,7 +125,7 @@ func TestNodeLogGRPCServerReportLogsUpdatesWireGuardRuntimeHealth(t *testing.T) 
 	entry := nodeLogEntryForTest("wireguard runtime unhealthy", time.Now().Unix())
 	entry.Set(nodeLogEntrySourceField, protoreflect.ValueOfString("wireguard"))
 	entry.Set(nodeLogEntryFieldsJSONField, protoreflect.ValueOfString(`{"runtime_healthy":false,"runtime_error":"gost exited"}`))
-	_, err := NewNodeLogGRPCServer().ReportLogs(context.Background(), nodeLogRequestForTest(uint32(node.ID), entry))
+	_, err := NewNodeLogGRPCServer().ReportLogs(withAdminCaller(context.Background()), nodeLogRequestForTest(uint32(node.ID), entry))
 	require.NoError(t, err)
 
 	var updated model.Node

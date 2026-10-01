@@ -1,6 +1,7 @@
 package grpc
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
@@ -109,4 +110,18 @@ func (m *NodeConnectionManager) configVersionForTest(nodeID uint32) int64 {
 func apiKeyHashForTest(apiKey string) string {
 	sum := sha256.Sum256([]byte(apiKey))
 	return hex.EncodeToString(sum[:])
+}
+
+// adminCallerServerOptionsForTest authenticates every call as an
+// administrator (as the global grpc.api_token does), for tests of the
+// handlers behind the authentication interceptors.
+func adminCallerServerOptionsForTest() []grpc.ServerOption {
+	return []grpc.ServerOption{
+		grpc.ChainUnaryInterceptor(func(ctx context.Context, req any, _ *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (any, error) {
+			return handler(withAdminCaller(ctx), req)
+		}),
+		grpc.ChainStreamInterceptor(func(srv any, ss grpc.ServerStream, _ *grpc.StreamServerInfo, handler grpc.StreamHandler) error {
+			return handler(srv, &streamWithContext{ServerStream: ss, ctx: withAdminCaller(ss.Context())})
+		}),
+	}
 }
