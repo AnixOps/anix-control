@@ -108,6 +108,21 @@ func NewForwardCleanAgentService(db *gorm.DB) *ForwardCleanAgentService {
 // choose the node, and take that node's jobs (Register). Tokens issued
 // without a node by earlier builds still bind on their first registration.
 func (s *ForwardCleanAgentService) CreateToken(input ForwardCleanAgentCreateInput) (*ForwardCleanAgentTokenResult, error) {
+	var result *ForwardCleanAgentTokenResult
+	if err := s.db.Transaction(func(tx *gorm.DB) (err error) {
+		result, err = CreateCleanAgentTokenTx(tx, input)
+		return err
+	}); err != nil {
+		return nil, err
+	}
+	return result, nil
+}
+
+// CreateCleanAgentTokenTx is CreateToken in the caller's transaction: the
+// agent row and its split row are written in it, and IssueCleanAgent runs
+// it in the operation's transaction. A token that collides with another
+// (never, in practice) is generated again under a savepoint.
+func CreateCleanAgentTokenTx(tx *gorm.DB, input ForwardCleanAgentCreateInput) (*ForwardCleanAgentTokenResult, error) {
 	name := strings.TrimSpace(input.Name)
 	if name == "" {
 		name = "v2forward-agent"
@@ -117,7 +132,7 @@ func (s *ForwardCleanAgentService) CreateToken(input ForwardCleanAgentCreateInpu
 		return nil, ErrForwardCleanAgentNodeRequired
 	}
 	var nodes int64
-	if err := s.db.Model(&model.ForwardNode{}).Where("id = ?", *nodeID).Count(&nodes).Error; err != nil {
+	if err := tx.Model(&model.ForwardNode{}).Where("id = ?", *nodeID).Count(&nodes).Error; err != nil {
 		return nil, err
 	}
 	if nodes == 0 {
@@ -136,7 +151,7 @@ func (s *ForwardCleanAgentService) CreateToken(input ForwardCleanAgentCreateInpu
 			Token:  token,
 			Status: model.ForwardCleanAgentStatusOffline,
 		}
-		if err := s.db.Transaction(func(tx *gorm.DB) error {
+		if err := tx.Transaction(func(tx *gorm.DB) error {
 			if err := tx.Create(agent).Error; err != nil {
 				return err
 			}
@@ -160,25 +175,33 @@ func (s *ForwardCleanAgentService) ListAgents() ([]model.ForwardCleanAgent, erro
 }
 
 func (s *ForwardCleanAgentService) RevokeAgent(id uint) error {
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		return RevokeCleanAgentTx(tx, id)
+	})
+}
+
+// RevokeCleanAgentTx is RevokeAgent in the caller's transaction: the agent
+// is marked revoked and its split row follows. RevokeCredential runs it in
+// the operation's transaction. An agent that does not exist is
+// gorm.ErrRecordNotFound; one already revoked is revoked again.
+func RevokeCleanAgentTx(tx *gorm.DB, id uint) error {
 	if id == 0 {
 		return errors.New("agent id is required")
 	}
 	now := time.Now()
-	return s.db.Transaction(func(tx *gorm.DB) error {
-		result := tx.Model(&model.ForwardCleanAgent{}).
-			Where("id = ?", id).
-			Updates(map[string]any{
-				"status":     model.ForwardCleanAgentStatusRevoked,
-				"revoked_at": &now,
-			})
-		if result.Error != nil {
-			return result.Error
-		}
-		if result.RowsAffected == 0 {
-			return gorm.ErrRecordNotFound
-		}
-		return nodesecrets.Sync(tx, nodesecrets.TableCleanAgent, id)
-	})
+	result := tx.Model(&model.ForwardCleanAgent{}).
+		Where("id = ?", id).
+		Updates(map[string]any{
+			"status":     model.ForwardCleanAgentStatusRevoked,
+			"revoked_at": &now,
+		})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nodesecrets.Sync(tx, nodesecrets.TableCleanAgent, id)
 }
 
 // Register marks an agent online and binds its token to a node.

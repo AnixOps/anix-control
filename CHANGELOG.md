@@ -474,6 +474,40 @@
 
 ### Added
 
+- **Credential, secret and retirement operations (NO-5)**
+  (`internal/kernelnodeops`, `docs/architecture/node-ops-service.md`
+  section 3.11). The kernel executes the credentials family
+  (`IssueCredential`, `RevokeCredential`, `IssueRegistrationKey`,
+  `RevokeRegistrationKey`, `IssueCleanAgent`), the nodeconfig family's
+  `RetireNode`, `RetireProtocol` and `PutSecretDocument`, and the
+  `ValidateNodeConfig` RPC; `GetCapabilities` lists the eight kinds.
+  - **Secrets in, secrets out.** A secret an administrator types reaches an
+    executor as a sealed handle, resolved for the bound request only and
+    kept in kernel memory until the request ends. A secret shown once (a
+    node's key and secret, a forward node token, a registration key, a
+    clean agent token, an `anixagt_` enrollment credential) is minted as a
+    handle inside the transaction that stores it: when the answer cannot
+    show it, nothing is issued. Issuing outside an administrator's request
+    is refused. Results and the ledger never hold a value or a handle.
+  - **One implementation.** The legacy node, protocol, raw configuration,
+    registration key, clean agent and forward node deletion routes run the
+    same functions (`internal/service/node_credential_ops.go`), with every
+    `nodesecrets.Sync` and every agent certificate revocation in the same
+    transaction as before. Their answers are pinned byte for byte
+    (`TestNodeCredentialAnswers`) and unchanged.
+  - **Cascades (D11).** `RetireNode` deletes a node's protocols with their
+    WireGuard peers, subscription group links and secrets, its credentials
+    and raw configuration secrets, and revokes its agent certificates, in
+    one transaction, as the legacy deletion does; `RetireProtocol` likewise.
+    A retirement of what is gone succeeds with nothing counted; a failure
+    rolls the cascade back. The node or protocol row stays the package's.
+  - **Validation.** `ValidateNodeConfig` runs the routes' validators; a
+    handle or the placeholder at a secret position counts as present.
+  - **Not revoked in place.** `RevokeCredential` revokes a clean agent's
+    token or a node's agent enrollments; a node's key, secret or token is
+    rotated (`replace`) or retired with the node.
+  - `nodesecrets.Retire` removes the split rows of legacy rows their owner
+    is about to delete; `nodesecrets.ReplacePositions` is exported.
 - **Sealed secret handles (NO-4)** (`internal/sealedsecrets`,
   `docs/architecture/node-ops-service.md` section 3.7). A package host no
   longer reads a node secret an administrator types, or one shown once in

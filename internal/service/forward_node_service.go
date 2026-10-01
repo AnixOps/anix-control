@@ -9,7 +9,6 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
-	"github.com/AnixOps/anix-control/v4/internal/agentpki"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"gorm.io/gorm"
@@ -57,16 +56,18 @@ func (s *ForwardNodeService) Update(node *model.ForwardNode) error {
 	})
 }
 
-// Delete 删除节点 and revoke its agent certificates.
+// Delete 删除节点 and revoke its agent certificates. The kernel's part, the
+// token's split row and the certificates, is RetireForwardNodeTx, which
+// RetireNode runs too; the node row goes with it in the same transaction.
 func (s *ForwardNodeService) Delete(id uint) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
+		if _, err := RetireForwardNodeTx(tx, id); err != nil {
+			return err
+		}
 		if err := tx.Delete(&model.ForwardNode{}, id).Error; err != nil {
 			return err
 		}
-		if err := nodesecrets.Sync(tx, nodesecrets.TableForwardNode, id); err != nil {
-			return err
-		}
-		return revokeNodeAgents(tx, agentcontrol.NodeKindForward, id, agentpki.RevokeReasonNodeDeleted)
+		return nodesecrets.Sync(tx, nodesecrets.TableForwardNode, id)
 	})
 }
 

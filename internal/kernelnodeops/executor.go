@@ -11,6 +11,7 @@ import (
 	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
 	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
 	"github.com/AnixOps/anix-control/v4/internal/sealedsecrets"
+	"gorm.io/gorm"
 )
 
 // Executor carries out the operations of one kind (node-ops-service.md
@@ -59,6 +60,9 @@ type Submission struct {
 	Targets []*kernelnodeopsv1.NodeRef
 
 	store *sealedsecrets.Store
+	// db is the submitting call's database, for checks a Preparer makes
+	// before the operation is recorded.
+	db *gorm.DB
 }
 
 // Registry maps operation kinds to their executors. A kind without one is

@@ -623,6 +623,17 @@ func resolveDocument(table, column string, owner uint64, document string, rows m
 	return resolved
 }
 
+// ReplacePositions returns document with each pointer set to its
+// JSON-encoded value (an empty pointer stands for the whole text). A
+// document that is not JSON, a value that is not, or a pointer whose parent
+// is not in the document is an error.
+func ReplacePositions(document string, replacements map[string]string) (string, error) {
+	if len(replacements) == 0 {
+		return document, nil
+	}
+	return replacePositions(document, replacements)
+}
+
 // replacePositions sets each pointer of document to its JSON-encoded value.
 // An empty pointer stands for the whole column, whose value is the text
 // itself.

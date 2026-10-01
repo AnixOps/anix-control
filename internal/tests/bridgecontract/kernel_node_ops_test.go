@@ -255,7 +255,9 @@ func exerciseNodeOps(t *testing.T, kernel *nodeOpsKernel, connection grpc.Client
 		}}}})
 	require.Equal(t, codes.PermissionDenied, status.Code(err), "a family the package does not hold")
 	_, err = client.ValidateNodeConfig(ctx, &kernelnodeopsv1.ValidateNodeConfigRequest{})
-	require.Equal(t, codes.Unimplemented, status.Code(err), "NO-5 serves the validators")
+	require.Equal(t, codes.InvalidArgument, status.Code(err), "NO-5 serves the validators: a document is required")
+	_, err = client.ListAgentSessions(ctx, &kernelnodeopsv1.ListAgentSessionsRequest{})
+	require.Equal(t, codes.Unimplemented, status.Code(err), "NO-6 serves the agent sessions")
 }
 
 // A local host reaches KernelNodeOps over its bridge connection and the
