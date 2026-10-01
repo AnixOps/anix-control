@@ -1278,10 +1278,26 @@ type ExecuteCommandRequest struct {
 // @Tags Agent
 // @Produce json
 // @Param node_id query int true "鑺傜偣 ID"
+// @Param X-API-Key header string true "forward node API token"
 // @Success 200 {object} map[string]any
+// @Failure 401 {object} map[string]any
+// @Failure 403 {object} map[string]any
 // @Router /api/v2/forward/agent/rules [get]
+//
+// Only a forward node reads its rules: the request names the node
+// (node_id, or the X-Node-ID header) and carries its API token (the
+// X-API-Key header, or api_key or token), as the agent's other calls do.
+// The route is public, and the rules show where every user's traffic goes.
 func (h *AgentHandler) AgentGetForwardRules(c *gin.Context) {
-	nodeID, _ := strconv.ParseUint(c.Query("node_id"), 10, 32)
+	nodeID, err := h.authenticateForwardNodeRequest(c)
+	if err != nil {
+		status := http.StatusUnauthorized
+		if errors.Is(err, errAgentNotForwardNode) {
+			status = http.StatusForbidden
+		}
+		c.JSON(status, gin.H{"error": err.Error()})
+		return
+	}
 
 	var rules []*model.ForwardRule
 	h.db.Where("relay_node_id = ? OR exit_node_id = ?", nodeID, nodeID).
@@ -1303,6 +1319,40 @@ func (h *AgentHandler) AgentGetForwardRules(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{"data": agentRules})
+}
+
+// errAgentNotForwardNode refuses a proxy node's credentials where only a
+// forward node may act.
+var errAgentNotForwardNode = errors.New("not a forward node")
+
+// authenticateForwardNodeRequest returns the forward node a REST request
+// authenticates as: the node it names and whose API token it carries. An
+// unknown node and a wrong token are the same error, so the answer does not
+// tell which nodes exist.
+func (h *AgentHandler) authenticateForwardNodeRequest(c *gin.Context) (uint, error) {
+	rawNodeID := c.Query("node_id")
+	if rawNodeID == "" {
+		rawNodeID = c.GetHeader("X-Node-ID")
+	}
+	token := c.GetHeader("X-API-Key")
+	if token == "" {
+		token = c.Query("api_key")
+	}
+	if token == "" {
+		token = c.Query("token")
+	}
+	nodeID, err := strconv.ParseUint(rawNodeID, 10, 32)
+	if err != nil || nodeID == 0 || token == "" {
+		return 0, errors.New("missing node_id or token")
+	}
+	isForwardNode, err := h.verifyForwardNodeToken(uint(nodeID), token)
+	if err != nil {
+		return 0, errAgentInvalidToken
+	}
+	if !isForwardNode {
+		return 0, errAgentNotForwardNode
+	}
+	return uint(nodeID), nil
 }
 
 // ForwardRuleForAgent 杞彂瑙勫垯锛圓gent 鏍煎紡锛?
