@@ -2385,6 +2385,7 @@ export default {
         port: '465',
         username: "your{'@'}email.com",
         password: 'Enter SMTP password',
+        passwordStored: 'Password stored; leave blank to keep it',
         fromName: CONTROL_NAME,
         fromAddress: "noreply{'@'}example.com"
       }

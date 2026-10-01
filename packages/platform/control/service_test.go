@@ -21,6 +21,10 @@ type bridgeStub struct{ operation string }
 // settingsStub stands for the kernel's KernelSettings.
 type settingsStub struct{}
 
+func (settingsStub) GetSettings(context.Context, *kernelsettingsv1.GetSettingsRequest, ...grpc.CallOption) (*kernelsettingsv1.GetSettingsResponse, error) {
+	return &kernelsettingsv1.GetSettingsResponse{}, nil
+}
+
 func (settingsStub) PutSettings(context.Context, *kernelsettingsv1.PutSettingsRequest, ...grpc.CallOption) (*kernelsettingsv1.PutSettingsResponse, error) {
 	return &kernelsettingsv1.PutSettingsResponse{Applied: true}, nil
 }
@@ -59,8 +63,10 @@ func TestPlatformHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) {
 	require.Error(t, err)
 	handlers := (&native.Service{Settings: settingsStub{}}).Handlers()
 	require.Len(t, handlers, len(platformRoutes))
-	require.NotContains(t, (&native.Service{}).Handlers(), native.BackupConfigUpdateRouteID,
-		"without KernelSettings the backup configuration update stays legacy")
+	for _, route := range []string{native.BackupConfigGetRouteID, native.BackupConfigUpdateRouteID} {
+		require.NotContains(t, (&native.Service{}).Handlers(), route,
+			"without KernelSettings the backup configuration routes stay legacy")
+	}
 	for route := range platformRoutes {
 		require.Contains(t, handlers, route, "every native route has a handler")
 	}
@@ -104,10 +110,12 @@ func TestPlatformManifestCapabilities(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(raw, &manifest))
 	require.ElementsMatch(t, []string{
-		"kernel.storage.v1", "kernel.storage.adopt:v2_backup_config", "kernel.storage.adopt:v2_backup_record",
+		"kernel.storage.v1", "kernel.storage.adopt:v2_backup_record",
 		"kernel.view:kapi_system_audit_log_v1",
-		// Only the backup namespace: the generic system configuration
-		// routes stay bridged (docs/architecture/settings-service.md).
-		"kernel.settings.backup.write.v1",
+		// Only the backup namespace, without its secrets: the package reads
+		// and writes the backup configuration through KernelSettings, never
+		// the row, and the generic system configuration routes stay
+		// bridged (docs/architecture/settings-service.md).
+		"kernel.settings.backup.read.v1", "kernel.settings.backup.write.v1",
 	}, manifest.Capabilities)
 }

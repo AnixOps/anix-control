@@ -140,6 +140,43 @@ describe('Admin Notifications', () => {
     wrapper.unmount()
   })
 
+  it('starts the SMTP password empty when the API masks it, and saves it empty to keep it', async () => {
+    adminApi.getEmailConfig.mockResolvedValue({
+      code: 0,
+      msg: 'ok',
+      data: {
+        host: 'smtp.masked.test',
+        port: 465,
+        username: 'mailer',
+        password: '********',
+        from_name: 'Mailer',
+        from_address: 'mailer@example.com',
+        encryption: true
+      },
+      ts: 1783526400000
+    })
+    const wrapper = mount(Notifications)
+    await flushPromises()
+
+    expect(wrapper.vm.emailConfig.password).toBe('')
+    expect(wrapper.vm.emailPasswordStored).toBe(true)
+    const input = wrapper.find('input[type="password"]')
+    expect(input.attributes('placeholder')).toBe('Password stored; leave blank to keep it')
+
+    await wrapper.vm.saveEmailSettings()
+    expect(adminApi.updateEmailConfig).toHaveBeenCalledWith(expect.objectContaining({
+      host: 'smtp.masked.test',
+      password: ''
+    }))
+
+    adminApi.getEmailConfig.mockResolvedValueOnce({ code: 0, msg: 'ok', data: { host: 'smtp.masked.test', password: '' }, ts: 1 })
+    await wrapper.vm.fetchEmailSettings()
+    expect(wrapper.vm.emailPasswordStored).toBe(false)
+    expect(wrapper.find('input[type="password"]').attributes('placeholder')).toBe('Enter SMTP password')
+
+    wrapper.unmount()
+  })
+
   it('keeps write flows working after response envelope normalization', async () => {
     const wrapper = mount(Notifications)
     await flushPromises()

@@ -210,16 +210,20 @@ refresh of the kernel's in-memory copies.
     `notification.email.config` through KernelSettings, namespace `mail`
     ([`settings-service.md`](settings-service.md)). Its value holds the SMTP
     password: the package reads it in clear (`kernel.settings.mail.secrets.v1`)
-    because the GET answers it, as the kernel's handler does, and the test
-    e-mail is sent from the package host. The parity test runs a test SMTP
-    server and compares the mail each side delivers.
+    because the test e-mail is sent from the package host; the GET masks it
+    as the kernel's handler does, and an update that keeps it sends the
+    placeholder. The parity test runs a test SMTP server and compares the
+    mail each side delivers.
   - Two stay bridged: setting the webhook (needs the request host) and the
     public webhook (`/sub` needs the subscription token).
-- **Platform (in place).** 5 of 12 routes: the backup configuration, list
-  and statistics on the adopted `v2_backup_config` and `v2_backup_record`
-  tables, the system audit log through `kapi_system_audit_log_v1`, and the
-  backup configuration update through KernelSettings (namespace `backup`),
+- **Platform (in place).** 5 of 12 routes: the backup list and statistics
+  on the adopted `v2_backup_record` table, the system audit log through
+  `kapi_system_audit_log_v1`, and the backup configuration (GET and PUT)
+  through KernelSettings (namespace `backup`, read and write, no secrets),
   proved by `internal/tests/platformcompat`.
+  - The package no longer adopts `v2_backup_config`: it never holds the S3
+    keys, which KernelSettings answers masked, as the kernel's handler
+    shows them. The parity test gives these routes no storage.
   - The update is written by the kernel: it saves the row, records the
     audit entry its handler records and makes the backup service reload
     the copy it keeps in memory, which backup creation reads. The parity

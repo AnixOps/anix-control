@@ -4,6 +4,25 @@
 
 ### Security
 
+- The SMTP password is no longer answered in clear to administrators.
+  `GET /api/v2/admin/notification/email/config` (legacy and native) answered
+  it as stored, and the system configuration list, single-key read and
+  update answer showed it inside the `notification.email.config` value: the
+  key's name does not mark it secret. The password now reads `********` when
+  one is set (`""` when none is) in all of these answers; the rest of the
+  value is shown as stored.
+  - Saving keeps it: an e-mail configuration update with the placeholder (or,
+    as before, a blank password) and a system configuration update whose
+    value carries `"password":"********"` keep the stored password, and a
+    new value replaces it. KernelSettings applies the same rule to a
+    `mail` namespace write, and the notification package sends the
+    placeholder when an update keeps the password.
+  - The test e-mail still uses the stored password: the notification package
+    keeps `kernel.settings.mail.secrets.v1`; only answers to administrators
+    are masked.
+  - The e-mail settings page starts the password field empty with
+    "Password stored; leave blank to keep it". See `docs/UPGRADE.md`.
+
 - The x402 callback marks a payment paid only when it pays the payment's
   token and at least its amount. `POST /api/v2/payment/x402/callback`
   verified the confirmation service's signature but never compared the
@@ -503,6 +522,20 @@
   `payment:<trade_no>`, and a repeat of a paid payment applies it to its
   order again, changing nothing unless the order was left pending. See
   `docs/UPGRADE.md`.
+- The platform package reads the backup configuration through
+  KernelSettings and no longer adopts `v2_backup_config`. It could read the
+  S3 access and secret keys from the adopted row and write the row
+  directly. `GET /api/v2/admin/system/backup/config` and the answer of its
+  `PUT` now read namespace `backup` without its secrets, so the S3 keys
+  reach the package masked, exactly as the kernel's handler shows them; the
+  package's grants are `kernel.storage.adopt:v2_backup_record`,
+  `kernel.view:kapi_system_audit_log_v1` and
+  `kernel.settings.backup.read.v1`/`write.v1`, and on PostgreSQL its role
+  loses its privileges on `v2_backup_config`. A backup read through
+  KernelSettings now creates the default row when there is none, as the
+  kernel's handler does, and answers the row's `id`, `created_at` and
+  `updated_at` as read-only keys. A host without the contract keeps both
+  routes legacy.
 - The Agent contract (`anix.agent.v1`) now lives in Control's SDK module,
   `github.com/AnixOps/anix-control/sdk` (plan step A0). Control no longer
   requires `github.com/AnixOps/anix-agent/sdk`, which is frozen at v1.1.0.
@@ -624,6 +657,24 @@
 
 ### Fixed
 
+- E-mail and invite configuration writes record an audit entry. `PUT
+  /api/v2/admin/notification/email/config` and `PUT
+  /api/v2/admin/invite/config` (legacy and native) wrote
+  `v2_system_config` without a `v2_operation_log` entry, unlike every other
+  system write. They now record the system configuration entry for the key
+  they write (`notification.email.config`, `invite.frontend.config`):
+  module `system`, `create` or `update`, target `system_config`, and
+  content naming the key, its group and type, whether it has a value and
+  whether the stored SMTP password was kept, and, for the e-mail
+  configuration, `"masked_fields":["password"]` with
+  `masked_fields_with_value` saying whether a password is set; never a
+  value. The legacy handlers and KernelSettings (namespaces `mail` and
+  `invite`) build it with the same function, so both write the same row.
+- Audit entries written through the package bridge name the user. A legacy
+  system handler the bridge relays to gets the actor's id only, so its
+  `v2_operation_log` rows (system and backup configuration, backups, and
+  now the e-mail and invite configuration) and the KernelSettings rows had
+  an empty username. Both now record the user's e-mail, looked up by id.
 - The administrator's order list filtered by `email` always failed: the
   joined `v2_user` made `created_at` ambiguous in the ordering. The filter is
   now a subquery, and orders created in the same second keep a stable order

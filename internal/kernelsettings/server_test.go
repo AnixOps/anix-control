@@ -2,6 +2,7 @@ package kernelsettings
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -276,24 +277,77 @@ func TestPutValidatesBeforeWriting(t *testing.T) {
 	require.Empty(t, audits(t, db))
 }
 
-// The e-mail and invite configuration handlers record no audit entry, and
-// neither do their namespaces' writes.
-func TestMailAndInviteWritesRecordNoAudit(t *testing.T) {
+// E-mail and invite configuration writes record the system configuration
+// handler's entry per key, as their kernel handlers now do: the masked
+// password is named, never its value. The username is the actor's e-mail.
+func TestMailAndInviteWritesRecordTheSystemConfigAudit(t *testing.T) {
 	ctx := context.Background()
 	db, server := fixture(t, capabilities("mail", service.SettingsAccessWrite).with(capabilities("invite", service.SettingsAccessWrite)))
-	_, err := server.PutSettings(ctx, &kernelsettingsv1.PutSettingsRequest{Namespace: "mail", RequestId: "m", Entries: []*kernelsettingsv1.SettingEntry{
-		{Key: "notification.email.config", Value: `{"host":"smtp.example"}`, Type: "json", Group: "notification", Remark: "Email notification config"},
+	require.NoError(t, db.AutoMigrate(&model.User{}))
+	require.NoError(t, db.Create(&model.User{ID: 7, Email: "admin@example.test", Password: "x", UUID: "u-7", Token: "t-7"}).Error)
+	actor := &kernelsettingsv1.Actor{UserId: ptr(uint64(7)), ClientIp: "192.0.2.4", UserAgent: "ua/1"}
+	_, err := server.PutSettings(ctx, &kernelsettingsv1.PutSettingsRequest{Namespace: "mail", RequestId: "m", Actor: actor, Entries: []*kernelsettingsv1.SettingEntry{
+		{Key: "notification.email.config", Value: `{"host":"smtp.example","password":"********"}`, Type: "json", Group: "notification", Remark: "Email notification config"},
 	}})
 	require.NoError(t, err)
-	_, err = server.PutSettings(ctx, &kernelsettingsv1.PutSettingsRequest{Namespace: "invite", RequestId: "i", Entries: []*kernelsettingsv1.SettingEntry{
+	_, err = server.PutSettings(ctx, &kernelsettingsv1.PutSettingsRequest{Namespace: "invite", RequestId: "i", Actor: actor, Entries: []*kernelsettingsv1.SettingEntry{
 		{Key: "invite.frontend.config", Value: `{"code_prefix":"NEW"}`, Type: "json", Group: "invite", Remark: "Invite frontend configuration fields"},
 	}})
 	require.NoError(t, err)
-	require.Empty(t, audits(t, db))
+	_, err = server.PutSettings(ctx, &kernelsettingsv1.PutSettingsRequest{Namespace: "mail", RequestId: "m2", Entries: []*kernelsettingsv1.SettingEntry{
+		{Key: "notification.email.sender", Value: "x"},
+	}})
+	require.NoError(t, err)
+
 	var stored model.SystemConfig
 	require.NoError(t, db.Where("key = ?", "notification.email.config").Take(&stored).Error)
-	require.Equal(t, `{"host":"smtp.example"}`, stored.Value)
+	require.Equal(t, `{"host":"smtp.example","password":"smtp-secret"}`, stored.Value)
 	require.Equal(t, "Email notification config", stored.Remark)
+
+	entries := audits(t, db)
+	require.Len(t, entries, 3)
+	for _, entry := range entries[:2] {
+		require.Equal(t, "system", entry.Module)
+		require.Equal(t, "system_config", entry.TargetType)
+		require.Equal(t, "update", entry.Action)
+		require.Equal(t, uint(7), *entry.UserID)
+		require.Equal(t, "admin@example.test", entry.Username)
+		require.Equal(t, "192.0.2.4", entry.IP)
+		require.Equal(t, "ua/1", entry.UserAgent)
+		require.NotContains(t, entry.Content, "smtp-secret")
+	}
+	require.Equal(t, stored.ID, *entries[0].TargetID)
+	require.JSONEq(t, `{"key":"notification.email.config","group":"notification","type":"json","sensitive":false,"has_value":true,
+		"preserve_existing":true,"masked_fields":["password"],"masked_fields_with_value":["password"]}`, entries[0].Content)
+	require.JSONEq(t, `{"key":"invite.frontend.config","group":"invite","type":"json","sensitive":false,"has_value":true,"preserve_existing":false}`, entries[1].Content)
+	require.Equal(t, "create", entries[2].Action)
+	require.Nil(t, entries[2].UserID)
+	require.Empty(t, entries[2].Username, "no actor, no user")
+}
+
+// The e-mail configuration's password is a masked field: a write that
+// sends it as the placeholder keeps the stored password, and a new one
+// replaces it.
+func TestMailWriteKeepsThePasswordSentAsThePlaceholder(t *testing.T) {
+	ctx := context.Background()
+	db, server := fixture(t, capabilities("mail", service.SettingsAccessWrite))
+	put := func(id, value string) {
+		_, err := server.PutSettings(ctx, &kernelsettingsv1.PutSettingsRequest{Namespace: "mail", RequestId: id, Entries: []*kernelsettingsv1.SettingEntry{
+			{Key: "notification.email.config", Value: value, Type: "json"},
+		}})
+		require.NoError(t, err)
+	}
+	stored := func() string {
+		var row model.SystemConfig
+		require.NoError(t, db.Where("key = ?", "notification.email.config").Take(&row).Error)
+		return row.Value
+	}
+	put("keep", `{"host":"smtp.new","password":"********"}`)
+	require.Equal(t, `{"host":"smtp.new","password":"smtp-secret"}`, stored())
+	put("rotate", `{"host":"smtp.new","password":"rotated"}`)
+	require.Equal(t, `{"host":"smtp.new","password":"rotated"}`, stored())
+	put("whole", "********")
+	require.Equal(t, `{"host":"smtp.new","password":"rotated"}`, stored(), "the placeholder for the whole secret keeps it")
 }
 
 func TestDeleteRemovesNamespaceKeysWithTheirAudit(t *testing.T) {
@@ -328,15 +382,27 @@ func TestBackupNamespaceWritesTheRowAndRefreshesTheBackupService(t *testing.T) {
 
 	listed, err := server.GetSettings(ctx, &kernelsettingsv1.GetSettingsRequest{Namespace: "backup"})
 	require.NoError(t, err)
-	require.Len(t, listed.GetSettings(), 13)
+	require.Len(t, listed.GetSettings(), 16, "the 13 fields and the row's id and times")
 	require.Equal(t, "backup.auto_backup", listed.GetSettings()[0].GetKey())
-	require.False(t, listed.GetSettings()[0].GetStored(), "with no row the defaults read, unstored")
-	var count int64
-	require.NoError(t, db.Model(&model.BackupConfig{}).Count(&count).Error)
-	require.Zero(t, count, "a read creates nothing")
+	require.True(t, listed.GetSettings()[0].GetStored(), "with no row the read creates the defaults, as the kernel's handler does")
+	var rows []model.BackupConfig
+	require.NoError(t, db.Find(&rows).Error)
+	require.Len(t, rows, 1)
+	read := values(listed.GetSettings())
+	require.Equal(t, "backups", read["backup.storage_path"])
+	require.Equal(t, "7", read["backup.retention_days"])
+	require.Equal(t, strconv.FormatUint(uint64(rows[0].ID), 10), read["backup.id"])
+	created, err := time.Parse(time.RFC3339Nano, read["backup.created_at"])
+	require.NoError(t, err)
+	require.True(t, created.Equal(rows[0].CreatedAt))
+	again, err := server.GetSettings(ctx, &kernelsettingsv1.GetSettingsRequest{Namespace: "backup"})
+	require.NoError(t, err)
+	require.Equal(t, read, values(again.GetSettings()), "a second read creates nothing")
 
 	backups := service.NewBackupService(db)
-	require.NoError(t, db.Create(&model.BackupConfig{StorageType: "s3", StoragePath: "/old", S3AccessKey: "AKIA", S3SecretKey: "s3cret", RetentionDays: 3}).Error)
+	require.NoError(t, db.Model(&model.BackupConfig{}).Where("id = ?", rows[0].ID).Updates(map[string]any{
+		"storage_type": "s3", "storage_path": "/old", "s3_access_key": "AKIA", "s3_secret_key": "s3cret", "retention_days": 3,
+	}).Error)
 	cached, err := backups.GetConfig()
 	require.NoError(t, err)
 	require.Equal(t, "/old", cached.StoragePath)
@@ -367,11 +433,20 @@ func TestBackupNamespaceWritesTheRowAndRefreshesTheBackupService(t *testing.T) {
 		"backup_files":false,"storage_type":"s3","storage_path":"/new","s3_bucket":"","s3_region":"","s3_endpoint":"",
 		"s3_access_key_has_value":true,"s3_secret_key_has_value":true,"preserved_sensitive_fields":["s3_access_key","s3_secret_key"]}`, entries[0].Content)
 
-	got, err := server.GetSettings(ctx, &kernelsettingsv1.GetSettingsRequest{Namespace: "backup", Keys: []string{"backup.s3_secret_key", "backup.enabled"}})
+	got, err := server.GetSettings(ctx, &kernelsettingsv1.GetSettingsRequest{Namespace: "backup", Keys: []string{"backup.s3_secret_key", "backup.enabled", "backup.updated_at"}})
 	require.NoError(t, err)
 	require.Equal(t, "********", got.GetSettings()[0].GetValue())
+	require.True(t, got.GetSettings()[0].GetMasked())
 	require.Equal(t, "true", got.GetSettings()[1].GetValue())
 	require.True(t, got.GetSettings()[1].GetStored())
+	require.Equal(t, refreshed.UpdatedAt.Format(time.RFC3339Nano), got.GetSettings()[2].GetValue())
+
+	// The row's id and times are read-only.
+	for _, key := range []string{"backup.id", "backup.created_at", "backup.updated_at"} {
+		_, err = server.PutSettings(ctx, &kernelsettingsv1.PutSettingsRequest{Namespace: "backup", RequestId: "ro:" + key,
+			Entries: []*kernelsettingsv1.SettingEntry{{Key: key, Value: "1"}}})
+		require.Equal(t, codes.InvalidArgument, status.Code(err), key)
+	}
 }
 
 // A backup write with no row creates the defaults first, as the kernel's

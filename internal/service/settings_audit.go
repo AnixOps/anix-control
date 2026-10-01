@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"gorm.io/gorm"
 )
 
 // SettingsAuditActor is who changed a setting, as the audit trail records
@@ -17,9 +18,27 @@ type SettingsAuditActor struct {
 	UserAgent string
 }
 
+// AuditUsername is the username the audit trail records for userID when
+// the request names none: the user's e-mail, which the kernel's handlers
+// record for a signed-in administrator. A request the package bridge
+// relays to a legacy handler, and a KernelSettings call, carry the actor's
+// id only. An unknown user, or a failed lookup, records none.
+func AuditUsername(db *gorm.DB, userID *uint) string {
+	if db == nil || userID == nil || *userID == 0 {
+		return ""
+	}
+	var emails []string
+	if err := db.Model(&model.User{}).Where("id = ?", *userID).Limit(1).Pluck("email", &emails).Error; err != nil || len(emails) == 0 {
+		return ""
+	}
+	return strings.TrimSpace(emails[0])
+}
+
 // SystemConfigAuditInput is the audit entry of a system configuration
 // change: which key, its group and type, whether it is a secret and has a
-// value, and whether the stored secret was kept. It never holds the value.
+// value, and whether the stored secret was kept. For a value with masked
+// fields (the SMTP password of the e-mail configuration) it also names
+// them and those that hold a value. It never holds the value.
 func SystemConfigAuditInput(actor SettingsAuditActor, action string, cfg *model.SystemConfig, preserveExisting bool) *OperationLogInput {
 	return &OperationLogInput{
 		UserID: actor.UserID, Username: actor.Username, Action: action, Module: "system",
@@ -34,14 +53,20 @@ func SystemConfigAuditContent(cfg *model.SystemConfig, preserveExisting bool) st
 	if cfg == nil {
 		return ""
 	}
-	content, err := json.Marshal(map[string]any{
+	fields := map[string]any{
 		"key":               cfg.Key,
 		"group":             cfg.Group,
 		"type":              cfg.Type,
 		"sensitive":         IsSensitiveSystemConfigKey(cfg.Key),
 		"has_value":         strings.TrimSpace(cfg.Value) != "",
 		"preserve_existing": preserveExisting,
-	})
+	}
+	// The names avoid the words the audit log answer redacts.
+	if masked := SystemConfigMaskedFields(cfg.Key); len(masked) > 0 {
+		fields["masked_fields"] = masked
+		fields["masked_fields_with_value"] = maskedFieldsWithValue(cfg.Key, cfg.Value)
+	}
+	content, err := json.Marshal(fields)
 	if err != nil {
 		return cfg.Key
 	}

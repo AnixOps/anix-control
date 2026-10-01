@@ -300,8 +300,9 @@ func storedFrontendConfig(cfg frontendConfig) frontendConfig {
 // AdminUpdateConfig is PUT /api/v2/admin/invite/config. The invite
 // configuration is written to the adopted v2_invite_config, the frontend
 // settings through the kernel's KernelSettings (namespace invite), which
-// also makes the kernel's invite services reload the configuration they
-// keep in memory. Like the kernel's handler it answers the settings as
+// records the system configuration audit entry the kernel's handler
+// records and makes the kernel's invite services reload the configuration
+// they keep in memory. Like the kernel's handler it answers the settings as
 // requested, before an empty prefix, length or method list is defaulted
 // for storage.
 func (s *Service) AdminUpdateConfig(ctx context.Context, request pluginhostsdk.NativeRequest) (pluginhostsdk.NativeResponse, error) {

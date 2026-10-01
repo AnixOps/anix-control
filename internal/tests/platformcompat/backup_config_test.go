@@ -2,6 +2,7 @@ package platformcompat
 
 import (
 	"context"
+	"errors"
 	"sync"
 	"testing"
 
@@ -12,32 +13,46 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/AnixOps/anix-control/v4/internal/tests/packagecompat"
 	"github.com/AnixOps/anix-control/v4/packages/platform/native"
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
 
 // platformHost is the identity the kernel serves the platform host as; its
-// signed release declares kernel.settings.backup.write.v1.
+// signed release declares kernel.settings.backup.read.v1 and
+// kernel.settings.backup.write.v1, not the namespace's secrets.
 var platformHost = packagebridge.HostIdentity{PackageID: "platform", Version: "4.1.0", Generation: 1}
 
-// backupConfigUpdate is the backup configuration update: the legacy handler
-// against the native one, which writes through the real KernelSettings
-// server on the native side's database.
-func backupConfigUpdate(t *testing.T) packagecompat.Route {
+// backupConfigRoute is a backup configuration route: the legacy handler
+// against the native one, which reads and writes through the real
+// KernelSettings server on the native side's database. The native side
+// gets no storage: the package no longer adopts v2_backup_config, and these
+// routes must not need it.
+func backupConfigRoute(t *testing.T, method, routeID string, legacy func(*handler.SystemHandler, *gin.Context)) packagecompat.Route {
 	return packagecompat.Route{
-		Method: "PUT", Pattern: "/api/v2/admin/system/backup/config", RouteID: native.BackupConfigUpdateRouteID,
-		Legacy: system((*handler.SystemHandler).UpdateBackupConfig),
-		Models: []any{&model.OperationLog{}, &model.BackupConfig{}, &model.BackupRecord{}, &model.SettingsRequest{}},
+		Method: method, Pattern: "/api/v2/admin/system/backup/config", RouteID: routeID,
+		Legacy: system(legacy),
+		Models: []any{&model.OperationLog{}, &model.BackupConfig{}, &model.BackupRecord{}, &model.SettingsRequest{}, &model.User{}},
 		Native: func(db *gorm.DB) pluginhostsdk.NativeHandler {
 			service := &native.Service{
-				Open: func(ctx context.Context) (*gorm.DB, error) { return db.WithContext(ctx), nil },
+				Open: func(context.Context) (*gorm.DB, error) {
+					t.Errorf("the backup configuration routes opened the package's storage")
+					return nil, errors.New("no storage")
+				},
 				Settings: packagecompat.KernelSettings(t, db, packagecompat.SettingsGrants{
-					Host: platformHost, Capabilities: []string{service.SettingsCapability(service.SettingsNamespaceBackup, service.SettingsAccessWrite)},
+					Host: platformHost, Capabilities: []string{
+						service.SettingsCapability(service.SettingsNamespaceBackup, service.SettingsAccessRead),
+						service.SettingsCapability(service.SettingsNamespaceBackup, service.SettingsAccessWrite),
+					},
 				}),
 			}
-			return service.Handlers()[native.BackupConfigUpdateRouteID]
+			return service.Handlers()[routeID]
 		},
 	}
+}
+
+func backupConfigUpdate(t *testing.T) packagecompat.Route {
+	return backupConfigRoute(t, "PUT", native.BackupConfigUpdateRouteID, (*handler.SystemHandler).UpdateBackupConfig)
 }
 
 // kernelCopies are the kernel's backup services by database: each loaded
@@ -91,8 +106,17 @@ var storedS3 = model.BackupConfig{
 	S3AccessKey: "AKIAEXAMPLE", S3SecretKey: "wJalrXUtnFEMI",
 }
 
+// withAdmin also writes the administrator the requests run as: the audit
+// entries name them by e-mail, on both sides.
+func withAdmin(seed func(testing.TB, *gorm.DB)) func(testing.TB, *gorm.DB) {
+	return func(t testing.TB, db *gorm.DB) {
+		require.NoError(t, db.Create(&model.User{ID: 1, Email: "admin@example.test", Token: "t1", UUID: "u1", IsAdmin: 1}).Error)
+		seed(t, db)
+	}
+}
+
 func TestBackupConfigUpdateRouteParity(t *testing.T) {
-	stored := warm(seedBackupConfig(storedS3))
+	stored := warm(withAdmin(seedBackupConfig(storedS3)))
 	clock := []string{"data.updated_at"}
 	created := []string{"data.created_at", "data.updated_at"}
 	for _, c := range []packagecompat.Case{

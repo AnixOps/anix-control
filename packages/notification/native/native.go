@@ -9,9 +9,10 @@
 // the notification.email.config key of the kernel's v2_system_config
 // through KernelSettings, namespace mail. Its value holds the SMTP password,
 // a secret: the package reads it in clear (kernel.settings.mail.secrets.v1)
-// because it answers it to administrators, as the kernel's handler does,
-// and sends the test e-mail itself. A host without the contract leaves the
-// three routes legacy.
+// because it sends the test e-mail itself. Administrators see it masked, as
+// the kernel's handler shows it, and an update that keeps it sends the
+// placeholder, which the kernel replaces with the stored password. A host
+// without the contract leaves the three routes legacy.
 //
 // Two routes have no native handler and stay bridged: setting the Telegram
 // webhook derives its default URL from the request host, which package

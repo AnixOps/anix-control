@@ -48,7 +48,9 @@ const (
 //   - backup: backup.<field>, the fields of the backup configuration row
 //     (enabled, auto_backup, schedule, retention_days, backup_database,
 //     backup_files, storage_type, storage_path, s3_bucket, s3_region,
-//     s3_endpoint, s3_access_key, s3_secret_key).
+//     s3_endpoint, s3_access_key, s3_secret_key), and the row's id,
+//     created_at and updated_at, which are read-only (times in RFC 3339
+//     with their fraction and offset).
 //
 // It is served on the module listener and the local package bridge to
 // official packages, per namespace, by capability:
@@ -71,7 +73,8 @@ const (
 // answers a repeat with the first result.
 type KernelSettingsClient interface {
 	// GetSettings reads keys of one namespace. With no keys it answers every
-	// stored key of the namespace, by key.
+	// stored key of the namespace, by key. A backup read creates the row with
+	// the kernel's defaults when there is none, as the kernel's handler does.
 	GetSettings(ctx context.Context, in *GetSettingsRequest, opts ...grpc.CallOption) (*GetSettingsResponse, error)
 	// PutSettings creates or changes keys of one namespace. A backup write
 	// with no entries saves the row as it is and records its audit entry, as
@@ -145,7 +148,9 @@ func (c *kernelSettingsClient) DeleteSettings(ctx context.Context, in *DeleteSet
 //   - backup: backup.<field>, the fields of the backup configuration row
 //     (enabled, auto_backup, schedule, retention_days, backup_database,
 //     backup_files, storage_type, storage_path, s3_bucket, s3_region,
-//     s3_endpoint, s3_access_key, s3_secret_key).
+//     s3_endpoint, s3_access_key, s3_secret_key), and the row's id,
+//     created_at and updated_at, which are read-only (times in RFC 3339
+//     with their fraction and offset).
 //
 // It is served on the module listener and the local package bridge to
 // official packages, per namespace, by capability:
@@ -168,7 +173,8 @@ func (c *kernelSettingsClient) DeleteSettings(ctx context.Context, in *DeleteSet
 // answers a repeat with the first result.
 type KernelSettingsServer interface {
 	// GetSettings reads keys of one namespace. With no keys it answers every
-	// stored key of the namespace, by key.
+	// stored key of the namespace, by key. A backup read creates the row with
+	// the kernel's defaults when there is none, as the kernel's handler does.
 	GetSettings(context.Context, *GetSettingsRequest) (*GetSettingsResponse, error)
 	// PutSettings creates or changes keys of one namespace. A backup write
 	// with no entries saves the row as it is and records its audit entry, as

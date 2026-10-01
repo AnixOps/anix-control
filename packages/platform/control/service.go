@@ -19,13 +19,13 @@ type platformBridge interface {
 }
 
 // newPlatformService returns the platform host's router. The routes in
-// platformRoutes have a native handler on the adopted backup tables, the
-// kapi_system_audit_log_v1 view and the kernel's KernelSettings; such a
+// platformRoutes have a native handler on the adopted backup record table,
+// the kapi_system_audit_log_v1 view and the kernel's KernelSettings; such a
 // route serves natively once the kernel sets its mode, and falls back to
-// the legacy handler otherwise. Updating the backup configuration calls
-// KernelSettings over the bridge connection (local socket or module
-// listener); a bridge without one leaves it legacy. The routes in
-// bridgedRoutes always relay to the legacy handler.
+// the legacy handler otherwise. Reading and updating the backup
+// configuration call KernelSettings over the bridge connection (local
+// socket or module listener); a bridge without one leaves them legacy. The
+// routes in bridgedRoutes always relay to the legacy handler.
 func newPlatformService(bridge platformBridge, leaseID string) (*pluginhostsdk.Router, error) {
 	storage := packagestoresdk.SharedOpener(bridge)
 	service := &native.Service{Open: func(ctx context.Context) (*gorm.DB, error) {

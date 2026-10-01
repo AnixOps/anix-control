@@ -213,7 +213,7 @@ func TestBackupStatsRouteParity(t *testing.T) {
 }
 
 func TestBackupConfigRouteParity(t *testing.T) {
-	write(t, route("GET", "/api/v2/admin/system/backup/config", "platform.admin.system.backup.config.get", system((*handler.SystemHandler).GetBackupConfig)), []packagecompat.Case{
+	write(t, backupConfigRoute(t, "GET", native.BackupConfigGetRouteID, (*handler.SystemHandler).GetBackupConfig), []packagecompat.Case{
 		{Name: "first read creates the defaults", Path: "/api/v2/admin/system/backup/config", Mask: []string{"data.created_at", "data.updated_at"}},
 		{Name: "stored configuration with S3 keys masked", Path: "/api/v2/admin/system/backup/config", Seed: seedBackupConfig(model.BackupConfig{
 			ID: 1, Enabled: true, AutoBackup: true, Schedule: "interval:6", RetentionDays: 14, BackupDatabase: true, BackupFiles: true,
@@ -227,5 +227,11 @@ func TestBackupConfigRouteParity(t *testing.T) {
 			ID: 1, Schedule: " interval:x ", RetentionDays: 7, BackupDatabase: true, StorageType: "local",
 		})},
 		{Name: "the first of two rows", Path: "/api/v2/admin/system/backup/config", Seed: seedTwoBackupConfigs},
+		{Name: "only the secret key set", Path: "/api/v2/admin/system/backup/config", Seed: seedBackupConfig(model.BackupConfig{
+			ID: 4, RetentionDays: 7, BackupDatabase: true, StorageType: "s3", S3SecretKey: "only-secret",
+		})},
+		{Name: "a stored placeholder reads masked", Path: "/api/v2/admin/system/backup/config", Seed: seedBackupConfig(model.BackupConfig{
+			ID: 1, RetentionDays: 7, StorageType: "s3", S3AccessKey: "********", S3SecretKey: "",
+		})},
 	})
 }

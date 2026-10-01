@@ -9,36 +9,11 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-	"gorm.io/gorm"
 )
 
 // sensitivePlaceholder is the kernel's service.SensitiveSystemConfigPlaceholder,
 // shown instead of a stored secret.
 const sensitivePlaceholder = "********"
-
-// BackupConfig is a v2_backup_config row, as the kernel model declares it.
-type BackupConfig struct {
-	ID             uint   `gorm:"primaryKey" json:"id"`
-	Enabled        bool   `gorm:"default:false" json:"enabled"`
-	AutoBackup     bool   `gorm:"default:false" json:"auto_backup"`
-	Schedule       string `gorm:"size:50" json:"schedule"`
-	RetentionDays  int    `gorm:"default:7" json:"retention_days"`
-	BackupDatabase bool   `gorm:"default:true" json:"backup_database"`
-	BackupFiles    bool   `gorm:"default:false" json:"backup_files"`
-	StorageType    string `gorm:"size:20;default:local" json:"storage_type"`
-	StoragePath    string `gorm:"size:255" json:"storage_path"`
-	S3Bucket       string `gorm:"size:100" json:"s3_bucket"`
-	S3Region       string `gorm:"size:50" json:"s3_region"`
-	S3Endpoint     string `gorm:"size:255" json:"s3_endpoint"`
-	S3AccessKey    string `gorm:"size:100" json:"s3_access_key"`
-	S3SecretKey    string `gorm:"size:100" json:"s3_secret_key"`
-
-	CreatedAt time.Time `json:"created_at"`
-	UpdatedAt time.Time `json:"updated_at"`
-}
-
-// TableName is the adopted kernel table.
-func (BackupConfig) TableName() string { return "v2_backup_config" }
 
 // BackupRecord is a v2_backup_record row, as the kernel model declares it.
 type BackupRecord struct {
@@ -93,7 +68,7 @@ func maskBackupSensitiveValue(value string) (displayValue string, sensitive bool
 
 // backupConfigResponse is the kernel's answer for the backup configuration;
 // the S3 keys are never returned.
-func backupConfigResponse(cfg *BackupConfig) map[string]any {
+func backupConfigResponse(cfg *backupConfig) map[string]any {
 	s3AccessKeyDisplayValue, s3AccessKeySensitive, s3AccessKeyHasValue := maskBackupSensitiveValue(cfg.S3AccessKey)
 	s3SecretKeyDisplayValue, s3SecretKeySensitive, s3SecretKeyHasValue := maskBackupSensitiveValue(cfg.S3SecretKey)
 
@@ -126,46 +101,10 @@ func backupConfigResponse(cfg *BackupConfig) map[string]any {
 	}
 }
 
-// loadBackupConfig is the kernel's BackupService.GetConfig: the first row,
-// created with the defaults when there is none.
-//
-// The kernel's service also keeps the row it read or wrote in memory, and
-// reloads it when the backup settings change (a legacy update or a
-// KernelSettings write). The stored row holds the same values; after a
-// legacy update, only the copy's timestamps can differ from the stored ones
-// in precision and time zone (PostgreSQL keeps microseconds). The package
-// only creates the defaults, as the kernel does on a first read; it changes
-// the row through KernelSettings.
-func loadBackupConfig(db *gorm.DB) (*BackupConfig, error) {
-	var cfg BackupConfig
-	err := db.First(&cfg).Error
-	if err == gorm.ErrRecordNotFound {
-		cfg = BackupConfig{
-			Enabled:        false,
-			AutoBackup:     false,
-			RetentionDays:  7,
-			BackupDatabase: true,
-			StorageType:    "local",
-			StoragePath:    "backups",
-		}
-		if createErr := db.Create(&cfg).Error; createErr != nil {
-			return nil, createErr
-		}
-		err = nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &cfg, nil
-}
-
-// GetBackupConfig is GET /api/v2/admin/system/backup/config.
+// GetBackupConfig is GET /api/v2/admin/system/backup/config: the
+// configuration read through KernelSettings, with the S3 keys masked.
 func (s *Service) GetBackupConfig(ctx context.Context, _ pluginhostsdk.NativeRequest) (pluginhostsdk.NativeResponse, error) {
-	db, err := s.Open(ctx)
-	if err != nil {
-		return s.panelError(err.Error())
-	}
-	cfg, err := loadBackupConfig(db)
+	cfg, err := s.loadBackupConfig(ctx)
 	if err != nil {
 		return s.panelError(err.Error())
 	}

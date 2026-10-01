@@ -2386,6 +2386,7 @@ export default {
         port: '465',
         username: "your{'@'}email.com",
         password: '请输入 SMTP 密码',
+        passwordStored: '密码已保存，留空则保留',
         fromName: CONTROL_NAME,
         fromAddress: "noreply{'@'}example.com"
       }

@@ -50,8 +50,7 @@ const (
 type SettingsAudit int
 
 const (
-	// SettingsAuditNone records nothing, as the kernel's e-mail and invite
-	// configuration handlers do.
+	// SettingsAuditNone records nothing.
 	SettingsAuditNone SettingsAudit = iota
 	// SettingsAuditSystemConfig records a system_config entry per key, as
 	// the system configuration handlers do.
@@ -81,11 +80,11 @@ const BackupSettingsPrefix = "backup."
 // entries (TestSettingsNamespacesDoNotOverlap).
 var settingsNamespaces = []SettingsNamespace{
 	{
-		Name: SettingsNamespaceMail, Prefixes: []string{"notification.email."},
+		Name: SettingsNamespaceMail, Prefixes: []string{"notification.email."}, Audit: SettingsAuditSystemConfig,
 		// The SMTP configuration is one JSON value that holds the password.
 		SecretKeys: []string{"notification.email.config"},
 	},
-	{Name: SettingsNamespaceInvite, Prefixes: []string{"invite."}},
+	{Name: SettingsNamespaceInvite, Prefixes: []string{"invite."}, Audit: SettingsAuditSystemConfig},
 	{Name: SettingsNamespaceNodeX, Prefixes: []string{"forward.runtime.nodex."}, Audit: SettingsAuditSystemConfig},
 	{
 		Name: SettingsNamespaceForwardRuntime, Audit: SettingsAuditSystemConfig,

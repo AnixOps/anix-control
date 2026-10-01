@@ -49,9 +49,10 @@ func warmInvite(seed func(testing.TB, *gorm.DB)) func(testing.TB, *gorm.DB) {
 	}
 }
 
-// configState is the affiliate state, v2_system_config, the number of
-// audit entries (neither side records one) and the invite configuration
-// the kernel's invite service holds in memory after the request.
+// configState is the affiliate state, v2_system_config, the system audit
+// entries (the frontend settings' system_config entry, naming the
+// administrator by e-mail) and the invite configuration the kernel's
+// invite service holds in memory after the request.
 func configState(t testing.TB, db *gorm.DB) any {
 	var configs []struct {
 		ID     uint
@@ -62,8 +63,20 @@ func configState(t testing.TB, db *gorm.DB) any {
 		Remark string
 	}
 	require.NoError(t, db.Model(&model.SystemConfig{}).Order("id").Find(&configs).Error)
-	var audit int64
-	require.NoError(t, db.Model(&model.OperationLog{}).Count(&audit).Error)
+	var audit []struct {
+		ID         uint
+		UserID     *uint
+		Username   string
+		Action     string
+		Module     string
+		TargetType string
+		TargetID   *uint
+		Content    string
+		IP         string
+		UserAgent  string
+		Status     int
+	}
+	require.NoError(t, db.Model(&model.OperationLog{}).Order("id").Find(&audit).Error)
 	invites := service.NewInviteService(db)
 	if warmed, ok := inviteCopies.Load(db); ok {
 		invites = warmed.(*service.InviteService)
@@ -90,6 +103,8 @@ func TestAdminConfigUpdateParity(t *testing.T) {
 		{Name: "an empty prefix answers empty and stores the default", Seed: stored, Mask: clock, Body: []byte(`{"code_prefix":"","withdraw_methods":[" bank ",""]}`)},
 		{Name: "withdraw methods as a JSON array in a string", Seed: stored, Mask: clock, Body: []byte(`{"withdraw_methods":"[\"usdt\",\"bank\"]"}`)},
 		{Name: "an empty update saves as it is", Seed: stored, Mask: clock, Body: []byte(`{}`)},
+		{Name: "the request's user agent in the audit", Seed: stored, Mask: clock, Body: []byte(`{"code_length":7}`),
+			RequestHeaders: map[string]string{"User-Agent": "parity-agent/1.0"}},
 		{Name: "a null body", Seed: stored, Mask: clock, Body: []byte(`null`)},
 		{Name: "no configuration and no settings yet", Seed: seedWith(false, nil), Mask: []string{"data.created_at", "data.updated_at"}, Body: []byte(`{"code_length":6}`)},
 		{Name: "settings that are not JSON read as the defaults", Seed: warmInvite(seedWith(true, ptr(`{"code_prefix":`))), Mask: clock, Body: []byte(`{"withdraw_fee":2}`)},

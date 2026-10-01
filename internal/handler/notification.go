@@ -19,6 +19,7 @@ import (
 type NotificationHandler struct {
 	notificationService *service.NotificationService
 	systemConfigService *service.SystemConfigService
+	operationLogService *service.OperationLogService
 }
 
 const notificationEmailConfigKey = "notification.email.config"
@@ -111,6 +112,25 @@ func emailEncryptionBool(enc string) bool {
 	return enc == "tls" || enc == "ssl"
 }
 
+// maskEmailPassword is the SMTP password as an administrator's answer shows
+// it: the placeholder when one is set, else "".
+func maskEmailPassword(password string) string {
+	if strings.TrimSpace(password) == "" {
+		return ""
+	}
+	return service.SensitiveSystemConfigPlaceholder
+}
+
+// newEmailPassword is the password an update sets: a string that is
+// neither blank nor the placeholder. Anything else keeps the stored one.
+func newEmailPassword(req map[string]any) (string, bool) {
+	password, ok := req["password"].(string)
+	if !ok || strings.TrimSpace(password) == "" || password == service.SensitiveSystemConfigPlaceholder {
+		return "", false
+	}
+	return password, true
+}
+
 func (h *NotificationHandler) loadEmailConfig() (*model.EmailConfig, error) {
 	cfg := &model.EmailConfig{
 		Host:        "",
@@ -178,6 +198,7 @@ func NewNotificationHandler() *NotificationHandler {
 	return &NotificationHandler{
 		notificationService: service.NewNotificationService(db, cfg),
 		systemConfigService: service.NewSystemConfigService(db),
+		operationLogService: service.NewOperationLogService(db),
 	}
 }
 
@@ -650,7 +671,7 @@ func (h *NotificationHandler) GetEmailConfig(c *gin.Context) {
 		"host":            cfg.Host,
 		"port":            cfg.Port,
 		"username":        cfg.Username,
-		"password":        cfg.Password,
+		"password":        maskEmailPassword(cfg.Password),
 		"from_address":    cfg.FromAddress,
 		"from_name":       cfg.FromName,
 		"encryption":      emailEncryptionBool(cfg.Encryption),
@@ -717,13 +738,12 @@ func (h *NotificationHandler) UpdateEmailConfig(c *gin.Context) {
 		cfg.FromName = branding.ControlName
 	}
 
-	if passwordRaw, ok := req["password"]; ok {
-		if password, ok := passwordRaw.(string); ok {
-			if strings.TrimSpace(password) != "" {
-				cfg.Password = password
-			}
-		}
+	password, rotated := newEmailPassword(req)
+	if rotated {
+		cfg.Password = password
 	}
+	// The audit entry says whether a stored password was kept.
+	keptPassword := !rotated && strings.TrimSpace(existing.Password) != ""
 
 	hasEncryption := false
 	if encRaw, ok := req["encryption_type"]; ok {
@@ -749,6 +769,11 @@ func (h *NotificationHandler) UpdateEmailConfig(c *gin.Context) {
 		cfg.Encryption = "none"
 	}
 
+	existingEntry, err := h.systemConfigService.GetEntry(notificationEmailConfigKey)
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
 	if err := h.systemConfigService.SetJSON(
 		notificationEmailConfigKey,
 		cfg,
@@ -758,6 +783,7 @@ func (h *NotificationHandler) UpdateEmailConfig(c *gin.Context) {
 		panelError(c, err.Error())
 		return
 	}
+	recordSettingsAudit(c, h.systemConfigService, h.operationLogService, notificationEmailConfigKey, existingEntry == nil, keptPassword)
 
 	// Ensure send-test uses newest config immediately.
 	h.notificationService.SetEmailConfig(cfg)
