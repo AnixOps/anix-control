@@ -411,6 +411,34 @@
 
 ### Added
 
+- **Agent stream data-plane contract** (`sdk/api/agent/v1/PROTOCOL.md`, "Data
+  plane"). `anix.agent.v1` gains the payloads that will carry each node's
+  configuration, users and reports on the Agent Control stream instead of
+  UniProxy, the v2board gRPC services and the WebSocket. Only the contract
+  lands now; the kernel does not send or accept them yet.
+  - Control → Agent: `ControlToAgent.config` (`ConfigSnapshot`), `users`
+    (`UserDelta` of `NodeUser`) and `report_ack` (`ReportAck`), fields 13 to
+    15. Agent → Control: `AgentToControl.config_status` (`ConfigStatus`),
+    `traffic` (`TrafficReport` of `UserTraffic` and `OnlineUser`), `logs`
+    (`LogBatch` of `LogEntry`) and `status` (`NodeStatus`), fields 14 to 17.
+    `Hello` gains `config_revision` (6) and `users_cursor` (7), and
+    `HelloAck` gains `server_capabilities` (5).
+  - Negotiation: each side sends a payload only when the other advertised
+    its capability, `config.v1`, `users.v1` or `reports.v1` (name `config`,
+    `users` or `reports`, version `v1`). `sdk/agentcontrol` names them and
+    adds `Negotiated`.
+  - The kernel advertises no `server_capabilities` yet. An Agent that sends
+    `config_status`, `traffic`, `logs` or `status` anyway gets
+    `InvalidArgument`, naming the capability, and the stream ends, as with a
+    kernel built before these payloads existed. Agents built against the
+    v1.1.0 SDK see no change.
+  - Additive only: `agent_descriptor_test.go` now requires the descriptor to
+    be a superset of v1.1.0's (every message, field, enum value and method
+    unchanged) instead of equal to it apart from `go_package`, and tests
+    that a removed, renamed or renumbered field fails. The proto golden file
+    grows by 55 elements. The manual SDK Sync workflow runs the renamed
+    `TestDescriptorExtendsExternalAgentSDK`.
+
 - **The administrator dashboard and the user's subscription summary run
   natively, from the kernel's caches** (`docs/architecture/kernel-caches.md`).
   The kernel answers both routes from a cache in its memory, with the time

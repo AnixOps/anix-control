@@ -9,9 +9,12 @@ Source of truth: this directory of `github.com/AnixOps/anix-control/sdk`
 changed only `option go_package`: the protobuf package, services, messages,
 field numbers and types, and the registered file name
 `api/grpc/agent/v1/agent.proto` are unchanged, so Agents built against the old
-SDK keep working. `agent_descriptor_test.go` proves the file descriptor equals
-v1.1.0's apart from `go_package`, and `internal/tests/protocompat` guards it
-from now on.
+SDK keep working. Since then the contract only grows.
+`agent_descriptor_test.go` proves the file descriptor is a superset of
+v1.1.0's: every v1.1.0 message, field (name, number, label, type), enum value
+and service method is still there unchanged, and only additions and
+`go_package` differ. `internal/tests/protocompat` guards every later release
+the same way.
 
 `AgentControlService.ControlStream` is the v3 primary Agent-first bidirectional
 gRPC control channel. Authentication reuses the configured node ID and node API
@@ -47,6 +50,95 @@ advertise or execute plugin operations. Delivery is at least once, so handlers
 must be idempotent. REST polling, v2board gRPC data services, and the legacy
 WebSocket synchronization path remain compatibility/fallback transports during
 the v3 migration.
+
+## Data plane
+
+The stream can also carry each node's configuration, users and reports, in
+place of UniProxy, the v2board gRPC services and the WebSocket. These payloads
+are additions to `anix.agent.v1`:
+
+| Direction | Payload | Capability |
+|---|---|---|
+| Control → Agent | `ControlToAgent.config` (`ConfigSnapshot`) | `config.v1` |
+| Agent → Control | `AgentToControl.config_status` (`ConfigStatus`) | `config.v1` |
+| Control → Agent | `ControlToAgent.users` (`UserDelta` of `NodeUser`) | `users.v1` |
+| Agent → Control | `AgentToControl.traffic` (`TrafficReport` of `UserTraffic` and `OnlineUser`) | `reports.v1` |
+| Agent → Control | `AgentToControl.logs` (`LogBatch` of `LogEntry`) | `reports.v1` |
+| Agent → Control | `AgentToControl.status` (`NodeStatus`) | `reports.v1` |
+| Control → Agent | `ControlToAgent.report_ack` (`ReportAck`) | `reports.v1` |
+
+`Hello` gains `config_revision` and `users_cursor`, and `HelloAck` gains
+`server_capabilities`.
+
+### Negotiation
+
+- A capability written `config.v1` is the `Capability` with name `config`
+  and version `v1`; `sdk/agentcontrol` names them (`CapabilityConfig`,
+  `CapabilityUsers`, `CapabilityReports`).
+- The Agent lists the ones it implements in `Hello.capabilities`. Control
+  lists the ones it serves in `HelloAck.server_capabilities`.
+- A capability is in use on a session only when both lists have it
+  (`agentcontrol.Negotiated`). Each side sends a payload only when the other
+  advertised its capability:
+  - Control sends `ConfigSnapshot` only to an Agent whose `Hello` lists
+    `config.v1`, and `UserDelta` only with `users.v1`. It reads
+    `Hello.config_revision` and `Hello.users_cursor` only then.
+  - The Agent sends `ConfigStatus` only with `config.v1`, and `TrafficReport`,
+    `LogBatch` and `NodeStatus` only with `reports.v1`, in
+    `HelloAck.server_capabilities`. Without them it keeps the legacy
+    transports.
+- Older Agents send none of these capabilities or `Hello` fields and skip
+  `server_capabilities`, so nothing changes for them.
+- Control does not serve the data plane yet: `server_capabilities` is empty.
+  An Agent that sends `config_status`, `traffic`, `logs` or `status` anyway
+  gets `InvalidArgument`, naming the capability it lacks, and the stream
+  ends.
+  A Control built before these payloads existed answers them the same way, as
+  an unknown payload ("control message payload is required").
+- `diag.v1` is reserved for node-side diagnostics (`diag.*` operations). It
+  adds no payload; its rules come with those operations.
+
+### Delivery
+
+- **Configuration** (`config.v1`). A `ConfigSnapshot` is the node's whole
+  configuration at `config_revision`. `config_hash` is the lowercase hex
+  SHA-256 of the exact `config_json` bytes, and `format` names their schema.
+  - Control sends one after `HelloAck` when `Hello.config_revision` is
+    older, and whenever the node's desired configuration changes.
+  - The Agent answers each with `ConfigStatus`: `applied`, or an `error`
+    (also for a hash mismatch or an unknown `format`). A failure becomes the
+    node's runtime health.
+  - A snapshot replaces what the Agent runs, so a lost or repeated snapshot
+    is harmless.
+- **Users** (`users.v1`). A `UserDelta` carries the changes after the
+  Agent's cursor.
+  - One delta may span several messages. The Agent applies them together
+    when the one with `last_page` arrives, then stores `cursor` and sends it
+    as `Hello.users_cursor` on its next connection.
+  - With `full`, the pages together are the node's whole user set and
+    replace the Agent's. Control sends a full set when the Agent's cursor is
+    0 or older than its change log. Otherwise the pages are changes, applied in
+    order.
+  - `speed_limit_mbps` and `device_limit` are 0 for no limit. `extra_json`
+    holds protocol-specific fields, such as WireGuard peer keys.
+- **Reports** (`reports.v1`).
+  - `TrafficReport` carries per-user bytes and online IPs for one window.
+    `LogBatch` carries runtime logs; `fields_json` holds no secrets.
+  - Each has a `batch_id`, unique per node and kept when resent:
+    `node:<kind>-<id>:<boot id>:<sequence>`, with `<kind>` `proxy` or
+    `forward`. Control records a batch once.
+  - Control answers each with a `ReportAck` for its `batch_id`:
+    - `applied: true` when this delivery recorded it;
+    - `applied: false` and no `error` when Control had recorded it before;
+    - `applied: false` and an `error` when Control refuses it for good.
+
+    In each case the Agent drops the batch from its spool. Control sends no
+    `ReportAck` for a batch it cannot record for now, and the Agent resends
+    it later.
+  - A batch stays on the stream: the Agent never resends it over a legacy
+    transport, which has no batch ids and could count it twice.
+  - `NodeStatus` is the node's system and runtime health. Each replaces the
+    previous one, and Control does not acknowledge it.
 
 The checked-in Go files are generated, not handwritten. From the repository
 root, run:
