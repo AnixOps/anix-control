@@ -114,6 +114,9 @@ func TestManifestCapabilityGrammar(t *testing.T) {
 		"malformed":                  {"Telemetry Read"},
 		"adopt node protocols":       {CapabilityStorage, "kernel.storage.adopt:v2_node_protocol"},
 		"adopt wireguard peers":      {CapabilityStorage, "kernel.storage.adopt:v2_wireguard_peer"},
+		"adopt split credentials":    {CapabilityStorage, "kernel.storage.adopt:v4_kernel_node_credential"},
+		"adopt split secrets":        {CapabilityStorage, "kernel.storage.adopt:v4_kernel_protocol_secret"},
+		"adopt split state":          {CapabilityStorage, "kernel.storage.adopt:v4_kernel_node_secret_split"},
 	}
 	for name, capabilities := range invalid {
 		assert.Error(t, validateManifestCapabilities(capabilities), name)

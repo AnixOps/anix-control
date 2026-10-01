@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"gorm.io/gorm"
 )
 
@@ -135,7 +136,12 @@ func (s *ForwardCleanAgentService) CreateToken(input ForwardCleanAgentCreateInpu
 			Token:  token,
 			Status: model.ForwardCleanAgentStatusOffline,
 		}
-		if err := s.db.Create(agent).Error; err != nil {
+		if err := s.db.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Create(agent).Error; err != nil {
+				return err
+			}
+			return nodesecrets.Sync(tx, nodesecrets.TableCleanAgent, agent.ID)
+		}); err != nil {
 			if strings.Contains(strings.ToLower(err.Error()), "unique") {
 				continue
 			}
@@ -158,19 +164,21 @@ func (s *ForwardCleanAgentService) RevokeAgent(id uint) error {
 		return errors.New("agent id is required")
 	}
 	now := time.Now()
-	result := s.db.Model(&model.ForwardCleanAgent{}).
-		Where("id = ?", id).
-		Updates(map[string]any{
-			"status":     model.ForwardCleanAgentStatusRevoked,
-			"revoked_at": &now,
-		})
-	if result.Error != nil {
-		return result.Error
-	}
-	if result.RowsAffected == 0 {
-		return gorm.ErrRecordNotFound
-	}
-	return nil
+	return s.db.Transaction(func(tx *gorm.DB) error {
+		result := tx.Model(&model.ForwardCleanAgent{}).
+			Where("id = ?", id).
+			Updates(map[string]any{
+				"status":     model.ForwardCleanAgentStatusRevoked,
+				"revoked_at": &now,
+			})
+		if result.Error != nil {
+			return result.Error
+		}
+		if result.RowsAffected == 0 {
+			return gorm.ErrRecordNotFound
+		}
+		return nodesecrets.Sync(tx, nodesecrets.TableCleanAgent, id)
+	})
 }
 
 // Register marks an agent online and binds its token to a node.

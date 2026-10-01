@@ -499,5 +499,6 @@ func KernelModels() []any {
 		&PackageStorage{}, &ServiceCA{}, &ModuleEnrollment{}, &ModuleCertificate{}, &PluginRuntime{},
 		&IdentityRevocation{}, &IdentitySessionRevocation{}, &IdentityAccountLink{}, &IdentityAuthority{},
 		&IdentityTokenKey{}, &IdentityCutoverEvent{}, &SubscriberRequest{}, &SubscriberChange{}, &SettingsRequest{},
+		&NodeCredential{}, &ProtocolSecret{}, &NodeSecretSplit{},
 	}
 }

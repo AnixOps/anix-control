@@ -5,6 +5,7 @@ import (
 	"sort"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"gorm.io/gorm"
 )
 
@@ -154,6 +155,9 @@ func runImport(db *gorm.DB, plan *migrationPlan) error {
 				return fmt.Errorf("link protocol %d to groups %v: %w", link.Protocol.ID, link.GroupIDs, err)
 			}
 		}
+		if err := syncNodeSecrets(tx, plan); err != nil {
+			return err
+		}
 		if len(plan.Users) > 0 {
 			if err := tx.Create(&plan.Users).Error; err != nil {
 				return fmt.Errorf("insert users: %w", err)
@@ -176,4 +180,26 @@ func runImport(db *gorm.DB, plan *migrationPlan) error {
 		}
 		return nil
 	})
+}
+
+// syncNodeSecrets writes the imported nodes' credentials and their
+// protocols' secrets to the node credential split tables, as Control's own
+// writers do (internal/nodesecrets). It does nothing on a database without
+// them.
+func syncNodeSecrets(tx *gorm.DB, plan *migrationPlan) error {
+	nodeIDs := make([]uint, 0, len(plan.Nodes))
+	for _, node := range plan.Nodes {
+		nodeIDs = append(nodeIDs, node.ID)
+	}
+	if err := nodesecrets.Sync(tx, nodesecrets.TableNode, nodeIDs...); err != nil {
+		return fmt.Errorf("write node credentials: %w", err)
+	}
+	protocolIDs := make([]uint, 0, len(plan.NodeProtocolLinks))
+	for _, link := range plan.NodeProtocolLinks {
+		protocolIDs = append(protocolIDs, link.Protocol.ID)
+	}
+	if err := nodesecrets.Sync(tx, nodesecrets.TableNodeProtocol, protocolIDs...); err != nil {
+		return fmt.Errorf("write node protocol secrets: %w", err)
+	}
+	return nil
 }

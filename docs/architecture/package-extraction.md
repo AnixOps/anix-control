@@ -278,9 +278,25 @@ The planned `kernel.entitlement.apply.v1` became
   `v2_audit_log`, `v2_operation_log`; the node credentials `v2_node` and
   `v2_authorized_key`; the node secrets `v2_node_protocol` and
   `v2_wireguard_peer`; the forward credentials `v2_forward_node`,
-  `v2_forward_clean_agent` and `v2_forward_runtime_job`; and every
-  `v2_user*`, `v3_kernel_*`, `v4_kernel_*`, `identity_*`, `kapi_*` and
-  `pg_*` table.
+  `v2_forward_clean_agent` and `v2_forward_runtime_job`; the node
+  credential split's `v4_kernel_node_credential`,
+  `v4_kernel_protocol_secret` and `v4_kernel_node_secret_split`, named as
+  well as covered by their prefix; and every `v2_user*`, `v3_kernel_*`,
+  `v4_kernel_*`, `identity_*`, `kapi_*` and `pg_*` table.
+- **Node credential split, phase P1 (dual-write).** The node credentials
+  and protocol secrets of `v2_node`, `v2_authorized_key`,
+  `v2_forward_node`, `v2_forward_clean_agent`, `v2_node_protocol` and
+  `v2_wireguard_peer` are also kept in `v4_kernel_node_credential` and
+  `v4_kernel_protocol_secret`, in clear like the legacy columns.
+  `internal/nodesecrets` is their one writer: every kernel writer of a
+  moved column calls it in the transaction of its legacy write.
+  `anix-control node-secrets backfill` copies older rows and `verify`
+  compares the digests of both forms; `v4_kernel_node_secret_split` holds
+  each table's phase (`dual_write`) and the outcome. Every reader still
+  reads the legacy columns, so the tables stay protected and no package
+  route changes; the readers move in the next phase, and the credential-free
+  tables become adoptable only once finalized (the KernelNodeOps design,
+  section 4).
 - **Kernel views.** Packages read other domains through 16 read-only
   `kapi_*` views (listed at the end of section 3.4), granted by
   `kernel.view:<view>`; none shows a credential.

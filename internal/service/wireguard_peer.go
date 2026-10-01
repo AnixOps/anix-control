@@ -14,6 +14,7 @@ import (
 	"sync"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"gorm.io/gorm"
 )
 
@@ -120,7 +121,15 @@ func (s *SubscriptionService) GetOrCreateWireGuardPeer(protocolID, userID uint, 
 		if err != nil {
 			return nil, err
 		}
-		if err := s.db.Create(&peer).Error; err == nil {
+		// The peer and its keys' split copies are written in one
+		// transaction; a conflict rolls back both.
+		peer.ID = 0
+		if err := s.db.Transaction(func(tx *gorm.DB) error {
+			if err := tx.Create(&peer).Error; err != nil {
+				return err
+			}
+			return nodesecrets.Sync(tx, nodesecrets.TableWireGuardPeer, peer.ID)
+		}); err == nil {
 			return &peer, nil
 		} else if !isWireGuardUniqueConstraintError(err) {
 			return nil, err
@@ -206,11 +215,20 @@ func isWireGuardExitProtocol(protocol *model.NodeProtocol) bool {
 	return IsWireGuardExitProtocol(protocol)
 }
 
+// deleteWireGuardPeers deletes the peers that match query, and their keys'
+// split copies, in the caller's transaction.
 func deleteWireGuardPeers(tx *gorm.DB, query string, args ...any) error {
 	if !tx.Migrator().HasTable(&model.WireGuardPeer{}) {
 		return nil
 	}
-	return tx.Where(query, args...).Delete(&model.WireGuardPeer{}).Error
+	var ids []uint
+	if err := tx.Model(&model.WireGuardPeer{}).Where(query, args...).Pluck("id", &ids).Error; err != nil {
+		return err
+	}
+	if err := tx.Where(query, args...).Delete(&model.WireGuardPeer{}).Error; err != nil {
+		return err
+	}
+	return nodesecrets.Sync(tx, nodesecrets.TableWireGuardPeer, ids...)
 }
 
 func (s *SubscriptionService) allocateWireGuardPeerIPLocked(protocolID uint, prefix netip.Prefix) (string, error) {

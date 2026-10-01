@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -62,6 +63,13 @@ func RotateWireGuardPeerKeys(db *gorm.DB, protocolID uint) (*WireGuardPeerRotati
 				return err
 			}
 			protocols[peers[i].NodeProtocolID] = struct{}{}
+		}
+		peerIDs := make([]uint, 0, len(peers))
+		for i := range peers {
+			peerIDs = append(peerIDs, peers[i].ID)
+		}
+		if err := nodesecrets.Sync(tx, nodesecrets.TableWireGuardPeer, peerIDs...); err != nil {
+			return err
 		}
 
 		result.RotatedPeerCount = len(peers)
