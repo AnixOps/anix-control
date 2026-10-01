@@ -59,6 +59,29 @@ func TestSQLiteLeaseSharesTheKernelFileWithATablePrefix(t *testing.T) {
 	require.Equal(t, []string{"id", "email", "is_admin", "is_staff", "banned", "plan_id", "group_id", "expired_at", "created_at"}, columns)
 }
 
+// kapi_system_audit_log_v1 shows only the system audit trail, and a view
+// whose source table does not exist yet is left out.
+func TestSystemAuditLogViewShowsOnlyTheSystemModule(t *testing.T) {
+	db, _ := openSQLiteKernel(t)
+	exists, err := viewExists(db, "kapi_system_audit_log_v1")
+	require.NoError(t, err)
+	require.False(t, exists, "no view without v2_operation_log")
+
+	require.NoError(t, db.AutoMigrate(&model.OperationLog{}))
+	require.NoError(t, db.Create(&[]model.OperationLog{
+		{Module: "system", Action: "update", TargetType: "system_config", Content: `{"key":"site.name"}`},
+		{Module: "user", Action: "login"},
+	}).Error)
+	require.NoError(t, EnsureKernelAPIViews(db))
+
+	var columns []string
+	require.NoError(t, db.Raw("SELECT name FROM pragma_table_info('kapi_system_audit_log_v1') ORDER BY cid").Scan(&columns).Error)
+	require.Equal(t, []string{"id", "user_id", "username", "action", "module", "target_type", "target_id", "content", "ip", "user_agent", "status", "created_at"}, columns)
+	var modules []string
+	require.NoError(t, db.Raw("SELECT module FROM kapi_system_audit_log_v1").Scan(&modules).Error)
+	require.Equal(t, []string{"system"}, modules)
+}
+
 func TestLeaseRejectsUndeclaredOrUnknownStorage(t *testing.T) {
 	db, path := openSQLiteKernel(t)
 	store := Store{DB: db, Driver: "sqlite", DSN: path}

@@ -170,6 +170,33 @@ func TestPostgresLeaseProvisionsALeastPrivilegeRole(t *testing.T) {
 	require.NoError(t, fresh.Exec("SELECT 1").Error)
 }
 
+// A role granted kapi_system_audit_log_v1 reads the system audit trail and
+// nothing else of v2_operation_log, and cannot change it through the view.
+func TestPostgresSystemAuditLogViewIsReadOnly(t *testing.T) {
+	kernel, kernelDSN := openPostgresKernel(t)
+	require.NoError(t, kernel.AutoMigrate(&model.OperationLog{}))
+	require.NoError(t, EnsureKernelAPIViews(kernel))
+	suffix := randomSuffix(t)
+	packageID := "pkgtest-" + suffix
+	t.Cleanup(func() { dropPackageStorage(t, kernel, packageID) })
+	action := "audit-" + suffix
+	require.NoError(t, kernel.Create(&[]model.OperationLog{{Module: "system", Action: action}, {Module: "user", Action: action}}).Error)
+	t.Cleanup(func() { _ = kernel.Exec("DELETE FROM v2_operation_log WHERE action = ?", action).Error })
+
+	store := Store{DB: kernel, Driver: "postgres", DSN: kernelDSN}
+	lease, err := store.Lease(context.Background(), Holder{PackageID: packageID, Version: "4.1.0", Generation: 1},
+		Grants{Storage: true, Views: []string{"kapi_system_audit_log_v1"}})
+	require.NoError(t, err)
+	pkg := openPostgres(t, lease.DSN)
+	var modules []string
+	require.NoError(t, pkg.Raw("SELECT module FROM kapi_system_audit_log_v1 WHERE action = ?", action).Scan(&modules).Error)
+	require.Equal(t, []string{"system"}, modules)
+	var count int64
+	requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM v2_operation_log").Scan(&count).Error)
+	requirePermissionDenied(t, pkg.Exec("DELETE FROM kapi_system_audit_log_v1 WHERE action = ?", action).Error)
+	requirePermissionDenied(t, pkg.Exec("UPDATE kapi_system_audit_log_v1 SET content = '' WHERE action = ?", action).Error)
+}
+
 func TestPostgresLeaseFailsWithoutPartialState(t *testing.T) {
 	kernel, kernelDSN := openPostgresKernel(t)
 	packageID := "pkgtest-" + randomSuffix(t)

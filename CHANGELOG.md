@@ -461,6 +461,16 @@
   parity on SQLite and PostgreSQL, and the PostgreSQL run is part of CI. The
   e-mail configuration and test send, setting the webhook, and the public
   Telegram webhook stay bridged.
+- **Platform module on adopted tables.** `packages/platform` serves 4 of its
+  12 routes natively: the backup configuration, list and statistics on
+  `v2_backup_config` and `v2_backup_record`, adopted in place, and the system
+  audit log through the new kernel view `kapi_system_audit_log_v1` (the
+  `v2_operation_log` rows of module `system`; read-only).
+  `internal/tests/platformcompat` proves byte parity on SQLite and
+  PostgreSQL, and the PostgreSQL run is part of CI. The system configuration
+  routes, updating the backup configuration, and creating, deleting and
+  restoring backups stay bridged. `EnsureKernelAPIViews` now leaves out a
+  view whose source table does not exist yet.
 
 - The kernel side of the identity module, `KernelIdentity` (N9). It is served
   on the local package bridge and on the module listener.

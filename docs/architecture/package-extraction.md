@@ -28,9 +28,9 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   WebSocket routes use `registeredPackageWebSocketRoute`.
 - `config/package-extraction.json` records each route's extraction mode
   (`bridged`, `native-flagged` or `native`) and where its legacy handler lives
-  (`router`, `identity-bridge` or `none`). 48 routes are `native-flagged`:
-  identity's group A (15), knowledge (6), ticket (8) and notification (19).
-  The rest are `bridged`.
+  (`router`, `identity-bridge` or `none`). 52 routes are `native-flagged`:
+  identity's group A (15), knowledge (6), ticket (8), notification (19) and
+  platform (4). The rest are `bridged`.
   The identity routes are `identity-bridge`. `check_plugin_only_routes.py`
   enforces the map against the router and the identity bridge.
 - Request path: gin middleware -> `compatv2` gateway -> route resolution
@@ -193,10 +193,23 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
   `kapi_user_directory_v1`. Five stay bridged: the e-mail configuration and
   test send (settings in `v2_system_config`), setting the webhook (needs the
   request host) and the public webhook (`/sub` needs the subscription token).
+- **Platform (in place).** 4 of 12 routes: the backup configuration, list
+  and statistics on the adopted `v2_backup_config` and `v2_backup_record`
+  tables, and the system audit log through `kapi_system_audit_log_v1`, proved
+  by `internal/tests/platformcompat`. Eight stay bridged:
+  - the system configuration routes: `v2_system_config` is a protected
+    kernel table, its values include secrets, and its writes record audit
+    entries in the protected `v2_operation_log`;
+  - updating the backup configuration: it records an audit entry and
+    refreshes the copy the kernel's backup service keeps in memory, which
+    backup creation reads;
+  - creating, deleting and restoring backups: archives of the database and
+    files on the kernel's disk.
 - The kernel publishes read-only views `kapi_*`, created at startup by
-  `EnsureKernelAPIViews` (first `kapi_user_directory_v1`, later
-  `kapi_plan_catalog_v1`). Packages read other domains only through `kapi_*`
-  views or typed operations.
+  `EnsureKernelAPIViews` (first `kapi_user_directory_v1`, then
+  `kapi_system_audit_log_v1`, the `v2_operation_log` rows of module
+  `system`; later `kapi_plan_catalog_v1`). Packages read other domains only
+  through `kapi_*` views or typed operations.
 
 ### 3.5 Isolation switch and SQLite
 
