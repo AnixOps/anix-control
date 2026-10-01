@@ -7,7 +7,7 @@
   "targets": ["control"],
   "architectures": [],
   "artifact_sha256": "GENERATED_AT_BUILD",
-  "capabilities": ["kernel.identity.v1", "kernel.storage.v1", "kernel.view:kapi_user_directory_v1", "kernel.view:kapi_subscriber_entitlement_v1", "kernel.subscriber.traffic.v1", "kernel.subscriber.credentials.v1"],
+  "capabilities": ["kernel.identity.v1", "kernel.storage.v1", "kernel.view:kapi_user_directory_v1", "kernel.view:kapi_subscriber_entitlement_v1", "kernel.view:kapi_plan_name_v1", "kernel.subscriber.traffic.v1", "kernel.subscriber.credentials.v1"],
   "dependencies": [],
   "conflicts": [],
   "permissions": ["identity-platform.view", "identity-platform.api"],

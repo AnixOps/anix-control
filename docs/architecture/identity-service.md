@@ -217,13 +217,15 @@ expired (Control).
 
 - **Choice: identity serves the search, joining Control's views in its own
   storage (in place, `native.UserDirectory`).**
-  - identity-platform's storage role reads two kernel API views on the same
+  - identity-platform's storage role reads kernel API views on the same
     database: `kapi_user_directory_v1` (which subscribers exist, since when,
-    and Control's projection of the identity fields) and
+    and Control's projection of the identity fields),
     `kapi_subscriber_entitlement_v1` (plan, group, traffic, limits, reset
-    day, expiry and balances). Neither shows a token or UUID. The package
-    declares `kernel.view:kapi_subscriber_entitlement_v1` for this.
-  - One SQL statement joins both views with identity's `account` table.
+    day, expiry and balances) and `kapi_plan_name_v1` (a plan's name).
+    None shows a token or UUID. The package declares
+    `kernel.view:kapi_subscriber_entitlement_v1` and
+    `kernel.view:kapi_plan_name_v1` for this.
+  - One SQL statement joins the views with identity's `account` table.
     The database filters, orders, pages and counts; nothing is materialized
     in the module.
   - Identity's account gives e-mail, administrator, staff and ban flags.
@@ -257,11 +259,12 @@ expired (Control).
   - Each user is `id`, `email`, `balance`, `commission_balance`,
     `device_limit`, `speed_limit`, `flowResetTime`, `transfer_enable`, `u`,
     `d`, `plan_id`, `group_id`, `expired_at`, `banned`, `is_admin`,
-    `is_staff` and `created_at`, in legacy and native mode alike.
+    `is_staff` and `created_at`, with `plan` as `{id, name}` while the plan
+    exists (as in the order answers), in legacy and native mode alike.
   - The token, proxy UUID, remark and the rest of the row come from the
     user detail, one user at a time (`KernelIdentity.GetSubscriber`). The
     administrator's page calls it to copy a subscription link or edit a
-    user, and names plans from the plan list.
+    user.
   - `docs/UPGRADE.md` lists the removed fields.
 - **No new identity API.** The search serves identity-platform's own
   routes. `IdentityService` is unchanged until another module needs the

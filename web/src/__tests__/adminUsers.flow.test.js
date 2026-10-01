@@ -13,7 +13,6 @@ const mockGetSubscriptionSettings = vi.fn()
 const mockGetTrafficHourly = vi.fn()
 const mockResetUserSubscribe = vi.fn()
 const mockGetAdminUser = vi.fn()
-const mockGetPlans = vi.fn()
 
 vi.mock('@/api/admin', () => ({
   assignAdminUserTunnel: vi.fn(),
@@ -22,7 +21,6 @@ vi.mock('@/api/admin', () => ({
   getAdminUser: (...args) => mockGetAdminUser(...args),
   getAdminUserTunnelList: vi.fn(),
   getForwardTunnels: vi.fn(),
-  getPlans: (...args) => mockGetPlans(...args),
   getSpeedLimitList: vi.fn(),
   getSubscriptionGroups: (...args) => mockGetSubscriptionGroups(...args),
   getSubscriptionSettings: (...args) => mockGetSubscriptionSettings(...args),
@@ -50,7 +48,6 @@ describe('Admin Users flow', () => {
     mockGetTrafficHourly.mockReset()
     mockResetUserSubscribe.mockReset()
     mockGetAdminUser.mockReset()
-    mockGetPlans.mockReset()
     vi.spyOn(window, 'alert').mockImplementation(() => {})
     vi.spyOn(window, 'confirm').mockReturnValue(true)
 
@@ -64,7 +61,6 @@ describe('Admin Users flow', () => {
     mockBanUser.mockResolvedValue({})
     mockCreateUser.mockResolvedValue({})
     mockGetAdminUser.mockResolvedValue({ code: 0, msg: '操作成功', data: {}, ts: 1783526400000 })
-    mockGetPlans.mockResolvedValue({ code: 0, msg: '操作成功', data: [], ts: 1783526400000 })
   })
 
   afterEach(() => {
@@ -314,18 +310,17 @@ describe('Admin Users flow', () => {
     expect(mockResetUserSubscribe).toHaveBeenCalledWith(406)
   })
 
-  it('names each user\'s plan from the plan list, which the user list no longer embeds', async () => {
+  it('shows each user\'s plan by the name the slim list carries', async () => {
     mockGetUserList.mockResolvedValue({
       data: {
         list: [
-          { id: 1, email: 'pro@example.com', plan_id: 7, banned: 0 },
+          { id: 1, email: 'pro@example.com', plan_id: 7, plan: { id: 7, name: 'Pro' }, banned: 0 },
           { id: 2, email: 'gone@example.com', plan_id: 99, banned: 0 },
           { id: 3, email: 'none@example.com', plan_id: null, banned: 0 },
         ],
         total: 3,
       },
     })
-    mockGetPlans.mockResolvedValue({ code: 0, msg: '操作成功', data: [{ id: 7, name: 'Pro' }], ts: 1783526400000 })
 
     const wrapper = mount(Users)
     await flushPromises()

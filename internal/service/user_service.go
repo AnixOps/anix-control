@@ -154,13 +154,14 @@ type UserListResult struct {
 }
 
 // UserListItem is one user in the administrator's list: the account
-// (e-mail, administrator, staff and ban flags) and the subscription summary
-// (plan, group, traffic, limits, reset day, expiry, balances), the columns
-// of kapi_user_directory_v1 and kapi_subscriber_entitlement_v1. It carries
-// no credential: the subscription token and proxy uuid, and the rest of the
-// row, are read one user at a time from GET /api/v2/admin/users/:id.
-// identity-platform's native list answers the same fields
-// (packages/identity-platform/native/directory.go).
+// (e-mail, administrator, staff and ban flags), the subscription summary
+// (plan, group, traffic, limits, reset day, expiry, balances) and the plan's
+// id and name: the columns of kapi_user_directory_v1,
+// kapi_subscriber_entitlement_v1 and kapi_plan_name_v1. A plan that no
+// longer exists is left out. It carries no credential: the subscription
+// token and proxy uuid, and the rest of the row, are read one user at a time
+// from GET /api/v2/admin/users/:id. identity-platform's native list answers
+// the same fields (packages/identity-platform/native/directory.go).
 type UserListItem struct {
 	ID                uint      `json:"id"`
 	Email             string    `json:"email"`
@@ -179,6 +180,15 @@ type UserListItem struct {
 	IsAdmin           int       `json:"is_admin"`
 	IsStaff           int       `json:"is_staff"`
 	CreatedAt         time.Time `json:"created_at"`
+	// Plan is never loaded with the row.
+	Plan *UserListPlan `gorm:"-" json:"plan,omitempty"`
+}
+
+// UserListPlan names a listed user's plan: its id and name, never the rest
+// of the plan row.
+type UserListPlan struct {
+	ID   uint   `json:"id"`
+	Name string `json:"name"`
 }
 
 // userListColumns are the v2_user columns of a UserListItem.
@@ -232,11 +242,42 @@ func (s *UserService) GetList(params UserListParams) (*UserListResult, error) {
 		Find(&users).Error; err != nil {
 		return nil, err
 	}
+	if err := s.nameListedPlans(users); err != nil {
+		return nil, err
+	}
 
 	return &UserListResult{
 		Total: total,
 		List:  users,
 	}, nil
+}
+
+// nameListedPlans gives each listed user on a plan that still exists the
+// plan's id and name.
+func (s *UserService) nameListedPlans(users []UserListItem) error {
+	planIDs := make([]uint, 0, len(users))
+	for _, user := range users {
+		if user.PlanID != nil {
+			planIDs = append(planIDs, *user.PlanID)
+		}
+	}
+	if len(planIDs) == 0 {
+		return nil
+	}
+	var plans []UserListPlan
+	if err := s.db.Model(&model.Plan{}).Select("id", "name").Where("id IN ?", planIDs).Find(&plans).Error; err != nil {
+		return err
+	}
+	byID := make(map[uint]*UserListPlan, len(plans))
+	for i := range plans {
+		byID[plans[i].ID] = &plans[i]
+	}
+	for i := range users {
+		if users[i].PlanID != nil {
+			users[i].Plan = byID[*users[i].PlanID]
+		}
+	}
+	return nil
 }
 
 // Create 创建用户

@@ -57,7 +57,7 @@
           <tr v-for="user in users" :key="user.id">
             <td>{{ user.id }}</td>
             <td><span v-if="user.is_admin === 1" class="admin-badge">{{ t('adminUsers.labels.admin') }}</span> {{ user.email }}</td>
-            <td>{{ planName(user) }}</td>
+            <td>{{ user.plan?.name || '-' }}</td>
             <td>{{ formatBytes((user.u || 0) + (user.d || 0)) }} / {{ formatBytes(user.transfer_enable || 0) }}</td>
             <td>{{ formatUserLimits(user) }}</td>
             <td>{{ formatDate(user.expired_at) }}</td>
@@ -273,7 +273,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import {
   assignAdminUserTunnel, banUser, createUser, getAdminUserTunnelList, getForwardTunnels, getSpeedLimitList,
-  getAdminUser, getPlans, getTrafficHourly,
+  getAdminUser, getTrafficHourly,
   getSubscriptionSettings,
   getUserList, getUserStats, removeAdminUserTunnel, resetUserSubscribe, resetUserTraffic, resetUserTunnelTraffic,
   unbanUser, updateAdminUserTunnel, updateUser
@@ -284,7 +284,6 @@ const { t, formatDate: i18nFormatDate, formatDateTime: i18nFormatDateTime } = us
 const users = ref([])
 const stats = ref({})
 const subscriptionGroups = ref([])
-const plans = ref([])
 const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
@@ -322,9 +321,6 @@ const newTunnelForm = () => ({ tunnelId: '', flow: 0, num: 0, expTime: '', flowR
 const tunnelForm = ref(newTunnelForm())
 
 const totalPages = computed(() => Math.ceil(total.value / pageSize.value) || 1)
-// The list names each user's plan by id; the names come from the plan list.
-const planNames = computed(() => new Map(plans.value.map(plan => [Number(plan?.id || 0), plan?.name || ''])))
-const planName = (user) => planNames.value.get(Number(user?.plan_id || 0)) || '-'
 const assignedTunnelIds = computed(() => new Set(userTunnels.value.map(item => Number(item?.tunnelId || 0)).filter(id => id > 0)))
 const availableTunnelOptions = computed(() => editingTunnelId.value ? tunnelOptions.value : tunnelOptions.value.filter(item => !assignedTunnelIds.value.has(Number(item?.id || 0))))
 const availableSpeedLimitOptions = computed(() => {
@@ -795,16 +791,7 @@ const formatHourTs = (timestamp) => {
   return i18nFormatDateTime(date) || date.toLocaleString()
 }
 
-onMounted(() => { fetchUsers(); fetchStats(); loadSubscriptionGroups(); loadSubscriptionSettings(); loadPlans() })
-
-const loadPlans = async () => {
-  try {
-    const payload = getResData(await getPlans()) || []
-    plans.value = Array.isArray(payload) ? payload : []
-  } catch (err) {
-    console.error('Failed to load plans', err)
-  }
-}
+onMounted(() => { fetchUsers(); fetchStats(); loadSubscriptionGroups(); loadSubscriptionSettings() })
 
 const loadSubscriptionGroups = async () => {
   try {

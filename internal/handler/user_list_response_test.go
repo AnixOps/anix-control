@@ -17,8 +17,9 @@ import (
 // UserListResponseTestSuite holds the regression tests for the
 // administrator's user list, which answered whole v2_user rows (subscription
 // token and proxy uuid included) with their plan rows. It now answers the
-// account and subscription summary of each user, and users created in the
-// same instant keep a stable order across pages.
+// account and subscription summary of each user with its plan's id and
+// name, and users created in the same instant keep a stable order across
+// pages.
 type UserListResponseTestSuite struct {
 	HandlerTestSuite
 }
@@ -52,8 +53,9 @@ func (s *UserListResponseTestSuite) list(query string) (string, struct {
 	return w.Body.String(), answer.Data
 }
 
-// The list carries no subscription token, proxy uuid, plan row or other
-// column of the user row; each user has exactly the listed fields.
+// The list carries no subscription token, proxy uuid or other column of the
+// user row, and of the plan only its id and name; each user has exactly the
+// listed fields, "plan" while the plan exists.
 func (s *UserListResponseTestSuite) TestListShowsNoCredentials() {
 	note, content := "remark only the detail shows", "plan description"
 	plan := &model.Plan{Name: "Pro", Content: &content}
@@ -63,25 +65,39 @@ func (s *UserListResponseTestSuite) TestListShowsNoCredentials() {
 		PlanID: &plan.ID, RemarkContent: &note, Balance: 4200, CommissionBalance: 70, TransferEnable: 1000, U: 1, D: 2,
 	}
 	s.Require().NoError(s.db.Create(user).Error)
+	gone := plan.ID + 100
+	orphan := &model.User{Email: "orphan@example.test", Password: "hash", Token: "orphan-token", UUID: "orphan-uuid", PlanID: &gone}
+	s.Require().NoError(s.db.Create(orphan).Error)
 
 	raw, data := s.list("")
-	for _, hidden := range []string{"listed-subscription-token", "listed-proxy-uuid", note, content, "\"plan\"", "\"token\"", "\"uuid\""} {
+	for _, hidden := range []string{"listed-subscription-token", "listed-proxy-uuid", "orphan-token", "orphan-uuid", note, content, "\"token\"", "\"uuid\"", "\"content\""} {
 		s.NotContains(raw, hidden)
 	}
-	s.Require().EqualValues(1, data.Total)
-	s.Require().Len(data.List, 1)
-	var keys []string
-	for key := range data.List[0] {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	s.Equal(userListFields, keys)
-	listed := data.List[0]
+	s.Require().EqualValues(2, data.Total)
+	s.Require().Len(data.List, 2)
+	listed, orphaned := data.List[1], data.List[0]
 	s.Equal("listed@example.test", listed["email"])
+	withPlan := append(append([]string(nil), userListFields...), "plan")
+	sort.Strings(withPlan)
+	s.Equal(withPlan, userListKeys(listed))
+	s.Equal(map[string]any{"id": float64(plan.ID), "name": "Pro"}, listed["plan"])
 	s.EqualValues(plan.ID, listed["plan_id"])
 	s.EqualValues(4200, listed["balance"])
 	s.EqualValues(70, listed["commission_balance"])
 	s.EqualValues(1000, listed["transfer_enable"])
+	s.Equal("orphan@example.test", orphaned["email"])
+	s.Equal(userListFields, userListKeys(orphaned), "a plan that no longer exists is left out")
+	s.EqualValues(gone, orphaned["plan_id"])
+}
+
+// userListKeys are the sorted keys of a listed user.
+func userListKeys(user map[string]any) []string {
+	keys := make([]string, 0, len(user))
+	for key := range user {
+		keys = append(keys, key)
+	}
+	sort.Strings(keys)
+	return keys
 }
 
 // Users created in the same instant are ordered by id, newest first, so

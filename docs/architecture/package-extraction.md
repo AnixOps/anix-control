@@ -372,15 +372,16 @@ refresh of the kernel's in-memory copies.
     (`native.UserDirectory`, [identity-service.md](identity-service.md#user-directory)).
     - One query on identity-platform's own storage joins its `account`
       table with `kapi_user_directory_v1` and the newly declared
-      `kapi_subscriber_entitlement_v1`. It filters by e-mail, plan and
-      status ("active" is not banned in identity and not expired in
-      Control), orders by `created_at DESC, id DESC`, pages and counts.
+      `kapi_subscriber_entitlement_v1` and `kapi_plan_name_v1`. It filters
+      by e-mail, plan and status ("active" is not banned in identity and
+      not expired in Control), orders by `created_at DESC, id DESC`, pages
+      and counts.
     - The total and the page come from one read-only, repeatable-read
       transaction, so they agree.
     - The list no longer shows any user's subscription token or proxy UUID,
-      in legacy mode either: each user is the account and the subscription
-      summary. The token is read for one user from the user detail
-      (`docs/UPGRADE.md` lists the removed fields).
+      in legacy mode either: each user is the account, the subscription
+      summary and its plan as `{id, name}`. The token is read for one user
+      from the user detail (`docs/UPGRADE.md` lists the removed fields).
   - **Resets:** the administrator's traffic reset and subscription reset.
     - They change only the subscriber, through
       `KernelSubscriber.ResetTraffic` (`kernel.subscriber.traffic.v1`) and

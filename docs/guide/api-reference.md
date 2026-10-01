@@ -167,10 +167,11 @@ DELETE /api/v2/admin/users/:id
 
 The list (`data.list`, with `data.total`) filters by `email` (substring),
 `plan_id` and `status` (`active`, `expired`, `banned`), newest first
-(`created_at DESC, id DESC`). Each user carries the account and the
-subscription summary, never the subscription token or proxy UUID; read
-those, the remark and the plan row from `GET /api/v2/admin/users/:id`, one
-user at a time (`docs/UPGRADE.md`).
+(`created_at DESC, id DESC`). Each user carries the account, the
+subscription summary and its plan as `{id, name}` (left out when the user
+has no plan or the plan no longer exists), never the subscription token or
+proxy UUID; read those, the remark and the plan row from
+`GET /api/v2/admin/users/:id`, one user at a time (`docs/UPGRADE.md`).
 
 ```json
 {
@@ -178,7 +179,8 @@ user at a time (`docs/UPGRADE.md`).
   "device_limit": 2, "speed_limit": null, "flowResetTime": 0,
   "transfer_enable": 107374182400, "u": 1024, "d": 4096,
   "plan_id": 2, "group_id": 1, "expired_at": 1798761600,
-  "banned": 0, "is_admin": 0, "is_staff": 0, "created_at": "2026-09-01T08:00:00Z"
+  "banned": 0, "is_admin": 0, "is_staff": 0, "created_at": "2026-09-01T08:00:00Z",
+  "plan": {"id": 2, "name": "Pro"}
 }
 ```
 

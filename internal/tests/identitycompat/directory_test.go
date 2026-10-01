@@ -36,14 +36,14 @@ func directoryUser(id uint, email string, created time.Time, change func(*model.
 	return user
 }
 
-// withDirectory adds subscribers of every kind to seedUsers' five: plans,
-// entitlements, expiries (past, future, zero), a banned and expired user,
-// staff, e-mails with LIKE wildcards and mixed case, and creation times with
-// ties, so ordering and paging have something to prove.
+// withDirectory adds subscribers of every kind to seedUsers' five: plans
+// (one deleted), entitlements, expiries (past, future, zero), a banned and
+// expired user, staff, e-mails with LIKE wildcards and mixed case, and
+// creation times with ties, so ordering and paging have something to prove.
 func withDirectory(t testing.TB, db *gorm.DB) {
 	withPlan(t, db)
 	require.NoError(t, db.Create(&model.Plan{ID: 8, Name: "Lite", GroupID: 5, TransferEnable: 5}).Error)
-	plan7, plan8, group4, group5 := uint(7), uint(8), uint(4), uint(5)
+	plan7, plan8, deletedPlan, group4, group5 := uint(7), uint(8), uint(9), uint(4), uint(5)
 	speed, devices, future, zero := int64(10), 2, later, int64(0)
 	users := []model.User{
 		directoryUser(6, "carol@example.test", directoryDay.Add(4*time.Hour), func(u *model.User) {
@@ -66,6 +66,16 @@ func withDirectory(t testing.TB, db *gorm.DB) {
 		directoryUser(11, "heidi@example.test", directoryDay.Add(-24*time.Hour), func(u *model.User) {
 			u.Banned = 1
 		}),
+		directoryUser(12, "ivan@example.test", directoryDay.Add(5*time.Hour), func(u *model.User) {
+			u.PlanID, u.GroupID = &deletedPlan, &group5
+		}),
+	}
+	if db.Name() == "postgres" {
+		// Plan 9 does not exist. SQLite enforces no foreign key, so a
+		// subscriber's plan can be gone there; PostgreSQL refuses to delete
+		// a plan in use, so the throwaway schema drops the key to hold the
+		// same row.
+		require.NoError(t, db.Exec("ALTER TABLE v2_user DROP CONSTRAINT IF EXISTS fk_v2_user_plan").Error)
 	}
 	require.NoError(t, db.Create(&users).Error)
 	if db.Name() == "postgres" {
@@ -134,6 +144,7 @@ func TestAdminUserListParity(t *testing.T) {
 		{Name: "email empty", Path: list("?email=")},
 		{Name: "plan", Path: list("?plan_id=7")},
 		{Name: "other plan", Path: list("?plan_id=8")},
+		{Name: "deleted plan", Path: list("?plan_id=9")},
 		{Name: "unknown plan", Path: list("?plan_id=99")},
 		{Name: "plan that does not parse", Path: list("?plan_id=abc")},
 		{Name: "plan beyond 32 bits", Path: list("?plan_id=4294967296")},
@@ -168,7 +179,8 @@ func TestAdminUserStatsParity(t *testing.T) {
 	})
 }
 
-// listedKeys are the fields of a listed user.
+// listedKeys are the fields of a listed user; a user on a plan that exists
+// also has "plan".
 var listedKeys = []string{
 	"balance", "banned", "commission_balance", "created_at", "d", "device_limit", "email", "expired_at", "flowResetTime",
 	"group_id", "id", "is_admin", "is_staff", "plan_id", "speed_limit", "transfer_enable", "u",
@@ -176,6 +188,7 @@ var listedKeys = []string{
 
 // The list shows no credential: each user has exactly the directory's
 // fields, and no subscription token, proxy uuid or other column of the row.
+// A plan is its id and name only.
 func TestAdminUserListShowsNoCredentials(t *testing.T) {
 	_, service, _ := controlWithIdentity(t)
 	listed := data(t, answer(t, service, native.AdminUsersRouteID, admin, nil, nil))
@@ -184,12 +197,18 @@ func TestAdminUserListShowsNoCredentials(t *testing.T) {
 	require.Len(t, users, 5)
 	for _, entry := range users {
 		user := entry.(map[string]any)
+		want := listedKeys
+		if user["id"] == 2.0 {
+			want = append(append([]string(nil), listedKeys...), "plan")
+			sort.Strings(want)
+			require.Equal(t, map[string]any{"id": 7.0, "name": "Pro"}, user["plan"])
+		}
 		var keys []string
 		for key := range user {
 			keys = append(keys, key)
 		}
 		sort.Strings(keys)
-		require.Equal(t, listedKeys, keys)
+		require.Equal(t, want, keys)
 	}
 }
 

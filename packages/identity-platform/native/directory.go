@@ -37,12 +37,12 @@ func (d ViewDirectory) ExpiredAt(ctx context.Context, userID uint64) (*int64, er
 // subscribers with identity's accounts, searched, ordered, paged and counted
 // in one query on identity's own storage connection.
 //
-//   - Control owns the subscribers. Identity reads them through two kernel
-//     API views on the same database: kapi_user_directory_v1 (which
-//     subscribers exist, since when, and the identity fields Control
-//     projects) and kapi_subscriber_entitlement_v1 (plan, group, traffic,
-//     limits, reset day, expiry and balances). Neither view shows a
-//     subscription token or proxy uuid.
+//   - Control owns the subscribers. Identity reads them through kernel API
+//     views on the same database: kapi_user_directory_v1 (which subscribers
+//     exist, since when, and the identity fields Control projects),
+//     kapi_subscriber_entitlement_v1 (plan, group, traffic, limits, reset
+//     day, expiry and balances) and kapi_plan_name_v1 (the plan's name). No
+//     view shows a subscription token or proxy uuid.
 //   - Identity owns the accounts: e-mail, administrator, staff and ban flags
 //     come from its account table. A subscriber identity has no account for
 //     keeps the fields Control holds, as the user detail does.
@@ -113,6 +113,20 @@ type DirectoryUser struct {
 	IsAdmin           int       `gorm:"column:is_admin" json:"is_admin"`
 	IsStaff           int       `gorm:"column:is_staff" json:"is_staff"`
 	CreatedAt         time.Time `gorm:"column:created_at" json:"created_at"`
+	// Plan is the plan's id and name, left out when the subscriber has no
+	// plan or its plan no longer exists.
+	Plan *DirectoryPlan `gorm:"-" json:"plan,omitempty"`
+	// ListedPlanID and ListedPlanName are the joined kapi_plan_name_v1 row
+	// Plan is made of.
+	ListedPlanID   *uint64 `gorm:"column:listed_plan_id" json:"-"`
+	ListedPlanName *string `gorm:"column:listed_plan_name" json:"-"`
+}
+
+// DirectoryPlan names a listed user's plan, as the kernel's
+// service.UserListPlan: its id and name, never the rest of the plan row.
+type DirectoryPlan struct {
+	ID   uint64 `json:"id"`
+	Name string `json:"name"`
 }
 
 // UserCounts are the directory's statistics.
@@ -148,7 +162,8 @@ const directoryColumns = "d.id AS id, " + userEmail + " AS email, e.balance AS b
 	"e.commission_balance AS commission_balance, e.device_limit AS device_limit, e.speed_limit AS speed_limit, " +
 	"e.flow_reset_time AS flow_reset_time, e.transfer_enable AS transfer_enable, e.u AS u, e.d AS d, " +
 	"e.plan_id AS plan_id, e.group_id AS group_id, e.expired_at AS expired_at, " + userBanned + " AS banned, " +
-	userIsAdmin + " AS is_admin, " + userIsStaff + " AS is_staff, d.created_at AS created_at"
+	userIsAdmin + " AS is_admin, " + userIsStaff + " AS is_staff, d.created_at AS created_at, " +
+	"p.id AS listed_plan_id, p.name AS listed_plan_name"
 
 // users are the directory's rows: every subscriber, its entitlements and its
 // account, if any.
@@ -156,6 +171,11 @@ func (d UserDirectory) users(tx *gorm.DB) *gorm.DB {
 	return tx.Table("kapi_user_directory_v1 AS d").
 		Joins("JOIN kapi_subscriber_entitlement_v1 AS e ON e.id = d.id").
 		Joins("LEFT JOIN " + d.Accounts + " AS a ON a.user_id = d.id")
+}
+
+// withPlans adds each row's plan name, if the plan still exists.
+func withPlans(rows *gorm.DB) *gorm.DB {
+	return rows.Joins("LEFT JOIN kapi_plan_name_v1 AS p ON p.id = e.plan_id")
 }
 
 // where applies a search's filters.
@@ -186,7 +206,7 @@ func (d UserDirectory) Search(ctx context.Context, q UserQuery) (int64, []Direct
 		if err := q.where(d.users(tx)).Count(&total).Error; err != nil {
 			return err
 		}
-		return q.where(d.users(tx)).
+		return q.where(withPlans(d.users(tx))).
 			Select(directoryColumns).
 			Order("d.created_at DESC, d.id DESC").
 			Offset(max(q.Offset, 0)).
@@ -195,6 +215,15 @@ func (d UserDirectory) Search(ctx context.Context, q UserQuery) (int64, []Direct
 	})
 	if err != nil {
 		return 0, nil, err
+	}
+	for i := range users {
+		if users[i].ListedPlanID != nil {
+			name := ""
+			if users[i].ListedPlanName != nil {
+				name = *users[i].ListedPlanName
+			}
+			users[i].Plan = &DirectoryPlan{ID: *users[i].ListedPlanID, Name: name}
+		}
 	}
 	return total, users, nil
 }

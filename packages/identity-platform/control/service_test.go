@@ -170,10 +170,10 @@ func TestIdentityHostNativeHandlersAreTheNativeRoutes(t *testing.T) {
 }
 
 // identity-platform reads the user directory view (login's expiry check,
-// the administrator's user directory) and the entitlement view (the
-// directory's subscription summary), and may reset traffic and subscription
-// credentials; it holds no other subscriber family and adopts no kernel
-// table.
+// the administrator's user directory), the entitlement view (the
+// directory's subscription summary) and the plan name view (the directory's
+// plans), and may reset traffic and subscription credentials; it holds no
+// other subscriber family and adopts no kernel table.
 func TestIdentityManifestCapabilities(t *testing.T) {
 	raw, err := os.ReadFile("../manifest.template.json")
 	require.NoError(t, err)
@@ -183,7 +183,7 @@ func TestIdentityManifestCapabilities(t *testing.T) {
 	require.NoError(t, json.Unmarshal(raw, &manifest))
 	require.ElementsMatch(t, []string{
 		"kernel.identity.v1", "kernel.storage.v1", "kernel.view:kapi_user_directory_v1", "kernel.view:kapi_subscriber_entitlement_v1",
-		"kernel.subscriber.traffic.v1", "kernel.subscriber.credentials.v1",
+		"kernel.view:kapi_plan_name_v1", "kernel.subscriber.traffic.v1", "kernel.subscriber.credentials.v1",
 	}, manifest.Capabilities)
 }
 
