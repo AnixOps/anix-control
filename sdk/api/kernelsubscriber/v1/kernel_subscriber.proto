@@ -29,14 +29,17 @@ service KernelSubscriber {
   // subscriber's row lock.
   rpc ApplyEntitlement(ApplyEntitlementRequest) returns (ApplyEntitlementResponse);
   // AdjustEntitlement sets individual entitlement fields, as the v2 admin
-  // user update does. Absent fields are left unchanged.
+  // user update does. Absent fields are left unchanged. A subscriber that
+  // does not exist is NOT_FOUND, and the request is not recorded.
   rpc AdjustEntitlement(AdjustEntitlementRequest) returns (AdjustEntitlementResponse);
   // RecordTraffic adds reported upload and download bytes to subscribers'
   // counters. A batch is applied once.
   rpc RecordTraffic(RecordTrafficRequest) returns (RecordTrafficResponse);
   // ResetTraffic zeroes subscribers' counters (monthly reset, admin reset).
   rpc ResetTraffic(ResetTrafficRequest) returns (ResetTrafficResponse);
-  // ResetCredentials issues a new subscription token and/or proxy uuid.
+  // ResetCredentials issues a new subscription token and/or proxy uuid. A
+  // subscriber that does not exist is NOT_FOUND, and the request is not
+  // recorded.
   rpc ResetCredentials(ResetCredentialsRequest) returns (ResetCredentialsResponse);
   // AdjustBalance changes a balance by a signed amount in cents.
   rpc AdjustBalance(AdjustBalanceRequest) returns (AdjustBalanceResponse);

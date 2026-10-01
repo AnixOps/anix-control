@@ -1,8 +1,10 @@
-// Package identitycompat proves that identity-platform's native group A
-// routes answer exactly as the kernel's legacy handlers: each case runs
-// against both on identically seeded databases (internal/tests/packagecompat).
-// The native side gets its accounts through the real import path and reaches
-// Control through the real KernelIdentity server.
+// Package identitycompat proves that identity-platform's native routes
+// answer exactly as the kernel's legacy handlers: each case runs against
+// both on identically seeded databases (internal/tests/packagecompat), on
+// SQLite and PostgreSQL. The native side gets its accounts through the real
+// import path and reaches Control through the real KernelIdentity and
+// KernelSubscriber servers, the latter authorized for exactly the families
+// the package declares.
 package identitycompat
 
 import (
@@ -20,15 +22,18 @@ import (
 	"github.com/AnixOps/anix-control/identity/throttle"
 	identityv1 "github.com/AnixOps/anix-control/sdk/api/identity/v1"
 	kernelidentityv1 "github.com/AnixOps/anix-control/sdk/api/kernelidentity/v1"
+	kernelsubscriberv1 "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1"
 	"github.com/AnixOps/anix-control/sdk/packagebridgesdk"
 	"github.com/AnixOps/anix-control/sdk/packagestoresdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/identityimport"
 	"github.com/AnixOps/anix-control/v4/internal/kernelidentity"
+	"github.com/AnixOps/anix-control/v4/internal/kernelsubscriber"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
 	"github.com/AnixOps/anix-control/v4/internal/packagestore"
+	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/AnixOps/anix-control/v4/packages/identity-platform/native"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
@@ -79,6 +84,33 @@ func (k kernel) GetSubscriber(ctx context.Context, in *kernelidentityv1.GetSubsc
 
 func (k kernel) GetIdentitySettings(ctx context.Context, in *kernelidentityv1.GetIdentitySettingsRequest, _ ...grpc.CallOption) (*kernelidentityv1.GetIdentitySettingsResponse, error) {
 	return k.server.GetIdentitySettings(ctx, in)
+}
+
+// identityHost is the identity-platform host the kernel serves.
+var identityHost = packagebridge.HostIdentity{PackageID: "identity-platform", Version: "4.1.0", Generation: 1}
+
+// declaredSubscriberFamilies authorizes what identity-platform's signed
+// release declares of KernelSubscriber: traffic and credential resets.
+type declaredSubscriberFamilies struct{}
+
+func (declaredSubscriberFamilies) AuthorizeCapability(_ context.Context, host packagebridge.HostIdentity, capability string) error {
+	if host == identityHost && (capability == service.CapabilitySubscriberTraffic || capability == service.CapabilitySubscriberCredentials) {
+		return nil
+	}
+	return service.ErrCapabilityNotAuthorized
+}
+
+// subscriberKernel calls the KernelSubscriber server in process.
+type subscriberKernel struct {
+	server kernelsubscriberv1.KernelSubscriberServer
+}
+
+func (k subscriberKernel) ResetTraffic(ctx context.Context, in *kernelsubscriberv1.ResetTrafficRequest, _ ...grpc.CallOption) (*kernelsubscriberv1.ResetTrafficResponse, error) {
+	return k.server.ResetTraffic(ctx, in)
+}
+
+func (k subscriberKernel) ResetCredentials(ctx context.Context, in *kernelsubscriberv1.ResetCredentialsRequest, _ ...grpc.CallOption) (*kernelsubscriberv1.ResetCredentialsResponse, error) {
+	return k.server.ResetCredentials(ctx, in)
 }
 
 func must(err error) {
@@ -146,9 +178,10 @@ func nativeService(db *gorm.DB) *native.Service {
 			Settings: &settings.Store{DB: db, Table: tablePrefix + "setting"},
 		}
 		service := &native.Service{
-			Open:      func(context.Context) (*native.Stores, error) { return stores, nil },
-			Kernel:    kernel{server: (&kernelidentity.Server{DB: db, Authorizer: allowAll{}, Config: config.Get}).For(packagebridge.HostIdentity{PackageID: "identity-platform", Version: "4.1.0", Generation: 1})},
-			Directory: native.ViewDirectory{DB: func(context.Context) (*gorm.DB, error) { return db, nil }},
+			Open:       func(context.Context) (*native.Stores, error) { return stores, nil },
+			Kernel:     kernel{server: (&kernelidentity.Server{DB: db, Authorizer: allowAll{}, Config: config.Get}).For(identityHost)},
+			Subscriber: subscriberKernel{server: (&kernelsubscriber.Server{DB: db, Authorizer: declaredSubscriberFamilies{}}).For(identityHost)},
+			Directory:  native.ViewDirectory{DB: func(context.Context) (*gorm.DB, error) { return db, nil }},
 			SigningKey: func(context.Context) (signingkey.Key, error) {
 				return key, nil
 			},

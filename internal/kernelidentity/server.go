@@ -425,7 +425,10 @@ func (h *hostServer) ResolveActorAccess(ctx context.Context, request *kerneliden
 	}, nil
 }
 
-// GetSubscriber returns the subscriber as the v2 admin API shows it.
+// GetSubscriber returns one subscriber as the v2 admin API shows it, with
+// its plan: the v2_user row without its password columns, subscription token
+// and proxy uuid included. Identity answers administration, the account's
+// own profile and its dashboard with it.
 func (h *hostServer) GetSubscriber(ctx context.Context, request *kernelidentityv1.GetSubscriberRequest) (*kernelidentityv1.GetSubscriberResponse, error) {
 	db, err := h.begin(ctx)
 	if err != nil {
@@ -436,7 +439,7 @@ func (h *hostServer) GetSubscriber(ctx context.Context, request *kernelidentityv
 		return nil, err
 	}
 	var user model.User
-	if err := db.Take(&user, id).Error; err != nil {
+	if err := db.Preload("Plan").Take(&user, id).Error; err != nil {
 		return nil, statusFor("get subscriber", err)
 	}
 	encoded, err := json.Marshal(user)

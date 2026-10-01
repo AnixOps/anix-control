@@ -198,8 +198,9 @@ and per-route counters in `HealthResponse.details_json`. The kernel's
 supervisor calls `Health` on every running host every 30 s, keeps the last
 details document, and `/metrics` exports it as `anixops_package_config_status`,
 `anixops_package_route_mode` and the `anixops_package_native_*` and
-`anixops_package_shadow_*` counters. The generic Control host and the
-identity-platform host run on the router with no native routes.
+`anixops_package_shadow_*` counters. The generic Control host runs on the
+router with no native routes; the native routes of the package hosts are
+listed in `package-extraction.md` and `identity-service.md`.
 
 ## Package Storage
 

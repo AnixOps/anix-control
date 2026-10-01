@@ -28,10 +28,12 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   WebSocket routes use `registeredPackageWebSocketRoute`.
 - `config/package-extraction.json` records each route's extraction mode
   (`bridged`, `native-flagged` or `native`) and where its legacy handler lives
-  (`router`, `identity-bridge` or `none`). 91 routes are `native-flagged`:
-  identity's group A (15), affiliate (7), knowledge (6), notification (19),
-  order (9), payment (16), plan (7), platform (4) and ticket (8). The rest are
-  `bridged`. The identity routes are `identity-bridge`.
+  (`router`, `identity-bridge` or `none`). 96 routes are `native-flagged`:
+  identity-platform (20: group A's 15, the profile, dashboard and user
+  detail, and the traffic and subscription resets), affiliate (7), knowledge
+  (6), notification (19), order (9), payment (16), plan (7), platform (4) and
+  ticket (8). The rest are `bridged`. The identity routes are
+  `identity-bridge`.
   `check_plugin_only_routes.py` enforces the map against the router and the
   identity bridge.
 - Request path: gin middleware -> `compatv2` gateway -> route resolution
@@ -306,6 +308,53 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
   - Updating the configuration stays bridged. It writes
     `invite.frontend.config` into `v2_system_config`, which no package may
     adopt and no contract writes.
+- **Identity leftovers (in place).** 5 of identity-platform's 9 routes
+  outside group A run natively, proved by `internal/tests/identitycompat`
+  (byte parity and the same Control state, on SQLite and PostgreSQL).
+  identity-platform adopts no kernel table.
+  - **Account reads:** the user's profile and dashboard and the
+    administrator's user detail.
+    - The account (email, administrator, staff and ban flags) comes from
+      identity's own store. Identity's store is current only while identity
+      is authoritative, so the kernel lets these three routes leave legacy
+      mode (shadow or native) only then
+      (`service.IdentityAccountReadRoutes`). The rollback returns them to
+      legacy with group A. The cutover leaves them to the operator: they are
+      not part of group A, and group A's rule is unchanged.
+    - The subscriber fields come from `KernelIdentity.GetSubscriber`
+      (`kernel.identity.v1`), for one user per call, never from a view:
+      plan, traffic and expiry, and the subscription token and proxy uuid
+      that the profile and the administrator's detail show.
+      `GetSubscriber` now includes the subscriber's plan, as the v2 detail
+      does.
+    - The plugin permissions come from `ResolveActorAccess`.
+    - The dashboard is computed on every request; the kernel cached it for
+      30 seconds.
+  - **Resets:** the administrator's traffic reset and subscription reset.
+    - They change only the subscriber, through
+      `KernelSubscriber.ResetTraffic` (`kernel.subscriber.traffic.v1`) and
+      `ResetCredentials` (`kernel.subscriber.credentials.v1`), so they switch
+      at any time.
+    - Their request id is `identity.reset_traffic:<user>:<digest>` or
+      `identity.reset_subscribe:<user>:<digest>`, a digest of the request's
+      `Idempotency-Key` (else its request id). The legacy handlers now derive
+      the same id and record it in the subscriber request ledger, so a retry
+      applies once whichever side serves it. A retried subscription reset
+      answers the token the first one issued.
+    - `ResetCredentials` and `AdjustEntitlement` now refuse a subscriber
+      that does not exist (`NotFound`) instead of recording an empty change.
+  - **Stay bridged:**
+    - the administrator's user list: it filters, orders and pages one
+      query over identity's ban flag and email and the subscriber's expiry
+      and plan, and shows every listed user's subscription token and proxy
+      uuid, which no contract lists;
+    - the user statistics: "active" means not banned (identity) and not
+      expired (subscriber), one predicate over both stores;
+    - the user's invite codes and their generation: affiliate data, not
+      identity's. Control keeps the codes (`v2_invite_code`, which
+      registration consumes inside Control), and the answer adds the
+      commission balance and invite statistics that join the order and
+      affiliate packages' tables. They belong with the affiliate package.
 - The kernel publishes read-only views `kapi_*`, created at startup by
   `EnsureKernelAPIViews` (first `kapi_user_directory_v1`, then
   `kapi_system_audit_log_v1`, the `v2_operation_log` rows of module

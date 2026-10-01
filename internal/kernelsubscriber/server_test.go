@@ -129,6 +129,16 @@ func TestWritesAreIdempotentAndValidated(t *testing.T) {
 	require.Equal(t, int64(20), balance.GetBalanceCents())
 	_, err = server.AdjustBalance(ctx, &kernelsubscriberv1.AdjustBalanceRequest{RequestId: "x", UserId: 99, Kind: kernelsubscriberv1.BalanceKind_BALANCE_KIND_ACCOUNT, AmountCents: 1})
 	require.Equal(t, codes.NotFound, status.Code(err))
+
+	// A subscriber that does not exist is NotFound, and the request is not
+	// recorded: the same id applies once the subscriber exists.
+	_, err = server.ResetCredentials(ctx, &kernelsubscriberv1.ResetCredentialsRequest{RequestId: "reset:missing", UserId: 99, SubscriptionToken: true})
+	require.Equal(t, codes.NotFound, status.Code(err))
+	_, err = server.AdjustEntitlement(ctx, &kernelsubscriberv1.AdjustEntitlementRequest{RequestId: "admin:missing", UserId: 99, TransferBytes: ptr(int64(5))})
+	require.Equal(t, codes.NotFound, status.Code(err))
+	var recorded int64
+	require.NoError(t, db.Model(&model.SubscriberRequest{}).Where("request_id IN ?", []string{"reset:missing", "admin:missing"}).Count(&recorded).Error)
+	require.Zero(t, recorded)
 }
 
 func TestDirectory(t *testing.T) {

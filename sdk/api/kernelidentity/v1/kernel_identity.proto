@@ -32,8 +32,9 @@ service KernelIdentity {
   // GetIdentitySettings returns the kernel's legacy auth settings once, to
   // seed the identity installation configuration.
   rpc GetIdentitySettings(GetIdentitySettingsRequest) returns (GetIdentitySettingsResponse);
-  // GetSubscriber returns a subscriber as the v2 admin API shows it, for
-  // identity's administration answers.
+  // GetSubscriber returns one subscriber as the v2 admin API shows it, with
+  // its plan, for identity's administration answers and the account's own
+  // profile and dashboard.
   rpc GetSubscriber(GetSubscriberRequest) returns (GetSubscriberResponse);
 }
 
@@ -42,7 +43,9 @@ message GetSubscriberRequest {
 }
 
 message GetSubscriberResponse {
-  // subscriber_json is the v2 user object, without credentials.
+  // subscriber_json is the v2 user object with its plan. It carries no
+  // password hash, but it does carry the subscription token and proxy uuid,
+  // which the v2 admin API and the account's own profile show.
   bytes subscriber_json = 1;
 }
 

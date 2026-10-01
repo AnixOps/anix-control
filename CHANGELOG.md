@@ -602,6 +602,44 @@
     ledger and configuration, against the real KernelSubscriber server. The
     PostgreSQL run is part of CI. The parity harness now tells a path its
     route does not match from a 404 the handler answers.
+- **Identity routes outside group A.** identity-platform serves 5 of the 9
+  natively: the user's profile and dashboard, and the administrator's user
+  detail, traffic reset and subscription reset.
+  - **Account reads.** The profile, dashboard and user detail take the
+    account (email, administrator, staff and ban flags) from identity's
+    store. Identity's store is current only while identity is
+    authoritative, so Control lets them leave legacy mode (shadow or native)
+    only then; the identity rollback returns them to legacy with group A.
+    They switch on their own: group A's rule and the cutover are unchanged.
+  - **Subscriber fields.** Plan, traffic and expiry, and the subscription
+    token and proxy uuid that the profile and the detail show, come from
+    `KernelIdentity.GetSubscriber` for that one user, never from a view.
+    `GetSubscriber` now includes the subscriber's plan, as the v2 detail
+    does. The native dashboard is computed on every request; the kernel's
+    was cached for 30 seconds.
+  - **Resets.** The traffic and subscription resets go through
+    `KernelSubscriber.ResetTraffic` and `ResetCredentials`; identity-platform
+    now declares `kernel.subscriber.traffic.v1` and
+    `kernel.subscriber.credentials.v1`. They change only the subscriber, so
+    they switch at any time.
+  - **Idempotent resets.** A reset's request id is
+    `identity.reset_traffic:<user>:<digest>` or
+    `identity.reset_subscribe:<user>:<digest>`, a digest of the request's
+    `Idempotency-Key` (else its request id). The kernel's legacy handlers
+    derive the same id and record it in the subscriber request ledger, so a
+    retry applies once whichever side serves it; a retried subscription
+    reset answers the token the first one issued.
+  - **Contract.** `KernelSubscriber.ResetCredentials` and
+    `AdjustEntitlement` answer `NotFound` for a subscriber that does not
+    exist, instead of recording an empty change.
+  - **Still bridged.** The administrator's user list and statistics: their
+    one query mixes identity's ban flag with the subscriber's expiry, and
+    the list shows every user's subscription token. The user's invite code
+    list and generation: affiliate data that Control keeps.
+  - `internal/tests/identitycompat` proves byte parity and the same Control
+    state (counters, tokens, request ledger, change log, revocations) on
+    SQLite and PostgreSQL, and that the reads answer identity's account
+    rather than Control's projection.
 
 - The kernel side of the identity module, `KernelIdentity` (N9). It is served
   on the local package bridge and on the module listener.

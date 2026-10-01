@@ -340,7 +340,8 @@ func (h *AdminHandler) ResetUserTraffic(c *gin.Context) {
 		return
 	}
 
-	if err := h.userService.ResetTraffic(uint(id)); err != nil {
+	requestID := service.AdminUserResetRequestID(service.AdminUserResetTraffic, uint(id), assignmentToken(c))
+	if err := h.userService.ResetTraffic(uint(id), requestID); err != nil {
 		panelAdminUserError(c, "重置失败", err)
 		return
 	}
@@ -367,7 +368,8 @@ func (h *AdminHandler) ResetUserSubscribe(c *gin.Context) {
 		return
 	}
 
-	newToken, err := h.userService.ResetToken(uint(id))
+	requestID := service.AdminUserResetRequestID(service.AdminUserResetSubscribe, uint(id), assignmentToken(c))
+	newToken, err := h.userService.ResetToken(uint(id), requestID)
 	if err != nil {
 		panelAdminUserError(c, "重置订阅失败", err)
 		return
@@ -386,7 +388,7 @@ func (h *AdminHandler) ResetCompatFlow(c *gin.Context) {
 	var err error
 	switch req.Type {
 	case 1:
-		err = h.userService.ResetTraffic(req.ID)
+		err = h.userService.ResetTraffic(req.ID, "")
 	case 2:
 		err = h.forwardService.ResetUserTunnelTraffic(req.ID)
 	default:
@@ -619,9 +621,10 @@ func (h *AdminHandler) AssignPlanToUser(c *gin.Context) {
 	panelSuccess(c, gin.H{"message": "分配成功"})
 }
 
-// assignmentToken identifies a plan assignment request for
-// service.PlanAssignmentRequestID: its Idempotency-Key, else its request id
-// (X-Request-ID or the one the kernel gave it), else a fresh value.
+// assignmentToken identifies an administrator's request for
+// service.PlanAssignmentRequestID and service.AdminUserResetRequestID: its
+// Idempotency-Key, else its request id (X-Request-ID or the one the kernel
+// gave it), else a fresh value.
 func assignmentToken(c *gin.Context) string {
 	if key := strings.TrimSpace(c.GetHeader("Idempotency-Key")); key != "" {
 		return key

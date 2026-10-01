@@ -60,14 +60,17 @@ type KernelSubscriberClient interface {
 	// subscriber's row lock.
 	ApplyEntitlement(ctx context.Context, in *ApplyEntitlementRequest, opts ...grpc.CallOption) (*ApplyEntitlementResponse, error)
 	// AdjustEntitlement sets individual entitlement fields, as the v2 admin
-	// user update does. Absent fields are left unchanged.
+	// user update does. Absent fields are left unchanged. A subscriber that
+	// does not exist is NOT_FOUND, and the request is not recorded.
 	AdjustEntitlement(ctx context.Context, in *AdjustEntitlementRequest, opts ...grpc.CallOption) (*AdjustEntitlementResponse, error)
 	// RecordTraffic adds reported upload and download bytes to subscribers'
 	// counters. A batch is applied once.
 	RecordTraffic(ctx context.Context, in *RecordTrafficRequest, opts ...grpc.CallOption) (*RecordTrafficResponse, error)
 	// ResetTraffic zeroes subscribers' counters (monthly reset, admin reset).
 	ResetTraffic(ctx context.Context, in *ResetTrafficRequest, opts ...grpc.CallOption) (*ResetTrafficResponse, error)
-	// ResetCredentials issues a new subscription token and/or proxy uuid.
+	// ResetCredentials issues a new subscription token and/or proxy uuid. A
+	// subscriber that does not exist is NOT_FOUND, and the request is not
+	// recorded.
 	ResetCredentials(ctx context.Context, in *ResetCredentialsRequest, opts ...grpc.CallOption) (*ResetCredentialsResponse, error)
 	// AdjustBalance changes a balance by a signed amount in cents.
 	AdjustBalance(ctx context.Context, in *AdjustBalanceRequest, opts ...grpc.CallOption) (*AdjustBalanceResponse, error)
@@ -229,14 +232,17 @@ type KernelSubscriberServer interface {
 	// subscriber's row lock.
 	ApplyEntitlement(context.Context, *ApplyEntitlementRequest) (*ApplyEntitlementResponse, error)
 	// AdjustEntitlement sets individual entitlement fields, as the v2 admin
-	// user update does. Absent fields are left unchanged.
+	// user update does. Absent fields are left unchanged. A subscriber that
+	// does not exist is NOT_FOUND, and the request is not recorded.
 	AdjustEntitlement(context.Context, *AdjustEntitlementRequest) (*AdjustEntitlementResponse, error)
 	// RecordTraffic adds reported upload and download bytes to subscribers'
 	// counters. A batch is applied once.
 	RecordTraffic(context.Context, *RecordTrafficRequest) (*RecordTrafficResponse, error)
 	// ResetTraffic zeroes subscribers' counters (monthly reset, admin reset).
 	ResetTraffic(context.Context, *ResetTrafficRequest) (*ResetTrafficResponse, error)
-	// ResetCredentials issues a new subscription token and/or proxy uuid.
+	// ResetCredentials issues a new subscription token and/or proxy uuid. A
+	// subscriber that does not exist is NOT_FOUND, and the request is not
+	// recorded.
 	ResetCredentials(context.Context, *ResetCredentialsRequest) (*ResetCredentialsResponse, error)
 	// AdjustBalance changes a balance by a signed amount in cents.
 	AdjustBalance(context.Context, *AdjustBalanceRequest) (*AdjustBalanceResponse, error)

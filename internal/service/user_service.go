@@ -1,6 +1,7 @@
 package service
 
 import (
+	"crypto/sha256"
 	"errors"
 	"fmt"
 	"time"
@@ -355,26 +356,95 @@ func (s *UserService) Unban(id uint) error {
 	return s.Update(id, map[string]any{"banned": 0})
 }
 
-// ResetTraffic 重置用户流量
-func (s *UserService) ResetTraffic(id uint) error {
+// ResetTraffic 重置用户流量. A non-empty requestID (AdminUserResetRequestID)
+// applies a retried reset once, through the subscriber request ledger.
+func (s *UserService) ResetTraffic(id uint, requestID string) error {
 	if err := s.ensureUserExists(id); err != nil {
 		return err
 	}
 	return s.db.Transaction(func(tx *gorm.DB) error {
-		_, err := subscriber.ResetTrafficTx(tx, "", []uint{id}, time.Now())
+		_, err := subscriber.ResetTrafficTx(tx, requestID, []uint{id}, time.Now())
 		return err
 	})
 }
 
 // ResetToken 为用户重新生成订阅 token, 让旧的 /s/<token> 链接立即失效。
 // 不改动 UUID, 所以节点端密码/连接不受影响, 用户只需重新导入订阅。
-// 返回新生成的 token。
-func (s *UserService) ResetToken(id uint) (string, error) {
-	newToken := uuid.New().String()
-	if err := s.Update(id, map[string]any{"token": newToken}); err != nil {
+// 返回当前 token. requestID (AdminUserResetRequestID) applies a retried
+// reset once, as KernelSubscriber.ResetCredentials does: a repeat changes
+// nothing and returns the token the first one issued, if it is still the
+// current one.
+func (s *UserService) ResetToken(id uint, requestID string) (string, error) {
+	if err := s.ensureUserExists(id); err != nil {
 		return "", err
 	}
-	return newToken, nil
+	var tokens []string
+	var revocation *authn.Revocation
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		var err error
+		if _, revocation, err = UpdateUserOnceTx(tx, requestID, SubscriberReissueMethod, id, map[string]any{"token": uuid.New().String()}, time.Now()); err != nil {
+			return err
+		}
+		return tx.Model(&model.User{}).Where("id = ?", id).Limit(1).Pluck("token", &tokens).Error
+	})
+	if err != nil {
+		return "", err
+	}
+	if revocation != nil {
+		authn.Remember(*revocation)
+	}
+	if len(tokens) == 0 {
+		return "", ErrUserNotFound
+	}
+	return tokens[0], nil
+}
+
+// SubscriberReissueMethod is the subscriber request ledger's method for a
+// new subscription token or proxy uuid (KernelSubscriber.ResetCredentials
+// and the administrator's subscription reset).
+const SubscriberReissueMethod = "reset_credentials"
+
+// Administrator resets of one user, for AdminUserResetRequestID.
+const (
+	AdminUserResetTraffic   = "reset_traffic"
+	AdminUserResetSubscribe = "reset_subscribe"
+)
+
+// AdminUserResetRequestID names an administrator's traffic or subscription
+// reset of a user in the subscriber request ledger, so a retried request is
+// applied once. token identifies the HTTP request: its Idempotency-Key, else
+// its request id. The identity package's native handlers derive the same id
+// (packages/identity-platform/native), so a retry is recognized whichever
+// side serves it; a new request is a new reset, as in v2.
+func AdminUserResetRequestID(kind string, userID uint, token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return fmt.Sprintf("identity.%s:%d:%x", kind, userID, sum[:12])
+}
+
+// UpdateUserOnceTx applies updates to an existing user through UpdateUserTx
+// once per request id, recording it in the subscriber request ledger: a
+// repeated id changes nothing and reports applied false. A user that does
+// not exist is ErrUserNotFound, and nothing is recorded. The revocation, if
+// any, is for authn.Remember after the commit. An empty request id applies
+// every time.
+func UpdateUserOnceTx(tx *gorm.DB, requestID, method string, userID uint, updates map[string]any, now time.Time) (bool, *authn.Revocation, error) {
+	var previous struct{}
+	seen, err := subscriber.Replay(tx, requestID, &previous)
+	if err != nil || seen {
+		return false, nil, err
+	}
+	var found []uint
+	if err := tx.Model(&model.User{}).Where("id = ?", userID).Limit(1).Pluck("id", &found).Error; err != nil {
+		return false, nil, err
+	}
+	if len(found) == 0 {
+		return false, nil, ErrUserNotFound
+	}
+	revocation, err := UpdateUserTx(tx, userID, updates)
+	if err != nil {
+		return false, nil, err
+	}
+	return true, revocation, subscriber.Record(tx, requestID, method, userID, struct{}{}, now)
 }
 
 func (s *UserService) ensureUserExists(id uint) error {

@@ -41,8 +41,8 @@ what it uses:
 | Capability | Methods | Typical holders |
 |---|---|---|
 | `kernel.subscriber.entitlements.v1` | ApplyEntitlement, AdjustEntitlement | order, plan, identity (admin edits) |
-| `kernel.subscriber.traffic.v1` | RecordTraffic, ResetTraffic | proxy-node, forward |
-| `kernel.subscriber.credentials.v1` | ResetCredentials | subscription, identity |
+| `kernel.subscriber.traffic.v1` | RecordTraffic, ResetTraffic | proxy-node, forward, identity (admin reset) |
+| `kernel.subscriber.credentials.v1` | ResetCredentials | subscription, identity (admin reset) |
 | `kernel.subscriber.balance.v1` | AdjustBalance | affiliate, payment |
 | `kernel.subscriber.directory.v1` | GetSubscribers, LookupBySubscriptionToken, ListActiveSubscribers, WatchSubscriberChanges | subscription, proxy-node, forward |
 
@@ -88,6 +88,14 @@ package and generation.
   the withdrawal's own transaction; the affiliate module calls the contract
   (`packages/affiliate/native`). A debit below zero is refused under the
   row lock, so concurrent withdrawals cannot overdraw.
+- **Administrator resets.** identity-platform resets a user's traffic and
+  subscription token with `ResetTraffic` and `ResetCredentials`, with
+  `request_id = "identity.reset_traffic:<user_id>:<digest>"` or
+  `"identity.reset_subscribe:<user_id>:<digest>"`; the digest covers the
+  request's `Idempotency-Key` (else its request id). The kernel's legacy
+  handlers derive the same ids, so a retry applies once whichever side
+  serves it. `ResetCredentials` and `AdjustEntitlement` answer `NotFound`
+  for a subscriber that does not exist and record nothing.
 - **RecordTraffic.**
   - Adds `(upload, download) × rate` to each subscriber's counters in one
     transaction.

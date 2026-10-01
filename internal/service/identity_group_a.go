@@ -37,6 +37,23 @@ var IdentityGroupARoutes = []string{
 	"identity.admin.users.id.delete",
 }
 
+// IdentityAccountReadRoutes are identity-platform's read routes whose native
+// handlers take the account (email, administrator, staff and ban flags) from
+// identity's own store: the user's profile and dashboard and the
+// administrator's user detail. Identity's store is current only while
+// identity is authoritative; before, the legacy handlers change accounts
+// and identity learns of it at the next import. These routes therefore
+// leave legacy mode (shadow or native) only while identity is
+// authoritative, and the rollback returns them to legacy with group A. In
+// legacy mode they read Control's projection, which identity keeps
+// current, so they may stay legacy at any time; they are not part of
+// group A and switch on their own.
+var IdentityAccountReadRoutes = []string{
+	"identity.user.profile.get",
+	"identity.user.dashboard.get",
+	"identity.admin.users.id.get",
+}
+
 // IdentityAuthorityState returns the identity authority state; no row
 // means the kernel.
 func IdentityAuthorityState(db *gorm.DB) (string, error) {
@@ -53,10 +70,13 @@ func IdentityAuthoritative(state string) bool {
 	return state == model.IdentityAuthorityIdentity || state == model.IdentityAuthorityFinalized
 }
 
-// validateIdentityGroupA keeps identity-platform's group A consistent with
-// the authority: its routes are native together, and exactly while identity
-// is authoritative. Anything else would let the legacy handlers and identity
-// both change credentials. The cutover and rollback change both at once.
+// validateIdentityGroupA keeps identity-platform's route modes consistent
+// with the authority. Group A's routes are native together, and exactly
+// while identity is authoritative: anything else would let the legacy
+// handlers and identity both change credentials. The cutover and rollback
+// change both at once. Identity's account reads
+// (IdentityAccountReadRoutes) leave legacy mode only while identity is
+// authoritative, so they never answer from a store that is behind.
 func validateIdentityGroupA(tx *gorm.DB, packageID string, modes map[string]string) error {
 	if packageID != IdentityPlatformPackageID {
 		return nil
@@ -78,6 +98,14 @@ func validateIdentityGroupA(tx *gorm.DB, packageID string, modes map[string]stri
 		return fmt.Errorf("identity group A is served natively only once identity is authoritative (state %q): use the identity cutover", state)
 	case native == 0 && IdentityAuthoritative(state):
 		return fmt.Errorf("identity is authoritative (state %q): group A stays native; roll back with the identity rollback", state)
+	}
+	if IdentityAuthoritative(state) {
+		return nil
+	}
+	for _, route := range IdentityAccountReadRoutes {
+		if mode := modes[route]; mode == packagebridge.RouteModeNative || mode == packagebridge.RouteModeShadow {
+			return fmt.Errorf("%s reads identity's accounts: it leaves legacy mode only once identity is authoritative (state %q)", route, state)
+		}
 	}
 	return nil
 }

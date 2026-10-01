@@ -1510,7 +1510,7 @@
       "path": "/api/v2/admin/users/:id",
       "package_id": "identity-platform",
       "route_id": "identity.admin.users.id.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "identity-bridge"
     },
     {
@@ -1534,7 +1534,7 @@
       "path": "/api/v2/admin/users/:id/reset-subscribe",
       "package_id": "identity-platform",
       "route_id": "identity.admin.users.id.reset_subscribe.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "identity-bridge"
     },
     {
@@ -1542,7 +1542,7 @@
       "path": "/api/v2/admin/users/:id/reset-traffic",
       "package_id": "identity-platform",
       "route_id": "identity.admin.users.id.reset_traffic.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "identity-bridge"
     },
     {
@@ -2030,7 +2030,7 @@
       "path": "/api/v2/user/dashboard",
       "package_id": "identity-platform",
       "route_id": "identity.user.dashboard.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "identity-bridge"
     },
     {
@@ -2254,7 +2254,7 @@
       "path": "/api/v2/user/profile",
       "package_id": "identity-platform",
       "route_id": "identity.user.profile.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "identity-bridge"
     },
     {

@@ -1,9 +1,22 @@
-// Package native implements identity-platform's group A v2 routes in the
-// identity module itself: accounts, credentials and MFA come from identity's
+// Package native implements identity-platform's v2 routes in the identity
+// module itself: accounts, credentials and MFA come from identity's
 // storage, subscribers and permissions from Control through KernelIdentity.
 // Responses are byte-compatible with the kernel's legacy handlers
-// (internal/tests/packagecompat proves it route by route). Routes use these
-// handlers only once their mode is native, which the identity cutover sets.
+// (internal/tests/identitycompat proves it route by route, on SQLite and
+// PostgreSQL). A route uses its handler only once its mode is native:
+//   - group A (login, registration, MFA, the administrator's account writes)
+//     switches with the identity cutover;
+//   - the account reads (the profile, the dashboard and the administrator's
+//     user detail) take the account from identity's store, so Control lets
+//     them leave legacy mode only while identity is authoritative; their
+//     subscriber fields, subscription token included, come from
+//     KernelIdentity.GetSubscriber for that one user, never from a view;
+//   - the administrator's traffic and subscription resets touch only the
+//     subscriber, through KernelSubscriber (ResetTraffic, ResetCredentials),
+//     and switch independently of the authority.
+//
+// The administrator's user list and statistics and the user's invite routes
+// have no handler here and stay bridged (see the package's control host).
 package native
 
 import (
@@ -18,6 +31,7 @@ import (
 	"github.com/AnixOps/anix-control/identity/signingkey"
 	"github.com/AnixOps/anix-control/identity/throttle"
 	kernelidentityv1 "github.com/AnixOps/anix-control/sdk/api/kernelidentity/v1"
+	kernelsubscriberv1 "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/AnixOps/anix-control/sdk/v2compat"
 	"google.golang.org/grpc"
@@ -32,6 +46,14 @@ type Kernel interface {
 	ApplyAccountProjection(ctx context.Context, in *kernelidentityv1.ApplyAccountProjectionRequest, opts ...grpc.CallOption) (*kernelidentityv1.ApplyAccountProjectionResponse, error)
 	DeleteSubscriber(ctx context.Context, in *kernelidentityv1.DeleteSubscriberRequest, opts ...grpc.CallOption) (*kernelidentityv1.DeleteSubscriberResponse, error)
 	GetSubscriber(ctx context.Context, in *kernelidentityv1.GetSubscriberRequest, opts ...grpc.CallOption) (*kernelidentityv1.GetSubscriberResponse, error)
+}
+
+// Subscriber is the part of KernelSubscriber the native routes call: the
+// administrator's resets (kernel.subscriber.traffic.v1 and
+// kernel.subscriber.credentials.v1).
+type Subscriber interface {
+	ResetTraffic(ctx context.Context, in *kernelsubscriberv1.ResetTrafficRequest, opts ...grpc.CallOption) (*kernelsubscriberv1.ResetTrafficResponse, error)
+	ResetCredentials(ctx context.Context, in *kernelsubscriberv1.ResetCredentialsRequest, opts ...grpc.CallOption) (*kernelsubscriberv1.ResetCredentialsResponse, error)
 }
 
 // Directory reads subscriber fields Control owns, from the kernel API view
@@ -54,15 +76,21 @@ type Service struct {
 	Open      func(ctx context.Context) (*Stores, error)
 	Kernel    Kernel
 	Directory Directory
+	// Subscriber is Control's KernelSubscriber; without it the resets stay
+	// legacy.
+	Subscriber Subscriber
 	// SigningKey returns the key that signs tokens now.
 	SigningKey func(ctx context.Context) (signingkey.Key, error)
 	// Now defaults to time.Now.
 	Now func() time.Time
+	// NewToken identifies a request without an Idempotency-Key or request
+	// id; it defaults to a random UUID.
+	NewToken func() string
 }
 
 // Handlers returns the native handlers by route id.
 func (s *Service) Handlers() map[string]pluginhostsdk.NativeHandler {
-	return map[string]pluginhostsdk.NativeHandler{
+	handlers := map[string]pluginhostsdk.NativeHandler{
 		"identity.auth.login":                            s.Login,
 		"identity.auth.register":                         s.Register,
 		"identity.user.mfa.status.get":                   s.MFAStatus,
@@ -78,7 +106,15 @@ func (s *Service) Handlers() map[string]pluginhostsdk.NativeHandler {
 		"identity.admin.users.id.ban.post":               s.BanUser,
 		"identity.admin.users.id.unban.post":             s.UnbanUser,
 		"identity.admin.users.id.delete":                 s.DeleteUser,
+		ProfileRouteID:                                   s.Profile,
+		DashboardRouteID:                                 s.Dashboard,
+		AdminUserRouteID:                                 s.AdminUser,
 	}
+	if s.Subscriber != nil {
+		handlers[ResetTrafficRouteID] = s.ResetTraffic
+		handlers[ResetSubscribeRouteID] = s.ResetSubscribe
+	}
+	return handlers
 }
 
 func (s *Service) now() time.Time {

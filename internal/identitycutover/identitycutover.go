@@ -5,7 +5,10 @@
 //     imports the last changes, then switches group A to native and the
 //     authority to identity in one transaction, and waits until the
 //     identity hosts serve group A natively;
-//   - a rollback, possible until finalize, switches back to legacy;
+//   - a rollback, possible until finalize, switches back to legacy, and
+//     returns identity's account reads (service.IdentityAccountReadRoutes),
+//     which the operator may have switched on their own since, to legacy
+//     with it;
 //   - finalize, a day after the cutover, removes the legacy credentials.
 //
 // Every change is recorded in v4_kernel_identity_cutover.
@@ -17,6 +20,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -121,10 +125,19 @@ func duration(value, fallback time.Duration) time.Duration {
 	return fallback
 }
 
-func groupAModes(mode string) map[string]string {
-	modes := make(map[string]string, len(service.IdentityGroupARoutes))
+// authorityModes are the route modes an authority change writes: group A in
+// mode and, when the change goes back to legacy, identity's account reads
+// too, which leave legacy only while identity is authoritative. A cutover
+// leaves the reads as they are; the operator switches them.
+func authorityModes(mode string) map[string]string {
+	modes := make(map[string]string, len(service.IdentityGroupARoutes)+len(service.IdentityAccountReadRoutes))
 	for _, route := range service.IdentityGroupARoutes {
 		modes[route] = mode
+	}
+	if mode == packagebridge.RouteModeLegacy {
+		for _, route := range service.IdentityAccountReadRoutes {
+			modes[route] = mode
+		}
 	}
 	return modes
 }
@@ -345,15 +358,15 @@ func (s *Service) drain(ctx context.Context) error {
 	return nil
 }
 
-// switchAuthority sets the authority state and group A's route mode in one
-// transaction, and records the event.
+// switchAuthority sets the authority state and the route modes of
+// authorityModes in one transaction, and records the event.
 func (s *Service) switchAuthority(ctx context.Context, publicKey ed25519.PublicKey, installationID uint, state, mode string, actorID uint, action, detail string) (int64, error) {
 	var revision int64
 	err := service.WithAgentLifecycleTransaction(s.DB.WithContext(ctx), func(tx *gorm.DB) error {
 		if err := setAuthority(tx, state, s.now()); err != nil {
 			return err
 		}
-		configuration, err := service.SetPackageRouteModesTx(tx, publicKey, installationID, groupAModes(mode), actorID)
+		configuration, err := service.SetPackageRouteModesTx(tx, publicKey, installationID, authorityModes(mode), actorID)
 		if err != nil {
 			return err
 		}
@@ -386,7 +399,8 @@ type hostDetails struct {
 }
 
 // awaitHosts waits until the identity-platform host reports the
-// configuration revision and serves every group A route in mode.
+// configuration revision and serves every route the change switched
+// (authorityModes) in mode.
 func (s *Service) awaitHosts(ctx context.Context, installation model.PluginInstallation, revision int64, mode string) error {
 	if s.Hosts == nil {
 		return errors.New("package hosts are not running")
@@ -426,7 +440,13 @@ func (s *Service) hostsApplied(ctx context.Context, installation model.PluginIns
 	if details.Config.Revision < revision {
 		return fmt.Errorf("the host applies configuration revision %d, not %d yet", details.Config.Revision, revision)
 	}
-	for _, route := range service.IdentityGroupARoutes {
+	modes := authorityModes(mode)
+	routes := make([]string, 0, len(modes))
+	for route := range modes {
+		routes = append(routes, route)
+	}
+	sort.Strings(routes)
+	for _, route := range routes {
 		effective := details.Routes[route].Effective
 		if effective == "" {
 			effective = packagebridge.RouteModeLegacy

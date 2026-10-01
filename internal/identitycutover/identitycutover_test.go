@@ -374,3 +374,80 @@ func TestStartRunsTheChangeInTheBackground(t *testing.T) {
 	require.Eventually(t, func() bool { return !f.service.Latest().Running }, 5*time.Second, 5*time.Millisecond)
 	require.Contains(t, f.service.Latest().Error, "already authoritative")
 }
+
+// routesWith is a route configuration: group A in groupA's mode (legacy
+// leaves it out) plus extra.
+func routesWith(t *testing.T, groupA string, extra map[string]string) string {
+	t.Helper()
+	modes := map[string]string{}
+	if groupA != packagebridge.RouteModeLegacy {
+		for _, route := range service.IdentityGroupARoutes {
+			modes[route] = groupA
+		}
+	}
+	for route, mode := range extra {
+		modes[route] = mode
+	}
+	document, err := json.Marshal(map[string]any{"routes": modes})
+	require.NoError(t, err)
+	return string(document)
+}
+
+// The account reads leave legacy only while identity is authoritative, on
+// their own; the rollback returns them to legacy. The resets, which touch
+// only the subscriber, switch at any time.
+func TestAccountReadsFollowTheAuthority(t *testing.T) {
+	f := newFixture(t)
+	ctx := context.Background()
+	profile, detail := "identity.user.profile.get", "identity.admin.users.id.get"
+	resets := map[string]string{
+		"identity.admin.users.id.reset_traffic.post":   packagebridge.RouteModeNative,
+		"identity.admin.users.id.reset_subscribe.post": packagebridge.RouteModeNative,
+	}
+	require.NoError(t, f.setModes(routesWith(t, packagebridge.RouteModeLegacy, resets)), "resets switch before any cutover")
+	for _, mode := range []string{packagebridge.RouteModeNative, packagebridge.RouteModeShadow} {
+		require.ErrorContains(t, f.setModes(routesWith(t, packagebridge.RouteModeLegacy, map[string]string{profile: mode})),
+			"leaves legacy mode only once identity is authoritative")
+	}
+	_, err := f.service.Importer.Run(ctx, false)
+	require.NoError(t, err)
+	require.ErrorContains(t, f.setModes(routesWith(t, packagebridge.RouteModeLegacy, map[string]string{detail: packagebridge.RouteModeNative})),
+		"leaves legacy mode only once identity is authoritative", "an import is not authority")
+
+	_, err = f.service.Cutover(ctx, 1)
+	require.NoError(t, err)
+	require.Equal(t, map[string]int{packagebridge.RouteModeLegacy: len(service.IdentityAccountReadRoutes)}, f.modesOf(t, service.IdentityAccountReadRoutes),
+		"the cutover leaves the reads to the operator")
+	reads := map[string]string{profile: packagebridge.RouteModeNative, detail: packagebridge.RouteModeShadow}
+	for route, mode := range resets {
+		reads[route] = mode
+	}
+	require.NoError(t, f.setModes(routesWith(t, packagebridge.RouteModeNative, reads)))
+	require.ErrorContains(t, f.setModes(routesWith(t, packagebridge.RouteModeNative, map[string]string{profile: packagebridge.RouteModeNative, "identity.auth.login": packagebridge.RouteModeLegacy})),
+		"switch together", "the reads do not count as group A")
+
+	_, err = f.service.Rollback(ctx, 1)
+	require.NoError(t, err)
+	require.Equal(t, map[string]int{packagebridge.RouteModeLegacy: len(service.IdentityAccountReadRoutes)}, f.modesOf(t, service.IdentityAccountReadRoutes))
+	require.Equal(t, map[string]int{packagebridge.RouteModeLegacy: len(service.IdentityGroupARoutes)}, f.groupAModes(t))
+	require.Equal(t, map[string]int{packagebridge.RouteModeNative: len(resets)}, f.modesOf(t, []string{
+		"identity.admin.users.id.reset_traffic.post", "identity.admin.users.id.reset_subscribe.post",
+	}), "the rollback leaves the resets alone")
+}
+
+// modesOf counts the configured modes of routes.
+func (f *fixture) modesOf(t *testing.T, routes []string) map[string]int {
+	t.Helper()
+	config, err := service.PackageHostOperations{DB: f.kernel}.PackageConfig(context.Background(),
+		packagebridge.HostIdentity{PackageID: service.IdentityPlatformPackageID, Version: "4.1.0", Generation: 3})
+	require.NoError(t, err)
+	counts := map[string]int{}
+	for _, route := range routes {
+		mode := config.RouteModes[route]
+		if mode == "" {
+			mode = packagebridge.RouteModeLegacy
+		}
+		counts[mode]++
+	}
+	return counts
+}
