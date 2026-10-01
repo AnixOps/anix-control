@@ -47,10 +47,12 @@ func TestAuthorizeCapabilityGrantsOnlyTheSignedSubscriberFamilies(t *testing.T) 
 	require.NoError(t, operations.AuthorizeCapability(ctx, host, CapabilitySubscriberTraffic))
 	require.NoError(t, operations.AuthorizeCapability(ctx, host, CapabilitySubscriberDirectory))
 	require.ErrorIs(t, operations.AuthorizeCapability(ctx, host, CapabilitySubscriberEntitlements), ErrCapabilityNotAuthorized)
+	require.ErrorIs(t, operations.AuthorizeCapability(ctx, host, CapabilitySubscriberGroups), ErrCapabilityNotAuthorized)
 	require.ErrorIs(t, operations.AuthorizeIdentity(ctx, host), ErrIdentityNotAuthorized)
 	stale := host
 	stale.Generation = 6
 	require.ErrorIs(t, operations.AuthorizeCapability(ctx, stale, CapabilitySubscriberTraffic), packagebridge.ErrHostFenced)
 
 	require.Error(t, validateManifestCapabilities([]string{"kernel.subscriber.everything.v1"}), "unknown families are refused")
+	require.NoError(t, validateManifestCapabilities([]string{CapabilitySubscriberGroups}), "the membership family is in the grammar")
 }

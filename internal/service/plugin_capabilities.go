@@ -26,6 +26,9 @@ const (
 	CapabilitySubscriberCredentials  = "kernel.subscriber.credentials.v1"
 	CapabilitySubscriberBalance      = "kernel.subscriber.balance.v1"
 	CapabilitySubscriberDirectory    = "kernel.subscriber.directory.v1"
+	// CapabilitySubscriberGroups edits one subscription group membership
+	// (v2_user_subscription_group) at a time.
+	CapabilitySubscriberGroups = "kernel.subscriber.groups.v1"
 	// capabilityStorageAdoptPrefix grants the storage role access to an
 	// existing kernel table, adopted in place: kernel.storage.adopt:<table>.
 	capabilityStorageAdoptPrefix = "kernel.storage.adopt:"
@@ -108,7 +111,7 @@ func validateManifestCapabilities(capabilities []string) error {
 		case capability == CapabilityObservedState, capability == CapabilityIdentity,
 			capability == CapabilitySubscriberEntitlements, capability == CapabilitySubscriberTraffic,
 			capability == CapabilitySubscriberCredentials, capability == CapabilitySubscriberBalance,
-			capability == CapabilitySubscriberDirectory:
+			capability == CapabilitySubscriberDirectory, capability == CapabilitySubscriberGroups:
 		case capability == CapabilityStorage:
 			storage = true
 		case strings.HasPrefix(capability, capabilityStorageAdoptPrefix):

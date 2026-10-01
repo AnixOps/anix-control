@@ -627,9 +627,10 @@ func (h *AdminHandler) AssignPlanToUser(c *gin.Context) {
 }
 
 // assignmentToken identifies an administrator's request for
-// service.PlanAssignmentRequestID and service.AdminUserResetRequestID: its
-// Idempotency-Key, else its request id (X-Request-ID or the one the kernel
-// gave it), else a fresh value.
+// service.PlanAssignmentRequestID, service.AdminUserResetRequestID and the
+// subscription group request ids (service.SubscriptionGroupGrantRequestID
+// and its kin): its Idempotency-Key, else its request id (X-Request-ID or
+// the one the kernel gave it), else a fresh value.
 func assignmentToken(c *gin.Context) string {
 	if key := strings.TrimSpace(c.GetHeader("Idempotency-Key")); key != "" {
 		return key

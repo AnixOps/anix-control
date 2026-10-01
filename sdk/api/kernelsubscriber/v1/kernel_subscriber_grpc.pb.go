@@ -19,16 +19,19 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	KernelSubscriber_ApplyEntitlement_FullMethodName          = "/anixops.kernelsubscriber.v1.KernelSubscriber/ApplyEntitlement"
-	KernelSubscriber_AdjustEntitlement_FullMethodName         = "/anixops.kernelsubscriber.v1.KernelSubscriber/AdjustEntitlement"
-	KernelSubscriber_RecordTraffic_FullMethodName             = "/anixops.kernelsubscriber.v1.KernelSubscriber/RecordTraffic"
-	KernelSubscriber_ResetTraffic_FullMethodName              = "/anixops.kernelsubscriber.v1.KernelSubscriber/ResetTraffic"
-	KernelSubscriber_ResetCredentials_FullMethodName          = "/anixops.kernelsubscriber.v1.KernelSubscriber/ResetCredentials"
-	KernelSubscriber_AdjustBalance_FullMethodName             = "/anixops.kernelsubscriber.v1.KernelSubscriber/AdjustBalance"
-	KernelSubscriber_GetSubscribers_FullMethodName            = "/anixops.kernelsubscriber.v1.KernelSubscriber/GetSubscribers"
-	KernelSubscriber_LookupBySubscriptionToken_FullMethodName = "/anixops.kernelsubscriber.v1.KernelSubscriber/LookupBySubscriptionToken"
-	KernelSubscriber_ListActiveSubscribers_FullMethodName     = "/anixops.kernelsubscriber.v1.KernelSubscriber/ListActiveSubscribers"
-	KernelSubscriber_WatchSubscriberChanges_FullMethodName    = "/anixops.kernelsubscriber.v1.KernelSubscriber/WatchSubscriberChanges"
+	KernelSubscriber_ApplyEntitlement_FullMethodName               = "/anixops.kernelsubscriber.v1.KernelSubscriber/ApplyEntitlement"
+	KernelSubscriber_AdjustEntitlement_FullMethodName              = "/anixops.kernelsubscriber.v1.KernelSubscriber/AdjustEntitlement"
+	KernelSubscriber_RecordTraffic_FullMethodName                  = "/anixops.kernelsubscriber.v1.KernelSubscriber/RecordTraffic"
+	KernelSubscriber_ResetTraffic_FullMethodName                   = "/anixops.kernelsubscriber.v1.KernelSubscriber/ResetTraffic"
+	KernelSubscriber_ResetCredentials_FullMethodName               = "/anixops.kernelsubscriber.v1.KernelSubscriber/ResetCredentials"
+	KernelSubscriber_AdjustBalance_FullMethodName                  = "/anixops.kernelsubscriber.v1.KernelSubscriber/AdjustBalance"
+	KernelSubscriber_GetSubscribers_FullMethodName                 = "/anixops.kernelsubscriber.v1.KernelSubscriber/GetSubscribers"
+	KernelSubscriber_LookupBySubscriptionToken_FullMethodName      = "/anixops.kernelsubscriber.v1.KernelSubscriber/LookupBySubscriptionToken"
+	KernelSubscriber_ListActiveSubscribers_FullMethodName          = "/anixops.kernelsubscriber.v1.KernelSubscriber/ListActiveSubscribers"
+	KernelSubscriber_WatchSubscriberChanges_FullMethodName         = "/anixops.kernelsubscriber.v1.KernelSubscriber/WatchSubscriberChanges"
+	KernelSubscriber_GrantSubscriptionGroup_FullMethodName         = "/anixops.kernelsubscriber.v1.KernelSubscriber/GrantSubscriptionGroup"
+	KernelSubscriber_RevokeSubscriptionGroup_FullMethodName        = "/anixops.kernelsubscriber.v1.KernelSubscriber/RevokeSubscriptionGroup"
+	KernelSubscriber_RemoveSubscriptionGroupMembers_FullMethodName = "/anixops.kernelsubscriber.v1.KernelSubscriber/RemoveSubscriptionGroupMembers"
 )
 
 // KernelSubscriberClient is the client API for KernelSubscriber service.
@@ -50,6 +53,8 @@ const (
 //   - kernel.subscriber.balance.v1: AdjustBalance
 //   - kernel.subscriber.directory.v1: GetSubscribers, LookupBySubscriptionToken,
 //     ListActiveSubscribers, WatchSubscriberChanges
+//   - kernel.subscriber.groups.v1: GrantSubscriptionGroup,
+//     RevokeSubscriptionGroup, RemoveSubscriptionGroupMembers
 //
 // Every write that can be retried carries a request_id; the kernel applies
 // each request_id once and answers a repeat with the first result.
@@ -84,6 +89,21 @@ type KernelSubscriberClient interface {
 	// serves, after a cursor. Clients resume from the last cursor they saw
 	// and re-list when told their cursor is too old.
 	WatchSubscriberChanges(ctx context.Context, in *WatchSubscriberChangesRequest, opts ...grpc.CallOption) (grpc.ServerStreamingClient[SubscriberChange], error)
+	// GrantSubscriptionGroup gives a subscriber one subscription group
+	// (v2_user_subscription_group): it creates the membership, or sets the
+	// given fields of an existing one and keeps the others, as the v2
+	// administrator route does. NOT_FOUND when the subscriber or the group
+	// does not exist; the request is then not recorded.
+	GrantSubscriptionGroup(ctx context.Context, in *GrantSubscriptionGroupRequest, opts ...grpc.CallOption) (*GrantSubscriptionGroupResponse, error)
+	// RevokeSubscriptionGroup takes one subscription group from a subscriber.
+	// NOT_FOUND when the subscriber, the group or the membership does not
+	// exist; the request is then not recorded.
+	RevokeSubscriptionGroup(ctx context.Context, in *RevokeSubscriptionGroupRequest, opts ...grpc.CallOption) (*RevokeSubscriptionGroupResponse, error)
+	// RemoveSubscriptionGroupMembers takes a group from every subscriber who
+	// holds it, as deleting the group requires; the group itself is the
+	// caller's. It succeeds whether or not the group still exists, so a retry
+	// after a failure in between finds no members and completes.
+	RemoveSubscriptionGroupMembers(ctx context.Context, in *RemoveSubscriptionGroupMembersRequest, opts ...grpc.CallOption) (*RemoveSubscriptionGroupMembersResponse, error)
 }
 
 type kernelSubscriberClient struct {
@@ -203,6 +223,36 @@ func (c *kernelSubscriberClient) WatchSubscriberChanges(ctx context.Context, in 
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type KernelSubscriber_WatchSubscriberChangesClient = grpc.ServerStreamingClient[SubscriberChange]
 
+func (c *kernelSubscriberClient) GrantSubscriptionGroup(ctx context.Context, in *GrantSubscriptionGroupRequest, opts ...grpc.CallOption) (*GrantSubscriptionGroupResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GrantSubscriptionGroupResponse)
+	err := c.cc.Invoke(ctx, KernelSubscriber_GrantSubscriptionGroup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *kernelSubscriberClient) RevokeSubscriptionGroup(ctx context.Context, in *RevokeSubscriptionGroupRequest, opts ...grpc.CallOption) (*RevokeSubscriptionGroupResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RevokeSubscriptionGroupResponse)
+	err := c.cc.Invoke(ctx, KernelSubscriber_RevokeSubscriptionGroup_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *kernelSubscriberClient) RemoveSubscriptionGroupMembers(ctx context.Context, in *RemoveSubscriptionGroupMembersRequest, opts ...grpc.CallOption) (*RemoveSubscriptionGroupMembersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(RemoveSubscriptionGroupMembersResponse)
+	err := c.cc.Invoke(ctx, KernelSubscriber_RemoveSubscriptionGroupMembers_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // KernelSubscriberServer is the server API for KernelSubscriber service.
 // All implementations must embed UnimplementedKernelSubscriberServer
 // for forward compatibility.
@@ -222,6 +272,8 @@ type KernelSubscriber_WatchSubscriberChangesClient = grpc.ServerStreamingClient[
 //   - kernel.subscriber.balance.v1: AdjustBalance
 //   - kernel.subscriber.directory.v1: GetSubscribers, LookupBySubscriptionToken,
 //     ListActiveSubscribers, WatchSubscriberChanges
+//   - kernel.subscriber.groups.v1: GrantSubscriptionGroup,
+//     RevokeSubscriptionGroup, RemoveSubscriptionGroupMembers
 //
 // Every write that can be retried carries a request_id; the kernel applies
 // each request_id once and answers a repeat with the first result.
@@ -256,6 +308,21 @@ type KernelSubscriberServer interface {
 	// serves, after a cursor. Clients resume from the last cursor they saw
 	// and re-list when told their cursor is too old.
 	WatchSubscriberChanges(*WatchSubscriberChangesRequest, grpc.ServerStreamingServer[SubscriberChange]) error
+	// GrantSubscriptionGroup gives a subscriber one subscription group
+	// (v2_user_subscription_group): it creates the membership, or sets the
+	// given fields of an existing one and keeps the others, as the v2
+	// administrator route does. NOT_FOUND when the subscriber or the group
+	// does not exist; the request is then not recorded.
+	GrantSubscriptionGroup(context.Context, *GrantSubscriptionGroupRequest) (*GrantSubscriptionGroupResponse, error)
+	// RevokeSubscriptionGroup takes one subscription group from a subscriber.
+	// NOT_FOUND when the subscriber, the group or the membership does not
+	// exist; the request is then not recorded.
+	RevokeSubscriptionGroup(context.Context, *RevokeSubscriptionGroupRequest) (*RevokeSubscriptionGroupResponse, error)
+	// RemoveSubscriptionGroupMembers takes a group from every subscriber who
+	// holds it, as deleting the group requires; the group itself is the
+	// caller's. It succeeds whether or not the group still exists, so a retry
+	// after a failure in between finds no members and completes.
+	RemoveSubscriptionGroupMembers(context.Context, *RemoveSubscriptionGroupMembersRequest) (*RemoveSubscriptionGroupMembersResponse, error)
 	mustEmbedUnimplementedKernelSubscriberServer()
 }
 
@@ -295,6 +362,15 @@ func (UnimplementedKernelSubscriberServer) ListActiveSubscribers(context.Context
 }
 func (UnimplementedKernelSubscriberServer) WatchSubscriberChanges(*WatchSubscriberChangesRequest, grpc.ServerStreamingServer[SubscriberChange]) error {
 	return status.Error(codes.Unimplemented, "method WatchSubscriberChanges not implemented")
+}
+func (UnimplementedKernelSubscriberServer) GrantSubscriptionGroup(context.Context, *GrantSubscriptionGroupRequest) (*GrantSubscriptionGroupResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GrantSubscriptionGroup not implemented")
+}
+func (UnimplementedKernelSubscriberServer) RevokeSubscriptionGroup(context.Context, *RevokeSubscriptionGroupRequest) (*RevokeSubscriptionGroupResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RevokeSubscriptionGroup not implemented")
+}
+func (UnimplementedKernelSubscriberServer) RemoveSubscriptionGroupMembers(context.Context, *RemoveSubscriptionGroupMembersRequest) (*RemoveSubscriptionGroupMembersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method RemoveSubscriptionGroupMembers not implemented")
 }
 func (UnimplementedKernelSubscriberServer) mustEmbedUnimplementedKernelSubscriberServer() {}
 func (UnimplementedKernelSubscriberServer) testEmbeddedByValue()                          {}
@@ -490,6 +566,60 @@ func _KernelSubscriber_WatchSubscriberChanges_Handler(srv interface{}, stream gr
 // This type alias is provided for backwards compatibility with existing code that references the prior non-generic stream type by name.
 type KernelSubscriber_WatchSubscriberChangesServer = grpc.ServerStreamingServer[SubscriberChange]
 
+func _KernelSubscriber_GrantSubscriptionGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GrantSubscriptionGroupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KernelSubscriberServer).GrantSubscriptionGroup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: KernelSubscriber_GrantSubscriptionGroup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KernelSubscriberServer).GrantSubscriptionGroup(ctx, req.(*GrantSubscriptionGroupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _KernelSubscriber_RevokeSubscriptionGroup_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RevokeSubscriptionGroupRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KernelSubscriberServer).RevokeSubscriptionGroup(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: KernelSubscriber_RevokeSubscriptionGroup_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KernelSubscriberServer).RevokeSubscriptionGroup(ctx, req.(*RevokeSubscriptionGroupRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _KernelSubscriber_RemoveSubscriptionGroupMembers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(RemoveSubscriptionGroupMembersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KernelSubscriberServer).RemoveSubscriptionGroupMembers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: KernelSubscriber_RemoveSubscriptionGroupMembers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KernelSubscriberServer).RemoveSubscriptionGroupMembers(ctx, req.(*RemoveSubscriptionGroupMembersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // KernelSubscriber_ServiceDesc is the grpc.ServiceDesc for KernelSubscriber service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -532,6 +662,18 @@ var KernelSubscriber_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListActiveSubscribers",
 			Handler:    _KernelSubscriber_ListActiveSubscribers_Handler,
+		},
+		{
+			MethodName: "GrantSubscriptionGroup",
+			Handler:    _KernelSubscriber_GrantSubscriptionGroup_Handler,
+		},
+		{
+			MethodName: "RevokeSubscriptionGroup",
+			Handler:    _KernelSubscriber_RevokeSubscriptionGroup_Handler,
+		},
+		{
+			MethodName: "RemoveSubscriptionGroupMembers",
+			Handler:    _KernelSubscriber_RemoveSubscriptionGroupMembers_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

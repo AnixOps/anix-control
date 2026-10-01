@@ -2243,7 +2243,7 @@ func (s *SubscriptionServiceTestSuite) TestDeleteGroup() {
 		Enable:   1,
 	}
 	assert.NoError(s.T(), s.svc.CreateGroup(group))
-	err := s.svc.DeleteGroup(group.ID)
+	err := s.svc.DeleteGroup(group.ID, "")
 	assert.NoError(s.T(), err)
 
 	_, err = s.svc.GetGroup(group.ID)
@@ -2263,7 +2263,7 @@ func (s *SubscriptionServiceTestSuite) TestDeleteGroupRemovesProtocolLinks() {
 	s.Require().NoError(database.GetDB().Table("v2_subscription_group_node_protocols").Where("subscription_group_id = ?", group.ID).Count(&links).Error)
 	s.Require().EqualValues(1, links)
 
-	s.Require().NoError(s.svc.DeleteGroup(group.ID))
+	s.Require().NoError(s.svc.DeleteGroup(group.ID, ""))
 
 	s.Require().NoError(database.GetDB().Table("v2_subscription_group_node_protocols").Where("subscription_group_id = ?", group.ID).Count(&links).Error)
 	s.Zero(links)
@@ -2272,7 +2272,7 @@ func (s *SubscriptionServiceTestSuite) TestDeleteGroupRemovesProtocolLinks() {
 }
 
 func (s *SubscriptionServiceTestSuite) TestDeleteGroup_NotFound() {
-	err := s.svc.DeleteGroup(99999)
+	err := s.svc.DeleteGroup(99999, "")
 	assert.Error(s.T(), err)
 }
 
@@ -2400,7 +2400,7 @@ func (s *SubscriptionServiceTestSuite) TestAssignGroupToUser() {
 		Enable:   1,
 	}
 	assert.NoError(s.T(), s.svc.CreateGroup(group))
-	err := s.svc.AssignGroupToUser(s.testUser.ID, group.ID, nil, nil, nil)
+	err := s.svc.AssignGroupToUser(s.testUser.ID, group.ID, nil, nil, nil, "")
 	assert.NoError(s.T(), err)
 
 	groups, err := s.svc.GetUserGroups(s.testUser.ID)
@@ -2416,12 +2416,12 @@ func (s *SubscriptionServiceTestSuite) TestAssignGroupToUser_UserNotFound() {
 	}
 	assert.NoError(s.T(), s.svc.CreateGroup(group))
 
-	err := s.svc.AssignGroupToUser(99999, group.ID, nil, nil, nil)
+	err := s.svc.AssignGroupToUser(99999, group.ID, nil, nil, nil, "")
 	assert.ErrorIs(s.T(), err, ErrSubscriptionUserNotFound)
 }
 
 func (s *SubscriptionServiceTestSuite) TestAssignGroupToUser_GroupNotFound() {
-	err := s.svc.AssignGroupToUser(s.testUser.ID, 99999, nil, nil, nil)
+	err := s.svc.AssignGroupToUser(s.testUser.ID, 99999, nil, nil, nil, "")
 	assert.ErrorIs(s.T(), err, ErrSubscriptionGroupNotFound)
 }
 
@@ -2433,7 +2433,7 @@ func (s *SubscriptionServiceTestSuite) TestAssignGroupToUser_WithExpiry() {
 	}
 	assert.NoError(s.T(), s.svc.CreateGroup(group))
 	expireAt := time.Now().Add(30 * 24 * time.Hour).Unix()
-	err := s.svc.AssignGroupToUser(s.testUser.ID, group.ID, &expireAt, nil, nil)
+	err := s.svc.AssignGroupToUser(s.testUser.ID, group.ID, &expireAt, nil, nil, "")
 	assert.NoError(s.T(), err)
 }
 
@@ -2445,9 +2445,9 @@ func (s *SubscriptionServiceTestSuite) TestRemoveGroupFromUser() {
 	}
 	assert.NoError(s.T(), s.svc.CreateGroup(group))
 	// 鍒嗛厤
-	assert.NoError(s.T(), s.svc.AssignGroupToUser(s.testUser.ID, group.ID, nil, nil, nil))
+	assert.NoError(s.T(), s.svc.AssignGroupToUser(s.testUser.ID, group.ID, nil, nil, nil, ""))
 	// 绉婚櫎
-	err := s.svc.RemoveGroupFromUser(s.testUser.ID, group.ID)
+	err := s.svc.RemoveGroupFromUser(s.testUser.ID, group.ID, "")
 	assert.NoError(s.T(), err)
 
 	groups, _ := s.svc.GetUserGroups(s.testUser.ID)
@@ -2461,7 +2461,7 @@ func (s *SubscriptionServiceTestSuite) TestRemoveGroupFromUser_NotFound() {
 	}
 	assert.NoError(s.T(), s.svc.CreateGroup(group))
 
-	err := s.svc.RemoveGroupFromUser(s.testUser.ID, group.ID)
+	err := s.svc.RemoveGroupFromUser(s.testUser.ID, group.ID, "")
 	assert.ErrorIs(s.T(), err, ErrSubscriptionUserGroupNotFound)
 }
 
@@ -2599,7 +2599,7 @@ func (s *SubscriptionServiceTestSuite) TestGetUserSubscription_Success() {
 	}
 	assert.NoError(s.T(), s.svc.CreateTemplate(tpl))
 	// 鍒嗛厤鍒嗙粍缁欑敤鎴?
-	assert.NoError(s.T(), s.svc.AssignGroupToUser(s.testUser.ID, group.ID, nil, nil, nil))
+	assert.NoError(s.T(), s.svc.AssignGroupToUser(s.testUser.ID, group.ID, nil, nil, nil, ""))
 	// 鑾峰彇璁㈤槄
 	resp, err := s.svc.GetUserSubscription(&model.SubscriptionRequest{
 		Token:  s.testUser.Token,
@@ -6250,7 +6250,7 @@ func (s *SubscriptionServiceTestSuite) TestApplyTemplateJSON() {
 	}
 	assert.NoError(s.T(), s.svc.CreateTemplate(tpl))
 	// Assign to user
-	assert.NoError(s.T(), s.svc.AssignGroupToUser(s.testUser.ID, group.ID, nil, nil, nil))
+	assert.NoError(s.T(), s.svc.AssignGroupToUser(s.testUser.ID, group.ID, nil, nil, nil, ""))
 	// Get subscription - applyTemplateJSON is called during renderTemplate
 	resp, err := s.svc.GetUserSubscription(&model.SubscriptionRequest{
 		Token:  s.testUser.Token,
@@ -6300,7 +6300,7 @@ func (s *SubscriptionServiceTestSuite) TestNodeProtocolToParsedNode() {
 	database.Get().Exec("INSERT INTO v2_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (?, ?)", group.ID, protocol.ID)
 
 	// Assign group to user
-	assert.NoError(s.T(), s.svc.AssignGroupToUser(s.testUser.ID, group.ID, nil, nil, nil))
+	assert.NoError(s.T(), s.svc.AssignGroupToUser(s.testUser.ID, group.ID, nil, nil, nil, ""))
 	// Get subscription - nodeProtocolToParsedNode is called during getInternalNodes
 	resp, err := s.svc.GetUserSubscription(&model.SubscriptionRequest{
 		Token:  s.testUser.Token,

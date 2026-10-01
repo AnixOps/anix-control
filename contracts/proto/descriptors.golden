@@ -284,6 +284,15 @@ field anixops.kernelsubscriber.v1.ApplyEntitlementResponse.applied = 1 optional 
 field anixops.kernelsubscriber.v1.ApplyEntitlementResponse.expires_at_unix = 2 optional int64
 field anixops.kernelsubscriber.v1.GetSubscribersRequest.user_ids = 1 repeated uint64
 field anixops.kernelsubscriber.v1.GetSubscribersResponse.subscribers = 1 repeated anixops.kernelsubscriber.v1.Subscriber
+field anixops.kernelsubscriber.v1.GrantSubscriptionGroupRequest.expires_at_unix = 4 optional int64
+field anixops.kernelsubscriber.v1.GrantSubscriptionGroupRequest.group_id = 3 optional uint64
+field anixops.kernelsubscriber.v1.GrantSubscriptionGroupRequest.next_renew_price_cents = 6 optional int64
+field anixops.kernelsubscriber.v1.GrantSubscriptionGroupRequest.reason = 7 optional string
+field anixops.kernelsubscriber.v1.GrantSubscriptionGroupRequest.request_id = 1 optional string
+field anixops.kernelsubscriber.v1.GrantSubscriptionGroupRequest.transfer_bytes = 5 optional int64
+field anixops.kernelsubscriber.v1.GrantSubscriptionGroupRequest.user_id = 2 optional uint64
+field anixops.kernelsubscriber.v1.GrantSubscriptionGroupResponse.applied = 1 optional bool
+field anixops.kernelsubscriber.v1.GrantSubscriptionGroupResponse.created = 2 optional bool
 field anixops.kernelsubscriber.v1.ListActiveSubscribersRequest.after_user_id = 2 optional uint64
 field anixops.kernelsubscriber.v1.ListActiveSubscribersRequest.group_ids = 1 repeated uint64
 field anixops.kernelsubscriber.v1.ListActiveSubscribersRequest.limit = 3 optional uint32
@@ -307,6 +316,11 @@ field anixops.kernelsubscriber.v1.RecordTrafficRequest.rate = 4 optional double
 field anixops.kernelsubscriber.v1.RecordTrafficRequest.source = 2 optional string
 field anixops.kernelsubscriber.v1.RecordTrafficResponse.applied = 1 optional bool
 field anixops.kernelsubscriber.v1.RecordTrafficResponse.exhausted_user_ids = 2 repeated uint64
+field anixops.kernelsubscriber.v1.RemoveSubscriptionGroupMembersRequest.group_id = 2 optional uint64
+field anixops.kernelsubscriber.v1.RemoveSubscriptionGroupMembersRequest.reason = 3 optional string
+field anixops.kernelsubscriber.v1.RemoveSubscriptionGroupMembersRequest.request_id = 1 optional string
+field anixops.kernelsubscriber.v1.RemoveSubscriptionGroupMembersResponse.applied = 1 optional bool
+field anixops.kernelsubscriber.v1.RemoveSubscriptionGroupMembersResponse.removed = 2 optional uint64
 field anixops.kernelsubscriber.v1.ResetCredentialsRequest.proxy_uuid = 4 optional bool
 field anixops.kernelsubscriber.v1.ResetCredentialsRequest.request_id = 1 optional string
 field anixops.kernelsubscriber.v1.ResetCredentialsRequest.subscription_token = 3 optional bool
@@ -317,6 +331,11 @@ field anixops.kernelsubscriber.v1.ResetTrafficRequest.request_id = 1 optional st
 field anixops.kernelsubscriber.v1.ResetTrafficRequest.user_ids = 2 repeated uint64
 field anixops.kernelsubscriber.v1.ResetTrafficResponse.applied = 1 optional bool
 field anixops.kernelsubscriber.v1.ResetTrafficResponse.reset_users = 2 optional uint64
+field anixops.kernelsubscriber.v1.RevokeSubscriptionGroupRequest.group_id = 3 optional uint64
+field anixops.kernelsubscriber.v1.RevokeSubscriptionGroupRequest.reason = 4 optional string
+field anixops.kernelsubscriber.v1.RevokeSubscriptionGroupRequest.request_id = 1 optional string
+field anixops.kernelsubscriber.v1.RevokeSubscriptionGroupRequest.user_id = 2 optional uint64
+field anixops.kernelsubscriber.v1.RevokeSubscriptionGroupResponse.applied = 1 optional bool
 field anixops.kernelsubscriber.v1.Subscriber.banned = 12 optional bool
 field anixops.kernelsubscriber.v1.Subscriber.device_limit = 11 optional int32
 field anixops.kernelsubscriber.v1.Subscriber.download_bytes = 9 optional uint64
@@ -525,11 +544,14 @@ rpc anixops.kernelsubscriber.v1.KernelSubscriber.AdjustBalance(anixops.kernelsub
 rpc anixops.kernelsubscriber.v1.KernelSubscriber.AdjustEntitlement(anixops.kernelsubscriber.v1.AdjustEntitlementRequest) returns (anixops.kernelsubscriber.v1.AdjustEntitlementResponse)
 rpc anixops.kernelsubscriber.v1.KernelSubscriber.ApplyEntitlement(anixops.kernelsubscriber.v1.ApplyEntitlementRequest) returns (anixops.kernelsubscriber.v1.ApplyEntitlementResponse)
 rpc anixops.kernelsubscriber.v1.KernelSubscriber.GetSubscribers(anixops.kernelsubscriber.v1.GetSubscribersRequest) returns (anixops.kernelsubscriber.v1.GetSubscribersResponse)
+rpc anixops.kernelsubscriber.v1.KernelSubscriber.GrantSubscriptionGroup(anixops.kernelsubscriber.v1.GrantSubscriptionGroupRequest) returns (anixops.kernelsubscriber.v1.GrantSubscriptionGroupResponse)
 rpc anixops.kernelsubscriber.v1.KernelSubscriber.ListActiveSubscribers(anixops.kernelsubscriber.v1.ListActiveSubscribersRequest) returns (anixops.kernelsubscriber.v1.ListActiveSubscribersResponse)
 rpc anixops.kernelsubscriber.v1.KernelSubscriber.LookupBySubscriptionToken(anixops.kernelsubscriber.v1.LookupBySubscriptionTokenRequest) returns (anixops.kernelsubscriber.v1.LookupBySubscriptionTokenResponse)
 rpc anixops.kernelsubscriber.v1.KernelSubscriber.RecordTraffic(anixops.kernelsubscriber.v1.RecordTrafficRequest) returns (anixops.kernelsubscriber.v1.RecordTrafficResponse)
+rpc anixops.kernelsubscriber.v1.KernelSubscriber.RemoveSubscriptionGroupMembers(anixops.kernelsubscriber.v1.RemoveSubscriptionGroupMembersRequest) returns (anixops.kernelsubscriber.v1.RemoveSubscriptionGroupMembersResponse)
 rpc anixops.kernelsubscriber.v1.KernelSubscriber.ResetCredentials(anixops.kernelsubscriber.v1.ResetCredentialsRequest) returns (anixops.kernelsubscriber.v1.ResetCredentialsResponse)
 rpc anixops.kernelsubscriber.v1.KernelSubscriber.ResetTraffic(anixops.kernelsubscriber.v1.ResetTrafficRequest) returns (anixops.kernelsubscriber.v1.ResetTrafficResponse)
+rpc anixops.kernelsubscriber.v1.KernelSubscriber.RevokeSubscriptionGroup(anixops.kernelsubscriber.v1.RevokeSubscriptionGroupRequest) returns (anixops.kernelsubscriber.v1.RevokeSubscriptionGroupResponse)
 rpc anixops.kernelsubscriber.v1.KernelSubscriber.WatchSubscriberChanges(anixops.kernelsubscriber.v1.WatchSubscriberChangesRequest) returns (stream anixops.kernelsubscriber.v1.SubscriberChange)
 rpc anixops.modulepki.v1.ModulePKI.Enroll(anixops.modulepki.v1.EnrollRequest) returns (anixops.modulepki.v1.EnrollResponse)
 rpc anixops.modulepki.v1.ModulePKI.GetTrustBundle(anixops.modulepki.v1.GetTrustBundleRequest) returns (anixops.modulepki.v1.GetTrustBundleResponse)

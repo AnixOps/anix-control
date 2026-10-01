@@ -349,7 +349,8 @@ func (h *SubscriptionAdminHandler) DeleteGroup(c *gin.Context) {
 		return
 	}
 
-	if err := h.subscriptionService.DeleteGroup(uint(id)); err != nil {
+	requestID := service.SubscriptionGroupDeleteRequestID(uint(id), assignmentToken(c))
+	if err := h.subscriptionService.DeleteGroup(uint(id), requestID); err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			panelError(c, "分组不存在")
 			return
@@ -603,7 +604,8 @@ func (h *SubscriptionAdminHandler) AssignGroupToUser(c *gin.Context) {
 		return
 	}
 
-	if err := h.subscriptionService.AssignGroupToUser(uint(userID), req.GroupID, req.ExpireAt, req.TransferEnable, req.NextRenewPrice); err != nil {
+	requestID := service.SubscriptionGroupGrantRequestID(uint(userID), req.GroupID, req.ExpireAt, req.TransferEnable, req.NextRenewPrice, assignmentToken(c))
+	if err := h.subscriptionService.AssignGroupToUser(uint(userID), req.GroupID, req.ExpireAt, req.TransferEnable, req.NextRenewPrice, requestID); err != nil {
 		panelSubscriptionBindingError(c, "分配失败", err)
 		return
 	}
@@ -626,7 +628,8 @@ func (h *SubscriptionAdminHandler) RemoveGroupFromUser(c *gin.Context) {
 		return
 	}
 
-	if err := h.subscriptionService.RemoveGroupFromUser(uint(userID), uint(groupID)); err != nil {
+	requestID := service.SubscriptionGroupRevokeRequestID(uint(userID), uint(groupID), assignmentToken(c))
+	if err := h.subscriptionService.RemoveGroupFromUser(uint(userID), uint(groupID), requestID); err != nil {
 		panelSubscriptionBindingError(c, "移除失败", err)
 		return
 	}
