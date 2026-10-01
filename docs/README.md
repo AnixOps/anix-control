@@ -20,6 +20,7 @@ Use this tree like NodeX:
 - Plugin kernel contract: [`architecture/plugin-kernel-contract.md`](architecture/plugin-kernel-contract.md)
 - Package extraction design and current development direction: [`architecture/package-extraction.md`](architecture/package-extraction.md)
 - Order completion contract for the payment callbacks: [`architecture/order-service.md`](architecture/order-service.md)
+- Node operations contract, node credential split and Agent A2 (design, draft): [`architecture/node-ops-service.md`](architecture/node-ops-service.md)
 - Network module runtime (mTLS, module PKI, remote runtime): [`architecture/module-runtime.md`](architecture/module-runtime.md)
 - Identity service design (login and credentials as a module): [`architecture/identity-service.md`](architecture/identity-service.md)
 - Kernel contracts for modules: subscriber state [`architecture/subscriber-service.md`](architecture/subscriber-service.md), system settings [`architecture/settings-service.md`](architecture/settings-service.md), the kernel's cached answers [`architecture/kernel-caches.md`](architecture/kernel-caches.md)
