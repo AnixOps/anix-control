@@ -419,6 +419,25 @@ so replace such a node: register its agent again with an authorization key,
 or create the node again in the panel (both issue a new key), then delete
 the keyless node.
 
+### Forward Node Tokens
+
+Earlier builds showed a user the API tokens of the relay and exit nodes of
+their forward rules (`GET /api/v2/user/forward/rules`), and any user can
+create such a rule. A forward node's token authenticates its agent. If users
+had rules, give the forward nodes new tokens from their edit form
+(`PUT /api/v2/admin/forward/nodes/:id` with `api_token`) and update their
+agents' configuration. The nodes that served user rules (read-only):
+
+```sql
+SELECT DISTINCT n.id, n.name FROM v2_forward_node n
+JOIN v2_forward_rule r ON n.id IN (r.relay_node_id, r.exit_node_id)
+WHERE r.user_id IS NOT NULL;
+```
+
+`GET /api/v2/forward/agent/rules` now answers only a forward node that sends
+its id (`node_id` or `X-Node-ID`) and its token (`X-API-Key`, `api_key` or
+`token`); it answered anyone before.
+
 ### Audit Request Bodies Written Before The Redaction Fix
 
 Earlier builds stored the raw body of every administrator write request in

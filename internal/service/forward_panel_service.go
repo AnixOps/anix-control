@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"sort"
+	"strconv"
 	"strings"
 	"time"
 
@@ -945,8 +946,28 @@ func (s *PanelForwardService) DiagnoseForward(userID uint, isAdmin bool, forward
 			continue
 		}
 
+		dialTarget := target
+		if !isAdmin {
+			// The probe runs from Control: a user's target must not reach
+			// Control's own network (see publicProbeAddress).
+			address, refusal := publicProbeAddress(host)
+			if refusal != "" {
+				results = append(results, DiagnosisOutcome{
+					Success:     false,
+					Description: "转发->目标",
+					NodeName:    resolveTunnelName(record.Tunnel),
+					NodeID:      fmt.Sprintf("%d", record.TunnelID),
+					TargetIP:    host,
+					TargetPort:  port,
+					Message:     refusal,
+				})
+				continue
+			}
+			dialTarget = net.JoinHostPort(address.String(), strconv.Itoa(port))
+		}
+
 		start := time.Now()
-		conn, dialErr := net.DialTimeout("tcp", target, diagnosisTimeout)
+		conn, dialErr := net.DialTimeout("tcp", dialTarget, diagnosisTimeout)
 		elapsed := time.Since(start)
 		if dialErr == nil {
 			_ = conn.Close()

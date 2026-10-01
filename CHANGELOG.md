@@ -28,6 +28,25 @@
     `type` while `Type` was written, so an invalid WireGuard protocol could
     be stored. Both checks now apply to every spelling. A parent that is not
     a whole number, or two keys for one column, now fail the update.
+- Forward routes no longer give users node credentials, rules or a view of
+  Control's network.
+  - **Node tokens.** `GET /api/v2/user/forward/rules` showed the caller's
+    rules with their relay and exit nodes, API tokens included. A forward
+    node's token authenticates its agent, and any user can create a rule on
+    any node (`POST /api/v2/user/forward/rules`), so any user could act as
+    any forward node. The answer now shows the nodes with an empty
+    `api_token`. Give the nodes new tokens; see `docs/UPGRADE.md`.
+  - **Agent rules.** `GET /api/v2/forward/agent/rules` is a public route
+    and answered anyone with the rules of any node: every user's listen
+    ports and targets. It now answers only the forward node it names, with
+    that node's token (`X-API-Key`, `api_key` or `token`); a proxy node's
+    key is refused.
+  - **Diagnosis.** `POST /api/v2/forward/diagnose` connects from Control to
+    the forward's targets, which the user chooses, so a user could probe
+    Control's loopback, private and metadata addresses and read which ports
+    were open. For a user, every address a target resolves to must now be
+    public, and the probe connects to the address it checked; an
+    administrator's diagnosis is unchanged.
 - An empty token no longer authenticates an agent. The agent WebSocket and
   REST authentication (`verifyForwardNodeToken`) accepted an empty token for
   a node whose API key and hash were empty, and for a forward node without a

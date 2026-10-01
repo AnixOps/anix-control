@@ -117,13 +117,23 @@ func (s *ForwardRuleService) List(page, pageSize int, userID *uint) ([]*model.Fo
 	return rules, total, err
 }
 
-// GetUserRules fetches rules owned by a user.
+// GetUserRules fetches rules owned by a user, for the user. Their relay and
+// exit nodes are shown without the nodes' API tokens: a node's token
+// authenticates its agent (verifyForwardNodeToken), so a user who saw it
+// could act as the node.
 func (s *ForwardRuleService) GetUserRules(userID uint) ([]*model.ForwardRule, error) {
 	var rules []*model.ForwardRule
 	err := s.db.Where("user_id = ?", userID).
 		Preload("RelayNode").
 		Preload("ExitNode").
 		Find(&rules).Error
+	for _, rule := range rules {
+		for _, node := range []*model.ForwardNode{rule.RelayNode, rule.ExitNode} {
+			if node != nil {
+				node.APIToken = ""
+			}
+		}
+	}
 	return rules, err
 }
 

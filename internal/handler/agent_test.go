@@ -525,7 +525,8 @@ func (s *AgentHandlerTestSuite) TestAgentGetForwardRules() {
 	handler := NewAgentHandler()
 	s.router.GET("/api/v2/forward/agent/rules", handler.AgentGetForwardRules)
 
-	req, _ := http.NewRequest("GET", "/api/v2/forward/agent/rules?node_id=1", nil)
+	req, _ := http.NewRequest("GET", fmt.Sprintf("/api/v2/forward/agent/rules?node_id=%d", s.testNode.ID), nil)
+	req.Header.Set("X-API-Key", s.testNode.APIToken)
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
@@ -534,7 +535,7 @@ func (s *AgentHandlerTestSuite) TestAgentGetForwardRules() {
 	var resp map[string]any
 	s.Require().NoError(json.Unmarshal(w.Body.Bytes(), &resp))
 	data := resp["data"].([]any)
-	assert.GreaterOrEqual(s.T(), len(data), 0)
+	assert.Len(s.T(), data, 1)
 }
 
 // ========== ListAgents 测试 ==========
