@@ -35,6 +35,14 @@
     once. Before, a banned user's token kept working until it expired (24 h
     by default). Updates that resend unchanged values revoke nothing.
   - `utils.ParseToken` is removed; use `authn.Default().Verify`.
+- Administrator routes no longer run a path id as SQL. The notification
+  template update and delete and the withdrawal processing passed the raw
+  `:id` to GORM, which runs a non-numeric id as an inline condition (for
+  example `0 OR 1=1`, which matches every row). They now parse the id:
+  - an invalid template id answers "template not found" on update and
+    "invalid template id" on delete, where delete used to leak the database
+    error;
+  - an invalid withdrawal id answers 404 "withdrawal not found", as before.
 
 ### Removed
 
@@ -418,6 +426,15 @@
   routes natively on `v2_ticket` and `v2_ticket_message`, adopted in place.
   `internal/tests/ticketcompat` proves byte parity on SQLite and PostgreSQL,
   and the PostgreSQL run is part of CI.
+- **Notification module on adopted tables.** `packages/notification` serves
+  19 of its 24 routes natively on the `v2_notification_template`,
+  `v2_notification_log`, `v2_telegram_bot` and `v2_telegram_user` tables,
+  adopted in place, and reads members' e-mail addresses through
+  `kapi_user_directory_v1`. The Telegram Bot API calls those routes make are
+  ported into the package. `internal/tests/notificationcompat` proves byte
+  parity on SQLite and PostgreSQL, and the PostgreSQL run is part of CI. The
+  e-mail configuration and test send, setting the webhook, and the public
+  Telegram webhook stay bridged.
 
 - The kernel side of the identity module, `KernelIdentity` (N9). It is served
   on the local package bridge and on the module listener.

@@ -28,9 +28,9 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   WebSocket routes use `registeredPackageWebSocketRoute`.
 - `config/package-extraction.json` records each route's extraction mode
   (`bridged`, `native-flagged` or `native`) and where its legacy handler lives
-  (`router`, `identity-bridge` or `none`). 29 routes are `native-flagged`:
-  identity's group A (15), knowledge (6) and ticket (8). The rest are
-  `bridged`.
+  (`router`, `identity-bridge` or `none`). 48 routes are `native-flagged`:
+  identity's group A (15), knowledge (6), ticket (8) and notification (19).
+  The rest are `bridged`.
   The identity routes are `identity-bridge`. `check_plugin_only_routes.py`
   enforces the map against the router and the identity bridge.
 - Request path: gin middleware -> `compatv2` gateway -> route resolution
@@ -186,6 +186,13 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
   `v2_ticket_message`, proved by `internal/tests/ticketcompat`. The admin
   list's legacy preload of the user is not needed: only `user_id` is
   returned.
+- **Notification (in place).** 19 of 24 routes on the adopted
+  `v2_notification_template`, `v2_notification_log`, `v2_telegram_bot` and
+  `v2_telegram_user` tables, proved by
+  `internal/tests/notificationcompat`; binding e-mails come from
+  `kapi_user_directory_v1`. Five stay bridged: the e-mail configuration and
+  test send (settings in `v2_system_config`), setting the webhook (needs the
+  request host) and the public webhook (`/sub` needs the subscription token).
 - The kernel publishes read-only views `kapi_*`, created at startup by
   `EnsureKernelAPIViews` (first `kapi_user_directory_v1`, later
   `kapi_plan_catalog_v1`). Packages read other domains only through `kapi_*`
