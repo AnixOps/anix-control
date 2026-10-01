@@ -148,7 +148,8 @@ func checkKeys(namespace service.SettingsNamespace, keys []string, required bool
 			return status.Errorf(codes.InvalidArgument, "key %q is not in namespace %q", key, namespace.Name)
 		}
 		if namespace.Storage == service.SettingsInBackupConfig {
-			if _, ok := backupFields[strings.TrimPrefix(key, service.BackupSettingsPrefix)]; !ok {
+			field := strings.TrimPrefix(key, service.BackupSettingsPrefix)
+			if _, ok := backupFields[field]; !ok && !backupRowFields[field] {
 				return status.Errorf(codes.InvalidArgument, "key %q is not a backup setting", key)
 			}
 		}
@@ -327,6 +328,9 @@ func checkEntry(namespace service.SettingsNamespace, entry *kernelsettingsv1.Set
 		return status.Errorf(codes.InvalidArgument, "the value of %q is too long or holds a NUL", entry.GetKey())
 	}
 	if namespace.Storage == service.SettingsInBackupConfig {
+		if backupRowFields[strings.TrimPrefix(entry.GetKey(), service.BackupSettingsPrefix)] {
+			return status.Errorf(codes.InvalidArgument, "backup setting %q is read-only", entry.GetKey())
+		}
 		if entry.GetType() != "" || entry.GetGroup() != "" || entry.GetRemark() != "" {
 			return status.Errorf(codes.InvalidArgument, "backup setting %q takes no type, group or remark", entry.GetKey())
 		}
@@ -602,9 +606,22 @@ var backupFields = map[string]func(*model.BackupConfig) any{
 	"s3_secret_key":   func(c *model.BackupConfig) any { return &c.S3SecretKey },
 }
 
+// backupRowFields are the backup namespace's read-only keys: the row's id
+// and times, which the kernel's backup configuration answer shows.
+var backupRowFields = map[string]bool{"id": true, "created_at": true, "updated_at": true}
+
 // backupField is a field's value as a setting: a boolean as true or false,
-// a number in decimal.
+// a number in decimal, a time in RFC 3339 with its fraction and offset, as
+// encoding/json writes it.
 func backupField(cfg *model.BackupConfig, field string) string {
+	switch field {
+	case "id":
+		return strconv.FormatUint(uint64(cfg.ID), 10)
+	case "created_at":
+		return cfg.CreatedAt.Format(time.RFC3339Nano)
+	case "updated_at":
+		return cfg.UpdatedAt.Format(time.RFC3339Nano)
+	}
 	switch value := backupFields[field](cfg).(type) {
 	case *bool:
 		return strconv.FormatBool(*value)
@@ -636,27 +653,26 @@ func setBackupField(cfg *model.BackupConfig, field, value string) error {
 	return nil
 }
 
-// getBackup reads backup fields: the first row's, or the defaults the
-// kernel would create (stored false) when there is none. A read creates
-// nothing.
+// getBackup reads backup fields of the first row. When there is none it
+// creates the defaults first, as the kernel's backup configuration handler
+// does on a read, so the answer has the row's id and times.
 func getBackup(db *gorm.DB, namespace service.SettingsNamespace, keys []string, secrets bool) ([]*kernelsettingsv1.Setting, error) {
-	var cfg model.BackupConfig
-	stored := true
-	err := db.First(&cfg).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		cfg, stored = service.DefaultBackupConfig(), false
-	} else if err != nil {
+	cfg, err := service.LoadBackupConfig(db)
+	if err != nil {
 		return nil, err
 	}
 	if len(keys) == 0 {
 		for field := range backupFields {
 			keys = append(keys, service.BackupSettingsPrefix+field)
 		}
+		for field := range backupRowFields {
+			keys = append(keys, service.BackupSettingsPrefix+field)
+		}
 		sort.Strings(keys)
 	}
 	settings := make([]*kernelsettingsv1.Setting, 0, len(keys))
 	for _, key := range keys {
-		settings = append(settings, shown(namespace, key, backupField(&cfg, strings.TrimPrefix(key, service.BackupSettingsPrefix)), stored, secrets))
+		settings = append(settings, shown(namespace, key, backupField(cfg, strings.TrimPrefix(key, service.BackupSettingsPrefix)), true, secrets))
 	}
 	return settings, nil
 }

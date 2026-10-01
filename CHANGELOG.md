@@ -522,6 +522,20 @@
   `payment:<trade_no>`, and a repeat of a paid payment applies it to its
   order again, changing nothing unless the order was left pending. See
   `docs/UPGRADE.md`.
+- The platform package reads the backup configuration through
+  KernelSettings and no longer adopts `v2_backup_config`. It could read the
+  S3 access and secret keys from the adopted row and write the row
+  directly. `GET /api/v2/admin/system/backup/config` and the answer of its
+  `PUT` now read namespace `backup` without its secrets, so the S3 keys
+  reach the package masked, exactly as the kernel's handler shows them; the
+  package's grants are `kernel.storage.adopt:v2_backup_record`,
+  `kernel.view:kapi_system_audit_log_v1` and
+  `kernel.settings.backup.read.v1`/`write.v1`, and on PostgreSQL its role
+  loses its privileges on `v2_backup_config`. A backup read through
+  KernelSettings now creates the default row when there is none, as the
+  kernel's handler does, and answers the row's `id`, `created_at` and
+  `updated_at` as read-only keys. A host without the contract keeps both
+  routes legacy.
 - The Agent contract (`anix.agent.v1`) now lives in Control's SDK module,
   `github.com/AnixOps/anix-control/sdk` (plan step A0). Control no longer
   requires `github.com/AnixOps/anix-agent/sdk`, which is frozen at v1.1.0.

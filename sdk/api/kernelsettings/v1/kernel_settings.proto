@@ -24,7 +24,9 @@ option go_package = "github.com/AnixOps/anix-control/sdk/api/kernelsettings/v1;k
 //   - backup: backup.<field>, the fields of the backup configuration row
 //     (enabled, auto_backup, schedule, retention_days, backup_database,
 //     backup_files, storage_type, storage_path, s3_bucket, s3_region,
-//     s3_endpoint, s3_access_key, s3_secret_key).
+//     s3_endpoint, s3_access_key, s3_secret_key), and the row's id,
+//     created_at and updated_at, which are read-only (times in RFC 3339
+//     with their fraction and offset).
 //
 // It is served on the module listener and the local package bridge to
 // official packages, per namespace, by capability:
@@ -47,7 +49,8 @@ option go_package = "github.com/AnixOps/anix-control/sdk/api/kernelsettings/v1;k
 // answers a repeat with the first result.
 service KernelSettings {
   // GetSettings reads keys of one namespace. With no keys it answers every
-  // stored key of the namespace, by key.
+  // stored key of the namespace, by key. A backup read creates the row with
+  // the kernel's defaults when there is none, as the kernel's handler does.
   rpc GetSettings(GetSettingsRequest) returns (GetSettingsResponse);
   // PutSettings creates or changes keys of one namespace. A backup write
   // with no entries saves the row as it is and records its audit entry, as
@@ -65,8 +68,8 @@ message Setting {
   // value is the stored value. For a secret the caller may not read it is
   // the placeholder "********" when has_value, else "".
   string value = 2;
-  // stored is false for a key with no stored value; value is then "", or
-  // the kernel's default for a backup field.
+  // stored is false for a key with no stored value; value is then "".
+  // Backup fields are always stored.
   bool stored = 3;
   bool secret = 4;
   // masked is true when value is the placeholder or "" in place of a
@@ -107,7 +110,9 @@ message SettingEntry {
   string value = 2;
   // keep leaves the stored value unchanged. A secret whose value is the
   // placeholder "********" is kept as well. A kept key with no stored value
-  // is not created.
+  // is not created. A masked field of a JSON value (the SMTP password,
+  // field password of notification.email.config) sent as the placeholder
+  // keeps its stored value, "" when none is stored.
   bool keep = 3;
   // type, group and remark are stored with a v2_system_config key; empty
   // leaves the stored one (a new key's type defaults to "string"). They

@@ -28,8 +28,8 @@ type Setting struct {
 	// value is the stored value. For a secret the caller may not read it is
 	// the placeholder "********" when has_value, else "".
 	Value string `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
-	// stored is false for a key with no stored value; value is then "", or
-	// the kernel's default for a backup field.
+	// stored is false for a key with no stored value; value is then "".
+	// Backup fields are always stored.
 	Stored bool `protobuf:"varint,3,opt,name=stored,proto3" json:"stored,omitempty"`
 	Secret bool `protobuf:"varint,4,opt,name=secret,proto3" json:"secret,omitempty"`
 	// masked is true when value is the placeholder or "" in place of a
@@ -307,7 +307,9 @@ type SettingEntry struct {
 	Value string                 `protobuf:"bytes,2,opt,name=value,proto3" json:"value,omitempty"`
 	// keep leaves the stored value unchanged. A secret whose value is the
 	// placeholder "********" is kept as well. A kept key with no stored value
-	// is not created.
+	// is not created. A masked field of a JSON value (the SMTP password,
+	// field password of notification.email.config) sent as the placeholder
+	// keeps its stored value, "" when none is stored.
 	Keep bool `protobuf:"varint,3,opt,name=keep,proto3" json:"keep,omitempty"`
 	// type, group and remark are stored with a v2_system_config key; empty
 	// leaves the stored one (a new key's type defaults to "string"). They

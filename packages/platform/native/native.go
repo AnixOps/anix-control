@@ -1,18 +1,20 @@
 // Package native implements the platform package's routes in the package
-// itself: the backup configuration, list and statistics on the kernel's
-// v2_backup_config and v2_backup_record tables adopted in place
-// (kernel.storage.adopt), the system audit log through the
-// kapi_system_audit_log_v1 kernel view, and the backup configuration update
-// through the kernel's KernelSettings contract (namespace backup,
+// itself: the backup list and statistics on the kernel's v2_backup_record
+// table adopted in place (kernel.storage.adopt), the system audit log
+// through the kapi_system_audit_log_v1 kernel view, and the backup
+// configuration, read and updated through the kernel's KernelSettings
+// contract (namespace backup, kernel.settings.backup.read.v1 and
 // kernel.settings.backup.write.v1). Legacy handlers and native routes share
 // the rows, so a route can switch between them at any time. Responses are
 // byte-compatible with the legacy handlers (internal/tests/platformcompat).
 //
-// The update is written by the kernel, not into the adopted table: the
-// kernel records the audit entry its own handler records, in the protected
-// v2_operation_log, and makes its backup service reload the copy of the
-// configuration it keeps in memory, from which backup creation takes its
-// storage path.
+// The package never sees the S3 keys: it holds no secrets capability, so
+// KernelSettings answers them masked, as the kernel's handler shows them,
+// and it has no access to the v2_backup_config row. The update is written
+// by the kernel: it records the audit entry its own handler records, in
+// the protected v2_operation_log, and makes its backup service reload the
+// copy of the configuration it keeps in memory, from which backup creation
+// takes its storage path.
 //
 // Seven routes have no native handler and stay bridged:
 //   - The system configuration routes (list, get, set, delete) work on any
@@ -49,8 +51,8 @@ type Service struct {
 	// Open returns the package's storage connection, on which the adopted
 	// tables and the kapi_system_audit_log_v1 view are visible.
 	Open func(ctx context.Context) (*gorm.DB, error)
-	// Settings is the kernel's KernelSettings; without it updating the
-	// backup configuration has no native handler and stays legacy.
+	// Settings is the kernel's KernelSettings; without it the backup
+	// configuration routes have no native handler and stay legacy.
 	Settings Settings
 	// NewToken names a request that carries neither an Idempotency-Key
 	// nor a request id; it defaults to a random UUID.
@@ -59,19 +61,22 @@ type Service struct {
 	Now func() time.Time
 }
 
-// BackupConfigUpdateRouteID is the route that updates the backup
-// configuration through KernelSettings.
-const BackupConfigUpdateRouteID = "platform.admin.system.backup.config.put"
+// Route ids of the routes that read and update the backup configuration
+// through KernelSettings.
+const (
+	BackupConfigGetRouteID    = "platform.admin.system.backup.config.get"
+	BackupConfigUpdateRouteID = "platform.admin.system.backup.config.put"
+)
 
 // Handlers returns the native handlers by route id.
 func (s *Service) Handlers() map[string]pluginhostsdk.NativeHandler {
 	handlers := map[string]pluginhostsdk.NativeHandler{
-		"platform.admin.system.audit_logs.get":    s.GetAuditLogs,
-		"platform.admin.system.backup.config.get": s.GetBackupConfig,
-		"platform.admin.system.backups.get":       s.ListBackups,
-		"platform.admin.system.backup.stats.get":  s.GetBackupStats,
+		"platform.admin.system.audit_logs.get":   s.GetAuditLogs,
+		"platform.admin.system.backups.get":      s.ListBackups,
+		"platform.admin.system.backup.stats.get": s.GetBackupStats,
 	}
 	if s.Settings != nil {
+		handlers[BackupConfigGetRouteID] = s.GetBackupConfig
 		handlers[BackupConfigUpdateRouteID] = s.UpdateBackupConfig
 	}
 	return handlers

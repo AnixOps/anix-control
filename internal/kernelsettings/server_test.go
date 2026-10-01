@@ -2,6 +2,7 @@ package kernelsettings
 
 import (
 	"context"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -381,15 +382,27 @@ func TestBackupNamespaceWritesTheRowAndRefreshesTheBackupService(t *testing.T) {
 
 	listed, err := server.GetSettings(ctx, &kernelsettingsv1.GetSettingsRequest{Namespace: "backup"})
 	require.NoError(t, err)
-	require.Len(t, listed.GetSettings(), 13)
+	require.Len(t, listed.GetSettings(), 16, "the 13 fields and the row's id and times")
 	require.Equal(t, "backup.auto_backup", listed.GetSettings()[0].GetKey())
-	require.False(t, listed.GetSettings()[0].GetStored(), "with no row the defaults read, unstored")
-	var count int64
-	require.NoError(t, db.Model(&model.BackupConfig{}).Count(&count).Error)
-	require.Zero(t, count, "a read creates nothing")
+	require.True(t, listed.GetSettings()[0].GetStored(), "with no row the read creates the defaults, as the kernel's handler does")
+	var rows []model.BackupConfig
+	require.NoError(t, db.Find(&rows).Error)
+	require.Len(t, rows, 1)
+	read := values(listed.GetSettings())
+	require.Equal(t, "backups", read["backup.storage_path"])
+	require.Equal(t, "7", read["backup.retention_days"])
+	require.Equal(t, strconv.FormatUint(uint64(rows[0].ID), 10), read["backup.id"])
+	created, err := time.Parse(time.RFC3339Nano, read["backup.created_at"])
+	require.NoError(t, err)
+	require.True(t, created.Equal(rows[0].CreatedAt))
+	again, err := server.GetSettings(ctx, &kernelsettingsv1.GetSettingsRequest{Namespace: "backup"})
+	require.NoError(t, err)
+	require.Equal(t, read, values(again.GetSettings()), "a second read creates nothing")
 
 	backups := service.NewBackupService(db)
-	require.NoError(t, db.Create(&model.BackupConfig{StorageType: "s3", StoragePath: "/old", S3AccessKey: "AKIA", S3SecretKey: "s3cret", RetentionDays: 3}).Error)
+	require.NoError(t, db.Model(&model.BackupConfig{}).Where("id = ?", rows[0].ID).Updates(map[string]any{
+		"storage_type": "s3", "storage_path": "/old", "s3_access_key": "AKIA", "s3_secret_key": "s3cret", "retention_days": 3,
+	}).Error)
 	cached, err := backups.GetConfig()
 	require.NoError(t, err)
 	require.Equal(t, "/old", cached.StoragePath)
@@ -420,11 +433,20 @@ func TestBackupNamespaceWritesTheRowAndRefreshesTheBackupService(t *testing.T) {
 		"backup_files":false,"storage_type":"s3","storage_path":"/new","s3_bucket":"","s3_region":"","s3_endpoint":"",
 		"s3_access_key_has_value":true,"s3_secret_key_has_value":true,"preserved_sensitive_fields":["s3_access_key","s3_secret_key"]}`, entries[0].Content)
 
-	got, err := server.GetSettings(ctx, &kernelsettingsv1.GetSettingsRequest{Namespace: "backup", Keys: []string{"backup.s3_secret_key", "backup.enabled"}})
+	got, err := server.GetSettings(ctx, &kernelsettingsv1.GetSettingsRequest{Namespace: "backup", Keys: []string{"backup.s3_secret_key", "backup.enabled", "backup.updated_at"}})
 	require.NoError(t, err)
 	require.Equal(t, "********", got.GetSettings()[0].GetValue())
+	require.True(t, got.GetSettings()[0].GetMasked())
 	require.Equal(t, "true", got.GetSettings()[1].GetValue())
 	require.True(t, got.GetSettings()[1].GetStored())
+	require.Equal(t, refreshed.UpdatedAt.Format(time.RFC3339Nano), got.GetSettings()[2].GetValue())
+
+	// The row's id and times are read-only.
+	for _, key := range []string{"backup.id", "backup.created_at", "backup.updated_at"} {
+		_, err = server.PutSettings(ctx, &kernelsettingsv1.PutSettingsRequest{Namespace: "backup", RequestId: "ro:" + key,
+			Entries: []*kernelsettingsv1.SettingEntry{{Key: key, Value: "1"}}})
+		require.Equal(t, codes.InvalidArgument, status.Code(err), key)
+	}
 }
 
 // A backup write with no row creates the defaults first, as the kernel's
