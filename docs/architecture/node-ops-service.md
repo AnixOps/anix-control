@@ -1268,9 +1268,10 @@ it up to A2-3.
 
 ## 10. Decisions for the owner
 
-These need a decision before NO-1 unless noted.
+Decided 2026-10-01: the owner accepted every recommendation below (D1–D12).
+Implementation follows section 7 in that order.
 
-| # | Decision | Recommendation |
+| # | Decision | Decided (the recommendation) |
 |---|---|---|
 | D1 | Draft naming: `anixops.kernelnodeops.v1` unreleased, or `v1alpha1` now with `v1` at NO-1 | `v1` unreleased (section 3.10), with the draft golden policy |
 | D2 | Sealed secret handles at the gateway (no package ever sees a secret, about 1 extra PR), or accept per-request transit of secrets an administrator types or is shown, as the bridged relay does today | handles. They are what makes "never sees a token or private key" true |
