@@ -263,7 +263,12 @@ needs of an order: `id`, `user_id`, `total_amount` and `status` of
 `v2_user`: who invited whom. `kapi_affiliate_settings_v1` exposes the `value`
 of the one `v2_system_config` row keyed `invite.frontend.config` (the
 affiliate's frontend settings, which the kernel does not treat as sensitive)
-and no other row. A view that filters rows is created `WITH
+and no other row. `kapi_user_subscription_group_v1` exposes `user_id`,
+`group_id` and `expire_at` of `v2_user_subscription_group`: the subscription
+groups a subscriber holds and until when. `kapi_node_protocol_v1` exposes
+`id` and `node_id` of `v2_node_protocol`, and `kapi_node_heartbeat_v1` `id`
+and `last_check_at` of `v2_node`; neither shows an address, a key or any
+settings. A view that filters rows is created `WITH
 (security_barrier)` on PostgreSQL, so a package's own functions never see the
 rows it hides. If a view cannot be created, or its source table does not
 exist, startup continues and leases that grant it fail.

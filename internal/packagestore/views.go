@@ -91,6 +91,29 @@ var KernelAPIViews = []KernelAPIView{
 		Query:     "SELECT value FROM v2_system_config WHERE key = '" + InviteSettingsKey + "'",
 		RowFilter: true,
 	},
+	{
+		// The subscription groups each subscriber holds and until when, for
+		// the subscription package's group lists and statistics. The kernel
+		// stays the only writer of this subscriber state.
+		Name:   "kapi_user_subscription_group_v1",
+		Source: "v2_user_subscription_group",
+		Query:  "SELECT user_id, group_id, expire_at FROM v2_user_subscription_group",
+	},
+	{
+		// The node a node protocol runs on, to link protocols to
+		// subscription groups and count a group's online nodes. No settings:
+		// they hold keys.
+		Name:   "kapi_node_protocol_v1",
+		Source: "v2_node_protocol",
+		Query:  "SELECT id, node_id FROM v2_node_protocol",
+	},
+	{
+		// When a node last reported, to count online nodes. No address,
+		// key or configuration.
+		Name:   "kapi_node_heartbeat_v1",
+		Source: "v2_node",
+		Query:  "SELECT id, last_check_at FROM v2_node",
+	},
 }
 
 // EnsureKernelAPIViews creates the kernel API views that do not exist yet.

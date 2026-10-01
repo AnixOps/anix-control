@@ -28,12 +28,13 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   WebSocket routes use `registeredPackageWebSocketRoute`.
 - `config/package-extraction.json` records each route's extraction mode
   (`bridged`, `native-flagged` or `native`) and where its legacy handler lives
-  (`router`, `identity-bridge` or `none`). 96 routes are `native-flagged`:
+  (`router`, `identity-bridge` or `none`). 113 routes are `native-flagged`:
   identity-platform (20: group A's 15, the profile, dashboard and user
   detail, and the traffic and subscription resets), affiliate (7), knowledge
-  (6), notification (19), order (9), payment (16), plan (7), platform (4) and
-  ticket (8). The rest are `bridged`. The identity routes are
-  `identity-bridge`.
+  (6), notification (19), order (9), payment (16), plan (7), platform (4),
+  subscription (17) and ticket (8). The rest are `bridged`. The identity
+  routes are `identity-bridge`. `check_plugin_only_routes.py` enforces the
+  map against the router and the identity bridge.
   `check_plugin_only_routes.py` enforces the map against the router and the
   identity bridge.
 - Request path: gin middleware -> `compatv2` gateway -> route resolution
@@ -225,8 +226,9 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
     limits: their rows name forward tunnels, they read
     `v2_forward_tunnel` and `v2_forward_user_tunnel`, and an update
     re-pushes forwards to nodes. They join forward later.
-  - Subscription still reads `v2_plan` directly; it needs
-    `kapi_plan_catalog_v1` when it moves.
+  - The subscription module checks a plan through `kapi_plan_catalog_v1`;
+    the kernel's subscription renderer, which stays in the kernel, still
+    reads `v2_plan` directly.
 - **Order (in place).** 9 of 13 routes run on the adopted `v2_order` and
   `v2_coupon` tables, proved by `internal/tests/ordercompat`: the coupon
   routes, order statistics, status changes, cancellation, "mark paid" and
@@ -355,6 +357,50 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
       registration consumes inside Control), and the answer adds the
       commission balance and invite statistics that join the order and
       affiliate packages' tables. They belong with the affiliate package.
+- **Subscription (in place).** 17 of 25 routes run on the adopted
+  `v2_subscription_group`, `v2_subscription_template`,
+  `v2_plan_subscription_group` and `v2_subscription_group_node_protocols`
+  tables, proved by `internal/tests/subscriptioncompat`: groups and templates
+  (list, read, create, update; templates also delete), a group's node
+  protocol links, a plan's groups, a user's groups, the statistics and the
+  two static lists. The subscription link endpoints (`/s/:token`,
+  `/api/v1/client/subscribe`) are kernel routes outside the package gate and
+  stay in the kernel with the renderer.
+  - Other domains are read through views: `kapi_plan_catalog_v1` (whether a
+    plan exists), `kapi_subscriber_entitlement_v1` (whether a user exists,
+    and their traffic), and the new `kapi_user_subscription_group_v1` (the
+    groups a subscriber holds, until when), `kapi_node_protocol_v1` (a
+    protocol's node) and `kapi_node_heartbeat_v1` (a node's last report). No
+    view shows a token, UUID, e-mail address, key or protocol settings.
+  - The kernel's renderer, order completion and
+    `kapi_plan_subscription_group_v1` read the adopted tables; the module's
+    writes leave the rows the legacy handlers leave. The kernel caches
+    nothing about them and no write pushes to nodes. Linking protocols
+    touches the group's `updated_at`, as the kernel's association replace
+    does.
+  - The bound and answered types mirror the kernel model in
+    `packages/subscription/native/model`, a package named `model` like the
+    kernel's, because JSON binding errors print a field's type with its
+    package; a test compares the two.
+  - Group and template writes no longer save the associations nested in a
+    body (a security fix made in the kernel first): a group's `protocols`
+    upserted proxy-node rows and nodes, which the module may not write.
+  - Eight routes stay bridged:
+    - deleting a group, and granting or taking away a user's group: they
+      write `v2_user_subscription_group`, subscriber state only the kernel
+      writes (no package may adopt a `v2_user*` table), and
+      `KernelSubscriber` has no call that edits one membership. An extension
+      is proposed in [`subscriber-service.md`](subscriber-service.md);
+    - a group's protocols and the protocol pool: they answer whole
+      `v2_node_protocol` and `v2_node` rows, Reality private keys and custom
+      configuration included, which no view may carry;
+    - the preview: the kernel's renderer, with the user's token and UUID,
+      the nodes, and the WireGuard peers it creates;
+    - the subscription link settings: `app.subscribe_path` is process
+      configuration and `app.subscribe_domains` lives in the protected
+      `v2_system_config`;
+    - the user's subscription summary: served from the kernel's 30-second
+      cache, with its `cached_at`, which a native answer cannot share.
 - The kernel publishes read-only views `kapi_*`, created at startup by
   `EnsureKernelAPIViews` (first `kapi_user_directory_v1`, then
   `kapi_system_audit_log_v1`, the `v2_operation_log` rows of module
@@ -363,7 +409,9 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
   `EnsureKernelAPIViews` (`kapi_user_directory_v1`,
   `kapi_subscriber_entitlement_v1`, `kapi_plan_catalog_v1`,
   `kapi_plan_subscription_group_v1`, `kapi_order_billing_v1`,
-  `kapi_user_referral_v1`, `kapi_affiliate_settings_v1`). Packages
+  `kapi_user_referral_v1`, `kapi_affiliate_settings_v1`,
+  `kapi_user_subscription_group_v1`, `kapi_node_protocol_v1`,
+  `kapi_node_heartbeat_v1`). Packages
   read other domains only
   through `kapi_*` views or typed operations. A view whose source table does
   not exist is left out. A view that filters rows is a PostgreSQL

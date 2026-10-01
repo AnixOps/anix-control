@@ -184,6 +184,41 @@ package and generation.
     with authorization and parity tests between legacy callers and contract
     callers.
 
+## Proposed: subscription group membership (PLANNED)
+
+Not implemented. The contract cannot edit one subscription group
+membership: `ApplyEntitlement` replaces all of a subscriber's groups with a
+plan's, together with plan, group, traffic and expiry. Three v2 routes of
+the subscription package therefore stay bridged: granting a user a group
+(`POST /api/v2/admin/subscription/users/:user_id/groups`, with its own
+expiry, traffic and renewal price), taking it away (`DELETE .../groups/:group_id`)
+and deleting a group, which removes every member's row. A minimal,
+backwards-compatible extension would add only new RPCs, under a new
+capability `kernel.subscriber.groups.v1`:
+
+- `GrantSubscriptionGroup(request_id, user_id, group_id, optional
+  expires_at_unix, optional transfer_bytes, optional next_renew_price_cents)`
+  creates the `v2_user_subscription_group` row or overwrites the given
+  fields of an existing one, as the v2 handler does;
+- `RevokeSubscriptionGroup(request_id, user_id, group_id)` deletes one row,
+  `NotFound` when there is none;
+- `RemoveSubscriptionGroupMembers(request_id, group_id)` deletes every row
+  of a group, which the module calls before it deletes the group's
+  templates, plan links and the group itself; a retry after a failure in
+  between finds no members and completes.
+
+Each runs under the subscriber's row lock and records its request id, like
+the other writes. Before it is built, two decisions are needed:
+
+- **Change log.** `Subscriber.subscription_group_ids` is part of
+  `GetSubscribers` and of every `UPSERT` change, but the v2 handlers append
+  no change row when a membership changes, so a watcher's copy goes stale
+  until the subscriber changes otherwise. Emitting `UPSERT` rows (and moving
+  the v2 handlers onto the same function, as for entitlements) fixes that.
+- **Request ids** for administrator edits, derived from the request's
+  `Idempotency-Key` as `plan.assign` does, so a retry applies once whichever
+  side serves it.
+
 ## Not in scope
 
 - Plan and order data: they belong to the plan and order modules.
