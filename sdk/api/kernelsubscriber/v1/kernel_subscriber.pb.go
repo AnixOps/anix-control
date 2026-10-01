@@ -893,9 +893,10 @@ func (x *ResetTrafficRequest) GetReason() string {
 }
 
 type ResetTrafficResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Applied       bool                   `protobuf:"varint,1,opt,name=applied,proto3" json:"applied,omitempty"`
-	Reset_        uint64                 `protobuf:"varint,2,opt,name=reset,proto3" json:"reset,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Applied bool                   `protobuf:"varint,1,opt,name=applied,proto3" json:"applied,omitempty"`
+	// reset_users counts the subscribers whose counters were zeroed.
+	ResetUsers    uint64 `protobuf:"varint,2,opt,name=reset_users,json=resetUsers,proto3" json:"reset_users,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -937,9 +938,9 @@ func (x *ResetTrafficResponse) GetApplied() bool {
 	return false
 }
 
-func (x *ResetTrafficResponse) GetReset_() uint64 {
+func (x *ResetTrafficResponse) GetResetUsers() uint64 {
 	if x != nil {
-		return x.Reset_
+		return x.ResetUsers
 	}
 	return 0
 }
@@ -1824,10 +1825,11 @@ const file_api_kernelsubscriber_v1_kernel_subscriber_proto_rawDesc = "" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x19\n" +
 	"\buser_ids\x18\x02 \x03(\x04R\auserIds\x12\x16\n" +
-	"\x06reason\x18\x03 \x01(\tR\x06reason\"F\n" +
+	"\x06reason\x18\x03 \x01(\tR\x06reason\"Q\n" +
 	"\x14ResetTrafficResponse\x12\x18\n" +
-	"\aapplied\x18\x01 \x01(\bR\aapplied\x12\x14\n" +
-	"\x05reset\x18\x02 \x01(\x04R\x05reset\"\x9f\x01\n" +
+	"\aapplied\x18\x01 \x01(\bR\aapplied\x12\x1f\n" +
+	"\vreset_users\x18\x02 \x01(\x04R\n" +
+	"resetUsers\"\x9f\x01\n" +
 	"\x17ResetCredentialsRequest\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x17\n" +

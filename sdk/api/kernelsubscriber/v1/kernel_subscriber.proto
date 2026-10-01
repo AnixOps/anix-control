@@ -154,7 +154,8 @@ message ResetTrafficRequest {
 
 message ResetTrafficResponse {
   bool applied = 1;
-  uint64 reset = 2;
+  // reset_users counts the subscribers whose counters were zeroed.
+  uint64 reset_users = 2;
 }
 
 message ResetCredentialsRequest {

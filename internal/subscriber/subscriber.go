@@ -95,7 +95,7 @@ func ApplyEntitlementTx(tx *gorm.DB, e Entitlement, now time.Time) (EntitlementR
 		return EntitlementResult{}, errors.New("an entitlement takes a period or an expiry, not both")
 	}
 	var previous EntitlementResult
-	if seen, err := replay(tx, e.RequestID, &previous); err != nil || seen {
+	if seen, err := Replay(tx, e.RequestID, &previous); err != nil || seen {
 		return previous, err
 	}
 	var user model.User
@@ -152,12 +152,12 @@ func ApplyEntitlementTx(tx *gorm.DB, e Entitlement, now time.Time) (EntitlementR
 			}
 		}
 	}
-	return result, record(tx, e.RequestID, "apply_entitlement", e.UserID, result, now)
+	return result, Record(tx, e.RequestID, "apply_entitlement", e.UserID, result, now)
 }
 
-// replay loads the recorded result of requestID into result and reports
+// Replay loads the recorded result of requestID into result and reports
 // whether it was applied before.
-func replay(tx *gorm.DB, requestID string, result any) (bool, error) {
+func Replay(tx *gorm.DB, requestID string, result any) (bool, error) {
 	if requestID == "" {
 		return false, nil
 	}
@@ -177,8 +177,8 @@ func replay(tx *gorm.DB, requestID string, result any) (bool, error) {
 	return true, nil
 }
 
-// record stores a request id with its result in tx.
-func record(tx *gorm.DB, requestID, method string, userID uint, result any, now time.Time) error {
+// Record stores a request id with its result in tx.
+func Record(tx *gorm.DB, requestID, method string, userID uint, result any, now time.Time) error {
 	if requestID == "" {
 		return nil
 	}

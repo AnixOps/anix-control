@@ -122,6 +122,7 @@ forms are accepted:
 |------------|--------|
 | `kernel.observed-state` | Agent observed-state reports |
 | `kernel.identity.v1` | the `KernelIdentity` contract: subscribers, the account projection, revocations; honoured only for official AnixOps packages, checked on every call |
+| `kernel.subscriber.entitlements.v1`, `.traffic.v1`, `.credentials.v1`, `.balance.v1`, `.directory.v1` | one method family each of the `KernelSubscriber` contract (`subscriber-service.md`): plan activation and entitlement edits, traffic ledger, credential resets, balances, directory and change feed; honoured only for official AnixOps packages, checked on every call |
 | `kernel.storage.v1` | a per-package database role and schema (storage lease) |
 | `kernel.storage.adopt:<table>` | read/write on an existing table, adopted in place; requires `kernel.storage.v1`; kernel and identity tables (`v2_user*`, `v2_system_config`, `v2_audit_log`, `v2_operation_log`, `v3_kernel_*`, `v4_kernel_*`, `identity_*`, `kapi_*`) cannot be adopted |
 | `kernel.view:kapi_<name>_v<N>` | read access to a kernel API view; requires `kernel.storage.v1` |

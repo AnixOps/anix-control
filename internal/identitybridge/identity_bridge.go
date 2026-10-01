@@ -19,6 +19,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/handler"
 	"github.com/AnixOps/anix-control/v4/internal/kernelidentity"
+	"github.com/AnixOps/anix-control/v4/internal/kernelsubscriber"
 	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
 	"github.com/AnixOps/anix-control/v4/internal/packagestore"
 	"github.com/AnixOps/anix-control/v4/internal/plugincontrol"
@@ -55,7 +56,23 @@ func NewFactory(cfg *config.Config) (packagebridge.SessionFactory, error) {
 		MaxRequestBodyBytes:  cfg.Plugins.ControlHostRequestBodyLimit(),
 		HostOperations:       operations,
 		KernelIdentity:       kernelIdentity(operations),
+		KernelSubscriber:     kernelSubscriber(operations),
 	}), nil
+}
+
+// NewKernelSubscriber returns the KernelSubscriber provider for the module
+// listener; local sessions get the same one from NewFactory.
+func NewKernelSubscriber(cfg *config.Config) (packagebridge.KernelSubscriberProvider, error) {
+	operations, err := newHostOperations(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return kernelSubscriber(operations), nil
+}
+
+func kernelSubscriber(operations service.PackageHostOperations) packagebridge.KernelSubscriberProvider {
+	server := &kernelsubscriber.Server{DB: operations.DB, Authorizer: operations}
+	return server.For
 }
 
 // NewKernelIdentity returns the KernelIdentity provider for the module

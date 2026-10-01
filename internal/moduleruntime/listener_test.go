@@ -15,6 +15,7 @@ import (
 	"time"
 
 	kernelidentityv1 "github.com/AnixOps/anix-control/sdk/api/kernelidentity/v1"
+	kernelsubscriberv1 "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1"
 	modulepkiv1 "github.com/AnixOps/anix-control/sdk/api/modulepki/v1"
 	packagebridgev1 "github.com/AnixOps/anix-control/sdk/api/packagebridge/v1"
 	"github.com/AnixOps/anix-control/sdk/moduletls"
@@ -77,6 +78,26 @@ type listenerFixture struct {
 	calls      chan packagebridge.Call
 	// identityHosts records the host identity KernelIdentity calls ran as.
 	identityHosts chan packagebridge.HostIdentity
+	// subscriberHosts records the host identity KernelSubscriber calls ran as.
+	subscriberHosts chan packagebridge.HostIdentity
+}
+
+// subscriberRecorder answers GetSubscribers and WatchSubscriberChanges and
+// records the calling host.
+type subscriberRecorder struct {
+	kernelsubscriberv1.UnimplementedKernelSubscriberServer
+	host  packagebridge.HostIdentity
+	hosts chan packagebridge.HostIdentity
+}
+
+func (r subscriberRecorder) GetSubscribers(context.Context, *kernelsubscriberv1.GetSubscribersRequest) (*kernelsubscriberv1.GetSubscribersResponse, error) {
+	r.hosts <- r.host
+	return &kernelsubscriberv1.GetSubscribersResponse{}, nil
+}
+
+func (r subscriberRecorder) WatchSubscriberChanges(_ *kernelsubscriberv1.WatchSubscriberChangesRequest, stream grpc.ServerStreamingServer[kernelsubscriberv1.SubscriberChange]) error {
+	r.hosts <- r.host
+	return stream.Send(&kernelsubscriberv1.SubscriberChange{Cursor: 1, Kind: kernelsubscriberv1.ChangeKind_CHANGE_KIND_RESYNC})
 }
 
 // identityRecorder answers ResolveActorAccess and records the calling host.
@@ -121,6 +142,9 @@ func (f *listenerFixture) serve(t *testing.T) {
 			KernelIdentity: func(host packagebridge.HostIdentity) kernelidentityv1.KernelIdentityServer {
 				return identityRecorder{host: host, hosts: f.identityHosts}
 			},
+			KernelSubscriber: func(host packagebridge.HostIdentity) kernelsubscriberv1.KernelSubscriberServer {
+				return subscriberRecorder{host: host, hosts: f.subscriberHosts}
+			},
 		}).Serve(ctx, listener)
 	}()
 	t.Cleanup(func() {
@@ -150,6 +174,7 @@ func newListenerFixture(t *testing.T) *listenerFixture {
 	require.NoError(t, err)
 	fixture.generation, fixture.binder, fixture.bridge, fixture.clock, fixture.calls = generation, binder, bridge, clock, calls
 	fixture.identityHosts = make(chan packagebridge.HostIdentity, 4)
+	fixture.subscriberHosts = make(chan packagebridge.HostIdentity, 4)
 	fixture.serve(t)
 	return fixture
 }
@@ -350,4 +375,33 @@ func TestKernelIdentityIsServedToBoundInstancesOnly(t *testing.T) {
 	require.NoError(t, fixture.generation.Close())
 	_, err = identity.ResolveActorAccess(session, &kernelidentityv1.ResolveActorAccessRequest{UserId: 1})
 	require.Equal(t, codes.PermissionDenied, status.Code(err), "a fenced generation loses KernelIdentity too")
+}
+
+// KernelSubscriber on the module listener runs as the bound instance's
+// generation, unary and streaming alike, and needs a bridge session.
+func TestKernelSubscriberIsServedToBoundInstancesOnly(t *testing.T) {
+	fixture := newListenerFixture(t)
+	certificate, _ := fixture.enroll(t, "knowledge")
+	connection := fixture.dial(t, certificate)
+	subscribers := kernelsubscriberv1.NewKernelSubscriberClient(connection)
+
+	_, err := subscribers.GetSubscribers(context.Background(), &kernelsubscriberv1.GetSubscribersRequest{})
+	require.Equal(t, codes.Unauthenticated, status.Code(err), "no bridge session")
+
+	session := bind(t, packagebridgev1.NewKernelPackageBridgeClient(connection), "pod-a")
+	_, err = subscribers.GetSubscribers(session, &kernelsubscriberv1.GetSubscribersRequest{})
+	require.NoError(t, err)
+	host := packagebridge.HostIdentity{PackageID: "knowledge", Version: "4.1.0", Generation: 9}
+	require.Equal(t, host, <-fixture.subscriberHosts)
+
+	stream, err := subscribers.WatchSubscriberChanges(session, &kernelsubscriberv1.WatchSubscriberChangesRequest{})
+	require.NoError(t, err)
+	change, err := stream.Recv()
+	require.NoError(t, err)
+	require.Equal(t, kernelsubscriberv1.ChangeKind_CHANGE_KIND_RESYNC, change.GetKind())
+	require.Equal(t, host, <-fixture.subscriberHosts)
+
+	require.NoError(t, fixture.generation.Close())
+	_, err = subscribers.GetSubscribers(session, &kernelsubscriberv1.GetSubscribersRequest{})
+	require.Equal(t, codes.PermissionDenied, status.Code(err), "a fenced generation loses KernelSubscriber too")
 }

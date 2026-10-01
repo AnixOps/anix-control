@@ -46,7 +46,7 @@ func RecordTrafficTx(tx *gorm.DB, batchID string, entries []TrafficEntry, now ti
 		totals[entry.UserID] = [2]int64{total[0] + entry.Upload, total[1] + entry.Download}
 	}
 	var previous TrafficResult
-	if seen, err := replay(tx, batchID, &previous); err != nil || seen {
+	if seen, err := Replay(tx, batchID, &previous); err != nil || seen {
 		return previous, err
 	}
 	result := TrafficResult{Applied: true}
@@ -78,7 +78,7 @@ func RecordTrafficTx(tx *gorm.DB, batchID string, entries []TrafficEntry, now ti
 	if err := RecordChangesTx(tx, result.Exhausted, false, now); err != nil {
 		return TrafficResult{}, err
 	}
-	return result, record(tx, batchID, "record_traffic", 0, result, now)
+	return result, Record(tx, batchID, "record_traffic", 0, result, now)
 }
 
 // ResetResult is the outcome of ResetTrafficTx.
@@ -90,7 +90,7 @@ type ResetResult struct {
 // ResetTrafficTx zeroes subscribers' counters in tx, once per request id.
 func ResetTrafficTx(tx *gorm.DB, requestID string, userIDs []uint, now time.Time) (ResetResult, error) {
 	var previous ResetResult
-	if seen, err := replay(tx, requestID, &previous); err != nil || seen {
+	if seen, err := Replay(tx, requestID, &previous); err != nil || seen {
 		return previous, err
 	}
 	result := ResetResult{Applied: true}
@@ -108,5 +108,5 @@ func ResetTrafficTx(tx *gorm.DB, requestID string, userIDs []uint, now time.Time
 	if len(userIDs) == 1 {
 		owner = userIDs[0]
 	}
-	return result, record(tx, requestID, "reset_traffic", owner, result, now)
+	return result, Record(tx, requestID, "reset_traffic", owner, result, now)
 }

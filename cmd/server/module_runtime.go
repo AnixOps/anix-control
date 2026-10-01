@@ -75,7 +75,13 @@ func (rt *serverRuntime) startModuleRuntime(cfg *config.Config, hosts *pluginhos
 	if err != nil {
 		return fmt.Errorf("module runtime kernel identity: %w", err)
 	}
-	server := &moduleruntime.Listener{TLS: source, Cluster: cluster, PKI: authority, Bridge: bridge, KernelIdentity: identity}
+	subscribers, err := identitybridge.NewKernelSubscriber(cfg)
+	if err != nil {
+		return err
+	}
+	server := &moduleruntime.Listener{
+		TLS: source, Cluster: cluster, PKI: authority, Bridge: bridge, KernelIdentity: identity, KernelSubscriber: subscribers,
+	}
 	rt.workers.Go("module listener", func(ctx context.Context) {
 		if err := server.Serve(ctx, listener); err != nil && !errors.Is(err, net.ErrClosed) {
 			rt.fatal.Report(fmt.Errorf("module listener: %w", err))

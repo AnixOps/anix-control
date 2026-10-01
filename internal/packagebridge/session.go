@@ -16,6 +16,7 @@ import (
 	"time"
 
 	kernelidentityv1 "github.com/AnixOps/anix-control/sdk/api/kernelidentity/v1"
+	kernelsubscriberv1 "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1"
 	packagebridgev1 "github.com/AnixOps/anix-control/sdk/api/packagebridge/v1"
 	"github.com/AnixOps/anix-control/v4/internal/panicrecovery"
 	"google.golang.org/grpc"
@@ -61,6 +62,9 @@ type SessionOptions struct {
 	// KernelIdentity, when set, serves the KernelIdentity contract on the
 	// session; the provided server authorizes the host on every call.
 	KernelIdentity KernelIdentityProvider
+	// KernelSubscriber, when set, serves the KernelSubscriber contract on
+	// the session, authorized per capability on every call.
+	KernelSubscriber KernelSubscriberProvider
 }
 
 func (o SessionOptions) responseLimit() int64 {
@@ -433,6 +437,9 @@ func NewSessionWithOptions(identity HostIdentity, handler *Allowlist, options Se
 	packagebridgev1.RegisterKernelPackageBridgeServer(session.server, session)
 	if options.KernelIdentity != nil {
 		kernelidentityv1.RegisterKernelIdentityServer(session.server, options.KernelIdentity(identity))
+	}
+	if options.KernelSubscriber != nil {
+		kernelsubscriberv1.RegisterKernelSubscriberServer(session.server, options.KernelSubscriber(identity))
 	}
 	server, listener := session.server, session.listener
 	go func() { _ = server.Serve(listener) }()
