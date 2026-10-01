@@ -16,8 +16,11 @@ from pathlib import Path
 
 REPO_ROOT = Path(__file__).resolve().parents[2]
 
-# Kernel workers that stay in the kernel.
+# Kernel workers that stay in the kernel. The order payment reconciler
+# completes orders through the kernel's own plan grant (v2_user), which no
+# package writes (docs/architecture/order-service.md).
 KERNEL_WORKERS = frozenset({
+    "NewOrderPaymentReconciler",
     "NewTopologyDeploymentExecutor",
 })
 

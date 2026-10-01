@@ -740,6 +740,23 @@
   server in process. It proves byte parity, the same memberships, request
   ledger and change log on SQLite and PostgreSQL (173 cases each). 147 of
   292 routes are now `native-flagged`.
+- **A paid payment no longer leaves its order pending.** The payment module
+  records a paid callback, then asks `KernelOrder` to complete the order. If
+  that second step failed and the provider never delivered the callback
+  again, the payment stayed paid and the order pending until an
+  administrator stepped in. A kernel worker now runs the same step
+  (`CompleteOrderPaymentTx`, request id `payment:<trade_no>`) for such
+  records (`docs/architecture/order-service.md`).
+  - It runs at start and every five minutes in every Control process. It
+    reads paid records whose order is pending and which have no outcome yet,
+    paid more than two minutes ago (so it does not race the live callback)
+    and within the request ledger's 90 days, in batches of 100 and at most
+    10 batches a run.
+  - The checks are the callback's: the record's user, a pending order, the
+    amount covering its total. A record that fails them is refused, logged
+    and recorded, and the order is left unchanged; it is not read again.
+  - A payment applies once: a second run, a callback's repeat, or two
+    processes at once change nothing more. See `docs/UPGRADE.md`.
 
 ## 4.1.0-rc.1 - 2026-10-01
 

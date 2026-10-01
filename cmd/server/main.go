@@ -567,6 +567,7 @@ func (rt *serverRuntime) start(cfg *config.Config, intervals pluginPollIntervals
 		return err
 	}
 	rt.startSubscriberChangePruner()
+	rt.startOrderPaymentReconciler()
 	pluginhost.SetDefaultManager(nil)
 	if cfg.Plugins.ControlExecutionEnabled {
 		hosts, err := newControlPluginHostManager(cfg)

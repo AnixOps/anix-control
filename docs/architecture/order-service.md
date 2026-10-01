@@ -128,17 +128,65 @@ then answers as the kernel answers a processed payment.
 | Failure | State left | What follows |
 |---|---|---|
 | before step 1 commits | nothing written | the provider delivers again |
-| crash after step 1 | record paid, order pending | no answer was sent: the provider delivers again; the repeat finds the record paid and runs step 2 |
-| step 2 fails (kernel unreachable, `Unavailable`, `Internal`) | record paid, order pending | the handler fails, the gateway answers 502, the provider delivers again |
+| crash after step 1 | record paid, order pending | no answer was sent: the provider delivers again; the repeat finds the record paid and runs step 2. If it never does, the reconciler runs step 2 |
+| step 2 fails (kernel unreachable, `Unavailable`, `Internal`) | record paid, order pending | the handler fails, the gateway answers 502, the provider delivers again. If it never does, the reconciler runs step 2 |
 | step 2 refuses | record paid, order unchanged | final: the callback answers as the kernel's does |
 | the grant fails inside step 2 | order paid | outcome `PAID`, logged, as before |
 
 EPay delivers again until it reads `success`, Stripe and PayPal after any
-non-2xx answer. A provider that never delivers again leaves a paid record
-and a pending order; an administrator's "mark paid" completes the order
-(`order:<id>`). The kernel's legacy callbacks also run step 2 on a repeat of
-a paid payment (`PaymentGatewayService.FinishPaidOrder`), so a route can
-switch between legacy and native at any time, even between the two steps.
+non-2xx answer. A provider that never delivers again would leave a paid
+record and a pending order; the kernel's reconciler (below) runs step 2 for
+it. The kernel's legacy callbacks also run step 2 on a repeat of a paid
+payment (`PaymentGatewayService.FinishPaidOrder`), so a route can switch
+between legacy and native at any time, even between the two steps.
+
+## The reconciler
+
+`service.OrderPaymentReconciler` is a kernel worker that runs step 2 for a
+paid record whose callback did not. Every Control process starts it with
+the other kernel workers (`cmd/server/order_payments.go`); it runs once at
+start, then every five minutes, and stops with the process. It stays in the
+kernel for the reason step 2 does: completing an order grants its plan,
+which only the kernel writes; the plugin-only worker gate lists it among
+the kernel workers.
+
+A run reads, in batches of 100 by record id and at most 10 batches, the
+records that:
+
+- are paid (`v2_payment_record.status = 1`);
+- name an order that exists and is pending (`v2_order.status = 0`);
+- were paid more than two minutes ago (the grace: the live callback runs
+  step 2 right after step 1 commits, and the reconciler stays out of it);
+- were paid within the request ledger's 90 days;
+- have no row under `payment:<trade_no>` in the request ledger.
+
+Each record is applied in its own transaction with
+`CompleteOrderPaymentTx(trade_no, order_id)`, the function step 2 calls: the
+same request id, row locks and checks (the record's user, a pending order,
+the amount covering its total), the same outcomes and the same ledger rows.
+A larger backlog continues on the next run.
+
+| Record | Outcome |
+|---|---|
+| pays its pending order | `COMPLETED` (order paid and completed, plan granted with `order:<id>`), or `PAID` if the grant fails, as for a callback |
+| fails the checks | `REFUSED`: the reason is recorded and logged, the order is left unchanged, and the record is not read again |
+| applied by a callback, or by another process, while the run read it | `applied: false`; nothing changes |
+| paid within the grace, more than 90 days ago, or with an outcome already | not read |
+
+- **Idempotent.** The reconciler writes no payment record and decides
+  nothing itself. The ledger row makes each trade number apply once, so a
+  second run, a callback's repeat afterwards, or two processes at once
+  change nothing more. Both lock the record, then the order, so two
+  processes do not deadlock; the second reads the first's outcome.
+- **90 days.** A refusal's ledger row lives 90 days. A record paid earlier
+  than that is not read, so a refusal is never re-run after its row is
+  pruned, and records from before the reconciler older than that stay for
+  an administrator.
+- **Failures.** A record whose transaction fails (a database error) records
+  nothing and is read again on the next run.
+- **Logs.** A line per completed order and per failure, and a summary per
+  run that read a record; `CompleteOrderPaymentTx` logs refusals and failed
+  grants.
 
 ## The callbacks in the payment module
 
@@ -189,10 +237,11 @@ shows the repeat completing the order once.
 - A repeat of a paid payment re-applies it to its order, which changes
   nothing unless a failure between the module's steps left the order
   pending.
+- The reconciler completes, two minutes after its payment, an order a paid
+  record left pending, and records a refusal for a record that does not pay
+  its pending order, including records written before this change.
 
 ## Not in scope
 
-- A sweeper that completes orders left pending when a provider never
-  delivers again.
 - Affiliate commission and notifications on completion (none, as before).
 - The order module serving the contract.
