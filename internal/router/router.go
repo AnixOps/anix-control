@@ -6,6 +6,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/handler"
 	"github.com/AnixOps/anix-control/v4/internal/health"
+	"github.com/AnixOps/anix-control/v4/internal/kernelnodeops"
 	"github.com/AnixOps/anix-control/v4/internal/middleware"
 	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
 	"github.com/gin-gonic/gin"
@@ -557,6 +558,9 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 
 		// 节点自动注册 API (公开)
 		agentHandler := handler.NewAgentHandler()
+		// The KernelNodeOps session RPCs and the agent.diagnostic executor
+		// read this handler's WebSocket agents.
+		kernelnodeops.UseWebSocketAgents(agentHandler.WebSockets())
 
 		nodePublic := v2.Group("/node")
 		nodePublic.Use(publicLimiter.Middleware())

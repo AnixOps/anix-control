@@ -1,6 +1,7 @@
 package handler
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -13,8 +14,11 @@ import (
 	"sync"
 	"time"
 
+	"github.com/AnixOps/anix-control/sdk/agentcontrol"
+	"github.com/AnixOps/anix-control/v4/internal/agentstreams"
 	"github.com/AnixOps/anix-control/v4/internal/agentws"
 	"github.com/AnixOps/anix-control/v4/internal/database"
+	"github.com/AnixOps/anix-control/v4/internal/kernelnodeops"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v4/internal/service"
@@ -26,7 +30,7 @@ import (
 
 // agentDiagnosticTaskType is the type of every task an administrator sends
 // to an agent: a whitelisted diagnostic action (ValidateAgentDiagnosticTask).
-const agentDiagnosticTaskType = "diagnostic"
+const agentDiagnosticTaskType = kernelnodeops.AgentDiagnosticTaskType
 
 var (
 	agentWSReadTimeout  = 60 * time.Second
@@ -847,13 +851,7 @@ func (h *AgentHandler) pullBridgeTasks(nodeID uint) []AgentTask {
 }
 
 // AgentTask 浠诲姟瀹氫箟
-type AgentTask struct {
-	ID      string         `json:"id"`
-	Type    string         `json:"type"`
-	Action  string         `json:"action"`
-	Params  map[string]any `json:"params"`
-	Timeout int            `json:"timeout"`
-}
+type AgentTask = agentstreams.DiagnosticTask
 
 // AgentReportResult godoc
 // @Summary 涓婃姤浠诲姟缁撴灉
@@ -1126,80 +1124,149 @@ func (h *AgentHandler) CreateTask(c *gin.Context) {
 		return
 	}
 
-	// 只接受白名单诊断动作，params 会被归一化（多余字段丢弃，数值裁剪）。
-	normalizedParams, err := service.ValidateAgentDiagnosticTask(req.Action, req.Params)
+	// The task is kernelnodeops.RunAgentDiagnostic, the function the
+	// agent.diagnostic executor runs: only whitelisted actions, params
+	// normalized, the row written before the dispatch. This route carries
+	// it on the node's WebSocket, with the legacy task message as the
+	// fallback.
+	run, err := kernelnodeops.RunAgentDiagnostic(c.Request.Context(), h.db, kernelnodeops.AgentDiagnosticRequest{
+		NodeID: req.NodeID, Action: req.Action, Params: req.Params, Timeout: req.Timeout,
+	}, &webSocketDiagnosticTransport{handler: h, connection: agentConn})
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	task := AgentTask{
-		ID:      generateTaskID(),
-		Type:    req.Type,
-		Action:  req.Action,
-		Params:  normalizedParams,
-		Timeout: req.Timeout,
-	}
-
-	if h.diagnosticSvc == nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "diagnostic task service unavailable"})
-		return
-	}
-	taskRow, err := h.diagnosticSvc.CreateTask(task.ID, req.NodeID, req.Action, normalizedParams)
-	if err != nil {
+		var refused *kernelnodeops.DiagnosticValidationError
+		if errors.As(err, &refused) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
-
-	messageID, ack, dispatchErr := h.dispatchWithAckRetry(agentConn, "task.assign", map[string]any{
-		"task": task,
-	}, true)
-	if dispatchErr != nil {
-		if fallbackErr := h.sendLegacyTask(agentConn, task); fallbackErr != nil {
-			_ = h.diagnosticSvc.MarkStatus(task.ID, model.AgentDiagnosticTaskStatusFailed)
+	dispatch := run.Dispatch
+	if dispatch.DispatchError != nil {
+		if !dispatch.LegacyFallback {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error":        "send failed",
-				"task_id":      task.ID,
-				"message_id":   messageID,
-				"dispatch_err": dispatchErr.Error(),
-				"data":         taskRow,
+				"task_id":      run.Task.ID,
+				"message_id":   dispatch.MessageID,
+				"dispatch_err": dispatch.DispatchError.Error(),
+				"data":         run.Row,
 			})
 			return
 		}
 
-		_ = h.diagnosticSvc.MarkStatus(task.ID, model.AgentDiagnosticTaskStatusDispatched)
-		taskRow, _ = h.diagnosticSvc.GetTask(task.ID)
-
 		panelSuccess(c, gin.H{
 			"message":      "task sent with legacy fallback",
-			"task_id":      task.ID,
+			"task_id":      run.Task.ID,
 			"node_id":      req.NodeID,
 			"success":      true,
 			"output":       "task dispatched (legacy fallback)",
 			"duration_ms":  int64(0),
-			"message_id":   messageID,
+			"message_id":   dispatch.MessageID,
 			"ack_received": false,
-			"dispatch_err": dispatchErr.Error(),
-			"data":         taskRow,
+			"dispatch_err": dispatch.DispatchError.Error(),
+			"data":         run.Row,
 		})
 		return
 	}
 
-	_ = h.diagnosticSvc.MarkStatus(task.ID, model.AgentDiagnosticTaskStatusDispatched)
-	taskRow, _ = h.diagnosticSvc.GetTask(task.ID)
-
 	panelSuccess(c, gin.H{
 		"message":      "task sent",
-		"task_id":      task.ID,
+		"task_id":      run.Task.ID,
 		"node_id":      req.NodeID,
 		"success":      true,
 		"output":       "task dispatched",
 		"duration_ms":  int64(0),
-		"message_id":   messageID,
+		"message_id":   dispatch.MessageID,
 		"ack_received": true,
-		"ack":          ack,
-		"data":         taskRow,
+		"ack":          dispatch.RawAck,
+		"data":         run.Row,
 	})
+}
+
+// webSocketDiagnosticTransport carries a diagnostic task on a node's
+// WebSocket: task.assign with an acknowledgement, then the legacy task
+// message when the acknowledgement fails.
+type webSocketDiagnosticTransport struct {
+	handler    *AgentHandler
+	connection *AgentConnection
+}
+
+func (t *webSocketDiagnosticTransport) DispatchDiagnostic(_ context.Context, task agentstreams.DiagnosticTask) agentstreams.DiagnosticDispatch {
+	messageID, ack, err := t.handler.dispatchWithAckRetry(t.connection, "task.assign", map[string]any{"task": task}, true)
+	dispatch := agentstreams.DiagnosticDispatch{MessageID: messageID}
+	if err != nil {
+		dispatch.DispatchError = err
+		if ack != nil {
+			dispatch.RawAck = ack
+			dispatch.Ack = agentstreams.Ack{Accepted: ack.Success, Error: ack.Error, AcceptedAt: time.Unix(ack.Timestamp, 0)}
+		}
+		if fallbackErr := t.handler.sendLegacyTask(t.connection, task); fallbackErr != nil {
+			dispatch.FallbackError = fallbackErr
+			return dispatch
+		}
+		dispatch.LegacyFallback = true
+		return dispatch
+	}
+	dispatch.AckReceived = true
+	dispatch.RawAck = ack
+	dispatch.Ack = agentstreams.Ack{Accepted: true, AcceptedAt: time.Unix(ack.Timestamp, 0)}
+	return dispatch
+}
+
+// WebSockets is this handler's connected agents as the KernelNodeOps
+// session RPCs and the agent.diagnostic executor read them
+// (agentstreams.WebSockets).
+func (h *AgentHandler) WebSockets() agentstreams.WebSockets {
+	return agentWebSockets{handler: h}
+}
+
+type agentWebSockets struct {
+	handler *AgentHandler
+}
+
+func (w agentWebSockets) Sessions() []agentstreams.Session {
+	var sessions []agentstreams.Session
+	w.handler.connections.Range(func(_, value any) bool {
+		conn, ok := value.(*AgentConnection)
+		if !ok {
+			return true
+		}
+		kind := agentcontrol.NodeKindProxy
+		if conn.IsForwardNode {
+			kind = agentcontrol.NodeKindForward
+		}
+		sessions = append(sessions, agentstreams.Session{
+			Node: agentcontrol.AgentNode{Kind: kind, ID: uint32(conn.NodeID)}, Transport: agentstreams.TransportWebSocket, // #nosec G115 -- node ids are 32-bit.
+			AgentVersion: conn.Version, Capabilities: append([]string(nil), conn.Capabilities...), LastSeen: conn.LastSeen,
+			System: conn.SystemInfo, Identity: agentstreams.IdentityAPIKey,
+		})
+		return true
+	})
+	return sessions
+}
+
+func (w agentWebSockets) Monitor(nodeID uint) (map[string]any, time.Time, bool) {
+	value, ok := w.handler.monitorData.Load(nodeID)
+	if !ok {
+		return nil, time.Time{}, false
+	}
+	snapshot, ok := value.(AgentMonitorSnapshot)
+	if !ok {
+		return nil, time.Time{}, false
+	}
+	return snapshot.System, snapshot.UpdatedAt, true
+}
+
+func (w agentWebSockets) DiagnosticTransport(nodeID uint) (agentstreams.DiagnosticTransport, bool) {
+	value, ok := w.handler.connections.Load(nodeID)
+	if !ok {
+		return nil, false
+	}
+	conn, ok := value.(*AgentConnection)
+	if !ok || conn.WsConn == nil {
+		return nil, false
+	}
+	return &webSocketDiagnosticTransport{handler: w.handler, connection: conn}, true
 }
 
 // CreateTaskRequest 鍒涘缓浠诲姟璇锋眰
@@ -1467,10 +1534,6 @@ type ForwardRuleForAgent struct {
 }
 
 // ========== 杈呭姪鍑芥暟 ==========
-
-func generateTaskID() string {
-	return fmt.Sprintf("task-%d", time.Now().UnixNano())
-}
 
 func generateMessageID() string {
 	return fmt.Sprintf("msg-%d", time.Now().UnixNano())

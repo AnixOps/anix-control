@@ -10,8 +10,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
+	"github.com/AnixOps/anix-control/v4/internal/agentstreams"
 	controlgrpc "github.com/AnixOps/anix-control/v4/internal/grpc"
+	"github.com/AnixOps/anix-control/v4/internal/kernelnodeops"
 	"github.com/gin-gonic/gin"
 )
 
@@ -43,6 +46,64 @@ type agentControlOperationRequest struct {
 	TimeoutSecond int    `json:"timeout_seconds"`
 }
 
+// proxyNodeStreams is the handler's Agent Control manager as the
+// KernelNodeOps functions read it (agentstreams.Streams): the proxy nodes'
+// streams, which is all this handler reaches. The manager's errors are
+// shown as they are, so the routes' answers do not change.
+type proxyNodeStreams struct {
+	control nodeAgentControl
+}
+
+func (h *NodeHandler) streams() agentstreams.Streams {
+	if h.agentControl == nil {
+		return nil
+	}
+	if streams, ok := h.agentControl.(agentstreams.Streams); ok {
+		return streams
+	}
+	return proxyNodeStreams{control: h.agentControl}
+}
+
+func (s proxyNodeStreams) Session(node agentcontrol.AgentNode) (agentstreams.Session, bool) {
+	if node.Kind != agentcontrol.NodeKindProxy {
+		return agentstreams.Session{}, false
+	}
+	snapshot, ok := s.control.Connection(node.ID)
+	if !ok {
+		return agentstreams.Session{}, false
+	}
+	return agentstreams.Session{
+		Node: node, Transport: agentstreams.TransportControlStream, SessionID: snapshot.SessionID, AgentVersion: snapshot.AgentVersion,
+		InstanceID: snapshot.InstanceID, Capabilities: snapshot.Capabilities, ConnectedAt: snapshot.ConnectedAt, LastSeen: snapshot.LastSeen,
+		DesiredRevision: snapshot.DesiredRev, ObservedRevision: snapshot.ObservedRev, Identity: agentstreams.IdentityAPIKey,
+	}, true
+}
+
+func (s proxyNodeStreams) Sessions() []agentstreams.Session { return nil }
+
+func (s proxyNodeStreams) Observed(node agentcontrol.AgentNode) (*agentv1pb.ObservedState, bool) {
+	if node.Kind != agentcontrol.NodeKindProxy {
+		return nil, false
+	}
+	return s.control.ObservedState(node.ID)
+}
+
+func (s proxyNodeStreams) Dispatch(ctx context.Context, node agentcontrol.AgentNode, operation *agentv1pb.DesiredOperation) (*agentv1pb.OperationAck, error) {
+	if node.Kind != agentcontrol.NodeKindProxy {
+		return nil, fmt.Errorf("agent node %s is not connected", node)
+	}
+	return s.control.DispatchOperation(ctx, node.ID, operation)
+}
+
+func (s proxyNodeStreams) Cancel(context.Context, agentcontrol.AgentNode, string, uint64) error {
+	return errors.New("the legacy routes do not cancel operations")
+}
+
+func (s proxyNodeStreams) OnObserved(agentstreams.ObservedHandler) {}
+
+// dispatchAgentControlOperation sends one Agent Control operation to a
+// proxy node through kernelnodeops.DispatchAgentOperation, the function
+// the agent.operation executor runs.
 func (h *NodeHandler) dispatchAgentControlOperation(
 	ctx context.Context,
 	nodeID uint32,
@@ -51,49 +112,28 @@ func (h *NodeHandler) dispatchAgentControlOperation(
 	payload any,
 	timeout time.Duration,
 ) (*agentv1pb.OperationAck, *agentv1pb.DesiredOperation, error) {
-	if h.agentControl == nil {
+	streams := h.streams()
+	if streams == nil {
 		return nil, nil, errors.New("agent control manager is unavailable")
 	}
-	kind = strings.TrimSpace(kind)
-	if _, allowed := allowedAgentControlOperations[kind]; !allowed {
-		return nil, nil, fmt.Errorf("unsupported Agent Control operation %q", kind)
-	}
-	if timeout <= 0 {
-		timeout = defaultAgentControlOperationTimeout
-	}
-	if timeout > maxAgentControlOperationTimeout {
-		timeout = maxAgentControlOperationTimeout
-	}
-
 	var payloadJSON []byte
-	var err error
 	if payload != nil {
-		payloadJSON, err = json.Marshal(payload)
+		encoded, err := json.Marshal(payload)
 		if err != nil {
 			return nil, nil, fmt.Errorf("encode operation payload: %w", err)
 		}
+		payloadJSON = encoded
 	}
-
-	operationID = strings.TrimSpace(operationID)
-	if operationID == "" {
-		operationID = generateTaskID()
+	operation, err := kernelnodeops.DispatchAgentOperation(ctx, streams, agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: nodeID},
+		kernelnodeops.AgentOperationRequest{OperationID: operationID, Kind: kind, PayloadJSON: payloadJSON, Timeout: timeout})
+	if operation == nil {
+		return nil, nil, err
 	}
-	operation := &agentv1pb.DesiredOperation{
-		OperationId:    operationID,
-		Kind:           kind,
-		PayloadJson:    payloadJSON,
-		DeadlineUnixMs: time.Now().Add(timeout).UnixMilli(),
-	}
-	dispatchCtx, cancel := context.WithTimeout(ctx, timeout)
-	defer cancel()
-	ack, err := h.agentControl.DispatchOperation(dispatchCtx, nodeID, operation)
+	operation.Release()
 	if err != nil {
-		return nil, operation, err
+		return nil, operation.Desired, err
 	}
-	if ack != nil && ack.Revision > 0 {
-		operation.Revision = ack.Revision
-	}
-	return ack, operation, nil
+	return operation.Ack, operation.Desired, nil
 }
 
 // GetAgentControlStatus returns the live v3 control-stream state for one node.
