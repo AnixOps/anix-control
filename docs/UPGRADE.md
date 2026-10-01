@@ -483,21 +483,21 @@ is left out, as before. The fields that disappear:
   `half_year_price`, `year_price`, `two_year_price`, `three_year_price`,
   `onetime_price`), `created_at` and `updated_at`.
 
-The `order` package serves these routes natively once their mode is
-switched (`native-flagged`); it reads the plan name from the new view
-`kapi_plan_name_v1` and the buyer's e-mail from `kapi_user_directory_v1`, so
-its signed release declares `kernel.view:kapi_plan_name_v1`. Install that
-release before switching the routes.
-
 Read them where they belong: a user's own account from
 `GET /api/v2/user/profile` and `GET /api/v2/user/subscription`, a buyer from
 `GET /api/v2/admin/users/:id`, and a plan from `GET /api/v2/user/plan` or
 `GET /api/v2/admin/plans/:id`.
 
-Two more changes come with it. The administrator's `email` filter works
-again: it always failed with an ambiguous `created_at`. The user's
+Two more changes come with it. The administrator's `email` filter now
+works: it always failed with an ambiguous `created_at`. The user's
 `page_size` is clamped as the administrator's (1 to 100, default 20 for 0 or
 less); a negative size used to list every order and 0 none.
+
+The `order` package can serve these routes natively (`native-flagged`). It
+reads the plan name from the new view `kapi_plan_name_v1` and the buyer's
+e-mail from `kapi_user_directory_v1`, so its signed release declares
+`kernel.view:kapi_plan_name_v1`: install that release before switching the
+routes to `native`.
 
 ### Audit Request Bodies Written Before The Redaction Fix
 

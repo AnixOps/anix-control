@@ -168,7 +168,6 @@
   - A user's order detail looks the order up by id and owner, and a request
     without a user names no one; another user's order stays "not found".
 
-### Added
 
 - **Order module: native order lists and details.** `packages/order` now
   serves all 13 of its routes natively (148 of 292 v2 routes are
