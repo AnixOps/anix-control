@@ -11,7 +11,7 @@ PROTO_DIR="api/agent/v1"
 # the file was compiled as api/grpc/agent/v1/agent.proto. Agents in the field
 # run that SDK, so protoc maps the old virtual path onto the new directory:
 # the registered file descriptor keeps its name and differs from v1.1.0 only
-# in go_package (see v1/agent_descriptor_test.go).
+# in go_package and in additions (see v1/agent_descriptor_test.go).
 PROTO_VIRTUAL_DIR="api/grpc/agent/v1"
 PROTO_FILE="${PROTO_VIRTUAL_DIR}/agent.proto"
 

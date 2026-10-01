@@ -742,6 +742,14 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 			}
 		case *agentv1pb.AgentToControl_Hello:
 			return status.Error(codes.InvalidArgument, "hello may only be sent once")
+		case *agentv1pb.AgentToControl_ConfigStatus:
+			return unnegotiatedPayload("config_status", agentcontrol.CapabilityConfig)
+		case *agentv1pb.AgentToControl_Traffic:
+			return unnegotiatedPayload("traffic", agentcontrol.CapabilityReports)
+		case *agentv1pb.AgentToControl_Logs:
+			return unnegotiatedPayload("logs", agentcontrol.CapabilityReports)
+		case *agentv1pb.AgentToControl_Status:
+			return unnegotiatedPayload("status", agentcontrol.CapabilityReports)
 		default:
 			return status.Error(codes.InvalidArgument, "control message payload is required")
 		}
@@ -853,6 +861,18 @@ func authenticatedStreamNodeID(ctx context.Context) (uint32, error) {
 		return 0, status.Error(codes.PermissionDenied, "node is disabled")
 	}
 	return uint32(nodeID), nil
+}
+
+// unnegotiatedPayload rejects a data-plane payload (PROTOCOL.md, "Data
+// plane"). An Agent sends one only when HelloAck.server_capabilities lists its
+// capability, and this server lists none yet. The answer is InvalidArgument,
+// ending the stream, as from a Control built before these payloads existed:
+// there they arrive as an unknown payload ("control message payload is
+// required").
+func unnegotiatedPayload(payload, capability string) error {
+	return status.Errorf(codes.InvalidArgument,
+		"control message payload %s requires the %s.%s server capability, which this server does not advertise",
+		payload, capability, agentcontrol.CapabilityVersionV1)
 }
 
 func cloneCapabilities(capabilities []*agentv1pb.Capability) []*agentv1pb.Capability {

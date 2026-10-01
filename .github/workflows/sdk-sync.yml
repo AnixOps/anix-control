@@ -15,8 +15,8 @@ permissions:
 # github.com/AnixOps/anix-control/sdk. During the transition anix-agent may
 # still build against its own SDK, github.com/AnixOps/anix-agent/sdk (frozen at
 # v1.1.0). The job reads anix-agent's go.mod and checks whichever applies:
-# - requires anix-agent/sdk: its agent descriptor must stay identical to
-#   Control's except for go_package;
+# - requires anix-agent/sdk: Control's agent descriptor must contain all of
+#   its descriptor unchanged, apart from go_package (Control only adds);
 # - requires anix-control/sdk: anix-agent builds and tests against this
 #   checkout's ./anix-control/sdk through a go.work replace.
 jobs:
@@ -79,7 +79,7 @@ jobs:
           fi
           cat go.work
 
-      - name: Verify the Agent SDK contract matches Control's
+      - name: Verify Control's contract extends the Agent SDK's
         if: steps.contract.outputs.agent_sdk_version != ''
         shell: bash
         run: |
@@ -127,8 +127,8 @@ jobs:
           (cd "${dump_dir}" && GOWORK=off go mod tidy && GOWORK=off go run . "${descriptor}")
           cd anix-control/sdk
           ANIXOPS_AGENT_SDK_DESCRIPTOR="${descriptor}" GOWORK=off \
-            go test ./api/agent/v1 -run '^TestDescriptorMatchesExternalAgentSDK$' -count=1 -v | tee "${RUNNER_TEMP}/descriptor-test.log"
-          grep -q -- '--- PASS: TestDescriptorMatchesExternalAgentSDK' "${RUNNER_TEMP}/descriptor-test.log"
+            go test ./api/agent/v1 -run '^TestDescriptorExtendsExternalAgentSDK$' -count=1 -v | tee "${RUNNER_TEMP}/descriptor-test.log"
+          grep -q -- '--- PASS: TestDescriptorExtendsExternalAgentSDK' "${RUNNER_TEMP}/descriptor-test.log"
 
       - name: Test Agent SDK
         if: steps.contract.outputs.agent_sdk_version != ''

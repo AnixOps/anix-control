@@ -140,12 +140,18 @@ func (x *Capability) GetAttributes() map[string]string {
 }
 
 type Hello struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Protocol      string                 `protobuf:"bytes,1,opt,name=protocol,proto3" json:"protocol,omitempty"`
-	AgentVersion  string                 `protobuf:"bytes,2,opt,name=agent_version,json=agentVersion,proto3" json:"agent_version,omitempty"`
-	InstanceId    string                 `protobuf:"bytes,3,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
-	Capabilities  []*Capability          `protobuf:"bytes,4,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
-	Labels        map[string]string      `protobuf:"bytes,5,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	state        protoimpl.MessageState `protogen:"open.v1"`
+	Protocol     string                 `protobuf:"bytes,1,opt,name=protocol,proto3" json:"protocol,omitempty"`
+	AgentVersion string                 `protobuf:"bytes,2,opt,name=agent_version,json=agentVersion,proto3" json:"agent_version,omitempty"`
+	InstanceId   string                 `protobuf:"bytes,3,opt,name=instance_id,json=instanceId,proto3" json:"instance_id,omitempty"`
+	Capabilities []*Capability          `protobuf:"bytes,4,rep,name=capabilities,proto3" json:"capabilities,omitempty"`
+	Labels       map[string]string      `protobuf:"bytes,5,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	// config_revision is the revision of the last ConfigSnapshot the Agent
+	// applied, 0 for none. Control reads it only when config.v1 is negotiated.
+	ConfigRevision uint64 `protobuf:"varint,6,opt,name=config_revision,json=configRevision,proto3" json:"config_revision,omitempty"`
+	// users_cursor is the cursor of the last UserDelta the Agent applied, 0 for
+	// none. Control reads it only when users.v1 is negotiated.
+	UsersCursor   uint64 `protobuf:"varint,7,opt,name=users_cursor,json=usersCursor,proto3" json:"users_cursor,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -215,14 +221,34 @@ func (x *Hello) GetLabels() map[string]string {
 	return nil
 }
 
+func (x *Hello) GetConfigRevision() uint64 {
+	if x != nil {
+		return x.ConfigRevision
+	}
+	return 0
+}
+
+func (x *Hello) GetUsersCursor() uint64 {
+	if x != nil {
+		return x.UsersCursor
+	}
+	return 0
+}
+
 type HelloAck struct {
 	state                    protoimpl.MessageState `protogen:"open.v1"`
 	SessionId                string                 `protobuf:"bytes,1,opt,name=session_id,json=sessionId,proto3" json:"session_id,omitempty"`
 	ServerTimeUnixMs         int64                  `protobuf:"varint,2,opt,name=server_time_unix_ms,json=serverTimeUnixMs,proto3" json:"server_time_unix_ms,omitempty"`
 	HeartbeatIntervalSeconds uint32                 `protobuf:"varint,3,opt,name=heartbeat_interval_seconds,json=heartbeatIntervalSeconds,proto3" json:"heartbeat_interval_seconds,omitempty"`
 	DesiredRevision          uint64                 `protobuf:"varint,4,opt,name=desired_revision,json=desiredRevision,proto3" json:"desired_revision,omitempty"`
-	unknownFields            protoimpl.UnknownFields
-	sizeCache                protoimpl.SizeCache
+	// server_capabilities lists the data-plane features this Control serves on
+	// the stream: config.v1, users.v1 and reports.v1 (Capability name "config",
+	// "users" or "reports", version "v1"). A feature is in use on a session only
+	// when Hello.capabilities lists it too. Empty from a Control that serves
+	// none; Agents built before this field ignore it.
+	ServerCapabilities []*Capability `protobuf:"bytes,5,rep,name=server_capabilities,json=serverCapabilities,proto3" json:"server_capabilities,omitempty"`
+	unknownFields      protoimpl.UnknownFields
+	sizeCache          protoimpl.SizeCache
 }
 
 func (x *HelloAck) Reset() {
@@ -281,6 +307,13 @@ func (x *HelloAck) GetDesiredRevision() uint64 {
 		return x.DesiredRevision
 	}
 	return 0
+}
+
+func (x *HelloAck) GetServerCapabilities() []*Capability {
+	if x != nil {
+		return x.ServerCapabilities
+	}
+	return nil
 }
 
 type Heartbeat struct {
@@ -854,6 +887,10 @@ type AgentToControl struct {
 	//	*AgentToControl_Heartbeat
 	//	*AgentToControl_OperationAck
 	//	*AgentToControl_ObservedState
+	//	*AgentToControl_ConfigStatus
+	//	*AgentToControl_Traffic
+	//	*AgentToControl_Logs
+	//	*AgentToControl_Status
 	Payload       isAgentToControl_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -960,6 +997,42 @@ func (x *AgentToControl) GetObservedState() *ObservedState {
 	return nil
 }
 
+func (x *AgentToControl) GetConfigStatus() *ConfigStatus {
+	if x != nil {
+		if x, ok := x.Payload.(*AgentToControl_ConfigStatus); ok {
+			return x.ConfigStatus
+		}
+	}
+	return nil
+}
+
+func (x *AgentToControl) GetTraffic() *TrafficReport {
+	if x != nil {
+		if x, ok := x.Payload.(*AgentToControl_Traffic); ok {
+			return x.Traffic
+		}
+	}
+	return nil
+}
+
+func (x *AgentToControl) GetLogs() *LogBatch {
+	if x != nil {
+		if x, ok := x.Payload.(*AgentToControl_Logs); ok {
+			return x.Logs
+		}
+	}
+	return nil
+}
+
+func (x *AgentToControl) GetStatus() *NodeStatus {
+	if x != nil {
+		if x, ok := x.Payload.(*AgentToControl_Status); ok {
+			return x.Status
+		}
+	}
+	return nil
+}
+
 type isAgentToControl_Payload interface {
 	isAgentToControl_Payload()
 }
@@ -980,6 +1053,25 @@ type AgentToControl_ObservedState struct {
 	ObservedState *ObservedState `protobuf:"bytes,13,opt,name=observed_state,json=observedState,proto3,oneof"`
 }
 
+type AgentToControl_ConfigStatus struct {
+	// Data plane. Sent only when the capability is negotiated (see
+	// HelloAck.server_capabilities): config_status with config.v1, the others
+	// with reports.v1.
+	ConfigStatus *ConfigStatus `protobuf:"bytes,14,opt,name=config_status,json=configStatus,proto3,oneof"`
+}
+
+type AgentToControl_Traffic struct {
+	Traffic *TrafficReport `protobuf:"bytes,15,opt,name=traffic,proto3,oneof"`
+}
+
+type AgentToControl_Logs struct {
+	Logs *LogBatch `protobuf:"bytes,16,opt,name=logs,proto3,oneof"`
+}
+
+type AgentToControl_Status struct {
+	Status *NodeStatus `protobuf:"bytes,17,opt,name=status,proto3,oneof"`
+}
+
 func (*AgentToControl_Hello) isAgentToControl_Payload() {}
 
 func (*AgentToControl_Heartbeat) isAgentToControl_Payload() {}
@@ -987,6 +1079,14 @@ func (*AgentToControl_Heartbeat) isAgentToControl_Payload() {}
 func (*AgentToControl_OperationAck) isAgentToControl_Payload() {}
 
 func (*AgentToControl_ObservedState) isAgentToControl_Payload() {}
+
+func (*AgentToControl_ConfigStatus) isAgentToControl_Payload() {}
+
+func (*AgentToControl_Traffic) isAgentToControl_Payload() {}
+
+func (*AgentToControl_Logs) isAgentToControl_Payload() {}
+
+func (*AgentToControl_Status) isAgentToControl_Payload() {}
 
 type ControlToAgent struct {
 	state        protoimpl.MessageState `protogen:"open.v1"`
@@ -999,6 +1099,9 @@ type ControlToAgent struct {
 	//	*ControlToAgent_HelloAck
 	//	*ControlToAgent_HeartbeatAck
 	//	*ControlToAgent_DesiredOperation
+	//	*ControlToAgent_Config
+	//	*ControlToAgent_Users
+	//	*ControlToAgent_ReportAck
 	Payload       isControlToAgent_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1096,6 +1199,33 @@ func (x *ControlToAgent) GetDesiredOperation() *DesiredOperation {
 	return nil
 }
 
+func (x *ControlToAgent) GetConfig() *ConfigSnapshot {
+	if x != nil {
+		if x, ok := x.Payload.(*ControlToAgent_Config); ok {
+			return x.Config
+		}
+	}
+	return nil
+}
+
+func (x *ControlToAgent) GetUsers() *UserDelta {
+	if x != nil {
+		if x, ok := x.Payload.(*ControlToAgent_Users); ok {
+			return x.Users
+		}
+	}
+	return nil
+}
+
+func (x *ControlToAgent) GetReportAck() *ReportAck {
+	if x != nil {
+		if x, ok := x.Payload.(*ControlToAgent_ReportAck); ok {
+			return x.ReportAck
+		}
+	}
+	return nil
+}
+
 type isControlToAgent_Payload interface {
 	isControlToAgent_Payload()
 }
@@ -1112,11 +1242,828 @@ type ControlToAgent_DesiredOperation struct {
 	DesiredOperation *DesiredOperation `protobuf:"bytes,12,opt,name=desired_operation,json=desiredOperation,proto3,oneof"`
 }
 
+type ControlToAgent_Config struct {
+	// Data plane. Sent only when the capability is negotiated (see
+	// HelloAck.server_capabilities): config with config.v1, users with
+	// users.v1, report_ack in answer to a report sent with reports.v1.
+	Config *ConfigSnapshot `protobuf:"bytes,13,opt,name=config,proto3,oneof"`
+}
+
+type ControlToAgent_Users struct {
+	Users *UserDelta `protobuf:"bytes,14,opt,name=users,proto3,oneof"`
+}
+
+type ControlToAgent_ReportAck struct {
+	ReportAck *ReportAck `protobuf:"bytes,15,opt,name=report_ack,json=reportAck,proto3,oneof"`
+}
+
 func (*ControlToAgent_HelloAck) isControlToAgent_Payload() {}
 
 func (*ControlToAgent_HeartbeatAck) isControlToAgent_Payload() {}
 
 func (*ControlToAgent_DesiredOperation) isControlToAgent_Payload() {}
+
+func (*ControlToAgent_Config) isControlToAgent_Payload() {}
+
+func (*ControlToAgent_Users) isControlToAgent_Payload() {}
+
+func (*ControlToAgent_ReportAck) isControlToAgent_Payload() {}
+
+// ConfigSnapshot is a node's whole configuration at one revision (config.v1).
+// Control sends it after HelloAck when Hello.config_revision is older, and
+// whenever the node's desired configuration changes. It replaces what the
+// Agent runs, so a lost or repeated snapshot is harmless.
+type ConfigSnapshot struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// config_revision increases with every change of the node's desired
+	// configuration.
+	ConfigRevision uint64 `protobuf:"varint,1,opt,name=config_revision,json=configRevision,proto3" json:"config_revision,omitempty"`
+	// config_hash is the lowercase hex SHA-256 of the exact config_json bytes.
+	ConfigHash string `protobuf:"bytes,2,opt,name=config_hash,json=configHash,proto3" json:"config_hash,omitempty"`
+	// format names the schema of config_json. An Agent that does not know it
+	// answers ConfigStatus with applied false.
+	Format        string `protobuf:"bytes,3,opt,name=format,proto3" json:"format,omitempty"`
+	ConfigJson    []byte `protobuf:"bytes,4,opt,name=config_json,json=configJson,proto3" json:"config_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ConfigSnapshot) Reset() {
+	*x = ConfigSnapshot{}
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[12]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConfigSnapshot) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConfigSnapshot) ProtoMessage() {}
+
+func (x *ConfigSnapshot) ProtoReflect() protoreflect.Message {
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[12]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConfigSnapshot.ProtoReflect.Descriptor instead.
+func (*ConfigSnapshot) Descriptor() ([]byte, []int) {
+	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{12}
+}
+
+func (x *ConfigSnapshot) GetConfigRevision() uint64 {
+	if x != nil {
+		return x.ConfigRevision
+	}
+	return 0
+}
+
+func (x *ConfigSnapshot) GetConfigHash() string {
+	if x != nil {
+		return x.ConfigHash
+	}
+	return ""
+}
+
+func (x *ConfigSnapshot) GetFormat() string {
+	if x != nil {
+		return x.Format
+	}
+	return ""
+}
+
+func (x *ConfigSnapshot) GetConfigJson() []byte {
+	if x != nil {
+		return x.ConfigJson
+	}
+	return nil
+}
+
+// ConfigStatus answers a ConfigSnapshot (config.v1): applied, or failed with
+// an error. A failure becomes the node's runtime health.
+type ConfigStatus struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	ConfigRevision uint64                 `protobuf:"varint,1,opt,name=config_revision,json=configRevision,proto3" json:"config_revision,omitempty"`
+	ConfigHash     string                 `protobuf:"bytes,2,opt,name=config_hash,json=configHash,proto3" json:"config_hash,omitempty"`
+	Applied        bool                   `protobuf:"varint,3,opt,name=applied,proto3" json:"applied,omitempty"`
+	Error          string                 `protobuf:"bytes,4,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *ConfigStatus) Reset() {
+	*x = ConfigStatus{}
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[13]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ConfigStatus) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ConfigStatus) ProtoMessage() {}
+
+func (x *ConfigStatus) ProtoReflect() protoreflect.Message {
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[13]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ConfigStatus.ProtoReflect.Descriptor instead.
+func (*ConfigStatus) Descriptor() ([]byte, []int) {
+	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{13}
+}
+
+func (x *ConfigStatus) GetConfigRevision() uint64 {
+	if x != nil {
+		return x.ConfigRevision
+	}
+	return 0
+}
+
+func (x *ConfigStatus) GetConfigHash() string {
+	if x != nil {
+		return x.ConfigHash
+	}
+	return ""
+}
+
+func (x *ConfigStatus) GetApplied() bool {
+	if x != nil {
+		return x.Applied
+	}
+	return false
+}
+
+func (x *ConfigStatus) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+// NodeUser is one user the node serves.
+type NodeUser struct {
+	state  protoimpl.MessageState `protogen:"open.v1"`
+	UserId uint64                 `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Uuid   string                 `protobuf:"bytes,2,opt,name=uuid,proto3" json:"uuid,omitempty"`
+	// speed_limit_mbps is 0 for no limit.
+	SpeedLimitMbps int64 `protobuf:"varint,3,opt,name=speed_limit_mbps,json=speedLimitMbps,proto3" json:"speed_limit_mbps,omitempty"`
+	// device_limit is 0 for no limit.
+	DeviceLimit int32 `protobuf:"varint,4,opt,name=device_limit,json=deviceLimit,proto3" json:"device_limit,omitempty"`
+	// extra_json holds protocol-specific fields, such as WireGuard peer keys.
+	ExtraJson     []byte `protobuf:"bytes,5,opt,name=extra_json,json=extraJson,proto3" json:"extra_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NodeUser) Reset() {
+	*x = NodeUser{}
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[14]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NodeUser) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NodeUser) ProtoMessage() {}
+
+func (x *NodeUser) ProtoReflect() protoreflect.Message {
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[14]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NodeUser.ProtoReflect.Descriptor instead.
+func (*NodeUser) Descriptor() ([]byte, []int) {
+	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{14}
+}
+
+func (x *NodeUser) GetUserId() uint64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+func (x *NodeUser) GetUuid() string {
+	if x != nil {
+		return x.Uuid
+	}
+	return ""
+}
+
+func (x *NodeUser) GetSpeedLimitMbps() int64 {
+	if x != nil {
+		return x.SpeedLimitMbps
+	}
+	return 0
+}
+
+func (x *NodeUser) GetDeviceLimit() int32 {
+	if x != nil {
+		return x.DeviceLimit
+	}
+	return 0
+}
+
+func (x *NodeUser) GetExtraJson() []byte {
+	if x != nil {
+		return x.ExtraJson
+	}
+	return nil
+}
+
+// UserDelta carries the node's user changes after the Agent's cursor
+// (users.v1). One delta may span several messages: the Agent applies them
+// together when the one with last_page arrives, then stores cursor and
+// resumes from it in Hello.users_cursor. With full, the pages together are
+// the node's whole user set and replace the Agent's; otherwise they are
+// changes, applied in order.
+type UserDelta struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	Cursor         uint64                 `protobuf:"varint,1,opt,name=cursor,proto3" json:"cursor,omitempty"`
+	Full           bool                   `protobuf:"varint,2,opt,name=full,proto3" json:"full,omitempty"`
+	LastPage       bool                   `protobuf:"varint,3,opt,name=last_page,json=lastPage,proto3" json:"last_page,omitempty"`
+	Upserts        []*NodeUser            `protobuf:"bytes,4,rep,name=upserts,proto3" json:"upserts,omitempty"`
+	RemovedUserIds []uint64               `protobuf:"varint,5,rep,packed,name=removed_user_ids,json=removedUserIds,proto3" json:"removed_user_ids,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *UserDelta) Reset() {
+	*x = UserDelta{}
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[15]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UserDelta) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UserDelta) ProtoMessage() {}
+
+func (x *UserDelta) ProtoReflect() protoreflect.Message {
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[15]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UserDelta.ProtoReflect.Descriptor instead.
+func (*UserDelta) Descriptor() ([]byte, []int) {
+	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{15}
+}
+
+func (x *UserDelta) GetCursor() uint64 {
+	if x != nil {
+		return x.Cursor
+	}
+	return 0
+}
+
+func (x *UserDelta) GetFull() bool {
+	if x != nil {
+		return x.Full
+	}
+	return false
+}
+
+func (x *UserDelta) GetLastPage() bool {
+	if x != nil {
+		return x.LastPage
+	}
+	return false
+}
+
+func (x *UserDelta) GetUpserts() []*NodeUser {
+	if x != nil {
+		return x.Upserts
+	}
+	return nil
+}
+
+func (x *UserDelta) GetRemovedUserIds() []uint64 {
+	if x != nil {
+		return x.RemovedUserIds
+	}
+	return nil
+}
+
+// TrafficReport carries per-user traffic and online IPs for one window
+// (reports.v1). Control records a batch_id once and answers ReportAck.
+type TrafficReport struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// batch_id is unique per node and kept when the batch is resent:
+	// node:<kind>-<id>:<boot id>:<sequence>.
+	BatchId         string         `protobuf:"bytes,1,opt,name=batch_id,json=batchId,proto3" json:"batch_id,omitempty"`
+	Users           []*UserTraffic `protobuf:"bytes,2,rep,name=users,proto3" json:"users,omitempty"`
+	Online          []*OnlineUser  `protobuf:"bytes,3,rep,name=online,proto3" json:"online,omitempty"`
+	WindowEndUnixMs int64          `protobuf:"varint,4,opt,name=window_end_unix_ms,json=windowEndUnixMs,proto3" json:"window_end_unix_ms,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *TrafficReport) Reset() {
+	*x = TrafficReport{}
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[16]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TrafficReport) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TrafficReport) ProtoMessage() {}
+
+func (x *TrafficReport) ProtoReflect() protoreflect.Message {
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[16]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TrafficReport.ProtoReflect.Descriptor instead.
+func (*TrafficReport) Descriptor() ([]byte, []int) {
+	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{16}
+}
+
+func (x *TrafficReport) GetBatchId() string {
+	if x != nil {
+		return x.BatchId
+	}
+	return ""
+}
+
+func (x *TrafficReport) GetUsers() []*UserTraffic {
+	if x != nil {
+		return x.Users
+	}
+	return nil
+}
+
+func (x *TrafficReport) GetOnline() []*OnlineUser {
+	if x != nil {
+		return x.Online
+	}
+	return nil
+}
+
+func (x *TrafficReport) GetWindowEndUnixMs() int64 {
+	if x != nil {
+		return x.WindowEndUnixMs
+	}
+	return 0
+}
+
+// UserTraffic is one user's traffic in a TrafficReport window.
+type UserTraffic struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        uint64                 `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	UploadBytes   uint64                 `protobuf:"varint,2,opt,name=upload_bytes,json=uploadBytes,proto3" json:"upload_bytes,omitempty"`
+	DownloadBytes uint64                 `protobuf:"varint,3,opt,name=download_bytes,json=downloadBytes,proto3" json:"download_bytes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UserTraffic) Reset() {
+	*x = UserTraffic{}
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[17]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UserTraffic) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UserTraffic) ProtoMessage() {}
+
+func (x *UserTraffic) ProtoReflect() protoreflect.Message {
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[17]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UserTraffic.ProtoReflect.Descriptor instead.
+func (*UserTraffic) Descriptor() ([]byte, []int) {
+	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{17}
+}
+
+func (x *UserTraffic) GetUserId() uint64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+func (x *UserTraffic) GetUploadBytes() uint64 {
+	if x != nil {
+		return x.UploadBytes
+	}
+	return 0
+}
+
+func (x *UserTraffic) GetDownloadBytes() uint64 {
+	if x != nil {
+		return x.DownloadBytes
+	}
+	return 0
+}
+
+// OnlineUser is one user's online IPs at the end of a TrafficReport window.
+type OnlineUser struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        uint64                 `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	Ips           []string               `protobuf:"bytes,2,rep,name=ips,proto3" json:"ips,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *OnlineUser) Reset() {
+	*x = OnlineUser{}
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[18]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *OnlineUser) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*OnlineUser) ProtoMessage() {}
+
+func (x *OnlineUser) ProtoReflect() protoreflect.Message {
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[18]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use OnlineUser.ProtoReflect.Descriptor instead.
+func (*OnlineUser) Descriptor() ([]byte, []int) {
+	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{18}
+}
+
+func (x *OnlineUser) GetUserId() uint64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+func (x *OnlineUser) GetIps() []string {
+	if x != nil {
+		return x.Ips
+	}
+	return nil
+}
+
+// LogBatch carries node runtime logs (reports.v1). Control records a
+// batch_id once and answers ReportAck.
+type LogBatch struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BatchId       string                 `protobuf:"bytes,1,opt,name=batch_id,json=batchId,proto3" json:"batch_id,omitempty"`
+	Entries       []*LogEntry            `protobuf:"bytes,2,rep,name=entries,proto3" json:"entries,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogBatch) Reset() {
+	*x = LogBatch{}
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[19]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogBatch) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogBatch) ProtoMessage() {}
+
+func (x *LogBatch) ProtoReflect() protoreflect.Message {
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[19]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogBatch.ProtoReflect.Descriptor instead.
+func (*LogBatch) Descriptor() ([]byte, []int) {
+	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{19}
+}
+
+func (x *LogBatch) GetBatchId() string {
+	if x != nil {
+		return x.BatchId
+	}
+	return ""
+}
+
+func (x *LogBatch) GetEntries() []*LogEntry {
+	if x != nil {
+		return x.Entries
+	}
+	return nil
+}
+
+// LogEntry is one node runtime log line.
+type LogEntry struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// level is debug, info, warning or error.
+	Level          string `protobuf:"bytes,1,opt,name=level,proto3" json:"level,omitempty"`
+	Source         string `protobuf:"bytes,2,opt,name=source,proto3" json:"source,omitempty"`
+	Message        string `protobuf:"bytes,3,opt,name=message,proto3" json:"message,omitempty"`
+	LoggedAtUnixMs int64  `protobuf:"varint,4,opt,name=logged_at_unix_ms,json=loggedAtUnixMs,proto3" json:"logged_at_unix_ms,omitempty"`
+	// fields_json is a JSON object of structured fields, without secrets.
+	FieldsJson    []byte `protobuf:"bytes,5,opt,name=fields_json,json=fieldsJson,proto3" json:"fields_json,omitempty"`
+	TraceId       string `protobuf:"bytes,6,opt,name=trace_id,json=traceId,proto3" json:"trace_id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *LogEntry) Reset() {
+	*x = LogEntry{}
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[20]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LogEntry) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LogEntry) ProtoMessage() {}
+
+func (x *LogEntry) ProtoReflect() protoreflect.Message {
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[20]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LogEntry.ProtoReflect.Descriptor instead.
+func (*LogEntry) Descriptor() ([]byte, []int) {
+	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{20}
+}
+
+func (x *LogEntry) GetLevel() string {
+	if x != nil {
+		return x.Level
+	}
+	return ""
+}
+
+func (x *LogEntry) GetSource() string {
+	if x != nil {
+		return x.Source
+	}
+	return ""
+}
+
+func (x *LogEntry) GetMessage() string {
+	if x != nil {
+		return x.Message
+	}
+	return ""
+}
+
+func (x *LogEntry) GetLoggedAtUnixMs() int64 {
+	if x != nil {
+		return x.LoggedAtUnixMs
+	}
+	return 0
+}
+
+func (x *LogEntry) GetFieldsJson() []byte {
+	if x != nil {
+		return x.FieldsJson
+	}
+	return nil
+}
+
+func (x *LogEntry) GetTraceId() string {
+	if x != nil {
+		return x.TraceId
+	}
+	return ""
+}
+
+// ReportAck answers a TrafficReport or LogBatch by batch_id. applied is true
+// when this delivery recorded the batch, and false when Control had recorded
+// it before (error empty) or refuses it for good (error set). In each case the
+// Agent drops the batch from its spool. Control sends no ReportAck for a batch
+// it cannot record for now, and the Agent resends it later.
+type ReportAck struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	BatchId       string                 `protobuf:"bytes,1,opt,name=batch_id,json=batchId,proto3" json:"batch_id,omitempty"`
+	Applied       bool                   `protobuf:"varint,2,opt,name=applied,proto3" json:"applied,omitempty"`
+	Error         string                 `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ReportAck) Reset() {
+	*x = ReportAck{}
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[21]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ReportAck) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ReportAck) ProtoMessage() {}
+
+func (x *ReportAck) ProtoReflect() protoreflect.Message {
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[21]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ReportAck.ProtoReflect.Descriptor instead.
+func (*ReportAck) Descriptor() ([]byte, []int) {
+	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{21}
+}
+
+func (x *ReportAck) GetBatchId() string {
+	if x != nil {
+		return x.BatchId
+	}
+	return ""
+}
+
+func (x *ReportAck) GetApplied() bool {
+	if x != nil {
+		return x.Applied
+	}
+	return false
+}
+
+func (x *ReportAck) GetError() string {
+	if x != nil {
+		return x.Error
+	}
+	return ""
+}
+
+// NodeStatus is the node's system and runtime health (reports.v1). Each one
+// replaces the previous; Control does not acknowledge it.
+type NodeStatus struct {
+	state              protoimpl.MessageState `protogen:"open.v1"`
+	CpuUsagePercent    float64                `protobuf:"fixed64,1,opt,name=cpu_usage_percent,json=cpuUsagePercent,proto3" json:"cpu_usage_percent,omitempty"`
+	MemoryUsagePercent float64                `protobuf:"fixed64,2,opt,name=memory_usage_percent,json=memoryUsagePercent,proto3" json:"memory_usage_percent,omitempty"`
+	DiskUsagePercent   float64                `protobuf:"fixed64,3,opt,name=disk_usage_percent,json=diskUsagePercent,proto3" json:"disk_usage_percent,omitempty"`
+	// uptime_seconds counts from the Agent's start.
+	UptimeSeconds    int64  `protobuf:"varint,4,opt,name=uptime_seconds,json=uptimeSeconds,proto3" json:"uptime_seconds,omitempty"`
+	RuntimeHealthy   bool   `protobuf:"varint,5,opt,name=runtime_healthy,json=runtimeHealthy,proto3" json:"runtime_healthy,omitempty"`
+	RuntimeError     string `protobuf:"bytes,6,opt,name=runtime_error,json=runtimeError,proto3" json:"runtime_error,omitempty"`
+	ObservedAtUnixMs int64  `protobuf:"varint,7,opt,name=observed_at_unix_ms,json=observedAtUnixMs,proto3" json:"observed_at_unix_ms,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *NodeStatus) Reset() {
+	*x = NodeStatus{}
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[22]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NodeStatus) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NodeStatus) ProtoMessage() {}
+
+func (x *NodeStatus) ProtoReflect() protoreflect.Message {
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[22]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NodeStatus.ProtoReflect.Descriptor instead.
+func (*NodeStatus) Descriptor() ([]byte, []int) {
+	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{22}
+}
+
+func (x *NodeStatus) GetCpuUsagePercent() float64 {
+	if x != nil {
+		return x.CpuUsagePercent
+	}
+	return 0
+}
+
+func (x *NodeStatus) GetMemoryUsagePercent() float64 {
+	if x != nil {
+		return x.MemoryUsagePercent
+	}
+	return 0
+}
+
+func (x *NodeStatus) GetDiskUsagePercent() float64 {
+	if x != nil {
+		return x.DiskUsagePercent
+	}
+	return 0
+}
+
+func (x *NodeStatus) GetUptimeSeconds() int64 {
+	if x != nil {
+		return x.UptimeSeconds
+	}
+	return 0
+}
+
+func (x *NodeStatus) GetRuntimeHealthy() bool {
+	if x != nil {
+		return x.RuntimeHealthy
+	}
+	return false
+}
+
+func (x *NodeStatus) GetRuntimeError() string {
+	if x != nil {
+		return x.RuntimeError
+	}
+	return ""
+}
+
+func (x *NodeStatus) GetObservedAtUnixMs() int64 {
+	if x != nil {
+		return x.ObservedAtUnixMs
+	}
+	return 0
+}
 
 var File_api_grpc_agent_v1_agent_proto protoreflect.FileDescriptor
 
@@ -1132,23 +2079,26 @@ const file_api_grpc_agent_v1_agent_proto_rawDesc = "" +
 	"attributes\x1a=\n" +
 	"\x0fAttributesEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x9d\x02\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xe9\x02\n" +
 	"\x05Hello\x12\x1a\n" +
 	"\bprotocol\x18\x01 \x01(\tR\bprotocol\x12#\n" +
 	"\ragent_version\x18\x02 \x01(\tR\fagentVersion\x12\x1f\n" +
 	"\vinstance_id\x18\x03 \x01(\tR\n" +
 	"instanceId\x12=\n" +
 	"\fcapabilities\x18\x04 \x03(\v2\x19.anix.agent.v1.CapabilityR\fcapabilities\x128\n" +
-	"\x06labels\x18\x05 \x03(\v2 .anix.agent.v1.Hello.LabelsEntryR\x06labels\x1a9\n" +
+	"\x06labels\x18\x05 \x03(\v2 .anix.agent.v1.Hello.LabelsEntryR\x06labels\x12'\n" +
+	"\x0fconfig_revision\x18\x06 \x01(\x04R\x0econfigRevision\x12!\n" +
+	"\fusers_cursor\x18\a \x01(\x04R\vusersCursor\x1a9\n" +
 	"\vLabelsEntry\x12\x10\n" +
 	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
-	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xc1\x01\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\x8d\x02\n" +
 	"\bHelloAck\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12-\n" +
 	"\x13server_time_unix_ms\x18\x02 \x01(\x03R\x10serverTimeUnixMs\x12<\n" +
 	"\x1aheartbeat_interval_seconds\x18\x03 \x01(\rR\x18heartbeatIntervalSeconds\x12)\n" +
-	"\x10desired_revision\x18\x04 \x01(\x04R\x0fdesiredRevision\"\xd0\x02\n" +
+	"\x10desired_revision\x18\x04 \x01(\x04R\x0fdesiredRevision\x12J\n" +
+	"\x13server_capabilities\x18\x05 \x03(\v2\x19.anix.agent.v1.CapabilityR\x12serverCapabilities\"\xd0\x02\n" +
 	"\tHeartbeat\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x01 \x01(\tR\tsessionId\x12%\n" +
@@ -1202,7 +2152,7 @@ const file_api_grpc_agent_v1_agent_proto_rawDesc = "" +
 	"state_json\x18\x05 \x01(\fR\tstateJson\x12-\n" +
 	"\x13observed_at_unix_ms\x18\x06 \x01(\x03R\x10observedAtUnixMs\x12\x1d\n" +
 	"\n" +
-	"session_id\x18\a \x01(\tR\tsessionId\"\x89\x03\n" +
+	"session_id\x18\a \x01(\tR\tsessionId\"\xeb\x04\n" +
 	"\x0eAgentToControl\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x17\n" +
@@ -1213,8 +2163,12 @@ const file_api_grpc_agent_v1_agent_proto_rawDesc = "" +
 	" \x01(\v2\x14.anix.agent.v1.HelloH\x00R\x05hello\x128\n" +
 	"\theartbeat\x18\v \x01(\v2\x18.anix.agent.v1.HeartbeatH\x00R\theartbeat\x12B\n" +
 	"\roperation_ack\x18\f \x01(\v2\x1b.anix.agent.v1.OperationAckH\x00R\foperationAck\x12E\n" +
-	"\x0eobserved_state\x18\r \x01(\v2\x1c.anix.agent.v1.ObservedStateH\x00R\robservedStateB\t\n" +
-	"\apayload\"\xe2\x02\n" +
+	"\x0eobserved_state\x18\r \x01(\v2\x1c.anix.agent.v1.ObservedStateH\x00R\robservedState\x12B\n" +
+	"\rconfig_status\x18\x0e \x01(\v2\x1b.anix.agent.v1.ConfigStatusH\x00R\fconfigStatus\x128\n" +
+	"\atraffic\x18\x0f \x01(\v2\x1c.anix.agent.v1.TrafficReportH\x00R\atraffic\x12-\n" +
+	"\x04logs\x18\x10 \x01(\v2\x17.anix.agent.v1.LogBatchH\x00R\x04logs\x123\n" +
+	"\x06status\x18\x11 \x01(\v2\x19.anix.agent.v1.NodeStatusH\x00R\x06statusB\t\n" +
+	"\apayload\"\x88\x04\n" +
 	"\x0eControlToAgent\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x17\n" +
@@ -1224,8 +2178,75 @@ const file_api_grpc_agent_v1_agent_proto_rawDesc = "" +
 	"\thello_ack\x18\n" +
 	" \x01(\v2\x17.anix.agent.v1.HelloAckH\x00R\bhelloAck\x12B\n" +
 	"\rheartbeat_ack\x18\v \x01(\v2\x1b.anix.agent.v1.HeartbeatAckH\x00R\fheartbeatAck\x12N\n" +
-	"\x11desired_operation\x18\f \x01(\v2\x1f.anix.agent.v1.DesiredOperationH\x00R\x10desiredOperationB\t\n" +
-	"\apayload*\xc1\x01\n" +
+	"\x11desired_operation\x18\f \x01(\v2\x1f.anix.agent.v1.DesiredOperationH\x00R\x10desiredOperation\x127\n" +
+	"\x06config\x18\r \x01(\v2\x1d.anix.agent.v1.ConfigSnapshotH\x00R\x06config\x120\n" +
+	"\x05users\x18\x0e \x01(\v2\x18.anix.agent.v1.UserDeltaH\x00R\x05users\x129\n" +
+	"\n" +
+	"report_ack\x18\x0f \x01(\v2\x18.anix.agent.v1.ReportAckH\x00R\treportAckB\t\n" +
+	"\apayload\"\x93\x01\n" +
+	"\x0eConfigSnapshot\x12'\n" +
+	"\x0fconfig_revision\x18\x01 \x01(\x04R\x0econfigRevision\x12\x1f\n" +
+	"\vconfig_hash\x18\x02 \x01(\tR\n" +
+	"configHash\x12\x16\n" +
+	"\x06format\x18\x03 \x01(\tR\x06format\x12\x1f\n" +
+	"\vconfig_json\x18\x04 \x01(\fR\n" +
+	"configJson\"\x88\x01\n" +
+	"\fConfigStatus\x12'\n" +
+	"\x0fconfig_revision\x18\x01 \x01(\x04R\x0econfigRevision\x12\x1f\n" +
+	"\vconfig_hash\x18\x02 \x01(\tR\n" +
+	"configHash\x12\x18\n" +
+	"\aapplied\x18\x03 \x01(\bR\aapplied\x12\x14\n" +
+	"\x05error\x18\x04 \x01(\tR\x05error\"\xa3\x01\n" +
+	"\bNodeUser\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\x04R\x06userId\x12\x12\n" +
+	"\x04uuid\x18\x02 \x01(\tR\x04uuid\x12(\n" +
+	"\x10speed_limit_mbps\x18\x03 \x01(\x03R\x0espeedLimitMbps\x12!\n" +
+	"\fdevice_limit\x18\x04 \x01(\x05R\vdeviceLimit\x12\x1d\n" +
+	"\n" +
+	"extra_json\x18\x05 \x01(\fR\textraJson\"\xb1\x01\n" +
+	"\tUserDelta\x12\x16\n" +
+	"\x06cursor\x18\x01 \x01(\x04R\x06cursor\x12\x12\n" +
+	"\x04full\x18\x02 \x01(\bR\x04full\x12\x1b\n" +
+	"\tlast_page\x18\x03 \x01(\bR\blastPage\x121\n" +
+	"\aupserts\x18\x04 \x03(\v2\x17.anix.agent.v1.NodeUserR\aupserts\x12(\n" +
+	"\x10removed_user_ids\x18\x05 \x03(\x04R\x0eremovedUserIds\"\xbc\x01\n" +
+	"\rTrafficReport\x12\x19\n" +
+	"\bbatch_id\x18\x01 \x01(\tR\abatchId\x120\n" +
+	"\x05users\x18\x02 \x03(\v2\x1a.anix.agent.v1.UserTrafficR\x05users\x121\n" +
+	"\x06online\x18\x03 \x03(\v2\x19.anix.agent.v1.OnlineUserR\x06online\x12+\n" +
+	"\x12window_end_unix_ms\x18\x04 \x01(\x03R\x0fwindowEndUnixMs\"p\n" +
+	"\vUserTraffic\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\x04R\x06userId\x12!\n" +
+	"\fupload_bytes\x18\x02 \x01(\x04R\vuploadBytes\x12%\n" +
+	"\x0edownload_bytes\x18\x03 \x01(\x04R\rdownloadBytes\"7\n" +
+	"\n" +
+	"OnlineUser\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\x04R\x06userId\x12\x10\n" +
+	"\x03ips\x18\x02 \x03(\tR\x03ips\"X\n" +
+	"\bLogBatch\x12\x19\n" +
+	"\bbatch_id\x18\x01 \x01(\tR\abatchId\x121\n" +
+	"\aentries\x18\x02 \x03(\v2\x17.anix.agent.v1.LogEntryR\aentries\"\xb9\x01\n" +
+	"\bLogEntry\x12\x14\n" +
+	"\x05level\x18\x01 \x01(\tR\x05level\x12\x16\n" +
+	"\x06source\x18\x02 \x01(\tR\x06source\x12\x18\n" +
+	"\amessage\x18\x03 \x01(\tR\amessage\x12)\n" +
+	"\x11logged_at_unix_ms\x18\x04 \x01(\x03R\x0eloggedAtUnixMs\x12\x1f\n" +
+	"\vfields_json\x18\x05 \x01(\fR\n" +
+	"fieldsJson\x12\x19\n" +
+	"\btrace_id\x18\x06 \x01(\tR\atraceId\"V\n" +
+	"\tReportAck\x12\x19\n" +
+	"\bbatch_id\x18\x01 \x01(\tR\abatchId\x12\x18\n" +
+	"\aapplied\x18\x02 \x01(\bR\aapplied\x12\x14\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\"\xbc\x02\n" +
+	"\n" +
+	"NodeStatus\x12*\n" +
+	"\x11cpu_usage_percent\x18\x01 \x01(\x01R\x0fcpuUsagePercent\x120\n" +
+	"\x14memory_usage_percent\x18\x02 \x01(\x01R\x12memoryUsagePercent\x12,\n" +
+	"\x12disk_usage_percent\x18\x03 \x01(\x01R\x10diskUsagePercent\x12%\n" +
+	"\x0euptime_seconds\x18\x04 \x01(\x03R\ruptimeSeconds\x12'\n" +
+	"\x0fruntime_healthy\x18\x05 \x01(\bR\x0eruntimeHealthy\x12#\n" +
+	"\rruntime_error\x18\x06 \x01(\tR\fruntimeError\x12-\n" +
+	"\x13observed_at_unix_ms\x18\a \x01(\x03R\x10observedAtUnixMs*\xc1\x01\n" +
 	"\rObservedPhase\x12\x1e\n" +
 	"\x1aOBSERVED_PHASE_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17OBSERVED_PHASE_ACCEPTED\x10\x01\x12\x1b\n" +
@@ -1249,7 +2270,7 @@ func file_api_grpc_agent_v1_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_api_grpc_agent_v1_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_api_grpc_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 15)
+var file_api_grpc_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
 var file_api_grpc_agent_v1_agent_proto_goTypes = []any{
 	(ObservedPhase)(0),          // 0: anix.agent.v1.ObservedPhase
 	(*Capability)(nil),          // 1: anix.agent.v1.Capability
@@ -1264,32 +2285,55 @@ var file_api_grpc_agent_v1_agent_proto_goTypes = []any{
 	(*ObservedState)(nil),       // 10: anix.agent.v1.ObservedState
 	(*AgentToControl)(nil),      // 11: anix.agent.v1.AgentToControl
 	(*ControlToAgent)(nil),      // 12: anix.agent.v1.ControlToAgent
-	nil,                         // 13: anix.agent.v1.Capability.AttributesEntry
-	nil,                         // 14: anix.agent.v1.Hello.LabelsEntry
-	nil,                         // 15: anix.agent.v1.Heartbeat.MetricsEntry
+	(*ConfigSnapshot)(nil),      // 13: anix.agent.v1.ConfigSnapshot
+	(*ConfigStatus)(nil),        // 14: anix.agent.v1.ConfigStatus
+	(*NodeUser)(nil),            // 15: anix.agent.v1.NodeUser
+	(*UserDelta)(nil),           // 16: anix.agent.v1.UserDelta
+	(*TrafficReport)(nil),       // 17: anix.agent.v1.TrafficReport
+	(*UserTraffic)(nil),         // 18: anix.agent.v1.UserTraffic
+	(*OnlineUser)(nil),          // 19: anix.agent.v1.OnlineUser
+	(*LogBatch)(nil),            // 20: anix.agent.v1.LogBatch
+	(*LogEntry)(nil),            // 21: anix.agent.v1.LogEntry
+	(*ReportAck)(nil),           // 22: anix.agent.v1.ReportAck
+	(*NodeStatus)(nil),          // 23: anix.agent.v1.NodeStatus
+	nil,                         // 24: anix.agent.v1.Capability.AttributesEntry
+	nil,                         // 25: anix.agent.v1.Hello.LabelsEntry
+	nil,                         // 26: anix.agent.v1.Heartbeat.MetricsEntry
 }
 var file_api_grpc_agent_v1_agent_proto_depIdxs = []int32{
-	13, // 0: anix.agent.v1.Capability.attributes:type_name -> anix.agent.v1.Capability.AttributesEntry
+	24, // 0: anix.agent.v1.Capability.attributes:type_name -> anix.agent.v1.Capability.AttributesEntry
 	1,  // 1: anix.agent.v1.Hello.capabilities:type_name -> anix.agent.v1.Capability
-	14, // 2: anix.agent.v1.Hello.labels:type_name -> anix.agent.v1.Hello.LabelsEntry
-	15, // 3: anix.agent.v1.Heartbeat.metrics:type_name -> anix.agent.v1.Heartbeat.MetricsEntry
-	5,  // 4: anix.agent.v1.Heartbeat.plugin_observations:type_name -> anix.agent.v1.PluginObservedState
-	6,  // 5: anix.agent.v1.PluginObservedState.rule_counters:type_name -> anix.agent.v1.PluginRuleCounter
-	0,  // 6: anix.agent.v1.ObservedState.phase:type_name -> anix.agent.v1.ObservedPhase
-	2,  // 7: anix.agent.v1.AgentToControl.hello:type_name -> anix.agent.v1.Hello
-	4,  // 8: anix.agent.v1.AgentToControl.heartbeat:type_name -> anix.agent.v1.Heartbeat
-	9,  // 9: anix.agent.v1.AgentToControl.operation_ack:type_name -> anix.agent.v1.OperationAck
-	10, // 10: anix.agent.v1.AgentToControl.observed_state:type_name -> anix.agent.v1.ObservedState
-	3,  // 11: anix.agent.v1.ControlToAgent.hello_ack:type_name -> anix.agent.v1.HelloAck
-	7,  // 12: anix.agent.v1.ControlToAgent.heartbeat_ack:type_name -> anix.agent.v1.HeartbeatAck
-	8,  // 13: anix.agent.v1.ControlToAgent.desired_operation:type_name -> anix.agent.v1.DesiredOperation
-	11, // 14: anix.agent.v1.AgentControlService.ControlStream:input_type -> anix.agent.v1.AgentToControl
-	12, // 15: anix.agent.v1.AgentControlService.ControlStream:output_type -> anix.agent.v1.ControlToAgent
-	15, // [15:16] is the sub-list for method output_type
-	14, // [14:15] is the sub-list for method input_type
-	14, // [14:14] is the sub-list for extension type_name
-	14, // [14:14] is the sub-list for extension extendee
-	0,  // [0:14] is the sub-list for field type_name
+	25, // 2: anix.agent.v1.Hello.labels:type_name -> anix.agent.v1.Hello.LabelsEntry
+	1,  // 3: anix.agent.v1.HelloAck.server_capabilities:type_name -> anix.agent.v1.Capability
+	26, // 4: anix.agent.v1.Heartbeat.metrics:type_name -> anix.agent.v1.Heartbeat.MetricsEntry
+	5,  // 5: anix.agent.v1.Heartbeat.plugin_observations:type_name -> anix.agent.v1.PluginObservedState
+	6,  // 6: anix.agent.v1.PluginObservedState.rule_counters:type_name -> anix.agent.v1.PluginRuleCounter
+	0,  // 7: anix.agent.v1.ObservedState.phase:type_name -> anix.agent.v1.ObservedPhase
+	2,  // 8: anix.agent.v1.AgentToControl.hello:type_name -> anix.agent.v1.Hello
+	4,  // 9: anix.agent.v1.AgentToControl.heartbeat:type_name -> anix.agent.v1.Heartbeat
+	9,  // 10: anix.agent.v1.AgentToControl.operation_ack:type_name -> anix.agent.v1.OperationAck
+	10, // 11: anix.agent.v1.AgentToControl.observed_state:type_name -> anix.agent.v1.ObservedState
+	14, // 12: anix.agent.v1.AgentToControl.config_status:type_name -> anix.agent.v1.ConfigStatus
+	17, // 13: anix.agent.v1.AgentToControl.traffic:type_name -> anix.agent.v1.TrafficReport
+	20, // 14: anix.agent.v1.AgentToControl.logs:type_name -> anix.agent.v1.LogBatch
+	23, // 15: anix.agent.v1.AgentToControl.status:type_name -> anix.agent.v1.NodeStatus
+	3,  // 16: anix.agent.v1.ControlToAgent.hello_ack:type_name -> anix.agent.v1.HelloAck
+	7,  // 17: anix.agent.v1.ControlToAgent.heartbeat_ack:type_name -> anix.agent.v1.HeartbeatAck
+	8,  // 18: anix.agent.v1.ControlToAgent.desired_operation:type_name -> anix.agent.v1.DesiredOperation
+	13, // 19: anix.agent.v1.ControlToAgent.config:type_name -> anix.agent.v1.ConfigSnapshot
+	16, // 20: anix.agent.v1.ControlToAgent.users:type_name -> anix.agent.v1.UserDelta
+	22, // 21: anix.agent.v1.ControlToAgent.report_ack:type_name -> anix.agent.v1.ReportAck
+	15, // 22: anix.agent.v1.UserDelta.upserts:type_name -> anix.agent.v1.NodeUser
+	18, // 23: anix.agent.v1.TrafficReport.users:type_name -> anix.agent.v1.UserTraffic
+	19, // 24: anix.agent.v1.TrafficReport.online:type_name -> anix.agent.v1.OnlineUser
+	21, // 25: anix.agent.v1.LogBatch.entries:type_name -> anix.agent.v1.LogEntry
+	11, // 26: anix.agent.v1.AgentControlService.ControlStream:input_type -> anix.agent.v1.AgentToControl
+	12, // 27: anix.agent.v1.AgentControlService.ControlStream:output_type -> anix.agent.v1.ControlToAgent
+	27, // [27:28] is the sub-list for method output_type
+	26, // [26:27] is the sub-list for method input_type
+	26, // [26:26] is the sub-list for extension type_name
+	26, // [26:26] is the sub-list for extension extendee
+	0,  // [0:26] is the sub-list for field type_name
 }
 
 func init() { file_api_grpc_agent_v1_agent_proto_init() }
@@ -1302,11 +2346,18 @@ func file_api_grpc_agent_v1_agent_proto_init() {
 		(*AgentToControl_Heartbeat)(nil),
 		(*AgentToControl_OperationAck)(nil),
 		(*AgentToControl_ObservedState)(nil),
+		(*AgentToControl_ConfigStatus)(nil),
+		(*AgentToControl_Traffic)(nil),
+		(*AgentToControl_Logs)(nil),
+		(*AgentToControl_Status)(nil),
 	}
 	file_api_grpc_agent_v1_agent_proto_msgTypes[11].OneofWrappers = []any{
 		(*ControlToAgent_HelloAck)(nil),
 		(*ControlToAgent_HeartbeatAck)(nil),
 		(*ControlToAgent_DesiredOperation)(nil),
+		(*ControlToAgent_Config)(nil),
+		(*ControlToAgent_Users)(nil),
+		(*ControlToAgent_ReportAck)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -1314,7 +2365,7 @@ func file_api_grpc_agent_v1_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_grpc_agent_v1_agent_proto_rawDesc), len(file_api_grpc_agent_v1_agent_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   15,
+			NumMessages:   26,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

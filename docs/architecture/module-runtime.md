@@ -264,13 +264,16 @@ The contracts and SDKs form their own Go module,
 
 **Agent contract source of truth.** The Agent contract moved here from
 `github.com/AnixOps/anix-agent/sdk`, which is frozen at v1.1.0 and gets no new
-releases. Only `option go_package` changed, so Agents built against that SDK
-keep working: `sdk/api/agent/v1/agent_descriptor_test.go` proves the file
-descriptor equals v1.1.0's apart from `go_package`. Control imports no
-anix-agent module (`config/scripts/check_agent_sdk_dependency.sh`). anix-agent
-switches to this module in its own change; until then the manual `SDK Sync`
-workflow (`.github/workflows/sdk-sync.yml`) checks that its SDK's descriptor
-still matches, and afterwards it builds anix-agent against this checkout's SDK.
+releases. The move changed only `option go_package`, and the contract has
+only grown since, so Agents built against that SDK keep working:
+`sdk/api/agent/v1/agent_descriptor_test.go` proves the file descriptor is a
+superset of v1.1.0's, with every v1.1.0 message, field, enum value and method
+unchanged. Control imports no anix-agent module
+(`config/scripts/check_agent_sdk_dependency.sh`). anix-agent switches to this
+module in its own change; until then the manual `SDK Sync` workflow
+(`.github/workflows/sdk-sync.yml`) checks that Control's descriptor still
+contains its SDK's, and afterwards it builds anix-agent against this
+checkout's SDK.
 
 **Independence from the kernel.** The module has no dependency on the kernel
 module: Go forbids it from importing the kernel's `internal/` packages, and
