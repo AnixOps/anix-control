@@ -4,6 +4,24 @@
 
 ### Security
 
+- Subscription group and template writes save only their own columns.
+  `POST` and `PUT /api/v2/admin/subscription/groups[/:id]` and
+  `POST /api/v2/admin/subscription/groups/:id/templates` bound the body to
+  the kernel model, and GORM saved the associations nested in it.
+  - A group's `protocols` upserted `v2_node_protocol` rows, and the nodes
+    nested in them into `v2_node`, without the node routes' checks and with
+    an empty API key, and linked them to the group. Linking protocols has
+    its own route, `POST .../groups/:id/protocols`.
+  - A group's `templates` created templates or moved existing ones from
+    other groups.
+  - A template's `group` created a group, or moved the new template into
+    another group than the one in the path.
+
+  These nested objects are now ignored, and the answer no longer echoes
+  them. `PUT /api/v2/admin/subscription/templates/:id` dropped `id`,
+  `created_at` and `updated_at` from the update, but GORM also accepts the
+  field names (`ID`, `CreatedAt`) and SQLite any case (`Id`), which changed
+  a template's id or creation time; every spelling is now dropped.
 - Kernel API views that filter rows are PostgreSQL security barriers.
   `kapi_system_audit_log_v1` shows only the `system` rows of
   `v2_operation_log`, but a package could define a cheap function, which the

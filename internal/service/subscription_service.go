@@ -19,6 +19,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/parser"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // SubscriptionService 订阅服务
@@ -772,14 +773,25 @@ func DeriveSS2022ServerKey(createdAt time.Time, cipher string) string {
 
 // ============ 管理员方法 ============
 
-// CreateGroup 创建订阅分组
+// CreateGroup 创建订阅分组, its own columns only.
+//
+// Group and template writes take the model an administrator's body was
+// bound to, and GORM saves the associations of a model it writes. A group
+// body's "protocols" upserted v2_node_protocol rows, and the nodes nested in
+// them into v2_node (without an API key and without the node routes'
+// checks), and linked them to the group; its "templates" created templates
+// or moved existing ones into the group; a template body's "group" created a
+// group and overrode the group the route names. Those belong to their own
+// routes: the associations of a body are dropped and never saved.
 func (s *SubscriptionService) CreateGroup(group *model.SubscriptionGroup) error {
-	return s.db.Create(group).Error
+	group.Templates, group.Protocols = nil, nil
+	return s.db.Omit(clause.Associations).Create(group).Error
 }
 
-// UpdateGroup 更新订阅分组
+// UpdateGroup 更新订阅分组, its own columns only (see CreateGroup).
 func (s *SubscriptionService) UpdateGroup(group *model.SubscriptionGroup) error {
-	return s.db.Save(group).Error
+	group.Templates, group.Protocols = nil, nil
+	return s.db.Omit(clause.Associations).Save(group).Error
 }
 
 // DeleteGroup 删除订阅分组
@@ -819,9 +831,23 @@ func (s *SubscriptionService) GetGroups() ([]*model.SubscriptionGroup, error) {
 	return groups, err
 }
 
-// CreateTemplate 创建订阅模板
+// CreateTemplate 创建订阅模板, its own columns only (see CreateGroup): the
+// template stays in the group its route names.
 func (s *SubscriptionService) CreateTemplate(template *model.SubscriptionTemplate) error {
-	return s.db.Create(template).Error
+	template.Group = nil
+	return s.db.Omit(clause.Associations).Create(template).Error
+}
+
+// isProtectedTemplateKey reports whether an update key names the template's
+// id or timestamps. GORM resolves a map key by column or by field name
+// ("ID", "CreatedAt"), and SQLite matches column names in any case, so
+// every spelling is refused, not only the column names.
+func isProtectedTemplateKey(key string) bool {
+	switch strings.ToLower(strings.ReplaceAll(key, "_", "")) {
+	case "id", "createdat", "updatedat":
+		return true
+	}
+	return false
 }
 
 // UpdateTemplateFields 按字段局部更新订阅模板
@@ -829,9 +855,11 @@ func (s *SubscriptionService) UpdateTemplateFields(id uint, fields map[string]an
 	if len(fields) == 0 {
 		return nil
 	}
-	delete(fields, "id")
-	delete(fields, "created_at")
-	delete(fields, "updated_at")
+	for key := range fields {
+		if isProtectedTemplateKey(key) {
+			delete(fields, key)
+		}
+	}
 
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		var template model.SubscriptionTemplate
