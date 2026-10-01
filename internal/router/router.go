@@ -531,9 +531,9 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			authUser.POST("/user/notifications/read-all", registeredPackageRoute(v2PackageGateway.Serve, "notification", "notification.user.notifications.read_all.post", notificationHandler.MarkAllAsRead))
 
 			// 用户邀请
-			authUser.GET("/user/invite", v2PackageGateway.Serve)
-			authUser.POST("/user/invite/generate", v2PackageGateway.Serve)
 			userAffiliateHandler := handler.NewInviteHandler()
+			authUser.GET("/user/invite", registeredPackageRoute(v2PackageGateway.Serve, "affiliate", "affiliate.user.invite.get", userAffiliateHandler.GetInviteInfo))
+			authUser.POST("/user/invite/generate", registeredPackageRoute(v2PackageGateway.Serve, "affiliate", "affiliate.user.invite.generate.post", userAffiliateHandler.GenerateCode))
 			authUser.GET("/user/invite/commissions", registeredPackageRoute(v2PackageGateway.Serve, "affiliate", "affiliate.user.invite.commissions.get", userAffiliateHandler.GetCommissionRecords))
 			authUser.POST("/user/invite/withdraw", registeredPackageRoute(v2PackageGateway.Serve, "affiliate", "affiliate.user.invite.withdraw.post", userAffiliateHandler.RequestWithdraw))
 			authUser.GET("/user/invite/withdrawals", registeredPackageRoute(v2PackageGateway.Serve, "affiliate", "affiliate.user.invite.withdrawals.get", userAffiliateHandler.GetWithdrawRecords))

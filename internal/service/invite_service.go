@@ -12,7 +12,6 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/subscriber"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 // Withdrawal errors. Their messages are the v2 answers.
@@ -183,9 +182,11 @@ func (s *InviteService) GenerateUserInviteCode(userID uint) (*model.InviteCode, 
 		return nil, err
 	}
 	err = WithRetryableTransaction(s.db, func(tx *gorm.DB) error {
-		// The user's row is locked so that concurrent generations count one
-		// after another (PostgreSQL; SQLite runs one writer at a time).
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Select("id").Where("id = ?", userID).Find(&[]model.User{}).Error; err != nil {
+		// Concurrent generations for one user count one after another: on
+		// PostgreSQL under the user's invite code lock, which the affiliate
+		// package takes too; SQLite runs one writer at a time and a
+		// transaction that read before another's write retries.
+		if err := LockUserInviteCodes(tx, userID); err != nil {
 			return err
 		}
 		var unused int64
@@ -203,6 +204,30 @@ func (s *InviteService) GenerateUserInviteCode(userID uint) (*model.InviteCode, 
 		return nil, err
 	}
 	return inviteCode, nil
+}
+
+// inviteCodeLockClass is the first key of the PostgreSQL advisory lock that
+// serializes a user's invite code generations ("invc" in ASCII). Advisory
+// locks need no grant, so the affiliate package's role takes the same lock
+// (packages/affiliate/native); a row lock on v2_user, which no package may
+// read or write, would not serialize the two.
+const inviteCodeLockClass int32 = 0x696e7663
+
+// InviteCodeLockKeys are the two keys of a user's invite code lock: the
+// class and the user id. A user id beyond 31 bits shares its key with
+// another user's, which only makes their generations wait for each other.
+func InviteCodeLockKeys(userID uint) (int32, int32) {
+	return inviteCodeLockClass, int32(uint64(userID) & math.MaxInt32) // #nosec G115 -- masked to 31 bits.
+}
+
+// LockUserInviteCodes takes the user's invite code lock until tx ends, on
+// PostgreSQL; on SQLite it does nothing.
+func LockUserInviteCodes(tx *gorm.DB, userID uint) error {
+	if tx.Name() != "postgres" {
+		return nil
+	}
+	class, key := InviteCodeLockKeys(userID)
+	return tx.Exec("SELECT pg_advisory_xact_lock(CAST(? AS integer), CAST(? AS integer))", class, key).Error
 }
 
 // inviteCodeLimit is the invite configuration's code_count, read from the

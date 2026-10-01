@@ -492,8 +492,8 @@ func TestAllCataloguedV2RoutesResolveThroughTheirPackageBridge(t *testing.T) {
 			require.NotNil(t, operation)
 		})
 	}
-	require.Equal(t, 24, identityRoutes)
-	require.Equal(t, 268, bridgedRoutes)
+	require.Equal(t, 22, identityRoutes)
+	require.Equal(t, 270, bridgedRoutes)
 }
 
 // Old identity-platform releases still declare the routes that moved to
@@ -508,7 +508,7 @@ func TestMovedV2RoutesKeepTheirOldIdentityRouteIDs(t *testing.T) {
 		catalog[route.Method+" "+route.Path] = route
 	}
 	moved := compatv2.MovedRoutes()
-	require.Len(t, moved, 21)
+	require.Len(t, moved, 23)
 	for _, route := range moved {
 		entry, ok := catalog[route.Method+" "+route.LegacyPath]
 		require.True(t, ok, route.LegacyPath)

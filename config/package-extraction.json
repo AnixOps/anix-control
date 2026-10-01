@@ -2068,10 +2068,10 @@
     {
       "method": "GET",
       "path": "/api/v2/user/invite",
-      "package_id": "identity-platform",
-      "route_id": "identity.user.invite.get",
-      "mode": "bridged",
-      "legacy": "identity-bridge"
+      "package_id": "affiliate",
+      "route_id": "affiliate.user.invite.get",
+      "mode": "native-flagged",
+      "legacy": "router"
     },
     {
       "method": "GET",
@@ -2084,10 +2084,10 @@
     {
       "method": "POST",
       "path": "/api/v2/user/invite/generate",
-      "package_id": "identity-platform",
-      "route_id": "identity.user.invite.generate.post",
-      "mode": "bridged",
-      "legacy": "identity-bridge"
+      "package_id": "affiliate",
+      "route_id": "affiliate.user.invite.generate.post",
+      "mode": "native-flagged",
+      "legacy": "router"
     },
     {
       "method": "POST",

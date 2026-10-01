@@ -39,8 +39,22 @@
     },
     {
       "method": "GET",
+      "legacy_path": "/api/v2/user/invite",
+      "package_route": "affiliate.user.invite.get",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
       "legacy_path": "/api/v2/user/invite/commissions",
       "package_route": "affiliate.user.invite.commissions.get",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/user/invite/generate",
+      "package_route": "affiliate.user.invite.generate.post",
       "envelope": "panel",
       "transport": "http"
     },

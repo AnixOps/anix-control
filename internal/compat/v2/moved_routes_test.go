@@ -69,5 +69,5 @@ func TestMovedRoutesAreUniqueAndLeaveTheirOwner(t *testing.T) {
 			require.NoError(t, route.Validate(), route.PackageRoute)
 		}
 	}
-	require.Len(t, seen, 21)
+	require.Len(t, seen, 23)
 }

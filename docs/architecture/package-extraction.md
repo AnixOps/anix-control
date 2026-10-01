@@ -30,18 +30,18 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
 - `config/package-extraction.json` records each route's extraction mode
   (`bridged`, `kernel-owned`, `native-flagged` or `native`; section 3.2) and
   where its legacy handler lives
-  (`router`, `identity-bridge` or `none`). 166 routes are `native-flagged`:
+  (`router`, `identity-bridge` or `none`). 168 routes are `native-flagged`:
   identity-platform (22: group A's 15, the profile, dashboard, user detail,
   user list and user statistics, and the traffic and subscription resets),
-  affiliate (8), forward (17), gost-mesh (3), knowledge (6), machine-telemetry
-  (3), notification (22), order (13), payment (20), plan (7), platform (5),
-  protocol-runtime (3), proxy-node (7), subscription (21), ticket (8) and
-  wireguard (1). 16 routes are `kernel-owned`: they stay in the kernel by
-  design, and each row says why. The other 110 are `bridged` until a kernel
-  contract lets their package serve them (section 3.2 lists what unblocks
-  them). None is `native` yet. The identity routes are `identity-bridge`.
-  `check_plugin_only_routes.py` enforces the map against the router, the
-  identity bridge and the package hosts.
+  affiliate (10), forward (17), gost-mesh (3), knowledge (6),
+  machine-telemetry (3), notification (22), order (13), payment (20), plan
+  (7), platform (5), protocol-runtime (3), proxy-node (7), subscription (21),
+  ticket (8) and wireguard (1). 16 routes are `kernel-owned`: they stay in the
+  kernel by design, and each row says why. The other 108 are `bridged` until a
+  kernel contract lets their package serve them (section 3.2 lists what
+  unblocks them). None is `native` yet. The identity routes are
+  `identity-bridge`. `check_plugin_only_routes.py` enforces the map against
+  the router, the identity bridge and the package hosts.
 - Request path: gin middleware -> `compatv2` gateway -> route resolution
   (`internal/compat/v2/registry.go`, `verifiedRouteSource`) -> package host
   process over Unix gRPC -> package bridge (FD 4) -> **the legacy in-kernel
@@ -55,16 +55,17 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
 - 11 packages (forward, knowledge, notification, order, payment, plan,
   protocol-runtime, proxy-node, subscription, ticket, wireguard) are 4-file
   placeholders (`manifest.template.json`, `compat/`, `migrations/`, `webui/`).
-- **After v4.0.0.** 21 of the 45 identity-platform routes moved to other
-  packages, still bridged:
+- **After v4.0.0.** 23 of the 45 identity-platform routes moved to other
+  packages:
   - system configuration, audit and backup (12) to the new `platform`
     package;
-  - commissions, withdrawals and invite statistics and configuration (8) to
-    the new `affiliate` package;
+  - commissions, withdrawals and invite statistics and configuration (8),
+    then the user's invite codes and their generation (2), to the new
+    `affiliate` package;
   - `/user/reset` to `forward`.
 
-  They are now `registeredPackageRoute` routes. identity-platform keeps 24,
-  all still served through the identity bridge. `internal/compat/v2/moved_routes.go`
+  They are now `registeredPackageRoute` routes. identity-platform keeps 22,
+  whose legacy handlers are in the identity bridge. `internal/compat/v2/moved_routes.go`
   lists the moves: the kernel accepts the old route ids from old
   identity-platform releases and, while both packages declare a route,
   prefers the new owner. There are now 18 packages. All but nat-egress and
@@ -82,10 +83,10 @@ Route modes per package (2026-10-01):
 
 | Package | `native-flagged` | `bridged` | `kernel-owned` |
 |---|---|---|---|
-| affiliate | 8 | 0 | 0 |
+| affiliate | 10 | 0 | 0 |
 | forward | 17 | 63 | 0 |
 | gost-mesh | 3 | 0 | 0 |
-| identity-platform | 22 | 2 | 0 |
+| identity-platform | 22 | 0 | 0 |
 | knowledge | 6 | 0 | 0 |
 | machine-telemetry | 3 | 0 | 2 |
 | notification | 22 | 2 | 0 |
@@ -222,7 +223,6 @@ What unblocks the `bridged` routes:
 | Moving to forward (an update also needs KernelNodeOps) | the speed-limit routes | 5 |
 | A proxy node view with parent and load | forward observability targets, trend and topology | 3 |
 | The request's scheme and host passed to hosts | setting the Telegram webhook; the clean agent install script | 2 |
-| Invite codes moving to affiliate | the user's invite codes and their generation | 2 |
 | A contract read of a member's subscription link | the public Telegram webhook (`/sub`) | 1 |
 | A KernelSettings namespace for the subscription link (with `app.subscribe_path`) | the subscription link settings | 1 |
 | Kernel caches (done, no invalidation events needed): the kernel keeps both caches and answers them through `KernelTelemetry.GetDashboard` and `KernelSubscriber.GetSubscriptionSummary`, so both modes answer the same entry and `cached_at` ([`kernel-caches.md`](kernel-caches.md)) | none left: the dashboard (the online set crosses as a count) and a user's subscription summary are `native-flagged` | 0 |
@@ -417,16 +417,40 @@ The planned `kernel.entitlement.apply.v1` became
     (502) so the provider delivers again; the kernel's answers its own
     error. The parity test runs the real KernelOrder server: 78 callback
     cases on SQLite and PostgreSQL each.
-- **Affiliate (in place).** All 8 routes run on the adopted
-  `v2_commission_record`, `v2_commission_withdraw` and `v2_invite_config`
-  tables, proved by `internal/tests/affiliatecompat`: the user's commissions,
-  withdrawals and withdrawal request, and the administrator's withdrawal
-  list and decisions, invite statistics and configuration.
+- **Affiliate (in place).** All 10 routes run on the adopted
+  `v2_commission_record`, `v2_commission_withdraw`, `v2_invite_config` and
+  `v2_invite_code` tables, proved by `internal/tests/affiliatecompat`: the
+  user's invite codes, code generation, commissions, withdrawals and
+  withdrawal request, and the administrator's withdrawal list and
+  decisions, invite statistics and configuration.
   - Other domains are read through views: `kapi_user_referral_v1` (who
-    invited whom) for the statistics, `kapi_subscriber_entitlement_v1` for
-    the caller's commission balance, and `kapi_affiliate_settings_v1` for
-    the frontend settings (code prefix and length, withdrawal fee and
-    methods).
+    invited whom) for the statistics, `kapi_order_billing_v1` (an order's
+    buyer and status) for the paying users a user invited,
+    `kapi_subscriber_entitlement_v1` for the caller's commission balance,
+    and `kapi_affiliate_settings_v1` for the frontend settings (code prefix
+    and length, withdrawal fee and methods).
+  - **Invite codes.** The user's invite codes and their generation moved
+    from identity-platform (`affiliate.user.invite.get`,
+    `affiliate.user.invite.generate.post`). `v2_invite_code` is not a
+    protected table: a code admits a registration and attributes the
+    referral, and holds no credential of an existing account. Control's
+    registration (the kernel's, and the identity module's through
+    `CreateSubscriber`) still consumes a code inside the transaction that
+    creates the user.
+    - A user holds at most `code_count` (default 5) unused codes. The
+      kernel used to count them under a row lock on the user's `v2_user`
+      row, which no package may read or write. Both sides now count and
+      create under one PostgreSQL advisory lock keyed by the user,
+      `pg_advisory_xact_lock(class, user)` with the class `0x696e7663`
+      ("invc") and the user id masked to 31 bits
+      (`service.InviteCodeLockKeys`, `native.InviteCodeLockKeys`).
+      Advisory locks need no grant, so the package role takes the lock the
+      kernel takes; a test proves a leased role waits for it. On SQLite one
+      writer runs at a time, and a generation that read before another's
+      write is retried, on both sides.
+    - The parity test also runs the kernel's and the package's generations
+      concurrently on one database: they never pass the limit. With the
+      kernel's old row lock they did.
   - `kapi_affiliate_settings_v1` shows one row of the protected
     `v2_system_config`: the value of `invite.frontend.config`, a key the
     kernel does not treat as sensitive and shows its administrators in
@@ -453,7 +477,7 @@ The planned `kernel.entitlement.apply.v1` became
     which makes the kernel's invite services reload the configuration they
     keep in memory. Neither path records an audit
     entry.
-- **Identity leftovers (in place).** 7 of identity-platform's 9 routes
+- **Identity leftovers (in place).** All 7 of identity-platform's routes
   outside group A run natively, proved by `internal/tests/identitycompat`
   (byte parity and the same Control state, on SQLite and PostgreSQL).
   identity-platform adopts no kernel table.
@@ -511,6 +535,9 @@ The planned `kernel.entitlement.apply.v1` became
     order and affiliate packages' tables. They belong with the affiliate
     package.
 - **Subscription (in place).** 21 of 25 routes run on the adopted
+  - **Moved to affiliate:** the user's invite codes and their generation,
+    affiliate data rather than identity's (see Affiliate).
+- **Subscription (in place).** 20 of 25 routes run on the adopted
   `v2_subscription_group`, `v2_subscription_template`,
   `v2_plan_subscription_group` and `v2_subscription_group_node_protocols`
   tables, proved by `internal/tests/subscriptioncompat`: groups (list, read,
@@ -930,9 +957,9 @@ shapes; the first extraction step adopts the existing `v2_*` tables in place.
 | wireguard (T12) | 1 | peer lifecycle, generated config | package migration (names not fixed) | Needs anix-agent revival |
 | protocol-runtime (T12) | 20 | protocol composition, runtime-adapter selection, Agent task/monitor | package migration (names not fixed) | Needs anix-agent revival |
 | machine-telemetry, nftables-forward, gost-mesh, nat-egress (T12) | 5 / 0 / 3 / 0 | keep runtime semantics; add v2 entrypoint, generation, `RuntimeStatus` reports | — | Agent-target runtime packages |
-| identity-platform | 24 | group A switches with the identity cutover | — | 22 native-flagged (section 3.4); the two invite routes bridged |
+| identity-platform | 22 | group A switches with the identity cutover | — | All native-flagged (section 3.4); the two invite routes moved to affiliate |
 | platform | 12 | system configuration, audit, backup | — | Moved from identity-platform after v4.0.0; bridged |
-| affiliate | 8 | commissions, withdrawals, invite statistics and configuration | — | Moved from identity-platform after v4.0.0; 7 native-flagged (section 3.4), the configuration update bridged |
+| affiliate | 10 | invite codes, commissions, withdrawals, invite statistics and configuration | — | Moved from identity-platform after v4.0.0; all native-flagged (section 3.4) |
 
 ## 7. Rollout Record Semantics (T5)
 

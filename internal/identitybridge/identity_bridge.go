@@ -174,7 +174,6 @@ func NewAllowlist(cfg *config.Config) (*packagebridge.Allowlist, error) {
 	userHandler := handler.NewUserHandler()
 	adminHandler := handler.NewAdminHandler()
 	mfaHandler := handler.NewMFAHandler()
-	inviteHandler := handler.NewInviteHandler()
 	handlers := map[string]gin.HandlerFunc{
 		"identity.auth.login":                            authHandler.Login,
 		"identity.auth.register":                         authHandler.Register,
@@ -198,8 +197,6 @@ func NewAllowlist(cfg *config.Config) (*packagebridge.Allowlist, error) {
 		"identity.user.mfa.backup_codes.regenerate.post": mfaHandler.RegenerateBackupCodes,
 		"identity.admin.mfa.config.get":                  mfaHandler.GetAdminConfig,
 		"identity.admin.mfa.config.put":                  mfaHandler.UpdateAdminConfig,
-		"identity.user.invite.get":                       inviteHandler.GetInviteInfo,
-		"identity.user.invite.generate.post":             inviteHandler.GenerateCode,
 	}
 	operations := make([]packagebridge.Operation, 0, len(handlers))
 	for routeID, routeHandler := range handlers {

@@ -107,6 +107,33 @@
 
 ### Changed
 
+- **The user's invite codes moved to affiliate and run natively.**
+  `GET /api/v2/user/invite` and `POST /api/v2/user/invite/generate` move
+  from identity-platform to the affiliate package
+  (`affiliate.user.invite.get`, `affiliate.user.invite.generate.post`);
+  paths and answers are unchanged.
+  - affiliate adopts `v2_invite_code` (not a protected table: a code holds
+    no credential of an existing account) and reads the new grant
+    `kapi_order_billing_v1` for the paying users a user invited. The
+    statistics, the commission total and the commission balance come from
+    the tables and views the package already had.
+  - **Generation lock.** The kernel counted a user's unused codes under a
+    row lock on the user's `v2_user` row, which no package may take. The
+    kernel and the package now both count and create under a PostgreSQL
+    advisory lock keyed by the user (`pg_advisory_xact_lock`, class
+    `0x696e7663`, the user id masked to 31 bits); advisory locks need no
+    grant. SQLite still runs one writer at a time, and a generation that
+    read before another's write is retried, on both sides.
+  - `internal/tests/affiliatecompat` proves byte parity and the same codes
+    and configuration on SQLite and PostgreSQL (19 cases each), and that
+    the kernel's and the package's generations, run concurrently on one
+    database, never pass the limit. A leased package role waits for the
+    kernel's lock.
+  - **Transition.** The kernel keeps the old `identity.*` ids callable
+    (`internal/compat/v2/moved_routes.go`) and prefers affiliate while both
+    packages declare the routes. Upgrade affiliate before identity-platform.
+    identity-platform now has 22 routes, all native-flagged.
+  - Extraction map: 166 `native-flagged`, 110 `bridged`, 16 `kernel-owned`.
 - The Agent contract (`anix.agent.v1`) now lives in Control's SDK module,
   `github.com/AnixOps/anix-control/sdk` (plan step A0). Control no longer
   requires `github.com/AnixOps/anix-agent/sdk`, which is frozen at v1.1.0.

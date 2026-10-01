@@ -19,8 +19,11 @@ type MovedRoute struct {
 
 // movedRoutes: system configuration, audit and backup moved to platform;
 // affiliate commissions, withdrawals and settings to affiliate; the Flux
-// reset-flow endpoint to forward (4.1).
+// reset-flow endpoint to forward (4.1). The user's invite codes and their
+// generation followed to affiliate (4.1).
 var movedRoutes = []MovedRoute{
+	{Method: "GET", LegacyPath: "/api/v2/user/invite", FromPackage: "identity-platform", FromRoute: "identity.user.invite.get", ToPackage: "affiliate", ToRoute: "affiliate.user.invite.get"},
+	{Method: "POST", LegacyPath: "/api/v2/user/invite/generate", FromPackage: "identity-platform", FromRoute: "identity.user.invite.generate.post", ToPackage: "affiliate", ToRoute: "affiliate.user.invite.generate.post"},
 	{Method: "GET", LegacyPath: "/api/v2/admin/invite/config", FromPackage: "identity-platform", FromRoute: "identity.admin.invite.config.get", ToPackage: "affiliate", ToRoute: "affiliate.admin.invite.config.get"},
 	{Method: "PUT", LegacyPath: "/api/v2/admin/invite/config", FromPackage: "identity-platform", FromRoute: "identity.admin.invite.config.put", ToPackage: "affiliate", ToRoute: "affiliate.admin.invite.config.put"},
 	{Method: "GET", LegacyPath: "/api/v2/admin/invite/stats", FromPackage: "identity-platform", FromRoute: "identity.admin.invite.stats.get", ToPackage: "affiliate", ToRoute: "affiliate.admin.invite.stats.get"},

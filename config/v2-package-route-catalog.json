@@ -2306,8 +2306,8 @@
   {
     "method": "GET",
     "path": "/api/v2/user/invite",
-    "owner": "identity-platform",
-    "route_id": "identity.user.invite.get",
+    "owner": "affiliate",
+    "route_id": "affiliate.user.invite.get",
     "envelope": "panel",
     "middleware_group": "user",
     "transport": "http"
@@ -2324,8 +2324,8 @@
   {
     "method": "POST",
     "path": "/api/v2/user/invite/generate",
-    "owner": "identity-platform",
-    "route_id": "identity.user.invite.generate.post",
+    "owner": "affiliate",
+    "route_id": "affiliate.user.invite.generate.post",
     "envelope": "panel",
     "middleware_group": "user",
     "transport": "http"

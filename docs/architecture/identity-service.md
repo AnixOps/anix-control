@@ -168,8 +168,7 @@ instance's generation.
 - **Group A — moves to identity, switched together at cutover:**
   - login and register;
   - user MFA (6) and admin MFA configuration (2);
-  - admin user create, update, ban, unban and delete;
-  - invite code generate and list.
+  - admin user create, update, ban, unban and delete.
 
   For admin create and update, identity handles the identity fields and
   passes the entitlement fields to `UpdateSubscriber`. Responses stay
@@ -189,13 +188,15 @@ instance's generation.
 - **Resets, native at any time (in place):** the admin traffic and
   subscription resets change only the subscriber, through
   `KernelSubscriber.ResetTraffic` and `ResetCredentials`.
-- **Stay bridged:** the user's invite routes, which are affiliate data.
-- **Moved to other packages, still bridged (done, step 7):**
+- **Moved to other packages (done, step 7):**
   - system configuration, audit and backup (12 routes) → new package
     `platform`;
   - `/user/reset` → `forward`;
   - commissions, withdrawals and invite statistics and configuration (8) →
-    new package `affiliate`.
+    new package `affiliate`;
+  - the user's invite codes and their generation (2) → `affiliate`, which
+    serves them natively on the adopted `v2_invite_code`
+    ([package-extraction.md](package-extraction.md#34-in-place-adoption-and-kernel-views)).
 
   The HTTP paths are unchanged; only the owner and route id changed
   (`platform.*`, `affiliate.*`, `forward.user.reset.post`).
@@ -316,7 +317,8 @@ expired (Control).
       - **Invite codes stay with Control.** They carry subscriber and
         commission data. Registration will validate and consume a code
         through `CreateSubscriber`, so `/user/invite` and
-        `/user/invite/generate` leave group A.
+        `/user/invite/generate` leave group A. They moved to the affiliate
+        package, which reads and writes `v2_invite_code` in place.
 11. Group A native handlers with parity tests, in three steps:
     - 11a (in place): login and registration in identity.
       - Accounts, bcrypt passwords, the ban flag and MFA come from identity;
@@ -429,8 +431,8 @@ expired (Control).
       any time. Their request ids, `identity.reset_traffic:<user>:<digest>`
       and `identity.reset_subscribe:<user>:<digest>`, are the legacy
       handlers' too, so a retry applies once whichever side serves it.
-    - **Stay bridged.** The user's invite code list and generation
-      (affiliate data; Control keeps the codes).
+    - **Moved to affiliate.** The user's invite code list and generation
+      (affiliate data; registration still consumes the codes in Control).
     - `internal/tests/identitycompat` proves the parity, and that the reads
       answer identity's account rather than the projection.
 15. The administrator's user directory (in place): the user list and
