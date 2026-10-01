@@ -157,9 +157,11 @@
   and the whole `v2_plan` row. Each order now carries its own fields, `plan`
   as `{id, name}` and, for administrators only, `user` as `{id, email}`; a
   plan or buyer that no longer exists is left out, as before.
-  - The bundled frontend reads only those fields and needs no change.
-    `docs/UPGRADE.md` lists every field that disappears and where to read it
-    instead.
+  - The bundled frontend reads only those fields (`plan.name`, and
+    `user.email` on the administrator's page) and needs no change; its order
+    page tests now use the slim answers, an order without a plan or buyer
+    included. `docs/UPGRADE.md` lists every field that disappears and where
+    to read it instead.
   - The user's order list clamps `page_size` as the administrator's does
     (1 to 100, default 20 for 0 or less): a negative size listed every order
     and 0 none.
