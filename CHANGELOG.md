@@ -2,39 +2,42 @@
 
 ## Unreleased
 
+## 4.1.0-rc.2 - 2026-10-01
+
+4.1.0-rc.2 is the second 4.1.0 release candidate. It brings thirteen
+security fixes, mostly in how nodes and agents authenticate and in what
+administrator answers reveal, and lands the kernel side of node
+operations: the binding KernelNodeOps contract with its executors (NO-1 to
+NO-8), the node credential split (phases P1 and P2), sealed secret handles
+at the v2 gateway, Agent PKI, and configuration, users and reports on the
+Agent Control stream (A2-1 to A2-5). The new features are opt-in and
+additive on the wire; new tables are created at start and no existing
+table is altered. Before upgrading, give every caller of the node gRPC
+listener a node key or `grpc.api_token`, update API clients of the
+administrator's user and order lists and of masked secrets, and review
+users' legacy forward rules, forward targets and clean agent bindings, and
+paid payments with a pending order. After upgrading, disable again any node
+an agent had re-enabled, set the API port of forward nodes without one,
+then run `anix-control node-secrets backfill` and `verify`.
+`docs/UPGRADE.md`, "Upgrading From 4.1.0-rc.1 To 4.1.0-rc.2", has the
+checklist. Upgrade the forward package before plan, and affiliate before
+identity-platform.
+
 ### Security
 
-- **The gost API connection test runs in the kernel.**
-  `POST /api/v2/admin/forward/test-connection` (gost-mesh, native-flagged)
-  dialled the gost API from the package host with the token the
-  administrator typed. The route is now listed in
-  `config/node-secret-fields.json` (target kind `dial`): the gateway seals
-  the token into a handle, the package's native handler submits
-  `TestForwardBackend` (`diagnose.forward_backend`, capability
-  `kernel.nodeops.diagnose.v1`) with its request binding, and the kernel
-  dials with its own gost client. The package never sees the token, the
-  ledger holds neither token nor handle, and the answer is byte for byte
-  the legacy one (`gostmeshcompat`, through the real gateway, sealer,
-  bridge session and router). A request that is not an administrator's
-  dials public addresses only; a shadow run submits nothing; a host
-  without KernelNodeOps keeps the route legacy.
-- **Forward runtime job payloads and NodeX requests carry no stored
-  token.** See the NO-7 entry under Added: new job rows hold no node token,
-  old rows are scrubbed at start, readers scrub meanwhile, and a forward
-  node's token is presented only at its pinned endpoint.
-
-- UniProxy over HTTP refuses a disabled node. A node an administrator
-  disabled kept polling its configuration and users over
-  `/api/v1/server/UniProxy/*` (and the `/api/v2` alias), so disabling a
-  node did not stop it serving. `NodeAuth` now answers 403
-  (`{"error":"node disabled"}`) before the heartbeat, as the HTTP node API
-  and the gRPC listener do.
 - The node gRPC listener no longer lets in callers without a node key when
   `grpc.api_token` is empty, the default. It accepted any `authorization`
   header, so anyone who reached port 50051 could read every node's
   configuration and protocol keys (`NodeService.GetConfig`), every user's
   UUID (`UserService.GetUsers`), and report traffic, status, online users and
   logs for any node. See `docs/UPGRADE.md`.
+  - **Affected.** Every build up to 4.1.0-rc.1 that ran the node gRPC
+    listener (`grpc.enabled`: on, bound to 127.0.0.1, in
+    `config.yaml.example`; off in `config.prod.yaml` and the Helm chart)
+    where untrusted callers could reach port 50051. With `grpc.api_token`
+    empty, the default, any caller was let in; whatever the token, any node
+    key acted for every node and a disabled node's key still worked. Every
+    transport's heartbeat re-enabled a disabled node in every deployment.
   - Without credentials only `HealthService` and `NodeService/Register`
     answer. A node authenticates with its API key (`x-api-key` and
     `x-node-id`); `grpc.api_token`, when set, is the administrator's token.
@@ -58,6 +61,14 @@
     agent ran. They still record `last_check_at` and set a pending or offline
     node online, and the administrator's node list shows a disabled node as
     disabled.
+- UniProxy over HTTP refuses a disabled node. A node an administrator
+  disabled kept polling its configuration and users over
+  `/api/v1/server/UniProxy/*` (and the `/api/v2` alias), so disabling a
+  node did not stop it serving. `NodeAuth` now answers 403
+  (`{"error":"node disabled"}`) before the heartbeat, as the HTTP node API
+  and the gRPC listener do.
+  - **Affected.** Every build up to 4.1.0-rc.1 with nodes that poll UniProxy
+    (V2bX, XrayR): a disabled node kept its configuration and users.
 - SQL logs no longer contain the values bound to statements. With
   `database.log_level: info`, the example configuration's level, GORM logged
   every statement with its values: node API keys and secrets, tokens,
@@ -65,31 +76,17 @@
   `warn`, slow ones) were logged with their values at the other levels too.
   Statements are now logged with their placeholders
   (`ParameterizedQueries`).
-
-- The SMTP password is no longer answered in clear to administrators.
-  `GET /api/v2/admin/notification/email/config` (legacy and native) answered
-  it as stored, and the system configuration list, single-key read and
-  update answer showed it inside the `notification.email.config` value: the
-  key's name does not mark it secret. The password now reads `********` when
-  one is set (`""` when none is) in all of these answers; the rest of the
-  value is shown as stored.
-  - Saving keeps it: an e-mail configuration update with the placeholder (or,
-    as before, a blank password) and a system configuration update whose
-    value carries `"password":"********"` keep the stored password, and a
-    new value replaces it. KernelSettings applies the same rule to a
-    `mail` namespace write, and the notification package sends the
-    placeholder when an update keeps the password.
-  - The test e-mail still uses the stored password: the notification package
-    keeps `kernel.settings.mail.secrets.v1`; only answers to administrators
-    are masked.
-  - The e-mail settings page starts the password field empty with
-    "Password stored; leave blank to keep it". See `docs/UPGRADE.md`.
-
+  - **Affected.** Every build up to 4.1.0-rc.1 whose `database.log_level` was
+    `info` (as in `config.yaml.example`) or `warn`; at `error`, the
+    `config.prod.yaml` level, failed statements were still logged with
+    their values. Logs kept from those builds may hold these secrets.
 - The x402 callback marks a payment paid only when it pays the payment's
   token and at least its amount. `POST /api/v2/payment/x402/callback`
   verified the confirmation service's signature but never compared the
   signed `amount` and `token` with the payment, so a confirmed transfer of
   any amount in any token paid the order.
+  - **Affected.** Every build up to 4.1.0-rc.1 with an x402 gateway enabled,
+    on the kernel's callback and, from #96, the payment package's native one.
   - The amount is compared in the unit `POST /api/v2/payment/x402/create`
     asks for: whole tokens (not base units such as wei), the record's
     `actual_amount`, shown with eight decimals. More is accepted.
@@ -104,6 +101,22 @@
     callback pays it; and the token amount is still the create route's
     placeholder conversion (order total in cents / 10^8), not an exchange
     rate.
+- **Invite codes are capped.** A user holds at most `code_count` unused
+  invite codes, as v2board limits them (`invite_gen_limit`).
+  `POST /api/v2/user/invite/generate` created codes without limit, and the
+  invite configuration's `code_count` was stored but unused.
+  - **Affected.** Every build up to 4.1.0-rc.1: any user could create codes
+    without limit.
+  - The limit is read from the stored configuration on each request; a
+    missing configuration or a `code_count` of `0` means 5, v2board's
+    default.
+  - Used codes, expired codes, other users' codes and public codes are not
+    counted. Concurrent requests of one user are counted one after another.
+  - At the limit the answer is v2board's: `500`
+    `{"error":"The maximum number of creations has been reached"}`, and no
+    code is created.
+  - No other path creates a user's codes; an administrator's generation,
+    if one is added, is not limited (`InviteService.GenerateInviteCode`).
 - Only administrators create or change legacy forward rules.
   `POST /api/v2/user/forward/rules` let any user create a rule on any relay
   and exit node, to any target, with speed, traffic and expiry limits of
@@ -117,6 +130,8 @@
   `GET /api/v2/user/forward/rules` still lists their rules, read-only. The
   administrator's `/api/v2/admin/forward/rules` routes are unchanged. See
   `docs/UPGRADE.md`.
+  - **Affected.** Every build up to 4.1.0-rc.1 with forward nodes: any
+    logged-in user could create such a rule.
 - A user's forward targets must be public. `POST /api/v2/forward/create`
   and `POST /api/v2/forward/update` let a user point a forward at any
   target, and the tunnel's node connects to it: the node's loopback
@@ -134,6 +149,8 @@
   Administrators' forwards are not checked, and tunnels are administrator
   routes. A user's diagnosis now also refuses the loopback names and numeric
   forms without asking DNS. See `docs/UPGRADE.md`.
+  - **Affected.** Every build up to 4.1.0-rc.1 whose users hold tunnel
+    permissions.
 - A clean agent's token is bound to its node.
   `POST /api/v2/forward-agent/register` set the agent's node to the body's
   `nodeId`, so the token of any clean agent could register under any node id
@@ -144,12 +161,81 @@
   `403` (`agent is bound to another node`) and changes nothing; one without
   `nodeId` keeps the binding. The binding uses the existing `node_id`
   column, so there is no migration. See `docs/UPGRADE.md`.
+  - **Affected.** Every build up to 4.1.0-rc.1 with clean agents
+    (`forward_runtime.backend: clean_agent`): the holder of any clean agent
+    token could take another node's jobs and its API token.
   - Issuing a token now names its node. `POST /api/v2/admin/forward/agents`
     without a `nodeId`, with `0` or with an id that is not a forward node is
     refused with the panel error `nodeId is required: a clean agent token is
     issued for one forward node` or `forward node not found`, and issues
     nothing; the token is bound to the node at issue. Tokens issued earlier
     without a node keep working and bind on their first registration.
+- **Node secrets are masked in administrator answers.** They no longer
+  show in clear; they read `********`, the placeholder of system
+  configuration and payment gateway secrets.
+  - **Affected.** Every build up to 4.1.0-rc.1: administrator answers carried
+    these secrets in clear, so anything that stored or relayed an answer
+    held them.
+  - **Node protocols.** The node list and detail,
+    `GET /api/v2/admin/nodes/:id/protocols`, the answer of
+    `POST /api/v2/admin/nodes/:id/protocols`, and a subscription group's
+    protocols and the protocol pool
+    (`GET /api/v2/admin/subscription/groups/:id/protocols`,
+    `GET /api/v2/admin/subscription/protocols/available`) showed whole
+    `v2_node_protocol` rows: Reality and TLS private keys, WireGuard server
+    private keys, Shadowsocks server keys, Hysteria2 obfuscation and auth
+    passwords, and tokens in a custom configuration. A setting whose name
+    marks a secret (`*_key` except public keys and key file paths,
+    `password`, `psk`, `auth`, `token`, `secret`, `credential`, `seed`) now
+    reads `********` in `settings`, `tls_settings`, `transport_settings`,
+    `reality_settings` and `custom_config`. Public keys and Reality's
+    `short_id` are still shown. A node's raw configuration (`raw_config` in
+    the node answers and `GET /api/v2/admin/nodes/:id/raw-config`) is masked
+    the same way.
+  - **Saving back.** A protocol update, a raw configuration update and a
+    node update that send `********` keep the stored secret, and a new value
+    replaces it, so the protocol editor keeps working. A new protocol has
+    nothing stored, so `********` in it is stored empty.
+  - **Registration keys.** `GET /api/v2/admin/auth-keys` showed every node
+    registration key. Keys now read `********`. `POST /api/v2/admin/auth-keys`
+    still answers the new key, once, and the node page's Auth Key dialog can
+    now generate one.
+  - **Forward node tokens.** `GET /api/v2/admin/forward/nodes[/:id]`, the
+    answer of `PUT /api/v2/admin/forward/nodes/:id`, and the relay and exit
+    nodes in the admin forward rule answers showed every node's `api_token`,
+    which authenticates the node's agent. It now reads `********`.
+    `POST /api/v2/admin/forward/nodes` answers it once, and the forward node
+    page and the setup wizard show a generated token after creating the
+    node. An update that sends an empty token or `********` keeps the stored
+    token.
+  - **Proxy node credentials.** A proxy node's `api_key` and `secret` were
+    already left out of the node answers.
+    `GET /api/v2/admin/nodes/:id/credentials` still answers them, for the
+    deployment helper and Ansible, and the audit log now records every read
+    of it, as action `reveal`.
+
+  Nodes and agents are not affected: UniProxy, the gRPC node service and
+  the forward agent routes read the stored values. None of these routes has
+  a native package handler. See `docs/UPGRADE.md`.
+- The SMTP password is no longer answered in clear to administrators.
+  `GET /api/v2/admin/notification/email/config` (legacy and native) answered
+  it as stored, and the system configuration list, single-key read and
+  update answer showed it inside the `notification.email.config` value: the
+  key's name does not mark it secret. The password now reads `********` when
+  one is set (`""` when none is) in all of these answers; the rest of the
+  value is shown as stored.
+  - **Affected.** Every build up to 4.1.0-rc.1 with an SMTP password stored.
+  - Saving keeps it: an e-mail configuration update with the placeholder (or,
+    as before, a blank password) and a system configuration update whose
+    value carries `"password":"********"` keep the stored password, and a
+    new value replaces it. KernelSettings applies the same rule to a
+    `mail` namespace write, and the notification package sends the
+    placeholder when an update keeps the password.
+  - The test e-mail still uses the stored password: the notification package
+    keeps `kernel.settings.mail.secrets.v1`; only answers to administrators
+    are masked.
+  - The e-mail settings page starts the password field empty with
+    "Password stored; leave blank to keep it". See `docs/UPGRADE.md`.
 - The single-key system configuration answer no longer returns secrets.
   `GET /api/v2/admin/system/configs/:key` answered a sensitive value in
   clear, such as the NodeX token (`forward.runtime.nodex.token`), the SMTP
@@ -158,6 +244,8 @@
   `********` when a value is stored (`""` when none is), with `sensitive`
   and `has_value`. `PUT /api/v2/admin/system/configs/:key` answers masked
   too, as before.
+  - **Affected.** Every build up to 4.1.0-rc.1 with a sensitive system
+    configuration value stored.
   - Saving `********` back keeps the stored value, as before; a new value
     replaces it. Saving `********` for a secret that is not stored is now
     refused (`value is required`) instead of storing the placeholder.
@@ -166,9 +254,81 @@
     `<FORWARD_API_TOKEN>` instead of the token. The forward setup wizard
     works as before. The routes stay bridged to the kernel; there is no
     native handler. See `docs/UPGRADE.md`.
+- **The gost API connection test runs in the kernel.**
+  `POST /api/v2/admin/forward/test-connection` (gost-mesh, native-flagged)
+  dialled the gost API from the package host with the token the
+  administrator typed. The route is now listed in
+  `config/node-secret-fields.json` (target kind `dial`): the gateway seals
+  the token into a handle, the package's native handler submits
+  `TestForwardBackend` (`diagnose.forward_backend`, capability
+  `kernel.nodeops.diagnose.v1`) with its request binding, and the kernel
+  dials with its own gost client. The package never sees the token, the
+  ledger holds neither token nor handle, and the answer is byte for byte
+  the legacy one (`gostmeshcompat`, through the real gateway, sealer,
+  bridge session and router). A request that is not an administrator's
+  dials public addresses only; a shadow run submits nothing; a host
+  without KernelNodeOps keeps the route legacy.
+  - **Affected.** Every build up to 4.1.0-rc.1: the gost-mesh package host
+    received the token in the request body, and in `native` mode dialled
+    with it.
+- **Forward runtime job payloads and NodeX requests carry no stored
+  token.** See the NO-7 entry under Added: new job rows hold no node token,
+  old rows are scrubbed at start, readers scrub meanwhile, and a forward
+  node's token is presented only at its pinned endpoint.
+  - **Affected.** Every build up to 4.1.0-rc.1 with the gost (NodeX)
+    backend or a job backend (local Ansible, clean agent): the job table, the
+    administrator's job list and a clean agent's claim carried the ingress
+    node's API token.
 
 ### Changed
 
+- **Extraction map at 4.1.0-rc.2.** Of the 292 `/api/v2` routes, 173 are
+  `native-flagged`, 88 `bridged` and 31 `kernel-owned`
+  (`config/package-extraction.json`). The counts quoted in the entries
+  below are those at each change.
+- **Extraction map: `kernel-owned` routes.** `config/package-extraction.json`
+  has a fourth mode, `kernel-owned`, for routes that stay in the kernel by
+  design; `bridged` now means only "not yet". Each `kernel-owned` row
+  carries a one-line `reason`. Nothing changes at runtime: these routes are
+  registered and relayed as before. 16 routes are `kernel-owned`, 112
+  `bridged` and 164 `native-flagged`:
+  - platform: the generic system configuration routes (no package gets a
+    settings grant over every namespace) and backup creation, deletion and
+    restore (archives on the kernel's disk);
+  - machine-telemetry: the system information and the monitoring WebSocket;
+  - protocol-runtime: the agent channel (registration, heartbeat, task poll,
+    result, monitor and the WebSocket);
+  - proxy-node: the node agent WebSocket.
+
+  `check_plugin_only_routes.py` accepts a `reason` only on `kernel-owned`
+  rows and now checks the package hosts too: a `bridged` or `kernel-owned`
+  route must be in its host's `bridgedRoutes` and named nowhere else in its
+  package, so it has no native handler, and a `native-flagged` or `native`
+  route must not be in `bridgedRoutes`.
+  `docs/architecture/package-extraction.md` has a refreshed status: route
+  counts per package and mode, what unblocks each group of `bridged`
+  routes, the kernel contracts (KernelIdentity, KernelSubscriber,
+  KernelSettings, KernelOrder), the protected tables and the `kapi_*`
+  views. Text that earlier merges duplicated in its section 3.4 is removed.
+- **Extraction map: 15 node routes are `kernel-owned`.** The owner accepted
+  decisions D3 and D4 of `docs/architecture/node-ops-service.md`, and the
+  routes its section 6 keeps in the kernel are now `kernel-owned` in
+  `config/package-extraction.json`, each with its reason. Nothing changes
+  at runtime: they are registered and relayed as before. 31 routes are
+  `kernel-owned`, 88 `bridged` and 173 `native-flagged`.
+  - forward (11): the runtime status and doctor (the kernel's own
+    executors, until the runtime moves to agents, A5); flow upload, report
+    and snapshot (one kernel transaction, as the callers send no batch id);
+    clean agent registration, heartbeat and report, and the agents' rule
+    list (the agent channel, removed in 5.0).
+  - proxy-node (4): the node credentials display (no contract call reveals
+    a stored secret); node registration, heartbeat and runtime health (the
+    node channel, removed in 5.0).
+
+  The package hosts list them in `bridgedRoutes` as before, now commented as
+  kernel-owned. `docs/architecture/package-extraction.md` updates its counts
+  and drops the open-decision row from its section 3.2 blockers; 76 routes
+  wait on KernelNodeOps.
 - **The speed-limit routes moved to forward; four run natively.** The five
   `/api/v2/speed-limit/*` routes are Flux forward limits, whose rows name
   forward tunnels; they move from plan to forward (`forward.speed_limit.*`)
@@ -199,8 +359,9 @@
     `kapi_order_billing_v1` for the paying users a user invited. The
     statistics, the commission total and the commission balance come from
     the tables and views the package already had.
-  - **Generation lock.** The kernel counted a user's unused codes under a
-    row lock on the user's `v2_user` row, which no package may take. The
+  - **Generation lock.** For the cap under Security, the kernel counted a
+    user's unused codes under a row lock on the user's `v2_user` row, which
+    no package may take. The
     kernel and the package now both count and create under a PostgreSQL
     advisory lock keyed by the user (`pg_advisory_xact_lock`, class
     `0x696e7663`, the user id masked to 31 bits); advisory locks need no
@@ -236,77 +397,6 @@
     tests anix-agent against this checkout's SDK through a `go.work` replace.
   - **License.** The moved files were MPL-2.0 in anix-agent; their sole
     author relicensed them under this repository's MIT license.
-- A user holds at most `code_count` unused invite codes, as v2board limits
-  them (`invite_gen_limit`). `POST /api/v2/user/invite/generate` created
-  codes without limit, and the invite configuration's `code_count` was
-  stored but unused.
-  - The limit is read from the stored configuration on each request; a
-    missing configuration or a `code_count` of `0` means 5, v2board's
-    default.
-  - Used codes, expired codes, other users' codes and public codes are not
-    counted. Concurrent requests of one user are counted one after another.
-  - At the limit the answer is v2board's: `500`
-    `{"error":"The maximum number of creations has been reached"}`, and no
-    code is created.
-  - No other path creates a user's codes; an administrator's generation,
-    if one is added, is not limited (`InviteService.GenerateInviteCode`).
-- Administrator answers no longer show node secrets in clear; they read
-  `********`, the placeholder of system configuration and payment gateway
-  secrets.
-  - **Node protocols.** The node list and detail,
-    `GET /api/v2/admin/nodes/:id/protocols`, the answer of
-    `POST /api/v2/admin/nodes/:id/protocols`, and a subscription group's
-    protocols and the protocol pool
-    (`GET /api/v2/admin/subscription/groups/:id/protocols`,
-    `GET /api/v2/admin/subscription/protocols/available`) showed whole
-    `v2_node_protocol` rows: Reality and TLS private keys, WireGuard server
-    private keys, Shadowsocks server keys, Hysteria2 obfuscation and auth
-    passwords, and tokens in a custom configuration. A setting whose name
-    marks a secret (`*_key` except public keys and key file paths,
-    `password`, `psk`, `auth`, `token`, `secret`, `credential`, `seed`) now
-    reads `********` in `settings`, `tls_settings`, `transport_settings`,
-    `reality_settings` and `custom_config`. Public keys and Reality's
-    `short_id` are still shown. A node's raw configuration (`raw_config` in
-    the node answers and `GET /api/v2/admin/nodes/:id/raw-config`) is masked
-    the same way.
-  - **Saving back.** A protocol update, a raw configuration update and a
-    node update that send `********` keep the stored secret, and a new value
-    replaces it, so the protocol editor keeps working. A new protocol has
-    nothing stored, so `********` in it is stored empty.
-  - **Registration keys.** `GET /api/v2/admin/auth-keys` showed every node
-    registration key. Keys now read `********`. `POST /api/v2/admin/auth-keys`
-    still answers the new key, once, and the node page's Auth Key dialog can
-    now generate one.
-  - **Forward node tokens.** `GET /api/v2/admin/forward/nodes[/:id]`, the
-    answer of `PUT /api/v2/admin/forward/nodes/:id`, and the relay and exit
-    nodes in the admin forward rule answers showed every node's `api_token`,
-    which authenticates the node's agent. It now reads `********`.
-    `POST /api/v2/admin/forward/nodes` answers it once, and the forward node
-    page and the setup wizard show a generated token after creating the
-    node. An update that sends an empty token or `********` keeps the stored
-    token.
-  - **Proxy node credentials.** A proxy node's `api_key` and `secret` were
-    already left out of the node answers.
-    `GET /api/v2/admin/nodes/:id/credentials` still answers them, for the
-    deployment helper and Ansible, and the audit log now records every read
-    of it, as action `reveal`.
-
-  Nodes and agents are not affected: UniProxy, the gRPC node service and
-  the forward agent routes read the stored values. None of these routes has
-  a native package handler. See `docs/UPGRADE.md`.
-
-- The kernel's legacy subscription membership routes go through the same
-  engine functions (`internal/subscriber`) as the contract:
-  - `POST /api/v2/admin/subscription/users/:user_id/groups`;
-  - `DELETE /api/v2/admin/subscription/users/:user_id/groups/:group_id`;
-  - `DELETE /api/v2/admin/subscription/groups/:id`.
-
-  They now append change-log rows, which they never did before. They also
-  record their request ids (`subscription.grant:`, `subscription.revoke:`,
-  `subscription.delete_group:`, derived from the request's
-  `Idempotency-Key`, else its request id). A retry therefore applies once
-  whichever side serves it, and a retried removal answers success rather
-  than "用户订阅分组不存在".
 - **Breaking for v2 API clients: the administrator's user list no longer
   shows subscription tokens.** `GET /api/v2/admin/users` answered every
   listed user's whole `v2_user` row, subscription token and proxy UUID
@@ -329,91 +419,24 @@
     longer in the list). `docs/UPGRADE.md` lists the change.
   - Users created in the same second keep a stable order
     (`created_at DESC, id DESC`); pages could repeat or skip them.
-
-
-- The Agent contract (`anix.agent.v1`) now lives in Control's SDK module,
-  `github.com/AnixOps/anix-control/sdk` (plan step A0). Control no longer
-  requires `github.com/AnixOps/anix-agent/sdk`, which is frozen at v1.1.0.
-  - **Moved as of v1.1.0.** The proto, generated code and `PROTOCOL.md` are
-    in `sdk/api/agent/v1` (Go package `agentv1pb`, generated by
-    `sdk/api/agent/gen.sh`). The helpers are `sdk/agentcontrol` and
-    `sdk/plugincontrol`.
-  - **Wire compatible.** Only `option go_package` changed; the registered file
-    name stays `api/grpc/agent/v1/agent.proto`. `agent_descriptor_test.go`
-    compares the serialized descriptor, with `go_package` cleared, against
-    v1.1.0's. The contract is in the protobuf compatibility golden and the
-    generated-code drift check.
-  - **Gates.** `check_agent_sdk_dependency.sh` now rejects any anix-agent
-    module in Control or the SDK.
-  - **SDK Sync.** The workflow reads anix-agent's `go.mod`. While anix-agent
-    requires its own SDK, the workflow checks that SDK's descriptor against
-    Control's. Once anix-agent requires `anix-control/sdk`, it builds and
-    tests anix-agent against this checkout's SDK through a `go.work` replace.
-  - **License.** The moved files were MPL-2.0 in anix-agent; their sole
-    author relicensed them under this repository's MIT license.
-- A user holds at most `code_count` unused invite codes, as v2board limits
-  them (`invite_gen_limit`). `POST /api/v2/user/invite/generate` created
-  codes without limit, and the invite configuration's `code_count` was
-  stored but unused.
-  - The limit is read from the stored configuration on each request; a
-    missing configuration or a `code_count` of `0` means 5, v2board's
-    default.
-  - Used codes, expired codes, other users' codes and public codes are not
-    counted. Concurrent requests of one user are counted one after another.
-  - At the limit the answer is v2board's: `500`
-    `{"error":"The maximum number of creations has been reached"}`, and no
-    code is created.
-  - No other path creates a user's codes; an administrator's generation,
-    if one is added, is not limited (`InviteService.GenerateInviteCode`).
-- Administrator answers no longer show node secrets in clear; they read
-  `********`, the placeholder of system configuration and payment gateway
-  secrets.
-  - **Node protocols.** The node list and detail,
-    `GET /api/v2/admin/nodes/:id/protocols`, the answer of
-    `POST /api/v2/admin/nodes/:id/protocols`, and a subscription group's
-    protocols and the protocol pool
-    (`GET /api/v2/admin/subscription/groups/:id/protocols`,
-    `GET /api/v2/admin/subscription/protocols/available`) showed whole
-    `v2_node_protocol` rows: Reality and TLS private keys, WireGuard server
-    private keys, Shadowsocks server keys, Hysteria2 obfuscation and auth
-    passwords, and tokens in a custom configuration. A setting whose name
-    marks a secret (`*_key` except public keys and key file paths,
-    `password`, `psk`, `auth`, `token`, `secret`, `credential`, `seed`) now
-    reads `********` in `settings`, `tls_settings`, `transport_settings`,
-    `reality_settings` and `custom_config`. Public keys and Reality's
-    `short_id` are still shown. A node's raw configuration (`raw_config` in
-    the node answers and `GET /api/v2/admin/nodes/:id/raw-config`) is masked
-    the same way.
-  - **Saving back.** A protocol update, a raw configuration update and a
-    node update that send `********` keep the stored secret, and a new value
-    replaces it, so the protocol editor keeps working. A new protocol has
-    nothing stored, so `********` in it is stored empty.
-  - **Registration keys.** `GET /api/v2/admin/auth-keys` showed every node
-    registration key. Keys now read `********`. `POST /api/v2/admin/auth-keys`
-    still answers the new key, once, and the node page's Auth Key dialog can
-    now generate one.
-  - **Forward node tokens.** `GET /api/v2/admin/forward/nodes[/:id]`, the
-    answer of `PUT /api/v2/admin/forward/nodes/:id`, and the relay and exit
-    nodes in the admin forward rule answers showed every node's `api_token`,
-    which authenticates the node's agent. It now reads `********`.
-    `POST /api/v2/admin/forward/nodes` answers it once, and the forward node
-    page and the setup wizard show a generated token after creating the
-    node. An update that sends an empty token or `********` keeps the stored
-    token.
-  - **Proxy node credentials.** A proxy node's `api_key` and `secret` were
-    already left out of the node answers.
-    `GET /api/v2/admin/nodes/:id/credentials` still answers them, for the
-    deployment helper and Ansible, and the audit log now records every read
-    of it, as action `reveal`.
-
-  Nodes and agents are not affected: UniProxy, the gRPC node service and
-  the forward agent routes read the stored values. None of these routes has
-  a native package handler. See `docs/UPGRADE.md`.
-- The kernel's backup and invite services reload the configuration they
-  keep in memory when it changes in another handler instance or through
-  KernelSettings. Before, a copy loaded once stayed until restart: for
-  example, invite code expiry kept using the configuration it first read.
-
+- **Breaking for v2 API clients: the order list and detail answers no
+  longer embed the buyer's and the plan's rows.**
+  `GET /api/v2/admin/orders`, `GET /api/v2/admin/orders/:id`,
+  `GET /api/v2/user/order` and `GET /api/v2/user/order/:id` embedded the
+  buyer's whole `v2_user` row, with its subscription token and proxy UUID,
+  and the whole `v2_plan` row. Each order now carries its own fields, `plan`
+  as `{id, name}` and, for administrators only, `user` as `{id, email}`; a
+  plan or buyer that no longer exists is left out, as before.
+  - The bundled frontend reads only those fields (`plan.name`, and
+    `user.email` on the administrator's page) and needs no change; its order
+    page tests now use the slim answers, an order without a plan or buyer
+    included. `docs/UPGRADE.md` lists every field that disappears and where
+    to read it instead.
+  - The user's order list clamps `page_size` as the administrator's does
+    (1 to 100, default 20 for 0 or less): a negative size listed every order
+    and 0 none.
+  - A user's order detail looks the order up by id and owner, and a request
+    without a user names no one; another user's order stays "not found".
 - The kernel's legacy subscription membership routes go through the same
   engine functions (`internal/subscriber`) as the contract:
   - `POST /api/v2/admin/subscription/users/:user_id/groups`;
@@ -426,119 +449,270 @@
   `Idempotency-Key`, else its request id). A retry therefore applies once
   whichever side serves it, and a retried removal answers success rather
   than "用户订阅分组不存在".
-- **Breaking for v2 API clients: the administrator's user list no longer
-  shows subscription tokens.** `GET /api/v2/admin/users` answered every
-  listed user's whole `v2_user` row, subscription token and proxy UUID
-  included, with the plan's row. Each user in `data.list` now carries only
-  the account and the subscription summary.
-  - **Removed fields:** `token`, `uuid`, `plan` (the plan row),
-    `invite_user_id`, `telegram_id`, `discount`, `commission_type`,
-    `commission_rate`, `remark_content`, `last_login_at` and `updated_at`.
-  - **Kept:** `id`, `email`, `balance`, `commission_balance`,
-    `device_limit`, `speed_limit`, `flowResetTime`, `transfer_enable`, `u`,
-    `d`, `plan_id`, `group_id`, `expired_at`, `banned`, `is_admin`,
-    `is_staff` and `created_at`.
-  - `GET /api/v2/admin/users/:id` still answers one user's whole row, token
-    included. The administrator's page now reads the token from it to copy
-    a subscription link, fills the edit form from it (the remark is no
-    longer in the list), and names plans from `GET /api/v2/admin/plans`.
-    `docs/UPGRADE.md` lists the change.
-  - Users created in the same second keep a stable order
-    (`created_at DESC, id DESC`); pages could repeat or skip them.
-
-- **Extraction map: `kernel-owned` routes.** `config/package-extraction.json`
-  has a fourth mode, `kernel-owned`, for routes that stay in the kernel by
-  design; `bridged` now means only "not yet". Each `kernel-owned` row
-  carries a one-line `reason`. Nothing changes at runtime: these routes are
-  registered and relayed as before. 16 routes are `kernel-owned`, 112
-  `bridged` and 164 `native-flagged`:
-  - platform: the generic system configuration routes (no package gets a
-    settings grant over every namespace) and backup creation, deletion and
-    restore (archives on the kernel's disk);
-  - machine-telemetry: the system information and the monitoring WebSocket;
-  - protocol-runtime: the agent channel (registration, heartbeat, task poll,
-    result, monitor and the WebSocket);
-  - proxy-node: the node agent WebSocket.
-
-  `check_plugin_only_routes.py` accepts a `reason` only on `kernel-owned`
-  rows and now checks the package hosts too: a `bridged` or `kernel-owned`
-  route must be in its host's `bridgedRoutes` and named nowhere else in its
-  package, so it has no native handler, and a `native-flagged` or `native`
-  route must not be in `bridgedRoutes`.
-  `docs/architecture/package-extraction.md` has a refreshed status: route
-  counts per package and mode, what unblocks each group of `bridged`
-  routes, the kernel contracts (KernelIdentity, KernelSubscriber,
-  KernelSettings, KernelOrder), the protected tables and the `kapi_*`
-  views. Text that earlier merges duplicated in its section 3.4 is removed.
-
-- **Extraction map: 15 node routes are `kernel-owned`.** The owner accepted
-  decisions D3 and D4 of `docs/architecture/node-ops-service.md`, and the
-  routes its section 6 keeps in the kernel are now `kernel-owned` in
-  `config/package-extraction.json`, each with its reason. Nothing changes
-  at runtime: they are registered and relayed as before. 31 routes are
-  `kernel-owned`, 88 `bridged` and 173 `native-flagged`.
-  - forward (11): the runtime status and doctor (the kernel's own
-    executors, until the runtime moves to agents, A5); flow upload, report
-    and snapshot (one kernel transaction, as the callers send no batch id);
-    clean agent registration, heartbeat and report, and the agents' rule
-    list (the agent channel, removed in 5.0).
-  - proxy-node (4): the node credentials display (no contract call reveals
-    a stored secret); node registration, heartbeat and runtime health (the
-    node channel, removed in 5.0).
-
-  The package hosts list them in `bridgedRoutes` as before, now commented as
-  kernel-owned. `docs/architecture/package-extraction.md` updates its counts
-  and drops the open-decision row from its section 3.2 blockers; 76 routes
-  wait on KernelNodeOps.
+- The kernel's backup and invite services reload the configuration they
+  keep in memory when it changes in another handler instance or through
+  KernelSettings. Before, a copy loaded once stayed until restart: for
+  example, invite code expiry kept using the configuration it first read.
+- The platform package reads the backup configuration through
+  KernelSettings and no longer adopts `v2_backup_config`. It could read the
+  S3 access and secret keys from the adopted row and write the row
+  directly. `GET /api/v2/admin/system/backup/config` and the answer of its
+  `PUT` now read namespace `backup` without its secrets, so the S3 keys
+  reach the package masked, exactly as the kernel's handler shows them; the
+  package's grants are `kernel.storage.adopt:v2_backup_record`,
+  `kernel.view:kapi_system_audit_log_v1` and
+  `kernel.settings.backup.read.v1`/`write.v1`, and on PostgreSQL its role
+  loses its privileges on `v2_backup_config`. A backup read through
+  KernelSettings now creates the default row when there is none, as the
+  kernel's handler does, and answers the row's `id`, `created_at` and
+  `updated_at` as read-only keys. A host without the contract keeps both
+  routes legacy.
+- A paid payment callback marks its order paid and completes it only while
+  the order is pending. A payment for an order that was cancelled,
+  completed, or paid by another payment is recorded, and the order is left
+  unchanged; before, it was marked paid and completed again (its plan was
+  already granted once per order). The kernel's callbacks now complete
+  orders through `service.CompleteOrderPaymentTx`, which records each paid
+  payment's outcome in `v4_kernel_subscriber_request` under
+  `payment:<trade_no>`, and a repeat of a paid payment applies it to its
+  order again, changing nothing unless the order was left pending. See
+  `docs/UPGRADE.md`.
 
 ### Added
 
-- **Configuration push on the Agent Control stream (A2-3, `config.v1`)**
-  (`sdk/api/agent/v1/PROTOCOL.md`, "Data plane";
-  `docs/architecture/node-ops-service.md` section 5.5). When an agent's
-  `Hello` lists `config.v1`, the kernel lists it in
-  `HelloAck.server_capabilities`, for proxy and forward nodes, and sends the
-  node's desired configuration (`v4_kernel_node_desired_config`) as a
-  `ConfigSnapshot`: after the `HelloAck` when `Hello.config_revision` is not
-  the desired revision (none, older, or from another database); when
-  `node.sync` stores or forces a configuration, in place of `node.reload`;
-  and when a rebuild from the node's rows, once a minute per session, moves
-  the revision. A session is never sent a revision older than one it was
-  sent. Agents without `config.v1`, and every agent in the field, get
-  nothing new and keep receiving `node.reload`.
-  - `ConfigStatus` from the agent is accepted once `config.v1` is
-    negotiated (before, and without it, it is still `InvalidArgument`) and
-    recorded in the new protected table `v4_kernel_node_config_status`: the
-    last report with the kernel's verdict (`applied`, `failed`, `stale` for
-    an older revision, `mismatch` for another hash), and the applied
-    revision and hash, which only a status naming the desired revision and
-    hash moves.
-  - `node.sync` on a `config.v1` agent ends on the agent's `ConfigStatus`
-    for the pushed revision and hash: `SUCCEEDED` when applied, `FAILED`
-    (`BACKEND_FAILED`) with the agent's error otherwise; a stale or
-    mismatched status does not end it. The operation runs at the
-    configuration revision (`node_revision`), and the result's `ack` is the
-    status. An agent that reconnects meanwhile is sent the snapshot again
-    and its answer on the new session ends the operation. A sync that is not
-    forced also pushes when the agent has not applied the stored
-    configuration. `POST /admin/nodes/:id/sync` answers such an agent with
-    the snapshot's `config_revision` and `config_hash`.
-  - The snapshot carries what the legacy pulls give the node and no other
-    secret. The proxy document gains `legacy_pull`: the UniProxy answer
-    for no node type and for each type the node serves, built by
-    `service.BuildUniProxyNodeConfig`, which the UniProxy handler now calls;
-    each protocol's `config` is the v2board `GetConfig` source. The
-    document's `raw_config` is read through the node credential split, as
-    UniProxy reads it. The new revision lands once, at the next rebuild.
-  - `/metrics` adds `anixops_agent_config_snapshots_sent_total{trigger}`
-    (`hello`, `sync`, `refresh`),
-    `anixops_agent_config_statuses_total{result}` and
-    `anixops_agent_config_lagging_nodes`.
-  - Tests: `internal/tests/nodeopsagent` on SQLite and PostgreSQL
-    (negotiation, the `Hello` reconcile, `node.sync` ending on
-    `ConfigStatus`, a reconnect mid-operation, parity with UniProxy and
-    v2board `GetConfig`, a walk of every secret-named key), and the listener
-    in `internal/grpc`.
+- **Design: node operations, the node credential split and Agent A2**
+  (`docs/architecture/node-ops-service.md`), with a draft contract
+  `sdk/api/kernelnodeops/v1` (`anixops.kernelnodeops.v1`). When it merged
+  (#101) nothing changed in behaviour; the entries below implement it, and
+  NO-1 made the contract binding.
+  - **KernelNodeOps.** Packages would request typed, idempotent node
+    operations: apply a forward, sync a node, check endpoints, run an agent
+    diagnostic, issue a credential. The kernel holds the credentials and
+    agent connections and answers receipts and results. The design covers
+    the request-id ledger, polling and a watch stream, a capability per
+    operation family, generation fencing, and sealed secret handles, so a
+    package never sees a token or private key.
+  - **Node credential split.** Credentials and secrets would move out of
+    `v2_node`, `v2_authorized_key`, `v2_forward_node`,
+    `v2_forward_clean_agent`, `v2_node_protocol` and `v2_wireguard_peer`
+    into new protected tables, in the phases dual-write, backfill,
+    dual-read and finalize, without altering any existing table.
+    proxy-node, protocol-runtime and forward could then adopt the
+    credential-free tables.
+  - **Agent A2.** One mTLS Agent Control stream for configuration, users,
+    traffic and logs, with agent certificates from the module PKI
+    (`spiffe://anixops/<cluster>/agent/<node>`). The REST, WebSocket and
+    v2board gRPC transports would stay for one major version.
+  - **Route plan.** The 83 routes waiting on node operations and the 7
+    waiting on the agent channel decision: 75 to go native and 15 to be
+    marked kernel-owned. The document also gives the PR sequence (Control
+    and anix-agent), the risks, the test strategy, and the decisions the
+    owner must make.
+  - **The draft contract.** It was unreleased and could change until the
+    first kernel change that serves it (NO-1, next). It is in the proto
+    golden file and in the CI generated-code check.
+- **KernelNodeOps contract engine (NO-1)** (`internal/kernelnodeops`,
+  `docs/architecture/node-ops-service.md` section 3). The kernel now serves
+  `anixops.kernelnodeops.v1` on local bridge sessions and the mTLS module
+  listener, and accepts its five capabilities
+  `kernel.nodeops.{forward,nodeconfig,diagnose,agents,credentials}.v1`
+  (official packages only, checked on every call against the host's
+  generation). **The contract is binding**: it is no longer a draft and
+  changes by additions only.
+  - **Executors.** NO-1 executed no kind; NO-5 to NO-8 below add the
+    executors. A kind without one answers `UNIMPLEMENTED` to
+    `SubmitOperation` and records nothing, so a retry after an upgrade
+    applies. `GetCapabilities` lists the kinds a kernel executes.
+  - **The ledger.** `v4_kernel_node_operation` (unique `request_id`), its
+    targets `v4_kernel_node_operation_target` and the event log
+    `v4_kernel_node_operation_event`. These are new protected tables; no
+    existing table changes. A repeat of a request id answers the first
+    receipt; the same id with another operation, or from another package,
+    is `FAILED_PRECONDITION`. A missing target is `NOT_FOUND` and records
+    nothing.
+  - **States.** Operations move pending, dispatching, running, then
+    succeeded, failed, cancelled, timed out or superseded, and a terminal
+    state never changes. A result that arrives after the deadline is kept as
+    evidence. Operations are polled (`GetOperation`, `ListOperations`) or
+    watched from a cursor (`WatchOperations`, `RESYNC` for a cursor the
+    7-day log no longer holds). `CancelOperation` stops pending and running
+    operations.
+  - **Fencing and quotas.** A fenced generation is refused. The kernel runs
+    one operation per resource at a time, and a newer level-triggered
+    operation supersedes a pending one. Each kind takes only its node kinds.
+    A package may have 256 operations that have not ended, and a node 32.
+    Fan-outs count their children.
+  - **No secrets.** Results, errors and evidence are scrubbed before they
+    are stored: every credential the operation used, and every value at an
+    `IsNodeSecretKey` key. Sealed handles are not part of the digest. A
+    secret document with a secret in clear is refused.
+  - **Administrators** list the ledger read-only at
+    `GET /api/v4/kernel/node-operations` (filters, cursor paging).
+  - Ended operations are kept 90 days and events 7 days; the kernel's
+    singleton worker runs the dispatcher and prunes hourly.
+  - Contract tests on SQLite and PostgreSQL, and SDK bridge contract tests
+    over the local bridge and the module listener.
+- **Node credential split, phase P1: dual-write** (the KernelNodeOps design,
+  `docs/architecture/node-ops-service.md`, section 4; NO-2). Node
+  credentials and protocol secrets are now also kept in new protected
+  tables, as the first step towards packages adopting the credential-free
+  node tables. No existing table is altered, and nothing reads the new
+  tables until an operator moves a table to `dual_read` (phase P2, below).
+  - New tables, created at start: `v4_kernel_node_credential` (node API
+    keys and shared secrets, registration keys, forward node tokens with the
+    `host:api_port` they are pinned to, clean agent tokens; one current
+    version per credential, replaced versions retired with their value
+    cleared), `v4_kernel_protocol_secret` (the secrets inside protocol
+    settings and raw configurations by JSON pointer, WireGuard peer keys)
+    and `v4_kernel_node_secret_split` (each table's phase, `dual_write`, and
+    the backfill and verify outcomes). Values are in clear, like the legacy
+    columns (decision D5). The tables are protected: `service.protectedTables`
+    names them, so no manifest can adopt them.
+  - `internal/nodesecrets` is their one writer. Every kernel writer of a
+    moved column calls it in the transaction of its legacy write, and it
+    derives the new rows from the legacy rows just written, so a failure
+    leaves neither: node creation, update (raw configuration) and deletion,
+    registration, registration key creation, use, deletion and the
+    `NODE_DEFAULT_AUTH_KEY` seed, forward node creation, update and
+    deletion, clean agent tokens and revocation, protocol creation, update
+    and deletion, WireGuard peer creation, rotation (`wgrotate`) and
+    deletion (with their protocol, node or user), and the XBoard import
+    (`cmd/migrate`).
+  - New commands `anix-control node-secrets backfill` (idempotent, in
+    batches by id, resumable), `verify` (compares SHA-256 digests over every
+    secret of both forms in one snapshot; exits 3 on a difference and names
+    the differing secrets by subject or JSON pointer, never by value) and
+    `status`. The phase stays `dual_write` until `phase` moves it; see
+    `docs/UPGRADE.md`.
+  - `service.IsNodeSecretKey` is now `nodesecrets.IsSecretKey`, so the
+    administrator's masks and the split place secrets by one rule; a test
+    proves the stored positions restore every masked document.
+  - Tests on SQLite and PostgreSQL (`internal/nodesecrets`,
+    `internal/tests/nodesecretsplit`, both on the CI PostgreSQL line):
+    backfill then verify with equal digests, detected mismatches,
+    dual-write from each writer, a failed split write rolling back the
+    legacy write, tombstones against the unique indexes, idempotent
+    re-runs, and the legacy readers authenticating every node afterwards.
+- **Node credential split, phase P2: dual-read** (the KernelNodeOps
+  design, `docs/architecture/node-ops-service.md`, section 4.3; NO-3).
+  Every kernel reader of a moved column now reads through
+  `internal/nodesecrets`, in its table's phase. Nothing changes until an
+  operator moves a table, and the way back is one command.
+  - **The readers.**
+    - Node API key checks: `NodeAuth`, `NodeAPIKeyAuth`,
+      `NodeAPIKeyHeaderAuth`, the gRPC interceptor, the Agent Control
+      stream, and the agent WebSocket and HTTP routes.
+    - The `SignatureAuth` shared secret, registration keys, forward node
+      tokens (agent checks, the gost manager, NodeX payloads) and clean agent
+      tokens.
+    - Protocol secrets in `BuildNodeProtocolConfig` and the subscription
+      renderer, raw configurations in UniProxy, WireGuard peer keys, and
+      `GET /admin/nodes/:id/credentials`.
+    - The agent enrollment bootstrap (a node API key or a forward token) and
+      the forward node update's token-change check.
+  - **Phases.** In `dual_write` the readers read the legacy columns as
+    before and never the new tables. In `dual_read` they read the new
+    tables.
+    - A missing or differing row falls back to the legacy column. It counts
+      `anixops_node_secrets_fallback_total{table,kind,reason}` on `/metrics`
+      and logs once per subject, never a value.
+    - JSON columns are rewritten only where the legacy document holds the
+      placeholder, so answers stay byte for byte while both forms agree.
+    - Each process caches the phases for 5 seconds.
+  - **New command `anix-control node-secrets phase [-by <name>] <table|all>
+    dual_read|dual_write`.**
+    - `dual_read` needs the table's latest `verify` to have matched, with no
+      mismatch and within the last hour; `dual_write` (rollback) is always
+      allowed.
+    - `all` moves every table or none.
+    - Each change writes a `v2_operation_log` entry (module `node_secrets`)
+      in the same transaction.
+  - **Validate on build, report-only (decision D7).** Before a node's
+    configuration is built from a protocol or a raw configuration, its
+    secrets are checked: no placeholder or tombstone, a valid WireGuard
+    server key pair, a 32-byte Reality private key, a Shadowsocks 2022
+    server key of its cipher's length.
+    - A failing row counts `anixops_node_secrets_invalid_total{table,type,
+      reason}` and logs the node, protocol and field. It is still built.
+    - New command `anix-control node-secrets validate` scans every row and
+      exits 3 on a finding.
+  - **Tombstone guard.** No reader accepts a tombstone (`!moved:<id>`) or
+    the placeholder (`********`) as a node key, registration key, forward
+    node token or clean agent token, in any phase. That includes the
+    plain-key fallback for node rows without a hash, which would have
+    accepted a finalized row's tombstone. A request signed with a
+    placeholder secret is refused.
+  - **Tests on SQLite and PostgreSQL.**
+    - Every reader in each phase, through the real middleware, handlers and
+      services. With only the new tables holding the secrets, every reader
+      still works in `dual_read` and none in `dual_write`.
+    - Fallback when a row is missing or differs, with the metric and one log
+      line.
+    - The phase gate, rollback and audit; validation reporting without
+      excluding; the tombstone guard.
+    - An older binary's legacy-only reads still authenticate every node
+      after `dual_read`.
+    - An agent enrolls in `dual_read` with a key whose legacy column is a
+      tombstone; a missing new row falls back and counts.
+- **Sealed secret handles (NO-4)** (`internal/sealedsecrets`,
+  `docs/architecture/node-ops-service.md` section 3.7). A package host no
+  longer reads a node secret an administrator types, or one shown once in
+  an answer, on the routes that carry one.
+  - **The field list.** New kernel-owned table
+    `config/node-secret-fields.json`, embedded in the kernel binary. It
+    lists 11 routes with their request and answer fields: node creation and
+    update, raw configuration and its validation, protocol creation and
+    update, forward node creation and update, registration keys and clean
+    agents. The route gate checks every route id against
+    `config/package-extraction.json`.
+  - **Requests.** The v2 gateway replaces every secret in a listed route's
+    body with an opaque handle (`anix-sealed:v1:` and 43 random base64url
+    characters) before the host reads it:
+    - each listed field;
+    - every value under a key `IsNodeSecretKey` marks, inside listed
+      documents, inline or as JSON strings, and anywhere else in the body.
+
+    Member names match whatever their case or underscores. The placeholder
+    `********` and empty values pass, so keep-on-save works. Every other
+    byte stays as sent. The bridge capability keeps the original body, so
+    the legacy handler, in every route mode, reads the request as sent.
+  - **Handles.** Each handle is bound to its request (the package
+    generation, request id and route), its target (the path parameter's
+    resource, or the one the request creates, bound at first use) and its
+    field. A handle is single-use and lives in kernel memory only until its
+    request ends. Handles never appear in logs, metric labels, the
+    KernelNodeOps ledger or error texts.
+  - **KernelNodeOps request bindings are verified.** NO-1 accepted them
+    unchecked. `SubmitOperation` now checks a binding on the session the
+    call arrived on, against a live, unconsumed dispatch to the calling
+    host; any other is `PERMISSION_DENIED`, and nothing is recorded.
+    - Executors resolve handles with `Submission.Unseal`, and mint the
+      handles of secrets they generate with `Run.Reveal`.
+    - The ledger stores results without handles, and refuses a request id,
+      reason or operation that holds one. Handles are answered only to the
+      submitting call.
+  - **Answers.** The gateway expands a handle only at a listed answer field,
+    under its name, in the answer to the request it was minted for, once.
+    Any other handle of a request in flight in an answer or its headers is
+    refused (502 `sealed_secret_refused`).
+  - **Fail closed.** A request that cannot be sealed is served by the
+    kernel's legacy handler without the package host
+    (`Supervisor.DispatchLegacy`), or refused with 503
+    `sealed_secret_unavailable` when the route has none. That covers a body
+    that is not JSON, a secret field that is not a string, a target that is
+    not an id, a sealed body over the limit, or a missing field list. New
+    metric `anixops_v2_gateway_sealed_secrets_total`.
+  - **Shadow mode.** The SDK router gives native handlers the request
+    binding (`NativeRequest.Binding`) and shadow runs none. The shadow and
+    parity comparisons (`v2compat.EqualForCompare`, `packagecompat`) mask
+    handles on both sides.
+  - No route changes mode, and answers are byte-identical. Tests cover:
+    - every listed route and field, the placeholder and empty values;
+    - refusals of another request's, route's, target's or field's handle;
+    - expansion in the bound answer only, the legacy fallback and the
+      shadow comparison;
+    - a walk of `IsNodeSecretKey` keys through every listed route, end to
+      end over a real bridge session (`internal/tests/sealedhandles`).
 - **Credential, secret and retirement operations (NO-5)**
   (`internal/kernelnodeops`, `docs/architecture/node-ops-service.md`
   section 3.11). The kernel executes the credentials family
@@ -580,7 +754,8 @@
     (one row per node kind and id: a monotonic revision, the SHA-256 of
     the canonical document, the document), drops the kernel's node cache,
     and pushes `node.reload` to an agent on the Agent Control stream when
-    the configuration changed or the sync is forced; a node on the legacy
+    the configuration changed or the sync is forced (a `config.v1` agent gets
+    a `ConfigSnapshot` instead, A2-3 below); a node on the legacy
     transports keeps the stored configuration for its next pull
     (`LEGACY_PULL`). `NodeSyncResult` gains `config_revision` (field 8).
   - `AgentControlOperation` (`agent.operation`) sends `agent.ping`,
@@ -657,119 +832,47 @@
     (success, failure, timeout, cancellation, a fenced generation,
     supersession on one forward), the fan-outs, the pin rule, the payload
     scrub, a secret walk and a bridge contract round trip.
-
-- **Sealed secret handles (NO-4)** (`internal/sealedsecrets`,
-  `docs/architecture/node-ops-service.md` section 3.7). A package host no
-  longer reads a node secret an administrator types, or one shown once in
-  an answer, on the routes that carry one.
-  - **The field list.** New kernel-owned table
-    `config/node-secret-fields.json`, embedded in the kernel binary. It
-    lists 11 routes with their request and answer fields: node creation and
-    update, raw configuration and its validation, protocol creation and
-    update, forward node creation and update, registration keys and clean
-    agents. The route gate checks every route id against
-    `config/package-extraction.json`.
-  - **Requests.** The v2 gateway replaces every secret in a listed route's
-    body with an opaque handle (`anix-sealed:v1:` and 43 random base64url
-    characters) before the host reads it:
-    - each listed field;
-    - every value under a key `IsNodeSecretKey` marks, inside listed
-      documents, inline or as JSON strings, and anywhere else in the body.
-
-    Member names match whatever their case or underscores. The placeholder
-    `********` and empty values pass, so keep-on-save works. Every other
-    byte stays as sent. The bridge capability keeps the original body, so
-    the legacy handler, in every route mode, reads the request as sent.
-  - **Handles.** Each handle is bound to its request (the package
-    generation, request id and route), its target (the path parameter's
-    resource, or the one the request creates, bound at first use) and its
-    field. A handle is single-use and lives in kernel memory only until its
-    request ends. Handles never appear in logs, metric labels, the
-    KernelNodeOps ledger or error texts.
-  - **KernelNodeOps request bindings are verified.** NO-1 accepted them
-    unchecked. `SubmitOperation` now checks a binding on the session the
-    call arrived on, against a live, unconsumed dispatch to the calling
-    host; any other is `PERMISSION_DENIED`, and nothing is recorded.
-    - Executors resolve handles with `Submission.Unseal`, and mint the
-      handles of secrets they generate with `Run.Reveal`.
-    - The ledger stores results without handles, and refuses a request id,
-      reason or operation that holds one. Handles are answered only to the
-      submitting call.
-  - **Answers.** The gateway expands a handle only at a listed answer field,
-    under its name, in the answer to the request it was minted for, once.
-    Any other handle of a request in flight in an answer or its headers is
-    refused (502 `sealed_secret_refused`).
-  - **Fail closed.** A request that cannot be sealed is served by the
-    kernel's legacy handler without the package host
-    (`Supervisor.DispatchLegacy`), or refused with 503
-    `sealed_secret_unavailable` when the route has none. That covers a body
-    that is not JSON, a secret field that is not a string, a target that is
-    not an id, a sealed body over the limit, or a missing field list. New
-    metric `anixops_v2_gateway_sealed_secrets_total`.
-  - **Shadow mode.** The SDK router gives native handlers the request
-    binding (`NativeRequest.Binding`) and shadow runs none. The shadow and
-    parity comparisons (`v2compat.EqualForCompare`, `packagecompat`) mask
-    handles on both sides.
-  - No route changes mode, and answers are byte-identical. Tests cover:
-    - every listed route and field, the placeholder and empty values;
-    - refusals of another request's, route's, target's or field's handle;
-    - expansion in the bound answer only, the legacy fallback and the
-      shadow comparison;
-    - a walk of `IsNodeSecretKey` keys through every listed route, end to
-      end over a real bridge session (`internal/tests/sealedhandles`).
-- **Reports on the Agent Control stream (A2-5)** (`sdk/api/agent/v1/PROTOCOL.md`,
-  "Reports"). When an agent's `Hello` lists `reports.v1`, the kernel
-  advertises it back in `HelloAck.server_capabilities` and accepts
-  `TrafficReport`, `LogBatch` and `NodeStatus` on the stream, for the
-  stream's node (a proxy node; forward-node reports join with A5). Agents
-  without `reports.v1`, and every agent in the field, keep the legacy paths
-  and today's `InvalidArgument` for the payloads.
-  - Traffic is counted through the transaction the legacy `ReportTraffic`
-    and the UniProxy push use (`v2_server_log`, the node's counters, the
-    server stats and the subscriber ledger), with the node's rate, so a byte
-    counts once whichever path carried it. Online IPs replace the node's
-    alive set, the one `ReportOnline` feeds, and `online_users`. Logs go
-    into `v2_node_log` as `ReportLogs` records them, with the runtime health
-    a WireGuard entry carries. A `NodeStatus` writes the heartbeat, system
-    and runtime-health columns `ReportStatus` writes.
-  - A `TrafficReport` or `LogBatch` is applied at most once per node and
-    batch id. The new table `v4_kernel_agent_report_batch` (protected from
-    package adoption, pruned after 7 days) is claimed in the transaction that
-    applies the batch. `ReportAck` answers each: `applied: true` when this
-    delivery recorded it; `applied: false` without an error for a batch a
-    committed delivery recorded before, which is not counted again;
-    `applied: false` with an error for a batch refused for good (no batch
-    id, or one over 128 bytes; a missing `user_id`; bytes beyond the
-    counter range; `fields_json` that is not JSON; a node that no longer
-    exists). A batch the kernel cannot record for now (the database failed)
-    gets no acknowledgement and the stream stays open, so the agent's spool
-    resends it. `NodeStatus` is never acknowledged.
-  - `diag.v1` in the `Hello` is recorded on the session
-    (`AgentControlSnapshot.diagnostics`, with `server_capabilities`), for the
-    diagnosis vantage of NO-8. No diagnostic is sent yet.
-
-- User deltas on the Agent Control stream (A2-4, `users.v1`). Control now
-  lists `users.v1` in `HelloAck.server_capabilities` for proxy nodes and,
-  to an Agent whose `Hello` lists it too, sends `UserDelta` payloads from
-  the subscriber change log (`v4_kernel_subscriber_change`): on connect the
-  changes after `Hello.users_cursor`, or a paged full resync when the
-  cursor is 0, ahead of the log or older than its 7-day retention (also
-  when rows are pruned mid-session); then a delta per batch of changes as
-  the log advances, bounded to 500 users or changes a message. A node gets
-  the same users as from the legacy pulls (UniProxy `user`, v2board
-  `GetUsers`): the three now share `service.ActiveUsersForNodeQuery`. A
-  `NodeUser` carries the id, uuid, limits and WireGuard peer fields only,
-  never the e-mail, password hash or subscription token. Agents without
-  `users.v1` get nothing new. `/metrics` adds
-  `anixops_agent_user_deltas_sent_total{kind}`,
-  `anixops_agent_user_resyncs_total{reason}`,
-  `anixops_agent_users_sessions` and `anixops_agent_users_cursor_lag`.
-  See `sdk/api/agent/v1/PROTOCOL.md`, "Data plane".
+- **KernelNodeOps diagnoses (NO-8)** (`internal/kernelnodeops`,
+  `docs/architecture/node-ops-service.md` section 6). The kernel executes the
+  diagnose family's `CheckEndpoints`, `CollectNodeStats`, `DiagnoseForward`
+  and `DiagnoseTunnel`, and `GetCapabilities` lists them. No route switches
+  to native; M3 does that.
+  - **One implementation.** The executors run the legacy routes' code from
+    Control (`internal/service/forward_diagnosis.go`): the forward node and
+    Ansible machine checks, the node statistics (a gost node's metrics, an
+    Ansible machine's counters), and the forward and tunnel diagnoses. The
+    routes' answers are unchanged byte for byte
+    (`TestForwardDiagnosisAnswers`, written before the move). The legacy
+    forward and tunnel diagnoses now probe their targets concurrently, at
+    most 8 at a time, and stop when the request ends.
+  - **Results.** Typed and scrubbed: the nodes' tokens and every value at a
+    secret key are masked. Failed probes are part of the result, not a
+    failed operation. A node, forward or tunnel deleted since the submission
+    is `TARGET_GONE`. Deadlines and cancellation stop the dials, and a
+    stopped endpoint check records nothing.
+  - **No private targets for a package.** `DiagnoseForward` checks every
+    target as a user's: public addresses only, as the #84 guard does. When
+    NO-8 merged the kernel could not tell an administrator's request from a
+    user's; NO-4 now verifies request bindings, but `DiagnoseForward` still
+    checks every target as a user's. The forward connection test (under
+    Security) is the operation that tells an administrator's request apart.
+  - **Vantage (D10).** Control by default, the node when the agent of every
+    node concerned advertises `diag.v1`. A2-5 records `diag.v1` but no
+    diagnostic is sent to agents yet, so the kernel still dials from Control
+    and says so in the result.
+  - **Contract additions.** `VantageReport` (in `EndpointCheck` and
+    `DiagnosisResult`), `ServiceTraffic`, and `NodeStatsResult.services` and
+    `current_connections`. The proto golden file grows by 11 elements.
+  - Tests on SQLite and PostgreSQL: each executor against a fake network and
+    a fake gost metrics endpoint (success, partial failure, timeout,
+    cancellation, the private-target refusals, a secret walk), and a bridge
+    contract round trip.
 - **Agent stream data-plane contract** (`sdk/api/agent/v1/PROTOCOL.md`, "Data
   plane"). `anix.agent.v1` gains the payloads that will carry each node's
   configuration, users and reports on the Agent Control stream instead of
-  UniProxy, the v2board gRPC services and the WebSocket. Only the contract
-  lands now; the kernel does not send or accept them yet.
+  UniProxy, the v2board gRPC services and the WebSocket. This entry is the
+  contract (A2-2); the kernel sends and accepts the payloads from A2-3,
+  A2-4 and A2-5, below.
   - Control → Agent: `ControlToAgent.config` (`ConfigSnapshot`), `users`
     (`UserDelta` of `NodeUser`) and `report_ack` (`ReportAck`), fields 13 to
     15. Agent → Control: `AgentToControl.config_status` (`ConfigStatus`),
@@ -781,99 +884,18 @@
     its capability, `config.v1`, `users.v1` or `reports.v1` (name `config`,
     `users` or `reports`, version `v1`). `sdk/agentcontrol` names them and
     adds `Negotiated`.
-  - The kernel advertises no `server_capabilities` yet. An Agent that sends
-    `config_status`, `traffic`, `logs` or `status` anyway gets
-    `InvalidArgument`, naming the capability, and the stream ends, as with a
-    kernel built before these payloads existed. Agents built against the
-    v1.1.0 SDK see no change.
+  - At A2-2 the kernel advertised no `server_capabilities`; A2-3 to A2-5
+    advertise `config.v1`, `users.v1` and `reports.v1`. An Agent that sends
+    `config_status`, `traffic`, `logs` or `status` without the capability
+    negotiated gets `InvalidArgument`, naming the capability, and the stream
+    ends, as with a kernel built before these payloads existed. Agents built
+    against the v1.1.0 SDK see no change.
   - Additive only: `agent_descriptor_test.go` now requires the descriptor to
     be a superset of v1.1.0's (every message, field, enum value and method
     unchanged) instead of equal to it apart from `go_package`, and tests
     that a removed, renamed or renumbered field fails. The proto golden file
     grows by 55 elements. The manual SDK Sync workflow runs the renamed
     `TestDescriptorExtendsExternalAgentSDK`.
-- **Node credential split, phase P1: dual-write** (the KernelNodeOps design,
-  `docs/architecture/node-ops-service.md`, section 4; NO-2). Node
-  credentials and protocol secrets are now also kept in new protected
-  tables, as the first step towards packages adopting the credential-free
-  node tables. No existing table is altered, and nothing reads the new
-  tables until an operator moves a table to `dual_read` (phase P2, below).
-  - New tables, created at start: `v4_kernel_node_credential` (node API
-    keys and shared secrets, registration keys, forward node tokens with the
-    `host:api_port` they are pinned to, clean agent tokens; one current
-    version per credential, replaced versions retired with their value
-    cleared), `v4_kernel_protocol_secret` (the secrets inside protocol
-    settings and raw configurations by JSON pointer, WireGuard peer keys)
-    and `v4_kernel_node_secret_split` (each table's phase, `dual_write`, and
-    the backfill and verify outcomes). Values are in clear, like the legacy
-    columns (decision D5). The tables are protected: `service.protectedTables`
-    names them, so no manifest can adopt them.
-  - `internal/nodesecrets` is their one writer. Every kernel writer of a
-    moved column calls it in the transaction of its legacy write, and it
-    derives the new rows from the legacy rows just written, so a failure
-    leaves neither: node creation, update (raw configuration) and deletion,
-    registration, registration key creation, use, deletion and the
-    `NODE_DEFAULT_AUTH_KEY` seed, forward node creation, update and
-    deletion, clean agent tokens and revocation, protocol creation, update
-    and deletion, WireGuard peer creation, rotation (`wgrotate`) and
-    deletion (with their protocol, node or user), and the XBoard import
-    (`cmd/migrate`).
-  - New commands `anix-control node-secrets backfill` (idempotent, in
-    batches by id, resumable), `verify` (compares SHA-256 digests over every
-    secret of both forms in one snapshot; exits 3 on a difference and names
-    the differing secrets by subject or JSON pointer, never by value) and
-    `status`. The phase stays `dual_write` until `phase` moves it; see
-    `docs/UPGRADE.md`.
-  - `service.IsNodeSecretKey` is now `nodesecrets.IsSecretKey`, so the
-    administrator's masks and the split place secrets by one rule; a test
-    proves the stored positions restore every masked document.
-  - Tests on SQLite and PostgreSQL (`internal/nodesecrets`,
-    `internal/tests/nodesecretsplit`, both on the CI PostgreSQL line):
-    backfill then verify with equal digests, detected mismatches,
-    dual-write from each writer, a failed split write rolling back the
-    legacy write, tombstones against the unique indexes, idempotent
-    re-runs, and the legacy readers authenticating every node afterwards.
-- **KernelNodeOps contract engine (NO-1)** (`internal/kernelnodeops`,
-  `docs/architecture/node-ops-service.md` section 3). The kernel now serves
-  `anixops.kernelnodeops.v1` on local bridge sessions and the mTLS module
-  listener, and accepts its five capabilities
-  `kernel.nodeops.{forward,nodeconfig,diagnose,agents,credentials}.v1`
-  (official packages only, checked on every call against the host's
-  generation). **The contract is binding**: it is no longer a draft and
-  changes by additions only.
-  - **No operation kind executes yet.** NO-5 to NO-8 add the executors.
-    Until a kind has one, `SubmitOperation` answers `UNIMPLEMENTED` and
-    records nothing, so a retry after the upgrade applies.
-    `GetCapabilities` lists the kinds a kernel executes (none now).
-  - **The ledger.** `v4_kernel_node_operation` (unique `request_id`), its
-    targets `v4_kernel_node_operation_target` and the event log
-    `v4_kernel_node_operation_event`. These are new protected tables; no
-    existing table changes. A repeat of a request id answers the first
-    receipt; the same id with another operation, or from another package,
-    is `FAILED_PRECONDITION`. A missing target is `NOT_FOUND` and records
-    nothing.
-  - **States.** Operations move pending, dispatching, running, then
-    succeeded, failed, cancelled, timed out or superseded, and a terminal
-    state never changes. A result that arrives after the deadline is kept as
-    evidence. Operations are polled (`GetOperation`, `ListOperations`) or
-    watched from a cursor (`WatchOperations`, `RESYNC` for a cursor the
-    7-day log no longer holds). `CancelOperation` stops pending and running
-    operations.
-  - **Fencing and quotas.** A fenced generation is refused. The kernel runs
-    one operation per resource at a time, and a newer level-triggered
-    operation supersedes a pending one. Each kind takes only its node kinds.
-    A package may have 256 operations that have not ended, and a node 32.
-    Fan-outs count their children.
-  - **No secrets.** Results, errors and evidence are scrubbed before they
-    are stored: every credential the operation used, and every value at an
-    `IsNodeSecretKey` key. Sealed handles are not part of the digest. A
-    secret document with a secret in clear is refused.
-  - **Administrators** list the ledger read-only at
-    `GET /api/v4/kernel/node-operations` (filters, cursor paging).
-  - Ended operations are kept 90 days and events 7 days; the kernel's
-    singleton worker runs the dispatcher and prunes hourly.
-  - Contract tests on SQLite and PostgreSQL, and SDK bridge contract tests
-    over the local bridge and the module listener.
 - **Agent PKI: mTLS client certificates for AnixOps Agents (A2-1)**
   (`docs/architecture/module-runtime.md`, "Agent PKI"). The module CA now
   also signs agent certificates whose one URI SAN names the node,
@@ -906,194 +928,104 @@
     agent enrollment is off. See `docs/UPGRADE.md`.
   - New tables `v4_kernel_agent_enrollment` and
     `v4_kernel_agent_certificate`, protected from package adoption.
+    The streams these certificates open carry the data plane of A2-3 to A2-5,
+    below.
     Disabling or deleting a node and replacing a forward node's token revoke
     its certificates; the listener refuses revoked serials through a cache
     of at most 30 s, and an open stream ends at its next heartbeat.
-- **Node credential split, phase P2: dual-read** (the KernelNodeOps
-  design, `docs/architecture/node-ops-service.md`, section 4.3; NO-3).
-  Every kernel reader of a moved column now reads through
-  `internal/nodesecrets`, in its table's phase. Nothing changes until an
-  operator moves a table, and the way back is one command.
-  - **The readers.**
-    - Node API key checks: `NodeAuth`, `NodeAPIKeyAuth`,
-      `NodeAPIKeyHeaderAuth`, the gRPC interceptor, the Agent Control
-      stream, and the agent WebSocket and HTTP routes.
-    - The `SignatureAuth` shared secret, registration keys, forward node
-      tokens (agent checks, the gost manager, NodeX payloads) and clean agent
-      tokens.
-    - Protocol secrets in `BuildNodeProtocolConfig` and the subscription
-      renderer, raw configurations in UniProxy, WireGuard peer keys, and
-      `GET /admin/nodes/:id/credentials`.
-    - The agent enrollment bootstrap (a node API key or a forward token) and
-      the forward node update's token-change check.
-  - **Phases.** In `dual_write` the readers read the legacy columns as
-    before and never the new tables. In `dual_read` they read the new
-    tables.
-    - A missing or differing row falls back to the legacy column. It counts
-      `anixops_node_secrets_fallback_total{table,kind,reason}` on `/metrics`
-      and logs once per subject, never a value.
-    - JSON columns are rewritten only where the legacy document holds the
-      placeholder, so answers stay byte for byte while both forms agree.
-    - Each process caches the phases for 5 seconds.
-  - **New command `anix-control node-secrets phase [-by <name>] <table|all>
-    dual_read|dual_write`.**
-    - `dual_read` needs the table's latest `verify` to have matched, with no
-      mismatch and within the last hour; `dual_write` (rollback) is always
-      allowed.
-    - `all` moves every table or none.
-    - Each change writes a `v2_operation_log` entry (module `node_secrets`)
-      in the same transaction.
-  - **Validate on build, report-only (decision D7).** Before a node's
-    configuration is built from a protocol or a raw configuration, its
-    secrets are checked: no placeholder or tombstone, a valid WireGuard
-    server key pair, a 32-byte Reality private key, a Shadowsocks 2022
-    server key of its cipher's length.
-    - A failing row counts `anixops_node_secrets_invalid_total{table,type,
-      reason}` and logs the node, protocol and field. It is still built.
-    - New command `anix-control node-secrets validate` scans every row and
-      exits 3 on a finding.
-  - **Tombstone guard.** No reader accepts a tombstone (`!moved:<id>`) or
-    the placeholder (`********`) as a node key, registration key, forward
-    node token or clean agent token, in any phase. That includes the
-    plain-key fallback for node rows without a hash, which would have
-    accepted a finalized row's tombstone. A request signed with a
-    placeholder secret is refused.
-  - **Tests on SQLite and PostgreSQL.**
-    - Every reader in each phase, through the real middleware, handlers and
-      services. With only the new tables holding the secrets, every reader
-      still works in `dual_read` and none in `dual_write`.
-    - Fallback when a row is missing or differs, with the metric and one log
-      line.
-    - The phase gate, rollback and audit; validation reporting without
-      excluding; the tombstone guard.
-    - An older binary's legacy-only reads still authenticate every node
-      after `dual_read`.
-    - An agent enrolls in `dual_read` with a key whose legacy column is a
-      tombstone; a missing new row falls back and counts.
-
-- **KernelNodeOps diagnoses (NO-8)** (`internal/kernelnodeops`,
-  `docs/architecture/node-ops-service.md` section 6). The kernel executes the
-  diagnose family's `CheckEndpoints`, `CollectNodeStats`, `DiagnoseForward`
-  and `DiagnoseTunnel`, and `GetCapabilities` lists them. No route switches
-  to native; M3 does that.
-  - **One implementation.** The executors run the legacy routes' code from
-    Control (`internal/service/forward_diagnosis.go`): the forward node and
-    Ansible machine checks, the node statistics (a gost node's metrics, an
-    Ansible machine's counters), and the forward and tunnel diagnoses. The
-    routes' answers are unchanged byte for byte
-    (`TestForwardDiagnosisAnswers`, written before the move). The legacy
-    forward and tunnel diagnoses now probe their targets concurrently, at
-    most 8 at a time, and stop when the request ends.
-  - **Results.** Typed and scrubbed: the nodes' tokens and every value at a
-    secret key are masked. Failed probes are part of the result, not a
-    failed operation. A node, forward or tunnel deleted since the submission
-    is `TARGET_GONE`. Deadlines and cancellation stop the dials, and a
-    stopped endpoint check records nothing.
-  - **No private targets for a package.** `DiagnoseForward` checks every
-    target as a user's: public addresses only, as the #84 guard does. The
-    kernel cannot tell an administrator's request from a user's until it
-    verifies request bindings (NO-4).
-  - **Vantage (D10).** Control by default, the node when the agent of every
-    node concerned advertises `diag.v1`. Agents do not run diagnoses before
-    A2-5, so the kernel still dials from Control and says so in the result.
-  - **Contract additions.** `VantageReport` (in `EndpointCheck` and
-    `DiagnosisResult`), `ServiceTraffic`, and `NodeStatsResult.services` and
-    `current_connections`. The proto golden file grows by 11 elements.
-  - Tests on SQLite and PostgreSQL: each executor against a fake network and
-    a fake gost metrics endpoint (success, partial failure, timeout,
-    cancellation, the private-target refusals, a secret walk), and a bridge
-    contract round trip.
-
-- **The administrator dashboard and the user's subscription summary run
-  natively, from the kernel's caches** (`docs/architecture/kernel-caches.md`).
-  The kernel answers both routes from a cache in its memory, with the time
-  it built the answer (`cached_at`), so they had stayed bridged. The kernel
-  now keeps both caches and modules read them through typed contract
-  methods, so legacy and native answers are the same entry. No invalidation
-  event is needed, because no module holds a copy.
-  - New contract **KernelTelemetry** (`sdk/api/kerneltelemetry/v1`,
-    `anixops.kerneltelemetry.v1`). `GetDashboard` answers the dashboard
-    snapshot the kernel caches for 60 seconds; `refresh` rebuilds it. The
-    online users cross only as a count. Capability
-    `kernel.telemetry.dashboard.v1`, held by machine-telemetry.
-  - New method **`KernelSubscriber.GetSubscriptionSummary`**, family
-    `kernel.subscriber.summary.v1`, held by subscription. It answers one
-    subscriber's summary, which the kernel caches for 30 seconds, with the
-    subscription link settings, and no token or UUID.
-  - Both are served on local bridge sessions and on the module listener,
-    for official packages only, and authorized on every call. They add only
-    new methods, messages and fields: the proto golden file grows, and
-    `kerneltelemetry` joins the CI generated-code check.
-  - `GET /api/v2/admin/dashboard` (machine-telemetry) and
-    `GET /api/v2/user/subscription` (subscription) are `native-flagged`,
-    which makes 166 of 292. A host without a bridge connection keeps them
-    legacy.
-  - Parity runs on SQLite and PostgreSQL against the real kernel servers:
-    15 dashboard cases and 21 summary cases. They compare the answers byte
-    for byte, including a cached entry's `cached_at`, and the cache entry
-    each side leaves.
-
-- **Design: node operations, the node credential split and Agent A2**
-  (`docs/architecture/node-ops-service.md`), with a draft contract
-  `sdk/api/kernelnodeops/v1` (`anixops.kernelnodeops.v1`). Nothing changes
-  in behaviour: no kernel serves the contract, and the kernel accepts none
-  of its `kernel.nodeops.*` capabilities.
-  - **KernelNodeOps.** Packages would request typed, idempotent node
-    operations: apply a forward, sync a node, check endpoints, run an agent
-    diagnostic, issue a credential. The kernel holds the credentials and
-    agent connections and answers receipts and results. The design covers
-    the request-id ledger, polling and a watch stream, a capability per
-    operation family, generation fencing, and sealed secret handles, so a
-    package never sees a token or private key.
-  - **Node credential split.** Credentials and secrets would move out of
-    `v2_node`, `v2_authorized_key`, `v2_forward_node`,
-    `v2_forward_clean_agent`, `v2_node_protocol` and `v2_wireguard_peer`
-    into new protected tables, in the phases dual-write, backfill,
-    dual-read and finalize, without altering any existing table.
-    proxy-node, protocol-runtime and forward could then adopt the
-    credential-free tables.
-  - **Agent A2.** One mTLS Agent Control stream for configuration, users,
-    traffic and logs, with agent certificates from the module PKI
-    (`spiffe://anixops/<cluster>/agent/<node>`). The REST, WebSocket and
-    v2board gRPC transports would stay for one major version.
-  - **Route plan.** The 83 routes waiting on node operations and the 7
-    waiting on the agent channel decision: 75 to go native and 15 to be
-    marked kernel-owned. The document also gives the PR sequence (Control
-    and anix-agent), the risks, the test strategy, and the decisions the
-    owner must make.
-  - **The draft contract.** It is unreleased and may change until the first
-    kernel change that serves it. It is in the proto golden file and in the
-    CI generated-code check.
-- **Package hosts receive the request's scheme and host; the Telegram
-  webhook is set natively.**
-  - The kernel sends the original request's scheme (`https` when the
-    connection was TLS, else `http`) and host (the `Host` header, only when
-    it is a plain `host[:port]`) to package hosts as the new
-    `DispatchRequest` and `WebSocketOpen` fields `request_scheme` and
-    `request_host`; the SDK shows them as `RequestMetadata.Scheme` and
-    `Host`. These are the values the kernel's bridge already gave the legacy
-    handlers; no forwarding header is trusted beyond what those handlers
-    read. They are protobuf fields, not request metadata JSON keys: hosts
-    built with the v4.0.0 SDK decode that JSON strictly and skip unknown
-    protobuf fields, so they keep working and no metadata version is needed.
-    The SDK refuses a scheme other than `http` or `https` and a host that is
-    not an authority.
-  - `pluginhostsdk.ErrNativeUnavailable`: a native handler that cannot
-    answer a request as the legacy handler would (for example, an older
-    kernel sent no request address) returns it, and the router answers from
-    the legacy handler; in shadow mode the comparison is skipped.
-  - `POST /api/v2/admin/telegram/webhook` runs natively in the notification
-    package: without a `url` it points the webhook at the request's
-    `/api/v2/telegram/webhook`, with `X-Forwarded-Proto` honoured as the
-    kernel's handler does. `internal/tests/notificationcompat` proves byte
-    parity, the same bot row and the same Bot API calls on SQLite and
-    PostgreSQL (16 cases each). The parity harness sends each case's host
-    and TLS state to both sides.
-  - `GET /api/v2/forward-agent/install.sh` stays bridged: its panel URL is
-    Control's `forward_runtime.clean_agent.public_url` when set, process
-    configuration no package can read, and only otherwise the request's
-    scheme and host.
-  - Extraction map: 171 `native-flagged`, 105 `bridged`, 16 `kernel-owned`.
+- **Configuration push on the Agent Control stream (A2-3, `config.v1`)**
+  (`sdk/api/agent/v1/PROTOCOL.md`, "Data plane";
+  `docs/architecture/node-ops-service.md` section 5.5). When an agent's
+  `Hello` lists `config.v1`, the kernel lists it in
+  `HelloAck.server_capabilities`, for proxy and forward nodes, and sends the
+  node's desired configuration (`v4_kernel_node_desired_config`) as a
+  `ConfigSnapshot`: after the `HelloAck` when `Hello.config_revision` is not
+  the desired revision (none, older, or from another database); when
+  `node.sync` stores or forces a configuration, in place of `node.reload`;
+  and when a rebuild from the node's rows, once a minute per session, moves
+  the revision. A session is never sent a revision older than one it was
+  sent. Agents without `config.v1`, and every agent in the field, get
+  nothing new and keep receiving `node.reload`.
+  - `ConfigStatus` from the agent is accepted once `config.v1` is
+    negotiated (before, and without it, it is still `InvalidArgument`) and
+    recorded in the new protected table `v4_kernel_node_config_status`: the
+    last report with the kernel's verdict (`applied`, `failed`, `stale` for
+    an older revision, `mismatch` for another hash), and the applied
+    revision and hash, which only a status naming the desired revision and
+    hash moves.
+  - `node.sync` on a `config.v1` agent ends on the agent's `ConfigStatus`
+    for the pushed revision and hash: `SUCCEEDED` when applied, `FAILED`
+    (`BACKEND_FAILED`) with the agent's error otherwise; a stale or
+    mismatched status does not end it. The operation runs at the
+    configuration revision (`node_revision`), and the result's `ack` is the
+    status. An agent that reconnects meanwhile is sent the snapshot again
+    and its answer on the new session ends the operation. A sync that is not
+    forced also pushes when the agent has not applied the stored
+    configuration. `POST /admin/nodes/:id/sync` answers such an agent with
+    the snapshot's `config_revision` and `config_hash`.
+  - The snapshot carries what the legacy pulls give the node and no other
+    secret. The proxy document gains `legacy_pull`: the UniProxy answer
+    for no node type and for each type the node serves, built by
+    `service.BuildUniProxyNodeConfig`, which the UniProxy handler now calls;
+    each protocol's `config` is the v2board `GetConfig` source. The
+    document's `raw_config` is read through the node credential split, as
+    UniProxy reads it. The new revision lands once, at the next rebuild.
+  - `/metrics` adds `anixops_agent_config_snapshots_sent_total{trigger}`
+    (`hello`, `sync`, `refresh`),
+    `anixops_agent_config_statuses_total{result}` and
+    `anixops_agent_config_lagging_nodes`.
+  - Tests: `internal/tests/nodeopsagent` on SQLite and PostgreSQL
+    (negotiation, the `Hello` reconcile, `node.sync` ending on
+    `ConfigStatus`, a reconnect mid-operation, parity with UniProxy and
+    v2board `GetConfig`, a walk of every secret-named key), and the listener
+    in `internal/grpc`.
+- User deltas on the Agent Control stream (A2-4, `users.v1`). Control now
+  lists `users.v1` in `HelloAck.server_capabilities` for proxy nodes and,
+  to an Agent whose `Hello` lists it too, sends `UserDelta` payloads from
+  the subscriber change log (`v4_kernel_subscriber_change`): on connect the
+  changes after `Hello.users_cursor`, or a paged full resync when the
+  cursor is 0, ahead of the log or older than its 7-day retention (also
+  when rows are pruned mid-session); then a delta per batch of changes as
+  the log advances, bounded to 500 users or changes a message. A node gets
+  the same users as from the legacy pulls (UniProxy `user`, v2board
+  `GetUsers`): the three now share `service.ActiveUsersForNodeQuery`. A
+  `NodeUser` carries the id, uuid, limits and WireGuard peer fields only,
+  never the e-mail, password hash or subscription token. Agents without
+  `users.v1` get nothing new. `/metrics` adds
+  `anixops_agent_user_deltas_sent_total{kind}`,
+  `anixops_agent_user_resyncs_total{reason}`,
+  `anixops_agent_users_sessions` and `anixops_agent_users_cursor_lag`.
+  See `sdk/api/agent/v1/PROTOCOL.md`, "Data plane".
+- **Reports on the Agent Control stream (A2-5)** (`sdk/api/agent/v1/PROTOCOL.md`,
+  "Reports"). When an agent's `Hello` lists `reports.v1`, the kernel
+  advertises it back in `HelloAck.server_capabilities` and accepts
+  `TrafficReport`, `LogBatch` and `NodeStatus` on the stream, for the
+  stream's node (a proxy node; forward-node reports join with A5). Agents
+  without `reports.v1`, and every agent in the field, keep the legacy paths
+  and today's `InvalidArgument` for the payloads.
+  - Traffic is counted through the transaction the legacy `ReportTraffic`
+    and the UniProxy push use (`v2_server_log`, the node's counters, the
+    server stats and the subscriber ledger), with the node's rate, so a byte
+    counts once whichever path carried it. Online IPs replace the node's
+    alive set, the one `ReportOnline` feeds, and `online_users`. Logs go
+    into `v2_node_log` as `ReportLogs` records them, with the runtime health
+    a WireGuard entry carries. A `NodeStatus` writes the heartbeat, system
+    and runtime-health columns `ReportStatus` writes.
+  - A `TrafficReport` or `LogBatch` is applied at most once per node and
+    batch id. The new table `v4_kernel_agent_report_batch` (protected from
+    package adoption, pruned after 7 days) is claimed in the transaction that
+    applies the batch. `ReportAck` answers each: `applied: true` when this
+    delivery recorded it; `applied: false` without an error for a batch a
+    committed delivery recorded before, which is not counted again;
+    `applied: false` with an error for a batch refused for good (no batch
+    id, or one over 128 bytes; a missing `user_id`; bytes beyond the
+    counter range; `fields_json` that is not JSON; a node that no longer
+    exists). A batch the kernel cannot record for now (the database failed)
+    gets no acknowledgement and the stream stays open, so the agent's spool
+    resends it. `NodeStatus` is never acknowledged.
+  - `diag.v1` in the `Hello` is recorded on the session
+    (`AgentControlSnapshot.diagnostics`, with `server_capabilities`), for the
+    diagnosis vantage of NO-8. No diagnostic is sent yet.
 - **KernelSettings contract** (`sdk/api/kernelsettings/v1`,
   `docs/architecture/settings-service.md`). Official packages read and write
   system settings per namespace instead of the protected `v2_system_config`
@@ -1119,8 +1051,9 @@
   real server in process; the tests also compare the settings rows, the
   audit rows and the kernel's in-memory copies:
   - notification: the e-mail configuration GET and PUT, and the test send
-    (15 cases against a test SMTP server). The GET still answers the SMTP
-    password, as before.
+    (15 cases against a test SMTP server). The GET answered the SMTP
+    password, as before; the masking under Security now reads it as
+    `********` on both sides.
   - affiliate: the invite configuration update (33 cases). All 8 affiliate
     routes are now native.
   - gost-mesh: the NodeX runtime status and diagnosis (21 cases each,
@@ -1131,8 +1064,6 @@
   The generic system configuration routes (list, get, put and delete) stay
   bridged. They reach every key, and a grant over every key would hold
   every secret. See `settings-service.md`.
-
-
 - **Subscription group membership in `KernelSubscriber`.** The contract
   gains `GrantSubscriptionGroup`, `RevokeSubscriptionGroup` and
   `RemoveSubscriptionGroupMembers`, under the new capability
@@ -1162,311 +1093,6 @@
   server in process. It proves byte parity, the same memberships, request
   ledger and change log on SQLite and PostgreSQL (173 cases each). 147 of
   292 routes are now `native-flagged`.
-
-
-- **Subscription group membership in `KernelSubscriber`.** The contract
-  gains `GrantSubscriptionGroup`, `RevokeSubscriptionGroup` and
-  `RemoveSubscriptionGroupMembers`, under the new capability
-  `kernel.subscriber.groups.v1`
-  (`docs/architecture/subscriber-service.md`). Only calls and messages are
-  added, so v4.0.0 hosts are unaffected; the proto golden file grows.
-  - A grant creates a user's `v2_user_subscription_group` row, or sets the
-    given expiry, traffic and renewal price of an existing one. A
-    revocation deletes one row, and `RemoveSubscriptionGroupMembers` every
-    row of a group.
-  - Every call is idempotent by request id through
-    `v4_kernel_subscriber_request`. A missing subscriber, group or
-    membership is `NotFound` and records nothing.
-  - A change that alters which groups an active subscriber holds, or until
-    when, appends a change-log row, so `WatchSubscriberChanges` streams the
-    new `subscription_group_ids`. A change to an inactive subscriber, or to
-    a membership's traffic or renewal price only, appends nothing.
-- **Subscription module: membership routes.** `packages/subscription` now
-  serves 20 of its 25 routes natively and declares
-  `kernel.subscriber.groups.v1`. Through `KernelSubscriber`, it:
-  - grants a user a group;
-  - takes it away;
-  - deletes a group: its members first, then its templates, plan links and
-    node protocol links with the group.
-
-  `internal/tests/subscriptioncompat` runs the real `KernelSubscriber`
-  server in process. It proves byte parity, the same memberships, request
-  ledger and change log on SQLite and PostgreSQL (173 cases each). 147 of
-  292 routes are now `native-flagged`.
-- **Breaking for v2 API clients: the order list and detail answers no
-  longer embed the buyer's and the plan's rows.**
-  `GET /api/v2/admin/orders`, `GET /api/v2/admin/orders/:id`,
-  `GET /api/v2/user/order` and `GET /api/v2/user/order/:id` embedded the
-  buyer's whole `v2_user` row, with its subscription token and proxy UUID,
-  and the whole `v2_plan` row. Each order now carries its own fields, `plan`
-  as `{id, name}` and, for administrators only, `user` as `{id, email}`; a
-  plan or buyer that no longer exists is left out, as before.
-  - The bundled frontend reads only those fields (`plan.name`, and
-    `user.email` on the administrator's page) and needs no change; its order
-    page tests now use the slim answers, an order without a plan or buyer
-    included. `docs/UPGRADE.md` lists every field that disappears and where
-    to read it instead.
-  - The user's order list clamps `page_size` as the administrator's does
-    (1 to 100, default 20 for 0 or less): a negative size listed every order
-    and 0 none.
-  - A user's order detail looks the order up by id and owner, and a request
-    without a user names no one; another user's order stays "not found".
-
-
-- **Order module: native order lists and details.** `packages/order` now
-  serves all 13 of its routes natively (148 of 292 v2 routes are
-  `native-flagged`). The administrator's and user's order lists and details
-  (`order.admin.orders.get`, `order.admin.orders.id.get`,
-  `order.user.order.get`, `order.user.order.id.get`) were bridged because
-  their answers embedded the buyer's `v2_user` row; with the slim answers
-  they read only kernel views.
-  - The new kernel view `kapi_plan_name_v1` shows a plan's `id` and `name`
-    and nothing else of `v2_plan`; the package declares
-    `kernel.view:kapi_plan_name_v1`. The buyer's e-mail comes from
-    `kapi_user_directory_v1`.
-  - A user's list and detail are the caller's own orders, with the owner in
-    the query.
-  - `internal/tests/ordercompat` proves byte parity on SQLite and PostgreSQL
-    for 55 more cases per backend: every list filter and paging edge, other
-    users' orders, deleted plans and buyers, and invalid ids. A mutation
-    check (owner filter, page clamp, ordering, e-mail match, plan and buyer
-    names) fails the parity tests. The seeded payment time is now taken once,
-    so both sides of a case see the same answer.
-
-
-- **Identity module: the administrator's user directory.** identity-platform
-  serves the user list and statistics natively (`identity.admin.users.get`,
-  `identity.admin.users.stats.get`; 153 of 292 routes are now
-  `native-flagged`).
-  - One query on the package's own storage joins identity's accounts with
-    Control's views `kapi_user_directory_v1`,
-    `kapi_subscriber_entitlement_v1` and `kapi_plan_name_v1`
-    (`native.UserDirectory`). It filters by e-mail, plan and status,
-    orders, pages and counts; "active" is not banned in identity and not
-    expired in Control. The total and the page are read in one
-    repeatable-read transaction. The package now declares
-    `kernel.view:kapi_subscriber_entitlement_v1` and
-    `kernel.view:kapi_plan_name_v1`.
-  - Both routes read identity's accounts, so they join
-    `service.IdentityAccountReadRoutes`: they leave legacy mode only while
-    identity is authoritative, and a rollback returns them to legacy.
-  - `internal/tests/identitycompat` proves byte parity on SQLite and
-    PostgreSQL (47 more cases per backend, 164 in all), and that the
-    answers follow identity's account rather than Control's projection. A
-    PostgreSQL test runs the search as the package's own role. A mutation
-    check of the native search (filters, statuses, ordering, paging, page
-    sizes, account source, plan names, counts) fails the tests.
-  - The design and the rejected alternatives (a kernel-side search over the
-    projection, a two-phase query) are in
-    `docs/architecture/identity-service.md`.
-- **Subscription group membership in `KernelSubscriber`.** The contract
-  gains `GrantSubscriptionGroup`, `RevokeSubscriptionGroup` and
-  `RemoveSubscriptionGroupMembers`, under the new capability
-  `kernel.subscriber.groups.v1`
-  (`docs/architecture/subscriber-service.md`). Only calls and messages are
-  added, so v4.0.0 hosts are unaffected; the proto golden file grows.
-  - A grant creates a user's `v2_user_subscription_group` row, or sets the
-    given expiry, traffic and renewal price of an existing one. A
-    revocation deletes one row, and `RemoveSubscriptionGroupMembers` every
-    row of a group.
-  - Every call is idempotent by request id through
-    `v4_kernel_subscriber_request`. A missing subscriber, group or
-    membership is `NotFound` and records nothing.
-  - A change that alters which groups an active subscriber holds, or until
-    when, appends a change-log row, so `WatchSubscriberChanges` streams the
-    new `subscription_group_ids`. A change to an inactive subscriber, or to
-    a membership's traffic or renewal price only, appends nothing.
-- **Subscription module: membership routes.** `packages/subscription` now
-  serves 20 of its 25 routes natively and declares
-  `kernel.subscriber.groups.v1`. Through `KernelSubscriber`, it:
-  - grants a user a group;
-  - takes it away;
-  - deletes a group: its members first, then its templates, plan links and
-    node protocol links with the group.
-- A paid payment callback marks its order paid and completes it only while
-  the order is pending. A payment for an order that was cancelled,
-  completed, or paid by another payment is recorded, and the order is left
-  unchanged; before, it was marked paid and completed again (its plan was
-  already granted once per order). The kernel's callbacks now complete
-  orders through `service.CompleteOrderPaymentTx`, which records each paid
-  payment's outcome in `v4_kernel_subscriber_request` under
-  `payment:<trade_no>`, and a repeat of a paid payment applies it to its
-  order again, changing nothing unless the order was left pending. See
-  `docs/UPGRADE.md`.
-- The platform package reads the backup configuration through
-  KernelSettings and no longer adopts `v2_backup_config`. It could read the
-  S3 access and secret keys from the adopted row and write the row
-  directly. `GET /api/v2/admin/system/backup/config` and the answer of its
-  `PUT` now read namespace `backup` without its secrets, so the S3 keys
-  reach the package masked, exactly as the kernel's handler shows them; the
-  package's grants are `kernel.storage.adopt:v2_backup_record`,
-  `kernel.view:kapi_system_audit_log_v1` and
-  `kernel.settings.backup.read.v1`/`write.v1`, and on PostgreSQL its role
-  loses its privileges on `v2_backup_config`. A backup read through
-  KernelSettings now creates the default row when there is none, as the
-  kernel's handler does, and answers the row's `id`, `created_at` and
-  `updated_at` as read-only keys. A host without the contract keeps both
-  routes legacy.
-- The Agent contract (`anix.agent.v1`) now lives in Control's SDK module,
-  `github.com/AnixOps/anix-control/sdk` (plan step A0). Control no longer
-  requires `github.com/AnixOps/anix-agent/sdk`, which is frozen at v1.1.0.
-  - **Moved as of v1.1.0.** The proto, generated code and `PROTOCOL.md` are
-    in `sdk/api/agent/v1` (Go package `agentv1pb`, generated by
-    `sdk/api/agent/gen.sh`). The helpers are `sdk/agentcontrol` and
-    `sdk/plugincontrol`.
-  - **Wire compatible.** Only `option go_package` changed; the registered file
-    name stays `api/grpc/agent/v1/agent.proto`. `agent_descriptor_test.go`
-    compares the serialized descriptor, with `go_package` cleared, against
-    v1.1.0's. The contract is in the protobuf compatibility golden and the
-    generated-code drift check.
-  - **Gates.** `check_agent_sdk_dependency.sh` now rejects any anix-agent
-    module in Control or the SDK.
-  - **SDK Sync.** The workflow reads anix-agent's `go.mod`. While anix-agent
-    requires its own SDK, the workflow checks that SDK's descriptor against
-    Control's. Once anix-agent requires `anix-control/sdk`, it builds and
-    tests anix-agent against this checkout's SDK through a `go.work` replace.
-  - **License.** The moved files were MPL-2.0 in anix-agent; their sole
-    author relicensed them under this repository's MIT license.
-- A user holds at most `code_count` unused invite codes, as v2board limits
-  them (`invite_gen_limit`). `POST /api/v2/user/invite/generate` created
-  codes without limit, and the invite configuration's `code_count` was
-  stored but unused.
-  - The limit is read from the stored configuration on each request; a
-    missing configuration or a `code_count` of `0` means 5, v2board's
-    default.
-  - Used codes, expired codes, other users' codes and public codes are not
-    counted. Concurrent requests of one user are counted one after another.
-  - At the limit the answer is v2board's: `500`
-    `{"error":"The maximum number of creations has been reached"}`, and no
-    code is created.
-  - No other path creates a user's codes; an administrator's generation,
-    if one is added, is not limited (`InviteService.GenerateInviteCode`).
-- Administrator answers no longer show node secrets in clear; they read
-  `********`, the placeholder of system configuration and payment gateway
-  secrets.
-  - **Node protocols.** The node list and detail,
-    `GET /api/v2/admin/nodes/:id/protocols`, the answer of
-    `POST /api/v2/admin/nodes/:id/protocols`, and a subscription group's
-    protocols and the protocol pool
-    (`GET /api/v2/admin/subscription/groups/:id/protocols`,
-    `GET /api/v2/admin/subscription/protocols/available`) showed whole
-    `v2_node_protocol` rows: Reality and TLS private keys, WireGuard server
-    private keys, Shadowsocks server keys, Hysteria2 obfuscation and auth
-    passwords, and tokens in a custom configuration. A setting whose name
-    marks a secret (`*_key` except public keys and key file paths,
-    `password`, `psk`, `auth`, `token`, `secret`, `credential`, `seed`) now
-    reads `********` in `settings`, `tls_settings`, `transport_settings`,
-    `reality_settings` and `custom_config`. Public keys and Reality's
-    `short_id` are still shown. A node's raw configuration (`raw_config` in
-    the node answers and `GET /api/v2/admin/nodes/:id/raw-config`) is masked
-    the same way.
-  - **Saving back.** A protocol update, a raw configuration update and a
-    node update that send `********` keep the stored secret, and a new value
-    replaces it, so the protocol editor keeps working. A new protocol has
-    nothing stored, so `********` in it is stored empty.
-  - **Registration keys.** `GET /api/v2/admin/auth-keys` showed every node
-    registration key. Keys now read `********`. `POST /api/v2/admin/auth-keys`
-    still answers the new key, once, and the node page's Auth Key dialog can
-    now generate one.
-  - **Forward node tokens.** `GET /api/v2/admin/forward/nodes[/:id]`, the
-    answer of `PUT /api/v2/admin/forward/nodes/:id`, and the relay and exit
-    nodes in the admin forward rule answers showed every node's `api_token`,
-    which authenticates the node's agent. It now reads `********`.
-    `POST /api/v2/admin/forward/nodes` answers it once, and the forward node
-    page and the setup wizard show a generated token after creating the
-    node. An update that sends an empty token or `********` keeps the stored
-    token.
-  - **Proxy node credentials.** A proxy node's `api_key` and `secret` were
-    already left out of the node answers.
-    `GET /api/v2/admin/nodes/:id/credentials` still answers them, for the
-    deployment helper and Ansible, and the audit log now records every read
-    of it, as action `reveal`.
-
-  `internal/tests/subscriptioncompat` runs the real `KernelSubscriber`
-  server in process. It proves byte parity, the same memberships, request
-  ledger and change log on SQLite and PostgreSQL (173 cases each). 147 of
-  292 routes are now `native-flagged`.
-- **Breaking for v2 API clients: the order list and detail answers no
-  longer embed the buyer's and the plan's rows.**
-  `GET /api/v2/admin/orders`, `GET /api/v2/admin/orders/:id`,
-  `GET /api/v2/user/order` and `GET /api/v2/user/order/:id` embedded the
-  buyer's whole `v2_user` row, with its subscription token and proxy UUID,
-  and the whole `v2_plan` row. Each order now carries its own fields, `plan`
-  as `{id, name}` and, for administrators only, `user` as `{id, email}`; a
-  plan or buyer that no longer exists is left out, as before.
-  - The bundled frontend reads only those fields (`plan.name`, and
-    `user.email` on the administrator's page) and needs no change; its order
-    page tests now use the slim answers, an order without a plan or buyer
-    included. `docs/UPGRADE.md` lists every field that disappears and where
-    to read it instead.
-  - The user's order list clamps `page_size` as the administrator's does
-    (1 to 100, default 20 for 0 or less): a negative size listed every order
-    and 0 none.
-  - A user's order detail looks the order up by id and owner, and a request
-    without a user names no one; another user's order stays "not found".
-
-
-- **Order module: native order lists and details.** `packages/order` now
-  serves all 13 of its routes natively (148 of 292 v2 routes are
-  `native-flagged`). The administrator's and user's order lists and details
-  (`order.admin.orders.get`, `order.admin.orders.id.get`,
-  `order.user.order.get`, `order.user.order.id.get`) were bridged because
-  their answers embedded the buyer's `v2_user` row; with the slim answers
-  they read only kernel views.
-  - The new kernel view `kapi_plan_name_v1` shows a plan's `id` and `name`
-    and nothing else of `v2_plan`; the package declares
-    `kernel.view:kapi_plan_name_v1`. The buyer's e-mail comes from
-    `kapi_user_directory_v1`.
-  - A user's list and detail are the caller's own orders, with the owner in
-    the query.
-  - `internal/tests/ordercompat` proves byte parity on SQLite and PostgreSQL
-    for 55 more cases per backend: every list filter and paging edge, other
-    users' orders, deleted plans and buyers, and invalid ids. A mutation
-    check (owner filter, page clamp, ordering, e-mail match, plan and buyer
-    names) fails the parity tests. The seeded payment time is now taken once,
-    so both sides of a case see the same answer.
-
-### Fixed
-
-- The Windows server binaries build again. The sealed secret handles (#112)
-  used `pluginhost.ErrLegacyUnavailable`, which only the Unix build defined;
-  the non-Unix stub now defines it too.
-- The legacy user dashboard no longer shows the subscription link settings.
-  `GET /api/v2/user/subscription` wrote `subscribe_path` and
-  `subscribe_domains` into the user's cached summary, and
-  `GET /api/v2/user/dashboard` answers that same entry. For up to 30
-  seconds after a summary read, the dashboard therefore showed them, and
-  concurrent requests wrote the entry while others encoded it. The summary
-  now answers a copy. identity's native dashboard never showed them.
-- Network modules can change subscription group memberships. The module
-  listener did not forward `KernelSubscriber.GrantSubscriptionGroup`,
-  `RevokeSubscriptionGroup` or `RemoveSubscriptionGroupMembers`. A
-  subscription module running as a network module got `Unimplemented` for
-  the native membership routes, where a local host was served. A test now
-  checks that the listener forwards every method of every contract.
-
-- E-mail and invite configuration writes record an audit entry. `PUT
-  /api/v2/admin/notification/email/config` and `PUT
-  /api/v2/admin/invite/config` (legacy and native) wrote
-  `v2_system_config` without a `v2_operation_log` entry, unlike every other
-  system write. They now record the system configuration entry for the key
-  they write (`notification.email.config`, `invite.frontend.config`):
-  module `system`, `create` or `update`, target `system_config`, and
-  content naming the key, its group and type, whether it has a value and
-  whether the stored SMTP password was kept, and, for the e-mail
-  configuration, `"masked_fields":["password"]` with
-  `masked_fields_with_value` saying whether a password is set; never a
-  value. The legacy handlers and KernelSettings (namespaces `mail` and
-  `invite`) build it with the same function, so both write the same row.
-- Audit entries written through the package bridge name the user. A legacy
-  system handler the bridge relays to gets the actor's id only, so its
-  `v2_operation_log` rows (system and backup configuration, backups, and
-  now the e-mail and invite configuration) and the KernelSettings rows had
-  an empty username. Both now record the user's e-mail, looked up by id.
-- The administrator's order list filtered by `email` always failed: the
-  joined `v2_user` made `created_at` ambiguous in the ordering. The filter is
-  now a subquery, and orders created in the same second keep a stable order
-  (`created_at DESC, id DESC`).
 - **Order completion contract `KernelOrder`.** A new service,
   `KernelOrder.CompleteOrderPayment`, under the new capability
   `kernel.order.complete.v1` (`docs/architecture/order-service.md`). Only a
@@ -1499,35 +1125,149 @@
     statistics, orders, subscribers, request ledger and change log on SQLite
     and PostgreSQL (78 callback cases each), with PayPal's API faked on
     both sides. 151 of 292 routes are now `native-flagged`.
-- **Subscription group membership in `KernelSubscriber`.** The contract
-  gains `GrantSubscriptionGroup`, `RevokeSubscriptionGroup` and
-  `RemoveSubscriptionGroupMembers`, under the new capability
-  `kernel.subscriber.groups.v1`
-  (`docs/architecture/subscriber-service.md`). Only calls and messages are
-  added, so v4.0.0 hosts are unaffected; the proto golden file grows.
-  - A grant creates a user's `v2_user_subscription_group` row, or sets the
-    given expiry, traffic and renewal price of an existing one. A
-    revocation deletes one row, and `RemoveSubscriptionGroupMembers` every
-    row of a group.
-  - Every call is idempotent by request id through
-    `v4_kernel_subscriber_request`. A missing subscriber, group or
-    membership is `NotFound` and records nothing.
-  - A change that alters which groups an active subscriber holds, or until
-    when, appends a change-log row, so `WatchSubscriberChanges` streams the
-    new `subscription_group_ids`. A change to an inactive subscriber, or to
-    a membership's traffic or renewal price only, appends nothing.
-- **Subscription module: membership routes.** `packages/subscription` now
-  serves 20 of its 25 routes natively and declares
-  `kernel.subscriber.groups.v1`. Through `KernelSubscriber`, it:
-  - grants a user a group;
-  - takes it away;
-  - deletes a group: its members first, then its templates, plan links and
-    node protocol links with the group.
+- **Order module: native order lists and details.** `packages/order` now
+  serves all 13 of its routes natively (148 of 292 v2 routes are
+  `native-flagged`). The administrator's and user's order lists and details
+  (`order.admin.orders.get`, `order.admin.orders.id.get`,
+  `order.user.order.get`, `order.user.order.id.get`) were bridged because
+  their answers embedded the buyer's `v2_user` row; with the slim answers
+  they read only kernel views.
+  - The new kernel view `kapi_plan_name_v1` shows a plan's `id` and `name`
+    and nothing else of `v2_plan`; the package declares
+    `kernel.view:kapi_plan_name_v1`. The buyer's e-mail comes from
+    `kapi_user_directory_v1`.
+  - A user's list and detail are the caller's own orders, with the owner in
+    the query.
+  - `internal/tests/ordercompat` proves byte parity on SQLite and PostgreSQL
+    for 55 more cases per backend: every list filter and paging edge, other
+    users' orders, deleted plans and buyers, and invalid ids. A mutation
+    check (owner filter, page clamp, ordering, e-mail match, plan and buyer
+    names) fails the parity tests. The seeded payment time is now taken once,
+    so both sides of a case see the same answer.
+- **Identity module: the administrator's user directory.** identity-platform
+  serves the user list and statistics natively (`identity.admin.users.get`,
+  `identity.admin.users.stats.get`; 153 of 292 routes are now
+  `native-flagged`).
+  - One query on the package's own storage joins identity's accounts with
+    Control's views `kapi_user_directory_v1`,
+    `kapi_subscriber_entitlement_v1` and `kapi_plan_name_v1`
+    (`native.UserDirectory`). It filters by e-mail, plan and status,
+    orders, pages and counts; "active" is not banned in identity and not
+    expired in Control. The total and the page are read in one
+    repeatable-read transaction. The package now declares
+    `kernel.view:kapi_subscriber_entitlement_v1` and
+    `kernel.view:kapi_plan_name_v1`.
+  - Both routes read identity's accounts, so they join
+    `service.IdentityAccountReadRoutes`: they leave legacy mode only while
+    identity is authoritative, and a rollback returns them to legacy.
+  - `internal/tests/identitycompat` proves byte parity on SQLite and
+    PostgreSQL (47 more cases per backend, 164 in all), and that the
+    answers follow identity's account rather than Control's projection. A
+    PostgreSQL test runs the search as the package's own role. A mutation
+    check of the native search (filters, statuses, ordering, paging, page
+    sizes, account source, plan names, counts) fails the tests.
+  - The design and the rejected alternatives (a kernel-side search over the
+    projection, a two-phase query) are in
+    `docs/architecture/identity-service.md`.
+- **The administrator dashboard and the user's subscription summary run
+  natively, from the kernel's caches** (`docs/architecture/kernel-caches.md`).
+  The kernel answers both routes from a cache in its memory, with the time
+  it built the answer (`cached_at`), so they had stayed bridged. The kernel
+  now keeps both caches and modules read them through typed contract
+  methods, so legacy and native answers are the same entry. No invalidation
+  event is needed, because no module holds a copy.
+  - New contract **KernelTelemetry** (`sdk/api/kerneltelemetry/v1`,
+    `anixops.kerneltelemetry.v1`). `GetDashboard` answers the dashboard
+    snapshot the kernel caches for 60 seconds; `refresh` rebuilds it. The
+    online users cross only as a count. Capability
+    `kernel.telemetry.dashboard.v1`, held by machine-telemetry.
+  - New method **`KernelSubscriber.GetSubscriptionSummary`**, family
+    `kernel.subscriber.summary.v1`, held by subscription. It answers one
+    subscriber's summary, which the kernel caches for 30 seconds, with the
+    subscription link settings, and no token or UUID.
+  - Both are served on local bridge sessions and on the module listener,
+    for official packages only, and authorized on every call. They add only
+    new methods, messages and fields: the proto golden file grows, and
+    `kerneltelemetry` joins the CI generated-code check.
+  - `GET /api/v2/admin/dashboard` (machine-telemetry) and
+    `GET /api/v2/user/subscription` (subscription) are `native-flagged`,
+    which makes 166 of 292. A host without a bridge connection keeps them
+    legacy.
+  - Parity runs on SQLite and PostgreSQL against the real kernel servers:
+    15 dashboard cases and 21 summary cases. They compare the answers byte
+    for byte, including a cached entry's `cached_at`, and the cache entry
+    each side leaves.
+- **Package hosts receive the request's scheme and host; the Telegram
+  webhook is set natively.**
+  - The kernel sends the original request's scheme (`https` when the
+    connection was TLS, else `http`) and host (the `Host` header, only when
+    it is a plain `host[:port]`) to package hosts as the new
+    `DispatchRequest` and `WebSocketOpen` fields `request_scheme` and
+    `request_host`; the SDK shows them as `RequestMetadata.Scheme` and
+    `Host`. These are the values the kernel's bridge already gave the legacy
+    handlers; no forwarding header is trusted beyond what those handlers
+    read. They are protobuf fields, not request metadata JSON keys: hosts
+    built with the v4.0.0 SDK decode that JSON strictly and skip unknown
+    protobuf fields, so they keep working and no metadata version is needed.
+    The SDK refuses a scheme other than `http` or `https` and a host that is
+    not an authority.
+  - `pluginhostsdk.ErrNativeUnavailable`: a native handler that cannot
+    answer a request as the legacy handler would (for example, an older
+    kernel sent no request address) returns it, and the router answers from
+    the legacy handler; in shadow mode the comparison is skipped.
+  - `POST /api/v2/admin/telegram/webhook` runs natively in the notification
+    package: without a `url` it points the webhook at the request's
+    `/api/v2/telegram/webhook`, with `X-Forwarded-Proto` honoured as the
+    kernel's handler does. `internal/tests/notificationcompat` proves byte
+    parity, the same bot row and the same Bot API calls on SQLite and
+    PostgreSQL (16 cases each). The parity harness sends each case's host
+    and TLS state to both sides.
+  - `GET /api/v2/forward-agent/install.sh` stays bridged: its panel URL is
+    Control's `forward_runtime.clean_agent.public_url` when set, process
+    configuration no package can read, and only otherwise the request's
+    scheme and host.
+  - Extraction map: 171 `native-flagged`, 105 `bridged`, 16 `kernel-owned`.
 
-  `internal/tests/subscriptioncompat` runs the real `KernelSubscriber`
-  server in process. It proves byte parity, the same memberships, request
-  ledger and change log on SQLite and PostgreSQL (173 cases each). 147 of
-  292 routes are now `native-flagged`.
+### Fixed
+
+- The Windows server binaries build again (#119). The sealed secret handles
+  (#112) used `pluginhost.ErrLegacyUnavailable`, which only the Unix build
+  defined; the non-Unix stub now defines it too.
+- The legacy user dashboard no longer shows the subscription link settings.
+  `GET /api/v2/user/subscription` wrote `subscribe_path` and
+  `subscribe_domains` into the user's cached summary, and
+  `GET /api/v2/user/dashboard` answers that same entry. For up to 30
+  seconds after a summary read, the dashboard therefore showed them, and
+  concurrent requests wrote the entry while others encoded it. The summary
+  now answers a copy. identity's native dashboard never showed them.
+- Network modules can change subscription group memberships. The module
+  listener did not forward `KernelSubscriber.GrantSubscriptionGroup`,
+  `RevokeSubscriptionGroup` or `RemoveSubscriptionGroupMembers`. A
+  subscription module running as a network module got `Unimplemented` for
+  the native membership routes, where a local host was served. A test now
+  checks that the listener forwards every method of every contract.
+- E-mail and invite configuration writes record an audit entry. `PUT
+  /api/v2/admin/notification/email/config` and `PUT
+  /api/v2/admin/invite/config` (legacy and native) wrote
+  `v2_system_config` without a `v2_operation_log` entry, unlike every other
+  system write. They now record the system configuration entry for the key
+  they write (`notification.email.config`, `invite.frontend.config`):
+  module `system`, `create` or `update`, target `system_config`, and
+  content naming the key, its group and type, whether it has a value and
+  whether the stored SMTP password was kept, and, for the e-mail
+  configuration, `"masked_fields":["password"]` with
+  `masked_fields_with_value` saying whether a password is set; never a
+  value. The legacy handlers and KernelSettings (namespaces `mail` and
+  `invite`) build it with the same function, so both write the same row.
+- Audit entries written through the package bridge name the user. A legacy
+  system handler the bridge relays to gets the actor's id only, so its
+  `v2_operation_log` rows (system and backup configuration, backups, and
+  now the e-mail and invite configuration) and the KernelSettings rows had
+  an empty username. Both now record the user's e-mail, looked up by id.
+- The administrator's order list filtered by `email` always failed: the
+  joined `v2_user` made `created_at` ambiguous in the ordering. The filter is
+  now a subquery, and orders created in the same second keep a stable order
+  (`created_at DESC, id DESC`).
 - **A paid payment no longer leaves its order pending.** The payment module
   records a paid callback, then asks `KernelOrder` to complete the order. If
   that second step failed and the provider never delivered the callback

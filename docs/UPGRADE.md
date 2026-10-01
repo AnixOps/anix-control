@@ -442,6 +442,160 @@ WHERE r.user_id IS NOT NULL;
 its id (`node_id` or `X-Node-ID`) and its token (`X-API-Key`, `api_key` or
 `token`); it answered anyone before.
 
+### Agent HTTP Routes Need The Node's Credentials
+
+`POST /api/v2/agent/heartbeat`, `GET /api/v2/agent/tasks`,
+`POST /api/v2/agent/result` and `POST /api/v2/agent/monitor` had no
+authentication; they now take the credentials the agent WebSocket takes:
+the node id in `X-Node-ID` (or the `node_id` query) and the node's API key,
+or a forward node's API token, in `X-API-Key` (or the `api_key` or `token`
+query). A request without them is answered `401`, a body naming another
+node `403`, and a result for another node's task `404`. `anix-agent` uses
+the WebSocket and is not affected; a custom agent or script that polls
+these routes must send the credentials.
+
+### Audit Request Bodies Written Before The Redaction Fix
+
+Earlier builds stored the raw body of every administrator write request in
+`v2_audit_log.request_body`, and logged the start of it. Those bodies can
+hold user passwords, payment gateway keys, SMTP and S3 credentials, and bot
+tokens. New rows are redacted; the upgrade does not rewrite old rows.
+
+After taking a backup, an operator who wants the old bodies gone can clear
+them. Adjust the cut-off to the upgrade time:
+
+```sql
+UPDATE v2_audit_log SET request_body = '' WHERE created_at < '2026-10-01';
+```
+
+Rotate any credential that was set through the administrator API while the
+old build ran, and apply the same care to log files kept from that time.
+
+## Upgrading From 4.1.0-rc.1 To 4.1.0-rc.2
+
+These sections cover what changes from 4.1.0-rc.1 to 4.1.0-rc.2
+(`CHANGELOG.md`, "4.1.0-rc.2"). They come in the order an operator needs
+them: what needs action, then API answers that change, then what runs by
+itself, then optional features.
+
+### rc.1 → rc.2 Checklist
+
+Before the upgrade:
+
+1. **Node gRPC callers.** Give every script or probe that calls port 50051
+   without a node key a node's API key, or set `grpc.api_token`
+   (`ANIX_CONTROL_GRPC_API_TOKEN`) and send that.
+2. **Disabled nodes.** Note which nodes should be disabled. A disabled
+   V2bX or XrayR node now gets 403 from UniProxy.
+3. **Forward.** List users' legacy rules and users' forwards with a
+   non-public target, and check each clean agent's node. Scripts that issue
+   clean agent tokens must send `nodeId`.
+4. **API clients.** Update clients that read tokens from the
+   administrator's user list, `user` or `plan` rows from the order answers,
+   or secrets from administrator answers (now `********`). A user's
+   `POST /api/v2/user/invite/generate` stops at `code_count` unused codes.
+5. **Payments.** Run the query in "Paid Payments Left With A Pending Order
+   Are Completed" and cancel any order you want kept pending.
+
+After the upgrade:
+
+6. Disable again any node an agent had re-enabled.
+7. Run `anix-control node-secrets status`, set the API port of each node
+   under `forward_nodes_without_api_port`, then run
+   `anix-control node-secrets backfill` and `anix-control node-secrets verify`.
+8. Read the log for `code=Unauthenticated` or `code=PermissionDenied` gRPC
+   lines, `removed the node tokens from N stored payloads` and
+   `Order payment reconciler:`.
+9. Upgrade the forward package before plan, and affiliate before
+   identity-platform.
+
+Optional, after a staging rehearsal: move the node credential readers to
+`dual_read` (Phase P2), let agents enroll for client certificates, and
+watch KernelNodeOps at `GET /api/v4/kernel/node-operations`.
+
+### The Node gRPC Listener Needs A Node Key
+
+With `grpc.api_token` empty (the default), the node gRPC listener
+(`grpc.*`, port 50051) let through any caller that sent an `authorization`
+header, whatever its value, and answered it for any node: node
+configurations with their protocol keys, user UUIDs, traffic, status and
+log reports. It now authenticates only:
+
+- a node's own API key, in `x-api-key` with the node's id in `x-node-id`, as
+  V2bX and anix-agent send them. The call acts for that node only: a request
+  whose `node_id` names another node is answered `PermissionDenied`, and a
+  stream that sends one ends;
+- `grpc.api_token`, when it is set, as `authorization: Bearer <token>`. It is
+  the administrator's token and acts for any node;
+- without credentials, `HealthService` and `NodeService/Register`, as
+  before.
+
+A caller without a node key, such as a script or probe that sent a made-up
+token, is now answered `Unauthenticated`. Give it a node's API key, or set
+`grpc.api_token` (`ANIX_CONTROL_GRPC_API_TOKEN`) to a generated secret and
+send that. After the upgrade, refused calls show in the log as
+`grpc unary request` or `grpc stream request` lines with
+`code=Unauthenticated` or `code=PermissionDenied`.
+
+A disabled node's key is refused too: see the next section.
+
+### Disabled Nodes Stay Disabled
+
+An administrator's disable now holds on every node transport. Before the
+upgrade, note which nodes should be disabled; after it, check them.
+
+- A disabled node's API key is refused on the listener (`PermissionDenied`,
+  `node is disabled`), as the HTTP node API and the Agent control stream
+  already refused it. A status stream that is open when the node is
+  disabled ends at its next report.
+- Heartbeats no longer re-enable a disabled node. Every heartbeat (gRPC,
+  UniProxy over HTTP, the agent WebSocket and its HTTP routes) records
+  `last_check_at` and sets a pending or offline node online, as before, but
+  leaves a disabled node disabled, and the administrator's node list shows
+  it disabled. A node an agent had silently re-enabled stays enabled after
+  the upgrade: check the nodes that should be disabled and disable them
+  again.
+- UniProxy over HTTP refuses a disabled node's polling with 403
+  (`{"error":"node disabled"}`) before the heartbeat, as the HTTP node API
+  and the gRPC listener do. A disabled V2bX or XrayR node therefore gets no
+  configuration and no users until an administrator enables it again.
+
+### Forward Node Tokens Are Pinned To Their Endpoint
+
+A forward node's API token is now presented only at the endpoint it was
+bound to, `host:api_port` as recorded in `v4_kernel_node_credential.endpoint`
+by the kernel's own forward node writers (decision D12,
+`docs/architecture/node-ops-service.md` section 3.8). A NodeX request for
+the gost backend or a legacy rule whose node's address is not the pinned
+one fails with `ENDPOINT_UNCONFIRMED`
+(`the forward node's address is not the one its token is pinned to`), and
+nothing is sent.
+
+- **What moves the pin.** Saving the node through the administrator's
+  forward node or Ansible machine routes (`PUT /api/v2/admin/forward/nodes/:id`)
+  re-pins it to the row as saved. A write that bypasses Control (direct
+  SQL) does not: re-save the node in the administrator UI to confirm the
+  address.
+- **Until `node-secrets backfill` has run**, a node without a credential
+  row has no pin yet, its token is presented as before, and it is counted in
+  `anixops_node_secrets_pin_total{reason="unpinned"}`. An unconfirmed
+  address is counted with `reason="unconfirmed"` and logged once per node,
+  without the address or the value.
+
+**Forward nodes without an API port: before the first backfill.** Once
+`backfill` has run, a forward node's token is pinned to its endpoint,
+`host:api_port` (decided by the owner, 2026-10-01). A forward node that has
+a token but no `api_port` has no endpoint, so its token is presented
+nowhere: gost backend changes and legacy rules on it fail with
+`ENDPOINT_UNCONFIRMED` until an administrator sets the API port, which pins
+it. Before the backfill nothing changes: such a node has no credential row
+and is used as before. List those nodes first and set their ports, then
+backfill ("Phase P1", below):
+
+```bash
+anix-control node-secrets status     # "forward_nodes_without_api_port": count, and each node's id and name
+```
+
 ### Legacy Forward Rules Are Administrator-Only
 
 Users can no longer create or change legacy forward rules.
@@ -469,7 +623,8 @@ Only an administrator can now disable, change or delete one
 (`POST /api/v2/admin/forward/rules/:id/toggle`,
 `PUT /api/v2/admin/forward/rules/:id` or
 `DELETE /api/v2/admin/forward/rules/:id`), which also updates the nodes.
-Rotate the tokens of the nodes they used, as the previous section says.
+Rotate the tokens of the nodes they used, as "Forward Node Tokens" above
+says.
 
 ### Users' Forward Targets Must Be Public
 
@@ -554,228 +709,6 @@ node's jobs.
   ```
 - The binding uses the existing `node_id` column: no migration.
 
-### Agent HTTP Routes Need The Node's Credentials
-
-`POST /api/v2/agent/heartbeat`, `GET /api/v2/agent/tasks`,
-`POST /api/v2/agent/result` and `POST /api/v2/agent/monitor` had no
-authentication; they now take the credentials the agent WebSocket takes:
-the node id in `X-Node-ID` (or the `node_id` query) and the node's API key,
-or a forward node's API token, in `X-API-Key` (or the `api_key` or `token`
-query). A request without them is answered `401`, a body naming another
-node `403`, and a result for another node's task `404`. `anix-agent` uses
-the WebSocket and is not affected; a custom agent or script that polls
-these routes must send the credentials.
-
-### The Node gRPC Listener Needs A Node Key
-
-With `grpc.api_token` empty (the default), the node gRPC listener
-(`grpc.*`, port 50051) let through any caller that sent an `authorization`
-header, whatever its value, and answered it for any node: node
-configurations with their protocol keys, user UUIDs, traffic, status and
-log reports. It now authenticates only:
-
-- a node's own API key, in `x-api-key` with the node's id in `x-node-id`, as
-  V2bX and anix-agent send them. The call acts for that node only: a request
-  whose `node_id` names another node is answered `PermissionDenied`, and a
-  stream that sends one ends;
-- `grpc.api_token`, when it is set, as `authorization: Bearer <token>`. It is
-  the administrator's token and acts for any node;
-- without credentials, `HealthService` and `NodeService/Register`, as
-  before.
-
-A caller without a node key, such as a script or probe that sent a made-up
-token, is now answered `Unauthenticated`. Give it a node's API key, or set
-`grpc.api_token` (`ANIX_CONTROL_GRPC_API_TOKEN`) to a generated secret and
-send that. After the upgrade, refused calls show in the log as
-`grpc unary request` or `grpc stream request` lines with
-`code=Unauthenticated` or `code=PermissionDenied`.
-
-Disabled nodes:
-
-- A disabled node's API key is refused on the listener (`PermissionDenied`,
-  `node is disabled`), as the HTTP node API and the Agent control stream
-  already refused it. A status stream that is open when the node is
-  disabled ends at its next report.
-- Heartbeats no longer re-enable a disabled node. Every heartbeat (gRPC,
-  UniProxy over HTTP, the agent WebSocket and its HTTP routes) records
-  `last_check_at` and sets a pending or offline node online, as before, but
-  leaves a disabled node disabled, and the administrator's node list shows
-  it disabled. A node an agent had silently re-enabled stays enabled after
-  the upgrade: check the nodes that should be disabled and disable them
-  again.
-- UniProxy over HTTP refuses a disabled node's polling with 403
-  (`{"error":"node disabled"}`) before the heartbeat, as the HTTP node API
-  and the gRPC listener do. A disabled V2bX or XrayR node therefore gets no
-  configuration and no users until an administrator enables it again.
-
-### Order Lists And Details No Longer Embed The Buyer And Plan Rows
-
-The four order list and detail routes embedded the buyer's whole `v2_user`
-row (subscription token and proxy UUID included) and the whole `v2_plan`
-row. They now carry the order, its plan's `id` and `name`, and, for an
-administrator, the buyer's `id` and `email`. The bundled frontend reads only
-those; an API client that read anything else of `user` or `plan` must change.
-
-| Route | `user` | `plan` |
-|-------|--------|--------|
-| `GET /api/v2/admin/orders` (each `list` item), `GET /api/v2/admin/orders/:id` | `{id, email}` | `{id, name}` |
-| `GET /api/v2/user/order` (each `list` item), `GET /api/v2/user/order/:id` | removed | `{id, name}` |
-
-The order's own fields are unchanged. A plan or buyer that no longer exists
-is left out, as before. The fields that disappear:
-
-- From `user`: `invite_user_id`, `telegram_id`, `balance`, `discount`,
-  `commission_type`, `commission_rate`, `commission_balance`, `token`, `uuid`,
-  `device_limit`, `speed_limit`, `flowResetTime`, `transfer_enable`, `u`, `d`,
-  `plan_id`, `group_id`, `expired_at`, `banned`, `remark_content`,
-  `is_admin`, `is_staff`, `last_login_at`, `created_at` and `updated_at`. The
-  user routes drop `user` altogether, `id` and `email` included. Password
-  hashes were never serialized.
-- From `plan`: `group_id`, `transfer_enable`, `speed_limit`, `device_limit`,
-  `content`, `show`, `sort`, `renew`, `reset_price`, `reset_traffic_method`,
-  `capacity_limit`, the seven prices (`month_price`, `quarter_price`,
-  `half_year_price`, `year_price`, `two_year_price`, `three_year_price`,
-  `onetime_price`), `created_at` and `updated_at`.
-
-Read them where they belong: a user's own account from
-`GET /api/v2/user/profile` and `GET /api/v2/user/subscription`, a buyer from
-`GET /api/v2/admin/users/:id`, and a plan from `GET /api/v2/user/plan` or
-`GET /api/v2/admin/plans/:id`.
-
-Two more changes come with it. The administrator's `email` filter now
-works: it always failed with an ambiguous `created_at`. The user's
-`page_size` is clamped as the administrator's (1 to 100, default 20 for 0 or
-less); a negative size used to list every order and 0 none.
-
-The `order` package can serve these routes natively (`native-flagged`). It
-reads the plan name from the new view `kapi_plan_name_v1` and the buyer's
-e-mail from `kapi_user_directory_v1`, so its signed release declares
-`kernel.view:kapi_plan_name_v1`: install that release before switching the
-routes to `native`.
-
-### Audit Request Bodies Written Before The Redaction Fix
-
-Earlier builds stored the raw body of every administrator write request in
-`v2_audit_log.request_body`, and logged the start of it. Those bodies can
-hold user passwords, payment gateway keys, SMTP and S3 credentials, and bot
-tokens. New rows are redacted; the upgrade does not rewrite old rows.
-
-After taking a backup, an operator who wants the old bodies gone can clear
-them. Adjust the cut-off to the upgrade time:
-
-```sql
-UPDATE v2_audit_log SET request_body = '' WHERE created_at < '2026-10-01';
-```
-
-Rotate any credential that was set through the administrator API while the
-old build ran, and apply the same care to log files kept from that time.
-
-### The SMTP Password Reads As `********`
-
-The administrator API no longer answers the SMTP password in clear:
-`GET /api/v2/admin/notification/email/config` answers `password` as
-`********` when one is stored, and the system configuration routes show the
-`notification.email.config` value with `"password":"********"`. The test
-e-mail still uses the stored password, so mail delivery needs nothing.
-
-- **Panel.** Notifications, Email starts the password field empty with
-  "Password stored; leave blank to keep it". Saving with the field empty
-  keeps the stored password; typing a new one replaces it. Editing
-  `notification.email.config` under System, Configuration shows the
-  placeholder in the value; saving it as shown keeps the password.
-- **Scripts.** A script that reads the e-mail configuration (either route)
-  and writes it back keeps the password: the placeholder is kept. A script
-  that read the password from these answers must keep its own copy.
-
-### Node Secrets Read As `********` In Administrator Answers
-
-The administrator API no longer answers node secrets in clear: protocol
-private keys, passwords and tokens, the secrets in a node's raw
-configuration, node registration keys and forward node API tokens read
-`********`. Nodes and agents still receive the real values, so running
-nodes need nothing.
-
-- **Editing.** Saving a protocol, a raw configuration or a forward node with
-  `********` keeps the stored secret, and a new value replaces it. The panel
-  editors work as before. A script that reads a protocol or raw
-  configuration and writes it back keeps working too; a script that read a
-  secret from these answers must keep its own copy instead.
-- **Registration keys.** `GET /api/v2/admin/auth-keys` no longer shows
-  existing keys, and they keep registering nodes. Copy a key when you
-  generate it: Nodes, Auth Key, Generate Key, or
-  `POST /api/v2/admin/auth-keys`. A key set with `NODE_DEFAULT_AUTH_KEY` is
-  the one in that variable.
-- **Forward node tokens.** A forward node's API token is answered once, by
-  `POST /api/v2/admin/forward/nodes`; the forward node page and the setup
-  wizard show a generated token after creating the node. Record it where
-  you configure the relay's gost API. The connection test of an existing
-  node needs the token typed in. If a token is lost, set a new one from the
-  node's edit form and update the relay and its agent.
-- **Proxy node credentials.** `GET /api/v2/admin/nodes/:id/credentials`
-  still answers a node's API key and secret, for the deployment helper and
-  Ansible. Each read is now recorded in `v2_audit_log` with action `reveal`.
-
-### System Configuration Secrets Read As `********`
-
-`GET /api/v2/admin/system/configs/:key` now masks a sensitive value as the
-list (`GET /api/v2/admin/system/configs`) already did: a key whose name
-contains `token`, `secret`, `password`, `passwd`, `private_key`, `api_key`,
-`access_key` or `client_secret` (in any case, with or without the
-underscore) reads `********` in `value` and `display_value` when a value is
-stored, and `""` when none is; `sensitive` and `has_value` say which. The
-kernel and the packages granted a namespace's secrets still read the real
-values, so nothing that uses the NodeX token, the SMTP password or another
-secret changes.
-
-- **Editing.** Saving `********` back keeps the stored value, and a new
-  value replaces it, as before. The NodeX page shows a stored token as
-  `********` and keeps it when saved; its commands show
-  `<FORWARD_API_TOKEN>` instead of the token. Saving `********` for a
-  secret that is not stored is refused (`value is required`).
-- **Scripts.** A script that read a secret from this route must keep its
-  own copy. A script that reads a value and writes it back keeps working.
-
-### The Administrator's User List No Longer Shows Subscription Tokens
-
-`GET /api/v2/admin/users` answered every listed user's whole `v2_user` row,
-the subscription token and proxy UUID included, with the plan's whole row.
-Each user in `data.list` now carries only the account, the subscription
-summary and its plan's `id` and `name`; `total` and the query parameters
-are unchanged.
-
-- **Kept:** `id`, `email`, `balance`, `commission_balance`, `device_limit`,
-  `speed_limit`, `flowResetTime`, `transfer_enable`, `u`, `d`, `plan_id`,
-  `group_id`, `expired_at`, `banned`, `is_admin`, `is_staff` and
-  `created_at`.
-- **Slimmed:** `plan` is `{id, name}`, as in the order answers. A user
-  without a plan, or whose plan no longer exists, has no `plan`, as before.
-  The rest of the plan row is gone: `group_id`, `transfer_enable`,
-  `speed_limit`, `device_limit`, `content`, `show`, `sort`, `renew`,
-  `reset_price`, `reset_traffic_method`, `capacity_limit`, the seven prices,
-  `created_at` and `updated_at`.
-- **Removed:** `token`, `uuid`, `invite_user_id`, `telegram_id`, `discount`,
-  `commission_type`, `commission_rate`, `remark_content`, `last_login_at`
-  and `updated_at`. Password hashes were never serialized.
-- **Where to read them.** `GET /api/v2/admin/users/:id` still answers one
-  user's whole row, token, UUID, remark and plan included. A whole plan is
-  in `GET /api/v2/admin/plans/:id`.
-- **Order.** Users created in the same second now keep a stable order
-  (`created_at DESC, id DESC`), so pages no longer repeat or skip them.
-
-The bundled administrator page reads the token from the user detail when it
-copies a subscription link and fills the edit form from the user detail; it
-still names plans with `plan.name`. Control Center's
-v2board plugin passes the answer through unchanged. A script that read
-tokens from the list must read `GET /api/v2/admin/users/:id` per user.
-`GET /api/v2/admin/users/stats` is unchanged.
-
-The identity module can serve both routes natively (`native-flagged`) once
-identity is authoritative (see the next section). It reads the subscription
-summary from the view `kapi_subscriber_entitlement_v1` and the plan names
-from `kapi_plan_name_v1`, so its signed release declares
-`kernel.view:kapi_subscriber_entitlement_v1` and
-`kernel.view:kapi_plan_name_v1`: install that release before switching the
-routes to `native`.
 ### Paid Callbacks Complete Pending Orders Only
 
 A paid payment callback marks its order paid and completes it only while the
@@ -831,10 +764,191 @@ granted once, or the payment is refused and the order left as it is.
   order, an amount below the total) is logged as `payment <trade_no> does
   not pay order <id>: <reason>` and recorded under `payment:<trade_no>`;
   the order is unchanged, and the payment is not tried again. Handle it as
-  described above.
+  "Paid Callbacks Complete Pending Orders Only" describes.
 - **Logs.** Each run that finds a payment logs a summary starting with
   `Order payment reconciler:`, and a line per completed order and per
   failure. Payments paid more than 90 days ago are left as they are.
+
+### The Administrator's User List No Longer Shows Subscription Tokens
+
+`GET /api/v2/admin/users` answered every listed user's whole `v2_user` row,
+the subscription token and proxy UUID included, with the plan's whole row.
+Each user in `data.list` now carries only the account, the subscription
+summary and its plan's `id` and `name`; `total` and the query parameters
+are unchanged.
+
+- **Kept:** `id`, `email`, `balance`, `commission_balance`, `device_limit`,
+  `speed_limit`, `flowResetTime`, `transfer_enable`, `u`, `d`, `plan_id`,
+  `group_id`, `expired_at`, `banned`, `is_admin`, `is_staff` and
+  `created_at`.
+- **Slimmed:** `plan` is `{id, name}`, as in the order answers. A user
+  without a plan, or whose plan no longer exists, has no `plan`, as before.
+  The rest of the plan row is gone: `group_id`, `transfer_enable`,
+  `speed_limit`, `device_limit`, `content`, `show`, `sort`, `renew`,
+  `reset_price`, `reset_traffic_method`, `capacity_limit`, the seven prices,
+  `created_at` and `updated_at`.
+- **Removed:** `token`, `uuid`, `invite_user_id`, `telegram_id`, `discount`,
+  `commission_type`, `commission_rate`, `remark_content`, `last_login_at`
+  and `updated_at`. Password hashes were never serialized.
+- **Where to read them.** `GET /api/v2/admin/users/:id` still answers one
+  user's whole row, token, UUID, remark and plan included. A whole plan is
+  in `GET /api/v2/admin/plans/:id`.
+- **Order.** Users created in the same second now keep a stable order
+  (`created_at DESC, id DESC`), so pages no longer repeat or skip them.
+
+The bundled administrator page reads the token from the user detail when it
+copies a subscription link and fills the edit form from the user detail; it
+still names plans with `plan.name`. Control Center's
+v2board plugin passes the answer through unchanged. A script that read
+tokens from the list must read `GET /api/v2/admin/users/:id` per user.
+`GET /api/v2/admin/users/stats` is unchanged.
+
+The identity module can serve both routes natively (`native-flagged`) once
+identity is authoritative (see the next section). It reads the subscription
+summary from the view `kapi_subscriber_entitlement_v1` and the plan names
+from `kapi_plan_name_v1`, so its signed release declares
+`kernel.view:kapi_subscriber_entitlement_v1` and
+`kernel.view:kapi_plan_name_v1`: install that release before switching the
+routes to `native`.
+
+### Order Lists And Details No Longer Embed The Buyer And Plan Rows
+
+The four order list and detail routes embedded the buyer's whole `v2_user`
+row (subscription token and proxy UUID included) and the whole `v2_plan`
+row. They now carry the order, its plan's `id` and `name`, and, for an
+administrator, the buyer's `id` and `email`. The bundled frontend reads only
+those; an API client that read anything else of `user` or `plan` must change.
+
+| Route | `user` | `plan` |
+|-------|--------|--------|
+| `GET /api/v2/admin/orders` (each `list` item), `GET /api/v2/admin/orders/:id` | `{id, email}` | `{id, name}` |
+| `GET /api/v2/user/order` (each `list` item), `GET /api/v2/user/order/:id` | removed | `{id, name}` |
+
+The order's own fields are unchanged. A plan or buyer that no longer exists
+is left out, as before. The fields that disappear:
+
+- From `user`: `invite_user_id`, `telegram_id`, `balance`, `discount`,
+  `commission_type`, `commission_rate`, `commission_balance`, `token`, `uuid`,
+  `device_limit`, `speed_limit`, `flowResetTime`, `transfer_enable`, `u`, `d`,
+  `plan_id`, `group_id`, `expired_at`, `banned`, `remark_content`,
+  `is_admin`, `is_staff`, `last_login_at`, `created_at` and `updated_at`. The
+  user routes drop `user` altogether, `id` and `email` included. Password
+  hashes were never serialized.
+- From `plan`: `group_id`, `transfer_enable`, `speed_limit`, `device_limit`,
+  `content`, `show`, `sort`, `renew`, `reset_price`, `reset_traffic_method`,
+  `capacity_limit`, the seven prices (`month_price`, `quarter_price`,
+  `half_year_price`, `year_price`, `two_year_price`, `three_year_price`,
+  `onetime_price`), `created_at` and `updated_at`.
+
+Read them where they belong: a user's own account from
+`GET /api/v2/user/profile` and `GET /api/v2/user/subscription`, a buyer from
+`GET /api/v2/admin/users/:id`, and a plan from `GET /api/v2/user/plan` or
+`GET /api/v2/admin/plans/:id`.
+
+Two more changes come with it. The administrator's `email` filter now
+works: it always failed with an ambiguous `created_at`. The user's
+`page_size` is clamped as the administrator's (1 to 100, default 20 for 0 or
+less); a negative size used to list every order and 0 none.
+
+The `order` package can serve these routes natively (`native-flagged`). It
+reads the plan name from the new view `kapi_plan_name_v1` and the buyer's
+e-mail from `kapi_user_directory_v1`, so its signed release declares
+`kernel.view:kapi_plan_name_v1`: install that release before switching the
+routes to `native`.
+
+### Node Secrets Read As `********` In Administrator Answers
+
+The administrator API no longer answers node secrets in clear: protocol
+private keys, passwords and tokens, the secrets in a node's raw
+configuration, node registration keys and forward node API tokens read
+`********`. Nodes and agents still receive the real values, so running
+nodes need nothing.
+
+- **Editing.** Saving a protocol, a raw configuration or a forward node with
+  `********` keeps the stored secret, and a new value replaces it. The panel
+  editors work as before. A script that reads a protocol or raw
+  configuration and writes it back keeps working too; a script that read a
+  secret from these answers must keep its own copy instead.
+- **Registration keys.** `GET /api/v2/admin/auth-keys` no longer shows
+  existing keys, and they keep registering nodes. Copy a key when you
+  generate it: Nodes, Auth Key, Generate Key, or
+  `POST /api/v2/admin/auth-keys`. A key set with `NODE_DEFAULT_AUTH_KEY` is
+  the one in that variable.
+- **Forward node tokens.** A forward node's API token is answered once, by
+  `POST /api/v2/admin/forward/nodes`; the forward node page and the setup
+  wizard show a generated token after creating the node. Record it where
+  you configure the relay's gost API. The connection test of an existing
+  node needs the token typed in; the kernel dials with it, and the package
+  host sees only a sealed handle. If a token is lost, set a new one from the
+  node's edit form and update the relay and its agent.
+- **Proxy node credentials.** `GET /api/v2/admin/nodes/:id/credentials`
+  still answers a node's API key and secret, for the deployment helper and
+  Ansible. Each read is now recorded in `v2_audit_log` with action `reveal`.
+
+### The SMTP Password Reads As `********`
+
+The administrator API no longer answers the SMTP password in clear:
+`GET /api/v2/admin/notification/email/config` answers `password` as
+`********` when one is stored, and the system configuration routes show the
+`notification.email.config` value with `"password":"********"`. The test
+e-mail still uses the stored password, so mail delivery needs nothing.
+
+- **Panel.** Notifications, Email starts the password field empty with
+  "Password stored; leave blank to keep it". Saving with the field empty
+  keeps the stored password; typing a new one replaces it. Editing
+  `notification.email.config` under System, Configuration shows the
+  placeholder in the value; saving it as shown keeps the password.
+- **Scripts.** A script that reads the e-mail configuration (either route)
+  and writes it back keeps the password: the placeholder is kept. A script
+  that read the password from these answers must keep its own copy.
+
+### System Configuration Secrets Read As `********`
+
+`GET /api/v2/admin/system/configs/:key` now masks a sensitive value as the
+list (`GET /api/v2/admin/system/configs`) already did: a key whose name
+contains `token`, `secret`, `password`, `passwd`, `private_key`, `api_key`,
+`access_key` or `client_secret` (in any case, with or without the
+underscore) reads `********` in `value` and `display_value` when a value is
+stored, and `""` when none is; `sensitive` and `has_value` say which. The
+kernel and the packages granted a namespace's secrets still read the real
+values, so nothing that uses the NodeX token, the SMTP password or another
+secret changes.
+
+- **Editing.** Saving `********` back keeps the stored value, and a new
+  value replaces it, as before. The NodeX page shows a stored token as
+  `********` and keeps it when saved; its commands show
+  `<FORWARD_API_TOKEN>` instead of the token. Saving `********` for a
+  secret that is not stored is refused (`value is required`).
+- **Scripts.** A script that read a secret from this route must keep its
+  own copy. A script that reads a value and writes it back keeps working.
+
+### Forward Runtime Job Payloads No Longer Hold Node Tokens
+
+Until this release a forward change on a job backend (local Ansible, clean
+agent) and every gost change recorded the ingress node's API token inside
+the `v2_forward_runtime_job` payload (`panelForward.ingressNode.apiToken`),
+so the job table, the administrator's job list
+(`GET /api/v2/admin/forward/runtime/jobs`) and a clean agent's claim all
+carried it (`docs/architecture/node-ops-service.md`, sections 3.7 and
+3.11).
+
+- **New rows carry no token.** The kernel resolves the token when it sends
+  a request to NodeX, and only for the node's pinned endpoint ("Forward
+  Node Tokens Are Pinned To Their Endpoint", above). Ansible and clean
+  agent jobs never needed it: the agent authenticates with its own token.
+- **Old rows are scrubbed at start.** The Control process that holds the
+  singleton worker lease rewrites, before its job executors serve a row,
+  every stored payload that still names a token (`"apiToken":"..."` and
+  every other secret key), in batches of 200, and logs the count
+  (`removed the node tokens from N stored payloads`). The pass is
+  idempotent: a scrubbed row no longer matches, so later starts read
+  nothing. It needs no operator action and no command.
+- **During the transition** every reader scrubs what it serves: a clean
+  agent that claims a row written before the upgrade gets the payload
+  without the token, and so does the job list. Nothing an agent or an
+  administrator reads holds a token.
+- **Rollback.** An older binary writes tokens into new rows again; the
+  next start of this release scrubs them.
 
 ### Node Credentials Are Also Kept In The Split Tables (Phase P1)
 
@@ -864,19 +978,8 @@ The values are stored in clear, like the legacy columns, and the tables are
 protected: no package can adopt them. Database backups and dumps hold them,
 as they hold the legacy columns.
 
-**Forward nodes without an API port.** Once `backfill` has run, a forward
-node's token is pinned to its endpoint, `host:api_port` (decided by the
-owner, 2026-10-01; see "Forward Node Tokens Are Pinned To Their Endpoint"
-below). A forward node that has a token but no `api_port` has no endpoint,
-so its token is presented nowhere: gost backend changes and legacy rules on
-it fail with `ENDPOINT_UNCONFIRMED` until an administrator sets the API
-port, which pins it. Before the backfill nothing changes: such a node has
-no credential row and is used as before. List those nodes first and set
-their ports, then backfill:
-
-```bash
-anix-control node-secrets status     # "forward_nodes_without_api_port": count, and each node's id and name
-```
+Set the API port of forward nodes without one before the first `backfill`
+("Forward Node Tokens Are Pinned To Their Endpoint", above).
 
 After the upgrade, copy the existing rows and compare both forms. Each
 command prints JSON with counts and digests and never a secret; run it with
@@ -991,61 +1094,6 @@ staging copy shows none. Fix what the scan reports before then.
 agent token. Finalize (P3) writes these values into the legacy columns. A
 request signed with a placeholder secret is refused.
 
-### Forward Runtime Job Payloads No Longer Hold Node Tokens
-
-Until this release a forward change on a job backend (local Ansible, clean
-agent) and every gost change recorded the ingress node's API token inside
-the `v2_forward_runtime_job` payload (`panelForward.ingressNode.apiToken`),
-so the job table, the administrator's job list
-(`GET /api/v2/admin/forward/runtime/jobs`) and a clean agent's claim all
-carried it (`docs/architecture/node-ops-service.md`, sections 3.7 and
-3.11).
-
-- **New rows carry no token.** The kernel resolves the token when it sends
-  a request to NodeX, and only for the node's pinned endpoint (next
-  section). Ansible and clean agent jobs never needed it: the agent
-  authenticates with its own token.
-- **Old rows are scrubbed at start.** The Control process that holds the
-  singleton worker lease rewrites, before its job executors serve a row,
-  every stored payload that still names a token (`"apiToken":"..."` and
-  every other secret key), in batches of 200, and logs the count
-  (`removed the node tokens from N stored payloads`). The pass is
-  idempotent: a scrubbed row no longer matches, so later starts read
-  nothing. It needs no operator action and no command.
-- **During the transition** every reader scrubs what it serves: a clean
-  agent that claims a row written before the upgrade gets the payload
-  without the token, and so does the job list. Nothing an agent or an
-  administrator reads holds a token.
-- **Rollback.** An older binary writes tokens into new rows again; the
-  next start of this release scrubs them.
-
-### Forward Node Tokens Are Pinned To Their Endpoint
-
-A forward node's API token is now presented only at the endpoint it was
-bound to, `host:api_port` as recorded in `v4_kernel_node_credential.endpoint`
-by the kernel's own forward node writers (decision D12,
-`docs/architecture/node-ops-service.md` section 3.8). A NodeX request for
-the gost backend or a legacy rule whose node's address is not the pinned
-one fails with `ENDPOINT_UNCONFIRMED`
-(`the forward node's address is not the one its token is pinned to`), and
-nothing is sent.
-
-- **What moves the pin.** Saving the node through the administrator's
-  forward node or Ansible machine routes (`PUT /api/v2/admin/forward/nodes/:id`)
-  re-pins it to the row as saved. A write that bypasses Control (direct
-  SQL) does not: re-save the node in the administrator UI to confirm the
-  address.
-- **A node without an API port** has no endpoint and its token is presented
-  nowhere (decided by the owner, 2026-10-01): set the API port before using
-  the node with the gost backend or a legacy rule.
-  `anix-control node-secrets status` lists such nodes under
-  `forward_nodes_without_api_port`, by id and name, with their count.
-- **Run `node-secrets backfill`** after the upgrade if you have not: a node
-  without a credential row has no pin yet, is presented as before, and is
-  counted in `anixops_node_secrets_pin_total{reason="unpinned"}`. An
-  unconfirmed address is counted with `reason="unconfirmed"` and logged
-  once per node, without the address or the value.
-
 ### Agent Client Certificates Are Optional
 
 Control can issue mTLS client certificates to AnixOps Agents
@@ -1057,16 +1105,7 @@ every agent keeps authenticating with its node API key as before.
   `v4_kernel_agent_certificate` (created at startup), the gRPC service
   `anix.agent.v1.AgentEnrollment` on the agent listener,
   `POST /api/v4/kernel/agents/enrollment-tokens` and
-  `anix-control agent token create -node proxy-12`. KernelNodeOps also
-  creates `v4_kernel_node_desired_config` at startup: each node's desired
-  configuration with its revision and hash, written by the administrator's
-  node sync (`docs/architecture/node-ops-service.md`, section 5.5), and
-  `v4_kernel_node_config_status`: what each node's agent last reported
-  about its configuration on the Agent Control stream (`config.v1`). Agents
-  that list `config.v1` receive their configuration as snapshots on the
-  stream; the first rebuild after the upgrade moves every stored revision
-  by one, since the document gained the UniProxy answers. Nothing is
-  required of operators.
+  `anix-control agent token create -node proxy-12`.
 - **To let agents enroll.** Set `module_runtime.ca_kek`
   (`ANIX_CONTROL_MODULE_RUNTIME_CA_KEK`, 32 random bytes as base64 or hex;
   keep it secret and backed up) and TLS on the gRPC listener
@@ -1082,13 +1121,43 @@ every agent keeps authenticating with its node API key as before.
   Remove the key if you do not want the CA.
 - **Later modes.** `preferred` keeps legacy credentials and answers a
   legacy control stream with the header `x-anix-auth-deprecated`; `required`
-  (planned for 5.0)
-  accepts only certificates on the Agent services. Both need the built-in
-  CA and gRPC TLS, or Control refuses to start. Do not switch before every
-  agent has enrolled.
+  (planned for 5.0) accepts only certificates on the Agent services. Both
+  need the built-in CA and gRPC TLS, or Control refuses to start. Do not
+  switch before every agent has enrolled.
 - **Revocation.** Disabling or deleting a node, or replacing a forward
   node's token, revokes the node's agent certificates. A re-enabled node's
   agent enrolls again with its credential.
+
+### KernelNodeOps And Configuration On The Agent Control Stream
+
+Packages now request node operations from the kernel (KernelNodeOps,
+`docs/architecture/node-ops-service.md`), and agents that ask for it get
+their configuration, users and report acknowledgements on the Agent Control
+stream. Nothing is required of operators; existing agents keep the legacy
+transports.
+
+- **New tables, created at startup.** `v4_kernel_node_operation`,
+  `v4_kernel_node_operation_target` and `v4_kernel_node_operation_event`
+  (the operation ledger), `v4_kernel_node_desired_config` (each node's
+  desired configuration with its revision and hash, written by the
+  administrator's node sync, section 5.5), `v4_kernel_node_config_status`
+  (what each node's agent last reported about its configuration on the
+  Agent Control stream, `config.v1`) and `v4_kernel_agent_report_batch`
+  (report batches applied, pruned after 7 days). All are protected from
+  package adoption; no existing table changes.
+- **The ledger.** Administrators list operations read-only at
+  `GET /api/v4/kernel/node-operations`. Ended operations are kept 90 days
+  and events 7 days.
+- **Configuration push.** Agents that list `config.v1` receive their
+  configuration as snapshots on the stream; the first rebuild after the
+  upgrade moves every stored revision by one, since the document gained the
+  UniProxy answers.
+- **Package order.** The speed-limit routes moved from plan to forward and
+  the user's invite routes from identity-platform to affiliate: upgrade the
+  forward package before plan, and affiliate before identity-platform.
+- **Metrics.** `/metrics` adds the `anixops_agent_config_*`,
+  `anixops_agent_user_*` and `anixops_agent_users_*` series and
+  `anixops_v2_gateway_sealed_secrets_total` (`CHANGELOG.md`, 4.1.0-rc.2).
 
 ## Moving Logins To The Identity Module
 
