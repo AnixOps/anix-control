@@ -812,6 +812,11 @@ func (s *SubscriptionService) DeleteGroup(id uint) error {
 		if err := tx.Where("group_id = ?", id).Delete(&model.PlanSubscriptionGroup{}).Error; err != nil {
 			return err
 		}
+		// The group's node protocol links reference it: PostgreSQL refuses
+		// to delete a linked group, and SQLite would keep orphan links.
+		if err := tx.Exec("DELETE FROM v2_subscription_group_node_protocols WHERE subscription_group_id = ?", id).Error; err != nil {
+			return err
+		}
 
 		return tx.Delete(&group).Error
 	})
