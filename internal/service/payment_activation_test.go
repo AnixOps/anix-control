@@ -98,3 +98,54 @@ func TestMarkOrderPaidIfCoveredChecksTheRecord(t *testing.T) {
 	require.NoError(t, db.Take(&order, order.ID).Error)
 	require.Equal(t, 1, order.Status)
 }
+
+// A payment for an order that is no longer pending (cancelled, or paid by
+// another payment) is recorded, and the order is left unchanged; the
+// refusal is recorded once under the payment's request id.
+func TestPaymentCallbackLeavesAnOrderThatIsNoLongerPending(t *testing.T) {
+	db := paymentActivationDB(t)
+	require.NoError(t, db.Create(&model.User{ID: 1, Email: "buyer@example.test", Token: "t", UUID: "u"}).Error)
+	plan := model.Plan{Name: "Pro", GroupID: 4, TransferEnable: 50}
+	require.NoError(t, db.Create(&plan).Error)
+	order := pendingPayment(t, db, "PAY-CANCELLED", plan.ID)
+	require.NoError(t, db.Model(&order).Update("status", 2).Error)
+
+	require.NoError(t, NewPaymentGatewayService(db).MarkOrderPaid("PAY-CANCELLED", "GW-1", "{}"))
+	var record model.PaymentRecord
+	require.NoError(t, db.Take(&record, "trade_no = ?", "PAY-CANCELLED").Error)
+	require.Equal(t, model.PaymentStatusPaid, record.Status)
+	require.NoError(t, db.Take(&order, order.ID).Error)
+	require.Equal(t, 2, order.Status)
+	require.Nil(t, order.PaidAt)
+	var user model.User
+	require.NoError(t, db.Take(&user, 1).Error)
+	require.Nil(t, user.PlanID)
+	var ledger model.SubscriberRequest
+	require.NoError(t, db.Take(&ledger, "request_id = ?", OrderPaymentRequestID("PAY-CANCELLED")).Error)
+	require.JSONEq(t, fmt.Sprintf(`{"order_id":%d,"outcome":"refused","reason":"the order is not pending (status 2)"}`, order.ID), ledger.Result)
+}
+
+// The payment module records a payment, then completes its order through
+// KernelOrder. A failure in between leaves a paid record whose order is
+// pending; the provider's repeat of the callback completes the order, here
+// in the kernel's legacy path, while answering as before.
+func TestRepeatedCallbackFinishesAnOrderLeftPending(t *testing.T) {
+	db := paymentActivationDB(t)
+	require.NoError(t, db.Create(&model.User{ID: 1, Email: "buyer@example.test", Token: "t", UUID: "u"}).Error)
+	plan := model.Plan{Name: "Pro", GroupID: 4, TransferEnable: 50}
+	require.NoError(t, db.Create(&plan).Error)
+	order := pendingPayment(t, db, "PAY-HALFWAY", plan.ID)
+	require.NoError(t, db.Model(&model.PaymentRecord{}).Where("trade_no = ?", "PAY-HALFWAY").Update("status", model.PaymentStatusPaid).Error)
+
+	svc := NewPaymentGatewayService(db)
+	require.EqualError(t, svc.MarkOrderPaid("PAY-HALFWAY", "GW-1", "{}"), "payment already processed")
+	require.NoError(t, db.Take(&order, order.ID).Error)
+	require.Equal(t, 3, order.Status, "the repeat completes the order")
+	var requests int64
+	require.NoError(t, db.Model(&model.SubscriberRequest{}).Count(&requests).Error)
+	require.EqualValues(t, 2, requests, "payment:PAY-HALFWAY and order:<id>")
+
+	require.EqualError(t, svc.MarkOrderPaid("PAY-HALFWAY", "GW-1", "{}"), "payment already processed")
+	require.NoError(t, db.Model(&model.SubscriberRequest{}).Count(&requests).Error)
+	require.EqualValues(t, 2, requests, "a further repeat applies nothing")
+}

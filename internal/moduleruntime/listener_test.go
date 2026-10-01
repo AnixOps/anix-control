@@ -15,6 +15,7 @@ import (
 	"time"
 
 	kernelidentityv1 "github.com/AnixOps/anix-control/sdk/api/kernelidentity/v1"
+	kernelorderv1 "github.com/AnixOps/anix-control/sdk/api/kernelorder/v1"
 	kernelsettingsv1 "github.com/AnixOps/anix-control/sdk/api/kernelsettings/v1"
 	kernelsubscriberv1 "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1"
 	modulepkiv1 "github.com/AnixOps/anix-control/sdk/api/modulepki/v1"
@@ -77,6 +78,8 @@ type listenerFixture struct {
 	bridge     *packagebridge.ModuleBridge
 	clock      *mutableClock
 	calls      chan packagebridge.Call
+	// orderHosts records the host identity KernelOrder calls ran as.
+	orderHosts chan packagebridge.HostIdentity
 	// identityHosts records the host identity KernelIdentity calls ran as.
 	identityHosts chan packagebridge.HostIdentity
 	// subscriberHosts records the host identity KernelSubscriber calls ran as.
@@ -127,6 +130,18 @@ func (r identityRecorder) ResolveActorAccess(context.Context, *kernelidentityv1.
 	return &kernelidentityv1.ResolveActorAccessResponse{PermissionMode: "legacy", Unrestricted: true}, nil
 }
 
+// orderRecorder answers CompleteOrderPayment and records the calling host.
+type orderRecorder struct {
+	kernelorderv1.UnimplementedKernelOrderServer
+	host  packagebridge.HostIdentity
+	hosts chan packagebridge.HostIdentity
+}
+
+func (r orderRecorder) CompleteOrderPayment(context.Context, *kernelorderv1.CompleteOrderPaymentRequest) (*kernelorderv1.CompleteOrderPaymentResponse, error) {
+	r.hosts <- r.host
+	return &kernelorderv1.CompleteOrderPaymentResponse{Applied: true}, nil
+}
+
 // newPKIFixture creates the kernel CA and its TLS identity.
 func newPKIFixture(t *testing.T) *listenerFixture {
 	t.Helper()
@@ -154,6 +169,9 @@ func (f *listenerFixture) serve(t *testing.T) {
 	go func() {
 		served <- (&Listener{
 			TLS: f.kernel, Cluster: "prod", PKI: f.authority, Bridge: f.bridge,
+			KernelOrder: func(host packagebridge.HostIdentity) kernelorderv1.KernelOrderServer {
+				return orderRecorder{host: host, hosts: f.orderHosts}
+			},
 			KernelIdentity: func(host packagebridge.HostIdentity) kernelidentityv1.KernelIdentityServer {
 				return identityRecorder{host: host, hosts: f.identityHosts}
 			},
@@ -191,6 +209,7 @@ func newListenerFixture(t *testing.T) *listenerFixture {
 	bridge, err := packagebridge.NewModuleBridge(binder, packagebridge.ModuleBridgeOptions{Cluster: "prod", Now: clock.Now})
 	require.NoError(t, err)
 	fixture.generation, fixture.binder, fixture.bridge, fixture.clock, fixture.calls = generation, binder, bridge, clock, calls
+	fixture.orderHosts = make(chan packagebridge.HostIdentity, 4)
 	fixture.identityHosts = make(chan packagebridge.HostIdentity, 4)
 	fixture.subscriberHosts = make(chan packagebridge.HostIdentity, 4)
 	fixture.settingsHosts = make(chan packagebridge.HostIdentity, 4)
@@ -394,6 +413,29 @@ func TestKernelIdentityIsServedToBoundInstancesOnly(t *testing.T) {
 	require.NoError(t, fixture.generation.Close())
 	_, err = identity.ResolveActorAccess(session, &kernelidentityv1.ResolveActorAccessRequest{UserId: 1})
 	require.Equal(t, codes.PermissionDenied, status.Code(err), "a fenced generation loses KernelIdentity too")
+}
+
+// KernelOrder on the module listener runs as the bound instance's
+// generation and needs a bridge session.
+func TestKernelOrderIsServedToBoundInstancesOnly(t *testing.T) {
+	fixture := newListenerFixture(t)
+	certificate, _ := fixture.enroll(t, "knowledge")
+	connection := fixture.dial(t, certificate)
+	orders := kernelorderv1.NewKernelOrderClient(connection)
+	request := &kernelorderv1.CompleteOrderPaymentRequest{TradeNo: "PAY1", OrderId: 1}
+
+	_, err := orders.CompleteOrderPayment(context.Background(), request)
+	require.Equal(t, codes.Unauthenticated, status.Code(err), "no bridge session")
+
+	session := bind(t, packagebridgev1.NewKernelPackageBridgeClient(connection), "pod-a")
+	response, err := orders.CompleteOrderPayment(session, request)
+	require.NoError(t, err)
+	require.True(t, response.GetApplied())
+	require.Equal(t, packagebridge.HostIdentity{PackageID: "knowledge", Version: "4.1.0", Generation: 9}, <-fixture.orderHosts)
+
+	require.NoError(t, fixture.generation.Close())
+	_, err = orders.CompleteOrderPayment(session, request)
+	require.Equal(t, codes.PermissionDenied, status.Code(err), "a fenced generation loses KernelOrder too")
 }
 
 // KernelSubscriber on the module listener runs as the bound instance's

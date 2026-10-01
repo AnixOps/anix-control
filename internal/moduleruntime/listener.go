@@ -12,6 +12,7 @@ import (
 	"time"
 
 	kernelidentityv1 "github.com/AnixOps/anix-control/sdk/api/kernelidentity/v1"
+	kernelorderv1 "github.com/AnixOps/anix-control/sdk/api/kernelorder/v1"
 	kernelsettingsv1 "github.com/AnixOps/anix-control/sdk/api/kernelsettings/v1"
 	kernelsubscriberv1 "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1"
 	modulepkiv1 "github.com/AnixOps/anix-control/sdk/api/modulepki/v1"
@@ -49,6 +50,9 @@ type Listener struct {
 	// KernelIdentity, when set, is served to bound instances; see
 	// ModuleBridge.KernelIdentityServer.
 	KernelIdentity packagebridge.KernelIdentityProvider
+	// KernelOrder, when set, is served to bound instances; see
+	// ModuleBridge.KernelOrderServer.
+	KernelOrder packagebridge.KernelOrderProvider
 	// KernelSubscriber, when set, is served to bound instances; see
 	// ModuleBridge.KernelSubscriberServer.
 	KernelSubscriber packagebridge.KernelSubscriberProvider
@@ -112,6 +116,9 @@ func (l *Listener) newServer() (*grpc.Server, error) {
 	packagebridgev1.RegisterKernelPackageBridgeServer(server, l.Bridge)
 	if l.KernelIdentity != nil {
 		kernelidentityv1.RegisterKernelIdentityServer(server, l.Bridge.KernelIdentityServer(l.KernelIdentity))
+	}
+	if l.KernelOrder != nil {
+		kernelorderv1.RegisterKernelOrderServer(server, l.Bridge.KernelOrderServer(l.KernelOrder))
 	}
 	if l.KernelSubscriber != nil {
 		kernelsubscriberv1.RegisterKernelSubscriberServer(server, l.Bridge.KernelSubscriberServer(l.KernelSubscriber))

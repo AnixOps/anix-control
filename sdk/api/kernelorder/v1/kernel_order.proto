@@ -1,0 +1,73 @@
+syntax = "proto3";
+
+package anixops.kernelorder.v1;
+
+option go_package = "github.com/AnixOps/anix-control/sdk/api/kernelorder/v1;kernelorderv1";
+
+// KernelOrder is the kernel's contract for the order writes that span
+// domains (docs/architecture/order-service.md). Completing a paid order
+// changes the order (v2_order, the order module's table) and grants its
+// plan (v2_user, the kernel's subscriber state) in one transaction; no
+// single module may write both, so the kernel does it for the module that
+// took the payment.
+//
+// It is served on the module listener and the local package bridge to
+// official packages, by capability:
+//   - kernel.order.complete.v1: CompleteOrderPayment
+service KernelOrder {
+  // CompleteOrderPayment applies a paid payment record to the order it
+  // names, as the kernel's payment callbacks do. The payment module first
+  // records the payment (the record's status, gateway trade number and
+  // notify data, and its gateway's statistics) in its own tables and
+  // commits, then calls this. The kernel reads the record itself and, in
+  // one transaction:
+  //   1. requires the record to be paid and to name order_id;
+  //   2. re-checks that the record pays the order: the order exists, is the
+  //      record's user's, is still pending, and the record's amount covers
+  //      its total. Otherwise the order is left unchanged and the outcome
+  //      is REFUSED;
+  //   3. marks the order paid;
+  //   4. completes it: grants its plan with request id "order:<order id>"
+  //      and marks it completed. If the grant fails, the order stays paid
+  //      for an administrator to complete and the outcome is PAID.
+  //
+  // It is idempotent per trade number: the outcome is recorded with request
+  // id "payment:<trade_no>" in the kernel's request ledger, and a repeat
+  // answers the first outcome with applied false.
+  //
+  // NOT_FOUND when no record has the trade number; FAILED_PRECONDITION when
+  // the record is not paid or names another order (nothing is recorded, a
+  // later call may apply).
+  rpc CompleteOrderPayment(CompleteOrderPaymentRequest) returns (CompleteOrderPaymentResponse);
+}
+
+message CompleteOrderPaymentRequest {
+  // trade_no is the payment record's trade number
+  // (v2_payment_record.trade_no), at most 120 bytes.
+  string trade_no = 1;
+  // order_id is the order the record names (v2_payment_record.order_id).
+  uint64 order_id = 2;
+}
+
+// OrderPaymentOutcome is what a paid record did to its order.
+enum OrderPaymentOutcome {
+  ORDER_PAYMENT_OUTCOME_UNSPECIFIED = 0;
+  // The order was marked paid and completed: its plan is granted.
+  ORDER_PAYMENT_OUTCOME_COMPLETED = 1;
+  // The order was marked paid, but granting its plan failed; it stays paid
+  // for an administrator to complete.
+  ORDER_PAYMENT_OUTCOME_PAID = 2;
+  // The record does not pay its order (see reason); the order is unchanged
+  // and the payment stays recorded.
+  ORDER_PAYMENT_OUTCOME_REFUSED = 3;
+}
+
+message CompleteOrderPaymentResponse {
+  // applied is false when the trade number was applied before; the other
+  // fields then describe that first application.
+  bool applied = 1;
+  uint64 order_id = 2;
+  OrderPaymentOutcome outcome = 3;
+  // reason says why a REFUSED record does not pay its order.
+  string reason = 4;
+}

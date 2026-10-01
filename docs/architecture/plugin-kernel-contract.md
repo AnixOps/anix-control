@@ -122,6 +122,7 @@ forms are accepted:
 |------------|--------|
 | `kernel.observed-state` | Agent observed-state reports |
 | `kernel.identity.v1` | the `KernelIdentity` contract: subscribers, the account projection, revocations; honoured only for official AnixOps packages, checked on every call |
+| `kernel.order.complete.v1` | the `KernelOrder` contract (`order-service.md`): a paid payment record marks its order paid and completes it, after the kernel re-checks that it pays the order; honoured only for official AnixOps packages, checked on every call |
 | `kernel.subscriber.entitlements.v1`, `.traffic.v1`, `.credentials.v1`, `.balance.v1`, `.directory.v1`, `.groups.v1` | one method family each of the `KernelSubscriber` contract (`subscriber-service.md`): plan activation and entitlement edits, traffic ledger, credential resets, balances, directory and change feed, subscription group membership; honoured only for official AnixOps packages, checked on every call |
 | `kernel.settings.<namespace>.read.v1`, `.write.v1`, `.secrets.v1` | the `KernelSettings` contract (`settings-service.md`) for one settings namespace (`mail`, `invite`, `nodex`, `forward-runtime`, `backup`): read, write (with the kernel's audit entries and in-memory refresh), and secret values in clear (requires `read`); unknown namespaces are refused; honoured only for official AnixOps packages, checked on every call |
 | `kernel.storage.v1` | a per-package database role and schema (storage lease) |

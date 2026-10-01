@@ -1814,7 +1814,7 @@
       "path": "/api/v2/payment/callback/:type",
       "package_id": "payment",
       "route_id": "payment.callback",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1838,7 +1838,7 @@
       "path": "/api/v2/payment/paypal/webhook",
       "package_id": "payment",
       "route_id": "payment.payment.paypal.webhook.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1854,7 +1854,7 @@
       "path": "/api/v2/payment/stripe/webhook",
       "package_id": "payment",
       "route_id": "payment.payment.stripe.webhook.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1862,7 +1862,7 @@
       "path": "/api/v2/payment/x402/callback",
       "package_id": "payment",
       "route_id": "payment.payment.x402.callback.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {

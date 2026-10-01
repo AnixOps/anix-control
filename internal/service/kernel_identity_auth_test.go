@@ -56,3 +56,25 @@ func TestAuthorizeCapabilityGrantsOnlyTheSignedSubscriberFamilies(t *testing.T) 
 	require.Error(t, validateManifestCapabilities([]string{"kernel.subscriber.everything.v1"}), "unknown families are refused")
 	require.NoError(t, validateManifestCapabilities([]string{CapabilitySubscriberGroups}), "the membership family is in the grammar")
 }
+
+// KernelOrder's completion is authorized as the subscriber families are: on
+// every call, for an official package whose signed release declares it.
+func TestAuthorizeCapabilityGrantsOrderCompletionToItsHoldersOnly(t *testing.T) {
+	db := newKernelTestDB(t)
+	publicKey, _ := seedKnowledgeRelease(t, db, "", []string{CapabilityOrderComplete})
+	operations := PackageHostOperations{DB: db, FallbackPublicKey: publicKey}
+	host := packagebridge.HostIdentity{PackageID: "knowledge", Version: "4.0.1", Generation: 7}
+	ctx := context.Background()
+
+	require.NoError(t, operations.AuthorizeCapability(ctx, host, CapabilityOrderComplete))
+	require.ErrorIs(t, operations.AuthorizeCapability(ctx, host, CapabilitySubscriberEntitlements), ErrCapabilityNotAuthorized)
+	stale := host
+	stale.Generation = 6
+	require.ErrorIs(t, operations.AuthorizeCapability(ctx, stale, CapabilityOrderComplete), packagebridge.ErrHostFenced)
+	require.NoError(t, db.Model(&model.Plugin{}).Where("id = ?", "knowledge").Update("official", false).Error)
+	require.ErrorIs(t, operations.AuthorizeCapability(ctx, host, CapabilityOrderComplete), ErrCapabilityNotAuthorized,
+		"only an official package may complete orders")
+
+	require.NoError(t, validateManifestCapabilities([]string{CapabilityOrderComplete}))
+	require.Error(t, validateManifestCapabilities([]string{"kernel.order.everything.v1"}), "unknown order capabilities are refused")
+}

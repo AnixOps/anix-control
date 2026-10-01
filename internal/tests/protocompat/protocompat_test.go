@@ -19,6 +19,7 @@ import (
 	_ "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	_ "github.com/AnixOps/anix-control/sdk/api/identity/v1"
 	_ "github.com/AnixOps/anix-control/sdk/api/kernelidentity/v1"
+	_ "github.com/AnixOps/anix-control/sdk/api/kernelorder/v1"
 	_ "github.com/AnixOps/anix-control/sdk/api/kernelsettings/v1"
 	_ "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1"
 	_ "github.com/AnixOps/anix-control/sdk/api/modulepki/v1"
@@ -37,6 +38,7 @@ var contractPackages = []string{
 	"anix.agent.v1",
 	"anix.pluginhost.v1",
 	"anixops.identity.v1",
+	"anixops.kernelorder.v1",
 	"anixops.kernelidentity.v1",
 	"anixops.kernelsettings.v1",
 	"anixops.kernelsubscriber.v1",

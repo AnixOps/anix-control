@@ -6,7 +6,6 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
-	"log"
 	"math"
 	"time"
 
@@ -55,23 +54,6 @@ func (s *PaymentGatewayService) CheckOrderPayable(orderID, userID uint, amount f
 		return ErrPaymentAmountMismatch
 	}
 	return nil
-}
-
-// recordPaysOrder reports whether a payment record pays its order: the
-// order exists, belongs to the record's user and costs no more than the
-// record's amount. Records created before CheckOrderPayable could name any
-// order with any amount; their payment is still recorded, but such an order
-// is left unchanged.
-func recordPaysOrder(tx *gorm.DB, record model.PaymentRecord, orderID uint) (bool, error) {
-	var order model.Order
-	err := tx.Select("id", "user_id", "total_amount").Where("id = ?", orderID).Take(&order).Error
-	switch {
-	case errors.Is(err, gorm.ErrRecordNotFound):
-		return false, nil
-	case err != nil:
-		return false, err
-	}
-	return order.UserID == record.UserID && math.Round(record.Amount*100) >= float64(order.TotalAmount), nil
 }
 
 func paymentGatewayEnabledTypes() []string {
@@ -338,8 +320,14 @@ func (s *PaymentGatewayService) MarkOrderPaidIfCovered(tradeNo string, gatewayTr
 	return s.markOrderPaid(tradeNo, gatewayTradeNo, notifyData, covers)
 }
 
+// errPaymentProcessed answers a callback for a payment that is no longer
+// pending.
+var errPaymentProcessed = errors.New("payment already processed")
+
 func (s *PaymentGatewayService) markOrderPaid(tradeNo string, gatewayTradeNo string, notifyData string, check func(model.PaymentRecord) error) error {
-	return WithRetryableTransaction(s.db, func(tx *gorm.DB) error {
+	var processed *model.PaymentRecord
+	err := WithRetryableTransaction(s.db, func(tx *gorm.DB) error {
+		processed = nil
 		// 查询支付记录
 		var record model.PaymentRecord
 		if err := tx.Where("trade_no = ?", tradeNo).First(&record).Error; err != nil {
@@ -347,7 +335,8 @@ func (s *PaymentGatewayService) markOrderPaid(tradeNo string, gatewayTradeNo str
 		}
 
 		if record.Status != model.PaymentStatusPending {
-			return fmt.Errorf("payment already processed")
+			processed = &record
+			return errPaymentProcessed
 		}
 
 		if check != nil {
@@ -377,36 +366,20 @@ func (s *PaymentGatewayService) markOrderPaid(tradeNo string, gatewayTradeNo str
 			}
 		}
 
-		// 更新关联订单状态
+		// 更新关联订单状态: the order it pays is marked paid and completed,
+		// as KernelOrder.CompleteOrderPayment does for the payment module.
 		if record.OrderID != nil {
-			pays, err := recordPaysOrder(tx, record, *record.OrderID)
-			if err != nil {
+			if _, err := CompleteOrderPaymentTx(tx, record.TradeNo, uint64(*record.OrderID), now); err != nil {
 				return err
-			}
-			if !pays {
-				log.Printf("payment %s does not pay order %d (another user's order, a lower amount or no such order); the order is left unchanged", tradeNo, *record.OrderID)
-				return nil
-			}
-			paidAt := time.Now().Unix()
-			if err := tx.Model(&model.Order{}).Where("id = ?", *record.OrderID).Updates(map[string]any{
-				"status":  1, // paid
-				"paid_at": paidAt,
-			}).Error; err != nil {
-				return err
-			}
-			// A paid order activates its plan at once. The activation runs in
-			// a savepoint: if it fails, the payment stays recorded and the
-			// order stays paid for an administrator to complete.
-			orderID := *record.OrderID
-			if err := tx.Transaction(func(inner *gorm.DB) error {
-				return completeOrderTx(inner, orderID, now)
-			}); err != nil {
-				log.Printf("payment %s: order %d is paid but was not activated: %v", tradeNo, orderID, err)
 			}
 		}
 
 		return nil
 	})
+	if processed != nil {
+		s.FinishPaidOrder(*processed)
+	}
+	return err
 }
 
 // GetUserRecords 获取用户支付记录

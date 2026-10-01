@@ -4,9 +4,9 @@
 // numbers and addresses masked) and the same resulting rows.
 //
 // The native side reads orders through the kernel view kapi_order_billing_v1
-// (packagestore.EnsureKernelAPIViews). No native route calls a payment
-// provider: the fiat routes are stubs on both sides, and the callbacks,
-// which verify provider signatures (PayPal's over its API), stay bridged.
+// (packagestore.EnsureKernelAPIViews). No test calls a payment provider: the
+// fiat routes are stubs on both sides, and the callbacks (callbacks_test.go)
+// verify PayPal deliveries against a fake PayPal API.
 package paymentcompat
 
 import (
