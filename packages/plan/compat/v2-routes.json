@@ -45,41 +45,6 @@
       "transport": "http"
     },
     {
-      "method": "POST",
-      "legacy_path": "/api/v2/speed-limit/create",
-      "package_route": "plan.speed_limit.create.post",
-      "envelope": "data",
-      "transport": "http"
-    },
-    {
-      "method": "POST",
-      "legacy_path": "/api/v2/speed-limit/delete",
-      "package_route": "plan.speed_limit.delete.post",
-      "envelope": "data",
-      "transport": "http"
-    },
-    {
-      "method": "POST",
-      "legacy_path": "/api/v2/speed-limit/list",
-      "package_route": "plan.speed_limit.list.post",
-      "envelope": "data",
-      "transport": "http"
-    },
-    {
-      "method": "POST",
-      "legacy_path": "/api/v2/speed-limit/tunnels",
-      "package_route": "plan.speed_limit.tunnels.post",
-      "envelope": "data",
-      "transport": "http"
-    },
-    {
-      "method": "POST",
-      "legacy_path": "/api/v2/speed-limit/update",
-      "package_route": "plan.speed_limit.update.post",
-      "envelope": "data",
-      "transport": "http"
-    },
-    {
       "method": "GET",
       "legacy_path": "/api/v2/user/plan",
       "package_route": "plan.user.plan.get",

@@ -1948,40 +1948,40 @@
     {
       "method": "POST",
       "path": "/api/v2/speed-limit/create",
-      "package_id": "plan",
-      "route_id": "plan.speed_limit.create.post",
-      "mode": "bridged",
+      "package_id": "forward",
+      "route_id": "forward.speed_limit.create.post",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
       "method": "POST",
       "path": "/api/v2/speed-limit/delete",
-      "package_id": "plan",
-      "route_id": "plan.speed_limit.delete.post",
-      "mode": "bridged",
+      "package_id": "forward",
+      "route_id": "forward.speed_limit.delete.post",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
       "method": "POST",
       "path": "/api/v2/speed-limit/list",
-      "package_id": "plan",
-      "route_id": "plan.speed_limit.list.post",
-      "mode": "bridged",
+      "package_id": "forward",
+      "route_id": "forward.speed_limit.list.post",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
       "method": "POST",
       "path": "/api/v2/speed-limit/tunnels",
-      "package_id": "plan",
-      "route_id": "plan.speed_limit.tunnels.post",
-      "mode": "bridged",
+      "package_id": "forward",
+      "route_id": "forward.speed_limit.tunnels.post",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
       "method": "POST",
       "path": "/api/v2/speed-limit/update",
-      "package_id": "plan",
-      "route_id": "plan.speed_limit.update.post",
+      "package_id": "forward",
+      "route_id": "forward.speed_limit.update.post",
       "mode": "bridged",
       "legacy": "router"
     },

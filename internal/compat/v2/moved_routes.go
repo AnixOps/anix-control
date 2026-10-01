@@ -5,7 +5,8 @@ package v2
 //
 // Old releases of the previous owner still declare the route, so while such
 // a release is active:
-//   - the kernel keeps accepting its old route id (see identitybridge), and
+//   - the kernel keeps accepting its old route id, from that package only
+//     (see identitybridge), and
 //   - route resolution prefers the new owner when both declare the route, so
 //     the new owner can be installed before the old one is upgraded.
 type MovedRoute struct {
@@ -20,8 +21,14 @@ type MovedRoute struct {
 // movedRoutes: system configuration, audit and backup moved to platform;
 // affiliate commissions, withdrawals and settings to affiliate; the Flux
 // reset-flow endpoint to forward (4.1). The user's invite codes and their
-// generation followed to affiliate (4.1).
+// generation followed to affiliate, and the Flux speed limits moved from
+// plan to forward (4.1).
 var movedRoutes = []MovedRoute{
+	{Method: "POST", LegacyPath: "/api/v2/speed-limit/create", FromPackage: "plan", FromRoute: "plan.speed_limit.create.post", ToPackage: "forward", ToRoute: "forward.speed_limit.create.post"},
+	{Method: "POST", LegacyPath: "/api/v2/speed-limit/delete", FromPackage: "plan", FromRoute: "plan.speed_limit.delete.post", ToPackage: "forward", ToRoute: "forward.speed_limit.delete.post"},
+	{Method: "POST", LegacyPath: "/api/v2/speed-limit/list", FromPackage: "plan", FromRoute: "plan.speed_limit.list.post", ToPackage: "forward", ToRoute: "forward.speed_limit.list.post"},
+	{Method: "POST", LegacyPath: "/api/v2/speed-limit/tunnels", FromPackage: "plan", FromRoute: "plan.speed_limit.tunnels.post", ToPackage: "forward", ToRoute: "forward.speed_limit.tunnels.post"},
+	{Method: "POST", LegacyPath: "/api/v2/speed-limit/update", FromPackage: "plan", FromRoute: "plan.speed_limit.update.post", ToPackage: "forward", ToRoute: "forward.speed_limit.update.post"},
 	{Method: "GET", LegacyPath: "/api/v2/user/invite", FromPackage: "identity-platform", FromRoute: "identity.user.invite.get", ToPackage: "affiliate", ToRoute: "affiliate.user.invite.get"},
 	{Method: "POST", LegacyPath: "/api/v2/user/invite/generate", FromPackage: "identity-platform", FromRoute: "identity.user.invite.generate.post", ToPackage: "affiliate", ToRoute: "affiliate.user.invite.generate.post"},
 	{Method: "GET", LegacyPath: "/api/v2/admin/invite/config", FromPackage: "identity-platform", FromRoute: "identity.admin.invite.config.get", ToPackage: "affiliate", ToRoute: "affiliate.admin.invite.config.get"},

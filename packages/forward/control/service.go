@@ -81,6 +81,13 @@ var forwardRoutes = map[string]struct{}{
 	// The administrator's traffic reset (KernelSubscriber.ResetTraffic, or
 	// a tunnel permission's traffic).
 	"forward.user.reset.post": {},
+	// Speed limits (v2_speed_limit), moved from plan: creation, the list,
+	// the deletion of an unused limit and the tunnels a limit may name. A
+	// limit runs nothing until a permission names it.
+	"forward.speed_limit.create.post":  {},
+	"forward.speed_limit.list.post":    {},
+	"forward.speed_limit.delete.post":  {},
+	"forward.speed_limit.tunnels.post": {},
 }
 
 // bridgedRoutes are the package's compatibility routes without a native
@@ -142,6 +149,9 @@ var bridgedRoutes = map[string]struct{}{
 	"forward.admin.tunnel.user.remove.post": {},
 	"forward.tunnel.user.update.post":       {},
 	"forward.admin.tunnel.user.update.post": {},
+	// A speed limit update re-applies the forwards of every permission that
+	// names the limit on their nodes; it waits for KernelNodeOps.
+	"forward.speed_limit.update.post": {},
 	// Legacy rules: every change is pushed to NodeX with the nodes' API
 	// tokens. The administrator's answers embed the full node rows, tokens
 	// included, which kapi_forward_node_v1 does not show. The agents' rule

@@ -107,6 +107,26 @@
 
 ### Changed
 
+- **The speed-limit routes moved to forward; four run natively.** The five
+  `/api/v2/speed-limit/*` routes are Flux forward limits, whose rows name
+  forward tunnels; they move from plan to forward (`forward.speed_limit.*`)
+  with the same paths and answers.
+  - Creation, the list, the deletion of a limit no permission names and
+    the tunnels a limit may name have native handlers on forward's adopted
+    `v2_speed_limit`, `v2_forward_tunnel` and `v2_forward_user_tunnel` and
+    `kapi_forward_runtime_settings_v1`. A limit runs nothing until a
+    permission names it, so none of them reaches a node.
+  - The update stays bridged: it re-applies the forwards of every
+    permission that names the limit on their nodes, which waits for
+    KernelNodeOps.
+  - `internal/tests/forwardcompat` proves byte parity and the same rows on
+    SQLite and PostgreSQL (43 cases each).
+  - **Transition.** Old plan releases still declare the routes under their
+    `plan.speed_limit.*` ids. The kernel keeps those ids callable from plan
+    (the moved-route operations now cover every previous owner, not only
+    identity-platform) and prefers forward while both declare a route.
+    Upgrade forward before plan. plan now has 7 routes, all native-flagged.
+  - Extraction map: 170 `native-flagged`, 106 `bridged`, 16 `kernel-owned`.
 - **The user's invite codes moved to affiliate and run natively.**
   `GET /api/v2/user/invite` and `POST /api/v2/user/invite/generate` move
   from identity-platform to the affiliate package

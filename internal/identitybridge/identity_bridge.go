@@ -220,17 +220,14 @@ func NewAllowlist(cfg *config.Config) (*packagebridge.Allowlist, error) {
 }
 
 // movedRouteOperations keeps the old route ids of routes that moved to other
-// packages callable by identity-platform releases that still declare them.
-// Each call runs the new owner's handler, resolved when the call arrives
-// because the router registers it.
+// packages callable by releases of their previous owner (identity-platform,
+// plan) that still declare them. Each call runs the new owner's handler,
+// resolved when the call arrives because the router registers it.
 func movedRouteOperations(routes packagebridge.OperationResolver) []packagebridge.Operation {
 	var operations []packagebridge.Operation
 	for _, moved := range compatv2.MovedRoutes() {
-		if moved.FromPackage != packageID {
-			continue
-		}
 		operations = append(operations, packagebridge.Operation{
-			PackageID: packageID, RouteID: moved.FromRoute, Name: moved.FromRoute,
+			PackageID: moved.FromPackage, RouteID: moved.FromRoute, Name: moved.FromRoute,
 			Handler: func(ctx context.Context, call packagebridge.Call) (packagebridge.Response, error) {
 				handler, ok := routes.Resolve(moved.ToPackage, moved.ToRoute, moved.ToRoute)
 				if !ok {

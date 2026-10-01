@@ -62,20 +62,7 @@ var planRoutes = map[string]struct{}{
 }
 
 // bridgedRoutes are the package's compatibility routes without a native
-// handler; they always relay to the kernel's legacy handler. The speed-limit
-// routes are Flux forward limits, which belong with the forward package, so
-// the plan package does not adopt v2_speed_limit (the forward runtime reads
-// it to rate-limit tunnels):
-//   - every row names a forward tunnel; create and update check it in
-//     v2_forward_tunnel, and update and delete count its assignments in
-//     v2_forward_user_tunnel, tables of the forward package that no kernel
-//     view exposes;
-//   - an update re-pushes every assigned forward to its nodes;
-//   - the tunnel list is the forward package's answer.
-var bridgedRoutes = map[string]struct{}{
-	"plan.speed_limit.create.post":  {},
-	"plan.speed_limit.list.post":    {},
-	"plan.speed_limit.update.post":  {},
-	"plan.speed_limit.delete.post":  {},
-	"plan.speed_limit.tunnels.post": {},
-}
+// handler; they always relay to the kernel's legacy handler. There are
+// none left: the speed-limit routes are Flux forward limits, whose rows name
+// forward tunnels, and moved to the forward package.
+var bridgedRoutes = map[string]struct{}{}

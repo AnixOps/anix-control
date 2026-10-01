@@ -496,9 +496,9 @@ func TestAllCataloguedV2RoutesResolveThroughTheirPackageBridge(t *testing.T) {
 	require.Equal(t, 270, bridgedRoutes)
 }
 
-// Old identity-platform releases still declare the routes that moved to
-// platform, affiliate and forward. Their old ids stay callable and run the
-// new owner's handler.
+// Old identity-platform and plan releases still declare the routes that
+// moved to platform, affiliate and forward. Their old ids stay callable and
+// run the new owner's handler.
 func TestMovedV2RoutesKeepTheirOldIdentityRouteIDs(t *testing.T) {
 	_, cfg, _ := setupV2PackageRouter(t)
 	identityAllowlist, err := identitybridge.NewAllowlist(cfg)
@@ -508,7 +508,7 @@ func TestMovedV2RoutesKeepTheirOldIdentityRouteIDs(t *testing.T) {
 		catalog[route.Method+" "+route.Path] = route
 	}
 	moved := compatv2.MovedRoutes()
-	require.Len(t, moved, 23)
+	require.Len(t, moved, 28)
 	for _, route := range moved {
 		entry, ok := catalog[route.Method+" "+route.LegacyPath]
 		require.True(t, ok, route.LegacyPath)
