@@ -761,5 +761,6 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.POST("/kernel/identity/finalize", handler.FinalizeIdentity)
 		v4.GET("/kernel/modules/runtimes", modules.ListRuntimes)
 		v4.PUT("/kernel/modules/runtimes/:plugin_id", modules.SetRuntime)
+		v4.GET("/kernel/node-operations", handler.NewKernelNodeOperationsHandler().List)
 	}
 }

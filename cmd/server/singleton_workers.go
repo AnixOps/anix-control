@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/database"
+	"github.com/AnixOps/anix-control/v4/internal/kernelnodeops"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 )
 
@@ -64,5 +65,8 @@ func runSingletonWorkers(ctx context.Context, bridgeEnabled bool) {
 	run(func(ctx context.Context) {
 		service.NewForwardLatencyProber(database.Get()).Start(ctx)
 	})
+	// The KernelNodeOps dispatcher recovers the operations a stopped
+	// process left started, so it runs in the lease holder only.
+	run(kernelnodeops.EngineFor(database.Get()).Run)
 	wg.Wait()
 }

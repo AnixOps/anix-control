@@ -500,5 +500,6 @@ func KernelModels() []any {
 		&IdentityRevocation{}, &IdentitySessionRevocation{}, &IdentityAccountLink{}, &IdentityAuthority{},
 		&IdentityTokenKey{}, &IdentityCutoverEvent{}, &SubscriberRequest{}, &SubscriberChange{}, &SettingsRequest{},
 		&NodeCredential{}, &ProtocolSecret{}, &NodeSecretSplit{},
+		&KernelNodeOperation{}, &KernelNodeOperationTarget{}, &KernelNodeOperationEvent{},
 	}
 }

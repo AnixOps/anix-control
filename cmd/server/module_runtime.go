@@ -91,9 +91,13 @@ func (rt *serverRuntime) startModuleRuntime(cfg *config.Config, hosts *pluginhos
 	if err != nil {
 		return fmt.Errorf("module runtime kernel telemetry: %w", err)
 	}
+	nodeOps, err := identitybridge.NewKernelNodeOps(cfg)
+	if err != nil {
+		return fmt.Errorf("module runtime kernel node operations: %w", err)
+	}
 	server := &moduleruntime.Listener{
 		TLS: source, Cluster: cluster, PKI: authority, Bridge: bridge, KernelIdentity: identity, KernelSubscriber: subscribers,
-		KernelSettings: kernelSettings, KernelTelemetry: telemetry,
+		KernelSettings: kernelSettings, KernelTelemetry: telemetry, KernelNodeOps: nodeOps,
 	}
 	server.KernelOrder = orders
 	rt.workers.Go("module listener", func(ctx context.Context) {

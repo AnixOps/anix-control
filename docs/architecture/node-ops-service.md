@@ -1,9 +1,10 @@
 # Node Operations Service (KernelNodeOps), Node Credential Split and Agent A2
 
-Status: DESIGN (2026-10-01), for the owner's review. Nothing here is
-implemented. The draft contract is `sdk/api/kernelnodeops/v1`
-(`anixops.kernelnodeops.v1`), unreleased (section 3.10). This is phase 3 of
-the 2026-10 plan, done together with Agent line A2.
+Status: DESIGN (2026-10-01), decided (section 10). NO-1 is implemented:
+the kernel serves the contract `sdk/api/kernelnodeops/v1`
+(`anixops.kernelnodeops.v1`), which is binding (section 3.10), with its
+ledger, but executes no operation kind yet (section 3.11). This is phase 3
+of the 2026-10 plan, done together with Agent line A2.
 
 > 中文摘要：剩余桥接路由里，有 83 条在等“内核代办节点操作”和“节点凭据外置”，
 > 另有 7 条在等节点/Agent 通道的决定。本文给出三件事的设计：
@@ -19,6 +20,9 @@ the 2026-10 plan, done together with Agent line A2.
 >   REST、WebSocket 和旧 v2board gRPC 保留一个大版本。
 >
 > 90 条路由的规划：75 条原生，15 条标为内核所有。
+>
+> 进度：NO-1 已完成。内核已提供 KernelNodeOps 契约和操作台账，契约自此定稿，只增不改。
+> 但还没有任何操作类型可执行：提交这类操作会得到 `UNIMPLEMENTED`，且不留任何记录（第 3.11 节）。
 
 ## Contents
 
@@ -160,10 +164,9 @@ KernelSettings.
 - **The kernel checks the target's kind too.** A forward node may not be
   the target of `RunAgentDiagnostic`. A proxy node is refused by
   `ApplyForward`. So a family cannot reach another domain's nodes.
-- **Until NO-1, the names are reserved, not accepted.** The grammar does not
-  list them yet, so a manifest that declares them fails validation
-  (`unknown kernel capability`). That keeps the draft unreleased (section
-  3.10).
+- **Since NO-1 the grammar accepts the five names**
+  (`service.NodeOpsCapabilities`). Any other `kernel.nodeops.*` name fails
+  validation (`unknown kernel capability`).
 
 **What a holder can do.** If a package is compromised, its capabilities
 bound the damage.
@@ -445,10 +448,22 @@ administrators:
 - credential operations also record the audit entries their legacy
   handlers record.
 
-### 3.10 Draft status and versioning
+The admin route is read-only, behind the `/api/v4` administrator
+authentication. It answers every package's operations, newest first:
 
-**Choice: package `anixops.kernelnodeops.v1`, unreleased.** It is not
-`v1alpha1`.
+- **Filters:** `package_id`, `family`, `kind`, `state`, `request_id`,
+  `operation_id`, `parent_operation_id`, and `target_kind` with
+  `target_id`.
+- **Paging:** `before` (a cursor) and `limit` (at most 500).
+- **Each row:** who submitted it (`<package>@<generation>`), the
+  canonical operation, targets, resource, channel, attempt, fan-out
+  counts, the scrubbed result and error, any late evidence, the cancel
+  request, and the times.
+
+### 3.10 Versioning: binding since NO-1
+
+**Choice (D1): package `anixops.kernelnodeops.v1`, binding since NO-1.**
+It was never `v1alpha1`.
 
 Why:
 
@@ -458,28 +473,144 @@ Why:
   - Its lines would stay forever after a `v1` replaced it.
   - Every package would have to change its imports, and the kernel would
     serve two packages during the switch.
-- **The other contracts are `v1`** and grow additively. KernelNodeOps
-  should look the same once it is served.
-- **"Unreleased" is enforced by mechanism, not by name:**
-  - no kernel serves the service;
-  - the `kernel.nodeops.*` capabilities are not in the grammar, so no
-    manifest that declares them installs;
-  - the proto file and the Go package doc say DRAFT, UNRELEASED;
-  - the contract is in the CI generated-code check, so the checked-in code
-    cannot drift.
+- **The other contracts are `v1`** and grow additively. KernelNodeOps looks
+  the same now that it is served.
 
-**Golden policy while it is a draft.** The draft is registered in
-`contracts/proto/descriptors.golden`, so any change shows up in review.
+**Until NO-1 the draft was unreleased by mechanism, not by name:** no kernel
+served it, its capabilities were not in the grammar, and the proto and Go
+package doc said DRAFT, UNRELEASED. NO-1 ended all three:
 
-- Until NO-1 merges, a design change may edit this draft's own golden lines
-  by hand, in the PR that changes the proto. The PR lists the removed lines.
-- From NO-1 on, normal rules apply: additions only.
-- An `sdk/v*` tag cut before NO-1 carries the draft. The draft's doc comment
-  says not to build against it, and no kernel accepts the capabilities.
+- the kernel serves it on local bridge sessions and the module listener
+  (section 3.9);
+- the grammar accepts the five `kernel.nodeops.*` capabilities (section
+  3.2);
+- the proto and the Go package doc say the contract is binding.
 
-Rejected alternative: `v1alpha1` now, `v1` at NO-1. If the owner prefers it
-(D1), NO-1 adds `anixops.kernelnodeops.v1`, the alpha package is never
-served, and the golden keeps both.
+**Golden policy.** The contract is in `contracts/proto/descriptors.golden`
+and in the CI generated-code check, like every other contract.
+
+- **From NO-1 on, normal rules apply:** additions only. A field, message,
+  RPC or enum value is never removed, renumbered or retyped.
+- **Before NO-1** a design change could edit the draft's own golden lines
+  in the PR that changed the proto. That exception has ended. NO-1 changed
+  no element, only comments.
+- An `sdk/v*` tag cut before NO-1 carries the draft's comments. Its
+  elements are the binding ones.
+
+**Kinds without an executor.** A kernel serves the contract before it
+executes every kind (NO-5 to NO-8 add the executors). Section 3.11 says
+how such a kind behaves. `GetCapabilities.kinds` is how a package tells
+what its kernel executes.
+
+### 3.11 What NO-1 implements
+
+**The engine** (`internal/kernelnodeops`):
+
+- the ledger and its event log;
+- the state machine;
+- the dispatcher, with an executor registry (`kernelnodeops.Registry`,
+  `DefaultExecutors`);
+- the watch stream, quotas, fan-out counting and cancellation;
+- the admin listing.
+
+One engine runs per kernel database (`kernelnodeops.EngineFor`). The local
+bridge and the module listener share it. Its dispatcher runs in the
+process that holds the singleton-worker lease (`cmd/server`, R6).
+
+**Unexecuted kinds fail in a defined way.** No kind has an executor in
+NO-1.
+
+- **At submission:** `SubmitOperation` for a kind without an executor
+  answers `UNIMPLEMENTED`, after authorization, validation and the
+  request-id replay check. Nothing is recorded and nothing is applied.
+  - A retry after the kernel gained the executor applies; it is not
+    answered with a stale refusal.
+  - A repeat of a request id recorded earlier still answers its receipt.
+  - An operation kind the kernel does not know at all (a newer contract's
+    oneof case) is `UNIMPLEMENTED` too.
+- **At dispatch:** an operation recorded while its kind had an executor,
+  but dispatched by a kernel without one (a rollback), ends `FAILED` at
+  once, with `INTERNAL`, retryable, "operation kind ... has no executor in
+  this kernel". It never waits for an executor that is not there.
+
+**Executors** implement `Execute(ctx, *Run) Outcome`:
+
+- `Run.Accept` moves the operation to RUNNING and records the channel,
+  node revision and links.
+- `Run.UseSecret` names the credentials whose values are scrubbed from the
+  outcome.
+- `Outcome` is one of `Succeeded`, `Failed`, `Cancelled` or `FanOut`.
+- An optional `Preparer.Prepare` runs in the submitting call: it verifies
+  the request binding, resolves handles and captures deletions (NO-4,
+  NO-5, NO-7).
+- The context ends at the operation's deadline, or when it is cancelled.
+
+**Details the sections above leave open, as NO-1 settles them:**
+
+- **Targets.** `v4_kernel_node_operation_target` holds one row per target
+  node, so per-node quotas and `ListOperations(target)` are queries.
+  Section 4.2 listed two operation tables; this is the third.
+- **Writes are serialized.** Every ledger write runs under one lock: a
+  PostgreSQL advisory lock, or SQLite's write lock taken first. So event
+  cursors commit in order, a watcher never steps over an event still being
+  written, and the quota counts are exact.
+- **Deadlines.** An operation's deadline is 10 minutes after submission,
+  for every kind (`Engine.Timeout`). Fan-out children inherit their
+  parent's. An operation still pending at its deadline ends `TIMED_OUT`
+  without running. An executor that fails after its deadline is recorded
+  `TIMED_OUT`.
+- **Resources.** Each kind names the resource it changes: `forward:<id>`,
+  `tunnel:<id>`, `forward-backend`, `legacy-rule:<id>`,
+  `nodeconfig:<kind>-<id>`, `protocol:<id>`,
+  `secret:<scope>:<owner>:<column>`, `credential:<kind>-<id>` or
+  `regkey:<id>`. Diagnoses and agent operations change none.
+  - One operation runs per resource at a time.
+  - Only `forward.apply`, `forward.tunnel`, `forward.sync_backend`,
+    `forward.legacy_rule` and `node.sync` are level-triggered: a newer one
+    supersedes a pending one of the same kind on the same resource.
+  - Exceptions: only a deletion supersedes a pending deletion, and only a
+    forced sync supersedes a pending forced sync.
+- **Target kinds.** A node kind an operation does not take is
+  `PERMISSION_DENIED`. A malformed reference is `INVALID_ARGUMENT`.
+  - `node.sync` and `node.retire` take proxy and forward nodes.
+  - `diagnose.endpoints` and `diagnose.node_stats` take forward nodes.
+  - `agent.*` operations take proxy nodes.
+  - Credentials must be ones the subject's node kind holds.
+- **Fan-out.**
+  - Children are recorded with request ids `fanout:<parent>:<n>`; package
+    request ids may not start with `fanout:`.
+  - Children must be of the parent's family, and may not fan out again.
+  - Children are not counted against the quotas: their parent was.
+  - A superseded child counts as succeeded, since the operation that
+    replaced it carries its work.
+  - A child whose target is gone is recorded `FAILED` (`TARGET_GONE`) and
+    counted as failed.
+  - Cancelling the parent cancels its children. The parent ends with its
+    last child.
+- **Cancellation.**
+  - A pending operation ends `CANCELLED` at once.
+  - A started one has its executor's context cancelled; `CancelOperation`
+    waits up to 2 s and answers the operation as it is.
+  - An outcome the executor reports despite the cancellation stands.
+  - A cancellation recorded by another process reaches the executor
+    through the ledger, on the dispatcher's next tick.
+- **Restarts.** At start, the dispatcher settles what a stopped process
+  left started:
+  - cancelled operations end `CANCELLED`;
+  - fan-outs go on with their children;
+  - level-triggered operations are dispatched again;
+  - anything else ends `FAILED` (`INTERNAL`, retryable), since whether it
+    applied is unknown.
+- **Unknown fields.** An operation that carries a field the kernel does not
+  know is `INVALID_ARGUMENT`. The kernel does not ignore an option it
+  cannot honour.
+- **Results.** A stored result is capped at 64 KiB. A larger one is
+  dropped; the operation keeps its state and gets an `INTERNAL` error
+  saying so.
+- **Request bindings.** A binding is passed to a `Preparer` and never
+  stored. NO-1 does not verify bindings; NO-4 does.
+- **Split phases.** `GetCapabilities.tables` answers `LEGACY` for the seven
+  tables of section 4.1 until NO-2 plugs in the split state.
 
 ## 4. Node credential split
 
@@ -532,8 +663,9 @@ All new tables carry the `v4_kernel_` prefix, so they are protected by
     `backfilled_rows`, `digest`, `verified_at`, `finalized_at`,
     `finalized_by`.
   - This is the state machine of section 4.3. `GetCapabilities` answers it.
-- **Operation tables** (section 3.4): `v4_kernel_node_operation` and
-  `v4_kernel_node_operation_event`.
+- **Operation tables** (section 3.4): `v4_kernel_node_operation`,
+  `v4_kernel_node_operation_event` and, since NO-1,
+  `v4_kernel_node_operation_target` (section 3.11). They exist since NO-1.
 - **Desired configuration** (A2, section 5.5):
   `v4_kernel_node_desired_config`, one row per node: `node_kind`,
   `node_id`, `revision`, `config_hash`, `excluded`, `updated_at`.
@@ -1127,7 +1259,7 @@ handlers ship `native-flagged`, and operators choose the runtime mode.
 |---|---|---|---|---|
 | NO-0 | This design and the draft contract | none | control | S |
 | NO-10 | Mark the 15 kernel-owned routes, with reasons, after D3 and D4 | NO-0 and the decisions | control | S |
-| NO-1 | Contract engine: the capability grammar, `internal/kernelnodeops` (Submit, Get, List, Watch, Cancel, GetCapabilities), `v4_kernel_node_operation` and its events, served on the bridge and the module listener, `bridgecontract` tests, `GET /api/v4/kernel/node-operations`. **The contract becomes binding.** | NO-0 | control | L |
+| NO-1 | Contract engine: the capability grammar, `internal/kernelnodeops` (Submit, Get, List, Watch, Cancel, GetCapabilities), `v4_kernel_node_operation` and its events, served on the bridge and the module listener, `bridgecontract` tests, `GET /api/v4/kernel/node-operations`. **The contract becomes binding.** Done: section 3.11 | NO-0 | control | L |
 | NO-2 | Split P1: the new secret tables, `internal/nodesecrets` as the one writer, dual-write in every writer, `node-secrets backfill` and `verify`, the split state table | NO-0 | control | L |
 | NO-3 | Split P2: every reader through `nodesecrets` with fallback and metrics; validate on build, report-only | NO-2 | control | L |
 | NO-4 | Sealed secret handles: gateway substitution and expansion, `config/node-secret-fields.json`, shadow-mode handling, fail-closed tests | NO-1 | control | M |
@@ -1182,7 +1314,7 @@ it up to A2-3.
 | R4 | **An address is a credential**: a forward node's address is written to steal its token | Endpoint pinning (`ENDPOINT_UNCONFIRMED`); the pin moves only to the address in the bound administrator request |
 | R5 | **Validate on build drops rows production relies on** | Report-only first (NO-3), with a scan of a staging copy; enforcement is a decision (D7) |
 | R6 | **Kernel memory and restarts**: sessions, handles and acknowledgement waiters live in one process | Durable operations through `KernelOperationBridge`; waits are bounded and answer the current state; handles expire with their request; HA stays out of scope |
-| R7 | **Churn in the draft contract** | Review before NO-1; the draft golden policy (section 3.10) |
+| R7 | **Churn in the draft contract** | Reviewed before NO-1; binding and additive since NO-1 (section 3.10) |
 | R8 | **Size and half-way states**: 90 routes, about 29 PRs | Per-route modes; legacy stays the default; every PR keeps both sides working; parity on SQLite and PostgreSQL |
 | R9 | **Field agents not upgraded by 5.0** | The transport inventory, deprecation signals a major ahead, and automatic enrollment with the existing key |
 | R10 | **Cross-package cascades** (a node deletes its protocols; a protocol deletes subscription links) | The kernel performs the cascade in its transaction, as today (Q11); the steps are idempotent by request id |
@@ -1274,7 +1406,7 @@ Implementation follows section 7 in that order.
 
 | # | Decision | Decided (the recommendation) |
 |---|---|---|
-| D1 | Draft naming: `anixops.kernelnodeops.v1` unreleased, or `v1alpha1` now with `v1` at NO-1 | `v1` unreleased (section 3.10), with the draft golden policy |
+| D1 | Draft naming: `anixops.kernelnodeops.v1` unreleased, or `v1alpha1` now with `v1` at NO-1 | `v1` unreleased, with the draft golden policy; binding since NO-1 (section 3.10) |
 | D2 | Sealed secret handles at the gateway (no package ever sees a secret, about 1 extra PR), or accept per-request transit of secrets an administrator types or is shown, as the bridged relay does today | handles. They are what makes "never sees a token or private key" true |
 | D3 (Q3) | The 7 node and agent channel routes: `kernel-owned` until 5.0 removes them, or native behind node authentication in the kernel | `kernel-owned`; moving them is wasted work before their removal |
 | D4 (Q4) | The other 8 kernel-owned routes: the node credentials display, the forward runtime status and doctor (4), flow accounting (3) | `kernel-owned` as in section 6 |
