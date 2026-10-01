@@ -28,12 +28,12 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   WebSocket routes use `registeredPackageWebSocketRoute`.
 - `config/package-extraction.json` records each route's extraction mode
   (`bridged`, `native-flagged` or `native`) and where its legacy handler lives
-  (`router`, `identity-bridge` or `none`). 144 routes are `native-flagged`:
+  (`router`, `identity-bridge` or `none`). 147 routes are `native-flagged`:
   identity-platform (20: group A's 15, the profile, dashboard and user detail,
   and the traffic and subscription resets), affiliate (7), forward (17),
   gost-mesh (1), knowledge (6), machine-telemetry (2), notification (19),
   order (9), payment (16), plan (7), platform (4), protocol-runtime (3),
-  proxy-node (7), subscription (17), ticket (8) and wireguard (1). The rest
+  proxy-node (7), subscription (20), ticket (8) and wireguard (1). The rest
   are `bridged`. The identity routes are `identity-bridge`.
   `check_plugin_only_routes.py` enforces the map against the router and the
   identity bridge.
@@ -359,13 +359,14 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
       registration consumes inside Control), and the answer adds the
       commission balance and invite statistics that join the order and
       affiliate packages' tables. They belong with the affiliate package.
-- **Subscription (in place).** 17 of 25 routes run on the adopted
+- **Subscription (in place).** 20 of 25 routes run on the adopted
   `v2_subscription_group`, `v2_subscription_template`,
   `v2_plan_subscription_group` and `v2_subscription_group_node_protocols`
-  tables, proved by `internal/tests/subscriptioncompat`: groups and templates
-  (list, read, create, update; templates also delete), a group's node
-  protocol links, a plan's groups, a user's groups, the statistics and the
-  two static lists. The subscription link endpoints (`/s/:token`,
+  tables, proved by `internal/tests/subscriptioncompat`: groups (list, read,
+  create, update, delete) and templates (list, read, create, update,
+  delete), a group's node protocol links, a plan's groups, a user's groups
+  (list, grant, take away), the statistics and the two static lists. The
+  subscription link endpoints (`/s/:token`,
   `/api/v1/client/subscribe`) are kernel routes outside the package gate and
   stay in the kernel with the renderer.
   - Other domains are read through views: `kapi_plan_catalog_v1` (whether a
@@ -387,12 +388,28 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
   - Group and template writes no longer save the associations nested in a
     body (a security fix made in the kernel first): a group's `protocols`
     upserted proxy-node rows and nodes, which the module may not write.
-  - Eight routes stay bridged:
-    - deleting a group, and granting or taking away a user's group: they
-      write `v2_user_subscription_group`, subscriber state only the kernel
-      writes (no package may adopt a `v2_user*` table), and
-      `KernelSubscriber` has no call that edits one membership. An extension
-      is proposed in [`subscriber-service.md`](subscriber-service.md);
+  - **Memberships go through the kernel.** `v2_user_subscription_group` is
+    subscriber state: only the kernel writes it, and no package may adopt a
+    `v2_user*` table. Granting a user a group, taking it away and deleting
+    a group call `KernelSubscriber` (`kernel.subscriber.groups.v1`,
+    [`subscriber-service.md`](subscriber-service.md)):
+    - a grant is `GrantSubscriptionGroup`, a removal
+      `RevokeSubscriptionGroup`;
+    - deleting a group first takes it from every member
+      (`RemoveSubscriptionGroupMembers`), then deletes the group's
+      templates, plan links and node protocol links with the group, in one
+      transaction on the adopted tables. A retry after a failure in between
+      finds no members and completes.
+
+    The request ids are `subscription.grant:<user>:<group>:<digest>`,
+    `subscription.revoke:<user>:<group>:<digest>` and
+    `subscription.delete_group:<group>:<digest>`. The digest covers the
+    request's `Idempotency-Key` (else its request id) and, for a grant, the
+    granted fields. The kernel's legacy handlers derive the same ids and
+    call the same engine functions, so both sides write the same
+    memberships, request ledger and change log. Without a bridge connection
+    these routes stay legacy.
+  - Five routes stay bridged:
     - a group's protocols and the protocol pool: they answer whole
       `v2_node_protocol` and `v2_node` rows, Reality private keys and custom
       configuration included, which no view may carry;

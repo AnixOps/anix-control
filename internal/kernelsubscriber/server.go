@@ -99,10 +99,22 @@ func userID(value uint64) (uint, error) {
 	return uint(value), nil
 }
 
+// groupID bounds a subscription group id as userID bounds a user id.
+func groupID(value uint64) (uint, error) {
+	if value == 0 || value > uint64(^uint32(0)) {
+		return 0, status.Error(codes.InvalidArgument, "group_id is invalid")
+	}
+	return uint(value), nil
+}
+
 func failure(operation string, err error) error {
 	switch {
 	case errors.Is(err, subscriber.ErrSubscriberNotFound), errors.Is(err, service.ErrUserNotFound):
 		return status.Error(codes.NotFound, "subscriber not found")
+	case errors.Is(err, subscriber.ErrSubscriptionGroupNotFound):
+		return status.Error(codes.NotFound, "subscription group not found")
+	case errors.Is(err, subscriber.ErrMembershipNotFound):
+		return status.Error(codes.NotFound, "subscription group membership not found")
 	case errors.Is(err, subscriber.ErrInsufficientBalance):
 		return status.Error(codes.FailedPrecondition, "insufficient balance")
 	case errors.Is(err, subscriber.ErrNegativeTraffic):

@@ -105,6 +105,51 @@
   the forward agent routes read the stored values. None of these routes has
   a native package handler. See `docs/UPGRADE.md`.
 
+- The kernel's legacy subscription membership routes go through the same
+  engine functions (`internal/subscriber`) as the contract:
+  - `POST /api/v2/admin/subscription/users/:user_id/groups`;
+  - `DELETE /api/v2/admin/subscription/users/:user_id/groups/:group_id`;
+  - `DELETE /api/v2/admin/subscription/groups/:id`.
+
+  They now append change-log rows, which they never did before. They also
+  record their request ids (`subscription.grant:`, `subscription.revoke:`,
+  `subscription.delete_group:`, derived from the request's
+  `Idempotency-Key`, else its request id). A retry therefore applies once
+  whichever side serves it, and a retried removal answers success rather
+  than "用户订阅分组不存在".
+
+### Added
+
+- **Subscription group membership in `KernelSubscriber`.** The contract
+  gains `GrantSubscriptionGroup`, `RevokeSubscriptionGroup` and
+  `RemoveSubscriptionGroupMembers`, under the new capability
+  `kernel.subscriber.groups.v1`
+  (`docs/architecture/subscriber-service.md`). Only calls and messages are
+  added, so v4.0.0 hosts are unaffected; the proto golden file grows.
+  - A grant creates a user's `v2_user_subscription_group` row, or sets the
+    given expiry, traffic and renewal price of an existing one. A
+    revocation deletes one row, and `RemoveSubscriptionGroupMembers` every
+    row of a group.
+  - Every call is idempotent by request id through
+    `v4_kernel_subscriber_request`. A missing subscriber, group or
+    membership is `NotFound` and records nothing.
+  - A change that alters which groups an active subscriber holds, or until
+    when, appends a change-log row, so `WatchSubscriberChanges` streams the
+    new `subscription_group_ids`. A change to an inactive subscriber, or to
+    a membership's traffic or renewal price only, appends nothing.
+- **Subscription module: membership routes.** `packages/subscription` now
+  serves 20 of its 25 routes natively and declares
+  `kernel.subscriber.groups.v1`. Through `KernelSubscriber`, it:
+  - grants a user a group;
+  - takes it away;
+  - deletes a group: its members first, then its templates, plan links and
+    node protocol links with the group.
+
+  `internal/tests/subscriptioncompat` runs the real `KernelSubscriber`
+  server in process. It proves byte parity, the same memberships, request
+  ledger and change log on SQLite and PostgreSQL (173 cases each). 147 of
+  292 routes are now `native-flagged`.
+
 ## 4.1.0-rc.1 - 2026-10-01
 
 ### Security

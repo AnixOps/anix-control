@@ -4,9 +4,11 @@ import (
 	"context"
 	"log"
 
+	kernelsubscriberv1 "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1"
 	"github.com/AnixOps/anix-control/sdk/packagestoresdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/AnixOps/anix-control/v4/packages/subscription/native"
+	"google.golang.org/grpc"
 	"gorm.io/gorm"
 )
 
@@ -23,8 +25,10 @@ type subscriptionBridge interface {
 // v2_plan_subscription_group and v2_subscription_group_node_protocols tables
 // and the plan, user, membership, entitlement and node views; such a route
 // serves natively once the kernel sets its mode, and falls back to the
-// legacy handler otherwise. The routes in bridgedRoutes always relay to the
-// legacy handler.
+// legacy handler otherwise. Deleting a group and granting or taking away a
+// user's group call the kernel's KernelSubscriber over the bridge connection
+// (local socket or module listener); a bridge without one leaves them
+// legacy. The routes in bridgedRoutes always relay to the legacy handler.
 func newSubscriptionService(bridge subscriptionBridge, leaseID string) (*pluginhostsdk.Router, error) {
 	storage := packagestoresdk.SharedOpener(bridge)
 	service := &native.Service{Open: func(ctx context.Context) (*gorm.DB, error) {
@@ -34,6 +38,11 @@ func newSubscriptionService(bridge subscriptionBridge, leaseID string) (*pluginh
 		}
 		return store.DB.WithContext(ctx), nil
 	}}
+	if conn, ok := bridge.(interface {
+		Conn() grpc.ClientConnInterface
+	}); ok && conn.Conn() != nil {
+		service.Subscriber = kernelsubscriberv1.NewKernelSubscriberClient(conn.Conn())
+	}
 	return pluginhostsdk.NewRouter(pluginhostsdk.RouterConfig{
 		PackageID: "subscription", LeaseID: leaseID, Bridge: bridge, Logf: log.Printf,
 		AllowRoute: func(routeID string) bool {
@@ -54,6 +63,7 @@ var subscriptionRoutes = map[string]struct{}{
 	"subscription.admin.subscription.groups.post":                          {},
 	"subscription.admin.subscription.groups.id.get":                        {},
 	"subscription.admin.subscription.groups.id.put":                        {},
+	"subscription.admin.subscription.groups.id.delete":                     {},
 	"subscription.admin.subscription.groups.id.templates.get":              {},
 	"subscription.admin.subscription.groups.id.templates.post":             {},
 	"subscription.admin.subscription.groups.id.protocols.post":             {},
@@ -64,22 +74,14 @@ var subscriptionRoutes = map[string]struct{}{
 	"subscription.admin.subscription.plans.plan_id.groups.post":            {},
 	"subscription.admin.subscription.plans.plan_id.groups.group_id.delete": {},
 	"subscription.admin.subscription.users.user_id.groups.get":             {},
+	"subscription.admin.subscription.users.user_id.groups.post":            {},
+	"subscription.admin.subscription.users.user_id.groups.group_id.delete": {},
 	"subscription.admin.subscription.stats.get":                            {},
 }
 
 // bridgedRoutes are the package's compatibility routes without a native
 // handler; they always relay to the kernel's legacy handler.
 var bridgedRoutes = map[string]struct{}{
-	// Deleting a group also deletes its members' rows in
-	// v2_user_subscription_group, which is subscriber state: the kernel is
-	// its only writer, no package may adopt a v2_user* table, and
-	// KernelSubscriber has no call that edits subscription group
-	// membership.
-	"subscription.admin.subscription.groups.id.delete": {},
-	// Granting a user a group (with its own expiry, traffic and renewal
-	// price) and taking it away write v2_user_subscription_group; see above.
-	"subscription.admin.subscription.users.user_id.groups.post":            {},
-	"subscription.admin.subscription.users.user_id.groups.group_id.delete": {},
 	// These answer whole proxy-node rows: v2_node_protocol with its
 	// settings, TLS and Reality settings (private keys included) and custom
 	// configuration, and the v2_node it runs on. No kernel view may carry

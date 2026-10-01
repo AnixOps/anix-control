@@ -5,32 +5,47 @@
 //
 // The native side reads the plan, entitlement, membership and node views the
 // kernel publishes (packagestore.EnsureKernelAPIViews) and writes only the
-// adopted subscription tables.
+// adopted subscription tables. Membership changes reach the real
+// KernelSubscriber server (internal/kernelsubscriber) in process over gRPC,
+// on the native side's database, so both sides end with the same
+// memberships, request ledger and change log.
 package subscriptioncompat
 
 import (
 	"context"
 	"fmt"
+	"net"
 	"reflect"
 	"strings"
 	"testing"
 	"time"
 
+	kernelsubscriberv1 "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/AnixOps/anix-control/v4/internal/handler"
+	"github.com/AnixOps/anix-control/v4/internal/kernelsubscriber"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
 	"github.com/AnixOps/anix-control/v4/internal/packagestore"
+	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/AnixOps/anix-control/v4/internal/tests/packagecompat"
 	"github.com/AnixOps/anix-control/v4/packages/subscription/native"
 	mirror "github.com/AnixOps/anix-control/v4/packages/subscription/native/model"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/test/bufconn"
 	"gorm.io/gorm"
 )
 
 var admin = pluginhostsdk.Principal{ActorID: 1, Admin: true}
 
 var seeded = time.Date(2026, 9, 1, 8, 0, 0, 0, time.UTC)
+
+// expiryBase is what seeded expiries are relative to: one value for the
+// whole run, so the two sides store the same expiries.
+var expiryBase = time.Now().Unix()
 
 func route(method, pattern, routeID string, legacy func(*handler.SubscriptionAdminHandler, *gin.Context)) packagecompat.Route {
 	return packagecompat.Route{
@@ -49,11 +64,64 @@ func route(method, pattern, routeID string, legacy func(*handler.SubscriptionAdm
 	}
 }
 
+// subscriptionHost is the identity the kernel serves the subscription host
+// as.
+var subscriptionHost = packagebridge.HostIdentity{PackageID: "subscription", Version: "4.0.0", Generation: 1}
+
+// groupsOnly authorizes what the subscription package's signed release
+// declares of KernelSubscriber: the membership family, for the
+// subscription host.
+type groupsOnly struct{}
+
+func (groupsOnly) AuthorizeCapability(_ context.Context, host packagebridge.HostIdentity, capability string) error {
+	if host == subscriptionHost && capability == service.CapabilitySubscriberGroups {
+		return nil
+	}
+	return service.ErrCapabilityNotAuthorized
+}
+
+// kernelSubscriber serves the kernel's KernelSubscriber on db in process and
+// returns a client for it, as the subscription host gets one over its
+// bridge.
+func kernelSubscriber(t *testing.T, db *gorm.DB) kernelsubscriberv1.KernelSubscriberClient {
+	t.Helper()
+	server := &kernelsubscriber.Server{DB: db, Authorizer: groupsOnly{}}
+	listener := bufconn.Listen(1 << 20)
+	grpcServer := grpc.NewServer()
+	kernelsubscriberv1.RegisterKernelSubscriberServer(grpcServer, server.For(subscriptionHost))
+	go func() { _ = grpcServer.Serve(listener) }()
+	t.Cleanup(grpcServer.Stop)
+	conn, err := grpc.NewClient("passthrough:///kernel", grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) { return listener.Dial() }))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+	return kernelsubscriberv1.NewKernelSubscriberClient(conn)
+}
+
+// membershipRoute is a route that changes subscription group membership:
+// the native side calls KernelSubscriber, and both databases have the
+// subscriber request ledger and change log.
+func membershipRoute(t *testing.T, method, pattern, routeID string, legacy func(*handler.SubscriptionAdminHandler, *gin.Context)) packagecompat.Route {
+	r := route(method, pattern, routeID, legacy)
+	r.Models = append(r.Models, &model.SubscriberRequest{}, &model.SubscriberChange{})
+	r.Native = func(db *gorm.DB) pluginhostsdk.NativeHandler {
+		service := &native.Service{
+			Open:       func(ctx context.Context) (*gorm.DB, error) { return db.WithContext(ctx), nil },
+			Subscriber: kernelSubscriber(t, db),
+		}
+		return service.Handlers()[routeID]
+	}
+	return r
+}
+
 func ptr[T any](value T) *T { return &value }
 
 // seed writes users, plans, groups, templates, nodes and their protocols,
 // the links between them, then the kernel views. Expiries and node reports
-// are relative to now, so the handlers' clocks see them as seeded.
+// are relative to now (expiries to expiryBase), so the handlers' clocks see
+// them as seeded. Users 1
+// and 2 are active subscribers; 3 is banned, 4 expired and 5 out of
+// traffic.
 func seed(t testing.TB, db *gorm.DB) {
 	now := time.Now().Unix()
 	require.NoError(t, db.Create(&[]model.Plan{
@@ -64,10 +132,12 @@ func seed(t testing.TB, db *gorm.DB) {
 	user := func(id uint, u, d int64) model.User {
 		return model.User{
 			ID: id, Email: fmt.Sprintf("user%d@example.test", id), Token: fmt.Sprintf("token-%d", id), UUID: fmt.Sprintf("uuid-%d", id),
-			U: u, D: d, IsAdmin: map[bool]int{true: 1}[id == 1], CreatedAt: seeded, UpdatedAt: seeded,
+			U: u, D: d, IsAdmin: map[bool]int{true: 1}[id == 1], TransferEnable: 1 << 30, CreatedAt: seeded, UpdatedAt: seeded,
 		}
 	}
-	require.NoError(t, db.Create(&[]model.User{user(1, 0, 0), user(2, 100, 200), user(3, 1000, 2000), user(4, 7, 9), user(5, 50, 0)}).Error)
+	users := []model.User{user(1, 0, 0), user(2, 100, 200), user(3, 1000, 2000), user(4, 7, 9), user(5, 50, 0)}
+	users[2].Banned, users[3].ExpiredAt, users[4].TransferEnable = 1, ptr(expiryBase-3600), 50
+	require.NoError(t, db.Create(&users).Error)
 	require.NoError(t, db.Create(&[]model.SubscriptionGroup{
 		{ID: 1, Name: "default", Priority: 0, Enable: 1, CreatedAt: seeded, UpdatedAt: seeded},
 		{ID: 2, Name: "premium", Description: ptr("fast nodes"), Priority: 10, Enable: 1, CreatedAt: seeded, UpdatedAt: seeded},
@@ -96,9 +166,9 @@ func seed(t testing.TB, db *gorm.DB) {
 	}).Error)
 	require.NoError(t, db.Create(&[]model.UserSubscriptionGroup{
 		{ID: 1, UserID: 2, GroupID: 1, CreatedAt: seeded},
-		{ID: 2, UserID: 2, GroupID: 2, ExpireAt: ptr(now + 86400), TransferEnable: ptr(int64(1 << 30)), CreatedAt: seeded},
-		{ID: 3, UserID: 3, GroupID: 2, ExpireAt: ptr(now - 86400), CreatedAt: seeded},
-		{ID: 4, UserID: 4, GroupID: 2, ExpireAt: ptr(now + 3600), NextRenewPrice: ptr(int64(990)), CreatedAt: seeded},
+		{ID: 2, UserID: 2, GroupID: 2, ExpireAt: ptr(expiryBase + 86400), TransferEnable: ptr(int64(1 << 30)), CreatedAt: seeded},
+		{ID: 3, UserID: 3, GroupID: 2, ExpireAt: ptr(expiryBase - 86400), CreatedAt: seeded},
+		{ID: 4, UserID: 4, GroupID: 2, ExpireAt: ptr(expiryBase + 3600), NextRenewPrice: ptr(int64(990)), CreatedAt: seeded},
 		{ID: 5, UserID: 5, GroupID: 3, CreatedAt: seeded},
 	}).Error)
 	require.NoError(t, db.Create(&[]model.Node{
@@ -443,6 +513,158 @@ func TestProtocolLinkWritesParity(t *testing.T) {
 		{Name: "an id the database refuses", Path: protocols("1"), Body: []byte(`{"protocol_ids":[18446744073709551615]}`)},
 		{Name: "not a number", Path: protocols("x"), Body: []byte(`{"protocol_ids":[1]}`)},
 		{Name: "no body", Path: protocols("1")},
+	})
+}
+
+// membershipState is state plus the shared subscriber state a membership
+// change writes: v2_user_subscription_group, the request ledger and the
+// change log, with clock times masked and, for requests that carry no key
+// or request id, the random request ids too.
+func membershipState(maskRequestIDs bool) func(t testing.TB, db *gorm.DB) any {
+	return func(t testing.TB, db *gorm.DB) any {
+		var members []model.UserSubscriptionGroup
+		require.NoError(t, db.Order("id").Find(&members).Error)
+		memberRows := make([]map[string]any, 0, len(members))
+		for _, m := range members {
+			memberRows = append(memberRows, map[string]any{
+				"id": m.ID, "user_id": m.UserID, "group_id": m.GroupID, "expire_at": m.ExpireAt, "transfer_enable": m.TransferEnable,
+				"next_renew_price": m.NextRenewPrice, "created_at": clockTime(m.CreatedAt),
+			})
+		}
+		var requests []model.SubscriberRequest
+		require.NoError(t, db.Order("created_at, request_id").Find(&requests).Error)
+		ledger := make([]map[string]any, 0, len(requests))
+		for index, request := range requests {
+			id := request.RequestID
+			if maskRequestIDs {
+				id = fmt.Sprintf("<request %d>", index+1)
+			}
+			ledger = append(ledger, map[string]any{
+				"request_id": id, "method": request.Method, "user_id": request.UserID, "result": request.Result,
+				"created_at": clockTime(request.CreatedAt),
+			})
+		}
+		var changes []struct {
+			UserID  uint
+			Deleted bool
+		}
+		require.NoError(t, db.Model(&model.SubscriberChange{}).Order("id").Find(&changes).Error)
+		return map[string]any{"tables": state(t, db), "members": memberRows, "ledger": ledger, "changes": changes}
+	}
+}
+
+func writeMembership(t *testing.T, r packagecompat.Route, maskRequestIDs bool, cases []packagecompat.Case) {
+	for _, c := range cases {
+		if c.Seed == nil {
+			c.Seed = seed
+		}
+		c.Principal = admin
+		c.Snapshot = membershipState(maskRequestIDs)
+		packagecompat.RunWrite(t, r, c)
+	}
+}
+
+func requestID(id string) map[string]string { return map[string]string{"X-Request-ID": id} }
+
+func TestUserGroupGrantParity(t *testing.T) {
+	grant := membershipRoute(t, "POST", "/api/v2/admin/subscription/users/:user_id/groups", native.GrantUserGroupRouteID,
+		(*handler.SubscriptionAdminHandler).AssignGroupToUser)
+	users := func(id string) string { return "/api/v2/admin/subscription/users/" + id + "/groups" }
+	later := time.Now().Add(30 * 24 * time.Hour).Unix()
+	expiring := func(group int) []byte { return []byte(fmt.Sprintf(`{"group_id":%d,"expire_at":%d}`, group, later)) }
+	writeMembership(t, grant, false, []packagecompat.Case{
+		{Name: "a new group with every field", Path: users("2"), RequestHeaders: requestID("g-1"),
+			Body: []byte(fmt.Sprintf(`{"group_id":3,"expire_at":%d,"transfer_enable":1073741824,"next_renew_price":1500}`, later))},
+		{Name: "a new group without fields", Path: users("1"), RequestHeaders: requestID("g-2"), Body: []byte(`{"group_id":4}`)},
+		{Name: "a disabled group", Path: users("1"), RequestHeaders: requestID("g-3"), Body: []byte(`{"group_id":3}`)},
+		{Name: "an existing group: only the given fields are set", Path: users("2"), RequestHeaders: requestID("g-4"),
+			Body: []byte(`{"group_id":2,"next_renew_price":500}`)},
+		{Name: "an existing group: a new expiry", Path: users("2"), RequestHeaders: requestID("g-5"), Body: expiring(2)},
+		{Name: "an existing group: null fields are kept", Path: users("2"), RequestHeaders: requestID("g-6"),
+			Body: []byte(`{"group_id":2,"expire_at":null,"transfer_enable":null}`)},
+		{Name: "an expired membership of a banned subscriber", Path: users("3"), RequestHeaders: requestID("g-7"), Body: expiring(2)},
+		{Name: "an expired subscriber", Path: users("4"), RequestHeaders: requestID("g-8"), Body: []byte(`{"group_id":1}`)},
+		{Name: "a subscriber out of traffic", Path: users("5"), RequestHeaders: requestID("g-9"), Body: []byte(`{"group_id":1}`)},
+		{Name: "negative values are stored as given", Path: users("2"), RequestHeaders: requestID("g-10"),
+			Body: []byte(`{"group_id":4,"expire_at":-1,"transfer_enable":-1,"next_renew_price":-5}`)},
+		{Name: "a retried request applies once", Path: users("1"), RequestHeaders: requestID("g-11"),
+			Warmup: [][]byte{[]byte(`{"group_id":2}`)}, Body: []byte(`{"group_id":2}`)},
+		{Name: "the idempotency key wins over the request id", Path: users("1"),
+			RequestHeaders: map[string]string{"Idempotency-Key": "grant-1", "X-Request-ID": "g-12"},
+			Warmup:         [][]byte{expiring(2)}, Body: expiring(2)},
+		{Name: "a key reused for other values is another grant", Path: users("1"), RequestHeaders: map[string]string{"Idempotency-Key": "grant-2"},
+			Warmup: [][]byte{[]byte(`{"group_id":2}`)}, Body: expiring(2)},
+		{Name: "unknown user", Path: users("99"), RequestHeaders: requestID("g-13"), Body: []byte(`{"group_id":1}`)},
+		{Name: "unknown user and group", Path: users("99"), Body: []byte(`{"group_id":99}`)},
+		{Name: "user zero", Path: users("0"), Body: []byte(`{"group_id":1}`)},
+		{Name: "unknown group", Path: users("2"), RequestHeaders: requestID("g-14"), Body: []byte(`{"group_id":99}`)},
+		{Name: "a group beyond 32 bits", Path: users("2"), Body: []byte(`{"group_id":4294967297}`)},
+		// The driver refuses an id beyond int64: a database error, not a
+		// missing record.
+		{Name: "a group id the database refuses", Path: users("2"), Body: []byte(`{"group_id":18446744073709551615}`)},
+		{Name: "no group", Path: users("2"), Body: []byte(`{}`)},
+		{Name: "group zero", Path: users("2"), Body: []byte(`{"group_id":0}`)},
+		{Name: "a group of the wrong type", Path: users("2"), Body: []byte(`{"group_id":"2"}`)},
+		{Name: "an expiry of the wrong type", Path: users("2"), Body: []byte(`{"group_id":2,"expire_at":"soon"}`)},
+		{Name: "user not a number", Path: users("x"), Body: []byte(`{"group_id":1}`)},
+		{Name: "user beyond 32 bits", Path: users("4294967297"), Body: []byte(`{"group_id":1}`)},
+		{Name: "a body that does not parse", Path: users("2"), Body: []byte(`{"group_id":`)},
+		{Name: "no body", Path: users("2")},
+	})
+	// Without an idempotency key or request id every request is a grant of
+	// its own, as in v2; the ids are random on both sides.
+	writeMembership(t, grant, true, []packagecompat.Case{
+		{Name: "two requests are two grants", Path: users("2"), Warmup: [][]byte{[]byte(`{"group_id":3}`)}, Body: expiring(3)},
+	})
+}
+
+func TestUserGroupRevokeParity(t *testing.T) {
+	revoke := membershipRoute(t, "DELETE", "/api/v2/admin/subscription/users/:user_id/groups/:group_id", native.RevokeUserGroupRouteID,
+		(*handler.SubscriptionAdminHandler).RemoveGroupFromUser)
+	membership := func(user, group string) string {
+		return "/api/v2/admin/subscription/users/" + user + "/groups/" + group
+	}
+	writeMembership(t, revoke, false, []packagecompat.Case{
+		{Name: "a group", Path: membership("2", "1"), RequestHeaders: requestID("r-1")},
+		{Name: "an expiring group", Path: membership("2", "2"), RequestHeaders: requestID("r-2")},
+		{Name: "an expired membership of a banned subscriber", Path: membership("3", "2"), RequestHeaders: requestID("r-3")},
+		{Name: "an expired subscriber", Path: membership("4", "2"), RequestHeaders: requestID("r-4")},
+		{Name: "a disabled group of a subscriber out of traffic", Path: membership("5", "3"), RequestHeaders: requestID("r-5")},
+		{Name: "a retried request applies once", Path: membership("2", "1"), RequestHeaders: requestID("r-6"), Warmup: [][]byte{nil}},
+		{Name: "no such membership", Path: membership("1", "2"), RequestHeaders: requestID("r-7")},
+		{Name: "unknown user", Path: membership("99", "1"), RequestHeaders: requestID("r-8")},
+		{Name: "unknown group", Path: membership("2", "99"), RequestHeaders: requestID("r-9")},
+		{Name: "unknown user and group", Path: membership("99", "99")},
+		{Name: "user zero", Path: membership("0", "1")},
+		{Name: "group zero", Path: membership("2", "0")},
+		{Name: "user not a number", Path: membership("x", "1")},
+		{Name: "group not a number", Path: membership("2", "x")},
+		{Name: "group beyond 32 bits", Path: membership("2", "4294967297")},
+	})
+	// A new request after the removal finds no membership.
+	writeMembership(t, revoke, true, []packagecompat.Case{
+		{Name: "a second request finds none", Path: membership("2", "1"), Warmup: [][]byte{nil}},
+	})
+}
+
+func TestGroupDeleteParity(t *testing.T) {
+	remove := membershipRoute(t, "DELETE", "/api/v2/admin/subscription/groups/:id", native.DeleteGroupRouteID,
+		(*handler.SubscriptionAdminHandler).DeleteGroup)
+	group := func(id string) string { return "/api/v2/admin/subscription/groups/" + id }
+	writeMembership(t, remove, false, []packagecompat.Case{
+		{Name: "members, templates, plan and protocol links", Path: group("2"), RequestHeaders: requestID("d-1")},
+		{Name: "one active member", Path: group("1"), RequestHeaders: requestID("d-2")},
+		{Name: "a disabled group with an inactive member", Path: group("3"), RequestHeaders: requestID("d-3")},
+		{Name: "a group without members or links", Path: group("4"), RequestHeaders: requestID("d-4")},
+		{Name: "a retried request finds the group gone", Path: group("2"), RequestHeaders: requestID("d-5"), Warmup: [][]byte{nil}},
+		{Name: "unknown", Path: group("99"), RequestHeaders: requestID("d-6")},
+		{Name: "zero", Path: group("0")},
+		{Name: "not a number", Path: group("x")},
+		{Name: "a condition", Path: group("1%20OR%201=1")},
+		{Name: "beyond 32 bits", Path: group("4294967297")},
+	})
+	writeMembership(t, remove, true, []packagecompat.Case{
+		{Name: "without a request id", Path: group("2")},
 	})
 }
 

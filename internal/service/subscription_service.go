@@ -18,6 +18,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/parser"
+	"github.com/AnixOps/anix-control/v4/internal/subscriber"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
 )
@@ -794,8 +795,12 @@ func (s *SubscriptionService) UpdateGroup(group *model.SubscriptionGroup) error 
 	return s.db.Omit(clause.Associations).Save(group).Error
 }
 
-// DeleteGroup 删除订阅分组
-func (s *SubscriptionService) DeleteGroup(id uint) error {
+// DeleteGroup 删除订阅分组. Its members' memberships go through the
+// subscriber engine (subscriber.RemoveSubscriptionGroupMembersTx), with
+// requestID (SubscriptionGroupDeleteRequestID) in the subscriber request
+// ledger and a change for each active member, as the subscription
+// package's native route does through KernelSubscriber.
+func (s *SubscriptionService) DeleteGroup(id uint, requestID string) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		var group model.SubscriptionGroup
 		if err := tx.First(&group, id).Error; err != nil {
@@ -806,7 +811,7 @@ func (s *SubscriptionService) DeleteGroup(id uint) error {
 		if err := tx.Where("group_id = ?", id).Delete(&model.SubscriptionTemplate{}).Error; err != nil {
 			return err
 		}
-		if err := tx.Where("group_id = ?", id).Delete(&model.UserSubscriptionGroup{}).Error; err != nil {
+		if _, err := subscriber.RemoveSubscriptionGroupMembersTx(tx, requestID, id, time.Now()); err != nil {
 			return err
 		}
 		if err := tx.Where("group_id = ?", id).Delete(&model.PlanSubscriptionGroup{}).Error; err != nil {
@@ -901,8 +906,51 @@ func (s *SubscriptionService) GetTemplatesByGroup(groupID uint) ([]*model.Subscr
 	return templates, err
 }
 
-// AssignGroupToUser 为用户分配订阅分组
-func (s *SubscriptionService) AssignGroupToUser(userID, groupID uint, expireAt *int64, transferEnable *int64, nextRenewPrice *int64) error {
+// SubscriptionGroupGrantRequestID names an administrator's grant of a
+// subscription group to a user in the subscriber request ledger
+// (v4_kernel_subscriber_request), so a retried request is applied once.
+// token identifies the HTTP request: its Idempotency-Key, else its request
+// id. The digest also covers the granted fields, so a key reused for other
+// values is another grant. The subscription package's native route derives
+// the same id (packages/subscription/native.GrantRequestID), so a retry is
+// recognized whichever side serves it.
+func SubscriptionGroupGrantRequestID(userID, groupID uint, expireAt, transferEnable, nextRenewPrice *int64, token string) string {
+	sum := sha256.Sum256([]byte(strings.Join([]string{
+		token, optionalDigestField(expireAt), optionalDigestField(transferEnable), optionalDigestField(nextRenewPrice),
+	}, "\x00")))
+	return fmt.Sprintf("subscription.grant:%d:%d:%x", userID, groupID, sum[:12])
+}
+
+// SubscriptionGroupRevokeRequestID names an administrator's removal of a
+// user's subscription group, as SubscriptionGroupGrantRequestID names a
+// grant (packages/subscription/native.RevokeRequestID).
+func SubscriptionGroupRevokeRequestID(userID, groupID uint, token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return fmt.Sprintf("subscription.revoke:%d:%d:%x", userID, groupID, sum[:12])
+}
+
+// SubscriptionGroupDeleteRequestID names the removal of a deleted group's
+// members, as SubscriptionGroupGrantRequestID names a grant
+// (packages/subscription/native.DeleteGroupRequestID).
+func SubscriptionGroupDeleteRequestID(groupID uint, token string) string {
+	sum := sha256.Sum256([]byte(token))
+	return fmt.Sprintf("subscription.delete_group:%d:%x", groupID, sum[:12])
+}
+
+func optionalDigestField(value *int64) string {
+	if value == nil {
+		return "-"
+	}
+	return strconv.FormatInt(*value, 10)
+}
+
+// AssignGroupToUser 为用户分配订阅分组: the membership is created, or the
+// given fields of an existing one are set, through the subscriber engine
+// (subscriber.GrantSubscriptionGroupTx) once per requestID
+// (SubscriptionGroupGrantRequestID), as the subscription package's native
+// route does through KernelSubscriber. An empty requestID applies every
+// time.
+func (s *SubscriptionService) AssignGroupToUser(userID, groupID uint, expireAt *int64, transferEnable *int64, nextRenewPrice *int64, requestID string) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		if err := subscriptionUserExists(tx, userID); err != nil {
 			return err
@@ -910,22 +958,18 @@ func (s *SubscriptionService) AssignGroupToUser(userID, groupID uint, expireAt *
 		if err := subscriptionGroupExists(tx, groupID); err != nil {
 			return err
 		}
-
-		ug := model.UserSubscriptionGroup{
-			UserID:         userID,
-			GroupID:        groupID,
-			ExpireAt:       expireAt,
-			TransferEnable: transferEnable,
-			NextRenewPrice: nextRenewPrice,
-		}
-		// Upsert (assign will update specified fields on conflict)
-		return tx.Where("user_id = ? AND group_id = ?", userID, groupID).
-			Assign(ug).FirstOrCreate(&ug).Error
+		_, err := subscriber.GrantSubscriptionGroupTx(tx, subscriber.GroupGrant{
+			RequestID: requestID, UserID: userID, GroupID: groupID,
+			ExpiresAt: expireAt, TransferBytes: transferEnable, NextRenewPrice: nextRenewPrice,
+		}, time.Now())
+		return subscriptionMembershipError(err)
 	})
 }
 
-// RemoveGroupFromUser 移除用户的订阅分组
-func (s *SubscriptionService) RemoveGroupFromUser(userID, groupID uint) error {
+// RemoveGroupFromUser 移除用户的订阅分组, through the subscriber engine
+// (subscriber.RevokeSubscriptionGroupTx) once per requestID
+// (SubscriptionGroupRevokeRequestID).
+func (s *SubscriptionService) RemoveGroupFromUser(userID, groupID uint, requestID string) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
 		if err := subscriptionUserExists(tx, userID); err != nil {
 			return err
@@ -933,17 +977,24 @@ func (s *SubscriptionService) RemoveGroupFromUser(userID, groupID uint) error {
 		if err := subscriptionGroupExists(tx, groupID); err != nil {
 			return err
 		}
-
-		res := tx.Where("user_id = ? AND group_id = ?", userID, groupID).
-			Delete(&model.UserSubscriptionGroup{})
-		if res.Error != nil {
-			return res.Error
-		}
-		if res.RowsAffected == 0 {
-			return ErrSubscriptionUserGroupNotFound
-		}
-		return nil
+		_, err := subscriber.RevokeSubscriptionGroupTx(tx, requestID, userID, groupID, time.Now())
+		return subscriptionMembershipError(err)
 	})
+}
+
+// subscriptionMembershipError maps the subscriber engine's errors to the
+// subscription service's.
+func subscriptionMembershipError(err error) error {
+	switch {
+	case errors.Is(err, subscriber.ErrSubscriberNotFound):
+		return ErrSubscriptionUserNotFound
+	case errors.Is(err, subscriber.ErrSubscriptionGroupNotFound):
+		return ErrSubscriptionGroupNotFound
+	case errors.Is(err, subscriber.ErrMembershipNotFound):
+		return ErrSubscriptionUserGroupNotFound
+	default:
+		return err
+	}
 }
 
 // AssignGroupToPlan 为套餐分配订阅分组

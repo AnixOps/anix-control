@@ -19,6 +19,8 @@ option go_package = "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1
 //   - kernel.subscriber.balance.v1: AdjustBalance
 //   - kernel.subscriber.directory.v1: GetSubscribers, LookupBySubscriptionToken,
 //     ListActiveSubscribers, WatchSubscriberChanges
+//   - kernel.subscriber.groups.v1: GrantSubscriptionGroup,
+//     RevokeSubscriptionGroup, RemoveSubscriptionGroupMembers
 //
 // Every write that can be retried carries a request_id; the kernel applies
 // each request_id once and answers a repeat with the first result.
@@ -53,6 +55,21 @@ service KernelSubscriber {
   // serves, after a cursor. Clients resume from the last cursor they saw
   // and re-list when told their cursor is too old.
   rpc WatchSubscriberChanges(WatchSubscriberChangesRequest) returns (stream SubscriberChange);
+  // GrantSubscriptionGroup gives a subscriber one subscription group
+  // (v2_user_subscription_group): it creates the membership, or sets the
+  // given fields of an existing one and keeps the others, as the v2
+  // administrator route does. NOT_FOUND when the subscriber or the group
+  // does not exist; the request is then not recorded.
+  rpc GrantSubscriptionGroup(GrantSubscriptionGroupRequest) returns (GrantSubscriptionGroupResponse);
+  // RevokeSubscriptionGroup takes one subscription group from a subscriber.
+  // NOT_FOUND when the subscriber, the group or the membership does not
+  // exist; the request is then not recorded.
+  rpc RevokeSubscriptionGroup(RevokeSubscriptionGroupRequest) returns (RevokeSubscriptionGroupResponse);
+  // RemoveSubscriptionGroupMembers takes a group from every subscriber who
+  // holds it, as deleting the group requires; the group itself is the
+  // caller's. It succeeds whether or not the group still exists, so a retry
+  // after a failure in between finds no members and completes.
+  rpc RemoveSubscriptionGroupMembers(RemoveSubscriptionGroupMembersRequest) returns (RemoveSubscriptionGroupMembersResponse);
 }
 
 // PlanSnapshot is what an entitlement grants, as the plan module knows it
@@ -266,4 +283,58 @@ message SubscriberChange {
   uint64 user_id = 3;
   // subscriber is set for UPSERT.
   Subscriber subscriber = 4;
+}
+
+// Subscription group membership (kernel.subscriber.groups.v1). A
+// membership change appends a change for the subscriber when it changes
+// which groups the subscriber holds, or until when, and the subscriber is
+// active: Subscriber.subscription_group_ids is part of every UPSERT. A
+// subscriber who is not active is not on a watcher's list, and whatever
+// makes them active again appends its own change.
+
+message GrantSubscriptionGroupRequest {
+  // request_id is unique per grant, e.g. "subscription.grant:<user>:<group>:<digest>".
+  string request_id = 1;
+  uint64 user_id = 2;
+  uint64 group_id = 3;
+  // The fields below are set when present and left unchanged otherwise
+  // (a new membership has them unset). They are stored as given.
+  // expires_at_unix ends the membership (unset: no expiry).
+  optional int64 expires_at_unix = 4;
+  // transfer_bytes is the membership's own traffic (unset: the
+  // subscriber's).
+  optional int64 transfer_bytes = 5;
+  optional int64 next_renew_price_cents = 6;
+  string reason = 7;
+}
+
+message GrantSubscriptionGroupResponse {
+  // applied is false when request_id was applied before; created then
+  // describes that first application.
+  bool applied = 1;
+  // created is true when the grant created the membership.
+  bool created = 2;
+}
+
+message RevokeSubscriptionGroupRequest {
+  string request_id = 1;
+  uint64 user_id = 2;
+  uint64 group_id = 3;
+  string reason = 4;
+}
+
+message RevokeSubscriptionGroupResponse {
+  bool applied = 1;
+}
+
+message RemoveSubscriptionGroupMembersRequest {
+  string request_id = 1;
+  uint64 group_id = 2;
+  string reason = 3;
+}
+
+message RemoveSubscriptionGroupMembersResponse {
+  bool applied = 1;
+  // removed counts the memberships deleted.
+  uint64 removed = 2;
 }

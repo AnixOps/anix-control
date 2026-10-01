@@ -3,18 +3,25 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"net"
 	"os"
 	"path/filepath"
 	"sort"
+	"sync"
 	"testing"
 	"time"
 
+	kernelsubscriberv1 "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1"
 	"github.com/AnixOps/anix-control/sdk/packagebridgesdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/AnixOps/anix-control/v4/packages/subscription/native"
 	"github.com/AnixOps/anix-control/v4/packages/subscription/native/model"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/test/bufconn"
+	"google.golang.org/protobuf/proto"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
 )
@@ -42,6 +49,38 @@ func (s *bridgeStub) GetPackageConfig(context.Context) (packagebridgesdk.Package
 func (s *bridgeStub) Invoke(_ context.Context, _ []byte, operation string, _ []byte) (packagebridgesdk.Response, error) {
 	s.operation = operation
 	return packagebridgesdk.Response{StatusCode: 200, Body: []byte(`{"code":0,"msg":"操作成功","ts":1,"data":null}`)}, nil
+}
+
+// connectedBridge is a bridge whose connection also carries the kernel's
+// other contracts, as packagebridgesdk.Client and NetworkClient do.
+type connectedBridge struct {
+	*bridgeStub
+	conn grpc.ClientConnInterface
+}
+
+func (b connectedBridge) Conn() grpc.ClientConnInterface { return b.conn }
+
+// membershipRecorder is the kernel's KernelSubscriber as far as the host
+// can tell: it records the membership calls it receives.
+type membershipRecorder struct {
+	kernelsubscriberv1.UnimplementedKernelSubscriberServer
+	mu      sync.Mutex
+	grants  []*kernelsubscriberv1.GrantSubscriptionGroupRequest
+	removed []*kernelsubscriberv1.RemoveSubscriptionGroupMembersRequest
+}
+
+func (r *membershipRecorder) GrantSubscriptionGroup(_ context.Context, request *kernelsubscriberv1.GrantSubscriptionGroupRequest) (*kernelsubscriberv1.GrantSubscriptionGroupResponse, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.grants = append(r.grants, request)
+	return &kernelsubscriberv1.GrantSubscriptionGroupResponse{Applied: true, Created: true}, nil
+}
+
+func (r *membershipRecorder) RemoveSubscriptionGroupMembers(_ context.Context, request *kernelsubscriberv1.RemoveSubscriptionGroupMembersRequest) (*kernelsubscriberv1.RemoveSubscriptionGroupMembersResponse, error) {
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.removed = append(r.removed, request)
+	return &kernelsubscriberv1.RemoveSubscriptionGroupMembersResponse{Applied: true}, nil
 }
 
 func dispatch(t *testing.T, service *pluginhostsdk.Router, route string, request pluginhostsdk.DispatchRequest) pluginhostsdk.DispatchResponse {
@@ -73,7 +112,7 @@ func TestSubscriptionHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) 
 		RouteID: "plan.admin.plans.get", BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
 	})
 	require.Error(t, err)
-	handlers := (&native.Service{}).Handlers()
+	handlers := (&native.Service{Subscriber: kernelsubscriberv1.NewKernelSubscriberClient(nil)}).Handlers()
 	require.Len(t, handlers, len(subscriptionRoutes))
 	for route := range subscriptionRoutes {
 		require.Contains(t, handlers, route, "every native route has a handler")
@@ -81,6 +120,10 @@ func TestSubscriptionHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) 
 	for route := range bridgedRoutes {
 		require.NotContains(t, handlers, route, "a bridged route has no native handler")
 		require.NotContains(t, subscriptionRoutes, route)
+	}
+	withoutSubscriber := (&native.Service{}).Handlers()
+	for _, route := range []string{native.DeleteGroupRouteID, native.GrantUserGroupRouteID, native.RevokeUserGroupRouteID} {
+		require.NotContains(t, withoutSubscriber, route, "without KernelSubscriber membership changes stay legacy")
 	}
 }
 
@@ -111,9 +154,8 @@ func TestSubscriptionHostRoutesAreThePackageRoutes(t *testing.T) {
 
 // The package adopts its four tables and reads the plan, entitlement,
 // membership and node views. It adopts no v2_user* table, reads no user
-// directory (e-mail addresses) and no node or protocol settings, and calls
-// no KernelSubscriber family: the routes that would change subscriber state
-// stay bridged.
+// directory (e-mail addresses) and no node or protocol settings, and of
+// KernelSubscriber calls only the subscription group membership family.
 func TestSubscriptionManifestCapabilities(t *testing.T) {
 	raw, err := os.ReadFile("../manifest.template.json")
 	require.NoError(t, err)
@@ -125,7 +167,7 @@ func TestSubscriptionManifestCapabilities(t *testing.T) {
 		"kernel.storage.v1", "kernel.storage.adopt:v2_subscription_group", "kernel.storage.adopt:v2_subscription_template",
 		"kernel.storage.adopt:v2_plan_subscription_group", "kernel.storage.adopt:v2_subscription_group_node_protocols",
 		"kernel.view:kapi_plan_catalog_v1", "kernel.view:kapi_subscriber_entitlement_v1", "kernel.view:kapi_user_subscription_group_v1",
-		"kernel.view:kapi_node_protocol_v1", "kernel.view:kapi_node_heartbeat_v1",
+		"kernel.view:kapi_node_protocol_v1", "kernel.view:kapi_node_heartbeat_v1", "kernel.subscriber.groups.v1",
 	}, manifest.Capabilities)
 }
 
@@ -175,6 +217,89 @@ func TestSubscriptionHostServesNativeRoutesOnTheLease(t *testing.T) {
 
 	response = dispatch(t, service, get, pluginhostsdk.DispatchRequest{Method: "GET", Metadata: params})
 	require.JSONEq(t, `"hk"`, mustField(t, response.ResponseBody, "data", "templates", "0", "name"))
+}
+
+// Native membership changes reach KernelSubscriber on the bridge
+// connection: a grant with the request's idempotency key and the fields
+// given, and a group's deletion, which takes the group from its members
+// first and then deletes it with its templates and links on the lease.
+func TestSubscriptionHostChangesMembershipThroughKernelSubscriberOverTheBridge(t *testing.T) {
+	path := filepath.Join(t.TempDir(), "control.db")
+	db, err := gorm.Open(sqlite.Open(path), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		if sqlDB, err := db.DB(); err == nil {
+			_ = sqlDB.Close()
+		}
+	})
+	// Tables stand in for the kernel views here.
+	require.NoError(t, db.AutoMigrate(&model.SubscriptionGroup{}, &model.SubscriptionTemplate{}, &model.PlanSubscriptionGroup{},
+		&model.GroupProtocol{}, &native.Entitlement{}))
+	require.NoError(t, db.Create(&[]model.SubscriptionGroup{{ID: 1, Name: "default", Enable: 1}, {ID: 2, Name: "premium", Enable: 1}}).Error)
+	require.NoError(t, db.Create(&model.SubscriptionTemplate{ID: 1, GroupID: 2, Name: "us", Enable: 1}).Error)
+	require.NoError(t, db.Create(&model.PlanSubscriptionGroup{ID: 1, PlanID: 1, GroupID: 2}).Error)
+	require.NoError(t, db.Create(&model.GroupProtocol{SubscriptionGroupID: 2, NodeProtocolID: 7}).Error)
+	require.NoError(t, db.Create(&native.Entitlement{ID: 5}).Error)
+
+	recorder := &membershipRecorder{}
+	listener := bufconn.Listen(1 << 20)
+	server := grpc.NewServer()
+	kernelsubscriberv1.RegisterKernelSubscriberServer(server, recorder)
+	go func() { _ = server.Serve(listener) }()
+	t.Cleanup(server.Stop)
+	conn, err := grpc.NewClient("passthrough:///kernel", grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) { return listener.Dial() }))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+
+	stub := &bridgeStub{
+		modes: map[string]string{native.GrantUserGroupRouteID: "native", native.DeleteGroupRouteID: "native"},
+		lease: packagebridgesdk.StorageLease{
+			Driver: "sqlite", DSN: path, TablePrefix: "pkg_subscription_",
+			AdoptedTables: []string{
+				"v2_plan_subscription_group", "v2_subscription_group", "v2_subscription_group_node_protocols", "v2_subscription_template",
+			},
+		},
+	}
+	service, err := newSubscriptionService(connectedBridge{bridgeStub: stub, conn: conn}, "lease-1")
+	require.NoError(t, err)
+	service.Refresh(context.Background())
+	_, effective := service.Mode(native.GrantUserGroupRouteID)
+	require.Equal(t, "native", effective)
+
+	response := dispatch(t, service, native.GrantUserGroupRouteID, pluginhostsdk.DispatchRequest{
+		Method: "POST", PrincipalJSON: []byte(`{"actor_id":1,"admin":true}`), RequestBody: []byte(`{"group_id":2,"expire_at":1893456000}`),
+		Metadata: pluginhostsdk.RequestMetadata{
+			PathParams: map[string]string{"user_id": "5"}, Headers: map[string][]string{"Idempotency-Key": {"grant-once"}},
+		},
+	})
+	require.JSONEq(t, `"分配成功"`, mustField(t, response.ResponseBody, "data", "message"))
+	require.Empty(t, stub.operation, "a native route does not reach the legacy handler")
+	expires := int64(1893456000)
+	require.Len(t, recorder.grants, 1)
+	want := &kernelsubscriberv1.GrantSubscriptionGroupRequest{
+		RequestId: native.GrantRequestID(5, 2, &expires, nil, nil, "grant-once"), UserId: 5, GroupId: 2,
+		ExpiresAtUnix: proto.Int64(expires), Reason: "administrator grant",
+	}
+	require.True(t, proto.Equal(want, recorder.grants[0]), "grant %v", recorder.grants[0])
+
+	response = dispatch(t, service, native.DeleteGroupRouteID, pluginhostsdk.DispatchRequest{
+		Method: "DELETE", PrincipalJSON: []byte(`{"actor_id":1,"admin":true}`),
+		Metadata: pluginhostsdk.RequestMetadata{PathParams: map[string]string{"id": "2"}, Headers: map[string][]string{"X-Request-Id": {"r-1"}}},
+	})
+	require.JSONEq(t, `"删除成功"`, mustField(t, response.ResponseBody, "data", "message"))
+	require.Len(t, recorder.removed, 1)
+	require.True(t, proto.Equal(&kernelsubscriberv1.RemoveSubscriptionGroupMembersRequest{
+		RequestId: native.DeleteGroupRequestID(2, "r-1"), GroupId: 2, Reason: "subscription group deleted",
+	}, recorder.removed[0]), "removal %v", recorder.removed[0])
+	var groups []model.SubscriptionGroup
+	require.NoError(t, db.Order("id").Find(&groups).Error)
+	require.Len(t, groups, 1)
+	for _, table := range []any{&model.SubscriptionTemplate{}, &model.PlanSubscriptionGroup{}, &model.GroupProtocol{}} {
+		var left int64
+		require.NoError(t, db.Model(table).Count(&left).Error)
+		require.Zero(t, left, "%T goes with the group", table)
+	}
 }
 
 // mustField returns the JSON of a nested field of body.

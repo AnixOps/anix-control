@@ -45,6 +45,7 @@ what it uses:
 | `kernel.subscriber.credentials.v1` | ResetCredentials | subscription, identity (admin reset) |
 | `kernel.subscriber.balance.v1` | AdjustBalance | affiliate, payment |
 | `kernel.subscriber.directory.v1` | GetSubscribers, LookupBySubscriptionToken, ListActiveSubscribers, WatchSubscriberChanges | subscription, proxy-node, forward |
+| `kernel.subscriber.groups.v1` | GrantSubscriptionGroup, RevokeSubscriptionGroup, RemoveSubscriptionGroupMembers | subscription |
 
 As with `kernel.identity.v1`, only packages signed by the official root can
 hold them. The kernel authorizes every call against the calling session's
@@ -104,6 +105,35 @@ package and generation.
   accounting stays in the kernel: a forward's counters, the subscriber's
   traffic (`subscriber.RecordTrafficTx`) and the tunnel permission's traffic
   change in one transaction, and exhaustion pauses forwards on their nodes.
+- **Subscription group membership.** `v2_user_subscription_group` rows,
+  one per group a subscriber holds, each with its own expiry, traffic and
+  renewal price. `internal/subscriber` holds the engine functions; the
+  kernel's legacy handlers and the contract call the same ones.
+  - `GrantSubscriptionGroup` (`GrantSubscriptionGroupTx`) creates the
+    membership, or sets the given fields of an existing one and keeps the
+    others, as the v2 route does.
+  - `RevokeSubscriptionGroup` (`RevokeSubscriptionGroupTx`) deletes one.
+  - `RemoveSubscriptionGroupMembers` (`RemoveSubscriptionGroupMembersTx`)
+    deletes every membership of a group, whether or not the group still
+    exists. The subscription module calls it before it deletes the group's
+    templates, plan links and node protocol links and the group itself, so
+    a retry after a failure in between finds no members and completes.
+
+  Each runs under the row locks of the subscribers it changes (taken in id
+  order) and records its request id. Grant and revoke answer `NotFound` for a subscriber, a
+  group or (revoke) a membership that does not exist, and record nothing;
+  the message says which is missing.
+
+  The administrator routes derive their request ids from the request's
+  `Idempotency-Key` (else its request id), on both sides, so a retry applies
+  once whichever side serves it:
+  - `subscription.grant:<user>:<group>:<digest>`, whose digest also covers
+    the granted fields, so a key reused for other values is a new grant;
+  - `subscription.revoke:<user>:<group>:<digest>`;
+  - `subscription.delete_group:<group>:<digest>`.
+
+  The ledger methods are `grant_subscription_group`,
+  `revoke_subscription_group` and `remove_group_members` (user 0).
 - **RecordTraffic.**
   - Adds `(upload, download) × rate` to each subscriber's counters in one
     transaction.
@@ -123,7 +153,21 @@ package and generation.
   - `v4_kernel_subscriber_change` is an append-only log (cursor, user id,
     kind), written in the same transaction as any change that can alter
     activity or node-visible fields: entitlements, ban, uuid, traffic
-    exhaustion or reset, deletion.
+    exhaustion or reset, deletion, and subscription group membership.
+  - **Membership changes.** Subscription groups do not decide whom a node
+    serves (`subscriber.Active` reads the primary group only), but
+    `Subscriber.subscription_group_ids` is part of every `UPSERT`, and they
+    decide what a subscription link renders. A membership write therefore
+    appends a row for a subscriber when it changes which groups they hold,
+    or until when, and the subscriber is active:
+    - a grant that creates the membership or changes its expiry;
+    - a revocation;
+    - each active member of a group whose members are removed.
+
+    A grant that only changes the traffic or renewal price appends nothing.
+    An inactive subscriber is on no watcher's list: whatever makes them
+    active again (an entitlement, an unban, a traffic reset) appends its own
+    row, which carries the groups they hold then.
   - Rows are kept for 7 days; an older cursor gets `RESYNC`.
   - Expiry is time-based and emits nothing. Consumers compare `expires_at`
     with their clock and re-list periodically.
@@ -191,41 +235,17 @@ package and generation.
   - `KernelSubscriber` is served on the module listener and package bridge,
     with authorization and parity tests between legacy callers and contract
     callers.
-
-## Proposed: subscription group membership (PLANNED)
-
-Not implemented. The contract cannot edit one subscription group
-membership: `ApplyEntitlement` replaces all of a subscriber's groups with a
-plan's, together with plan, group, traffic and expiry. Three v2 routes of
-the subscription package therefore stay bridged: granting a user a group
-(`POST /api/v2/admin/subscription/users/:user_id/groups`, with its own
-expiry, traffic and renewal price), taking it away (`DELETE .../groups/:group_id`)
-and deleting a group, which removes every member's row. A minimal,
-backwards-compatible extension would add only new RPCs, under a new
-capability `kernel.subscriber.groups.v1`:
-
-- `GrantSubscriptionGroup(request_id, user_id, group_id, optional
-  expires_at_unix, optional transfer_bytes, optional next_renew_price_cents)`
-  creates the `v2_user_subscription_group` row or overwrites the given
-  fields of an existing one, as the v2 handler does;
-- `RevokeSubscriptionGroup(request_id, user_id, group_id)` deletes one row,
-  `NotFound` when there is none;
-- `RemoveSubscriptionGroupMembers(request_id, group_id)` deletes every row
-  of a group, which the module calls before it deletes the group's
-  templates, plan links and the group itself; a retry after a failure in
-  between finds no members and completes.
-
-Each runs under the subscriber's row lock and records its request id, like
-the other writes. Before it is built, two decisions are needed:
-
-- **Change log.** `Subscriber.subscription_group_ids` is part of
-  `GetSubscribers` and of every `UPSERT` change, but the v2 handlers append
-  no change row when a membership changes, so a watcher's copy goes stale
-  until the subscriber changes otherwise. Emitting `UPSERT` rows (and moving
-  the v2 handlers onto the same function, as for entitlements) fixes that.
-- **Request ids** for administrator edits, derived from the request's
-  `Idempotency-Key` as `plan.assign` does, so a retry applies once whichever
-  side serves it.
+- **F2e. Subscription group membership** (in place).
+  - The capability `kernel.subscriber.groups.v1` and the three calls
+    `GrantSubscriptionGroup`, `RevokeSubscriptionGroup` and
+    `RemoveSubscriptionGroupMembers` were added to the contract; only new
+    calls and messages, so v4.0.0 hosts are unaffected.
+  - The legacy v2 membership routes (granting a user a group, taking it
+    away, deleting a group) go through the same engine functions. Before,
+    they wrote no change-log row, so a watcher's copy of a subscriber's
+    groups went stale.
+  - The subscription module serves the three routes natively through the
+    contract (`internal/tests/subscriptioncompat`).
 
 ## Not in scope
 

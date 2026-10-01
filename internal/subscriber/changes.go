@@ -28,7 +28,12 @@ func TouchesNodeFields(updates map[string]any) bool {
 	return false
 }
 
-// RecordChangesTx appends change log rows for the subscribers in tx.
+// changeBatch bounds the rows of one insert: a statement takes at most
+// 65535 parameters on PostgreSQL.
+const changeBatch = 1000
+
+// RecordChangesTx appends change log rows for the subscribers in tx, in
+// the given order.
 func RecordChangesTx(tx *gorm.DB, userIDs []uint, deleted bool, now time.Time) error {
 	if len(userIDs) == 0 {
 		return nil
@@ -42,7 +47,7 @@ func RecordChangesTx(tx *gorm.DB, userIDs []uint, deleted bool, now time.Time) e
 	if len(rows) == 0 {
 		return nil
 	}
-	return tx.Create(&rows).Error
+	return tx.CreateInBatches(&rows, changeBatch).Error
 }
 
 // ChangesAfter returns up to limit changes after cursor. resync is true when
