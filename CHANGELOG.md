@@ -403,6 +403,17 @@
     - Directory reads carry no token.
     - `WatchSubscriberChanges` streams each change with the subscriber's
       current state, and answers `RESYNC` for pruned cursors.
+- **Knowledge pilot: the first domain module on an adopted table.**
+  - `packages/knowledge` now has its own host with native handlers for all 6
+    routes, on the kernel's `v2_knowledge` table adopted in place
+    (`kernel.storage.v1`, `kernel.storage.adopt:v2_knowledge`).
+  - `internal/tests/knowledgecompat` proves byte parity with the legacy
+    handlers on SQLite and PostgreSQL. The PostgreSQL run is part of the
+    `package-storage-postgres` job.
+  - Legacy and native share the table, so each route's mode switches freely
+    through the installation's `routes` configuration.
+  - `config/package-extraction.json` now marks the knowledge routes and
+    identity's 15 group A routes `native-flagged`.
 
 - The kernel side of the identity module, `KernelIdentity` (N9). It is served
   on the local package bridge and on the module listener.

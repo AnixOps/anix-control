@@ -534,7 +534,7 @@
       "path": "/api/v2/admin/knowledge",
       "package_id": "knowledge",
       "route_id": "knowledge.admin.knowledge.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -542,7 +542,7 @@
       "path": "/api/v2/admin/knowledge",
       "package_id": "knowledge",
       "route_id": "knowledge.admin.knowledge.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -550,7 +550,7 @@
       "path": "/api/v2/admin/knowledge/:id",
       "package_id": "knowledge",
       "route_id": "knowledge.admin.knowledge.id.delete",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -558,7 +558,7 @@
       "path": "/api/v2/admin/knowledge/:id",
       "package_id": "knowledge",
       "route_id": "knowledge.admin.knowledge.id.put",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -622,7 +622,7 @@
       "path": "/api/v2/admin/mfa/config",
       "package_id": "identity-platform",
       "route_id": "identity.admin.mfa.config.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "identity-bridge"
     },
     {
@@ -630,7 +630,7 @@
       "path": "/api/v2/admin/mfa/config",
       "package_id": "identity-platform",
       "route_id": "identity.admin.mfa.config.put",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "identity-bridge"
     },
     {
@@ -1494,7 +1494,7 @@
       "path": "/api/v2/admin/users",
       "package_id": "identity-platform",
       "route_id": "identity.admin.users.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "identity-bridge"
     },
     {
@@ -1502,7 +1502,7 @@
       "path": "/api/v2/admin/users/:id",
       "package_id": "identity-platform",
       "route_id": "identity.admin.users.id.delete",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "identity-bridge"
     },
     {
@@ -1518,7 +1518,7 @@
       "path": "/api/v2/admin/users/:id",
       "package_id": "identity-platform",
       "route_id": "identity.admin.users.id.put",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "identity-bridge"
     },
     {
@@ -1526,7 +1526,7 @@
       "path": "/api/v2/admin/users/:id/ban",
       "package_id": "identity-platform",
       "route_id": "identity.admin.users.id.ban.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "identity-bridge"
     },
     {
@@ -1550,7 +1550,7 @@
       "path": "/api/v2/admin/users/:id/unban",
       "package_id": "identity-platform",
       "route_id": "identity.admin.users.id.unban.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "identity-bridge"
     },
     {
@@ -1774,7 +1774,7 @@
       "path": "/api/v2/login",
       "package_id": "identity-platform",
       "route_id": "identity.auth.login",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "identity-bridge"
     },
     {
@@ -1886,7 +1886,7 @@
       "path": "/api/v2/register",
       "package_id": "identity-platform",
       "route_id": "identity.auth.register",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "identity-bridge"
     },
     {
@@ -2094,7 +2094,7 @@
       "path": "/api/v2/user/knowledge",
       "package_id": "knowledge",
       "route_id": "knowledge.article.list",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -2102,7 +2102,7 @@
       "path": "/api/v2/user/knowledge/:id",
       "package_id": "knowledge",
       "route_id": "knowledge.user.knowledge.id.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -2110,7 +2110,7 @@
       "path": "/api/v2/user/mfa/backup-codes/regenerate",
       "package_id": "identity-platform",
       "route_id": "identity.user.mfa.backup_codes.regenerate.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "identity-bridge"
     },
     {
@@ -2118,7 +2118,7 @@
       "path": "/api/v2/user/mfa/disable",
       "package_id": "identity-platform",
       "route_id": "identity.user.mfa.disable.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "identity-bridge"
     },
     {
@@ -2126,7 +2126,7 @@
       "path": "/api/v2/user/mfa/status",
       "package_id": "identity-platform",
       "route_id": "identity.user.mfa.status.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "identity-bridge"
     },
     {
@@ -2134,7 +2134,7 @@
       "path": "/api/v2/user/mfa/totp/enable",
       "package_id": "identity-platform",
       "route_id": "identity.user.mfa.totp.enable.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "identity-bridge"
     },
     {
@@ -2142,7 +2142,7 @@
       "path": "/api/v2/user/mfa/totp/setup",
       "package_id": "identity-platform",
       "route_id": "identity.user.mfa.totp.setup.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "identity-bridge"
     },
     {
@@ -2150,7 +2150,7 @@
       "path": "/api/v2/user/mfa/verify",
       "package_id": "identity-platform",
       "route_id": "identity.user.mfa.verify.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "identity-bridge"
     },
     {
