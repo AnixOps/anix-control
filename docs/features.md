@@ -49,7 +49,7 @@ source of truth.
 | Auth | MFA setup, verification, and login challenge | Partial | User MFA API, admin MFA config, `/api/v2/login`, `web/src/views/Login.vue` | User-enabled TOTP/backup MFA gates token issuance, and global `enforce_for_all`/`enforce_for_admin` policies now return no-token enrollment-required responses; user-facing self-service enrollment UI still needs implementation evidence. |
 | User | Profile, dashboard, subscription summary | Implemented | `/api/v2/user/profile`, `/dashboard`, `/subscription` | Continue UI regression coverage as payloads evolve. |
 | User | User plan browsing | Implemented | `/api/v2/user/plan`, user Plans page, unified success/error envelopes | None known. |
-| User | Order list, detail, and order creation | Implemented | `/api/v2/user/order*` | Keep amount/traffic boundary tests current. |
+| User | Order list, detail, and order creation | Implemented | `/api/v2/user/order*`; the caller's own orders with the plan's `id` and `name`, no buyer row | Keep amount/traffic boundary tests current. |
 | User | Coupon validation | Implemented | `/api/v2/user/coupon/check` | None known. |
 | User | Knowledge base browsing | Implemented | `/api/v2/user/knowledge*` | None known. |
 | User | Ticket create/list/detail/reply/close | Implemented | `/api/v2/user/ticket*` | None known. |
@@ -61,7 +61,7 @@ source of truth.
 | Admin | Hourly traffic and user ranking | Implemented | `/api/v2/admin/traffic/hourly`, `/traffic/user-ranking` | Watch high-volume query performance in production. |
 | Admin | User management | Implemented | CRUD, ban/unban, traffic reset, subscribe reset with unified success/user-error envelopes | Continue authorization regression tests for new admin actions. |
 | Admin | Plan management | Implemented | CRUD and assign with unified success/user-error envelopes | None known. |
-| Admin | Order management | Implemented | list/detail/status/paid/cancel with unified success/user-error envelopes and localized admin error prompts | Payment provider callbacks remain separate. |
+| Admin | Order management | Implemented | list/detail/status/paid/cancel with unified success/user-error envelopes and localized admin error prompts; list and detail carry the plan's `id` and `name` and the buyer's `id` and `email` only | Payment provider callbacks remain separate. |
 | Admin | Node management and protocol configuration | Implemented | CRUD, credentials, raw config, protocol templates, auth keys | Keep AnixOps Agent and legacy V2bX compatibility tests current. |
 | Admin | Subscription groups, templates, preview, user/plan binding | Implemented | `/api/v2/admin/subscription/*`, unified group/template CRUD, protocol-binding, preview, and user/plan binding success/user-error envelopes | Keep public subscription compatibility separate. |
 | Admin | Ticket management | Implemented | list/reply/close | None known. |

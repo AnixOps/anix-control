@@ -219,7 +219,8 @@ tables and their indexes: `v4_kernel_package_backup_reference`,
 `v4_kernel_package_validation_result`, plus the read-only `kapi_*` views:
 `kapi_user_directory_v1`, `kapi_subscriber_entitlement_v1` and
 `kapi_user_referral_v1` over `v2_user`, `kapi_system_audit_log_v1` over
-`v2_operation_log`, `kapi_plan_catalog_v1` over `v2_plan`,
+`v2_operation_log`, `kapi_plan_catalog_v1` and `kapi_plan_name_v1` over
+`v2_plan`,
 `kapi_plan_subscription_group_v1` over `v2_plan_subscription_group`,
 `kapi_order_billing_v1` over `v2_order`, `kapi_affiliate_settings_v1` over
 one row of `v2_system_config`, `kapi_user_subscription_group_v1` over
@@ -481,6 +482,12 @@ is left out, as before. The fields that disappear:
   `capacity_limit`, the seven prices (`month_price`, `quarter_price`,
   `half_year_price`, `year_price`, `two_year_price`, `three_year_price`,
   `onetime_price`), `created_at` and `updated_at`.
+
+The `order` package serves these routes natively once their mode is
+switched (`native-flagged`); it reads the plan name from the new view
+`kapi_plan_name_v1` and the buyer's e-mail from `kapi_user_directory_v1`, so
+its signed release declares `kernel.view:kapi_plan_name_v1`. Install that
+release before switching the routes.
 
 Read them where they belong: a user's own account from
 `GET /api/v2/user/profile` and `GET /api/v2/user/subscription`, a buyer from

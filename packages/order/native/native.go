@@ -9,16 +9,17 @@
 // Other domains are read through kernel views only: the plan catalog
 // (kapi_plan_catalog_v1) and the subscription groups a plan grants
 // (kapi_plan_subscription_group_v1) for pricing and completing an order,
-// and the user directory (kapi_user_directory_v1) for the buyer's current
-// plan. Completing an order grants its plan through the kernel's
-// KernelSubscriber contract (kernel.subscriber.entitlements.v1): the package
-// never writes v2_user. Completion pays no commission and sends no
-// notification, in the kernel as here.
+// the plan names (kapi_plan_name_v1) for the order lists and details, and
+// the user directory (kapi_user_directory_v1) for the buyer's current plan
+// and, in an administrator's order answers, the buyer's e-mail. Completing
+// an order grants its plan through the kernel's KernelSubscriber contract
+// (kernel.subscriber.entitlements.v1): the package never writes v2_user.
+// Completion pays no commission and sends no notification, in the kernel as
+// here.
 //
-// The four order list and detail routes (administrator and user) have no
-// native handler and stay bridged: their answers embed the buyer's whole
-// v2_user row, subscription token and proxy UUID included, which no kernel
-// view may expose.
+// The order list and detail answers carry the order, its plan's id and
+// name and, for an administrator, its buyer's id and e-mail; never the
+// buyer's subscription token or UUID, which no kernel view exposes.
 package native
 
 import (
@@ -155,6 +156,10 @@ func (s *Service) Handlers() map[string]pluginhostsdk.NativeHandler {
 		"order.admin.orders.id.status.put":  s.AdminUpdateOrderStatus,
 		"order.admin.orders.id.cancel.post": s.AdminCancelOrder,
 		"order.user.order.save.post":        s.SaveOrder,
+		AdminOrdersRouteID:                  s.AdminOrders,
+		AdminOrderRouteID:                   s.AdminOrder,
+		UserOrdersRouteID:                   s.UserOrders,
+		UserOrderRouteID:                    s.UserOrder,
 	}
 	if s.Subscriber != nil {
 		handlers[MarkPaidRouteID] = s.AdminMarkOrderPaid

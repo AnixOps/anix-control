@@ -168,6 +168,28 @@
   - A user's order detail looks the order up by id and owner, and a request
     without a user names no one; another user's order stays "not found".
 
+### Added
+
+- **Order module: native order lists and details.** `packages/order` now
+  serves all 13 of its routes natively (148 of 292 v2 routes are
+  `native-flagged`). The administrator's and user's order lists and details
+  (`order.admin.orders.get`, `order.admin.orders.id.get`,
+  `order.user.order.get`, `order.user.order.id.get`) were bridged because
+  their answers embedded the buyer's `v2_user` row; with the slim answers
+  they read only kernel views.
+  - The new kernel view `kapi_plan_name_v1` shows a plan's `id` and `name`
+    and nothing else of `v2_plan`; the package declares
+    `kernel.view:kapi_plan_name_v1`. The buyer's e-mail comes from
+    `kapi_user_directory_v1`.
+  - A user's list and detail are the caller's own orders, with the owner in
+    the query.
+  - `internal/tests/ordercompat` proves byte parity on SQLite and PostgreSQL
+    for 55 more cases per backend: every list filter and paging edge, other
+    users' orders, deleted plans and buyers, and invalid ids. A mutation
+    check (owner filter, page clamp, ordering, e-mail match, plan and buyer
+    names) fails the parity tests. The seeded payment time is now taken once,
+    so both sides of a case see the same answer.
+
 ### Fixed
 
 - The administrator's order list filtered by `email` always failed: the

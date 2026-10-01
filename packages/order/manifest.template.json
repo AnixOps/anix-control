@@ -7,7 +7,7 @@
   "targets": ["control"],
   "architectures": [],
   "artifact_sha256": "GENERATED_AT_BUILD",
-  "capabilities": ["kernel.storage.v1", "kernel.storage.adopt:v2_order", "kernel.storage.adopt:v2_coupon", "kernel.view:kapi_plan_catalog_v1", "kernel.view:kapi_plan_subscription_group_v1", "kernel.view:kapi_user_directory_v1", "kernel.subscriber.entitlements.v1"],
+  "capabilities": ["kernel.storage.v1", "kernel.storage.adopt:v2_order", "kernel.storage.adopt:v2_coupon", "kernel.view:kapi_plan_catalog_v1", "kernel.view:kapi_plan_name_v1", "kernel.view:kapi_plan_subscription_group_v1", "kernel.view:kapi_user_directory_v1", "kernel.subscriber.entitlements.v1"],
   "dependencies": [],
   "conflicts": [],
   "permissions": ["order.view", "order.api"],

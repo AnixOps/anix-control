@@ -64,6 +64,13 @@ var KernelAPIViews = []KernelAPIView{
 			"half_year_price, year_price, two_year_price, three_year_price, onetime_price FROM v2_plan",
 	},
 	{
+		// A plan's name, which the order list and detail answers show
+		// next to the order. No price, content or limit.
+		Name:   "kapi_plan_name_v1",
+		Source: "v2_plan",
+		Query:  "SELECT id, name FROM v2_plan",
+	},
+	{
 		// The subscription groups a plan grants, which a completed order
 		// gives the subscriber.
 		Name:   "kapi_plan_subscription_group_v1",

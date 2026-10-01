@@ -846,7 +846,7 @@
       "path": "/api/v2/admin/orders",
       "package_id": "order",
       "route_id": "order.admin.orders.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -854,7 +854,7 @@
       "path": "/api/v2/admin/orders/:id",
       "package_id": "order",
       "route_id": "order.admin.orders.id.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -2190,7 +2190,7 @@
       "path": "/api/v2/user/order",
       "package_id": "order",
       "route_id": "order.user.order.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -2198,7 +2198,7 @@
       "path": "/api/v2/user/order/:id",
       "package_id": "order",
       "route_id": "order.user.order.id.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
