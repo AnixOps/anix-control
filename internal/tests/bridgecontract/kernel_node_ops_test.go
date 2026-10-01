@@ -45,11 +45,7 @@ var nodeOpsGorm = &gorm.Config{Logger: logger.Default.LogMode(logger.Silent), Di
 func nodeOpsDatabases(t *testing.T, body func(t *testing.T, db *gorm.DB)) {
 	t.Helper()
 	t.Run("sqlite", func(t *testing.T) {
-		db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "kernel.db")+"?_pragma=busy_timeout(10000)&_pragma=journal_mode(WAL)"), nodeOpsGorm)
-		require.NoError(t, err)
-		sqlDB, err := db.DB()
-		require.NoError(t, err)
-		t.Cleanup(func() { _ = sqlDB.Close() })
+		db := openSQLiteForTest(t, "kernel.db", "_pragma=journal_mode(WAL)")
 		seedNodeOps(t, db)
 		body(t, db)
 	})
@@ -82,6 +78,43 @@ func nodeOpsDatabases(t *testing.T, body func(t *testing.T, db *gorm.DB)) {
 		seedNodeOps(t, db)
 		body(t, db)
 	})
+}
+
+// openSQLiteForTest opens name in a fresh t.TempDir and closes it before
+// that directory is removed. Its close is registered after t.TempDir, so it
+// runs first, and it waits until every connection is closed: sql.DB.Close
+// does not wait for connections in use, and an RPC handler the bridge's
+// server.Stop did not wait for, or an executor past the engine's shutdown
+// grace, could otherwise still write the database, its WAL and shared
+// memory files while the directory is being removed.
+//
+// _txlock=immediate: every transaction takes the write lock when it begins
+// and waits for it under the busy timeout. A deferred transaction that read
+// and then writes while another connection (the engine's dispatcher, an
+// executor) has committed gets SQLITE_BUSY at once in WAL mode: the busy
+// timeout does not apply to that upgrade.
+func openSQLiteForTest(t *testing.T, name string, pragmas ...string) *gorm.DB {
+	t.Helper()
+	dsn := filepath.Join(t.TempDir(), name) + "?_pragma=busy_timeout(10000)&_txlock=immediate"
+	for _, pragma := range pragmas {
+		dsn += "&" + pragma
+	}
+	db, err := gorm.Open(sqlite.Open(dsn), nodeOpsGorm)
+	require.NoError(t, err)
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	t.Cleanup(func() {
+		_ = sqlDB.Close()
+		deadline := time.Now().Add(30 * time.Second)
+		for sqlDB.Stats().OpenConnections > 0 {
+			if time.Now().After(deadline) {
+				t.Errorf("%s: %d connections still open after close", name, sqlDB.Stats().OpenConnections)
+				return
+			}
+			time.Sleep(5 * time.Millisecond)
+		}
+	})
+	return db
 }
 
 func seedNodeOps(t *testing.T, db *gorm.DB) {
@@ -307,11 +340,10 @@ func (b *nodeOpsBinder) BindInstance(_ context.Context, binding packagebridge.In
 func TestKernelNodeOpsOverTheModuleListener(t *testing.T) {
 	nodeOpsDatabases(t, func(t *testing.T, db *gorm.DB) {
 		kernel := newNodeOpsKernel(t, db, "proxy-node")
-		pkiDB, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "pki.db")+"?_pragma=busy_timeout(10000)"), nodeOpsGorm)
-		require.NoError(t, err)
+		pkiDB := openSQLiteForTest(t, "pki.db")
 		require.NoError(t, pkiDB.AutoMigrate(&model.ServiceCA{}, &model.ModuleEnrollment{}, &model.ModuleCertificate{}))
 		kek := make([]byte, 32)
-		_, err = rand.Read(kek)
+		_, err := rand.Read(kek)
 		require.NoError(t, err)
 		authority, err := modulepki.New(modulepki.Options{DB: pkiDB, Cluster: "prod", KEK: kek})
 		require.NoError(t, err)
