@@ -71,8 +71,10 @@ package and generation.
   logic, with the plan read by the caller instead of the kernel.
 - **Payment auto-activation (owner decision, 2026-09-30).** A payment callback
   that marks an order paid also completes it: `ApplyEntitlement` with
-  `request_id = "order:<trade_no>"`, in the same flow. Today an administrator
-  completes paid orders by hand.
+  `request_id = "order:<order id>"`, in the same flow. An administrator's
+  "mark paid" completes an order with the same id, in the kernel or in the
+  order module (`kernel.subscriber.entitlements.v1`), so an order's plan is
+  granted once whichever path completes it.
 - **Administrator assignment.** The plan module applies it with
   `request_id = "plan.assign:<plan_id>:<user_id>:<digest>"`. The digest
   covers the request's `Idempotency-Key` (else its request id) and the

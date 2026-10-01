@@ -78,7 +78,7 @@
       "path": "/api/v2/admin/coupon",
       "package_id": "order",
       "route_id": "order.admin.coupon.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -86,7 +86,7 @@
       "path": "/api/v2/admin/coupon",
       "package_id": "order",
       "route_id": "order.admin.coupon.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -94,7 +94,7 @@
       "path": "/api/v2/admin/coupon/:id",
       "package_id": "order",
       "route_id": "order.admin.coupon.id.delete",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -862,7 +862,7 @@
       "path": "/api/v2/admin/orders/:id/cancel",
       "package_id": "order",
       "route_id": "order.admin.orders.id.cancel.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -870,7 +870,7 @@
       "path": "/api/v2/admin/orders/:id/paid",
       "package_id": "order",
       "route_id": "order.admin.orders.id.paid.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -878,7 +878,7 @@
       "path": "/api/v2/admin/orders/:id/status",
       "package_id": "order",
       "route_id": "order.admin.orders.id.status.put",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -886,7 +886,7 @@
       "path": "/api/v2/admin/orders/stats",
       "package_id": "order",
       "route_id": "order.admin.orders.stats.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -894,7 +894,7 @@
       "path": "/api/v2/admin/payment/gateways",
       "package_id": "payment",
       "route_id": "payment.admin.payment.gateways.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -902,7 +902,7 @@
       "path": "/api/v2/admin/payment/gateways",
       "package_id": "payment",
       "route_id": "payment.admin.payment.gateways.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -910,7 +910,7 @@
       "path": "/api/v2/admin/payment/gateways/:id",
       "package_id": "payment",
       "route_id": "payment.admin.payment.gateways.id.delete",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -918,7 +918,7 @@
       "path": "/api/v2/admin/payment/gateways/:id",
       "package_id": "payment",
       "route_id": "payment.admin.payment.gateways.id.put",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -926,7 +926,7 @@
       "path": "/api/v2/admin/payment/gateways/:id/toggle",
       "package_id": "payment",
       "route_id": "payment.admin.payment.gateways.id.toggle.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -934,7 +934,7 @@
       "path": "/api/v2/admin/payment/records",
       "package_id": "payment",
       "route_id": "payment.admin.payment.records.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -942,7 +942,7 @@
       "path": "/api/v2/admin/payment/stats",
       "package_id": "payment",
       "route_id": "payment.admin.payment.stats.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1822,7 +1822,7 @@
       "path": "/api/v2/payment/fiat/create",
       "package_id": "payment",
       "route_id": "payment.payment.fiat.create.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1830,7 +1830,7 @@
       "path": "/api/v2/payment/methods",
       "package_id": "payment",
       "route_id": "payment.payment.methods.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1846,7 +1846,7 @@
       "path": "/api/v2/payment/status/:trade_no",
       "package_id": "payment",
       "route_id": "payment.payment.status.trade_no.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1870,7 +1870,7 @@
       "path": "/api/v2/payment/x402/check/:id",
       "package_id": "payment",
       "route_id": "payment.payment.x402.check.id.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1878,7 +1878,7 @@
       "path": "/api/v2/payment/x402/create",
       "package_id": "payment",
       "route_id": "payment.payment.x402.create.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -2022,7 +2022,7 @@
       "path": "/api/v2/user/coupon/check",
       "package_id": "order",
       "route_id": "order.user.coupon.check.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -2206,7 +2206,7 @@
       "path": "/api/v2/user/order/save",
       "package_id": "order",
       "route_id": "order.user.order.save.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -2214,7 +2214,7 @@
       "path": "/api/v2/user/payment/channels",
       "package_id": "payment",
       "route_id": "payment.user.payment.channels.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -2222,7 +2222,7 @@
       "path": "/api/v2/user/payment/create",
       "package_id": "payment",
       "route_id": "payment.user.payment.create.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -2230,7 +2230,7 @@
       "path": "/api/v2/user/payment/records",
       "package_id": "payment",
       "route_id": "payment.user.payment.records.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -2238,7 +2238,7 @@
       "path": "/api/v2/user/payment/status/:trade_no",
       "package_id": "payment",
       "route_id": "payment.user.payment.status.trade_no.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {

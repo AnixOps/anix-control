@@ -140,3 +140,37 @@ func TestLeaseCacheSharesOneLeasePerGeneration(t *testing.T) {
 	_, err = store.Lease(ctx, Holder{PackageID: "knowledge", Version: "4.1.0", Generation: 4, Remote: true}, Grants{Storage: true})
 	require.ErrorContains(t, err, "need PostgreSQL")
 }
+
+// The plan views show an order what it needs of a plan, and a view whose
+// source table does not exist yet is left out.
+func TestPlanViewsShowWhatAnOrderNeeds(t *testing.T) {
+	db, _ := openSQLiteKernel(t)
+	exists, err := viewExists(db, "kapi_plan_subscription_group_v1")
+	require.NoError(t, err)
+	require.False(t, exists, "no view without v2_plan_subscription_group")
+	require.NoError(t, db.AutoMigrate(&model.Plan{}, &model.PlanSubscriptionGroup{}))
+	require.NoError(t, EnsureKernelAPIViews(db))
+
+	var columns []string
+	require.NoError(t, db.Raw("SELECT name FROM pragma_table_info('kapi_plan_catalog_v1') ORDER BY cid").Scan(&columns).Error)
+	require.Equal(t, []string{
+		"id", "group_id", "transfer_enable", "speed_limit", "device_limit", "month_price", "quarter_price",
+		"half_year_price", "year_price", "two_year_price", "three_year_price", "onetime_price",
+	}, columns)
+	require.NoError(t, db.Raw("SELECT name FROM pragma_table_info('kapi_plan_subscription_group_v1') ORDER BY cid").Scan(&columns).Error)
+	require.Equal(t, []string{"plan_id", "group_id"}, columns)
+}
+
+// kapi_order_billing_v1 shows a payment whose order it is, what it costs
+// and its status, and nothing else of v2_order.
+func TestOrderBillingViewShowsWhatAPaymentNeeds(t *testing.T) {
+	db, _ := openSQLiteKernel(t)
+	exists, err := viewExists(db, "kapi_order_billing_v1")
+	require.NoError(t, err)
+	require.False(t, exists, "no view without v2_order")
+	require.NoError(t, db.AutoMigrate(&model.Order{}))
+	require.NoError(t, EnsureKernelAPIViews(db))
+	var columns []string
+	require.NoError(t, db.Raw("SELECT name FROM pragma_table_info('kapi_order_billing_v1') ORDER BY cid").Scan(&columns).Error)
+	require.Equal(t, []string{"id", "user_id", "total_amount", "status"}, columns)
+}
