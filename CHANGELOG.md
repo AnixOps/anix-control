@@ -4,6 +4,21 @@
 
 ### Security
 
+- The administrator audit trail no longer records credentials. The audit
+  middleware stored the raw body of every administrator write request in
+  `v2_audit_log.request_body` (up to 4 KiB) and logged its first 512 bytes.
+  That included user passwords, payment gateway keys (also inside the
+  gateway's JSON `config` string), SMTP and S3 credentials, and bot tokens.
+  - **Redaction.** Bodies are now redacted before they are logged or stored.
+    Any field whose name contains `password`, `secret`, `token`, `key`,
+    `private`, `credential` or `uuid` becomes `[REDACTED]`, except public
+    names such as `public_key` and `key_id`. So does the `value` of a
+    sensitive system setting, sent as `{"key","value"}` or to
+    `PUT /admin/system/configs/:key`.
+  - **Non-JSON bodies.** A body that is not JSON, or is larger than 64 KiB, is
+    recorded only by its size.
+  - **Old rows.** Existing rows are not rewritten; `docs/UPGRADE.md` shows how
+    to clear them.
 - User access tokens are verified in one place, `internal/authn`, and can be
   revoked (N8). It covers the HTTP middleware, the admin monitor WebSocket
   and the gRPC interceptor.
