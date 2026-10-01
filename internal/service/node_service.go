@@ -102,8 +102,18 @@ func (s *NodeService) GetNode(id uint) (*model.Node, error) {
 	return &node, nil
 }
 
-// CreateNode 创建节点 (手动添加)
+// CreateNode 创建节点 (手动添加), its own columns only.
+//
+// Node and node protocol writes take the model or the map an
+// administrator's body was bound to. GORM saves the associations of a model
+// it creates: a node body's "protocols" moved other nodes' protocols to the
+// new node, and the nodes and subscription groups nested in them were
+// created, those nodes without an API key. A body's id chose the new row's
+// id. Protocols have their own routes and are never saved from a node body.
 func (s *NodeService) CreateNode(node *model.Node) error {
+	node.ID = 0
+	node.Protocols = nil
+
 	// 生成 API Key 和 Secret
 	apiKey, err := generateSecureToken(32)
 	if err != nil {
@@ -121,7 +131,7 @@ func (s *NodeService) CreateNode(node *model.Node) error {
 
 	// 创建节点 + 默认协议 (事务)
 	return s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(node).Error; err != nil {
+		if err := tx.Omit(clause.Associations).Create(node).Error; err != nil {
 			return err
 		}
 
@@ -145,18 +155,17 @@ func (s *NodeService) CreateNode(node *model.Node) error {
 	})
 }
 
-// UpdateNode 更新节点
+// UpdateNode 更新节点. The node's id and credentials are never updated, and
+// a new parent is checked whatever spelling names it (see columnUpdates).
 func (s *NodeService) UpdateNode(id uint, updates map[string]any) error {
+	updates, err := columnUpdates(s.db, &model.Node{}, updates, "id", "api_key", "api_key_hash", "secret")
+	if err != nil {
+		return err
+	}
 	if raw, ok := updates["parent_id"]; ok {
-		var parentID *uint
-		switch v := raw.(type) {
-		case nil:
-			parentID = nil
-		case float64:
-			p := uint(v)
-			parentID = &p
-		case uint:
-			parentID = &v
+		parentID, err := parentIDUpdate(raw)
+		if err != nil {
+			return err
 		}
 		if err := s.validateParentID(id, parentID); err != nil {
 			return err
@@ -168,6 +177,90 @@ func (s *NodeService) UpdateNode(id uint, updates map[string]any) error {
 	_ = cache.Delete(CacheKeyNodeList)
 
 	return s.db.Model(&model.Node{}).Where("id = ?", id).Updates(updates).Error
+}
+
+// parentIDUpdate reads the parent of a node update: null, a JSON number or
+// a number in a string, which the database stores as that number.
+func parentIDUpdate(raw any) (*uint, error) {
+	switch v := raw.(type) {
+	case nil:
+		return nil, nil
+	case float64:
+		if v < 0 || v != float64(uint32(v)) {
+			return nil, errors.New("父节点ID无效")
+		}
+		p := uint(v)
+		return &p, nil
+	case uint:
+		return &v, nil
+	case string:
+		parsed, err := strconv.ParseUint(strings.TrimSpace(v), 10, 32)
+		if err != nil {
+			return nil, errors.New("父节点ID无效")
+		}
+		p := uint(parsed)
+		return &p, nil
+	default:
+		return nil, errors.New("父节点ID无效")
+	}
+}
+
+// columnUpdates resolves the keys of an administrator's update map to the
+// model's column names and leaves out the refused columns and every
+// association.
+//
+// GORM resolves a key by column or by field name ("api_key", "APIKey"), and
+// SQLite matches column names in any case ("API_KEY"), so refusing only the
+// column names let other spellings through. Keys are resolved here the same
+// way, ignoring case and underscores, so a refused column is refused in
+// every spelling and a checked one (a node's parent, a protocol's type) is
+// checked whatever spelling names it. Two keys for one column are refused.
+// A key that names no column is kept, and the database refuses it as
+// before.
+func columnUpdates(db *gorm.DB, value any, updates map[string]any, refused ...string) (map[string]any, error) {
+	statement := &gorm.Statement{DB: db}
+	if err := statement.Parse(value); err != nil {
+		return nil, err
+	}
+	columns := make(map[string]string)
+	for _, field := range statement.Schema.Fields {
+		if field.DBName != "" {
+			columns[updateKey(field.DBName)] = field.DBName
+			columns[updateKey(field.Name)] = field.DBName
+		}
+	}
+	associations := make(map[string]bool)
+	for name := range statement.Schema.Relationships.Relations {
+		associations[updateKey(name)] = true
+	}
+	refusedColumns := make(map[string]bool, len(refused))
+	for _, column := range refused {
+		refusedColumns[column] = true
+	}
+	resolved := make(map[string]any, len(updates))
+	for key, update := range updates {
+		column, ok := columns[updateKey(key)]
+		if !ok {
+			if associations[updateKey(key)] {
+				continue
+			}
+			column = key
+		}
+		if refusedColumns[column] {
+			continue
+		}
+		if _, duplicate := resolved[column]; duplicate {
+			return nil, fmt.Errorf("字段 %s 重复", column)
+		}
+		resolved[column] = update
+	}
+	return resolved, nil
+}
+
+// updateKey is the form in which an update key is compared with a column or
+// field name: lower case, without underscores.
+func updateKey(key string) string {
+	return strings.ToLower(strings.ReplaceAll(key, "_", ""))
 }
 
 func nodeCacheKey(id uint) string {
@@ -538,8 +631,15 @@ func (s *NodeService) GetProtocol(id uint) (*model.NodeProtocol, error) {
 	return &protocol, nil
 }
 
-// CreateProtocol 创建协议
+// CreateProtocol 创建协议, its own columns only (see CreateNode): a
+// protocol body's "node" created a node without an API key and moved the
+// protocol to it, and its "subscription_groups" were created and linked.
+// Linking protocols to groups has its own route.
 func (s *NodeService) CreateProtocol(protocol *model.NodeProtocol) error {
+	protocol.ID = 0
+	protocol.Node = nil
+	protocol.SubscriptionGroups = nil
+
 	// 验证节点存在
 	var node model.Node
 	if err := s.db.First(&node, protocol.NodeID).Error; err != nil {
@@ -549,16 +649,22 @@ func (s *NodeService) CreateProtocol(protocol *model.NodeProtocol) error {
 		return err
 	}
 
-	return s.db.Create(protocol).Error
+	return s.db.Omit(clause.Associations).Create(protocol).Error
 }
 
-// UpdateProtocol 更新协议
+// UpdateProtocol 更新协议. The protocol's id and node are never updated, and
+// the update is checked with the values it writes, whatever spelling names
+// them (see columnUpdates).
 func (s *NodeService) UpdateProtocol(id uint, updates map[string]any) error {
 	var current model.NodeProtocol
 	if err := s.db.First(&current, id).Error; err != nil {
 		return err
 	}
 
+	updates, err := columnUpdates(s.db, &model.NodeProtocol{}, updates, "id", "node_id")
+	if err != nil {
+		return fmt.Errorf("%w: %v", ErrInvalidNodeProtocol, err)
+	}
 	normalized, err := normalizeProtocolUpdates(updates)
 	if err != nil {
 		return err

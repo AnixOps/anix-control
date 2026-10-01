@@ -413,8 +413,11 @@ SELECT id, name FROM v2_node WHERE COALESCE(api_key, '') = '' AND COALESCE(api_k
 SELECT id, name FROM v2_forward_node WHERE COALESCE(api_token, '') = '';
 ```
 
-Give each one a key from the administrator panel and update its agent's
-configuration.
+Give a forward node a token from its edit form and update its agent's
+configuration. No route sets the key of an existing proxy node (`v2_node`),
+so replace such a node: register its agent again with an authorization key,
+or create the node again in the panel (both issue a new key), then delete
+the keyless node.
 
 ### Audit Request Bodies Written Before The Redaction Fix
 

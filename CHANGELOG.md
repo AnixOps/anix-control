@@ -4,6 +4,30 @@
 
 ### Security
 
+- Node and node protocol writes save only their own columns.
+  - **Nested objects.** `POST /api/v2/admin/nodes` and
+    `POST /api/v2/admin/nodes/:id/protocols` bound the body to the kernel
+    model, and GORM saved the associations nested in it.
+    - A node's `protocols` moved other nodes' protocols to the new node.
+    - A protocol's `node` created a node without an API key and moved the
+      protocol to it.
+    - `subscription_groups` created groups and linked them.
+
+    These nested objects are now ignored, the answer no longer echoes
+    them, and a body's `id` no longer picks the new row's id.
+  - **Spellings.** `PUT /api/v2/admin/nodes/:id` refused `id`, `api_key`,
+    `api_key_hash` and `secret`, and
+    `PUT /api/v2/admin/nodes/:id/protocols/:protocol_id` refused `id` and
+    `node_id`. GORM also accepts the field names (`APIKey`, `NodeID`), and
+    SQLite any case (`API_KEY`). An administrator's body could replace or
+    empty a node's credentials, renumber a node or protocol, or move a
+    protocol to another node. Every spelling is now refused.
+  - **Checks.** The check of a node's parent ran only for `parent_id` with
+    a number, so `ParentID` or `"parent_id": "<id>"` could make a node its
+    own parent or a cycle. A protocol update was checked with the value of
+    `type` while `Type` was written, so an invalid WireGuard protocol could
+    be stored. Both checks now apply to every spelling. A parent that is not
+    a whole number, or two keys for one column, now fail the update.
 - An empty token no longer authenticates an agent. The agent WebSocket and
   REST authentication (`verifyForwardNodeToken`) accepted an empty token for
   a node whose API key and hash were empty, and for a forward node without a
