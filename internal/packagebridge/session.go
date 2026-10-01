@@ -16,6 +16,7 @@ import (
 	"time"
 
 	kernelidentityv1 "github.com/AnixOps/anix-control/sdk/api/kernelidentity/v1"
+	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
 	kernelorderv1 "github.com/AnixOps/anix-control/sdk/api/kernelorder/v1"
 	kernelsettingsv1 "github.com/AnixOps/anix-control/sdk/api/kernelsettings/v1"
 	kernelsubscriberv1 "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1"
@@ -77,6 +78,9 @@ type SessionOptions struct {
 	// KernelTelemetry, when set, serves the KernelTelemetry contract on the
 	// session, authorized per capability on every call.
 	KernelTelemetry KernelTelemetryProvider
+	// KernelNodeOps, when set, serves the KernelNodeOps contract on the
+	// session, authorized per operation family on every call.
+	KernelNodeOps KernelNodeOpsProvider
 }
 
 func (o SessionOptions) responseLimit() int64 {
@@ -461,6 +465,9 @@ func NewSessionWithOptions(identity HostIdentity, handler *Allowlist, options Se
 	}
 	if options.KernelTelemetry != nil {
 		kerneltelemetryv1.RegisterKernelTelemetryServer(session.server, options.KernelTelemetry(identity))
+	}
+	if options.KernelNodeOps != nil {
+		kernelnodeopsv1.RegisterKernelNodeOpsServer(session.server, options.KernelNodeOps(identity))
 	}
 	server, listener := session.server, session.listener
 	go func() { _ = server.Serve(listener) }()

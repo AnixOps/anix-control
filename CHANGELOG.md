@@ -541,6 +541,47 @@
     dual-write from each writer, a failed split write rolling back the
     legacy write, tombstones against the unique indexes, idempotent
     re-runs, and the legacy readers authenticating every node afterwards.
+- **KernelNodeOps contract engine (NO-1)** (`internal/kernelnodeops`,
+  `docs/architecture/node-ops-service.md` section 3). The kernel now serves
+  `anixops.kernelnodeops.v1` on local bridge sessions and the mTLS module
+  listener, and accepts its five capabilities
+  `kernel.nodeops.{forward,nodeconfig,diagnose,agents,credentials}.v1`
+  (official packages only, checked on every call against the host's
+  generation). **The contract is binding**: it is no longer a draft and
+  changes by additions only.
+  - **No operation kind executes yet.** NO-5 to NO-8 add the executors.
+    Until a kind has one, `SubmitOperation` answers `UNIMPLEMENTED` and
+    records nothing, so a retry after the upgrade applies.
+    `GetCapabilities` lists the kinds a kernel executes (none now).
+  - **The ledger.** `v4_kernel_node_operation` (unique `request_id`), its
+    targets `v4_kernel_node_operation_target` and the event log
+    `v4_kernel_node_operation_event`. These are new protected tables; no
+    existing table changes. A repeat of a request id answers the first
+    receipt; the same id with another operation, or from another package,
+    is `FAILED_PRECONDITION`. A missing target is `NOT_FOUND` and records
+    nothing.
+  - **States.** Operations move pending, dispatching, running, then
+    succeeded, failed, cancelled, timed out or superseded, and a terminal
+    state never changes. A result that arrives after the deadline is kept as
+    evidence. Operations are polled (`GetOperation`, `ListOperations`) or
+    watched from a cursor (`WatchOperations`, `RESYNC` for a cursor the
+    7-day log no longer holds). `CancelOperation` stops pending and running
+    operations.
+  - **Fencing and quotas.** A fenced generation is refused. The kernel runs
+    one operation per resource at a time, and a newer level-triggered
+    operation supersedes a pending one. Each kind takes only its node kinds.
+    A package may have 256 operations that have not ended, and a node 32.
+    Fan-outs count their children.
+  - **No secrets.** Results, errors and evidence are scrubbed before they
+    are stored: every credential the operation used, and every value at an
+    `IsNodeSecretKey` key. Sealed handles are not part of the digest. A
+    secret document with a secret in clear is refused.
+  - **Administrators** list the ledger read-only at
+    `GET /api/v4/kernel/node-operations` (filters, cursor paging).
+  - Ended operations are kept 90 days and events 7 days; the kernel's
+    singleton worker runs the dispatcher and prunes hourly.
+  - Contract tests on SQLite and PostgreSQL, and SDK bridge contract tests
+    over the local bridge and the module listener.
 
 - **The administrator dashboard and the user's subscription summary run
   natively, from the kernel's caches** (`docs/architecture/kernel-caches.md`).

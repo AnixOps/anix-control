@@ -269,6 +269,7 @@ legacy handler or package, serves it.
 | KernelSettings ([`settings-service.md`](settings-service.md)): settings per namespace, secrets masked without the namespace's `secrets` capability | `kernel.settings.<namespace>.<read\|write\|secrets>.v1` | notification (`mail`), affiliate (`invite`), gost-mesh (`nodex`), platform (`backup`) |
 | KernelOrder ([`order-service.md`](order-service.md)): a paid payment record completes its order | `kernel.order.complete.v1` | payment |
 | KernelTelemetry ([`kernel-caches.md`](kernel-caches.md)): the administrator dashboard's snapshot from the kernel's cache, the online users as a count | `kernel.telemetry.dashboard.v1` | machine-telemetry |
+| KernelNodeOps ([`node-ops-service.md`](node-ops-service.md)): typed, idempotent node operations with a ledger, polling and a watch stream; no operation kind executes yet | `kernel.nodeops.<forward\|nodeconfig\|diagnose\|agents\|credentials>.v1` | none yet (planned: forward, proxy-node, protocol-runtime) |
 
 The planned `kernel.entitlement.apply.v1` became
 `KernelSubscriber.ApplyEntitlement`.
@@ -300,16 +301,28 @@ The planned `kernel.entitlement.apply.v1` became
 - **Kernel views.** Packages read other domains through 16 read-only
   `kapi_*` views (listed at the end of section 3.4), granted by
   `kernel.view:<view>`; none shows a credential.
-- **KernelNodeOps (PLANNED).** Most `bridged` routes act on nodes. A module
-  will ask the kernel for a typed operation on a node (apply a forward,
-  sync its protocols, run a diagnosis); the kernel holds the credentials,
-  dispatches over the Agent Control stream and answers the outcome,
-  idempotently. Node credentials move to a protected table of their own, so
-  a package can adopt the rest of `v2_node`. The design, with the node
-  credential split, Agent A2 and the plan for the 83 + 7 routes, is
-  [`node-ops-service.md`](node-ops-service.md). Its draft contract
-  `sdk/api/kernelnodeops/v1` is unreleased: no kernel serves it and no
-  manifest may declare its capabilities yet.
+- **KernelNodeOps (AVAILABLE, no executors yet).** Most `bridged` routes act
+  on nodes. A module asks the kernel for a typed operation on a node (apply
+  a forward, sync its protocols, run a diagnosis); the kernel holds the
+  credentials, carries the operation out and answers the outcome,
+  idempotently. The design, with the node credential split, Agent A2 and
+  the plan for the 83 + 7 routes, is
+  [`node-ops-service.md`](node-ops-service.md).
+  - **Served since NO-1.** The kernel serves `sdk/api/kernelnodeops/v1`
+    (`internal/kernelnodeops`) on local bridge sessions and the module
+    listener. Manifests may declare its five capabilities. The contract is
+    binding and grows by additions only.
+  - **The engine.** The ledger is `v4_kernel_node_operation`, with its
+    targets and event log, all protected. It has request-id idempotency,
+    states that end once, a watch stream, quotas, fan-out counting and
+    cancellation. Administrators list it at
+    `GET /api/v4/kernel/node-operations`.
+  - **No operation kind executes yet.** `SubmitOperation` answers
+    `UNIMPLEMENTED` for every kind and records nothing, and
+    `GetCapabilities` lists no kind. So every node route stays bridged
+    until its kinds' executors land (NO-5 to NO-8).
+  - **What comes next.** Node credentials move to a protected table of
+    their own (NO-2), so a package can adopt the rest of `v2_node`.
 
 ### 3.4 In-place adoption and kernel views
 

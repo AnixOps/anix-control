@@ -84,6 +84,12 @@ var (
 		// prefix (a finalized table becoming adoptable) can reach them.
 		"v4_kernel_node_credential": true, "v4_kernel_protocol_secret": true,
 		"v4_kernel_node_secret_split": true,
+		// The KernelNodeOps ledger (node-ops-service.md section 3.4): who
+		// asked for which node operation, and its outcome. The v4_kernel_
+		// prefix protects them too; they are listed so that the rule holds
+		// if the prefix list ever changes.
+		"v4_kernel_node_operation": true, "v4_kernel_node_operation_event": true,
+		"v4_kernel_node_operation_target": true,
 	}
 )
 
@@ -138,7 +144,8 @@ func validateManifestCapabilities(capabilities []string) error {
 			capability == CapabilitySubscriberEntitlements, capability == CapabilitySubscriberTraffic,
 			capability == CapabilitySubscriberCredentials, capability == CapabilitySubscriberBalance,
 			capability == CapabilitySubscriberDirectory, capability == CapabilitySubscriberGroups,
-			capability == CapabilitySubscriberSummary, capability == CapabilityTelemetryDashboard:
+			capability == CapabilitySubscriberSummary, capability == CapabilityTelemetryDashboard,
+			isNodeOpsCapability(capability):
 		case capability == CapabilityStorage:
 			storage = true
 		case strings.HasPrefix(capability, capabilityStorageAdoptPrefix):

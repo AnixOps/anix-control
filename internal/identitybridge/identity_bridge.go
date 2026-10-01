@@ -19,6 +19,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/handler"
 	"github.com/AnixOps/anix-control/v4/internal/kernelidentity"
+	"github.com/AnixOps/anix-control/v4/internal/kernelnodeops"
 	"github.com/AnixOps/anix-control/v4/internal/kernelorder"
 	"github.com/AnixOps/anix-control/v4/internal/kernelsettings"
 	"github.com/AnixOps/anix-control/v4/internal/kernelsubscriber"
@@ -63,7 +64,25 @@ func NewFactory(cfg *config.Config) (packagebridge.SessionFactory, error) {
 		KernelOrder:          kernelOrder(operations),
 		KernelSettings:       kernelSettings(operations),
 		KernelTelemetry:      kernelTelemetry(operations),
+		KernelNodeOps:        kernelNodeOps(operations),
 	}), nil
+}
+
+// NewKernelNodeOps returns the KernelNodeOps provider for the module
+// listener; local sessions get one from NewFactory. Both serve the process's
+// engine for the kernel database (kernelnodeops.EngineFor), whose dispatcher
+// the kernel's singleton workers run.
+func NewKernelNodeOps(cfg *config.Config) (packagebridge.KernelNodeOpsProvider, error) {
+	operations, err := newHostOperations(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return kernelNodeOps(operations), nil
+}
+
+func kernelNodeOps(operations service.PackageHostOperations) packagebridge.KernelNodeOpsProvider {
+	server := &kernelnodeops.Server{Engine: kernelnodeops.EngineFor(operations.DB), Authorizer: operations}
+	return server.For
 }
 
 // NewKernelTelemetry returns the KernelTelemetry provider for the module

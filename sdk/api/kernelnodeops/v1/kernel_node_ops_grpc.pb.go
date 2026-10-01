@@ -35,12 +35,13 @@ const (
 //
 // For semantics around ctx use and closing/ending streaming RPCs, please refer to https://pkg.go.dev/google.golang.org/grpc/?tab=doc#ClientConn.NewStream.
 //
-// DRAFT, UNRELEASED. This contract is the design draft of
-// docs/architecture/node-ops-service.md. No kernel serves it yet, and its
-// capabilities are not in the kernel's capability grammar, so no package
-// manifest that declares them is accepted. It may still change while the
-// design is reviewed; it becomes binding (additions only) with the first
-// kernel change that serves it. Do not build against it.
+// KernelNodeOps is binding: the kernel serves it (internal/kernelnodeops)
+// and accepts its capabilities, so it changes by additions only
+// (internal/tests/protocompat), like every other AnixOps contract. Its design
+// is docs/architecture/node-ops-service.md. GetCapabilities answers which
+// operation kinds a kernel executes; a kind it does not execute is refused
+// with UNIMPLEMENTED and nothing is recorded, so a package keeps the route
+// legacy until its kernel serves the kind.
 //
 // KernelNodeOps is the kernel's contract for operations on nodes: proxy
 // nodes (v2_node), forward nodes and Ansible machines (v2_forward_node) and
@@ -89,8 +90,12 @@ type KernelNodeOpsClient interface {
 	// before answers the first receipt with applied false; the same id with a
 	// different operation is FAILED_PRECONDITION. INVALID_ARGUMENT for a
 	// malformed operation, NOT_FOUND when its target does not exist (nothing
-	// is recorded), PERMISSION_DENIED without the family's capability or from
-	// a fenced package generation.
+	// is recorded), PERMISSION_DENIED without the family's capability, for a
+	// target of a kind the operation does not take, or from a fenced package
+	// generation, UNIMPLEMENTED for a kind this kernel does not execute
+	// (nothing is recorded; GetCapabilities lists the kinds it does), and
+	// RESOURCE_EXHAUSTED beyond the package's or a node's quota of operations
+	// that have not ended.
 	SubmitOperation(ctx context.Context, in *SubmitOperationRequest, opts ...grpc.CallOption) (*SubmitOperationResponse, error)
 	// GetOperation answers one operation by operation_id or request_id.
 	GetOperation(ctx context.Context, in *GetOperationRequest, opts ...grpc.CallOption) (*GetOperationResponse, error)
@@ -247,12 +252,13 @@ func (c *kernelNodeOpsClient) GetCapabilities(ctx context.Context, in *GetCapabi
 // All implementations must embed UnimplementedKernelNodeOpsServer
 // for forward compatibility.
 //
-// DRAFT, UNRELEASED. This contract is the design draft of
-// docs/architecture/node-ops-service.md. No kernel serves it yet, and its
-// capabilities are not in the kernel's capability grammar, so no package
-// manifest that declares them is accepted. It may still change while the
-// design is reviewed; it becomes binding (additions only) with the first
-// kernel change that serves it. Do not build against it.
+// KernelNodeOps is binding: the kernel serves it (internal/kernelnodeops)
+// and accepts its capabilities, so it changes by additions only
+// (internal/tests/protocompat), like every other AnixOps contract. Its design
+// is docs/architecture/node-ops-service.md. GetCapabilities answers which
+// operation kinds a kernel executes; a kind it does not execute is refused
+// with UNIMPLEMENTED and nothing is recorded, so a package keeps the route
+// legacy until its kernel serves the kind.
 //
 // KernelNodeOps is the kernel's contract for operations on nodes: proxy
 // nodes (v2_node), forward nodes and Ansible machines (v2_forward_node) and
@@ -301,8 +307,12 @@ type KernelNodeOpsServer interface {
 	// before answers the first receipt with applied false; the same id with a
 	// different operation is FAILED_PRECONDITION. INVALID_ARGUMENT for a
 	// malformed operation, NOT_FOUND when its target does not exist (nothing
-	// is recorded), PERMISSION_DENIED without the family's capability or from
-	// a fenced package generation.
+	// is recorded), PERMISSION_DENIED without the family's capability, for a
+	// target of a kind the operation does not take, or from a fenced package
+	// generation, UNIMPLEMENTED for a kind this kernel does not execute
+	// (nothing is recorded; GetCapabilities lists the kinds it does), and
+	// RESOURCE_EXHAUSTED beyond the package's or a node's quota of operations
+	// that have not ended.
 	SubmitOperation(context.Context, *SubmitOperationRequest) (*SubmitOperationResponse, error)
 	// GetOperation answers one operation by operation_id or request_id.
 	GetOperation(context.Context, *GetOperationRequest) (*GetOperationResponse, error)
