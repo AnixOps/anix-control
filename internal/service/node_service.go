@@ -968,10 +968,14 @@ func InitDefaultAuthKeyFromEnv() {
 	db := database.Get()
 	keyHash := hashString(defaultKey)
 
-	// 1. 检查密钥内容是否已经存在（相同哈希就是相同密钥）
-	var count int64
-	db.Model(&model.AuthorizedKey{}).Where("key_hash = ?", keyHash).Count(&count)
-	if count > 0 {
+	// 1. 检查密钥内容是否已经存在（相同哈希就是相同密钥）. Read through the
+	// node credential split: a finalized table's key_hash column is empty.
+	exists, err := nodesecrets.RegistrationKeyExists(db, defaultKey)
+	if err != nil {
+		log.Printf("Failed to look up the default auth key: %v", err)
+		return
+	}
+	if exists {
 		log.Printf("Default auth key from environment already exists (hash: %s), skipping", keyHash[:12])
 		return
 	}

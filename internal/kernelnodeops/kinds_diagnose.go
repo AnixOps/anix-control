@@ -13,6 +13,7 @@ import (
 	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
 	"github.com/AnixOps/anix-control/v4/internal/gost"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"gorm.io/gorm"
 )
@@ -159,7 +160,7 @@ func (d *Diagnosis) checkEndpoints(ctx context.Context, run *Run) Outcome {
 		ref := forwardNode(check.NodeID)
 		item := &kernelnodeopsv1.EndpointCheck{Node: ref, Vantage: d.vantage(op.GetVantage(), []*kernelnodeopsv1.NodeRef{ref})}
 		if check.Node != nil {
-			run.UseSecret(check.Node.APIToken)
+			run.UseSecret(nodesecrets.ForwardNodeToken(run.engine.DB, check.Node))
 		}
 		switch {
 		case check.Node == nil:
@@ -205,7 +206,7 @@ func (d *Diagnosis) collectNodeStats(ctx context.Context, run *Run) Outcome {
 	if err != nil {
 		return Failed(kernelnodeopsv1.ErrorCode_ERROR_CODE_INTERNAL, "loading the forward node failed", true)
 	}
-	run.UseSecret(node.APIToken)
+	run.UseSecret(nodesecrets.ForwardNodeToken(db, node))
 	ansible := true
 	if _, err := nodes.GetByIDForInventoryScope(id, service.ForwardNodeInventoryScopeAnsible); errors.Is(err, gorm.ErrRecordNotFound) {
 		ansible = false
@@ -307,7 +308,7 @@ func nameTargetTokens(run *Run) {
 			continue
 		}
 		if node, err := nodes.GetByID(nodeID(target.GetId())); err == nil {
-			run.UseSecret(node.APIToken)
+			run.UseSecret(nodesecrets.ForwardNodeToken(run.engine.DB, node))
 		}
 	}
 }

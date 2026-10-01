@@ -101,6 +101,58 @@ func collectPositions(value any, pointer string, positions *[]Position) {
 	}
 }
 
+// Redact replaces the secret values of a node protocol setting or a raw
+// configuration (JSON text) with Placeholder: a string or array under a
+// secret key is replaced whole, an object's own keys are checked, and so are
+// the objects in arrays. A document without a secret is returned unchanged,
+// and one that is not JSON is replaced whole, since it cannot be told apart.
+// These are exactly the positions SecretPositions answers. It is the
+// administrators' masked answer (service.RedactNodeSecretsJSON) and the
+// document a finalized JSON column keeps (section 4.4).
+func Redact(document string) string {
+	if strings.TrimSpace(document) == "" {
+		return document
+	}
+	value, ok := decodeJSON(document)
+	if !ok {
+		return Placeholder
+	}
+	if !redactValue(value) {
+		return document
+	}
+	encoded := encodeJSON(value)
+	if encoded == "" {
+		return Placeholder
+	}
+	return encoded
+}
+
+// redactValue replaces the secrets of value in place; it reports whether
+// it replaced any.
+func redactValue(value any) bool {
+	changed := false
+	switch typed := value.(type) {
+	case map[string]any:
+		for key, item := range typed {
+			if object, ok := item.(map[string]any); ok {
+				changed = redactValue(object) || changed
+				continue
+			}
+			if IsSecretKey(key) && hasSecretValue(item) {
+				typed[key] = Placeholder
+				changed = true
+				continue
+			}
+			changed = redactValue(item) || changed
+		}
+	case []any:
+		for _, item := range typed {
+			changed = redactValue(item) || changed
+		}
+	}
+	return changed
+}
+
 // hasSecretValue reports whether a value under a secret key holds a secret:
 // a non-empty string or array. Empty values, null, numbers and booleans are
 // not secrets.

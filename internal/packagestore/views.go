@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"gorm.io/gorm"
 )
 
@@ -20,6 +21,16 @@ type KernelAPIView struct {
 	// package's query cannot see the rows the filter hides before the
 	// filter applies.
 	RowFilter bool
+	// Finalized names the node credential split tables
+	// (node-ops-service.md section 4.6) that must all be finalized before
+	// the view is created, because it shows a column that held secrets
+	// until then or the credential-free remainder of a split table. Unsplit
+	// drops the view again (DropFinalizedViews).
+	Finalized []string
+	// FinalizedAny names split tables of which one must be finalized
+	// before the view is created; the view shows no secret in any phase,
+	// so unsplit leaves it.
+	FinalizedAny []string
 }
 
 // InviteSettingsKey is the system configuration key holding the affiliate
@@ -165,6 +176,156 @@ var KernelAPIViews = []KernelAPIView{
 	},
 }
 
+// The views of the node credential split's remainder (node-ops-service.md
+// section 4.6). Each exists only once its source is finalized: before that,
+// EnsureKernelAPIViews leaves it out, and a lease leaves its grant out
+// (FinalizedViewAvailable), so they are inert. None shows a moved column:
+// no API key, key hash, shared secret, token, registration key or peer key;
+// the JSON columns only in their finalized, redacted form.
+func init() {
+	KernelAPIViews = append(KernelAPIViews, splitViews...)
+}
+
+var splitViews = []KernelAPIView{
+	{
+		// A proxy node, without its API key, key hash and shared secret.
+		// raw_config is the redacted document a finalized v2_node keeps.
+		Name:   "kapi_node_public_v1",
+		Source: "v2_node",
+		Query: "SELECT " + quotedColumns("id", "name", "host", "port", "status", "tags", "group_id", "rate", "traffic_rate",
+			"sort", "show", "auto_register", "parent_id", "monthly_limit", "monthly_upload", "monthly_download",
+			"monthly_reset_day", "raw_config", "server_ip", "server_version", "server_os", "cpu_usage", "memory_usage",
+			"disk_usage", "uptime", "online_users", "runtime_healthy", "runtime_error", "runtime_checked_at",
+			"total_upload", "total_download", "last_check_at", "created_at", "updated_at") + " FROM v2_node",
+		Finalized: []string{"v2_node"},
+	},
+	{
+		// Every column of a node protocol: once finalized its settings
+		// hold the placeholder at every secret position.
+		Name:   "kapi_node_protocol_public_v1",
+		Source: "v2_node_protocol",
+		Query: "SELECT " + quotedColumns("id", "node_id", "name", "type", "port", "enable", "show", "sort", "group_id",
+			"host", "tls", "alpn", "settings", "tls_settings", "transport", "transport_settings", "reality_settings",
+			"custom_config", "created_at", "updated_at") + " FROM v2_node_protocol",
+		Finalized: []string{"v2_node_protocol"},
+	},
+	{
+		// Which credentials a node, forward node, clean agent or
+		// registration key holds, and their state: "has a token" since the
+		// legacy columns hold tombstones. No value and no hash.
+		Name:   "kapi_node_credential_status_v1",
+		Source: "v4_kernel_node_credential",
+		Query: "SELECT " + quotedColumns("subject_kind", "subject_id", "kind", "version", "status", "rotated_at") +
+			", (value <> '') AS has_value FROM v4_kernel_node_credential",
+		FinalizedAny: []string{"v2_node", "v2_forward_node", "v2_authorized_key", "v2_forward_clean_agent"},
+	},
+	{
+		// A registration key without the key: whether it holds one comes
+		// from its credential.
+		Name:   "kapi_registration_key_v1",
+		Source: "v2_authorized_key",
+		Query: "SELECT k.id, k.name, k.used, k.expire_at, k.created_at, k.updated_at, " +
+			"EXISTS (SELECT 1 FROM v4_kernel_node_credential c WHERE c.subject_kind = 'registration_key' " +
+			"AND c.subject_id = k.id AND c.kind = 'registration_key' AND c.status = 'active' AND c.value <> '') AS has_key " +
+			"FROM v2_authorized_key k",
+		// No row is filtered; the subquery's WHERE makes it a barrier
+		// view on PostgreSQL, which costs nothing here.
+		RowFilter: true,
+		Finalized: []string{"v2_authorized_key"},
+	},
+	{
+		// A clean agent, without its token.
+		Name:   "kapi_forward_clean_agent_v1",
+		Source: "v2_forward_clean_agent",
+		Query: "SELECT " + quotedColumns("id", "node_id", "name", "version", "hostname", "os", "arch", "kernel", "public_ip",
+			"private_ip", "capabilities", "status", "last_seen", "last_error", "revoked_at", "created_at", "updated_at") +
+			" FROM v2_forward_clean_agent",
+		Finalized: []string{"v2_forward_clean_agent"},
+	},
+	{
+		// A user's WireGuard peer, without its private and preshared keys.
+		Name:   "kapi_wireguard_peer_v1",
+		Source: "v2_wireguard_peer",
+		Query: "SELECT " + quotedColumns("id", "node_protocol_id", "user_id", "peer_ip", "public_key", "created_at", "updated_at") +
+			" FROM v2_wireguard_peer",
+		Finalized: []string{"v2_wireguard_peer"},
+	},
+}
+
+// quotedColumns joins column names, quoted: show and sort are keywords.
+func quotedColumns(columns ...string) string {
+	quoted := make([]string, len(columns))
+	for i, column := range columns {
+		quoted[i] = quoteIdent(column)
+	}
+	return strings.Join(quoted, ", ")
+}
+
+// FinalizedViewAvailable reports whether view may exist and be granted
+// now: a view of the split's remainder only once its source is finalized.
+// Every other view answers true.
+func FinalizedViewAvailable(db *gorm.DB, view string) (bool, error) {
+	for _, candidate := range KernelAPIViews {
+		if candidate.Name != view {
+			continue
+		}
+		if len(candidate.Finalized) == 0 && len(candidate.FinalizedAny) == 0 {
+			return true, nil
+		}
+		finalized, err := nodesecrets.FinalizedTables(db)
+		if err != nil {
+			return false, err
+		}
+		return splitViewReady(candidate, finalized), nil
+	}
+	return true, nil
+}
+
+func splitViewReady(view KernelAPIView, finalized []string) bool {
+	done := make(map[string]bool, len(finalized))
+	for _, table := range finalized {
+		done[table] = true
+	}
+	for _, table := range view.Finalized {
+		if !done[table] {
+			return false
+		}
+	}
+	if len(view.FinalizedAny) == 0 {
+		return true
+	}
+	for _, table := range view.FinalizedAny {
+		if done[table] {
+			return true
+		}
+	}
+	return false
+}
+
+// DropFinalizedViews drops the views that may exist only while table is
+// finalized (Finalized names it), in tx: unsplit writes secrets back into
+// the columns they show.
+func DropFinalizedViews(tx *gorm.DB, table string) error {
+	for _, view := range KernelAPIViews {
+		if !containsString(view.Finalized, table) {
+			continue
+		}
+		if err := tx.Exec("DROP VIEW IF EXISTS " + quoteIdent(view.Name)).Error; err != nil {
+			return fmt.Errorf("drop kernel API view %s: %w", view.Name, err)
+		}
+	}
+	return nil
+}
+
+func containsString(values []string, value string) bool {
+	for _, candidate := range values {
+		if candidate == value {
+			return true
+		}
+	}
+	return false
+}
+
 // ForwardRuntimeSettingKeys are the system configuration keys
 // kapi_forward_runtime_settings_v1 shows.
 var ForwardRuntimeSettingKeys = []string{
@@ -178,11 +339,21 @@ var ForwardRuntimeSettingKeys = []string{
 // creates its tables before its views, so this only happens on a partial
 // schema, and a lease that grants the view then fails as for any missing
 // view.
+//
+// A view of the split's remainder (Finalized, FinalizedAny) is created only
+// once its source is finalized; until then it is left out.
 func EnsureKernelAPIViews(db *gorm.DB) error {
 	if db == nil {
 		return nil
 	}
+	finalized, err := nodesecrets.FinalizedTables(db)
+	if err != nil {
+		return err
+	}
 	for _, view := range KernelAPIViews {
+		if !splitViewReady(view, finalized) {
+			continue
+		}
 		if !grantTargetPattern.MatchString(view.Name) {
 			return fmt.Errorf("invalid kernel API view name %q", view.Name)
 		}

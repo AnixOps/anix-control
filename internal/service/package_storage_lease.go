@@ -33,7 +33,12 @@ func (o PackageHostOperations) LeaseStorage(ctx context.Context, host packagebri
 	if err != nil {
 		return packagebridge.StorageLease{}, fmt.Errorf("verify package release for storage: %w", err)
 	}
-	grants := StorageGrants(*manifest)
+	// A grant the installation cannot honour yet (a table whose credential
+	// split is not finalized, a view that exists only after) is left out.
+	grants, err := EffectiveStorageGrants(o.DB.WithContext(ctx), StorageGrants(*manifest))
+	if err != nil {
+		return packagebridge.StorageLease{}, err
+	}
 	lease, err := o.Storage.Lease(ctx, packagestore.Holder{
 		PackageID: host.PackageID, Version: host.Version, Generation: host.Generation, Remote: host.Remote,
 	}, packagestore.Grants{Storage: grants.Storage, AdoptTables: grants.AdoptTables, Views: grants.Views})

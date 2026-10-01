@@ -1159,6 +1159,108 @@ transports.
   `anixops_agent_user_*` and `anixops_agent_users_*` series and
   `anixops_v2_gateway_sealed_secrets_total` (`CHANGELOG.md`, 4.1.0-rc.2).
 
+## Upgrading Past 4.1.0-rc.2
+
+These notes are for the release after 4.1.0-rc.2. Upgrading changes no
+phase of the node credential split; the section below is an operator
+procedure for later, under the owner's approval.
+
+### Finalizing The Node Credential Split (Phase P3)
+
+Phase P3, finalize, removes the node credentials and protocol secrets from
+the legacy columns: from then on they live only in the split tables. Nothing
+runs it automatically, and upgrading to this release changes nothing: every
+table stays in the phase it is in.
+
+**Production needs the owner's approval, and a staging rehearsal first
+(decision D6).** Run finalize on production only:
+
+- at least one release after the tables moved to `dual_read`;
+- after a rehearsal on a staging copy of production: finalize, the node
+  fleet authenticating, `unsplit`, finalize again;
+- with the owner's written approval for that installation.
+
+**Upgrade order.** After finalize, never start a Control binary older than
+this release against the database:
+
+- binaries before the release that shipped P2 (NO-3) compare the legacy
+  columns directly, and accept a presented tombstone (`!moved:<id>`) as a
+  node key or clean agent token: they would **fail open**;
+- binaries from P2 up to the one before this release read the new tables
+  correctly, but their writers would write secrets back into the legacy
+  columns and treat a tombstone as a value.
+
+Upgrade every Control process (server, workers, CLI) to this release first,
+then finalize. To go back to an older binary, `unsplit` first.
+
+**What finalize writes** (docs/architecture/node-ops-service.md, section
+4.4). Values only; no table is altered:
+
+| Legacy column | After finalize |
+|---|---|
+| `v2_node.api_key`, `.secret`, `v2_authorized_key.key`, `v2_forward_node.api_token`, `v2_forward_clean_agent.token`, `v2_wireguard_peer.private_key`, `.preshared_key` | `!moved:<row id>`: unique per row, never a credential |
+| `v2_node.api_key_hash`, `v2_authorized_key.key_hash` | empty |
+| `v2_node.raw_config`, the settings columns of `v2_node_protocol` | the masked document administrators already see, with `********` at every secret position |
+
+An empty value stays empty. The new tables keep every secret, and keep the
+original bytes of each JSON column so `unsplit` restores them exactly.
+
+**The procedure,** per table or for `all`:
+
+```bash
+anix-control node-secrets status                    # every table to finalize in dual_read
+anix-control node-secrets verify                    # must exit 0, within the hour before finalize
+# /metrics: anixops_node_secrets_fallback_total must not have grown since dual_read
+anix-control node-secrets finalize -confirm -by <you> all
+anix-control node-secrets status                    # phase finalized, finalized_at set
+anix-control node-secrets verify                    # finalized tables compare by presence; must exit 0
+```
+
+- `finalize` refuses, changes nothing and exits 2 without `-confirm`, for a
+  table not in `dual_read`, or without a matching `verify` at most an hour
+  old. With `all`, one refusal refuses every table.
+- It first sets the phase to `finalized` (readers read the new tables only;
+  writers write tombstones), then rewrites the rows in batches of `-batch`
+  (500) by id, each in its own transaction, and records `finalized_at` once a
+  pass finds nothing left.
+- A tombstone that would collide with another row's value on a unique
+  column (a row already holding `!moved:<that id>`) stops the batch and names
+  both row ids. Give that row its own value and run `finalize` again.
+- An interrupted finalize (phase `finalized`, `finalized_at` empty) is
+  resumed by running the same command again; it needs no new `verify`.
+- Each step is audited in `v2_operation_log` (module `node_secrets`,
+  actions `finalize_started` and `finalized`). No command prints a secret.
+
+**After finalize:**
+
+- Every reader reads the new tables only and never falls back. A literal
+  secret written into a finalized JSON column past Control's writers is
+  ignored, and its position is sent as `********` (reported by `validate`).
+- The views of the credential-free remainder appear
+  (`kapi_node_public_v1`, `kapi_node_protocol_public_v1`,
+  `kapi_node_credential_status_v1`, `kapi_registration_key_v1`,
+  `kapi_forward_clean_agent_v1`, `kapi_wireguard_peer_v1`). Packages that
+  declare them, or `kernel.storage.adopt:` for `v2_node`,
+  `v2_node_protocol` or `v2_forward_node`, get them at their next storage
+  lease. Before finalize the lease leaves them out.
+
+**Rollback: `unsplit`.**
+
+```bash
+anix-control node-secrets unsplit -confirm -by <you> all   # exit 3 if verify then differs
+anix-control node-secrets status                           # back in dual_read
+```
+
+- It returns each table to `dual_read`, drops the views that show a column
+  that held secrets, writes every secret back from the new tables (the JSON
+  columns byte for byte as they were), and runs `verify`.
+- It refuses a table a package's storage lease adopted: that package would
+  read the secrets written back. Remove the grant first (uninstall the
+  package, or lease a release without it), then add `-adopted-ok`. It does
+  not undo what the package wrote.
+- An interrupted `unsplit` is resumed by running it again.
+- From `dual_read`, `phase all dual_write` goes back further, as in P2.
+
 ## Moving Logins To The Identity Module
 
 From 4.1 the identity module can own accounts, passwords, MFA and token

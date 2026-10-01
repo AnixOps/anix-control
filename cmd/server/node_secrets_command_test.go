@@ -105,11 +105,69 @@ func TestNodeSecretsCommand(t *testing.T) {
 	require.NotContains(t, output.String(), "fake-")
 
 	for _, arguments := range [][]string{
-		{}, {"finalize"}, {"status", "extra"}, {"backfill", "-batch", "0"}, {"verify", "extra"},
+		{}, {"finalize"}, {"unsplit"}, {"finalize", "-confirm"}, {"finalize", "-confirm", "-adopted-ok", "all"},
+		{"finalize", "-confirm", "all", "extra"}, {"unsplit", "-confirm", ","}, {"status", "extra"}, {"backfill", "-batch", "0"}, {"verify", "extra"},
 		{"phase"}, {"phase", "all"}, {"phase", "all", "finalized"}, {"phase", "all", "legacy"}, {"phase", "all", "dual_read", "extra"},
 		{"phase", ",", "dual_read"}, {"validate", "extra"},
 	} {
 		require.Error(t, runNodeSecretsCommand(ctx, db, arguments, &output), "%v", arguments)
 	}
 	require.Error(t, runNodeSecretsCommand(ctx, db, []string{"backfill", "-table", "v2_user"}, &output))
+}
+
+// TestNodeSecretsFinalizeAndUnsplitCommands: finalize needs -confirm and
+// dual_read, writes the tombstones and creates the views of the finalized
+// remainder; unsplit writes the secrets back and drops them. Nothing is
+// printed but counts.
+func TestNodeSecretsFinalizeAndUnsplitCommands(t *testing.T) {
+	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "kernel.db")+"?_txlock=immediate"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	require.NoError(t, err)
+	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.NodeProtocol{}, &model.WireGuardPeer{}, &model.AuthorizedKey{},
+		&model.ForwardNode{}, &model.ForwardCleanAgent{}, &model.OperationLog{}))
+	require.NoError(t, nodesecrets.EnsureSchema(db))
+	node := model.Node{Name: "n", Host: "203.0.113.40", APIKey: "fake-cli-key", Secret: "fake-cli-secret"}
+	require.NoError(t, db.Create(&node).Error)
+	ctx := context.Background()
+	var output bytes.Buffer
+	run := func(arguments ...string) error {
+		output.Reset()
+		return runNodeSecretsCommand(ctx, db, arguments, &output)
+	}
+	viewExists := func(name string) bool {
+		var count int64
+		require.NoError(t, db.Raw("SELECT count(*) FROM sqlite_master WHERE type = 'view' AND name = ?", name).Scan(&count).Error)
+		return count > 0
+	}
+
+	require.NoError(t, run("backfill"))
+	require.NoError(t, run("verify"))
+	require.ErrorIs(t, run("finalize", "-confirm", "v2_node"), nodesecrets.ErrFinalizeRefused)
+	require.Contains(t, output.String(), "finalize needs phase dual_read")
+	require.NoError(t, run("phase", "v2_node", "dual_read"))
+	require.ErrorIs(t, run("finalize", "v2_node"), nodesecrets.ErrFinalizeRefused)
+	require.Contains(t, output.String(), "confirm it")
+	require.False(t, viewExists("kapi_node_public_v1"))
+
+	require.NoError(t, run("finalize", "-confirm", "-by", "ops", "-batch", "1", "v2_node"))
+	var finalized []nodesecrets.TableFinalize
+	require.NoError(t, json.Unmarshal(output.Bytes(), &finalized))
+	require.Len(t, finalized, 1)
+	require.NotNil(t, finalized[0].FinalizedAt)
+	require.NotContains(t, output.String(), "fake-")
+	require.True(t, viewExists("kapi_node_public_v1"))
+	require.True(t, viewExists("kapi_node_credential_status_v1"))
+	var stored model.Node
+	require.NoError(t, db.First(&stored, node.ID).Error)
+	require.Equal(t, nodesecrets.Tombstone(uint64(node.ID)), stored.APIKey)
+
+	require.Error(t, run("unsplit", "v2_node"))
+	require.NoError(t, run("unsplit", "-confirm", "v2_node"))
+	var unsplit []nodesecrets.TableUnsplit
+	require.NoError(t, json.Unmarshal(output.Bytes(), &unsplit))
+	require.True(t, unsplit[0].Verify.Match)
+	require.NotContains(t, output.String(), "fake-")
+	require.False(t, viewExists("kapi_node_public_v1"))
+	require.NoError(t, db.First(&stored, node.ID).Error)
+	require.Equal(t, "fake-cli-key", stored.APIKey)
+	require.Equal(t, "fake-cli-secret", stored.Secret)
 }

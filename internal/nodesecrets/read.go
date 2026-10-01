@@ -18,10 +18,14 @@ import (
 //
 //   - In phase dual_write (and legacy) a reader reads the legacy column
 //     exactly as before the split, and never the new tables.
-//   - In phase dual_read (and finalized) it reads the new tables. A missing
-//     or mismatching row falls back to the legacy column, which still holds
-//     every secret until P3, counts anixops_node_secrets_fallback_total and
-//     logs once per subject, without the value.
+//   - In phase dual_read it reads the new tables. A missing or mismatching
+//     row falls back to the legacy column, which still holds every secret
+//     until P3, counts anixops_node_secrets_fallback_total and logs once per
+//     subject, without the value.
+//   - In phase finalized (P3) it reads the new tables only, and never falls
+//     back: the legacy columns hold tombstones and redacted documents, and
+//     a literal secret a JSON column holds anyway (a row written past the
+//     kernel's writers) is ignored, its position left at the placeholder.
 //
 // No reader accepts a tombstone or the placeholder as a credential, in any
 // phase (Unusable).
@@ -120,6 +124,13 @@ func invalidatePhases(db *gorm.DB) {
 	}
 }
 
+// ForgetPhases drops the phases this process cached for db, so the next
+// read loads them again: for a test, or a tool, that changed the split's
+// state table directly.
+func ForgetPhases(db *gorm.DB) {
+	invalidatePhases(db)
+}
+
 // readsNew reports whether table's readers read the new tables.
 func readsNew(db *gorm.DB, table string) bool {
 	switch ReadPhase(db, table) {
@@ -128,6 +139,12 @@ func readsNew(db *gorm.DB, table string) bool {
 	default:
 		return false
 	}
+}
+
+// readsOnlyNew reports whether table is finalized: its readers never fall
+// back to the legacy column.
+func readsOnlyNew(db *gorm.DB, table string) bool {
+	return ReadPhase(db, table) == PhaseFinalized
 }
 
 // Unusable reports whether a credential value, presented or stored, can
@@ -209,6 +226,12 @@ func credentialValue(db *gorm.DB, table, subjectKind, kind string, subjectID uin
 		return legacy
 	}
 	row, err := currentCredential(db, subjectKind, subjectID, kind)
+	if readsOnlyNew(db, table) {
+		if err != nil || row == nil {
+			return ""
+		}
+		return row.Value
+	}
 	switch {
 	case err == nil && row != nil && row.Value != "" && (row.Value == legacy || Unusable(legacy)):
 		return row.Value
@@ -248,7 +271,7 @@ func NodeAPIKeyMatches(db *gorm.DB, node *model.Node, apiKey string) bool {
 	if err == nil && row != nil && row.Status == StatusActive && hashEqual(row.KeyHash, hashSecret(apiKey)) {
 		return true
 	}
-	if !legacyNodeKeyMatches(node, apiKey) {
+	if readsOnlyNew(db, TableNode) || !legacyNodeKeyMatches(node, apiKey) {
 		return false
 	}
 	recordFallback(TableNode, KindNodeAPIKey, fallbackReason(err, row), subjectName(uint64(node.ID)))
@@ -276,6 +299,9 @@ func NodeByAPIKey(db *gorm.DB, apiKey string, plain bool) (*model.Node, error) {
 			if err := newSession(db).First(&node, id).Error; err == nil {
 				return &node, nil
 			}
+		}
+		if readsOnlyNew(db, TableNode) {
+			return nil, notFound(readErr)
 		}
 	}
 	node, err := legacyNodeByAPIKey(db, apiKey, keyHash, plain)
@@ -345,6 +371,9 @@ func LockRegistrationKey(tx *gorm.DB, key string) (*model.AuthorizedKey, error) 
 				return &authKey, nil
 			}
 		}
+		if readsOnlyNew(tx, TableAuthorizedKey) {
+			return nil, notFound(readErr)
+		}
 	}
 	var authKey model.AuthorizedKey
 	if err := newSession(tx).Clauses(clause.Locking{Strength: "UPDATE"}).Where("key_hash = ?", keyHash).First(&authKey).Error; err != nil {
@@ -358,6 +387,27 @@ func LockRegistrationKey(tx *gorm.DB, key string) (*model.AuthorizedKey, error) 
 		recordFallback(TableAuthorizedKey, KindRegistrationKey, reason, subjectName(uint64(authKey.ID)))
 	}
 	return &authKey, nil
+}
+
+// RegistrationKeyExists reports whether key is a registration key, active
+// or not, expired or not: the default key Control creates from its
+// environment exists once. An unusable key exists nowhere.
+func RegistrationKeyExists(db *gorm.DB, key string) (bool, error) {
+	if Unusable(key) {
+		return false, nil
+	}
+	keyHash := hashSecret(key)
+	if readsNew(db, TableAuthorizedKey) {
+		_, found, err := credentialSubject(db, SubjectRegistrationKey, KindRegistrationKey, keyHash, StatusActive)
+		if err != nil || found || readsOnlyNew(db, TableAuthorizedKey) {
+			return found, err
+		}
+	}
+	var count int64
+	if err := newSession(db).Model(&model.AuthorizedKey{}).Where("key_hash = ?", keyHash).Count(&count).Error; err != nil {
+		return false, err
+	}
+	return count > 0, nil
 }
 
 // --- Forward nodes (v2_forward_node) ---
@@ -376,7 +426,7 @@ func ForwardNodeTokenMatches(db *gorm.DB, node *model.ForwardNode, token string)
 	if err == nil && row != nil && row.Status == StatusActive && hashEqual(row.KeyHash, hashSecret(token)) {
 		return true
 	}
-	if !secretEqual(node.APIToken, token) {
+	if readsOnlyNew(db, TableForwardNode) || !secretEqual(node.APIToken, token) {
 		return false
 	}
 	recordFallback(TableForwardNode, KindForwardNodeToken, fallbackReason(err, row), subjectName(uint64(node.ID)))
@@ -414,6 +464,9 @@ func CleanAgentByToken(db *gorm.DB, token string) (*model.ForwardCleanAgent, err
 				return &agent, nil
 			}
 		}
+		if readsOnlyNew(db, TableCleanAgent) {
+			return nil, notFound(readErr)
+		}
 	}
 	var agent model.ForwardCleanAgent
 	if err := newSession(db).Where("token = ?", token).First(&agent).Error; err != nil {
@@ -444,6 +497,9 @@ func CleanAgentWithToken(db *gorm.DB, agentID uint, token string) (*model.Forwar
 				return &agent, nil
 			}
 		}
+		if readsOnlyNew(db, TableCleanAgent) {
+			return nil, notFound(err)
+		}
 		agent, legacyErr := legacyCleanAgentWithToken(db, agentID, token)
 		if legacyErr != nil {
 			return nil, legacyErr
@@ -452,6 +508,15 @@ func CleanAgentWithToken(db *gorm.DB, agentID uint, token string) (*model.Forwar
 		return agent, nil
 	}
 	return legacyCleanAgentWithToken(db, agentID, token)
+}
+
+// notFound answers a finalized reader's miss: the read error, or
+// gorm.ErrRecordNotFound.
+func notFound(err error) error {
+	if err != nil {
+		return err
+	}
+	return gorm.ErrRecordNotFound
 }
 
 func legacyCleanAgentWithToken(db *gorm.DB, agentID uint, token string) (*model.ForwardCleanAgent, error) {
@@ -495,6 +560,7 @@ func resolveProtocols(db *gorm.DB, protocols []*model.NodeProtocol) {
 		ids = append(ids, uint64(protocol.ID))
 	}
 	rows, err := secretRows(db, ScopeNodeProtocol, ids)
+	only := readsOnlyNew(db, TableNodeProtocol)
 	for _, protocol := range protocols {
 		owner := uint64(protocol.ID)
 		for _, column := range []struct {
@@ -510,7 +576,7 @@ func resolveProtocols(db *gorm.DB, protocols []*model.NodeProtocol) {
 			if *column.value == nil {
 				continue
 			}
-			resolved := resolveDocument(TableNodeProtocol, column.name, owner, **column.value, rows[secretOwner{owner, column.name}], err)
+			resolved := resolveDocument(TableNodeProtocol, column.name, owner, **column.value, rows[secretOwner{owner, column.name}], err, only)
 			if resolved != **column.value {
 				*column.value = &resolved
 			}
@@ -526,7 +592,7 @@ func ResolveNodeRawConfig(db *gorm.DB, node *model.Node) {
 	}
 	owner := uint64(node.ID)
 	rows, err := secretRows(db, ScopeNodeRawConfig, []uint64{owner})
-	resolved := resolveDocument(TableNode, "raw_config", owner, *node.RawConfig, rows[secretOwner{owner, "raw_config"}], err)
+	resolved := resolveDocument(TableNode, "raw_config", owner, *node.RawConfig, rows[secretOwner{owner, "raw_config"}], err, readsOnlyNew(db, TableNode))
 	if resolved != *node.RawConfig {
 		node.RawConfig = &resolved
 	}
@@ -546,18 +612,26 @@ func ResolveWireGuardPeers(db *gorm.DB, peers ...*model.WireGuardPeer) {
 		}
 	}
 	rows, err := secretRows(db, ScopeWireGuardPeer, ids)
+	only := readsOnlyNew(db, TableWireGuardPeer)
 	for _, peer := range peers {
 		if peer == nil {
 			continue
 		}
 		owner := uint64(peer.ID)
-		peer.PrivateKey = peerKey(owner, "private_key", peer.PrivateKey, rows[secretOwner{owner, "private_key"}], err)
-		peer.PresharedKey = peerKey(owner, "preshared_key", peer.PresharedKey, rows[secretOwner{owner, "preshared_key"}], err)
+		peer.PrivateKey = peerKey(owner, "private_key", peer.PrivateKey, rows[secretOwner{owner, "private_key"}], err, only)
+		peer.PresharedKey = peerKey(owner, "preshared_key", peer.PresharedKey, rows[secretOwner{owner, "preshared_key"}], err, only)
 	}
 }
 
-func peerKey(owner uint64, column, legacy string, rows map[string]string, err error) string {
+func peerKey(owner uint64, column, legacy string, rows map[string]string, err error, only bool) string {
 	value, found := rows[""]
+	if only {
+		// Finalized: the new table's key, or none.
+		if err != nil {
+			return ""
+		}
+		return value
+	}
 	switch {
 	case err == nil && found && value != "" && (value == legacy || Unusable(legacy)):
 		return value
@@ -606,12 +680,42 @@ func secretRows(db *gorm.DB, scope string, owners []uint64) (map[secretOwner]map
 // legacy JSON column: the new table's value where the legacy document holds
 // the placeholder, the legacy value (counted) where the new row is missing
 // or differs, and the document unchanged where every position agrees.
-func resolveDocument(table, column string, owner uint64, document string, rows map[string]string, readErr error) string {
+//
+// With only (a finalized table) every secret position takes the new
+// table's value, and a position the new table does not hold is left at the
+// placeholder, whatever the legacy document holds there: nothing falls back.
+func resolveDocument(table, column string, owner uint64, document string, rows map[string]string, readErr error, only bool) string {
 	positions := SecretPositions(document)
 	if len(positions) == 0 {
 		return document
 	}
 	replacements := map[string]string{}
+	if only {
+		placeholder := encodeJSON(Placeholder)
+		for _, position := range positions {
+			value, found := rows[position.Pointer]
+			switch {
+			case readErr == nil && found:
+				if value != position.Value {
+					replacements[position.Pointer] = value
+				}
+			case !position.Moved:
+				if position.Pointer == "" {
+					replacements[""] = Placeholder
+				} else {
+					replacements[position.Pointer] = placeholder
+				}
+			}
+		}
+		if len(replacements) == 0 {
+			return document
+		}
+		resolved, err := replacePositions(document, replacements)
+		if err != nil {
+			return Redact(document)
+		}
+		return resolved
+	}
 	for _, position := range positions {
 		value, found := rows[position.Pointer]
 		if readErr == nil && found && value == position.Value {

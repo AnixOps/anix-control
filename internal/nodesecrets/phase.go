@@ -59,8 +59,8 @@ type PhaseOptions struct {
 //   - dual_read requires each table's latest verification to have matched,
 //     with no mismatch, within VerifyMaxAge (`node-secrets verify`).
 //   - dual_write, the rollback, is always allowed from dual_read.
-//   - A finalized table, and any other phase, is refused: finalize and
-//     unsplit come with P3.
+//   - A finalized table, and any other phase, is refused: Finalize and
+//     Unsplit move a table into and out of finalized.
 //
 // Either every table moves or none does: one refusal refuses the whole
 // change, with ErrPhaseRefused and the reasons. Each table that changes
@@ -156,6 +156,14 @@ func phaseRefusal(row model.NodeSecretSplit, phase string, now time.Time) string
 	if phase == PhaseDualWrite {
 		return ""
 	}
+	return verificationRefusal(row, now)
+}
+
+// verificationRefusal says why row's latest verification does not allow a
+// move that needs one (dual_read, finalize); empty when it does: the latest
+// verification matched, with no mismatch, within VerifyMaxAge, and is not
+// dated in the future.
+func verificationRefusal(row model.NodeSecretSplit, now time.Time) string {
 	switch {
 	case row.CheckedAt == nil || row.VerifiedAt == nil:
 		return "no verification has matched; run node-secrets verify"

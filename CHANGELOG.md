@@ -2,6 +2,44 @@
 
 ## Unreleased
 
+### Added
+
+- **Node credential split, phase P3: finalize and unsplit (NO-9)**
+  (`internal/nodesecrets`, `docs/architecture/node-ops-service.md`
+  section 4.3, `docs/UPGRADE.md`). Off by default: nothing runs finalize,
+  and every table stays in its phase after the upgrade. Production
+  finalize needs the owner's approval and a staging rehearsal (D6).
+  - **`anix-control node-secrets finalize -confirm <table|all>`** needs
+    phase `dual_read` and a matching `verify` at most an hour old. It
+    rewrites the legacy secret columns in batches, one transaction each:
+    `!moved:<row id>` in every credential column (unique per row, so no
+    unique index collides; a row already holding another row's tombstone
+    stops the batch), an empty key hash, and the masked document in every
+    JSON column. It resumes when run again, and is audited.
+  - **After finalize** the readers read the new tables only and never fall
+    back; the writers' `Sync` writes tombstones; `verify` compares by
+    presence. A binary reading the legacy columns fails closed.
+  - **`unsplit -confirm`** writes every secret back byte for byte (the
+    original JSON documents are kept for it), returns the table to
+    `dual_read`, drops the views that wait for finalize, and verifies. It
+    refuses a table a package adopted unless `-adopted-ok`.
+  - **Conditional adoption and views.** A manifest may declare
+    `kernel.storage.adopt:` for `v2_node`, `v2_node_protocol` and
+    `v2_forward_node`; the lease honours it only once the table is
+    finalized. The views `kapi_node_public_v1`,
+    `kapi_node_protocol_public_v1`, `kapi_node_credential_status_v1`,
+    `kapi_registration_key_v1`, `kapi_forward_clean_agent_v1` and
+    `kapi_wireguard_peer_v1` are created only after finalize and show no
+    moved column. `GetCapabilities.tables` answers each table's phase.
+  - **The last readers moved.** The forward node inventory asks whether a
+    node has a token through the split (a live credential row since
+    `dual_read`); the default registration key from the environment, the
+    diagnosis scrubber and the forward node update's token-change check
+    read through it too.
+  - **Static gate** `config/scripts/check_moved_columns.sh` (CI): no kernel
+    read of a moved credential column outside `internal/nodesecrets`, but
+    for reasoned exceptions.
+
 ## 4.1.0-rc.2 - 2026-10-01
 
 4.1.0-rc.2 is the second 4.1.0 release candidate. It brings thirteen

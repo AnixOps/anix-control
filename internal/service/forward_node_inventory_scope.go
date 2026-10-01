@@ -2,6 +2,7 @@ package service
 
 import (
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"gorm.io/gorm"
 )
 
@@ -44,15 +45,23 @@ func (s *ForwardNodeService) GetByIDForInventoryScope(id uint, scope string) (*m
 	return &node, nil
 }
 
+// applyForwardNodeInventoryScope keeps the forward nodes of an inventory: an
+// Ansible machine is a relay tagged so, or a relay without an API port and
+// without a token. Whether a node has a token is read through the node
+// credential split (nodesecrets.ForwardNodeTokenAbsent), never from the
+// legacy column directly.
 func applyForwardNodeInventoryScope(query *gorm.DB, scope string) *gorm.DB {
 	switch scope {
 	case ForwardNodeInventoryScopeAnsible:
+		absent, args := nodesecrets.ForwardNodeTokenAbsent(query)
 		return query.
 			Where("type = ?", model.ForwardNodeTypeRelay).
-			Where("(tags LIKE ? OR (api_port = 0 AND (api_token = '' OR api_token IS NULL)))", forwardNodeInventoryTagLike())
+			Where("(tags LIKE ? OR (api_port = 0 AND "+absent+"))", append([]any{forwardNodeInventoryTagLike()}, args...)...)
 	case ForwardNodeInventoryScopeNodeX:
+		absent, args := nodesecrets.ForwardNodeTokenAbsent(query)
 		return query.
-			Where("NOT (type = ? AND (tags LIKE ? OR (api_port = 0 AND (api_token = '' OR api_token IS NULL))))", model.ForwardNodeTypeRelay, forwardNodeInventoryTagLike())
+			Where("NOT (type = ? AND (tags LIKE ? OR (api_port = 0 AND "+absent+")))",
+				append([]any{model.ForwardNodeTypeRelay, forwardNodeInventoryTagLike()}, args...)...)
 	default:
 		return query
 	}

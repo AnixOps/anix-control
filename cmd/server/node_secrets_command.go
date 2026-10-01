@@ -12,6 +12,7 @@ import (
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
+	"github.com/AnixOps/anix-control/v4/internal/packagestore"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"gorm.io/gorm"
 )
@@ -22,6 +23,8 @@ const nodeSecretsCommandUsage = `usage:
   anix-control node-secrets backfill [-table <table>[,<table>...]] [-batch 500] [-restart]
   anix-control node-secrets verify [-table <table>[,<table>...]] [-samples 20]
   anix-control node-secrets phase [-by <name>] <table|all> <dual_read|dual_write>
+  anix-control node-secrets finalize -confirm [-by <name>] [-batch 500] <table|all>
+  anix-control node-secrets unsplit -confirm [-adopted-ok] [-by <name>] [-batch 500] <table|all>
   anix-control node-secrets validate
 
 Tables: v2_node, v2_authorized_key, v2_forward_node, v2_forward_clean_agent,
@@ -42,6 +45,21 @@ the legacy columns) or back to dual_write (the legacy columns). dual_read
 needs the table's latest verify to have matched within the last hour; with
 "all", one refusal refuses every table. Each change is audited; -by names who
 made it (default: $USER). Running Control processes follow within 5 seconds.
+
+finalize (phase P3) writes tombstones over a table's legacy secret
+columns: "!moved:<id>" in each credential column, "" in each key hash
+column, and the redacted document in each JSON column. The secrets stay in
+the new tables, which become the only ones read. It needs -confirm, phase
+dual_read and a verify that matched within the last hour; it runs in
+batches, and an interrupted finalize is resumed by running it again. Run it
+only after a staging rehearsal and, on production, with the owner's
+approval (docs/UPGRADE.md). After it, never start a Control binary older
+than this one.
+
+unsplit is the way back: it writes the secrets back from the new tables,
+drops the views that exist only after finalize, returns the table to
+dual_read and verifies it (exit 3 on a mismatch). It needs -confirm, and
+-adopted-ok when a package's storage lease adopted the table.
 
 validate checks the secrets of every node protocol and raw configuration as
 the configuration builder uses them, and exits 3 when one fails. It reports
@@ -155,6 +173,55 @@ func runNodeSecretsCommand(ctx context.Context, db *gorm.DB, arguments []string,
 			if encodeErr := encoder.Encode(changes); encodeErr != nil && err == nil {
 				err = encodeErr
 			}
+		}
+		return err
+	case "finalize", "unsplit":
+		flags := flag.NewFlagSet("node-secrets "+arguments[0], flag.ContinueOnError)
+		flags.SetOutput(io.Discard)
+		confirm := flags.Bool("confirm", false, "confirm the rewrite of the legacy columns")
+		adoptedOK := flags.Bool("adopted-ok", false, "unsplit a table a package's storage lease adopted")
+		by := flags.String("by", os.Getenv("USER"), "who runs it, for the audit entries")
+		batch := flags.Int("batch", nodesecrets.DefaultBatchSize, "legacy rows per transaction")
+		if err := flags.Parse(arguments[1:]); err != nil || flags.NArg() != 1 || *batch <= 0 {
+			return nodeSecretsUsageError()
+		}
+		if *adoptedOK && arguments[0] != "unsplit" {
+			return nodeSecretsUsageError()
+		}
+		var tables []string
+		if table := flags.Arg(0); table != "all" {
+			tables = splitTables(table)
+			if len(tables) == 0 {
+				return nodeSecretsUsageError()
+			}
+		}
+		if arguments[0] == "finalize" {
+			results, err := nodesecrets.Finalize(ctx, db, nodesecrets.FinalizeOptions{
+				Tables: tables, Confirm: *confirm, Actor: *by, BatchSize: *batch,
+			})
+			if results != nil {
+				if encodeErr := encoder.Encode(results); encodeErr != nil && err == nil {
+					err = encodeErr
+				}
+			}
+			if err != nil {
+				return err
+			}
+			// The views of the finalized remainder (node-ops-service.md
+			// section 4.6) exist from now on.
+			return packagestore.EnsureKernelAPIViews(db)
+		}
+		results, err := nodesecrets.Unsplit(ctx, db, nodesecrets.UnsplitOptions{
+			Tables: tables, Confirm: *confirm, AllowAdopted: *adoptedOK, Actor: *by, BatchSize: *batch,
+			DropViews: packagestore.DropFinalizedViews,
+		})
+		if results != nil {
+			if encodeErr := encoder.Encode(results); encodeErr != nil && err == nil {
+				err = encodeErr
+			}
+		}
+		if errors.Is(err, nodesecrets.ErrMismatch) {
+			return errNodeSecretsMismatch
 		}
 		return err
 	case "validate":

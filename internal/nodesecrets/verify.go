@@ -109,14 +109,24 @@ func verifyTable(ctx context.Context, db *gorm.DB, spec tableSpec, samples int) 
 	}
 	result.Phase = split.Phase
 
+	// A finalized table's legacy columns hold tombstones: its forms are
+	// compared by presence, every secret the legacy rows stand for against
+	// the new tables' rows, and a secret still in a legacy column is a
+	// difference.
+	finalized := split.Phase == PhaseFinalized
 	var legacy, current map[string]string
 	err = readSnapshot(db.WithContext(ctx), func(tx *gorm.DB) error {
 		var err error
-		legacy, result.LegacyRows, err = legacyEntries(tx, spec)
+		legacy, result.LegacyRows, err = legacyEntries(tx, spec, finalized)
 		if err != nil {
 			return err
 		}
 		current, err = newEntries(tx, spec)
+		if err == nil && finalized {
+			for key := range current {
+				current[key] = movedFingerprint
+			}
+		}
 		return err
 	})
 	if err != nil {
@@ -181,9 +191,15 @@ func readSnapshot(db *gorm.DB, fn func(tx *gorm.DB) error) error {
 	return db.Transaction(fn)
 }
 
+// movedFingerprint is the entry of a secret a finalized table's legacy
+// column stands for with a tombstone or the placeholder.
+const movedFingerprint = "moved"
+
 // legacyEntries reads every legacy row of spec's table, in batches by id,
-// and answers its secrets as entries.
-func legacyEntries(tx *gorm.DB, spec tableSpec) (map[string]string, int64, error) {
+// and answers its secrets as entries. With finalized, a tombstone or
+// placeholder is the entry movedFingerprint, and a secret still in the
+// column one that never equals it.
+func legacyEntries(tx *gorm.DB, spec tableSpec, finalized bool) (map[string]string, int64, error) {
 	entries := make(map[string]string)
 	var rows int64
 	cursor := uint64(0)
@@ -205,6 +221,14 @@ func legacyEntries(tx *gorm.DB, spec tableSpec) (map[string]string, int64, error
 		}
 		for _, entry := range derived.secrets {
 			entries[secretEntryKey(spec.scope, entry.OwnerID, entry.Column, entry.Pointer)] = secretFingerprint(entry.Value)
+		}
+		if finalized {
+			for key := range derived.keptCredentials {
+				entries[credentialEntryKey(spec.subjectKind, key.SubjectID, key.Kind)] = movedFingerprint
+			}
+			for key := range derived.keptSecrets {
+				entries[secretEntryKey(spec.scope, key.OwnerID, key.Column, key.Pointer)] = movedFingerprint
+			}
 		}
 		rows += int64(len(ids))
 		cursor = ids[len(ids)-1]

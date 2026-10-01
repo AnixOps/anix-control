@@ -54,5 +54,8 @@ func Retire(tx *gorm.DB, table string, ids ...uint) (Retired, error) {
 		}
 		retired.Secrets = result.RowsAffected
 	}
+	if err := dropOriginals(tx, spec.table, subjects, ""); err != nil {
+		return retired, err
+	}
 	return retired, nil
 }
