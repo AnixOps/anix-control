@@ -3749,39 +3749,132 @@ func (s *PaymentHandlerTestSuite) TestX402CreatePayment_NonPendingOrderUsesPanel
 	s.assertPaymentPanelError(w, "订单已支付或已取消")
 }
 
-func (s *PaymentHandlerTestSuite) TestX402Callback_Success() {
-	handler := NewPaymentHandler()
-	s.router.POST("/x402/callback", handler.X402Callback)
+const x402TestSecret = "x402-test-secret"
 
-	// 建立带 webhook 密钥的 X402 网关，供回调验签使用。
-	secret := "x402-test-secret"
-	gateway := &model.PaymentGateway{
-		Name:    "X402",
-		Type:    model.PaymentGatewayX402,
-		Enabled: true,
-		Config:  `{"webhook_secret":"` + secret + `"}`,
-	}
-	s.Require().NoError(database.Get().Create(gateway).Error)
+// enableX402Gateway enables the x402 gateway with the test webhook secret,
+// which callbacks are signed with, and accepting the given tokens.
+func (s *PaymentHandlerTestSuite) enableX402Gateway(acceptTokens ...string) {
+	config, err := json.Marshal(model.X402Config{WebhookSecret: x402TestSecret, AcceptTokens: acceptTokens})
+	s.Require().NoError(err)
+	s.Require().NoError(database.Get().Create(&model.PaymentGateway{
+		Name: "X402", Type: model.PaymentGatewayX402, Enabled: true, Config: string(config),
+	}).Error)
+}
 
-	// 构造与 handler 一致的签名体并生成合法签名。
-	fields := map[string]string{
-		"trade_no":      "ORDER123",
-		"tx_hash":       "0xabc123",
-		"block_number":  "12345",
-		"confirmations": "6",
-		"status":        "confirmed",
-		"amount":        "0.0001",
-		"token":         "ETH",
-	}
-	sig := computeHMACSHA256(canonicalizeFields(fields), secret)
-
-	payload := `{"trade_no":"ORDER123","tx_hash":"0xabc123","block_number":12345,"confirmations":6,"status":"confirmed","amount":"0.0001","token":"ETH","signature":"` + sig + `"}`
-	req, _ := http.NewRequest("POST", "/x402/callback", bytes.NewReader([]byte(payload)))
+// createX402Payment creates an x402 payment in token for a new pending
+// order of 100.00 through X402CreatePayment, and returns its trade number,
+// the amount it asks for and the order's id.
+func (s *PaymentHandlerTestSuite) createX402Payment(token string) (string, string, uint) {
+	order := &model.Order{TradeNo: "x402-order-" + strconv.Itoa(int(time.Now().UnixNano())), UserID: 1, PlanID: 1, TotalAmount: 10000, Period: "month", Type: 1}
+	s.Require().NoError(database.Get().Create(order).Error)
+	body, err := json.Marshal(map[string]any{"order_id": order.ID, "token": token, "network": "sepolia"})
+	s.Require().NoError(err)
+	req, _ := http.NewRequest("POST", "/x402/create", bytes.NewReader(body))
 	req.Header.Set("Content-Type", "application/json")
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
+	resp := decodePanelTestResponse(s.T(), w)
+	s.Require().Equal(float64(0), resp["code"], w.Body.String())
+	data := resp["data"].(map[string]any)
+	return data["trade_no"].(string), data["amount"].(string), order.ID
+}
 
-	assert.Equal(s.T(), http.StatusOK, w.Code)
+// x402Callback sends a confirmed callback signed with the test secret.
+func (s *PaymentHandlerTestSuite) x402Callback(tradeNo, amount, token string) *httptest.ResponseRecorder {
+	fields := map[string]string{
+		"trade_no": tradeNo, "tx_hash": "0xabc123", "block_number": "12345", "confirmations": "6",
+		"status": "confirmed", "amount": amount, "token": token,
+	}
+	payload, err := json.Marshal(map[string]any{
+		"trade_no": tradeNo, "tx_hash": "0xabc123", "block_number": 12345, "confirmations": 6,
+		"status": "confirmed", "amount": amount, "token": token,
+		"signature": computeHMACSHA256(canonicalizeFields(fields), x402TestSecret),
+	})
+	s.Require().NoError(err)
+	req, _ := http.NewRequest("POST", "/x402/callback", bytes.NewReader(payload))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+	return w
+}
+
+func (s *PaymentHandlerTestSuite) x402State(tradeNo string, orderID uint) (int, int) {
+	var record model.PaymentRecord
+	s.Require().NoError(database.Get().Where("trade_no = ?", tradeNo).First(&record).Error)
+	var order model.Order
+	s.Require().NoError(database.Get().First(&order, orderID).Error)
+	return record.Status, order.Status
+}
+
+// A callback pays when it pays the payment's token and at least the
+// amount X402CreatePayment asked for, in the same unit (whole tokens).
+func (s *PaymentHandlerTestSuite) TestX402Callback_Success() {
+	handler := NewPaymentHandler()
+	s.router.POST("/x402/create", handler.X402CreatePayment)
+	s.router.POST("/x402/callback", handler.X402Callback)
+	s.enableX402Gateway("ETH", "USDC")
+
+	for _, c := range []struct{ name, token, paid, callbackToken string }{
+		{"the amount asked for", "ETH", "", "ETH"},
+		{"the amount without trailing zeros", "ETH", "0.0001", "ETH"},
+		{"more than the amount", "ETH", "0.00020000", "ETH"},
+		{"the token in another case", "USDC", "", "usdc"},
+	} {
+		tradeNo, asked, orderID := s.createX402Payment(c.token)
+		s.Require().Equal("0.00010000", asked, c.name)
+		paid := c.paid
+		if paid == "" {
+			paid = asked
+		}
+		w := s.x402Callback(tradeNo, paid, c.callbackToken)
+		s.Require().Equal(http.StatusOK, w.Code, c.name)
+		assert.Contains(s.T(), w.Body.String(), "payment confirmed", c.name)
+		recordStatus, orderStatus := s.x402State(tradeNo, orderID)
+		assert.Equal(s.T(), model.PaymentStatusPaid, recordStatus, c.name)
+		assert.NotEqual(s.T(), 0, orderStatus, c.name)
+	}
+}
+
+// A callback that does not pay the payment's token and amount is
+// acknowledged, so it is not redelivered, and changes nothing.
+func (s *PaymentHandlerTestSuite) TestX402Callback_RefusesWhatDoesNotPay() {
+	handler := NewPaymentHandler()
+	s.router.POST("/x402/create", handler.X402CreatePayment)
+	s.router.POST("/x402/callback", handler.X402Callback)
+	s.enableX402Gateway("ETH", "USDT", "USDC")
+
+	for _, c := range []struct{ name, token, paid, callbackToken string }{
+		{"less than the amount", "ETH", "0.00009999", "ETH"},
+		{"another token", "ETH", "0.0001", "USDT"},
+		{"no token", "ETH", "0.0001", ""},
+		{"no amount", "ETH", "", "ETH"},
+		{"a negative amount", "ETH", "-0.0002", "ETH"},
+		{"a fraction", "ETH", "2/10000", "ETH"},
+		{"an exponent", "ETH", "2e-4", "ETH"},
+		{"a token the gateway does not accept", "DOGE", "0.0001", "DOGE"},
+		// Created without a token, the payment has the column default
+		// currency and an amount in no named token.
+		{"a payment created without a token", "", "0.0001", "ETH"},
+		{"a payment created without a token, paid in its currency", "", "0.0001", "CNY"},
+	} {
+		tradeNo, _, orderID := s.createX402Payment(c.token)
+		w := s.x402Callback(tradeNo, c.paid, c.callbackToken)
+		s.Require().Equal(http.StatusOK, w.Code, c.name)
+		var resp map[string]any
+		s.Require().NoError(json.Unmarshal(w.Body.Bytes(), &resp), c.name)
+		assert.Equal(s.T(), "ok", resp["status"], c.name)
+		assert.Contains(s.T(), resp["message"], "payment not applied", c.name)
+		recordStatus, orderStatus := s.x402State(tradeNo, orderID)
+		assert.Equal(s.T(), model.PaymentStatusPending, recordStatus, c.name)
+		assert.Equal(s.T(), 0, orderStatus, c.name)
+	}
+
+	// A refused payment stays payable by a callback that pays it.
+	tradeNo, asked, orderID := s.createX402Payment("ETH")
+	s.Require().Contains(s.x402Callback(tradeNo, "0.00005", "ETH").Body.String(), "payment not applied")
+	s.Require().Contains(s.x402Callback(tradeNo, asked, "ETH").Body.String(), "payment confirmed")
+	recordStatus, _ := s.x402State(tradeNo, orderID)
+	assert.Equal(s.T(), model.PaymentStatusPaid, recordStatus)
 }
 
 func (s *PaymentHandlerTestSuite) TestX402Callback_ForgedSignatureRejected() {
@@ -5595,6 +5688,40 @@ func (s *InviteHandlerTestSuite) TestGenerateCode() {
 	data := resp["data"].(map[string]any)
 	assert.NotEmpty(s.T(), data["code"])
 	assert.NotContains(s.T(), resp, "error")
+}
+
+// A user holds at most code_count unused invite codes (5 by default); at
+// the limit the answer is v2board's: 500 and its message.
+func (s *InviteHandlerTestSuite) TestGenerateCode_LimitsUnusedCodes() {
+	handler := NewInviteHandler()
+	s.router.POST("/invite/generate", func(c *gin.Context) {
+		c.Set("user_id", s.testUser.ID)
+		c.Next()
+	}, handler.GenerateCode)
+	generate := func() *httptest.ResponseRecorder {
+		req, _ := http.NewRequest("POST", "/invite/generate", nil)
+		w := httptest.NewRecorder()
+		s.router.ServeHTTP(w, req)
+		return w
+	}
+
+	for i := 0; i < service.DefaultInviteCodeLimit; i++ {
+		w := generate()
+		s.Require().Equal(http.StatusOK, w.Code, w.Body.String())
+	}
+	w := generate()
+	assert.Equal(s.T(), http.StatusInternalServerError, w.Code)
+	assert.JSONEq(s.T(), `{"error":"The maximum number of creations has been reached"}`, w.Body.String())
+	var codes int64
+	s.Require().NoError(s.db.Model(&model.InviteCode{}).Where("user_id = ?", s.testUser.ID).Count(&codes).Error)
+	assert.Equal(s.T(), int64(service.DefaultInviteCodeLimit), codes)
+
+	// A used code frees a place.
+	var used model.InviteCode
+	s.Require().NoError(s.db.Where("user_id = ?", s.testUser.ID).Order("id").First(&used).Error)
+	s.Require().NoError(s.db.Model(&used).Update("status", 1).Error)
+	assert.Equal(s.T(), http.StatusOK, generate().Code)
+	assert.Equal(s.T(), http.StatusInternalServerError, generate().Code)
 }
 
 func (s *InviteHandlerTestSuite) TestGetCommissionRecords() {

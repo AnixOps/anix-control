@@ -1,6 +1,7 @@
 package service
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
@@ -65,4 +66,35 @@ func TestPaymentCallbackKeepsThePaymentWhenActivationFails(t *testing.T) {
 	var record model.PaymentRecord
 	require.NoError(t, db.Take(&record, "trade_no = ?", "PAY-NO-PLAN").Error)
 	require.Equal(t, model.PaymentStatusPaid, record.Status)
+}
+
+// MarkOrderPaidIfCovered checks the pending record inside the transaction:
+// a refusal (or no check) writes nothing, an acceptance pays as
+// MarkOrderPaid does.
+func TestMarkOrderPaidIfCoveredChecksTheRecord(t *testing.T) {
+	db := paymentActivationDB(t)
+	require.NoError(t, db.Create(&model.User{ID: 1, Email: "buyer@example.test", Token: "t", UUID: "u"}).Error)
+	order := pendingPayment(t, db, "PAY-COVERED", 404)
+	svc := NewPaymentGatewayService(db)
+
+	refuse := func(record model.PaymentRecord) error {
+		require.Equal(t, model.PaymentStatusPending, record.Status)
+		require.Equal(t, 10.0, record.ActualAmount)
+		return fmt.Errorf("%w: short", ErrPaymentNotCovered)
+	}
+	require.ErrorIs(t, svc.MarkOrderPaidIfCovered("PAY-COVERED", "GW-1", "{}", refuse), ErrPaymentNotCovered)
+	require.ErrorIs(t, svc.MarkOrderPaidIfCovered("PAY-COVERED", "GW-1", "{}", nil), ErrPaymentNotCovered)
+	var record model.PaymentRecord
+	require.NoError(t, db.Take(&record, "trade_no = ?", "PAY-COVERED").Error)
+	require.Equal(t, model.PaymentStatusPending, record.Status)
+	require.Empty(t, record.GatewayTradeNo)
+	require.NoError(t, db.Take(&order, order.ID).Error)
+	require.Equal(t, 0, order.Status)
+
+	require.NoError(t, svc.MarkOrderPaidIfCovered("PAY-COVERED", "GW-2", "{}", func(model.PaymentRecord) error { return nil }))
+	require.NoError(t, db.Take(&record, "trade_no = ?", "PAY-COVERED").Error)
+	require.Equal(t, model.PaymentStatusPaid, record.Status)
+	require.Equal(t, "GW-2", record.GatewayTradeNo)
+	require.NoError(t, db.Take(&order, order.ID).Error)
+	require.Equal(t, 1, order.Status)
 }

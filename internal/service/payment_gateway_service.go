@@ -311,10 +311,34 @@ func (s *PaymentGatewayService) MarkOrderPaid(tradeNo string, gatewayTradeNo str
 
 // MarkOrderPaidWithAmount 标记支付并核对回调金额。
 func (s *PaymentGatewayService) MarkOrderPaidWithAmount(tradeNo string, gatewayTradeNo string, notifyData string, paidAmount *float64) error {
-	return s.markOrderPaid(tradeNo, gatewayTradeNo, notifyData, paidAmount)
+	var check func(model.PaymentRecord) error
+	if paidAmount != nil {
+		check = func(record model.PaymentRecord) error {
+			if math.Abs(record.ActualAmount-*paidAmount) > 0.01 {
+				return fmt.Errorf("payment amount mismatch")
+			}
+			return nil
+		}
+	}
+	return s.markOrderPaid(tradeNo, gatewayTradeNo, notifyData, check)
 }
 
-func (s *PaymentGatewayService) markOrderPaid(tradeNo string, gatewayTradeNo string, notifyData string, paidAmount *float64) error {
+// ErrPaymentNotCovered is returned, wrapped with the reason, when a paid
+// callback does not pay what its payment record asks for. Nothing is
+// written: the record stays pending and its order unpaid.
+var ErrPaymentNotCovered = errors.New("payment not applied")
+
+// MarkOrderPaidIfCovered marks the payment paid, as MarkOrderPaid does,
+// only if covers accepts its pending record, read inside the transaction.
+// covers returns an error wrapping ErrPaymentNotCovered to refuse it.
+func (s *PaymentGatewayService) MarkOrderPaidIfCovered(tradeNo string, gatewayTradeNo string, notifyData string, covers func(model.PaymentRecord) error) error {
+	if covers == nil {
+		return fmt.Errorf("%w: no payment check", ErrPaymentNotCovered)
+	}
+	return s.markOrderPaid(tradeNo, gatewayTradeNo, notifyData, covers)
+}
+
+func (s *PaymentGatewayService) markOrderPaid(tradeNo string, gatewayTradeNo string, notifyData string, check func(model.PaymentRecord) error) error {
 	return WithRetryableTransaction(s.db, func(tx *gorm.DB) error {
 		// 查询支付记录
 		var record model.PaymentRecord
@@ -326,8 +350,10 @@ func (s *PaymentGatewayService) markOrderPaid(tradeNo string, gatewayTradeNo str
 			return fmt.Errorf("payment already processed")
 		}
 
-		if paidAmount != nil && math.Abs(record.ActualAmount-*paidAmount) > 0.01 {
-			return fmt.Errorf("payment amount mismatch")
+		if check != nil {
+			if err := check(record); err != nil {
+				return err
+			}
 		}
 
 		now := time.Now()

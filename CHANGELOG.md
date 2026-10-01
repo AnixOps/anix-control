@@ -2,6 +2,28 @@
 
 ## Unreleased
 
+### Security
+
+- The x402 callback marks a payment paid only when it pays the payment's
+  token and at least its amount. `POST /api/v2/payment/x402/callback`
+  verified the confirmation service's signature but never compared the
+  signed `amount` and `token` with the payment, so a confirmed transfer of
+  any amount in any token paid the order.
+  - The amount is compared in the unit `POST /api/v2/payment/x402/create`
+    asks for: whole tokens (not base units such as wei), the record's
+    `actual_amount`, shown with eight decimals. More is accepted.
+  - The token must be the payment's (the record's `currency`, any case) and,
+    when the x402 gateway sets `accept_tokens`, one of those.
+  - The check runs in the transaction that marks the payment paid. A refused
+    callback changes nothing and is answered `200`
+    `{"status":"ok","message":"payment not applied: ..."}`, like the other
+    callbacks that change nothing, so it is not redelivered.
+  - Known gaps: a payment created without a `token` is stored with the
+    column default currency `CNY` while its amount is a token amount, so no
+    callback pays it; and the token amount is still the create route's
+    placeholder conversion (order total in cents / 10^8), not an exchange
+    rate.
+
 ### Changed
 
 - The Agent contract (`anix.agent.v1`) now lives in Control's SDK module,
@@ -24,6 +46,20 @@
     tests anix-agent against this checkout's SDK through a `go.work` replace.
   - **License.** The moved files were MPL-2.0 in anix-agent; their sole
     author relicensed them under this repository's MIT license.
+- A user holds at most `code_count` unused invite codes, as v2board limits
+  them (`invite_gen_limit`). `POST /api/v2/user/invite/generate` created
+  codes without limit, and the invite configuration's `code_count` was
+  stored but unused.
+  - The limit is read from the stored configuration on each request; a
+    missing configuration or a `code_count` of `0` means 5, v2board's
+    default.
+  - Used codes, expired codes, other users' codes and public codes are not
+    counted. Concurrent requests of one user are counted one after another.
+  - At the limit the answer is v2board's: `500`
+    `{"error":"The maximum number of creations has been reached"}`, and no
+    code is created.
+  - No other path creates a user's codes; an administrator's generation,
+    if one is added, is not limited (`InviteService.GenerateInviteCode`).
 
 ## 4.1.0-rc.1 - 2026-10-01
 
