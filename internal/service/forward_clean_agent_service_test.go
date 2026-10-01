@@ -366,8 +366,42 @@ func (s *ForwardCleanAgentServiceTestSuite) TestAgentIssuedForANodeCannotRegiste
 	s.Nil(pending.AgentID)
 }
 
-// A token issued without a node is bound by its first registration that
-// names one, and cannot move afterwards.
+// A token issued without a node was bound by its first registration, so
+// whoever registered it first chose the node and took that node's jobs.
+// Issuing a token now takes an existing forward node, and binds it there.
+func (s *ForwardCleanAgentServiceTestSuite) TestCreateTokenRequiresAnExistingNode() {
+	db := database.Get()
+	node, _, _ := s.createCleanAgentForwardFixtures()
+	zero, unknown := uint(0), node.ID+1000
+	for name, input := range map[string]ForwardCleanAgentCreateInput{
+		"no node":      {Name: "agent"},
+		"node zero":    {Name: "agent", NodeID: &zero},
+		"unknown node": {Name: "agent", NodeID: &unknown},
+	} {
+		result, err := s.svc.CreateToken(input)
+		s.Nil(result, name)
+		if name == "unknown node" {
+			s.ErrorIs(err, ErrForwardCleanAgentNodeNotFound, name)
+		} else {
+			s.ErrorIs(err, ErrForwardCleanAgentNodeRequired, name)
+		}
+	}
+	var count int64
+	s.Require().NoError(db.Model(&model.ForwardCleanAgent{}).Count(&count).Error)
+	s.Zero(count, "a token was issued without a valid node")
+
+	result, err := s.svc.CreateToken(ForwardCleanAgentCreateInput{Name: "agent", NodeID: &node.ID})
+	s.Require().NoError(err)
+	s.Require().NotNil(result.Agent.NodeID)
+	s.Equal(node.ID, *result.Agent.NodeID)
+	var stored model.ForwardCleanAgent
+	s.Require().NoError(db.Where("token = ?", result.Token).First(&stored).Error)
+	s.Require().NotNil(stored.NodeID)
+	s.Equal(node.ID, *stored.NodeID)
+}
+
+// A token an earlier build issued without a node is bound by its first
+// registration that names one, and cannot move afterwards.
 func (s *ForwardCleanAgentServiceTestSuite) TestUnboundAgentIsBoundByItsFirstRegistration() {
 	db := database.Get()
 	nodeA, _, _ := s.createCleanAgentForwardFixtures()
@@ -376,9 +410,8 @@ func (s *ForwardCleanAgentServiceTestSuite) TestUnboundAgentIsBoundByItsFirstReg
 	jobA := s.pendingCleanAgentJob(nodeA.ID)
 	jobB := s.pendingCleanAgentJob(nodeB.ID)
 
-	issued, err := s.svc.CreateToken(ForwardCleanAgentCreateInput{Name: "unbound"})
-	s.Require().NoError(err)
-	s.Nil(issued.Agent.NodeID)
+	issued := &model.ForwardCleanAgent{Name: "unbound", Token: "v2fa_issued-without-a-node", Status: model.ForwardCleanAgentStatusOffline}
+	s.Require().NoError(db.Create(issued).Error)
 
 	// A registration without a node leaves it unbound.
 	agent, err := s.svc.Register(ForwardCleanAgentRegisterInput{Token: issued.Token})

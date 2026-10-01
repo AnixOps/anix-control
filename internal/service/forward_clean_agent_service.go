@@ -24,6 +24,12 @@ var (
 	// ErrForwardCleanAgentNodeMismatch refuses an agent's registration
 	// under a node other than the one its token is bound to.
 	ErrForwardCleanAgentNodeMismatch = errors.New("forward clean agent is bound to another node")
+	// ErrForwardCleanAgentNodeRequired refuses to issue a token without the
+	// forward node it is for.
+	ErrForwardCleanAgentNodeRequired = errors.New("nodeId is required: a clean agent token is issued for one forward node")
+	// ErrForwardCleanAgentNodeNotFound refuses to issue a token for a forward
+	// node that does not exist.
+	ErrForwardCleanAgentNodeNotFound = errors.New("forward node not found")
 )
 
 type ForwardCleanAgentService struct {
@@ -95,12 +101,27 @@ func NewForwardCleanAgentService(db *gorm.DB) *ForwardCleanAgentService {
 	return &ForwardCleanAgentService{db: db}
 }
 
+// CreateToken issues a clean agent token bound to the forward node it names.
+// The node is required and must exist: a token issued without one would be
+// bound by its first registration, so whoever registered it first would
+// choose the node, and take that node's jobs (Register). Tokens issued
+// without a node by earlier builds still bind on their first registration.
 func (s *ForwardCleanAgentService) CreateToken(input ForwardCleanAgentCreateInput) (*ForwardCleanAgentTokenResult, error) {
 	name := strings.TrimSpace(input.Name)
 	if name == "" {
 		name = "v2forward-agent"
 	}
 	nodeID := normalizeOptionalUint(input.NodeID)
+	if nodeID == nil {
+		return nil, ErrForwardCleanAgentNodeRequired
+	}
+	var nodes int64
+	if err := s.db.Model(&model.ForwardNode{}).Where("id = ?", *nodeID).Count(&nodes).Error; err != nil {
+		return nil, err
+	}
+	if nodes == 0 {
+		return nil, ErrForwardCleanAgentNodeNotFound
+	}
 
 	for attempt := 0; attempt < 3; attempt++ {
 		token, err := generateForwardCleanAgentToken()
@@ -155,8 +176,8 @@ func (s *ForwardCleanAgentService) RevokeAgent(id uint) error {
 // Register marks an agent online and binds its token to a node.
 //
 // A token is bound to the node it was issued for (CreateToken's nodeId) or,
-// when it was issued without one, to the node of its first registration
-// that names one. A heartbeat claims the pending jobs of the agent's node,
+// for a token an earlier build issued without one, to the node of its first
+// registration that names one. A heartbeat claims the pending jobs of the agent's node,
 // and their payloads carry the node's API token, so a token that could
 // register again under another node could take that node's jobs and
 // credentials. A registration naming another node is refused

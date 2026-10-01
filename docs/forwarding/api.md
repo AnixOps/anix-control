@@ -373,7 +373,9 @@ Admin token routes:
 | `POST` | `/api/v2/admin/forward/agents` | Create an agent token. |
 | `POST` | `/api/v2/admin/forward/agents/:id/revoke` | Revoke an agent. |
 
-Create token request:
+Create token request (`nodeId` is required and must be a forward node; a
+missing, `0` or unknown node is refused with a panel error and issues
+nothing):
 
 ```json
 {
@@ -400,9 +402,9 @@ Register request:
 }
 ```
 
-A token is bound to one node: the `nodeId` it was created with or, when it
-was created without one, the `nodeId` of its first registration that names
-one. A registration naming another node is answered `403` with
+A token is bound to one node: the `nodeId` it was created with or, for a
+token an earlier build created without one, the `nodeId` of its first
+registration that names one. A registration naming another node is answered `403` with
 `agent is bound to another node` and changes nothing; one without `nodeId`
 keeps the binding. Moving an agent to another node takes a new token.
 

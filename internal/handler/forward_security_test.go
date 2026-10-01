@@ -296,6 +296,38 @@ func (s *ForwardSecurityTestSuite) TestCleanAgentCannotRegisterUnderAnotherNode(
 	s.Contains(w.Body.String(), fmt.Sprintf(`"nodeId":%d`, s.relay.ID))
 }
 
+// An administrator issued a clean agent token without a node, and its first
+// registration chose the node. Issuing one now takes an existing forward
+// node, refused otherwise with the handler's panel error.
+func (s *ForwardSecurityTestSuite) TestCleanAgentTokensAreIssuedForANode() {
+	s.Require().NoError(s.db.AutoMigrate(&model.ForwardCleanAgent{}))
+	s.Require().NoError(s.db.Exec("DELETE FROM v2_forward_clean_agent").Error)
+	issue := func(body string) map[string]any {
+		w := s.serve("POST", "/admin/forward/agents", "/admin/forward/agents", body, nil, 1, true, NewForwardCleanAgentHandler().CreateAgentToken)
+		s.Require().Equal(http.StatusOK, w.Code, w.Body.String())
+		return decodePanelTestResponse(s.T(), w)
+	}
+
+	for body, message := range map[string]string{
+		`{"name":"relay-agent"}`:               "nodeId is required: a clean agent token is issued for one forward node",
+		`{"name":"relay-agent","nodeId":0}`:    "nodeId is required: a clean agent token is issued for one forward node",
+		`{"name":"relay-agent","nodeId":9999}`: "forward node not found",
+	} {
+		resp := issue(body)
+		s.Equal(float64(-1), resp["code"], body)
+		s.Equal(message, resp["msg"], body)
+	}
+	var count int64
+	s.Require().NoError(s.db.Model(&model.ForwardCleanAgent{}).Count(&count).Error)
+	s.Zero(count, "a token was issued without a valid node")
+
+	resp := issue(fmt.Sprintf(`{"name":"relay-agent","nodeId":%d}`, s.relay.ID))
+	s.Require().Equal(float64(0), resp["code"], resp)
+	data := resp["data"].(map[string]any)
+	s.NotEmpty(data["token"])
+	s.Equal(float64(s.relay.ID), data["agent"].(map[string]any)["nodeId"])
+}
+
 func TestForwardSecurity(t *testing.T) {
 	suite.Run(t, new(ForwardSecurityTestSuite))
 }
