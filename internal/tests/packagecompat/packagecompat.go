@@ -79,6 +79,9 @@ type Case struct {
 	Warmup [][]byte
 }
 
+// noRouteHeader marks the harness's own answer to a path no route matches.
+const noRouteHeader = "X-Packagecompat-No-Route"
+
 // clientIP is the address both sides see: the legacy handler through the
 // request, the native one through the metadata the kernel sends.
 const clientIP = "192.0.2.1"
@@ -258,6 +261,9 @@ func serve(t *testing.T, method, pattern string, c Case, handler gin.HandlerFunc
 	t.Helper()
 	engine := gin.New()
 	engine.Handle(method, pattern, handler)
+	// A path the pattern does not match is a broken case; a 404 the handler
+	// answers itself (an unknown record) is not.
+	engine.NoRoute(func(ctx *gin.Context) { ctx.Header(noRouteHeader, "1"); ctx.Status(http.StatusNotFound) })
 	send := func(body []byte) Result {
 		request := httptest.NewRequestWithContext(context.Background(), method, c.Path, bytes.NewReader(body))
 		request.RemoteAddr = clientIP + ":1234"
@@ -269,7 +275,7 @@ func serve(t *testing.T, method, pattern string, c Case, handler gin.HandlerFunc
 		}
 		recorder := httptest.NewRecorder()
 		engine.ServeHTTP(recorder, request)
-		require.NotEqual(t, http.StatusNotFound, recorder.Code, "case path %s does not match pattern %s", c.Path, pattern)
+		require.Empty(t, recorder.Header().Get(noRouteHeader), "case path %s does not match pattern %s", c.Path, pattern)
 		return Result{StatusCode: recorder.Code, Body: recorder.Body.Bytes(), Header: recorder.Header()}
 	}
 	for _, body := range c.Warmup {

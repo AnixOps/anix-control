@@ -258,8 +258,14 @@ what an order needs of a plan (`id`, `group_id`, `transfer_enable`,
 `kapi_plan_subscription_group_v1` the `plan_id` and `group_id` of
 `v2_plan_subscription_group`. `kapi_order_billing_v1` exposes what a payment
 needs of an order: `id`, `user_id`, `total_amount` and `status` of
-`v2_order`. If a view cannot be created, or its source table does not exist,
-startup continues and leases that grant it fail.
+`v2_order`. `kapi_user_referral_v1` exposes `id` and `invite_user_id` of
+`v2_user`: who invited whom. `kapi_affiliate_settings_v1` exposes the `value`
+of the one `v2_system_config` row keyed `invite.frontend.config` (the
+affiliate's frontend settings, which the kernel does not treat as sensitive)
+and no other row. A view that filters rows is created `WITH
+(security_barrier)` on PostgreSQL, so a package's own functions never see the
+rows it hides. If a view cannot be created, or its source table does not
+exist, startup continues and leases that grant it fail.
 
 `sdk/packagestoresdk` is the host side:
 

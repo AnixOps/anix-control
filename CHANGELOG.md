@@ -573,6 +573,35 @@
   - `internal/tests/paymentcompat` proves byte parity on SQLite and
     PostgreSQL, and the same payment records, gateways and orders. The
     PostgreSQL run is part of CI.
+- **Affiliate module.** `packages/affiliate` has its own host and serves 7
+  of its 8 routes natively: the user's commissions, withdrawals and
+  withdrawal request, and the administrator's withdrawal list and
+  decisions, invite statistics and configuration.
+  - It runs on `v2_commission_record`, `v2_commission_withdraw` and
+    `v2_invite_config`, adopted in place.
+  - Other domains are read through kernel views: the new
+    `kapi_user_referral_v1` (who invited whom),
+    `kapi_subscriber_entitlement_v1` (the commission balance) and the new
+    `kapi_affiliate_settings_v1`, which shows the one non-sensitive
+    `v2_system_config` row holding the frontend settings
+    (`invite.frontend.config`). A view that filters rows is a
+    `security_barrier` view on PostgreSQL, so a package's own functions
+    cannot see the rows it hides.
+  - Withdrawals debit and rejections refund the commission balance through
+    `KernelSubscriber.AdjustBalance` (`kernel.subscriber.balance.v1`), with
+    the ledger ids the kernel's handlers use, so a balance changes once
+    whichever side serves the request. The package never writes `v2_user`.
+    The contract already covered the commission balance and is unchanged.
+  - A native withdrawal is recorded as a reservation (status `-1`) until its
+    debit applies, and a rejection claims the withdrawal before refunding
+    it, so no failure pays out or refunds an undebited amount.
+  - Updating the configuration stays bridged: it writes `v2_system_config`,
+    which no package may adopt and no contract writes.
+  - `internal/tests/affiliatecompat` proves byte parity on SQLite and
+    PostgreSQL (80 cases each), and the same withdrawals, balances, request
+    ledger and configuration, against the real KernelSubscriber server. The
+    PostgreSQL run is part of CI. The parity harness now tells a path its
+    route does not match from a 404 the handler answers.
 
 - The kernel side of the identity module, `KernelIdentity` (N9). It is served
   on the local package bridge and on the module listener.

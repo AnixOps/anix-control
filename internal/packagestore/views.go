@@ -21,6 +21,11 @@ type KernelAPIView struct {
 	RowFilter bool
 }
 
+// InviteSettingsKey is the system configuration key holding the affiliate
+// frontend settings, the one row of v2_system_config that
+// kapi_affiliate_settings_v1 shows.
+const InviteSettingsKey = "invite.frontend.config"
+
 // KernelAPIViews lists every kernel API view. They expose only the columns a
 // package may read: never password hashes, tokens or subscription UUIDs.
 var KernelAPIViews = []KernelAPIView{
@@ -69,6 +74,22 @@ var KernelAPIViews = []KernelAPIView{
 		Name:   "kapi_order_billing_v1",
 		Source: "v2_order",
 		Query:  "SELECT id, user_id, total_amount, status FROM v2_order",
+	},
+	{
+		// Who invited whom, for the affiliate's invite statistics.
+		Name:   "kapi_user_referral_v1",
+		Source: "v2_user",
+		Query:  "SELECT id, invite_user_id FROM v2_user",
+	},
+	{
+		// The affiliate's frontend settings (code prefix and length,
+		// withdrawal fee and methods): the value of one system
+		// configuration key, which the kernel does not treat as sensitive.
+		// No other row of v2_system_config, which holds secrets, is visible.
+		Name:      "kapi_affiliate_settings_v1",
+		Source:    "v2_system_config",
+		Query:     "SELECT value FROM v2_system_config WHERE key = '" + InviteSettingsKey + "'",
+		RowFilter: true,
 	},
 }
 
