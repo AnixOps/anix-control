@@ -32,8 +32,9 @@ import (
 const PhaseCacheTTL = 5 * time.Second
 
 type phaseEntry struct {
-	phases map[string]string
-	loaded time.Time
+	phases    map[string]string
+	installed bool
+	loaded    time.Time
 }
 
 var (
@@ -55,20 +56,7 @@ func phaseCacheKey(db *gorm.DB) any {
 // unknown phase and a failed read all answer dual_write: the legacy
 // columns. The phases are cached for PhaseCacheTTL.
 func ReadPhase(db *gorm.DB, table string) string {
-	key := phaseCacheKey(db)
-	if key == nil {
-		return PhaseDualWrite
-	}
-	phaseMu.Lock()
-	entry, ok := phaseCache[key]
-	phaseMu.Unlock()
-	if !ok || time.Since(entry.loaded) >= PhaseCacheTTL {
-		entry = phaseEntry{phases: loadPhases(db), loaded: time.Now()}
-		phaseMu.Lock()
-		phaseCache[key] = entry
-		phaseMu.Unlock()
-	}
-	switch phase := entry.phases[table]; phase {
+	switch phase := cachedPhases(db).phases[table]; phase {
 	case PhaseDualRead, PhaseFinalized, PhaseLegacy:
 		return phase
 	default:
@@ -76,20 +64,50 @@ func ReadPhase(db *gorm.DB, table string) string {
 	}
 }
 
-func loadPhases(db *gorm.DB) map[string]string {
+// SplitInstalled reports whether db holds the split tables (EnsureSchema
+// ran): a database without them (a tool's, or a test's that never created
+// the kernel schema) has no credential rows and no endpoint pins. It is
+// cached with the phases.
+func SplitInstalled(db *gorm.DB) bool {
+	return cachedPhases(db).installed
+}
+
+// cachedPhases answers the phases of db, loaded at most every
+// PhaseCacheTTL.
+func cachedPhases(db *gorm.DB) phaseEntry {
+	key := phaseCacheKey(db)
+	if key == nil {
+		return phaseEntry{}
+	}
+	phaseMu.Lock()
+	entry, ok := phaseCache[key]
+	phaseMu.Unlock()
+	if !ok || time.Since(entry.loaded) >= PhaseCacheTTL {
+		phases, installed := loadPhases(db)
+		entry = phaseEntry{phases: phases, installed: installed, loaded: time.Now()}
+		phaseMu.Lock()
+		phaseCache[key] = entry
+		phaseMu.Unlock()
+	}
+	return entry
+}
+
+// loadPhases reads the split state table; it reports whether the split
+// tables exist.
+func loadPhases(db *gorm.DB) (map[string]string, bool) {
 	session := db.Session(&gorm.Session{NewDB: true})
-	if !session.Migrator().HasTable(&model.NodeSecretSplit{}) {
-		return nil
+	if !session.Migrator().HasTable(&model.NodeSecretSplit{}) || !installed(session) {
+		return nil, false
 	}
 	var rows []model.NodeSecretSplit
 	if err := session.Select("table_name", "phase").Find(&rows).Error; err != nil {
-		return nil
+		return nil, true
 	}
 	phases := make(map[string]string, len(rows))
 	for _, row := range rows {
 		phases[row.Table] = row.Phase
 	}
-	return phases
+	return phases, true
 }
 
 // invalidatePhases drops the cached phases of db, so this process reads a

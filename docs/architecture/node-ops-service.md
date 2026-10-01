@@ -5,7 +5,10 @@ the kernel serves the contract `sdk/api/kernelnodeops/v1`
 (`anixops.kernelnodeops.v1`), which is binding (section 3.10), with its
 ledger, but executes no operation kind yet (section 3.11). NO-4 is
 implemented: the gateway seals node secrets into handles, and the kernel
-verifies request bindings (section 3.7). This is phase 3 of the 2026-10
+verifies request bindings (section 3.7). NO-7 is implemented: the kernel
+executes the forward family and the gost API connection test, runtime job
+payloads carry no token, and forward node tokens are pinned to their
+endpoints (sections 3.8, 3.11 and 6.1). This is phase 3 of the 2026-10
 plan, done together with Agent line A2.
 
 > 中文摘要：剩余桥接路由里，有 83 条在等“内核代办节点操作”和“节点凭据外置”，
@@ -27,6 +30,9 @@ plan, done together with Agent line A2.
 > 但还没有任何操作类型可执行：提交这类操作会得到 `UNIMPLEMENTED`，且不留任何记录（第 3.11 节）。
 > NO-4 已完成：对 `config/node-secret-fields.json` 列出的路由，网关把请求里的节点密钥换成一次性句柄，
 > 应答里只还原为本请求生成的句柄；无法替换时由内核的旧处理器直接应答，模块看不到这个请求（第 3.7 节）。
+> NO-7 已完成：内核可执行转发族四种操作（应用转发、隧道变更、后端同步、旧版规则）和 gost API 连通性测试；
+> 转发运行时任务的载荷不再含节点令牌，旧载荷在启动时清洗；转发节点令牌钉在其管理端点上，
+> 地址未经管理员确认时不出示令牌（第 3.8、3.11、6.1 节）。
 
 ## Contents
 
@@ -390,6 +396,7 @@ A package learns everything it needs and never a secret.
      | `PUT /admin/forward/nodes/:id` | `/api_token` (value) | | forward node `:id` |
      | `POST /admin/auth-keys`, `POST /internal/auth-keys` | | `/data/key` | new registration key |
      | `POST /admin/forward/agents` | | `/data/token` | new clean agent |
+     | `POST /admin/forward/test-connection` | `/api_token` (value) | | `dial`: no resource (NO-7) |
 
    - **Handles.**
      - **Format.** A handle is `anix-sealed:v1:` followed by 43 unpadded
@@ -480,9 +487,14 @@ A package learns everything it needs and never a secret.
        package never sees an unsealed request.
      - **Handles are never echoed.** A request's own handle is not expanded
        in its answer: an executor reveals what an answer shows.
-     - **Not listed.** `POST /admin/forward/test-connection` (gost-mesh,
-       native-flagged) is not listed: its native handler dials gost with the
-       typed token.
+     - **A dial target.** `POST /admin/forward/test-connection` (gost-mesh,
+       native-flagged) is listed since NO-7 with target kind `dial`: the
+       typed token is sealed, resolved for the bound request only, and
+       presented once by the kernel to the address the request names
+       (`diagnose.forward_backend`, section 6.1). A `dial` target names no
+       resource: a resolution names the kind and no id, and the store
+       binds nothing. The package's connection test submits the handle and
+       waits for the result; it never dials.
 5. **No call reveals a stored secret.** No KernelNodeOps call answers an
    existing credential's value, even as a handle. The one route whose answer
    is a stored secret, `GET /admin/nodes/:id/credentials`, is
@@ -531,6 +543,45 @@ pinned to the endpoint it was issued for:
   `PUT /admin/forward/nodes/:id` (or the Ansible machine equivalent) for
   that node, and only to the host and port in that request's body. The
   kernel retained that body, so the package cannot choose the address.
+
+**The rule as NO-7 built it** (`nodesecrets.ForwardNodeTokenAt`,
+`service.ForwardNodeAPIToken`):
+
+- **What is compared.** The token is presented only when the row's current
+  `host:api_port` is the credential row's `endpoint`, and both are set. The
+  host is compared as written, the port as a number. A changed host, a
+  changed port, a removed port and a port added after the pin are each
+  another endpoint: `ENDPOINT_UNCONFIRMED`, not retryable, with a message
+  that names no address and no value. Nothing is sent.
+- **Where it applies.** Every call that carries the token to an address:
+  NodeX requests for the gost backend and the legacy rules (both nodes of a
+  rule must be confirmed), the NodeX translation of a clean agent job, and
+  the gost manager's clients. Job backends carry no node token (section
+  3.11), so they need no pin. The legacy routes and the kernel's executors
+  run the same functions, so a legacy forward change on an unconfirmed node
+  fails the same way.
+- **A node without an API port** has no endpoint: its pin is empty and its
+  token is presented nowhere (decided by the owner, 2026-10-01). It cannot
+  be used by the gost backend or a legacy rule until an administrator sets
+  its API port, which pins it. `node-secrets status` lists such nodes by id
+  and name (`forward_nodes_without_api_port`). This closes the gap NO-2
+  left open: an attacker could otherwise clear the port, move the host
+  while "unpinned", and set the port again.
+- **What moves the pin.** The kernel's own forward node writers
+  (`ForwardNodeService.Create`, `Update` and the Ansible machine routes),
+  which re-derive the endpoint from the row they just wrote
+  (`nodesecrets.Sync`). Today every write of `v2_forward_node` goes through
+  them, driven by the administrator's `PUT /admin/forward/nodes/:id`; once
+  the table is adopted (M3-4), only the `SyncNode` bound to that request
+  moves it (NO-5/NO-6). A write that bypasses them, a package's or a direct
+  SQL one, leaves the pin where it was.
+- **Before the backfill** a node has no credential row and so no pin: its
+  token is presented as before the split, and the read is counted
+  (`anixops_node_secrets_pin_total{reason="unpinned"}`). Run
+  `node-secrets backfill` after the upgrade to pin every node. An
+  unconfirmed address is counted with `reason="unconfirmed"` and logged
+  once per node. The rule applies in every split phase: the pin is the
+  kernel's record, not a secret.
 
 The rule lapses once the forward runtime runs on agent plugins (A5): agents
 dial Control, and Control no longer dials nodes with tokens.
@@ -900,6 +951,69 @@ executes `node.sync` (nodeconfig), `agent.operation` (agents) and
   agent's refusals and failures, a disconnect before and after the
   acknowledgement, a replaced session, cancellation, the deadline, and a
   walk of every answer for the fixture's credentials.
+**Forward operations, as NO-7 built them** (`kernelnodeops.Forward`). The
+kernel executes `ApplyForward`, `ApplyTunnel`, `SyncForwardBackend` and
+`ApplyLegacyRule`, and `GetCapabilities` lists them. No route switches to
+native; M3-4 and M3-5 do that.
+
+- **One implementation.** Each kind runs the legacy routes' code
+  (`PanelForwardService.ApplyForwardRuntime`,
+  `ForwardRuleService.ApplyRuntime`) over the executors the kernel has: the
+  NodeX client for the gost backend and the legacy rules, the local Ansible
+  job executor and the clean agent job queue. The legacy routes call the
+  same functions, so their answers are unchanged byte for byte
+  (`TestForwardOperationsAnswers`, written before the move).
+- **What `forward.apply` does.** It loads the forward and its tunnel when
+  it runs (level-triggered: a repeat converges on the rows as they are) and
+  applies the action through the backend in force for that forward:
+  `CREATE`, `UPDATE`, `PAUSE`, `RESUME` and `SYNC` as named, `DELETE` and
+  `FORCE_DELETE` as the runtime's delete. The forward's runtime columns are
+  written as every legacy change writes them; the status column stays the
+  package's, as it is the caller's in every legacy route.
+  - On the gost backend NodeX is called in the operation (`NODEX`,
+    accepted when the call starts), and the result is NodeX's answer.
+  - On a job backend the operation is accepted when the job is queued
+    (`LOCAL_ANSIBLE` or `CLEAN_AGENT_JOB`, with the job id in the receipt)
+    and follows the job to its end, reading it every 250 ms: the job's
+    result or error is the operation's. A job still queued when the
+    operation is cancelled or times out stays queued; the executor runs it,
+    and the next operation on the forward converges.
+  - The deletion is not captured at submission: the package deletes its
+    rows only after the operation ends (section 3.1), so the rows are
+    there when the kernel executes.
+  - `FORCE_DELETE` succeeds whatever the node answered, with the failure in
+    its result, so the package may delete the forward. A forward gone
+    since the submission is `TARGET_GONE`; a refusing node is
+    `BACKEND_FAILED`, retryable; an unconfirmed endpoint is
+    `ENDPOINT_UNCONFIRMED` (section 3.8).
+- **Fan-outs.** `forward.tunnel` creates one `forward.apply UPDATE` per
+  active forward of the tunnel, as the legacy tunnel update applies them
+  (the contract's comment said `SYNC`; `UPDATE` keeps the job rows the
+  legacy route writes). `forward.sync_backend` takes the target backend from
+  the new `SyncForwardBackend.backend` field (the backend in force when
+  empty), records the target on every active forward not on it, and
+  creates one `forward.apply SYNC` per forward. The legacy backend sync
+  records the target only after a forward applied; the kernel records it
+  first, so a failed child leaves the forward on the target backend with
+  its runtime status failed, where the administrator sees it. A fan-out
+  without children ends at once.
+- **Legacy rules.** `forward.legacy_rule` pushes the row as it is through
+  NodeX, with both nodes' tokens resolved at send time: `CREATE`, `UPDATE`
+  and `DELETE` as named, `PAUSE`, `RESUME` and `SYNC` as the runtime's
+  sync. The result says the rule was applied on both nodes, or carries the
+  refusal.
+- **Job payloads without tokens.** A `v2_forward_runtime_job` payload no
+  longer holds the ingress node's token (`apiToken` is omitted). The gost
+  executor resolves the token when it sends the request to NodeX, the
+  bridge worker when it asks NodeX to translate a clean agent job, each at
+  the node's pinned endpoint only; the stored task parameters NodeX
+  answers are scrubbed too. A clean agent's claim and the administrator's
+  job list serve a payload written before NO-7 scrubbed, and a start-up
+  pass in the singleton worker process rewrites those rows
+  (`docs/UPGRADE.md`), so both shapes are served during the transition.
+- **Results.** `ForwardApplyResult` and `LegacyRuleResult`, scrubbed: the
+  nodes' tokens and every value at a secret key are masked, in results,
+  errors and the forward's runtime message.
 
 ## 4. Node credential split
 
@@ -1474,6 +1588,26 @@ adopted table wait for that table to be finalized on an installation (section
 
 Call names below are `SubmitOperation` kinds unless they are RPCs. "wait T"
 means `wait: TERMINAL` and "wait A" means `wait: ACCEPTED`.
+
+**The connection test, as NO-7 built it.** `POST /admin/forward/test-connection`
+(gost-mesh, `native-flagged`) runs through the kernel: the gateway seals the
+typed token (section 3.7), the package's native handler submits
+`TestForwardBackend{host, api_port, token}` (`diagnose.forward_backend`,
+family diagnose, held by gost-mesh through `kernel.nodeops.diagnose.v1`)
+with its request binding and waits for the result, and the kernel dials
+the gost API with the kernel's own gost client, as the legacy handler does,
+so the answer is byte for byte the legacy one (`gostmeshcompat`). The
+operation's `Preparer` resolves the handle in the submitting call and holds
+the value in kernel memory until the executor dials, or the request's
+deadline; the ledger holds neither token nor handle, and the token is
+scrubbed from the result. A refusing or unreachable API is the result, not
+a failed operation. The SSRF rule of the diagnoses (#84, #90) applies: a
+request that is not an administrator's dials public addresses only; the
+route is administrator-only, so the kernel dials what the administrator
+named, loopback included, as before. A shadow run has no binding and so
+submits nothing; a host without KernelNodeOps keeps the route legacy; a
+value the gateway did not seal (the placeholder) is never sent, and the
+router answers from the legacy handler.
 
 **Diagnoses, as NO-8 built them.** The kernel executes `CheckEndpoints`,
 `CollectNodeStats`, `DiagnoseForward` and `DiagnoseTunnel`

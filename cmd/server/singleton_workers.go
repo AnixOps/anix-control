@@ -34,6 +34,9 @@ func runSingletonWorkers(ctx context.Context, bridgeEnabled bool) {
 		}()
 	}
 
+	// Runtime job payloads written before NO-7 carry node tokens: they are
+	// scrubbed before the executors serve a row (docs/UPGRADE.md).
+	service.RunForwardRuntimeJobPayloadScrub(ctx, database.Get())
 	run(func(ctx context.Context) {
 		service.NewPanelForwardRuntimeJobExecutor(database.Get()).Start(ctx)
 	})

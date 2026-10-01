@@ -864,6 +864,20 @@ The values are stored in clear, like the legacy columns, and the tables are
 protected: no package can adopt them. Database backups and dumps hold them,
 as they hold the legacy columns.
 
+**Forward nodes without an API port.** Once `backfill` has run, a forward
+node's token is pinned to its endpoint, `host:api_port` (decided by the
+owner, 2026-10-01; see "Forward Node Tokens Are Pinned To Their Endpoint"
+below). A forward node that has a token but no `api_port` has no endpoint,
+so its token is presented nowhere: gost backend changes and legacy rules on
+it fail with `ENDPOINT_UNCONFIRMED` until an administrator sets the API
+port, which pins it. Before the backfill nothing changes: such a node has
+no credential row and is used as before. List those nodes first and set
+their ports, then backfill:
+
+```bash
+anix-control node-secrets status     # "forward_nodes_without_api_port": count, and each node's id and name
+```
+
 After the upgrade, copy the existing rows and compare both forms. Each
 command prints JSON with counts and digests and never a secret; run it with
 the server's configuration (`ANIX_CONTROL_CONFIG` or `-config`):
@@ -871,7 +885,7 @@ the server's configuration (`ANIX_CONTROL_CONFIG` or `-config`):
 ```bash
 anix-control node-secrets backfill   # idempotent; resumes an interrupted pass
 anix-control node-secrets verify     # exit 3 when the forms differ
-anix-control node-secrets status     # phase, backfill progress, last verify
+anix-control node-secrets status     # phase, backfill progress, last verify, forward nodes without an API port
 ```
 
 - `backfill` works table by table in batches by id (`-batch 500`), one
@@ -976,6 +990,61 @@ staging copy shows none. Fix what the scan reports before then.
 `********` as a node key, registration key, forward node token or clean
 agent token. Finalize (P3) writes these values into the legacy columns. A
 request signed with a placeholder secret is refused.
+
+### Forward Runtime Job Payloads No Longer Hold Node Tokens
+
+Until this release a forward change on a job backend (local Ansible, clean
+agent) and every gost change recorded the ingress node's API token inside
+the `v2_forward_runtime_job` payload (`panelForward.ingressNode.apiToken`),
+so the job table, the administrator's job list
+(`GET /api/v2/admin/forward/runtime/jobs`) and a clean agent's claim all
+carried it (`docs/architecture/node-ops-service.md`, sections 3.7 and
+3.11).
+
+- **New rows carry no token.** The kernel resolves the token when it sends
+  a request to NodeX, and only for the node's pinned endpoint (next
+  section). Ansible and clean agent jobs never needed it: the agent
+  authenticates with its own token.
+- **Old rows are scrubbed at start.** The Control process that holds the
+  singleton worker lease rewrites, before its job executors serve a row,
+  every stored payload that still names a token (`"apiToken":"..."` and
+  every other secret key), in batches of 200, and logs the count
+  (`removed the node tokens from N stored payloads`). The pass is
+  idempotent: a scrubbed row no longer matches, so later starts read
+  nothing. It needs no operator action and no command.
+- **During the transition** every reader scrubs what it serves: a clean
+  agent that claims a row written before the upgrade gets the payload
+  without the token, and so does the job list. Nothing an agent or an
+  administrator reads holds a token.
+- **Rollback.** An older binary writes tokens into new rows again; the
+  next start of this release scrubs them.
+
+### Forward Node Tokens Are Pinned To Their Endpoint
+
+A forward node's API token is now presented only at the endpoint it was
+bound to, `host:api_port` as recorded in `v4_kernel_node_credential.endpoint`
+by the kernel's own forward node writers (decision D12,
+`docs/architecture/node-ops-service.md` section 3.8). A NodeX request for
+the gost backend or a legacy rule whose node's address is not the pinned
+one fails with `ENDPOINT_UNCONFIRMED`
+(`the forward node's address is not the one its token is pinned to`), and
+nothing is sent.
+
+- **What moves the pin.** Saving the node through the administrator's
+  forward node or Ansible machine routes (`PUT /api/v2/admin/forward/nodes/:id`)
+  re-pins it to the row as saved. A write that bypasses Control (direct
+  SQL) does not: re-save the node in the administrator UI to confirm the
+  address.
+- **A node without an API port** has no endpoint and its token is presented
+  nowhere (decided by the owner, 2026-10-01): set the API port before using
+  the node with the gost backend or a legacy rule.
+  `anix-control node-secrets status` lists such nodes under
+  `forward_nodes_without_api_port`, by id and name, with their count.
+- **Run `node-secrets backfill`** after the upgrade if you have not: a node
+  without a credential row has no pin yet, is presented as before, and is
+  counted in `anixops_node_secrets_pin_total{reason="unpinned"}`. An
+  unconfirmed address is counted with `reason="unconfirmed"` and logged
+  once per node, without the address or the value.
 
 ### Agent Client Certificates Are Optional
 

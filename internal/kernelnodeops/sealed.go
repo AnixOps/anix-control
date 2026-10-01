@@ -101,6 +101,13 @@ func NodeTarget(ref *kernelnodeopsv1.NodeRef) sealedsecrets.Target {
 	return sealedsecrets.Target{}
 }
 
+// DialTarget is the sealed secret target of a route whose secret the kernel
+// presents once to the address the request names (target kind dial): no
+// resource.
+func DialTarget() sealedsecrets.Target {
+	return sealedsecrets.Target{Kind: sealedsecrets.TargetDial}
+}
+
 // Unseal resolves sealed handles the bound request carried, for the target
 // and field each is stored for, all or none, and each once
 // (sealedsecrets.Store.Resolve). Without a binding, or for a handle sealed

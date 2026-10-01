@@ -43,14 +43,34 @@ func (s *ForwardRuleService) Create(rule *model.ForwardRule) error {
 	}
 
 	if rule.Enabled {
-		ctx := context.Background()
-		if err := s.runtimeProvider.CreateForwardRule(ctx, rule); err != nil {
+		if err := s.ApplyRuntime(context.Background(), rule, model.ForwardRuntimeJobActionCreate); err != nil {
 			// Keep DB persistence compatible with current behavior even if runtime sync fails.
 			fmt.Printf("sync rule %d failed: %v\n", rule.ID, err)
 		}
 	}
 
 	return nil
+}
+
+// ApplyRuntime pushes a rule to its relay and exit nodes through the
+// runtime provider (NodeX): create, update or sync apply the row as it is,
+// delete removes it. The legacy routes and the KernelNodeOps
+// forward.legacy_rule executor run it alike; the row is the caller's.
+func (s *ForwardRuleService) ApplyRuntime(ctx context.Context, rule *model.ForwardRule, action string) error {
+	if rule == nil {
+		return errors.New("forward rule is required")
+	}
+	switch action {
+	case model.ForwardRuntimeJobActionCreate:
+		return s.runtimeProvider.CreateForwardRule(ctx, rule)
+	case model.ForwardRuntimeJobActionUpdate:
+		return s.runtimeProvider.UpdateForwardRule(ctx, rule)
+	case model.ForwardRuntimeJobActionDelete:
+		return s.runtimeProvider.DeleteForwardRule(ctx, rule)
+	case model.ForwardRuntimeJobActionSync, model.ForwardRuntimeJobActionPause, model.ForwardRuntimeJobActionResume:
+		return s.runtimeProvider.SyncForwardRule(ctx, rule)
+	}
+	return fmt.Errorf("unsupported forward rule action: %s", action)
 }
 
 // Update updates a rule and syncs it to the runtime backend.
@@ -66,8 +86,7 @@ func (s *ForwardRuleService) Update(rule *model.ForwardRule) error {
 		return err
 	}
 
-	ctx := context.Background()
-	if err := s.runtimeProvider.UpdateForwardRule(ctx, rule); err != nil {
+	if err := s.ApplyRuntime(context.Background(), rule, model.ForwardRuntimeJobActionUpdate); err != nil {
 		fmt.Printf("sync rule %d failed: %v\n", rule.ID, err)
 	}
 
@@ -81,8 +100,7 @@ func (s *ForwardRuleService) Delete(id uint) error {
 		return err
 	}
 
-	ctx := context.Background()
-	if err := s.runtimeProvider.DeleteForwardRule(ctx, rule); err != nil {
+	if err := s.ApplyRuntime(context.Background(), rule, model.ForwardRuntimeJobActionDelete); err != nil {
 		fmt.Printf("delete rule %d failed: %v\n", id, err)
 	}
 
@@ -152,8 +170,7 @@ func (s *ForwardRuleService) Toggle(id uint, enabled bool) error {
 
 	rule.Enabled = enabled
 
-	ctx := context.Background()
-	if err := s.runtimeProvider.SyncForwardRule(ctx, rule); err != nil {
+	if err := s.ApplyRuntime(context.Background(), rule, model.ForwardRuntimeJobActionSync); err != nil {
 		fmt.Printf("sync rule %d failed: %v\n", id, err)
 	}
 

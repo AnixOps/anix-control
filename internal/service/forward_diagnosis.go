@@ -59,6 +59,13 @@ func (p DiagnosisProbes) dial(ctx context.Context, address string, timeout time.
 	return dialer.DialContext(ctx, "tcp", address)
 }
 
+// PublicHost resolves the host of a probe Control runs for a user and
+// answers the address to connect to, or the refusal (publicProbeAddress):
+// loopback, private and other non-public addresses are refused.
+func (p DiagnosisProbes) PublicHost(ctx context.Context, host string) (netip.Addr, string) {
+	return publicProbeAddressWith(ctx, p.lookup(), host)
+}
+
 func (p DiagnosisProbes) lookup() probeLookupFunc {
 	if p.Lookup != nil {
 		return p.Lookup

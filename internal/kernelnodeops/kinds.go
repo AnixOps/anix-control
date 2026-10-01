@@ -35,13 +35,17 @@ const (
 	KindDiagnoseNodeStats  = "diagnose.node_stats"
 	KindDiagnoseForward    = "diagnose.forward"
 	KindDiagnoseTunnel     = "diagnose.tunnel"
-	KindAgentDiagnostic    = "agent.diagnostic"
-	KindAgentOperation     = "agent.operation"
-	KindCredentialIssue    = "credential.issue"  // #nosec G101 -- an operation kind name, not a credential.
-	KindCredentialRevoke   = "credential.revoke" // #nosec G101 -- an operation kind name, not a credential.
-	KindRegKeyIssue        = "regkey.issue"
-	KindRegKeyRevoke       = "regkey.revoke"
-	KindCleanAgentIssue    = "cleanagent.issue"
+	// KindDiagnoseForwardBackend tests a gost API with a token the
+	// administrator typed (POST /admin/forward/test-connection); the
+	// kernel dials, the package never sees the token.
+	KindDiagnoseForwardBackend = "diagnose.forward_backend"
+	KindAgentDiagnostic        = "agent.diagnostic"
+	KindAgentOperation         = "agent.operation"
+	KindCredentialIssue        = "credential.issue"  // #nosec G101 -- an operation kind name, not a credential.
+	KindCredentialRevoke       = "credential.revoke" // #nosec G101 -- an operation kind name, not a credential.
+	KindRegKeyIssue            = "regkey.issue"
+	KindRegKeyRevoke           = "regkey.revoke"
+	KindCleanAgentIssue        = "cleanagent.issue"
 )
 
 // SealedPrefix starts a sealed secret handle (section 3.7).
@@ -60,6 +64,7 @@ const (
 	maxCheckNodes    = 256
 	maxTimeout       = 3600
 	maxAgentOpID     = 128
+	maxHostBytes     = 1024
 )
 
 // families maps each operation family to its name in the ledger and its
@@ -177,6 +182,8 @@ func kindOf(spec *kernelnodeopsv1.OperationSpec) (*kind, error) {
 		name = KindDiagnoseForward
 	case *kernelnodeopsv1.OperationSpec_DiagnoseTunnel:
 		name = KindDiagnoseTunnel
+	case *kernelnodeopsv1.OperationSpec_TestForwardBackend:
+		name = KindDiagnoseForwardBackend
 	case *kernelnodeopsv1.OperationSpec_RunAgentDiagnostic:
 		name = KindAgentDiagnostic
 	case *kernelnodeopsv1.OperationSpec_AgentControlOperation:
@@ -574,7 +581,16 @@ func init() {
 	})
 	register(&kind{
 		name: KindForwardSyncBackend, family: forward, fanOut: true,
-		check: func(*kernelnodeopsv1.OperationSpec) error { return nil },
+		check: func(spec *kernelnodeopsv1.OperationSpec) error {
+			backend := spec.GetSyncForwardBackend().GetBackend()
+			if backend == "" {
+				return nil
+			}
+			if _, known := service.NormalizeForwardRuntimeBackend(backend); !known {
+				return invalid("backend must be gost, nftables_ansible, iptables_ansible or clean_agent")
+			}
+			return nil
+		},
 		resolve: func(*gorm.DB, *kernelnodeopsv1.OperationSpec) (resolution, error) {
 			return resolution{resource: "forward-backend"}, nil
 		},
@@ -753,6 +769,22 @@ func init() {
 			targets, err := tunnelTargets(db, spec.GetDiagnoseTunnel().GetTunnelId())
 			return resolution{targets: targets}, err
 		},
+	})
+	register(&kind{
+		name: KindDiagnoseForwardBackend, family: diagnose,
+		check: func(spec *kernelnodeopsv1.OperationSpec) error {
+			op := spec.GetTestForwardBackend()
+			if err := checkText(op.GetHost(), "host", maxHostBytes, true); err != nil {
+				return err
+			}
+			if op.GetToken() == nil {
+				// The administrator typed no token: the API is dialled
+				// without one, as the legacy route does.
+				return nil
+			}
+			return checkHandle(op.GetToken().GetHandle(), "token.handle")
+		},
+		resolve: func(*gorm.DB, *kernelnodeopsv1.OperationSpec) (resolution, error) { return resolution{}, nil },
 	})
 	register(&kind{
 		name: KindAgentDiagnostic, family: diagnose,

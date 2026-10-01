@@ -57,7 +57,7 @@ EXTRACTION_LEGACY_SOURCES = frozenset({"router", "identity-bridge", "none"})
 NODE_SECRET_FIELDS_FORMAT = "anixops.node-secret-fields/v1"
 NODE_SECRET_FIELDS_ROOT_FIELDS = frozenset({"format", "routes"})
 NODE_SECRET_ROUTE_FIELDS = frozenset({"route_id", "target", "request", "answer"})
-NODE_SECRET_TARGET_KINDS = frozenset({"proxy", "forward", "protocol", "clean_agent", "registration_key", "none"})
+NODE_SECRET_TARGET_KINDS = frozenset({"proxy", "forward", "protocol", "clean_agent", "registration_key", "none", "dial"})
 NODE_SECRET_REQUEST_KINDS = frozenset({"value", "document"})
 
 
@@ -516,9 +516,9 @@ def validate_node_secret_fields(path: Path, extraction: dict[tuple[str, str], Ex
         new = target.get("new", False)
         if not isinstance(path_param, str) or not isinstance(new, bool):
             raise PluginOnlyRouteError(f"{context} target path_param must be a string and new a boolean")
-        if kind == "none":
+        if kind in {"none", "dial"}:
             if path_param or new:
-                raise PluginOnlyRouteError(f"{context} target of kind none has no path parameter")
+                raise PluginOnlyRouteError(f"{context} target of kind {kind} has no path parameter")
         elif bool(path_param) == new:
             raise PluginOnlyRouteError(f"{context} target names a path parameter or is new, not both")
         if path_param and f":{path_param}" not in route.path.split("/"):

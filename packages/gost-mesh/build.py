@@ -103,6 +103,7 @@ EXPECTED_CAPABILITIES = [
     # NodeX status and diagnosis (docs/architecture/settings-service.md).
     "kernel.settings.nodex.read.v1",
     "kernel.settings.nodex.secrets.v1",
+    "kernel.nodeops.diagnose.v1",
 ]
 EXPECTED_PERMISSIONS = [
     "gost-mesh.view",

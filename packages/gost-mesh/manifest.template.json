@@ -19,7 +19,8 @@
     "plugin.runtime-state",
     "plugin.cleanup",
     "kernel.settings.nodex.read.v1",
-    "kernel.settings.nodex.secrets.v1"
+    "kernel.settings.nodex.secrets.v1",
+    "kernel.nodeops.diagnose.v1"
   ],
   "dependencies": [],
   "conflicts": [],

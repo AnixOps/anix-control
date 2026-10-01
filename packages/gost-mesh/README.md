@@ -24,7 +24,11 @@ cleanup entrypoint after crashes, disable, update, rollback, or Agent restart.
 The Control host declares `kernel.settings.nodex.read.v1` and
 `kernel.settings.nodex.secrets.v1`: the NodeX runtime status and diagnosis read
 the NodeX address and shared token through the kernel's KernelSettings contract
-(`docs/architecture/settings-service.md`).
+(`docs/architecture/settings-service.md`). It also declares
+`kernel.nodeops.diagnose.v1`: the administrator's gost API connection test is
+run by the kernel (`diagnose.forward_backend`), with the token the kernel's
+gateway sealed out of the request, so the host never sees it
+(`docs/architecture/node-ops-service.md`, section 6.1).
 
 ## Configuration
 

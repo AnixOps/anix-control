@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
-	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"gorm.io/gorm"
 )
 
@@ -51,6 +50,9 @@ type panelForwardRuntimeResult struct {
 	Status  int
 	Message string
 	Async   bool
+	// JobID is the v2_forward_runtime_job row the change recorded, when
+	// one was.
+	JobID uint
 }
 
 type PanelForwardRuntimeService struct {
@@ -124,6 +126,17 @@ func (s *PanelForwardRuntimeService) forwardRuntimeExecutor(backend string) (for
 	return exec, ok
 }
 
+// BackendForForward answers the runtime backend a forward's change runs
+// on: the forward's own, else the backend in force.
+func (s *PanelForwardRuntimeService) BackendForForward(forward *model.Forward) (string, error) {
+	return s.resolveBackendForForward(forward)
+}
+
+// ResolveBackend answers the runtime backend in force.
+func (s *PanelForwardRuntimeService) ResolveBackend() (string, error) {
+	return s.resolveBackend()
+}
+
 func (s *PanelForwardRuntimeService) resolveBackendForForward(forward *model.Forward) (string, error) {
 	if forward != nil {
 		if backend, ok := normalizeForwardRuntimeBackend(forward.RuntimeBackend); ok {
@@ -171,6 +184,7 @@ func (s *PanelForwardRuntimeService) enqueueLocalAnsibleJob(action string, forwa
 		Status:  model.ForwardRuntimeJobStatusPending,
 		Message: queuedPanelForwardRuntimeMessage(action),
 		Async:   true,
+		JobID:   job.ID,
 	}, nil
 }
 
@@ -203,6 +217,7 @@ func (s *PanelForwardRuntimeService) enqueueCleanAgentJob(action string, forward
 		Status:  model.ForwardRuntimeJobStatusPending,
 		Message: queuedCleanAgentRuntimeMessage(action),
 		Async:   true,
+		JobID:   job.ID,
 	}, nil
 }
 
@@ -271,6 +286,12 @@ func (s *PanelForwardRuntimeService) resolveNodeXMode() (*bool, error) {
 		return nil, err
 	}
 	return parseForwardRuntimeBoolValue(value, forwardRuntimeNodeXModeConfigKey)
+}
+
+// NormalizeForwardRuntimeBackend answers the canonical name of a runtime
+// backend (iptables_ansible is kept as named) and whether value names one.
+func NormalizeForwardRuntimeBackend(value string) (string, bool) {
+	return normalizeForwardRuntimeBackend(value)
 }
 
 func normalizeForwardRuntimeBackend(value string) (string, bool) {
@@ -467,14 +488,10 @@ func (s *PanelForwardRuntimeService) buildExecuteRequest(role forwardRuntimeNode
 		req.AnsibleRuntime = ansiblePayload
 	}
 
-	req.PanelForward.IngressNode = nodeXForwardNodePayload{
-		ID:       node.ID,
-		Name:     node.Name,
-		Host:     node.Host,
-		Port:     node.Port,
-		APIPort:  node.APIPort,
-		APIToken: nodesecrets.ForwardNodeToken(s.db, node),
-	}
+	// The node's token is not part of the request: a stored payload never
+	// carries it, and the gost executor resolves it when it sends the
+	// request (withForwardNodeTokens).
+	req.PanelForward.IngressNode = mapForwardNodeToNodeXPayload(node)
 	return req, uintPtr(node.ID), nil
 }
 
@@ -986,17 +1003,30 @@ func parseForwardRuntimeBoolValue(value, key string) (*bool, error) {
 
 // SyncForwardsToBackend re-synces all active forwards to the current backend.
 // Used when the admin switches between NodeX and Local mode.
-func (s *PanelForwardRuntimeService) SyncForwardsToBackend(targetBackend string) (synced int, failed int, err error) {
+// ForwardsToMoveToBackend lists the active forwards not on targetBackend,
+// oldest first: what the backend sync re-applies.
+func (s *PanelForwardRuntimeService) ForwardsToMoveToBackend(targetBackend string) ([]model.Forward, error) {
 	var forwards []model.Forward
-	if err := s.db.Where("status = ?", model.ForwardStatusActive).Find(&forwards).Error; err != nil {
+	if err := s.db.Where("status = ? AND runtime_backend <> ?", model.ForwardStatusActive, targetBackend).Order("id ASC").Find(&forwards).Error; err != nil {
+		return nil, err
+	}
+	return forwards, nil
+}
+
+// MoveForwardToBackend records that a forward now runs on backend; the
+// change is applied by the next sync of the forward.
+func (s *PanelForwardRuntimeService) MoveForwardToBackend(forwardID uint, backend string) error {
+	return s.db.Model(&model.Forward{}).Where("id = ?", forwardID).Updates(map[string]any{"runtime_backend": backend}).Error
+}
+
+func (s *PanelForwardRuntimeService) SyncForwardsToBackend(targetBackend string) (synced int, failed int, err error) {
+	forwards, err := s.ForwardsToMoveToBackend(targetBackend)
+	if err != nil {
 		return 0, 0, err
 	}
 
 	for i := range forwards {
 		fwd := &forwards[i]
-		if fwd.RuntimeBackend == targetBackend {
-			continue // already on the target backend
-		}
 
 		// Load tunnel for the forward
 		var tunnel model.ForwardTunnel
@@ -1022,9 +1052,7 @@ func (s *PanelForwardRuntimeService) SyncForwardsToBackend(targetBackend string)
 
 		// Persist the backend change. For Ansible, the executor also updates this when the job runs.
 		// For gost (synchronous), we must do it here since Apply() only updates the job record.
-		if err := s.db.Model(&model.Forward{}).Where("id = ?", fwd.ID).Updates(map[string]any{
-			"runtime_backend": targetBackend,
-		}).Error; err != nil {
+		if err := s.MoveForwardToBackend(fwd.ID, targetBackend); err != nil {
 			failed++
 			continue
 		}

@@ -6,7 +6,6 @@ import (
 	"fmt"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
-	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"gorm.io/gorm"
 )
 
@@ -59,6 +58,10 @@ func (p *nodeXForwardRuntimeProvider) execute(ctx context.Context, action string
 	if err != nil {
 		return err
 	}
+	req, err = withForwardNodeTokens(p.db, req)
+	if err != nil {
+		return err
+	}
 	_, err = p.client.Execute(ctx, req)
 	return err
 }
@@ -87,8 +90,8 @@ func (p *nodeXForwardRuntimeProvider) buildRequest(action string, rule *model.Fo
 				TargetPort: rule.TargetPort,
 				Enabled:    rule.Enabled,
 			},
-			RelayNode: mapForwardNodeToNodeXPayload(p.db, relayNode),
-			ExitNode:  mapForwardNodeToNodeXPayload(p.db, exitNode),
+			RelayNode: mapForwardNodeToNodeXPayload(relayNode),
+			ExitNode:  mapForwardNodeToNodeXPayload(exitNode),
 		},
 	}, nil
 }
@@ -108,18 +111,18 @@ func (p *nodeXForwardRuntimeProvider) loadNode(preloaded *model.ForwardNode, id 
 	return &node, nil
 }
 
-// mapForwardNodeToNodeXPayload is a forward node as NodeX receives it. Its
-// token is read through the node credential split.
-func mapForwardNodeToNodeXPayload(db *gorm.DB, node *model.ForwardNode) nodeXForwardNodePayload {
+// mapForwardNodeToNodeXPayload is a forward node as NodeX receives it,
+// without its token: withForwardNodeTokens adds it to the request the
+// kernel sends.
+func mapForwardNodeToNodeXPayload(node *model.ForwardNode) nodeXForwardNodePayload {
 	if node == nil {
 		return nodeXForwardNodePayload{}
 	}
 	return nodeXForwardNodePayload{
-		ID:       node.ID,
-		Name:     node.Name,
-		Host:     node.Host,
-		Port:     node.Port,
-		APIPort:  node.APIPort,
-		APIToken: nodesecrets.ForwardNodeToken(db, node),
+		ID:      node.ID,
+		Name:    node.Name,
+		Host:    node.Host,
+		Port:    node.Port,
+		APIPort: node.APIPort,
 	}
 }

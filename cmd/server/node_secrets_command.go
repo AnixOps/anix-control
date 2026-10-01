@@ -10,6 +10,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"gorm.io/gorm"
@@ -25,6 +26,11 @@ const nodeSecretsCommandUsage = `usage:
 
 Tables: v2_node, v2_authorized_key, v2_forward_node, v2_forward_clean_agent,
 v2_node_protocol, v2_wireguard_peer (default: all).
+
+status prints each table's phase, backfill progress and last verify, and
+the forward nodes that hold a token but no API port (id and name): their
+token is pinned to no endpoint, so gost changes and legacy rules on them
+fail until an administrator sets the port.
 
 backfill copies the node credentials and protocol secrets of the legacy
 tables into v4_kernel_node_credential and v4_kernel_protocol_secret. It is
@@ -87,7 +93,13 @@ func runNodeSecretsCommand(ctx context.Context, db *gorm.DB, arguments []string,
 		if err != nil {
 			return err
 		}
-		return encoder.Encode(rows)
+		unpinned, err := nodesecrets.ForwardNodesWithoutAPIPort(ctx, db)
+		if err != nil {
+			return err
+		}
+		return encoder.Encode(nodeSecretsStatus{
+			Tables: rows, ForwardNodesWithoutAPIPort: nodeSecretsUnpinned{Count: len(unpinned), Nodes: unpinned},
+		})
 	case "backfill":
 		flags := flag.NewFlagSet("node-secrets backfill", flag.ContinueOnError)
 		flags.SetOutput(io.Discard)
@@ -162,6 +174,19 @@ func runNodeSecretsCommand(ctx context.Context, db *gorm.DB, arguments []string,
 		return nil
 	}
 	return nodeSecretsUsageError()
+}
+
+// nodeSecretsStatus is what status prints: the split tables' state, and
+// the forward nodes whose token is pinned to no endpoint because they have
+// no API port (docs/UPGRADE.md), by id and name only.
+type nodeSecretsStatus struct {
+	Tables                     []model.NodeSecretSplit `json:"tables"`
+	ForwardNodesWithoutAPIPort nodeSecretsUnpinned     `json:"forward_nodes_without_api_port"`
+}
+
+type nodeSecretsUnpinned struct {
+	Count int                               `json:"count"`
+	Nodes []nodesecrets.UnpinnedForwardNode `json:"nodes"`
 }
 
 func splitTables(value string) []string {

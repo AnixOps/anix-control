@@ -22,6 +22,11 @@ const (
 	// TargetNone is a route whose secrets are never stored (validation):
 	// its handles never resolve.
 	TargetNone = "none"
+	// TargetDial is a route whose secret is presented once, by the kernel,
+	// to the address the request names, and never stored (a connection
+	// test): its handles resolve for the bound request only, for no
+	// resource.
+	TargetDial = "dial"
 )
 
 // Request field kinds.
@@ -139,9 +144,9 @@ func (s routeStatement) route() (*Route, error) {
 		if (s.Target.PathParam == "") == !s.Target.New {
 			return nil, errors.New("the target names a path parameter or is new, not both")
 		}
-	case TargetNone:
+	case TargetNone, TargetDial:
 		if s.Target.PathParam != "" || s.Target.New {
-			return nil, errors.New("a target of kind none has no path parameter")
+			return nil, fmt.Errorf("a target of kind %s has no path parameter", s.Target.Kind)
 		}
 	default:
 		return nil, fmt.Errorf("target kind %q is unknown", s.Target.Kind)

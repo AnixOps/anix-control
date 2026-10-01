@@ -267,7 +267,8 @@ func (s *Store) liveLocked(binding Binding) (*sealedRequest, error) {
 // or field, one used before, one the kernel minted for an answer, or one of
 // a route that stores no secret (target kind none) is refused, and nothing
 // is used. A request that creates its target binds it at its first
-// resolution: every later one must name the same resource.
+// resolution: every later one must name the same resource. A dial target
+// names no resource: a use names the kind and no id.
 func (s *Store) Resolve(binding Binding, uses ...Use) ([]Secret, error) {
 	if s == nil || len(uses) == 0 {
 		return nil, ErrRefused
@@ -291,8 +292,14 @@ func (s *Store) Resolve(binding Binding, uses ...Use) ([]Secret, error) {
 	for index, use := range uses {
 		item := s.handles[use.Handle]
 		if item == nil || seen[use.Handle] || item.request != request || item.direction != Inbound || item.used ||
-			item.field != use.Field || use.Target.Kind != target.Kind || use.Target.ID == 0 ||
-			(bound != 0 && use.Target.ID != bound) {
+			item.field != use.Field || use.Target.Kind != target.Kind {
+			return nil, ErrRefused
+		}
+		if target.Kind == TargetDial {
+			if use.Target.ID != 0 {
+				return nil, ErrRefused
+			}
+		} else if use.Target.ID == 0 || (bound != 0 && use.Target.ID != bound) {
 			return nil, ErrRefused
 		}
 		if bound == 0 {

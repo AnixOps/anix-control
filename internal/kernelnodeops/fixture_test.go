@@ -33,7 +33,13 @@ var gormConfig = &gorm.Config{Logger: logger.Default.LogMode(logger.Silent), Dis
 func forEachDatabase(t *testing.T, body func(t *testing.T, db *gorm.DB)) {
 	t.Helper()
 	t.Run("sqlite", func(t *testing.T) {
-		db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "kernel.db")+"?_pragma=busy_timeout(10000)&_pragma=journal_mode(WAL)"), gormConfig)
+		// _txlock=immediate: every transaction takes the write lock when it
+		// begins, and waits for it under the busy timeout. With the default
+		// deferred BEGIN, a transaction that read and then writes while
+		// another connection (the engine's dispatcher, an executor) has
+		// committed gets SQLITE_BUSY at once in WAL mode: the busy timeout
+		// does not apply to that upgrade.
+		db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "kernel.db")+"?_pragma=busy_timeout(10000)&_pragma=journal_mode(WAL)&_txlock=immediate"), gormConfig)
 		require.NoError(t, err)
 		sqlDB, err := db.DB()
 		require.NoError(t, err)

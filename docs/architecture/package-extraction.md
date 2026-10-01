@@ -885,9 +885,12 @@ The planned `kernel.entitlement.apply.v1` became
       `v2_node`; WebSocket routes always relay to the kernel.
 - **Gost mesh (in place).** All 3 of gost-mesh's routes run natively,
   proved by `internal/tests/gostmeshcompat`.
-  - The administrator's gost API connection test reads no table: it calls
-    the gost API at the host and port in the request, with the token in the
-    request, as the kernel's handler does, and answers the same errors.
+  - The administrator's gost API connection test reads no table. Since
+    NO-7 the kernel runs it: the gateway seals the typed token, the host
+    submits `diagnose.forward_backend` with its request binding, and the
+    kernel calls the gost API at the host and port in the request with the
+    kernel's own client, so the answer carries the same errors
+    (`docs/architecture/node-ops-service.md`, section 6.1).
   - The NodeX runtime status and diagnosis read the NodeX address, shared
     token and timeout through KernelSettings (namespace `nodex`; the token
     in clear with `kernel.settings.nodex.secrets.v1`) and call NodeX from

@@ -4,6 +4,7 @@ import (
 	"log"
 	"strings"
 
+	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
 	kernelsettingsv1 "github.com/AnixOps/anix-control/sdk/api/kernelsettings/v1"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/AnixOps/anix-control/v4/packages/gost-mesh/native"
@@ -14,7 +15,8 @@ import (
 // gostMeshRoutes have a native handler and need no storage; such a route
 // serves natively once the kernel sets its mode, and falls back to the
 // legacy handler otherwise. The NodeX status and diagnosis read their
-// settings through the kernel's KernelSettings over the bridge connection
+// settings through the kernel's KernelSettings, and the connection test is
+// run by the kernel through KernelNodeOps, over the bridge connection
 // (local socket or module listener); a bridge without one leaves them
 // legacy. No route is bridged for good.
 func newGostMeshService(bridge pluginhostsdk.RouterBridge, leaseID string) (*pluginhostsdk.Router, error) {
@@ -23,6 +25,7 @@ func newGostMeshService(bridge pluginhostsdk.RouterBridge, leaseID string) (*plu
 		Conn() grpc.ClientConnInterface
 	}); ok && conn.Conn() != nil {
 		service.Settings = kernelsettingsv1.NewKernelSettingsClient(conn.Conn())
+		service.NodeOps = kernelnodeopsv1.NewKernelNodeOpsClient(conn.Conn())
 	}
 	return pluginhostsdk.NewRouter(pluginhostsdk.RouterConfig{
 		PackageID: "gost-mesh", LeaseID: leaseID, Bridge: bridge, Logf: log.Printf,

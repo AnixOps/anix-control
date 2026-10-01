@@ -28,6 +28,10 @@ func canonical(spec *kernelnodeopsv1.OperationSpec) *kernelnodeopsv1.OperationSp
 		}
 	case *kernelnodeopsv1.OperationSpec_PutSecretDocument:
 		op.PutSecretDocument.DocumentJson = canonicalDocument(op.PutSecretDocument.GetDocumentJson())
+	case *kernelnodeopsv1.OperationSpec_TestForwardBackend:
+		if token := op.TestForwardBackend.GetToken(); token != nil && strings.HasPrefix(token.GetHandle(), SealedPrefix) {
+			token.Handle = SealedPrefix
+		}
 	}
 	return copied
 }
