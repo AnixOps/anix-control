@@ -137,6 +137,18 @@
     when, appends a change-log row, so `WatchSubscriberChanges` streams the
     new `subscription_group_ids`. A change to an inactive subscriber, or to
     a membership's traffic or renewal price only, appends nothing.
+- **Subscription module: membership routes.** `packages/subscription` now
+  serves 20 of its 25 routes natively and declares
+  `kernel.subscriber.groups.v1`. Through `KernelSubscriber`, it:
+  - grants a user a group;
+  - takes it away;
+  - deletes a group: its members first, then its templates, plan links and
+    node protocol links with the group.
+
+  `internal/tests/subscriptioncompat` runs the real `KernelSubscriber`
+  server in process. It proves byte parity, the same memberships, request
+  ledger and change log on SQLite and PostgreSQL (173 cases each). 147 of
+  292 routes are now `native-flagged`.
 
 ## 4.1.0-rc.1 - 2026-10-01
 

@@ -18,6 +18,7 @@ var (
 	errPlanNotFound      = errors.New("套餐不存在")
 	errGroupNotFound     = errors.New(groupNotFound)
 	errPlanGroupNotFound = errors.New("套餐订阅分组不存在")
+	errUserGroupNotFound = errors.New("用户订阅分组不存在")
 	errProtocolNotFound  = errors.New("协议不存在")
 )
 
@@ -25,7 +26,7 @@ var (
 func (s *Service) bindingError(fallback string, err error) (pluginhostsdk.NativeResponse, error) {
 	switch {
 	case errors.Is(err, errUserNotFound), errors.Is(err, errPlanNotFound), errors.Is(err, errGroupNotFound),
-		errors.Is(err, errPlanGroupNotFound):
+		errors.Is(err, errUserGroupNotFound), errors.Is(err, errPlanGroupNotFound):
 		return s.panelError(err.Error())
 	default:
 		return s.panelError(fallback + ": " + err.Error())

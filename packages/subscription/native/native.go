@@ -8,6 +8,11 @@
 // (internal/tests/subscriptioncompat); the bound and answered types mirror
 // the kernel model (package model).
 //
+// Subscription group membership (v2_user_subscription_group) is subscriber
+// state, which only the kernel writes: granting a user a group, taking it
+// away and deleting a group's members go through KernelSubscriber
+// (kernel.subscriber.groups.v1), and without it those routes stay legacy.
+//
 // Other domains are read through kernel views only:
 //   - kapi_plan_catalog_v1 for whether a plan exists;
 //   - kapi_subscriber_entitlement_v1 for whether a user exists and the
@@ -17,7 +22,7 @@
 //   - kapi_node_protocol_v1 and kapi_node_heartbeat_v1 for which node a
 //     protocol belongs to and when it last reported.
 //
-// Eight routes have no native handler and stay bridged; see bridgedRoutes in
+// Five routes have no native handler and stay bridged; see bridgedRoutes in
 // packages/subscription/control.
 package native
 
@@ -45,13 +50,20 @@ type Service struct {
 	// Open returns the package's storage connection, on which the adopted
 	// tables and the granted views are visible.
 	Open func(ctx context.Context) (*gorm.DB, error)
+	// Subscriber is the kernel's KernelSubscriber; without it the routes
+	// that change subscription group membership have no native handler and
+	// stay legacy.
+	Subscriber Subscriber
 	// Now defaults to time.Now.
 	Now func() time.Time
+	// NewToken names a request that carries neither an Idempotency-Key nor
+	// an X-Request-ID; it defaults to a random UUID.
+	NewToken func() string
 }
 
 // Handlers returns the native handlers by route id.
 func (s *Service) Handlers() map[string]pluginhostsdk.NativeHandler {
-	return map[string]pluginhostsdk.NativeHandler{
+	handlers := map[string]pluginhostsdk.NativeHandler{
 		"subscription.admin.subscription.formats.get":                          s.Formats,
 		"subscription.admin.subscription.protocols.get":                        s.ProtocolTypes,
 		"subscription.admin.subscription.groups.get":                           s.Groups,
@@ -70,6 +82,12 @@ func (s *Service) Handlers() map[string]pluginhostsdk.NativeHandler {
 		"subscription.admin.subscription.users.user_id.groups.get":             s.UserGroups,
 		"subscription.admin.subscription.stats.get":                            s.Stats,
 	}
+	if s.Subscriber != nil {
+		handlers[DeleteGroupRouteID] = s.DeleteGroup
+		handlers[GrantUserGroupRouteID] = s.GrantUserGroup
+		handlers[RevokeUserGroupRouteID] = s.RevokeUserGroup
+	}
+	return handlers
 }
 
 func (s *Service) now() time.Time {

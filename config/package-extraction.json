@@ -1030,7 +1030,7 @@
       "path": "/api/v2/admin/subscription/groups/:id",
       "package_id": "subscription",
       "route_id": "subscription.admin.subscription.groups.id.delete",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1174,7 +1174,7 @@
       "path": "/api/v2/admin/subscription/users/:user_id/groups",
       "package_id": "subscription",
       "route_id": "subscription.admin.subscription.users.user_id.groups.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1182,7 +1182,7 @@
       "path": "/api/v2/admin/subscription/users/:user_id/groups/:group_id",
       "package_id": "subscription",
       "route_id": "subscription.admin.subscription.users.user_id.groups.group_id.delete",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
