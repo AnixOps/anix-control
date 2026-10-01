@@ -30,10 +30,20 @@ EXPECTED_V4_ROUTE_COUNT = 292
 EXTRACTION_FORMAT = "anixops.package-extraction/v1"
 EXTRACTION_ROOT_FIELDS = frozenset({"format", "routes"})
 EXTRACTION_ROUTE_FIELDS = frozenset({"method", "path", "package_id", "route_id", "mode", "legacy"})
-# bridged: only the legacy implementation exists. native-flagged: the host has
-# a native implementation and the legacy one stays for runtime route modes.
-# native: the legacy handler is deleted and the host answers alone.
-EXTRACTION_MODES = frozenset({"bridged", "native-flagged", "native"})
+# bridged: only the legacy implementation exists, until a kernel contract lets
+# the package serve the route. kernel-owned: only the legacy implementation
+# exists, by design: the route stays in the kernel, and its row carries a
+# reason. native-flagged: the host has a native implementation and the legacy
+# one stays for runtime route modes. native: the legacy handler is deleted and
+# the host answers alone.
+EXTRACTION_MODES = frozenset({"bridged", "kernel-owned", "native-flagged", "native"})
+# Modes whose route the package host only relays to the kernel's legacy
+# handler: it is listed in the host's bridgedRoutes and has no native handler.
+RELAY_ONLY_MODES = frozenset({"bridged", "kernel-owned"})
+EXTRACTION_REASON_FIELD = "reason"
+EXTRACTION_REASON_MAX_LENGTH = 160
+# The map literal through which a package host relays its relay-only routes.
+BRIDGED_ROUTES_DECLARATION = "var bridgedRoutes = map[string]struct{}{"
 # router: the legacy gin handler is registered through registeredPackageRoute.
 # identity-bridge: it lives in the kernel's identity bridge allowlist and the
 # router binds the bare gateway. none: there is no legacy handler.
@@ -180,6 +190,7 @@ class ExtractionRoute:
     route_id: str
     mode: str
     legacy: str
+    reason: str | None = None
 
     @property
     def key(self) -> tuple[str, str]:
@@ -199,7 +210,10 @@ def load_extraction(path: Path) -> dict[tuple[str, str], ExtractionRoute]:
         context = f"package extraction row {index + 1}"
         if not isinstance(row, dict):
             raise PluginOnlyRouteError(f"{context} must be an object")
-        require_exact_fields(row, EXTRACTION_ROUTE_FIELDS, context)
+        # Only a kernel-owned row says why it stays in the kernel.
+        kernel_owned = row.get("mode") == "kernel-owned"
+        expected_fields = EXTRACTION_ROUTE_FIELDS | {EXTRACTION_REASON_FIELD} if kernel_owned else EXTRACTION_ROUTE_FIELDS
+        require_exact_fields(row, expected_fields, context)
         route = ExtractionRoute(
             method=require_string(row, "method", context),
             path=require_string(row, "path", context),
@@ -207,7 +221,16 @@ def load_extraction(path: Path) -> dict[tuple[str, str], ExtractionRoute]:
             route_id=require_string(row, "route_id", context),
             mode=require_string(row, "mode", context),
             legacy=require_string(row, "legacy", context),
+            reason=require_string(row, EXTRACTION_REASON_FIELD, context) if kernel_owned else None,
         )
+        if route.reason is not None and (
+            route.reason != route.reason.strip()
+            or "\n" in route.reason
+            or len(route.reason) > EXTRACTION_REASON_MAX_LENGTH
+        ):
+            raise PluginOnlyRouteError(
+                f"{context} reason must be one trimmed line of at most {EXTRACTION_REASON_MAX_LENGTH} characters"
+            )
         if route.mode not in EXTRACTION_MODES:
             raise PluginOnlyRouteError(f"{context} has unsupported mode {route.mode!r}")
         if route.legacy not in EXTRACTION_LEGACY_SOURCES:
@@ -239,23 +262,93 @@ def validate_extraction(
             )
     for key in sorted(set(extraction) - catalog_keys):
         raise PluginOnlyRouteError(f"package extraction row without catalog row: {key[0]} {key[1]}")
-    host_sources: dict[str, str] = {}
+    hosts: dict[str, PackageHostRoutes] = {}
     for entry in extraction.values():
-        if entry.mode == "bridged":
+        if entry.package_id not in hosts:
+            hosts[entry.package_id] = load_package_host_routes(packages_root, entry.package_id)
+        host = hosts[entry.package_id]
+        quoted = f'"{entry.route_id}"'
+        if entry.mode in RELAY_ONLY_MODES:
+            # The generic host only relays; a package's own host relays the
+            # routes in its bridgedRoutes, and nothing else in the package
+            # may name them, so none has a native handler.
+            if not host.has_host:
+                continue
+            if quoted not in host.relayed:
+                raise PluginOnlyRouteError(
+                    f"{entry.mode} route {entry.method} {entry.path} is not relayed: "
+                    f"packages/{entry.package_id}/control does not list {entry.route_id} in bridgedRoutes"
+                )
+            if quoted in host.package_sources:
+                raise PluginOnlyRouteError(
+                    f"{entry.mode} route {entry.method} {entry.path} has a native handler: "
+                    f"packages/{entry.package_id} names {entry.route_id} outside bridgedRoutes"
+                )
             continue
         # A native implementation lives in the package's own host; the
         # generic host only relays to legacy handlers.
-        if entry.package_id not in host_sources:
-            host_root = packages_root / entry.package_id / "control"
-            sources = sorted(host_root.glob("*.go")) if host_root.is_dir() else []
-            host_sources[entry.package_id] = "\n".join(
-                source.read_text(encoding="utf-8") for source in sources if not source.name.endswith("_test.go")
-            )
-        if f'"{entry.route_id}"' not in host_sources[entry.package_id]:
+        if quoted not in host.host_sources:
             raise PluginOnlyRouteError(
                 f"{entry.mode} route {entry.method} {entry.path} has no native implementation: "
                 f"packages/{entry.package_id}/control does not name {entry.route_id}"
             )
+        if quoted in host.relayed:
+            raise PluginOnlyRouteError(
+                f"{entry.mode} route {entry.method} {entry.path} is relayed: "
+                f"packages/{entry.package_id}/control lists {entry.route_id} in bridgedRoutes"
+            )
+
+
+@dataclass(frozen=True)
+class PackageHostRoutes:
+    """A package's Go sources, split around its host's bridgedRoutes."""
+
+    has_host: bool
+    # The body of the bridgedRoutes map literal ("" without one).
+    relayed: str
+    # The host's sources (packages/<id>/control) without that literal.
+    host_sources: str
+    # Every Go source of the package without that literal.
+    package_sources: str
+
+
+def go_sources(root: Path, *, recursive: bool) -> list[Path]:
+    if not root.is_dir():
+        return []
+    sources = root.rglob("*.go") if recursive else root.glob("*.go")
+    return sorted(source for source in sources if not source.name.endswith("_test.go"))
+
+
+def load_package_host_routes(packages_root: Path, package_id: str) -> PackageHostRoutes:
+    package_root = packages_root / package_id
+    host_root = package_root / "control"
+    host_files = go_sources(host_root, recursive=False)
+    host_text = "\n".join(source.read_text(encoding="utf-8") for source in host_files)
+    other_text = "\n".join(
+        source.read_text(encoding="utf-8")
+        for source in go_sources(package_root, recursive=True)
+        if source.parent != host_root
+    )
+    relayed = ""
+    start = host_text.find(BRIDGED_ROUTES_DECLARATION)
+    if start >= 0:
+        if host_text.find(BRIDGED_ROUTES_DECLARATION, start + 1) >= 0:
+            raise PluginOnlyRouteError(f"packages/{package_id}/control declares bridgedRoutes more than once")
+        body_start = start + len(BRIDGED_ROUTES_DECLARATION)
+        depth, index = 1, body_start
+        while depth and index < len(host_text):
+            depth += {"{": 1, "}": -1}.get(host_text[index], 0)
+            index += 1
+        if depth:
+            raise PluginOnlyRouteError(f"packages/{package_id}/control has an unterminated bridgedRoutes")
+        relayed = host_text[body_start : index - 1]
+        host_text = host_text[:start] + host_text[index:]
+    return PackageHostRoutes(
+        has_host=bool(host_files),
+        relayed=relayed,
+        host_sources=host_text,
+        package_sources=host_text + "\n" + other_text,
+    )
 
 
 def identity_bridge_route_ids(source_root: Path) -> frozenset[str]:

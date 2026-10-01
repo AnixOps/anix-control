@@ -170,6 +170,14 @@ maps v2 route ids to a route mode:
 | `shadow` | GET only: the legacy result is returned, the host runs its native implementation in the background and counts mismatches |
 | `native` | the host answers with its native implementation |
 
+A route's runtime mode is not its extraction mode, which
+`config/package-extraction.json` records per route
+([`package-extraction.md`](package-extraction.md#32-per-route-modes)):
+`native-flagged` and `native` routes have a native handler; `bridged` routes
+are relayed until a kernel contract lets the package serve them, and
+`kernel-owned` routes are relayed by design. A relayed route stays `legacy`
+whatever its runtime mode says.
+
 On `PUT`, the kernel validates `routes` against the verified compatibility
 routes of the installation's release: unknown routes, other modes, `shadow`
 on non-GET routes, and non-legacy WebSocket routes are rejected. It then

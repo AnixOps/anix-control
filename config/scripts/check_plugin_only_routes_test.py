@@ -30,6 +30,7 @@ class PluginOnlyRoutesTest(unittest.TestCase):
         include_generic_host: bool = True,
         mode: str = "bridged",
         legacy: str = "router",
+        reason: str | None = None,
         package_host_source: str | None = None,
         identity_bridge_source: str = "",
     ) -> tuple[Path, Path, Path]:
@@ -89,15 +90,11 @@ class PluginOnlyRoutesTest(unittest.TestCase):
             ),
             encoding="utf-8",
         )
+        row = {"method": method, "path": path, "package_id": owner, "route_id": route_id, "mode": mode, "legacy": legacy}
+        if reason is not None:
+            row["reason"] = reason
         (root / "extraction.json").write_text(
-            json.dumps(
-                {
-                    "format": "anixops.package-extraction/v1",
-                    "routes": [
-                        {"method": method, "path": path, "package_id": owner, "route_id": route_id, "mode": mode, "legacy": legacy}
-                    ],
-                }
-            ),
+            json.dumps({"format": "anixops.package-extraction/v1", "routes": [row]}),
             encoding="utf-8",
         )
         if package_host_source is not None:
@@ -299,6 +296,107 @@ GROUP
         self.assertIn("has no native implementation", generic_only.stderr)
         self.assertEqual(0, flagged.returncode, flagged.stderr)
         self.assertIn("1 native-flagged", flagged.stdout)
+
+    def test_native_route_must_not_be_relayed(self) -> None:
+        relayed_only = 'package main\nvar bridgedRoutes = map[string]struct{}{\n\t"knowledge.article.list": {},\n}\n'
+        relayed_too = 'package main\nconst route = "knowledge.article.list"\n' + relayed_only
+        with tempfile.TemporaryDirectory() as temporary:
+            catalog, router, packages_root = self.write_fixture(
+                Path(temporary), mode="native-flagged", package_host_source=relayed_only
+            )
+            only_relayed = self.run_gate(catalog, router, packages_root)
+        with tempfile.TemporaryDirectory() as temporary:
+            catalog, router, packages_root = self.write_fixture(
+                Path(temporary), mode="native-flagged", package_host_source=relayed_too
+            )
+            also_relayed = self.run_gate(catalog, router, packages_root)
+
+        self.assertIn("has no native implementation", only_relayed.stderr)
+        self.assertIn("lists knowledge.article.list in bridgedRoutes", also_relayed.stderr)
+
+    def test_kernel_owned_route_is_relayed_like_a_bridged_one(self) -> None:
+        reason = "the kernel binary's own build metadata"
+        relayed = 'package main\nvar bridgedRoutes = map[string]struct{}{\n\t"knowledge.article.list": {},\n}\n'
+        outcomes: dict[str, subprocess.CompletedProcess[str]] = {}
+        cases = {
+            "generic host": {},
+            "own host": {"package_host_source": relayed},
+            "identity bridge": {
+                "handler": "v2PackageGateway.Serve",
+                "legacy": "identity-bridge",
+                "identity_bridge_source": 'package identitybridge\nvar ids = []string{"knowledge.article.list"}\n',
+            },
+            "direct handler": {"handler": "knowledgeHandler.GetArticles"},
+            "bare gateway": {"handler": "v2PackageGateway.Serve"},
+            "not relayed": {"package_host_source": "package main\nvar bridgedRoutes = map[string]struct{}{}\n"},
+            "no relay map": {"package_host_source": "package main\n"},
+            "native host handler": {
+                "package_host_source": relayed + 'var nativeRoutes = map[string]struct{}{"knowledge.article.list": {}}\n'
+            },
+        }
+        for name, overrides in cases.items():
+            with tempfile.TemporaryDirectory() as temporary:
+                catalog, router, packages_root = self.write_fixture(
+                    Path(temporary), mode="kernel-owned", reason=reason, **overrides
+                )
+                outcomes[name] = self.run_gate(catalog, router, packages_root)
+        with tempfile.TemporaryDirectory() as temporary:
+            catalog, router, packages_root = self.write_fixture(
+                Path(temporary), mode="kernel-owned", reason=reason, package_host_source=relayed
+            )
+            native_dir = packages_root / "knowledge" / "native"
+            native_dir.mkdir()
+            (native_dir / "handlers.go").write_text(
+                'package native\nconst RouteID = "knowledge.article.list"\n', encoding="utf-8"
+            )
+            outcomes["native package handler"] = self.run_gate(catalog, router, packages_root)
+
+        for name in ("generic host", "own host", "identity bridge"):
+            self.assertEqual(0, outcomes[name].returncode, f"{name}: {outcomes[name].stderr}")
+        self.assertIn("1 kernel-owned", outcomes["own host"].stdout)
+        self.assertIn("direct legacy handler", outcomes["direct handler"].stderr)
+        self.assertIn("package bridge binding mismatch", outcomes["bare gateway"].stderr)
+        self.assertIn("does not list knowledge.article.list in bridgedRoutes", outcomes["not relayed"].stderr)
+        self.assertIn("does not list knowledge.article.list in bridgedRoutes", outcomes["no relay map"].stderr)
+        self.assertIn("has a native handler", outcomes["native host handler"].stderr)
+        self.assertIn("has a native handler", outcomes["native package handler"].stderr)
+
+    def test_bridged_route_must_be_relayed_by_its_own_host(self) -> None:
+        with tempfile.TemporaryDirectory() as temporary:
+            catalog, router, packages_root = self.write_fixture(
+                Path(temporary), package_host_source='package main\nconst route = "knowledge.article.list"\n'
+            )
+            result = self.run_gate(catalog, router, packages_root)
+
+        self.assertIn("bridged route GET /api/v2/user/knowledge is not relayed", result.stderr)
+
+    def test_only_kernel_owned_rows_carry_a_reason(self) -> None:
+        cases = {
+            "kernel-owned without reason": ({"mode": "kernel-owned"}, "invalid schema: missing reason"),
+            "kernel-owned with empty reason": (
+                {"mode": "kernel-owned", "reason": ""},
+                "field reason must be a non-empty string",
+            ),
+            "kernel-owned with long reason": (
+                {"mode": "kernel-owned", "reason": "x" * 161},
+                "reason must be one trimmed line of at most 160 characters",
+            ),
+            "kernel-owned with multi-line reason": (
+                {"mode": "kernel-owned", "reason": "two\nlines"},
+                "reason must be one trimmed line",
+            ),
+            "kernel-owned without legacy": (
+                {"mode": "kernel-owned", "legacy": "none", "reason": "kernel disk"},
+                "does not match legacy source",
+            ),
+            "bridged with reason": ({"mode": "bridged", "reason": "later"}, "invalid schema: unexpected reason"),
+        }
+        for name, (row, message) in cases.items():
+            with self.subTest(name), tempfile.TemporaryDirectory() as temporary:
+                catalog, router, packages_root = self.write_fixture(Path(temporary), **row)
+                result = self.run_gate(catalog, router, packages_root)
+                self.assertNotEqual(0, result.returncode)
+                self.assertIn(message, result.stderr)
 
     def test_extraction_map_rejects_inconsistent_rows(self) -> None:
         cases = {
