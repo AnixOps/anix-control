@@ -819,7 +819,7 @@ func (h *PaymentHandler) GetPaymentMethods(c *gin.Context) {
 			"icon":     "cryptocurrency",
 			"tokens":   []string{"ETH", "USDT", "USDC"},
 			"networks": []string{"sepolia", "base-sepolia", "ethereum", "polygon", "arbitrum", "base"},
-			"enabled":  enabledProviders["x402"] || len(paymentConfigs) == 0, // 默认启用 (无配置时)
+			"enabled":  enabledProviders["x402"], // only when an enabled x402 payment config exists
 		},
 		{
 			"id":       "wechat",

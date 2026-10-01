@@ -458,6 +458,13 @@ func writeResolutionError(c *gin.Context, err error) string {
 	if errors.Is(err, ErrPackageUnavailable) {
 		return writeGatewayError(c, http.StatusServiceUnavailable, codePackageUnavailable, "package route is unavailable")
 	}
+	return WriteRouteNotFound(c)
+}
+
+// WriteRouteNotFound answers a request as the gateway answers a route that
+// no active package declares. The edition filter uses it for the routes the
+// configured edition hides, so they cannot be told apart.
+func WriteRouteNotFound(c *gin.Context) string {
 	return writeGatewayError(c, http.StatusNotFound, codeRouteNotFound, "package route is not declared")
 }
 

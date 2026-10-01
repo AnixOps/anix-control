@@ -361,7 +361,7 @@ func TestStatusRoutesParity(t *testing.T) {
 	methods := route("GET", "/api/v2/payment/methods", "payment.payment.methods.get", payments((*handler.PaymentHandler).GetPaymentMethods))
 	read(t, methods, []packagecompat.Case{
 		{Name: "the enabled methods", Path: "/api/v2/payment/methods", Principal: public},
-		{Name: "crypto while no method is enabled", Path: "/api/v2/payment/methods", Principal: public, Seed: noMethods},
+		{Name: "x402 stays off while no method is enabled", Path: "/api/v2/payment/methods", Principal: public, Seed: noMethods},
 		{Name: "no methods", Path: "/api/v2/payment/methods", Principal: public, Seed: empty},
 	})
 	check := route("GET", "/api/v2/payment/x402/check/:id", "payment.payment.x402.check.id.get", payments((*handler.PaymentHandler).X402CheckPayment))

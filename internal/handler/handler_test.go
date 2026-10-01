@@ -22,6 +22,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/pquerna/otp/totp"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 	"github.com/stretchr/testify/suite"
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
@@ -3651,6 +3652,37 @@ func (s *PaymentHandlerTestSuite) TestGetPaymentMethods_Success() {
 	assert.Contains(s.T(), first, "id")
 	assert.Contains(s.T(), first, "provider")
 	assert.Contains(s.T(), first, "enabled")
+}
+
+// x402 is an internal play-coin method: it is enabled only by an enabled
+// x402 payment configuration, never by default.
+func (s *PaymentHandlerTestSuite) TestGetPaymentMethods_X402IsNotEnabledByDefault() {
+	handler := NewPaymentHandler()
+	s.router.GET("/methods-x402", handler.GetPaymentMethods)
+	x402Enabled := func() any {
+		req, _ := http.NewRequest("GET", "/methods-x402", nil)
+		w := httptest.NewRecorder()
+		s.router.ServeHTTP(w, req)
+		resp := decodePanelTestResponse(s.T(), w)
+		for _, entry := range resp["data"].([]any) {
+			method := entry.(map[string]any)
+			if method["id"] == "x402" {
+				return method["enabled"]
+			}
+		}
+		s.T().Fatal("x402 method missing")
+		return nil
+	}
+
+	require.NoError(s.T(), database.Get().AutoMigrate(&model.Payment{}))
+	require.NoError(s.T(), database.Get().Where("1 = 1").Delete(&model.Payment{}).Error)
+	assert.Equal(s.T(), false, x402Enabled(), "no payment configuration")
+
+	require.NoError(s.T(), database.Get().Create(&model.Payment{Name: "Stripe", Method: "fiat", Provider: "stripe", Enable: 1}).Error)
+	assert.Equal(s.T(), false, x402Enabled(), "another method enabled")
+
+	require.NoError(s.T(), database.Get().Create(&model.Payment{Name: "x402", Method: "crypto", Provider: "x402", Enable: 1}).Error)
+	assert.Equal(s.T(), true, x402Enabled(), "x402 configured and enabled")
 }
 
 func (s *PaymentHandlerTestSuite) TestX402CreatePayment_Success() {

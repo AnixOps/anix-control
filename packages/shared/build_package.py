@@ -72,6 +72,32 @@ PACKAGE_SPECS = (
     PackageSpec("protocol-runtime", ("control",)),
 )
 
+EDITIONS_TABLE = REPO_ROOT / "config" / "editions.json"
+EDITIONS = ("community", "commercial")
+
+
+def commercial_package_ids() -> frozenset[str]:
+    """Return the packages only the commercial edition ships (config/editions.json)."""
+    table = json.loads(EDITIONS_TABLE.read_text(encoding="utf-8"))
+    if table.get("format") != "anixops.editions/v1":
+        raise PackageBuildError(f"{EDITIONS_TABLE} has an unknown format")
+    return frozenset(table.get("commercial_packages", []))
+
+
+def edition_package_specs(edition: str) -> tuple[PackageSpec, ...]:
+    """Return the release package set of an edition: community leaves out the
+    commercial packages, commercial ships every package."""
+    if edition not in EDITIONS:
+        raise PackageBuildError(f"unknown edition {edition!r}")
+    if edition == "commercial":
+        return PACKAGE_SPECS
+    commercial = commercial_package_ids()
+    unknown = commercial - {spec.package_id for spec in PACKAGE_SPECS}
+    if unknown:
+        raise PackageBuildError(f"config/editions.json names unknown packages: {', '.join(sorted(unknown))}")
+    return tuple(spec for spec in PACKAGE_SPECS if spec.package_id not in commercial)
+
+
 MANIFEST_FIELDS = (
     "id",
     "name",
@@ -1069,8 +1095,14 @@ def build_package(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(description=__doc__)
     scope = parser.add_mutually_exclusive_group(required=True)
-    scope.add_argument("--all", action="store_true", help="Build every v4 package in the release-stage matrix.")
+    scope.add_argument("--all", action="store_true", help="Build every v4 package of the --edition release set.")
     scope.add_argument("--package", choices=[spec.package_id for spec in PACKAGE_SPECS], help="Build one package.")
+    parser.add_argument(
+        "--edition",
+        choices=EDITIONS,
+        default="community",
+        help="Release edition for --all: community (default) leaves out the commercial packages of config/editions.json.",
+    )
     parser.add_argument("--version", required=True, help="Stable package version applied to every selected artifact.")
     parser.add_argument("--out", required=True, type=Path, help="Directory for .anxp, manifest, signature, and SBOM files.")
     parser.add_argument("--goos", default="linux", help="Legacy single-platform GOOS selector (default: linux).")
@@ -1117,7 +1149,7 @@ def main() -> int:
     args = parse_args()
     try:
         version = require_safe_segment(args.version, "version")
-        selected = PACKAGE_SPECS if args.all else tuple(spec for spec in PACKAGE_SPECS if spec.package_id == args.package)
+        selected = edition_package_specs(args.edition) if args.all else tuple(spec for spec in PACKAGE_SPECS if spec.package_id == args.package)
         if args.platform and (args.goos != "linux" or args.goarch != "amd64"):
             raise PackageBuildError("--platform cannot be combined with --goos or --goarch")
         platforms = normalize_platforms(args.platform or [args.goos + "/" + args.goarch])

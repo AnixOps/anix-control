@@ -100,6 +100,11 @@ app:
   api_token: ""
   traffic_log_enable: true
   subscribe_path: "s"
+  # Product edition (ANIX_CONTROL_APP_EDITION). "community" (the default)
+  # hides orders, payments, coupons, affiliate/invite commission and plan
+  # purchase; plans stay as free subscription templates. Set "commercial"
+  # BEFORE upgrading an install that uses payments, orders or affiliate.
+  edition: "community"
 
 # Base64-encoded Ed25519 trust root for signed official plugin manifests.
 plugins:

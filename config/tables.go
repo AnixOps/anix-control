@@ -11,3 +11,17 @@ import _ "embed"
 //
 //go:embed node-secret-fields.json
 var NodeSecretFields []byte
+
+// Editions is config/editions.json: the packages and v2 routes that only the
+// commercial edition (app.edition) serves. The community edition answers
+// their routes as undeclared, and its release leaves the packages out
+// (packages/shared/build_package.py --edition).
+//
+//go:embed editions.json
+var Editions []byte
+
+// PackageExtraction is config/package-extraction.json: the owning package
+// and route id of every /api/v2 route, which the edition filter keys on.
+//
+//go:embed package-extraction.json
+var PackageExtraction []byte

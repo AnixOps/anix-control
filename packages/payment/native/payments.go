@@ -245,7 +245,7 @@ func (s *Service) PaymentMethods(ctx context.Context, _ pluginhostsdk.NativeRequ
 			"id": "x402", "name": "虚拟货币支付", "method": "crypto", "provider": "x402", "icon": "cryptocurrency",
 			"tokens":   []string{"ETH", "USDT", "USDC"},
 			"networks": []string{"sepolia", "base-sepolia", "ethereum", "polygon", "arbitrum", "base"},
-			"enabled":  enabled["x402"] || len(configs) == 0,
+			"enabled":  enabled["x402"],
 		},
 		{"id": "wechat", "name": "微信支付", "method": "fiat", "provider": "wechat_pay", "icon": "wechat", "enabled": enabled["wechat_pay"]},
 		{"id": "alipay", "name": "支付宝", "method": "fiat", "provider": "alipay", "icon": "alipay", "enabled": enabled["alipay"]},

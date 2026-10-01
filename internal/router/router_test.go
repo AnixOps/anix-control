@@ -282,6 +282,13 @@ func disablePackage(t *testing.T, packageID string) {
 
 func setupV2PackageRouter(t *testing.T) (*gin.Engine, *config.Config, *v2TestHost) {
 	t.Helper()
+	// The commercial edition serves every route; edition_test.go covers the
+	// community edition.
+	return setupV2PackageRouterWithEdition(t, config.EditionCommercial)
+}
+
+func setupV2PackageRouterWithEdition(t *testing.T, edition string) (*gin.Engine, *config.Config, *v2TestHost) {
+	t.Helper()
 	cache.InitMemory()
 	require.NoError(t, database.Close())
 	require.NoError(t, database.Init(&config.DatabaseConfig{Driver: "sqlite", Database: ":memory:"}))
@@ -291,7 +298,7 @@ func setupV2PackageRouter(t *testing.T) (*gin.Engine, *config.Config, *v2TestHos
 	cfg := &config.Config{
 		Env: "test",
 		JWT: config.JWTConfig{Secret: "test-jwt-secret", Expire: 86400},
-		App: config.AppConfig{APIToken: "test-api-token", SubscribePath: "s", TrafficLogEnable: true},
+		App: config.AppConfig{APIToken: "test-api-token", SubscribePath: "s", TrafficLogEnable: true, Edition: edition},
 	}
 	host := testHost(t)
 	publicKey, privateKey := seedV2KnowledgePackage(t, cfg)
@@ -529,6 +536,10 @@ func init() {
 }
 
 func setupTestRouter(t *testing.T) (*gin.Engine, *config.Config) {
+	return setupTestRouterWithEdition(t, config.EditionCommercial)
+}
+
+func setupTestRouterWithEdition(t *testing.T, edition string) (*gin.Engine, *config.Config) {
 	// 初始化缓存
 	cache.InitMemory()
 
@@ -552,12 +563,16 @@ func setupTestRouter(t *testing.T) (*gin.Engine, *config.Config) {
 			APIToken:         "test-api-token",
 			SubscribePath:    "s",
 			TrafficLogEnable: true,
+			// The commercial edition serves every route; edition_test.go
+			// covers the community edition.
+			Edition: edition,
 		},
 	}
 	config.Set(cfg)
 
 	r := gin.New()
 	Setup(r, cfg)
+	SetupNotFound(r)
 
 	return r, cfg
 }
