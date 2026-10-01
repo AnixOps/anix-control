@@ -1,0 +1,880 @@
+syntax = "proto3";
+
+package anixops.kernelnodeops.v1;
+
+option go_package = "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1;kernelnodeopsv1";
+
+// DRAFT, UNRELEASED. This contract is the design draft of
+// docs/architecture/node-ops-service.md. No kernel serves it yet, and its
+// capabilities are not in the kernel's capability grammar, so no package
+// manifest that declares them is accepted. It may still change while the
+// design is reviewed; it becomes binding (additions only) with the first
+// kernel change that serves it. Do not build against it.
+//
+// KernelNodeOps is the kernel's contract for operations on nodes: proxy
+// nodes (v2_node), forward nodes and Ansible machines (v2_forward_node) and
+// clean agents (v2_forward_clean_agent). The kernel holds every node
+// credential and secret and every agent connection; a package asks it for a
+// typed operation (apply a forward, sync a node's configuration, check an
+// endpoint, issue a credential) and learns the outcome. The kernel picks
+// the channel (the Agent Control stream, the agent WebSocket, the legacy
+// pull, NodeX, a local Ansible job, a clean agent job, or a dial from the
+// kernel), loads the credentials it needs at execution time, and answers
+// receipts and results that never carry a token, key or private key.
+//
+// Operations name resources, not payloads: ApplyForward{forward_id} makes the
+// forward's node match the forward's current rows, read by the kernel when
+// it executes. A repeat, a late retry or two operations on one resource
+// therefore converge on the latest state. A deletion is the exception: the
+// kernel captures what to remove when the operation is submitted, so the
+// package may delete its rows after the operation ends.
+//
+// Every operation carries a request_id; the kernel applies each request_id
+// of a package once and answers a repeat with the first receipt. Operations
+// run asynchronously: SubmitOperation answers a receipt at once or, with a
+// wait mode, when the operation was accepted by its channel or ended.
+// GetOperation polls, WatchOperations streams changes after a cursor.
+//
+// It is served on the module listener and the local package bridge to
+// official packages, per operation family, by capability:
+//   - kernel.nodeops.forward.v1: the forward family (apply a forward, a
+//     tunnel's forwards, the whole backend, a legacy rule);
+//   - kernel.nodeops.nodeconfig.v1: the node configuration family (sync a
+//     node, retire a node or a protocol, store a secret document) and
+//     ValidateNodeConfig;
+//   - kernel.nodeops.diagnose.v1: the diagnosis family (endpoint checks,
+//     node statistics, forward and tunnel diagnoses, agent diagnostic
+//     tasks);
+//   - kernel.nodeops.agents.v1: the agent family (bounded Agent Control
+//     operations) and ListAgentSessions, GetAgentSession, GetAgentMonitor;
+//   - kernel.nodeops.credentials.v1: the credential family (issue, rotate
+//     and revoke node credentials and registration keys).
+// GetOperation, ListOperations, WatchOperations and CancelOperation answer
+// only the calling package's own operations and need any one of them.
+// GetCapabilities needs none.
+service KernelNodeOps {
+  // SubmitOperation records and starts one operation. A request_id seen
+  // before answers the first receipt with applied false; the same id with a
+  // different operation is FAILED_PRECONDITION. INVALID_ARGUMENT for a
+  // malformed operation, NOT_FOUND when its target does not exist (nothing
+  // is recorded), PERMISSION_DENIED without the family's capability or from
+  // a fenced package generation.
+  rpc SubmitOperation(SubmitOperationRequest) returns (SubmitOperationResponse);
+  // GetOperation answers one operation by operation_id or request_id.
+  rpc GetOperation(GetOperationRequest) returns (GetOperationResponse);
+  // ListOperations pages through the caller's operations, newest first.
+  rpc ListOperations(ListOperationsRequest) returns (ListOperationsResponse);
+  // WatchOperations streams every change of the caller's operations after a
+  // cursor. A client resumes from the last cursor it saw and lists again
+  // when told its cursor is too old (RESYNC).
+  rpc WatchOperations(WatchOperationsRequest) returns (stream OperationEvent);
+  // CancelOperation asks the kernel to stop an operation that has not
+  // ended. A dispatched operation is cancelled on its channel when the
+  // channel supports it; the operation then ends CANCELLED, or with the
+  // outcome its channel reports first. Cancelling an ended operation
+  // answers it unchanged.
+  rpc CancelOperation(CancelOperationRequest) returns (CancelOperationResponse);
+  // ValidateNodeConfig runs the kernel's node configuration validators (the
+  // raw configuration and protocol validators the kernel also runs before it
+  // builds any node's configuration) and answers their verdict. It stores
+  // nothing.
+  rpc ValidateNodeConfig(ValidateNodeConfigRequest) returns (ValidateNodeConfigResponse);
+  // ListAgentSessions answers the live agent sessions the kernel holds (the
+  // Agent Control streams and the agent WebSockets).
+  rpc ListAgentSessions(ListAgentSessionsRequest) returns (ListAgentSessionsResponse);
+  // GetAgentSession answers one node's Agent Control session and the last
+  // state it observed.
+  rpc GetAgentSession(GetAgentSessionRequest) returns (GetAgentSessionResponse);
+  // GetAgentMonitor answers the last monitoring snapshot an agent reported.
+  rpc GetAgentMonitor(GetAgentMonitorRequest) returns (GetAgentMonitorResponse);
+  // GetCapabilities tells a package which operation families it holds,
+  // which operation kinds this kernel serves, and how far the node
+  // credential split has gone, so the package can keep a route legacy
+  // (mode_unsupported) where the kernel cannot serve it yet.
+  rpc GetCapabilities(GetCapabilitiesRequest) returns (GetCapabilitiesResponse);
+}
+
+// NodeKind names the table a node lives in.
+enum NodeKind {
+  NODE_KIND_UNSPECIFIED = 0;
+  // A proxy node, a row of v2_node.
+  NODE_KIND_PROXY = 1;
+  // A forward node or Ansible machine, a row of v2_forward_node.
+  NODE_KIND_FORWARD = 2;
+  // A clean agent, a row of v2_forward_clean_agent.
+  NODE_KIND_CLEAN_AGENT = 3;
+}
+
+message NodeRef {
+  NodeKind kind = 1;
+  uint64 id = 2;
+}
+
+// RequestBinding ties an operation to the v2 request the package is serving:
+// the bridge capability the kernel minted for that request (the
+// bridge_capability of the host's Dispatch). The kernel verifies it without
+// consuming it, and takes from it the route, the actor and the request id.
+// Operations that act for a user (a user's forward diagnosis), consume a
+// sealed secret the request carried, or answer a secret the administrator
+// must see once, require it.
+message RequestBinding {
+  bytes bridge_capability = 1;
+}
+
+// SecretRef points at a secret the package never sees: a sealed handle
+// ("anix-sealed:v1:..."). The kernel's gateway replaces the secret values of
+// an administrator's request with handles before the package reads the
+// request, for the routes and fields the kernel declares, and a handle
+// resolves only within the request it was sealed for.
+message SecretRef {
+  string handle = 1;
+}
+
+// SecretHandle is a secret the administrator must see once (a new API key,
+// token or registration key). The package puts the handle where the v2
+// answer shows the secret; the kernel's gateway expands it in the answer to
+// the bound request only. Anywhere else it is an opaque string.
+message SecretHandle {
+  // field names the secret, for example "api_key", "secret" or "token".
+  string field = 1;
+  string handle = 2;
+  int64 expires_at_unix_ms = 3;
+}
+
+// OperationFamily groups operation kinds under one capability.
+enum OperationFamily {
+  OPERATION_FAMILY_UNSPECIFIED = 0;
+  // kernel.nodeops.forward.v1
+  OPERATION_FAMILY_FORWARD = 1;
+  // kernel.nodeops.nodeconfig.v1
+  OPERATION_FAMILY_NODE_CONFIG = 2;
+  // kernel.nodeops.diagnose.v1
+  OPERATION_FAMILY_DIAGNOSE = 3;
+  // kernel.nodeops.agents.v1
+  OPERATION_FAMILY_AGENTS = 4;
+  // kernel.nodeops.credentials.v1
+  OPERATION_FAMILY_CREDENTIALS = 5;
+}
+
+// OperationSpec is one typed operation. Field numbers are grouped by family.
+message OperationSpec {
+  oneof operation {
+    // Forward family.
+    ApplyForward apply_forward = 10;
+    ApplyTunnel apply_tunnel = 11;
+    SyncForwardBackend sync_forward_backend = 12;
+    ApplyLegacyRule apply_legacy_rule = 13;
+    // Node configuration family.
+    SyncNode sync_node = 20;
+    RetireNode retire_node = 21;
+    RetireProtocol retire_protocol = 22;
+    PutSecretDocument put_secret_document = 23;
+    // Diagnosis family.
+    CheckEndpoints check_endpoints = 30;
+    CollectNodeStats collect_node_stats = 31;
+    DiagnoseForward diagnose_forward = 32;
+    DiagnoseTunnel diagnose_tunnel = 33;
+    RunAgentDiagnostic run_agent_diagnostic = 34;
+    // Agent family.
+    AgentControlOperation agent_control_operation = 40;
+    // Credential family.
+    IssueCredential issue_credential = 50;
+    RevokeCredential revoke_credential = 51;
+    IssueRegistrationKey issue_registration_key = 52;
+    RevokeRegistrationKey revoke_registration_key = 53;
+    IssueCleanAgent issue_clean_agent = 54;
+  }
+}
+
+// ForwardAction is what ApplyForward makes the forward's node do.
+enum ForwardAction {
+  FORWARD_ACTION_UNSPECIFIED = 0;
+  FORWARD_ACTION_CREATE = 1;
+  FORWARD_ACTION_UPDATE = 2;
+  // DELETE removes the forward from its node; the kernel captures the
+  // forward when the operation is submitted.
+  FORWARD_ACTION_DELETE = 3;
+  // FORCE_DELETE removes it as far as the node allows and succeeds even when
+  // the node cannot be reached, so the package may delete the forward.
+  FORWARD_ACTION_FORCE_DELETE = 4;
+  FORWARD_ACTION_PAUSE = 5;
+  FORWARD_ACTION_RESUME = 6;
+  // SYNC re-applies the forward's current state.
+  FORWARD_ACTION_SYNC = 7;
+}
+
+// ApplyForward applies one panel forward (v2_forward) on its node through
+// the forward runtime backend in force (NodeX, a local Ansible job or a
+// clean agent job) and records the runtime result as the kernel's legacy
+// handlers do.
+message ApplyForward {
+  uint64 forward_id = 1;
+  ForwardAction action = 2;
+}
+
+// ApplyTunnel re-applies the forwards of one tunnel (v2_forward_tunnel),
+// after a tunnel change that alters what its nodes run. It fans out into one
+// ApplyForward SYNC per active forward of the tunnel.
+message ApplyTunnel {
+  uint64 tunnel_id = 1;
+  // reasons name what changed ("protocol", "listen", "interface"), for the
+  // audit trail.
+  repeated string reasons = 2;
+}
+
+// SyncForwardBackend re-applies every active forward, as the administrator's
+// backend sync does. It fans out into one ApplyForward SYNC per forward.
+message SyncForwardBackend {}
+
+// ApplyLegacyRule pushes one legacy forward rule (v2_forward_rule) to its
+// relay and exit nodes through NodeX.
+message ApplyLegacyRule {
+  uint64 rule_id = 1;
+  ForwardAction action = 2;
+}
+
+// SyncNode makes the kernel drop what it caches about a node (the node
+// cache, the gost manager's address and token), rebuild the node's desired
+// configuration from the current rows, validate it, and push it when it
+// changed: over the Agent Control stream when the node's agent is
+// connected; otherwise the node's next periodic pull reads it.
+message SyncNode {
+  NodeRef node = 1;
+  // force pushes even when the configuration did not change, as the
+  // administrator's sync button does.
+  bool force = 2;
+  // reasons name what changed ("node", "protocol", "raw_config", "deleted"),
+  // for the audit trail.
+  repeated string reasons = 3;
+}
+
+// RetireNode removes what the kernel holds for a node that the package is
+// deleting: its credentials and their agent certificates, its secrets and,
+// for a proxy node, its protocols with their secrets, WireGuard peers and
+// subscription group links, as the legacy node deletion does in one
+// transaction. The package deletes its own row after the operation
+// succeeds.
+message RetireNode {
+  NodeRef node = 1;
+}
+
+// RetireProtocol removes what goes with a node protocol that the package is
+// deleting: its secrets, its users' WireGuard peers and its subscription
+// group links, as the legacy protocol deletion does in one transaction. The
+// package deletes the protocol row after the operation succeeds.
+message RetireProtocol {
+  uint64 protocol_id = 1;
+}
+
+// SecretScope names what a secret document belongs to.
+enum SecretScope {
+  SECRET_SCOPE_UNSPECIFIED = 0;
+  // A column of a node protocol (v2_node_protocol): settings, tls_settings,
+  // transport_settings, reality_settings or custom_config.
+  SECRET_SCOPE_NODE_PROTOCOL = 1;
+  // A proxy node's raw configuration (v2_node.raw_config).
+  SECRET_SCOPE_NODE_RAW_CONFIG = 2;
+}
+
+// PutSecretDocument stores the secrets of one JSON document (a protocol
+// setting or a raw configuration) in the kernel and answers the document the
+// package stores in its own row instead: the same document with every secret
+// replaced by the placeholder "********". In the document the package sends,
+// a secret is a sealed handle (a value the administrator sent), the
+// placeholder (keep the stored value) or empty (no value). Requires the
+// request binding the handles were sealed for.
+message PutSecretDocument {
+  SecretScope scope = 1;
+  // owner_id is the protocol id or the node id.
+  uint64 owner_id = 2;
+  // column is the document's column, for example "reality_settings".
+  string column = 3;
+  bytes document_json = 4;
+}
+
+// Vantage is where a check or diagnosis dials from.
+enum Vantage {
+  VANTAGE_UNSPECIFIED = 0;
+  // From the kernel's network, as the kernel's legacy handlers dial.
+  VANTAGE_CONTROL = 1;
+  // From the node's agent, when it advertises the diagnosis capability.
+  VANTAGE_NODE = 2;
+}
+
+// CheckEndpoints tests that nodes accept TCP connections on their service
+// port, as the forward node check and the load balancer health check do.
+message CheckEndpoints {
+  repeated NodeRef nodes = 1;
+  // record_status writes each node's status, last check, latency and uptime,
+  // as the legacy checks do.
+  bool record_status = 2;
+  Vantage vantage = 3;
+}
+
+// CollectNodeStats reads a forward node's or Ansible machine's traffic
+// counters (the node's gost metrics endpoint, or the Ansible statistics)
+// and records them as the legacy statistics sync does.
+message CollectNodeStats {
+  NodeRef node = 1;
+}
+
+// DiagnoseForward tests a forward's path to its targets. For a user's
+// forward (from the request binding's actor) only public targets are
+// dialled, as the legacy handler allows.
+message DiagnoseForward {
+  uint64 forward_id = 1;
+  Vantage vantage = 2;
+}
+
+// DiagnoseTunnel tests a tunnel's nodes and their path.
+message DiagnoseTunnel {
+  uint64 tunnel_id = 1;
+  Vantage vantage = 2;
+}
+
+// RunAgentDiagnostic sends one whitelisted diagnostic action to a node's
+// agent (the kernel's diagnostic whitelist normalizes the parameters),
+// records the task in v2_agent_diagnostic_task and waits for the agent's
+// acknowledgement, as the administrator's task and execute routes do.
+message RunAgentDiagnostic {
+  uint64 node_id = 1;
+  string action = 2;
+  bytes params_json = 3;
+  uint32 timeout_seconds = 4;
+}
+
+// AgentControlOperation sends one bounded operation over a node's Agent
+// Control stream: agent.ping, node.reload or users.reload.
+message AgentControlOperation {
+  uint64 node_id = 1;
+  string kind = 2;
+  bytes payload_json = 3;
+  uint32 timeout_seconds = 4;
+  // agent_operation_id is the stream's operation id; the kernel generates
+  // one when empty.
+  string agent_operation_id = 5;
+}
+
+// CredentialKind names one credential of a node.
+enum CredentialKind {
+  CREDENTIAL_KIND_UNSPECIFIED = 0;
+  // A proxy node's API key (x-api-key, UniProxy, agent WebSocket and the
+  // legacy stream authentication).
+  CREDENTIAL_KIND_NODE_API_KEY = 1;
+  // A proxy node's shared secret (request signing).
+  CREDENTIAL_KIND_NODE_SHARED_SECRET = 2;
+  // A forward node's API token (its agent, and the relay's gost API).
+  CREDENTIAL_KIND_FORWARD_NODE_TOKEN = 3;
+  // A clean agent's token.
+  CREDENTIAL_KIND_CLEAN_AGENT_TOKEN = 4;
+  // An agent enrollment credential (Agent A2), bound to one node.
+  CREDENTIAL_KIND_AGENT_ENROLLMENT = 5;
+}
+
+// IssueCredential creates or replaces one credential of a node, or, with
+// kind unspecified, every credential of the node's kind (a proxy node's API
+// key and shared secret). With value the kernel stores the secret the
+// administrator sent (a sealed handle); without it the kernel generates
+// one. A generated secret is answered as a SecretHandle when the request
+// binding is present, so the administrator sees it once; it is never
+// answered in clear. Replacing a credential revokes the previous one and the
+// agent certificates enrolled with it.
+message IssueCredential {
+  NodeRef subject = 1;
+  CredentialKind kind = 2;
+  SecretRef value = 3;
+  // replace allows replacing an existing credential (a rotation); without
+  // it an existing credential is FAILED_PRECONDITION.
+  bool replace = 4;
+}
+
+// RevokeCredential revokes one credential of a node, or every credential
+// of the node when kind is unspecified, and the agent certificates enrolled
+// with them.
+message RevokeCredential {
+  NodeRef subject = 1;
+  CredentialKind kind = 2;
+}
+
+// IssueRegistrationKey creates a node registration key (v2_authorized_key):
+// a key with which a new node registers and receives its credentials. The key
+// is answered as a SecretHandle.
+message IssueRegistrationKey {
+  string name = 1;
+  // expires_at_unix ends the key; 0 never.
+  int64 expires_at_unix = 2;
+}
+
+message RevokeRegistrationKey {
+  uint64 key_id = 1;
+}
+
+// IssueCleanAgent creates a clean agent (v2_forward_clean_agent) bound to
+// one forward node and its token, as the administrator's agent creation
+// does. The token is answered as a SecretHandle; the result's subject names
+// the new agent.
+message IssueCleanAgent {
+  string name = 1;
+  uint64 forward_node_id = 2;
+}
+
+// WaitMode is how long SubmitOperation waits before it answers.
+enum WaitMode {
+  WAIT_MODE_UNSPECIFIED = 0;
+  // NONE answers the receipt as soon as the operation is recorded.
+  WAIT_MODE_NONE = 1;
+  // ACCEPTED waits until the channel accepted the operation (the agent
+  // acknowledged it, the job was queued, or the configuration a pulling
+  // node reads was rebuilt).
+  WAIT_MODE_ACCEPTED = 2;
+  // TERMINAL waits until the operation ended.
+  WAIT_MODE_TERMINAL = 3;
+}
+
+message SubmitOperationRequest {
+  // request_id is unique per intent, at most 128 bytes, for example
+  // "forward.apply:<forward>:<action>:<digest>". The kernel's legacy
+  // handlers derive the same ids, so a retry applies once whichever side
+  // serves it.
+  string request_id = 1;
+  OperationSpec operation = 2;
+  WaitMode wait = 3;
+  // wait_timeout_ms bounds ACCEPTED and TERMINAL waits (at most 60000). An
+  // operation still running when it passes is answered as it is.
+  uint32 wait_timeout_ms = 4;
+  RequestBinding request = 5;
+  // reason is recorded with the operation, for the audit trail.
+  string reason = 6;
+}
+
+message SubmitOperationResponse {
+  // applied is false when request_id was submitted before; operation is
+  // then that first operation, as it is now.
+  bool applied = 1;
+  Operation operation = 2;
+}
+
+// OperationState is an operation's progress. SUCCEEDED, FAILED, CANCELLED,
+// TIMED_OUT and SUPERSEDED are terminal and never change again.
+enum OperationState {
+  OPERATION_STATE_UNSPECIFIED = 0;
+  OPERATION_STATE_PENDING = 1;
+  OPERATION_STATE_DISPATCHING = 2;
+  OPERATION_STATE_RUNNING = 3;
+  OPERATION_STATE_SUCCEEDED = 4;
+  OPERATION_STATE_FAILED = 5;
+  OPERATION_STATE_CANCELLED = 6;
+  OPERATION_STATE_TIMED_OUT = 7;
+  // SUPERSEDED: a newer operation on the same resource replaced it before
+  // it was dispatched, or the node reported a newer revision.
+  OPERATION_STATE_SUPERSEDED = 8;
+}
+
+// Channel is how the kernel carried an operation.
+enum Channel {
+  CHANNEL_UNSPECIFIED = 0;
+  // The operation changed only kernel state (credentials, secrets).
+  CHANNEL_KERNEL = 1;
+  CHANNEL_AGENT_CONTROL = 2;
+  CHANNEL_AGENT_WEBSOCKET = 3;
+  // Nothing was pushed: the node's next periodic pull (UniProxy, the
+  // v2board gRPC node service) reads the rebuilt configuration.
+  CHANNEL_LEGACY_PULL = 4;
+  CHANNEL_NODEX = 5;
+  CHANNEL_LOCAL_ANSIBLE = 6;
+  CHANNEL_CLEAN_AGENT_JOB = 7;
+  // The kernel dialled the node or target itself.
+  CHANNEL_CONTROL_DIAL = 8;
+}
+
+// ErrorCode classifies a failed, cancelled or timed-out operation.
+enum ErrorCode {
+  ERROR_CODE_UNSPECIFIED = 0;
+  ERROR_CODE_NODE_OFFLINE = 1;
+  ERROR_CODE_AGENT_REJECTED = 2;
+  // The node's agent does not advertise the capability the operation needs.
+  ERROR_CODE_CAPABILITY_MISSING = 3;
+  ERROR_CODE_BACKEND_FAILED = 4;
+  ERROR_CODE_VALIDATION_FAILED = 5;
+  ERROR_CODE_DEADLINE_EXCEEDED = 6;
+  ERROR_CODE_CANCELLED = 7;
+  // A forward node's address changed since its credential was bound to it;
+  // the kernel does not present the credential there until an
+  // administrator confirms the address.
+  ERROR_CODE_ENDPOINT_UNCONFIRMED = 8;
+  ERROR_CODE_SECRET_HANDLE_INVALID = 9;
+  ERROR_CODE_TARGET_GONE = 10;
+  ERROR_CODE_INTERNAL = 11;
+}
+
+message OperationError {
+  ErrorCode code = 1;
+  // message is the kernel's error text, the one its legacy handlers answer,
+  // with any credential the operation used scrubbed out.
+  string message = 2;
+  bool retryable = 3;
+}
+
+message Operation {
+  string operation_id = 1;
+  string request_id = 2;
+  string package_id = 3;
+  // package_generation is the lifecycle generation that submitted it.
+  uint64 package_generation = 4;
+  OperationFamily family = 5;
+  // kind is the operation's stable name, for example "forward.apply" or
+  // "node.sync".
+  string kind = 6;
+  repeated NodeRef targets = 7;
+  OperationState state = 8;
+  Channel channel = 9;
+  uint32 attempt = 10;
+  int64 created_at_unix_ms = 11;
+  int64 accepted_at_unix_ms = 12;
+  int64 finished_at_unix_ms = 13;
+  int64 deadline_unix_ms = 14;
+  // node_revision is the node's desired revision the operation was
+  // dispatched at, on revisioned channels.
+  uint64 node_revision = 15;
+  // parent_operation_id is set on the operations a fan-out created.
+  string parent_operation_id = 16;
+  FanOut fan_out = 17;
+  OperationResult result = 18;
+  OperationError error = 19;
+}
+
+// FanOut counts the operations a fan-out (ApplyTunnel, SyncForwardBackend)
+// created.
+message FanOut {
+  uint32 total = 1;
+  uint32 succeeded = 2;
+  uint32 failed = 3;
+  uint32 pending = 4;
+}
+
+// OperationResult is the typed outcome of an operation; the case matches the
+// operation's kind. Results carry no credential: the kernel scrubs every
+// credential the operation used from texts a node or backend answered.
+message OperationResult {
+  oneof result {
+    ForwardApplyResult forward_apply = 10;
+    LegacyRuleResult legacy_rule = 11;
+    NodeSyncResult node_sync = 20;
+    RetireResult retire = 21;
+    SecretDocumentResult secret_document = 22;
+    EndpointCheckResult endpoint_check = 30;
+    NodeStatsResult node_stats = 31;
+    DiagnosisResult diagnosis = 32;
+    AgentDiagnosticResult agent_diagnostic = 33;
+    AgentOperationResult agent_operation = 40;
+    CredentialResult credential = 50;
+    RegistrationKeyResult registration_key = 51;
+  }
+}
+
+message ForwardApplyResult {
+  // backend is the runtime backend: gost, nftables_ansible,
+  // iptables_ansible or clean_agent.
+  string backend = 1;
+  // runtime_status is the forward's runtime status as the kernel records
+  // it (pending, running, success, failed).
+  int32 runtime_status = 2;
+  string message = 3;
+  // runtime_job_id is the v2_forward_runtime_job row of the change.
+  uint64 runtime_job_id = 4;
+  int64 synced_at_unix_ms = 5;
+}
+
+message LegacyRuleResult {
+  bool applied_on_relay = 1;
+  bool applied_on_exit = 2;
+  string message = 3;
+}
+
+message AgentAck {
+  bool accepted = 1;
+  string error = 2;
+  int64 accepted_at_unix_ms = 3;
+  string session_id = 4;
+  uint64 revision = 5;
+}
+
+message NodeSyncResult {
+  // channel is AGENT_CONTROL or LEGACY_PULL.
+  Channel channel = 1;
+  string agent_operation_id = 2;
+  uint64 revision = 3;
+  AgentAck ack = 4;
+  // config_hash is the SHA-256 of the desired configuration.
+  string config_hash = 5;
+  // changed is false when the configuration was already the node's.
+  bool changed = 6;
+  // excluded counts the protocols left out because they failed validation.
+  uint32 excluded_protocols = 7;
+}
+
+message RetireResult {
+  uint32 credentials_revoked = 1;
+  uint32 secrets_deleted = 2;
+  uint32 wireguard_peers_deleted = 3;
+  uint32 protocols_deleted = 4;
+  uint32 subscription_links_deleted = 5;
+}
+
+message SecretDocumentResult {
+  // redacted_json is the document the package stores in its row.
+  bytes redacted_json = 1;
+  uint32 stored = 2;
+  uint32 kept = 3;
+  uint32 cleared = 4;
+}
+
+message EndpointCheck {
+  NodeRef node = 1;
+  bool reachable = 2;
+  int64 latency_ms = 3;
+  string error = 4;
+  int64 checked_at_unix_ms = 5;
+}
+
+message EndpointCheckResult {
+  repeated EndpointCheck checks = 1;
+}
+
+message NodeStatsResult {
+  NodeRef node = 1;
+  uint64 upload_bytes = 2;
+  uint64 download_bytes = 3;
+  int64 collected_at_unix_ms = 4;
+}
+
+// DiagnosisOutcome is one probe of a diagnosis, as the legacy diagnosis
+// reports it.
+message DiagnosisOutcome {
+  bool success = 1;
+  string description = 2;
+  string node_name = 3;
+  string node_id = 4;
+  string target_ip = 5;
+  int32 target_port = 6;
+  double average_time_ms = 7;
+  double packet_loss = 8;
+  string message = 9;
+}
+
+message DiagnosisResult {
+  repeated DiagnosisOutcome outcomes = 1;
+}
+
+message AgentDiagnosticResult {
+  string task_id = 1;
+  string message_id = 2;
+  bool ack_received = 3;
+  AgentAck ack = 4;
+  string dispatch_error = 5;
+  // legacy_fallback is true when the task went out in the legacy task
+  // message after the acknowledged dispatch failed.
+  bool legacy_fallback = 6;
+}
+
+message AgentOperationResult {
+  string agent_operation_id = 1;
+  uint64 revision = 2;
+  AgentAck ack = 3;
+}
+
+message CredentialResult {
+  NodeRef subject = 1;
+  CredentialKind kind = 2;
+  uint64 credential_id = 3;
+  uint32 version = 4;
+  repeated SecretHandle reveal = 5;
+}
+
+message RegistrationKeyResult {
+  uint64 key_id = 1;
+  string name = 2;
+  int64 expires_at_unix = 3;
+  repeated SecretHandle reveal = 4;
+}
+
+message GetOperationRequest {
+  oneof selector {
+    string operation_id = 1;
+    string request_id = 2;
+  }
+}
+
+message GetOperationResponse {
+  Operation operation = 1;
+}
+
+message ListOperationsRequest {
+  repeated OperationFamily families = 1;
+  repeated OperationState states = 2;
+  // target limits the list to operations on one node.
+  NodeRef target = 3;
+  string page_token = 4;
+  uint32 limit = 5;
+}
+
+message ListOperationsResponse {
+  repeated Operation operations = 1;
+  string next_page_token = 2;
+}
+
+message WatchOperationsRequest {
+  uint64 after_cursor = 1;
+  repeated OperationFamily families = 2;
+}
+
+enum OperationEventKind {
+  OPERATION_EVENT_KIND_UNSPECIFIED = 0;
+  // CHANGED: the operation is now as given.
+  OPERATION_EVENT_KIND_CHANGED = 1;
+  // RESYNC: the cursor is too old; list again and watch from the cursor
+  // the event carries.
+  OPERATION_EVENT_KIND_RESYNC = 2;
+}
+
+message OperationEvent {
+  uint64 cursor = 1;
+  OperationEventKind kind = 2;
+  Operation operation = 3;
+}
+
+message CancelOperationRequest {
+  string operation_id = 1;
+  string reason = 2;
+}
+
+message CancelOperationResponse {
+  Operation operation = 1;
+}
+
+// NodeConfigKind names what ValidateNodeConfig validates.
+enum NodeConfigKind {
+  NODE_CONFIG_KIND_UNSPECIFIED = 0;
+  NODE_CONFIG_KIND_RAW_CONFIG = 1;
+  NODE_CONFIG_KIND_PROTOCOL = 2;
+}
+
+message ValidateNodeConfigRequest {
+  NodeConfigKind kind = 1;
+  // protocol_type is the protocol's type (vless, wireguard, ...) for a
+  // PROTOCOL document.
+  string protocol_type = 2;
+  // document_json may carry sealed handles or the placeholder where
+  // secrets go; the validators check that a secret is present, not its
+  // value.
+  bytes document_json = 3;
+}
+
+message ValidationIssue {
+  // path is the JSON pointer of the offending value.
+  string path = 1;
+  string message = 2;
+}
+
+message ValidateNodeConfigResponse {
+  bool valid = 1;
+  // message is the validator's first error as the kernel's handlers answer
+  // it; empty when valid.
+  string message = 2;
+  repeated ValidationIssue issues = 3;
+}
+
+// AgentTransport is the connection an agent session uses.
+enum AgentTransport {
+  AGENT_TRANSPORT_UNSPECIFIED = 0;
+  AGENT_TRANSPORT_CONTROL_STREAM = 1;
+  AGENT_TRANSPORT_WEBSOCKET = 2;
+}
+
+message AgentSession {
+  NodeRef node = 1;
+  AgentTransport transport = 2;
+  string session_id = 3;
+  string agent_version = 4;
+  string instance_id = 5;
+  repeated string capabilities = 6;
+  int64 connected_at_unix_ms = 7;
+  int64 last_seen_unix_ms = 8;
+  uint64 desired_revision = 9;
+  uint64 observed_revision = 10;
+  // system_json is the system information a WebSocket agent reported.
+  bytes system_json = 11;
+  // identity is the session's authenticated identity: the agent's SPIFFE ID
+  // ("spiffe://anixops/<cluster>/agent/<node>") or "api-key".
+  string identity = 12;
+}
+
+message ListAgentSessionsRequest {
+  AgentTransport transport = 1;
+}
+
+message ListAgentSessionsResponse {
+  repeated AgentSession sessions = 1;
+}
+
+message GetAgentSessionRequest {
+  uint64 node_id = 1;
+}
+
+// ObservedOperation is the last state an agent reported on its stream.
+message ObservedOperation {
+  string agent_operation_id = 1;
+  uint64 revision = 2;
+  // phase is the agent's observed phase name, for example "SUCCEEDED".
+  string phase = 3;
+  string message = 4;
+  bytes state_json = 5;
+  int64 observed_at_unix_ms = 6;
+  string session_id = 7;
+}
+
+message GetAgentSessionResponse {
+  bool connected = 1;
+  AgentSession session = 2;
+  ObservedOperation observed = 3;
+}
+
+message GetAgentMonitorRequest {
+  uint64 node_id = 1;
+}
+
+message GetAgentMonitorResponse {
+  bool found = 1;
+  bytes snapshot_json = 2;
+  int64 received_at_unix_ms = 3;
+}
+
+message GetCapabilitiesRequest {}
+
+// SecretSplitPhase is how far the node credential split has gone
+// (docs/architecture/node-ops-service.md).
+enum SecretSplitPhase {
+  SECRET_SPLIT_PHASE_UNSPECIFIED = 0;
+  // LEGACY: the v2 columns hold every credential and secret.
+  SECRET_SPLIT_PHASE_LEGACY = 1;
+  // DUAL_WRITE: the kernel writes both; the v2 columns are read.
+  SECRET_SPLIT_PHASE_DUAL_WRITE = 2;
+  // DUAL_READ: the kernel reads the new tables, falling back to the v2
+  // columns, and writes both.
+  SECRET_SPLIT_PHASE_DUAL_READ = 3;
+  // FINALIZED: the v2 columns hold no secret; the credential-free tables
+  // may be adopted.
+  SECRET_SPLIT_PHASE_FINALIZED = 4;
+}
+
+message TableSplitState {
+  string table = 1;
+  SecretSplitPhase phase = 2;
+}
+
+message GetCapabilitiesResponse {
+  repeated OperationFamily granted_families = 1;
+  // kinds are the operation kinds this kernel serves.
+  repeated string kinds = 2;
+  repeated TableSplitState tables = 3;
+}
