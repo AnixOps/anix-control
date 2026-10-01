@@ -175,6 +175,9 @@ func TestPostgresLeaseProvisionsALeastPrivilegeRole(t *testing.T) {
 func TestPostgresSystemAuditLogViewIsReadOnly(t *testing.T) {
 	kernel, kernelDSN := openPostgresKernel(t)
 	require.NoError(t, kernel.AutoMigrate(&model.OperationLog{}))
+	// Views are immutable once created; recreate this one so the test sees
+	// the current definition.
+	require.NoError(t, kernel.Exec("DROP VIEW IF EXISTS kapi_system_audit_log_v1").Error)
 	require.NoError(t, EnsureKernelAPIViews(kernel))
 	suffix := randomSuffix(t)
 	packageID := "pkgtest-" + suffix
@@ -195,6 +198,43 @@ func TestPostgresSystemAuditLogViewIsReadOnly(t *testing.T) {
 	requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM v2_operation_log").Scan(&count).Error)
 	requirePermissionDenied(t, pkg.Exec("DELETE FROM kapi_system_audit_log_v1 WHERE action = ?", action).Error)
 	requirePermissionDenied(t, pkg.Exec("UPDATE kapi_system_audit_log_v1 SET content = '' WHERE action = ?", action).Error)
+
+	// A cheap function of the package's own records every row it is shown.
+	// The view is a security barrier, so it sees only the system rows, even
+	// with the planner told to run it before the view's filter.
+	require.NoError(t, pkg.Exec("CREATE TABLE seen (module text)").Error)
+	require.NoError(t, pkg.Exec(`CREATE FUNCTION peek(m text) RETURNS boolean LANGUAGE plpgsql COST 0.0000001 AS $$
+		BEGIN INSERT INTO seen VALUES (m); RETURN true; END $$`).Error)
+	var seen []string
+	require.NoError(t, pkg.Transaction(func(tx *gorm.DB) error {
+		for _, setting := range []string{"enable_indexscan", "enable_bitmapscan", "enable_indexonlyscan"} {
+			if err := tx.Exec("SET LOCAL " + setting + " = off").Error; err != nil {
+				return err
+			}
+		}
+		if err := tx.Raw("SELECT module FROM kapi_system_audit_log_v1 WHERE peek(module)").Scan(&modules).Error; err != nil {
+			return err
+		}
+		return tx.Raw("SELECT DISTINCT module FROM seen").Scan(&seen).Error
+	}))
+	require.Equal(t, []string{"system"}, seen)
+}
+
+// A row-filtering view created before it was a security barrier becomes one.
+func TestPostgresExistingRowFilterViewBecomesASecurityBarrier(t *testing.T) {
+	kernel, _ := openPostgresKernel(t)
+	require.NoError(t, kernel.AutoMigrate(&model.OperationLog{}))
+	require.NoError(t, kernel.Exec("DROP VIEW IF EXISTS kapi_system_audit_log_v1").Error)
+	require.NoError(t, kernel.Exec("CREATE VIEW kapi_system_audit_log_v1 AS SELECT id FROM v2_operation_log WHERE module = 'system'").Error)
+	t.Cleanup(func() {
+		_ = kernel.Exec("DROP VIEW IF EXISTS kapi_system_audit_log_v1").Error
+		_ = EnsureKernelAPIViews(kernel)
+	})
+
+	require.NoError(t, EnsureKernelAPIViews(kernel))
+	var options []string
+	require.NoError(t, kernel.Raw("SELECT unnest(reloptions) FROM pg_class WHERE relname = 'kapi_system_audit_log_v1' AND relnamespace = current_schema()::regnamespace").Scan(&options).Error)
+	require.Contains(t, options, "security_barrier=true")
 }
 
 func TestPostgresLeaseFailsWithoutPartialState(t *testing.T) {

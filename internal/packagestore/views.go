@@ -14,6 +14,11 @@ type KernelAPIView struct {
 	// Source is the kernel table the view reads.
 	Source string
 	Query  string
+	// RowFilter marks a view that shows only some rows of its source. On
+	// PostgreSQL it is a security_barrier view, so a function in a
+	// package's query cannot see the rows the filter hides before the
+	// filter applies.
+	RowFilter bool
 }
 
 // KernelAPIViews lists every kernel API view. They expose only the columns a
@@ -33,21 +38,25 @@ var KernelAPIViews = []KernelAPIView{
 		Source: "v2_operation_log",
 		Query: "SELECT id, user_id, username, action, module, target_type, target_id, content, ip, user_agent, status, created_at " +
 			"FROM v2_operation_log WHERE module = 'system'",
+		RowFilter: true,
 	},
 	{
 		// Entitlements and traffic counters (docs/architecture/subscriber-service.md);
 		// no token or uuid.
-		Name: "kapi_subscriber_entitlement_v1",
+		Name:   "kapi_subscriber_entitlement_v1",
+		Source: "v2_user",
 		Query: "SELECT id, plan_id, group_id, expired_at, transfer_enable, u, d, speed_limit, device_limit, " +
 			"flow_reset_time, banned, balance, commission_balance FROM v2_user",
 	},
 }
 
 // EnsureKernelAPIViews creates the kernel API views that do not exist yet.
-// Existing views are left unchanged, since a published version is immutable.
-// A view whose source table does not exist is left out; the kernel creates
-// its tables before its views, so this only happens on a partial schema,
-// and a lease that grants the view then fails as for any missing view.
+// Existing views keep their definition, since a published version is
+// immutable; on PostgreSQL a RowFilter view, existing or new, is a security
+// barrier. A view whose source table does not exist is left out; the kernel
+// creates its tables before its views, so this only happens on a partial
+// schema, and a lease that grants the view then fails as for any missing
+// view.
 func EnsureKernelAPIViews(db *gorm.DB) error {
 	if db == nil {
 		return nil
@@ -60,10 +69,24 @@ func EnsureKernelAPIViews(db *gorm.DB) error {
 		if err != nil {
 			return err
 		}
-		if exists || !db.Migrator().HasTable(view.Source) {
+		barrier := view.RowFilter && db.Name() == DriverPostgres
+		if exists {
+			// Views created before they were barriers become barriers.
+			if barrier {
+				if err := db.Exec("ALTER VIEW " + quoteIdent(view.Name) + " SET (security_barrier = true)").Error; err != nil {
+					return fmt.Errorf("make kernel API view %s a security barrier: %w", view.Name, err)
+				}
+			}
 			continue
 		}
-		if err := db.Exec("CREATE VIEW " + quoteIdent(view.Name) + " AS " + view.Query).Error; err != nil {
+		if !db.Migrator().HasTable(view.Source) {
+			continue
+		}
+		options := ""
+		if barrier {
+			options = " WITH (security_barrier)"
+		}
+		if err := db.Exec("CREATE VIEW " + quoteIdent(view.Name) + options + " AS " + view.Query).Error; err != nil {
 			return fmt.Errorf("create kernel API view %s: %w", view.Name, err)
 		}
 	}

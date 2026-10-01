@@ -4,6 +4,12 @@
 
 ### Security
 
+- Kernel API views that filter rows are PostgreSQL security barriers.
+  `kapi_system_audit_log_v1` shows only the `system` rows of
+  `v2_operation_log`, but a package could define a cheap function, which the
+  planner may run before the view's filter, and see every module's audit
+  rows. Such views are now created `WITH (security_barrier)`, and an existing
+  one is altered to be a barrier at startup.
 - The PayPal webhook marks a payment paid only for a completed capture of
   the record's amount and currency. It treated `CHECKOUT.ORDER.APPROVED`
   as paid, although an approved checkout has collected nothing until it is
@@ -1186,6 +1192,9 @@
 
 ### Fixed
 
+- `kapi_subscriber_entitlement_v1` is created again. It named no source
+  table, so the check that skips a view whose source table does not exist
+  left it out. A test now requires every view to name its source.
 - The subscriber request ledger (`v4_kernel_subscriber_request`) is now pruned
   after 90 days, as the subscriber contract documents, by the same hourly
   worker as the change log. Before, it was never pruned.
