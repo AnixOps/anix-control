@@ -28,14 +28,14 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   WebSocket routes use `registeredPackageWebSocketRoute`.
 - `config/package-extraction.json` records each route's extraction mode
   (`bridged`, `native-flagged` or `native`) and where its legacy handler lives
-  (`router`, `identity-bridge` or `none`). 140 routes are `native-flagged`:
+  (`router`, `identity-bridge` or `none`). 142 routes are `native-flagged`:
   identity-platform (20: group A's 15, the profile, dashboard and user detail,
   and the traffic and subscription resets), affiliate (7), forward (17),
-  knowledge (6), notification (19), order (9), payment (16), plan (7),
-  platform (4), protocol-runtime (3), proxy-node (7), subscription (17) and
-  ticket (8). The rest are `bridged`. The identity routes are
-  `identity-bridge`. `check_plugin_only_routes.py` enforces the map against
-  the router and the identity bridge.
+  knowledge (6), machine-telemetry (2), notification (19), order (9), payment
+  (16), plan (7), platform (4), protocol-runtime (3), proxy-node (7),
+  subscription (17) and ticket (8). The rest are `bridged`. The identity
+  routes are `identity-bridge`. `check_plugin_only_routes.py` enforces the map
+  against the router and the identity bridge.
 - Request path: gin middleware -> `compatv2` gateway -> route resolution
   (`internal/compat/v2/registry.go`, `verifiedRouteSource`) -> package host
   process over Unix gRPC -> package bridge (FD 4) -> **the legacy in-kernel
@@ -547,6 +547,26 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
       WebSocket): node credentials checked in the kernel, node status in
       `v2_node` and `v2_forward_node`, connections in the kernel's memory,
       and the forward package's bridge tasks and runtime jobs.
+- **Machine telemetry (in place).** 2 of machine-telemetry's 5 routes run
+  natively, proved by `internal/tests/machinetelemetrycompat`: the
+  administrator's hourly traffic series and user traffic ranking.
+  - The package adopts no table. It reads the traffic log through the new
+    `kapi_traffic_log_v1` (the user, bytes, rate and time of each node
+    traffic report in `v2_server_log`, no node or credential) and e-mail
+    addresses through `kapi_user_directory_v1`. The kernel writes the log
+    when a node reports traffic, in the transaction that counts the
+    subscriber's traffic; a package that could write it would change the
+    charts, so it only reads it.
+  - The hourly buckets are local hours, as the kernel's; the kernel passes
+    its time zone to the host.
+  - **Stay bridged** (3, with the reason in the host's route map):
+    - the dashboard: it counts users (the protected `v2_user`), orders,
+      revenue and the legacy server tables, takes the online users from the
+      alive set UniProxy keeps in the kernel's cache, and answers a snapshot
+      the kernel caches for 60 seconds;
+    - the system information: the kernel binary's own build metadata;
+    - the monitoring WebSocket: the kernel's node list from the protected
+      `v2_node`; WebSocket routes always relay to the kernel.
 - The kernel publishes read-only views `kapi_*`, created at startup by
   `EnsureKernelAPIViews` (first `kapi_user_directory_v1`, then
   `kapi_system_audit_log_v1`, the `v2_operation_log` rows of module
@@ -560,6 +580,8 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
   `kapi_node_heartbeat_v1`). Packages
   `kapi_node_status_v1`). Packages
   `kapi_forward_node_v1`, `kapi_forward_runtime_settings_v1`). Packages
+  `kapi_node_heartbeat_v1`, `kapi_node_status_v1`, `kapi_traffic_log_v1`).
+  Packages
   read other domains only
   through `kapi_*` views or typed operations. A view whose source table does
   not exist is left out. A view that filters rows is a PostgreSQL

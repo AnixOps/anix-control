@@ -275,8 +275,10 @@ credentials. `kapi_forward_node_v1` exposes every column of
 `kapi_forward_runtime_settings_v1` exposes `key` and `value` of the three
 `v2_system_config` rows that choose the forward runtime backend
 (`forward.runtime.nodex_mode`, `forward.runtime_backend`,
-`forward.runtime.ansible.backend`) and no other row. A view that filters rows
-is created `WITH
+`forward.runtime.ansible.backend`) and no other row. `kapi_traffic_log_v1`
+exposes `user_id`, `u`, `d`, `rate` and `log_at` of `v2_server_log`: each
+node traffic report's bytes per user, for traffic charts. A view that filters
+rows is created `WITH
 (security_barrier)` on PostgreSQL, so a package's own functions never see the
 rows it hides. If a view cannot be created, or its source table does not
 exist, startup continues and leases that grant it fail.

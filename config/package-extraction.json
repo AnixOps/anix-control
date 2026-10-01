@@ -1390,7 +1390,7 @@
       "path": "/api/v2/admin/traffic/hourly",
       "package_id": "machine-telemetry",
       "route_id": "telemetry.admin.traffic.hourly.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1398,7 +1398,7 @@
       "path": "/api/v2/admin/traffic/user-ranking",
       "package_id": "machine-telemetry",
       "route_id": "telemetry.admin.traffic.user_ranking.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {

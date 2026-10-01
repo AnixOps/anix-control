@@ -833,6 +833,17 @@
     credentials, node status, forward bridge tasks).
   - `internal/tests/protocolruntimecompat` proves byte parity on SQLite and
     PostgreSQL (22 cases each). The PostgreSQL run is part of CI.
+- **Machine telemetry module.** `packages/machine-telemetry` has its own host
+  and serves 2 of its 5 routes natively: the administrator's hourly traffic
+  series and user traffic ranking.
+  - It adopts no table: the traffic log comes from the new kernel view
+    `kapi_traffic_log_v1` (`user_id`, `u`, `d`, `rate` and `log_at` of
+    `v2_server_log`), e-mail addresses from `kapi_user_directory_v1`.
+  - The dashboard (users, orders and the online set in the kernel's cache,
+    cached itself), the system information (the kernel binary's build
+    metadata) and the monitoring WebSocket stay bridged.
+  - `internal/tests/machinetelemetrycompat` proves byte parity on SQLite and
+    PostgreSQL (42 cases each). The PostgreSQL run is part of CI.
 
 - The kernel side of the identity module, `KernelIdentity` (N9). It is served
   on the local package bridge and on the module listener.
