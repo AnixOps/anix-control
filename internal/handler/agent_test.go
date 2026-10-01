@@ -692,6 +692,29 @@ func (s *AgentHandlerTestSuite) TestCreateTask_Success() {
 	s.Require().NoError(<-ackDone)
 }
 
+// A task goes to the agent with the type in the body; only diagnostic tasks
+// are sent, as for ExecuteCommand. Any other type was sent as given.
+func (s *AgentHandlerTestSuite) TestCreateTask_RefusesOtherTaskTypes() {
+	handler, _, cleanup := s.newAckingAgentHandler()
+	defer cleanup()
+	s.router.POST("/admin/agent/tasks", handler.CreateTask)
+
+	for _, taskType := range []string{"forward", "shell", "Diagnostic", ""} {
+		body, _ := json.Marshal(map[string]any{
+			"node_id": s.testNode.ID, "type": taskType, "action": "service_restart",
+			"params": map[string]any{"service": "gost"},
+		})
+		req, _ := http.NewRequest("POST", "/admin/agent/tasks", bytes.NewReader(body))
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		s.router.ServeHTTP(w, req)
+		assert.Equal(s.T(), http.StatusBadRequest, w.Code, "%q: %s", taskType, w.Body.String())
+	}
+	var tasks int64
+	s.Require().NoError(s.db.Model(&model.AgentDiagnosticTask{}).Count(&tasks).Error)
+	assert.Zero(s.T(), tasks, "a task of another type was created")
+}
+
 func (s *AgentHandlerTestSuite) TestCreateTask_InvalidBody() {
 	handler := NewAgentHandler()
 	s.router.POST("/admin/agent/tasks", handler.CreateTask)

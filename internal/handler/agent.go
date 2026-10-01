@@ -10,6 +10,7 @@ import (
 	"log"
 	"net/http"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -22,6 +23,10 @@ import (
 	"github.com/gorilla/websocket"
 	"gorm.io/gorm"
 )
+
+// agentDiagnosticTaskType is the type of every task an administrator sends
+// to an agent: a whitelisted diagnostic action (ValidateAgentDiagnosticTask).
+const agentDiagnosticTaskType = "diagnostic"
 
 var (
 	agentWSReadTimeout  = 60 * time.Second
@@ -783,7 +788,7 @@ func (h *AgentHandler) AgentGetTasks(c *gin.Context) {
 			}
 			tasks = append(tasks, AgentTask{
 				ID:     diagTasks[i].TaskID,
-				Type:   "diagnostic",
+				Type:   agentDiagnosticTaskType,
 				Action: diagTasks[i].Action,
 				Params: params,
 			})
@@ -1107,6 +1112,13 @@ func (h *AgentHandler) CreateTask(c *gin.Context) {
 			return
 		}
 	}
+	// The task goes to the agent with its type, so the type is fixed like
+	// the action: only diagnostic tasks, whatever the body says.
+	if strings.TrimSpace(req.Type) != agentDiagnosticTaskType {
+		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("task type %q is not allowed: only %q tasks are sent to agents", req.Type, agentDiagnosticTaskType)})
+		return
+	}
+	req.Type = agentDiagnosticTaskType
 
 	// 妫€鏌ヨ妭鐐规槸鍚﹀湪绾?
 	conn, ok := h.connections.Load(req.NodeID)
@@ -1347,7 +1359,7 @@ func (h *AgentHandler) ExecuteCommand(c *gin.Context) {
 	// ExecuteCommand 不再接受任意命令字符串，改为白名单诊断动作
 	taskReq := CreateTaskRequest{
 		NodeID:  req.NodeID,
-		Type:    "diagnostic",
+		Type:    agentDiagnosticTaskType,
 		Action:  req.Action,
 		Params:  req.Params,
 		Timeout: req.Timeout,

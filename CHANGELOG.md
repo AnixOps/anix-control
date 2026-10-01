@@ -25,6 +25,11 @@
   A heartbeat or monitoring report marks the node online in the table that
   authenticated it; without a live connection a proxy node's report used to
   mark the forward node with the same id online. See `docs/UPGRADE.md`.
+- An administrator's agent task goes out only as a diagnostic task.
+  `POST /api/v2/admin/agent/tasks` checked the action and params against the
+  diagnostic whitelist but sent the body's `type` to the agent as given;
+  `POST /api/v2/admin/agent/execute` already fixed it to `diagnostic`. Any
+  other type is now refused with `400`.
 - Node and node protocol writes save only their own columns.
   - **Nested objects.** `POST /api/v2/admin/nodes` and
     `POST /api/v2/admin/nodes/:id/protocols` bound the body to the kernel
