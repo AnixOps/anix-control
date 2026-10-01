@@ -265,6 +265,34 @@ package host: `anixops_plugin_host_starts_total`,
 for the current state (`running`, `restarting`, `failed`, `exited`,
 `stopped`) and `0` for the others.
 
+## Agent Client Certificates
+
+`agent_control.mtls` (`ANIX_CONTROL_AGENT_CONTROL_MTLS`) sets how AnixOps
+Agents authenticate on the gRPC listener (`grpc.*`):
+
+```yaml
+agent_control:
+  mtls: "optional"   # optional | preferred | required
+```
+
+| Mode | Agents without a client certificate |
+|------|------|
+| `optional` (default) | authenticate with their node API key, as before |
+| `preferred` | still authenticate; the control stream answers with `x-anix-auth-deprecated` |
+| `required` | are refused by the Agent services; `Enroll` takes only one-time enrollment credentials |
+
+- Agents get certificates from `anix.agent.v1.AgentEnrollment`, signed by the
+  built-in CA. It needs only `module_runtime.ca_kek`
+  (`ANIX_CONTROL_MODULE_RUNTIME_CA_KEK`, 32 bytes, base64 or hex) with
+  `module_runtime.pki: builtin`; `module_runtime.enabled` and the module
+  listener are not needed. Without the CA, or with `pki: external`,
+  `optional` behaves exactly as before.
+- `preferred` and `required` need `grpc.tls_cert_file`, `grpc.tls_key_file`
+  and the built-in CA; startup fails otherwise.
+- Enrollment credentials: `anix-control agent token create -node proxy-12`
+  or `POST /api/v4/kernel/agents/enrollment-tokens`. Details in
+  [`../architecture/module-runtime.md`](../architecture/module-runtime.md#agent-pki).
+
 ## Related Docs
 
 - [`forward-runtime-migration.md`](forward-runtime-migration.md)

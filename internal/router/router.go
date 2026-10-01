@@ -730,7 +730,8 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v3.GET("/observed-states", kernel.ListObservedStates)
 	}
 
-	// API v4 exposes the package route gateway and module PKI administration.
+	// API v4 exposes the package route gateway and module and agent PKI
+	// administration.
 	// Its admission model is identical to v3.
 	// Public: the identity token keys Control accepts (JWKS).
 	identityPublic := r.Group("/api/v4/identity")
@@ -762,5 +763,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.GET("/kernel/modules/runtimes", modules.ListRuntimes)
 		v4.PUT("/kernel/modules/runtimes/:plugin_id", modules.SetRuntime)
 		v4.GET("/kernel/node-operations", handler.NewKernelNodeOperationsHandler().List)
+		agents := handler.NewAgentPKIHandler()
+		v4.POST("/kernel/agents/enrollment-tokens", agents.CreateEnrollmentToken)
 	}
 }

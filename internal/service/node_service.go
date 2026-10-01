@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/AnixOps/anix-control/sdk/agentcontrol"
+	"github.com/AnixOps/anix-control/v4/internal/agentpki"
 	"github.com/AnixOps/anix-control/v4/internal/cache"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
@@ -195,7 +197,10 @@ func (s *NodeService) UpdateNode(id uint, updates map[string]any) error {
 		if err := tx.Model(&model.Node{}).Where("id = ?", id).Updates(updates).Error; err != nil {
 			return err
 		}
-		return nodesecrets.Sync(tx, nodesecrets.TableNode, id)
+		if err := nodesecrets.Sync(tx, nodesecrets.TableNode, id); err != nil {
+			return err
+		}
+		return revokeProxyNodeAgentsIfDisabled(tx, id, updates)
 	})
 }
 
@@ -368,7 +373,10 @@ func (s *NodeService) DeleteNode(id uint) error {
 		if err := tx.Delete(&model.Node{}, id).Error; err != nil {
 			return err
 		}
-		return nodesecrets.Sync(tx, nodesecrets.TableNode, id)
+		if err := nodesecrets.Sync(tx, nodesecrets.TableNode, id); err != nil {
+			return err
+		}
+		return revokeNodeAgents(tx, agentcontrol.NodeKindProxy, id, agentpki.RevokeReasonNodeDeleted)
 	})
 }
 

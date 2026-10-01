@@ -104,3 +104,7 @@ grpc:
   enabled: false
   host: "0.0.0.0"
   port: 50051
+agent_control:
+  # Client certificates on the agent listener: optional, preferred or
+  # required. Optional keeps every legacy agent working.
+  mtls: "optional"

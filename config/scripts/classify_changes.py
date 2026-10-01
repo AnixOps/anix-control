@@ -67,6 +67,7 @@ CLASS_PATTERNS: dict[str, tuple[str, ...]] = {
         # The node credential split's writer and its PostgreSQL tests.
         "internal/nodesecrets/*",
         "internal/kernelnodeops/*",
+        "internal/agentpki/*",
         "sdk/v2compat/*",
         "packages/identity-platform/*",
         "identity/*",
@@ -105,6 +106,7 @@ CLASS_PATTERNS: dict[str, tuple[str, ...]] = {
     ),
     "agent": (
         "internal/grpc/*",
+        "internal/agentpki/*",
         "api/*",
         "contracts/agent/*",
         "internal/handler/agent*",
@@ -157,6 +159,7 @@ def self_test() -> None:
     check(["internal/pluginhost/remote.go"], {"code", "modules"})
     check(["internal/service/forward_panel_flow.go"], {"code", "db", "forward"})
     check(["internal/grpc/node_server.go"], {"code", "agent"})
+    check(["internal/agentpki/enrollment.go"], {"code", "db", "agent"})
     check(["packages/knowledge/compat/v2-routes.json"], {"code", "packages"})
     check(["packages/order/native/orders.go"], {"code", "db", "packages"})
     check(["packages/identity-platform/native/auth.go"], {"code", "db", "modules", "packages"})

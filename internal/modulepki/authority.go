@@ -208,14 +208,25 @@ func (a *Authority) Maintain(ctx context.Context) error {
 // TrustBundle returns every CA a peer must trust: the current and next CAs
 // and retired CAs whose certificates may still be valid.
 func (a *Authority) TrustBundle(ctx context.Context) ([]*x509.Certificate, error) {
+	return a.trustBundle(a.db.WithContext(ctx), a.lifetime)
+}
+
+// TrustBundleRetaining is TrustBundle for certificates that live up to
+// retention, such as agent certificates: a retired CA stays until the last
+// certificate it may have signed has expired.
+func (a *Authority) TrustBundleRetaining(ctx context.Context, retention time.Duration) ([]*x509.Certificate, error) {
+	return a.trustBundle(a.db.WithContext(ctx), max(retention, a.lifetime))
+}
+
+func (a *Authority) trustBundle(db *gorm.DB, retention time.Duration) ([]*x509.Certificate, error) {
 	var rows []model.ServiceCA
-	if err := a.db.WithContext(ctx).Where("cluster = ?", a.cluster).Order("id").Find(&rows).Error; err != nil {
+	if err := db.Where("cluster = ?", a.cluster).Order("id").Find(&rows).Error; err != nil {
 		return nil, err
 	}
 	now := a.now().UTC()
 	var bundle []*x509.Certificate
 	for _, row := range rows {
-		if row.State == model.ServiceCAStateRetired && (row.RetiredAt == nil || row.RetiredAt.Add(a.lifetime+clockSkew).Before(now)) {
+		if row.State == model.ServiceCAStateRetired && (row.RetiredAt == nil || row.RetiredAt.Add(retention+clockSkew).Before(now)) {
 			continue
 		}
 		certificate, err := parseCertificatePEM(row.CertificatePEM)
@@ -295,50 +306,102 @@ func (a *Authority) currentSigner(tx *gorm.DB) (*signer, error) {
 
 // sign issues a leaf for identity and publicKey with the current CA.
 func (a *Authority) sign(ctx context.Context, tx *gorm.DB, identity moduletls.Identity, publicKey crypto.PublicKey) (Issued, *signer, error) {
-	current, err := a.currentSigner(tx)
+	leaf, current, err := a.signURI(tx.WithContext(ctx), identity.URL(), a.lifetime, a.lifetime, publicKey)
 	if err != nil {
 		return Issued{}, nil, err
 	}
+	return Issued{
+		CertificateDER: leaf.CertificateDER, TrustBundleDER: leaf.TrustBundleDER, Identity: identity,
+		Serial: leaf.Serial, NotAfter: leaf.NotAfter, RenewAfter: leaf.RenewAfter,
+	}, current, nil
+}
+
+// SignedLeaf is a certificate the CA signed for an identity outside the
+// module identities, such as an agent's.
+type SignedLeaf struct {
+	CertificateDER []byte
+	// TrustBundleDER is the trust bundle retaining retired CAs for the
+	// lifetime the leaf was signed with.
+	TrustBundleDER [][]byte
+	Serial         string
+	NotAfter       time.Time
+	RenewAfter     time.Time
+	// IssuerKeyID names the CA that signed the leaf.
+	IssuerKeyID string
+}
+
+// Leaf lifetimes SignLeaf accepts.
+const (
+	MinLeafLifetime = 10 * time.Minute
+	MaxLeafLifetime = 30 * 24 * time.Hour
+)
+
+// SignLeaf issues, inside tx, a certificate whose only identity is the URI
+// SAN uri, for the public key of the PKCS#10 request csrDER, valid for
+// lifetime, with the current CA. The subject and SANs of the request are
+// ignored. The caller records the serial in the same transaction.
+func (a *Authority) SignLeaf(ctx context.Context, tx *gorm.DB, uri *url.URL, lifetime time.Duration, csrDER []byte) (SignedLeaf, error) {
+	if uri == nil || uri.Scheme != "spiffe" || uri.Host != moduletls.TrustDomain {
+		return SignedLeaf{}, fmt.Errorf("%w: the identity must be an AnixOps SPIFFE ID", ErrInvalidRequest)
+	}
+	if lifetime < MinLeafLifetime || lifetime > MaxLeafLifetime {
+		return SignedLeaf{}, fmt.Errorf("certificate lifetime %s must be between %s and %s", lifetime, MinLeafLifetime, MaxLeafLifetime)
+	}
+	publicKey, err := checkCSR(csrDER)
+	if err != nil {
+		return SignedLeaf{}, err
+	}
+	leaf, _, err := a.signURI(tx.WithContext(ctx), uri, lifetime, max(lifetime, a.lifetime), publicKey)
+	return leaf, err
+}
+
+// signURI signs a leaf for uri and publicKey with the current CA. The trust
+// bundle it returns keeps retired CAs for retention.
+func (a *Authority) signURI(tx *gorm.DB, uri *url.URL, lifetime, retention time.Duration, publicKey crypto.PublicKey) (SignedLeaf, *signer, error) {
+	current, err := a.currentSigner(tx)
+	if err != nil {
+		return SignedLeaf{}, nil, err
+	}
 	serialBytes := make([]byte, 16)
 	if _, err := rand.Read(serialBytes); err != nil {
-		return Issued{}, nil, err
+		return SignedLeaf{}, nil, err
 	}
 	serialBytes[0] &= 0x7f
 	serial := new(big.Int).SetBytes(serialBytes)
 	now := a.now().UTC()
-	notAfter := now.Add(a.lifetime)
+	notAfter := now.Add(lifetime)
 	if notAfter.After(current.certificate.NotAfter) {
 		notAfter = current.certificate.NotAfter
 	}
 	template := &x509.Certificate{
 		SerialNumber:          serial,
-		Subject:               pkix.Name{CommonName: identity.String()},
+		Subject:               pkix.Name{CommonName: uri.String()},
 		NotBefore:             now.Add(-clockSkew),
 		NotAfter:              notAfter,
 		KeyUsage:              x509.KeyUsageDigitalSignature,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
 		BasicConstraintsValid: true,
-		URIs:                  []*url.URL{identity.URL()},
+		URIs:                  []*url.URL{uri},
 	}
 	if _, isRSA := publicKey.(*rsa.PublicKey); isRSA {
 		template.KeyUsage |= x509.KeyUsageKeyEncipherment
 	}
 	der, err := x509.CreateCertificate(rand.Reader, template, current.certificate, publicKey, current.key)
 	if err != nil {
-		return Issued{}, nil, err
+		return SignedLeaf{}, nil, err
 	}
-	bundle, err := a.TrustBundle(ctx)
+	bundle, err := a.trustBundle(tx, retention)
 	if err != nil {
-		return Issued{}, nil, err
+		return SignedLeaf{}, nil, err
 	}
 	bundleDER := make([][]byte, 0, len(bundle))
 	for _, certificate := range bundle {
 		bundleDER = append(bundleDER, certificate.Raw)
 	}
-	lifetime := notAfter.Sub(now)
-	return Issued{
-		CertificateDER: der, TrustBundleDER: bundleDER, Identity: identity,
-		Serial: SerialString(serial), NotAfter: notAfter, RenewAfter: now.Add(lifetime * 2 / 3),
+	valid := notAfter.Sub(now)
+	return SignedLeaf{
+		CertificateDER: der, TrustBundleDER: bundleDER, Serial: SerialString(serial),
+		NotAfter: notAfter, RenewAfter: now.Add(valid * 2 / 3), IssuerKeyID: current.row.KeyID,
 	}, current, nil
 }
 

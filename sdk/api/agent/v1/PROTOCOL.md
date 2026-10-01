@@ -18,7 +18,20 @@ the same way.
 
 `AgentControlService.ControlStream` is the v3 primary Agent-first bidirectional
 gRPC control channel. Authentication reuses the configured node ID and node API
-key as `x-node-id` and `x-api-key` metadata.
+key as `x-node-id` and `x-api-key` metadata, or an agent client certificate.
+
+`AgentEnrollment` (`agent_enrollment.proto`, a separate file of the same
+package so `agent.proto` keeps its v1.1.0 descriptor) issues those
+certificates. Its one URI SAN names the node:
+`spiffe://anixops/<cluster>/agent/proxy-<id>` or
+`spiffe://anixops/<cluster>/agent/forward-<id>`. `Enroll` takes the node
+credential in metadata (`x-node-kind: forward` with a forward node's token)
+or a one-time `anixagt_...` `enrollment_credential`; `Renew` and
+`GetTrustBundle` need the current certificate. Certificates last 7 days and
+are renewed after `renew_after_unix`, two thirds of the lifetime. With a
+certificate the stream's node comes from it, every envelope's `node_id`
+must name it, and `x-api-key` is not needed. `sdk/agentcontrol` has the
+identity helpers and metadata keys.
 
 The client declares capabilities in `Hello`, sends application heartbeats,
 automatically reconnects with jittered exponential backoff, acknowledges

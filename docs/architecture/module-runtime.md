@@ -75,7 +75,10 @@ that serves `ModulePKI` arrives with `Bind`.
   - The CA certificate carries a name constraint: only `spiffe://anixops/...`
     URIs can chain to it.
   - The kernel creates the CA at startup (under the bootstrap lock) when
-    `module_runtime.enabled` is true and `module_runtime.pki` is `builtin`.
+    `module_runtime.pki` is `builtin` and `module_runtime.ca_kek` is set.
+    The CA does not need the module listener: with
+    `module_runtime.enabled: false` it still signs agent certificates
+    ("Agent PKI" below), and its rotation maintenance runs either way.
   - Rotation keeps a `current` and a `next` CA. The trust bundle carries
     both, and issuing switches to `next` only after one full certificate
     lifetime.
@@ -114,6 +117,97 @@ that serves `ModulePKI` arrives with `Bind`.
   loads `trust_bundle_file`, `cert_file` and `key_file`, for example from
   cert-manager, and re-reads them when they change. It then checks SANs
   only, and `Enroll`/`Renew` are disabled.
+
+## Agent PKI
+
+Status: implemented in the kernel (`internal/agentpki`; A2-1 of the node
+operations design, `node-ops-service.md` section 5.3). The anix-agent side
+(enroll, store, renew, dial with mTLS) is AG-2.
+
+The module CA above also signs the client certificates of AnixOps Agents.
+Agents get them from `anix.agent.v1.AgentEnrollment` on the node-facing
+gRPC listener (`grpc.*`, port 50051), not on the module listener.
+
+- **Identity.** One URI SAN names the node:
+  `spiffe://anixops/<cluster>/agent/proxy-<id>` for a `v2_node` row or
+  `.../agent/forward-<id>` for a `v2_forward_node` row. Proxy and forward
+  ids overlap, so the kind is part of the name. The kernel ignores the
+  CSR's subject and SANs and issues the identity of the node the bootstrap
+  credential authenticated.
+- **Issuer and lifetime.** The module CA, with its `current`/`next`
+  rotation. Agent certificates last 7 days (decision D9) and are renewed at
+  two thirds of the lifetime with `AgentEnrollment.Renew`, authenticated by
+  the current certificate. Retired CAs stay trusted for agent certificates
+  until the last one they signed has expired.
+- **Bootstrap** (`AgentEnrollment.Enroll`, without a client certificate):
+  1. *Agents in the field* use the credential they have: metadata
+     `x-node-id` and `x-api-key` (a proxy node's API key), with
+     `x-node-kind: forward` for a forward node's token.
+  2. *New nodes* use a one-time enrollment credential (`anixagt_...`) bound
+     to a node, at most 7 days (default 24 h), stored hashed in
+     `v4_kernel_agent_enrollment`, in `enrollment_credential`.
+  3. *Registration keys* keep minting node API keys
+     (`/api/v2/node/register`, `NodeService.Register`); the agent then
+     enrolls with that key, as in 1.
+
+  A one-time credential is consumed atomically: of two concurrent
+  enrollments exactly one succeeds, and a failed issuance leaves it unused.
+  Rejections share one answer.
+- **Administration.** Both print the credential once; the kernel keeps its
+  SHA-256.
+  - Admin API: `POST /api/v4/kernel/agents/enrollment-tokens` with
+    `{"node":"proxy-12","ttl_seconds":86400}` (`ttl_seconds` optional, at
+    most 604800).
+  - CLI: `anix-control agent token create -node proxy-12 [-ttl 24h]`.
+  - Every credential issue and every enrollment writes an operation log
+    entry (`v2_operation_log`, module `agent_pki`, actions
+    `agent_enrollment_token_issue` and `agent_enroll`) without the
+    credential.
+- **Listener.** The listener keeps its public TLS certificate
+  (`grpc.tls_cert_file`); agents verify it as before. With the agent PKI
+  on, the handshake asks for a client certificate but never requires one;
+  the Agent services and the v2board interceptors verify a presented
+  certificate against the agent trust bundle, its identity and its
+  revocation state. An invalid, expired, revoked or foreign certificate
+  (the kernel's, a module's, another cluster's) is refused, never
+  downgraded to the legacy credential.
+  - The stream takes its node from the certificate, for proxy and forward
+    nodes. Every envelope's `node_id` must name it, and `x-node-id`, when
+    sent, too. Forward-node streams live in their own connection manager;
+    operations for them arrive with KernelNodeOps (NO-6, NO-7).
+  - On the v2board services only a proxy node's certificate is accepted,
+    and every request's `node_id` must name the certificate's node.
+  - A certificate revoked while a stream is open ends the stream at its
+    next heartbeat.
+- **Mode** `agent_control.mtls` (`ANIX_CONTROL_AGENT_CONTROL_MTLS`):
+
+  | Mode | Without a client certificate |
+  |---|---|
+  | `optional` (default) | the legacy node credential authenticates, as before |
+  | `preferred` | the same, and the control stream answers it with the header `x-anix-auth-deprecated` |
+  | `required` (v5) | the Agent services refuse the call; `Enroll` accepts only enrollment credentials. The v2board services keep the legacy credential for third-party node software (the F3 decision) |
+
+  `preferred` and `required` need `grpc.tls_cert_file`/`grpc.tls_key_file`
+  and the built-in CA; the kernel refuses to start without them.
+- **Revocation.** Every certificate is recorded in
+  `v4_kernel_agent_certificate` (serial, node kind and id, enrollment,
+  issuer, `not_after`, `revoked_at`). Disabling a proxy node, replacing a
+  forward node's token, disabling a forward node and deleting either node
+  revoke the node's certificates and its unused enrollment credentials in
+  the same transaction. The listener answers revocation from a cache of at
+  most 30 s; revocations in the same process apply at once. Expired records
+  are pruned hourly.
+- **Requirements.** Agent enrollment needs only the built-in CA:
+  `module_runtime.ca_kek` with `module_runtime.pki: builtin` (the default).
+  `module_runtime.enabled` may stay `false`; the module listener (`:7443`)
+  and the remote runtime then stay off, and `module_runtime.cluster` still
+  names the cluster in agent SPIFFE IDs. With `pki: external` the kernel
+  holds no CA key, so agent enrollment is off (`optional` only; the other
+  modes refuse to start). Without the CA, `Enroll` answers
+  `FailedPrecondition`, client certificates are not requested, and
+  `optional` behaves exactly as before. Client certificates need the
+  listener's own TLS: behind a TLS-terminating proxy they do not reach
+  Control.
 
 ## Bind, sessions and fencing
 

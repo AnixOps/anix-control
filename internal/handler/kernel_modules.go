@@ -58,7 +58,7 @@ func (h *ModuleHandler) authorityOrError(c *gin.Context) *modulepki.Authority {
 	authority, err := h.authority()
 	switch {
 	case errors.Is(err, modulepki.ErrBuiltinPKIDisabled):
-		kernelError(c, http.StatusConflict, "module_pki_disabled", "the built-in module PKI is not enabled (module_runtime.enabled with pki=builtin)")
+		kernelError(c, http.StatusConflict, "module_pki_disabled", "the built-in module PKI is not enabled (module_runtime.ca_kek with pki=builtin)")
 		return nil
 	case err != nil:
 		kernelError(c, http.StatusServiceUnavailable, "module_pki_unavailable", err.Error())

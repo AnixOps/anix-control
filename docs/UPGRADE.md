@@ -885,6 +885,41 @@ anix-control node-secrets status     # phase, backfill progress, last verify
   release; the next phase, where readers move to the new tables with a
   fallback, will require a matching `verify` first.
 
+### Agent Client Certificates Are Optional
+
+Control can issue mTLS client certificates to AnixOps Agents
+(`docs/architecture/module-runtime.md`, "Agent PKI"). Nothing is required of
+operators: the new key `agent_control.mtls` defaults to `optional`, and
+every agent keeps authenticating with its node API key as before.
+
+- **What is new.** The tables `v4_kernel_agent_enrollment` and
+  `v4_kernel_agent_certificate` (created at startup), the gRPC service
+  `anix.agent.v1.AgentEnrollment` on the agent listener,
+  `POST /api/v4/kernel/agents/enrollment-tokens` and
+  `anix-control agent token create -node proxy-12`.
+- **To let agents enroll.** Set `module_runtime.ca_kek`
+  (`ANIX_CONTROL_MODULE_RUNTIME_CA_KEK`, 32 random bytes as base64 or hex;
+  keep it secret and backed up) and TLS on the gRPC listener
+  (`grpc.tls_cert_file`, `grpc.tls_key_file`). The module runtime need not be
+  enabled: the kernel creates the built-in CA at startup and does not open
+  the module listener. Agents that support enrollment (anix-agent with AG-2)
+  then enroll with their API key. Without the CA, or with
+  `module_runtime.pki: external`, `Enroll` answers `FailedPrecondition` and
+  the listener behaves exactly as before.
+- **An existing `ca_kek` with the module runtime off.** From this release a
+  `module_runtime.ca_kek` creates the built-in CA even when
+  `module_runtime.enabled` is false, and a malformed key stops startup.
+  Remove the key if you do not want the CA.
+- **Later modes.** `preferred` keeps legacy credentials and answers a
+  legacy control stream with the header `x-anix-auth-deprecated`; `required`
+  (planned for 5.0)
+  accepts only certificates on the Agent services. Both need the built-in
+  CA and gRPC TLS, or Control refuses to start. Do not switch before every
+  agent has enrolled.
+- **Revocation.** Disabling or deleting a node, or replacing a forward
+  node's token, revokes the node's agent certificates. A re-enabled node's
+  agent enrolls again with its credential.
+
 ## Moving Logins To The Identity Module
 
 From 4.1 the identity module can own accounts, passwords, MFA and token

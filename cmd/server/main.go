@@ -341,10 +341,10 @@ func main() {
 // code so that deferred cleanup (cache, database) runs before os.Exit.
 func run() int {
 	migrateOnly := takeMigrateCommand()
-	moduleArguments := takeModuleCommand()
+	adminArguments := takeAdminCommand()
 	nodeSecretsArguments := takeNodeSecretsCommand()
-	// Module and node-secrets commands print JSON on stdout.
-	jsonCommand := moduleArguments != nil || nodeSecretsArguments != nil
+	// Module, agent and node-secrets commands print JSON on stdout.
+	jsonCommand := adminArguments != nil || nodeSecretsArguments != nil
 	flag.Parse()
 	if printEnv {
 		if err := writeEnvTable(os.Stdout); err != nil {
@@ -366,7 +366,7 @@ func run() int {
 
 	// 打印版本信息
 	syncBuildInfo()
-	// Module commands print JSON on stdout, so the banner goes to stderr.
+	// Module and agent commands print JSON on stdout, so the banner goes to stderr.
 	banner := os.Stdout
 	if jsonCommand {
 		banner = os.Stderr
@@ -384,7 +384,7 @@ func run() int {
 		}
 	}
 	if jsonCommand {
-		// Module commands print their result on stdout; logs go to stderr.
+		// Module, agent and node-secrets commands print their result on stdout; logs go to stderr.
 		logging.SetupTo(cfg.Log, os.Stderr)
 	} else {
 		logging.Setup(cfg.Log)
@@ -439,9 +439,9 @@ func run() int {
 		log.Println("Database schema and seed data are up to date; migrate finished.")
 		return 0
 	}
-	if moduleArguments != nil {
-		if err := runModuleCommand(context.Background(), cfg, database.Get(), moduleArguments, os.Stdout); err != nil {
-			log.Printf("module: %v", err)
+	if adminArguments != nil {
+		if err := runAdminCommand(context.Background(), cfg, database.Get(), adminArguments, os.Stdout); err != nil {
+			log.Printf("%s: %v", adminArguments[0], err)
 			return 2
 		}
 		return 0
@@ -581,6 +581,10 @@ func (rt *serverRuntime) start(cfg *config.Config, intervals pluginPollIntervals
 	}
 	rt.startSubscriberChangePruner()
 	rt.startOrderPaymentReconciler()
+	rt.startAgentPKIMaintenance()
+	if err := rt.startKernelCAMaintenance(cfg, database.Get()); err != nil {
+		return err
+	}
 	pluginhost.SetDefaultManager(nil)
 	if cfg.Plugins.ControlExecutionEnabled {
 		hosts, err := newControlPluginHostManager(cfg)
@@ -820,6 +824,12 @@ func startGRPCServer(cfg *config.Config) (*grpcserver.Server, string, error) {
 	grpcCfg.APIToken = cfg.GRPC.APIToken
 	grpcCfg.TLSCertFile = cfg.GRPC.TLSCertFile
 	grpcCfg.TLSKeyFile = cfg.GRPC.TLSKeyFile
+	grpcCfg.AgentMTLS = cfg.AgentControl.MTLSOrDefault()
+	agentPKI, err := agentPKIForGRPC(cfg, database.Get())
+	if err != nil {
+		return nil, "", err
+	}
+	grpcCfg.AgentPKI = agentPKI
 
 	server := grpcserver.NewServer(grpcCfg)
 	if err := server.Start(); err != nil {

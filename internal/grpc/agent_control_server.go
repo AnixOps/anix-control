@@ -568,16 +568,27 @@ func isTerminalObservedPhase(phase agentv1pb.ObservedPhase) bool {
 	}
 }
 
-var agentControlManager = NewAgentControlManager()
+var (
+	agentControlManager        = NewAgentControlManager()
+	forwardAgentControlManager = NewAgentControlManager()
+)
 
 func GetAgentControlManager() *AgentControlManager {
 	return agentControlManager
+}
+
+// GetForwardAgentControlManager returns the streams of forward-node agents.
+// Forward and proxy node ids overlap, so they have managers of their own.
+func GetForwardAgentControlManager() *AgentControlManager {
+	return forwardAgentControlManager
 }
 
 // AgentControlGRPCServer implements the Agent-first control stream.
 type AgentControlGRPCServer struct {
 	agentv1pb.UnimplementedAgentControlServiceServer
 	manager                  *AgentControlManager
+	forwardManager           *AgentControlManager
+	auth                     *AgentAuthenticator
 	nodeService              *service.NodeService
 	heartbeatIntervalSeconds uint32
 }
@@ -588,15 +599,43 @@ func NewAgentControlGRPCServer(manager *AgentControlManager) *AgentControlGRPCSe
 	}
 	return &AgentControlGRPCServer{
 		manager:                  manager,
+		forwardManager:           GetForwardAgentControlManager(),
 		nodeService:              service.NewNodeService(),
 		heartbeatIntervalSeconds: defaultAgentHeartbeatIntervalSeconds,
 	}
 }
 
+// WithAuthenticator sets how agents authenticate: by client certificate
+// and, unless agent_control.mtls is required, by node API key. Without it
+// only node API keys authenticate.
+func (s *AgentControlGRPCServer) WithAuthenticator(auth *AgentAuthenticator) *AgentControlGRPCServer {
+	s.auth = auth
+	return s
+}
+
+// touchNode records an agent's liveness in the table that owns its node.
+func (s *AgentControlGRPCServer) touchNode(node agentcontrol.AgentNode) error {
+	if node.Kind == agentcontrol.NodeKindForward {
+		return databaseForAgentChecks().Model(&model.ForwardNode{}).Where("id = ?", node.ID).Updates(map[string]any{
+			"status": model.ForwardNodeStatusOnline, "last_check": time.Now(),
+		}).Error
+	}
+	return s.nodeService.UpdateLastCheckAt(uint(node.ID))
+}
+
+// ControlStream serves one agent's control stream. The stream's node comes
+// from the client certificate (proxy or forward node) or from the legacy
+// node API key (proxy nodes); every envelope's node_id must name it.
 func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlService_ControlStreamServer) error {
-	nodeID, err := authenticatedStreamNodeID(stream.Context())
+	principal, err := s.auth.authenticateControlStream(stream)
 	if err != nil {
 		return err
+	}
+	agentNode := principal.Node
+	nodeID := agentNode.ID
+	manager := s.manager
+	if agentNode.Kind == agentcontrol.NodeKindForward {
+		manager = s.forwardManager
 	}
 
 	first, err := stream.Recv()
@@ -627,7 +666,7 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 	}
 
 	now := time.Now()
-	desiredRevision := s.manager.reconcileDesiredRevision(nodeID, first.Revision)
+	desiredRevision := manager.reconcileDesiredRevision(nodeID, first.Revision)
 	connection := &AgentControlConnection{
 		NodeID:       nodeID,
 		SessionID:    newAgentControlID("session"),
@@ -641,8 +680,8 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 		stream:       stream,
 	}
 
-	if err := s.nodeService.UpdateLastCheckAt(uint(nodeID)); err != nil {
-		slog.Warn("failed to persist agent hello heartbeat", "component", "agent-control", "node_id", nodeID, "error", err)
+	if err := s.touchNode(agentNode); err != nil {
+		slog.Warn("failed to persist agent hello heartbeat", "component", "agent-control", "node", agentNode.String(), "error", err)
 	}
 
 	if err := connection.send(&agentv1pb.ControlToAgent{
@@ -661,10 +700,10 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 	}); err != nil {
 		return err
 	}
-	if err := s.manager.registerAndReplay(connection); err != nil {
+	if err := manager.registerAndReplay(connection); err != nil {
 		return err
 	}
-	defer s.manager.unregister(connection)
+	defer manager.unregister(connection)
 
 	for {
 		message, err := stream.Recv()
@@ -674,7 +713,7 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 			}
 			return err
 		}
-		if !s.manager.isCurrent(connection) {
+		if !manager.isCurrent(connection) {
 			return status.Error(codes.Aborted, "agent stream replaced by a newer session")
 		}
 		if message.NodeId != nodeID {
@@ -693,34 +732,30 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 			if payload.Heartbeat.SessionId != connection.SessionID {
 				return status.Error(codes.FailedPrecondition, "heartbeat session_id does not match")
 			}
+			// A certificate revoked or expired while the stream is open
+			// ends it at the next heartbeat.
+			if err := s.auth.recheck(stream.Context(), principal); err != nil {
+				return err
+			}
 			connection.touch(payload.Heartbeat.ObservedRevision)
-			if err := s.nodeService.UpdateLastCheckAt(uint(nodeID)); err != nil {
-				slog.Warn("failed to persist agent heartbeat", "component", "agent-control", "node_id", nodeID, "error", err)
+			if err := s.touchNode(agentNode); err != nil {
+				slog.Warn("failed to persist agent heartbeat", "component", "agent-control", "node", agentNode.String(), "error", err)
 			}
-			if len(payload.Heartbeat.Metrics) > 0 {
-				if accepted, err := s.nodeService.RecordPluginTelemetry(uint(nodeID), payload.Heartbeat.Metrics, time.Now()); err != nil {
-					slog.Warn("failed to persist agent plugin telemetry", "component", "agent-control", "node_id", nodeID, "accepted_metrics", accepted, "error", err)
-				}
-			}
-			if len(payload.Heartbeat.PluginObservations) > 0 {
-				snapshots, snapshotErr := kernelPluginObservedSnapshots(payload.Heartbeat.PluginObservations)
-				if snapshotErr != nil {
-					slog.Warn("ignored malformed agent plugin observations", "component", "agent-control", "node_id", nodeID, "error", snapshotErr)
-				}
-				if len(snapshots) > 0 {
-					s.recordHeartbeatPluginObservations(uint(nodeID), snapshots, time.Now())
-				}
+			// Plugin telemetry and observations belong to proxy nodes
+			// (v2_node); forward-node counters join with A5.
+			if agentNode.Kind == agentcontrol.NodeKindProxy {
+				s.recordHeartbeatPluginState(nodeID, payload.Heartbeat)
 			}
 			if err := connection.send(&agentv1pb.ControlToAgent{
 				RequestId:    message.RequestId,
 				NodeId:       nodeID,
-				Revision:     s.manager.DesiredRevision(nodeID),
+				Revision:     manager.DesiredRevision(nodeID),
 				SentAtUnixMs: time.Now().UnixMilli(),
 				Payload: &agentv1pb.ControlToAgent_HeartbeatAck{
 					HeartbeatAck: &agentv1pb.HeartbeatAck{
 						SessionId:        connection.SessionID,
 						ServerTimeUnixMs: time.Now().UnixMilli(),
-						DesiredRevision:  s.manager.DesiredRevision(nodeID),
+						DesiredRevision:  manager.DesiredRevision(nodeID),
 					},
 				},
 			}); err != nil {
@@ -730,14 +765,14 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 			if payload.OperationAck == nil || payload.OperationAck.Revision != message.Revision {
 				return status.Error(codes.InvalidArgument, "operation ACK envelope revision does not match payload")
 			}
-			if err := s.manager.resolveAck(connection, payload.OperationAck); err != nil {
+			if err := manager.resolveAck(connection, payload.OperationAck); err != nil {
 				return err
 			}
 		case *agentv1pb.AgentToControl_ObservedState:
 			if payload.ObservedState == nil || payload.ObservedState.Revision != message.Revision {
 				return status.Error(codes.InvalidArgument, "observed state envelope revision does not match payload")
 			}
-			if err := s.manager.recordObserved(connection, payload.ObservedState); err != nil {
+			if err := manager.recordObserved(connection, payload.ObservedState); err != nil {
 				return err
 			}
 		case *agentv1pb.AgentToControl_Hello:
@@ -752,6 +787,25 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 			return unnegotiatedPayload("status", agentcontrol.CapabilityReports)
 		default:
 			return status.Error(codes.InvalidArgument, "control message payload is required")
+		}
+	}
+}
+
+// recordHeartbeatPluginState persists the plugin telemetry and runtime
+// observations a proxy node's heartbeat carries.
+func (s *AgentControlGRPCServer) recordHeartbeatPluginState(nodeID uint32, heartbeat *agentv1pb.Heartbeat) {
+	if len(heartbeat.Metrics) > 0 {
+		if accepted, err := s.nodeService.RecordPluginTelemetry(uint(nodeID), heartbeat.Metrics, time.Now()); err != nil {
+			slog.Warn("failed to persist agent plugin telemetry", "component", "agent-control", "node_id", nodeID, "accepted_metrics", accepted, "error", err)
+		}
+	}
+	if len(heartbeat.PluginObservations) > 0 {
+		snapshots, snapshotErr := kernelPluginObservedSnapshots(heartbeat.PluginObservations)
+		if snapshotErr != nil {
+			slog.Warn("ignored malformed agent plugin observations", "component", "agent-control", "node_id", nodeID, "error", snapshotErr)
+		}
+		if len(snapshots) > 0 {
+			s.recordHeartbeatPluginObservations(uint(nodeID), snapshots, time.Now())
 		}
 	}
 }

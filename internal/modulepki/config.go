@@ -9,13 +9,16 @@ import (
 	"gorm.io/gorm"
 )
 
-// ErrBuiltinPKIDisabled means the kernel does not run its own module CA:
-// the module runtime is off or uses an external PKI.
+// ErrBuiltinPKIDisabled means the kernel does not run its own CA: no
+// module_runtime.ca_kek is configured, or the PKI is external.
 var ErrBuiltinPKIDisabled = errors.New("the built-in module PKI is not enabled")
 
-// FromConfig returns the built-in Authority configured by cfg.
+// FromConfig returns the built-in Authority configured by cfg. The CA is
+// independent of the module listener: with pki builtin, module_runtime.ca_kek
+// configures it whether or not module_runtime.enabled starts the listener,
+// so agent enrollment can use it alone (config.ModuleRuntimeConfig.BuiltinCA).
 func FromConfig(cfg config.ModuleRuntimeConfig, db *gorm.DB) (*Authority, error) {
-	if !cfg.Enabled || cfg.PKIOrDefault() != config.ModulePKIBuiltin {
+	if !cfg.BuiltinCA() {
 		return nil, ErrBuiltinPKIDisabled
 	}
 	kek, err := ParseKEK(cfg.CAKEK)

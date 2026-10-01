@@ -90,6 +90,13 @@ var (
 		// if the prefix list ever changes.
 		"v4_kernel_node_operation": true, "v4_kernel_node_operation_event": true,
 		"v4_kernel_node_operation_target": true,
+		// Agent PKI: v4_kernel_agent_enrollment holds the hashes of
+		// one-time agent enrollment credentials and v4_kernel_agent_certificate
+		// the revocation state the agent listener checks. A package that
+		// could write them could enroll as any node or un-revoke a
+		// certificate. The v4_kernel_ prefix already protects them; they are
+		// named here so the rule survives a prefix change.
+		"v4_kernel_agent_enrollment": true, "v4_kernel_agent_certificate": true,
 	}
 )
 
