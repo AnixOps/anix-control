@@ -1,6 +1,7 @@
 package nodesecrets
 
 import (
+	"context"
 	"testing"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
@@ -120,6 +121,30 @@ func TestForwardNodeTokenAt(t *testing.T) {
 		token, err = ForwardNodeTokenAt(db, nil)
 		require.NoError(t, err)
 		require.Empty(t, token)
+	})
+}
+
+// ForwardNodesWithoutAPIPort lists the nodes that hold a token and no API
+// port, by id and name, in every phase.
+func TestForwardNodesWithoutAPIPort(t *testing.T) {
+	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
+		require.NoError(t, db.Create(&[]model.ForwardNode{
+			{ID: 1, Name: "pinned", Host: "a.example", Port: 443, APIPort: 18080, APIToken: "token-1"},
+			{ID: 2, Name: "no-port", Host: "b.example", Port: 443, APIToken: "token-2"},
+			{ID: 3, Name: "no-token", Host: "c.example", Port: 443},
+			{ID: 4, Name: "zero-port", Host: "d.example", Port: 443, APIPort: 0, APIToken: "token-4"},
+			{ID: 5, Name: "moved", Host: "e.example", Port: 443, APIToken: Tombstone(5)},
+		}).Error)
+		require.NoError(t, Sync(db, TableForwardNode, 1, 2, 3, 4))
+		nodes, err := ForwardNodesWithoutAPIPort(context.Background(), db)
+		require.NoError(t, err)
+		require.Equal(t, []UnpinnedForwardNode{{ID: 2, Name: "no-port"}, {ID: 4, Name: "zero-port"}}, nodes)
+
+		// The administrator sets the port: the node leaves the list.
+		require.NoError(t, db.Model(&model.ForwardNode{}).Where("id = ?", 2).Update("api_port", 18080).Error)
+		nodes, err = ForwardNodesWithoutAPIPort(context.Background(), db)
+		require.NoError(t, err)
+		require.Equal(t, []UnpinnedForwardNode{{ID: 4, Name: "zero-port"}}, nodes)
 	})
 }
 

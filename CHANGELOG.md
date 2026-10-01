@@ -599,7 +599,10 @@
     without an API port, is `ENDPOINT_UNCONFIRMED`, with nothing sent. The
     administrator's forward node update moves the pin. A node not yet
     backfilled is unpinned and counted in
-    `anixops_node_secrets_pin_total{reason}`.
+    `anixops_node_secrets_pin_total{reason}`. `node-secrets status` now
+    prints its tables under `tables` and, under
+    `forward_nodes_without_api_port`, the forward nodes whose token is
+    pinned to no endpoint, by id and name with their count.
   - **Contract additions.** `SyncForwardBackend.backend`,
     `TestForwardBackend` (operation 35) and `ForwardBackendTestResult`
     (result 34). The proto golden file grows by 9 elements.

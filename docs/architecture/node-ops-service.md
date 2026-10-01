@@ -561,10 +561,12 @@ pinned to the endpoint it was issued for:
   run the same functions, so a legacy forward change on an unconfirmed node
   fails the same way.
 - **A node without an API port** has no endpoint: its pin is empty and its
-  token is presented nowhere. It cannot be used by the gost backend or a
-  legacy rule until an administrator sets its API port, which pins it. This
-  closes the gap NO-2 left open: an attacker could otherwise clear the
-  port, move the host while "unpinned", and set the port again.
+  token is presented nowhere (decided by the owner, 2026-10-01). It cannot
+  be used by the gost backend or a legacy rule until an administrator sets
+  its API port, which pins it. `node-secrets status` lists such nodes by id
+  and name (`forward_nodes_without_api_port`). This closes the gap NO-2
+  left open: an attacker could otherwise clear the port, move the host
+  while "unpinned", and set the port again.
 - **What moves the pin.** The kernel's own forward node writers
   (`ForwardNodeService.Create`, `Update` and the Ansible machine routes),
   which re-derive the endpoint from the row they just wrote

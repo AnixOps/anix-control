@@ -1,6 +1,7 @@
 package nodesecrets
 
 import (
+	"context"
 	"errors"
 	"log/slog"
 	"net"
@@ -110,6 +111,35 @@ func endpointEqual(pinned, current string) bool {
 		return false
 	}
 	return pinnedHost == currentHost && pinnedNumber == currentNumber && pinnedNumber > 0
+}
+
+// UnpinnedForwardNode is a forward node that holds a token but no API port:
+// it has no endpoint, so its token is presented nowhere until an
+// administrator sets the port (node-ops-service.md section 3.8, decided by
+// the owner on 2026-10-01). Id and name only, never a value.
+type UnpinnedForwardNode struct {
+	ID   uint   `json:"id"`
+	Name string `json:"name"`
+}
+
+// ForwardNodesWithoutAPIPort lists the forward nodes that hold a token and
+// have no API port, by id, for the node-secrets status command: the nodes
+// whose gost backend changes and legacy rules fail ENDPOINT_UNCONFIRMED
+// after the backfill.
+func ForwardNodesWithoutAPIPort(ctx context.Context, db *gorm.DB) ([]UnpinnedForwardNode, error) {
+	var rows []model.ForwardNode
+	if err := newSession(db).WithContext(ctx).Select("id", "name", "api_token").
+		Where("(api_port IS NULL OR api_port <= 0) AND api_token IS NOT NULL AND api_token <> ''").Order("id").Find(&rows).Error; err != nil {
+		return nil, err
+	}
+	nodes := make([]UnpinnedForwardNode, 0, len(rows))
+	for i := range rows {
+		if Unusable(ForwardNodeToken(db, &rows[i])) {
+			continue
+		}
+		nodes = append(nodes, UnpinnedForwardNode{ID: rows[i].ID, Name: rows[i].Name})
+	}
+	return nodes, nil
 }
 
 var pins counterSet // table, kind, reason

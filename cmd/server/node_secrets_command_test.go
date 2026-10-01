@@ -23,14 +23,27 @@ func TestNodeSecretsCommand(t *testing.T) {
 		&model.ForwardNode{}, &model.ForwardCleanAgent{}, &model.OperationLog{}))
 	require.NoError(t, nodesecrets.EnsureSchema(db))
 	require.NoError(t, db.Create(&model.Node{Name: "n", Host: "203.0.113.40", APIKey: "fake-cli-key", Secret: "fake-cli-secret"}).Error)
+	require.NoError(t, db.Create(&[]model.ForwardNode{
+		{ID: 3, Name: "no-port", Host: "203.0.113.41", Port: 443, APIToken: "fake-cli-relay-token"},
+		{ID: 4, Name: "pinned", Host: "203.0.113.42", Port: 443, APIPort: 18080, APIToken: "fake-cli-relay-token-2"},
+	}).Error)
 	ctx := context.Background()
 
 	var output bytes.Buffer
 	require.NoError(t, runNodeSecretsCommand(ctx, db, []string{"status"}, &output))
-	var splits []model.NodeSecretSplit
-	require.NoError(t, json.Unmarshal(output.Bytes(), &splits))
-	require.Len(t, splits, len(nodesecrets.Tables()))
-	require.Equal(t, nodesecrets.PhaseDualWrite, splits[0].Phase)
+	var status struct {
+		Tables   []model.NodeSecretSplit `json:"tables"`
+		Unpinned struct {
+			Count int                               `json:"count"`
+			Nodes []nodesecrets.UnpinnedForwardNode `json:"nodes"`
+		} `json:"forward_nodes_without_api_port"`
+	}
+	require.NoError(t, json.Unmarshal(output.Bytes(), &status))
+	require.Len(t, status.Tables, len(nodesecrets.Tables()))
+	require.Equal(t, nodesecrets.PhaseDualWrite, status.Tables[0].Phase)
+	require.Equal(t, 1, status.Unpinned.Count)
+	require.Equal(t, []nodesecrets.UnpinnedForwardNode{{ID: 3, Name: "no-port"}}, status.Unpinned.Nodes)
+	require.NotContains(t, output.String(), "fake-cli-relay-token", "status prints no token")
 
 	// Before any verification the readers may not move to dual_read.
 	output.Reset()

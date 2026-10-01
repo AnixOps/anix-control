@@ -864,6 +864,20 @@ The values are stored in clear, like the legacy columns, and the tables are
 protected: no package can adopt them. Database backups and dumps hold them,
 as they hold the legacy columns.
 
+**Forward nodes without an API port.** Once `backfill` has run, a forward
+node's token is pinned to its endpoint, `host:api_port` (decided by the
+owner, 2026-10-01; see "Forward Node Tokens Are Pinned To Their Endpoint"
+below). A forward node that has a token but no `api_port` has no endpoint,
+so its token is presented nowhere: gost backend changes and legacy rules on
+it fail with `ENDPOINT_UNCONFIRMED` until an administrator sets the API
+port, which pins it. Before the backfill nothing changes: such a node has
+no credential row and is used as before. List those nodes first and set
+their ports, then backfill:
+
+```bash
+anix-control node-secrets status     # "forward_nodes_without_api_port": count, and each node's id and name
+```
+
 After the upgrade, copy the existing rows and compare both forms. Each
 command prints JSON with counts and digests and never a secret; run it with
 the server's configuration (`ANIX_CONTROL_CONFIG` or `-config`):
@@ -871,7 +885,7 @@ the server's configuration (`ANIX_CONTROL_CONFIG` or `-config`):
 ```bash
 anix-control node-secrets backfill   # idempotent; resumes an interrupted pass
 anix-control node-secrets verify     # exit 3 when the forms differ
-anix-control node-secrets status     # phase, backfill progress, last verify
+anix-control node-secrets status     # phase, backfill progress, last verify, forward nodes without an API port
 ```
 
 - `backfill` works table by table in batches by id (`-batch 500`), one
@@ -1022,8 +1036,10 @@ nothing is sent.
   SQL) does not: re-save the node in the administrator UI to confirm the
   address.
 - **A node without an API port** has no endpoint and its token is presented
-  nowhere: set the API port before using the node with the gost backend or
-  a legacy rule.
+  nowhere (decided by the owner, 2026-10-01): set the API port before using
+  the node with the gost backend or a legacy rule.
+  `anix-control node-secrets status` lists such nodes under
+  `forward_nodes_without_api_port`, by id and name, with their count.
 - **Run `node-secrets backfill`** after the upgrade if you have not: a node
   without a credential row has no pin yet, is presented as before, and is
   counted in `anixops_node_secrets_pin_total{reason="unpinned"}`. An
