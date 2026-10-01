@@ -211,6 +211,99 @@
     names) fails the parity tests. The seeded payment time is now taken once,
     so both sides of a case see the same answer.
 
+
+- **Identity module: the administrator's user directory.** identity-platform
+  serves the user list and statistics natively (`identity.admin.users.get`,
+  `identity.admin.users.stats.get`; 153 of 292 routes are now
+  `native-flagged`).
+  - One query on the package's own storage joins identity's accounts with
+    Control's subscriber views `kapi_user_directory_v1` and
+    `kapi_subscriber_entitlement_v1` (`native.UserDirectory`). It filters by
+    e-mail, plan and status, orders, pages and counts; "active" is not
+    banned in identity and not expired in Control. The total and the page
+    are read in one repeatable-read transaction. The package now declares
+    `kernel.view:kapi_subscriber_entitlement_v1`.
+  - Both routes read identity's accounts, so they join
+    `service.IdentityAccountReadRoutes`: they leave legacy mode only while
+    identity is authoritative, and a rollback returns them to legacy.
+  - `internal/tests/identitycompat` proves byte parity on SQLite and
+    PostgreSQL (46 more cases per backend, 163 in all), and that the
+    answers follow identity's account rather than Control's projection. A
+    PostgreSQL test runs the search as the package's own role. A mutation
+    check of the native search (filters, statuses, ordering, paging, page
+    sizes, account source, counts) fails the tests.
+  - The design and the rejected alternatives (a kernel-side search over the
+    projection, a two-phase query) are in
+    `docs/architecture/identity-service.md`.
+- **Subscription group membership in `KernelSubscriber`.** The contract
+  gains `GrantSubscriptionGroup`, `RevokeSubscriptionGroup` and
+  `RemoveSubscriptionGroupMembers`, under the new capability
+  `kernel.subscriber.groups.v1`
+  (`docs/architecture/subscriber-service.md`). Only calls and messages are
+  added, so v4.0.0 hosts are unaffected; the proto golden file grows.
+  - A grant creates a user's `v2_user_subscription_group` row, or sets the
+    given expiry, traffic and renewal price of an existing one. A
+    revocation deletes one row, and `RemoveSubscriptionGroupMembers` every
+    row of a group.
+  - Every call is idempotent by request id through
+    `v4_kernel_subscriber_request`. A missing subscriber, group or
+    membership is `NotFound` and records nothing.
+  - A change that alters which groups an active subscriber holds, or until
+    when, appends a change-log row, so `WatchSubscriberChanges` streams the
+    new `subscription_group_ids`. A change to an inactive subscriber, or to
+    a membership's traffic or renewal price only, appends nothing.
+- **Subscription module: membership routes.** `packages/subscription` now
+  serves 20 of its 25 routes natively and declares
+  `kernel.subscriber.groups.v1`. Through `KernelSubscriber`, it:
+  - grants a user a group;
+  - takes it away;
+  - deletes a group: its members first, then its templates, plan links and
+    node protocol links with the group.
+
+  `internal/tests/subscriptioncompat` runs the real `KernelSubscriber`
+  server in process. It proves byte parity, the same memberships, request
+  ledger and change log on SQLite and PostgreSQL (173 cases each). 147 of
+  292 routes are now `native-flagged`.
+- **Breaking for v2 API clients: the order list and detail answers no
+  longer embed the buyer's and the plan's rows.**
+  `GET /api/v2/admin/orders`, `GET /api/v2/admin/orders/:id`,
+  `GET /api/v2/user/order` and `GET /api/v2/user/order/:id` embedded the
+  buyer's whole `v2_user` row, with its subscription token and proxy UUID,
+  and the whole `v2_plan` row. Each order now carries its own fields, `plan`
+  as `{id, name}` and, for administrators only, `user` as `{id, email}`; a
+  plan or buyer that no longer exists is left out, as before.
+  - The bundled frontend reads only those fields (`plan.name`, and
+    `user.email` on the administrator's page) and needs no change; its order
+    page tests now use the slim answers, an order without a plan or buyer
+    included. `docs/UPGRADE.md` lists every field that disappears and where
+    to read it instead.
+  - The user's order list clamps `page_size` as the administrator's does
+    (1 to 100, default 20 for 0 or less): a negative size listed every order
+    and 0 none.
+  - A user's order detail looks the order up by id and owner, and a request
+    without a user names no one; another user's order stays "not found".
+
+
+- **Order module: native order lists and details.** `packages/order` now
+  serves all 13 of its routes natively (148 of 292 v2 routes are
+  `native-flagged`). The administrator's and user's order lists and details
+  (`order.admin.orders.get`, `order.admin.orders.id.get`,
+  `order.user.order.get`, `order.user.order.id.get`) were bridged because
+  their answers embedded the buyer's `v2_user` row; with the slim answers
+  they read only kernel views.
+  - The new kernel view `kapi_plan_name_v1` shows a plan's `id` and `name`
+    and nothing else of `v2_plan`; the package declares
+    `kernel.view:kapi_plan_name_v1`. The buyer's e-mail comes from
+    `kapi_user_directory_v1`.
+  - A user's list and detail are the caller's own orders, with the owner in
+    the query.
+  - `internal/tests/ordercompat` proves byte parity on SQLite and PostgreSQL
+    for 55 more cases per backend: every list filter and paging edge, other
+    users' orders, deleted plans and buyers, and invalid ids. A mutation
+    check (owner filter, page clamp, ordering, e-mail match, plan and buyer
+    names) fails the parity tests. The seeded payment time is now taken once,
+    so both sides of a case see the same answer.
+
 ### Changed
 
 - The Agent contract (`anix.agent.v1`) now lives in Control's SDK module,

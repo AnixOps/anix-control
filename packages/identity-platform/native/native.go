@@ -7,16 +7,20 @@
 //   - group A (login, registration, MFA, the administrator's account writes)
 //     switches with the identity cutover;
 //   - the account reads (the profile, the dashboard and the administrator's
-//     user detail) take the account from identity's store, so Control lets
-//     them leave legacy mode only while identity is authoritative; their
-//     subscriber fields, subscription token included, come from
+//     user detail, user list and user statistics) take the account from
+//     identity's store, so Control lets them leave legacy mode only while
+//     identity is authoritative. The profile and the detail take their
+//     subscriber fields, subscription token included, from
 //     KernelIdentity.GetSubscriber for that one user, never from a view;
+//     the list and the statistics search the user directory
+//     (UserDirectory), which joins identity's accounts with Control's
+//     subscriber views and shows no token;
 //   - the administrator's traffic and subscription resets touch only the
 //     subscriber, through KernelSubscriber (ResetTraffic, ResetCredentials),
 //     and switch independently of the authority.
 //
-// The administrator's user list and statistics and the user's invite routes
-// have no handler here and stay bridged (see the package's control host).
+// The user's invite routes have no handler here and stay bridged (see the
+// package's control host).
 package native
 
 import (
@@ -109,6 +113,8 @@ func (s *Service) Handlers() map[string]pluginhostsdk.NativeHandler {
 		ProfileRouteID:                                   s.Profile,
 		DashboardRouteID:                                 s.Dashboard,
 		AdminUserRouteID:                                 s.AdminUser,
+		AdminUsersRouteID:                                s.AdminUsers,
+		AdminUserStatsRouteID:                            s.AdminUserStats,
 	}
 	if s.Subscriber != nil {
 		handlers[ResetTrafficRouteID] = s.ResetTraffic

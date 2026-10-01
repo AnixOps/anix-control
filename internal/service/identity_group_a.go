@@ -40,9 +40,11 @@ var IdentityGroupARoutes = []string{
 // IdentityAccountReadRoutes are identity-platform's read routes whose native
 // handlers take the account (email, administrator, staff and ban flags) from
 // identity's own store: the user's profile and dashboard and the
-// administrator's user detail. Identity's store is current only while
-// identity is authoritative; before, the legacy handlers change accounts
-// and identity learns of it at the next import. These routes therefore
+// administrator's user detail, user list and user statistics (which search
+// and count identity's accounts with Control's subscriber views in one
+// query). Identity's store is current only while identity is
+// authoritative; before, the legacy handlers change accounts and identity
+// learns of it at the next import. These routes therefore
 // leave legacy mode (shadow or native) only while identity is
 // authoritative, and the rollback returns them to legacy with group A. In
 // legacy mode they read Control's projection, which identity keeps
@@ -52,6 +54,8 @@ var IdentityAccountReadRoutes = []string{
 	"identity.user.profile.get",
 	"identity.user.dashboard.get",
 	"identity.admin.users.id.get",
+	"identity.admin.users.get",
+	"identity.admin.users.stats.get",
 }
 
 // IdentityAuthorityState returns the identity authority state; no row

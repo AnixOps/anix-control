@@ -400,25 +400,34 @@ func TestAccountReadsFollowTheAuthority(t *testing.T) {
 	f := newFixture(t)
 	ctx := context.Background()
 	profile, detail := "identity.user.profile.get", "identity.admin.users.id.get"
+	list, stats := "identity.admin.users.get", "identity.admin.users.stats.get"
+	require.Subset(t, service.IdentityAccountReadRoutes, []string{profile, detail, list, stats})
 	resets := map[string]string{
 		"identity.admin.users.id.reset_traffic.post":   packagebridge.RouteModeNative,
 		"identity.admin.users.id.reset_subscribe.post": packagebridge.RouteModeNative,
 	}
 	require.NoError(t, f.setModes(routesWith(t, packagebridge.RouteModeLegacy, resets)), "resets switch before any cutover")
-	for _, mode := range []string{packagebridge.RouteModeNative, packagebridge.RouteModeShadow} {
-		require.ErrorContains(t, f.setModes(routesWith(t, packagebridge.RouteModeLegacy, map[string]string{profile: mode})),
-			"leaves legacy mode only once identity is authoritative")
+	for _, route := range []string{profile, list, stats} {
+		for _, mode := range []string{packagebridge.RouteModeNative, packagebridge.RouteModeShadow} {
+			require.ErrorContains(t, f.setModes(routesWith(t, packagebridge.RouteModeLegacy, map[string]string{route: mode})),
+				"leaves legacy mode only once identity is authoritative", route)
+		}
 	}
 	_, err := f.service.Importer.Run(ctx, false)
 	require.NoError(t, err)
-	require.ErrorContains(t, f.setModes(routesWith(t, packagebridge.RouteModeLegacy, map[string]string{detail: packagebridge.RouteModeNative})),
-		"leaves legacy mode only once identity is authoritative", "an import is not authority")
+	for _, route := range []string{detail, list, stats} {
+		require.ErrorContains(t, f.setModes(routesWith(t, packagebridge.RouteModeLegacy, map[string]string{route: packagebridge.RouteModeNative})),
+			"leaves legacy mode only once identity is authoritative", "an import is not authority")
+	}
 
 	_, err = f.service.Cutover(ctx, 1)
 	require.NoError(t, err)
 	require.Equal(t, map[string]int{packagebridge.RouteModeLegacy: len(service.IdentityAccountReadRoutes)}, f.modesOf(t, service.IdentityAccountReadRoutes),
 		"the cutover leaves the reads to the operator")
-	reads := map[string]string{profile: packagebridge.RouteModeNative, detail: packagebridge.RouteModeShadow}
+	reads := map[string]string{
+		profile: packagebridge.RouteModeNative, detail: packagebridge.RouteModeShadow,
+		list: packagebridge.RouteModeNative, stats: packagebridge.RouteModeShadow,
+	}
 	for route, mode := range resets {
 		reads[route] = mode
 	}

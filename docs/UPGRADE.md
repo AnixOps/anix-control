@@ -684,6 +684,12 @@ v2board plugin passes the answer through unchanged. A script that read
 tokens from the list must read `GET /api/v2/admin/users/:id` per user.
 `GET /api/v2/admin/users/stats` is unchanged.
 
+The identity module can serve both routes natively (`native-flagged`) once
+identity is authoritative (see the next section). It reads the subscription
+summary from the view `kapi_subscriber_entitlement_v1`, so its signed
+release declares `kernel.view:kapi_subscriber_entitlement_v1`: install that
+release before switching the routes to `native`.
+
 ## Moving Logins To The Identity Module
 
 From 4.1 the identity module can own accounts, passwords, MFA and token
