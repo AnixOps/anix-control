@@ -78,3 +78,26 @@ func TestAuthorizeCapabilityGrantsOrderCompletionToItsHoldersOnly(t *testing.T) 
 	require.NoError(t, validateManifestCapabilities([]string{CapabilityOrderComplete}))
 	require.Error(t, validateManifestCapabilities([]string{"kernel.order.everything.v1"}), "unknown order capabilities are refused")
 }
+
+// The cached-answer reads (kernel-caches.md) are authorized as the other
+// contracts are: on every call, for an official package whose signed release
+// declares them, one capability each.
+func TestAuthorizeCapabilityGrantsTheCachedReadsToTheirHoldersOnly(t *testing.T) {
+	db := newKernelTestDB(t)
+	publicKey, _ := seedKnowledgeRelease(t, db, "", []string{CapabilityTelemetryDashboard})
+	operations := PackageHostOperations{DB: db, FallbackPublicKey: publicKey}
+	host := packagebridge.HostIdentity{PackageID: "knowledge", Version: "4.0.1", Generation: 7}
+	ctx := context.Background()
+
+	require.NoError(t, operations.AuthorizeCapability(ctx, host, CapabilityTelemetryDashboard))
+	require.ErrorIs(t, operations.AuthorizeCapability(ctx, host, CapabilitySubscriberSummary), ErrCapabilityNotAuthorized)
+	stale := host
+	stale.Generation = 6
+	require.ErrorIs(t, operations.AuthorizeCapability(ctx, stale, CapabilityTelemetryDashboard), packagebridge.ErrHostFenced)
+	require.NoError(t, db.Model(&model.Plugin{}).Where("id = ?", "knowledge").Update("official", false).Error)
+	require.ErrorIs(t, operations.AuthorizeCapability(ctx, host, CapabilityTelemetryDashboard), ErrCapabilityNotAuthorized,
+		"only an official package may read the kernel's caches")
+
+	require.NoError(t, validateManifestCapabilities([]string{CapabilityTelemetryDashboard, CapabilitySubscriberSummary}))
+	require.Error(t, validateManifestCapabilities([]string{"kernel.telemetry.everything.v1"}), "unknown telemetry capabilities are refused")
+}

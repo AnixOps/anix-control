@@ -32,6 +32,7 @@ const (
 	KernelSubscriber_GrantSubscriptionGroup_FullMethodName         = "/anixops.kernelsubscriber.v1.KernelSubscriber/GrantSubscriptionGroup"
 	KernelSubscriber_RevokeSubscriptionGroup_FullMethodName        = "/anixops.kernelsubscriber.v1.KernelSubscriber/RevokeSubscriptionGroup"
 	KernelSubscriber_RemoveSubscriptionGroupMembers_FullMethodName = "/anixops.kernelsubscriber.v1.KernelSubscriber/RemoveSubscriptionGroupMembers"
+	KernelSubscriber_GetSubscriptionSummary_FullMethodName         = "/anixops.kernelsubscriber.v1.KernelSubscriber/GetSubscriptionSummary"
 )
 
 // KernelSubscriberClient is the client API for KernelSubscriber service.
@@ -55,6 +56,7 @@ const (
 //     ListActiveSubscribers, WatchSubscriberChanges
 //   - kernel.subscriber.groups.v1: GrantSubscriptionGroup,
 //     RevokeSubscriptionGroup, RemoveSubscriptionGroupMembers
+//   - kernel.subscriber.summary.v1: GetSubscriptionSummary
 //
 // Every write that can be retried carries a request_id; the kernel applies
 // each request_id once and answers a repeat with the first result.
@@ -104,6 +106,19 @@ type KernelSubscriberClient interface {
 	// caller's. It succeeds whether or not the group still exists, so a retry
 	// after a failure in between finds no members and completes.
 	RemoveSubscriptionGroupMembers(ctx context.Context, in *RemoveSubscriptionGroupMembersRequest, opts ...grpc.CallOption) (*RemoveSubscriptionGroupMembersResponse, error)
+	// GetSubscriptionSummary answers one subscriber's subscription summary,
+	// as the v2 route GET /api/v2/user/subscription shows it to the
+	// subscriber (docs/architecture/kernel-caches.md). The kernel caches a
+	// subscriber's summary for 30 seconds in its memory, the entry the v2
+	// user dashboard reads too; GetSubscriptionSummary answers the cached
+	// one, or builds, caches and answers a new one when none is cached or
+	// refresh is set. The subscription link settings are added on every
+	// call and are not cached. It carries no credential: no subscription
+	// token, no proxy uuid.
+	//
+	// NOT_FOUND when the subscriber does not exist; INVALID_ARGUMENT for a
+	// user id of 0 or beyond 32 bits.
+	GetSubscriptionSummary(ctx context.Context, in *GetSubscriptionSummaryRequest, opts ...grpc.CallOption) (*GetSubscriptionSummaryResponse, error)
 }
 
 type kernelSubscriberClient struct {
@@ -253,6 +268,16 @@ func (c *kernelSubscriberClient) RemoveSubscriptionGroupMembers(ctx context.Cont
 	return out, nil
 }
 
+func (c *kernelSubscriberClient) GetSubscriptionSummary(ctx context.Context, in *GetSubscriptionSummaryRequest, opts ...grpc.CallOption) (*GetSubscriptionSummaryResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetSubscriptionSummaryResponse)
+	err := c.cc.Invoke(ctx, KernelSubscriber_GetSubscriptionSummary_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // KernelSubscriberServer is the server API for KernelSubscriber service.
 // All implementations must embed UnimplementedKernelSubscriberServer
 // for forward compatibility.
@@ -274,6 +299,7 @@ func (c *kernelSubscriberClient) RemoveSubscriptionGroupMembers(ctx context.Cont
 //     ListActiveSubscribers, WatchSubscriberChanges
 //   - kernel.subscriber.groups.v1: GrantSubscriptionGroup,
 //     RevokeSubscriptionGroup, RemoveSubscriptionGroupMembers
+//   - kernel.subscriber.summary.v1: GetSubscriptionSummary
 //
 // Every write that can be retried carries a request_id; the kernel applies
 // each request_id once and answers a repeat with the first result.
@@ -323,6 +349,19 @@ type KernelSubscriberServer interface {
 	// caller's. It succeeds whether or not the group still exists, so a retry
 	// after a failure in between finds no members and completes.
 	RemoveSubscriptionGroupMembers(context.Context, *RemoveSubscriptionGroupMembersRequest) (*RemoveSubscriptionGroupMembersResponse, error)
+	// GetSubscriptionSummary answers one subscriber's subscription summary,
+	// as the v2 route GET /api/v2/user/subscription shows it to the
+	// subscriber (docs/architecture/kernel-caches.md). The kernel caches a
+	// subscriber's summary for 30 seconds in its memory, the entry the v2
+	// user dashboard reads too; GetSubscriptionSummary answers the cached
+	// one, or builds, caches and answers a new one when none is cached or
+	// refresh is set. The subscription link settings are added on every
+	// call and are not cached. It carries no credential: no subscription
+	// token, no proxy uuid.
+	//
+	// NOT_FOUND when the subscriber does not exist; INVALID_ARGUMENT for a
+	// user id of 0 or beyond 32 bits.
+	GetSubscriptionSummary(context.Context, *GetSubscriptionSummaryRequest) (*GetSubscriptionSummaryResponse, error)
 	mustEmbedUnimplementedKernelSubscriberServer()
 }
 
@@ -371,6 +410,9 @@ func (UnimplementedKernelSubscriberServer) RevokeSubscriptionGroup(context.Conte
 }
 func (UnimplementedKernelSubscriberServer) RemoveSubscriptionGroupMembers(context.Context, *RemoveSubscriptionGroupMembersRequest) (*RemoveSubscriptionGroupMembersResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method RemoveSubscriptionGroupMembers not implemented")
+}
+func (UnimplementedKernelSubscriberServer) GetSubscriptionSummary(context.Context, *GetSubscriptionSummaryRequest) (*GetSubscriptionSummaryResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetSubscriptionSummary not implemented")
 }
 func (UnimplementedKernelSubscriberServer) mustEmbedUnimplementedKernelSubscriberServer() {}
 func (UnimplementedKernelSubscriberServer) testEmbeddedByValue()                          {}
@@ -620,6 +662,24 @@ func _KernelSubscriber_RemoveSubscriptionGroupMembers_Handler(srv interface{}, c
 	return interceptor(ctx, in, info, handler)
 }
 
+func _KernelSubscriber_GetSubscriptionSummary_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSubscriptionSummaryRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(KernelSubscriberServer).GetSubscriptionSummary(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: KernelSubscriber_GetSubscriptionSummary_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(KernelSubscriberServer).GetSubscriptionSummary(ctx, req.(*GetSubscriptionSummaryRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // KernelSubscriber_ServiceDesc is the grpc.ServiceDesc for KernelSubscriber service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -674,6 +734,10 @@ var KernelSubscriber_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "RemoveSubscriptionGroupMembers",
 			Handler:    _KernelSubscriber_RemoveSubscriptionGroupMembers_Handler,
+		},
+		{
+			MethodName: "GetSubscriptionSummary",
+			Handler:    _KernelSubscriber_GetSubscriptionSummary_Handler,
 		},
 	},
 	Streams: []grpc.StreamDesc{

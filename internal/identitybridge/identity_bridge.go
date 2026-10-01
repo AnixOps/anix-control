@@ -22,6 +22,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/kernelorder"
 	"github.com/AnixOps/anix-control/v4/internal/kernelsettings"
 	"github.com/AnixOps/anix-control/v4/internal/kernelsubscriber"
+	"github.com/AnixOps/anix-control/v4/internal/kerneltelemetry"
 	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
 	"github.com/AnixOps/anix-control/v4/internal/packagestore"
 	"github.com/AnixOps/anix-control/v4/internal/plugincontrol"
@@ -61,7 +62,23 @@ func NewFactory(cfg *config.Config) (packagebridge.SessionFactory, error) {
 		KernelSubscriber:     kernelSubscriber(operations),
 		KernelOrder:          kernelOrder(operations),
 		KernelSettings:       kernelSettings(operations),
+		KernelTelemetry:      kernelTelemetry(operations),
 	}), nil
+}
+
+// NewKernelTelemetry returns the KernelTelemetry provider for the module
+// listener; local sessions get the same one from NewFactory.
+func NewKernelTelemetry(cfg *config.Config) (packagebridge.KernelTelemetryProvider, error) {
+	operations, err := newHostOperations(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return kernelTelemetry(operations), nil
+}
+
+func kernelTelemetry(operations service.PackageHostOperations) packagebridge.KernelTelemetryProvider {
+	server := &kerneltelemetry.Server{DB: operations.DB, Authorizer: operations}
+	return server.For
 }
 
 // NewKernelOrder returns the KernelOrder provider for the module listener;
@@ -105,7 +122,7 @@ func NewKernelSubscriber(cfg *config.Config) (packagebridge.KernelSubscriberProv
 }
 
 func kernelSubscriber(operations service.PackageHostOperations) packagebridge.KernelSubscriberProvider {
-	server := &kernelsubscriber.Server{DB: operations.DB, Authorizer: operations}
+	server := &kernelsubscriber.Server{DB: operations.DB, Authorizer: operations, Config: config.Get}
 	return server.For
 }
 

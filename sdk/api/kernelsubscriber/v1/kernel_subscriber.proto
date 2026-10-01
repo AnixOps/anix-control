@@ -21,6 +21,7 @@ option go_package = "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1
 //     ListActiveSubscribers, WatchSubscriberChanges
 //   - kernel.subscriber.groups.v1: GrantSubscriptionGroup,
 //     RevokeSubscriptionGroup, RemoveSubscriptionGroupMembers
+//   - kernel.subscriber.summary.v1: GetSubscriptionSummary
 //
 // Every write that can be retried carries a request_id; the kernel applies
 // each request_id once and answers a repeat with the first result.
@@ -70,6 +71,19 @@ service KernelSubscriber {
   // caller's. It succeeds whether or not the group still exists, so a retry
   // after a failure in between finds no members and completes.
   rpc RemoveSubscriptionGroupMembers(RemoveSubscriptionGroupMembersRequest) returns (RemoveSubscriptionGroupMembersResponse);
+  // GetSubscriptionSummary answers one subscriber's subscription summary,
+  // as the v2 route GET /api/v2/user/subscription shows it to the
+  // subscriber (docs/architecture/kernel-caches.md). The kernel caches a
+  // subscriber's summary for 30 seconds in its memory, the entry the v2
+  // user dashboard reads too; GetSubscriptionSummary answers the cached
+  // one, or builds, caches and answers a new one when none is cached or
+  // refresh is set. The subscription link settings are added on every
+  // call and are not cached. It carries no credential: no subscription
+  // token, no proxy uuid.
+  //
+  // NOT_FOUND when the subscriber does not exist; INVALID_ARGUMENT for a
+  // user id of 0 or beyond 32 bits.
+  rpc GetSubscriptionSummary(GetSubscriptionSummaryRequest) returns (GetSubscriptionSummaryResponse);
 }
 
 // PlanSnapshot is what an entitlement grants, as the plan module knows it
@@ -337,4 +351,42 @@ message RemoveSubscriptionGroupMembersResponse {
   bool applied = 1;
   // removed counts the memberships deleted.
   uint64 removed = 2;
+}
+
+// Subscription summary (kernel.subscriber.summary.v1).
+
+message GetSubscriptionSummaryRequest {
+  uint64 user_id = 1;
+  // refresh rebuilds the summary from the database and replaces the cached
+  // one, as the v2 route's refresh=true does.
+  bool refresh = 2;
+}
+
+// GetSubscriptionSummaryResponse is the summary, field for field the
+// kernel's service.UserSubscription. Traffic is in bytes.
+message GetSubscriptionSummaryResponse {
+  uint64 user_id = 1;
+  string email = 2;
+  // plan_id is unset when the subscriber has no plan; it stays set when the
+  // plan was deleted (plan_name is then "无套餐").
+  optional uint64 plan_id = 3;
+  string plan_name = 4;
+  int64 transfer_enable = 5;
+  int64 used_traffic = 6;
+  int64 upload_traffic = 7;
+  int64 download_traffic = 8;
+  // expired_at is 0 when the subscription never expires.
+  int64 expired_at = 9;
+  bool is_expired = 10;
+  // days_remaining is -1 when the subscription never expires.
+  int64 days_remaining = 11;
+  double usage_percent = 12;
+  // subscribe_path and subscribe_domains are the subscription link
+  // settings, read on every call.
+  string subscribe_path = 13;
+  repeated string subscribe_domains = 14;
+  // cached_at is when the kernel built the summary: RFC 3339 with its
+  // fraction and offset, as encoding/json writes the kernel's time, so a
+  // module answers it byte for byte.
+  string cached_at = 15;
 }

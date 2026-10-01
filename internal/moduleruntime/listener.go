@@ -15,6 +15,7 @@ import (
 	kernelorderv1 "github.com/AnixOps/anix-control/sdk/api/kernelorder/v1"
 	kernelsettingsv1 "github.com/AnixOps/anix-control/sdk/api/kernelsettings/v1"
 	kernelsubscriberv1 "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1"
+	kerneltelemetryv1 "github.com/AnixOps/anix-control/sdk/api/kerneltelemetry/v1"
 	modulepkiv1 "github.com/AnixOps/anix-control/sdk/api/modulepki/v1"
 	packagebridgev1 "github.com/AnixOps/anix-control/sdk/api/packagebridge/v1"
 	"github.com/AnixOps/anix-control/sdk/moduletls"
@@ -59,6 +60,9 @@ type Listener struct {
 	// KernelSettings, when set, is served to bound instances; see
 	// ModuleBridge.KernelSettingsServer.
 	KernelSettings packagebridge.KernelSettingsProvider
+	// KernelTelemetry, when set, is served to bound instances; see
+	// ModuleBridge.KernelTelemetryServer.
+	KernelTelemetry packagebridge.KernelTelemetryProvider
 
 	revocations revocationCache
 }
@@ -125,6 +129,9 @@ func (l *Listener) newServer() (*grpc.Server, error) {
 	}
 	if l.KernelSettings != nil {
 		kernelsettingsv1.RegisterKernelSettingsServer(server, l.Bridge.KernelSettingsServer(l.KernelSettings))
+	}
+	if l.KernelTelemetry != nil {
+		kerneltelemetryv1.RegisterKernelTelemetryServer(server, l.Bridge.KernelTelemetryServer(l.KernelTelemetry))
 	}
 	return server, nil
 }

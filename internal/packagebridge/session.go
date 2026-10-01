@@ -19,6 +19,7 @@ import (
 	kernelorderv1 "github.com/AnixOps/anix-control/sdk/api/kernelorder/v1"
 	kernelsettingsv1 "github.com/AnixOps/anix-control/sdk/api/kernelsettings/v1"
 	kernelsubscriberv1 "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1"
+	kerneltelemetryv1 "github.com/AnixOps/anix-control/sdk/api/kerneltelemetry/v1"
 	packagebridgev1 "github.com/AnixOps/anix-control/sdk/api/packagebridge/v1"
 	"github.com/AnixOps/anix-control/v4/internal/panicrecovery"
 	"google.golang.org/grpc"
@@ -73,6 +74,9 @@ type SessionOptions struct {
 	// KernelSettings, when set, serves the KernelSettings contract on the
 	// session, authorized per namespace capability on every call.
 	KernelSettings KernelSettingsProvider
+	// KernelTelemetry, when set, serves the KernelTelemetry contract on the
+	// session, authorized per capability on every call.
+	KernelTelemetry KernelTelemetryProvider
 }
 
 func (o SessionOptions) responseLimit() int64 {
@@ -454,6 +458,9 @@ func NewSessionWithOptions(identity HostIdentity, handler *Allowlist, options Se
 	}
 	if options.KernelSettings != nil {
 		kernelsettingsv1.RegisterKernelSettingsServer(session.server, options.KernelSettings(identity))
+	}
+	if options.KernelTelemetry != nil {
+		kerneltelemetryv1.RegisterKernelTelemetryServer(session.server, options.KernelTelemetry(identity))
 	}
 	server, listener := session.server, session.listener
 	go func() { _ = server.Serve(listener) }()

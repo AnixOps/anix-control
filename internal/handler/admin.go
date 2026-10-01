@@ -914,6 +914,9 @@ func (h *AdminHandler) GetDashboard(c *gin.Context) {
 	// 检查是否强制刷新
 	forceRefresh := c.Query("refresh") == "true"
 
+	// The machine-telemetry package answers it through
+	// KernelTelemetry.GetDashboard, which calls the same function on the
+	// same cache.
 	stats, err := h.statsService.GetDashboardStats(forceRefresh)
 	if err != nil {
 		panelError(c, "获取统计失败: "+err.Error())

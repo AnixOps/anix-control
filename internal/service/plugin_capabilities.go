@@ -33,6 +33,14 @@ const (
 	// CapabilitySubscriberGroups edits one subscription group membership
 	// (v2_user_subscription_group) at a time.
 	CapabilitySubscriberGroups = "kernel.subscriber.groups.v1"
+	// CapabilitySubscriberSummary reads one subscriber's cached
+	// subscription summary (kernel-caches.md).
+	CapabilitySubscriberSummary = "kernel.subscriber.summary.v1"
+	// CapabilityTelemetryDashboard lets an official package call
+	// KernelTelemetry.GetDashboard (kernel-caches.md): the administrator
+	// dashboard's snapshot from the kernel's cache, with the online users
+	// as a count.
+	CapabilityTelemetryDashboard = "kernel.telemetry.dashboard.v1"
 	// capabilityStorageAdoptPrefix grants the storage role access to an
 	// existing kernel table, adopted in place: kernel.storage.adopt:<table>.
 	capabilityStorageAdoptPrefix = "kernel.storage.adopt:"
@@ -122,7 +130,8 @@ func validateManifestCapabilities(capabilities []string) error {
 		case capability == CapabilityObservedState, capability == CapabilityIdentity, capability == CapabilityOrderComplete,
 			capability == CapabilitySubscriberEntitlements, capability == CapabilitySubscriberTraffic,
 			capability == CapabilitySubscriberCredentials, capability == CapabilitySubscriberBalance,
-			capability == CapabilitySubscriberDirectory, capability == CapabilitySubscriberGroups:
+			capability == CapabilitySubscriberDirectory, capability == CapabilitySubscriberGroups,
+			capability == CapabilitySubscriberSummary, capability == CapabilityTelemetryDashboard:
 		case capability == CapabilityStorage:
 			storage = true
 		case strings.HasPrefix(capability, capabilityStorageAdoptPrefix):

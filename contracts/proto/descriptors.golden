@@ -331,6 +331,23 @@ field anixops.kernelsubscriber.v1.ApplyEntitlementResponse.applied = 1 optional 
 field anixops.kernelsubscriber.v1.ApplyEntitlementResponse.expires_at_unix = 2 optional int64
 field anixops.kernelsubscriber.v1.GetSubscribersRequest.user_ids = 1 repeated uint64
 field anixops.kernelsubscriber.v1.GetSubscribersResponse.subscribers = 1 repeated anixops.kernelsubscriber.v1.Subscriber
+field anixops.kernelsubscriber.v1.GetSubscriptionSummaryRequest.refresh = 2 optional bool
+field anixops.kernelsubscriber.v1.GetSubscriptionSummaryRequest.user_id = 1 optional uint64
+field anixops.kernelsubscriber.v1.GetSubscriptionSummaryResponse.cached_at = 15 optional string
+field anixops.kernelsubscriber.v1.GetSubscriptionSummaryResponse.days_remaining = 11 optional int64
+field anixops.kernelsubscriber.v1.GetSubscriptionSummaryResponse.download_traffic = 8 optional int64
+field anixops.kernelsubscriber.v1.GetSubscriptionSummaryResponse.email = 2 optional string
+field anixops.kernelsubscriber.v1.GetSubscriptionSummaryResponse.expired_at = 9 optional int64
+field anixops.kernelsubscriber.v1.GetSubscriptionSummaryResponse.is_expired = 10 optional bool
+field anixops.kernelsubscriber.v1.GetSubscriptionSummaryResponse.plan_id = 3 optional uint64
+field anixops.kernelsubscriber.v1.GetSubscriptionSummaryResponse.plan_name = 4 optional string
+field anixops.kernelsubscriber.v1.GetSubscriptionSummaryResponse.subscribe_domains = 14 repeated string
+field anixops.kernelsubscriber.v1.GetSubscriptionSummaryResponse.subscribe_path = 13 optional string
+field anixops.kernelsubscriber.v1.GetSubscriptionSummaryResponse.transfer_enable = 5 optional int64
+field anixops.kernelsubscriber.v1.GetSubscriptionSummaryResponse.upload_traffic = 7 optional int64
+field anixops.kernelsubscriber.v1.GetSubscriptionSummaryResponse.usage_percent = 12 optional double
+field anixops.kernelsubscriber.v1.GetSubscriptionSummaryResponse.used_traffic = 6 optional int64
+field anixops.kernelsubscriber.v1.GetSubscriptionSummaryResponse.user_id = 1 optional uint64
 field anixops.kernelsubscriber.v1.GrantSubscriptionGroupRequest.expires_at_unix = 4 optional int64
 field anixops.kernelsubscriber.v1.GrantSubscriptionGroupRequest.group_id = 3 optional uint64
 field anixops.kernelsubscriber.v1.GrantSubscriptionGroupRequest.next_renew_price_cents = 6 optional int64
@@ -404,6 +421,24 @@ field anixops.kernelsubscriber.v1.TrafficEntry.download_bytes = 3 optional uint6
 field anixops.kernelsubscriber.v1.TrafficEntry.upload_bytes = 2 optional uint64
 field anixops.kernelsubscriber.v1.TrafficEntry.user_id = 1 optional uint64
 field anixops.kernelsubscriber.v1.WatchSubscriberChangesRequest.after_cursor = 1 optional uint64
+field anixops.kerneltelemetry.v1.GetDashboardRequest.refresh = 1 optional bool
+field anixops.kerneltelemetry.v1.GetDashboardResponse.active_nodes = 13 optional int64
+field anixops.kerneltelemetry.v1.GetDashboardResponse.active_users = 2 optional int64
+field anixops.kerneltelemetry.v1.GetDashboardResponse.banned_users = 4 optional int64
+field anixops.kerneltelemetry.v1.GetDashboardResponse.cached_at = 17 optional string
+field anixops.kerneltelemetry.v1.GetDashboardResponse.expired_users = 3 optional int64
+field anixops.kerneltelemetry.v1.GetDashboardResponse.monthly_income = 10 optional int64
+field anixops.kerneltelemetry.v1.GetDashboardResponse.online_users = 14 optional int64
+field anixops.kerneltelemetry.v1.GetDashboardResponse.paid_orders = 8 optional int64
+field anixops.kerneltelemetry.v1.GetDashboardResponse.pending_orders = 7 optional int64
+field anixops.kerneltelemetry.v1.GetDashboardResponse.today_income = 11 optional int64
+field anixops.kerneltelemetry.v1.GetDashboardResponse.today_new_users = 5 optional int64
+field anixops.kerneltelemetry.v1.GetDashboardResponse.today_traffic = 16 optional int64
+field anixops.kerneltelemetry.v1.GetDashboardResponse.total_nodes = 12 optional int64
+field anixops.kerneltelemetry.v1.GetDashboardResponse.total_orders = 6 optional int64
+field anixops.kerneltelemetry.v1.GetDashboardResponse.total_revenue = 9 optional int64
+field anixops.kerneltelemetry.v1.GetDashboardResponse.total_traffic_used = 15 optional int64
+field anixops.kerneltelemetry.v1.GetDashboardResponse.total_users = 1 optional int64
 field anixops.modulepki.v1.EnrollRequest.cluster = 3 optional string
 field anixops.modulepki.v1.EnrollRequest.csr_der = 4 optional bytes
 field anixops.modulepki.v1.EnrollRequest.enrollment_credential = 1 optional string
@@ -595,6 +630,7 @@ rpc anixops.kernelsubscriber.v1.KernelSubscriber.AdjustBalance(anixops.kernelsub
 rpc anixops.kernelsubscriber.v1.KernelSubscriber.AdjustEntitlement(anixops.kernelsubscriber.v1.AdjustEntitlementRequest) returns (anixops.kernelsubscriber.v1.AdjustEntitlementResponse)
 rpc anixops.kernelsubscriber.v1.KernelSubscriber.ApplyEntitlement(anixops.kernelsubscriber.v1.ApplyEntitlementRequest) returns (anixops.kernelsubscriber.v1.ApplyEntitlementResponse)
 rpc anixops.kernelsubscriber.v1.KernelSubscriber.GetSubscribers(anixops.kernelsubscriber.v1.GetSubscribersRequest) returns (anixops.kernelsubscriber.v1.GetSubscribersResponse)
+rpc anixops.kernelsubscriber.v1.KernelSubscriber.GetSubscriptionSummary(anixops.kernelsubscriber.v1.GetSubscriptionSummaryRequest) returns (anixops.kernelsubscriber.v1.GetSubscriptionSummaryResponse)
 rpc anixops.kernelsubscriber.v1.KernelSubscriber.GrantSubscriptionGroup(anixops.kernelsubscriber.v1.GrantSubscriptionGroupRequest) returns (anixops.kernelsubscriber.v1.GrantSubscriptionGroupResponse)
 rpc anixops.kernelsubscriber.v1.KernelSubscriber.ListActiveSubscribers(anixops.kernelsubscriber.v1.ListActiveSubscribersRequest) returns (anixops.kernelsubscriber.v1.ListActiveSubscribersResponse)
 rpc anixops.kernelsubscriber.v1.KernelSubscriber.LookupBySubscriptionToken(anixops.kernelsubscriber.v1.LookupBySubscriptionTokenRequest) returns (anixops.kernelsubscriber.v1.LookupBySubscriptionTokenResponse)
@@ -604,6 +640,7 @@ rpc anixops.kernelsubscriber.v1.KernelSubscriber.ResetCredentials(anixops.kernel
 rpc anixops.kernelsubscriber.v1.KernelSubscriber.ResetTraffic(anixops.kernelsubscriber.v1.ResetTrafficRequest) returns (anixops.kernelsubscriber.v1.ResetTrafficResponse)
 rpc anixops.kernelsubscriber.v1.KernelSubscriber.RevokeSubscriptionGroup(anixops.kernelsubscriber.v1.RevokeSubscriptionGroupRequest) returns (anixops.kernelsubscriber.v1.RevokeSubscriptionGroupResponse)
 rpc anixops.kernelsubscriber.v1.KernelSubscriber.WatchSubscriberChanges(anixops.kernelsubscriber.v1.WatchSubscriberChangesRequest) returns (stream anixops.kernelsubscriber.v1.SubscriberChange)
+rpc anixops.kerneltelemetry.v1.KernelTelemetry.GetDashboard(anixops.kerneltelemetry.v1.GetDashboardRequest) returns (anixops.kerneltelemetry.v1.GetDashboardResponse)
 rpc anixops.modulepki.v1.ModulePKI.Enroll(anixops.modulepki.v1.EnrollRequest) returns (anixops.modulepki.v1.EnrollResponse)
 rpc anixops.modulepki.v1.ModulePKI.GetTrustBundle(anixops.modulepki.v1.GetTrustBundleRequest) returns (anixops.modulepki.v1.GetTrustBundleResponse)
 rpc anixops.modulepki.v1.ModulePKI.Renew(anixops.modulepki.v1.RenewRequest) returns (anixops.modulepki.v1.RenewResponse)

@@ -1,0 +1,63 @@
+syntax = "proto3";
+
+package anixops.kerneltelemetry.v1;
+
+option go_package = "github.com/AnixOps/anix-control/sdk/api/kerneltelemetry/v1;kerneltelemetryv1";
+
+// KernelTelemetry is the kernel's contract for the telemetry it computes and
+// caches in its own memory (docs/architecture/kernel-caches.md). The kernel
+// keeps the cache: a module reads the cached answer through this contract
+// instead of keeping a copy, so whichever side answers a route, legacy
+// handler or module, answers the same snapshot with the same cached_at, and
+// a refresh rebuilds the one cache both read.
+//
+// It is served on the module listener and the local package bridge to
+// official packages, by capability:
+//   - kernel.telemetry.dashboard.v1: GetDashboard
+service KernelTelemetry {
+  // GetDashboard answers the administrator dashboard's snapshot, as the v2
+  // route GET /api/v2/admin/dashboard shows it. The kernel caches the
+  // snapshot for 60 seconds in its memory; GetDashboard answers the cached
+  // one, or builds, caches and answers a new one when none is cached or
+  // refresh is set.
+  //
+  // online_users is a count of the alive set node reports keep in the
+  // kernel's memory; the set itself never leaves the kernel.
+  //
+  // INTERNAL when building the snapshot fails; the message is the kernel's
+  // error, which the v2 route shows the administrator after
+  // "获取统计失败: ".
+  rpc GetDashboard(GetDashboardRequest) returns (GetDashboardResponse);
+}
+
+message GetDashboardRequest {
+  // refresh rebuilds the snapshot from the database and replaces the cached
+  // one, as the v2 route's refresh=true does.
+  bool refresh = 1;
+}
+
+// GetDashboardResponse is the snapshot, field for field the kernel's
+// service.DashboardStats. Amounts are in cents, traffic in bytes.
+message GetDashboardResponse {
+  int64 total_users = 1;
+  int64 active_users = 2;
+  int64 expired_users = 3;
+  int64 banned_users = 4;
+  int64 today_new_users = 5;
+  int64 total_orders = 6;
+  int64 pending_orders = 7;
+  int64 paid_orders = 8;
+  int64 total_revenue = 9;
+  int64 monthly_income = 10;
+  int64 today_income = 11;
+  int64 total_nodes = 12;
+  int64 active_nodes = 13;
+  // online_users counts the users in the kernel's alive set.
+  int64 online_users = 14;
+  int64 total_traffic_used = 15;
+  int64 today_traffic = 16;
+  // cached_at is when the kernel built the snapshot: RFC 3339 with its
+  // fraction and offset, as encoding/json writes the kernel's time, so a
+  // module answers it byte for byte.
+  string cached_at = 17;
+}
