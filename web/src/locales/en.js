@@ -2760,6 +2760,7 @@ export default {
       id: 'ID',
       email: 'Email',
       plan: 'Plan',
+      subscriptionTemplate: 'Subscription template',
       traffic: 'Traffic',
       limits: 'Limits',
       expireAt: 'Expires at',

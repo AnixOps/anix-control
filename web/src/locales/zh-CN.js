@@ -2761,6 +2761,7 @@ export default {
       id: 'ID',
       email: '邮箱',
       plan: '套餐',
+      subscriptionTemplate: '订阅模板',
       traffic: '流量',
       limits: '限制',
       expireAt: '到期时间',

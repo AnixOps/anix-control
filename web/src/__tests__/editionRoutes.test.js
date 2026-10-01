@@ -5,10 +5,7 @@ import { useUserStore } from '@/stores/user'
 import { getPublicConfig } from '@/api/public'
 import { loadEdition, setEdition } from '@/composables/useEdition'
 
-vi.mock('@/api/public', () => ({
-  getPublicConfig: vi.fn(async () => ({ edition: 'community', hidden_packages: ['affiliate', 'order', 'payment'], registration: {} })),
-}))
-
+// '@/api/public' is mocked in setup.js.
 vi.mock('@/api/kernel', () => ({
   getKernelExtensions: vi.fn(async () => []),
 }))

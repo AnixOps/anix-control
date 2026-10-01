@@ -410,6 +410,7 @@ describe('Admin Users flow', () => {
     await flushPromises()
 
     expect(wrapper.find('[data-test="user-balance-field"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="user-plan-column"]').text()).toBe('Subscription template')
     await wrapper.vm.saveUser()
     expect(mockUpdateUser).toHaveBeenCalledWith(11, expect.objectContaining({ balance: 9 }))
   })
@@ -426,5 +427,6 @@ describe('Admin Users flow', () => {
     await flushPromises()
 
     expect(wrapper.find('[data-test="user-balance-field"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="user-plan-column"]').text()).toBe('Plan')
   })
 })
