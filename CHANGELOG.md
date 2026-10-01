@@ -414,7 +414,7 @@
   routes its section 6 keeps in the kernel are now `kernel-owned` in
   `config/package-extraction.json`, each with its reason. Nothing changes
   at runtime: they are registered and relayed as before. 31 routes are
-  `kernel-owned`, 95 `bridged` and 166 `native-flagged`.
+  `kernel-owned`, 88 `bridged` and 173 `native-flagged`.
   - forward (11): the runtime status and doctor (the kernel's own
     executors, until the runtime moves to agents, A5); flow upload, report
     and snapshot (one kernel transaction, as the callers send no batch id);
@@ -426,7 +426,7 @@
 
   The package hosts list them in `bridgedRoutes` as before, now commented as
   kernel-owned. `docs/architecture/package-extraction.md` updates its counts
-  and drops the open-decision row from its section 3.2 blockers; 75 routes
+  and drops the open-decision row from its section 3.2 blockers; 76 routes
   wait on KernelNodeOps.
 
 ### Added

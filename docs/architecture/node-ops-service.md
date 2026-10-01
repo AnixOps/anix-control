@@ -952,7 +952,8 @@ PRs AG-1 to AG-7 (section 7):
 
 ## 6. Route mapping
 
-The 83 routes waiting on KernelNodeOps and the 7 open-decision routes:
+The 83 routes waiting on KernelNodeOps and the 7 node and agent channel routes
+(decided D3):
 
 | Package | Routes | Native | Kernel-owned |
 |---|---|---|---|
@@ -1032,7 +1033,7 @@ port bindings (adopting `v2_forward_port_binding`) and quota checks.
 | Route | Planned calls | Mode |
 |---|---|---|
 | `GET /admin/forward/runtime/jobs` | none; `kapi_forward_runtime_job_v1`, once the payloads are scrubbed | native |
-| `GET /admin/forward/runtime/status`, `/runtime/doctor`, `/local/status`, `/local/doctor` | none | **kernel-owned**: they describe the kernel's own executors (Control's disk and Ansible paths, its NodeX client, its job queue). A native answer would only relay a kernel summary. They go once the runtime moves to agents (A5). **Q4** |
+| `GET /admin/forward/runtime/status`, `/runtime/doctor`, `/local/status`, `/local/doctor` | none | **kernel-owned**: they describe the kernel's own executors (Control's disk and Ansible paths, its NodeX client, its job queue). A native answer would only relay a kernel summary. They go once the runtime moves to agents (A5). **decided D4** |
 
 **Clean agents, administrator side (3): native.**
 
@@ -1042,7 +1043,7 @@ port bindings (adopting `v2_forward_port_binding`) and quota checks.
 | `POST /admin/forward/agents` | `IssueCleanAgent{name, forward_node_id}` (the token answered as a handle) | native |
 | `POST /admin/forward/agents/:id/revoke` | `RevokeCredential{clean_agent}` | native |
 
-**Flow accounting (3): kernel-owned (Q4).** This covers
+**Flow accounting (3): kernel-owned (decided D4).** This covers
 `POST /internal/forward/traffic/upload`, `/report` and `/snapshot`.
 
 - In one kernel transaction, under a per-forward lock, they change:
@@ -1057,7 +1058,7 @@ port bindings (adopting `v2_forward_port_binding`) and quota checks.
 - **Later.** With A2, forward traffic arrives on the stream with batch ids.
   A later contract ("forward traffic events") can then move the accounting.
 
-**Agent channel (4 of the 7): kernel-owned (Q3).**
+**Agent channel (4 of the 7): kernel-owned (decided D3).**
 
 | Route | Why |
 |---|---|
@@ -1075,7 +1076,7 @@ Proxy-node adopts `v2_node` once it is finalized.
 | `GET /admin/nodes/:id` | none | native |
 | `PUT /admin/nodes/:id` | update the row; `SyncNode{reasons: node}` (cache, desired configuration) | native |
 | `DELETE /admin/nodes/:id` | `RetireNode{proxy}`: the kernel deletes the credentials and certificates, and the protocols with their secrets, WireGuard peers and subscription group links, as the legacy transaction does. Then the package deletes the row. **Q11** | native |
-| `GET /admin/nodes/:id/credentials` | none | **kernel-owned**: the answer is the stored key and secret, and no contract call reveals a stored secret (section 3.7). **Q4** |
+| `GET /admin/nodes/:id/credentials` | none | **kernel-owned**: the answer is the stored key and secret, and no contract call reveals a stored secret (section 3.7). **decided D4** |
 | `GET /admin/nodes/:id/raw-config` | none; the stored, redacted `raw_config` | native |
 | `PUT /admin/nodes/:id/raw-config` | `ValidateNodeConfig{RAW_CONFIG}`; `PutSecretDocument{NODE_RAW_CONFIG}` (handles from the request); store `redacted_json`; `SyncNode` | native |
 | `POST /admin/nodes/validate-config` | `ValidateNodeConfig` | native |
@@ -1085,7 +1086,7 @@ Proxy-node adopts `v2_node` once it is finalized.
 | `POST /internal/auth-keys` | `IssueRegistrationKey`, under the app-token principal | native |
 | `GET /admin/loadbalancers/:id/stats` | none; `kapi_forward_node_v1` (exists) and the adopted `v2_load_balancer`. No node operation is needed; it was bridged together with the check | native |
 | `POST /admin/loadbalancers/:id/check` | `CheckEndpoints{forward nodes of the group, record_status}`: the kernel writes the status columns of forward's table (wait T) | native |
-| `POST /node/register`, `/node/heartbeat`, `/node/runtime-health` | none | **kernel-owned (Q3)**: registration mints node credentials, and the others are authenticated by them. With A2 they become enrollment and stream reports, and 5.0 removes them |
+| `POST /node/register`, `/node/heartbeat`, `/node/runtime-health` | none | **kernel-owned (decided D3)**: registration mints node credentials, and the others are authenticated by them. With A2 they become enrollment and stream reports, and 5.0 removes them |
 
 ### 6.3 protocol-runtime (11): all native
 
