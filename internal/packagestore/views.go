@@ -63,6 +63,13 @@ var KernelAPIViews = []KernelAPIView{
 		Source: "v2_plan_subscription_group",
 		Query:  "SELECT plan_id, group_id FROM v2_plan_subscription_group",
 	},
+	{
+		// What a payment needs of an order: whose it is, what it costs (in
+		// cents) and whether it is still pending.
+		Name:   "kapi_order_billing_v1",
+		Source: "v2_order",
+		Query:  "SELECT id, user_id, total_amount, status FROM v2_order",
+	},
 }
 
 // EnsureKernelAPIViews creates the kernel API views that do not exist yet.

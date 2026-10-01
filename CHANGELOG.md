@@ -556,6 +556,23 @@
     PostgreSQL jobs in the pull request lane.
   - `EnsureKernelAPIViews` leaves out a view whose source table does not
     exist.
+- **Payment module.** `packages/payment` has its own host and serves 16 of
+  its 20 routes natively: gateway administration, payment records and
+  statistics, the user's channels, payments and their status, the method
+  list, and x402 and fiat payment creation.
+  - It runs on `v2_payment_gateway`, `v2_payment_record` and `v2_payment`,
+    adopted in place. As the gateways' owner it holds their secrets; its
+    administrator answers redact them as the kernel's do.
+  - Orders are read through the new kernel view `kapi_order_billing_v1`
+    (buyer, total, status) only. No native route changes an order or a
+    subscriber, and none calls a payment provider: the fiat routes are
+    stubs, as in the kernel.
+  - The four callback routes stay bridged. A paid callback marks the payment,
+    the gateway statistics and the order paid and completes the order in one
+    kernel transaction, with no contract yet for the order's part.
+  - `internal/tests/paymentcompat` proves byte parity on SQLite and
+    PostgreSQL, and the same payment records, gateways and orders. The
+    PostgreSQL run is part of CI.
 
 - The kernel side of the identity module, `KernelIdentity` (N9). It is served
   on the local package bridge and on the module listener.

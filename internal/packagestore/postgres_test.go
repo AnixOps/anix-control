@@ -363,3 +363,44 @@ func TestPostgresPlanViewsAreReadOnly(t *testing.T) {
 	requirePermissionDenied(t, pkg.Exec("UPDATE kapi_plan_catalog_v1 SET month_price = 1 WHERE id = ?", plan.ID).Error)
 	requirePermissionDenied(t, pkg.Exec("DELETE FROM kapi_plan_subscription_group_v1 WHERE plan_id = ?", plan.ID).Error)
 }
+
+// A role granted kapi_order_billing_v1 reads an order's buyer, total and
+// status, and can neither read v2_order itself nor change it through the
+// view.
+func TestPostgresOrderBillingViewIsReadOnly(t *testing.T) {
+	kernel, kernelDSN := openPostgresKernel(t)
+	require.NoError(t, kernel.AutoMigrate(&model.Order{}))
+	require.NoError(t, EnsureKernelAPIViews(kernel))
+	suffix := randomSuffix(t)
+	packageID := "pkgtest-" + suffix
+	t.Cleanup(func() { dropPackageStorage(t, kernel, packageID) })
+	user := model.User{Email: "billing-" + suffix + "@example.test", Token: "billing-" + suffix, UUID: "billing-" + suffix}
+	require.NoError(t, kernel.Create(&user).Error)
+	t.Cleanup(func() { _ = kernel.Delete(&model.User{}, user.ID).Error })
+	plan := model.Plan{Name: "billing-" + suffix}
+	require.NoError(t, kernel.Create(&plan).Error)
+	t.Cleanup(func() { _ = kernel.Delete(&model.Plan{}, plan.ID).Error })
+	order := model.Order{UserID: user.ID, PlanID: plan.ID, TradeNo: "billing-" + suffix, TotalAmount: 4200, CallbackNo: &suffix}
+	require.NoError(t, kernel.Create(&order).Error)
+	t.Cleanup(func() { _ = kernel.Delete(&model.Order{}, order.ID).Error })
+
+	store := Store{DB: kernel, Driver: "postgres", DSN: kernelDSN}
+	lease, err := store.Lease(context.Background(), Holder{PackageID: packageID, Version: "4.1.0", Generation: 1},
+		Grants{Storage: true, Views: []string{"kapi_order_billing_v1"}})
+	require.NoError(t, err)
+	pkg := openPostgres(t, lease.DSN)
+	var rows []struct {
+		UserID      uint
+		TotalAmount int64
+		Status      int
+	}
+	require.NoError(t, pkg.Raw("SELECT user_id, total_amount, status FROM kapi_order_billing_v1 WHERE id = ?", order.ID).Scan(&rows).Error)
+	require.Len(t, rows, 1)
+	require.Equal(t, user.ID, rows[0].UserID)
+	require.Equal(t, int64(4200), rows[0].TotalAmount)
+	var tradeNos []string
+	require.ErrorContains(t, pkg.Raw("SELECT trade_no FROM kapi_order_billing_v1").Scan(&tradeNos).Error, "does not exist")
+	var count int64
+	requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM v2_order").Scan(&count).Error)
+	requirePermissionDenied(t, pkg.Exec("UPDATE kapi_order_billing_v1 SET status = 1 WHERE id = ?", order.ID).Error)
+}

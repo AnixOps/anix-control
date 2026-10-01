@@ -256,8 +256,10 @@ whether a secret is set, never its value). `kapi_plan_catalog_v1` exposes
 what an order needs of a plan (`id`, `group_id`, `transfer_enable`,
 `speed_limit`, `device_limit` and the seven period prices of `v2_plan`), and
 `kapi_plan_subscription_group_v1` the `plan_id` and `group_id` of
-`v2_plan_subscription_group`. If a view cannot be created, or its source
-table does not exist, startup continues and leases that grant it fail.
+`v2_plan_subscription_group`. `kapi_order_billing_v1` exposes what a payment
+needs of an order: `id`, `user_id`, `total_amount` and `status` of
+`v2_order`. If a view cannot be created, or its source table does not exist,
+startup continues and leases that grant it fail.
 
 `sdk/packagestoresdk` is the host side:
 

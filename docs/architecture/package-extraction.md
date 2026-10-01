@@ -28,11 +28,11 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   WebSocket routes use `registeredPackageWebSocketRoute`.
 - `config/package-extraction.json` records each route's extraction mode
   (`bridged`, `native-flagged` or `native`) and where its legacy handler lives
-  (`router`, `identity-bridge` or `none`). 68 routes are `native-flagged`:
-  identity's group A (15), knowledge (6), notification (19), order (9), plan
-  (7), platform (4) and ticket (8). The rest are `bridged`. The identity
-  routes are `identity-bridge`. `check_plugin_only_routes.py` enforces the map
-  against the router and the identity bridge.
+  (`router`, `identity-bridge` or `none`). 84 routes are `native-flagged`:
+  identity's group A (15), knowledge (6), notification (19), order (9),
+  payment (16), plan (7), platform (4) and ticket (8). The rest are `bridged`.
+  The identity routes are `identity-bridge`. `check_plugin_only_routes.py`
+  enforces the map against the router and the identity bridge.
 - Request path: gin middleware -> `compatv2` gateway -> route resolution
   (`internal/compat/v2/registry.go`, `verifiedRouteSource`) -> package host
   process over Unix gRPC -> package bridge (FD 4) -> **the legacy in-kernel
@@ -252,6 +252,25 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
   - The four order list and detail routes stay bridged. Their answers embed
     the buyer's whole `v2_user` row, subscription token and proxy UUID
     included, which no kernel view may expose.
+- **Payment (in place).** 16 of 20 routes run on the adopted
+  `v2_payment_gateway`, `v2_payment_record` and `v2_payment` tables, proved
+  by `internal/tests/paymentcompat`: gateway administration, payment records
+  and statistics, the user's channels, payments and their status, the method
+  list, and the x402 and fiat payment creation (stubs that call no provider,
+  on both sides).
+  - Payment owns the gateways and so holds their secrets (merchant keys,
+    webhook secrets) through the adopted `v2_payment_gateway`. Its
+    administrator answers show them as `********`, as the kernel's do.
+  - An order is read only through `kapi_order_billing_v1` (its buyer, total
+    and status): a payment is created for the caller's own pending order and
+    its exact total.
+  - The four callback routes (`/payment/callback/:type`, the x402 callback,
+    the Stripe and PayPal webhooks) stay bridged. A paid callback updates the
+    payment record and the gateway statistics, marks the order paid and
+    completes it, in one kernel transaction. The order is the order module's
+    table, and there is no contract for those writes yet. The provider
+    signature checks stay with them, and the PayPal webhook calls PayPal's
+    API to verify each delivery.
 - The kernel publishes read-only views `kapi_*`, created at startup by
   `EnsureKernelAPIViews` (first `kapi_user_directory_v1`, then
   `kapi_system_audit_log_v1`, the `v2_operation_log` rows of module
@@ -259,7 +278,8 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
   through `kapi_*` views or typed operations.
   `EnsureKernelAPIViews` (`kapi_user_directory_v1`,
   `kapi_subscriber_entitlement_v1`, `kapi_plan_catalog_v1`,
-  `kapi_plan_subscription_group_v1`). Packages read other domains only
+  `kapi_plan_subscription_group_v1`, `kapi_order_billing_v1`). Packages
+  read other domains only
   through `kapi_*` views or typed operations. A view whose source table does
   not exist is left out.
 
@@ -539,9 +559,10 @@ Next quarter, in dependency order:
 2. order + payment together (33 routes): keep one transaction, column-level
    grant on `v2_order(status, paid_at)`, replay payment-callback fixtures.
    A successful callback marks the payment and order paid and completes the
-   order (owner decision, 2026-09-30, `subscriber-service.md`). Order is in
-   place (9 of 13 routes, section 3.4); the callbacks, which write the
-   payment and the order in one transaction, are not.
+   order (owner decision, 2026-09-30, `subscriber-service.md`). Order (9 of
+   13 routes) and payment (16 of 20) are in place (section 3.4); the
+   callbacks, which write the payment and the order in one transaction, are
+   not.
 3. subscription + proxy-node (56 routes plus parser and gRPC): map
    `/s/:token` and UniProxy v1 through a kernel-side `Gateway.ServeRoute`.
 4. forward (79 routes, ~12k lines of forward handler/service code, 6 workers).
