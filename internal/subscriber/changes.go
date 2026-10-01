@@ -75,6 +75,16 @@ func PruneChanges(db *gorm.DB, now time.Time) (int64, error) {
 	return result.RowsAffected, result.Error
 }
 
+// RequestRetention is how long the request ledger keeps a request id; a
+// retry after that applies again.
+const RequestRetention = 90 * 24 * time.Hour
+
+// PruneRequests deletes request ledger rows older than RequestRetention.
+func PruneRequests(db *gorm.DB, now time.Time) (int64, error) {
+	result := db.Where("created_at < ?", now.Add(-RequestRetention)).Delete(&model.SubscriberRequest{})
+	return result.RowsAffected, result.Error
+}
+
 // Active restricts a v2_user query to the subscribers a node serves: not
 // banned, not expired, and within their traffic (a zero transfer limit
 // serves nothing), as node user lists always have.
