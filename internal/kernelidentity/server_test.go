@@ -323,8 +323,19 @@ func TestGetSubscriberShowsTheV2UserWithoutCredentials(t *testing.T) {
 	require.NoError(t, json.Unmarshal(response.GetSubscriberJson(), &shown))
 	require.Equal(t, "shown@example.test", shown["email"])
 	require.NotContains(t, shown, "password")
+	require.NotContains(t, shown, "password_algo")
+	require.NotContains(t, shown, "password_salt")
+	require.NotContains(t, shown, "plan", "a subscriber without a plan shows none, as the v2 admin API")
 	_, err = f.server.GetSubscriber(context.Background(), &kernelidentityv1.GetSubscriberRequest{UserId: 999})
 	requireCode(t, err, codes.NotFound)
+
+	// With a plan, the subscriber shows it, as the v2 admin user detail does.
+	require.NoError(t, f.db.Create(&model.Plan{ID: 7, Name: "Pro", GroupID: 2}).Error)
+	require.NoError(t, f.db.Model(&model.User{}).Where("id = ?", id).Update("plan_id", 7).Error)
+	response, err = f.server.GetSubscriber(context.Background(), &kernelidentityv1.GetSubscriberRequest{UserId: uint64(id)})
+	require.NoError(t, err)
+	require.NoError(t, json.Unmarshal(response.GetSubscriberJson(), &shown))
+	require.Equal(t, "Pro", shown["plan"].(map[string]any)["name"])
 }
 
 func TestCreateSubscriberMirrorsCredentialsWithoutRevoking(t *testing.T) {

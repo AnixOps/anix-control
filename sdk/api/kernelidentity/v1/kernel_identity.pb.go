@@ -67,7 +67,9 @@ func (x *GetSubscriberRequest) GetUserId() uint64 {
 
 type GetSubscriberResponse struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
-	// subscriber_json is the v2 user object, without credentials.
+	// subscriber_json is the v2 user object with its plan. It carries no
+	// password hash, but it does carry the subscription token and proxy uuid,
+	// which the v2 admin API and the account's own profile show.
 	SubscriberJson []byte `protobuf:"bytes,1,opt,name=subscriber_json,json=subscriberJson,proto3" json:"subscriber_json,omitempty"`
 	unknownFields  protoimpl.UnknownFields
 	sizeCache      protoimpl.SizeCache

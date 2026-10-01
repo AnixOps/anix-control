@@ -177,26 +177,23 @@ func (h *hostServer) ApplyEntitlement(ctx context.Context, request *kernelsubscr
 }
 
 // updateOnce applies v2_user updates through the kernel's user update path
-// (revocations, change log) once per request id.
+// (revocations, change log) once per request id. A subscriber that does not
+// exist is NotFound, and nothing is recorded.
 func (h *hostServer) updateOnce(db *gorm.DB, id, method string, user uint, updates map[string]any) (bool, error) {
 	applied := false
+	var revocation *authn.Revocation
 	err := db.Transaction(func(tx *gorm.DB) error {
-		var previous struct{}
-		seen, err := subscriber.Replay(tx, id, &previous)
-		if err != nil || seen {
-			return err
-		}
-		revocation, err := service.UpdateUserTx(tx, user, updates)
-		if err != nil {
-			return err
-		}
-		if revocation != nil {
-			defer authn.Remember(*revocation)
-		}
-		applied = true
-		return subscriber.Record(tx, id, method, user, struct{}{}, h.now())
+		var err error
+		applied, revocation, err = service.UpdateUserOnceTx(tx, id, method, user, updates, h.now())
+		return err
 	})
-	return applied, err
+	if err != nil {
+		return false, err
+	}
+	if revocation != nil {
+		authn.Remember(*revocation)
+	}
+	return applied, nil
 }
 
 func (h *hostServer) AdjustEntitlement(ctx context.Context, request *kernelsubscriberv1.AdjustEntitlementRequest) (*kernelsubscriberv1.AdjustEntitlementResponse, error) {
@@ -358,7 +355,7 @@ func (h *hostServer) ResetCredentials(ctx context.Context, request *kernelsubscr
 	if len(updates) == 0 {
 		return nil, status.Error(codes.InvalidArgument, "choose subscription_token and/or proxy_uuid")
 	}
-	applied, err := h.updateOnce(db, id, "reset_credentials", user, updates)
+	applied, err := h.updateOnce(db, id, service.SubscriberReissueMethod, user, updates)
 	if err != nil {
 		return nil, failure("reset credentials", err)
 	}

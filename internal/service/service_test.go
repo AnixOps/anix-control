@@ -807,7 +807,7 @@ func (s *UserServiceTestSuite) TestResetTraffic() {
 	database.Get().Create(user)
 
 	// 閲嶇疆娴侀噺
-	err := s.svc.ResetTraffic(user.ID)
+	err := s.svc.ResetTraffic(user.ID, "")
 	assert.NoError(s.T(), err)
 
 	found, _ := s.svc.GetByID(user.ID)
@@ -816,13 +816,51 @@ func (s *UserServiceTestSuite) TestResetTraffic() {
 }
 
 func (s *UserServiceTestSuite) TestResetTraffic_NotFound() {
-	assert.ErrorIs(s.T(), s.svc.ResetTraffic(99999), ErrUserNotFound)
+	assert.ErrorIs(s.T(), s.svc.ResetTraffic(99999, ""), ErrUserNotFound)
 }
 
 func (s *UserServiceTestSuite) TestResetToken_NotFound() {
-	token, err := s.svc.ResetToken(99999)
+	token, err := s.svc.ResetToken(99999, "identity.reset_subscribe:99999:missing")
 	assert.ErrorIs(s.T(), err, ErrUserNotFound)
 	assert.Empty(s.T(), token)
+	var recorded int64
+	assert.NoError(s.T(), database.Get().Model(&model.SubscriberRequest{}).Where("user_id = ?", 99999).Count(&recorded).Error)
+	assert.Zero(s.T(), recorded, "a reset of a missing user records nothing")
+}
+
+// A retried reset (same request id) applies once and answers the token the
+// first one issued; a new request issues a new token.
+func (s *UserServiceTestSuite) TestResetToken_AppliesARequestOnce() {
+	user := &model.User{Email: "reset-once@example.com", Password: "hash", Token: "token-before", UUID: "uuid-reset-once"}
+	s.Require().NoError(database.Get().Create(user).Error)
+	requestID := AdminUserResetRequestID(AdminUserResetSubscribe, user.ID, "key-1")
+
+	first, err := s.svc.ResetToken(user.ID, requestID)
+	s.Require().NoError(err)
+	assert.NotEqual(s.T(), "token-before", first)
+	again, err := s.svc.ResetToken(user.ID, requestID)
+	s.Require().NoError(err)
+	assert.Equal(s.T(), first, again, "a retry answers the token the first reset issued")
+	other, err := s.svc.ResetToken(user.ID, AdminUserResetRequestID(AdminUserResetSubscribe, user.ID, "key-2"))
+	s.Require().NoError(err)
+	assert.NotEqual(s.T(), first, other)
+
+	var stored model.User
+	s.Require().NoError(database.Get().Take(&stored, user.ID).Error)
+	assert.Equal(s.T(), other, stored.Token)
+	assert.Equal(s.T(), "uuid-reset-once", stored.UUID, "the proxy uuid is kept")
+	var recorded int64
+	s.Require().NoError(database.Get().Model(&model.SubscriberRequest{}).Where("user_id = ? AND method = ?", user.ID, SubscriberReissueMethod).Count(&recorded).Error)
+	assert.EqualValues(s.T(), 2, recorded)
+}
+
+func TestAdminUserResetRequestIDNamesTheRequest(t *testing.T) {
+	id := AdminUserResetRequestID(AdminUserResetTraffic, 7, "key")
+	assert.Equal(t, id, AdminUserResetRequestID(AdminUserResetTraffic, 7, "key"))
+	assert.NotEqual(t, id, AdminUserResetRequestID(AdminUserResetTraffic, 7, "other"))
+	assert.NotEqual(t, id, AdminUserResetRequestID(AdminUserResetSubscribe, 7, "key"))
+	assert.Regexp(t, `^identity\.reset_traffic:7:[0-9a-f]{24}$`, id)
+	assert.LessOrEqual(t, len(AdminUserResetRequestID(AdminUserResetSubscribe, 4294967295, "key")), 128)
 }
 
 func TestUserService(t *testing.T) {

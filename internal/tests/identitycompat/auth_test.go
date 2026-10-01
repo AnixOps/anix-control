@@ -50,6 +50,8 @@ func configure(change func(*config.Config)) {
 	}
 	config.Set(cfg)
 	service.ResetLoginRateLimiterForTest()
+	// The legacy dashboard's service keeps the database it was built with.
+	service.ResetStatsServiceForTest()
 }
 
 func hash(t testing.TB, plain string) string {

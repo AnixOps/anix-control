@@ -61,8 +61,9 @@ type KernelIdentityClient interface {
 	// GetIdentitySettings returns the kernel's legacy auth settings once, to
 	// seed the identity installation configuration.
 	GetIdentitySettings(ctx context.Context, in *GetIdentitySettingsRequest, opts ...grpc.CallOption) (*GetIdentitySettingsResponse, error)
-	// GetSubscriber returns a subscriber as the v2 admin API shows it, for
-	// identity's administration answers.
+	// GetSubscriber returns one subscriber as the v2 admin API shows it, with
+	// its plan, for identity's administration answers and the account's own
+	// profile and dashboard.
 	GetSubscriber(ctx context.Context, in *GetSubscriberRequest, opts ...grpc.CallOption) (*GetSubscriberResponse, error)
 }
 
@@ -186,8 +187,9 @@ type KernelIdentityServer interface {
 	// GetIdentitySettings returns the kernel's legacy auth settings once, to
 	// seed the identity installation configuration.
 	GetIdentitySettings(context.Context, *GetIdentitySettingsRequest) (*GetIdentitySettingsResponse, error)
-	// GetSubscriber returns a subscriber as the v2 admin API shows it, for
-	// identity's administration answers.
+	// GetSubscriber returns one subscriber as the v2 admin API shows it, with
+	// its plan, for identity's administration answers and the account's own
+	// profile and dashboard.
 	GetSubscriber(context.Context, *GetSubscriberRequest) (*GetSubscriberResponse, error)
 	mustEmbedUnimplementedKernelIdentityServer()
 }

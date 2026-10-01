@@ -87,6 +87,13 @@ type UserSubscription struct {
 
 var statsServiceInstance *StatsService
 
+// ResetStatsServiceForTest drops the shared StatsService, which keeps the
+// database it was first built with, so a test that opens a new database gets
+// a service on it.
+func ResetStatsServiceForTest() {
+	statsServiceInstance = nil
+}
+
 // NewStatsService 创建统计服务
 func NewStatsService() *StatsService {
 	if statsServiceInstance == nil {

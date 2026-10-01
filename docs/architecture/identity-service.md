@@ -176,8 +176,19 @@ instance's generation.
   byte-compatible with v2 (panel envelope, Chinese error strings,
   `Retry-After`, the MFA response shapes and the permission fields). Parity is
   proven with `internal/tests/packagecompat`.
-- **Stay bridged for now:** profile, dashboard, and admin user list, detail
-  and stats. They read the projection.
+- **Account reads, native on their own (in place):** the profile, the
+  dashboard and the admin user detail take the account from identity's store
+  and the subscriber, token included, from `KernelIdentity.GetSubscriber`,
+  one user per call. They leave legacy mode only while identity is
+  authoritative, and the rollback returns them to legacy; they are not part
+  of group A.
+- **Resets, native at any time (in place):** the admin traffic and
+  subscription resets change only the subscriber, through
+  `KernelSubscriber.ResetTraffic` and `ResetCredentials`.
+- **Stay bridged:** the admin user list and stats, whose one query mixes
+  identity's ban flag with the subscriber's expiry (the list also shows
+  every user's subscription token), and the user's invite routes, which are
+  affiliate data.
 - **Moved to other packages, still bridged (done, step 7):**
   - system configuration, audit and backup (12 routes) → new package
     `platform`;
@@ -313,7 +324,10 @@ instance's generation.
         subscribers, sent as `ImportAccountsRequest.deleted_user_id` (new).
       - **Consistency.** Configuration writes are refused unless group A's 15
         routes are native together, and exactly while identity is
-        authoritative. Only the cutover and rollback change both.
+        authoritative. Only the cutover and rollback change both. The account
+        reads (profile, dashboard, admin user detail) may leave legacy mode
+        only while identity is authoritative; the rollback returns them to
+        legacy too.
       - **Rollback.** `POST /api/v4/kernel/identity/rollback` pauses group A,
         switches it to legacy and the authority to `importing`.
       - **Finalize.** `POST /api/v4/kernel/identity/finalize`
@@ -332,6 +346,30 @@ instance's generation.
     - The kind smoke runs it against two identity replicas.
     - The Compose smoke runs it, then checks that issued tokens outlive the
       identity module.
+14. The routes outside group A (in place).
+    - **Account reads.** The profile, the dashboard and the admin user
+      detail are native: the account from identity's store, the subscriber
+      (plan, traffic, expiry, subscription token and proxy uuid) from
+      `KernelIdentity.GetSubscriber`, which now includes the plan, and the
+      permissions from `ResolveActorAccess`.
+      - `service.IdentityAccountReadRoutes` lets them leave legacy mode only
+        while identity is authoritative.
+      - The cutover leaves them to the operator, who may shadow them first;
+        the rollback returns them to legacy with group A, and the hosts
+        confirm it.
+      - A subscriber identity has no account for is "用户不存在" to the
+        user's own routes; the admin detail shows it as Control holds it.
+    - **Resets.** The admin traffic and subscription resets call
+      `KernelSubscriber.ResetTraffic` (`kernel.subscriber.traffic.v1`) and
+      `ResetCredentials` (`kernel.subscriber.credentials.v1`) and switch at
+      any time. Their request ids, `identity.reset_traffic:<user>:<digest>`
+      and `identity.reset_subscribe:<user>:<digest>`, are the legacy
+      handlers' too, so a retry applies once whichever side serves it.
+    - **Stay bridged.** The admin user list and statistics, and the user's
+      invite code list and generation (affiliate data; Control keeps the
+      codes).
+    - `internal/tests/identitycompat` proves the parity, and that the reads
+      answer identity's account rather than the projection.
 
 Deferred:
 - deleting the legacy identity handlers (after finalize and the rollback
