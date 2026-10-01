@@ -4,6 +4,14 @@
 
 ### Security
 
+- SQL logs no longer contain the values bound to statements. With
+  `database.log_level: info`, the example configuration's level, GORM logged
+  every statement with its values: node API keys and secrets, tokens,
+  password hashes and subscription UUIDs. Failed statements (and, at
+  `warn`, slow ones) were logged with their values at the other levels too.
+  Statements are now logged with their placeholders
+  (`ParameterizedQueries`).
+
 - The SMTP password is no longer answered in clear to administrators.
   `GET /api/v2/admin/notification/email/config` (legacy and native) answered
   it as stored, and the system configuration list, single-key read and
