@@ -681,7 +681,7 @@ ships NO-2. Every later phase is an operator command, never a release.
 |---|---|---|---|---|
 | **P0 legacy** (today) | old columns | old columns | n/a | (default) |
 | **P1 dual-write** | old columns and new tables, in one transaction, through one writer (`internal/nodesecrets`) | old columns | yes | the release that ships NO-2: dual-write is always on, and a backfill copies the existing rows (`anix-control node-secrets backfill`, idempotent, in batches by id, checkpointed) |
-| **P2 dual-read** | both | new tables. A missing or mismatching row falls back to the old column and counts `anix_node_secret_fallback_total{table}` | yes | `anix-control node-secrets verify`: the digests over every secret of the old and new forms match, and the phase moves to `dual_read` |
+| **P2 dual-read** | both | new tables. A missing or mismatching row falls back to the old column and counts `anixops_node_secrets_fallback_total{table,kind,reason}` | yes | `anix-control node-secrets verify`: the digests over every secret of the old and new forms match; then `anix-control node-secrets phase <table\|all> dual_read` |
 | **P3 finalized** | new tables only; old columns get tombstones (section 4.4) | new tables only | **no** (restore from backup) | `anix-control node-secrets finalize --table <t>`, after a zero fallback count. It rewrites every old secret to its tombstone or redacted form in batches, verifies, and records `finalized_at` |
 | **P4 adopted** | packages write the credential-free columns | | | a package release that declares `kernel.storage.adopt:<table>` (section 4.6) |
 
@@ -711,11 +711,76 @@ So P1 cannot drift, and the parity tests compare both forms.
 Each reads through `internal/nodesecrets`, which applies the phase. A static
 gate (NO-9) refuses any other kernel read of a moved column.
 
+**Built in NO-3.** Every reader above reads through `internal/nodesecrets`
+(`read.go`), which applies its table's phase:
+
+- **The readers.**
+  - Node API keys: `NodeAuth` (UniProxy), `NodeAPIKeyAuth` and
+    `NodeAPIKeyHeaderAuth` (the node API, package downloads), the gRPC
+    interceptor and the Agent Control stream (`NodeService.GetNodeByAPIKey`),
+    and the agent WebSocket and HTTP routes (`verifyForwardNodeToken`).
+  - The shared secret of `SignatureAuth`; registration keys in
+    `RegisterNode`; forward node tokens in the agent checks, the gost
+    manager and the NodeX payloads (which also fill clean agent job
+    payloads); clean agent tokens in `Register`, `Heartbeat` and `Report`.
+  - Protocol secrets in `BuildNodeProtocolConfig` (UniProxy and the gRPC
+    configuration) and in the subscription renderer; the raw configuration
+    in UniProxy; WireGuard peer keys in subscriptions and in the node's user
+    list; the administrators' credentials route.
+- **The rule.** Phases are read from `v4_kernel_node_secret_split` and
+  cached for 5 seconds per process.
+  - In `dual_write` a reader reads the legacy column exactly as before and
+    never the new tables.
+  - In `dual_read` a credential check accepts a match in the new table, and
+    otherwise the legacy column. A value is the new table's where it equals
+    the legacy one or the legacy column no longer holds it (empty, a
+    tombstone, the placeholder); otherwise the legacy value is used.
+  - Each use of the legacy column is counted in
+    `anixops_node_secrets_fallback_total{table,kind,reason}`, with reason
+    `missing`, `mismatch` or `error`, and logged once per subject (row id and
+    JSON pointer), never with a value. The name follows the `anixops_`
+    prefix of Control's other metrics.
+  - A JSON column is rewritten only where its legacy document holds the
+    placeholder, so an answer stays byte for byte as before while both forms
+    agree.
+- **The gate.** `anix-control node-secrets phase [-by <name>] <table|all>
+  dual_read|dual_write`:
+  - `dual_read` needs the table's latest verification to have matched: no
+    mismatch, not followed by a failing one, at most an hour old
+    (`VerifyMaxAge`) and not dated in the future;
+  - `dual_write`, the way back, is always allowed;
+  - `finalized` and `legacy` are neither asked for nor left;
+  - `all` moves every table or none;
+  - each change writes an audit entry (`v2_operation_log`, module
+    `node_secrets`) in the same transaction.
+- **Tombstones.** No reader accepts `!moved:<id>` or `********` as a
+  credential in any phase, presented or stored, including the plain-key
+  fallback for rows without a hash. A request signed with a placeholder
+  secret is refused.
+- **Validate on build, report-only (D7).** Before building a node's
+  configuration from a protocol or a raw configuration, the builder checks
+  its secrets:
+  - no secret position holds the placeholder or a tombstone;
+  - a WireGuard entry's server key pair is valid, a Reality private key is
+    32 bytes, a Shadowsocks 2022 server key has its cipher's length.
+
+  A failing row is counted in `anixops_node_secrets_invalid_total{table,
+  type,reason}` and logged once naming the node, protocol and field. It is
+  still built. `anix-control node-secrets validate` scans every row and
+  exits 3 on a finding.
+- **Not moved.**
+  - The forward node inventory filter (`api_token = ''`) is a presence check,
+    not a read of a value. It moves to `kapi_node_credential_status_v1` with
+    the tombstones in NO-9.
+  - The A2-1 enrollment bootstrap reads node keys through
+    `NodeAPIKeyMatches` and `NodeByAPIKey` once it lands.
+
 **Rollback:**
 
 - **P1 or P2 to P0:** set the phase back (`anix-control node-secrets
-  phase legacy`). The old columns still hold every value, so an older
-  binary works.
+  phase all dual_write`). The writers dual-write in every phase since P1,
+  so `dual_write` is the way back: the readers read only the old columns.
+  The old columns still hold every value, so an older binary works.
 - **After P3:** only `anix-control node-secrets unsplit` (or a backup)
   writes values back. `unsplit` is the documented escape hatch; it does not
   undo adoption.

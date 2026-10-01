@@ -2,7 +2,6 @@ package handler
 
 import (
 	"crypto/sha256"
-	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -17,6 +16,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/agentws"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/AnixOps/anix-control/v4/internal/utils"
 	"github.com/gin-gonic/gin"
@@ -132,12 +132,15 @@ func NewAgentHandler() *AgentHandler {
 // matching the same api_key/api_key_hash contract used by the UniProxy
 // middleware. The returned isForwardNode tells callers which table owns the
 // node so online-status writes land in the right place.
+//
+// Both checks go through the node credential split, which applies each
+// table's phase. An empty token, a tombstone and the placeholder never
+// authenticate: a node whose key or token is empty would otherwise accept
+// anyone.
 func (h *AgentHandler) verifyForwardNodeToken(nodeID uint, token string) (isForwardNode bool, err error) {
-	// An empty token never authenticates: a node whose key or token is
-	// empty would otherwise accept anyone.
 	var fwd model.ForwardNode
 	if fwdErr := h.db.First(&fwd, nodeID).Error; fwdErr == nil {
-		if token == "" || !secretEqual(fwd.APIToken, token) {
+		if !nodesecrets.ForwardNodeTokenMatches(h.db, &fwd, token) {
 			return true, errAgentInvalidToken
 		}
 		return true, nil
@@ -148,21 +151,10 @@ func (h *AgentHandler) verifyForwardNodeToken(nodeID uint, token string) (isForw
 		return false, errAgentNodeNotFound
 	}
 
-	if token == "" {
-		return false, errAgentInvalidToken
-	}
-	tokenHash := hashString(token)
-	valid := secretEqual(node.APIKeyHash, tokenHash) || (node.APIKeyHash == "" && secretEqual(node.APIKey, token))
-	if !valid {
+	if !nodesecrets.NodeAPIKeyMatches(h.db, &node, token) {
 		return false, errAgentInvalidToken
 	}
 	return false, nil
-}
-
-// secretEqual compares a stored secret with a presented one in constant
-// time; an empty stored secret matches nothing.
-func secretEqual(stored, presented string) bool {
-	return stored != "" && subtle.ConstantTimeCompare([]byte(stored), []byte(presented)) == 1
 }
 
 func prepareAgentWebSocket(conn *websocket.Conn) error {

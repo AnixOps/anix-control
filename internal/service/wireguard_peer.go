@@ -81,10 +81,12 @@ func (s *SubscriptionService) GetOrCreateWireGuardPeer(protocolID, userID uint, 
 	wireGuardPeerMu.Lock()
 	defer wireGuardPeerMu.Unlock()
 
+	// An existing peer's keys are read through the node credential split.
 	var peer model.WireGuardPeer
 	if err := s.db.Where("node_protocol_id = ? AND user_id = ?", protocolID, userID).First(&peer).Error; err == nil {
 		addr, parseErr := netip.ParseAddr(strings.TrimSpace(peer.PeerIP))
 		if parseErr == nil && prefix.Contains(addr) && !isWireGuardReservedAddress(prefix, addr) {
+			nodesecrets.ResolveWireGuardPeers(s.db, &peer)
 			return &peer, nil
 		}
 		peerIP, allocErr := s.allocateWireGuardPeerIPLocked(protocolID, prefix)
@@ -95,6 +97,7 @@ func (s *SubscriptionService) GetOrCreateWireGuardPeer(protocolID, userID uint, 
 			return nil, err
 		}
 		peer.PeerIP = peerIP
+		nodesecrets.ResolveWireGuardPeers(s.db, &peer)
 		return &peer, nil
 	} else if !errors.Is(err, gorm.ErrRecordNotFound) {
 		return nil, err
@@ -140,6 +143,7 @@ func (s *SubscriptionService) GetOrCreateWireGuardPeer(protocolID, userID uint, 
 		var existing model.WireGuardPeer
 		lookupErr := s.db.Where("node_protocol_id = ? AND user_id = ?", protocolID, userID).First(&existing).Error
 		if lookupErr == nil {
+			nodesecrets.ResolveWireGuardPeers(s.db, &existing)
 			return &existing, nil
 		}
 		if !errors.Is(lookupErr, gorm.ErrRecordNotFound) {

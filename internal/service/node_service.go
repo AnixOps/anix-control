@@ -384,10 +384,8 @@ func (s *NodeService) DeleteNode(id uint) error {
 
 // RegisterNode 节点自动注册
 func (s *NodeService) RegisterNode(req *model.NodeRegisterRequest, clientIP string) (*model.NodeRegisterResponse, error) {
-	// 1. 计算密钥哈希
-	keyHash := hashString(req.AuthKey)
-
-	// 2. 生成节点凭证
+	// 1. 生成节点凭证 (the registration key is looked up in the transaction
+	// below)
 	apiKey, err := generateSecureToken(32)
 	if err != nil {
 		return nil, errors.New("生成API密钥失败")
@@ -449,9 +447,10 @@ func (s *NodeService) RegisterNode(req *model.NodeRegisterRequest, clientIP stri
 	}
 
 	if err := s.db.Transaction(func(tx *gorm.DB) error {
-		// 在事务内用 SELECT FOR UPDATE 锁定授权密钥，防止并发注册
-		var authKey model.AuthorizedKey
-		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).Where("key_hash = ?", keyHash).First(&authKey).Error; err != nil {
+		// 在事务内用 SELECT FOR UPDATE 锁定授权密钥，防止并发注册. The key is
+		// found through the node credential split.
+		authKey, err := nodesecrets.LockRegistrationKey(tx, req.AuthKey)
+		if err != nil {
 			return errors.New("授权密钥无效")
 		}
 
@@ -472,7 +471,7 @@ func (s *NodeService) RegisterNode(req *model.NodeRegisterRequest, clientIP stri
 		}
 
 		// 计数器 +1，记录有多少节点用此密钥注册
-		if err := tx.Model(&authKey).Update("used", authKey.Used+1).Error; err != nil {
+		if err := tx.Model(authKey).Update("used", authKey.Used+1).Error; err != nil {
 			return errors.New("更新密钥使用计数失败")
 		}
 
@@ -627,14 +626,28 @@ func (s *NodeService) UpdateRuntimeHealth(nodeID uint, healthy bool, message str
 	return nil
 }
 
-// GetNodeByAPIKey 通过API Key获取节点
+// GetNodeByAPIKey 通过API Key获取节点 by its stored hash, for the gRPC node
+// listener and the Agent Control stream. The lookup goes through the node
+// credential split, which applies the table's phase and never matches a
+// tombstone or the placeholder.
 func (s *NodeService) GetNodeByAPIKey(apiKey string) (*model.Node, error) {
-	keyHash := hashString(apiKey)
-	var node model.Node
-	if err := s.db.Where("api_key_hash = ?", keyHash).First(&node).Error; err != nil {
-		return nil, err
-	}
-	return &node, nil
+	return nodesecrets.NodeByAPIKey(s.db, apiKey, false)
+}
+
+// NodeCredentials answers node's API key and shared secret, where the
+// kernel shows them to an administrator, read through the node credential
+// split.
+func (s *NodeService) NodeCredentials(node *model.Node) (apiKey, secret string) {
+	return nodesecrets.NodeAPIKey(s.db, node), nodesecrets.NodeSharedSecret(s.db, node)
+}
+
+// PrepareNodeRawConfig reads the secrets of node's raw configuration through
+// the node credential split, in place, before UniProxy builds the node's
+// configuration from it, and reports a secret that fails validation
+// (report-only, D7).
+func (s *NodeService) PrepareNodeRawConfig(node *model.Node) {
+	nodesecrets.ResolveNodeRawConfig(s.db, node)
+	ReportNodeSecretFindings(ValidateRawConfigSecrets(node))
 }
 
 // ========== 协议管理 ==========

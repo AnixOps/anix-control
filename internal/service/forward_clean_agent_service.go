@@ -197,13 +197,16 @@ func (s *ForwardCleanAgentService) Register(input ForwardCleanAgentRegisterInput
 		return nil, ErrForwardCleanAgentUnauthorized
 	}
 
-	var agent model.ForwardCleanAgent
-	if err := s.db.Where("token = ?", token).First(&agent).Error; err != nil {
+	// The token is looked up through the node credential split, which
+	// never matches a tombstone or the placeholder.
+	found, err := nodesecrets.CleanAgentByToken(s.db, token)
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrForwardCleanAgentUnauthorized
 		}
 		return nil, err
 	}
+	agent := *found
 	if isForwardCleanAgentRevoked(&agent) {
 		return nil, ErrForwardCleanAgentRevoked
 	}
@@ -384,17 +387,17 @@ func (s *ForwardCleanAgentService) authenticate(agentID uint, token string) (*mo
 		return nil, ErrForwardCleanAgentUnauthorized
 	}
 
-	var agent model.ForwardCleanAgent
-	if err := s.db.Where("id = ? AND token = ?", agentID, strings.TrimSpace(token)).First(&agent).Error; err != nil {
+	agent, err := nodesecrets.CleanAgentWithToken(s.db, agentID, strings.TrimSpace(token))
+	if err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return nil, ErrForwardCleanAgentUnauthorized
 		}
 		return nil, err
 	}
-	if isForwardCleanAgentRevoked(&agent) {
+	if isForwardCleanAgentRevoked(agent) {
 		return nil, ErrForwardCleanAgentRevoked
 	}
-	return &agent, nil
+	return agent, nil
 }
 
 func (s *ForwardCleanAgentService) updateForwardRuntimeStateTx(tx *gorm.DB, job *model.ForwardRuntimeJob, runtimeStatus int, message string, syncedAt *time.Time) error {

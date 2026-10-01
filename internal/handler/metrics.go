@@ -12,6 +12,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/branding"
 	compatv2 "github.com/AnixOps/anix-control/v4/internal/compat/v2"
 	"github.com/AnixOps/anix-control/v4/internal/database"
+	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -141,6 +142,9 @@ v2board_go_gc_duration_seconds ` + formatFloat(float64(m.PauseTotalNs)/1e9) + `
 	}
 	// Singleton-worker leadership of this process.
 	lease.WritePrometheus(&body)
+	// Node credential split: dual_read fallbacks and validate-on-build
+	// findings of this process.
+	nodesecrets.WritePrometheus(&body)
 
 	c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(body.String()))
 }

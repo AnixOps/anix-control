@@ -11,7 +11,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"github.com/gin-gonic/gin"
 )
 
@@ -97,11 +99,13 @@ func SignatureAuth() gin.HandlerFunc {
 		// 构建签名字符串: timestamp + method + path + body
 		signData := timestampStr + c.Request.Method + c.Request.URL.Path + string(bodyBytes)
 
-		// 计算期望签名
-		expectedSig := calculateHMAC(signData, node.Secret)
+		// 计算期望签名. The node's shared secret is read through the node
+		// credential split; a tombstone or the placeholder signs nothing.
+		secret := nodesecrets.NodeSharedSecret(database.GetDB(), node)
+		expectedSig := calculateHMAC(signData, secret)
 
 		// 验证签名 (使用常量时间比较防止时序攻击)
-		if !hmac.Equal([]byte(signature), []byte(expectedSig)) {
+		if (secret != "" && nodesecrets.Unusable(secret)) || !hmac.Equal([]byte(signature), []byte(expectedSig)) {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"message": "签名验证失败",
 				"code":    "INVALID_SIGNATURE",

@@ -13,6 +13,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/gin-gonic/gin"
 )
@@ -59,9 +60,9 @@ func NodeAuth() gin.HandlerFunc {
 			return
 		}
 
-		tokenHash := sha256Hash(apiKey)
-		valid := node.APIKeyHash == tokenHash || (node.APIKeyHash == "" && node.APIKey == apiKey)
-		if !valid {
+		// The key is checked through the node credential split, which
+		// applies the table's phase and never accepts a tombstone.
+		if !nodesecrets.NodeAPIKeyMatches(db, &node, apiKey) {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
 				"error": "invalid api key",
 			})
@@ -123,18 +124,16 @@ func nodeAPIKeyAuth(allowQuery bool) gin.HandlerFunc {
 			return
 		}
 
-		// 閫氳繃 API Key Hash 鏌ユ壘鑺傜偣锛屽吋瀹规棫鏁版嵁鍥炶惤鍒?api_key 鏄庢枃鍖归厤
-		keyHash := sha256Hash(apiKey)
-		var node model.Node
-		db := database.GetDB()
-		if err := db.Where("api_key_hash = ?", keyHash).First(&node).Error; err != nil {
-			if err := db.Where("api_key = ?", apiKey).First(&node).Error; err != nil {
-				c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-					"message": "API Key 鏃犳晥",
-				})
-				return
-			}
+		// The node is looked up by its key's hash, or, for an old row without
+		// a hash, by the key itself, through the node credential split.
+		found, err := nodesecrets.NodeByAPIKey(database.GetDB(), apiKey, true)
+		if err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"message": "API Key 鏃犳晥",
+			})
+			return
 		}
+		node := *found
 
 		// 妫€鏌ヨ妭鐐圭姸鎬?
 		if node.Status == model.NodeStatusDisabled {

@@ -257,14 +257,15 @@ func (h *NodeHandler) GetNodeCredentials(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"message": "节点不存在"})
 		return
 	}
+	apiKey, secret := h.nodeService.NodeCredentials(node)
 
 	panelSuccess(c, gin.H{
 		"node_id": node.ID,
 		"name":    node.Name,
 		"host":    node.Host,
 		"port":    node.Port,
-		"api_key": node.APIKey,
-		"secret":  node.Secret,
+		"api_key": apiKey,
+		"secret":  secret,
 	})
 }
 

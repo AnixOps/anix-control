@@ -506,7 +506,7 @@
   credentials and protocol secrets are now also kept in new protected
   tables, as the first step towards packages adopting the credential-free
   node tables. No existing table is altered, and nothing reads the new
-  tables yet.
+  tables until an operator moves a table to `dual_read` (phase P2, below).
   - New tables, created at start: `v4_kernel_node_credential` (node API
     keys and shared secrets, registration keys, forward node tokens with the
     `host:api_port` they are pinned to, clean agent tokens; one current
@@ -531,7 +531,8 @@
     batches by id, resumable), `verify` (compares SHA-256 digests over every
     secret of both forms in one snapshot; exits 3 on a difference and names
     the differing secrets by subject or JSON pointer, never by value) and
-    `status`. The phase stays `dual_write`; see `docs/UPGRADE.md`.
+    `status`. The phase stays `dual_write` until `phase` moves it; see
+    `docs/UPGRADE.md`.
   - `service.IsNodeSecretKey` is now `nodesecrets.IsSecretKey`, so the
     administrator's masks and the split place secrets by one rule; a test
     proves the stored positions restore every masked document.
@@ -617,6 +618,63 @@
     Disabling or deleting a node and replacing a forward node's token revoke
     its certificates; the listener refuses revoked serials through a cache
     of at most 30 s, and an open stream ends at its next heartbeat.
+- **Node credential split, phase P2: dual-read** (the KernelNodeOps
+  design, `docs/architecture/node-ops-service.md`, section 4.3; NO-3).
+  Every kernel reader of a moved column now reads through
+  `internal/nodesecrets`, in its table's phase. Nothing changes until an
+  operator moves a table, and the way back is one command.
+  - **The readers.**
+    - Node API key checks: `NodeAuth`, `NodeAPIKeyAuth`,
+      `NodeAPIKeyHeaderAuth`, the gRPC interceptor, the Agent Control
+      stream, and the agent WebSocket and HTTP routes.
+    - The `SignatureAuth` shared secret, registration keys, forward node
+      tokens (agent checks, the gost manager, NodeX payloads) and clean agent
+      tokens.
+    - Protocol secrets in `BuildNodeProtocolConfig` and the subscription
+      renderer, raw configurations in UniProxy, WireGuard peer keys, and
+      `GET /admin/nodes/:id/credentials`.
+  - **Phases.** In `dual_write` the readers read the legacy columns as
+    before and never the new tables. In `dual_read` they read the new
+    tables.
+    - A missing or differing row falls back to the legacy column. It counts
+      `anixops_node_secrets_fallback_total{table,kind,reason}` on `/metrics`
+      and logs once per subject, never a value.
+    - JSON columns are rewritten only where the legacy document holds the
+      placeholder, so answers stay byte for byte while both forms agree.
+    - Each process caches the phases for 5 seconds.
+  - **New command `anix-control node-secrets phase [-by <name>] <table|all>
+    dual_read|dual_write`.**
+    - `dual_read` needs the table's latest `verify` to have matched, with no
+      mismatch and within the last hour; `dual_write` (rollback) is always
+      allowed.
+    - `all` moves every table or none.
+    - Each change writes a `v2_operation_log` entry (module `node_secrets`)
+      in the same transaction.
+  - **Validate on build, report-only (decision D7).** Before a node's
+    configuration is built from a protocol or a raw configuration, its
+    secrets are checked: no placeholder or tombstone, a valid WireGuard
+    server key pair, a 32-byte Reality private key, a Shadowsocks 2022
+    server key of its cipher's length.
+    - A failing row counts `anixops_node_secrets_invalid_total{table,type,
+      reason}` and logs the node, protocol and field. It is still built.
+    - New command `anix-control node-secrets validate` scans every row and
+      exits 3 on a finding.
+  - **Tombstone guard.** No reader accepts a tombstone (`!moved:<id>`) or
+    the placeholder (`********`) as a node key, registration key, forward
+    node token or clean agent token, in any phase. That includes the
+    plain-key fallback for node rows without a hash, which would have
+    accepted a finalized row's tombstone. A request signed with a
+    placeholder secret is refused.
+  - **Tests on SQLite and PostgreSQL.**
+    - Every reader in each phase, through the real middleware, handlers and
+      services. With only the new tables holding the secrets, every reader
+      still works in `dual_read` and none in `dual_write`.
+    - Fallback when a row is missing or differs, with the metric and one log
+      line.
+    - The phase gate, rollback and audit; validation reporting without
+      excluding; the tombstone guard.
+    - An older binary's legacy-only reads still authenticate every node
+      after `dual_read`.
 
 - **The administrator dashboard and the user's subscription summary run
   natively, from the kernel's caches** (`docs/architecture/kernel-caches.md`).
