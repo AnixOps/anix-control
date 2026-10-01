@@ -684,7 +684,7 @@ onBeforeUnmount(() => {
 .icon-button, .btn { min-height: 36px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--surface-color); color: var(--text-color); cursor: pointer; }
 .icon-button { display: inline-grid; width: 36px; place-items: center; padding: 0; }
 .btn { padding: 8px 12px; }
-.btn-primary { border-color: var(--primary-color); background: var(--primary-color); color: #fff; }
+.btn-primary { border-color: var(--accent-fill); background: var(--accent-fill); color: var(--on-accent); }
 .icon-button:disabled, .btn:disabled { cursor: not-allowed; opacity: .55; }
 .spinning { animation: plugin-spin .8s linear infinite; }
 @keyframes plugin-spin { to { transform: rotate(360deg); } }

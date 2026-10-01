@@ -211,7 +211,7 @@ function emitLifecycle(action) {
 .detail-list dd { margin: 0; overflow-wrap: anywhere; }
 .drawer-actions { display: flex; flex-wrap: wrap; gap: 8px; }
 .btn { min-height: 36px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--surface-color); color: var(--text-color); cursor: pointer; padding: 8px 12px; }
-.btn-primary { border-color: var(--primary-color); background: var(--primary-color); color: #fff; }
+.btn-primary { border-color: var(--accent-fill); background: var(--accent-fill); color: var(--on-accent); }
 .btn-danger { border-color: var(--error-color); color: var(--error-color); }
 .btn:disabled { cursor: not-allowed; opacity: .55; }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }

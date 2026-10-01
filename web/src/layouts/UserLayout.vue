@@ -14,11 +14,8 @@
           ☰
         </button>
         <div class="brand-block">
-          <div class="brand-mark">AO</div>
-          <div>
-            <div class="brand-name">{{ t('layout.user.brand') }}</div>
-            <div class="brand-subtitle">{{ pageTitle }}</div>
-          </div>
+          <BrandLockup />
+          <div class="brand-subtitle">{{ pageTitle }}</div>
         </div>
       </div>
 
@@ -40,10 +37,7 @@
 
     <aside id="user-sidebar" class="mobile-sidebar" :class="{ open: sidebarOpen }" :aria-label="t('layout.user.brand')">
       <div class="mobile-sidebar-header">
-        <div class="brand-block">
-          <div class="brand-mark">AO</div>
-          <div class="brand-name">{{ t('layout.user.brand') }}</div>
-        </div>
+        <BrandLockup size="sm" />
         <button
           class="btn btn-ghost btn-sm"
           type="button"
@@ -81,6 +75,7 @@ import { useUserStore } from '@/stores/user'
 import { useAppI18n } from '@/composables/useAppI18n'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import ThemeToggle from '@/components/common/ThemeToggle.vue'
+import BrandLockup from '@/components/common/BrandLockup.vue'
 import { resolveRoutePageTitle } from '@/utils/pageMeta'
 import { filterByEdition, loadEdition } from '@/composables/useEdition'
 
@@ -121,7 +116,6 @@ onMounted(() => {
 
 .user-header,
 .user-header-main,
-.brand-block,
 .user-actions {
   display: flex;
   align-items: center;
@@ -132,9 +126,10 @@ onMounted(() => {
   justify-content: space-between;
   gap: 18px;
   padding: 14px 20px;
-  border-bottom: 1px solid rgba(220, 227, 240, 0.9);
-  background: rgba(247, 249, 252, 0.82);
-  backdrop-filter: blur(10px);
+  border-bottom: 1px solid var(--separator);
+  background: var(--material);
+  -webkit-backdrop-filter: saturate(180%) blur(20px);
+  backdrop-filter: saturate(180%) blur(20px);
   position: sticky;
   top: 0;
   z-index: 100;
@@ -149,33 +144,24 @@ onMounted(() => {
 }
 
 .brand-block {
-  gap: 12px;
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-0-5);
 }
 
-.brand-mark,
 .sidebar-link-icon {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 8px;
+  border-radius: var(--radius-xs);
 }
 
-.brand-mark {
-  width: 40px;
-  height: 40px;
-  background: var(--primary-soft);
-  color: var(--primary-color);
-  font-weight: 800;
-  font-size: 13px;
-}
-
-.brand-name {
-  font-size: 16px;
-  font-weight: 700;
-}
-
+/* Lines up with the lockup text: mark (26 px) plus a third of it. */
 .brand-subtitle {
-  font-size: 12px;
+  padding-left: calc(26px * 4 / 3);
+  font-size: var(--type-caption-size);
   color: var(--text-secondary);
 }
 
@@ -190,14 +176,14 @@ onMounted(() => {
 .sidebar-link {
   color: var(--text-secondary);
   text-decoration: none;
-  border-radius: 8px;
+  border-radius: var(--radius-sm);
   transition: all 0.2s ease;
 }
 
 .desktop-nav a {
   padding: 10px 12px;
-  font-size: 14px;
-  font-weight: 600;
+  font-size: var(--type-body-size);
+  font-weight: var(--weight-medium);
 }
 
 .desktop-nav a:hover,
@@ -216,9 +202,9 @@ onMounted(() => {
   align-items: center;
   min-height: 40px;
   padding: 0 12px;
-  background: rgba(255, 255, 255, 0.86);
+  background: var(--bg-elevated);
   border: 1px solid var(--border-color);
-  border-radius: 999px;
+  border-radius: var(--radius-pill);
   box-shadow: var(--shadow-sm);
 }
 
@@ -227,14 +213,14 @@ onMounted(() => {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 13px;
+  font-size: var(--type-callout-size);
   color: var(--text-secondary);
 }
 
 .sidebar-overlay {
   position: fixed;
   inset: 0;
-  background: rgba(15, 23, 42, 0.3);
+  background: var(--scrim);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease;
@@ -251,7 +237,7 @@ onMounted(() => {
   inset: 0 auto 0 0;
   width: 300px;
   max-width: 88vw;
-  background: #ffffff;
+  background: var(--bg-elevated);
   border-right: 1px solid var(--border-color);
   z-index: 200;
   transform: translateX(-100%);
@@ -303,7 +289,7 @@ onMounted(() => {
   height: 28px;
   background: var(--surface-muted);
   color: var(--primary-color);
-  font-size: 11px;
+  font-size: var(--type-caption-size);
   font-weight: 700;
 }
 
@@ -338,6 +324,14 @@ onMounted(() => {
 @media (max-width: 768px) {
   .user-header {
     padding: 12px 16px;
+  }
+
+  /* Phones: language and logout live in the navigation drawer, so the
+     header keeps only the menu, the brand and the theme switch. */
+  .brand-subtitle,
+  .user-actions > .locale-switcher,
+  .user-actions > .btn {
+    display: none;
   }
 
   .main-content {

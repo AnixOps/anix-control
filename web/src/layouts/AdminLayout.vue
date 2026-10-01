@@ -14,11 +14,8 @@
     >
       <div class="sidebar-top">
         <div class="brand-block">
-          <div class="brand-mark" aria-hidden="true"><PanelsTopLeft :size="20" /></div>
-          <div class="brand-copy">
-            <div class="brand-name">{{ t('layout.admin.brand') }}</div>
-            <div class="brand-meta">{{ t('layout.admin.badge') }}</div>
-          </div>
+          <BrandLockup />
+          <div class="brand-meta">{{ t('layout.admin.badge') }}</div>
         </div>
         <button
           class="btn-ghost close-button"
@@ -98,11 +95,12 @@
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watchEffect } from 'vue'
-import { LogOut, Menu, PanelsTopLeft, Users, X } from '@lucide/vue'
+import { LogOut, Menu, Users, X } from '@lucide/vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useAppI18n } from '@/composables/useAppI18n'
 import AdminNavigation from '@/components/admin/AdminNavigation.vue'
+import BrandLockup from '@/components/common/BrandLockup.vue'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import ThemeToggle from '@/components/common/ThemeToggle.vue'
 import { resolveRoutePageTitle } from '@/utils/pageMeta'
@@ -484,7 +482,7 @@ watchEffect(() => {
   position: fixed;
   inset: 0;
   z-index: 1000;
-  background: rgba(15, 23, 42, 0.42);
+  background: var(--scrim);
   opacity: 0;
   pointer-events: none;
   transition: opacity 0.2s ease;
@@ -512,6 +510,27 @@ watchEffect(() => {
   transition: width 0.2s ease, flex-basis 0.2s ease, padding 0.2s ease;
 }
 
+/* Frosted material (plan D3); opaque where backdrop-filter is unsupported
+   or the user asks for less transparency. */
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .sidebar {
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    backdrop-filter: saturate(180%) blur(20px);
+  }
+}
+
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .sidebar {
+    background: var(--bg-grouped);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .sidebar {
+    background: var(--bg-grouped);
+  }
+}
+
 .navigation-collapsed .sidebar {
   width: var(--sidebar-collapsed-width);
   flex-basis: var(--sidebar-collapsed-width);
@@ -519,7 +538,6 @@ watchEffect(() => {
 }
 
 .sidebar-top,
-.brand-block,
 .operator-card,
 .topbar,
 .topbar-primary,
@@ -534,11 +552,19 @@ watchEffect(() => {
 }
 
 .brand-block {
+  display: flex;
   min-width: 0;
-  gap: 10px;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: var(--space-0-5);
+  padding: var(--space-1) var(--space-1) 0;
 }
 
-.brand-mark,
+/* The badge lines up with the lockup text: mark (26 px) plus a third of it. */
+.brand-meta {
+  padding-left: calc(26px * 4 / 3);
+}
+
 .operator-avatar {
   display: inline-flex;
   align-items: center;
@@ -550,17 +576,10 @@ watchEffect(() => {
   color: var(--admin-sidebar-text-strong);
 }
 
-.brand-mark {
-  width: 38px;
-  height: 38px;
-}
-
-.brand-copy,
 .operator-copy {
   min-width: 0;
 }
 
-.brand-name,
 .operator-name {
   overflow: hidden;
   color: var(--admin-sidebar-text-strong);
@@ -569,15 +588,11 @@ watchEffect(() => {
   white-space: nowrap;
 }
 
-.brand-name {
-  font-size: 15px;
-}
-
 .brand-meta,
 .operator-email,
 .version-line {
   color: var(--admin-sidebar-muted);
-  font-size: 12px;
+  font-size: var(--type-caption-size);
 }
 
 .close-button {
@@ -666,7 +681,7 @@ watchEffect(() => {
 .topbar-title {
   overflow: hidden;
   color: var(--text-color);
-  font-size: 20px;
+  font-size: var(--type-title-3-size);
   font-weight: 700;
   line-height: 1.2;
   text-overflow: ellipsis;
@@ -677,7 +692,7 @@ watchEffect(() => {
   max-width: 760px;
   margin-top: 3px;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: var(--type-callout-size);
 }
 
 .topbar-actions {
@@ -687,7 +702,7 @@ watchEffect(() => {
 
 .current-time {
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: var(--type-callout-size);
   white-space: nowrap;
 }
 
@@ -696,19 +711,8 @@ watchEffect(() => {
   padding: 24px;
 }
 
-.sidebar :deep(.locale-switcher),
-.topbar :deep(.locale-switcher),
-.topbar :deep(.theme-toggle) {
-  border-radius: var(--radius-md);
-  background: var(--surface-muted);
-}
-
-.sidebar :deep(.locale-option),
-.topbar :deep(.locale-option) {
-  border-radius: var(--radius-sm);
-}
-
-.navigation-collapsed .brand-copy,
+.navigation-collapsed .brand-meta,
+.navigation-collapsed .brand-block :deep(.brand-lockup-name),
 .navigation-collapsed .operator-copy,
 .navigation-collapsed .version-line,
 .navigation-collapsed .sidebar-actions :deep(.locale-switcher),
@@ -755,7 +759,8 @@ watchEffect(() => {
     justify-content: center;
   }
 
-  .navigation-collapsed .brand-copy,
+  .navigation-collapsed .brand-meta,
+  .navigation-collapsed .brand-block :deep(.brand-lockup-name),
   .navigation-collapsed .operator-copy,
   .navigation-collapsed .version-line,
   .navigation-collapsed .logout-label {

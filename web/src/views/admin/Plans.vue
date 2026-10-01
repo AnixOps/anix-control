@@ -701,8 +701,8 @@ const formatPlanLimits = (plan) => {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--primary-color);
-  color: white;
+  background: var(--accent-fill);
+  color: var(--on-accent);
   border-radius: 999px;
   font-size: 12px;
   font-weight: 700;

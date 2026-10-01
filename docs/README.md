@@ -50,6 +50,7 @@ Use this tree like NodeX:
 - Exact startup flow: [`reference/startup-config.md`](reference/startup-config.md)
 - Config source-of-truth: [`reference/configuration.md`](reference/configuration.md)
 - Repository layout: [`reference/repository-layout.md`](reference/repository-layout.md)
+- Frontend design system (AnixOps Design tokens, brand assets, sync and lint): [`reference/frontend-design.md`](reference/frontend-design.md)
 - Control boundary and entry points: [`control-boundary.md`](control-boundary.md)
 
 ## Forwarding Runtime

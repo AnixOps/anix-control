@@ -1,0 +1,209 @@
+/*
+ * Base styles on AnixOps Design tokens (src/design/tokens.css).
+ * Loaded after the tokens and before the legacy layer in style.css.
+ * Theme: tokens.css follows prefers-color-scheme while html has no
+ * data-theme, and data-theme="light" | "dark" (useTheme.js) overrides it.
+ * Use tokens only; see docs/reference/frontend-design.md.
+ */
+
+/* Token gaps: AnixOps Design 1.0.2 has no scrim or focus-ring tokens yet.
+   Defined here once, so pages use a variable rather than a literal. */
+:root {
+  /* stylelint-disable-next-line function-disallowed-list -- token gap: a scrim behind dialogs and drawers, black in both themes */
+  --scrim: rgb(0 0 0 / 0.4);
+  --focus-ring: 2px solid var(--accent);
+  --focus-ring-offset: 2px;
+}
+
+/* prefers-contrast: more strengthens separators and secondary text
+   (guidelines/accessibility.md). :root:root outranks the dark-theme block. */
+@media (prefers-contrast: more) {
+  :root:root {
+    --separator: var(--separator-strong);
+    --label-3: var(--label-2);
+  }
+}
+
+/* Reset */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+* {
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  scroll-behavior: smooth;
+  scrollbar-color: var(--separator-strong) transparent;
+}
+
+body {
+  min-height: 100vh;
+  min-height: 100dvh;
+  background: var(--bg);
+  color: var(--label-1);
+  font-family: var(--font-sans);
+  font-size: var(--type-body-size);
+  font-weight: var(--type-body-weight);
+  line-height: var(--type-body-line);
+  letter-spacing: var(--type-body-tracking);
+  text-rendering: optimizeLegibility;
+}
+
+/* Chinese paragraphs read better at 1.6 (guidelines/typography.md). */
+:root:lang(zh) body {
+  line-height: 1.6;
+}
+
+img,
+picture,
+video,
+canvas {
+  max-width: 100%;
+}
+
+svg {
+  flex-shrink: 0;
+}
+
+input,
+button,
+textarea,
+select {
+  font: inherit;
+  color: inherit;
+}
+
+p,
+h1,
+h2,
+h3,
+h4,
+h5,
+h6 {
+  overflow-wrap: break-word;
+}
+
+h1,
+h2,
+h3,
+h4 {
+  text-wrap: balance;
+}
+
+/* :where() keeps this at zero specificity so classes such as .btn win. */
+:where(a) {
+  color: var(--accent);
+}
+
+::selection {
+  background: var(--accent-soft);
+}
+
+code,
+kbd,
+pre,
+samp {
+  font-family: var(--font-mono);
+}
+
+/* Focus: a 2 px accent ring with a 2 px offset on every interactive element
+   (guidelines/accessibility.md). Never remove it without a replacement. */
+:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+/* Numbers align in tables, traffic, money and dates. */
+.tabular-nums,
+.tnum {
+  font-variant-numeric: tabular-nums;
+}
+
+/* Type scale utilities: one class per token step. */
+.type-display,
+.type-title-1,
+.type-title-2,
+.type-title-3,
+.type-body,
+.type-callout,
+.type-caption {
+  font-size: var(--t-size);
+  font-weight: var(--t-weight);
+  line-height: var(--t-line);
+  letter-spacing: var(--t-tracking);
+}
+
+.type-display { --t-size: var(--type-display-size); --t-weight: var(--type-display-weight); --t-line: var(--type-display-line); --t-tracking: var(--type-display-tracking); }
+.type-title-1 { --t-size: var(--type-title-1-size); --t-weight: var(--type-title-1-weight); --t-line: var(--type-title-1-line); --t-tracking: var(--type-title-1-tracking); }
+.type-title-2 { --t-size: var(--type-title-2-size); --t-weight: var(--type-title-2-weight); --t-line: var(--type-title-2-line); --t-tracking: var(--type-title-2-tracking); }
+.type-title-3 { --t-size: var(--type-title-3-size); --t-weight: var(--type-title-3-weight); --t-line: var(--type-title-3-line); --t-tracking: var(--type-title-3-tracking); }
+.type-body { --t-size: var(--type-body-size); --t-weight: var(--type-body-weight); --t-line: var(--type-body-line); --t-tracking: var(--type-body-tracking); }
+.type-callout { --t-size: var(--type-callout-size); --t-weight: var(--type-callout-weight); --t-line: var(--type-callout-line); --t-tracking: var(--type-callout-tracking); }
+.type-caption { --t-size: var(--type-caption-size); --t-weight: var(--type-caption-weight); --t-line: var(--type-caption-line); --t-tracking: var(--type-caption-tracking); }
+
+.visually-hidden {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip: rect(0 0 0 0);
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Scrollbars follow the theme. Standard properties above; WebKit fallback
+   for Safari, which ignores scrollbar-color. */
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+::-webkit-scrollbar-thumb {
+  border: 2px solid transparent;
+  border-radius: var(--radius-pill);
+  background: var(--separator-strong) padding-box;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: var(--label-3) padding-box;
+}
+
+/* Phones: inputs at 16 px or more stop iOS Safari from zooming on focus. */
+@media (max-width: 833px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px;
+  }
+}
+
+/* Reduced motion: no translation or scale, only short opacity changes
+   (guidelines/motion.md). */
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 1ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 100ms !important;
+    transition-property: opacity, color, background-color, border-color !important;
+    scroll-behavior: auto !important;
+  }
+}

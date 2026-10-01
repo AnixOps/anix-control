@@ -89,8 +89,10 @@
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { getTrafficHourly, getUserTrafficRanking } from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { useChartTheme } from '@/composables/useChartTheme'
 
 const { t, formatDateTime } = useAppI18n()
+const { themeFor, onThemeChange } = useChartTheme()
 
 const hours = ref(168)
 const selectedUserId = ref(0)
@@ -208,7 +210,7 @@ async function renderChart(requestSeq = chartRequestSeq) {
   const echarts = await ensureECharts()
   if (!isActive || requestSeq !== chartRequestSeq || !chartEl.value || !chartEl.value.isConnected) return
   if (!chart) {
-    chart = echarts.init(chartEl.value)
+    chart = echarts.init(chartEl.value, themeFor(echarts))
   }
   const labels = points.value.map(p => formatHour(p.hour_ts))
   const values = points.value.map(p => p.traffic || 0)
@@ -234,7 +236,7 @@ async function renderChart(requestSeq = chartRequestSeq) {
         name: t('adminTrafficHourly.chart.seriesName'),
         type: 'line',
         smooth: true,
-        areaStyle: {},
+        areaStyle: { opacity: 0.12 },
         showSymbol: false,
         data: values
       }
@@ -309,6 +311,10 @@ async function refreshAll() {
 function handleResize() {
   if (chart) chart.resize()
 }
+
+onThemeChange(() => {
+  if (chart && echartsLib) chart.setTheme(themeFor(echartsLib))
+})
 
 onMounted(async () => {
   await refreshAll()

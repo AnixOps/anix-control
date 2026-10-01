@@ -2495,8 +2495,8 @@ onMounted(async () => {
 }
 
 .tag {
-  background: rgba(99, 102, 241, 0.2);
-  color: #a5b4fc;
+  background: var(--accent-soft);
+  color: var(--accent);
   padding: 2px 8px;
   border-radius: 12px;
   font-size: 11px;
@@ -2511,7 +2511,7 @@ onMounted(async () => {
   font-weight: 500;
 }
 
-.status-pending { background: rgba(99, 102, 241, 0.2); color: #a5b4fc; }
+.status-pending { background: var(--accent-soft); color: var(--accent); }
 .status-online { background: rgba(34, 197, 94, 0.2); color: var(--success-color); }
 .status-offline { background: rgba(239, 68, 68, 0.2); color: var(--error-color); }
 .status-disabled { background: rgba(161, 161, 170, 0.2); color: var(--text-secondary); }
@@ -2548,8 +2548,8 @@ onMounted(async () => {
   font-size: 14px;
 }
 
-.btn-primary { background: var(--primary-color); color: white; }
-.btn-primary:hover { background: var(--primary-hover); transform: translateY(-1px); }
+.btn-primary { background: var(--accent-fill); color: var(--on-accent); }
+.btn-primary:hover { background: var(--accent-fill-hover); transform: translateY(-1px); }
 .btn-secondary { background: var(--surface-color); color: var(--text-color); border: 1px solid var(--border-color); }
 .btn-secondary:hover { background: var(--surface-hover); border-color: var(--text-secondary); }
 .btn-info { background: #0ea5e9; color: white; }
@@ -2832,8 +2832,8 @@ onMounted(async () => {
 }
 
 .tab-btn.active {
-  color: white;
-  background: var(--primary-color);
+  color: var(--on-accent);
+  background: var(--accent-fill);
 }
 
 .badge {

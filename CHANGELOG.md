@@ -38,6 +38,38 @@
     filters, copies and revokes codes and says whether registration
     requires one; in commercial it links the Invite Rewards page, which is
     unchanged.
+- **The web UI adopts AnixOps Design v1.0.2** (UI redesign phase U1,
+  `docs/reference/frontend-design.md`). Colours, type, radii, shadows,
+  favicon and app icons change; no page structure changes yet.
+  - **Vendored design system.** `web/src/design/` holds `tokens.css`, the
+    mark, wordmarks, favicon and PWA icons, and self-hosted Inter (Latin
+    subset, `font-display: swap`), copied unmodified from
+    `AnixOps/AnixOps-design` at `v1.0.2`. `npm run design:sync -- --tag
+    <tag>` updates them; `npm run design:check` (Frontend Build CI job,
+    offline) compares them with the SHA-256 manifest. The mark and wordmark
+    are not MIT: all rights reserved, AnixOps products only
+    (`web/src/design/LICENSE-BRAND.md`).
+  - **Theme.** Light by default, follows `prefers-color-scheme` until the
+    user picks a theme, and `data-theme` overrides it; dark is pure black
+    with `#1C1C1E` cards. The accent moves from `#0064FA` to `#4F5BE8`
+    (dark `#818CF8`, filled buttons `#5B63E6`).
+  - **Legacy bridge.** Every pre-redesign variable (`--primary-color`,
+    `--surface-color`, `--text-*`, the admin sidebar set, ...) is now an
+    alias of a token, and the global `.btn`, `.card`, `.data-table`,
+    `.modal`, `.tabs` and form classes are restyled through tokens: pill
+    buttons, 10/14/20 px radii, hairline separators. The admin sidebar is
+    light frosted material (dark in dark mode).
+  - **Brand.** The admin sidebar, user header and login page show the
+    AnixOps mark lockup ("AnixOps" + "Control") instead of the text and
+    icon placeholders. The browser tab, home-screen icon and web app
+    manifest use the AnixOps icons; `theme-color` follows the theme.
+  - **Charts.** The hourly traffic and observability charts and the
+    topology graph take their colours from the chart tokens and re-theme
+    when the theme changes.
+  - **Lint (warnings for now).** `npm run lint:styles` (stylelint) flags
+    colour literals and font sizes or radii off the token scale;
+    `npm run lint` (ESLint) flags `alert`/`confirm`/`prompt`. They become
+    errors as the redesign migrates pages.
 
 ## 4.1.0-rc.3 - 2026-10-01
 

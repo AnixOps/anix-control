@@ -41,19 +41,19 @@ const label = computed(() =>
   align-items: center;
   gap: 6px;
   padding: 6px 12px;
-  border: 1px solid var(--border-color);
-  border-radius: 999px;
-  background: var(--surface-color);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--fill-1);
   color: var(--text-secondary);
   cursor: pointer;
-  font-size: 12px;
-  font-weight: 700;
-  box-shadow: var(--shadow-sm);
+  font-size: var(--type-caption-size);
+  font-weight: var(--weight-semibold);
+  box-shadow: none;
   transition: var(--transition);
 }
 
 .theme-toggle:hover {
-  background: var(--surface-hover);
+  background: var(--fill-2);
   color: var(--text-color);
 }
 
@@ -64,7 +64,7 @@ const label = computed(() =>
 }
 
 .theme-icon {
-  font-size: 14px;
+  font-size: var(--type-body-size);
   line-height: 1;
 }
 </style>

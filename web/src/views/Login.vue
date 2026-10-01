@@ -2,9 +2,11 @@
   <main id="app-main-content" tabindex="-1" class="login-page" aria-labelledby="login-page-title">
     <div class="login-shell">
       <section class="login-aside">
-        <div class="aside-pill">{{ t('layout.admin.badge') }}</div>
+        <div class="aside-top">
+          <BrandLockup tile inverse />
+          <div class="aside-pill">{{ t('layout.admin.badge') }}</div>
+        </div>
         <div class="aside-copy">
-          <div class="aside-kicker">{{ t('login.brandSubtitle') }}</div>
           <h1>{{ t('layout.user.brand') }}</h1>
           <p>{{ t('login.brandDescription') }}</p>
           <p class="aside-mode-copy">{{ isRegisterMode ? t('login.registerSubtitle') : t('login.signInSubtitle') }}</p>
@@ -26,6 +28,7 @@
       </section>
 
       <section class="login-panel card">
+        <BrandLockup class="panel-brand" tile />
         <div class="login-panel-header">
           <div>
             <h2 id="login-page-title">{{ isRegisterMode ? t('login.registerTitle') : t('login.signInTitle') }}</h2>
@@ -130,6 +133,7 @@ import { useAppI18n } from '@/composables/useAppI18n'
 import { login, register } from '@/api/auth'
 import { useEdition } from '@/composables/useEdition'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
+import BrandLockup from '@/components/common/BrandLockup.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
@@ -331,7 +335,7 @@ function mockLogin(role) {
   display: flex;
   align-items: center;
   justify-content: center;
-  padding: 24px;
+  padding: var(--space-6);
 }
 
 .login-shell {
@@ -339,178 +343,197 @@ function mockLogin(role) {
   max-width: 1120px;
   display: grid;
   grid-template-columns: minmax(320px, 1.05fr) minmax(360px, 0.95fr);
-  gap: 24px;
+  gap: var(--space-6);
 }
 
+/* Brand moment: the mark tile on slate with a soft glow of the brand
+   gradient; text stays on slate so it keeps AA contrast (brand.md §3.1). */
 .login-aside {
-  padding: 36px;
-  border-radius: 8px;
+  display: flex;
+  flex-direction: column;
+  padding: var(--space-10);
+  border-radius: var(--radius-lg);
   background:
-    linear-gradient(180deg, rgba(0, 100, 250, 0.94), rgba(8, 47, 135, 0.94)),
-    #0f172a;
-  color: #fff;
-  box-shadow: var(--shadow-lg);
+    radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--brand-gradient-end) 42%, transparent), transparent 62%),
+    radial-gradient(90% 70% at 0% 100%, color-mix(in srgb, var(--brand-gradient-start) 26%, transparent), transparent 60%),
+    var(--brand-slate-900);
+  color: var(--on-accent);
+  box-shadow: var(--shadow-2);
+}
+
+.aside-top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  flex-wrap: wrap;
 }
 
 .aside-copy {
-  margin-top: 24px;
+  margin-top: var(--space-12);
 }
 
 .aside-pill {
   display: inline-flex;
   align-items: center;
   min-height: 28px;
-  padding: 0 12px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.14);
-  font-size: 12px;
-  font-weight: 700;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-pill);
+  background: color-mix(in srgb, var(--on-accent) 14%, transparent);
+  font-size: var(--type-caption-size);
+  font-weight: var(--weight-semibold);
 }
 
 .login-aside h1 {
-  font-size: 36px;
-  line-height: 1.1;
-}
-
-.aside-kicker {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  padding: 0 10px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.1);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
+  font-size: var(--type-display-size);
+  line-height: var(--type-display-line);
+  font-weight: var(--type-display-weight);
+  letter-spacing: var(--type-display-tracking);
 }
 
 .login-aside p {
-  margin-top: 12px;
+  margin-top: var(--space-3);
   max-width: 440px;
-  color: rgba(255, 255, 255, 0.78);
+  color: color-mix(in srgb, var(--on-accent) 78%, transparent);
 }
 
 .aside-mode-copy {
-  color: rgba(255, 255, 255, 0.92);
-  font-weight: 600;
+  color: color-mix(in srgb, var(--on-accent) 92%, transparent);
+  font-weight: var(--weight-semibold);
 }
 
 .aside-stats {
-  margin-top: 36px;
+  margin-top: auto;
+  padding-top: var(--space-10);
   display: grid;
-  gap: 14px;
+  gap: var(--space-3);
 }
 
 .aside-stat {
-  padding: 16px 18px;
-  border-radius: 8px;
-  background: rgba(255, 255, 255, 0.1);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-md);
+  background: color-mix(in srgb, var(--on-accent) 8%, transparent);
+  border: 1px solid color-mix(in srgb, var(--on-accent) 10%, transparent);
 }
 
 .aside-stat-label {
   display: block;
-  font-size: 12px;
-  color: rgba(255, 255, 255, 0.66);
-  margin-bottom: 6px;
+  font-size: var(--type-caption-size);
+  color: color-mix(in srgb, var(--on-accent) 70%, transparent);
+  margin-bottom: var(--space-1);
 }
 
 .aside-stat strong {
-  font-size: 16px;
+  font-size: var(--type-body-size);
+  font-weight: var(--weight-semibold);
 }
 
 .login-panel {
-  padding: 28px;
+  padding: var(--space-8);
+  border-radius: var(--radius-lg);
+}
+
+.panel-brand {
+  display: none;
+  margin-bottom: var(--space-6);
 }
 
 .login-panel-header {
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 16px;
-  margin-bottom: 24px;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
 }
 
 .login-panel-header h2 {
-  font-size: 28px;
-  line-height: 1.15;
+  font-size: var(--type-title-2-size);
+  line-height: var(--type-title-2-line);
+  font-weight: var(--type-title-2-weight);
+  letter-spacing: var(--type-title-2-tracking);
 }
 
 .login-panel-header p {
-  margin-top: 8px;
-  color: var(--text-secondary);
+  margin-top: var(--space-2);
+  color: var(--label-2);
 }
 
 .login-form {
   display: flex;
   flex-direction: column;
-  gap: 16px;
+  gap: var(--space-4);
+}
+
+/* The global .form-row is a horizontal flex row; login fields stack their
+   label on top (plan D5). */
+.login-form .form-row {
+  display: block;
 }
 
 .form-row label {
   display: block;
-  margin-bottom: 8px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-secondary);
+  margin-bottom: var(--space-2);
+  font-size: var(--type-callout-size);
+  font-weight: var(--weight-semibold);
+  color: var(--label-2);
 }
 
 .banner {
-  padding: 12px 14px;
-  border-radius: 8px;
-  font-size: 14px;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: var(--type-callout-size);
 }
 
 .error-banner {
-  background: rgba(220, 38, 38, 0.08);
-  border: 1px solid rgba(220, 38, 38, 0.18);
-  color: var(--error-color);
+  background: var(--danger-soft);
+  border: 1px solid color-mix(in srgb, var(--danger) 24%, transparent);
+  color: var(--danger);
 }
 
 .success-banner {
-  background: rgba(22, 163, 74, 0.08);
-  border: 1px solid rgba(22, 163, 74, 0.18);
-  color: var(--success-color);
+  background: var(--success-soft);
+  border: 1px solid color-mix(in srgb, var(--success) 24%, transparent);
+  color: var(--success);
 }
 
 .submit-button {
   width: 100%;
-  min-height: 44px;
+  min-height: var(--size-control-lg);
 }
 
 .spinner {
   width: 14px;
   height: 14px;
-  border: 2px solid rgba(255, 255, 255, 0.35);
-  border-top-color: #fff;
+  border: 2px solid color-mix(in srgb, var(--on-accent) 35%, transparent);
+  border-top-color: var(--on-accent);
   border-radius: 50%;
   animation: rotate 1s linear infinite;
 }
 
 .login-footer {
-  margin-top: 18px;
+  margin-top: var(--space-5);
   display: flex;
   justify-content: space-between;
-  gap: 12px;
+  gap: var(--space-3);
 }
 
 .login-footer a {
-  color: var(--primary-color);
+  color: var(--accent);
   text-decoration: none;
-  font-weight: 600;
+  font-weight: var(--weight-medium);
 }
 
 .dev-actions {
-  margin-top: 22px;
+  margin-top: var(--space-6);
 }
 
 .dev-divider {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-  color: var(--text-secondary);
-  font-size: 13px;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
 }
 
 .dev-divider::before,
@@ -518,13 +541,13 @@ function mockLogin(role) {
   content: '';
   flex: 1;
   height: 1px;
-  background: var(--border-color);
+  background: var(--separator);
 }
 
 .dev-buttons {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  gap: var(--space-3);
 }
 
 @keyframes rotate {
@@ -535,21 +558,26 @@ function mockLogin(role) {
 
 @media (max-width: 920px) {
   .login-shell {
+    max-width: 480px;
     grid-template-columns: 1fr;
   }
 
   .login-aside {
     display: none;
   }
+
+  .panel-brand {
+    display: inline-flex;
+  }
 }
 
 @media (max-width: 520px) {
   .login-page {
-    padding: 16px;
+    padding: var(--space-4);
   }
 
   .login-panel {
-    padding: 22px;
+    padding: var(--space-6);
   }
 
   .login-panel-header,
