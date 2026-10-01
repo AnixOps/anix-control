@@ -7,7 +7,7 @@
   "targets": ["control"],
   "architectures": [],
   "artifact_sha256": "GENERATED_AT_BUILD",
-  "capabilities": ["kernel.storage.v1", "kernel.storage.adopt:v2_backup_config", "kernel.storage.adopt:v2_backup_record", "kernel.view:kapi_system_audit_log_v1"],
+  "capabilities": ["kernel.storage.v1", "kernel.storage.adopt:v2_backup_config", "kernel.storage.adopt:v2_backup_record", "kernel.view:kapi_system_audit_log_v1", "kernel.settings.backup.write.v1"],
   "dependencies": [],
   "conflicts": [],
   "permissions": ["platform.view", "platform.api"],

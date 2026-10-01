@@ -129,12 +129,13 @@ func backupConfigResponse(cfg *BackupConfig) map[string]any {
 // loadBackupConfig is the kernel's BackupService.GetConfig: the first row,
 // created with the defaults when there is none.
 //
-// The kernel's service also keeps the row it read or wrote in memory and
-// answers from that copy until the kernel restarts. The stored row holds the
-// same values, since only the kernel's handler writes the configuration and
-// it writes every change through; after a legacy update, only the copy's
-// timestamps can differ from the stored ones in precision and time zone
-// (PostgreSQL keeps microseconds).
+// The kernel's service also keeps the row it read or wrote in memory, and
+// reloads it when the backup settings change (a legacy update or a
+// KernelSettings write). The stored row holds the same values; after a
+// legacy update, only the copy's timestamps can differ from the stored ones
+// in precision and time zone (PostgreSQL keeps microseconds). The package
+// only creates the defaults, as the kernel does on a first read; it changes
+// the row through KernelSettings.
 func loadBackupConfig(db *gorm.DB) (*BackupConfig, error) {
 	var cfg BackupConfig
 	err := db.First(&cfg).Error

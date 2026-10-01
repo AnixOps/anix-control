@@ -1214,7 +1214,7 @@
       "path": "/api/v2/admin/system/backup/config",
       "package_id": "platform",
       "route_id": "platform.admin.system.backup.config.put",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
