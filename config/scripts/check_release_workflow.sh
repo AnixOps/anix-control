@@ -14,7 +14,8 @@ Usage: config/scripts/check_release_workflow.sh [--self-test|--help]
 Statically checks the release workflow essentials: a version tag (with an
 optional alpha, beta or rc suffix) that must match the tree's declared version,
 tests gating the release, every official package signed with the protected
-official root, multi-platform binaries, a signed multi-architecture GHCR image
+official root and shipped in one signed packages archive (plus the identity
+bootstrap package the installer and image use), multi-platform binaries, a signed multi-architecture GHCR image
 with SBOM and provenance, a source SBOM, checksums, and a GitHub Release whose
 body is the tag's CHANGELOG section. See docs/RELEASING.md.
 EOF
@@ -276,6 +277,8 @@ check_release_workflow() {
   require_job_text plugin-package-publish "runtime_args+=(--runtime-binary" "explicit GOST runtime mappings" || failed=1
   require_job_text plugin-package-publish "--platform linux/amd64" "amd64 package platform" || failed=1
   require_job_text plugin-package-publish "--platform linux/arm64" "arm64 package platform" || failed=1
+  require_job_text plugin-package-publish "--release-archive release-assets" "signed packages archive" || failed=1
+  require_job_text plugin-package-publish "path: release-assets/" "signed package artifact holds the release assets only" || failed=1
   require_job_text plugin-package-publish "name: signed-plugin-releases" "signed package artifact" || failed=1
 
   # Binaries.
@@ -312,8 +315,13 @@ check_release_workflow() {
   require_job_text release "config/scripts/generate_release_manifest.py" "release manifest" || failed=1
   require_job_text release "sha256sum * > SHA256SUMS.txt" "release checksums" || failed=1
   require_job_text release "config/scripts/verify_release_artifacts.py" "release artifact verification" || failed=1
+  require_job_text release "--verify-release-archive" "packages archive signature and contents verification" || failed=1
   for asset in \
+    '"anix-control-packages-${version}.tar.gz"' \
+    '"anix-control-packages-${version}.tar.gz.sig"' \
     '"identity-platform-${version}.anxp"' \
+    '"identity-platform-${version}.manifest.json"' \
+    '"identity-platform-${version}.manifest.sig"' \
     anix-control-frontend.tar.gz \
     anix-control-linux-amd64.tar.gz \
     anix-control-linux-arm64.tar.gz \
@@ -325,6 +333,11 @@ check_release_workflow() {
   require_job_text release "body_path: release/RELEASE_NOTES.md" "release body from the CHANGELOG" || failed=1
   require_job_text release "prerelease: \${{ contains(github.ref_name, '-') }}" "suffixed tags are prereleases" || failed=1
   require_job_text release "files: release/*" "release asset upload glob" || failed=1
+
+  # One frontend format and one packages archive: no per-package assets.
+  reject_job_text release "--require anix-control-frontend.zip" "required frontend zip asset" || failed=1
+  reject_job_text release "zip -r release/" "frontend zip release asset" || failed=1
+  reject_job_text release '--require "${stem}' "per-package release assets" || failed=1
 
   # Legacy names stay retired.
   reject_text "v2board-frontend.tar.gz" "legacy frontend release alias" || failed=1
@@ -355,7 +368,9 @@ run_self_test() {
     "s/check_release_version.py --tag/check_release_version.py --self-test/" \
     "s/body_path: release\/RELEASE_NOTES.md/generate_release_notes: true/" \
     "s/anix-control-linux-amd64.tar.gz/anix-control-linux.tar.gz/g" \
-    "s/go-race, backend-test/backend-test/"; do
+    "s/go-race, backend-test/backend-test/" \
+    "s/--verify-release-archive/--skip-release-archive/" \
+    "s#tar -czvf release/anix-control-frontend.tar.gz -C web/public .#&\n          zip -r release/anix-control-frontend.zip web/public#"; do
     sed "${mutation}" "${original}" > "${tmpdir}/ci.yml"
     if cmp -s "${original}" "${tmpdir}/ci.yml"; then
       echo "self-test failed: mutation matched nothing: ${mutation}" >&2

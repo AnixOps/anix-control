@@ -156,6 +156,17 @@ signature, choose the matching `.anxp` artifact, and submit each release. The
 UI verifies the signed manifest and artifact digest before it becomes
 installable; do not mix assets from different tags or evidence bundles.
 
+From `v4.1.0-rc.3` on, the package files are not separate release assets: they
+are in the signed `anix-control-packages-<version>.tar.gz`. Check its `.sig`
+against the pinned official root and extract the `.anxp`, `.manifest.json` and
+`.manifest.sig` you import with the commands in
+[`../UPGRADE.md`](../UPGRADE.md#getting-a-package-from-the-release), for example:
+
+```bash
+tar -xzf "anix-control-packages-${VERSION#v}.tar.gz" --strip-components=1 \
+  --wildcards "*/machine-telemetry-${VERSION#v}.*"
+```
+
 After importing a release:
 
 1. Open **Control > Plugins**, install every Control-target package while

@@ -73,28 +73,71 @@ download:
 
 - the matching `anix-control-<os>-<arch>.tar.gz` backend artifact (or the
   matching Windows `.exe.zip`)
-- `anix-control-frontend.tar.gz` or `anix-control-frontend.zip`
+- `anix-control-frontend.tar.gz` (releases up to `v4.1.0-rc.2` also attached
+  `anix-control-frontend.zip` with the same files)
 - `SHA256SUMS.txt`
 - `RELEASE_MANIFEST.json`
 - `RELEASE_NOTES.md`
 
-Every official package is attached at the release version. For each package
-ID, keep these files from the same release together:
-
-- `<plugin-id>-<version>.anxp`
-- `<plugin-id>-<version>.manifest.json`
-- `<plugin-id>-<version>.manifest.sig`
-- `<plugin-id>-<version>.public-key.pem`
-- `<plugin-id>-<version>.sbom.spdx.json`
+Every official package is built at the release version and shipped inside one
+signed archive, `anix-control-packages-<version>.tar.gz`, with its detached
+signature `anix-control-packages-<version>.tar.gz.sig`. The archive holds, for
+each package ID, `<plugin-id>-<version>.anxp`, `.manifest.json`,
+`.manifest.sig` and `.sbom.spdx.json`, plus one `official-public-key.pem`
+(the official root in PEM form). `RELEASE_MANIFEST.json` lists each package
+under `packages` with its version and the SHA-256 of its `.anxp` and manifest.
+The identity bootstrap package (`identity-platform-<version>.anxp`,
+`.manifest.json`, `.manifest.sig`) is also attached on its own, because the
+release installer and the image use it. Releases up to `v4.1.0-rc.2` attached
+every package file, and a `<plugin-id>-<version>.public-key.pem` per package,
+as separate assets.
 
 Do not import a mixed-version package set. The `v4.0.0` release also attaches
 `v4-release-evidence.tar.gz`; the v4 plugin-only upgrade guide covers it.
 
-Verify checksums before replacing any production file:
+Verify checksums before replacing any production file (`--ignore-missing`
+skips the assets you did not download):
 
 ```bash
-sha256sum -c SHA256SUMS.txt
+sha256sum --ignore-missing -c SHA256SUMS.txt
 ```
+
+### Getting A Package From The Release
+
+Download the archive, its signature, `official-public-key.raw` and
+`SHA256SUMS.txt` from the same release. Compare `official-public-key.raw` with
+the root pinned in your environment (`plugins.official_public_key`) first, then
+check the archive signature against that root and extract the packages you
+need:
+
+```bash
+VERSION=4.1.0-rc.3   # the release version, without the leading v
+ARCHIVE="anix-control-packages-${VERSION}.tar.gz"
+sha256sum --ignore-missing -c SHA256SUMS.txt
+# The raw Base64 root as a PEM public key: Ed25519 SPKI prefix + the 32 key bytes.
+{ printf '\x30\x2a\x30\x05\x06\x03\x2b\x65\x70\x03\x21\x00'; base64 -d official-public-key.raw; } \
+  | openssl pkey -pubin -inform DER -out official-root.pem
+base64 -d "${ARCHIVE}.sig" > packages.sig.bin
+openssl pkeyutl -verify -pubin -inkey official-root.pem -rawin -in "${ARCHIVE}" -sigfile packages.sig.bin
+# "Signature Verified Successfully". Extract one package (or drop the
+# wildcard to extract all of them into anix-control-packages-<version>/):
+tar -xzf "${ARCHIVE}" --strip-components=1 --wildcards "*/machine-telemetry-${VERSION}.*"
+```
+
+Each extracted manifest can still be checked on its own, exactly as before:
+
+```bash
+PKG="machine-telemetry-${VERSION}"
+base64 -d "${PKG}.manifest.sig" > manifest.sig.bin
+openssl pkeyutl -verify -pubin -inkey official-root.pem -rawin -in "${PKG}.manifest.json" -sigfile manifest.sig.bin
+grep -o '"artifact_sha256":"[0-9a-f]*"' "${PKG}.manifest.json"
+sha256sum "${PKG}.anxp"   # must equal artifact_sha256
+```
+
+`openssl pkeyutl -rawin` loads the whole archive into memory (a few hundred
+MB). A Control source checkout can run the same checks, including every
+package in the archive, with
+`python3 packages/shared/build_package.py --all --version "${VERSION}" --verify-release-archive "${ARCHIVE}" --official-public-key official-public-key.raw`.
 
 Open `RELEASE_MANIFEST.json` and confirm:
 
@@ -245,7 +288,9 @@ a route's package is installed and healthy, that route returns
 directly, so proxy clients and nodes are not affected by this window.
 
 1. Verify the release evidence bundle and download the sixteen `v4.0.0`
-   packages: `.anxp`, `.manifest.json` and `.manifest.sig` for each.
+   packages: `.anxp`, `.manifest.json` and `.manifest.sig` for each. From
+   `v4.1.0-rc.3` on, take them from the signed packages archive instead
+   ([Getting A Package From The Release](#getting-a-package-from-the-release)).
 2. Containers: the release image already contains the identity package and
    enables package execution by default, so start `docker-compose.prod.yml`
    (see [Docker Compose Upgrade](#docker-compose-upgrade)) and continue with
@@ -1242,6 +1287,17 @@ curl -s -H 'X-Forwarded-Host: evil.example' -H 'X-Forwarded-Proto: https' \
 
 **Rollback:** the setting is read by older releases too (for the client IP
 only), so it can stay when you go back.
+
+### Fewer Release Assets
+
+The release page has about 18 assets instead of 104. The packages are in one
+signed archive, `anix-control-packages-<version>.tar.gz` (signature:
+`.tar.gz.sig`); take a package from it as in
+[Getting A Package From The Release](#getting-a-package-from-the-release).
+The per-package `.public-key.pem` files and `anix-control-frontend.zip` are
+gone: use `official-public-key.raw` (or the archive's `official-public-key.pem`)
+and `anix-control-frontend.tar.gz`. `scripts/install.sh`, the image and the
+identity bootstrap package (still a separate asset) are unaffected.
 
 ### Finalizing The Node Credential Split (Phase P3)
 

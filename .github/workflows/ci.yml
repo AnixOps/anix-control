@@ -1296,13 +1296,28 @@ jobs:
             --out release-packages \
             --verify-release \
             --official-public-key "${root_file}"
-          cp "${root_file}" release-packages/official-public-key.raw
+          # The release ships the package set as one signed archive; the key
+          # signs the archive bytes the same way it signs each manifest.
+          python3 packages/shared/build_package.py \
+            --all \
+            --version "${GITHUB_REF_NAME#v}" \
+            --out release-packages \
+            --release-archive release-assets \
+            --signing-key "${key_file}" \
+            --official-public-key "${root_file}"
+          cp "${root_file}" release-assets/official-public-key.raw
+          # scripts/install.sh (frozen) and the docker job read the identity
+          # bootstrap package by name, so it also stays a separate asset.
+          for suffix in anxp manifest.json manifest.sig; do
+            install -m 0644 "release-packages/identity-platform-${GITHUB_REF_NAME#v}.${suffix}" release-assets/
+          done
+          ls -l release-assets
 
       - name: Upload signed packages
         uses: actions/upload-artifact@v7
         with:
           name: signed-plugin-releases
-          path: release-packages/
+          path: release-assets/
 
   forward-runtime-test:
     name: Forward Runtime Regression
@@ -1915,7 +1930,6 @@ jobs:
       - name: Create release archives
         run: |
           tar -czvf release/anix-control-frontend.tar.gz -C web/public .
-          zip -r release/anix-control-frontend.zip web/public
 
       # The GitHub Release body is the tag's CHANGELOG section.
       - name: Generate release notes file
@@ -1956,25 +1970,21 @@ jobs:
         run: |
           set -Eeuo pipefail
           version="${GITHUB_REF_NAME#v}"
-          package_requirements=()
-          mapfile -t packages < <(find release -maxdepth 1 -name '*.anxp' -printf '%f\n' | sort)
-          (( ${#packages[@]} > 0 )) || { echo "no signed packages in the release" >&2; exit 1; }
-          for package in "${packages[@]}"; do
-            stem="${package%.anxp}"
-            package_requirements+=(
-              --require "${package}"
-              --require "${stem}.manifest.json"
-              --require "${stem}.manifest.sig"
-              --require "${stem}.public-key.pem"
-              --require "${stem}.sbom.spdx.json"
-            )
-          done
+          # Every package, its manifest, signature and SBOM is inside the
+          # signed packages archive; verify it against the shipped root.
+          python3 packages/shared/build_package.py \
+            --all \
+            --version "${version}" \
+            --verify-release-archive "release/anix-control-packages-${version}.tar.gz" \
+            --official-public-key release/official-public-key.raw
           # scripts/install.sh downloads the binaries, the frontend, the
           # checksums and the identity bootstrap package by these names.
           python3 config/scripts/verify_release_artifacts.py \
             --release-dir release \
             --manifest release/RELEASE_MANIFEST.json \
             --checksums release/SHA256SUMS.txt \
+            --require "anix-control-packages-${version}.tar.gz" \
+            --require "anix-control-packages-${version}.tar.gz.sig" \
             --require "identity-platform-${version}.anxp" \
             --require "identity-platform-${version}.manifest.json" \
             --require "identity-platform-${version}.manifest.sig" \
@@ -1985,14 +1995,17 @@ jobs:
             --require docker-image.txt \
             --require anix-control-source.sbom.spdx.json \
             --require anix-control-frontend.tar.gz \
-            --require anix-control-frontend.zip \
             --require anix-control-linux-amd64.tar.gz \
             --require anix-control-linux-arm64.tar.gz \
             --require anix-control-windows-amd64.exe.zip \
             --require anix-control-windows-arm64.exe.zip \
             --require anix-control-darwin-amd64.tar.gz \
-            --require anix-control-darwin-arm64.tar.gz \
-            "${package_requirements[@]}"
+            --require anix-control-darwin-arm64.tar.gz
+          # Nothing else is published: one archive replaces the per-package assets.
+          unexpected="$(find release -maxdepth 1 -type f \( -name '*.anxp' -o -name '*.public-key.pem' -o -name '*.sbom.spdx.json' -o -name 'anix-control-frontend.zip' \) \
+            ! -name "identity-platform-${version}.anxp" ! -name anix-control-source.sbom.spdx.json)"
+          [[ -z "${unexpected}" ]] || { echo "unexpected release assets:" >&2; echo "${unexpected}" >&2; exit 1; }
+          echo "release assets: $(find release -maxdepth 1 -type f | wc -l)"
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v3
