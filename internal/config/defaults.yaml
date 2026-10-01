@@ -11,7 +11,10 @@ server:
   write_timeout: 30
   # Keep serving for this long after /readyz starts failing on shutdown.
   shutdown_drain_delay: "5s"
-  trusted_proxies: ["127.0.0.1", "10.0.0.0/8", "172.16.0.0/12", "192.168.0.0/16"]
+  # Reverse proxies whose X-Forwarded-For/Proto/Host are honoured. Loopback
+  # only: a proxy in another container, host or pod must be added
+  # (docs/DEPLOYMENT.md, "Reverse proxies"); an empty list trusts none.
+  trusted_proxies: ["127.0.0.1/32", "::1/128"]
   cors:
     allowed_origins: []
     allowed_methods: ["GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"]

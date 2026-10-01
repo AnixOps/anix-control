@@ -40,6 +40,11 @@ Rules:
 - Unknown `ANIX_CONTROL_*` names are logged at startup, so typos are visible.
 - `anix-control -print-env` prints every variable with its type and built-in
   default; secret defaults are never printed.
+- `server.trusted_proxies` (IPs or CIDRs) are the reverse proxies whose
+  `X-Forwarded-Proto`, `X-Forwarded-Host`, `X-Forwarded-For` and
+  `X-Real-IP` Control honours (`internal/requestorigin`); from any other peer
+  they are ignored. Unset means `127.0.0.1/32,::1/128`; an empty list trusts
+  none; a list replaces the default. See `docs/DEPLOYMENT.md` section 6.1.
 
 Without a config file, Control starts from the built-in defaults: `env:
 production`, API on `0.0.0.0:8080`, UI on `3000`, PostgreSQL

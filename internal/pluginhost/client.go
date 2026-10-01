@@ -113,10 +113,10 @@ func (c *hostClient) OpenWebSocket(ctx context.Context, input WebSocketInput) (w
 	return &webSocketClientStream{stream: stream}, nil
 }
 
-// requestScheme is the original request's scheme as the kernel received it:
-// "https" when the connection was TLS, else "http". Forwarding headers are
-// not consulted; a host that honours X-Forwarded-Proto as a legacy handler
-// does reads it from the forwarded request headers.
+// requestScheme is the original request's scheme as the kernel resolved it
+// (internal/requestorigin): "https" when the connection was TLS or a trusted
+// reverse proxy reported https, else "http". Package hosts must use it and
+// never read forwarding headers, which the kernel does not pass on.
 func requestScheme(metadata RequestMetadata) string {
 	if metadata.TLS {
 		return "https"

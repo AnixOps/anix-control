@@ -73,8 +73,10 @@ func seedBrokenBot(t testing.TB, db *gorm.DB) {
 
 // The webhook's default URL is the administrator's request's scheme and
 // host: the legacy handler reads them from the request, the native one from
-// the request scheme and host the kernel sends, and both honour
-// X-Forwarded-Proto. Each side's Bot API calls are part of its state.
+// the request scheme and host the kernel sends. Neither honours a client's
+// X-Forwarded-Proto (the harness's peer, 192.0.2.1, is no trusted proxy; the
+// kernel resolves a trusted proxy's headers before the package, see
+// internal/requestorigin). Each side's Bot API calls are part of its state.
 func TestAdminSetWebhookParity(t *testing.T) {
 	api := withBotAPI(t)
 	r := route("POST", "/api/v2/admin/telegram/webhook", native.SetWebhookRouteID, telegram((*handler.TelegramHandler).SetWebhook))
@@ -89,9 +91,9 @@ func TestAdminSetWebhookParity(t *testing.T) {
 		{Name: "null", Path: path, Principal: admin, Seed: seedBot("[1]"), Body: []byte(`null`)},
 		{Name: "a TLS request with a port", Path: path, Principal: admin, Seed: seedBot("[1]"), Host: "panel.example.test:8443", TLS: true},
 		{Name: "an IPv6 host", Path: path, Principal: admin, Seed: seedBot("[1]"), Host: "[2001:db8::7]:8080"},
-		{Name: "X-Forwarded-Proto", Path: path, Principal: admin, Seed: seedBot("[1]"), Host: "panel.example.test",
+		{Name: "X-Forwarded-Proto from an untrusted peer is ignored", Path: path, Principal: admin, Seed: seedBot("[1]"), Host: "panel.example.test",
 			RequestHeaders: map[string]string{"X-Forwarded-Proto": "https"}},
-		{Name: "X-Forwarded-Proto over TLS", Path: path, Principal: admin, Seed: seedBot("[1]"), TLS: true,
+		{Name: "an untrusted X-Forwarded-Proto over TLS is ignored", Path: path, Principal: admin, Seed: seedBot("[1]"), TLS: true,
 			RequestHeaders: map[string]string{"X-Forwarded-Proto": " http "}},
 		{Name: "a blank X-Forwarded-Proto", Path: path, Principal: admin, Seed: seedBot("[1]"), TLS: true,
 			RequestHeaders: map[string]string{"X-Forwarded-Proto": "   "}},

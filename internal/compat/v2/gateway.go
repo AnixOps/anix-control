@@ -12,6 +12,7 @@ import (
 
 	"github.com/AnixOps/anix-control/v4/internal/agentws"
 	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
+	"github.com/AnixOps/anix-control/v4/internal/requestorigin"
 	"github.com/AnixOps/anix-control/v4/internal/sealedsecrets"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
@@ -254,11 +255,17 @@ func requestPrincipalFor(actorID uint, admin bool, packageID string) ([]byte, er
 }
 
 func requestMetadata(c *gin.Context) pluginhost.RequestMetadata {
-	metadata := pluginhost.RequestMetadata{Path: c.Request.URL.Path, TLS: c.Request.TLS != nil}
-	if validPackageRequestHost(c.Request.Host) {
-		metadata.Host = c.Request.Host
+	// The original request's scheme, host and client address: forwarding
+	// headers count only from a trusted reverse proxy
+	// (server.trusted_proxies). The package host receives them as
+	// request_scheme and request_host, and the forwarding headers
+	// themselves are not passed on (packageRequestHeaders).
+	origin := requestorigin.Resolve(c.Request)
+	metadata := pluginhost.RequestMetadata{Path: c.Request.URL.Path, TLS: origin.Scheme == "https"}
+	if validPackageRequestHost(origin.Host) {
+		metadata.Host = origin.Host
 	}
-	if clientIP := net.ParseIP(strings.TrimSpace(c.ClientIP())); clientIP != nil {
+	if clientIP := net.ParseIP(origin.ClientIP); clientIP != nil {
 		metadata.ClientIP = clientIP.String()
 	}
 	if userAgent := c.Request.UserAgent(); validPackageUserAgent(userAgent) {
@@ -335,7 +342,7 @@ func packageRequestHeaders(source http.Header) map[string][]string {
 
 func forwardPackageRequestHeader(name string) bool {
 	name = strings.ToLower(strings.TrimSpace(name))
-	if name == "" {
+	if name == "" || requestorigin.IsForwardingHeader(name) {
 		return false
 	}
 	switch name {

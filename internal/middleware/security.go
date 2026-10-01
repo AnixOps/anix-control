@@ -3,6 +3,7 @@ package middleware
 import (
 	"strings"
 
+	"github.com/AnixOps/anix-control/v4/internal/requestorigin"
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 )
@@ -58,10 +59,9 @@ func isCacheablePath(path string) bool {
 	return false
 }
 
+// isSecureRequest is true over TLS, or when a trusted reverse proxy
+// (server.trusted_proxies) reports https; a client's own X-Forwarded-Proto
+// is ignored.
 func isSecureRequest(c *gin.Context) bool {
-	if c.Request.TLS != nil {
-		return true
-	}
-
-	return strings.EqualFold(strings.TrimSpace(c.GetHeader("X-Forwarded-Proto")), "https")
+	return requestorigin.Resolve(c.Request).Scheme == "https"
 }

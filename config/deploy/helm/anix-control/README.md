@@ -32,6 +32,12 @@ What the chart does:
 - Services: `http` (8080) and `web` (3000; the UI server also proxies `/api`),
   plus an optional `grpc` Service for nodes (`grpc.enabled`). Optional Ingress
   and Prometheus Operator `ServiceMonitor`.
+- Reverse proxy trust: `config.ANIX_CONTROL_SERVER_TRUSTED_PROXIES` lists the
+  peers whose `X-Forwarded-*` headers Control honours (links in install
+  scripts and subscriptions, the client IP). The default keeps loopback (the
+  UI server's `/api` proxy) and the private ranges; narrow the private ranges
+  to the ingress controller's pod CIDR, and do not expose the Service
+  directly while they are trusted (`docs/DEPLOYMENT.md` section 6.1).
 - `ansible.existingSecret` mounts `inventory.ini` and SSH material for the
   local-ansible forward runtime.
 

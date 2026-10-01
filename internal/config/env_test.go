@@ -168,3 +168,26 @@ func TestLoadValidatesDrainDelayAndLogFormat(t *testing.T) {
 	require.NoError(t, err)
 	assert.Zero(t, zero)
 }
+
+// server.trusted_proxies: the built-in default is loopback only, an empty
+// variable trusts no proxy, an omitted key in a config file is the loopback
+// default (nil), and an invalid entry stops the load.
+func TestTrustedProxiesDefaultsAndValidation(t *testing.T) {
+	loaded, err := load("", nil)
+	require.NoError(t, err)
+	assert.Equal(t, []string{"127.0.0.1/32", "::1/128"}, loaded.Server.TrustedProxies)
+
+	loaded, err = load("", []string{"ANIX_CONTROL_SERVER_TRUSTED_PROXIES="})
+	require.NoError(t, err)
+	assert.NotNil(t, loaded.Server.TrustedProxies)
+	assert.Empty(t, loaded.Server.TrustedProxies)
+
+	path := filepath.Join(t.TempDir(), "config.yaml")
+	require.NoError(t, os.WriteFile(path, []byte("server:\n  port: 8080\n"), 0o600))
+	loaded, err = load(path, nil)
+	require.NoError(t, err)
+	assert.Nil(t, loaded.Server.TrustedProxies)
+
+	_, err = load("", []string{"ANIX_CONTROL_SERVER_TRUSTED_PROXIES=127.0.0.1,proxy.example"})
+	require.ErrorContains(t, err, "server.trusted_proxies")
+}

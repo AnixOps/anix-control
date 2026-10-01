@@ -12,9 +12,11 @@ server:
   mode: "release"
   read_timeout: 30
   write_timeout: 30
-  # Leave empty to disable trusting forwarded client IP headers.
-  # Populate this only with the reverse proxies/load balancers that sit in front of AnixOps Control.
-  trusted_proxies: []
+  # Reverse proxies (IPs or CIDRs) whose X-Forwarded-For, X-Forwarded-Proto
+  # and X-Forwarded-Host are honoured; from any other peer they are ignored.
+  # Loopback covers a reverse proxy on this host; add a proxy on another host
+  # by its address. [] trusts none. See docs/DEPLOYMENT.md "Reverse proxies".
+  trusted_proxies: ["127.0.0.1/32", "::1/128"]
   # HTTP CORS and WebSocket Origin allowlist. Empty HTTP CORS echoes any Origin;
   # empty WebSocket origins keep upgrades same-host only while still allowing
   # non-browser clients with no Origin header.

@@ -46,8 +46,11 @@ Manual action required:
 
 - Confirm production domain names.
 - Configure TLS certificates.
-- Configure trusted proxies.
-- Configure Nginx/Caddy headers for `X-Forwarded-Proto`, client IP, and WebSocket upgrade.
+- Configure trusted proxies: list every reverse proxy that is not on the
+  Control host in `server.trusted_proxies`, keeping loopback; forwarding
+  headers from any other peer are ignored (`docs/DEPLOYMENT.md` section 6.1).
+- Configure Nginx/Caddy to set (overwrite) `X-Forwarded-Proto`,
+  `X-Forwarded-Host` and `X-Forwarded-For`, and the WebSocket upgrade.
 - Confirm HSTS and redirect policy.
 
 ## Payment And Legal/Compliance

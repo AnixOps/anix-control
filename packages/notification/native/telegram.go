@@ -361,11 +361,11 @@ const SetWebhookRouteID = "notification.admin.telegram.webhook.post"
 // AdminSetWebhook is POST /api/v2/admin/telegram/webhook: it calls the Bot
 // API's setWebhook and records the webhook. Without a url in the body the
 // webhook is this Control's /api/v2/telegram/webhook, at the scheme and host
-// of the administrator's request, as the kernel's handler builds it:
-//   - the scheme is the X-Forwarded-Proto request header when one is set,
-//     else the connection's (the scheme the kernel sends: https over TLS);
-//   - the host is the request's Host, which the kernel sends when it is a
-//     plain host[:port].
+// of the administrator's request, as the kernel's handler builds it: the
+// request_scheme and request_host the kernel sends. The kernel resolves
+// them from the connection, or from X-Forwarded-Proto/Host only when the
+// peer is a trusted reverse proxy (server.trusted_proxies); forwarding
+// headers never reach the package and are not read here.
 //
 // A kernel that sends no request scheme or host leaves the request to the
 // legacy handler (pluginhostsdk.ErrNativeUnavailable), which builds the URL
@@ -399,21 +399,13 @@ func (s *Service) AdminSetWebhook(ctx context.Context, request pluginhostsdk.Nat
 	})
 }
 
-// requestOrigin is the kernel's requestScheme and c.Request.Host: the
-// X-Forwarded-Proto header when it is set, else the scheme the kernel saw,
-// and the request's host. It is false when the kernel sent no scheme or
-// host.
+// requestOrigin is the request's scheme and host as the kernel resolved
+// them. It is false when the kernel sent no scheme or host.
 func requestOrigin(metadata pluginhostsdk.RequestMetadata) (string, string, bool) {
 	if metadata.Scheme == "" || metadata.Host == "" {
 		return "", "", false
 	}
-	scheme := metadata.Scheme
-	if values := metadata.Headers["X-Forwarded-Proto"]; len(values) > 0 {
-		if proto := strings.TrimSpace(values[0]); proto != "" {
-			scheme = proto
-		}
-	}
-	return scheme, metadata.Host, true
+	return metadata.Scheme, metadata.Host, true
 }
 
 // AdminDeleteWebhook is DELETE /api/v2/admin/telegram/webhook: it calls the

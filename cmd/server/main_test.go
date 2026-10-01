@@ -18,6 +18,7 @@ import (
 	appconfig "github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/handler"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/requestorigin"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
@@ -146,45 +147,148 @@ func TestEnsureConfiguredPluginTrustRootActivatesOnlyConfiguredRoot(t *testing.T
 	}
 }
 
-func TestApplyTrustedProxiesDisabledByDefault(t *testing.T) {
+// clientIPFor serves one request on an engine configured with proxies and
+// returns what Context.ClientIP saw.
+func clientIPFor(t *testing.T, proxies []string, peer string, headers map[string]string) string {
+	t.Helper()
 	gin.SetMode(gin.TestMode)
+	previous := requestorigin.Default()
+	t.Cleanup(func() { requestorigin.SetDefault(previous) })
 	r := gin.New()
-	if err := applyTrustedProxies(r, nil); err != nil {
+	if err := applyTrustedProxies(r, proxies); err != nil {
 		t.Fatalf("applyTrustedProxies() error = %v", err)
 	}
 	r.GET("/ip", func(c *gin.Context) {
 		c.String(http.StatusOK, c.ClientIP())
 	})
-
 	req := httptest.NewRequest(http.MethodGet, "/ip", nil)
-	req.RemoteAddr = "203.0.113.10:12345"
-	req.Header.Set("X-Forwarded-For", "198.51.100.8")
+	req.RemoteAddr = peer
+	for name, value := range headers {
+		req.Header.Set(name, value)
+	}
 	w := httptest.NewRecorder()
 	r.ServeHTTP(w, req)
+	return w.Body.String()
+}
 
-	if got := w.Body.String(); got != "203.0.113.10" {
-		t.Fatalf("ClientIP() = %q, want %q when trusted proxies are disabled", got, "203.0.113.10")
+// The default (server.trusted_proxies unset) trusts loopback only: no other
+// peer can set its address with X-Forwarded-For or X-Real-IP, which feed
+// rate limits, login throttling and audit logs.
+func TestApplyTrustedProxiesDefaultsToLoopbackOnly(t *testing.T) {
+	spoof := map[string]string{"X-Forwarded-For": "198.51.100.8", "X-Real-IP": "198.51.100.9"}
+	for _, peer := range []string{"203.0.113.10:12345", "10.0.0.7:12345", "192.168.1.2:12345", "172.17.0.1:12345"} {
+		want, _, _ := net.SplitHostPort(peer)
+		if got := clientIPFor(t, nil, peer, spoof); got != want {
+			t.Fatalf("peer %s: ClientIP() = %q, want the peer", peer, got)
+		}
+	}
+	if got := clientIPFor(t, nil, "127.0.0.1:12345", spoof); got != "198.51.100.8" {
+		t.Fatalf("loopback proxy: ClientIP() = %q, want X-Forwarded-For", got)
+	}
+	if got := clientIPFor(t, nil, "[::1]:12345", spoof); got != "198.51.100.8" {
+		t.Fatalf("IPv6 loopback proxy: ClientIP() = %q, want X-Forwarded-For", got)
+	}
+}
+
+func TestApplyTrustedProxiesEmptyListTrustsNone(t *testing.T) {
+	if got := clientIPFor(t, []string{}, "127.0.0.1:12345", map[string]string{"X-Forwarded-For": "198.51.100.8"}); got != "127.0.0.1" {
+		t.Fatalf("ClientIP() = %q, want the peer when no proxy is trusted", got)
 	}
 }
 
 func TestApplyTrustedProxiesHonorsConfiguredProxyChain(t *testing.T) {
-	gin.SetMode(gin.TestMode)
-	r := gin.New()
-	if err := applyTrustedProxies(r, []string{"127.0.0.1"}); err != nil {
-		t.Fatalf("applyTrustedProxies() error = %v", err)
-	}
-	r.GET("/ip", func(c *gin.Context) {
-		c.String(http.StatusOK, c.ClientIP())
-	})
-
-	req := httptest.NewRequest(http.MethodGet, "/ip", nil)
-	req.RemoteAddr = "127.0.0.1:12345"
-	req.Header.Set("X-Forwarded-For", "198.51.100.8")
-	w := httptest.NewRecorder()
-	r.ServeHTTP(w, req)
-
-	if got := w.Body.String(); got != "198.51.100.8" {
+	if got := clientIPFor(t, []string{"10.0.0.0/8"}, "10.1.2.3:12345", map[string]string{"X-Forwarded-For": "198.51.100.8"}); got != "198.51.100.8" {
 		t.Fatalf("ClientIP() = %q, want %q when proxy is trusted", got, "198.51.100.8")
+	}
+	if got := clientIPFor(t, []string{"10.0.0.0/8"}, "127.0.0.1:12345", map[string]string{"X-Forwarded-For": "198.51.100.8"}); got != "127.0.0.1" {
+		t.Fatalf("ClientIP() = %q: a configured list replaces the loopback default", got)
+	}
+}
+
+func TestApplyTrustedProxiesSetsTheRequestOriginPolicy(t *testing.T) {
+	previous := requestorigin.Default()
+	t.Cleanup(func() { requestorigin.SetDefault(previous) })
+	if err := applyTrustedProxies(gin.New(), []string{"10.0.0.0/8"}); err != nil {
+		t.Fatal(err)
+	}
+	if got := requestorigin.Default().CIDRs(); len(got) != 1 || got[0] != "10.0.0.0/8" {
+		t.Fatalf("request origin policy = %v", got)
+	}
+	if err := applyTrustedProxies(gin.New(), []string{"not-an-ip"}); err == nil {
+		t.Fatal("an invalid trusted proxy was accepted")
+	}
+}
+
+// The UI server proxies /api to the API listener, which trusts it as a
+// loopback peer: it must pass on only the origin it resolved, never a
+// client's forwarding headers.
+func TestProxyAPIReplacesClientForwardingHeaders(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	previous := requestorigin.Default()
+	t.Cleanup(func() { requestorigin.SetDefault(previous) })
+	defaultPolicy, err := requestorigin.NewPolicy(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requestorigin.SetDefault(defaultPolicy)
+
+	var seen http.Header
+	var seenHost, seenPeer string
+	upstream := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		seen, seenHost, seenPeer = r.Header.Clone(), r.Host, r.RemoteAddr
+	}))
+	defer upstream.Close()
+
+	r := gin.New()
+	r.Any("/api/*path", func(c *gin.Context) { proxyAPI(c, upstream.URL) })
+	// A real server (the reverse proxy needs a CloseNotifier) that lets the
+	// test choose the peer address the UI server sees.
+	front := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, req *http.Request) {
+		req.RemoteAddr = req.Header.Get("X-Test-Peer")
+		req.Header.Del("X-Test-Peer")
+		r.ServeHTTP(w, req)
+	}))
+	defer front.Close()
+	send := func(peer string) {
+		req, err := http.NewRequest(http.MethodGet, front.URL+"/api/v2/forward-agent/install.sh", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		req.Host = "panel.example.test"
+		req.Header.Set("X-Test-Peer", peer)
+		req.Header.Set("X-Forwarded-Proto", "https")
+		req.Header.Set("X-Forwarded-Host", "evil.example")
+		req.Header.Set("X-Forwarded-For", "198.51.100.66")
+		req.Header.Set("X-Real-IP", "198.51.100.67")
+		req.Header.Set("Forwarded", "host=evil.example")
+		resp, err := http.DefaultClient.Do(req)
+		if err != nil {
+			t.Fatal(err)
+		}
+		_ = resp.Body.Close()
+	}
+
+	send("203.0.113.9:40000")
+	if got := seen.Get("X-Forwarded-Proto"); got != "http" {
+		t.Fatalf("X-Forwarded-Proto = %q, want http", got)
+	}
+	if got := seen.Get("X-Forwarded-Host"); got != "panel.example.test" || seenHost != "panel.example.test" {
+		t.Fatalf("X-Forwarded-Host = %q, Host = %q, want panel.example.test", got, seenHost)
+	}
+	if got := seen.Get("X-Forwarded-For"); got != "203.0.113.9" {
+		t.Fatalf("X-Forwarded-For = %q, want only the real peer", got)
+	}
+	if seen.Get("X-Real-IP") != "" || seen.Get("Forwarded") != "" {
+		t.Fatalf("client forwarding headers passed on: %v", seen)
+	}
+	if !strings.HasPrefix(seenPeer, "127.0.0.1:") {
+		t.Fatalf("upstream peer = %q", seenPeer)
+	}
+
+	send("127.0.0.1:40000")
+	if seen.Get("X-Forwarded-Proto") != "https" || seen.Get("X-Forwarded-Host") != "evil.example" ||
+		seen.Get("X-Forwarded-For") != "198.51.100.66, 127.0.0.1" {
+		t.Fatalf("a trusted proxy's headers were not kept: %v", seen)
 	}
 }
 
