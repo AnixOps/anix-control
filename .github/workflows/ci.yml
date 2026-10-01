@@ -929,7 +929,7 @@ jobs:
         env:
           ANIX_TEST_POSTGRES_DSN: host=127.0.0.1 port=5432 user=anix_kernel password=kernel dbname=anix_package_test sslmode=disable TimeZone=UTC
         run: |
-          go test -p 1 -v -count=1 ./internal/packagestore ./internal/tests/integration ./internal/tests/packagecompat ./internal/tests/identitycompat ./internal/tests/knowledgecompat ./internal/tests/ticketcompat ./internal/tests/notificationcompat ./internal/tests/platformcompat
+          go test -p 1 -v -count=1 ./internal/packagestore ./internal/tests/integration ./internal/tests/packagecompat ./internal/tests/identitycompat ./internal/tests/knowledgecompat ./internal/tests/ticketcompat ./internal/tests/notificationcompat ./internal/tests/platformcompat ./internal/tests/plancompat
           go -C sdk test -v -count=1 ./packagestoresdk
 
   migration-dry-run-test:

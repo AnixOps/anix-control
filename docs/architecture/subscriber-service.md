@@ -73,6 +73,11 @@ package and generation.
   that marks an order paid also completes it: `ApplyEntitlement` with
   `request_id = "order:<trade_no>"`, in the same flow. Today an administrator
   completes paid orders by hand.
+- **Administrator assignment.** The plan module applies it with
+  `request_id = "plan.assign:<plan_id>:<user_id>:<digest>"`. The digest
+  covers the request's `Idempotency-Key` (else its request id) and the
+  expiry. The kernel's legacy handler derives the same id, so a retry applies
+  once whichever side serves it, and a new request is a new grant.
 - **RecordTraffic.**
   - Adds `(upload, download) × rate` to each subscriber's counters in one
     transaction.

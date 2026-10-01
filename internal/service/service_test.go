@@ -994,8 +994,23 @@ func (s *PlanServiceTestSuite) TestAssignToUser() {
 
 	// 鍒嗛厤濂楅
 	expireAt := time.Now().Add(30 * 24 * time.Hour).Unix()
-	err := s.svc.AssignToUser(plan.ID, user.ID, &expireAt)
+	requestID := PlanAssignmentRequestID(plan.ID, user.ID, &expireAt, "req-1")
+	err := s.svc.AssignToUser(plan.ID, user.ID, &expireAt, requestID)
 	assert.NoError(s.T(), err)
+	var recorded model.SubscriberRequest
+	assert.NoError(s.T(), database.Get().Where("request_id = ?", requestID).Take(&recorded).Error)
+	assert.Equal(s.T(), user.ID, recorded.UserID)
+
+	// A retry of the same request is applied once: traffic used since then
+	// is kept.
+	assert.NoError(s.T(), database.Get().Model(&model.User{}).Where("id = ?", user.ID).Update("u", 5).Error)
+	assert.NoError(s.T(), s.svc.AssignToUser(plan.ID, user.ID, &expireAt, requestID))
+	var retried model.User
+	assert.NoError(s.T(), database.Get().First(&retried, user.ID).Error)
+	assert.Equal(s.T(), int64(5), retried.U)
+	var events int64
+	assert.NoError(s.T(), database.Get().Model(&model.Event{}).Where("type = ? AND payload LIKE ?", "plan.assigned", fmt.Sprintf(`%%"user_id":%d%%`, user.ID)).Count(&events).Error)
+	assert.Equal(s.T(), int64(2), events, "every answered request writes its event")
 
 	// 楠岃瘉鐢ㄦ埛鏇存柊
 	var updatedUser model.User
@@ -1014,7 +1029,7 @@ func (s *PlanServiceTestSuite) TestAssignToUser_PlanNotFound() {
 	}
 	assert.NoError(s.T(), database.Get().Create(user).Error)
 
-	err := s.svc.AssignToUser(99999, user.ID, nil)
+	err := s.svc.AssignToUser(99999, user.ID, nil, "")
 	assert.ErrorIs(s.T(), err, ErrPlanNotFound)
 }
 
@@ -1029,7 +1044,7 @@ func (s *PlanServiceTestSuite) TestAssignToUser_UserNotFound() {
 	}
 	assert.NoError(s.T(), s.svc.Create(plan))
 
-	err := s.svc.AssignToUser(plan.ID, 99999, nil)
+	err := s.svc.AssignToUser(plan.ID, 99999, nil, "")
 	assert.ErrorIs(s.T(), err, ErrPlanUserNotFound)
 }
 
@@ -1344,7 +1359,7 @@ func (s *StatsServiceTestSuite) TestGetUserSubscription() {
 	assert.NoError(s.T(), s.planSvc.Create(plan))
 	// 鍒嗛厤濂楅缁欑敤鎴?
 	expireAt := time.Now().Add(30 * 24 * time.Hour).Unix()
-	assert.NoError(s.T(), s.planSvc.AssignToUser(plan.ID, user.ID, &expireAt))
+	assert.NoError(s.T(), s.planSvc.AssignToUser(plan.ID, user.ID, &expireAt, ""))
 	sub, err := s.svc.GetUserSubscription(user.ID, false)
 	assert.NoError(s.T(), err)
 	assert.NotNil(s.T(), sub)

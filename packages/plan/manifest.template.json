@@ -7,7 +7,7 @@
   "targets": ["control"],
   "architectures": [],
   "artifact_sha256": "GENERATED_AT_BUILD",
-  "capabilities": [],
+  "capabilities": ["kernel.storage.v1", "kernel.storage.adopt:v2_plan", "kernel.storage.adopt:v2_event", "kernel.subscriber.entitlements.v1"],
   "dependencies": [],
   "conflicts": [],
   "permissions": ["plan.view", "plan.api"],

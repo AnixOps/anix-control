@@ -12,6 +12,7 @@ import (
 	"github.com/AnixOps/anix-control/sdk/v2compat"
 	"github.com/AnixOps/anix-control/v4/internal/handler"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 )
@@ -127,6 +128,26 @@ func TestRunWriteComparesDatabaseState(t *testing.T) {
 	admin := pluginhostsdk.Principal{ActorID: 1, Admin: true}
 	RunWrite(t, remove, Case{Name: "delete", Path: "/api/v2/admin/knowledge/2", Principal: admin, Seed: seedKnowledge, Snapshot: knowledgeIDs})
 	RunWrite(t, remove, Case{Name: "delete missing", Path: "/api/v2/admin/knowledge/42", Principal: admin, Seed: seedKnowledge, Snapshot: knowledgeIDs})
+}
+
+// Both sides see the case's request headers: the legacy handler on the
+// request, the native one in the forwarded metadata.
+func TestRequestHeadersReachBothSides(t *testing.T) {
+	echo := Route{
+		Method: http.MethodGet, Pattern: "/api/v2/echo", RouteID: "echo",
+		Legacy: func(c *gin.Context) {
+			c.JSON(http.StatusOK, v2compat.PanelSuccess(c.GetHeader("Idempotency-Key"), time.Now()))
+		},
+		Native: func(*gorm.DB) pluginhostsdk.NativeHandler {
+			return func(_ context.Context, request pluginhostsdk.NativeRequest) (pluginhostsdk.NativeResponse, error) {
+				return pluginhostsdk.PanelJSON(v2compat.PanelSuccess(request.Metadata.Headers["Idempotency-Key"][0], time.Now()))
+			}
+		},
+	}
+	RunRead(t, echo, Case{Name: "idempotency key", Path: "/api/v2/echo", RequestHeaders: map[string]string{"idempotency-key": "k-1"}})
+	legacy, native := run(t, openSQLite, echo, Case{Path: "/api/v2/echo", RequestHeaders: map[string]string{"Idempotency-Key": "k-1"}})
+	require.NoError(t, CompareAnswers(legacy, native))
+	require.Contains(t, string(native.Body), `"data":"k-1"`, "the header is not lost on both sides")
 }
 
 func TestCompareAnswersReportsDifferences(t *testing.T) {

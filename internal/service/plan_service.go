@@ -1,8 +1,11 @@
 package service
 
 import (
+	"crypto/sha256"
 	"encoding/json"
 	"errors"
+	"fmt"
+	"strconv"
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/database"
@@ -105,8 +108,26 @@ func (s *PlanService) List() ([]*model.Plan, error) {
 	return list, nil
 }
 
-// AssignToUser 将套餐分配给用户（同步修改用户记录），并写事件
-func (s *PlanService) AssignToUser(planID, userID uint, expireAt *int64) error {
+// PlanAssignmentRequestID names an administrator's plan assignment in the
+// subscriber request ledger (v4_kernel_subscriber_request), so a retried
+// request is applied once. token identifies the HTTP request: its
+// Idempotency-Key, else its request id. A new request is a new grant, as in
+// v2. The plan package's native route derives the same id
+// (packages/plan/native.AssignRequestID), so a retry is recognized whichever
+// side serves it.
+func PlanAssignmentRequestID(planID, userID uint, expireAt *int64, token string) string {
+	expiry := "-"
+	if expireAt != nil {
+		expiry = strconv.FormatInt(*expireAt, 10)
+	}
+	sum := sha256.Sum256([]byte(token + "\x00" + expiry))
+	return fmt.Sprintf("plan.assign:%d:%d:%x", planID, userID, sum[:12])
+}
+
+// AssignToUser 将套餐分配给用户（同步修改用户记录），并写事件。requestID
+// (PlanAssignmentRequestID) applies a retried assignment once; the event is
+// written again.
+func (s *PlanService) AssignToUser(planID, userID uint, expireAt *int64, requestID string) error {
 	if planID == 0 {
 		return ErrPlanNotFound
 	}
@@ -127,7 +148,7 @@ func (s *PlanService) AssignToUser(planID, userID uint, expireAt *int64) error {
 		// An administrator's assignment resets traffic, keeps the
 		// subscription groups and changes the expiry only when given.
 		if _, err := subscriber.ApplyEntitlementTx(tx, subscriber.Entitlement{
-			UserID: userID, Plan: subscriber.PlanSnapshotFromPlan(plan, nil), ExpiresAt: expireAt,
+			RequestID: requestID, UserID: userID, Plan: subscriber.PlanSnapshotFromPlan(plan, nil), ExpiresAt: expireAt,
 			ResetTraffic: true, KeepSubscriptionGroups: true,
 		}, time.Now()); err != nil {
 			if errors.Is(err, subscriber.ErrSubscriberNotFound) {
