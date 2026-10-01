@@ -4117,7 +4117,7 @@ func (s *ForwardRuleServiceTestSuite) TestToggle() {
 
 func (s *ForwardRuleServiceTestSuite) TestCreateRuleForUser() {
 	userID := uint(1)
-	rule, err := s.svc.CreateRuleForUser(userID, &CreateRuleRequest{
+	rule, err := s.svc.CreateRuleForUser(userID, true, &CreateRuleRequest{
 		RelayNodeID: s.relayNode.ID,
 		ExitNodeID:  s.exitNode.ID,
 		Protocol:    "tcp",
@@ -4127,6 +4127,27 @@ func (s *ForwardRuleServiceTestSuite) TestCreateRuleForUser() {
 	assert.NoError(s.T(), err)
 	assert.NotNil(s.T(), rule)
 	assert.Equal(s.T(), userID, *rule.UserID)
+}
+
+// Any user created legacy rules on any relay and exit node, to any target.
+// No user entitlement covers a legacy rule's nodes, so only administrators
+// create them.
+func (s *ForwardRuleServiceTestSuite) TestCreateRuleForUserRefusesUsers() {
+	var before int64
+	s.Require().NoError(database.Get().Model(&model.ForwardRule{}).Count(&before).Error)
+	rule, err := s.svc.CreateRuleForUser(2, false, &CreateRuleRequest{
+		Name:        "user rule",
+		RelayNodeID: s.relayNode.ID,
+		ExitNodeID:  s.exitNode.ID,
+		Protocol:    "tcp",
+		TargetHost:  "203.0.113.5",
+		TargetPort:  443,
+	})
+	s.Require().ErrorIs(err, ErrForwardRuleAdminOnly)
+	s.Nil(rule)
+	var after int64
+	s.Require().NoError(database.Get().Model(&model.ForwardRule{}).Count(&after).Error)
+	s.Equal(before, after, "a user's rule was stored")
 }
 
 // Additional InviteService Tests

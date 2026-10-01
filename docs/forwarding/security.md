@@ -25,6 +25,11 @@ Current route-level controls:
 
 - User forward routes require JWT authentication.
 - Admin routes require JWT plus admin authorization.
+- Legacy forward rules are administrator-only. `POST /api/v2/user/forward/rules`
+  refuses users in the handler and the service
+  (`ForwardRuleService.CreateRuleForUser`); no user grant covers a legacy
+  rule's relay and exit nodes. `GET /api/v2/user/forward/rules` stays a
+  user's read-only list.
 - Internal traffic routes require application token authentication.
 - Legacy `/flow/upload` requires application token authentication.
 - Clean-agent register/heartbeat/report require an agent token.
@@ -89,8 +94,15 @@ Current and required controls:
   overlap checks.
 - Use explicit runtime backend configuration for NodeX base URL.
 - Do not allow users to configure NodeX or relay management API endpoints.
-- Consider denylisting metadata-service and loopback targets for user-controlled
-  `remoteAddr` if product requirements do not require them.
+- A user's `remoteAddr` targets must be public on create and update
+  (`validateUserForwardTargets`, with the classification of the user's
+  diagnosis probe, `resolvePublicAddress`): loopback, private, link-local,
+  unspecified, multicast, carrier-grade NAT and other special-purpose
+  addresses are refused, as are names that resolve to one, loopback names,
+  numeric IPv4 forms and names that do not resolve. Names are resolved on
+  Control when the forward is written; the node resolves them again when it
+  connects, so DNS rebinding and names only the node can resolve differently
+  are not covered. Administrators' targets are not checked.
 - Keep gost API tests and runtime diagnostics admin-only.
 
 ## Authorization And Quota
@@ -121,6 +133,11 @@ Controls that must remain true:
 - Agent tokens are generated from cryptographic randomness.
 - Register, heartbeat, and report reject missing or invalid tokens.
 - Revoked agents cannot heartbeat.
+- An agent token is issued for a forward node, which token creation requires,
+  and is bound to it; a token an earlier build issued without a node is bound
+  to the first one it registers with. Registration under another node is refused, so
+  a token cannot move to another node and claim its jobs, whose payloads
+  carry that node's API token.
 - Heartbeat only claims pending `clean_agent` jobs for the agent node.
 - Report only updates a job claimed by the same agent.
 - Negative traffic values are rejected.

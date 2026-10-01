@@ -23,6 +23,52 @@
     callback pays it; and the token amount is still the create route's
     placeholder conversion (order total in cents / 10^8), not an exchange
     rate.
+- Only administrators create or change legacy forward rules.
+  `POST /api/v2/user/forward/rules` let any user create a rule on any relay
+  and exit node, to any target, with speed, traffic and expiry limits of
+  their own choosing. A user now gets the panel error "only administrators
+  can create or change legacy forward rules; forward through your tunnels
+  instead", and nothing is stored. A legacy rule names its nodes, and no user
+  entitlement covers them: a tunnel permission (`v2_forward_user_tunnel`)
+  grants a tunnel, and a rule is neither counted in the permission's quotas
+  nor paused when the permission ends. Users forward through the tunnels they
+  are granted (`POST /api/v2/forward/create`);
+  `GET /api/v2/user/forward/rules` still lists their rules, read-only. The
+  administrator's `/api/v2/admin/forward/rules` routes are unchanged. See
+  `docs/UPGRADE.md`.
+- A user's forward targets must be public. `POST /api/v2/forward/create`
+  and `POST /api/v2/forward/update` let a user point a forward at any
+  target, and the tunnel's node connects to it: the node's loopback
+  services, the private network behind it or its cloud metadata service.
+  For a user, every target must now be a public address, or a name every
+  address of which is public, with the classification the user's diagnosis
+  already used: loopback, private (RFC 1918 and ULA), link-local,
+  unspecified, multicast, carrier-grade NAT and other special-purpose
+  addresses are refused, and so are `localhost` and its aliases, numeric
+  IPv4 forms such as `127.1`, and names that do not resolve. The answer is
+  the panel error `不能转发到内网或本机地址: <target>` (or
+  `无法解析目标地址: <target>`), and nothing changes. Names are resolved on
+  Control when the forward is written; DNS can answer differently later, on
+  the node, so this is not complete protection against DNS rebinding.
+  Administrators' forwards are not checked, and tunnels are administrator
+  routes. A user's diagnosis now also refuses the loopback names and numeric
+  forms without asking DNS. See `docs/UPGRADE.md`.
+- A clean agent's token is bound to its node.
+  `POST /api/v2/forward-agent/register` set the agent's node to the body's
+  `nodeId`, so the token of any clean agent could register under any node id
+  and then claim that node's pending runtime jobs on its heartbeat, whose
+  payloads carry the node's API token. A token is now bound to the node it
+  was issued for or, for a token issued without one, to the node of its
+  first registration that names one. A registration naming another node is
+  `403` (`agent is bound to another node`) and changes nothing; one without
+  `nodeId` keeps the binding. The binding uses the existing `node_id`
+  column, so there is no migration. See `docs/UPGRADE.md`.
+  - Issuing a token now names its node. `POST /api/v2/admin/forward/agents`
+    without a `nodeId`, with `0` or with an id that is not a forward node is
+    refused with the panel error `nodeId is required: a clean agent token is
+    issued for one forward node` or `forward node not found`, and issues
+    nothing; the token is bound to the node at issue. Tokens issued earlier
+    without a node keep working and bind on their first registration.
 
 ### Changed
 

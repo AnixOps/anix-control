@@ -2,8 +2,10 @@ package service
 
 import (
 	"context"
+	"errors"
 	"net"
 	"net/netip"
+	"strings"
 )
 
 // probeLookup resolves a probe target's host name; tests replace it.
@@ -41,6 +43,77 @@ func isPublicProbeAddress(addr netip.Addr) bool {
 	return true
 }
 
+var (
+	// errNotPublicAddress: the host is, or resolves to, an address that is
+	// not public (isPublicProbeAddress).
+	errNotPublicAddress = errors.New("not a public address")
+	// errNoAddress: the host name resolved to no address.
+	errNoAddress = errors.New("no address")
+)
+
+// loopbackHostNames are names that mean the host itself without asking DNS:
+// "localhost" and its subdomains (RFC 6761), and the loopback aliases that
+// Linux distributions put in /etc/hosts.
+var loopbackHostNames = []string{"localhost", "localhost.localdomain", "ip6-localhost", "ip6-loopback"}
+
+// isLoopbackHostName reports whether name means the host itself.
+func isLoopbackHostName(name string) bool {
+	for _, loopback := range loopbackHostNames {
+		if name == loopback {
+			return true
+		}
+	}
+	return strings.HasSuffix(name, ".localhost")
+}
+
+// isNumericHostName reports whether name, which is not an address netip
+// parses, is a numeric IPv4 form that inet_aton and so most resolvers
+// accept: "127.1", "2130706433", "0x7f000001" or "0177.0.0.1". A DNS name's
+// last label is never numeric.
+func isNumericHostName(name string) bool {
+	last := name[strings.LastIndex(name, ".")+1:]
+	if last == "" {
+		return false
+	}
+	if digits := strings.TrimPrefix(strings.TrimPrefix(last, "0x"), "0X"); digits != last {
+		return strings.Trim(digits, "0123456789abcdefABCDEF") == ""
+	}
+	return strings.Trim(last, "0123456789") == ""
+}
+
+// resolvePublicAddress returns the public address host names: host itself
+// when it is an address, else the first address it resolves to. It fails
+// with errNotPublicAddress when host is, or resolves to any, address that
+// is not public, including loopback names and numeric IPv4 forms, which it
+// refuses without asking DNS.
+func resolvePublicAddress(host string) (netip.Addr, error) {
+	if addr, err := netip.ParseAddr(host); err == nil {
+		if !isPublicProbeAddress(addr) {
+			return netip.Addr{}, errNotPublicAddress
+		}
+		return addr.Unmap(), nil
+	}
+	name := strings.ToLower(strings.TrimSuffix(host, "."))
+	if isLoopbackHostName(name) || isNumericHostName(name) {
+		return netip.Addr{}, errNotPublicAddress
+	}
+	ctx, cancel := context.WithTimeout(context.Background(), diagnosisTimeout)
+	defer cancel()
+	addrs, err := probeLookup(ctx, host)
+	if err != nil {
+		return netip.Addr{}, err
+	}
+	if len(addrs) == 0 {
+		return netip.Addr{}, errNoAddress
+	}
+	for _, addr := range addrs {
+		if !isPublicProbeAddress(addr) {
+			return netip.Addr{}, errNotPublicAddress
+		}
+	}
+	return addrs[0].Unmap(), nil
+}
+
 // publicProbeAddress resolves the host of a probe that Control runs for a
 // user (a forward's diagnosis) and returns the address to connect to, or
 // why the probe is refused.
@@ -52,25 +125,15 @@ func isPublicProbeAddress(addr netip.Addr) bool {
 // must be public, and the probe connects to the checked address, so the
 // name cannot resolve to another one between the check and the connection.
 func publicProbeAddress(host string) (netip.Addr, string) {
-	if addr, err := netip.ParseAddr(host); err == nil {
-		if !isPublicProbeAddress(addr) {
-			return netip.Addr{}, "不能诊断内网或本机地址"
-		}
-		return addr.Unmap(), ""
-	}
-	ctx, cancel := context.WithTimeout(context.Background(), diagnosisTimeout)
-	defer cancel()
-	addrs, err := probeLookup(ctx, host)
-	if err != nil {
+	addr, err := resolvePublicAddress(host)
+	switch {
+	case err == nil:
+		return addr, ""
+	case errors.Is(err, errNotPublicAddress):
+		return netip.Addr{}, "不能诊断内网或本机地址"
+	case errors.Is(err, errNoAddress):
+		return netip.Addr{}, "无法解析目标地址"
+	default:
 		return netip.Addr{}, err.Error()
 	}
-	if len(addrs) == 0 {
-		return netip.Addr{}, "无法解析目标地址"
-	}
-	for _, addr := range addrs {
-		if !isPublicProbeAddress(addr) {
-			return netip.Addr{}, "不能诊断内网或本机地址"
-		}
-	}
-	return addrs[0].Unmap(), ""
 }

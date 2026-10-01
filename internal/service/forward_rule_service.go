@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"time"
 
@@ -219,8 +220,22 @@ func (s *ForwardRuleService) getUsedPorts(relayNodeID uint) (map[int]bool, error
 	return used, nil
 }
 
-// CreateRuleForUser creates a user-owned rule.
-func (s *ForwardRuleService) CreateRuleForUser(userID uint, req *CreateRuleRequest) (*model.ForwardRule, error) {
+// ErrForwardRuleAdminOnly refuses a user's write of a legacy forward rule.
+var ErrForwardRuleAdminOnly = errors.New("only administrators can create or change legacy forward rules; forward through your tunnels instead")
+
+// CreateRuleForUser creates a rule owned by the caller, who must be an
+// administrator (ErrForwardRuleAdminOnly).
+//
+// Legacy rules are administrator-only. A rule runs on the relay and exit
+// nodes it names, and no user entitlement covers them: users are entitled
+// to tunnels (v2_forward_user_tunnel), and a rule is neither counted in a
+// tunnel permission's forward or traffic quota nor paused when the
+// permission is disabled, expires or is removed. Users forward through
+// their tunnels (PanelForwardService.CreateForward).
+func (s *ForwardRuleService) CreateRuleForUser(userID uint, isAdmin bool, req *CreateRuleRequest) (*model.ForwardRule, error) {
+	if !isAdmin {
+		return nil, ErrForwardRuleAdminOnly
+	}
 	port, err := s.GetFreePort(req.RelayNodeID, 10000, 65535)
 	if err != nil {
 		return nil, fmt.Errorf("no available port: %w", err)

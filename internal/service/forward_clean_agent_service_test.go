@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"testing"
 
 	"github.com/AnixOps/anix-control/v4/internal/database"
@@ -301,6 +302,134 @@ func (s *ForwardCleanAgentServiceTestSuite) TestRuntimeApplyQueuesCleanAgentJob(
 		assert.Equal(s.T(), tunnel.ID, payload.PanelForward.Tunnel.ID)
 		assert.Equal(s.T(), node.ID, payload.PanelForward.IngressNode.ID)
 	}
+}
+
+// pendingCleanAgentJob queues a clean agent job for a node; its payload
+// stands for the node's API token that real payloads carry.
+func (s *ForwardCleanAgentServiceTestSuite) pendingCleanAgentJob(nodeID uint) *model.ForwardRuntimeJob {
+	job := &model.ForwardRuntimeJob{
+		Backend: model.ForwardRuntimeBackendCleanAgent, Action: model.ForwardRuntimeJobActionSync,
+		NodeID: uintPtr(nodeID), Status: model.ForwardRuntimeJobStatusPending,
+		Payload: fmt.Sprintf(`{"node":%d}`, nodeID),
+	}
+	s.Require().NoError(database.Get().Create(job).Error)
+	return job
+}
+
+func (s *ForwardCleanAgentServiceTestSuite) claimedJobIDs(agentID uint, token string) []uint {
+	actions, err := s.svc.Heartbeat(ForwardCleanAgentHeartbeatInput{AgentID: agentID, Token: token})
+	s.Require().NoError(err)
+	ids := []uint{}
+	for _, action := range actions {
+		ids = append(ids, action.JobID)
+	}
+	return ids
+}
+
+// A clean agent's registration set its node to the body's nodeId, so the
+// token of an agent issued for one node could register under any other and
+// claim that node's jobs, whose payloads carry the node's API token. A token
+// is now bound to the node it was issued for.
+func (s *ForwardCleanAgentServiceTestSuite) TestAgentIssuedForANodeCannotRegisterUnderAnother() {
+	db := database.Get()
+	nodeA, _, _ := s.createCleanAgentForwardFixtures()
+	nodeB := &model.ForwardNode{Name: "victim-node", Type: model.ForwardNodeTypeRelay, Host: "203.0.113.11", Port: 22, Enabled: true}
+	s.Require().NoError(db.Create(nodeB).Error)
+	jobA := s.pendingCleanAgentJob(nodeA.ID)
+	jobB := s.pendingCleanAgentJob(nodeB.ID)
+
+	issued, err := s.svc.CreateToken(ForwardCleanAgentCreateInput{Name: "agent-a", NodeID: &nodeA.ID})
+	s.Require().NoError(err)
+
+	agent, err := s.svc.Register(ForwardCleanAgentRegisterInput{Token: issued.Token, NodeID: &nodeB.ID, Hostname: "attacker"})
+	s.Require().ErrorIs(err, ErrForwardCleanAgentNodeMismatch)
+	s.Nil(agent)
+	var stored model.ForwardCleanAgent
+	s.Require().NoError(db.First(&stored, issued.Agent.ID).Error)
+	s.Require().NotNil(stored.NodeID)
+	s.Equal(nodeA.ID, *stored.NodeID, "the refused registration moved the agent")
+	s.Empty(stored.Hostname, "the refused registration changed the agent")
+	s.Equal(model.ForwardCleanAgentStatusOffline, stored.Status)
+
+	// Its own node, or no node, registers it; it claims its node's jobs only.
+	agent, err = s.svc.Register(ForwardCleanAgentRegisterInput{Token: issued.Token, NodeID: &nodeA.ID})
+	s.Require().NoError(err)
+	s.Equal(nodeA.ID, *agent.NodeID)
+	agent, err = s.svc.Register(ForwardCleanAgentRegisterInput{Token: issued.Token})
+	s.Require().NoError(err)
+	s.Equal(nodeA.ID, *agent.NodeID)
+	s.Equal([]uint{jobA.ID}, s.claimedJobIDs(agent.ID, issued.Token))
+
+	var pending model.ForwardRuntimeJob
+	s.Require().NoError(db.First(&pending, jobB.ID).Error)
+	s.Equal(model.ForwardRuntimeJobStatusPending, pending.Status, "another node's job was claimed")
+	s.Nil(pending.AgentID)
+}
+
+// A token issued without a node was bound by its first registration, so
+// whoever registered it first chose the node and took that node's jobs.
+// Issuing a token now takes an existing forward node, and binds it there.
+func (s *ForwardCleanAgentServiceTestSuite) TestCreateTokenRequiresAnExistingNode() {
+	db := database.Get()
+	node, _, _ := s.createCleanAgentForwardFixtures()
+	zero, unknown := uint(0), node.ID+1000
+	for name, input := range map[string]ForwardCleanAgentCreateInput{
+		"no node":      {Name: "agent"},
+		"node zero":    {Name: "agent", NodeID: &zero},
+		"unknown node": {Name: "agent", NodeID: &unknown},
+	} {
+		result, err := s.svc.CreateToken(input)
+		s.Nil(result, name)
+		if name == "unknown node" {
+			s.ErrorIs(err, ErrForwardCleanAgentNodeNotFound, name)
+		} else {
+			s.ErrorIs(err, ErrForwardCleanAgentNodeRequired, name)
+		}
+	}
+	var count int64
+	s.Require().NoError(db.Model(&model.ForwardCleanAgent{}).Count(&count).Error)
+	s.Zero(count, "a token was issued without a valid node")
+
+	result, err := s.svc.CreateToken(ForwardCleanAgentCreateInput{Name: "agent", NodeID: &node.ID})
+	s.Require().NoError(err)
+	s.Require().NotNil(result.Agent.NodeID)
+	s.Equal(node.ID, *result.Agent.NodeID)
+	var stored model.ForwardCleanAgent
+	s.Require().NoError(db.Where("token = ?", result.Token).First(&stored).Error)
+	s.Require().NotNil(stored.NodeID)
+	s.Equal(node.ID, *stored.NodeID)
+}
+
+// A token an earlier build issued without a node is bound by its first
+// registration that names one, and cannot move afterwards.
+func (s *ForwardCleanAgentServiceTestSuite) TestUnboundAgentIsBoundByItsFirstRegistration() {
+	db := database.Get()
+	nodeA, _, _ := s.createCleanAgentForwardFixtures()
+	nodeB := &model.ForwardNode{Name: "victim-node", Type: model.ForwardNodeTypeRelay, Host: "203.0.113.11", Port: 22, Enabled: true}
+	s.Require().NoError(db.Create(nodeB).Error)
+	jobA := s.pendingCleanAgentJob(nodeA.ID)
+	jobB := s.pendingCleanAgentJob(nodeB.ID)
+
+	issued := &model.ForwardCleanAgent{Name: "unbound", Token: "v2fa_issued-without-a-node", Status: model.ForwardCleanAgentStatusOffline}
+	s.Require().NoError(db.Create(issued).Error)
+
+	// A registration without a node leaves it unbound.
+	agent, err := s.svc.Register(ForwardCleanAgentRegisterInput{Token: issued.Token})
+	s.Require().NoError(err)
+	s.Nil(agent.NodeID)
+
+	agent, err = s.svc.Register(ForwardCleanAgentRegisterInput{Token: issued.Token, NodeID: &nodeA.ID})
+	s.Require().NoError(err)
+	s.Require().NotNil(agent.NodeID)
+	s.Equal(nodeA.ID, *agent.NodeID)
+
+	_, err = s.svc.Register(ForwardCleanAgentRegisterInput{Token: issued.Token, NodeID: &nodeB.ID})
+	s.Require().ErrorIs(err, ErrForwardCleanAgentNodeMismatch)
+	s.Equal([]uint{jobA.ID}, s.claimedJobIDs(agent.ID, issued.Token))
+
+	var pending model.ForwardRuntimeJob
+	s.Require().NoError(db.First(&pending, jobB.ID).Error)
+	s.Equal(model.ForwardRuntimeJobStatusPending, pending.Status, "another node's job was claimed")
 }
 
 func (s *ForwardCleanAgentServiceTestSuite) createCleanAgentForwardFixtures() (*model.ForwardNode, *model.ForwardTunnel, *model.Forward) {

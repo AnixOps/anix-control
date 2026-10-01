@@ -136,8 +136,11 @@ Backend name: `clean_agent`.
 
 Execution chain:
 
-1. Admin creates an agent token.
-2. Agent registers and heartbeats against `/api/v2/forward-agent/*`.
+1. Admin creates an agent token for a forward node (`nodeId` is required).
+2. Agent registers and heartbeats against `/api/v2/forward-agent/*`. Its token
+   is bound to the node it was issued for (or, for a token an earlier build
+   issued without one, the first node it registers with); registering under
+   another node is refused.
 3. Panel queues clean-agent runtime jobs.
 4. Agent heartbeat claims pending jobs for its node.
 5. Agent reports success, failure, and optional traffic deltas.
@@ -163,6 +166,20 @@ Admin-only surfaces include:
 
 The service layer must preserve ownership checks even when an endpoint exists in
 both user and admin route groups.
+
+### Policy: Legacy Rules Are Administrator-Only
+
+Legacy forward rules (`v2_forward_rule`) are created, changed and deleted only
+by administrators (`/api/v2/admin/forward/rules*`). Users forward through the
+tunnels they are granted, with panel forwards (`/api/v2/forward/*`).
+`POST /api/v2/user/forward/rules` refuses a user, and
+`GET /api/v2/user/forward/rules` lists a user's own rules, read-only.
+
+Do not add user writes for legacy rules. A rule names its relay and exit nodes,
+and no user entitlement covers them: a user is entitled to tunnels
+(`v2_forward_user_tunnel`), and a rule is not counted in a tunnel permission's
+forward or traffic quota, nothing records its traffic, and nothing pauses it
+when the permission is disabled, expires or is removed.
 
 ## Traffic And Quota
 

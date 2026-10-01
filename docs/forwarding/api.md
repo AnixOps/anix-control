@@ -75,13 +75,23 @@ Base path: `/api/v2`
   "name": "ssh-home",
   "tunnelId": 1,
   "inPort": 10022,
-  "remoteAddr": "10.0.0.10:22",
+  "remoteAddr": "203.0.113.10:22",
   "interfaceName": "",
   "strategy": "fifo"
 }
 ```
 
 `inPort` may be omitted when the tunnel has a usable configured port range.
+
+For a user, every `remoteAddr` target must be public: an address, or a name
+every address of which is public. Loopback, private (RFC 1918, ULA),
+link-local, unspecified, multicast, carrier-grade NAT and other
+special-purpose addresses, `localhost` and its aliases, numeric IPv4 forms
+such as `127.1`, and names that do not resolve on Control are refused with the
+panel error `不能转发到内网或本机地址: <target>` or
+`无法解析目标地址: <target>`. The same applies to updates. Names are resolved
+when the forward is written, so this does not stop DNS rebinding.
+Administrators' forwards are not checked.
 
 ### Update Forward
 
@@ -92,7 +102,7 @@ Base path: `/api/v2`
   "name": "ssh-home",
   "tunnelId": 1,
   "inPort": 10022,
-  "remoteAddr": "10.0.0.10:22",
+  "remoteAddr": "203.0.113.10:22",
   "interfaceName": "",
   "strategy": "fifo"
 }
@@ -363,7 +373,9 @@ Admin token routes:
 | `POST` | `/api/v2/admin/forward/agents` | Create an agent token. |
 | `POST` | `/api/v2/admin/forward/agents/:id/revoke` | Revoke an agent. |
 
-Create token request:
+Create token request (`nodeId` is required and must be a forward node; a
+missing, `0` or unknown node is refused with a panel error and issues
+nothing):
 
 ```json
 {
@@ -389,6 +401,12 @@ Register request:
   "capabilities": ["tcp", "udp"]
 }
 ```
+
+A token is bound to one node: the `nodeId` it was created with or, for a
+token an earlier build created without one, the `nodeId` of its first
+registration that names one. A registration naming another node is answered `403` with
+`agent is bound to another node` and changes nothing; one without `nodeId`
+keeps the binding. Moving an agent to another node takes a new token.
 
 Heartbeat request:
 

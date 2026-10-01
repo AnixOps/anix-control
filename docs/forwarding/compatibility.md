@@ -57,6 +57,8 @@ Admin mirrors and admin resources:
 - `/api/v2/tunnel/user/remove`
 - `/api/v2/tunnel/user/update`
 - `/api/v2/user/reset`
+- `POST /api/v2/user/forward/rules` (legacy rule creation: a user gets a
+  panel error; the `GET` lists the caller's rules for any user)
 - `/api/v2/speed-limit/*`
 
 Admin mirror routes are local convenience surfaces. Keep authorization semantics

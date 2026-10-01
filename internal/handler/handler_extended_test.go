@@ -1492,6 +1492,7 @@ func (s *ForwardUserRulesTestSuite) TestCreateUserRule() {
 	handler := NewForwardHandler()
 	s.router.POST("/user/forward/rules", func(c *gin.Context) {
 		c.Set("user_id", s.testUser.ID)
+		c.Set("is_admin", true)
 		handler.CreateUserRule(c)
 	})
 
@@ -1523,6 +1524,7 @@ func (s *ForwardUserRulesTestSuite) TestCreateUserRule_InvalidBody() {
 	handler := NewForwardHandler()
 	s.router.POST("/user/forward/rules", func(c *gin.Context) {
 		c.Set("user_id", s.testUser.ID)
+		c.Set("is_admin", true)
 		handler.CreateUserRule(c)
 	})
 
@@ -1543,6 +1545,7 @@ func (s *ForwardUserRulesTestSuite) TestCreateUserRule_ServiceError() {
 	handler := NewForwardHandler()
 	s.router.POST("/user/forward/rules", func(c *gin.Context) {
 		c.Set("user_id", s.testUser.ID)
+		c.Set("is_admin", true)
 		handler.CreateUserRule(c)
 	})
 

@@ -58,4 +58,26 @@ func TestPublicProbeAddressChecksEveryResolvedAddress(t *testing.T) {
 
 	_, refusal = publicProbeAddress("127.0.0.1")
 	require.Equal(t, "不能诊断内网或本机地址", refusal)
+
+	// Loopback names and numeric IPv4 forms are refused without asking DNS,
+	// whatever it would answer.
+	for _, host := range []string{"localhost", "LocalHost.", "db.localhost", "localhost.localdomain", "ip6-localhost", "127.1", "2130706433", "0x7f000001", "0177.0.0.1"} {
+		answers[host] = []netip.Addr{netip.MustParseAddr("203.0.113.7")}
+		_, refusal = publicProbeAddress(host)
+		require.Equal(t, "不能诊断内网或本机地址", refusal, host)
+	}
+	// A name whose last label is a word is not numeric.
+	answers["cafe.example"] = []netip.Addr{netip.MustParseAddr("203.0.113.8")}
+	addr, refusal = publicProbeAddress("cafe.example")
+	require.Empty(t, refusal)
+	require.Equal(t, "203.0.113.8", addr.String())
+}
+
+func TestIsNumericHostName(t *testing.T) {
+	for _, name := range []string{"127.1", "2130706433", "0x7f000001", "0x7f.1", "0177.0.0.1", "10.0x1"} {
+		require.True(t, isNumericHostName(name), name)
+	}
+	for _, name := range []string{"example.com", "cafe", "beef.example", "1.example", "0xcafe.example", "host-1", "x0", ""} {
+		require.False(t, isNumericHostName(name), name)
+	}
 }

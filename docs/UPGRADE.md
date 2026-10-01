@@ -425,7 +425,7 @@ the keyless node.
 ### Forward Node Tokens
 
 Earlier builds showed a user the API tokens of the relay and exit nodes of
-their forward rules (`GET /api/v2/user/forward/rules`), and any user can
+their forward rules (`GET /api/v2/user/forward/rules`), and any user could
 create such a rule. A forward node's token authenticates its agent. If users
 had rules, give the forward nodes new tokens from their edit form
 (`PUT /api/v2/admin/forward/nodes/:id` with `api_token`) and update their
@@ -440,6 +440,118 @@ WHERE r.user_id IS NOT NULL;
 `GET /api/v2/forward/agent/rules` now answers only a forward node that sends
 its id (`node_id` or `X-Node-ID`) and its token (`X-API-Key`, `api_key` or
 `token`); it answered anyone before.
+
+### Legacy Forward Rules Are Administrator-Only
+
+Users can no longer create or change legacy forward rules.
+`POST /api/v2/user/forward/rules`, the only user write on them, answers a
+user with the panel error "only administrators can create or change legacy
+forward rules; forward through your tunnels instead" and stores nothing; an
+administrator's call still creates a rule. It let any user create a rule on
+any relay and exit node, to any target. No user entitlement covers a legacy
+rule: tunnel permissions grant tunnels, while a rule names its nodes, is not
+counted in a permission's forward or traffic quota, carries the limits its
+creator chose, and keeps running when a permission ends. Users forward
+through the tunnels they are granted (`POST /api/v2/forward/create`); the web
+panel never called the rule route. `GET /api/v2/user/forward/rules` still
+lists a user's rules, read-only.
+
+Rules that users created before the upgrade are kept and keep running. List
+them (read-only):
+
+```sql
+SELECT id, user_id, name, relay_node_id, exit_node_id, listen_port, target_host, target_port, enabled
+FROM v2_forward_rule WHERE user_id IS NOT NULL ORDER BY id;
+```
+
+Only an administrator can now disable, change or delete one
+(`POST /api/v2/admin/forward/rules/:id/toggle`,
+`PUT /api/v2/admin/forward/rules/:id` or
+`DELETE /api/v2/admin/forward/rules/:id`), which also updates the nodes.
+Rotate the tokens of the nodes they used, as the previous section says.
+
+### Users' Forward Targets Must Be Public
+
+`POST /api/v2/forward/create` and `POST /api/v2/forward/update` now refuse a
+user's target that is, or resolves to, a loopback, private (RFC 1918, ULA),
+link-local, unspecified, multicast, carrier-grade NAT or other
+special-purpose address, as well as `localhost` and its aliases, numeric
+IPv4 forms such as `127.1`, and names that do not resolve on Control. An
+administrator's forwards are not checked.
+
+- Names are resolved from Control. A name that only the nodes' resolvers
+  know (split-horizon DNS) is refused for users; an administrator can create
+  such a forward.
+- The check runs when a forward is written. DNS can answer differently
+  later, when the node connects, so it is not complete protection against
+  DNS rebinding.
+- Existing forwards are not changed and keep running. A user can still
+  pause, resume and delete one, but an update must replace a refused target.
+
+To review existing user forwards with a non-public target, start from this
+coarse filter (read-only). It also lists some public addresses (for example
+`110.x` matches `10.`) and misses names that resolve to private addresses,
+so check each row:
+
+```sql
+SELECT f.id, f.user_id, f.name, f.remote_addr, f.status
+FROM v2_forward f JOIN v2_user u ON u.id = f.user_id
+WHERE u.is_admin = 0 AND (
+  f.remote_addr LIKE '%127.%' OR f.remote_addr LIKE '%localhost%'
+  OR f.remote_addr LIKE '%10.%' OR f.remote_addr LIKE '%192.168.%'
+  OR f.remote_addr LIKE '%172.%' OR f.remote_addr LIKE '%169.254.%'
+  OR f.remote_addr LIKE '%100.%' OR f.remote_addr LIKE '%0.0.0.0%'
+  OR f.remote_addr LIKE '%[f%' OR f.remote_addr LIKE '%[::%')
+ORDER BY f.id;
+```
+
+Pause or delete an unwanted one as an administrator
+(`POST /api/v2/admin/forward/pause` or `/api/v2/admin/forward/delete`), which
+also removes it from the node.
+
+### Clean Agents Are Bound To Their Node
+
+A clean agent's token is now bound to one forward node: the node it was
+issued for or, for a token issued without a node, the node of its first
+registration that names one. `POST /api/v2/forward-agent/register` with
+another `nodeId` is answered `403` (`agent is bound to another node`); a
+registration without `nodeId` keeps the binding. Earlier builds moved the
+agent to whatever node a registration named, so any token could take another
+node's jobs.
+
+- Each agent's current `node_id` becomes its binding at the upgrade. Before
+  or right after upgrading, check that every live agent is on the node it
+  serves (read-only):
+
+  ```sql
+  SELECT a.id, a.name, a.node_id, n.name AS node_name, a.hostname, a.public_ip, a.status, a.last_seen
+  FROM v2_forward_clean_agent a LEFT JOIN v2_forward_node n ON n.id = a.node_id
+  WHERE a.status <> -1 ORDER BY a.node_id, a.id;
+  ```
+
+  Revoke an agent whose node, host or address is wrong
+  (`POST /api/v2/admin/forward/agents/:id/revoke`), issue a new token with
+  the right `nodeId`, and rotate the API token of any node whose jobs it may
+  have claimed.
+- An agent whose configuration names a different node than its token now
+  fails to register. Fix its `node_id` setting, or issue a token for the
+  node it should serve. Moving an agent to another node always takes a new
+  token.
+- Issuing a token now requires its node. `POST /api/v2/admin/forward/agents`
+  without a `nodeId`, with `0` or with an id that is not a forward node is
+  refused with a panel error (`nodeId is required: a clean agent token is
+  issued for one forward node` or `forward node not found`); scripts that
+  issue tokens must send the forward node's id. Tokens issued earlier
+  without a node keep working: each is bound by its first registration that
+  names a node, so whoever holds it first chooses the node. Revoke unused
+  unbound tokens and issue new ones for their nodes. To list them
+  (read-only):
+
+  ```sql
+  SELECT id, name, status, last_seen FROM v2_forward_clean_agent
+  WHERE (node_id IS NULL OR node_id = 0) AND status <> -1 ORDER BY id;
+  ```
+- The binding uses the existing `node_id` column: no migration.
 
 ### Agent HTTP Routes Need The Node's Credentials
 

@@ -88,6 +88,35 @@ func (s *ForwardSecurityTestSuite) TestUserRulesHideNodeTokens() {
 	s.Equal("relay-secret-token", relay.APIToken)
 }
 
+// POST /api/v2/user/forward/rules let any user create a legacy rule on any
+// relay and exit node, to any target. Only an administrator creates one now;
+// a user still lists their own rules.
+func (s *ForwardSecurityTestSuite) TestOnlyAdministratorsCreateLegacyRules() {
+	create := NewForwardHandler().CreateUserRule
+	body := fmt.Sprintf(`{"name":"mine","relay_node_id":%d,"exit_node_id":%d,"protocol":"tcp","target_host":"10.0.0.1","target_port":22}`, s.relay.ID, s.exit.ID)
+	for name, w := range map[string]*httptest.ResponseRecorder{
+		"a rule":        s.serve("POST", "/user/forward/rules", "/user/forward/rules", body, nil, s.user.ID, false, create),
+		"an empty body": s.serve("POST", "/user/forward/rules", "/user/forward/rules", "", nil, s.user.ID, false, create),
+	} {
+		s.Require().Equal(http.StatusOK, w.Code, w.Body.String())
+		resp := decodePanelTestResponse(s.T(), w)
+		s.Equal(float64(-1), resp["code"], name)
+		s.Equal("only administrators can create or change legacy forward rules; forward through your tunnels instead", resp["msg"], name)
+	}
+	var count int64
+	s.Require().NoError(s.db.Model(&model.ForwardRule{}).Count(&count).Error)
+	s.Zero(count, "a user's rule was stored")
+
+	// An administrator creates one, and the user lists theirs.
+	w := s.serve("POST", "/user/forward/rules", "/user/forward/rules", body, nil, 999, true, create)
+	s.Require().Equal(float64(0), decodePanelTestResponse(s.T(), w)["code"], w.Body.String())
+	s.createRule(&s.user.ID, 20001)
+	w = s.serve("GET", "/user/forward/rules", "/user/forward/rules", "", nil, s.user.ID, false, NewForwardHandler().GetUserRules)
+	resp := decodePanelTestResponse(s.T(), w)
+	s.Require().Equal(float64(0), resp["code"], w.Body.String())
+	s.Len(resp["data"].([]any), 1)
+}
+
 // GET /api/v2/forward/agent/rules is a public route and answered anyone with
 // the rules of any node: every user's listen ports and targets.
 func (s *ForwardSecurityTestSuite) TestAgentRulesNeedTheForwardNodeToken() {
@@ -195,6 +224,108 @@ func (s *ForwardSecurityTestSuite) TestUserDiagnosisDoesNotProbeControlsNetwork(
 	s.Require().Len(results, 1)
 	s.Equal(true, results[0].(map[string]any)["success"], "%v", results[0])
 	s.Equal(1, connections())
+}
+
+// A user's forward pointed its tunnel's node at the node's loopback or the
+// private network behind it. POST /api/v2/forward/create and
+// /forward/update refuse such targets for a user with the handler's panel
+// error; an administrator's are not checked.
+func (s *ForwardSecurityTestSuite) TestUserForwardTargetsMustBePublic() {
+	tunnel := &model.ForwardTunnel{Name: "user-tunnel", InNodeID: s.relay.ID, OutNodeID: &s.relay.ID, InIP: s.relay.Host, Type: 1, Flow: 2, TrafficRatio: 1, Status: model.ForwardTunnelStatusActive}
+	s.Require().NoError(s.db.Create(tunnel).Error)
+	s.Require().NoError(s.db.Create(&model.ForwardUserTunnel{UserID: s.user.ID, TunnelID: tunnel.ID, Status: model.ForwardUserTunnelStatusActive}).Error)
+	write := func(path string, body string, actor uint, admin bool) map[string]any {
+		handler := NewForwardHandler().CreatePanelForward
+		if path == "/forward/update" {
+			handler = NewForwardHandler().UpdatePanelForward
+		}
+		w := s.serve("POST", path, path, body, nil, actor, admin, handler)
+		s.Require().Equal(http.StatusOK, w.Code, w.Body.String())
+		return decodePanelTestResponse(s.T(), w)
+	}
+
+	for _, target := range []string{"127.0.0.1:22", "localhost:6379", "[::1]:22", "10.0.0.8:5432", "192.168.1.1:80", "172.20.0.1:80", "169.254.169.254:80", "100.100.100.200:80", "[fd00::1]:80", "0.0.0.0:80"} {
+		resp := write("/forward/create", fmt.Sprintf(`{"name":"fwd","tunnelId":%d,"remoteAddr":%q}`, tunnel.ID, target), s.user.ID, false)
+		s.Equal(float64(-1), resp["code"], target)
+		s.Equal("不能转发到内网或本机地址: "+target, resp["msg"], target)
+	}
+	var count int64
+	s.Require().NoError(s.db.Model(&model.Forward{}).Count(&count).Error)
+	s.Zero(count, "a forward to a non-public target was stored")
+
+	resp := write("/forward/create", fmt.Sprintf(`{"name":"fwd","tunnelId":%d,"remoteAddr":"203.0.113.5:443"}`, tunnel.ID), s.user.ID, false)
+	s.Require().Equal(float64(0), resp["code"], resp)
+	id := resp["data"].(map[string]any)["id"]
+
+	resp = write("/forward/update", fmt.Sprintf(`{"id":%v,"name":"fwd","tunnelId":%d,"remoteAddr":"127.0.0.1:8080"}`, id, tunnel.ID), s.user.ID, false)
+	s.Equal(float64(-1), resp["code"], resp)
+	s.Equal("不能转发到内网或本机地址: 127.0.0.1:8080", resp["msg"])
+	var stored model.Forward
+	s.Require().NoError(s.db.First(&stored, id).Error)
+	s.Equal("203.0.113.5:443", stored.RemoteAddr)
+
+	// An administrator's forwards are not checked.
+	resp = write("/forward/update", fmt.Sprintf(`{"id":%v,"name":"fwd","tunnelId":%d,"remoteAddr":"127.0.0.1:8080"}`, id, tunnel.ID), 1, true)
+	s.Equal(float64(0), resp["code"], resp)
+	resp = write("/forward/create", fmt.Sprintf(`{"name":"admin","tunnelId":%d,"remoteAddr":"10.0.0.8:5432"}`, tunnel.ID), 1, true)
+	s.Equal(float64(0), resp["code"], resp)
+}
+
+// A clean agent's token registered under any node id and then claimed that
+// node's jobs. The token stays bound to its node: another node is 403.
+func (s *ForwardSecurityTestSuite) TestCleanAgentCannotRegisterUnderAnotherNode() {
+	s.Require().NoError(s.db.AutoMigrate(&model.ForwardCleanAgent{}))
+	s.Require().NoError(s.db.Exec("DELETE FROM v2_forward_clean_agent").Error)
+	agent := &model.ForwardCleanAgent{Name: "relay-agent", NodeID: &s.relay.ID, Token: "v2fa_relay-agent-token"}
+	s.Require().NoError(s.db.Create(agent).Error)
+	register := NewForwardCleanAgentHandler().Register
+	post := func(body string) *httptest.ResponseRecorder {
+		return s.serve("POST", "/forward-agent/register", "/forward-agent/register", body, map[string]string{"X-Agent-Token": agent.Token}, 0, false, register)
+	}
+
+	w := post(fmt.Sprintf(`{"nodeId":%d,"hostname":"elsewhere"}`, s.exit.ID))
+	s.Equal(http.StatusForbidden, w.Code, w.Body.String())
+	s.JSONEq(`{"code":-1,"msg":"agent is bound to another node","data":null}`, w.Body.String())
+	var stored model.ForwardCleanAgent
+	s.Require().NoError(s.db.First(&stored, agent.ID).Error)
+	s.Equal(s.relay.ID, *stored.NodeID)
+	s.Empty(stored.Hostname)
+
+	w = post(fmt.Sprintf(`{"nodeId":%d}`, s.relay.ID))
+	s.Equal(http.StatusOK, w.Code, w.Body.String())
+	s.Contains(w.Body.String(), fmt.Sprintf(`"nodeId":%d`, s.relay.ID))
+}
+
+// An administrator issued a clean agent token without a node, and its first
+// registration chose the node. Issuing one now takes an existing forward
+// node, refused otherwise with the handler's panel error.
+func (s *ForwardSecurityTestSuite) TestCleanAgentTokensAreIssuedForANode() {
+	s.Require().NoError(s.db.AutoMigrate(&model.ForwardCleanAgent{}))
+	s.Require().NoError(s.db.Exec("DELETE FROM v2_forward_clean_agent").Error)
+	issue := func(body string) map[string]any {
+		w := s.serve("POST", "/admin/forward/agents", "/admin/forward/agents", body, nil, 1, true, NewForwardCleanAgentHandler().CreateAgentToken)
+		s.Require().Equal(http.StatusOK, w.Code, w.Body.String())
+		return decodePanelTestResponse(s.T(), w)
+	}
+
+	for body, message := range map[string]string{
+		`{"name":"relay-agent"}`:               "nodeId is required: a clean agent token is issued for one forward node",
+		`{"name":"relay-agent","nodeId":0}`:    "nodeId is required: a clean agent token is issued for one forward node",
+		`{"name":"relay-agent","nodeId":9999}`: "forward node not found",
+	} {
+		resp := issue(body)
+		s.Equal(float64(-1), resp["code"], body)
+		s.Equal(message, resp["msg"], body)
+	}
+	var count int64
+	s.Require().NoError(s.db.Model(&model.ForwardCleanAgent{}).Count(&count).Error)
+	s.Zero(count, "a token was issued without a valid node")
+
+	resp := issue(fmt.Sprintf(`{"name":"relay-agent","nodeId":%d}`, s.relay.ID))
+	s.Require().Equal(float64(0), resp["code"], resp)
+	data := resp["data"].(map[string]any)
+	s.NotEmpty(data["token"])
+	s.Equal(float64(s.relay.ID), data["agent"].(map[string]any)["nodeId"])
 }
 
 func TestForwardSecurity(t *testing.T) {

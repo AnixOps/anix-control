@@ -471,7 +471,8 @@ func (s *ForwardNodeTokenTestSuite) TestUpdateKeepsTheMaskedToken() {
 func (s *ForwardNodeTokenTestSuite) TestCleanAgentTokenIsShownOnce() {
 	s.Require().NoError(s.db.AutoMigrate(&model.ForwardCleanAgent{}))
 	handler := NewForwardCleanAgentHandler()
-	created := s.serve("POST", "/forward/agents", "/forward/agents", `{"name":"edge-agent"}`, nil, handler.CreateAgentToken)
+	// A clean agent token is issued for one forward node.
+	created := s.serve("POST", "/forward/agents", "/forward/agents", fmt.Sprintf(`{"name":"edge-agent","nodeId":%d}`, s.relay.ID), nil, handler.CreateAgentToken)
 	s.Require().Equal(http.StatusOK, created.Code, created.Body.String())
 	token := decodePanelTestResponse(s.T(), created)["data"].(map[string]any)["token"].(string)
 	s.Require().NotEmpty(token)

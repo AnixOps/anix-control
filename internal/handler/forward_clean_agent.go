@@ -152,6 +152,8 @@ func (h *ForwardCleanAgentHandler) handleAgentError(c *gin.Context, err error) {
 		cleanAgentError(c, http.StatusUnauthorized, "unauthorized")
 	case errors.Is(err, service.ErrForwardCleanAgentRevoked):
 		cleanAgentError(c, http.StatusForbidden, "agent revoked")
+	case errors.Is(err, service.ErrForwardCleanAgentNodeMismatch):
+		cleanAgentError(c, http.StatusForbidden, "agent is bound to another node")
 	default:
 		cleanAgentError(c, http.StatusOK, err.Error())
 	}
