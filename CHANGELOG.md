@@ -40,6 +40,42 @@
     read of a moved credential column outside `internal/nodesecrets`, but
     for reasoned exceptions.
 
+### Changed
+
+- **Community edition by default (`app.edition`,
+  `ANIX_CONTROL_APP_EDITION`).** Control now ships as the `community`
+  edition; `commercial` restores every commercial feature exactly as in
+  4.1.0-rc.2. **An install that uses payments, orders, coupons or the
+  invite commission must set `app.edition: commercial` before upgrading**
+  (`docs/UPGRADE.md`).
+  - **Hidden in community.** Every `/api/v2` route of the `order`,
+    `payment` (all gateways, x402, Stripe, PayPal, epay, USDT, and their
+    callbacks and webhooks) and `affiliate` packages, plus the user's plan
+    list (`GET /api/v2/user/plan`), answers `404`
+    `{"error":{"code":"package_route_not_found",...}}`, the same body as an
+    `/api/v2` path that does not exist. One table lists them
+    (`config/editions.json`), and one filter in the router applies it
+    (`internal/router/edition.go`, `internal/edition`).
+  - **Plans become free subscription templates (订阅模板).** Administrators
+    still create, edit and assign them, and they keep mapping users to
+    subscription groups; the admin page hides prices and calls them
+    subscription templates, and a stored price is sent back unchanged.
+  - **Web app.** The user menu drops Plans and Orders; the admin menu drops
+    Orders, Coupons, Invite and Payment, the user balance field, the
+    revenue and order cards on the dashboard, and the extension menus of
+    the hidden packages; their routes redirect to the dashboard. One
+    composable decides (`web/src/composables/useEdition.js`), fed by the
+    new public `GET /api/v4/public/config` (edition, hidden packages,
+    registration settings). Registration shows the invite-code field only
+    when `auth.registration.require_invite` is on.
+  - **Release packages.** `packages/shared/build_package.py --all` builds
+    the community set by default (15 packages, without `affiliate`,
+    `order` and `payment`); `--edition commercial` builds all 18.
+  - **x402 is never enabled by default.** `GET /api/v2/payment/methods`
+    reported x402 as enabled when no payment method was configured; it is
+    now enabled only by an enabled x402 payment configuration, in either
+    edition.
+
 ### Fixed
 
 - Tests: the node gRPC listener's binding tests read a refused stream's status from `Recv` when `Send` returns `io.EOF`, instead of failing intermittently with `Unknown`.
