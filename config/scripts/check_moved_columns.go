@@ -403,7 +403,7 @@ func chainTables(info *types.Info, call *ast.CallExpr, parents map[ast.Node]ast.
 		switch {
 		case sel.Sel.Name == "Table" && len(outer.Args) > 0:
 			if name, ok := constantString(info, outer.Args[0]); ok {
-				tables[strings.Fields(name+" ")[0]] = true
+				tables[strings.Fields(name + " ")[0]] = true
 			}
 		case chainModelMethods[sel.Sel.Name] && len(outer.Args) > 0:
 			if t := info.TypeOf(outer.Args[0]); t != nil {
