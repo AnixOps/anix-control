@@ -72,6 +72,9 @@ type Case struct {
 	Mask []string
 	// Headers lists response headers both sides must send.
 	Headers []string
+	// RequestHeaders are sent with the request: the legacy handler reads
+	// them from it, the native one from the metadata the kernel forwards.
+	RequestHeaders map[string]string
 	// Warmup bodies are sent, in order, before the compared request.
 	Warmup [][]byte
 }
@@ -213,7 +216,7 @@ func run(t *testing.T, open opener, route Route, c Case) (Result, Result) {
 			RouteID: route.RouteID, Method: route.Method, Body: body, Principal: c.Principal,
 			Metadata: pluginhostsdk.RequestMetadata{
 				Path: ctx.Request.URL.Path, Query: ctx.Request.URL.Query(), PathParams: params,
-				ClientIP: clientIP, UserAgent: ctx.Request.UserAgent(),
+				ClientIP: clientIP, UserAgent: ctx.Request.UserAgent(), Headers: forwardedHeaders(c),
 			},
 		})
 		require.NoError(t, err, "native handler failed")
@@ -226,6 +229,19 @@ func run(t *testing.T, open opener, route Route, c Case) (Result, Result) {
 		native.State = c.Snapshot(t, nativeDB)
 	}
 	return legacy, native
+}
+
+// forwardedHeaders are the case's request headers as the kernel forwards
+// them to a package: canonical names, nil when there are none.
+func forwardedHeaders(c Case) map[string][]string {
+	if len(c.RequestHeaders) == 0 {
+		return nil
+	}
+	headers := make(map[string][]string, len(c.RequestHeaders))
+	for name, value := range c.RequestHeaders {
+		headers[http.CanonicalHeaderKey(name)] = []string{value}
+	}
+	return headers
 }
 
 func prepare(t *testing.T, db *gorm.DB, route Route, c Case) {
@@ -247,6 +263,9 @@ func serve(t *testing.T, method, pattern string, c Case, handler gin.HandlerFunc
 		request.RemoteAddr = clientIP + ":1234"
 		if len(body) > 0 {
 			request.Header.Set("Content-Type", "application/json")
+		}
+		for name, value := range c.RequestHeaders {
+			request.Header.Set(name, value)
 		}
 		recorder := httptest.NewRecorder()
 		engine.ServeHTTP(recorder, request)

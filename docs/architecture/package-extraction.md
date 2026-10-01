@@ -28,11 +28,11 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   WebSocket routes use `registeredPackageWebSocketRoute`.
 - `config/package-extraction.json` records each route's extraction mode
   (`bridged`, `native-flagged` or `native`) and where its legacy handler lives
-  (`router`, `identity-bridge` or `none`). 52 routes are `native-flagged`:
-  identity's group A (15), knowledge (6), ticket (8), notification (19) and
-  platform (4). The rest are `bridged`.
-  The identity routes are `identity-bridge`. `check_plugin_only_routes.py`
-  enforces the map against the router and the identity bridge.
+  (`router`, `identity-bridge` or `none`). 59 routes are `native-flagged`:
+  identity's group A (15), knowledge (6), notification (19), plan (7),
+  platform (4) and ticket (8). The rest are `bridged`. The identity routes are
+  `identity-bridge`. `check_plugin_only_routes.py` enforces the map against
+  the router and the identity bridge.
 - Request path: gin middleware -> `compatv2` gateway -> route resolution
   (`internal/compat/v2/registry.go`, `verifiedRouteSource`) -> package host
   process over Unix gRPC -> package bridge (FD 4) -> **the legacy in-kernel
@@ -205,6 +205,25 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
     backup creation reads;
   - creating, deleting and restoring backups: archives of the database and
     files on the kernel's disk.
+- **Plan (in place).** The first module that changes shared subscriber
+  state. 7 of 12 routes run on the adopted `v2_plan` and `v2_event` tables,
+  proved by `internal/tests/plancompat`.
+  - `v2_event` is the plan domain's event log: only the plan routes write
+    it, and nothing reads it.
+  - An administrator's assignment calls `KernelSubscriber.ApplyEntitlement`
+    (`kernel.subscriber.entitlements.v1`) over the bridge connection instead
+    of writing `v2_user`.
+  - Its request id is `plan.assign:<plan>:<user>:<digest>`, a digest of the
+    request's `Idempotency-Key` (else its request id) and the expiry. The
+    legacy handler derives the same id, so a retry applies once whichever
+    side serves it. The parity test runs the real KernelSubscriber server
+    and compares `v2_user`, the request ledger and the change log.
+  - The five `/speed-limit/*` routes stay bridged. They are Flux forward
+    limits: their rows name forward tunnels, they read
+    `v2_forward_tunnel` and `v2_forward_user_tunnel`, and an update
+    re-pushes forwards to nodes. They join forward later.
+  - Order and subscription still read `v2_plan` directly; they need
+    `kapi_plan_catalog_v1` when they move.
 - The kernel publishes read-only views `kapi_*`, created at startup by
   `EnsureKernelAPIViews` (first `kapi_user_directory_v1`, then
   `kapi_system_audit_log_v1`, the `v2_operation_log` rows of module

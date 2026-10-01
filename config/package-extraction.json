@@ -950,7 +950,7 @@
       "path": "/api/v2/admin/plans",
       "package_id": "plan",
       "route_id": "plan.admin.plans.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -958,7 +958,7 @@
       "path": "/api/v2/admin/plans",
       "package_id": "plan",
       "route_id": "plan.admin.plans.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -966,7 +966,7 @@
       "path": "/api/v2/admin/plans/:id",
       "package_id": "plan",
       "route_id": "plan.admin.plans.id.delete",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -974,7 +974,7 @@
       "path": "/api/v2/admin/plans/:id",
       "package_id": "plan",
       "route_id": "plan.admin.plans.id.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -982,7 +982,7 @@
       "path": "/api/v2/admin/plans/:id",
       "package_id": "plan",
       "route_id": "plan.admin.plans.id.put",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -990,7 +990,7 @@
       "path": "/api/v2/admin/plans/:id/assign",
       "package_id": "plan",
       "route_id": "plan.admin.plans.id.assign.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -2246,7 +2246,7 @@
       "path": "/api/v2/user/plan",
       "package_id": "plan",
       "route_id": "plan.user.plan.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {

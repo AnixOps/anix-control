@@ -471,6 +471,24 @@
   routes, updating the backup configuration, and creating, deleting and
   restoring backups stay bridged. `EnsureKernelAPIViews` now leaves out a
   view whose source table does not exist yet.
+- **Plan module, the first on KernelSubscriber.** `packages/plan` has its own
+  host and serves 7 of its 12 routes natively: the admin plan CRUD, the
+  assignment and the user plan list.
+  - It runs on `v2_plan` and `v2_event`, adopted in place.
+  - An administrator's assignment calls `KernelSubscriber.ApplyEntitlement`
+    over the bridge connection (`kernel.subscriber.entitlements.v1`). The
+    package never writes `v2_user`.
+  - Assignments are now idempotent on the legacy and native paths alike. The
+    request id is `plan.assign:<plan>:<user>:<digest>`, a digest of the
+    request's `Idempotency-Key` (else its request id) and the expiry, and it
+    is recorded in `v4_kernel_subscriber_request`. A retried request applies
+    once, and a new request is a new grant, as before.
+  - `internal/tests/plancompat` proves byte parity on SQLite and PostgreSQL,
+    and the same `v2_user` rows, request ledger and change log, against the
+    real KernelSubscriber server. The PostgreSQL run is part of CI.
+  - The five `/api/v2/speed-limit/*` routes stay bridged: they are forward
+    limits on forward tunnels and join the forward package later.
+  - The parity harness can send request headers (`Case.RequestHeaders`).
 
 - The kernel side of the identity module, `KernelIdentity` (N9). It is served
   on the local package bridge and on the module listener.

@@ -4,6 +4,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/database"
@@ -610,11 +611,28 @@ func (h *AdminHandler) AssignPlanToUser(c *gin.Context) {
 		panelError(c, "参数错误: "+err.Error())
 		return
 	}
-	if err := h.planService.AssignToUser(uint(planID), req.UserID, req.ExpireAt); err != nil {
+	requestID := service.PlanAssignmentRequestID(uint(planID), req.UserID, req.ExpireAt, assignmentToken(c))
+	if err := h.planService.AssignToUser(uint(planID), req.UserID, req.ExpireAt, requestID); err != nil {
 		panelAdminPlanError(c, "分配失败", err)
 		return
 	}
 	panelSuccess(c, gin.H{"message": "分配成功"})
+}
+
+// assignmentToken identifies a plan assignment request for
+// service.PlanAssignmentRequestID: its Idempotency-Key, else its request id
+// (X-Request-ID or the one the kernel gave it), else a fresh value.
+func assignmentToken(c *gin.Context) string {
+	if key := strings.TrimSpace(c.GetHeader("Idempotency-Key")); key != "" {
+		return key
+	}
+	if id := strings.TrimSpace(c.GetString("request_id")); id != "" {
+		return id
+	}
+	if id := strings.TrimSpace(c.GetHeader("X-Request-ID")); id != "" {
+		return id
+	}
+	return uuid.NewString()
 }
 
 func panelAdminPlanError(c *gin.Context, fallback string, err error) {
