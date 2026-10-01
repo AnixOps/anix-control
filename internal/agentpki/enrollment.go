@@ -3,7 +3,6 @@ package agentpki
 import (
 	"context"
 	"crypto/rand"
-	"crypto/subtle"
 	"crypto/x509"
 	"encoding/base64"
 	"encoding/json"
@@ -15,6 +14,7 @@ import (
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/modulepki"
+	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -223,13 +223,14 @@ func (s *Service) consumeCredential(tx *gorm.DB, bootstrap Bootstrap, now time.T
 
 // authenticateNodeCredential checks a proxy node's API key or a forward
 // node's token against the node the agent claims, as the legacy transports
-// do.
+// do. Both are read through the node credential split, which applies the
+// table's phase and never matches a tombstone or the placeholder.
 func authenticateNodeCredential(tx *gorm.DB, bootstrap Bootstrap) error {
 	node := bootstrap.Node
 	switch {
 	case bootstrap.Method == model.AgentEnrollmentMethodNodeAPIKey && node.Kind == agentcontrol.NodeKindProxy && node.ID > 0:
-		var row model.Node
-		if err := tx.Select("id", "api_key_hash").Where("api_key_hash = ?", hashSecret(bootstrap.Secret)).First(&row).Error; err != nil {
+		row, err := nodesecrets.NodeByAPIKey(tx, bootstrap.Secret, false)
+		if err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
 				return ErrEnrollmentRejected
 			}
@@ -247,7 +248,7 @@ func authenticateNodeCredential(tx *gorm.DB, bootstrap Bootstrap) error {
 			}
 			return err
 		}
-		if row.APIToken == "" || subtle.ConstantTimeCompare([]byte(row.APIToken), []byte(bootstrap.Secret)) != 1 {
+		if !nodesecrets.ForwardNodeTokenMatches(tx, &row, bootstrap.Secret) {
 			return ErrEnrollmentRejected
 		}
 		return nil

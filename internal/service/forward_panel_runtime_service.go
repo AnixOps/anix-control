@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"gorm.io/gorm"
 )
 
@@ -472,7 +473,7 @@ func (s *PanelForwardRuntimeService) buildExecuteRequest(role forwardRuntimeNode
 		Host:     node.Host,
 		Port:     node.Port,
 		APIPort:  node.APIPort,
-		APIToken: node.APIToken,
+		APIToken: nodesecrets.ForwardNodeToken(s.db, node),
 	}
 	return req, uintPtr(node.ID), nil
 }

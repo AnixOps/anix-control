@@ -104,6 +104,7 @@ func (h *UniProxyHandler) buildNewNodeConfig(nodeID uint, preferredType string) 
 	config := make(map[string]any)
 
 	if node.RawConfig != nil && *node.RawConfig != "" {
+		h.nodeService.PrepareNodeRawConfig(node)
 		if err := json.Unmarshal([]byte(*node.RawConfig), &config); err != nil {
 			return nil, fmt.Errorf("invalid raw_config JSON: %v", err)
 		}

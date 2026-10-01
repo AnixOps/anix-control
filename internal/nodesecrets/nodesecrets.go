@@ -7,11 +7,15 @@
 // protected kernel tables v4_kernel_node_credential and
 // v4_kernel_protocol_secret. Existing tables are never altered.
 //
-// This is phase P1 (dual_write): every kernel writer of a moved column calls
-// Sync in the transaction of its legacy write, and Sync derives the new rows
-// from the legacy rows it just wrote, so the two forms cannot drift. Readers
-// still read the legacy columns; Backfill copies the rows written before P1
-// and Verify compares the digests of both forms.
+// Phase P1 (dual_write): every kernel writer of a moved column calls Sync in
+// the transaction of its legacy write, and Sync derives the new rows from the
+// legacy rows it just wrote, so the two forms cannot drift. Backfill copies
+// the rows written before P1 and Verify compares the digests of both forms.
+//
+// Phase P2 (dual_read): every kernel reader of a moved column reads through
+// this package (read.go), which applies each table's phase. SetPhase moves a
+// table's readers to dual_read once a recent verification matched, and back
+// to dual_write. Writers dual-write in both phases.
 //
 // Secret values are never logged, printed or put in an error.
 package nodesecrets

@@ -6,6 +6,7 @@ import (
 	"sync"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"gorm.io/gorm"
 )
 
@@ -51,7 +52,7 @@ func (m *Manager) createClient(node *model.ForwardNode) (*Client, error) {
 	client := NewClient(&Config{
 		Host:        fmt.Sprintf("http://%s:%d", node.Host, node.APIPort),
 		MetricsHost: metricsHost,
-		APIToken:    node.APIToken,
+		APIToken:    nodesecrets.ForwardNodeToken(m.db, node),
 	})
 
 	m.clients.Store(node.ID, client)

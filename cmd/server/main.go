@@ -449,7 +449,7 @@ func run() int {
 	if nodeSecretsArguments != nil {
 		if err := runNodeSecretsCommand(context.Background(), database.Get(), nodeSecretsArguments, os.Stdout); err != nil {
 			log.Printf("node-secrets: %v", err)
-			if errors.Is(err, errNodeSecretsMismatch) {
+			if errors.Is(err, errNodeSecretsMismatch) || errors.Is(err, errNodeSecretsInvalid) {
 				return 3
 			}
 			return 2

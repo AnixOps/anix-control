@@ -70,9 +70,9 @@ var ErrMismatch = errors.New("nodesecrets: the old and new forms of the node sec
 // PostgreSQL), so concurrent writers cannot make it report a difference.
 //
 // The outcome is recorded in v4_kernel_node_secret_split: a match records
-// the digest and verified_at. The phase is left as it is; the readers move
-// in a later release (NO-3). Verify answers ErrMismatch, with the results,
-// when a table differs.
+// the digest and verified_at. The phase is left as it is: SetPhase moves the
+// readers to dual_read, and requires a recent verification that matched.
+// Verify answers ErrMismatch, with the results, when a table differs.
 func Verify(ctx context.Context, db *gorm.DB, options VerifyOptions) ([]TableVerify, error) {
 	tables, err := selectTables(options.Tables)
 	if err != nil {

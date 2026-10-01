@@ -6,6 +6,7 @@ import (
 	"fmt"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"gorm.io/gorm"
 )
 
@@ -86,8 +87,8 @@ func (p *nodeXForwardRuntimeProvider) buildRequest(action string, rule *model.Fo
 				TargetPort: rule.TargetPort,
 				Enabled:    rule.Enabled,
 			},
-			RelayNode: mapForwardNodeToNodeXPayload(relayNode),
-			ExitNode:  mapForwardNodeToNodeXPayload(exitNode),
+			RelayNode: mapForwardNodeToNodeXPayload(p.db, relayNode),
+			ExitNode:  mapForwardNodeToNodeXPayload(p.db, exitNode),
 		},
 	}, nil
 }
@@ -107,7 +108,9 @@ func (p *nodeXForwardRuntimeProvider) loadNode(preloaded *model.ForwardNode, id 
 	return &node, nil
 }
 
-func mapForwardNodeToNodeXPayload(node *model.ForwardNode) nodeXForwardNodePayload {
+// mapForwardNodeToNodeXPayload is a forward node as NodeX receives it. Its
+// token is read through the node credential split.
+func mapForwardNodeToNodeXPayload(db *gorm.DB, node *model.ForwardNode) nodeXForwardNodePayload {
 	if node == nil {
 		return nodeXForwardNodePayload{}
 	}
@@ -117,6 +120,6 @@ func mapForwardNodeToNodeXPayload(node *model.ForwardNode) nodeXForwardNodePaylo
 		Host:     node.Host,
 		Port:     node.Port,
 		APIPort:  node.APIPort,
-		APIToken: node.APIToken,
+		APIToken: nodesecrets.ForwardNodeToken(db, node),
 	}
 }

@@ -19,8 +19,13 @@ func TestVerifyForwardNodeTokenRefusesEmptyTokens(t *testing.T) {
 	keyless := model.Node{ID: 1, Name: "keyless", Host: "a.example.test"}
 	keyed := model.Node{ID: 2, Name: "keyed", Host: "b.example.test", APIKey: "stored-elsewhere", APIKeyHash: hashString("node-key")}
 	legacy := model.Node{ID: 3, Name: "legacy", Host: "c.example.test", APIKey: "legacy-key"}
-	require.NoError(t, db.Create(&[]model.Node{keyless, keyed, legacy}).Error)
-	require.NoError(t, db.Create(&[]model.ForwardNode{{ID: 10, Name: "tokenless"}, {ID: 11, Name: "tokened", APIToken: "fwd-token"}}).Error)
+	// What the credential split leaves in the legacy columns of a finalized
+	// table: a tombstone, or the placeholder.
+	tombstoned := model.Node{ID: 4, Name: "tombstoned", Host: "d.example.test", APIKey: "!moved:4"}
+	masked := model.Node{ID: 5, Name: "masked", Host: "e.example.test", APIKey: "********"}
+	require.NoError(t, db.Create(&[]model.Node{keyless, keyed, legacy, tombstoned, masked}).Error)
+	require.NoError(t, db.Create(&[]model.ForwardNode{{ID: 10, Name: "tokenless"}, {ID: 11, Name: "tokened", APIToken: "fwd-token"},
+		{ID: 12, Name: "masked", APIToken: "********"}}).Error)
 	h := &AgentHandler{db: db}
 
 	for _, c := range []struct {
@@ -38,6 +43,12 @@ func TestVerifyForwardNodeTokenRefusesEmptyTokens(t *testing.T) {
 		{"forward node without a token, empty token", 10, "", false},
 		{"forward node with a token, empty token", 11, "", false},
 		{"forward node with a token, its token", 11, "fwd-token", true},
+		{"node with a tombstone, the tombstone", 4, "!moved:4", false},
+		{"node with a tombstone, the placeholder", 4, "********", false},
+		{"node with the placeholder, the placeholder", 5, "********", false},
+		{"node with a key, a tombstone", 2, "!moved:2", false},
+		{"forward node with the placeholder, the placeholder", 12, "********", false},
+		{"forward node with a token, a tombstone", 11, "!moved:11", false},
 	} {
 		_, err := h.verifyForwardNodeToken(c.id, c.token)
 		if c.ok {

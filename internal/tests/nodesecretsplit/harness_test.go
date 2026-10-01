@@ -1,10 +1,11 @@
-// Package nodesecretsplit tests phase P1 of the node credential split
-// (docs/architecture/node-ops-service.md, section 4) through the kernel's
-// own writers and readers: every writer of a moved column dual-writes in its
-// transaction, backfill and verify agree, and the legacy readers still
-// authenticate every node from the unchanged legacy columns. It runs on
-// SQLite and, with ANIX_TEST_POSTGRES_DSN set, on PostgreSQL. Every secret
-// is fake.
+// Package nodesecretsplit tests phases P1 and P2 of the node credential
+// split (docs/architecture/node-ops-service.md, section 4) through the
+// kernel's own writers and readers: every writer of a moved column
+// dual-writes in its transaction, backfill and verify agree, every reader
+// follows its table's phase and falls back with a metric, and an older
+// binary still authenticates every node from the unchanged legacy columns.
+// It runs on SQLite and, with ANIX_TEST_POSTGRES_DSN set, on PostgreSQL.
+// Every secret is fake.
 package nodesecretsplit
 
 import (
@@ -81,7 +82,9 @@ func initKernelDatabase(t *testing.T, name string, cfg *config.DatabaseConfig) b
 	require.NoError(t, db.AutoMigrate(
 		&model.User{}, &model.Plan{}, &model.SubscriptionGroup{},
 		&model.Node{}, &model.NodeProtocol{}, &model.WireGuardPeer{}, &model.AuthorizedKey{},
-		&model.ForwardNode{}, &model.ForwardCleanAgent{}, &model.ForwardRuntimeJob{},
+		&model.ForwardNode{}, &model.ForwardCleanAgent{}, &model.ForwardRuntimeJob{}, &model.ForwardRule{},
+		// Phase changes are audited in the operation log.
+		&model.OperationLog{},
 	))
 	require.NoError(t, service.EnsureKernelSchema(db))
 	require.NoError(t, nodesecrets.EnsureSchema(db))

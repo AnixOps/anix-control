@@ -854,10 +854,11 @@ existing one:
 Every kernel write of a credential or secret (node creation, update and
 deletion, registration, registration keys, forward nodes, clean agents,
 protocols, WireGuard peers and their rotation) now also writes these
-tables, in the same transaction. Nothing reads them yet: every reader still
-uses the legacy columns, which keep every value. An older binary therefore
-works as before after a rollback; writes it makes do not reach the new
-tables, so run `backfill` again after upgrading again.
+tables, in the same transaction. Readers keep using the legacy columns,
+which keep every value, until you move a table to `dual_read` (next
+section). An older binary therefore works as before after a rollback;
+writes it makes do not reach the new tables, so run `backfill` again after
+upgrading again.
 
 The values are stored in clear, like the legacy columns, and the tables are
 protected: no package can adopt them. Database backups and dumps hold them,
@@ -881,9 +882,100 @@ anix-control node-secrets status     # phase, backfill progress, last verify
   differing secrets per table by subject and kind or JSON pointer
   (`missing`, `extra`, `different`). A difference after a completed backfill
   means a write bypassed Control's writers; `backfill` repairs it.
-- The phase stays `dual_write`. Nothing depends on these commands in this
-  release; the next phase, where readers move to the new tables with a
-  fallback, will require a matching `verify` first.
+- The phase stays `dual_write` until you change it (next section), which
+  requires a matching `verify` first.
+
+### Moving The Node Credential Readers To The Split Tables (Phase P2)
+
+Phase P2, dual-read, moves a table's readers to the new tables. It is an
+operator command per table, never automatic, and the way back is another
+phase change. Rehearse it on a staging copy first.
+
+**What moves.** Every kernel reader of a moved column reads through the
+split, in its table's phase:
+
+- node API key checks: UniProxy, the node API, package downloads, the gRPC
+  listener, the Agent Control stream, and the agent WebSocket and HTTP
+  routes;
+- the request signature's shared secret and node registration keys;
+- forward node tokens (agent checks, the gost API, NodeX payloads) and
+  clean agent tokens;
+- protocol secrets in node configurations (UniProxy, gRPC) and in
+  subscriptions, raw configurations, WireGuard peer keys, and the
+  administrators' credentials route.
+
+In `dual_write` they read the legacy columns, exactly as before. In
+`dual_read` they read the new tables. Where a new row is missing or differs,
+they fall back to the legacy column, so no node is locked out.
+
+**The procedure:**
+
+```bash
+anix-control node-secrets backfill                  # copy what a bypassing write left behind
+anix-control node-secrets verify                    # must exit 0
+anix-control node-secrets phase -by <you> all dual_read
+anix-control node-secrets status                    # every table in dual_read
+```
+
+- `phase` takes one table, a comma-separated list, or `all`. It moves a
+  table to `dual_read` only if the table's latest `verify` matched: no
+  mismatch, not followed by a failing verify, and at most an hour old.
+  - Otherwise it prints each table's reason, changes nothing and exits 2.
+    With `all`, one refusal refuses every table.
+  - Run `verify` again and repeat.
+- Running Control processes follow a change within 5 seconds; no restart is
+  needed.
+- Each change writes an audit entry: `v2_operation_log`, module
+  `node_secrets`, action `phase_dual_read` or `phase_dual_write`. It names
+  the table, the phases, the verification it relied on, and who made it
+  (`-by`, default `$USER`).
+
+**Watch the fallbacks.** `/metrics` counts every read that used a legacy
+column in `anixops_node_secrets_fallback_total{table,kind,reason}`, with
+reason `missing`, `mismatch` or `error`. It should stay at zero.
+
+- The log has one line per subject, `node secret read fell back to the
+  legacy column`. It names the table, kind, row id and JSON pointer, never a
+  value.
+- A fallback means a write bypassed Control's writers. `backfill` repairs
+  it, and `verify` confirms the repair.
+- Finalizing (P3) will require a zero fallback count.
+
+**Rollback** is a phase change and needs no verification:
+
+```bash
+anix-control node-secrets phase -by <you> all dual_write
+```
+
+The writers dual-write in both phases, and `phase` changes only the split's
+state table. The legacy columns therefore still hold every value, and an
+older binary authenticates every node without any phase change.
+
+**Validate on build (report-only).** Before Control builds a node's
+configuration from a protocol or a raw configuration (UniProxy, gRPC), it
+checks the secrets:
+
+- no secret is the mask `********` or a tombstone;
+- a WireGuard entry's server key pair is valid;
+- a Reality private key is 32 bytes;
+- a Shadowsocks 2022 server key has its cipher's length.
+
+A failing row is counted in `anixops_node_secrets_invalid_total{table,type,
+reason}` and logged once with the node, protocol and field, never the
+value. It is still sent to the node: nothing is excluded in this release. To
+scan every row:
+
+```bash
+anix-control node-secrets validate                  # exit 3 when a row fails
+```
+
+A later release leaves failing rows out of node configurations, once a
+staging copy shows none. Fix what the scan reports before then.
+
+**Tombstones.** In every phase, no reader accepts `!moved:<id>` or
+`********` as a node key, registration key, forward node token or clean
+agent token. Finalize (P3) writes these values into the legacy columns. A
+request signed with a placeholder secret is refused.
 
 ### Agent Client Certificates Are Optional
 

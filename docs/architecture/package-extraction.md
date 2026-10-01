@@ -293,11 +293,16 @@ The planned `kernel.entitlement.apply.v1` became
   moved column calls it in the transaction of its legacy write.
   `anix-control node-secrets backfill` copies older rows and `verify`
   compares the digests of both forms; `v4_kernel_node_secret_split` holds
-  each table's phase (`dual_write`) and the outcome. Every reader still
-  reads the legacy columns, so the tables stay protected and no package
-  route changes; the readers move in the next phase, and the credential-free
-  tables become adoptable only once finalized (the KernelNodeOps design,
-  section 4).
+  each table's phase (`dual_write`) and the outcome.
+- **Node credential split, phase P2 (dual-read).** Every kernel reader of
+  a moved column reads through `internal/nodesecrets`, in its table's
+  phase. `anix-control node-secrets phase <table|all> dual_read` moves a
+  table's readers to the new tables after a recent matching `verify`; a
+  missing or differing row falls back to the legacy column and is counted.
+  `phase ... dual_write` moves them back. The legacy columns keep every
+  value in both phases, so the tables stay protected and no package route
+  changes. The credential-free tables become adoptable only once finalized
+  (the KernelNodeOps design, section 4).
 - **Kernel views.** Packages read other domains through 16 read-only
   `kapi_*` views (listed at the end of section 3.4), granted by
   `kernel.view:<view>`; none shows a credential.

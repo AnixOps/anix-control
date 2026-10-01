@@ -17,6 +17,7 @@ import (
 
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v4/internal/parser"
 	"github.com/AnixOps/anix-control/v4/internal/subscriber"
 	"gorm.io/gorm"
@@ -590,6 +591,9 @@ func (s *SubscriptionService) getInternalNodes(user *model.User, ctx *model.Temp
 	}
 
 	fmt.Printf("[Subscription] Found %d candidate protocols\n", len(protocols))
+	// The protocols' secrets (a Shadowsocks 2022 server key, a WireGuard
+	// server key) are read through the node credential split.
+	nodesecrets.ResolveProtocols(s.db, protocols)
 
 	var result []*model.ParsedNode
 	for _, p := range protocols {
