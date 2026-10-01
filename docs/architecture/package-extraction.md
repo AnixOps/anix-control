@@ -28,14 +28,14 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   WebSocket routes use `registeredPackageWebSocketRoute`.
 - `config/package-extraction.json` records each route's extraction mode
   (`bridged`, `native-flagged` or `native`) and where its legacy handler lives
-  (`router`, `identity-bridge` or `none`). 142 routes are `native-flagged`:
+  (`router`, `identity-bridge` or `none`). 143 routes are `native-flagged`:
   identity-platform (20: group A's 15, the profile, dashboard and user detail,
   and the traffic and subscription resets), affiliate (7), forward (17),
-  knowledge (6), machine-telemetry (2), notification (19), order (9), payment
-  (16), plan (7), platform (4), protocol-runtime (3), proxy-node (7),
-  subscription (17) and ticket (8). The rest are `bridged`. The identity
-  routes are `identity-bridge`. `check_plugin_only_routes.py` enforces the map
-  against the router and the identity bridge.
+  gost-mesh (1), knowledge (6), machine-telemetry (2), notification (19),
+  order (9), payment (16), plan (7), platform (4), protocol-runtime (3),
+  proxy-node (7), subscription (17) and ticket (8). The rest are `bridged`.
+  The identity routes are `identity-bridge`. `check_plugin_only_routes.py`
+  enforces the map against the router and the identity bridge.
 - Request path: gin middleware -> `compatv2` gateway -> route resolution
   (`internal/compat/v2/registry.go`, `verifiedRouteSource`) -> package host
   process over Unix gRPC -> package bridge (FD 4) -> **the legacy in-kernel
@@ -567,6 +567,14 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
     - the system information: the kernel binary's own build metadata;
     - the monitoring WebSocket: the kernel's node list from the protected
       `v2_node`; WebSocket routes always relay to the kernel.
+- **Gost mesh (in place).** 1 of gost-mesh's 3 routes runs natively, proved
+  by `internal/tests/gostmeshcompat`: the administrator's gost API
+  connection test. It reads no table: it calls the gost API at the host and
+  port in the request, with the token in the request, as the kernel's
+  handler does, and answers the same errors. The NodeX runtime status and
+  diagnosis stay bridged: they read the NodeX address and shared token from
+  the protected `v2_system_config` (the token is a secret no view shows) and
+  call NodeX with it.
 - The kernel publishes read-only views `kapi_*`, created at startup by
   `EnsureKernelAPIViews` (first `kapi_user_directory_v1`, then
   `kapi_system_audit_log_v1`, the `v2_operation_log` rows of module

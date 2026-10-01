@@ -844,6 +844,13 @@
     metadata) and the monitoring WebSocket stay bridged.
   - `internal/tests/machinetelemetrycompat` proves byte parity on SQLite and
     PostgreSQL (42 cases each). The PostgreSQL run is part of CI.
+- **Gost mesh module.** `packages/gost-mesh` has its own host and serves 1
+  of its 3 routes natively: the administrator's gost API connection test,
+  which reads no table. The NodeX runtime status and diagnosis stay bridged:
+  they use the NodeX token in the protected `v2_system_config`.
+  `internal/tests/gostmeshcompat` proves byte parity (23 cases) against test
+  gost APIs that answer, refuse, fail, answer what the client cannot decode,
+  or do not listen. The PostgreSQL run is part of CI.
 
 - The kernel side of the identity module, `KernelIdentity` (N9). It is served
   on the local package bridge and on the module listener.

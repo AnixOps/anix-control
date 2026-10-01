@@ -470,7 +470,7 @@
       "path": "/api/v2/admin/forward/test-connection",
       "package_id": "gost-mesh",
       "route_id": "gost.admin.forward.test_connection.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
