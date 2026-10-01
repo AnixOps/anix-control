@@ -2,6 +2,7 @@ package main
 
 import (
 	"log"
+	"strings"
 
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/AnixOps/anix-control/v4/packages/gost-mesh/native"
@@ -19,7 +20,9 @@ func newGostMeshService(bridge pluginhostsdk.RouterBridge, leaseID string) (*plu
 		AllowRoute: func(routeID string) bool {
 			_, nativeRoute := gostMeshRoutes[routeID]
 			_, bridgedRoute := bridgedRoutes[routeID]
-			return nativeRoute || bridgedRoute
+			// The package's own /api/v3/plugins routes (control_routes)
+			// arrive as "gost-mesh.control.<digest>" and relay to the kernel.
+			return nativeRoute || bridgedRoute || strings.HasPrefix(routeID, pluginControlRoutePrefix)
 		},
 		Native: service.Handlers(),
 	})
@@ -30,6 +33,10 @@ func newGostMeshService(bridge pluginhostsdk.RouterBridge, leaseID string) (*plu
 var gostMeshRoutes = map[string]struct{}{
 	"gost.admin.forward.test_connection.post": {},
 }
+
+// pluginControlRoutePrefix starts the route id the kernel gives the
+// package's own plugin control routes (service.PluginControlBridgeRouteID).
+const pluginControlRoutePrefix = "gost-mesh.control."
 
 // bridgedRoutes are the package's compatibility routes without a native
 // handler; they always relay to the kernel's legacy handler. The NodeX

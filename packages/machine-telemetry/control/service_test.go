@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -96,4 +97,25 @@ func TestMachineTelemetryManifestCapabilities(t *testing.T) {
 	require.ElementsMatch(t, []string{
 		"telemetry.read", "kernel.storage.v1", "kernel.view:kapi_traffic_log_v1", "kernel.view:kapi_user_directory_v1",
 	}, manifest.Capabilities)
+}
+
+// The package's own plugin control routes (its /api/v3/plugins status
+// route, dispatched as "machine-telemetry.control.<digest>") relay to the kernel;
+// another package's are refused.
+func TestHostRelaysThePackagePluginControlRoutes(t *testing.T) {
+	bridge := &bridgeStub{}
+	service, err := newMachineTelemetryService(bridge, "lease-1")
+	require.NoError(t, err)
+	route := "machine-telemetry.control." + strings.Repeat("ab", 32)
+	response, err := service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
+		RouteID: route, BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
+	})
+	require.NoError(t, err)
+	require.EqualValues(t, 200, response.StatusCode)
+	require.Equal(t, route, bridge.operation)
+
+	_, err = service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
+		RouteID: "gost-mesh.control." + strings.Repeat("ab", 32), BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
+	})
+	require.Error(t, err)
 }

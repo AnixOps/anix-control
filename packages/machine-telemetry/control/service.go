@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"log"
+	"strings"
 
 	"github.com/AnixOps/anix-control/sdk/packagestoresdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
@@ -37,7 +38,9 @@ func newMachineTelemetryService(bridge machineTelemetryBridge, leaseID string) (
 		AllowRoute: func(routeID string) bool {
 			_, nativeRoute := machineTelemetryRoutes[routeID]
 			_, bridgedRoute := bridgedRoutes[routeID]
-			return nativeRoute || bridgedRoute
+			// The package's own /api/v3/plugins routes (control_routes)
+			// arrive as "machine-telemetry.control.<digest>" and relay to the kernel.
+			return nativeRoute || bridgedRoute || strings.HasPrefix(routeID, pluginControlRoutePrefix)
 		},
 		Native: service.Handlers(),
 	})
@@ -49,6 +52,10 @@ var machineTelemetryRoutes = map[string]struct{}{
 	"telemetry.admin.traffic.hourly.get":       {},
 	"telemetry.admin.traffic.user_ranking.get": {},
 }
+
+// pluginControlRoutePrefix starts the route id the kernel gives the
+// package's own plugin control routes (service.PluginControlBridgeRouteID).
+const pluginControlRoutePrefix = "machine-telemetry.control."
 
 // bridgedRoutes are the package's compatibility routes without a native
 // handler; they always relay to the kernel's legacy handler.

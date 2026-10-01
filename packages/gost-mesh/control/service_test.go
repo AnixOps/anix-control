@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"sort"
+	"strings"
 	"testing"
 	"time"
 
@@ -82,4 +83,25 @@ func TestGostMeshHostRoutesAreThePackageRoutes(t *testing.T) {
 	sort.Strings(want)
 	sort.Strings(got)
 	require.Equal(t, want, got)
+}
+
+// The package's own plugin control routes (its /api/v3/plugins status
+// route, dispatched as "gost-mesh.control.<digest>") relay to the kernel;
+// another package's are refused.
+func TestHostRelaysThePackagePluginControlRoutes(t *testing.T) {
+	bridge := &bridgeStub{}
+	service, err := newGostMeshService(bridge, "lease-1")
+	require.NoError(t, err)
+	route := "gost-mesh.control." + strings.Repeat("ab", 32)
+	response, err := service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
+		RouteID: route, BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
+	})
+	require.NoError(t, err)
+	require.EqualValues(t, 200, response.StatusCode)
+	require.Equal(t, route, bridge.operation)
+
+	_, err = service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
+		RouteID: "machine-telemetry.control." + strings.Repeat("ab", 32), BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
+	})
+	require.Error(t, err)
 }
