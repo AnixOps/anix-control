@@ -10,6 +10,7 @@ import (
 
 	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/sealedsecrets"
 	"github.com/google/uuid"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -59,7 +60,11 @@ type Engine struct {
 	NodeQuota    int
 	// Now defaults to time.Now; it stamps the ledger.
 	Now func() time.Time
+	// Secrets holds the sealed handles of the requests in flight; nil
+	// selects sealedsecrets.DefaultStore, which the v2 gateway seals into.
+	Secrets *sealedsecrets.Store
 
+	sealed  sealedState
 	notify  hub
 	wakeMu  sync.Mutex
 	wake    chan struct{}
@@ -367,7 +372,7 @@ func (e *Engine) dispatch(ctx context.Context, op model.KernelNodeOperation) {
 	run := &Run{
 		OperationID: op.OperationID, RequestID: op.RequestID, PackageID: op.PackageID, Kind: op.Kind,
 		ParentOperationID: op.ParentOperationID, Operation: operation, Targets: targets[op.OperationID],
-		Attempt: op.Attempt, Deadline: op.DeadlineAt, engine: e,
+		Attempt: op.Attempt, Deadline: op.DeadlineAt, Request: e.boundRequest(op.PackageID, op.RequestID), engine: e,
 	}
 	runCtx, cancel := context.WithDeadline(ctx, op.DeadlineAt)
 	e.mu.Lock()
@@ -420,7 +425,14 @@ func (e *Engine) complete(engineCtx, runCtx context.Context, run *Run, outcome O
 		}
 		return
 	}
-	end := ending{result: scrubResult(outcome.result, secrets), err: scrubError(outcome.err, secrets), channel: channelName(outcome.channel)}
+	defer e.dropBinding(run.PackageID, run.RequestID)
+	// The ledger keeps a result without its handles; the submitting call,
+	// bound to the request they were minted for, is answered them.
+	stored, revealed := withoutHandles(scrubResult(outcome.result, secrets))
+	if revealed != nil && run.Request != nil {
+		e.keepReveal(run.OperationID, revealed, run.Request)
+	}
+	end := ending{result: stored, err: scrubError(outcome.err, secrets), channel: channelName(outcome.channel)}
 	switch outcome.kind {
 	case outcomeSucceeded:
 		end.state = stateSucceeded

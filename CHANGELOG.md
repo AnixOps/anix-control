@@ -474,6 +474,66 @@
 
 ### Added
 
+- **Sealed secret handles (NO-4)** (`internal/sealedsecrets`,
+  `docs/architecture/node-ops-service.md` section 3.7). A package host no
+  longer reads a node secret an administrator types, or one shown once in
+  an answer, on the routes that carry one.
+  - **The field list.** New kernel-owned table
+    `config/node-secret-fields.json`, embedded in the kernel binary. It
+    lists 11 routes with their request and answer fields: node creation and
+    update, raw configuration and its validation, protocol creation and
+    update, forward node creation and update, registration keys and clean
+    agents. The route gate checks every route id against
+    `config/package-extraction.json`.
+  - **Requests.** The v2 gateway replaces every secret in a listed route's
+    body with an opaque handle (`anix-sealed:v1:` and 43 random base64url
+    characters) before the host reads it:
+    - each listed field;
+    - every value under a key `IsNodeSecretKey` marks, inside listed
+      documents, inline or as JSON strings, and anywhere else in the body.
+
+    Member names match whatever their case or underscores. The placeholder
+    `********` and empty values pass, so keep-on-save works. Every other
+    byte stays as sent. The bridge capability keeps the original body, so
+    the legacy handler, in every route mode, reads the request as sent.
+  - **Handles.** Each handle is bound to its request (the package
+    generation, request id and route), its target (the path parameter's
+    resource, or the one the request creates, bound at first use) and its
+    field. A handle is single-use and lives in kernel memory only until its
+    request ends. Handles never appear in logs, metric labels, the
+    KernelNodeOps ledger or error texts.
+  - **KernelNodeOps request bindings are verified.** NO-1 accepted them
+    unchecked. `SubmitOperation` now checks a binding on the session the
+    call arrived on, against a live, unconsumed dispatch to the calling
+    host; any other is `PERMISSION_DENIED`, and nothing is recorded.
+    - Executors resolve handles with `Submission.Unseal`, and mint the
+      handles of secrets they generate with `Run.Reveal`.
+    - The ledger stores results without handles, and refuses a request id,
+      reason or operation that holds one. Handles are answered only to the
+      submitting call.
+  - **Answers.** The gateway expands a handle only at a listed answer field,
+    under its name, in the answer to the request it was minted for, once.
+    Any other handle of a request in flight in an answer or its headers is
+    refused (502 `sealed_secret_refused`).
+  - **Fail closed.** A request that cannot be sealed is served by the
+    kernel's legacy handler without the package host
+    (`Supervisor.DispatchLegacy`), or refused with 503
+    `sealed_secret_unavailable` when the route has none. That covers a body
+    that is not JSON, a secret field that is not a string, a target that is
+    not an id, a sealed body over the limit, or a missing field list. New
+    metric `anixops_v2_gateway_sealed_secrets_total`.
+  - **Shadow mode.** The SDK router gives native handlers the request
+    binding (`NativeRequest.Binding`) and shadow runs none. The shadow and
+    parity comparisons (`v2compat.EqualForCompare`, `packagecompat`) mask
+    handles on both sides.
+  - No route changes mode, and answers are byte-identical. Tests cover:
+    - every listed route and field, the placeholder and empty values;
+    - refusals of another request's, route's, target's or field's handle;
+    - expansion in the bound answer only, the legacy fallback and the
+      shadow comparison;
+    - a walk of `IsNodeSecretKey` keys through every listed route, end to
+      end over a real bridge session (`internal/tests/sealedhandles`).
+
 - **Agent stream data-plane contract** (`sdk/api/agent/v1/PROTOCOL.md`, "Data
   plane"). `anix.agent.v1` gains the payloads that will carry each node's
   configuration, users and reports on the Agent Control stream instead of

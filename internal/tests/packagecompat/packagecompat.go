@@ -164,15 +164,15 @@ func mask(t *testing.T, body []byte, paths []string) []byte {
 }
 
 // CompareAnswers reports how two answers differ: status code, or body after
-// v2compat.NormalizeForCompare.
+// v2compat.NormalizeForCompare. A sealed handle in the native answer
+// matches the secret the legacy answer shows there, as in the router's
+// shadow comparison (v2compat.EqualForCompare).
 func CompareAnswers(legacy, native Result) error {
 	if legacy.StatusCode != native.StatusCode {
 		return fmt.Errorf("status code differs: legacy %d %s, native %d %s", legacy.StatusCode, legacy.Body, native.StatusCode, native.Body)
 	}
-	legacyNormalized := v2compat.NormalizeForCompare(legacy.Body)
-	nativeNormalized := v2compat.NormalizeForCompare(native.Body)
-	if !bytes.Equal(legacyNormalized, nativeNormalized) {
-		return fmt.Errorf("normalized body differs:\nlegacy %s\nnative %s", legacyNormalized, nativeNormalized)
+	if !v2compat.EqualForCompare(legacy.Body, native.Body) {
+		return fmt.Errorf("normalized body differs:\nlegacy %s\nnative %s", v2compat.NormalizeForCompare(legacy.Body), v2compat.NormalizeForCompare(native.Body))
 	}
 	return nil
 }

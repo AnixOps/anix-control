@@ -43,11 +43,20 @@ type Principal struct {
 
 // NativeRequest is what a package-native route implementation receives.
 type NativeRequest struct {
-	RouteID   string
-	Method    string
+	RouteID string
+	Method  string
+	// Body is the request body. For the routes the kernel lists in
+	// config/node-secret-fields.json, every node secret in it is a sealed
+	// handle (v2compat.SealedHandlePrefix) that only the kernel resolves.
 	Body      []byte
 	Principal Principal
 	Metadata  RequestMetadata
+	// Binding is the request binding a KernelNodeOps call passes as
+	// RequestBinding.bridge_capability: the kernel resolves the request's
+	// sealed handles, and mints the handles its answer shows, only for it.
+	// It is nil in a shadow run, which must not act, and whose handles are
+	// never resolved.
+	Binding []byte
 }
 
 // NativeResponse is a native route's HTTP-level answer; the kernel gateway
@@ -257,7 +266,7 @@ func (r *Router) Dispatch(ctx context.Context, request DispatchRequest) (Dispatc
 	_, mode := r.Mode(request.RouteID)
 	switch mode {
 	case RouteModeNative:
-		response, err := r.runNative(ctx, request)
+		response, err := r.runNative(ctx, request, request.BridgeCapability)
 		if errors.Is(err, ErrNativeUnavailable) {
 			return r.invokeLegacy(ctx, request)
 		}
@@ -300,7 +309,10 @@ func (r *Router) invokeLegacy(ctx context.Context, request DispatchRequest) (Dis
 	return DispatchResponse{StatusCode: response.StatusCode, ResponseBody: response.Body, Headers: headers}, nil
 }
 
-func (r *Router) runNative(ctx context.Context, request DispatchRequest) (response NativeResponse, err error) {
+// runNative runs the route's native implementation. binding is the request
+// binding the handler may pass to the kernel: the bridge capability in
+// native mode, nil in a shadow run.
+func (r *Router) runNative(ctx context.Context, request DispatchRequest, binding []byte) (response NativeResponse, err error) {
 	handler := r.config.Native[request.RouteID]
 	if handler == nil {
 		return NativeResponse{}, fmt.Errorf("package route %q has no native implementation", request.RouteID)
@@ -318,6 +330,7 @@ func (r *Router) runNative(ctx context.Context, request DispatchRequest) (respon
 	}()
 	response, err = handler(ctx, NativeRequest{
 		RouteID: request.RouteID, Method: request.Method, Body: request.RequestBody, Principal: principal, Metadata: request.Metadata,
+		Binding: append([]byte(nil), binding...),
 	})
 	if err == nil && response.StatusCode == 0 {
 		response.StatusCode = http.StatusOK
@@ -336,11 +349,14 @@ func (r *Router) startShadow(request DispatchRequest, legacy DispatchResponse) {
 		return
 	}
 	request.RequestBody = append([]byte(nil), request.RequestBody...)
+	// The shadow run gets no request binding: the legacy answer stands, so
+	// the kernel must not act or resolve a sealed handle for it.
+	request.BridgeCapability = nil
 	go func() {
 		defer func() { <-r.shadow }()
 		ctx, cancel := context.WithTimeout(context.Background(), r.config.ShadowTimeout)
 		defer cancel()
-		native, err := r.runNative(ctx, request)
+		native, err := r.runNative(ctx, request, nil)
 		if errors.Is(err, ErrNativeUnavailable) {
 			r.count(request.RouteID, func(stats *routeStatistics) { stats.ShadowSkipped++ })
 			return

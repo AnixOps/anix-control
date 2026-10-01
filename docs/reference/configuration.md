@@ -251,11 +251,30 @@ The gateway exports per-package traffic on `/metrics`:
 `anixops_v2_gateway_errors_total{package,route,code}` (gateway error codes such
 as `package_unavailable`, `package_route_not_found`, `plugin_host_unavailable`,
 `plugin_host_incompatible`, `plugin_request_too_large`,
-`plugin_response_too_large`), and the
+`plugin_response_too_large`, `sealed_secret_unavailable`,
+`sealed_secret_refused`), and the
 `anixops_v2_gateway_request_duration_seconds{package}` histogram. `route` is
 the package route id from the signed declaration, never the request path;
 requests that match no declared route are counted under
 `package="unresolved",route="unresolved"`.
+
+The routes of `config/node-secret-fields.json` have their node secrets sealed
+before a package host reads them (`docs/architecture/node-ops-service.md`
+section 3.7).
+
+- **The metric.** `anixops_v2_gateway_sealed_secrets_total`, with the labels
+  `package`, `route`, `stage`, `result` and `reason`, counts the gateway's
+  work:
+  - `stage="request"`: requests sealed (`result="sealed"`), served by the
+    kernel's legacy handler without the host because they could not be
+    sealed (`legacy_fallback`), or refused (`refused`);
+  - `stage="answer"`: handles expanded (`expanded`) or refused (`refused`).
+- **Reasons.** `reason` is one of `not_json`, `value_not_string`,
+  `target_invalid`, `too_large`, `fields_unavailable`, `answer_handle`,
+  `store` or `none`.
+- **Errors.** `sealed_secret_unavailable` (503) is a request that could not
+  be sealed on a route with no legacy handler. `sealed_secret_refused` (502)
+  is an answer that would show a handle.
 
 While package execution is enabled, `/metrics` also reports each supervised
 package host: `anixops_plugin_host_starts_total`,

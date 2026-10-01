@@ -43,6 +43,14 @@ type DispatchInput struct {
 	Metadata         RequestMetadata
 	BridgeCapability []byte
 	Deadline         time.Time
+	// BridgeBody is the body the bridge capability retains for the
+	// kernel's legacy handler when the host reads another one: the request
+	// as the client sent it, while Body has its node secrets sealed. Nil
+	// retains Body.
+	BridgeBody []byte
+	// SealedRequest names the request's sealed secrets; the capability
+	// carries it so that KernelNodeOps resolves them for this request only.
+	SealedRequest string
 }
 
 // RequestMetadata preserves the request address independently from the
@@ -353,18 +361,80 @@ func (h *hostProcess) mintDispatchCapability(input DispatchInput) ([]byte, error
 	if h == nil || h.bridge == nil {
 		return nil, nil
 	}
-	metadata, err := marshalBridgeRequestMetadata(input.Metadata)
+	request, err := BridgeRequest(input)
 	if err != nil {
 		return nil, err
 	}
-	capability, err := h.bridge.Mint(packagebridge.Request{
-		RequestID: input.RequestID, RouteID: input.RouteID, Method: input.Method,
-		Body: input.Body, PrincipalJSON: input.PrincipalJSON, MetadataJSON: metadata, Deadline: input.Deadline,
-	})
+	capability, err := h.bridge.Mint(request)
 	if err != nil {
 		return nil, fmt.Errorf("%w: mint package bridge capability: %v", ErrHostUnavailable, err)
 	}
 	return capability, nil
+}
+
+// BridgeRequest is the request state a dispatch's bridge capability
+// retains: the body as the client sent it (BridgeBody, when the host reads
+// one with sealed secrets), the principal, the kernel-side metadata and the
+// sealed request.
+func BridgeRequest(input DispatchInput) (packagebridge.Request, error) {
+	metadata, err := marshalBridgeRequestMetadata(input.Metadata)
+	if err != nil {
+		return packagebridge.Request{}, err
+	}
+	body := input.Body
+	if input.BridgeBody != nil {
+		body = input.BridgeBody
+	}
+	return packagebridge.Request{
+		RequestID: input.RequestID, RouteID: input.RouteID, Method: input.Method,
+		Body: body, PrincipalJSON: input.PrincipalJSON, MetadataJSON: metadata, Deadline: input.Deadline,
+		SealedRequest: input.SealedRequest,
+	}, nil
+}
+
+// ErrLegacyUnavailable reports that the kernel cannot serve a request with
+// its legacy handler without the package host: the route has no legacy
+// bridge operation.
+var ErrLegacyUnavailable = errors.New("plugin route has no kernel legacy handler")
+
+// legacyServer is a host bridge that serves a route's legacy operation in
+// the kernel.
+type legacyServer interface {
+	ServeLegacy(context.Context, packagebridge.Request, string) (packagebridge.Response, error)
+}
+
+// DispatchLegacy serves a request with the kernel's legacy handler for its
+// route, as the host's legacy mode would relay it, without the package
+// host: the v2 gateway's fail-closed path when a request's node secrets
+// cannot be sealed (node-ops-service.md section 3.7). The host's current
+// generation must be the request's.
+func (m *Supervisor) DispatchLegacy(ctx context.Context, input DispatchInput) (DispatchOutput, error) {
+	host, err := m.hostForGeneration(input.PackageID, input.Version, input.Generation)
+	if err != nil {
+		return DispatchOutput{}, err
+	}
+	server, ok := host.bridge.(legacyServer)
+	if !ok {
+		return DispatchOutput{}, ErrLegacyUnavailable
+	}
+	request, err := BridgeRequest(input)
+	if err != nil {
+		return DispatchOutput{}, err
+	}
+	response, err := server.ServeLegacy(ctx, request, input.RouteID)
+	switch {
+	case errors.Is(err, packagebridge.ErrCapabilityRejected):
+		return DispatchOutput{}, ErrLegacyUnavailable
+	case errors.Is(err, packagebridge.ErrResponseTooLarge):
+		return DispatchOutput{}, ErrResponseTooLarge
+	case err != nil:
+		return DispatchOutput{}, fmt.Errorf("%w: kernel legacy handler failed", ErrHostUnavailable)
+	}
+	headers := make([]Header, len(response.Headers))
+	for index, header := range response.Headers {
+		headers[index] = Header{Name: header.Name, Value: header.Value}
+	}
+	return DispatchOutput{StatusCode: response.StatusCode, Body: response.Body, Headers: headers}, nil
 }
 
 func (m *Supervisor) Health(ctx context.Context, packageID, version string, generation uint64) (HostHealth, error) {

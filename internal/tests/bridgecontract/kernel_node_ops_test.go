@@ -150,13 +150,33 @@ func syncProxy(id uint64) *kernelnodeopsv1.OperationSpec {
 	}}}
 }
 
+// mintBinding mints a live bridge capability on a host's generation, as the
+// kernel does for each dispatch: the request binding a native route passes.
+func mintBinding(t *testing.T, minter interface {
+	Mint(packagebridge.Request) ([]byte, error)
+}, packageID string) []byte {
+	t.Helper()
+	capability, err := minter.Mint(packagebridge.Request{
+		RequestID: "req-1", RouteID: "proxy.admin.nodes.id.sync", Method: "POST",
+		PrincipalJSON: []byte(`{"actor_id":1,"admin":true,"package_id":"` + packageID + `"}`), Deadline: time.Now().Add(time.Minute),
+	})
+	require.NoError(t, err)
+	return capability
+}
+
 // exerciseNodeOps runs the contract through an SDK client: capabilities, a
-// submission that waits for its end, its repeat, polling, listing, the
-// watch stream, cancellation and the refusals.
-func exerciseNodeOps(t *testing.T, kernel *nodeOpsKernel, connection grpc.ClientConnInterface, packageID string, generation uint64) {
+// submission bound to a live request that waits for its end, its repeat,
+// polling, listing, the watch stream, cancellation and the refusals.
+func exerciseNodeOps(t *testing.T, kernel *nodeOpsKernel, connection grpc.ClientConnInterface, packageID string, generation uint64, binding []byte) {
 	t.Helper()
 	client := kernelnodeopsv1.NewKernelNodeOpsClient(connection)
 	ctx := context.Background()
+
+	_, err := client.SubmitOperation(ctx, &kernelnodeopsv1.SubmitOperationRequest{
+		RequestId: "node.sync:proxy-1:forged", Operation: syncProxy(1),
+		Request: &kernelnodeopsv1.RequestBinding{BridgeCapability: make([]byte, 32)},
+	})
+	require.Equal(t, codes.PermissionDenied, status.Code(err), "a binding that names no live request of the package")
 
 	capabilities, err := client.GetCapabilities(ctx, &kernelnodeopsv1.GetCapabilitiesRequest{})
 	require.NoError(t, err)
@@ -172,7 +192,7 @@ func exerciseNodeOps(t *testing.T, kernel *nodeOpsKernel, connection grpc.Client
 	kernel.release <- struct{}{}
 	submitted, err := client.SubmitOperation(ctx, &kernelnodeopsv1.SubmitOperationRequest{
 		RequestId: "node.sync:proxy-1:bridge", Operation: syncProxy(1), Wait: kernelnodeopsv1.WaitMode_WAIT_MODE_TERMINAL,
-		Reason: "protocol changed", Request: &kernelnodeopsv1.RequestBinding{BridgeCapability: []byte("binding")},
+		Reason: "protocol changed", Request: &kernelnodeopsv1.RequestBinding{BridgeCapability: binding},
 	})
 	require.NoError(t, err)
 	require.True(t, submitted.GetApplied())
@@ -243,8 +263,18 @@ func exerciseNodeOps(t *testing.T, kernel *nodeOpsKernel, connection grpc.Client
 func TestKernelNodeOpsOverTheLocalBridge(t *testing.T) {
 	nodeOpsDatabases(t, func(t *testing.T, db *gorm.DB) {
 		kernel := newNodeOpsKernel(t, db, "plan")
-		client := dialPlanSession(t, packagebridge.SessionOptions{KernelNodeOps: kernel.server.For})
-		exerciseNodeOps(t, kernel, client.Conn(), "plan", 3)
+		allowlist, err := packagebridge.NewAllowlistWithFallback(nil)
+		require.NoError(t, err)
+		session, child, err := packagebridge.NewSessionWithOptions(
+			packagebridge.HostIdentity{PackageID: "plan", Version: "4.0.0", Generation: 3}, allowlist,
+			packagebridge.SessionOptions{KernelNodeOps: kernel.server.For},
+		)
+		require.NoError(t, err)
+		t.Cleanup(func() { require.NoError(t, session.Close()) })
+		client, err := packagebridgesdk.DialFile(context.Background(), child)
+		require.NoError(t, err)
+		t.Cleanup(func() { require.NoError(t, client.Close()) })
+		exerciseNodeOps(t, kernel, client.Conn(), "plan", 3, mintBinding(t, session, "plan"))
 	})
 }
 
@@ -340,7 +370,7 @@ func TestKernelNodeOpsOverTheModuleListener(t *testing.T) {
 		t.Cleanup(func() { require.NoError(t, module.Close()) })
 		require.NoError(t, module.Bind(context.Background()))
 
-		exerciseNodeOps(t, kernel, module.Conn(), "proxy-node", 9)
+		exerciseNodeOps(t, kernel, module.Conn(), "proxy-node", 9, mintBinding(t, generation, "proxy-node"))
 
 		require.NoError(t, generation.Close())
 		fenced := kernelnodeopsv1.NewKernelNodeOpsClient(module.Conn())
@@ -350,5 +380,31 @@ func TestKernelNodeOpsOverTheModuleListener(t *testing.T) {
 		require.NoError(t, err)
 		_, err = stream.Recv()
 		require.Equal(t, codes.PermissionDenied, status.Code(err), "streaming calls too")
+	})
+}
+
+// A binding is verified against the host the contract serves: a server for
+// another generation than the session's refuses the session's bindings.
+func TestKernelNodeOpsRefusesABindingOfAnotherGeneration(t *testing.T) {
+	nodeOpsDatabases(t, func(t *testing.T, db *gorm.DB) {
+		kernel := newNodeOpsKernel(t, db, "plan")
+		allowlist, err := packagebridge.NewAllowlistWithFallback(nil)
+		require.NoError(t, err)
+		session, child, err := packagebridge.NewSessionWithOptions(
+			packagebridge.HostIdentity{PackageID: "plan", Version: "4.0.0", Generation: 3}, allowlist,
+			packagebridge.SessionOptions{KernelNodeOps: func(packagebridge.HostIdentity) kernelnodeopsv1.KernelNodeOpsServer {
+				return kernel.server.For(packagebridge.HostIdentity{PackageID: "plan", Version: "4.0.0", Generation: 4})
+			}},
+		)
+		require.NoError(t, err)
+		t.Cleanup(func() { require.NoError(t, session.Close()) })
+		client, err := packagebridgesdk.DialFile(context.Background(), child)
+		require.NoError(t, err)
+		t.Cleanup(func() { require.NoError(t, client.Close()) })
+		_, err = kernelnodeopsv1.NewKernelNodeOpsClient(client.Conn()).SubmitOperation(context.Background(), &kernelnodeopsv1.SubmitOperationRequest{
+			RequestId: "node.sync:proxy-1:other", Operation: syncProxy(1),
+			Request: &kernelnodeopsv1.RequestBinding{BridgeCapability: mintBinding(t, session, "plan")},
+		})
+		require.Equal(t, codes.PermissionDenied, status.Code(err))
 	})
 }

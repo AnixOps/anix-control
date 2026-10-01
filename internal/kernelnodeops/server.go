@@ -23,6 +23,7 @@ import (
 	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
+	"github.com/AnixOps/anix-control/v4/internal/sealedsecrets"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -212,6 +213,9 @@ func (h *hostServer) SubmitOperation(ctx context.Context, request *kernelnodeops
 	if err := checkText(request.GetReason(), "reason", maxReasonText, false); err != nil {
 		return nil, err
 	}
+	if sealedsecrets.ContainsHandle(requestID) || sealedsecrets.ContainsHandle(request.GetReason()) {
+		return nil, status.Error(codes.InvalidArgument, "request_id and reason never hold a sealed handle")
+	}
 	if _, known := kernelnodeopsv1.WaitMode_name[int32(request.GetWait())]; !known {
 		return nil, status.Error(codes.InvalidArgument, "wait is unknown")
 	}
@@ -239,14 +243,20 @@ func (h *hostServer) SubmitOperation(ctx context.Context, request *kernelnodeops
 	if !served {
 		return nil, status.Errorf(codes.Unimplemented, "this kernel does not execute %s operations yet; GetCapabilities lists the kinds it does", k.name)
 	}
+	bound, err := h.verifyBinding(ctx, request.GetRequest())
+	if err != nil {
+		return nil, err
+	}
 	resolved, err := k.resolve(db, operation)
 	if err != nil {
 		return nil, failure("submit operation", err)
 	}
-	if preparer, ok := executor.(Preparer); ok {
+	preparer, prepares := executor.(Preparer)
+	if prepares {
 		prepared := &Submission{
 			Host: h.host, Kind: k.name, Operation: proto.Clone(spec).(*kernelnodeopsv1.OperationSpec),
-			Binding: request.GetRequest().GetBridgeCapability(), Targets: resolved.targets,
+			Binding: request.GetRequest().GetBridgeCapability(), Request: bound, Targets: resolved.targets,
+			store: engine.secretStore(),
 		}
 		if err := preparer.Prepare(ctx, prepared); err != nil {
 			return nil, failure("prepare operation", err)
@@ -256,11 +266,24 @@ func (h *hostServer) SubmitOperation(ctx context.Context, request *kernelnodeops
 		}
 		operation = canonical(prepared.Operation)
 	}
+	// The ledger never holds a sealed handle: only a Preparer resolves one.
+	if holdsHandle(operation.ProtoReflect()) {
+		if prepares {
+			return nil, status.Error(codes.Internal, "prepare operation left a sealed handle")
+		}
+		return nil, status.Errorf(codes.InvalidArgument, "%s operations resolve no sealed handle", k.name)
+	}
+	retained := engine.retainBinding(h.host.PackageID, requestID, bound)
 	row, applied, err := engine.record(ctx, submission{
 		ownerID: h.host.PackageID, generation: h.host.Generation, submittedBy: submitter(h.host),
 		requestID: requestID, kind: k, operation: operation, digest: dg, targets: resolved.targets,
 		resource: resolved.resource, reason: request.GetReason(),
 	})
+	if err != nil || !applied {
+		if retained {
+			engine.dropBinding(h.host.PackageID, requestID)
+		}
+	}
 	if err != nil {
 		return nil, failure("submit operation", err)
 	}
@@ -297,6 +320,15 @@ func (h *hostServer) answerSubmission(ctx context.Context, request *kernelnodeop
 	operation, err := answer(h.db(ctx), row)
 	if err != nil {
 		return nil, failure("submit operation", err)
+	}
+	// The handles an operation minted are answered once, to a call bound
+	// to the request they were minted for.
+	if Terminal(row.State) && h.server.Engine.hasReveal(row.OperationID) {
+		if bound, err := h.verifyBinding(ctx, request.GetRequest()); err == nil {
+			if revealed := h.server.Engine.takeReveal(row.OperationID, bound); revealed != nil {
+				operation.Result = revealed
+			}
+		}
 	}
 	return &kernelnodeopsv1.SubmitOperationResponse{Applied: applied, Operation: operation}, nil
 }

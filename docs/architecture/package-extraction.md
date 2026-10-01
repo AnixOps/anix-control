@@ -326,6 +326,31 @@ The planned `kernel.entitlement.apply.v1` became
     `UNIMPLEMENTED` for every kind and records nothing, and
     `GetCapabilities` lists no kind. So every node route stays bridged
     until its kinds' executors land (NO-5 to NO-8).
+  - **Sealed secret handles (NO-4).** A package never reads a node secret,
+    even one an administrator types or is shown once.
+    - **The field list.** `config/node-secret-fields.json` lists the
+      routes and fields that carry one, per direction. It is kernel-owned:
+      the kernel binary embeds it (`config.NodeSecretFields`), and the route
+      gate checks every route id against `package-extraction.json`.
+    - **Requests.** The v2 gateway (`internal/sealedsecrets`) replaces each
+      secret of a listed route's body with an opaque handle,
+      `anix-sealed:v1:<43 base64url characters>`, before the package host
+      reads it. The handle is bound to the request, its route, target and
+      field, and is single-use. The bridge capability keeps the original
+      body, so the legacy handler, in any mode, reads the request as sent.
+    - **Use.** A KernelNodeOps call carries the request's binding, which the
+      kernel now verifies against the live dispatch. Its executor resolves
+      the handles only for that request.
+    - **Answers.** A secret the kernel generates is answered to the
+      package as a handle, and the gateway expands it only in the answer to
+      the request it was minted for.
+    - **Fail closed.** A request that cannot be sealed is served by the
+      kernel's legacy handler without the package host, and is counted in
+      `anixops_v2_gateway_sealed_secrets_total`. An answer that would show
+      a handle is refused. Handles live in kernel memory only and die with
+      their request.
+
+    The details are in `node-ops-service.md` section 3.7.
   - **What comes next.** Node credentials move to a protected table of
     their own (NO-2), so a package can adopt the rest of `v2_node`.
 

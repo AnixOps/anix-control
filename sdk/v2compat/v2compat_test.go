@@ -45,3 +45,35 @@ func TestNormalizeForCompareIgnoresTimestampsAndKeyOrder(t *testing.T) {
 	assert.Equal(t, []byte("plain text"), NormalizeForCompare([]byte("plain text")))
 	assert.True(t, EqualForCompare([]byte(`[1,2]`), []byte(`[1, 2]`)))
 }
+
+func TestSealedHandleGrammar(t *testing.T) {
+	handle := SealedHandlePrefix + "abcdefghijklmnopqrstuvwxyzABCDEFGHIJ-_01234"
+	require.Len(t, handle, SealedHandleLength)
+	assert.True(t, IsSealedHandle(handle))
+	assert.False(t, IsSealedHandle(handle[:len(handle)-1]), "too short")
+	assert.False(t, IsSealedHandle(handle+"x"), "too long")
+	assert.False(t, IsSealedHandle(SealedHandlePrefix+"abcdefghijklmnopqrstuvwxyzABCDEFGHIJ-_0123="), "padding is not base64url")
+	assert.False(t, IsSealedHandle("anix-sealed:v2:abcdefghijklmnopqrstuvwxyzABCDEFGHIJ-_01234"), "another version")
+	assert.False(t, IsSealedHandle("********"))
+}
+
+// The shadow comparison masks handles on both sides: a native answer holds
+// a handle where the legacy answer shows the secret.
+func TestEqualForCompareMasksSealedHandles(t *testing.T) {
+	first := SealedHandlePrefix + "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"
+	second := SealedHandlePrefix + "BBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBBB"
+	legacy := []byte(`{"code":0,"data":{"node_id":7,"api_key":"real-key","secret":"real-secret"},"msg":"ok","ts":1}`)
+	native := []byte(`{"code":0,"data":{"node_id":7,"api_key":"` + first + `","secret":"` + second + `"},"msg":"ok","ts":2}`)
+	assert.True(t, EqualForCompare(legacy, native), "only handles differ")
+	assert.True(t, EqualForCompare(native, legacy), "on either side")
+	assert.True(t, EqualForCompare(
+		[]byte(`{"data":{"api_key":"`+first+`"}}`), []byte(`{"data":{"api_key":"`+second+`"}}`),
+	), "two answers with different handles")
+	assert.False(t, EqualForCompare(legacy, []byte(`{"code":0,"data":{"node_id":8,"api_key":"`+first+`","secret":"`+second+`"},"msg":"ok"}`)),
+		"anything else that differs still differs")
+	assert.False(t, EqualForCompare([]byte(`{"data":{"api_key":7}}`), []byte(`{"data":{"api_key":"`+first+`"}}`)),
+		"a handle matches strings only")
+	assert.False(t, EqualForCompare([]byte(`{"data":{"api_key":"k"}}`), []byte(`{"data":{"api_key":"`+first+`x"}}`)),
+		"a string that is not a handle is compared as it is")
+	assert.Equal(t, `{"data":["`+SealedHandleMask+`"]}`, string(NormalizeForCompare([]byte(`{"data":["`+first+`"]}`))))
+}

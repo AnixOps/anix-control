@@ -218,3 +218,58 @@ func writeBridgeHostArtifactRef(t *testing.T, packageID, version string) Artifac
 	ref.EntrypointSHA256 = testDigest(entrypoint)
 	return ref
 }
+
+// The bridge capability keeps the request as the client sent it for the
+// legacy handler, and the sealed request it carries, while the host relays
+// the body it was sent; the kernel's legacy dispatch serves the route
+// without the host.
+func TestManagerKeepsTheOriginalBodyForTheLegacyHandler(t *testing.T) {
+	calls := make(chan packagebridge.Call, 2)
+	allowlist, err := packagebridge.NewAllowlistWithFallback(nil, packagebridge.Operation{
+		PackageID: "identity-platform", RouteID: "identity.auth.login", Name: "identity.auth.login",
+		Handler: func(_ context.Context, call packagebridge.Call) (packagebridge.Response, error) {
+			calls <- call
+			return packagebridge.Response{StatusCode: 200, Body: []byte(`{"legacy":true}`)}, nil
+		},
+	})
+	require.NoError(t, err)
+	manager, err := NewManager(ManagerConfig{RuntimeDir: shortHostTempDir(t), BridgeFactory: packagebridge.NewFactory(allowlist)})
+	require.NoError(t, err)
+	t.Cleanup(func() { require.NoError(t, manager.Shutdown(context.Background())) })
+	ref := writeBridgeHostArtifactRef(t, "identity-platform", "4.0.0")
+	require.NoError(t, manager.Start(context.Background(), ref, 7))
+	original, sealed := []byte(`{"password":"typed"}`), []byte(`{"password":"anix-sealed:v1:handle"}`)
+	input := DispatchInput{
+		PackageID: "identity-platform", Version: "4.0.0", Generation: 7, RequestID: "request-sealed-1", RouteID: "identity.auth.login",
+		Method: "POST", Body: sealed, BridgeBody: original, SealedRequest: "sealed-key", Deadline: time.Now().Add(5 * time.Second),
+	}
+
+	_, err = manager.Dispatch(context.Background(), input)
+	require.NoError(t, err)
+	call := <-calls
+	require.Equal(t, original, call.Request.Body, "the legacy handler reads the request as sent")
+	require.Equal(t, sealed, call.Payload, "the host relayed only what it was sent")
+	require.Equal(t, "sealed-key", call.Request.SealedRequest)
+
+	legacy := input
+	legacy.Body, legacy.BridgeBody, legacy.SealedRequest = original, nil, ""
+	response, err := manager.DispatchLegacy(context.Background(), legacy)
+	require.NoError(t, err)
+	require.Equal(t, `{"legacy":true}`, string(response.Body))
+	call = <-calls
+	require.Equal(t, original, call.Request.Body)
+	require.Empty(t, call.Payload, "no host took part")
+
+	other := legacy
+	other.RouteID = "identity.auth.register"
+	_, err = manager.DispatchLegacy(context.Background(), other)
+	require.ErrorIs(t, err, ErrLegacyUnavailable, "a route without a legacy operation")
+	stale := legacy
+	stale.Generation = 6
+	_, err = manager.DispatchLegacy(context.Background(), stale)
+	require.ErrorIs(t, err, ErrGenerationUnavailable)
+
+	request, err := BridgeRequest(DispatchInput{RequestID: "r", RouteID: "x", Body: sealed})
+	require.NoError(t, err)
+	require.Equal(t, sealed, request.Body, "without a bridge body the capability keeps the body")
+}
