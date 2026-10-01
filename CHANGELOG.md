@@ -36,6 +36,23 @@
   `GET /api/v2/user/forward/rules` still lists their rules, read-only. The
   administrator's `/api/v2/admin/forward/rules` routes are unchanged. See
   `docs/UPGRADE.md`.
+- A user's forward targets must be public. `POST /api/v2/forward/create`
+  and `POST /api/v2/forward/update` let a user point a forward at any
+  target, and the tunnel's node connects to it: the node's loopback
+  services, the private network behind it or its cloud metadata service.
+  For a user, every target must now be a public address, or a name every
+  address of which is public, with the classification the user's diagnosis
+  already used: loopback, private (RFC 1918 and ULA), link-local,
+  unspecified, multicast, carrier-grade NAT and other special-purpose
+  addresses are refused, and so are `localhost` and its aliases, numeric
+  IPv4 forms such as `127.1`, and names that do not resolve. The answer is
+  the panel error `不能转发到内网或本机地址: <target>` (or
+  `无法解析目标地址: <target>`), and nothing changes. Names are resolved on
+  Control when the forward is written; DNS can answer differently later, on
+  the node, so this is not complete protection against DNS rebinding.
+  Administrators' forwards are not checked, and tunnels are administrator
+  routes. A user's diagnosis now also refuses the loopback names and numeric
+  forms without asking DNS. See `docs/UPGRADE.md`.
 
 ### Changed
 

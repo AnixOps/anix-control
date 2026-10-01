@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"net/netip"
 	"testing"
 	"time"
 
@@ -87,6 +88,14 @@ func (s *PanelForwardServiceTestSuite) SetupSuite() {
 func (s *PanelForwardServiceTestSuite) SetupTest() {
 	s.ServiceTestSuite.SetupTest()
 	pathExists = func(raw string) bool { return true }
+	// A user's forward targets are resolved (validateUserForwardTargets):
+	// the tests' names resolve to a public documentation address without
+	// asking DNS, unless a test answers otherwise.
+	previousLookup := probeLookup
+	probeLookup = func(context.Context, string) ([]netip.Addr, error) {
+		return []netip.Addr{netip.MustParseAddr("203.0.113.80")}, nil
+	}
+	s.T().Cleanup(func() { probeLookup = previousLookup })
 	db := database.Get()
 	db.Exec("DELETE FROM v2_forward_port_binding")
 	db.Exec("DELETE FROM v2_forward")
@@ -1058,6 +1067,102 @@ func (s *PanelForwardServiceTestSuite) TestCreateForward_RequiresUserTunnelPermi
 	assert.NotNil(s.T(), item)
 	assert.Equal(s.T(), tunnel.ID, item.TunnelID)
 	assert.Equal(s.T(), user.ID, item.UserID)
+}
+
+// A user's forward pointed its tunnel's node at any target: the node's
+// loopback services or the private network behind it. Targets that are, or
+// resolve to, non-public addresses are refused for a user, on create and on
+// update; an administrator's forwards are not checked.
+func (s *PanelForwardServiceTestSuite) TestUserForwardTargetsMustBePublic() {
+	db := database.Get()
+	node := s.createForwardNode("Target Relay", "198.51.100.40", model.ForwardNodeStatusOnline)
+	user := &model.User{Email: "panel-forward-target@example.com", Password: "hash", Token: "panel-forward-target-token", UUID: "panel-forward-target-uuid", TransferEnable: bytesPerGiB}
+	tunnel := &model.ForwardTunnel{Name: "Target Tunnel", InNodeID: node.ID, InIP: node.Host, Type: 1, Protocol: "tcp", Status: model.ForwardTunnelStatusActive}
+	s.Require().NoError(db.Create(user).Error)
+	s.Require().NoError(db.Create(tunnel).Error)
+	s.Require().NoError(db.Create(&model.ForwardUserTunnel{UserID: user.ID, TunnelID: tunnel.ID, Status: model.ForwardUserTunnelStatusActive}).Error)
+
+	answers := map[string][]netip.Addr{
+		"public.example.test":   {netip.MustParseAddr("203.0.113.7")},
+		"internal.example.test": {netip.MustParseAddr("10.0.0.5")},
+		"mixed.example.test":    {netip.MustParseAddr("203.0.113.7"), netip.MustParseAddr("192.168.1.10")},
+		"metadata.example.test": {netip.MustParseAddr("169.254.169.254")},
+		"cgnat.example.test":    {netip.MustParseAddr("100.64.1.1")},
+		"ula.example.test":      {netip.MustParseAddr("fd00::1")},
+		"localhost":             {netip.MustParseAddr("203.0.113.9")}, // refused without asking DNS
+	}
+	probeLookup = func(_ context.Context, host string) ([]netip.Addr, error) {
+		if addrs, ok := answers[host]; ok {
+			return addrs, nil
+		}
+		return nil, fmt.Errorf("lookup %s: no such host", host)
+	}
+
+	refused := map[string]string{
+		"127.0.0.1:22":                "不能转发到内网或本机地址: 127.0.0.1:22",
+		"[::1]:22":                    "不能转发到内网或本机地址: [::1]:22",
+		"[::ffff:127.0.0.1]:22":       "不能转发到内网或本机地址: [::ffff:127.0.0.1]:22",
+		"10.1.2.3:80":                 "不能转发到内网或本机地址: 10.1.2.3:80",
+		"172.16.0.1:80":               "不能转发到内网或本机地址: 172.16.0.1:80",
+		"192.168.0.1:80":              "不能转发到内网或本机地址: 192.168.0.1:80",
+		"[fd12::1]:80":                "不能转发到内网或本机地址: [fd12::1]:80",
+		"169.254.169.254:80":          "不能转发到内网或本机地址: 169.254.169.254:80",
+		"[fe80::1]:80":                "不能转发到内网或本机地址: [fe80::1]:80",
+		"0.0.0.0:80":                  "不能转发到内网或本机地址: 0.0.0.0:80",
+		"[::]:80":                     "不能转发到内网或本机地址: [::]:80",
+		"224.0.0.1:80":                "不能转发到内网或本机地址: 224.0.0.1:80",
+		"[ff02::1]:80":                "不能转发到内网或本机地址: [ff02::1]:80",
+		"100.64.0.1:80":               "不能转发到内网或本机地址: 100.64.0.1:80",
+		"localhost:22":                "不能转发到内网或本机地址: localhost:22",
+		"LOCALHOST.:22":               "不能转发到内网或本机地址: LOCALHOST.:22",
+		"api.localhost:22":            "不能转发到内网或本机地址: api.localhost:22",
+		"127.1:22":                    "不能转发到内网或本机地址: 127.1:22",
+		"2130706433:22":               "不能转发到内网或本机地址: 2130706433:22",
+		"0x7f000001:22":               "不能转发到内网或本机地址: 0x7f000001:22",
+		"internal.example.test:80":    "不能转发到内网或本机地址: internal.example.test:80",
+		"mixed.example.test:80":       "不能转发到内网或本机地址: mixed.example.test:80",
+		"metadata.example.test:80":    "不能转发到内网或本机地址: metadata.example.test:80",
+		"cgnat.example.test:80":       "不能转发到内网或本机地址: cgnat.example.test:80",
+		"ula.example.test:80":         "不能转发到内网或本机地址: ula.example.test:80",
+		"missing.example.test:80":     "无法解析目标地址: missing.example.test:80",
+		"203.0.113.7:80\n10.0.0.1:80": "不能转发到内网或本机地址: 10.0.0.1:80",
+	}
+	for remoteAddr, message := range refused {
+		_, err := s.svc.CreateForward(user.ID, false, PanelForwardInput{Name: "Refused", TunnelID: tunnel.ID, RemoteAddr: remoteAddr})
+		if s.Error(err, remoteAddr) {
+			s.Equal(message, err.Error(), remoteAddr)
+		}
+	}
+	var count int64
+	s.Require().NoError(db.Model(&model.Forward{}).Count(&count).Error)
+	s.Zero(count, "a refused forward was stored")
+	s.Zero(s.runtimeClient.calls, "a refused forward was sent to the node")
+
+	item, err := s.svc.CreateForward(user.ID, false, PanelForwardInput{
+		Name: "Public", TunnelID: tunnel.ID, RemoteAddr: "203.0.113.7:80\npublic.example.test:443\n[2001:db8::1]:443",
+	})
+	s.Require().NoError(err)
+
+	// An update is checked too, and leaves the forward as it was.
+	inPort := item.InPort
+	for remoteAddr, message := range refused {
+		_, err := s.svc.UpdateForward(user.ID, false, PanelForwardUpdateInput{ID: item.ID, Name: "Public", TunnelID: tunnel.ID, InPort: &inPort, RemoteAddr: remoteAddr})
+		if s.Error(err, remoteAddr) {
+			s.Equal(message, err.Error(), remoteAddr)
+		}
+	}
+	var stored model.Forward
+	s.Require().NoError(db.First(&stored, item.ID).Error)
+	s.Equal("203.0.113.7:80,public.example.test:443,[2001:db8::1]:443", stored.RemoteAddr)
+
+	// An administrator's forwards are not checked.
+	admin := &model.User{Email: "panel-forward-target-admin@example.com", Password: "hash", Token: "panel-forward-target-admin-token", UUID: "panel-forward-target-admin-uuid", IsAdmin: 1}
+	s.Require().NoError(db.Create(admin).Error)
+	adminItem, err := s.svc.CreateForward(admin.ID, true, PanelForwardInput{Name: "Admin Private", TunnelID: tunnel.ID, RemoteAddr: "10.0.0.9:22\nlocalhost:8080"})
+	s.Require().NoError(err)
+	s.Equal("10.0.0.9:22,localhost:8080", adminItem.RemoteAddr)
+	_, err = s.svc.UpdateForward(admin.ID, true, PanelForwardUpdateInput{ID: item.ID, Name: "Public", TunnelID: tunnel.ID, InPort: &inPort, RemoteAddr: "127.0.0.1:9000"})
+	s.Require().NoError(err)
 }
 
 func (s *PanelForwardServiceTestSuite) TestCreateForward_CreatesPortBindings() {

@@ -662,6 +662,9 @@ func (s *PanelForwardService) CreateForward(userID uint, isAdmin bool, input Pan
 		}); err != nil {
 			return nil, err
 		}
+		if err := validateUserForwardTargets(input.RemoteAddr); err != nil {
+			return nil, err
+		}
 	}
 
 	var record *model.Forward
@@ -751,6 +754,9 @@ func (s *PanelForwardService) UpdateForward(userID uint, isAdmin bool, input Pan
 			CheckTunnelTraffic:      true,
 			CheckTunnelForwardQuota: true,
 		}); err != nil {
+			return nil, err
+		}
+		if err := validateUserForwardTargets(input.RemoteAddr); err != nil {
 			return nil, err
 		}
 	} else if record.UserID != userID && record.TunnelID != tunnel.ID {
@@ -2250,6 +2256,36 @@ func validatePanelForwardInput(input PanelForwardInput) error {
 	}
 	if input.InPort != nil && (*input.InPort < 1 || *input.InPort > 65535) {
 		return errors.New("端口号必须在 1-65535 范围内")
+	}
+	return nil
+}
+
+// validateUserForwardTargets refuses a user's forward targets that are not
+// public. A forward runs on its tunnel's nodes, and the node connects to the
+// target: a loopback, private (RFC 1918 or ULA), link-local, unspecified,
+// multicast, carrier-grade NAT or other special-purpose address, or a name
+// that resolves to one, reaches the node's own services or the network
+// behind it. A name that does not resolve is refused too, since the node may
+// resolve it to a private address (an internal or metadata name). Names are
+// resolved on Control when the forward is written, and DNS can answer
+// differently later on the node, so this does not stop DNS rebinding.
+// Administrators' forwards are not checked.
+func validateUserForwardTargets(remoteAddr string) error {
+	for _, raw := range strings.Split(normalizeRemoteAddr(remoteAddr), ",") {
+		target := strings.TrimSpace(raw)
+		if target == "" {
+			continue
+		}
+		host, _, err := splitTarget(target)
+		if err != nil {
+			return fmt.Errorf("目标地址格式错误: %s", target)
+		}
+		if _, err := resolvePublicAddress(host); err != nil {
+			if errors.Is(err, errNotPublicAddress) {
+				return fmt.Errorf("不能转发到内网或本机地址: %s", target)
+			}
+			return fmt.Errorf("无法解析目标地址: %s", target)
+		}
 	}
 	return nil
 }

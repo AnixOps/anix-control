@@ -94,8 +94,15 @@ Current and required controls:
   overlap checks.
 - Use explicit runtime backend configuration for NodeX base URL.
 - Do not allow users to configure NodeX or relay management API endpoints.
-- Consider denylisting metadata-service and loopback targets for user-controlled
-  `remoteAddr` if product requirements do not require them.
+- A user's `remoteAddr` targets must be public on create and update
+  (`validateUserForwardTargets`, with the classification of the user's
+  diagnosis probe, `resolvePublicAddress`): loopback, private, link-local,
+  unspecified, multicast, carrier-grade NAT and other special-purpose
+  addresses are refused, as are names that resolve to one, loopback names,
+  numeric IPv4 forms and names that do not resolve. Names are resolved on
+  Control when the forward is written; the node resolves them again when it
+  connects, so DNS rebinding and names only the node can resolve differently
+  are not covered. Administrators' targets are not checked.
 - Keep gost API tests and runtime diagnostics admin-only.
 
 ## Authorization And Quota

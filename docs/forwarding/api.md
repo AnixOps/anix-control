@@ -75,13 +75,23 @@ Base path: `/api/v2`
   "name": "ssh-home",
   "tunnelId": 1,
   "inPort": 10022,
-  "remoteAddr": "10.0.0.10:22",
+  "remoteAddr": "203.0.113.10:22",
   "interfaceName": "",
   "strategy": "fifo"
 }
 ```
 
 `inPort` may be omitted when the tunnel has a usable configured port range.
+
+For a user, every `remoteAddr` target must be public: an address, or a name
+every address of which is public. Loopback, private (RFC 1918, ULA),
+link-local, unspecified, multicast, carrier-grade NAT and other
+special-purpose addresses, `localhost` and its aliases, numeric IPv4 forms
+such as `127.1`, and names that do not resolve on Control are refused with the
+panel error `不能转发到内网或本机地址: <target>` or
+`无法解析目标地址: <target>`. The same applies to updates. Names are resolved
+when the forward is written, so this does not stop DNS rebinding.
+Administrators' forwards are not checked.
 
 ### Update Forward
 
@@ -92,7 +102,7 @@ Base path: `/api/v2`
   "name": "ssh-home",
   "tunnelId": 1,
   "inPort": 10022,
-  "remoteAddr": "10.0.0.10:22",
+  "remoteAddr": "203.0.113.10:22",
   "interfaceName": "",
   "strategy": "fifo"
 }

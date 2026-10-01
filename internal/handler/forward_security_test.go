@@ -226,6 +226,51 @@ func (s *ForwardSecurityTestSuite) TestUserDiagnosisDoesNotProbeControlsNetwork(
 	s.Equal(1, connections())
 }
 
+// A user's forward pointed its tunnel's node at the node's loopback or the
+// private network behind it. POST /api/v2/forward/create and
+// /forward/update refuse such targets for a user with the handler's panel
+// error; an administrator's are not checked.
+func (s *ForwardSecurityTestSuite) TestUserForwardTargetsMustBePublic() {
+	tunnel := &model.ForwardTunnel{Name: "user-tunnel", InNodeID: s.relay.ID, OutNodeID: &s.relay.ID, InIP: s.relay.Host, Type: 1, Flow: 2, TrafficRatio: 1, Status: model.ForwardTunnelStatusActive}
+	s.Require().NoError(s.db.Create(tunnel).Error)
+	s.Require().NoError(s.db.Create(&model.ForwardUserTunnel{UserID: s.user.ID, TunnelID: tunnel.ID, Status: model.ForwardUserTunnelStatusActive}).Error)
+	write := func(path string, body string, actor uint, admin bool) map[string]any {
+		handler := NewForwardHandler().CreatePanelForward
+		if path == "/forward/update" {
+			handler = NewForwardHandler().UpdatePanelForward
+		}
+		w := s.serve("POST", path, path, body, nil, actor, admin, handler)
+		s.Require().Equal(http.StatusOK, w.Code, w.Body.String())
+		return decodePanelTestResponse(s.T(), w)
+	}
+
+	for _, target := range []string{"127.0.0.1:22", "localhost:6379", "[::1]:22", "10.0.0.8:5432", "192.168.1.1:80", "172.20.0.1:80", "169.254.169.254:80", "100.100.100.200:80", "[fd00::1]:80", "0.0.0.0:80"} {
+		resp := write("/forward/create", fmt.Sprintf(`{"name":"fwd","tunnelId":%d,"remoteAddr":%q}`, tunnel.ID, target), s.user.ID, false)
+		s.Equal(float64(-1), resp["code"], target)
+		s.Equal("不能转发到内网或本机地址: "+target, resp["msg"], target)
+	}
+	var count int64
+	s.Require().NoError(s.db.Model(&model.Forward{}).Count(&count).Error)
+	s.Zero(count, "a forward to a non-public target was stored")
+
+	resp := write("/forward/create", fmt.Sprintf(`{"name":"fwd","tunnelId":%d,"remoteAddr":"203.0.113.5:443"}`, tunnel.ID), s.user.ID, false)
+	s.Require().Equal(float64(0), resp["code"], resp)
+	id := resp["data"].(map[string]any)["id"]
+
+	resp = write("/forward/update", fmt.Sprintf(`{"id":%v,"name":"fwd","tunnelId":%d,"remoteAddr":"127.0.0.1:8080"}`, id, tunnel.ID), s.user.ID, false)
+	s.Equal(float64(-1), resp["code"], resp)
+	s.Equal("不能转发到内网或本机地址: 127.0.0.1:8080", resp["msg"])
+	var stored model.Forward
+	s.Require().NoError(s.db.First(&stored, id).Error)
+	s.Equal("203.0.113.5:443", stored.RemoteAddr)
+
+	// An administrator's forwards are not checked.
+	resp = write("/forward/update", fmt.Sprintf(`{"id":%v,"name":"fwd","tunnelId":%d,"remoteAddr":"127.0.0.1:8080"}`, id, tunnel.ID), 1, true)
+	s.Equal(float64(0), resp["code"], resp)
+	resp = write("/forward/create", fmt.Sprintf(`{"name":"admin","tunnelId":%d,"remoteAddr":"10.0.0.8:5432"}`, tunnel.ID), 1, true)
+	s.Equal(float64(0), resp["code"], resp)
+}
+
 func TestForwardSecurity(t *testing.T) {
 	suite.Run(t, new(ForwardSecurityTestSuite))
 }

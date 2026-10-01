@@ -470,6 +470,45 @@ Only an administrator can now disable, change or delete one
 `DELETE /api/v2/admin/forward/rules/:id`), which also updates the nodes.
 Rotate the tokens of the nodes they used, as the previous section says.
 
+### Users' Forward Targets Must Be Public
+
+`POST /api/v2/forward/create` and `POST /api/v2/forward/update` now refuse a
+user's target that is, or resolves to, a loopback, private (RFC 1918, ULA),
+link-local, unspecified, multicast, carrier-grade NAT or other
+special-purpose address, as well as `localhost` and its aliases, numeric
+IPv4 forms such as `127.1`, and names that do not resolve on Control. An
+administrator's forwards are not checked.
+
+- Names are resolved from Control. A name that only the nodes' resolvers
+  know (split-horizon DNS) is refused for users; an administrator can create
+  such a forward.
+- The check runs when a forward is written. DNS can answer differently
+  later, when the node connects, so it is not complete protection against
+  DNS rebinding.
+- Existing forwards are not changed and keep running. A user can still
+  pause, resume and delete one, but an update must replace a refused target.
+
+To review existing user forwards with a non-public target, start from this
+coarse filter (read-only). It also lists some public addresses (for example
+`110.x` matches `10.`) and misses names that resolve to private addresses,
+so check each row:
+
+```sql
+SELECT f.id, f.user_id, f.name, f.remote_addr, f.status
+FROM v2_forward f JOIN v2_user u ON u.id = f.user_id
+WHERE u.is_admin = 0 AND (
+  f.remote_addr LIKE '%127.%' OR f.remote_addr LIKE '%localhost%'
+  OR f.remote_addr LIKE '%10.%' OR f.remote_addr LIKE '%192.168.%'
+  OR f.remote_addr LIKE '%172.%' OR f.remote_addr LIKE '%169.254.%'
+  OR f.remote_addr LIKE '%100.%' OR f.remote_addr LIKE '%0.0.0.0%'
+  OR f.remote_addr LIKE '%[f%' OR f.remote_addr LIKE '%[::%')
+ORDER BY f.id;
+```
+
+Pause or delete an unwanted one as an administrator
+(`POST /api/v2/admin/forward/pause` or `/api/v2/admin/forward/delete`), which
+also removes it from the node.
+
 ### Agent HTTP Routes Need The Node's Credentials
 
 `POST /api/v2/agent/heartbeat`, `GET /api/v2/agent/tasks`,
