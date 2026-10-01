@@ -168,6 +168,15 @@ assignment and order fulfilment, executed exactly once via an idempotency
 table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
 `OrderService.Complete`.
 
+The contracts in place: KernelIdentity
+([`identity-service.md`](identity-service.md)), KernelSubscriber
+([`subscriber-service.md`](subscriber-service.md)) and KernelSettings
+([`settings-service.md`](settings-service.md)), which serves the settings
+in the protected `v2_system_config` and the backup configuration row per
+namespace, masks secrets for packages without the namespace's secrets
+capability, and writes with the legacy handlers' audit entries and a
+refresh of the kernel's in-memory copies.
+
 ### 3.4 In-place adoption and kernel views
 
 - Existing tables are adopted in place by grant: no copy, no dual write. The

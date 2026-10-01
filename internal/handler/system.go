@@ -50,15 +50,6 @@ func systemConfigResponse(cfg *model.SystemConfig, maskSensitive bool) gin.H {
 	}
 }
 
-func systemConfigTargetID(cfg *model.SystemConfig) *uint {
-	if cfg == nil || cfg.ID == 0 {
-		return nil
-	}
-
-	targetID := cfg.ID
-	return &targetID
-}
-
 func contextUint(c *gin.Context, key string) *uint {
 	if c == nil {
 		return nil
@@ -122,24 +113,12 @@ func contextString(c *gin.Context, key string) string {
 	return strings.TrimSpace(value)
 }
 
-func systemConfigAuditContent(cfg *model.SystemConfig, preserveExisting bool) string {
-	if cfg == nil {
-		return ""
+// settingsAuditActor is the request's actor as the audit trail records it.
+func settingsAuditActor(c *gin.Context) service.SettingsAuditActor {
+	return service.SettingsAuditActor{
+		UserID: contextUint(c, "user_id"), Username: contextString(c, "email"),
+		IP: c.ClientIP(), UserAgent: c.Request.UserAgent(),
 	}
-
-	content, err := json.Marshal(gin.H{
-		"key":               cfg.Key,
-		"group":             cfg.Group,
-		"type":              cfg.Type,
-		"sensitive":         service.IsSensitiveSystemConfigKey(cfg.Key),
-		"has_value":         strings.TrimSpace(cfg.Value) != "",
-		"preserve_existing": preserveExisting,
-	})
-	if err != nil {
-		return cfg.Key
-	}
-
-	return string(content)
 }
 
 func (h *SystemHandler) recordSystemConfigAudit(c *gin.Context, action string, cfg *model.SystemConfig, preserveExisting bool) {
@@ -147,18 +126,7 @@ func (h *SystemHandler) recordSystemConfigAudit(c *gin.Context, action string, c
 		return
 	}
 
-	if err := h.operationLogService.Record(&service.OperationLogInput{
-		UserID:     contextUint(c, "user_id"),
-		Username:   contextString(c, "email"),
-		Action:     action,
-		Module:     "system",
-		TargetType: "system_config",
-		TargetID:   systemConfigTargetID(cfg),
-		Content:    systemConfigAuditContent(cfg, preserveExisting),
-		IP:         c.ClientIP(),
-		UserAgent:  c.Request.UserAgent(),
-		Status:     1,
-	}); err != nil {
+	if err := h.operationLogService.Record(service.SystemConfigAuditInput(settingsAuditActor(c), action, cfg, preserveExisting)); err != nil {
 		log.Printf("record system config audit failed for key=%s: %v", cfg.Key, err)
 	}
 }
@@ -227,60 +195,12 @@ func backupConfigResponse(cfg *model.BackupConfig) gin.H {
 	}
 }
 
-func backupConfigTargetID(cfg *model.BackupConfig) *uint {
-	if cfg == nil || cfg.ID == 0 {
-		return nil
-	}
-
-	targetID := cfg.ID
-	return &targetID
-}
-
-func backupConfigAuditContent(cfg *model.BackupConfig, preservedSensitiveFields []string) string {
-	if cfg == nil {
-		return ""
-	}
-
-	content, err := json.Marshal(gin.H{
-		"enabled":                    cfg.Enabled,
-		"auto_backup":                cfg.AutoBackup,
-		"schedule":                   cfg.Schedule,
-		"retention_days":             cfg.RetentionDays,
-		"backup_database":            cfg.BackupDatabase,
-		"backup_files":               cfg.BackupFiles,
-		"storage_type":               cfg.StorageType,
-		"storage_path":               cfg.StoragePath,
-		"s3_bucket":                  cfg.S3Bucket,
-		"s3_region":                  cfg.S3Region,
-		"s3_endpoint":                cfg.S3Endpoint,
-		"s3_access_key_has_value":    strings.TrimSpace(cfg.S3AccessKey) != "",
-		"s3_secret_key_has_value":    strings.TrimSpace(cfg.S3SecretKey) != "",
-		"preserved_sensitive_fields": preservedSensitiveFields,
-	})
-	if err != nil {
-		return cfg.StorageType
-	}
-
-	return string(content)
-}
-
 func (h *SystemHandler) recordBackupConfigAudit(c *gin.Context, action string, cfg *model.BackupConfig, preservedSensitiveFields []string) {
 	if h == nil || h.operationLogService == nil || cfg == nil {
 		return
 	}
 
-	if err := h.operationLogService.Record(&service.OperationLogInput{
-		UserID:     contextUint(c, "user_id"),
-		Username:   contextString(c, "email"),
-		Action:     action,
-		Module:     "system",
-		TargetType: "backup_config",
-		TargetID:   backupConfigTargetID(cfg),
-		Content:    backupConfigAuditContent(cfg, preservedSensitiveFields),
-		IP:         c.ClientIP(),
-		UserAgent:  c.Request.UserAgent(),
-		Status:     1,
-	}); err != nil {
+	if err := h.operationLogService.Record(service.BackupConfigAuditInput(settingsAuditActor(c), action, cfg, preservedSensitiveFields)); err != nil {
 		log.Printf("record backup config audit failed: %v", err)
 	}
 }
@@ -578,6 +498,8 @@ func (h *SystemHandler) SetConfig(c *gin.Context) {
 		action = "create"
 	}
 	h.recordSystemConfigAudit(c, action, savedEntry, preserveExisting)
+	// The kernel's in-memory copies of the key's namespace reload.
+	service.TouchSettingsKey(key)
 
 	resp := systemConfigResponse(savedEntry, true)
 	resp["message"] = "config updated"
@@ -612,6 +534,7 @@ func (h *SystemHandler) DeleteConfig(c *gin.Context) {
 	if existingEntry != nil {
 		h.recordSystemConfigAudit(c, "delete", existingEntry, false)
 	}
+	service.TouchSettingsKey(key)
 
 	panelSuccess(c, gin.H{"message": "config deleted"})
 }

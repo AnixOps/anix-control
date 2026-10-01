@@ -70,6 +70,29 @@
     nothing; the token is bound to the node at issue. Tokens issued earlier
     without a node keep working and bind on their first registration.
 
+### Added
+
+- **KernelSettings contract** (`sdk/api/kernelsettings/v1`,
+  `docs/architecture/settings-service.md`). Official packages read and write
+  system settings per namespace instead of the protected `v2_system_config`
+  and the backup configuration row. It is served on local bridge sessions
+  and the module listener.
+  - The kernel maps each key to at most one namespace: `mail`
+    (`notification.email.*`), `invite` (`invite.*`), `nodex`
+    (`forward.runtime.nodex.*`), `forward-runtime` (the runtime backend and
+    Ansible keys) and `backup` (the backup configuration fields). No call
+    reaches any other key.
+  - Each namespace has `kernel.settings.<namespace>.read.v1`, `.write.v1`
+    and `.secrets.v1` capabilities, for official packages only. Without
+    `secrets`, a secret reads as `********`. The `notification.email.config`
+    value holds the SMTP password, so it counts as a secret. A write that
+    sends the placeholder, or asks to keep a value, keeps the stored secret.
+  - Writes run in the kernel, in one transaction with the same audit
+    entries the legacy handlers record and with the new request ledger
+    `v4_kernel_settings_request` (a new table, kept 90 days). Before the
+    call returns, the kernel reloads the backup and invite configuration it
+    keeps in memory.
+
 ### Changed
 
 - The Agent contract (`anix.agent.v1`) now lives in Control's SDK module,
@@ -150,6 +173,10 @@
   Nodes and agents are not affected: UniProxy, the gRPC node service and
   the forward agent routes read the stored values. None of these routes has
   a native package handler. See `docs/UPGRADE.md`.
+- The kernel's backup and invite services reload the configuration they
+  keep in memory when it changes in another handler instance or through
+  KernelSettings. Before, a copy loaded once stayed until restart: for
+  example, invite code expiry kept using the configuration it first read.
 
 - The kernel's legacy subscription membership routes go through the same
   engine functions (`internal/subscriber`) as the contract:

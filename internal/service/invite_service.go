@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sync"
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
@@ -55,9 +56,18 @@ func WithdrawRefundCents(amount float64) (int64, bool) {
 }
 
 // InviteService 邀请服务
+//
+// It keeps the invite configuration (v2_invite_config) in memory and
+// reloads it when the invite settings namespace changed
+// (SettingsGeneration): the affiliate module writes the table it adopted,
+// then the frontend settings through KernelSettings, which bumps the
+// namespace.
 type InviteService struct {
-	db     *gorm.DB
-	config *model.InviteConfig
+	db *gorm.DB
+
+	mu               sync.Mutex
+	config           *model.InviteConfig
+	configGeneration uint64
 }
 
 // NewInviteService 创建服务
@@ -65,21 +75,47 @@ func NewInviteService(db *gorm.DB) *InviteService {
 	return &InviteService{db: db}
 }
 
-// SetConfig 设置配置
+// SetConfig 设置配置: cfg becomes the configuration in memory, and every
+// other copy reloads.
 func (s *InviteService) SetConfig(cfg *model.InviteConfig) {
-	s.config = cfg
+	generation := BumpSettingsGeneration(SettingsNamespaceInvite)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.config, s.configGeneration = cfg, generation
 }
 
-// GetConfig 获取配置
+// SaveConfig saves cfg and makes it the configuration in memory; every
+// other copy reloads.
+func (s *InviteService) SaveConfig(cfg *model.InviteConfig) error {
+	before := SettingsGeneration(SettingsNamespaceInvite)
+	if err := s.db.Save(cfg).Error; err != nil {
+		return err
+	}
+	generation, keep := BumpSettingsGenerationAfter(SettingsNamespaceInvite, before)
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	if keep {
+		s.config, s.configGeneration = cfg, generation
+	} else {
+		s.config = nil
+	}
+	return nil
+}
+
+// GetConfig 获取配置: the copy in memory while the invite settings
+// namespace has not changed since it was loaded.
 func (s *InviteService) GetConfig() (*model.InviteConfig, error) {
-	if s.config != nil {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	generation := SettingsGeneration(SettingsNamespaceInvite)
+	if s.config != nil && s.configGeneration == generation {
 		return s.config, nil
 	}
 	cfg, err := s.loadConfig()
 	if err != nil {
 		return nil, err
 	}
-	s.config = cfg
+	s.config, s.configGeneration = cfg, generation
 	return cfg, nil
 }
 
