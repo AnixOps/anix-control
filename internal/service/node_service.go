@@ -577,6 +577,54 @@ func NodeHeartbeatStatus() clause.Expr {
 	return gorm.Expr("CASE WHEN status = ? THEN status ELSE ? END", model.NodeStatusDisabled, model.NodeStatusOnline)
 }
 
+// AgentNodeStatus is a NodeStatus from the Agent Control stream (reports.v1).
+type AgentNodeStatus struct {
+	CPUUsage       float64
+	MemoryUsage    float64
+	DiskUsage      float64
+	Uptime         int64
+	RuntimeHealthy bool
+	RuntimeError   string
+}
+
+// RecordAgentNodeStatus writes what the legacy ReportStatus heartbeat and
+// the runtime-health report write together: the system metrics, the
+// heartbeat (last_check_at and the status, which never re-enables a
+// disabled node) and the runtime health. online_users is not here: the
+// stream's TrafficReport.online keeps it. A node that does not exist is
+// gorm.ErrRecordNotFound.
+func (s *NodeService) RecordAgentNodeStatus(nodeID uint, status AgentNodeStatus) error {
+	message := strings.TrimSpace(status.RuntimeError)
+	if len(message) > 4096 {
+		message = message[:4096]
+	}
+	now := time.Now().Unix()
+	result := s.db.Model(&model.Node{}).Where("id = ?", nodeID).Updates(map[string]any{
+		"cpu_usage":          status.CPUUsage,
+		"memory_usage":       status.MemoryUsage,
+		"disk_usage":         status.DiskUsage,
+		"uptime":             status.Uptime,
+		"last_check_at":      now,
+		"status":             NodeHeartbeatStatus(),
+		"runtime_healthy":    status.RuntimeHealthy,
+		"runtime_error":      message,
+		"runtime_checked_at": now,
+	})
+	if result.Error != nil {
+		return result.Error
+	}
+	if result.RowsAffected == 0 {
+		return gorm.ErrRecordNotFound
+	}
+	return nil
+}
+
+// UpdateOnlineUsers records how many users a node's last online report
+// listed, as the legacy status heartbeat records online_users.
+func (s *NodeService) UpdateOnlineUsers(nodeID uint, count int) error {
+	return s.db.Model(&model.Node{}).Where("id = ?", nodeID).Update("online_users", count).Error
+}
+
 // UpdateRuntimeHealth records the health of a node's managed runtime process.
 // It deliberately does not change last_check_at: the node can be reachable
 // while its relay process is unhealthy, and those are different signals.

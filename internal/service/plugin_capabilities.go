@@ -97,6 +97,11 @@ var (
 		// certificate. The v4_kernel_ prefix already protects them; they are
 		// named here so the rule survives a prefix change.
 		"v4_kernel_agent_enrollment": true, "v4_kernel_agent_certificate": true,
+		// Agent reports (A2-5): v4_kernel_agent_report_batch records which
+		// traffic and log batches the stream applied. A package that could
+		// write it could make a batch count twice, or never. Protected by
+		// the prefix; named so the rule survives a prefix change.
+		"v4_kernel_agent_report_batch": true,
 	}
 )
 

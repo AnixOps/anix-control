@@ -203,6 +203,28 @@ func normalizeLoggedAt(raw int64) *time.Time {
 	return &t
 }
 
+// nodeLogRuntimeHealth reads the runtime health a WireGuard log entry's
+// fields carry: the last entry with runtime_healthy wins. It is how the
+// legacy log batch, which has no status message, reports runtime health.
+func nodeLogRuntimeHealth(inputs []service.NodeLogInput) (healthy *bool, runtimeError string) {
+	for _, input := range inputs {
+		if !strings.EqualFold(strings.TrimSpace(input.Source), "wireguard") || strings.TrimSpace(input.FieldsJSON) == "" {
+			continue
+		}
+		var fields struct {
+			RuntimeHealthy *bool  `json:"runtime_healthy"`
+			RuntimeError   string `json:"runtime_error"`
+		}
+		if err := json.Unmarshal([]byte(input.FieldsJSON), &fields); err != nil || fields.RuntimeHealthy == nil {
+			continue
+		}
+		value := *fields.RuntimeHealthy
+		healthy = &value
+		runtimeError = fields.RuntimeError
+	}
+	return healthy, runtimeError
+}
+
 func (s *NodeLogGRPCServer) ReportLogs(ctx context.Context, req *dynamicpb.Message) (*pb.StatusResponse, error) {
 	nodeID := uint(req.Get(nodeLogBatchNodeIDField).Uint())
 	if nodeID == 0 {
@@ -235,23 +257,7 @@ func (s *NodeLogGRPCServer) ReportLogs(ctx context.Context, req *dynamicpb.Messa
 		})
 	}
 
-	var runtimeHealthy *bool
-	runtimeError := ""
-	for _, input := range inputs {
-		if !strings.EqualFold(strings.TrimSpace(input.Source), "wireguard") || strings.TrimSpace(input.FieldsJSON) == "" {
-			continue
-		}
-		var fields struct {
-			RuntimeHealthy *bool  `json:"runtime_healthy"`
-			RuntimeError   string `json:"runtime_error"`
-		}
-		if err := json.Unmarshal([]byte(input.FieldsJSON), &fields); err != nil || fields.RuntimeHealthy == nil {
-			continue
-		}
-		healthy := *fields.RuntimeHealthy
-		runtimeHealthy = &healthy
-		runtimeError = fields.RuntimeError
-	}
+	runtimeHealthy, runtimeError := nodeLogRuntimeHealth(inputs)
 
 	if err := s.nodeLogService.RecordLogs(nodeID, inputs); err != nil {
 		switch {

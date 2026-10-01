@@ -6,6 +6,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/AnixOps/anix-control/v4/internal/agentreports"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"gorm.io/gorm"
@@ -88,12 +89,36 @@ func sanitizeNodeLogFieldsJSON(raw string) (string, error) {
 }
 
 func (s *NodeLogService) RecordLogs(nodeID uint, inputs []NodeLogInput) error {
+	return s.RecordLogsTx(s.db, nodeID, inputs)
+}
+
+// RecordAgentLogBatch records a LogBatch from the Agent Control stream
+// (reports.v1) as RecordLogs records the legacy NodeLogService batch, once
+// per node and batch id: the batch record (internal/agentreports) is claimed
+// in the transaction that inserts the rows. It reports whether this call
+// recorded the batch; false means a committed transaction recorded it
+// before. gorm.ErrRecordNotFound means the node does not exist.
+func (s *NodeLogService) RecordAgentLogBatch(nodeKind string, nodeID uint, batchID string, inputs []NodeLogInput) (bool, error) {
+	applied := false
+	err := s.db.Transaction(func(tx *gorm.DB) error {
+		seen, err := agentreports.ClaimTx(tx, nodeKind, nodeID, batchID, agentreports.KindLogs, time.Now())
+		if err != nil || seen {
+			return err
+		}
+		applied = true
+		return s.RecordLogsTx(tx, nodeID, inputs)
+	})
+	return applied, err
+}
+
+// RecordLogsTx is RecordLogs inside tx.
+func (s *NodeLogService) RecordLogsTx(tx *gorm.DB, nodeID uint, inputs []NodeLogInput) error {
 	if nodeID == 0 {
 		return errors.New("node_id is required")
 	}
 
 	var exists int64
-	if err := s.db.Model(&model.Node{}).Where("id = ?", nodeID).Count(&exists).Error; err != nil {
+	if err := tx.Model(&model.Node{}).Where("id = ?", nodeID).Count(&exists).Error; err != nil {
 		return err
 	}
 	if exists == 0 {
@@ -136,7 +161,7 @@ func (s *NodeLogService) RecordLogs(nodeID uint, inputs []NodeLogInput) error {
 		return nil
 	}
 
-	return s.db.Create(&logs).Error
+	return tx.Create(&logs).Error
 }
 
 func (s *NodeLogService) GetLogs(params NodeLogListParams) (*NodeLogListResult, error) {

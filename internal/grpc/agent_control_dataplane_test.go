@@ -24,16 +24,30 @@ func dataPlaneCapabilities() []*agentv1pb.Capability {
 	}
 }
 
+// dataPlaneCapabilitiesWithout is dataPlaneCapabilities less one feature.
+func dataPlaneCapabilitiesWithout(name string) []*agentv1pb.Capability {
+	var capabilities []*agentv1pb.Capability
+	for _, capability := range dataPlaneCapabilities() {
+		if capability.Name != name {
+			capabilities = append(capabilities, capability)
+		}
+	}
+	return capabilities
+}
+
 // openDataPlaneSession sends a Hello advertising the data plane, with a
 // configuration revision and a user cursor, and returns the HelloAck.
-func openDataPlaneSession(t *testing.T, environment *agentControlTestEnvironment) (agentv1pb.AgentControlService_ControlStreamClient, *agentv1pb.HelloAck) {
+func openDataPlaneSession(t *testing.T, environment *agentControlTestEnvironment, capabilities ...*agentv1pb.Capability) (agentv1pb.AgentControlService_ControlStreamClient, *agentv1pb.HelloAck) {
 	t.Helper()
+	if capabilities == nil {
+		capabilities = dataPlaneCapabilities()
+	}
 	ctx, cancel := context.WithTimeout(environment.authContext(context.Background()), 5*time.Second)
 	t.Cleanup(cancel)
 	stream, err := agentv1pb.NewAgentControlServiceClient(environment.conn).ControlStream(ctx)
 	require.NoError(t, err)
 	hello := validAgentHello(uint32(environment.node.ID))
-	hello.GetHello().Capabilities = dataPlaneCapabilities()
+	hello.GetHello().Capabilities = capabilities
 	hello.GetHello().ConfigRevision = 41
 	hello.GetHello().UsersCursor = 1234
 	require.NoError(t, stream.Send(hello))
@@ -44,18 +58,18 @@ func openDataPlaneSession(t *testing.T, environment *agentControlTestEnvironment
 	return stream, helloAck
 }
 
-// The server serves users.v1 of the data plane (A2-4) and nothing else yet:
-// an Agent that advertises the whole data plane negotiates users only, and
-// no ConfigSnapshot is pushed for its revision.
-func TestAgentControlServerAdvertisesUsersOnly(t *testing.T) {
+// The server serves users.v1 (A2-4) and reports.v1 (A2-5) of the data plane
+// and nothing else yet: an Agent that advertises the whole data plane
+// negotiates those two, and no ConfigSnapshot is pushed for its revision.
+func TestAgentControlServerAdvertisesUsersAndReports(t *testing.T) {
 	environment := newAgentControlTestEnvironment(t)
 	requireAutoMigrate(t, &model.User{}, &model.SubscriberChange{})
 	stream, helloAck := openDataPlaneSession(t, environment)
 	require.NotEmpty(t, helloAck.SessionId)
-	assert.True(t, agentcontrol.Negotiated(dataPlaneCapabilities(), helloAck.ServerCapabilities, agentcontrol.CapabilityUsers))
-	for _, capability := range []string{agentcontrol.CapabilityConfig, agentcontrol.CapabilityReports} {
-		assert.False(t, agentcontrol.Negotiated(dataPlaneCapabilities(), helloAck.ServerCapabilities, capability), capability)
+	for _, capability := range []string{agentcontrol.CapabilityUsers, agentcontrol.CapabilityReports} {
+		assert.True(t, agentcontrol.Negotiated(dataPlaneCapabilities(), helloAck.ServerCapabilities, capability), capability)
 	}
+	assert.False(t, agentcontrol.Negotiated(dataPlaneCapabilities(), helloAck.ServerCapabilities, agentcontrol.CapabilityConfig))
 
 	snapshot, connected := environment.manager.Connection(uint32(environment.node.ID))
 	require.True(t, connected)
@@ -95,8 +109,10 @@ func TestAgentControlServerAdvertisesUsersOnly(t *testing.T) {
 	require.NoError(t, stream.CloseSend())
 }
 
-// An Agent that sends a data-plane report anyway gets InvalidArgument and the
-// stream ends, as from a Control built before the payloads existed.
+// An Agent that sends a data-plane payload the session did not negotiate
+// gets InvalidArgument and the stream ends, as from a Control built before
+// the payloads existed: config_status, which the server does not serve yet,
+// and the reports from an Agent whose Hello did not list reports.v1.
 func TestAgentControlStreamRejectsUnnegotiatedDataPlanePayloads(t *testing.T) {
 	environment := newAgentControlTestEnvironment(t)
 	tests := []struct {
@@ -147,7 +163,7 @@ func TestAgentControlStreamRejectsUnnegotiatedDataPlanePayloads(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			stream, _ := openDataPlaneSession(t, environment)
+			stream, _ := openDataPlaneSession(t, environment, dataPlaneCapabilitiesWithout(agentcontrol.CapabilityReports)...)
 			message := test.payload()
 			message.RequestId = test.name + "-request"
 			message.NodeId = uint32(environment.node.ID)

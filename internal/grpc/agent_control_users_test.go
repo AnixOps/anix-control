@@ -62,11 +62,13 @@ func TestDecideUsersStart(t *testing.T) {
 // Forward nodes have no user list, so they are not offered users.v1.
 func TestAgentControlUsersServedToProxyNodesOnly(t *testing.T) {
 	server := &AgentControlGRPCServer{}
-	proxy := server.serverCapabilities(agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: 1})
+	// With no data-plane capability from the agent only users.v1 is offered.
+	agent := validAgentHello(1).GetHello().Capabilities
+	proxy := server.serverCapabilities(agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: 1}, agent)
 	require.Len(t, proxy, 1)
 	assert.Equal(t, agentcontrol.CapabilityUsers, proxy[0].Name)
 	assert.Equal(t, agentcontrol.CapabilityVersionV1, proxy[0].Version)
-	assert.Empty(t, server.serverCapabilities(agentcontrol.AgentNode{Kind: agentcontrol.NodeKindForward, ID: 1}))
+	assert.Empty(t, server.serverCapabilities(agentcontrol.AgentNode{Kind: agentcontrol.NodeKindForward, ID: 1}, agent))
 }
 
 // agentUsersEnvironment is an Agent Control server over a node with a plan
