@@ -129,4 +129,30 @@ describe('NodeX admin page', () => {
     expect(timeoutCall?.[1].value).toBe(42)
     expect(wrapper.vm.validationError).toBe('')
   })
+
+  it('keeps a masked token: the commands show a placeholder and saving sends the mask back', async () => {
+    const configMap = {
+      'forward.runtime.nodex_mode': { value: true },
+      'forward.runtime_backend': { value: 'gost' },
+      'forward.runtime.nodex.base_url': { value: 'http://127.0.0.1:18081' },
+      'forward.runtime.nodex.token': { value: '********', display_value: '********', sensitive: true, has_value: true },
+      'forward.runtime.nodex.timeout_seconds': { value: 15 }
+    }
+    adminApi.getSystemConfig.mockImplementation((key) => Promise.resolve({ data: configMap[key] ?? { value: '' } }))
+
+    const wrapper = mountNodeX()
+    await flushPromises()
+
+    expect(wrapper.vm.nodeXToken).toBe('********')
+    expect(wrapper.vm.operatorToken).toBe('<FORWARD_API_TOKEN>')
+    expect(wrapper.text()).not.toContain('Bearer ********')
+
+    adminApi.setSystemConfig.mockClear()
+    await wrapper.vm.saveNodeXConfig()
+    await flushPromises()
+
+    expect(wrapper.vm.validationError).toBe('')
+    const tokenCall = adminApi.setSystemConfig.mock.calls.find(([key]) => key === 'forward.runtime.nodex.token')
+    expect(tokenCall?.[1].value).toBe('********')
+  })
 })

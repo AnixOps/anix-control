@@ -57,10 +57,13 @@ type OrderPaymentResult struct {
 	Reason string `json:"reason,omitempty"`
 }
 
+// orderPaymentRequestPrefix starts every OrderPaymentRequestID.
+const orderPaymentRequestPrefix = "payment:"
+
 // OrderPaymentRequestID names a payment's order completion in the request
 // ledger (v4_kernel_subscriber_request).
 func OrderPaymentRequestID(tradeNo string) string {
-	return "payment:" + tradeNo
+	return orderPaymentRequestPrefix + tradeNo
 }
 
 // recordPaysOrder says why a paid payment record does not pay its order, or

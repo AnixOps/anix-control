@@ -207,6 +207,7 @@ import {
   setSystemConfig
 } from '@/api/admin'
 import { humanizeForwardRuntimeBackend } from '@/utils/forwardRuntime'
+import { isMaskedSecret } from '@/constants/secrets'
 
 const runtimeNodeXModeKey = 'forward.runtime.nodex_mode'
 const runtimeBackendKey = 'forward.runtime_backend'
@@ -235,7 +236,12 @@ const doctorSummary = ref(null)
 const doctorOutput = ref('')
 
 const operatorBaseUrl = computed(() => nodeXBaseUrl.value?.trim() || 'http://127.0.0.1:18081')
-const operatorToken = computed(() => nodeXToken.value?.trim() || '<FORWARD_API_TOKEN>')
+// A stored token reads MASKED_SECRET: the field keeps it, so saving keeps the
+// stored token, and the commands show a placeholder instead.
+const operatorToken = computed(() => {
+  const token = nodeXToken.value?.trim() || ''
+  return token && !isMaskedSecret(token) ? token : '<FORWARD_API_TOKEN>'
+})
 
 const fallbackCommands = computed(() => ({
   powerShell: [

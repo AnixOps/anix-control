@@ -23,23 +23,23 @@ type SystemHandler struct {
 	operationLogService *service.OperationLogService
 }
 
-func systemConfigResponse(cfg *model.SystemConfig, maskSensitive bool) gin.H {
+// systemConfigResponse is a configuration entry as the administrator API
+// answers it. A sensitive value (service.IsSensitiveSystemConfigKey) is
+// never answered: value and display_value read
+// service.SensitiveSystemConfigPlaceholder when one is stored, and
+// has_value says whether one is. Writing the placeholder back keeps the
+// stored value (SetConfig).
+func systemConfigResponse(cfg *model.SystemConfig) gin.H {
 	if cfg == nil {
 		return gin.H{}
 	}
 
 	displayValue, sensitive, hasValue := service.MaskSystemConfigValue(cfg.Key, cfg.Value)
-	// A secret inside a JSON value (the SMTP password) is masked in every
-	// answer; a sensitive key's whole value only where asked.
-	value := service.MaskSystemConfigFields(cfg.Key, cfg.Value)
-	if maskSensitive && sensitive {
-		value = displayValue
-	}
 
 	return gin.H{
 		"id":            cfg.ID,
 		"key":           cfg.Key,
-		"value":         value,
+		"value":         displayValue,
 		"display_value": displayValue,
 		"sensitive":     sensitive,
 		"has_value":     hasValue,
@@ -373,7 +373,7 @@ func (h *SystemHandler) GetConfigs(c *gin.Context) {
 
 	list := make([]gin.H, 0, len(configs))
 	for i := range configs {
-		list = append(list, systemConfigResponse(&configs[i], true))
+		list = append(list, systemConfigResponse(&configs[i]))
 	}
 
 	panelSuccess(c, gin.H{
@@ -394,6 +394,9 @@ func (h *SystemHandler) GetConfigs(c *gin.Context) {
 // @Failure 500 {object} map[string]any
 // @Router /admin/system/configs/{key} [get]
 func (h *SystemHandler) GetConfig(c *gin.Context) {
+	// A sensitive value is masked as in the list (systemConfigResponse);
+	// the kernel's own readers, and packages holding a namespace's
+	// KernelSettings secrets grant, read it in clear.
 	key := c.Param("key")
 
 	entry, err := h.configService.GetEntry(key)
@@ -414,7 +417,7 @@ func (h *SystemHandler) GetConfig(c *gin.Context) {
 		return
 	}
 
-	panelSuccess(c, systemConfigResponse(entry, false))
+	panelSuccess(c, systemConfigResponse(entry))
 }
 
 // SetConfig godoc
@@ -478,9 +481,15 @@ func (h *SystemHandler) SetConfig(c *gin.Context) {
 	if existingEntry != nil {
 		sensitiveConfig = sensitiveConfig || service.IsSensitiveSystemConfigKey(existingEntry.Key)
 	}
+	// The answers mask a sensitive value; writing the placeholder back
+	// keeps the stored one, and never stores the placeholder itself.
 	if existingEntry != nil && sensitiveConfig && (preserveExisting || value == service.SensitiveSystemConfigPlaceholder) {
 		value = existingEntry.Value
 		preserveExisting = true
+	}
+	if existingEntry == nil && sensitiveConfig && value == service.SensitiveSystemConfigPlaceholder {
+		panelError(c, "value is required")
+		return
 	}
 	if len(rawValue) == 0 && existingEntry != nil {
 		if !preserveExisting {
@@ -541,7 +550,7 @@ func (h *SystemHandler) SetConfig(c *gin.Context) {
 	// The kernel's in-memory copies of the key's namespace reload.
 	service.TouchSettingsKey(key)
 
-	resp := systemConfigResponse(savedEntry, true)
+	resp := systemConfigResponse(savedEntry)
 	resp["message"] = "config updated"
 	panelSuccess(c, resp)
 }

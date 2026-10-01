@@ -673,6 +673,26 @@ nodes need nothing.
   still answers a node's API key and secret, for the deployment helper and
   Ansible. Each read is now recorded in `v2_audit_log` with action `reveal`.
 
+### System Configuration Secrets Read As `********`
+
+`GET /api/v2/admin/system/configs/:key` now masks a sensitive value as the
+list (`GET /api/v2/admin/system/configs`) already did: a key whose name
+contains `token`, `secret`, `password`, `passwd`, `private_key`, `api_key`,
+`access_key` or `client_secret` (in any case, with or without the
+underscore) reads `********` in `value` and `display_value` when a value is
+stored, and `""` when none is; `sensitive` and `has_value` say which. The
+kernel and the packages granted a namespace's secrets still read the real
+values, so nothing that uses the NodeX token, the SMTP password or another
+secret changes.
+
+- **Editing.** Saving `********` back keeps the stored value, and a new
+  value replaces it, as before. The NodeX page shows a stored token as
+  `********` and keeps it when saved; its commands show
+  `<FORWARD_API_TOKEN>` instead of the token. Saving `********` for a
+  secret that is not stored is refused (`value is required`).
+- **Scripts.** A script that read a secret from this route must keep its
+  own copy. A script that reads a value and writes it back keeps working.
+
 ### The Administrator's User List No Longer Shows Subscription Tokens
 
 `GET /api/v2/admin/users` answered every listed user's whole `v2_user` row,
@@ -737,6 +757,42 @@ completed again. The reason is logged and kept in
   then verifies deliveries from the payment host, which needs outbound HTTPS
   to `api-m.paypal.com` (or `api-m.sandbox.paypal.com`). The callback URLs
   stay the same.
+
+### Paid Payments Left With A Pending Order Are Completed
+
+Control now completes the order of a paid payment whose callback did not
+(`docs/architecture/order-service.md`). At start and every five minutes,
+every Control process applies the paid payment records whose order is
+still pending, paid more than two minutes ago and within the last 90 days,
+that have no outcome under `payment:<trade_no>` yet. The checks and the
+result are the callback's: the order is paid and completed and its plan
+granted once, or the payment is refused and the order left as it is.
+
+- **First start.** Records already in that state are applied at the first
+  run after the upgrade, including records from before it. To see them
+  beforehand:
+
+  ```sql
+  SELECT r.trade_no, r.order_id, r.paid_at
+  FROM v2_payment_record r JOIN v2_order o ON o.id = r.order_id
+  WHERE r.status = 1 AND o.status = 0
+    AND r.paid_at >= CURRENT_TIMESTAMP - INTERVAL '90 days'
+    AND NOT EXISTS (SELECT 1 FROM v4_kernel_subscriber_request q
+                    WHERE q.request_id = 'payment:' || r.trade_no);
+  ```
+
+  On SQLite, write the age condition as
+  `r.paid_at >= datetime('now', '-90 days')`. Cancel an order you want
+  kept pending (`POST /api/v2/admin/orders/:id/cancel`) before the
+  upgrade.
+- **Refusals.** A payment that does not pay its order (another user's
+  order, an amount below the total) is logged as `payment <trade_no> does
+  not pay order <id>: <reason>` and recorded under `payment:<trade_no>`;
+  the order is unchanged, and the payment is not tried again. Handle it as
+  described above.
+- **Logs.** Each run that finds a payment logs a summary starting with
+  `Order payment reconciler:`, and a line per completed order and per
+  failure. Payments paid more than 90 days ago are left as they are.
 
 ## Moving Logins To The Identity Module
 

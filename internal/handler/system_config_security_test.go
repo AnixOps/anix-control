@@ -143,31 +143,135 @@ func TestSystemHandlerGetConfigsMasksSensitiveValues(t *testing.T) {
 	assert.Equal(t, false, plainCfg["sensitive"])
 }
 
-func TestSystemHandlerGetConfigReturnsRawSensitiveValueWithMaskedDisplay(t *testing.T) {
-	db, handler, router := setupSystemConfigSecurityTest(t)
-	router.GET("/admin/system/configs/:key", handler.GetConfig)
-
-	require.NoError(t, db.Create(&model.SystemConfig{
-		Key:    "forward.runtime.nodex.token",
-		Value:  "runtime-secret-token",
-		Type:   "string",
-		Group:  "forward",
-		Remark: "NodeX runtime token",
-	}).Error)
-
-	recorder := performSystemConfigJSONRequest(t, router, http.MethodGet, "/admin/system/configs/forward.runtime.nodex.token", nil)
+// systemConfigData decodes a successful panel answer's data.
+func systemConfigData(t *testing.T, recorder *httptest.ResponseRecorder) map[string]any {
+	t.Helper()
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
-
 	body := decodeJSONMap(t, recorder)
-	assert.Equal(t, float64(0), body["code"])
+	require.Equal(t, float64(0), body["code"], recorder.Body.String())
 	require.NotEmpty(t, body["msg"])
 	require.NotZero(t, body["ts"])
 	data, ok := body["data"].(map[string]any)
 	require.True(t, ok)
-	assert.Equal(t, "runtime-secret-token", data["value"])
-	assert.Equal(t, service.SensitiveSystemConfigPlaceholder, data["display_value"])
-	assert.Equal(t, true, data["sensitive"])
+	return data
+}
+
+// The single-key answer masks a sensitive value as the list does: the
+// value and display_value read the placeholder, and the stored secret
+// appears nowhere in the answer.
+func TestSystemHandlerGetConfigMasksSensitiveValues(t *testing.T) {
+	db, handler, router := setupSystemConfigSecurityTest(t)
+	router.GET("/admin/system/configs/:key", handler.GetConfig)
+
+	secrets := map[string]string{
+		"forward.runtime.nodex.token": "runtime-secret-token",
+		"smtp.password":               "smtp-secret-password",
+		"payment.stripe.api_key":      "sk_live_secret",
+		"oauth.client_secret":         "oauth-client-secret",
+	}
+	for key, value := range secrets {
+		require.True(t, service.IsSensitiveSystemConfigKey(key), key)
+		require.NoError(t, db.Create(&model.SystemConfig{Key: key, Value: value, Type: "string", Group: "test", Remark: key}).Error)
+	}
+
+	for key, value := range secrets {
+		recorder := performSystemConfigJSONRequest(t, router, http.MethodGet, "/admin/system/configs/"+key, nil)
+		data := systemConfigData(t, recorder)
+		assert.Equal(t, key, data["key"])
+		assert.Equal(t, service.SensitiveSystemConfigPlaceholder, data["value"], key)
+		assert.Equal(t, service.SensitiveSystemConfigPlaceholder, data["display_value"], key)
+		assert.Equal(t, true, data["sensitive"], key)
+		assert.Equal(t, true, data["has_value"], key)
+		assert.NotContains(t, recorder.Body.String(), value, key)
+	}
+}
+
+// A sensitive key without a value, or that does not exist, answers an
+// empty value and has_value false; a plain key answers its value.
+func TestSystemHandlerGetConfigAnswersEmptySecretsAndPlainValues(t *testing.T) {
+	db, handler, router := setupSystemConfigSecurityTest(t)
+	router.GET("/admin/system/configs/:key", handler.GetConfig)
+
+	require.NoError(t, db.Create(&[]model.SystemConfig{
+		{Key: "forward.runtime.nodex.token", Value: "", Type: "string", Group: "forward"},
+		{Key: "forward.runtime.nodex.base_url", Value: "https://nodex.internal", Type: "string", Group: "forward"},
+	}).Error)
+
+	for _, key := range []string{"forward.runtime.nodex.token", "smtp.password"} {
+		data := systemConfigData(t, performSystemConfigJSONRequest(t, router, http.MethodGet, "/admin/system/configs/"+key, nil))
+		assert.Equal(t, "", data["value"], key)
+		assert.Equal(t, "", data["display_value"], key)
+		assert.Equal(t, true, data["sensitive"], key)
+		assert.Equal(t, false, data["has_value"], key)
+	}
+
+	data := systemConfigData(t, performSystemConfigJSONRequest(t, router, http.MethodGet, "/admin/system/configs/forward.runtime.nodex.base_url", nil))
+	assert.Equal(t, "https://nodex.internal", data["value"])
+	assert.Equal(t, "https://nodex.internal", data["display_value"])
+	assert.Equal(t, false, data["sensitive"])
 	assert.Equal(t, true, data["has_value"])
+}
+
+// An editor that reads a secret and saves the answer back keeps the stored
+// secret; a new value replaces it, and no answer echoes it.
+func TestSystemHandlerSensitiveConfigRoundTripKeepsTheStoredValue(t *testing.T) {
+	db, handler, router := setupSystemConfigSecurityTest(t)
+	router.GET("/admin/system/configs/:key", handler.GetConfig)
+	router.PUT("/admin/system/configs/:key", handler.SetConfig)
+	const key = "forward.runtime.nodex.token"
+	stored := func() string {
+		var cfg model.SystemConfig
+		require.NoError(t, db.Where("key = ?", key).First(&cfg).Error)
+		return cfg.Value
+	}
+
+	require.NoError(t, db.Create(&model.SystemConfig{Key: key, Value: "first-secret", Type: "string", Group: "forward"}).Error)
+	read := systemConfigData(t, performSystemConfigJSONRequest(t, router, http.MethodGet, "/admin/system/configs/"+key, nil))
+
+	recorder := performSystemConfigJSONRequest(t, router, http.MethodPut, "/admin/system/configs/"+key, map[string]any{
+		"value": read["value"], "type": "string", "group": "forward", "description": "Forward runtime NodeX token",
+	})
+	saved := systemConfigData(t, recorder)
+	assert.Equal(t, "first-secret", stored(), "saving the answer back keeps the secret")
+	assert.Equal(t, service.SensitiveSystemConfigPlaceholder, saved["value"])
+	assert.NotContains(t, recorder.Body.String(), "first-secret")
+
+	recorder = performSystemConfigJSONRequest(t, router, http.MethodPut, "/admin/system/configs/"+key, map[string]any{
+		"value": "second-secret", "type": "string", "group": "forward",
+	})
+	saved = systemConfigData(t, recorder)
+	assert.Equal(t, "second-secret", stored(), "a new value replaces the secret")
+	assert.Equal(t, service.SensitiveSystemConfigPlaceholder, saved["value"])
+	assert.Equal(t, service.SensitiveSystemConfigPlaceholder, saved["display_value"])
+	assert.Equal(t, true, saved["has_value"])
+	assert.NotContains(t, recorder.Body.String(), "second-secret")
+
+	recorder = performSystemConfigJSONRequest(t, router, http.MethodGet, "/admin/system/configs/"+key, nil)
+	assert.Equal(t, service.SensitiveSystemConfigPlaceholder, systemConfigData(t, recorder)["value"])
+	assert.NotContains(t, recorder.Body.String(), "second-secret")
+}
+
+// The placeholder is not a value: saving it for a secret that is not
+// stored is refused and stores nothing.
+func TestSystemHandlerSetConfigRefusesThePlaceholderForANewSecret(t *testing.T) {
+	db, handler, router := setupSystemConfigSecurityTest(t)
+	router.PUT("/admin/system/configs/:key", handler.SetConfig)
+
+	recorder := performSystemConfigJSONRequest(t, router, http.MethodPut, "/admin/system/configs/smtp.password", map[string]any{
+		"value": service.SensitiveSystemConfigPlaceholder, "type": "string", "group": "mail",
+	})
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	body := decodeJSONMap(t, recorder)
+	assert.NotEqual(t, float64(0), body["code"])
+	assert.Equal(t, "value is required", body["msg"])
+	var count int64
+	require.NoError(t, db.Model(&model.SystemConfig{}).Where("key = ?", "smtp.password").Count(&count).Error)
+	assert.Zero(t, count)
+
+	recorder = performSystemConfigJSONRequest(t, router, http.MethodPut, "/admin/system/configs/site.motto", map[string]any{
+		"value": service.SensitiveSystemConfigPlaceholder, "type": "string", "group": "site",
+	})
+	assert.Equal(t, service.SensitiveSystemConfigPlaceholder, systemConfigData(t, recorder)["value"], "a plain key stores any value")
 }
 
 func TestSystemHandlerSetConfigPreservesSensitiveValueAndWritesAuditLog(t *testing.T) {
