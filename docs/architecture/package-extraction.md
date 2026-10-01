@@ -1,6 +1,6 @@
 # Package Extraction Design
 
-Date: 2026-09-29
+Date: 2026-09-29 (status refreshed 2026-10-01)
 
 This is the design of record for moving business domains out of the Control
 kernel and into signed packages. It replaces the retired plans that lived under
@@ -9,8 +9,9 @@ is copied here. Feature status stays in [`../features.md`](../features.md) and
 open work in [`../../TODO.md`](../../TODO.md).
 
 > 中文摘要：v4.0.0 的「插件化」只到路由层；本文定义「一个领域真正住在插件里」
-> 的验收标准、目标机制（存储租约 + 按路由模式 + 类型化内核操作，均为**计划中**）、
-> 保留下来的旧计划约束，以及 M0–M4 里程碑。
+> 的验收标准、目标机制（存储租约 + 按路由模式 + 类型化内核操作，均已实现）、
+> 保留下来的旧计划约束，以及 M0–M4 里程碑。292 条 v2 路由中，164 条
+> `native-flagged`，112 条 `bridged`（待契约），16 条 `kernel-owned`（按设计留在内核）。
 
 Markers used below: **CURRENT** = true in the tree today; **PLANNED** = accepted
 design, not implemented yet; **HISTORICAL** = preserved from a retired plan for
@@ -27,16 +28,20 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   `identity-platform` routes use the bare `v2PackageGateway.Serve`; the 3
   WebSocket routes use `registeredPackageWebSocketRoute`.
 - `config/package-extraction.json` records each route's extraction mode
-  (`bridged`, `native-flagged` or `native`) and where its legacy handler lives
+  (`bridged`, `kernel-owned`, `native-flagged` or `native`; section 3.2) and
+  where its legacy handler lives
   (`router`, `identity-bridge` or `none`). 164 routes are `native-flagged`:
   identity-platform (22: group A's 15, the profile, dashboard, user detail,
   user list and user statistics, and the traffic and subscription resets),
   affiliate (8), forward (17), gost-mesh (3), knowledge (6), machine-telemetry
   (2), notification (22), order (13), payment (20), plan (7), platform (5),
   protocol-runtime (3), proxy-node (7), subscription (20), ticket (8) and
-  wireguard (1). The rest are `bridged`. The identity routes are
-  `identity-bridge`. `check_plugin_only_routes.py` enforces the map against
-  the router and the identity bridge.
+  wireguard (1). 16 routes are `kernel-owned`: they stay in the kernel by
+  design, and each row says why. The other 112 are `bridged` until a kernel
+  contract lets their package serve them (section 3.2 lists what unblocks
+  them). None is `native` yet. The identity routes are `identity-bridge`.
+  `check_plugin_only_routes.py` enforces the map against the router, the
+  identity bridge and the package hosts.
 - Request path: gin middleware -> `compatv2` gateway -> route resolution
   (`internal/compat/v2/registry.go`, `verifiedRouteSource`) -> package host
   process over Unix gRPC -> package bridge (FD 4) -> **the legacy in-kernel
@@ -62,17 +67,38 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   all still served through the identity bridge. `internal/compat/v2/moved_routes.go`
   lists the moves: the kernel accepts the old route ids from old
   identity-platform releases and, while both packages declare a route,
-  prefers the new owner. There are now 18 packages. Ten have their own host
-  (affiliate, identity-platform, knowledge, notification, order, payment,
-  plan, platform, proxy-node and ticket); the other eight run the generic
-  host.
+  prefers the new owner. There are now 18 packages. All but nat-egress and
+  nftables-forward, which have no v2 routes, have their own host.
 - The 4.0 stage exit condition "production requests no longer reach coupled
-  legacy handlers" was **not** met. Business tables (`v2_*`), handlers,
-  services, and workers are still kernel-owned.
+  legacy handlers" was **not** met. Handlers, services and workers stay in
+  the kernel; packages adopt business tables (`v2_*`) in place
+  (section 3.4).
 - Production (per the operator, 2026-09) still runs a pre-v4 Control on
   PostgreSQL. Moving it to v4 is a database migration plus host move (M2).
 - Outside the package gate, kernel handlers serve `/api/v1/server/UniProxy/*`,
   `/{subscribe_path}/:token`, `/api/v1/client/subscribe`, and `/flow/upload`.
+
+Route modes per package (2026-10-01):
+
+| Package | `native-flagged` | `bridged` | `kernel-owned` |
+|---|---|---|---|
+| affiliate | 8 | 0 | 0 |
+| forward | 17 | 63 | 0 |
+| gost-mesh | 3 | 0 | 0 |
+| identity-platform | 22 | 2 | 0 |
+| knowledge | 6 | 0 | 0 |
+| machine-telemetry | 2 | 1 | 2 |
+| notification | 22 | 2 | 0 |
+| order | 13 | 0 | 0 |
+| payment | 20 | 0 | 0 |
+| plan | 7 | 5 | 0 |
+| platform | 5 | 0 | 7 |
+| protocol-runtime | 3 | 11 | 6 |
+| proxy-node | 7 | 23 | 1 |
+| subscription | 20 | 5 | 0 |
+| ticket | 8 | 0 | 0 |
+| wireguard | 1 | 0 | 0 |
+| **all** | **164** | **112** | **16** |
 
 Reusable pieces that already exist:
 
@@ -139,43 +165,106 @@ through the ledger when their host starts (`plugin-kernel-contract.md`,
 
 ### 3.2 Per-route modes
 
-- Each route has a mode `legacy` | `shadow` | `native`, stored in the package's
-  existing versioned config document and polled by the host every 5 s through a
-  new bridge RPC `GetPackageConfig`.
-- `legacy`: pass through the bridge to the legacy handler (today's behaviour).
-- `shadow` (GET only): return the legacy result, run the native implementation
-  in the background, compare normalized output, count mismatches in
-  `HealthResponse.details_json`.
-- `native`: the host answers; the legacy handler is not called.
-- Rollback = set the route back to `legacy` (effective within 5 s, audited
-  through the config revision history).
-- Router, mode logic, legacy pass-through, and shadow comparison move into
-  `sdk/pluginhostsdk/router.go` (from `packages/shared/controlhost`).
-- `sdk/v2compat` exposes `PanelSuccess`/`PanelError`/`NormalizeForCompare`;
-  legacy handlers delegate to it so output stays byte-identical.
+A route has two modes: what the code supports (the extraction mode, per
+route) and what an installation runs (the runtime mode).
 
-Status (2026-09-30): implemented. `GetPackageConfig` and the reserved
-`routes` configuration key, `sdk/pluginhostsdk.Router` and `sdk/v2compat` are
-in place, and route modes and shadow counters are exported on `/metrics`
-(see [`plugin-kernel-contract.md`](plugin-kernel-contract.md#package-configuration)).
-No package has a native route yet.
+**Runtime mode** (CURRENT): `legacy` | `shadow` | `native`, in the reserved
+`routes` key of the package's versioned configuration, which the host polls
+every 5 s through the bridge RPC `GetPackageConfig`
+([`plugin-kernel-contract.md`](plugin-kernel-contract.md#package-configuration)).
+
+- `legacy` (the default): the host relays the request through the bridge to
+  the legacy handler.
+- `shadow` (GET only): the legacy result is returned; the host runs its
+  native implementation in the background, compares the normalized output
+  and counts mismatches.
+- `native`: the host answers; the legacy handler is not called.
+- Rollback sets the route back to `legacy`, effective within 5 s and audited
+  through the configuration revision history.
+- `sdk/pluginhostsdk.Router` implements the modes, and `sdk/v2compat` keeps
+  the output byte-identical. Route modes and shadow counters are exported
+  on `/metrics`. A route without a native handler stays `legacy`
+  (`mode_unsupported`), and the kernel refuses a non-legacy mode for a
+  WebSocket route.
+
+**Extraction mode** (CURRENT): `config/package-extraction.json`, enforced
+by `check_plugin_only_routes.py` (counts in section 1).
+
+| Mode | Meaning | Routes |
+|---|---|---|
+| `native-flagged` | the package host has a native handler, proved by a parity test; the legacy handler stays, so every runtime mode works | 164 |
+| `native` | the legacy handler is deleted and the host answers alone | 0 |
+| `bridged` | the host only relays, until a kernel contract lets the package serve the route | 112 |
+| `kernel-owned` | the host only relays, by design: the route stays in the kernel, and the row's `reason` says why | 16 |
+
+A `bridged` or `kernel-owned` route is registered and relayed alike: it is
+in its host's `bridgedRoutes`, and no other source of its package names it,
+so it has no native handler. The `kernel-owned` routes:
+
+- platform: the generic system configuration routes (no package gets a
+  settings grant over every namespace,
+  [`settings-service.md`](settings-service.md#routes)) and backup creation,
+  deletion and restore (archives on the kernel's disk);
+- machine-telemetry: the system information (the kernel binary's build
+  metadata) and the monitoring WebSocket;
+- protocol-runtime: the agent channel (registration, heartbeat, task poll,
+  result, monitor and the WebSocket): node credentials checked in the
+  kernel, connections and reports in its memory;
+- proxy-node: the node agent WebSocket.
+
+What unblocks the `bridged` routes:
+
+| Unblocked by | Routes | Count |
+|---|---|---|
+| KernelNodeOps and the node credential split (section 3.3) | forward: nodes, Ansible machines, clean agent tokens, every change applied on a node, runtime status and jobs, flow accounting; proxy-node: node administration, credentials, raw configuration, authorization keys, load balancer checks; protocol-runtime: node protocols, sync, Agent Control and agent operations; subscription: a group's protocols and the protocol pool | 83 |
+| Open decision: `kernel-owned`, or a package behind node authentication in the kernel | node registration, heartbeat and runtime health; clean agent registration, heartbeat and report; the agents' forward rule list | 7 |
+| Open decision: whether UniProxy and the subscription renderer stay in the kernel | UniProxy (5) and the subscription preview | 6 |
+| Moving to forward (an update also needs KernelNodeOps) | the speed-limit routes | 5 |
+| A proxy node view with parent and load | forward observability targets, trend and topology | 3 |
+| Cache invalidation events | the dashboard (also the online set) and a user's subscription summary | 2 |
+| The request's scheme and host passed to hosts | setting the Telegram webhook; the clean agent install script | 2 |
+| Invite codes moving to affiliate | the user's invite codes and their generation | 2 |
+| A contract read of a member's subscription link | the public Telegram webhook (`/sub`) | 1 |
+| A KernelSettings namespace for the subscription link (with `app.subscribe_path`) | the subscription link settings | 1 |
+
+Status (2026-10-01): every installation runs every route `legacy` unless an
+operator sets another mode; no route is `native` yet.
 
 ### 3.3 Typed kernel operations
 
-Cross-domain writes go through typed, idempotent kernel operations instead of
-foreign-table writes. First one: `kernel.entitlement.apply.v1`, covering plan
-assignment and order fulfilment, executed exactly once via an idempotency
-table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
-`OrderService.Complete`.
+Packages change other domains' data, and read protected data, only through
+typed, idempotent kernel contracts. The kernel serves them to official
+packages whose signed manifest declares the capability and authorizes every
+call. Their writes are idempotent, so a retry applies once whichever side,
+legacy handler or package, serves it.
 
-The contracts in place: KernelIdentity
-([`identity-service.md`](identity-service.md)), KernelSubscriber
-([`subscriber-service.md`](subscriber-service.md)) and KernelSettings
-([`settings-service.md`](settings-service.md)), which serves the settings
-in the protected `v2_system_config` and the backup configuration row per
-namespace, masks secrets for packages without the namespace's secrets
-capability, and writes with the legacy handlers' audit entries and a
-refresh of the kernel's in-memory copies.
+| Contract | Capabilities | Holders |
+|---|---|---|
+| KernelIdentity ([`identity-service.md`](identity-service.md)) | `kernel.identity.v1` | identity-platform |
+| KernelSubscriber ([`subscriber-service.md`](subscriber-service.md)): entitlements, traffic, credentials, balance, directory, subscription groups | `kernel.subscriber.<family>.v1` | plan and order (entitlements), identity-platform and forward (resets), affiliate (balance), subscription (groups) |
+| KernelSettings ([`settings-service.md`](settings-service.md)): settings per namespace, secrets masked without the namespace's `secrets` capability | `kernel.settings.<namespace>.<read\|write\|secrets>.v1` | notification (`mail`), affiliate (`invite`), gost-mesh (`nodex`), platform (`backup`) |
+| KernelOrder ([`order-service.md`](order-service.md)): a paid payment record completes its order | `kernel.order.complete.v1` | payment |
+
+The planned `kernel.entitlement.apply.v1` became
+`KernelSubscriber.ApplyEntitlement`.
+
+- **Protected tables.** No manifest may adopt a table that holds credentials
+  or kernel state (`service.protectedTables`): `v2_system_config`,
+  `v2_audit_log`, `v2_operation_log`; the node credentials `v2_node` and
+  `v2_authorized_key`; the node secrets `v2_node_protocol` and
+  `v2_wireguard_peer`; the forward credentials `v2_forward_node`,
+  `v2_forward_clean_agent` and `v2_forward_runtime_job`; and every
+  `v2_user*`, `v3_kernel_*`, `v4_kernel_*`, `identity_*`, `kapi_*` and
+  `pg_*` table.
+- **Kernel views.** Packages read other domains through 16 read-only
+  `kapi_*` views (listed at the end of section 3.4), granted by
+  `kernel.view:<view>`; none shows a credential.
+- **KernelNodeOps (PLANNED).** Most `bridged` routes act on nodes. A module
+  will ask the kernel for a typed operation on a node (apply a forward,
+  sync its protocols, run a diagnosis); the kernel holds the credentials,
+  dispatches over the Agent Control stream and answers the outcome,
+  idempotently. Node credentials move to a protected table of their own, so
+  a package can adopt the rest of `v2_node`.
 
 ### 3.4 In-place adoption and kernel views
 
@@ -228,7 +317,7 @@ refresh of the kernel's in-memory copies.
     audit entry its handler records and makes the backup service reload
     the copy it keeps in memory, which backup creation reads. The parity
     test compares the rows, the audit entries and that copy.
-  - Seven stay bridged:
+  - Seven are `kernel-owned`:
     - the system configuration routes: they reach every key of the
       protected `v2_system_config`, and a grant over every key holds every
       secret ([`settings-service.md`](settings-service.md#routes));
@@ -279,8 +368,9 @@ refresh of the kernel's in-memory copies.
     the kernel as in the module: `InviteService.AddCommission` and
     `NotifyOrderPaid` have no caller. Paying commission on completion needs
     an affiliate contract first.
-  - The kernel keeps writing `v2_order`: the payment callbacks mark orders
-    paid and complete them, and the dashboard and invite statistics read it.
+  - The kernel keeps writing `v2_order`: it marks orders paid and completes
+    them for the payment callbacks, legacy or through `KernelOrder`
+    (`order-service.md`), and the dashboard and invite statistics read it.
   - The order list and detail answers carry the order, its plan's `id` and
     `name` and, for an administrator, its buyer's `id` and `email`. They
     embedded the buyer's whole `v2_user` row, subscription token and proxy
@@ -291,13 +381,6 @@ refresh of the kernel's in-memory copies.
     of the query, and another user's order is "not found", as an unknown
     one. The parity cases include other users' orders, orders whose plan or
     buyer was deleted, and every list filter and paging edge.
-- **Payment (in place).** 16 of 20 routes run on the adopted
-  - The kernel keeps writing `v2_order`: it marks orders paid and completes
-    them for the payment callbacks, legacy or through `KernelOrder`
-    (`order-service.md`), and the dashboard and invite statistics read it.
-  - The four order list and detail routes stay bridged. Their answers embed
-    the buyer's whole `v2_user` row, subscription token and proxy UUID
-    included, which no kernel view may expose.
 - **Payment (in place).** All 20 routes run on the adopted
   `v2_payment_gateway`, `v2_payment_record` and `v2_payment` tables, proved
   by `internal/tests/paymentcompat`: gateway administration, payment records
@@ -311,13 +394,6 @@ refresh of the kernel's in-memory copies.
     and status): a payment is created for the caller's own pending order and
     its exact total.
   - The four callback routes (`/payment/callback/:type`, the x402 callback,
-    the Stripe and PayPal webhooks) stay bridged. A paid callback updates the
-    payment record and the gateway statistics, marks the order paid and
-    completes it, in one kernel transaction. The order is the order module's
-    table, and there is no contract for those writes yet. The provider
-    signature checks stay with them, and the PayPal webhook calls PayPal's
-    API to verify each delivery.
-- **Affiliate (in place).** All 8 routes run on the adopted
     the Stripe and PayPal webhooks) verify the provider's signature with the
     gateway's secrets, as the kernel's do; the PayPal webhook calls PayPal's
     API for it. A paid callback takes two steps (`order-service.md`):
@@ -336,7 +412,7 @@ refresh of the kernel's in-memory copies.
     (502) so the provider delivers again; the kernel's answers its own
     error. The parity test runs the real KernelOrder server: 78 callback
     cases on SQLite and PostgreSQL each.
-- **Affiliate (in place).** 7 of 8 routes run on the adopted
+- **Affiliate (in place).** All 8 routes run on the adopted
   `v2_commission_record`, `v2_commission_withdraw` and `v2_invite_config`
   tables, proved by `internal/tests/affiliatecompat`: the user's commissions,
   withdrawals and withdrawal request, and the administrator's withdrawal
@@ -367,15 +443,11 @@ refresh of the kernel's in-memory copies.
     refund puts it back to pending, and an unknown outcome leaves it
     rejected with a failed answer. No path pays out or refunds an amount
     that was not debited.
-  - Updating the configuration (8 of 8 routes now) writes the adopted
-    `v2_invite_config`, then `invite.frontend.config` through KernelSettings
-    (namespace `invite`), which makes the kernel's invite services reload
-    the configuration they keep in memory. Neither path records an audit
+  - Updating the configuration writes the adopted `v2_invite_config`, then
+    `invite.frontend.config` through KernelSettings (namespace `invite`),
+    which makes the kernel's invite services reload the configuration they
+    keep in memory. Neither path records an audit
     entry.
-- **Identity leftovers (in place).** 5 of identity-platform's 9 routes
-  - Updating the configuration stays bridged. It writes
-    `invite.frontend.config` into `v2_system_config`, which no package may
-    adopt and no contract writes.
 - **Identity leftovers (in place).** 7 of identity-platform's 9 routes
   outside group A run natively, proved by `internal/tests/identitycompat`
   (byte parity and the same Control state, on SQLite and PostgreSQL).
@@ -517,7 +589,8 @@ refresh of the kernel's in-memory copies.
     configurations) is not proxy-node's: the protocol routes belong to
     protocol-runtime, whose extraction decides whether it may hold those
     keys, as payment holds its gateways' secrets.
-  - **Stay bridged** (24, with the reason in the host's route map):
+  - **Stay bridged** (23) or **kernel-owned** (the agent WebSocket), with
+    the reason in the host's route map:
     - node list, detail, creation, update, deletion, credentials and raw
       configuration: they read or write the node credentials, the list and
       detail embed each node's protocols with their Reality private keys,
@@ -530,10 +603,10 @@ refresh of the kernel's in-memory copies.
       kernel's HTTP and gRPC registration read them;
     - registration, heartbeat and runtime health: authenticated or minted
       node credentials, and writes to `v2_node`;
-    - the agent WebSocket, a live connection the kernel holds and pushes
-      to, and UniProxy: node-authenticated, with every eligible
-      subscriber's UUID in the user list, subscriber traffic in a push and
-      the online list in the kernel's in-memory cache;
+    - the agent WebSocket (`kernel-owned`), a live connection the kernel
+      holds and pushes to, and UniProxy: node-authenticated, with every
+      eligible subscriber's UUID in the user list, subscriber traffic in a
+      push and the online list in the kernel's in-memory cache;
     - the load balancer statistics and health check: they read the forward
       package's `v2_forward_node`, and the check probes each forward node
       and writes its status.
@@ -621,7 +694,8 @@ refresh of the kernel's in-memory copies.
       sees the keys of the protocols an administrator opens or saves. The
       protection removes standing access to every key and every write, not
       that relay.
-  - **Stay bridged** (17, with the reason in the host's route map):
+  - **Stay bridged** (11) or **kernel-owned** (the 6 agent routes), with
+    the reason in the host's route map:
     - the node protocol list, creation, update and deletion: the protected
       `v2_node_protocol`; the list answers the keys in clear (the
       administrator's editor round-trips them), and a deletion also deletes
@@ -634,9 +708,10 @@ refresh of the kernel's in-memory copies.
       in the kernel's memory; creating a task sends it over the connection
       and waits for the acknowledgement;
     - the agent routes (registration, heartbeat, task poll, result, monitor,
-      WebSocket): node credentials checked in the kernel, node status in
-      `v2_node` and `v2_forward_node`, connections in the kernel's memory,
-      and the forward package's bridge tasks and runtime jobs.
+      WebSocket; `kernel-owned`): node credentials checked in the kernel,
+      node status in `v2_node` and `v2_forward_node`, connections in the
+      kernel's memory, and the forward package's bridge tasks and runtime
+      jobs.
 - **Machine telemetry (in place).** 2 of machine-telemetry's 5 routes run
   natively, proved by `internal/tests/machinetelemetrycompat`: the
   administrator's hourly traffic series and user traffic ranking.
@@ -649,7 +724,8 @@ refresh of the kernel's in-memory copies.
     charts, so it only reads it.
   - The hourly buckets are local hours, as the kernel's; the kernel passes
     its time zone to the host.
-  - **Stay bridged** (3, with the reason in the host's route map):
+  - **Stay bridged** (the dashboard) or **kernel-owned** (the other two),
+    with the reason in the host's route map:
     - the dashboard: it counts users (the protected `v2_user`), orders,
       revenue and the legacy server tables, takes the online users from the
       alive set UniProxy keeps in the kernel's cache, and answers a snapshot
@@ -967,7 +1043,7 @@ Next quarter, in dependency order:
 2. order + payment together (33 routes): keep one transaction, column-level
    grant on `v2_order(status, paid_at)`, replay payment-callback fixtures.
    A successful callback marks the payment and order paid and completes the
-   order (owner decision, 2026-09-30, `subscriber-service.md`). Order (9 of
+   order (owner decision, 2026-09-30, `subscriber-service.md`). Order (13 of
    13 routes) and payment (20 of 20) are in place (section 3.4); the
    callbacks complete orders through `KernelOrder` (`order-service.md`).
 3. subscription + proxy-node (56 routes plus parser and gRPC): map
