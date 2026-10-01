@@ -155,6 +155,42 @@ func TestNodeAuth_UpdatesHeartbeat(t *testing.T) {
 	assert.True(t, updated.IsOnline(), "节点应被判定为在线")
 }
 
+// TestNodeAuth_HeartbeatKeepsDisabledNode: a disabled node's UniProxy
+// polling refreshes last_check_at but never re-enables the node.
+func TestNodeAuth_HeartbeatKeepsDisabledNode(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+
+	nodeAPIKey := "disabled-heartbeat-node-key"
+	stale := time.Now().Unix() - 9999
+	node := &model.Node{
+		Name:        "Disabled Heartbeat Node",
+		Host:        "127.0.0.1",
+		Port:        443,
+		APIKeyHash:  sha256Hash(nodeAPIKey),
+		Status:      model.NodeStatusDisabled,
+		LastCheckAt: &stale,
+	}
+	require.NoError(t, database.GetDB().Create(node).Error)
+
+	router := gin.New()
+	router.Use(NodeAuth())
+	router.GET("/test", func(c *gin.Context) {
+		c.JSON(http.StatusOK, gin.H{"message": "ok"})
+	})
+
+	req := httptest.NewRequest("GET", "/test?node_id="+strconv.Itoa(int(node.ID)), nil)
+	req.Header.Set("X-API-Key", nodeAPIKey)
+	w := httptest.NewRecorder()
+	router.ServeHTTP(w, req)
+
+	var updated model.Node
+	require.NoError(t, database.GetDB().First(&updated, node.ID).Error)
+	require.NotNil(t, updated.LastCheckAt)
+	assert.Greater(t, *updated.LastCheckAt, stale)
+	assert.Equal(t, model.NodeStatusDisabled, updated.Status)
+}
+
 func TestNodeAuth_InvalidAPIKey(t *testing.T) {
 	cleanup := setupTestDB(t)
 	defer cleanup()

@@ -206,7 +206,8 @@ func writeAgentWebSocketJSON(agentConn *AgentConnection, payload any) error {
 	return agentConn.WsConn.WriteJSON(payload)
 }
 
-// touchNodeOnline marks a node online in the table that owns it.
+// touchNodeOnline marks a node online in the table that owns it; a
+// disabled proxy node stays disabled.
 func (h *AgentHandler) touchNodeOnline(nodeID uint, isForwardNode bool) {
 	if isForwardNode {
 		h.db.Model(&model.ForwardNode{}).Where("id = ?", nodeID).Updates(map[string]any{
@@ -216,7 +217,7 @@ func (h *AgentHandler) touchNodeOnline(nodeID uint, isForwardNode bool) {
 		return
 	}
 	h.db.Model(&model.Node{}).Where("id = ?", nodeID).Updates(map[string]any{
-		"status":        model.NodeStatusOnline,
+		"status":        service.NodeHeartbeatStatus(),
 		"last_check_at": time.Now().Unix(),
 	})
 }

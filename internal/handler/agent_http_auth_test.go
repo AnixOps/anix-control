@@ -245,6 +245,20 @@ func (s *AgentHTTPAuthTestSuite) TestAProxyNodesHeartbeatMarksTheProxyNodeOnline
 	s.Equal(model.NodeStatusOnline, edge.Status)
 }
 
+// A disabled proxy node's heartbeat records its liveness but leaves it
+// disabled.
+func (s *AgentHTTPAuthTestSuite) TestAProxyNodesHeartbeatKeepsADisabledNodeDisabled() {
+	s.Require().NoError(s.db.Model(&model.Node{}).Where("id = ?", s.edge.ID).Update("status", model.NodeStatusDisabled).Error)
+	router := s.router(NewAgentHandler())
+	edgeID := strconv.FormatUint(uint64(s.edge.ID), 10)
+	w := s.send(router, "POST", "/api/v2/agent/heartbeat", `{"node_id":`+edgeID+`}`, as(s.edge.ID, edgeKey))
+	s.Require().Equal(http.StatusOK, w.Code, w.Body.String())
+	var edge model.Node
+	s.Require().NoError(s.db.First(&edge, s.edge.ID).Error)
+	s.Equal(model.NodeStatusDisabled, edge.Status)
+	s.NotNil(edge.LastCheckAt)
+}
+
 // Query credentials authenticate as for the agent WebSocket.
 func (s *AgentHTTPAuthTestSuite) TestQueryCredentialsAuthenticate() {
 	router := s.router(NewAgentHandler())

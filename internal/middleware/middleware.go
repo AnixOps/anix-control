@@ -13,6 +13,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/gin-gonic/gin"
 )
 
@@ -71,10 +72,11 @@ func NodeAuth() gin.HandlerFunc {
 		c.Set("node", &node)
 
 		// 刷新节点心跳: 所有 UniProxy 轮询请求 (config/user/push/alive) 都经过本中间件,
-		// 在此统一更新 last_check_at, 避免节点带 node_type 时心跳不更新导致误判离线
+		// 在此统一更新 last_check_at, 避免节点带 node_type 时心跳不更新导致误判离线。
+		// 心跳不会把管理员禁用的节点改回在线。
 		db.Model(&model.Node{}).Where("id = ?", node.ID).Updates(map[string]any{
 			"last_check_at": time.Now().Unix(),
-			"status":        model.NodeStatusOnline,
+			"status":        service.NodeHeartbeatStatus(),
 		})
 
 		c.Next()

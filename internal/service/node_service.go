@@ -80,6 +80,9 @@ func (s *NodeService) GetNodes(params NodeListParams) (*NodeListResult, error) {
 
 	// 更新在线状态
 	for i := range nodes {
+		if nodes[i].Status == model.NodeStatusDisabled {
+			continue
+		}
 		if nodes[i].IsOnline() {
 			nodes[i].Status = model.NodeStatusOnline
 		} else if nodes[i].Status == model.NodeStatusOnline {
@@ -475,7 +478,7 @@ func (s *NodeService) Heartbeat(nodeID uint, req *model.NodeHeartbeatRequest) er
 		"uptime":        req.Uptime,
 		"online_users":  req.OnlineUsers,
 		"last_check_at": now,
-		"status":        model.NodeStatusOnline,
+		"status":        NodeHeartbeatStatus(),
 	}
 
 	result := s.db.Model(&model.Node{}).Where("id = ?", nodeID).Updates(updates)
@@ -552,8 +555,16 @@ func (s *NodeService) UpdateLastCheckAt(nodeID uint) error {
 	now := time.Now().Unix()
 	return s.db.Model(&model.Node{}).Where("id = ?", nodeID).Updates(map[string]any{
 		"last_check_at": now,
-		"status":        model.NodeStatusOnline,
+		"status":        NodeHeartbeatStatus(),
 	}).Error
+}
+
+// NodeHeartbeatStatus is the status column a node's heartbeat writes:
+// online, unless an administrator disabled the node. A heartbeat proves
+// that the node's software runs; it never re-enables a disabled node. A
+// pending node (never seen yet) becomes online, as before.
+func NodeHeartbeatStatus() clause.Expr {
+	return gorm.Expr("CASE WHEN status = ? THEN status ELSE ? END", model.NodeStatusDisabled, model.NodeStatusOnline)
 }
 
 // UpdateRuntimeHealth records the health of a node's managed runtime process.

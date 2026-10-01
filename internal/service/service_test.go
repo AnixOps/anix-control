@@ -3648,6 +3648,50 @@ func (s *NodeServiceTestSuite) TestHeartbeat_NodeNotFound() {
 	assert.Error(s.T(), err)
 }
 
+// A heartbeat records the node's liveness but never re-enables a node an
+// administrator disabled; a pending or offline node becomes online.
+func (s *NodeServiceTestSuite) TestHeartbeatKeepsDisabledNodesDisabled() {
+	db := database.Get()
+	for from, want := range map[model.NodeStatus]model.NodeStatus{
+		model.NodeStatusDisabled: model.NodeStatusDisabled,
+		model.NodeStatusPending:  model.NodeStatusOnline,
+		model.NodeStatusOffline:  model.NodeStatusOnline,
+		model.NodeStatusOnline:   model.NodeStatusOnline,
+	} {
+		node := &model.Node{Name: fmt.Sprintf("Heartbeat Status %d", from), Host: "192.168.1.61", Port: 443, Rate: 1.0, Show: 1}
+		s.Require().NoError(s.svc.CreateNode(node))
+		reset := func() {
+			s.Require().NoError(db.Model(&model.Node{}).Where("id = ?", node.ID).
+				Updates(map[string]any{"status": from, "last_check_at": nil}).Error)
+		}
+		for name, heartbeat := range map[string]func() error{
+			"Heartbeat":         func() error { return s.svc.Heartbeat(node.ID, &model.NodeHeartbeatRequest{CPUUsage: 1}) },
+			"UpdateLastCheckAt": func() error { return s.svc.UpdateLastCheckAt(node.ID) },
+		} {
+			reset()
+			s.Require().NoError(heartbeat(), name)
+			found, err := s.svc.GetNode(node.ID)
+			s.Require().NoError(err)
+			s.Equal(want, found.Status, "%s from status %d", name, from)
+			s.NotNil(found.LastCheckAt, name)
+		}
+	}
+
+	// The administrator's node list shows a disabled node with a recent
+	// heartbeat as disabled, not online.
+	list, err := s.svc.GetNodes(NodeListParams{Page: 1, PageSize: 100})
+	s.Require().NoError(err)
+	var listed int
+	for _, node := range list.List {
+		if node.Name == fmt.Sprintf("Heartbeat Status %d", model.NodeStatusDisabled) {
+			listed++
+			s.True(node.IsOnline())
+			s.Equal(model.NodeStatusDisabled, node.Status)
+		}
+	}
+	s.Equal(1, listed)
+}
+
 func (s *NodeServiceTestSuite) TestHeartbeatRejectsNegativeTraffic() {
 	node := &model.Node{Name: "Heartbeat Negative", Host: "192.168.1.69", Port: 443, Rate: 1.0, Show: 1}
 	assert.NoError(s.T(), s.svc.CreateNode(node))
