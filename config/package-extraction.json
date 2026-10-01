@@ -782,7 +782,7 @@
       "path": "/api/v2/admin/notification/email/config",
       "package_id": "notification",
       "route_id": "notification.admin.notification.email.config.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -790,7 +790,7 @@
       "path": "/api/v2/admin/notification/email/config",
       "package_id": "notification",
       "route_id": "notification.admin.notification.email.config.put",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -838,7 +838,7 @@
       "path": "/api/v2/admin/notification/test",
       "package_id": "notification",
       "route_id": "notification.admin.notification.test.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {

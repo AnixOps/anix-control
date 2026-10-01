@@ -1,15 +1,22 @@
 // Package native implements the notification package's v2 routes in the
 // package itself, on the kernel's notification and Telegram tables adopted in
-// place (kernel.storage.adopt). Legacy handlers and native routes share the
-// tables, so a route can switch between them at any time. Responses are
+// place (kernel.storage.adopt), and the e-mail configuration through the
+// kernel's KernelSettings contract. Legacy handlers and native routes share
+// the tables, so a route can switch between them at any time. Responses are
 // byte-compatible with the legacy handlers (internal/tests/notificationcompat).
 //
-// Five routes have no native handler and stay bridged: the e-mail
-// configuration (GET and PUT) and the test send keep their settings in the
-// kernel's v2_system_config; setting the Telegram webhook derives its default
-// URL from the request host, which package hosts are not sent; and the public
-// Telegram webhook answers bot commands from subscriber data (the
-// subscription token) that no kernel view exposes.
+// The e-mail configuration (GET and PUT) and the test send read and write
+// the notification.email.config key of the kernel's v2_system_config
+// through KernelSettings, namespace mail. Its value holds the SMTP password,
+// a secret: the package reads it in clear (kernel.settings.mail.secrets.v1)
+// because it answers it to administrators, as the kernel's handler does,
+// and sends the test e-mail itself. A host without the contract leaves the
+// three routes legacy.
+//
+// Two routes have no native handler and stay bridged: setting the Telegram
+// webhook derives its default URL from the request host, which package
+// hosts are not sent; and the public Telegram webhook answers bot commands
+// from subscriber data (the subscription token) that no kernel view exposes.
 package native
 
 import (
@@ -36,13 +43,19 @@ type Service struct {
 	// Open returns the package's storage connection, on which the adopted
 	// tables and the kapi_user_directory_v1 view are visible.
 	Open func(ctx context.Context) (*gorm.DB, error)
+	// Settings is the kernel's KernelSettings; without it the e-mail
+	// configuration and test send have no native handler and stay legacy.
+	Settings Settings
+	// NewToken names a request that carries neither an Idempotency-Key
+	// nor a request id; it defaults to a random UUID.
+	NewToken func() string
 	// Now defaults to time.Now.
 	Now func() time.Time
 }
 
 // Handlers returns the native handlers by route id.
 func (s *Service) Handlers() map[string]pluginhostsdk.NativeHandler {
-	return map[string]pluginhostsdk.NativeHandler{
+	handlers := map[string]pluginhostsdk.NativeHandler{
 		"notification.admin.notification.logs.get":            s.AdminLogs,
 		"notification.admin.notification.templates.get":       s.AdminTemplates,
 		"notification.admin.notification.templates.post":      s.AdminCreateTemplate,
@@ -63,6 +76,12 @@ func (s *Service) Handlers() map[string]pluginhostsdk.NativeHandler {
 		"notification.user.telegram.unbind.post":              s.UserTelegramUnbind,
 		"notification.user.telegram.notify.post":              s.UserTelegramNotify,
 	}
+	if s.Settings != nil {
+		handlers[EmailConfigGetRouteID] = s.AdminEmailConfig
+		handlers[EmailConfigPutRouteID] = s.AdminUpdateEmailConfig
+		handlers[TestSendRouteID] = s.AdminTestNotification
+	}
+	return handlers
 }
 
 func (s *Service) now() time.Time {
