@@ -827,7 +827,7 @@ jobs:
       - name: Generate Swagger docs
         run: |
           go install github.com/swaggo/swag/cmd/swag@v1.16.6
-          $(go env GOPATH)/bin/swag init -g cmd/server/main.go -o docs --parseInternal --exclude control-center
+          $(go env GOPATH)/bin/swag init -g cmd/server/main.go -o docs --parseInternal --exclude control-center,packages
 
       - name: Run go vet
         run: go vet ./...
@@ -1557,7 +1557,7 @@ jobs:
       - name: Generate Swagger docs
         run: |
           go install github.com/swaggo/swag/cmd/swag@v1.16.6
-          $(go env GOPATH)/bin/swag init -g cmd/server/main.go -o docs --parseInternal --exclude control-center
+          $(go env GOPATH)/bin/swag init -g cmd/server/main.go -o docs --parseInternal --exclude control-center,packages
 
       - name: Build binary
         run: |
