@@ -1428,6 +1428,9 @@
 
 ### Fixed
 
+- The Windows server binaries build again. The sealed secret handles (#112)
+  used `pluginhost.ErrLegacyUnavailable`, which only the Unix build defined;
+  the non-Unix stub now defines it too.
 - The legacy user dashboard no longer shows the subscription link settings.
   `GET /api/v2/user/subscription` wrote `subscribe_path` and
   `subscribe_domains` into the user's cached summary, and
