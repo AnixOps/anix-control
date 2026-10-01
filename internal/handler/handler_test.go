@@ -4113,6 +4113,7 @@ func (s *PaymentHandlerTestSuite) createPayPalRecord(tradeNo string) uint {
 		UserID:       user.ID,
 		Amount:       10.00,
 		ActualAmount: 10.00,
+		Currency:     "USD",
 		Status:       model.PaymentStatusPending,
 		OrderID:      &order.ID,
 	}
@@ -4142,7 +4143,7 @@ func (s *PaymentHandlerTestSuite) TestPayPalWebhook_Success() {
 	handler.gatewayService = service.NewPaymentGatewayService(s.db)
 	s.router.POST("/paypal/webhook", handler.PayPalWebhook)
 
-	payload := `{"id":"WH-123","event_type":"PAYMENT.CAPTURE.COMPLETED","resource":{"id":"cap_123","custom_id":"` + tradeNo + `"}}`
+	payload := `{"id":"WH-123","event_type":"PAYMENT.CAPTURE.COMPLETED","resource":{"id":"cap_123","custom_id":"` + tradeNo + `","amount":{"value":"10.00","currency_code":"USD"}}}`
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, s.paypalWebhookRequest(payload))
 
@@ -4156,6 +4157,38 @@ func (s *PaymentHandlerTestSuite) TestPayPalWebhook_Success() {
 	var order model.Order
 	s.Require().NoError(s.db.First(&order, orderID).Error)
 	assert.Equal(s.T(), 1, order.Status)
+}
+
+// Only a captured payment of the record's amount and currency pays: an
+// approved checkout has collected nothing yet.
+func (s *PaymentHandlerTestSuite) TestPayPalWebhook_PaysOnlyMatchingCaptures() {
+	restore := s.withPayPalVerifyClient("SUCCESS")
+	defer restore()
+	handler := NewPaymentHandler()
+	handler.gatewayService = service.NewPaymentGatewayService(s.db)
+	s.router.POST("/paypal/webhook", handler.PayPalWebhook)
+
+	for _, c := range []struct{ name, event, amount string }{
+		{"approved", "CHECKOUT.ORDER.APPROVED", `"amount":{"value":"10.00","currency_code":"USD"}`},
+		{"order completed", "CHECKOUT.ORDER.COMPLETED", `"amount":{"value":"10.00","currency_code":"USD"}`},
+		{"capture below the amount", "PAYMENT.CAPTURE.COMPLETED", `"amount":{"value":"0.01","currency_code":"USD"}`},
+		{"capture in another currency", "PAYMENT.CAPTURE.COMPLETED", `"amount":{"value":"10.00","currency_code":"JPY"}`},
+		{"capture without an amount", "PAYMENT.CAPTURE.COMPLETED", `"status":"COMPLETED"`},
+	} {
+		tradeNo := "PAYPAL-UNPAID-" + strings.ReplaceAll(c.name, " ", "-")
+		orderID := s.createPayPalRecord(tradeNo)
+		payload := `{"id":"WH-1","event_type":"` + c.event + `","resource":{"id":"cap_1","custom_id":"` + tradeNo + `",` + c.amount + `}}`
+		w := httptest.NewRecorder()
+		s.router.ServeHTTP(w, s.paypalWebhookRequest(payload))
+		assert.Equal(s.T(), http.StatusOK, w.Code, c.name)
+
+		var record model.PaymentRecord
+		s.Require().NoError(s.db.Where("trade_no = ?", tradeNo).First(&record).Error)
+		assert.Equal(s.T(), model.PaymentStatusPending, record.Status, c.name)
+		var order model.Order
+		s.Require().NoError(s.db.First(&order, orderID).Error)
+		assert.Equal(s.T(), 0, order.Status, c.name)
+	}
 }
 
 func (s *PaymentHandlerTestSuite) TestPayPalWebhook_RemoteSignatureRejected() {
