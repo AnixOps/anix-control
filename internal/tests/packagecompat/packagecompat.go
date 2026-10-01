@@ -13,6 +13,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -75,6 +76,11 @@ type Case struct {
 	// RequestHeaders are sent with the request: the legacy handler reads
 	// them from it, the native one from the metadata the kernel forwards.
 	RequestHeaders map[string]string
+	// Host is the request's Host (default example.com) and TLS whether it
+	// arrived over TLS: the legacy handler reads them from the request, the
+	// native one from the request scheme and host the kernel sends.
+	Host string
+	TLS  bool
 	// Warmup bodies are sent, in order, before the compared request.
 	Warmup [][]byte
 }
@@ -220,6 +226,7 @@ func run(t *testing.T, open opener, route Route, c Case) (Result, Result) {
 			Metadata: pluginhostsdk.RequestMetadata{
 				Path: ctx.Request.URL.Path, Query: ctx.Request.URL.Query(), PathParams: params,
 				ClientIP: clientIP, UserAgent: ctx.Request.UserAgent(), Headers: forwardedHeaders(c),
+				Scheme: requestScheme(ctx.Request), Host: ctx.Request.Host,
 			},
 		})
 		require.NoError(t, err, "native handler failed")
@@ -232,6 +239,15 @@ func run(t *testing.T, open opener, route Route, c Case) (Result, Result) {
 		native.State = c.Snapshot(t, nativeDB)
 	}
 	return legacy, native
+}
+
+// requestScheme is the scheme the kernel sends: from the connection's TLS
+// state only.
+func requestScheme(request *http.Request) string {
+	if request.TLS != nil {
+		return "https"
+	}
+	return "http"
 }
 
 // forwardedHeaders are the case's request headers as the kernel forwards
@@ -267,6 +283,14 @@ func serve(t *testing.T, method, pattern string, c Case, handler gin.HandlerFunc
 	send := func(body []byte) Result {
 		request := httptest.NewRequestWithContext(context.Background(), method, c.Path, bytes.NewReader(body))
 		request.RemoteAddr = clientIP + ":1234"
+		if c.Host != "" {
+			request.Host = c.Host
+		}
+		if c.TLS {
+			request.TLS = &tls.ConnectionState{}
+		} else {
+			request.TLS = nil
+		}
 		if len(body) > 0 {
 			request.Header.Set("Content-Type", "application/json")
 		}

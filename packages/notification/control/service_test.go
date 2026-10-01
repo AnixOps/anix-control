@@ -9,6 +9,7 @@ import (
 	"time"
 
 	kernelsettingsv1 "github.com/AnixOps/anix-control/sdk/api/kernelsettings/v1"
+	pluginhostv1 "github.com/AnixOps/anix-control/sdk/api/pluginhost/v1"
 	"github.com/AnixOps/anix-control/sdk/packagebridgesdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/AnixOps/anix-control/v4/packages/notification/native"
@@ -116,4 +117,45 @@ func TestNotificationManifestCapabilities(t *testing.T) {
 		// answers and the test send uses.
 		"kernel.settings.mail.read.v1", "kernel.settings.mail.write.v1", "kernel.settings.mail.secrets.v1",
 	}, manifest.Capabilities)
+}
+
+// modesBridge is bridgeStub with route modes set by the kernel.
+type modesBridge struct {
+	bridgeStub
+	modes map[string]string
+}
+
+func (b *modesBridge) GetPackageConfig(context.Context) (packagebridgesdk.PackageConfig, error) {
+	return packagebridgesdk.PackageConfig{Revision: 1, RouteModes: b.modes}, nil
+}
+
+// Setting the webhook natively needs the request's scheme and host, which a
+// kernel sends as DispatchRequest fields; a request from a kernel that does
+// not send them is answered by the legacy handler.
+func TestNotificationHostSetsTheWebhookNativelyOnlyWithTheRequestAddress(t *testing.T) {
+	bridge := &modesBridge{modes: map[string]string{native.SetWebhookRouteID: pluginhostsdk.RouteModeNative}}
+	router, err := newNotificationService(bridge, "lease-1")
+	require.NoError(t, err)
+	router.Refresh(context.Background())
+	server, err := pluginhostsdk.NewServer(pluginhostsdk.ServerConfig{PackageID: "notification", PackageVersion: "4.1.0"}, router)
+	require.NoError(t, err)
+	dispatch := func(scheme, host string) {
+		t.Helper()
+		bridge.operation = ""
+		response, err := server.Dispatch(context.Background(), &pluginhostv1.DispatchRequest{
+			PackageId: "notification", PackageVersion: "4.1.0", RouteGeneration: 1, RequestId: "request-1",
+			RouteId: native.SetWebhookRouteID, Method: "POST", PrincipalJson: []byte(`{"actor_id":1,"admin":true}`),
+			RequestMetadataJson: []byte(`{"path":"/api/v2/admin/telegram/webhook"}`), BridgeCapability: make([]byte, 32),
+			DeadlineUnixMillis: time.Now().Add(5 * time.Second).UnixMilli(), RequestScheme: scheme, RequestHost: host,
+		})
+		require.NoError(t, err)
+		require.EqualValues(t, 200, response.GetStatusCode())
+	}
+
+	dispatch("", "")
+	require.Equal(t, native.SetWebhookRouteID, bridge.operation, "without the request address the legacy handler answers")
+	dispatch("https", "")
+	require.Equal(t, native.SetWebhookRouteID, bridge.operation, "without the request host the legacy handler answers")
+	dispatch("https", "panel.example.test:8443")
+	require.Empty(t, bridge.operation, "with the request address the package answers")
 }

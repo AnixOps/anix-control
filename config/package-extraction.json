@@ -1366,7 +1366,7 @@
       "path": "/api/v2/admin/telegram/webhook",
       "package_id": "notification",
       "route_id": "notification.admin.telegram.webhook.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1948,40 +1948,40 @@
     {
       "method": "POST",
       "path": "/api/v2/speed-limit/create",
-      "package_id": "plan",
-      "route_id": "plan.speed_limit.create.post",
-      "mode": "bridged",
+      "package_id": "forward",
+      "route_id": "forward.speed_limit.create.post",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
       "method": "POST",
       "path": "/api/v2/speed-limit/delete",
-      "package_id": "plan",
-      "route_id": "plan.speed_limit.delete.post",
-      "mode": "bridged",
+      "package_id": "forward",
+      "route_id": "forward.speed_limit.delete.post",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
       "method": "POST",
       "path": "/api/v2/speed-limit/list",
-      "package_id": "plan",
-      "route_id": "plan.speed_limit.list.post",
-      "mode": "bridged",
+      "package_id": "forward",
+      "route_id": "forward.speed_limit.list.post",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
       "method": "POST",
       "path": "/api/v2/speed-limit/tunnels",
-      "package_id": "plan",
-      "route_id": "plan.speed_limit.tunnels.post",
-      "mode": "bridged",
+      "package_id": "forward",
+      "route_id": "forward.speed_limit.tunnels.post",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
       "method": "POST",
       "path": "/api/v2/speed-limit/update",
-      "package_id": "plan",
-      "route_id": "plan.speed_limit.update.post",
+      "package_id": "forward",
+      "route_id": "forward.speed_limit.update.post",
       "mode": "bridged",
       "legacy": "router"
     },
@@ -2068,10 +2068,10 @@
     {
       "method": "GET",
       "path": "/api/v2/user/invite",
-      "package_id": "identity-platform",
-      "route_id": "identity.user.invite.get",
-      "mode": "bridged",
-      "legacy": "identity-bridge"
+      "package_id": "affiliate",
+      "route_id": "affiliate.user.invite.get",
+      "mode": "native-flagged",
+      "legacy": "router"
     },
     {
       "method": "GET",
@@ -2084,10 +2084,10 @@
     {
       "method": "POST",
       "path": "/api/v2/user/invite/generate",
-      "package_id": "identity-platform",
-      "route_id": "identity.user.invite.generate.post",
-      "mode": "bridged",
-      "legacy": "identity-bridge"
+      "package_id": "affiliate",
+      "route_id": "affiliate.user.invite.generate.post",
+      "mode": "native-flagged",
+      "legacy": "router"
     },
     {
       "method": "POST",

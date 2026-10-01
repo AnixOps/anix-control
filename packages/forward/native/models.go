@@ -81,18 +81,18 @@ type UserTunnel struct {
 // TableName is the adopted kernel table.
 func (UserTunnel) TableName() string { return "v2_forward_user_tunnel" }
 
-// SpeedLimit is a v2_speed_limit row: a tunnel's named speed limit. The
-// plan package's /speed-limit routes, bridged, manage them; forward only
-// reads them.
+// SpeedLimit is a v2_speed_limit row: a tunnel's named speed limit, which
+// the /speed-limit routes manage. Its fields and tags match the kernel
+// model, so answers are the same.
 type SpeedLimit struct {
-	ID          uint   `gorm:"primaryKey"`
-	CreatedTime int64  `gorm:"index;not null"`
-	UpdatedTime int64  `gorm:"index;not null"`
-	Status      int    `gorm:"default:1"`
-	Name        string `gorm:"size:100;not null"`
-	Speed       int64  `gorm:"not null"`
-	TunnelID    uint   `gorm:"index;not null"`
-	TunnelName  string `gorm:"size:100;not null"`
+	ID          uint   `gorm:"primaryKey" json:"id"`
+	CreatedTime int64  `gorm:"index;not null" json:"createdTime"`
+	UpdatedTime int64  `gorm:"index;not null" json:"updatedTime"`
+	Status      int    `gorm:"default:1" json:"status"`
+	Name        string `gorm:"size:100;not null" json:"name"`
+	Speed       int64  `gorm:"not null" json:"speed"`
+	TunnelID    uint   `gorm:"index;not null" json:"tunnelId"`
+	TunnelName  string `gorm:"size:100;not null" json:"tunnelName"`
 }
 
 // TableName is the adopted kernel table.

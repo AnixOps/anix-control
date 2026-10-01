@@ -642,7 +642,7 @@ func NamedResultShadow(r *gin.Engine, cfg *config.Config) (config resultConfig) 
 
         expected = {
             ("GET", "/api/v2/admin/loadbalancers"): ("proxy-node", "proxy.loadbalancer."),
-            ("POST", "/api/v2/speed-limit/create"): ("plan", "plan.speed_limit."),
+            ("POST", "/api/v2/speed-limit/create"): ("forward", "forward.speed_limit."),
             ("GET", "/api/v2/admin/nodes/:id/protocols"): ("protocol-runtime", "protocol."),
             ("GET", "/api/v2/admin/protocol-templates"): ("protocol-runtime", "protocol."),
             ("POST", "/api/v2/node/register"): ("proxy-node", "proxy."),

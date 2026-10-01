@@ -59,16 +59,10 @@ var identityRoutes = map[string]struct{}{
 }
 
 // bridgedRoutes are the package's compatibility routes without a native
-// handler; they always relay to the kernel's legacy handler. The user's
-// invite codes and their generation are affiliate data, not identity's:
-// Control keeps the codes (v2_invite_code, which registration consumes
-// inside Control), and the answer adds the commission balance and the
-// invite statistics, which join orders and commission records of the order
-// and affiliate packages.
-var bridgedRoutes = map[string]struct{}{
-	"identity.user.invite.generate.post": {},
-	"identity.user.invite.get":           {},
-}
+// handler; they always relay to the kernel's legacy handler. There are
+// none left: the user's invite codes and their generation, affiliate data
+// rather than identity's, moved to the affiliate package.
+var bridgedRoutes = map[string]struct{}{}
 
 // identityBridge is what the identity host needs from the package bridge.
 type identityBridge interface {

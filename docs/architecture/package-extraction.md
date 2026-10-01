@@ -10,8 +10,8 @@ open work in [`../../TODO.md`](../../TODO.md).
 
 > 中文摘要：v4.0.0 的「插件化」只到路由层；本文定义「一个领域真正住在插件里」
 > 的验收标准、目标机制（存储租约 + 按路由模式 + 类型化内核操作，均已实现）、
-> 保留下来的旧计划约束，以及 M0–M4 里程碑。292 条 v2 路由中，166 条
-> `native-flagged`，110 条 `bridged`（待契约），16 条 `kernel-owned`（按设计留在内核）。
+> 保留下来的旧计划约束，以及 M0–M4 里程碑。292 条 v2 路由中，171 条
+> `native-flagged`，105 条 `bridged`（待契约），16 条 `kernel-owned`（按设计留在内核）。
 
 Markers used below: **CURRENT** = true in the tree today; **PLANNED** = accepted
 design, not implemented yet; **HISTORICAL** = preserved from a retired plan for
@@ -30,18 +30,18 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
 - `config/package-extraction.json` records each route's extraction mode
   (`bridged`, `kernel-owned`, `native-flagged` or `native`; section 3.2) and
   where its legacy handler lives
-  (`router`, `identity-bridge` or `none`). 166 routes are `native-flagged`:
+  (`router`, `identity-bridge` or `none`). 173 routes are `native-flagged`:
   identity-platform (22: group A's 15, the profile, dashboard, user detail,
   user list and user statistics, and the traffic and subscription resets),
-  affiliate (8), forward (17), gost-mesh (3), knowledge (6), machine-telemetry
-  (3), notification (22), order (13), payment (20), plan (7), platform (5),
-  protocol-runtime (3), proxy-node (7), subscription (21), ticket (8) and
-  wireguard (1). 16 routes are `kernel-owned`: they stay in the kernel by
-  design, and each row says why. The other 110 are `bridged` until a kernel
-  contract lets their package serve them (section 3.2 lists what unblocks
-  them). None is `native` yet. The identity routes are `identity-bridge`.
-  `check_plugin_only_routes.py` enforces the map against the router, the
-  identity bridge and the package hosts.
+  affiliate (10), forward (21), gost-mesh (3), knowledge (6),
+  machine-telemetry (3), notification (23), order (13), payment (20), plan
+  (7), platform (5), protocol-runtime (3), proxy-node (7), subscription (21),
+  ticket (8) and wireguard (1). 16 routes are `kernel-owned`: they stay in the
+  kernel by design, and each row says why. The other 103 are `bridged` until a
+  kernel contract lets their package serve them (section 3.2 lists what
+  unblocks them). None is `native` yet. The identity routes are
+  `identity-bridge`. `check_plugin_only_routes.py` enforces the map against
+  the router, the identity bridge and the package hosts.
 - Request path: gin middleware -> `compatv2` gateway -> route resolution
   (`internal/compat/v2/registry.go`, `verifiedRouteSource`) -> package host
   process over Unix gRPC -> package bridge (FD 4) -> **the legacy in-kernel
@@ -55,16 +55,17 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
 - 11 packages (forward, knowledge, notification, order, payment, plan,
   protocol-runtime, proxy-node, subscription, ticket, wireguard) are 4-file
   placeholders (`manifest.template.json`, `compat/`, `migrations/`, `webui/`).
-- **After v4.0.0.** 21 of the 45 identity-platform routes moved to other
-  packages, still bridged:
+- **After v4.0.0.** 23 of the 45 identity-platform routes moved to other
+  packages:
   - system configuration, audit and backup (12) to the new `platform`
     package;
-  - commissions, withdrawals and invite statistics and configuration (8) to
-    the new `affiliate` package;
+  - commissions, withdrawals and invite statistics and configuration (8),
+    then the user's invite codes and their generation (2), to the new
+    `affiliate` package;
   - `/user/reset` to `forward`.
 
-  They are now `registeredPackageRoute` routes. identity-platform keeps 24,
-  all still served through the identity bridge. `internal/compat/v2/moved_routes.go`
+  They are now `registeredPackageRoute` routes. identity-platform keeps 22,
+  whose legacy handlers are in the identity bridge. `internal/compat/v2/moved_routes.go`
   lists the moves: the kernel accepts the old route ids from old
   identity-platform releases and, while both packages declare a route,
   prefers the new owner. There are now 18 packages. All but nat-egress and
@@ -82,23 +83,22 @@ Route modes per package (2026-10-01):
 
 | Package | `native-flagged` | `bridged` | `kernel-owned` |
 |---|---|---|---|
-| affiliate | 8 | 0 | 0 |
-| forward | 17 | 63 | 0 |
+| affiliate | 10 | 0 | 0 |
+| forward | 21 | 64 | 0 |
 | gost-mesh | 3 | 0 | 0 |
-| identity-platform | 22 | 2 | 0 |
+| identity-platform | 22 | 0 | 0 |
 | knowledge | 6 | 0 | 0 |
 | machine-telemetry | 3 | 0 | 2 |
-| notification | 22 | 2 | 0 |
+| notification | 23 | 1 | 0 |
 | order | 13 | 0 | 0 |
 | payment | 20 | 0 | 0 |
-| plan | 7 | 5 | 0 |
+| plan | 7 | 0 | 0 |
 | platform | 5 | 0 | 7 |
 | protocol-runtime | 3 | 11 | 6 |
 | proxy-node | 7 | 23 | 1 |
 | subscription | 21 | 4 | 0 |
 | ticket | 8 | 0 | 0 |
 | wireguard | 1 | 0 | 0 |
-| **all** | **166** | **110** | **16** |
 
 Reusable pieces that already exist:
 
@@ -192,9 +192,9 @@ by `check_plugin_only_routes.py` (counts in section 1).
 
 | Mode | Meaning | Routes |
 |---|---|---|
-| `native-flagged` | the package host has a native handler, proved by a parity test; the legacy handler stays, so every runtime mode works | 166 |
+| `native-flagged` | the package host has a native handler, proved by a parity test; the legacy handler stays, so every runtime mode works | 173 |
 | `native` | the legacy handler is deleted and the host answers alone | 0 |
-| `bridged` | the host only relays, until a kernel contract lets the package serve the route | 110 |
+| `bridged` | the host only relays, until a kernel contract lets the package serve the route | 103 |
 | `kernel-owned` | the host only relays, by design: the route stays in the kernel, and the row's `reason` says why | 16 |
 
 A `bridged` or `kernel-owned` route is registered and relayed alike: it is
@@ -216,16 +216,30 @@ What unblocks the `bridged` routes:
 
 | Unblocked by | Routes | Count |
 |---|---|---|
-| KernelNodeOps and the node credential split (section 3.3) | forward: nodes, Ansible machines, clean agent tokens, every change applied on a node, runtime status and jobs, flow accounting; proxy-node: node administration, credentials, raw configuration, authorization keys, load balancer checks; protocol-runtime: node protocols, sync, Agent Control and agent operations; subscription: a group's protocols and the protocol pool | 83 |
+| KernelNodeOps and the node credential split (section 3.3) | forward: nodes, Ansible machines, clean agent tokens, every change applied on a node (a speed limit update included), runtime status and jobs, flow accounting; proxy-node: node administration, credentials, raw configuration, authorization keys, load balancer checks; protocol-runtime: node protocols, sync, Agent Control and agent operations; subscription: a group's protocols and the protocol pool | 84 |
 | Open decision: `kernel-owned`, or a package behind node authentication in the kernel | node registration, heartbeat and runtime health; clean agent registration, heartbeat and report; the agents' forward rule list | 7 |
 | Open decision: whether UniProxy and the subscription renderer stay in the kernel | UniProxy (5) and the subscription preview | 6 |
-| Moving to forward (an update also needs KernelNodeOps) | the speed-limit routes | 5 |
 | A proxy node view with parent and load | forward observability targets, trend and topology | 3 |
-| The request's scheme and host passed to hosts | setting the Telegram webhook; the clean agent install script | 2 |
-| Invite codes moving to affiliate | the user's invite codes and their generation | 2 |
+| A read of Control's process configuration `forward_runtime.clean_agent.public_url` (a KernelSettings-style namespace, or the host's environment) | the clean agent install script: its panel URL is that setting when set, else the request's scheme and host | 1 |
 | A contract read of a member's subscription link | the public Telegram webhook (`/sub`) | 1 |
 | A KernelSettings namespace for the subscription link (with `app.subscribe_path`) | the subscription link settings | 1 |
 | Kernel caches (done, no invalidation events needed): the kernel keeps both caches and answers them through `KernelTelemetry.GetDashboard` and `KernelSubscriber.GetSubscriptionSummary`, so both modes answer the same entry and `cached_at` ([`kernel-caches.md`](kernel-caches.md)) | none left: the dashboard (the online set crosses as a count) and a user's subscription summary are `native-flagged` | 0 |
+
+**Request address** (CURRENT). Hosts receive the original request's scheme
+and host, so a native route can build absolute URLs as its legacy handler
+does: the kernel sends `request_scheme` (`https` when the connection was TLS,
+else `http`) and `request_host` (the `Host` header, only when it is a plain
+`host[:port]`) as fields of `DispatchRequest` and `WebSocketOpen`, which the
+SDK exposes as `RequestMetadata.Scheme` and `Host`. They are the values the
+kernel's bridge already passed to the legacy handlers. They are new protobuf
+fields, not keys of the request metadata JSON, which hosts built with the
+v4.0.0 SDK decode with `DisallowUnknownFields`: those hosts skip the fields,
+so no metadata version is needed. A host can tell a kernel that predates
+them by the empty scheme; a native handler that needs them then returns
+`pluginhostsdk.ErrNativeUnavailable`, and the router answers from the legacy
+handler (in shadow mode the comparison is skipped). `X-Forwarded-Proto` is
+not folded into the scheme: a route whose legacy handler honours it (the
+Telegram webhook) reads it from the forwarded request headers, as before.
 
 Status (2026-10-01): every installation runs every route `legacy` unless an
 operator sets another mode; no route is `native` yet.
@@ -295,7 +309,7 @@ The planned `kernel.entitlement.apply.v1` became
   `v2_ticket_message`, proved by `internal/tests/ticketcompat`. The admin
   list's legacy preload of the user is not needed: only `user_id` is
   returned.
-- **Notification (in place).** 22 of 24 routes on the adopted
+- **Notification (in place).** 23 of 24 routes on the adopted
   `v2_notification_template`, `v2_notification_log`, `v2_telegram_bot` and
   `v2_telegram_user` tables and the kernel's KernelSettings, proved by
   `internal/tests/notificationcompat`; binding e-mails come from
@@ -308,8 +322,14 @@ The planned `kernel.entitlement.apply.v1` became
     as the kernel's handler does, and an update that keeps it sends the
     placeholder. The parity test runs a test SMTP server and compares the
     mail each side delivers.
-  - Two stay bridged: setting the webhook (needs the request host) and the
-    public webhook (`/sub` needs the subscription token).
+  - Setting the webhook without a `url` points it at
+    `<scheme>://<host>/api/v2/telegram/webhook` of the administrator's
+    request: the scheme is `X-Forwarded-Proto` when set, else the request
+    scheme the kernel sends, and the host the request host it sends
+    (section 3.2, "Request address"). The parity test answers the Bot API
+    calls of both sides and compares them.
+  - One stays bridged: the public webhook (`/sub` needs the subscription
+    token).
 - **Platform (in place).** 5 of 12 routes: the backup list and statistics
   on the adopted `v2_backup_record` table, the system audit log through
   `kapi_system_audit_log_v1`, and the backup configuration (GET and PUT)
@@ -329,7 +349,7 @@ The planned `kernel.entitlement.apply.v1` became
     - creating, deleting and restoring backups: archives of the database
       and files on the kernel's disk.
 - **Plan (in place).** The first module that changes shared subscriber
-  state. 7 of 12 routes run on the adopted `v2_plan` and `v2_event` tables,
+  state. All 7 routes run on the adopted `v2_plan` and `v2_event` tables,
   proved by `internal/tests/plancompat`.
   - `v2_event` is the plan domain's event log: only the plan routes write
     it, and nothing reads it.
@@ -341,10 +361,8 @@ The planned `kernel.entitlement.apply.v1` became
     legacy handler derives the same id, so a retry applies once whichever
     side serves it. The parity test runs the real KernelSubscriber server
     and compares `v2_user`, the request ledger and the change log.
-  - The five `/speed-limit/*` routes stay bridged. They are Flux forward
-    limits: their rows name forward tunnels, they read
-    `v2_forward_tunnel` and `v2_forward_user_tunnel`, and an update
-    re-pushes forwards to nodes. They join forward later.
+  - The five `/speed-limit/*` routes moved to forward: they are Flux
+    forward limits, whose rows name forward tunnels (see Forward).
   - The subscription module checks a plan through `kapi_plan_catalog_v1`;
     the kernel's subscription renderer, which stays in the kernel, still
     reads `v2_plan` directly.
@@ -417,16 +435,40 @@ The planned `kernel.entitlement.apply.v1` became
     (502) so the provider delivers again; the kernel's answers its own
     error. The parity test runs the real KernelOrder server: 78 callback
     cases on SQLite and PostgreSQL each.
-- **Affiliate (in place).** All 8 routes run on the adopted
-  `v2_commission_record`, `v2_commission_withdraw` and `v2_invite_config`
-  tables, proved by `internal/tests/affiliatecompat`: the user's commissions,
-  withdrawals and withdrawal request, and the administrator's withdrawal
-  list and decisions, invite statistics and configuration.
+- **Affiliate (in place).** All 10 routes run on the adopted
+  `v2_commission_record`, `v2_commission_withdraw`, `v2_invite_config` and
+  `v2_invite_code` tables, proved by `internal/tests/affiliatecompat`: the
+  user's invite codes, code generation, commissions, withdrawals and
+  withdrawal request, and the administrator's withdrawal list and
+  decisions, invite statistics and configuration.
   - Other domains are read through views: `kapi_user_referral_v1` (who
-    invited whom) for the statistics, `kapi_subscriber_entitlement_v1` for
-    the caller's commission balance, and `kapi_affiliate_settings_v1` for
-    the frontend settings (code prefix and length, withdrawal fee and
-    methods).
+    invited whom) for the statistics, `kapi_order_billing_v1` (an order's
+    buyer and status) for the paying users a user invited,
+    `kapi_subscriber_entitlement_v1` for the caller's commission balance,
+    and `kapi_affiliate_settings_v1` for the frontend settings (code prefix
+    and length, withdrawal fee and methods).
+  - **Invite codes.** The user's invite codes and their generation moved
+    from identity-platform (`affiliate.user.invite.get`,
+    `affiliate.user.invite.generate.post`). `v2_invite_code` is not a
+    protected table: a code admits a registration and attributes the
+    referral, and holds no credential of an existing account. Control's
+    registration (the kernel's, and the identity module's through
+    `CreateSubscriber`) still consumes a code inside the transaction that
+    creates the user.
+    - A user holds at most `code_count` (default 5) unused codes. The
+      kernel used to count them under a row lock on the user's `v2_user`
+      row, which no package may read or write. Both sides now count and
+      create under one PostgreSQL advisory lock keyed by the user,
+      `pg_advisory_xact_lock(class, user)` with the class `0x696e7663`
+      ("invc") and the user id masked to 31 bits
+      (`service.InviteCodeLockKeys`, `native.InviteCodeLockKeys`).
+      Advisory locks need no grant, so the package role takes the lock the
+      kernel takes; a test proves a leased role waits for it. On SQLite one
+      writer runs at a time, and a generation that read before another's
+      write is retried, on both sides.
+    - The parity test also runs the kernel's and the package's generations
+      concurrently on one database: they never pass the limit. With the
+      kernel's old row lock they did.
   - `kapi_affiliate_settings_v1` shows one row of the protected
     `v2_system_config`: the value of `invite.frontend.config`, a key the
     kernel does not treat as sensitive and shows its administrators in
@@ -453,7 +495,7 @@ The planned `kernel.entitlement.apply.v1` became
     which makes the kernel's invite services reload the configuration they
     keep in memory. Neither path records an audit
     entry.
-- **Identity leftovers (in place).** 7 of identity-platform's 9 routes
+- **Identity leftovers (in place).** All 7 of identity-platform's routes
   outside group A run natively, proved by `internal/tests/identitycompat`
   (byte parity and the same Control state, on SQLite and PostgreSQL).
   identity-platform adopts no kernel table.
@@ -511,6 +553,9 @@ The planned `kernel.entitlement.apply.v1` became
     order and affiliate packages' tables. They belong with the affiliate
     package.
 - **Subscription (in place).** 21 of 25 routes run on the adopted
+  - **Moved to affiliate:** the user's invite codes and their generation,
+    affiliate data rather than identity's (see Affiliate).
+- **Subscription (in place).** 20 of 25 routes run on the adopted
   `v2_subscription_group`, `v2_subscription_template`,
   `v2_plan_subscription_group` and `v2_subscription_group_node_protocols`
   tables, proved by `internal/tests/subscriptioncompat`: groups (list, read,
@@ -625,7 +670,7 @@ The planned `kernel.entitlement.apply.v1` became
     - the load balancer statistics and health check: they read the forward
       package's `v2_forward_node`, and the check probes each forward node
       and writes its status.
-- **Forward (in place).** 17 of 80 routes run on the adopted `v2_forward`,
+- **Forward (in place).** 21 of 85 routes run on the adopted `v2_forward`,
   `v2_forward_tunnel`, `v2_forward_user_tunnel`, `v2_speed_limit`,
   `v2_forward_rule` and `v2_forward_latency_bucket` tables, proved by
   `internal/tests/forwardcompat`:
@@ -640,11 +685,18 @@ The planned `kernel.entitlement.apply.v1` became
     subscriber's traffic through `KernelSubscriber.ResetTraffic`
     (`kernel.subscriber.traffic.v1`), with the request id
     `forward.reset_traffic:<user>:<digest>` that the legacy handler now
-    derives too; type 2 a permission's traffic.
+    derives too; type 2 a permission's traffic;
+  - the speed limits, moved from plan (`forward.speed_limit.*`): creation,
+    the list, the deletion of a limit no permission names, and the tunnels
+    a limit may name (every active one, for any caller, as the kernel
+    answers). The update stays bridged: it re-applies the forwards of every
+    permission that names the limit on their nodes, which waits for
+    KernelNodeOps.
 
-  None of them changes what a node runs: a tunnel or a permission alone runs
-  nothing, the display order is not part of a forward's runtime payload, and
-  the kernel's forward runtime re-reads these rows on every use.
+  None of them changes what a node runs: a tunnel, a permission or a speed
+  limit alone runs nothing, the display order is not part of a forward's
+  runtime payload, and the kernel's forward runtime re-reads these rows on
+  every use.
   - Forward nodes are read through `kapi_forward_node_v1` (every column but
     `api_token`), the runtime backend through
     `kapi_forward_runtime_settings_v1` (three keys of the protected
@@ -657,15 +709,16 @@ The planned `kernel.entitlement.apply.v1` became
     gRPC and REST), a clean agent's token authenticates it, and clean agent
     jobs carry the node's API token in their payloads: a package holding
     them could act as any forward node or agent.
-  - **Stay bridged (63):**
+  - **Stay bridged (64):**
     - forward nodes and Ansible machines (`v2_forward_node`; the answers
       show tokens to administrators, the kernel's gost manager caches each
       node's address and token, the checks and statistics sync reach the
       node over the network);
     - every forward change, pause, resume, deletion and diagnosis, the
-      backend sync, the tunnel update and diagnosis, and permission removal
-      and updates: they apply forwards on their nodes (NodeX, a local
-      Ansible job or a clean agent job) or dial from Control;
+      backend sync, the tunnel update and diagnosis, permission removal and
+      updates, and the speed limit update: they apply forwards on their
+      nodes (NodeX, a local Ansible job or a clean agent job) or dial from
+      Control;
     - the legacy rules other than the user's list (pushed to NodeX with the
       nodes' tokens; the administrator's answers embed the nodes' tokens)
       and the agents' rule list (node token authentication);
@@ -674,7 +727,10 @@ The planned `kernel.entitlement.apply.v1` became
     - the observability targets, trend and topology, which read the proxy
       nodes of `v2_node`;
     - clean agents and their registration, heartbeat, report and install
-      script (agent tokens, job claims, the request's host);
+      script (agent tokens, job claims; the script's panel URL is Control's
+      `forward_runtime.clean_agent.public_url` when set, process
+      configuration no package can read, else the request's scheme and
+      host);
     - flow upload, report and snapshot: the forward's counters, the
       subscriber's traffic and the permission's traffic change in one kernel
       transaction under a per-forward lock in Control's memory, and
@@ -921,18 +977,18 @@ shapes; the first extraction step adopts the existing `v2_*` tables in place.
 | knowledge (T7) | 6 | `knowledge.article.list/read`, `knowledge.admin.write` | `v4_knowledge_article`, `v4_knowledge_category` | Pilot; adopts `v2_knowledge` |
 | notification (T7) | 24 | `notification.notice.list`, `notification.delivery.enqueue/retry` | `v4_notification_notice`, `_delivery`, `_outbox` | Retry idempotent, one outbox row; SMTP/Telegram send moves to host |
 | ticket (T8) | 8 | `ticket.list`, `ticket.message.create`, `ticket.status.transition` | `v4_ticket_ticket`, `v4_ticket_message` | Generation-fenced transitions; adopts `v2_ticket`, `v2_ticket_message` |
-| plan (T8) | 12 | `plan.catalog.list`, `plan.assignment.read`, `plan.entitlement.read` | `v4_plan_catalog`, `_assignment`, `_quota` | Publishes versioned `EntitlementReader`; 5 `/speed-limit/*` routes are Flux forward limits, stay bridged, later join forward |
+| plan (T8) | 7 | `plan.catalog.list`, `plan.assignment.read`, `plan.entitlement.read` | `v4_plan_catalog`, `_assignment`, `_quota` | Publishes versioned `EntitlementReader`; the 5 `/speed-limit/*` routes, Flux forward limits, moved to forward |
 | order (T9) | 13 | `order.create`, `order.apply_coupon`, `order.transition`, `order.request_entitlement` | `v4_order_order`, `_promotion`, `_coupon_redemption` | Owns coupons; entitlement requests are durable messages |
 | payment (T9) | 20 | `payment.initiate`, `payment.callback`, `payment.reconcile` | `v4_payment_record`, `_callback`, `_outbox` | Receipt stored before transition; exactly-once per gateway event; one-time secret lease |
 | subscription (T10) | 25 | `subscription.render`, `subscription.usage.read` | `v4_subscription_group`, `_template`, `_usage` | Byte-identical output incl. content type and cache headers |
 | proxy-node (T10) | 31 | `proxy-node.register`, `.config.deliver`, `.user.deliver`, `.traffic.report` | `v4_proxy_node`, `_config`, `_user`, `_usage` | Delivery becomes a versioned Agent operation; kernel gRPC transport-only |
-| forward (T11) | 80 | `forward.rule.create/update`, `forward.tunnel.assign`, `forward.observation.read`, `forward.agent.apply` | `v4_forward_rule`, `_tunnel`, `_assignment`, `_observation`, `_outbox` | Assignment + Agent op atomic, rolled back on Agent reject; 6 kernel workers move to the package; 17 native-flagged (section 3.4), the rest bridged |
+| forward (T11) | 85 | `forward.rule.create/update`, `forward.tunnel.assign`, `forward.observation.read`, `forward.agent.apply` | `v4_forward_rule`, `_tunnel`, `_assignment`, `_observation`, `_outbox` | Assignment + Agent op atomic, rolled back on Agent reject; 6 kernel workers move to the package; 21 native-flagged (section 3.4), the rest bridged |
 | wireguard (T12) | 1 | peer lifecycle, generated config | package migration (names not fixed) | Needs anix-agent revival |
 | protocol-runtime (T12) | 20 | protocol composition, runtime-adapter selection, Agent task/monitor | package migration (names not fixed) | Needs anix-agent revival |
 | machine-telemetry, nftables-forward, gost-mesh, nat-egress (T12) | 5 / 0 / 3 / 0 | keep runtime semantics; add v2 entrypoint, generation, `RuntimeStatus` reports | — | Agent-target runtime packages |
-| identity-platform | 24 | group A switches with the identity cutover | — | 22 native-flagged (section 3.4); the two invite routes bridged |
+| identity-platform | 22 | group A switches with the identity cutover | — | All native-flagged (section 3.4); the two invite routes moved to affiliate |
 | platform | 12 | system configuration, audit, backup | — | Moved from identity-platform after v4.0.0; bridged |
-| affiliate | 8 | commissions, withdrawals, invite statistics and configuration | — | Moved from identity-platform after v4.0.0; 7 native-flagged (section 3.4), the configuration update bridged |
+| affiliate | 10 | invite codes, commissions, withdrawals, invite statistics and configuration | — | Moved from identity-platform after v4.0.0; all native-flagged (section 3.4) |
 
 ## 7. Rollout Record Semantics (T5)
 

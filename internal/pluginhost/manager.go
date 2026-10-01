@@ -58,9 +58,13 @@ type RequestMetadata struct {
 	NodeID                           uint                `json:"node_id,omitempty"`
 	TrustedAgentWebSocketAuth        bool                `json:"trusted_agent_websocket_auth,omitempty"`
 	TrustedAgentWebSocketForwardNode bool                `json:"trusted_agent_websocket_forward_node,omitempty"`
-	// Host and TLS describe the original request address for the kernel's
-	// package bridge only. They are never sent to package hosts, because hosts
-	// built with the v4.0.0 SDK reject unknown metadata fields.
+	// Host and TLS describe the original request address: the Host header,
+	// kept only when it is a plain host[:port] (validPackageRequestHost), and
+	// whether the connection was TLS. They are never request metadata JSON
+	// keys, because hosts built with the v4.0.0 SDK reject unknown keys. The
+	// kernel's bridge snapshot carries them as "host" and "tls", and package
+	// hosts receive them as the DispatchRequest and WebSocketOpen fields
+	// request_host and request_scheme, which older hosts skip.
 	Host string `json:"-"`
 	TLS  bool   `json:"-"`
 }

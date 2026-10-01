@@ -659,6 +659,8 @@ func TestEveryNativeRouteIsCovered(t *testing.T) {
 		"forward.tunnel.user.assign.post": true, "forward.admin.tunnel.user.assign.post": true, "forward.tunnel.user.list.post": true,
 		"forward.admin.tunnel.user.list.post": true, "forward.admin.forward.observability.multi_ingress.get": true,
 		"forward.admin.forward.stats.get": true, "forward.user.forward.rules.get": true, native.ResetRouteID: true,
+		native.SpeedLimitCreateRouteID: true, native.SpeedLimitListRouteID: true, native.SpeedLimitDeleteRouteID: true,
+		native.SpeedLimitTunnelsRouteID: true,
 	}
 	handlers := (&native.Service{Subscriber: kernelsubscriberv1.NewKernelSubscriberClient(nil)}).Handlers()
 	require.Len(t, handlers, len(covered))

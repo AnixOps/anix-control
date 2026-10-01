@@ -99,7 +99,7 @@ func TestAffiliateHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) {
 	bridge := &bridgeStub{}
 	service, err := newAffiliateService(bridge, "lease-1")
 	require.NoError(t, err)
-	for _, route := range []string{"affiliate.admin.invite.stats.get", native.WithdrawRouteID, "affiliate.admin.invite.config.put"} {
+	for _, route := range []string{"affiliate.admin.invite.stats.get", native.WithdrawRouteID, "affiliate.admin.invite.config.put", native.InviteGenerateRouteID} {
 		response := dispatch(t, service, route, pluginhostsdk.DispatchRequest{})
 		require.EqualValues(t, 200, response.StatusCode)
 		require.Equal(t, route, bridge.operation)
@@ -151,9 +151,9 @@ func TestAffiliateHostRoutesAreThePackageRoutes(t *testing.T) {
 	require.Equal(t, want, got)
 }
 
-// The package adopts its three tables, reads the referral, entitlement and
-// settings views, and may adjust balances; it neither adopts nor reads
-// v2_user or v2_system_config.
+// The package adopts its four tables, reads the referral, order billing,
+// entitlement and settings views, and may adjust balances; it neither adopts
+// nor reads v2_user, v2_order or v2_system_config.
 func TestAffiliateManifestCapabilities(t *testing.T) {
 	raw, err := os.ReadFile("../manifest.template.json")
 	require.NoError(t, err)
@@ -163,7 +163,8 @@ func TestAffiliateManifestCapabilities(t *testing.T) {
 	require.NoError(t, json.Unmarshal(raw, &manifest))
 	require.ElementsMatch(t, []string{
 		"kernel.storage.v1", "kernel.storage.adopt:v2_commission_record", "kernel.storage.adopt:v2_commission_withdraw",
-		"kernel.storage.adopt:v2_invite_config", "kernel.view:kapi_user_referral_v1", "kernel.view:kapi_subscriber_entitlement_v1",
+		"kernel.storage.adopt:v2_invite_config", "kernel.storage.adopt:v2_invite_code",
+		"kernel.view:kapi_user_referral_v1", "kernel.view:kapi_order_billing_v1", "kernel.view:kapi_subscriber_entitlement_v1",
 		"kernel.view:kapi_affiliate_settings_v1", "kernel.subscriber.balance.v1",
 		// The frontend settings are written through KernelSettings; they
 		// are read through kapi_affiliate_settings_v1.

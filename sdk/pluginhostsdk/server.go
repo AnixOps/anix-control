@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"strings"
 	"time"
 
 	pluginhostv1 "github.com/AnixOps/anix-control/sdk/api/pluginhost/v1"
@@ -37,6 +38,13 @@ type DispatchRequest struct {
 // RequestMetadata is kernel-provided HTTP address metadata. It is distinct
 // from signed route selection and lets a package preserve the legacy v2
 // request contract without consulting kernel routing state.
+//
+// Scheme and Host are the original request's scheme ("http" or "https",
+// from the connection's TLS state) and Host header (a host[:port] the kernel
+// validated). The kernel sends them as protobuf fields of their own, not in
+// the metadata JSON, which hosts built with the v4.0.0 SDK decode strictly.
+// A kernel that predates them leaves both empty; a handler that needs them
+// then returns ErrNativeUnavailable.
 type RequestMetadata struct {
 	Path                             string              `json:"path,omitempty"`
 	Query                            map[string][]string `json:"query,omitempty"`
@@ -47,6 +55,8 @@ type RequestMetadata struct {
 	NodeID                           uint                `json:"node_id,omitempty"`
 	TrustedAgentWebSocketAuth        bool                `json:"trusted_agent_websocket_auth,omitempty"`
 	TrustedAgentWebSocketForwardNode bool                `json:"trusted_agent_websocket_forward_node,omitempty"`
+	Scheme                           string              `json:"-"`
+	Host                             string              `json:"-"`
 }
 
 type DispatchResponse struct {
@@ -314,6 +324,9 @@ func (s *Server) validateDispatchRequest(request *pluginhostv1.DispatchRequest) 
 	if _, err := requestMetadataFromJSON(request.GetRequestMetadataJson()); err != nil {
 		return err
 	}
+	if err := validateRequestAddress(request.GetRequestScheme(), request.GetRequestHost()); err != nil {
+		return err
+	}
 	if capability := request.GetBridgeCapability(); len(capability) != 0 && len(capability) != 32 {
 		return status.Error(codes.InvalidArgument, "bridge capability is invalid")
 	}
@@ -343,6 +356,9 @@ func (s *Server) validateWebSocketOpen(open *pluginhostv1.WebSocketOpen) error {
 		return status.Error(codes.InvalidArgument, "principal JSON is invalid")
 	}
 	if _, err := requestMetadataFromJSON(open.GetRequestMetadataJson()); err != nil {
+		return err
+	}
+	if err := validateRequestAddress(open.GetRequestScheme(), open.GetRequestHost()); err != nil {
 		return err
 	}
 	if capability := open.GetBridgeCapability(); len(capability) != 0 && len(capability) != 32 {
@@ -424,6 +440,7 @@ func packageError(operation string, err error) error {
 
 func dispatchRequestFromProto(request *pluginhostv1.DispatchRequest) DispatchRequest {
 	metadata, _ := requestMetadataFromJSON(request.GetRequestMetadataJson())
+	metadata.Scheme, metadata.Host = request.GetRequestScheme(), request.GetRequestHost()
 	return DispatchRequest{
 		PackageID:          request.GetPackageId(),
 		PackageVersion:     request.GetPackageVersion(),
@@ -442,6 +459,7 @@ func dispatchRequestFromProto(request *pluginhostv1.DispatchRequest) DispatchReq
 
 func webSocketOpenFromProto(open *pluginhostv1.WebSocketOpen) WebSocketOpen {
 	metadata, _ := requestMetadataFromJSON(open.GetRequestMetadataJson())
+	metadata.Scheme, metadata.Host = open.GetRequestScheme(), open.GetRequestHost()
 	return WebSocketOpen{
 		PackageID:          open.GetPackageId(),
 		PackageVersion:     open.GetPackageVersion(),
@@ -454,6 +472,34 @@ func webSocketOpenFromProto(open *pluginhostv1.WebSocketOpen) WebSocketOpen {
 		DeadlineUnixMillis: open.GetDeadlineUnixMillis(),
 		BridgeCapability:   append([]byte(nil), open.GetBridgeCapability()...),
 	}
+}
+
+// validateRequestAddress accepts the request address fields a kernel sends:
+// none (a kernel that predates them), or the scheme "http" or "https" with
+// an empty host or a host[:port] made of the characters of a registered
+// name, an IPv4 address or a bracketed IPv6 literal.
+func validateRequestAddress(scheme, host string) error {
+	switch scheme {
+	case "":
+		if host != "" {
+			return status.Error(codes.InvalidArgument, "request address is invalid")
+		}
+		return nil
+	case "http", "https":
+	default:
+		return status.Error(codes.InvalidArgument, "request address is invalid")
+	}
+	if len(host) > 255 {
+		return status.Error(codes.InvalidArgument, "request address is invalid")
+	}
+	for _, character := range host {
+		if (character >= 'a' && character <= 'z') || (character >= 'A' && character <= 'Z') ||
+			(character >= '0' && character <= '9') || strings.ContainsRune("-._~:[]", character) {
+			continue
+		}
+		return status.Error(codes.InvalidArgument, "request address is invalid")
+	}
+	return nil
 }
 
 func requestMetadataFromJSON(raw []byte) (RequestMetadata, error) {

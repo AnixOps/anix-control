@@ -2171,8 +2171,8 @@
   {
     "method": "POST",
     "path": "/api/v2/speed-limit/create",
-    "owner": "plan",
-    "route_id": "plan.speed_limit.create.post",
+    "owner": "forward",
+    "route_id": "forward.speed_limit.create.post",
     "envelope": "data",
     "middleware_group": "admin",
     "transport": "http"
@@ -2180,8 +2180,8 @@
   {
     "method": "POST",
     "path": "/api/v2/speed-limit/delete",
-    "owner": "plan",
-    "route_id": "plan.speed_limit.delete.post",
+    "owner": "forward",
+    "route_id": "forward.speed_limit.delete.post",
     "envelope": "data",
     "middleware_group": "admin",
     "transport": "http"
@@ -2189,8 +2189,8 @@
   {
     "method": "POST",
     "path": "/api/v2/speed-limit/list",
-    "owner": "plan",
-    "route_id": "plan.speed_limit.list.post",
+    "owner": "forward",
+    "route_id": "forward.speed_limit.list.post",
     "envelope": "data",
     "middleware_group": "admin",
     "transport": "http"
@@ -2198,8 +2198,8 @@
   {
     "method": "POST",
     "path": "/api/v2/speed-limit/tunnels",
-    "owner": "plan",
-    "route_id": "plan.speed_limit.tunnels.post",
+    "owner": "forward",
+    "route_id": "forward.speed_limit.tunnels.post",
     "envelope": "data",
     "middleware_group": "admin",
     "transport": "http"
@@ -2207,8 +2207,8 @@
   {
     "method": "POST",
     "path": "/api/v2/speed-limit/update",
-    "owner": "plan",
-    "route_id": "plan.speed_limit.update.post",
+    "owner": "forward",
+    "route_id": "forward.speed_limit.update.post",
     "envelope": "data",
     "middleware_group": "admin",
     "transport": "http"
@@ -2306,8 +2306,8 @@
   {
     "method": "GET",
     "path": "/api/v2/user/invite",
-    "owner": "identity-platform",
-    "route_id": "identity.user.invite.get",
+    "owner": "affiliate",
+    "route_id": "affiliate.user.invite.get",
     "envelope": "panel",
     "middleware_group": "user",
     "transport": "http"
@@ -2324,8 +2324,8 @@
   {
     "method": "POST",
     "path": "/api/v2/user/invite/generate",
-    "owner": "identity-platform",
-    "route_id": "identity.user.invite.generate.post",
+    "owner": "affiliate",
+    "route_id": "affiliate.user.invite.generate.post",
     "envelope": "panel",
     "middleware_group": "user",
     "transport": "http"

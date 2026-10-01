@@ -78,11 +78,16 @@ func (s *Service) ListAdminTunnels(ctx context.Context, _ pluginhostsdk.NativeRe
 // route: the active tunnels the caller may use (every one for an
 // administrator), as far as they suit the configured runtime backend.
 func (s *Service) ListTunnels(ctx context.Context, request pluginhostsdk.NativeRequest) (pluginhostsdk.NativeResponse, error) {
+	userID, isAdmin := actor(request)
+	return s.listTunnels(ctx, userID, isAdmin)
+}
+
+// listTunnels is the kernel's PanelForwardService.ListTunnels.
+func (s *Service) listTunnels(ctx context.Context, userID uint, isAdmin bool) (pluginhostsdk.NativeResponse, error) {
 	db, err := s.Open(ctx)
 	if err != nil {
 		return s.panelError(err.Error())
 	}
-	userID, isAdmin := actor(request)
 	tunnels, err := accessibleTunnels(db, userID, isAdmin)
 	if err != nil {
 		return s.panelError(err.Error())

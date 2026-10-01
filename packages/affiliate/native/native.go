@@ -1,12 +1,15 @@
 // Package native implements the affiliate package's v2 routes in the package
-// itself, on the kernel's v2_commission_record, v2_commission_withdraw and
-// v2_invite_config tables adopted in place (kernel.storage.adopt). Legacy
+// itself, on the kernel's v2_commission_record, v2_commission_withdraw,
+// v2_invite_config and v2_invite_code tables adopted in place
+// (kernel.storage.adopt). Legacy
 // handlers and native routes share the tables, so a route can switch
 // between them at any time. Responses are byte-compatible with the legacy
 // handlers (internal/tests/affiliatecompat).
 //
 // Other domains are read through kernel views only:
 //   - kapi_user_referral_v1 (who invited whom) for the invite statistics;
+//   - kapi_order_billing_v1 (an order's buyer and status) for the paying
+//     users a user invited;
 //   - kapi_subscriber_entitlement_v1 for the caller's commission balance;
 //   - kapi_affiliate_settings_v1, the one non-secret row of the protected
 //     v2_system_config that holds the affiliate's frontend settings (code
@@ -41,6 +44,12 @@
 // write, and the write makes the kernel's invite services reload the
 // configuration they keep in memory. A host without the contract leaves the
 // route legacy.
+//
+// A user's invite codes are rows of v2_invite_code, which Control's
+// registration consumes. A user holds at most code_count unused codes; the
+// kernel and the package count and create under the same PostgreSQL
+// advisory lock, keyed by the user (LockUserInviteCodes), so concurrent
+// generations served by either side never pass the limit.
 package native
 
 import (
@@ -197,6 +206,8 @@ func (s *Service) Handlers() map[string]pluginhostsdk.NativeHandler {
 		"affiliate.admin.invite.withdrawals.get": s.AdminWithdrawals,
 		"affiliate.user.invite.commissions.get":  s.UserCommissions,
 		"affiliate.user.invite.withdrawals.get":  s.UserWithdrawals,
+		InviteInfoRouteID:                        s.InviteInfo,
+		InviteGenerateRouteID:                    s.GenerateInviteCode,
 	}
 	if s.Subscriber != nil {
 		handlers[WithdrawRouteID] = s.UserWithdraw

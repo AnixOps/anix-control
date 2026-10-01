@@ -14,10 +14,11 @@
 // placeholder, which the kernel replaces with the stored password. A host
 // without the contract leaves the three routes legacy.
 //
-// Two routes have no native handler and stay bridged: setting the Telegram
-// webhook derives its default URL from the request host, which package
-// hosts are not sent; and the public Telegram webhook answers bot commands
-// from subscriber data (the subscription token) that no kernel view exposes.
+// Setting the Telegram webhook derives its default URL from the request's
+// scheme and host, which the kernel sends package hosts as request
+// metadata (RequestMetadata.Scheme and Host). The public Telegram webhook
+// has no native handler and stays bridged: it answers bot commands from
+// subscriber data (the subscription token) that no kernel view exposes.
 package native
 
 import (
@@ -65,6 +66,7 @@ func (s *Service) Handlers() map[string]pluginhostsdk.NativeHandler {
 		"notification.admin.telegram.bot.get":                 s.AdminGetBot,
 		"notification.admin.telegram.bot.put":                 s.AdminUpdateBot,
 		"notification.admin.telegram.webhook.delete":          s.AdminDeleteWebhook,
+		"notification.admin.telegram.webhook.post":            s.AdminSetWebhook,
 		"notification.admin.telegram.notify.post":             s.AdminTelegramNotify,
 		"notification.admin.telegram.broadcast.post":          s.AdminTelegramBroadcast,
 		"notification.admin.telegram.users.get":               s.AdminBindings,

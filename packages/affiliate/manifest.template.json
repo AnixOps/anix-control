@@ -7,7 +7,7 @@
   "targets": ["control"],
   "architectures": [],
   "artifact_sha256": "GENERATED_AT_BUILD",
-  "capabilities": ["kernel.storage.v1", "kernel.storage.adopt:v2_commission_record", "kernel.storage.adopt:v2_commission_withdraw", "kernel.storage.adopt:v2_invite_config", "kernel.view:kapi_user_referral_v1", "kernel.view:kapi_subscriber_entitlement_v1", "kernel.view:kapi_affiliate_settings_v1", "kernel.subscriber.balance.v1", "kernel.settings.invite.write.v1"],
+  "capabilities": ["kernel.storage.v1", "kernel.storage.adopt:v2_commission_record", "kernel.storage.adopt:v2_commission_withdraw", "kernel.storage.adopt:v2_invite_config", "kernel.storage.adopt:v2_invite_code", "kernel.view:kapi_user_referral_v1", "kernel.view:kapi_order_billing_v1", "kernel.view:kapi_subscriber_entitlement_v1", "kernel.view:kapi_affiliate_settings_v1", "kernel.subscriber.balance.v1", "kernel.settings.invite.write.v1"],
   "dependencies": [],
   "conflicts": [],
   "permissions": ["affiliate.view", "affiliate.api"],

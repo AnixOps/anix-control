@@ -508,6 +508,41 @@
     },
     {
       "method": "POST",
+      "legacy_path": "/api/v2/speed-limit/create",
+      "package_route": "forward.speed_limit.create.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/speed-limit/delete",
+      "package_route": "forward.speed_limit.delete.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/speed-limit/list",
+      "package_route": "forward.speed_limit.list.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/speed-limit/tunnels",
+      "package_route": "forward.speed_limit.tunnels.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/speed-limit/update",
+      "package_route": "forward.speed_limit.update.post",
+      "envelope": "data",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
       "legacy_path": "/api/v2/tunnel/user/assign",
       "package_route": "forward.tunnel.user.assign.post",
       "envelope": "data",

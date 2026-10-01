@@ -21,8 +21,9 @@ type affiliateBridge interface {
 
 // newAffiliateService returns the affiliate host's router. The routes in
 // affiliateRoutes have a native handler on the adopted
-// v2_commission_record, v2_commission_withdraw and v2_invite_config tables
-// and the referral, entitlement and settings views; such a route serves
+// v2_commission_record, v2_commission_withdraw, v2_invite_config and
+// v2_invite_code tables and the referral, order billing, entitlement and
+// settings views; such a route serves
 // natively once the kernel sets its mode, and falls back to the legacy
 // handler otherwise. Withdrawing and processing a withdrawal change a
 // commission balance through the kernel's KernelSubscriber, and updating
@@ -66,6 +67,10 @@ var affiliateRoutes = map[string]struct{}{
 	"affiliate.user.invite.commissions.get":              {},
 	"affiliate.user.invite.withdraw.post":                {},
 	"affiliate.user.invite.withdrawals.get":              {},
+	// The caller's invite codes and their generation (v2_invite_code),
+	// moved from identity-platform.
+	"affiliate.user.invite.get":           {},
+	"affiliate.user.invite.generate.post": {},
 }
 
 // bridgedRoutes are the package's compatibility routes without a native

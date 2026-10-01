@@ -7,13 +7,8 @@
 // request ledger, so a route can switch between them at any time. Responses
 // are byte-compatible with the legacy handlers (internal/tests/plancompat).
 //
-// The five /api/v2/speed-limit routes have no native handler and stay
-// bridged: they are Flux forward limits, and v2_speed_limit, which the
-// forward runtime reads, is not adopted. Their rows name forward tunnels,
-// create, update and delete read the forward package's v2_forward_tunnel and
-// v2_forward_user_tunnel, which no kernel view exposes, an update re-pushes
-// the assigned forwards to their nodes, and the tunnel list is the forward
-// package's own answer.
+// The five /api/v2/speed-limit routes are Flux forward limits, whose rows
+// name forward tunnels: they belong to the forward package.
 package native
 
 import (

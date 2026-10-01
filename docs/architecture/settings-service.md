@@ -156,7 +156,7 @@ write came between (`BumpSettingsGenerationAfter`).
 | Copy | Namespace | Readers |
 |---|---|---|
 | `BackupService.config` (the router's system handler) | `backup` | backup creation takes its storage path and type from it |
-| `InviteService.config` (the admin and user invite handlers, the identity bridge's) | `invite` | invite code expiry, commission computation. The affiliate module writes the adopted `v2_invite_config` first, then the frontend settings through `invite`, which bumps it |
+| `InviteService.config` (the admin and user invite handlers) | `invite` | invite code expiry, commission computation. The affiliate module writes the adopted `v2_invite_config` first, then the frontend settings through `invite`, which bumps it |
 | `NotificationService.emailConfig` (the notification handler) | `mail` | only the test send, which reloads it first: nothing to refresh |
 
 The generic system configuration handler bumps the namespace of the key it

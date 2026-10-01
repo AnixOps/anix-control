@@ -108,20 +108,6 @@
       "transport": "http"
     },
     {
-      "method": "GET",
-      "legacy_path": "/api/v2/user/invite",
-      "package_route": "identity.user.invite.get",
-      "envelope": "panel",
-      "transport": "http"
-    },
-    {
-      "method": "POST",
-      "legacy_path": "/api/v2/user/invite/generate",
-      "package_route": "identity.user.invite.generate.post",
-      "envelope": "panel",
-      "transport": "http"
-    },
-    {
       "method": "POST",
       "legacy_path": "/api/v2/user/mfa/backup-codes/regenerate",
       "package_route": "identity.user.mfa.backup_codes.regenerate.post",

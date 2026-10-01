@@ -19,8 +19,8 @@
 //     subscriber, through KernelSubscriber (ResetTraffic, ResetCredentials),
 //     and switch independently of the authority.
 //
-// The user's invite routes have no handler here and stay bridged (see the
-// package's control host).
+// The user's invite codes are affiliate data: their routes belong to the
+// affiliate package.
 package native
 
 import (

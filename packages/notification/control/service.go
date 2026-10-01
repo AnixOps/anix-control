@@ -66,6 +66,7 @@ var notificationRoutes = map[string]struct{}{
 	"notification.admin.telegram.bot.get":                 {},
 	"notification.admin.telegram.bot.put":                 {},
 	"notification.admin.telegram.webhook.delete":          {},
+	"notification.admin.telegram.webhook.post":            {},
 	"notification.admin.telegram.notify.post":             {},
 	"notification.admin.telegram.broadcast.post":          {},
 	"notification.admin.telegram.users.get":               {},
@@ -80,12 +81,9 @@ var notificationRoutes = map[string]struct{}{
 }
 
 // bridgedRoutes are the package's compatibility routes without a native
-// handler; they always relay to the kernel's legacy handler.
-//   - Setting the webhook defaults its URL to the request's scheme and host,
-//     which the kernel does not send to package hosts.
-//   - The public Telegram webhook answers /sub with the member's
-//     subscription token, which no kernel view exposes.
+// handler; they always relay to the kernel's legacy handler. The public
+// Telegram webhook answers /sub with the member's subscription token, which
+// no kernel view exposes.
 var bridgedRoutes = map[string]struct{}{
-	"notification.admin.telegram.webhook.post": {},
-	"notification.telegram.webhook.post":       {},
+	"notification.telegram.webhook.post": {},
 }

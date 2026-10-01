@@ -28,6 +28,14 @@ message DispatchRequest {
   int64 deadline_unix_millis = 10;
   bytes request_metadata_json = 11;
   bytes bridge_capability = 12;
+  // request_scheme ("http" or "https", from the connection's TLS state) and
+  // request_host (the Host header, a validated host[:port]) are the
+  // original request's address as the kernel received it. They are fields
+  // of their own, not request_metadata_json keys, because hosts built with
+  // the v4.0.0 SDK reject unknown metadata keys; those hosts skip unknown
+  // fields. A kernel that does not send them leaves both empty.
+  string request_scheme = 13;
+  string request_host = 14;
 }
 
 message DispatchResponse {
@@ -57,6 +65,9 @@ message WebSocketOpen {
   int64 deadline_unix_millis = 8;
   bytes request_metadata_json = 9;
   bytes bridge_capability = 10;
+  // As in DispatchRequest.
+  string request_scheme = 11;
+  string request_host = 12;
 }
 
 message WebSocketClose {

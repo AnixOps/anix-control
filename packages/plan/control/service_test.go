@@ -90,7 +90,7 @@ func TestPlanHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) {
 	bridge := &bridgeStub{}
 	service, err := newPlanService(bridge, "lease-1")
 	require.NoError(t, err)
-	for _, route := range []string{"plan.admin.plans.get", "plan.admin.plans.id.assign.post", "plan.speed_limit.list.post"} {
+	for _, route := range []string{"plan.admin.plans.get", "plan.admin.plans.id.assign.post"} {
 		response := dispatch(t, service, route, pluginhostsdk.DispatchRequest{})
 		require.EqualValues(t, 200, response.StatusCode)
 		require.Equal(t, route, bridge.operation)

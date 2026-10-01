@@ -290,10 +290,7 @@ func TestIdentityHostResetsThroughKernelSubscriberOverTheBridge(t *testing.T) {
 	require.Equal(t, native.ResetRequestID("reset_traffic", 2, "key-1"), recorder.traffic[0].GetRequestId())
 	require.Equal(t, []uint64{2}, recorder.traffic[0].GetUserIds())
 
-	// The bridged invite list still relays to the legacy handler, and so
-	// does the user list while its mode is legacy.
-	dispatchRoute(t, host.Router, "identity.user.invite.get", pluginhostsdk.DispatchRequest{Method: "GET"})
-	require.Equal(t, "identity.user.invite.get", storage.operation)
+	// The user list relays to the legacy handler while its mode is legacy.
 	dispatchRoute(t, host.Router, native.AdminUsersRouteID, pluginhostsdk.DispatchRequest{Method: "GET"})
 	require.Equal(t, native.AdminUsersRouteID, storage.operation)
 }

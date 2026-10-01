@@ -91,7 +91,10 @@ func TestForwardHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) {
 	bridge := &bridgeStub{}
 	service, err := newForwardService(bridge, "lease-1")
 	require.NoError(t, err)
-	for _, route := range []string{"forward.forward.list.post", native.ResetRouteID, "forward.forward.create.post", "forward.admin.forward.nodes.get"} {
+	for _, route := range []string{
+		"forward.forward.list.post", native.ResetRouteID, "forward.forward.create.post", "forward.admin.forward.nodes.get",
+		native.SpeedLimitCreateRouteID, "forward.speed_limit.update.post",
+	} {
 		response := dispatch(t, service, route, pluginhostsdk.DispatchRequest{})
 		require.EqualValues(t, 200, response.StatusCode)
 		require.Equal(t, route, bridge.operation)
@@ -136,7 +139,7 @@ func TestForwardHostRoutesAreThePackageRoutes(t *testing.T) {
 	sort.Strings(want)
 	sort.Strings(got)
 	require.Equal(t, want, got)
-	require.Len(t, want, 80)
+	require.Len(t, want, 85)
 }
 
 // The package adopts the forward tables its native routes use, reads the

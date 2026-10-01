@@ -107,6 +107,53 @@
 
 ### Changed
 
+- **The speed-limit routes moved to forward; four run natively.** The five
+  `/api/v2/speed-limit/*` routes are Flux forward limits, whose rows name
+  forward tunnels; they move from plan to forward (`forward.speed_limit.*`)
+  with the same paths and answers.
+  - Creation, the list, the deletion of a limit no permission names and
+    the tunnels a limit may name have native handlers on forward's adopted
+    `v2_speed_limit`, `v2_forward_tunnel` and `v2_forward_user_tunnel` and
+    `kapi_forward_runtime_settings_v1`. A limit runs nothing until a
+    permission names it, so none of them reaches a node.
+  - The update stays bridged: it re-applies the forwards of every
+    permission that names the limit on their nodes, which waits for
+    KernelNodeOps.
+  - `internal/tests/forwardcompat` proves byte parity and the same rows on
+    SQLite and PostgreSQL (43 cases each).
+  - **Transition.** Old plan releases still declare the routes under their
+    `plan.speed_limit.*` ids. The kernel keeps those ids callable from plan
+    (the moved-route operations now cover every previous owner, not only
+    identity-platform) and prefers forward while both declare a route.
+    Upgrade forward before plan. plan now has 7 routes, all native-flagged.
+  - Extraction map: 170 `native-flagged`, 106 `bridged`, 16 `kernel-owned`.
+- **The user's invite codes moved to affiliate and run natively.**
+  `GET /api/v2/user/invite` and `POST /api/v2/user/invite/generate` move
+  from identity-platform to the affiliate package
+  (`affiliate.user.invite.get`, `affiliate.user.invite.generate.post`);
+  paths and answers are unchanged.
+  - affiliate adopts `v2_invite_code` (not a protected table: a code holds
+    no credential of an existing account) and reads the new grant
+    `kapi_order_billing_v1` for the paying users a user invited. The
+    statistics, the commission total and the commission balance come from
+    the tables and views the package already had.
+  - **Generation lock.** The kernel counted a user's unused codes under a
+    row lock on the user's `v2_user` row, which no package may take. The
+    kernel and the package now both count and create under a PostgreSQL
+    advisory lock keyed by the user (`pg_advisory_xact_lock`, class
+    `0x696e7663`, the user id masked to 31 bits); advisory locks need no
+    grant. SQLite still runs one writer at a time, and a generation that
+    read before another's write is retried, on both sides.
+  - `internal/tests/affiliatecompat` proves byte parity and the same codes
+    and configuration on SQLite and PostgreSQL (19 cases each), and that
+    the kernel's and the package's generations, run concurrently on one
+    database, never pass the limit. A leased package role waits for the
+    kernel's lock.
+  - **Transition.** The kernel keeps the old `identity.*` ids callable
+    (`internal/compat/v2/moved_routes.go`) and prefers affiliate while both
+    packages declare the routes. Upgrade affiliate before identity-platform.
+    identity-platform now has 22 routes, all native-flagged.
+  - Extraction map: 166 `native-flagged`, 110 `bridged`, 16 `kernel-owned`.
 - The Agent contract (`anix.agent.v1`) now lives in Control's SDK module,
   `github.com/AnixOps/anix-control/sdk` (plan step A0). Control no longer
   requires `github.com/AnixOps/anix-agent/sdk`, which is frozen at v1.1.0.
@@ -424,6 +471,36 @@
   - **The draft contract.** It is unreleased and may change until the first
     kernel change that serves it. It is in the proto golden file and in the
     CI generated-code check.
+- **Package hosts receive the request's scheme and host; the Telegram
+  webhook is set natively.**
+  - The kernel sends the original request's scheme (`https` when the
+    connection was TLS, else `http`) and host (the `Host` header, only when
+    it is a plain `host[:port]`) to package hosts as the new
+    `DispatchRequest` and `WebSocketOpen` fields `request_scheme` and
+    `request_host`; the SDK shows them as `RequestMetadata.Scheme` and
+    `Host`. These are the values the kernel's bridge already gave the legacy
+    handlers; no forwarding header is trusted beyond what those handlers
+    read. They are protobuf fields, not request metadata JSON keys: hosts
+    built with the v4.0.0 SDK decode that JSON strictly and skip unknown
+    protobuf fields, so they keep working and no metadata version is needed.
+    The SDK refuses a scheme other than `http` or `https` and a host that is
+    not an authority.
+  - `pluginhostsdk.ErrNativeUnavailable`: a native handler that cannot
+    answer a request as the legacy handler would (for example, an older
+    kernel sent no request address) returns it, and the router answers from
+    the legacy handler; in shadow mode the comparison is skipped.
+  - `POST /api/v2/admin/telegram/webhook` runs natively in the notification
+    package: without a `url` it points the webhook at the request's
+    `/api/v2/telegram/webhook`, with `X-Forwarded-Proto` honoured as the
+    kernel's handler does. `internal/tests/notificationcompat` proves byte
+    parity, the same bot row and the same Bot API calls on SQLite and
+    PostgreSQL (16 cases each). The parity harness sends each case's host
+    and TLS state to both sides.
+  - `GET /api/v2/forward-agent/install.sh` stays bridged: its panel URL is
+    Control's `forward_runtime.clean_agent.public_url` when set, process
+    configuration no package can read, and only otherwise the request's
+    scheme and host.
+  - Extraction map: 171 `native-flagged`, 105 `bridged`, 16 `kernel-owned`.
 - **KernelSettings contract** (`sdk/api/kernelsettings/v1`,
   `docs/architecture/settings-service.md`). Official packages read and write
   system settings per namespace instead of the protected `v2_system_config`

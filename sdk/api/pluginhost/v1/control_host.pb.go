@@ -35,8 +35,16 @@ type DispatchRequest struct {
 	DeadlineUnixMillis  int64                  `protobuf:"varint,10,opt,name=deadline_unix_millis,json=deadlineUnixMillis,proto3" json:"deadline_unix_millis,omitempty"`
 	RequestMetadataJson []byte                 `protobuf:"bytes,11,opt,name=request_metadata_json,json=requestMetadataJson,proto3" json:"request_metadata_json,omitempty"`
 	BridgeCapability    []byte                 `protobuf:"bytes,12,opt,name=bridge_capability,json=bridgeCapability,proto3" json:"bridge_capability,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// request_scheme ("http" or "https", from the connection's TLS state) and
+	// request_host (the Host header, a validated host[:port]) are the
+	// original request's address as the kernel received it. They are fields
+	// of their own, not request_metadata_json keys, because hosts built with
+	// the v4.0.0 SDK reject unknown metadata keys; those hosts skip unknown
+	// fields. A kernel that does not send them leaves both empty.
+	RequestScheme string `protobuf:"bytes,13,opt,name=request_scheme,json=requestScheme,proto3" json:"request_scheme,omitempty"`
+	RequestHost   string `protobuf:"bytes,14,opt,name=request_host,json=requestHost,proto3" json:"request_host,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *DispatchRequest) Reset() {
@@ -151,6 +159,20 @@ func (x *DispatchRequest) GetBridgeCapability() []byte {
 		return x.BridgeCapability
 	}
 	return nil
+}
+
+func (x *DispatchRequest) GetRequestScheme() string {
+	if x != nil {
+		return x.RequestScheme
+	}
+	return ""
+}
+
+func (x *DispatchRequest) GetRequestHost() string {
+	if x != nil {
+		return x.RequestHost
+	}
+	return ""
 }
 
 type DispatchResponse struct {
@@ -339,8 +361,11 @@ type WebSocketOpen struct {
 	DeadlineUnixMillis  int64                  `protobuf:"varint,8,opt,name=deadline_unix_millis,json=deadlineUnixMillis,proto3" json:"deadline_unix_millis,omitempty"`
 	RequestMetadataJson []byte                 `protobuf:"bytes,9,opt,name=request_metadata_json,json=requestMetadataJson,proto3" json:"request_metadata_json,omitempty"`
 	BridgeCapability    []byte                 `protobuf:"bytes,10,opt,name=bridge_capability,json=bridgeCapability,proto3" json:"bridge_capability,omitempty"`
-	unknownFields       protoimpl.UnknownFields
-	sizeCache           protoimpl.SizeCache
+	// As in DispatchRequest.
+	RequestScheme string `protobuf:"bytes,11,opt,name=request_scheme,json=requestScheme,proto3" json:"request_scheme,omitempty"`
+	RequestHost   string `protobuf:"bytes,12,opt,name=request_host,json=requestHost,proto3" json:"request_host,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *WebSocketOpen) Reset() {
@@ -441,6 +466,20 @@ func (x *WebSocketOpen) GetBridgeCapability() []byte {
 		return x.BridgeCapability
 	}
 	return nil
+}
+
+func (x *WebSocketOpen) GetRequestScheme() string {
+	if x != nil {
+		return x.RequestScheme
+	}
+	return ""
+}
+
+func (x *WebSocketOpen) GetRequestHost() string {
+	if x != nil {
+		return x.RequestHost
+	}
+	return ""
 }
 
 type WebSocketClose struct {
@@ -1007,7 +1046,7 @@ var File_api_pluginhost_v1_control_host_proto protoreflect.FileDescriptor
 
 const file_api_pluginhost_v1_control_host_proto_rawDesc = "" +
 	"\n" +
-	"$api/pluginhost/v1/control_host.proto\x12\x12anix.pluginhost.v1\"\xdc\x03\n" +
+	"$api/pluginhost/v1/control_host.proto\x12\x12anix.pluginhost.v1\"\xa6\x04\n" +
 	"\x0fDispatchRequest\x12\x1d\n" +
 	"\n" +
 	"package_id\x18\x01 \x01(\tR\tpackageId\x12'\n" +
@@ -1023,7 +1062,9 @@ const file_api_pluginhost_v1_control_host_proto_rawDesc = "" +
 	"\x14deadline_unix_millis\x18\n" +
 	" \x01(\x03R\x12deadlineUnixMillis\x122\n" +
 	"\x15request_metadata_json\x18\v \x01(\fR\x13requestMetadataJson\x12+\n" +
-	"\x11bridge_capability\x18\f \x01(\fR\x10bridgeCapability\"\xd4\x01\n" +
+	"\x11bridge_capability\x18\f \x01(\fR\x10bridgeCapability\x12%\n" +
+	"\x0erequest_scheme\x18\r \x01(\tR\rrequestScheme\x12!\n" +
+	"\frequest_host\x18\x0e \x01(\tR\vrequestHost\"\xd4\x01\n" +
 	"\x10DispatchResponse\x12\x1f\n" +
 	"\vstatus_code\x18\x01 \x01(\rR\n" +
 	"statusCode\x12#\n" +
@@ -1035,7 +1076,7 @@ const file_api_pluginhost_v1_control_host_proto_rawDesc = "" +
 	"\x04open\x18\x01 \x01(\v2!.anix.pluginhost.v1.WebSocketOpenH\x00R\x04open\x12\x14\n" +
 	"\x04data\x18\x02 \x01(\fH\x00R\x04data\x12:\n" +
 	"\x05close\x18\x03 \x01(\v2\".anix.pluginhost.v1.WebSocketCloseH\x00R\x05closeB\a\n" +
-	"\x05value\"\x9f\x03\n" +
+	"\x05value\"\xe9\x03\n" +
 	"\rWebSocketOpen\x12\x1d\n" +
 	"\n" +
 	"package_id\x18\x01 \x01(\tR\tpackageId\x12'\n" +
@@ -1049,7 +1090,9 @@ const file_api_pluginhost_v1_control_host_proto_rawDesc = "" +
 	"\x14deadline_unix_millis\x18\b \x01(\x03R\x12deadlineUnixMillis\x122\n" +
 	"\x15request_metadata_json\x18\t \x01(\fR\x13requestMetadataJson\x12+\n" +
 	"\x11bridge_capability\x18\n" +
-	" \x01(\fR\x10bridgeCapability\"<\n" +
+	" \x01(\fR\x10bridgeCapability\x12%\n" +
+	"\x0erequest_scheme\x18\v \x01(\tR\rrequestScheme\x12!\n" +
+	"\frequest_host\x18\f \x01(\tR\vrequestHost\"<\n" +
 	"\x0eWebSocketClose\x12\x12\n" +
 	"\x04code\x18\x01 \x01(\rR\x04code\x12\x16\n" +
 	"\x06reason\x18\x02 \x01(\tR\x06reason\"2\n" +

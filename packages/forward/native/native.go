@@ -84,6 +84,10 @@ func (s *Service) Handlers() map[string]pluginhostsdk.NativeHandler {
 		"forward.admin.forward.observability.multi_ingress.get": s.MultiIngressLatency,
 		"forward.admin.forward.stats.get":                       s.Stats,
 		"forward.user.forward.rules.get":                        s.UserRules,
+		SpeedLimitCreateRouteID:                                 s.CreateSpeedLimit,
+		SpeedLimitListRouteID:                                   s.ListSpeedLimits,
+		SpeedLimitDeleteRouteID:                                 s.DeleteSpeedLimit,
+		SpeedLimitTunnelsRouteID:                                s.SpeedLimitTunnels,
 	}
 	if s.Subscriber != nil {
 		handlers[ResetRouteID] = s.ResetFlow
