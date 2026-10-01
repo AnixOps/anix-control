@@ -116,8 +116,9 @@ func TestResultsNeverCarrySecrets(t *testing.T) {
 	}
 	checked, withText := 0, 0
 	for _, template := range resultCases(t) {
-		// Some types hold no text at all (RetireResult, NodeStatsResult,
-		// CredentialResult outside its handles): nothing to scrub there.
+		// Some types hold no text at all (RetireResult, CredentialResult
+		// outside its handles): nothing to scrub there. NodeStatsResult
+		// holds its services' names since NO-8.
 		fields := resultFields(proto.Clone(template).(*kernelnodeopsv1.OperationResult))
 		if len(fields) > 0 {
 			withText++
@@ -152,7 +153,7 @@ func TestResultsNeverCarrySecrets(t *testing.T) {
 			}
 		}
 	}
-	require.Equal(t, 9, withText)
+	require.Equal(t, 10, withText)
 	require.Greater(t, checked, 5000)
 }
 

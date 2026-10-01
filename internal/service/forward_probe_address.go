@@ -81,12 +81,21 @@ func isNumericHostName(name string) bool {
 	return strings.Trim(last, "0123456789") == ""
 }
 
+// probeLookupFunc resolves a host name to its addresses.
+type probeLookupFunc func(ctx context.Context, host string) ([]netip.Addr, error)
+
 // resolvePublicAddress returns the public address host names: host itself
 // when it is an address, else the first address it resolves to. It fails
 // with errNotPublicAddress when host is, or resolves to any, address that
 // is not public, including loopback names and numeric IPv4 forms, which it
 // refuses without asking DNS.
 func resolvePublicAddress(host string) (netip.Addr, error) {
+	return resolvePublicAddressWith(context.Background(), probeLookup, host)
+}
+
+// resolvePublicAddressWith is resolvePublicAddress with lookup asking DNS,
+// for at most diagnosisTimeout and until ctx ends.
+func resolvePublicAddressWith(ctx context.Context, lookup probeLookupFunc, host string) (netip.Addr, error) {
 	if addr, err := netip.ParseAddr(host); err == nil {
 		if !isPublicProbeAddress(addr) {
 			return netip.Addr{}, errNotPublicAddress
@@ -97,9 +106,9 @@ func resolvePublicAddress(host string) (netip.Addr, error) {
 	if isLoopbackHostName(name) || isNumericHostName(name) {
 		return netip.Addr{}, errNotPublicAddress
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), diagnosisTimeout)
+	ctx, cancel := context.WithTimeout(ctx, diagnosisTimeout)
 	defer cancel()
-	addrs, err := probeLookup(ctx, host)
+	addrs, err := lookup(ctx, host)
 	if err != nil {
 		return netip.Addr{}, err
 	}
@@ -125,7 +134,13 @@ func resolvePublicAddress(host string) (netip.Addr, error) {
 // must be public, and the probe connects to the checked address, so the
 // name cannot resolve to another one between the check and the connection.
 func publicProbeAddress(host string) (netip.Addr, string) {
-	addr, err := resolvePublicAddress(host)
+	return publicProbeAddressWith(context.Background(), probeLookup, host)
+}
+
+// publicProbeAddressWith is publicProbeAddress with lookup asking DNS, until
+// ctx ends.
+func publicProbeAddressWith(ctx context.Context, lookup probeLookupFunc, host string) (netip.Addr, string) {
+	addr, err := resolvePublicAddressWith(ctx, lookup, host)
 	switch {
 	case err == nil:
 		return addr, ""

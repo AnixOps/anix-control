@@ -856,8 +856,7 @@ func (h *ForwardHandler) SyncNodeStats(c *gin.Context) {
 		return
 	}
 
-	ctx := context.Background()
-	totals, err := h.gostManager.GetNodeTrafficTotals(ctx, node.ID)
+	traffic, err := service.CollectForwardNodeTraffic(c.Request.Context(), h.gostManager, node, false)
 	if err != nil {
 		panelError(c, err.Error())
 		return
@@ -865,7 +864,7 @@ func (h *ForwardHandler) SyncNodeStats(c *gin.Context) {
 
 	panelSuccess(c, gin.H{
 		"message": "Stats synced",
-		"stats":   totals,
+		"stats":   traffic.Services,
 	})
 }
 

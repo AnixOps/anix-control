@@ -242,12 +242,18 @@ func (h *ForwardHandler) SyncAnsibleMachineStats(c *gin.Context) {
 		return
 	}
 
+	traffic, err := service.CollectForwardNodeTraffic(c.Request.Context(), nil, node, true)
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
+
 	panelSuccess(c, gin.H{
 		"message": "Ansible machines do not expose gost management API stats; keeping panel-side counters",
 		"stats": gin.H{
-			"current_conn":   node.CurrentConn,
-			"total_upload":   node.TotalUpload,
-			"total_download": node.TotalDownload,
+			"current_conn":   traffic.CurrentConn,
+			"total_upload":   traffic.TotalUpload,
+			"total_download": traffic.TotalDownload,
 		},
 	})
 }

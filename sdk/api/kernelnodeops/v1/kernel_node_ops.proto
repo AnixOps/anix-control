@@ -634,23 +634,64 @@ message SecretDocumentResult {
   uint32 cleared = 4;
 }
 
+// VantageReport says where a check or diagnosis ran (D10): from Control by
+// default, from the node's agent when the agent advertises diag.v1. A
+// package host is never a vantage.
+message VantageReport {
+  // requested is the operation's vantage.
+  Vantage requested = 1;
+  // selected is the vantage the kernel chose: NODE when CONTROL was not
+  // requested and the agent of every node the diagnosis concerns advertises
+  // diag.v1 on its Agent Control session, else CONTROL.
+  Vantage selected = 2;
+  // used is where the probes ran. A kernel that does not run diagnoses on
+  // agents dials from Control, so used is then CONTROL even when selected
+  // is NODE.
+  Vantage used = 3;
+  // note says why used differs from requested or selected; empty when they
+  // agree.
+  string note = 4;
+}
+
 message EndpointCheck {
   NodeRef node = 1;
   bool reachable = 2;
   int64 latency_ms = 3;
   string error = 4;
   int64 checked_at_unix_ms = 5;
+  // vantage is where this node's check ran.
+  VantageReport vantage = 6;
 }
 
 message EndpointCheckResult {
   repeated EndpointCheck checks = 1;
 }
 
+// ServiceTraffic is one gost service's counters on a node, summed over its
+// clients, as the node's metrics endpoint reports them.
+message ServiceTraffic {
+  string service = 1;
+  // input_bytes is gost_service_transfer_input_bytes_total.
+  uint64 input_bytes = 2;
+  // output_bytes is gost_service_transfer_output_bytes_total.
+  uint64 output_bytes = 3;
+}
+
+// NodeStatsResult is a forward node's traffic counters. For a gost node they
+// come from its metrics endpoint (channel CONTROL_DIAL): upload_bytes and
+// download_bytes sum its services' input and output bytes. For an Ansible
+// machine (channel LOCAL_ANSIBLE) they are the panel-side counters, which
+// the legacy statistics sync keeps: upload_bytes and download_bytes are its
+// total upload and download.
 message NodeStatsResult {
   NodeRef node = 1;
   uint64 upload_bytes = 2;
   uint64 download_bytes = 3;
   int64 collected_at_unix_ms = 4;
+  // services are a gost node's services, by name.
+  repeated ServiceTraffic services = 5;
+  // current_connections is an Ansible machine's connection counter.
+  int64 current_connections = 6;
 }
 
 // DiagnosisOutcome is one probe of a diagnosis, as the legacy diagnosis
@@ -669,6 +710,8 @@ message DiagnosisOutcome {
 
 message DiagnosisResult {
   repeated DiagnosisOutcome outcomes = 1;
+  // vantage is where the diagnosis ran.
+  VantageReport vantage = 2;
 }
 
 message AgentDiagnosticResult {

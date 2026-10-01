@@ -201,7 +201,7 @@ func (h *ForwardHandler) DiagnosePanelTunnel(c *gin.Context) {
 		return
 	}
 
-	report, err := h.panelService.DiagnoseTunnel(req.TunnelID)
+	report, err := h.panelService.DiagnoseTunnelContext(c.Request.Context(), service.DiagnosisProbes{}, req.TunnelID)
 	if err != nil {
 		panelError(c, err.Error())
 		return
@@ -302,7 +302,7 @@ func (h *ForwardHandler) DiagnosePanelForward(c *gin.Context) {
 		return
 	}
 
-	report, err := h.panelService.DiagnoseForward(c.GetUint("user_id"), c.GetBool("is_admin"), req.ForwardID)
+	report, err := h.panelService.DiagnoseForwardContext(c.Request.Context(), service.DiagnosisProbes{}, c.GetUint("user_id"), c.GetBool("is_admin"), req.ForwardID)
 	if err != nil {
 		panelError(c, err.Error())
 		return
