@@ -22,7 +22,10 @@ var (
 	ErrHostIncompatible      = errors.New("plugin host incompatible")
 	ErrPackageFailed         = errors.New("plugin package failed")
 	ErrGenerationUnavailable = errors.New("plugin host generation unavailable")
-	defaultManager           struct {
+	// ErrLegacyUnavailable matches the Unix build: the kernel cannot serve
+	// the request with its legacy handler.
+	ErrLegacyUnavailable = errors.New("plugin route has no kernel legacy handler")
+	defaultManager       struct {
 		sync.RWMutex
 		manager Manager
 	}
