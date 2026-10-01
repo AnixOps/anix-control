@@ -357,7 +357,8 @@ export default {
       },
       node: {
         intro: 'Register a NodeX node first — the tunnel step will use it.',
-        createAndContinue: 'Create and continue'
+        createAndContinue: 'Create and continue',
+        tokenShownOnce: 'API token of node "{name}". Copy it now, it is not shown again: {token}'
       },
       tunnel: {
         title: 'Step 3: Tunnel',
@@ -1630,12 +1631,14 @@ export default {
           name: 'e.g. relay-hk-01',
           host: '1.2.3.4',
           apiToken: 'Leave blank to auto-generate',
+          apiTokenKept: 'Stored token hidden; leave blank to keep it',
           region: 'HK / JP / US',
           isp: 'CMI / NTT / Cogent'
         },
         hints: {
           apiPort: 'Required for NodeX management API health checks, stats sync, and connection tests.',
-          metricsPort: 'gost Prometheus /metrics port, used to collect traffic stats. Leave blank to skip collection.'
+          metricsPort: 'gost Prometheus /metrics port, used to collect traffic stats. Leave blank to skip collection.',
+          apiTokenKept: 'The API token is shown only once, when the node is created. Leave this blank to keep it, or enter a new token to replace it.'
         }
       },
       ruleModal: {
@@ -1680,7 +1683,8 @@ export default {
         },
         placeholders: {
           host: '127.0.0.1',
-          apiToken: 'Leave blank if auth is disabled'
+          apiToken: 'Leave blank if auth is disabled',
+          apiTokenHidden: 'The stored token is hidden; enter it to test'
         },
         success: 'Connection succeeded',
         failed: 'Connection failed',
@@ -1720,6 +1724,7 @@ export default {
         saveNodeFailed: 'Failed to save relay/exit node',
         nodeUpdated: 'Relay/exit node updated',
         nodeCreated: 'Relay/exit node created',
+        nodeCreatedWithToken: 'Relay/exit node created. Copy its API token now, it is not shown again: {token}',
         nodeDeleted: 'Relay/exit node deleted',
         nodeCheckFailed: 'Health check failed',
         nodeSyncFailed: 'Sync stats failed',
@@ -2115,7 +2120,13 @@ export default {
         copy: 'Copy Key',
         copyConfig: 'Copy Config',
         configHint: `Paste this config into ${AGENT_NAME} config.json, then replace <auth_key> with the key above.`,
-        registeredCount: 'Registered Nodes'
+        registeredCount: 'Registered Nodes',
+        generate: 'Generate Key',
+        generating: 'Generating...',
+        hiddenKey: 'Hidden (********)',
+        hiddenHint: 'Registration keys are shown only once, when they are generated. Generate a new key to copy it; existing keys keep working.',
+        shownOnce: 'Copy this key now: it is not shown again after you leave this page.',
+        defaultName: 'Panel key {date}'
       },
       deployModal: {
         title: 'Parent Node Deployment Helper',
@@ -2204,6 +2215,7 @@ export default {
         titleCreate: 'Add Protocol',
         titleEdit: 'Edit Protocol',
         templateLibrary: 'Protocol Template Library',
+        maskedSecretsHint: 'Stored secrets (private keys, passwords, tokens) show as ********. Leave ******** to keep a stored secret, or replace it with a new value.',
         tabs: {
           visual: 'Visual Config'
         },

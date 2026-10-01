@@ -247,6 +247,15 @@ export function getAuthKeys() {
   })
 }
 
+// The answer is the only one that shows the key; the list masks it.
+export function generateAuthKey(data) {
+  return request({
+    url: '/admin/auth-keys',
+    method: 'post',
+    data
+  })
+}
+
 export function getSubscriptionGroups() {
   return request({
     url: '/admin/subscription/groups',
@@ -1352,6 +1361,7 @@ export default {
   deleteNodeProtocol,
   getProtocolTemplates,
   getAuthKeys,
+  generateAuthKey,
   getSubscriptionGroups,
   createSubscriptionGroup,
   updateSubscriptionGroup,

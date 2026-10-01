@@ -5,6 +5,7 @@ import (
 	"errors"
 	"net/http"
 	"strconv"
+	"strings"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/service"
@@ -192,6 +193,10 @@ func (h *NodeHandler) GetNodes(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取节点列表失败"})
 		return
 	}
+	// Protocol and raw configuration secrets read as the placeholder.
+	for i := range result.List {
+		service.RedactNode(&result.List[i])
+	}
 
 	panelSuccess(c, result)
 }
@@ -220,6 +225,7 @@ func (h *NodeHandler) GetNode(c *gin.Context) {
 		c.JSON(http.StatusNotFound, gin.H{"message": "节点不存在"})
 		return
 	}
+	service.RedactNode(node)
 
 	panelSuccess(c, node)
 }
@@ -229,6 +235,7 @@ func (h *NodeHandler) GetNode(c *gin.Context) {
 // @Description 管理员获取指定节点的 api_key / secret, 用于 AnixOps Agent 对接配置。
 // @Description Node.APIKey/Secret 在普通序列化里是隐藏字段 (json:"-"), 此接口显式返回,
 // @Description 仅限管理员, 供 Ansible 等部署工具自动拉取节点凭证。
+// @Description 每次读取都写入管理员审计日志 (action "reveal")。
 // @Tags 管理端-节点
 // @Accept json
 // @Produce json
@@ -479,7 +486,10 @@ func (h *NodeHandler) GetNodeRawConfig(c *gin.Context) {
 
 	var config any
 	if node.RawConfig != nil && *node.RawConfig != "" {
-		if err := json.Unmarshal([]byte(*node.RawConfig), &config); err != nil {
+		// Secrets read as the placeholder, and saving it back keeps them.
+		// A configuration that is not JSON is refused as before (it would
+		// read as the placeholder alone).
+		if err := json.Unmarshal([]byte(service.RedactNodeSecretsJSON(*node.RawConfig)), &config); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "节点原始配置 JSON 无效"})
 			return
 		}
@@ -555,6 +565,20 @@ func (h *NodeHandler) UpdateNodeRawConfig(c *gin.Context) {
 		if err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "原始配置必须是 JSON 对象"})
 			return
+		}
+		// Secrets sent back as the placeholder keep their stored values,
+		// and the configuration is checked with them.
+		if strings.Contains(string(jsonBytes), service.NodeSecretPlaceholder) {
+			node, err := h.nodeService.GetNode(uint(id))
+			if err != nil {
+				c.JSON(http.StatusNotFound, gin.H{"message": "节点不存在"})
+				return
+			}
+			config, jsonBytes, err = decodeRawConfigObject(service.KeepNodeRawConfig(string(jsonBytes), node.RawConfig))
+			if err != nil {
+				c.JSON(http.StatusBadRequest, gin.H{"message": "原始配置必须是 JSON 对象"})
+				return
+			}
 		}
 		if err := service.ValidateWireGuardRuntimeConfig(config); err != nil {
 			c.JSON(http.StatusBadRequest, gin.H{"message": "WireGuard 配置无效", "error": err.Error()})
@@ -650,6 +674,9 @@ func (h *NodeHandler) GetProtocols(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取协议列表失败"})
 		return
 	}
+	// Secret settings (Reality and WireGuard private keys, passwords) read
+	// as the placeholder; an update that sends it back keeps them.
+	service.RedactNodeProtocols(protocols)
 
 	panelSuccess(c, protocols)
 }
@@ -690,6 +717,7 @@ func (h *NodeHandler) CreateProtocol(c *gin.Context) {
 		c.JSON(status, gin.H{"message": "创建失败", "error": err.Error()})
 		return
 	}
+	service.RedactNodeProtocol(&protocol)
 
 	panelSuccess(c, protocol)
 }
@@ -890,7 +918,7 @@ func (h *NodeHandler) GenerateAuthKey(c *gin.Context) {
 
 // GetAuthKeys godoc
 // @Summary 获取授权密钥列表
-// @Description 管理员获取所有授权密钥列表
+// @Description 管理员获取所有授权密钥列表。密钥值显示为 ********, 只在生成时返回一次。
 // @Tags 管理端-节点
 // @Accept json
 // @Produce json
@@ -904,6 +932,8 @@ func (h *NodeHandler) GetAuthKeys(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取失败"})
 		return
 	}
+	// A key is shown once, when it is generated.
+	service.MaskAuthorizedKeys(keys)
 
 	panelSuccess(c, keys)
 }

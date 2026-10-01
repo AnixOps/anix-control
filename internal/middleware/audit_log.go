@@ -5,6 +5,7 @@ import (
 	"io"
 	"log/slog"
 	"net/http"
+	"regexp"
 	"strconv"
 	"strings"
 	"time"
@@ -63,9 +64,11 @@ func AuditLog() gin.HandlerFunc {
 			return
 		}
 
-		// Only log write operations (POST, PUT, DELETE)
+		// Only log write operations (POST, PUT, DELETE), and the reads that
+		// reveal a secret.
 		method := c.Request.Method
-		if method != http.MethodPost && method != http.MethodPut && method != http.MethodDelete {
+		if method != http.MethodPost && method != http.MethodPut && method != http.MethodDelete &&
+			!auditedRead(method, c.Request.URL.Path) {
 			c.Next()
 			return
 		}
@@ -180,6 +183,18 @@ func persistAuditLog(db *gorm.DB, userID *uint, email, method, path, module, act
 	_ = db.Create(&entry)
 }
 
+// revealPath matches the administrator reads that answer a secret in
+// clear, one item at a time: a proxy node's API key and shared secret
+// (GET /api/v2/admin/nodes/:id/credentials). Every other answer masks node
+// secrets, so these reads are recorded like writes, as "reveal".
+var revealPath = regexp.MustCompile(`^/api/v2/admin/nodes/[^/]+/credentials/?$`)
+
+// auditedRead reports whether a read is recorded in the audit log: one
+// that reveals a secret.
+func auditedRead(method, path string) bool {
+	return method == http.MethodGet && revealPath.MatchString(path)
+}
+
 // extractModuleAndAction derives a human-readable module and action from the URL path and HTTP method.
 func extractModuleAndAction(path, method string) (module, action string) {
 	// Strip the relevant administrator API prefix.
@@ -248,6 +263,9 @@ func extractModuleAndAction(path, method string) (module, action string) {
 		action = "delete"
 	default:
 		action = strings.ToLower(method)
+		if auditedRead(method, path) {
+			action = "reveal"
+		}
 	}
 
 	return module, action

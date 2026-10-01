@@ -394,6 +394,9 @@ func (h *SubscriptionAdminHandler) GetGroupProtocols(c *gin.Context) {
 		panelError(c, err.Error())
 		return
 	}
+	// Secret settings and the nodes' raw configuration secrets read as the
+	// placeholder.
+	service.RedactNodeProtocols(protocols)
 
 	panelSuccess(c, protocols)
 }
@@ -440,6 +443,7 @@ func (h *SubscriptionAdminHandler) GetAvailableProtocols(c *gin.Context) {
 		panelError(c, err.Error())
 		return
 	}
+	service.RedactNodeProtocols(protocols)
 
 	panelSuccess(c, protocols)
 }

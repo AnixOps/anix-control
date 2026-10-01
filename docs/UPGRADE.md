@@ -470,6 +470,34 @@ UPDATE v2_audit_log SET request_body = '' WHERE created_at < '2026-10-01';
 Rotate any credential that was set through the administrator API while the
 old build ran, and apply the same care to log files kept from that time.
 
+### Node Secrets Read As `********` In Administrator Answers
+
+The administrator API no longer answers node secrets in clear: protocol
+private keys, passwords and tokens, the secrets in a node's raw
+configuration, node registration keys and forward node API tokens read
+`********`. Nodes and agents still receive the real values, so running
+nodes need nothing.
+
+- **Editing.** Saving a protocol, a raw configuration or a forward node with
+  `********` keeps the stored secret, and a new value replaces it. The panel
+  editors work as before. A script that reads a protocol or raw
+  configuration and writes it back keeps working too; a script that read a
+  secret from these answers must keep its own copy instead.
+- **Registration keys.** `GET /api/v2/admin/auth-keys` no longer shows
+  existing keys, and they keep registering nodes. Copy a key when you
+  generate it: Nodes, Auth Key, Generate Key, or
+  `POST /api/v2/admin/auth-keys`. A key set with `NODE_DEFAULT_AUTH_KEY` is
+  the one in that variable.
+- **Forward node tokens.** A forward node's API token is answered once, by
+  `POST /api/v2/admin/forward/nodes`; the forward node page and the setup
+  wizard show a generated token after creating the node. Record it where
+  you configure the relay's gost API. The connection test of an existing
+  node needs the token typed in. If a token is lost, set a new one from the
+  node's edit form and update the relay and its agent.
+- **Proxy node credentials.** `GET /api/v2/admin/nodes/:id/credentials`
+  still answers a node's API key and secret, for the deployment helper and
+  Ansible. Each read is now recorded in `v2_audit_log` with action `reveal`.
+
 ## Moving Logins To The Identity Module
 
 From 4.1 the identity module can own accounts, passwords, MFA and token
