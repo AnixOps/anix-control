@@ -16,6 +16,7 @@ const adminApi = vi.hoisted(() => ({
   deleteNodeProtocol: vi.fn(),
   getProtocolTemplates: vi.fn(),
   getAuthKeys: vi.fn(),
+  generateAuthKey: vi.fn(),
   generateWireGuardKeypair: vi.fn()
 }))
 
@@ -135,6 +136,66 @@ describe('Nodes.vue', () => {
     await wrapper.vm.loadAuthKeysPreview()
     expect(wrapper.vm.authKey).toBe('nested-key')
     expect(wrapper.vm.authKeyUsed).toBe(4)
+  })
+
+  it('shows a registration key once: the list masks keys, a generated key stays shown', async () => {
+    adminApi.getAuthKeys.mockResolvedValue({ data: [{ id: 3, key: '********', used: 1 }] })
+    adminApi.generateAuthKey.mockResolvedValueOnce({
+      code: 0,
+      msg: '操作成功',
+      data: { id: 4, name: 'Panel key', key: 'fresh-registration-key' },
+      ts: 1783526400000
+    })
+
+    const wrapper = mountNodes()
+    await flushPromises()
+    await wrapper.vm.openAuthKeyModal()
+    await wrapper.vm.$nextTick()
+
+    expect(wrapper.vm.authKey).toBe('')
+    expect(wrapper.vm.authKeyMasked).toBe(true)
+    expect(wrapper.get('.auth-key-display button').attributes('disabled')).toBeDefined()
+    expect(parseAgentConfigSnippet(wrapper.vm.configSnippet).Nodes[0].AuthKey).toBe('<your-auth-key>')
+
+    await wrapper.get('[data-testid="generate-auth-key"]').trigger('click')
+    await flushPromises()
+
+    expect(adminApi.generateAuthKey).toHaveBeenCalledWith(expect.objectContaining({ expire_days: 0 }))
+    expect(adminApi.generateAuthKey.mock.calls[0][0].name).toBeTruthy()
+    expect(wrapper.vm.authKey).toBe('fresh-registration-key')
+    expect(wrapper.get('[data-testid="auth-key-value"]').text()).toBe('fresh-registration-key')
+    expect(parseAgentConfigSnippet(wrapper.vm.configSnippet).Nodes[0].AuthKey).toBe('fresh-registration-key')
+
+    // Reopening the modal reads the masked list again and keeps the key it issued.
+    adminApi.getAuthKeys.mockResolvedValue({ data: [{ id: 4, key: '********', used: 0 }, { id: 3, key: '********', used: 1 }] })
+    await wrapper.vm.openAuthKeyModal()
+    expect(wrapper.vm.authKey).toBe('fresh-registration-key')
+  })
+
+  it('saves masked protocol secrets back as the placeholder, which keeps the stored values', async () => {
+    adminApi.getNodes.mockResolvedValueOnce({ data: { list: [{ id: 9, name: 'Root Node', host: 'root.example' }], total: 1 } })
+    adminApi.getNodeProtocols.mockResolvedValue({
+      data: [{
+        id: 91,
+        type: 'vless',
+        port: 443,
+        tls: 2,
+        settings: '{"flow":"xtls-rprx-vision"}',
+        reality_settings: '{"private_key":"********","public_key":"reality-public","short_id":"ab"}'
+      }]
+    })
+    adminApi.updateNodeProtocol.mockResolvedValueOnce({ data: { message: 'ok' } })
+
+    const wrapper = mountNodes()
+    await flushPromises()
+    await wrapper.vm.openProtocols(wrapper.vm.nodes[0])
+    wrapper.vm.editProtocol(wrapper.vm.protocols[0])
+    await wrapper.vm.saveProtocol()
+
+    expect(adminApi.updateNodeProtocol).toHaveBeenCalledTimes(1)
+    const [nodeId, protocolId, payload] = adminApi.updateNodeProtocol.mock.calls[0]
+    expect([nodeId, protocolId]).toEqual([9, 91])
+    expect(JSON.parse(payload.reality_settings)).toEqual({ private_key: '********', public_key: 'reality-public', short_id: 'ab' })
   })
 
   it('loads node protocols, logs, and deploy credentials from panel envelopes', async () => {

@@ -241,11 +241,16 @@
         <div class="modal-body">
           <p class="auth-key-hint">{{ t('admin.nodes.authKeyModal.hint') }}</p>
           <div class="auth-key-display">
-            <code class="auth-key-value">{{ authKey || t('admin.nodes.authKeyModal.noKey') }}</code>
+            <code class="auth-key-value" data-testid="auth-key-value">{{ authKey || (authKeyMasked ? t('admin.nodes.authKeyModal.hiddenKey') : t('admin.nodes.authKeyModal.noKey')) }}</code>
             <button class="btn btn-sm" @click="copyAuthKey" :disabled="!authKey">
               {{ t('admin.nodes.authKeyModal.copy') }}
             </button>
+            <button class="btn btn-sm btn-primary" data-testid="generate-auth-key" @click="createAuthKey" :disabled="authKeyGenerating">
+              {{ authKeyGenerating ? t('admin.nodes.authKeyModal.generating') : t('admin.nodes.authKeyModal.generate') }}
+            </button>
           </div>
+          <p v-if="authKey" class="field-hint">{{ t('admin.nodes.authKeyModal.shownOnce') }}</p>
+          <p v-else-if="authKeyMasked" class="field-hint">{{ t('admin.nodes.authKeyModal.hiddenHint') }}</p>
           <div class="auth-key-usage" v-if="authKeyUsed > 0">
             {{ t('admin.nodes.authKeyModal.registeredCount', { count: authKeyUsed }) }}
           </div>
@@ -581,6 +586,8 @@
               </div>
             </div>
           </div>
+
+          <p v-if="editingProtocol" class="field-hint" data-testid="protocol-masked-hint">{{ t('admin.nodes.protocolForm.maskedSecretsHint') }}</p>
 
           <!-- Mode tabs -->
           <div class="tabs">
@@ -959,8 +966,9 @@ import {
   syncNodeProtocol,
   getNodeProtocols, createNodeProtocol, updateNodeProtocol, deleteNodeProtocol,
   getProtocolTemplates, generateWireGuardKeypair,
-  getAuthKeys
+  getAuthKeys, generateAuthKey
 } from '@/api/admin'
+import { MASKED_SECRET, isMaskedSecret } from '@/constants/secrets'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { AGENT_NAME } from '@/constants/brand'
 
@@ -1026,6 +1034,11 @@ const parentNodes = computed(() => nodes.value.filter((node) => !node.parent_id)
 const showAuthKeyModal = ref(false)
 const authKey = ref('')
 const authKeyUsed = ref(0)
+// Registration keys are shown once, when generated: the key list masks them
+// (MASKED_SECRET). A key generated here stays shown while the page is open.
+const authKeyMasked = ref(false)
+const authKeyGenerating = ref(false)
+const issuedAuthKey = ref(null)
 const showDeployModal = ref(false)
 const deployLoading = ref(false)
 const deployError = ref('')
@@ -1574,16 +1587,53 @@ const loadAuthKeysPreview = async () => {
     const res = await getAuthKeys()
     const keys = readNodeList(res)
     if (keys.length > 0) {
-      authKey.value = keys[0].key || ''
-      authKeyUsed.value = keys[0].used || 0
+      const latest = keys[0]
+      const key = String(latest.key || '')
+      authKeyUsed.value = latest.used || 0
+      if (key && !isMaskedSecret(key)) {
+        authKey.value = key
+        authKeyMasked.value = false
+      } else if (issuedAuthKey.value && issuedAuthKey.value.id === latest.id) {
+        authKey.value = issuedAuthKey.value.key
+        authKeyMasked.value = false
+      } else {
+        authKey.value = ''
+        authKeyMasked.value = key === MASKED_SECRET
+      }
     } else {
       authKey.value = ''
+      authKeyMasked.value = false
       authKeyUsed.value = 0
     }
   } catch (e) {
     console.error('Failed to preload auth keys:', e)
     authKey.value = ''
+    authKeyMasked.value = false
     authKeyUsed.value = 0
+  }
+}
+
+// Generates a registration key. The answer is the only one that shows it.
+const createAuthKey = async () => {
+  authKeyGenerating.value = true
+  try {
+    const res = await generateAuthKey({
+      name: t('admin.nodes.authKeyModal.defaultName', { date: new Date().toISOString().slice(0, 10) }),
+      expire_days: 0
+    })
+    const payload = readNodePayload(res) || {}
+    const key = String(payload.key || '')
+    if (!key || isMaskedSecret(key)) {
+      throw new Error(t('admin.nodes.authKeyModal.noKey'))
+    }
+    issuedAuthKey.value = { id: payload.id, key }
+    authKey.value = key
+    authKeyMasked.value = false
+    authKeyUsed.value = 0
+  } catch (e) {
+    alert(t('admin.nodes.messages.generateFailed', { message: readNodeApiError(e) }))
+  } finally {
+    authKeyGenerating.value = false
   }
 }
 

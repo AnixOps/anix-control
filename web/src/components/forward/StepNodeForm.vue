@@ -83,6 +83,7 @@
 import { onMounted, reactive, ref } from 'vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { createForwardNode, getForwardNodes } from '@/api/admin'
+import { isMaskedSecret } from '@/constants/secrets'
 
 const emit = defineEmits(['created'])
 
@@ -191,11 +192,14 @@ async function submitForm() {
     if (form.isp.trim()) payload.isp = form.isp.trim()
 
     const created = unwrapResponse(await createForwardNode(payload, nodeXScopeParams))
+    // A generated token is shown once, in the answer that creates the node.
+    const token = String(created?.api_token || '')
     emit('created', {
       id: Number(created?.id || 0),
       name: payload.name,
       host: payload.host,
-      type: payload.type
+      type: payload.type,
+      apiToken: !payload.api_token && token && !isMaskedSecret(token) ? token : ''
     })
   } catch (error) {
     errors.name = errors.name || (error?.message ? String(error.message) : '')

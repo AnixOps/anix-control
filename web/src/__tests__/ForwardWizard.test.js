@@ -24,4 +24,28 @@ describe('ForwardWizard.vue', () => {
     expect(wrapper.findComponent({ name: 'ASteps' }).exists()).toBe(false)
     expect(wrapper.find('[data-test="mode-step"]').exists()).toBe(true)
   })
+
+  it('shows the generated API token of the node it created once, after the node step', async () => {
+    const wrapper = mount(ForwardWizard, {
+      global: {
+        stubs: {
+          StepForwardModeForm: true,
+          StepMachineForm: true,
+          StepNodeForm: true,
+          StepTunnelForm: true,
+          StepForwardForm: true,
+          RouterLink: true
+        }
+      }
+    })
+    expect(wrapper.find('[data-testid="wizard-node-token"]').exists()).toBe(false)
+
+    wrapper.vm.handleModeSelected({ nodeXMode: true, tunnelType: 1 })
+    wrapper.vm.handleNodeCreated({ id: 7, name: 'relay-hk', apiToken: 'generated-relay-token' })
+    await wrapper.vm.$nextTick()
+
+    const notice = wrapper.get('[data-testid="wizard-node-token"]')
+    expect(notice.text()).toContain('generated-relay-token')
+    expect(wrapper.vm.stepIndex).toBe(2)
+  })
 })

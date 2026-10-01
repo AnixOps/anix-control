@@ -359,7 +359,8 @@ export default {
       },
       node: {
         intro: '先注册一个 NodeX 节点,后面的隧道会用到它。',
-        createAndContinue: '创建并继续'
+        createAndContinue: '创建并继续',
+        tokenShownOnce: '节点「{name}」的 API Token,请立即复制,之后不再显示:{token}'
       },
       tunnel: {
         title: '第三步:隧道',
@@ -1631,12 +1632,14 @@ export default {
           name: '\u4f8b\u5982 relay-hk-01',
           host: '1.2.3.4',
           apiToken: '\u7559\u7a7a\u5219\u540e\u7aef\u81ea\u52a8\u751f\u6210',
+          apiTokenKept: '\u5df2\u4fdd\u5b58\u7684\u4ee4\u724c\u4e0d\u518d\u663e\u793a\uff1b\u7559\u7a7a\u5373\u4fdd\u7559',
           region: 'HK / JP / US',
           isp: 'CMI / NTT / Cogent'
         },
         hints: {
           apiPort: 'NodeX \u7ba1\u7406 API \u7684\u5065\u5eb7\u68c0\u67e5\u3001\u7edf\u8ba1\u540c\u6b65\u548c\u8fde\u901a\u6d4b\u8bd5\u90fd\u9700\u8981\u8be5\u7aef\u53e3\u3002',
-          metricsPort: 'gost Prometheus /metrics \u7aef\u53e3\uff0c\u7528\u4e8e\u91c7\u96c6\u8f6c\u53d1\u6d41\u91cf\u7edf\u8ba1\uff0c\u7559\u7a7a\u8868\u793a\u4e0d\u91c7\u96c6\u3002'
+          metricsPort: 'gost Prometheus /metrics \u7aef\u53e3\uff0c\u7528\u4e8e\u91c7\u96c6\u8f6c\u53d1\u6d41\u91cf\u7edf\u8ba1\uff0c\u7559\u7a7a\u8868\u793a\u4e0d\u91c7\u96c6\u3002',
+          apiTokenKept: 'API Token \u53ea\u5728\u521b\u5efa\u8282\u70b9\u65f6\u663e\u793a\u4e00\u6b21\u3002\u7559\u7a7a\u5373\u4fdd\u7559\u539f\u4ee4\u724c\uff0c\u586b\u5199\u65b0\u4ee4\u724c\u5219\u66ff\u6362\u3002'
         }
       },
       ruleModal: {
@@ -1681,7 +1684,8 @@ export default {
         },
         placeholders: {
           host: '127.0.0.1',
-          apiToken: '\u5982\u672a\u542f\u7528\u9274\u6743\u53ef\u7559\u7a7a'
+          apiToken: '\u5982\u672a\u542f\u7528\u9274\u6743\u53ef\u7559\u7a7a',
+          apiTokenHidden: '\u5df2\u4fdd\u5b58\u7684\u4ee4\u724c\u4e0d\u518d\u663e\u793a\uff1b\u8bf7\u586b\u5199\u4ee4\u724c\u540e\u6d4b\u8bd5'
         },
         success: '\u8fde\u63a5\u6210\u529f',
         failed: '\u8fde\u63a5\u5931\u8d25',
@@ -1721,6 +1725,7 @@ export default {
         saveNodeFailed: '\u4fdd\u5b58\u4e2d\u8f6c\u8282\u70b9\u5931\u8d25',
         nodeUpdated: '\u4e2d\u8f6c\u8282\u70b9\u5df2\u66f4\u65b0',
         nodeCreated: '\u4e2d\u8f6c\u8282\u70b9\u5df2\u521b\u5efa',
+        nodeCreatedWithToken: '\u4e2d\u8f6c\u8282\u70b9\u5df2\u521b\u5efa\u3002\u8bf7\u7acb\u5373\u590d\u5236\u5176 API Token\uff0c\u4e4b\u540e\u4e0d\u518d\u663e\u793a\uff1a{token}',
         nodeDeleted: '\u4e2d\u8f6c\u8282\u70b9\u5df2\u5220\u9664',
         nodeCheckFailed: '\u5065\u5eb7\u68c0\u6d4b\u5931\u8d25',
         nodeSyncFailed: '\u540c\u6b65\u7edf\u8ba1\u5931\u8d25',
@@ -2116,7 +2121,13 @@ export default {
         copy: '复制密钥',
         copyConfig: '复制配置',
         configHint: `将此配置粘贴到 ${AGENT_NAME} 的 config.json 中，并将 <auth_key> 替换为上方密钥值。`,
-        registeredCount: '已注册节点数'
+        registeredCount: '已注册节点数',
+        generate: '生成密钥',
+        generating: '生成中...',
+        hiddenKey: '已隐藏 (********)',
+        hiddenHint: '授权密钥只在生成时显示一次。请生成新密钥后复制；已有密钥仍可继续使用。',
+        shownOnce: '请立即复制此密钥：离开本页面后将不再显示。',
+        defaultName: '面板密钥 {date}'
       },
       deployModal: {
         title: '父节点部署助手',
@@ -2205,6 +2216,7 @@ export default {
         titleCreate: '添加协议',
         titleEdit: '编辑协议',
         templateLibrary: '协议模板库',
+        maskedSecretsHint: '已保存的密钥（私钥、密码、令牌）显示为 ********。保留 ******** 即沿用原值，填写新值则替换。',
         tabs: {
           visual: '可视化配置'
         },

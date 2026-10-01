@@ -74,6 +74,10 @@ describe('admin api mapping', () => {
         expected: { url: '/admin/auth-keys', method: 'get' },
       },
       {
+        call: () => adminApi.generateAuthKey({ name: 'tokyo', expire_days: 0 }),
+        expected: { url: '/admin/auth-keys', method: 'post', data: { name: 'tokyo', expire_days: 0 } },
+      },
+      {
         call: () => adminApi.getSubscriptionGroups(),
         expected: { url: '/admin/subscription/groups', method: 'get' },
       },

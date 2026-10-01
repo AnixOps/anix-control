@@ -18,6 +18,10 @@
       </li>
     </ol>
 
+    <p v-if="createdNode.apiToken" class="wizard-token-notice" data-testid="wizard-node-token">
+      {{ t('forwardWizard.steps.node.tokenShownOnce', { name: createdNode.name, token: createdNode.apiToken }) }}
+    </p>
+
     <div class="wizard-body">
       <StepForwardModeForm v-if="stepIndex === 0" @selected="handleModeSelected" />
 
@@ -81,7 +85,7 @@ const wizardSteps = computed(() => [
 ])
 
 const selectedMode = reactive({ nodeXMode: false, tunnelType: 1 })
-const createdNode = reactive({ id: 0, name: '' })
+const createdNode = reactive({ id: 0, name: '', apiToken: '' })
 const createdTunnel = reactive({ id: 0, name: '' })
 const createdForward = reactive({ id: 0, name: '' })
 
@@ -94,6 +98,8 @@ function handleModeSelected(payload) {
 function handleNodeCreated(payload) {
   createdNode.id = Number(payload?.id || 0)
   createdNode.name = payload?.name || ''
+  // A generated API token is shown once, when the node is created.
+  createdNode.apiToken = payload?.apiToken || ''
   stepIndex.value = 2
 }
 
@@ -120,6 +126,15 @@ function createAnotherForward() {
 .wizard-page { display: flex; flex-direction: column; gap: 24px; padding: 24px; max-width: 880px; margin: 0 auto; }
 .wizard-header h1 { margin: 0 0 8px; font-size: 22px; }
 .wizard-subtitle { margin: 0; color: var(--text-secondary); line-height: 1.6; }
+.wizard-token-notice {
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 12px;
+  background: var(--bg-color);
+  line-height: 1.6;
+  overflow-wrap: anywhere;
+}
 .wizard-steps {
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));

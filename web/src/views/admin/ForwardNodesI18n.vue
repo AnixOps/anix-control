@@ -390,8 +390,9 @@
                 <input
                   v-model.trim="nodeForm.apiToken"
                   type="text"
-                  :placeholder="t('runtime.nodeXTopology.nodeModal.placeholders.apiToken')"
+                  :placeholder="nodeForm.apiTokenMasked ? t('runtime.nodeXTopology.nodeModal.placeholders.apiTokenKept') : t('runtime.nodeXTopology.nodeModal.placeholders.apiToken')"
                 />
+                <small v-if="nodeForm.apiTokenMasked">{{ t('runtime.nodeXTopology.nodeModal.hints.apiTokenKept') }}</small>
               </label>
             </div>
             <div class="form-grid">
@@ -629,7 +630,7 @@
               <input
                 v-model.trim="connectionForm.apiToken"
                 type="text"
-                :placeholder="t('runtime.nodeXTopology.connectionModal.placeholders.apiToken')"
+                :placeholder="connectionForm.apiTokenMasked ? t('runtime.nodeXTopology.connectionModal.placeholders.apiTokenHidden') : t('runtime.nodeXTopology.connectionModal.placeholders.apiToken')"
               />
             </label>
           </div>
@@ -717,6 +718,7 @@ import {
   updateForwardNode,
   updateForwardRule
 } from '@/api/admin'
+import { isMaskedSecret } from '@/constants/secrets'
 
 const { t, formatDateTime, translateLiteral } = useAppI18n()
 
@@ -765,6 +767,9 @@ const nodeForm = reactive({
   port: '',
   apiPort: '',
   apiToken: '',
+  // The node answers mask the stored token (MASKED_SECRET); the form then
+  // starts empty, and saving it empty keeps the stored token.
+  apiTokenMasked: false,
   metricsPort: '',
   region: '',
   isp: '',
@@ -807,7 +812,7 @@ const ruleFormErrors = reactive({
 const connectionModalOpen = ref(false)
 const connectionLoading = ref(false)
 const connectionResult = ref(null)
-const connectionForm = reactive({ host: '', apiPort: '', apiToken: '' })
+const connectionForm = reactive({ host: '', apiPort: '', apiToken: '', apiTokenMasked: false })
 const connectionErrors = reactive({ host: '', apiPort: '' })
 
 const deleteModalOpen = ref(false)
@@ -1124,6 +1129,7 @@ function resetNodeForm() {
   nodeForm.port = ''
   nodeForm.apiPort = ''
   nodeForm.apiToken = ''
+  nodeForm.apiTokenMasked = false
   nodeForm.region = ''
   nodeForm.isp = ''
   nodeForm.bandwidth = ''
@@ -1143,7 +1149,8 @@ function fillNodeForm(node) {
   nodeForm.host = node.host
   nodeForm.port = node.port ? String(node.port) : ''
   nodeForm.apiPort = node.apiPort ? String(node.apiPort) : ''
-  nodeForm.apiToken = node.apiToken || ''
+  nodeForm.apiTokenMasked = isMaskedSecret(node.apiToken)
+  nodeForm.apiToken = nodeForm.apiTokenMasked ? '' : (node.apiToken || '')
   nodeForm.metricsPort = node.metricsPort ? String(node.metricsPort) : ''
   nodeForm.region = node.region || ''
   nodeForm.isp = node.isp || ''
@@ -1264,6 +1271,7 @@ function resetConnectionForm() {
   connectionForm.host = ''
   connectionForm.apiPort = ''
   connectionForm.apiToken = ''
+  connectionForm.apiTokenMasked = false
   connectionErrors.host = ''
   connectionErrors.apiPort = ''
   connectionResult.value = null
@@ -1504,8 +1512,14 @@ async function submitNodeForm() {
       await updateForwardNode(nodeForm.id, payload, nodeXScopeParams)
       setFeedback('success', t('runtime.nodeXTopology.messages.nodeUpdated'))
     } else {
-      await createForwardNode(payload, nodeXScopeParams)
-      setFeedback('success', t('runtime.nodeXTopology.messages.nodeCreated'))
+      const created = unwrapResponse(await createForwardNode(payload, nodeXScopeParams))
+      // A generated token is shown once, in the answer that creates the node.
+      const token = String(created?.api_token || '')
+      if (!payload.api_token && token && !isMaskedSecret(token)) {
+        setFeedback('success', t('runtime.nodeXTopology.messages.nodeCreatedWithToken', { token }))
+      } else {
+        setFeedback('success', t('runtime.nodeXTopology.messages.nodeCreated'))
+      }
     }
 
     closeNodeModal(true)
@@ -1694,7 +1708,8 @@ function openConnectionModal(node = null) {
   if (node) {
     connectionForm.host = node.host || ''
     connectionForm.apiPort = node.apiPort ? String(node.apiPort) : ''
-    connectionForm.apiToken = node.apiToken || ''
+    connectionForm.apiTokenMasked = isMaskedSecret(node.apiToken)
+    connectionForm.apiToken = connectionForm.apiTokenMasked ? '' : (node.apiToken || '')
   }
   connectionModalOpen.value = true
 }
