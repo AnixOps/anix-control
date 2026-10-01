@@ -740,6 +740,103 @@ NO-1.
 - **Split phases.** `GetCapabilities.tables` answers `LEGACY` for the seven
   tables of section 4.1 until NO-2 plugs in the split state.
 
+**What NO-5 built** (`internal/kernelnodeops` `kinds_credentials.go`,
+`kinds_retire.go`, `kinds_secrets.go`, `validate.go`; the shared functions
+in `internal/service/node_credential_ops.go`; `nodesecrets.Retire`):
+
+- **Kinds.** The credentials family (`credential.issue`,
+  `credential.revoke`, `regkey.issue`, `regkey.revoke`, `cleanagent.issue`),
+  the nodeconfig family's `node.retire`, `protocol.retire` and `secrets.put`,
+  and the `ValidateNodeConfig` RPC. `GetCapabilities` lists the eight
+  kinds. Every executor runs on the `KERNEL` channel, in one transaction of
+  the kernel database.
+- **One implementation.** Each executor runs the function of
+  `internal/service` its legacy route runs, and the legacy routes were
+  moved onto those functions first: node creation and deletion, the raw
+  configuration and protocol writes and deletions, registration keys, clean
+  agent creation and revocation, and the forward node deletion. Every
+  `nodesecrets.Sync` and every agent certificate revocation (#107, A2-1)
+  stays in the transaction it was in. The legacy answers are pinned byte
+  for byte (`TestNodeCredentialAnswers`, written before the move) and
+  unchanged.
+- **Secrets in.** A typed secret (a forward node token, a protocol or raw
+  configuration secret) arrives as a sealed handle. The `Preparer` resolves
+  it with `Submission.Unseal` for the bound request, the operation's target
+  and the field the gateway sealed it from (`/api_token`, or the column's
+  pointer followed by the secret's, `/reality_settings/private_key`), all
+  or none, and keeps the values in kernel memory for the executor
+  (`Submission.Retain`, `Run.Prepared`), with the binding: they die with
+  the request and with a restart. An operation dispatched after that stores
+  nothing and ends `FAILED` (`SECRET_HANDLE_INVALID`). The operation keeps
+  the bare prefix where each handle was. A handle outside a secret position
+  is `INVALID_ARGUMENT`.
+- **Secrets out.** A generated secret (a node's API key and secret, a
+  forward node token, a registration key, a clean agent token, an
+  `anixagt_` enrollment credential) is minted with `Run.Reveal` inside the
+  transaction that stores it: when the bound answer cannot show it (no
+  binding, the request ended, the route lists no field of that name) the
+  transaction rolls back and nothing is issued. The names are the answer
+  fields the field list spells: `api_key`, `secret`, `api_token`, `key`,
+  `token`, and `credential` for enrollment. A typed secret is never
+  echoed. Issuing a credential outside an administrator's request (no
+  binding) is `PERMISSION_DENIED` before anything is recorded.
+- **IssueCredential.** A proxy node's key and secret, both or one, and a
+  forward node's token, generated or typed. An existing credential is
+  replaced only with `replace`: otherwise `FAILED_PRECONDITION` in the
+  submitting call. Replacing revokes the node's agent certificates and
+  enrollments (`credentials_replaced`), as the legacy update does. A forward
+  node's token keeps its endpoint pin through `nodesecrets.Sync` (NO-7
+  moves the pin). `AGENT_ENROLLMENT` mints a one-time credential through
+  `agentpki.CreateEnrollmentToken` (section 5.3), bound to the subject, 24
+  hours, hashed at rest, with the legacy audit entry; the actor in the
+  entry is `kernelnodeops:<package>`. No listed route answers a
+  `credential` field yet, so the kind issues nothing until one does. A clean
+  agent's token is issued with `IssueCleanAgent` only.
+- **RevokeCredential.** A clean agent (the legacy revocation: status,
+  `revoked_at`, the split row), or a node's agent enrollments and
+  certificates (`AGENT_ENROLLMENT`, `credentials_revoked`). A proxy node's
+  key or secret and a forward node's token are not revoked in place: no
+  kernel route does, and the unique `api_key` index leaves no empty state
+  to revoke into. They are rotated with `replace` or retired with the node.
+- **Registration keys and clean agents** are issued and revoked as
+  `POST /admin/auth-keys`, `DELETE /admin/auth-keys/:id`, `POST
+  /admin/forward/agents` and `POST /admin/forward/agents/:id/revoke` do; a
+  key gone since the submission is nothing to do.
+- **Cascades (D11).** `RetireNode` on a proxy node deletes its protocols
+  with their users' WireGuard peers, their subscription group links and
+  their secrets, the node's credentials and raw configuration secrets in
+  the split tables (`nodesecrets.Retire`), and revokes its agent
+  certificates (`node_deleted`); on a forward node, the token's split row
+  and the certificates. `RetireProtocol` deletes the peers, links and
+  secrets. The node or protocol row is the package's: the legacy deletion
+  removes it in the same transaction, a package after the operation
+  succeeded. A retirement of what is already gone succeeds with nothing
+  counted; a failure anywhere rolls the whole cascade back, retryable.
+- **PutSecretDocument.** The document, with the resolved values at its
+  handles and the stored values at its placeholders
+  (`KeepNodeSecretsJSON`), is written to the legacy column and the split
+  table, as the protocol and raw configuration routes write it; the result
+  is the redacted document (`RedactNodeSecretsJSON`, the bytes the masked
+  answers show) with the counts of secrets stored, kept and cleared. A
+  document with only placeholders needs no binding. Finalized tables (P3,
+  NO-9) will write the redacted document to the legacy column instead.
+- **ValidateNodeConfig.** Runs `ValidateRawNodeConfig` (the route's
+  decoding, WireGuard check and `server_port` warning, answered as an issue
+  at `/server_port`) or `ValidateNodeProtocol` on a protocol row's document.
+  A handle or the placeholder at a secret position counts as present: it is
+  replaced by a stand-in before the validators run, a generated WireGuard
+  key pair for `server_private_key` and its public key. The answer's
+  `message` is the route's.
+- **Tests.** Each executor on SQLite and PostgreSQL: success, refusals
+  (unknown target, a node kind or credential kind the operation does not
+  take, a handle of another request, target or field, no binding), the
+  idempotent repeat by request id, the legacy column and split row in
+  agreement in `dual_write` and `dual_read`, the walk showing no secret or
+  handle in any stored result; the cascade rolling back as one; an engine
+  round trip over the bridge (`bridgecontract`); the typed and generated
+  secrets through the real gateway, bridge and executors
+  (`internal/tests/sealedhandles`).
+
 ## 4. Node credential split
 
 ### 4.1 What moves
@@ -1497,7 +1594,7 @@ handlers ship `native-flagged`, and operators choose the runtime mode.
 | NO-2 | Split P1: the new secret tables, `internal/nodesecrets` as the one writer, dual-write in every writer, `node-secrets backfill` and `verify`, the split state table | NO-0 | control | L |
 | NO-3 | Split P2: every reader through `nodesecrets` with fallback and metrics; validate on build, report-only | NO-2 | control | L |
 | NO-4 | Sealed secret handles: gateway substitution and expansion, `config/node-secret-fields.json`, shadow-mode handling, fail-closed tests. Done: section 3.7 | NO-1 | control | M |
-| NO-5 | Credential and secret operations: `IssueCredential`, `RevokeCredential`, registration keys, `IssueCleanAgent`, `PutSecretDocument`, `RetireNode`, `RetireProtocol`, `ValidateNodeConfig`; the legacy handlers move onto the same functions | NO-1, NO-3, NO-4 | control | L |
+| NO-5 | Credential and secret operations: `IssueCredential`, `RevokeCredential`, registration keys, `IssueCleanAgent`, `PutSecretDocument`, `RetireNode`, `RetireProtocol`, `ValidateNodeConfig`; the legacy handlers move onto the same functions. Done: section 3.11 | NO-1, NO-3, NO-4 | control | L |
 | NO-6 | Node configuration and agents: `SyncNode` with `v4_kernel_node_desired_config`, `AgentControlOperation`, `RunAgentDiagnostic`, the agent session RPCs; the durable dispatcher takes node kinds | NO-1 | control | L |
 | NO-7 | Forward operations: `ApplyForward`, `ApplyTunnel`, `SyncForwardBackend`, `ApplyLegacyRule` over the existing executors; job payloads without tokens and the payload scrub; endpoint pinning | NO-1, NO-3 | control | L |
 | NO-8 | Diagnosis: `CheckEndpoints`, `CollectNodeStats`, `DiagnoseForward`, `DiagnoseTunnel` (Control vantage; node vantage after A2-5) | NO-1 | control | M |
