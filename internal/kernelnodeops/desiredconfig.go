@@ -11,6 +11,7 @@ import (
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -18,8 +19,9 @@ import (
 
 // DesiredConfigFormat names the desired configuration document's schema
 // (node-ops-service.md section 5.5): a proxy node's protocols as the
-// kernel's builder renders them for the node, with its raw configuration;
-// a forward node's legacy rules and tunnels.
+// kernel's builder renders them for the node, with its raw configuration
+// and the UniProxy answers (legacy_pull); a forward node's legacy rules and
+// tunnels.
 const DesiredConfigFormat = "anixops.nodeconfig/v1"
 
 // ErrNodeGone reports a node whose row no longer exists.
@@ -94,6 +96,9 @@ func buildProxyDesiredConfig(db *gorm.DB, id uint) (map[string]any, error) {
 		},
 		"raw_config": nil,
 	}
+	// The raw configuration as the node's pull reads it: its secrets
+	// through the node credential split, in the table's phase.
+	nodesecrets.ResolveNodeRawConfig(db, &node)
 	if node.RawConfig != nil && *node.RawConfig != "" {
 		var raw map[string]any
 		if err := json.Unmarshal([]byte(*node.RawConfig), &raw); err != nil || raw == nil {
@@ -114,7 +119,43 @@ func buildProxyDesiredConfig(db *gorm.DB, id uint) (map[string]any, error) {
 		})
 	}
 	document["protocols"] = rendered
+	document["legacy_pull"] = buildLegacyPull(db, id, rendered)
 	return document, nil
+}
+
+// buildLegacyPull renders what the node's legacy pull answers
+// (service.BuildUniProxyNodeConfig, the UniProxy configuration): "default"
+// for a pull that names no node type, and "types" for each node type the
+// node serves (its enabled protocols' and the default's), by normalized
+// type. A pull that would fail leaves its entry out. The Agent Control
+// stream's snapshot thus carries exactly what UniProxy gives the node,
+// and no secret beyond it.
+func buildLegacyPull(db *gorm.DB, id uint, protocols []map[string]any) map[string]any {
+	pull := map[string]any{}
+	candidates := make([]string, 0, len(protocols)+1)
+	if answer, err := service.BuildUniProxyNodeConfig(db, id, ""); err == nil {
+		pull["default"] = answer
+		if nodeType, ok := answer["node_type"].(string); ok {
+			candidates = append(candidates, nodeType)
+		}
+	}
+	for _, protocol := range protocols {
+		if nodeType, ok := protocol["type"].(string); ok {
+			candidates = append(candidates, nodeType)
+		}
+	}
+	types := map[string]any{}
+	for _, candidate := range candidates {
+		nodeType := service.NormalizeNodeType(candidate)
+		if _, done := types[nodeType]; done || nodeType == "" {
+			continue
+		}
+		if answer, err := service.BuildUniProxyNodeConfig(db, id, nodeType); err == nil {
+			types[nodeType] = answer
+		}
+	}
+	pull["types"] = types
+	return pull
 }
 
 // buildForwardDesiredConfig renders a forward node: the legacy rules it

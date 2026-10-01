@@ -44,6 +44,15 @@ type Script struct {
 	ObservedRevision uint64
 	// AgentVersion defaults to "fake-agent".
 	AgentVersion string
+	// ConfigRevision is what Hello reports as the configuration revision
+	// the agent applied (config.v1).
+	ConfigRevision uint64
+	// Config decides the ConfigStatus answering a ConfigSnapshot: applied,
+	// with the snapshot's revision and hash, when nil.
+	Config func(snapshot *agentv1pb.ConfigSnapshot) (applied bool, reason string)
+	// HoldConfig keeps the agent from answering snapshots on its own: the
+	// test answers with SendConfigStatus.
+	HoldConfig bool
 }
 
 // Agent is one scripted agent session.
@@ -60,6 +69,8 @@ type Agent struct {
 	received      []*agentv1pb.DesiredOperation
 	arrivals      chan *agentv1pb.DesiredOperation
 	heartbeatAcks chan *agentv1pb.HeartbeatAck
+	snapshots     []*agentv1pb.ConfigSnapshot
+	configs       chan *agentv1pb.ConfigSnapshot
 	sendMu        sync.Mutex
 	exited        chan struct{}
 	exitError     error
@@ -90,12 +101,13 @@ func connect(t testing.TB, ctx context.Context, cancel context.CancelFunc, conn 
 	agent := &Agent{
 		t: t, Node: node, script: script, stream: stream, cancel: cancel, arrivals: make(chan *agentv1pb.DesiredOperation, 64),
 		heartbeatAcks: make(chan *agentv1pb.HeartbeatAck, 4), exited: make(chan struct{}),
+		configs: make(chan *agentv1pb.ConfigSnapshot, 64),
 	}
 	capabilities := script.Capabilities
 	if capabilities == nil {
 		capabilities = DefaultCapabilities
 	}
-	hello := &agentv1pb.Hello{Protocol: agentcontrol.ProtocolV1, AgentVersion: script.AgentVersion, InstanceId: "fake-" + node.String()}
+	hello := &agentv1pb.Hello{Protocol: agentcontrol.ProtocolV1, AgentVersion: script.AgentVersion, InstanceId: "fake-" + node.String(), ConfigRevision: script.ConfigRevision}
 	if hello.AgentVersion == "" {
 		hello.AgentVersion = "fake-agent"
 	}
@@ -165,6 +177,12 @@ func (a *Agent) serve() {
 			select {
 			case a.heartbeatAcks <- ack:
 			default:
+			}
+			continue
+		}
+		if snapshot := message.GetConfig(); snapshot != nil {
+			if err := a.receiveConfig(snapshot); err != nil {
+				return
 			}
 			continue
 		}
@@ -253,6 +271,54 @@ func (a *Agent) Complete(operation *agentv1pb.DesiredOperation, phase agentv1pb.
 // would send.
 func (a *Agent) Report(observed *agentv1pb.ObservedState) error {
 	return a.send(&agentv1pb.AgentToControl{Revision: observed.GetRevision(), Payload: &agentv1pb.AgentToControl_ObservedState{ObservedState: observed}})
+}
+
+// receiveConfig records a snapshot and answers it per the script.
+func (a *Agent) receiveConfig(snapshot *agentv1pb.ConfigSnapshot) error {
+	a.mu.Lock()
+	a.snapshots = append(a.snapshots, proto.Clone(snapshot).(*agentv1pb.ConfigSnapshot))
+	a.mu.Unlock()
+	select {
+	case a.configs <- snapshot:
+	default:
+	}
+	if a.script.HoldConfig {
+		return nil
+	}
+	applied, reason := true, ""
+	if a.script.Config != nil {
+		applied, reason = a.script.Config(snapshot)
+	}
+	return a.SendConfigStatus(&agentv1pb.ConfigStatus{
+		ConfigRevision: snapshot.GetConfigRevision(), ConfigHash: snapshot.GetConfigHash(), Applied: applied, Error: reason,
+	})
+}
+
+// SendConfigStatus sends a ConfigStatus as the agent.
+func (a *Agent) SendConfigStatus(status *agentv1pb.ConfigStatus) error {
+	return a.send(&agentv1pb.AgentToControl{Payload: &agentv1pb.AgentToControl_ConfigStatus{ConfigStatus: status}})
+}
+
+// Snapshots returns every ConfigSnapshot the agent received, in order.
+func (a *Agent) Snapshots() []*agentv1pb.ConfigSnapshot {
+	a.mu.Lock()
+	defer a.mu.Unlock()
+	out := make([]*agentv1pb.ConfigSnapshot, len(a.snapshots))
+	for i, snapshot := range a.snapshots {
+		out[i] = proto.Clone(snapshot).(*agentv1pb.ConfigSnapshot)
+	}
+	return out
+}
+
+// AwaitSnapshot returns the next ConfigSnapshot the agent receives, within
+// timeout.
+func (a *Agent) AwaitSnapshot(timeout time.Duration) (*agentv1pb.ConfigSnapshot, error) {
+	select {
+	case snapshot := <-a.configs:
+		return snapshot, nil
+	case <-time.After(timeout):
+		return nil, fmt.Errorf("agent %s received no configuration snapshot within %s", a.Node, timeout)
+	}
 }
 
 // Received returns every desired operation the agent received, in order.

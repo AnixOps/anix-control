@@ -493,6 +493,52 @@
 
 ### Added
 
+- **Configuration push on the Agent Control stream (A2-3, `config.v1`)**
+  (`sdk/api/agent/v1/PROTOCOL.md`, "Data plane";
+  `docs/architecture/node-ops-service.md` section 5.5). When an agent's
+  `Hello` lists `config.v1`, the kernel lists it in
+  `HelloAck.server_capabilities`, for proxy and forward nodes, and sends the
+  node's desired configuration (`v4_kernel_node_desired_config`) as a
+  `ConfigSnapshot`: after the `HelloAck` when `Hello.config_revision` is not
+  the desired revision (none, older, or from another database); when
+  `node.sync` stores or forces a configuration, in place of `node.reload`;
+  and when a rebuild from the node's rows, once a minute per session, moves
+  the revision. A session is never sent a revision older than one it was
+  sent. Agents without `config.v1`, and every agent in the field, get
+  nothing new and keep receiving `node.reload`.
+  - `ConfigStatus` from the agent is accepted once `config.v1` is
+    negotiated (before, and without it, it is still `InvalidArgument`) and
+    recorded in the new protected table `v4_kernel_node_config_status`: the
+    last report with the kernel's verdict (`applied`, `failed`, `stale` for
+    an older revision, `mismatch` for another hash), and the applied
+    revision and hash, which only a status naming the desired revision and
+    hash moves.
+  - `node.sync` on a `config.v1` agent ends on the agent's `ConfigStatus`
+    for the pushed revision and hash: `SUCCEEDED` when applied, `FAILED`
+    (`BACKEND_FAILED`) with the agent's error otherwise; a stale or
+    mismatched status does not end it. The operation runs at the
+    configuration revision (`node_revision`), and the result's `ack` is the
+    status. An agent that reconnects meanwhile is sent the snapshot again
+    and its answer on the new session ends the operation. A sync that is not
+    forced also pushes when the agent has not applied the stored
+    configuration. `POST /admin/nodes/:id/sync` answers such an agent with
+    the snapshot's `config_revision` and `config_hash`.
+  - The snapshot carries what the legacy pulls give the node and no other
+    secret. The proxy document gains `legacy_pull`: the UniProxy answer
+    for no node type and for each type the node serves, built by
+    `service.BuildUniProxyNodeConfig`, which the UniProxy handler now calls;
+    each protocol's `config` is the v2board `GetConfig` source. The
+    document's `raw_config` is read through the node credential split, as
+    UniProxy reads it. The new revision lands once, at the next rebuild.
+  - `/metrics` adds `anixops_agent_config_snapshots_sent_total{trigger}`
+    (`hello`, `sync`, `refresh`),
+    `anixops_agent_config_statuses_total{result}` and
+    `anixops_agent_config_lagging_nodes`.
+  - Tests: `internal/tests/nodeopsagent` on SQLite and PostgreSQL
+    (negotiation, the `Hello` reconcile, `node.sync` ending on
+    `ConfigStatus`, a reconnect mid-operation, parity with UniProxy and
+    v2board `GetConfig`, a walk of every secret-named key), and the listener
+    in `internal/grpc`.
 - **Credential, secret and retirement operations (NO-5)**
   (`internal/kernelnodeops`, `docs/architecture/node-ops-service.md`
   section 3.11). The kernel executes the credentials family

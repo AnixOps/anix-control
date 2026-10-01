@@ -1060,8 +1060,13 @@ every agent keeps authenticating with its node API key as before.
   `anix-control agent token create -node proxy-12`. KernelNodeOps also
   creates `v4_kernel_node_desired_config` at startup: each node's desired
   configuration with its revision and hash, written by the administrator's
-  node sync (`docs/architecture/node-ops-service.md`, section 5.5). Nothing
-  is required of operators.
+  node sync (`docs/architecture/node-ops-service.md`, section 5.5), and
+  `v4_kernel_node_config_status`: what each node's agent last reported
+  about its configuration on the Agent Control stream (`config.v1`). Agents
+  that list `config.v1` receive their configuration as snapshots on the
+  stream; the first rebuild after the upgrade moves every stored revision
+  by one, since the document gained the UniProxy answers. Nothing is
+  required of operators.
 - **To let agents enroll.** Set `module_runtime.ca_kek`
   (`ANIX_CONTROL_MODULE_RUNTIME_CA_KEK`, 32 random bytes as base64 or hex;
   keep it secret and backed up) and TLS on the gRPC listener

@@ -94,6 +94,38 @@ type Streams interface {
 	OnObserved(handler ObservedHandler)
 }
 
+// ConfigStatusReport is one ConfigStatus an agent sent on its stream
+// (config.v1), with the kernel's verdict on it (model.ConfigVerdict*):
+// empty when the status could not be recorded.
+type ConfigStatusReport struct {
+	Node      agentcontrol.AgentNode
+	SessionID string
+	Status    *agentv1pb.ConfigStatus
+	Verdict   string
+}
+
+// ConfigStatusHandler receives every ConfigStatus an agent sends.
+type ConfigStatusHandler func(report ConfigStatusReport)
+
+// ConfigStreams is a Streams that carries node configurations (config.v1,
+// node-ops-service.md section 5.5): the kernel pushes a ConfigSnapshot to
+// an agent that negotiated it, and the agent answers ConfigStatus. A
+// Streams without it carries none, and node.sync pushes node.reload.
+type ConfigStreams interface {
+	// ConfigNegotiated reports whether the node's current session
+	// negotiated config.v1.
+	ConfigNegotiated(node agentcontrol.AgentNode) bool
+	// PushConfig sends snapshot on the node's session and returns the
+	// session's id. It does not wait for the agent's ConfigStatus. Errors
+	// wrap ErrNotConnected or ErrCapabilityMissing. A snapshot older than
+	// one the session was already sent is not sent again (sent is false):
+	// the agent has a newer configuration.
+	PushConfig(ctx context.Context, node agentcontrol.AgentNode, snapshot *agentv1pb.ConfigSnapshot) (sessionID string, sent bool, err error)
+	// OnConfigStatus registers a handler for every ConfigStatus, of every
+	// node kind.
+	OnConfigStatus(handler ConfigStatusHandler)
+}
+
 // DiagnosticTask is one whitelisted diagnostic action as it is sent to an
 // agent, on the WebSocket ("task.assign", and the legacy "task" message)
 // and on the stream (an "agent.diagnostic" operation).

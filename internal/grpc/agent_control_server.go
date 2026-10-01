@@ -66,6 +66,15 @@ type AgentControlConnection struct {
 	stream   agentv1pb.AgentControlService_ControlStreamServer
 	sendMu   sync.Mutex
 	stateMu  sync.RWMutex
+	// configNegotiated is whether the session negotiated config.v1; set
+	// before the session is registered. Under configMu, configRevision is
+	// the configuration revision the agent has (its Hello's, then the last
+	// one sent) and configSentMax the newest revision sent on the session
+	// (agent_control_config.go).
+	configNegotiated bool
+	configMu         sync.Mutex
+	configRevision   uint64
+	configSentMax    uint64
 }
 
 func (c *AgentControlConnection) send(message *agentv1pb.ControlToAgent) error {
@@ -95,7 +104,7 @@ type AgentControlSnapshot struct {
 	DesiredRev   uint64    `json:"desired_revision"`
 	ObservedRev  uint64    `json:"observed_revision"`
 	// ServerCapabilities are the data-plane features the HelloAck advertised
-	// to the agent (users.v1, reports.v1); one is in use only when
+	// to the agent (config.v1, users.v1, reports.v1); one is in use only when
 	// Capabilities lists it too. Diagnostics is whether the agent advertised
 	// diag.v1, so a diagnostic may run from the node's vantage.
 	ServerCapabilities []string `json:"server_capabilities"`
@@ -111,6 +120,7 @@ type AgentControlManager struct {
 	observed         map[uint32]*agentv1pb.ObservedState
 	pending          map[agentOperationKey]chan *agentv1pb.OperationAck
 	observedHandlers []ObservedStateHandler
+	configHandlers   []configStatusHandler
 }
 
 func NewAgentControlManager() *AgentControlManager {
@@ -700,6 +710,10 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 	}
 	connection.ServerCapabilities = s.serverCapabilities(agentNode, hello.Capabilities)
 	connection.Diagnostics = agentcontrol.HasCapabilityVersion(hello.Capabilities, agentcontrol.CapabilityDiag, agentcontrol.CapabilityVersionV1)
+	connection.configNegotiated = agentcontrol.Negotiated(hello.Capabilities, connection.ServerCapabilities, agentcontrol.CapabilityConfig)
+	if connection.configNegotiated {
+		connection.configRevision = hello.GetConfigRevision()
+	}
 
 	if err := s.touchNode(agentNode); err != nil {
 		slog.Warn("failed to persist agent hello heartbeat", "component", "agent-control", "node", agentNode.String(), "error", err)
@@ -728,6 +742,15 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 	defer manager.unregister(connection)
 	// The data plane, per negotiated capability (PROTOCOL.md, "Data plane").
 	// Each sender stops before the connection is unregistered.
+	if connection.configNegotiated {
+		// Hello reconcile: the desired configuration, unless the agent
+		// reported its revision.
+		if err := s.pushDesiredConfig(stream.Context(), connection, agentNode, configTriggerHello); err != nil {
+			return err
+		}
+		stopConfigRefresh := s.startConfigRefresh(stream.Context(), connection, agentNode)
+		defer stopConfigRefresh()
+	}
 	if agentcontrol.Negotiated(hello.Capabilities, connection.ServerCapabilities, agentcontrol.CapabilityUsers) {
 		stopUserDeltas := s.startUserDeltas(stream.Context(), connection, agentNode, hello.UsersCursor)
 		defer stopUserDeltas()
@@ -806,7 +829,9 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 		case *agentv1pb.AgentToControl_Hello:
 			return status.Error(codes.InvalidArgument, "hello may only be sent once")
 		case *agentv1pb.AgentToControl_ConfigStatus:
-			return unnegotiatedPayload("config_status", agentcontrol.CapabilityConfig)
+			if err := s.handleConfigStatus(stream.Context(), manager, connection, agentNode, payload.ConfigStatus); err != nil {
+				return err
+			}
 		case *agentv1pb.AgentToControl_Traffic, *agentv1pb.AgentToControl_Logs, *agentv1pb.AgentToControl_Status:
 			if err := s.handleReport(manager, connection, agentNode, message); err != nil {
 				return err
@@ -948,6 +973,9 @@ func authenticatedStreamNodeID(ctx context.Context) (uint32, error) {
 // capability too (agentcontrol.Negotiated).
 func (s *AgentControlGRPCServer) serverCapabilities(node agentcontrol.AgentNode, agent []*agentv1pb.Capability) []*agentv1pb.Capability {
 	var capabilities []*agentv1pb.Capability
+	if s.servesConfig(node, agent) {
+		capabilities = append(capabilities, &agentv1pb.Capability{Name: agentcontrol.CapabilityConfig, Version: agentcontrol.CapabilityVersionV1})
+	}
 	if s.servesUserDeltas(node) {
 		capabilities = append(capabilities, &agentv1pb.Capability{Name: agentcontrol.CapabilityUsers, Version: agentcontrol.CapabilityVersionV1})
 	}

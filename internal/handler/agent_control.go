@@ -49,9 +49,13 @@ type agentControlOperationRequest struct {
 // proxyNodeStreams is the handler's Agent Control manager as the
 // KernelNodeOps functions read it (agentstreams.Streams): the proxy nodes'
 // streams, which is all this handler reaches. The manager's errors are
-// shown as they are, so the routes' answers do not change.
+// shown as they are, so the routes' answers do not change. config is the
+// process's streams when the manager is the process's, so the sync route
+// pushes a ConfigSnapshot to an agent that negotiated config.v1
+// (agentstreams.ConfigStreams); nil otherwise.
 type proxyNodeStreams struct {
 	control nodeAgentControl
+	config  agentstreams.ConfigStreams
 }
 
 func (h *NodeHandler) streams() agentstreams.Streams {
@@ -61,7 +65,32 @@ func (h *NodeHandler) streams() agentstreams.Streams {
 	if streams, ok := h.agentControl.(agentstreams.Streams); ok {
 		return streams
 	}
-	return proxyNodeStreams{control: h.agentControl}
+	streams := proxyNodeStreams{control: h.agentControl}
+	if manager, ok := h.agentControl.(*controlgrpc.AgentControlManager); ok && manager == controlgrpc.GetAgentControlManager() {
+		streams.config = controlgrpc.GetAgentStreams()
+	}
+	return streams
+}
+
+// ConfigNegotiated reports whether the proxy node's session negotiated
+// config.v1.
+func (s proxyNodeStreams) ConfigNegotiated(node agentcontrol.AgentNode) bool {
+	return s.config != nil && node.Kind == agentcontrol.NodeKindProxy && s.config.ConfigNegotiated(node)
+}
+
+// PushConfig sends a snapshot to the proxy node's session.
+func (s proxyNodeStreams) PushConfig(ctx context.Context, node agentcontrol.AgentNode, snapshot *agentv1pb.ConfigSnapshot) (string, bool, error) {
+	if s.config == nil || node.Kind != agentcontrol.NodeKindProxy {
+		return "", false, fmt.Errorf("agent node %s does not advertise capability %q: %w", node, agentcontrol.CapabilityConfig, agentstreams.ErrCapabilityMissing)
+	}
+	return s.config.PushConfig(ctx, node, snapshot)
+}
+
+// OnConfigStatus registers handler with the process's streams.
+func (s proxyNodeStreams) OnConfigStatus(handler agentstreams.ConfigStatusHandler) {
+	if s.config != nil {
+		s.config.OnConfigStatus(handler)
+	}
 }
 
 func (s proxyNodeStreams) Session(node agentcontrol.AgentNode) (agentstreams.Session, bool) {

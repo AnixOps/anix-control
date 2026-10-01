@@ -58,26 +58,28 @@ func openDataPlaneSession(t *testing.T, environment *agentControlTestEnvironment
 	return stream, helloAck
 }
 
-// The server serves users.v1 (A2-4) and reports.v1 (A2-5) of the data plane
-// and nothing else yet: an Agent that advertises the whole data plane
-// negotiates those two, and no ConfigSnapshot is pushed for its revision.
-func TestAgentControlServerAdvertisesUsersAndReports(t *testing.T) {
+// The server serves the data plane: config.v1 (A2-3), users.v1 (A2-4) and
+// reports.v1 (A2-5). An Agent that advertises the whole data plane
+// negotiates the three, and is sent a ConfigSnapshot because its revision
+// (41) is not the node's.
+func TestAgentControlServerAdvertisesTheDataPlane(t *testing.T) {
 	environment := newAgentControlTestEnvironment(t)
-	requireAutoMigrate(t, &model.User{}, &model.SubscriberChange{})
+	requireAutoMigrate(t, append(model.KernelNodeOperationModels(), &model.User{}, &model.SubscriberChange{}, &model.NodeProtocol{})...)
 	stream, helloAck := openDataPlaneSession(t, environment)
 	require.NotEmpty(t, helloAck.SessionId)
-	for _, capability := range []string{agentcontrol.CapabilityUsers, agentcontrol.CapabilityReports} {
+	for _, capability := range []string{agentcontrol.CapabilityConfig, agentcontrol.CapabilityUsers, agentcontrol.CapabilityReports} {
 		assert.True(t, agentcontrol.Negotiated(dataPlaneCapabilities(), helloAck.ServerCapabilities, capability), capability)
 	}
-	assert.False(t, agentcontrol.Negotiated(dataPlaneCapabilities(), helloAck.ServerCapabilities, agentcontrol.CapabilityConfig))
 
 	snapshot, connected := environment.manager.Connection(uint32(environment.node.ID))
 	require.True(t, connected)
 	assert.Contains(t, snapshot.Capabilities, agentcontrol.CapabilityReports)
+	assert.Contains(t, snapshot.ServerCapabilities, "config.v1")
 
 	// The Hello's cursor (1234) is ahead of the empty change log, so the
-	// node's (empty) user set is sent as a full resync; the heartbeat ack
-	// and that one page are the only messages, in either order.
+	// node's (empty) user set is sent as a full resync; with the heartbeat
+	// ack and the configuration snapshot, those are the only messages, in
+	// any order.
 	require.NoError(t, stream.Send(&agentv1pb.AgentToControl{
 		RequestId:    "heartbeat-request",
 		NodeId:       uint32(environment.node.ID),
@@ -86,8 +88,8 @@ func TestAgentControlServerAdvertisesUsersAndReports(t *testing.T) {
 			Heartbeat: &agentv1pb.Heartbeat{SessionId: helloAck.SessionId, UptimeSeconds: 1},
 		},
 	}))
-	var heartbeatAcks, userDeltas int
-	for i := 0; i < 2; i++ {
+	var heartbeatAcks, userDeltas, snapshots int
+	for i := 0; i < 3; i++ {
 		message, err := stream.Recv()
 		require.NoError(t, err)
 		switch payload := message.Payload.(type) {
@@ -100,24 +102,30 @@ func TestAgentControlServerAdvertisesUsersAndReports(t *testing.T) {
 			assert.True(t, payload.Users.LastPage)
 			assert.Zero(t, payload.Users.Cursor)
 			assert.Empty(t, payload.Users.Upserts)
+		case *agentv1pb.ControlToAgent_Config:
+			snapshots++
+			assert.Equal(t, uint64(1), payload.Config.ConfigRevision)
 		default:
 			t.Fatalf("unexpected payload %T", message.Payload)
 		}
 	}
 	assert.Equal(t, 1, heartbeatAcks)
 	assert.Equal(t, 1, userDeltas)
+	assert.Equal(t, 1, snapshots)
 	require.NoError(t, stream.CloseSend())
 }
 
 // An Agent that sends a data-plane payload the session did not negotiate
 // gets InvalidArgument and the stream ends, as from a Control built before
-// the payloads existed: config_status, which the server does not serve yet,
-// and the reports from an Agent whose Hello did not list reports.v1.
+// the payloads existed: config_status from an Agent whose Hello did not list
+// config.v1, and the reports from an Agent whose Hello did not list
+// reports.v1.
 func TestAgentControlStreamRejectsUnnegotiatedDataPlanePayloads(t *testing.T) {
 	environment := newAgentControlTestEnvironment(t)
 	tests := []struct {
 		name    string
 		payload func() *agentv1pb.AgentToControl
+		without string
 		want    string
 	}{
 		{
@@ -127,7 +135,8 @@ func TestAgentControlStreamRejectsUnnegotiatedDataPlanePayloads(t *testing.T) {
 					ConfigStatus: &agentv1pb.ConfigStatus{ConfigRevision: 41, ConfigHash: "hash", Applied: true},
 				}}
 			},
-			want: "control message payload config_status requires the config.v1 server capability",
+			without: agentcontrol.CapabilityConfig,
+			want:    "control message payload config_status requires the config.v1 server capability",
 		},
 		{
 			name: "traffic",
@@ -163,7 +172,11 @@ func TestAgentControlStreamRejectsUnnegotiatedDataPlanePayloads(t *testing.T) {
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			stream, _ := openDataPlaneSession(t, environment, dataPlaneCapabilitiesWithout(agentcontrol.CapabilityReports)...)
+			without := test.without
+			if without == "" {
+				without = agentcontrol.CapabilityReports
+			}
+			stream, _ := openDataPlaneSession(t, environment, dataPlaneCapabilitiesWithout(without)...)
 			message := test.payload()
 			message.RequestId = test.name + "-request"
 			message.NodeId = uint32(environment.node.ID)
