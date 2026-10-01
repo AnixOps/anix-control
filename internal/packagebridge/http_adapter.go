@@ -16,6 +16,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/AnixOps/anix-control/v4/internal/agentws"
 	"github.com/AnixOps/anix-control/v4/internal/panicrecovery"
 	"github.com/gin-gonic/gin"
 )
@@ -68,6 +69,12 @@ func NewHTTPAdapter(handler gin.HandlerFunc) OperationHandler {
 		ginContext.Set("is_admin", principal.Admin)
 		if metadata.NodeID != 0 {
 			ginContext.Set("node_id", metadata.NodeID)
+		}
+		// The agent's node identity the kernel verified before the gateway
+		// (the agent HTTP routes' RequireAgentNode, as for agent sockets).
+		if metadata.TrustedAgentWebSocketAuth {
+			ginContext.Set(agentws.TrustedContextKey, true)
+			ginContext.Set(agentws.ForwardNodeContextKey, metadata.TrustedAgentWebSocketForwardNode)
 		}
 		for key, value := range metadata.PathParams {
 			ginContext.Params = append(ginContext.Params, gin.Param{Key: key, Value: value})

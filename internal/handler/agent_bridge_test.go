@@ -57,8 +57,8 @@ func (s *AgentBridgeHandlerTestSuite) SetupTest() {
 	s.db.Exec("DELETE FROM v2_forward")
 	s.db.Exec("DELETE FROM v2_forward_node")
 
-	nodeA := &model.ForwardNode{Name: "relay-a", Type: model.ForwardNodeTypeRelay, Host: "10.0.0.1", Port: 22, Enabled: true}
-	nodeB := &model.ForwardNode{Name: "relay-b", Type: model.ForwardNodeTypeRelay, Host: "10.0.0.2", Port: 22, Enabled: true}
+	nodeA := &model.ForwardNode{Name: "relay-a", Type: model.ForwardNodeTypeRelay, Host: "10.0.0.1", Port: 22, APIToken: "bridge-token-a", Enabled: true}
+	nodeB := &model.ForwardNode{Name: "relay-b", Type: model.ForwardNodeTypeRelay, Host: "10.0.0.2", Port: 22, APIToken: "bridge-token-b", Enabled: true}
 	s.db.Create(nodeA)
 	s.db.Create(nodeB)
 	s.nodeA = nodeA.ID
@@ -107,8 +107,19 @@ func (s *AgentBridgeHandlerTestSuite) seedBridgeJob(nodeID uint, action string) 
 	return forward, job, mapping
 }
 
+// authenticate adds the node's credentials, which the agent routes require.
+func (s *AgentBridgeHandlerTestSuite) authenticate(req *http.Request, nodeID uint) {
+	token := "bridge-token-a"
+	if nodeID == s.nodeB {
+		token = "bridge-token-b"
+	}
+	req.Header.Set("X-Node-ID", strconv.FormatUint(uint64(nodeID), 10))
+	req.Header.Set("X-API-Key", token)
+}
+
 func (s *AgentBridgeHandlerTestSuite) getTasks(nodeID uint) []any {
-	req, _ := http.NewRequest("GET", "/api/v2/agent/tasks?node_id="+strconv.FormatUint(uint64(nodeID), 10), nil)
+	req, _ := http.NewRequest("GET", "/api/v2/agent/tasks", nil)
+	s.authenticate(req, nodeID)
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 	assert.Equal(s.T(), http.StatusOK, w.Code)
@@ -171,6 +182,7 @@ func (s *AgentBridgeHandlerTestSuite) TestReportResultWritesBackBridgeJob() {
 	jsonBody, _ := json.Marshal(body)
 	req, _ := http.NewRequest("POST", "/api/v2/agent/result", bytes.NewReader(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
+	s.authenticate(req, s.nodeA)
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 	assert.Equal(s.T(), http.StatusOK, w.Code)
@@ -203,6 +215,7 @@ func (s *AgentBridgeHandlerTestSuite) TestDuplicateReportIsIdempotent() {
 		jsonBody, _ := json.Marshal(body)
 		req, _ := http.NewRequest("POST", "/api/v2/agent/result", bytes.NewReader(jsonBody))
 		req.Header.Set("Content-Type", "application/json")
+		s.authenticate(req, s.nodeA)
 		w := httptest.NewRecorder()
 		s.router.ServeHTTP(w, req)
 		assert.Equal(s.T(), http.StatusOK, w.Code)
@@ -233,6 +246,7 @@ func (s *AgentBridgeHandlerTestSuite) TestReportResultMissingTaskIDRejected() {
 	// task_id is required (binding) — malformed report is explicitly rejected, not swallowed.
 	req, _ := http.NewRequest("POST", "/api/v2/agent/result", bytes.NewReader([]byte(`{"success":true}`)))
 	req.Header.Set("Content-Type", "application/json")
+	s.authenticate(req, s.nodeA)
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 	assert.Equal(s.T(), http.StatusBadRequest, w.Code)
@@ -247,6 +261,7 @@ func (s *AgentBridgeHandlerTestSuite) TestNonBridgeResultUsesMemoryPath() {
 	jsonBody, _ := json.Marshal(body)
 	req, _ := http.NewRequest("POST", "/api/v2/agent/result", bytes.NewReader(jsonBody))
 	req.Header.Set("Content-Type", "application/json")
+	s.authenticate(req, s.nodeA)
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 	assert.Equal(s.T(), http.StatusOK, w.Code)

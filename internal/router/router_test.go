@@ -39,6 +39,7 @@ import (
 type v2TestHost struct {
 	lastRouteID    string
 	lastGeneration uint64
+	lastMetadata   pluginhost.RequestMetadata
 }
 
 type v2PackageRouteCatalogRow struct {
@@ -69,6 +70,7 @@ func (h *v2TestHost) Start(context.Context, pluginhost.ArtifactRef, uint64) erro
 func (h *v2TestHost) Dispatch(_ context.Context, input pluginhost.DispatchInput) (pluginhost.DispatchOutput, error) {
 	h.lastRouteID = input.RouteID
 	h.lastGeneration = input.Generation
+	h.lastMetadata = input.Metadata
 	if strings.HasPrefix(input.RouteID, "identity.") {
 		return pluginhost.DispatchOutput{StatusCode: http.StatusOK, Body: []byte(`{"code":0,"msg":"操作成功","ts":1,"data":{"token":"identity-host"}}`)}, nil
 	}
@@ -229,7 +231,7 @@ func seedV2TaskEightPackages(t *testing.T, publicKey ed25519.PublicKey, privateK
 	t.Helper()
 	seedV2TaskSixPackage(t, "machine-telemetry", "Machine Telemetry", `{"api_version":"v2","package_id":"machine-telemetry","routes":[{"method":"GET","legacy_path":"/api/v2/admin/dashboard","package_route":"telemetry.admin.dashboard.get","envelope":"data"}]}`, publicKey, privateKey)
 	seedV2TaskSixPackage(t, "proxy-node", "Proxy Node", `{"api_version":"v2","package_id":"proxy-node","routes":[{"method":"GET","legacy_path":"/api/v2/admin/nodes","package_route":"proxy.admin.nodes.get","envelope":"data"}]}`, publicKey, privateKey)
-	seedV2TaskSixPackage(t, "protocol-runtime", "Protocol Runtime", `{"api_version":"v2","package_id":"protocol-runtime","routes":[{"method":"GET","legacy_path":"/api/v2/agent/tasks","package_route":"protocol.agent.tasks.get","envelope":"raw"}]}`, publicKey, privateKey)
+	seedV2TaskSixPackage(t, "protocol-runtime", "Protocol Runtime", `{"api_version":"v2","package_id":"protocol-runtime","routes":[{"method":"GET","legacy_path":"/api/v2/agent/tasks","package_route":"protocol.agent.tasks.get","envelope":"raw"},{"method":"POST","legacy_path":"/api/v2/agent/heartbeat","package_route":"protocol.agent.heartbeat.post","envelope":"raw"}]}`, publicKey, privateKey)
 	seedV2TaskSixPackage(t, "wireguard", "WireGuard", `{"api_version":"v2","package_id":"wireguard","routes":[{"method":"POST","legacy_path":"/api/v2/admin/wireguard/keypair","package_route":"wireguard.admin.wireguard.keypair.post","envelope":"data"}]}`, publicKey, privateKey)
 	seedV2TaskSixPackage(t, "forward", "Forward", `{"api_version":"v2","package_id":"forward","routes":[{"method":"GET","legacy_path":"/api/v2/user/forward/rules","package_route":"forward.user.forward.rules.get","envelope":"data"}]}`, publicKey, privateKey)
 	seedV2TaskSixPackage(t, "gost-mesh", "Gost Mesh", `{"api_version":"v2","package_id":"gost-mesh","routes":[{"method":"GET","legacy_path":"/api/v2/admin/forward/nodex/status","package_route":"gost.admin.forward.nodex.status.get","envelope":"data"}]}`, publicKey, privateKey)
@@ -349,7 +351,6 @@ func TestV2TaskEightRepresentativeRoutesUsePackageHosts(t *testing.T) {
 	}{
 		{method: http.MethodGet, path: "/api/v2/admin/dashboard", routeID: "telemetry.admin.dashboard.get", admin: true},
 		{method: http.MethodGet, path: "/api/v2/admin/nodes", routeID: "proxy.admin.nodes.get", admin: true},
-		{method: http.MethodGet, path: "/api/v2/agent/tasks", routeID: "protocol.agent.tasks.get"},
 		{method: http.MethodPost, path: "/api/v2/admin/wireguard/keypair", routeID: "wireguard.admin.wireguard.keypair.post", admin: true},
 		{method: http.MethodGet, path: "/api/v2/user/forward/rules", routeID: "forward.user.forward.rules.get"},
 		{method: http.MethodGet, path: "/api/v2/admin/forward/nodex/status", routeID: "gost.admin.forward.nodex.status.get", admin: true},
@@ -365,6 +366,60 @@ func TestV2TaskEightRepresentativeRoutesUsePackageHosts(t *testing.T) {
 			require.Equal(t, test.routeID, host.lastRouteID)
 		})
 	}
+}
+
+// The agent HTTP routes authenticate the node in the kernel before the
+// gateway: without its credentials the package host is never called, and
+// with them it gets the verified node and never the credentials.
+func TestV2AgentHTTPRoutesRequireTheNodesCredentials(t *testing.T) {
+	router, _, host := setupV2PackageRouter(t)
+	require.NoError(t, database.GetDB().AutoMigrate(&model.Node{}, &model.ForwardNode{}))
+	node := model.Node{Name: "edge", Host: "edge.example.test", APIKey: "edge-api-key", APIKeyHash: sha256Hex("edge-api-key")}
+	require.NoError(t, database.GetDB().Create(&node).Error)
+	nodeID := strconv.FormatUint(uint64(node.ID), 10)
+
+	for _, test := range []struct {
+		name    string
+		path    string
+		headers map[string]string
+	}{
+		{name: "no credentials", path: "/api/v2/agent/tasks"},
+		{name: "a node id alone", path: "/api/v2/agent/tasks?node_id=" + nodeID},
+		{name: "a wrong key", path: "/api/v2/agent/tasks", headers: map[string]string{"X-Node-ID": nodeID, "X-API-Key": "wrong"}},
+		{name: "an unknown node", path: "/api/v2/agent/tasks", headers: map[string]string{"X-Node-ID": "999", "X-API-Key": "edge-api-key"}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			host.lastRouteID = ""
+			request := httptest.NewRequest(http.MethodGet, test.path, nil)
+			for name, value := range test.headers {
+				request.Header.Set(name, value)
+			}
+			recorder := httptest.NewRecorder()
+			router.ServeHTTP(recorder, request)
+			require.Equal(t, http.StatusUnauthorized, recorder.Code, recorder.Body.String())
+			require.Empty(t, host.lastRouteID, "the package host was called")
+		})
+	}
+
+	request := httptest.NewRequest(http.MethodGet, "/api/v2/agent/tasks?node_id="+nodeID+"&api_key=edge-api-key&limit=5", nil)
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	require.Equal(t, "protocol.agent.tasks.get", host.lastRouteID)
+	require.Equal(t, node.ID, host.lastMetadata.NodeID)
+	require.True(t, host.lastMetadata.TrustedAgentWebSocketAuth)
+	require.False(t, host.lastMetadata.TrustedAgentWebSocketForwardNode)
+	require.Equal(t, map[string][]string{"limit": {"5"}}, host.lastMetadata.Query, "credentials reached the package host")
+
+	host.lastRouteID = ""
+	request = httptest.NewRequest(http.MethodPost, "/api/v2/agent/heartbeat", strings.NewReader(`{"node_id":`+nodeID+`}`))
+	request.Header.Set("X-Node-ID", nodeID)
+	request.Header.Set("X-API-Key", "edge-api-key")
+	recorder = httptest.NewRecorder()
+	router.ServeHTTP(recorder, request)
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	require.Equal(t, "protocol.agent.heartbeat.post", host.lastRouteID)
+	require.NotContains(t, host.lastMetadata.Headers, "X-Api-Key")
 }
 
 func TestV2WebSocketRoutesRegisterExactPackageBridgeOperations(t *testing.T) {
@@ -1226,4 +1281,9 @@ func TestEveryCataloguedV2RouteResolvesToItsOwnRouteID(t *testing.T) {
 		require.Equal(t, route.RouteID, resolved.PackageRoute, "%s %s", route.Method, requestPath)
 		require.Equal(t, route.Owner, resolved.PackageID, "%s %s", route.Method, requestPath)
 	}
+}
+
+func sha256Hex(value string) string {
+	sum := sha256.Sum256([]byte(value))
+	return hex.EncodeToString(sum[:])
 }

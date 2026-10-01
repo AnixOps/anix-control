@@ -6,6 +6,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/AnixOps/anix-control/v4/internal/agentws"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
@@ -107,4 +108,36 @@ func TestHTTPAdapterRestoresTheOriginalRequestAddress(t *testing.T) {
 
 	_, err = call(`{"path":"/api/v2/forward-agent/install.sh","host":"evil.test/x?y"}`)
 	require.ErrorIs(t, err, ErrCapabilityRejected)
+}
+
+// The agent node identity the kernel verified before the gateway reaches the
+// legacy agent handler as trusted, which the agent HTTP routes require.
+func TestHTTPAdapterRelaysTheKernelVerifiedAgentNode(t *testing.T) {
+	gin.SetMode(gin.TestMode)
+	adapter := NewHTTPAdapter(func(c *gin.Context) {
+		nodeID, _ := c.Get("node_id")
+		trusted, _ := c.Get(agentws.TrustedContextKey)
+		forward, _ := c.Get(agentws.ForwardNodeContextKey)
+		c.JSON(200, gin.H{"node_id": nodeID, "trusted": trusted, "forward": forward})
+	})
+	call := func(metadata string) string {
+		response, err := adapter(context.Background(), Call{
+			Host: HostIdentity{PackageID: "protocol-runtime", Version: "4.0.0", Generation: 7},
+			Request: Request{
+				RequestID: "request-agent-http", RouteID: "protocol.agent.tasks.get", Method: "GET",
+				PrincipalJSON: []byte(`{"actor_id":0,"admin":false,"package_id":"protocol-runtime"}`),
+				MetadataJSON:  []byte(metadata),
+				Deadline:      time.Now().Add(time.Second),
+			},
+			Operation: "protocol.agent.tasks.get",
+		})
+		require.NoError(t, err)
+		return string(response.Body)
+	}
+	require.JSONEq(t, `{"node_id":12,"trusted":true,"forward":true}`,
+		call(`{"path":"/api/v2/agent/tasks","node_id":12,"trusted_agent_websocket_auth":true,"trusted_agent_websocket_forward_node":true}`))
+	require.JSONEq(t, `{"node_id":12,"trusted":true,"forward":false}`,
+		call(`{"path":"/api/v2/agent/tasks","node_id":12,"trusted_agent_websocket_auth":true}`))
+	require.JSONEq(t, `{"node_id":12,"trusted":null,"forward":null}`,
+		call(`{"path":"/api/v2/agent/tasks","node_id":12}`))
 }

@@ -438,6 +438,18 @@ WHERE r.user_id IS NOT NULL;
 its id (`node_id` or `X-Node-ID`) and its token (`X-API-Key`, `api_key` or
 `token`); it answered anyone before.
 
+### Agent HTTP Routes Need The Node's Credentials
+
+`POST /api/v2/agent/heartbeat`, `GET /api/v2/agent/tasks`,
+`POST /api/v2/agent/result` and `POST /api/v2/agent/monitor` had no
+authentication; they now take the credentials the agent WebSocket takes:
+the node id in `X-Node-ID` (or the `node_id` query) and the node's API key,
+or a forward node's API token, in `X-API-Key` (or the `api_key` or `token`
+query). A request without them is answered `401`, a body naming another
+node `403`, and a result for another node's task `404`. `anix-agent` uses
+the WebSocket and is not affected; a custom agent or script that polls
+these routes must send the credentials.
+
 ### Audit Request Bodies Written Before The Redaction Fix
 
 Earlier builds stored the raw body of every administrator write request in

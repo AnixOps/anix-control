@@ -4,6 +4,27 @@
 
 ### Security
 
+- The agent HTTP routes authenticate the node. `POST /api/v2/agent/heartbeat`,
+  `GET /api/v2/agent/tasks`, `POST /api/v2/agent/result` and
+  `POST /api/v2/agent/monitor` took a node id from the body or query and
+  checked nothing, so anyone could:
+  - mark any proxy or forward node online;
+  - take a node's queued diagnostic and forward bridge tasks, which the real
+    agent then never received;
+  - complete any task with a forged result: a forward runtime job and its
+    forward's runtime state, or a diagnostic result shown to administrators
+    (and create such results for any task id);
+  - store monitoring data for any node id in the kernel's memory.
+
+  They now require the credentials the agent WebSocket takes (`X-Node-ID` and
+  `X-API-Key`, or the `node_id` and `api_key` or `token` query), checked in
+  the kernel before the package gateway (`AgentHandler.RequireAgentNode`); the
+  credentials never reach the package host, which gets the verified node.
+  A node reports and polls only for itself: a body naming another node is
+  `403`, and a result for another node's task is `404` and changes nothing.
+  A heartbeat or monitoring report marks the node online in the table that
+  authenticated it; without a live connection a proxy node's report used to
+  mark the forward node with the same id online. See `docs/UPGRADE.md`.
 - Node and node protocol writes save only their own columns.
   - **Nested objects.** `POST /api/v2/admin/nodes` and
     `POST /api/v2/admin/nodes/:id/protocols` bound the body to the kernel

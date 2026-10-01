@@ -92,8 +92,11 @@ type wsPendingAck struct {
 }
 
 var (
-	errAgentNodeNotFound = errors.New("node not found")
-	errAgentInvalidToken = errors.New("invalid token")
+	errAgentNodeNotFound    = errors.New("node not found")
+	errAgentInvalidToken    = errors.New("invalid token")
+	errAgentMissingIdentity = errors.New("missing node_id or token")
+	errAgentNodeMismatch    = errors.New("node_id does not match the authenticated node")
+	errAgentTaskNotFound    = errors.New("task not found")
 )
 
 // hashString hashes a token with SHA-256, matching the api_key_hash contract
@@ -221,6 +224,57 @@ func (h *AgentHandler) updateConnectionLastSeen(nodeID uint) {
 		isForwardNode = ac.IsForwardNode
 	}
 	h.touchNodeOnline(nodeID, isForwardNode)
+}
+
+// markAgentSeen records a report of an authenticated agent: the last-seen
+// time of its live connection, if any, and its node online in the table that
+// authenticated it.
+func (h *AgentHandler) markAgentSeen(nodeID uint, isForwardNode bool) {
+	if conn, ok := h.connections.Load(nodeID); ok {
+		conn.(*AgentConnection).LastSeen = time.Now()
+	}
+	h.touchNodeOnline(nodeID, isForwardNode)
+}
+
+// RequireAgentNode authenticates an agent's HTTP request in the kernel,
+// before the package gateway, as the agent WebSocket's preflight does: the
+// node id comes from X-Node-ID or the node_id query, the token from
+// X-API-Key or the api_key or token query, and verifyForwardNodeToken checks
+// it. The verified node travels to the legacy handler as the kernel's trusted
+// agent identity, so the credential never reaches the package host.
+//
+// The heartbeat, task, result and monitor routes had no authentication: anyone
+// could mark any node online, take and complete its queued tasks (forward
+// runtime jobs included) or report its monitoring data.
+func (h *AgentHandler) RequireAgentNode(c *gin.Context) {
+	authInfo, hasRequestAuth, err := h.authFromRequest(c)
+	if err == nil && (!hasRequestAuth || authInfo == nil || authInfo.NodeID == 0) {
+		err = errAgentMissingIdentity
+	}
+	if err != nil {
+		c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return
+	}
+	c.Set(agentws.TrustedContextKey, true)
+	c.Set(agentws.ForwardNodeContextKey, authInfo.IsForwardNode)
+	c.Set("node_id", authInfo.NodeID)
+	c.Next()
+}
+
+// authenticatedAgentNode returns the node an agent request is authenticated
+// as: the kernel's trusted identity (RequireAgentNode, relayed by the package
+// bridge), or the request's own credentials. Without one it answers 401 and
+// returns false. A node id in a body is only ever checked against it.
+func (h *AgentHandler) authenticatedAgentNode(c *gin.Context) (nodeID uint, isForwardNode bool, ok bool) {
+	authInfo, hasRequestAuth, err := h.authFromRequest(c)
+	if err == nil && (!hasRequestAuth || authInfo == nil || authInfo.NodeID == 0) {
+		err = errAgentMissingIdentity
+	}
+	if err != nil {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": err.Error()})
+		return 0, false, false
+	}
+	return authInfo.NodeID, authInfo.IsForwardNode, true
 }
 
 // PrepareWebSocketBridge authenticates optional request credentials before a
@@ -666,14 +720,22 @@ type AgentRegisterRequest struct {
 // @Success 200 {object} map[string]any
 // @Router /api/v2/agent/heartbeat [post]
 func (h *AgentHandler) AgentHeartbeat(c *gin.Context) {
+	nodeID, isForwardNode, ok := h.authenticatedAgentNode(c)
+	if !ok {
+		return
+	}
 	var req AgentHeartbeatRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if req.NodeID != nodeID {
+		c.JSON(http.StatusForbidden, gin.H{"error": errAgentNodeMismatch.Error()})
+		return
+	}
 
 	// 鏇存柊杩炴帴鏃堕棿
-	h.updateConnectionLastSeen(req.NodeID)
+	h.markAgentSeen(nodeID, isForwardNode)
 
 	c.JSON(http.StatusOK, gin.H{"message": "ok"})
 }
@@ -695,7 +757,12 @@ type AgentHeartbeatRequest struct {
 // @Success 200 {object} map[string]any
 // @Router /api/v2/agent/tasks [get]
 func (h *AgentHandler) AgentGetTasks(c *gin.Context) {
-	nodeID, _ := strconv.ParseUint(c.Query("node_id"), 10, 32)
+	// Only the authenticated node's own tasks; a node_id query authenticates
+	// with the token or is stripped by the gateway, it never selects a node.
+	nodeID, _, ok := h.authenticatedAgentNode(c)
+	if !ok {
+		return
+	}
 
 	tasks := []AgentTask{}
 
@@ -703,7 +770,7 @@ func (h *AgentHandler) AgentGetTasks(c *gin.Context) {
 	// WebSocket 推送的降级路径。这些任务持久化在 DB 里，重启不丢。取出后
 	// 原子标记 dispatched 防止并发重复下发。
 	if h.diagnosticSvc != nil {
-		diagTasks, err := h.diagnosticSvc.PullPendingTasks(uint(nodeID))
+		diagTasks, err := h.diagnosticSvc.PullPendingTasks(nodeID)
 		if err != nil {
 			log.Printf("[WARN] agent tasks: load diagnostic tasks for node %d failed: %v", nodeID, err)
 		}
@@ -725,7 +792,7 @@ func (h *AgentHandler) AgentGetTasks(c *gin.Context) {
 
 	// 追加持久化的 clean_agent bridge 任务：这些任务存在 DB 里 (重启不丢)，
 	// 只发给目标节点 (node_id 过滤)，取出后原子标记 dispatched 防止并发重复下发。
-	tasks = append(tasks, h.pullBridgeTasks(uint(nodeID))...)
+	tasks = append(tasks, h.pullBridgeTasks(nodeID)...)
 
 	c.JSON(http.StatusOK, gin.H{"tasks": tasks})
 }
@@ -800,15 +867,28 @@ type AgentTask struct {
 // @Success 200 {object} map[string]any
 // @Router /api/v2/agent/result [post]
 func (h *AgentHandler) AgentReportResult(c *gin.Context) {
+	nodeID, _, ok := h.authenticatedAgentNode(c)
+	if !ok {
+		return
+	}
 	var result AgentTaskResult
 	if err := c.ShouldBindJSON(&result); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
+	if result.NodeID != 0 && result.NodeID != nodeID {
+		c.JSON(http.StatusForbidden, gin.H{"error": errAgentNodeMismatch.Error()})
+		return
+	}
+	// A node reports only its own tasks.
+	result.NodeID = nodeID
 
 	// 若该 task_id 命中持久化的 clean_agent bridge 映射，则回写 runtime job 与 forward 状态。
 	// 幂等：重复上报同一已完成任务直接返回 200，不二次污染终态。
-	if handled, done, err := h.completeBridgeResult(result); err != nil {
+	if handled, done, err := h.completeBridgeResult(result); errors.Is(err, errAgentTaskNotFound) {
+		c.JSON(http.StatusNotFound, gin.H{"error": err.Error()})
+		return
+	} else if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	} else if handled {
@@ -823,7 +903,10 @@ func (h *AgentHandler) AgentReportResult(c *gin.Context) {
 	// 否则按白名单诊断任务处理，结果落库（重启不丢）。
 	var taskStatus *model.AgentDiagnosticTask
 	if h.diagnosticSvc != nil {
-		if err := h.diagnosticSvc.CompleteTask(result.TaskID, result.NodeID, result.Action, result.Success, result.Output, result.Error, result.Duration); err != nil {
+		if err := h.diagnosticSvc.CompleteTask(result.TaskID, result.NodeID, result.Action, result.Success, result.Output, result.Error, result.Duration); errors.Is(err, service.ErrAgentDiagnosticTaskOfAnotherNode) {
+			c.JSON(http.StatusNotFound, gin.H{"error": errAgentTaskNotFound.Error()})
+			return
+		} else if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 			return
 		}
@@ -850,6 +933,10 @@ func (h *AgentHandler) completeBridgeResult(result AgentTaskResult) (bool, bool,
 	}
 	if mapping == nil {
 		return false, false, nil
+	}
+	// Another node's forward job is not this node's to complete.
+	if mapping.NodeID != result.NodeID {
+		return false, false, errAgentTaskNotFound
 	}
 
 	done, err := svc.CompleteJob(result.TaskID, result.Success, result.Output, result.Error)
@@ -885,9 +972,18 @@ type AgentTaskResult struct {
 // @Success 200 {object} map[string]any
 // @Router /api/v2/agent/monitor [post]
 func (h *AgentHandler) AgentMonitor(c *gin.Context) {
+	nodeID, isForwardNode, ok := h.authenticatedAgentNode(c)
+	if !ok {
+		return
+	}
 	var req AgentMonitorRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+	// A node reports only its own monitoring data.
+	if req.NodeID != nodeID {
+		c.JSON(http.StatusForbidden, gin.H{"error": errAgentNodeMismatch.Error()})
 		return
 	}
 
@@ -898,8 +994,8 @@ func (h *AgentHandler) AgentMonitor(c *gin.Context) {
 		System:    req.System,
 		UpdatedAt: time.Now(),
 	}
-	h.monitorData.Store(req.NodeID, snapshot)
-	h.updateConnectionLastSeen(req.NodeID)
+	h.monitorData.Store(nodeID, snapshot)
+	h.markAgentSeen(nodeID, isForwardNode)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "received",
