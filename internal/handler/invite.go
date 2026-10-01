@@ -849,22 +849,17 @@ func (h *InviteHandler) ProcessWithdraw(c *gin.Context) {
 		return
 	}
 
-	now := time.Now()
-	withdraw.Status = status
-	withdraw.Remark = remark
-	withdraw.ProcessedAt = &now
-
-	if err := database.Get().Save(&withdraw).Error; err != nil {
+	// The decision applies only while the withdrawal is still pending, and a
+	// rejection's refund is part of it: two concurrent decisions cannot both
+	// apply, and a failed refund leaves the withdrawal pending.
+	if err := h.inviteService.ProcessWithdraw(&withdraw, status, remark, time.Now()); err != nil {
+		if errors.Is(err, service.ErrWithdrawalProcessed) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": "withdrawal already processed"})
+			return
+		}
+		log.Printf("failed to process withdrawal %d: %v", withdraw.ID, err)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to process withdrawal"})
 		return
-	}
-
-	// If rejected, return the amount to user commission balance.
-	if status == 2 {
-		if err := database.Get().Model(&model.User{}).Where("id = ?", withdraw.UserID).
-			Update("commission_balance", gorm.Expr("commission_balance + ?", withdraw.Amount)).Error; err != nil {
-			log.Printf("failed to return commission balance for user %d: %v", withdraw.UserID, err)
-		}
 	}
 
 	panelSuccess(c, inviteWithdrawalResponse(withdraw))

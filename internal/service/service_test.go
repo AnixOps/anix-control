@@ -6626,12 +6626,13 @@ func (s *InviteServiceTestSuite) TestGetConfig_NoConfig() {
 }
 
 func (s *InviteServiceTestSuite) TestRequestWithdraw_AmountBelowMinimum() {
-	// Set config with minimum amount
+	// Store a config with a minimum amount: a withdrawal reads the stored
+	// configuration, which an administrator's update writes.
 	cfg := &model.InviteConfig{
 		Enabled:             true,
 		CommissionMinAmount: 50.0,
 	}
-	s.svc.SetConfig(cfg)
+	s.Require().NoError(database.Get().Create(cfg).Error)
 
 	// Add commission balance
 	database.Get().Model(s.testUser).Update("commission_balance", 100.0)
