@@ -62,8 +62,8 @@ const (
 
 // Credential kinds.
 const (
-	KindNodeAPIKey       = "node_api_key"
-	KindNodeSharedSecret = "node_shared_secret"
+	KindNodeAPIKey       = "node_api_key"       // #nosec G101 -- this names a credential kind, not a hardcoded credential.
+	KindNodeSharedSecret = "node_shared_secret" // #nosec G101 -- this names a credential kind, not a hardcoded credential.
 	KindRegistrationKey  = "registration_key"
 	KindForwardNodeToken = "forward_node_token"
 	KindCleanAgentToken  = "clean_agent_token"

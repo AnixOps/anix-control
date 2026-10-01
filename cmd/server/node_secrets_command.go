@@ -14,6 +14,7 @@ import (
 	"gorm.io/gorm"
 )
 
+// #nosec G101 -- the usage text names tables and commands, not a credential.
 const nodeSecretsCommandUsage = `usage:
   anix-control node-secrets status
   anix-control node-secrets backfill [-table <table>[,<table>...]] [-batch 500] [-restart]
