@@ -39,7 +39,14 @@ type BoundRequest struct {
 	Admin    bool
 	Deadline time.Time
 	binding  sealedsecrets.Binding
+	// prepared is what the Preparer kept for the executor (Submission.Retain):
+	// the secrets it resolved. It lives with the binding, in memory only.
+	prepared any
 }
+
+// boundRequest verifies a request binding on the session a call arrived on;
+// tests replace it.
+var boundRequest = packagebridge.BoundRequest
 
 // verifyBinding verifies a request binding on the generation the call
 // arrived on: it must name a live dispatch to the calling host (not
@@ -51,7 +58,7 @@ func (h *hostServer) verifyBinding(ctx context.Context, binding *kernelnodeopsv1
 		return nil, nil
 	}
 	refused := status.Error(codes.PermissionDenied, "the request binding names no live request of this package")
-	identity, request, err := packagebridge.BoundRequest(ctx, raw)
+	identity, request, err := boundRequest(ctx, raw)
 	if err != nil || identity != h.host {
 		return nil, refused
 	}
@@ -108,6 +115,26 @@ func (s *Submission) Unseal(uses ...sealedsecrets.Use) ([]sealedsecrets.Secret, 
 		return nil, status.Error(codes.PermissionDenied, "a sealed handle was refused: it is not one this request sealed for this target and field, or it was used")
 	}
 	return secrets, nil
+}
+
+// Retain keeps a value of the Preparer's for the operation's executor
+// (Run.Prepared): the secrets it resolved from the request's handles. It
+// lives with the request binding, in kernel memory only, and is gone with
+// it: at the request's deadline, or after a kernel restart. Without a
+// binding nothing is kept.
+func (s *Submission) Retain(value any) {
+	if s != nil && s.Request != nil {
+		s.Request.prepared = value
+	}
+}
+
+// Prepared returns what the Preparer retained, nil when the request's
+// binding is no longer live.
+func (r *Run) Prepared() any {
+	if r == nil || r.Request == nil {
+		return nil
+	}
+	return r.Request.prepared
 }
 
 // Reveal mints the handle of a secret the operation generated, for the

@@ -14,8 +14,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AnixOps/anix-control/sdk/agentcontrol"
-	"github.com/AnixOps/anix-control/v4/internal/agentpki"
 	"github.com/AnixOps/anix-control/v4/internal/cache"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
@@ -120,19 +118,12 @@ func (s *NodeService) CreateNode(node *model.Node) error {
 	node.ID = 0
 	node.Protocols = nil
 
-	// 生成 API Key 和 Secret
-	apiKey, err := generateSecureToken(32)
+	// 生成 API Key 和 Secret, as IssueCredential generates them.
+	credentials, err := GenerateProxyNodeCredentials(true, true)
 	if err != nil {
 		return err
 	}
-	secret, err := generateSecureToken(32)
-	if err != nil {
-		return err
-	}
-
-	node.APIKey = apiKey
-	node.APIKeyHash = hashString(apiKey)
-	node.Secret = secret
+	credentials.Apply(node)
 	node.Status = model.NodeStatusPending
 
 	// 创建节点 + 默认协议 (事务)
@@ -194,10 +185,7 @@ func (s *NodeService) UpdateNode(id uint, updates map[string]any) error {
 	_ = cache.Delete(CacheKeyNodeList)
 
 	return s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&model.Node{}).Where("id = ?", id).Updates(updates).Error; err != nil {
-			return err
-		}
-		if err := nodesecrets.Sync(tx, nodesecrets.TableNode, id); err != nil {
+		if err := updateNodeColumnsTx(tx, id, updates); err != nil {
 			return err
 		}
 		return revokeProxyNodeAgentsIfDisabled(tx, id, updates)
@@ -350,33 +338,19 @@ func (s *NodeService) validateParentID(nodeID uint, parentID *uint) error {
 }
 
 // DeleteNode 删除节点
+//
+// The kernel's part, the protocols with their peers, links and secrets,
+// the credentials and the agent certificates, is RetireProxyNodeTx, which
+// RetireNode runs too; the node row goes with it in the same transaction.
 func (s *NodeService) DeleteNode(id uint) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
-		var protocolIDs []uint
-		if err := tx.Model(&model.NodeProtocol{}).Where("node_id = ?", id).Pluck("id", &protocolIDs).Error; err != nil {
-			return err
-		}
-		if len(protocolIDs) > 0 {
-			if err := deleteWireGuardPeers(tx, "node_protocol_id IN ?", protocolIDs); err != nil {
-				return err
-			}
-			if err := deleteProtocolGroupLinks(tx, protocolIDs...); err != nil {
-				return err
-			}
-		}
-		if err := tx.Where("node_id = ?", id).Delete(&model.NodeProtocol{}).Error; err != nil {
-			return err
-		}
-		if err := nodesecrets.Sync(tx, nodesecrets.TableNodeProtocol, protocolIDs...); err != nil {
+		if _, err := RetireProxyNodeTx(tx, id); err != nil {
 			return err
 		}
 		if err := tx.Delete(&model.Node{}, id).Error; err != nil {
 			return err
 		}
-		if err := nodesecrets.Sync(tx, nodesecrets.TableNode, id); err != nil {
-			return err
-		}
-		return revokeNodeAgents(tx, agentcontrol.NodeKindProxy, id, agentpki.RevokeReasonNodeDeleted)
+		return nodesecrets.Sync(tx, nodesecrets.TableNode, id)
 	})
 }
 
@@ -800,20 +774,16 @@ func (s *NodeService) UpdateProtocol(id uint, updates map[string]any) error {
 	}
 
 	return s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Model(&model.NodeProtocol{}).Where("id = ?", id).Updates(normalized).Error; err != nil {
-			return err
-		}
-		return nodesecrets.Sync(tx, nodesecrets.TableNodeProtocol, id)
+		return putNodeProtocolColumnsTx(tx, id, normalized)
 	})
 }
 
-// DeleteProtocol 删除协议
+// DeleteProtocol 删除协议. The kernel's part, the peers, links and secrets,
+// is RetireProtocolTx, which RetireProtocol runs too; the protocol row goes
+// with it in the same transaction.
 func (s *NodeService) DeleteProtocol(id uint) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
-		if err := deleteWireGuardPeers(tx, "node_protocol_id = ?", id); err != nil {
-			return err
-		}
-		if err := deleteProtocolGroupLinks(tx, id); err != nil {
+		if _, err := RetireProtocolTx(tx, id); err != nil {
 			return err
 		}
 		if err := tx.Delete(&model.NodeProtocol{}, id).Error; err != nil {
@@ -872,34 +842,18 @@ func (s *NodeService) SyncProtocolToNode(nodeID uint) error {
 
 // ========== 授权密钥管理 ==========
 
-// GenerateAuthKey 生成授权密钥
+// GenerateAuthKey 生成授权密钥, as IssueRegistrationKey does.
 func (s *NodeService) GenerateAuthKey(name string, expireDays int) (*model.AuthorizedKey, string, error) {
-	key, err := generateSecureToken(32)
-	if err != nil {
-		return nil, "", err
-	}
-
-	authKey := &model.AuthorizedKey{
-		Name:    name,
-		Key:     key,
-		KeyHash: hashString(key),
-		Used:    0,
-	}
-
-	if expireDays > 0 {
-		expireAt := time.Now().Add(time.Duration(expireDays) * 24 * time.Hour).Unix()
-		authKey.ExpireAt = &expireAt
-	}
-
-	if err := s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Create(authKey).Error; err != nil {
-			return err
-		}
-		return nodesecrets.Sync(tx, nodesecrets.TableAuthorizedKey, authKey.ID)
+	var (
+		authKey *model.AuthorizedKey
+		key     string
+	)
+	if err := s.db.Transaction(func(tx *gorm.DB) (err error) {
+		authKey, key, err = IssueRegistrationKeyTx(tx, name, registrationKeyExpiry(expireDays, time.Now()))
+		return err
 	}); err != nil {
 		return nil, "", err
 	}
-
 	return authKey, key, nil
 }
 
@@ -912,13 +866,11 @@ func (s *NodeService) GetAuthKeys() ([]model.AuthorizedKey, error) {
 	return keys, nil
 }
 
-// DeleteAuthKey 删除授权密钥
+// DeleteAuthKey 删除授权密钥, as RevokeRegistrationKey does.
 func (s *NodeService) DeleteAuthKey(id uint) error {
 	return s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Delete(&model.AuthorizedKey{}, id).Error; err != nil {
-			return err
-		}
-		return nodesecrets.Sync(tx, nodesecrets.TableAuthorizedKey, id)
+		_, err := RevokeRegistrationKeyTx(tx, id)
+		return err
 	})
 }
 

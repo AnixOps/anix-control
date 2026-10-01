@@ -120,7 +120,16 @@ type harness struct {
 	requests   int
 }
 
+// newHarness is a harness whose KernelNodeOps serves the fake credential
+// executor.
 func newHarness(t *testing.T) *harness {
+	t.Helper()
+	return newHarnessWith(t, nil)
+}
+
+// newHarnessWith is a harness whose KernelNodeOps serves what register
+// registers; nil registers the fake credential executor.
+func newHarnessWith(t *testing.T, register func(h *harness, registry *kernelnodeops.Registry)) *harness {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "kernel.db")+"?_pragma=busy_timeout(10000)&_pragma=journal_mode(WAL)"),
@@ -140,7 +149,11 @@ func newHarness(t *testing.T) *harness {
 		metrics: compatv2.NewGatewayMetrics(),
 	}
 	registry := kernelnodeops.NewRegistry()
-	require.NoError(t, registry.Register(kernelnodeops.KindCredentialIssue, credentialExecutor{h: h}))
+	if register == nil {
+		require.NoError(t, registry.Register(kernelnodeops.KindCredentialIssue, credentialExecutor{h: h}))
+	} else {
+		register(h, registry)
+	}
 	engine := &kernelnodeops.Engine{DB: db, Executors: registry, PollInterval: 10 * time.Millisecond, Secrets: h.store}
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan struct{})

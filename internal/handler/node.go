@@ -504,31 +504,7 @@ func (h *NodeHandler) GetNodeRawConfig(c *gin.Context) {
 }
 
 func decodeRawConfigObject(raw any) (map[string]any, []byte, error) {
-	var (
-		jsonBytes []byte
-		err       error
-	)
-	if rawString, ok := raw.(string); ok {
-		jsonBytes = []byte(rawString)
-	} else {
-		jsonBytes, err = json.Marshal(raw)
-		if err != nil {
-			return nil, nil, err
-		}
-	}
-
-	var config map[string]any
-	if err := json.Unmarshal(jsonBytes, &config); err != nil || config == nil {
-		if err == nil {
-			err = errors.New("raw config must be an object")
-		}
-		return nil, nil, err
-	}
-	normalized, err := json.Marshal(config)
-	if err != nil {
-		return nil, nil, err
-	}
-	return config, normalized, nil
+	return service.DecodeRawNodeConfig(raw)
 }
 
 // UpdateNodeRawConfig godoc
@@ -619,15 +595,9 @@ func (h *NodeHandler) ValidateRawConfig(c *gin.Context) {
 		return
 	}
 
-	config, jsonBytes, err := decodeRawConfigObject(req.RawConfig)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"valid":   false,
-			"message": "配置必须是 JSON 对象",
-		})
-		return
-	}
-	if err := service.ValidateWireGuardRuntimeConfig(config); err != nil {
+	// The validators are the kernel's ValidateNodeConfig (KernelNodeOps).
+	validated, err := service.ValidateRawNodeConfig(req.RawConfig)
+	if errors.Is(err, service.ErrInvalidNodeProtocol) {
 		c.JSON(http.StatusBadRequest, gin.H{
 			"valid":   false,
 			"message": "WireGuard 配置无效",
@@ -635,17 +605,19 @@ func (h *NodeHandler) ValidateRawConfig(c *gin.Context) {
 		})
 		return
 	}
-
-	warnings := []string{}
-	if _, ok := config["server_port"]; !ok {
-		warnings = append(warnings, "缺少 server_port 字段")
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"valid":   false,
+			"message": "配置必须是 JSON 对象",
+		})
+		return
 	}
 
 	panelSuccess(c, gin.H{
 		"valid":    true,
 		"message":  "配置有效",
-		"warnings": warnings,
-		"size":     len(jsonBytes),
+		"warnings": validated.Warnings,
+		"size":     len(validated.Normalized),
 	})
 }
 

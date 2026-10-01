@@ -256,7 +256,7 @@ func (h *hostServer) SubmitOperation(ctx context.Context, request *kernelnodeops
 		prepared := &Submission{
 			Host: h.host, Kind: k.name, Operation: proto.Clone(spec).(*kernelnodeopsv1.OperationSpec),
 			Binding: request.GetRequest().GetBridgeCapability(), Request: bound, Targets: resolved.targets,
-			store: engine.secretStore(),
+			store: engine.secretStore(), db: db,
 		}
 		if err := preparer.Prepare(ctx, prepared); err != nil {
 			return nil, failure("prepare operation", err)
