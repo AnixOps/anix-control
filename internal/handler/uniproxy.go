@@ -149,11 +149,6 @@ func normalizeNodeType(nodeType string) string {
 	}
 }
 
-func stringValue(value any) string {
-	text, _ := value.(string)
-	return text
-}
-
 // GetUsers returns active users.
 // GET /api/v1/server/UniProxy/user
 func (h *UniProxyHandler) GetUsers(c *gin.Context) {
