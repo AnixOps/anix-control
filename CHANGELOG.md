@@ -664,6 +664,31 @@
     state (counters, tokens, request ledger, change log, revocations) on
     SQLite and PostgreSQL, and that the reads answer identity's account
     rather than Control's projection.
+- **Subscription module.** `packages/subscription` has its own host and
+  serves 17 of its 25 routes natively: subscription groups and templates,
+  a group's node protocol links, a plan's groups, a user's groups, the
+  group statistics and the format and protocol lists.
+  - It runs on `v2_subscription_group`, `v2_subscription_template`,
+    `v2_plan_subscription_group` and `v2_subscription_group_node_protocols`,
+    adopted in place. The kernel's subscription renderer and order
+    completion keep reading them; the module's writes leave the same rows.
+  - Other domains are read through kernel views: `kapi_plan_catalog_v1`,
+    `kapi_subscriber_entitlement_v1` and the new
+    `kapi_user_subscription_group_v1` (a subscriber's groups and their
+    expiry), `kapi_node_protocol_v1` (a protocol's node) and
+    `kapi_node_heartbeat_v1` (a node's last report). None shows a token,
+    UUID, e-mail address, key or protocol settings.
+  - Eight routes stay bridged: deleting a group and granting or removing a
+    user's group write `v2_user_subscription_group`, which only the kernel
+    writes and `KernelSubscriber` cannot edit yet (an extension is proposed
+    in `docs/architecture/subscriber-service.md`); a group's protocols and
+    the protocol pool answer node rows with keys; the preview renders a
+    user's subscription; the link settings read process configuration; the
+    user's summary comes from the kernel's cache.
+  - `internal/tests/subscriptioncompat` proves byte parity on SQLite and
+    PostgreSQL (104 cases each) and the same groups, templates and links,
+    and that the bound types mirror the kernel model. The PostgreSQL run is
+    part of CI.
 
 - The kernel side of the identity module, `KernelIdentity` (N9). It is served
   on the local package bridge and on the module listener.

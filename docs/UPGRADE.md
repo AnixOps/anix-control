@@ -221,8 +221,11 @@ tables and their indexes: `v4_kernel_package_backup_reference`,
 `kapi_user_referral_v1` over `v2_user`, `kapi_system_audit_log_v1` over
 `v2_operation_log`, `kapi_plan_catalog_v1` over `v2_plan`,
 `kapi_plan_subscription_group_v1` over `v2_plan_subscription_group`,
-`kapi_order_billing_v1` over `v2_order` and `kapi_affiliate_settings_v1` over
-one row of `v2_system_config`. No existing table, column or index changes.
+`kapi_order_billing_v1` over `v2_order`, `kapi_affiliate_settings_v1` over
+one row of `v2_system_config`, `kapi_user_subscription_group_v1` over
+`v2_user_subscription_group`, `kapi_node_protocol_v1` over `v2_node_protocol`
+and `kapi_node_heartbeat_v1` over `v2_node`. No existing table, column or
+index changes.
 
 Package storage leases additionally need `CREATEROLE` on the Control
 database role and a `pg_hba.conf` entry that admits the `+anix_packages`

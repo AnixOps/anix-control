@@ -491,3 +491,88 @@ func TestPostgresAffiliateSettingsViewHidesOtherKeys(t *testing.T) {
 	require.NotContains(t, seen, secret)
 	require.Equal(t, []string{settings}, seen)
 }
+
+// The subscription package's role writes its adopted tables, including
+// rows that reference plans and node protocols it cannot read, and reads
+// memberships, protocols and nodes only through their views: no membership
+// write, no protocol settings, no node key.
+func TestPostgresSubscriptionGrants(t *testing.T) {
+	kernel, kernelDSN := openPostgresKernel(t)
+	require.NoError(t, kernel.AutoMigrate(&model.Plan{}, &model.Node{}, &model.NodeProtocol{}, &model.SubscriptionGroup{},
+		&model.SubscriptionTemplate{}, &model.PlanSubscriptionGroup{}, &model.UserSubscriptionGroup{}))
+	require.NoError(t, EnsureKernelAPIViews(kernel))
+	suffix := randomSuffix(t)
+	packageID := "pkgtest-" + suffix
+	t.Cleanup(func() { dropPackageStorage(t, kernel, packageID) })
+	user := model.User{Email: "subscriber-" + suffix + "@example.test", Token: "subscriber-" + suffix, UUID: "subscriber-" + suffix}
+	plan := model.Plan{Name: "plan-" + suffix}
+	group := model.SubscriptionGroup{Name: "group-" + suffix, Enable: 1}
+	node := model.Node{Name: "node-" + suffix, APIKey: "key-" + suffix, Secret: "secret-" + suffix}
+	require.NoError(t, kernel.Create(&user).Error)
+	require.NoError(t, kernel.Create(&plan).Error)
+	require.NoError(t, kernel.Create(&group).Error)
+	require.NoError(t, kernel.Create(&node).Error)
+	protocol := model.NodeProtocol{NodeID: node.ID, Name: "p", RealitySettings: ptr(`{"private_key":"pk-` + suffix + `"}`)}
+	require.NoError(t, kernel.Create(&protocol).Error)
+	expires := int64(4102444800)
+	member := model.UserSubscriptionGroup{UserID: user.ID, GroupID: group.ID, ExpireAt: &expires}
+	require.NoError(t, kernel.Create(&member).Error)
+	t.Cleanup(func() {
+		kernel.Exec("DELETE FROM v2_subscription_group_node_protocols WHERE subscription_group_id = ?", group.ID)
+		kernel.Where("group_id = ?", group.ID).Delete(&model.SubscriptionTemplate{})
+		kernel.Where("group_id = ?", group.ID).Delete(&model.PlanSubscriptionGroup{})
+		kernel.Where("group_id = ?", group.ID).Delete(&model.UserSubscriptionGroup{})
+		kernel.Delete(&model.SubscriptionGroup{}, group.ID)
+		kernel.Delete(&model.NodeProtocol{}, protocol.ID)
+		kernel.Delete(&model.Node{}, node.ID)
+		kernel.Delete(&model.Plan{}, plan.ID)
+		kernel.Delete(&model.User{}, user.ID)
+	})
+
+	store := Store{DB: kernel, Driver: "postgres", DSN: kernelDSN}
+	lease, err := store.Lease(context.Background(), Holder{PackageID: packageID, Version: "4.1.0", Generation: 1}, Grants{
+		Storage: true,
+		AdoptTables: []string{
+			"v2_plan_subscription_group", "v2_subscription_group", "v2_subscription_group_node_protocols", "v2_subscription_template",
+		},
+		Views: []string{
+			"kapi_node_heartbeat_v1", "kapi_node_protocol_v1", "kapi_plan_catalog_v1", "kapi_subscriber_entitlement_v1",
+			"kapi_user_subscription_group_v1",
+		},
+	})
+	require.NoError(t, err)
+	pkg := openPostgres(t, lease.DSN)
+
+	require.NoError(t, pkg.Exec("UPDATE v2_subscription_group SET priority = 3 WHERE id = ?", group.ID).Error)
+	require.NoError(t, pkg.Exec("INSERT INTO v2_subscription_template (group_id, name, created_at, updated_at) VALUES (?, 't', now(), now())", group.ID).Error)
+	require.NoError(t, pkg.Exec("INSERT INTO v2_plan_subscription_group (plan_id, group_id, created_at) VALUES (?, ?, now())", plan.ID, group.ID).Error)
+	require.NoError(t, pkg.Exec("INSERT INTO v2_subscription_group_node_protocols (subscription_group_id, node_protocol_id) VALUES (?, ?)", group.ID, protocol.ID).Error)
+
+	var members []struct {
+		UserID   uint
+		GroupID  uint
+		ExpireAt *int64
+	}
+	require.NoError(t, pkg.Raw("SELECT * FROM kapi_user_subscription_group_v1 WHERE group_id = ?", group.ID).Scan(&members).Error)
+	require.Len(t, members, 1)
+	require.Equal(t, user.ID, members[0].UserID)
+	require.Equal(t, expires, *members[0].ExpireAt)
+	var nodeIDs []uint
+	require.NoError(t, pkg.Raw("SELECT node_id FROM kapi_node_protocol_v1 WHERE id = ?", protocol.ID).Scan(&nodeIDs).Error)
+	require.Equal(t, []uint{node.ID}, nodeIDs)
+	var heartbeats int64
+	require.NoError(t, pkg.Raw("SELECT count(*) FROM kapi_node_heartbeat_v1 WHERE id = ?", node.ID).Scan(&heartbeats).Error)
+	require.EqualValues(t, 1, heartbeats)
+
+	var values []string
+	require.ErrorContains(t, pkg.Raw("SELECT reality_settings FROM kapi_node_protocol_v1").Scan(&values).Error, "does not exist")
+	require.ErrorContains(t, pkg.Raw("SELECT api_key FROM kapi_node_heartbeat_v1").Scan(&values).Error, "does not exist")
+	var count int64
+	for _, table := range []string{"v2_node_protocol", "v2_node", "v2_user_subscription_group", "v2_plan", "v2_user"} {
+		requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM "+table).Scan(&count).Error)
+	}
+	requirePermissionDenied(t, pkg.Exec("DELETE FROM kapi_user_subscription_group_v1 WHERE group_id = ?", group.ID).Error)
+	requirePermissionDenied(t, pkg.Exec("INSERT INTO v2_user_subscription_group (user_id, group_id, created_at) VALUES (?, ?, now())", user.ID, group.ID).Error)
+}
+
+func ptr[T any](value T) *T { return &value }

@@ -204,3 +204,26 @@ func TestAffiliateSettingsViewShowsOneKey(t *testing.T) {
 	require.NoError(t, db.Raw("SELECT value FROM kapi_affiliate_settings_v1").Scan(&values).Error)
 	require.Equal(t, []string{`{"code_prefix":"AFF"}`}, values)
 }
+
+// The subscription views show a subscriber's groups and their expiry, a
+// protocol's node and a node's last report, and nothing else of their
+// tables: no token, uuid, address, key or settings.
+func TestSubscriptionViewsShowWhatTheSubscriptionPackageNeeds(t *testing.T) {
+	db, _ := openSQLiteKernel(t)
+	for _, view := range []string{"kapi_user_subscription_group_v1", "kapi_node_protocol_v1", "kapi_node_heartbeat_v1"} {
+		exists, err := viewExists(db, view)
+		require.NoError(t, err)
+		require.False(t, exists, "no %s without its table", view)
+	}
+	require.NoError(t, db.AutoMigrate(&model.Node{}, &model.NodeProtocol{}, &model.SubscriptionGroup{}, &model.UserSubscriptionGroup{}))
+	require.NoError(t, EnsureKernelAPIViews(db))
+	for view, want := range map[string][]string{
+		"kapi_user_subscription_group_v1": {"user_id", "group_id", "expire_at"},
+		"kapi_node_protocol_v1":           {"id", "node_id"},
+		"kapi_node_heartbeat_v1":          {"id", "last_check_at"},
+	} {
+		var columns []string
+		require.NoError(t, db.Raw("SELECT name FROM pragma_table_info('"+view+"') ORDER BY cid").Scan(&columns).Error)
+		require.Equal(t, want, columns, view)
+	}
+}
