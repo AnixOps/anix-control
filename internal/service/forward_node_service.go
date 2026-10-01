@@ -6,8 +6,6 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"fmt"
-	"net"
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
@@ -89,73 +87,10 @@ func (s *ForwardNodeService) GetByType(nodeType string) ([]*model.ForwardNode, e
 	return nodes, err
 }
 
-// HealthCheck 健康检查
+// HealthCheck 健康检查: the forward node check, from Control, recording what
+// it found (CheckEndpoint).
 func (s *ForwardNodeService) HealthCheck(ctx context.Context, nodeID uint) (*HealthCheckResult, error) {
-	if ctx == nil {
-		ctx = context.Background()
-	}
-	if err := ctx.Err(); err != nil {
-		return nil, err
-	}
-
-	node, err := s.GetByID(nodeID)
-	if err != nil {
-		return nil, err
-	}
-
-	start := time.Now()
-	result := &HealthCheckResult{
-		NodeID:    node.ID,
-		CheckTime: start,
-	}
-
-	// TCP连接测试
-	dialer := net.Dialer{Timeout: 5 * time.Second}
-	conn, err := dialer.DialContext(ctx, "tcp", fmt.Sprintf("%s:%d", node.Host, node.Port))
-	if err != nil {
-		if ctxErr := ctx.Err(); ctxErr != nil {
-			return nil, ctxErr
-		}
-		result.Status = model.ForwardNodeStatusOffline
-		result.Error = err.Error()
-	} else {
-		if err := conn.Close(); err != nil {
-			return nil, fmt.Errorf("close health check connection: %w", err)
-		}
-		result.Status = model.ForwardNodeStatusOnline
-		result.Latency = time.Since(start).Milliseconds()
-	}
-
-	// 更新节点状态
-	now := time.Now()
-	updates := map[string]any{
-		"status":     result.Status,
-		"last_check": now,
-		"latency":    result.Latency,
-	}
-
-	if result.Status == model.ForwardNodeStatusOnline {
-		// 计算在线率
-		var stats struct {
-			Total  int64
-			Online int64
-		}
-		if err := s.db.Model(&model.ForwardNode{}).
-			Where("id = ?", node.ID).
-			Select("COUNT(*) as total, SUM(CASE WHEN status = ? THEN 1 ELSE 0 END) as online", model.ForwardNodeStatusOnline).
-			Scan(&stats).Error; err != nil {
-			return nil, fmt.Errorf("calculate forward node uptime: %w", err)
-		}
-		if stats.Total > 0 {
-			updates["uptime"] = float64(stats.Online) / float64(stats.Total) * 100
-		}
-	}
-
-	if err := s.db.Model(&model.ForwardNode{}).Where("id = ?", node.ID).Updates(updates).Error; err != nil {
-		return nil, fmt.Errorf("update forward node health check: %w", err)
-	}
-
-	return result, nil
+	return s.CheckEndpoint(ctx, DiagnosisProbes{}, nodeID, true)
 }
 
 // HealthCheckResult 健康检查结果

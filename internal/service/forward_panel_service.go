@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"sort"
-	"strconv"
 	"strings"
 	"time"
 
@@ -489,150 +488,6 @@ func (s *PanelForwardService) DeleteTunnel(id uint) error {
 	return s.db.Delete(&model.ForwardTunnel{}, record.ID).Error
 }
 
-func (s *PanelForwardService) DiagnoseTunnel(id uint) (*TunnelDiagnosisReport, error) {
-	tunnel, err := s.getTunnelByID(id)
-	if err != nil {
-		return nil, err
-	}
-	backend, err := s.resolveRuntimeBackend()
-	if err != nil {
-		return nil, err
-	}
-
-	checks := make([]struct {
-		description string
-		nodeLabel   string
-		nodeID      uint
-		host        string
-		port        int
-	}, 0, 2)
-
-	if isForwardRuntimeExecutionNodeBackend(backend) {
-		executionNodeID := storedPanelTunnelExecutionNodeID(tunnel)
-		if executionNodeID > 0 {
-			executionNode, err := s.getForwardNodeByID(executionNodeID)
-			if err != nil {
-				return nil, err
-			}
-			checks = append(checks, struct {
-				description string
-				nodeLabel   string
-				nodeID      uint
-				host        string
-				port        int
-			}{
-				description: "管理端->中转执行节点",
-				nodeLabel:   executionNode.Name,
-				nodeID:      executionNode.ID,
-				host:        strings.TrimSpace(executionNode.Host),
-				port:        executionNode.Port,
-			})
-		}
-	} else if tunnel.InNodeID > 0 {
-		inNode, err := s.getForwardNodeByID(tunnel.InNodeID)
-		if err != nil {
-			return nil, err
-		}
-		checks = append(checks, struct {
-			description string
-			nodeLabel   string
-			nodeID      uint
-			host        string
-			port        int
-		}{
-			description: "管理端->入口节点",
-			nodeLabel:   inNode.Name,
-			nodeID:      inNode.ID,
-			host:        strings.TrimSpace(inNode.Host),
-			port:        inNode.Port,
-		})
-	}
-
-	if !isForwardRuntimeExecutionNodeBackend(backend) && tunnel.Type == 2 && tunnel.OutNodeID != nil {
-		outNode, err := s.getForwardNodeByID(*tunnel.OutNodeID)
-		if err != nil {
-			return nil, err
-		}
-		checks = append(checks, struct {
-			description string
-			nodeLabel   string
-			nodeID      uint
-			host        string
-			port        int
-		}{
-			description: "管理端->出口节点",
-			nodeLabel:   outNode.Name,
-			nodeID:      outNode.ID,
-			host:        strings.TrimSpace(outNode.Host),
-			port:        outNode.Port,
-		})
-	}
-
-	results := make([]DiagnosisOutcome, 0, len(checks))
-	for _, check := range checks {
-		if check.host == "" || check.port <= 0 {
-			results = append(results, DiagnosisOutcome{
-				Success:     false,
-				Description: check.description,
-				NodeName:    check.nodeLabel,
-				NodeID:      fmt.Sprintf("%d", check.nodeID),
-				TargetIP:    check.host,
-				TargetPort:  check.port,
-				Message:     "节点地址未配置",
-			})
-			continue
-		}
-
-		target := net.JoinHostPort(strings.Trim(check.host, "[]"), fmt.Sprintf("%d", check.port))
-		start := time.Now()
-		conn, dialErr := net.DialTimeout("tcp", target, diagnosisTimeout)
-		elapsed := time.Since(start)
-		if dialErr == nil {
-			_ = conn.Close()
-			results = append(results, DiagnosisOutcome{
-				Success:     true,
-				Description: check.description,
-				NodeName:    check.nodeLabel,
-				NodeID:      fmt.Sprintf("%d", check.nodeID),
-				TargetIP:    check.host,
-				TargetPort:  check.port,
-				AverageTime: float64(elapsed.Milliseconds()),
-				PacketLoss:  0,
-			})
-			continue
-		}
-
-		results = append(results, DiagnosisOutcome{
-			Success:     false,
-			Description: check.description,
-			NodeName:    check.nodeLabel,
-			NodeID:      fmt.Sprintf("%d", check.nodeID),
-			TargetIP:    check.host,
-			TargetPort:  check.port,
-			Message:     dialErr.Error(),
-		})
-	}
-
-	if len(results) == 0 {
-		results = append(results, DiagnosisOutcome{
-			Success:     false,
-			Description: "隧道诊断",
-			NodeName:    resolveTunnelName(tunnel),
-			NodeID:      fmt.Sprintf("%d", tunnel.ID),
-			TargetIP:    "-",
-			Message:     "没有可诊断的节点",
-		})
-	}
-
-	return &TunnelDiagnosisReport{
-		TunnelID:   tunnel.ID,
-		TunnelName: tunnel.Name,
-		TunnelType: resolvePanelTunnelTypeName(tunnel.Type),
-		Timestamp:  time.Now().UnixMilli(),
-		Results:    results,
-	}, nil
-}
-
 func (s *PanelForwardService) CreateForward(userID uint, isAdmin bool, input PanelForwardInput) (*PanelForwardListItem, error) {
 	if err := validatePanelForwardInput(input); err != nil {
 		return nil, err
@@ -924,103 +779,6 @@ func isForwardRuntimeJobDuplicateForStatus(action string, status int) bool {
 	default:
 		return false
 	}
-}
-
-func (s *PanelForwardService) DiagnoseForward(userID uint, isAdmin bool, forwardID uint) (*DiagnosisReport, error) {
-	record, err := s.getForwardForActor(forwardID, userID, isAdmin)
-	if err != nil {
-		return nil, err
-	}
-	if err := s.db.Preload("Tunnel").First(record, record.ID).Error; err != nil {
-		return nil, err
-	}
-
-	targets := strings.Split(record.RemoteAddr, ",")
-	results := make([]DiagnosisOutcome, 0, len(targets))
-	for _, raw := range targets {
-		target := strings.TrimSpace(raw)
-		if target == "" {
-			continue
-		}
-
-		host, port, err := splitTarget(target)
-		if err != nil {
-			results = append(results, DiagnosisOutcome{
-				Success:     false,
-				Description: "转发->目标",
-				NodeName:    resolveTunnelName(record.Tunnel),
-				NodeID:      fmt.Sprintf("%d", record.TunnelID),
-				TargetIP:    target,
-				Message:     err.Error(),
-			})
-			continue
-		}
-
-		dialTarget := target
-		if !isAdmin {
-			// The probe runs from Control: a user's target must not reach
-			// Control's own network (see publicProbeAddress).
-			address, refusal := publicProbeAddress(host)
-			if refusal != "" {
-				results = append(results, DiagnosisOutcome{
-					Success:     false,
-					Description: "转发->目标",
-					NodeName:    resolveTunnelName(record.Tunnel),
-					NodeID:      fmt.Sprintf("%d", record.TunnelID),
-					TargetIP:    host,
-					TargetPort:  port,
-					Message:     refusal,
-				})
-				continue
-			}
-			dialTarget = net.JoinHostPort(address.String(), strconv.Itoa(port))
-		}
-
-		start := time.Now()
-		conn, dialErr := net.DialTimeout("tcp", dialTarget, diagnosisTimeout)
-		elapsed := time.Since(start)
-		if dialErr == nil {
-			_ = conn.Close()
-			results = append(results, DiagnosisOutcome{
-				Success:     true,
-				Description: "转发->目标",
-				NodeName:    resolveTunnelName(record.Tunnel),
-				NodeID:      fmt.Sprintf("%d", record.TunnelID),
-				TargetIP:    host,
-				TargetPort:  port,
-				AverageTime: float64(elapsed.Milliseconds()),
-				PacketLoss:  0,
-			})
-			continue
-		}
-
-		results = append(results, DiagnosisOutcome{
-			Success:     false,
-			Description: "转发->目标",
-			NodeName:    resolveTunnelName(record.Tunnel),
-			NodeID:      fmt.Sprintf("%d", record.TunnelID),
-			TargetIP:    host,
-			TargetPort:  port,
-			Message:     dialErr.Error(),
-		})
-	}
-
-	if len(results) == 0 {
-		results = append(results, DiagnosisOutcome{
-			Success:     false,
-			Description: "转发->目标",
-			NodeName:    resolveTunnelName(record.Tunnel),
-			NodeID:      fmt.Sprintf("%d", record.TunnelID),
-			TargetIP:    "-",
-			Message:     "没有可诊断的目标地址",
-		})
-	}
-
-	return &DiagnosisReport{
-		ForwardName: record.Name,
-		Timestamp:   time.Now().UnixMilli(),
-		Results:     results,
-	}, nil
 }
 
 func (s *PanelForwardService) UpdateOrder(userID uint, isAdmin bool, updates []PanelForwardOrderUpdate) error {
@@ -1379,7 +1137,7 @@ func (s *PanelForwardService) getForwardForActor(forwardID, userID uint, isAdmin
 	}
 	if err := query.First(&record).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("转发不存在")
+			return nil, ErrPanelForwardNotFound
 		}
 		return nil, err
 	}
@@ -1889,7 +1647,7 @@ func (s *PanelForwardService) getTunnelByID(id uint) (*model.ForwardTunnel, erro
 	var tunnel model.ForwardTunnel
 	if err := s.db.First(&tunnel, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("隧道不存在")
+			return nil, ErrPanelTunnelNotFound
 		}
 		return nil, err
 	}
@@ -1915,7 +1673,7 @@ func (s *PanelForwardService) getForwardNodeByID(id uint) (*model.ForwardNode, e
 	var node model.ForwardNode
 	if err := s.db.First(&node, id).Error; err != nil {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("节点不存在")
+			return nil, ErrPanelForwardNodeNotFound
 		}
 		return nil, err
 	}
