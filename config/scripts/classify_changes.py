@@ -56,6 +56,12 @@ CLASS_PATTERNS: dict[str, tuple[str, ...]] = {
         "cmd/migrate/*",
         "scripts/postgres_restore_rehearsal.sh",
         "packages/*/migrations/*",
+        # Parity tests compare legacy handlers with package-native ones on
+        # PostgreSQL as well.
+        "packages/*/native/*",
+        "internal/handler/*",
+        "internal/kernelsubscriber/*",
+        "sdk/v2compat/*",
         "packages/identity-platform/*",
         "identity/*",
         "sdk/packagestoresdk/*",
@@ -138,7 +144,9 @@ def self_test() -> None:
     everything = {"full", *CLASSES}
     check(["docs/RELEASING.md", "CHANGELOG.md"], set())
     check(["web/src/App.vue"], {"code", "web"})
-    check(["internal/handler/ticket.go"], {"code"})
+    check(["internal/handler/ticket.go"], {"code", "db"})
+    check(["internal/middleware/audit_log.go"], {"code"})
+    check(["packages/plan/native/plans.go"], {"code", "db", "packages"})
     check(["internal/service/order_service.go"], {"code", "db"})
     check(["internal/pluginhost/remote.go"], {"code", "modules"})
     check(["internal/service/forward_panel_flow.go"], {"code", "db", "forward"})

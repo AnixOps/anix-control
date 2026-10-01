@@ -69,6 +69,20 @@ func TestChangeLogResyncAndPrune(t *testing.T) {
 	require.True(t, changes[0].Deleted)
 }
 
+func TestRequestLedgerPrune(t *testing.T) {
+	db := openDB(t)
+	now := time.Now()
+	require.NoError(t, Record(db, "old", "apply_entitlement", 1, nil, now.Add(-RequestRetention-time.Hour)))
+	require.NoError(t, Record(db, "kept", "apply_entitlement", 1, nil, now.Add(-RequestRetention+time.Hour)))
+
+	pruned, err := PruneRequests(db, now)
+	require.NoError(t, err)
+	require.Equal(t, int64(1), pruned)
+	var ids []string
+	require.NoError(t, db.Model(&model.SubscriberRequest{}).Pluck("request_id", &ids).Error)
+	require.Equal(t, []string{"kept"}, ids)
+}
+
 func TestActiveMatchesNodeUserLists(t *testing.T) {
 	db := openDB(t)
 	now := time.Now()

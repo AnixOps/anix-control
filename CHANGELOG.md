@@ -1076,6 +1076,13 @@
 
 ### Fixed
 
+- The subscriber request ledger (`v4_kernel_subscriber_request`) is now pruned
+  after 90 days, as the subscriber contract documents, by the same hourly
+  worker as the change log. Before, it was never pruned.
+- CI's fast lane runs the PostgreSQL parity tests when a legacy handler
+  (`internal/handler`), a package's native code (`packages/*/native`),
+  `internal/kernelsubscriber` or `sdk/v2compat` changes. Before, those
+  changes ran the parity tests on SQLite only.
 - Network modules no longer crash-loop when they start while Control is
   unreachable (for example during a rollout restart). `modulesdk` retries
   enrollment with backoff while the kernel is unavailable; a refused
