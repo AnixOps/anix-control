@@ -102,10 +102,11 @@ are additions to `anix.agent.v1`:
     transports.
 - Older Agents send none of these capabilities or `Hello` fields and skip
   `server_capabilities`, so nothing changes for them.
-- Control does not serve the data plane yet: `server_capabilities` is empty.
-  An Agent that sends `config_status`, `traffic`, `logs` or `status` anyway
-  gets `InvalidArgument`, naming the capability it lacks, and the stream
-  ends.
+- Control serves `users.v1` to proxy nodes (`server_capabilities` lists it
+  for them; a forward node has no user list and is offered nothing).
+  `config.v1` and `reports.v1` are not served yet. An Agent that sends
+  `config_status`, `traffic`, `logs` or `status` anyway gets
+  `InvalidArgument`, naming the capability it lacks, and the stream ends.
   A Control built before these payloads existed answers them the same way, as
   an unknown payload ("control message payload is required").
 - `diag.v1` is reserved for node-side diagnostics (`diag.*` operations). It
@@ -124,16 +125,39 @@ are additions to `anix.agent.v1`:
   - A snapshot replaces what the Agent runs, so a lost or repeated snapshot
     is harmless.
 - **Users** (`users.v1`). A `UserDelta` carries the changes after the
-  Agent's cursor.
+  Agent's cursor. The cursor is Control's subscriber change log position
+  (`v4_kernel_subscriber_change`); the users are the ones the legacy pulls
+  (UniProxy `user`, v2board `GetUsers`) give the node: the active
+  subscribers of its plan group.
   - One delta may span several messages. The Agent applies them together
     when the one with `last_page` arrives, then stores `cursor` and sends it
     as `Hello.users_cursor` on its next connection.
-  - With `full`, the pages together are the node's whole user set and
-    replace the Agent's. Control sends a full set when the Agent's cursor is
-    0 or older than its change log. Otherwise the pages are changes, applied in
-    order.
-  - `speed_limit_mbps` and `device_limit` are 0 for no limit. `extra_json`
-    holds protocol-specific fields, such as WireGuard peer keys.
+  - **Full resync.** With `full`, the pages together are the node's whole
+    user set and replace the Agent's. Control sends one, after `HelloAck`,
+    when it cannot resume from `Hello.users_cursor`:
+    - the cursor is 0 (the Agent has no set);
+    - the cursor is ahead of the change log (it came from another log, such
+      as a restored database);
+    - the change log no longer holds every change after the cursor (rows
+      are kept 7 days); also when that happens while the Agent is connected.
+
+    The pages carry the users in id order, at most 500 per page, and each
+    the same `cursor`: the log's position read before the listing, so a
+    change made during it is sent again as a delta. The last page has
+    `last_page`; an empty set is one empty page. An Agent that loses the
+    stream before `last_page` has no new cursor and sends its old one again.
+  - **Deltas.** Otherwise Control sends, after `HelloAck`, the changes after
+    the cursor, and then a delta for each batch of changes as the log
+    advances (it is read about once a second), at most 500 changes per
+    delta, each with `last_page`. A delta carries each changed user's
+    current state: in `upserts` when the node serves the user now, in
+    `removed_user_ids` otherwise. A removal may name a user the Agent never
+    had, which it ignores. The Agent applies deltas in order.
+  - `speed_limit_mbps` and `device_limit` are 0 for no limit, as the legacy
+    pulls send them. `extra_json` holds protocol-specific fields, such as
+    the WireGuard peer fields when the node's protocol is WireGuard; it is
+    empty otherwise. A `NodeUser` never carries the e-mail, the password
+    hash or the subscription token.
 - **Reports** (`reports.v1`).
   - `TrafficReport` carries per-user bytes and online IPs for one window.
     `LogBatch` carries runtime logs; `fields_json` holds no secrets.

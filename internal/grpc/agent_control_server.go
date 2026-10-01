@@ -684,6 +684,7 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 		slog.Warn("failed to persist agent hello heartbeat", "component", "agent-control", "node", agentNode.String(), "error", err)
 	}
 
+	serverCapabilities := s.serverCapabilities(agentNode)
 	if err := connection.send(&agentv1pb.ControlToAgent{
 		RequestId:    first.RequestId,
 		NodeId:       nodeID,
@@ -695,6 +696,7 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 				ServerTimeUnixMs:         time.Now().UnixMilli(),
 				HeartbeatIntervalSeconds: s.heartbeatIntervalSeconds,
 				DesiredRevision:          desiredRevision,
+				ServerCapabilities:       serverCapabilities,
 			},
 		},
 	}); err != nil {
@@ -704,6 +706,12 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 		return err
 	}
 	defer manager.unregister(connection)
+	// The data plane, per negotiated capability (PROTOCOL.md, "Data plane").
+	// Each sender stops before the connection is unregistered.
+	if agentcontrol.Negotiated(hello.Capabilities, serverCapabilities, agentcontrol.CapabilityUsers) {
+		stopUserDeltas := s.startUserDeltas(stream.Context(), connection, agentNode, hello.UsersCursor)
+		defer stopUserDeltas()
+	}
 
 	for {
 		message, err := stream.Recv()
@@ -915,9 +923,21 @@ func authenticatedStreamNodeID(ctx context.Context) (uint32, error) {
 	return uint32(nodeID), nil
 }
 
+// serverCapabilities lists the data-plane features this Control serves to
+// node, HelloAck.server_capabilities (PROTOCOL.md, "Data plane"). Each
+// feature appends its capability here; a payload is sent on a session only
+// when the Agent's Hello lists the capability too (agentcontrol.Negotiated).
+func (s *AgentControlGRPCServer) serverCapabilities(node agentcontrol.AgentNode) []*agentv1pb.Capability {
+	var capabilities []*agentv1pb.Capability
+	if s.servesUserDeltas(node) {
+		capabilities = append(capabilities, &agentv1pb.Capability{Name: agentcontrol.CapabilityUsers, Version: agentcontrol.CapabilityVersionV1})
+	}
+	return capabilities
+}
+
 // unnegotiatedPayload rejects a data-plane payload (PROTOCOL.md, "Data
 // plane"). An Agent sends one only when HelloAck.server_capabilities lists its
-// capability, and this server lists none yet. The answer is InvalidArgument,
+// capability, and this server lists none of these. The answer is InvalidArgument,
 // ending the stream, as from a Control built before these payloads existed:
 // there they arrive as an unknown payload ("control message payload is
 // required").
