@@ -28,14 +28,15 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   WebSocket routes use `registeredPackageWebSocketRoute`.
 - `config/package-extraction.json` records each route's extraction mode
   (`bridged`, `native-flagged` or `native`) and where its legacy handler lives
-  (`router`, `identity-bridge` or `none`). 143 routes are `native-flagged`:
+  (`router`, `identity-bridge` or `none`). 144 routes are `native-flagged`:
   identity-platform (20: group A's 15, the profile, dashboard and user detail,
   and the traffic and subscription resets), affiliate (7), forward (17),
   gost-mesh (1), knowledge (6), machine-telemetry (2), notification (19),
   order (9), payment (16), plan (7), platform (4), protocol-runtime (3),
-  proxy-node (7), subscription (17) and ticket (8). The rest are `bridged`.
-  The identity routes are `identity-bridge`. `check_plugin_only_routes.py`
-  enforces the map against the router and the identity bridge.
+  proxy-node (7), subscription (17), ticket (8) and wireguard (1). The rest
+  are `bridged`. The identity routes are `identity-bridge`.
+  `check_plugin_only_routes.py` enforces the map against the router and the
+  identity bridge.
 - Request path: gin middleware -> `compatv2` gateway -> route resolution
   (`internal/compat/v2/registry.go`, `verifiedRouteSource`) -> package host
   process over Unix gRPC -> package bridge (FD 4) -> **the legacy in-kernel
@@ -575,6 +576,15 @@ table and proven equivalent to `PlanService.AssignToUser` and steps 4–5 of
   diagnosis stay bridged: they read the NodeX address and shared token from
   the protected `v2_system_config` (the token is a secret no view shows) and
   call NodeX with it.
+- **WireGuard (in place).** wireguard's one route runs natively, proved by
+  `internal/tests/wireguardcompat`: the administrator's server keypair for
+  the protocol form. It reads and stores nothing; the administrator saves
+  the private key into a protocol through protocol-runtime's bridged routes
+  on the protected `v2_node_protocol`. The answer carries a private key
+  either way: a bridged answer passes through the package host too, so
+  generating it in the package gives the package nothing it did not see.
+  The parity test masks the random keys and checks on both sides that each
+  answer is a fresh X25519 pair.
 - The kernel publishes read-only views `kapi_*`, created at startup by
   `EnsureKernelAPIViews` (first `kapi_user_directory_v1`, then
   `kapi_system_audit_log_v1`, the `v2_operation_log` rows of module

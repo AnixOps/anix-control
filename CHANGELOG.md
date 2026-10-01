@@ -851,6 +851,11 @@
   `internal/tests/gostmeshcompat` proves byte parity (23 cases) against test
   gost APIs that answer, refuse, fail, answer what the client cannot decode,
   or do not listen. The PostgreSQL run is part of CI.
+- **WireGuard module.** `packages/wireguard` has its own host and serves its
+  one route natively: the administrator's WireGuard server keypair, which
+  reads and stores nothing. `internal/tests/wireguardcompat` proves the same
+  answer with the random keys masked, and that both sides answer a fresh
+  X25519 pair. The PostgreSQL run is part of CI.
 
 - The kernel side of the identity module, `KernelIdentity` (N9). It is served
   on the local package bridge and on the module listener.

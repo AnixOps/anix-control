@@ -1566,7 +1566,7 @@
       "path": "/api/v2/admin/wireguard/keypair",
       "package_id": "wireguard",
       "route_id": "wireguard.admin.wireguard.keypair.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
