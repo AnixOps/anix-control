@@ -2,6 +2,7 @@ package handler
 
 import (
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
@@ -124,9 +125,11 @@ func NewAgentHandler() *AgentHandler {
 // middleware. The returned isForwardNode tells callers which table owns the
 // node so online-status writes land in the right place.
 func (h *AgentHandler) verifyForwardNodeToken(nodeID uint, token string) (isForwardNode bool, err error) {
+	// An empty token never authenticates: a node whose key or token is
+	// empty would otherwise accept anyone.
 	var fwd model.ForwardNode
 	if fwdErr := h.db.First(&fwd, nodeID).Error; fwdErr == nil {
-		if fwd.APIToken != token {
+		if token == "" || !secretEqual(fwd.APIToken, token) {
 			return true, errAgentInvalidToken
 		}
 		return true, nil
@@ -137,12 +140,21 @@ func (h *AgentHandler) verifyForwardNodeToken(nodeID uint, token string) (isForw
 		return false, errAgentNodeNotFound
 	}
 
+	if token == "" {
+		return false, errAgentInvalidToken
+	}
 	tokenHash := hashString(token)
-	valid := node.APIKeyHash == tokenHash || (node.APIKeyHash == "" && node.APIKey == token)
+	valid := secretEqual(node.APIKeyHash, tokenHash) || (node.APIKeyHash == "" && secretEqual(node.APIKey, token))
 	if !valid {
 		return false, errAgentInvalidToken
 	}
 	return false, nil
+}
+
+// secretEqual compares a stored secret with a presented one in constant
+// time; an empty stored secret matches nothing.
+func secretEqual(stored, presented string) bool {
+	return stored != "" && subtle.ConstantTimeCompare([]byte(stored), []byte(presented)) == 1
 }
 
 func prepareAgentWebSocket(conn *websocket.Conn) error {

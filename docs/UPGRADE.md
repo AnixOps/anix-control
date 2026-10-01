@@ -398,6 +398,21 @@ If a release requires schema/data changes:
 For SQLite-to-PostgreSQL migration, use
 [`reference/sqlite-to-postgres-migration.md`](reference/sqlite-to-postgres-migration.md).
 
+### Nodes Without An API Key
+
+Agents authenticate with their node's API key, or with a forward node's API
+token. Earlier builds accepted an empty token for a node whose key was empty;
+such a node now refuses every agent until it has a key. Before upgrading,
+check for one (read-only):
+
+```sql
+SELECT id, name FROM v2_node WHERE COALESCE(api_key, '') = '' AND COALESCE(api_key_hash, '') = '';
+SELECT id, name FROM v2_forward_node WHERE COALESCE(api_token, '') = '';
+```
+
+Give each one a key from the administrator panel and update its agent's
+configuration.
+
 ### Audit Request Bodies Written Before The Redaction Fix
 
 Earlier builds stored the raw body of every administrator write request in

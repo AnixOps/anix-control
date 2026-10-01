@@ -4,6 +4,12 @@
 
 ### Security
 
+- An empty token no longer authenticates an agent. The agent WebSocket and
+  REST authentication (`verifyForwardNodeToken`) accepted an empty token for
+  a node whose API key and hash were empty, and for a forward node without a
+  token, so anyone could act as such a node: fetch its users and report
+  traffic. Tokens are now compared in constant time, and an empty token is
+  refused. A node without a key must be given one; see `docs/UPGRADE.md`.
 - Subscription group and template writes save only their own columns.
   `POST` and `PUT /api/v2/admin/subscription/groups[/:id]` and
   `POST /api/v2/admin/subscription/groups/:id/templates` bound the body to
