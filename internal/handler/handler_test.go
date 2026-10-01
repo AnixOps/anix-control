@@ -5690,6 +5690,40 @@ func (s *InviteHandlerTestSuite) TestGenerateCode() {
 	assert.NotContains(s.T(), resp, "error")
 }
 
+// A user holds at most code_count unused invite codes (5 by default); at
+// the limit the answer is v2board's: 500 and its message.
+func (s *InviteHandlerTestSuite) TestGenerateCode_LimitsUnusedCodes() {
+	handler := NewInviteHandler()
+	s.router.POST("/invite/generate", func(c *gin.Context) {
+		c.Set("user_id", s.testUser.ID)
+		c.Next()
+	}, handler.GenerateCode)
+	generate := func() *httptest.ResponseRecorder {
+		req, _ := http.NewRequest("POST", "/invite/generate", nil)
+		w := httptest.NewRecorder()
+		s.router.ServeHTTP(w, req)
+		return w
+	}
+
+	for i := 0; i < service.DefaultInviteCodeLimit; i++ {
+		w := generate()
+		s.Require().Equal(http.StatusOK, w.Code, w.Body.String())
+	}
+	w := generate()
+	assert.Equal(s.T(), http.StatusInternalServerError, w.Code)
+	assert.JSONEq(s.T(), `{"error":"The maximum number of creations has been reached"}`, w.Body.String())
+	var codes int64
+	s.Require().NoError(s.db.Model(&model.InviteCode{}).Where("user_id = ?", s.testUser.ID).Count(&codes).Error)
+	assert.Equal(s.T(), int64(service.DefaultInviteCodeLimit), codes)
+
+	// A used code frees a place.
+	var used model.InviteCode
+	s.Require().NoError(s.db.Where("user_id = ?", s.testUser.ID).Order("id").First(&used).Error)
+	s.Require().NoError(s.db.Model(&used).Update("status", 1).Error)
+	assert.Equal(s.T(), http.StatusOK, generate().Code)
+	assert.Equal(s.T(), http.StatusInternalServerError, generate().Code)
+}
+
 func (s *InviteHandlerTestSuite) TestGetCommissionRecords() {
 	handler := NewInviteHandler()
 	s.router.GET("/invite/commissions", func(c *gin.Context) {

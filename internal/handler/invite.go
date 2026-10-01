@@ -348,7 +348,12 @@ func (h *InviteHandler) GetInviteInfo(c *gin.Context) {
 func (h *InviteHandler) GenerateCode(c *gin.Context) {
 	userID := c.GetUint("user_id")
 
-	code, err := h.inviteService.GenerateInviteCode(&userID)
+	code, err := h.inviteService.GenerateUserInviteCode(userID)
+	if errors.Is(err, service.ErrInviteCodeLimit) {
+		// v2board answers the limit with 500 and this message.
+		c.JSON(http.StatusInternalServerError, gin.H{"error": service.InviteCodeLimitMessage})
+		return
+	}
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return

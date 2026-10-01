@@ -53,7 +53,7 @@ source of truth.
 | User | Coupon validation | Implemented | `/api/v2/user/coupon/check` | None known. |
 | User | Knowledge base browsing | Implemented | `/api/v2/user/knowledge*` | None known. |
 | User | Ticket create/list/detail/reply/close | Implemented | `/api/v2/user/ticket*` | None known. |
-| User | Invite codes, commission records, withdrawals | Implemented | `/api/v2/user/invite*`, admin Invite page | Add provider-specific payout integration only after policy review. |
+| User | Invite codes, commission records, withdrawals | Implemented | `/api/v2/user/invite*`, admin Invite page; a user holds at most `code_count` (default 5) unused codes, as in v2board | Add provider-specific payout integration only after policy review. |
 | User | User notification inbox | Implemented | `/api/v2/user/notifications*`, unified success/error envelopes | Add broader event coverage as business events grow. |
 | User | Telegram binding status and notification preference | Implemented | `/api/v2/user/telegram/*`, unified success/error envelopes | Bot token/webhook operations need operator credentials. |
 | User | User-managed forwarding/tunnel entries | Partial | `/api/v2/forward/*`, `/api/v2/tunnel/user/tunnel` | Close remaining Flux parity and runtime enforcement gaps. |

@@ -46,6 +46,20 @@
     tests anix-agent against this checkout's SDK through a `go.work` replace.
   - **License.** The moved files were MPL-2.0 in anix-agent; their sole
     author relicensed them under this repository's MIT license.
+- A user holds at most `code_count` unused invite codes, as v2board limits
+  them (`invite_gen_limit`). `POST /api/v2/user/invite/generate` created
+  codes without limit, and the invite configuration's `code_count` was
+  stored but unused.
+  - The limit is read from the stored configuration on each request; a
+    missing configuration or a `code_count` of `0` means 5, v2board's
+    default.
+  - Used codes, expired codes, other users' codes and public codes are not
+    counted. Concurrent requests of one user are counted one after another.
+  - At the limit the answer is v2board's: `500`
+    `{"error":"The maximum number of creations has been reached"}`, and no
+    code is created.
+  - No other path creates a user's codes; an administrator's generation,
+    if one is added, is not limited (`InviteService.GenerateInviteCode`).
 
 ## 4.1.0-rc.1 - 2026-10-01
 

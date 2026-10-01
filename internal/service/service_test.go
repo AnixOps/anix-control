@@ -2016,6 +2016,85 @@ func (s *InviteServiceTestSuite) TestGenerateInviteCode() {
 	assert.Equal(s.T(), 0, code.Status)
 }
 
+// A user holds at most code_count unused codes (5 without a
+// configuration); used and expired codes, other users' codes and public
+// codes are not counted, and GenerateInviteCode is not limited.
+func (s *InviteServiceTestSuite) TestGenerateUserInviteCode_Limit() {
+	db := database.Get()
+	userID := s.testUser.ID
+	unused := func() int64 {
+		var n int64
+		s.Require().NoError(db.Model(&model.InviteCode{}).Where("user_id = ? AND status = 0", userID).Count(&n).Error)
+		return n
+	}
+	s.Require().NoError(db.Where("1 = 1").Delete(&model.InviteConfig{}).Error)
+
+	for i := 0; i < DefaultInviteCodeLimit; i++ {
+		code, err := s.svc.GenerateUserInviteCode(userID)
+		s.Require().NoError(err, i)
+		s.Equal(userID, *code.UserID)
+	}
+	_, err := s.svc.GenerateUserInviteCode(userID)
+	s.Require().ErrorIs(err, ErrInviteCodeLimit)
+	s.Equal(int64(DefaultInviteCodeLimit), unused())
+
+	// Not counted: another user's codes, public codes, a used code and an
+	// expired one.
+	otherID := userID + 1000
+	s.Require().NoError(db.Create(&model.InviteCode{Code: "OTHER001", UserID: &otherID}).Error)
+	s.Require().NoError(db.Create(&model.InviteCode{Code: "PUBLIC01"}).Error)
+	var first model.InviteCode
+	s.Require().NoError(db.Where("user_id = ?", userID).Order("id").First(&first).Error)
+	s.Require().NoError(db.Model(&first).Update("status", 1).Error)
+	_, err = s.svc.GenerateUserInviteCode(userID)
+	s.Require().NoError(err, "a used code frees a place")
+	_, err = s.svc.GenerateUserInviteCode(userID)
+	s.Require().ErrorIs(err, ErrInviteCodeLimit)
+	var second model.InviteCode
+	s.Require().NoError(db.Where("user_id = ? AND status = 0", userID).Order("id").First(&second).Error)
+	s.Require().NoError(db.Model(&second).Update("expired_at", time.Now().Add(-time.Hour)).Error)
+	_, err = s.svc.GenerateUserInviteCode(userID)
+	s.Require().NoError(err, "an expired code frees a place")
+	_, err = s.svc.GenerateUserInviteCode(userID)
+	s.Require().ErrorIs(err, ErrInviteCodeLimit)
+
+	// Other generation is not limited.
+	_, err = s.svc.GenerateInviteCode(&userID)
+	s.Require().NoError(err)
+}
+
+// The limit is the stored configuration's code_count, read on each
+// generation; a code_count below one is the default.
+func (s *InviteServiceTestSuite) TestGenerateUserInviteCode_ConfiguredLimit() {
+	db := database.Get()
+	userID := s.testUser.ID
+	s.Require().NoError(db.Where("1 = 1").Delete(&model.InviteConfig{}).Error)
+	cfg := model.InviteConfig{Enabled: true, CodeCount: 2}
+	s.Require().NoError(db.Create(&cfg).Error)
+
+	for i := 0; i < 2; i++ {
+		_, err := s.svc.GenerateUserInviteCode(userID)
+		s.Require().NoError(err, i)
+	}
+	_, err := s.svc.GenerateUserInviteCode(userID)
+	s.Require().ErrorIs(err, ErrInviteCodeLimit)
+
+	// The administrator raises it through another service.
+	s.Require().NoError(db.Model(&cfg).Update("code_count", 3).Error)
+	_, err = s.svc.GenerateUserInviteCode(userID)
+	s.Require().NoError(err)
+	_, err = s.svc.GenerateUserInviteCode(userID)
+	s.Require().ErrorIs(err, ErrInviteCodeLimit)
+
+	s.Require().NoError(db.Model(&cfg).Update("code_count", 0).Error)
+	_, err = s.svc.GenerateUserInviteCode(userID)
+	s.Require().NoError(err, "code_count 0 is the default of 5")
+	_, err = s.svc.GenerateUserInviteCode(userID)
+	s.Require().NoError(err)
+	_, err = s.svc.GenerateUserInviteCode(userID)
+	s.Require().ErrorIs(err, ErrInviteCodeLimit)
+}
+
 func (s *InviteServiceTestSuite) TestGetInviteStats() {
 	stats, err := s.svc.GetInviteStats(s.testUser.ID)
 	assert.NoError(s.T(), err)
