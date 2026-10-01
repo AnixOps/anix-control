@@ -34,13 +34,13 @@ const (
 	NodeSecretReasonWireGuardKey = "wireguard_key"
 	// NodeSecretReasonWireGuardKeyPair: a WireGuard entry's server public
 	// key is not the public key of its server_private_key.
-	NodeSecretReasonWireGuardKeyPair = "wireguard_key_pair"
+	NodeSecretReasonWireGuardKeyPair = "wireguard_key_pair" // #nosec G101 -- this names a validation reason, not a credential.
 	// NodeSecretReasonRealityKey: a Reality private_key is not a 32-byte
 	// Base64 key.
 	NodeSecretReasonRealityKey = "reality_key"
 	// NodeSecretReasonSS2022Key: a Shadowsocks 2022 server_key does not
 	// decode to the cipher's key length.
-	NodeSecretReasonSS2022Key = "ss2022_key"
+	NodeSecretReasonSS2022Key = "ss2022_key" // #nosec G101 -- this names a validation reason, not a credential.
 )
 
 // NodeSecretFinding names one secret that fails validation: where it is and

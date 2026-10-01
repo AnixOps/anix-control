@@ -47,7 +47,7 @@ func phaseCacheKey(db *gorm.DB) any {
 	if db == nil || db.Config == nil {
 		return nil
 	}
-	return db.Config.ConnPool
+	return db.ConnPool
 }
 
 // ReadPhase answers the phase whose read rule table's readers apply. A
