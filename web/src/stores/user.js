@@ -174,6 +174,13 @@ export const useUserStore = defineStore('user', () => {
     localStorage.removeItem('userInfo')
   }
 
+  // Merge fields the client learned from an answer (a reset subscription
+  // token) without refetching the profile.
+  function updateUserInfo(patch) {
+    userInfo.value = normalizeUserInfo({ ...userInfo.value, ...patch })
+    localStorage.setItem('userInfo', JSON.stringify(userInfo.value))
+  }
+
   async function getUserInfo() {
     try {
       const res = await getProfile()
@@ -210,6 +217,7 @@ export const useUserStore = defineStore('user', () => {
     hasPermission,
     login,
     logout,
+    updateUserInfo,
     getUserInfo
   }
 })
