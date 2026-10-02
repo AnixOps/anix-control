@@ -330,28 +330,30 @@
 
     <!-- Create/edit group -->
     <UiDialog :open="showCreateGroupModal || showEditGroupModal" :title="showEditGroupModal ? $t('admin.subscriptions.editGroup') : $t('admin.subscriptions.createGroup')" :dismissible="!groupSaving" @update:open="value => { if (!value) closeGroupModal() }">
-      <div class="form-group">
-        <label for="subscription-field-2">{{ $t('admin.subscriptions.groupName') }} *</label>
-        <input id="subscription-field-2" type="text" v-model="groupForm.name" :placeholder="$t('admin.subscriptions.groupNamePlaceholder')">
-      </div>
-      <div class="form-group">
-        <label for="subscription-field-3">{{ $t('admin.subscriptions.description') }}</label>
-        <textarea id="subscription-field-3" v-model="groupForm.description" rows="3"></textarea>
-      </div>
-      <div class="form-row">
+      <div class="dialog-fields">
         <div class="form-group">
-          <label for="subscription-field-4">{{ $t('admin.subscriptions.priority') }}</label>
-          <input id="subscription-field-4" type="number" v-model.number="groupForm.priority">
+          <label for="subscription-field-2">{{ $t('admin.subscriptions.groupName') }} *</label>
+          <input id="subscription-field-2" type="text" v-model="groupForm.name" :placeholder="$t('admin.subscriptions.groupNamePlaceholder')">
         </div>
         <div class="form-group">
-          <label>{{ $t('admin.subscriptions.enabled') }}</label>
-          <label class="switch">
-            <input type="checkbox" v-model="groupForm.enable" :aria-label="$t('admin.subscriptions.enabled')">
-            <span class="slider"></span>
-          </label>
+          <label for="subscription-field-3">{{ $t('admin.subscriptions.description') }}</label>
+          <textarea id="subscription-field-3" v-model="groupForm.description" rows="3"></textarea>
         </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="subscription-field-4">{{ $t('admin.subscriptions.priority') }}</label>
+            <input id="subscription-field-4" type="number" v-model.number="groupForm.priority">
+          </div>
+          <div class="form-group">
+            <label>{{ $t('admin.subscriptions.enabled') }}</label>
+            <label class="switch">
+              <input type="checkbox" v-model="groupForm.enable" :aria-label="$t('admin.subscriptions.enabled')">
+              <span class="slider"></span>
+            </label>
+          </div>
+        </div>
+        <p v-if="groupFormError" class="dialog-error" role="alert" data-test="group-form-error">{{ groupFormError }}</p>
       </div>
-      <p v-if="groupFormError" class="dialog-error" role="alert" data-test="group-form-error">{{ groupFormError }}</p>
       <template #footer="{ close }">
         <UiButton :disabled="groupSaving" @click="close">{{ $t('common.actions.cancel') }}</UiButton>
         <UiButton variant="primary" data-test="save-group" :loading="groupSaving" @click="saveGroup">{{ $t('common.actions.save') }}</UiButton>
@@ -360,97 +362,99 @@
 
     <!-- Create/edit template -->
     <UiDialog :open="showCreateTemplateModal || showEditTemplateModal" size="lg" :title="showEditTemplateModal ? $t('admin.subscriptions.editTemplate') : $t('admin.subscriptions.createTemplate')" :dismissible="!templateSaving" @update:open="value => { if (!value) closeTemplateModal() }">
-      <div class="form-row">
-        <div class="form-group">
-          <label for="subscription-field-5">{{ $t('admin.subscriptions.nodeName') }} *</label>
-          <input id="subscription-field-5" type="text" v-model="templateForm.name" :placeholder="$t('admin.subscriptions.nodeNamePlaceholder')">
+      <div class="dialog-fields">
+        <div class="form-row">
+          <div class="form-group">
+            <label for="subscription-field-5">{{ $t('admin.subscriptions.nodeName') }} *</label>
+            <input id="subscription-field-5" type="text" v-model="templateForm.name" :placeholder="$t('admin.subscriptions.nodeNamePlaceholder')">
+          </div>
+          <div class="form-group">
+            <label for="subscription-field-6">{{ $t('admin.subscriptions.protocol') }} *</label>
+            <select id="subscription-field-6" v-model="templateForm.type">
+              <option value="vless">{{ $t('networkPages.subscriptions.protocols.vless') }}</option>
+              <option value="vmess">{{ $t('networkPages.subscriptions.protocols.vmess') }}</option>
+              <option value="trojan">{{ $t('networkPages.subscriptions.protocols.trojan') }}</option>
+              <option value="shadowsocks">{{ $t('networkPages.subscriptions.protocols.shadowsocks') }}</option>
+              <option value="hysteria2">{{ $t('networkPages.subscriptions.protocols.hysteria2') }}</option>
+              <option value="tuic">{{ $t('networkPages.subscriptions.protocols.tuic') }}</option>
+            </select>
+          </div>
         </div>
-        <div class="form-group">
-          <label for="subscription-field-6">{{ $t('admin.subscriptions.protocol') }} *</label>
-          <select id="subscription-field-6" v-model="templateForm.type">
-            <option value="vless">{{ $t('networkPages.subscriptions.protocols.vless') }}</option>
-            <option value="vmess">{{ $t('networkPages.subscriptions.protocols.vmess') }}</option>
-            <option value="trojan">{{ $t('networkPages.subscriptions.protocols.trojan') }}</option>
-            <option value="shadowsocks">{{ $t('networkPages.subscriptions.protocols.shadowsocks') }}</option>
-            <option value="hysteria2">{{ $t('networkPages.subscriptions.protocols.hysteria2') }}</option>
-            <option value="tuic">{{ $t('networkPages.subscriptions.protocols.tuic') }}</option>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="subscription-field-7">{{ $t('admin.subscriptions.server') }} *</label>
+            <input id="subscription-field-7" type="text" v-model="templateForm.server" :placeholder="$t('networkPages.subscriptions.placeholders.server')">
+          </div>
+          <div class="form-group">
+            <label for="subscription-field-8">{{ $t('admin.subscriptions.port') }} *</label>
+            <input id="subscription-field-8" type="number" v-model.number="templateForm.port" :placeholder="$t('networkPages.subscriptions.placeholders.port')">
+          </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="subscription-field-9">{{ $t('admin.subscriptions.tls') }}</label>
+            <select id="subscription-field-9" v-model.number="templateForm.tls">
+              <option :value="0">{{ $t('admin.subscriptions.tlsNone') }}</option>
+              <option :value="1">{{ $t('networkPages.subscriptions.tlsModes.tls') }}</option>
+              <option :value="2">{{ $t('networkPages.subscriptions.tlsModes.reality') }}</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="subscription-field-10">{{ $t('admin.subscriptions.transport') }}</label>
+            <select id="subscription-field-10" v-model="templateForm.transport">
+              <option value="tcp">{{ $t('networkPages.subscriptions.transports.tcp') }}</option>
+              <option value="ws">{{ $t('networkPages.subscriptions.transports.ws') }}</option>
+              <option value="grpc">{{ $t('networkPages.subscriptions.transports.grpc') }}</option>
+              <option value="h2">{{ $t('networkPages.subscriptions.transports.h2') }}</option>
+              <option value="quic">{{ $t('networkPages.subscriptions.transports.quic') }}</option>
+            </select>
+          </div>
+        </div>
+        <div class="form-group" v-if="templateForm.tls > 0">
+          <label for="subscription-field-11">{{ $t('admin.subscriptions.sni') }}</label>
+          <input id="subscription-field-11" type="text" v-model="templateForm.server_name" :placeholder="$t('networkPages.subscriptions.placeholders.sni')">
+        </div>
+        <div class="form-row" v-if="templateForm.tls === 2">
+          <div class="form-group">
+            <label for="subscription-field-12">{{ $t('admin.subscriptions.realityPublicKey') }}</label>
+            <input id="subscription-field-12" type="text" v-model="templateForm.reality_public_key">
+          </div>
+          <div class="form-group">
+            <label for="subscription-field-13">{{ $t('admin.subscriptions.realityShortId') }}</label>
+            <input id="subscription-field-13" type="text" v-model="templateForm.reality_short_id">
+          </div>
+        </div>
+        <div class="form-group" v-if="templateForm.tls > 0">
+          <label for="subscription-field-14">{{ $t('admin.subscriptions.tlsFingerprint') }}</label>
+          <select id="subscription-field-14" v-model="templateForm.tls_fingerprint">
+            <option value="">{{ $t('admin.subscriptions.defaultOption') }}</option>
+            <option value="chrome">{{ $t('networkPages.subscriptions.fingerprints.chrome') }}</option>
+            <option value="firefox">{{ $t('networkPages.subscriptions.fingerprints.firefox') }}</option>
+            <option value="safari">{{ $t('networkPages.subscriptions.fingerprints.safari') }}</option>
+            <option value="edge">{{ $t('networkPages.subscriptions.fingerprints.edge') }}</option>
+            <option value="random">{{ $t('networkPages.subscriptions.fingerprints.random') }}</option>
           </select>
         </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label for="subscription-field-7">{{ $t('admin.subscriptions.server') }} *</label>
-          <input id="subscription-field-7" type="text" v-model="templateForm.server" :placeholder="$t('networkPages.subscriptions.placeholders.server')">
+        <div class="form-group" v-if="templateForm.transport === 'ws'">
+          <label for="subscription-field-15">{{ $t('admin.subscriptions.websocketPath') }}</label>
+          <input id="subscription-field-15" type="text" v-model="wsPath" :placeholder="$t('networkPages.subscriptions.placeholders.wsPath')">
         </div>
-        <div class="form-group">
-          <label for="subscription-field-8">{{ $t('admin.subscriptions.port') }} *</label>
-          <input id="subscription-field-8" type="number" v-model.number="templateForm.port" :placeholder="$t('networkPages.subscriptions.placeholders.port')">
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label for="subscription-field-9">{{ $t('admin.subscriptions.tls') }}</label>
-          <select id="subscription-field-9" v-model.number="templateForm.tls">
-            <option :value="0">{{ $t('admin.subscriptions.tlsNone') }}</option>
-            <option :value="1">{{ $t('networkPages.subscriptions.tlsModes.tls') }}</option>
-            <option :value="2">{{ $t('networkPages.subscriptions.tlsModes.reality') }}</option>
+        <div class="form-group" v-if="templateForm.type === 'vless' && templateForm.tls === 2">
+          <label for="subscription-field-16">{{ $t('admin.subscriptions.flow') }}</label>
+          <select id="subscription-field-16" v-model="vlessFlow">
+            <option value="">{{ $t('admin.subscriptions.noneOption') }}</option>
+            <option value="xtls-rprx-vision">{{ $t('networkPages.subscriptions.flows.xtlsRprxVision') }}</option>
           </select>
         </div>
         <div class="form-group">
-          <label for="subscription-field-10">{{ $t('admin.subscriptions.transport') }}</label>
-          <select id="subscription-field-10" v-model="templateForm.transport">
-            <option value="tcp">{{ $t('networkPages.subscriptions.transports.tcp') }}</option>
-            <option value="ws">{{ $t('networkPages.subscriptions.transports.ws') }}</option>
-            <option value="grpc">{{ $t('networkPages.subscriptions.transports.grpc') }}</option>
-            <option value="h2">{{ $t('networkPages.subscriptions.transports.h2') }}</option>
-            <option value="quic">{{ $t('networkPages.subscriptions.transports.quic') }}</option>
-          </select>
+          <label>{{ $t('admin.subscriptions.enabled') }}</label>
+          <label class="switch">
+            <input type="checkbox" v-model="templateForm.enable" :aria-label="$t('admin.subscriptions.enabled')">
+            <span class="slider"></span>
+          </label>
         </div>
+        <p v-if="templateFormError" class="dialog-error" role="alert" data-test="template-form-error">{{ templateFormError }}</p>
       </div>
-      <div class="form-group" v-if="templateForm.tls > 0">
-        <label for="subscription-field-11">{{ $t('admin.subscriptions.sni') }}</label>
-        <input id="subscription-field-11" type="text" v-model="templateForm.server_name" :placeholder="$t('networkPages.subscriptions.placeholders.sni')">
-      </div>
-      <div class="form-row" v-if="templateForm.tls === 2">
-        <div class="form-group">
-          <label for="subscription-field-12">{{ $t('admin.subscriptions.realityPublicKey') }}</label>
-          <input id="subscription-field-12" type="text" v-model="templateForm.reality_public_key">
-        </div>
-        <div class="form-group">
-          <label for="subscription-field-13">{{ $t('admin.subscriptions.realityShortId') }}</label>
-          <input id="subscription-field-13" type="text" v-model="templateForm.reality_short_id">
-        </div>
-      </div>
-      <div class="form-group" v-if="templateForm.tls > 0">
-        <label for="subscription-field-14">{{ $t('admin.subscriptions.tlsFingerprint') }}</label>
-        <select id="subscription-field-14" v-model="templateForm.tls_fingerprint">
-          <option value="">{{ $t('admin.subscriptions.defaultOption') }}</option>
-          <option value="chrome">{{ $t('networkPages.subscriptions.fingerprints.chrome') }}</option>
-          <option value="firefox">{{ $t('networkPages.subscriptions.fingerprints.firefox') }}</option>
-          <option value="safari">{{ $t('networkPages.subscriptions.fingerprints.safari') }}</option>
-          <option value="edge">{{ $t('networkPages.subscriptions.fingerprints.edge') }}</option>
-          <option value="random">{{ $t('networkPages.subscriptions.fingerprints.random') }}</option>
-        </select>
-      </div>
-      <div class="form-group" v-if="templateForm.transport === 'ws'">
-        <label for="subscription-field-15">{{ $t('admin.subscriptions.websocketPath') }}</label>
-        <input id="subscription-field-15" type="text" v-model="wsPath" :placeholder="$t('networkPages.subscriptions.placeholders.wsPath')">
-      </div>
-      <div class="form-group" v-if="templateForm.type === 'vless' && templateForm.tls === 2">
-        <label for="subscription-field-16">{{ $t('admin.subscriptions.flow') }}</label>
-        <select id="subscription-field-16" v-model="vlessFlow">
-          <option value="">{{ $t('admin.subscriptions.noneOption') }}</option>
-          <option value="xtls-rprx-vision">{{ $t('networkPages.subscriptions.flows.xtlsRprxVision') }}</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label>{{ $t('admin.subscriptions.enabled') }}</label>
-        <label class="switch">
-          <input type="checkbox" v-model="templateForm.enable" :aria-label="$t('admin.subscriptions.enabled')">
-          <span class="slider"></span>
-        </label>
-      </div>
-      <p v-if="templateFormError" class="dialog-error" role="alert" data-test="template-form-error">{{ templateFormError }}</p>
       <template #footer="{ close }">
         <UiButton :disabled="templateSaving" @click="close">{{ $t('common.actions.cancel') }}</UiButton>
         <UiButton variant="primary" data-test="save-template" :loading="templateSaving" @click="saveTemplate">{{ $t('common.actions.save') }}</UiButton>
@@ -1407,6 +1411,9 @@ input:checked + .slider:before { transform: translateX(20px); }
 
 /* Dialogs */
 .dialog-error { margin: 0; color: var(--danger); }
+.dialog-fields { display: grid; gap: var(--space-4); }
+.dialog-fields .form-group { margin-bottom: 0; }
+.dialog-fields .form-row { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: var(--space-4); }
 
 .form-group { margin-bottom:16px; }
 .form-group label { display:block; margin-bottom:4px; font-weight:500; color: var(--text-color); }

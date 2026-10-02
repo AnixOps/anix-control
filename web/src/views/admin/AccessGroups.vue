@@ -594,6 +594,9 @@ onMounted(refresh)
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .form-group-wide { grid-column: 1 / -1; }
 .checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.form-grid .form-group { margin-bottom: 0; }
+.form-grid .checkbox-row { grid-column: 1 / -1; }
+.checkbox-row input { width: auto; }
 @media (max-width: 980px) { .access-layout, .policy-grid { grid-template-columns: 1fr; } .policy-section-wide { grid-column: auto; } .grant-form, .quota-form, .resolver-form { grid-template-columns: 1fr; } .grant-form .btn, .quota-form .btn, .resolver-form .btn { justify-self: start; } }
 @media (max-width: 620px) { .access-toolbar { align-items: stretch; flex-direction: column; } .detail-heading { flex-direction: column; } .form-grid { grid-template-columns: 1fr; } .form-group-wide { grid-column: auto; } }
 </style>

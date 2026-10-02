@@ -178,36 +178,38 @@
     </div>
 
     <UiDialog v-model:open="showTaskModal" :title="t('runtime.nodeXAgents.taskModal.title')" :dismissible="!taskSending">
-      <div class="form-group">
-        <label for="agent-task-node">{{ t('runtime.nodeXAgents.taskModal.targetNode') }}</label>
-        <input id="agent-task-node" :value="taskTargetNode?.node_id" disabled />
+      <div class="dialog-fields">
+        <div class="form-group">
+          <label for="agent-task-node">{{ t('runtime.nodeXAgents.taskModal.targetNode') }}</label>
+          <input id="agent-task-node" :value="taskTargetNode?.node_id" disabled />
+        </div>
+        <div class="form-group">
+          <label for="agent-task-action">{{ t('runtime.nodeXAgents.taskModal.action') }}</label>
+          <select id="agent-task-action" v-model="taskForm.action">
+            <option value="">{{ t('runtime.nodeXAgents.terminal.chooseAction') }}</option>
+            <option v-for="action in diagnosticActions" :key="action.value" :value="action.value">
+              {{ t(`runtime.nodeXAgents.diagnosticActions.${action.value}`) }}
+            </option>
+          </select>
+        </div>
+        <div class="form-group" v-if="taskActionSpec?.params.includes('service')">
+          <label for="agent-task-service">{{ t('runtime.nodeXAgents.fields.service') }}</label>
+          <select id="agent-task-service" v-model="taskForm.service">
+            <option v-for="service in diagnosticServices" :key="service" :value="service">
+              {{ t(`runtime.nodeXAgents.services.${service}`) }}
+            </option>
+          </select>
+        </div>
+        <div class="form-group" v-if="taskActionSpec?.params.includes('lines')">
+          <label for="agent-task-lines">{{ t('runtime.nodeXAgents.fields.lines') }}</label>
+          <input id="agent-task-lines" v-model.number="taskForm.lines" type="number" min="1" max="1000" />
+        </div>
+        <div class="form-group">
+          <label for="agent-task-timeout">{{ t('runtime.nodeXAgents.taskModal.timeoutSeconds') }}</label>
+          <input id="agent-task-timeout" v-model.number="taskForm.timeout" type="number" />
+        </div>
+        <p v-if="taskError" class="task-error" role="alert" data-test="agent-task-error">{{ taskError }}</p>
       </div>
-      <div class="form-group">
-        <label for="agent-task-action">{{ t('runtime.nodeXAgents.taskModal.action') }}</label>
-        <select id="agent-task-action" v-model="taskForm.action">
-          <option value="">{{ t('runtime.nodeXAgents.terminal.chooseAction') }}</option>
-          <option v-for="action in diagnosticActions" :key="action.value" :value="action.value">
-            {{ t(`runtime.nodeXAgents.diagnosticActions.${action.value}`) }}
-          </option>
-        </select>
-      </div>
-      <div class="form-group" v-if="taskActionSpec?.params.includes('service')">
-        <label for="agent-task-service">{{ t('runtime.nodeXAgents.fields.service') }}</label>
-        <select id="agent-task-service" v-model="taskForm.service">
-          <option v-for="service in diagnosticServices" :key="service" :value="service">
-            {{ t(`runtime.nodeXAgents.services.${service}`) }}
-          </option>
-        </select>
-      </div>
-      <div class="form-group" v-if="taskActionSpec?.params.includes('lines')">
-        <label for="agent-task-lines">{{ t('runtime.nodeXAgents.fields.lines') }}</label>
-        <input id="agent-task-lines" v-model.number="taskForm.lines" type="number" min="1" max="1000" />
-      </div>
-      <div class="form-group">
-        <label for="agent-task-timeout">{{ t('runtime.nodeXAgents.taskModal.timeoutSeconds') }}</label>
-        <input id="agent-task-timeout" v-model.number="taskForm.timeout" type="number" />
-      </div>
-      <p v-if="taskError" class="task-error" role="alert" data-test="agent-task-error">{{ taskError }}</p>
       <template #footer="{ close }">
         <UiButton :disabled="taskSending" @click="close">{{ t('runtime.nodeXAgents.actions.cancel') }}</UiButton>
         <UiButton variant="primary" data-test="agent-task-send" :loading="taskSending" @click="sendTask">{{ t('runtime.nodeXAgents.actions.send') }}</UiButton>
@@ -661,6 +663,15 @@ onUnmounted(() => {
 .status-error {
   background: rgba(239, 68, 68, 0.15);
   color: var(--error-color);
+}
+
+.dialog-fields {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.dialog-fields .form-group {
+  margin-bottom: 0;
 }
 
 .task-error {

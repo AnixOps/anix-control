@@ -2138,6 +2138,23 @@ onMounted(async () => {
   margin-bottom: 0;
 }
 
+.system-dialog-form .form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-3);
+}
+
+.system-dialog-form .checkbox-label {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  min-height: var(--size-control-md);
+}
+
+.system-dialog-form .checkbox-label input {
+  width: auto;
+}
+
 .system-dialog-error {
   margin: 0;
   color: var(--danger);

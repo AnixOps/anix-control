@@ -48,45 +48,47 @@
     </div>
 
     <UiDialog v-model:open="showModal" size="lg" :title="isEdit ? t('adminKnowledge.modal.editTitle') : t('adminKnowledge.modal.createTitle')">
-      <div class="form-row">
-        <div class="form-group flex-2">
-          <label for="knowledge-title">{{ t('adminKnowledge.fields.title') }} <span class="required">*</span></label>
-          <input id="knowledge-title" v-model="form.title" type="text" data-test="knowledge-title" :placeholder="t('adminKnowledge.placeholders.title')" :aria-invalid="formError && !form.title.trim() ? 'true' : undefined" />
+      <div class="dialog-fields">
+        <div class="form-row">
+          <div class="form-group flex-2">
+            <label for="knowledge-title">{{ t('adminKnowledge.fields.title') }} <span class="required">*</span></label>
+            <input id="knowledge-title" v-model="form.title" type="text" data-test="knowledge-title" :placeholder="t('adminKnowledge.placeholders.title')" :aria-invalid="formError && !form.title.trim() ? 'true' : undefined" />
+          </div>
+          <div class="form-group">
+            <label for="knowledge-category">{{ t('adminKnowledge.fields.category') }}</label>
+            <select id="knowledge-category" v-model="form.category">
+              <option v-for="category in categoryOptions" :key="category.value" :value="category.value">
+                {{ category.label }}
+              </option>
+            </select>
+          </div>
         </div>
         <div class="form-group">
-          <label for="knowledge-category">{{ t('adminKnowledge.fields.category') }}</label>
-          <select id="knowledge-category" v-model="form.category">
-            <option v-for="category in categoryOptions" :key="category.value" :value="category.value">
-              {{ category.label }}
-            </option>
-          </select>
+          <label for="knowledge-body">{{ t('adminKnowledge.fields.content') }} <span class="required">*</span></label>
+          <textarea
+            id="knowledge-body"
+            v-model="form.body"
+            rows="12"
+            data-test="knowledge-body"
+            :placeholder="t('adminKnowledge.placeholders.body')"
+            :aria-invalid="formError && !form.body.trim() ? 'true' : undefined"
+          ></textarea>
         </div>
-      </div>
-      <div class="form-group">
-        <label for="knowledge-body">{{ t('adminKnowledge.fields.content') }} <span class="required">*</span></label>
-        <textarea
-          id="knowledge-body"
-          v-model="form.body"
-          rows="12"
-          data-test="knowledge-body"
-          :placeholder="t('adminKnowledge.placeholders.body')"
-          :aria-invalid="formError && !form.body.trim() ? 'true' : undefined"
-        ></textarea>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label for="knowledge-sort">{{ t('adminKnowledge.fields.sort') }}</label>
-          <input id="knowledge-sort" v-model.number="form.sort" type="number" min="0" />
+        <div class="form-row">
+          <div class="form-group">
+            <label for="knowledge-sort">{{ t('adminKnowledge.fields.sort') }}</label>
+            <input id="knowledge-sort" v-model.number="form.sort" type="number" min="0" />
+          </div>
+          <div class="form-group">
+            <label for="knowledge-show">{{ t('adminKnowledge.fields.visibility') }}</label>
+            <select id="knowledge-show" v-model="form.show">
+              <option :value="1">{{ t('adminKnowledge.visibility.visible') }}</option>
+              <option :value="0">{{ t('adminKnowledge.visibility.hidden') }}</option>
+            </select>
+          </div>
         </div>
-        <div class="form-group">
-          <label for="knowledge-show">{{ t('adminKnowledge.fields.visibility') }}</label>
-          <select id="knowledge-show" v-model="form.show">
-            <option :value="1">{{ t('adminKnowledge.visibility.visible') }}</option>
-            <option :value="0">{{ t('adminKnowledge.visibility.hidden') }}</option>
-          </select>
-        </div>
+        <p v-if="formError" class="form-error" role="alert" data-test="knowledge-error">{{ formError }}</p>
       </div>
-      <p v-if="formError" class="form-error" role="alert" data-test="knowledge-error">{{ formError }}</p>
       <template #footer="{ close }">
         <UiButton :disabled="saving" @click="close">{{ t('common.actions.cancel') }}</UiButton>
         <UiButton variant="primary" data-test="knowledge-save" :loading="saving" @click="saveArticle">{{ isEdit ? t('common.actions.save') : t('adminKnowledge.actions.publish') }}</UiButton>
@@ -377,6 +379,16 @@ const removeArticle = async (article) => {
 
 .form-row .form-group.flex-2 {
   flex: 2;
+}
+
+.dialog-fields {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.dialog-fields .form-group,
+.dialog-fields .form-row {
+  margin-bottom: 0;
 }
 
 .form-error {
