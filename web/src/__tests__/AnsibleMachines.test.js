@@ -1,6 +1,6 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import { render, screen, within } from '@testing-library/vue'
+import { render, screen, waitFor, within } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
 import AnsibleMachines from '@/views/admin/AnsibleMachines.vue'
 
@@ -64,15 +64,17 @@ describe('AnsibleMachines admin page', () => {
   })
 
   it('closes the editor after a successful save', async () => {
-    const wrapper = mountAnsibleMachines()
-    await flushPromises()
+    const user = userEvent.setup()
+    render(AnsibleMachines, { global: { stubs: { RouterLink: { template: '<a><slot /></a>' } } } })
+    await screen.findByText('relay-exec-01')
 
-    await wrapper.vm.openEditor()
-    wrapper.vm.form.name = 'relay-exec-02'
-    wrapper.vm.form.host = '5.6.7.8'
-    wrapper.vm.form.port = '2222'
-    await wrapper.vm.submitForm()
-    await flushPromises()
+    await user.click(screen.getAllByRole('button', { name: 'Add machine' })[0])
+    const dialog = await screen.findByRole('dialog', { name: 'Add Ansible Machine' })
+    await user.type(within(dialog).getByLabelText(/^Name/), 'relay-exec-02')
+    await user.type(within(dialog).getByLabelText(/^Host/), '5.6.7.8')
+    await user.type(within(dialog).getByLabelText(/^Reachability Port/), '2222')
+    await user.click(within(dialog).getByRole('button', { name: 'Save' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
 
     expect(adminApi.createAnsibleMachine).toHaveBeenCalledWith({
       name: 'relay-exec-02',
@@ -81,7 +83,6 @@ describe('AnsibleMachines admin page', () => {
       port: 2222,
       weight: 1
     })
-    expect(wrapper.vm.editorOpen).toBe(false)
   })
 
   it('surfaces action failures inline on the machine card', async () => {

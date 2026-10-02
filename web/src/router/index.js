@@ -38,6 +38,8 @@ const AdminAnsibleMachines = () => import('@/views/admin/AnsibleMachines.vue')
 const AdminForwardNodes = () => import('@/views/admin/ForwardNodes.vue')
 const AdminLocalRuntime = () => import('@/views/admin/LocalRuntime.vue')
 const AdminNodeX = () => import('@/views/admin/NodeX.vue')
+const AdminForwardNodeDetail = () => import('@/views/admin/forward-nodes/ForwardNodeDetail.vue')
+const AdminAnsibleMachineDetail = () => import('@/views/admin/forward-nodes/AnsibleMachineDetail.vue')
 const AdminObservability = () => import('@/views/admin/Observability.vue')
 const AdminPayment = () => import('@/views/admin/Payment.vue')
 const AdminTelegram = () => import('@/views/admin/Telegram.vue')
@@ -207,6 +209,19 @@ const routes = [
         path: 'forward/nodes',
         component: AdminForwardNodes,
         meta: WIDE
+      },
+      // Detail pages of 转发节点 (UI U7); the ids are numbers.
+      {
+        path: 'forward/nodes/:id(\\d+)',
+        component: AdminForwardNodeDetail,
+        props: route => ({ id: Number(route.params.id) }),
+        meta: { titleKey: 'forwardNodesPage.detail.sections' }
+      },
+      {
+        path: 'forward/ansible-machines/:id(\\d+)',
+        component: AdminAnsibleMachineDetail,
+        props: route => ({ id: Number(route.params.id) }),
+        meta: { titleKey: 'forwardNodesPage.detail.sections' }
       },
       {
         path: 'forward/local',

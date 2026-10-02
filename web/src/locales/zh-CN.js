@@ -9,6 +9,7 @@ import ui from './modules/zh-CN/ui'
 import shell from './modules/zh-CN/shell'
 import userPages from './modules/zh-CN/userPages'
 import adminNodes from './modules/zh-CN/adminNodes'
+import forwardNodesPage from './modules/zh-CN/forwardNodesPage'
 import { AGENT_NAME, CONTROL_NAME } from '../constants/brand'
 
 const legacy = {
@@ -103,6 +104,7 @@ export default {
   ...ui,
   ...shell,
   ...userPages,
+  ...forwardNodesPage,
   common: {
     locale: {
       label: '语言',
@@ -436,18 +438,13 @@ export default {
       disabled: '\u5df2\u7981\u7528'
     },
     localRuntime: {
-      heroEyebrow: '\u65e0\u72b6\u6001\u8fd0\u884c\u65f6',
-      title: '\u672c\u5730\u8fd0\u884c\u65f6 / Ansible',
       heroTextPrimary: '\u8be5\u9875\u9762\u53ea\u7ba1\u7406\u9762\u677f\u4e3b\u673a\u4e0a\u7684 Ansible \u6267\u884c\u5668\u3002\u5b83\u662f\u9762\u677f\u4fa7\u8f6c\u53d1\u7684\u65e0\u72b6\u6001\u8fd0\u884c\u65f6\u8def\u5f84\uff0c\u4e0d\u9700\u8981\u6301\u7eed\u7684 NodeX \u63a7\u5236\u9762\u6216 Node-Agent \u8fde\u63a5\u3002',
       heroTextSecondary: '\u540e\u7aef\u4e3a nftables / Ansible\uff0c\u9762\u677f\u4fa7\u8f6c\u53d1\u7684\u65e0\u72b6\u6001\u63a7\u5236\u8def\u5f84\u3002',
-      refreshLoading: '\u5237\u65b0\u4e2d...',
-      saveLoading: '\u4fdd\u5b58\u4e2d...',
       saveActivate: '\u4fdd\u5b58\u5e76\u542f\u7528\u672c\u5730\u8fd0\u884c\u65f6',
       activeBannerTitle: '\u672c\u5730\u8fd0\u884c\u65f6\u5df2\u542f\u7528',
       standbyBannerTitle: '\u672c\u5730\u8fd0\u884c\u65f6\u5904\u4e8e\u5f85\u547d',
       activeBannerText: '\u5f53\u524d\u8f6c\u53d1\u4efb\u52a1\u4f7f\u7528 {backend}\u3002SSH \u4f20\u8f93\u548c\u63d0\u6743\u7b56\u7565\u90fd\u4ece\u8fd9\u4efd Ansible \u8fd0\u884c\u65f6\u914d\u7f6e\u89e3\u6790\u3002',
       standbyBannerText: 'NodeX/gost \u4ecd\u7136\u662f\u5168\u5c40\u6d3b\u8dc3\u8fd0\u884c\u65f6\u3002\u4f60\u4ecd\u53ef\u5148\u5728\u8fd9\u91cc\u9884\u6f14\u548c\u9a8c\u8bc1\u672c\u5730 Ansible \u8fd0\u884c\u65f6\uff0c\u518d\u5207\u6362\u56de\u53bb\u3002',
-      configEyebrow: '\u914d\u7f6e',
       configTitle: '\u9762\u677f\u4e3b\u673a Ansible \u6267\u884c\u5668',
       configCopy: 'Ansible \u6a21\u5f0f\u662f\u65e0\u72b6\u6001\u7684\uff1a\u9762\u677f\u53ea\u5728 tunnel \u548c forward \u8bb0\u5f55\u4e2d\u4fdd\u5b58\u6267\u884c\u8282\u70b9\u6807\u8bc6\uff0cinventory\u3001playbook\u3001sudo \u548c SSH \u884c\u4e3a\u90fd\u5728\u8fd9\u91cc\u914d\u7f6e\u3002',
       recommended: '\u63a8\u8350',
@@ -472,9 +469,7 @@ export default {
       extraVarsHint: '\u540e\u7aef\u76f8\u5173\u5b57\u6bb5\uff08\u6bd4\u5982 firewall driver\uff09\u4f1a\u7531\u6240\u9009 backend \u81ea\u52a8\u6ce8\u5165\u3002',
       environmentHint: '\u9762\u677f\u4e3b\u673a\u6267\u884c\u5668\u8fdb\u7a0b\u7684\u989d\u5916\u73af\u5883\u53d8\u91cf\u3002',
       generatedHint: 'JSON \u8d1f\u8f7d\u7531\u4e0a\u9762\u7684\u7ed3\u6784\u5316\u5b57\u6bb5\u751f\u6210\uff0c\u5e76\u5b58\u5165 `forward.runtime.ansible.config`\u3002',
-      probeEyebrow: '\u672c\u5730\u63a2\u6d4b',
       probeTitle: '\u6267\u884c\u5668\u53ef\u8fde\u901a\u6027\u4e0e\u8fd0\u884c\u65f6\u5c31\u7eea\u5ea6',
-      loadingStatus: '\u52a0\u8f7d\u672c\u5730\u8fd0\u884c\u65f6\u72b6\u6001\u4e2d...',
       noStatus: '\u8fd8\u672a\u52a0\u8f7d\u672c\u5730\u8fd0\u884c\u65f6\u72b6\u6001\u3002',
       cards: {
         localActiveValue: '\u672c\u5730\u8fd0\u884c\u65f6\u5df2\u542f\u7528',
@@ -491,10 +486,7 @@ export default {
         removePlaybook: '\u79fb\u9664 Playbook',
         workingDir: '\u5de5\u4f5c\u76ee\u5f55'
       },
-      jobsEyebrow: '\u8fd0\u884c\u65f6\u4efb\u52a1',
       latestJobs: '\u6700\u65b0 {backend} \u4efb\u52a1',
-      jobMeta: 'forward {forwardId} / tunnel {tunnelId} / node {nodeId}',
-      loadingJobs: '\u52a0\u8f7d\u8fd0\u884c\u65f6\u4efb\u52a1\u4e2d...',
       noJobs: '\u6682\u65e0\u672c\u5730\u8fd0\u884c\u65f6\u4efb\u52a1\u3002',
       backends: {
         nftables: {
@@ -514,18 +506,14 @@ export default {
       }
     },
     nodeX: {
-      heroEyebrow: '\u79c1\u6709\u8fd0\u884c\u65f6',
-      title: 'NodeX \u8fd0\u884c\u65f6',
       heroTextPrimary: '\u8fd9\u662f\u7ed9\u6709\u72b6\u6001 NodeX/gost \u8def\u5f84\u7684\u4e13\u7528\u64cd\u4f5c\u5165\u53e3\u3002\u5373\u4f7f\u5168\u5c40 runtime backend \u4ecd\u662f\u672c\u5730 Ansible\uff0c\u8fd9\u4e2a\u9875\u9762\u4e5f\u4f1a\u76f4\u63a5\u63a2\u6d4b\u5df2\u914d\u7f6e\u7684 NodeX \u63a7\u5236\u9762\u3002',
       heroTextSecondary: '\u672c\u5730 Ansible \u6267\u884c\u73b0\u5728\u653e\u5728 Local Runtime \u548c Ansible Machines \u4e0b\u3002\u8282\u70b9\u201c\u5728\u7ebf\u201d\u4ecd\u7136\u53ea\u8868\u793a TCP \u53ef\u8fde\u901a\uff0c\u4e0d\u4ee3\u8868 NodeX \u6216 relay gost API \u5df2\u7ecf\u6302\u8f7d\u6210\u529f\u3002',
-      refreshLoading: '\u5237\u65b0\u4e2d...',
       saveLoading: '\u4fdd\u5b58\u4e2d...',
       save: '\u4fdd\u5b58 NodeX \u914d\u7f6e',
       enabledBannerTitle: 'NodeX \u6a21\u5f0f\u5df2\u542f\u7528',
       disabledBannerTitle: 'NodeX \u6a21\u5f0f\u672a\u542f\u7528',
       enabledBannerText: '\u9762\u677f\u8f6c\u53d1\u4efb\u52a1\u53ef\u4ee5\u7ecf\u7531 NodeX/gost\uff0c\u4f46\u6bcf\u4e2a runtime \u4efb\u52a1\u4ecd\u7136\u5fc5\u987b\u6210\u529f\u624d\u4ee3\u8868 relay \u771f\u6b63\u6302\u8f7d\u5b8c\u6210\u3002',
       disabledBannerText: '\u4f60\u53ef\u4ee5\u5148\u5728\u8fd9\u91cc\u9a8c\u8bc1\u5df2\u914d\u7f6e\u7684 NodeX \u63a7\u5236\u9762\uff0c\u51c6\u5907\u597d\u540e\u518d\u5207\u6362\u5168\u5c40 backend\u3002',
-      configEyebrow: '\u914d\u7f6e',
       configTitle: 'NodeX \u63a7\u5236\u9762',
       enableModeTitle: '\u542f\u7528 NodeX \u6a21\u5f0f',
       enableModeHint: '\u4f1a\u5199\u5165 `forward.runtime.nodex_mode=true` \u548c `forward.runtime_backend=gost`\u3002',
@@ -537,10 +525,8 @@ export default {
         timeout: '\u8d85\u65f6\uff08\u79d2\uff09',
         timeoutHint: '\u9762\u677f\u63a2\u6d4b\u6216\u6267\u884c NodeX runtime \u8bf7\u6c42\u65f6\u4f1a\u4f7f\u7528\u8be5\u8d85\u65f6\u503c\u3002'
       },
-      probeEyebrow: 'NodeX \u63a2\u6d4b',
       probeTitle: '\u5065\u5eb7\u5ea6\u4e0e\u8fd0\u884c\u65f6\u72b6\u6001',
       probeCopy: '\u8fd9\u4e9b\u68c0\u67e5\u603b\u662f\u76f4\u63a5\u6307\u5411\u5df2\u914d\u7f6e\u7684 NodeX \u63a7\u5236\u9762\uff0c\u4e0d\u4f9d\u8d56\u5f53\u524d\u5168\u5c40 runtime backend\u3002',
-      loadingStatus: '\u52a0\u8f7d NodeX \u8fd0\u884c\u65f6\u72b6\u6001\u4e2d...',
       noStatus: '\u8fd8\u672a\u52a0\u8f7d NodeX \u8fd0\u884c\u65f6\u72b6\u6001\u3002',
       cards: {
         modeOn: 'NodeX \u6a21\u5f0f\u5df2\u5f00',
@@ -554,11 +540,8 @@ export default {
         version: '\u7248\u672c',
         executePath: '\u6267\u884c\u8def\u5f84'
       },
-      jobsEyebrow: '\u8fd0\u884c\u65f6\u4efb\u52a1',
       jobsTitle: '\u6700\u65b0 gost \u4efb\u52a1',
       jobsCopy: '\u6700\u8fd1\u7684\u9762\u677f\u4fa7 runtime \u5ba1\u8ba1\u8bb0\u5f55\uff0c\u5df2\u6309 `gost` backend \u8fc7\u6ee4\u3002',
-      jobMeta: 'forward {forwardId} / tunnel {tunnelId} / node {nodeId}',
-      loadingJobs: '\u52a0\u8f7d\u8fd0\u884c\u65f6\u4efb\u52a1\u4e2d...',
       noJobs: '\u6682\u65e0 gost \u8fd0\u884c\u65f6\u4efb\u52a1\u3002',
       backends: {
         gost: 'gost / NodeX'
@@ -572,11 +555,8 @@ export default {
       }
     },
     ansibleMachines: {
-      heroEyebrow: '\u6267\u884c\u673a\u7fa4',
-      title: 'Ansible \u673a\u5668',
       heroText: '\u8fd9\u4e2a\u9875\u9762\u53ea\u7528\u4e8e\u65e0\u72b6\u6001 Ansible \u6267\u884c\u673a\u5668\u3002\u8fd9\u4e9b\u4e3b\u673a\u4e0d\u9700\u8981 Node-Agent\uff0c\u4e5f\u4e0d\u9700\u8981\u6301\u7eed\u63a7\u5236\u9762\u8fde\u63a5\u3002',
       addMachine: '\u6dfb\u52a0\u673a\u5668',
-      relatedPages: '\u76f8\u5173\u8fd0\u884c\u65f6\u9875\u9762',
       table: {
         reachability: '\u53ef\u8fbe\u6027',
         lastResult: '\u6700\u8fd1\u7ed3\u679c'
@@ -1300,22 +1280,13 @@ export default {
       }
     },
     nodeXTopology: {
-      heroEyebrow: 'NodeX Topology',
-      title: 'NodeX Topology + Legacy Rules',
-      heroText: '\u8fd9\u4e2a\u9875\u9762\u53ea\u7ba1\u7406 NodeX \u6709\u72b6\u6001 relay/exit \u62d3\u6251\u53ca Legacy \u89c4\u5219\u517c\u5bb9\u5c42\u3002\u65e0\u72b6\u6001\u6267\u884c\u4e3b\u673a\u8bf7\u653e\u5230 Ansible Machines \u9875\u9762\u5355\u72ec\u7ba1\u7406\u3002',
-      nodesEyebrow: 'Nodes',
-      nodesTitle: 'NodeX Relay / Exit Topology',
-      nodesText: '\u8fd9\u91cc\u53ea\u7528\u4e8e NodeX \u6709\u72b6\u6001 relay/exit \u62d3\u6251\u3001\u8fde\u901a\u6027\u68c0\u67e5\u548c gost API \u76f8\u5173\u64cd\u4f5c\uff0c\u4e0d\u627f\u8f7d Ansible \u673a\u5668\u7ba1\u7406\u3002',
-      loading: '\u6b63\u5728\u52a0\u8f7d NodeX \u62d3\u6251\u8282\u70b9...',
       emptyTitle: '\u6682\u65e0 NodeX \u62d3\u6251\u8282\u70b9',
       emptyText: '\u8bf7\u5148\u521b\u5efa relay / exit \u8282\u70b9\u7528\u4e8e NodeX \u6a21\u5f0f\u3002\u82e5\u53ea\u505a\u65e0\u72b6\u6001\u6267\u884c\uff0c\u8bf7\u6539\u5230 Ansible Machines \u9875\u9762\u3002',
       legacyText: '\u8fd9\u4e2a\u533a\u5757\u5bf9\u5e94 `/admin/forward/rules*` \u517c\u5bb9\u63a5\u53e3\u3002\u5b83\u53ea\u4fdd\u7559 Legacy \u89c4\u5219\u80fd\u529b\uff0c\u4e0d\u4ee3\u8868 NodeX \u6216 Ansible \u7684\u5f53\u524d\u4e3b\u8fd0\u884c\u8def\u5f84\u3002',
       actions: {
         refresh: '\u5237\u65b0',
         testConnection: '\u6d4b\u8bd5\u8fde\u63a5',
-        addLegacyRule: '\u65b0\u589e Legacy \u89c4\u5219',
         addNode: '\u65b0\u589e\u8282\u70b9',
-        query: '\u67e5\u8be2',
         clear: '\u6e05\u7a7a',
         addRule: '\u65b0\u589e\u89c4\u5219',
         edit: '\u7f16\u8f91',
@@ -1333,31 +1304,23 @@ export default {
         createRule: '\u521b\u5efa\u89c4\u5219'
       },
       filters: {
-        nodeType: '\u8282\u70b9\u7c7b\u578b',
-        status: '\u72b6\u6001',
-        all: '\u5168\u90e8',
         online: '\u5728\u7ebf',
         offline: '\u79bb\u7ebf',
         userId: '\u7528\u6237 ID',
         userIdPlaceholder: '\u6309\u7528\u6237 ID \u8fc7\u6ee4',
-        relay: 'Relay',
-        exit: 'Exit'
+        relay: '中继',
+        exit: '出口'
       },
       status: {
         enabled: '\u5df2\u542f\u7528',
         disabled: '\u5df2\u7981\u7528',
         online: '\u5728\u7ebf',
-        offline: '\u79bb\u7ebf',
-        operationSuccess: '\u64cd\u4f5c\u6210\u529f',
-        operationFailed: '\u64cd\u4f5c\u5931\u8d25'
+        offline: '\u79bb\u7ebf'
       },
       meta: {
-        managementApi: '\u7ba1\u7406 API',
-        regionIsp: '\u5730\u533a / ISP',
         latency: '\u5ef6\u8fdf',
         currentConnections: '\u5f53\u524d\u8fde\u63a5',
         traffic: '\u4e0a\u884c / \u4e0b\u884c',
-        weightMaxConnections: '\u6743\u91cd / \u6700\u5927\u8fde\u63a5',
         lastCheck: '\u6700\u540e\u68c0\u6d4b',
         uptime: '\u5728\u7ebf\u7387',
         rateLimit: '\u901f\u7387',
@@ -1368,41 +1331,10 @@ export default {
         connections: '\u8fde\u63a5',
         serviceCount: '\u670d\u52a1\u6570\u91cf'
       },
-      stats: {
-        relayNodes: 'Relay \u8282\u70b9',
-        exitNodes: 'Exit \u8282\u70b9',
-        totalNodes: '\u8282\u70b9\u603b\u6570',
-        onlineNodes: '\u5728\u7ebf\u8282\u70b9',
-        totalUpload: '\u7d2f\u8ba1\u4e0a\u884c',
-        totalDownload: '\u7d2f\u8ba1\u4e0b\u884c',
-        onlineCount: '\u5728\u7ebf {count} \u53f0',
-        includesRelayExit: '\u5305\u542b Relay / Exit',
-        refreshing: '\u7edf\u8ba1\u5237\u65b0\u4e2d...',
-        basedOnLastCheck: '\u57fa\u4e8e\u6700\u8fd1\u4e00\u6b21\u5065\u5eb7\u68c0\u6d4b',
-        aggregatedAcrossNodes: '\u6240\u6709\u62d3\u6251\u8282\u70b9\u6c47\u603b'
-      },
-      pagination: {
-        prev: '\u4e0a\u4e00\u9875',
-        next: '\u4e0b\u4e00\u9875',
-        summary: '\u7b2c {page} / {totalPages} \u9875\uff0c\u5171 {total} \u6761'
-      },
       legacy: {
-        eyebrow: 'Legacy Rules',
-        title: 'Legacy Port Forward Rules',
-        loading: '\u6b63\u5728\u52a0\u8f7d Legacy \u89c4\u5219...',
+        title: '旧版端口转发规则',
         emptyTitle: '\u6682\u65e0 Legacy \u89c4\u5219',
-        emptyText: '\u5982\u679c\u9700\u8981\u517c\u5bb9 relay + exit \u7aef\u53e3\u7ea7\u8f6c\u53d1\uff0c\u53ef\u5148\u5728\u8fd9\u91cc\u65b0\u589e\u89c4\u5219\u3002',
-        columns: {
-          id: 'ID',
-          name: '\u540d\u79f0',
-          ingress: '\u5165\u53e3',
-          egress: '\u51fa\u53e3',
-          owner: '\u5f52\u5c5e',
-          limits: '\u9650\u989d',
-          traffic: '\u6d41\u91cf',
-          status: '\u72b6\u6001',
-          actions: '\u64cd\u4f5c'
-        }
+        emptyText: '\u5982\u679c\u9700\u8981\u517c\u5bb9 relay + exit \u7aef\u53e3\u7ea7\u8f6c\u53d1\uff0c\u53ef\u5148\u5728\u8fd9\u91cc\u65b0\u589e\u89c4\u5219\u3002'
       },
       nodeModal: {
         titleEdit: '\u7f16\u8f91\u4e2d\u8f6c\u8282\u70b9',
@@ -1552,8 +1484,6 @@ export default {
         both: 'TCP + UDP'
       },
       labels: {
-        node: 'Node #{id}',
-        route: '\u8def',
         none: '\u4e0d\u9650',
         neverExpires: '\u6c38\u4e0d\u8fc7\u671f'
       }

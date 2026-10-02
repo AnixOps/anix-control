@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { render, screen, waitFor, within } from '@testing-library/vue'
 import userEvent from '@testing-library/user-event'
 import LimitI18n from '@/views/admin/LimitI18n.vue'
-import ForwardNodesI18n from '@/views/admin/ForwardNodesI18n.vue'
+import ForwardNodes from '@/views/admin/ForwardNodes.vue'
 import AnsibleMachines from '@/views/admin/AnsibleMachines.vue'
 import UiHost from '@/ui/UiHost.vue'
 import { toastMessages, toasts } from './helpers/feedback'
@@ -132,11 +132,12 @@ describe('NodeX forward nodes page', () => {
   it('deletes a forward node only after its name is typed', async () => {
     const user = userEvent.setup()
     api.deleteForwardNode.mockResolvedValue({ code: 0 })
-    renderPage(ForwardNodesI18n)
-    const name = await screen.findByText('hk-relay-01')
-    const card = name.closest('article') || name.parentElement.parentElement
+    renderPage(ForwardNodes)
+    await screen.findByText('hk-relay-01')
 
-    await user.click(within(card).getByRole('button', { name: 'Delete' }))
+    // Row actions are in the row's "…" menu (UI U7).
+    await user.click(screen.getByRole('button', { name: 'Actions for hk-relay-01' }))
+    await user.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: 'Delete' }))
     const confirm = await screen.findByRole('alertdialog', { name: 'Delete forward node hk-relay-01?' })
     const action = within(confirm).getByRole('button', { name: 'Delete forward node' })
     expect(action.disabled).toBe(true)
@@ -153,16 +154,20 @@ describe('NodeX forward nodes page', () => {
   it('confirms deleting a rule without a typed name; Esc cancels', async () => {
     const user = userEvent.setup()
     api.deleteForwardRule.mockResolvedValue({ code: 0 })
-    renderPage(ForwardNodesI18n)
-    const row = (await screen.findByText('rule-a')).closest('tr')
+    renderPage(ForwardNodes)
+    await screen.findByText('rule-a')
+    const openDelete = async () => {
+      await user.click(screen.getByRole('button', { name: 'Actions for rule-a' }))
+      await user.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: 'Delete' }))
+    }
 
-    await user.click(within(row).getByRole('button', { name: 'Delete' }))
+    await openDelete()
     await screen.findByRole('alertdialog', { name: 'Delete forward rule rule-a?' })
     await user.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
     expect(api.deleteForwardRule).not.toHaveBeenCalled()
 
-    await user.click(within(row).getByRole('button', { name: 'Delete' }))
+    await openDelete()
     const confirm = await screen.findByRole('alertdialog')
     expect(within(confirm).queryByRole('textbox')).toBeNull()
     await user.click(within(confirm).getByRole('button', { name: 'Delete rule' }))
@@ -171,10 +176,10 @@ describe('NodeX forward nodes page', () => {
 
   it('opens the node editor and the connection test as dialogs', async () => {
     const user = userEvent.setup()
-    renderPage(ForwardNodesI18n)
+    renderPage(ForwardNodes)
     await screen.findByText('hk-relay-01')
 
-    await user.click(screen.getByRole('button', { name: 'Add Node' }))
+    await user.click(screen.getAllByRole('button', { name: 'Add Node' })[0])
     const editor = await screen.findByRole('dialog', { name: 'Add Relay/Exit Node' })
     expect(editor.getAttribute('aria-modal')).toBe('true')
     await user.click(within(editor).getByRole('button', { name: 'Cancel' }))

@@ -64,7 +64,7 @@ export const ADMIN_MENU = Object.freeze([
         to: '/admin/forward/nodes',
         icon: 'forward-nodes',
         labelKey: 'shell.admin.items.forwardNodes',
-        match: ['/admin/forward/ansible-machines', '/admin/forward/local', '/admin/forward/nodex']
+        match: ['/admin/forward/ansible-machines', '/admin/forward/ansible-machines/', '/admin/forward/local', '/admin/forward/nodex']
       },
       { id: 'agents', to: '/admin/agent', icon: 'agents', labelKey: 'shell.admin.items.agents', match: ['/admin/forward/agents'] }
     ]
