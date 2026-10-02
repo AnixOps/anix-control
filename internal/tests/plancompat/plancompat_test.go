@@ -289,6 +289,9 @@ func TestPlanWriteRoutesParity(t *testing.T) {
 			`"device_limit":3,"name":"New","content":"c","show":1,"sort":5,"renew":1,"reset_price":10,"reset_traffic_method":2,"capacity_limit":7,` +
 			`"month_price":1,"quarter_price":2,"half_year_price":3,"year_price":4,"two_year_price":5,"three_year_price":6,"onetime_price":7}`)},
 		{Name: "create with defaults", Path: "/api/v2/admin/plans", Principal: admin, Mask: created, Body: []byte(`{"name":"Bare"}`)},
+		// The community edition's subscription templates carry no price.
+		{Name: "a subscription template without prices", Path: "/api/v2/admin/plans", Principal: admin, Mask: created,
+			Body: []byte(`{"name":"Template","group_id":2,"transfer_enable":100,"speed_limit":50,"device_limit":3}`)},
 		{Name: "renew zero keeps the column default", Path: "/api/v2/admin/plans", Principal: admin, Mask: created, Body: []byte(`{"name":"No renew","renew":0}`)},
 		{Name: "create with an explicit id", Path: "/api/v2/admin/plans", Principal: admin, Mask: created, Body: []byte(`{"id":50,"name":"Fixed"}`)},
 		{Name: "create with a taken id", Path: "/api/v2/admin/plans", Principal: admin, Body: []byte(`{"id":2,"name":"Taken"}`)},
@@ -299,6 +302,8 @@ func TestPlanWriteRoutesParity(t *testing.T) {
 	write(t, route(t, "PUT", "/api/v2/admin/plans/:id", "plan.admin.plans.id.put", admins((*handler.AdminHandler).UpdatePlan)), plans, []packagecompat.Case{
 		{Name: "update keeps the creation time", Path: "/api/v2/admin/plans/2", Principal: admin, Mask: []string{"data.updated_at"},
 			Body: []byte(`{"name":"Pro 2","group_id":3,"transfer_enable":200,"show":0,"sort":9,"month_price":3500,"created_at":"2020-01-01T00:00:00Z"}`)},
+		{Name: "a subscription template update without prices", Path: "/api/v2/admin/plans/2", Principal: admin, Mask: []string{"data.updated_at"},
+			Body: []byte(`{"name":"Template 2","group_id":3,"transfer_enable":200,"speed_limit":0,"device_limit":0}`)},
 		{Name: "an empty body clears every field", Path: "/api/v2/admin/plans/1", Principal: admin, Mask: []string{"data.updated_at"}, Body: []byte(`{}`)},
 		{Name: "the body cannot move another plan", Path: "/api/v2/admin/plans/3", Principal: admin, Mask: []string{"data.updated_at"}, Body: []byte(`{"id":2,"name":"Moved"}`)},
 		{Name: "unknown plan", Path: "/api/v2/admin/plans/99", Principal: admin, Body: []byte(`{"name":"x"}`)},

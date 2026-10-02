@@ -79,7 +79,7 @@
             />
           </div>
 
-          <div v-if="isRegisterMode" class="form-row">
+          <div v-if="isRegisterMode && requireInvite" class="form-row">
             <label for="invite-code">{{ t('login.inviteCodeLabel') }}</label>
             <input
               id="invite-code"
@@ -123,16 +123,23 @@
 </template>
 
 <script setup>
-import { computed, ref } from 'vue'
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { login, register } from '@/api/auth'
+import { useEdition } from '@/composables/useEdition'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 
 const router = useRouter()
 const userStore = useUserStore()
 const { t } = useAppI18n()
+// Registration asks for an invite code only when auth.registration
+// require_invite is on (GET /api/v4/public/config).
+const { requireInvite, loadEdition } = useEdition()
+onMounted(() => {
+  void loadEdition()
+})
 
 const email = ref('')
 const password = ref('')
@@ -226,7 +233,7 @@ async function handleRegister() {
     const res = await register({
       email: email.value,
       password: password.value,
-      ...(inviteCode.value ? { invite_code: inviteCode.value } : {})
+      ...(requireInvite.value && inviteCode.value ? { invite_code: inviteCode.value } : {})
     })
 
     const payload = resolveAuthPayload(res, t('login.errors.registerFailed'))

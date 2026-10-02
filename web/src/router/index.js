@@ -2,6 +2,7 @@ import { createRouter, createWebHistory } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { ensureAdminExtensions, resetAdminExtensions } from '@/extensions/runtime'
 import { resolveLegacyControlRedirect } from '@/router/controlLegacy'
+import { loadEdition, routeAllowedByEdition } from '@/composables/useEdition'
 
 // Layouts
 import UserLayout from '@/layouts/UserLayout.vue'
@@ -80,11 +81,13 @@ const routes = [
       },
       {
         path: 'plans',
-        component: UserPlans
+        component: UserPlans,
+        meta: { edition: 'commercial' }
       },
       {
         path: 'orders',
-        component: UserOrders
+        component: UserOrders,
+        meta: { edition: 'commercial' }
       }
     ]
   },
@@ -117,7 +120,8 @@ const routes = [
       },
       {
         path: 'orders',
-        component: AdminOrders
+        component: AdminOrders,
+        meta: { edition: 'commercial' }
       },
       {
         path: 'subscriptions',
@@ -133,7 +137,8 @@ const routes = [
       },
       {
         path: 'coupons',
-        component: AdminCoupons
+        component: AdminCoupons,
+        meta: { edition: 'commercial' }
       },
       {
         path: 'knowledge',
@@ -209,7 +214,8 @@ const routes = [
       },
       {
         path: 'payment',
-        component: AdminPayment
+        component: AdminPayment,
+        meta: { edition: 'commercial' }
       },
       {
         path: 'telegram',
@@ -225,7 +231,8 @@ const routes = [
       },
       {
         path: 'invite',
-        component: AdminInvite
+        component: AdminInvite,
+        meta: { edition: 'commercial' }
       },
       {
         path: 'system',
@@ -260,10 +267,24 @@ const router = createRouter({
   routes
 })
 
+// editionFallback is where a page the edition does not serve leads.
+function editionFallback(to) {
+  return to.path.startsWith('/admin') ? '/admin/dashboard' : '/user/dashboard'
+}
+
 // Navigation Guards
 router.beforeEach(async (to, from, next) => {
   const userStore = useUserStore()
   const isAdminTarget = to.path === '/admin' || to.path.startsWith('/admin/')
+
+  // Commercial pages (meta.edition) exist only in the commercial edition.
+  if (to.matched.some(record => record.meta?.edition || record.meta?.extensionPluginID)) {
+    await loadEdition()
+    if (!routeAllowedByEdition(to)) {
+      next(editionFallback(to))
+      return
+    }
+  }
 
   if ((to.meta.requiresAuth || isAdminTarget) && !userStore.isLoggedIn) {
     resetAdminExtensions()

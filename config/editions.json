@@ -1,0 +1,6 @@
+{
+  "format": "anixops.editions/v1",
+  "default": "community",
+  "commercial_packages": ["affiliate", "order", "payment"],
+  "commercial_routes": ["plan.user.plan.get"]
+}

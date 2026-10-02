@@ -68,6 +68,19 @@ PostgreSQL connection settings:
 | `database.timezone` | `Asia/Shanghai` | session `TimeZone`; must be a valid IANA name |
 | `database.dsn` | empty | full connection string used verbatim instead of the fields above |
 
+## Product Edition
+
+| Key | Default | Notes |
+|------|------|------|
+| `app.edition` (`ANIX_CONTROL_APP_EDITION`) | `community` | `community` hides orders, payments (every gateway and callback), coupons, the invite commission and plan purchase; plans stay as free subscription templates. `commercial` serves everything. Any other value stops the server at start-up. |
+
+The commercial packages and routes are listed in `config/editions.json`.
+In the community edition their `/api/v2` routes answer like an undeclared
+route, the web app hides their menus and pages, and the release leaves the
+packages out. The web app reads the edition from the public
+`GET /api/v4/public/config`. Installs that use payments must set
+`commercial` before upgrading past 4.1.0-rc.2 (`docs/UPGRADE.md`).
+
 ## Unified Forward Runtime Layout
 
 Put the runtime selection in `config/config.yaml`:

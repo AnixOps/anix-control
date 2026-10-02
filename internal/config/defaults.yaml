@@ -59,6 +59,9 @@ auth:
 app:
   traffic_log_enable: true
   subscribe_path: "s"
+  # community (default) hides orders, payments, affiliate and plan purchase;
+  # commercial serves them.
+  edition: "community"
 plugins:
   official_public_key: "lvbhRmhzVbSAbrw3vm0k7vYqpEu4/dF/ZqVbp2gS7uM="
   control_execution_enabled: true

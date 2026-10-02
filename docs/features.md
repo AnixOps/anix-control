@@ -29,6 +29,7 @@ source of truth.
 
 | Area | Feature | Status | Current Surface | Remaining Work |
 |------|---------|--------|-----------------|----------------|
+| Platform | Product editions (`app.edition`) | Implemented | `community` (default) or `commercial`; `config/editions.json` lists the commercial packages (`order`, `payment`, `affiliate`) and routes (`GET /api/v2/user/plan`); community answers them like an undeclared `/api/v2` route (`internal/router/edition.go`), the web app hides their menus and pages (`web/src/composables/useEdition.js`, public `GET /api/v4/public/config`), and `build_package.py --all` leaves the packages out of the community release | Publish commercial package builds (`--edition commercial`) through a channel the owner chooses. |
 | Platform | Health check | Implemented | `GET /health` | None known. |
 | Platform | Prometheus-style metrics | Implemented | `GET /metrics` | Broaden metric coverage as new runtimes land. |
 | Platform | Swagger/OpenAPI docs | Implemented | `/swagger/*any`, `docs/swagger.*` | Keep generated docs current with route changes. |
@@ -48,26 +49,26 @@ source of truth.
 | Auth | JWT authenticated user/admin APIs | Implemented | `middleware.JWTAuth`, `middleware.AdminAuth` | Continue permission tests for new routes. |
 | Auth | MFA setup, verification, and login challenge | Partial | User MFA API, admin MFA config, `/api/v2/login`, `web/src/views/Login.vue` | User-enabled TOTP/backup MFA gates token issuance, and global `enforce_for_all`/`enforce_for_admin` policies now return no-token enrollment-required responses; user-facing self-service enrollment UI still needs implementation evidence. |
 | User | Profile, dashboard, subscription summary | Implemented | `/api/v2/user/profile`, `/dashboard`, `/subscription` | Continue UI regression coverage as payloads evolve. |
-| User | User plan browsing | Implemented | `/api/v2/user/plan`, user Plans page, unified success/error envelopes | None known. |
+| User | User plan browsing | Implemented (commercial edition) | `/api/v2/user/plan`, user Plans page, unified success/error envelopes; hidden in the community edition | None known. |
 | User | Order list, detail, and order creation | Implemented | `/api/v2/user/order*`; the caller's own orders with the plan's `id` and `name`, no buyer row | Keep amount/traffic boundary tests current. |
-| User | Coupon validation | Implemented | `/api/v2/user/coupon/check` | None known. |
+| User | Coupon validation | Implemented (commercial edition) | `/api/v2/user/coupon/check`; hidden in the community edition | None known. |
 | User | Knowledge base browsing | Implemented | `/api/v2/user/knowledge*` | None known. |
 | User | Ticket create/list/detail/reply/close | Implemented | `/api/v2/user/ticket*` | None known. |
-| User | Invite codes, commission records, withdrawals | Implemented | `/api/v2/user/invite*`, admin Invite page; a user holds at most `code_count` (default 5) unused codes, as in v2board | Add provider-specific payout integration only after policy review. |
+| User | Invite codes, commission records, withdrawals | Implemented (commercial edition) | `/api/v2/user/invite*`, admin Invite page, hidden in the community edition; a user holds at most `code_count` (default 5) unused codes, as in v2board | Add provider-specific payout integration only after policy review. |
 | User | User notification inbox | Implemented | `/api/v2/user/notifications*`, unified success/error envelopes | Add broader event coverage as business events grow. |
 | User | Telegram binding status and notification preference | Implemented | `/api/v2/user/telegram/*`, unified success/error envelopes | Bot token/webhook operations need operator credentials. |
 | User | User-managed forwarding/tunnel entries | Partial | `/api/v2/forward/*`, `/api/v2/tunnel/user/tunnel` | Close remaining Flux parity and runtime enforcement gaps. |
 | Admin | Dashboard and system info | Implemented | `/api/v2/admin/dashboard` success/database-error panel envelopes, `/system/info` | Add more operational health signals over time. |
 | Admin | Hourly traffic and user ranking | Implemented | `/api/v2/admin/traffic/hourly`, `/traffic/user-ranking` | Watch high-volume query performance in production. |
 | Admin | User management | Implemented | CRUD, ban/unban, traffic reset, subscribe reset with unified success/user-error envelopes | Continue authorization regression tests for new admin actions. |
-| Admin | Plan management | Implemented | CRUD and assign with unified success/user-error envelopes | None known. |
-| Admin | Order management | Implemented | list/detail/status/paid/cancel with unified success/user-error envelopes and localized admin error prompts; list and detail carry the plan's `id` and `name` and the buyer's `id` and `email` only | Payment provider callbacks remain separate. |
+| Admin | Plan management / subscription templates | Implemented | CRUD and assign with unified success/user-error envelopes; the community edition calls plans subscription templates (订阅模板) and hides prices | None known. |
+| Admin | Order management | Implemented (commercial edition) | list/detail/status/paid/cancel with unified success/user-error envelopes and localized admin error prompts; list and detail carry the plan's `id` and `name` and the buyer's `id` and `email` only | Payment provider callbacks remain separate. |
 | Admin | Node management and protocol configuration | Implemented | CRUD, credentials, raw config, protocol templates, auth keys | Keep AnixOps Agent and legacy V2bX compatibility tests current. |
 | Admin | Subscription groups, templates, preview, user/plan binding | Implemented | `/api/v2/admin/subscription/*`, unified group/template CRUD, protocol-binding, preview, and user/plan binding success/user-error envelopes | Keep public subscription compatibility separate. |
 | Admin | Ticket management | Implemented | list/reply/close | None known. |
-| Admin | Coupon management | Implemented | list/create/delete | Add update API only if product requires it. |
+| Admin | Coupon management | Implemented (commercial edition) | list/create/delete | Add update API only if product requires it. |
 | Admin | Knowledge management | Implemented | list/create/update/delete | None known. |
-| Admin | Payment gateway management and payment records | Implemented | gateway CRUD/toggle, stats, records, unified success/error envelopes | Provider-specific live payment creation is not complete for every provider. |
+| Admin | Payment gateway management and payment records | Implemented (commercial edition) | gateway CRUD/toggle, stats, records, unified success/error envelopes | Provider-specific live payment creation is not complete for every provider. |
 | Admin | Notification template/log/email config management | Implemented | `/api/v2/admin/notification/*`, unified success/error envelopes | Add more event emitters as needed. |
 | Admin | Telegram bot management | Implemented | bot config, webhook, users, notify, broadcast, unified success/error envelopes | Requires live bot credentials for production. |
 | Admin | MFA global config | Implemented | `/api/v2/admin/mfa/config` | Global policy now affects login; user-facing enrollment UI remains tracked under Auth. |
@@ -86,7 +87,7 @@ source of truth.
 | Subscription | Multi-format subscription output | Implemented | V2Ray, Clash/Stash, Surge, Shadowrocket, Sing-box paths | Continue parser/formatter compatibility tests. |
 | Payment | Public payment methods and status | Implemented | `/api/v2/payment/methods`, `/payment/status/:trade_no` | None known. |
 | Payment | EPay callback plugin | Implemented | `/api/v2/payment/callback/epay` | Keep signature and amount verification tests. |
-| Payment | X402 create/check/callback | Partial | `/payment/x402/*` | Current chain/provider behavior needs production integration evidence. A callback pays only in the payment's token and at least its amount; the token amount is a placeholder conversion (total / 10^8), and a payment created without a token cannot be paid. |
+| Payment | X402 create/check/callback | Partial (commercial edition, internal play coin) | `/payment/x402/*`; `/payment/methods` reports x402 enabled, and `/payment/x402/create` accepts a payment, only with an enabled x402 payment configuration | Not for stable releases. Current chain/provider behavior needs production integration evidence. A callback pays only in the payment's token and at least its amount; the token amount is a placeholder conversion (total / 10^8), and a payment created without a token cannot be paid. |
 | Payment | Stripe and PayPal webhooks | Partial | `/payment/stripe/webhook`, `/payment/paypal/webhook` | Checkout/order creation is still mocked/stubbed. |
 | Payment | Alipay, WeChat, USDT live callbacks | Planned | Config structs and gateway type constants exist; service blocks enable/use until implementations exist | Add callback implementations and tests before enabling. |
 | Forwarding | Flux-compatible forward CRUD and ordering | Partial | `/api/v2/forward/*`, admin Forward page | Remaining Flux parity and runtime edge cases. |

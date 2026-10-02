@@ -53,6 +53,9 @@ Before touching production:
   evidence attached to the GitHub Release.
 - Verify the deployment type: systemd binary, Docker Compose, or another
   operator-managed wrapper.
+- **Upgrading past 4.1.0-rc.2 with payments, orders, coupons or the invite
+  commission in use: set `app.edition: commercial` first**
+  ([Community Edition By Default](#community-edition-by-default-set-commercial-before-upgrading)).
 
 Evidence to keep:
 
@@ -1287,6 +1290,71 @@ curl -s -H 'X-Forwarded-Host: evil.example' -H 'X-Forwarded-Proto: https' \
 
 **Rollback:** the setting is read by older releases too (for the client IP
 only), so it can stay when you go back.
+These notes are for the release after 4.1.0-rc.2 (4.1.0-rc.3). **Read the
+first section before upgrading: an install that sells plans loses its
+payment, order and invite commission features unless it opts in to the
+commercial edition first.** Upgrading changes no phase of the node
+credential split; the section after it is an operator procedure for later,
+under the owner's approval.
+
+### Community Edition By Default: Set `commercial` Before Upgrading
+
+> **Action required for paid installs.** From 4.1.0-rc.3 Control runs as the
+> **community** edition unless the configuration says otherwise. If this
+> install uses payments, orders, coupons, plan purchase or the invite
+> commission, set the edition to `commercial` **before** you start the new
+> binary or image, or those features disappear for administrators, users
+> and payment providers alike.
+
+Set one of:
+
+```yaml
+# config.yaml
+app:
+  edition: "commercial"
+```
+
+```bash
+# Docker / Kubernetes / systemd environment
+ANIX_CONTROL_APP_EDITION=commercial
+```
+
+An unknown value stops the server at start-up (`invalid app.edition`).
+Check what the running server uses with
+`curl -s http://127.0.0.1:<port>/api/v4/public/config` (`"edition"`).
+
+What the community edition does (`docs/features.md`, "Product editions"):
+
+- Every `/api/v2` route of the `order`, `payment` and `affiliate`
+  packages, and `GET /api/v2/user/plan`, answers `404`
+  `{"error":{"code":"package_route_not_found","message":"package route is not declared"}}`,
+  like a path that does not exist. This includes the payment callbacks and
+  webhooks (`/api/v2/payment/callback/:type`, `/payment/stripe/webhook`,
+  `/payment/paypal/webhook`, `/payment/x402/callback`): **a provider that
+  calls back for an order paid just before the switch gets 404**, so drain
+  pending payments or stay on `commercial`.
+- Nothing is deleted: orders, payment records, coupons, commissions,
+  balances and plan prices stay in the database and come back with
+  `commercial`. Plans remain as free subscription templates: administrators
+  edit and assign them, and their subscription groups keep working; the
+  admin page hides prices but sends a stored price back unchanged.
+- The web app hides the commercial menus and pages (and redirects their
+  URLs to the dashboard), the user balance field and the revenue cards.
+- Registration keeps invite codes when `auth.registration.require_invite`
+  is on, but users cannot generate new codes in the community edition (the
+  generator belongs to the `affiliate` package).
+- The community release no longer ships the `affiliate`, `order` and
+  `payment` packages. Installed ones keep running (their routes are hidden);
+  a commercial install keeps the versions it has until commercial package
+  builds are published (`build_package.py --all --edition commercial`).
+
+x402 changes in both editions: `GET /api/v2/payment/methods` no longer
+reports x402 as enabled when no payment method is configured, and
+`POST /api/v2/payment/x402/create` answers `gateway is disabled` unless an
+enabled x402 payment configuration exists. Enable it explicitly if you rely
+on it.
+
+To switch back later, set `commercial` and restart; nothing else is needed.
 
 ### Fewer Release Assets
 

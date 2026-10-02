@@ -984,6 +984,7 @@ func newAPIServer(cfg *config.Config) (*http.Server, error) {
 		return nil, fmt.Errorf("configure trusted proxies for API server: %w", err)
 	}
 	router.Setup(r, cfg)
+	router.SetupNotFound(r)
 
 	readTimeout := time.Duration(cfg.Server.ReadTimeout) * time.Second
 	if readTimeout == 0 {

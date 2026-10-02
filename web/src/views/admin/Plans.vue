@@ -2,10 +2,10 @@
   <div class="page-shell">
     <div class="page-toolbar">
       <div>
-        <h1>{{ t('adminPlans.title') }}</h1>
-        <p>{{ t('adminPlans.subtitle') }}</p>
+        <h1>{{ pt('title') }}</h1>
+        <p>{{ pt('subtitle') }}</p>
       </div>
-      <button class="btn btn-primary" @click="openCreateModal">{{ t('adminPlans.actions.create') }}</button>
+      <button class="btn btn-primary" @click="openCreateModal">{{ pt('actions.create') }}</button>
     </div>
 
     <section class="section-panel data-panel">
@@ -13,12 +13,12 @@
         <thead>
           <tr>
             <th>{{ t('miscPages.shared.id') }}</th>
-            <th>{{ t('adminPlans.table.name') }}</th>
-            <th>{{ t('adminPlans.table.transfer') }}</th>
-            <th>{{ t('adminPlans.table.limits') }}</th>
-            <th>{{ t('adminPlans.table.monthPrice') }}</th>
-            <th>{{ t('adminPlans.table.subscriptionGroups') }}</th>
-            <th>{{ t('adminPlans.table.actions') }}</th>
+            <th>{{ pt('table.name') }}</th>
+            <th>{{ pt('table.transfer') }}</th>
+            <th>{{ pt('table.limits') }}</th>
+            <th v-if="isCommercial">{{ pt('table.monthPrice') }}</th>
+            <th>{{ pt('table.subscriptionGroups') }}</th>
+            <th>{{ pt('table.actions') }}</th>
           </tr>
         </thead>
         <tbody>
@@ -27,15 +27,15 @@
             <td>{{ plan.name }}</td>
             <td>{{ plan.transfer_enable }}</td>
             <td>{{ formatPlanLimits(plan) }}</td>
-            <td>{{ plan.month_price ?? '-' }}</td>
+            <td v-if="isCommercial">{{ plan.month_price ?? '-' }}</td>
             <td>
               <div class="group-tags">
                 <span v-for="group in (planGroups[plan.id] || [])" :key="group.id" class="group-tag">
                   {{ group.name }}
                   <button
                     class="tag-remove"
-                    :title="t('adminPlans.actions.removeGroup')"
-                    :aria-label="t('adminPlans.actions.removeGroup')"
+                    :title="pt('actions.removeGroup')"
+                    :aria-label="pt('actions.removeGroup')"
                     @click="removeGroup(plan.id, group.id)"
                   >
                     x
@@ -43,11 +43,11 @@
                 </span>
                 <button
                   class="btn btn-sm"
-                  :title="t('adminPlans.actions.manageGroups')"
-                  :aria-label="t('adminPlans.actions.manageGroups')"
+                  :title="pt('actions.manageGroups')"
+                  :aria-label="pt('actions.manageGroups')"
                   @click="openGroupModal(plan)"
                 >
-                  {{ t('adminPlans.actions.manageGroups') }}
+                  {{ pt('actions.manageGroups') }}
                 </button>
               </div>
             </td>
@@ -55,33 +55,33 @@
               <div class="action-buttons">
                 <button
                   class="btn btn-sm"
-                  :title="t('adminPlans.actions.edit')"
-                  :aria-label="t('adminPlans.actions.edit')"
+                  :title="pt('actions.edit')"
+                  :aria-label="pt('actions.edit')"
                   @click="edit(plan)"
                 >
-                  {{ t('adminPlans.actions.edit') }}
+                  {{ pt('actions.edit') }}
                 </button>
                 <button
                   class="btn btn-sm"
-                  :title="t('adminPlans.actions.delete')"
-                  :aria-label="t('adminPlans.actions.delete')"
+                  :title="pt('actions.delete')"
+                  :aria-label="pt('actions.delete')"
                   @click="remove(plan)"
                 >
-                  {{ t('adminPlans.actions.delete') }}
+                  {{ pt('actions.delete') }}
                 </button>
                 <button
                   class="btn btn-sm"
-                  :title="t('adminPlans.actions.assign')"
-                  :aria-label="t('adminPlans.actions.assign')"
+                  :title="pt('actions.assign')"
+                  :aria-label="pt('actions.assign')"
                   @click="openAssign(plan)"
                 >
-                  {{ t('adminPlans.actions.assign') }}
+                  {{ pt('actions.assign') }}
                 </button>
               </div>
             </td>
           </tr>
           <tr v-if="plans.length === 0">
-            <td colspan="7" class="empty-row">{{ t('adminPlans.empty.noData') }}</td>
+            <td :colspan="isCommercial ? 7 : 6" class="empty-row">{{ pt('empty.noData') }}</td>
           </tr>
         </tbody>
       </table>
@@ -90,28 +90,28 @@
     <div v-if="showPlanModal" class="modal-overlay" @click.self="closePlanModal">
       <div class="modal">
         <div class="modal-header">
-          <h3>{{ editingPlanId ? t('adminPlans.planModal.editTitle') : t('adminPlans.planModal.createTitle') }}</h3>
-          <button class="btn btn-ghost btn-sm close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closePlanModal">x</button>
+          <h3>{{ editingPlanId ? pt('planModal.editTitle') : pt('planModal.createTitle') }}</h3>
+          <button class="btn btn-ghost btn-sm close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closePlanModal">×</button>
         </div>
         <div class="modal-body">
           <div class="form-group">
-            <label>{{ t('adminPlans.planModal.fields.name') }} <span class="required">*</span></label>
-            <input v-model="form.name" type="text" :placeholder="t('adminPlans.planModal.placeholders.name')" />
+            <label>{{ pt('planModal.fields.name') }} <span class="required">*</span></label>
+            <input v-model="form.name" type="text" :placeholder="pt('planModal.placeholders.name')" />
           </div>
           <div class="form-group">
-            <label>{{ t('adminPlans.planModal.fields.transfer') }}</label>
+            <label>{{ pt('planModal.fields.transfer') }}</label>
             <input v-model.number="form.transfer_enable" type="number" min="0" />
           </div>
           <div class="form-group">
-            <label>{{ t('adminPlans.planModal.fields.speedLimit') }}</label>
+            <label>{{ pt('planModal.fields.speedLimit') }}</label>
             <input v-model.number="form.speed_limit" data-test="plan-speed-limit-input" type="number" min="0" />
           </div>
           <div class="form-group">
-            <label>{{ t('adminPlans.planModal.fields.deviceLimit') }}</label>
+            <label>{{ pt('planModal.fields.deviceLimit') }}</label>
             <input v-model.number="form.device_limit" data-test="plan-device-limit-input" type="number" min="0" />
           </div>
-          <div class="form-group">
-            <label>{{ t('adminPlans.planModal.fields.monthPrice') }}</label>
+          <div v-if="isCommercial" class="form-group" data-test="plan-month-price-field">
+            <label>{{ pt('planModal.fields.monthPrice') }}</label>
             <input v-model.number="form.month_price" type="number" min="0" />
           </div>
         </div>
@@ -125,26 +125,26 @@
     <div v-if="showAssign" class="modal-overlay" @click.self="closeAssign">
       <div class="modal">
         <div class="modal-header">
-          <h3>{{ t('adminPlans.assignModal.title') }}</h3>
-          <button class="btn btn-ghost btn-sm close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeAssign">x</button>
+          <h3>{{ pt('assignModal.title') }}</h3>
+          <button class="btn btn-ghost btn-sm close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeAssign">×</button>
         </div>
         <div class="modal-body">
           <div class="form-group">
-            <label>{{ t('adminPlans.assignModal.fields.userId') }} <span class="required">*</span></label>
+            <label>{{ pt('assignModal.fields.userId') }} <span class="required">*</span></label>
             <input
               v-model.number="assignForm.user_id"
               type="number"
-              :placeholder="t('adminPlans.assignModal.placeholders.userId')"
+              :placeholder="pt('assignModal.placeholders.userId')"
             />
           </div>
           <div class="form-group">
-            <label>{{ t('adminPlans.assignModal.fields.expireAt') }}</label>
+            <label>{{ pt('assignModal.fields.expireAt') }}</label>
             <input v-model.number="assignForm.expire_at" type="number" />
           </div>
         </div>
         <div class="modal-footer">
           <button class="btn" @click="closeAssign">{{ t('common.actions.cancel') }}</button>
-          <button class="btn btn-primary" @click="assign">{{ t('adminPlans.actions.assign') }}</button>
+          <button class="btn btn-primary" @click="assign">{{ pt('actions.assign') }}</button>
         </div>
       </div>
     </div>
@@ -152,14 +152,14 @@
     <div v-if="showGroupModal" class="modal-overlay" @click.self="closeGroupModal">
       <div class="modal">
         <div class="modal-header">
-          <h3>{{ t('adminPlans.groupModal.title', { name: currentPlan?.name || '' }) }}</h3>
-          <button class="btn btn-ghost btn-sm close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeGroupModal">x</button>
+          <h3>{{ pt('groupModal.title', { name: currentPlan?.name || '' }) }}</h3>
+          <button class="btn btn-ghost btn-sm close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeGroupModal">×</button>
         </div>
         <div class="modal-body">
-          <p class="group-description">{{ t('adminPlans.groupModal.description') }}</p>
+          <p class="group-description">{{ pt('groupModal.description') }}</p>
 
           <div v-if="allGroups.length === 0" class="empty-msg">
-            {{ t('adminPlans.groupModal.empty') }}
+            {{ pt('groupModal.empty') }}
           </div>
 
           <div v-else class="group-list">
@@ -172,10 +172,10 @@
             >
               <div class="group-info">
                 <div class="group-name">{{ group.name }}</div>
-                <div class="group-desc">{{ group.description || t('adminPlans.groupModal.noDescription') }}</div>
+                <div class="group-desc">{{ group.description || pt('groupModal.noDescription') }}</div>
               </div>
               <div class="group-check">
-                <span>{{ isGroupSelected(group.id) ? t('adminPlans.groupModal.selectedShort') : '' }}</span>
+                <span>{{ isGroupSelected(group.id) ? pt('groupModal.selectedShort') : '' }}</span>
               </div>
             </div>
           </div>
@@ -202,8 +202,18 @@ import {
   updatePlan
 } from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { useEdition } from '@/composables/useEdition'
 
-const { t } = useAppI18n()
+const { t, te } = useAppI18n()
+// The community edition calls plans subscription templates: no price, no
+// purchase. Copy comes from adminTemplates where it differs, and a stored
+// price is sent back unchanged.
+const { isCommercial } = useEdition()
+const pt = (key, params) => (
+  !isCommercial.value && te(`adminTemplates.${key}`)
+    ? t(`adminTemplates.${key}`, params)
+    : t(`adminPlans.${key}`, params)
+)
 
 const plans = ref([])
 const allGroups = ref([])
@@ -299,7 +309,7 @@ const load = async () => {
     plans.value = readPlanList(res)
     await Promise.all(plans.value.map((plan) => loadPlanGroups(plan.id)))
   } catch (error) {
-    console.error(t('adminPlans.messages.loadFailed'), error)
+    console.error(pt('messages.loadFailed'), error)
   }
 }
 
@@ -311,7 +321,7 @@ const loadAllGroups = async () => {
     )
     allGroups.value = readPlanList(res)
   } catch (error) {
-    console.error(t('adminPlans.messages.loadGroupsFailed'), error)
+    console.error(pt('messages.loadGroupsFailed'), error)
   }
 }
 
@@ -336,7 +346,7 @@ const edit = (plan) => {
 }
 
 const remove = async (plan) => {
-  if (!window.confirm(t('adminPlans.messages.deleteConfirm'))) {
+  if (!window.confirm(pt('messages.deleteConfirm'))) {
     return
   }
 
@@ -347,7 +357,7 @@ const remove = async (plan) => {
     )
     await load()
   } catch (error) {
-    window.alert(t('adminPlans.messages.deleteFailed', {
+    window.alert(pt('messages.deleteFailed', {
       message: resolveApiError(error, 'adminPlans.messages.deleteFailedShort')
     }))
   }
@@ -360,7 +370,7 @@ const closePlanModal = () => {
 
 const save = async () => {
   if (!form.name || form.name.trim() === '') {
-    window.alert(t('adminPlans.messages.nameRequired'))
+    window.alert(pt('messages.nameRequired'))
     return
   }
 
@@ -387,7 +397,7 @@ const save = async () => {
     closePlanModal()
     await load()
   } catch (error) {
-    window.alert(t('adminPlans.messages.saveFailed', {
+    window.alert(pt('messages.saveFailed', {
       message: resolveApiError(error, 'adminPlans.messages.saveFailedShort')
     }))
   }
@@ -406,7 +416,7 @@ const closeAssign = () => {
 
 const assign = async () => {
   if (!assignForm.user_id) {
-    window.alert(t('adminPlans.messages.userIdRequired'))
+    window.alert(pt('messages.userIdRequired'))
     return
   }
 
@@ -419,9 +429,9 @@ const assign = async () => {
       'adminPlans.messages.assignFailedShort'
     )
     closeAssign()
-    window.alert(t('adminPlans.messages.assignSuccess'))
+    window.alert(pt('messages.assignSuccess'))
   } catch (error) {
-    window.alert(t('adminPlans.messages.assignFailed', {
+    window.alert(pt('messages.assignFailed', {
       message: resolveApiError(error, 'adminPlans.messages.assignFailedShort')
     }))
   }
@@ -462,14 +472,14 @@ const toggleGroup = async (group) => {
     }
     await loadPlanGroups(planId)
   } catch (error) {
-    window.alert(t('adminPlans.messages.toggleGroupFailed', {
+    window.alert(pt('messages.toggleGroupFailed', {
       message: resolveApiError(error, 'adminPlans.messages.toggleGroupFailedShort')
     }))
   }
 }
 
 const removeGroup = async (planId, groupId) => {
-  if (!window.confirm(t('adminPlans.messages.removeGroupConfirm'))) {
+  if (!window.confirm(pt('messages.removeGroupConfirm'))) {
     return
   }
 
@@ -480,7 +490,7 @@ const removeGroup = async (planId, groupId) => {
     )
     await loadPlanGroups(planId)
   } catch (error) {
-    window.alert(t('adminPlans.messages.removeGroupFailed', {
+    window.alert(pt('messages.removeGroupFailed', {
       message: resolveApiError(error, 'adminPlans.messages.removeGroupFailedShort')
     }))
   }
@@ -489,8 +499,8 @@ const removeGroup = async (planId, groupId) => {
 const formatPlanLimits = (plan) => {
   const speedLimit = Number(plan?.speed_limit || 0)
   const deviceLimit = Number(plan?.device_limit || 0)
-  const speedText = speedLimit > 0 ? t('adminPlans.labels.speedLimitMbps', { value: speedLimit }) : t('adminPlans.labels.noSpeedLimit')
-  const deviceText = deviceLimit > 0 ? t('adminPlans.labels.deviceLimitCount', { value: deviceLimit }) : t('adminPlans.labels.noDeviceLimit')
+  const speedText = speedLimit > 0 ? pt('labels.speedLimitMbps', { value: speedLimit }) : pt('labels.noSpeedLimit')
+  const deviceText = deviceLimit > 0 ? pt('labels.deviceLimitCount', { value: deviceLimit }) : pt('labels.noDeviceLimit')
   return `${speedText} / ${deviceText}`
 }
 </script>

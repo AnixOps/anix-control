@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import Users from '@/views/admin/Users.vue'
+import { setEdition } from '@/composables/useEdition'
 
 const mockCreateUser = vi.fn()
 const mockGetUserList = vi.fn()
@@ -395,5 +396,37 @@ describe('Admin Users flow', () => {
     expect(wrapper.vm.editingUser.balance).toBe(5)
     expect(wrapper.vm.editingUser.remark_content).toBeUndefined()
     expect(wrapper.vm.showEditModal).toBe(true)
+  })
+
+  it('hides the balance in the community edition and keeps the stored value', async () => {
+    setEdition('community')
+    const user = { id: 11, email: 'community@example.com', balance: 9, banned: 0 }
+    mockGetUserList.mockResolvedValue({ data: { list: [user], total: 1 } })
+    mockGetAdminUser.mockResolvedValueOnce({ code: 0, msg: '操作成功', data: { ...user }, ts: 1783526400000 })
+
+    const wrapper = mount(Users)
+    await flushPromises()
+    await wrapper.vm.editUser(user)
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="user-balance-field"]').exists()).toBe(false)
+    expect(wrapper.find('[data-test="user-plan-column"]').text()).toBe('Subscription template')
+    await wrapper.vm.saveUser()
+    expect(mockUpdateUser).toHaveBeenCalledWith(11, expect.objectContaining({ balance: 9 }))
+  })
+
+  it('shows the balance in the commercial edition', async () => {
+    setEdition('commercial')
+    const user = { id: 12, email: 'commercial@example.com', balance: 3, banned: 0 }
+    mockGetUserList.mockResolvedValue({ data: { list: [user], total: 1 } })
+    mockGetAdminUser.mockResolvedValueOnce({ code: 0, msg: '操作成功', data: { ...user }, ts: 1783526400000 })
+
+    const wrapper = mount(Users)
+    await flushPromises()
+    await wrapper.vm.editUser(user)
+    await flushPromises()
+
+    expect(wrapper.find('[data-test="user-balance-field"]').exists()).toBe(true)
+    expect(wrapper.find('[data-test="user-plan-column"]').text()).toBe('Plan')
   })
 })

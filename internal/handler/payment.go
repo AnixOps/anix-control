@@ -99,8 +99,16 @@ func (h *PaymentHandler) X402CreatePayment(c *gin.Context) {
 		return
 	}
 
-	// 1. 验证订单存在
+	// x402 is an internal play coin: it is usable only when an enabled
+	// v2_payment row names it, and refused like a disabled gateway otherwise.
 	db := database.Get()
+	var x402Enabled int64
+	if err := db.Model(&model.Payment{}).Where("provider = ? AND enable = ?", "x402", 1).Count(&x402Enabled).Error; err != nil || x402Enabled == 0 {
+		panelError(c, "gateway is disabled")
+		return
+	}
+
+	// 1. 验证订单存在
 	var order model.Order
 	if err := db.Where("id = ?", req.OrderID).First(&order).Error; err != nil {
 		if err == gorm.ErrRecordNotFound {
@@ -819,7 +827,7 @@ func (h *PaymentHandler) GetPaymentMethods(c *gin.Context) {
 			"icon":     "cryptocurrency",
 			"tokens":   []string{"ETH", "USDT", "USDC"},
 			"networks": []string{"sepolia", "base-sepolia", "ethereum", "polygon", "arbitrum", "base"},
-			"enabled":  enabledProviders["x402"] || len(paymentConfigs) == 0, // 默认启用 (无配置时)
+			"enabled":  enabledProviders["x402"], // only when an enabled x402 payment config exists
 		},
 		{
 			"id":       "wechat",

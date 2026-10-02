@@ -551,3 +551,20 @@ func TestLogConfig(t *testing.T) {
 	assert.Equal(t, "stdout", got.Log.Output)
 	assert.Equal(t, 100, got.Log.MaxSize)
 }
+
+func TestAppEditionDefaultsToCommunityAndRejectsUnknownValues(t *testing.T) {
+	loaded, err := load("", nil)
+	require.NoError(t, err)
+	require.Equal(t, EditionCommunity, loaded.App.Edition)
+
+	loaded, err = load("", []string{"ANIX_CONTROL_APP_EDITION=commercial"})
+	require.NoError(t, err)
+	require.Equal(t, EditionCommercial, loaded.App.Edition)
+
+	_, err = load("", []string{"ANIX_CONTROL_APP_EDITION=enterprise"})
+	require.ErrorContains(t, err, "invalid app.edition")
+
+	require.Equal(t, EditionCommunity, AppConfig{}.EditionOrDefault())
+	require.Equal(t, EditionCommunity, AppConfig{Edition: "bogus"}.EditionOrDefault())
+	require.Equal(t, EditionCommercial, AppConfig{Edition: " Commercial "}.EditionOrDefault())
+}

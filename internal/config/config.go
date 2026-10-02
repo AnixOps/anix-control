@@ -404,6 +404,39 @@ type AppConfig struct {
 	APIToken         string `yaml:"api_token"`
 	TrafficLogEnable bool   `yaml:"traffic_log_enable"`
 	SubscribePath    string `yaml:"subscribe_path"`
+	// Edition selects the product edition: "community" (default) hides the
+	// commercial features (orders, payments, affiliate, plan purchase);
+	// "commercial" serves them. See internal/edition.
+	Edition string `yaml:"edition"`
+}
+
+// Product editions (app.edition).
+const (
+	EditionCommunity  = "community"
+	EditionCommercial = "commercial"
+)
+
+// NormalizeEdition returns the canonical edition name: empty selects
+// community, and any value other than community or commercial is an error.
+func NormalizeEdition(value string) (string, error) {
+	switch strings.ToLower(strings.TrimSpace(value)) {
+	case "", EditionCommunity:
+		return EditionCommunity, nil
+	case EditionCommercial:
+		return EditionCommercial, nil
+	default:
+		return "", fmt.Errorf("invalid app.edition %q: use %s or %s", value, EditionCommunity, EditionCommercial)
+	}
+}
+
+// EditionOrDefault returns the configured edition, community when it is
+// empty or not valid (load rejects invalid values).
+func (a AppConfig) EditionOrDefault() string {
+	edition, err := NormalizeEdition(a.Edition)
+	if err != nil {
+		return EditionCommunity
+	}
+	return edition
 }
 
 // Load reads the configuration once per process. A non-empty path names a
@@ -451,6 +484,10 @@ func load(path string, environ []string) (*Config, error) {
 	loaded.App.SubscribePath, err = NormalizeSubscribePath(loaded.App.SubscribePath)
 	if err != nil {
 		return nil, fmt.Errorf("invalid app.subscribe_path: %w", err)
+	}
+	loaded.App.Edition, err = NormalizeEdition(loaded.App.Edition)
+	if err != nil {
+		return nil, err
 	}
 	if err := loaded.Plugins.ValidatePayloadLimits(); err != nil {
 		return nil, err

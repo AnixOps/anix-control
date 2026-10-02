@@ -22,7 +22,7 @@
     </section>
 
     <section class="detail-grid">
-      <article class="section-panel detail-card">
+      <article v-if="isCommercial" class="section-panel detail-card">
         <div class="detail-header">
           <h2>{{ t('adminDashboard.orders.title') }}</h2>
         </div>
@@ -68,12 +68,15 @@
 import { computed, onMounted, ref } from 'vue'
 import { getDashboard } from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { filterByEdition, useEdition } from '@/composables/useEdition'
 
 const { t, formatDateTime } = useAppI18n()
+// Revenue and orders are commercial.
+const { isCommercial } = useEdition()
 const stats = ref({})
 const loading = ref(false)
 
-const metrics = computed(() => ([
+const metrics = computed(() => filterByEdition([
   {
     code: 'USR',
     tone: 'primary',
@@ -100,6 +103,7 @@ const metrics = computed(() => ([
   },
   {
     code: 'REV',
+    edition: 'commercial',
     tone: 'warning',
     label: t('adminDashboard.stats.monthlyIncome'),
     value: `¥${formatMoney(stats.value.monthly_income)}`,

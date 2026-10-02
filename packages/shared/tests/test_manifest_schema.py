@@ -703,6 +703,17 @@ func main() {
             self.assertEqual(package_id, migrations["package_id"])
             self.assertEqual("__ANIXOPS_PACKAGE_VERSION__", migrations["version"])
 
+    def test_edition_package_sets(self) -> None:
+        every = [spec.package_id for spec in BUILD_PACKAGE_MODULE.PACKAGE_SPECS]
+        commercial = [spec.package_id for spec in BUILD_PACKAGE_MODULE.edition_package_specs("commercial")]
+        community = [spec.package_id for spec in BUILD_PACKAGE_MODULE.edition_package_specs("community")]
+        self.assertEqual(every, commercial)
+        self.assertEqual([package_id for package_id in every if package_id not in {"affiliate", "order", "payment"}], community)
+        self.assertIn("plan", community, "subscription templates need the plan package")
+        self.assertEqual(frozenset({"affiliate", "order", "payment"}), BUILD_PACKAGE_MODULE.commercial_package_ids())
+        with self.assertRaises(BUILD_PACKAGE_MODULE.PackageBuildError):
+            BUILD_PACKAGE_MODULE.edition_package_specs("enterprise")
+
     def test_all_v4_packages_materialize_signed_v2_artifacts(self) -> None:
         with tempfile.TemporaryDirectory() as temporary:
             root = Path(temporary)
@@ -728,9 +739,14 @@ func main() {
 
             artifacts = sorted(output.glob("*.anxp"))
             sboms = sorted(output.glob("*.sbom.spdx.json"))
-            self.assertEqual(18, len(artifacts))
-            self.assertEqual(18, len(sboms))
+            # --all builds the community edition by default: every package
+            # but the commercial ones of config/editions.json.
+            self.assertEqual(15, len(artifacts))
+            self.assertEqual(15, len(sboms))
             self.assertIn(output / "identity-platform-4.0.0.anxp", artifacts)
+            self.assertIn(output / "plan-4.0.0.anxp", artifacts)
+            for commercial in ("affiliate", "order", "payment"):
+                self.assertNotIn(output / f"{commercial}-4.0.0.anxp", artifacts)
 
             for artifact_path in artifacts:
                 stem = artifact_path.name.removesuffix(".anxp")

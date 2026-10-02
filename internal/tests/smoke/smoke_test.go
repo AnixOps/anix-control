@@ -324,10 +324,17 @@ func (s *SmokeTestSuite) TestSubscriptionWithInvalidToken() {
 // Smoke 9: API Version Check
 // ============================================================
 func (s *SmokeTestSuite) TestAPIV2GroupExists() {
-	req := httptest.NewRequest("GET", "/api/v2/user/plan", nil)
+	req := httptest.NewRequest("GET", "/api/v2/user/subscription", nil)
 	w := httptest.NewRecorder()
 	s.router.ServeHTTP(w, req)
 
 	// Should respond (likely 401 since no auth, not 404)
-	assert.NotEqual(s.T(), http.StatusNotFound, w.Code, "v2/user/plan route should exist")
+	assert.NotEqual(s.T(), http.StatusNotFound, w.Code, "v2/user/subscription route should exist")
+
+	// The default community edition answers the plan purchase list as an
+	// undeclared route.
+	req = httptest.NewRequest("GET", "/api/v2/user/plan", nil)
+	w = httptest.NewRecorder()
+	s.router.ServeHTTP(w, req)
+	assert.Equal(s.T(), http.StatusNotFound, w.Code, "v2/user/plan is commercial")
 }

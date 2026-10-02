@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/config"
+	"github.com/AnixOps/anix-control/v4/internal/edition"
 	"github.com/AnixOps/anix-control/v4/internal/handler"
 	"github.com/AnixOps/anix-control/v4/internal/health"
 	"github.com/AnixOps/anix-control/v4/internal/kernelnodeops"
@@ -41,6 +42,9 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	r.Use(middleware.CORS())
 	r.Use(middleware.Logger())
 	r.Use(middleware.Recovery())
+	// The configured edition (app.edition) hides its commercial /api/v2
+	// routes here, and only here.
+	r.Use(editionRouteFilter(edition.For(cfg)))
 
 	// 速率限制器 (测试模式跳过)
 	exemptPaths := []string{"/health", "/livez", "/readyz", "/metrics", "/swagger/"}
@@ -741,6 +745,10 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	identityPublic := r.Group("/api/v4/identity")
 	identityPublic.Use(publicLimiter.Middleware())
 	identityPublic.GET("/jwks.json", handler.IdentityJWKS)
+	// Public: the edition and registration settings the web app reads first.
+	publicConfig := r.Group("/api/v4/public")
+	publicConfig.Use(publicLimiter.Middleware())
+	publicConfig.GET("/config", handler.PublicConfigHandler(cfg))
 	identityUser := r.Group("/api/v4/identity")
 	identityUser.Use(userLimiter.Middleware(), middleware.JWTAuth())
 	identityUser.POST("/logout", handler.IdentityLogout)

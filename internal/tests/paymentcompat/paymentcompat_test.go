@@ -130,6 +130,8 @@ func seed(t testing.TB, db *gorm.DB) {
 		{ID: 1, Name: "Stripe", Method: "fiat", Provider: "stripe", Sort: 2, CreatedAt: seeded, UpdatedAt: seeded},
 		{ID: 2, Name: "PayPal", Method: "fiat", Provider: "paypal", Sort: 1, CreatedAt: seeded, UpdatedAt: seeded},
 		{ID: 3, Name: "Alipay", Method: "fiat", Provider: "alipay", Sort: 1, CreatedAt: seeded, UpdatedAt: seeded},
+		// x402 is usable only while an enabled row names it.
+		{ID: 4, Name: "x402", Method: "crypto", Provider: "x402", Sort: 3, CreatedAt: seeded, UpdatedAt: seeded},
 	}).Error)
 	// enable defaults to 1 on insert; PayPal's method is off.
 	require.NoError(t, db.Model(&model.Payment{}).Where("id = ?", 2).UpdateColumn("enable", 0).Error)
@@ -361,7 +363,7 @@ func TestStatusRoutesParity(t *testing.T) {
 	methods := route("GET", "/api/v2/payment/methods", "payment.payment.methods.get", payments((*handler.PaymentHandler).GetPaymentMethods))
 	read(t, methods, []packagecompat.Case{
 		{Name: "the enabled methods", Path: "/api/v2/payment/methods", Principal: public},
-		{Name: "crypto while no method is enabled", Path: "/api/v2/payment/methods", Principal: public, Seed: noMethods},
+		{Name: "x402 stays off while no method is enabled", Path: "/api/v2/payment/methods", Principal: public, Seed: noMethods},
 		{Name: "no methods", Path: "/api/v2/payment/methods", Principal: public, Seed: empty},
 	})
 	check := route("GET", "/api/v2/payment/x402/check/:id", "payment.payment.x402.check.id.get", payments((*handler.PaymentHandler).X402CheckPayment))
@@ -410,6 +412,8 @@ func TestCreatePaymentRoutesParity(t *testing.T) {
 		{Name: "an unknown order", Path: "/api/v2/payment/x402/create", Principal: buyer, Body: []byte(`{"order_id":99,"token":"ETH"}`)},
 		{Name: "no order", Path: "/api/v2/payment/x402/create", Principal: buyer, Body: []byte(`{"token":"ETH"}`)},
 		{Name: "no body", Path: "/api/v2/payment/x402/create", Principal: buyer},
+		{Name: "x402 is not enabled", Path: "/api/v2/payment/x402/create", Principal: buyer, Seed: noMethods,
+			Body: []byte(`{"order_id":1,"token":"USDC","network":"base-sepolia"}`)},
 	})
 	fiat := route("POST", "/api/v2/payment/fiat/create", "payment.payment.fiat.create.post", payments((*handler.PaymentHandler).FiatCreatePayment))
 	write(t, fiat, recordState, []packagecompat.Case{

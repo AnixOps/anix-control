@@ -49,7 +49,7 @@
         <table class="data-table">
         <thead>
           <tr>
-            <th>{{ t('adminUsers.table.id') }}</th><th>{{ t('adminUsers.table.email') }}</th><th>{{ t('adminUsers.table.plan') }}</th><th>{{ t('adminUsers.table.traffic') }}</th><th>{{ t('adminUsers.table.limits') }}</th>
+            <th>{{ t('adminUsers.table.id') }}</th><th>{{ t('adminUsers.table.email') }}</th><th data-test="user-plan-column">{{ isCommercial ? t('adminUsers.table.plan') : t('adminUsers.table.subscriptionTemplate') }}</th><th>{{ t('adminUsers.table.traffic') }}</th><th>{{ t('adminUsers.table.limits') }}</th>
             <th>{{ t('adminUsers.table.expireAt') }}</th><th>{{ t('adminUsers.table.status') }}</th><th>{{ t('adminUsers.table.createdAt') }}</th><th>{{ t('adminUsers.table.actions') }}</th>
           </tr>
         </thead>
@@ -90,7 +90,7 @@
       <div class="modal">
         <h3>{{ t('adminUsers.editModal.title') }}</h3>
         <label>{{ t('adminUsers.editModal.fields.email') }}<input v-model="editingUser.email" type="email" /></label>
-        <label>{{ t('adminUsers.editModal.fields.balance') }}<input v-model.number="editingUser.balance" type="number" /></label>
+        <label v-if="isCommercial" data-test="user-balance-field">{{ t('adminUsers.editModal.fields.balance') }}<input v-model.number="editingUser.balance" type="number" /></label>
         <label>{{ t('adminUsers.editModal.fields.transfer') }}<input v-model.number="editingUser.transfer_enable" type="number" /></label>
         <label>{{ t('adminUsers.editModal.fields.speedLimit') }}<input v-model.number="editingUser.speed_limit" data-test="user-speed-limit-input" type="number" min="0" /></label>
         <label>{{ t('adminUsers.editModal.fields.deviceLimit') }}<input v-model.number="editingUser.device_limit" data-test="user-device-limit-input" type="number" min="0" /></label>
@@ -271,6 +271,7 @@
 <script setup>
 import { computed, onMounted, ref } from 'vue'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { useEdition } from '@/composables/useEdition'
 import {
   assignAdminUserTunnel, banUser, createUser, getAdminUserTunnelList, getForwardTunnels, getSpeedLimitList,
   getAdminUser, getTrafficHourly,
@@ -281,6 +282,9 @@ import {
 import { getSubscriptionGroups } from '@/api/admin'
 
 const { t, formatDate: i18nFormatDate, formatDateTime: i18nFormatDateTime } = useAppI18n()
+// The balance is commercial: the community edition hides the field and
+// sends the stored value back unchanged.
+const { isCommercial } = useEdition()
 const users = ref([])
 const stats = ref({})
 const subscriptionGroups = ref([])
