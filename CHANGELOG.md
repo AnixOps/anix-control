@@ -146,6 +146,48 @@
   nightly schedule and manual runs, has a 40-minute timeout, and is no longer
   a release dependency (`config/scripts/check_release_workflow.sh` updated).
 
+- **Mobile polish, accessibility to zero, visual regression baseline and
+  page follow-ups (UI redesign phase U9, polish)** (`web/src/ui/`,
+  `web/src/views/`, `web/src/components/`, `web/e2e/`,
+  `web/playwright.visual.config.js`, `.github/workflows/ci.yml` job
+  `frontend-visual`, `.github/workflows/frontend-visual-baselines.yml`;
+  `docs/reference/frontend-design.md` "Accessibility and visual regression
+  tests (U9)"). Same endpoints, request bodies, permission and edition
+  checks; no backend change.
+  - Every admin and user route swept at 390 and 360 px with touch
+    emulation, light and dark: no horizontal scroll; every control is a
+    44 px touch target on coarse pointers (an `::after` hit area where the
+    look stays: buttons, close buttons, switches, segmented tabs and
+    controls, locale options, data-table card titles, back links, suite
+    and mode navs, dashboard and help links); medium fields are 44 px tall
+    there; tab rows that do not fit fade on the clipped edge and keep the
+    active tab in view (subscription group tabs at 390); the forward
+    wizard footer clears the home indicator.
+  - Accessibility: axe finds no serious or critical issue on 23 admin and
+    user screens in both themes at 1440 and 390 px, and the moderate ones
+    found are fixed (the admin sidebar is a labelled complementary
+    landmark; search fields, table pagination and the traffic summary
+    carry their own names; heading levels on the forward node page). Charts
+    and topology graphs turn their animation off under
+    `prefers-reduced-motion`. `web/e2e/a11y.spec.js` (`@axe-core/playwright`,
+    a dev dependency) runs in the Frontend Build job and also checks the
+    skip link, landmarks, one `h1` and focus return after a dialog.
+  - Visual regression: 28 full-page screenshots of 12 key screens with the
+    API mocked, a fixed clock, UTC, English and no animation, compared in
+    the official Playwright image by the new Frontend Visual Regression job;
+    `npm run test:visual` / `test:visual:update` run the same image locally
+    with docker, and the Frontend Visual Baselines workflow regenerates them
+    without docker.
+  - Admin lists keep search, filter chips and page in the URL query (plan
+    §9): users, orders, tickets, plugins, agents, coupons and invite codes,
+    as nodes already did (`useListQuery`).
+  - 部署编排 is the page title in both locale layers; its tab bar is a
+    segmented `UiTabs`; the topology workspace's pickers are `UiSelect`; the
+    node config and deploy previews use `UiCodeBlock` (new `copyLabel`,
+    `copyDisabled`); the NodeX and local runtime pages use the settings
+    save / discard bar with the leave prompt.
+  - 转发 says when the runtime is nftables / Ansible that Primary / Backup
+    and Hash use only the first target and speed limits are not enforced.
 - **Nodes: a list and a node page (UI redesign phase U7)**
   (`web/src/views/admin/Nodes.vue`, `NodeDetail.vue`, `views/admin/nodes/`;
   `docs/reference/frontend-design.md` "Node pages"). Same endpoints, request
@@ -415,6 +457,12 @@
   snapped back. It now treats any value it did not write as the new source.
 - Vue Router no longer warns about the unnamed empty-path child of the
   `admin` route (now `admin-index`).
+- **A reset subscription link no longer reverts to the old one** (UI U9):
+  the user shell's profile request could answer after a reset and put the
+  old token back on the page. The user store re-applies fields merged after
+  a profile request started (`web/src/stores/user.js`); the user-portal e2e
+  test now holds the profile answer until the reset is done, so it covers
+  the race on every run instead of flaking.
 
 ## 4.1.0-rc.4 - 2026-10-02
 

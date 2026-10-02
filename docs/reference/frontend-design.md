@@ -247,7 +247,7 @@ written separately for each language. Page text is passed in as props.
 | A choice applied on submit | `UiCheckbox` | `'indeterminate'` for "select all". |
 | One of a few visible options | `UiRadioGroup` | When the options need descriptions. |
 | A value that changes the view in place | `UiSegmentedControl` | 2–5 values (time range, list or grouped view). |
-| Switching content panels | `UiTabs` | `underline` for detail sections; `variant="segmented"` for the pill look at the top of a page (转发规则 / 隧道 / 限速). |
+| Switching content panels | `UiTabs` | `underline` for detail sections; `variant="segmented"` for the pill look at the top of a page (转发规则 / 隧道 / 限速). A row of tabs wider than the screen scrolls sideways, fades out on the clipped edge and keeps the active tab in view. |
 | A focused task | `UiDialog` | sm 420 / md 560 / lg 760; full screen below 834 px for md and lg. |
 | Confirming an irreversible action | `useConfirm()` / `UiConfirmDialog` | `requireText` for deleting nodes and users. |
 | Details or an editor next to a list | `UiSheet` | Right drawer; bottom sheet below 834 px. |
@@ -256,7 +256,7 @@ written separately for each language. Page text is passed in as props.
 | Nothing to show, or a failed load | `UiEmptyState` | What will appear and the first action; for errors, retry and "复制错误详情". |
 | Loading | `UiSkeleton` + `useDelayedLoading()` | text, card, table-row. |
 | A link, token or command to copy | `UiCopyField` | `secret` masks it. |
-| Generated text, output, commands | `UiCodeBlock` | Monospace, scrolls inside itself (`maxHeight`; `wrap` wraps instead), label and 复制; focusable for keyboard scrolling. |
+| Generated text, output, commands | `UiCodeBlock` | Monospace, scrolls inside itself (`maxHeight`; `wrap` wraps instead), label and 复制 (`copyLabel` for a specific verb, `copyDisabled` while the text is not usable yet); focusable for keyboard scrolling. |
 | Page title | `UiPageHeader` | The only H1, one sentence, actions with the primary last. |
 | Surfaces and settings rows | `UiCard`, `UiSection`, `UiGroupedList` + `UiGroupedListRow` | System Settings style rows: label left; value, control or chevron right. |
 | Numbers, bytes, rates, money, dates | `useFormat()` | One implementation on Intl and the current locale. |
@@ -297,6 +297,11 @@ written separately for each language. Page text is passed in as props.
   toasts.
 - **Copy.** Short, active, about the result; Chinese and English written
   separately; a space between a number and its unit (`128.4 GB`, `3 分钟前`).
+- **Lists.** Search, filter chips and page live in the URL query, so a
+  filtered list can be shared and survives a reload or 返回
+  (`composables/useListQuery.js`: `read`, `readPage`, `write` with
+  `router.replace`; defaults stay out of the URL). Nodes, users, orders,
+  tickets, plugins, agents, coupons and invite codes do this.
 
 ### Feedback and dialogs in pages (U4)
 
@@ -381,6 +386,51 @@ gives a fixed-locale set; `formatBytes()` is a plain helper.
 - `date` `2026-11-30`, `dateTime` `2026-11-30 14:05` (24-hour, local time);
   `relativeTime` 「3 分钟前」 (show `dateTime` on hover).
 - Missing values render as `—` (option `empty`).
+
+## Accessibility and visual regression tests (U9)
+
+Both run against mocked screens: `web/e2e/support/screens.js` names each
+screen (fixture from `web/e2e/fixtures/` plus a scenario such as `empty` or
+`error`) and `openScreen(page, name, { theme, locale, clock })` opens it
+with the API answered from the fixture.
+
+- **Accessibility** (`web/e2e/a11y.spec.js`, part of `npm run test:e2e` in
+  the Frontend Build job): `@axe-core/playwright` with the WCAG 2.2 AA and
+  best-practice rules on 23 admin and user screens, light and dark, 1440 and
+  390 px. Serious and critical findings fail. It also checks the skip link,
+  the landmarks, one `h1` per page and focus returning to the opener when a
+  dialog closes. Add a screen to `SCREENS` when a page is added.
+- **Visual regression** (`web/e2e/visual/visual.spec.js`,
+  `playwright.visual.config.js`): 28 full-page screenshots of 12 key screens
+  (sign-in, user home, subscription, dashboard, users, node detail, forward
+  rules, settings, monitoring, plugin center, an empty and an error state),
+  light and dark at 1440 px and a few at 390 px. Deterministic by design:
+  mocked data with fixed timestamps, `Date.now()` fixed with
+  `page.clock.setFixedTime`, UTC, English (text in the bundled Inter),
+  reduced motion and `animations: 'disabled'` (charts and graphs turn their
+  animation off under reduced motion), and anything marked
+  `data-visual-mask` masked. Baselines live in
+  `web/e2e/visual/__screenshots__/` and are made in the official Playwright
+  image, the same one the **Frontend Visual Regression** CI job uses, so
+  fonts and rasterizing match:
+
+  ```bash
+  cd web
+  npm run test:visual            # compare (docker, mcr.microsoft.com/playwright:v<@playwright/test>-noble)
+  npm run test:visual:update     # rewrite the baselines after an intended change
+  sh scripts/visual-docker.sh -g "admin-users"   # extra Playwright arguments
+  ```
+
+  Without docker, run the **Frontend Visual Baselines** workflow
+  (`workflow_dispatch`) on the branch and commit the PNGs from its artifact.
+  On a failure the CI job uploads the expected, actual and diff images
+  (`frontend-visual-diffs`). Bumping `@playwright/test` means updating the
+  image tag in `ci.yml` and `frontend-visual-baselines.yml` and
+  regenerating the baselines.
+
+Touch targets: on coarse pointers every control is at least 44 × 44 px,
+through its own size or an `::after` hit area that keeps the look; medium
+fields grow to 44 px; inputs are 16 px on phones.
 
 ## App shell
 
@@ -693,9 +743,13 @@ in the query (`?tab=config`, `useDetailTab`). The NodeX and local runtime
 pages use `RuntimeStatusPanel` (probes, commands, Doctor output) and
 `RuntimeJobsTable`.
 
-The legacy global `button` rule in `style.css` (min-height 40 / 44 px on
-phones) no longer stretches library buttons, checkboxes, switches and chips:
-they set `min-height: 0` and keep their 44 px touch area with `::after`.
+The NodeX and local runtime settings use the settings template's sticky
+保存 / 放弃 bar (`SettingsSaveBar`) and ask before leaving with unsaved
+changes; the local runtime keeps 保存并启用 in the header while it is on
+standby.
+
+Library buttons, checkboxes, switches and chips set `min-height: 0` and get
+their 44 px touch area from `::after` on coarse pointers.
 
 ## Node pages (U7)
 
