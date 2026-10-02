@@ -487,13 +487,18 @@ export default {
     empty: {
       noData: 'No articles'
     },
+    confirm: {
+      deleteTitle: 'Delete article "{title}"?',
+      deleteMessage: 'The article is removed from the help center and users can no longer see it. This can’t be undone.',
+      deleteAction: 'Delete article'
+    },
     messages: {
       fetchFailed: 'Failed to load articles',
       requiredFields: 'Please fill in title and content',
       saveSuccess: 'Article saved successfully',
       publishSuccess: 'Article published successfully',
       actionFailed: 'Article operation failed',
-      deleteConfirm: 'Delete article "{title}"?',
+      deleted: 'Article "{title}" deleted',
       deleteFailed: 'Failed to delete article'
     }
   }

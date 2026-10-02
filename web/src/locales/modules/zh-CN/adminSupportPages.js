@@ -487,13 +487,18 @@ export default {
     empty: {
       noData: '暂无文章'
     },
+    confirm: {
+      deleteTitle: '删除文章“{title}”？',
+      deleteMessage: '文章会从帮助中心移除，用户将无法再看到它。此操作无法撤销。',
+      deleteAction: '删除文章'
+    },
     messages: {
       fetchFailed: '加载文章失败',
       requiredFields: '请填写标题和内容',
       saveSuccess: '文章保存成功',
       publishSuccess: '文章发布成功',
       actionFailed: '文章操作失败',
-      deleteConfirm: '确认删除文章“{title}”吗？',
+      deleted: '已删除文章“{title}”',
       deleteFailed: '删除文章失败'
     }
   }
