@@ -1,538 +1,661 @@
 <template>
-  <div class="page-shell tickets-page">
-    <div class="page-toolbar">
-      <div>
-        <h1>{{ t('user.tickets.title') }}</h1>
-        <p>{{ t('user.tickets.subtitle') }}</p>
-      </div>
-      <button class="btn btn-primary" data-test="ticket-create-button" @click="showCreate = true">{{ t('user.tickets.submitTicket') }}</button>
+  <div class="tickets">
+    <UiPageHeader v-if="!(narrow && selectedId)" :title="t('portal.tickets.title')" :description="t('portal.tickets.description')">
+      <template v-if="list.state === 'ready' && list.items.length" #actions>
+        <UiButton variant="primary" :icon="Plus" data-ticket-new @click="openCreate">{{ t('portal.tickets.new') }}</UiButton>
+      </template>
+    </UiPageHeader>
+
+    <div v-if="list.state === 'loading'">
+      <UiSkeleton v-if="showSkeleton" variant="table-row" :rows="4" :columns="2" />
+    </div>
+    <LoadError v-else-if="list.state === 'failed'" :title="t('portal.tickets.errors.load')" :error="list.error" @retry="loadList" />
+    <UiEmptyState
+      v-else-if="!list.items.length"
+      :icon="MessagesSquare"
+      :title="t('portal.tickets.empty')"
+      :description="t('portal.tickets.emptyHint')"
+      heading-tag="h2"
+      data-tickets-empty
+    >
+      <template #actions>
+        <UiButton variant="primary" :icon="Plus" data-ticket-new @click="openCreate">{{ t('portal.tickets.new') }}</UiButton>
+      </template>
+    </UiEmptyState>
+
+    <div v-else class="tickets-split" :class="{ 'is-narrow': narrow }">
+      <!-- The list (always on wide screens; on phones until a ticket is open). -->
+      <nav v-if="!narrow || !selectedId" class="ticket-list" :aria-label="t('portal.tickets.list')" data-ticket-list>
+        <ul>
+          <li v-for="ticket in list.items" :key="ticket.id">
+            <button
+              type="button"
+              class="ticket-list__item"
+              :class="{ 'is-selected': String(ticket.id) === selectedId }"
+              :aria-current="String(ticket.id) === selectedId ? 'true' : undefined"
+              :data-ticket-id="ticket.id"
+              @click="select(ticket.id)"
+            >
+              <span class="ticket-list__top">
+                <span class="ticket-list__subject">{{ ticket.subject }}</span>
+                <UiBadge :tone="statusTone(ticket.status)" :label="statusLabel(ticket.status)" />
+              </span>
+              <span class="ticket-list__meta">
+                {{ t('portal.tickets.number', { id: ticket.id }) }} ·
+                <span :title="format.dateTime(ticket.updated_at)">{{ t('portal.tickets.updated', { time: format.relativeTime(ticket.updated_at) }) }}</span>
+              </span>
+            </button>
+          </li>
+        </ul>
+      </nav>
+
+      <!-- The conversation. -->
+      <section v-if="!narrow || selectedId" class="conversation" :aria-labelledby="selectedId ? 'conversation-title' : undefined" data-ticket-conversation>
+        <div v-if="!selectedId" class="conversation__placeholder">
+          <UiIcon :icon="MessagesSquare" :size="48" />
+          <p>{{ t('portal.tickets.select') }}</p>
+        </div>
+
+        <template v-else>
+          <div v-if="detail.state === 'loading'" class="conversation__loading">
+            <UiSkeleton v-if="showDetailSkeleton" variant="text" :lines="6" />
+          </div>
+          <LoadError v-else-if="detail.state === 'failed'" :title="t('portal.tickets.errors.detail')" :error="detail.error" compact heading-tag="h2" @retry="loadDetail(selectedId)" />
+
+          <template v-else-if="detail.ticket">
+            <header class="conversation__header">
+              <UiButton v-if="narrow" variant="tertiary" size="sm" :icon="ChevronLeft" class="conversation__back" data-ticket-back @click="select('')">
+                {{ t('portal.tickets.backToList') }}
+              </UiButton>
+              <div class="conversation__heading">
+                <component :is="narrow ? 'h1' : 'h2'" id="conversation-title" ref="conversationTitleRef" class="conversation__title" tabindex="-1">{{ detail.ticket.subject }}</component>
+                <p class="conversation__meta">
+                  <UiBadge :tone="statusTone(detail.ticket.status)" :label="statusLabel(detail.ticket.status)" />
+                  <span>{{ t('portal.tickets.number', { id: detail.ticket.id }) }} · {{ priorityLabel(detail.ticket.level) }}</span>
+                </p>
+              </div>
+              <UiButton v-if="!isClosed" variant="tertiary" size="sm" data-ticket-close @click="closeCurrent">{{ t('portal.tickets.close') }}</UiButton>
+            </header>
+
+            <ol ref="messagesRef" class="conversation__messages" tabindex="0" :aria-label="detail.ticket.subject" data-ticket-messages>
+              <li
+                v-for="message in detail.ticket.messages || []"
+                :key="message.id"
+                class="message"
+                :class="message.is_admin ? 'message--support' : 'message--me'"
+              >
+                <span class="message__author">{{ message.is_admin ? t('portal.tickets.support') : t('portal.tickets.me') }}</span>
+                <p class="message__bubble">{{ message.message }}</p>
+                <time class="message__time" :datetime="isoTime(message.created_at)" :title="format.dateTime(message.created_at)">{{ format.relativeTime(message.created_at) }}</time>
+              </li>
+            </ol>
+
+            <p v-if="isClosed" class="conversation__closed" data-ticket-closed>
+              <UiIcon :icon="Lock" :size="16" />
+              <span>{{ t('portal.tickets.closedNote') }}</span>
+            </p>
+            <form v-else class="composer" novalidate data-ticket-reply-form @submit.prevent="sendReply">
+              <UiTextarea
+                v-model="reply.text"
+                :rows="2"
+                :placeholder="t('portal.tickets.replyPlaceholder')"
+                :aria-label="t('portal.tickets.reply')"
+                :error="reply.error"
+                :help="t('portal.tickets.sendHint')"
+                class="composer__field"
+                data-ticket-reply
+                @keydown.enter.ctrl.prevent="sendReply"
+                @keydown.enter.meta.prevent="sendReply"
+              />
+              <UiButton type="submit" variant="primary" :icon="Send" :loading="reply.busy" class="composer__send" data-ticket-send>{{ t('portal.tickets.send') }}</UiButton>
+            </form>
+          </template>
+        </template>
+      </section>
     </div>
 
-    <section class="section-panel stats-bar">
-      <div class="stat-item">
-        <span class="label">{{ t('user.tickets.active') }}</span>
-        <span class="value">{{ activeCount }}</span>
-      </div>
-      <div class="stat-item">
-        <span class="label">{{ t('user.tickets.resolved') }}</span>
-        <span class="value">{{ resolvedCount }}</span>
-      </div>
-    </section>
-
-    <div class="content-container">
-      <div v-if="loading" class="loading-state">
-        <div class="spinner"></div>
-        <p>{{ t('user.tickets.loading') }}</p>
-      </div>
-
-      <div v-else-if="tickets.length === 0" class="empty-state">
-        <div class="empty-icon">?</div>
-        <p>{{ t('user.tickets.empty') }}</p>
-        <button class="btn mt-4" data-test="ticket-create-button" @click="showCreate = true">{{ t('user.tickets.submitNow') }}</button>
-      </div>
-
-      <div v-else class="tickets-list">
-        <div
-          v-for="ticket in tickets"
-          :key="ticket.id"
-          class="ticket-card"
-          @click="viewDetail(ticket)"
-        >
-          <div class="ticket-status">
-            <span :class="['status-dot', statusClass(ticket.status)]"></span>
-            <span :class="['status-text', statusClass(ticket.status)]">{{ statusText(ticket.status) }}</span>
-          </div>
-          <div class="ticket-info">
-            <h3 class="ticket-subject">{{ ticket.subject }}</h3>
-            <div class="ticket-meta">
-              <span class="ticket-id">#{{ ticket.id }}</span>
-              <span class="divider">/</span>
-              <span class="ticket-date">{{ formatDate(ticket.updated_at) }} {{ t('user.tickets.updated') }}</span>
-            </div>
-          </div>
-          <div class="ticket-arrow">></div>
-        </div>
-      </div>
-    </div>
-
-    <UiSheet v-model:open="showCreate" :title="t('user.tickets.newTicketTitle')" :dismissible="!submitting">
-      <div class="ticket-form">
-        <div class="form-group">
-          <label for="ticket-subject">{{ t('common.labels.subject') }}</label>
-          <input id="ticket-subject" v-model="createForm.subject" type="text" :placeholder="t('common.labels.subject')">
-        </div>
-        <div class="form-group">
-          <label for="ticket-level">{{ t('common.labels.priority') }}</label>
-          <select id="ticket-level" v-model="createForm.level">
-            <option :value="0">{{ t('common.ticketPriority.low') }}</option>
-            <option :value="1">{{ t('common.ticketPriority.medium') }}</option>
-            <option :value="2">{{ t('common.ticketPriority.high') }}</option>
-          </select>
-        </div>
-        <div class="form-group">
-          <label for="ticket-message">{{ t('common.labels.message') }}</label>
-          <textarea id="ticket-message" v-model="createForm.message" rows="6" :placeholder="t('common.labels.message')"></textarea>
-        </div>
-        <p v-if="createError" class="form-error" role="alert" data-test="ticket-create-error">{{ createError }}</p>
-      </div>
+    <UiSheet v-model:open="create.open" :title="t('portal.tickets.new')" :dismissible="!create.busy" data-ticket-create>
+      <form id="ticket-create-form" class="create-form" novalidate @submit.prevent="submitCreate">
+        <UiTextField
+          v-model="create.subject"
+          :label="t('portal.tickets.subject')"
+          :placeholder="t('portal.tickets.subjectPlaceholder')"
+          :error="create.errors.subject"
+          maxlength="255"
+          required
+          data-ticket-subject
+        />
+        <UiField :label="t('portal.tickets.priority.label')" label-tag="span">
+          <UiSegmentedControl v-model="create.level" :options="priorityOptions" :aria-label="t('portal.tickets.priority.label')" block data-ticket-priority />
+        </UiField>
+        <UiTextarea
+          v-model="create.message"
+          :label="t('portal.tickets.message')"
+          :help="t('portal.tickets.messageHelp')"
+          :error="create.errors.message"
+          :rows="6"
+          required
+          data-ticket-message
+        />
+        <p v-if="create.error" class="create-form__error" role="alert" data-ticket-create-error>{{ create.error }}</p>
+      </form>
       <template #footer="{ close }">
-        <UiButton :disabled="submitting" @click="close">{{ t('common.actions.cancel') }}</UiButton>
-        <UiButton variant="primary" data-test="ticket-submit-button" :loading="submitting" @click="submitCreate">
-          {{ t('common.actions.submit') }}
-        </UiButton>
-      </template>
-    </UiSheet>
-
-    <UiSheet v-model:open="showDetail" size="lg" class="ticket-detail-sheet" :title="detailTicket.subject || ''">
-      <template #description>
-        <span class="header-top">
-          <span :class="['status-badge', statusIndicator(detailTicket.status)]">{{ statusText(detailTicket.status) }}</span>
-          <span class="ticket-id">{{ t('user.tickets.ticketId', { id: detailTicket.id }) }}</span>
-        </span>
-      </template>
-
-      <div class="chat-container">
-        <div class="messages-list">
-          <div
-            v-for="message in detailTicket.messages || []"
-            :key="message.id"
-            :class="['message-item', message.is_admin ? 'admin' : 'user']"
-          >
-            <div class="message-bubble">
-              <div class="message-sender">{{ message.is_admin ? t('user.tickets.assistant') : t('user.tickets.me') }}</div>
-              <div class="message-content">{{ message.message }}</div>
-              <div class="message-time">{{ formatDateTime(message.created_at) }}</div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <template #footer="{ close }">
-        <div v-if="detailTicket.status !== 2" class="reply-input-wrapper">
-          <label class="visually-hidden" for="ticket-reply">{{ t('user.tickets.replyLabel') }}</label>
-          <textarea
-            id="ticket-reply"
-            v-model="replyMessage"
-            rows="2"
-            :placeholder="t('user.tickets.replyPlaceholder')"
-            @keyup.ctrl.enter="submitReply"
-          ></textarea>
-          <p v-if="replyError" class="form-error" role="alert" data-test="ticket-reply-error">{{ replyError }}</p>
-          <div class="reply-actions">
-            <UiButton variant="tertiary" data-test="ticket-close-button" @click="handleClose(detailTicket)">{{ t('user.tickets.closeTicket') }}</UiButton>
-            <UiButton variant="primary" data-test="ticket-reply-button" :loading="replying" @click="submitReply">
-              {{ t('user.tickets.sendReply') }}
-            </UiButton>
-          </div>
-        </div>
-        <div v-else class="closed-footer">
-          <div class="text-secondary">{{ t('user.tickets.closedHint') }}</div>
-          <UiButton @click="close">{{ t('user.tickets.closeWindow') }}</UiButton>
-        </div>
+        <UiButton :disabled="create.busy" @click="close">{{ t('common.actions.cancel') }}</UiButton>
+        <UiButton type="submit" form="ticket-create-form" variant="primary" :loading="create.busy" data-ticket-submit>{{ t('portal.tickets.submit') }}</UiButton>
       </template>
     </UiSheet>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+// 工单 (plan §8.1): the list with the conversation beside it on wide
+// screens; on phones the list, then the conversation full width with a way
+// back. A new ticket opens in a Sheet. ?ticket=<id> selects a ticket and
+// ?new=1 opens the Sheet (links from 概览, 帮助中心 and 订阅). Data: GET/POST
+// /user/ticket, GET /user/ticket/:id, POST …/reply and …/close.
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
+import { useRoute, useRouter } from 'vue-router'
+import { ChevronLeft, Lock, MessagesSquare, Plus, Send } from '@lucide/vue'
 import { closeTicket, createTicket, getTicketDetail, getTickets, replyTicket } from '@/api/user'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { UiButton, UiSheet, useConfirm, useToast } from '@/ui'
+import { useMediaQuery, NARROW_QUERY } from '@/composables/useMediaQuery'
+import { listOf, panelErrorMessage, unwrapPanel } from '@/utils/panelResponse'
+import LoadError from '@/components/common/LoadError.vue'
+import UiBadge from '@/ui/UiBadge.vue'
+import UiButton from '@/ui/UiButton.vue'
+import UiEmptyState from '@/ui/UiEmptyState.vue'
+import UiField from '@/ui/UiField.vue'
+import UiIcon from '@/ui/UiIcon.vue'
+import UiPageHeader from '@/ui/UiPageHeader.vue'
+import UiSegmentedControl from '@/ui/UiSegmentedControl.vue'
+import UiSheet from '@/ui/UiSheet.vue'
+import UiSkeleton from '@/ui/UiSkeleton.vue'
+import UiTextField from '@/ui/UiTextField.vue'
+import UiTextarea from '@/ui/UiTextarea.vue'
+import { useConfirm } from '@/ui/composables/useConfirm'
+import { useDelayedLoading } from '@/ui/composables/useDelayedLoading'
+import { useFormat } from '@/ui/composables/useFormat'
+import { useToast } from '@/ui/composables/useToast'
 
-const { t, formatDate, formatDateTime } = useAppI18n()
-const tickets = ref([])
-const loading = ref(true)
-const showCreate = ref(false)
-const showDetail = ref(false)
-const submitting = ref(false)
-const replying = ref(false)
-const createForm = ref({
-  subject: '',
-  level: 1,
-  message: ''
-})
-const detailTicket = ref({})
-const replyMessage = ref('')
-const createError = ref('')
-const replyError = ref('')
+const { t } = useAppI18n()
+const format = useFormat()
 const toast = useToast()
 const confirm = useConfirm()
+const route = useRoute()
+const router = useRouter()
+const narrow = useMediaQuery(NARROW_QUERY)
 
-const activeCount = computed(() => tickets.value.filter((ticket) => ticket.status !== 2).length)
-const resolvedCount = computed(() => tickets.value.filter((ticket) => ticket.status === 2).length)
+const STATUS = ['open', 'answered', 'closed']
 
-async function fetchTickets() {
-  loading.value = true
+function statusLabel(status) {
+  return t(`portal.tickets.status.${STATUS[status] || 'open'}`)
+}
+
+function statusTone(status) {
+  return ['info', 'success', 'neutral'][status] || 'neutral'
+}
+
+function priorityLabel(level) {
+  return t(`portal.tickets.priority.${['low', 'medium', 'high'][level] || 'medium'}`)
+}
+
+const priorityOptions = computed(() => [
+  { value: 0, label: t('portal.tickets.priority.low') },
+  { value: 1, label: t('portal.tickets.priority.medium') },
+  { value: 2, label: t('portal.tickets.priority.high') }
+])
+
+function timeOf(value) {
+  const n = typeof value === 'number' ? (value > 1e12 ? value : value * 1000) : Date.parse(value)
+  return Number.isFinite(n) ? n : 0
+}
+
+function isoTime(value) {
+  const n = timeOf(value)
+  return n ? new Date(n).toISOString() : undefined
+}
+
+// --- list ----------------------------------------------------------------------
+const list = reactive({ state: 'loading', items: [], error: null })
+const showSkeleton = useDelayedLoading(computed(() => list.state === 'loading'))
+
+async function loadList({ quiet = false } = {}) {
+  if (!quiet) list.state = 'loading'
   try {
-    const res = await getTickets()
-    tickets.value = res.data || []
-  } catch (err) {
-    console.error('Failed to load tickets:', err)
-  } finally {
-    loading.value = false
+    list.items = [...listOf(unwrapPanel(await getTickets()))].sort((a, b) => timeOf(b.updated_at) - timeOf(a.updated_at))
+    list.state = 'ready'
+    list.error = null
+  } catch (error) {
+    if (quiet && list.state === 'ready') return
+    list.error = error
+    list.state = 'failed'
   }
 }
 
-function statusText(status) {
-  return [t('common.states.open'), t('common.states.answered'), t('common.states.closed')][status] || t('common.states.unknown')
+// --- selection (?ticket=) -------------------------------------------------------
+const selectedId = computed(() => String(route.query.ticket || ''))
+
+function select(id) {
+  router.replace({ query: { ...route.query, ticket: id ? String(id) : undefined } })
 }
 
-function statusClass(status) {
-  return ['status-open', 'status-answered', 'status-closed'][status] || ''
+const detail = reactive({ state: 'idle', ticket: null, error: null })
+const reply = reactive({ text: '', busy: false, error: '' })
+const showDetailSkeleton = useDelayedLoading(computed(() => detail.state === 'loading'))
+const isClosed = computed(() => detail.ticket?.status === 2)
+const messagesRef = ref(null)
+const conversationTitleRef = ref(null)
+
+function scrollToEnd() {
+  nextTick(() => {
+    const el = messagesRef.value
+    if (el) el.scrollTop = el.scrollHeight
+  })
 }
 
-function statusIndicator(status) {
-  return ['indicator-blue', 'indicator-green', 'indicator-gray'][status] || ''
-}
-
-async function submitCreate() {
-  createError.value = ''
-  if (!createForm.value.subject || !createForm.value.message) {
-    createError.value = t('user.tickets.fillSubjectMessage')
+async function loadDetail(id, { quiet = false } = {}) {
+  if (!id) {
+    detail.state = 'idle'
+    detail.ticket = null
     return
   }
-  submitting.value = true
+  if (!quiet) detail.state = 'loading'
   try {
-    await createTicket(createForm.value)
-    showCreate.value = false
-    createForm.value = { subject: '', level: 1, message: '' }
-    toast.success(t('user.tickets.created'))
-    await fetchTickets()
-  } catch (err) {
-    createError.value = err.response?.data?.message || t('common.messages.submitFailed')
-  } finally {
-    submitting.value = false
+    detail.ticket = unwrapPanel(await getTicketDetail(id)) || null
+    detail.state = 'ready'
+    scrollToEnd()
+  } catch (error) {
+    detail.error = error
+    detail.state = 'failed'
   }
 }
 
-async function viewDetail(ticket) {
-  try {
-    const res = await getTicketDetail(ticket.id)
-    detailTicket.value = res.data || {}
-    replyError.value = ''
-    showDetail.value = true
-  } catch {
-    toast.error(t('user.tickets.loadDetailFailed'))
-  }
-}
+watch(selectedId, async (id, previous) => {
+  reply.text = ''
+  reply.error = ''
+  await loadDetail(id)
+  // Opened by the user (not on first load): move focus to the conversation.
+  if (id && previous !== undefined) nextTick(() => conversationTitleRef.value?.$el?.focus?.() || conversationTitleRef.value?.focus?.())
+}, { immediate: true })
 
-async function submitReply() {
-  if (!replyMessage.value.trim()) {
+// --- reply ---------------------------------------------------------------------
+
+async function sendReply() {
+  if (reply.busy) return
+  if (!reply.text.trim()) {
+    reply.error = t('portal.tickets.errors.reply')
     return
   }
-  replying.value = true
-  replyError.value = ''
+  reply.busy = true
+  reply.error = ''
   try {
-    await replyTicket(detailTicket.value.id, { message: replyMessage.value })
-    replyMessage.value = ''
-    const res = await getTicketDetail(detailTicket.value.id)
-    detailTicket.value = res.data || {}
-    await fetchTickets()
-  } catch (err) {
-    replyError.value = err?.response?.data?.message || t('common.messages.submitFailed')
+    unwrapPanel(await replyTicket(detail.ticket.id, { message: reply.text }))
+    reply.text = ''
+    await Promise.all([loadDetail(selectedId.value, { quiet: true }), loadList({ quiet: true })])
+  } catch (error) {
+    reply.error = t('portal.tickets.errors.send', { message: panelErrorMessage(error) })
   } finally {
-    replying.value = false
+    reply.busy = false
   }
 }
 
-async function handleClose(ticket) {
+async function closeCurrent() {
+  const ticket = detail.ticket
   const closed = await confirm({
-    title: t('user.tickets.closeConfirmTitle', { subject: ticket.subject || `#${ticket.id}` }),
-    message: t('user.tickets.closeConfirmMessage'),
-    confirmLabel: t('user.tickets.closeTicket'),
+    title: t('portal.tickets.closeTitle', { subject: ticket.subject || `#${ticket.id}` }),
+    message: t('portal.tickets.closeMessage'),
+    confirmLabel: t('portal.tickets.closeConfirm'),
     onConfirm: async () => {
       try {
-        await closeTicket(ticket.id)
-      } catch (err) {
-        throw new Error(err?.response?.data?.message || t('common.messages.submitFailed'))
+        unwrapPanel(await closeTicket(ticket.id))
+      } catch (error) {
+        throw new Error(panelErrorMessage(error))
       }
     }
   })
   if (!closed) return
-  showDetail.value = false
-  toast.success(t('user.tickets.closed'))
-  await fetchTickets()
+  toast.success(t('portal.tickets.closed'))
+  await Promise.all([loadDetail(selectedId.value, { quiet: true }), loadList({ quiet: true })])
 }
 
-onMounted(() => {
-  fetchTickets()
+// --- new ticket (?new=1) --------------------------------------------------------
+const create = reactive({ open: false, busy: false, subject: '', level: 1, message: '', error: '', errors: { subject: '', message: '' } })
+
+function openCreate() {
+  Object.assign(create, { open: true, busy: false, error: '', errors: { subject: '', message: '' } })
+}
+
+watch(() => create.open, (open) => {
+  if (!open && route.query.new) router.replace({ query: { ...route.query, new: undefined } })
+})
+
+async function submitCreate() {
+  create.errors.subject = create.subject.trim() ? '' : t('portal.tickets.errors.subject')
+  create.errors.message = create.message.trim() ? '' : t('portal.tickets.errors.message')
+  if (create.errors.subject || create.errors.message) return
+  create.busy = true
+  create.error = ''
+  try {
+    const ticket = unwrapPanel(await createTicket({ subject: create.subject.trim(), level: create.level, message: create.message }))
+    create.open = false
+    create.subject = ''
+    create.message = ''
+    create.level = 1
+    toast.success(t('portal.tickets.created'))
+    await loadList({ quiet: true })
+    if (ticket?.id) select(ticket.id)
+  } catch (error) {
+    create.error = t('portal.tickets.errors.create', { message: panelErrorMessage(error) })
+  } finally {
+    create.busy = false
+  }
+}
+
+onMounted(async () => {
+  await loadList()
+  if (route.query.new) openCreate()
 })
 </script>
 
 <style scoped>
-.stats-bar {
-  display: flex;
-  gap: 32px;
-  padding: 16px 24px;
-}
-
-.stat-item {
+.tickets {
   display: flex;
   flex-direction: column;
+  gap: var(--space-8);
 }
 
-.stat-item .label {
-  font-size: 13px;
-  color: var(--text-secondary);
-  margin-bottom: 4px;
-}
-
-.stat-item .value {
-  font-size: 20px;
-  font-weight: 700;
-}
-
-.tickets-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.ticket-card {
-  display: flex;
-  align-items: center;
-  padding: 16px 20px;
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: var(--transition);
-  box-shadow: var(--shadow-sm);
-}
-
-.ticket-card:hover {
-  border-color: var(--primary-color);
-  box-shadow: var(--shadow-md);
-}
-
-.ticket-status {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  min-width: 80px;
-  margin-right: 20px;
-}
-
-.status-dot {
-  width: 8px;
-  height: 8px;
-  border-radius: 50%;
-  margin-bottom: 4px;
-}
-
-.status-text {
-  font-size: 12px;
-  font-weight: 500;
-}
-
-.status-open {
-  color: var(--primary-color);
-}
-
-.status-open.status-dot {
-  background: var(--primary-color);
-}
-
-.status-answered {
-  color: var(--success-color);
-}
-
-.status-answered.status-dot {
-  background: var(--success-color);
-}
-
-.status-closed {
-  color: var(--text-secondary);
-}
-
-.status-closed.status-dot {
-  background: var(--text-secondary);
-}
-
-.ticket-info {
-  flex: 1;
-}
-
-.ticket-subject {
-  font-size: 16px;
-  font-weight: 600;
-  margin-bottom: 4px;
-}
-
-.ticket-meta {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.ticket-arrow {
-  font-size: 18px;
-  color: var(--border-color);
-  margin-left: 12px;
-}
-
-.ticket-form {
+/* ---- split view --------------------------------------------------------------- */
+.tickets-split {
   display: grid;
+  grid-template-columns: 320px minmax(0, 1fr);
+  height: min(720px, calc(100dvh - 260px));
+  min-height: 480px;
+  overflow: hidden;
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  box-shadow: 0 0 0 0.5px var(--separator), var(--shadow-1);
 }
 
-.form-error {
-  margin: 0;
+.tickets-split.is-narrow {
+  display: block;
+  height: auto;
+  min-height: 0;
+  overflow: visible;
+  border-radius: var(--radius-md);
+}
+
+.ticket-list {
+  overflow-y: auto;
+  border-right: 1px solid var(--separator);
+  background: var(--bg-grouped);
+}
+
+.is-narrow .ticket-list {
+  border-right: 0;
+  border-radius: inherit;
+  background: var(--bg-elevated);
+}
+
+.ticket-list ul {
+  list-style: none;
+}
+
+.ticket-list li + li {
+  border-top: 1px solid var(--separator);
+}
+
+.ticket-list__item {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  align-items: stretch;
+  /* Undo the legacy global button rule (style.css): rows, not pills. */
+  justify-content: flex-start;
+  border-radius: 0;
+  font-weight: inherit;
+  line-height: inherit;
+  white-space: normal;
+  user-select: auto;
+
+  width: 100%;
+  padding: var(--space-4) var(--space-5);
+  border: 0;
+  background: transparent;
+  color: var(--label-1);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.ticket-list__item:hover {
+  background: var(--fill-1);
+}
+
+.ticket-list__item:active {
+  background: var(--fill-2);
+}
+
+.ticket-list__item:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.ticket-list__item.is-selected {
+  background: var(--accent-soft);
+}
+
+.ticket-list__item.is-selected .ticket-list__meta {
+  color: color-mix(in srgb, var(--label-2) 70%, var(--label-1));
+}
+
+.ticket-list__top {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  justify-content: space-between;
+}
+
+.ticket-list__subject {
+  min-width: 0;
+  font-weight: var(--weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.ticket-list__meta {
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
+}
+
+/* ---- conversation ------------------------------------------------------------- */
+.conversation {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+}
+
+.is-narrow .conversation {
+  min-height: 60vh;
+}
+
+.conversation__placeholder {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: center;
+  padding: var(--space-8);
+  color: var(--label-2);
+  text-align: center;
+}
+
+.conversation__placeholder :deep(.ui-icon) {
+  color: var(--label-3);
+}
+
+.conversation__loading {
+  padding: var(--space-6);
+}
+
+.conversation__header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: var(--space-5) var(--space-6);
+  border-bottom: 1px solid var(--separator);
+}
+
+.conversation__back {
+  flex-basis: 100%;
+  justify-content: flex-start;
+  margin-left: calc(var(--space-2) * -1);
+}
+
+.conversation__heading {
+  flex: 1 1 240px;
+  min-width: 0;
+}
+
+.conversation__title {
+  font-size: var(--type-title-3-size);
+  font-weight: var(--type-title-3-weight);
+  line-height: var(--type-title-3-line);
+  overflow-wrap: anywhere;
+}
+
+.conversation__title:focus {
+  outline: none;
+}
+
+.conversation__meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  margin-top: var(--space-2);
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
+}
+
+.conversation__messages {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-5);
+  min-height: 0;
+  overflow-y: auto;
+  padding: var(--space-6);
+  list-style: none;
+}
+
+.conversation__messages:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.message {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  max-width: min(560px, 85%);
+}
+
+.message--me {
+  align-self: flex-end;
+  align-items: flex-end;
+}
+
+.message__author,
+.message__time {
+  color: var(--label-2);
+  font-size: var(--type-caption-size);
+}
+
+.message__bubble {
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  line-height: var(--type-body-line);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.message--support .message__bubble {
+  border-top-left-radius: var(--radius-xs);
+  background: var(--fill-1);
+}
+
+.message--me .message__bubble {
+  border-top-right-radius: var(--radius-xs);
+  background: var(--accent-soft);
+}
+
+.conversation__closed {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  padding: var(--space-4) var(--space-6);
+  border-top: 1px solid var(--separator);
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
+}
+
+.composer {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  padding: var(--space-4) var(--space-6);
+  border-top: 1px solid var(--separator);
+}
+
+.composer__field {
+  flex: 1;
+  min-width: 0;
+}
+
+.composer__field :deep(textarea) {
+  min-height: 44px;
+  max-height: 160px;
+}
+
+.composer__send {
+  flex: none;
+}
+
+/* ---- new ticket ----------------------------------------------------------------- */
+.create-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.create-form__error {
   color: var(--danger);
   font-size: var(--type-callout-size);
 }
 
-.header-top {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-}
-
-.status-badge {
-  font-size: 11px;
-  font-weight: 600;
-  padding: 2px 8px;
-  border-radius: 4px;
-}
-
-.indicator-blue {
-  background: rgba(59, 130, 246, 0.1);
-  color: var(--primary-color);
-}
-
-.indicator-green {
-  background: rgba(34, 197, 94, 0.1);
-  color: var(--success-color);
-}
-
-.indicator-gray {
-  background: rgba(161, 161, 170, 0.1);
-  color: var(--text-secondary);
-}
-
-.chat-container {
-  display: flex;
-  flex: 1;
-  flex-direction: column-reverse;
-  margin: calc(var(--space-6) * -1);
-  padding: var(--space-5);
-  background: var(--bg-grouped);
-}
-
-.messages-list {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.message-item {
-  display: flex;
-}
-
-.message-item.user {
-  justify-content: flex-end;
-}
-
-.message-item.admin {
-  justify-content: flex-start;
-}
-
-.message-bubble {
-  max-width: 80%;
-  padding: 12px 16px;
-  border-radius: var(--radius-lg);
-  position: relative;
-}
-
-.user .message-bubble {
-  background: var(--accent-fill);
-  color: var(--on-accent);
-  border-bottom-right-radius: 2px;
-}
-
-.admin .message-bubble {
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-bottom-left-radius: 2px;
-}
-
-.message-sender {
-  font-size: var(--type-caption-size);
-  font-weight: var(--weight-bold);
-  margin-bottom: var(--space-1);
-}
-
-.message-content {
-  font-size: 14px;
-  line-height: 1.6;
-  white-space: pre-wrap;
-}
-
-.message-time {
-  font-size: var(--type-caption-size);
-  margin-top: var(--space-2);
-}
-
-.admin .message-time {
-  color: var(--label-2);
-}
-
-.reply-input-wrapper {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  width: 100%;
-}
-
-.reply-input-wrapper textarea {
-  background: var(--bg-color);
-  border-radius: var(--radius-md);
-  padding: 12px;
-}
-
-.reply-actions,
-.closed-footer {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-}
-
-.closed-footer {
-  width: 100%;
-}
-
-.loading-state,
-.empty-state {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  padding: 80px 20px;
-  color: var(--text-secondary);
-}
-
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid rgba(59, 130, 246, 0.1);
-  border-top-color: var(--primary-color);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin-bottom: 16px;
-}
-
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
+@media (max-width: 833px) {
+  .tickets {
+    gap: var(--space-6);
   }
-}
 
-.empty-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
+  .conversation__header,
+  .conversation__messages,
+  .composer,
+  .conversation__closed {
+    padding-right: var(--space-4);
+    padding-left: var(--space-4);
+  }
+
+  .composer {
+    flex-direction: column;
+    align-items: stretch;
+  }
+
+  .message {
+    max-width: 92%;
+  }
 }
 </style>
