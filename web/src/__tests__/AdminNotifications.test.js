@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
+import { render, screen, waitFor, within } from '@testing-library/vue'
+import userEvent from '@testing-library/user-event'
+import UiHost from '@/ui/UiHost.vue'
 import Notifications from '@/views/admin/Notifications.vue'
 import { setLocale } from '@/i18n'
+import { inBody, toastMessages, toasts } from './helpers/feedback'
 
 const adminApi = vi.hoisted(() => ({
   createNotificationTemplate: vi.fn(),
@@ -16,12 +20,12 @@ const adminApi = vi.hoisted(() => ({
 
 vi.mock('@/api/admin', () => adminApi)
 
+enableAutoUnmount(afterEach)
+
 describe('Admin Notifications', () => {
   beforeEach(async () => {
     vi.resetAllMocks()
     vi.spyOn(console, 'error').mockImplementation(() => {})
-    vi.spyOn(window, 'alert').mockImplementation(() => {})
-    vi.spyOn(window, 'confirm').mockImplementation(() => true)
     await setLocale('en')
 
     adminApi.getNotificationTemplates.mockResolvedValue({
@@ -192,12 +196,13 @@ describe('Admin Notifications', () => {
     }
     await wrapper.vm.saveTemplate()
     expect(adminApi.createNotificationTemplate).toHaveBeenCalledWith(wrapper.vm.templateForm)
-    expect(window.alert).toHaveBeenCalledWith('Template saved successfully')
+    expect(toastMessages('success')).toContain('Template saved successfully')
+    expect(wrapper.vm.showTemplateModal).toBe(false)
 
     wrapper.vm.emailConfig.host = 'smtp.save.test'
     await wrapper.vm.saveEmailSettings()
     expect(adminApi.updateEmailConfig).toHaveBeenCalledWith(wrapper.vm.emailConfig)
-    expect(window.alert).toHaveBeenCalledWith('Email configuration saved')
+    expect(toastMessages('success')).toContain('Email configuration saved')
 
     wrapper.vm.testEmail = 'ops@example.com'
     await wrapper.vm.sendTestEmail()
@@ -207,7 +212,7 @@ describe('Admin Notifications', () => {
       subject: 'Test Email',
       content: 'This is a test email. If you received it, the email configuration is working correctly.'
     })
-    expect(window.alert).toHaveBeenCalledWith('Test email sent successfully')
+    expect(toastMessages('success')).toContain('Test email sent successfully')
 
     wrapper.unmount()
   })
@@ -240,7 +245,7 @@ describe('Admin Notifications', () => {
       ts: 1783526400000
     })
 
-    const wrapper = mount(Notifications)
+    const wrapper = mount(Notifications, { attachTo: document.body })
     await flushPromises()
 
     wrapper.vm.openTemplateModal()
@@ -254,11 +259,87 @@ describe('Admin Notifications', () => {
     }
     await wrapper.vm.saveTemplate()
 
-    expect(window.alert).toHaveBeenCalledWith(
-      expect.stringContaining('server rejected template')
-    )
-    expect(window.alert).not.toHaveBeenCalledWith('Template saved successfully')
+    await flushPromises()
+    // The failure stays in the open dialog, not in a toast.
+    expect(wrapper.vm.showTemplateModal).toBe(true)
+    expect(inBody('[data-test="notification-template-error"]').text()).toContain('server rejected template')
+    expect(toasts()).toHaveLength(0)
 
     wrapper.unmount()
+  })
+
+  describe('dialogs', () => {
+    const Harness = {
+      components: { Notifications, UiHost },
+      template: '<div><Notifications /><UiHost /></div>'
+    }
+
+    it('confirms deleting a template; Cancel and Esc keep it, a failure stays inline', async () => {
+      const user = userEvent.setup()
+      render(Harness)
+      await screen.findByText('Legacy Template')
+      const opener = screen.getByRole('button', { name: 'Delete' })
+
+      await user.click(opener)
+      let dialog = await screen.findByRole('alertdialog', { name: 'Delete template Legacy Template?' })
+      await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+      await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+
+      await user.click(opener)
+      await screen.findByRole('alertdialog')
+      await user.keyboard('{Escape}')
+      await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+      await waitFor(() => expect(document.activeElement).toBe(opener))
+      expect(adminApi.deleteNotificationTemplate).not.toHaveBeenCalled()
+
+      adminApi.deleteNotificationTemplate.mockResolvedValueOnce({ code: -1, msg: 'template in use' })
+      await user.click(opener)
+      dialog = await screen.findByRole('alertdialog')
+      await user.click(within(dialog).getByRole('button', { name: 'Delete template' }))
+      expect((await within(dialog).findByRole('alert')).textContent).toContain('template in use')
+
+      await user.click(within(dialog).getByRole('button', { name: 'Delete template' }))
+      await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+      expect(adminApi.deleteNotificationTemplate).toHaveBeenLastCalledWith(1)
+      expect(toastMessages('success')).toEqual(['Template Legacy Template deleted'])
+    })
+
+    it('sends a test email from a dialog that validates the recipient', async () => {
+      const user = userEvent.setup()
+      adminApi.sendTestNotification.mockResolvedValueOnce({ code: -1, msg: 'smtp refused' })
+      render(Harness)
+      await screen.findByText('Legacy Template')
+      await user.click(screen.getByRole('button', { name: 'Email' }))
+      await user.click(screen.getByRole('button', { name: 'Send test email' }))
+      const dialog = await screen.findByRole('dialog', { name: 'Send Test Email' })
+
+      await user.click(within(dialog).getByRole('button', { name: 'Send' }))
+      const field = within(dialog).getByRole('textbox')
+      expect(field.getAttribute('aria-invalid')).toBe('true')
+      expect(dialog.textContent).toContain('Please enter a recipient email address')
+      expect(adminApi.sendTestNotification).not.toHaveBeenCalled()
+
+      await user.type(field, 'ops@example.com')
+      await user.click(within(dialog).getByRole('button', { name: 'Send' }))
+      await waitFor(() => expect(dialog.textContent).toContain('smtp refused'))
+      expect(toasts()).toHaveLength(0)
+
+      await user.click(within(dialog).getByRole('button', { name: 'Send' }))
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+      expect(toastMessages('success')).toEqual(['Test email sent successfully'])
+    })
+
+    it('edits a template in a dialog that closes with Esc', async () => {
+      const user = userEvent.setup()
+      render(Harness)
+      await screen.findByText('Legacy Template')
+      await user.click(screen.getByRole('button', { name: 'Edit' }))
+      const dialog = await screen.findByRole('dialog')
+      expect(dialog.getAttribute('aria-modal')).toBe('true')
+      expect(within(dialog).getByLabelText(/Template name|Name/).value).toBe('Legacy Template')
+      await user.keyboard('{Escape}')
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+      expect(adminApi.updateNotificationTemplate).not.toHaveBeenCalled()
+    })
   })
 })

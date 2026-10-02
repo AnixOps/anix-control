@@ -2399,6 +2399,11 @@ export default {
       subject: '测试邮件',
       content: '这是一封测试邮件。如果您收到此邮件，说明邮件配置正确。'
     },
+    confirm: {
+      deleteTitle: '删除模板 {name}？',
+      deleteMessage: '使用这个模板的通知将不再发送。此操作无法撤销。',
+      deleteAction: '删除模板'
+    },
     messages: {
       fetchTemplatesFailed: '加载通知模板失败',
       fetchLogsFailed: '加载通知日志失败',
@@ -2406,8 +2411,7 @@ export default {
       templateSaveSuccess: '模板保存成功',
       templateSaveFailed: '模板保存失败: {message}',
       templateSaveFailedShort: '保存失败',
-      deleteConfirm: '确定删除模板 "{name}"？',
-      deleteFailed: '删除模板失败: {message}',
+      deleteSuccess: '已删除模板 {name}',
       deleteFailedShort: '删除失败',
       emailSaveSuccess: '邮件配置已保存',
       emailSaveFailed: '邮件配置保存失败: {message}',

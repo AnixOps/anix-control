@@ -2398,6 +2398,11 @@ export default {
       subject: 'Test Email',
       content: 'This is a test email. If you received it, the email configuration is working correctly.'
     },
+    confirm: {
+      deleteTitle: 'Delete template {name}?',
+      deleteMessage: 'Notifications that use this template stop being sent. This can’t be undone.',
+      deleteAction: 'Delete template'
+    },
     messages: {
       fetchTemplatesFailed: 'Failed to load notification templates',
       fetchLogsFailed: 'Failed to load notification logs',
@@ -2405,8 +2410,7 @@ export default {
       templateSaveSuccess: 'Template saved successfully',
       templateSaveFailed: 'Failed to save template: {message}',
       templateSaveFailedShort: 'Save failed',
-      deleteConfirm: 'Delete template "{name}"?',
-      deleteFailed: 'Failed to delete template: {message}',
+      deleteSuccess: 'Template {name} deleted',
       deleteFailedShort: 'Delete failed',
       emailSaveSuccess: 'Email configuration saved',
       emailSaveFailed: 'Failed to save email configuration: {message}',

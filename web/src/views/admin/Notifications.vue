@@ -204,91 +204,89 @@
       </div>
     </div>
 
-    <div v-if="showTemplateModal" class="modal-overlay" @click.self="showTemplateModal = false">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>{{ editingTemplate ? t('adminNotifications.modal.editTitle') : t('adminNotifications.modal.createTitle') }}</h3>
-          <button class="close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="showTemplateModal = false">×</button>
+    <UiDialog
+      v-model:open="showTemplateModal"
+      :title="editingTemplate ? t('adminNotifications.modal.editTitle') : t('adminNotifications.modal.createTitle')"
+      :dismissible="!templateSaving"
+    >
+      <div class="dialog-form">
+        <div class="form-group">
+          <label for="notification-template-name">{{ t('adminNotifications.modal.fields.name') }} <span class="required">*</span></label>
+          <input
+            id="notification-template-name"
+            v-model="templateForm.name"
+            type="text"
+            data-test="notification-template-name"
+            :placeholder="t('adminNotifications.modal.placeholders.name')"
+          />
         </div>
-        <div class="modal-body">
+        <div class="form-row">
           <div class="form-group">
-            <label>{{ t('adminNotifications.modal.fields.name') }} <span class="required">*</span></label>
-            <input
-              v-model="templateForm.name"
-              type="text"
-              :placeholder="t('adminNotifications.modal.placeholders.name')"
-            />
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>{{ t('adminNotifications.modal.fields.type') }}</label>
-              <select v-model="templateForm.type">
-                <option v-for="type in notificationTypes" :key="type" :value="type">
-                  {{ getTypeLabel(type) }}
-                </option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>{{ t('adminNotifications.modal.fields.event') }}</label>
-              <select v-model="templateForm.event">
-                <option v-for="event in notificationEvents" :key="event" :value="event">
-                  {{ getEventLabel(event) }}
-                </option>
-              </select>
-            </div>
+            <label for="notification-template-type">{{ t('adminNotifications.modal.fields.type') }}</label>
+            <select id="notification-template-type" v-model="templateForm.type">
+              <option v-for="type in notificationTypes" :key="type" :value="type">
+                {{ getTypeLabel(type) }}
+              </option>
+            </select>
           </div>
           <div class="form-group">
-            <label>{{ t('adminNotifications.modal.fields.title') }}</label>
-            <input
-              v-model="templateForm.title"
-              type="text"
-              :placeholder="t('adminNotifications.modal.placeholders.title')"
-            />
-          </div>
-          <div class="form-group">
-            <label>{{ t('adminNotifications.modal.fields.content') }}</label>
-            <textarea
-              v-model="templateForm.content"
-              rows="5"
-              :placeholder="t('adminNotifications.modal.placeholders.content')"
-            ></textarea>
-          </div>
-          <div class="form-group">
-            <label class="checkbox-label">
-              <input v-model="templateForm.enabled" type="checkbox" />
-              <span>{{ t('adminNotifications.modal.fields.enabled') }}</span>
-            </label>
+            <label for="notification-template-event">{{ t('adminNotifications.modal.fields.event') }}</label>
+            <select id="notification-template-event" v-model="templateForm.event">
+              <option v-for="event in notificationEvents" :key="event" :value="event">
+                {{ getEventLabel(event) }}
+              </option>
+            </select>
           </div>
         </div>
-        <div class="modal-footer">
-          <button class="btn-secondary" @click="showTemplateModal = false">{{ t('common.actions.cancel') }}</button>
-          <button @click="saveTemplate">{{ t('common.actions.save') }}</button>
+        <div class="form-group">
+          <label for="notification-template-title">{{ t('adminNotifications.modal.fields.title') }}</label>
+          <input
+            id="notification-template-title"
+            v-model="templateForm.title"
+            type="text"
+            :placeholder="t('adminNotifications.modal.placeholders.title')"
+          />
         </div>
+        <div class="form-group">
+          <label for="notification-template-content">{{ t('adminNotifications.modal.fields.content') }}</label>
+          <textarea
+            id="notification-template-content"
+            v-model="templateForm.content"
+            rows="5"
+            :placeholder="t('adminNotifications.modal.placeholders.content')"
+          ></textarea>
+        </div>
+        <div class="form-group">
+          <label class="checkbox-label">
+            <input v-model="templateForm.enabled" type="checkbox" />
+            <span>{{ t('adminNotifications.modal.fields.enabled') }}</span>
+          </label>
+        </div>
+        <p v-if="templateError" class="form-error" role="alert" data-test="notification-template-error">{{ templateError }}</p>
       </div>
-    </div>
+      <template #footer="{ close }">
+        <UiButton :disabled="templateSaving" @click="close">{{ t('common.actions.cancel') }}</UiButton>
+        <UiButton variant="primary" data-test="notification-template-save" :loading="templateSaving" @click="saveTemplate">{{ t('common.actions.save') }}</UiButton>
+      </template>
+    </UiDialog>
 
-    <div v-if="showTestModal" class="modal-overlay" @click.self="showTestModal = false">
-      <div class="modal modal-sm">
-        <div class="modal-header">
-          <h3>{{ t('adminNotifications.testModal.title') }}</h3>
-          <button class="close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="showTestModal = false">×</button>
-        </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>{{ t('adminNotifications.testModal.fields.recipient') }}</label>
-            <input
-              v-model="testEmail"
-              type="email"
-              :placeholder="t('adminNotifications.testModal.placeholders.recipient')"
-            />
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn-secondary" @click="showTestModal = false">{{ t('common.actions.cancel') }}</button>
-          <button @click="sendTestEmail">{{ t('adminNotifications.testModal.actions.send') }}</button>
-        </div>
-      </div>
-    </div>
+    <UiDialog v-model:open="showTestModal" size="sm" :title="t('adminNotifications.testModal.title')" :dismissible="!testSending">
+      <UiTextField
+        v-model="testEmail"
+        type="email"
+        autocomplete="email"
+        data-test="notification-test-recipient"
+        :label="t('adminNotifications.testModal.fields.recipient')"
+        :placeholder="t('adminNotifications.testModal.placeholders.recipient')"
+        :error="testError"
+        required
+        @keydown.enter.prevent="sendTestEmail"
+      />
+      <template #footer="{ close }">
+        <UiButton :disabled="testSending" @click="close">{{ t('common.actions.cancel') }}</UiButton>
+        <UiButton variant="primary" data-test="notification-test-send" :loading="testSending" @click="sendTestEmail">{{ t('adminNotifications.testModal.actions.send') }}</UiButton>
+      </template>
+    </UiDialog>
   </div>
 </template>
 
@@ -306,8 +304,11 @@ import {
 } from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { isMaskedSecret } from '@/constants/secrets'
+import { UiButton, UiDialog, UiTextField, useConfirm, useToast } from '@/ui'
 
 const { t, formatDateTime } = useAppI18n()
+const toast = useToast()
+const confirm = useConfirm()
 
 const notificationTypes = ['email', 'telegram', 'webhook']
 const notificationEvents = [
@@ -330,9 +331,13 @@ const logFilter = ref({ type: '', status: '' })
 const showTemplateModal = ref(false)
 const editingTemplate = ref(null)
 const templateForm = ref(createTemplateForm())
+const templateSaving = ref(false)
+const templateError = ref('')
 
 const showTestModal = ref(false)
 const testEmail = ref('')
+const testSending = ref(false)
+const testError = ref('')
 
 const emailConfig = ref({
   host: '',
@@ -477,10 +482,14 @@ const fetchEmailSettings = async () => {
 const openTemplateModal = (template = null) => {
   editingTemplate.value = template
   templateForm.value = createTemplateForm(template || {})
+  templateError.value = ''
   showTemplateModal.value = true
 }
 
 const saveTemplate = async () => {
+  if (templateSaving.value) return
+  templateSaving.value = true
+  templateError.value = ''
   try {
     if (editingTemplate.value) {
       ensureNotificationApiSuccess(
@@ -493,33 +502,38 @@ const saveTemplate = async () => {
         'adminNotifications.messages.templateSaveFailedShort'
       )
     }
-    window.alert(t('adminNotifications.messages.templateSaveSuccess'))
+    toast.success(t('adminNotifications.messages.templateSaveSuccess'))
     showTemplateModal.value = false
     await fetchTemplates()
   } catch (error) {
-    window.alert(
-      t('adminNotifications.messages.templateSaveFailed', {
-        message: resolveApiError(error, 'adminNotifications.messages.templateSaveFailedShort')
-      })
-    )
+    templateError.value = t('adminNotifications.messages.templateSaveFailed', {
+      message: resolveApiError(error, 'adminNotifications.messages.templateSaveFailedShort')
+    })
+  } finally {
+    templateSaving.value = false
   }
 }
 
 const deleteTemplateItem = async (template) => {
-  if (!window.confirm(t('adminNotifications.messages.deleteConfirm', { name: template.name }))) return
-  try {
-    ensureNotificationApiSuccess(
-      await deleteNotificationTemplate(template.id),
-      'adminNotifications.messages.deleteFailedShort'
-    )
-    await fetchTemplates()
-  } catch (error) {
-    window.alert(
-      t('adminNotifications.messages.deleteFailed', {
-        message: resolveApiError(error, 'adminNotifications.messages.deleteFailedShort')
-      })
-    )
-  }
+  const confirmed = await confirm({
+    title: t('adminNotifications.confirm.deleteTitle', { name: template.name }),
+    message: t('adminNotifications.confirm.deleteMessage'),
+    confirmLabel: t('adminNotifications.confirm.deleteAction'),
+    tone: 'danger',
+    onConfirm: async () => {
+      try {
+        ensureNotificationApiSuccess(
+          await deleteNotificationTemplate(template.id),
+          'adminNotifications.messages.deleteFailedShort'
+        )
+      } catch (error) {
+        throw new Error(resolveApiError(error, 'adminNotifications.messages.deleteFailedShort'))
+      }
+    }
+  })
+  if (!confirmed) return
+  toast.success(t('adminNotifications.messages.deleteSuccess', { name: template.name }))
+  await fetchTemplates()
 }
 
 const saveEmailSettings = async () => {
@@ -528,26 +542,28 @@ const saveEmailSettings = async () => {
       await updateEmailConfig(emailConfig.value),
       'adminNotifications.messages.emailSaveFailedShort'
     )
-    window.alert(t('adminNotifications.messages.emailSaveSuccess'))
+    toast.success(t('adminNotifications.messages.emailSaveSuccess'))
   } catch (error) {
-    window.alert(
-      t('adminNotifications.messages.emailSaveFailed', {
-        message: resolveApiError(error, 'adminNotifications.messages.emailSaveFailedShort')
-      })
-    )
+    toast.error(t('adminNotifications.messages.emailSaveFailed', {
+      message: resolveApiError(error, 'adminNotifications.messages.emailSaveFailedShort')
+    }))
   }
 }
 
 const openTestModal = () => {
+  testError.value = ''
   showTestModal.value = true
 }
 
 const sendTestEmail = async () => {
+  if (testSending.value) return
   if (!testEmail.value.trim()) {
-    window.alert(t('adminNotifications.messages.testRecipientRequired'))
+    testError.value = t('adminNotifications.messages.testRecipientRequired')
     return
   }
 
+  testSending.value = true
+  testError.value = ''
   try {
     ensureNotificationApiSuccess(
       await sendTestNotification({
@@ -558,15 +574,15 @@ const sendTestEmail = async () => {
       }),
       'adminNotifications.messages.testSendFailedShort'
     )
-    window.alert(t('adminNotifications.messages.testSendSuccess'))
+    toast.success(t('adminNotifications.messages.testSendSuccess'))
     showTestModal.value = false
     testEmail.value = ''
   } catch (error) {
-    window.alert(
-      t('adminNotifications.messages.testSendFailed', {
-        message: resolveApiError(error, 'adminNotifications.messages.testSendFailedShort')
-      })
-    )
+    testError.value = t('adminNotifications.messages.testSendFailed', {
+      message: resolveApiError(error, 'adminNotifications.messages.testSendFailedShort')
+    })
+  } finally {
+    testSending.value = false
   }
 }
 
@@ -655,7 +671,13 @@ onMounted(() => {
   background: rgba(239, 68, 68, 0.18);
 }
 
-.modal-sm {
-  max-width: 400px;
+.dialog-form .form-group:last-of-type {
+  margin-bottom: 0;
+}
+
+.form-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--type-callout-size);
 }
 </style>
