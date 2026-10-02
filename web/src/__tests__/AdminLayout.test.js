@@ -128,10 +128,16 @@ describe('AdminLayout.vue', () => {
   })
 
   it('renders the forward suite navigation once, only on forward pages', async () => {
-    const { wrapper, router } = await mountLayout('/admin/forward/local')
+    const { wrapper, router } = await mountLayout('/admin/forward/tunnel')
     mounted = wrapper
     expect(wrapper.findAll('[data-forward-suite-nav]')).toHaveLength(1)
     expect(wrapper.find('#admin-sidebar [data-forward-suite-nav]').exists()).toBe(false)
+    // 转发节点 pages (execution plane, UI U7) show their run-mode switch instead.
+    for (const path of ['/admin/forward/nodes', '/admin/forward/nodes/5', '/admin/forward/ansible-machines/7', '/admin/forward/local', '/admin/forward/nodex']) {
+      await router.push(path)
+      await flushPromises()
+      expect(wrapper.find('[data-forward-suite-nav]').exists()).toBe(false)
+    }
     await router.push('/admin/users')
     await flushPromises()
     expect(wrapper.find('[data-forward-suite-nav]').exists()).toBe(false)

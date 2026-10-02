@@ -58,6 +58,39 @@
     status 3 / 0) and deletes it after the name is typed.
   - The 3,272-line page is now 21 files, none over 480 lines; `admin.nodes`
     strings moved to `locales/modules/*/adminNodes.js`.
+- **转发节点 on the list and detail templates (UI redesign phase U7)**
+  (`web/src/views/admin/ForwardNodes.vue`, `AnsibleMachines.vue`,
+  `NodeX.vue`, `LocalRuntime.vue`, `views/admin/forward-nodes/`;
+  `docs/guide/flux-panel-clone.md`). Same endpoints, inventory scopes,
+  system config keys, request fields and confirmations. Execution plane
+  only: the Flux control plane (转发, 隧道, 限速) is untouched.
+  - The four pages behind the sidebar item 转发节点 stay separate (NodeX and
+    local Ansible are separate runtime paths with separate endpoints, see
+    AGENTS.md) but share the header 转发节点 and a run-mode switch: NodeX
+    拓扑 · Ansible 机器 · 本地运行时 · NodeX 运行时, and a link to NodeX
+    Agents. The forward suite navigation (a control-plane control) no longer
+    shows above these pages; the sidebar item 转发 leads back.
+  - NodeX 拓扑: the node cards became a `UiDataTable` with server pages,
+    type and reachability chips, the stats as a summary row and the
+    actions in the row menu; the legacy rules are a second table with the
+    user ID filter. Node, rule and connection-test forms use the Ui fields.
+  - New detail pages `/admin/forward/nodes/:id` and
+    `/admin/forward/ansible-machines/:id` (a row opens them): 概览 (status,
+    traffic, last check result, sync, connection test), 配置 (the stored
+    fields, the token only as 已设置) and 危险操作 (enable / disable, delete
+    after typing the name); the section is kept in `?tab=`.
+  - NodeX 运行时 and 本地运行时: grouped settings with a switch and Ui
+    fields, the probes as grouped lists, copyable troubleshooting commands,
+    the Doctor output and the latest jobs as a table.
+  - `ForwardNodesI18n.vue` is gone: since the i18n change of April 2026
+    `ForwardNodes.vue` only wrapped it; the page now lives in
+    `ForwardNodes.vue` again. The NodeX node form no longer keeps the
+    metrics port of the node edited before when it adds a new one.
+  - Bundle (JS and CSS a route loads beyond the shell, gzip): NodeX 拓扑
+    37.1 → 30.6 KB (no longer pulls the whole `@/ui` barrel), Ansible 机器
+    17.3 → 20.8 KB, 本地运行时 7.5 → 28.1 KB and NodeX 运行时 5.8 → 23.9 KB
+    (they now load the shared `UiDataTable`, section, switch and state
+    chunks); the detail pages load 15.4 KB (node) and 11.1 KB (machine).
 
 - **Admin list pages on one template (UI redesign phase U6)**
   (`web/src/ui/UiDataTable.vue`, `views/admin/*`;

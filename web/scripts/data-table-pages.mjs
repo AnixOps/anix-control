@@ -20,5 +20,9 @@ export const DATA_TABLE_PAGES = [
   'src/views/admin/Nodes.vue',
   'src/views/admin/NodeDetail.vue',
   'src/views/admin/nodes/NodeProtocolsSection.vue',
-  'src/views/admin/nodes/NodeLogsSection.vue'
+  'src/views/admin/nodes/NodeLogsSection.vue',
+  // U7: forward nodes
+  'src/views/admin/ForwardNodes.vue',
+  'src/views/admin/forward-nodes/NodeXRulesPanel.vue',
+  'src/views/admin/forward-nodes/RuntimeJobsTable.vue'
 ]

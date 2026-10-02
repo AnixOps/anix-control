@@ -139,7 +139,8 @@ The forward suite keeps its own sub-navigation (快速配置向导, 流量转发
 限速, NodeX 拓扑, and 更多 for Ansible 机器, 本地运行时, NodeX 运行时, NodeX
 Agents, 可观测性) and its routes, including the seven legacy redirects. Since
 UI phase U3 the admin shell renders it once, above every `/admin/forward*`
-page; the pages and the sidebar no longer repeat it. A new forward page adds
+page except the 转发节点 pages (see U7 below); the pages and the sidebar no
+longer repeat it. A new forward page adds
 its link to `FORWARD_SUITE_LINKS`, not to the page.
 
 UI phase U4 changed the forward suite visually only. Forward, Tunnel, Limit,
@@ -149,6 +150,23 @@ and page banners. The fields, buttons, flows and API calls are unchanged,
 including Forward's second confirmation before a force delete. The one
 addition is a safeguard: deleting a forward node (NodeX or Ansible machine)
 now asks for its name to be typed.
+
+UI phase U7 restyled the execution-plane pages behind the sidebar item
+转发节点 and left the Flux control plane (Forward, Tunnel, Limit) alone.
+NodeX 拓扑 (`/admin/forward/nodes`), Ansible 机器, 本地运行时 and NodeX 运行时
+keep their own routes, endpoints and inventory scopes (`?scope=nodex` versus
+`/admin/forward/ansible-machines`): NodeX and local Ansible stay separate
+paths, so the pages are not merged into one list. They share one header
+(转发节点) and a run-mode switch that links the four pages, plus a link to
+NodeX Agents. The forward suite navigation is not shown on these pages or
+their detail pages (`showsForwardSuiteNav` in `menu.js`), so the execution
+plane does not sit under the control-plane navigation; its 更多 menu still
+links to them, and the sidebar item 转发 leads back to the Flux pages. A NodeX node and an Ansible machine each have a detail page
+(`/admin/forward/nodes/:id`, `/admin/forward/ansible-machines/:id`) with
+the sections 概览, 配置 and 危险操作. The legacy rules
+(`/admin/forward/rules*`) stay on the NodeX page. Fields, calls, payloads
+and confirmations are unchanged, and "online" still means only `host:port`
+TCP reachability.
 
 ## Current Forward/Tunnel Base
 

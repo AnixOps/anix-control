@@ -1,251 +1,152 @@
 <template>
-  <div class="local-runtime-page">
-    <section class="hero-card">
-      <div class="hero-copy">
-        <p class="eyebrow">{{ t('runtime.localRuntime.heroEyebrow') }}</p>
-        <h2>{{ t('runtime.localRuntime.title') }}</h2>
-        <p class="hero-text">
-          {{ t('runtime.localRuntime.heroTextPrimary') }}
-        </p>
-        <p class="hero-text">
-          {{ t('runtime.localRuntime.heroTextSecondary') }}
-        </p>
-      </div>
-      <div class="hero-actions">
-        <router-link class="btn btn-secondary" to="/admin/forward/ansible-machines">{{ t('forwardSuite.nav.ansibleMachines') }}</router-link>
-        <router-link class="btn btn-secondary" to="/admin/forward/nodex">{{ t('forwardSuite.nav.nodeXRuntime') }}</router-link>
-        <router-link class="btn btn-secondary" to="/admin/forward/agents">{{ t('forwardSuite.nav.nodeXAgents') }}</router-link>
-        <button class="btn btn-secondary" :disabled="jobsLoading || statusLoading" @click="refreshAll">
-          {{ jobsLoading || statusLoading ? t('runtime.localRuntime.refreshLoading') : t('common.actions.refresh') }}
-        </button>
-        <button class="btn btn-primary" :disabled="saving" @click="saveLocalConfig">
-          {{ saving ? t('runtime.localRuntime.saveLoading') : t('runtime.localRuntime.saveActivate') }}
-        </button>
-      </div>
-    </section>
+  <div class="runtime-page local-runtime-page">
+    <UiPageHeader :title="t('forwardNodesPage.title')" :description="t('forwardNodesPage.descriptions.local')">
+      <template #meta>
+        <UiBadge :tone="localModeActive ? 'success' : 'warning'" :label="localModeActive ? t('runtime.localRuntime.cards.localActiveValue') : t('runtime.localRuntime.cards.standbyValue')" />
+      </template>
+      <template #actions>
+        <UiIconButton variant="secondary" :icon="RefreshCw" :label="t('common.actions.refresh')" :disabled="jobsLoading || statusLoading" data-test="local-refresh" @click="refreshAll" />
+        <UiButton variant="primary" :loading="saving" data-test="local-save" @click="saveLocalConfig">{{ t('runtime.localRuntime.saveActivate') }}</UiButton>
+      </template>
+    </UiPageHeader>
 
-    <section :class="['mode-banner', localModeActive ? 'banner-success' : 'banner-warning']">
-      <strong>{{ localModeActive ? t('runtime.localRuntime.activeBannerTitle') : t('runtime.localRuntime.standbyBannerTitle') }}</strong>
-      <span>
-        {{
-          localModeActive
-            ? t('runtime.localRuntime.activeBannerText', { backend: localBackendLabel(selectedLocalBackend) })
-            : t('runtime.localRuntime.standbyBannerText')
-        }}
-      </span>
-    </section>
+    <ForwardNodesModeNav current="local" />
 
-    <section class="panel-card">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">{{ t('runtime.localRuntime.configEyebrow') }}</p>
-          <h3>{{ t('runtime.localRuntime.configTitle') }}</h3>
-          <p class="section-copy">
-            {{ t('runtime.localRuntime.configCopy') }}
-          </p>
+    <div :class="['runtime-banner', localModeActive ? 'is-on' : 'is-off']" role="status" data-test="local-banner">
+      <UiIcon :icon="localModeActive ? CircleCheck : CircleAlert" :size="18" />
+      <div>
+        <strong>{{ localModeActive ? t('runtime.localRuntime.activeBannerTitle') : t('runtime.localRuntime.standbyBannerTitle') }}</strong>
+        <p>
+          {{
+            localModeActive
+              ? t('runtime.localRuntime.activeBannerText', { backend: localBackendLabel(selectedLocalBackend) })
+              : t('runtime.localRuntime.standbyBannerText')
+          }}
+        </p>
+        <p data-test="local-backend-note">{{ t('runtime.localRuntime.heroTextSecondary') }}</p>
+      </div>
+    </div>
+
+    <UiSection :title="t('runtime.localRuntime.configTitle')" :description="t('runtime.localRuntime.configCopy')">
+      <div class="runtime-form">
+        <div class="local-backend">
+          <UiRadioGroup
+            :model-value="selectedLocalBackend"
+            :label="t('runtime.localRuntime.executorEyebrow')"
+            :options="backendRadioOptions"
+            data-test="local-backend"
+            @update:model-value="selectLocalBackend"
+          />
         </div>
-      </div>
-
-      <div class="backend-grid">
-        <button
-          v-for="option in localBackendOptions"
-          :key="option.value"
-          type="button"
-          :class="['backend-card', { active: selectedLocalBackend === option.value }]"
-          @click="selectLocalBackend(option.value)"
-        >
-          <div class="backend-head">
-            <strong>{{ option.label }}</strong>
-            <span :class="['backend-chip', option.recommended ? 'backend-chip-primary' : 'backend-chip-muted']">
-              {{ option.recommended ? t('runtime.localRuntime.recommended') : t('runtime.localRuntime.legacy') }}
-            </span>
-          </div>
-          <p>{{ option.description }}</p>
-          <code>{{ option.applyPlaybook }}</code>
-        </button>
-      </div>
-
-      <div class="runtime-local-head">
-        <div>
-          <p class="eyebrow">{{ t('runtime.localRuntime.executorEyebrow') }}</p>
-          <h4>{{ localBackendLabel(selectedLocalBackend) }}</h4>
-          <p class="hint">
+        <div class="local-executor">
+          <p class="local-executor__hint" data-test="local-executor-hint">
             {{ t('runtime.localRuntime.executorHint', { backend: localBackendLabel(selectedLocalBackend), backendKey: selectedLocalBackend }) }}
           </p>
+          <UiButton size="sm" :disabled="saving" data-test="local-defaults" @click="applyDefaultRuntimeAnsibleConfig">
+            {{ t('runtime.localRuntime.defaultsAction') }}
+          </UiButton>
         </div>
-        <button class="btn btn-secondary btn-sm" :disabled="saving" @click="applyDefaultRuntimeAnsibleConfig">
-          {{ t('runtime.localRuntime.defaultsAction') }}
-        </button>
-      </div>
 
-      <div class="form-grid ansible-form-grid">
-        <div class="form-group">
-          <label for="ansible-inventory">{{ t('runtime.localRuntime.fields.inventory') }}</label>
-          <input id="ansible-inventory" v-model.trim="runtimeAnsibleForm.inventory" type="text" placeholder="config/deploy/ansible/inventory.ini" />
+        <div class="form-grid">
+          <UiTextField id="ansible-inventory" v-model.trim="runtimeAnsibleForm.inventory" placeholder="config/deploy/ansible/inventory.ini" :label="t('runtime.localRuntime.fields.inventory')" />
+          <UiTextField id="ansible-apply-playbook" v-model.trim="runtimeAnsibleForm.playbookApply" :placeholder="defaultRuntimeAnsibleConfig.playbookApply" :label="t('runtime.localRuntime.fields.applyPlaybook')" />
+          <UiTextField id="ansible-remove-playbook" v-model.trim="runtimeAnsibleForm.playbookRemove" :placeholder="defaultRuntimeAnsibleConfig.playbookRemove" :label="t('runtime.localRuntime.fields.removePlaybook')" />
+          <UiTextField id="ansible-command" v-model.trim="runtimeAnsibleForm.command" :placeholder="t('runtimePages.localRuntime.placeholders.command')" :label="t('runtime.localRuntime.fields.command')" />
+          <UiTextField id="ansible-working-dir" v-model.trim="runtimeAnsibleForm.workingDir" placeholder="config/deploy/ansible" :label="t('runtime.localRuntime.fields.workingDir')" />
+          <UiTextField id="ansible-target-pattern" v-model.trim="runtimeAnsibleForm.targetPattern" placeholder="{{node.host}}" :label="t('runtime.localRuntime.fields.targetPattern')" />
+          <UiTextField id="ansible-timeout-seconds" v-model.number="runtimeAnsibleForm.timeoutSeconds" type="number" min="1" placeholder="120" suffix="s" :label="t('runtime.localRuntime.fields.timeoutSeconds')" />
+          <UiTextField id="ansible-config-path" v-model.trim="runtimeAnsibleForm.ansibleConfig" placeholder="config/deploy/ansible/ansible.cfg" :label="t('runtime.localRuntime.fields.ansibleConfig')" />
         </div>
-        <div class="form-group">
-          <label for="ansible-apply-playbook">{{ t('runtime.localRuntime.fields.applyPlaybook') }}</label>
-          <input id="ansible-apply-playbook" v-model.trim="runtimeAnsibleForm.playbookApply" type="text" :placeholder="defaultRuntimeAnsibleConfig.playbookApply" />
-        </div>
-        <div class="form-group">
-          <label for="ansible-remove-playbook">{{ t('runtime.localRuntime.fields.removePlaybook') }}</label>
-          <input id="ansible-remove-playbook" v-model.trim="runtimeAnsibleForm.playbookRemove" type="text" :placeholder="defaultRuntimeAnsibleConfig.playbookRemove" />
-        </div>
-        <div class="form-group">
-          <label for="ansible-command">{{ t('runtime.localRuntime.fields.command') }}</label>
-          <input id="ansible-command" v-model.trim="runtimeAnsibleForm.command" type="text" :placeholder="t('runtimePages.localRuntime.placeholders.command')" />
-        </div>
-        <div class="form-group">
-          <label for="ansible-working-dir">{{ t('runtime.localRuntime.fields.workingDir') }}</label>
-          <input id="ansible-working-dir" v-model.trim="runtimeAnsibleForm.workingDir" type="text" placeholder="config/deploy/ansible" />
-        </div>
-        <div class="form-group">
-          <label for="ansible-target-pattern">{{ t('runtime.localRuntime.fields.targetPattern') }}</label>
-          <input id="ansible-target-pattern" v-model.trim="runtimeAnsibleForm.targetPattern" type="text" placeholder="{{node.host}}" />
-        </div>
-        <div class="form-group">
-          <label for="ansible-timeout-seconds">{{ t('runtime.localRuntime.fields.timeoutSeconds') }}</label>
-          <input id="ansible-timeout-seconds" v-model.number="runtimeAnsibleForm.timeoutSeconds" type="number" min="1" placeholder="120" />
-        </div>
-        <div class="form-group">
-          <label for="ansible-config-path">{{ t('runtime.localRuntime.fields.ansibleConfig') }}</label>
-          <input id="ansible-config-path" v-model.trim="runtimeAnsibleForm.ansibleConfig" type="text" placeholder="config/deploy/ansible/ansible.cfg" />
-        </div>
-      </div>
 
-      <div class="form-group checkbox-group">
-        <label class="checkbox-label">
-          <input v-model="runtimeAnsibleForm.become" type="checkbox" />
-          <span>{{ t('runtime.localRuntime.fields.useBecome') }}</span>
-        </label>
-      </div>
+        <UiSwitch id="ansible-become" v-model="runtimeAnsibleForm.become" :label="t('runtime.localRuntime.fields.useBecome')" />
 
-      <div class="form-grid ansible-form-grid ansible-json-grid">
-        <div class="form-group">
-          <label for="ansible-extra-vars-json">{{ t('runtime.localRuntime.fields.extraVarsJson') }}</label>
-          <textarea id="ansible-extra-vars-json" v-model="runtimeAnsibleForm.extraVarsJson" rows="6" placeholder='{"change_window":"maintenance"}'></textarea>
-          <p class="hint">{{ t('runtime.localRuntime.extraVarsHint') }}</p>
+        <div class="form-grid">
+          <UiTextarea id="ansible-extra-vars-json" v-model="runtimeAnsibleForm.extraVarsJson" class="local-json" :rows="6" placeholder='{"change_window":"maintenance"}' :label="t('runtime.localRuntime.fields.extraVarsJson')" :help="t('runtime.localRuntime.extraVarsHint')" />
+          <UiTextarea id="ansible-environment-json" v-model="runtimeAnsibleForm.environmentJson" class="local-json" :rows="6" placeholder='{"ANSIBLE_HOST_KEY_CHECKING":"False"}' :label="t('runtime.localRuntime.fields.environmentJson')" :help="t('runtime.localRuntime.environmentHint')" />
         </div>
-        <div class="form-group">
-          <label for="ansible-environment-json">{{ t('runtime.localRuntime.fields.environmentJson') }}</label>
-          <textarea id="ansible-environment-json" v-model="runtimeAnsibleForm.environmentJson" rows="6" placeholder='{"ANSIBLE_HOST_KEY_CHECKING":"False"}'></textarea>
-          <p class="hint">{{ t('runtime.localRuntime.environmentHint') }}</p>
-        </div>
-      </div>
 
-      <div class="form-group">
-        <label>{{ t('runtime.localRuntime.fields.generatedJson') }}</label>
-        <textarea :value="runtimeConfigPreview" rows="8" class="runtime-config-preview" readonly></textarea>
-        <p class="hint">{{ t('runtime.localRuntime.generatedHint') }}</p>
-      </div>
+        <UiTextarea id="ansible-runtime-preview" class="local-json" :model-value="runtimeConfigPreview" :rows="8" readonly :label="t('runtime.localRuntime.fields.generatedJson')" :help="t('runtime.localRuntime.generatedHint')" />
 
-      <p v-if="validationError" class="form-error">{{ validationError }}</p>
-    </section>
+        <p v-if="validationError" class="form-error" role="alert">{{ validationError }}</p>
+      </div>
+    </UiSection>
 
-    <section class="panel-card">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">{{ t('runtime.localRuntime.probeEyebrow') }}</p>
-          <h3>{{ t('runtime.localRuntime.probeTitle') }}</h3>
-        </div>
-        <div class="section-actions">
-          <button class="btn btn-secondary btn-sm" :disabled="statusLoading" @click="fetchLocalStatus">
-            {{ statusLoading ? t('runtime.shared.loading') : t('runtime.shared.refreshStatus') }}
-          </button>
-          <button class="btn btn-secondary btn-sm" :disabled="doctorRunning" @click="runLocalDoctor">
-            {{ doctorRunning ? t('runtime.shared.runningDoctor') : t('runtime.shared.runDoctor') }}
-          </button>
-        </div>
-      </div>
+    <RuntimeStatusPanel
+      :title="t('runtime.localRuntime.probeTitle')"
+      :description="t('runtime.localRuntime.heroTextPrimary')"
+      :loading="statusLoading"
+      :error="statusError"
+      :has-status="Boolean(statusSummary)"
+      :empty-text="t('runtime.localRuntime.noStatus')"
+      :summary="statusSummary?.summary ? translateRuntimeText(statusSummary.summary) : ''"
+      :warnings="(statusSummary?.warnings || []).map(warning => translateRuntimeText(warning))"
+      :commands="displayedCommands"
+      :doctor-running="doctorRunning"
+      :doctor-output="doctorOutput"
+      @refresh="fetchLocalStatus"
+      @doctor="runLocalDoctor"
+    >
+      <UiGroupedList :title="t('runtime.shared.panelConfig')" heading-tag="h3">
+        <UiGroupedListRow :label="t('runtime.shared.panelConfig')" :value="localModeActive ? t('runtime.localRuntime.cards.localActiveValue') : t('runtime.localRuntime.cards.standbyValue')" />
+        <UiGroupedListRow :label="t('runtime.localRuntime.cards.backend')" :value="localBackendLabel(actualBackend)" />
+        <UiGroupedListRow :label="t('runtime.localRuntime.cards.preferredLocalBackend')" :value="localBackendLabel(selectedLocalBackend)" />
+        <UiGroupedListRow :label="t('runtime.localRuntime.cards.attachment')" :description="statusSummary.attachment?.model || '-'" />
+      </UiGroupedList>
+      <UiGroupedList :title="t('runtime.shared.reachability')" heading-tag="h3">
+        <UiGroupedListRow :label="t('runtime.shared.reachability')" :description="translateRuntimeText(statusSummary.reachability?.reason)">
+          <template #value><UiBadge :status="statusSummary.reachability?.ready ? 'online' : 'offline'" :label="statusSummary.reachability?.ready ? t('runtime.shared.reachable') : t('runtime.shared.notReady')" /></template>
+        </UiGroupedListRow>
+        <UiGroupedListRow :label="t('runtime.localRuntime.cards.runtimeReady')" :description="translateRuntimeText(statusSummary.runtimeReady?.reason)" :value="statusSummary.runtimeReady?.ready ? t('runtime.shared.yes') : t('runtime.shared.no')" />
+      </UiGroupedList>
+      <UiGroupedList :title="t('runtime.shared.executor')" heading-tag="h3">
+        <UiGroupedListRow :label="t('runtime.localRuntime.fields.command')" :value="statusSummary.localAnsible?.command || runtimeAnsibleForm.command || t('runtimePages.localRuntime.defaults.command')" />
+        <UiGroupedListRow :label="t('runtime.localRuntime.cards.firewallDriver')" :value="statusSummary.localAnsible?.firewallDriver || firewallDriverLabel(selectedLocalBackend)" />
+        <UiGroupedListRow :label="t('runtime.localRuntime.cards.commandFound')" :value="statusSummary.localAnsible?.commandFound ? t('runtime.shared.yes') : t('runtime.shared.no')" />
+        <UiGroupedListRow :label="t('runtime.localRuntime.cards.become')" :value="statusSummary.localAnsible?.become ? t('runtime.shared.yes') : t('runtime.shared.no')" />
+      </UiGroupedList>
+      <UiGroupedList :title="t('runtime.shared.files')" heading-tag="h3">
+        <UiGroupedListRow :label="t('runtime.localRuntime.cards.inventory')" :value="statusSummary.localAnsible?.inventoryExists ? t('runtime.shared.present') : t('runtime.shared.missing')" />
+        <UiGroupedListRow :label="t('runtime.localRuntime.cards.applyPlaybook')" :value="statusSummary.localAnsible?.applyPlaybookExists ? t('runtime.shared.present') : t('runtime.shared.missing')" />
+        <UiGroupedListRow :label="t('runtime.localRuntime.cards.removePlaybook')" :value="statusSummary.localAnsible?.removePlaybookExists ? t('runtime.shared.present') : t('runtime.shared.missing')" />
+        <UiGroupedListRow :label="t('runtime.localRuntime.cards.workingDir')" :value="statusSummary.localAnsible?.workingDirExists ? t('runtime.shared.present') : t('runtime.shared.missing')" />
+      </UiGroupedList>
+    </RuntimeStatusPanel>
 
-      <div v-if="statusLoading" class="state-card">{{ t('runtime.localRuntime.loadingStatus') }}</div>
-      <div v-else-if="statusError" class="state-card state-error">{{ statusError }}</div>
-      <div v-else-if="statusSummary" class="status-grid">
-        <article class="status-card">
-          <p class="metric-label">{{ t('runtime.shared.panelConfig') }}</p>
-          <p class="metric-value">{{ localModeActive ? t('runtime.localRuntime.cards.localActiveValue') : t('runtime.localRuntime.cards.standbyValue') }}</p>
-          <p class="metric-detail">{{ t('runtime.localRuntime.cards.backend') }}: {{ localBackendLabel(actualBackend) }}</p>
-          <p class="metric-detail">{{ t('runtime.localRuntime.cards.preferredLocalBackend') }}: {{ localBackendLabel(selectedLocalBackend) }}</p>
-          <p class="metric-detail">{{ t('runtime.localRuntime.cards.attachment') }}: {{ statusSummary.attachment?.model || '-' }}</p>
-        </article>
-        <article class="status-card">
-          <p class="metric-label">{{ t('runtime.shared.reachability') }}</p>
-          <p class="metric-value">{{ statusSummary.reachability?.ready ? t('runtime.shared.reachable') : t('runtime.shared.notReady') }}</p>
-          <p class="metric-detail">{{ translateRuntimeText(statusSummary.reachability?.reason) }}</p>
-          <p class="metric-detail">{{ t('runtime.localRuntime.cards.runtimeReady') }}: {{ statusSummary.runtimeReady?.ready ? t('runtime.shared.yes') : t('runtime.shared.no') }}</p>
-          <p class="metric-detail">{{ translateRuntimeText(statusSummary.runtimeReady?.reason) }}</p>
-        </article>
-        <article class="status-card">
-          <p class="metric-label">{{ t('runtime.shared.executor') }}</p>
-          <p class="metric-value">{{ statusSummary.localAnsible?.command || runtimeAnsibleForm.command || t('runtimePages.localRuntime.defaults.command') }}</p>
-          <p class="metric-detail">{{ t('runtime.localRuntime.cards.firewallDriver') }}: {{ statusSummary.localAnsible?.firewallDriver || firewallDriverLabel(selectedLocalBackend) }}</p>
-          <p class="metric-detail">{{ t('runtime.localRuntime.cards.commandFound') }}: {{ statusSummary.localAnsible?.commandFound ? t('runtime.shared.yes') : t('runtime.shared.no') }}</p>
-          <p class="metric-detail">{{ t('runtime.localRuntime.cards.become') }}: {{ statusSummary.localAnsible?.become ? t('runtime.shared.yes') : t('runtime.shared.no') }}</p>
-        </article>
-        <article class="status-card">
-          <p class="metric-label">{{ t('runtime.shared.files') }}</p>
-          <p class="metric-detail">{{ t('runtime.localRuntime.cards.inventory') }}: {{ statusSummary.localAnsible?.inventoryExists ? t('runtime.shared.present') : t('runtime.shared.missing') }}</p>
-          <p class="metric-detail">{{ t('runtime.localRuntime.cards.applyPlaybook') }}: {{ statusSummary.localAnsible?.applyPlaybookExists ? t('runtime.shared.present') : t('runtime.shared.missing') }}</p>
-          <p class="metric-detail">{{ t('runtime.localRuntime.cards.removePlaybook') }}: {{ statusSummary.localAnsible?.removePlaybookExists ? t('runtime.shared.present') : t('runtime.shared.missing') }}</p>
-          <p class="metric-detail">{{ t('runtime.localRuntime.cards.workingDir') }}: {{ statusSummary.localAnsible?.workingDirExists ? t('runtime.shared.present') : t('runtime.shared.missing') }}</p>
-        </article>
-      </div>
-      <div v-else class="state-card">{{ t('runtime.localRuntime.noStatus') }}</div>
-
-      <div v-if="statusSummary?.summary" class="summary-card">{{ translateRuntimeText(statusSummary.summary) }}</div>
-      <div v-if="statusSummary?.warnings?.length" class="warning-list">
-        <p class="metric-label">{{ t('runtime.shared.warnings') }}</p>
-        <code v-for="warning in statusSummary.warnings" :key="warning">{{ translateRuntimeText(warning) }}</code>
-      </div>
-      <div class="command-block">
-        <p class="metric-label">{{ t('runtime.shared.powerShell') }}</p>
-        <code v-for="command in displayedCommands.powerShell" :key="`ps-${command}`">{{ command }}</code>
-        <p class="metric-label">{{ t('runtime.shared.bash') }}</p>
-        <code v-for="command in displayedCommands.bash" :key="`bash-${command}`">{{ command }}</code>
-        <p class="metric-label">{{ t('runtime.shared.bootstrapVerify') }}</p>
-        <code v-for="command in displayedCommands.upgrade" :key="`verify-${command}`">{{ command }}</code>
-        <p class="metric-label">{{ t('runtime.shared.references') }}</p>
-        <code v-for="reference in displayedCommands.references" :key="reference">{{ reference }}</code>
-      </div>
-      <div class="doctor-output">
-        <p class="metric-label">{{ t('runtime.shared.doctorOutput') }}</p>
-        <pre>{{ doctorOutput || t('runtime.shared.doctorNotExecuted') }}</pre>
-      </div>
-    </section>
-
-    <section class="panel-card">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">{{ t('runtime.localRuntime.jobsEyebrow') }}</p>
-          <h3>{{ t('runtime.localRuntime.latestJobs', { backend: localBackendLabel(selectedLocalBackend) }) }}</h3>
-        </div>
-      </div>
-
-      <div v-if="jobsLoading" class="state-card">{{ t('runtime.localRuntime.loadingJobs') }}</div>
-      <div v-else-if="jobs.length" class="job-list">
-        <article v-for="job in jobs" :key="job.id" class="job-item">
-          <div class="job-main">
-            <div>
-              <strong>#{{ job.id }} {{ job.action }}</strong>
-              <p class="job-meta">{{ t('runtime.localRuntime.jobMeta', { forwardId: job.forwardId || '-', tunnelId: job.tunnelId || '-', nodeId: job.nodeId || '-' }) }}</p>
-            </div>
-            <div class="job-side">
-              <span :class="['status-chip', `status-${job.status}`]">{{ runtimeJobStatusLabel(job.status) }}</span>
-              <span class="job-time">{{ formatJobTime(job) }}</span>
-            </div>
-          </div>
-          <code v-if="job.message" class="job-message">{{ translateRuntimeText(job.message) }}</code>
-        </article>
-      </div>
-      <div v-else class="state-card">{{ t('runtime.localRuntime.noJobs') }}</div>
-    </section>
+    <RuntimeJobsTable
+      :title="t('runtime.localRuntime.latestJobs', { backend: localBackendLabel(selectedLocalBackend) })"
+      :jobs="jobs"
+      :loading="jobsLoading"
+      :empty-text="t('runtime.localRuntime.noJobs')"
+      storage-key="admin.local-runtime-jobs"
+    />
   </div>
 </template>
 
 <script setup>
+// 转发节点 › 本地运行时 (/admin/forward/local): the Ansible executor on the
+// panel host (stateless; system config keys), its probes and the latest
+// local jobs. Execution plane, apart from the flux-panel forward pages.
+// UI U7 restyled it; config keys, calls and payloads are unchanged.
 import { computed, onMounted, ref } from 'vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { getLocalRuntimeStatus, getSystemConfig, listForwardRuntimeJobs, runLocalRuntimeDoctor, setSystemConfig } from '@/api/admin'
+import { CircleAlert, CircleCheck, RefreshCw } from '@lucide/vue'
+import UiBadge from '@/ui/UiBadge.vue'
+import UiButton from '@/ui/UiButton.vue'
+import UiGroupedList from '@/ui/UiGroupedList.vue'
+import UiGroupedListRow from '@/ui/UiGroupedListRow.vue'
+import UiIcon from '@/ui/UiIcon.vue'
+import UiIconButton from '@/ui/UiIconButton.vue'
+import UiPageHeader from '@/ui/UiPageHeader.vue'
+import UiRadioGroup from '@/ui/UiRadioGroup.vue'
+import UiSection from '@/ui/UiSection.vue'
+import UiSwitch from '@/ui/UiSwitch.vue'
+import UiTextarea from '@/ui/UiTextarea.vue'
+import UiTextField from '@/ui/UiTextField.vue'
+import ForwardNodesModeNav from './forward-nodes/ForwardNodesModeNav.vue'
+import RuntimeJobsTable from './forward-nodes/RuntimeJobsTable.vue'
+import RuntimeStatusPanel from './forward-nodes/RuntimeStatusPanel.vue'
+import { normalizeRuntimeJob as normalizeJob, parseRuntimeBoolean, unwrapPayload } from './forward-nodes/forwardNodeModel'
 
 const runtimeNodeXModeKey = 'forward.runtime.nodex_mode'
 const runtimeBackendKey = 'forward.runtime_backend'
@@ -263,7 +164,7 @@ const runtimeLegacyAnsibleRemovePlaybookKey = 'forward.ansible.playbook_remove'
 const runtimeLegacyAnsibleBecomeKey = 'forward.ansible.become'
 const runtimeLegacyAnsibleExtraVarsKey = 'forward.ansible.extra_vars_json'
 
-const { t, formatDateTime, translateLiteral } = useAppI18n()
+const { t, translateLiteral } = useAppI18n()
 
 const localBackendOptions = computed(() => ([
   {
@@ -275,6 +176,12 @@ const localBackendOptions = computed(() => ([
     recommended: true
   }
 ]))
+
+const backendRadioOptions = computed(() => localBackendOptions.value.map(option => ({
+  value: option.value,
+  label: `${option.label} · ${option.recommended ? t('runtime.localRuntime.recommended') : t('runtime.localRuntime.legacy')}`,
+  description: `${option.description} ${option.applyPlaybook}`
+})))
 
 function normalizeLocalBackend(value) {
   const normalized = String(value ?? '').trim().toLowerCase()
@@ -329,16 +236,6 @@ const statusError = ref('')
 const doctorRunning = ref(false)
 const doctorSummary = ref(null)
 const doctorOutput = ref('')
-
-function parseRuntimeBoolean(value) {
-  if (typeof value === 'boolean') return value
-  if (typeof value === 'number') return value !== 0
-  const normalized = String(value ?? '').trim().toLowerCase()
-  if (!normalized) return null
-  if (['1', 'true', 'yes', 'on'].includes(normalized)) return true
-  if (['0', 'false', 'no', 'off'].includes(normalized)) return false
-  return null
-}
 
 function normalizeJsonObjectText(value) {
   const trimmed = String(value ?? '').trim()
@@ -438,41 +335,6 @@ function buildRuntimeAnsiblePayload(source = runtimeAnsibleForm.value) {
     environment,
     timeoutSeconds: Number.isFinite(Number(form.timeoutSeconds)) && Number(form.timeoutSeconds) > 0 ? Number(form.timeoutSeconds) : defaultRuntimeAnsibleConfig.value.timeoutSeconds
   }
-}
-
-function extractPayload(response) {
-  return response?.data?.data ?? response?.data ?? response
-}
-
-function normalizeRuntimeJob(job) {
-  return {
-    id: job?.id,
-    action: job?.action || t('runtime.shared.unknown'),
-    forwardId: job?.forwardId ?? job?.forward_id ?? null,
-    tunnelId: job?.tunnelId ?? job?.tunnel_id ?? null,
-    nodeId: job?.nodeId ?? job?.node_id ?? null,
-    status: Number(job?.status ?? 0),
-    message: String(job?.result || job?.error || '').trim(),
-    completedAt: job?.completedAt ?? job?.completed_at ?? null,
-    updatedAt: job?.updatedAt ?? job?.updated_at ?? null,
-    createdAt: job?.createdAt ?? job?.created_at ?? null
-  }
-}
-
-function runtimeJobStatusLabel(status) {
-  switch (Number(status)) {
-    case 0: return t('runtime.shared.pending')
-    case 1: return t('runtime.shared.running')
-    case 2: return t('runtime.shared.success')
-    case 3: return t('runtime.shared.failed')
-    default: return t('runtime.shared.unknown')
-  }
-}
-
-function formatJobTime(job) {
-  const raw = job?.completedAt || job?.updatedAt || job?.createdAt
-  if (!raw) return '-'
-  return formatDateTime(raw) || String(raw)
 }
 
 function safeParseObject(value) {
@@ -640,9 +502,9 @@ async function fetchJobs() {
   jobsLoading.value = true
   try {
     const res = await listForwardRuntimeJobs({ backend: selectedLocalBackend.value, limit: 10 })
-    const payload = extractPayload(res)
+    const payload = unwrapPayload(res)
     const list = Array.isArray(payload?.list) ? payload.list : Array.isArray(payload) ? payload : []
-    jobs.value = list.map(normalizeRuntimeJob)
+    jobs.value = list.map(job => normalizeJob(job, t('runtime.shared.unknown')))
   } catch (error) {
     console.error('get local runtime jobs failed:', error)
     jobs.value = []
@@ -656,7 +518,7 @@ async function fetchLocalStatus() {
   statusError.value = ''
   try {
     const res = await getLocalRuntimeStatus()
-    statusSummary.value = extractPayload(res) || null
+    statusSummary.value = unwrapPayload(res) || null
   } catch (error) {
     statusError.value = resolveRuntimeError(error, 'runtime.localRuntime.errors.fetchStatusFailed')
     statusSummary.value = null
@@ -670,7 +532,7 @@ async function runLocalDoctor() {
   doctorOutput.value = ''
   try {
     const res = await runLocalRuntimeDoctor()
-    const payload = extractPayload(res) || null
+    const payload = unwrapPayload(res) || null
     doctorSummary.value = payload
     statusSummary.value = payload
     doctorOutput.value = JSON.stringify(payload, null, 2)
@@ -691,359 +553,41 @@ onMounted(async () => {
 })
 </script>
 
+<style scoped src="./forward-nodes/runtime-page.css"></style>
+
 <style scoped>
-.local-runtime-page {
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-
-.hero-card,
-.panel-card,
-.mode-banner {
-  border: 1px solid var(--border-color);
-  border-radius: 20px;
-  background: var(--surface-color);
-}
-
-.hero-card {
-  display: flex;
-  justify-content: space-between;
-  gap: 20px;
-  padding: 24px;
-  background:
-    radial-gradient(circle at top right, rgba(16, 185, 129, 0.14), transparent 28%),
-    linear-gradient(180deg, rgba(15, 23, 42, 0.03), transparent 70%),
-    var(--surface-color);
-}
-
-.hero-copy {
-  max-width: 760px;
-}
-
-.hero-copy h2 {
-  margin: 6px 0 12px;
-  font-size: 30px;
-}
-
-.hero-text,
-.section-copy,
-.hint,
-.metric-detail,
-.job-meta,
-.job-time {
-  color: var(--text-secondary);
-  line-height: 1.6;
-}
-
-.hero-actions,
-.section-actions {
+.local-executor {
   display: flex;
   flex-wrap: wrap;
-  gap: 10px;
-}
-
-.hero-actions {
+  gap: var(--space-3);
   align-items: flex-start;
-  justify-content: flex-end;
-  min-width: 320px;
-}
-
-.btn {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border: 1px solid transparent;
-  border-radius: 12px;
-  padding: 10px 16px;
-  cursor: pointer;
-  text-decoration: none;
-}
-
-.btn-primary {
-  background: var(--accent-fill);
-  color: var(--on-accent);
-}
-
-.btn-secondary {
-  background: var(--surface-color);
-  color: var(--text-color);
-  border-color: var(--border-color);
-}
-
-.btn-sm {
-  padding: 8px 12px;
-  font-size: 12px;
-}
-
-.mode-banner {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 12px;
-  align-items: center;
-  padding: 16px 18px;
-}
-
-.banner-success {
-  border-color: rgba(16, 185, 129, 0.35);
-  background: rgba(16, 185, 129, 0.08);
-}
-
-.banner-warning {
-  border-color: rgba(245, 158, 11, 0.35);
-  background: rgba(245, 158, 11, 0.08);
-}
-
-.panel-card {
-  padding: 22px;
-}
-
-.section-head,
-.runtime-local-head,
-.job-main {
-  display: flex;
   justify-content: space-between;
-  gap: 16px;
-  align-items: flex-start;
 }
 
-.section-head,
-.runtime-local-head {
-  margin-bottom: 18px;
-}
-
-.section-head h3,
-.runtime-local-head h4 {
-  margin: 6px 0 0;
-}
-
-.eyebrow,
-.metric-label {
+.local-executor__hint {
+  flex: 1 1 320px;
   margin: 0;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  font-size: 12px;
-  color: var(--text-secondary);
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
+  overflow-wrap: anywhere;
 }
 
-.backend-grid,
-.form-grid,
-.status-grid {
-  display: grid;
-  gap: 16px;
+.local-backend {
+  min-width: 0;
 }
 
-.backend-grid {
-  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
-  margin-bottom: 18px;
+.local-backend :deep(.ui-radio),
+.local-backend :deep(.ui-radio__text) {
+  min-width: 0;
 }
 
-.backend-card {
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-  border: 1px solid var(--border-color);
-  border-radius: 18px;
-  background: var(--bg-color);
-  padding: 18px;
-  text-align: left;
-  cursor: pointer;
+.local-backend :deep(.ui-radio__desc),
+.local-backend :deep(.ui-radio__label) {
+  overflow-wrap: anywhere;
 }
 
-.backend-card.active {
-  border-color: var(--primary-color);
-  box-shadow: 0 12px 26px rgba(59, 130, 246, 0.12);
-}
-
-.backend-card p,
-.backend-card code {
-  margin: 0;
-  color: var(--text-secondary);
-}
-
-.backend-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.backend-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 24px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.backend-chip-primary {
-  background: rgba(59, 130, 246, 0.12);
-  color: #1d4ed8;
-}
-
-.backend-chip-muted {
-  background: rgba(148, 163, 184, 0.16);
-  color: #475569;
-}
-
-.ansible-form-grid {
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-}
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.form-group input,
-.form-group textarea {
-  width: 100%;
-  border: 1px solid var(--border-color);
-  border-radius: 12px;
-  background: var(--bg-color);
-  color: var(--text-color);
-  padding: 12px 14px;
-}
-
-.form-group textarea {
-  resize: vertical;
-}
-
-.checkbox-group {
-  margin: 18px 0 10px;
-}
-
-.checkbox-label {
-  display: inline-flex;
-  align-items: center;
-  gap: 10px;
-}
-
-.form-error,
-.state-error {
-  color: #dc2626;
-}
-
-.state-card,
-.summary-card,
-.doctor-output,
-.command-block,
-.warning-list,
-.status-card,
-.job-item {
-  border: 1px solid var(--border-color);
-  border-radius: 16px;
-  background: var(--bg-color);
-}
-
-.state-card,
-.summary-card,
-.doctor-output,
-.command-block,
-.warning-list,
-.status-card {
-  padding: 16px;
-}
-
-.status-grid {
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-}
-
-.metric-value {
-  margin: 8px 0;
-  font-size: 24px;
-  font-weight: 700;
-}
-
-.warning-list,
-.command-block,
-.doctor-output {
-  margin-top: 16px;
-}
-
-.warning-list code,
-.command-block code,
-.job-message {
-  display: block;
-  margin-top: 8px;
-  border-radius: 10px;
-  padding: 10px 12px;
-  background: rgba(15, 23, 42, 0.06);
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.doctor-output pre {
-  margin: 8px 0 0;
-  white-space: pre-wrap;
-  word-break: break-word;
-}
-
-.job-list {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-}
-
-.job-item {
-  padding: 14px 16px;
-}
-
-.job-side {
-  display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 6px;
-}
-
-.status-chip {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 72px;
-  border-radius: 999px;
-  padding: 4px 10px;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.status-0 {
-  background: rgba(148, 163, 184, 0.18);
-  color: #475569;
-}
-
-.status-1 {
-  background: rgba(59, 130, 246, 0.18);
-  color: #1d4ed8;
-}
-
-.status-2 {
-  background: rgba(16, 185, 129, 0.18);
-  color: #047857;
-}
-
-.status-3 {
-  background: rgba(239, 68, 68, 0.18);
-  color: #b91c1c;
-}
-
-@media (max-width: 900px) {
-  .hero-card,
-  .section-head,
-  .runtime-local-head,
-  .job-main {
-    flex-direction: column;
-  }
-
-  .hero-actions,
-  .job-side {
-    justify-content: flex-start;
-    align-items: stretch;
-  }
+.local-json :deep(textarea) {
+  font-family: var(--font-mono);
+  font-size: var(--type-callout-size);
 }
 </style>

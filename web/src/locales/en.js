@@ -9,6 +9,7 @@ import ui from './modules/en/ui'
 import shell from './modules/en/shell'
 import userPages from './modules/en/userPages'
 import adminNodes from './modules/en/adminNodes'
+import forwardNodesPage from './modules/en/forwardNodesPage'
 import { AGENT_NAME, CONTROL_NAME } from '../constants/brand'
 
 const legacy = {
@@ -101,6 +102,7 @@ export default {
   ...ui,
   ...shell,
   ...userPages,
+  ...forwardNodesPage,
   common: {
     locale: {
       label: 'Language',
@@ -434,18 +436,13 @@ export default {
       disabled: 'Disabled'
     },
     localRuntime: {
-      heroEyebrow: 'Stateless Runtime',
-      title: 'Local Runtime / Ansible',
       heroTextPrimary: 'This page owns the panel-host Ansible executor only. It is the stateless runtime path for panel-side forwarding and does not require a persistent NodeX control-plane or Node-Agent connection.',
       heroTextSecondary: 'The backend is nftables / Ansible — a stateless control path for panel-side forwarding.',
-      refreshLoading: 'Refreshing...',
-      saveLoading: 'Saving...',
       saveActivate: 'Save And Activate Local Runtime',
       activeBannerTitle: 'Local runtime is active',
       standbyBannerTitle: 'Local runtime is configured as standby',
       activeBannerText: 'Forward jobs currently use {backend}. SSH transport and privilege escalation are resolved from this Ansible runtime config.',
       standbyBannerText: 'NodeX/gost remains active globally. You can still stage and validate the local Ansible runtime here before switching back.',
-      configEyebrow: 'Configuration',
       configTitle: 'Panel-Host Ansible Executor',
       configCopy: 'Ansible mode is stateless: the panel stores execution-node identity on tunnel and forward records, while inventory, playbooks, sudo and SSH behavior live here.',
       recommended: 'Recommended',
@@ -470,9 +467,7 @@ export default {
       extraVarsHint: 'Backend-specific fields such as firewall driver are injected automatically by the backend.',
       environmentHint: 'Extra process environment variables for the panel-host executor.',
       generatedHint: 'The JSON payload is generated from the structured fields above and stored in `forward.runtime.ansible.config`.',
-      probeEyebrow: 'Local Probe',
       probeTitle: 'Executor Reachability And Runtime Readiness',
-      loadingStatus: 'Loading local runtime status...',
       noStatus: 'No local runtime status loaded yet.',
       cards: {
         localActiveValue: 'Local runtime active',
@@ -489,10 +484,7 @@ export default {
         removePlaybook: 'Remove playbook',
         workingDir: 'Working dir'
       },
-      jobsEyebrow: 'Runtime Jobs',
       latestJobs: 'Latest {backend} Jobs',
-      jobMeta: 'forward {forwardId} / tunnel {tunnelId} / node {nodeId}',
-      loadingJobs: 'Loading runtime jobs...',
       noJobs: 'No local runtime jobs yet.',
       backends: {
         nftables: {
@@ -512,18 +504,14 @@ export default {
       }
     },
     nodeX: {
-      heroEyebrow: 'Private Runtime',
-      title: 'NodeX Runtime',
       heroTextPrimary: 'Dedicated operator entry for the stateful NodeX/gost path. This page probes the configured NodeX control plane directly, even when the current global runtime backend is still a local Ansible backend.',
       heroTextSecondary: 'Local Ansible execution now lives under Local Runtime and Ansible Machines. Node "online" still means TCP reachability only and is not proof that NodeX or the relay gost API is already attached.',
-      refreshLoading: 'Refreshing...',
       saveLoading: 'Saving...',
       save: 'Save NodeX Config',
       enabledBannerTitle: 'NodeX Mode is enabled',
       disabledBannerTitle: 'NodeX Mode is disabled',
       enabledBannerText: 'Panel forward jobs can route through NodeX/gost, but each runtime job still has to succeed before relay attachment is real.',
       disabledBannerText: 'You can validate the configured NodeX control plane here first, then switch the global backend when you are ready.',
-      configEyebrow: 'Configuration',
       configTitle: 'NodeX Control Plane',
       enableModeTitle: 'Enable NodeX Mode',
       enableModeHint: 'Writes `forward.runtime.nodex_mode=true` and `forward.runtime_backend=gost`.',
@@ -535,10 +523,8 @@ export default {
         timeout: 'Timeout (seconds)',
         timeoutHint: 'Used by the panel when probing or executing NodeX runtime requests.'
       },
-      probeEyebrow: 'NodeX Probe',
       probeTitle: 'Health And Runtime Status',
       probeCopy: 'These checks always target the configured NodeX control plane. They do not depend on the currently active runtime backend.',
-      loadingStatus: 'Loading NodeX runtime status...',
       noStatus: 'No NodeX runtime status loaded yet.',
       cards: {
         modeOn: 'NodeX mode on',
@@ -552,11 +538,8 @@ export default {
         version: 'Version',
         executePath: 'Execute path'
       },
-      jobsEyebrow: 'Runtime Jobs',
       jobsTitle: 'Latest gost Jobs',
       jobsCopy: 'Recent panel-side runtime audit rows filtered to the `gost` backend.',
-      jobMeta: 'forward {forwardId} / tunnel {tunnelId} / node {nodeId}',
-      loadingJobs: 'Loading runtime jobs...',
       noJobs: 'No gost runtime jobs yet.',
       backends: {
         gost: 'gost / NodeX'
@@ -570,11 +553,8 @@ export default {
       }
     },
     ansibleMachines: {
-      heroEyebrow: 'Execution Fleet',
-      title: 'Ansible Machines',
       heroText: 'This page is only for stateless Ansible execution machines. These hosts do not need Node-Agent and do not need a persistent control-plane connection.',
       addMachine: 'Add machine',
-      relatedPages: 'Related runtime pages',
       table: {
         reachability: 'Reachability',
         lastResult: 'Last result'
@@ -1299,22 +1279,13 @@ export default {
       }
     },
     nodeXTopology: {
-      heroEyebrow: 'NodeX Topology',
-      title: 'NodeX Topology + Legacy Rules',
-      heroText: 'This page owns the stateful NodeX relay/exit topology and the legacy-rules compatibility layer. Stateless execution hosts belong on Ansible Machines.',
-      nodesEyebrow: 'Nodes',
-      nodesTitle: 'NodeX Relay / Exit Topology',
-      nodesText: 'Use this page only for stateful NodeX relay/exit topology, reachability checks, and gost API operations. It does not manage Ansible machines.',
-      loading: 'Loading NodeX topology nodes...',
       emptyTitle: 'No NodeX topology nodes yet.',
       emptyText: 'Create relay / exit nodes here for NodeX mode. If you only need stateless execution, use Ansible Machines.',
       legacyText: 'This block mirrors the `/admin/forward/rules*` compatibility endpoints. It preserves legacy rule behavior but does not define the current primary runtime path for NodeX or Ansible.',
       actions: {
         refresh: 'Refresh',
         testConnection: 'Test Connection',
-        addLegacyRule: 'Add Legacy Rule',
         addNode: 'Add Node',
-        query: 'Query',
         clear: 'Clear',
         addRule: 'Add Rule',
         edit: 'Edit',
@@ -1332,9 +1303,6 @@ export default {
         createRule: 'Create Rule'
       },
       filters: {
-        nodeType: 'Node Type',
-        status: 'Status',
-        all: 'All',
         online: 'Online',
         offline: 'Offline',
         userId: 'User ID',
@@ -1346,17 +1314,12 @@ export default {
         enabled: 'Enabled',
         disabled: 'Disabled',
         online: 'Online',
-        offline: 'Offline',
-        operationSuccess: 'Operation succeeded',
-        operationFailed: 'Operation failed'
+        offline: 'Offline'
       },
       meta: {
-        managementApi: 'Management API',
-        regionIsp: 'Region / ISP',
         latency: 'Latency',
         currentConnections: 'Current Connections',
         traffic: 'Upload / Download',
-        weightMaxConnections: 'Weight / Max Connections',
         lastCheck: 'Last Check',
         uptime: 'Uptime',
         rateLimit: 'Rate',
@@ -1367,41 +1330,10 @@ export default {
         connections: 'Connections',
         serviceCount: 'Service Count'
       },
-      stats: {
-        relayNodes: 'Relay Nodes',
-        exitNodes: 'Exit Nodes',
-        totalNodes: 'Total Nodes',
-        onlineNodes: 'Online Nodes',
-        totalUpload: 'Total Upload',
-        totalDownload: 'Total Download',
-        onlineCount: 'Online {count}',
-        includesRelayExit: 'Includes Relay / Exit',
-        refreshing: 'Refreshing stats...',
-        basedOnLastCheck: 'Based on latest health check',
-        aggregatedAcrossNodes: 'Aggregated across all topology nodes'
-      },
-      pagination: {
-        prev: 'Previous',
-        next: 'Next',
-        summary: 'Page {page} / {totalPages}, total {total} items'
-      },
       legacy: {
-        eyebrow: 'Legacy Rules',
         title: 'Legacy Port Forward Rules',
-        loading: 'Loading legacy rules...',
         emptyTitle: 'No legacy rules yet',
-        emptyText: 'Add rules here if you need compatibility for relay + exit port-level forwarding.',
-        columns: {
-          id: 'ID',
-          name: 'Name',
-          ingress: 'Ingress',
-          egress: 'Egress',
-          owner: 'Owner',
-          limits: 'Limits',
-          traffic: 'Traffic',
-          status: 'Status',
-          actions: 'Actions'
-        }
+        emptyText: 'Add rules here if you need compatibility for relay + exit port-level forwarding.'
       },
       nodeModal: {
         titleEdit: 'Edit Relay/Exit Node',
@@ -1551,8 +1483,6 @@ export default {
         both: 'TCP + UDP'
       },
       labels: {
-        node: 'Node #{id}',
-        route: 'Route',
         none: 'Unlimited',
         neverExpires: 'Never Expires'
       }
