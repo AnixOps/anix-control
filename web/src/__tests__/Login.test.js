@@ -1,18 +1,18 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { render, screen, waitFor, within } from '@testing-library/vue'
+import userEvent from '@testing-library/user-event'
 import { createPinia, setActivePinia } from 'pinia'
-import { nextTick } from 'vue'
 import Login from '@/views/Login.vue'
 import { useUserStore } from '@/stores/user'
 import { setEdition } from '@/composables/useEdition'
+import { toastMessages } from './helpers/feedback'
 
 const mockLogin = vi.hoisted(() => vi.fn())
 const mockRegister = vi.hoisted(() => vi.fn())
+const mockPush = vi.hoisted(() => vi.fn())
 
 vi.mock('vue-router', () => ({
-  useRouter: () => ({
-    push: vi.fn(),
-  }),
+  useRouter: () => ({ push: mockPush }),
 }))
 
 vi.mock('@/api/auth', () => ({
@@ -20,298 +20,255 @@ vi.mock('@/api/auth', () => ({
   register: (...args) => mockRegister(...args),
 }))
 
+function ok(data) {
+  return { code: 0, msg: '操作成功', ts: 1783536000000, data }
+}
+
+async function signIn(user, email = 'lin@example.com', password = 'password123') {
+  await user.type(screen.getByLabelText(/^Email/), email)
+  await user.type(screen.getByLabelText(/^Password/), password)
+  await user.click(screen.getByRole('button', { name: 'Sign in' }))
+}
+
+function codeBoxes() {
+  return screen.getAllByLabelText(/^Digit \d of 6$/)
+}
+
 describe('Login.vue', () => {
   beforeEach(() => {
     localStorage.clear()
     setActivePinia(createPinia())
     mockLogin.mockReset()
     mockRegister.mockReset()
-  })
-
-  it('renders login form', () => {
-    const wrapper = mount(Login, {
-      global: {
-        stubs: ['router-link'],
-      },
-    })
-
-    expect(wrapper.find('input[type="email"]').exists() || wrapper.find('input[type="text"]').exists()).toBe(true)
-    expect(wrapper.find('input[type="password"]').exists()).toBe(true)
-  })
-
-  it('has login button', () => {
-    const wrapper = mount(Login, {
-      global: {
-        stubs: ['router-link'],
-      },
-    })
-
-    const button = wrapper.find('button')
-    expect(button.exists()).toBe(true)
-  })
-
-  it('shows validation error for empty fields', async () => {
-    const wrapper = mount(Login, {
-      global: {
-        stubs: ['router-link'],
-      },
-    })
-
-    const button = wrapper.find('button')
-    await button.trigger('click')
-
-    // Form validation should trigger
-    // Actual behavior depends on implementation
-  })
-
-  it('does not ask for an invite code when registration does not require one', async () => {
+    mockPush.mockReset()
     setEdition('community', { requireInvite: false })
-    mockRegister.mockResolvedValue({ data: { token: 'registered-token', is_admin: false, user_id: 8, email: 'open@example.com' } })
-    const wrapper = mount(Login, {
-      global: {
-        stubs: ['router-link'],
-      },
-    })
-
-    wrapper.vm.isRegisterMode = true
-    await nextTick()
-
-    expect(wrapper.find('#invite-code').exists()).toBe(false)
-    await wrapper.find('#email').setValue('open@example.com')
-    await wrapper.find('#password').setValue('password123')
-    await wrapper.find('#confirm-password').setValue('password123')
-    await wrapper.find('form').trigger('submit.prevent')
-    await flushPromises()
-
-    expect(mockRegister).toHaveBeenCalledWith({ email: 'open@example.com', password: 'password123' })
   })
 
-  it('submits invite code when registering', async () => {
+  it('shows one centred card: one H1, email and password, no dead links or decorative stats', async () => {
+    render(Login)
+    expect(screen.getAllByRole('heading', { level: 1 }).map(h => h.textContent)).toEqual(['Sign in to AnixOps Control'])
+    expect(screen.getByLabelText(/^Email/).getAttribute('autocomplete')).toBe('username')
+    expect(screen.getByLabelText(/^Password/).getAttribute('type')).toBe('password')
+    // The password can be revealed.
+    await userEvent.setup().click(screen.getByRole('button', { name: 'Show password' }))
+    expect(screen.getByLabelText(/^Password/).getAttribute('type')).toBe('text')
+    // No password reset endpoint, so no "forgot password" link; no stats.
+    expect(screen.queryByText(/forgot/i)).toBeNull()
+    expect(screen.queryByRole('link')).toBeNull()
+    expect(document.body.textContent).not.toMatch(/Users\s*Users|用户管理/)
+  })
+
+  it('checks the fields before calling the server', async () => {
+    const user = userEvent.setup()
+    render(Login)
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+    expect(await screen.findByText('Enter your email.')).toBeTruthy()
+    expect(screen.getByText('Enter your password.')).toBeTruthy()
+    await user.type(screen.getByLabelText(/^Email/), 'not-an-email')
+    await user.click(screen.getByRole('button', { name: 'Sign in' }))
+    expect(await screen.findByText('Enter an email like name@example.com.')).toBeTruthy()
+    expect(mockLogin).not.toHaveBeenCalled()
+  })
+
+  it('signs in from a panel envelope and keeps the permission fields', async () => {
+    mockLogin.mockResolvedValue(ok({
+      token: 'login-token', is_admin: true, user_id: 9, email: 'admin@example.com',
+      permission_mode: 'mixed', permissions: ['forward.view'], restricted_plugins: ['forward'],
+    }))
+    render(Login)
+    await signIn(userEvent.setup(), 'admin@example.com')
+    expect(mockLogin).toHaveBeenCalledWith({ email: 'admin@example.com', password: 'password123' })
+    const store = useUserStore()
+    expect(store.token).toBe('login-token')
+    expect(store.userInfo).toMatchObject({ id: 9, is_admin: true, permission_mode: 'mixed', permissions: ['forward.view'], restricted_plugins: ['forward'] })
+    expect(mockPush).toHaveBeenCalledWith('/admin/dashboard')
+  })
+
+  it('shows a server error in an alert and keeps the form', async () => {
+    mockLogin.mockResolvedValue({ code: -1, msg: '用户不存在或密码错误', data: null })
+    render(Login)
+    await signIn(userEvent.setup())
+    expect((await screen.findByRole('alert')).textContent).toContain('Could not sign in: 用户不存在或密码错误')
+    expect(useUserStore().token).toBe('')
+  })
+
+  it('says when there were too many attempts', async () => {
+    mockLogin.mockRejectedValue({ response: { status: 429, data: { msg: 'too many login attempts, please try again later' } } })
+    render(Login)
+    await signIn(userEvent.setup())
+    expect((await screen.findByRole('alert')).textContent).toContain('Too many attempts')
+  })
+
+  it('asks for the 6-digit code as a second step and submits it when complete', async () => {
+    const user = userEvent.setup()
+    mockLogin
+      .mockResolvedValueOnce(ok({ mfa_required: true, methods: ['totp', 'backup'], user_id: 10, email: 'mfa@example.com' }))
+      .mockResolvedValueOnce(ok({ token: 'mfa-token', is_admin: false, user_id: 10, email: 'mfa@example.com' }))
+    render(Login)
+    await signIn(user, 'mfa@example.com')
+
+    expect(await screen.findByRole('heading', { level: 1, name: 'Two-factor authentication' })).toBeTruthy()
+    expect(screen.getByText('mfa@example.com')).toBeTruthy()
+    expect(useUserStore().token).toBe('')
+    await waitFor(() => expect(document.activeElement).toBe(codeBoxes()[0]))
+
+    // Typing moves from box to box; the sixth digit submits.
+    await user.keyboard('123456')
+    await waitFor(() => expect(mockLogin).toHaveBeenCalledTimes(2))
+    expect(mockLogin).toHaveBeenNthCalledWith(2, { email: 'mfa@example.com', password: 'password123', mfa_code: '123456', mfa_method: 'totp' })
+    expect(useUserStore().token).toBe('mfa-token')
+    expect(mockPush).toHaveBeenCalledWith('/user/dashboard')
+  })
+
+  it('takes a pasted code, and clears the boxes after a wrong one', async () => {
+    const user = userEvent.setup()
+    mockLogin
+      .mockResolvedValueOnce(ok({ mfa_required: true, methods: ['totp'], email: 'mfa@example.com' }))
+      .mockResolvedValueOnce({ code: -1, msg: 'invalid mfa code', data: null })
+    render(Login)
+    await signIn(user, 'mfa@example.com')
+    await screen.findByRole('heading', { level: 1, name: 'Two-factor authentication' })
+
+    await user.click(codeBoxes()[2])
+    await user.paste('654 321')
+    await waitFor(() => expect(mockLogin).toHaveBeenCalledTimes(2))
+    expect(mockLogin.mock.calls[1][0]).toMatchObject({ mfa_code: '654321' })
+    expect(await screen.findByText(/That code is not correct/)).toBeTruthy()
+    await waitFor(() => expect(codeBoxes().map(box => box.value).join('')).toBe(''))
+  })
+
+  it('requires all six digits before verifying', async () => {
+    const user = userEvent.setup()
+    mockLogin.mockResolvedValueOnce(ok({ mfa_required: true, methods: ['totp'], email: 'mfa@example.com' }))
+    render(Login)
+    await signIn(user, 'mfa@example.com')
+    await screen.findByRole('heading', { level: 1, name: 'Two-factor authentication' })
+    await user.keyboard('12')
+    await user.click(screen.getByRole('button', { name: 'Verify' }))
+    expect(await screen.findByText('Enter all 6 digits.')).toBeTruthy()
+    expect(mockLogin).toHaveBeenCalledTimes(1)
+  })
+
+  it('offers a recovery code only when the account has one', async () => {
+    const user = userEvent.setup()
+    mockLogin.mockResolvedValueOnce(ok({ mfa_required: true, methods: ['totp'], email: 'mfa@example.com' }))
+    render(Login)
+    await signIn(user, 'mfa@example.com')
+    await screen.findByRole('heading', { level: 1, name: 'Two-factor authentication' })
+    expect(screen.queryByRole('button', { name: 'Use a recovery code' })).toBeNull()
+  })
+
+  it('signs in with a recovery code, normalised to XXXX-XXXX', async () => {
+    const user = userEvent.setup()
+    mockLogin
+      .mockResolvedValueOnce(ok({ mfa_required: true, methods: ['totp', 'backup'], email: 'mfa@example.com' }))
+      .mockResolvedValueOnce(ok({ token: 'backup-token', is_admin: false, user_id: 10, email: 'mfa@example.com' }))
+    render(Login)
+    await signIn(user, 'mfa@example.com')
+    await user.click(await screen.findByRole('button', { name: 'Use a recovery code' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Use a recovery code' })).toBeTruthy()
+
+    const field = screen.getByLabelText(/^Recovery code/)
+    await user.type(field, 'abc')
+    await user.click(screen.getByRole('button', { name: 'Verify' }))
+    expect(await screen.findByText(/A recovery code has 8 letters or digits/)).toBeTruthy()
+
+    await user.clear(field)
+    await user.type(field, 'abcd 1234')
+    await user.click(screen.getByRole('button', { name: 'Verify' }))
+    await waitFor(() => expect(mockLogin).toHaveBeenCalledTimes(2))
+    expect(mockLogin).toHaveBeenNthCalledWith(2, { email: 'mfa@example.com', password: 'password123', mfa_code: 'ABCD-1234', mfa_method: 'backup' })
+    expect(useUserStore().token).toBe('backup-token')
+
+  })
+
+  it('goes back from the code step to email and password', async () => {
+    const user = userEvent.setup()
+    mockLogin.mockResolvedValueOnce(ok({ mfa_required: true, methods: ['totp', 'backup'], email: 'mfa@example.com' }))
+    render(Login)
+    await signIn(user, 'mfa@example.com')
+    await user.click(await screen.findByRole('button', { name: 'Back' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Sign in to AnixOps Control' })).toBeTruthy()
+    expect(screen.getByLabelText(/^Password/).value).toBe('')
+    expect(screen.getByLabelText(/^Email/).value).toBe('mfa@example.com')
+  })
+
+  it('explains what to do when the administrator requires two-factor authentication first', async () => {
+    const user = userEvent.setup()
+    mockLogin.mockResolvedValueOnce(ok({ mfa_enrollment_required: true, mfa_setup_required: true, methods: ['totp'], user_id: 12, email: 'enroll@example.com' }))
+    render(Login)
+    await signIn(user, 'enroll@example.com')
+
+    const heading = await screen.findByRole('heading', { level: 1, name: 'Turn on two-factor authentication first' })
+    await waitFor(() => expect(document.activeElement).toBe(heading))
+    expect(screen.getByText('enroll@example.com')).toBeTruthy()
+    expect(screen.getAllByRole('listitem')).toHaveLength(3)
+    expect(screen.queryAllByLabelText(/^Digit/)).toHaveLength(0)
+    expect(useUserStore().token).toBe('')
+
+    await user.click(screen.getByRole('button', { name: 'Back to sign in' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Sign in to AnixOps Control' })).toBeTruthy()
+  })
+
+  it('registers without an invite code when none is required', async () => {
+    const user = userEvent.setup()
+    mockRegister.mockResolvedValue({ data: { token: 'registered-token', is_admin: false, user_id: 8, email: 'open@example.com' } })
+    render(Login)
+    await user.click(screen.getByRole('button', { name: 'Create an account' }))
+    expect(await screen.findByRole('heading', { level: 1, name: 'Create your account' })).toBeTruthy()
+    expect(screen.queryByLabelText(/Invite code/)).toBeNull()
+
+    await user.type(screen.getByLabelText(/^Email/), 'open@example.com')
+    await user.type(screen.getByLabelText(/^Password/), 'password123')
+    await user.type(screen.getByLabelText(/^Confirm password/), 'password12')
+    await user.click(screen.getByRole('button', { name: 'Create account' }))
+    expect(await screen.findByText('The passwords do not match.')).toBeTruthy()
+    expect(mockRegister).not.toHaveBeenCalled()
+
+    await user.type(screen.getByLabelText(/^Confirm password/), '3')
+    await user.click(screen.getByRole('button', { name: 'Create account' }))
+    await waitFor(() => expect(mockRegister).toHaveBeenCalledWith({ email: 'open@example.com', password: 'password123' }))
+    expect(useUserStore().token).toBe('registered-token')
+    expect(toastMessages('success')).toEqual(['Account created'])
+  })
+
+  it('asks for the invite code when registration requires one', async () => {
+    const user = userEvent.setup()
     setEdition('community', { requireInvite: true })
     mockRegister.mockResolvedValue({
-      data: {
-        token: 'registered-token',
-        is_admin: false,
-        user_id: 7,
-        email: 'invite-user@example.com',
-        permission_mode: 'authoritative',
-        permissions: ['subscription.view'],
-        restricted_plugins: ['forward'],
-      },
+      data: { token: 'registered-token', is_admin: false, user_id: 7, email: 'invite-user@example.com', permission_mode: 'authoritative', permissions: ['subscription.view'], restricted_plugins: ['forward'] },
     })
+    render(Login)
+    await user.click(screen.getByRole('button', { name: 'Create an account' }))
+    await user.type(await screen.findByLabelText(/^Email/), 'invite-user@example.com')
+    await user.type(screen.getByLabelText(/^Password/), 'password123')
+    await user.type(screen.getByLabelText(/^Confirm password/), 'password123')
+    await user.click(screen.getByRole('button', { name: 'Create account' }))
+    expect(await screen.findByText('Enter your invite code.')).toBeTruthy()
 
-    const wrapper = mount(Login, {
-      global: {
-        stubs: ['router-link'],
-      },
-    })
-
-    wrapper.vm.isRegisterMode = true
-    await nextTick()
-
-    await wrapper.find('#email').setValue('invite-user@example.com')
-    await wrapper.find('#password').setValue('password123')
-    await wrapper.find('#confirm-password').setValue('password123')
-    await wrapper.find('#invite-code').setValue('INVITE123')
-    await wrapper.find('form').trigger('submit.prevent')
-    await flushPromises()
-
-    expect(mockRegister).toHaveBeenCalledWith({
-      email: 'invite-user@example.com',
-      password: 'password123',
-      invite_code: 'INVITE123',
-    })
-    expect(useUserStore().userInfo).toMatchObject({
-      permission_mode: 'authoritative',
-      permissions: ['subscription.view'],
-      restricted_plugins: ['forward'],
-    })
+    await user.type(screen.getByLabelText(/^Invite code/), 'INVITE123')
+    await user.click(screen.getByRole('button', { name: 'Create account' }))
+    await waitFor(() => expect(mockRegister).toHaveBeenCalledWith({ email: 'invite-user@example.com', password: 'password123', invite_code: 'INVITE123' }))
+    expect(useUserStore().userInfo).toMatchObject({ permission_mode: 'authoritative', permissions: ['subscription.view'], restricted_plugins: ['forward'] })
   })
 
-  it('logs in from a panel envelope payload', async () => {
-    mockLogin.mockResolvedValue({
-      code: 0,
-      msg: '操作成功',
-      ts: 1783536000000,
-      data: {
-        token: 'login-token',
-        is_admin: true,
-        user_id: 9,
-        email: 'admin@example.com',
-        permission_mode: 'mixed',
-        permissions: ['forward.view'],
-        restricted_plugins: ['forward'],
-      },
-    })
-
-    const wrapper = mount(Login, {
-      global: {
-        stubs: ['router-link'],
-      },
-    })
-
-    await wrapper.find('#email').setValue('admin@example.com')
-    await wrapper.find('#password').setValue('password123')
-    await wrapper.find('form').trigger('submit.prevent')
-    await flushPromises()
-
-    const userStore = useUserStore()
-    expect(mockLogin).toHaveBeenCalledWith({
-      email: 'admin@example.com',
-      password: 'password123',
-    })
-    expect(userStore.token).toBe('login-token')
-    expect(userStore.userInfo).toMatchObject({
-      id: 9,
-      email: 'admin@example.com',
-      is_admin: true,
-      permission_mode: 'mixed',
-      permissions: ['forward.view'],
-      restricted_plugins: ['forward'],
-    })
+  it('hides registration when the server closed it', () => {
+    setEdition('community', { registrationEnabled: false })
+    render(Login)
+    expect(screen.queryByRole('button', { name: 'Create an account' })).toBeNull()
   })
 
-  it('completes MFA login challenge before storing token', async () => {
-    mockLogin
-      .mockResolvedValueOnce({
-        code: 0,
-        msg: '操作成功',
-        ts: 1783536000000,
-        data: {
-          mfa_required: true,
-          methods: ['totp', 'backup'],
-          user_id: 10,
-          email: 'mfa@example.com',
-        },
-      })
-      .mockResolvedValueOnce({
-        code: 0,
-        msg: '操作成功',
-        ts: 1783536000000,
-        data: {
-          token: 'mfa-token',
-          is_admin: false,
-          user_id: 10,
-          email: 'mfa@example.com',
-        },
-      })
-
-    const wrapper = mount(Login, {
-      global: {
-        stubs: ['router-link'],
-      },
-    })
-
-    await wrapper.find('#email').setValue('mfa@example.com')
-    await wrapper.find('#password').setValue('password123')
-    await wrapper.find('form').trigger('submit.prevent')
-    await flushPromises()
-
-    expect(mockLogin).toHaveBeenNthCalledWith(1, {
-      email: 'mfa@example.com',
-      password: 'password123',
-    })
-    expect(wrapper.find('#mfa-code').exists()).toBe(true)
-    expect(useUserStore().token).toBe('')
-
-    await wrapper.find('#mfa-code').setValue('123456')
-    await wrapper.find('form').trigger('submit.prevent')
-    await flushPromises()
-
-    expect(mockLogin).toHaveBeenNthCalledWith(2, {
-      email: 'mfa@example.com',
-      password: 'password123',
-      mfa_code: '123456',
-    })
-    expect(useUserStore().token).toBe('mfa-token')
-  })
-
-  it('requires an MFA code after the challenge response', async () => {
-    mockLogin.mockResolvedValueOnce({
-      code: 0,
-      msg: '操作成功',
-      ts: 1783536000000,
-      data: {
-        mfa_required: true,
-        methods: ['totp'],
-        user_id: 11,
-        email: 'mfa-required@example.com',
-      },
-    })
-
-    const wrapper = mount(Login, {
-      global: {
-        stubs: ['router-link'],
-      },
-    })
-
-    await wrapper.find('#email').setValue('mfa-required@example.com')
-    await wrapper.find('#password').setValue('password123')
-    await wrapper.find('form').trigger('submit.prevent')
-    await flushPromises()
-
-    await wrapper.find('form').trigger('submit.prevent')
-    await flushPromises()
-
-    expect(mockLogin).toHaveBeenCalledTimes(1)
-    expect(wrapper.find('[role="alert"]').text()).toContain('MFA')
-    expect(useUserStore().token).toBe('')
-  })
-
-  it('shows MFA enrollment-required responses without storing a token', async () => {
-    mockLogin.mockResolvedValueOnce({
-      code: 0,
-      msg: '操作成功',
-      ts: 1783536000000,
-      data: {
-        mfa_enrollment_required: true,
-        mfa_setup_required: true,
-        methods: ['totp'],
-        user_id: 12,
-        email: 'mfa-enroll@example.com',
-      },
-    })
-
-    const wrapper = mount(Login, {
-      global: {
-        stubs: ['router-link'],
-      },
-    })
-
-    await wrapper.find('#email').setValue('mfa-enroll@example.com')
-    await wrapper.find('#password').setValue('password123')
-    await wrapper.find('form').trigger('submit.prevent')
-    await flushPromises()
-
-    expect(mockLogin).toHaveBeenCalledWith({
-      email: 'mfa-enroll@example.com',
-      password: 'password123',
-    })
-    expect(wrapper.find('#mfa-code').exists()).toBe(false)
-    expect(wrapper.find('[role="alert"]').text()).toContain('MFA')
-    expect(useUserStore().token).toBe('')
-  })
-
-  it('shows panel envelope login errors', async () => {
-    mockLogin.mockResolvedValue({
-      code: -1,
-      msg: '用户不存在或密码错误',
-      ts: 1783536000000,
-      data: null,
-    })
-
-    const wrapper = mount(Login, {
-      global: {
-        stubs: ['router-link'],
-      },
-    })
-
-    await wrapper.find('#email').setValue('admin@example.com')
-    await wrapper.find('#password').setValue('wrong-password')
-    await wrapper.find('form').trigger('submit.prevent')
-    await flushPromises()
-
-    expect(wrapper.find('[role="alert"]').text()).toContain('用户不存在或密码错误')
+  it('keeps a failed registration in the form', async () => {
+    const user = userEvent.setup()
+    mockRegister.mockResolvedValue({ code: -1, msg: '邮箱已被注册', data: null })
+    render(Login)
+    await user.click(screen.getByRole('button', { name: 'Create an account' }))
+    await user.type(await screen.findByLabelText(/^Email/), 'taken@example.com')
+    await user.type(screen.getByLabelText(/^Password/), 'password123')
+    await user.type(screen.getByLabelText(/^Confirm password/), 'password123')
+    await user.click(screen.getByRole('button', { name: 'Create account' }))
+    const alert = await screen.findByRole('alert')
+    expect(within(alert).getByText('Could not create the account: 邮箱已被注册')).toBeTruthy()
     expect(useUserStore().token).toBe('')
   })
 })
