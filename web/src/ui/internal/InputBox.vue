@@ -50,6 +50,13 @@ defineProps({
   --ui-box-height: var(--size-control-md);
 }
 
+/* Touch: medium fields and pickers grow to the 44 px touch size. */
+@media (pointer: coarse) {
+  .ui-box--md {
+    --ui-box-height: var(--size-control-lg);
+  }
+}
+
 .ui-box--sm {
   --ui-box-height: var(--size-control-sm);
   --ui-box-pad: var(--space-2);
@@ -165,10 +172,16 @@ defineProps({
   padding-right: var(--space-1);
 }
 
-/* Phones: 16 px text so iOS Safari does not zoom on focus. */
+/* Phones: 16 px text so iOS Safari does not zoom on focus. Pages that set
+   a smaller size on the field (monospace JSON, links) do not win here. */
 @media (max-width: 833px) {
   .ui-box {
     font-size: 16px;
+  }
+
+  .ui-box :slotted(input),
+  .ui-box :slotted(textarea) {
+    font-size: 16px !important;
   }
 }
 </style>

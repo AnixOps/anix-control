@@ -210,6 +210,7 @@
     <UiPagination
       v-if="paginated && !error && totalRows > 0"
       class="ui-data-table__pagination"
+      :label="t('ui.pagination.labelFor', { name: label })"
       :page="currentPage"
       :total="totalRows"
       :page-size="pageSize"
@@ -891,6 +892,13 @@ th[aria-sort='descending'] .ui-data-table__sort-icon {
 .ui-data-table__card-title.is-action {
   min-height: 32px;
   cursor: pointer;
+}
+
+/* Touch: the card title that opens the row is a 44 px target. */
+@media (pointer: coarse) {
+  .ui-data-table__card-title.is-action {
+    min-height: var(--size-control-lg);
+  }
 }
 
 .ui-data-table__card-title:hover,

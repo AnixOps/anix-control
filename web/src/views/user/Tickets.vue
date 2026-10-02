@@ -409,7 +409,7 @@ onMounted(async () => {
   flex-direction: column;
   gap: var(--space-1);
   align-items: stretch;
-  /* Undo the legacy global button rule (style.css): rows, not pills. */
+  /* Undo the global button rule (style.css): rows, not pills. */
   justify-content: flex-start;
   border-radius: 0;
   font-weight: inherit;

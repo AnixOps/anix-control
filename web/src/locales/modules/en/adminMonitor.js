@@ -64,6 +64,7 @@ export default {
       showing: 'Showing {user}',
       clearUser: 'Show all users',
       summary: {
+        label: 'Traffic summary',
         total: 'Traffic in range',
         peak: 'Peak hour',
         latestReport: 'Last report',

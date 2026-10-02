@@ -186,4 +186,21 @@ a.dashboard-alerts__title:hover {
   color: var(--label-2);
   font-size: var(--type-callout-size);
 }
+
+/* Touch: a 44 px hit area around the link without changing the look. */
+@media (pointer: coarse) {
+  .dashboard-alerts__title {
+    position: relative;
+  }
+
+  .dashboard-alerts__title::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, var(--size-control-lg));
+    height: max(100%, var(--size-control-lg));
+    transform: translate(-50%, -50%);
+    content: '';
+  }
+}
 </style>

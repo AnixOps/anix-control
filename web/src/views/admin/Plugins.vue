@@ -210,7 +210,7 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
 import { BadgeCheck, PackagePlus, Puzzle, RefreshCw, SearchX } from '@lucide/vue'
 import PluginConfigForm from '@/components/admin/PluginConfigForm.vue'
@@ -219,6 +219,7 @@ import PluginInstallationDialog from '@/components/admin/PluginInstallationDialo
 import PluginReleaseImportDialog from '@/components/admin/PluginReleaseImportDialog.vue'
 import OperationTimeline from '@/components/admin/OperationTimeline.vue'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { useListQuery } from '@/composables/useListQuery'
 import { useKernelPlugins } from '@/composables/useKernelPlugins'
 import UiBadge from '@/ui/UiBadge.vue'
 import UiButton from '@/ui/UiButton.vue'
@@ -260,9 +261,12 @@ const {
   load,
 } = useKernelPlugins()
 
-const search = ref('')
-const healthFilter = ref('')
-const targetFilter = ref('')
+// Search and the chips live in the URL query (plan §9).
+const listQuery = useListQuery()
+const search = ref(listQuery.read('q'))
+const healthFilter = ref(listQuery.read('health', { values: ['healthy', 'attention', 'catalogued'] }))
+const targetFilter = ref(listQuery.read('target', { values: ['control', 'agent'] }))
+watch([search, healthFilter, targetFilter], () => listQuery.write({ q: search.value.trim(), health: healthFilter.value, target: targetFilter.value }))
 const error = ref('')
 const notice = ref('')
 const selectedRow = ref(null)

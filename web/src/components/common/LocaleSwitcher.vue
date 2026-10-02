@@ -131,4 +131,21 @@ function onOptionKeydown(event, value) {
   min-width: 40px;
   padding: 0 var(--space-2);
 }
+
+/* Touch: a 44 px hit area around each option without changing the look. */
+@media (pointer: coarse) {
+  .locale-option {
+    position: relative;
+  }
+
+  .locale-option::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, var(--size-control-lg));
+    height: var(--size-control-lg);
+    transform: translate(-50%, -50%);
+    content: '';
+  }
+}
 </style>

@@ -184,4 +184,21 @@ defineExpose({ narrow })
 .is-narrow .settings-layout__link:focus-visible {
   outline-offset: -3px;
 }
+
+/* Touch: a 44 px hit area around the link without changing the look. */
+@media (pointer: coarse) {
+  .settings-layout__back {
+    position: relative;
+  }
+
+  .settings-layout__back::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, var(--size-control-lg));
+    height: max(100%, var(--size-control-lg));
+    transform: translate(-50%, -50%);
+    content: '';
+  }
+}
 </style>

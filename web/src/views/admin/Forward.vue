@@ -17,6 +17,7 @@
         <router-link to="/admin/forward/nodex">{{ t('forwardSuite.nav.nodeXRuntime') }}</router-link>
       </span>
     </nav>
+    <p v-if="nftablesRuntime" class="list-page__note" role="note" data-test="forward-nftables-hint">{{ t('runtime.forward.nftablesHint') }}</p>
 
     <ForwardRulesTable
       v-if="viewMode === 'direct'"
@@ -176,6 +177,7 @@
           v-model="form.strategy"
           :label="t('runtime.forward.editor.fields.strategy')"
           :options="strategyOptions"
+          :help="nftablesRuntime && ['fifo', 'hash'].includes(form.strategy) ? t('runtime.forward.nftablesStrategyHint') : ''"
           size="md"
         />
       </form>
@@ -355,6 +357,10 @@ const runtimeModeLabel = computed(() => (
     ? t('runtime.forward.modeLabelNodeX')
     : t('runtime.forward.modeLabelLocal', { backend: humanizeForwardRuntimeBackend(t, runtimeBackend.value) })
 ))
+// nftables_ansible (and the legacy iptables_ansible) balance only with
+// round/rand and enforce no speed limit (internal/service/forward_nftables_plan.go).
+const runtimeBackendLoaded = ref(false)
+const nftablesRuntime = computed(() => runtimeBackendLoaded.value && !runtimeNodeXMode.value && ['nftables_ansible', 'iptables_ansible'].includes(runtimeBackend.value))
 const runtimeModeSummary = computed(() => (
   runtimeNodeXMode.value
     ? t('runtime.forward.modeSummaryNodeX')
@@ -645,6 +651,7 @@ async function loadRuntimeMode() {
     const res = await getSystemConfig(runtimeBackendKey)
     runtimeBackend.value = String(res.data?.value || 'nftables_ansible').toLowerCase() || 'nftables_ansible'
     runtimeNodeXMode.value = explicitMode === null ? runtimeBackend.value === 'gost' : explicitMode
+    runtimeBackendLoaded.value = true
   } catch (error) {
     console.error('get forward runtime backend failed:', error)
     if (explicitMode !== null) {
@@ -1881,6 +1888,23 @@ async function reorderDirectForwards(activeId, overId) {
 @media (max-width: 639.98px) {
   .tunnel-filter {
     flex: 1 1 100%;
+  }
+}
+
+/* Touch: a 44 px hit area around the link without changing the look. */
+@media (pointer: coarse) {
+  .runtime-context__links a {
+    position: relative;
+  }
+
+  .runtime-context__links a::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, var(--size-control-lg));
+    height: max(100%, var(--size-control-lg));
+    transform: translate(-50%, -50%);
+    content: '';
   }
 }
 </style>

@@ -7,7 +7,14 @@
     :unmount-on-hide="unmountOnHide"
     @update:model-value="emit('update:modelValue', $event)"
   >
-    <TabsList class="ui-tabs__list" :aria-label="ariaLabel || undefined" loop>
+    <TabsList
+      ref="listRef"
+      class="ui-tabs__list"
+      :class="{ 'is-clipped-start': clipped.start, 'is-clipped-end': clipped.end }"
+      :aria-label="ariaLabel || undefined"
+      loop
+      @scroll.passive="measure"
+    >
       <TabsTrigger
         v-for="item in normalizedItems"
         :key="String(item.value)"
@@ -42,7 +49,7 @@
 //   <UiTabs v-model="tab" :items="[{ value: 'rules', label: '规则' }]">
 //     <template #rules>…</template>
 //   </UiTabs>
-import { computed } from 'vue'
+import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { TabsContent, TabsIndicator, TabsList, TabsRoot, TabsTrigger } from 'reka-ui'
 import UiIcon from './UiIcon.vue'
 
@@ -63,6 +70,51 @@ const normalizedItems = computed(() => props.items.map(item => (
     ? { ...item, label: String(item.label ?? item.value) }
     : { value: item, label: String(item) }
 )))
+
+// Tabs wider than their row scroll sideways; the clipped edge fades out so
+// it is clear there is more (plan §10), and the active tab is scrolled into
+// view when it changes.
+const listRef = ref(null)
+const clipped = reactive({ start: false, end: false })
+let resizeObserver = null
+
+function listElement() {
+  return listRef.value?.$el ?? null
+}
+
+function measure() {
+  const el = listElement()
+  if (!el) return
+  const max = el.scrollWidth - el.clientWidth
+  clipped.start = max > 1 && el.scrollLeft > 1
+  clipped.end = max > 1 && el.scrollLeft < max - 1
+}
+
+function revealActive() {
+  const el = listElement()
+  if (!el || el.scrollWidth <= el.clientWidth) return
+  const active = el.querySelector('[data-state="active"]')
+  if (!active) return
+  const start = active.offsetLeft - el.offsetLeft
+  if (start < el.scrollLeft) el.scrollLeft = start
+  else if (start + active.offsetWidth > el.scrollLeft + el.clientWidth) el.scrollLeft = start + active.offsetWidth - el.clientWidth
+  measure()
+}
+
+watch(() => [props.modelValue, normalizedItems.value.length], () => nextTick(revealActive))
+
+onMounted(() => {
+  nextTick(() => {
+    revealActive()
+    measure()
+  })
+  if (typeof ResizeObserver === 'function' && listElement()) {
+    resizeObserver = new ResizeObserver(measure)
+    resizeObserver.observe(listElement())
+  }
+})
+
+onBeforeUnmount(() => resizeObserver?.disconnect())
 </script>
 
 <style scoped>
@@ -83,6 +135,19 @@ const normalizedItems = computed(() => props.items.map(item => (
 
 .ui-tabs__list::-webkit-scrollbar {
   display: none;
+}
+
+/* A clipped edge fades out: more tabs are a swipe away. */
+.ui-tabs__list.is-clipped-end {
+  mask-image: linear-gradient(to right, currentcolor calc(100% - var(--space-8)), transparent);
+}
+
+.ui-tabs__list.is-clipped-start {
+  mask-image: linear-gradient(to left, currentcolor calc(100% - var(--space-8)), transparent);
+}
+
+.ui-tabs__list.is-clipped-start.is-clipped-end {
+  mask-image: linear-gradient(to right, transparent, currentcolor var(--space-8), currentcolor calc(100% - var(--space-8)), transparent);
 }
 
 .ui-tabs__tab {
@@ -195,8 +260,25 @@ const normalizedItems = computed(() => props.items.map(item => (
 }
 
 @media (pointer: coarse) {
+  .ui-tabs__tab {
+    justify-content: center;
+    min-width: var(--size-control-lg);
+  }
+
   .ui-tabs--segmented .ui-tabs__tab {
+    position: relative;
     height: 40px;
+  }
+
+  /* The 40 px pills sit in a 44 px track: the hit area spans the track. */
+  .ui-tabs--segmented .ui-tabs__tab::after {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 100%;
+    height: var(--size-control-lg);
+    transform: translateY(-50%);
+    content: '';
   }
 }
 

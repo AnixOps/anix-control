@@ -73,6 +73,7 @@ web/coverage/
 web/bundle-reports/
 web/bundle-reports-check/
 web/playwright-report/
+web/playwright-visual-report/
 web/test-results/
 web/.histoire/
 

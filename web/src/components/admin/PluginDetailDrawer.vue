@@ -176,6 +176,12 @@ function emitLifecycle(action) {
 .target-tab:hover { background: var(--fill-2); }
 .target-tab.active { background: var(--bg-elevated); box-shadow: var(--shadow-1); font-weight: var(--weight-semibold); }
 .target-tab:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-ring-offset); }
+
+/* Touch: 44 px tall hit areas on the target tabs. */
+@media (pointer: coarse) {
+  .target-tab { position: relative; }
+  .target-tab::after { position: absolute; top: 50%; left: 0; width: 100%; height: var(--size-control-lg); transform: translateY(-50%); content: ''; }
+}
 .target-detail { display: grid; gap: var(--space-5); }
 .target-detail code { font-family: var(--font-mono); }
 .drawer-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }

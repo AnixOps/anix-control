@@ -116,6 +116,7 @@ import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ArrowRight, Ban, Copy, Plus, Ticket } from '@lucide/vue'
 import { generateInviteCodes, getInviteCodes, revokeInviteCode } from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { useListQuery } from '@/composables/useListQuery'
 import { useEdition } from '@/composables/useEdition'
 import UiBadge from '@/ui/UiBadge.vue'
 import UiButton from '@/ui/UiButton.vue'
@@ -139,10 +140,12 @@ const maxBatch = 50
 const pageSize = 20
 const STATE_TONES = { unused: 'success', used: 'neutral', expired: 'warning' }
 
+// The status chip and the page live in the URL query (plan §9).
+const listQuery = useListQuery()
 const codes = ref([])
 const total = ref(0)
-const page = ref(1)
-const filter = ref('')
+const page = ref(listQuery.readPage())
+const filter = ref(listQuery.read('status', { values: ['unused', 'used', 'expired'] }))
 const loading = ref(false)
 const loadError = ref(null)
 const selectedIds = ref([])
@@ -196,6 +199,7 @@ function codeState(item) {
 
 async function fetchCodes() {
   loading.value = true
+  listQuery.write({ status: filter.value, page: page.value })
   try {
     const params = { page: page.value, page_size: pageSize }
     if (filter.value) params.status = filter.value

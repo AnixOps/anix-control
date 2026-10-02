@@ -13,6 +13,7 @@
       :row-label="coupon => coupon.code"
       storage-key="admin.coupons"
       :page-size="20"
+      :page="page"
       :loading="loading"
       :error="loadError"
       :error-title="t('adminCoupons.messages.fetchFailed')"
@@ -22,6 +23,7 @@
       :empty-description="t('adminCoupons.empty.description')"
       :row-actions="couponActions"
       @retry="load"
+      @update:page="page = $event"
       @clear-filters="clearFilters"
     >
       <template #toolbar>
@@ -89,10 +91,11 @@
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { Plus, TicketPercent, Trash2 } from '@lucide/vue'
 import adminApi from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { useListQuery } from '@/composables/useListQuery'
 import UiBadge from '@/ui/UiBadge.vue'
 import UiButton from '@/ui/UiButton.vue'
 import UiDataTable from '@/ui/UiDataTable.vue'
@@ -116,8 +119,13 @@ const coupons = ref([])
 const loading = ref(false)
 const loadError = ref(null)
 // Every coupon is loaded at once: search and the type chips filter in the page.
-const search = ref('')
-const typeFilter = ref('')
+// Search, the type chip and the page live in the URL query (plan §9).
+const listQuery = useListQuery()
+const search = ref(listQuery.read('q'))
+const typeFilter = ref(listQuery.read('type', { values: ['1', '2'] }))
+const page = ref(listQuery.readPage())
+watch([search, typeFilter], () => { page.value = 1 })
+watch([search, typeFilter, page], () => listQuery.write({ q: search.value.trim(), type: typeFilter.value, page: page.value }))
 const visibleCoupons = computed(() => {
   const query = search.value.trim().toLowerCase()
   return coupons.value.filter(coupon => (

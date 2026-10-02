@@ -214,4 +214,21 @@ defineExpose({ node, load, section })
 .node-page__tabs :deep(.ui-tabs__list) {
   max-width: 100%;
 }
+
+/* Touch: a 44 px hit area around the link without changing the look. */
+@media (pointer: coarse) {
+  .node-page__back {
+    position: relative;
+  }
+
+  .node-page__back::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, var(--size-control-lg));
+    height: max(100%, var(--size-control-lg));
+    transform: translate(-50%, -50%);
+    content: '';
+  }
+}
 </style>

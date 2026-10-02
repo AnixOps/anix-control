@@ -298,6 +298,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { Ban, Copy, Gauge, KeyRound, Pencil, Plus, RotateCcw, RotateCw, Route, ShieldCheck, Users as UsersIcon } from '@lucide/vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useEdition } from '@/composables/useEdition'
+import { useListQuery } from '@/composables/useListQuery'
 import { useRouteIntent } from '@/composables/useRouteIntent'
 import {
   assignAdminUserTunnel, banUser, createUser, getAdminUserTunnelList, getForwardTunnels, getSpeedLimitList,
@@ -337,7 +338,10 @@ const { isCommercial } = useEdition()
 const users = ref([])
 const stats = ref({})
 const subscriptionGroups = ref([])
-const page = ref(1)
+// The list state (q, status, page) lives in the URL query (plan §9).
+const listQuery = useListQuery({ omit: ['email', 'create'] })
+const USER_STATUS_FILTERS = ['active', 'expired', 'banned', 'exhausted']
+const page = ref(listQuery.readPage())
 const pageSize = ref(20)
 const total = ref(0)
 // The command palette opens this page with ?email= (a user search result)
@@ -350,10 +354,14 @@ const routeIntent = useRouteIntent(['email', 'create'], intent => {
   }
   if (intent.create === '1') showCreateModal.value = true
 })
-const filters = ref({ email: routeIntent.email || '', status: '' })
 // 已封禁 / 已到期 / 正常 are the list's server-side status filter;
 // 流量用尽 has no server filter, so it narrows the loaded page only.
-const statusFilter = ref('')
+const statusFilter = ref(listQuery.read('status', { values: USER_STATUS_FILTERS }))
+const filters = ref({
+  email: routeIntent.email || listQuery.read('q'),
+  status: statusFilter.value === 'exhausted' ? '' : statusFilter.value
+})
+if (routeIntent.email) page.value = 1
 const listLoading = ref(false)
 const listError = ref(null)
 const selectedIds = ref([])
@@ -645,6 +653,7 @@ const handleCreateUser = async () => {
 
 const fetchUsers = async () => {
   listLoading.value = true
+  listQuery.write({ q: filters.value.email.trim(), status: statusFilter.value, page: page.value })
   try {
     const res = await getUserList({ page: page.value, page_size: pageSize.value, email: filters.value.email, status: filters.value.status })
     const payload = getResData(res) || {}

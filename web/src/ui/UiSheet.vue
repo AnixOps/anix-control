@@ -225,6 +225,23 @@ defineExpose({ close })
   outline-offset: var(--focus-ring-offset);
 }
 
+/* Touch: a 44 px hit area around the close button. */
+@media (pointer: coarse) {
+  .ui-sheet__close {
+    position: relative;
+  }
+
+  .ui-sheet__close::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: var(--size-control-lg);
+    height: var(--size-control-lg);
+    transform: translate(-50%, -50%);
+    content: '';
+  }
+}
+
 .ui-sheet__body:focus-visible {
   outline: var(--focus-ring);
   outline-offset: calc(-1 * var(--focus-ring-offset));
@@ -243,6 +260,18 @@ defineExpose({ close })
 
 .ui-sheet__body.is-grouped {
   background: var(--bg-grouped);
+}
+
+/* Without a footer the body is last: keep its end above the home indicator. */
+.ui-sheet__body:last-child {
+  padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
+}
+
+/* A full-height side sheet starts under the status bar (viewport-fit=cover). */
+@media (min-width: 834px) {
+  .ui-sheet__header {
+    padding-top: calc(var(--space-4) + env(safe-area-inset-top, 0px));
+  }
 }
 
 .ui-sheet__footer {

@@ -146,10 +146,11 @@
 // endpoints as before: GET /admin/ticket, POST /admin/ticket/reply,
 // POST /admin/ticket/:id/close. The admin API returns no message thread, so
 // the panel shows the ticket's facts and the reply box.
-import { computed, nextTick, onMounted, ref } from 'vue'
+import { computed, nextTick, onMounted, ref, watch } from 'vue'
 import { ChevronLeft, Inbox, Info, Lock, MessagesSquare, SearchX, Send } from '@lucide/vue'
 import adminApi from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { useListQuery } from '@/composables/useListQuery'
 import { NARROW_QUERY, useMediaQuery } from '@/composables/useMediaQuery'
 import LoadError from '@/components/common/LoadError.vue'
 import UiBadge from '@/ui/UiBadge.vue'
@@ -177,8 +178,11 @@ const loading = ref(false)
 const loaded = ref(false)
 const loadError = ref(null)
 const showSkeleton = useDelayedLoading(loading)
-const search = ref('')
-const statusFilter = ref('')
+// The queue's search and status chip live in the URL query (plan §9).
+const listQuery = useListQuery()
+const search = ref(listQuery.read('q'))
+const statusFilter = ref(listQuery.read('status', { values: ['open', 'answered', 'closed'] }))
+watch([search, statusFilter], () => listQuery.write({ q: search.value.trim(), status: statusFilter.value }))
 const selectedId = ref(null)
 const titleRef = ref(null)
 const replyMessage = ref('')
@@ -378,7 +382,7 @@ defineExpose({ load, select, submitReply, closeTicket })
   flex-direction: column;
   gap: var(--space-1);
   align-items: stretch;
-  /* Undo the legacy global button rule (style.css): rows, not pills. */
+  /* Undo the global button rule (style.css): rows, not pills. */
   justify-content: flex-start;
   width: 100%;
   min-height: 0;

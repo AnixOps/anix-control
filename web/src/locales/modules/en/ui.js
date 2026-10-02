@@ -70,6 +70,7 @@ export default {
     },
     pagination: {
       label: 'Pages',
+      labelFor: 'Pages of {name}',
       range: '{from}–{to} of {total}',
       previous: 'Previous page',
       next: 'Next page',

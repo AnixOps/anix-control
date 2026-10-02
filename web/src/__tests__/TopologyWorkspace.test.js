@@ -5,6 +5,7 @@ import { nextTick } from 'vue'
 import OperationTimeline from '@/components/admin/OperationTimeline.vue'
 import TopologyWorkspace from '@/components/admin/TopologyWorkspace.vue'
 import UiSegmentedControl from '@/ui/UiSegmentedControl.vue'
+import UiSelect from '@/ui/UiSelect.vue'
 
 // G6 draws on canvas; record what the preview hands it instead.
 const g6 = vi.hoisted(() => ({ graphs: [] }))
@@ -252,7 +253,11 @@ describe('TopologyWorkspace', () => {
     await nextTick()
 
     await bodyGet('#new-topology-name').setValue('China egress')
-    await bodyGet('#new-topology-scope').setValue('forward')
+    // UiSelect (Reka) has no native value: choose through the component.
+    const scope = wrapper.findAllComponents(UiSelect).find(select => select.props('id') === 'new-topology-scope')
+    expect(scope.props('options').map(option => option.value)).toContain('forward')
+    scope.vm.$emit('update:modelValue', 'forward')
+    await nextTick()
     await bodyGet('#new-topology-description').setValue('Regional egress rollout')
     await bodyGet('#create-topology').trigger('click')
 
@@ -337,6 +342,20 @@ describe('OperationTimeline', () => {
     expect(wrapper.get('h2').text()).toBe('Recent plugin operations')
     expect(wrapper.text()).toContain('No recent plugin operations')
     expect(wrapper.find('[data-testid="show-all-activity"]').exists()).toBe(false)
+    wrapper.unmount()
+  })
+
+  it('switches revisions through the revision UiSelect', async () => {
+    const wrapper = mountWorkspace({ revisions: [{ id: 7, revision: 2 }, { id: 9, revision: 3 }] })
+    await nextTick()
+    const selects = wrapper.findAllComponents(UiSelect)
+    const revision = selects.find(select => select.props('id') === 'topology-revision-selector')
+    expect(revision.props('options')).toEqual([{ value: 7, label: 'r2 (#7)' }, { value: 9, label: 'r3 (#9)' }])
+    expect(revision.props('modelValue')).toBe(7)
+    revision.vm.$emit('update:modelValue', 9)
+    await nextTick()
+    expect(wrapper.emitted('select-revision')).toEqual([[{ topologyID: 3, revisionID: 9 }]])
+    expect(selects.find(select => select.props('id') === 'topology-failure-policy').props('modelValue')).toBe('stop_and_rollback')
     wrapper.unmount()
   })
 })

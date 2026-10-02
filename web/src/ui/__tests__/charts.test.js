@@ -68,6 +68,19 @@ describe('UiChart', () => {
     expect(chart.dispose).toHaveBeenCalled()
   })
 
+  it('turns ECharts animation off when the system asks for reduced motion', async () => {
+    const original = window.matchMedia
+    window.matchMedia = query => ({ matches: query === '(prefers-reduced-motion: reduce)', media: query, addEventListener() {}, removeEventListener() {} })
+    try {
+      const wrapper = mount(UiChart, { props: { option, label: 'Traffic' } })
+      await flushPromises()
+      expect(engine.charts.at(-1).setOption).toHaveBeenCalledWith({ ...option, animation: false }, { notMerge: true })
+      wrapper.unmount()
+    } finally {
+      window.matchMedia = original
+    }
+  })
+
   it('updates in place, re-themes when <html data-theme> changes and resizes with its box', async () => {
     const wrapper = mount(UiChart, { props: { option, label: 'Traffic' } })
     await flushPromises()

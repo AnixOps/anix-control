@@ -353,6 +353,8 @@ export default {
       modeSummaryNodeX: 'Edit NodeX control-plane URL, token and gost operator checks on the dedicated NodeX Runtime page.',
       modeSummaryLocal: 'Edit inventory, playbooks and panel-host executor settings on the dedicated Local Runtime page.',
       modeCompatibilityHint: 'Forward editor options are filtered by the currently active runtime. Local Ansible runtime only accepts Port Forward tunnels, while NodeX/gost can attach both compatible port-forward and tunnel-forward layouts.',
+      nftablesHint: 'The runtime is nftables / Ansible: Primary / Backup and Hash send traffic only to the first target, and speed limits are not enforced. Use Round Robin or Random to balance across targets, or the NodeX runtime for speed limits.',
+      nftablesStrategyHint: 'On the nftables / Ansible runtime, Primary / Backup and Hash use only the first target.',
       modeHintNodeX: 'NodeX/gost mode keeps ingress and exit semantics. A selected tunnel still requires NodeX runtime jobs to succeed before forwarding is really attached.',
       modeHintLocal: 'Local Ansible mode only records the execution node. SSH access comes from the configured ansible inventory and local runtime settings, not from NodeX topology records.',
       tunnelHintNodeX: '{name} will be attached through NodeX/gost. Panel-side "online" or status checks do not prove the remote relay has finished attaching.',

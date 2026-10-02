@@ -189,4 +189,21 @@ describe('user store', () => {
     expect(userStore.hasPermission('machine-telemetry.view')).toBe(false)
     expect(userStore.userInfo).not.toHaveProperty('permissions')
   })
+
+  it('keeps a token reset while an older profile request was in flight', async () => {
+    let answer
+    mockGetProfile.mockReturnValue(new Promise(resolve => { answer = resolve }))
+    const userStore = useUserStore()
+    const pending = userStore.getUserInfo()
+    userStore.updateUserInfo({ token: 'new-sub-token' })
+    answer({ code: 0, data: { id: 7, email: 'lin@example.com', token: 'old-sub-token' } })
+    await pending
+
+    expect(userStore.userInfo).toMatchObject({ id: 7, email: 'lin@example.com', token: 'new-sub-token' })
+    expect(JSON.parse(localStorage.getItem('userInfo')).token).toBe('new-sub-token')
+
+    mockGetProfile.mockResolvedValue({ code: 0, data: { id: 7, email: 'lin@example.com', token: 'server-token' } })
+    await userStore.getUserInfo()
+    expect(userStore.userInfo.token).toBe('server-token')
+  })
 })

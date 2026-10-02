@@ -75,8 +75,8 @@ function onClick(event) {
   place-items: center;
   width: var(--ui-icon-button-size);
   height: var(--ui-icon-button-size);
-  /* The legacy global button rule (style.css) sets 40/44 px on phones;
-     the touch hit area comes from ::after instead. */
+  /* The size is fixed; on touch screens the 44 px hit area comes from
+     ::after. */
   min-height: 0;
   padding: 0;
   border: 0;

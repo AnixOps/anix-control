@@ -1,7 +1,7 @@
 <template>
   <div class="node-wg">
     <section class="dialog-section">
-      <h4 class="dialog-section__title">{{ t(`${K}.sections.access`) }}</h4>
+      <h3 class="dialog-section__title">{{ t(`${K}.sections.access`) }}</h3>
       <div class="form-grid">
         <UiTextField v-model.trim="wg.cidr" size="md" :label="t(`${K}.fields.cidr`)" />
         <UiTextField v-if="!isExit" v-model.trim="wg.serverAddress" size="md" :label="t(`${K}.fields.serverAddress`)" />
@@ -19,7 +19,7 @@
     </section>
 
     <section class="dialog-section">
-      <h4 class="dialog-section__title">{{ t(`${K}.sections.relay`) }}</h4>
+      <h3 class="dialog-section__title">{{ t(`${K}.sections.relay`) }}</h3>
       <div class="form-grid">
         <UiSelect v-model="wg.role" size="md" :label="t(`${K}.fields.role`)" :options="roleOptions" />
         <UiSelect v-model="wg.tunnelType" size="md" :label="t(`${K}.fields.tunnelType`)" :options="TUNNEL_OPTIONS" />
@@ -50,7 +50,7 @@
     </section>
 
     <section v-if="wg.role === 'entry' && usesWss" class="dialog-section">
-      <h4 class="dialog-section__title">{{ t(`${K}.sections.networkPolicy`) }}</h4>
+      <h3 class="dialog-section__title">{{ t(`${K}.sections.networkPolicy`) }}</h3>
       <UiSwitch v-model="wg.networkPolicyEnabled" :label="t(`${K}.fields.networkPolicyEnabled`)" :description="t(`${K}.hints.networkPolicy`)" />
       <template v-if="wg.networkPolicyEnabled">
         <fieldset v-for="(path, index) in wg.networkPaths" :key="index" class="node-wg__path">

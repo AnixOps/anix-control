@@ -325,6 +325,23 @@ defineExpose({ editor })
   cursor: pointer;
 }
 
+/* Touch: the disclosure toggles from a 44 px tall strip. */
+@media (pointer: coarse) {
+  .node-protocol__advanced summary {
+    position: relative;
+  }
+
+  .node-protocol__advanced summary::after {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 100%;
+    height: max(100%, var(--size-control-lg));
+    transform: translateY(-50%);
+    content: '';
+  }
+}
+
 .node-protocol__advanced summary:focus-visible {
   border-radius: var(--radius-xs);
   outline: var(--focus-ring);

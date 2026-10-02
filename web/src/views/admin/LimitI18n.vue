@@ -452,4 +452,21 @@ onMounted(async () => {
 .editor-form .form-error {
   margin: 0;
 }
+
+/* Touch: a 44 px hit area around the link without changing the look. */
+@media (pointer: coarse) {
+  .runtime-context__links a {
+    position: relative;
+  }
+
+  .runtime-context__links a::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, var(--size-control-lg));
+    height: max(100%, var(--size-control-lg));
+    transform: translate(-50%, -50%);
+    content: '';
+  }
+}
 </style>

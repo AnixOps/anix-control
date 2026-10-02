@@ -101,8 +101,8 @@ function onClick(event) {
   justify-content: center;
   min-width: 0;
   height: var(--ui-button-height);
-  /* The legacy global button rule (style.css) sets 40/44 px on phones;
-     the touch hit area comes from ::after instead. */
+  /* The size is fixed; on touch screens the 44 px hit area comes from
+     ::after. */
   min-height: 0;
   padding: 0 var(--ui-button-pad);
   border: 0;
@@ -248,9 +248,11 @@ function onClick(event) {
   .ui-button--sm::after,
   .ui-button--md::after {
     position: absolute;
-    inset: 50% 0 auto;
+    top: 50%;
+    left: 50%;
+    width: max(100%, var(--size-control-lg));
     min-height: var(--size-control-lg);
-    transform: translateY(-50%);
+    transform: translate(-50%, -50%);
     content: '';
   }
 }

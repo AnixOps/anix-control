@@ -25,7 +25,7 @@
     </template>
 
     <template #overview>
-      <UiGroupedList :title="t('forwardNodesPage.detail.runtime')" :footer="t('runtime.ansibleMachines.fields.reachabilityHelp')">
+      <UiGroupedList heading-tag="h2" :title="t('forwardNodesPage.detail.runtime')" :footer="t('runtime.ansibleMachines.fields.reachabilityHelp')">
         <UiGroupedListRow :label="t('runtime.ansibleMachines.table.reachability')">
           <template #value>
             <UiBadge :status="machine.status === 1 ? 'online' : 'offline'" :label="machine.status === 1 ? t('runtime.shared.online') : t('runtime.shared.offline')" />
@@ -42,13 +42,13 @@
           </template>
         </UiGroupedListRow>
       </UiGroupedList>
-      <UiGroupedList :title="t('forwardNodesPage.detail.actions')">
+      <UiGroupedList heading-tag="h2" :title="t('forwardNodesPage.detail.actions')">
         <UiGroupedListRow :label="t('runtime.ansibleMachines.actions.sync')" data-test="ansible-detail-sync" @click="runIfIdle(syncMachine)" />
       </UiGroupedList>
     </template>
 
     <template #config>
-      <UiGroupedList :title="t('forwardNodesPage.detail.identity')" :footer="t('runtime.ansibleMachines.inventoryHint')">
+      <UiGroupedList heading-tag="h2" :title="t('forwardNodesPage.detail.identity')" :footer="t('runtime.ansibleMachines.inventoryHint')">
         <UiGroupedListRow :label="t('runtime.ansibleMachines.fields.name')" :value="machine.name" />
         <UiGroupedListRow :label="t('runtime.ansibleMachines.fields.host')">
           <template #value><code class="fn-mono">{{ machine.host }}</code></template>

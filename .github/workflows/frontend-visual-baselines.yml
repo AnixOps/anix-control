@@ -1,0 +1,39 @@
+name: Frontend Visual Baselines
+
+# Regenerates the visual regression baselines (web/e2e/visual/__screenshots__)
+# in the same Playwright image as the "Frontend Visual Regression" CI job, for
+# contributors without docker. Run it on a branch, download the artifact and
+# commit the PNGs it contains to web/e2e/visual/__screenshots__/.
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  baselines:
+    name: Regenerate visual baselines
+    runs-on: ubuntu-latest
+    container:
+      image: mcr.microsoft.com/playwright:v1.61.1-noble
+      options: --ipc=host
+    timeout-minutes: 20
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Install dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Rewrite the baselines
+        working-directory: web
+        env:
+          HOME: /root
+        run: npx playwright test --config playwright.visual.config.js --update-snapshots
+
+      - name: Upload the baselines
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend-visual-baselines
+          path: web/e2e/visual/__screenshots__/

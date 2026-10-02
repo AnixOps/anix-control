@@ -175,4 +175,13 @@ function validateSchemaValue(schema, value, path) {
 .full-json-editor { min-height: 320px; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 500; resize: vertical; }
 .field-error { margin: 0; color: var(--danger); font-size: 12px; overflow-wrap: anywhere; }
 @media (max-width: 720px) { .structured-fields { grid-template-columns: 1fr; } }
+
+/* Phones: 16 px fields so iOS Safari does not zoom on focus. */
+@media (max-width: 833px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
 </style>

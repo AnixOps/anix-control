@@ -249,6 +249,19 @@ defineExpose({ close })
   color: var(--label-1);
 }
 
+/* Touch: a 44 px hit area around the close button. */
+@media (pointer: coarse) {
+  .ui-dialog__close::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: var(--size-control-lg);
+    height: var(--size-control-lg);
+    transform: translate(-50%, -50%);
+    content: '';
+  }
+}
+
 .ui-dialog__close:focus-visible {
   outline: var(--focus-ring);
   outline-offset: var(--focus-ring-offset);

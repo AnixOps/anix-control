@@ -15,6 +15,8 @@
     "lint:styles": "stylelint \"src/**/*.{css,vue}\"",
     "test": "vitest run",
     "test:e2e": "playwright test",
+    "test:visual": "sh scripts/visual-docker.sh",
+    "test:visual:update": "sh scripts/visual-docker.sh --update-snapshots",
     "test:watch": "vitest",
     "test:coverage": "vitest run --coverage",
     "test:ui": "vitest --ui",
@@ -35,6 +37,7 @@
     "vue-router": "^4.2.5"
   },
   "devDependencies": {
+    "@axe-core/playwright": "^4.13.0",
     "@histoire/plugin-vue": "1.0.0-beta.1",
     "@playwright/test": "^1.61.1",
     "@testing-library/dom": "10.4.2",

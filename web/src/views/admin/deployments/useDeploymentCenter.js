@@ -262,19 +262,6 @@ export function useDeploymentCenter() {
     updatePolling()
   }
 
-  function moveViewTab(event, index) {
-    let nextIndex = index
-    if (event.key === 'ArrowRight') nextIndex = (index + 1) % VIEW_MODES.length
-    else if (event.key === 'ArrowLeft') nextIndex = (index - 1 + VIEW_MODES.length) % VIEW_MODES.length
-    else if (event.key === 'Home') nextIndex = 0
-    else if (event.key === 'End') nextIndex = VIEW_MODES.length - 1
-    else return
-    event.preventDefault()
-    const nextMode = VIEW_MODES[nextIndex]
-    void setViewMode(nextMode)
-    document.getElementById(`deployment-tab-${nextMode}`)?.focus()
-  }
-
   async function loadAssignments(nodeID = selectedNodeID.value) {
     const requestedNodeID = Number(nodeID)
     const requestID = ++assignmentLoadRequestID
@@ -805,7 +792,6 @@ export function useDeploymentCenter() {
     latestDeploymentFor,
     loadInitial,
     setViewMode,
-    moveViewTab,
     loadAssignments,
     selectAssignmentTarget,
     openAssignmentDrawer,

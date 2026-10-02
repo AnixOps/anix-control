@@ -311,7 +311,7 @@ function onDragEnd() {
   box-shadow: inset 0 2px 0 var(--accent);
 }
 
-/* Undo the legacy global button rule (inline-flex, centred, pill, fill). */
+/* Undo the global button rule (inline-flex, centred, pill, fill). */
 .address-button {
   display: inline;
   max-width: 100%;
@@ -404,6 +404,23 @@ function onDragEnd() {
   line-height: 1.35;
   white-space: nowrap;
 }
+
+/* Touch: a 44 px hit area around the link without changing the look. */
+@media (pointer: coarse) {
+  .address-button {
+    position: relative;
+  }
+
+  .address-button::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, var(--size-control-lg));
+    height: max(100%, var(--size-control-lg));
+    transform: translate(-50%, -50%);
+    content: '';
+  }
+}
 </style>
 
 <style>
@@ -420,4 +437,5 @@ function onDragEnd() {
   line-height: 1.45;
   overflow-wrap: anywhere;
 }
+
 </style>

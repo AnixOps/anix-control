@@ -104,6 +104,7 @@
           :label="t('runtime.nodeXAgents.tabs.tasks')"
           storage-key="admin.agent-tasks"
           :page-size="20"
+          :page="taskPage"
           :loading="tasksLoading"
           :error="tasksError"
           :error-title="t('runtime.nodeXAgents.messages.tasksFetchFailed')"
@@ -111,6 +112,7 @@
           :empty-title="t('runtime.nodeXAgents.empty.tasks')"
           :empty-description="t('runtime.nodeXAgents.empty.tasksDescription')"
           @retry="fetchTaskHistory"
+          @update:page="taskPage = $event"
         >
           <template #cell-command="{ row }">
             <code>{{ diagnosticActionMap[row.action] ? t(`runtime.nodeXAgents.diagnosticActions.${row.action}`) : row.action }}</code>
@@ -158,9 +160,10 @@
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
 import { Activity, ListChecks, Play, RefreshCw, Send, Server, SquareTerminal } from '@lucide/vue'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { useListQuery } from '@/composables/useListQuery'
 import UiBadge from '@/ui/UiBadge.vue'
 import UiButton from '@/ui/UiButton.vue'
 import UiDataTable from '@/ui/UiDataTable.vue'
@@ -186,7 +189,14 @@ const diagnosticActions = [
 const diagnosticServices = ['gost']
 const diagnosticActionMap = Object.fromEntries(diagnosticActions.map(action => [action.value, action]))
 
-const activeTab = ref('agents')
+// The open tab and the task history page live in the URL query (plan §9).
+const listQuery = useListQuery()
+const activeTab = ref(listQuery.read('tab', { values: ['agents', 'terminal', 'tasks'] }) || 'agents')
+const taskPage = ref(listQuery.readPage())
+watch([activeTab, taskPage], () => listQuery.write({
+  tab: activeTab.value === 'agents' ? '' : activeTab.value,
+  page: activeTab.value === 'tasks' ? taskPage.value : 1
+}))
 const agents = ref([])
 const selectedNodeId = ref('')
 const wsConnected = ref(false)

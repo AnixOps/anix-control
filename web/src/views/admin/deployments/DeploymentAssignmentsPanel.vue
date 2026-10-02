@@ -1,10 +1,7 @@
 <template>
   <section
-    id="deployment-panel-targets"
     class="deployment-panel"
     data-testid="deployment-target-panel"
-    role="tabpanel"
-    aria-labelledby="deployment-tab-targets"
   >
     <UiDataTable
       :columns="columns"

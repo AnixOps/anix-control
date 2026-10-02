@@ -9,12 +9,12 @@
           size="sm"
           variant="ghost"
           :icon="copied ? Check : Copy"
-          :disabled="!code"
+          :disabled="!code || copyDisabled"
           :aria-describedby="label ? labelId : undefined"
           data-test="code-copy"
           @click="copy"
         >
-          {{ copied ? t('ui.actions.copied') : t('ui.actions.copy') }}
+          {{ copied ? t('ui.actions.copied') : (copyLabel || t('ui.actions.copy')) }}
         </UiButton>
       </span>
     </figcaption>
@@ -46,6 +46,10 @@ const props = defineProps({
   code: { type: String, default: '' },
   label: { type: String, default: '' },
   copyable: { type: Boolean, default: true },
+  // A more specific copy button text (「复制配置」) and a way to block
+  // copying text that is not ready to use yet.
+  copyLabel: { type: String, default: '' },
+  copyDisabled: { type: Boolean, default: false },
   // CSS length; the block scrolls beyond it. Empty: no limit.
   maxHeight: { type: String, default: '360px' },
   wrap: { type: Boolean, default: false }
@@ -66,6 +70,7 @@ const statusText = computed(() => {
 })
 
 async function copy() {
+  if (props.copyDisabled) return
   failed.value = false
   const ok = await copyText(props.code)
   if (ok) {

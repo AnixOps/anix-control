@@ -84,8 +84,7 @@ const hasLabel = computed(() => Boolean(props.label || slots.default))
   align-items: center;
   width: 51px;
   height: 31px;
-  /* The legacy global button rule (style.css) centres the content and sets
-     40/44 px on phones. */
+  /* The global button rule (style.css) centres the content. */
   justify-content: flex-start;
   min-height: 0;
   padding: 2px;
@@ -129,6 +128,19 @@ const hasLabel = computed(() => Boolean(props.label || slots.default))
 }
 
 /* Windows high-contrast: system colours for the track and thumb. */
+/* Touch: a 44 px hit area around the 51 × 31 track. */
+@media (pointer: coarse) {
+  .ui-switch__control::before {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100%;
+    height: var(--size-control-lg);
+    transform: translate(-50%, -50%);
+    content: '';
+  }
+}
+
 @media (forced-colors: active) {
   .ui-switch__control {
     border: 1px solid ButtonText;

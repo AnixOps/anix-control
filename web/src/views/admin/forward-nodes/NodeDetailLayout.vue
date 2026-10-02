@@ -107,4 +107,21 @@ const ready = computed(() => props.loaded && !props.error && !props.notFound)
   gap: var(--space-6);
   max-width: 880px;
 }
+
+/* Touch: a 44 px hit area around the link without changing the look. */
+@media (pointer: coarse) {
+  .node-detail__back {
+    position: relative;
+  }
+
+  .node-detail__back::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, var(--size-control-lg));
+    height: max(100%, var(--size-control-lg));
+    transform: translate(-50%, -50%);
+    content: '';
+  }
+}
 </style>

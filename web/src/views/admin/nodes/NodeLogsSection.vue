@@ -232,6 +232,23 @@ defineExpose({ load, refresh, logs, pagination, filter })
   cursor: pointer;
 }
 
+/* Touch: the disclosure toggles from a 44 px tall strip. */
+@media (pointer: coarse) {
+  .node-log__fields summary {
+    position: relative;
+  }
+
+  .node-log__fields summary::after {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 100%;
+    height: max(100%, var(--size-control-lg));
+    transform: translateY(-50%);
+    content: '';
+  }
+}
+
 .node-log__fields summary:focus-visible {
   border-radius: var(--radius-xs);
   outline: var(--focus-ring);

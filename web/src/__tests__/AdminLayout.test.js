@@ -82,7 +82,8 @@ describe('AdminLayout.vue', () => {
     const { wrapper } = await mountLayout()
     mounted = wrapper
     expect(wrapper.find('#admin-sidebar nav').attributes('aria-label')).toBe('Admin navigation')
-    expect(wrapper.find('#admin-sidebar').attributes('role')).toBeUndefined()
+    expect(wrapper.find('#admin-sidebar').attributes('role')).toBe('complementary')
+    expect(wrapper.find('#admin-sidebar').attributes('aria-label')).toBe('Sidebar')
     expect(wrapper.find('header.admin-topbar').exists()).toBe(true)
     const main = wrapper.get('main#app-main-content')
     expect(main.attributes('tabindex')).toBe('-1')

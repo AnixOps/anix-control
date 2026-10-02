@@ -25,7 +25,7 @@
     </template>
 
     <template #overview>
-      <UiGroupedList :title="t('forwardNodesPage.detail.runtime')" :footer="t('forwardNodesPage.nodex.onlineNote')">
+      <UiGroupedList heading-tag="h2" :title="t('forwardNodesPage.detail.runtime')" :footer="t('forwardNodesPage.nodex.onlineNote')">
         <UiGroupedListRow :label="t('forwardNodesPage.nodex.columns.status')">
           <template #value>
             <UiBadge :status="node.status === 1 ? 'online' : 'offline'" :label="node.status === 1 ? t('runtime.nodeXTopology.status.online') : t('runtime.nodeXTopology.status.offline')" />
@@ -44,20 +44,20 @@
           </template>
         </UiGroupedListRow>
       </UiGroupedList>
-      <UiGroupedList :title="t('forwardNodesPage.detail.actions')">
+      <UiGroupedList heading-tag="h2" :title="t('forwardNodesPage.detail.actions')">
         <UiGroupedListRow :label="actions.isPending(node.id, 'sync') ? t('runtime.nodeXTopology.actions.syncing') : t('runtime.nodeXTopology.actions.syncStats')" data-test="node-detail-sync" @click="runIfIdle(actions.sync)" />
         <UiGroupedListRow :label="t('runtime.nodeXTopology.actions.testConnection')" data-test="node-detail-test" @click="connectionOpen = true" />
       </UiGroupedList>
     </template>
 
     <template #config>
-      <UiGroupedList :title="t('forwardNodesPage.detail.identity')">
+      <UiGroupedList heading-tag="h2" :title="t('forwardNodesPage.detail.identity')">
         <UiGroupedListRow :label="t('runtime.nodeXTopology.nodeModal.fields.name')" :value="node.name" />
         <UiGroupedListRow :label="t('runtime.nodeXTopology.nodeModal.fields.type')" :value="typeLabel(node.type)" />
         <UiGroupedListRow :label="t('runtime.nodeXTopology.nodeModal.fields.region')" :value="node.region || '—'" />
         <UiGroupedListRow :label="t('runtime.nodeXTopology.nodeModal.fields.isp')" :value="node.isp || '—'" />
       </UiGroupedList>
-      <UiGroupedList :title="t('forwardNodesPage.detail.endpoints')">
+      <UiGroupedList heading-tag="h2" :title="t('forwardNodesPage.detail.endpoints')">
         <UiGroupedListRow :label="t('runtime.nodeXTopology.nodeModal.fields.host')">
           <template #value><code class="fn-mono">{{ node.host }}</code></template>
         </UiGroupedListRow>
@@ -66,7 +66,7 @@
         <UiGroupedListRow :label="t('runtime.nodeXTopology.nodeModal.fields.apiToken')" :value="tokenLabel" />
         <UiGroupedListRow :label="t('runtime.nodeXTopology.nodeModal.fields.metricsPort')" :value="node.metricsPort || '—'" />
       </UiGroupedList>
-      <UiGroupedList :title="t('forwardNodesPage.detail.capacity')">
+      <UiGroupedList heading-tag="h2" :title="t('forwardNodesPage.detail.capacity')">
         <UiGroupedListRow :label="t('runtime.nodeXTopology.nodeModal.fields.bandwidth')" :value="node.bandwidth || '—'" />
         <UiGroupedListRow :label="t('runtime.nodeXTopology.nodeModal.fields.maxConnections')" :value="node.maxConn || '—'" />
         <UiGroupedListRow :label="t('runtime.nodeXTopology.nodeModal.fields.weight')" :value="node.weight" />

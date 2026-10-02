@@ -201,6 +201,33 @@ describe('Plugin Center', () => {
     expect(inBody('[data-testid="plugin-installation-dialog"]').exists()).toBe(false)
   })
 
+  it('restores the search and chips from the URL query and writes changes back', async () => {
+    const { ref } = await import('vue')
+    router.currentRoute = ref({ path: '/admin/plugins', query: { q: 'unmatched', target: 'agent', health: 'bogus' }, hash: '' })
+    router.replace = vi.fn(async (to) => { router.currentRoute.value = { ...router.currentRoute.value, ...to } })
+    try {
+      resolveCatalog([
+        { id: 2, plugin_id: plugin.id, target: 'agent', desired_version: '1.1.0', observed_version: '1.1.0', state: 'healthy', enabled: true },
+      ])
+      const wrapper = mountPlugins()
+      await flushPromises()
+      expect(bodyGet('[data-testid="plugin-search"]').element.value).toBe('unmatched')
+      expect(wrapper.findAll('[data-testid^="plugin-row-"]')).toHaveLength(0)
+
+      await bodyGet('[data-clear-filters]').trigger('click')
+      await flushPromises()
+      expect(wrapper.findAll('[data-testid^="plugin-row-"]')).toHaveLength(1)
+      expect(router.replace).toHaveBeenLastCalledWith({ path: '/admin/plugins', query: {}, hash: '' })
+
+      await bodyGet('[data-testid="plugin-health-filter"] [data-filter="healthy"]').trigger('click')
+      await flushPromises()
+      expect(router.replace).toHaveBeenLastCalledWith({ path: '/admin/plugins', query: { health: 'healthy' }, hash: '' })
+    } finally {
+      delete router.currentRoute
+      delete router.replace
+    }
+  })
+
   it('loads only plugin resources, renders one grouped row, filters it, and restores row focus after close', async () => {
     resolveCatalog([
       { id: 1, plugin_id: plugin.id, target: 'control', desired_version: '1.0.0', observed_version: '1.0.0', state: 'healthy', enabled: true },
