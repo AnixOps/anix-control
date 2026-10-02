@@ -2843,15 +2843,28 @@ export default {
       },
       empty: 'No grants'
     },
+    confirm: {
+      resetSubscribeTitle: 'Reset the subscription link of {email}?',
+      resetSubscribeMessage: 'The old link stops working at once and the user has to import the subscription again. This can’t be undone.',
+      resetSubscribeAction: 'Reset link',
+      deleteGrantTitle: 'Delete tunnel grant #{id}?',
+      deleteGrantMessage: 'The user can no longer use tunnel {tunnel}. This can’t be undone.',
+      deleteGrantAction: 'Delete grant'
+    },
+    copyDialog: {
+      title: 'Copy subscription link',
+      description: 'The link could not be copied automatically. Copy it below.',
+      label: 'Subscription link'
+    },
     resetFlow: {
-      userTitle: 'Reset User Traffic',
-      userMessage: 'Confirm reset used traffic for user {email}?',
-      tunnelTitle: 'Reset Tunnel Grant Traffic',
-      tunnelMessage: 'Confirm reset used traffic for tunnel grant #{id}?',
+      userTitle: 'Reset the traffic of {email}?',
+      userMessage: 'Used traffic goes back to zero. This can’t be undone.',
+      tunnelTitle: 'Reset the traffic of tunnel grant #{id}?',
+      tunnelMessage: 'Used traffic of this grant goes back to zero. This can’t be undone.',
       usedFlow: 'Used flow',
       quota: 'Quota',
       resetting: 'Resetting...',
-      confirmAction: 'Confirm reset'
+      confirmAction: 'Reset traffic'
     },
     trafficModal: {
       title: 'Traffic Detail - {email}',
@@ -2893,8 +2906,9 @@ export default {
       fetchUsersFailed: 'Failed to fetch users',
       fetchStatsFailed: 'Failed to fetch statistics',
       saveFailed: 'Save failed: {message}',
-      confirmBan: 'Confirm ban for user {email}?',
-      confirmUnban: 'Confirm unban for user {email}?',
+      userSaved: '{email} saved',
+      userBanned: '{email} banned',
+      userUnbanned: '{email} unbanned',
       fetchTunnelListFailed: 'Failed to fetch tunnel list',
       fetchSpeedLimitFailed: 'Failed to fetch speed limit rules',
       fetchTunnelGrantFailed: 'Failed to fetch tunnel grants',
@@ -2905,7 +2919,7 @@ export default {
       grantUpdated: 'Grant updated successfully',
       grantCreated: 'Grant created successfully',
       grantActionFailed: 'Grant action failed',
-      confirmDeleteGrant: 'Confirm deleting tunnel grant #{id}?',
+      grantDeleted: 'Tunnel grant #{id} deleted',
       grantDeleteFailed: 'Failed to delete grant',
       resetFailed: 'Reset failed',
       userFlowReset: 'User traffic reset successfully',
@@ -2913,8 +2927,6 @@ export default {
       fetchUserFailed: 'Failed to load the user',
       noToken: 'This user has no subscription token',
       subscribeCopied: 'Subscription link copied to clipboard',
-      copyManual: 'Auto-copy failed, please copy the subscription link manually:',
-      resetSubscribeConfirm: 'Reset the subscription link for {email}? The old link will stop working immediately and the user must re-import.',
       resetSubscribeSuccess: 'Subscription link reset',
       resetSubscribeFailed: 'Failed to reset subscription'
     }

@@ -2844,15 +2844,28 @@ export default {
       },
       empty: '暂无授权'
     },
+    confirm: {
+      resetSubscribeTitle: '重置 {email} 的订阅链接？',
+      resetSubscribeMessage: '旧链接会立即失效，用户需要重新导入订阅。此操作无法撤销。',
+      resetSubscribeAction: '重置订阅链接',
+      deleteGrantTitle: '删除隧道授权 #{id}？',
+      deleteGrantMessage: '该用户将不能再使用隧道 {tunnel}。此操作无法撤销。',
+      deleteGrantAction: '删除授权'
+    },
+    copyDialog: {
+      title: '复制订阅链接',
+      description: '无法自动复制，请手动复制下面的链接。',
+      label: '订阅链接'
+    },
     resetFlow: {
-      userTitle: '重置用户流量',
-      userMessage: '确认将用户 {email} 的已用流量清零吗？',
-      tunnelTitle: '重置隧道授权流量',
-      tunnelMessage: '确认将隧道授权 #{id} 的已用流量清零吗？',
+      userTitle: '重置 {email} 的流量？',
+      userMessage: '已用流量将清零。此操作无法撤销。',
+      tunnelTitle: '重置隧道授权 #{id} 的流量？',
+      tunnelMessage: '这条授权的已用流量将清零。此操作无法撤销。',
       usedFlow: '当前已用',
       quota: '当前配额',
       resetting: '重置中...',
-      confirmAction: '确认重置'
+      confirmAction: '重置流量'
     },
     trafficModal: {
       title: '流量详情 - {email}',
@@ -2894,8 +2907,9 @@ export default {
       fetchUsersFailed: '获取用户列表失败',
       fetchStatsFailed: '获取统计失败',
       saveFailed: '保存失败：{message}',
-      confirmBan: '确认封禁用户 {email} 吗？',
-      confirmUnban: '确认解封用户 {email} 吗？',
+      userSaved: '已保存 {email}',
+      userBanned: '已封禁 {email}',
+      userUnbanned: '已解封 {email}',
       fetchTunnelListFailed: '获取隧道列表失败',
       fetchSpeedLimitFailed: '获取限速规则失败',
       fetchTunnelGrantFailed: '获取隧道授权失败',
@@ -2906,7 +2920,7 @@ export default {
       grantUpdated: '授权更新成功',
       grantCreated: '授权创建成功',
       grantActionFailed: '授权操作失败',
-      confirmDeleteGrant: '确认删除隧道授权 #{id} 吗？',
+      grantDeleted: '已删除隧道授权 #{id}',
       grantDeleteFailed: '删除授权失败',
       resetFailed: '重置失败',
       userFlowReset: '用户流量已重置',
@@ -2914,8 +2928,6 @@ export default {
       fetchUserFailed: '获取用户详情失败',
       noToken: '该用户没有订阅 token',
       subscribeCopied: '订阅链接已复制到剪贴板',
-      copyManual: '自动复制失败，请手动复制以下订阅链接：',
-      resetSubscribeConfirm: '确认重置用户 {email} 的订阅链接吗？旧链接将立即失效，用户需重新导入。',
       resetSubscribeSuccess: '订阅链接已重置',
       resetSubscribeFailed: '重置订阅失败'
     }

@@ -1,8 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import Users from '@/views/admin/Users.vue'
 import { setEdition } from '@/composables/useEdition'
+import { allInBody, answerConfirms, inBody, toastMessages, toasts } from './helpers/feedback'
 
 const mockCreateUser = vi.fn()
 const mockGetUserList = vi.fn()
@@ -37,6 +38,8 @@ vi.mock('@/api/admin', () => ({
   updateUser: (...args) => mockUpdateUser(...args),
 }))
 
+enableAutoUnmount(afterEach)
+
 describe('Admin Users flow', () => {
   beforeEach(() => {
     mockCreateUser.mockReset()
@@ -49,8 +52,6 @@ describe('Admin Users flow', () => {
     mockGetTrafficHourly.mockReset()
     mockResetUserSubscribe.mockReset()
     mockGetAdminUser.mockReset()
-    vi.spyOn(window, 'alert').mockImplementation(() => {})
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
 
     mockGetUserList.mockResolvedValue({ data: { list: [], total: 0 } })
     mockGetUserStats.mockResolvedValue({ data: {} })
@@ -82,7 +83,7 @@ describe('Admin Users flow', () => {
     }
     mockGetUserList.mockResolvedValue({ data: { list: [user], total: 1 } })
 
-    const wrapper = mount(Users)
+    const wrapper = mount(Users, { attachTo: document.body })
     await flushPromises()
 
     expect(wrapper.text()).toContain('20 Mbps / 2 devices')
@@ -90,9 +91,9 @@ describe('Admin Users flow', () => {
     await wrapper.vm.editUser(user)
     await nextTick()
 
-    await wrapper.find('[data-test="user-speed-limit-input"]').setValue('80')
-    await wrapper.find('[data-test="user-device-limit-input"]').setValue('5')
-    await wrapper.find('[data-test="user-save-button"]').trigger('click')
+    await inBody('[data-test="user-speed-limit-input"]').setValue('80')
+    await inBody('[data-test="user-device-limit-input"]').setValue('5')
+    await inBody('[data-test="user-save-button"]').trigger('click')
     await flushPromises()
 
     expect(mockUpdateUser).toHaveBeenCalledWith(1, expect.objectContaining({
@@ -124,7 +125,7 @@ describe('Admin Users flow', () => {
         ts: 1783526400000,
       })
 
-    const wrapper = mount(Users)
+    const wrapper = mount(Users, { attachTo: document.body })
     await flushPromises()
 
     let metricValues = wrapper.findAll('.metric-card strong').map(node => node.text())
@@ -156,7 +157,7 @@ describe('Admin Users flow', () => {
         ts: 1783526400000
       })
 
-    const wrapper = mount(Users)
+    const wrapper = mount(Users, { attachTo: document.body })
     await flushPromises()
 
     expect(wrapper.vm.buildSubscribeUrl({ token: 'tok_legacy' })).toBe('http://legacy.example.com/sub/tok_legacy')
@@ -173,7 +174,7 @@ describe('Admin Users flow', () => {
     })
     mockGetSubscriptionGroups.mockResolvedValueOnce({ data: [{ id: 10, name: 'Legacy Group' }] })
 
-    const wrapper = mount(Users)
+    const wrapper = mount(Users, { attachTo: document.body })
     await flushPromises()
 
     expect(wrapper.vm.users[0].email).toBe('legacy@example.com')
@@ -220,14 +221,16 @@ describe('Admin Users flow', () => {
       ts: 1783526400000,
     })
 
-    const wrapper = mount(Users)
+    const wrapper = mount(Users, { attachTo: document.body })
     await flushPromises()
 
+    const confirms = answerConfirms(true)
     await wrapper.vm.resetSubscribe(user)
     await flushPromises()
 
+    expect(confirms.last()).toMatchObject({ tone: 'danger', title: 'Reset the subscription link of reset@example.com?', confirmLabel: 'Reset link' })
     expect(mockResetUserSubscribe).toHaveBeenCalledWith(3)
-    expect(window.alert).toHaveBeenCalledWith('Subscription link reset')
+    expect(toastMessages('success')).toContain('Subscription link reset')
   })
 
   it('treats panel code -1 create-user responses as form errors', async () => {
@@ -238,7 +241,7 @@ describe('Admin Users flow', () => {
       ts: 1783526400000,
     })
 
-    const wrapper = mount(Users)
+    const wrapper = mount(Users, { attachTo: document.body })
     await flushPromises()
 
     wrapper.vm.newUser.email = 'duplicate@example.com'
@@ -247,7 +250,7 @@ describe('Admin Users flow', () => {
     await flushPromises()
 
     expect(wrapper.vm.createError).toBe('该邮箱已被注册')
-    expect(window.alert).not.toHaveBeenCalledWith('User created successfully')
+    expect(toastMessages()).not.toContain('User created successfully')
   })
 
   it('treats panel code -1 update-user responses as errors', async () => {
@@ -260,14 +263,17 @@ describe('Admin Users flow', () => {
       ts: 1783526400000,
     })
 
-    const wrapper = mount(Users)
+    const wrapper = mount(Users, { attachTo: document.body })
     await flushPromises()
 
     await wrapper.vm.editUser(user)
     await wrapper.vm.saveUser()
     await flushPromises()
 
-    expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('用户不存在'))
+    // A failed save stays in the dialog as an inline error.
+    expect(wrapper.vm.showEditModal).toBe(true)
+    expect(inBody('[data-test="user-save-error"]').text()).toContain('用户不存在')
+    expect(toasts()).toHaveLength(0)
     expect(mockUpdateUser).toHaveBeenCalledWith(404, expect.any(Object))
   })
 
@@ -281,13 +287,13 @@ describe('Admin Users flow', () => {
       ts: 1783526400000,
     })
 
-    const wrapper = mount(Users)
+    const wrapper = mount(Users, { attachTo: document.body })
     await flushPromises()
 
     await wrapper.vm.handleBan(user)
     await flushPromises()
 
-    expect(window.alert).toHaveBeenCalledWith('用户不存在')
+    expect(toastMessages('error')).toEqual(['用户不存在'])
     expect(mockBanUser).toHaveBeenCalledWith(405)
   })
 
@@ -301,13 +307,16 @@ describe('Admin Users flow', () => {
       ts: 1783526400000,
     })
 
-    const wrapper = mount(Users)
+    const wrapper = mount(Users, { attachTo: document.body })
     await flushPromises()
 
+    const confirms = answerConfirms(true)
     await wrapper.vm.resetSubscribe(user)
     await flushPromises()
 
-    expect(window.alert).toHaveBeenCalledWith('用户不存在')
+    // The dialog keeps the failure inline and stays open; nothing succeeded.
+    expect(confirms.errors.map(error => error.message)).toEqual(['用户不存在'])
+    expect(toastMessages('success')).toEqual([])
     expect(mockResetUserSubscribe).toHaveBeenCalledWith(406)
   })
 
@@ -323,7 +332,7 @@ describe('Admin Users flow', () => {
       },
     })
 
-    const wrapper = mount(Users)
+    const wrapper = mount(Users, { attachTo: document.body })
     await flushPromises()
 
     const planCells = wrapper.findAll('tbody tr').map(row => row.findAll('td')[2]?.text())
@@ -341,14 +350,14 @@ describe('Admin Users flow', () => {
     Object.defineProperty(window, 'isSecureContext', { value: true, configurable: true })
 
     try {
-      const wrapper = mount(Users)
+      const wrapper = mount(Users, { attachTo: document.body })
       await flushPromises()
       await wrapper.vm.copySubscribe(user)
       await flushPromises()
 
       expect(mockGetAdminUser).toHaveBeenCalledWith(8)
       expect(writeText).toHaveBeenCalledWith(`${window.location.protocol}//${window.location.host}/s/detail-token`)
-      expect(window.alert).toHaveBeenCalledWith('Subscription link copied to clipboard')
+      expect(toastMessages('success')).toEqual(['Subscription link copied to clipboard'])
     } finally {
       if (clipboard) Object.defineProperty(navigator, 'clipboard', clipboard)
       else delete navigator.clipboard
@@ -364,14 +373,13 @@ describe('Admin Users flow', () => {
       .mockResolvedValueOnce({ code: 0, msg: '操作成功', data: { id: 9, token: '' }, ts: 1783526400000 })
       .mockResolvedValueOnce({ code: -1, msg: '用户不存在', data: null, ts: 1783526400000 })
 
-    const wrapper = mount(Users)
+    const wrapper = mount(Users, { attachTo: document.body })
     await flushPromises()
     await wrapper.vm.copySubscribe(user)
     await wrapper.vm.copySubscribe(user)
     await flushPromises()
 
-    expect(window.alert).toHaveBeenCalledWith('This user has no subscription token')
-    expect(window.alert).toHaveBeenCalledWith('用户不存在')
+    expect(toastMessages('error')).toEqual(['This user has no subscription token', '用户不存在'])
   })
 
   it('fills the edit form from the user detail, remark included', async () => {
@@ -381,7 +389,7 @@ describe('Admin Users flow', () => {
       code: 0, msg: '操作成功', data: { id: 10, email: 'edit@example.com', balance: 7, remark_content: 'vip' }, ts: 1783526400000,
     })
 
-    const wrapper = mount(Users)
+    const wrapper = mount(Users, { attachTo: document.body })
     await flushPromises()
     await wrapper.vm.editUser(user)
     await flushPromises()
@@ -404,12 +412,12 @@ describe('Admin Users flow', () => {
     mockGetUserList.mockResolvedValue({ data: { list: [user], total: 1 } })
     mockGetAdminUser.mockResolvedValueOnce({ code: 0, msg: '操作成功', data: { ...user }, ts: 1783526400000 })
 
-    const wrapper = mount(Users)
+    const wrapper = mount(Users, { attachTo: document.body })
     await flushPromises()
     await wrapper.vm.editUser(user)
     await flushPromises()
 
-    expect(wrapper.find('[data-test="user-balance-field"]').exists()).toBe(false)
+    expect(inBody('[data-test="user-balance-field"]').exists()).toBe(false)
     expect(wrapper.find('[data-test="user-plan-column"]').text()).toBe('Subscription template')
     await wrapper.vm.saveUser()
     expect(mockUpdateUser).toHaveBeenCalledWith(11, expect.objectContaining({ balance: 9 }))
@@ -421,12 +429,12 @@ describe('Admin Users flow', () => {
     mockGetUserList.mockResolvedValue({ data: { list: [user], total: 1 } })
     mockGetAdminUser.mockResolvedValueOnce({ code: 0, msg: '操作成功', data: { ...user }, ts: 1783526400000 })
 
-    const wrapper = mount(Users)
+    const wrapper = mount(Users, { attachTo: document.body })
     await flushPromises()
     await wrapper.vm.editUser(user)
     await flushPromises()
 
-    expect(wrapper.find('[data-test="user-balance-field"]').exists()).toBe(true)
+    expect(inBody('[data-test="user-balance-field"]').exists()).toBe(true)
     expect(wrapper.find('[data-test="user-plan-column"]').text()).toBe('Plan')
   })
 })
