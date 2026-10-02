@@ -1616,14 +1616,18 @@ subscription page filed before is gone.
   identity cutover nothing changes: the cutover and rollback switch it with
   the rest of group A.
 - **Identity already authoritative** (cutover done before this upgrade):
-  the stored route modes do not list the new route, so it stays with the
-  legacy handler, which after finalize has no credentials to check and
-  refuses every reset (`invalid password`), and the kernel refuses the next
-  configuration write of `identity-platform` until group A is native
-  together. After moving `identity-platform`, add
-  `"identity.user.subscription.reset.post": "native"` to the `routes` of
-  its configuration (`GET`, then `PUT /api/v3/plugin-installations/<id>/config`
-  with the document's revision), keeping the other modes.
+  nothing to do. The route modes the cutover stored do not name the new
+  route, and the kernel resolves a group A route the stored modes leave out
+  as `native` while identity is authoritative (`identity` or `finalized`)
+  and as `legacy` before (`service.ResolvePackageRouteModes`). So the
+  identity host serves the reset natively, with identity's credentials,
+  as soon as `identity-platform` is moved, and configuration writes that
+  do not name the route are not refused. A route stored explicitly as
+  `legacy` still counts as legacy: group A must stay native together.
+- The limit is counted in memory by the legacy handler, so with several
+  replicas before the cutover each replica allows three attempts an hour
+  (as for login, [container deployment](architecture/container-deployment.md));
+  after the cutover identity counts them in its shared table.
 
 ## Moving Logins To The Identity Module
 

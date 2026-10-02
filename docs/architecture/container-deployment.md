@@ -59,6 +59,6 @@ done:
 | Agent gRPC streams and agent WebSockets | `AgentControlManager` and `AgentHandler` keep connections in memory; admin actions on another replica see the node as offline. | Record stream ownership (node, replica) in the database and forward admin requests to the owning replica. |
 | Plugin operation dispatcher | `recoverOnce` resets every dispatching/running node operation at start, including another replica's. Dispatch is off by default. | Record the dispatching replica and recover only operations of replicas whose heartbeat expired. |
 | Online users / device limits | `cache.InitMemory` backs UniProxy alive lists; each replica sees a fraction. | Shared store (PostgreSQL table or Redis). |
-| Login and registration rate limits, per-IP limiters | In-memory; N replicas allow N times the attempts. | Shared counters. |
+| Login and registration rate limits, per-IP limiters, the users' subscription reset limit (legacy handler) | In-memory; N replicas allow N times the attempts. Once identity is authoritative, identity-platform serves login and the subscription reset with counters in its shared `throttle` table. | Shared counters. |
 | Backups | Written to the local filesystem; database backups are SQLite-only. | Object storage, `pg_dump`-based. |
 | Short caches (dashboard 60 s, subscription 30 s) | Per replica. | Acceptable; TTL-bounded. |

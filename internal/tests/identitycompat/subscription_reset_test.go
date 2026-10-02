@@ -100,3 +100,45 @@ func TestUserSubscriptionResetChangesControlsToken(t *testing.T) {
 	require.NoError(t, db.Take(&request).Error)
 	require.Equal(t, kernelservice.UserSubscriptionResetRequestID(2, "self-1"), request.RequestID)
 }
+
+// An installation finalized before the route joined group A has no stored
+// mode for it: the kernel resolves it native, and the native handler resets
+// with identity's credentials although Control no longer holds any.
+func TestUserSubscriptionResetWorksOnAFinalizedInstallWithoutItsStoredMode(t *testing.T) {
+	db, identity, _ := controlWithIdentity(t)
+	require.NoError(t, db.Save(&model.IdentityAuthority{ID: 1, State: model.IdentityAuthorityFinalized, UpdatedAt: time.Now()}).Error)
+	require.NoError(t, db.Model(&model.User{}).Where("1 = 1").Update("password", model.UnusableLegacyPassword).Error)
+	require.NoError(t, db.Where("1 = 1").Delete(&model.UserMFA{}).Error)
+
+	stored := map[string]string{}
+	for _, route := range kernelservice.IdentityGroupARoutes {
+		if route != native.UserSubscriptionResetRouteID {
+			stored[route] = "native"
+		}
+	}
+	modes, err := kernelservice.ResolvePackageRouteModes(db, kernelservice.IdentityPlatformPackageID, stored)
+	require.NoError(t, err)
+	require.Equal(t, "native", modes[native.UserSubscriptionResetRouteID])
+
+	code, err := totp.GenerateCode(totpSecret, time.Now())
+	require.NoError(t, err)
+	for _, c := range []struct {
+		principal pluginhostsdk.Principal
+		body      []byte
+	}{
+		{member, resetBody(map[string]string{"password": password})},
+		{mfa, resetBody(map[string]string{"code": code, "method": "totp"})},
+	} {
+		response, err := identity.Handlers()[native.UserSubscriptionResetRouteID](context.Background(), pluginhostsdk.NativeRequest{
+			RouteID: native.UserSubscriptionResetRouteID, Principal: c.principal, Body: c.body,
+		})
+		require.NoError(t, err)
+		var decoded map[string]any
+		require.NoError(t, json.Unmarshal(response.Body, &decoded), "%s", response.Body)
+		token, ok := data(t, decoded)["token"].(string)
+		require.True(t, ok, "%v", decoded)
+		var stored model.User
+		require.NoError(t, db.Take(&stored, c.principal.ActorID).Error)
+		require.Equal(t, token, stored.Token)
+	}
+}

@@ -394,7 +394,11 @@ expired (Control).
         subscribers, sent as `ImportAccountsRequest.deleted_user_id` (new).
       - **Consistency.** Configuration writes are refused unless group A's 16
         routes are native together, and exactly while identity is
-        authoritative. Only the cutover and rollback change both. The account
+        authoritative. A group A route the stored modes do not name is
+        native while identity is authoritative and legacy before
+        (`service.ResolvePackageRouteModes`, used by the host's
+        configuration and by this check), so a route added to group A after
+        a cutover needs no configuration write. Only the cutover and rollback change both. The account
         reads (profile, dashboard, admin user detail) may leave legacy mode
         only while identity is authoritative; the rollback returns them to
         legacy too.

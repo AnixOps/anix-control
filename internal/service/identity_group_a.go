@@ -76,6 +76,41 @@ func IdentityAuthoritative(state string) bool {
 	return state == model.IdentityAuthorityIdentity || state == model.IdentityAuthorityFinalized
 }
 
+// ResolvePackageRouteModes returns a package's effective route modes from
+// its stored route-mode map. It is where every reader resolves them (the
+// package host's configuration and the configuration check), so the rule
+// below holds for any group A route, today's and future ones:
+// identity-platform's group A routes that the stored map does not name are
+// native while identity is authoritative (state identity or finalized),
+// because group A is native exactly then. An installation whose map
+// predates a route added to group A (the cutover wrote only the routes it
+// knew) therefore stays consistent without an operator writing the new
+// key. A route the map names keeps its stored mode, legacy included; in the
+// kernel and importing states a missing route is legacy, as for every other
+// package. The stored map is not changed.
+func ResolvePackageRouteModes(db *gorm.DB, packageID string, stored map[string]string) (map[string]string, error) {
+	resolved := make(map[string]string, len(stored)+len(IdentityGroupARoutes))
+	for route, mode := range stored {
+		resolved[route] = mode
+	}
+	if packageID != IdentityPlatformPackageID {
+		return resolved, nil
+	}
+	state, err := IdentityAuthorityState(db)
+	if err != nil {
+		return nil, err
+	}
+	if !IdentityAuthoritative(state) {
+		return resolved, nil
+	}
+	for _, route := range IdentityGroupARoutes {
+		if _, named := stored[route]; !named {
+			resolved[route] = packagebridge.RouteModeNative
+		}
+	}
+	return resolved, nil
+}
+
 // validateIdentityGroupA keeps identity-platform's route modes consistent
 // with the authority. Group A's routes are native together, and exactly
 // while identity is authoritative: anything else would let the legacy
@@ -87,15 +122,21 @@ func validateIdentityGroupA(tx *gorm.DB, packageID string, modes map[string]stri
 	if packageID != IdentityPlatformPackageID {
 		return nil
 	}
+	state, err := IdentityAuthorityState(tx)
+	if err != nil {
+		return err
+	}
+	// A group A route the document does not name is native while identity
+	// is authoritative (ResolvePackageRouteModes).
+	modes, err = ResolvePackageRouteModes(tx, packageID, modes)
+	if err != nil {
+		return err
+	}
 	native := 0
 	for _, route := range IdentityGroupARoutes {
 		if modes[route] == packagebridge.RouteModeNative {
 			native++
 		}
-	}
-	state, err := IdentityAuthorityState(tx)
-	if err != nil {
-		return err
 	}
 	switch {
 	case native != 0 && native != len(IdentityGroupARoutes):

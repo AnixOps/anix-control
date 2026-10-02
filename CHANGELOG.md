@@ -24,8 +24,11 @@
     boxes / a recovery code, then shows the new link and its QR code and
     reloads the page (toast 订阅链接已重置，请在所有设备重新导入). The
     reset-request ticket is gone.
-  - Upgrading with identity already authoritative: set the new route
-    native with the rest of group A (`docs/UPGRADE.md`).
+  - While identity is authoritative, a group A route the stored route
+    modes do not name resolves to native (`service.ResolvePackageRouteModes`,
+    for the host's configuration and the group A check), so installations
+    cut over before this route joined group A serve it natively with no
+    operator action; before the cutover a missing route stays legacy.
 
 ### Changed
 
