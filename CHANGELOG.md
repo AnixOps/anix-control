@@ -2,121 +2,68 @@
 
 ## Unreleased
 
-### Fixed
+## 4.1.0-rc.4 - 2026-10-02
 
-- The affiliate invite-code parity test no longer fails when a 30-day expiry crosses a
-  daylight-saving change in the machine's local zone: it compares expiries with the
-  same calendar arithmetic as the handlers (`time.Now().AddDate`). Test code only.
-
-### Added
-
-- **Web component library, first batch (UI redesign phase U2)**
-  (`web/src/ui/`, `docs/reference/frontend-design.md` "Components"). Not
-  used by any page yet; U4 onwards migrates pages to it.
-  - Built on Reka UI 2.10.5 (headless; pinned) with our own scoped CSS on
-    AnixOps Design tokens only: Button, IconButton, Field, TextField,
-    Textarea, PasswordField, NumberField, Select, Combobox, Switch,
-    Checkbox, RadioGroup, SegmentedControl, Tabs, Dialog, ConfirmDialog
-    (typed-name variant for destructive actions), Sheet (right drawer,
-    bottom sheet below 834 px), Toast, Badge and StatusDot (one status
-    map), EmptyState, Skeleton, CopyField, PageHeader, Card, Section and
-    GroupedList. Keyboard operable, announced correctly, token focus
-    ring, reduced motion, light and dark, 390 px.
-  - Composables: `useToast()` (success 3 s, errors persistent, undo 5 s,
-    one live region, F8), `useConfirm()` (a promise instead of
-    `confirm()`), `useFormat()` (bytes, rates, durations, money, numbers,
-    dates, relative times on Intl and the current locale; `formatBytes`
-    matches the page copies, `{ precision: 1 }` for hero numbers),
-    `useDelayedLoading()` (the 300 ms rule).
-  - Built-in strings in `zh-CN` and `en` under `ui.*`.
-  - Histoire 1.0.0-beta.1 documents every component (`npm run story:dev`,
-    `npm run story:build`), with the vendored tokens and a dark-mode
-    toggle. `package.json` overrides Histoire's `vite` peer range (^7) to
-    the project's Vite 8.
-  - `reka-ui` and its helpers build into their own `ui-vendor` chunk. No
-    page imports the library yet, so the app bundle is unchanged apart
-    from the new strings (+0.7 KB gzip in the locale chunks).
+4.1.0-rc.4 is the fourth 4.1.0 release candidate and the **UI redesign
+preview**: the web app adopts AnixOps Design v1.0.2 (new colours, type, brand
+mark, favicon and app icons, a pure-black dark mode), gets new admin and user
+shells (frosted sidebar regrouped by object, a `⌘K` / `Ctrl+K` command
+palette, an account page, 404 and 无权限 pages), and replaces every browser
+`alert`/`confirm`/`prompt` with in-app toasts and dialogs. **For users:**
+language and theme (now with "跟随系统") live in the account menu, and the user
+bar becomes a bottom tab bar on phones. **For admins:** the sidebar groups are
+概览, 用户, 网络, 扩展, 系统 (and 商业 in the commercial edition); the version
+line moved to 账户菜单 → 关于; reversible actions (ban, gateway on/off, removing
+a group or member) happen at once with 撤销 for 5 s instead of an "are you
+sure?"; deleting a node, NodeX forward node or Ansible machine asks you to type
+its name; a Telegram broadcast now asks first. Administrators can also
+**generate and revoke invite codes in every edition** (用户 → 邀请码); the new
+routes are served by `identity-platform`, so **install this release's
+`identity-platform` package** with Control. **What did not change:** page
+bodies (the fields, tables and flows inside each page), the existing API
+and page routes (only the three invite-code routes are new), the database
+schema, the forward suite's flows and `config/editions.json`. The new
+assets have new hashed names, so a proxy or CDN that caches `index.html`
+aggressively must be purged. `docs/UPGRADE.md`, "Upgrading From 4.1.0-rc.3 To
+4.1.0-rc.4", has the checklist.
 
 ### Changed
 
-- **Administrators manage invite codes in every edition** (owner decision
-  2026-10-01; `internal/handler/invite_codes.go`,
-  `internal/service/invite_code_admin.go`, `docs/UPGRADE.md`). Invite codes
-  are registration control, so the community edition keeps them; the
-  commission, withdrawals, invite statistics and configuration stay with
-  the commercial `affiliate` package.
-  - **New routes, owned by `identity-platform`** (which owns registration
-    and ships in every release): `GET /api/v2/admin/invite/codes` (every
-    code, newest first, `status` = `unused`, `used` or `expired`, paged),
-    `POST /api/v2/admin/invite/codes` (`count` 1-50, optional
-    `expire_days`: empty uses the configured `code_expire_days`, `0` never
-    expires) and `DELETE /api/v2/admin/invite/codes/:id` (revokes an unused
-    code; a used code is kept as the record of who registered with it).
-    Panel envelope; errors are `code: -1` answers.
-  - **Bridged.** The identity-platform host relays them to the kernel's
-    handler (`bridgedRoutes`), like every route whose table only Control
-    reads: `v2_invite_code` is consumed by registration inside Control. The
-    v2 catalog grows to 295 routes (91 bridged, 173 native-flagged, 31
-    kernel-owned); `config/editions.json` is unchanged.
-  - **Codes made here belong to no user**: they admit a registration and
-    attribute no referral, and do not count toward a user's `code_count`
-    limit. The user's own generation (affiliate), its limit and its
-    advisory lock are unchanged.
-  - **Web app.** A new "邀请码 / Invite codes" admin page
-    (`/admin/invite-codes`, under Users in both editions) generates, lists,
-    filters, copies and revokes codes and says whether registration
-    requires one; in commercial it links the Invite Rewards page, which is
-    unchanged.
-- **Browser pop-ups replaced by in-app toasts and dialogs** (UI redesign
-  phase U4, `docs/reference/frontend-design.md` "Feedback and dialogs in
-  pages"). No admin or user page opens the browser's `alert`, `confirm` or
-  `prompt` any more, and every hand-rolled pop-up window is the shared
-  dialog or side sheet: same fields, buttons and API calls.
-  - **Results** appear as a toast at the bottom (success disappears after
-    3 s; errors stay until closed). Errors in a form stay in the open
-    dialog, next to the field or above its buttons, instead of a pop-up
-    that closed the form's context.
-  - **Undo instead of "are you sure?"** where the action has a real
-    inverse: banning or unbanning a user, enabling or disabling a payment
-    gateway, deleting the Telegram webhook, removing a group from a plan,
-    removing a member or plan from an access group. The toast offers 撤销
-    for 5 s.
-  - **Confirmations** for irreversible actions name the object and say what
-    happens, with a red button named after the action (「删除节点」, not
-    「确定」); a failure is shown inside the confirmation. Deleting a node, a
-    NodeX forward node or an Ansible machine now asks you to type its name.
-    Sending a Telegram broadcast now asks first.
-  - **Dialogs** trap focus, close with Esc and return focus to the button
-    that opened them, are named for screen readers, follow dark mode, and
-    form dialogs fill the screen on phones. Details open as a side sheet (a bottom sheet
-    on phones): a user's 30-day traffic, order and payment-record details,
-    tickets, a node's protocols, plugin details and deployment assignments.
-  - **Forward suite** (转发, 隧道, 限速, NodeX 转发节点, Ansible 机器): visual
-    change only; flows, including the second confirmation before a forward
-    force delete, are unchanged. Their result banners became toasts, so a
-    message is no longer hidden behind an open dialog.
-  - Fixed along the way: the forward import hint and the notification
-    template hint lost text to i18n placeholders; the payment gateway
-    config example logged errors; Subscriptions' protocol-pool checkboxes did
-    nothing and its icon buttons had no names; a failed subscription cache
-    refresh reported success; the plan group picker could not be used from
-    the keyboard; several dialog labels were not tied to their fields.
-  - Component library: a dialog stays within the screen width on phones; a
-    scrolling dialog body with read-only content can be scrolled from the
-    keyboard; the select placeholder and the `danger-soft` button meet
-    4.5:1 contrast.
-  - Lint: `no-alert` and the legacy `.modal*` classes are ESLint errors, and
-    `npm test` fails on a native dialog or `.modal-overlay`; the global
-    `.modal*` CSS and `useModalFocus` are removed.
-
+- **The web UI adopts AnixOps Design v1.0.2** (UI redesign phase U1,
+  `docs/reference/frontend-design.md`). Colours, type, radii, shadows,
+  favicon and app icons change.
+  - **Vendored design system.** `web/src/design/` holds `tokens.css`, the
+    mark, wordmarks, favicon and PWA icons, and self-hosted Inter (Latin
+    subset, `font-display: swap`), copied unmodified from
+    `AnixOps/AnixOps-design` at `v1.0.2`. `npm run design:sync -- --tag
+    <tag>` updates them; `npm run design:check` (Frontend Build CI job,
+    offline) compares them with the SHA-256 manifest. The mark and wordmark
+    are not MIT: all rights reserved, AnixOps products only
+    (`web/src/design/LICENSE-BRAND.md`).
+  - **Theme.** Light by default, follows `prefers-color-scheme` until the
+    user picks a theme, and `data-theme` overrides it; dark is pure black
+    with `#1C1C1E` cards. The accent moves from `#0064FA` to `#4F5BE8`
+    (dark `#818CF8`, filled buttons `#5B63E6`).
+  - **Legacy bridge.** Every pre-redesign variable (`--primary-color`,
+    `--surface-color`, `--text-*`, the admin sidebar set, ...) is now an
+    alias of a token, and the global `.btn`, `.card`, `.data-table`,
+    `.tabs` and form classes are restyled through tokens: pill buttons,
+    10/14/20 px radii, hairline separators.
+  - **Brand.** The admin sidebar, user header and login page show the
+    AnixOps mark lockup ("AnixOps" + "Control") instead of the text and
+    icon placeholders. The browser tab, home-screen icon and web app
+    manifest use the AnixOps icons; `theme-color` follows the theme.
+  - **Charts.** The hourly traffic and observability charts and the
+    topology graph take their colours from the chart tokens and re-theme
+    when the theme changes.
 - **New navigation: admin and user shells rebuilt** (UI redesign phase U3,
   `docs/reference/frontend-design.md` "App shell").
-  - **Admin sidebar** regrouped by object (plan §4.2): 概览, 用户, 网络 (节点,
-    转发, 转发节点, NodeX Agents), 扩展, 系统, and 商业 in the commercial
-    edition only. Light frosted material (dark in dark mode), the selected
-    page a rounded fill with an accent icon, ↑/↓ between links, and a toggle
-    that collapses it to an icon rail (remembered). Below 834 px it is a
-    modal drawer. Everything it shows comes from one menu config
+  - **Admin sidebar** regrouped by object: 概览, 用户, 网络 (节点, 转发,
+    转发节点, NodeX Agents), 扩展, 系统, and 商业 in the commercial edition
+    only. Light frosted material (dark in dark mode), the selected page a
+    rounded fill with an accent icon, ↑/↓ between links, and a toggle that
+    collapses it to an icon rail (remembered). Below 834 px it is a modal
+    drawer. Everything it shows comes from one menu config
     (`web/src/navigation/menu.js`) that merges the built-in items, the
     edition, permissions and plugin menus (`services` and `operations` under
     扩展, `system` under 系统).
@@ -147,38 +94,114 @@
   - Pages fade in (240 ms, 8 px rise; fade only under reduced motion); going
     back restores the list's scroll position. The shells load after sign-in,
     so the login page stays at 112 KB gzip.
-- **The web UI adopts AnixOps Design v1.0.2** (UI redesign phase U1,
-  `docs/reference/frontend-design.md`). Colours, type, radii, shadows,
-  favicon and app icons change; no page structure changes yet.
-  - **Vendored design system.** `web/src/design/` holds `tokens.css`, the
-    mark, wordmarks, favicon and PWA icons, and self-hosted Inter (Latin
-    subset, `font-display: swap`), copied unmodified from
-    `AnixOps/AnixOps-design` at `v1.0.2`. `npm run design:sync -- --tag
-    <tag>` updates them; `npm run design:check` (Frontend Build CI job,
-    offline) compares them with the SHA-256 manifest. The mark and wordmark
-    are not MIT: all rights reserved, AnixOps products only
-    (`web/src/design/LICENSE-BRAND.md`).
-  - **Theme.** Light by default, follows `prefers-color-scheme` until the
-    user picks a theme, and `data-theme` overrides it; dark is pure black
-    with `#1C1C1E` cards. The accent moves from `#0064FA` to `#4F5BE8`
-    (dark `#818CF8`, filled buttons `#5B63E6`).
-  - **Legacy bridge.** Every pre-redesign variable (`--primary-color`,
-    `--surface-color`, `--text-*`, the admin sidebar set, ...) is now an
-    alias of a token, and the global `.btn`, `.card`, `.data-table`,
-    `.modal`, `.tabs` and form classes are restyled through tokens: pill
-    buttons, 10/14/20 px radii, hairline separators. The admin sidebar is
-    light frosted material (dark in dark mode).
-  - **Brand.** The admin sidebar, user header and login page show the
-    AnixOps mark lockup ("AnixOps" + "Control") instead of the text and
-    icon placeholders. The browser tab, home-screen icon and web app
-    manifest use the AnixOps icons; `theme-color` follows the theme.
-  - **Charts.** The hourly traffic and observability charts and the
-    topology graph take their colours from the chart tokens and re-theme
-    when the theme changes.
-  - **Lint (warnings for now).** `npm run lint:styles` (stylelint) flags
-    colour literals and font sizes or radii off the token scale;
-    `npm run lint` (ESLint) flags `alert`/`confirm`/`prompt`. They become
-    errors as the redesign migrates pages.
+- **Browser pop-ups replaced by in-app toasts and dialogs** (UI redesign
+  phase U4, `docs/reference/frontend-design.md` "Feedback and dialogs in
+  pages"). No admin or user page opens the browser's `alert`, `confirm` or
+  `prompt` any more, and every hand-rolled pop-up window is the shared
+  dialog or side sheet: same fields, buttons and API calls.
+  - **Results** appear as a toast at the bottom (success disappears after
+    3 s; errors stay until closed). Errors in a form stay in the open
+    dialog, next to the field or above its buttons, instead of a pop-up
+    that closed the form's context.
+  - **Undo instead of "are you sure?"** where the action has a real
+    inverse: banning or unbanning a user, enabling or disabling a payment
+    gateway, deleting the Telegram webhook, removing a group from a plan,
+    removing a member or plan from an access group. The action happens at
+    once and the toast offers 撤销 for 5 s.
+  - **Confirmations** for irreversible actions name the object and say what
+    happens, with a red button named after the action (「删除节点」, not
+    「确定」); a failure is shown inside the confirmation. Deleting a node, a
+    NodeX forward node or an Ansible machine now asks you to type its name.
+    Sending a Telegram broadcast now asks first.
+  - **Dialogs** trap focus, close with Esc and return focus to the button
+    that opened them, are named for screen readers, follow dark mode, and
+    form dialogs fill the screen on phones. Details open as a side sheet (a
+    bottom sheet on phones): a user's 30-day traffic, order and
+    payment-record details, tickets, a node's protocols, plugin details and
+    deployment assignments.
+  - **Forward suite** (转发, 隧道, 限速, NodeX 转发节点, Ansible 机器): visual
+    change only; flows, including the second confirmation before a forward
+    force delete, are unchanged. Their result banners became toasts, so a
+    message is no longer hidden behind an open dialog.
+- **Administrators manage invite codes in every edition** (owner decision
+  2026-10-01; `internal/handler/invite_codes.go`,
+  `internal/service/invite_code_admin.go`, `docs/UPGRADE.md`). Invite codes
+  are registration control, so the community edition keeps them; the
+  commission, withdrawals, invite statistics and configuration stay with
+  the commercial `affiliate` package. Install this release's
+  `identity-platform` package: it serves the new routes.
+  - **Codes made here belong to no user**: they admit a registration and
+    attribute no referral, and do not count toward a user's `code_count`
+    limit. The user's own generation (affiliate), its limit and its
+    advisory lock are unchanged.
+  - **Bridged.** The identity-platform host relays the new routes to the
+    kernel's handler (`bridgedRoutes`), like every route whose table only
+    Control reads: `v2_invite_code` is consumed by registration inside
+    Control. The v2 catalog grows to 295 routes (91 bridged, 173
+    native-flagged, 31 kernel-owned); `config/editions.json` is unchanged.
+- **Frontend lint.** `no-alert` and the legacy `.modal*` classes are ESLint
+  errors, and `npm test` fails on a native dialog or `.modal-overlay`; the
+  global `.modal*` CSS and `useModalFocus` are removed. `npm run
+  lint:styles` (stylelint) still only warns about colour literals and font
+  sizes or radii off the token scale.
+
+### Added
+
+- **Admin invite-code routes and page**, owned by `identity-platform`
+  (which owns registration and ships in every release):
+  - `GET /api/v2/admin/invite/codes` (every code, newest first, `status` =
+    `unused`, `used` or `expired`, paged), `POST /api/v2/admin/invite/codes`
+    (`count` 1-50, optional `expire_days`: empty uses the configured
+    `code_expire_days`, `0` never expires) and
+    `DELETE /api/v2/admin/invite/codes/:id` (revokes an unused code; a used
+    code is kept as the record of who registered with it). Panel envelope;
+    errors are `code: -1` answers.
+  - A "邀请码 / Invite codes" admin page (`/admin/invite-codes`, under 用户
+    in both editions) generates, lists, filters, copies and revokes codes
+    and says whether registration requires one; in commercial it links the
+    Invite Rewards page, which is unchanged.
+- **Web component library** (UI redesign phase U2, `web/src/ui/`,
+  `docs/reference/frontend-design.md` "Components"), used by the new shells
+  and dialogs; page bodies migrate to it in later phases.
+  - Built on Reka UI 2.10.5 (headless; pinned) with our own scoped CSS on
+    AnixOps Design tokens only: Button, IconButton, Field, TextField,
+    Textarea, PasswordField, NumberField, Select, Combobox, Switch,
+    Checkbox, RadioGroup, SegmentedControl, Tabs, Dialog, ConfirmDialog
+    (typed-name variant for destructive actions), Sheet (right drawer,
+    bottom sheet below 834 px), Toast, Badge and StatusDot (one status
+    map), EmptyState, Skeleton, CopyField, PageHeader, Card, Section and
+    GroupedList. Keyboard operable, announced correctly, token focus
+    ring, reduced motion, light and dark, 390 px.
+  - Composables: `useToast()` (success 3 s, errors persistent, undo 5 s,
+    one live region, F8), `useConfirm()` (a promise instead of
+    `confirm()`), `useFormat()` (bytes, rates, durations, money, numbers,
+    dates, relative times on Intl and the current locale; `formatBytes`
+    matches the page copies, `{ precision: 1 }` for hero numbers),
+    `useDelayedLoading()` (the 300 ms rule).
+  - Built-in strings in `zh-CN` and `en` under `ui.*`.
+  - Histoire 1.0.0-beta.1 documents every component (`npm run story:dev`,
+    `npm run story:build`), with the vendored tokens and a dark-mode
+    toggle. `package.json` overrides Histoire's `vite` peer range (^7) to
+    the project's Vite 8.
+  - `reka-ui` and its helpers build into their own `ui-vendor` chunk.
+
+### Fixed
+
+- Web app, found while moving pages to the shared dialogs (U4): the forward
+  import hint and the notification template hint lost text to i18n
+  placeholders; the payment gateway config example logged errors;
+  Subscriptions' protocol-pool checkboxes did nothing and its icon buttons
+  had no names; a failed subscription cache refresh reported success; the
+  plan group picker could not be used from the keyboard; several dialog
+  labels were not tied to their fields.
+- Component library: a dialog stays within the screen width on phones; a
+  scrolling dialog body with read-only content can be scrolled from the
+  keyboard; the select placeholder and the `danger-soft` button meet 4.5:1
+  contrast.
+- The affiliate invite-code parity test no longer fails when a 30-day expiry
+  crosses a daylight-saving change in the machine's local zone: it compares
+  expiries with the same calendar arithmetic as the handlers
+  (`time.Now().AddDate`). Test code only.
 
 ## 4.1.0-rc.3 - 2026-10-01
 
