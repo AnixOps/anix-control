@@ -38,6 +38,45 @@ export default {
     qr: {
       failed: 'QR code unavailable'
     },
+    table: {
+      settings: 'Table settings',
+      columns: 'Columns',
+      density: 'Row height',
+      densities: {
+        comfortable: 'Comfortable',
+        compact: 'Compact'
+      },
+      actions: 'Actions',
+      rowActions: 'Actions for {name}',
+      selectAll: 'Select all rows on this page',
+      selectRow: 'Select {name}',
+      selected: '{count} selected',
+      selectAllMatching: 'Select all {count}',
+      clearSelection: 'Clear selection',
+      bulkActions: 'Actions for the selected rows',
+      loading: 'Loading {label}…',
+      loadFailed: 'This list didn’t load',
+      empty: 'Nothing here yet',
+      noMatches: 'No results',
+      noMatchesHint: 'Try other words or clear the filters.',
+      clearFilters: 'Clear filters'
+    },
+    pagination: {
+      label: 'Pages',
+      range: '{from}–{to} of {total}',
+      previous: 'Previous page',
+      next: 'Next page',
+      page: 'Page {page}',
+      compact: '{page} / {pages}'
+    },
+    search: {
+      clear: 'Clear search'
+    },
+    error: {
+      retry: 'Try again',
+      copyDetails: 'Copy error details',
+      detailsCopied: 'Error details copied'
+    },
     copy: {
       failed: 'Could not copy automatically. The text is selected; press Ctrl+C or ⌘C to copy it.'
     },

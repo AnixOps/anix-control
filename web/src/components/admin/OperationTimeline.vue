@@ -145,9 +145,9 @@ function stateClass(state) {
 .secondary-cell { color: var(--text-secondary); font-size: 11px; }
 .row-error { color: var(--error-color); font-size: 11px; }
 .state-badge { display: inline-flex; border-radius: 6px; padding: 3px 7px; font-size: 12px; }
-.state-active { color: var(--success-color); background: rgba(22, 163, 74, .1); }
-.state-error { color: var(--error-color); background: rgba(220, 38, 38, .1); }
-.state-pending { color: var(--warning-color); background: rgba(217, 119, 6, .1); }
+.state-active { color: color-mix(in srgb, var(--success) 78%, var(--label-1)); background: var(--success-soft); }
+.state-error { color: color-mix(in srgb, var(--danger) 78%, var(--label-1)); background: var(--danger-soft); }
+.state-pending { color: color-mix(in srgb, var(--warning) 78%, var(--label-1)); background: var(--warning-soft); }
 .empty-row { color: var(--text-secondary); text-align: center; }
 .btn { min-height: 32px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--surface-color); color: var(--text-color); cursor: pointer; padding: 6px 10px; }
 .btn-danger { border-color: var(--error-color); color: var(--error-color); }

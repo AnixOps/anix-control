@@ -1,147 +1,176 @@
 <template>
-  <div class="page-shell invite-codes-page">
-    <div class="page-toolbar">
-      <div>
-        <h1>{{ t('adminInviteCodes.title') }}</h1>
-        <p>{{ t('adminInviteCodes.subtitle') }}</p>
-      </div>
-      <router-link v-if="isCommercial" class="btn btn-secondary" to="/admin/invite" data-testid="invite-rewards-link">
-        {{ t('adminInviteCodes.rewardsLink') }}
-      </router-link>
-    </div>
+  <div class="list-page">
+    <UiPageHeader :title="t('adminInviteCodes.title')" :description="t('adminInviteCodes.subtitle')">
+      <template #actions>
+        <UiButton v-if="isCommercial" as="router-link" to="/admin/invite" :icon-end="ArrowRight" data-testid="invite-rewards-link">
+          {{ t('adminInviteCodes.rewardsLink') }}
+        </UiButton>
+        <UiButton variant="primary" :icon="Plus" data-testid="open-generate" @click="openGenerate">{{ t('adminInviteCodes.generate.title') }}</UiButton>
+      </template>
+    </UiPageHeader>
 
     <p class="registration-hint" data-testid="registration-hint">
-      {{ requireInvite ? t('adminInviteCodes.registration.required') : t('adminInviteCodes.registration.optional') }}
+      <UiBadge :tone="requireInvite ? 'info' : 'neutral'" :dot="false" :label="requireInvite ? t('adminInviteCodes.registration.requiredBadge') : t('adminInviteCodes.registration.optionalBadge')" />
+      <span>{{ requireInvite ? t('adminInviteCodes.registration.required') : t('adminInviteCodes.registration.optional') }}</span>
     </p>
 
-    <section class="section-panel generate-panel">
-      <h3>{{ t('adminInviteCodes.generate.title') }}</h3>
-      <div class="form-row">
-        <div class="form-group">
-          <label for="invite-code-count">{{ t('adminInviteCodes.generate.count') }}</label>
-          <input id="invite-code-count" v-model.number="form.count" type="number" min="1" :max="maxBatch" />
-        </div>
-        <div class="form-group">
-          <label for="invite-code-expire">{{ t('adminInviteCodes.generate.expireDays') }}</label>
-          <input
-            id="invite-code-expire"
-            v-model="form.expireDays"
-            type="number"
-            min="0"
-            :placeholder="t('adminInviteCodes.generate.expireDaysPlaceholder')"
-          />
-          <p class="help-text">{{ t('adminInviteCodes.generate.expireDaysHelp') }}</p>
-        </div>
-      </div>
-      <div class="form-actions">
-        <button class="btn btn-primary" data-testid="generate-invite-codes" :disabled="generating" @click="generate">
-          {{ t('adminInviteCodes.generate.submit') }}
-        </button>
-      </div>
-      <div v-if="generated.length" class="generated-codes" data-testid="generated-codes">
-        <span>{{ t('adminInviteCodes.generate.created', { count: generated.length }) }}</span>
-        <code v-for="item in generated" :key="item.id">{{ item.code }}</code>
-        <button class="btn btn-sm btn-secondary" @click="copy(generated.map(item => item.code).join('\n'))">
-          {{ t('adminInviteCodes.actions.copyAll') }}
-        </button>
-      </div>
-    </section>
+    <UiDataTable
+      v-model:selected="selectedIds"
+      :columns="columns"
+      :rows="codes"
+      :label="t('adminInviteCodes.table.label')"
+      :row-label="item => item.code"
+      storage-key="admin.invite-codes"
+      manual-pagination
+      :page="page"
+      :page-size="pageSize"
+      :total="total"
+      :loading="loading"
+      :error="loadError"
+      :error-title="t('adminInviteCodes.messages.fetchFailed')"
+      :filtered="Boolean(filter)"
+      :empty-icon="Ticket"
+      :empty-title="t('adminInviteCodes.empty.title')"
+      :empty-description="t('adminInviteCodes.empty.description')"
+      selectable
+      :row-actions="codeActions"
+      @update:page="goTo"
+      @retry="fetchCodes"
+      @clear-filters="filter = ''"
+    >
+      <template #toolbar>
+        <UiFilterChips v-model="filter" :label="t('adminInviteCodes.filters.label')" :options="statusChips" data-testid="invite-code-filter" />
+      </template>
+      <template #empty-actions>
+        <UiButton variant="primary" :icon="Plus" @click="openGenerate">{{ t('adminInviteCodes.generate.title') }}</UiButton>
+      </template>
+      <template #cell-code="{ row }">
+        <code class="invite-code">{{ row.code }}</code>
+      </template>
+      <template #cell-status="{ row }">
+        <UiBadge :tone="STATE_TONES[codeState(row)]" :label="t(`adminInviteCodes.status.${codeState(row)}`)" />
+      </template>
+      <template #bulk-actions="{ rows: chosen }">
+        <UiButton size="sm" :icon="Copy" data-testid="bulk-copy" @click="copy(chosen.map(item => item.code).join('\n'))">{{ t('adminInviteCodes.actions.copy') }}</UiButton>
+        <UiButton size="sm" variant="danger-soft" :icon="Ban" :disabled="!chosen.some(item => item.status === 0)" data-testid="bulk-revoke" @click="revokeMany(chosen)">{{ t('adminInviteCodes.actions.revoke') }}</UiButton>
+      </template>
+    </UiDataTable>
 
-    <section class="section-panel data-panel">
-      <div class="toolbar">
-        <select v-model="filter" data-testid="invite-code-filter" @change="reload">
-          <option value="">{{ t('adminInviteCodes.filters.all') }}</option>
-          <option value="unused">{{ t('adminInviteCodes.status.unused') }}</option>
-          <option value="used">{{ t('adminInviteCodes.status.used') }}</option>
-          <option value="expired">{{ t('adminInviteCodes.status.expired') }}</option>
-        </select>
-        <button class="btn btn-secondary" @click="fetchCodes">{{ t('adminInviteCodes.actions.refresh') }}</button>
+    <UiDialog
+      v-model:open="showGenerate"
+      size="sm"
+      :title="t('adminInviteCodes.generate.title')"
+      :description="t('adminInviteCodes.generate.description')"
+      :dismissible="!generating"
+    >
+      <div v-if="generated.length" class="generated" data-testid="generated-codes">
+        <p class="generated__lead">{{ t('adminInviteCodes.generate.created', { count: generated.length }) }}</p>
+        <ul class="generated__list">
+          <li v-for="item in generated" :key="item.id"><code class="invite-code">{{ item.code }}</code></li>
+        </ul>
       </div>
-      <div class="table-wrap">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>{{ t('adminInviteCodes.table.code') }}</th>
-              <th>{{ t('adminInviteCodes.table.owner') }}</th>
-              <th>{{ t('adminInviteCodes.table.status') }}</th>
-              <th>{{ t('adminInviteCodes.table.usedBy') }}</th>
-              <th>{{ t('adminInviteCodes.table.expiresAt') }}</th>
-              <th>{{ t('adminInviteCodes.table.createdAt') }}</th>
-              <th>{{ t('adminInviteCodes.table.actions') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="item in codes" :key="item.id" data-testid="invite-code-row">
-              <td><code>{{ item.code }}</code></td>
-              <td>{{ item.user_id ? t('adminInviteCodes.owner.user', { id: item.user_id }) : t('adminInviteCodes.owner.admin') }}</td>
-              <td>
-                <span :class="['status-badge', `status-${codeState(item)}`]">{{ t(`adminInviteCodes.status.${codeState(item)}`) }}</span>
-              </td>
-              <td>{{ item.used_by ? `#${item.used_by}` : '-' }}</td>
-              <td>{{ item.expired_at ? formatDateTime(item.expired_at) : t('adminInviteCodes.never') }}</td>
-              <td>{{ item.created_at ? formatDateTime(item.created_at) : '-' }}</td>
-              <td>
-                <div class="action-buttons">
-                  <button class="btn btn-sm btn-secondary" @click="copy(item.code)">
-                    {{ t('adminInviteCodes.actions.copy') }}
-                  </button>
-                  <button
-                    v-if="item.status === 0"
-                    class="btn btn-sm btn-danger"
-                    data-testid="revoke-invite-code"
-                    @click="revoke(item)"
-                  >
-                    {{ t('adminInviteCodes.actions.revoke') }}
-                  </button>
-                </div>
-              </td>
-            </tr>
-            <tr v-if="codes.length === 0">
-              <td colspan="7" class="empty-row">{{ t('adminInviteCodes.empty') }}</td>
-            </tr>
-          </tbody>
-        </table>
+      <div v-else class="generate-form">
+        <UiTextField
+          id="invite-code-count"
+          v-model.number="form.count"
+          type="number"
+          min="1"
+          :max="maxBatch"
+          :label="t('adminInviteCodes.generate.count')"
+          :help="t('adminInviteCodes.generate.countHelp', { max: maxBatch })"
+          :error="countError"
+        />
+        <UiTextField
+          id="invite-code-expire"
+          v-model="form.expireDays"
+          type="number"
+          min="0"
+          :label="t('adminInviteCodes.generate.expireDays')"
+          :placeholder="t('adminInviteCodes.generate.expireDaysPlaceholder')"
+          :help="t('adminInviteCodes.generate.expireDaysHelp')"
+          :suffix="t('adminInviteCodes.generate.daysUnit')"
+        />
       </div>
-      <div class="pager">
-        <button class="btn btn-sm btn-secondary" :disabled="page <= 1" @click="goTo(page - 1)">
-          {{ t('adminInviteCodes.pager.previous') }}
-        </button>
-        <span>{{ t('adminInviteCodes.pager.summary', { page, pages: totalPages, total }) }}</span>
-        <button class="btn btn-sm btn-secondary" :disabled="page >= totalPages" @click="goTo(page + 1)">
-          {{ t('adminInviteCodes.pager.next') }}
-        </button>
-      </div>
-    </section>
+      <template #footer="{ close }">
+        <template v-if="generated.length">
+          <UiButton :icon="Copy" @click="copy(generated.map(item => item.code).join('\n'))">{{ t('adminInviteCodes.actions.copyAll') }}</UiButton>
+          <UiButton variant="primary" @click="close">{{ t('adminInviteCodes.actions.done') }}</UiButton>
+        </template>
+        <template v-else>
+          <UiButton :disabled="generating" @click="close">{{ t('common.actions.cancel') }}</UiButton>
+          <UiButton variant="primary" data-testid="generate-invite-codes" :loading="generating" @click="generate">{{ t('adminInviteCodes.generate.submit') }}</UiButton>
+        </template>
+      </template>
+    </UiDialog>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref } from 'vue'
+// 邀请码 (plan §7.1 list page): registration control in every edition
+// (identity-platform). Codes as a server-paged list with status chips, a
+// "…" menu (copy, revoke), bulk copy / revoke, and a dialog that generates
+// a batch and shows it. Commissions, withdrawals and statistics are the
+// commercial 邀请返佣 page. Endpoints unchanged: GET/POST
+// /admin/invite/codes, DELETE /admin/invite/codes/:id.
+import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { ArrowRight, Ban, Copy, Plus, Ticket } from '@lucide/vue'
 import { generateInviteCodes, getInviteCodes, revokeInviteCode } from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useEdition } from '@/composables/useEdition'
-import { useConfirm, useToast } from '@/ui'
+import UiBadge from '@/ui/UiBadge.vue'
+import UiButton from '@/ui/UiButton.vue'
+import UiDataTable from '@/ui/UiDataTable.vue'
+import UiDialog from '@/ui/UiDialog.vue'
+import UiFilterChips from '@/ui/UiFilterChips.vue'
+import UiPageHeader from '@/ui/UiPageHeader.vue'
+import UiTextField from '@/ui/UiTextField.vue'
+import { copyText } from '@/ui/composables/useClipboard'
+import { useConfirm } from '@/ui/composables/useConfirm'
+import { useFormat } from '@/ui/composables/useFormat'
+import { useToast } from '@/ui/composables/useToast'
 
-// Invite codes are registration control and served in every edition
-// (identity-platform). Commissions, withdrawals and statistics are the
-// commercial Invite Rewards page.
-const { t, formatDateTime } = useAppI18n()
+const { t } = useAppI18n()
+const format = useFormat()
 const toast = useToast()
 const confirm = useConfirm()
 const { isCommercial, requireInvite, loadEdition } = useEdition()
 
 const maxBatch = 50
 const pageSize = 20
+const STATE_TONES = { unused: 'success', used: 'neutral', expired: 'warning' }
 
 const codes = ref([])
 const total = ref(0)
 const page = ref(1)
 const filter = ref('')
+const loading = ref(false)
+const loadError = ref(null)
+const selectedIds = ref([])
+const showGenerate = ref(false)
 const generating = ref(false)
 const generated = ref([])
+const countError = ref('')
 const form = reactive({ count: 1, expireDays: '' })
 
 const totalPages = computed(() => Math.max(1, Math.ceil(total.value / pageSize)))
+
+const columns = computed(() => [
+  { key: 'code', label: t('adminInviteCodes.table.code'), primary: true, hideable: false },
+  { key: 'status', label: t('adminInviteCodes.table.status'), secondary: true },
+  { key: 'owner', label: t('adminInviteCodes.table.owner'), value: item => (item.user_id ? t('adminInviteCodes.owner.user', { id: item.user_id }) : t('adminInviteCodes.owner.admin')) },
+  { key: 'used_by', label: t('adminInviteCodes.table.usedBy'), numeric: true, format: value => (value ? `#${value}` : '—') },
+  { key: 'expired_at', label: t('adminInviteCodes.table.expiresAt'), nowrap: true, format: value => (value ? format.dateTime(value) : t('adminInviteCodes.never')) },
+  { key: 'created_at', label: t('adminInviteCodes.table.createdAt'), nowrap: true, breakpoint: 'lg', format: value => format.dateTime(value) }
+])
+const statusChips = computed(() => [
+  { value: 'unused', label: t('adminInviteCodes.status.unused') },
+  { value: 'used', label: t('adminInviteCodes.status.used') },
+  { value: 'expired', label: t('adminInviteCodes.status.expired') }
+])
+const codeActions = item => [
+  { key: 'copy', label: t('adminInviteCodes.actions.copy'), icon: Copy, onSelect: () => copy(item.code) },
+  { key: 'revoke', label: t('adminInviteCodes.actions.revokeOne'), icon: Ban, danger: true, separatorBefore: true, hidden: item.status !== 0, onSelect: () => revoke(item) }
+]
 
 // readPanel returns the data of a panel answer and throws its message when
 // the answer is an error (code other than 0).
@@ -166,33 +195,48 @@ function codeState(item) {
 }
 
 async function fetchCodes() {
+  loading.value = true
   try {
     const params = { page: page.value, page_size: pageSize }
     if (filter.value) params.status = filter.value
     const data = readPanel(await getInviteCodes(params))
     codes.value = Array.isArray(data.list) ? data.list : []
     total.value = Number(data.total || 0)
+    loadError.value = null
   } catch (error) {
-    console.error(t('adminInviteCodes.messages.fetchFailed'), error)
+    loadError.value = error
     codes.value = []
     total.value = 0
+  } finally {
+    loading.value = false
   }
 }
 
 function reload() {
   page.value = 1
+  selectedIds.value = []
   return fetchCodes()
 }
 
 function goTo(next) {
   page.value = Math.min(Math.max(1, next), totalPages.value)
+  selectedIds.value = []
   return fetchCodes()
+}
+
+watch(filter, () => { reload() })
+
+function openGenerate() {
+  generated.value = []
+  countError.value = ''
+  showGenerate.value = true
 }
 
 async function generate() {
   const count = Number(form.count)
+  countError.value = ''
   if (!Number.isInteger(count) || count < 1 || count > maxBatch) {
-    toast.error(t('adminInviteCodes.messages.countRange', { max: maxBatch }))
+    countError.value = t('adminInviteCodes.messages.countRange', { max: maxBatch })
     return
   }
   const payload = { count }
@@ -203,9 +247,10 @@ async function generate() {
   try {
     const data = readPanel(await generateInviteCodes(payload))
     generated.value = Array.isArray(data.codes) ? data.codes : []
+    toast.success(t('adminInviteCodes.messages.generated', { count: generated.value.length }))
     await reload()
   } catch (error) {
-    toast.error(t('adminInviteCodes.messages.generateFailed', { message: errorMessage(error) }))
+    countError.value = t('adminInviteCodes.messages.generateFailed', { message: errorMessage(error) })
   } finally {
     generating.value = false
   }
@@ -213,46 +258,51 @@ async function generate() {
 
 async function revoke(item) {
   const confirmed = await confirm({
-    title: t('adminInviteCodes.messages.revokeConfirm', { code: item.code }),
-    confirmLabel: t('adminInviteCodes.actions.revoke'),
+    title: t('adminInviteCodes.confirm.revokeTitle', { code: item.code }),
+    message: t('adminInviteCodes.confirm.revokeMessage'),
+    confirmLabel: t('adminInviteCodes.actions.revokeOne'),
     tone: 'danger'
   })
   if (!confirmed) return
   try {
     readPanel(await revokeInviteCode(item.id))
+    toast.success(t('adminInviteCodes.messages.revoked', { code: item.code }))
     await fetchCodes()
   } catch (error) {
     toast.error(t('adminInviteCodes.messages.revokeFailed', { message: errorMessage(error) }))
   }
 }
 
-// copy uses the clipboard API where the page is a secure context and a
-// hidden textarea otherwise (plain HTTP).
+// Bulk revoke: there is no bulk endpoint, so each unused code goes through
+// the same DELETE as the row action, after one confirmation.
+async function revokeMany(chosen) {
+  const targets = chosen.filter(item => item.status === 0)
+  if (!targets.length) return
+  const confirmed = await confirm({
+    title: t('adminInviteCodes.confirm.revokeManyTitle', { count: targets.length }),
+    message: t('adminInviteCodes.confirm.revokeMessage'),
+    confirmLabel: t('adminInviteCodes.actions.revoke'),
+    tone: 'danger'
+  })
+  if (!confirmed) return
+  let done = 0
+  let failure = null
+  for (const item of targets) {
+    try {
+      readPanel(await revokeInviteCode(item.id))
+      done += 1
+    } catch (error) {
+      failure = failure || error
+    }
+  }
+  selectedIds.value = []
+  await fetchCodes()
+  if (done) toast.success(t('adminInviteCodes.messages.revokedMany', { count: done }))
+  if (failure) toast.error(t('adminInviteCodes.messages.revokeFailed', { message: errorMessage(failure) }))
+}
+
 async function copy(text) {
-  let copied = false
-  if (navigator.clipboard && window.isSecureContext) {
-    try {
-      await navigator.clipboard.writeText(text)
-      copied = true
-    } catch {
-      copied = false
-    }
-  }
-  if (!copied) {
-    try {
-      const area = document.createElement('textarea')
-      area.value = text
-      area.style.position = 'fixed'
-      area.style.top = '-9999px'
-      document.body.appendChild(area)
-      area.select()
-      copied = document.execCommand('copy')
-      document.body.removeChild(area)
-    } catch {
-      copied = false
-    }
-  }
-  if (copied) toast.success(t('adminInviteCodes.messages.copied'))
+  if (await copyText(text)) toast.success(t('adminInviteCodes.messages.copied'))
   else toast.error(t('adminInviteCodes.messages.copyFailed'))
 }
 
@@ -260,63 +310,53 @@ onMounted(() => {
   loadEdition()
   fetchCodes()
 })
+
+defineExpose({ fetchCodes, generate, revoke })
 </script>
 
 <style scoped>
 .registration-hint {
-  color: var(--text-secondary);
-  margin-bottom: 16px;
-}
-
-.generate-panel {
-  margin-bottom: 20px;
-}
-
-.generate-panel h3 {
-  margin-bottom: 12px;
-}
-
-.help-text {
-  color: var(--text-secondary);
-  font-size: 12px;
-  margin-top: 4px;
-}
-
-.generated-codes {
   display: flex;
   flex-wrap: wrap;
+  gap: var(--space-2);
   align-items: center;
-  gap: 8px;
-  margin-top: 12px;
+  margin-top: calc(-1 * var(--space-2));
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
 }
 
-.toolbar {
+.invite-code {
+  font-family: var(--font-mono);
+  font-size: var(--type-callout-size);
+  letter-spacing: 0.04em;
+}
+
+.generate-form {
   display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-bottom: 12px;
+  flex-direction: column;
+  gap: var(--space-4);
 }
 
-.pager {
+.generated {
   display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  gap: 12px;
-  margin-top: 12px;
+  flex-direction: column;
+  gap: var(--space-3);
 }
 
-.status-unused {
-  background: rgba(34, 197, 94, 0.15);
-  color: #22c55e;
+.generated__lead {
+  color: var(--label-2);
 }
 
-.status-used {
-  background: rgba(148, 163, 184, 0.15);
-  color: var(--text-secondary);
-}
-
-.status-expired {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
+.generated__list {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+  gap: var(--space-2);
+  max-height: 280px;
+  padding: var(--space-3);
+  margin: 0;
+  overflow-y: auto;
+  border-radius: var(--radius-sm);
+  background: var(--bg-grouped);
+  list-style: none;
 }
 </style>

@@ -5,6 +5,7 @@
 // checks the same in CI).
 import pluginVue from 'eslint-plugin-vue'
 import globals from 'globals'
+import { DATA_TABLE_PAGES } from './scripts/data-table-pages.mjs'
 
 export default [
   { ignores: ['public/**', 'coverage/**', 'node_modules/**', 'playwright-report/**', 'test-results/**'] },
@@ -19,6 +20,13 @@ export default [
     rules: {
       'no-alert': 'error',
       'vue/no-restricted-class': ['error', 'modal-overlay', 'modal', 'modal-lg', 'modal-header', 'modal-body', 'modal-footer']
+    }
+  },
+  {
+    // Migrated list pages use UiDataTable (UI U6).
+    files: DATA_TABLE_PAGES,
+    rules: {
+      'vue/no-restricted-html-elements': ['error', { element: 'table', message: 'Use UiDataTable (frontend-design.md, "List pages").' }]
     }
   }
 ]

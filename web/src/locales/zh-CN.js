@@ -200,15 +200,15 @@ export default {
       dashboard: '仪表盘',
       monitor: '实时监控',
       trafficHourly: '小时流量统计',
-      users: '用户管理',
+      users: '用户',
       nodes: '节点管理',
       subscriptions: '订阅管理',
-      orders: '订单管理',
-      plans: '套餐管理',
+      orders: '订单',
+      plans: '套餐',
       subscriptionTemplates: '订阅模板',
-      tickets: '工单管理',
-      coupons: '优惠券管理',
-      knowledge: '知识库管理',
+      tickets: '工单',
+      coupons: '优惠券',
+      knowledge: '帮助中心内容',
       forward: '流量转发管理',
       forwardTunnel: '隧道管理',
       forwardLimit: '限速管理',
@@ -218,14 +218,14 @@ export default {
       forwardNodeX: 'NodeX 运行时',
       forwardAgents: 'NodeX Agents',
       control: '控制内核',
-      plugins: '插件',
+      plugins: '插件中心',
       deployments: '部署',
       accessGroups: '访问组',
-      payment: '支付网关管理',
+      payment: '支付',
       telegram: 'Telegram Bot 管理',
       mfa: 'MFA 设置',
       notifications: '通知管理',
-      invite: '邀请返利管理',
+      invite: '邀请返佣',
       inviteCodes: '邀请码',
       system: '系统管理',
       fallback: '管理面板'
@@ -574,29 +574,27 @@ export default {
       heroEyebrow: '\u6267\u884c\u673a\u7fa4',
       title: 'Ansible \u673a\u5668',
       heroText: '\u8fd9\u4e2a\u9875\u9762\u53ea\u7528\u4e8e\u65e0\u72b6\u6001 Ansible \u6267\u884c\u673a\u5668\u3002\u8fd9\u4e9b\u4e3b\u673a\u4e0d\u9700\u8981 Node-Agent\uff0c\u4e5f\u4e0d\u9700\u8981\u6301\u7eed\u63a7\u5236\u9762\u8fde\u63a5\u3002',
-      refreshLoading: '\u5237\u65b0\u4e2d...',
       addMachine: '\u6dfb\u52a0\u673a\u5668',
+      relatedPages: '\u76f8\u5173\u8fd0\u884c\u65f6\u9875\u9762',
+      table: {
+        reachability: '\u53ef\u8fbe\u6027',
+        lastResult: '\u6700\u8fd1\u7ed3\u679c'
+      },
       stats: {
         machines: '\u673a\u5668',
         online: '\u5728\u7ebf',
         enabled: '\u5df2\u542f\u7528'
       },
-      sectionEyebrow: '\u673a\u5668',
       sectionTitle: '\u6267\u884c\u76ee\u6807',
       sectionCopy: '\u8fd9\u4e9b\u8bb0\u5f55\u53ea\u7528\u4e8e\u672c\u5730 Ansible \u8fd0\u884c\u65f6\u8bc6\u522b\u6267\u884c\u76ee\u6807\u4e3b\u673a\uff0c\u4e0d\u5c5e\u4e8e NodeX \u63a7\u5236\u9762\u8282\u70b9\u3002',
       inventoryHint: 'SSH \u7528\u6237\u540d\u3001\u5bc6\u7801\u548c\u79c1\u94a5\u4e0d\u5728\u6b64\u9875\u9762\u4fdd\u5b58\uff0c\u8bf7\u5728 Ansible inventory\u3001playbook \u6216 Local Runtime \u73af\u5883\u914d\u7f6e\u4e2d\u63d0\u4f9b\u3002',
       filterLabel: '\u72b6\u6001',
       filters: {
-        all: '\u5168\u90e8',
         online: '\u5728\u7ebf',
         offline: '\u79bb\u7ebf'
       },
-      loading: '\u52a0\u8f7d Ansible \u673a\u5668\u4e2d...',
-      empty: '\u6682\u65e0 Ansible \u6267\u884c\u673a\u5668\u3002',
-      machineEyebrow: '\u673a\u5668 #{id}',
+      empty: '\u8fd8\u6ca1\u6709 Ansible \u6267\u884c\u673a\u5668',
       meta: {
-        authSource: '\u51ed\u636e\u6765\u6e90',
-        authSourceValue: 'Inventory / Local Runtime',
         regionIsp: '\u533a\u57df / ISP',
         currentConn: '\u5f53\u524d\u8fde\u63a5',
         traffic: '\u6d41\u91cf'
@@ -609,26 +607,28 @@ export default {
         syncing: '\u540c\u6b65\u4e2d...',
         disable: '\u7981\u7528',
         enable: '\u542f\u7528',
-        delete: '\u5220\u9664'
+        delete: '\u5220\u9664',
+        updating: '\u6b63\u5728\u66f4\u65b0 {name}\u2026'
       },
       modal: {
         titleEdit: '\u7f16\u8f91 Ansible \u673a\u5668',
         titleAdd: '\u6dfb\u52a0 Ansible \u673a\u5668',
-        deleteTitle: '删除 Ansible 机器 {name}？',
-        deleteConfirm: '它将从 Ansible 执行机群中移除。此操作无法撤销。',
-        deleteAction: '删除机器',
+        deleteTitle: '\u5220\u9664 Ansible \u673a\u5668 {name}\uff1f',
+        deleteConfirm: '\u5b83\u5c06\u4ece Ansible \u6267\u884c\u673a\u7fa4\u4e2d\u79fb\u9664\u3002\u6b64\u64cd\u4f5c\u65e0\u6cd5\u64a4\u9500\u3002',
+        deleteAction: '\u5220\u9664\u673a\u5668',
         saveLoading: '\u4fdd\u5b58\u4e2d...',
         save: '\u4fdd\u5b58',
         cancel: '\u53d6\u6d88'
       },
       messages: {
-        saved: '已保存 {name}',
-        deleted: '已删除 {name}'
+        saved: '\u5df2\u4fdd\u5b58 {name}',
+        deleted: '\u5df2\u5220\u9664 {name}'
       },
       fields: {
         name: '\u540d\u79f0',
         host: '\u4e3b\u673a',
         reachabilityPort: '\u8fde\u901a\u6027\u7aef\u53e3',
+        reachabilityHelp: '\u63a7\u5236\u9762\u53ea\u68c0\u67e5 host:port \u80fd\u5426\u5efa\u7acb TCP \u8fde\u63a5\u3002',
         weight: '\u6743\u91cd',
         region: '\u533a\u57df',
         isp: 'ISP'
@@ -1636,22 +1636,19 @@ export default {
       },
       actions: {
         refresh: '\u5237\u65b0',
-        execute: '\u6267\u884c',
+        execute: '\u8fd0\u884c',
         send: '\u53d1\u9001',
         cancel: '\u53d6\u6d88',
-        monitor: '\u76d1\u63a7',
-        terminalShort: '\u7ec8\u7aef',
-        taskShort: '\u4efb\u52a1',
-        monitorShort: '\u76d1\u63a7'
+        monitor: '\u67e5\u770b\u76d1\u63a7',
+        openTerminal: '\u5728\u7ec8\u7aef\u4e2d\u6253\u5f00'
       },
       table: {
-        nodeId: '\u8282\u70b9 ID',
+        nodeId: '\u8282\u70b9',
         version: '\u7248\u672c',
         system: '\u7cfb\u7edf',
         lastSeen: '\u6700\u540e\u5728\u7ebf',
         status: '\u72b6\u6001',
         capabilities: '\u80fd\u529b',
-        action: '\u64cd\u4f5c',
         taskId: '\u4efb\u52a1 ID',
         node: '\u8282\u70b9',
         command: '\u547d\u4ee4 / \u52a8\u4f5c',
@@ -1667,13 +1664,17 @@ export default {
         failed: '\u5931\u8d25'
       },
       empty: {
-        agents: '\u6682\u65e0\u5728\u7ebf Agent',
-        tasks: '\u6682\u65e0\u4efb\u52a1\u8bb0\u5f55'
+        agents: '\u6ca1\u6709\u5728\u7ebf\u7684 Agent',
+        agentsDescription: 'NodeX \u8282\u70b9\u8fde\u4e0a\u63a7\u5236\u9762\u540e\uff0c\u5b83\u7684 Agent \u4f1a\u51fa\u73b0\u5728\u8fd9\u91cc\u3002',
+        tasks: '\u8fd8\u6ca1\u6709\u4efb\u52a1\u8bb0\u5f55',
+        tasksDescription: '\u5728\u7ec8\u7aef\u91cc\u8fd0\u884c\u7684\u547d\u4ee4\u548c\u4e0b\u53d1\u7684\u4efb\u52a1\u4f1a\u5217\u5728\u8fd9\u91cc\u3002'
       },
       terminal: {
         chooseNode: '\u9009\u62e9\u8282\u70b9',
         nodeLabel: '\u8282\u70b9 #{id}',
-        chooseAction: '\u9009\u62e9\u52a8\u4f5c'
+        chooseAction: '\u9009\u62e9\u52a8\u4f5c',
+        output: '\u7ec8\u7aef\u8f93\u51fa',
+        hint: '\u9009\u62e9\u4e00\u4e2a\u5728\u7ebf\u8282\u70b9\u548c\u52a8\u4f5c\u540e\u8fd0\u884c\u3002\u53ea\u80fd\u8fd0\u884c\u63a7\u5236\u9762\u5141\u8bb8\u7684\u8bca\u65ad\u52a8\u4f5c\u3002'
       },
       diagnosticActions: {
         service_status: '\u67e5\u770b\u670d\u52a1\u72b6\u6001',
@@ -1689,19 +1690,19 @@ export default {
       },
       taskModal: {
         title: '\u4e0b\u53d1\u4efb\u52a1',
-        targetNode: '\u76ee\u6807\u8282\u70b9',
         action: '\u52a8\u4f5c',
-        timeoutSeconds: '\u8d85\u65f6 (\u79d2)'
+        timeoutSeconds: '\u8d85\u65f6\uff08\u79d2\uff09'
       },
       hints: {
         monitor: '\u67e5\u770b\u8282\u70b9 #{id} \u7684\u76d1\u63a7\u6570\u636e'
       },
       messages: {
-        fetchFailed: '\u83b7\u53d6 Agent \u5217\u8868\u5931\u8d25',
+        fetchFailed: 'Agent \u5217\u8868\u6ca1\u6709\u52a0\u8f7d\u51fa\u6765',
+        tasksFetchFailed: '\u4efb\u52a1\u5386\u53f2\u6ca1\u6709\u52a0\u8f7d\u51fa\u6765',
         taskIncomplete: '\u8bf7\u586b\u5199\u5b8c\u6574\u4fe1\u606f',
         taskSent: '\u4efb\u52a1\u5df2\u53d1\u9001',
-        taskSendFailed: '\u53d1\u9001\u5931\u8d25: {message}',
-        commandError: '\u9519\u8bef: {message}',
+        taskSendFailed: '\u53d1\u9001\u5931\u8d25\uff1a{message}',
+        commandError: '\u9519\u8bef\uff1a{message}',
         selectActionFirst: '\u8bf7\u5148\u9009\u62e9\u4e00\u4e2a\u52a8\u4f5c'
       }
     }
@@ -2297,24 +2298,23 @@ export default {
     }
   },
   adminPayment: {
-    title: '支付网关管理',
-    subtitle: '管理支付渠道、支付记录和统计数据。',
-    currencySymbol: '¥',
+    title: '支付',
+    subtitle: '用户付款用的网关、每一笔支付和收入统计。',
     tabs: {
+      label: '支付分区',
       gateways: '支付网关',
       records: '支付记录',
       stats: '统计数据'
     },
     actions: {
-      createGateway: '新增网关',
+      createGateway: '新建网关',
       enable: '启用',
       disable: '禁用',
       edit: '编辑',
-      delete: '删除',
-      search: '搜索',
       details: '详情'
     },
     gateways: {
+      label: '支付网关',
       table: {
         id: 'ID',
         name: '名称',
@@ -2322,15 +2322,16 @@ export default {
         feeRate: '手续费率',
         minAmount: '最小金额',
         maxAmount: '最大金额',
-        status: '状态',
-        actions: '操作'
+        status: '状态'
       },
-      empty: '暂无支付网关'
+      empty: '还没有支付网关',
+      emptyDescription: '添加一个网关，用户才能付款购买套餐。'
     },
     records: {
+      label: '支付记录',
       filters: {
-        allStatuses: '全部状态',
-        allTypes: '全部类型'
+        status: '按状态筛选',
+        type: '按网关筛选'
       },
       table: {
         id: 'ID',
@@ -2339,8 +2340,7 @@ export default {
         gateway: '网关',
         amount: '金额',
         status: '状态',
-        createdAt: '创建时间',
-        actions: '操作'
+        createdAt: '创建时间'
       },
       detail: {
         title: '支付详情',
@@ -2348,7 +2348,8 @@ export default {
         amount: '金额',
         status: '状态'
       },
-      empty: '暂无支付记录'
+      empty: '还没有支付记录',
+      emptyDescription: '用户为订单付款后，记录会出现在这里。'
     },
     stats: {
       totalAmount: '总收入',
@@ -2359,7 +2360,7 @@ export default {
       empty: '暂无渠道统计'
     },
     modal: {
-      createTitle: '新增网关',
+      createTitle: '新建网关',
       editTitle: '编辑网关',
       fields: {
         name: '名称',
@@ -2385,8 +2386,8 @@ export default {
       epay: 'EPay'
     },
     status: {
-      enabled: '启用',
-      disabled: '禁用',
+      enabled: '已启用',
+      disabled: '已停用',
       pending: '待支付',
       paid: '已支付',
       failed: '失败',
@@ -2398,9 +2399,9 @@ export default {
       deleteAction: '删除网关'
     },
     messages: {
-      fetchGatewaysFailed: '加载支付网关失败',
-      fetchRecordsFailed: '加载支付记录失败',
-      fetchStatsFailed: '加载支付统计失败',
+      fetchGatewaysFailed: '支付网关没有加载出来',
+      fetchRecordsFailed: '支付记录没有加载出来',
+      fetchStatsFailed: '支付统计没有加载出来',
       invalidConfigJson: '配置 JSON 格式错误',
       gatewaySaveSuccess: '网关保存成功',
       gatewaySaveFailed: '网关保存失败: {message}',
@@ -2456,14 +2457,27 @@ export default {
   adminTemplates: {
     title: '订阅模板',
     subtitle: '免费的订阅模板：流量额度、速率和设备限制，以及授予的订阅分组。分配给用户即可生效。',
+    filters: {
+      search: '搜索模板'
+    },
+    table: {
+      label: '订阅模板列表'
+    },
     actions: {
-      create: '新增模板'
+      create: '新建模板'
     },
     empty: {
-      noData: '暂无订阅模板'
+      title: '还没有订阅模板',
+      description: '创建模板后分配给用户，用户就能获得流量和订阅分组。'
+    },
+    detail: {
+      description: '模板 ID {id}'
+    },
+    labels: {
+      noGroupsHint: '这个模板还没有授予订阅分组。'
     },
     planModal: {
-      createTitle: '新增订阅模板',
+      createTitle: '新建订阅模板',
       editTitle: '编辑订阅模板',
       fields: {
         name: '模板名称'
@@ -2491,39 +2505,51 @@ export default {
     }
   },
   adminPlans: {
-    title: '套餐管理',
-    subtitle: '管理订阅套餐、流量额度、速率和设备限制。',
+    title: '套餐',
+    subtitle: '用户可以购买的套餐：流量额度、速率和设备限制、价格，以及授予的订阅分组。',
+    filters: {
+      search: '搜索套餐'
+    },
     table: {
+      label: '套餐列表',
       name: '名称',
-      transfer: '流量（GB）',
+      transfer: '流量',
       limits: '限制',
-      monthPrice: '月付价格（分）',
-      subscriptionGroups: '订阅分组',
-      actions: '操作'
+      monthPrice: '月付价格',
+      subscriptionGroups: '订阅分组'
     },
     actions: {
-      create: '新增套餐',
+      create: '新建套餐',
       edit: '编辑',
       delete: '删除',
       assign: '分配',
       manageGroups: '管理分组',
-      removeGroup: '移除分组'
+      removeGroupNamed: '移除分组 {name}'
     },
     empty: {
-      noData: '暂无套餐'
+      title: '还没有套餐',
+      description: '创建套餐后，用户就能购买流量并获得订阅分组。'
+    },
+    detail: {
+      description: '套餐 ID {id}',
+      limits: '额度和限制',
+      actions: '操作'
     },
     planModal: {
-      createTitle: '新增套餐',
+      createTitle: '新建套餐',
       editTitle: '编辑套餐',
       fields: {
         name: '套餐名称',
-        transfer: '流量额度（GB）',
-        speedLimit: '速率限制（Mbps，0 为不限）',
-        deviceLimit: '设备限制（0 为不限）',
+        transfer: '流量额度',
+        speedLimit: '速率限制',
+        deviceLimit: '设备限制',
         monthPrice: '月付价格（分）'
       },
       placeholders: {
         name: '请输入套餐名称'
+      },
+      help: {
+        zeroUnlimited: '0 表示不限制。'
       }
     },
     assignModal: {
@@ -2534,20 +2560,24 @@ export default {
       },
       placeholders: {
         userId: '请输入用户 ID'
+      },
+      help: {
+        expireAt: '可选，Unix 时间（秒）。'
       }
     },
     groupModal: {
       title: '套餐分组 - {name}',
       description: '选择该套餐可访问的订阅分组。',
       empty: '暂无订阅分组',
-      noDescription: '无描述',
-      selectedShort: '已选'
+      noDescription: '无描述'
     },
     labels: {
       noSpeedLimit: '不限速',
       noDeviceLimit: '不限设备',
       speedLimitMbps: '{value} Mbps',
-      deviceLimitCount: '{value} 台'
+      deviceLimitCount: '{value} 台',
+      noGroups: '无',
+      noGroupsHint: '这个套餐还没有授予订阅分组。'
     },
     confirm: {
       deleteTitle: '删除套餐 {name}？',
@@ -2575,59 +2605,53 @@ export default {
     }
   },
   adminUsers: {
-    title: '用户管理',
-    subtitle: '管理所有注册用户。',
-    stats: {
-      totalUsers: '总用户数',
-      activeUsers: '有效用户',
-      expiredUsers: '已过期',
-      bannedUsers: '已封禁'
-    },
+    title: '用户',
+    subtitle: '账户、订阅和流量。选中一个用户查看详情。',
     filters: {
-      searchEmail: '搜索邮箱...',
-      allStatus: '全部状态'
+      searchEmail: '搜索邮箱',
+      label: '按状态筛选',
+      exhaustedHint: '「流量用尽」只筛选本页的用户，服务器没有这个筛选条件。'
     },
     table: {
+      label: '用户列表',
       id: 'ID',
       email: '邮箱',
       plan: '套餐',
       subscriptionTemplate: '订阅模板',
-      traffic: '流量',
+      traffic: '已用 / 总流量',
       limits: '限制',
       expireAt: '到期时间',
       status: '状态',
-      createdAt: '注册时间',
-      actions: '操作'
+      createdAt: '注册时间'
     },
     status: {
-      active: '有效',
-      expired: '已过期',
-      banned: '已封禁'
+      active: '正常',
+      expired: '已到期',
+      banned: '已封禁',
+      exhausted: '流量用尽'
     },
     actions: {
-      search: '搜索',
-      addUser: '新增用户',
+      addUser: '新建用户',
       editUser: '编辑用户',
       manageTunnel: '管理隧道授权',
-      manageTunnelShort: '隧道',
       ban: '封禁',
       unban: '解封',
       resetTraffic: '重置流量',
-      resetShort: '重置',
       copySubscribe: '复制订阅链接',
-      copySubscribeShort: '复制订阅',
-      resetSubscribe: '重置订阅链接 (旧链接失效)',
-      resetSubscribeShort: '重置订阅',
-      viewTraffic: '查看最近 30 天流量',
-      viewTrafficShort: '流量详情'
+      resetSubscribe: '重置订阅链接',
+      viewTraffic: '最近 30 天流量'
     },
     empty: {
-      noData: '暂无数据'
+      title: '还没有用户',
+      description: '添加第一个用户后，就能给他分配订阅。'
     },
-    pagination: {
-      prev: '上一页',
-      next: '下一页',
-      info: '第 {page} / {totalPages} 页'
+    detail: {
+      description: 'ID {id} · 注册于 {date}',
+      subscription: '订阅',
+      flowReset: '流量重置',
+      actions: '操作',
+      danger: '危险操作',
+      dangerFooter: '重置订阅链接后，所有客户端都要重新导入；重置流量无法撤销。'
     },
     editModal: {
       title: '编辑用户',
@@ -2647,8 +2671,8 @@ export default {
       }
     },
     createModal: {
-      title: '新增用户',
-      creating: '创建中...',
+      title: '新建用户',
+      submit: '创建用户',
       fields: {
         email: '邮箱',
         password: '密码',
@@ -2666,9 +2690,6 @@ export default {
         speedLimit: '0 表示不限速',
         deviceLimit: '0 表示不限设备'
       },
-      groupOptions: {
-        unassigned: '未分配'
-      },
       userTypes: {
         normal: '普通用户',
         admin: '管理员'
@@ -2677,12 +2698,13 @@ export default {
     tunnelModal: {
       title: '隧道授权 - {email}',
       sections: {
-        form: '授权表单',
+        form: '新增授权',
+        editForm: '编辑授权 #{id}',
         list: '当前授权列表'
       },
       fields: {
         tunnel: '隧道',
-        tunnelReadonlyHint: '（编辑时不可修改）',
+        tunnelReadonlyHint: '编辑授权时不能更换隧道。',
         status: '状态',
         flowQuota: '流量配额',
         numQuota: '数量配额',
@@ -2698,7 +2720,6 @@ export default {
       },
       actions: {
         cancelEdit: '取消编辑',
-        submitting: '提交中...',
         updateGrant: '更新授权',
         addGrant: '新增授权'
       },
@@ -2735,14 +2756,12 @@ export default {
       tunnelMessage: '这条授权的已用流量将清零。此操作无法撤销。',
       usedFlow: '当前已用',
       quota: '当前配额',
-      resetting: '重置中...',
       confirmAction: '重置流量'
     },
     trafficModal: {
       title: '流量详情 - {email}',
       subtitle: '最近 30 天每日汇总和每小时明细。',
       refresh: '刷新',
-      loading: '加载中...',
       dailyTitle: '每日流量',
       hourlyTitle: '每小时流量',
       empty: '暂无流量记录',
@@ -2767,7 +2786,8 @@ export default {
       deviceLimitCount: '{value} 台',
       noReset: '不重置',
       monthlyDay: '每月第 {day} 天',
-      permanent: '永久'
+      permanent: '永久',
+      trafficUnlimited: '已用 {used} · 不限'
     },
     messages: {
       actionFailed: '操作失败',
@@ -2775,7 +2795,10 @@ export default {
       passwordTooShort: '密码长度至少 6 位',
       userCreated: '用户创建成功',
       createFailed: '创建失败',
-      fetchUsersFailed: '获取用户列表失败',
+      fetchUsersFailed: '用户列表没有加载出来',
+      bulkBanned: '已封禁 {count} 个用户',
+      bulkUnbanned: '已解封 {count} 个用户',
+      bulkPartial: '{total} 个用户中 {done} 个已更改。{message}',
       fetchStatsFailed: '获取统计失败',
       saveFailed: '保存失败：{message}',
       userSaved: '已保存 {email}',
@@ -2811,10 +2834,14 @@ export default {
       saving: '保存中...', newAssignment: '新建角色'
     },
     pluginCenter: {
-      filters: { search: '搜索插件', health: '健康状态', target: '目标', allHealth: '全部健康状态', allTargets: '全部目标' },
+      filters: { search: '搜索插件', health: '按健康状态筛选', target: '按运行目标筛选' },
       states: { healthy: '健康', attention: '需要关注' },
-      summary: { label: '插件目录摘要', healthy: '{count} 个健康', attention: '{count} 个需要关注', catalogued: '{count} 个已登记' },
+      listLabel: '插件',
+      official: '官方签名软件包',
+      loadFailed: '插件目录没有加载出来',
       empty: '没有符合当前筛选条件的插件',
+      emptyCatalog: { title: '还没有插件', description: '导入一个官方签名发行版，它的插件就会出现在这里。' },
+      detail: { versions: '版本与状态' },
       operations: { title: '最近插件操作', empty: '暂无最近插件操作' }
     },
     tabs: { assignments: '节点角色', topologies: '拓扑' },
@@ -2869,18 +2896,18 @@ export default {
   },
   accessGroups: {
     subtitle: '管理独立服务作用域的成员关系、资源授权和插件私有配额策略。',
-    actions: { refresh: '刷新', refreshing: '刷新中...', newGroup: '新建访问组', open: '打开', enable: '启用', disable: '禁用', add: '添加', addGrant: '添加授权', saveQuota: '保存配额', resolve: '解析有效授权', resolving: '解析中...', saving: '保存中...' },
-    filters: { title: '访问组筛选', scope: '服务作用域', allScopes: '全部服务作用域' },
-    table: { group: '访问组', scope: '作用域', state: '状态', actions: '操作' },
+    actions: { refresh: '刷新', newGroup: '新建访问组', open: '打开', editGroup: '编辑名称和说明', enable: '启用', disable: '禁用', add: '添加', removeNamed: '移除 {name}', addGrant: '添加授权', saveQuota: '保存配额', resolve: '解析有效授权' },
+    filters: { label: '按服务作用域筛选', allScopes: '全部服务作用域' },
+    table: { group: '访问组', scope: '作用域', state: '状态' },
     states: { enabled: '已启用', disabled: '已禁用' },
-    groups: { title: '访问组', count: '{count} 个访问组', empty: '该作用域暂无访问组', noDescription: '暂无说明', directUnion: '直接成员和套餐成员按允许并集计算。' },
-    detail: { loading: '正在加载访问组详情...', empty: '选择一个访问组以管理其成员和策略。' },
+    groups: { title: '访问组', empty: '这个作用域还没有访问组', emptyAll: '还没有访问组', emptyDescription: '访问组在一个服务作用域内，为其中的用户和套餐授予资源权限和配额策略。', noDescription: '暂无说明', directUnion: '直接成员和套餐成员按允许并集计算。' },
+    detail: { title: '访问组', loading: '正在加载访问组详情…', group: '访问组', danger: '危险操作' },
     members: { title: '用户成员', userID: '用户 ID', empty: '暂无直接用户成员' },
     plans: { title: '套餐成员', planID: '套餐 ID', empty: '暂无套餐成员' },
     grants: { title: '资源授权', resourceType: '资源类型', resourceID: '资源 ID', permissions: '权限 JSON', empty: '暂无资源授权' },
     quotas: { title: '配额策略', key: '策略键', policy: '策略 JSON', empty: '暂无配额策略' },
     resolver: { title: '有效授权预览', description: '预览一个用户、可选套餐和服务作用域在服务端的允许并集结果。', userID: '用户 ID', planID: '套餐 ID（可选）', scope: '服务作用域', result: '命中 {count} 个已启用访问组', none: '没有命中已启用访问组', policySummary: '当前生效 {grants} 条授权和 {quotas} 条配额策略。' },
-    editor: { createTitle: '新建访问组', editTitle: '编辑访问组', name: '组名称', description: '说明', enabled: '启用该访问组' },
+    editor: { createTitle: '新建访问组', editTitle: '编辑访问组', name: '组名称', description: '说明', enabled: '启用该访问组', scopeFixed: '已有访问组的作用域不能修改。' },
     messages: { groupCreated: '已创建访问组 {name}', groupSaved: '已保存访问组 {name}', groupEnabled: '已启用访问组 {name}', groupDisabled: '已禁用访问组 {name}', groupDeleted: '已删除访问组 {name}', memberAdded: '已添加用户 #{id}', memberRemoved: '已移除用户 #{id}', planAdded: '已添加套餐 #{id}', planRemoved: '已移除套餐 #{id}', grantAdded: '已添加资源授权', grantRemoved: '已移除资源授权', quotaSaved: '已保存配额策略', quotaRemoved: '已移除配额策略' },
     confirm: { deleteGroupTitle: '删除访问组 {name}？', deleteGroup: '组内的成员关系、资源授权和配额策略会一并删除。此操作无法撤销。', deleteGroupAction: '删除访问组', removeGrantTitle: '移除资源授权 #{id}？', removeGrant: '该组成员将失去对 {resource} 的访问权限。此操作无法撤销。', removeGrantAction: '移除授权', removeQuotaTitle: '移除配额策略 {key}？', removeQuota: '该组将不再受这条配额限制。此操作无法撤销。', removeQuotaAction: '移除策略' },
     errors: { load: '无法加载访问控制数据', loadGroups: '无法加载访问组', loadDetail: '无法加载访问组详情', groupRequired: '必须填写服务作用域和组名称', saveGroup: '无法保存访问组', deleteGroup: '无法删除访问组', member: '无法更新用户成员关系', plan: '无法更新套餐成员关系', grant: '无法更新资源授权', quota: '无法更新配额策略', resolve: '无法解析有效授权', invalidID: '{label} 必须为正整数', invalidJSON: '{label} 必须为有效 JSON', scopeRequired: '必须选择服务作用域' }

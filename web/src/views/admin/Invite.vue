@@ -1,226 +1,132 @@
 <template>
-  <div class="invite-page">
-    <div class="page-header">
-      <h1>{{ t('adminInvite.title') }}</h1>
-      <p class="text-secondary">{{ t('adminInvite.subtitle') }}</p>
-    </div>
+  <div class="list-page">
+    <UiPageHeader :title="t('adminInvite.title')" :description="t('adminInvite.subtitle')" />
 
-    <div class="tabs">
-      <button :class="['tab', { active: activeTab === 'config' }]" @click="activeTab = 'config'">
-        {{ t('adminInvite.tabs.config') }}
-      </button>
-      <button :class="['tab', { active: activeTab === 'withdrawals' }]" @click="activeTab = 'withdrawals'">
-        {{ t('adminInvite.tabs.withdrawals') }}
-      </button>
-      <button :class="['tab', { active: activeTab === 'stats' }]" @click="activeTab = 'stats'">
-        {{ t('adminInvite.tabs.stats') }}
-      </button>
-    </div>
+    <UiTabs v-model="activeTab" variant="segmented" :aria-label="t('adminInvite.tabs.label')" :items="tabItems">
+      <template #withdrawals>
+        <UiDataTable
+          :columns="withdrawalColumns"
+          :rows="withdrawals"
+          :label="t('adminInvite.withdrawals.label')"
+          :row-label="item => t('adminInvite.withdrawals.rowName', { id: item.id })"
+          storage-key="admin.invite.withdrawals"
+          :page-size="20"
+          :loading="withdrawalsLoading"
+          :error="withdrawalsError"
+          :error-title="t('adminInvite.messages.fetchWithdrawalsFailed')"
+          :filtered="Boolean(withdrawalFilter.status)"
+          :empty-icon="Wallet"
+          :empty-title="t('adminInvite.withdrawals.empty')"
+          :empty-description="t('adminInvite.withdrawals.emptyDescription')"
+          :row-actions="withdrawalActions"
+          @retry="fetchWithdrawals"
+          @clear-filters="withdrawalFilter.status = ''"
+        >
+          <template #toolbar>
+            <UiFilterChips v-model="withdrawalFilter.status" :label="t('adminInvite.withdrawals.filters.label')" :options="statusChips" />
+          </template>
+          <template #cell-status="{ row }">
+            <UiBadge :tone="statusTone(row.status)" :label="getStatusLabel(row.status)" />
+          </template>
+        </UiDataTable>
+      </template>
 
-    <div v-show="activeTab === 'config'">
-      <div class="config-section">
-        <h3>{{ t('adminInvite.config.inviteTitle') }}</h3>
-        <div class="form-group">
-          <label class="checkbox-label">
-            <input v-model="config.enabled" type="checkbox" />
-            <span>{{ t('adminInvite.config.enabled') }}</span>
-          </label>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label>{{ t('adminInvite.config.codePrefix') }}</label>
-            <input
-              v-model="config.code_prefix"
-              type="text"
-              :placeholder="t('adminInvite.placeholders.codePrefix')"
+      <template #stats>
+        <UiErrorState v-if="statsError" :title="t('adminInvite.messages.fetchStatsFailed')" :error="statsError" @retry="fetchStats" />
+        <div v-else class="invite-stats">
+          <div class="invite-stats__grid">
+            <div v-for="card in statCards" :key="card.key" class="invite-stat" :data-stat="card.key">
+              <span class="invite-stat__label">{{ card.label }}</span>
+              <strong class="invite-stat__value tabular-nums">{{ card.value }}</strong>
+            </div>
+          </div>
+          <section class="dialog-section" aria-labelledby="invite-ranking-title">
+            <h2 id="invite-ranking-title" class="dialog-section__title">{{ t('adminInvite.stats.rankingTitle') }}</h2>
+            <UiDataTable
+              :columns="rankingColumns"
+              :rows="rankedInviters"
+              row-key="user_id"
+              :label="t('adminInvite.stats.rankingTitle')"
+              :loading="statsLoading"
+              :empty-icon="Trophy"
+              :empty-title="t('adminInvite.stats.empty')"
+              :settings="false"
+              state-heading-tag="h3"
             />
-          </div>
-          <div class="form-group">
-            <label>{{ t('adminInvite.config.codeLength') }}</label>
-            <input v-model.number="config.code_length" type="number" min="4" max="16" />
-          </div>
+          </section>
         </div>
+      </template>
 
-        <h4>{{ t('adminInvite.config.commissionTitle') }}</h4>
-        <div class="form-row">
-          <div class="form-group">
-            <label>{{ t('adminInvite.config.commissionRate') }}</label>
-            <input v-model.number="config.commission_rate" type="number" min="0" max="100" step="0.1" />
-            <p class="help-text">{{ t('adminInvite.config.commissionRateHelp') }}</p>
+      <template #config>
+        <UiErrorState v-if="configError" :title="t('adminInvite.messages.fetchConfigFailed')" :error="configError" @retry="fetchConfig" />
+        <UiSkeleton v-else-if="showConfigSkeleton" variant="text" :lines="6" />
+        <form v-else class="invite-config" @submit.prevent="saveConfig">
+          <UiCard as="section" :title="t('adminInvite.config.inviteTitle')">
+            <div class="form-grid">
+              <div class="form-grid__full">
+                <UiSwitch v-model="config.enabled" :label="t('adminInvite.config.enabled')" />
+              </div>
+              <UiTextField v-model="config.code_prefix" size="md" :label="t('adminInvite.config.codePrefix')" :placeholder="t('adminInvite.placeholders.codePrefix')" />
+              <UiTextField v-model.number="config.code_length" size="md" type="number" min="4" max="16" :label="t('adminInvite.config.codeLength')" :help="t('adminInvite.config.codeLengthHelp')" />
+            </div>
+          </UiCard>
+          <UiCard as="section" :title="t('adminInvite.config.commissionTitle')">
+            <div class="form-grid">
+              <UiSelect v-model="config.commission_type" size="md" :label="t('adminInvite.config.commissionType')" :options="commissionTypeOptions" />
+              <UiTextField v-if="config.commission_type === 'fixed'" v-model.number="config.commission_fixed" size="md" type="number" step="0.01" :prefix="t('adminInvite.currencySymbol')" :label="t('adminInvite.config.commissionFixed')" />
+              <UiTextField v-model.number="config.commission_rate" size="md" type="number" min="0" max="100" step="0.1" suffix="%" :label="t('adminInvite.config.commissionRate')" :help="t('adminInvite.config.commissionRateHelp')" />
+            </div>
+          </UiCard>
+          <UiCard as="section" :title="t('adminInvite.config.withdrawTitle')">
+            <div class="form-grid">
+              <UiTextField v-model.number="config.min_withdraw" size="md" type="number" step="0.01" :prefix="t('adminInvite.currencySymbol')" :label="t('adminInvite.config.minWithdraw')" />
+              <UiTextField v-model.number="config.withdraw_fee" size="md" type="number" min="0" max="100" step="0.1" suffix="%" :label="t('adminInvite.config.withdrawFee')" />
+              <fieldset class="invite-methods form-grid__full">
+                <legend class="invite-methods__legend">{{ t('adminInvite.config.withdrawMethods') }}</legend>
+                <UiCheckbox
+                  v-for="method in METHODS"
+                  :key="method"
+                  :model-value="config.withdraw_methods.includes(method)"
+                  :label="getMethodLabel(method)"
+                  @update:model-value="value => toggleMethod(method, value)"
+                />
+              </fieldset>
+            </div>
+          </UiCard>
+          <div class="invite-config__actions">
+            <UiButton variant="primary" :loading="configSaving" data-test="invite-config-save" @click="saveConfig">{{ t('common.actions.save') }}</UiButton>
           </div>
-          <div class="form-group">
-            <label>{{ t('adminInvite.config.commissionType') }}</label>
-            <select v-model="config.commission_type">
-              <option value="percent">{{ t('adminInvite.types.percent') }}</option>
-              <option value="fixed">{{ t('adminInvite.types.fixed') }}</option>
-            </select>
-          </div>
-        </div>
-        <div v-if="config.commission_type === 'fixed'" class="form-group">
-          <label>{{ t('adminInvite.config.commissionFixed') }}</label>
-          <input v-model.number="config.commission_fixed" type="number" step="0.01" />
-        </div>
-
-        <h4>{{ t('adminInvite.config.withdrawTitle') }}</h4>
-        <div class="form-row">
-          <div class="form-group">
-            <label>{{ t('adminInvite.config.minWithdraw') }}</label>
-            <input v-model.number="config.min_withdraw" type="number" step="0.01" />
-          </div>
-          <div class="form-group">
-            <label>{{ t('adminInvite.config.withdrawFee') }}</label>
-            <input v-model.number="config.withdraw_fee" type="number" min="0" max="100" step="0.1" />
-          </div>
-        </div>
-        <div class="form-group">
-          <label>{{ t('adminInvite.config.withdrawMethods') }}</label>
-          <div class="checkbox-group">
-            <label class="checkbox-label">
-              <input v-model="config.withdraw_methods" type="checkbox" value="alipay" />
-              <span>{{ t('adminInvite.methods.alipay') }}</span>
-            </label>
-            <label class="checkbox-label">
-              <input v-model="config.withdraw_methods" type="checkbox" value="wechat" />
-              <span>{{ t('adminInvite.methods.wechat') }}</span>
-            </label>
-            <label class="checkbox-label">
-              <input v-model="config.withdraw_methods" type="checkbox" value="bank" />
-              <span>{{ t('adminInvite.methods.bank') }}</span>
-            </label>
-          </div>
-        </div>
-
-        <div class="form-actions">
-          <button class="btn-primary" @click="saveConfig">{{ t('common.actions.save') }}</button>
-        </div>
-      </div>
-    </div>
-
-    <div v-show="activeTab === 'withdrawals'">
-      <div class="toolbar">
-        <select v-model="withdrawalFilter.status">
-          <option value="">{{ t('adminInvite.withdrawals.filters.all') }}</option>
-          <option value="pending">{{ t('adminInvite.status.pending') }}</option>
-          <option value="approved">{{ t('adminInvite.status.approved') }}</option>
-          <option value="rejected">{{ t('adminInvite.status.rejected') }}</option>
-        </select>
-        <button class="btn-secondary" @click="fetchWithdrawals">{{ t('adminInvite.actions.search') }}</button>
-      </div>
-
-      <div class="table-container">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>{{ t('adminInvite.withdrawals.table.id') }}</th>
-              <th>{{ t('adminInvite.withdrawals.table.userId') }}</th>
-              <th>{{ t('adminInvite.withdrawals.table.amount') }}</th>
-              <th>{{ t('adminInvite.withdrawals.table.method') }}</th>
-              <th>{{ t('adminInvite.withdrawals.table.account') }}</th>
-              <th>{{ t('adminInvite.withdrawals.table.status') }}</th>
-              <th>{{ t('adminInvite.withdrawals.table.createdAt') }}</th>
-              <th>{{ t('adminInvite.withdrawals.table.actions') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="item in withdrawals" :key="item.id">
-              <td>{{ item.id }}</td>
-              <td>{{ item.user_id }}</td>
-              <td>{{ formatMoney(item.amount) }}</td>
-              <td>{{ getMethodLabel(item.method) }}</td>
-              <td>{{ maskAccount(item.account) }}</td>
-              <td>
-                <span :class="['status-badge', `status-${item.status}`]">
-                  {{ getStatusLabel(item.status) }}
-                </span>
-              </td>
-              <td>{{ formatTime(item.created_at) }}</td>
-              <td>
-                <div v-if="item.status === 'pending'" class="action-buttons">
-                  <button
-                    class="btn-sm btn-primary"
-                    :title="t('adminInvite.actions.approve')"
-                    :aria-label="t('adminInvite.actions.approve')"
-                    @click="processWithdrawalRequest(item, true)"
-                  >
-                    {{ t('adminInvite.actions.approve') }}
-                  </button>
-                  <button
-                    class="btn-sm btn-danger"
-                    :title="t('adminInvite.actions.reject')"
-                    :aria-label="t('adminInvite.actions.reject')"
-                    @click="processWithdrawalRequest(item, false)"
-                  >
-                    {{ t('adminInvite.actions.reject') }}
-                  </button>
-                </div>
-                <span v-else class="text-secondary">-</span>
-              </td>
-            </tr>
-            <tr v-if="withdrawals.length === 0">
-              <td colspan="8" class="empty-row">{{ t('adminInvite.withdrawals.empty') }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <div v-show="activeTab === 'stats'">
-      <div class="stats-grid">
-        <div class="stat-card">
-          <div class="stat-value">{{ stats.total_invites || 0 }}</div>
-          <div class="stat-label">{{ t('adminInvite.stats.totalInvites') }}</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">{{ formatMoney(stats.total_commission) }}</div>
-          <div class="stat-label">{{ t('adminInvite.stats.totalCommission') }}</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">{{ formatMoney(stats.pending_commission) }}</div>
-          <div class="stat-label">{{ t('adminInvite.stats.pendingCommission') }}</div>
-        </div>
-        <div class="stat-card">
-          <div class="stat-value">{{ formatMoney(stats.withdrawn_commission) }}</div>
-          <div class="stat-label">{{ t('adminInvite.stats.withdrawnCommission') }}</div>
-        </div>
-      </div>
-
-      <div class="chart-section">
-        <h3>{{ t('adminInvite.stats.rankingTitle') }}</h3>
-        <div class="table-container">
-          <table class="data-table">
-            <thead>
-              <tr>
-                <th>{{ t('adminInvite.stats.table.rank') }}</th>
-                <th>{{ t('adminInvite.stats.table.userId') }}</th>
-                <th>{{ t('adminInvite.stats.table.inviteCount') }}</th>
-                <th>{{ t('adminInvite.stats.table.commission') }}</th>
-              </tr>
-            </thead>
-            <tbody>
-              <tr v-for="(item, index) in topInviters" :key="item.user_id">
-                <td>{{ index + 1 }}</td>
-                <td>{{ item.user_id }}</td>
-                <td>{{ item.invite_count }}</td>
-                <td>{{ formatMoney(item.commission) }}</td>
-              </tr>
-              <tr v-if="topInviters.length === 0">
-                <td colspan="4" class="empty-row">{{ t('adminInvite.stats.empty') }}</td>
-              </tr>
-            </tbody>
-          </table>
-        </div>
-      </div>
-    </div>
+        </form>
+      </template>
+    </UiTabs>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { Check, Trophy, Wallet, X } from '@lucide/vue'
 import { getInviteConfig, getInviteStats, getWithdrawals, processWithdrawal, updateInviteConfig } from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { useConfirm, useToast } from '@/ui'
+import UiBadge from '@/ui/UiBadge.vue'
+import UiButton from '@/ui/UiButton.vue'
+import UiCard from '@/ui/UiCard.vue'
+import UiCheckbox from '@/ui/UiCheckbox.vue'
+import UiDataTable from '@/ui/UiDataTable.vue'
+import UiErrorState from '@/ui/UiErrorState.vue'
+import UiFilterChips from '@/ui/UiFilterChips.vue'
+import UiPageHeader from '@/ui/UiPageHeader.vue'
+import UiSelect from '@/ui/UiSelect.vue'
+import UiSkeleton from '@/ui/UiSkeleton.vue'
+import UiSwitch from '@/ui/UiSwitch.vue'
+import UiTabs from '@/ui/UiTabs.vue'
+import UiTextField from '@/ui/UiTextField.vue'
+import { useConfirm } from '@/ui/composables/useConfirm'
+import { useDelayedLoading } from '@/ui/composables/useDelayedLoading'
+import { useFormat } from '@/ui/composables/useFormat'
+import { useToast } from '@/ui/composables/useToast'
 
-const { t, formatDateTime } = useAppI18n()
+const { t } = useAppI18n()
+const format = useFormat()
 const toast = useToast()
 const confirm = useConfirm()
 
@@ -236,9 +142,20 @@ const defaultInviteConfig = Object.freeze({
   withdraw_methods: ['alipay']
 })
 
-const activeTab = ref('config')
+const METHODS = ['alipay', 'wechat', 'bank']
+// The list comes first (list page template): withdrawals to review, then
+// the stats, then the rules.
+const activeTab = ref('withdrawals')
 const withdrawals = ref([])
+const withdrawalsLoading = ref(false)
+const withdrawalsError = ref(null)
 const stats = ref({})
+const statsLoading = ref(false)
+const statsError = ref(null)
+const configLoading = ref(false)
+const configError = ref(null)
+const configSaving = ref(false)
+const showConfigSkeleton = useDelayedLoading(configLoading)
 
 const withdrawalFilter = ref({ status: '' })
 const config = ref(createInviteConfig())
@@ -276,6 +193,51 @@ function normalizeCommissionRate(source = {}) {
 const topInviters = computed(() => (
   Array.isArray(stats.value.top_inviters) ? stats.value.top_inviters : []
 ))
+const rankedInviters = computed(() => topInviters.value.map((item, index) => ({ ...item, rank: index + 1 })))
+
+const tabItems = computed(() => [
+  { value: 'withdrawals', label: t('adminInvite.tabs.withdrawals') },
+  { value: 'stats', label: t('adminInvite.tabs.stats') },
+  { value: 'config', label: t('adminInvite.tabs.config') }
+])
+const statusChips = computed(() => ['pending', 'approved', 'rejected'].map(value => ({ value, label: getStatusLabel(value) })))
+const commissionTypeOptions = computed(() => [
+  { value: 'percent', label: t('adminInvite.types.percent') },
+  { value: 'fixed', label: t('adminInvite.types.fixed') }
+])
+const statusTone = status => ({ pending: 'warning', approved: 'success', rejected: 'neutral' })[status] || 'neutral'
+const withdrawalColumns = computed(() => [
+  { key: 'id', label: t('adminInvite.withdrawals.table.id'), primary: true, sortable: true, numeric: true, firstDirection: 'desc', format: value => `#${value}` },
+  { key: 'status', label: t('adminInvite.withdrawals.table.status'), secondary: true, sortable: true },
+  { key: 'amount', label: t('adminInvite.withdrawals.table.amount'), sortable: true, numeric: true, align: 'end', firstDirection: 'desc', format: value => formatMoney(value) },
+  { key: 'user_id', label: t('adminInvite.withdrawals.table.userId'), sortable: true, numeric: true },
+  { key: 'method', label: t('adminInvite.withdrawals.table.method'), format: value => getMethodLabel(value) },
+  { key: 'account', label: t('adminInvite.withdrawals.table.account'), format: value => maskAccount(value) },
+  { key: 'created_at', label: t('adminInvite.withdrawals.table.createdAt'), sortable: true, nowrap: true, format: value => formatTime(value), breakpoint: 'lg' }
+])
+const withdrawalActions = item => (item.status === 'pending'
+  ? [
+      { key: 'approve', label: t('adminInvite.actions.approve'), icon: Check, onSelect: () => processWithdrawalRequest(item, true) },
+      { key: 'reject', label: t('adminInvite.actions.reject'), icon: X, danger: true, separatorBefore: true, onSelect: () => processWithdrawalRequest(item, false) }
+    ]
+  : [])
+const rankingColumns = computed(() => [
+  { key: 'rank', label: t('adminInvite.stats.table.rank'), numeric: true, sortable: true, width: 80 },
+  { key: 'user_id', label: t('adminInvite.stats.table.userId'), primary: true, numeric: true },
+  { key: 'invite_count', label: t('adminInvite.stats.table.inviteCount'), numeric: true, align: 'end', sortable: true, firstDirection: 'desc' },
+  { key: 'commission', label: t('adminInvite.stats.table.commission'), numeric: true, align: 'end', sortable: true, firstDirection: 'desc', format: value => formatMoney(value) }
+])
+const statCards = computed(() => [
+  { key: 'invites', label: t('adminInvite.stats.totalInvites'), value: format.number(Number(stats.value.total_invites || 0)) },
+  { key: 'total', label: t('adminInvite.stats.totalCommission'), value: formatMoney(stats.value.total_commission) },
+  { key: 'pending', label: t('adminInvite.stats.pendingCommission'), value: formatMoney(stats.value.pending_commission) },
+  { key: 'withdrawn', label: t('adminInvite.stats.withdrawnCommission'), value: formatMoney(stats.value.withdrawn_commission) }
+])
+
+const toggleMethod = (method, on) => {
+  const current = config.value.withdraw_methods.filter(item => item !== method)
+  config.value.withdraw_methods = on === true ? METHODS.filter(item => item === method || current.includes(item)).concat(current.filter(item => !METHODS.includes(item))) : current
+}
 
 const resolveApiError = (error, fallbackKey) => (
   error?.response?.data?.error ||
@@ -310,10 +272,7 @@ const getStatusLabel = (status) => {
   }
 }
 
-const formatTime = (time) => {
-  if (!time) return '-'
-  return formatDateTime(time)
-}
+const formatTime = time => format.dateTime(time)
 
 const formatMoney = (value) => {
   const amount = Number(value || 0)
@@ -350,18 +309,24 @@ const readInvitePayload = (res) => {
 }
 
 const fetchConfig = async () => {
+  configLoading.value = true
   try {
     const res = await getInviteConfig()
     const payload = readInviteConfig(res)
     if (payload) {
       config.value = createInviteConfig(payload)
     }
+    configError.value = null
   } catch (error) {
-    console.error(t('adminInvite.messages.fetchConfigFailed'), error)
+    configError.value = error
+  } finally {
+    configLoading.value = false
   }
 }
 
 const saveConfig = async () => {
+  if (configSaving.value) return
+  configSaving.value = true
   try {
     const payload = {
       ...config.value,
@@ -371,17 +336,24 @@ const saveConfig = async () => {
     toast.success(t('adminInvite.messages.saveSuccess'))
   } catch (error) {
     toast.error(t('adminInvite.messages.saveFailed', { message: resolveApiError(error, 'adminInvite.messages.saveFailedShort') }))
+  } finally {
+    configSaving.value = false
   }
 }
 
 const fetchWithdrawals = async () => {
+  withdrawalsLoading.value = true
   try {
     const res = await getWithdrawals(withdrawalFilter.value)
     withdrawals.value = readWithdrawals(res)
+    withdrawalsError.value = null
   } catch (error) {
-    console.error(t('adminInvite.messages.fetchWithdrawalsFailed'), error)
+    withdrawalsError.value = error
+  } finally {
+    withdrawalsLoading.value = false
   }
 }
+watch(() => withdrawalFilter.value.status, () => fetchWithdrawals())
 
 const readWithdrawals = (res) => {
   const payload = readInvitePayload(res)
@@ -418,11 +390,15 @@ const processWithdrawalRequest = async (item, approve) => {
 }
 
 const fetchStats = async () => {
+  statsLoading.value = true
   try {
     const res = await getInviteStats()
     stats.value = readInviteStats(res)
+    statsError.value = null
   } catch (error) {
-    console.error(t('adminInvite.messages.fetchStatsFailed'), error)
+    statsError.value = error
+  } finally {
+    statsLoading.value = false
   }
 }
 
@@ -439,107 +415,65 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.config-section {
-  background: var(--surface-color);
-  padding: 24px;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border-color);
-}
-
-.config-section h3 {
-  margin-bottom: 16px;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.config-section h4 {
-  margin-top: 24px;
-  margin-bottom: 12px;
-}
-
-.checkbox-label {
+.invite-stats {
   display: flex;
-  align-items: center;
-  gap: 8px;
-  cursor: pointer;
+  flex-direction: column;
+  gap: var(--space-6);
 }
 
-.checkbox-label input[type="checkbox"] {
-  width: 18px;
-  height: 18px;
-}
-
-.checkbox-group {
-  display: flex;
-  gap: 16px;
-  margin-top: 8px;
-}
-
-.help-text {
-  color: var(--text-secondary);
-  font-size: 12px;
-  margin-top: 4px;
-}
-
-.stats-grid {
+.invite-stats__grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 20px;
-  margin-bottom: 30px;
+  gap: var(--space-4);
 }
 
-.stat-card {
-  background: var(--surface-color);
-  padding: 24px;
-  border-radius: var(--radius-lg);
-  text-align: center;
-  border: 1px solid var(--border-color);
+.invite-stat {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-5);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-1), 0 0 0 0.5px var(--separator);
 }
 
-.stat-value {
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--primary-color);
+.invite-stat__label {
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
 }
 
-.stat-label {
-  color: var(--text-secondary);
-  margin-top: 8px;
+.invite-stat__value {
+  font-size: var(--type-title-2-size);
+  font-weight: var(--type-title-2-weight);
+  line-height: var(--type-title-2-line);
 }
 
-.chart-section {
-  background: var(--surface-color);
-  padding: 24px;
-  border-radius: var(--radius-lg);
-  border: 1px solid var(--border-color);
+.invite-config {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  max-width: 760px;
 }
 
-.chart-section h3 {
-  margin-bottom: 16px;
+.invite-methods {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3) var(--space-6);
+  padding: 0;
+  margin: 0;
+  border: 0;
 }
 
-.status-pending {
-  background: rgba(251, 191, 36, 0.15);
-  color: #fbbf24;
+.invite-methods__legend {
+  width: 100%;
+  margin-bottom: var(--space-2);
+  color: var(--label-1);
+  font-size: var(--type-callout-size);
+  font-weight: var(--weight-medium);
 }
 
-.status-approved {
-  background: rgba(34, 197, 94, 0.15);
-  color: #22c55e;
-}
-
-.status-rejected {
-  background: rgba(239, 68, 68, 0.15);
-  color: #ef4444;
-}
-
-.btn-danger {
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
-  border: 1px solid rgba(239, 68, 68, 0.2);
-}
-
-.btn-danger:hover {
-  background: rgba(239, 68, 68, 0.2);
+.invite-config__actions {
+  display: flex;
+  justify-content: flex-end;
 }
 </style>

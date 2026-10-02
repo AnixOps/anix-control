@@ -84,6 +84,10 @@ const hasLabel = computed(() => Boolean(props.label || slots.default))
   align-items: center;
   width: 51px;
   height: 31px;
+  /* The legacy global button rule (style.css) centres the content and sets
+     40/44 px on phones. */
+  justify-content: flex-start;
+  min-height: 0;
   padding: 2px;
   border: 0;
   border-radius: var(--radius-pill);

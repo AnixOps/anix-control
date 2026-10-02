@@ -192,7 +192,9 @@ describe('Ansible machines page', () => {
     renderPage(AnsibleMachines)
     await screen.findByText('relay-exec-01')
 
-    await user.click(screen.getByRole('button', { name: 'Delete' }))
+    // Row actions are in the row's "…" menu (UI U6).
+    await user.click(screen.getByRole('button', { name: 'Actions for relay-exec-01' }))
+    await user.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: 'Delete' }))
     const confirm = await screen.findByRole('alertdialog', { name: 'Delete Ansible machine relay-exec-01?' })
     const action = within(confirm).getByRole('button', { name: 'Delete machine' })
     expect(action.disabled).toBe(true)
@@ -209,13 +211,13 @@ describe('Ansible machines page', () => {
     renderPage(AnsibleMachines)
     await screen.findByText('relay-exec-01')
 
-    await user.click(screen.getByRole('button', { name: 'Add Machine' }))
+    await user.click(screen.getByRole('button', { name: 'Add machine' }))
     const dialog = await screen.findByRole('dialog', { name: 'Add Ansible Machine' })
     await user.click(within(dialog).getByRole('button', { name: 'Save' }))
     expect(within(dialog).getByRole('alert').textContent).toContain('required')
-    await user.type(within(dialog).getByLabelText('Name'), 'relay-exec-02')
-    await user.type(within(dialog).getByLabelText('Host'), '5.6.7.8')
-    await user.type(within(dialog).getByLabelText('Reachability Port'), '22')
+    await user.type(within(dialog).getByLabelText(/^Name/), 'relay-exec-02')
+    await user.type(within(dialog).getByLabelText(/^Host/), '5.6.7.8')
+    await user.type(within(dialog).getByLabelText(/^Reachability Port/), '22')
     await user.click(within(dialog).getByRole('button', { name: 'Save' }))
     expect((await within(dialog).findByText('host exists')).getAttribute('role')).toBe('alert')
     expect(toasts()).toHaveLength(0)

@@ -32,6 +32,39 @@
 
 ### Changed
 
+- **Admin list pages on one template (UI redesign phase U6)**
+  (`web/src/ui/UiDataTable.vue`, `views/admin/*`;
+  `docs/reference/frontend-design.md` "List pages"). Same endpoints,
+  request fields, permission and edition checks.
+  - New `UiDataTable`: column definitions; sorting and pagination on the
+    client or the server (`UiPagination`); hidden columns and row height
+    remembered per table; row selection with a bulk bar that floats up from
+    the bottom; a "…" row menu (`UiMenu`); rows that open with a click or
+    Enter (↑/↓ move); error with 重试 / 复制错误详情, skeleton rows after
+    300 ms, empty and "no results" states; a header that sticks under the
+    top bar; one card per row on phones instead of sideways scrolling. Also
+    `UiSearchField` (`/` focuses it), `UiFilterChips`, `UiErrorState` (the
+    user pages' `LoadError` now wraps it) and `UiUsageBar`.
+  - Migrated: 用户 (status chips with counts, 流量用尽 for the loaded page,
+    usage bars, a detail Sheet, bulk 封禁 / 解封 with 撤销), 工单 (an inbox:
+    queue and ticket side by side, quick replies), 帮助中心内容 (Markdown
+    editor with a live preview that renders elements, never HTML), 插件中心
+    (card grid and details Sheet), NodeX Agents, Ansible 机器 (visuals only),
+    邀请码 (bulk copy and revoke), 访问组 (the group in a Sheet), and in the
+    commercial edition 订单, 优惠券, 套餐, 支付 and 邀请返佣. Page titles
+    follow the navigation (用户, 工单, 插件中心, 支付, 邀请返佣…).
+  - Bulk actions without a bulk endpoint (ban users, revoke invite codes)
+    call the existing per-item endpoint for each selected row.
+  - `web/scripts/data-table-pages.mjs` lists the migrated pages; ESLint
+    (`vue/no-restricted-html-elements`) and
+    `src/__tests__/dataTableGuard.test.js` reject a bare `<table>` in them.
+  - Library buttons, checkboxes, switches and chips no longer grow to 40 px
+    on phones through the legacy global `button` rule; selected rows, the
+    segmented tabs and the operation timeline badges reach 4.5:1.
+  - Bundle: `UiDataTable` and its parts are a shared chunk of about 10 KB
+    gzip; each migrated page changes by −0.6 to +1.4 KB gzip; the locale
+    files grow by about 2 KB each.
+
 - **Sign-in and user pages redesigned (UI redesign phase U5)**
   (`web/src/views/Login.vue`, `views/user/*`, `views/Account.vue`;
   `docs/reference/frontend-design.md` "Sign-in and user pages"). Same

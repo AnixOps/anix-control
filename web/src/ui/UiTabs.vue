@@ -176,6 +176,8 @@ const normalizedItems = computed(() => props.items.map(item => (
   padding: 0 var(--space-4);
   border-radius: var(--radius-pill);
   font-size: var(--type-callout-size);
+  /* 4.5:1 on the track's fill over any page background (as UiSegmentedControl). */
+  color: color-mix(in srgb, var(--label-2) 85%, var(--label-1));
   transition:
     background-color var(--dur-toggle) var(--ease-standard),
     color var(--dur-toggle) var(--ease-standard);
@@ -183,6 +185,7 @@ const normalizedItems = computed(() => props.items.map(item => (
 
 .ui-tabs--segmented .ui-tabs__tab[data-state='active'] {
   background: var(--bg-elevated);
+  color: var(--label-1);
   box-shadow: var(--shadow-1), 0 0 0 0.5px var(--separator);
 }
 

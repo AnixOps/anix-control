@@ -65,6 +65,7 @@ describe('Admin Knowledge', () => {
     const wrapper = mount(Knowledge)
     await flushPromises()
 
+    expect(wrapper.find('table').exists()).toBe(true)
     expect(wrapper.text()).toContain('Legacy Notice')
     expect(wrapper.text()).toContain('Legacy article body')
     expect(wrapper.text()).toContain('Announcement')
@@ -86,21 +87,28 @@ describe('Admin Knowledge', () => {
     const Harness = { components: { Knowledge, UiHost }, template: '<div><Knowledge /><UiHost /></div>' }
     const article = { id: 5, category: 'faq', title: 'Reset password', body: 'Steps', sort: 1, show: 1, updated_at: 1783526400 }
 
-    async function renderPage() {
-      adminApi.getKnowledgeList.mockResolvedValue({ data: [article] })
+    async function renderPage(list = [article]) {
+      adminApi.getKnowledgeList.mockResolvedValue({ data: list })
       render(Harness)
-      await screen.findByText('Reset password')
+      await screen.findByText(list[0]?.title || 'No articles yet')
+    }
+
+    async function rowAction(user, name, title = 'Reset password') {
+      const trigger = screen.getByRole('button', { name: `Actions for ${title}` })
+      await user.click(trigger)
+      await user.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name }))
+      return trigger
     }
 
     it('validates the article dialog inline and publishes with a toast', async () => {
       const user = userEvent.setup()
       adminApi.createKnowledge.mockResolvedValue({ code: 0 })
       await renderPage()
-      const opener = screen.getAllByRole('button', { name: 'Create Article' })[0]
+      const opener = screen.getAllByRole('button', { name: 'New article' })[0]
       await user.click(opener)
-      const dialog = await screen.findByRole('dialog', { name: 'Create Article' })
+      const dialog = await screen.findByRole('dialog', { name: 'New article' })
       await user.click(within(dialog).getByRole('button', { name: 'Publish' }))
-      expect(within(dialog).getByRole('alert').textContent).toBe('Please fill in title and content')
+      expect(within(dialog).getByRole('alert').textContent).toBe('Add a title and the article text')
       expect(adminApi.createKnowledge).not.toHaveBeenCalled()
 
       await user.keyboard('{Escape}')
@@ -111,18 +119,19 @@ describe('Admin Knowledge', () => {
       const again = await screen.findByRole('dialog')
       await user.type(within(again).getByLabelText(/Title/), 'New guide')
       await user.type(within(again).getByLabelText(/Content/), 'Body')
+      expect(within(again).getByText('New guide', { selector: '.editor__preview-title' })).toBeTruthy()
       await user.click(within(again).getByRole('button', { name: 'Publish' }))
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
       expect(adminApi.createKnowledge).toHaveBeenCalledWith(expect.objectContaining({ title: 'New guide', body: 'Body' }))
-      expect(toastMessages('success')).toEqual(['Article published successfully'])
+      expect(toastMessages('success')).toEqual(['Article published'])
     })
 
     it('keeps a failed save in the dialog', async () => {
       const user = userEvent.setup()
       adminApi.updateKnowledge.mockRejectedValue(new Error('conflict'))
       await renderPage()
-      await user.click(screen.getByRole('button', { name: 'Edit' }))
-      const dialog = await screen.findByRole('dialog', { name: 'Edit Article' })
+      await rowAction(user, 'Edit')
+      const dialog = await screen.findByRole('dialog', { name: 'Edit article' })
       await user.click(within(dialog).getByRole('button', { name: 'Save' }))
       expect((await within(dialog).findByRole('alert')).textContent).toBe('conflict')
       expect(toasts()).toHaveLength(0)
@@ -132,13 +141,13 @@ describe('Admin Knowledge', () => {
       const user = userEvent.setup()
       adminApi.deleteKnowledge.mockRejectedValueOnce(new Error('locked')).mockResolvedValueOnce({ code: 0 })
       await renderPage()
-      await user.click(screen.getByRole('button', { name: 'Delete' }))
+      await rowAction(user, 'Delete article…')
       let confirm = await screen.findByRole('alertdialog', { name: 'Delete article "Reset password"?' })
       await user.click(within(confirm).getByRole('button', { name: 'Cancel' }))
       await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
       expect(adminApi.deleteKnowledge).not.toHaveBeenCalled()
 
-      await user.click(screen.getByRole('button', { name: 'Delete' }))
+      await rowAction(user, 'Delete article…')
       confirm = await screen.findByRole('alertdialog')
       await user.click(within(confirm).getByRole('button', { name: 'Delete article' }))
       expect((await within(confirm).findByRole('alert')).textContent).toContain('locked')
@@ -146,6 +155,52 @@ describe('Admin Knowledge', () => {
       await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
       expect(adminApi.deleteKnowledge).toHaveBeenCalledWith(5)
       expect(toastMessages('success')).toEqual(['Article "Reset password" deleted'])
+    })
+
+    it('opens the editor from a row and previews Markdown as elements, never HTML', async () => {
+      const user = userEvent.setup()
+      await renderPage([{ ...article, body: '## Steps\n\n- Open **Account**\n- Tap <img src=x onerror=alert(1)>' }])
+      const row = screen.getByText('Reset password').closest('tr')
+      row.focus()
+      await user.keyboard('{Enter}')
+      const dialog = await screen.findByRole('dialog', { name: 'Edit article' })
+      const preview = dialog.querySelector('[data-test="knowledge-preview"]')
+      expect(within(preview).getByRole('heading', { level: 3, name: 'Steps' })).toBeTruthy()
+      expect(within(preview).getByText('Account').tagName).toBe('STRONG')
+      expect(preview.querySelector('img')).toBeNull()
+      expect(preview.textContent).toContain('<img src=x onerror=alert(1)>')
+    })
+
+    it('hides an article from the row menu with the same update and offers undo', async () => {
+      const user = userEvent.setup()
+      adminApi.updateKnowledge.mockResolvedValue({ code: 0 })
+      await renderPage()
+      await rowAction(user, 'Hide from Help Center')
+      await waitFor(() => expect(adminApi.updateKnowledge).toHaveBeenCalledWith(5, { title: 'Reset password', category: '常见问题', body: 'Steps', sort: 1, show: 0 }))
+      await waitFor(() => expect(toastMessages('success')).toEqual(['“Reset password” is hidden']))
+    })
+
+    it('filters by category and search, and shows empty and error states', async () => {
+      const user = userEvent.setup()
+      const other = { id: 6, category: '教程', title: 'Install Clash', body: 'Download', sort: 2, show: 1, updated_at: 1783526400 }
+      await renderPage([article, other])
+      await user.click(within(screen.getByRole('group', { name: 'Filter by category' })).getByRole('button', { name: 'Tutorial 1' }))
+      expect(screen.queryByText('Reset password')).toBeNull()
+      expect(screen.getByText('Install Clash')).toBeTruthy()
+      await user.type(screen.getByRole('searchbox', { name: 'Search articles' }), 'zzz')
+      expect(screen.getByRole('heading', { name: 'No results' })).toBeTruthy()
+      await user.click(screen.getByRole('button', { name: 'Clear filters' }))
+      expect(screen.getByText('Reset password')).toBeTruthy()
+    })
+
+    it('shows a load error with retry, then the empty state', async () => {
+      const user = userEvent.setup()
+      adminApi.getKnowledgeList.mockRejectedValueOnce(new Error('bad gateway')).mockResolvedValueOnce({ data: [] })
+      render(Harness)
+      const alert = await screen.findByRole('alert')
+      expect(alert.textContent).toContain('Articles didn’t load')
+      await user.click(within(alert).getByRole('button', { name: 'Try again' }))
+      expect(await screen.findByRole('heading', { name: 'No articles yet' })).toBeTruthy()
     })
   })
 })

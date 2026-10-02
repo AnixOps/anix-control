@@ -151,11 +151,15 @@ pages migrate (the type and radius scale become errors in U9).
 | | `border-radius` off the scale (6/10/14/20/980 px, 0, 50 %, or a variable) | 132 warnings | |
 | `npm run lint` (ESLint, `web/eslint.config.js`) | `no-alert`: `alert`, `confirm`, `prompt` | 117 warnings | error, 0 |
 | | `vue/no-restricted-class`: `.modal-overlay`, `.modal`, `.modal-lg`, `.modal-header`, `.modal-body`, `.modal-footer` | — | error, 0 |
+| | `vue/no-restricted-html-elements`: `<table>` in the pages listed in `web/scripts/data-table-pages.mjs` (U6) | — | error, 0 |
 
 The style warnings do not fail either command. CI does not run the linters,
 so `web/src/__tests__/nativeDialogs.test.js` (part of `npm test`) also fails
 on `window.alert/confirm/prompt` or `.modal-overlay` in the app sources, and
-the test setup makes a native dialog throw.
+the test setup makes a native dialog throw. Likewise
+`web/src/__tests__/dataTableGuard.test.js` fails when a page listed in
+`web/scripts/data-table-pages.mjs` (the migrated list pages) has a bare
+`<table>` or the legacy `.data-table` class again.
 
 ## Components
 
@@ -213,6 +217,13 @@ written separately for each language. Page text is passed in as props.
 | Page title | `UiPageHeader` | The only H1, one sentence, actions with the primary last. |
 | Surfaces and settings rows | `UiCard`, `UiSection`, `UiGroupedList` + `UiGroupedListRow` | System Settings style rows: label left; value, control or chevron right. |
 | Numbers, bytes, rates, money, dates | `useFormat()` | One implementation on Intl and the current locale. |
+| A list of records | `UiDataTable` | Column definitions; sorting, pagination, selection + bulk bar, row "…" menu, states, phone cards. See "List pages". |
+| Pages of a long list | `UiPagination` | Inside `UiDataTable` when `pageSize` is set; on its own for card grids. |
+| Searching a list | `UiSearchField` | A search landmark; `/` focuses it; Esc clears. |
+| Filtering a list | `UiFilterChips` | Toggle chips (已封禁 / 已到期); one at a time, or `multiple`. |
+| More actions on a row or toolbar | `UiMenu` | "…" trigger with `label`; danger items last after a separator. |
+| A failed load | `UiErrorState` | What failed, the message, 重试 and 复制错误详情 (status, request id, page, time). `LoadError` of the user pages wraps it. |
+| Used of a total | `UiUsageBar` | The text carries the value; the bar is decorative, amber at 75 %, red at 90 %. |
 
 ### Interaction rules (redesign plan §9)
 
@@ -531,6 +542,101 @@ New components: `UiOtpField` (a fieldset of one-digit boxes) and `UiQrCode`
 use; dark modules on a light tile in both themes, because many scanners
 cannot read an inverted code).
 
+## List pages (U6)
+
+Every list in the admin console uses one template (plan §7.1) and one
+component, `UiDataTable`. Shared layout classes are in
+`web/src/styles/pages.css` (`.list-page`, `.list-page__search`,
+`.list-page__note`, `.form-grid`, `.dialog-section`, `.form-error`).
+
+```
+UiPageHeader      title (the nav name) · one sentence · primary "新建…" on the right
+UiDataTable       #toolbar: UiSearchField + UiFilterChips · table settings (columns, row height)
+                  rows → click / Enter opens a UiSheet quick view (or the detail page)
+                  "…" row menu (UiMenu) · selection → bulk bar floating up from the bottom
+UiSheet           details as grouped lists, actions, then a danger zone
+UiDialog          create / edit forms with Ui fields in a .form-grid
+```
+
+**`UiDataTable`** (`web/src/ui/UiDataTable.vue`, story "DataTable"):
+
+- **Columns** are objects: `key`, `label`, `sortable` (`firstDirection:
+  'desc'` for dates and amounts), `align: 'end'`, `numeric` (tabular
+  numbers), `width`, `value(row)`, `format(value, row)`, `sortValue(row)`,
+  `hidden` (off by default), `hideable: false`, `breakpoint: 'md' | 'lg'`
+  (left out of the table below that width), `primary` / `secondary` (title
+  and subtitle of the phone card), `card: false`. Cells render text (empty is
+  `—`) or the slot `#cell-<key>="{ row, value, card }"`.
+- **Sorting and pages**: client-side by default (`pageSize` turns pages on);
+  `manualSort` and `manualPagination` + `total` for the server, with
+  `update:sort` / `update:page`. Header buttons cycle none → ascending →
+  descending and set `aria-sort`.
+- **Selection**: `selectable` + `v-model:selected` (row keys, `rowKey`
+  default `id`). A header checkbox selects the page (mixed when partly
+  selected); the bulk bar (slot `#bulk-actions="{ rows, clear }"`) floats
+  up from the bottom with the count, "全选所有 N 条" when every row is loaded,
+  and 取消选择 (Esc too). Only offer bulk actions an endpoint supports; a bulk
+  action without a bulk endpoint calls the per-row endpoint for each row (as
+  Users ban / unban does) and offers 撤销.
+- **Rows**: `rowActions(row)` gives the "…" menu items (`{ key, label, icon,
+  danger, separatorBefore, onSelect }`; the action runs after focus is back
+  on the trigger, so a dialog it opens returns focus there). `activatable`
+  rows emit `row-activate` on click (not on controls inside) and Enter; ↑/↓,
+  Home and End move between rows (one tab stop); Space toggles selection.
+  `rowLabel(row)` names the row for "选择 {name}" and "{name} 的操作".
+- **States**: `error` (+ `errorTitle`, `retry` event) shows `UiErrorState`;
+  `loading` with no rows shows skeleton rows after 300 ms, with rows it dims
+  them; no rows shows the empty state (`emptyTitle`, `emptyDescription`,
+  `emptyIcon`, slot `#empty-actions`), or "没有结果" + 清除筛选
+  (`clear-filters`) when `filtered`.
+- **View**: the header sticks under the admin top bar
+  (`--shell-topbar-height`); comfortable (52 px rows) or compact (40 px);
+  hidden columns and row height are remembered per `storageKey` in
+  `localStorage` (`anix.table.<key>`, guarded: blocked storage just means
+  defaults). `flat` drops the surface for tables inside dialogs and sheets.
+- **Phones** (< 640 px): a list of cards instead of the table (no sideways
+  scrolling): checkbox, title (a button when `activatable`), subtitle, the
+  first three visible fields with their labels, and the "…" menu.
+- **Accessibility**: a real `<table>` with a hidden caption (`label`),
+  `scope="col"`, sortable headers as buttons with `aria-sort`, named
+  checkboxes and menus, a polite live region for the selection count, and
+  the bulk bar as a named region.
+
+**Filters and search.** Use the API's filters (the users' `status`, the
+orders' `status`) as chips; a filter the API lacks narrows the loaded page
+only and says so under the table (Users: 流量用尽). Search calls the server
+300 ms after typing stops and on Enter.
+
+Migrated in U6 (also listed in `web/scripts/data-table-pages.mjs`):
+- **用户** (`Users.vue`): search by email; chips 正常 / 已到期 / 已封禁 (the
+  API's `status`, with the counts from the stats) and 流量用尽 (loaded page
+  only); used / total as a `UiUsageBar`; the row opens a detail Sheet
+  (subscription, actions, danger zone); bulk 封禁 / 解封 call the per-user
+  endpoints with one 撤销. The limits and ID columns start hidden.
+- **工单** (`Tickets.vue`): an inbox like the user tickets page, the queue on
+  the left and the ticket with quick replies on the right (full width on
+  phones, with a back button). The admin list has no message thread, so the
+  panel shows the ticket and the reply box.
+- **帮助中心内容** (`Knowledge.vue`): articles in a table with category chips;
+  the editor is a wide dialog with the Markdown source and a live preview
+  (U5's `parseArticle` + `ArticleBody`: elements, never HTML), a Write /
+  Preview switch below 834 px; show / hide from the row menu with 撤销.
+- **插件中心** (`Plugins.vue`): an App Store style card grid (icon, name,
+  publisher, versions, health) with search and health / target chips; the
+  details Sheet and the install dialog keep their behaviour and test ids.
+- **NodeX Agents** (`Agent.vue`), **Ansible 机器** (`AnsibleMachines.vue`,
+  execution plane: visuals only), **邀请码** (`InviteCodes.vue`, bulk copy
+  and revoke), **访问组** (`AccessGroups.vue`, the group opens in a large
+  Sheet with members, plans, grants, quotas and a danger zone).
+- Commercial: **订单** (details Sheet, server status chips), **优惠券**,
+  **套餐** (details Sheet with groups), **支付** (gateways / records / stats
+  tabs), **邀请返佣** (withdrawals / stats / rules). Edition gating is
+  unchanged.
+
+The legacy global `button` rule in `style.css` (min-height 40 / 44 px on
+phones) no longer stretches library buttons, checkboxes, switches and chips:
+they set `min-height: 0` and keep their 44 px touch area with `::after`.
+
 ## Bundle
 
 Reka UI and its helpers (`@floating-ui`, `@vueuse`, …) build into a
@@ -541,5 +647,7 @@ of plan §13). The admin shell adds its layout chunk and `ui-vendor`: about
 165 KB gzip before the first page, against the 250 KB budget. Import
 components from the pages that use them so routes stay lazy: the `@/ui`
 barrel pulls every component into the page that imports it, so pages import
-`@/ui/UiButton.vue` and `@/ui/composables/…` directly. The U5 sign-in form
+`@/ui/UiButton.vue` and `@/ui/composables/…` directly. `UiDataTable` with
+its pagination, menu, states and checkbox is a shared chunk of about 10 KB
+gzip (JS and CSS) that the U6 list pages load. The U5 sign-in form
 (text, password and code fields) adds about 10 KB gzip to the login page.

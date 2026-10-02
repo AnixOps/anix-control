@@ -249,15 +249,21 @@ describe('Admin Payment', () => {
       adminApi.deletePaymentGateway.mockResolvedValueOnce({ code: -1, msg: 'gateway has payments' }).mockResolvedValueOnce({ code: 0 })
       render(Harness)
       await screen.findByText('Stripe EU')
-      const opener = screen.getByRole('button', { name: 'Delete' })
+      const menu = screen.getByRole('button', { name: 'Actions for Stripe EU' })
+      const opener = {
+        async click() {
+          await user.click(menu)
+          await user.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: 'Delete gateway' }))
+        }
+      }
 
-      await user.click(opener)
+      await opener.click()
       let dialog = await screen.findByRole('alertdialog', { name: 'Delete payment gateway Stripe EU?' })
       await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
       await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
       expect(adminApi.deletePaymentGateway).not.toHaveBeenCalled()
 
-      await user.click(opener)
+      await opener.click()
       dialog = await screen.findByRole('alertdialog')
       await user.click(within(dialog).getByRole('button', { name: 'Delete gateway' }))
       expect((await within(dialog).findByRole('alert')).textContent).toContain('gateway has payments')
@@ -300,14 +306,45 @@ describe('Admin Payment', () => {
     it('shows a payment record in a side sheet that closes with Esc', async () => {
       const user = userEvent.setup()
       render(Harness)
-      await user.click(await screen.findByRole('button', { name: 'Records' }))
-      const opener = await screen.findByRole('button', { name: 'Details' })
-      await user.click(opener)
+      await user.click(await screen.findByRole('tab', { name: 'Records' }))
+      const panel = screen.getByRole('tabpanel', { name: 'Records' })
+      const opener = (await within(panel).findByText('T-900')).closest('tr')
+      opener.focus()
+      await user.keyboard('{Enter}')
       const sheet = await screen.findByRole('dialog', { name: 'Payment Details' })
       expect(sheet.textContent).toContain('T-900')
       await user.keyboard('{Escape}')
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
       await waitFor(() => expect(document.activeElement).toBe(opener))
+    })
+      it('filters payment records by status and gateway on the server', async () => {
+      const user = userEvent.setup()
+      render(Harness)
+      await user.click(await screen.findByRole('tab', { name: 'Records' }))
+      await user.click(within(screen.getByRole('group', { name: 'Filter by status' })).getByRole('button', { name: 'Failed' }))
+      await waitFor(() => expect(adminApi.getPaymentRecords).toHaveBeenLastCalledWith({ status: 'failed', gateway_type: '' }))
+      await user.click(within(screen.getByRole('group', { name: 'Filter by gateway' })).getByRole('button', { name: 'Stripe' }))
+      await waitFor(() => expect(adminApi.getPaymentRecords).toHaveBeenLastCalledWith({ status: 'failed', gateway_type: 'stripe' }))
+    })
+
+    it('enables and disables from the row menu, with undo', async () => {
+      const user = userEvent.setup()
+      adminApi.togglePaymentGateway.mockResolvedValue({ code: 0 })
+      render(Harness)
+      await user.click(await screen.findByRole('button', { name: 'Actions for Stripe EU' }))
+      await user.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: 'Disable' }))
+      await waitFor(() => expect(adminApi.togglePaymentGateway).toHaveBeenCalledWith(4, false))
+      expect(toastMessages('success')).toEqual(['Stripe EU disabled'])
+    })
+
+    it('shows a load error with retry for the gateways', async () => {
+      const user = userEvent.setup()
+      adminApi.getPaymentGateways.mockRejectedValueOnce(new Error('Network Error'))
+      render(Harness)
+      const alert = await screen.findByRole('alert')
+      expect(alert.textContent).toContain('Payment gateways didn’t load')
+      await user.click(within(alert).getByRole('button', { name: 'Try again' }))
+      expect(await screen.findByText('Stripe EU')).toBeTruthy()
     })
   })
 })

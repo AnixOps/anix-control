@@ -1,5 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
+import { render, screen, within } from '@testing-library/vue'
+import userEvent from '@testing-library/user-event'
 import AnsibleMachines from '@/views/admin/AnsibleMachines.vue'
 
 const adminApi = vi.hoisted(() => ({
@@ -91,5 +93,30 @@ describe('AnsibleMachines admin page', () => {
 
     expect(wrapper.vm.results[1].success).toBe(false)
     expect(wrapper.vm.results[1].message).toContain('dial tcp timeout')
+  })
+
+  it('lists machines in a table with reachability and filters on the server', async () => {
+    const user = userEvent.setup()
+    render(AnsibleMachines, { global: { stubs: { RouterLink: { template: '<a><slot /></a>' } } } })
+    const table = await screen.findByRole('table', { name: 'Execution Targets' })
+    const row = within(table).getAllByRole('row')[1]
+    expect(row.textContent).toContain('relay-exec-01')
+    expect(row.textContent).toContain('1.2.3.4:22')
+    expect(row.textContent).toContain('Online')
+    await user.click(screen.getByRole('button', { name: 'Offline' }))
+    expect(adminApi.getAnsibleMachines).toHaveBeenLastCalledWith({ page: 1, page_size: 200, type: 'relay', status: 0 })
+    await user.click(screen.getByRole('button', { name: 'Offline' }))
+    expect(adminApi.getAnsibleMachines).toHaveBeenLastCalledWith({ page: 1, page_size: 200, type: 'relay' })
+  })
+
+  it('shows a load error with retry', async () => {
+    const user = userEvent.setup()
+    adminApi.getAnsibleMachines.mockRejectedValueOnce({ response: { data: { msg: 'inventory unreadable' } } })
+    render(AnsibleMachines, { global: { stubs: { RouterLink: { template: '<a><slot /></a>' } } } })
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('Failed to load Ansible machines')
+    expect(alert.textContent).toContain('inventory unreadable')
+    await user.click(within(alert).getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByRole('table')).toBeTruthy()
   })
 })

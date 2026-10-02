@@ -73,9 +73,7 @@ export default {
   },
   portal: {
     state: {
-      retry: 'Try again',
-      copyDetails: 'Copy error details',
-      detailsCopied: 'Error details copied'
+      retry: 'Try again'
     },
     home: {
       greeting: 'Hello, {name}',

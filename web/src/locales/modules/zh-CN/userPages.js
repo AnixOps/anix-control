@@ -72,9 +72,7 @@ export default {
   },
   portal: {
     state: {
-      retry: '重试',
-      copyDetails: '复制错误详情',
-      detailsCopied: '已复制错误详情'
+      retry: '重试'
     },
     home: {
       greeting: '你好，{name}',
