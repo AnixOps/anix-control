@@ -183,4 +183,13 @@ function save() {
 .form-group textarea { width: 100%; box-sizing: border-box; font-family: var(--font-mono); font-size: var(--type-caption-size); resize: vertical; }
 .field-help, .dialog-error { margin: 0; color: var(--label-2); overflow-wrap: anywhere; }
 .dialog-error { color: var(--danger); }
+
+/* Phones: 16 px fields so iOS Safari does not zoom on focus. */
+@media (max-width: 833px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
 </style>

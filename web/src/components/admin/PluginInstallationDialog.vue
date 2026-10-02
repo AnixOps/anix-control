@@ -137,4 +137,13 @@ function save() {
 .toggle-field { display: flex; align-items: center; gap: var(--space-3); color: var(--label-1); font-size: var(--type-body-size); }
 .toggle-field input { width: 18px; height: 18px; accent-color: var(--accent-fill); }
 .dialog-error { margin: 0; color: var(--danger); font-size: var(--type-callout-size); overflow-wrap: anywhere; }
+
+/* Phones: 16 px fields so iOS Safari does not zoom on focus. */
+@media (max-width: 833px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
 </style>

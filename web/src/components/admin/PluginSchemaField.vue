@@ -225,4 +225,13 @@ function updateJSON() {
 .remove-item { position: absolute; top: 10px; right: 0; }
 .icon-button { width: 34px; height: 34px; min-height: 34px; padding: 0; }
 .json-editor { min-height: 120px; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 500; resize: vertical; }
+
+/* Phones: 16 px fields so iOS Safari does not zoom on focus. */
+@media (max-width: 833px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
 </style>

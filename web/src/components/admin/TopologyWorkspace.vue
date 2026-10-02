@@ -498,4 +498,13 @@ function stateClass(state) {
 @media (max-width: 720px) {
   .editor-toolbar { grid-template-columns: 1fr; }
 }
+
+/* Phones: 16 px fields so iOS Safari does not zoom on focus. */
+@media (max-width: 833px) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
 </style>
