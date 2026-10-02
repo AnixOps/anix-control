@@ -9,6 +9,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/AnixOps/anix-control/v4/internal/agenttransport"
 	"github.com/AnixOps/anix-control/v4/internal/branding"
 	compatv2 "github.com/AnixOps/anix-control/v4/internal/compat/v2"
 	"github.com/AnixOps/anix-control/v4/internal/database"
@@ -150,6 +151,9 @@ v2board_go_gc_duration_seconds ` + formatFloat(float64(m.PauseTotalNs)/1e9) + `
 	controlgrpc.WriteAgentUsersPrometheus(&body)
 	// Configuration push on the Agent Control stream.
 	controlgrpc.WriteAgentConfigPrometheus(&body)
+	// The agent transport transition: legacy requests served and refused,
+	// and the agent_control.mtls mode.
+	agenttransport.WritePrometheus(&body)
 
 	c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(body.String()))
 }

@@ -24,6 +24,20 @@ const (
 	// Agent authenticated with its legacy node credential although client
 	// certificates are preferred (agent_control.mtls: preferred).
 	MetadataAuthDeprecated = "x-anix-auth-deprecated"
+	// MetadataAuthSunset accompanies MetadataAuthDeprecated when Control
+	// announces a date (agent_control.legacy_sunset) after which legacy
+	// credentials may be refused, as an HTTP-date (RFC 9110).
+	MetadataAuthSunset = "x-anix-auth-sunset"
+	// MetadataAuthDeprecationLink accompanies MetadataAuthDeprecated: where
+	// the operator reads how to move the node to client certificates.
+	MetadataAuthDeprecationLink = "x-anix-auth-deprecation-link"
+	// MetadataErrorCode is the trailer of a call Control refused for a
+	// machine-readable reason, such as ErrorCodeMTLSRequired.
+	MetadataErrorCode = "x-anix-error-code"
+	// ErrorCodeMTLSRequired refuses legacy credentials on an AnixOps Agent
+	// channel under agent_control.mtls: required. HTTP answers carry it as
+	// the "code" of their JSON body.
+	ErrorCodeMTLSRequired = "agent_mtls_required"
 )
 
 // Node kinds of an agent identity.

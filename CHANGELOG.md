@@ -62,6 +62,59 @@
     until the first change that serves it), and `internal/tests/protocompat`
     checks the fixtures parse as the draft contract and are consistent.
 
+- The agent transport transition (A2-6, `docs/architecture/node-ops-service.md`
+  section 5.6):
+  - `agent_control.mtls` takes four modes: `off` (new: no client
+    certificates are requested or accepted, a rollback switch), `optional`,
+    `preferred` and `required`. `required` now also refuses the legacy
+    AnixOps-agent HTTP and WebSocket paths (`/api/v2/agent/*`,
+    `/api/v2/node/*`, `/api/v2/forward/agent/rules`, the clean agent
+    endpoints) with HTTP 403 `{"code":"agent_mtls_required"}`, and the
+    stream and `Enroll` add the trailer `x-anix-error-code:
+    agent_mtls_required`. UniProxy and the v2board gRPC services stay open
+    to third-party node software in every mode.
+  - Deprecation signals in `preferred`: `Deprecation: true`, a `Link` to the
+    upgrade guide and, with the new `agent_control.legacy_sunset`, `Sunset`
+    on the legacy agent paths (and the WebSocket handshake);
+    `x-anix-auth-deprecation-link` and `x-anix-auth-sunset` next to
+    `x-anix-auth-deprecated` on the control stream, in its header and
+    trailer.
+  - Metrics `anixops_agent_legacy_requests_total{path}`,
+    `anixops_agent_legacy_refused_total{path}` and
+    `anixops_agent_mtls_mode{mode}`, and a startup log line with the
+    effective mode and whether agents can enroll.
+  - The transport inventory: `GET /api/v4/kernel/agents/transports`
+    (admin), `anix-control agents transports [--json] [--legacy-only]` and
+    the admin page NodeX Agents → Agent 连接方式 (`/admin/agent/transports`)
+    list each proxy and forward node with the transport it was last seen on
+    (`mtls-stream`, `apikey-stream`, `http-legacy`, `websocket`,
+    `clean-agent`, `uniproxy`, `v2board-grpc`), its agent version, its
+    newest valid certificate and when it was last seen, with a warning on
+    legacy nodes. Sightings are kept in memory and in the new table
+    `v4_kernel_agent_transport`, written at most once a minute per node and
+    transport.
+
+### Changed
+
+- `agent_control.mtls` defaults to `preferred` instead of `optional`
+  (decision H5): legacy API-key agents keep working and now get the
+  deprecation signals. `preferred` no longer needs gRPC TLS and the
+  built-in CA to start (only `required` does, together with
+  `grpc.enabled`); without them agents cannot enroll, which the startup log
+  says. Set `optional` to keep the release candidates' silent behaviour.
+
+### Deprecated
+
+- Legacy AnixOps Agent authentication: the node API key on the Agent
+  Control stream, the agent and node WebSocket, `/api/v2/agent/*`,
+  `/api/v2/node/*`, `/api/v2/forward/agent/rules` and the clean agent
+  endpoints. **v4.2 makes `agent_control.mtls: required` the default:
+  before upgrading to v4.2, every node must run an Agent that has enrolled
+  (mTLS); legacy API-key agents will be refused.** Third-party node
+  software on UniProxy or the v2board gRPC services is not affected. Run
+  `anix-control agents transports --legacy-only` as the checklist; see
+  "Agent Transports: Preparing For v4.2" in `docs/UPGRADE.md`.
+
 ### Fixed
 
 - SQLite deployments no longer fail writes with "database is locked" under

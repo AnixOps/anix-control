@@ -2,6 +2,7 @@
   <div class="list-page agent-page">
     <UiPageHeader :title="t('runtime.nodeXAgents.title')" :description="t('runtime.nodeXAgents.subtitle')">
       <template #actions>
+        <UiButton :icon="Cable" data-testid="open-agent-transports" @click="router.push('/admin/agent/transports')">{{ t('agentTransports.open') }}</UiButton>
         <UiButton :icon="RefreshCw" :loading="agentsLoading" data-test="agent-refresh" @click="refreshAll">{{ t('runtime.nodeXAgents.actions.refresh') }}</UiButton>
       </template>
     </UiPageHeader>
@@ -161,7 +162,8 @@
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue'
-import { Activity, ListChecks, Play, RefreshCw, Send, Server, SquareTerminal } from '@lucide/vue'
+import { useRouter } from 'vue-router'
+import { Activity, Cable, ListChecks, Play, RefreshCw, Send, Server, SquareTerminal } from '@lucide/vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useListQuery } from '@/composables/useListQuery'
 import UiBadge from '@/ui/UiBadge.vue'
@@ -177,6 +179,7 @@ import { useToast } from '@/ui/composables/useToast'
 import { createAgentTask, executeAgentCommand, getAgents, listAgentDiagnosticTasks } from '@/api/admin'
 
 const { t } = useAppI18n()
+const router = useRouter()
 const format = useFormat()
 
 // 与后端 internal/service/agent_diagnostic_actions.go 的白名单保持一致，

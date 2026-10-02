@@ -41,9 +41,12 @@ type ServerConfig struct {
 	// AgentEnrollment; nil when the built-in module PKI is off. Client
 	// certificates need TLS (TLSCertFile).
 	AgentPKI *agentpki.Service
-	// AgentMTLS is agent_control.mtls: optional (default), preferred or
-	// required.
+	// AgentMTLS is agent_control.mtls: off, optional, preferred (the
+	// configuration default) or required.
 	AgentMTLS string
+	// AgentLegacySunset is agent_control.legacy_sunset, announced to legacy
+	// agents in preferred mode; zero announces none.
+	AgentLegacySunset time.Time
 }
 
 // DefaultServerConfig 默认配置
@@ -67,17 +70,18 @@ type Server struct {
 
 // agentAuthenticator returns how agents authenticate on this listener.
 func (s *Server) agentAuthenticator() *AgentAuthenticator {
-	return &AgentAuthenticator{PKI: s.config.AgentPKI, Mode: s.config.AgentMTLS}
+	return &AgentAuthenticator{PKI: s.config.AgentPKI, Mode: s.config.AgentMTLS, Sunset: s.config.AgentLegacySunset}
 }
 
 // tlsConfig is the listener's TLS configuration. With the agent PKI the
 // server asks for a client certificate but never requires one in the
 // handshake: agents enroll without one, and legacy agents have none. The
 // Agent services and the interceptors verify a presented certificate
-// against the agent trust bundle, which changes with CA rotation.
+// against the agent trust bundle, which changes with CA rotation. In
+// agent_control.mtls: off no client certificate is requested.
 func (s *Server) tlsConfig(cert tls.Certificate) *tls.Config {
 	config := &tls.Config{Certificates: []tls.Certificate{cert}}
-	if s.config.AgentPKI != nil {
+	if s.agentAuthenticator().pki() != nil {
 		config.ClientAuth = tls.RequestClientCert
 	}
 	return config

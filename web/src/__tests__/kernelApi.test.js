@@ -273,4 +273,11 @@ describe('kernel API', () => {
     await kernelApi.getKernelRouteModeRevisions('legacy-api', 100)
     expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/route-modes/revisions', method: 'get', params: { package_id: 'legacy-api', limit: 100 } })
   })
+
+  it('reads the agent transport inventory through the v4 kernel', async () => {
+    await kernelApi.getKernelAgentTransports()
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/agents/transports', method: 'get' })
+    await kernelApi.getKernelAgentTransports(true)
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/agents/transports', method: 'get', params: { legacy_only: true } })
+  })
 })

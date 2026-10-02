@@ -16,6 +16,7 @@ import (
 
 	agentcontrol "github.com/AnixOps/anix-control/sdk/agentcontrol"
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
+	"github.com/AnixOps/anix-control/v4/internal/agenttransport"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"google.golang.org/grpc/codes"
@@ -715,6 +716,7 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 		connection.configRevision = hello.GetConfigRevision()
 	}
 
+	agenttransport.Seen(stream.Context(), principal.sighting(hello.AgentVersion))
 	if err := s.touchNode(agentNode); err != nil {
 		slog.Warn("failed to persist agent hello heartbeat", "component", "agent-control", "node", agentNode.String(), "error", err)
 	}
@@ -789,6 +791,8 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 				return err
 			}
 			connection.touch(payload.Heartbeat.ObservedRevision)
+			// Throttled by the recorder: at most one write a minute.
+			agenttransport.Seen(stream.Context(), principal.sighting(hello.AgentVersion))
 			if err := s.touchNode(agentNode); err != nil {
 				slog.Warn("failed to persist agent heartbeat", "component", "agent-control", "node", agentNode.String(), "error", err)
 			}

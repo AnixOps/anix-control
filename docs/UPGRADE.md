@@ -1816,6 +1816,85 @@ Run it after at least a day on identity, once no rollback is expected:
 - Control no longer creates a default administrator. Create administrators
   through the admin API.
 
+## Agent Transports: Preparing For v4.2
+
+From 4.1.0, `agent_control.mtls` defaults to `preferred`; from v4.2 it
+defaults to `required` (owner decision H5). **Before upgrading to v4.2,
+every node must run an AnixOps Agent that has enrolled (mTLS); legacy
+API-key agents will be refused** on the AnixOps Agent channels.
+
+- **What 4.1.0 changes.** Nothing stops working. A kernel that left
+  `agent_control.mtls` unset moves from `optional` to `preferred`: legacy
+  agents are still served, and are now told so. The legacy HTTP and
+  WebSocket agent paths answer `Deprecation: true` and a `Link` to this
+  section (and `Sunset` when you set `agent_control.legacy_sunset`), and the
+  control stream answers `x-anix-auth-deprecated`. Unlike the release candidates,
+  `preferred` no longer needs gRPC TLS or the built-in CA to start; without
+  them agents just cannot enroll yet. Set `optional` to stay silent, or
+  `off` to stop requesting client certificates altogether.
+- **What v4.2's `required` refuses.** API key authentication on the Agent
+  Control stream and the API key bootstrap of `Enroll`;
+  `/api/v2/agent/*`; `/api/v2/node/*` (register, heartbeat,
+  runtime-health, ws); `/api/v2/forward/agent/rules`; the clean agent
+  endpoints `/api/v2/forward-agent/register|heartbeat|report`. They answer
+  HTTP 403 with `"code": "agent_mtls_required"`, or gRPC `Unauthenticated`
+  with the trailer `x-anix-error-code: agent_mtls_required`.
+- **What it does not touch.** UniProxy (`/api/v1|v2/server/UniProxy/*`) and
+  the v2board gRPC services, which XrayR, V2bX and other third-party node
+  software use, keep their node API keys in every mode. Nodes running such
+  software need nothing.
+- **The new table.** `v4_kernel_agent_transport`, created at startup,
+  records which transport each node was last seen on (at most one write a
+  minute per node and transport).
+
+### The Checklist
+
+```bash
+# Which mode runs, and every node with its last transport, agent version,
+# certificate and last sighting.
+anix-control agents transports
+
+# The nodes v4.2 would refuse. This must print "refuses none" before you
+# upgrade (or before you set agent_control.mtls: required yourself).
+anix-control agents transports --legacy-only
+
+# The same for scripts.
+anix-control agents transports --legacy-only --json
+```
+
+The admin page NodeX Agents → Agent 连接方式 (`/admin/agent/transports`) and
+`GET /api/v4/kernel/agents/transports?legacy_only=true` show the same.
+A node's status follows its newest AnixOps Agent channel:
+
+| Status | Meaning | Action before v4.2 |
+|---|---|---|
+| `mtls` | its agent uses the mTLS stream | none |
+| `legacy` | its agent still uses the API key stream, the legacy HTTP paths, the WebSocket or a clean agent | upgrade the agent and let it enroll |
+| `third-party` | seen on UniProxy or v2board gRPC only | none (not affected); if it is in fact an old anix-agent, upgrade it too |
+| `unseen` | no sighting since 4.1.0 | check the node; it may be offline |
+
+To move a `legacy` node:
+
+1. Give the kernel what enrollment needs: `module_runtime.ca_kek`
+   (`ANIX_CONTROL_MODULE_RUNTIME_CA_KEK`), `grpc.enabled: true` and
+   `grpc.tls_cert_file`/`grpc.tls_key_file`. The startup log line
+   `Agent transports: ... agent enrollment: available` confirms it.
+2. Upgrade anix-agent to a release with A2 enrollment. It enrolls with its
+   existing node key on its next start; a new node can use a one-time
+   credential (`anix-control agent token create -node proxy-12`).
+3. Watch the node turn `mtls` in `anix-control agents transports` (within
+   a minute), and `anixops_agent_legacy_requests_total{path}` on `/metrics`
+   stop growing.
+4. Optionally rehearse v4.2 early: set `agent_control.mtls: required` on
+   4.1.0 and watch `anixops_agent_legacy_refused_total{path}`. Roll back by
+   setting `preferred` and restarting.
+
+To announce a date to legacy agents, set
+`agent_control.legacy_sunset: "YYYY-MM-DD"`
+(`ANIX_CONTROL_AGENT_CONTROL_LEGACY_SUNSET`); it is sent as the `Sunset`
+header and the `x-anix-auth-sunset` stream metadata. It is unset by default
+because the v4.2 release date is not fixed.
+
 ## Switching Route Modes
 
 Each v2 route of a Control package runs in one of three modes: `legacy` (the

@@ -16,6 +16,7 @@ import (
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/v4/internal/agentstreams"
+	"github.com/AnixOps/anix-control/v4/internal/agenttransport"
 	"github.com/AnixOps/anix-control/v4/internal/agentws"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/kernelnodeops"
@@ -622,6 +623,7 @@ func (h *AgentHandler) handleWebSocketMessage(agentConn *AgentConnection, raw []
 	}
 
 	h.updateConnectionLastSeen(agentConn.NodeID)
+	recordWebSocketSighting(context.Background(), agentConn)
 
 	var envelope wsInboundEnvelope
 	if err := json.Unmarshal(raw, &envelope); err != nil {
@@ -1029,7 +1031,7 @@ func (h *AgentHandler) AgentWebSocketUnified(c *gin.Context) {
 		return
 	}
 
-	conn, err := h.wsUpgrader.Upgrade(c.Writer, c.Request, nil)
+	conn, err := h.wsUpgrader.Upgrade(c.Writer, c.Request, legacyAgentUpgradeHeader(c.Writer.Header()))
 	if err != nil {
 		return
 	}
@@ -1063,6 +1065,7 @@ func (h *AgentHandler) AgentWebSocketUnified(c *gin.Context) {
 	}
 	h.connections.Store(authInfo.NodeID, agentConn)
 	h.touchNodeOnline(authInfo.NodeID, authInfo.IsForwardNode)
+	recordWebSocketSighting(c.Request.Context(), agentConn)
 	defer h.connections.Delete(authInfo.NodeID)
 	defer h.failPendingAcksForNode(authInfo.NodeID, "agent websocket closed")
 
@@ -1077,6 +1080,41 @@ func (h *AgentHandler) AgentWebSocketUnified(c *gin.Context) {
 		}
 		h.handleWebSocketMessage(agentConn, msg)
 	}
+}
+
+// legacyAgentUpgradeHeader carries the deprecation signals the legacy agent
+// path middleware (agenttransport.LegacyHTTP) set into the WebSocket
+// handshake answer, which the upgrader writes itself.
+func legacyAgentUpgradeHeader(header http.Header) http.Header {
+	var upgrade http.Header
+	for _, name := range []string{"Deprecation", "Sunset", "Link"} {
+		if values := header.Values(name); len(values) > 0 {
+			if upgrade == nil {
+				upgrade = http.Header{}
+			}
+			for _, value := range values {
+				upgrade.Add(name, value)
+			}
+		}
+	}
+	return upgrade
+}
+
+// recordWebSocketSighting records an agent WebSocket session in the
+// transport inventory, at its start and as it talks (the recorder writes at
+// most once a minute).
+func recordWebSocketSighting(ctx context.Context, agentConn *AgentConnection) {
+	if agentConn == nil || agentConn.NodeID == 0 {
+		return
+	}
+	kind := agentcontrol.NodeKindProxy
+	if agentConn.IsForwardNode {
+		kind = agentcontrol.NodeKindForward
+	}
+	agenttransport.Seen(ctx, agenttransport.Sighting{
+		Node:      agentcontrol.AgentNode{Kind: kind, ID: uint32(agentConn.NodeID)}, // #nosec G115 -- node ids are uint32 on every agent channel.
+		Transport: model.AgentTransportWebSocket, AgentVersion: agentConn.Version, Identity: agentstreams.IdentityAPIKey,
+	})
 }
 
 // ========== 管理接口 ==========

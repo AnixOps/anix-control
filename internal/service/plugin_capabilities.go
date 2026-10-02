@@ -117,6 +117,11 @@ var (
 		// applied. A package that could write it could make a node look
 		// converged on a configuration it never ran.
 		"v4_kernel_node_config_status": true,
+		// The agent transport inventory (A2-6): which channel each node's
+		// agent was last seen on, which the operator reads before switching
+		// agent_control.mtls to required. A package that could write it
+		// could make a legacy node look enrolled.
+		"v4_kernel_agent_transport": true,
 	}
 )
 

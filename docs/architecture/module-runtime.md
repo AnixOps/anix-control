@@ -183,12 +183,15 @@ gRPC listener (`grpc.*`, port 50051), not on the module listener.
 
   | Mode | Without a client certificate |
   |---|---|
-  | `optional` (default) | the legacy node credential authenticates, as before |
-  | `preferred` | the same, and the control stream answers it with the header `x-anix-auth-deprecated` |
-  | `required` (v5) | the Agent services refuse the call; `Enroll` accepts only enrollment credentials. The v2board services keep the legacy credential for third-party node software (the F3 decision) |
+  | `off` | the legacy node credential authenticates; no client certificate is requested or accepted, and `Enroll` is unavailable |
+  | `optional` | the legacy node credential authenticates, as before |
+  | `preferred` (default from 4.1.0) | the same, and the control stream answers it with the header `x-anix-auth-deprecated` (the legacy HTTP agent paths with `Deprecation`, `Sunset` and `Link`) |
+  | `required` (default from 4.2) | the Agent services refuse the call (`agent_mtls_required`); `Enroll` accepts only enrollment credentials. The v2board services keep the legacy credential for third-party node software (the F3 decision) |
 
-  `preferred` and `required` need `grpc.tls_cert_file`/`grpc.tls_key_file`
-  and the built-in CA; the kernel refuses to start without them.
+  `required` needs `grpc.tls_cert_file`/`grpc.tls_key_file` and the built-in
+  CA; the kernel refuses to start without them. The transition (decision
+  H5, the transport inventory, the signals) is in
+  [`node-ops-service.md`](node-ops-service.md) section 5.6.
 - **Revocation.** Every certificate is recorded in
   `v4_kernel_agent_certificate` (serial, node kind and id, enrollment,
   issuer, `not_after`, `revoked_at`). Disabling a proxy node, replacing a

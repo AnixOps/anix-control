@@ -11,6 +11,7 @@ const messages = {
   'pageTitles.admin.control': 'Control Kernel',
   'pageTitles.admin.plugins': 'Plugins',
   'pageTitles.admin.routeModes': 'Route modes',
+  'pageTitles.admin.agentTransports': 'Agent transports',
   'pageTitles.admin.deployments': 'Deployments',
   'pageTitles.admin.accessGroups': 'Access Groups',
   'app.meta.defaultDescription': 'Default app description',
@@ -34,6 +35,7 @@ describe('pageMeta helpers', () => {
     expect(resolveRoutePageTitle(t, '/admin/control', 'Fallback')).toBe('Control Kernel')
     expect(resolveRoutePageTitle(t, '/admin/plugins', 'Fallback')).toBe('Plugins')
     expect(resolveRoutePageTitle(t, '/admin/plugins/route-modes', 'Fallback')).toBe('Route modes')
+    expect(resolveRoutePageTitle(t, '/admin/agent/transports', 'Fallback')).toBe('Agent transports')
     expect(resolveRoutePageTitle(t, '/admin/deployments', 'Fallback')).toBe('Deployments')
     expect(resolveRoutePageTitle(t, '/admin/access-groups', 'Fallback')).toBe('Access Groups')
   })

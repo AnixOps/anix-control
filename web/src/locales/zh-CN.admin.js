@@ -1786,4 +1786,38 @@ export default {
     confirm: { deleteGroupTitle: '删除访问组 {name}？', deleteGroup: '组内的成员关系、资源授权和配额策略会一并删除。此操作无法撤销。', deleteGroupAction: '删除访问组', removeGrantTitle: '移除资源授权 #{id}？', removeGrant: '该组成员将失去对 {resource} 的访问权限。此操作无法撤销。', removeGrantAction: '移除授权', removeQuotaTitle: '移除配额策略 {key}？', removeQuota: '该组将不再受这条配额限制。此操作无法撤销。', removeQuotaAction: '移除策略' },
     errors: { load: '无法加载访问控制数据', loadGroups: '无法加载访问组', loadDetail: '无法加载访问组详情', groupRequired: '必须填写服务作用域和组名称', saveGroup: '无法保存访问组', deleteGroup: '无法删除访问组', member: '无法更新用户成员关系', plan: '无法更新套餐成员关系', grant: '无法更新资源授权', quota: '无法更新配额策略', resolve: '无法解析有效授权', invalidID: '{label} 必须为正整数', invalidJSON: '{label} 必须为有效 JSON', scopeRequired: '必须选择服务作用域' }
   },
+  agentTransports: {
+    open: 'Agent 连接方式',
+    subtitle: '查看每个节点的 Agent 如何连接 Control：mTLS 流，或 v4.2 将拒绝的旧版通道。',
+    back: 'NodeX Agents',
+    mode: 'agent_control.mtls：{mode}',
+    modes: {
+      off: '已关闭客户端证书；旧版 Agent 照常服务，不发出提示。',
+      optional: '提供客户端证书时会校验；旧版 Agent 照常服务，不发出提示。',
+      preferred: '旧版 Agent 仍可连接，但会收到弃用提示。',
+      required: 'AnixOps Agent 通道只接受已注册（持有客户端证书）的 Agent。'
+    },
+    sunset: '旧版停用日期：{date}',
+    notice: 'v4.2 起 agent_control.mtls 默认为 required。升级前，所有标记为“旧版”的节点都必须运行已完成注册的 Agent；使用 API 密钥的旧版 Agent 将被拒绝。UniProxy 和 v2board gRPC（第三方节点软件）不受影响。',
+    guide: '升级指南',
+    filterLabel: '按状态筛选',
+    statuses: { all: '全部', mtls: 'mTLS', legacy: '旧版', 'third-party': '第三方', unseen: '未出现' },
+    legacyHint: 'required 模式下会被拒绝',
+    transports: {
+      'mtls-stream': 'mTLS 流',
+      'apikey-stream': 'API 密钥流',
+      'http-legacy': '旧版 HTTP',
+      websocket: 'WebSocket',
+      'clean-agent': 'Clean Agent',
+      uniproxy: 'UniProxy',
+      'v2board-grpc': 'v2board gRPC'
+    },
+    columns: { node: '节点', status: '状态', transport: '最近通道', version: 'Agent 版本', certificate: '证书', lastSeen: '最近出现', seenOn: '出现过的通道' },
+    certificateUntil: '有效至 {date}',
+    noCertificate: '未注册',
+    disabled: '已停用',
+    tableLabel: '各节点的 Agent 连接方式',
+    empty: { title: '暂无节点', description: '创建代理节点或转发节点后会显示在这里。' },
+    loadFailed: 'Agent 连接方式加载失败'
+  },
 }

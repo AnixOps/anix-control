@@ -60,7 +60,7 @@ func TestAgentCommandCreatesEnrollmentCredentials(t *testing.T) {
 func TestTakeAdminCommand(t *testing.T) {
 	saved := os.Args
 	t.Cleanup(func() { os.Args = saved })
-	for _, command := range []string{"module", "agent", "routes"} {
+	for _, command := range []string{"module", "agent", "agents", "routes"} {
 		os.Args = []string{"anix-control", command, "token", "create"}
 		require.Equal(t, []string{command, "token", "create"}, takeAdminCommand())
 		require.Equal(t, []string{"anix-control"}, os.Args)
@@ -72,7 +72,7 @@ func TestTakeAdminCommand(t *testing.T) {
 func TestAgentPKIForGRPC(t *testing.T) {
 	pki, err := agentPKIForGRPC(&config.Config{}, nil)
 	require.NoError(t, err)
-	require.Nil(t, pki, "optional mode runs without the agent PKI")
+	require.Nil(t, pki, "the default (preferred) runs without the agent PKI")
 
 	required := &config.Config{AgentControl: config.AgentControlConfig{MTLS: config.AgentMTLSRequired}}
 	_, err = agentPKIForGRPC(required, nil)
@@ -118,13 +118,17 @@ func TestAgentPKIWithTheCAAlone(t *testing.T) {
 	stopped, running := rt.workers.Stop(5 * time.Second)
 	require.True(t, stopped, running)
 
-	// An external PKI holds no CA key: optional mode runs without agent
-	// enrollment, the other modes refuse to start.
+	// An external PKI holds no CA key: every mode but required runs
+	// without agent enrollment (preferred is the default), required refuses
+	// to start.
 	external := &config.Config{ModuleRuntime: config.ModuleRuntimeConfig{Enabled: true, PKI: config.ModulePKIExternal}}
-	pki, err = agentPKIForGRPC(external, db)
-	require.NoError(t, err)
-	require.Nil(t, pki)
-	external.AgentControl.MTLS = config.AgentMTLSPreferred
+	for _, mode := range []string{"", config.AgentMTLSOff, config.AgentMTLSOptional, config.AgentMTLSPreferred} {
+		external.AgentControl.MTLS = mode
+		pki, err = agentPKIForGRPC(external, db)
+		require.NoError(t, err, mode)
+		require.Nil(t, pki, mode)
+	}
+	external.AgentControl.MTLS = config.AgentMTLSRequired
 	_, err = agentPKIForGRPC(external, db)
 	require.ErrorIs(t, err, agentpki.ErrExternalPKI)
 	require.NoError(t, (&serverRuntime{}).startKernelCAMaintenance(&config.Config{}, db), "no CA, no maintenance")

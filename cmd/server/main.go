@@ -23,6 +23,7 @@ import (
 	_ "time/tzdata" // database.timezone and TZ resolve without system zoneinfo
 
 	_ "github.com/AnixOps/anix-control/v4/docs" // swagger docs
+	"github.com/AnixOps/anix-control/v4/internal/agenttransport"
 	"github.com/AnixOps/anix-control/v4/internal/branding"
 	"github.com/AnixOps/anix-control/v4/internal/cache"
 	"github.com/AnixOps/anix-control/v4/internal/config"
@@ -484,6 +485,8 @@ func run() int {
 	if grpcSrv != nil {
 		log.Printf("gRPC server listening on %s", grpcAddr)
 	}
+	agenttransport.SetMode(cfg.AgentControl.MTLSOrDefault())
+	log.Print(agentTransportPolicyLog(cfg, grpcSrv))
 	// KernelNodeOps dispatches node operations on the Agent Control streams
 	// of both node kinds (node-ops-service.md section 3.8) and serves the
 	// node configuration and agent kinds (section 3.11, NO-6).
@@ -792,6 +795,12 @@ func (rt *serverRuntime) shutdown(stopSignals context.CancelFunc) {
 			log.Printf("gRPC server did not stop within %s, continuing shutdown", grpcStopTimeout)
 		}
 	}
+	// Agent transport sightings not yet written (at most a minute old).
+	flushCtx, cancelFlush := context.WithTimeout(context.Background(), 5*time.Second)
+	if err := agenttransport.Default().Flush(flushCtx); err != nil {
+		log.Printf("Agent transport inventory flush failed: %v", err)
+	}
+	cancelFlush()
 
 	if rt.controlPluginHosts != nil {
 		hostCtx, cancelHosts := context.WithTimeout(context.Background(), pluginHostStopTimeout)
@@ -835,6 +844,7 @@ func startGRPCServer(cfg *config.Config) (*grpcserver.Server, string, error) {
 	grpcCfg.TLSCertFile = cfg.GRPC.TLSCertFile
 	grpcCfg.TLSKeyFile = cfg.GRPC.TLSKeyFile
 	grpcCfg.AgentMTLS = cfg.AgentControl.MTLSOrDefault()
+	grpcCfg.AgentLegacySunset, _ = cfg.AgentControl.LegacySunsetTime() // validated by ValidateForServer
 	agentPKI, err := agentPKIForGRPC(cfg, database.Get())
 	if err != nil {
 		return nil, "", err

@@ -202,6 +202,7 @@ export default {
       forwardLocal: '本地运行时',
       forwardNodeX: 'NodeX 运行时',
       forwardAgents: 'NodeX Agents',
+      agentTransports: 'Agent 连接方式',
       control: '控制内核',
       plugins: '插件中心',
       routeModes: '路由模式',

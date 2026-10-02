@@ -10,10 +10,12 @@ import (
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	"github.com/AnixOps/anix-control/v4/internal/agentpki"
+	"github.com/AnixOps/anix-control/v4/internal/agenttransport"
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/modulepki"
+	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -102,7 +104,9 @@ func (s *AgentEnrollmentGRPCServer) bootstrap(ctx context.Context, credential st
 		return agentpki.Bootstrap{Method: model.AgentEnrollmentMethodCredential, Node: node, Secret: credential}, nil
 	}
 	if s.auth.mode() == config.AgentMTLSRequired {
-		return agentpki.Bootstrap{}, status.Error(codes.Unauthenticated, "an enrollment credential is required (agent_control.mtls: required)")
+		agenttransport.CountRefused(agentv1pb.AgentEnrollment_Enroll_FullMethodName)
+		_ = grpc.SetTrailer(ctx, metadata.Pairs(agentcontrol.MetadataErrorCode, agentcontrol.ErrorCodeMTLSRequired))
+		return agentpki.Bootstrap{}, status.Error(codes.Unauthenticated, agentcontrol.ErrorCodeMTLSRequired+": an enrollment credential is required (agent_control.mtls: required)")
 	}
 	secret := first(agentcontrol.MetadataAPIKey)
 	if secret == "" || node == (agentcontrol.AgentNode{}) {

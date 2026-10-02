@@ -200,6 +200,7 @@ export default {
       forwardLocal: 'Local Runtime',
       forwardNodeX: 'NodeX Runtime',
       forwardAgents: 'NodeX Agents',
+      agentTransports: 'Agent transports',
       control: 'Control Kernel',
       plugins: 'Plugin Center',
       routeModes: 'Route modes',

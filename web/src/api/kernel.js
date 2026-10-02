@@ -293,3 +293,12 @@ export async function getKernelRouteModeRevisions(packageID, limit) {
   if (limit) params.limit = limit
   return unwrap(await v4({ url: '/kernel/route-modes/revisions', method: 'get', params }))
 }
+
+// The agent transport inventory (A2-6), /api/v4: each node's last agent
+// transport, agent version and certificate. legacyOnly keeps the nodes
+// agent_control.mtls: required would refuse.
+export async function getKernelAgentTransports(legacyOnly = false) {
+  const config = { url: '/kernel/agents/transports', method: 'get' }
+  if (legacyOnly) config.params = { legacy_only: true }
+  return unwrap(await v4(config))
+}

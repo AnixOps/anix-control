@@ -14,7 +14,10 @@ const adminApi = vi.hoisted(() => ({
   listAgentDiagnosticTasks: vi.fn()
 }))
 
+const router = vi.hoisted(() => ({ push: vi.fn() }))
+
 vi.mock('@/api/admin', () => adminApi)
+vi.mock('vue-router', () => ({ useRouter: () => router }))
 
 describe('Admin Agent', () => {
   beforeEach(async () => {
@@ -211,5 +214,13 @@ describe('Admin Agent', () => {
     expect(table.textContent).toContain('12 ms')
     await user.click(screen.getByRole('tab', { name: 'Remote Terminal' }))
     expect(await screen.findByRole('log', { name: 'Terminal output' })).toBeTruthy()
+  })
+
+  it('links to the agent transport inventory', async () => {
+    const wrapper = mount(Agent)
+    await flushPromises()
+    await wrapper.get('[data-testid="open-agent-transports"]').trigger('click')
+    expect(router.push).toHaveBeenCalledWith('/admin/agent/transports')
+    wrapper.unmount()
   })
 })

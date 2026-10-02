@@ -1787,4 +1787,38 @@ export default {
     confirm: { deleteGroupTitle: 'Delete access group {name}?', deleteGroup: 'Its memberships, resource grants and quota policies are deleted with it. This can’t be undone.', deleteGroupAction: 'Delete group', removeGrantTitle: 'Remove resource grant #{id}?', removeGrant: 'Members of this group lose access to {resource}. This can’t be undone.', removeGrantAction: 'Remove grant', removeQuotaTitle: 'Remove quota policy {key}?', removeQuota: 'The group is no longer limited by this quota. This can’t be undone.', removeQuotaAction: 'Remove policy' },
     errors: { load: 'Unable to load access control data', loadGroups: 'Unable to load access groups', loadDetail: 'Unable to load access group details', groupRequired: 'A service scope and group name are required', saveGroup: 'Unable to save access group', deleteGroup: 'Unable to delete access group', member: 'Unable to update user membership', plan: 'Unable to update plan membership', grant: 'Unable to update resource grant', quota: 'Unable to update quota policy', resolve: 'Unable to resolve effective access', invalidID: '{label} must be a positive integer', invalidJSON: '{label} must be valid JSON', scopeRequired: 'A service scope is required' }
   },
+  agentTransports: {
+    open: 'Agent transports',
+    subtitle: 'How each node’s agent reaches Control: the mTLS stream, or a legacy channel that v4.2 will refuse.',
+    back: 'NodeX Agents',
+    mode: 'agent_control.mtls: {mode}',
+    modes: {
+      off: 'Client certificates are off; legacy agents are served silently.',
+      optional: 'Client certificates are verified when presented; legacy agents are served silently.',
+      preferred: 'Legacy agents are still served, with deprecation signals.',
+      required: 'Only enrolled agents (client certificates) are accepted on AnixOps Agent channels.'
+    },
+    sunset: 'Legacy sunset: {date}',
+    notice: 'v4.2 makes agent_control.mtls: required the default. Before upgrading, every node marked Legacy must run an Agent that has enrolled; legacy API-key agents will be refused. UniProxy and v2board gRPC (third-party node software) are not affected.',
+    guide: 'Upgrade guide',
+    filterLabel: 'Filter by status',
+    statuses: { all: 'All', mtls: 'mTLS', legacy: 'Legacy', 'third-party': 'Third-party', unseen: 'Not seen' },
+    legacyHint: 'Refused under required',
+    transports: {
+      'mtls-stream': 'mTLS stream',
+      'apikey-stream': 'API key stream',
+      'http-legacy': 'Legacy HTTP',
+      websocket: 'WebSocket',
+      'clean-agent': 'Clean agent',
+      uniproxy: 'UniProxy',
+      'v2board-grpc': 'v2board gRPC'
+    },
+    columns: { node: 'Node', status: 'Status', transport: 'Last transport', version: 'Agent version', certificate: 'Certificate', lastSeen: 'Last seen', seenOn: 'Seen on' },
+    certificateUntil: 'until {date}',
+    noCertificate: 'Not enrolled',
+    disabled: 'Disabled',
+    tableLabel: 'Agent transports by node',
+    empty: { title: 'No nodes', description: 'Proxy and forward nodes appear here once they exist.' },
+    loadFailed: 'Unable to load agent transports'
+  },
 }
