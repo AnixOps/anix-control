@@ -23,8 +23,12 @@ const trackedChunkPatterns = [
   ['forwardRuntime', /^forwardRuntime-/],
   ['echarts', /^echarts-/],
   ['g6', /^g6-/],
-  ['vendor', /^vendor-/],
-  ['vue-vendor', /^vue-vendor-/]
+  ['vue-vendor', /^vue-vendor-/],
+  ['router', /^router-/],
+  ['i18n', /^i18n-/],
+  ['axios', /^axios-/],
+  ['messages (zh-CN)', /^zh-CN(\.admin)?-/],
+  ['messages (en)', /^en(\.admin)?-/]
 ]
 
 function fail(message) {

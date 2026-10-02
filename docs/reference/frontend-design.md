@@ -63,7 +63,8 @@ its colours and the `theme-color` values are read from `tokens.css`.
 ## Styles
 
 Load order (`web/src/main.js`): `design/fonts/inter/inter.css`,
-`design/tokens.css`, `styles/base.css`, then the legacy `style.css`.
+`design/tokens.css`, `styles/base.css`, `styles/pages.css`, then
+`style.css`.
 
 - **`styles/base.css`**: reset; `body` on `--bg` / `--label-1` with the
   token font stack (system, Inter, then Chinese system fonts) and the Body
@@ -73,6 +74,17 @@ Load order (`web/src/main.js`): `design/fonts/inter/inter.css`,
   fades) and `prefers-contrast: more` (stronger separators). It also defines
   two values the tokens do not have yet: `--scrim` (dialog and drawer
   backdrop) and `--focus-ring`.
+- **`style.css`**: what is left of the pre-redesign global layer (U9): the
+  baseline for bare `<button>`, `<input>`, `<textarea>` and `<select>`, the
+  skip link, and the classes that signed plugin WebUI bundles
+  (`packages/<name>/webui`, `anixops.webui/v1`) render: `.btn`,
+  `.btn-secondary`, `.table-container`, `.data-table`, `.empty-state`. The
+  plugin configuration forms also use `.btn-primary`, `.btn-sm`,
+  `.btn-danger`, `.form-group` and `.required`. Plugins ship separately, so
+  these classes stay while the WebUI contract does; nothing new goes there.
+  On touch screens `.btn` and the bare fields keep a 44 px minimum height;
+  bare buttons size themselves (the old rule that set every button to
+  40 / 44 px on phones is gone).
 - **New code uses the tokens directly**: `var(--label-1)`, `var(--accent)`,
   `var(--accent-fill)` with `var(--on-accent)` for filled controls,
   `var(--radius-sm)`, `var(--type-body-size)`, `var(--space-4)`, and so on.
@@ -89,11 +101,12 @@ system preference), always writes it to `data-theme` (older page styles use
 picks a theme with the toggle, and points the `theme-color` meta tags at the
 active background.
 
-### Legacy variable bridge
+### Legacy variable map
 
-Until every page is migrated, `web/src/style.css` keeps the pre-redesign
-variable names as aliases of tokens, so old pages follow the brand and both
-themes:
+The pre-redesign variable names were aliases of tokens in `style.css`
+until every page used the tokens; U9 removed them, and stylelint rejects
+them (`declaration-property-value-disallowed-list`). Code copied from an
+old page or a plugin translates like this:
 
 | Legacy | Token |
 |---|---|
@@ -113,13 +126,12 @@ themes:
 | Arco-era `--color-bg-1`, `--color-bg-2`, `--color-border` | `--bg-elevated`, `--bg-elevated`, `--separator` |
 | `--background-color`, `--bg-secondary` | `--bg-grouped`, `--fill-1` |
 
-The global classes `.btn` (`-primary`, `-secondary`, `-ghost`, `-danger`,
-`-sm`, `-lg`), `.card`, `.section-panel`, `.table-container`, `.data-table`,
-`.tabs`/`.tab` (segmented control), `.status-badge`, `.form-group`
-and the form fields are restyled through tokens: pill buttons, 36 px controls,
-10/14/20 px radii, hairline separators and the token shadows. The aliases and
-classes are removed when the last page stops using them; `.modal*` and
-`.close-btn` went in U4, when every overlay moved to `UiDialog`/`UiSheet`.
+The global classes `.card`, `.section-panel`, `.tabs`/`.tab`,
+`.status-badge`, `.form-row`, `.btn-ghost`, `.btn-lg`, the layout and
+spacing utilities (`.grid-*`, `.flex`, `.mt-4`, ...) and `.container` went
+in U9, unused; ESLint (`vue/no-restricted-class`) rejects the distinctive
+ones. `.modal*` and `.close-btn` went in U4, when every overlay moved to
+`UiDialog`/`UiSheet`.
 
 ## Brand in the UI
 
@@ -170,20 +182,21 @@ headline number with `UiMetricCard`; neither imports ECharts in the page.
 
 ## Lint rules
 
-Native dialogs are errors since U4; the style rules stay warnings while
-pages migrate (the type and radius scale become errors in U9).
+Every rule is an error, and the Frontend Build job runs both linters
+(`npm run lint && npm run lint:styles`). The style rules warned while the
+pages migrated and became errors in U9, when the count reached 0.
 
-| Command | Rule | At U1 | At U4 |
-|---|---|---|---|
-| `npm run lint:styles` (stylelint, `web/stylelint.config.mjs`) | colour literals (hex, named colours, `rgb()`/`hsl()`…) outside `src/design/` | 512 warnings | 646 warnings for the three rules together (774 before U4) |
-| | `font-size` off the scale (12/13/15/19/24/32/48 px, phone 16/28/34 px, or a variable) | 131 warnings | |
-| | `border-radius` off the scale (6/10/14/20/980 px, 0, 50 %, or a variable) | 132 warnings | |
-| `npm run lint` (ESLint, `web/eslint.config.js`) | `no-alert`: `alert`, `confirm`, `prompt` | 117 warnings | error, 0 |
-| | `vue/no-restricted-class`: `.modal-overlay`, `.modal`, `.modal-lg`, `.modal-header`, `.modal-body`, `.modal-footer` | — | error, 0 |
-| | `vue/no-restricted-html-elements`: `<table>` in the pages listed in `web/scripts/data-table-pages.mjs` (U6) | — | error, 0 |
+| Command | Rule | At U1 | At U4 | At U9 |
+|---|---|---|---|---|
+| `npm run lint:styles` (stylelint, `web/stylelint.config.mjs`) | colour literals (hex, named colours, `rgb()`/`hsl()`…) outside `src/design/` | 512 warnings | 646 warnings for the three rules together (774 before U4) | error, 0 |
+| | `font-size` off the scale (12/13/15/19/24/32/48 px, phone 16/28/34 px, or a variable) | 131 warnings | | error, 0 |
+| | `border-radius` off the scale (6/10/14/20/980 px, 0, 50 %, or a variable) | 132 warnings | | error, 0 |
+| | removed legacy variables (`var(--text-color)`, …, see "Legacy variable map") | — | — | error, 0 |
+| `npm run lint` (ESLint, `web/eslint.config.js`) | `no-alert`: `alert`, `confirm`, `prompt` | 117 warnings | error, 0 | error, 0 |
+| | `vue/no-restricted-class`: `.modal*` (U4) and the removed global classes (U9) | — | error, 0 | error, 0 |
+| | `vue/no-restricted-html-elements`: `<table>` in the pages listed in `web/scripts/data-table-pages.mjs` (U6) | — | error, 0 | error, 0 |
 
-The style warnings do not fail either command. CI does not run the linters,
-so `web/src/__tests__/nativeDialogs.test.js` (part of `npm test`) also fails
+`web/src/__tests__/nativeDialogs.test.js` (part of `npm test`) also fails
 on `window.alert/confirm/prompt` or `.modal-overlay` in the app sources, and
 the test setup makes a native dialog throw. Likewise
 `web/src/__tests__/dataTableGuard.test.js` fails when a page listed in
@@ -808,15 +821,64 @@ fails and retries on its own, so one failing endpoint never blanks the page.
 
 ## Bundle
 
-Reka UI and its helpers (`@floating-ui`, `@vueuse`, …) build into a
-`ui-vendor` chunk, kept out of `vue-vendor`. With every component imported
-it is about 45 KB gzip (the components add 14 KB JS and 7 KB CSS). The
-login page loads none of it (112 KB gzip in total, against the 120 KB budget
-of plan §13). The admin shell adds its layout chunk and `ui-vendor`: about
-165 KB gzip before the first page, against the 250 KB budget. Import
-components from the pages that use them so routes stay lazy: the `@/ui`
-barrel pulls every component into the page that imports it, so pages import
-`@/ui/UiButton.vue` and `@/ui/composables/…` directly. `UiDataTable` with
-its pagination, menu, states and checkbox is a shared chunk of about 10 KB
-gzip (JS and CSS) that the U6 list pages load. The U5 sign-in form
-(text, password and code fields) adds about 10 KB gzip to the login page.
+### Performance budget (plan §13, U9)
+
+`npm run bundle:budget` (`web/scripts/check-bundle-budget.mjs`) runs after
+`npm run build`; CI runs it in the Frontend Build job. The build writes the
+chunk graph (which chunk imports which, the CSS each pulls in, the source
+modules in each) to `web/bundle-reports/chunk-graph.json`
+(`web/scripts/vite-chunk-graph.mjs`, outside the served `web/public`). The
+script adds up gzip sizes from it and fails when a number is over
+`web/bundle-budget.json`:
+
+- **Routes, first visit.** *Initial* is what the route needs before it
+  renders: the entry with its static imports and CSS, the default locale's
+  core messages (`boot`), and the route's layout and page chunks with
+  theirs (for the admin route also its message group, which the router
+  awaits). *With deferred* adds what loads right after (`after`: axios,
+  with the first request).
+- **Lazy chunks.** Every chunk except the entry, against one limit;
+  `echarts` and `g6` are excluded (they load only with the pages that draw
+  charts and graphs).
+
+| Budget (gzip) | Measured at U9 | Limit | Why |
+|---|---:|---:|---|
+| Sign-in, initial | 115 KB | 120 KB | plan §13 |
+| Sign-in, with axios | 134 KB | 141 KB | measured + 5 % |
+| User home, initial | 168 KB | 178 KB | measured + 5 % |
+| User home, with axios | 186 KB | 197 KB | measured + 5 % |
+| Admin shell + dashboard, initial | 237 KB | 250 KB | plan §13 |
+| Admin shell + dashboard, with axios | 255 KB | 269 KB | measured + 5 % |
+| Largest lazy chunk (`vue-vendor`) | 42 KB | 80 KB | plan §13, per route chunk |
+
+Before U9 the same measurement gave 278, 289 and 307 KB. When a change
+needs more, raise the limit in `bundle-budget.json` in the same PR and say
+why in the CHANGELOG; `--verbose` lists every file of every route by size.
+
+### What keeps the sign-in page small
+
+- **Locale messages** (`src/i18n.js`) come in two groups per language:
+  `core` (`src/locales/<lang>.js`: sign-in, user pages, shell, components)
+  loads at startup, `admin` (`src/locales/<lang>.admin.js`: the admin
+  console and the forward suite) when an administrator is signed in (the
+  router guard calls `loadMessageGroup('admin')`). Only the active
+  language loads; switching loads the new language's active groups.
+  `localeParity.test.js` keeps en and zh-CN on the same keys (so the
+  fallback locale is not fetched) and the groups' namespaces disjoint. A new
+  namespace for user or sign-in pages goes in the core file; one for admin
+  pages goes in the admin file. Tests and Histoire load both groups.
+- **App code is not grouped.** `vite.config.js` groups only vendor code
+  (`chunkGroups`: `vue-vendor` with every `@vue/*` package, `router`,
+  `i18n`, `axios`, `echarts`, `g6`, `qr`). API modules, composables and
+  messages split automatically with the routes that use them; a manual
+  group would also take every module its members import.
+- **Reka UI has no group**: automatic splitting shares each primitive only
+  between the routes that render it (one `ui-vendor` chunk cost the sign-in
+  page 43 KB).
+- **axios** loads with the first request (`utils/request.js`
+  `loadRequestClient()`, `api/public.js`), the **extension runtime** with
+  the first admin route, and vue-i18n is built without its legacy API
+  (`__VUE_I18N_LEGACY_API__`).
+- Import components from the pages that use them so routes stay lazy: the
+  `@/ui` barrel pulls every component into the page that imports it, so
+  pages import `@/ui/UiButton.vue` and `@/ui/composables/…` directly.

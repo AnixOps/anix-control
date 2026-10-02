@@ -32,6 +32,36 @@
 
 ### Changed
 
+- **Performance budget and legacy CSS cleanup (UI redesign phase U9)**
+  (`web/vite.config.js`, `web/src/i18n.js`, `web/src/locales/`,
+  `web/src/utils/request.js`, `web/src/style.css`,
+  `web/scripts/check-bundle-budget.mjs`, `web/bundle-budget.json`;
+  `docs/reference/frontend-design.md` "Bundle" and "Styles"). No API,
+  permission or edition change.
+  - First-visit gzip size (JS and CSS, zh-CN): sign-in 278 → 115 KB, user
+    home 289 → 168 KB, admin dashboard 307 → 237 KB (with its messages);
+    axios (18 KB) now loads with the first request.
+  - Locale messages are split into a core group and an admin group per
+    language. Only the active language loads (en no longer fetches zh-CN
+    as a fallback; `localeParity.test.js` keeps the keys equal); the admin
+    group loads when an administrator is signed in.
+  - The single `api` chunk is gone: API modules go with the routes that use
+    them; Vue's `@vue/*` packages join `vue-vendor`; Reka UI is shared per
+    route instead of one 52 KB `ui-vendor` chunk; the extension runtime
+    loads with the first admin page; vue-i18n drops its legacy API.
+  - `npm run bundle:budget` sums what the first visit to the sign-in page,
+    the user home and the admin dashboard downloads, and checks every lazy
+    chunk, against `web/bundle-budget.json` (sign-in 120 KB, the plan §13
+    budget; admin shell and dashboard 250 KB; route chunks 80 KB). CI runs
+    it after the build, and now runs ESLint and stylelint too.
+  - `style.css` loses the pre-redesign variable aliases (`--primary-color`,
+    `--text-color`, ...), the unused utility and page classes (`.card`,
+    `.tabs`, `.grid-*`, `.page-toolbar`, ...), the phone rule that set every
+    button to 40 / 44 px and the 14 px phone root size. What remains is the
+    element baseline and the classes signed plugin WebUI bundles render
+    (`.btn`, `.data-table`, `.empty-state`, ...). The stylelint rules are
+    errors now and reject the removed variables.
+
 - **Dashboard, 流量与监控 and 部署编排 (UI redesign phase U8)**
   (`web/src/ui/UiChart.vue`, `UiMetricCard.vue`,
   `web/src/views/admin/Dashboard.vue`, `Monitor.vue`, `Deployments.vue`,
