@@ -111,10 +111,10 @@
               <svg class="icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M16 1H4a2 2 0 0 0-2 2v12h2V3h12V1zM20 5H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm-1 15H9V8h10v12z"/></svg>
               {{ $t('admin.subscriptions.copyCombinedSubscription') }}
             </button>
-            <button class="btn btn-sm btn-outline" @click.stop="editGroup(group)">
+            <button class="btn btn-sm btn-outline" :aria-label="`${$t('common.actions.edit')} ${group.name}`" :title="$t('common.actions.edit')" @click.stop="editGroup(group)">
               <svg class="icon" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
             </button>
-            <button class="btn btn-sm btn-outline btn-danger" @click.stop="deleteGroup(group)">
+            <button class="btn btn-sm btn-outline btn-danger" :aria-label="`${$t('common.actions.delete')} ${group.name}`" :title="$t('common.actions.delete')" @click.stop="deleteGroup(group)">
               <svg class="icon" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
             </button>
           </div>
@@ -173,13 +173,13 @@
                 </label>
               </td>
               <td>
-                <button class="btn btn-sm btn-outline" @click="copyTemplateLink(template)">
+                <button class="btn btn-sm btn-outline" :aria-label="`${$t('common.actions.copy')} ${template.name}`" :title="$t('common.actions.copy')" @click="copyTemplateLink(template)">
                   <svg class="icon" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M10.59 13.41L9.17 12l4.24-4.24 1.41 1.41L10.59 13.41zM6 18h12v2H6v-2z"/></svg>
                 </button>
-                <button class="btn btn-sm btn-outline" @click="editTemplate(template)">
+                <button class="btn btn-sm btn-outline" :aria-label="`${$t('common.actions.edit')} ${template.name}`" :title="$t('common.actions.edit')" @click="editTemplate(template)">
                   <svg class="icon" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04a1 1 0 0 0 0-1.41l-2.34-2.34a1 1 0 0 0-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z"/></svg>
                 </button>
-                <button class="btn btn-sm btn-outline btn-danger" @click="deleteTemplate(template)">
+                <button class="btn btn-sm btn-outline btn-danger" :aria-label="`${$t('common.actions.delete')} ${template.name}`" :title="$t('common.actions.delete')" @click="deleteTemplate(template)">
                   <svg class="icon" viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path fill="currentColor" d="M6 19a2 2 0 0 0 2 2h8a2 2 0 0 0 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/></svg>
                 </button>
               </td>
