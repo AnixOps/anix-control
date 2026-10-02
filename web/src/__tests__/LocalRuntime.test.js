@@ -128,4 +128,17 @@ describe('Local runtime admin page', () => {
     expect(payloadCall?.[1].value).toContain('"inventory":"hosts.ini"')
     expect(wrapper.vm.validationError).toBe('')
   })
+
+  it('shows the save bar for unsaved changes and puts them back on discard', async () => {
+    const wrapper = mountLocalRuntime()
+    await flushPromises()
+    expect(wrapper.find('[data-test="settings-save-bar"]').exists()).toBe(false)
+    const before = wrapper.get('#ansible-inventory').element.value
+
+    await wrapper.get('#ansible-inventory').setValue('edited.ini')
+    expect(wrapper.find('[data-test="settings-save-bar"]').exists()).toBe(true)
+    await wrapper.get('[data-test="settings-discard"]').trigger('click')
+    expect(wrapper.get('#ansible-inventory').element.value).toBe(before)
+    expect(wrapper.find('[data-test="settings-save-bar"]').exists()).toBe(false)
+  })
 })

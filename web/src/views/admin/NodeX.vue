@@ -6,7 +6,6 @@
       </template>
       <template #actions>
         <UiIconButton variant="secondary" :icon="RefreshCw" :label="t('common.actions.refresh')" :disabled="jobsLoading || statusLoading" data-test="nodex-refresh" @click="refreshAll" />
-        <UiButton variant="primary" :loading="saving" data-test="nodex-save" @click="saveNodeXConfig">{{ t('runtime.nodeX.save') }}</UiButton>
       </template>
     </UiPageHeader>
 
@@ -58,6 +57,8 @@
         <p v-if="validationError" class="form-error" role="alert">{{ validationError }}</p>
       </div>
     </UiSection>
+
+    <SettingsSaveBar :visible="dirty || saving" :saving="saving" @save="saveNodeXConfig" @discard="discardNodeXConfig" />
 
     <RuntimeStatusPanel
       :title="t('runtime.nodeX.probeTitle')"
@@ -114,6 +115,7 @@
 // Execution plane: kept apart from the flux-panel forward pages (AGENTS.md).
 // UI U7 restyled it; config keys, calls and payloads are unchanged.
 import { computed, onMounted, ref } from 'vue'
+import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
 import { useAppI18n } from '@/composables/useAppI18n'
 import {
   getNodeXRuntimeStatus,
@@ -125,8 +127,8 @@ import {
 import { humanizeForwardRuntimeBackend } from '@/utils/forwardRuntime'
 import { isMaskedSecret } from '@/constants/secrets'
 import { CircleAlert, CircleCheck, RefreshCw } from '@lucide/vue'
+import SettingsSaveBar from '@/components/admin/settings/SettingsSaveBar.vue'
 import UiBadge from '@/ui/UiBadge.vue'
-import UiButton from '@/ui/UiButton.vue'
 import UiGroupedList from '@/ui/UiGroupedList.vue'
 import UiGroupedListRow from '@/ui/UiGroupedListRow.vue'
 import UiIcon from '@/ui/UiIcon.vue'
@@ -165,6 +167,28 @@ const statusError = ref('')
 const doctorRunning = ref(false)
 const doctorSummary = ref(null)
 const doctorOutput = ref('')
+
+// The settings template's save bar (plan §7.3): the form as last loaded or
+// saved, to tell unsaved changes and to put them back on 放弃.
+const savedForm = ref(null)
+const currentForm = () => ({
+  nodeXMode: nodeXMode.value,
+  baseUrl: nodeXBaseUrl.value || '',
+  token: nodeXToken.value || '',
+  timeout: Number(nodeXTimeout.value) || 0
+})
+const dirty = computed(() => savedForm.value !== null && JSON.stringify(currentForm()) !== JSON.stringify(savedForm.value))
+
+function discardNodeXConfig() {
+  if (!savedForm.value) return
+  validationError.value = ''
+  nodeXMode.value = savedForm.value.nodeXMode
+  nodeXBaseUrl.value = savedForm.value.baseUrl
+  nodeXToken.value = savedForm.value.token
+  nodeXTimeout.value = savedForm.value.timeout
+}
+
+useUnsavedChanges(dirty, { discard: discardNodeXConfig })
 
 const operatorBaseUrl = computed(() => nodeXBaseUrl.value?.trim() || 'http://127.0.0.1:18081')
 // A stored token reads MASKED_SECRET: the field keeps it, so saving keeps the
@@ -277,6 +301,7 @@ async function fetchNodeXConfig() {
   } catch (error) {
     console.error('get NodeX timeout failed:', error)
   }
+  savedForm.value = currentForm()
 }
 
 async function saveNodeXConfig() {

@@ -155,4 +155,22 @@ describe('NodeX admin page', () => {
     const tokenCall = adminApi.setSystemConfig.mock.calls.find(([key]) => key === 'forward.runtime.nodex.token')
     expect(tokenCall?.[1].value).toBe('********')
   })
+
+  it('shows the save bar for unsaved changes and puts them back on discard', async () => {
+    const wrapper = mountNodeX()
+    await flushPromises()
+    expect(wrapper.find('[data-test="settings-save-bar"]').exists()).toBe(false)
+
+    await wrapper.get('#nodex-base-url').setValue('http://10.0.0.2:18081')
+    expect(wrapper.find('[data-test="settings-save-bar"]').exists()).toBe(true)
+    await wrapper.get('[data-test="settings-discard"]').trigger('click')
+    expect(wrapper.get('#nodex-base-url').element.value).toBe('http://127.0.0.1:18081')
+    expect(wrapper.find('[data-test="settings-save-bar"]').exists()).toBe(false)
+
+    await wrapper.get('#nodex-base-url').setValue('http://10.0.0.2:18081')
+    adminApi.setSystemConfig.mockClear()
+    await wrapper.get('[data-test="settings-save"]').trigger('click')
+    await flushPromises()
+    expect(adminApi.setSystemConfig).toHaveBeenCalledWith('forward.runtime.nodex.base_url', expect.objectContaining({ value: 'http://10.0.0.2:18081' }))
+  })
 })

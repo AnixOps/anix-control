@@ -6,7 +6,7 @@
       </template>
       <template #actions>
         <UiIconButton variant="secondary" :icon="RefreshCw" :label="t('common.actions.refresh')" :disabled="jobsLoading || statusLoading" data-test="local-refresh" @click="refreshAll" />
-        <UiButton variant="primary" :loading="saving" data-test="local-save" @click="saveLocalConfig">{{ t('runtime.localRuntime.saveActivate') }}</UiButton>
+        <UiButton v-if="!localModeActive" variant="primary" :loading="saving" data-test="local-save" @click="saveLocalConfig">{{ t('runtime.localRuntime.saveActivate') }}</UiButton>
       </template>
     </UiPageHeader>
 
@@ -71,6 +71,8 @@
       </div>
     </UiSection>
 
+    <SettingsSaveBar :visible="dirty || (saving && localModeActive)" :saving="saving" @save="saveLocalConfig" @discard="discardLocalConfig" />
+
     <RuntimeStatusPanel
       :title="t('runtime.localRuntime.probeTitle')"
       :description="t('runtime.localRuntime.heroTextPrimary')"
@@ -128,9 +130,11 @@
 // local jobs. Execution plane, apart from the flux-panel forward pages.
 // UI U7 restyled it; config keys, calls and payloads are unchanged.
 import { computed, onMounted, ref } from 'vue'
+import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { getLocalRuntimeStatus, getSystemConfig, listForwardRuntimeJobs, runLocalRuntimeDoctor, setSystemConfig } from '@/api/admin'
 import { CircleAlert, CircleCheck, RefreshCw } from '@lucide/vue'
+import SettingsSaveBar from '@/components/admin/settings/SettingsSaveBar.vue'
 import UiBadge from '@/ui/UiBadge.vue'
 import UiButton from '@/ui/UiButton.vue'
 import UiGroupedList from '@/ui/UiGroupedList.vue'
@@ -226,6 +230,22 @@ const defaultRuntimeAnsibleConfig = computed(() => defaultRuntimeAnsibleConfigFo
 const actualBackend = ref('nftables_ansible')
 const localModeActive = ref(false)
 const runtimeAnsibleForm = ref(createRuntimeAnsibleForm())
+// The settings template's save bar (plan §7.3): the backend and form as last
+// loaded or saved, to tell unsaved changes and to put them back on 放弃.
+// 保存并启用 in the header stays for switching to the local runtime.
+const savedForm = ref('')
+const currentForm = () => JSON.stringify({ backend: selectedLocalBackend.value, form: runtimeAnsibleForm.value })
+const dirty = computed(() => savedForm.value !== '' && currentForm() !== savedForm.value)
+
+function discardLocalConfig() {
+  if (!savedForm.value) return
+  const saved = JSON.parse(savedForm.value)
+  validationError.value = ''
+  selectedLocalBackend.value = saved.backend
+  runtimeAnsibleForm.value = saved.form
+}
+
+useUnsavedChanges(dirty, { discard: discardLocalConfig })
 const saving = ref(false)
 const validationError = ref('')
 const jobs = ref([])
@@ -462,6 +482,7 @@ async function fetchLocalConfig() {
   }
 
   runtimeAnsibleForm.value = normalizeRuntimeAnsibleForm(parsedPayload || fallbackPayload)
+  savedForm.value = currentForm()
 }
 
 async function saveLocalConfig() {
