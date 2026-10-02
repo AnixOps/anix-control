@@ -337,6 +337,8 @@ describe('Admin Notifications', () => {
       const dialog = await screen.findByRole('dialog')
       expect(dialog.getAttribute('aria-modal')).toBe('true')
       expect(within(dialog).getByLabelText(/Template name|Name/).value).toBe('Legacy Template')
+      // The variable hints render literally (no i18n interpolation).
+      expect(within(dialog).getByLabelText('Content Template').getAttribute('placeholder')).toBe('Supports variables: {username}, {email}, {expire_time}')
       await user.keyboard('{Escape}')
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
       expect(adminApi.updateNotificationTemplate).not.toHaveBeenCalled()

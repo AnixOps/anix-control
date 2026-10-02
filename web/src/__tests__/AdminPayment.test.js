@@ -274,6 +274,8 @@ describe('Admin Payment', () => {
 
       wrapper.vm.openGatewayModal(gateway)
       await flushPromises()
+      // The JSON example placeholder renders literally (no i18n compile error).
+      expect(inBody('[data-test="payment-gateway-config"]').attributes('placeholder')).toBe('{"app_id": "", "private_key": ""}')
       await inBody('[data-test="payment-gateway-config"]').setValue('{bad json')
       await inBody('[data-test="payment-gateway-save"]').trigger('click')
       await flushPromises()

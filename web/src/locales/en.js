@@ -2356,8 +2356,8 @@ export default {
       },
       placeholders: {
         name: 'Template name',
-        title: 'Supports variables: {username}, {site_name}',
-        content: 'Supports variables: {username}, {email}, {expire_time}'
+        title: "Supports variables: {'{'}username{'}'}, {'{'}site_name{'}'}",
+        content: "Supports variables: {'{'}username{'}'}, {'{'}email{'}'}, {'{'}expire_time{'}'}"
       }
     },
     testModal: {
@@ -2499,7 +2499,7 @@ export default {
         feeRate: 'Example: 0.01 = 1%',
         minAmount: 'Minimum payment amount',
         maxAmount: 'Maximum payment amount',
-        configJson: '{"app_id": "", "private_key": ""}'
+        configJson: "{'{'}\"app_id\": \"\", \"private_key\": \"\"{'}'}"
       }
     },
     types: {

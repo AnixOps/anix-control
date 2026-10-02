@@ -2357,8 +2357,8 @@ export default {
       },
       placeholders: {
         name: '模板名称',
-        title: '支持变量: {username}, {site_name}',
-        content: '支持变量: {username}, {email}, {expire_time}'
+        title: "支持变量: {'{'}username{'}'}, {'{'}site_name{'}'}",
+        content: "支持变量: {'{'}username{'}'}, {'{'}email{'}'}, {'{'}expire_time{'}'}"
       }
     },
     testModal: {
@@ -2500,7 +2500,7 @@ export default {
         feeRate: '例如: 0.01 = 1%',
         minAmount: '最小支付金额',
         maxAmount: '最大支付金额',
-        configJson: '{"app_id": "", "private_key": ""}'
+        configJson: "{'{'}\"app_id\": \"\", \"private_key\": \"\"{'}'}"
       }
     },
     types: {
