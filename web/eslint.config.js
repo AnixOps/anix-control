@@ -1,4 +1,5 @@
 // Minimal ESLint setup for the redesign rules (docs/reference/frontend-design.md).
+// CI runs it (Frontend Build, "Lint frontend").
 // Since U4 every alert, confirm and prompt is a toast, a ConfirmDialog or a
 // UiDialog, and every overlay is UiDialog or UiSheet: no-alert and the
 // legacy modal classes are errors (src/__tests__/nativeDialogs.test.js
@@ -19,7 +20,14 @@ export default [
     },
     rules: {
       'no-alert': 'error',
-      'vue/no-restricted-class': ['error', 'modal-overlay', 'modal', 'modal-lg', 'modal-header', 'modal-body', 'modal-footer']
+      // The U4 dialog classes, and the global page classes removed from
+      // style.css in U9 (they no longer style anything).
+      'vue/no-restricted-class': [
+        'error',
+        'modal-overlay', 'modal', 'modal-lg', 'modal-header', 'modal-body', 'modal-footer',
+        'section-panel', 'page-shell', 'page-toolbar', 'filter-bar', 'table-wrap', 'data-panel',
+        'status-badge', 'type-badge', 'empty-row', 'form-row', 'btn-ghost', 'btn-lg'
+      ]
     }
   },
   {

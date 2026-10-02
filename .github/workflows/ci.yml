@@ -1531,6 +1531,13 @@ jobs:
         working-directory: web
         run: npm audit --audit-level=moderate
 
+      # ESLint (no native dialogs, no legacy classes, no bare tables on list
+      # pages) and stylelint (colour tokens, type and radius scale, no legacy
+      # variables); both fail on any finding.
+      - name: Lint frontend
+        working-directory: web
+        run: npm run lint && npm run lint:styles
+
       - name: Run frontend tests
         working-directory: web
         run: npm test
