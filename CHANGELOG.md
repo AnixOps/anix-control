@@ -2,87 +2,26 @@
 
 ## Unreleased
 
-### Added
+## 4.1.0-rc.3 - 2026-10-01
 
-- **Node credential split, phase P3: finalize and unsplit (NO-9)**
-  (`internal/nodesecrets`, `docs/architecture/node-ops-service.md`
-  section 4.3, `docs/UPGRADE.md`). Off by default: nothing runs finalize,
-  and every table stays in its phase after the upgrade. Production
-  finalize needs the owner's approval and a staging rehearsal (D6).
-  - **`anix-control node-secrets finalize -confirm <table|all>`** needs
-    phase `dual_read` and a matching `verify` at most an hour old. It
-    rewrites the legacy secret columns in batches, one transaction each:
-    `!moved:<row id>` in every credential column (unique per row, so no
-    unique index collides; a row already holding another row's tombstone
-    stops the batch), an empty key hash, and the masked document in every
-    JSON column. It resumes when run again, and is audited.
-  - **After finalize** the readers read the new tables only and never fall
-    back; the writers' `Sync` writes tombstones; `verify` compares by
-    presence. A binary reading the legacy columns fails closed.
-  - **`unsplit -confirm`** writes every secret back byte for byte (the
-    original JSON documents are kept for it), returns the table to
-    `dual_read`, drops the views that wait for finalize, and verifies. It
-    refuses a table a package adopted unless `-adopted-ok`.
-  - **Conditional adoption and views.** A manifest may declare
-    `kernel.storage.adopt:` for `v2_node`, `v2_node_protocol` and
-    `v2_forward_node`; the lease honours it only once the table is
-    finalized. The views `kapi_node_public_v1`,
-    `kapi_node_protocol_public_v1`, `kapi_node_credential_status_v1`,
-    `kapi_registration_key_v1`, `kapi_forward_clean_agent_v1` and
-    `kapi_wireguard_peer_v1` are created only after finalize and show no
-    moved column. `GetCapabilities.tables` answers each table's phase.
-  - **The last readers moved.** The forward node inventory asks whether a
-    node has a token through the split (a live credential row since
-    `dual_read`); the default registration key from the environment, the
-    diagnosis scrubber and the forward node update's token-change check
-    read through it too.
-  - **Static gate** `config/scripts/check_moved_columns.sh` (CI): no kernel
-    read of a moved credential column outside `internal/nodesecrets`, but
-    for reasoned exceptions.
-
-### Changed
-
-- **Community edition by default (`app.edition`,
-  `ANIX_CONTROL_APP_EDITION`).** Control now ships as the `community`
-  edition; `commercial` restores every commercial feature exactly as in
-  4.1.0-rc.2. **An install that uses payments, orders, coupons or the
-  invite commission must set `app.edition: commercial` before upgrading**
-  (`docs/UPGRADE.md`).
-  - **Hidden in community.** Every `/api/v2` route of the `order`,
-    `payment` (all gateways, x402, Stripe, PayPal, epay, USDT, and their
-    callbacks and webhooks) and `affiliate` packages, plus the user's plan
-    list (`GET /api/v2/user/plan`), answers `404`
-    `{"error":{"code":"package_route_not_found",...}}`, the same body as an
-    `/api/v2` path that does not exist. One table lists them
-    (`config/editions.json`), and one filter in the router applies it
-    (`internal/router/edition.go`, `internal/edition`).
-  - **Plans become free subscription templates (订阅模板).** Administrators
-    still create, edit and assign them, and they keep mapping users to
-    subscription groups; the admin page hides prices and calls them
-    subscription templates, and a stored price is sent back unchanged.
-  - **Web app.** The user menu drops Plans and Orders; the admin menu drops
-    Orders, Coupons, Invite and Payment, the user balance field, the
-    revenue and order cards on the dashboard, and the extension menus of
-    the hidden packages; their routes redirect to the dashboard. One
-    composable decides (`web/src/composables/useEdition.js`), fed by the
-    new public `GET /api/v4/public/config` (edition, hidden packages,
-    registration settings). Registration shows the invite-code field only
-    when `auth.registration.require_invite` is on.
-  - **Release packages.** `packages/shared/build_package.py --all` builds
-    the community set by default (15 packages, without `affiliate`,
-    `order` and `payment`); `--edition commercial` builds all 18.
-  - **x402 is never enabled by default.** `GET /api/v2/payment/methods`
-    reported x402 as enabled when no payment method was configured; it is
-    now enabled only by an enabled x402 payment configuration, in either
-    edition, and `POST /api/v2/payment/x402/create` refuses with
-    `gateway is disabled` (the disabled-gateway answer) without one.
-  - The administrator's user list calls the plan column "Subscription
-    template" (订阅模板) in the community edition.
-
-### Fixed
-
-- Tests: the node gRPC listener's binding tests read a refused stream's status from `Recv` when `Send` returns `io.EOF`, instead of failing intermittently with `Unknown`.
-- Tests: the bridge contract tests' SQLite databases use `_txlock=immediate` and are closed, waiting for every connection, before their temporary directory is removed, instead of failing intermittently with "directory not empty".
+4.1.0-rc.3 is the third 4.1.0 release candidate. **Two changes need action
+before upgrading.** Control now runs as the **community edition** by
+default: an install that uses payments, orders, coupons, plan purchase or
+the invite commission must set `app.edition: commercial`
+(`ANIX_CONTROL_APP_EDITION=commercial`) first, or those routes, including
+payment callbacks, answer `404`; the release no longer ships the
+`affiliate`, `order` and `payment` packages, so a commercial install keeps
+the versions it has or builds them with
+`packages/shared/build_package.py --all --edition commercial` until a
+commercial channel exists. And forwarding headers are now trusted only
+from `server.trusted_proxies` (default loopback only): list every reverse
+proxy that is not on the same host, or links come out as `http://` or an
+internal address and logs show the proxy's IP. The release page shrinks
+from 104 assets to 18, with the packages in one signed archive;
+`scripts/install.sh` is unaffected. Phase P3 of the node credential split
+(finalize and unsplit) ships, off by default: upgrading changes no table's
+phase. `docs/UPGRADE.md`, "Upgrading From 4.1.0-rc.2 To 4.1.0-rc.3", has
+the checklist.
 
 ### Security
 
@@ -118,6 +57,12 @@
     package no longer reads `X-Forwarded-Proto`. The UI server's `/api` proxy
     replaces a client's forwarding headers with what it resolved, and sends
     the public host as `Host`.
+  - **Supersedes** two 4.1.0-rc.2 entries (Added, the native
+    notification and forward-agent routes): the native
+    `POST /api/v2/admin/telegram/webhook` no longer honours
+    `X-Forwarded-Proto` itself, and `GET /api/v2/forward-agent/install.sh`
+    falls back to the origin resolved as above, not to any request's
+    scheme and host.
   - **Default** `127.0.0.1/32,::1/128` (was `127.0.0.1` plus `10.0.0.0/8`,
     `172.16.0.0/12` and `192.168.0.0/16`); an empty list trusts none; an
     invalid entry stops startup. The Compose example keeps the Docker bridge
@@ -130,12 +75,52 @@
 
 ### Changed
 
-- **The release page ships about 18 assets instead of 104**
+- **Community edition by default (`app.edition`,
+  `ANIX_CONTROL_APP_EDITION`). BREAKING for installs that sell plans.**
+  Control now ships as the `community` edition; `commercial` restores every
+  commercial feature exactly as in 4.1.0-rc.2. **An install that uses
+  payments, orders, coupons or the invite commission must set
+  `app.edition: commercial` before upgrading** (`docs/UPGRADE.md`).
+  - **Hidden in community.** Every `/api/v2` route of the `order`,
+    `payment` (all gateways, x402, Stripe, PayPal, epay, USDT, and their
+    callbacks and webhooks) and `affiliate` packages, plus the user's plan
+    list (`GET /api/v2/user/plan`), answers `404`
+    `{"error":{"code":"package_route_not_found",...}}`, the same body as an
+    `/api/v2` path that does not exist. One table lists them
+    (`config/editions.json`), and one filter in the router applies it
+    (`internal/router/edition.go`, `internal/edition`).
+  - **Plans become free subscription templates (订阅模板).** Administrators
+    still create, edit and assign them, and they keep mapping users to
+    subscription groups; the admin page hides prices and calls them
+    subscription templates (the administrator's user list too: its plan
+    column reads "Subscription template"), and a stored price is sent back
+    unchanged.
+  - **Web app.** The user menu drops Plans and Orders; the admin menu drops
+    Orders, Coupons, Invite and Payment, the user balance field, the
+    revenue and order cards on the dashboard, and the extension menus of
+    the hidden packages; their routes redirect to the dashboard. One
+    composable decides (`web/src/composables/useEdition.js`), fed by the
+    new public `GET /api/v4/public/config` (edition, hidden packages,
+    registration settings). Registration shows the invite-code field only
+    when `auth.registration.require_invite` is on.
+  - **Release packages.** `packages/shared/build_package.py --all` builds
+    the community set by default (15 packages, without `affiliate`,
+    `order` and `payment`); `--edition commercial` builds all 18. The
+    release builds the community set, so the packages archive below holds
+    15 packages and **commercial packages are no longer published**: build
+    them with `--edition commercial` until a commercial channel exists.
+  - **x402 is never enabled by default.** `GET /api/v2/payment/methods`
+    reported x402 as enabled when no payment method was configured; it is
+    now enabled only by an enabled x402 payment configuration, in either
+    edition, and `POST /api/v2/payment/x402/create` refuses with
+    `gateway is disabled` (the disabled-gateway answer) without one.
+- **The release page ships 18 assets instead of 104**
   (`.github/workflows/ci.yml`, `packages/shared/build_package.py`,
   `docs/RELEASING.md`, `docs/UPGRADE.md`).
   - **Packages: one signed archive.** `anix-control-packages-<version>.tar.gz`
-    holds every package's `.anxp`, `.manifest.json`, `.manifest.sig` and
-    `.sbom.spdx.json`, plus one `official-public-key.pem`.
+    holds every released package's `.anxp`, `.manifest.json`,
+    `.manifest.sig` and `.sbom.spdx.json` (the community set, see above),
+    plus one `official-public-key.pem`.
     `anix-control-packages-<version>.tar.gz.sig` is the Base64 Ed25519
     signature of the archive, made with the package signing key by the same
     `openssl` step as each manifest signature. `RELEASE_MANIFEST.json` lists
@@ -159,6 +144,51 @@
     `identity-platform-<version>` `.anxp`, `.manifest.json` and
     `.manifest.sig`: the frozen `scripts/install.sh` downloads that trio by
     name, so it keeps working unchanged.
+
+### Added
+
+- **Node credential split, phase P3: finalize and unsplit (NO-9)**
+  (`internal/nodesecrets`, `docs/architecture/node-ops-service.md`
+  section 4.3, `docs/UPGRADE.md`). It completes phases P1 (dual-write and
+  backfill) and P2 (dual-read) of 4.1.0-rc.2. Off by default: nothing runs
+  finalize, and every table stays in its phase after the upgrade.
+  Production finalize needs the owner's approval and a staging rehearsal
+  (D6).
+  - **`anix-control node-secrets finalize -confirm <table|all>`** needs
+    phase `dual_read` and a matching `verify` at most an hour old. It
+    rewrites the legacy secret columns in batches, one transaction each:
+    `!moved:<row id>` in every credential column (unique per row, so no
+    unique index collides; a row already holding another row's tombstone
+    stops the batch), an empty key hash, and the masked document in every
+    JSON column. It resumes when run again, and is audited.
+  - **After finalize** the readers read the new tables only and never fall
+    back; the writers' `Sync` writes tombstones; `verify` compares by
+    presence. A binary reading the legacy columns fails closed.
+  - **`unsplit -confirm`** writes every secret back byte for byte (the
+    original JSON documents are kept for it), returns the table to
+    `dual_read`, drops the views that wait for finalize, and verifies. It
+    refuses a table a package adopted unless `-adopted-ok`.
+  - **Conditional adoption and views.** A manifest may declare
+    `kernel.storage.adopt:` for `v2_node`, `v2_node_protocol` and
+    `v2_forward_node`; the lease honours it only once the table is
+    finalized. The views `kapi_node_public_v1`,
+    `kapi_node_protocol_public_v1`, `kapi_node_credential_status_v1`,
+    `kapi_registration_key_v1`, `kapi_forward_clean_agent_v1` and
+    `kapi_wireguard_peer_v1` are created only after finalize and show no
+    moved column. `GetCapabilities.tables` answers each table's phase.
+  - **The last readers moved.** The forward node inventory asks whether a
+    node has a token through the split (a live credential row since
+    `dual_read`); the default registration key from the environment, the
+    diagnosis scrubber and the forward node update's token-change check
+    read through it too.
+  - **Static gate** `config/scripts/check_moved_columns.sh` (CI): no kernel
+    read of a moved credential column outside `internal/nodesecrets`, but
+    for reasoned exceptions.
+
+### Fixed
+
+- Tests: the node gRPC listener's binding tests read a refused stream's status from `Recv` when `Send` returns `io.EOF`, instead of failing intermittently with `Unknown`.
+- Tests: the bridge contract tests' SQLite databases use `_txlock=immediate` and are closed, waiting for every connection, before their temporary directory is removed, instead of failing intermittently with "directory not empty". Both had stopped the 4.1.0-rc.2 release run.
 
 ## 4.1.0-rc.2 - 2026-10-01
 

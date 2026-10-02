@@ -56,6 +56,9 @@ Before touching production:
 - **Upgrading past 4.1.0-rc.2 with payments, orders, coupons or the invite
   commission in use: set `app.edition: commercial` first**
   ([Community Edition By Default](#community-edition-by-default-set-commercial-before-upgrading)).
+- **Upgrading past 4.1.0-rc.2 behind a reverse proxy that is not on the
+  same host: list it in `server.trusted_proxies` first**
+  ([Reverse Proxies](#reverse-proxies-must-be-in-servertrusted_proxies-security)).
 
 Evidence to keep:
 
@@ -1207,13 +1210,116 @@ transports.
   `anixops_agent_user_*` and `anixops_agent_users_*` series and
   `anixops_v2_gateway_sealed_secrets_total` (`CHANGELOG.md`, 4.1.0-rc.2).
 
-## Upgrading Past 4.1.0-rc.2
+## Upgrading From 4.1.0-rc.2 To 4.1.0-rc.3
 
-These notes are for the release after 4.1.0-rc.2 (4.1.0-rc.3). **One
-change needs action before you upgrade: list your reverse proxies in
-`server.trusted_proxies`** (next section). Upgrading changes no phase of the
-node credential split; the section after it is an operator procedure for
+These sections cover what changes from 4.1.0-rc.2 to 4.1.0-rc.3
+(`CHANGELOG.md`, "4.1.0-rc.3"). **Two changes need action before you
+upgrade:** the community edition is now the default, so an install that
+sells plans must opt in to `commercial` first, and forwarding headers count
+only from `server.trusted_proxies`, so every reverse proxy that is not on
+the same host must be listed. Upgrading changes no phase of the node
+credential split; finalizing it (Phase P3) is an operator procedure for
 later, under the owner's approval.
+
+### rc.2 → rc.3 Checklist
+
+Before the upgrade:
+
+1. **Decide the edition.** An install that uses payments, orders, coupons,
+   plan purchase or the invite commission sets `app.edition: commercial`
+   (`ANIX_CONTROL_APP_EDITION=commercial`) before starting the new binary
+   or image, and plans how it will get the commercial packages: the
+   release no longer ships `affiliate`, `order` and `payment`, so keep the
+   installed versions or build them with
+   `packages/shared/build_package.py --all --edition commercial` until a
+   commercial channel exists. An install going community drains pending
+   payments first
+   ([Community Edition By Default](#community-edition-by-default-set-commercial-before-upgrading)).
+2. **List your reverse proxies** (the peer address Control sees from each)
+   and set `server.trusted_proxies`
+   (`ANIX_CONTROL_SERVER_TRUSTED_PROXIES`), keeping `127.0.0.1/32,::1/128`;
+   replace an old private-range list with the real addresses, and set the
+   public addresses (`forward_runtime.clean_agent.public_url`,
+   `app.subscribe_domains`)
+   ([Reverse Proxies](#reverse-proxies-must-be-in-servertrusted_proxies-security)).
+3. Download and verify the release as in
+   [Artifact Verification](#artifact-verification): packages now come in
+   one signed archive ([Fewer Release Assets](#fewer-release-assets)).
+
+After the upgrade:
+
+4. `curl -s http://127.0.0.1:<port>/api/v4/public/config` shows the
+   `"edition"` you chose.
+5. Subscription links and the clean agent install script
+   (`/api/v2/forward-agent/install.sh`, `PANEL_URL`) show the public host
+   over `https://`, not `http://` or an internal address; logs and audit
+   entries show client IPs, not the proxy's.
+6. Payment callbacks still arrive and complete orders (commercial), or
+   answer `404` `package_route_not_found` (community).
+
+Optional, only after a staging rehearsal and with the owner's written
+approval: finalize the node credential split
+([Phase P3](#finalizing-the-node-credential-split-phase-p3)).
+
+### Community Edition By Default: Set `commercial` Before Upgrading
+
+> **Action required for paid installs.** From 4.1.0-rc.3 Control runs as the
+> **community** edition unless the configuration says otherwise. If this
+> install uses payments, orders, coupons, plan purchase or the invite
+> commission, set the edition to `commercial` **before** you start the new
+> binary or image, or those features disappear for administrators, users
+> and payment providers alike.
+
+Set one of:
+
+```yaml
+# config.yaml
+app:
+  edition: "commercial"
+```
+
+```bash
+# Docker / Kubernetes / systemd environment
+ANIX_CONTROL_APP_EDITION=commercial
+```
+
+An unknown value stops the server at start-up (`invalid app.edition`).
+Check what the running server uses with
+`curl -s http://127.0.0.1:<port>/api/v4/public/config` (`"edition"`).
+
+What the community edition does (`docs/features.md`, "Product editions"):
+
+- Every `/api/v2` route of the `order`, `payment` and `affiliate`
+  packages, and `GET /api/v2/user/plan`, answers `404`
+  `{"error":{"code":"package_route_not_found","message":"package route is not declared"}}`,
+  like a path that does not exist. This includes the payment callbacks and
+  webhooks (`/api/v2/payment/callback/:type`, `/payment/stripe/webhook`,
+  `/payment/paypal/webhook`, `/payment/x402/callback`): **a provider that
+  calls back for an order paid just before the switch gets 404**, so drain
+  pending payments or stay on `commercial`.
+- Nothing is deleted: orders, payment records, coupons, commissions,
+  balances and plan prices stay in the database and come back with
+  `commercial`. Plans remain as free subscription templates: administrators
+  edit and assign them, and their subscription groups keep working; the
+  admin page hides prices but sends a stored price back unchanged.
+- The web app hides the commercial menus and pages (and redirects their
+  URLs to the dashboard), the user balance field and the revenue cards.
+- Registration keeps invite codes when `auth.registration.require_invite`
+  is on, but users cannot generate new codes in the community edition (the
+  generator belongs to the `affiliate` package).
+- The community release no longer ships the `affiliate`, `order` and
+  `payment` packages. Installed ones keep running (their routes are hidden);
+  a commercial install keeps the versions it has, or builds them from
+  source with `build_package.py --all --edition commercial`, until a
+  commercial channel publishes them.
+
+x402 changes in both editions: `GET /api/v2/payment/methods` no longer
+reports x402 as enabled when no payment method is configured, and
+`POST /api/v2/payment/x402/create` answers `gateway is disabled` unless an
+enabled x402 payment configuration exists. Enable it explicitly if you rely
+on it.
+
+To switch back later, set `commercial` and restart; nothing else is needed.
 
 ### Reverse Proxies Must Be In `server.trusted_proxies` (Security)
 
@@ -1222,7 +1328,7 @@ Control now reads `X-Forwarded-Proto`, `X-Forwarded-Host`,
 `server.trusted_proxies` (`ANIX_CONTROL_SERVER_TRUSTED_PROXIES`). From any
 other peer they are ignored: the scheme comes from the connection (TLS or
 not), the host from the `Host` header, the client IP from the peer address
-(`CHANGELOG.md`, Unreleased, Security).
+(`CHANGELOG.md`, 4.1.0-rc.3, Security).
 
 Before, any client could set the scheme and host of the links Control hands
 out (clean agent install script, subscription links, Telegram webhook, the
@@ -1290,75 +1396,10 @@ curl -s -H 'X-Forwarded-Host: evil.example' -H 'X-Forwarded-Proto: https' \
 
 **Rollback:** the setting is read by older releases too (for the client IP
 only), so it can stay when you go back.
-These notes are for the release after 4.1.0-rc.2 (4.1.0-rc.3). **Read the
-first section before upgrading: an install that sells plans loses its
-payment, order and invite commission features unless it opts in to the
-commercial edition first.** Upgrading changes no phase of the node
-credential split; the section after it is an operator procedure for later,
-under the owner's approval.
-
-### Community Edition By Default: Set `commercial` Before Upgrading
-
-> **Action required for paid installs.** From 4.1.0-rc.3 Control runs as the
-> **community** edition unless the configuration says otherwise. If this
-> install uses payments, orders, coupons, plan purchase or the invite
-> commission, set the edition to `commercial` **before** you start the new
-> binary or image, or those features disappear for administrators, users
-> and payment providers alike.
-
-Set one of:
-
-```yaml
-# config.yaml
-app:
-  edition: "commercial"
-```
-
-```bash
-# Docker / Kubernetes / systemd environment
-ANIX_CONTROL_APP_EDITION=commercial
-```
-
-An unknown value stops the server at start-up (`invalid app.edition`).
-Check what the running server uses with
-`curl -s http://127.0.0.1:<port>/api/v4/public/config` (`"edition"`).
-
-What the community edition does (`docs/features.md`, "Product editions"):
-
-- Every `/api/v2` route of the `order`, `payment` and `affiliate`
-  packages, and `GET /api/v2/user/plan`, answers `404`
-  `{"error":{"code":"package_route_not_found","message":"package route is not declared"}}`,
-  like a path that does not exist. This includes the payment callbacks and
-  webhooks (`/api/v2/payment/callback/:type`, `/payment/stripe/webhook`,
-  `/payment/paypal/webhook`, `/payment/x402/callback`): **a provider that
-  calls back for an order paid just before the switch gets 404**, so drain
-  pending payments or stay on `commercial`.
-- Nothing is deleted: orders, payment records, coupons, commissions,
-  balances and plan prices stay in the database and come back with
-  `commercial`. Plans remain as free subscription templates: administrators
-  edit and assign them, and their subscription groups keep working; the
-  admin page hides prices but sends a stored price back unchanged.
-- The web app hides the commercial menus and pages (and redirects their
-  URLs to the dashboard), the user balance field and the revenue cards.
-- Registration keeps invite codes when `auth.registration.require_invite`
-  is on, but users cannot generate new codes in the community edition (the
-  generator belongs to the `affiliate` package).
-- The community release no longer ships the `affiliate`, `order` and
-  `payment` packages. Installed ones keep running (their routes are hidden);
-  a commercial install keeps the versions it has until commercial package
-  builds are published (`build_package.py --all --edition commercial`).
-
-x402 changes in both editions: `GET /api/v2/payment/methods` no longer
-reports x402 as enabled when no payment method is configured, and
-`POST /api/v2/payment/x402/create` answers `gateway is disabled` unless an
-enabled x402 payment configuration exists. Enable it explicitly if you rely
-on it.
-
-To switch back later, set `commercial` and restart; nothing else is needed.
 
 ### Fewer Release Assets
 
-The release page has about 18 assets instead of 104. The packages are in one
+The release page has 18 assets instead of 104. The packages are in one
 signed archive, `anix-control-packages-<version>.tar.gz` (signature:
 `.tar.gz.sig`); take a package from it as in
 [Getting A Package From The Release](#getting-a-package-from-the-release).
