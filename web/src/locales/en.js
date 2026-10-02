@@ -1944,7 +1944,9 @@ export default {
         node: 'Node',
         protocolName: 'Protocol / Name',
         port: 'Port',
-        linkedGroups: 'Linked Groups'
+        linkedGroups: 'Linked Groups',
+        selectAll: 'Select all protocols',
+        select: 'Select protocol {name}'
       },
       formats: {
         auto: 'Auto (By User-Agent)',
@@ -1963,17 +1965,22 @@ export default {
       availableProtocolsLoadError: 'Failed to load available protocols',
       groupProtocolsUpdated: 'Group protocol links updated',
       groupProtocolsUpdateFailed: 'Failed to update protocol links',
-      copyCombinedConfirm: 'Copy the combined subscription content for this group?',
       copied: 'Copied',
       copyError: 'Copy failed',
       copyFallbackNotice: 'Copied merged subscription content using the template-only fallback.',
       previewError: 'Failed to load preview content',
-      confirmDeleteGroup: 'Delete this subscription group?',
+      confirm: {
+        deleteGroupTitle: 'Delete subscription group {name}?',
+        deleteGroupMessage: 'Its templates and protocol links are deleted with it, and users of the group no longer receive these nodes. This can’t be undone.',
+        deleteGroupAction: 'Delete group',
+        deleteTemplateTitle: 'Delete subscription template {name}?',
+        deleteTemplateMessage: 'The node disappears from the group’s subscription. This can’t be undone.',
+        deleteTemplateAction: 'Delete template'
+      },
       groupDeleted: 'Subscription group deleted',
       deleteError: 'Delete failed',
       groupSaved: 'Subscription group saved',
       saveError: 'Save failed',
-      confirmDeleteTemplate: 'Delete this subscription template?',
       templateDeleted: 'Subscription template deleted',
       updateError: 'Update failed',
       templateSaved: 'Subscription template saved',

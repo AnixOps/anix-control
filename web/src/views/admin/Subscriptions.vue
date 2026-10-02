@@ -249,265 +249,213 @@
       </div>
     </div>
 
-    <!-- Manage linked protocols modal -->
-    <div class="modal" v-if="showManageProtocolsModal" @click.self="showManageProtocolsModal = false">
-      <div class="modal-content modal-lg">
-        <div class="modal-header">
-          <h3>{{ $t('admin.subscriptions.manageProtocolsTitle') }}</h3>
-          <button class="close-btn" :title="$t('common.actions.close')" :aria-label="$t('common.actions.close')" @click="showManageProtocolsModal = false">&times;</button>
+    <!-- Manage linked protocols -->
+    <UiDialog v-model:open="showManageProtocolsModal" size="lg" :title="$t('admin.subscriptions.manageProtocolsTitle')" :description="$t('admin.subscriptions.manageProtocolsDescription', { group: selectedGroup?.name || '' })">
+      <div class="protocol-pool-table">
+        <table>
+          <thead>
+            <tr>
+              <th width="40"><input type="checkbox" :aria-label="$t('admin.subscriptions.protocolPool.selectAll')" @change="toggleAllAvailable" :checked="isAllSelected"></th>
+              <th>{{ $t('admin.subscriptions.protocolPool.node') }}</th>
+              <th>{{ $t('admin.subscriptions.protocolPool.protocolName') }}</th>
+              <th>{{ $t('admin.subscriptions.protocolPool.port') }}</th>
+              <th>{{ $t('admin.subscriptions.protocolPool.linkedGroups') }}</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr v-for="p in availableProtocols" :key="p.id" @click="toggleProtocolSelection(p.id)" class="clickable-row">
+              <td><input type="checkbox" :aria-label="$t('admin.subscriptions.protocolPool.select', { name: p.name })" :checked="selectedProtocolIds.includes(p.id)" @change="toggleProtocolSelection(p.id)" @click.stop></td>
+              <td>{{ p.node?.name || $t('admin.subscriptions.unknownNode') }}</td>
+              <td>
+                <span class="protocol-badge" :class="'protocol-' + p.type">{{ p.type.toUpperCase() }}</span>
+                <span class="ml-2">{{ p.name }}</span>
+              </td>
+              <td>{{ p.port }}</td>
+              <td>
+                <div class="group-badges">
+                  <span v-for="g in p.subscription_groups" :key="g.id" class="mini-badge">
+                    {{ g.name }}
+                  </span>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+      <p v-if="protocolsError" class="dialog-error" role="alert">{{ protocolsError }}</p>
+      <template #footer="{ close }">
+        <UiButton :disabled="protocolsSaving" @click="close">{{ $t('common.actions.cancel') }}</UiButton>
+        <UiButton variant="primary" data-test="save-group-protocols" :loading="protocolsSaving" @click="saveGroupProtocols">{{ $t('admin.subscriptions.confirmSave') }}</UiButton>
+      </template>
+    </UiDialog>
+
+    <!-- Preview -->
+    <UiDialog v-model:open="showPreviewModal" size="lg" :title="$t('admin.subscriptions.previewTitle')">
+      <div class="preview-format-selector">
+        <label for="subscription-field-1">{{ $t('admin.subscriptions.format') }}:</label>
+        <select id="subscription-field-1" v-model="previewFormat" @change="loadPreview">
+          <option value="v2ray">{{ $t('admin.subscriptions.formats.v2ray') }}</option>
+          <option value="clash">{{ $t('admin.subscriptions.formats.clash') }}</option>
+          <option value="stash">{{ $t('admin.subscriptions.formats.stash') }}</option>
+          <option value="egern">{{ $t('admin.subscriptions.formats.egern') }}</option>
+          <option value="surge">{{ $t('admin.subscriptions.formats.surge') }}</option>
+          <option value="loon">{{ $t('admin.subscriptions.formats.loon') }}</option>
+          <option value="shadowrocket">{{ $t('admin.subscriptions.formats.shadowrocket') }}</option>
+          <option value="quantumultx">{{ $t('admin.subscriptions.formats.quantumultx') }}</option>
+          <option value="json">{{ $t('admin.subscriptions.formats.json') }}</option>
+          <option value="base64json">{{ $t('admin.subscriptions.formats.base64json') }}</option>
+        </select>
+      </div>
+      <div class="preview-content">
+        <pre>{{ previewContent }}</pre>
+      </div>
+      <template #footer>
+        <UiButton :icon="Download" @click="downloadPreview">{{ $t('admin.subscriptions.download') }}</UiButton>
+        <UiButton variant="primary" :icon="Copy" @click="copyPreviewContent">{{ $t('admin.subscriptions.copyContent') }}</UiButton>
+      </template>
+    </UiDialog>
+
+    <!-- Subscription links -->
+    <UiDialog v-model:open="showSubscriptionModal" :title="$t('admin.subscriptions.subscriptionLinks')">
+      <div class="subscription-links">
+        <UiCopyField
+          v-for="format in subscriptionFormats"
+          :key="format.value"
+          :value="getSubscriptionUrl(format.value)"
+          :label="format.label"
+          size="md"
+        />
+      </div>
+    </UiDialog>
+
+    <!-- Create/edit group -->
+    <UiDialog :open="showCreateGroupModal || showEditGroupModal" :title="showEditGroupModal ? $t('admin.subscriptions.editGroup') : $t('admin.subscriptions.createGroup')" :dismissible="!groupSaving" @update:open="value => { if (!value) closeGroupModal() }">
+      <div class="form-group">
+        <label for="subscription-field-2">{{ $t('admin.subscriptions.groupName') }} *</label>
+        <input id="subscription-field-2" type="text" v-model="groupForm.name" :placeholder="$t('admin.subscriptions.groupNamePlaceholder')">
+      </div>
+      <div class="form-group">
+        <label for="subscription-field-3">{{ $t('admin.subscriptions.description') }}</label>
+        <textarea id="subscription-field-3" v-model="groupForm.description" rows="3"></textarea>
+      </div>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="subscription-field-4">{{ $t('admin.subscriptions.priority') }}</label>
+          <input id="subscription-field-4" type="number" v-model.number="groupForm.priority">
         </div>
-        <div class="modal-body">
-          <p class="subtitle mb-4">{{ $t('admin.subscriptions.manageProtocolsDescription', { group: selectedGroup?.name || '' }) }}</p>
-          
-          <div class="protocol-pool-table">
-            <table>
-              <thead>
-                <tr>
-                  <th width="40"><input type="checkbox" @change="toggleAllAvailable" :checked="isAllSelected"></th>
-                  <th>{{ $t('admin.subscriptions.protocolPool.node') }}</th>
-                  <th>{{ $t('admin.subscriptions.protocolPool.protocolName') }}</th>
-                  <th>{{ $t('admin.subscriptions.protocolPool.port') }}</th>
-                  <th>{{ $t('admin.subscriptions.protocolPool.linkedGroups') }}</th>
-                </tr>
-              </thead>
-              <tbody>
-                <tr v-for="p in availableProtocols" :key="p.id" @click="toggleProtocolSelection(p.id)" class="clickable-row">
-                  <td><input type="checkbox" :checked="selectedProtocolIds.includes(p.id)" @click.stop></td>
-                  <td>{{ p.node?.name || $t('admin.subscriptions.unknownNode') }}</td>
-                  <td>
-                    <span class="protocol-badge" :class="'protocol-' + p.type">{{ p.type.toUpperCase() }}</span>
-                    <span class="ml-2">{{ p.name }}</span>
-                  </td>
-                  <td>{{ p.port }}</td>
-                  <td>
-                    <div class="group-badges">
-                      <span v-for="g in p.subscription_groups" :key="g.id" class="mini-badge">
-                        {{ g.name }}
-                      </span>
-                    </div>
-                  </td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" @click="showManageProtocolsModal = false">{{ $t('common.actions.cancel') }}</button>
-          <button class="btn btn-primary" @click="saveGroupProtocols">{{ $t('admin.subscriptions.confirmSave') }}</button>
+        <div class="form-group">
+          <label>{{ $t('admin.subscriptions.enabled') }}</label>
+          <label class="switch">
+            <input type="checkbox" v-model="groupForm.enable" :aria-label="$t('admin.subscriptions.enabled')">
+            <span class="slider"></span>
+          </label>
         </div>
       </div>
-    </div>
+      <p v-if="groupFormError" class="dialog-error" role="alert" data-test="group-form-error">{{ groupFormError }}</p>
+      <template #footer="{ close }">
+        <UiButton :disabled="groupSaving" @click="close">{{ $t('common.actions.cancel') }}</UiButton>
+        <UiButton variant="primary" data-test="save-group" :loading="groupSaving" @click="saveGroup">{{ $t('common.actions.save') }}</UiButton>
+      </template>
+    </UiDialog>
 
-    <!-- Preview modal -->
-    <div class="modal" v-if="showPreviewModal" @click.self="showPreviewModal = false">
-      <div class="modal-content modal-lg">
-        <div class="modal-header">
-          <h3>{{ $t('admin.subscriptions.previewTitle') }}</h3>
-          <button class="close-btn" :title="$t('common.actions.close')" :aria-label="$t('common.actions.close')" @click="showPreviewModal = false">&times;</button>
+    <!-- Create/edit template -->
+    <UiDialog :open="showCreateTemplateModal || showEditTemplateModal" size="lg" :title="showEditTemplateModal ? $t('admin.subscriptions.editTemplate') : $t('admin.subscriptions.createTemplate')" :dismissible="!templateSaving" @update:open="value => { if (!value) closeTemplateModal() }">
+      <div class="form-row">
+        <div class="form-group">
+          <label for="subscription-field-5">{{ $t('admin.subscriptions.nodeName') }} *</label>
+          <input id="subscription-field-5" type="text" v-model="templateForm.name" :placeholder="$t('admin.subscriptions.nodeNamePlaceholder')">
         </div>
-        <div class="modal-body">
-          <div class="preview-format-selector">
-            <label>{{ $t('admin.subscriptions.format') }}:</label>
-            <select v-model="previewFormat" @change="loadPreview">
-              <option value="v2ray">{{ $t('admin.subscriptions.formats.v2ray') }}</option>
-              <option value="clash">{{ $t('admin.subscriptions.formats.clash') }}</option>
-              <option value="stash">{{ $t('admin.subscriptions.formats.stash') }}</option>
-              <option value="egern">{{ $t('admin.subscriptions.formats.egern') }}</option>
-              <option value="surge">{{ $t('admin.subscriptions.formats.surge') }}</option>
-              <option value="loon">{{ $t('admin.subscriptions.formats.loon') }}</option>
-              <option value="shadowrocket">{{ $t('admin.subscriptions.formats.shadowrocket') }}</option>
-              <option value="quantumultx">{{ $t('admin.subscriptions.formats.quantumultx') }}</option>
-              <option value="json">{{ $t('admin.subscriptions.formats.json') }}</option>
-              <option value="base64json">{{ $t('admin.subscriptions.formats.base64json') }}</option>
-            </select>
-          </div>
-          <div class="preview-content">
-            <pre>{{ previewContent }}</pre>
-          </div>
-          <div class="preview-actions">
-            <button class="btn btn-primary" @click="copyPreviewContent">
-              <svg class="icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M16 1H4a2 2 0 0 0-2 2v12h2V3h12V1zM20 5H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2zm-1 15H9V8h10v12z"/></svg>
-              {{ $t('admin.subscriptions.copyContent') }}
-            </button>
-            <button class="btn btn-secondary" @click="downloadPreview">
-              <svg class="icon" viewBox="0 0 24 24" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M5 20h14v-2H5v2zm7-18L5.33 9h3.67v6h6V9h3.67L12 2z"/></svg>
-              {{ $t('admin.subscriptions.download') }}
-            </button>
-          </div>
+        <div class="form-group">
+          <label for="subscription-field-6">{{ $t('admin.subscriptions.protocol') }} *</label>
+          <select id="subscription-field-6" v-model="templateForm.type">
+            <option value="vless">{{ $t('networkPages.subscriptions.protocols.vless') }}</option>
+            <option value="vmess">{{ $t('networkPages.subscriptions.protocols.vmess') }}</option>
+            <option value="trojan">{{ $t('networkPages.subscriptions.protocols.trojan') }}</option>
+            <option value="shadowsocks">{{ $t('networkPages.subscriptions.protocols.shadowsocks') }}</option>
+            <option value="hysteria2">{{ $t('networkPages.subscriptions.protocols.hysteria2') }}</option>
+            <option value="tuic">{{ $t('networkPages.subscriptions.protocols.tuic') }}</option>
+          </select>
         </div>
       </div>
-    </div>
-
-    <!-- Subscription links modal -->
-    <div class="modal" v-if="showSubscriptionModal" @click.self="showSubscriptionModal = false">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>{{ $t('admin.subscriptions.subscriptionLinks') }}</h3>
-          <button class="close-btn" :title="$t('common.actions.close')" :aria-label="$t('common.actions.close')" @click="showSubscriptionModal = false">&times;</button>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="subscription-field-7">{{ $t('admin.subscriptions.server') }} *</label>
+          <input id="subscription-field-7" type="text" v-model="templateForm.server" :placeholder="$t('networkPages.subscriptions.placeholders.server')">
         </div>
-        <div class="modal-body">
-          <div class="subscription-links">
-            <div class="link-item" v-for="format in subscriptionFormats" :key="format.value">
-              <label>{{ format.label }}:</label>
-              <div class="link-input-group">
-                <input type="text" readonly :value="getSubscriptionUrl(format.value)">
-                <button class="btn btn-sm" @click="copyToClipboard(getSubscriptionUrl(format.value))">
-                  <i class="icon-copy"></i>
-                </button>
-              </div>
-            </div>
-          </div>
+        <div class="form-group">
+          <label for="subscription-field-8">{{ $t('admin.subscriptions.port') }} *</label>
+          <input id="subscription-field-8" type="number" v-model.number="templateForm.port" :placeholder="$t('networkPages.subscriptions.placeholders.port')">
         </div>
       </div>
-    </div>
-
-    <!-- Create/edit group modal -->
-    <div class="modal" v-if="showCreateGroupModal || showEditGroupModal" @click.self="closeGroupModal">
-      <div class="modal-content">
-        <div class="modal-header">
-          <h3>{{ showEditGroupModal ? $t('admin.subscriptions.editGroup') : $t('admin.subscriptions.createGroup') }}</h3>
-          <button class="close-btn" :title="$t('common.actions.close')" :aria-label="$t('common.actions.close')" @click="closeGroupModal">&times;</button>
+      <div class="form-row">
+        <div class="form-group">
+          <label for="subscription-field-9">{{ $t('admin.subscriptions.tls') }}</label>
+          <select id="subscription-field-9" v-model.number="templateForm.tls">
+            <option :value="0">{{ $t('admin.subscriptions.tlsNone') }}</option>
+            <option :value="1">{{ $t('networkPages.subscriptions.tlsModes.tls') }}</option>
+            <option :value="2">{{ $t('networkPages.subscriptions.tlsModes.reality') }}</option>
+          </select>
         </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>{{ $t('admin.subscriptions.groupName') }} *</label>
-            <input type="text" v-model="groupForm.name" :placeholder="$t('admin.subscriptions.groupNamePlaceholder')">
-          </div>
-          <div class="form-group">
-            <label>{{ $t('admin.subscriptions.description') }}</label>
-            <textarea v-model="groupForm.description" rows="3"></textarea>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>{{ $t('admin.subscriptions.priority') }}</label>
-              <input type="number" v-model.number="groupForm.priority">
-            </div>
-            <div class="form-group">
-              <label>{{ $t('admin.subscriptions.enabled') }}</label>
-              <label class="switch">
-                <input type="checkbox" v-model="groupForm.enable">
-                <span class="slider"></span>
-              </label>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" @click="closeGroupModal">{{ $t('common.actions.cancel') }}</button>
-          <button class="btn btn-primary" @click="saveGroup">{{ $t('common.actions.save') }}</button>
+        <div class="form-group">
+          <label for="subscription-field-10">{{ $t('admin.subscriptions.transport') }}</label>
+          <select id="subscription-field-10" v-model="templateForm.transport">
+            <option value="tcp">{{ $t('networkPages.subscriptions.transports.tcp') }}</option>
+            <option value="ws">{{ $t('networkPages.subscriptions.transports.ws') }}</option>
+            <option value="grpc">{{ $t('networkPages.subscriptions.transports.grpc') }}</option>
+            <option value="h2">{{ $t('networkPages.subscriptions.transports.h2') }}</option>
+            <option value="quic">{{ $t('networkPages.subscriptions.transports.quic') }}</option>
+          </select>
         </div>
       </div>
-    </div>
-
-    <!-- Create/edit template modal -->
-    <div class="modal" v-if="showCreateTemplateModal || showEditTemplateModal" @click.self="closeTemplateModal">
-      <div class="modal-content modal-lg">
-        <div class="modal-header">
-          <h3>{{ showEditTemplateModal ? $t('admin.subscriptions.editTemplate') : $t('admin.subscriptions.createTemplate') }}</h3>
-          <button class="close-btn" :title="$t('common.actions.close')" :aria-label="$t('common.actions.close')" @click="closeTemplateModal">&times;</button>
+      <div class="form-group" v-if="templateForm.tls > 0">
+        <label for="subscription-field-11">{{ $t('admin.subscriptions.sni') }}</label>
+        <input id="subscription-field-11" type="text" v-model="templateForm.server_name" :placeholder="$t('networkPages.subscriptions.placeholders.sni')">
+      </div>
+      <div class="form-row" v-if="templateForm.tls === 2">
+        <div class="form-group">
+          <label for="subscription-field-12">{{ $t('admin.subscriptions.realityPublicKey') }}</label>
+          <input id="subscription-field-12" type="text" v-model="templateForm.reality_public_key">
         </div>
-        <div class="modal-body">
-          <div class="form-row">
-            <div class="form-group">
-              <label>{{ $t('admin.subscriptions.nodeName') }} *</label>
-              <input type="text" v-model="templateForm.name" :placeholder="$t('admin.subscriptions.nodeNamePlaceholder')">
-            </div>
-            <div class="form-group">
-              <label>{{ $t('admin.subscriptions.protocol') }} *</label>
-              <select v-model="templateForm.type">
-                <option value="vless">{{ $t('networkPages.subscriptions.protocols.vless') }}</option>
-                <option value="vmess">{{ $t('networkPages.subscriptions.protocols.vmess') }}</option>
-                <option value="trojan">{{ $t('networkPages.subscriptions.protocols.trojan') }}</option>
-                <option value="shadowsocks">{{ $t('networkPages.subscriptions.protocols.shadowsocks') }}</option>
-                <option value="hysteria2">{{ $t('networkPages.subscriptions.protocols.hysteria2') }}</option>
-                <option value="tuic">{{ $t('networkPages.subscriptions.protocols.tuic') }}</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>{{ $t('admin.subscriptions.server') }} *</label>
-              <input type="text" v-model="templateForm.server" :placeholder="$t('networkPages.subscriptions.placeholders.server')">
-            </div>
-            <div class="form-group">
-              <label>{{ $t('admin.subscriptions.port') }} *</label>
-              <input type="number" v-model.number="templateForm.port" :placeholder="$t('networkPages.subscriptions.placeholders.port')">
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>{{ $t('admin.subscriptions.tls') }}</label>
-              <select v-model.number="templateForm.tls">
-                <option :value="0">{{ $t('admin.subscriptions.tlsNone') }}</option>
-                <option :value="1">{{ $t('networkPages.subscriptions.tlsModes.tls') }}</option>
-                <option :value="2">{{ $t('networkPages.subscriptions.tlsModes.reality') }}</option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>{{ $t('admin.subscriptions.transport') }}</label>
-              <select v-model="templateForm.transport">
-                <option value="tcp">{{ $t('networkPages.subscriptions.transports.tcp') }}</option>
-                <option value="ws">{{ $t('networkPages.subscriptions.transports.ws') }}</option>
-                <option value="grpc">{{ $t('networkPages.subscriptions.transports.grpc') }}</option>
-                <option value="h2">{{ $t('networkPages.subscriptions.transports.h2') }}</option>
-                <option value="quic">{{ $t('networkPages.subscriptions.transports.quic') }}</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-group" v-if="templateForm.tls > 0">
-            <label>{{ $t('admin.subscriptions.sni') }}</label>
-            <input type="text" v-model="templateForm.server_name" :placeholder="$t('networkPages.subscriptions.placeholders.sni')">
-          </div>
-          <div class="form-row" v-if="templateForm.tls === 2">
-            <div class="form-group">
-              <label>{{ $t('admin.subscriptions.realityPublicKey') }}</label>
-              <input type="text" v-model="templateForm.reality_public_key">
-            </div>
-            <div class="form-group">
-              <label>{{ $t('admin.subscriptions.realityShortId') }}</label>
-              <input type="text" v-model="templateForm.reality_short_id">
-            </div>
-          </div>
-          <div class="form-group" v-if="templateForm.tls > 0">
-            <label>{{ $t('admin.subscriptions.tlsFingerprint') }}</label>
-            <select v-model="templateForm.tls_fingerprint">
-              <option value="">{{ $t('admin.subscriptions.defaultOption') }}</option>
-              <option value="chrome">{{ $t('networkPages.subscriptions.fingerprints.chrome') }}</option>
-              <option value="firefox">{{ $t('networkPages.subscriptions.fingerprints.firefox') }}</option>
-              <option value="safari">{{ $t('networkPages.subscriptions.fingerprints.safari') }}</option>
-              <option value="edge">{{ $t('networkPages.subscriptions.fingerprints.edge') }}</option>
-              <option value="random">{{ $t('networkPages.subscriptions.fingerprints.random') }}</option>
-            </select>
-          </div>
-          <div class="form-group" v-if="templateForm.transport === 'ws'">
-            <label>{{ $t('admin.subscriptions.websocketPath') }}</label>
-            <input type="text" v-model="wsPath" :placeholder="$t('networkPages.subscriptions.placeholders.wsPath')">
-          </div>
-          <div class="form-group" v-if="templateForm.type === 'vless' && templateForm.tls === 2">
-            <label>{{ $t('admin.subscriptions.flow') }}</label>
-            <select v-model="vlessFlow">
-              <option value="">{{ $t('admin.subscriptions.noneOption') }}</option>
-              <option value="xtls-rprx-vision">{{ $t('networkPages.subscriptions.flows.xtlsRprxVision') }}</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>{{ $t('admin.subscriptions.enabled') }}</label>
-            <label class="switch">
-              <input type="checkbox" v-model="templateForm.enable">
-              <span class="slider"></span>
-            </label>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" @click="closeTemplateModal">{{ $t('common.actions.cancel') }}</button>
-          <button class="btn btn-primary" @click="saveTemplate">{{ $t('common.actions.save') }}</button>
+        <div class="form-group">
+          <label for="subscription-field-13">{{ $t('admin.subscriptions.realityShortId') }}</label>
+          <input id="subscription-field-13" type="text" v-model="templateForm.reality_short_id">
         </div>
       </div>
-    </div>
-
-    <!-- Toast -->
-    <div class="toast" v-if="toastMessage" :class="toastType">
-      {{ toastMessage }}
-    </div>
+      <div class="form-group" v-if="templateForm.tls > 0">
+        <label for="subscription-field-14">{{ $t('admin.subscriptions.tlsFingerprint') }}</label>
+        <select id="subscription-field-14" v-model="templateForm.tls_fingerprint">
+          <option value="">{{ $t('admin.subscriptions.defaultOption') }}</option>
+          <option value="chrome">{{ $t('networkPages.subscriptions.fingerprints.chrome') }}</option>
+          <option value="firefox">{{ $t('networkPages.subscriptions.fingerprints.firefox') }}</option>
+          <option value="safari">{{ $t('networkPages.subscriptions.fingerprints.safari') }}</option>
+          <option value="edge">{{ $t('networkPages.subscriptions.fingerprints.edge') }}</option>
+          <option value="random">{{ $t('networkPages.subscriptions.fingerprints.random') }}</option>
+        </select>
+      </div>
+      <div class="form-group" v-if="templateForm.transport === 'ws'">
+        <label for="subscription-field-15">{{ $t('admin.subscriptions.websocketPath') }}</label>
+        <input id="subscription-field-15" type="text" v-model="wsPath" :placeholder="$t('networkPages.subscriptions.placeholders.wsPath')">
+      </div>
+      <div class="form-group" v-if="templateForm.type === 'vless' && templateForm.tls === 2">
+        <label for="subscription-field-16">{{ $t('admin.subscriptions.flow') }}</label>
+        <select id="subscription-field-16" v-model="vlessFlow">
+          <option value="">{{ $t('admin.subscriptions.noneOption') }}</option>
+          <option value="xtls-rprx-vision">{{ $t('networkPages.subscriptions.flows.xtlsRprxVision') }}</option>
+        </select>
+      </div>
+      <div class="form-group">
+        <label>{{ $t('admin.subscriptions.enabled') }}</label>
+        <label class="switch">
+          <input type="checkbox" v-model="templateForm.enable" :aria-label="$t('admin.subscriptions.enabled')">
+          <span class="slider"></span>
+        </label>
+      </div>
+      <p v-if="templateFormError" class="dialog-error" role="alert" data-test="template-form-error">{{ templateFormError }}</p>
+      <template #footer="{ close }">
+        <UiButton :disabled="templateSaving" @click="close">{{ $t('common.actions.cancel') }}</UiButton>
+        <UiButton variant="primary" data-test="save-template" :loading="templateSaving" @click="saveTemplate">{{ $t('common.actions.save') }}</UiButton>
+      </template>
+    </UiDialog>
   </div>
 </template>
 
@@ -516,11 +464,16 @@ import { ref, reactive, onMounted, onUnmounted, computed } from 'vue'
 import adminApi, { getSubscriptionStats } from '@/api/admin'
 import { useUserStore } from '@/stores/user'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { Copy, Download } from '@lucide/vue'
+import { UiButton, UiCopyField, UiDialog, copyText, useConfirm, useToast } from '@/ui'
 
 export default {
   name: 'Subscriptions',
+  components: { UiButton, UiCopyField, UiDialog },
   setup() {
     const { t } = useAppI18n()
+    const toast = useToast()
+    const confirm = useConfirm()
     const userStore = useUserStore()
     
     // Data
@@ -573,9 +526,13 @@ export default {
     const previewFormat = ref('v2ray')
     const previewContent = ref('')
     
-    // Toast
-    const toastMessage = ref('')
-    const toastType = ref('success')
+    // Dialog state: saving flags and inline errors
+    const protocolsSaving = ref(false)
+    const protocolsError = ref('')
+    const groupSaving = ref(false)
+    const groupFormError = ref('')
+    const templateSaving = ref(false)
+    const templateFormError = ref('')
     
     const subscriptionFormats = computed(() => [
       { value: 'auto', label: t('admin.subscriptions.formats.auto') },
@@ -705,6 +662,7 @@ export default {
       if (!selectedGroup.value) return
       await loadAvailableProtocols()
       selectedProtocolIds.value = protocols.value.map((p) => p.id)
+      protocolsError.value = ''
       showManageProtocolsModal.value = true
     }
 
@@ -739,6 +697,9 @@ export default {
     }
 
     const saveGroupProtocols = async () => {
+      if (protocolsSaving.value) return
+      protocolsSaving.value = true
+      protocolsError.value = ''
       try {
         ensureSubscriptionSuccess(
           await adminApi.updateGroupProtocols(selectedGroup.value.id, selectedProtocolIds.value),
@@ -748,7 +709,9 @@ export default {
         showManageProtocolsModal.value = false
         loadProtocols(selectedGroup.value.id)
       } catch (error) {
-        showToast(t('admin.subscriptions.groupProtocolsUpdateFailed'), 'error')
+        protocolsError.value = t('admin.subscriptions.groupProtocolsUpdateFailed')
+      } finally {
+        protocolsSaving.value = false
       }
     }
     
@@ -766,7 +729,6 @@ export default {
     // Copy merged subscription content for a group
     const copyGroupCombined = async (group) => {
       selectedGroup.value = group
-      if (!confirm(t('admin.subscriptions.copyCombinedConfirm'))) return
 
       // Prefer the server-side merged result first
       try {
@@ -820,10 +782,9 @@ export default {
         showToast(t('admin.subscriptions.copyError'), 'error')
         return
       }
-      try {
-        await navigator.clipboard.writeText(text)
+      if (await copyText(text)) {
         showToast(t('admin.subscriptions.copied'), 'success')
-      } catch (error) {
+      } else {
         showToast(t('admin.subscriptions.copyError'), 'error')
       }
     }
@@ -877,34 +838,50 @@ export default {
         priority: group.priority,
         enable: group.enable === 1
       })
+      groupFormError.value = ''
       showEditGroupModal.value = true
     }
     
-    const deleteGroup = async (group) => {
-      if (!confirm(t('admin.subscriptions.confirmDeleteGroup'))) return
-      try {
-        ensureSubscriptionSuccess(
-          await adminApi.deleteSubscriptionGroup(group.id),
-          t('admin.subscriptions.deleteError')
-        )
-        showToast(t('admin.subscriptions.groupDeleted'), 'success')
-        loadGroups()
-        if (selectedGroup.value?.id === group.id) {
-          selectedGroup.value = null
-          templates.value = []
+    // Danger confirmation that runs the request; a failure stays inline.
+    const confirmDelete = (options, request) => confirm({
+      tone: 'danger',
+      ...options,
+      onConfirm: async () => {
+        try {
+          ensureSubscriptionSuccess(await request(), t('admin.subscriptions.deleteError'))
+        } catch (error) {
+          throw new Error(error?.message || t('admin.subscriptions.deleteError'))
         }
-      } catch (error) {
-        showToast(t('admin.subscriptions.deleteError'), 'error')
+      }
+    })
+
+    const deleteGroup = async (group) => {
+      const confirmed = await confirmDelete({
+        title: t('admin.subscriptions.confirm.deleteGroupTitle', { name: group.name }),
+        message: t('admin.subscriptions.confirm.deleteGroupMessage'),
+        confirmLabel: t('admin.subscriptions.confirm.deleteGroupAction')
+      }, () => adminApi.deleteSubscriptionGroup(group.id))
+      if (!confirmed) return
+      showToast(t('admin.subscriptions.groupDeleted'), 'success')
+      loadGroups()
+      if (selectedGroup.value?.id === group.id) {
+        selectedGroup.value = null
+        templates.value = []
       }
     }
     
     const closeGroupModal = () => {
+      if (groupSaving.value) return
+      groupFormError.value = ''
       showCreateGroupModal.value = false
       showEditGroupModal.value = false
       Object.assign(groupForm, { id: null, name: '', description: '', priority: 0, enable: true })
     }
     
     const saveGroup = async () => {
+      if (groupSaving.value) return
+      groupSaving.value = true
+      groupFormError.value = ''
       try {
         const data = {
           name: groupForm.name,
@@ -925,11 +902,14 @@ export default {
           )
         }
         
+        groupSaving.value = false
         showToast(t('admin.subscriptions.groupSaved'), 'success')
         closeGroupModal()
         loadGroups()
       } catch (error) {
-        showToast(t('admin.subscriptions.saveError'), 'error')
+        groupFormError.value = t('admin.subscriptions.saveError')
+      } finally {
+        groupSaving.value = false
       }
     }
     
@@ -965,21 +945,19 @@ export default {
         } catch (e) {}
       }
       
+      templateFormError.value = ''
       showEditTemplateModal.value = true
     }
     
     const deleteTemplate = async (template) => {
-      if (!confirm(t('admin.subscriptions.confirmDeleteTemplate'))) return
-      try {
-        ensureSubscriptionSuccess(
-          await adminApi.deleteSubscriptionTemplate(template.id),
-          t('admin.subscriptions.deleteError')
-        )
-        showToast(t('admin.subscriptions.templateDeleted'), 'success')
-        loadTemplates(selectedGroup.value.id)
-      } catch (error) {
-        showToast(t('admin.subscriptions.deleteError'), 'error')
-      }
+      const confirmed = await confirmDelete({
+        title: t('admin.subscriptions.confirm.deleteTemplateTitle', { name: template.name }),
+        message: t('admin.subscriptions.confirm.deleteTemplateMessage'),
+        confirmLabel: t('admin.subscriptions.confirm.deleteTemplateAction')
+      }, () => adminApi.deleteSubscriptionTemplate(template.id))
+      if (!confirmed) return
+      showToast(t('admin.subscriptions.templateDeleted'), 'success')
+      loadTemplates(selectedGroup.value.id)
     }
     
     const toggleTemplate = async (template) => {
@@ -997,6 +975,8 @@ export default {
     }
     
     const closeTemplateModal = () => {
+      if (templateSaving.value) return
+      templateFormError.value = ''
       showCreateTemplateModal.value = false
       showEditTemplateModal.value = false
       Object.assign(templateForm, {
@@ -1009,6 +989,9 @@ export default {
     }
     
     const saveTemplate = async () => {
+      if (templateSaving.value) return
+      templateSaving.value = true
+      templateFormError.value = ''
       try {
         const data = {
           name: templateForm.name,
@@ -1050,11 +1033,14 @@ export default {
           )
         }
         
+        templateSaving.value = false
         showToast(t('admin.subscriptions.templateSaved'), 'success')
         closeTemplateModal()
         loadTemplates(selectedGroup.value.id)
       } catch (error) {
-        showToast(t('admin.subscriptions.saveError'), 'error')
+        templateFormError.value = t('admin.subscriptions.saveError')
+      } finally {
+        templateSaving.value = false
       }
     }
     
@@ -1140,13 +1126,10 @@ export default {
       return tls === 2 ? t('admin.subscriptions.tlsReality') : tls === 1 ? t('admin.subscriptions.tlsEnabled') : t('admin.subscriptions.tlsNone')
     }
     
-    const showToast = (message, type = 'success') => {
-      toastMessage.value = message
-      toastType.value = type
-      setTimeout(() => {
-        toastMessage.value = ''
-      }, 3000)
-    }
+    // Results go to the app toasts: success disappears, errors stay.
+    const showToast = (message, type = 'success') => (
+      type === 'error' ? toast.error(message) : toast.success(message)
+    )
     
     const goToNode = (nodeId) => {
       window.location.hash = `#/admin/nodes?id=${nodeId}`
@@ -1194,8 +1177,14 @@ export default {
       previewFormat,
       previewContent,
       subscriptionFormats,
-      toastMessage,
-      toastType,
+      protocolsSaving,
+      protocolsError,
+      groupSaving,
+      groupFormError,
+      templateSaving,
+      templateFormError,
+      Copy,
+      Download,
       totalUsers,
       totalTemplates,
       totalTraffic,
@@ -1416,13 +1405,8 @@ export default {
 input:checked + .slider { background-color: var(--primary-color); }
 input:checked + .slider:before { transform: translateX(20px); }
 
-/* Modal */
-.modal { position:fixed; inset:0; background: rgba(0,0,0,0.6); display:flex; align-items:center; justify-content:center; z-index:1000; }
-.modal-content { background: var(--surface-color); border-radius:8px; width:90%; max-width:700px; max-height:90vh; overflow-y:auto; border:1px solid var(--border-color); }
-.modal-header { display:flex; justify-content:space-between; align-items:center; padding:16px; border-bottom:1px solid var(--border-color); }
-.close-btn { background:none; border:none; font-size:24px; cursor:pointer; color: var(--text-secondary); }
-.modal-body { padding:16px; }
-.modal-footer { padding:16px; border-top:1px solid var(--border-color); display:flex; justify-content:flex-end; gap:8px; }
+/* Dialogs */
+.dialog-error { margin: 0; color: var(--danger); }
 
 .form-group { margin-bottom:16px; }
 .form-group label { display:block; margin-bottom:4px; font-weight:500; color: var(--text-color); }
@@ -1435,12 +1419,8 @@ input:checked + .slider:before { transform: translateX(20px); }
 
 .preview-content { background: rgba(255,255,255,0.02); border:1px solid var(--border-color); border-radius:4px; padding:16px; max-height:400px; overflow:auto; color: var(--text-color); }
 .preview-content pre { margin:0; white-space:pre-wrap; word-break:break-all; font-size:12px; }
-.preview-actions { margin-top:16px; display:flex; gap:8px; }
 
 .subscription-links { display:flex; flex-direction:column; gap:12px; }
-.link-item label { display:block; margin-bottom:4px; font-weight:500; color:var(--text-color); }
-.link-input-group { display:flex; gap:8px; }
-.link-input-group input { flex:1; padding:8px 12px; border:1px solid var(--border-color); border-radius:4px; font-size:12px; background:var(--surface-color); color:var(--text-color); }
 
 /* Buttons */
 .btn { padding:8px 16px; border:none; border-radius:4px; cursor:pointer; font-size:14px; display:inline-flex; align-items:center; gap:4px; }
@@ -1463,12 +1443,6 @@ input:checked + .slider:before { transform: translateX(20px); }
 .btn-danger { color: var(--error-color); }
 .btn-sm { padding:4px 8px; font-size:12px; }
 
-/* Toast */
-.toast { position:fixed; bottom:24px; right:24px; padding:12px 24px; border-radius:4px; color:white; z-index:2000; }
-.toast.error { background: var(--error-color); }
-
-.modal-lg { max-width: 900px; }
-.mb-4 { margin-bottom: 24px; }
 .ml-2 { margin-left: 8px; }
 .clickable-row { cursor: pointer; transition: background 0.2s; }
 .clickable-row:hover { background: rgba(255,255,255,0.02); }

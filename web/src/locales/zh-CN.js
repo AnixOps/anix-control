@@ -1945,7 +1945,9 @@ export default {
         node: '节点',
         protocolName: '协议 / 名称',
         port: '端口',
-        linkedGroups: '已关联分组'
+        linkedGroups: '已关联分组',
+        selectAll: '全选协议',
+        select: '选择协议 {name}'
       },
       formats: {
         auto: '自动（按 User-Agent）',
@@ -1964,17 +1966,22 @@ export default {
       availableProtocolsLoadError: '加载可用协议失败',
       groupProtocolsUpdated: '分组协议关联已更新',
       groupProtocolsUpdateFailed: '更新协议关联失败',
-      copyCombinedConfirm: '确定复制该分组的合并订阅内容吗？',
       copied: '已复制',
       copyError: '复制失败',
       copyFallbackNotice: '已使用仅模板回退方案复制合并订阅内容。',
       previewError: '加载预览内容失败',
-      confirmDeleteGroup: '确定删除这个订阅分组吗？',
+      confirm: {
+        deleteGroupTitle: '删除订阅分组 {name}？',
+        deleteGroupMessage: '分组内的订阅模板和协议关联会一并删除，使用该分组的用户将收不到这些节点。此操作无法撤销。',
+        deleteGroupAction: '删除分组',
+        deleteTemplateTitle: '删除订阅模板 {name}？',
+        deleteTemplateMessage: '该节点会从分组的订阅里消失。此操作无法撤销。',
+        deleteTemplateAction: '删除模板'
+      },
       groupDeleted: '订阅分组已删除',
       deleteError: '删除失败',
       groupSaved: '订阅分组已保存',
       saveError: '保存失败',
-      confirmDeleteTemplate: '确定删除这个订阅模板吗？',
       templateDeleted: '订阅模板已删除',
       updateError: '更新失败',
       templateSaved: '订阅模板已保存',
