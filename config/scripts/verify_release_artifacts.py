@@ -6,10 +6,16 @@ from __future__ import annotations
 import argparse
 import fnmatch
 import hashlib
+import io
 import json
+import sys
+import tarfile
 import tempfile
 from pathlib import Path
 from typing import Any
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from generate_release_manifest import PACKAGE_ARCHIVE_GLOB, release_package_entries  # noqa: E402
 
 
 MANIFEST_NAME = "RELEASE_MANIFEST.json"
@@ -107,7 +113,24 @@ def verify_manifest(release_dir: Path, manifest_path: Path) -> set[str]:
         extra = sorted(manifest_names - expected_names)
         raise VerificationError(f"manifest artifact set mismatch; missing={missing}, extra={extra}")
 
+    verify_package_listing(release_dir, manifest)
     return manifest_names
+
+
+def verify_package_listing(release_dir: Path, manifest: dict[str, Any]) -> None:
+    """The packages archive must be signed and listed package by package."""
+    archives = sorted(path.name for path in release_dir.glob(PACKAGE_ARCHIVE_GLOB) if path.is_file())
+    for name in archives:
+        if not (release_dir / f"{name}.sig").is_file():
+            raise VerificationError(f"package archive signature missing: {name}.sig")
+    try:
+        expected = release_package_entries(release_dir)
+    except (OSError, ValueError, tarfile.TarError, EOFError) as exc:
+        raise VerificationError(f"cannot read package archive: {exc}") from exc
+    if archives and not expected:
+        raise VerificationError("package archive contains no packages")
+    if manifest.get("packages", []) != expected:
+        raise VerificationError("manifest packages do not match the package archive contents")
 
 
 def verify_checksums(release_dir: Path, checksum_path: Path) -> None:
@@ -173,8 +196,28 @@ def write_fixture_manifest(release_dir: Path) -> None:
         "build_source": "github-actions",
         "manual_deployment_required": True,
         "artifacts": artifacts,
+        "packages": release_package_entries(release_dir),
     }
     (release_dir / MANIFEST_NAME).write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n", encoding="utf-8")
+
+
+def write_fixture_package_archive(path: Path, anxp: bytes) -> None:
+    manifest = json.dumps({"id": "demo", "version": "2.4.0", "artifact_sha256": hashlib.sha256(anxp).hexdigest()})
+    with tarfile.open(path, mode="w:gz") as archive:
+        for name, data in (
+            ("anix-control-packages-2.4.0/demo-2.4.0.anxp", anxp),
+            ("anix-control-packages-2.4.0/demo-2.4.0.manifest.json", manifest.encode("utf-8")),
+        ):
+            info = tarfile.TarInfo(name)
+            info.size = len(data)
+            archive.addfile(info, io.BytesIO(data))
+
+
+def copy_fixture_release(source: Path, target: Path) -> None:
+    target.mkdir()
+    for path in source.iterdir():
+        if path.is_file():
+            write_fixture_file(target / path.name, path.read_bytes())
 
 
 def write_fixture_checksums(release_dir: Path) -> None:
@@ -205,7 +248,6 @@ def run_self_test() -> None:
         "migration-dry-run.txt",
         "anix-control-source.sbom.spdx.json",
         "anix-control-frontend.tar.gz",
-        "anix-control-frontend.zip",
         "anix-control-linux-amd64.tar.gz",
         "anix-control-linux-arm64.tar.gz",
         "anix-control-windows-amd64.exe.zip",
@@ -220,6 +262,8 @@ def run_self_test() -> None:
         for name in required:
             if name not in {MANIFEST_NAME, CHECKSUM_NAME}:
                 write_fixture_file(release_dir / name, f"{name}\n".encode("utf-8"))
+        write_fixture_package_archive(release_dir / "anix-control-packages-2.4.0.tar.gz", b"package bytes")
+        write_fixture_file(release_dir / "anix-control-packages-2.4.0.tar.gz.sig", b"signature\n")
         write_fixture_manifest(release_dir)
         write_fixture_checksums(release_dir)
 
@@ -273,6 +317,45 @@ def run_self_test() -> None:
                 manifest_path=release_dir / MANIFEST_NAME,
                 checksum_path=release_dir / CHECKSUM_NAME,
                 required=required + ["missing-required.txt"],
+                required_globs=[],
+            ),
+        )
+
+        # A package swapped inside the archive (with refreshed checksums) no
+        # longer matches the per-package listing in the manifest.
+        swapped_dir = Path(tmp) / "swapped-package"
+        copy_fixture_release(release_dir, swapped_dir)
+        write_fixture_package_archive(swapped_dir / "anix-control-packages-2.4.0.tar.gz", b"other package bytes")
+        manifest = load_manifest(swapped_dir / MANIFEST_NAME)
+        for artifact in manifest["artifacts"]:
+            path = swapped_dir / artifact["name"]
+            artifact["size"] = path.stat().st_size
+            artifact["sha256"] = sha256_file(path)
+        (swapped_dir / MANIFEST_NAME).write_text(json.dumps(manifest), encoding="utf-8")
+        write_fixture_checksums(swapped_dir)
+        expect_failure(
+            "package listing mismatch",
+            lambda: verify_release_artifacts(
+                release_dir=swapped_dir,
+                manifest_path=swapped_dir / MANIFEST_NAME,
+                checksum_path=swapped_dir / CHECKSUM_NAME,
+                required=required,
+                required_globs=[],
+            ),
+        )
+
+        unsigned_dir = Path(tmp) / "unsigned-archive"
+        copy_fixture_release(release_dir, unsigned_dir)
+        (unsigned_dir / "anix-control-packages-2.4.0.tar.gz.sig").unlink()
+        write_fixture_manifest(unsigned_dir)
+        write_fixture_checksums(unsigned_dir)
+        expect_failure(
+            "unsigned package archive",
+            lambda: verify_release_artifacts(
+                release_dir=unsigned_dir,
+                manifest_path=unsigned_dir / MANIFEST_NAME,
+                checksum_path=unsigned_dir / CHECKSUM_NAME,
+                required=required,
                 required_globs=[],
             ),
         )

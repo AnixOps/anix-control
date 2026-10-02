@@ -165,6 +165,10 @@ A release tag `vX.Y.Z[-alpha|-beta|-rc.N]` must match every surface checked by
   - It produces signed packages for every package under `packages/`, the
     binaries, a signed GHCR image with SBOM and provenance, the source SBOM,
     checksums and the manifest.
+  - The release page ships the packages as one signed
+    `anix-control-packages-<version>.tar.gz` (+ `.sig`), plus the
+    `identity-platform` trio that `scripts/install.sh` downloads by name; one
+    frontend archive (`.tar.gz`). `docs/RELEASING.md` lists every asset.
   - The release body is the tag's CHANGELOG section.
 - Cut a release with `config/scripts/prepare_release.py <version>`, a pull
   request, then the tag (`docs/RELEASING.md`). There are no release-stage,

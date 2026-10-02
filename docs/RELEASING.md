@@ -46,15 +46,29 @@ unsuffixed tags become the latest release.
   - Agent packages embed Agent binaries from the pinned `anix-agent` commit
     and a checksum-pinned GOST runtime.
 - **Binaries.** Linux, Windows and macOS builds for amd64 and arm64, plus the
-  frontend archives.
+  frontend archive (`anix-control-frontend.tar.gz`).
 - **Image.** `ghcr.io/anixops/anix-control` for linux/amd64 and linux/arm64,
   with the signed identity bootstrap package inside.
   - It is signed with cosign (keyless).
   - It carries SBOM and provenance attestations.
-- **GitHub Release.** It publishes the binaries, frontend, signed packages,
+- **GitHub Release.** About 18 assets: the six binaries, the frontend,
   `official-public-key.raw`, the source SBOM, `RELEASE_MANIFEST.json`,
-  `SHA256SUMS.txt` and `docker-image.txt`. The release body is the tag's
-  CHANGELOG section.
+  `RELEASE_NOTES.md`, `SHA256SUMS.txt`, `docker-image.txt`, and the packages:
+  - `anix-control-packages-<version>.tar.gz` holds every package's `.anxp`,
+    `.manifest.json`, `.manifest.sig` and `.sbom.spdx.json`, plus one
+    `official-public-key.pem`. `build_package.py --release-archive` writes
+    it from the `--all` build, so `PACKAGE_SPECS` in
+    `packages/shared/build_package.py` is the one list of what ships.
+  - `anix-control-packages-<version>.tar.gz.sig` is the Base64 Ed25519
+    signature of the archive bytes, made with the package signing key by the
+    same `openssl pkeyutl -sign -rawin` step that signs each manifest.
+  - `identity-platform-<version>.anxp`, `.manifest.json` and `.manifest.sig`
+    stay separate assets: the frozen `scripts/install.sh` downloads them by
+    name.
+  - `RELEASE_MANIFEST.json` lists each package under `packages` (id,
+    version, `.anxp` size and SHA-256, manifest SHA-256).
+
+  The release body is the tag's CHANGELOG section.
 
 `config/scripts/check_release_workflow.sh` keeps these essentials in the
 workflow. Change it in the same pull request as any release step.
@@ -71,8 +85,10 @@ workflow. Change it in the same pull request as any release step.
     --certificate-identity-regexp '^https://github.com/AnixOps/anix-control/'
   ```
 
-- **Packages.** Control verifies every package manifest against its
-  configured official root on import.
+- **Packages.** Check the archive signature and extract a package as in
+  [`UPGRADE.md`](UPGRADE.md#getting-a-package-from-the-release). Control
+  verifies every package manifest against its configured official root on
+  import.
 
 ## History
 

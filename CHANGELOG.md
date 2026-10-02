@@ -89,6 +89,38 @@
     loopback; otherwise links come out as `http://` or an internal address
     and logs show the proxy's IP. Also set the public addresses above.
 
+### Changed
+
+- **The release page ships about 18 assets instead of 104**
+  (`.github/workflows/ci.yml`, `packages/shared/build_package.py`,
+  `docs/RELEASING.md`, `docs/UPGRADE.md`).
+  - **Packages: one signed archive.** `anix-control-packages-<version>.tar.gz`
+    holds every package's `.anxp`, `.manifest.json`, `.manifest.sig` and
+    `.sbom.spdx.json`, plus one `official-public-key.pem`.
+    `anix-control-packages-<version>.tar.gz.sig` is the Base64 Ed25519
+    signature of the archive, made with the package signing key by the same
+    `openssl` step as each manifest signature. `RELEASE_MANIFEST.json` lists
+    every package under `packages` (id, version, `.anxp` size and SHA-256,
+    manifest SHA-256), and `SHA256SUMS.txt` covers the archive and its
+    signature. The release job verifies the signature and every package in
+    the archive (`build_package.py --verify-release-archive`).
+  - **Getting a package now:** download the archive, its `.sig`,
+    `official-public-key.raw` and `SHA256SUMS.txt`, check the signature
+    against the pinned root with `openssl pkeyutl -verify -rawin`, then
+    `tar -xzf anix-control-packages-<version>.tar.gz --strip-components=1
+    --wildcards '*/<plugin-id>-<version>.*'`. The exact commands are in
+    `docs/UPGRADE.md`, "Getting A Package From The Release".
+  - **Removed assets:** the 18 per-package `.public-key.pem` files (all the
+    same official key), the per-package `.anxp`, manifest, signature and SBOM
+    assets, and `anix-control-frontend.zip` (nothing consumed it;
+    `anix-control-frontend.tar.gz` stays).
+  - **Kept:** the six binaries, `anix-control-frontend.tar.gz`,
+    `SHA256SUMS.txt`, `RELEASE_MANIFEST.json`, `RELEASE_NOTES.md`,
+    `docker-image.txt`, `official-public-key.raw`, the source SBOM, and the
+    `identity-platform-<version>` `.anxp`, `.manifest.json` and
+    `.manifest.sig`: the frozen `scripts/install.sh` downloads that trio by
+    name, so it keeps working unchanged.
+
 ## 4.1.0-rc.2 - 2026-10-01
 
 4.1.0-rc.2 is the second 4.1.0 release candidate. It brings thirteen
