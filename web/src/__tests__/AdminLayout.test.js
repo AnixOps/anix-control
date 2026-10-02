@@ -65,6 +65,7 @@ const adminMenuPaths = [
   '/admin/plans',
   '/admin/coupons',
   '/admin/invite',
+  '/admin/invite-codes',
   '/admin/payment',
   '/admin/telegram',
   '/admin/notifications',
@@ -419,6 +420,8 @@ describe('AdminLayout.vue', () => {
     }
     expect(links).toEqual(expect.arrayContaining(adminMenuPaths.filter(path => !commercialPaths.includes(path))))
     expect(links).toContain('/admin/extensions/example')
+    // Invite codes are registration control: every edition manages them.
+    expect(links).toContain('/admin/invite-codes')
     const templates = wrapper.get('a.menu-link[data-to="/admin/plans"]')
     expect(templates.text()).toContain('Subscription templates')
   })

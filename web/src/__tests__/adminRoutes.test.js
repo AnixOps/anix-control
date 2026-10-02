@@ -54,6 +54,7 @@ describe('admin routes', () => {
       '/admin/plans',
       '/admin/coupons',
       '/admin/invite',
+      '/admin/invite-codes',
       '/admin/payment',
       '/admin/telegram',
       '/admin/notifications',

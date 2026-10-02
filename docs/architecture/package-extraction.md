@@ -10,8 +10,8 @@ open work in [`../../TODO.md`](../../TODO.md).
 
 > 中文摘要：v4.0.0 的「插件化」只到路由层；本文定义「一个领域真正住在插件里」
 > 的验收标准、目标机制（存储租约 + 按路由模式 + 类型化内核操作，均已实现）、
-> 保留下来的旧计划约束，以及 M0–M4 里程碑。292 条 v2 路由中，173 条
-> `native-flagged`，88 条 `bridged`（待契约），31 条 `kernel-owned`（按设计留在内核）。
+> 保留下来的旧计划约束，以及 M0–M4 里程碑。295 条 v2 路由中，173 条
+> `native-flagged`，91 条 `bridged`（待契约），31 条 `kernel-owned`（按设计留在内核）。
 
 Markers used below: **CURRENT** = true in the tree today; **PLANNED** = accepted
 design, not implemented yet; **HISTORICAL** = preserved from a retired plan for
@@ -21,12 +21,13 @@ context, not a commitment.
 
 v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
 
-- All 292 `/api/v2` routes in `config/v2-package-route-catalog.json` enter the
-  package gateway. 244 are registered with `registeredPackageRoute`
+- All 295 `/api/v2` routes in `config/v2-package-route-catalog.json` enter the
+  package gateway. 267 are registered with `registeredPackageRoute`
   (`internal/router/router.go`), which registers the legacy gin handler into
-  `packagebridge.DefaultRouteRegistry()` and returns the gateway; the 45
-  `identity-platform` routes use the bare `v2PackageGateway.Serve`; the 3
-  WebSocket routes use `registeredPackageWebSocketRoute`.
+  `packagebridge.DefaultRouteRegistry()` and returns the gateway; the 25
+  `identity-platform` routes use the bare `v2PackageGateway.Serve` (their
+  legacy handlers are in the identity bridge); the 3 WebSocket routes use
+  `registeredPackageWebSocketRoute`.
 - `config/package-extraction.json` records each route's extraction mode
   (`bridged`, `kernel-owned`, `native-flagged` or `native`; section 3.2) and
   where its legacy handler lives
@@ -37,7 +38,7 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   machine-telemetry (3), notification (23), order (13), payment (20), plan
   (7), platform (5), protocol-runtime (3), proxy-node (7), subscription (21),
   ticket (8) and wireguard (1). 31 routes are `kernel-owned`: they stay in the
-  kernel by design, and each row says why. The other 88 are `bridged` until a
+  kernel by design, and each row says why. The other 91 are `bridged` until a
   kernel contract lets their package serve them (section 3.2 lists what
   unblocks them). None is `native` yet. The identity routes are
   `identity-bridge`. `check_plugin_only_routes.py` enforces the map against
@@ -65,7 +66,8 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
   - `/user/reset` to `forward`.
 
   They are now `registeredPackageRoute` routes. identity-platform keeps 22,
-  whose legacy handlers are in the identity bridge. `internal/compat/v2/moved_routes.go`
+  whose legacy handlers are in the identity bridge, and has since gained the
+  administrator's invite codes (3, bridged; see Identity leftovers). `internal/compat/v2/moved_routes.go`
   lists the moves: the kernel accepts the old route ids from old
   identity-platform releases and, while both packages declare a route,
   prefers the new owner. There are now 18 packages. All but nat-egress and
@@ -86,7 +88,7 @@ Route modes per package (2026-10-01):
 | affiliate | 10 | 0 | 0 |
 | forward | 21 | 53 | 11 |
 | gost-mesh | 3 | 0 | 0 |
-| identity-platform | 22 | 0 | 0 |
+| identity-platform | 22 | 3 | 0 |
 | knowledge | 6 | 0 | 0 |
 | machine-telemetry | 3 | 0 | 2 |
 | notification | 23 | 1 | 0 |
@@ -99,7 +101,7 @@ Route modes per package (2026-10-01):
 | subscription | 21 | 4 | 0 |
 | ticket | 8 | 0 | 0 |
 | wireguard | 1 | 0 | 0 |
-| **all** | **173** | **88** | **31** |
+| **all** | **173** | **91** | **31** |
 
 Reusable pieces that already exist:
 
@@ -195,7 +197,7 @@ by `check_plugin_only_routes.py` (counts in section 1).
 |---|---|---|
 | `native-flagged` | the package host has a native handler, proved by a parity test; the legacy handler stays, so every runtime mode works | 173 |
 | `native` | the legacy handler is deleted and the host answers alone | 0 |
-| `bridged` | the host only relays, until a kernel contract lets the package serve the route | 88 |
+| `bridged` | the host only relays, until a kernel contract lets the package serve the route | 91 |
 | `kernel-owned` | the host only relays, by design: the route stays in the kernel, and the row's `reason` says why | 31 |
 
 A `bridged` or `kernel-owned` route is registered and relayed alike: it is
@@ -233,6 +235,7 @@ What unblocks the `bridged` routes:
 | A read of Control's process configuration `forward_runtime.clean_agent.public_url` (a KernelSettings-style namespace, or the host's environment) | the clean agent install script: its panel URL is that setting when set, else the request's scheme and host | 1 |
 | A contract read of a member's subscription link | the public Telegram webhook (`/sub`) | 1 |
 | A KernelSettings namespace for the subscription link (with `app.subscribe_path`) | the subscription link settings | 1 |
+| A contract (or a storage adoption by identity-platform) for `v2_invite_code`, which registration consumes inside Control | identity-platform: the administrator's invite codes (list, generate, revoke) | 3 |
 | Kernel caches (done, no invalidation events needed): the kernel keeps both caches and answers them through `KernelTelemetry.GetDashboard` and `KernelSubscriber.GetSubscriptionSummary`, so both modes answer the same entry and `cached_at` ([`kernel-caches.md`](kernel-caches.md)) | none left: the dashboard (the online set crosses as a count) and a user's subscription summary are `native-flagged` | 0 |
 
 **Request address** (CURRENT). Hosts receive the original request's scheme
@@ -626,6 +629,19 @@ The planned `kernel.entitlement.apply.v1` became
 - **Subscription (in place).** 21 of 25 routes run on the adopted
   - **Moved to affiliate:** the user's invite codes and their generation,
     affiliate data rather than identity's (see Affiliate).
+  - **Administrator's invite codes (bridged, every edition).**
+    `GET`/`POST /api/v2/admin/invite/codes` and
+    `DELETE /api/v2/admin/invite/codes/:id`
+    (`identity.admin.invite.codes.*`) are registration control, so they are
+    identity-platform's and the community edition serves them (owner
+    decision 2026-10-01); the affiliate package, which the community
+    edition hides and does not ship, keeps the user's codes, commissions,
+    withdrawals and statistics. They are new routes, not moves, so no
+    parity test applies: the host relays them (`bridgedRoutes`) to
+    `handler.InviteCodeAdminHandler` until identity-platform can read
+    `v2_invite_code`. An administrator's codes belong to no user and do not
+    count toward a user's `code_count`; the user's generation, its limit
+    and advisory lock are unchanged.
 - **Subscription (in place).** 20 of 25 routes run on the adopted
   `v2_subscription_group`, `v2_subscription_template`,
   `v2_plan_subscription_group` and `v2_subscription_group_node_protocols`
@@ -1064,7 +1080,7 @@ shapes; the first extraction step adopts the existing `v2_*` tables in place.
 | wireguard (T12) | 1 | peer lifecycle, generated config | package migration (names not fixed) | Needs anix-agent revival |
 | protocol-runtime (T12) | 20 | protocol composition, runtime-adapter selection, Agent task/monitor | package migration (names not fixed) | Needs anix-agent revival |
 | machine-telemetry, nftables-forward, gost-mesh, nat-egress (T12) | 5 / 0 / 3 / 0 | keep runtime semantics; add v2 entrypoint, generation, `RuntimeStatus` reports | — | Agent-target runtime packages |
-| identity-platform | 22 | group A switches with the identity cutover | — | All native-flagged (section 3.4); the two invite routes moved to affiliate |
+| identity-platform | 25 | group A switches with the identity cutover | — | 22 native-flagged (section 3.4); the user's two invite routes moved to affiliate; the administrator's 3 invite code routes are bridged |
 | platform | 12 | system configuration, audit, backup | — | Moved from identity-platform after v4.0.0; bridged |
 | affiliate | 10 | invite codes, commissions, withdrawals, invite statistics and configuration | — | Moved from identity-platform after v4.0.0; all native-flagged (section 3.4) |
 

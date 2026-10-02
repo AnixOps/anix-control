@@ -225,6 +225,7 @@ export default {
       mfa: 'MFA 设置',
       notifications: '通知管理',
       invite: '邀请返利管理',
+      inviteCodes: '邀请码',
       system: '系统管理',
       fallback: '管理面板'
     }
@@ -274,6 +275,7 @@ export default {
         subscriptionTemplates: '订阅模板',
         coupons: '优惠券管理',
         invite: '邀请返利管理',
+        inviteCodes: '邀请码',
         payment: '支付网关',
         telegram: 'Telegram Bot',
         notifications: '通知管理',

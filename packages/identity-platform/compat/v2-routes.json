@@ -4,6 +4,27 @@
   "routes": [
     {
       "method": "GET",
+      "legacy_path": "/api/v2/admin/invite/codes",
+      "package_route": "identity.admin.invite.codes.get",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/admin/invite/codes",
+      "package_route": "identity.admin.invite.codes.post",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "DELETE",
+      "legacy_path": "/api/v2/admin/invite/codes/:id",
+      "package_route": "identity.admin.invite.codes.id.delete",
+      "envelope": "panel",
+      "transport": "http"
+    },
+    {
+      "method": "GET",
       "legacy_path": "/api/v2/admin/mfa/config",
       "package_route": "identity.admin.mfa.config.get",
       "envelope": "panel",

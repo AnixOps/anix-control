@@ -495,6 +495,30 @@
     },
     {
       "method": "GET",
+      "path": "/api/v2/admin/invite/codes",
+      "package_id": "identity-platform",
+      "route_id": "identity.admin.invite.codes.get",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "POST",
+      "path": "/api/v2/admin/invite/codes",
+      "package_id": "identity-platform",
+      "route_id": "identity.admin.invite.codes.post",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "DELETE",
+      "path": "/api/v2/admin/invite/codes/:id",
+      "package_id": "identity-platform",
+      "route_id": "identity.admin.invite.codes.id.delete",
+      "mode": "bridged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "GET",
       "path": "/api/v2/admin/invite/config",
       "package_id": "affiliate",
       "route_id": "affiliate.admin.invite.config.get",

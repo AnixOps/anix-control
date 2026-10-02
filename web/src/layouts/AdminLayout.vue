@@ -211,6 +211,7 @@ const navSections = computed(() => {
       label: t('layout.admin.sections.business'),
       items: [
         { to: '/admin/users', icon: 'users', label: t('layout.admin.nav.users') },
+        { to: '/admin/invite-codes', icon: 'invite', label: t('layout.admin.nav.inviteCodes') },
         { to: '/admin/orders', icon: 'orders', label: t('layout.admin.nav.orders'), edition: 'commercial' },
         { to: '/admin/tickets', icon: 'tickets', label: t('layout.admin.nav.tickets') }
       ],

@@ -314,6 +314,27 @@ func TestCreateSubscriberConsumesTheInviteCode(t *testing.T) {
 	requireCode(t, err, codes.FailedPrecondition)
 }
 
+// An administrator's code (registration control, every edition) admits a
+// registration through the identity module and attributes no inviter.
+func TestCreateSubscriberConsumesAnAdministratorsInviteCode(t *testing.T) {
+	f := newFixture(t)
+	require.NoError(t, f.db.AutoMigrate(&model.InviteCode{}, &model.InviteConfig{}))
+	codes, err := service.NewInviteService(f.db).GenerateAdminInviteCodes(1, nil, time.Now())
+	require.NoError(t, err)
+
+	response, err := f.server.CreateSubscriber(context.Background(), &kernelidentityv1.CreateSubscriberRequest{
+		AccountUuid: "21111111-2222-4333-8444-555555555555", Email: "admitted@example.test", InviteCode: codes[0].Code,
+	})
+	require.NoError(t, err)
+	var user model.User
+	require.NoError(t, f.db.Take(&user, response.GetUserId()).Error)
+	require.Nil(t, user.InviteUserID)
+	var invite model.InviteCode
+	require.NoError(t, f.db.Take(&invite, codes[0].ID).Error)
+	require.Equal(t, 1, invite.Status)
+	require.Equal(t, user.ID, *invite.UsedBy)
+}
+
 func TestGetSubscriberShowsTheV2UserWithoutCredentials(t *testing.T) {
 	f := newFixture(t)
 	id := f.createSubscriber(t, accountA, "shown@example.test")

@@ -1176,6 +1176,30 @@ export function processWithdrawal(id, data) {
   })
 }
 
+// Invite codes (registration control, every edition).
+export function getInviteCodes(params) {
+  return request({
+    url: '/admin/invite/codes',
+    method: 'get',
+    params
+  })
+}
+
+export function generateInviteCodes(data) {
+  return request({
+    url: '/admin/invite/codes',
+    method: 'post',
+    data
+  })
+}
+
+export function revokeInviteCode(id) {
+  return request({
+    url: `/admin/invite/codes/${id}`,
+    method: 'delete'
+  })
+}
+
 export function getSystemConfigs(params) {
   return request({
     url: '/admin/system/configs',
@@ -1486,6 +1510,9 @@ export default {
   getInviteStats,
   getWithdrawals,
   processWithdrawal,
+  getInviteCodes,
+  generateInviteCodes,
+  revokeInviteCode,
   getSystemConfigs,
   getSystemConfig,
   getSubscriptionSettings,

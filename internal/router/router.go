@@ -422,6 +422,11 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			admin.GET("/mfa/config", v2PackageGateway.Serve)
 			admin.PUT("/mfa/config", v2PackageGateway.Serve)
 
+			// ========== 邀请码管理（注册控制，所有版本） ==========
+			admin.GET("/invite/codes", v2PackageGateway.Serve)
+			admin.POST("/invite/codes", v2PackageGateway.Serve)
+			admin.DELETE("/invite/codes/:id", v2PackageGateway.Serve)
+
 			// ========== 通知管理 ==========
 			notificationHandler := handler.NewNotificationHandler()
 			admin.GET("/notification/templates", registeredPackageRoute(v2PackageGateway.Serve, "notification", "notification.admin.notification.templates.get", notificationHandler.ListTemplates))

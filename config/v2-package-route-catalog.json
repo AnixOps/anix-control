@@ -550,6 +550,33 @@
   },
   {
     "method": "GET",
+    "path": "/api/v2/admin/invite/codes",
+    "owner": "identity-platform",
+    "route_id": "identity.admin.invite.codes.get",
+    "envelope": "panel",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
+    "path": "/api/v2/admin/invite/codes",
+    "owner": "identity-platform",
+    "route_id": "identity.admin.invite.codes.post",
+    "envelope": "panel",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "DELETE",
+    "path": "/api/v2/admin/invite/codes/:id",
+    "owner": "identity-platform",
+    "route_id": "identity.admin.invite.codes.id.delete",
+    "envelope": "panel",
+    "middleware_group": "admin",
+    "transport": "http"
+  },
+  {
+    "method": "GET",
     "path": "/api/v2/admin/invite/config",
     "owner": "affiliate",
     "route_id": "affiliate.admin.invite.config.get",
