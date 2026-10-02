@@ -1,6 +1,6 @@
 # Forward SDK: routes, hops, engines and drivers
 
-Status: DESIGN DRAFT (2026-10-02), for the owner's review (gate H11).
+Status: DESIGN APPROVED (gates H11–H14 decided by the owner on 2026-10-02).
 Nothing is implemented and no behaviour changes. The draft contract is
 `sdk/api/forward/v1` (`anixops.forward.v1`, DRAFT, UNRELEASED); the draft
 planner goldens are in `contracts/forward/v1`. This is phase F1 of the v4.2
@@ -856,6 +856,21 @@ when decided.
 | H21 | LB and failover defaults: circuit breaker, check interval, DDNS providers | Breaker 3 failures → skip 30 s; checks every 5 s with a 2 s timeout; least-conn re-weighting every 10 s; DDNS: Cloudflare, Alibaba Cloud DNS, DNSPod, Huawei Cloud DNS, generic webhook |
 | H22 | AnixOps protocol design review (threat model, cryptography, REALITY-like fallback) | Separate design document before any prototype; prototype off by default and marked experimental in v4.2 |
 | H23 | Community vs commercial boundary for forwarding | Section 12: core forwarding, LB, failover and onboarding in both; self-service, plans, multipliers and resellers commercial |
+
+Decided by the owner (2026-10-02):
+
+- **H11:** approved as drafted. The contract freezes when F3a serves it.
+- **H12:** `sdk/v0.x` through v4.2's release candidates, then `sdk/v1.0.0`
+  with v4.2.0.
+- **H13:** dedicated user with ambient `CAP_NET_ADMIN` (+
+  `CAP_NET_BIND_SERVICE`) and the systemd sandbox of section 14. Root is
+  only for the installer and the signed-artifact updater unit. The driver
+  only touches `inet anixops_fwd`.
+- **H14:** the netns suite runs on GitHub-hosted runners with sudo, on
+  forward changes and nightly. It becomes a required check after two green
+  weeks.
+
+H18–H23 are still open; each is asked before the work it gates.
 
 Smaller questions raised by this design, to settle with the gates above:
 
