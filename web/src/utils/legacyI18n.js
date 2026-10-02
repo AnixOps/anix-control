@@ -37,13 +37,18 @@ function shouldSkipTextNode(node) {
   return ['SCRIPT', 'STYLE', 'TEXTAREA', 'PRE', 'CODE'].includes(parent.tagName)
 }
 
+// Each node remembers its source text and what we last wrote. A value we did
+// not write is a new source: Vue updated the text in place (a button label
+// that turns into "已复制", a heading that follows a mode). Without this the
+// first value seen would be written back over every later update.
 function translateTextNode(i18n, node) {
   if (shouldSkipTextNode(node)) {
     return
   }
-  const source = TEXT_SOURCE_MAP.get(node) ?? node.nodeValue
-  TEXT_SOURCE_MAP.set(node, source)
+  const record = TEXT_SOURCE_MAP.get(node)
+  const source = record && record.output === node.nodeValue ? record.source : node.nodeValue
   const translated = translateLiteral(i18n, source)
+  TEXT_SOURCE_MAP.set(node, { source, output: translated })
   if (translated !== node.nodeValue) {
     node.nodeValue = translated
   }
@@ -62,12 +67,13 @@ function translateAttributes(i18n, root) {
       if (!element.hasAttribute(attr)) {
         continue
       }
-      if (!(attr in sourceMap)) {
-        sourceMap[attr] = element.getAttribute(attr)
-      }
-      const source = sourceMap[attr]
+      // As for text: a value we did not write is the app's new source.
+      const current = element.getAttribute(attr)
+      const record = sourceMap[attr]
+      const source = record && record.output === current ? record.source : current
       const translated = translateLiteral(i18n, source)
-      if (translated !== element.getAttribute(attr)) {
+      sourceMap[attr] = { source, output: translated }
+      if (translated !== current) {
         element.setAttribute(attr, translated)
       }
     }
