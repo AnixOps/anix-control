@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+import { render, screen, waitFor, within } from '@testing-library/vue'
+import userEvent from '@testing-library/user-event'
+import UiHost from '@/ui/UiHost.vue'
 import Invite from '@/views/admin/Invite.vue'
 import { setLocale } from '@/i18n'
+import { answerConfirms, toastMessages } from './helpers/feedback'
 
 const adminApi = vi.hoisted(() => ({
   getInviteConfig: vi.fn(),
@@ -192,5 +196,58 @@ describe('Admin Invite', () => {
     expect(wrapper.text()).toContain('5')
 
     wrapper.unmount()
+  })
+
+  describe('feedback', () => {
+    const Harness = {
+      components: { Invite, UiHost },
+      template: '<div><Invite /><UiHost /></div>'
+    }
+    const pending = { id: 5, user_id: 7, amount: 12.5, method: 'alipay', account: 'payee@example.com', status: 'pending' }
+
+    it('asks before approving a withdrawal; Cancel keeps it, a failure stays inline', async () => {
+      const user = userEvent.setup()
+      adminApi.getWithdrawals.mockResolvedValue({ data: { list: [pending] } })
+      adminApi.processWithdrawal.mockRejectedValueOnce(new Error('insufficient balance')).mockResolvedValueOnce({ code: 0 })
+      render(Harness)
+      await waitFor(() => expect(adminApi.getWithdrawals).toHaveBeenCalled())
+      await user.click(screen.getByRole('button', { name: 'Withdrawals' }))
+      const approve = await screen.findByRole('button', { name: 'Approve' })
+
+      await user.click(approve)
+      let dialog = await screen.findByRole('alertdialog', { name: 'Approve withdrawal #5?' })
+      expect(dialog.textContent).toContain('¥12.50')
+      expect(dialog.textContent).toContain('pa***om')
+      await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+      await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+      expect(adminApi.processWithdrawal).not.toHaveBeenCalled()
+
+      await user.click(approve)
+      dialog = await screen.findByRole('alertdialog')
+      await user.click(within(dialog).getByRole('button', { name: 'Approve' }))
+      expect((await within(dialog).findByRole('alert')).textContent).toContain('insufficient balance')
+      await user.click(within(dialog).getByRole('button', { name: 'Approve' }))
+      await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+      expect(adminApi.processWithdrawal).toHaveBeenLastCalledWith(5, { approve: true })
+      expect(toastMessages('success')).toEqual(['Withdrawal approved'])
+    })
+
+    it('rejects with a danger confirmation and saves the config with toasts', async () => {
+      adminApi.updateInviteConfig.mockResolvedValueOnce({}).mockRejectedValueOnce(new Error('offline'))
+      const wrapper = mount(Invite)
+      await flushPromises()
+
+      const confirms = answerConfirms(true)
+      await wrapper.vm.processWithdrawalRequest(pending, false)
+      expect(confirms.last()).toMatchObject({ tone: 'danger', title: 'Reject withdrawal #5?', confirmLabel: 'Reject' })
+      expect(adminApi.processWithdrawal).toHaveBeenCalledWith(5, { approve: false })
+      expect(toastMessages('success')).toContain('Withdrawal rejected')
+
+      await wrapper.vm.saveConfig()
+      expect(toastMessages('success')).toContain('Invite config saved')
+      await wrapper.vm.saveConfig()
+      expect(toastMessages('error')).toEqual([expect.stringContaining('offline')])
+      wrapper.unmount()
+    })
   })
 })

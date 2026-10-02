@@ -218,8 +218,11 @@
 import { computed, onMounted, ref } from 'vue'
 import { getInviteConfig, getInviteStats, getWithdrawals, processWithdrawal, updateInviteConfig } from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { useConfirm, useToast } from '@/ui'
 
 const { t, formatDateTime } = useAppI18n()
+const toast = useToast()
+const confirm = useConfirm()
 
 const defaultInviteConfig = Object.freeze({
   enabled: false,
@@ -365,9 +368,9 @@ const saveConfig = async () => {
       commission_rate_ratio: Number(config.value.commission_rate || 0) / 100
     }
     await updateInviteConfig(payload)
-    window.alert(t('adminInvite.messages.saveSuccess'))
+    toast.success(t('adminInvite.messages.saveSuccess'))
   } catch (error) {
-    window.alert(t('adminInvite.messages.saveFailed', { message: resolveApiError(error, 'adminInvite.messages.saveFailedShort') }))
+    toast.error(t('adminInvite.messages.saveFailed', { message: resolveApiError(error, 'adminInvite.messages.saveFailedShort') }))
   }
 }
 
@@ -391,25 +394,27 @@ const readWithdrawals = (res) => {
   return []
 }
 
+// Approving or rejecting a withdrawal is final: ask first, with the amount
+// and the (masked) account in the question.
 const processWithdrawalRequest = async (item, approve) => {
-  const confirmMessage = approve
-    ? t('adminInvite.messages.approveConfirm')
-    : t('adminInvite.messages.rejectConfirm')
-
-  if (!window.confirm(confirmMessage)) return
-
-  try {
-    await processWithdrawal(item.id, { approve })
-    window.alert(approve ? t('adminInvite.messages.approveSuccess') : t('adminInvite.messages.rejectSuccess'))
-    await fetchWithdrawals()
-    await fetchStats()
-  } catch (error) {
-    window.alert(
-      approve
-        ? t('adminInvite.messages.approveFailed', { message: resolveApiError(error, 'adminInvite.messages.approveFailedShort') })
-        : t('adminInvite.messages.rejectFailed', { message: resolveApiError(error, 'adminInvite.messages.rejectFailedShort') })
-    )
-  }
+  const facts = { id: item.id, amount: formatMoney(item.amount), account: maskAccount(item.account) }
+  const confirmed = await confirm({
+    title: t(approve ? 'adminInvite.confirm.approveTitle' : 'adminInvite.confirm.rejectTitle', facts),
+    message: t(approve ? 'adminInvite.confirm.approveMessage' : 'adminInvite.confirm.rejectMessage', facts),
+    confirmLabel: t(approve ? 'adminInvite.actions.approve' : 'adminInvite.actions.reject'),
+    tone: approve ? 'default' : 'danger',
+    onConfirm: async () => {
+      try {
+        await processWithdrawal(item.id, { approve })
+      } catch (error) {
+        throw new Error(resolveApiError(error, approve ? 'adminInvite.messages.approveFailedShort' : 'adminInvite.messages.rejectFailedShort'))
+      }
+    }
+  })
+  if (!confirmed) return
+  toast.success(approve ? t('adminInvite.messages.approveSuccess') : t('adminInvite.messages.rejectSuccess'))
+  await fetchWithdrawals()
+  await fetchStats()
 }
 
 const fetchStats = async () => {

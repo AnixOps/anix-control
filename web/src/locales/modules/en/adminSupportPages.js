@@ -272,6 +272,12 @@ export default {
         commission: 'Commission'
       }
     },
+    confirm: {
+      approveTitle: 'Approve withdrawal #{id}?',
+      approveMessage: '{amount} will be paid to {account}. This can’t be undone.',
+      rejectTitle: 'Reject withdrawal #{id}?',
+      rejectMessage: 'The request for {amount} will be rejected. This can’t be undone.'
+    },
     messages: {
       fetchConfigFailed: 'Failed to load invite config',
       fetchWithdrawalsFailed: 'Failed to load withdrawal requests',
@@ -279,13 +285,9 @@ export default {
       saveSuccess: 'Invite config saved',
       saveFailed: 'Failed to save invite config: {message}',
       saveFailedShort: 'Save failed',
-      approveConfirm: 'Approve this withdrawal request?',
       approveSuccess: 'Withdrawal approved',
-      approveFailed: 'Failed to approve withdrawal: {message}',
       approveFailedShort: 'Approval failed',
-      rejectConfirm: 'Reject this withdrawal request?',
       rejectSuccess: 'Withdrawal rejected',
-      rejectFailed: 'Failed to reject withdrawal: {message}',
       rejectFailedShort: 'Rejection failed'
     }
   },

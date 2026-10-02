@@ -272,6 +272,12 @@ export default {
         commission: '佣金'
       }
     },
+    confirm: {
+      approveTitle: '通过提现申请 #{id}？',
+      approveMessage: '将向 {account} 发放 {amount}。此操作无法撤销。',
+      rejectTitle: '拒绝提现申请 #{id}？',
+      rejectMessage: '这笔 {amount} 的申请会被拒绝。此操作无法撤销。'
+    },
     messages: {
       fetchConfigFailed: '加载邀请配置失败',
       fetchWithdrawalsFailed: '加载提现申请失败',
@@ -279,13 +285,9 @@ export default {
       saveSuccess: '邀请配置已保存',
       saveFailed: '保存邀请配置失败：{message}',
       saveFailedShort: '保存失败',
-      approveConfirm: '确定通过这笔提现申请吗？',
       approveSuccess: '提现申请已通过',
-      approveFailed: '通过提现申请失败：{message}',
       approveFailedShort: '审核失败',
-      rejectConfirm: '确定拒绝这笔提现申请吗？',
       rejectSuccess: '提现申请已拒绝',
-      rejectFailed: '拒绝提现申请失败：{message}',
       rejectFailedShort: '拒绝失败'
     }
   },
