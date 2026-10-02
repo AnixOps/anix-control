@@ -66,6 +66,12 @@ export function manualChunks(id) {
     return 'echarts'
   }
 
+  // The QR encoder loads only when a page draws a code (UiQrCode imports it
+  // on first use).
+  if (id.includes('/node_modules/uqr/')) {
+    return 'qr'
+  }
+
   if (id.includes('@antv')) {
     return 'g6'
   }

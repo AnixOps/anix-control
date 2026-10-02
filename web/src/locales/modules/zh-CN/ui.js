@@ -32,6 +32,12 @@ export default {
       search: '搜索',
       empty: '没有匹配的选项'
     },
+    otp: {
+      digit: '第 {n} 位，共 {total} 位'
+    },
+    qr: {
+      failed: '无法生成二维码'
+    },
     copy: {
       failed: '无法自动复制，已选中内容，请按 Ctrl+C 或 ⌘C 复制。'
     },

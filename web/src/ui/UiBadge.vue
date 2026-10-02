@@ -35,7 +35,11 @@ const text = computed(() => props.label || (statusLabelKey(props.status) ? t(sta
   padding: 0 var(--space-2);
   border-radius: var(--radius-pill);
   background: var(--fill-1);
-  color: var(--label-2);
+  /* Caption text on a tinted fill needs 4.5:1 wherever the badge sits (a
+     card, a grouped list, a selected row): each tone mixes its colour a
+     fifth of the way towards --label-1, which darkens it in light mode and
+     lightens it in dark mode. */
+  color: color-mix(in srgb, var(--label-2) 70%, var(--label-1));
   font-size: var(--type-caption-size);
   font-weight: var(--type-caption-weight);
   line-height: 1;
@@ -51,22 +55,22 @@ const text = computed(() => props.label || (statusLabelKey(props.status) ? t(sta
 
 .ui-badge--success {
   background: var(--success-soft);
-  color: var(--success);
+  color: color-mix(in srgb, var(--success) 78%, var(--label-1));
 }
 
 .ui-badge--warning {
   background: var(--warning-soft);
-  color: var(--warning);
+  color: color-mix(in srgb, var(--warning) 78%, var(--label-1));
 }
 
 .ui-badge--danger {
   background: var(--danger-soft);
-  color: var(--danger);
+  color: color-mix(in srgb, var(--danger) 78%, var(--label-1));
 }
 
 .ui-badge--info {
   background: var(--accent-soft);
-  color: var(--accent);
+  color: color-mix(in srgb, var(--accent) 78%, var(--label-1));
 }
 
 @media (forced-colors: active) {

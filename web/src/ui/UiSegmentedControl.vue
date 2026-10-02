@@ -96,7 +96,8 @@ function onUpdate(value) {
   border: 0;
   border-radius: var(--radius-pill);
   background: transparent;
-  color: var(--label-2);
+  /* 4.5:1 on the track's fill over any page background. */
+  color: color-mix(in srgb, var(--label-2) 85%, var(--label-1));
   font-family: inherit;
   font-size: var(--type-callout-size);
   font-weight: var(--weight-medium);

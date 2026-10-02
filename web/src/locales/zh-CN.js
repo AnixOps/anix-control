@@ -7,6 +7,7 @@ import adminMonitor from './modules/zh-CN/adminMonitor'
 import adminTrafficHourly from './modules/zh-CN/adminTrafficHourly'
 import ui from './modules/zh-CN/ui'
 import shell from './modules/zh-CN/shell'
+import userPages from './modules/zh-CN/userPages'
 import { AGENT_NAME, CONTROL_NAME } from '../constants/brand'
 
 const legacy = {
@@ -100,6 +101,7 @@ export default {
   ...adminTrafficHourly,
   ...ui,
   ...shell,
+  ...userPages,
   common: {
     locale: {
       label: '语言',
