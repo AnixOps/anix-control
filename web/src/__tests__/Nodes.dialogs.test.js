@@ -234,14 +234,13 @@ describe('Nodes dialogs and feedback', () => {
     }
   })
 
-  it('opens the logs as a side sheet', async () => {
+  it('opens the logs in a dialog that closes with Esc', async () => {
     const user = userEvent.setup()
     api.getNodeLogs.mockResolvedValue({ data: { list: [{ id: 1, level: 'error', source: 'xray', message: 'listen failed', created_at: 1790000000 }], total: 1 } })
     await renderPage()
     await user.click(rowButton('Logs'))
-    const sheet = await screen.findByRole('dialog', { name: /hk-01/ })
-    expect(sheet.classList.contains('ui-sheet')).toBe(true)
-    expect(await within(sheet).findByText('listen failed')).toBeTruthy()
+    const dialog = await screen.findByRole('dialog', { name: /hk-01/ })
+    expect(await within(dialog).findByText('listen failed')).toBeTruthy()
     await user.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   })

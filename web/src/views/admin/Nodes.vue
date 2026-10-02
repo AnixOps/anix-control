@@ -166,32 +166,32 @@
     >
         <div class="dialog-fields">
           <div class="form-group">
-            <label>{{ t('admin.nodes.nodeModal.fields.name') }}</label>
-            <input v-model="nodeForm.name" type="text" :placeholder="t('admin.nodes.nodeModal.placeholders.name')" />
+            <label for="node-form-name">{{ t('admin.nodes.nodeModal.fields.name') }}</label>
+            <input id="node-form-name" v-model="nodeForm.name" type="text" :placeholder="t('admin.nodes.nodeModal.placeholders.name')" />
           </div>
           <div class="form-group">
-            <label>{{ t('admin.nodes.nodeModal.fields.address') }}</label>
-            <input v-model="nodeForm.address" type="text" :placeholder="t('admin.nodes.nodeModal.placeholders.address')" />
+            <label for="node-form-address">{{ t('admin.nodes.nodeModal.fields.address') }}</label>
+            <input id="node-form-address" v-model="nodeForm.address" type="text" :placeholder="t('admin.nodes.nodeModal.placeholders.address')" />
           </div>
           <div class="form-row">
             <div class="form-group">
-              <label>{{ t('admin.nodes.nodeModal.fields.rate') }}</label>
-              <input v-model.number="nodeForm.rate" type="number" step="0.1" min="0" :placeholder="t('admin.nodes.nodeModal.placeholders.rate')" />
+              <label for="node-form-rate">{{ t('admin.nodes.nodeModal.fields.rate') }}</label>
+              <input id="node-form-rate" v-model.number="nodeForm.rate" type="number" step="0.1" min="0" :placeholder="t('admin.nodes.nodeModal.placeholders.rate')" />
             </div>
             <div class="form-group">
-              <label>{{ t('admin.nodes.nodeModal.fields.sort') }}</label>
-              <input v-model.number="nodeForm.sort" type="number" :placeholder="t('admin.nodes.nodeModal.placeholders.sort')" />
+              <label for="node-form-sort">{{ t('admin.nodes.nodeModal.fields.sort') }}</label>
+              <input id="node-form-sort" v-model.number="nodeForm.sort" type="number" :placeholder="t('admin.nodes.nodeModal.placeholders.sort')" />
             </div>
           </div>
           <div class="form-group">
-            <label>{{ t('admin.nodes.nodeModal.fields.tags') }}</label>
-            <input v-model="nodeForm.tags" type="text" :placeholder="t('admin.nodes.nodeModal.placeholders.tags')" />
+            <label for="node-form-tags">{{ t('admin.nodes.nodeModal.fields.tags') }}</label>
+            <input id="node-form-tags" v-model="nodeForm.tags" type="text" :placeholder="t('admin.nodes.nodeModal.placeholders.tags')" />
           </div>
 
           <!-- 中转链路: 父节点 (落地节点为根, 转发节点为子, 支持多级) -->
           <div class="form-group">
-            <label>{{ t('admin.nodes.nodeModal.fields.parent') }}</label>
-            <select v-model="nodeForm.parent_id">
+            <label for="node-form-parent">{{ t('admin.nodes.nodeModal.fields.parent') }}</label>
+            <select id="node-form-parent" v-model="nodeForm.parent_id">
               <option :value="null">{{ t('admin.nodes.nodeModal.parentNone') }}</option>
               <option v-for="candidate in parentCandidates" :key="candidate.id" :value="candidate.id">
                 {{ candidate.name }} ({{ candidate.address || candidate.host }})
@@ -203,18 +203,18 @@
           <!-- 月流量限额: 每个节点独立统计, 超限只做标记不自动限制 -->
           <div class="form-row">
             <div class="form-group">
-              <label>{{ t('admin.nodes.nodeModal.fields.monthlyLimit') }}</label>
-              <input v-model.number="nodeForm.monthly_limit_gb" type="number" min="0" step="0.1" :placeholder="t('admin.nodes.nodeModal.placeholders.monthlyLimit')" />
+              <label for="node-form-monthlyLimit">{{ t('admin.nodes.nodeModal.fields.monthlyLimit') }}</label>
+              <input id="node-form-monthlyLimit" v-model.number="nodeForm.monthly_limit_gb" type="number" min="0" step="0.1" :placeholder="t('admin.nodes.nodeModal.placeholders.monthlyLimit')" />
             </div>
             <div class="form-group">
-              <label>{{ t('admin.nodes.nodeModal.fields.monthlyResetDay') }}</label>
-              <input v-model.number="nodeForm.monthly_reset_day" type="number" min="1" max="28" :placeholder="t('admin.nodes.nodeModal.placeholders.monthlyResetDay')" />
+              <label for="node-form-monthlyResetDay">{{ t('admin.nodes.nodeModal.fields.monthlyResetDay') }}</label>
+              <input id="node-form-monthlyResetDay" v-model.number="nodeForm.monthly_reset_day" type="number" min="1" max="28" :placeholder="t('admin.nodes.nodeModal.placeholders.monthlyResetDay')" />
             </div>
           </div>
 
           <div class="form-group" v-if="editingNode">
-            <label>{{ t('admin.nodes.nodeModal.fields.status') }}</label>
-            <select v-model.number="nodeForm.status">
+            <label for="node-form-status">{{ t('admin.nodes.nodeModal.fields.status') }}</label>
+            <select id="node-form-status" v-model.number="nodeForm.status">
               <option :value="0">{{ t('admin.nodes.statusText.pending') }}</option>
               <option :value="1">{{ t('admin.nodes.statusText.online') }}</option>
               <option :value="2">{{ t('admin.nodes.statusText.offline') }}</option>
@@ -254,7 +254,7 @@
           </div>
           <div class="auth-key-config">
             <label>{{ t('admin.nodes.authKeyModal.configHint') }}</label>
-            <pre class="config-block">{{ configSnippet }}</pre>
+            <pre class="config-block" tabindex="0" :aria-label="t('admin.nodes.authKeyModal.configHint')">{{ configSnippet }}</pre>
             <button class="btn btn-sm" :disabled="!pluginSupervisorCanaryReady" @click="copyConfig">{{ t('admin.nodes.authKeyModal.copyConfig') }}</button>
             <p v-if="deploySettings.pluginSupervisorEnabled && !pluginSupervisorCanaryReady" class="field-hint">
               {{ pluginSupervisorCanaryError }}
@@ -284,28 +284,28 @@
 
           <div class="deploy-settings-grid">
             <div class="form-group">
-              <label>{{ t('admin.nodes.deployModal.fields.panelApiHost') }}</label>
-              <input v-model.trim="deploySettings.panelApiHost" type="text" />
+              <label for="deploy-panelApiHost">{{ t('admin.nodes.deployModal.fields.panelApiHost') }}</label>
+              <input id="deploy-panelApiHost" v-model.trim="deploySettings.panelApiHost" type="text" />
             </div>
             <div class="form-group">
-              <label>{{ t('admin.nodes.deployModal.fields.grpcHost') }}</label>
-              <input v-model.trim="deploySettings.grpcHost" type="text" />
+              <label for="deploy-grpcHost">{{ t('admin.nodes.deployModal.fields.grpcHost') }}</label>
+              <input id="deploy-grpcHost" v-model.trim="deploySettings.grpcHost" type="text" />
             </div>
             <div class="form-group">
-              <label>{{ t('admin.nodes.deployModal.fields.grpcServerName') }}</label>
-              <input v-model.trim="deploySettings.grpcServerName" type="text" />
+              <label for="deploy-grpcServerName">{{ t('admin.nodes.deployModal.fields.grpcServerName') }}</label>
+              <input id="deploy-grpcServerName" v-model.trim="deploySettings.grpcServerName" type="text" />
             </div>
             <div class="form-group">
-              <label>{{ t('admin.nodes.deployModal.fields.amd64BinaryPath') }}</label>
-              <input v-model.trim="deploySettings.amd64BinaryPath" type="text" />
+              <label for="deploy-amd64BinaryPath">{{ t('admin.nodes.deployModal.fields.amd64BinaryPath') }}</label>
+              <input id="deploy-amd64BinaryPath" v-model.trim="deploySettings.amd64BinaryPath" type="text" />
             </div>
             <div class="form-group">
-              <label>{{ t('admin.nodes.deployModal.fields.arm64BinaryPath') }}</label>
-              <input v-model.trim="deploySettings.arm64BinaryPath" type="text" />
+              <label for="deploy-arm64BinaryPath">{{ t('admin.nodes.deployModal.fields.arm64BinaryPath') }}</label>
+              <input id="deploy-arm64BinaryPath" v-model.trim="deploySettings.arm64BinaryPath" type="text" />
             </div>
             <div class="form-group">
-              <label>{{ t('admin.nodes.deployModal.fields.coreType') }}</label>
-              <select v-model="deploySettings.coreType">
+              <label for="deploy-coreType">{{ t('admin.nodes.deployModal.fields.coreType') }}</label>
+              <select id="deploy-coreType" v-model="deploySettings.coreType">
                 <option value="xray">xray</option>
                 <option value="sing">sing</option>
               </select>
@@ -329,17 +329,17 @@
             </div>
             <template v-if="deploySettings.pluginSupervisorEnabled">
               <div class="form-group">
-                <label>{{ t('admin.nodes.deployModal.fields.pluginRoot') }}</label>
-                <input v-model.trim="deploySettings.pluginRoot" data-testid="plugin-root" type="text" />
+                <label for="deploy-pluginRoot">{{ t('admin.nodes.deployModal.fields.pluginRoot') }}</label>
+                <input id="deploy-pluginRoot" v-model.trim="deploySettings.pluginRoot" data-testid="plugin-root" type="text" />
               </div>
               <div class="form-group">
-                <label>{{ t('admin.nodes.deployModal.fields.pluginSocketDir') }}</label>
-                <input v-model.trim="deploySettings.pluginSocketDir" data-testid="plugin-socket-dir" type="text" />
+                <label for="deploy-pluginSocketDir">{{ t('admin.nodes.deployModal.fields.pluginSocketDir') }}</label>
+                <input id="deploy-pluginSocketDir" v-model.trim="deploySettings.pluginSocketDir" data-testid="plugin-socket-dir" type="text" />
               </div>
               <div class="form-group deploy-plugin-public-key">
-                <label>{{ t('admin.nodes.deployModal.fields.pluginOfficialPublicKey') }}</label>
+                <label for="deploy-pluginOfficialPublicKey">{{ t('admin.nodes.deployModal.fields.pluginOfficialPublicKey') }}</label>
                 <input
-                  v-model.trim="deploySettings.pluginOfficialPublicKey"
+                  id="deploy-pluginOfficialPublicKey" v-model.trim="deploySettings.pluginOfficialPublicKey"
                   data-testid="plugin-official-public-key"
                   type="text"
                   autocomplete="off"
@@ -354,7 +354,7 @@
           <div v-if="deployError" class="form-error">{{ deployError }}</div>
           <div v-if="deployLoading" class="empty-message">{{ t('admin.nodes.deployModal.loading') }}</div>
 
-          <div v-else class="dialog-table-wrap">
+          <div v-else class="dialog-table-wrap" tabindex="0" role="region" :aria-label="t('admin.nodes.deployModal.title')">
           <table class="table deploy-table">
             <thead>
               <tr>
@@ -370,29 +370,29 @@
             </thead>
             <tbody>
               <tr v-for="row in deployRows" :key="row.id">
-                <td><input v-model.trim="row.alias" type="text" /></td>
+                <td><input v-model.trim="row.alias" :aria-label="`${t('admin.nodes.deployModal.table.alias')} · ${row.name}`" type="text" /></td>
                 <td>
                   <strong>{{ row.name }}</strong>
                   <div class="deploy-meta">ID {{ row.nodeId }}</div>
                 </td>
-                <td><input v-model.trim="row.host" type="text" /></td>
-                <td><input v-model.number="row.sshPort" type="number" min="1" max="65535" /></td>
-                <td><input v-model.trim="row.sshUser" type="text" /></td>
+                <td><input v-model.trim="row.host" :aria-label="`${t('admin.nodes.deployModal.table.sshHost')} · ${row.name}`" type="text" /></td>
+                <td><input v-model.number="row.sshPort" :aria-label="`${t('admin.nodes.deployModal.table.port')} · ${row.name}`" type="number" min="1" max="65535" /></td>
+                <td><input v-model.trim="row.sshUser" :aria-label="`${t('admin.nodes.deployModal.table.user')} · ${row.name}`" type="text" /></td>
                 <td>
-                  <select v-model="row.arch">
+                  <select v-model="row.arch" :aria-label="`${t('admin.nodes.deployModal.table.arch')} · ${row.name}`">
                     <option value="amd64">amd64</option>
                     <option value="arm64">arm64</option>
                   </select>
                 </td>
                 <td>
-                  <select v-model="row.authMode">
+                  <select v-model="row.authMode" :aria-label="`${t('admin.nodes.deployModal.table.authMode')} · ${row.name}`">
                     <option value="password">{{ t('admin.nodes.deployModal.authModes.password') }}</option>
                     <option value="key">{{ t('admin.nodes.deployModal.authModes.key') }}</option>
                   </select>
                 </td>
                 <td>
                   <input
-                    v-model.trim="row.authValue"
+                    v-model.trim="row.authValue" :aria-label="`${t('admin.nodes.deployModal.table.authValue')} · ${row.name}`"
                     :type="row.authMode === 'password' ? 'password' : 'text'"
                     :placeholder="row.authMode === 'password' ? t('admin.nodes.deployModal.placeholders.password') : t('admin.nodes.deployModal.placeholders.privateKey')"
                   />
@@ -411,14 +411,14 @@
                 <strong>inventory.ini</strong>
                 <button class="btn btn-sm btn-secondary" @click="copyDeployText(deployInventoryPreview)">{{ t('common.actions.copy') }}</button>
               </div>
-              <textarea readonly rows="9" :value="deployInventoryPreview"></textarea>
+              <textarea readonly rows="9" :value="deployInventoryPreview" aria-label="inventory.ini"></textarea>
             </div>
             <div class="deploy-output-panel">
               <div class="deploy-output-head">
                 <strong>group_vars/all.yml</strong>
                 <button class="btn btn-sm btn-secondary" @click="copyDeployText(deployGroupVarsPreview)">{{ t('common.actions.copy') }}</button>
               </div>
-              <textarea readonly rows="9" :value="deployGroupVarsPreview"></textarea>
+              <textarea readonly rows="9" :value="deployGroupVarsPreview" aria-label="group_vars/all.yml"></textarea>
             </div>
           </div>
 
@@ -427,7 +427,7 @@
               <strong>{{ t('admin.nodes.deployModal.commandsLabel') }}</strong>
               <button class="btn btn-sm btn-secondary" @click="copyDeployText(deployCommandsPreview)">{{ t('common.actions.copy') }}</button>
             </div>
-            <textarea readonly rows="6" :value="deployCommandsPreview"></textarea>
+            <textarea readonly rows="6" :value="deployCommandsPreview" :aria-label="t('admin.nodes.deployModal.commandsLabel')"></textarea>
           </div>
         </div>
       <template #footer="{ close }">
@@ -435,8 +435,8 @@
       </template>
     </UiDialog>
 
-    <!-- Node log sheet -->
-    <UiSheet
+    <!-- Node log dialog (wide: four columns of log rows) -->
+    <UiDialog
       :open="showLogModal"
       size="lg"
       :title="t('admin.nodes.logModal.title', { name: logNode?.name || '-' })"
@@ -444,7 +444,7 @@
     >
         <div class="dialog-fields">
           <div class="log-toolbar">
-            <select v-model="logFilter.level">
+            <select v-model="logFilter.level" :aria-label="t('admin.nodes.logModal.table.level')">
               <option value="">{{ t('admin.nodes.logModal.filters.allLevels') }}</option>
               <option v-for="level in logLevels" :key="level" :value="level">
                 {{ getLogLevelLabel(level) }}
@@ -453,11 +453,13 @@
             <input
               v-model.trim="logFilter.source"
               type="text"
+              :aria-label="t('admin.nodes.logModal.table.source')"
               :placeholder="t('admin.nodes.logModal.filters.sourcePlaceholder')"
             />
             <input
               v-model.trim="logFilter.search"
               type="text"
+              :aria-label="t('admin.nodes.logModal.filters.searchPlaceholder')"
               :placeholder="t('admin.nodes.logModal.filters.searchPlaceholder')"
               @keyup.enter="refreshLogs"
             />
@@ -468,7 +470,7 @@
 
           <div v-if="logLoading" class="empty-message">{{ t('admin.nodes.logModal.loading') }}</div>
 
-          <div v-else-if="nodeLogs.length > 0" class="dialog-table-wrap">
+          <div v-else-if="nodeLogs.length > 0" class="dialog-table-wrap" tabindex="0" role="region" :aria-label="t('admin.nodes.logModal.title', { name: logNode?.name || '-' })">
           <table class="table node-log-table">
             <thead>
               <tr>
@@ -517,7 +519,10 @@
             </button>
           </div>
         </div>
-    </UiSheet>
+      <template #footer="{ close }">
+        <UiButton @click="close">{{ t('common.actions.close') }}</UiButton>
+      </template>
+    </UiDialog>
 
     <!-- Protocol management sheet -->
     <UiSheet
@@ -533,7 +538,7 @@
             </button>
           </div>
 
-          <div v-if="protocols.length > 0" class="dialog-table-wrap">
+          <div v-if="protocols.length > 0" class="dialog-table-wrap" tabindex="0" role="region" :aria-label="t('admin.nodes.protocolModal.title', { name: selectedNode?.name || '-' })">
           <table class="table">
             <thead>
               <tr>
@@ -2596,9 +2601,11 @@ onMounted(async () => {
 }
 
 .status-pending { background: var(--accent-soft); color: var(--accent); }
-.status-online { background: rgba(34, 197, 94, 0.2); color: var(--success-color); }
-.status-offline { background: rgba(239, 68, 68, 0.2); color: var(--error-color); }
-.status-disabled { background: rgba(161, 161, 170, 0.2); color: var(--text-secondary); }
+/* Small tinted chips: the word carries the state, the tint supports it; text
+   stays --label-1 so 12 px text keeps 4.5:1 on every tint in both themes. */
+.status-online { background: var(--success-soft); color: var(--label-1); }
+.status-offline { background: var(--danger-soft); color: var(--label-1); }
+.status-disabled { background: var(--fill-1); color: var(--label-2); }
 
 .runtime-health-badge {
   display: inline-block;
@@ -2636,12 +2643,12 @@ onMounted(async () => {
 .btn-primary:hover { background: var(--accent-fill-hover); transform: translateY(-1px); }
 .btn-secondary { background: var(--surface-color); color: var(--text-color); border: 1px solid var(--border-color); }
 .btn-secondary:hover { background: var(--surface-hover); border-color: var(--text-secondary); }
-.btn-info { background: #0ea5e9; color: white; }
-.btn-info:hover { background: #0284c7; }
-.btn-warning { background: var(--warning-color); color: white; }
-.btn-warning:hover { background: #d97706; }
-.btn-danger { background: var(--error-color); color: white; }
-.btn-danger:hover { background: #dc2626; }
+.btn-info { background: var(--accent-soft); color: var(--label-1); }
+.btn-info:hover { background: var(--accent-fill); color: var(--on-accent); }
+.btn-warning { background: var(--warning-soft); color: var(--label-1); }
+.btn-warning:hover { background: var(--fill-2); color: var(--label-1); }
+.btn-danger { background: var(--danger-soft); color: var(--label-1); }
+.btn-danger:hover { background: var(--danger-fill); color: var(--on-danger); }
 
 .btn-sm { padding: 6px 12px; font-size: 12px; }
 
@@ -2668,9 +2675,23 @@ onMounted(async () => {
 }
 
 /* Dialog and sheet content (UiDialog / UiSheet bodies) */
+/* One wrapper per dialog body. Wide tables scroll inside their own wrapper;
+   inline-size containment keeps their width out of the dialog's intrinsic
+   size, which UiDialog's centring grid would otherwise grow to on phones. */
+.dialog-fields {
+  min-width: 0;
+  contain: inline-size;
+}
+
 .dialog-table-wrap {
   max-width: 100%;
   overflow-x: auto;
+}
+
+.dialog-table-wrap:focus-visible,
+.config-block:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .form-error {
@@ -2916,13 +2937,13 @@ onMounted(async () => {
 }
 
 .json-status.valid {
-  background: rgba(34, 197, 94, 0.15);
-  color: var(--success-color);
+  background: var(--success-soft);
+  color: var(--label-1);
 }
 
 .json-status.invalid {
-  background: rgba(239, 68, 68, 0.15);
-  color: var(--error-color);
+  background: var(--danger-soft);
+  color: var(--label-1);
 }
 
 /* Advanced details */
@@ -2972,15 +2993,6 @@ onMounted(async () => {
     grid-template-columns: 1fr;
   }
 
-  .deploy-summary {
-    flex-direction: column;
-  }
-
-  .deploy-settings-grid,
-  .deploy-output-grid {
-    grid-template-columns: 1fr;
-  }
-
   .table-container {
     overflow-x: auto;
   }
@@ -2993,9 +3005,6 @@ onMounted(async () => {
     flex-direction: column;
   }
 
-  .log-toolbar {
-    grid-template-columns: 1fr;
-  }
 }
 
 /* Auth Key Modal */
@@ -3126,7 +3135,7 @@ onMounted(async () => {
 
 .log-toolbar {
   display: grid;
-  grid-template-columns: 160px 180px minmax(240px, 1fr) auto;
+  grid-template-columns: minmax(0, 150px) minmax(0, 160px) minmax(160px, 1fr) auto;
   gap: 12px;
   margin-bottom: 16px;
 }
@@ -3149,23 +3158,36 @@ onMounted(async () => {
   box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
 }
 
+/* After the base rules above, so the one-column layout wins on phones. */
+@media (max-width: 768px) {
+  .deploy-summary {
+    flex-direction: column;
+  }
+
+  .deploy-settings-grid,
+  .deploy-output-grid,
+  .log-toolbar {
+    grid-template-columns: 1fr;
+  }
+}
+
 .node-log-table {
   table-layout: fixed;
 }
 
 .node-log-table th:nth-child(1),
 .node-log-table td:nth-child(1) {
-  width: 180px;
+  width: 150px;
 }
 
 .node-log-table th:nth-child(2),
 .node-log-table td:nth-child(2) {
-  width: 120px;
+  width: 100px;
 }
 
 .node-log-table th:nth-child(3),
 .node-log-table td:nth-child(3) {
-  width: 160px;
+  width: 120px;
 }
 
 .log-time,
@@ -3225,23 +3247,23 @@ onMounted(async () => {
 }
 
 .log-level-debug {
-  background: rgba(148, 163, 184, 0.2);
-  color: #cbd5e1;
+  background: var(--fill-1);
+  color: var(--label-2);
 }
 
 .log-level-info {
-  background: rgba(59, 130, 246, 0.16);
-  color: #93c5fd;
+  background: var(--accent-soft);
+  color: var(--label-1);
 }
 
 .log-level-warning {
-  background: rgba(245, 158, 11, 0.18);
-  color: #fbbf24;
+  background: var(--warning-soft);
+  color: var(--label-1);
 }
 
 .log-level-error {
-  background: rgba(239, 68, 68, 0.18);
-  color: #fca5a5;
+  background: var(--danger-soft);
+  color: var(--label-1);
 }
 
 .log-pagination {
