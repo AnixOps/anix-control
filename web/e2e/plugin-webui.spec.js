@@ -263,19 +263,23 @@ test('groups signed extension menus by parent and sorts each parent bucket', asy
   await page.goto('/admin/dashboard')
   await expect(page.locator('a[href="/admin/extensions/service-a"]')).toBeVisible()
 
-  const parents = await page.locator('section[data-extension-parent]').evaluateAll(sections => (
-    sections.map(section => section.getAttribute('data-extension-parent'))
+  // U3 shell: plugin menus merge into the sidebar group their parent maps to
+  // (services, operations and unknown parents -> Extensions; system -> System),
+  // after the built-in items and sorted by order within each group.
+  const nav = page.getByRole('navigation', { name: 'Admin navigation' })
+  const extensionHrefs = list => list.getByRole('link').evaluateAll(links => (
+    links.map(link => link.getAttribute('href')).filter(href => href.startsWith('/admin/extensions/'))
   ))
-  expect(parents).toEqual(['services', 'operations', 'system', 'extensions'])
-
-  const serviceLinks = await page.locator('section[data-extension-parent="services"] a.nav-link').evaluateAll(links => (
-    links.map(link => link.getAttribute('href'))
-  ))
-  expect(serviceLinks).toEqual([
+  expect(await extensionHrefs(nav.getByRole('list', { name: 'Extensions', exact: true }))).toEqual([
     '/admin/extensions/service-b',
     '/admin/extensions/service-a',
+    '/admin/extensions/operation',
+    '/admin/extensions/legacy',
   ])
-  await expect(page.locator('section[data-extension-parent="extensions"] a[href="/admin/extensions/legacy"]')).toBeVisible()
+  expect(await extensionHrefs(nav.getByRole('list', { name: 'System', exact: true }))).toEqual([
+    '/admin/extensions/system',
+  ])
+  expect(await extensionHrefs(nav)).toHaveLength(fixtures.length)
 })
 
 test('disabled and tampered plugins fail closed without contaminating core admin UI', async ({ page }) => {
@@ -307,7 +311,7 @@ test('disabled and tampered plugins fail closed without contaminating core admin
   await expect(page.locator('.page-toolbar h1')).toHaveText('Dashboard')
   await expect(page.locator('a[href="/admin/extensions/disabled-fixture"]')).toHaveCount(0)
   await expect(page.locator('a[href="/admin/extensions/tampered-fixture"]')).toHaveCount(0)
-  await expect(page.locator('a[href="/admin/dashboard"]')).toBeVisible()
+  await expect(page.getByRole('navigation', { name: 'Admin navigation' }).getByRole('link', { name: 'Dashboard', exact: true })).toBeVisible()
 
   expect(assetRequests).toEqual([
     `/api/v3/extensions/tampered-fixture/1.0.0/webui/${tampered.bundle.sha256}/index.mjs`,
@@ -316,5 +320,5 @@ test('disabled and tampered plugins fail closed without contaminating core admin
   await page.goto('/admin/extensions/tampered-fixture')
   await expect(page).toHaveURL(/\/admin\/plugins$/)
   await expect(page.locator('.page-header h1')).toHaveText('Plugins')
-  await expect(page.locator('a[href="/admin/dashboard"]')).toBeVisible()
+  await expect(page.getByRole('navigation', { name: 'Admin navigation' }).getByRole('link', { name: 'Dashboard', exact: true })).toBeVisible()
 })
