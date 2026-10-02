@@ -289,13 +289,19 @@ export default {
     title: 'Forward Setup Wizard',
     subtitle: 'Create a node, tunnel and forward step by step without jumping between pages',
     loading: 'Loading runtime mode…',
+    stepsLabel: 'Setup steps',
+    stepCount: 'Step {current} of {total}',
+    stepDone: ' (done)',
+    back: 'Back',
+    next: 'Next',
     shared: {
       existingLabel: 'Existing records you can reuse',
       useExisting: 'Use existing'
     },
     steps: {
       mode: {
-        title: 'Step 1: Choose forward mode',
+        title: 'Choose forward mode',
+        chooseLabel: 'Forward mode',
         intro: 'Pick a forward mode — the runtime backend and tunnel type are configured automatically, so you don\'t need to understand either concept separately.',
         cards: {
           local: {
@@ -316,23 +322,23 @@ export default {
         confirmAndContinue: 'Confirm and continue'
       },
       machine: {
-        title: 'Step 2: Machine/Node',
+        title: 'Machine or node',
         intro: 'Register an execution machine or node first — the tunnel step will use it.',
         createAndContinue: 'Create and continue'
       },
       node: {
         intro: 'Register a NodeX node first — the tunnel step will use it.',
         createAndContinue: 'Create and continue',
-        tokenShownOnce: 'API token of node "{name}". Copy it now, it is not shown again: {token}'
+        tokenNotice: 'This is the API token of node "{name}". It is shown only once: copy it now.'
       },
       tunnel: {
-        title: 'Step 3: Tunnel',
+        title: 'Tunnel',
         intro: 'Create a tunnel based on the node from the previous step. A tunnel is required for forwards.',
         inheritedNodeHint: 'The node from the previous step is filled in automatically.',
         createAndContinue: 'Create and continue'
       },
       forward: {
-        title: 'Step 4: Forward',
+        title: 'Forward',
         intro: 'Create the actual forward entry based on the tunnel from the previous step. Just fill in the remote address.',
         inheritedTunnelHint: 'The tunnel from the previous step is filled in automatically.',
         createAndFinish: 'Create and finish'
@@ -340,6 +346,7 @@ export default {
       done: {
         title: 'Done',
         summary: 'Forward "{name}" was created successfully — the chain is now live.',
+        nextTitle: 'What next',
         gotoForward: 'Go to forward management',
         gotoTunnel: 'Go to tunnel management',
         gotoNode: 'Go to machine/node management',
@@ -650,12 +657,10 @@ export default {
       portRange: 'Allowed range: {start} - {end}',
       portHintNodeX: 'Leaving the port empty lets the panel allocate one from the tunnel entry-node range.',
       portHintLocal: 'Leaving the port empty lets the panel allocate one on the selected execution node.',
+      runtimeLinks: 'Runtime pages',
       loading: 'Loading forwards and tunnels...',
       view: {
-        switchToDirectTitle: 'Switch to direct view',
-        switchToGroupedTitle: 'Switch to grouped view',
-        directShort: 'D',
-        groupedShort: 'G',
+        label: 'View',
         directLabel: 'Direct',
         groupedLabel: 'Grouped'
       },
@@ -666,17 +671,16 @@ export default {
         edit: 'Edit',
         diagnose: 'Diagnose',
         delete: 'Delete',
-        copyAll: 'Copy All'
+        copyAll: 'Copy All',
+        more: 'More actions',
+        moveUp: 'Move up',
+        moveDown: 'Move down'
       },
       bulk: {
-        selected: '{count} selected',
-        selectAll: 'Select all forwards',
-        selectRule: 'Select {name}',
         resume: 'Resume',
         pause: 'Pause',
         export: 'Export',
-        delete: 'Delete',
-        clear: 'Clear'
+        delete: 'Delete'
       },
       filters: {
         search: 'Search',
@@ -684,28 +688,27 @@ export default {
         tunnel: 'Tunnel',
         allTunnels: 'All tunnels',
         status: 'Status',
-        allStatuses: 'All statuses',
         running: 'Running',
         paused: 'Paused',
-        error: 'Error',
-        clear: 'Reset',
-        emptyTitle: 'No matching forwards',
-        emptyText: 'Adjust the search, tunnel or status filters to show more rules.'
+        error: 'Error'
       },
       table: {
-        rule: 'Rule / Tunnel',
+        label: 'Forward rules',
+        ruleName: 'Rule',
+        tunnel: 'Tunnel',
         ingress: 'Ingress',
         target: 'Target',
         policy: 'Policy',
         status: 'Status',
         traffic: 'Traffic',
-        actions: 'Actions'
+        copyAddress: 'Copy {title}: {address}',
+        toggleService: 'Forwarding service of {name}'
       },
       group: {
-        eyebrow: 'User',
         userTag: 'User',
         summary: '{tunnels} tunnels, {forwards} forwards',
-        tunnelMeta: 'Tunnel #{id}'
+        tunnelMeta: 'Tunnel #{id}',
+        runningCount: '{running} of {total} running'
       },
       emptyGroupedTitle: 'No forwards yet',
       emptyGroupedText: 'There are no flux-panel-compatible forward records in the current system yet.',
@@ -714,6 +717,7 @@ export default {
       editor: {
         titleEdit: 'Edit Forward',
         titleAdd: 'Create Forward',
+        description: 'Traffic enters through the tunnel and goes to the targets below.',
         fields: {
           name: 'Forward Name',
           tunnel: 'Tunnel',
@@ -743,7 +747,6 @@ export default {
       },
       addressModal: {
         copy: 'Copy',
-        copying: 'Copying...',
         titleWithCount: '{title} ({count})'
       },
       exportModal: {
@@ -751,11 +754,10 @@ export default {
         subtitle: 'Format: relay-panel compatible JSON: {\'[{ "dest": ["host:port"], "listen_port": 10086, "name": "Rule" }\'}]',
         tunnelLabel: 'Select Export Tunnel',
         tunnelPlaceholder: 'Please select a tunnel',
-        generating: 'Generating...',
         regenerate: 'Regenerate',
         generate: 'Generate Export Data',
-        noDataPlaceholder: 'No export data yet',
-        selectionHint: 'Exporting {count} selected forwards.'
+        selectionHint: 'Exporting {count} selected forwards.',
+        dataLabel: 'Export data'
       },
       importModal: {
         title: 'Import Forward Data',
@@ -786,7 +788,8 @@ export default {
         failedFallback: 'Diagnosis Failed',
         emptyTitle: 'No diagnosis data yet',
         emptyText: 'After you run a diagnosis, results aligned with the reference page will appear here.',
-        rerun: 'Run Again'
+        rerun: 'Run Again',
+        summary: '{passed} of {total} checks passed'
       },
       status: {
         normal: 'Healthy',
@@ -885,7 +888,6 @@ export default {
       card: {
         dragHandleTitle: 'Drag to reorder',
         ingressAddressTitle: 'Ingress address',
-        ingressLabel: 'Ingress',
         targetAddressTitle: 'Target address',
         targetLabel: 'Target'
       }
@@ -896,8 +898,8 @@ export default {
       modeLabelLocal: 'Active Runtime: Local / {backend}',
       modeSummaryNodeX: 'Ingress and egress semantics are controlled through NodeX/gost. Use NodeX Runtime for the control-plane URL, token and gost readiness.',
       modeSummaryLocal: 'Only the execution node identity is stored here. Use Local Runtime for inventory, playbooks and the panel-host ansible executor.',
-      modeCompatibilityHint: 'Tunnel cards below are evaluated against the currently active runtime. Legacy type-1 tunnels may stay schema-compatible with both runtimes, so use the compatibility badge instead of assuming ownership from stored fields.',
-      loading: 'Loading tunnels and nodes...',
+      modeCompatibilityHint: 'Tunnels below are evaluated against the currently active runtime. Legacy type-1 tunnels may stay schema-compatible with both runtimes, so use the compatibility badge instead of assuming ownership from stored fields.',
+      runtimeLinks: 'Runtime pages',
       emptyTitle: 'No tunnels yet.',
       emptyText: 'Create the required topology first, then add the first tunnel that forwards can reference.',
       actions: {
@@ -905,6 +907,11 @@ export default {
         edit: 'Edit',
         diagnose: 'Diagnose',
         delete: 'Delete'
+      },
+      table: {
+        label: 'Tunnels',
+        compatibility: 'Runtime compatibility',
+        status: 'Status'
       },
       meta: {
         ingressNode: 'Ingress node',
@@ -918,7 +925,6 @@ export default {
         titleAdd: 'Create tunnel',
         deleteConfirmMessage: 'Delete tunnel {name}?',
         deleteHint: 'If forward rules or user grants still use this tunnel, the delete is refused. This can’t be undone.',
-        submitLoading: 'Submitting...',
         submitUpdate: 'Update',
         submitCreate: 'Create',
         confirmDelete: 'Delete tunnel'
@@ -976,10 +982,10 @@ export default {
         loading: 'Diagnosing tunnel connectivity...',
         targetAddress: 'Target Address',
         duration: 'Duration',
-        message: 'Message',
         emptyTitle: 'No diagnosis results yet',
         emptyText: 'There is currently no diagnosis data to display.',
-        rerun: 'Run Again'
+        rerun: 'Run Again',
+        summary: '{passed} of {total} checks passed'
       },
       validation: {
         nameRequired: 'Please enter a tunnel name',
@@ -1497,7 +1503,11 @@ export default {
         edit: 'Edit',
         delete: 'Delete'
       },
-      loading: 'Loading limit rules...',
+      runtimeLinks: 'Runtime pages',
+      table: {
+        label: 'Limit rules',
+        status: 'Status'
+      },
       empty: {
         title: 'No limit rules yet',
         text: 'No limit rules have been created yet. Use the button above to create the first one.'

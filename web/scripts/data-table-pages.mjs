@@ -24,5 +24,9 @@ export const DATA_TABLE_PAGES = [
   // U7: forward nodes
   'src/views/admin/ForwardNodes.vue',
   'src/views/admin/forward-nodes/NodeXRulesPanel.vue',
-  'src/views/admin/forward-nodes/RuntimeJobsTable.vue'
+  'src/views/admin/forward-nodes/RuntimeJobsTable.vue',
+  // U7: forward suite
+  'src/views/admin/Forward.vue',
+  'src/views/admin/Tunnel.vue',
+  'src/views/admin/LimitI18n.vue'
 ]

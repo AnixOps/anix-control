@@ -1,95 +1,64 @@
 <template>
-  <div class="step-form">
+  <form id="wizard-step-form" class="step-form" novalidate @submit.prevent="handleSubmit">
     <p class="step-intro">{{ t('forwardWizard.steps.tunnel.intro') }}</p>
 
-    <div v-if="tunnels.length" class="existing-list">
-      <p class="existing-label">{{ t('forwardWizard.shared.existingLabel') }}</p>
-      <ul>
-        <li v-for="tunnel in tunnels" :key="tunnel.id" class="existing-item">
-          <div>
-            <strong>{{ tunnel.name }}</strong>
-            <span class="existing-meta">{{ tunnelTypeLabel(tunnel.type) }}</span>
-          </div>
-          <button class="btn btn-secondary btn-sm" @click="useExisting(tunnel)">
-            {{ t('forwardWizard.shared.useExisting') }}
-          </button>
-        </li>
-      </ul>
-    </div>
+    <WizardExistingList
+      v-if="tunnels.length"
+      :items="tunnels.map(tunnel => ({ ...tunnel, title: tunnel.name, meta: tunnelTypeLabel(tunnel.type) }))"
+      @use="useExisting"
+    />
 
     <div class="form-grid">
-      <label class="form-group">
-        <span>{{ t('runtime.tunnel.fields.name') }}</span>
-        <input v-model.trim="form.name" type="text" maxlength="50" :placeholder="t('runtime.tunnel.placeholders.name')" />
-        <p v-if="errors.name" class="form-error">{{ errors.name }}</p>
-      </label>
-      <label v-if="fixedType === null" class="form-group">
-        <span>{{ t('runtime.tunnel.fields.tunnelType') }}</span>
-        <select v-model.number="form.type" :disabled="!runtimeNodeXMode">
-          <option :value="1">{{ t('runtime.tunnel.options.portForward') }}</option>
-          <option :value="2">{{ t('runtime.tunnel.options.tunnelForward') }}</option>
-        </select>
-      </label>
-    </div>
-
-    <div class="form-grid">
-      <label class="form-group">
-        <span>{{ runtimeNodeXMode ? t('runtime.tunnel.meta.ingressNode') : t('runtime.tunnel.fields.executionNode') }}</span>
-        <select v-model.number="form.inNodeId" disabled>
-          <option :value="prefillNodeId">{{ prefillNodeLabel }}</option>
-        </select>
-        <p class="hint">{{ t('forwardWizard.steps.tunnel.inheritedNodeHint') }}</p>
-      </label>
-      <label class="form-group">
-        <span>{{ t('runtime.tunnel.fields.trafficRatio') }}</span>
-        <input v-model.number="form.trafficRatio" type="number" min="0.1" max="100" step="0.1" />
-      </label>
+      <UiTextField v-model.trim="form.name" :label="t('runtime.tunnel.fields.name')" :placeholder="t('runtime.tunnel.placeholders.name')" :error="errors.name" maxlength="50" required size="md" />
+      <UiSelect
+        v-if="fixedType === null"
+        :model-value="Number(form.type)"
+        :label="t('runtime.tunnel.fields.tunnelType')"
+        :options="typeOptions"
+        :disabled="!runtimeNodeXMode"
+        size="md"
+        @update:model-value="value => { form.type = Number(value) }"
+      />
+      <UiTextField
+        :model-value="prefillNodeLabel"
+        :label="runtimeNodeXMode ? t('runtime.tunnel.meta.ingressNode') : t('runtime.tunnel.fields.executionNode')"
+        :help="t('forwardWizard.steps.tunnel.inheritedNodeHint')"
+        readonly
+        size="md"
+      />
+      <UiNumberField
+        v-model="form.trafficRatio"
+        :label="t('runtime.tunnel.fields.trafficRatio')"
+        :min="0.1"
+        :max="100"
+        :step="0.1"
+        :format-options="{ useGrouping: false, maximumFractionDigits: 2 }"
+        unit="x"
+        size="md"
+      />
     </div>
 
     <div v-if="runtimeNodeXMode && effectiveType === 2" class="form-grid">
-      <label class="form-group">
-        <span>{{ t('runtime.tunnel.fields.protocol') }}</span>
-        <select v-model="form.protocol">
-          <option value="tls">tls</option>
-          <option value="tcp">tcp</option>
-          <option value="udp">udp</option>
-          <option value="ws">ws</option>
-          <option value="wss">wss</option>
-          <option value="grpc">grpc</option>
-          <option value="quic">quic</option>
-        </select>
-      </label>
-      <label class="form-group">
-        <span>{{ t('runtime.tunnel.fields.egressNode') }}</span>
-        <select v-model.number="form.outNodeId">
-          <option :value="0">{{ t('runtime.tunnel.validation.egressRequired') }}</option>
-          <option v-for="node in exitNodeOptions" :key="node.id" :value="node.id">
-            {{ node.name }} · {{ node.host }}
-          </option>
-        </select>
-        <p v-if="errors.outNodeId" class="form-error">{{ errors.outNodeId }}</p>
-      </label>
+      <UiSelect v-model="form.protocol" :label="t('runtime.tunnel.fields.protocol')" :options="protocolOptions" size="md" />
+      <UiSelect
+        :model-value="form.outNodeId || undefined"
+        :label="t('runtime.tunnel.fields.egressNode')"
+        :placeholder="t('runtime.tunnel.validation.egressRequired')"
+        :options="exitNodeSelectOptions"
+        :error="errors.outNodeId"
+        required
+        size="md"
+        @update:model-value="value => { form.outNodeId = Number(value) || 0 }"
+      />
     </div>
 
     <div class="form-grid">
-      <label class="form-group">
-        <span>{{ t('runtime.tunnel.fields.tcpListenAddr') }}</span>
-        <input v-model.trim="form.tcpListenAddr" type="text" placeholder="[::]" />
-      </label>
-      <label class="form-group">
-        <span>{{ t('runtime.tunnel.fields.udpListenAddr') }}</span>
-        <input v-model.trim="form.udpListenAddr" type="text" placeholder="[::]" />
-      </label>
+      <UiTextField v-model.trim="form.tcpListenAddr" :label="t('runtime.tunnel.fields.tcpListenAddr')" placeholder="[::]" size="md" />
+      <UiTextField v-model.trim="form.udpListenAddr" :label="t('runtime.tunnel.fields.udpListenAddr')" placeholder="[::]" size="md" />
     </div>
 
-    <p v-if="submitError" class="form-error">{{ submitError }}</p>
-
-    <div class="step-actions">
-      <button class="btn btn-primary" :disabled="submitLoading" @click="handleSubmit">
-        {{ submitLoading ? t('runtime.tunnel.modal.submitLoading') : t('forwardWizard.steps.tunnel.createAndContinue') }}
-      </button>
-    </div>
-  </div>
+    <p v-if="submitError" class="form-error" role="alert">{{ submitError }}</p>
+  </form>
 </template>
 
 <script setup>
@@ -102,6 +71,10 @@ import {
   getForwardNodes,
   getSystemConfig
 } from '@/api/admin'
+import UiNumberField from '@/ui/UiNumberField.vue'
+import UiSelect from '@/ui/UiSelect.vue'
+import UiTextField from '@/ui/UiTextField.vue'
+import WizardExistingList from './WizardExistingList.vue'
 
 const props = defineProps({
   prefillNodeId: { type: Number, required: true },
@@ -279,6 +252,16 @@ async function handleSubmit() {
   }
 }
 
+const typeOptions = computed(() => [
+  { value: 1, label: t('runtime.tunnel.options.portForward') },
+  { value: 2, label: t('runtime.tunnel.options.tunnelForward') }
+])
+const protocolOptions = ['tls', 'tcp', 'udp', 'ws', 'wss', 'grpc', 'quic']
+const exitNodeSelectOptions = computed(() => exitNodeOptions.value.map(node => ({ value: node.id, label: `${node.name} · ${node.host}` })))
+
+// The wizard footer reads these (UI U7: 上一步 / 下一步 at the bottom).
+defineExpose({ submit: handleSubmit, busy: submitLoading, canSubmit: true, primaryLabel: computed(() => t('forwardWizard.steps.tunnel.createAndContinue')) })
+
 onMounted(async () => {
   await loadRuntimeMode()
   form.inNodeId = runtimeNodeXMode.value ? props.prefillNodeId : props.prefillNodeId
@@ -287,24 +270,18 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.step-form { display: flex; flex-direction: column; gap: 16px; }
-.step-intro { margin: 0; color: var(--text-secondary); line-height: 1.6; }
-.existing-list { border: 1px solid var(--border-color); border-radius: 14px; padding: 12px 14px; background: var(--bg-color); }
-.existing-label { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-secondary); }
-.existing-list ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.existing-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.existing-meta { margin-left: 8px; color: var(--text-secondary); font-size: 13px; }
-.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-.form-group { display: flex; flex-direction: column; gap: 8px; }
-.form-group input, .form-group select { border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-color); color: var(--text-color); padding: 12px 14px; }
-.hint { margin: 0; font-size: 12px; color: var(--text-secondary); }
-.form-error { margin: 0; color: #b91c1c; }
-.step-actions { display: flex; justify-content: flex-end; }
-.btn { display: inline-flex; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: 12px; padding: 10px 16px; cursor: pointer; }
-.btn-primary { background: var(--accent-fill); color: var(--on-accent); }
-.btn-secondary { background: var(--surface-color); color: var(--text-color); border-color: var(--border-color); }
-.btn-sm { padding: 6px 12px; font-size: 12px; }
-@media (max-width: 720px) {
-  .form-grid { grid-template-columns: 1fr; }
+.step-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.step-intro {
+  margin: 0;
+  color: var(--label-2);
+}
+
+.form-error {
+  margin: 0;
 }
 </style>

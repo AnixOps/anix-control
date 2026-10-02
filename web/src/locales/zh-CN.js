@@ -289,59 +289,66 @@ export default {
   },
   forwardWizard: {
     title: '转发配置向导',
-    subtitle: '按步骤创建节点、隧道和转发,不用在多个页面之间来回跳转',
+    subtitle: '按步骤创建节点、隧道和转发，不用在多个页面之间来回跳转',
     loading: '正在加载运行模式…',
+    stepsLabel: '配置步骤',
+    stepCount: '第 {current} 步，共 {total} 步',
+    stepDone: '（已完成）',
+    back: '上一步',
+    next: '下一步',
     shared: {
       existingLabel: '已有可复用的记录',
       useExisting: '使用现有'
     },
     steps: {
       mode: {
-        title: '第一步:选择转发方式',
-        intro: '选一种转发方式,系统会自动配置好对应的运行时后端和隧道类型,无需分别理解这两个概念。',
+        title: '选择转发方式',
+        chooseLabel: '转发方式',
+        intro: '选一种转发方式，系统会自动配置好对应的运行时后端和隧道类型，无需分别理解这两个概念。',
         cards: {
           local: {
             label: '本地端口转发',
-            description: '直接在 Ansible 管理的机器上转发,无需中转节点。'
+            description: '直接在 Ansible 管理的机器上转发，无需中转节点。'
           },
           gostSingle: {
             label: '中转 · 单节点转发',
-            description: '通过一个 NodeX 节点转发,不做协议封装。'
+            description: '通过一个 NodeX 节点转发，不做协议封装。'
           },
           gostTunnel: {
             label: '中转 · 隧道转发',
-            description: '跨入口/出口两个节点转发,支持协议隐藏(tls/ws/grpc 等)。'
+            description: '跨入口/出口两个节点转发，支持协议隐藏(tls/ws/grpc 等)。'
           }
         },
         currentBadge: '当前生效',
-        nodeXSetupHint: '首次使用中转转发,需要先填写 NodeX 控制面信息才能继续。',
+        nodeXSetupHint: '首次使用中转转发，需要先填写 NodeX 控制面信息才能继续。',
         confirmAndContinue: '确认并继续'
       },
       machine: {
-        title: '第二步:机器/节点',
-        intro: '先注册一台执行机器或节点,后面的隧道会用到它。',
+        title: '机器或节点',
+        intro: '先注册一台执行机器或节点，后面的隧道会用到它。',
         createAndContinue: '创建并继续'
       },
       node: {
-        intro: '先注册一个 NodeX 节点,后面的隧道会用到它。',
+        intro: '先注册一个 NodeX 节点，后面的隧道会用到它。',
         createAndContinue: '创建并继续',
-        tokenShownOnce: '节点「{name}」的 API Token,请立即复制,之后不再显示:{token}'
+        tokenNotice: '这是节点「{name}」的 API Token，只显示这一次，请立即复制。'
       },
       tunnel: {
-        title: '第三步:隧道',
-        intro: '基于上一步的节点创建隧道,隧道是转发条目的必选项。',
-        inheritedNodeHint: '已自动带入上一步创建的节点,无需重复选择。',
+        title: '隧道',
+        intro: '基于上一步的节点创建隧道，隧道是转发条目的必选项。',
+        inheritedNodeHint: '已自动带入上一步创建的节点，无需重复选择。',
         createAndContinue: '创建并继续'
       },
       forward: {
-        title: '第四步:转发',
-        intro: '基于上一步的隧道创建实际的转发条目,填好目标地址即可生效。',
-        inheritedTunnelHint: '已自动带入上一步创建的隧道,无需重复选择。',
+        title: '转发',
+        intro: '基于上一步的隧道创建实际的转发条目，填好目标地址即可生效。',
+        inheritedTunnelHint: '已自动带入上一步创建的隧道，无需重复选择。',
         createAndFinish: '创建并完成'
       },
       done: {
         title: '完成',
-        summary: '转发「{name}」已创建成功,链路已打通。',
+        summary: '转发「{name}」已创建成功，链路已打通。',
+        nextTitle: '接下来',
         gotoForward: '前往流量转发管理',
         gotoTunnel: '前往隧道管理',
         gotoNode: '前往机器/节点管理',
@@ -652,14 +659,12 @@ export default {
       portRange: '\u53ef\u7528\u7aef\u53e3\u8303\u56f4\uff1a{start} - {end}',
       portHintNodeX: '\u7aef\u53e3\u7559\u7a7a\u65f6\uff0c\u9762\u677f\u4f1a\u4ece tunnel \u5165\u53e3\u8282\u70b9\u7aef\u53e3\u6bb5\u4e2d\u81ea\u52a8\u5206\u914d\u3002',
       portHintLocal: '\u7aef\u53e3\u7559\u7a7a\u65f6\uff0c\u9762\u677f\u4f1a\u5728\u6240\u9009\u6267\u884c\u8282\u70b9\u4e0a\u81ea\u52a8\u5206\u914d\u3002',
+      runtimeLinks: '运行时页面',
       loading: '\u6b63\u5728\u52a0\u8f7d\u8f6c\u53d1\u4e0e\u96a7\u9053\u6570\u636e...',
       view: {
-        switchToDirectTitle: '\u5207\u6362\u5230\u76f4\u8fde\u89c6\u56fe',
-        switchToGroupedTitle: '\u5207\u6362\u5230\u5206\u7ec4\u89c6\u56fe',
-        directShort: '\u76f4',
-        groupedShort: '\u7ec4',
-        directLabel: '\u76f4\u8fde',
-        groupedLabel: '\u5206\u7ec4'
+        label: '视图',
+        directLabel: '直连',
+        groupedLabel: '分组'
       },
       actions: {
         import: '\u5bfc\u5165',
@@ -668,17 +673,16 @@ export default {
         edit: '\u7f16\u8f91',
         diagnose: '\u8bca\u65ad',
         delete: '\u5220\u9664',
-        copyAll: '\u590d\u5236\u5168\u90e8'
+        copyAll: '\u590d\u5236\u5168\u90e8',
+        more: '更多操作',
+        moveUp: '上移',
+        moveDown: '下移'
       },
       bulk: {
-        selected: '已选择 {count} 条',
-        selectAll: '选择全部转发',
-        selectRule: '选择 {name}',
         resume: '恢复',
         pause: '暂停',
         export: '导出',
-        delete: '删除',
-        clear: '清空'
+        delete: '删除'
       },
       filters: {
         search: '搜索',
@@ -686,28 +690,27 @@ export default {
         tunnel: '隧道',
         allTunnels: '全部隧道',
         status: '状态',
-        allStatuses: '全部状态',
         running: '运行中',
         paused: '已暂停',
-        error: '错误',
-        clear: '重置',
-        emptyTitle: '没有匹配的转发',
-        emptyText: '调整搜索、隧道或状态筛选后查看更多规则。'
+        error: '错误'
       },
       table: {
-        rule: '\u89c4\u5219 / \u96a7\u9053',
-        ingress: '\u5165\u53e3',
-        target: '\u76ee\u6807',
-        policy: '\u7b56\u7565',
-        status: '\u72b6\u6001',
-        traffic: '\u6d41\u91cf',
-        actions: '\u64cd\u4f5c'
+        label: '转发规则',
+        ruleName: '规则',
+        tunnel: '隧道',
+        ingress: '入口',
+        target: '目标',
+        policy: '策略',
+        status: '状态',
+        traffic: '流量',
+        copyAddress: '复制{title}：{address}',
+        toggleService: '{name} 的转发服务'
       },
       group: {
-        eyebrow: 'User',
-        userTag: '\u7528\u6237',
-        summary: '{tunnels} \u4e2a\u96a7\u9053\uff0c{forwards} \u4e2a\u8f6c\u53d1',
-        tunnelMeta: 'Tunnel #{id}'
+        userTag: '用户',
+        summary: '{tunnels} 个隧道，{forwards} 个转发',
+        tunnelMeta: 'Tunnel #{id}',
+        runningCount: '{running}/{total} 运行中'
       },
       emptyGroupedTitle: '\u6682\u65e0\u8f6c\u53d1\u914d\u7f6e',
       emptyGroupedText: '\u5f53\u524d\u7cfb\u7edf\u91cc\u8fd8\u6ca1\u6709\u4efb\u4f55\u517c\u5bb9 flux-panel \u7684\u8f6c\u53d1\u8bb0\u5f55\u3002',
@@ -716,6 +719,7 @@ export default {
       editor: {
         titleEdit: '\u7f16\u8f91\u8f6c\u53d1',
         titleAdd: '\u65b0\u589e\u8f6c\u53d1',
+        description: '流量从隧道入口进入，转到下面的目标地址。',
         fields: {
           name: '\u8f6c\u53d1\u540d\u79f0',
           tunnel: '\u5173\u8054\u96a7\u9053',
@@ -745,7 +749,6 @@ export default {
       },
       addressModal: {
         copy: '\u590d\u5236',
-        copying: '\u590d\u5236\u4e2d...',
         titleWithCount: '{title} ({count})'
       },
       exportModal: {
@@ -753,11 +756,10 @@ export default {
         subtitle: '格式：兼容 relay-panel 的 JSON：{\'[{ "dest": ["host:port"], "listen_port": 10086, "name": "规则" }\'}]',
         tunnelLabel: '\u9009\u62e9\u5bfc\u51fa\u96a7\u9053',
         tunnelPlaceholder: '\u8bf7\u9009\u62e9\u96a7\u9053',
-        generating: '\u751f\u6210\u4e2d...',
         regenerate: '\u91cd\u65b0\u751f\u6210',
         generate: '\u751f\u6210\u5bfc\u51fa\u6570\u636e',
-        noDataPlaceholder: '\u6682\u65e0\u5bfc\u51fa\u6570\u636e',
-        selectionHint: '正在导出已选择的 {count} 条转发。'
+        selectionHint: '正在导出已选择的 {count} 条转发。',
+        dataLabel: '导出数据'
       },
       importModal: {
         title: '\u5bfc\u5165\u8f6c\u53d1\u6570\u636e',
@@ -788,7 +790,8 @@ export default {
         failedFallback: '\u8bca\u65ad\u5931\u8d25',
         emptyTitle: '\u6682\u65e0\u8bca\u65ad\u6570\u636e',
         emptyText: '\u53d1\u8d77\u4e00\u6b21\u8bca\u65ad\u540e\uff0c\u8fd9\u91cc\u4f1a\u5c55\u793a\u4e0e\u53c2\u8003\u9875\u4e00\u81f4\u7684\u7ed3\u679c\u5361\u7247\u3002',
-        rerun: '\u91cd\u65b0\u8bca\u65ad'
+        rerun: '\u91cd\u65b0\u8bca\u65ad',
+        summary: '{passed}/{total} 项通过'
       },
       status: {
         normal: '\u6b63\u5e38',
@@ -886,7 +889,6 @@ export default {
       card: {
         dragHandleTitle: '\u62d6\u62fd\u6392\u5e8f',
         ingressAddressTitle: '\u5165\u53e3\u5730\u5740',
-        ingressLabel: '\u5165\u53e3',
         targetAddressTitle: '\u76ee\u6807\u5730\u5740',
         targetLabel: '\u76ee\u6807'
       }
@@ -897,8 +899,8 @@ export default {
       modeLabelLocal: '\u5f53\u524d\u8fd0\u884c\u65f6\uff1aLocal / {backend}',
       modeSummaryNodeX: 'ingress \u4e0e egress \u8bed\u4e49\u7531 NodeX/gost \u63a7\u5236\u3002NodeX Runtime \u9875\u9762\u8d1f\u8d23\u63a7\u5236\u9762 URL\u3001Token \u548c gost \u5c31\u7eea\u6027\u3002',
       modeSummaryLocal: '\u8fd9\u91cc\u53ea\u5b58\u50a8\u6267\u884c\u8282\u70b9\u8eab\u4efd\u3002inventory\u3001playbook \u548c\u9762\u677f\u5bbf\u4e3b ansible \u6267\u884c\u5668\u8bf7\u5230 Local Runtime \u9875\u9762\u7ba1\u7406\u3002',
-      modeCompatibilityHint: '\u4e0b\u65b9\u96a7\u9053\u5361\u7247\u662f\u6309\u201c\u5f53\u524d\u8fd0\u884c\u65f6\u80fd\u5426\u6267\u884c\u201d\u6765\u6807\u8bb0\u7684\u3002\u4e00\u4e9b\u5386\u53f2 type-1 \u96a7\u9053\u5728\u8868\u7ed3\u6784\u4e0a\u53ef\u80fd\u540c\u65f6\u517c\u5bb9\u4e24\u79cd\u8fd0\u884c\u65f6\uff0c\u4e0d\u8981\u4ec5\u51ed\u5b58\u50a8\u5b57\u6bb5\u63a8\u65ad\u5b83\u5c5e\u4e8e NodeX \u8fd8\u662f Ansible\u3002',
-      loading: '\u6b63\u5728\u52a0\u8f7d\u96a7\u9053\u4e0e\u8282\u70b9\u6570\u636e...',
+      modeCompatibilityHint: '下方隧道列表\u662f\u6309\u201c\u5f53\u524d\u8fd0\u884c\u65f6\u80fd\u5426\u6267\u884c\u201d\u6765\u6807\u8bb0\u7684\u3002\u4e00\u4e9b\u5386\u53f2 type-1 \u96a7\u9053\u5728\u8868\u7ed3\u6784\u4e0a\u53ef\u80fd\u540c\u65f6\u517c\u5bb9\u4e24\u79cd\u8fd0\u884c\u65f6\uff0c\u4e0d\u8981\u4ec5\u51ed\u5b58\u50a8\u5b57\u6bb5\u63a8\u65ad\u5b83\u5c5e\u4e8e NodeX \u8fd8\u662f Ansible\u3002',
+      runtimeLinks: '运行时页面',
       emptyTitle: '\u6682\u65e0\u96a7\u9053\u914d\u7f6e',
       emptyText: '\u8bf7\u5148\u5b8c\u6210\u6240\u9700\u62d3\u6251\uff0c\u518d\u521b\u5efa\u7b2c\u4e00\u4e2a\u53ef\u88ab\u8f6c\u53d1\u5f15\u7528\u7684\u96a7\u9053\u3002',
       actions: {
@@ -906,6 +908,11 @@ export default {
         edit: '\u7f16\u8f91',
         diagnose: '\u8bca\u65ad',
         delete: '\u5220\u9664'
+      },
+      table: {
+        label: '隧道列表',
+        compatibility: '运行时兼容性',
+        status: '状态'
       },
       meta: {
         ingressNode: '\u8f6c\u53d1\u5165\u53e3\u8282\u70b9',
@@ -919,7 +926,6 @@ export default {
         titleAdd: '\u65b0\u589e\u96a7\u9053',
         deleteConfirmMessage: '删除隧道 {name}？',
         deleteHint: '如果该隧道仍被转发规则或用户授权引用，将无法删除。此操作无法撤销。',
-        submitLoading: '\u63d0\u4ea4\u4e2d...',
         submitUpdate: '\u66f4\u65b0',
         submitCreate: '\u521b\u5efa',
         confirmDelete: '删除隧道'
@@ -977,10 +983,10 @@ export default {
         loading: '\u6b63\u5728\u8bca\u65ad\u96a7\u9053\u8fde\u901a\u6027...',
         targetAddress: '\u76ee\u6807\u5730\u5740',
         duration: '\u8017\u65f6',
-        message: '\u4fe1\u606f',
         emptyTitle: '\u6682\u65e0\u8bca\u65ad\u7ed3\u679c',
         emptyText: '\u5f53\u524d\u6ca1\u6709\u53ef\u5c55\u793a\u7684\u8282\u70b9\u8bca\u65ad\u6570\u636e\u3002',
-        rerun: '\u91cd\u65b0\u8bca\u65ad'
+        rerun: '\u91cd\u65b0\u8bca\u65ad',
+        summary: '{passed}/{total} 项通过'
       },
       validation: {
         nameRequired: '\u8bf7\u8f93\u5165\u96a7\u9053\u540d\u79f0',
@@ -1498,7 +1504,11 @@ export default {
         edit: '编辑',
         delete: '删除'
       },
-      loading: '正在加载限速规则...',
+      runtimeLinks: '运行时页面',
+      table: {
+        label: '限速规则',
+        status: '状态'
+      },
       empty: {
         title: '暂无限速规则',
         text: '还没有创建任何限速规则，点击上方按钮开始创建。'

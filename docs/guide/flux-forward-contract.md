@@ -11,7 +11,15 @@ Use it before changing:
 - `internal/service/forward_panel_service.go`
 - `internal/model/forward_panel.go`
 - `web/src/api/admin.js`
-- `web/src/views/admin/Forward.vue`
+- `web/src/views/admin/Forward.vue` (route entry; since UI U7 its table,
+  grouped view and import / export / address dialogs are page-local
+  components in `web/src/views/admin/forward/`, and the pure helpers are in
+  `web/src/views/admin/forward/forwardModel.js`)
+
+UI phase U7 changed only how the forward, tunnel and limit pages look and
+which components they use. Every request in this document (path, method,
+body fields, the `{ "forwards": [{ "id", "inx" }] }` order payload, the
+diagnose response fields) is unchanged.
 
 ## Reference Sources
 

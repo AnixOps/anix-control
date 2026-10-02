@@ -369,8 +369,9 @@ router, so the login page loads neither.
   tunnels, limits, forward nodes, Ansible machines) use
   `--size-content-wide` (1440 px).
 - **Forward suite.** On `/admin/forward*` the shell renders
-  `ForwardSuiteNav` once above the page: the flux-panel sub-navigation as a
-  segmented strip of links (快速配置向导, 流量转发, 隧道, 限速, NodeX 拓扑)
+  `ForwardSuiteNav` once above the page: the flux-panel sub-navigation as
+  links: 快速配置向导 (an accent pill), 流量转发 / 隧道 / 限速 as a segmented
+  control (U7; its own row on phones), NodeX 拓扑
   and a 更多 menu (Ansible 机器, 本地运行时, NodeX 运行时, NodeX Agents,
   可观测性) whose button names the current page when it is one of them. The
   pages and the sidebar no longer repeat it; routes and the seven legacy
@@ -574,7 +575,8 @@ UiDialog          create / edit forms with Ui fields in a .form-grid
 - **Selection**: `selectable` + `v-model:selected` (row keys, `rowKey`
   default `id`). A header checkbox selects the page (mixed when partly
   selected); the bulk bar (slot `#bulk-actions="{ rows, clear }"`) floats
-  up from the bottom with the count, "全选所有 N 条" when every row is loaded,
+  up from the bottom (under the overlays; it fades out while a modal Dialog
+  or Sheet is open) with the count, "全选所有 N 条" when every row is loaded,
   and 取消选择 (Esc too). Only offer bulk actions an endpoint supports; a bulk
   action without a bulk endpoint calls the per-row endpoint for each row (as
   Users ban / unban does) and offers 撤销.
@@ -687,6 +689,38 @@ template and the first detail page (plan §7.2). Page-local parts live in
   request bodies), `useNodeActions` (sync, typed-name delete), `nodeData`
   (payload readers, request bodies, status), and one component per sheet or
   section. `NodeCodeBlock` shows generated files with a copy button.
+
+## Forward suite and the wizard template (U7)
+
+The flux-panel clone pages (`docs/guide/flux-panel-clone.md`) moved to the
+list page template with visual and interaction changes only: same fields,
+endpoints and flows.
+
+- **流量转发** (`views/admin/Forward.vue`, the route entry, with page-local
+  components in `views/admin/forward/`): `ForwardRulesTable` (a
+  `UiDataTable` with the service `UiSwitch` and one status badge (the
+  worst state; the detail in a Reka tooltip, a second line on cards), addresses that
+  copy or open the address list, the row menu 编辑 / 诊断 / 上移 / 下移 / 删除,
+  and a drag handle in the name cell), `ForwardGroupedView` (per user, per
+  tunnel, flat tables), and the import, export and address dialogs. The
+  toolbar has the search, the tunnel `UiSelect`, status chips and the
+  直连 / 分组 `UiSegmentedControl`; 导入 / 导出 sit in the header's "…" menu.
+  The editor is a `UiSheet` whose form the footer button submits (`form`
+  attribute), so Enter in a field saves too.
+- **隧道** and **限速**: `UiDataTable` + editor `UiSheet`.
+- **Diagnosis timeline** (`components/admin/forward/DiagnosisTimeline.vue`):
+  an ordered list of steps (green check or red cross marker, title, node,
+  a field grid, the message) under a "2/3 项通过" badge and the check time.
+  Presentational: the page maps the diagnose response to `steps`.
+- **Wizard template** (plan §7.5, `views/admin/ForwardWizard.vue`): a
+  240 px step list on the left (number, check when done, `aria-current="step"`),
+  the step in a card on the right with "第 2 步，共 5 步" and its title (which
+  takes focus when the step changes), and a sticky footer with 上一步 and
+  the primary action. Below 834 px the steps become a row of five above the
+  card; below 640 px only their numbers show. Each step component keeps its
+  fields and API calls, renders `<form id="wizard-step-form">` and exposes
+  `submit`, `busy`, `canSubmit` and `primaryLabel` for the footer. Records
+  a step can reuse are a `WizardExistingList` with "使用现有".
 
 ## Bundle
 

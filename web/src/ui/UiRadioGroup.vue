@@ -124,6 +124,8 @@ const normalizedOptions = computed(() => props.options.map(option => (
   place-items: center;
   width: 18px;
   height: 18px;
+  /* The legacy global button rule (40 / 44 px) must not stretch it. */
+  min-height: 0;
   margin-top: 2px;
   padding: 0;
   /* label-3 keeps the boundary at 3:1 or more (WCAG 1.4.11). */

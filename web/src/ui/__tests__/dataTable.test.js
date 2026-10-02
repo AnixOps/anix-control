@@ -361,3 +361,24 @@ describe('UiSearchField', () => {
     expect(value.value).toBe('')
   })
 })
+
+describe('UiDataTable bulk bar under overlays', () => {
+  it('steps behind an open modal dialog and comes back when it closes', async () => {
+    render(UiDataTable, { props: { columns: COLUMNS, rows: ROWS, label: 'Users', selectable: true, selected: [1] } })
+    const bar = await waitFor(() => {
+      const element = document.querySelector('[data-bulk-bar]')
+      expect(element).not.toBeNull()
+      return element
+    })
+    expect(bar.classList.contains('is-under-overlay')).toBe(false)
+
+    const dialog = document.createElement('div')
+    dialog.setAttribute('role', 'dialog')
+    dialog.setAttribute('aria-modal', 'true')
+    document.body.appendChild(dialog)
+    await waitFor(() => expect(bar.classList.contains('is-under-overlay')).toBe(true))
+
+    dialog.remove()
+    await waitFor(() => expect(bar.classList.contains('is-under-overlay')).toBe(false))
+  })
+})
