@@ -7,6 +7,7 @@ import adminMonitor from './modules/en/adminMonitor'
 import adminTrafficHourly from './modules/en/adminTrafficHourly'
 import ui from './modules/en/ui'
 import shell from './modules/en/shell'
+import userPages from './modules/en/userPages'
 import { AGENT_NAME, CONTROL_NAME } from '../constants/brand'
 
 const legacy = {
@@ -98,6 +99,7 @@ export default {
   ...adminTrafficHourly,
   ...ui,
   ...shell,
+  ...userPages,
   common: {
     locale: {
       label: 'Language',
@@ -185,9 +187,9 @@ export default {
       login: 'Sign In'
     },
     user: {
-      dashboard: 'Dashboard',
-      subscribe: 'Subscriptions',
-      knowledge: 'Guides',
+      dashboard: 'Overview',
+      subscribe: 'Subscription',
+      knowledge: 'Help Center',
       tickets: 'Tickets',
       plans: 'Plans',
       orders: 'Orders'
@@ -392,186 +394,6 @@ export default {
       running: 'Running',
       success: 'Success',
       failed: 'Failed'
-    }
-  },
-  login: {
-    brandSubtitle: CONTROL_NAME,
-    brandDescription: 'A delivery-focused control plane for subscriptions, nodes, and forwarding operations.',
-    signInTitle: 'Welcome back',
-    registerTitle: 'Create an account',
-    signInSubtitle: 'Sign in to continue managing studio services.',
-    registerSubtitle: `Create an ${CONTROL_NAME} account to start provisioning services.`,
-    emailPlaceholder: 'Enter your email address',
-    passwordPlaceholder: 'Enter your password',
-    registerPasswordPlaceholder: 'Enter a password (minimum 6 characters)',
-    confirmPasswordPlaceholder: 'Re-enter your password',
-    inviteCodeLabel: 'Invite code (optional)',
-    inviteCodePlaceholder: 'Enter an invite code if this site requires one',
-    mfaCodeLabel: 'Authentication code',
-    mfaCodePlaceholder: 'Enter TOTP or backup code',
-    mfaRequired: 'Enter your MFA code to finish signing in.',
-    forgotPassword: 'Forgot password?',
-    switchToRegister: 'No account yet? Register',
-    switchToLogin: 'Already have an account? Sign in',
-    submitLogin: 'Sign in',
-    submitMFA: 'Verify and sign in',
-    submitRegister: 'Register',
-    loadingLogin: 'Signing in...',
-    loadingRegister: 'Registering...',
-    mockMode: 'Development mode',
-    mockUser: 'Mock user',
-    mockAdmin: 'Mock admin',
-    errors: {
-      emailPasswordRequired: 'Please enter both email and password.',
-      passwordMin: 'Password must be at least 6 characters.',
-      passwordMismatch: 'The two passwords do not match.',
-      registerFailed: 'Registration failed. Please try again later.',
-      loginFailed: 'Sign-in failed. Check your email and password.',
-      mfaCodeRequired: 'Please enter your MFA code.',
-      mfaEnrollmentRequired: 'MFA setup is required before signing in. Contact the site administrator.'
-    },
-    success: {
-      registerCompleted: 'Registration completed. Redirecting...'
-    }
-  },
-  user: {
-    dashboard: {
-      title: 'My Subscription',
-      subtitle: 'Review your current plan and usage.',
-      refresh: 'Refresh',
-      refreshing: 'Refreshing...',
-      trafficUsage: 'Traffic usage',
-      upload: 'Upload',
-      download: 'Download',
-      remainingDays: 'Remaining days',
-      trafficRemaining: 'Traffic remaining',
-      quickActions: {
-        subscribe: 'Manage subscriptions',
-        orders: 'My orders',
-        tickets: 'My tickets',
-        knowledge: 'Guides'
-      },
-      cacheUpdatedAt: 'Last updated at {value}'
-    },
-    subscribe: {
-      title: 'Subscriptions',
-      subtitle: 'Manage, copy, preview, and download your subscription links.',
-      missingToken: 'No subscription token was detected. Please sign in again or refresh the page.',
-      infoTitle: 'Subscription info',
-      linksTitle: 'Subscription links',
-      previewTitle: 'Subscription preview ({format})',
-      usedTraffic: 'Used traffic',
-      totalTraffic: 'Total traffic',
-      domainLabel: 'Subscription domain',
-      copyLink: 'Copy link',
-      refreshCache: 'Refresh subscription cache',
-      copyContent: 'Copy content',
-      closePreview: 'Close',
-      fetchPreviewFailed: 'Failed to fetch preview.',
-      noPreviewContent: 'No subscription content returned.',
-      copyFailed: 'Couldn’t copy automatically. Select the text and copy it by hand.',
-      refreshFailed: 'The subscription cache wasn’t refreshed. Try again later.',
-      refreshCompleted: 'Subscription cache refreshed.',
-      formats: {
-        auto: 'Auto (by User-Agent)',
-        v2ray: 'V2Ray (Base64)',
-        clash: 'Clash (YAML)',
-        stash: 'Stash (YAML)',
-        egern: 'Egern (YAML)',
-        surge: 'Surge',
-        loon: 'Loon',
-        shadowrocket: 'ShadowRocket',
-        quantumultx: 'Quantumult X',
-        singBox: 'Sing-box (JSON)',
-        wireguard: 'WireGuard (.conf)',
-        json: 'Raw JSON',
-        base64json: 'Base64 JSON'
-      }
-    },
-    orders: {
-      title: 'My Orders',
-      subtitle: 'Review and manage your order history.',
-      loading: 'Loading your order history...',
-      empty: 'You do not have any orders yet. Explore the available plans to get started.',
-      buyNow: 'Browse plans',
-      unknownPlan: 'Unknown plan',
-      detailTitle: 'Order details',
-      loadDetailFailed: 'The order details couldn’t be opened. Try again later.',
-      headers: {
-        tradeNo: 'Order #',
-        plan: 'Plan',
-        period: 'Billing',
-        amount: 'Amount',
-        status: 'Status',
-        createdAt: 'Created at',
-        actions: 'Actions'
-      },
-      labels: {
-        tradeNo: 'Order number',
-        status: 'Status',
-        plan: 'Plan',
-        period: 'Billing period',
-        totalAmount: 'Total amount',
-        discount: 'Discount',
-        createdAt: 'Created at',
-        paidAt: 'Paid at'
-      }
-    },
-    plans: {
-      title: 'Plans',
-      subtitle: 'Choose the plan that matches your traffic needs and start instantly.',
-      loading: 'Loading plans...',
-      permanentBadge: 'Permanent',
-      unlimitedFeature: 'Multi-country nodes with full protocol support',
-      trafficFeature: '{value} traffic',
-      speedLimitFeature: '{value} Mbps speed limit',
-      deviceLimitFeature: '{value} devices online at the same time',
-      confirmOrder: 'Confirm order',
-      selectedPlan: 'Selected plan',
-      choosePeriod: 'Choose billing period',
-      optionalCoupon: 'Coupon code (optional)',
-      couponPlaceholder: 'Enter coupon code',
-      couponApplied: 'Coupon applied: {name} (-¥{value})',
-      totalAmount: 'Total due',
-      backToEdit: 'Back',
-      orderCreated: 'Order created. Pay for it in My Orders.'
-    },
-    tickets: {
-      title: 'My Tickets',
-      subtitle: 'Submit feedback or request technical support.',
-      submitTicket: 'New ticket',
-      active: 'Active',
-      resolved: 'Resolved',
-      loading: 'Loading...',
-      empty: 'No tickets yet. Submit one whenever you need help.',
-      submitNow: 'Create now',
-      newTicketTitle: 'Create a new ticket',
-      replyPlaceholder: 'Write your reply...',
-      closeWindow: 'Close window',
-      closedHint: 'This ticket is already closed. Create a new one if you need more help.',
-      assistant: 'Support assistant',
-      me: 'Me',
-      updated: 'updated',
-      ticketId: 'Ticket #{id}',
-      replyLabel: 'Reply',
-      sendReply: 'Send reply',
-      closeTicket: 'Close ticket',
-      closeConfirmTitle: 'Close the ticket “{subject}”?',
-      closeConfirmMessage: 'You can’t reply after closing it. Open a new ticket if you need more help.',
-      closed: 'Ticket closed',
-      created: 'Ticket sent. We’ll reply soon.',
-      fillSubjectMessage: 'Enter a subject and a message.',
-      loadDetailFailed: 'The ticket couldn’t be opened. Try again later.'
-    },
-    knowledge: {
-      title: 'Guides',
-      subtitle: 'Find setup guides, notices, and frequently asked questions.',
-      loading: 'Loading...',
-      empty: 'No related articles found.',
-      readMore: 'Read more →',
-      updated: 'updated',
-      all: 'All',
-      closeAction: 'Close'
     }
   },
   runtime: {

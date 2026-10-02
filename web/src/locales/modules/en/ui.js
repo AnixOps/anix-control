@@ -32,6 +32,12 @@ export default {
       search: 'Search',
       empty: 'No matching options'
     },
+    otp: {
+      digit: 'Digit {n} of {total}'
+    },
+    qr: {
+      failed: 'QR code unavailable'
+    },
     copy: {
       failed: 'Could not copy automatically. The text is selected; press Ctrl+C or ⌘C to copy it.'
     },

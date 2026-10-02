@@ -32,7 +32,7 @@ test('loads, serves, and revokes the official signed machine-telemetry WebUI thr
   await page.goto('/login')
   await page.locator('#email').fill('live-control-webui@anixops.test')
   await page.locator('#password').fill('LiveControlWebUI!2026')
-  await page.locator('form.login-form button[type="submit"]').click()
+  await page.locator('form[data-auth-form="password"] button[type="submit"]').click()
   await page.waitForURL(/\/admin\/dashboard$/)
 
   const extensions = await (await catalogResponse).json()
@@ -130,7 +130,7 @@ test('loads the merged native plugin center against the real Control process', a
   await page.goto('/login')
   await page.locator('#email').fill('live-control-webui@anixops.test')
   await page.locator('#password').fill('LiveControlWebUI!2026')
-  await page.locator('form.login-form button[type="submit"]').click()
+  await page.locator('form[data-auth-form="password"] button[type="submit"]').click()
   await page.waitForURL(/\/admin\/dashboard$/)
 
   await page.goto('/admin/plugins')

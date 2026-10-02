@@ -2,6 +2,56 @@
 
 ## Unreleased
 
+### Changed
+
+- **Sign-in and user pages redesigned (UI redesign phase U5)**
+  (`web/src/views/Login.vue`, `views/user/*`, `views/Account.vue`;
+  `docs/reference/frontend-design.md` "Sign-in and user pages"). Same
+  endpoints and routes; page state (search, category, article, ticket, new
+  ticket) lives in the query.
+  - 登录: one centred card on a brand-tinted backdrop, the decorative stats
+    gone. Two-factor authentication is a second step with six code boxes
+    (paste, autofill, auto-advance, Backspace) that submits on the sixth
+    digit; 使用恢复码 appears only when the account has recovery codes. An
+    account the administrator requires to use two-factor authentication but
+    that has none gets steps to follow instead of a bare error. No
+    "忘记密码" link (there is no reset endpoint); registration and the invite
+    code follow the public config.
+  - 概览: greeting, a hero card with the remaining traffic in a brand-gradient
+    ring, status, expiry and usage, 复制订阅链接 and 导入到客户端, the first help
+    articles and the latest tickets; plans and orders in the commercial
+    edition.
+  - 订阅: the link with a real, scannable QR code, one-click import for
+    Clash Verge, Shadowrocket, sing-box, Stash, Surge, Quantumult X and Loon
+    (v2rayN copies its link), every other format with copy and preview, and
+    a danger zone that asks an administrator for a reset through a ticket
+    (users cannot reset the link themselves).
+  - 帮助中心: search (`/`), category cards, articles at reading width with a
+    table of contents and previous / next instead of a dialog; Markdown-style
+    bodies render as elements, never HTML.
+  - 工单: list and conversation side by side, full width on phones; new
+    tickets in a Sheet. 套餐 / 订单: store-style plan cards with a period
+    switch and checkout, orders with a details Sheet.
+  - 账户: two-factor setup with a QR code and the code boxes; "备用码" are
+    now "恢复码" / recovery codes, with a download.
+  - Every page has a skeleton after 300 ms, an empty state, and an error
+    state with 重试 and 复制错误详情. Page titles follow the navigation
+    (概览, 订阅, 帮助中心, 工单, 套餐, 订单).
+  - New components `UiOtpField` and `UiQrCode` (the `uqr` 0.1.3 encoder, MIT,
+    3.8 KB gzip in its own chunk, loaded on first use). Badges and unselected
+    segmented-control items now reach 4.5:1 on every background they sit on.
+  - Bundle: the login page grows by about 12 KB gzip (form and code fields,
+    new strings), the user pages by 10–18 KB.
+
+### Fixed
+
+- The legacy literal translator (`web/src/utils/legacyI18n.js`) wrote the
+  first text it saw back over later updates, so labels that change in place
+  (a copy button turning into "已复制", a form switching to registration)
+  snapped back. It now treats any value it did not write as the new source.
+- Vue Router no longer warns about the unnamed empty-path child of the
+  `admin` route (now `admin-index`).
+
 ## 4.1.0-rc.4 - 2026-10-02
 
 4.1.0-rc.4 is the fourth 4.1.0 release candidate and the **UI redesign

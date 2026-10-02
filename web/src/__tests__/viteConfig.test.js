@@ -8,6 +8,10 @@ describe('vite manual chunking', () => {
     expect(manualChunks('/repo/web/node_modules/@antv/g6/esm/index.js')).toBe('g6')
   })
 
+  it('keeps the QR encoder in its own on-demand chunk', () => {
+    expect(manualChunks('/repo/web/node_modules/uqr/dist/index.mjs')).toBe('qr')
+  })
+
   it('keeps app infrastructure chunks stable for browser caching', () => {
     expect(manualChunks('/repo/web/src/api/admin.js')).toBe('api')
     expect(manualChunks('/repo/web/node_modules/vue-router/dist/vue-router.mjs')).toBe('router')

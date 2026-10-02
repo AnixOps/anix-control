@@ -1,167 +1,228 @@
 <template>
-  <main id="app-main-content" tabindex="-1" class="login-page" aria-labelledby="login-page-title">
-    <div class="login-shell">
-      <section class="login-aside">
-        <div class="aside-top">
-          <BrandLockup tile inverse />
-          <div class="aside-pill">{{ t('layout.admin.badge') }}</div>
-        </div>
-        <div class="aside-copy">
-          <h1>{{ t('layout.user.brand') }}</h1>
-          <p>{{ t('login.brandDescription') }}</p>
-          <p class="aside-mode-copy">{{ isRegisterMode ? t('login.registerSubtitle') : t('login.signInSubtitle') }}</p>
-        </div>
-        <div class="aside-stats">
-          <div class="aside-stat">
-            <span class="aside-stat-label">{{ t('layout.admin.sections.overview') }}</span>
-            <strong>{{ t('layout.admin.nav.dashboard') }}</strong>
-          </div>
-          <div class="aside-stat">
-            <span class="aside-stat-label">{{ t('layout.admin.sections.userManagement') }}</span>
-            <strong>{{ t('layout.admin.nav.users') }}</strong>
-          </div>
-          <div class="aside-stat">
-            <span class="aside-stat-label">{{ t('layout.admin.sections.system') }}</span>
-            <strong>{{ t('layout.admin.nav.system') }}</strong>
-          </div>
-        </div>
-      </section>
+  <main id="app-main-content" tabindex="-1" class="auth" :aria-labelledby="titleId">
+    <div class="auth__stack">
+      <section class="auth__card" :data-auth-step="step" :aria-busy="loading ? 'true' : 'false'">
+        <header class="auth__header">
+          <BrandLockup class="auth__tile" tile mark-only size="lg" style="--lockup-mark: 56px" />
+          <h1 :id="titleId" ref="headingRef" class="auth__title" tabindex="-1">{{ heading.title }}</h1>
+          <p class="auth__subtitle">
+            <template v-if="step === 'mfa' || step === 'enroll'">
+              <i18n-t :keypath="step === 'mfa' ? 'auth.mfa.description' : 'auth.enroll.description'" scope="global">
+                <template #email><strong class="auth__email">{{ challengeEmail }}</strong></template>
+              </i18n-t>
+            </template>
+            <template v-else>{{ heading.subtitle }}</template>
+          </p>
+        </header>
 
-      <section class="login-panel card">
-        <BrandLockup class="panel-brand" tile />
-        <div class="login-panel-header">
-          <div>
-            <h2 id="login-page-title">{{ isRegisterMode ? t('login.registerTitle') : t('login.signInTitle') }}</h2>
-            <p>{{ isRegisterMode ? t('login.registerSubtitle') : t('login.signInSubtitle') }}</p>
-          </div>
-          <LocaleSwitcher />
-        </div>
-
-        <form class="login-form" :aria-busy="loading ? 'true' : 'false'" @submit.prevent="isRegisterMode ? handleRegister() : handleLogin()">
-          <div class="form-row">
-            <label for="email">{{ t('common.labels.email') }}</label>
-            <input
-              id="email"
-              v-model.trim="email"
-              type="email"
-              :placeholder="t('login.emailPlaceholder')"
-              autocomplete="email"
-            />
-          </div>
-
-          <div class="form-row">
-            <label for="password">{{ t('common.labels.password') }}</label>
-            <input
-              id="password"
-              v-model="password"
-              type="password"
-              :placeholder="isRegisterMode ? t('login.registerPasswordPlaceholder') : t('login.passwordPlaceholder')"
-              :autocomplete="isRegisterMode ? 'new-password' : 'current-password'"
-            />
-          </div>
-
-          <div v-if="mfaRequired && !isRegisterMode" class="form-row">
-            <label for="mfa-code">{{ t('login.mfaCodeLabel') }}</label>
-            <input
-              id="mfa-code"
-              v-model.trim="mfaCode"
-              type="text"
-              :placeholder="t('login.mfaCodePlaceholder')"
-              autocomplete="one-time-code"
-            />
-          </div>
-
-          <div v-if="isRegisterMode" class="form-row">
-            <label for="confirm-password">{{ t('common.labels.confirmPassword') }}</label>
-            <input
+        <!-- Email and password (sign in), or the registration form. -->
+        <form
+          v-if="step === 'password'"
+          class="auth__form"
+          novalidate
+          data-auth-form="password"
+          @submit.prevent="mode === 'register' ? submitRegister() : submitPassword()"
+        >
+          <UiTextField
+            id="email"
+            ref="emailRef"
+            v-model.trim="email"
+            type="email"
+            :label="mode === 'register' ? t('auth.register.email') : t('auth.signIn.email')"
+            :autocomplete="mode === 'register' ? 'email' : 'username'"
+            :error="errors.email"
+            autocapitalize="off"
+            spellcheck="false"
+            aria-required="true"
+            @blur="validateEmail"
+          />
+          <UiPasswordField
+            id="password"
+            v-model="password"
+            :label="mode === 'register' ? t('auth.register.password') : t('auth.signIn.password')"
+            :help="mode === 'register' ? t('auth.register.passwordHelp') : ''"
+            :autocomplete="mode === 'register' ? 'new-password' : 'current-password'"
+            :error="errors.password"
+            aria-required="true"
+          />
+          <template v-if="mode === 'register'">
+            <UiPasswordField
               id="confirm-password"
               v-model="confirmPassword"
-              type="password"
-              :placeholder="t('login.confirmPasswordPlaceholder')"
+              :label="t('auth.register.confirm')"
               autocomplete="new-password"
+              :error="errors.confirm"
+              aria-required="true"
             />
-          </div>
-
-          <div v-if="isRegisterMode && requireInvite" class="form-row">
-            <label for="invite-code">{{ t('login.inviteCodeLabel') }}</label>
-            <input
+            <UiTextField
+              v-if="requireInvite"
               id="invite-code"
               v-model.trim="inviteCode"
-              type="text"
-              :placeholder="t('login.inviteCodePlaceholder')"
+              :label="t('auth.register.invite')"
+              :help="t('auth.register.inviteHelp')"
+              :error="errors.invite"
               autocomplete="off"
+              autocapitalize="characters"
+              spellcheck="false"
+              aria-required="true"
             />
-          </div>
+          </template>
 
-          <div v-if="errorMsg" class="banner error-banner" role="alert">{{ errorMsg }}</div>
-          <div v-if="successMsg" class="banner success-banner" role="status" aria-live="polite">{{ successMsg }}</div>
+          <p v-if="formError" class="auth__alert" role="alert" data-auth-error>
+            <UiIcon :icon="CircleAlert" :size="16" />
+            <span>{{ formError }}</span>
+          </p>
 
-          <button type="submit" class="btn btn-primary submit-button" :disabled="loading">
-            <span v-if="loading" class="spinner"></span>
-            {{ loading
-              ? (isRegisterMode ? t('login.loadingRegister') : t('login.loadingLogin'))
-              : submitLabel }}
-          </button>
+          <UiButton type="submit" variant="primary" size="lg" block :loading="loading" data-auth-submit>
+            {{ mode === 'register' ? t('auth.register.submit') : t('auth.signIn.submit') }}
+          </UiButton>
+
+          <p v-if="mode === 'register' || registrationEnabled" class="auth__switch">
+            <span>{{ mode === 'register' ? t('auth.register.haveAccount') : t('auth.signIn.noAccount') }}</span>
+            <UiButton variant="tertiary" size="sm" data-auth-switch @click="switchMode">
+              {{ mode === 'register' ? t('auth.register.signIn') : t('auth.signIn.register') }}
+            </UiButton>
+          </p>
         </form>
 
-        <div class="login-footer">
-          <a v-if="!isRegisterMode" href="#" @click.prevent>{{ t('login.forgotPassword') }}</a>
-          <a href="#" @click.prevent="toggleMode">
-            {{ isRegisterMode ? t('login.switchToLogin') : t('login.switchToRegister') }}
-          </a>
+        <!-- Second step: the 6-digit code. -->
+        <form v-else-if="step === 'mfa'" class="auth__form" novalidate data-auth-form="mfa" @submit.prevent="submitCode()">
+          <UiOtpField
+            ref="otpRef"
+            v-model="code"
+            :label="t('auth.mfa.code')"
+            hide-label
+            :error="errors.code"
+            :disabled="loading"
+            @complete="submitCode"
+          />
+          <UiButton type="submit" variant="primary" size="lg" block :loading="loading" data-auth-submit>
+            {{ t('auth.mfa.submit') }}
+          </UiButton>
+          <div class="auth__row">
+            <UiButton variant="tertiary" size="sm" :icon="ChevronLeft" data-auth-back @click="backToPassword">{{ t('auth.mfa.back') }}</UiButton>
+            <UiButton v-if="canUseRecovery" variant="tertiary" size="sm" data-auth-recovery @click="goTo('recovery')">{{ t('auth.mfa.useRecovery') }}</UiButton>
+          </div>
+        </form>
+
+        <!-- Second step with a recovery (backup) code. -->
+        <form v-else-if="step === 'recovery'" class="auth__form" novalidate data-auth-form="recovery" @submit.prevent="submitRecovery">
+          <UiTextField
+            id="recovery-code"
+            ref="recoveryRef"
+            v-model="recoveryCode"
+            :label="t('auth.mfa.recovery')"
+            placeholder="XXXX-XXXX"
+            :error="errors.recovery"
+            autocomplete="one-time-code"
+            autocapitalize="characters"
+            spellcheck="false"
+            maxlength="9"
+            class="auth__recovery"
+            aria-required="true"
+            @blur="recoveryCode = formatRecovery(recoveryCode)"
+          />
+          <UiButton type="submit" variant="primary" size="lg" block :loading="loading" data-auth-submit>
+            {{ t('auth.mfa.submit') }}
+          </UiButton>
+          <div class="auth__row">
+            <UiButton variant="tertiary" size="sm" :icon="ChevronLeft" data-auth-back @click="backToPassword">{{ t('auth.mfa.back') }}</UiButton>
+            <UiButton variant="tertiary" size="sm" data-auth-use-code @click="goTo('mfa')">{{ t('auth.mfa.useCode') }}</UiButton>
+          </div>
+        </form>
+
+        <!-- The administrator requires two-step verification and this account has none. -->
+        <div v-else-if="step === 'enroll'" class="auth__form" data-auth-form="enroll">
+          <div class="auth__enroll">
+            <h2 class="auth__enroll-title">{{ t('auth.enroll.stepsTitle') }}</h2>
+            <ol class="auth__steps">
+              <li>{{ t('auth.enroll.step1') }}</li>
+              <li>{{ t('auth.enroll.step2') }}</li>
+              <li>{{ t('auth.enroll.step3') }}</li>
+            </ol>
+            <p class="auth__note">
+              <UiIcon :icon="Smartphone" :size="16" />
+              <span>{{ t('auth.enroll.app') }}</span>
+            </p>
+          </div>
+          <UiButton size="lg" block :icon="ChevronLeft" data-auth-back @click="backToPassword">{{ t('auth.enroll.back') }}</UiButton>
         </div>
 
-        <div v-if="enableMockLogin && !isRegisterMode" class="dev-actions">
-          <div class="dev-divider">
-            <span>{{ t('login.mockMode') }}</span>
-          </div>
-          <div class="dev-buttons">
-            <button type="button" class="btn" @click="mockLogin('user')">{{ t('login.mockUser') }}</button>
-            <button type="button" class="btn" @click="mockLogin('admin')">{{ t('login.mockAdmin') }}</button>
+        <div v-if="enableMockLogin && step === 'password' && mode === 'login'" class="auth__dev">
+          <p class="auth__dev-title">{{ t('auth.dev.title') }}</p>
+          <div class="auth__row">
+            <UiButton size="sm" @click="mockLogin('user')">{{ t('auth.dev.user') }}</UiButton>
+            <UiButton size="sm" @click="mockLogin('admin')">{{ t('auth.dev.admin') }}</UiButton>
           </div>
         </div>
       </section>
+
+      <LocaleSwitcher class="auth__locale" compact />
     </div>
   </main>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+// Sign-in (plan §4.3): one centred card on a faint brand-tinted backdrop.
+// Steps: email and password → (when the account has it) the 6-digit code,
+// or a recovery code when the server lists the "backup" method → home.
+// When the administrator requires two-step verification and the account has
+// none, the server answers mfa_enrollment_required without a token; the
+// /user/mfa/* setup endpoints need a signed-in session, so the card explains
+// what to do instead of starting a setup it cannot finish.
+// "忘记密码" is not offered: the backend has no password-reset endpoint.
+// Registration (when the public config allows it) asks for an invite code
+// only when auth.registration.require_invite is on.
+import { computed, nextTick, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
+import { ChevronLeft, CircleAlert, Smartphone } from '@lucide/vue'
 import { useUserStore } from '@/stores/user'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { login, register } from '@/api/auth'
 import { useEdition } from '@/composables/useEdition'
 import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
 import BrandLockup from '@/components/common/BrandLockup.vue'
+import UiButton from '@/ui/UiButton.vue'
+import UiIcon from '@/ui/UiIcon.vue'
+import UiOtpField from '@/ui/UiOtpField.vue'
+import UiPasswordField from '@/ui/UiPasswordField.vue'
+import UiTextField from '@/ui/UiTextField.vue'
+import { useToast } from '@/ui/composables/useToast'
 
 const router = useRouter()
 const userStore = useUserStore()
+const toast = useToast()
 const { t } = useAppI18n()
-// Registration asks for an invite code only when auth.registration
-// require_invite is on (GET /api/v4/public/config).
-const { requireInvite, loadEdition } = useEdition()
-onMounted(() => {
-  void loadEdition()
-})
+const { requireInvite, registrationEnabled, loadEdition } = useEdition()
 
+const titleId = 'login-page-title'
+const mode = ref('login') // 'login' | 'register'
+const step = ref('password') // 'password' | 'mfa' | 'recovery' | 'enroll'
 const email = ref('')
 const password = ref('')
 const confirmPassword = ref('')
 const inviteCode = ref('')
+const code = ref('')
+const recoveryCode = ref('')
 const loading = ref(false)
-const errorMsg = ref('')
-const successMsg = ref('')
-const isRegisterMode = ref(false)
-const mfaRequired = ref(false)
-const mfaCode = ref('')
-const mfaMethods = ref([])
+const formError = ref('')
+const errors = reactive({ email: '', password: '', confirm: '', invite: '', code: '', recovery: '' })
+const challenge = reactive({ email: '', methods: [] })
 
-const submitLabel = computed(() => {
-  if (isRegisterMode.value) {
-    return t('login.submitRegister')
-  }
-  return mfaRequired.value ? t('login.submitMFA') : t('login.submitLogin')
+const headingRef = ref(null)
+const emailRef = ref(null)
+const otpRef = ref(null)
+const recoveryRef = ref(null)
+
+const challengeEmail = computed(() => challenge.email || email.value)
+const canUseRecovery = computed(() => challenge.methods.includes('backup'))
+
+const heading = computed(() => {
+  if (step.value === 'mfa') return { title: t('auth.mfa.title') }
+  if (step.value === 'recovery') return { title: t('auth.mfa.recoveryTitle'), subtitle: t('auth.mfa.recoveryDescription') }
+  if (step.value === 'enroll') return { title: t('auth.enroll.title') }
+  if (mode.value === 'register') return { title: t('auth.register.title'), subtitle: t('auth.register.subtitle') }
+  return { title: t('auth.signIn.title'), subtitle: t('auth.signIn.subtitle') }
 })
 
 const enableMockLogin = computed(() => {
@@ -169,424 +230,422 @@ const enableMockLogin = computed(() => {
   return flag === 'true' || flag === '1' || flag === 'yes'
 })
 
-function toggleMode() {
-  isRegisterMode.value = !isRegisterMode.value
-  errorMsg.value = ''
-  successMsg.value = ''
+// Registration closed after the page loaded: go back to signing in.
+watch(registrationEnabled, (enabled) => {
+  if (!enabled && mode.value === 'register') switchMode()
+})
+
+onMounted(() => {
+  void loadEdition()
+})
+
+function clearErrors() {
+  formError.value = ''
+  for (const key of Object.keys(errors)) errors[key] = ''
+}
+
+// Move focus to what the new step needs: the code boxes, the recovery
+// field, or the heading (so a screen reader hears the new title).
+function focusStep() {
+  nextTick(() => {
+    if (step.value === 'mfa') otpRef.value?.focus()
+    else if (step.value === 'recovery') recoveryRef.value?.focus()
+    else if (step.value === 'enroll') headingRef.value?.focus()
+    else emailRef.value?.focus()
+  })
+}
+
+function goTo(next) {
+  clearErrors()
+  code.value = ''
+  recoveryCode.value = ''
+  step.value = next
+  focusStep()
+}
+
+function backToPassword() {
+  challenge.email = ''
+  challenge.methods = []
+  password.value = ''
+  goTo('password')
+}
+
+function switchMode() {
+  mode.value = mode.value === 'register' ? 'login' : 'register'
   password.value = ''
   confirmPassword.value = ''
   inviteCode.value = ''
-  resetMFAChallenge()
+  goTo('password')
 }
 
-function resetMFAChallenge() {
-  mfaRequired.value = false
-  mfaCode.value = ''
-  mfaMethods.value = []
+const EMAIL_PATTERN = /^[^\s@]+@[^\s@]+\.[^\s@]+$/
+
+function validateEmail() {
+  if (!email.value) {
+    // Only complain on blur once the user typed something; submit checks again.
+    return true
+  }
+  errors.email = EMAIL_PATTERN.test(email.value) ? '' : t('auth.errors.emailInvalid')
+  return !errors.email
 }
 
-function resolveAuthPayload(res, fallbackMessage, options = {}) {
+function requireEmailAndPassword() {
+  errors.email = !email.value ? t('auth.errors.emailRequired') : (EMAIL_PATTERN.test(email.value) ? '' : t('auth.errors.emailInvalid'))
+  errors.password = password.value ? '' : t('auth.errors.passwordRequired')
+  return !errors.email && !errors.password
+}
+
+// --- server answers -------------------------------------------------------
+function payloadOf(res, fallback) {
   if (typeof res?.code === 'number' && res.code !== 0) {
-    throw new Error(res.msg || fallbackMessage)
+    throw new Error(res.msg || fallback)
   }
-
-  const payload = res?.data && typeof res.data === 'object' ? res.data : res
-  if (options.allowMFAChallenge && (payload?.mfa_required || payload?.mfa_enrollment_required)) {
-    return payload
-  }
-  if (!payload?.token) {
-    throw new Error(fallbackMessage)
-  }
-  return payload
+  return res?.data && typeof res.data === 'object' ? res.data : res
 }
 
-function resolvePermissionFields(payload) {
+function permissionFields(payload) {
   const fields = {}
   for (const field of ['permission_mode', 'permissions', 'restricted_plugins']) {
-    if (Object.prototype.hasOwnProperty.call(payload || {}, field)) {
-      fields[field] = payload[field]
-    }
+    if (Object.prototype.hasOwnProperty.call(payload || {}, field)) fields[field] = payload[field]
   }
   return fields
 }
 
-function resolveAuthErrorMessage(err, fallbackMessage) {
-  return err?.response?.data?.msg || err?.response?.data?.message || err?.message || fallbackMessage
+function serverMessage(error) {
+  return error?.response?.data?.msg || error?.response?.data?.message || error?.message || ''
 }
 
-async function handleRegister() {
-  resetMFAChallenge()
-  if (!email.value || !password.value) {
-    errorMsg.value = t('login.errors.emailPasswordRequired')
-    return
-  }
-  if (password.value.length < 6) {
-    errorMsg.value = t('login.errors.passwordMin')
-    return
-  }
-  if (password.value !== confirmPassword.value) {
-    errorMsg.value = t('login.errors.passwordMismatch')
-    return
-  }
+function isRateLimited(error, message) {
+  return error?.response?.status === 429 || /too many/i.test(message)
+}
 
+// axios: no response at all (offline, refused, timed out).
+function isNetworkError(error) {
+  return Boolean(error?.isAxiosError || error?.request) && !error?.response
+}
+
+function signInWith(payload) {
+  const { token, is_admin: isAdmin, user_id: id, email: userEmail } = payload
+  if (!token) throw new Error(t('auth.errors.network'))
+  userStore.login(token, { id, email: userEmail, is_admin: isAdmin, ...permissionFields(payload) })
+  router.push(isAdmin ? '/admin/dashboard' : '/user/dashboard')
+}
+
+function credentials() {
+  return { email: email.value, password: password.value }
+}
+
+// --- sign in ----------------------------------------------------------------
+async function submitPassword() {
+  clearErrors()
+  if (!requireEmailAndPassword()) return
   loading.value = true
-  errorMsg.value = ''
-  successMsg.value = ''
-
   try {
-    const res = await register({
-      email: email.value,
-      password: password.value,
-      ...(requireInvite.value && inviteCode.value ? { invite_code: inviteCode.value } : {})
-    })
-
-    const payload = resolveAuthPayload(res, t('login.errors.registerFailed'))
-    const { token, is_admin, user_id, email: userEmail } = payload
-    userStore.login(token, {
-      id: user_id,
-      email: userEmail,
-      is_admin,
-      ...resolvePermissionFields(payload)
-    })
-
-    successMsg.value = t('login.success.registerCompleted')
-    setTimeout(() => {
-      router.push(is_admin ? '/admin/dashboard' : '/user/dashboard')
-    }, 1000)
-  } catch (err) {
-    errorMsg.value = resolveAuthErrorMessage(err, t('login.errors.registerFailed'))
+    const payload = payloadOf(await login(credentials()), t('auth.errors.network'))
+    if (payload?.mfa_enrollment_required) {
+      challenge.email = payload.email || email.value
+      goTo('enroll')
+      return
+    }
+    if (payload?.mfa_required) {
+      challenge.email = payload.email || email.value
+      challenge.methods = Array.isArray(payload.methods) ? payload.methods : (Array.isArray(payload.mfa_methods) ? payload.mfa_methods : [])
+      goTo('mfa')
+      return
+    }
+    signInWith(payload)
+  } catch (error) {
+    const message = serverMessage(error)
+    if (isRateLimited(error, message)) formError.value = t('auth.errors.rateLimited')
+    else if (isNetworkError(error)) formError.value = t('auth.errors.network')
+    else formError.value = t('auth.errors.signInFailed', { message: message || t('auth.errors.network') })
   } finally {
     loading.value = false
   }
 }
 
-async function handleLogin() {
-  if (!email.value || !password.value) {
-    errorMsg.value = t('login.errors.emailPasswordRequired')
+async function submitSecondFactor(fields, field) {
+  loading.value = true
+  try {
+    const payload = payloadOf(await login({ ...credentials(), ...fields }), t('auth.errors.network'))
+    if (payload?.mfa_required || payload?.mfa_enrollment_required) {
+      errors[field] = field === 'code' ? t('auth.errors.codeInvalid') : t('auth.errors.recoveryInvalid')
+      return
+    }
+    signInWith(payload)
+  } catch (error) {
+    const message = serverMessage(error)
+    if (isRateLimited(error, message)) errors[field] = t('auth.errors.rateLimited')
+    else if (/invalid mfa code/i.test(message)) errors[field] = field === 'code' ? t('auth.errors.codeInvalid') : t('auth.errors.recoveryInvalid')
+    else if (isNetworkError(error)) errors[field] = t('auth.errors.network')
+    else errors[field] = t('auth.errors.signInFailed', { message: message || t('auth.errors.network') })
+    if (field === 'code') {
+      otpRef.value?.clear()
+    } else {
+      nextTick(() => recoveryRef.value?.select?.())
+    }
+  } finally {
+    loading.value = false
+  }
+}
+
+async function submitCode(value) {
+  if (loading.value) return
+  const digits = String(typeof value === 'string' ? value : code.value).replace(/\D/g, '')
+  if (digits.length !== 6) {
+    errors.code = t('auth.errors.codeIncomplete')
+    otpRef.value?.focus()
     return
   }
-  if (mfaRequired.value && !mfaCode.value) {
-    errorMsg.value = t('login.errors.mfaCodeRequired')
+  errors.code = ''
+  await submitSecondFactor({ mfa_code: digits, mfa_method: 'totp' }, 'code')
+}
+
+// Recovery codes are XXXX-XXXX from A-Z and 0-9 (identity/account/mfa.go)
+// and compared exactly: upper-case them and restore the hyphen.
+function formatRecovery(value) {
+  const clean = String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+  if (clean.length !== 8) return String(value || '').toUpperCase().trim()
+  return `${clean.slice(0, 4)}-${clean.slice(4)}`
+}
+
+async function submitRecovery() {
+  const formatted = formatRecovery(recoveryCode.value)
+  recoveryCode.value = formatted
+  if (!/^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(formatted)) {
+    errors.recovery = t('auth.errors.recoveryFormat')
+    recoveryRef.value?.focus()
     return
   }
+  errors.recovery = ''
+  await submitSecondFactor({ mfa_code: formatted, mfa_method: 'backup' }, 'recovery')
+}
+
+// --- register ---------------------------------------------------------------
+async function submitRegister() {
+  clearErrors()
+  const valid = requireEmailAndPassword()
+  if (password.value && password.value.length < 6) errors.password = t('auth.errors.passwordShort')
+  if (password.value !== confirmPassword.value) errors.confirm = t('auth.errors.passwordMismatch')
+  if (requireInvite.value && !inviteCode.value) errors.invite = t('auth.errors.inviteRequired')
+  if (!valid || errors.password || errors.confirm || errors.invite) return
 
   loading.value = true
-  errorMsg.value = ''
-  successMsg.value = ''
-
   try {
-    const res = await login({
-      email: email.value,
-      password: password.value,
-      ...(mfaRequired.value ? { mfa_code: mfaCode.value } : {})
-    })
-
-    const payload = resolveAuthPayload(res, t('login.errors.loginFailed'), { allowMFAChallenge: true })
-    if (payload.mfa_enrollment_required) {
-      resetMFAChallenge()
-      errorMsg.value = t('login.errors.mfaEnrollmentRequired')
-      return
-    }
-    if (payload.mfa_required) {
-      mfaRequired.value = true
-      mfaCode.value = ''
-      mfaMethods.value = Array.isArray(payload.methods) ? payload.methods : []
-      successMsg.value = t('login.mfaRequired')
-      return
-    }
-
-    const { token, is_admin, user_id, email: userEmail } = payload
-    userStore.login(token, {
-      id: user_id,
-      email: userEmail,
-      is_admin,
-      ...resolvePermissionFields(payload)
-    })
-
-    resetMFAChallenge()
-    router.push(is_admin ? '/admin/dashboard' : '/user/dashboard')
-  } catch (err) {
-    errorMsg.value = resolveAuthErrorMessage(err, t('login.errors.loginFailed'))
+    const payload = payloadOf(await register({
+      ...credentials(),
+      ...(requireInvite.value && inviteCode.value ? { invite_code: inviteCode.value } : {})
+    }), t('auth.errors.network'))
+    toast.success(t('auth.register.done'))
+    signInWith(payload)
+  } catch (error) {
+    const message = serverMessage(error)
+    if (isNetworkError(error)) formError.value = t('auth.errors.network')
+    else formError.value = t('auth.errors.registerFailed', { message: message || t('auth.errors.network') })
   } finally {
     loading.value = false
   }
 }
 
 function mockLogin(role) {
-  if (!enableMockLogin.value) {
-    return
-  }
-
-  const mockUser = {
+  if (!enableMockLogin.value) return
+  userStore.login(`mock-token-${role}`, {
     id: 1,
     email: role === 'admin' ? 'admin@example.com' : 'user@example.com',
     is_admin: role === 'admin'
-  }
-
-  resetMFAChallenge()
-  userStore.login(`mock-token-${role}`, mockUser)
+  })
   router.push(role === 'admin' ? '/admin/dashboard' : '/user/dashboard')
 }
+
+defineExpose({ mode, step })
 </script>
 
 <style scoped>
-.login-page {
-  min-height: 100vh;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space-6);
-}
-
-.login-shell {
-  width: 100%;
-  max-width: 1120px;
+/* Brand moment (guidelines/color.md rule 4): the only gradient is the
+   backdrop wash and the mark tile; text and controls stay neutral. */
+.auth {
   display: grid;
-  grid-template-columns: minmax(320px, 1.05fr) minmax(360px, 0.95fr);
-  gap: var(--space-6);
+  min-height: 100vh;
+  min-height: 100dvh;
+  place-items: center;
+  padding: var(--space-10) var(--space-4);
+  background:
+    radial-gradient(60% 50% at 20% 0%, color-mix(in srgb, var(--brand-gradient-start) 14%, transparent), transparent 70%),
+    radial-gradient(50% 50% at 90% 10%, color-mix(in srgb, var(--brand-gradient-end) 12%, transparent), transparent 70%),
+    var(--bg);
 }
 
-/* Brand moment: the mark tile on slate with a soft glow of the brand
-   gradient; text stays on slate so it keeps AA contrast (brand.md §3.1). */
-.login-aside {
+.auth:focus {
+  outline: none;
+}
+
+.auth__stack {
   display: flex;
   flex-direction: column;
-  padding: var(--space-10);
-  border-radius: var(--radius-lg);
-  background:
-    radial-gradient(120% 90% at 100% 0%, color-mix(in srgb, var(--brand-gradient-end) 42%, transparent), transparent 62%),
-    radial-gradient(90% 70% at 0% 100%, color-mix(in srgb, var(--brand-gradient-start) 26%, transparent), transparent 60%),
-    var(--brand-slate-900);
-  color: var(--on-accent);
-  box-shadow: var(--shadow-2);
+  gap: var(--space-5);
+  align-items: center;
+  width: 100%;
 }
 
-.aside-top {
+.auth__card {
   display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  width: min(400px, 100%);
+  padding: var(--space-10) var(--space-8);
+  border-radius: var(--radius-lg);
+  background: var(--bg-elevated);
+  box-shadow: 0 0 0 0.5px var(--separator), var(--shadow-2);
+}
+
+.auth__header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
   align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  flex-wrap: wrap;
+  text-align: center;
 }
 
-.aside-copy {
-  margin-top: var(--space-12);
-}
-
-.aside-pill {
-  display: inline-flex;
-  align-items: center;
-  min-height: 28px;
-  padding: 0 var(--space-3);
-  border-radius: var(--radius-pill);
-  background: color-mix(in srgb, var(--on-accent) 14%, transparent);
-  font-size: var(--type-caption-size);
-  font-weight: var(--weight-semibold);
-}
-
-.login-aside h1 {
-  font-size: var(--type-display-size);
-  line-height: var(--type-display-line);
-  font-weight: var(--type-display-weight);
-  letter-spacing: var(--type-display-tracking);
-}
-
-.login-aside p {
-  margin-top: var(--space-3);
-  max-width: 440px;
-  color: color-mix(in srgb, var(--on-accent) 78%, transparent);
-}
-
-.aside-mode-copy {
-  color: color-mix(in srgb, var(--on-accent) 92%, transparent);
-  font-weight: var(--weight-semibold);
-}
-
-.aside-stats {
-  margin-top: auto;
-  padding-top: var(--space-10);
-  display: grid;
-  gap: var(--space-3);
-}
-
-.aside-stat {
-  padding: var(--space-4) var(--space-5);
-  border-radius: var(--radius-md);
-  background: color-mix(in srgb, var(--on-accent) 8%, transparent);
-  border: 1px solid color-mix(in srgb, var(--on-accent) 10%, transparent);
-}
-
-.aside-stat-label {
-  display: block;
-  font-size: var(--type-caption-size);
-  color: color-mix(in srgb, var(--on-accent) 70%, transparent);
+.auth__tile {
   margin-bottom: var(--space-1);
+  filter: drop-shadow(0 8px 20px color-mix(in srgb, var(--brand-gradient-end) 30%, transparent));
 }
 
-.aside-stat strong {
+.auth__title {
+  font-size: var(--type-title-2-size);
+  font-weight: var(--type-title-2-weight);
+  line-height: var(--type-title-2-line);
+  letter-spacing: var(--type-title-2-tracking);
+}
+
+.auth__title:focus {
+  outline: none;
+}
+
+.auth__title:focus-visible {
+  border-radius: var(--radius-xs);
+  outline: 2px solid var(--accent);
+  outline-offset: 4px;
+}
+
+.auth__subtitle {
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
+  line-height: var(--type-callout-line);
+  overflow-wrap: anywhere;
+}
+
+.auth__email {
+  color: var(--label-1);
+  font-weight: var(--weight-medium);
+}
+
+.auth__form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.auth__alert {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--danger-soft);
+  /* 4.5:1 on the tinted fill in both themes. */
+  color: color-mix(in srgb, var(--danger) 80%, var(--label-1));
+  font-size: var(--type-callout-size);
+  line-height: var(--type-callout-line);
+}
+
+.auth__alert :deep(.ui-icon) {
+  flex: none;
+  margin-top: 2px;
+}
+
+.auth__switch {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  align-items: center;
+  justify-content: center;
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
+}
+
+.auth__row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  justify-content: space-between;
+}
+
+.auth__recovery :deep(input) {
+  font-family: var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.auth__enroll {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+  padding: var(--space-5);
+  border-radius: var(--radius-md);
+  background: var(--bg-grouped);
+}
+
+.auth__enroll-title {
   font-size: var(--type-body-size);
   font-weight: var(--weight-semibold);
 }
 
-.login-panel {
-  padding: var(--space-8);
-  border-radius: var(--radius-lg);
-}
-
-.panel-brand {
-  display: none;
-  margin-bottom: var(--space-6);
-}
-
-.login-panel-header {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-4);
-  margin-bottom: var(--space-6);
-}
-
-.login-panel-header h2 {
-  font-size: var(--type-title-2-size);
-  line-height: var(--type-title-2-line);
-  font-weight: var(--type-title-2-weight);
-  letter-spacing: var(--type-title-2-tracking);
-}
-
-.login-panel-header p {
-  margin-top: var(--space-2);
-  color: var(--label-2);
-}
-
-.login-form {
+.auth__steps {
   display: flex;
   flex-direction: column;
-  gap: var(--space-4);
-}
-
-/* The global .form-row is a horizontal flex row; login fields stack their
-   label on top (plan D5). */
-.login-form .form-row {
-  display: block;
-}
-
-.form-row label {
-  display: block;
-  margin-bottom: var(--space-2);
+  gap: var(--space-2);
+  padding-left: var(--space-5);
   font-size: var(--type-callout-size);
-  font-weight: var(--weight-semibold);
-  color: var(--label-2);
+  line-height: var(--type-callout-line);
 }
 
-.banner {
-  padding: var(--space-3) var(--space-4);
-  border-radius: var(--radius-sm);
-  font-size: var(--type-callout-size);
-}
-
-.error-banner {
-  background: var(--danger-soft);
-  border: 1px solid color-mix(in srgb, var(--danger) 24%, transparent);
-  color: var(--danger);
-}
-
-.success-banner {
-  background: var(--success-soft);
-  border: 1px solid color-mix(in srgb, var(--success) 24%, transparent);
-  color: var(--success);
-}
-
-.submit-button {
-  width: 100%;
-  min-height: var(--size-control-lg);
-}
-
-.spinner {
-  width: 14px;
-  height: 14px;
-  border: 2px solid color-mix(in srgb, var(--on-accent) 35%, transparent);
-  border-top-color: var(--on-accent);
-  border-radius: 50%;
-  animation: rotate 1s linear infinite;
-}
-
-.login-footer {
-  margin-top: var(--space-5);
+.auth__note {
   display: flex;
-  justify-content: space-between;
-  gap: var(--space-3);
-}
-
-.login-footer a {
-  color: var(--accent);
-  text-decoration: none;
-  font-weight: var(--weight-medium);
-}
-
-.dev-actions {
-  margin-top: var(--space-6);
-}
-
-.dev-divider {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  margin-bottom: var(--space-3);
+  gap: var(--space-2);
+  align-items: flex-start;
   color: var(--label-2);
   font-size: var(--type-callout-size);
+  line-height: var(--type-callout-line);
 }
 
-.dev-divider::before,
-.dev-divider::after {
-  content: '';
-  flex: 1;
-  height: 1px;
-  background: var(--separator);
+.auth__note :deep(.ui-icon) {
+  flex: none;
+  margin-top: 2px;
 }
 
-.dev-buttons {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
+.auth__dev {
+  display: flex;
+  flex-direction: column;
   gap: var(--space-3);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--separator);
 }
 
-@keyframes rotate {
-  to {
-    transform: rotate(360deg);
-  }
+.auth__dev-title {
+  color: var(--label-2);
+  font-size: var(--type-caption-size);
+  text-align: center;
 }
 
-@media (max-width: 920px) {
-  .login-shell {
-    max-width: 480px;
-    grid-template-columns: 1fr;
+@media (max-width: 639px) {
+  .auth {
+    align-items: start;
+    padding: var(--space-8) var(--space-4);
   }
 
-  .login-aside {
-    display: none;
-  }
-
-  .panel-brand {
-    display: inline-flex;
-  }
-}
-
-@media (max-width: 520px) {
-  .login-page {
-    padding: var(--space-4);
-  }
-
-  .login-panel {
-    padding: var(--space-6);
-  }
-
-  .login-panel-header,
-  .login-footer {
-    flex-direction: column;
-  }
-
-  .dev-buttons {
-    grid-template-columns: 1fr;
+  .auth__card {
+    padding: var(--space-8) var(--space-5);
   }
 }
 </style>

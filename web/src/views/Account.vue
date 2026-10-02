@@ -15,7 +15,7 @@
       data-account-section="mfa"
     >
       <UiGroupedListRow v-if="mfa.state === 'loading'" :label="t('shell.accountPage.mfa.status')">
-        <UiSkeleton variant="text" :lines="1" class="account-page__skeleton" />
+        <UiSkeleton v-if="showMfaSkeleton" variant="text" :lines="1" class="account-page__skeleton" />
       </UiGroupedListRow>
       <UiGroupedListRow v-else-if="mfa.state === 'failed'" :label="t('shell.accountPage.mfa.loadFailed')">
         <UiButton size="sm" @click="loadMfa">{{ t('shell.accountPage.mfa.retry') }}</UiButton>
@@ -67,7 +67,7 @@
       </UiGroupedListRow>
     </UiGroupedList>
 
-    <!-- Turn on: setup key, then the first code. -->
+    <!-- Turn on: scan the QR code (or type the key), then the first code. -->
     <UiDialog
       v-model:open="setup.open"
       :title="t('shell.accountPage.mfa.setup.title')"
@@ -78,19 +78,37 @@
     >
       <p v-if="setup.preparing" class="account-page__muted">{{ t('shell.accountPage.mfa.setup.preparing') }}</p>
       <p v-else-if="setup.loadError" class="account-page__error" role="alert">{{ setup.loadError }}</p>
-      <form v-else id="mfa-setup-form" class="account-page__form" novalidate @submit.prevent="confirmSetup">
-        <UiCopyField :value="setup.secret" :label="t('shell.accountPage.mfa.setup.secret')" :help="t('shell.accountPage.mfa.setup.secretHelp')" size="md" />
-        <a v-if="setup.url" class="account-page__link" :href="setup.url">{{ t('shell.accountPage.mfa.setup.openApp') }}</a>
-        <UiTextField
-          v-model="setup.code"
-          :label="t('shell.accountPage.mfa.setup.code')"
-          :help="t('shell.accountPage.mfa.setup.codeHelp')"
-          :error="setup.error"
-          inputmode="numeric"
-          autocomplete="one-time-code"
-          maxlength="6"
-          required
-        />
+      <form v-else id="mfa-setup-form" class="account-page__form" novalidate @submit.prevent="confirmSetup()">
+        <ol class="account-page__steps">
+          <li class="account-page__step">
+            <span class="account-page__step-number" aria-hidden="true">1</span>
+            <div class="account-page__step-body">
+              <p class="account-page__step-title">{{ t('shell.accountPage.mfa.setup.scan') }}</p>
+              <div class="account-page__scan">
+                <UiQrCode v-if="setup.url" :value="setup.url" :label="t('shell.accountPage.mfa.setup.qrLabel')" :size="152" data-mfa-qr />
+                <div class="account-page__manual">
+                  <UiCopyField :value="setup.secret" :label="t('shell.accountPage.mfa.setup.manual')" :help="t('shell.accountPage.mfa.setup.secretHelp')" size="md" stacked />
+                  <a v-if="setup.url" class="account-page__link" :href="setup.url">{{ t('shell.accountPage.mfa.setup.openApp') }}</a>
+                </div>
+              </div>
+            </div>
+          </li>
+          <li class="account-page__step">
+            <span class="account-page__step-number" aria-hidden="true">2</span>
+            <div class="account-page__step-body">
+              <UiOtpField
+                ref="setupOtpRef"
+                v-model="setup.code"
+                :label="t('shell.accountPage.mfa.setup.enterCode')"
+                :help="t('shell.accountPage.mfa.setup.codeHelp')"
+                :error="setup.error"
+                :disabled="setup.busy"
+                data-mfa-code
+                @complete="confirmSetup"
+              />
+            </div>
+          </li>
+        </ol>
       </form>
       <template #footer="{ close }">
         <UiButton :disabled="setup.busy" @click="close">{{ t('common.actions.cancel') }}</UiButton>
@@ -106,7 +124,7 @@
       </template>
     </UiDialog>
 
-    <!-- Backup codes, shown once after turning on or regenerating. -->
+    <!-- Recovery codes, shown once after turning on or regenerating. -->
     <UiDialog
       v-model:open="codes.open"
       :title="t('shell.accountPage.mfa.backup.title')"
@@ -118,7 +136,8 @@
         <li v-for="code in codes.list" :key="code">{{ code }}</li>
       </ul>
       <template #footer="{ close }">
-        <UiButton @click="copyCodes">{{ codes.copied ? t('ui.actions.copied') : t('shell.accountPage.mfa.backup.copyAll') }}</UiButton>
+        <UiButton :icon="Download" data-mfa-codes-download @click="downloadCodes">{{ t('shell.accountPage.mfa.backup.download') }}</UiButton>
+        <UiButton :icon="codes.copied ? Check : Copy" @click="copyCodes">{{ codes.copied ? t('ui.actions.copied') : t('shell.accountPage.mfa.backup.copyAll') }}</UiButton>
         <UiButton variant="primary" @click="close">{{ t('shell.accountPage.mfa.backup.done') }}</UiButton>
       </template>
     </UiDialog>
@@ -154,18 +173,33 @@
 // 账户 (plan §8.1, shell phase U3): profile, two-factor authentication,
 // language and appearance, for users (/user/account) and admins
 // (/admin/account). Only what the backend serves: the profile is read-only
-// (GET /user/profile) and two-factor uses /user/mfa/*. Password change and
-// signed-in devices have no endpoint yet, so they are not here.
-import { computed, onMounted, reactive } from 'vue'
-import { Monitor, Moon, Sun } from '@lucide/vue'
+// (GET /user/profile) and two-factor uses /user/mfa/*: turning it on shows
+// the otpauth:// key as a QR code (and as text) and takes the first code in
+// UiOtpField (U5). Password change and signed-in devices have no endpoint
+// yet, so they are not here.
+import { computed, nextTick, onMounted, reactive, ref } from 'vue'
+import { Check, Copy, Download, Monitor, Moon, Sun } from '@lucide/vue'
 import { disableMfa, enableTotp, getMfaStatus, regenerateBackupCodes, setupTotp } from '@/api/user'
 import { useUserStore } from '@/stores/user'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useTheme } from '@/composables/useTheme'
-import {
-  UiBadge, UiButton, UiCopyField, UiDialog, UiGroupedList, UiGroupedListRow, UiPageHeader, UiPasswordField,
-  UiSegmentedControl, UiSkeleton, UiTextField, copyText, useConfirm, useFormat, useToast
-} from '@/ui'
+import UiBadge from '@/ui/UiBadge.vue'
+import UiButton from '@/ui/UiButton.vue'
+import UiCopyField from '@/ui/UiCopyField.vue'
+import UiDialog from '@/ui/UiDialog.vue'
+import UiGroupedList from '@/ui/UiGroupedList.vue'
+import UiGroupedListRow from '@/ui/UiGroupedListRow.vue'
+import UiOtpField from '@/ui/UiOtpField.vue'
+import UiPageHeader from '@/ui/UiPageHeader.vue'
+import UiPasswordField from '@/ui/UiPasswordField.vue'
+import UiQrCode from '@/ui/UiQrCode.vue'
+import UiSegmentedControl from '@/ui/UiSegmentedControl.vue'
+import UiSkeleton from '@/ui/UiSkeleton.vue'
+import { copyText } from '@/ui/composables/useClipboard'
+import { useConfirm } from '@/ui/composables/useConfirm'
+import { useDelayedLoading } from '@/ui/composables/useDelayedLoading'
+import { useFormat } from '@/ui/composables/useFormat'
+import { useToast } from '@/ui/composables/useToast'
 
 const userStore = useUserStore()
 const { t, currentLocale, localeOptions, switchLocale } = useAppI18n()
@@ -200,6 +234,7 @@ function messageOf(error) {
 }
 
 const mfa = reactive({ state: 'loading', enabled: false, remaining: 0, lastUsed: null })
+const showMfaSkeleton = useDelayedLoading(computed(() => mfa.state === 'loading'))
 
 async function loadMfa() {
   mfa.state = 'loading'
@@ -226,6 +261,16 @@ async function copyCodes() {
   codes.copied = await copyText(codes.list.join('\n'))
 }
 
+function downloadCodes() {
+  const host = typeof window !== 'undefined' ? window.location.host : 'anixops'
+  const url = URL.createObjectURL(new Blob([`${codes.list.join('\n')}\n`], { type: 'text/plain' }))
+  const anchor = document.createElement('a')
+  anchor.href = url
+  anchor.download = `${host}-recovery-codes.txt`
+  anchor.click()
+  URL.revokeObjectURL(url)
+}
+
 // --- turn on -------------------------------------------------------------
 const setup = reactive({ open: false, preparing: false, busy: false, secret: '', url: '', backupCodes: [], code: '', error: '', loadError: '' })
 
@@ -245,10 +290,14 @@ async function startSetup() {
   }
 }
 
-async function confirmSetup() {
-  const code = String(setup.code || '').replace(/\s+/g, '')
+const setupOtpRef = ref(null)
+
+async function confirmSetup(value) {
+  if (setup.busy) return
+  const code = String(typeof value === 'string' ? value : setup.code || '').replace(/\s+/g, '')
   if (!/^\d{6}$/.test(code)) {
     setup.error = t('shell.accountPage.mfa.errors.code')
+    setupOtpRef.value?.focus()
     return
   }
   setup.error = ''
@@ -261,6 +310,7 @@ async function confirmSetup() {
     await loadMfa()
   } catch (error) {
     setup.error = t('shell.accountPage.mfa.errors.failed', { message: messageOf(error) })
+    nextTick(() => setupOtpRef.value?.clear())
   } finally {
     setup.busy = false
   }
@@ -340,6 +390,57 @@ onMounted(loadMfa)
 .account-page__link {
   align-self: flex-start;
   font-size: var(--type-callout-size);
+}
+
+.account-page__steps {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  list-style: none;
+}
+
+.account-page__step {
+  display: flex;
+  gap: var(--space-3);
+}
+
+.account-page__step-number {
+  display: grid;
+  flex: none;
+  width: 24px;
+  height: 24px;
+  place-items: center;
+  border-radius: 50%;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: var(--type-caption-size);
+  font-weight: var(--weight-semibold);
+}
+
+.account-page__step-body {
+  flex: 1;
+  min-width: 0;
+}
+
+.account-page__step-title {
+  margin-bottom: var(--space-3);
+  font-size: var(--type-callout-size);
+  font-weight: var(--weight-medium);
+}
+
+.account-page__scan {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-5);
+  align-items: flex-start;
+}
+
+.account-page__manual {
+  display: flex;
+  flex: 1 1 200px;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
 }
 
 .account-page__muted {

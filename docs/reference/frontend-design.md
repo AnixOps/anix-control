@@ -436,8 +436,10 @@ focus returns to where it was. It lists:
   follows the system again.
 - **账户** (`/user/account`, `/admin/account`, `views/Account.vue`): the
   profile (read-only, `GET /user/profile`), two-factor authentication
-  (`/user/mfa/*`: status, turn on with a setup key and the first code, backup
-  codes shown once, new backup codes, turn off with the current password),
+  (`/user/mfa/*`: status; turn on by scanning a QR code of the `otpauth://`
+  key, or typing the key, then entering the first code in `UiOtpField`;
+  recovery codes shown once, with copy and download; new recovery codes;
+  turn off with the current password),
   language and appearance. Password change and signed-in devices have no
   endpoint, so they are not shown.
 - **404 and 无权限** (`views/StatusPage.vue`, `UiEmptyState` with the page's
@@ -455,6 +457,77 @@ focus returns to where it was. It lists:
   the position (waiting up to 1.5 s for the list to load), and a change of
   only the query keeps the position.
 
+## Sign-in and user pages (U5)
+
+All of them read the API through `utils/panelResponse.js` (`unwrapPanel`
+throws on a `{ code != 0 }` envelope, so an error never renders as an empty
+page) and have the same four states: nothing for 300 ms, then a skeleton
+(`useDelayedLoading`); the content; an empty state that says what will
+appear and offers the first action; and `components/common/LoadError.vue`
+(what failed, the server's message, 重试, 复制错误详情 with status, request id,
+page and time). No new endpoints or routes: page state lives in the query.
+
+- **登录** (`views/Login.vue`): one 400 px card on the `--bg` backdrop with
+  two faint brand-gradient washes (a brand moment). Steps, each with its own
+  H1 that takes focus when it is not a field: email and password
+  (`UiPasswordField` reveal) → 两步验证, six `UiOtpField` boxes (typing
+  advances, Backspace steps back, paste or one-time-code autofill spreads,
+  the sixth digit submits; `mfa_method: "totp"`) → or 使用恢复码, offered only
+  when the server lists the `backup` method (`XXXX-XXXX`, upper-cased,
+  `mfa_method: "backup"`). `mfa_enrollment_required` has no token and the
+  `/user/mfa/*` setup endpoints need one, so the card explains what to do
+  (the administrator pauses the policy, the user turns it on in 账户). No
+  "忘记密码": there is no password-reset endpoint. Registration appears only
+  when the public config enables it; the invite code field only with
+  `require_invite`. Server errors show in one `role="alert"` above the
+  button; field errors sit under their fields. No required asterisks on this
+  form (`aria-required` instead).
+- **概览** (`views/user/Dashboard.vue`): 你好，{邮箱前缀}, one sentence on the
+  state, and the hero card: remaining traffic in a 200 px ring (brand
+  gradient stroke; the number in the gradient, its first stop mixed 30 %
+  towards indigo so the lightest edge keeps 3:1 on white), status, expiry,
+  used (upload and download hidden on phones), the plan (订阅模板 in the
+  community edition, 套餐 in the commercial one), 复制订阅链接 (primary),
+  导入到客户端, and 数据更新于 … with 刷新 (`?refresh=true`). Below: the first
+  three help articles in the administrator's order, and the three latest
+  tickets. The commercial edition adds a card with 选购套餐 and 我的订单. The
+  summary has no traffic-reset date and no balance, so neither is shown.
+- **订阅** (`views/user/Subscribe.vue`, `composables/useUserSubscription.js`):
+  the link (`UiCopyField`, the token from the profile, the domain picker when
+  several are configured), its QR code (`UiQrCode`), and one-click import
+  for the clients the kernel serves a format for
+  (`views/user/subscriptionClients.js`: Clash Verge, Shadowrocket, sing-box,
+  Stash, Surge, Quantumult X and Loon open their own URL scheme with the
+  format's link; v2rayN copies its link). 其他格式 lists every format with
+  copy and a preview Sheet (fetched from the page's own origin) with
+  download. Users cannot reset their own link (only
+  `POST /admin/users/:id/reset-subscribe` exists), so the danger zone's
+  申请重置 confirms in place and files a ticket for the administrator.
+- **帮助中心** (`views/user/Knowledge.vue`): a centred search (`/` focuses
+  it; `?q=`), category cards with counts (`?category=`), and the list. An
+  article opens in place (`?article=`) at `--size-content-read` (692 px)
+  with a table of contents (three headings or more), previous / next within
+  the list the reader came from, and 提交工单. Bodies are rendered by
+  `utils/articleMarkup.js` + `ArticleBody.vue` as elements, never HTML:
+  headings, paragraphs, lists, quotes, fenced code, bold, inline code and
+  http(s)/mailto links.
+- **工单** (`views/user/Tickets.vue`): the list and the conversation side by
+  side from 834 px (`?ticket=`); below it the list, then the conversation
+  full width with 我的工单 to go back (its subject becomes the page's H1).
+  Replies send with the button or Ctrl/⌘ + Enter; 关闭工单 confirms. 新建工单
+  opens a Sheet (subject, priority, details; `?new=1` opens it from other
+  pages) and selects the new ticket.
+- **套餐 / 订单** (commercial edition only): store-style plan cards (price in
+  Title 1 through `useFormat().money`, a billing-period segmented control,
+  the plan's limits and description lines), a checkout dialog with a coupon,
+  and the orders as a list with a details Sheet. 去支付 says that online
+  payment is not available yet.
+
+New components: `UiOtpField` (a fieldset of one-digit boxes) and `UiQrCode`
+(the `uqr` encoder, MIT, 3.8 KB gzip in its own `qr` chunk, loaded on first
+use; dark modules on a light tile in both themes, because many scanners
+cannot read an inverted code).
+
 ## Bundle
 
 Reka UI and its helpers (`@floating-ui`, `@vueuse`, …) build into a
@@ -463,4 +536,7 @@ it is about 45 KB gzip (the components add 14 KB JS and 7 KB CSS). The
 login page loads none of it (112 KB gzip in total, against the 120 KB budget
 of plan §13). The admin shell adds its layout chunk and `ui-vendor`: about
 165 KB gzip before the first page, against the 250 KB budget. Import
-components from the pages that use them so routes stay lazy.
+components from the pages that use them so routes stay lazy: the `@/ui`
+barrel pulls every component into the page that imports it, so pages import
+`@/ui/UiButton.vue` and `@/ui/composables/…` directly. The U5 sign-in form
+(text, password and code fields) adds about 10 KB gzip to the login page.

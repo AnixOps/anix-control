@@ -1,305 +1,266 @@
 <template>
-  <div class="page-shell orders-page">
-    <div class="page-toolbar">
-      <div>
-        <h1>{{ t('user.orders.title') }}</h1>
-        <p>{{ t('user.orders.subtitle') }}</p>
-      </div>
+  <div class="orders">
+    <UiPageHeader :title="t('portal.orders.title')" :description="t('portal.orders.description')">
+      <template v-if="state === 'ready' && orders.length" #actions>
+        <UiButton :as="RouterLink" to="/user/plans">{{ t('portal.orders.browse') }}</UiButton>
+      </template>
+    </UiPageHeader>
+
+    <div v-if="state === 'loading'">
+      <UiSkeleton v-if="showSkeleton" variant="table-row" :rows="4" :columns="4" />
     </div>
+    <LoadError v-else-if="state === 'failed'" :title="t('portal.orders.loadFailed')" :error="loadError" @retry="load" />
+    <UiEmptyState v-else-if="!orders.length" :icon="Receipt" :title="t('portal.orders.empty')" :description="t('portal.orders.emptyHint')" heading-tag="h2" data-orders-empty>
+      <template #actions>
+        <UiButton :as="RouterLink" to="/user/plans" variant="primary">{{ t('portal.orders.browse') }}</UiButton>
+      </template>
+    </UiEmptyState>
 
-    <section v-if="loading" class="section-panel loading-state">
-      <div class="spinner"></div>
-      <p>{{ t('user.orders.loading') }}</p>
-    </section>
+    <ul v-else class="order-list" data-order-list>
+      <li v-for="order in orders" :key="order.id" class="order-row">
+        <button type="button" class="order-row__main" :aria-label="`${t('portal.orders.details')}: ${planName(order)} ${format.money(order.total_amount)}`" data-order-detail @click="openDetail(order)">
+          <span class="order-row__plan">
+            <span class="order-row__name">{{ planName(order) }}</span>
+            <span class="order-row__meta">{{ periodLabel(order.period) }} · <span :title="format.dateTime(order.created_at)">{{ format.date(order.created_at) }}</span></span>
+          </span>
+          <span class="order-row__amount">{{ format.money(order.total_amount) }}</span>
+          <UiBadge :tone="statusTone(order.status)" :label="statusLabel(order.status)" class="order-row__status" />
+          <UiIcon :icon="ChevronRight" :size="20" class="order-row__chevron" />
+        </button>
+        <UiButton v-if="order.status === 0" variant="primary" size="sm" class="order-row__pay" data-order-pay @click="pay">{{ t('portal.orders.pay') }}</UiButton>
+      </li>
+    </ul>
 
-    <section v-else-if="orders.length === 0" class="section-panel empty-state">
-      <div class="empty-icon">0</div>
-      <p>{{ t('user.orders.empty') }}</p>
-      <router-link to="/user/plans" class="btn btn-primary mt-4">{{ t('user.orders.buyNow') }}</router-link>
-    </section>
-
-    <div v-else class="content-container">
-      <div class="table-container">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>{{ t('user.orders.headers.tradeNo') }}</th>
-              <th>{{ t('user.orders.headers.plan') }}</th>
-              <th>{{ t('user.orders.headers.period') }}</th>
-              <th>{{ t('user.orders.headers.amount') }}</th>
-              <th>{{ t('user.orders.headers.status') }}</th>
-              <th>{{ t('user.orders.headers.createdAt') }}</th>
-              <th>{{ t('user.orders.headers.actions') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="order in orders" :key="order.id">
-              <td class="trade-no">{{ order.trade_no }}</td>
-              <td>{{ order.plan?.name || t('user.orders.unknownPlan') }}</td>
-              <td>{{ formatPeriod(order.period) }}</td>
-              <td class="normalized-amount">{{ formatCurrency(order.total_amount) }}</td>
-              <td>¥{{ formatPrice(order.total_amount) }}</td>
-              <td>
-                <span :class="['status-badge', statusClass(order.status)]">{{ statusText(order.status) }}</span>
-              </td>
-              <td class="time text-secondary">{{ formatDateTime(order.created_at) }}</td>
-              <td>
-                <div class="action-buttons">
-                  <button v-if="order.status === 0" class="btn btn-sm btn-primary" @click="goPay(order)">{{ t('common.actions.payNow') }}</button>
-                  <button class="btn btn-sm" data-test="order-detail-button" @click="viewDetail(order)">{{ t('common.actions.details') }}</button>
-                </div>
-              </td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <UiSheet v-model:open="showDetail" :title="t('user.orders.detailTitle')">
-      <div class="detail-grid">
-        <div class="detail-item">
-          <span class="label">{{ t('user.orders.labels.tradeNo') }}</span>
-          <span class="value">{{ currentOrder.trade_no }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="label">{{ t('user.orders.labels.status') }}</span>
-          <span :class="['value', statusClass(currentOrder.status)]">{{ statusText(currentOrder.status) }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="label">{{ t('user.orders.labels.plan') }}</span>
-          <span class="value">{{ currentOrder.plan?.name || '-' }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="label">{{ t('user.orders.labels.period') }}</span>
-          <span class="value">{{ formatPeriod(currentOrder.period) }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="label">{{ t('user.orders.labels.totalAmount') }}</span>
-          <span class="value normalized-amount">{{ formatCurrency(currentOrder.total_amount) }}</span>
-          <span class="value">¥{{ formatPrice(currentOrder.total_amount) }}</span>
-        </div>
-        <div v-if="currentOrder.discount_amount" class="detail-item">
-          <span class="label">{{ t('user.orders.labels.discount') }}</span>
-          <span class="value text-success normalized-amount">-{{ formatCurrency(currentOrder.discount_amount) }}</span>
-          <span class="value text-success">-¥{{ formatPrice(currentOrder.discount_amount) }}</span>
-        </div>
-        <div class="detail-item">
-          <span class="label">{{ t('user.orders.labels.createdAt') }}</span>
-          <span class="value">{{ formatDateTime(currentOrder.created_at) }}</span>
-        </div>
-        <div v-if="currentOrder.paid_at" class="detail-item">
-          <span class="label">{{ t('user.orders.labels.paidAt') }}</span>
-          <span class="value">{{ formatDateTime(currentOrder.paid_at) }}</span>
-        </div>
-      </div>
+    <UiSheet v-model:open="detail.open" :title="t('portal.orders.detail.title')" grouped data-order-sheet>
+      <UiSkeleton v-if="detail.loading" variant="text" :lines="6" />
+      <p v-else-if="detail.error" class="orders__error" role="alert">{{ detail.error }}</p>
+      <UiGroupedList v-else-if="detail.order">
+        <UiGroupedListRow :label="t('portal.orders.detail.tradeNo')">
+          <template #value><span class="orders__mono">{{ detail.order.trade_no || '—' }}</span></template>
+        </UiGroupedListRow>
+        <UiGroupedListRow :label="t('portal.orders.detail.status')">
+          <template #value><UiBadge :tone="statusTone(detail.order.status)" :label="statusLabel(detail.order.status)" /></template>
+        </UiGroupedListRow>
+        <UiGroupedListRow :label="t('portal.orders.detail.plan')" :value="planName(detail.order)" />
+        <UiGroupedListRow :label="t('portal.orders.detail.period')" :value="periodLabel(detail.order.period)" />
+        <UiGroupedListRow v-if="detail.order.discount_amount" :label="t('portal.orders.detail.subtotal')" :value="format.money(Number(detail.order.total_amount || 0) + Number(detail.order.discount_amount || 0))" />
+        <UiGroupedListRow v-if="detail.order.discount_amount" :label="t('portal.orders.detail.discount')" :value="`−${format.money(detail.order.discount_amount)}`" />
+        <UiGroupedListRow :label="t('portal.orders.detail.total')" :value="format.money(detail.order.total_amount)" />
+        <UiGroupedListRow :label="t('portal.orders.detail.createdAt')" :value="format.dateTime(detail.order.created_at)" />
+        <UiGroupedListRow v-if="detail.order.paid_at" :label="t('portal.orders.detail.paidAt')" :value="format.dateTime(detail.order.paid_at)" />
+      </UiGroupedList>
       <template #footer="{ close }">
-        <UiButton @click="close">{{ t('common.actions.back') }}</UiButton>
+        <UiButton v-if="detail.order?.status === 0" variant="primary" @click="pay">{{ t('portal.orders.pay') }}</UiButton>
+        <UiButton @click="close">{{ t('ui.actions.close') }}</UiButton>
       </template>
     </UiSheet>
   </div>
 </template>
 
 <script setup>
-import { onMounted, ref } from 'vue'
+// 订单 (commercial edition only; plan §8.1): the orders as a list (plan,
+// period, date, amount, status) and a details Sheet. Online payment is a
+// separate line of work (plan §8.1), so 去支付 says how to pay for now.
+// Data: GET /user/order (first 50), GET /user/order/:id.
+import { computed, onMounted, reactive, ref } from 'vue'
+import { RouterLink } from 'vue-router'
+import { ChevronRight, Receipt } from '@lucide/vue'
 import { getOrderDetail, getOrders } from '@/api/user'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { UiButton, UiSheet, useToast } from '@/ui'
+import { listOf, panelErrorMessage, unwrapPanel } from '@/utils/panelResponse'
+import LoadError from '@/components/common/LoadError.vue'
+import UiBadge from '@/ui/UiBadge.vue'
+import UiButton from '@/ui/UiButton.vue'
+import UiEmptyState from '@/ui/UiEmptyState.vue'
+import UiGroupedList from '@/ui/UiGroupedList.vue'
+import UiGroupedListRow from '@/ui/UiGroupedListRow.vue'
+import UiIcon from '@/ui/UiIcon.vue'
+import UiPageHeader from '@/ui/UiPageHeader.vue'
+import UiSheet from '@/ui/UiSheet.vue'
+import UiSkeleton from '@/ui/UiSkeleton.vue'
+import { useDelayedLoading } from '@/ui/composables/useDelayedLoading'
+import { useFormat } from '@/ui/composables/useFormat'
+import { useToast } from '@/ui/composables/useToast'
 
-const { t, formatDateTime } = useAppI18n()
-const orders = ref([])
-const loading = ref(true)
-const showDetail = ref(false)
-const currentOrder = ref({})
+const { t } = useAppI18n()
+const format = useFormat()
 const toast = useToast()
 
-async function loadOrders() {
-  loading.value = true
+const STATUS = ['pending', 'paid', 'cancelled', 'completed', 'discounted']
+const TONES = ['warning', 'success', 'neutral', 'success', 'info']
+
+const orders = ref([])
+const state = ref('loading')
+const loadError = ref(null)
+const showSkeleton = useDelayedLoading(computed(() => state.value === 'loading'))
+
+async function load() {
+  state.value = 'loading'
+  loadError.value = null
   try {
-    const res = await getOrders({ page: 1, page_size: 50 })
-    orders.value = res.data?.list || []
-  } catch (err) {
-    console.error('Failed to load orders:', err)
+    orders.value = listOf(unwrapPanel(await getOrders({ page: 1, page_size: 50 })))
+    state.value = 'ready'
+  } catch (error) {
+    loadError.value = error
+    state.value = 'failed'
+  }
+}
+
+function statusLabel(status) {
+  return t(`portal.orders.status.${STATUS[status] || 'unknown'}`)
+}
+
+function statusTone(status) {
+  return TONES[status] || 'neutral'
+}
+
+function periodLabel(period) {
+  return period ? t(`portal.plans.periods.${period}`) : '—'
+}
+
+function planName(order) {
+  return order?.plan?.name || t('portal.orders.unknownPlan')
+}
+
+const detail = reactive({ open: false, loading: false, order: null, error: '' })
+
+async function openDetail(order) {
+  Object.assign(detail, { open: true, loading: true, order: null, error: '' })
+  try {
+    detail.order = unwrapPanel(await getOrderDetail(order.id)) || order
+  } catch (error) {
+    detail.error = `${t('portal.orders.detailFailed')} ${panelErrorMessage(error)}`
   } finally {
-    loading.value = false
+    detail.loading = false
   }
 }
 
-function statusText(status) {
-  return [
-    t('common.states.pending'),
-    t('common.states.paid'),
-    t('common.states.cancelled'),
-    t('common.states.completed'),
-    t('common.states.discounted')
-  ][status] || t('common.states.unknown')
+function pay() {
+  toast.info(t('portal.orders.payPending'))
 }
 
-function statusClass(status) {
-  return ['pending', 'paid', 'cancelled', 'completed', 'discounted'][status] || ''
-}
-
-function formatPeriod(period) {
-  const map = {
-    month: t('common.periods.month'),
-    quarter: t('common.periods.quarter'),
-    half_year: t('common.periods.halfYear'),
-    year: t('common.periods.year'),
-    two_year: t('common.periods.twoYear'),
-    three_year: t('common.periods.threeYear'),
-    onetime: t('common.periods.onetime')
-  }
-  return map[period] || period || '-'
-}
-
-function formatPrice(amount) {
-  return ((amount || 0) / 100).toFixed(2)
-}
-
-function formatCurrency(amount) {
-  return `\u00a5${formatPrice(amount)}`
-}
-
-async function viewDetail(order) {
-  try {
-    const res = await getOrderDetail(order.id)
-    currentOrder.value = res.data || {}
-    showDetail.value = true
-  } catch {
-    toast.error(t('user.orders.loadDetailFailed'))
-  }
-}
-
-function goPay() {
-  toast.info(t('common.messages.paymentPending'))
-}
-
-onMounted(() => {
-  loadOrders()
-})
+onMounted(load)
 </script>
 
 <style scoped>
-.table-container {
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
+.orders {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-8);
+}
+
+.order-list {
   overflow: hidden;
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  box-shadow: 0 0 0 0.5px var(--separator), var(--shadow-1);
+  list-style: none;
 }
 
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.data-table th,
-.data-table td {
-  padding: 16px;
-  text-align: left;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.data-table th {
-  background: var(--bg-color);
-  font-size: 13px;
-  font-weight: 600;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-}
-
-.trade-no {
-  font-family: monospace;
-  font-size: 13px;
-}
-
-.data-table tbody td:nth-child(5),
-.normalized-amount + .value {
-  display: none;
-}
-
-.normalized-amount {
-  font-weight: 700;
-}
-
-.status-badge {
-  font-size: 12px;
-  font-weight: 600;
-  padding: 4px 10px;
-  border-radius: 6px;
-}
-
-.status-badge.pending {
-  background: rgba(59, 130, 246, 0.1);
-  color: var(--primary-color);
-}
-
-.status-badge.paid,
-.status-badge.completed {
-  background: rgba(34, 197, 94, 0.1);
-  color: var(--success-color);
-}
-
-.status-badge.cancelled {
-  background: rgba(239, 68, 68, 0.1);
-  color: var(--error-color);
-}
-
-.detail-grid {
+.order-row {
   display: flex;
-  flex-direction: column;
-  gap: 16px;
-}
-
-.detail-item {
-  display: flex;
-  justify-content: space-between;
-  padding-bottom: 12px;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.detail-item:last-child {
-  border-bottom: none;
-}
-
-.detail-item .label {
-  color: var(--text-secondary);
-}
-
-.detail-item .value {
-  font-weight: 600;
-}
-
-.text-success {
-  color: var(--success-color);
-}
-
-.loading-state,
-.empty-state {
-  display: flex;
-  flex-direction: column;
+  gap: var(--space-3);
   align-items: center;
-  justify-content: center;
-  padding: 100px 0;
-  color: var(--text-secondary);
+  padding-right: var(--space-4);
 }
 
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid rgba(59, 130, 246, 0.1);
-  border-top-color: var(--primary-color);
-  border-radius: 50%;
-  animation: rotate 1s linear infinite;
-  margin-bottom: 16px;
+.order-row + .order-row {
+  border-top: 1px solid var(--separator);
 }
 
-@keyframes rotate {
-  to {
-    transform: rotate(360deg);
+.order-row__main {
+  display: grid;
+  justify-content: stretch;
+  border-radius: 0;
+  font-weight: inherit;
+  line-height: inherit;
+  white-space: normal;
+  user-select: auto;
+  flex: 1;
+  grid-template-columns: minmax(0, 1fr) auto 96px 20px;
+  gap: var(--space-4);
+  align-items: center;
+  min-width: 0;
+  padding: var(--space-4) 0 var(--space-4) var(--space-6);
+  border: 0;
+  background: transparent;
+  color: var(--label-1);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.order-row__main:hover {
+  background: var(--fill-1);
+}
+
+.order-row__main:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+
+.order-row__plan {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+.order-row__name {
+  font-weight: var(--weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.order-row__meta {
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
+}
+
+.order-row__amount {
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.order-row__status {
+  justify-self: start;
+}
+
+.order-row__chevron {
+  color: var(--label-3);
+}
+
+.orders__mono {
+  font-family: var(--font-mono);
+  font-size: var(--type-callout-size);
+  overflow-wrap: anywhere;
+}
+
+.orders__error {
+  color: var(--danger);
+}
+
+@media (max-width: 833px) {
+  .order-row {
+    flex-wrap: wrap;
+    padding: 0 0 var(--space-3);
   }
-}
 
-.empty-icon {
-  font-size: 48px;
-  margin-bottom: 16px;
+  .order-row__main {
+    grid-template-columns: minmax(0, 1fr) auto;
+    padding: var(--space-4) var(--space-4) var(--space-1);
+  }
+
+  .order-row__chevron {
+    display: none;
+  }
+
+  .order-row__status {
+    grid-column: 1;
+  }
+
+  .order-row__pay {
+    margin-left: var(--space-4);
+  }
 }
 </style>

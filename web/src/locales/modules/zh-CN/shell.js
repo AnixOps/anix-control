@@ -148,21 +148,25 @@ export default {
         status: '状态',
         on: '已开启',
         off: '未开启',
-        backupCodes: '备用码',
+        backupCodes: '恢复码',
         remaining: '剩余 {count} 个',
         none: '没有',
         lastUsed: '最近使用',
         enable: '开启两步验证',
         disable: '关闭两步验证…',
-        regenerate: '重新生成备用码…',
+        regenerate: '重新生成恢复码…',
         loadFailed: '无法读取两步验证状态。',
         retry: '重试',
         setup: {
           title: '开启两步验证',
           description: '在验证器 App（如 1Password、Google Authenticator）里添加这个账户，再输入它显示的验证码。',
           secret: '密钥',
-          secretHelp: '在验证器里选择“手动输入密钥”，粘贴这串字符。',
+          secretHelp: '在验证器里选择「手动输入密钥」，粘贴这串字符。',
           openApp: '在本机验证器中打开',
+          scan: '用验证器 App 扫描二维码',
+          qrLabel: '两步验证设置二维码',
+          manual: '无法扫码？手动输入密钥',
+          enterCode: '输入验证器显示的 6 位验证码',
           code: '6 位验证码',
           codeHelp: '验证器每 30 秒更新一次。',
           confirm: '验证并开启',
@@ -170,9 +174,10 @@ export default {
           enabled: '两步验证已开启'
         },
         backup: {
-          title: '保存备用码',
-          description: '手机丢失时，可以用备用码登录。每个备用码只能用一次，请保存到安全的地方。',
+          title: '保存恢复码',
+          description: '手机丢失时，可以用恢复码登录。每个恢复码只能用一次，请保存到安全的地方。',
           copyAll: '复制全部',
+          download: '下载',
           done: '我已保存'
         },
         disableDialog: {
@@ -183,8 +188,8 @@ export default {
           done: '两步验证已关闭'
         },
         regenerateDialog: {
-          title: '重新生成备用码？',
-          description: '旧的备用码会立即失效。',
+          title: '重新生成恢复码？',
+          description: '旧的恢复码会立即失效。',
           confirm: '重新生成'
         },
         errors: {
