@@ -443,12 +443,17 @@ export default {
       content: 'Reply content',
       placeholder: 'Write your reply...'
     },
+    confirm: {
+      closeTitle: 'Close ticket #{id} “{subject}”?',
+      closeMessage: 'A closed ticket takes no more replies and can’t be reopened.',
+      closeAction: 'Close ticket'
+    },
     messages: {
       fetchFailed: 'Failed to load tickets',
       replyRequired: 'Please enter a reply',
       replySuccess: 'Reply sent successfully',
       replyFailed: 'Failed to send reply',
-      closeConfirm: 'Close this ticket?',
+      closed: 'Ticket #{id} closed',
       closeFailed: 'Failed to close ticket'
     }
   },

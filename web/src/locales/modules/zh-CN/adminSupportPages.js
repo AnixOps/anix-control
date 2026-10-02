@@ -443,12 +443,17 @@ export default {
       content: '回复内容',
       placeholder: '输入回复内容...'
     },
+    confirm: {
+      closeTitle: '关闭工单 #{id}「{subject}」？',
+      closeMessage: '关闭后不能再回复，也无法重新打开。',
+      closeAction: '关闭工单'
+    },
     messages: {
       fetchFailed: '加载工单失败',
       replyRequired: '请输入回复内容',
       replySuccess: '回复发送成功',
       replyFailed: '回复发送失败',
-      closeConfirm: '确定关闭该工单吗？',
+      closed: '已关闭工单 #{id}',
       closeFailed: '关闭工单失败'
     }
   },
