@@ -302,7 +302,10 @@ const routes = [
         meta: ACCOUNT_META
       },
       {
+        // Named so the parent's name ('admin', which extensions add their
+        // pages under) does not trigger Vue Router's empty-path warning.
         path: '',
+        name: 'admin-index',
         redirect: '/admin/dashboard'
       },
       {
