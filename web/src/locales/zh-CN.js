@@ -2605,10 +2605,15 @@ export default {
       title: '模板分组 - {name}',
       description: '选择该模板授予的订阅分组。'
     },
+    confirm: {
+      deleteTitle: '删除订阅模板 {name}？',
+      deleteAction: '删除模板'
+    },
     messages: {
       loadFailed: '加载订阅模板失败',
-      deleteConfirm: '确定删除该订阅模板？',
-      nameRequired: '请输入模板名称'
+      nameRequired: '请输入模板名称',
+      deleted: '已删除订阅模板 {name}',
+      groupRemoved: '已从模板 {plan} 移除分组 {group}'
     }
   },
   adminPlans: {
@@ -2670,22 +2675,27 @@ export default {
       speedLimitMbps: '{value} Mbps',
       deviceLimitCount: '{value} 台'
     },
+    confirm: {
+      deleteTitle: '删除套餐 {name}？',
+      deleteMessage: '此操作无法撤销。',
+      deleteAction: '删除套餐'
+    },
     messages: {
       loadFailed: '加载套餐失败',
       loadGroupsFailed: '加载订阅分组失败',
-      deleteConfirm: '确定删除该套餐吗？',
-      deleteFailed: '删除失败：{message}',
+      deleted: '已删除套餐 {name}',
       deleteFailedShort: '删除失败',
       nameRequired: '请填写套餐名称',
       saveFailed: '保存失败：{message}',
       saveFailedShort: '保存失败',
+      saved: '已保存 {name}',
       userIdRequired: '请填写用户 ID',
       assignSuccess: '分配成功',
       assignFailed: '分配失败：{message}',
       assignFailedShort: '分配失败',
       toggleGroupFailed: '切换分组失败：{message}',
       toggleGroupFailedShort: '切换分组失败',
-      removeGroupConfirm: '确定移除该订阅分组吗？',
+      groupRemoved: '已从套餐 {plan} 移除分组 {group}',
       removeGroupFailed: '移除分组失败：{message}',
       removeGroupFailedShort: '移除失败'
     }

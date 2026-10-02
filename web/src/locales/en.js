@@ -2604,10 +2604,15 @@ export default {
       title: 'Template groups - {name}',
       description: 'Select the subscription groups this template grants.'
     },
+    confirm: {
+      deleteTitle: 'Delete subscription template {name}?',
+      deleteAction: 'Delete template'
+    },
     messages: {
       loadFailed: 'Failed to load subscription templates',
-      deleteConfirm: 'Delete this subscription template?',
-      nameRequired: 'Please enter a template name'
+      nameRequired: 'Please enter a template name',
+      deleted: 'Subscription template {name} deleted',
+      groupRemoved: 'Group {group} removed from template {plan}'
     }
   },
   adminPlans: {
@@ -2669,22 +2674,27 @@ export default {
       speedLimitMbps: '{value} Mbps',
       deviceLimitCount: '{value} devices'
     },
+    confirm: {
+      deleteTitle: 'Delete plan {name}?',
+      deleteMessage: 'This can’t be undone.',
+      deleteAction: 'Delete plan'
+    },
     messages: {
       loadFailed: 'Failed to load plans',
       loadGroupsFailed: 'Failed to load subscription groups',
-      deleteConfirm: 'Delete this plan?',
-      deleteFailed: 'Delete failed: {message}',
+      deleted: 'Plan {name} deleted',
       deleteFailedShort: 'Delete failed',
       nameRequired: 'Please enter a plan name',
       saveFailed: 'Save failed: {message}',
       saveFailedShort: 'Save failed',
+      saved: '{name} saved',
       userIdRequired: 'Please enter a user ID',
       assignSuccess: 'Assigned successfully',
       assignFailed: 'Assign failed: {message}',
       assignFailedShort: 'Assign failed',
       toggleGroupFailed: 'Failed to toggle group: {message}',
       toggleGroupFailedShort: 'Failed to toggle group',
-      removeGroupConfirm: 'Remove this subscription group?',
+      groupRemoved: 'Group {group} removed from plan {plan}',
       removeGroupFailed: 'Failed to remove group: {message}',
       removeGroupFailedShort: 'Remove failed'
     }

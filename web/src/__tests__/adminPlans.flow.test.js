@@ -1,8 +1,13 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
+import { render, screen, waitFor, within } from '@testing-library/vue'
+import userEvent from '@testing-library/user-event'
+import UiHost from '@/ui/UiHost.vue'
+import { runAction } from '@/ui/composables/useToast'
 import { nextTick } from 'vue'
 import Plans from '@/views/admin/Plans.vue'
 import { setEdition } from '@/composables/useEdition'
+import { inBody, toastMessages, toasts } from './helpers/feedback'
 
 const mockGetPlans = vi.fn()
 const mockGetPlanGroups = vi.fn()
@@ -11,18 +16,22 @@ const mockAssignPlanToUser = vi.fn()
 const mockCreatePlan = vi.fn()
 const mockDeletePlan = vi.fn()
 const mockUpdatePlan = vi.fn()
+const mockAddGroupToPlan = vi.fn()
+const mockRemoveGroupFromPlan = vi.fn()
 
 vi.mock('@/api/admin', () => ({
-  addGroupToPlan: vi.fn(),
+  addGroupToPlan: (...args) => mockAddGroupToPlan(...args),
   assignPlanToUser: (...args) => mockAssignPlanToUser(...args),
   createPlan: (...args) => mockCreatePlan(...args),
   deletePlan: (...args) => mockDeletePlan(...args),
   getPlanGroups: (...args) => mockGetPlanGroups(...args),
   getPlans: (...args) => mockGetPlans(...args),
   getSubscriptionGroups: (...args) => mockGetSubscriptionGroups(...args),
-  removeGroupFromPlan: vi.fn(),
+  removeGroupFromPlan: (...args) => mockRemoveGroupFromPlan(...args),
   updatePlan: (...args) => mockUpdatePlan(...args),
 }))
+
+enableAutoUnmount(afterEach)
 
 describe('Admin Plans flow', () => {
   beforeEach(() => {
@@ -34,6 +43,8 @@ describe('Admin Plans flow', () => {
     mockCreatePlan.mockReset()
     mockDeletePlan.mockReset()
     mockUpdatePlan.mockReset()
+    mockAddGroupToPlan.mockReset()
+    mockRemoveGroupFromPlan.mockReset()
 
     mockGetPlanGroups.mockResolvedValue({ data: [] })
     mockGetSubscriptionGroups.mockResolvedValue({ data: [] })
@@ -54,7 +65,7 @@ describe('Admin Plans flow', () => {
     }
     mockGetPlans.mockResolvedValue({ data: [plan] })
 
-    const wrapper = mount(Plans)
+    const wrapper = mount(Plans, { attachTo: document.body })
     await flushPromises()
 
     expect(wrapper.text()).toContain('30 Mbps / 3 devices')
@@ -62,9 +73,9 @@ describe('Admin Plans flow', () => {
     wrapper.vm.edit(plan)
     await nextTick()
 
-    await wrapper.find('[data-test="plan-speed-limit-input"]').setValue('90')
-    await wrapper.find('[data-test="plan-device-limit-input"]').setValue('6')
-    await wrapper.find('[data-test="plan-save-button"]').trigger('click')
+    await inBody('[data-test="plan-speed-limit-input"]').setValue('90')
+    await inBody('[data-test="plan-device-limit-input"]').setValue('6')
+    await inBody('[data-test="plan-save-button"]').trigger('click')
     await flushPromises()
 
     expect(mockUpdatePlan).toHaveBeenCalledWith(2, expect.objectContaining({
@@ -87,7 +98,7 @@ describe('Admin Plans flow', () => {
       data: { data: [{ id: 10, name: 'Nested Group' }] }
     })
 
-    const wrapper = mount(Plans)
+    const wrapper = mount(Plans, { attachTo: document.body })
     await flushPromises()
 
     expect(wrapper.vm.plans[0].name).toBe('Legacy Plan')
@@ -109,7 +120,6 @@ describe('Admin Plans flow', () => {
   })
 
   it('treats panel code -1 save responses as errors', async () => {
-    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
     const plan = {
       id: 3,
       name: 'Rejected',
@@ -126,20 +136,22 @@ describe('Admin Plans flow', () => {
       ts: 1783526400000,
     })
 
-    const wrapper = mount(Plans)
+    const wrapper = mount(Plans, { attachTo: document.body })
     await flushPromises()
 
     wrapper.vm.edit(plan)
     await nextTick()
-    await wrapper.find('[data-test="plan-save-button"]').trigger('click')
+    await inBody('[data-test="plan-save-button"]').trigger('click')
     await flushPromises()
 
-    expect(alertSpy).toHaveBeenCalledWith(expect.stringContaining('套餐不存在'))
+    // The failure stays in the open dialog.
+    expect(inBody('[data-test="plan-save-error"]').text()).toContain('套餐不存在')
+    expect(wrapper.vm.showPlanModal).toBe(true)
+    expect(toasts()).toHaveLength(0)
     expect(mockGetPlans).toHaveBeenCalledTimes(1)
   })
 
   it('treats panel code -1 assign responses as errors', async () => {
-    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
     const plan = {
       id: 4,
       name: 'Assign Rejected',
@@ -156,7 +168,7 @@ describe('Admin Plans flow', () => {
       ts: 1783526400000,
     })
 
-    const wrapper = mount(Plans)
+    const wrapper = mount(Plans, { attachTo: document.body })
     await flushPromises()
 
     wrapper.vm.openAssign(plan)
@@ -164,7 +176,8 @@ describe('Admin Plans flow', () => {
     await wrapper.vm.assign()
     await flushPromises()
 
-    expect(alertSpy).toHaveBeenCalledWith(expect.stringContaining('用户不存在'))
+    await flushPromises()
+    expect(inBody('[data-test="plan-assign-error"]').text()).toContain('用户不存在')
     expect(wrapper.vm.showAssign).toBe(true)
   })
 
@@ -173,7 +186,7 @@ describe('Admin Plans flow', () => {
     const plan = { id: 5, name: 'Starter', transfer_enable: 50, speed_limit: 0, device_limit: 0, month_price: 990 }
     mockGetPlans.mockResolvedValue({ data: [plan] })
 
-    const wrapper = mount(Plans)
+    const wrapper = mount(Plans, { attachTo: document.body })
     await flushPromises()
 
     expect(wrapper.find('h1').text()).toBe('Subscription templates')
@@ -182,18 +195,18 @@ describe('Admin Plans flow', () => {
 
     wrapper.vm.openCreateModal()
     await nextTick()
-    expect(wrapper.find('[data-test="plan-month-price-field"]').exists()).toBe(false)
-    expect(wrapper.text()).toContain('Create subscription template')
+    expect(inBody('[data-test="plan-month-price-field"]').exists()).toBe(false)
+    expect(document.body.textContent).toContain('Create subscription template')
     wrapper.vm.form.name = 'Template'
     wrapper.vm.form.transfer_enable = 100
-    await wrapper.find('[data-test="plan-save-button"]').trigger('click')
+    await inBody('[data-test="plan-save-button"]').trigger('click')
     await flushPromises()
     expect(mockCreatePlan).toHaveBeenCalledWith(expect.objectContaining({ name: 'Template', transfer_enable: 100, month_price: null }))
 
     // Editing a template sends a stored price back unchanged.
     wrapper.vm.edit(plan)
     await nextTick()
-    await wrapper.find('[data-test="plan-save-button"]').trigger('click')
+    await inBody('[data-test="plan-save-button"]').trigger('click')
     await flushPromises()
     expect(mockUpdatePlan).toHaveBeenCalledWith(5, expect.objectContaining({ month_price: 990 }))
 
@@ -209,7 +222,7 @@ describe('Admin Plans flow', () => {
     const plan = { id: 6, name: 'Pro', transfer_enable: 50, speed_limit: 0, device_limit: 0, month_price: 1990 }
     mockGetPlans.mockResolvedValue({ data: [plan] })
 
-    const wrapper = mount(Plans)
+    const wrapper = mount(Plans, { attachTo: document.body })
     await flushPromises()
 
     expect(wrapper.find('h1').text()).toBe('Plan Management')
@@ -217,6 +230,102 @@ describe('Admin Plans flow', () => {
     expect(wrapper.text()).toContain('1990')
     wrapper.vm.openCreateModal()
     await nextTick()
-    expect(wrapper.find('[data-test="plan-month-price-field"]').exists()).toBe(true)
+    expect(inBody('[data-test="plan-month-price-field"]').exists()).toBe(true)
+  })
+
+  describe('dialogs and feedback', () => {
+    const plan = { id: 8, name: 'Pro', transfer_enable: 50, speed_limit: 0, device_limit: 0, month_price: 1990 }
+    const Harness = {
+      components: { Plans, UiHost },
+      template: '<div><Plans /><UiHost /></div>'
+    }
+
+    beforeEach(() => {
+      setEdition('commercial')
+      mockGetPlans.mockResolvedValue({ code: 0, data: [plan] })
+    })
+
+    it('confirms deleting a plan; Cancel and Esc keep it, a failure stays inline', async () => {
+      const user = userEvent.setup()
+      mockDeletePlan.mockResolvedValueOnce({ code: -1, msg: 'plan in use' }).mockResolvedValueOnce({ code: 0 })
+      render(Harness)
+      await screen.findByText('Pro')
+      const opener = screen.getByRole('button', { name: 'Delete' })
+
+      await user.click(opener)
+      let dialog = await screen.findByRole('alertdialog', { name: 'Delete plan Pro?' })
+      await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+      await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+      await user.click(opener)
+      await screen.findByRole('alertdialog')
+      await user.keyboard('{Escape}')
+      await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+      expect(mockDeletePlan).not.toHaveBeenCalled()
+
+      await user.click(opener)
+      dialog = await screen.findByRole('alertdialog')
+      await user.click(within(dialog).getByRole('button', { name: 'Delete plan' }))
+      expect((await within(dialog).findByRole('alert')).textContent).toContain('plan in use')
+      await user.click(within(dialog).getByRole('button', { name: 'Delete plan' }))
+      await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+      expect(mockDeletePlan).toHaveBeenLastCalledWith(8)
+      expect(toastMessages('success')).toEqual(['Plan Pro deleted'])
+    })
+
+    it('names a missing plan name and user ID under their fields', async () => {
+      const wrapper = mount(Plans, { attachTo: document.body })
+      await flushPromises()
+
+      wrapper.vm.openCreateModal()
+      await flushPromises()
+      await inBody('[data-test="plan-save-button"]').trigger('click')
+      await flushPromises()
+      expect(inBody('#plan-name-error').text()).toBe('Please enter a plan name')
+      expect(inBody('[data-test="plan-name-input"]').attributes('aria-invalid')).toBe('true')
+      expect(mockCreatePlan).not.toHaveBeenCalled()
+      wrapper.vm.closePlanModal()
+
+      wrapper.vm.openAssign(plan)
+      await flushPromises()
+      await inBody('[data-test="plan-assign-button"]').trigger('click')
+      await flushPromises()
+      expect(inBody('#plan-assign-user-error').text()).toBe('Please enter a user ID')
+      expect(mockAssignPlanToUser).not.toHaveBeenCalled()
+
+      await inBody('[data-test="plan-assign-user"]').setValue('7')
+      await inBody('[data-test="plan-assign-button"]').trigger('click')
+      await flushPromises()
+      expect(mockAssignPlanToUser).toHaveBeenCalledWith(8, { user_id: 7, expire_at: null })
+      expect(toastMessages('success')).toEqual(['Assigned successfully'])
+    })
+
+    it('removes a group from a plan at once and offers undo', async () => {
+      mockGetPlanGroups.mockResolvedValue({ code: 0, data: [{ id: 3, name: 'HK' }] })
+      mockRemoveGroupFromPlan.mockResolvedValue({ code: 0 })
+      mockAddGroupToPlan.mockResolvedValue({ code: 0 })
+      const wrapper = mount(Plans)
+      await flushPromises()
+
+      await wrapper.vm.removeGroup(plan, { id: 3, name: 'HK' })
+      expect(mockRemoveGroupFromPlan).toHaveBeenCalledWith(8, 3)
+      const [toast] = toasts('success')
+      expect(toast.message).toBe('Group HK removed from plan Pro')
+      await runAction(toast.id)
+      expect(mockAddGroupToPlan).toHaveBeenCalledWith(8, 3)
+    })
+
+    it('toggles groups with keyboard-reachable buttons in the groups dialog', async () => {
+      const user = userEvent.setup()
+      mockGetSubscriptionGroups.mockResolvedValue({ code: 0, data: [{ id: 3, name: 'HK' }] })
+      mockAddGroupToPlan.mockResolvedValue({ code: -1, msg: 'group locked' })
+      render(Harness)
+      await screen.findByText('Pro')
+      await user.click(screen.getByRole('button', { name: 'Manage groups' }))
+      const dialog = await screen.findByRole('dialog')
+      const toggle = within(dialog).getByRole('button', { pressed: false })
+      await user.click(toggle)
+      expect(mockAddGroupToPlan).toHaveBeenCalledWith(8, 3)
+      expect((await within(dialog).findByRole('alert')).textContent).toContain('group locked')
+    })
   })
 })
