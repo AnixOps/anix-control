@@ -59,6 +59,9 @@ Before touching production:
 - **Upgrading past 4.1.0-rc.2 behind a reverse proxy that is not on the
   same host: list it in `server.trusted_proxies` first**
   ([Reverse Proxies](#reverse-proxies-must-be-in-servertrusted_proxies-security)).
+- **Upgrading past 4.1.0-rc.3: move the `identity-platform` installation to
+  the new release after the upgrade**
+  ([rc.3 → rc.4 Checklist](#rc3--rc4-checklist)).
 
 Evidence to keep:
 
@@ -1504,7 +1507,72 @@ anix-control node-secrets status                           # back in dual_read
 - An interrupted `unsplit` is resumed by running it again.
 - From `dual_read`, `phase all dual_write` goes back further, as in P2.
 
-## Upgrading Past 4.1.0-rc.3
+## Upgrading From 4.1.0-rc.3 To 4.1.0-rc.4
+
+These sections cover what changes from 4.1.0-rc.3 to 4.1.0-rc.4
+(`CHANGELOG.md`, "4.1.0-rc.4"): the UI redesign preview and invite codes for
+administrators in every edition. There is no schema migration and no
+configuration key changes. **One action is needed:** move `identity-platform`
+to this release's version, since it serves the new invite-code routes.
+
+### rc.3 → rc.4 Checklist
+
+Before the upgrade:
+
+1. Download and verify the release as in
+   [Artifact Verification](#artifact-verification), including the three
+   `identity-platform-<version>` assets (or take them from the packages
+   archive).
+2. If a reverse proxy or CDN in front of Control caches `index.html`,
+   plan to purge it after the upgrade.
+   The new frontend's scripts and styles have new hashed names; a cached
+   `index.html` keeps pointing at the old ones, which are gone.
+
+After the upgrade:
+
+3. **Move `identity-platform` to this release.** Start-up registers the
+   bundled `identity-platform` release (the image and `scripts/install.sh`
+   ship it) but never moves an existing installation to it. As an
+   administrator, `PUT /api/v3/plugin-installations` with
+   `{"plugin_id": "identity-platform", "target": "control", "desired_version": "4.1.0-rc.4", "enabled": true}`
+   and poll `GET /api/v3/plugin-installations` until it is healthy. A manual
+   install without the bootstrap directory first registers the release with
+   `POST /api/v3/plugin-releases` and `POST /api/v3/plugin-releases/<id>/artifact`
+   ([Package Install Window](#package-install-window), step 3). Until then
+   the admin 邀请码 page answers `404` `package_route_not_found`.
+4. Purge the proxy or CDN cache from step 2, and tell administrators to
+   reload once (a hard reload if a tab still shows the old sidebar).
+5. Check sign-in, the admin dashboard and one user page in light and dark,
+   then open 用户 → 邀请码 and generate one code.
+6. Tell administrators and users where things moved
+   ([The New Web UI](#the-new-web-ui)).
+
+### The New Web UI
+
+The web app is redesigned (AnixOps Design v1.0.2). Page bodies, the API and
+page routes are unchanged; what moved:
+
+- **Language, theme and version.** Language and theme (light, dark or the
+  new 跟随系统) are in the account menu: the avatar at the bottom of the admin
+  sidebar, or in the top bar on phones. The version and build line is under
+  账户菜单 → 关于. A language or theme choice saved in the browser is kept.
+- **Admin sidebar.** Grouped 概览, 用户, 网络, 扩展, 系统 (and 商业 in the
+  commercial edition); plugin menus appear under 扩展 or 系统. Invite codes
+  are under 用户 → 邀请码. `⌘K` / `Ctrl+K` opens a command palette that jumps
+  to any page and finds users by email.
+- **Forward suite.** Its sub-navigation is a strip at the top of every
+  `/admin/forward*` page, no longer in the sidebar.
+- **Users.** Phones get a bottom tab bar; the new 账户 page holds profile,
+  two-factor authentication, language and appearance.
+- **Undo instead of confirm.** Banning or unbanning a user, enabling or
+  disabling a payment gateway, deleting the Telegram webhook, removing a group
+  from a plan and removing a member or plan from an access group now happen
+  at once, with 撤销 in the toast for 5 s. Scripts or runbooks that expected a
+  browser confirmation before these actions need updating.
+- **Typed confirmations.** Deleting a node, a NodeX forward node or an Ansible
+  machine asks for its name; sending a Telegram broadcast asks first.
+- A non-administrator opening an admin page sees 无权限 instead of being
+  sent to the user dashboard; unknown paths show a 404 page.
 
 ### Administrators Manage Invite Codes In Every Edition
 
@@ -1512,14 +1580,14 @@ In 4.1.0-rc.3 the community edition could not create invite codes, because
 their generator belongs to the commercial `affiliate` package, so
 `require_invite` registration only worked with codes that already existed.
 Administrators can now generate, list and revoke invite codes in every
-edition, on the admin "Invite codes" page (`/admin/invite-codes`;
-`GET`/`POST /api/v2/admin/invite/codes`,
+edition, on the admin "邀请码 / Invite codes" page (用户 → 邀请码,
+`/admin/invite-codes`; `GET`/`POST /api/v2/admin/invite/codes`,
 `DELETE /api/v2/admin/invite/codes/:id`). Users still cannot generate codes
 in the community edition.
 
 - These routes are declared by `identity-platform`: install the
-  `identity-platform` package of this release, or an older installed one
-  answers them `404` `package_route_not_found`.
+  `identity-platform` package of this release (checklist step 3), or an older
+  installed one answers them `404` `package_route_not_found`.
 - Codes generated there belong to no user and attribute no referral; they do
   not count toward any user's code limit.
 - Commission, withdrawals, invite statistics and the invite configuration stay
