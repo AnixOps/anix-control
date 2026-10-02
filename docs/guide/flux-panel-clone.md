@@ -150,6 +150,20 @@ including Forward's second confirmation before a force delete. The one
 addition is a safeguard: deleting a forward node (NodeX or Ansible machine)
 now asks for its name to be typed.
 
+UI phase U7 restyled the execution-plane pages behind the sidebar item
+转发节点 and left the Flux control plane (Forward, Tunnel, Limit) alone.
+NodeX 拓扑 (`/admin/forward/nodes`), Ansible 机器, 本地运行时 and NodeX 运行时
+keep their own routes, endpoints and inventory scopes (`?scope=nodex` versus
+`/admin/forward/ansible-machines`): NodeX and local Ansible stay separate
+paths, so the pages are not merged into one list. They share one header
+(转发节点) and a run-mode switch that links the four pages, plus a link to
+NodeX Agents. A NodeX node and an Ansible machine each have a detail page
+(`/admin/forward/nodes/:id`, `/admin/forward/ansible-machines/:id`) with
+the sections 概览, 配置 and 危险操作. The legacy rules
+(`/admin/forward/rules*`) stay on the NodeX page. Fields, calls, payloads
+and confirmations are unchanged, and "online" still means only `host:port`
+TCP reachability.
+
 ## Current Forward/Tunnel Base
 
 As of `2026-04-05`, the local project already has these pieces:

@@ -633,6 +633,19 @@ Migrated in U6 (also listed in `web/scripts/data-table-pages.mjs`):
   tabs), **邀请返佣** (withdrawals / stats / rules). Edition gating is
   unchanged.
 
+**转发节点 (U7).** The execution-plane pages keep their own routes and
+share a header and a run-mode switch
+(`views/admin/forward-nodes/ForwardNodesModeNav.vue`: real links styled as
+a segmented control, `aria-current="page"` on the current one). A NodeX
+node and an Ansible machine open a detail page built on
+`forward-nodes/NodeDetailLayout.vue`, the detail template of plan §7.2:
+back link, title, status badges and actions, then `UiTabs` sections
+(概览 / 配置 / 危险操作) of `UiGroupedList`s, with a delayed skeleton, an
+error state with 重试 and a "no longer exists" state. The open section is
+in the query (`?tab=config`, `useDetailTab`). The NodeX and local runtime
+pages use `RuntimeStatusPanel` (probes, commands, Doctor output) and
+`RuntimeJobsTable`.
+
 The legacy global `button` rule in `style.css` (min-height 40 / 44 px on
 phones) no longer stretches library buttons, checkboxes, switches and chips:
 they set `min-height: 0` and keep their 44 px touch area with `::after`.
