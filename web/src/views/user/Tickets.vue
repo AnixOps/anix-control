@@ -459,10 +459,9 @@ onMounted(() => {
 }
 
 .message-sender {
-  font-size: 11px;
-  font-weight: 700;
-  margin-bottom: 4px;
-  opacity: 0.8;
+  font-size: var(--type-caption-size);
+  font-weight: var(--weight-bold);
+  margin-bottom: var(--space-1);
 }
 
 .message-content {
@@ -472,9 +471,12 @@ onMounted(() => {
 }
 
 .message-time {
-  font-size: 10px;
-  margin-top: 6px;
-  opacity: 0.6;
+  font-size: var(--type-caption-size);
+  margin-top: var(--space-2);
+}
+
+.admin .message-time {
+  color: var(--label-2);
 }
 
 .reply-input-wrapper {

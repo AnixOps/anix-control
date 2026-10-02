@@ -88,7 +88,7 @@
             {{ t('control.actions.configure') }}
           </UiButton>
           <UiButton
-            :variant="currentTarget.installation.enabled ? 'danger-soft' : 'primary'"
+            :variant="currentTarget.installation.enabled ? 'secondary' : 'primary'"
             :data-action="currentTarget.installation.enabled ? 'disable' : 'enable'"
             :disabled="targetBusy"
             @click="emitLifecycle(currentTarget.installation.enabled ? 'disable' : 'enable')"

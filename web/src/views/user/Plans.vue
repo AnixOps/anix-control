@@ -439,8 +439,12 @@ onMounted(() => {
 }
 
 .period-price {
-  font-size: 11px;
-  color: var(--text-secondary);
+  font-size: var(--type-caption-size);
+  color: var(--label-2);
+}
+
+.period-btn.active .period-price {
+  color: var(--label-1);
 }
 
 .coupon-input-group {
