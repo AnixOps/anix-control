@@ -69,6 +69,12 @@
     topology (`TopologyGraph.vue`, shared with 流量与监控) follows the theme
     live; the operation timeline shared with 插件中心 is a timeline list
     with state words instead of a bare table.
+- **CI: the Go race detector runs nightly only** (`.github/workflows/ci.yml`,
+  job "Go Race Detector"). It re-ran the whole suite serially and took about
+  28 minutes on every `go_dev` push and tag, so it is now limited to the
+  nightly schedule and manual runs, has a 40-minute timeout, and is no longer
+  a release dependency (`config/scripts/check_release_workflow.sh` updated).
+
 - **Nodes: a list and a node page (UI redesign phase U7)**
   (`web/src/views/admin/Nodes.vue`, `NodeDetail.vue`, `views/admin/nodes/`;
   `docs/reference/frontend-design.md` "Node pages"). Same endpoints, request
