@@ -6,6 +6,7 @@ import adminDashboard from './modules/en/adminDashboard'
 import adminMonitor from './modules/en/adminMonitor'
 import adminTrafficHourly from './modules/en/adminTrafficHourly'
 import ui from './modules/en/ui'
+import shell from './modules/en/shell'
 import { AGENT_NAME, CONTROL_NAME } from '../constants/brand'
 
 const legacy = {
@@ -96,6 +97,7 @@ export default {
   ...adminMonitor,
   ...adminTrafficHourly,
   ...ui,
+  ...shell,
   common: {
     locale: {
       label: 'Language',
@@ -104,10 +106,6 @@ export default {
       en: 'English',
       zhShort: '中',
       enShort: 'EN'
-    },
-    theme: {
-      switchToDark: 'Dark mode',
-      switchToLight: 'Light mode'
     },
     a11y: {
       skipToContent: 'Skip to main content',
@@ -240,65 +238,24 @@ export default {
     }
   },
   layout: {
+    // The shells' strings live under shell.* (locales/modules/*/shell.js);
+    // these remain for the login page until it is redesigned (U5).
     admin: {
       brand: CONTROL_NAME,
       badge: 'Studio Console',
-      mobileTitle: `${CONTROL_NAME} Console`,
-      subtitle: 'Subscription delivery, node orchestration, forwarding tools, and studio operations are centralized here.',
-      adminUser: 'Administrator',
-      collapseNavigation: 'Collapse navigation',
-      expandNavigation: 'Expand navigation',
       sections: {
         overview: 'Overview',
-        business: 'Business',
-        network: 'Network',
-        controlCenter: 'Control Center',
-        more: 'More',
-        forwardSuite: 'Forward Suite',
         userManagement: 'User Management',
-        extensions: 'Extensions',
-        extensionServices: 'Extensions / Services',
-        extensionOperations: 'Extensions / Operations',
-        extensionSystem: 'Extensions / System',
         system: 'System'
       },
       nav: {
         dashboard: 'Dashboard',
-        monitor: 'Monitor',
-        trafficHourly: 'Hourly Traffic',
         users: 'Users',
-        orders: 'Orders',
-        tickets: 'Tickets',
-        nodes: 'Nodes',
-        subscriptions: 'Subscriptions',
-        plans: 'Plans',
-        subscriptionTemplates: 'Subscription templates',
-        coupons: 'Coupons',
-        invite: 'Invite Rewards',
-        inviteCodes: 'Invite codes',
-        payment: 'Payment',
-        telegram: 'Telegram Bot',
-        notifications: 'Notifications',
-        knowledge: 'Knowledge Base',
-        mfa: 'MFA',
-        control: 'Control Kernel',
-        plugins: 'Plugins',
-        deployments: 'Deployments',
-        accessGroups: 'Access Groups',
-        system: 'System',
-        nodeXAgentsLegacy: 'NodeX Agents Legacy'
+        system: 'System'
       }
     },
     user: {
-      brand: CONTROL_NAME,
-      nav: {
-        dashboard: 'Dashboard',
-        subscribe: 'Subscriptions',
-        knowledge: 'Guides',
-        tickets: 'Tickets',
-        plans: 'Plans',
-        orders: 'Orders'
-      }
+      brand: CONTROL_NAME
     }
   },
   forwardSuite: {
@@ -312,8 +269,7 @@ export default {
       nodeXTopology: 'NodeX Topology',
       nodeXRuntime: 'NodeX Runtime',
       nodeXAgents: 'NodeX Agents',
-      observability: 'Observability',
-      more: 'More'
+      observability: 'Observability'
     },
     hints: {
       setupWizard: 'Configure nodes, tunnels and forwards step by step',
@@ -322,8 +278,7 @@ export default {
       nodeXTopology: 'Stateful relay/exit topology',
       nodeXRuntime: 'Stateful gost control-plane',
       nodeXAgents: 'Stateful agent task channel',
-      observability: 'Network topology & latency metrics',
-      more: 'Advanced runtime tools'
+      observability: 'Network topology & latency metrics'
     }
   },
   forwardWizard: {

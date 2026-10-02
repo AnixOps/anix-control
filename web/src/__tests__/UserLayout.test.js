@@ -1,142 +1,90 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount } from '@vue/test-utils'
-import { reactive } from 'vue'
+import { beforeEach, describe, expect, it, vi } from 'vitest'
+import { flushPromises, mount } from '@vue/test-utils'
+import { createMemoryHistory, createRouter } from 'vue-router'
 import { createPinia, setActivePinia } from 'pinia'
 import { useUserStore } from '@/stores/user'
 import UserLayout from '@/layouts/UserLayout.vue'
 import { setEdition } from '@/composables/useEdition'
 
-const mockPush = vi.fn()
-const mockRoute = reactive({ path: '/user/dashboard' })
+function stubNarrow(matches) {
+  vi.stubGlobal('matchMedia', vi.fn(() => ({ matches, addEventListener: vi.fn(), removeEventListener: vi.fn() })))
+}
 
-vi.mock('vue-router', () => ({
-  useRouter: () => ({
-    push: mockPush,
-  }),
-  useRoute: () => mockRoute,
-}))
+async function mountLayout(path = '/user/dashboard') {
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/:rest(.*)*', component: { template: '<div class="test-page">page</div>' } }]
+  })
+  await router.push(path)
+  await router.isReady()
+  const wrapper = mount(UserLayout, { global: { plugins: [router] } })
+  await flushPromises()
+  return { wrapper, router }
+}
+
+function links(wrapper, selector) {
+  return wrapper.findAll(`${selector} a[data-nav-item]`).map(link => link.attributes('href'))
+}
 
 describe('UserLayout.vue', () => {
   beforeEach(() => {
     setActivePinia(createPinia())
-    mockRoute.path = '/user/dashboard'
-    mockPush.mockReset()
-    localStorage.clear()
-  })
-
-  it('renders router view container', () => {
-    const wrapper = mount(UserLayout, {
-      global: {
-        stubs: {
-          'router-link': true,
-          'router-view': true,
-        },
-      },
-    })
-
-    expect(wrapper.find('router-view-stub').exists()).toBe(true)
-  })
-
-  it('exposes accessible navigation controls and main landmark', () => {
-    const wrapper = mount(UserLayout, {
-      global: {
-        stubs: {
-          'router-link': true,
-          'router-view': true,
-        },
-      },
-    })
-
-    expect(wrapper.find('.menu-toggle').attributes('aria-controls')).toBe('user-sidebar')
-    expect(wrapper.find('.menu-toggle').attributes('aria-expanded')).toBe('false')
-    expect(wrapper.find('.mobile-sidebar').attributes('id')).toBe('user-sidebar')
-    expect(wrapper.find('main.main-content').attributes('id')).toBe('app-main-content')
-    expect(wrapper.find('main.main-content').attributes('tabindex')).toBe('-1')
-  })
-
-  it('hides plans and orders in the community edition', () => {
-    setEdition('community')
-    const wrapper = mount(UserLayout, {
-      global: {
-        stubs: {
-          'router-link': {
-            props: ['to'],
-            template: '<a class="menu-link" :data-to="to"><slot /></a>',
-          },
-          'router-view': true,
-        },
-      },
-    })
-
-    const links = wrapper.findAll('a.menu-link').map(link => link.attributes('data-to'))
-    expect(links).toEqual(expect.arrayContaining(['/user/dashboard', '/user/subscribe', '/user/knowledge', '/user/tickets']))
-    expect(links).not.toContain('/user/plans')
-    expect(links).not.toContain('/user/orders')
-  })
-
-  it('contains all user menu routes in the commercial edition', () => {
-    setEdition('commercial')
-    const expectedPaths = [
-      '/user/dashboard',
-      '/user/subscribe',
-      '/user/knowledge',
-      '/user/tickets',
-      '/user/plans',
-      '/user/orders',
-    ]
-
-    const wrapper = mount(UserLayout, {
-      global: {
-        stubs: {
-          'router-link': {
-            props: ['to'],
-            template: '<a class="menu-link" :data-to="to"><slot /></a>',
-          },
-          'router-view': true,
-        },
-      },
-    })
-
-    const links = wrapper
-      .findAll('a.menu-link')
-      .map(link => link.attributes('data-to'))
-
-    expect(links).toEqual(expect.arrayContaining(expectedPaths))
-  })
-
-  it('fetches user info on mount when already logged in', () => {
     const userStore = useUserStore()
-    userStore.token = 'token-123'
     userStore.getUserInfo = vi.fn()
-
-    mount(UserLayout, {
-      global: {
-        stubs: {
-          'router-link': true,
-          'router-view': true,
-        },
-      },
-    })
-
-    expect(userStore.getUserInfo).toHaveBeenCalledTimes(1)
+    userStore.login('token-123', { id: 7, email: 'lin@example.test', is_admin: false })
+    stubNarrow(false)
   })
 
-  it('logs out and redirects to login', async () => {
-    const wrapper = mount(UserLayout, {
-      global: {
-        stubs: {
-          'router-link': true,
-          'router-view': true,
-        },
-      },
-    })
+  it('has a header with the lockup, a named navigation and the main landmark', async () => {
+    const { wrapper } = await mountLayout()
+    expect(wrapper.find('header.user-bar .brand-lockup').exists()).toBe(true)
+    expect(wrapper.get('nav[data-user-nav="top"]').attributes('aria-label')).toBe('Main navigation')
+    const main = wrapper.get('main#app-main-content')
+    expect(main.attributes('tabindex')).toBe('-1')
+    expect(main.find('.test-page').exists()).toBe(true)
+    // Theme and language moved into the account menu.
+    expect(wrapper.find('.locale-switcher').exists()).toBe(false)
+    expect(wrapper.find('.theme-toggle').exists()).toBe(false)
+    expect(wrapper.find('header [data-account-menu-trigger]').attributes('aria-label')).toBe('Account menu: lin@example.test')
+  })
 
-    const userStore = useUserStore()
-    userStore.logout = vi.fn()
+  it('shows 概览 / 订阅 / 帮助中心 / 工单 / 账户 and marks the current page', async () => {
+    setEdition('community')
+    const { wrapper } = await mountLayout('/user/subscribe')
+    expect(links(wrapper, 'nav[data-user-nav="top"]')).toEqual([
+      '/user/dashboard', '/user/subscribe', '/user/knowledge', '/user/tickets', '/user/account'
+    ])
+    const current = wrapper.findAll('nav[data-user-nav="top"] [aria-current="page"]')
+    expect(current.map(link => link.attributes('href'))).toEqual(['/user/subscribe'])
+    expect(wrapper.find('nav[data-user-nav="tabs"]').exists()).toBe(false)
+  })
 
-    await wrapper.find('.user-actions .btn').trigger('click')
+  it('adds plans and orders in the commercial edition', async () => {
+    setEdition('commercial')
+    const { wrapper } = await mountLayout()
+    expect(links(wrapper, 'nav[data-user-nav="top"]')).toEqual([
+      '/user/dashboard', '/user/subscribe', '/user/knowledge', '/user/tickets', '/user/plans', '/user/orders', '/user/account'
+    ])
+  })
 
-    expect(userStore.logout).toHaveBeenCalledTimes(1)
-    expect(mockPush).toHaveBeenCalledWith('/login')
+  it('uses a bottom tab bar below 834 px and keeps the lockup and avatar on top', async () => {
+    stubNarrow(true)
+    setEdition('commercial')
+    const { wrapper } = await mountLayout('/user/tickets')
+    expect(wrapper.find('nav[data-user-nav="top"]').exists()).toBe(false)
+    const tabs = wrapper.get('nav[data-user-nav="tabs"]')
+    expect(tabs.attributes('aria-label')).toBe('Main navigation')
+    expect(links(wrapper, 'nav[data-user-nav="tabs"]')).toEqual([
+      '/user/dashboard', '/user/subscribe', '/user/knowledge', '/user/tickets', '/user/account'
+    ])
+    expect(tabs.find('[aria-current="page"]').attributes('href')).toBe('/user/tickets')
+    expect(tabs.findAll('svg')).toHaveLength(5)
+    expect(tabs.text()).toContain('Help')
+    expect(wrapper.find('header [data-account-menu-trigger]').exists()).toBe(true)
+  })
+
+  it('fetches the profile on mount', async () => {
+    await mountLayout()
+    expect(useUserStore().getUserInfo).toHaveBeenCalledTimes(1)
   })
 })

@@ -3,10 +3,12 @@ import { useUserStore } from '@/stores/user'
 import { ensureAdminExtensions, resetAdminExtensions } from '@/extensions/runtime'
 import { resolveLegacyControlRedirect } from '@/router/controlLegacy'
 import { loadEdition, routeAllowedByEdition } from '@/composables/useEdition'
+import { scrollBehavior } from '@/router/scroll'
 
-// Layouts
-import UserLayout from '@/layouts/UserLayout.vue'
-import AdminLayout from '@/layouts/AdminLayout.vue'
+// Layouts: lazy, so the login page does not load the shells (and the
+// component library they use) before anyone has signed in.
+const UserLayout = () => import('@/layouts/UserLayout.vue')
+const AdminLayout = () => import('@/layouts/AdminLayout.vue')
 
 // Lazy-loaded views
 const Login = () => import('@/views/Login.vue')
@@ -47,6 +49,14 @@ const AdminAgent = () => import('@/views/admin/Agent.vue')
 const AdminPlugins = () => import('@/views/admin/Plugins.vue')
 const AdminDeployments = () => import('@/views/admin/Deployments.vue')
 const AdminAccessGroups = () => import('@/views/admin/AccessGroups.vue')
+const Account = () => import('@/views/Account.vue')
+const StatusPage = () => import('@/views/StatusPage.vue')
+
+const ACCOUNT_META = Object.freeze({ titleKey: 'shell.accountPage.title' })
+const NOT_FOUND_META = Object.freeze({ titleKey: 'shell.status.notFound.title' })
+// Pages with wide tables keep to --size-content-wide instead of
+// --size-content-admin (AdminLayout).
+const WIDE = Object.freeze({ layout: 'wide' })
 
 const routes = [
   {
@@ -89,6 +99,21 @@ const routes = [
         path: 'orders',
         component: UserOrders,
         meta: { edition: 'commercial' }
+      },
+      {
+        path: 'account',
+        component: Account,
+        meta: ACCOUNT_META
+      },
+      {
+        path: '',
+        redirect: '/user/dashboard'
+      },
+      {
+        path: ':pathMatch(.*)*',
+        component: StatusPage,
+        props: { kind: 'not-found' },
+        meta: NOT_FOUND_META
       }
     ]
   },
@@ -113,16 +138,18 @@ const routes = [
       },
       {
         path: 'users',
-        component: AdminUsers
+        component: AdminUsers,
+        meta: WIDE
       },
       {
         path: 'nodes',
-        component: AdminNodes
+        component: AdminNodes,
+        meta: WIDE
       },
       {
         path: 'orders',
         component: AdminOrders,
-        meta: { edition: 'commercial' }
+        meta: { edition: 'commercial', ...WIDE }
       },
       {
         path: 'subscriptions',
@@ -147,7 +174,8 @@ const routes = [
       },
       {
         path: 'forward',
-        component: AdminForward
+        component: AdminForward,
+        meta: WIDE
       },
       {
         path: 'forward/setup',
@@ -155,19 +183,23 @@ const routes = [
       },
       {
         path: 'forward/tunnel',
-        component: AdminTunnel
+        component: AdminTunnel,
+        meta: WIDE
       },
       {
         path: 'forward/limit',
-        component: AdminLimit
+        component: AdminLimit,
+        meta: WIDE
       },
       {
         path: 'forward/ansible-machines',
-        component: AdminAnsibleMachines
+        component: AdminAnsibleMachines,
+        meta: WIDE
       },
       {
         path: 'forward/nodes',
-        component: AdminForwardNodes
+        component: AdminForwardNodes,
+        meta: WIDE
       },
       {
         path: 'forward/local',
@@ -253,7 +285,8 @@ const routes = [
       },
       {
         path: 'deployments',
-        component: AdminDeployments
+        component: AdminDeployments,
+        meta: WIDE
       },
       {
         path: 'control',
@@ -262,14 +295,47 @@ const routes = [
       {
         path: 'access-groups',
         component: AdminAccessGroups
+      },
+      {
+        path: 'account',
+        component: Account,
+        meta: ACCOUNT_META
+      },
+      {
+        path: '',
+        redirect: '/admin/dashboard'
+      },
+      {
+        path: ':pathMatch(.*)*',
+        component: StatusPage,
+        props: { kind: 'not-found' },
+        meta: NOT_FOUND_META
       }
     ]
+  },
+  // Unknown paths outside the shells, and admin pages a signed-in user may
+  // not open. Both keep the URL as typed: the guard redirects by name with
+  // the path as the parameter.
+  {
+    path: '/:pathMatch(.*)*',
+    name: 'not-found',
+    component: StatusPage,
+    props: { kind: 'not-found', standalone: true },
+    meta: NOT_FOUND_META
+  },
+  {
+    path: '/:forbiddenPath(.*)*',
+    name: 'forbidden',
+    component: StatusPage,
+    props: { kind: 'forbidden', standalone: true },
+    meta: { titleKey: 'shell.status.forbidden.title' }
   }
 ]
 
 const router = createRouter({
   history: createWebHistory(),
-  routes
+  routes,
+  scrollBehavior
 })
 
 // editionFallback is where a page the edition does not serve leads.
@@ -278,9 +344,27 @@ function editionFallback(to) {
 }
 
 // Navigation Guards
+// forbiddenLocation shows 无权限 at the requested URL.
+function forbiddenLocation(to) {
+  return {
+    name: 'forbidden',
+    params: { forbiddenPath: to.path.replace(/^\//, '').split('/') },
+    query: to.query,
+    hash: to.hash,
+    replace: true
+  }
+}
+
 router.beforeEach(async (to, from, next) => {
   const userStore = useUserStore()
   const isAdminTarget = to.path === '/admin' || to.path.startsWith('/admin/')
+
+  // The status pages are terminal: no auth or edition checks (a redirect
+  // to them keeps an /admin URL, which would loop otherwise).
+  if (to.name === 'forbidden' || to.name === 'not-found') {
+    next()
+    return
+  }
 
   // Commercial pages (meta.edition) exist only in the commercial edition.
   if (to.matched.some(record => record.meta?.edition || record.meta?.extensionPluginID)) {
@@ -296,7 +380,7 @@ router.beforeEach(async (to, from, next) => {
     next('/login')
   } else if ((to.meta.requiresAdmin || isAdminTarget) && !userStore.isAdmin) {
     resetAdminExtensions()
-    next('/user/dashboard') // Redirect non-admins to user dashboard
+    next(forbiddenLocation(to)) // Signed in, but not an administrator: 无权限
   } else if (to.meta.guest && userStore.isLoggedIn) {
     if (userStore.isAdmin) {
       next('/admin/dashboard')

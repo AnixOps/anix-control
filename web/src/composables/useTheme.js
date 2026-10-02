@@ -5,8 +5,12 @@ const THEME_LIGHT = 'light'
 const THEME_DARK = 'dark'
 const DARK_QUERY = '(prefers-color-scheme: dark)'
 
-// 全局单例状态，跨组件共享当前（已解析的）主题。
+export const THEME_SYSTEM = 'system'
+
+// 全局单例状态，跨组件共享当前（已解析的）主题和用户的选择
+// （system / light / dark；system 表示没有保存的选择，跟随系统）。
 const currentTheme = ref(THEME_LIGHT)
+const themePreference = ref(THEME_SYSTEM)
 
 let systemQuery = null
 
@@ -55,6 +59,7 @@ function handleSystemChange() {
 // initTheme 在应用启动时调用。优先级：用户选择 > 系统偏好 > 亮色；
 // 没有用户选择时继续跟随系统切换。
 export function initTheme() {
+  themePreference.value = readStoredTheme() || THEME_SYSTEM
   applyTheme(readStoredTheme() || systemTheme())
   if (!systemQuery && typeof window !== 'undefined' && typeof window.matchMedia === 'function') {
     systemQuery = window.matchMedia(DARK_QUERY)
@@ -69,11 +74,28 @@ export function initTheme() {
 export function useTheme() {
   function setTheme(theme) {
     applyTheme(theme)
+    themePreference.value = currentTheme.value
     try {
       localStorage.setItem(STORAGE_KEY, currentTheme.value)
     } catch {
       // Blocked storage only loses the preference; the theme still applies.
     }
+  }
+
+  // setThemePreference takes the account menu's choice: 'system' forgets the
+  // stored theme and follows prefers-color-scheme again.
+  function setThemePreference(preference) {
+    if (preference !== THEME_SYSTEM) {
+      setTheme(preference === THEME_DARK ? THEME_DARK : THEME_LIGHT)
+      return
+    }
+    themePreference.value = THEME_SYSTEM
+    try {
+      localStorage.removeItem(STORAGE_KEY)
+    } catch {
+      // Blocked storage: nothing was stored either.
+    }
+    applyTheme(systemTheme())
   }
 
   function toggleTheme() {
@@ -84,5 +106,5 @@ export function useTheme() {
     return currentTheme.value === THEME_DARK
   }
 
-  return { currentTheme, setTheme, toggleTheme, isDark }
+  return { currentTheme, themePreference, setTheme, setThemePreference, toggleTheme, isDark }
 }

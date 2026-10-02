@@ -133,6 +133,14 @@ If local code only matches the DB layer but not runtime side effects, document t
 | entity | `internal/model/` |
 | frontend page | `web/src/views/` |
 | frontend api | `web/src/api/` |
+| forward suite sub-navigation | `web/src/components/admin/ForwardSuiteNav.vue`, links in `web/src/navigation/menu.js` (`FORWARD_SUITE_LINKS`) |
+
+The forward suite keeps its own sub-navigation (快速配置向导, 流量转发, 隧道,
+限速, NodeX 拓扑, and 更多 for Ansible 机器, 本地运行时, NodeX 运行时, NodeX
+Agents, 可观测性) and its routes, including the seven legacy redirects. Since
+UI phase U3 the admin shell renders it once, above every `/admin/forward*`
+page; the pages and the sidebar no longer repeat it. A new forward page adds
+its link to `FORWARD_SUITE_LINKS`, not to the page.
 
 ## Current Forward/Tunnel Base
 

@@ -6,6 +6,7 @@ import adminDashboard from './modules/zh-CN/adminDashboard'
 import adminMonitor from './modules/zh-CN/adminMonitor'
 import adminTrafficHourly from './modules/zh-CN/adminTrafficHourly'
 import ui from './modules/zh-CN/ui'
+import shell from './modules/zh-CN/shell'
 import { AGENT_NAME, CONTROL_NAME } from '../constants/brand'
 
 const legacy = {
@@ -98,6 +99,7 @@ export default {
   ...adminMonitor,
   ...adminTrafficHourly,
   ...ui,
+  ...shell,
   common: {
     locale: {
       label: '语言',
@@ -106,10 +108,6 @@ export default {
       en: 'English',
       zhShort: '中',
       enShort: 'EN'
-    },
-    theme: {
-      switchToDark: '深色模式',
-      switchToLight: '浅色模式'
     },
     a11y: {
       skipToContent: '跳转到主内容',
@@ -242,65 +240,24 @@ export default {
     }
   },
   layout: {
+    // The shells' strings live under shell.* (locales/modules/*/shell.js);
+    // these remain for the login page until it is redesigned (U5).
     admin: {
       brand: CONTROL_NAME,
-      mobileTitle: `${CONTROL_NAME} 管理台`,
       badge: '工作室管理台',
-      subtitle: '订阅交付、节点编排、转发套件与运维入口统一收敛在此导航。',
-      adminUser: '管理员',
-      collapseNavigation: '收起导航',
-      expandNavigation: '展开导航',
       sections: {
         overview: '概览',
-        business: '业务',
-        network: '网络',
-        controlCenter: '控制中心',
-        more: '更多',
-        forwardSuite: '转发套件',
         userManagement: '用户管理',
-        extensions: '扩展',
-        extensionServices: '扩展 / 服务',
-        extensionOperations: '扩展 / 运维',
-        extensionSystem: '扩展 / 系统',
         system: '系统'
       },
       nav: {
         dashboard: '仪表盘',
-        monitor: '实时监控',
-        trafficHourly: '小时流量',
         users: '用户管理',
-        orders: '订单管理',
-        tickets: '工单管理',
-        nodes: '节点管理',
-        subscriptions: '订阅管理',
-        plans: '套餐管理',
-        subscriptionTemplates: '订阅模板',
-        coupons: '优惠券管理',
-        invite: '邀请返利管理',
-        inviteCodes: '邀请码',
-        payment: '支付网关',
-        telegram: 'Telegram Bot',
-        notifications: '通知管理',
-        knowledge: '知识库',
-        mfa: 'MFA 设置',
-        control: '控制内核',
-        plugins: '插件',
-        deployments: '部署',
-        accessGroups: '访问组',
-        system: '系统管理',
-        nodeXAgentsLegacy: 'NodeX Agents Legacy'
+        system: '系统管理'
       }
     },
     user: {
-      brand: CONTROL_NAME,
-      nav: {
-        dashboard: '仪表盘',
-        subscribe: '订阅',
-        knowledge: '使用教程',
-        tickets: '我的工单',
-        plans: '购买套餐',
-        orders: '我的订单'
-      }
+      brand: CONTROL_NAME
     }
   },
   forwardSuite: {
@@ -314,8 +271,7 @@ export default {
       nodeXTopology: 'NodeX 拓扑',
       nodeXRuntime: 'NodeX 运行时',
       nodeXAgents: 'NodeX Agents',
-      observability: '可观测性',
-      more: '更多'
+      observability: '可观测性'
     },
     hints: {
       setupWizard: '一步步配置节点、隧道和转发',
@@ -324,8 +280,7 @@ export default {
       nodeXTopology: '有状态 relay/exit 拓扑',
       nodeXRuntime: '有状态 gost 控制面',
       nodeXAgents: '有状态 agent 任务通道',
-      observability: '网络拓扑与延迟指标',
-      more: '高级运行时工具'
+      observability: '网络拓扑与延迟指标'
     }
   },
   forwardWizard: {

@@ -37,9 +37,11 @@ export function useAppI18n() {
     }
   })
 
+  // nativeLabel is the language's own name (a language picker shows
+  // 简体中文 to an English reader, too).
   const localeOptions = computed(() => ([
-    { value: 'zh-CN', label: t('common.locale.zhCN'), shortLabel: t('common.locale.zhShort') },
-    { value: 'en', label: t('common.locale.en'), shortLabel: t('common.locale.enShort') }
+    { value: 'zh-CN', label: t('common.locale.zhCN'), nativeLabel: '简体中文', shortLabel: t('common.locale.zhShort') },
+    { value: 'en', label: t('common.locale.en'), nativeLabel: 'English', shortLabel: t('common.locale.enShort') }
   ]))
 
   const currentLocale = computed(() => localeBinding.value)

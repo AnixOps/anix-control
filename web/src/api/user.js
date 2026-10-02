@@ -96,3 +96,42 @@ export function getOrderDetail(id) {
     method: 'get'
   })
 }
+
+// Two-factor authentication of the signed-in account (identity package,
+// /api/v2/user/mfa/*). The account page (views/Account.vue) uses them.
+export function getMfaStatus() {
+  return request({
+    url: '/user/mfa/status',
+    method: 'get'
+  })
+}
+
+export function setupTotp() {
+  return request({
+    url: '/user/mfa/totp/setup',
+    method: 'post'
+  })
+}
+
+export function enableTotp(code) {
+  return request({
+    url: '/user/mfa/totp/enable',
+    method: 'post',
+    data: { code }
+  })
+}
+
+export function disableMfa(password) {
+  return request({
+    url: '/user/mfa/disable',
+    method: 'post',
+    data: { password }
+  })
+}
+
+export function regenerateBackupCodes() {
+  return request({
+    url: '/user/mfa/backup-codes/regenerate',
+    method: 'post'
+  })
+}

@@ -1,108 +1,75 @@
-import { describe, it, expect } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { describe, expect, it } from 'vitest'
+import { render, screen, waitFor, within } from '@testing-library/vue'
+import userEvent from '@testing-library/user-event'
 import { createMemoryHistory, createRouter } from 'vue-router'
-import { nextTick } from 'vue'
 import ForwardSuiteNav from '@/components/admin/ForwardSuiteNav.vue'
 
-const routes = [
-  { path: '/admin/forward/setup', component: { template: '<div />' } },
-  { path: '/admin/forward', component: { template: '<div />' } },
-  { path: '/admin/forward/tunnel', component: { template: '<div />' } },
-  { path: '/admin/forward/limit', component: { template: '<div />' } },
-  { path: '/admin/forward/ansible-machines', component: { template: '<div />' } },
-  { path: '/admin/forward/local', component: { template: '<div />' } },
-  { path: '/admin/forward/nodes', component: { template: '<div />' } },
-  { path: '/admin/forward/nodex', component: { template: '<div />' } },
-  { path: '/admin/forward/agents', component: { template: '<div />' } },
-  { path: '/admin/forward/observability', component: { template: '<div />' } }
+const paths = [
+  '/admin/forward/setup', '/admin/forward', '/admin/forward/tunnel', '/admin/forward/limit',
+  '/admin/forward/ansible-machines', '/admin/forward/local', '/admin/forward/nodes', '/admin/forward/nodex',
+  '/admin/forward/agents', '/admin/forward/observability'
 ]
 
-function createTestRouter(startPath = '/admin/forward') {
+async function renderNav(startPath = '/admin/forward') {
   const router = createRouter({
     history: createMemoryHistory(),
-    routes
+    routes: paths.map(path => ({ path, component: { template: '<div />' } }))
   })
-  router.push(startPath)
+  await router.push(startPath)
+  await router.isReady()
+  render(ForwardSuiteNav, { global: { plugins: [router] } })
   return router
 }
 
 describe('ForwardSuiteNav.vue', () => {
-  it('renders structured navigation semantics and descriptive link labels', async () => {
-    const router = createTestRouter()
-    await router.isReady()
+  it('keeps the flux-panel sub-navigation: five links and a 更多 menu with the runtime tools', async () => {
+    const user = userEvent.setup()
+    await renderNav()
+    const nav = screen.getByRole('navigation', { name: 'Forward suite' })
+    const links = within(nav).getAllByRole('link')
+    expect(links.map(link => link.getAttribute('href'))).toEqual([
+      '/admin/forward/setup', '/admin/forward', '/admin/forward/tunnel', '/admin/forward/limit', '/admin/forward/nodes'
+    ])
+    expect(within(nav).getByRole('link', { name: 'Setup Wizard' }).getAttribute('title')).toBeTruthy()
 
-    const wrapper = mount(ForwardSuiteNav, {
-      global: {
-        plugins: [router]
-      }
-    })
-
-    const nav = wrapper.find('nav.forward-suite-nav')
-    const listItems = wrapper.findAll('li.forward-suite-item')
-    const advancedItems = wrapper.findAll('li.forward-suite-subitem')
-    const ansibleLink = wrapper.find('a[href="/admin/forward/ansible-machines"]')
-
-    expect(nav.exists()).toBe(true)
-    expect(nav.attributes('aria-label')).toContain('Forward')
-    expect(wrapper.find('ul.forward-suite-list').exists()).toBe(true)
-    expect(listItems).toHaveLength(6)
-    expect(advancedItems).toHaveLength(5)
-    expect(wrapper.find('a[href="/admin/forward/setup"]').exists()).toBe(true)
-    expect(wrapper.find('a[href="/admin/forward/nodes"]').exists()).toBe(true)
-    expect(ansibleLink.attributes('aria-label')).toContain('Stateless execution machines')
+    await user.click(within(nav).getByRole('button', { name: 'More forwarding tools' }))
+    const menu = await screen.findByRole('menu')
+    expect(within(menu).getAllByRole('menuitem').map(item => item.getAttribute('href'))).toEqual([
+      '/admin/forward/ansible-machines', '/admin/forward/local', '/admin/forward/nodex', '/admin/forward/agents', '/admin/forward/observability'
+    ])
+    expect(within(menu).getByRole('menuitem', { name: /Ansible Machines/ }).textContent).toContain('Stateless execution machines')
   })
 
-  it('renders Lucide navigation icons rather than text-initial glyphs', async () => {
-    const router = createTestRouter()
-    await router.isReady()
-
-    const wrapper = mount(ForwardSuiteNav, {
-      global: {
-        plugins: [router]
-      }
-    })
-
-    expect(wrapper.findAll('[data-admin-nav-icon]').length).toBeGreaterThan(0)
-    expect(wrapper.find('[data-admin-nav-icon="setup"]').element.tagName).toBe('svg')
-    expect(wrapper.find('.icon').exists()).toBe(false)
+  it('marks only the current page, not the /admin/forward prefix', async () => {
+    await renderNav('/admin/forward/tunnel')
+    const nav = screen.getByRole('navigation', { name: 'Forward suite' })
+    const current = within(nav).getAllByRole('link').filter(link => link.getAttribute('aria-current') === 'page')
+    expect(current.map(link => link.getAttribute('href'))).toEqual(['/admin/forward/tunnel'])
+    expect(current[0].classList.contains('is-active')).toBe(true)
   })
 
-  it('uses sidebar surface treatment only when explicitly embedded in navigation', async () => {
-    const router = createTestRouter()
-    await router.isReady()
-
-    const contentWrapper = mount(ForwardSuiteNav, {
-      global: {
-        plugins: [router]
-      }
-    })
-    const sidebarWrapper = mount(ForwardSuiteNav, {
-      props: { sidebar: true },
-      global: {
-        plugins: [router]
-      }
-    })
-
-    expect(contentWrapper.classes()).not.toContain('forward-suite-nav-sidebar')
-    expect(sidebarWrapper.classes()).toContain('forward-suite-nav-sidebar')
+  it('names the current runtime tool on the 更多 button and in its menu', async () => {
+    const user = userEvent.setup()
+    await renderNav('/admin/forward/nodex')
+    const nav = screen.getByRole('navigation', { name: 'Forward suite' })
+    const more = within(nav).getByRole('button', { name: 'More forwarding tools: NodeX Runtime' })
+    expect(more.classList.contains('is-active')).toBe(true)
+    expect(within(nav).getAllByRole('link').some(link => link.getAttribute('aria-current') === 'page')).toBe(false)
+    await user.click(more)
+    const item = await screen.findByRole('menuitem', { name: /NodeX Runtime/ })
+    expect(item.getAttribute('aria-current')).toBe('page')
   })
 
-  it('exposes clear active-state semantics via active class and aria-current', async () => {
-    const router = createTestRouter('/admin/forward/nodex')
-    await router.isReady()
-
-    const wrapper = mount(ForwardSuiteNav, {
-      global: {
-        plugins: [router]
-      }
-    })
-
-    await nextTick()
-
-    const activeLink = wrapper.find('a[href="/admin/forward/nodex"]')
-    const advancedDetails = wrapper.find('details.forward-suite-details')
-    expect(activeLink.classes()).toContain('forward-suite-link-active')
-    expect(activeLink.attributes('aria-current')).toBe('page')
-    expect(advancedDetails.element.open).toBe(true)
+  it('opens a runtime tool from the keyboard', async () => {
+    const user = userEvent.setup()
+    const router = await renderNav()
+    const more = screen.getByRole('button', { name: 'More forwarding tools' })
+    more.focus()
+    await user.keyboard('{Enter}')
+    await screen.findByRole('menu')
+    await user.keyboard('{ArrowDown}')
+    await waitFor(() => expect(document.activeElement.getAttribute('href')).toBe('/admin/forward/local'))
+    await user.keyboard('{Enter}')
+    await waitFor(() => expect(router.currentRoute.value.path).toBe('/admin/forward/local'))
   })
 })

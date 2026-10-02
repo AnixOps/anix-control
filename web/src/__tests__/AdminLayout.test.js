@@ -1,638 +1,332 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
-import { reactive, nextTick } from 'vue'
+import { nextTick } from 'vue'
+import { createMemoryHistory, createRouter } from 'vue-router'
 import { createPinia, setActivePinia } from 'pinia'
 import { useUserStore } from '@/stores/user'
 import AdminLayout from '@/layouts/AdminLayout.vue'
 import { setEdition } from '@/composables/useEdition'
+import { usePalette } from '@/components/shell/usePalette'
 
-const mockPush = vi.fn()
-const mockRoute = reactive({ path: '/admin/dashboard' })
 const mockGetSystemInfo = vi.hoisted(() => vi.fn())
+const mockGetUserList = vi.hoisted(() => vi.fn())
 const mockAdminExtensionMenus = vi.hoisted(() => ({ value: [] }))
-
-function stubTabletViewport(matches = true) {
-  const listeners = new Map()
-  const mediaQuery = {
-    matches,
-    addEventListener: vi.fn((event, listener) => listeners.set(event, listener)),
-    removeEventListener: vi.fn((event) => listeners.delete(event)),
-    setMatches(nextMatches) {
-      mediaQuery.matches = nextMatches
-      listeners.get('change')?.({ matches: nextMatches })
-    }
-  }
-  vi.stubGlobal('matchMedia', vi.fn(() => mediaQuery))
-  return mediaQuery
-}
-
-vi.mock('vue-router', () => ({
-  routeLocationKey: Symbol('route location'),
-  useRouter: () => ({ push: mockPush }),
-  useRoute: () => mockRoute,
-}))
 
 vi.mock('@/api/admin', () => ({
   getSystemInfo: (...args) => mockGetSystemInfo(...args),
+  getUserList: (...args) => mockGetUserList(...args)
 }))
 
 vi.mock('@/extensions/runtime', () => ({
-  adminExtensionMenus: mockAdminExtensionMenus,
+  adminExtensionMenus: mockAdminExtensionMenus
 }))
 
-const adminMenuPaths = [
-  '/admin/dashboard',
-  '/admin/monitor',
-  '/admin/traffic-hourly',
-  '/admin/users',
-  '/admin/orders',
-  '/admin/tickets',
-  '/admin/nodes',
-  '/admin/subscriptions',
-  '/admin/forward/setup',
-  '/admin/forward',
-  '/admin/forward/tunnel',
-  '/admin/forward/limit',
-  '/admin/forward/ansible-machines',
-  '/admin/forward/nodes',
-  '/admin/forward/local',
-  '/admin/forward/nodex',
-  '/admin/forward/agents',
-  '/admin/forward/observability',
-  '/admin/agent',
-  '/admin/plugins',
-  '/admin/deployments',
-  '/admin/plans',
-  '/admin/coupons',
-  '/admin/invite',
-  '/admin/invite-codes',
-  '/admin/payment',
-  '/admin/telegram',
-  '/admin/notifications',
-  '/admin/knowledge',
-  '/admin/mfa',
-  '/admin/system',
-  '/admin/control',
-  '/admin/access-groups',
-]
+function stubViewport({ narrow = false } = {}) {
+  const listeners = new Set()
+  const list = {
+    matches: narrow,
+    addEventListener: vi.fn((event, listener) => listeners.add(listener)),
+    removeEventListener: vi.fn((event, listener) => listeners.delete(listener)),
+    set(next) {
+      list.matches = next
+      for (const listener of listeners) listener({ matches: next })
+    }
+  }
+  vi.stubGlobal('matchMedia', vi.fn(() => list))
+  return list
+}
+
+async function mountLayout(path = '/admin/dashboard', options = {}) {
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [{ path: '/:rest(.*)*', component: { template: '<div class="test-page">page</div>' } }]
+  })
+  await router.push(path)
+  await router.isReady()
+  const wrapper = mount(AdminLayout, {
+    attachTo: document.body,
+    global: { plugins: [router], stubs: { teleport: true } },
+    ...options
+  })
+  await flushPromises()
+  return { wrapper, router }
+}
+
+function sidebarPaths(wrapper) {
+  return wrapper.findAll('#admin-sidebar a[data-nav-item]').map(link => link.attributes('href'))
+}
 
 describe('AdminLayout.vue', () => {
+  let mounted = null
+
   beforeEach(() => {
     setActivePinia(createPinia())
-    useUserStore().getUserInfo = vi.fn()
-    mockRoute.path = '/admin/dashboard'
+    const userStore = useUserStore()
+    userStore.getUserInfo = vi.fn()
+    userStore.login('admin-token', { id: 1, email: 'admin@example.test', is_admin: true, permission_mode: 'legacy' })
     mockAdminExtensionMenus.value = []
-    mockPush.mockReset()
     mockGetSystemInfo.mockReset()
-    mockGetSystemInfo.mockResolvedValue({ data: { version: '2.0.0' } })
-    vi.useFakeTimers()
+    mockGetSystemInfo.mockResolvedValue({ code: 0, data: { version: '4.1.0', build_code: '202610020001', commit: 'abc123' } })
+    mockGetUserList.mockReset()
+    mockGetUserList.mockResolvedValue({ code: 0, data: { list: [], total: 0 } })
+    stubViewport()
   })
 
   afterEach(() => {
-    vi.runOnlyPendingTimers()
-    vi.useRealTimers()
+    mounted?.unmount()
+    mounted = null
+    usePalette().closePalette()
   })
 
-  it('renders router view container', () => {
-    const wrapper = mount(AdminLayout, {
-      global: {
-        stubs: {
-          'router-link': true,
-          'router-view': true,
-        },
-      },
-    })
-
-    expect(wrapper.find('router-view-stub').exists()).toBe(true)
+  it('has the header, navigation and main landmarks and no clock, subtitle, version line or locale switcher', async () => {
+    const { wrapper } = await mountLayout()
+    mounted = wrapper
+    expect(wrapper.find('#admin-sidebar nav').attributes('aria-label')).toBe('Admin navigation')
+    expect(wrapper.find('#admin-sidebar').attributes('role')).toBeUndefined()
+    expect(wrapper.find('header.admin-topbar').exists()).toBe(true)
+    const main = wrapper.get('main#app-main-content')
+    expect(main.attributes('tabindex')).toBe('-1')
+    expect(main.find('.test-page').exists()).toBe(true)
+    expect(wrapper.find('.current-time').exists()).toBe(false)
+    expect(wrapper.find('.topbar-subtitle').exists()).toBe(false)
+    expect(wrapper.find('.version-line').exists()).toBe(false)
+    expect(wrapper.find('.locale-switcher').exists()).toBe(false)
+    expect(wrapper.text()).not.toContain('4.1.0')
   })
 
-  it('shows system version from legacy and panel envelope payloads', async () => {
-    mockGetSystemInfo.mockResolvedValueOnce({
-      data: {
-        version: '2.1.0',
-        build_code: '202607090001',
-        build_time: '2026-07-09T00:00:00Z',
-        commit: 'abc123'
-      }
-    })
-
-    const legacyWrapper = mount(AdminLayout, {
-      global: {
-        stubs: {
-          'router-link': true,
-          'router-view': true,
-        },
-      },
-    })
-    await flushPromises()
-
-    expect(legacyWrapper.find('.version-line').text()).toBe('AnixOps v2.1.0 #202607090001')
-    expect(legacyWrapper.find('.version-line').attributes('title')).toContain('Build code: 202607090001')
-    legacyWrapper.unmount()
-
-    mockGetSystemInfo.mockResolvedValueOnce({
-      code: 0,
-      msg: '操作成功',
-      data: {
-        version: '2.2.0',
-        build_code: '202607090002',
-        build_time: '2026-07-09T00:01:00Z',
-        commit: 'def456'
-      },
-      ts: 1783526400000
-    })
-
-    const envelopeWrapper = mount(AdminLayout, {
-      global: {
-        stubs: {
-          'router-link': true,
-          'router-view': true,
-        },
-      },
-    })
-    await flushPromises()
-
-    expect(envelopeWrapper.find('.version-line').text()).toBe('AnixOps v2.2.0 #202607090002')
-    expect(envelopeWrapper.find('.version-line').attributes('title')).toContain('Commit: def456')
-    envelopeWrapper.unmount()
+  it('renders the menu config groups and marks one selected item', async () => {
+    const { wrapper } = await mountLayout('/admin/forward/tunnel')
+    mounted = wrapper
+    const groups = wrapper.findAll('[data-nav-group]').map(group => group.attributes('data-nav-group'))
+    expect(groups).toEqual(['overview', 'users', 'network', 'extensions', 'system'])
+    const current = wrapper.findAll('#admin-sidebar [aria-current="page"]')
+    expect(current).toHaveLength(1)
+    expect(current[0].attributes('data-nav-item')).toBe('forward')
+    expect(current[0].classes()).toContain('is-active')
   })
 
-  it('exposes accessible navigation controls and main landmark', () => {
-    const wrapper = mount(AdminLayout, {
-      global: {
-        stubs: {
-          'router-link': true,
-          'router-view': true,
-        },
-      },
-    })
-
-    expect(wrapper.find('.menu-button').attributes('aria-controls')).toBe('admin-sidebar')
-    expect(wrapper.find('.menu-button').attributes('aria-expanded')).toBe('false')
-    expect(wrapper.find('.sidebar').attributes('id')).toBe('admin-sidebar')
-    expect(wrapper.find('main.content').attributes('id')).toBe('app-main-content')
-    expect(wrapper.find('main.content').attributes('tabindex')).toBe('-1')
-  })
-
-  it('groups the compact navigation and persists the desktop collapse preference', async () => {
-    stubTabletViewport(false)
-    const wrapper = mount(AdminLayout, {
-      global: {
-        stubs: {
-          'router-link': {
-            props: ['to'],
-            emits: ['click'],
-            template: '<a class="menu-link" :data-to="to" @click="$emit(\'click\', $event)"><slot /></a>',
-          },
-          'router-view': true,
-        },
-      },
-    })
-
-    expect(wrapper.find('[data-nav-group="overview"]').text()).toContain('Dashboard')
-    expect(wrapper.find('[data-nav-group="control-center"] a[data-to="/admin/plugins"]').exists()).toBe(true)
-    expect(wrapper.find('[data-nav-group="control-center"] a[data-to="/admin/deployments"]').exists()).toBe(true)
-
-    localStorage.setItem.mockClear()
-    await wrapper.get('[aria-label="Collapse navigation"]').trigger('click')
-
-    expect(localStorage.setItem).toHaveBeenCalledWith('admin.sidebar.collapsed', 'true')
-    expect(wrapper.find('.admin-layout').classes()).toContain('navigation-collapsed')
-  })
-
-  it('closes the mobile drawer after a navigation item is activated', async () => {
-    const wrapper = mount(AdminLayout, {
-      global: {
-        stubs: {
-          'router-link': {
-            props: ['to'],
-            emits: ['click'],
-            template: '<a class="menu-link" :data-to="to" @click="$emit(\'click\', $event)"><slot /></a>',
-          },
-          'router-view': true,
-        },
-      },
-    })
-
-    await wrapper.get('.menu-button').trigger('click')
-    expect(wrapper.get('.menu-button').attributes('aria-expanded')).toBe('true')
-
-    await wrapper.get('a[data-to="/admin/dashboard"]').trigger('click')
-    await nextTick()
-
-    expect(wrapper.get('.menu-button').attributes('aria-expanded')).toBe('false')
-  })
-
-  it('makes a closed mobile drawer inert and restores focus to its trigger', async () => {
-    const mediaQuery = stubTabletViewport()
-    const wrapper = mount(AdminLayout, {
-      attachTo: document.body,
-      global: {
-        stubs: {
-          'router-link': {
-            props: ['to'],
-            emits: ['click'],
-            template: '<a class="menu-link" :data-to="to" @click="$emit(\'click\', $event)"><slot /></a>',
-          },
-          'router-view': true,
-        },
-      },
-    })
-
-    const sidebar = wrapper.get('#admin-sidebar')
-    const menuButton = wrapper.get('.menu-button')
-
-    expect(mediaQuery.addEventListener).toHaveBeenCalledWith('change', expect.any(Function))
-    expect(sidebar.attributes('inert')).toBeDefined()
-    expect(sidebar.attributes('aria-hidden')).toBe('true')
-
-    await menuButton.trigger('click')
-    await nextTick()
-
-    expect(sidebar.attributes('inert')).toBeUndefined()
-    expect(sidebar.attributes('aria-hidden')).toBeUndefined()
-    expect(document.activeElement).toBe(wrapper.get('.close-button').element)
-
-    await wrapper.get('a[data-to="/admin/dashboard"]').trigger('click')
-    await nextTick()
-
-    expect(sidebar.attributes('inert')).toBeDefined()
-    expect(sidebar.attributes('aria-hidden')).toBe('true')
-    expect(document.activeElement).toBe(menuButton.element)
-    wrapper.unmount()
-  })
-
-  it('resets an open drawer when the viewport leaves the tablet breakpoint', async () => {
-    const mediaQuery = stubTabletViewport()
-    const wrapper = mount(AdminLayout, {
-      global: {
-        stubs: {
-          'router-link': {
-            props: ['to'],
-            emits: ['click'],
-            template: '<a class="menu-link" :data-to="to" @click="$emit(\'click\', $event)"><slot /></a>',
-          },
-          'router-view': true,
-        },
-      },
-    })
-
-    await wrapper.get('.menu-button').trigger('click')
-    expect(wrapper.find('.sidebar-overlay').classes()).toContain('active')
-    expect(wrapper.get('.menu-button').attributes('aria-expanded')).toBe('true')
-
-    mediaQuery.setMatches(false)
-    await nextTick()
-
-    expect(wrapper.find('.sidebar-overlay').classes()).not.toContain('active')
-    expect(wrapper.get('.menu-button').attributes('aria-expanded')).toBe('false')
-    expect(wrapper.find('#admin-sidebar').classes()).not.toContain('open')
-  })
-
-  it('wraps Tab from the final mobile drawer control to its close button', async () => {
-    stubTabletViewport()
-    const wrapper = mount(AdminLayout, {
-      attachTo: document.body,
-      global: {
-        stubs: {
-          'router-link': {
-            props: ['to'],
-            emits: ['click'],
-            template: '<a class="menu-link" href="#" :data-to="to" @click="$emit(\'click\', $event)"><slot /></a>',
-          },
-          'router-view': true,
-        },
-      },
-    })
-
-    await wrapper.get('.menu-button').trigger('click')
-    await nextTick()
-
-    const closeButton = wrapper.get('.close-button')
-    const logoutButton = wrapper.get('.logout-button')
-    logoutButton.element.focus()
-    await logoutButton.trigger('keydown', { key: 'Tab' })
-
-    expect(document.activeElement).toBe(closeButton.element)
-    wrapper.unmount()
-  })
-
-  it('wraps Shift+Tab from the first mobile drawer control to its final control', async () => {
-    stubTabletViewport()
-    const wrapper = mount(AdminLayout, {
-      attachTo: document.body,
-      global: {
-        stubs: {
-          'router-link': {
-            props: ['to'],
-            emits: ['click'],
-            template: '<a class="menu-link" href="#" :data-to="to" @click="$emit(\'click\', $event)"><slot /></a>',
-          },
-          'router-view': true,
-        },
-      },
-    })
-
-    await wrapper.get('.menu-button').trigger('click')
-    await nextTick()
-
-    const closeButton = wrapper.get('.close-button')
-    const logoutButton = wrapper.get('.logout-button')
-    closeButton.element.focus()
-    await closeButton.trigger('keydown', { key: 'Tab', shiftKey: true })
-
-    expect(document.activeElement).toBe(logoutButton.element)
-    wrapper.unmount()
-  })
-
-  it('closes the mobile drawer on Escape and cleans up focus containment', async () => {
-    stubTabletViewport()
-    const wrapper = mount(AdminLayout, {
-      attachTo: document.body,
-      global: {
-        stubs: {
-          'router-link': {
-            props: ['to'],
-            emits: ['click'],
-            template: '<a class="menu-link" href="#" :data-to="to" @click="$emit(\'click\', $event)"><slot /></a>',
-          },
-          'router-view': true,
-        },
-      },
-    })
-
-    const menuButton = wrapper.get('.menu-button')
-    await menuButton.trigger('click')
-    await nextTick()
-
-    await wrapper.get('.close-button').trigger('keydown', { key: 'Escape' })
-    await nextTick()
-
-    expect(menuButton.attributes('aria-expanded')).toBe('false')
-    expect(wrapper.get('#admin-sidebar').attributes('inert')).toBeDefined()
-    expect(document.activeElement).toBe(menuButton.element)
-    wrapper.unmount()
-  })
-
-  it('contains all admin menu routes in sidebar in the commercial edition', () => {
-    setEdition('commercial')
-    const wrapper = mount(AdminLayout, {
-      global: {
-        stubs: {
-          'router-link': {
-            props: ['to'],
-            template: '<a class="menu-link" :data-to="to"><slot /></a>',
-          },
-          'router-view': true,
-        },
-      },
-    })
-
-    const links = wrapper.findAll('a.menu-link').map(link => link.attributes('data-to'))
-
-    expect(links).toEqual(expect.arrayContaining(adminMenuPaths))
-  })
-
-  it('hides the commercial menu entries in the community edition', () => {
-    setEdition('community')
-    const userStore = useUserStore()
-    userStore.login('admin-token', { id: 1, is_admin: true, permissions: ['payment.view', 'example.view'] })
-    mockAdminExtensionMenus.value = [
-      { pluginID: 'payment', id: 'payment.main', parent: 'services', label: 'Payment', icon: 'credit-card', to: '/admin/extensions/payment', permission: 'payment.view', order: 140 },
-      { pluginID: 'example', id: 'example.main', parent: 'services', label: 'Example Service', icon: 'EX', to: '/admin/extensions/example', permission: 'example.view', order: 100 },
-    ]
-    const wrapper = mount(AdminLayout, {
-      global: {
-        stubs: {
-          'router-link': {
-            props: ['to'],
-            template: '<a class="menu-link" :data-to="to"><slot /></a>',
-          },
-          'router-view': true,
-        },
-      },
-    })
-
-    const links = wrapper.findAll('a.menu-link').map(link => link.attributes('data-to'))
-    const commercialPaths = ['/admin/orders', '/admin/coupons', '/admin/invite', '/admin/payment', '/admin/extensions/payment']
-    for (const path of commercialPaths) {
-      expect(links).not.toContain(path)
+  it('lists invite codes under 用户 and selects it on its page', async () => {
+    for (const edition of ['community', 'commercial']) {
+      setEdition(edition)
+      const { wrapper } = await mountLayout('/admin/invite-codes')
+      const link = wrapper.get('[data-nav-group="users"] a[data-nav-item="invite-codes"]')
+      expect(link.attributes('href')).toBe('/admin/invite-codes')
+      expect(link.attributes('aria-current')).toBe('page')
+      expect(link.text()).toBe('Invite codes')
+      expect(wrapper.findAll('.admin-crumbs li').map(item => item.text())).toEqual(['Users', 'Invite codes'])
+      wrapper.unmount()
     }
-    expect(links).toEqual(expect.arrayContaining(adminMenuPaths.filter(path => !commercialPaths.includes(path))))
-    expect(links).toContain('/admin/extensions/example')
-    // Invite codes are registration control: every edition manages them.
-    expect(links).toContain('/admin/invite-codes')
-    const templates = wrapper.get('a.menu-link[data-to="/admin/plans"]')
-    expect(templates.text()).toContain('Subscription templates')
   })
 
-  it('projects enabled extension menus and titles without changing core navigation', () => {
+  it('shows group › item › page in the breadcrumb', async () => {
+    const { wrapper } = await mountLayout('/admin/forward/tunnel')
+    mounted = wrapper
+    const crumbs = wrapper.findAll('.admin-crumbs li').map(item => item.text())
+    expect(crumbs).toEqual(['Network', 'Forwarding', 'Tunnels'])
+    expect(wrapper.get('.admin-crumbs a').attributes('href')).toBe('/admin/forward')
+    expect(wrapper.get('.admin-crumbs [aria-current="page"]').text()).toBe('Tunnels')
+  })
+
+  it('renders the forward suite navigation once, only on forward pages', async () => {
+    const { wrapper, router } = await mountLayout('/admin/forward/local')
+    mounted = wrapper
+    expect(wrapper.findAll('[data-forward-suite-nav]')).toHaveLength(1)
+    expect(wrapper.find('#admin-sidebar [data-forward-suite-nav]').exists()).toBe(false)
+    await router.push('/admin/users')
+    await flushPromises()
+    expect(wrapper.find('[data-forward-suite-nav]').exists()).toBe(false)
+  })
+
+  it('keeps content to the admin width unless the route is wide', async () => {
+    const { wrapper } = await mountLayout('/admin/dashboard')
+    mounted = wrapper
+    expect(wrapper.get('.admin-content').classes()).not.toContain('is-wide')
+  })
+
+  it('collapses the sidebar to an icon rail and remembers it', async () => {
+    const { wrapper } = await mountLayout()
+    mounted = wrapper
+    const toggle = wrapper.get('[data-sidebar-toggle]')
+    expect(toggle.attributes('aria-expanded')).toBe('true')
+    expect(toggle.attributes('aria-label')).toBe('Collapse sidebar')
+    localStorage.setItem.mockClear()
+    await toggle.trigger('click')
+    expect(localStorage.setItem).toHaveBeenCalledWith('admin.sidebar.collapsed', 'true')
+    expect(wrapper.get('.admin-shell').classes()).toContain('is-rail')
+    expect(toggle.attributes('aria-expanded')).toBe('false')
+    // Labels stay in the accessibility tree and become tooltips.
+    const link = wrapper.get('a[data-nav-item="dashboard"]')
+    expect(link.attributes('title')).toBe('Dashboard')
+    expect(link.get('.admin-nav__label').classes()).toContain('visually-hidden')
+  })
+
+  it('starts as a rail when that was the last choice', async () => {
+    localStorage.setItem('admin.sidebar.collapsed', 'true')
+    const { wrapper } = await mountLayout()
+    mounted = wrapper
+    expect(wrapper.get('.admin-shell').classes()).toContain('is-rail')
+  })
+
+  it('moves between sidebar links with the arrow keys', async () => {
+    const { wrapper } = await mountLayout()
+    mounted = wrapper
+    const links = wrapper.findAll('#admin-sidebar a[data-nav-item]')
+    links[0].element.focus()
+    await links[0].trigger('keydown', { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(links[1].element)
+    await links[1].trigger('keydown', { key: 'End' })
+    expect(document.activeElement).toBe(links.at(-1).element)
+    await links.at(-1).trigger('keydown', { key: 'ArrowDown' })
+    expect(document.activeElement).toBe(links[0].element)
+  })
+
+  describe('below 834 px', () => {
+    beforeEach(() => {
+      stubViewport({ narrow: true })
+    })
+
+    it('makes the closed drawer inert and opens it with focus on its close button', async () => {
+      const { wrapper } = await mountLayout()
+      mounted = wrapper
+      const sidebar = wrapper.get('#admin-sidebar')
+      const toggle = wrapper.get('[data-sidebar-toggle]')
+      expect(wrapper.get('.admin-shell').classes()).toContain('is-drawer')
+      expect(sidebar.attributes('inert')).toBeDefined()
+      expect(sidebar.attributes('aria-hidden')).toBe('true')
+      expect(toggle.attributes('aria-controls')).toBe('admin-sidebar')
+      expect(toggle.attributes('aria-expanded')).toBe('false')
+
+      await toggle.trigger('click')
+      await nextTick()
+      expect(sidebar.attributes('inert')).toBeUndefined()
+      expect(toggle.attributes('aria-expanded')).toBe('true')
+      expect(sidebar.attributes('role')).toBe('dialog')
+      expect(sidebar.attributes('aria-modal')).toBe('true')
+      expect(document.activeElement).toBe(wrapper.get('.admin-sidebar__close').element)
+    })
+
+    it('closes on Escape and returns focus to the toggle', async () => {
+      const { wrapper } = await mountLayout()
+      mounted = wrapper
+      const toggle = wrapper.get('[data-sidebar-toggle]')
+      await toggle.trigger('click')
+      await nextTick()
+      await wrapper.get('.admin-sidebar__close').trigger('keydown', { key: 'Escape' })
+      await nextTick()
+      expect(toggle.attributes('aria-expanded')).toBe('false')
+      expect(wrapper.get('#admin-sidebar').attributes('inert')).toBeDefined()
+      expect(document.activeElement).toBe(toggle.element)
+    })
+
+    it('keeps Tab and Shift+Tab inside the open drawer', async () => {
+      const { wrapper } = await mountLayout()
+      mounted = wrapper
+      await wrapper.get('[data-sidebar-toggle]').trigger('click')
+      await nextTick()
+      const brand = wrapper.get('.admin-sidebar__brand')
+      const account = wrapper.get('#admin-sidebar [data-account-menu-trigger]')
+      account.element.focus()
+      await account.trigger('keydown', { key: 'Tab' })
+      expect(document.activeElement).toBe(brand.element)
+      await brand.trigger('keydown', { key: 'Tab', shiftKey: true })
+      expect(document.activeElement).toBe(account.element)
+    })
+
+    it('closes after a navigation item is chosen', async () => {
+      const { wrapper } = await mountLayout()
+      mounted = wrapper
+      const toggle = wrapper.get('[data-sidebar-toggle]')
+      await toggle.trigger('click')
+      await wrapper.get('a[data-nav-item="users"]').trigger('click')
+      await flushPromises()
+      expect(toggle.attributes('aria-expanded')).toBe('false')
+    })
+
+    it('leaves drawer mode when the window grows', async () => {
+      const list = stubViewport({ narrow: true })
+      const { wrapper } = await mountLayout()
+      mounted = wrapper
+      await wrapper.get('[data-sidebar-toggle]').trigger('click')
+      list.set(false)
+      await nextTick()
+      expect(wrapper.get('.admin-shell').classes()).not.toContain('is-drawer')
+      expect(wrapper.get('#admin-sidebar').classes()).not.toContain('is-open')
+    })
+
+    it('puts the account avatar in the top bar', async () => {
+      const { wrapper } = await mountLayout()
+      mounted = wrapper
+      expect(wrapper.find('.admin-topbar [data-account-menu-trigger]').exists()).toBe(true)
+    })
+  })
+
+  it('has no top-bar avatar when the sidebar footer shows the account', async () => {
+    const { wrapper } = await mountLayout()
+    mounted = wrapper
+    expect(wrapper.find('.admin-topbar [data-account-menu-trigger]').exists()).toBe(false)
+    expect(wrapper.find('#admin-sidebar [data-account-menu-trigger]').exists()).toBe(true)
+  })
+
+  it('shows the commercial group only in the commercial edition', async () => {
+    setEdition('commercial')
+    let { wrapper } = await mountLayout()
+    expect(wrapper.find('[data-nav-group="commerce"]').exists()).toBe(true)
+    expect(sidebarPaths(wrapper)).toEqual(expect.arrayContaining(['/admin/orders', '/admin/coupons', '/admin/payment', '/admin/invite']))
+    wrapper.unmount()
+
+    setEdition('community')
+    ;({ wrapper } = await mountLayout())
+    mounted = wrapper
+    expect(wrapper.find('[data-nav-group="commerce"]').exists()).toBe(false)
+    expect(sidebarPaths(wrapper)).not.toContain('/admin/orders')
+    expect(wrapper.get('a[data-nav-item="templates"]').text()).toBe('Subscription templates')
+  })
+
+  it('adds plugin menus the admin may open and titles their pages', async () => {
     const userStore = useUserStore()
     userStore.login('admin-token', { id: 1, is_admin: true, permissions: ['example.view'] })
-    mockAdminExtensionMenus.value = [{
-      pluginID: 'example',
-      id: 'example.main',
-      parent: 'services',
-      label: 'Example Service',
-      icon: 'EX',
-      to: '/admin/extensions/example',
-      permission: 'example.view',
-      order: 100,
-    }]
-    mockRoute.path = '/admin/extensions/example'
-
-    const wrapper = mount(AdminLayout, {
-      global: {
-        stubs: {
-          'router-link': {
-            props: ['to'],
-            template: '<a class="menu-link" :data-to="to"><slot /></a>',
-          },
-          'router-view': true,
-        },
-      },
-    })
-
-    const links = wrapper.findAll('a.menu-link').map(link => link.attributes('data-to'))
-    expect(links).toContain('/admin/extensions/example')
-    expect(links).toContain('/admin/dashboard')
-    expect(wrapper.find('.topbar-title').text()).toContain('Example Service')
-    const controlCenter = wrapper.get('[data-nav-group="control-center"]')
-    expect(controlCenter.text()).toContain('Extensions / Services')
-    expect(controlCenter.find('[data-admin-nav-icon="box"]').exists()).toBe(true)
-  })
-
-  it('groups extension menus by registered parent, sorts each group, and isolates unknown parents', () => {
-    const userStore = useUserStore()
-    userStore.login('admin-token', {
-      id: 1,
-      is_admin: true,
-      permissions: ['service-a.view', 'service-b.view', 'operation.view', 'system.view', 'legacy.view']
-    })
     mockAdminExtensionMenus.value = [
-      { pluginID: 'service-a', id: 'service-a.main', parent: 'services', label: 'Service A', icon: 'A', to: '/admin/extensions/service-a', permission: 'service-a.view', order: 20 },
-      { pluginID: 'service-b', id: 'service-b.main', parent: 'services', label: 'Service B', icon: 'B', to: '/admin/extensions/service-b', permission: 'service-b.view', order: 10 },
-      { pluginID: 'operation', id: 'operation.main', parent: 'operations', label: 'Operation', icon: 'OP', to: '/admin/extensions/operation', permission: 'operation.view', order: 30 },
-      { pluginID: 'system', id: 'system.main', parent: 'system', label: 'System Extension', icon: 'SY', to: '/admin/extensions/system', permission: 'system.view', order: 40 },
-      { pluginID: 'legacy', id: 'legacy.main', parent: 'legacy-parent', label: 'Legacy Extension', icon: 'LE', to: '/admin/extensions/legacy', permission: 'legacy.view', order: 50 },
+      { pluginID: 'example', id: 'example.main', parent: 'services', label: 'Example Service', icon: 'EX', to: '/admin/extensions/example', permission: 'example.view', order: 100 },
+      { pluginID: 'hidden', id: 'hidden.main', parent: 'services', label: 'Hidden', icon: 'EX', to: '/admin/extensions/hidden', permission: 'hidden.view', order: 100 }
     ]
-
-    const wrapper = mount(AdminLayout, {
-      global: {
-        stubs: {
-          'router-link': {
-            props: ['to'],
-            template: '<a class="menu-link" :data-to="to"><slot /></a>',
-          },
-          'router-view': true,
-        },
-      },
-    })
-
-    const controlCenter = wrapper.get('[data-nav-group="control-center"]')
-    const extensionSections = controlCenter.findAll('section[data-extension-parent]')
-    expect(extensionSections.map(section => section.attributes('data-extension-parent'))).toEqual([
-      'services', 'operations', 'system', 'extensions'
-    ])
-    expect(extensionSections[0].findAll('a.menu-link').map(link => link.attributes('data-to'))).toEqual([
-      '/admin/extensions/service-b', '/admin/extensions/service-a'
-    ])
-    expect(extensionSections[3].find('a.menu-link').attributes('data-to')).toBe('/admin/extensions/legacy')
+    const { wrapper } = await mountLayout('/admin/extensions/example')
+    mounted = wrapper
+    const extensions = wrapper.get('[data-nav-group="extensions"]')
+    expect(extensions.find('a[data-nav-source="extension"]').attributes('href')).toBe('/admin/extensions/example')
+    expect(extensions.find('[data-admin-nav-icon="EX"]').exists()).toBe(true)
+    expect(sidebarPaths(wrapper)).not.toContain('/admin/extensions/hidden')
+    expect(wrapper.get('.admin-crumbs [aria-current="page"]').text()).toBe('Example Service')
   })
 
-  it('hides extension menus when the admin lacks the plugin permission', () => {
-    const userStore = useUserStore()
-    userStore.login('admin-token', { id: 1, is_admin: true, permissions: ['other.view'] })
-    mockAdminExtensionMenus.value = [{
-      pluginID: 'example',
-      id: 'example.main',
-      parent: 'services',
-      label: 'Example Service',
-      icon: 'EX',
-      to: '/admin/extensions/example',
-      permission: 'example.view',
-      order: 100,
-    }]
-    mockRoute.path = '/admin/extensions/example'
-
-    const wrapper = mount(AdminLayout, {
-      global: {
-        stubs: {
-          'router-link': {
-            props: ['to'],
-            template: '<a class="menu-link" :data-to="to"><slot /></a>',
-          },
-          'router-view': true,
-        },
-      },
-    })
-
-    const links = wrapper.findAll('a.menu-link').map(link => link.attributes('data-to'))
-    expect(links).not.toContain('/admin/extensions/example')
-    expect(wrapper.find('[data-nav-group="control-center"] [data-extension-parent]').exists()).toBe(false)
-    expect(wrapper.find('.topbar-title').text()).not.toContain('Example Service')
+  it('titles pages from the page meta table, the route meta and the menu', async () => {
+    const { wrapper, router } = await mountLayout('/admin/telegram')
+    mounted = wrapper
+    const title = () => wrapper.get('.admin-crumbs [aria-current="page"]').text()
+    expect(title()).toContain('Telegram')
+    await router.push('/admin/forward/ansible-machines')
+    await flushPromises()
+    expect(title()).toBe('Ansible Machines')
+    await router.push('/admin/forward/nodex')
+    await flushPromises()
+    expect(title()).toBe('NodeX Runtime')
+    await router.push('/admin/account')
+    await flushPromises()
+    expect(title()).toBe('Account')
   })
 
-  it('updates page title on route changes for key admin pages', async () => {
-    const wrapper = mount(AdminLayout, {
-      global: {
-        stubs: {
-          'router-link': true,
-          'router-view': true,
-        },
-      },
-    })
-
-    mockRoute.path = '/admin/telegram'
-    await nextTick()
-    expect(wrapper.find('.topbar-title').text()).toContain('Telegram')
-
-    mockRoute.path = '/admin/monitor'
-    await nextTick()
-    expect(wrapper.find('.topbar-title').text()).toContain('Monitor')
-
-    mockRoute.path = '/admin/traffic-hourly'
-    await nextTick()
-    expect(wrapper.find('.topbar-title').text()).toContain('Hourly Traffic')
-
-    mockRoute.path = '/admin/mfa'
-    await nextTick()
-    expect(wrapper.find('.topbar-title').text()).toContain('MFA')
-
-    mockRoute.path = '/admin/forward/agents'
-    await nextTick()
-    expect(wrapper.find('.topbar-title').text()).toContain('NodeX Agents')
-
-    mockRoute.path = '/admin/forward/nodes'
-    await nextTick()
-    expect(wrapper.find('.topbar-title').text()).toContain('NodeX Topology')
-
-    mockRoute.path = '/admin/control'
-    await nextTick()
-    expect(wrapper.find('.topbar-title').text()).toContain('Control Kernel')
-  })
-
-  it('shows NodeX title for the dedicated runtime route', async () => {
-    const wrapper = mount(AdminLayout, {
-      global: {
-        stubs: {
-          'router-link': true,
-          'router-view': true,
-        },
-      },
-    })
-
-    mockRoute.path = '/admin/forward/nodex'
-    await nextTick()
-    expect(wrapper.find('.topbar-title').text()).toContain('NodeX')
-  })
-
-  it('shows Local Runtime title for the dedicated local route', async () => {
-    const wrapper = mount(AdminLayout, {
-      global: {
-        stubs: {
-          'router-link': true,
-          'router-view': true,
-        },
-      },
-    })
-
-    mockRoute.path = '/admin/forward/local'
-    await nextTick()
-    expect(wrapper.find('.topbar-title').text()).toContain('Local Runtime')
-  })
-
-  it('shows Ansible Machines title for the dedicated route', async () => {
-    const wrapper = mount(AdminLayout, {
-      global: {
-        stubs: {
-          'router-link': true,
-          'router-view': true,
-        },
-      },
-    })
-
-    mockRoute.path = '/admin/forward/ansible-machines'
-    await nextTick()
-    expect(wrapper.find('.topbar-title').text()).toContain('Ansible Machines')
-  })
-
-  it('logs out and redirects to login', async () => {
-    const wrapper = mount(AdminLayout, {
-      global: {
-        stubs: {
-          'router-link': true,
-          'router-view': true,
-        },
-      },
-    })
-
-    const userStore = useUserStore()
-    userStore.logout = vi.fn()
-
-    await wrapper.find('.sidebar-actions .btn').trigger('click')
-
-    expect(userStore.logout).toHaveBeenCalledTimes(1)
-    expect(mockPush).toHaveBeenCalledWith('/login')
+  it('opens the command palette with the search button and with ⌘K / Ctrl+K', async () => {
+    const { wrapper } = await mountLayout()
+    mounted = wrapper
+    const { open } = usePalette()
+    await wrapper.get('[data-palette-trigger]').trigger('click')
+    expect(open.value).toBe(true)
+    open.value = false
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', metaKey: true }))
+    expect(open.value).toBe(true)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'K', ctrlKey: true }))
+    expect(open.value).toBe(false)
+    window.dispatchEvent(new KeyboardEvent('keydown', { key: 'k', ctrlKey: true, shiftKey: true }))
+    expect(open.value).toBe(false)
+    expect(wrapper.get('[data-palette-trigger]').attributes('aria-keyshortcuts')).toBe('Meta+K Control+K')
   })
 })

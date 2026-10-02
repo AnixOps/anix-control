@@ -272,6 +272,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useEdition } from '@/composables/useEdition'
+import { useRouteIntent } from '@/composables/useRouteIntent'
 import {
   assignAdminUserTunnel, banUser, createUser, getAdminUserTunnelList, getForwardTunnels, getSpeedLimitList,
   getAdminUser, getTrafficHourly,
@@ -291,10 +292,20 @@ const subscriptionGroups = ref([])
 const page = ref(1)
 const pageSize = ref(20)
 const total = ref(0)
-const filters = ref({ email: '', status: '' })
+// The command palette opens this page with ?email= (a user search result)
+// or ?create=1 (添加用户).
+const routeIntent = useRouteIntent(['email', 'create'], intent => {
+  if (intent.email !== undefined) {
+    filters.value.email = intent.email
+    page.value = 1
+    fetchUsers()
+  }
+  if (intent.create === '1') showCreateModal.value = true
+})
+const filters = ref({ email: routeIntent.email || '', status: '' })
 const showEditModal = ref(false)
 const editingUser = ref({})
-const showCreateModal = ref(false)
+const showCreateModal = ref(routeIntent.create === '1')
 const createLoading = ref(false)
 const createError = ref('')
 const subscriptionSettings = ref({ subscribe_path: '/s', subscribe_domains: [] })
