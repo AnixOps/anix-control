@@ -188,6 +188,13 @@
     save / discard bar with the leave prompt.
   - 转发 says when the runtime is nftables / Ansible that Primary / Backup
     and Hash use only the first target and speed limits are not enforced.
+  - Safe areas: `viewport-fit=cover`, and the admin top bar and drawer, the
+    user bar and tab bar, sheets, the wizard footer and `body` (landscape)
+    pad themselves with `env(safe-area-inset-*)`; checked on an emulated
+    iPhone 13 with a notch. The skip link is a 44 px target.
+  - Known follow-ups: an open action menu sits outside the landmarks (axe
+    "region", moderate); the plugin drawer's target tabs move to `UiTabs`;
+    the topology workspace's text inputs move to `UiTextField`.
 - **Nodes: a list and a node page (UI redesign phase U7)**
   (`web/src/views/admin/Nodes.vue`, `NodeDetail.vue`, `views/admin/nodes/`;
   `docs/reference/frontend-design.md` "Node pages"). Same endpoints, request

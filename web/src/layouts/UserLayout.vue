@@ -111,6 +111,8 @@ onMounted(() => {
   position: sticky;
   top: 0;
   z-index: var(--z-sticky);
+  /* viewport-fit=cover: clear the notch / status bar. */
+  padding-top: env(safe-area-inset-top, 0px);
   border-bottom: 1px solid var(--separator);
   background: var(--bg);
 }
@@ -198,7 +200,7 @@ onMounted(() => {
   bottom: 0;
   left: 0;
   z-index: var(--z-sticky);
-  padding-bottom: env(safe-area-inset-bottom, 0px);
+  padding: 0 env(safe-area-inset-right, 0px) env(safe-area-inset-bottom, 0px) env(safe-area-inset-left, 0px);
   border-top: 1px solid var(--separator);
   background: var(--bg);
 }

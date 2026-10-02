@@ -305,7 +305,8 @@ onBeforeUnmount(() => {
   --admin-sidebar-width: 248px;
   --admin-rail-width: 64px;
   /* Sticky table headers (UiDataTable) stop under the top bar. */
-  --shell-topbar-height: 52px;
+  /* viewport-fit=cover: the bar grows by the notch / status bar inset. */
+  --shell-topbar-height: calc(52px + env(safe-area-inset-top, 0px));
 
   display: grid;
   grid-template-columns: var(--admin-sidebar-width) minmax(0, 1fr);
@@ -423,7 +424,7 @@ onBeforeUnmount(() => {
   gap: var(--space-3);
   align-items: center;
   height: var(--shell-topbar-height);
-  padding: 0 var(--space-6) 0 var(--space-4);
+  padding: env(safe-area-inset-top, 0px) calc(var(--space-6) + env(safe-area-inset-right, 0px)) 0 calc(var(--space-4) + env(safe-area-inset-left, 0px));
   border-bottom: 1px solid var(--separator);
   background: var(--bg);
 }
@@ -581,6 +582,8 @@ onBeforeUnmount(() => {
   inset: 0 auto 0 0;
   z-index: calc(var(--z-drawer) + 1);
   width: min(88vw, 300px);
+  padding-top: env(safe-area-inset-top, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
   padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
   box-shadow: var(--shadow-3);
   transform: translateX(-100%);
@@ -598,7 +601,7 @@ onBeforeUnmount(() => {
 
 .admin-shell.is-drawer .admin-topbar {
   gap: var(--space-2);
-  padding: 0 var(--space-3);
+  padding: env(safe-area-inset-top, 0px) calc(var(--space-3) + env(safe-area-inset-right, 0px)) 0 calc(var(--space-3) + env(safe-area-inset-left, 0px));
 }
 
 .admin-shell.is-drawer .admin-crumbs li:not(.is-current) {

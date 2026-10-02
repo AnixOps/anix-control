@@ -459,7 +459,7 @@ function createAnotherForward() {
   }
 
   .wizard-footer {
-    padding: var(--space-3) var(--space-4);
+    padding: var(--space-3) var(--space-4) calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
   }
 }
 </style>

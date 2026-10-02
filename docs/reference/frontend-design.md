@@ -426,11 +426,33 @@ with the API answered from the fixture.
   On a failure the CI job uploads the expected, actual and diff images
   (`frontend-visual-diffs`). Bumping `@playwright/test` means updating the
   image tag in `ci.yml` and `frontend-visual-baselines.yml` and
-  regenerating the baselines.
+  regenerating the baselines. The image (about 2.4 GB) is not kept on
+  developer machines: `scripts/visual-docker.sh` pulls it on first use, and
+  `docker rmi mcr.microsoft.com/playwright:v<version>-noble` frees the
+  space again.
 
 Touch targets: on coarse pointers every control is at least 44 × 44 px,
 through its own size or an `::after` hit area that keeps the look; medium
 fields grow to 44 px; inputs are 16 px on phones.
+
+Safe areas: `index.html` sets `viewport-fit=cover`, so the page draws under
+the notch and the home indicator and each bar pads itself with
+`env(safe-area-inset-*)`: the admin top bar (`--shell-topbar-height`
+includes the top inset, so sticky offsets follow) and drawer, the user bar
+and tab bar, Sheet header (side sheet) and body or footer, full-screen
+dialogs, the settings save bar, the forward wizard footer and toasts; `body`
+takes the left and right insets in landscape. Checked on an emulated
+iPhone 13 with a 47 px notch and a 34 px home indicator
+(`Emulation.setSafeAreaInsetsOverride`).
+
+Known follow-ups: an open `UiMenu` is portalled to `<body>`, outside the
+landmarks (axe "region", moderate, only while a menu is open); moving the
+portal into a landmark would put the fixed-position menu under the top
+bar's `backdrop-filter` or a dialog's transform, so it waits for a menu
+layer design. The plugin detail drawer's install-target tabs are still a
+hand-built tablist without arrow keys (move to `UiTabs`), and the topology
+workspace still has native text inputs and textareas (move to
+`UiTextField` / `UiTextarea`).
 
 ## App shell
 

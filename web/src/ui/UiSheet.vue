@@ -262,6 +262,18 @@ defineExpose({ close })
   background: var(--bg-grouped);
 }
 
+/* Without a footer the body is last: keep its end above the home indicator. */
+.ui-sheet__body:last-child {
+  padding-bottom: calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
+}
+
+/* A full-height side sheet starts under the status bar (viewport-fit=cover). */
+@media (min-width: 834px) {
+  .ui-sheet__header {
+    padding-top: calc(var(--space-4) + env(safe-area-inset-top, 0px));
+  }
+}
+
 .ui-sheet__footer {
   display: flex;
   flex-wrap: wrap;

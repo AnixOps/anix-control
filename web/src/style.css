@@ -26,6 +26,9 @@
   left: var(--space-4);
   top: -56px;
   z-index: var(--z-tooltip);
+  display: inline-flex;
+  align-items: center;
+  min-height: var(--size-control-lg);
   padding: var(--space-2) var(--space-4);
   border-radius: var(--radius-pill);
   background: var(--accent-fill);
@@ -36,8 +39,15 @@
   transition: top var(--dur-toggle) var(--ease-standard);
 }
 
+/* viewport-fit=cover (index.html): keep content out of a landscape notch.
+   Fixed bars handle their own insets. */
+body {
+  padding-right: env(safe-area-inset-right, 0px);
+  padding-left: env(safe-area-inset-left, 0px);
+}
+
 .skip-link:focus {
-  top: var(--space-4);
+  top: calc(var(--space-4) + env(safe-area-inset-top, 0px));
 }
 
 /* Buttons: pill shaped (radius-pill); .btn is 36 px, .btn-sm 28 px. Bare
