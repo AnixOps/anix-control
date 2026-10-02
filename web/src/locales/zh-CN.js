@@ -179,8 +179,7 @@ export default {
       loadFailed: '加载失败',
       submitFailed: '提交失败',
       invalidCoupon: '无效的优惠码',
-      paymentPending: '支付功能正在集成中，敬请期待',
-      closeTicketConfirm: '确定要关闭此工单吗？'
+      paymentPending: '支付功能正在集成中，敬请期待'
     }
   },
   pageTitles: {
@@ -473,6 +472,8 @@ export default {
       fetchPreviewFailed: '获取预览失败',
       noPreviewContent: '无订阅内容',
       refreshCompleted: '订阅缓存已刷新',
+      copyFailed: '无法自动复制，请选中内容后手动复制。',
+      refreshFailed: '订阅缓存没有刷新，请稍后再试。',
       formats: {
         auto: '自动（按 User-Agent）',
         v2ray: 'V2Ray（Base64）',
@@ -497,6 +498,7 @@ export default {
       buyNow: '立即选购',
       unknownPlan: '未知套餐',
       detailTitle: '订单详情',
+      loadDetailFailed: '无法打开订单详情，请稍后再试。',
       headers: {
         tradeNo: '订单号',
         plan: '套餐',
@@ -534,7 +536,7 @@ export default {
       couponApplied: '已应用优惠：{name} (-¥{value})',
       totalAmount: '应付总额',
       backToEdit: '返回重选',
-      creatingOrder: '正在下单...'
+      orderCreated: '订单已创建，请在“我的订单”中完成支付。'
     },
     tickets: {
       title: '我的工单',
@@ -552,7 +554,16 @@ export default {
       assistant: '客服助手',
       me: '我',
       updated: '更新',
-      ticketId: '工单 #{id}'
+      ticketId: '工单 #{id}',
+      replyLabel: '回复内容',
+      sendReply: '发送回复',
+      closeTicket: '关闭工单',
+      closeConfirmTitle: '关闭工单「{subject}」？',
+      closeConfirmMessage: '关闭后不能再回复。如需继续咨询，请提交新工单。',
+      closed: '工单已关闭',
+      created: '工单已提交，我们会尽快回复。',
+      fillSubjectMessage: '请填写主题和内容。',
+      loadDetailFailed: '无法打开工单，请稍后再试。'
     },
     knowledge: {
       title: '使用教程',

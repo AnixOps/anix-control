@@ -1,12 +1,15 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
 import Knowledge from '@/views/user/Knowledge.vue'
+import { inBody } from './helpers/feedback'
 
 const mockGetKnowledgeList = vi.fn()
 
 vi.mock('@/api/user', () => ({
   getKnowledgeList: (...args) => mockGetKnowledgeList(...args)
 }))
+
+enableAutoUnmount(afterEach)
 
 describe('User Knowledge flow', () => {
   beforeEach(() => {
@@ -33,7 +36,7 @@ describe('User Knowledge flow', () => {
       ]
     })
 
-    const wrapper = mount(Knowledge)
+    const wrapper = mount(Knowledge, { attachTo: document.body })
     await flushPromises()
 
     expect(mockGetKnowledgeList).toHaveBeenCalledTimes(1)
@@ -68,7 +71,7 @@ describe('User Knowledge flow', () => {
       ]
     })
 
-    const wrapper = mount(Knowledge)
+    const wrapper = mount(Knowledge, { attachTo: document.body })
     await flushPromises()
 
     expect(wrapper.findAll('.article-card')).toHaveLength(1)
@@ -76,8 +79,14 @@ describe('User Knowledge flow', () => {
     await wrapper.find('.article-card').trigger('click')
     await flushPromises()
 
-    expect(wrapper.find('.article-detail-modal').exists()).toBe(true)
-    expect(wrapper.find('.article-detail-modal h3').text()).toBe('Subscription security')
-    expect(wrapper.find('.markdown-body').text()).toContain('Use strong passwords and MFA')
+    const dialog = inBody('[role="dialog"]')
+    expect(dialog.classes()).toContain('article-detail-dialog')
+    expect(inBody('.article-detail-dialog h2').text()).toBe('Subscription security')
+    expect(inBody('.markdown-body').text()).toContain('Use strong passwords and MFA')
+
+    // Esc closes the article.
+    await dialog.trigger('keydown', { key: 'Escape' })
+    await flushPromises()
+    expect(inBody('[role="dialog"]').exists()).toBe(false)
   })
 })

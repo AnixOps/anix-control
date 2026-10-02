@@ -45,79 +45,73 @@
       </div>
     </div>
 
-    <div v-if="showPurchase" class="modal-overlay" @click.self="closePurchase">
-      <div class="modal modal-md">
-        <div class="modal-header">
-          <h3>{{ t('user.plans.confirmOrder') }}</h3>
-          <button class="btn btn-ghost btn-sm close-btn normalized-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closePurchase">x</button>
-          <button class="close-btn" @click="closePurchase">×</button>
+    <UiDialog :open="showPurchase" :title="t('user.plans.confirmOrder')" :dismissible="!creatingOrder" @update:open="value => { if (!value) closePurchase() }">
+      <div class="order-summary">
+        <div class="summary-item">
+          <span class="label">{{ t('user.plans.selectedPlan') }}</span>
+          <span class="value">{{ selectedPlan?.name }}</span>
         </div>
-        <div class="modal-body">
-          <div class="order-summary">
-            <div class="summary-item">
-              <span class="label">{{ t('user.plans.selectedPlan') }}</span>
-              <span class="value">{{ selectedPlan?.name }}</span>
-            </div>
 
-            <div class="form-group mt-4">
-              <label>{{ t('user.plans.choosePeriod') }}</label>
-              <div class="period-selector">
-                <button
-                  v-for="item in availablePeriods"
-                  :key="item.key"
-                  :class="['period-btn', { active: selectedPeriod === item.key }]"
-                  @click="selectedPeriod = item.key"
-                >
-                  <span class="period-name">{{ item.label }}</span>
-                  <span class="period-price normalized-amount">{{ formatCurrency(item.price) }}</span>
-                  <span class="period-price">¥{{ formatPrice(item.price) }}</span>
-                </button>
-              </div>
-            </div>
-
-            <div class="coupon-section mt-4">
-              <label>{{ t('user.plans.optionalCoupon') }}</label>
-              <div class="coupon-input-group">
-                <input
-                  v-model.trim="couponCode"
-                  type="text"
-                  :placeholder="t('user.plans.couponPlaceholder')"
-                  :disabled="couponApplied"
-                >
-                <button
-                  v-if="!couponApplied"
-                  class="btn"
-                  data-test="coupon-verify-button"
-                  :disabled="checkingCoupon"
-                  @click="applyCoupon"
-                >
-                  {{ checkingCoupon ? t('common.actions.refresh') : t('common.actions.verify') }}
-                </button>
-                <button v-else class="btn btn-ghost text-error" data-test="coupon-remove-button" @click="removeCoupon">{{ t('common.actions.remove') }}</button>
-              </div>
-              <p v-if="couponError" class="coupon-tip text-error">{{ couponError }}</p>
-              <p v-if="couponApplied" class="coupon-tip text-success">
-                {{ t('user.plans.couponApplied', { name: couponData.name, value: formatPrice(discountAmount) }) }}
-              </p>
-            </div>
-          </div>
-
-          <div class="order-total mt-6">
-            <div class="total-row">
-              <span>{{ t('user.plans.totalAmount') }}</span>
-              <span class="total-price normalized-amount">{{ formatCurrency(finalPrice) }}</span>
-              <span class="total-price">¥{{ formatPrice(finalPrice) }}</span>
-            </div>
+        <div class="form-group mt-4">
+          <label id="plan-period-label">{{ t('user.plans.choosePeriod') }}</label>
+          <div class="period-selector" role="group" aria-labelledby="plan-period-label">
+            <button
+              v-for="item in availablePeriods"
+              :key="item.key"
+              :class="['period-btn', { active: selectedPeriod === item.key }]"
+              :aria-pressed="selectedPeriod === item.key ? 'true' : 'false'"
+              @click="selectedPeriod = item.key"
+            >
+              <span class="period-name">{{ item.label }}</span>
+              <span class="period-price normalized-amount">{{ formatCurrency(item.price) }}</span>
+              <span class="period-price">¥{{ formatPrice(item.price) }}</span>
+            </button>
           </div>
         </div>
-        <div class="modal-footer">
-          <button class="btn btn-ghost" @click="closePurchase">{{ t('user.plans.backToEdit') }}</button>
-          <button class="btn btn-primary" :disabled="creatingOrder" @click="submitOrder">
-            {{ creatingOrder ? t('user.plans.creatingOrder') : t('common.actions.submit') }}
-          </button>
+
+        <div class="coupon-section mt-4">
+          <label for="plan-coupon">{{ t('user.plans.optionalCoupon') }}</label>
+          <div class="coupon-input-group">
+            <input
+              id="plan-coupon"
+              v-model.trim="couponCode"
+              type="text"
+              :placeholder="t('user.plans.couponPlaceholder')"
+              :disabled="couponApplied"
+            >
+            <button
+              v-if="!couponApplied"
+              class="btn"
+              data-test="coupon-verify-button"
+              :disabled="checkingCoupon"
+              @click="applyCoupon"
+            >
+              {{ checkingCoupon ? t('common.actions.refresh') : t('common.actions.verify') }}
+            </button>
+            <button v-else class="btn btn-ghost text-error" data-test="coupon-remove-button" @click="removeCoupon">{{ t('common.actions.remove') }}</button>
+          </div>
+          <p v-if="couponError" class="coupon-tip text-error">{{ couponError }}</p>
+          <p v-if="couponApplied" class="coupon-tip text-success">
+            {{ t('user.plans.couponApplied', { name: couponData.name, value: formatPrice(discountAmount) }) }}
+          </p>
         </div>
       </div>
-    </div>
+
+      <div class="order-total mt-6">
+        <div class="total-row">
+          <span>{{ t('user.plans.totalAmount') }}</span>
+          <span class="total-price normalized-amount">{{ formatCurrency(finalPrice) }}</span>
+          <span class="total-price">¥{{ formatPrice(finalPrice) }}</span>
+        </div>
+      </div>
+      <p v-if="orderError" class="coupon-tip text-error" role="alert" data-test="order-error">{{ orderError }}</p>
+      <template #footer>
+        <UiButton variant="tertiary" :disabled="creatingOrder" @click="closePurchase">{{ t('user.plans.backToEdit') }}</UiButton>
+        <UiButton variant="primary" data-test="order-submit-button" :loading="creatingOrder" @click="submitOrder">
+          {{ t('common.actions.submit') }}
+        </UiButton>
+      </template>
+    </UiDialog>
   </div>
 </template>
 
@@ -126,8 +120,11 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { checkCoupon, getPlans, saveOrder } from '@/api/user'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { UiButton, UiDialog, useToast } from '@/ui'
 
 const router = useRouter()
+const toast = useToast()
+const orderError = ref('')
 const { t } = useAppI18n()
 
 const plans = ref([])
@@ -239,10 +236,12 @@ function formatBytes(bytes) {
 function openPurchase(plan) {
   selectedPlan.value = plan
   selectedPeriod.value = availablePeriods.value[0]?.key || 'month'
+  orderError.value = ''
   showPurchase.value = true
 }
 
 function closePurchase() {
+  if (creatingOrder.value) return
   showPurchase.value = false
   removeCoupon()
 }
@@ -275,16 +274,21 @@ function removeCoupon() {
 }
 
 async function submitOrder() {
+  if (creatingOrder.value) return
   creatingOrder.value = true
+  orderError.value = ''
   try {
     await saveOrder({
       plan_id: selectedPlan.value.id,
       period: selectedPeriod.value,
       coupon_id: couponApplied.value ? couponData.value.id : null
     })
+    creatingOrder.value = false
+    showPurchase.value = false
+    toast.success(t('user.plans.orderCreated'))
     router.push('/user/orders')
   } catch (err) {
-    alert(err.response?.data?.message || t('common.messages.submitFailed'))
+    orderError.value = err.response?.data?.message || t('common.messages.submitFailed')
   } finally {
     creatingOrder.value = false
   }
@@ -472,8 +476,7 @@ onMounted(() => {
 }
 
 .period-name + .normalized-amount + .period-price,
-.total-row .normalized-amount + .total-price,
-.modal-header > .close-btn:not(.normalized-close) {
+.total-row .normalized-amount + .total-price {
   display: none;
 }
 

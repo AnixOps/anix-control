@@ -177,8 +177,7 @@ export default {
       loadFailed: 'Load failed',
       submitFailed: 'Submit failed',
       invalidCoupon: 'Invalid coupon code',
-      paymentPending: 'Payment is still being integrated. Please try again later.',
-      closeTicketConfirm: 'Are you sure you want to close this ticket?'
+      paymentPending: 'Payment is still being integrated. Please try again later.'
     }
   },
   pageTitles: {
@@ -470,6 +469,8 @@ export default {
       closePreview: 'Close',
       fetchPreviewFailed: 'Failed to fetch preview.',
       noPreviewContent: 'No subscription content returned.',
+      copyFailed: 'Couldn’t copy automatically. Select the text and copy it by hand.',
+      refreshFailed: 'The subscription cache wasn’t refreshed. Try again later.',
       refreshCompleted: 'Subscription cache refreshed.',
       formats: {
         auto: 'Auto (by User-Agent)',
@@ -495,6 +496,7 @@ export default {
       buyNow: 'Browse plans',
       unknownPlan: 'Unknown plan',
       detailTitle: 'Order details',
+      loadDetailFailed: 'The order details couldn’t be opened. Try again later.',
       headers: {
         tradeNo: 'Order #',
         plan: 'Plan',
@@ -532,7 +534,7 @@ export default {
       couponApplied: 'Coupon applied: {name} (-¥{value})',
       totalAmount: 'Total due',
       backToEdit: 'Back',
-      creatingOrder: 'Creating order...'
+      orderCreated: 'Order created. Pay for it in My Orders.'
     },
     tickets: {
       title: 'My Tickets',
@@ -550,7 +552,16 @@ export default {
       assistant: 'Support assistant',
       me: 'Me',
       updated: 'updated',
-      ticketId: 'Ticket #{id}'
+      ticketId: 'Ticket #{id}',
+      replyLabel: 'Reply',
+      sendReply: 'Send reply',
+      closeTicket: 'Close ticket',
+      closeConfirmTitle: 'Close the ticket “{subject}”?',
+      closeConfirmMessage: 'You can’t reply after closing it. Open a new ticket if you need more help.',
+      closed: 'Ticket closed',
+      created: 'Ticket sent. We’ll reply soon.',
+      fillSubjectMessage: 'Enter a subject and a message.',
+      loadDetailFailed: 'The ticket couldn’t be opened. Try again later.'
     },
     knowledge: {
       title: 'Guides',

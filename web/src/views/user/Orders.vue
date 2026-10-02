@@ -55,56 +55,47 @@
       </div>
     </div>
 
-    <div v-if="showDetail" class="modal-overlay" @click.self="showDetail = false">
-      <div class="modal modal-md">
-        <div class="modal-header">
-          <h3>{{ t('user.orders.detailTitle') }}</h3>
-          <button class="btn btn-ghost btn-sm close-btn normalized-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="showDetail = false">x</button>
-          <button class="close-btn" @click="showDetail = false">×</button>
+    <UiSheet v-model:open="showDetail" :title="t('user.orders.detailTitle')">
+      <div class="detail-grid">
+        <div class="detail-item">
+          <span class="label">{{ t('user.orders.labels.tradeNo') }}</span>
+          <span class="value">{{ currentOrder.trade_no }}</span>
         </div>
-        <div class="modal-body">
-          <div class="detail-grid">
-            <div class="detail-item">
-              <span class="label">{{ t('user.orders.labels.tradeNo') }}</span>
-              <span class="value">{{ currentOrder.trade_no }}</span>
-            </div>
-            <div class="detail-item">
-              <span class="label">{{ t('user.orders.labels.status') }}</span>
-              <span :class="['value', statusClass(currentOrder.status)]">{{ statusText(currentOrder.status) }}</span>
-            </div>
-            <div class="detail-item">
-              <span class="label">{{ t('user.orders.labels.plan') }}</span>
-              <span class="value">{{ currentOrder.plan?.name || '-' }}</span>
-            </div>
-            <div class="detail-item">
-              <span class="label">{{ t('user.orders.labels.period') }}</span>
-              <span class="value">{{ formatPeriod(currentOrder.period) }}</span>
-            </div>
-            <div class="detail-item">
-              <span class="label">{{ t('user.orders.labels.totalAmount') }}</span>
-              <span class="value normalized-amount">{{ formatCurrency(currentOrder.total_amount) }}</span>
-              <span class="value">¥{{ formatPrice(currentOrder.total_amount) }}</span>
-            </div>
-            <div v-if="currentOrder.discount_amount" class="detail-item">
-              <span class="label">{{ t('user.orders.labels.discount') }}</span>
-              <span class="value text-success normalized-amount">-{{ formatCurrency(currentOrder.discount_amount) }}</span>
-              <span class="value text-success">-¥{{ formatPrice(currentOrder.discount_amount) }}</span>
-            </div>
-            <div class="detail-item">
-              <span class="label">{{ t('user.orders.labels.createdAt') }}</span>
-              <span class="value">{{ formatDateTime(currentOrder.created_at) }}</span>
-            </div>
-            <div v-if="currentOrder.paid_at" class="detail-item">
-              <span class="label">{{ t('user.orders.labels.paidAt') }}</span>
-              <span class="value">{{ formatDateTime(currentOrder.paid_at) }}</span>
-            </div>
-          </div>
+        <div class="detail-item">
+          <span class="label">{{ t('user.orders.labels.status') }}</span>
+          <span :class="['value', statusClass(currentOrder.status)]">{{ statusText(currentOrder.status) }}</span>
         </div>
-        <div class="modal-footer">
-          <button class="btn btn-primary" @click="showDetail = false">{{ t('common.actions.back') }}</button>
+        <div class="detail-item">
+          <span class="label">{{ t('user.orders.labels.plan') }}</span>
+          <span class="value">{{ currentOrder.plan?.name || '-' }}</span>
+        </div>
+        <div class="detail-item">
+          <span class="label">{{ t('user.orders.labels.period') }}</span>
+          <span class="value">{{ formatPeriod(currentOrder.period) }}</span>
+        </div>
+        <div class="detail-item">
+          <span class="label">{{ t('user.orders.labels.totalAmount') }}</span>
+          <span class="value normalized-amount">{{ formatCurrency(currentOrder.total_amount) }}</span>
+          <span class="value">¥{{ formatPrice(currentOrder.total_amount) }}</span>
+        </div>
+        <div v-if="currentOrder.discount_amount" class="detail-item">
+          <span class="label">{{ t('user.orders.labels.discount') }}</span>
+          <span class="value text-success normalized-amount">-{{ formatCurrency(currentOrder.discount_amount) }}</span>
+          <span class="value text-success">-¥{{ formatPrice(currentOrder.discount_amount) }}</span>
+        </div>
+        <div class="detail-item">
+          <span class="label">{{ t('user.orders.labels.createdAt') }}</span>
+          <span class="value">{{ formatDateTime(currentOrder.created_at) }}</span>
+        </div>
+        <div v-if="currentOrder.paid_at" class="detail-item">
+          <span class="label">{{ t('user.orders.labels.paidAt') }}</span>
+          <span class="value">{{ formatDateTime(currentOrder.paid_at) }}</span>
         </div>
       </div>
-    </div>
+      <template #footer="{ close }">
+        <UiButton @click="close">{{ t('common.actions.back') }}</UiButton>
+      </template>
+    </UiSheet>
   </div>
 </template>
 
@@ -112,12 +103,14 @@
 import { onMounted, ref } from 'vue'
 import { getOrderDetail, getOrders } from '@/api/user'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { UiButton, UiSheet, useToast } from '@/ui'
 
 const { t, formatDateTime } = useAppI18n()
 const orders = ref([])
 const loading = ref(true)
 const showDetail = ref(false)
 const currentOrder = ref({})
+const toast = useToast()
 
 async function loadOrders() {
   loading.value = true
@@ -172,12 +165,12 @@ async function viewDetail(order) {
     currentOrder.value = res.data || {}
     showDetail.value = true
   } catch {
-    alert(t('common.messages.loadFailed'))
+    toast.error(t('user.orders.loadDetailFailed'))
   }
 }
 
 function goPay() {
-  alert(t('common.messages.paymentPending'))
+  toast.info(t('common.messages.paymentPending'))
 }
 
 onMounted(() => {
@@ -219,8 +212,7 @@ onMounted(() => {
 }
 
 .data-table tbody td:nth-child(5),
-.normalized-amount + .value,
-.modal-header > .close-btn:not(.normalized-close) {
+.normalized-amount + .value {
   display: none;
 }
 

@@ -42,7 +42,7 @@
           <label>{{ fmt.label }}:</label>
           <div class="link-row">
             <input type="text" :value="getSubscribeUrl(fmt.value)" readonly />
-            <button class="btn btn-sm" @click="copyText(getSubscribeUrl(fmt.value))">{{ t('user.subscribe.copyLink') }}</button>
+            <button class="btn btn-sm" @click="copyContent(getSubscribeUrl(fmt.value))">{{ t('user.subscribe.copyLink') }}</button>
             <button class="btn btn-sm" @click="preview(fmt.value)">{{ t('common.actions.preview') }}</button>
           </div>
         </div>
@@ -54,7 +54,7 @@
       <section v-if="showPreview" class="section-panel preview-card">
         <h3>{{ t('user.subscribe.previewTitle', { format: previewFormat }) }}</h3>
         <div class="preview-controls">
-          <button class="btn btn-sm" @click="copyText(previewContent)">{{ t('user.subscribe.copyContent') }}</button>
+          <button class="btn btn-sm" @click="copyContent(previewContent)">{{ t('user.subscribe.copyContent') }}</button>
           <button class="btn btn-sm" @click="downloadPreview">{{ t('common.actions.download') }}</button>
           <button class="btn btn-ghost btn-sm" @click="closePreview">{{ t('user.subscribe.closePreview') }}</button>
         </div>
@@ -69,6 +69,7 @@ import { computed, onMounted, ref, watch } from 'vue'
 import { useUserStore } from '@/stores/user'
 import { getSubscription } from '@/api/user'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { copyText, useToast } from '@/ui'
 
 const userStore = useUserStore()
 const { t, formatDateTime } = useAppI18n()
@@ -100,8 +101,9 @@ async function load(refresh = false) {
   try {
     const res = await getSubscription(refresh)
     subscription.value = res.data || {}
+    return true
   } catch {
-    // no-op
+    return false
   }
 }
 
@@ -142,12 +144,13 @@ function getFileExt(format) {
   return 'txt'
 }
 
-async function copyText(text) {
-  try {
-    await navigator.clipboard.writeText(text)
-    alert(t('common.messages.copySuccess'))
-  } catch {
-    alert(t('common.messages.copyFailed'))
+const toast = useToast()
+
+async function copyContent(text) {
+  if (await copyText(text)) {
+    toast.success(t('common.messages.copySuccess'))
+  } else {
+    toast.error(t('user.subscribe.copyFailed'))
   }
 }
 
@@ -190,8 +193,8 @@ function downloadPreview() {
 }
 
 async function refresh() {
-  await load(true)
-  alert(t('user.subscribe.refreshCompleted'))
+  if (await load(true)) toast.success(t('user.subscribe.refreshCompleted'))
+  else toast.error(t('user.subscribe.refreshFailed'))
 }
 
 function formatBytes(bytes) {
