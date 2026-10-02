@@ -191,7 +191,9 @@ every 5 s through the bridge RPC `GetPackageConfig`
   rollback` returns a whole package to `legacy` in one revision.
 - `sdk/pluginhostsdk.Router` implements the modes, and `sdk/v2compat` keeps
   the output byte-identical. Route modes and shadow counters are exported
-  on `/metrics`. A route without a native handler stays `legacy`
+  on `/metrics`; sanitized samples of shadow mismatches are stored for 7
+  days and listed by `GET /api/v4/kernel/route-modes/mismatches` and the
+  admin page. A route without a native handler stays `legacy`
   (`mode_unsupported`), and the kernel refuses a non-legacy mode for a
   WebSocket route.
 

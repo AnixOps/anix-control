@@ -1736,7 +1736,7 @@ export default {
     modes: { legacy: 'Legacy', shadow: 'Shadow', native: 'Native' },
     catalog: { 'native-flagged': 'Native-flagged', bridged: 'Bridged', 'kernel-owned': 'Kernel-owned', native: 'Native', none: 'Undeclared' },
     locked: { kernel_owned: 'Kernel-owned', identity_group_a: 'Identity cutover', websocket: 'WebSocket', not_declared: 'Not declared' },
-    columns: { route: 'Route', endpoint: 'Method / path', catalog: 'Eligibility', configured: 'Configured', effective: 'Effective', shadow: 'Shadow (total / mismatch / errors)', mode: 'Switch to' },
+    columns: { route: 'Route', endpoint: 'Method / path', catalog: 'Eligibility', configured: 'Configured', effective: 'Effective', shadow: 'Shadow (total / mismatch / errors)', mismatch: 'Mismatch rate', mode: 'Switch to' },
     routesLabel: 'Routes of {package}',
     routeMode: 'Mode of {route}',
     effectiveDiffers: 'Differs from configured',
@@ -1767,6 +1767,27 @@ export default {
       empty: 'No route mode changes yet',
       time: 'Time', route: 'Route', change: 'Change', actor: 'Actor', reason: 'Reason', revision: 'Revision',
       actions: { set: 'Set', rollback: 'Rollback' }
+    },
+    mismatches: {
+      title: 'Shadow mismatch samples',
+      label: 'Mismatch samples',
+      open: 'Samples ({count})',
+      lastSeen: 'Last {time}',
+      privacy: 'Samples are masked before they are stored: tokens, passwords, keys, UUIDs and subscription links are hidden, e-mail addresses keep their first letter and domain, IP addresses their first two parts. Each route keeps its latest {max} samples for {days} days.',
+      loadFailed: 'Mismatch samples didn’t load',
+      empty: 'No samples stored',
+      emptyDescription: 'Samples appear here when a shadow run answers differently from legacy.',
+      observed: 'Observed',
+      status: 'Status (legacy → native)',
+      diffColumn: 'Differences',
+      fields: '{count} fields',
+      detail: 'Sample details',
+      request: 'Request',
+      requestID: 'Request ID',
+      version: 'Package version',
+      truncated: 'Diff shortened',
+      diff: 'Differences (masked)',
+      copyDiff: 'Copy diff'
     }
   },
   accessGroups: {

@@ -94,6 +94,26 @@
     `v4_kernel_agent_transport`, written at most once a minute per node and
     transport.
 
+- Shadow mismatches can be investigated. Until now a shadow run that answered
+  differently from legacy only incremented
+  `anixops_package_shadow_mismatches_total`. Package hosts built with this
+  SDK now keep a sanitized sample of each mismatch (route, method, path
+  template, legacy and native status, request id, and a structural diff of
+  the two JSON answers) and report the latest ones in their Health details;
+  the kernel sanitizes them again and stores them in the new table
+  `v4_kernel_shadow_mismatch_sample`, for 7 days and at most 100 per route.
+  `GET /api/v4/kernel/route-modes/mismatches` lists them, the route-mode
+  list adds each route's mismatch rate, last mismatch and stored samples,
+  and the admin page 路由模式 shows the rate and opens the samples of a
+  route. Any administrator may read them. Secrets are masked before a
+  sample leaves the host and again in the kernel: tokens, passwords,
+  hashes, keys, UUIDs, signatures, cookies, subscription URLs, JWTs and long
+  hex or base64 strings become `***`, e-mail addresses keep their first
+  character and domain, IPv4 addresses two octets and IPv6 addresses two
+  hextets; request bodies are never stored. Hosts built with the 4.0.0 SDK
+  keep working and report no samples. See "Reading Shadow Mismatches" in
+  `docs/UPGRADE.md`.
+
 ### Changed
 
 - `agent_control.mtls` defaults to `preferred` instead of `optional`

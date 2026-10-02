@@ -333,3 +333,57 @@ func TestRouterBindsNativeRunsButNeverShadowRuns(t *testing.T) {
 	assert.Nil(t, binding, "a shadow run is never bound")
 	assert.Zero(t, healthDetails(t, router).Routes["proxy.admin.auth_keys.get"].ShadowMismatch, "answers that differ only in handles match")
 }
+
+func TestRouterReportsSanitizedShadowSamples(t *testing.T) {
+	const legacy = `{"code":0,"data":{"email":"alice@example.com","token":"tok-legacy","last_ip":"10.2.3.4","plan":1},"msg":"操作成功","ts":1}`
+	bridge := &routerBridgeFake{response: packagebridgesdk.Response{StatusCode: 200, Body: []byte(legacy)}}
+	bridge.setConfig(map[string]string{"knowledge.user.knowledge.id.get": RouteModeShadow}, nil)
+	now := time.Unix(1_800_000_000, 0)
+	router, err := NewRouter(RouterConfig{
+		PackageID: "knowledge", LeaseID: "lease-1", Bridge: bridge, ShadowConcurrency: 1, Now: func() time.Time { return now },
+		Native: map[string]NativeHandler{"knowledge.user.knowledge.id.get": func(context.Context, NativeRequest) (NativeResponse, error) {
+			return PanelJSON(v2compat.PanelSuccess(map[string]any{"email": "bob@example.com", "token": "tok-native", "last_ip": "10.2.9.9", "plan": 2}, now))
+		}},
+	})
+	require.NoError(t, err)
+	router.Refresh(context.Background())
+
+	_, err = router.Dispatch(context.Background(), DispatchRequest{
+		RequestID: "req-42", RouteID: "knowledge.user.knowledge.id.get", Method: "GET", BridgeCapability: make([]byte, 32),
+		RequestBody: []byte(`{"password":"hunter2"}`),
+		Metadata: RequestMetadata{
+			Path: "/api/v2/user/knowledge/17", PathParams: map[string]string{"id": "17"},
+			Query: map[string][]string{"token": {"subscribe-secret"}},
+		},
+	})
+	require.NoError(t, err)
+	require.Eventually(t, func() bool { return len(healthDetails(t, router).ShadowSamples) == 1 }, time.Second, 5*time.Millisecond)
+	sample := healthDetails(t, router).ShadowSamples[0]
+	assert.Len(t, sample.ID, 32)
+	assert.Equal(t, "knowledge.user.knowledge.id.get", sample.RouteID)
+	assert.Equal(t, "GET", sample.Method)
+	assert.Equal(t, "/api/v2/user/knowledge/{id}?token=***", sample.Path)
+	assert.Equal(t, "req-42", sample.RequestID)
+	assert.Equal(t, now.Unix(), sample.ObservedAt)
+	encoded, err := json.Marshal(sample.Diff)
+	require.NoError(t, err)
+	assert.JSONEq(t, `[
+		{"path":"$.data.email","kind":"changed","legacy":"a***@example.com","native":"b***@example.com"},
+		{"path":"$.data.last_ip","kind":"changed","legacy":"10.2.*.*","native":"10.2.*.*"},
+		{"path":"$.data.plan","kind":"changed","legacy":1,"native":2},
+		{"path":"$.data.token","kind":"changed","legacy":"***","native":"***"}
+	]`, string(encoded))
+	health, err := router.Health(context.Background())
+	require.NoError(t, err)
+	for _, secret := range []string{"hunter2", "tok-legacy", "tok-native", "subscribe-secret", "alice", "10.2.3.4"} {
+		assert.NotContains(t, health.DetailsJSON, secret)
+	}
+
+	// Samples age out of the details, and at most maxShadowSamples are kept.
+	now = now.Add(shadowSampleMaxAge + time.Second)
+	assert.Empty(t, healthDetails(t, router).ShadowSamples)
+	for index := 0; index < maxShadowSamples+5; index++ {
+		router.recordSample(DispatchRequest{RouteID: "knowledge.user.knowledge.id.get", Method: "GET"}, DispatchResponse{StatusCode: 200}, NativeResponse{StatusCode: 500}, now.Unix())
+	}
+	assert.Len(t, healthDetails(t, router).ShadowSamples, maxShadowSamples)
+}

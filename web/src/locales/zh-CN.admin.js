@@ -1735,7 +1735,7 @@ export default {
     modes: { legacy: '旧版', shadow: '影子', native: '原生' },
     catalog: { 'native-flagged': '可切原生', bridged: '桥接', 'kernel-owned': '内核接管', native: '原生', none: '未声明' },
     locked: { kernel_owned: '内核接管', identity_group_a: '身份切换', websocket: 'WebSocket', not_declared: '未声明' },
-    columns: { route: '路由', endpoint: '方法 / 路径', catalog: '资格', configured: '配置模式', effective: '生效模式', shadow: '影子（总数 / 不一致 / 错误）', mode: '切换为' },
+    columns: { route: '路由', endpoint: '方法 / 路径', catalog: '资格', configured: '配置模式', effective: '生效模式', shadow: '影子（总数 / 不一致 / 错误）', mismatch: '不一致率', mode: '切换为' },
     routesLabel: '{package} 的路由',
     routeMode: '{route} 的模式',
     effectiveDiffers: '与配置模式不同',
@@ -1766,6 +1766,27 @@ export default {
       empty: '暂无路由模式变更',
       time: '时间', route: '路由', change: '变更', actor: '操作人', reason: '原因', revision: '修订',
       actions: { set: '设置', rollback: '回滚' }
+    },
+    mismatches: {
+      title: '影子不一致样本',
+      label: '不一致样本',
+      open: '样本（{count}）',
+      lastSeen: '最近 {time}',
+      privacy: '样本在保存前已脱敏：令牌、密码、密钥、UUID 和订阅链接全部隐藏，邮箱只保留首字母和域名，IP 只保留前两段。每条路由保留最近 {max} 条，保存 {days} 天。',
+      loadFailed: '不一致样本加载失败',
+      empty: '没有保存的样本',
+      emptyDescription: '影子运行的结果与旧版不同时，样本会出现在这里。',
+      observed: '发生时间',
+      status: '状态码（旧版 → 原生）',
+      diffColumn: '差异',
+      fields: '{count} 个字段',
+      detail: '样本详情',
+      request: '请求',
+      requestID: '请求 ID',
+      version: '包版本',
+      truncated: '差异已截断',
+      diff: '差异（已脱敏）',
+      copyDiff: '复制差异'
     }
   },
   accessGroups: {

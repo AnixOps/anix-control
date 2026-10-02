@@ -220,7 +220,20 @@ and per-route counters in `HealthResponse.details_json`. The kernel's
 supervisor calls `Health` on every running host every 30 s, keeps the last
 details document, and `/metrics` exports it as `anixops_package_config_status`,
 `anixops_package_route_mode` and the `anixops_package_native_*` and
-`anixops_package_shadow_*` counters. The generic Control host runs on the
+`anixops_package_shadow_*` counters.
+
+The details document also carries `shadow_samples` (added in 4.1.0; a
+kernel that does not read it ignores it): the router's latest 32 shadow
+mismatches of the last 10 minutes, built and sanitized by
+`sdk/shadowsample` before they leave the host (route, method, sanitized
+path, both status codes, request id, observed time and a structural diff of
+at most 64 paths and 8 KB with masked values; never the request body). The
+kernel's collector (`internal/shadowsamples`) reads them after each health
+poll, keeps only samples of routes `config/package-extraction.json` assigns
+to the reporting package, sanitizes them again, replaces the path with the
+route's template, and stores each sample once in
+`v4_kernel_shadow_mismatch_sample` (7 days, 100 per route). A host has no
+other write path to that table. The generic Control host runs on the
 router with no native routes; the native routes of the package hosts are
 listed in `package-extraction.md` and `identity-service.md`.
 
