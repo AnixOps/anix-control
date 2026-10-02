@@ -575,7 +575,8 @@ UiDialog          create / edit forms with Ui fields in a .form-grid
 - **Selection**: `selectable` + `v-model:selected` (row keys, `rowKey`
   default `id`). A header checkbox selects the page (mixed when partly
   selected); the bulk bar (slot `#bulk-actions="{ rows, clear }"`) floats
-  up from the bottom with the count, "全选所有 N 条" when every row is loaded,
+  up from the bottom (under the overlays; it fades out while a modal Dialog
+  or Sheet is open) with the count, "全选所有 N 条" when every row is loaded,
   and 取消选择 (Esc too). Only offer bulk actions an endpoint supports; a bulk
   action without a bulk endpoint calls the per-row endpoint for each row (as
   Users ban / unban does) and offers 撤销.
@@ -697,7 +698,8 @@ endpoints and flows.
 
 - **流量转发** (`views/admin/Forward.vue`, the route entry, with page-local
   components in `views/admin/forward/`): `ForwardRulesTable` (a
-  `UiDataTable` with the service `UiSwitch`, status badges, addresses that
+  `UiDataTable` with the service `UiSwitch` and one status badge (the
+  worst state; the detail in a Reka tooltip, a second line on cards), addresses that
   copy or open the address list, the row menu 编辑 / 诊断 / 上移 / 下移 / 删除,
   and a drag handle in the name cell), `ForwardGroupedView` (per user, per
   tunnel, flat tables), and the import, export and address dialogs. The

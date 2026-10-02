@@ -179,7 +179,8 @@ installer or inventory control was added.
 - 流量转发 (`Forward.vue`, flux `forward.tsx`): the direct view is a
   `UiDataTable` (search, tunnel filter, 运行中 / 已暂停 / 错误 chips,
   selection with the bulk bar for 恢复 / 暂停 / 导出 / 删除, the service switch
-  and status badges in the row). The grouped view (one section per user, one
+  and one status badge per row: the worst of `status` and the runtime state,
+  with the other state and `runtimeMessage` in its tooltip). The grouped view (one section per user, one
   collapsible group per tunnel) stays, with a 直连 / 分组 switch in the toolbar
   that is still remembered in `forward-view-mode`. Drag to reorder keeps its
   handle; the row menu adds 上移 / 下移, which send the same

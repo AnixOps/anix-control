@@ -120,6 +120,13 @@
     are unchanged; a generated node token is a copy field.
   - New `components/admin/forward/DiagnosisTimeline.vue`. Forward, Tunnel and
     LimitI18n join the `UiDataTable` guard list.
+  - The rules table's 状态 column is one line: the service switch and one
+    badge with the worst state (异常 / 同步失败 > 执行中 / 待下发 > 暂停 >
+    已应用 > 正常); the other state and the runtime message are a tooltip on
+    the badge (also in its accessible name) and a truncated second line on
+    phone cards. Rows are 52–60 px again.
+  - `UiDataTable`: the bulk bar stays under the overlays' layer and fades out
+    while a modal Dialog or Sheet is open (`ui/composables/useModalOpen.js`).
   - `UiRadioGroup`: the radio no longer stretches to 40 / 44 px on phones
     through the legacy global `button` rule.
 
