@@ -1763,17 +1763,13 @@ export default {
           speed: 'Enter speed limit (Mbps)',
           tunnel: 'Select a tunnel to bind'
         },
-        submitting: 'Submitting...',
         submitCreate: 'Create Rule',
         submitUpdate: 'Save Changes'
       },
       deleteModal: {
-        title: 'Delete Rule',
-        eyebrow: 'Confirm Deletion',
-        confirmText: 'Delete limit rule {name}?',
-        hint: 'This action cannot be undone. The rule will be permanently removed.',
-        deleting: 'Deleting...',
-        confirmDelete: 'Confirm Delete'
+        title: 'Delete limit rule {name}?',
+        hint: 'This can’t be undone. The rule is removed for good.',
+        confirmDelete: 'Delete rule'
       },
       values: {
         unlimited: 'Unlimited',

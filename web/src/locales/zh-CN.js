@@ -1764,17 +1764,13 @@ export default {
           speed: '请输入速度限制（Mbps）',
           tunnel: '请选择要绑定的隧道'
         },
-        submitting: '提交中...',
         submitCreate: '创建规则',
         submitUpdate: '保存修改'
       },
       deleteModal: {
-        title: '确认删除',
-        eyebrow: '确认删除',
-        confirmText: '确定要删除限速规则 {name} 吗？',
+        title: '删除限速规则 {name}？',
         hint: '此操作无法撤销，删除后该规则将永久消失。',
-        deleting: '删除中...',
-        confirmDelete: '确认删除'
+        confirmDelete: '删除规则'
       },
       values: {
         unlimited: '不限速',
