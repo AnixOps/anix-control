@@ -7,6 +7,7 @@ import userEvent from '@testing-library/user-event'
 import { createPinia, setActivePinia } from 'pinia'
 import Forward from '@/views/admin/Forward.vue'
 import UiHost from '@/ui/UiHost.vue'
+import { toastMessages } from './helpers/feedback'
 
 const adminApi = vi.hoisted(() => ({
   createForward: vi.fn(),
@@ -104,6 +105,8 @@ describe('Forward dialogs', () => {
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
     expect(adminApi.deleteForward).toHaveBeenCalledWith(11)
     expect(adminApi.forceDeleteForward).not.toHaveBeenCalled()
+    // The result is a toast above the page, not the old inline banner.
+    await waitFor(() => expect(toastMessages('success')).toEqual(['Deleted successfully']))
   })
 
   it('asks a second time before a force delete, and shows its failure inline', async () => {

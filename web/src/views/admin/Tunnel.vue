@@ -22,10 +22,6 @@
       {{ t('runtime.tunnel.modeCompatibilityHint') }}
     </p>
 
-    <div v-if="feedback.message" :class="['feedback', `feedback-${feedback.type}`]">
-      <span>{{ feedback.message }}</span>
-      <button class="feedback-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="clearFeedback">×</button>
-    </div>
 
     <div v-if="loading" class="loading-state">
       <div class="spinner"></div>
@@ -307,7 +303,7 @@ import {
   updateForwardTunnel
 } from '@/api/admin'
 import { humanizeForwardRuntimeBackend } from '@/utils/forwardRuntime'
-import { UiButton, UiConfirmDialog, UiDialog } from '@/ui'
+import { UiButton, UiConfirmDialog, UiDialog, useToast } from '@/ui'
 
 const { t, translateLiteral } = useAppI18n()
 
@@ -356,10 +352,6 @@ const deleteError = ref('')
 const currentDiagnosisTunnel = ref(null)
 const diagnosisResult = ref(null)
 
-const feedback = reactive({
-  type: 'info',
-  message: ''
-})
 
 const form = reactive(createDefaultForm())
 const errors = reactive({
@@ -452,13 +444,16 @@ function clearErrors() {
   errors.udpListenAddr = ''
 }
 
+// Results go to the shared toasts (UI U4); the same message replaces its
+// previous toast instead of stacking (auto-refresh can repeat a failure).
+const toast = useToast()
+const feedbackToasts = new Map()
 function setFeedback(type, message) {
-  feedback.type = type
-  feedback.message = message
-}
-
-function clearFeedback() {
-  feedback.message = ''
+  const text = String(message ?? '')
+  if (!text) return
+  if (feedbackToasts.has(text)) toast.dismiss(feedbackToasts.get(text))
+  const tone = ['success', 'error', 'warning', 'info'].includes(type) ? type : 'info'
+  feedbackToasts.set(text, toast[tone](text))
 }
 
 function translateMessage(value, fallback = '') {
@@ -505,7 +500,6 @@ async function loadData(showLoading = true) {
     loading.value = true
   }
 
-  clearFeedback()
   try {
     const inventoryPromise = runtimeNodeXMode.value
       ? getForwardNodes({ page_size: 200, scope: 'nodex' })
@@ -903,33 +897,9 @@ async function rerunDiagnosis() {
   color: #dc2626;
 }
 
-.feedback {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 18px;
-  border-radius: 16px;
-  border: 1px solid var(--border-color);
-}
 
-.feedback-success {
-  background: rgba(22, 163, 74, 0.1);
-  border-color: rgba(22, 163, 74, 0.25);
-}
 
-.feedback-error {
-  background: rgba(220, 38, 38, 0.1);
-  border-color: rgba(220, 38, 38, 0.25);
-}
 
-.feedback-close {
-  border: none;
-  background: transparent;
-  color: inherit;
-  font-size: 22px;
-  cursor: pointer;
-}
 
 .loading-state,
 .empty-state {

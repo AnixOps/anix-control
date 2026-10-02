@@ -30,10 +30,6 @@
       </div>
     </div>
 
-    <div v-if="feedback.message" :class="['feedback', `feedback-${feedback.type}`]">
-      <span>{{ feedback.message }}</span>
-      <button class="feedback-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="clearFeedback">×</button>
-    </div>
 
     <div v-if="loading" class="loading-state">
       <div class="spinner"></div>
@@ -647,7 +643,7 @@ import {
   getSystemConfig
 } from '@/api/admin'
 import { humanizeForwardRuntimeBackend } from '@/utils/forwardRuntime'
-import { UiButton, UiConfirmDialog, UiDialog, useConfirm } from '@/ui'
+import { UiButton, UiConfirmDialog, UiDialog, useConfirm, useToast } from '@/ui'
 
 const { t, translateLiteral } = useAppI18n()
 const confirm = useConfirm()
@@ -710,10 +706,6 @@ const draggingId = ref(null)
 const dragOverId = ref(null)
 const portInput = ref('')
 
-const feedback = reactive({
-  type: 'info',
-  message: ''
-})
 
 const form = reactive({
   id: null,
@@ -740,7 +732,6 @@ const directFilters = reactive({
 })
 
 const AUTO_REFRESH_INTERVAL_MS = 10000
-let feedbackTimer = null
 let refreshTimer = null
 let dataLoadPromise = null
 
@@ -996,24 +987,21 @@ function updateViewport() {
   isMobile.value = window.innerWidth < 768
 }
 
+// Results go to the shared toasts (UI U4); the same message replaces its
+// previous toast instead of stacking (auto-refresh can repeat a failure).
+const toast = useToast()
+const feedbackToasts = new Map()
 function setFeedback(type, message) {
-  feedback.type = type
-  feedback.message = message
-  if (feedbackTimer) {
-    clearTimeout(feedbackTimer)
-  }
-  feedbackTimer = setTimeout(() => {
-    feedback.message = ''
-    feedbackTimer = null
-  }, 3600)
+  const text = String(message ?? '')
+  if (!text) return
+  if (feedbackToasts.has(text)) toast.dismiss(feedbackToasts.get(text))
+  const tone = ['success', 'error', 'warning', 'info'].includes(type) ? type : 'info'
+  feedbackToasts.set(text, toast[tone](text))
 }
 
 function clearFeedback() {
-  if (feedbackTimer) {
-    clearTimeout(feedbackTimer)
-    feedbackTimer = null
-  }
-  feedback.message = ''
+  for (const id of feedbackToasts.values()) toast.dismiss(id)
+  feedbackToasts.clear()
 }
 
 function isForwardSelected(id) {
@@ -2551,47 +2539,11 @@ function onDragEnd() {
   font-weight: 700;
 }
 
-.feedback {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 16px;
-  border-radius: var(--radius-md);
-  border: 1px solid transparent;
-}
 
-.feedback-success {
-  background: var(--forward-success-soft);
-  color: #047857;
-  border-color: rgba(16, 185, 129, 0.24);
-}
 
-.feedback-error {
-  background: var(--forward-danger-soft);
-  color: #b91c1c;
-  border-color: rgba(239, 68, 68, 0.25);
-}
 
-.feedback-warning {
-  background: var(--forward-warning-soft);
-  color: #b45309;
-  border-color: rgba(245, 158, 11, 0.28);
-}
 
-.feedback-info {
-  background: var(--forward-accent-soft);
-  color: #1d4ed8;
-  border-color: rgba(37, 99, 235, 0.24);
-}
 
-.feedback-close {
-  background: transparent;
-  border: none;
-  color: inherit;
-  font-size: 22px;
-  cursor: pointer;
-}
 
 .loading-state {
   min-height: 300px;
