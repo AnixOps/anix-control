@@ -28,8 +28,8 @@ export const ADMIN_MENU = Object.freeze([
     labelKey: 'shell.admin.groups.overview',
     items: [
       { id: 'dashboard', to: '/admin/dashboard', icon: 'dashboard', labelKey: 'shell.admin.items.dashboard' },
-      { id: 'monitor', to: '/admin/monitor', icon: 'monitor', labelKey: 'shell.admin.items.monitor' },
-      { id: 'traffic-hourly', to: '/admin/traffic-hourly', icon: 'traffic', labelKey: 'shell.admin.items.trafficHourly' }
+      // 流量与监控 merges 实时监控, 小时流量 and 转发可观测性 (UI U8).
+      { id: 'monitor', to: '/admin/monitor', icon: 'monitor', labelKey: 'shell.admin.items.monitor', match: ['/admin/traffic-hourly', '/admin/forward/observability'] }
     ]
   },
   {
@@ -59,7 +59,7 @@ export const ADMIN_MENU = Object.freeze([
         icon: 'forward',
         labelKey: 'shell.admin.items.forward',
         exact: true,
-        match: ['/admin/forward/setup', '/admin/forward/tunnel', '/admin/forward/limit', '/admin/forward/observability']
+        match: ['/admin/forward/setup', '/admin/forward/tunnel', '/admin/forward/limit']
       },
       {
         id: 'forward-nodes',
@@ -127,8 +127,7 @@ export const FORWARD_SUITE_LINKS = Object.freeze({
     { id: 'forward-ansible', to: '/admin/forward/ansible-machines', icon: 'ansible', labelKey: 'forwardSuite.nav.ansibleMachines', hintKey: 'forwardSuite.hints.ansibleMachines' },
     { id: 'forward-local', to: '/admin/forward/local', icon: 'local', labelKey: 'forwardSuite.nav.localRuntime', hintKey: 'forwardSuite.hints.localRuntime' },
     { id: 'forward-nodex', to: '/admin/forward/nodex', icon: 'nodex', labelKey: 'forwardSuite.nav.nodeXRuntime', hintKey: 'forwardSuite.hints.nodeXRuntime' },
-    { id: 'forward-agents', to: '/admin/forward/agents', icon: 'agents', labelKey: 'forwardSuite.nav.nodeXAgents', hintKey: 'forwardSuite.hints.nodeXAgents' },
-    { id: 'forward-observability', to: '/admin/forward/observability', icon: 'observability', labelKey: 'forwardSuite.nav.observability', hintKey: 'forwardSuite.hints.observability' }
+    { id: 'forward-agents', to: '/admin/forward/agents', icon: 'agents', labelKey: 'forwardSuite.nav.nodeXAgents', hintKey: 'forwardSuite.hints.nodeXAgents' }
   ]
 })
 

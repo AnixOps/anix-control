@@ -152,7 +152,9 @@ describe('navigation/menu.js: active item', () => {
     ['/admin/forward/setup', 'forward'],
     ['/admin/forward/tunnel', 'forward'],
     ['/admin/forward/limit', 'forward'],
-    ['/admin/forward/observability', 'forward'],
+    ['/admin/forward/observability', 'monitor'],
+    ['/admin/monitor', 'monitor'],
+    ['/admin/monitor/traffic', 'monitor'],
     ['/admin/forward/nodes', 'forward-nodes'],
     ['/admin/forward/local', 'forward-nodes'],
     ['/admin/forward/nodex', 'forward-nodes'],
@@ -218,6 +220,21 @@ describe('navigation/menu.js: palette entries', () => {
     expect(activeMenuItem(groups, '/admin/mfa').item.id).toBe('security')
     expect(activeMenuItem(groups, '/admin/telegram').item.id).toBe('notifications')
     expect(activeMenuItem(groups, '/admin/system/backup').item.id).toBe('settings')
+  })
+
+  it('lists the 流量与监控 sections and drops the merged pages from the menu (UI U8)', () => {
+    const groups = buildAdminMenu({ t, editionAllows: community })
+    const ids = groups.flatMap(group => group.items.map(item => item.id))
+    expect(ids).not.toContain('traffic-hourly')
+    expect(FORWARD_SUITE_LINKS.advanced.map(link => link.id)).not.toContain('forward-observability')
+    const { pages } = paletteEntries({ t, groups })
+    for (const section of ADMIN_PAGE_SECTIONS.monitor) {
+      expect(pages.find(page => page.id === section.id)).toMatchObject({
+        to: section.to,
+        context: 'shell.admin.groups.overview · shell.admin.items.monitor'
+      })
+    }
+    expect(matchesQuery(pages.find(page => page.id === 'monitor-latency'), 'monitor latency')).toBe(true)
   })
 
   it('matches every query word against label, context and route words', () => {

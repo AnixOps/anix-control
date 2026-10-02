@@ -20,7 +20,6 @@ const UserPlans = () => import('@/views/user/Plans.vue')
 const UserOrders = () => import('@/views/user/Orders.vue')
 const AdminDashboard = () => import('@/views/admin/Dashboard.vue')
 const AdminMonitor = () => import('@/views/admin/Monitor.vue')
-const AdminTrafficHourly = () => import('@/views/admin/TrafficHourly.vue')
 const AdminUsers = () => import('@/views/admin/Users.vue')
 const AdminOrders = () => import('@/views/admin/Orders.vue')
 const AdminNodes = () => import('@/views/admin/Nodes.vue')
@@ -41,7 +40,6 @@ const AdminLocalRuntime = () => import('@/views/admin/LocalRuntime.vue')
 const AdminNodeX = () => import('@/views/admin/NodeX.vue')
 const AdminForwardNodeDetail = () => import('@/views/admin/forward-nodes/ForwardNodeDetail.vue')
 const AdminAnsibleMachineDetail = () => import('@/views/admin/forward-nodes/AnsibleMachineDetail.vue')
-const AdminObservability = () => import('@/views/admin/Observability.vue')
 const AdminPayment = () => import('@/views/admin/Payment.vue')
 const AdminSecurity = () => import('@/views/admin/Security.vue')
 const AdminNotifications = () => import('@/views/admin/Notifications.vue')
@@ -131,12 +129,14 @@ const routes = [
         component: AdminDashboard
       },
       {
-        path: 'monitor',
+        // 流量与监控 (UI U8): live nodes, user traffic, node latency and
+        // forwards as sections in the path; the old pages redirect.
+        path: 'monitor/:section?',
         component: AdminMonitor
       },
       {
         path: 'traffic-hourly',
-        component: AdminTrafficHourly
+        redirect: to => ({ path: '/admin/monitor/traffic', query: to.query })
       },
       {
         path: 'users',
@@ -236,8 +236,9 @@ const routes = [
         component: AdminNodeX
       },
       {
+        // 转发可观测性 is the 转发 section of 流量与监控 now (UI U8).
         path: 'forward/observability',
-        component: AdminObservability
+        redirect: to => ({ path: '/admin/monitor/forward', query: to.query })
       },
       {
         path: 'forward/agents',

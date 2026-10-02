@@ -12,7 +12,6 @@ const PAGE_TITLE_KEYS = {
   '/user/account': 'shell.accountPage.title',
   '/admin/dashboard': 'pageTitles.admin.dashboard',
   '/admin/monitor': 'pageTitles.admin.monitor',
-  '/admin/traffic-hourly': 'pageTitles.admin.trafficHourly',
   '/admin/users': 'pageTitles.admin.users',
   '/admin/nodes': 'pageTitles.admin.nodes',
   '/admin/subscriptions': 'pageTitles.admin.subscriptions',

@@ -18,8 +18,7 @@ export default {
       },
       items: {
         dashboard: 'Dashboard',
-        monitor: 'Monitor',
-        trafficHourly: 'Hourly traffic',
+        monitor: 'Traffic & monitoring',
         users: 'Users',
         inviteCodes: 'Invite codes',
         subscriptions: 'Subscription groups',

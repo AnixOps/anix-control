@@ -4,7 +4,6 @@ import miscPages from './modules/en/miscPages'
 import adminSupportPages from './modules/en/adminSupportPages'
 import adminDashboard from './modules/en/adminDashboard'
 import adminMonitor from './modules/en/adminMonitor'
-import adminTrafficHourly from './modules/en/adminTrafficHourly'
 import ui from './modules/en/ui'
 import shell from './modules/en/shell'
 import userPages from './modules/en/userPages'
@@ -99,7 +98,6 @@ export default {
   ...adminSupportPages,
   ...adminDashboard,
   ...adminMonitor,
-  ...adminTrafficHourly,
   ...ui,
   ...shell,
   ...userPages,
@@ -201,8 +199,7 @@ export default {
     },
     admin: {
       dashboard: 'Dashboard',
-      monitor: 'Monitor',
-      trafficHourly: 'Hourly Traffic',
+      monitor: 'Traffic & Monitoring',
       users: 'Users',
       nodes: 'Nodes',
       subscriptions: 'Subscription groups',
@@ -273,8 +270,7 @@ export default {
       localRuntime: 'Local Runtime',
       nodeXTopology: 'NodeX Topology',
       nodeXRuntime: 'NodeX Runtime',
-      nodeXAgents: 'NodeX Agents',
-      observability: 'Observability'
+      nodeXAgents: 'NodeX Agents'
     },
     hints: {
       setupWizard: 'Configure nodes, tunnels and forwards step by step',
@@ -282,8 +278,7 @@ export default {
       localRuntime: 'Stateless panel-host executor',
       nodeXTopology: 'Stateful relay/exit topology',
       nodeXRuntime: 'Stateful gost control-plane',
-      nodeXAgents: 'Stateful agent task channel',
-      observability: 'Network topology & latency metrics'
+      nodeXAgents: 'Stateful agent task channel'
     }
   },
   forwardWizard: {
@@ -353,58 +348,6 @@ export default {
         gotoNode: 'Go to machine/node management',
         createAnother: 'Create another forward'
       }
-    }
-  },
-  observability: {
-    title: 'Forward Observability',
-    subtitle: 'Latency trends, topology and runtime job timeline',
-    refresh: 'Refresh',
-    tabs: {
-      trend: 'Latency Trend',
-      topology: 'Topology',
-      multiIngress: 'Multi-Ingress',
-      jobs: 'Job Timeline'
-    },
-    trend: {
-      targetLabel: 'Target',
-      selectTarget: 'Select a target',
-      noTargets: 'No probe targets yet. Targets appear once forwards/tunnels/nodes are active.',
-      noData: 'No samples in the selected window.',
-      avg: 'Avg',
-      p95: 'P95',
-      max: 'Max',
-      latencyAxis: 'Latency (ms)',
-      online: 'Online',
-      offline: 'Offline'
-    },
-    topology: {
-      empty: 'No relay/exit nodes to display.',
-      relay: 'Relay',
-      exit: 'Exit',
-      proxy: 'Proxy'
-    },
-    multiIngress: {
-      forwardLabel: 'Forward',
-      selectForward: 'Select a forward',
-      tunnel: 'Tunnel',
-      ingress: 'Ingress',
-      ingressIp: 'Ingress IP',
-      avgRtt: 'Avg RTT (ms)',
-      loss: 'Loss (%)',
-      status: 'Status',
-      empty: 'Select a forward to compare ingress paths.',
-      noRows: 'No ingress data for this forward.'
-    },
-    jobs: {
-      empty: 'No runtime jobs.',
-      action: 'Action',
-      backend: 'Backend',
-      status: 'Status',
-      createdAt: 'Created',
-      pending: 'Pending',
-      running: 'Running',
-      success: 'Success',
-      failed: 'Failed'
     }
   },
   runtime: {
