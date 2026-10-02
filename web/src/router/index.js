@@ -26,6 +26,7 @@ const AdminOrders = () => import('@/views/admin/Orders.vue')
 const AdminNodes = () => import('@/views/admin/Nodes.vue')
 const AdminNodeDetail = () => import('@/views/admin/NodeDetail.vue')
 const AdminSubscriptions = () => import('@/views/admin/Subscriptions.vue')
+const AdminSubscriptionGroup = () => import('@/views/admin/SubscriptionGroup.vue')
 const AdminPlans = () => import('@/views/admin/Plans.vue')
 const AdminTickets = () => import('@/views/admin/Tickets.vue')
 const AdminCoupons = () => import('@/views/admin/Coupons.vue')
@@ -42,8 +43,7 @@ const AdminForwardNodeDetail = () => import('@/views/admin/forward-nodes/Forward
 const AdminAnsibleMachineDetail = () => import('@/views/admin/forward-nodes/AnsibleMachineDetail.vue')
 const AdminObservability = () => import('@/views/admin/Observability.vue')
 const AdminPayment = () => import('@/views/admin/Payment.vue')
-const AdminTelegram = () => import('@/views/admin/Telegram.vue')
-const AdminMFA = () => import('@/views/admin/MFA.vue')
+const AdminSecurity = () => import('@/views/admin/Security.vue')
 const AdminNotifications = () => import('@/views/admin/Notifications.vue')
 const AdminInvite = () => import('@/views/admin/Invite.vue')
 const AdminInviteCodes = () => import('@/views/admin/InviteCodes.vue')
@@ -51,7 +51,6 @@ const AdminSystem = () => import('@/views/admin/System.vue')
 const AdminAgent = () => import('@/views/admin/Agent.vue')
 const AdminPlugins = () => import('@/views/admin/Plugins.vue')
 const AdminDeployments = () => import('@/views/admin/Deployments.vue')
-const AdminAccessGroups = () => import('@/views/admin/AccessGroups.vue')
 const Account = () => import('@/views/Account.vue')
 const StatusPage = () => import('@/views/StatusPage.vue')
 
@@ -165,6 +164,11 @@ const routes = [
         component: AdminSubscriptions
       },
       {
+        // One subscription group, its section in the path (UI U7).
+        path: 'subscriptions/:id(\\d+)/:section?',
+        component: AdminSubscriptionGroup
+      },
+      {
         path: 'plans',
         component: AdminPlans
       },
@@ -273,15 +277,22 @@ const routes = [
         meta: { edition: 'commercial' }
       },
       {
+        // Telegram is a channel of 通知 now (UI U7).
         path: 'telegram',
-        component: AdminTelegram
+        redirect: '/admin/notifications/telegram'
+      },
+      {
+        // 安全 holds the MFA policy and the access groups (UI U7).
+        path: 'security/:section?',
+        component: AdminSecurity
       },
       {
         path: 'mfa',
-        component: AdminMFA
+        redirect: '/admin/security/mfa'
       },
       {
-        path: 'notifications',
+        // 通知: the channel is in the path (UI U7).
+        path: 'notifications/:channel?',
         component: AdminNotifications
       },
       {
@@ -294,7 +305,8 @@ const routes = [
         component: AdminInviteCodes
       },
       {
-        path: 'system',
+        // 系统设置: the section is in the path (UI U7).
+        path: 'system/:section?',
         component: AdminSystem
       },
       {
@@ -316,7 +328,7 @@ const routes = [
       },
       {
         path: 'access-groups',
-        component: AdminAccessGroups
+        redirect: '/admin/security/access-groups'
       },
       {
         path: 'account',

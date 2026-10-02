@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   ADMIN_MENU,
+  ADMIN_PAGE_SECTIONS,
   FORWARD_SUITE_LINKS,
   activeMenuItem,
   buildAdminMenu,
@@ -71,9 +72,11 @@ describe('navigation/menu.js: buildAdminMenu', () => {
     const groups = buildAdminMenu({ t, editionAllows: commercial, routeExists: () => false })
     const paths = groups.flatMap(group => group.items.map(item => item.to))
     expect(new Set(paths).size).toBe(paths.length)
-    const registered = new Set(router.getRoutes().map(route => route.path))
+    // Resolved by a real route, not the catch-all (pages with sections use
+    // a parameter: /admin/system/:section?).
     for (const path of paths) {
-      expect(registered.has(path), path).toBe(true)
+      const matched = router.resolve(path).matched
+      expect(matched.length > 0 && !matched.at(-1).path.includes(':pathMatch'), path).toBe(true)
     }
     // The legacy redirect and the duplicated forward-suite links are not in the sidebar.
     expect(paths).not.toContain('/admin/control')
@@ -197,6 +200,24 @@ describe('navigation/menu.js: palette entries', () => {
     const groups = buildAdminMenu({ t }).map(group => ({ ...group, items: group.items.filter(item => item.id !== 'nodes') }))
     const { actions } = paletteEntries({ t, groups })
     expect(actions.map(action => action.id)).not.toContain('add-node')
+  })
+
+  it('lists the sections of settings-style pages under their page (UI U7)', () => {
+    const groups = buildAdminMenu({ t, editionAllows: community })
+    const { pages } = paletteEntries({ t, groups })
+    const ids = pages.map(page => page.id)
+    expect(ids).not.toContain('mfa')
+    expect(ids).not.toContain('telegram')
+    for (const section of [...ADMIN_PAGE_SECTIONS.settings, ...ADMIN_PAGE_SECTIONS.security, ...ADMIN_PAGE_SECTIONS.notifications]) {
+      expect(ids).toContain(section.id)
+    }
+    const accessGroups = pages.find(page => page.id === 'security-access-groups')
+    expect(accessGroups).toMatchObject({ to: '/admin/security/access-groups', label: 'adminSecurity.sections.accessGroups', context: 'shell.admin.groups.system · shell.admin.items.security' })
+    expect(matchesQuery(accessGroups, 'access groups')).toBe(true)
+    // The old paths still select their new menu item.
+    expect(activeMenuItem(groups, '/admin/mfa').item.id).toBe('security')
+    expect(activeMenuItem(groups, '/admin/telegram').item.id).toBe('notifications')
+    expect(activeMenuItem(groups, '/admin/system/backup').item.id).toBe('settings')
   })
 
   it('matches every query word against label, context and route words', () => {

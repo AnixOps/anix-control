@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import System from '@/views/admin/System.vue'
-import { toastMessages } from './helpers/feedback'
+import { createMemoryHistory, createRouter } from 'vue-router'
+import SettingsAudit from '@/views/admin/system/SettingsAudit.vue'
 
 const adminApi = vi.hoisted(() => ({
   getSystemConfig: vi.fn(),
@@ -21,7 +21,7 @@ const adminApi = vi.hoisted(() => ({
 vi.mock('@/api/admin', () => adminApi)
 
 function mountSystem() {
-  return mount(System, {
+  return mount(SettingsAudit, {
     global: {
       stubs: {
         'router-link': true
@@ -99,7 +99,6 @@ describe('System audit logs', () => {
 
   it('renders audit log row content from API response', async () => {
     const wrapper = mountSystem()
-    wrapper.vm.activeTab = 'audit'
     await flushPromises()
 
     const text = wrapper.text()
@@ -134,7 +133,6 @@ describe('System audit logs', () => {
     })
 
     const wrapper = mountSystem()
-    wrapper.vm.activeTab = 'audit'
     await flushPromises()
 
     const text = wrapper.text()
@@ -143,7 +141,7 @@ describe('System audit logs', () => {
     expect(text).toContain('backup_record')
   })
 
-  it('shows panel envelope errors when audit log loading fails', async () => {
+  it('shows panel envelope errors in the table error state when audit log loading fails', async () => {
     adminApi.getSystemAuditLogs.mockResolvedValue({
       code: -1,
       msg: 'database unavailable',
@@ -154,8 +152,26 @@ describe('System audit logs', () => {
     const wrapper = mountSystem()
     await flushPromises()
 
-    expect(toastMessages('error')).toEqual(['database unavailable'])
+    expect(wrapper.vm.auditError).toBe('database unavailable')
+    expect(wrapper.text()).toContain('database unavailable')
     expect(wrapper.vm.auditLogs).toEqual([])
     expect(wrapper.vm.auditTotal).toBe(0)
+  })
+
+  it('reads the filters and page from the query and writes them back', async () => {
+    const router = createRouter({ history: createMemoryHistory(), routes: [{ path: '/admin/system/:section?', component: { template: '<div />' } }] })
+    await router.push('/admin/system/audit?action=login&page=2&size=50')
+    const replace = vi.spyOn(router, 'replace')
+    const wrapper = mount(SettingsAudit, { global: { plugins: [router] } })
+    await flushPromises()
+
+    expect(adminApi.getSystemAuditLogs).toHaveBeenCalledWith({ page: 2, page_size: 50, action: 'login' })
+    expect(wrapper.vm.auditFilters).toMatchObject({ action: 'login' })
+
+    adminApi.getSystemAuditLogs.mockClear()
+    wrapper.vm.auditFilters.target_type = 'node'
+    await wrapper.vm.applyAuditFilters()
+    expect(replace).toHaveBeenLastCalledWith({ path: '/admin/system/audit', query: { action: 'login', target: 'node' } })
+    expect(adminApi.getSystemAuditLogs).toHaveBeenCalledWith({ page: 1, page_size: 20, action: 'login', target_type: 'node' })
   })
 })

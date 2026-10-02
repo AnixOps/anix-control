@@ -1,6 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
-import Telegram from '@/views/admin/Telegram.vue'
+import Telegram from '@/views/admin/notifications/NotifyTelegram.vue'
 import { setLocale } from '@/i18n'
 import { answerConfirms, toastMessages, toasts } from './helpers/feedback'
 import { runAction } from '@/ui/composables/useToast'
@@ -18,7 +18,7 @@ const adminApi = vi.hoisted(() => ({
 
 vi.mock('@/api/admin', () => adminApi)
 
-describe('Admin Telegram', () => {
+describe('Notifications → Telegram channel', () => {
   beforeEach(async () => {
     vi.resetAllMocks()
     vi.spyOn(console, 'error').mockImplementation(() => {})
@@ -148,14 +148,14 @@ describe('Admin Telegram', () => {
     // A broadcast asks first; declining sends nothing.
     const confirms = answerConfirms(false)
     await wrapper.vm.sendNotification()
-    expect(confirms.last()).toMatchObject({ title: 'Broadcast this message to every bound user?', confirmLabel: 'Broadcast' })
+    expect(confirms.last()).toMatchObject({ title: 'Broadcast this message to every linked user?', confirmLabel: 'Broadcast' })
     expect(adminApi.broadcastTelegram).not.toHaveBeenCalled()
 
     confirms.answer(true)
     await wrapper.vm.sendNotification()
     expect(adminApi.broadcastTelegram).toHaveBeenCalledWith('hello')
     // Some deliveries failed: a warning, not a success.
-    expect(toastMessages('warning')).toEqual(['Broadcast finished. Success: 3, failed: 1'])
+    expect(toastMessages('warning')).toEqual(['Broadcast finished: 3 sent, 1 failed'])
     expect(wrapper.vm.notifyForm.message).toBe('')
 
     wrapper.unmount()
@@ -167,15 +167,15 @@ describe('Admin Telegram', () => {
 
     await wrapper.vm.saveBotConfig()
     expect(adminApi.updateTelegramBot).toHaveBeenCalledWith(wrapper.vm.botConfig)
-    expect(toastMessages('success')).toContain('Telegram bot config saved')
+    expect(toastMessages('success')).toContain('Bot settings saved')
 
     await wrapper.vm.setWebhookConfig()
     expect(adminApi.setTelegramWebhook).toHaveBeenCalledWith('http://localhost:3000/api/v2/telegram/webhook')
-    expect(toastMessages('success')).toContain('Webhook configured successfully')
+    expect(toastMessages('success')).toContain('Webhook set')
 
     await wrapper.vm.deleteWebhookConfig()
     expect(adminApi.deleteTelegramWebhook).toHaveBeenCalled()
-    const deleted = toasts('success').find(toast => toast.message === 'Webhook deleted successfully')
+    const deleted = toasts('success').find(toast => toast.message === 'Webhook deleted')
     expect(deleted.action?.undo).toBe(true)
     // 撤销 sets the webhook again.
     adminApi.setTelegramWebhook.mockClear()
@@ -195,7 +195,7 @@ describe('Admin Telegram', () => {
     wrapper.unmount()
   })
 
-  it('logs panel envelope load failures instead of accepting empty config payloads', async () => {
+  it('shows a bot config load failure as an error state instead of an empty form', async () => {
     adminApi.getTelegramBot.mockResolvedValueOnce({
       code: -1,
       msg: 'telegram config failed',
@@ -207,10 +207,30 @@ describe('Admin Telegram', () => {
     await flushPromises()
 
     expect(wrapper.vm.botConfig.token).toBe('')
-    expect(console.error).toHaveBeenCalledWith(
-      'Failed to load Telegram bot config',
-      expect.any(Error)
-    )
+    expect(wrapper.vm.botLoadError).toBe('telegram config failed')
+    expect(wrapper.text()).toContain('telegram config failed')
+
+    wrapper.unmount()
+  })
+
+  it('validates administrator IDs as you type and saves them as numbers', async () => {
+    const wrapper = mount(Telegram)
+    await flushPromises()
+    expect(wrapper.vm.adminIdsText).toBe('1001, 1002')
+    expect(wrapper.vm.botDirty).toBe(false)
+
+    wrapper.vm.adminIdsText = '1001, abc'
+    await flushPromises()
+    expect(wrapper.vm.adminIdsError).toBe('Not valid IDs: abc')
+    await wrapper.vm.saveBotConfig()
+    expect(adminApi.updateTelegramBot).not.toHaveBeenCalled()
+
+    wrapper.vm.adminIdsText = '1001, 3003'
+    await flushPromises()
+    expect(wrapper.vm.botDirty).toBe(true)
+    await wrapper.vm.saveBotConfig()
+    expect(adminApi.updateTelegramBot).toHaveBeenCalledWith({ token: 'legacy-token', admin_ids: [1001, 3003], welcome_message: 'Legacy welcome' })
+    expect(wrapper.vm.botDirty).toBe(false)
 
     wrapper.unmount()
   })
@@ -229,7 +249,7 @@ describe('Admin Telegram', () => {
     await wrapper.vm.saveBotConfig()
 
     expect(toastMessages('error')).toEqual([expect.stringContaining('telegram save rejected')])
-    expect(toastMessages('success')).not.toContain('Telegram bot config saved')
+    expect(toastMessages('success')).not.toContain('Bot settings saved')
 
     wrapper.unmount()
   })
@@ -242,8 +262,8 @@ describe('Admin Telegram', () => {
     await wrapper.vm.sendNotification()
     await flushPromises()
 
-    expect(wrapper.find('#telegram-notify-id-error').text()).toBe('Please enter a Telegram ID')
-    expect(wrapper.find('#telegram-notify-message-error').text()).toBe('Please enter a message')
+    expect(wrapper.find('#telegram-notify-id-error').text()).toBe('Enter a Telegram ID')
+    expect(wrapper.find('#telegram-notify-message-error').text()).toBe('Enter a message')
     expect(wrapper.find('[data-test="telegram-notify-message"]').attributes('aria-invalid')).toBe('true')
     expect(adminApi.sendTelegramNotification).not.toHaveBeenCalled()
     expect(toasts()).toHaveLength(0)

@@ -1,4 +1,5 @@
 import { isCommercialEdition } from '@/composables/useEdition'
+import { ADMIN_PAGE_SECTIONS } from '@/navigation/menu'
 
 const PAGE_TITLE_KEYS = {
   '/login': 'pageTitles.auth.login',
@@ -34,12 +35,11 @@ const PAGE_TITLE_KEYS = {
   '/admin/deployments': 'pageTitles.admin.deployments',
   '/admin/access-groups': 'pageTitles.admin.accessGroups',
   '/admin/payment': 'pageTitles.admin.payment',
-  '/admin/telegram': 'pageTitles.admin.telegram',
-  '/admin/mfa': 'pageTitles.admin.mfa',
   '/admin/notifications': 'pageTitles.admin.notifications',
   '/admin/invite': 'pageTitles.admin.invite',
   '/admin/invite-codes': 'pageTitles.admin.inviteCodes',
   '/admin/system': 'pageTitles.admin.system',
+  '/admin/security': 'pageTitles.admin.security',
   '/admin/account': 'shell.accountPage.title'
 }
 
@@ -55,8 +55,13 @@ const COMMUNITY_PAGE_TITLE_KEYS = {
   '/admin/plans': 'pageTitles.admin.subscriptionTemplates'
 }
 
+// Sections of settings-style pages (/admin/system/backup → 备份).
+const SECTION_TITLE_KEYS = Object.fromEntries(
+  Object.values(ADMIN_PAGE_SECTIONS).flat().map(section => [section.to, section.labelKey])
+)
+
 export function resolveRoutePageTitle(t, path, fallback = '') {
-  const key = (!isCommercialEdition() && COMMUNITY_PAGE_TITLE_KEYS[path]) || PAGE_TITLE_KEYS[path]
+  const key = (!isCommercialEdition() && COMMUNITY_PAGE_TITLE_KEYS[path]) || PAGE_TITLE_KEYS[path] || SECTION_TITLE_KEYS[path]
   return key ? t(key) : fallback
 }
 

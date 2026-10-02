@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import System from '@/views/admin/System.vue'
+import SettingsGeneral from '@/views/admin/system/SettingsGeneral.vue'
+import SettingsRuntime from '@/views/admin/system/SettingsRuntime.vue'
 import { toastMessages } from './helpers/feedback'
 
 const adminApi = vi.hoisted(() => ({
@@ -20,8 +21,8 @@ const adminApi = vi.hoisted(() => ({
 
 vi.mock('@/api/admin', () => adminApi)
 
-function mountSystem() {
-  return mount(System, {
+function mountSystem(component = SettingsRuntime) {
+  return mount(component, {
     global: {
       stubs: {
         'router-link': true
@@ -33,7 +34,7 @@ function mountSystem() {
   })
 }
 
-describe('System runtime configuration', () => {
+describe('System settings: forward runtime and configuration keys', () => {
   beforeEach(() => {
     vi.resetAllMocks()
 
@@ -140,6 +141,7 @@ describe('System runtime configuration', () => {
     })
 
     const wrapper = mountSystem()
+    const general = mountSystem(SettingsGeneral)
     await flushPromises()
 
     expect(wrapper.vm.runtimeBackend).toBe('nftables_ansible')
@@ -148,8 +150,8 @@ describe('System runtime configuration', () => {
     expect(wrapper.vm.runtimeNodeXToken).toBe('panel-token')
     expect(wrapper.vm.runtimeNodeXTimeout).toBe(33)
     expect(wrapper.vm.runtimeAnsibleForm.inventory).toBe('panel-hosts.ini')
-    expect(wrapper.vm.configs).toHaveLength(1)
-    expect(wrapper.vm.configs[0]).toMatchObject({
+    expect(general.vm.configs).toHaveLength(1)
+    expect(general.vm.configs[0]).toMatchObject({
       key: 'site.name',
       value: 'AnixOps',
       description: 'Site name',
@@ -158,8 +160,7 @@ describe('System runtime configuration', () => {
     })
   })
 
-  it('logs panel envelope config list failures instead of accepting them as empty lists', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+  it('shows a config list envelope failure as the table error state, not an empty list', async () => {
     adminApi.getSystemConfigs.mockResolvedValueOnce({
       code: -1,
       msg: 'config list rejected',
@@ -167,20 +168,16 @@ describe('System runtime configuration', () => {
       ts: 1783526400000
     })
 
-    const wrapper = mountSystem()
+    const wrapper = mountSystem(SettingsGeneral)
     await flushPromises()
 
     expect(wrapper.vm.configs).toEqual([])
-    expect(consoleError).toHaveBeenCalledWith(
-      'Failed to load configs',
-      expect.any(Error)
-    )
-
-    consoleError.mockRestore()
+    expect(wrapper.vm.configsError).toBe('config list rejected')
+    expect(wrapper.text()).toContain('config list rejected')
   })
 
   it('keeps the config modal open when an enveloped config save fails', async () => {
-    const wrapper = mountSystem()
+    const wrapper = mountSystem(SettingsGeneral)
     await flushPromises()
 
     adminApi.getSystemConfigs.mockClear()

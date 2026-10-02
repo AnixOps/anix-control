@@ -63,6 +63,7 @@ export const NAV_ICONS = Object.freeze({
   deployments: Rocket,
   settings: Settings,
   mfa: ShieldCheck,
+  security: Shield,
   'access-groups': KeyRound,
   notifications: Bell,
   telegram: Send,

@@ -135,6 +135,13 @@ describe('AdminLayout.vue', () => {
     expect(wrapper.get('.admin-crumbs [aria-current="page"]').text()).toBe('Users')
   })
 
+  it('shows group › page › section on a settings section', async () => {
+    const { wrapper } = await mountLayout('/admin/system/backup')
+    mounted = wrapper
+    expect(wrapper.findAll('.admin-crumbs li').map(item => item.text())).toEqual(['System', 'Settings', 'Backups'])
+    expect(wrapper.get('.admin-crumbs a').attributes('href')).toBe('/admin/system')
+  })
+
   it('renders the forward suite navigation once, only on forward pages', async () => {
     const { wrapper, router } = await mountLayout('/admin/forward/tunnel')
     mounted = wrapper
@@ -313,10 +320,10 @@ describe('AdminLayout.vue', () => {
   })
 
   it('titles pages from the page meta table, the route meta and the menu', async () => {
-    const { wrapper, router } = await mountLayout('/admin/telegram')
+    const { wrapper, router } = await mountLayout('/admin/notifications/telegram')
     mounted = wrapper
     const title = () => wrapper.get('.admin-crumbs [aria-current="page"]').text()
-    expect(title()).toContain('Telegram')
+    expect(title()).toBe('Telegram')
     await router.push('/admin/forward/ansible-machines')
     await flushPromises()
     expect(title()).toBe('Ansible Machines')
