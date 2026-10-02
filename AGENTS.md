@@ -77,10 +77,13 @@ duplicate it here); the docs landing page is `docs/README.md`.
     - forward, Agent and package jobs for their areas.
 
     Documentation-only PRs skip the Go jobs.
-  - **Full lane.** Every job, including the race detector and benchmarks.
+  - **Full lane.** Every job, including benchmarks.
     It runs on `go_dev` pushes, tags, the nightly schedule, manual runs,
     PRs labelled `ci:full`, and PRs that change the workflow or Go
     dependencies.
+  - **Race detector** (`go test -race`, about 28 min serially). It runs only
+    in the nightly schedule and manual runs, with a 40-minute timeout, and no
+    release job waits for it. Check the latest nightly run before tagging.
   - Skipped jobs count as passed for the required checks, so conditions stay
     job-level `if:`. Never use a workflow-level `paths` filter.
 

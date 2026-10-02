@@ -249,7 +249,6 @@ check_release_workflow() {
     go-quality \
     go-lint \
     go-security \
-    go-race \
     backend-test \
     postgres-stats-test \
     migration-dry-run-test \
@@ -368,7 +367,7 @@ run_self_test() {
     "s/check_release_version.py --tag/check_release_version.py --self-test/" \
     "s/body_path: release\/RELEASE_NOTES.md/generate_release_notes: true/" \
     "s/anix-control-linux-amd64.tar.gz/anix-control-linux.tar.gz/g" \
-    "s/go-race, backend-test/backend-test/" \
+    "s/go-security, backend-test/backend-test/" \
     "s/--verify-release-archive/--skip-release-archive/" \
     "s#tar -czvf release/anix-control-frontend.tar.gz -C web/public .#&\n          zip -r release/anix-control-frontend.zip web/public#"; do
     sed "${mutation}" "${original}" > "${tmpdir}/ci.yml"

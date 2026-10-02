@@ -6,7 +6,7 @@ This register tracks known and suspected concurrency risks. A risk is closed onl
 
 ## Baseline Evidence
 
-- CI includes `go test -race ./... -count=1 -p=1`.
+- CI runs `go test -race ./... -count=1 -p=1` in the nightly run and on manual runs (the "Go Race Detector" job); pushes, pull requests and tags do not wait for it.
 - The full Go test suite is run serially with `-p=1` because some tests share fixed SQLite paths.
 - The in-memory cache uses `sync.RWMutex` and a cleanup goroutine.
 - Forward runtime workers, gRPC streams, WebSocket flows, package host processes, and health checks all create goroutines.
