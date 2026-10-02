@@ -60,7 +60,9 @@ test('signs in with a code and gets the subscription link in two clicks', async 
   const link = `${new URL(baseURL).origin}/s/${TOKEN}`
   await expect(page.getByRole('img', { name: '128.4 GB of 200 GB traffic left' })).toBeVisible()
   await page.getByRole('button', { name: 'Copy subscription link' }).click()
-  await expect(page.getByText('Subscription link copied')).toBeVisible()
+  // The toast itself: the live region repeats its text 100 ms later. (By
+  // label: during a dialog the toast list is aria-hidden, the live region not.)
+  await expect(page.getByLabel('Notifications').getByText('Subscription link copied')).toBeVisible()
   expect(await page.evaluate(() => navigator.clipboard.readText())).toBe(link)
 
   await page.getByRole('link', { name: 'Import to a client' }).click()
@@ -94,7 +96,7 @@ test('resets the subscription link with a code and shows the new one', async ({ 
   const link = `${new URL(baseURL).origin}/s/${NEW_TOKEN}`
   await expect(done.getByLabel('New subscription link')).toHaveValue(link)
   await expect(done.getByRole('img', { name: 'QR code of your subscription link' })).toBeVisible()
-  await expect(page.getByText('Subscription link reset. Import it again on all your devices.')).toBeVisible()
+  await expect(page.getByLabel('Notifications').getByText('Subscription link reset. Import it again on all your devices.')).toBeVisible()
   expect(calls.at(-1)).toEqual({ reset: { code: '123456', method: 'totp' } })
   await done.getByRole('button', { name: 'Done' }).click()
   await expect(page.locator('#subscribe-link')).toHaveValue(link)
