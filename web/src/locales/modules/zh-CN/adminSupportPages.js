@@ -122,15 +122,20 @@ export default {
       next: '下一页',
       info: '第 {page} / {totalPages} 页'
     },
+    confirm: {
+      markPaidTitle: '将订单 {tradeNo} 标记为已支付？',
+      markPaidMessage: '订单金额 {amount}，标记后按已支付处理。此操作无法撤销。',
+      cancelTitle: '取消订单 {tradeNo}？',
+      cancelMessage: '用户将不能再支付这笔订单。此操作无法撤销。',
+      cancelAction: '取消订单',
+      keepOrder: '保留订单'
+    },
     messages: {
       fetchOrdersFailed: '加载订单失败',
       fetchStatsFailed: '加载订单统计失败',
-      markPaidConfirm: '确定将订单 {tradeNo} 标记为已支付吗？',
       markPaidSuccess: '订单已标记为支付成功',
-      markPaidFailed: '标记订单支付失败：{message}',
       markPaidFailedShort: '标记失败',
-      cancelConfirm: '确定取消订单 {tradeNo} 吗？',
-      cancelFailed: '取消订单失败：{message}',
+      cancelSuccess: '已取消订单 {tradeNo}',
       cancelFailedShort: '取消失败'
     }
   },

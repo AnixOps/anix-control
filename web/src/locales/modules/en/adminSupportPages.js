@@ -122,15 +122,20 @@ export default {
       next: 'Next',
       info: 'Page {page} of {totalPages}'
     },
+    confirm: {
+      markPaidTitle: 'Mark order {tradeNo} as paid?',
+      markPaidMessage: 'Order amount {amount}. The order is then treated as paid. This can’t be undone.',
+      cancelTitle: 'Cancel order {tradeNo}?',
+      cancelMessage: 'The user can no longer pay this order. This can’t be undone.',
+      cancelAction: 'Cancel order',
+      keepOrder: 'Keep order'
+    },
     messages: {
       fetchOrdersFailed: 'Failed to load orders',
       fetchStatsFailed: 'Failed to load order stats',
-      markPaidConfirm: 'Mark order {tradeNo} as paid?',
       markPaidSuccess: 'Order marked as paid',
-      markPaidFailed: 'Failed to mark order as paid: {message}',
       markPaidFailedShort: 'Mark paid failed',
-      cancelConfirm: 'Cancel order {tradeNo}?',
-      cancelFailed: 'Failed to cancel order: {message}',
+      cancelSuccess: 'Order {tradeNo} cancelled',
       cancelFailedShort: 'Cancel failed'
     }
   },

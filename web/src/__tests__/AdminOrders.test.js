@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
+import { render, screen, waitFor, within } from '@testing-library/vue'
+import userEvent from '@testing-library/user-event'
+import UiHost from '@/ui/UiHost.vue'
 import Orders from '@/views/admin/Orders.vue'
 import { setLocale } from '@/i18n'
+import { answerConfirms, inBody, toastMessages } from './helpers/feedback'
 
 const adminApi = vi.hoisted(() => ({
   cancelOrder: vi.fn(),
@@ -11,6 +15,8 @@ const adminApi = vi.hoisted(() => ({
 }))
 
 vi.mock('@/api/admin', () => adminApi)
+
+enableAutoUnmount(afterEach)
 
 describe('Admin Orders', () => {
   beforeEach(async () => {
@@ -114,7 +120,7 @@ describe('Admin Orders', () => {
       }
     })
 
-    const wrapper = mount(Orders)
+    const wrapper = mount(Orders, { attachTo: document.body })
     await flushPromises()
 
     const rows = wrapper.findAll('tbody tr')
@@ -128,13 +134,13 @@ describe('Admin Orders', () => {
 
     await wrapper.vm.viewDetail(wrapper.vm.orders[0])
     await flushPromises()
-    const detail = wrapper.find('.modal-body').text()
+    const detail = inBody('[data-test="order-detail"]').text()
     expect(detail).toContain('SLIM012')
     expect(detail).toContain('buyer@example.test')
     expect(detail).toContain('Pro')
     expect(detail).toContain('CB-12')
-
-    wrapper.unmount()
+    // A side sheet, not a centred modal.
+    expect(inBody('[role="dialog"]').classes()).toContain('ui-sheet')
   })
 
   it('renders order stats from legacy, panel envelope, and nested payloads', async () => {
@@ -191,8 +197,7 @@ describe('Admin Orders', () => {
   })
 
   it('treats panel code -1 mark-paid responses as errors', async () => {
-    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const confirms = answerConfirms(true)
     adminApi.markOrderPaid.mockResolvedValueOnce({
       code: -1,
       msg: '订单不存在',
@@ -206,15 +211,15 @@ describe('Admin Orders', () => {
     await wrapper.vm.handleMarkPaid({ id: 99, trade_no: 'MISSING-ORDER' })
     await flushPromises()
 
-    expect(alertSpy).toHaveBeenCalledWith(expect.stringContaining('订单不存在'))
+    expect(confirms.errors.map(error => error.message)).toEqual(['订单不存在'])
+    expect(toastMessages('success')).toEqual([])
     expect(adminApi.markOrderPaid).toHaveBeenCalledWith(99)
 
     wrapper.unmount()
   })
 
   it('treats panel code -1 cancel responses as errors', async () => {
-    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
-    vi.spyOn(window, 'confirm').mockReturnValue(true)
+    const confirms = answerConfirms(true)
     adminApi.cancelOrder.mockResolvedValueOnce({
       code: -1,
       msg: '订单不存在',
@@ -228,9 +233,36 @@ describe('Admin Orders', () => {
     await wrapper.vm.handleCancel({ id: 88, trade_no: 'MISSING-CANCEL' })
     await flushPromises()
 
-    expect(alertSpy).toHaveBeenCalledWith(expect.stringContaining('订单不存在'))
+    expect(confirms.last()).toMatchObject({ tone: 'danger', title: 'Cancel order MISSING-CANCEL?', confirmLabel: 'Cancel order' })
+    expect(confirms.errors.map(error => error.message)).toEqual(['订单不存在'])
     expect(adminApi.cancelOrder).toHaveBeenCalledWith(88)
 
     wrapper.unmount()
+  })
+
+  it('asks before marking an order paid; Cancel and Esc keep it', async () => {
+    const user = userEvent.setup()
+    adminApi.getOrderList.mockResolvedValue({ code: 0, data: { total: 1, list: [{ id: 7, trade_no: 'T-7', total_amount: 1990, status: 0, period: 'month' }] } })
+    adminApi.markOrderPaid.mockResolvedValue({ code: 0 })
+    render({ components: { Orders, UiHost }, template: '<div><Orders /><UiHost /></div>' })
+    const opener = await screen.findByRole('button', { name: 'Mark paid' })
+
+    await user.click(opener)
+    let dialog = await screen.findByRole('alertdialog', { name: 'Mark order T-7 as paid?' })
+    expect(dialog.textContent).toContain('19.90')
+    await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+    await user.click(opener)
+    await screen.findByRole('alertdialog')
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+    expect(adminApi.markOrderPaid).not.toHaveBeenCalled()
+
+    await user.click(opener)
+    dialog = await screen.findByRole('alertdialog')
+    await user.click(within(dialog).getByRole('button', { name: 'Mark paid' }))
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+    expect(adminApi.markOrderPaid).toHaveBeenCalledWith(7)
+    expect(toastMessages('success')).toEqual(['Order marked as paid'])
   })
 })
