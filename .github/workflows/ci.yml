@@ -337,11 +337,8 @@ jobs:
           go -C sdk vet ./...
           go -C identity vet ./...
 
-      - name: Run full Go test suite
-        run: |
-          go test ./... -count=1 -p=1
-          go -C sdk test ./... -count=1
-          go -C identity test ./... -count=1
+      # The full Go test suite (root module, sdk and identity) runs once, in
+      # "Backend Tests"; this job keeps the static gates only.
 
   # The race detector re-runs the whole suite serially (about 28 min), so it
   # runs only on the nightly schedule and on manual runs; pushes, pull
@@ -472,10 +469,70 @@ jobs:
           name: gosec-report
           path: security-reports/gosec.json
 
+  # Builds the Control image (Dockerfile "source" target) and the
+  # identity-platform module image once, with a GitHub Actions layer cache per
+  # image, and hands both to the Docker and Kubernetes smokes as image
+  # archives. The smokes start as soon as the images exist; they do not wait
+  # for the Go gates.
+  build-images:
+    name: Build Smoke Images
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: ${{ needs.changes.outputs.modules == 'true' }}
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v4
+
+      - name: Create the image archive directory
+        run: mkdir -p "${RUNNER_TEMP}/smoke-images"
+
+      - name: Build the Control image archive
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          target: source
+          push: false
+          tags: anix-control:ci
+          outputs: type=docker,dest=${{ runner.temp }}/smoke-images/anix-control.tar
+          build-args: |
+            VERSION=ci
+            BUILD_TIME=1970-01-01T00:00:00Z
+            BUILD_CODE=${{ github.run_number }}
+            COMMIT=${{ github.sha }}
+          cache-from: type=gha,scope=docker-smoke
+          cache-to: type=gha,scope=docker-smoke,mode=max
+
+      - name: Build the identity-platform module image archive
+        uses: docker/build-push-action@v7
+        with:
+          context: .
+          file: Dockerfile.module
+          push: false
+          tags: anix-module-identity-platform:ci
+          outputs: type=docker,dest=${{ runner.temp }}/smoke-images/anix-module-identity-platform.tar
+          build-args: |
+            PACKAGE_ID=identity-platform
+            PACKAGE_VERSION=4.0.0
+          cache-from: type=gha,scope=module-image
+          cache-to: type=gha,scope=module-image,mode=max
+
+      # The archives' layers are already compressed.
+      - name: Upload the smoke image archives
+        uses: actions/upload-artifact@v7
+        with:
+          name: smoke-images
+          path: ${{ runner.temp }}/smoke-images/
+          retention-days: 1
+          compression-level: 0
+          if-no-files-found: error
+
   docker-smoke:
     name: Docker Build Smoke
     runs-on: ubuntu-latest
-    needs: [changes, go-quality, go-security]
+    needs: [changes, build-images]
     if: ${{ needs.changes.outputs.modules == 'true' }}
     services:
       postgres:
@@ -501,38 +558,19 @@ jobs:
           go-version: ${{ env.GO_VERSION }}
           cache: true
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Build Docker image
-        uses: docker/build-push-action@v7
+      - name: Download the smoke image archives
+        uses: actions/download-artifact@v8
         with:
-          context: .
-          target: source
-          load: true
-          push: false
-          tags: anix-control:ci
-          build-args: |
-            VERSION=ci
-            BUILD_TIME=1970-01-01T00:00:00Z
-            BUILD_CODE=${{ github.run_number }}
-            COMMIT=${{ github.sha }}
-          cache-from: type=gha,scope=docker-smoke
-          cache-to: type=gha,scope=docker-smoke,mode=max
+          name: smoke-images
+          path: ${{ runner.temp }}/smoke-images
 
-      - name: Build the identity-platform module image
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: Dockerfile.module
-          load: true
-          push: false
-          tags: anix-module-identity-platform:ci
-          build-args: |
-            PACKAGE_ID=identity-platform
-            PACKAGE_VERSION=4.0.0
-          cache-from: type=gha,scope=module-image
-          cache-to: type=gha,scope=module-image,mode=max
+      - name: Load the Control and identity-platform module images
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker load -i "${RUNNER_TEMP}/smoke-images/anix-control.tar"
+          docker load -i "${RUNNER_TEMP}/smoke-images/anix-module-identity-platform.tar"
+          docker image inspect anix-control:ci anix-module-identity-platform:ci >/dev/null
 
       - name: Run the image as a container deployment would
         shell: bash
@@ -674,7 +712,7 @@ jobs:
   kubernetes-smoke:
     name: Kubernetes Smoke
     runs-on: ubuntu-latest
-    needs: [changes, helm-chart, docker-smoke]
+    needs: [changes, helm-chart, build-images]
     if: ${{ needs.changes.outputs.modules == 'true' }}
     steps:
       - name: Checkout code
@@ -690,34 +728,19 @@ jobs:
         with:
           cluster_name: anix-control
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v4
-
-      - name: Build Docker image
-        uses: docker/build-push-action@v7
+      - name: Download the smoke image archives
+        uses: actions/download-artifact@v8
         with:
-          context: .
-          target: source
-          load: true
-          push: false
-          tags: anix-control:ci
-          build-args: |
-            VERSION=ci
-            COMMIT=${{ github.sha }}
-          cache-from: type=gha,scope=docker-smoke
+          name: smoke-images
+          path: ${{ runner.temp }}/smoke-images
 
-      - name: Build the identity-platform module image
-        uses: docker/build-push-action@v7
-        with:
-          context: .
-          file: Dockerfile.module
-          load: true
-          push: false
-          tags: anix-module-identity-platform:ci
-          build-args: |
-            PACKAGE_ID=identity-platform
-            PACKAGE_VERSION=4.0.0
-          cache-from: type=gha,scope=module-image
+      - name: Load the Control and identity-platform module images
+        shell: bash
+        run: |
+          set -euo pipefail
+          docker load -i "${RUNNER_TEMP}/smoke-images/anix-control.tar"
+          docker load -i "${RUNNER_TEMP}/smoke-images/anix-module-identity-platform.tar"
+          docker image inspect anix-control:ci anix-module-identity-platform:ci >/dev/null
 
       - name: Setup Go for the package builder
         uses: actions/setup-go@v6
@@ -729,7 +752,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          kind load docker-image anix-control:ci --name anix-control
+          kind load image-archive "${RUNNER_TEMP}/smoke-images/anix-control.tar" --name anix-control
           kubectl create namespace anix
           kubectl -n anix apply -f - <<'YAML'
           apiVersion: apps/v1
@@ -837,14 +860,31 @@ jobs:
           go install github.com/swaggo/swag/cmd/swag@v1.16.6
           $(go env GOPATH)/bin/swag init -g cmd/server/main.go -o docs --parseInternal --exclude control-center,packages
 
-      - name: Run go vet
-        run: go vet ./...
+      # "Go Quality Gates" vets the whole tree as committed; this vets the
+      # regenerated Swagger package.
+      - name: Run go vet on the generated Swagger docs
+        run: go vet ./docs
 
+      # This job is the single full Go test run. The coverage report covers
+      # ./internal/... without the integration and e2e packages; the next
+      # step runs every other package of the root module, then the sdk and
+      # identity modules.
       - name: Run tests with coverage
         shell: bash
         run: |
-          mapfile -t packages < <(go list ./internal/... | grep -v '^github.com/AnixOps/anix-control/v4/internal/tests/integration' | grep -v '^github.com/AnixOps/anix-control/v4/internal/tests/e2e')
+          go list ./internal/... | grep -v '^github.com/AnixOps/anix-control/v4/internal/tests/integration' | grep -v '^github.com/AnixOps/anix-control/v4/internal/tests/e2e' > coverage-packages.txt
+          mapfile -t packages < coverage-packages.txt
           go test -p=1 -count=1 -v -coverprofile=coverage.out -covermode=atomic "${packages[@]}"
+
+      - name: Run the remaining Go tests (root module, sdk, identity)
+        shell: bash
+        run: |
+          set -euo pipefail
+          mapfile -t packages < <(go list ./... | grep -vxF -f coverage-packages.txt)
+          test "${#packages[@]}" -gt 0
+          go test -p=1 -count=1 "${packages[@]}"
+          go -C sdk test ./... -count=1
+          go -C identity test ./... -count=1
 
       - name: Generate coverage report
         run: |
@@ -1446,7 +1486,7 @@ jobs:
   smoke-test:
     name: Smoke Tests
     runs-on: ubuntu-latest
-    needs: [changes, backend-test, cmd-test]
+    needs: [changes]
     if: ${{ needs.changes.outputs.code == 'true' }}
     steps:
       - name: Checkout code
@@ -1465,7 +1505,7 @@ jobs:
   e2e-test:
     name: E2E Tests
     runs-on: ubuntu-latest
-    needs: [changes, backend-test, cmd-test, smoke-test]
+    needs: [changes]
     if: ${{ needs.changes.outputs.code == 'true' }}
     steps:
       - name: Checkout code
@@ -1785,6 +1825,11 @@ jobs:
             BUILD_TIME=${{ steps.build_meta.outputs.build_time }}
             BUILD_CODE=${{ steps.build_meta.outputs.build_code }}
             COMMIT=${{ steps.build_meta.outputs.commit }}
+          # The runtime-base layers (apt packages for both architectures) come
+          # from the go_dev edge build; a cache written from a tag ref would
+          # only be readable by that same tag, so the release does not export
+          # one.
+          cache-from: type=gha,scope=docker-edge
 
       - name: Install cosign
         uses: sigstore/cosign-installer@v4.1.2
@@ -1818,7 +1863,7 @@ jobs:
   docker-edge:
     name: Publish Edge Docker Image
     runs-on: ubuntu-latest
-    needs: [docker-smoke, backend-test, frontend-build]
+    needs: [docker-smoke, go-quality, go-security, backend-test, frontend-build]
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/go_dev' }}
     permissions:
       contents: read
@@ -1861,7 +1906,9 @@ jobs:
             BUILD_TIME=${{ github.event.head_commit.timestamp }}
             BUILD_CODE=${{ github.run_number }}
             COMMIT=${{ github.sha }}
-          cache-from: type=gha,scope=docker-edge
+          cache-from: |
+            type=gha,scope=docker-edge
+            type=gha,scope=docker-smoke
           cache-to: type=gha,scope=docker-edge,mode=max
 
       - name: Install cosign
@@ -1896,7 +1943,9 @@ jobs:
           build-args: |
             PACKAGE_ID=identity-platform
             PACKAGE_VERSION=${{ steps.identity.outputs.version }}
-          cache-from: type=gha,scope=module-edge
+          cache-from: |
+            type=gha,scope=module-edge
+            type=gha,scope=module-image
           cache-to: type=gha,scope=module-edge,mode=max
 
       - name: Sign the edge module image digest
