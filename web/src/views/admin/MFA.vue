@@ -94,8 +94,10 @@
 import { onMounted, ref } from 'vue'
 import { getMFAConfig, updateMFAConfig } from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { useToast } from '@/ui'
 
 const { t } = useAppI18n()
+const toast = useToast()
 
 const defaultConfig = Object.freeze({
   enabled: false,
@@ -163,9 +165,9 @@ const fetchConfig = async () => {
 const saveConfig = async () => {
   try {
     requirePanelSuccess(await updateMFAConfig(config.value), 'adminMfa.messages.saveFailedShort')
-    window.alert(t('adminMfa.messages.saveSuccess'))
+    toast.success(t('adminMfa.messages.saveSuccess'))
   } catch (error) {
-    window.alert(t('adminMfa.messages.saveFailed', { message: resolveApiError(error, 'adminMfa.messages.saveFailedShort') }))
+    toast.error(t('adminMfa.messages.saveFailed', { message: resolveApiError(error, 'adminMfa.messages.saveFailedShort') }))
   }
 }
 
