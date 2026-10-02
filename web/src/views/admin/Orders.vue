@@ -98,6 +98,7 @@ import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
 import { CircleCheck, CircleX, Eye, Receipt } from '@lucide/vue'
 import { cancelOrder, getOrderList, getOrderStats, markOrderPaid } from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { useListQuery } from '@/composables/useListQuery'
 import UiBadge from '@/ui/UiBadge.vue'
 import UiButton from '@/ui/UiButton.vue'
 import UiDataTable from '@/ui/UiDataTable.vue'
@@ -114,15 +115,17 @@ import { useToast } from '@/ui/composables/useToast'
 const { t } = useAppI18n()
 const format = useFormat()
 
+// The list state (trade_no, email, status, page) lives in the URL query (plan §9).
+const listQuery = useListQuery()
 const orders = ref([])
 const stats = ref({})
-const page = ref(1)
+const page = ref(listQuery.readPage())
 const pageSize = ref(20)
 const total = ref(0)
 const filters = ref({
-  trade_no: '',
-  email: '',
-  status: ''
+  trade_no: listQuery.read('trade_no'),
+  email: listQuery.read('email'),
+  status: listQuery.read('status', { values: ['0', '1', '2', '3'] })
 })
 const showDetailModal = ref(false)
 const toast = useToast()
@@ -196,6 +199,7 @@ const ensureOrderSuccess = (res, fallbackKey) => {
 
 const fetchOrders = async () => {
   listLoading.value = true
+  listQuery.write({ trade_no: filters.value.trade_no.trim(), email: filters.value.email.trim(), status: filters.value.status, page: page.value })
   try {
     const res = ensureOrderSuccess(
       await getOrderList({
