@@ -173,8 +173,10 @@ describe('Admin Invite', () => {
 
     const wrapper = mount(Invite)
     await flushPromises()
+    wrapper.vm.activeTab = 'stats'
+    await flushPromises()
 
-    let metricValues = wrapper.findAll('.stat-card .stat-value').map(node => node.text())
+    let metricValues = wrapper.findAll('.invite-stat__value').map(node => node.text())
     expect(metricValues).toEqual(['12', '¥123.45', '¥67.89', '¥10.11'])
     expect(wrapper.text()).toContain('7')
     expect(wrapper.text()).toContain('3')
@@ -182,7 +184,7 @@ describe('Admin Invite', () => {
     await wrapper.vm.fetchStats()
     await flushPromises()
 
-    metricValues = wrapper.findAll('.stat-card .stat-value').map(node => node.text())
+    metricValues = wrapper.findAll('.invite-stat__value').map(node => node.text())
     expect(metricValues).toEqual(['21', '¥234.56', '¥78.90', '¥11.12'])
     expect(wrapper.text()).toContain('8')
     expect(wrapper.text()).toContain('4')
@@ -190,7 +192,7 @@ describe('Admin Invite', () => {
     await wrapper.vm.fetchStats()
     await flushPromises()
 
-    metricValues = wrapper.findAll('.stat-card .stat-value').map(node => node.text())
+    metricValues = wrapper.findAll('.invite-stat__value').map(node => node.text())
     expect(metricValues).toEqual(['31', '¥345.67', '¥89.01', '¥12.13'])
     expect(wrapper.text()).toContain('9')
     expect(wrapper.text()).toContain('5')
@@ -211,10 +213,15 @@ describe('Admin Invite', () => {
       adminApi.processWithdrawal.mockRejectedValueOnce(new Error('insufficient balance')).mockResolvedValueOnce({ code: 0 })
       render(Harness)
       await waitFor(() => expect(adminApi.getWithdrawals).toHaveBeenCalled())
-      await user.click(screen.getByRole('button', { name: 'Withdrawals' }))
-      const approve = await screen.findByRole('button', { name: 'Approve' })
+      // Withdrawals are the first tab; approve and reject are in the row menu.
+      expect(screen.getByRole('tab', { name: 'Withdrawals' }).getAttribute('aria-selected')).toBe('true')
+      await screen.findByText('#5')
+      const approve = async () => {
+        await user.click(screen.getByRole('button', { name: 'Actions for withdrawal #5' }))
+        await user.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: 'Approve' }))
+      }
 
-      await user.click(approve)
+      await approve()
       let dialog = await screen.findByRole('alertdialog', { name: 'Approve withdrawal #5?' })
       expect(dialog.textContent).toContain('¥12.50')
       expect(dialog.textContent).toContain('pa***om')
@@ -222,7 +229,7 @@ describe('Admin Invite', () => {
       await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
       expect(adminApi.processWithdrawal).not.toHaveBeenCalled()
 
-      await user.click(approve)
+      await approve()
       dialog = await screen.findByRole('alertdialog')
       await user.click(within(dialog).getByRole('button', { name: 'Approve' }))
       expect((await within(dialog).findByRole('alert')).textContent).toContain('insufficient balance')
@@ -248,6 +255,28 @@ describe('Admin Invite', () => {
       await wrapper.vm.saveConfig()
       expect(toastMessages('error')).toEqual([expect.stringContaining('offline')])
       wrapper.unmount()
+    })
+      it('filters withdrawals by status on the server and retries a failed load', async () => {
+      const user = userEvent.setup()
+      adminApi.getWithdrawals.mockRejectedValueOnce(new Error('bad gateway')).mockResolvedValue({ data: { list: [pending] } })
+      render(Harness)
+      const alert = await screen.findByRole('alert')
+      expect(alert.textContent).toContain('Failed to load withdrawal requests')
+      await user.click(within(alert).getByRole('button', { name: 'Try again' }))
+      await screen.findByText('#5')
+      await user.click(within(screen.getByRole('group', { name: 'Filter by status' })).getByRole('button', { name: 'Approved' }))
+      await waitFor(() => expect(adminApi.getWithdrawals).toHaveBeenLastCalledWith({ status: 'approved' }))
+    })
+
+    it('saves the rules from the Rules tab', async () => {
+      const user = userEvent.setup()
+      adminApi.getInviteConfig.mockResolvedValue({ data: { enabled: true, withdraw_methods: ['alipay'] } })
+      adminApi.updateInviteConfig.mockResolvedValue({})
+      render(Harness)
+      await user.click(screen.getByRole('tab', { name: 'Rules' }))
+      await user.click(await screen.findByRole('checkbox', { name: 'Bank transfer' }))
+      await user.click(screen.getByRole('button', { name: 'Save' }))
+      await waitFor(() => expect(adminApi.updateInviteConfig).toHaveBeenCalledWith(expect.objectContaining({ withdraw_methods: ['alipay', 'bank'], commission_rate_ratio: 0.1 })))
     })
   })
 })

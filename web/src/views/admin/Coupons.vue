@@ -1,63 +1,46 @@
 <template>
-  <div class="page-shell coupons-page">
-    <div class="page-toolbar">
-      <div>
-        <h1>{{ t('adminCoupons.title') }}</h1>
-        <p>{{ t('adminCoupons.subtitle') }}</p>
-      </div>
-      <button class="btn btn-primary" @click="showCreate = true">
-        {{ t('adminCoupons.actions.createCoupon') }}
-      </button>
-    </div>
+  <div class="list-page">
+    <UiPageHeader :title="t('adminCoupons.title')" :description="t('adminCoupons.subtitle')">
+      <template #actions>
+        <UiButton variant="primary" :icon="Plus" @click="showCreate = true">{{ t('adminCoupons.actions.createCoupon') }}</UiButton>
+      </template>
+    </UiPageHeader>
 
-    <section class="section-panel data-panel">
-      <div class="table-wrap">
-        <table class="data-table">
-        <thead>
-          <tr>
-            <th>{{ t('adminCoupons.table.id') }}</th>
-            <th>{{ t('adminCoupons.table.code') }}</th>
-            <th>{{ t('adminCoupons.table.name') }}</th>
-            <th>{{ t('adminCoupons.table.type') }}</th>
-            <th>{{ t('adminCoupons.table.value') }}</th>
-            <th>{{ t('adminCoupons.table.usageCount') }}</th>
-            <th>{{ t('adminCoupons.table.validity') }}</th>
-            <th>{{ t('adminCoupons.table.actions') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="coupon in coupons" :key="coupon.id">
-            <td>{{ coupon.id }}</td>
-            <td><code class="coupon-code">{{ coupon.code }}</code></td>
-            <td>{{ coupon.name }}</td>
-            <td>
-              <span :class="['status-badge', coupon.type === 1 ? 'type-percent' : 'type-fixed']">
-                {{ coupon.type === 1 ? t('adminCoupons.types.discount') : t('adminCoupons.types.fixed') }}
-              </span>
-            </td>
-            <td>{{ formatCouponValue(coupon) }}</td>
-            <td>{{ coupon.use_count }} / {{ coupon.limit_use === -1 ? t('adminCoupons.table.unlimited') : coupon.limit_use }}</td>
-            <td class="date-range">{{ formatCouponDate(coupon.started_at) }} ~ {{ formatCouponDate(coupon.ended_at) }}</td>
-            <td>
-              <div class="action-buttons">
-                <button
-                  class="btn btn-sm btn-danger"
-                  :title="t('common.actions.delete')"
-                  :aria-label="t('common.actions.delete')"
-                  @click="removeCoupon(coupon)"
-                >
-                  {{ t('common.actions.delete') }}
-                </button>
-              </div>
-            </td>
-          </tr>
-          <tr v-if="coupons.length === 0">
-            <td colspan="8" class="empty-row">{{ t('adminCoupons.empty.noData') }}</td>
-          </tr>
-        </tbody>
-        </table>
-      </div>
-    </section>
+    <UiDataTable
+      :columns="columns"
+      :rows="visibleCoupons"
+      :label="t('adminCoupons.table.label')"
+      :row-label="coupon => coupon.code"
+      storage-key="admin.coupons"
+      :page-size="20"
+      :loading="loading"
+      :error="loadError"
+      :error-title="t('adminCoupons.messages.fetchFailed')"
+      :filtered="Boolean(search || typeFilter)"
+      :empty-icon="TicketPercent"
+      :empty-title="t('adminCoupons.empty.title')"
+      :empty-description="t('adminCoupons.empty.description')"
+      :row-actions="couponActions"
+      @retry="load"
+      @clear-filters="clearFilters"
+    >
+      <template #toolbar>
+        <UiSearchField v-model="search" class="list-page__search" :label="t('adminCoupons.filters.search')" />
+        <UiFilterChips v-model="typeFilter" :label="t('adminCoupons.filters.type')" :options="typeChips" />
+      </template>
+      <template #empty-actions>
+        <UiButton variant="primary" :icon="Plus" @click="showCreate = true">{{ t('adminCoupons.actions.createCoupon') }}</UiButton>
+      </template>
+      <template #cell-code="{ value }">
+        <code class="coupon-code">{{ value }}</code>
+      </template>
+      <template #cell-type="{ row }">
+        <UiBadge :tone="row.type === 1 ? 'success' : 'info'" :dot="false" :label="row.type === 1 ? t('adminCoupons.types.discount') : t('adminCoupons.types.fixed')" />
+      </template>
+      <template #cell-usage="{ row }">
+        <UiUsageBar :value="Number(row.use_count || 0)" :max="row.limit_use === -1 ? 0 : Number(row.limit_use || 0)" :text="usageText(row)" :warn-at="80" :danger-at="100" />
+      </template>
+    </UiDataTable>
 
     <UiDialog
       :open="showCreate"
@@ -65,83 +48,108 @@
       :dismissible="!creating"
       @update:open="value => { if (!value) closeModal() }"
     >
-      <div class="dialog-form">
-        <div class="form-row">
-          <div class="form-group">
-            <label for="coupon-code">{{ t('adminCoupons.fields.code') }} <span class="required">*</span></label>
-            <input
-              id="coupon-code"
-              v-model="form.code"
-              type="text"
-              data-test="coupon-code"
-              :placeholder="t('adminCoupons.placeholders.code')"
-              :aria-invalid="fieldErrors.code ? 'true' : undefined"
-              :aria-describedby="fieldErrors.code ? 'coupon-code-error' : undefined"
-            />
-            <p v-if="fieldErrors.code" id="coupon-code-error" class="form-error" role="alert">{{ fieldErrors.code }}</p>
-          </div>
-          <div class="form-group">
-            <label for="coupon-name">{{ t('adminCoupons.fields.name') }} <span class="required">*</span></label>
-            <input
-              id="coupon-name"
-              v-model="form.name"
-              type="text"
-              data-test="coupon-name"
-              :placeholder="t('adminCoupons.placeholders.name')"
-              :aria-invalid="fieldErrors.name ? 'true' : undefined"
-              :aria-describedby="fieldErrors.name ? 'coupon-name-error' : undefined"
-            />
-            <p v-if="fieldErrors.name" id="coupon-name-error" class="form-error" role="alert">{{ fieldErrors.name }}</p>
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="coupon-type">{{ t('adminCoupons.fields.type') }}</label>
-            <select id="coupon-type" v-model="form.type">
-              <option :value="1">{{ t('adminCoupons.types.discountPercent') }}</option>
-              <option :value="2">{{ t('adminCoupons.types.fixedCents') }}</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label for="coupon-value">{{ form.type === 1 ? t('adminCoupons.fields.discountValue') : t('adminCoupons.fields.fixedValue') }}</label>
-            <input id="coupon-value" v-model.number="form.value" type="number" min="0" />
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="coupon-start">{{ t('adminCoupons.fields.startTime') }}</label>
-            <input id="coupon-start" v-model="form.started_at" type="datetime-local" />
-          </div>
-          <div class="form-group">
-            <label for="coupon-end">{{ t('adminCoupons.fields.endTime') }}</label>
-            <input id="coupon-end" v-model="form.ended_at" type="datetime-local" />
-          </div>
-        </div>
-        <div class="form-group">
-          <label for="coupon-limit">{{ t('adminCoupons.fields.limitUse') }}</label>
-          <input id="coupon-limit" v-model.number="form.limit_use" type="number" />
-        </div>
-        <p v-if="createError" class="form-error" role="alert" data-test="coupon-create-error">{{ createError }}</p>
+      <div class="form-grid">
+        <UiTextField
+          v-model="form.code"
+          required
+          :label="t('adminCoupons.fields.code')"
+          :placeholder="t('adminCoupons.placeholders.code')"
+          :help="t('adminCoupons.help.code')"
+          :error="fieldErrors.code"
+          data-test="coupon-code"
+        />
+        <UiTextField
+          v-model="form.name"
+          required
+          :label="t('adminCoupons.fields.name')"
+          :placeholder="t('adminCoupons.placeholders.name')"
+          :error="fieldErrors.name"
+          data-test="coupon-name"
+        />
+        <UiSelect v-model="form.type" :label="t('adminCoupons.fields.type')" :options="typeOptions" />
+        <UiTextField
+          v-model.number="form.value"
+          type="number"
+          min="0"
+          :label="form.type === 1 ? t('adminCoupons.fields.discountValue') : t('adminCoupons.fields.fixedValue')"
+          :suffix="form.type === 1 ? '%' : t('adminCoupons.units.cents')"
+          :help="form.type === 1 ? '' : formatCouponValue({ type: 2, value: Number(form.value || 0) })"
+        />
+        <UiTextField v-model="form.started_at" type="datetime-local" :label="t('adminCoupons.fields.startTime')" :help="t('adminCoupons.help.startTime')" />
+        <UiTextField v-model="form.ended_at" type="datetime-local" :label="t('adminCoupons.fields.endTime')" :help="t('adminCoupons.help.endTime')" />
+        <UiTextField v-model.number="form.limit_use" class="form-grid__full" type="number" :label="t('adminCoupons.fields.limitUse')" :help="t('adminCoupons.help.limitUse')" />
       </div>
+      <p v-if="createError" class="form-error" role="alert" data-test="coupon-create-error">{{ createError }}</p>
       <template #footer="{ close }">
         <UiButton :disabled="creating" @click="close">{{ t('common.actions.cancel') }}</UiButton>
-        <UiButton variant="primary" data-test="coupon-create" :loading="creating" @click="createCoupon">{{ t('common.actions.create') }}</UiButton>
+        <UiButton variant="primary" data-test="coupon-create" :loading="creating" @click="createCoupon">{{ t('adminCoupons.actions.create') }}</UiButton>
       </template>
     </UiDialog>
   </div>
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { Plus, TicketPercent, Trash2 } from '@lucide/vue'
 import adminApi from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { UiButton, UiDialog, useConfirm, useToast } from '@/ui'
+import UiBadge from '@/ui/UiBadge.vue'
+import UiButton from '@/ui/UiButton.vue'
+import UiDataTable from '@/ui/UiDataTable.vue'
+import UiDialog from '@/ui/UiDialog.vue'
+import UiFilterChips from '@/ui/UiFilterChips.vue'
+import UiPageHeader from '@/ui/UiPageHeader.vue'
+import UiSearchField from '@/ui/UiSearchField.vue'
+import UiSelect from '@/ui/UiSelect.vue'
+import UiTextField from '@/ui/UiTextField.vue'
+import UiUsageBar from '@/ui/UiUsageBar.vue'
+import { useConfirm } from '@/ui/composables/useConfirm'
+import { useFormat } from '@/ui/composables/useFormat'
+import { useToast } from '@/ui/composables/useToast'
 
-const { t, formatDate } = useAppI18n()
+const { t } = useAppI18n()
+const format = useFormat()
 const toast = useToast()
 const confirm = useConfirm()
 
 const coupons = ref([])
+const loading = ref(false)
+const loadError = ref(null)
+// Every coupon is loaded at once: search and the type chips filter in the page.
+const search = ref('')
+const typeFilter = ref('')
+const visibleCoupons = computed(() => {
+  const query = search.value.trim().toLowerCase()
+  return coupons.value.filter(coupon => (
+    (!typeFilter.value || String(coupon.type) === typeFilter.value) &&
+    (!query || String(coupon.code || '').toLowerCase().includes(query) || String(coupon.name || '').toLowerCase().includes(query))
+  ))
+})
+const clearFilters = () => {
+  search.value = ''
+  typeFilter.value = ''
+}
+const typeChips = computed(() => [
+  { value: '1', label: t('adminCoupons.types.discount') },
+  { value: '2', label: t('adminCoupons.types.fixed') }
+])
+const typeOptions = computed(() => [
+  { value: 1, label: t('adminCoupons.types.discountPercent') },
+  { value: 2, label: t('adminCoupons.types.fixedCents') }
+])
+const usageText = coupon => `${coupon.use_count ?? 0} / ${coupon.limit_use === -1 ? t('adminCoupons.table.unlimited') : (coupon.limit_use ?? 0)}`
+const columns = computed(() => [
+  { key: 'code', label: t('adminCoupons.table.code'), primary: true, sortable: true },
+  { key: 'name', label: t('adminCoupons.table.name'), secondary: true, sortable: true },
+  { key: 'type', label: t('adminCoupons.table.type'), sortable: true },
+  { key: 'value', label: t('adminCoupons.table.value'), numeric: true, sortable: true, value: coupon => formatCouponValue(coupon), sortValue: coupon => Number(coupon.value || 0) },
+  { key: 'usage', label: t('adminCoupons.table.usageCount'), sortable: true, sortValue: coupon => Number(coupon.use_count || 0) },
+  { key: 'validity', label: t('adminCoupons.table.validity'), nowrap: true, value: coupon => `${formatCouponDate(coupon.started_at)} – ${formatCouponDate(coupon.ended_at)}`, sortable: true, sortValue: coupon => Number(coupon.ended_at || 0) },
+  { key: 'id', label: t('adminCoupons.table.id'), numeric: true, sortable: true, hidden: true }
+])
+const couponActions = coupon => [
+  { key: 'delete', label: t('adminCoupons.confirm.deleteAction'), icon: Trash2, danger: true, onSelect: () => removeCoupon(coupon) }
+]
 const showCreate = ref(false)
 const creating = ref(false)
 const createError = ref('')
@@ -170,11 +178,15 @@ const resetForm = () => {
 }
 
 const load = async () => {
+  loading.value = true
   try {
     const res = await adminApi.getCoupons()
     coupons.value = res.data || []
+    loadError.value = null
   } catch (error) {
-    console.error(t('adminCoupons.messages.fetchFailed'), error)
+    loadError.value = error
+  } finally {
+    loading.value = false
   }
 }
 
@@ -182,17 +194,11 @@ onMounted(() => {
   load()
 })
 
-const formatCouponDate = (ts) => {
-  if (!ts) return '-'
-  return formatDate(ts)
-}
+const formatCouponDate = ts => format.date(ts)
 
 const formatCouponValue = (coupon) => {
   if (!coupon) return ''
-  const currencySymbol = t('adminCoupons.currencySymbol')
-  return coupon.type === 1
-    ? `${coupon.value}%`
-    : `${currencySymbol}${(coupon.value / 100).toFixed(2)}`
+  return coupon.type === 1 ? `${coupon.value}%` : format.money(Number(coupon.value || 0))
 }
 
 const closeModal = () => {
@@ -255,53 +261,9 @@ const removeCoupon = async (coupon) => {
 </script>
 
 <style scoped>
-.data-panel {
-  padding: 0;
-}
-
 .coupon-code {
-  display: inline-flex;
-  background: var(--primary-soft);
-  color: var(--primary-color);
-  padding: 4px 8px;
-  border-radius: var(--radius-sm);
-  font-family: 'Consolas', 'Monaco', monospace;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.type-percent {
-  background: rgba(22, 163, 74, 0.08);
-  color: var(--success-color);
-}
-
-.type-fixed {
-  background: var(--primary-soft);
-  color: var(--primary-color);
-}
-
-.date-range {
-  font-size: 13px;
-  color: var(--text-secondary);
-}
-
-.action-buttons {
-  display: flex;
-  gap: 6px;
-  flex-wrap: wrap;
-}
-
-.empty-row {
-  padding: 40px !important;
-}
-
-.dialog-form > .form-group:last-child {
-  margin-bottom: 0;
-}
-
-.form-error {
-  margin: var(--space-1) 0 0;
-  color: var(--danger);
+  font-family: var(--font-mono);
   font-size: var(--type-callout-size);
+  font-weight: var(--weight-semibold);
 }
 </style>

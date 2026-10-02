@@ -18,18 +18,35 @@ vi.mock('@/api/admin', () => ({
   ...adminApi
 }))
 
+const Harness = { components: { Tickets, UiHost }, template: '<div><Tickets /><UiHost /></div>' }
+const TICKETS = [
+  { id: 9, user_id: 3, subject: 'Slow node', level: 1, status: 0, created_at: 1783526400, updated_at: 1783526400 },
+  { id: 10, user_id: 4, subject: 'Billing question', level: 0, status: 1, created_at: 1783526500, updated_at: 1783526500 },
+  { id: 11, user_id: 5, subject: 'Old issue', level: 2, status: 2, created_at: 1783526000, updated_at: 1783526000 }
+]
+
+async function renderPage(list = TICKETS) {
+  adminApi.getTickets.mockResolvedValue({ code: 0, data: list })
+  render(Harness)
+  await screen.findByText('Slow node')
+}
+
+function queue() {
+  return screen.getByRole('navigation', { name: 'Ticket queue' })
+}
+
 describe('Admin Tickets', () => {
   beforeEach(async () => {
     vi.resetAllMocks()
-    vi.spyOn(console, 'error').mockImplementation(() => {})
     await setLocale('en')
   })
 
   afterEach(() => {
     vi.restoreAllMocks()
+    vi.unstubAllGlobals()
   })
 
-  it('renders tickets from legacy and panel envelope payloads', async () => {
+  it('lists tickets from legacy and panel envelope payloads with status counts', async () => {
     adminApi.getTickets
       .mockResolvedValueOnce({
         data: [
@@ -40,79 +57,108 @@ describe('Admin Tickets', () => {
       .mockResolvedValueOnce({
         code: 0,
         msg: '操作成功',
-        data: [
-          { id: 3, user_id: 12, subject: 'Panel answered', level: 0, status: 1, created_at: 1783526600 }
-        ],
+        data: [{ id: 3, user_id: 12, subject: 'Panel answered', level: 0, status: 1, created_at: 1783526600 }],
         ts: 1783526400000
       })
 
     const wrapper = mount(Tickets)
     await flushPromises()
-
-    let metricValues = wrapper.findAll('.metric-card strong').map(node => node.text())
-    expect(metricValues).toEqual(['1', '0', '1'])
-    expect(wrapper.text()).toContain('Legacy open')
-    expect(wrapper.text()).toContain('Legacy closed')
+    const counts = () => wrapper.findAll('.ui-filter-chips__count').map(node => node.text())
+    expect(counts()).toEqual(['1', '0', '1'])
+    // Open tickets come first.
+    expect(wrapper.findAll('.ticket-list__subject').map(node => node.text())).toEqual(['Legacy open', 'Legacy closed'])
 
     await wrapper.vm.load()
     await flushPromises()
-
-    metricValues = wrapper.findAll('.metric-card strong').map(node => node.text())
-    expect(metricValues).toEqual(['0', '1', '0'])
+    expect(counts()).toEqual(['0', '1', '0'])
     expect(wrapper.text()).toContain('Panel answered')
     expect(wrapper.text()).not.toContain('Legacy open')
-
     wrapper.unmount()
   })
 
-  describe('dialogs and feedback', () => {
-    const Harness = { components: { Tickets, UiHost }, template: '<div><Tickets /><UiHost /></div>' }
+  it('shows the empty state, and an error with retry', async () => {
+    const user = userEvent.setup()
+    adminApi.getTickets.mockRejectedValueOnce(new Error('bad gateway')).mockResolvedValueOnce({ code: 0, data: [] })
+    render(Harness)
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('Tickets didn’t load')
+    expect(alert.textContent).toContain('bad gateway')
+    await user.click(within(alert).getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByRole('heading', { name: 'No tickets' })).toBeTruthy()
+  })
 
-    async function renderPage() {
-      adminApi.getTickets.mockResolvedValue({ data: [{ id: 9, user_id: 3, subject: 'Slow node', level: 1, status: 0, created_at: 1783526400 }] })
-      render(Harness)
-      await screen.findByText('Slow node')
-    }
+  it('filters the queue by status and by search', async () => {
+    const user = userEvent.setup()
+    await renderPage()
+    await user.click(within(screen.getByRole('group', { name: 'Filter by status' })).getByRole('button', { name: 'Answered 1' }))
+    expect(within(queue()).getAllByRole('button').map(button => button.dataset.ticketId)).toEqual(['10'])
 
-    it('replies in a side sheet with inline validation and errors', async () => {
-      const user = userEvent.setup()
-      adminApi.replyTicket.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ code: 0 })
-      await renderPage()
-      const opener = screen.getByRole('button', { name: 'Reply' })
-      await user.click(opener)
-      const sheet = await screen.findByRole('dialog', { name: 'Reply to Ticket #9' })
-      await user.click(within(sheet).getByRole('button', { name: 'Send Reply' }))
-      expect(within(sheet).getByRole('alert').textContent).toBe('Please enter a reply')
-      await user.keyboard('{Escape}')
-      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-      await waitFor(() => expect(document.activeElement).toBe(opener))
+    await user.click(screen.getByRole('button', { name: 'Answered 1' }))
+    await user.type(screen.getByRole('searchbox', { name: 'Search subject, #number or user ID' }), '#11')
+    expect(within(queue()).getAllByRole('button').map(button => button.dataset.ticketId)).toEqual(['11'])
 
-      await user.click(opener)
-      const again = await screen.findByRole('dialog')
-      await user.type(within(again).getByLabelText('Reply content'), 'Fixed')
-      await user.click(within(again).getByRole('button', { name: 'Send Reply' }))
-      expect((await within(again).findByRole('alert')).textContent).toBe('offline')
-      await user.click(within(again).getByRole('button', { name: 'Send Reply' }))
-      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
-      expect(adminApi.replyTicket).toHaveBeenLastCalledWith({ ticket_id: 9, message: 'Fixed' })
-      expect(toastMessages('success')).toEqual(['Reply sent successfully'])
-    })
+    await user.clear(screen.getByRole('searchbox'))
+    await user.type(screen.getByRole('searchbox'), 'nothing like this')
+    expect(within(queue()).getByRole('heading', { name: 'No tickets match' })).toBeTruthy()
+    await user.click(within(queue()).getByRole('button', { name: 'Clear filters' }))
+    expect(within(queue()).getAllByRole('button')).toHaveLength(3)
+  })
 
-    it('asks before closing a ticket', async () => {
-      const user = userEvent.setup()
-      adminApi.closeTicket.mockResolvedValue({ code: 0 })
-      await renderPage()
-      await user.click(screen.getByRole('button', { name: 'Close' }))
-      let confirm = await screen.findByRole('alertdialog', { name: 'Close ticket #9 “Slow node”?' })
-      await user.keyboard('{Escape}')
-      await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
-      expect(adminApi.closeTicket).not.toHaveBeenCalled()
+  it('replies to the selected ticket with inline validation, quick replies and errors', async () => {
+    const user = userEvent.setup()
+    adminApi.replyTicket.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ code: 0 })
+    await renderPage()
+    expect(screen.getByText('Select a ticket to reply to it.')).toBeTruthy()
+    await user.click(within(queue()).getByRole('button', { name: /Slow node/ }))
+    const panel = screen.getByRole('region', { name: 'Slow node' })
+    expect(within(queue()).getByRole('button', { name: /Slow node/ }).getAttribute('aria-current')).toBe('true')
 
-      await user.click(screen.getByRole('button', { name: 'Close' }))
-      confirm = await screen.findByRole('alertdialog')
-      await user.click(within(confirm).getByRole('button', { name: 'Close ticket' }))
-      await waitFor(() => expect(adminApi.closeTicket).toHaveBeenCalledWith(9))
-      await waitFor(() => expect(toastMessages('success')).toEqual(['Ticket #9 closed']))
-    })
+    await user.click(within(panel).getByRole('button', { name: 'Send reply' }))
+    expect(within(panel).getByRole('alert').textContent).toBe('Write a reply first')
+
+    await user.click(within(panel).getByRole('button', { name: 'Ask for details' }))
+    expect(within(panel).getByLabelText('Reply').value).toContain('which client and node')
+    await user.click(within(panel).getByRole('button', { name: 'Send reply' }))
+    expect((await within(panel).findByRole('alert')).textContent).toBe('offline')
+
+    await user.click(within(panel).getByRole('button', { name: 'Send reply' }))
+    await waitFor(() => expect(toastMessages('success')).toEqual(['Reply sent to ticket #9']))
+    expect(adminApi.replyTicket).toHaveBeenLastCalledWith({ ticket_id: 9, message: expect.stringContaining('which client and node') })
+    expect(within(panel).getByLabelText('Reply').value).toBe('')
+  })
+
+  it('asks before closing a ticket; a closed ticket takes no replies', async () => {
+    const user = userEvent.setup()
+    adminApi.closeTicket.mockResolvedValue({ code: 0 })
+    await renderPage()
+    await user.click(within(queue()).getByRole('button', { name: /Slow node/ }))
+    await user.click(screen.getByRole('button', { name: 'Close ticket…' }))
+    let confirm = await screen.findByRole('alertdialog', { name: 'Close ticket #9 “Slow node”?' })
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+    expect(adminApi.closeTicket).not.toHaveBeenCalled()
+
+    await user.click(screen.getByRole('button', { name: 'Close ticket…' }))
+    confirm = await screen.findByRole('alertdialog')
+    await user.click(within(confirm).getByRole('button', { name: 'Close ticket' }))
+    await waitFor(() => expect(adminApi.closeTicket).toHaveBeenCalledWith(9))
+    await waitFor(() => expect(toastMessages('success')).toEqual(['Ticket #9 closed']))
+
+    await user.click(within(queue()).getByRole('button', { name: /Old issue/ }))
+    expect(screen.getByText('This ticket is closed and takes no more replies.')).toBeTruthy()
+    expect(screen.queryByRole('button', { name: 'Send reply' })).toBeNull()
+  })
+
+  it('shows the queue, then the ticket full width with a way back on phones', async () => {
+    const user = userEvent.setup()
+    vi.stubGlobal('matchMedia', query => ({ matches: query.includes('833.98'), media: query, addEventListener() {}, removeEventListener() {} }))
+    await renderPage()
+    expect(screen.queryByText('Select a ticket to reply to it.')).toBeNull()
+    await user.click(within(queue()).getByRole('button', { name: /Slow node/ }))
+    expect(screen.queryByRole('navigation', { name: 'Ticket queue' })).toBeNull()
+    const title = screen.getByRole('heading', { level: 1, name: 'Slow node' })
+    await waitFor(() => expect(document.activeElement).toBe(title))
+    await user.click(screen.getByRole('button', { name: 'All tickets' }))
+    expect(queue()).toBeTruthy()
   })
 })

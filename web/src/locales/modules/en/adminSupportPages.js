@@ -1,20 +1,24 @@
 export default {
   adminCoupons: {
     title: 'Coupons',
-    subtitle: 'Create and manage discount coupons for orders.',
-    currencySymbol: '¥',
+    subtitle: 'Discount codes users enter at checkout.',
     actions: {
-      createCoupon: 'Create Coupon'
+      createCoupon: 'New coupon',
+      create: 'Create coupon'
+    },
+    filters: {
+      search: 'Search code or name',
+      type: 'Filter by type'
     },
     table: {
+      label: 'Coupons',
       id: 'ID',
       code: 'Code',
       name: 'Name',
       type: 'Type',
       value: 'Value',
       usageCount: 'Usage',
-      validity: 'Validity',
-      actions: 'Actions',
+      validity: 'Valid',
       unlimited: 'Unlimited'
     },
     types: {
@@ -34,14 +38,24 @@ export default {
       limitUse: 'Usage limit'
     },
     modal: {
-      title: 'Create Coupon'
+      title: 'New coupon'
+    },
+    help: {
+      code: 'Saved in capitals.',
+      startTime: 'Empty: from now.',
+      endTime: 'Empty: 30 days from now.',
+      limitUse: '-1 for unlimited.'
+    },
+    units: {
+      cents: 'cents'
     },
     placeholders: {
       code: 'SUMMER2026',
       name: 'Summer sale'
     },
     empty: {
-      noData: 'No coupons'
+      title: 'No coupons yet',
+      description: 'Create a code to give users a discount on their next order.'
     },
     confirm: {
       deleteTitle: 'Delete coupon {code}?',
@@ -49,7 +63,7 @@ export default {
       deleteAction: 'Delete coupon'
     },
     messages: {
-      fetchFailed: 'Failed to load coupons',
+      fetchFailed: 'Coupons didn’t load',
       codeRequired: 'Enter a coupon code',
       nameRequired: 'Enter a coupon name',
       createSuccess: 'Coupon created successfully',
@@ -59,8 +73,8 @@ export default {
     }
   },
   adminOrders: {
-    title: 'Order Management',
-    subtitle: 'Review orders, handle pending payments, and cancel invalid records.',
+    title: 'Orders',
+    subtitle: 'Every purchase, renewal and upgrade. Select an order to see its payment.',
     stats: {
       totalOrders: 'Total orders',
       pendingOrders: 'Pending orders',
@@ -70,7 +84,7 @@ export default {
     filters: {
       tradeNo: 'Order number',
       email: 'User email',
-      allStatus: 'All statuses'
+      label: 'Filter by status'
     },
     status: {
       pending: 'Pending',
@@ -80,28 +94,27 @@ export default {
       unknown: 'Unknown'
     },
     actions: {
-      search: 'Search',
-      markPaid: 'Mark paid',
-      cancelOrder: 'Cancel'
+      markPaid: 'Mark paid'
     },
     table: {
+      label: 'Orders',
       tradeNo: 'Order #',
       user: 'User',
       plan: 'Plan',
       period: 'Billing',
       amount: 'Amount',
       status: 'Status',
-      createdAt: 'Created at',
-      actions: 'Actions'
+      createdAt: 'Created at'
     },
     detailModal: {
       title: 'Order details',
+      orderSection: 'Order',
+      paymentSection: 'Payment',
       tradeNo: 'Order number',
       userEmail: 'User email',
       plan: 'Plan',
       period: 'Billing period',
       amount: 'Amount',
-      status: 'Status',
       type: 'Order type',
       createdAt: 'Created at',
       paidAt: 'Paid at',
@@ -115,12 +128,8 @@ export default {
       unknown: 'Unknown'
     },
     empty: {
-      noData: 'No orders'
-    },
-    pagination: {
-      prev: 'Previous',
-      next: 'Next',
-      info: 'Page {page} of {totalPages}'
+      title: 'No orders yet',
+      description: 'Orders appear here when users buy or renew a plan.'
     },
     confirm: {
       markPaidTitle: 'Mark order {tradeNo} as paid?',
@@ -131,7 +140,7 @@ export default {
       keepOrder: 'Keep order'
     },
     messages: {
-      fetchOrdersFailed: 'Failed to load orders',
+      fetchOrdersFailed: 'Orders didn’t load',
       fetchStatsFailed: 'Failed to load order stats',
       markPaidSuccess: 'Order marked as paid',
       markPaidFailedShort: 'Mark paid failed',
@@ -142,24 +151,32 @@ export default {
   adminInviteCodes: {
     title: 'Invite codes',
     subtitle: 'Generate, copy and revoke the codes that admit a registration.',
-    rewardsLink: 'Invite rewards',
+    rewardsLink: 'Referrals',
     never: 'Never',
-    empty: 'No invite codes',
+    empty: {
+      title: 'No invite codes',
+      description: 'Generate a batch and hand the codes to the people you want to sign up.'
+    },
     registration: {
+      requiredBadge: 'Required',
+      optionalBadge: 'Optional',
       required: 'Registration currently requires an invite code (auth.registration.require_invite).',
       optional: 'Registration does not require an invite code; a code given at sign-up is still consumed.'
     },
     generate: {
       title: 'Generate codes',
+      description: 'Each code admits one registration.',
       count: 'How many',
-      expireDays: 'Expires after (days)',
+      countHelp: '1 to {max} at a time.',
+      expireDays: 'Expires after',
+      daysUnit: 'days',
       expireDaysPlaceholder: 'Configured default',
       expireDaysHelp: 'Empty: the configured expiry. 0: never expires.',
       submit: 'Generate',
-      created: '{count} code(s) generated:'
+      created: '{count} codes generated:'
     },
     filters: {
-      all: 'All codes'
+      label: 'Filter by status'
     },
     status: {
       unused: 'Unused',
@@ -171,58 +188,63 @@ export default {
       user: 'User #{id}'
     },
     table: {
+      label: 'Invite codes',
       code: 'Code',
       owner: 'Created by',
       status: 'Status',
       usedBy: 'Used by',
       expiresAt: 'Expires',
-      createdAt: 'Created',
-      actions: 'Actions'
+      createdAt: 'Created'
     },
     actions: {
       copy: 'Copy',
       copyAll: 'Copy all',
       revoke: 'Revoke',
-      refresh: 'Refresh'
+      revokeOne: 'Revoke code…',
+      done: 'Done'
     },
-    pager: {
-      previous: 'Previous',
-      next: 'Next',
-      summary: 'Page {page} of {pages} ({total} codes)'
+    confirm: {
+      revokeTitle: 'Revoke invite code {code}?',
+      revokeManyTitle: 'Revoke {count} invite codes?',
+      revokeMessage: 'A revoked code can no longer be used to register. This can’t be undone.'
     },
     messages: {
       failed: 'Request failed',
-      fetchFailed: 'Failed to load invite codes',
+      fetchFailed: 'Invite codes didn’t load',
       countRange: 'Generate between 1 and {max} codes at a time.',
+      generated: '{count} codes generated',
       generateFailed: 'Failed to generate codes: {message}',
-      revokeConfirm: 'Revoke invite code {code}? It can no longer be used to register.',
+      revoked: 'Code {code} revoked',
+      revokedMany: '{count} codes revoked',
       revokeFailed: 'Failed to revoke the code: {message}',
       copied: 'Copied',
       copyFailed: 'Copy failed'
     }
   },
   adminInvite: {
-    title: 'Invite Rewards',
-    subtitle: 'Configure invite commissions, review withdrawals, and track rankings.',
+    title: 'Referrals',
+    subtitle: 'Review commission withdrawals, see who invites the most, and set the referral rules.',
     currencySymbol: '¥',
     tabs: {
-      config: 'Configuration',
+      label: 'Referral sections',
+      config: 'Rules',
       withdrawals: 'Withdrawals',
       stats: 'Stats'
     },
     config: {
-      inviteTitle: 'Invite Configuration',
+      inviteTitle: 'Invite codes',
       enabled: 'Enable invite rewards',
       codePrefix: 'Invite code prefix',
       codeLength: 'Invite code length',
-      commissionTitle: 'Commission Rules',
-      commissionRate: 'Commission rate (%)',
+      codeLengthHelp: '4 to 16 characters.',
+      commissionTitle: 'Commission',
+      commissionRate: 'Commission rate',
       commissionRateHelp: 'Percentage of each qualified order returned to the inviter.',
       commissionType: 'Commission type',
       commissionFixed: 'Fixed commission amount',
-      withdrawTitle: 'Withdrawal Rules',
+      withdrawTitle: 'Withdrawals',
       minWithdraw: 'Minimum withdrawal amount',
-      withdrawFee: 'Withdrawal fee (%)',
+      withdrawFee: 'Withdrawal fee',
       withdrawMethods: 'Withdrawal methods'
     },
     types: {
@@ -235,7 +257,6 @@ export default {
       bank: 'Bank transfer'
     },
     actions: {
-      search: 'Search',
       approve: 'Approve',
       reject: 'Reject'
     },
@@ -248,8 +269,10 @@ export default {
       rejected: 'Rejected'
     },
     withdrawals: {
+      label: 'Withdrawal requests',
+      rowName: 'withdrawal #{id}',
       filters: {
-        all: 'All statuses'
+        label: 'Filter by status'
       },
       table: {
         id: 'ID',
@@ -258,10 +281,10 @@ export default {
         method: 'Method',
         account: 'Account',
         status: 'Status',
-        createdAt: 'Created at',
-        actions: 'Actions'
+        createdAt: 'Requested at'
       },
-      empty: 'No withdrawal requests'
+      empty: 'No withdrawal requests',
+      emptyDescription: 'When an inviter asks to withdraw their commission, the request appears here for review.'
     },
     stats: {
       totalInvites: 'Total invites',
@@ -401,28 +424,35 @@ export default {
   },
   adminTickets: {
     title: 'Tickets',
-    subtitle: 'Review user tickets and reply from one queue.',
-    stats: {
-      open: 'Open',
-      answered: 'Answered',
-      closed: 'Closed'
+    subtitle: 'Every user ticket in one queue. Pick one to reply or close it.',
+    list: 'Ticket queue',
+    loading: 'Loading tickets…',
+    select: 'Select a ticket to reply to it.',
+    backToList: 'All tickets',
+    noSubject: 'No subject',
+    meta: '#{id} · user {user} · {level}',
+    priority: '{level} priority',
+    threadNote: 'Earlier messages aren’t available to administrators here. Your reply reaches the user on their Tickets page and marks the ticket as answered.',
+    closedNote: 'This ticket is closed and takes no more replies.',
+    filters: {
+      search: 'Search subject, #number or user ID',
+      label: 'Filter by status',
+      clear: 'Clear filters'
     },
-    table: {
-      id: 'ID',
-      userId: 'User ID',
-      subject: 'Subject',
-      priority: 'Priority',
-      status: 'Status',
-      createdAt: 'Created at',
-      actions: 'Actions'
+    facts: {
+      number: 'Ticket',
+      user: 'User ID',
+      created: 'Opened',
+      updated: 'Last update'
     },
     actions: {
-      reply: 'Reply',
-      closeTicket: 'Close',
-      sendReply: 'Send Reply'
+      closeTicket: 'Close ticket…',
+      sendReply: 'Send reply'
     },
     empty: {
-      noData: 'No tickets'
+      title: 'No tickets',
+      description: 'When users ask for help, their tickets show up here.',
+      noMatches: 'No tickets match'
     },
     levels: {
       low: 'Low',
@@ -436,12 +466,19 @@ export default {
       closed: 'Closed',
       unknown: 'Unknown'
     },
-    replyModal: {
-      title: 'Reply to Ticket #{id}',
-      subject: 'Subject: ',
-      userId: 'User ID: ',
-      content: 'Reply content',
-      placeholder: 'Write your reply...'
+    reply: {
+      content: 'Reply',
+      placeholder: 'Write a reply to the user',
+      hint: 'Ctrl+Enter or ⌘Enter sends it.'
+    },
+    quick: {
+      label: 'Quick replies',
+      receivedLabel: 'Looking into it',
+      received: 'Thanks for reaching out. We’re looking into this and will update you here.',
+      detailsLabel: 'Ask for details',
+      details: 'Could you tell us which client and node you use, and when the problem started?',
+      fixedLabel: 'Fixed',
+      fixed: 'This should be fixed now. Please refresh your subscription and let us know if it still happens.'
     },
     confirm: {
       closeTitle: 'Close ticket #{id} “{subject}”?',
@@ -449,20 +486,31 @@ export default {
       closeAction: 'Close ticket'
     },
     messages: {
-      fetchFailed: 'Failed to load tickets',
-      replyRequired: 'Please enter a reply',
-      replySuccess: 'Reply sent successfully',
-      replyFailed: 'Failed to send reply',
+      fetchFailed: 'Tickets didn’t load',
+      replyRequired: 'Write a reply first',
+      replySuccess: 'Reply sent to ticket #{id}',
+      replyFailed: 'The reply wasn’t sent',
       closed: 'Ticket #{id} closed',
-      closeFailed: 'Failed to close ticket'
+      closeFailed: 'The ticket wasn’t closed'
     }
   },
   adminKnowledge: {
-    title: 'Knowledge Base',
-    subtitle: 'Publish announcements, tutorials, FAQs, and support articles.',
+    title: 'Help Center content',
+    subtitle: 'Announcements, tutorials and answers your users read in the Help Center.',
     actions: {
-      createArticle: 'Create Article',
-      publish: 'Publish'
+      createArticle: 'New article',
+      publish: 'Publish',
+      show: 'Show in Help Center',
+      hide: 'Hide from Help Center',
+      delete: 'Delete article…'
+    },
+    table: {
+      label: 'Articles',
+      updatedAt: 'Updated'
+    },
+    filters: {
+      search: 'Search articles',
+      label: 'Filter by category'
     },
     categories: {
       announcement: 'Announcement',
@@ -478,19 +526,30 @@ export default {
       title: 'Title',
       category: 'Category',
       content: 'Content',
-      sort: 'Sort',
-      visibility: 'Visibility'
+      sort: 'Order',
+      sortHelp: 'Lower numbers come first.',
+      visibility: 'Show in Help Center',
+      visibilityHelp: 'Hidden articles stay here but users don’t see them.'
     },
     placeholders: {
       title: 'Article title',
-      body: 'Write the article content...'
+      body: 'Write the article. ## starts a section, - a list item.'
+    },
+    editor: {
+      view: 'Editor view',
+      write: 'Write',
+      preview: 'Preview',
+      previewEmpty: 'The preview appears as you write.',
+      syntax: '## heading, - list, 1. numbered list, **bold**, `code`, > quote, [text](https://…).'
     },
     modal: {
-      createTitle: 'Create Article',
-      editTitle: 'Edit Article'
+      createTitle: 'New article',
+      editTitle: 'Edit article',
+      description: 'The preview shows the article as users see it in the Help Center.'
     },
     empty: {
-      noData: 'No articles'
+      title: 'No articles yet',
+      description: 'Write the first article and users will find it in the Help Center.'
     },
     confirm: {
       deleteTitle: 'Delete article "{title}"?',
@@ -498,13 +557,17 @@ export default {
       deleteAction: 'Delete article'
     },
     messages: {
-      fetchFailed: 'Failed to load articles',
-      requiredFields: 'Please fill in title and content',
-      saveSuccess: 'Article saved successfully',
-      publishSuccess: 'Article published successfully',
-      actionFailed: 'Article operation failed',
+      fetchFailed: 'Articles didn’t load',
+      requiredFields: 'Add a title and the article text',
+      titleRequired: 'Add a title',
+      bodyRequired: 'Write the article text',
+      saveSuccess: 'Article saved',
+      publishSuccess: 'Article published',
+      actionFailed: 'The article wasn’t saved',
+      shown: '“{title}” is visible in the Help Center',
+      hidden: '“{title}” is hidden',
       deleted: 'Article "{title}" deleted',
-      deleteFailed: 'Failed to delete article'
+      deleteFailed: 'The article wasn’t deleted'
     }
   }
 }

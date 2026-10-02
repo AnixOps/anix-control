@@ -1,9 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
+import { render, screen, waitFor, within } from '@testing-library/vue'
+import userEvent from '@testing-library/user-event'
 import InviteCodes from '@/views/admin/InviteCodes.vue'
+import UiHost from '@/ui/UiHost.vue'
 import { setLocale } from '@/i18n'
 import { resetEdition, setEdition } from '@/composables/useEdition'
-import { answerConfirms, toastMessages } from './helpers/feedback'
+import { answerConfirms, inBody, toastMessages } from './helpers/feedback'
 
 const adminApi = vi.hoisted(() => ({
   getInviteCodes: vi.fn(),
@@ -19,20 +22,31 @@ const unused = { id: 3, code: 'a1b2c3d4', user_id: null, status: 0, used_by: nul
 const used = { id: 2, code: 'e5f6a7b8', user_id: 7, status: 1, used_by: 9, expired_at: null, created_at: '2026-09-30T10:00:00Z' }
 const expired = { id: 1, code: 'c9d0e1f2', user_id: null, status: 0, used_by: null, expired_at: '2020-01-01T00:00:00Z', created_at: '2019-12-01T10:00:00Z' }
 
+const RouterLinkStub = { props: ['to'], template: '<a :data-to="to" v-bind="$attrs"><slot /></a>' }
+
 function mountPage() {
   return mount(InviteCodes, {
-    global: {
-      stubs: {
-        'router-link': { props: ['to'], template: '<a :data-to="to" v-bind="$attrs"><slot /></a>' }
-      }
-    }
+    attachTo: document.body,
+    global: { stubs: { 'router-link': RouterLinkStub } }
   })
 }
+
+function renderPage() {
+  return render({ components: { InviteCodes, UiHost }, template: '<div><InviteCodes /><UiHost /></div>' }, {
+    global: { stubs: { 'router-link': RouterLinkStub } }
+  })
+}
+
+async function rowAction(user, code, name) {
+  await user.click(screen.getByRole('button', { name: `Actions for ${code}` }))
+  await user.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name }))
+}
+
+enableAutoUnmount(afterEach)
 
 describe('Admin invite codes', () => {
   beforeEach(async () => {
     vi.resetAllMocks()
-    vi.spyOn(console, 'error').mockImplementation(() => {})
     await setLocale('en')
     adminApi.getInviteCodes.mockResolvedValue(panel({ list: [unused, used, expired], total: 3, page: 1, page_size: 20 }))
   })
@@ -48,7 +62,7 @@ describe('Admin invite codes', () => {
     await flushPromises()
 
     expect(adminApi.getInviteCodes).toHaveBeenCalledWith({ page: 1, page_size: 20 })
-    const rows = wrapper.findAll('[data-testid="invite-code-row"]')
+    const rows = wrapper.findAll('tbody tr')
     expect(rows).toHaveLength(3)
     expect(rows[0].text()).toContain('a1b2c3d4')
     expect(rows[0].text()).toContain('Administrator')
@@ -58,13 +72,23 @@ describe('Admin invite codes', () => {
     expect(rows[1].text()).toContain('Used')
     expect(rows[1].text()).toContain('#9')
     expect(rows[2].text()).toContain('Expired')
-    // Only an unused (or expired) code can be revoked.
-    expect(rows[0].find('[data-testid="revoke-invite-code"]').exists()).toBe(true)
-    expect(rows[1].find('[data-testid="revoke-invite-code"]').exists()).toBe(false)
     // No commission, withdrawal or statistics entry in community.
     expect(wrapper.find('[data-testid="invite-rewards-link"]').exists()).toBe(false)
     expect(wrapper.text()).not.toMatch(/commission|withdraw/i)
     expect(wrapper.get('[data-testid="registration-hint"]').text()).toContain('requires an invite code')
+  })
+
+  it('offers revoke only for codes that were not used', async () => {
+    const user = userEvent.setup()
+    setEdition('community')
+    renderPage()
+    await screen.findByText('a1b2c3d4')
+    await user.click(screen.getByRole('button', { name: 'Actions for a1b2c3d4' }))
+    expect(within(await screen.findByRole('menu')).getByRole('menuitem', { name: 'Revoke code…' })).toBeTruthy()
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
+    await user.click(screen.getByRole('button', { name: 'Actions for e5f6a7b8' }))
+    expect(within(await screen.findByRole('menu')).queryByRole('menuitem', { name: 'Revoke code…' })).toBeNull()
   })
 
   it('links the rewards page in the commercial edition', async () => {
@@ -76,67 +100,96 @@ describe('Admin invite codes', () => {
     expect(wrapper.get('[data-testid="registration-hint"]').text()).toContain('does not require')
   })
 
-  it('generates codes and shows them', async () => {
+  it('generates codes in a dialog and shows them', async () => {
     setEdition('community')
     adminApi.generateInviteCodes.mockResolvedValue(panel({ codes: [{ id: 4, code: 'feedbeef' }, { id: 5, code: 'deadbeef' }] }))
     const wrapper = mountPage()
     await flushPromises()
 
-    await wrapper.get('#invite-code-count').setValue(2)
-    await wrapper.get('#invite-code-expire').setValue(0)
-    await wrapper.get('[data-testid="generate-invite-codes"]').trigger('click')
+    await wrapper.get('[data-testid="open-generate"]').trigger('click')
+    await flushPromises()
+    await inBody('#invite-code-count').setValue(2)
+    await inBody('#invite-code-expire').setValue(0)
+    await inBody('[data-testid="generate-invite-codes"]').trigger('click')
     await flushPromises()
 
     expect(adminApi.generateInviteCodes).toHaveBeenCalledWith({ count: 2, expire_days: 0 })
-    expect(wrapper.get('[data-testid="generated-codes"]').text()).toContain('feedbeef')
-    expect(wrapper.get('[data-testid="generated-codes"]').text()).toContain('deadbeef')
+    expect(inBody('[data-testid="generated-codes"]').text()).toContain('feedbeef')
+    expect(inBody('[data-testid="generated-codes"]').text()).toContain('deadbeef')
     expect(adminApi.getInviteCodes).toHaveBeenCalledTimes(2)
+    expect(toastMessages('success')).toContain('2 codes generated')
   })
 
-  it('leaves the expiry to the configuration when empty and refuses a bad count', async () => {
+  it('leaves the expiry to the configuration when empty and refuses a bad count inline', async () => {
     setEdition('community')
     adminApi.generateInviteCodes.mockResolvedValue(panel({ codes: [] }))
     const wrapper = mountPage()
     await flushPromises()
 
-    await wrapper.get('[data-testid="generate-invite-codes"]').trigger('click')
+    await wrapper.get('[data-testid="open-generate"]').trigger('click')
+    await flushPromises()
+    await inBody('[data-testid="generate-invite-codes"]').trigger('click')
     await flushPromises()
     expect(adminApi.generateInviteCodes).toHaveBeenCalledWith({ count: 1 })
 
-    await wrapper.get('#invite-code-count').setValue(51)
-    await wrapper.get('[data-testid="generate-invite-codes"]').trigger('click')
+    await inBody('#invite-code-count').setValue(51)
+    await inBody('[data-testid="generate-invite-codes"]').trigger('click')
     await flushPromises()
     expect(adminApi.generateInviteCodes).toHaveBeenCalledTimes(1)
-    expect(toastMessages('error')).toContain('Generate between 1 and 50 codes at a time.')
+    expect(document.body.textContent).toContain('Generate between 1 and 50 codes at a time.')
   })
 
   it('revokes an unused code after confirmation and reports a panel error', async () => {
+    const user = userEvent.setup()
     setEdition('community')
     const confirms = answerConfirms(true)
     adminApi.revokeInviteCode
       .mockResolvedValueOnce(panel({ message: 'invite code revoked' }))
       .mockResolvedValueOnce(panel(null, -1, 'invite code already used'))
-    const wrapper = mountPage()
-    await flushPromises()
+    renderPage()
+    await screen.findByText('a1b2c3d4')
 
-    await wrapper.findAll('[data-testid="revoke-invite-code"]')[0].trigger('click')
-    await flushPromises()
-    expect(confirms.last()).toMatchObject({ tone: 'danger' })
-    expect(adminApi.revokeInviteCode).toHaveBeenCalledWith(3)
-    expect(adminApi.getInviteCodes).toHaveBeenCalledTimes(2)
+    await rowAction(user, 'a1b2c3d4', 'Revoke code…')
+    await waitFor(() => expect(adminApi.revokeInviteCode).toHaveBeenCalledWith(3))
+    expect(confirms.last()).toMatchObject({ tone: 'danger', title: 'Revoke invite code a1b2c3d4?' })
+    await waitFor(() => expect(adminApi.getInviteCodes).toHaveBeenCalledTimes(2))
 
-    await wrapper.findAll('[data-testid="revoke-invite-code"]')[0].trigger('click')
-    await flushPromises()
-    expect(toastMessages('error')).toContain('Failed to revoke the code: invite code already used')
+    await rowAction(user, 'a1b2c3d4', 'Revoke code…')
+    await waitFor(() => expect(toastMessages('error')).toContain('Failed to revoke the code: invite code already used'))
+  })
+
+  it('revokes the selected unused codes one by one from the bulk bar', async () => {
+    const user = userEvent.setup()
+    setEdition('community')
+    answerConfirms(true)
+    adminApi.revokeInviteCode.mockResolvedValue(panel({}))
+    renderPage()
+    await screen.findByText('a1b2c3d4')
+    await user.click(screen.getByRole('checkbox', { name: 'Select all rows on this page' }))
+    const bar = await screen.findByRole('region', { name: 'Actions for the selected rows' })
+    await user.click(within(bar).getByRole('button', { name: 'Revoke' }))
+    // The used code is skipped.
+    await waitFor(() => expect(adminApi.revokeInviteCode.mock.calls).toEqual([[3], [1]]))
+    await waitFor(() => expect(toastMessages('success')).toContain('2 codes revoked'))
   })
 
   it('filters by status from the first page', async () => {
+    const user = userEvent.setup()
     setEdition('community')
-    const wrapper = mountPage()
-    await flushPromises()
+    renderPage()
+    await screen.findByText('a1b2c3d4')
+    await user.click(within(screen.getByRole('group', { name: 'Filter by status' })).getByRole('button', { name: 'Used' }))
+    await waitFor(() => expect(adminApi.getInviteCodes).toHaveBeenLastCalledWith({ page: 1, page_size: 20, status: 'used' }))
+  })
 
-    await wrapper.get('[data-testid="invite-code-filter"]').setValue('used')
-    await flushPromises()
-    expect(adminApi.getInviteCodes).toHaveBeenLastCalledWith({ page: 1, page_size: 20, status: 'used' })
+  it('shows a load error with retry', async () => {
+    const user = userEvent.setup()
+    setEdition('community')
+    adminApi.getInviteCodes.mockRejectedValueOnce(new Error('bad gateway'))
+    renderPage()
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('Invite codes didn’t load')
+    await user.click(within(alert).getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByText('a1b2c3d4')).toBeTruthy()
   })
 })

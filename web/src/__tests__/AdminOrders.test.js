@@ -125,12 +125,13 @@ describe('Admin Orders', () => {
 
     const rows = wrapper.findAll('tbody tr')
     expect(rows).toHaveLength(2)
-    const cells = rows[0].findAll('td').map(cell => cell.text())
-    expect(cells[1]).toBe('buyer@example.test')
-    expect(cells[2]).toBe('Pro')
-    const orphan = rows[1].findAll('td').map(cell => cell.text())
-    expect(orphan[1]).toBe('-')
-    expect(orphan[2]).toBe('-')
+    const headers = wrapper.findAll('thead th').map(th => th.text())
+    const cellOf = (row, header) => row.findAll('td')[headers.indexOf(header)].text()
+    expect(cellOf(rows[0], 'User')).toBe('buyer@example.test')
+    expect(cellOf(rows[0], 'Plan')).toBe('Pro')
+    expect(cellOf(rows[0], 'Amount')).toBe('¥80.00')
+    expect(cellOf(rows[1], 'User')).toBe('—')
+    expect(cellOf(rows[1], 'Plan')).toBe('—')
 
     await wrapper.vm.viewDetail(wrapper.vm.orders[0])
     await flushPromises()
@@ -178,19 +179,19 @@ describe('Admin Orders', () => {
     const wrapper = mount(Orders)
     await flushPromises()
 
-    let metricValues = wrapper.findAll('.metric-card strong').map(node => node.text())
+    let metricValues = wrapper.findAll('[data-test="order-summary"] strong').map(node => node.text())
     expect(metricValues).toEqual(['12', '5', '¥123.45', '¥6.78'])
 
     await wrapper.vm.fetchStats()
     await flushPromises()
 
-    metricValues = wrapper.findAll('.metric-card strong').map(node => node.text())
+    metricValues = wrapper.findAll('[data-test="order-summary"] strong').map(node => node.text())
     expect(metricValues).toEqual(['21', '7', '¥234.56', '¥7.89'])
 
     await wrapper.vm.fetchStats()
     await flushPromises()
 
-    metricValues = wrapper.findAll('.metric-card strong').map(node => node.text())
+    metricValues = wrapper.findAll('[data-test="order-summary"] strong').map(node => node.text())
     expect(metricValues).toEqual(['31', '9', '¥345.67', '¥8.90'])
 
     wrapper.unmount()
@@ -245,24 +246,71 @@ describe('Admin Orders', () => {
     adminApi.getOrderList.mockResolvedValue({ code: 0, data: { total: 1, list: [{ id: 7, trade_no: 'T-7', total_amount: 1990, status: 0, period: 'month' }] } })
     adminApi.markOrderPaid.mockResolvedValue({ code: 0 })
     render({ components: { Orders, UiHost }, template: '<div><Orders /><UiHost /></div>' })
-    const opener = await screen.findByRole('button', { name: 'Mark paid' })
+    const menu = await screen.findByRole('button', { name: 'Actions for T-7' })
+    const opener = {
+      async click() {
+        await user.click(menu)
+        await user.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: 'Mark paid' }))
+      }
+    }
 
-    await user.click(opener)
+    await opener.click()
     let dialog = await screen.findByRole('alertdialog', { name: 'Mark order T-7 as paid?' })
     expect(dialog.textContent).toContain('19.90')
     await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
-    await user.click(opener)
+    expect(document.activeElement).toBe(menu)
+    await opener.click()
     await screen.findByRole('alertdialog')
     await user.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
     expect(adminApi.markOrderPaid).not.toHaveBeenCalled()
 
-    await user.click(opener)
+    await opener.click()
     dialog = await screen.findByRole('alertdialog')
     await user.click(within(dialog).getByRole('button', { name: 'Mark paid' }))
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
     expect(adminApi.markOrderPaid).toHaveBeenCalledWith(7)
     expect(toastMessages('success')).toEqual(['Order marked as paid'])
+  })
+  it('opens the details from a row and acts on a pending order there', async () => {
+    const user = userEvent.setup()
+    adminApi.getOrderList.mockResolvedValue({ code: 0, data: { total: 1, list: [{ id: 7, trade_no: 'T-7', total_amount: 1990, status: 0, period: 'month', user: { id: 1, email: 'a@example.test' } }] } })
+    adminApi.cancelOrder.mockResolvedValue({ code: 0 })
+    render({ components: { Orders, UiHost }, template: '<div><Orders /><UiHost /></div>' })
+    const row = (await screen.findByText('T-7')).closest('tr')
+    row.focus()
+    await user.keyboard('{Enter}')
+    const sheet = await screen.findByRole('dialog', { name: 'Order details' })
+    expect(within(sheet).getByText('a@example.test')).toBeTruthy()
+    expect(within(sheet).getByText('Pending')).toBeTruthy()
+    await user.click(within(sheet).getByRole('button', { name: 'Cancel order' }))
+    const confirm = await screen.findByRole('alertdialog', { name: 'Cancel order T-7?' })
+    await user.click(within(confirm).getByRole('button', { name: 'Cancel order' }))
+    await waitFor(() => expect(adminApi.cancelOrder).toHaveBeenCalledWith(7))
+    expect(toastMessages('success')).toEqual(['Order T-7 cancelled'])
+  })
+
+  it('filters by status and searches on the server', async () => {
+    const user = userEvent.setup()
+    render({ components: { Orders, UiHost }, template: '<div><Orders /><UiHost /></div>' })
+    await screen.findByRole('heading', { name: 'No orders yet' })
+    await user.click(within(screen.getByRole('group', { name: 'Filter by status' })).getByRole('button', { name: 'Paid' }))
+    await waitFor(() => expect(adminApi.getOrderList).toHaveBeenLastCalledWith(expect.objectContaining({ status: '1', page: 1 })))
+    await user.type(screen.getByRole('searchbox', { name: 'User email' }), 'buyer{Enter}')
+    await waitFor(() => expect(adminApi.getOrderList).toHaveBeenLastCalledWith(expect.objectContaining({ email: 'buyer', status: '1' })))
+    // Filtered and empty: offers to clear the filters.
+    await user.click(await screen.findByRole('button', { name: 'Clear filters' }))
+    await waitFor(() => expect(adminApi.getOrderList).toHaveBeenLastCalledWith(expect.objectContaining({ email: '', status: undefined, trade_no: '' })))
+  })
+
+  it('shows a load error with retry', async () => {
+    const user = userEvent.setup()
+    adminApi.getOrderList.mockRejectedValueOnce(new Error('Network Error'))
+    render({ components: { Orders, UiHost }, template: '<div><Orders /><UiHost /></div>' })
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('Orders didn’t load')
+    await user.click(within(alert).getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByRole('heading', { name: 'No orders yet' })).toBeTruthy()
   })
 })
