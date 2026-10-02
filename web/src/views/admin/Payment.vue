@@ -599,7 +599,7 @@ onMounted(() => {
   margin-bottom: 20px;
 }
 
-.dialog-form .form-group:last-child {
+.dialog-form > .form-group:last-child {
   margin-bottom: 0;
 }
 

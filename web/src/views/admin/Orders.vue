@@ -579,6 +579,7 @@ onMounted(() => {
 
 .detail-row {
   display: flex;
+  align-items: baseline;
   justify-content: space-between;
   gap: 16px;
   padding: 12px 0;
@@ -599,12 +600,5 @@ onMounted(() => {
   font-size: 14px;
   overflow-wrap: anywhere;
   text-align: right;
-}
-
-@media (max-width: 768px) {
-  .detail-row {
-    flex-direction: column;
-    gap: 4px;
-  }
 }
 </style>

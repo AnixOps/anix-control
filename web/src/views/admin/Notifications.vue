@@ -671,7 +671,7 @@ onMounted(() => {
   background: rgba(239, 68, 68, 0.18);
 }
 
-.dialog-form .form-group:last-of-type {
+.dialog-form > .form-group:last-child {
   margin-bottom: 0;
 }
 

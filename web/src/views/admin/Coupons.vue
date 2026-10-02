@@ -295,7 +295,7 @@ const removeCoupon = async (coupon) => {
   padding: 40px !important;
 }
 
-.dialog-form .form-group:last-of-type {
+.dialog-form > .form-group:last-child {
   margin-bottom: 0;
 }
 

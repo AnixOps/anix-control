@@ -642,7 +642,7 @@ const formatPlanLimits = (plan) => {
   padding: 40px !important;
 }
 
-.dialog-form .form-group:last-child {
+.dialog-form > .form-group:last-child {
   margin-bottom: 0;
 }
 
