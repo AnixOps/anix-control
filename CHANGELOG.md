@@ -32,6 +32,33 @@
 
 ### Changed
 
+- **Nodes: a list and a node page (UI redesign phase U7)**
+  (`web/src/views/admin/Nodes.vue`, `NodeDetail.vue`, `views/admin/nodes/`;
+  `docs/reference/frontend-design.md` "Node pages"). Same endpoints, request
+  bodies, permission and edition checks; one new read of an existing route,
+  `GET /admin/nodes/:id` (`getNode`), for the node page.
+  - 节点 list on the list template: name and tags, address, protocol count,
+    status (with runtime health and 本月超限), Agent version, load (CPU and
+    memory of the last report, online nodes only), last heartbeat as a
+    relative time; ID, parent, total traffic and monthly quota in the column
+    settings. Server search and status chips (在线 / 离线 / 已停用 / 待激活,
+    the API's `status`) and the page are in the URL. Headers and dates no
+    longer wrap at 1440 px; phones get cards with status and heartbeat.
+  - A row opens the new node page `/admin/nodes/:id` (`?section=`): back
+    link, name, status, 编辑 and 同步并重载, then 概览 (health, traffic,
+    settings) / 协议 / 凭据 / 部署 / 日志 / 危险区.
+  - The seven dialogs became sheets and sections: add / edit node and the
+    protocol editor are sheets (inline field errors); the protocol list and
+    the logs are sections with `UiDataTable`; the registration key and the
+    parent-node Ansible helper are sheets on the list and part of 部署; the
+    template picker stays a small dialog.
+  - 凭据 reads the node's API key only when asked (each read is audited as a
+    reveal) and shows it masked with reveal and copy; the shared secret is
+    still never shown. 危险区 disables or enables a node (the edit body with
+    status 3 / 0) and deletes it after the name is typed.
+  - The 3,272-line page is now 21 files, none over 480 lines; `admin.nodes`
+    strings moved to `locales/modules/*/adminNodes.js`.
+
 - **Admin list pages on one template (UI redesign phase U6)**
   (`web/src/ui/UiDataTable.vue`, `views/admin/*`;
   `docs/reference/frontend-design.md` "List pages"). Same endpoints,

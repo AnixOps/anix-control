@@ -15,5 +15,10 @@ export const DATA_TABLE_PAGES = [
   'src/views/admin/InviteCodes.vue',
   'src/views/admin/AccessGroups.vue',
   'src/views/admin/Invite.vue',
-  'src/views/admin/AnsibleMachines.vue'
+  'src/views/admin/AnsibleMachines.vue',
+  // U7: nodes (list, node page and its table sections)
+  'src/views/admin/Nodes.vue',
+  'src/views/admin/NodeDetail.vue',
+  'src/views/admin/nodes/NodeProtocolsSection.vue',
+  'src/views/admin/nodes/NodeLogsSection.vue'
 ]

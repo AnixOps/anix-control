@@ -153,6 +153,14 @@ export function getNodes(params) {
   })
 }
 
+// One node with its protocols (the node detail page, UI U7).
+export function getNode(id) {
+  return request({
+    url: `/admin/nodes/${id}`,
+    method: 'get'
+  })
+}
+
 export function getNodeStats() {
   return request({
     url: '/admin/nodes/stats',
@@ -1381,6 +1389,7 @@ export default {
   markOrderPaid,
   cancelOrder,
   getNodes,
+  getNode,
   getNodeStats,
   getNodeLogs,
   createNode,

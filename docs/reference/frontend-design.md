@@ -637,6 +637,44 @@ The legacy global `button` rule in `style.css` (min-height 40 / 44 px on
 phones) no longer stretches library buttons, checkboxes, switches and chips:
 they set `min-height: 0` and keep their 44 px touch area with `::after`.
 
+## Node pages (U7)
+
+The proxy nodes (`Node`, `/admin/nodes`; not `ForwardNode`) use the list
+template and the first detail page (plan §7.2). Page-local parts live in
+`web/src/views/admin/nodes/`.
+
+```
+/admin/nodes            UiPageHeader (注册密钥 · 部署父节点 · 添加节点)
+                        UiDataTable: search + status chips (?q= &status= &page=)
+                        row → node page; "…" → 打开 / 协议 / 日志 / 同步 / 编辑 / 删除
+/admin/nodes/:id        back link · name · status badge · 编辑 · 同步并重载 (primary)
+  ?section=             UiTabs variant="segmented":
+                        overview | protocols | credentials | deploy | logs | danger
+```
+
+- **Detail page template.** `UiPageHeader` with the `#back` slot (a link
+  back to the list that keeps the list's query), the status in `#meta`, one
+  primary action; sections are `UiTabs` panels named in `?section=` (the
+  default section leaves the query clean, `router.replace`); each section is
+  a `UiSection` with grouped lists, cards or a `UiDataTable`. Panels mount
+  when shown, so a section loads its data the first time it opens; state that
+  must survive switching (a just-generated registration key) belongs to the
+  page. The route sets `meta.titleKey`, so the breadcrumb reads
+  网络 › 节点 › 节点详情.
+- **Status.** The list endpoint reports online/offline from the last
+  heartbeat; `GET /admin/nodes/:id` returns the stored column, so
+  `nodeData.displayStatus()` applies the same five-minute rule.
+- **Secrets.** 凭据 calls `GET /admin/nodes/:id/credentials` only on 读取 API
+  密钥 (the server audits every read) and shows the API key in a masked
+  `UiCopyField`; the shared secret is never shown. Registration keys are
+  shown once, when generated. Protocol secrets stay `********` and are sent
+  back as such.
+- **Pieces.** `useNodeDeploy` (registration key, connection settings,
+  config.json, Ansible inventory), `useProtocolEditor` (JSON / form editor and
+  request bodies), `useNodeActions` (sync, typed-name delete), `nodeData`
+  (payload readers, request bodies, status), and one component per sheet or
+  section. `NodeCodeBlock` shows generated files with a copy button.
+
 ## Bundle
 
 Reka UI and its helpers (`@floating-ui`, `@vueuse`, …) build into a
