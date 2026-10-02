@@ -32,6 +32,32 @@
 
 ### Changed
 
+- **CI: shorter critical path** (`.github/workflows/ci.yml`,
+  `config/scripts/classify_changes.py`). No test is dropped, and the
+  required check names are unchanged.
+  - "Go Quality Gates" keeps its static gates but no longer runs the full
+    test suite. "Backend Tests" runs it once: coverage of `./internal/...`
+    as before, then the remaining root-module packages (`cmd`, `packages`,
+    `api`, integration, e2e), `sdk` and `identity`. It vets only the
+    regenerated Swagger package, since Go Quality Gates vets the tree.
+  - The new job "Build Smoke Images" builds the Control and identity-platform
+    module images once, with a buildx GitHub Actions cache per image, and
+    hands them to "Docker Build Smoke" and "Kubernetes Smoke" as image
+    archives (`docker load`, `kind load image-archive`). Before, the
+    Kubernetes smoke rebuilt both images, the Docker smoke waited for Go
+    Quality Gates and Go Security Scans, and the Kubernetes smoke waited for
+    the Docker smoke: a 24-minute serial chain.
+  - "Smoke Tests" and "E2E Tests" no longer wait for Backend Tests and CLI
+    Tests.
+  - The edge publish keeps its gates. It now names Go Quality Gates and Go
+    Security Scans, which it used to inherit through the Docker smoke.
+    The edge builds also read the smoke layer caches, and the release image
+    reads the edge cache.
+  - A pull request that changes `ci.yml` only inside class-gated jobs runs
+    those classes instead of the full lane (AGENTS.md, "Workflow changes").
+    Other `.github/` files no longer force the full lane; `.github/actions/`
+    still does.
+
 - **Performance budget and legacy CSS cleanup (UI redesign phase U9)**
   (`web/vite.config.js`, `web/src/i18n.js`, `web/src/locales/`,
   `web/src/utils/request.js`, `web/src/style.css`,

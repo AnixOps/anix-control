@@ -79,8 +79,30 @@ duplicate it here); the docs landing page is `docs/README.md`.
     Documentation-only PRs skip the Go jobs.
   - **Full lane.** Every job, including benchmarks.
     It runs on `go_dev` pushes, tags, the nightly schedule, manual runs,
-    PRs labelled `ci:full`, and PRs that change the workflow or Go
-    dependencies.
+    PRs labelled `ci:full`, and PRs that change the Go dependencies, the
+    classifier or `.github/actions/`.
+  - **Workflow changes.** A PR that changes `ci.yml` runs the full lane,
+    unless the change stays inside the bodies of jobs gated on one class
+    (`if: ${{ needs.changes.outputs.<class> == 'true' }}`) or of always-run
+    jobs, with their `if:`, `needs:` and `outputs:` unchanged. Then it runs
+    those classes plus the classes of the jobs that need the changed ones.
+    Changes to the header, to Classify Changes or the tag gate, adding or
+    removing a job, and edits to release, edge or schedule-only jobs still
+    run the full lane.
+  - **Job graph.**
+    - "Go Quality Gates" runs the static gates: protobuf and `go mod tidy`
+      drift, the route, worker and package-boundary gates, the script unit
+      tests, gofmt and `go vet`. It does not run the tests.
+    - "Backend Tests" is the single full Go test run. It takes coverage of
+      `./internal/...` (without `internal/tests/integration` and `e2e`),
+      then runs every other root-module package, then `sdk` and `identity`.
+    - "Build Smoke Images" builds the Control image and the identity-platform
+      module image once, with a buildx `type=gha` layer cache per image.
+      "Docker Build Smoke" and "Kubernetes Smoke" load its archives and
+      start without waiting for the Go jobs.
+    - "Smoke Tests" and "E2E Tests" start at once as well.
+    - The edge image publish still waits for the Go quality and security
+      gates, Backend Tests, the frontend and the Docker smoke.
   - **Race detector** (`go test -race`, about 28 min serially). It runs only
     in the nightly schedule and manual runs, with a 40-minute timeout, and no
     release job waits for it. Check the latest nightly run before tagging.
@@ -93,7 +115,7 @@ Always run Go with `GOWORK=off`; the module is not part of any `go.work`.
 
 ```bash
 GOWORK=off go build ./... && GOWORK=off go vet ./...
-GOWORK=off go test ./... -count=1 -p=1        # what Go Quality Gates runs
+GOWORK=off go test ./... -count=1 -p=1        # the full suite; CI runs it in Backend Tests (plus sdk, identity)
 GOWORK=off go test ./cmd/server -count=1      # reads Dockerfile, ci.yml, deploy_panel.sh
 make run              # isolated dev instance: API 127.0.0.1:19080, UI :19000, gRPC :50052
 make build            # frontend (web/public) + backend (build/anix-control)
