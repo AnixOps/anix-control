@@ -142,6 +142,14 @@ UI phase U3 the admin shell renders it once, above every `/admin/forward*`
 page; the pages and the sidebar no longer repeat it. A new forward page adds
 its link to `FORWARD_SUITE_LINKS`, not to the page.
 
+UI phase U4 changed the forward suite visually only. Forward, Tunnel, Limit,
+NodeX forward nodes and Ansible machines now use the shared `UiDialog`,
+`ConfirmDialog` and toasts instead of hand-rolled overlays, `window.confirm`
+and page banners. The fields, buttons, flows and API calls are unchanged,
+including Forward's second confirmation before a force delete. The one
+addition is a safeguard: deleting a forward node (NodeX or Ansible machine)
+now asks for its name to be typed.
+
 ## Current Forward/Tunnel Base
 
 As of `2026-04-05`, the local project already has these pieces:
