@@ -2441,12 +2441,13 @@ function onDragEnd() {
 
 <style scoped>
 .forward-page {
-  --forward-accent: #2563eb;
-  --forward-accent-soft: rgba(37, 99, 235, 0.12);
-  --forward-success-soft: rgba(16, 185, 129, 0.14);
-  --forward-warning-soft: rgba(245, 158, 11, 0.14);
-  --forward-danger-soft: rgba(239, 68, 68, 0.14);
-  --forward-muted-soft: rgba(148, 163, 184, 0.16);
+  /* AnixOps Design tokens (visual change only; flux-panel structure unchanged). */
+  --forward-accent: var(--accent);
+  --forward-accent-soft: var(--accent-soft);
+  --forward-success-soft: var(--success-soft);
+  --forward-warning-soft: var(--warning-soft);
+  --forward-danger-soft: var(--danger-soft);
+  --forward-muted-soft: var(--fill-2);
   display: flex;
   flex-direction: column;
   gap: 20px;
@@ -2523,13 +2524,13 @@ function onDragEnd() {
 }
 
 .btn-primary {
-  background: var(--forward-accent);
-  color: #fff;
-  box-shadow: 0 14px 32px rgba(37, 99, 235, 0.2);
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  box-shadow: none;
 }
 
 .btn-primary:hover {
-  background: #1d4ed8;
+  background: var(--accent-fill-hover);
 }
 
 .btn-secondary {

@@ -1444,7 +1444,7 @@ input:checked + .slider:before { transform: translateX(20px); }
 
 /* Buttons */
 .btn { padding:8px 16px; border:none; border-radius:4px; cursor:pointer; font-size:14px; display:inline-flex; align-items:center; gap:4px; }
-.btn-primary { background:var(--primary-color); color:white; }
+.btn-primary { background:var(--accent-fill); color:var(--on-accent); }
 .btn-secondary { background: rgba(255,255,255,0.02); color: var(--text-color); border:1px solid var(--border-color); }
 .btn-outline {
   background: rgba(255,255,255,0.02);

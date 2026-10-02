@@ -437,8 +437,8 @@ onMounted(() => {
 }
 
 .user .message-bubble {
-  background: var(--primary-color);
-  color: white;
+  background: var(--accent-fill);
+  color: var(--on-accent);
   border-bottom-right-radius: 2px;
 }
 

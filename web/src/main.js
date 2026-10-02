@@ -1,5 +1,8 @@
 import { createApp } from 'vue'
 import { createPinia } from 'pinia'
+import './design/fonts/inter/inter.css'
+import './design/tokens.css'
+import './styles/base.css'
 import './style.css'
 import App from './App.vue'
 import router from './router'
@@ -8,8 +11,9 @@ import { mountLegacyI18n } from './utils/legacyI18n'
 import { initTheme } from './composables/useTheme'
 
 async function bootstrap() {
-  await initI18n()
+  // Theme first, so the page background is right before the locale loads.
   initTheme()
+  await initI18n()
 
   const app = createApp(App)
 

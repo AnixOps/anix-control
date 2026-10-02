@@ -1,6 +1,7 @@
 import { defineConfig } from 'vite'
 import vue from '@vitejs/plugin-vue'
 import path from 'path'
+import brandIcons from './scripts/vite-brand-icons.mjs'
 
 function pad(value) {
   return String(value).padStart(2, '0')
@@ -67,7 +68,15 @@ export function manualChunks(id) {
 }
 
 export default defineConfig({
-  plugins: [vue()],
+  plugins: [
+    vue(),
+    brandIcons({
+      designDir: path.resolve(__dirname, './src/design'),
+      name: 'AnixOps Control',
+      shortName: 'AnixOps',
+      description: 'AnixOps Control manages subscriptions, payments, nodes, forwarding topology, and agent runtime operations.'
+    })
+  ],
   publicDir: false,
   define: {
     'import.meta.env.VITE_APP_BUILD_CODE': JSON.stringify(appBuildCode),

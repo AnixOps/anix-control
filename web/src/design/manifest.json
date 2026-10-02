@@ -1,0 +1,97 @@
+{
+  "name": "AnixOps Design",
+  "repository": "https://github.com/AnixOps/AnixOps-design",
+  "tag": "v1.0.2",
+  "files": [
+    {
+      "path": "LICENSE",
+      "source": "LICENSE",
+      "bytes": 1271,
+      "sha256": "03a5c3a7c1610baf765c07e0acf0faf6e9bc865fd3b61fd85b26aa28e555c3d4"
+    },
+    {
+      "path": "LICENSE-BRAND.md",
+      "source": "LICENSE-BRAND.md",
+      "bytes": 1477,
+      "sha256": "e0662f51bdaab8a6fc8e3a55bb6fcefeb10daf254672b4047e4f98117e9f4aa0"
+    },
+    {
+      "path": "brand/favicon.svg",
+      "source": "brand/assets/favicon.svg",
+      "bytes": 663,
+      "sha256": "dfc3893bdb4ab0c7e3d7b7d447fb39bc5e10d1610259a3c145ac62f1cc26b73d"
+    },
+    {
+      "path": "brand/favicon/apple-touch-icon.png",
+      "source": "brand/assets/favicon/apple-touch-icon.png",
+      "bytes": 4465,
+      "sha256": "4e8027f0b5bfa20b774d265a131202f273c64e27b51eaf90eb35bbb122afdfa7"
+    },
+    {
+      "path": "brand/favicon/favicon.ico",
+      "source": "brand/assets/favicon/favicon.ico",
+      "bytes": 4000,
+      "sha256": "b3213846b3b46895c9d17603d09b430a31c2bd2b108cce22d789fa30a515d9b4"
+    },
+    {
+      "path": "brand/favicon/icon-192.png",
+      "source": "brand/assets/favicon/icon-192.png",
+      "bytes": 5841,
+      "sha256": "e68071f425087927546fd2c31b40f11bfa9a708e7ebcedf47f0d94ac8e0663b1"
+    },
+    {
+      "path": "brand/favicon/icon-512.png",
+      "source": "brand/assets/favicon/icon-512.png",
+      "bytes": 17695,
+      "sha256": "47b499b06575e3c26cc5a392765b3a6575794422d0c98fed7df9627a8cecda11"
+    },
+    {
+      "path": "brand/favicon/icon-maskable-512.png",
+      "source": "brand/assets/favicon/icon-maskable-512.png",
+      "bytes": 13914,
+      "sha256": "6d1cb349ba3df9f6cdfa1f2d6ba1501fb99ffe758ac3bca9fd8fd9762a76e591"
+    },
+    {
+      "path": "brand/mark-glyph.svg",
+      "source": "brand/assets/mark-glyph.svg",
+      "bytes": 426,
+      "sha256": "9747611f420b09a6554ba2ba99590d485e7b5b41bf5fdfb48f94c05a4fd49df7"
+    },
+    {
+      "path": "brand/wordmark-on-dark.svg",
+      "source": "brand/assets/wordmark-on-dark.svg",
+      "bytes": 4524,
+      "sha256": "055baf78ba9bdee513cc594deddf42c036c2a40c136e53aa81c3dab3bc5d636d"
+    },
+    {
+      "path": "brand/wordmark.svg",
+      "source": "brand/assets/wordmark.svg",
+      "bytes": 4524,
+      "sha256": "c8ded5d1ad3857b79d0cad2a18c33f726f702df091c69064e3fd876eb9b70e99"
+    },
+    {
+      "path": "fonts/inter/InterVariable-latin.woff2",
+      "source": "fonts/inter/InterVariable-latin.woff2",
+      "bytes": 48256,
+      "sha256": "3100e775e8616cd2611beecfa23a4263d7037586789b43f035236a2e6fbd4c62"
+    },
+    {
+      "path": "fonts/inter/OFL.txt",
+      "source": "fonts/inter/OFL.txt",
+      "bytes": 4477,
+      "sha256": "3b0a5fca3d17942cde889069889dedbbbd075e9b599968c82a95f4d944e9b345"
+    },
+    {
+      "path": "fonts/inter/inter.css",
+      "source": "fonts/inter/inter.css",
+      "bytes": 624,
+      "sha256": "5c2c09bb2da468c12c1a2877295cfb1e0bef129f235dd988c5e1ac5011f37238"
+    },
+    {
+      "path": "tokens.css",
+      "source": "tokens/css/tokens.css",
+      "bytes": 6571,
+      "sha256": "b1dabc1acbcaa8f8b8a475baceb685f4670f84bca3e3847953ad17148c4a930e"
+    }
+  ]
+}

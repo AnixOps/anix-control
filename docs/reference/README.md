@@ -13,6 +13,7 @@ This section is the operator/developer reference index for `anix-control`.
 - [sqlite-to-postgres-migration.md](sqlite-to-postgres-migration.md): SQLite to PostgreSQL dry-run, import, verification, and rollback runbook
 - [traffic-stats-operations.md](traffic-stats-operations.md): traffic log indexes, query bounds, and retention runbook
 - [repository-layout.md](repository-layout.md): root and directory ownership, plus root hygiene rules
+- [frontend-design.md](frontend-design.md): the vendored AnixOps Design system in `web/` (tokens, brand assets, theme, legacy variable bridge, design sync and lint rules)
 - [runtime.md](runtime.md): NodeX mode vs local Ansible mode, recommended `nftables_ansible` defaults, and where to operate each path
 
 ## Runtime And Boundary References

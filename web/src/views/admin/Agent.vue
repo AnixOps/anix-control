@@ -471,9 +471,9 @@ onUnmounted(() => {
 }
 
 .tab.active {
-  background: var(--primary-color);
-  color: white;
-  border-color: var(--primary-color);
+  background: var(--accent-fill);
+  color: var(--on-accent);
+  border-color: var(--accent-fill);
 }
 
 .toolbar {
@@ -650,10 +650,10 @@ onUnmounted(() => {
 
 .terminal-input button {
   padding: 8px 16px;
-  background: var(--primary-color);
+  background: var(--accent-fill);
   border: none;
   border-radius: var(--radius-md);
-  color: white;
+  color: var(--on-accent);
   cursor: pointer;
 }
 

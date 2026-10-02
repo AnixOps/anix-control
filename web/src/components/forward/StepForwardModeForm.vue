@@ -237,7 +237,7 @@ onMounted(async () => {
 .mode-card-active { border-color: var(--primary-color); box-shadow: 0 0 0 2px var(--primary-color) inset; }
 .mode-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
 .mode-card-label { font-weight: 600; }
-.mode-card-badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--primary-color); color: #fff; }
+.mode-card-badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--accent-fill); color: var(--on-accent); }
 .mode-card-description { margin: 0; font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
 .nodex-setup { border: 1px solid var(--border-color); border-radius: 14px; padding: 14px 16px; background: var(--bg-color); display: flex; flex-direction: column; gap: 12px; }
 .nodex-setup-hint { margin: 0; color: var(--text-secondary); font-size: 13px; }
@@ -248,7 +248,7 @@ onMounted(async () => {
 .form-error { margin: 0; color: #b91c1c; }
 .step-actions { display: flex; justify-content: flex-end; }
 .btn { display: inline-flex; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: 12px; padding: 10px 16px; cursor: pointer; }
-.btn-primary { background: var(--primary-color); color: #fff; }
+.btn-primary { background: var(--accent-fill); color: var(--on-accent); }
 @media (max-width: 720px) {
   .mode-cards { grid-template-columns: 1fr; }
   .form-grid { grid-template-columns: 1fr; }

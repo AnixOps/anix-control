@@ -419,7 +419,7 @@ onMounted(async () => {
 .inventory-hint.compact { margin: 0; }
 .hero-actions, .section-head, .status-stack, .card-actions { display: flex; gap: 10px; flex-wrap: wrap; }
 .btn { display: inline-flex; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: 12px; padding: 10px 16px; text-decoration: none; cursor: pointer; }
-.btn-primary { background: var(--primary-color); color: #fff; }
+.btn-primary { background: var(--accent-fill); color: var(--on-accent); }
 .btn-secondary { background: var(--surface-color); color: var(--text-color); border-color: var(--border-color); }
 .btn-sm { padding: 8px 12px; font-size: 12px; }
 .eyebrow { margin: 0; text-transform: uppercase; letter-spacing: .08em; font-size: 12px; color: var(--text-secondary); }

@@ -613,8 +613,8 @@ onMounted(async () => {
 }
 
 .btn-primary {
-  background: var(--primary-color);
-  color: #fff;
+  background: var(--accent-fill);
+  color: var(--on-accent);
 }
 
 .btn-secondary {

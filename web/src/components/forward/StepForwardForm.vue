@@ -184,7 +184,7 @@ async function handleSubmit() {
 .form-error { margin: 0; color: #b91c1c; }
 .step-actions { display: flex; justify-content: flex-end; }
 .btn { display: inline-flex; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: 12px; padding: 10px 16px; cursor: pointer; }
-.btn-primary { background: var(--primary-color); color: #fff; }
+.btn-primary { background: var(--accent-fill); color: var(--on-accent); }
 @media (max-width: 720px) {
   .form-grid { grid-template-columns: 1fr; }
 }

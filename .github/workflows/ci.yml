@@ -1514,6 +1514,12 @@ jobs:
         working-directory: web
         run: npm ci
 
+      # Vendored AnixOps Design files must equal the pinned tag
+      # (web/src/design/manifest.json); offline, no network needed.
+      - name: Check vendored AnixOps Design
+        working-directory: web
+        run: npm run design:check
+
       - name: Audit frontend dependencies
         working-directory: web
         run: npm audit --audit-level=moderate

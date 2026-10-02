@@ -130,6 +130,7 @@
 <script setup>
 import { nextTick, onMounted, onUnmounted, ref, computed } from 'vue'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { useChartTheme } from '@/composables/useChartTheme'
 import {
   getForwardObservabilityTargets,
   getForwardObservabilityTrend,
@@ -139,6 +140,7 @@ import {
 } from '@/api/admin'
 
 const { t, formatDateTime } = useAppI18n()
+const { themeFor, onThemeChange, graphColors } = useChartTheme()
 
 const tabs = computed(() => ([
   { key: 'trend', label: t('observability.tabs.trend') },
@@ -183,14 +185,14 @@ function formatRtt(value) {
   return Number(value).toFixed(1)
 }
 
-// Topology node fill: offline is grey; online color encodes the node kind
-// (relay/exit = forward infra, node = AnixOps Agent proxy node).
-function nodeFill(n) {
-  if (!n.online) return '#86909c'
-  if (n.kind === 'relay') return '#3491fa'
-  if (n.kind === 'exit') return '#00b42a'
-  if (n.kind === 'node') return '#ff7d00'
-  return '#3491fa'
+// Topology node fill from the chart tokens: offline is the neutral colour;
+// online colour encodes the node kind (relay/exit = forward infra,
+// node = AnixOps Agent proxy node).
+function nodeFill(n, colors) {
+  if (!n.online) return colors.offline
+  if (n.kind === 'exit') return colors.exit
+  if (n.kind === 'node') return colors.node
+  return colors.relay
 }
 
 // Human-readable node kind for topology labels.
@@ -260,7 +262,7 @@ async function renderTrendChart() {
   if (!trendChartEl.value || !trendPoints.value.length) return
   const echarts = await ensureECharts()
   if (!trendChart) {
-    trendChart = echarts.init(trendChartEl.value)
+    trendChart = echarts.init(trendChartEl.value, themeFor(echarts))
   }
   const times = trendPoints.value.map(p => formatDateTime(p.bucketAt, { month: undefined, year: undefined }))
   trendChart.setOption({
@@ -300,13 +302,14 @@ async function renderTopology() {
     topologyGraph.destroy()
     topologyGraph = null
   }
+  const colors = graphColors()
   const data = {
     nodes: topology.value.nodes.map(n => ({
       id: n.id,
       data: { ...n },
       style: {
         labelText: `${n.label} [${kindLabel(n.kind)}]\n${n.latencyMs}ms`,
-        fill: nodeFill(n)
+        fill: nodeFill(n, colors)
       }
     })),
     edges: topology.value.edges.map(e => ({
@@ -321,8 +324,8 @@ async function renderTopology() {
     data,
     autoFit: 'view',
     layout: { type: 'force', preventOverlap: true, linkDistance: 160 },
-    node: { style: { size: 44, labelFill: '#1d2129', labelPlacement: 'bottom' } },
-    edge: { style: { endArrow: true, stroke: '#c9cdd4', labelFill: '#86909c' } },
+    node: { style: { size: 44, labelFill: colors.label, labelPlacement: 'bottom' } },
+    edge: { style: { endArrow: true, stroke: colors.edge, labelFill: colors.edgeLabel } },
     behaviors: ['drag-canvas', 'zoom-canvas', 'drag-element']
   })
   topologyGraph.render()
@@ -383,6 +386,11 @@ function handleVisibility() {
 function handleResize() {
   if (trendChart) trendChart.resize()
 }
+
+onThemeChange(() => {
+  if (trendChart && echartsLib) trendChart.setTheme(themeFor(echartsLib))
+  if (topologyGraph) renderTopology()
+})
 
 onMounted(async () => {
   await loadTargets()

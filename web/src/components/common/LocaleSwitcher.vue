@@ -90,41 +90,45 @@ function onOptionKeydown(event, value) {
 </script>
 
 <style scoped>
+/* Segmented control on AnixOps Design tokens. */
 .locale-switcher {
   display: inline-flex;
   align-items: center;
-  gap: 4px;
-  padding: 4px;
-  border: 1px solid var(--border-color);
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.92);
-  box-shadow: var(--shadow-sm);
+  gap: var(--space-0-5);
+  padding: var(--space-0-5);
+  border: 0;
+  border-radius: var(--radius-pill);
+  background: var(--fill-1);
+  box-shadow: none;
 }
 
 .locale-option {
   min-width: 48px;
+  min-height: var(--size-control-sm);
   border: 0;
   background: transparent;
-  color: var(--text-secondary);
-  padding: 6px 12px;
-  border-radius: 999px;
+  color: var(--label-2);
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-pill);
   cursor: pointer;
-  font-size: 12px;
-  font-weight: 700;
+  font-size: var(--type-caption-size);
+  font-weight: var(--weight-semibold);
   box-shadow: none;
 }
 
 .locale-option:hover {
-  background: var(--surface-hover);
+  background: transparent;
+  color: var(--label-1);
 }
 
 .locale-option.active {
-  background: var(--primary-color);
-  color: #fff;
+  background: var(--bg-elevated);
+  color: var(--label-1);
+  box-shadow: var(--shadow-1), 0 0 0 0.5px var(--separator);
 }
 
 .locale-switcher.compact .locale-option {
   min-width: 40px;
-  padding: 6px 10px;
+  padding: 0 var(--space-2);
 }
 </style>

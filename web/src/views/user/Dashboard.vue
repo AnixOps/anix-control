@@ -226,7 +226,7 @@ onMounted(() => {
 .usage-bar {
   height: 10px;
   margin: 14px 0 12px;
-  background: #dbe5f4;
+  background: var(--fill-2);
   border-radius: 999px;
   overflow: hidden;
 }

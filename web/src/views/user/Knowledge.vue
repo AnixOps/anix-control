@@ -176,9 +176,9 @@ onMounted(() => {
 }
 
 .tab-item.active {
-  background: var(--primary-color);
-  border-color: var(--primary-color);
-  color: white;
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
+  color: var(--on-accent);
 }
 
 .content-container {

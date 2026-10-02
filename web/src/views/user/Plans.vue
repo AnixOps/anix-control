@@ -323,8 +323,8 @@ onMounted(() => {
   position: absolute;
   top: 16px;
   right: 16px;
-  background: var(--primary-color);
-  color: white;
+  background: var(--accent-fill);
+  color: var(--on-accent);
   padding: 4px 12px;
   border-radius: 999px;
   font-size: 12px;

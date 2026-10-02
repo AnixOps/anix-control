@@ -179,9 +179,9 @@ function createAnotherForward() {
   font-weight: 700;
 }
 .wizard-step.active .wizard-step-index {
-  background: var(--primary-color);
-  border-color: var(--primary-color);
-  color: #fff;
+  background: var(--accent-fill);
+  border-color: var(--accent-fill);
+  color: var(--on-accent);
 }
 .wizard-step.complete .wizard-step-index {
   background: var(--success-color);
