@@ -360,6 +360,10 @@ export default {
       markdown: 'Messages support Telegram Markdown where available.',
       singleFirst: 'Test with a single user before broadcasting.'
     },
+    confirm: {
+      broadcastTitle: 'Broadcast this message to every bound user?',
+      broadcastMessage: 'It goes to everyone who has bound Telegram and can’t be recalled once sent.'
+    },
     messages: {
       fetchConfigFailed: 'Failed to load Telegram bot config',
       fetchUsersFailed: 'Failed to load Telegram users',

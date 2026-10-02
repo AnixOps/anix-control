@@ -360,6 +360,10 @@ export default {
       markdown: '在支持的场景下，消息可使用 Telegram Markdown。',
       singleFirst: '建议先单发测试，再执行广播。'
     },
+    confirm: {
+      broadcastTitle: '向所有绑定用户广播这条消息？',
+      broadcastMessage: '消息会发送给每一位已绑定 Telegram 的用户，发出后无法撤回。'
+    },
     messages: {
       fetchConfigFailed: '加载 Telegram Bot 配置失败',
       fetchUsersFailed: '加载 Telegram 用户失败',
