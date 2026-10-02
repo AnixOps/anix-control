@@ -14,7 +14,7 @@
           @escape-key-down="onEscape"
           @interact-outside="onInteractOutside"
         >
-          <header class="ui-dialog__header">
+          <header class="ui-dialog__header" :class="{ 'ui-dialog__header--closable': !hideClose }">
             <DialogTitle class="ui-dialog__title">
               <slot name="title">{{ title }}</slot>
             </DialogTitle>
@@ -22,7 +22,7 @@
               <slot name="description">{{ description }}</slot>
             </DialogDescription>
           </header>
-          <div v-if="$slots.default" class="ui-dialog__body">
+          <div v-if="$slots.default" :ref="scrollable.setElement" class="ui-dialog__body" :tabindex="scrollable.tabindex.value">
             <slot :close="close" />
           </div>
           <footer v-if="$slots.footer" class="ui-dialog__footer">
@@ -55,6 +55,7 @@ import { useI18n } from 'vue-i18n'
 import { DialogClose, DialogContent, DialogDescription, DialogOverlay, DialogPortal, DialogRoot, DialogTitle, DialogTrigger } from 'reka-ui'
 import { X } from '@lucide/vue'
 import UiIcon from './UiIcon.vue'
+import { useScrollableFocus } from './internal/useScrollableFocus'
 
 defineOptions({ inheritAttrs: false })
 
@@ -77,6 +78,8 @@ const emit = defineEmits(['update:open', 'close'])
 const attrs = useAttrs()
 const { t } = useI18n()
 const contentRef = ref(null)
+// Read-only content that scrolls stays reachable from the keyboard.
+const scrollable = useScrollableFocus()
 
 // Without a description, drop aria-describedby (Reka points it at an id that
 // would not exist).
@@ -124,6 +127,9 @@ defineExpose({ close })
   inset: 0;
   z-index: var(--z-modal);
   display: grid;
+  /* minmax(0, 1fr): wide content scrolls inside the dialog instead of
+     widening the column past the screen. */
+  grid-template-columns: minmax(0, 1fr);
   place-items: center;
   padding: var(--space-6) var(--space-4);
   overflow-y: auto;
@@ -173,7 +179,12 @@ defineExpose({ close })
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: var(--space-6) var(--space-16) 0 var(--space-6);
+  padding: var(--space-6) var(--space-6) 0;
+}
+
+/* Room for the close button in the top right corner. */
+.ui-dialog__header--closable {
+  padding-right: var(--space-16);
 }
 
 .ui-dialog__title {
@@ -187,6 +198,11 @@ defineExpose({ close })
   color: var(--label-2);
   font-size: var(--type-callout-size);
   line-height: var(--type-callout-line);
+}
+
+.ui-dialog__body:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: calc(-1 * var(--focus-ring-offset));
 }
 
 .ui-dialog__body {

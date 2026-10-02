@@ -4,6 +4,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import Forward from '@/views/admin/Forward.vue'
 import i18n, { setLocale } from '@/i18n'
 import { useUserStore } from '@/stores/user'
+import { allInBody } from './helpers/feedback'
 
 const adminApi = vi.hoisted(() => ({
   createForward: vi.fn(),
@@ -34,7 +35,9 @@ function deferred() {
 }
 
 function mountForward() {
+  // Dialogs render into document.body (UiDialog portal).
   wrapper = mount(Forward, {
+    attachTo: document.body,
     global: {
       stubs: {
         'router-link': {
@@ -94,7 +97,7 @@ describe('Forward.vue', () => {
     wrapper.vm.openCreateModal()
     await wrapper.vm.$nextTick()
 
-    const options = wrapper.findAll('[data-test="forward-tunnel-select"] option').map(option => option.text())
+    const options = allInBody('[data-test="forward-tunnel-select"] option').map(option => option.text())
 
     expect(wrapper.text()).toContain(i18n.global.t('runtime.forward.modeCompatibilityHint'))
     expect(options.some(text => text.includes('Port Tunnel'))).toBe(true)
@@ -297,7 +300,7 @@ describe('Forward.vue', () => {
     wrapper.vm.openEditModal(wrapper.vm.forwards[0])
     await wrapper.vm.$nextTick()
 
-    expect(wrapper.text()).toContain(
+    expect(document.body.textContent).toContain(
       i18n.global.t('runtime.forward.tunnelHintLocalIncompatible', { name: 'NodeX Tunnel' })
     )
 

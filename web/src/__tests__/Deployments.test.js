@@ -1,7 +1,8 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises, mount } from '@vue/test-utils'
+import { DOMWrapper, flushPromises, mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import Deployments from '@/views/admin/Deployments.vue'
+import { answerConfirms } from './helpers/feedback'
 
 const kernelApi = vi.hoisted(() => ({
   applyKernelDeployment: vi.fn(),
@@ -106,10 +107,26 @@ async function openTargets(wrapper) {
   await flushPromises()
 }
 
+// The assignment drawer (UiSheet) and the topology workspace (UiDialog)
+// render into document.body.
+function inBody(selector) {
+  return new DOMWrapper(document.body.querySelector(selector))
+}
+
+function bodyGet(selector) {
+  const found = inBody(selector)
+  if (!found.exists()) throw new Error(`Unable to find ${selector} in document.body`)
+  return found
+}
+
+function assignmentDrawer() {
+  return inBody('[data-testid="assignment-drawer"]')
+}
+
 async function openAssignmentDrawer(wrapper) {
   await wrapper.get('[data-testid="new-assignment"]').trigger('click')
   await flushPromises()
-  return wrapper.get('[data-testid="assignment-drawer"]')
+  return assignmentDrawer()
 }
 
 describe('Deployments', () => {
@@ -266,10 +283,10 @@ describe('Deployments', () => {
     })
     await wrapper.get('[data-testid="new-assignment"]').trigger('click')
     await flushPromises()
-    await wrapper.get('[data-testid="save-assignment"]').trigger('click')
+    await assignmentDrawer().get('[data-testid="save-assignment"]').trigger('click')
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="assignment-drawer"]').text()).toContain('agent package artifact is missing')
+    expect(assignmentDrawer().text()).toContain('agent package artifact is missing')
     wrapper.unmount()
   })
 
@@ -487,14 +504,14 @@ describe('Deployments', () => {
       enabled: false,
     }
     resolveAssignmentState([assignment])
-    const confirmSpy = vi.spyOn(globalThis, 'confirm').mockReturnValue(true)
+    answerConfirms(true)
     const wrapper = mountDeployments()
     await flushPromises()
     await openTargets(wrapper)
 
     await wrapper.get('[data-testid="edit-assignment-7"]').trigger('click')
     await flushPromises()
-    const drawer = wrapper.get('[data-testid="assignment-drawer"]')
+    const drawer = assignmentDrawer()
     for (const selector of ['#assignment-node', '#assignment-plugin', '#assignment-scope', '#assignment-role']) {
       expect(drawer.get(selector).attributes('disabled')).toBeDefined()
     }
@@ -527,7 +544,6 @@ describe('Deployments', () => {
     await flushPromises()
     expect(kernelApi.deleteKernelNodeAssignment).toHaveBeenCalledWith(11, 7)
     wrapper.unmount()
-    confirmSpy.mockRestore()
   })
 
   it('requires explicit confirmation before deleting an assignment', async () => {
@@ -543,23 +559,22 @@ describe('Deployments', () => {
       enabled: true,
     }
     resolveAssignmentState([assignment])
-    const confirmSpy = vi.spyOn(globalThis, 'confirm')
-      .mockReturnValueOnce(false)
-      .mockReturnValueOnce(true)
+    const answers = [false, true]
+    const confirms = answerConfirms(() => answers.shift())
     const wrapper = mountDeployments()
     await flushPromises()
     await openTargets(wrapper)
 
     await wrapper.get('[data-testid="delete-assignment-7"]').trigger('click')
     await flushPromises()
-    expect(confirmSpy).toHaveBeenCalledTimes(1)
+    expect(confirms.calls).toHaveLength(1)
+    expect(confirms.last()).toMatchObject({ tone: 'danger', title: 'Delete gost-mesh / relay from this node?', confirmLabel: 'Delete assignment' })
     expect(kernelApi.deleteKernelNodeAssignment).not.toHaveBeenCalled()
 
     await wrapper.get('[data-testid="delete-assignment-7"]').trigger('click')
     await flushPromises()
     expect(kernelApi.deleteKernelNodeAssignment).toHaveBeenCalledWith(11, 7)
     wrapper.unmount()
-    confirmSpy.mockRestore()
   })
 
   it('creates a topology and opens its revision workspace', async () => {
@@ -569,8 +584,8 @@ describe('Deployments', () => {
     await flushPromises()
 
     await wrapper.get('[data-testid="new-topology"]').trigger('click')
-    await wrapper.get('#new-topology-name').setValue('New topology')
-    await wrapper.get('#create-topology').trigger('click')
+    await bodyGet('#new-topology-name').setValue('New topology')
+    await bodyGet('#create-topology').trigger('click')
     await flushPromises()
 
     expect(kernelApi.createKernelTopology).toHaveBeenCalledWith({
@@ -578,7 +593,7 @@ describe('Deployments', () => {
       service_scope: 'forward',
       description: '',
     })
-    expect(wrapper.get('[data-testid="topology-workspace"]').exists()).toBe(true)
+    expect(bodyGet('[data-testid="topology-workspace"]').exists()).toBe(true)
     wrapper.unmount()
   })
 
@@ -592,13 +607,13 @@ describe('Deployments', () => {
     await flushPromises()
 
     await wrapper.get('[data-testid="new-topology"]').trigger('click')
-    await wrapper.get('#new-topology-name').setValue('New topology')
-    await wrapper.get('#create-topology').trigger('click')
+    await bodyGet('#new-topology-name').setValue('New topology')
+    await bodyGet('#create-topology').trigger('click')
     await flushPromises()
 
     expect(kernelApi.createKernelTopology).toHaveBeenCalledTimes(1)
-    expect(wrapper.get('#topology-editor-title').exists()).toBe(true)
-    expect(wrapper.text()).toContain('topology list refresh failed')
+    expect(bodyGet('#topology-editor-title').exists()).toBe(true)
+    expect(bodyGet('[data-testid="topology-workspace"]').text()).toContain('topology list refresh failed')
     wrapper.unmount()
   })
 
@@ -618,10 +633,10 @@ describe('Deployments', () => {
 
     await wrapper.get('[data-testid="edit-topology-3"]').trigger('click')
     await flushPromises()
-    expect(wrapper.get('#topology-editor-json').element.value).toContain('entry')
-    await wrapper.get('#topology-revision-message').setValue('canary')
-    await wrapper.get('#topology-rollout-group').setValue('canary-a')
-    await wrapper.get('#topology-diagnose').trigger('click')
+    expect(bodyGet('#topology-editor-json').element.value).toContain('entry')
+    await bodyGet('#topology-revision-message').setValue('canary')
+    await bodyGet('#topology-rollout-group').setValue('canary-a')
+    await bodyGet('#topology-diagnose').trigger('click')
     await flushPromises()
     expect(kernelApi.validateKernelTopology).toHaveBeenCalledWith(expect.objectContaining({
       message: 'canary',
@@ -632,11 +647,11 @@ describe('Deployments', () => {
       failurePolicy: 'stop_and_rollback',
     })
 
-    await wrapper.get('#topology-save-revision').trigger('click')
+    await bodyGet('#topology-save-revision').trigger('click')
     await flushPromises()
     expect(kernelApi.createKernelTopologyRevision).toHaveBeenCalledWith(3, expect.objectContaining({ message: 'canary' }))
-    await wrapper.get('#topology-rollout-group').setValue('canary-a')
-    await wrapper.get('#topology-plan').trigger('click')
+    await bodyGet('#topology-rollout-group').setValue('canary-a')
+    await bodyGet('#topology-plan').trigger('click')
     await flushPromises()
     expect(kernelApi.planKernelDeployment).toHaveBeenCalledWith(expect.objectContaining({
       topology_id: 3,
@@ -659,18 +674,18 @@ describe('Deployments', () => {
 
     await wrapper.get('[data-testid="view-deployment-44"]').trigger('click')
     await flushPromises()
-    await wrapper.get('#topology-apply').trigger('click')
+    await bodyGet('#topology-apply').trigger('click')
     expect(kernelApi.applyKernelDeployment).not.toHaveBeenCalled()
-    expect(wrapper.get('[data-testid="apply-confirmation"]').text()).toContain('Mesh')
-    await wrapper.get('[data-testid="confirm-apply"]').trigger('click')
+    expect(bodyGet('[data-testid="apply-confirmation"]').text()).toContain('Mesh')
+    await bodyGet('[data-testid="confirm-apply"]').trigger('click')
     await flushPromises()
     expect(kernelApi.applyKernelDeployment).toHaveBeenCalledWith(44)
     expect(kernelApi.getKernelDeploymentStatus.mock.calls.length).toBeGreaterThan(1)
 
-    await wrapper.get('#topology-rollback').trigger('click')
+    await bodyGet('#topology-rollback').trigger('click')
     expect(kernelApi.rollbackKernelDeployment).not.toHaveBeenCalled()
-    expect(wrapper.get('[data-testid="rollback-confirmation"]').text()).toContain('Mesh')
-    await wrapper.get('[data-testid="confirm-rollback"]').trigger('click')
+    expect(bodyGet('[data-testid="rollback-confirmation"]').text()).toContain('Mesh')
+    await bodyGet('[data-testid="confirm-rollback"]').trigger('click')
     await flushPromises()
     expect(kernelApi.rollbackKernelDeployment).toHaveBeenCalledWith(44)
     wrapper.unmount()
@@ -700,13 +715,13 @@ describe('Deployments', () => {
 
     await wrapper.get('[data-testid="edit-topology-5"]').trigger('click')
     await flushPromises()
-    expect(wrapper.get('.workspace-meta').text()).toContain('Tokyo mesh')
-    expect(wrapper.find('.deployment-status').exists()).toBe(false)
+    expect(bodyGet('[data-testid="topology-workspace"]').text()).toContain('Tokyo mesh')
+    expect(inBody('.deployment-status').exists()).toBe(false)
 
     firstStatus.resolve({ deployment: { id: 44, topology_id: 4, state: 'applying' }, steps: [] })
     await flushPromises()
-    expect(wrapper.get('.workspace-meta').text()).toContain('Tokyo mesh')
-    expect(wrapper.find('.deployment-status').exists()).toBe(false)
+    expect(bodyGet('[data-testid="topology-workspace"]').text()).toContain('Tokyo mesh')
+    expect(inBody('.deployment-status').exists()).toBe(false)
     wrapper.unmount()
   })
 

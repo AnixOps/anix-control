@@ -36,9 +36,9 @@
                     class="tag-remove"
                     :title="pt('actions.removeGroup')"
                     :aria-label="pt('actions.removeGroup')"
-                    @click="removeGroup(plan.id, group.id)"
+                    @click="removeGroup(plan, group)"
                   >
-                    x
+                    ×
                   </button>
                 </span>
                 <button
@@ -87,104 +87,119 @@
       </table>
     </section>
 
-    <div v-if="showPlanModal" class="modal-overlay" @click.self="closePlanModal">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>{{ editingPlanId ? pt('planModal.editTitle') : pt('planModal.createTitle') }}</h3>
-          <button class="btn btn-ghost btn-sm close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closePlanModal">×</button>
+    <UiDialog
+      :open="showPlanModal"
+      size="sm"
+      :title="editingPlanId ? pt('planModal.editTitle') : pt('planModal.createTitle')"
+      :dismissible="!planSaving"
+      @update:open="value => { if (!value) closePlanModal() }"
+    >
+      <div class="dialog-form">
+        <div class="form-group">
+          <label for="plan-name">{{ pt('planModal.fields.name') }} <span class="required">*</span></label>
+          <input
+            id="plan-name"
+            v-model="form.name"
+            type="text"
+            data-test="plan-name-input"
+            :placeholder="pt('planModal.placeholders.name')"
+            :aria-invalid="nameError ? 'true' : undefined"
+            :aria-describedby="nameError ? 'plan-name-error' : undefined"
+          />
+          <p v-if="nameError" id="plan-name-error" class="form-error" role="alert">{{ nameError }}</p>
         </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>{{ pt('planModal.fields.name') }} <span class="required">*</span></label>
-            <input v-model="form.name" type="text" :placeholder="pt('planModal.placeholders.name')" />
-          </div>
-          <div class="form-group">
-            <label>{{ pt('planModal.fields.transfer') }}</label>
-            <input v-model.number="form.transfer_enable" type="number" min="0" />
-          </div>
-          <div class="form-group">
-            <label>{{ pt('planModal.fields.speedLimit') }}</label>
-            <input v-model.number="form.speed_limit" data-test="plan-speed-limit-input" type="number" min="0" />
-          </div>
-          <div class="form-group">
-            <label>{{ pt('planModal.fields.deviceLimit') }}</label>
-            <input v-model.number="form.device_limit" data-test="plan-device-limit-input" type="number" min="0" />
-          </div>
-          <div v-if="isCommercial" class="form-group" data-test="plan-month-price-field">
-            <label>{{ pt('planModal.fields.monthPrice') }}</label>
-            <input v-model.number="form.month_price" type="number" min="0" />
-          </div>
+        <div class="form-group">
+          <label for="plan-transfer">{{ pt('planModal.fields.transfer') }}</label>
+          <input id="plan-transfer" v-model.number="form.transfer_enable" type="number" min="0" />
         </div>
-        <div class="modal-footer">
-          <button class="btn" @click="closePlanModal">{{ t('common.actions.cancel') }}</button>
-          <button class="btn btn-primary" data-test="plan-save-button" @click="save">{{ t('common.actions.save') }}</button>
+        <div class="form-group">
+          <label for="plan-speed-limit">{{ pt('planModal.fields.speedLimit') }}</label>
+          <input id="plan-speed-limit" v-model.number="form.speed_limit" data-test="plan-speed-limit-input" type="number" min="0" />
         </div>
+        <div class="form-group">
+          <label for="plan-device-limit">{{ pt('planModal.fields.deviceLimit') }}</label>
+          <input id="plan-device-limit" v-model.number="form.device_limit" data-test="plan-device-limit-input" type="number" min="0" />
+        </div>
+        <div v-if="isCommercial" class="form-group" data-test="plan-month-price-field">
+          <label for="plan-month-price">{{ pt('planModal.fields.monthPrice') }}</label>
+          <input id="plan-month-price" v-model.number="form.month_price" type="number" min="0" />
+        </div>
+        <p v-if="planError" class="form-error" role="alert" data-test="plan-save-error">{{ planError }}</p>
       </div>
-    </div>
+      <template #footer="{ close }">
+        <UiButton :disabled="planSaving" @click="close">{{ t('common.actions.cancel') }}</UiButton>
+        <UiButton variant="primary" data-test="plan-save-button" :loading="planSaving" @click="save">{{ t('common.actions.save') }}</UiButton>
+      </template>
+    </UiDialog>
 
-    <div v-if="showAssign" class="modal-overlay" @click.self="closeAssign">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>{{ pt('assignModal.title') }}</h3>
-          <button class="btn btn-ghost btn-sm close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeAssign">×</button>
+    <UiDialog
+      :open="showAssign"
+      size="sm"
+      :title="pt('assignModal.title')"
+      :dismissible="!assigning"
+      @update:open="value => { if (!value) closeAssign() }"
+    >
+      <div class="dialog-form">
+        <div class="form-group">
+          <label for="plan-assign-user">{{ pt('assignModal.fields.userId') }} <span class="required">*</span></label>
+          <input
+            id="plan-assign-user"
+            v-model.number="assignForm.user_id"
+            type="number"
+            data-test="plan-assign-user"
+            :placeholder="pt('assignModal.placeholders.userId')"
+            :aria-invalid="assignUserError ? 'true' : undefined"
+            :aria-describedby="assignUserError ? 'plan-assign-user-error' : undefined"
+          />
+          <p v-if="assignUserError" id="plan-assign-user-error" class="form-error" role="alert">{{ assignUserError }}</p>
         </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>{{ pt('assignModal.fields.userId') }} <span class="required">*</span></label>
-            <input
-              v-model.number="assignForm.user_id"
-              type="number"
-              :placeholder="pt('assignModal.placeholders.userId')"
-            />
-          </div>
-          <div class="form-group">
-            <label>{{ pt('assignModal.fields.expireAt') }}</label>
-            <input v-model.number="assignForm.expire_at" type="number" />
-          </div>
+        <div class="form-group">
+          <label for="plan-assign-expire">{{ pt('assignModal.fields.expireAt') }}</label>
+          <input id="plan-assign-expire" v-model.number="assignForm.expire_at" type="number" />
         </div>
-        <div class="modal-footer">
-          <button class="btn" @click="closeAssign">{{ t('common.actions.cancel') }}</button>
-          <button class="btn btn-primary" @click="assign">{{ pt('actions.assign') }}</button>
-        </div>
+        <p v-if="assignError" class="form-error" role="alert" data-test="plan-assign-error">{{ assignError }}</p>
       </div>
-    </div>
+      <template #footer="{ close }">
+        <UiButton :disabled="assigning" @click="close">{{ t('common.actions.cancel') }}</UiButton>
+        <UiButton variant="primary" data-test="plan-assign-button" :loading="assigning" @click="assign">{{ pt('actions.assign') }}</UiButton>
+      </template>
+    </UiDialog>
 
-    <div v-if="showGroupModal" class="modal-overlay" @click.self="closeGroupModal">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>{{ pt('groupModal.title', { name: currentPlan?.name || '' }) }}</h3>
-          <button class="btn btn-ghost btn-sm close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeGroupModal">×</button>
-        </div>
-        <div class="modal-body">
-          <p class="group-description">{{ pt('groupModal.description') }}</p>
-
-          <div v-if="allGroups.length === 0" class="empty-msg">
-            {{ pt('groupModal.empty') }}
-          </div>
-
-          <div v-else class="group-list">
-            <div
-              v-for="group in allGroups"
-              :key="group.id"
-              class="group-item"
-              :class="{ selected: isGroupSelected(group.id) }"
-              @click="toggleGroup(group)"
-            >
-              <div class="group-info">
-                <div class="group-name">{{ group.name }}</div>
-                <div class="group-desc">{{ group.description || pt('groupModal.noDescription') }}</div>
-              </div>
-              <div class="group-check">
-                <span>{{ isGroupSelected(group.id) ? pt('groupModal.selectedShort') : '' }}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn" @click="closeGroupModal">{{ t('common.actions.close') }}</button>
-        </div>
+    <UiDialog
+      :open="showGroupModal"
+      :title="pt('groupModal.title', { name: currentPlan?.name || '' })"
+      :description="pt('groupModal.description')"
+      @update:open="value => { if (!value) closeGroupModal() }"
+    >
+      <div v-if="allGroups.length === 0" class="empty-msg">
+        {{ pt('groupModal.empty') }}
       </div>
-    </div>
+
+      <div v-else class="group-list">
+        <button
+          v-for="group in allGroups"
+          :key="group.id"
+          type="button"
+          class="group-item"
+          :class="{ selected: isGroupSelected(group.id) }"
+          :aria-pressed="isGroupSelected(group.id) ? 'true' : 'false'"
+          :disabled="togglingGroupId === group.id"
+          @click="toggleGroup(group)"
+        >
+          <span class="group-info">
+            <span class="group-name">{{ group.name }}</span>
+            <span class="group-desc">{{ group.description || pt('groupModal.noDescription') }}</span>
+          </span>
+          <span class="group-check" aria-hidden="true">
+            <span>{{ isGroupSelected(group.id) ? pt('groupModal.selectedShort') : '' }}</span>
+          </span>
+        </button>
+      </div>
+      <p v-if="groupError" class="form-error" role="alert" data-test="plan-group-error">{{ groupError }}</p>
+      <template #footer="{ close }">
+        <UiButton @click="close">{{ t('common.actions.close') }}</UiButton>
+      </template>
+    </UiDialog>
   </div>
 </template>
 
@@ -203,12 +218,15 @@ import {
 } from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useEdition } from '@/composables/useEdition'
+import { UiButton, UiDialog, useConfirm, useToast } from '@/ui'
 
 const { t, te } = useAppI18n()
 // The community edition calls plans subscription templates: no price, no
 // purchase. Copy comes from adminTemplates where it differs, and a stored
 // price is sent back unchanged.
 const { isCommercial } = useEdition()
+const toast = useToast()
+const confirm = useConfirm()
 const pt = (key, params) => (
   !isCommercial.value && te(`adminTemplates.${key}`)
     ? t(`adminTemplates.${key}`, params)
@@ -225,6 +243,14 @@ const showGroupModal = ref(false)
 
 const editingPlanId = ref(null)
 const currentPlan = ref(null)
+const planSaving = ref(false)
+const planError = ref('')
+const nameError = ref('')
+const assigning = ref(false)
+const assignError = ref('')
+const assignUserError = ref('')
+const groupError = ref('')
+const togglingGroupId = ref(null)
 
 const form = reactive({
   name: '',
@@ -280,12 +306,16 @@ const resetPlanForm = () => {
   form.speed_limit = 0
   form.device_limit = 0
   form.month_price = null
+  planError.value = ''
+  nameError.value = ''
 }
 
 const resetAssignForm = () => {
   assignForm.plan_id = null
   assignForm.user_id = null
   assignForm.expire_at = null
+  assignError.value = ''
+  assignUserError.value = ''
 }
 
 const loadPlanGroups = async (planId) => {
@@ -342,25 +372,31 @@ const edit = (plan) => {
   form.speed_limit = Number(plan.speed_limit || 0)
   form.device_limit = Number(plan.device_limit || 0)
   form.month_price = plan.month_price
+  planError.value = ''
+  nameError.value = ''
   showPlanModal.value = true
 }
 
 const remove = async (plan) => {
-  if (!window.confirm(pt('messages.deleteConfirm'))) {
-    return
-  }
-
-  try {
-    ensurePlanSuccess(
-      await deletePlan(plan.id),
-      'adminPlans.messages.deleteFailedShort'
-    )
-    await load()
-  } catch (error) {
-    window.alert(pt('messages.deleteFailed', {
-      message: resolveApiError(error, 'adminPlans.messages.deleteFailedShort')
-    }))
-  }
+  const confirmed = await confirm({
+    title: pt('confirm.deleteTitle', { name: plan.name }),
+    message: pt('confirm.deleteMessage'),
+    confirmLabel: pt('confirm.deleteAction'),
+    tone: 'danger',
+    onConfirm: async () => {
+      try {
+        ensurePlanSuccess(
+          await deletePlan(plan.id),
+          'adminPlans.messages.deleteFailedShort'
+        )
+      } catch (error) {
+        throw new Error(resolveApiError(error, 'adminPlans.messages.deleteFailedShort'))
+      }
+    }
+  })
+  if (!confirmed) return
+  toast.success(pt('messages.deleted', { name: plan.name }))
+  await load()
 }
 
 const closePlanModal = () => {
@@ -369,8 +405,11 @@ const closePlanModal = () => {
 }
 
 const save = async () => {
+  if (planSaving.value) return
+  planError.value = ''
+  nameError.value = ''
   if (!form.name || form.name.trim() === '') {
-    window.alert(pt('messages.nameRequired'))
+    nameError.value = pt('messages.nameRequired')
     return
   }
 
@@ -382,6 +421,7 @@ const save = async () => {
     month_price: form.month_price
   }
 
+  planSaving.value = true
   try {
     if (editingPlanId.value) {
       ensurePlanSuccess(
@@ -395,11 +435,14 @@ const save = async () => {
       )
     }
     closePlanModal()
+    toast.success(pt('messages.saved', { name: payload.name }))
     await load()
   } catch (error) {
-    window.alert(pt('messages.saveFailed', {
+    planError.value = pt('messages.saveFailed', {
       message: resolveApiError(error, 'adminPlans.messages.saveFailedShort')
-    }))
+    })
+  } finally {
+    planSaving.value = false
   }
 }
 
@@ -415,11 +458,15 @@ const closeAssign = () => {
 }
 
 const assign = async () => {
+  if (assigning.value) return
+  assignError.value = ''
+  assignUserError.value = ''
   if (!assignForm.user_id) {
-    window.alert(pt('messages.userIdRequired'))
+    assignUserError.value = pt('messages.userIdRequired')
     return
   }
 
+  assigning.value = true
   try {
     ensurePlanSuccess(
       await assignPlanToUser(assignForm.plan_id, {
@@ -429,16 +476,19 @@ const assign = async () => {
       'adminPlans.messages.assignFailedShort'
     )
     closeAssign()
-    window.alert(pt('messages.assignSuccess'))
+    toast.success(pt('messages.assignSuccess'))
   } catch (error) {
-    window.alert(pt('messages.assignFailed', {
+    assignError.value = pt('messages.assignFailed', {
       message: resolveApiError(error, 'adminPlans.messages.assignFailedShort')
-    }))
+    })
+  } finally {
+    assigning.value = false
   }
 }
 
 const openGroupModal = (plan) => {
   currentPlan.value = plan
+  groupError.value = ''
   showGroupModal.value = true
 }
 
@@ -457,6 +507,8 @@ const toggleGroup = async (group) => {
   if (!currentPlan.value) return
 
   const planId = currentPlan.value.id
+  groupError.value = ''
+  togglingGroupId.value = group.id
 
   try {
     if (isGroupSelected(group.id)) {
@@ -472,28 +524,44 @@ const toggleGroup = async (group) => {
     }
     await loadPlanGroups(planId)
   } catch (error) {
-    window.alert(pt('messages.toggleGroupFailed', {
+    groupError.value = pt('messages.toggleGroupFailed', {
       message: resolveApiError(error, 'adminPlans.messages.toggleGroupFailedShort')
-    }))
+    })
+  } finally {
+    togglingGroupId.value = null
   }
 }
 
-const removeGroup = async (planId, groupId) => {
-  if (!window.confirm(pt('messages.removeGroupConfirm'))) {
-    return
-  }
-
+// Removing a group from a plan is undone by adding it back: no
+// confirmation, 撤销 in the toast (redesign plan §9).
+const removeGroup = async (plan, group) => {
   try {
     ensurePlanSuccess(
-      await removeGroupFromPlan(planId, groupId),
+      await removeGroupFromPlan(plan.id, group.id),
       'adminPlans.messages.removeGroupFailedShort'
     )
-    await loadPlanGroups(planId)
+    await loadPlanGroups(plan.id)
   } catch (error) {
-    window.alert(pt('messages.removeGroupFailed', {
+    toast.error(pt('messages.removeGroupFailed', {
       message: resolveApiError(error, 'adminPlans.messages.removeGroupFailedShort')
     }))
+    return
   }
+  toast.success(pt('messages.groupRemoved', { group: group.name, plan: plan.name }), {
+    undo: async () => {
+      try {
+        ensurePlanSuccess(
+          await addGroupToPlan(plan.id, group.id),
+          'adminPlans.messages.toggleGroupFailedShort'
+        )
+      } catch (error) {
+        toast.error(pt('messages.toggleGroupFailed', {
+          message: resolveApiError(error, 'adminPlans.messages.toggleGroupFailedShort')
+        }))
+      }
+      await loadPlanGroups(plan.id)
+    }
+  })
 }
 
 const formatPlanLimits = (plan) => {
@@ -574,84 +642,20 @@ const formatPlanLimits = (plan) => {
   padding: 40px !important;
 }
 
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.42);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 20px;
+.dialog-form > .form-group:last-child {
+  margin-bottom: 0;
 }
 
-.modal {
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  width: 100%;
-  max-width: 500px;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: var(--shadow-lg);
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.modal-header h3 {
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.close-btn {
-  min-width: 36px;
-  font-size: 18px;
-}
-
-.modal-body {
-  padding: 20px;
-}
-
-.modal-body .form-group {
-  margin-bottom: 16px;
-}
-
-.modal-body label {
-  display: block;
-  margin-bottom: 6px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-secondary);
-}
-
-.modal-body .required {
-  color: var(--error-color);
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 16px 20px;
-  border-top: 1px solid var(--border-color);
-  flex-wrap: wrap;
+.form-error {
+  margin: var(--space-1) 0 0;
+  color: var(--danger);
+  font-size: var(--type-callout-size);
 }
 
 .empty-msg {
   text-align: center;
   color: var(--text-secondary);
   padding: 30px 20px;
-}
-
-.group-description {
-  margin-bottom: 16px;
-  color: var(--text-secondary);
 }
 
 .group-list {
@@ -662,14 +666,25 @@ const formatPlanLimits = (plan) => {
 
 .group-item {
   display: flex;
+  width: 100%;
+  min-height: auto;
   align-items: center;
   justify-content: space-between;
+  gap: var(--space-3);
+  color: var(--label-1);
+  font: inherit;
+  text-align: left;
   padding: 12px 16px;
   background: var(--surface-muted);
   border: 1px solid var(--border-color);
   border-radius: var(--radius-md);
   cursor: pointer;
   transition: var(--transition);
+}
+
+.group-item:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .group-item:hover {
@@ -682,7 +697,9 @@ const formatPlanLimits = (plan) => {
 }
 
 .group-info {
+  display: flex;
   flex: 1;
+  flex-direction: column;
 }
 
 .group-name {

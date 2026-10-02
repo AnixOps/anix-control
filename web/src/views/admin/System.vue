@@ -544,98 +544,89 @@
       </div>
     </div>
 
-    <!-- Config modal -->
-    <div v-if="showConfigModal" class="modal-overlay" @click.self="showConfigModal = false">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>{{ editingConfig ? t('runtime.systemPage.configModal.titleEdit') : t('runtime.systemPage.configModal.titleCreate') }}</h3>
-          <button class="close-btn" :aria-label="t('common.actions.close')" :title="t('common.actions.close')" @click="showConfigModal = false">x</button>
+    <!-- Config dialog -->
+    <UiDialog v-model:open="showConfigModal" :title="editingConfig ? t('runtime.systemPage.configModal.titleEdit') : t('runtime.systemPage.configModal.titleCreate')">
+      <div class="system-dialog-form" data-test="system-config-form">
+        <div class="form-group">
+          <label for="system-config-key">{{ t('runtime.systemPage.configModal.key') }} <span class="required">*</span></label>
+          <input id="system-config-key" v-model="configForm.key" type="text" :placeholder="t('runtime.systemPage.configModal.keyPlaceholder')" :disabled="!!editingConfig" />
         </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>{{ t('runtime.systemPage.configModal.key') }} <span class="required">*</span></label>
-            <input v-model="configForm.key" type="text" :placeholder="t('runtime.systemPage.configModal.keyPlaceholder')" :disabled="!!editingConfig" />
-          </div>
-          <div class="form-group">
-            <label>{{ t('runtime.systemPage.configModal.value') }}</label>
-            <textarea v-model="configForm.value" rows="3" :placeholder="t('runtime.systemPage.configModal.valuePlaceholder')"></textarea>
-            <p v-if="editingConfig && configForm.sensitive" class="text-secondary">
-              {{
-                configForm.has_value
-                  ? t('runtime.systemPage.configModal.sensitiveHintWithValue')
-                  : t('runtime.systemPage.configModal.sensitiveHintWithoutValue')
-              }}
-            </p>
-          </div>
-          <div class="form-group">
-            <label>{{ t('runtime.systemPage.configModal.description') }}</label>
-            <input v-model="configForm.description" type="text" :placeholder="t('runtime.systemPage.configModal.descriptionPlaceholder')" />
-          </div>
+        <div class="form-group">
+          <label for="system-config-value">{{ t('runtime.systemPage.configModal.value') }}</label>
+          <textarea id="system-config-value" v-model="configForm.value" rows="3" :placeholder="t('runtime.systemPage.configModal.valuePlaceholder')"></textarea>
+          <p v-if="editingConfig && configForm.sensitive" class="text-secondary">
+            {{
+              configForm.has_value
+                ? t('runtime.systemPage.configModal.sensitiveHintWithValue')
+                : t('runtime.systemPage.configModal.sensitiveHintWithoutValue')
+            }}
+          </p>
         </div>
-        <div class="modal-footer">
-          <button class="btn-secondary" @click="showConfigModal = false">{{ t('common.actions.cancel') }}</button>
-          <button @click="saveConfig">{{ t('common.actions.save') }}</button>
+        <div class="form-group">
+          <label for="system-config-description">{{ t('runtime.systemPage.configModal.description') }}</label>
+          <input id="system-config-description" v-model="configForm.description" type="text" :placeholder="t('runtime.systemPage.configModal.descriptionPlaceholder')" />
         </div>
+        <p v-if="configError" class="system-dialog-error" role="alert" data-test="system-config-error">{{ configError }}</p>
       </div>
-    </div>
+      <template #footer="{ close }">
+        <UiButton :disabled="configSaving" @click="close">{{ t('common.actions.cancel') }}</UiButton>
+        <UiButton variant="primary" data-test="system-config-save" :loading="configSaving" @click="saveConfig">{{ t('common.actions.save') }}</UiButton>
+      </template>
+    </UiDialog>
 
-    <!-- Balancer modal -->
-    <div v-if="showBalancerModal" class="modal-overlay" @click.self="showBalancerModal = false">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>{{ editingBalancer ? t('runtime.systemPage.balancerModal.titleEdit') : t('runtime.systemPage.balancerModal.titleCreate') }}</h3>
-          <button class="close-btn" :aria-label="t('common.actions.close')" :title="t('common.actions.close')" @click="showBalancerModal = false">x</button>
+    <!-- Balancer dialog -->
+    <UiDialog v-model:open="showBalancerModal" :title="editingBalancer ? t('runtime.systemPage.balancerModal.titleEdit') : t('runtime.systemPage.balancerModal.titleCreate')">
+      <div class="system-dialog-form" data-test="system-balancer-form">
+        <div class="form-group">
+          <label for="system-balancer-name">{{ t('runtime.systemPage.balancerModal.name') }} <span class="required">*</span></label>
+          <input id="system-balancer-name" v-model="balancerForm.name" type="text" :placeholder="t('runtime.systemPage.balancerModal.namePlaceholder')" />
         </div>
-        <div class="modal-body">
+        <div class="form-row">
           <div class="form-group">
-            <label>{{ t('runtime.systemPage.balancerModal.name') }} <span class="required">*</span></label>
-            <input v-model="balancerForm.name" type="text" :placeholder="t('runtime.systemPage.balancerModal.namePlaceholder')" />
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>{{ t('runtime.systemPage.balancerModal.groupId') }}</label>
-              <input v-model.number="balancerForm.group_id" type="number" />
-            </div>
-            <div class="form-group">
-              <label>{{ t('runtime.systemPage.balancerModal.strategy') }}</label>
-              <select v-model="balancerForm.strategy">
-                <option value="round-robin">{{ t('runtime.systemPage.strategy.roundRobin') }}</option>
-                <option value="least-load">{{ t('runtime.systemPage.strategy.leastLoad') }}</option>
-                <option value="latency">{{ t('runtime.systemPage.strategy.latency') }}</option>
-                <option value="weight">{{ t('runtime.systemPage.strategy.weight') }}</option>
-                <option value="random">{{ t('runtime.systemPage.strategy.random') }}</option>
-              </select>
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label class="checkbox-label">
-                <input type="checkbox" v-model="balancerForm.health_check" />
-                <span>{{ t('runtime.systemPage.balancerModal.healthCheck') }}</span>
-              </label>
-            </div>
-            <div class="form-group">
-              <label>{{ t('runtime.systemPage.balancerModal.checkInterval') }}</label>
-              <input v-model.number="balancerForm.check_interval" type="number" min="10" />
-            </div>
+            <label for="system-balancer-group">{{ t('runtime.systemPage.balancerModal.groupId') }}</label>
+            <input id="system-balancer-group" v-model.number="balancerForm.group_id" type="number" />
           </div>
           <div class="form-group">
-            <label>{{ t('runtime.systemPage.balancerModal.weightsJson') }}</label>
-            <textarea v-model="balancerForm.weights_json" rows="3" :placeholder="t('runtime.systemPage.balancerModal.weightsPlaceholder')"></textarea>
+            <label for="system-balancer-strategy">{{ t('runtime.systemPage.balancerModal.strategy') }}</label>
+            <select id="system-balancer-strategy" v-model="balancerForm.strategy">
+              <option value="round-robin">{{ t('runtime.systemPage.strategy.roundRobin') }}</option>
+              <option value="least-load">{{ t('runtime.systemPage.strategy.leastLoad') }}</option>
+              <option value="latency">{{ t('runtime.systemPage.strategy.latency') }}</option>
+              <option value="weight">{{ t('runtime.systemPage.strategy.weight') }}</option>
+              <option value="random">{{ t('runtime.systemPage.strategy.random') }}</option>
+            </select>
           </div>
         </div>
-        <div class="modal-footer">
-          <button class="btn-secondary" @click="showBalancerModal = false">{{ t('common.actions.cancel') }}</button>
-          <button @click="saveBalancer">{{ t('common.actions.save') }}</button>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="checkbox-label">
+              <input type="checkbox" v-model="balancerForm.health_check" />
+              <span>{{ t('runtime.systemPage.balancerModal.healthCheck') }}</span>
+            </label>
+          </div>
+          <div class="form-group">
+            <label for="system-balancer-interval">{{ t('runtime.systemPage.balancerModal.checkInterval') }}</label>
+            <input id="system-balancer-interval" v-model.number="balancerForm.check_interval" type="number" min="10" />
+          </div>
         </div>
+        <div class="form-group">
+          <label for="system-balancer-weights">{{ t('runtime.systemPage.balancerModal.weightsJson') }}</label>
+          <textarea id="system-balancer-weights" v-model="balancerForm.weights_json" rows="3" :placeholder="t('runtime.systemPage.balancerModal.weightsPlaceholder')"></textarea>
+        </div>
+        <p v-if="balancerError" class="system-dialog-error" role="alert" data-test="system-balancer-error">{{ balancerError }}</p>
       </div>
-    </div>
+      <template #footer="{ close }">
+        <UiButton :disabled="balancerSaving" @click="close">{{ t('common.actions.cancel') }}</UiButton>
+        <UiButton variant="primary" data-test="system-balancer-save" :loading="balancerSaving" @click="saveBalancer">{{ t('common.actions.save') }}</UiButton>
+      </template>
+    </UiDialog>
   </div>
 </template>
 
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { UiButton, UiDialog, useConfirm, useToast } from '@/ui'
 import {
   getSystemConfigs, getSystemConfig, getSubscriptionSettings, setSystemConfig, deleteSystemConfig,
   getSystemAuditLogs,
@@ -710,6 +701,8 @@ const backupConfig = ref(createBackupConfigForm())
 const backupStats = ref({})
 
 const showConfigModal = ref(false)
+const configSaving = ref(false)
+const configError = ref('')
 const editingConfig = ref(null)
 const configForm = ref({
   key: '',
@@ -722,6 +715,8 @@ const configForm = ref({
 })
 
 const showBalancerModal = ref(false)
+const balancerSaving = ref(false)
+const balancerError = ref('')
 const editingBalancer = ref(null)
 const balancerForm = ref({
   name: '', group_id: 0, strategy: 'round-robin',
@@ -984,14 +979,21 @@ const formatTime = (time) => {
   return formatDateTime(time) || String(time)
 }
 
-const notify = (message) => {
-  if (typeof window !== 'undefined' && typeof window.alert === 'function') {
-    window.alert(message)
-    return
+const toast = useToast()
+const confirm = useConfirm()
+// Danger confirmation whose onConfirm runs the request; a rejected request
+// stays in the dialog as an inline error.
+const confirmSystemAction = (options, request, fallbackKey) => confirm({
+  tone: 'danger',
+  ...options,
+  onConfirm: async () => {
+    try {
+      await ensureSystemMutation(request(), fallbackKey)
+    } catch (err) {
+      throw new Error(resolveSystemError(err, fallbackKey))
+    }
   }
-  console.warn(message)
-}
-const confirmAction = (message) => window.confirm(message)
+})
 const resolveSystemError = (error, fallbackKey) => (
   translateRuntimeText(error?.response?.data?.msg || error?.response?.data?.error || error?.msg || error?.message, t(fallbackKey))
 )
@@ -1314,7 +1316,7 @@ const saveSubscriptionDomainSettings = async () => {
       loadSubscriptionDomainSettings(),
       fetchConfigs()
     ])
-    notify(t('runtime.systemPage.subscription.messages.saveSuccess'))
+    toast.success(t('runtime.systemPage.subscription.messages.saveSuccess'))
   } catch (err) {
     subscriptionDomainError.value = resolveSystemError(err, 'runtime.systemPage.subscription.messages.saveFailed')
   } finally {
@@ -1386,7 +1388,7 @@ const fetchAuditLogs = async () => {
   } catch (err) {
     auditLogs.value = []
     auditTotal.value = 0
-    notify(resolveSystemError(err, 'runtime.systemPage.messages.fetchAuditLogsFailed'))
+    toast.error(resolveSystemError(err, 'runtime.systemPage.messages.fetchAuditLogsFailed'))
   } finally {
     auditLoading.value = false
   }
@@ -1445,10 +1447,14 @@ const openConfigModal = (config = null) => {
       has_value: false
     }
   }
+  configError.value = ''
   showConfigModal.value = true
 }
 
 const saveConfig = async () => {
+  if (configSaving.value) return
+  configSaving.value = true
+  configError.value = ''
   try {
     const value = typeof configForm.value.value === 'string'
       ? configForm.value.value
@@ -1471,25 +1477,26 @@ const saveConfig = async () => {
       'runtime.systemPage.messages.fetchConfigsFailed'
     )
     showConfigModal.value = false
+    toast.success(t('runtime.systemPage.messages.configSaved', { key: configForm.value.key }))
     fetchConfigs()
   } catch (err) {
-    notify(t('runtime.systemPage.messages.saveConfigFailed', {
+    configError.value = t('runtime.systemPage.messages.saveConfigFailed', {
       message: resolveSystemError(err, 'runtime.systemPage.messages.fetchConfigsFailed')
-    }))
+    })
+  } finally {
+    configSaving.value = false
   }
 }
 
 const deleteConfig = async (config) => {
-  if (!confirmAction(t('runtime.systemPage.messages.deleteConfigConfirm', { key: config.key }))) return
-  try {
-    await ensureSystemMutation(
-      deleteSystemConfig(config.key),
-      'runtime.systemPage.messages.deleteConfigFailed'
-    )
-    fetchConfigs()
-  } catch (err) {
-    notify(resolveSystemError(err, 'runtime.systemPage.messages.deleteConfigFailed'))
-  }
+  const confirmed = await confirmSystemAction({
+    title: t('runtime.systemPage.confirm.deleteConfigTitle', { key: config.key }),
+    message: t('runtime.systemPage.confirm.deleteConfigMessage'),
+    confirmLabel: t('runtime.systemPage.confirm.deleteConfigAction')
+  }, () => deleteSystemConfig(config.key), 'runtime.systemPage.messages.deleteConfigFailed')
+  if (!confirmed) return
+  toast.success(t('runtime.systemPage.messages.configDeleted', { key: config.key }))
+  fetchConfigs()
 }
 
 // Backups
@@ -1556,9 +1563,9 @@ const saveBackupConfig = async () => {
       updateBackupConfig(buildBackupConfigPayload(backupConfig.value)),
       'runtime.systemPage.messages.backupConfigSaveFailed'
     )
-    notify(t('runtime.systemPage.messages.backupConfigSaved'))
+    toast.success(t('runtime.systemPage.messages.backupConfigSaved'))
   } catch (err) {
-    notify(resolveSystemError(err, 'runtime.systemPage.messages.backupConfigSaveFailed'))
+    toast.error(resolveSystemError(err, 'runtime.systemPage.messages.backupConfigSaveFailed'))
   }
 }
 
@@ -1568,11 +1575,11 @@ const createBackupRequest = async () => {
       createBackup(),
       'runtime.systemPage.messages.backupStartFailed'
     )
-    notify(t('runtime.systemPage.messages.backupStarted'))
+    toast.success(t('runtime.systemPage.messages.backupStarted'))
     fetchBackups()
     fetchBackupStats()
   } catch (err) {
-    notify(resolveSystemError(err, 'runtime.systemPage.messages.backupStartFailed'))
+    toast.error(resolveSystemError(err, 'runtime.systemPage.messages.backupStartFailed'))
   }
 }
 
@@ -1600,32 +1607,25 @@ const fetchBackupStats = async () => {
 }
 
 const deleteBackupRequest = async (backup) => {
-  if (!confirmAction(t('runtime.systemPage.messages.deleteBackupConfirm', { filename: backup.filename }))) return
-  try {
-    await ensureSystemMutation(
-      deleteBackup(backup.id),
-      'runtime.systemPage.messages.deleteBackupFailed'
-    )
-    fetchBackups()
-    fetchBackupStats()
-  } catch (err) {
-    notify(resolveSystemError(err, 'runtime.systemPage.messages.deleteBackupFailed'))
-  }
+  const confirmed = await confirmSystemAction({
+    title: t('runtime.systemPage.confirm.deleteBackupTitle', { filename: backup.filename }),
+    message: t('runtime.systemPage.confirm.deleteBackupMessage'),
+    confirmLabel: t('runtime.systemPage.confirm.deleteBackupAction')
+  }, () => deleteBackup(backup.id), 'runtime.systemPage.messages.deleteBackupFailed')
+  if (!confirmed) return
+  toast.success(t('runtime.systemPage.messages.backupDeleted', { filename: backup.filename }))
+  fetchBackups()
+  fetchBackupStats()
 }
 
 const restoreBackupRequest = async (backup) => {
-  if (!confirmAction(t('runtime.systemPage.messages.restoreBackupConfirm', { filename: backup.filename }))) return
-  try {
-    await ensureSystemMutation(
-      restoreBackup(backup.id),
-      'runtime.systemPage.messages.restoreBackupFailed'
-    )
-    notify(t('runtime.systemPage.messages.restoreBackupSuccess'))
-  } catch (err) {
-    notify(t('runtime.systemPage.messages.restoreBackupFailed', {
-      message: resolveSystemError(err, 'runtime.systemPage.messages.restoreBackupFailed')
-    }))
-  }
+  const confirmed = await confirmSystemAction({
+    title: t('runtime.systemPage.confirm.restoreBackupTitle', { filename: backup.filename }),
+    message: t('runtime.systemPage.confirm.restoreBackupMessage'),
+    confirmLabel: t('runtime.systemPage.confirm.restoreBackupAction')
+  }, () => restoreBackup(backup.id), 'runtime.systemPage.messages.restoreBackupFailed')
+  if (!confirmed) return
+  toast.success(t('runtime.systemPage.messages.restoreBackupSuccess'))
 }
 
 // Load balancing
@@ -1659,20 +1659,24 @@ const openBalancerModal = (lb = null) => {
       health_check: true, check_interval: 60, weights_json: ''
     }
   }
+  balancerError.value = ''
   showBalancerModal.value = true
 }
 
 const saveBalancer = async () => {
-  try {
-    const data = { ...balancerForm.value }
-    if (data.weights_json) {
-      try {
-        data.weights = JSON.parse(data.weights_json)
-      } catch (e) {
-        notify(t('runtime.systemPage.messages.weightsJsonInvalid'))
-        return
-      }
+  if (balancerSaving.value) return
+  balancerError.value = ''
+  const data = { ...balancerForm.value }
+  if (data.weights_json) {
+    try {
+      data.weights = JSON.parse(data.weights_json)
+    } catch (e) {
+      balancerError.value = t('runtime.systemPage.messages.weightsJsonInvalid')
+      return
     }
+  }
+  balancerSaving.value = true
+  try {
     delete data.weights_json
 
     if (editingBalancer.value) {
@@ -1687,25 +1691,26 @@ const saveBalancer = async () => {
       )
     }
     showBalancerModal.value = false
+    toast.success(t('runtime.systemPage.messages.balancerSaved', { name: data.name }))
     fetchBalancers()
   } catch (err) {
-    notify(t('runtime.systemPage.messages.saveBalancerFailed', {
+    balancerError.value = t('runtime.systemPage.messages.saveBalancerFailed', {
       message: resolveSystemError(err, 'runtime.systemPage.messages.saveBalancerFailed')
-    }))
+    })
+  } finally {
+    balancerSaving.value = false
   }
 }
 
 const deleteBalancer = async (lb) => {
-  if (!confirmAction(t('runtime.systemPage.messages.deleteBalancerConfirm', { name: lb.name }))) return
-  try {
-    await ensureSystemMutation(
-      deleteLoadBalancer(lb.id),
-      'runtime.systemPage.messages.deleteBalancerFailed'
-    )
-    fetchBalancers()
-  } catch (err) {
-    notify(resolveSystemError(err, 'runtime.systemPage.messages.deleteBalancerFailed'))
-  }
+  const confirmed = await confirmSystemAction({
+    title: t('runtime.systemPage.confirm.deleteBalancerTitle', { name: lb.name }),
+    message: t('runtime.systemPage.confirm.deleteBalancerMessage'),
+    confirmLabel: t('runtime.systemPage.confirm.deleteBalancerAction')
+  }, () => deleteLoadBalancer(lb.id), 'runtime.systemPage.messages.deleteBalancerFailed')
+  if (!confirmed) return
+  toast.success(t('runtime.systemPage.messages.balancerDeleted', { name: lb.name }))
+  fetchBalancers()
 }
 
 const runHealthCheckRequest = async (lb) => {
@@ -1714,10 +1719,10 @@ const runHealthCheckRequest = async (lb) => {
       runHealthCheck(lb.id),
       'runtime.systemPage.messages.healthCheckFailed'
     )
-    notify(t('runtime.systemPage.messages.healthCheckCompleted'))
+    toast.success(t('runtime.systemPage.messages.healthCheckCompleted'))
     fetchBalancers()
   } catch (err) {
-    notify(resolveSystemError(err, 'runtime.systemPage.messages.healthCheckFailed'))
+    toast.error(resolveSystemError(err, 'runtime.systemPage.messages.healthCheckFailed'))
   }
 }
 
@@ -2122,5 +2127,36 @@ onMounted(async () => {
     flex-direction: column;
     align-items: flex-start;
   }
+}
+
+.system-dialog-form {
+  display: grid;
+  gap: var(--space-3);
+}
+
+.system-dialog-form .form-group {
+  margin-bottom: 0;
+}
+
+.system-dialog-form .form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+  gap: var(--space-3);
+}
+
+.system-dialog-form .checkbox-label {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  min-height: var(--size-control-md);
+}
+
+.system-dialog-form .checkbox-label input {
+  width: auto;
+}
+
+.system-dialog-error {
+  margin: 0;
+  color: var(--danger);
 }
 </style>

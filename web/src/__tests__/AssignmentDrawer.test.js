@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+import { inBody } from './helpers/feedback'
 import { nextTick } from 'vue'
 import AssignmentDrawer from '@/components/admin/AssignmentDrawer.vue'
 
@@ -42,12 +43,12 @@ describe('AssignmentDrawer', () => {
     const wrapper = mountDrawer()
     await nextTick()
 
-    expect(wrapper.get('#assignment-node').element.value).toBe('11')
-    expect(wrapper.get('#assignment-plugin').element.value).toBe('gost-mesh')
-    expect(wrapper.get('#assignment-scope').element.value).toBe('forward')
-    expect(wrapper.get('#assignment-role').element.value).toBe('relay')
-    expect(wrapper.get('#assignment-version').element.value).toBe('1.0.0')
-    expect(wrapper.get('#assignment-config-revision').element.value).toBe('6')
+    expect(inBody('#assignment-node').element.value).toBe('11')
+    expect(inBody('#assignment-plugin').element.value).toBe('gost-mesh')
+    expect(inBody('#assignment-scope').element.value).toBe('forward')
+    expect(inBody('#assignment-role').element.value).toBe('relay')
+    expect(inBody('#assignment-version').element.value).toBe('1.0.0')
+    expect(inBody('#assignment-config-revision').element.value).toBe('6')
     wrapper.unmount()
   })
 
@@ -68,17 +69,17 @@ describe('AssignmentDrawer', () => {
     await nextTick()
 
     for (const selector of ['#assignment-node', '#assignment-plugin', '#assignment-scope', '#assignment-role']) {
-      expect(wrapper.get(selector).attributes('disabled')).toBeDefined()
+      expect(inBody(selector).attributes('disabled')).toBeDefined()
     }
     for (const selector of ['#assignment-version', '#assignment-config-revision', '#assignment-rollout-group']) {
-      expect(wrapper.get(selector).attributes('disabled')).toBeUndefined()
+      expect(inBody(selector).attributes('disabled')).toBeUndefined()
     }
-    expect(wrapper.get('#assignment-enabled').attributes('disabled')).toBeUndefined()
+    expect(inBody('#assignment-enabled').attributes('disabled')).toBeUndefined()
 
-    await wrapper.get('#assignment-config-revision').setValue('8')
-    await wrapper.get('#assignment-rollout-group').setValue('canary-b')
-    await wrapper.get('#assignment-enabled').setValue(true)
-    await wrapper.get('[data-testid="save-assignment"]').trigger('click')
+    await inBody('#assignment-config-revision').setValue('8')
+    await inBody('#assignment-rollout-group').setValue('canary-b')
+    await inBody('#assignment-enabled').setValue(true)
+    await inBody('[data-testid="save-assignment"]').trigger('click')
 
     expect(wrapper.emitted('save')).toEqual([[
       {
@@ -97,15 +98,31 @@ describe('AssignmentDrawer', () => {
     wrapper.unmount()
   })
 
-  it('uses the shared modal focus behavior for Escape dismissal', async () => {
+  it('moves focus into the sheet and closes on Escape', async () => {
     const wrapper = mountDrawer()
     await nextTick()
     await nextTick()
 
-    expect(document.activeElement).toBe(wrapper.get('[data-testid="assignment-close"]').element)
-    await wrapper.get('[data-testid="assignment-drawer"]').trigger('keydown', { key: 'Escape' })
+    const drawer = inBody('[data-testid="assignment-drawer"]')
+    expect(drawer.classes()).toContain('ui-sheet')
+    expect(drawer.element.contains(document.activeElement)).toBe(true)
+    await drawer.trigger('keydown', { key: 'Escape' })
     await flushPromises()
     expect(wrapper.emitted('close')).toHaveLength(1)
+    wrapper.unmount()
+  })
+
+  it('refuses Escape and its close button while saving', async () => {
+    const wrapper = mountDrawer({ saving: true })
+    await nextTick()
+    await nextTick()
+
+    const drawer = inBody('[data-testid="assignment-drawer"]')
+    await drawer.trigger('keydown', { key: 'Escape' })
+    await drawer.get('[aria-label="Close"]').trigger('click')
+    await flushPromises()
+    expect(wrapper.emitted('close')).toBeUndefined()
+    expect(inBody('[data-testid="save-assignment"]').attributes('aria-busy')).toBe('true')
     wrapper.unmount()
   })
 })

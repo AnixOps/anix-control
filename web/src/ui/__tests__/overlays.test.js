@@ -195,3 +195,37 @@ describe('UiSheet', () => {
     expect(open.value).toBe(false)
   })
 })
+
+describe('useScrollableFocus', () => {
+  it('makes an overflowing body without focusable content reachable with Tab', async () => {
+    const { useScrollableFocus } = await import('../internal/useScrollableFocus')
+    const { mount } = await import('@vue/test-utils')
+    const { nextTick } = await import('vue')
+    const Probe = {
+      props: { withButton: Boolean },
+      setup() {
+        return { scrollable: useScrollableFocus() }
+      },
+      template: `<div :ref="scrollable.setElement" :tabindex="scrollable.tabindex.value"><p>Long read-only text</p><button v-if="withButton">Copy</button></div>`
+    }
+    const overflow = (el) => {
+      Object.defineProperty(el, 'scrollHeight', { value: 900, configurable: true })
+      Object.defineProperty(el, 'clientHeight', { value: 300, configurable: true })
+    }
+    const plain = mount(Probe)
+    expect(plain.attributes('tabindex')).toBeUndefined()
+    overflow(plain.element)
+    await plain.setProps({ withButton: false })
+    plain.element.appendChild(document.createElement('p'))
+    await new Promise(resolve => setTimeout(resolve))
+    await nextTick()
+    expect(plain.attributes('tabindex')).toBe('0')
+
+    // Something focusable inside already lets the keyboard scroll it.
+    await plain.setProps({ withButton: true })
+    await new Promise(resolve => setTimeout(resolve))
+    await nextTick()
+    expect(plain.attributes('tabindex')).toBeUndefined()
+    plain.unmount()
+  })
+})

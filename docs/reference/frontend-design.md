@@ -115,10 +115,11 @@ themes:
 
 The global classes `.btn` (`-primary`, `-secondary`, `-ghost`, `-danger`,
 `-sm`, `-lg`), `.card`, `.section-panel`, `.table-container`, `.data-table`,
-`.tabs`/`.tab` (segmented control), `.status-badge`, `.modal*`, `.form-group`
+`.tabs`/`.tab` (segmented control), `.status-badge`, `.form-group`
 and the form fields are restyled through tokens: pill buttons, 36 px controls,
 10/14/20 px radii, hairline separators and the token shadows. The aliases and
-classes are removed when the last page stops using them.
+classes are removed when the last page stops using them; `.modal*` and
+`.close-btn` went in U4, when every overlay moved to `UiDialog`/`UiSheet`.
 
 ## Brand in the UI
 
@@ -140,17 +141,21 @@ topology takes node, label and edge colours from the same tokens.
 
 ## Lint rules
 
-Warnings for now; the redesign makes them errors as pages migrate (colour
-literals and native dialogs in U4, the type and radius scale in U9).
+Native dialogs are errors since U4; the style rules stay warnings while
+pages migrate (the type and radius scale become errors in U9).
 
-| Command | Rule | Warnings at U1 |
-|---|---|---|
-| `npm run lint:styles` (stylelint, `web/stylelint.config.mjs`) | colour literals (hex, named colours, `rgb()`/`hsl()`…) outside `src/design/` | 512 |
-| | `font-size` off the scale (12/13/15/19/24/32/48 px, phone 16/28/34 px, or a variable) | 131 |
-| | `border-radius` off the scale (6/10/14/20/980 px, 0, 50 %, or a variable) | 132 |
-| `npm run lint` (ESLint, `web/eslint.config.js`) | `no-alert`: `alert`, `confirm`, `prompt` | 117 |
+| Command | Rule | At U1 | At U4 |
+|---|---|---|---|
+| `npm run lint:styles` (stylelint, `web/stylelint.config.mjs`) | colour literals (hex, named colours, `rgb()`/`hsl()`…) outside `src/design/` | 512 warnings | 646 warnings for the three rules together (774 before U4) |
+| | `font-size` off the scale (12/13/15/19/24/32/48 px, phone 16/28/34 px, or a variable) | 131 warnings | |
+| | `border-radius` off the scale (6/10/14/20/980 px, 0, 50 %, or a variable) | 132 warnings | |
+| `npm run lint` (ESLint, `web/eslint.config.js`) | `no-alert`: `alert`, `confirm`, `prompt` | 117 warnings | error, 0 |
+| | `vue/no-restricted-class`: `.modal-overlay`, `.modal`, `.modal-lg`, `.modal-header`, `.modal-body`, `.modal-footer` | — | error, 0 |
 
-Neither command fails on warnings, and CI does not run them yet.
+The style warnings do not fail either command. CI does not run the linters,
+so `web/src/__tests__/nativeDialogs.test.js` (part of `npm test`) also fails
+on `window.alert/confirm/prompt` or `.modal-overlay` in the app sources, and
+the test setup makes a native dialog throw.
 
 ## Components
 
@@ -158,7 +163,9 @@ Neither command fails on warnings, and CI does not run them yet.
 [Reka UI](https://reka-ui.com) 2.10.5 (headless primitives with the
 keyboard, focus and ARIA behaviour; pinned) and our own scoped CSS that uses
 only tokens (stylelint reports zero warnings for `src/ui/`). The app shells
-(U3) and the account page use it; U4 onwards migrates the other pages. Names carry a `Ui` prefix so they never
+(U3) and the account page use it; since U4 every page's feedback and
+dialogs do too (see "Feedback and dialogs in pages"); U5 onwards migrates
+the page bodies. Names carry a `Ui` prefix so they never
 shadow HTML elements: `import { UiButton, useToast } from '@/ui'`.
 
 **Stories.** Every component has a Histoire story (`src/ui/stories/`):
@@ -235,6 +242,47 @@ written separately for each language. Page text is passed in as props.
 - **Copy.** Short, active, about the result; Chinese and English written
   separately; a space between a number and its unit (`128.4 GB`, `3 分钟前`).
 
+### Feedback and dialogs in pages (U4)
+
+How the rules above were applied when U4 replaced every `alert`, `confirm`
+and `prompt` (117 calls plus the `notify` wrappers on Users, Agent and
+System) and every hand-rolled overlay (about 50 in 25 views and
+components):
+
+- **Results** are `toast.success`. Page-local banners and toasts that did
+  the same job (Forward, Tunnel, Limit, NodeX forward nodes, Subscriptions)
+  now call `useToast()`; a message that repeats (auto-refresh) replaces its
+  toast instead of stacking.
+- **Errors** of an open form stay in it: a field error, or a
+  `<p class="error" role="alert">` above the footer; the dialog stays open.
+  Errors with no form (a load or a row action) are persistent
+  `toast.error`.
+- **Undo instead of a confirmation** only where the API has a real inverse:
+  ban/unban a user, enable/disable a payment gateway, delete the Telegram
+  webhook (sets it again), remove a group from a plan, remove a member or
+  plan from an access group. Nothing else offers 撤销.
+- **ConfirmDialog** (`useConfirm`, danger tone, title naming the object,
+  verb button) for irreversible actions, with `onConfirm` so a failure shows
+  inside it. **Typed name** for deleting a node, a NodeX forward node and an
+  Ansible machine (the user list has no delete). Forward keeps its second
+  confirmation before a force delete (flux clone flow); a few non-danger
+  confirmations (mark an order paid, close a ticket, send a Telegram
+  broadcast) use the default tone.
+- **`prompt()`** became a small dialog: the node template picker (a select
+  with validation) and the "copy manually" fallback (a `UiCopyField`).
+- **Containers**: forms are `UiDialog` (sm/md/lg by content; the inner
+  markup was kept and is restyled in U5–U7); details and side tasks are
+  `UiSheet`: user traffic, order and payment-record details, user tickets
+  (new ticket and conversation), the admin ticket reply, a node's protocol
+  list, plugin details and deployment assignments. Busy dialogs set
+  `:dismissible="false"`.
+- **Tests**: `src/__tests__/helpers/feedback.js` gives `answerConfirms()`
+  (answers `useConfirm`, running `onConfirm`), `toastMessages()` and
+  `inBody()` (dialogs render in `document.body`: mount with
+  `attachTo: document.body`). Flows that matter (typed name, Esc, focus
+  return, inline errors) are tested with `<UiHost />` and Testing Library,
+  e.g. `adminUsers.dialogs.test.js`.
+
 ### Accessibility built in
 
 | Component | Behaviour |
@@ -245,7 +293,7 @@ written separately for each language. Page text is passed in as props.
 | Switch / Checkbox / Radio | `role="switch"` / `checkbox` (`mixed`) / `radiogroup` named by its label; boundaries at 3:1 or more. |
 | SegmentedControl | Named `group` of `aria-pressed` buttons with roving focus; one selection always. |
 | Tabs | `tablist` / `tab` / `tabpanel` with `aria-controls`; arrows move and activate. |
-| Dialog / Sheet | `role="dialog"`, `aria-modal`, labelled by the title and described by the description; focus trapped and returned; Esc; page scroll locked; the close button (Lucide x) is named "关闭" and comes last in tab order. A sheet focuses its first text field, else the close button. |
+| Dialog / Sheet | `role="dialog"`, `aria-modal`, labelled by the title and described by the description; focus trapped and returned; Esc; page scroll locked; the close button (Lucide x) is named "关闭" and comes last in tab order. A sheet focuses its first text field, else the close button. A body that scrolls with nothing focusable inside takes `tabindex="0"` so the keyboard can scroll it. Below 834 px wide content scrolls inside the dialog, never past the screen. |
 | ConfirmDialog | `role="alertdialog"`; focus on the typed field, else Cancel for danger, else the confirm button; the scrim does not close it. |
 | Toast | One polite `role="status"` region announces each toast (with "按 F8 前往通知" when it has an action); the toasts are a named region. |
 | Badge / StatusDot | Always a word next to the colour. |

@@ -179,8 +179,7 @@ export default {
       loadFailed: '加载失败',
       submitFailed: '提交失败',
       invalidCoupon: '无效的优惠码',
-      paymentPending: '支付功能正在集成中，敬请期待',
-      closeTicketConfirm: '确定要关闭此工单吗？'
+      paymentPending: '支付功能正在集成中，敬请期待'
     }
   },
   pageTitles: {
@@ -473,6 +472,8 @@ export default {
       fetchPreviewFailed: '获取预览失败',
       noPreviewContent: '无订阅内容',
       refreshCompleted: '订阅缓存已刷新',
+      copyFailed: '无法自动复制，请选中内容后手动复制。',
+      refreshFailed: '订阅缓存没有刷新，请稍后再试。',
       formats: {
         auto: '自动（按 User-Agent）',
         v2ray: 'V2Ray（Base64）',
@@ -497,6 +498,7 @@ export default {
       buyNow: '立即选购',
       unknownPlan: '未知套餐',
       detailTitle: '订单详情',
+      loadDetailFailed: '无法打开订单详情，请稍后再试。',
       headers: {
         tradeNo: '订单号',
         plan: '套餐',
@@ -534,7 +536,7 @@ export default {
       couponApplied: '已应用优惠：{name} (-¥{value})',
       totalAmount: '应付总额',
       backToEdit: '返回重选',
-      creatingOrder: '正在下单...'
+      orderCreated: '订单已创建，请在“我的订单”中完成支付。'
     },
     tickets: {
       title: '我的工单',
@@ -552,7 +554,16 @@ export default {
       assistant: '客服助手',
       me: '我',
       updated: '更新',
-      ticketId: '工单 #{id}'
+      ticketId: '工单 #{id}',
+      replyLabel: '回复内容',
+      sendReply: '发送回复',
+      closeTicket: '关闭工单',
+      closeConfirmTitle: '关闭工单「{subject}」？',
+      closeConfirmMessage: '关闭后不能再回复。如需继续咨询，请提交新工单。',
+      closed: '工单已关闭',
+      created: '工单已提交，我们会尽快回复。',
+      fillSubjectMessage: '请填写主题和内容。',
+      loadDetailFailed: '无法打开工单，请稍后再试。'
     },
     knowledge: {
       title: '使用教程',
@@ -779,16 +790,18 @@ export default {
         delete: '\u5220\u9664'
       },
       modal: {
-        eyebrow: '\u673a\u5668',
         titleEdit: '\u7f16\u8f91 Ansible \u673a\u5668',
         titleAdd: '\u6dfb\u52a0 Ansible \u673a\u5668',
-        deleteEyebrow: '\u5220\u9664',
-        deleteTitle: '\u5220\u9664\u673a\u5668',
-        deleteConfirm: '\u786e\u5b9a\u5c06 {name} \u4ece Ansible \u6267\u884c\u673a\u7fa4\u4e2d\u5220\u9664\u5417\uff1f',
+        deleteTitle: '删除 Ansible 机器 {name}？',
+        deleteConfirm: '它将从 Ansible 执行机群中移除。此操作无法撤销。',
+        deleteAction: '删除机器',
         saveLoading: '\u4fdd\u5b58\u4e2d...',
         save: '\u4fdd\u5b58',
-        cancel: '\u53d6\u6d88',
-        deleteLoading: '\u5220\u9664\u4e2d...'
+        cancel: '\u53d6\u6d88'
+      },
+      messages: {
+        saved: '已保存 {name}',
+        deleted: '已删除 {name}'
       },
       fields: {
         name: '\u540d\u79f0',
@@ -898,7 +911,6 @@ export default {
       emptyDirectTitle: '\u6682\u65e0\u8f6c\u53d1\u914d\u7f6e',
       emptyDirectText: '\u521b\u5efa\u7b2c\u4e00\u6761\u8f6c\u53d1\u540e\uff0c\u8fd9\u91cc\u4f1a\u663e\u793a\u5f53\u524d\u8f6c\u53d1\u7684\u76f4\u8fde\u8868\u683c\u89c6\u56fe\u3002',
       editor: {
-        eyebrow: 'Forward',
         titleEdit: '\u7f16\u8f91\u8f6c\u53d1',
         titleAdd: '\u65b0\u589e\u8f6c\u53d1',
         fields: {
@@ -917,29 +929,23 @@ export default {
           remoteAddress: '\u6bcf\u884c\u4e00\u4e2a\u76ee\u6807\uff0c\u4f8b\u5982\uff1a\n1.1.1.1:443\nexample.com:8443\n[2001:db8::1]:443'
         },
         remoteHint: '\u652f\u6301 IPv4:port\u3001domain:port\u3001[\u5b8c\u6574 IPv6]:port\u3002\u591a\u5730\u5740\u8bf7\u6bcf\u884c\u4e00\u4e2a\u3002',
-        submitLoading: '\u63d0\u4ea4\u4e2d...',
         submitUpdate: '\u4fdd\u5b58\u4fee\u6539',
         submitCreate: '\u521b\u5efa\u8f6c\u53d1'
       },
       deleteModal: {
-        eyebrow: 'Delete',
-        title: '\u5220\u9664\u8f6c\u53d1',
-        confirmText: '\u786e\u8ba4\u5220\u9664 {name} \u5417\uff1f',
-        hint: '\u5e38\u89c4\u5220\u9664\u5931\u8d25\u65f6\uff0c\u4f1a\u7ee7\u7eed\u7ed9\u51fa\u5f3a\u5236\u5220\u9664\u786e\u8ba4\u3002',
-        deleteLoading: '\u5220\u9664\u4e2d...',
-        confirmDelete: '\u786e\u8ba4\u5220\u9664',
-        forceDeleteIntro: '\u5e38\u89c4\u5220\u9664\u5931\u8d25\uff1a{message}',
-        forceDeleteQuestion: '\u662f\u5426\u9700\u8981\u5f3a\u5236\u5220\u9664\uff1f',
-        forceDeleteWarning: '\u8b66\u544a\uff1a\u5f3a\u5236\u5220\u9664\u4e0d\u4f1a\u9a8c\u8bc1\u8282\u70b9\u7aef\u662f\u5426\u5df2\u5220\u9664\u5bf9\u5e94\u7684\u8f6c\u53d1\u670d\u52a1\u3002'
+        confirmText: '删除转发 {name}？',
+        hint: '常规删除失败时，会再询问是否强制删除。此操作无法撤销。',
+        confirmDelete: '删除转发',
+        forceDeleteTitle: '强制删除 {name}？',
+        forceDeleteAction: '强制删除',
+        forceDeleteMessage: '常规删除失败（{message}）。强制删除不会确认节点上的转发服务是否已移除。'
       },
       addressModal: {
-        eyebrow: 'Address',
         copy: '\u590d\u5236',
         copying: '\u590d\u5236\u4e2d...',
         titleWithCount: '{title} ({count})'
       },
       exportModal: {
-        eyebrow: 'Export',
         title: '\u5bfc\u51fa\u8f6c\u53d1\u6570\u636e',
         subtitle: '格式：兼容 relay-panel 的 JSON：{\'[{ "dest": ["host:port"], "listen_port": 10086, "name": "规则" }\'}]',
         tunnelLabel: '\u9009\u62e9\u5bfc\u51fa\u96a7\u9053',
@@ -951,9 +957,8 @@ export default {
         selectionHint: '正在导出已选择的 {count} 条转发。'
       },
       importModal: {
-        eyebrow: 'Import',
         title: '\u5bfc\u5165\u8f6c\u53d1\u6570\u636e',
-        subtitle: '支持 relay-panel JSON 和旧格式 remoteAddr|name|inPort，inPort 可留空。',
+        subtitle: '支持 relay-panel JSON 和旧格式 remoteAddr{\'|\'}name{\'|\'}inPort，inPort 可留空。',
         subtitleSecondary: 'JSON 示例：{\'[{ "dest": ["3.3.3.3:3", "4.4.4.4:4"], "listen_port": 10086, "name": "业务入口" }\'}]',
         tunnelLabel: '\u9009\u62e9\u5bfc\u5165\u96a7\u9053',
         tunnelPlaceholder: '\u8bf7\u9009\u62e9\u96a7\u9053',
@@ -963,11 +968,9 @@ export default {
         resultSummary: '\u6210\u529f\uff1a{success} / \u603b\u8ba1\uff1a{total}',
         statusSuccess: '\u6210\u529f',
         statusFailed: '\u5931\u8d25',
-        importing: '\u5bfc\u5165\u4e2d...',
         startImport: '\u5f00\u59cb\u5bfc\u5165'
       },
       diagnosis: {
-        eyebrow: 'Diagnosis',
         title: '\u8f6c\u53d1\u8bca\u65ad\u7ed3\u679c',
         loading: '\u6b63\u5728\u8bca\u65ad\u8f6c\u53d1\u8fde\u63a5...',
         connectionSuccess: '\u8fde\u63a5\u6210\u529f',
@@ -982,7 +985,6 @@ export default {
         failedFallback: '\u8bca\u65ad\u5931\u8d25',
         emptyTitle: '\u6682\u65e0\u8bca\u65ad\u6570\u636e',
         emptyText: '\u53d1\u8d77\u4e00\u6b21\u8bca\u65ad\u540e\uff0c\u8fd9\u91cc\u4f1a\u5c55\u793a\u4e0e\u53c2\u8003\u9875\u4e00\u81f4\u7684\u7ed3\u679c\u5361\u7247\u3002',
-        rerunning: '\u8bca\u65ad\u4e2d...',
         rerun: '\u91cd\u65b0\u8bca\u65ad'
       },
       status: {
@@ -1046,7 +1048,9 @@ export default {
         servicePaused: '\u6682\u505c\u8bf7\u6c42\u5df2\u63d0\u4ea4',
         networkActionFailed: '\u7f51\u7edc\u9519\u8bef\uff0c\u64cd\u4f5c\u5931\u8d25',
         bulkActionComplete: '批量操作完成：成功 {success} 条，失败 {failed} 条',
-        bulkDeleteConfirm: '确认删除已选择的 {count} 条转发吗？批量模式下常规删除失败不会自动强制删除。',
+        bulkDeleteTitle: '删除选中的 {count} 条转发？',
+        bulkDeleteMessage: '批量模式下，常规删除失败的转发不会被强制删除。此操作无法撤销。',
+        bulkDeleteAction: '删除转发',
         deleted: '\u5220\u9664\u6210\u529f',
         forceDeleted: '\u5f3a\u5236\u5220\u9664\u6210\u529f',
         forceDeleteFailed: '\u5f3a\u5236\u5220\u9664\u5931\u8d25',
@@ -1108,18 +1112,14 @@ export default {
         trafficRatio: '\u6d41\u91cf\u500d\u7387'
       },
       modal: {
-        eyebrow: 'Tunnel',
         titleEdit: '\u7f16\u8f91\u96a7\u9053',
         titleAdd: '\u65b0\u589e\u96a7\u9053',
-        deleteEyebrow: 'Delete',
-        deleteTitle: '\u786e\u8ba4\u5220\u9664',
-        deleteConfirmMessage: '\u786e\u8ba4\u5220\u9664\u96a7\u9053 {name} \u5417\uff1f',
-        deleteHint: '\u5982\u679c\u8be5\u96a7\u9053\u4ecd\u88ab\u8f6c\u53d1\u89c4\u5219\u6216\u7528\u6237\u6743\u9650\u5f15\u7528\uff0c\u540e\u7aef\u4f1a\u963b\u6b62\u5220\u9664\u3002',
+        deleteConfirmMessage: '删除隧道 {name}？',
+        deleteHint: '如果该隧道仍被转发规则或用户授权引用，将无法删除。此操作无法撤销。',
         submitLoading: '\u63d0\u4ea4\u4e2d...',
         submitUpdate: '\u66f4\u65b0',
         submitCreate: '\u521b\u5efa',
-        deleteLoading: '\u5220\u9664\u4e2d...',
-        confirmDelete: '\u786e\u8ba4\u5220\u9664'
+        confirmDelete: '删除隧道'
       },
       fields: {
         name: '\u96a7\u9053\u540d\u79f0',
@@ -1170,7 +1170,6 @@ export default {
         diagnosisRequestFailed: '\u8bca\u65ad\u8bf7\u6c42\u5931\u8d25'
       },
       diagnosis: {
-        eyebrow: 'Diagnosis',
         title: '\u96a7\u9053\u8bca\u65ad\u7ed3\u679c',
         loading: '\u6b63\u5728\u8bca\u65ad\u96a7\u9053\u8fde\u901a\u6027...',
         targetAddress: '\u76ee\u6807\u5730\u5740',
@@ -1178,8 +1177,7 @@ export default {
         message: '\u4fe1\u606f',
         emptyTitle: '\u6682\u65e0\u8bca\u65ad\u7ed3\u679c',
         emptyText: '\u5f53\u524d\u6ca1\u6709\u53ef\u5c55\u793a\u7684\u8282\u70b9\u8bca\u65ad\u6570\u636e\u3002',
-        rerun: '\u91cd\u65b0\u8bca\u65ad',
-        rerunning: '\u8bca\u65ad\u4e2d...'
+        rerun: '\u91cd\u65b0\u8bca\u65ad'
       },
       validation: {
         nameRequired: '\u8bf7\u8f93\u5165\u96a7\u9053\u540d\u79f0',
@@ -1436,11 +1434,26 @@ export default {
         enabled: '启用',
         disabled: '禁用'
       },
+      confirm: {
+        deleteConfigTitle: '删除配置 {key}？',
+        deleteConfigMessage: '依赖这项配置的功能会改用默认值。此操作无法撤销。',
+        deleteConfigAction: '删除配置',
+        deleteBackupTitle: '删除备份 {filename}？',
+        deleteBackupMessage: '备份文件会被永久删除，之后不能再用它恢复。此操作无法撤销。',
+        deleteBackupAction: '删除备份',
+        restoreBackupTitle: '用备份 {filename} 恢复？',
+        restoreBackupMessage: '当前数据会被这份备份覆盖，备份之后的改动都会丢失。此操作无法撤销。',
+        restoreBackupAction: '恢复备份',
+        deleteBalancerTitle: '删除负载均衡器 {name}？',
+        deleteBalancerMessage: '该节点组将不再做负载均衡和健康检查。此操作无法撤销。',
+        deleteBalancerAction: '删除负载均衡器'
+      },
       messages: {
         fetchConfigsFailed: '获取配置失败',
         fetchAuditLogsFailed: '获取审计日志失败',
         saveConfigFailed: '保存失败: {message}',
-        deleteConfigConfirm: '确定删除配置 {key}?',
+        configSaved: '已保存配置 {key}',
+        configDeleted: '已删除配置 {key}',
         deleteConfigFailed: '删除失败',
         fetchBackupConfigFailed: '获取备份配置失败',
         backupConfigSaved: '保存成功',
@@ -1449,15 +1462,15 @@ export default {
         backupStartFailed: '创建备份失败',
         fetchBackupsFailed: '获取备份列表失败',
         fetchBackupStatsFailed: '获取备份统计失败',
-        deleteBackupConfirm: '确定删除备份 {filename}?',
+        backupDeleted: '已删除备份 {filename}',
         deleteBackupFailed: '删除失败',
-        restoreBackupConfirm: '确定恢复备份 {filename}? 当前数据将被覆盖。',
         restoreBackupSuccess: '恢复成功',
         restoreBackupFailed: '恢复失败: {message}',
         fetchBalancersFailed: '获取负载均衡器失败',
         weightsJsonInvalid: '权重 JSON 格式错误',
         saveBalancerFailed: '保存失败: {message}',
-        deleteBalancerConfirm: '确定删除负载均衡器 {name}?',
+        balancerSaved: '已保存负载均衡器 {name}',
+        balancerDeleted: '已删除负载均衡器 {name}',
         deleteBalancerFailed: '删除失败',
         healthCheckCompleted: '健康检查已完成',
         healthCheckFailed: '健康检查失败'
@@ -1491,7 +1504,6 @@ export default {
         disable: '\u7981\u7528',
         delete: '\u5220\u9664',
         startTest: '\u5f00\u59cb\u68c0\u6d4b',
-        confirmDelete: '\u786e\u8ba4\u5220\u9664',
         cancel: '\u53d6\u6d88',
         saveChanges: '\u4fdd\u5b58\u4fee\u6539',
         createNode: '\u521b\u5efa\u8282\u70b9',
@@ -1570,7 +1582,6 @@ export default {
         }
       },
       nodeModal: {
-        eyebrow: 'Node',
         titleEdit: '\u7f16\u8f91\u4e2d\u8f6c\u8282\u70b9',
         titleAdd: '\u65b0\u589e\u4e2d\u8f6c\u8282\u70b9',
         loading: '\u6b63\u5728\u52a0\u8f7d\u8282\u70b9\u8be6\u60c5...',
@@ -1604,11 +1615,9 @@ export default {
         }
       },
       ruleModal: {
-        eyebrow: 'Rule',
         titleEdit: '\u7f16\u8f91 Legacy \u89c4\u5219',
         titleAdd: '\u65b0\u589e Legacy \u89c4\u5219',
         loading: '\u6b63\u5728\u52a0\u8f7d\u89c4\u5219\u8be6\u60c5...',
-        saveLoading: '\u4fdd\u5b58\u4e2d...',
         ownerReadOnlyHint: '\u5f53\u524d\u540e\u7aef\u66f4\u65b0\u63a5\u53e3\u4e0d\u652f\u6301\u4fee\u6539\u5f52\u5c5e\u5b57\u6bb5\uff0c\u7f16\u8f91\u65f6\u53ea\u8bfb\u3002',
         fields: {
           name: '\u89c4\u5219\u540d\u79f0',
@@ -1636,7 +1645,6 @@ export default {
         }
       },
       connectionModal: {
-        eyebrow: 'Gost API',
         title: '\u6d4b\u8bd5\u8282\u70b9\u8fde\u63a5',
         fields: {
           host: '\u4e3b\u673a\u5730\u5740',
@@ -1649,15 +1657,14 @@ export default {
           apiTokenHidden: '\u5df2\u4fdd\u5b58\u7684\u4ee4\u724c\u4e0d\u518d\u663e\u793a\uff1b\u8bf7\u586b\u5199\u4ee4\u724c\u540e\u6d4b\u8bd5'
         },
         success: '\u8fde\u63a5\u6210\u529f',
-        failed: '\u8fde\u63a5\u5931\u8d25',
-        testing: '\u68c0\u6d4b\u4e2d...'
+        failed: '\u8fde\u63a5\u5931\u8d25'
       },
       deleteModal: {
-        title: '\u786e\u8ba4\u5220\u9664',
-        confirmNode: '\u786e\u8ba4\u5220\u9664\u8282\u70b9',
-        confirmRule: '\u786e\u8ba4\u5220\u9664\u89c4\u5219',
-        warning: '\u5220\u9664\u540e\u65e0\u6cd5\u81ea\u52a8\u6062\u590d\uff0c\u8bf7\u786e\u8ba4\u6ca1\u6709\u4ecd\u5728\u4f7f\u7528\u7684\u8f6c\u53d1\u5173\u7cfb\u3002',
-        deleting: '\u5220\u9664\u4e2d...'
+        titleNode: '删除转发节点 {name}？',
+        titleRule: '删除转发规则 {name}？',
+        deleteNode: '删除转发节点',
+        deleteRule: '删除规则',
+        warning: '\u5220\u9664\u540e\u65e0\u6cd5\u81ea\u52a8\u6062\u590d\uff0c\u8bf7\u786e\u8ba4\u6ca1\u6709\u4ecd\u5728\u4f7f\u7528\u7684\u8f6c\u53d1\u5173\u7cfb\u3002'
       },
       validation: {
         requestFailed: '\u8bf7\u6c42\u5931\u8d25',
@@ -1764,17 +1771,13 @@ export default {
           speed: '请输入速度限制（Mbps）',
           tunnel: '请选择要绑定的隧道'
         },
-        submitting: '提交中...',
         submitCreate: '创建规则',
         submitUpdate: '保存修改'
       },
       deleteModal: {
-        title: '确认删除',
-        eyebrow: '确认删除',
-        confirmText: '确定要删除限速规则 {name} 吗？',
+        title: '删除限速规则 {name}？',
         hint: '此操作无法撤销，删除后该规则将永久消失。',
-        deleting: '删除中...',
-        confirmDelete: '确认删除'
+        confirmDelete: '删除规则'
       },
       values: {
         unlimited: '不限速',
@@ -1953,7 +1956,9 @@ export default {
         node: '节点',
         protocolName: '协议 / 名称',
         port: '端口',
-        linkedGroups: '已关联分组'
+        linkedGroups: '已关联分组',
+        selectAll: '全选协议',
+        select: '选择协议 {name}'
       },
       formats: {
         auto: '自动（按 User-Agent）',
@@ -1972,17 +1977,22 @@ export default {
       availableProtocolsLoadError: '加载可用协议失败',
       groupProtocolsUpdated: '分组协议关联已更新',
       groupProtocolsUpdateFailed: '更新协议关联失败',
-      copyCombinedConfirm: '确定复制该分组的合并订阅内容吗？',
       copied: '已复制',
       copyError: '复制失败',
       copyFallbackNotice: '已使用仅模板回退方案复制合并订阅内容。',
       previewError: '加载预览内容失败',
-      confirmDeleteGroup: '确定删除这个订阅分组吗？',
+      confirm: {
+        deleteGroupTitle: '删除订阅分组 {name}？',
+        deleteGroupMessage: '分组内的订阅模板和协议关联会一并删除，使用该分组的用户将收不到这些节点。此操作无法撤销。',
+        deleteGroupAction: '删除分组',
+        deleteTemplateTitle: '删除订阅模板 {name}？',
+        deleteTemplateMessage: '该节点会从分组的订阅里消失。此操作无法撤销。',
+        deleteTemplateAction: '删除模板'
+      },
       groupDeleted: '订阅分组已删除',
       deleteError: '删除失败',
       groupSaved: '订阅分组已保存',
       saveError: '保存失败',
-      confirmDeleteTemplate: '确定删除这个订阅模板吗？',
       templateDeleted: '订阅模板已删除',
       updateError: '更新失败',
       templateSaved: '订阅模板已保存',
@@ -2007,6 +2017,14 @@ export default {
     nodes: {
       title: '节点管理',
       addNode: '添加节点',
+      confirm: {
+        deleteNodeTitle: '删除节点 {name}？',
+        deleteNodeMessage: '节点和它的凭据会被移除。此操作无法撤销。',
+        deleteNodeAction: '删除节点',
+        deleteProtocolTitle: '删除协议 {type} :{port}？',
+        deleteProtocolMessage: '节点 {name} 将不再提供这个协议。此操作无法撤销。',
+        deleteProtocolAction: '删除协议'
+      },
       stats: {
         total: '总节点',
         online: '在线',
@@ -2199,6 +2217,14 @@ export default {
           copy: '复制',
           fromTemplate: '从模板加载'
         },
+        templatePicker: {
+          title: '从模板加载',
+          description: '选择一个模板，编辑器中的 JSON 会被替换。',
+          label: '模板',
+          placeholder: '选择模板',
+          required: '请先选择要加载的模板。',
+          apply: '加载模板'
+        },
         jsonStatus: {
           valid: 'JSON 有效',
           invalid: 'JSON 无效'
@@ -2293,14 +2319,17 @@ export default {
         saveFailed: '保存失败: {message}',
         syncSuccess: '\u8282\u70b9 "{name}" \u5df2\u63a5\u6536\u540c\u6b65\u64cd\u4f5c',
         syncFailed: '\u540c\u6b65\u5931\u8d25: {message}',
-        deleteNodeConfirm: '确定要删除节点 "{name}" 吗？',
-        deleteFailed: '删除失败: {message}',
-        deleteProtocolConfirm: '确定要删除此协议吗？',
+        nodeCreated: '已添加节点 {name}',
+        nodeSaved: '已保存节点 {name}',
+        nodeDeleted: '已删除节点 {name}',
+        protocolCreated: '已添加协议 {type} :{port}',
+        protocolSaved: '已保存协议 {type} :{port}',
+        protocolDeleted: '已删除协议 {type} :{port}',
         generateFailed: '生成失败: {message}',
         deployLoadFailed: '加载父节点凭据失败',
         copied: '已复制到剪贴板',
-        copyFailed: '复制失败: {message}',
-        invalidJson: 'JSON 格式无效',
+        copyFailedManual: '无法自动复制，请手动选中文本后复制。',
+        invalidJsonDetail: 'JSON 格式无效：{message}',
         quotaExceededBanner: '有 {count} 个节点本月流量已超限，仅作提示，不会自动限制'
       }
     }
@@ -2380,8 +2409,8 @@ export default {
       },
       placeholders: {
         name: '模板名称',
-        title: '支持变量: {username}, {site_name}',
-        content: '支持变量: {username}, {email}, {expire_time}'
+        title: "支持变量: {'{'}username{'}'}, {'{'}site_name{'}'}",
+        content: "支持变量: {'{'}username{'}'}, {'{'}email{'}'}, {'{'}expire_time{'}'}"
       }
     },
     testModal: {
@@ -2422,6 +2451,11 @@ export default {
       subject: '测试邮件',
       content: '这是一封测试邮件。如果您收到此邮件，说明邮件配置正确。'
     },
+    confirm: {
+      deleteTitle: '删除模板 {name}？',
+      deleteMessage: '使用这个模板的通知将不再发送。此操作无法撤销。',
+      deleteAction: '删除模板'
+    },
     messages: {
       fetchTemplatesFailed: '加载通知模板失败',
       fetchLogsFailed: '加载通知日志失败',
@@ -2429,8 +2463,7 @@ export default {
       templateSaveSuccess: '模板保存成功',
       templateSaveFailed: '模板保存失败: {message}',
       templateSaveFailedShort: '保存失败',
-      deleteConfirm: '确定删除模板 "{name}"？',
-      deleteFailed: '删除模板失败: {message}',
+      deleteSuccess: '已删除模板 {name}',
       deleteFailedShort: '删除失败',
       emailSaveSuccess: '邮件配置已保存',
       emailSaveFailed: '邮件配置保存失败: {message}',
@@ -2519,7 +2552,7 @@ export default {
         feeRate: '例如: 0.01 = 1%',
         minAmount: '最小支付金额',
         maxAmount: '最大支付金额',
-        configJson: '{"app_id": "", "private_key": ""}'
+        configJson: "{'{'}\"app_id\": \"\", \"private_key\": \"\"{'}'}"
       }
     },
     types: {
@@ -2537,6 +2570,11 @@ export default {
       failed: '失败',
       refunded: '已退款'
     },
+    confirm: {
+      deleteTitle: '删除支付网关 {name}？',
+      deleteMessage: '用户将无法再通过这个网关付款。此操作无法撤销。',
+      deleteAction: '删除网关'
+    },
     messages: {
       fetchGatewaysFailed: '加载支付网关失败',
       fetchRecordsFailed: '加载支付记录失败',
@@ -2547,8 +2585,9 @@ export default {
       gatewaySaveFailedShort: '保存失败',
       toggleFailed: '切换网关状态失败: {message}',
       toggleFailedShort: '操作失败',
-      deleteConfirm: '确定删除网关 "{name}"？',
-      deleteFailed: '删除网关失败: {message}',
+      gatewayEnabled: '已启用 {name}',
+      gatewayDisabled: '已禁用 {name}',
+      gatewayDeleted: '已删除网关 {name}',
       deleteFailedShort: '删除失败'
     }
   },
@@ -2618,10 +2657,15 @@ export default {
       title: '模板分组 - {name}',
       description: '选择该模板授予的订阅分组。'
     },
+    confirm: {
+      deleteTitle: '删除订阅模板 {name}？',
+      deleteAction: '删除模板'
+    },
     messages: {
       loadFailed: '加载订阅模板失败',
-      deleteConfirm: '确定删除该订阅模板？',
-      nameRequired: '请输入模板名称'
+      nameRequired: '请输入模板名称',
+      deleted: '已删除订阅模板 {name}',
+      groupRemoved: '已从模板 {plan} 移除分组 {group}'
     }
   },
   adminPlans: {
@@ -2683,22 +2727,27 @@ export default {
       speedLimitMbps: '{value} Mbps',
       deviceLimitCount: '{value} 台'
     },
+    confirm: {
+      deleteTitle: '删除套餐 {name}？',
+      deleteMessage: '此操作无法撤销。',
+      deleteAction: '删除套餐'
+    },
     messages: {
       loadFailed: '加载套餐失败',
       loadGroupsFailed: '加载订阅分组失败',
-      deleteConfirm: '确定删除该套餐吗？',
-      deleteFailed: '删除失败：{message}',
+      deleted: '已删除套餐 {name}',
       deleteFailedShort: '删除失败',
       nameRequired: '请填写套餐名称',
       saveFailed: '保存失败：{message}',
       saveFailedShort: '保存失败',
+      saved: '已保存 {name}',
       userIdRequired: '请填写用户 ID',
       assignSuccess: '分配成功',
       assignFailed: '分配失败：{message}',
       assignFailedShort: '分配失败',
       toggleGroupFailed: '切换分组失败：{message}',
       toggleGroupFailedShort: '切换分组失败',
-      removeGroupConfirm: '确定移除该订阅分组吗？',
+      groupRemoved: '已从套餐 {plan} 移除分组 {group}',
       removeGroupFailed: '移除分组失败：{message}',
       removeGroupFailedShort: '移除失败'
     }
@@ -2844,15 +2893,28 @@ export default {
       },
       empty: '暂无授权'
     },
+    confirm: {
+      resetSubscribeTitle: '重置 {email} 的订阅链接？',
+      resetSubscribeMessage: '旧链接会立即失效，用户需要重新导入订阅。此操作无法撤销。',
+      resetSubscribeAction: '重置订阅链接',
+      deleteGrantTitle: '删除隧道授权 #{id}？',
+      deleteGrantMessage: '该用户将不能再使用隧道 {tunnel}。此操作无法撤销。',
+      deleteGrantAction: '删除授权'
+    },
+    copyDialog: {
+      title: '复制订阅链接',
+      description: '无法自动复制，请手动复制下面的链接。',
+      label: '订阅链接'
+    },
     resetFlow: {
-      userTitle: '重置用户流量',
-      userMessage: '确认将用户 {email} 的已用流量清零吗？',
-      tunnelTitle: '重置隧道授权流量',
-      tunnelMessage: '确认将隧道授权 #{id} 的已用流量清零吗？',
+      userTitle: '重置 {email} 的流量？',
+      userMessage: '已用流量将清零。此操作无法撤销。',
+      tunnelTitle: '重置隧道授权 #{id} 的流量？',
+      tunnelMessage: '这条授权的已用流量将清零。此操作无法撤销。',
       usedFlow: '当前已用',
       quota: '当前配额',
       resetting: '重置中...',
-      confirmAction: '确认重置'
+      confirmAction: '重置流量'
     },
     trafficModal: {
       title: '流量详情 - {email}',
@@ -2894,8 +2956,9 @@ export default {
       fetchUsersFailed: '获取用户列表失败',
       fetchStatsFailed: '获取统计失败',
       saveFailed: '保存失败：{message}',
-      confirmBan: '确认封禁用户 {email} 吗？',
-      confirmUnban: '确认解封用户 {email} 吗？',
+      userSaved: '已保存 {email}',
+      userBanned: '已封禁 {email}',
+      userUnbanned: '已解封 {email}',
       fetchTunnelListFailed: '获取隧道列表失败',
       fetchSpeedLimitFailed: '获取限速规则失败',
       fetchTunnelGrantFailed: '获取隧道授权失败',
@@ -2906,7 +2969,7 @@ export default {
       grantUpdated: '授权更新成功',
       grantCreated: '授权创建成功',
       grantActionFailed: '授权操作失败',
-      confirmDeleteGrant: '确认删除隧道授权 #{id} 吗？',
+      grantDeleted: '已删除隧道授权 #{id}',
       grantDeleteFailed: '删除授权失败',
       resetFailed: '重置失败',
       userFlowReset: '用户流量已重置',
@@ -2914,8 +2977,6 @@ export default {
       fetchUserFailed: '获取用户详情失败',
       noToken: '该用户没有订阅 token',
       subscribeCopied: '订阅链接已复制到剪贴板',
-      copyManual: '自动复制失败，请手动复制以下订阅链接：',
-      resetSubscribeConfirm: '确认重置用户 {email} 的订阅链接吗？旧链接将立即失效，用户需重新导入。',
       resetSubscribeSuccess: '订阅链接已重置',
       resetSubscribeFailed: '重置订阅失败'
     }
@@ -2923,7 +2984,7 @@ export default {
   control: {
     subtitle: '管理官方签名软件包、Control WebUI 扩展与生命周期操作。',
     actions: {
-      refresh: '刷新', refreshing: '刷新中...', importRelease: '导入发行版', importing: '导入中...', install: '安装',
+      refresh: '刷新', refreshing: '刷新中...', importRelease: '导入发行版', install: '安装',
       configure: '配置', enable: '启用', disable: '禁用', upgrade: '升级', update: '升级', rollback: '回滚', cancel: '取消操作', installOfficialOnly: '需要官方发行版',
       saving: '保存中...', newAssignment: '新建角色'
     },
@@ -2956,7 +3017,7 @@ export default {
     extensions: { errorsTitle: 'WebUI 扩展加载失败' },
     assignments: {
       node: '节点', noNodes: '暂无可用节点', agentPlugin: 'Agent 插件', loading: '正在加载节点角色...', enabled: '启用该节点角色',
-      createTitle: '新建节点角色', editTitle: '编辑节点角色', deleteConfirm: '确认从该节点删除 {plugin} / {role} 吗？'
+      createTitle: '新建节点角色', editTitle: '编辑节点角色', deleteTitle: '从该节点删除 {plugin} / {role}？', deleteMessage: '该节点会停止运行这个插件角色。此操作无法撤销。', deleteAction: '删除节点角色'
     },
     install: { title: '安装官方插件', target: '运行目标', version: '发行版本', enableAfterInstall: '安装后立即启用' },
     update: { title: '升级官方插件' },
@@ -2999,7 +3060,7 @@ export default {
     resolver: { title: '有效授权预览', description: '预览一个用户、可选套餐和服务作用域在服务端的允许并集结果。', userID: '用户 ID', planID: '套餐 ID（可选）', scope: '服务作用域', result: '命中 {count} 个已启用访问组', none: '没有命中已启用访问组', policySummary: '当前生效 {grants} 条授权和 {quotas} 条配额策略。' },
     editor: { createTitle: '新建访问组', editTitle: '编辑访问组', name: '组名称', description: '说明', enabled: '启用该访问组' },
     messages: { groupCreated: '已创建访问组 {name}', groupSaved: '已保存访问组 {name}', groupEnabled: '已启用访问组 {name}', groupDisabled: '已禁用访问组 {name}', groupDeleted: '已删除访问组 {name}', memberAdded: '已添加用户 #{id}', memberRemoved: '已移除用户 #{id}', planAdded: '已添加套餐 #{id}', planRemoved: '已移除套餐 #{id}', grantAdded: '已添加资源授权', grantRemoved: '已移除资源授权', quotaSaved: '已保存配额策略', quotaRemoved: '已移除配额策略' },
-    confirm: { deleteGroup: '删除访问组 {name}？其成员、授权和配额策略将一并删除。', removeMember: '确认从该访问组移除用户 #{id}？', removePlan: '确认从该访问组移除套餐 #{id}？', removeGrant: '确认移除资源授权 #{id}？', removeQuota: '确认移除配额策略 {key}？' },
+    confirm: { deleteGroupTitle: '删除访问组 {name}？', deleteGroup: '组内的成员关系、资源授权和配额策略会一并删除。此操作无法撤销。', deleteGroupAction: '删除访问组', removeGrantTitle: '移除资源授权 #{id}？', removeGrant: '该组成员将失去对 {resource} 的访问权限。此操作无法撤销。', removeGrantAction: '移除授权', removeQuotaTitle: '移除配额策略 {key}？', removeQuota: '该组将不再受这条配额限制。此操作无法撤销。', removeQuotaAction: '移除策略' },
     errors: { load: '无法加载访问控制数据', loadGroups: '无法加载访问组', loadDetail: '无法加载访问组详情', groupRequired: '必须填写服务作用域和组名称', saveGroup: '无法保存访问组', deleteGroup: '无法删除访问组', member: '无法更新用户成员关系', plan: '无法更新套餐成员关系', grant: '无法更新资源授权', quota: '无法更新配额策略', resolve: '无法解析有效授权', invalidID: '{label} 必须为正整数', invalidJSON: '{label} 必须为有效 JSON', scopeRequired: '必须选择服务作用域' }
   },
   legacy

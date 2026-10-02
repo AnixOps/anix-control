@@ -1,5 +1,6 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+import { toastMessages } from './helpers/feedback'
 import MFA from '@/views/admin/MFA.vue'
 import { setLocale } from '@/i18n'
 
@@ -14,7 +15,6 @@ describe('Admin MFA', () => {
   beforeEach(async () => {
     vi.resetAllMocks()
     vi.spyOn(console, 'error').mockImplementation(() => {})
-    vi.spyOn(window, 'alert').mockImplementation(() => {})
     await setLocale('en')
 
     adminApi.getMFAConfig.mockResolvedValue({
@@ -91,7 +91,7 @@ describe('Admin MFA', () => {
       max_attempts: 4,
       lockout_duration: 20
     })
-    expect(window.alert).toHaveBeenCalledWith('Saved successfully')
+    expect(toastMessages('success')).toEqual(['Saved successfully'])
 
     wrapper.unmount()
   })
@@ -110,8 +110,8 @@ describe('Admin MFA', () => {
     await wrapper.vm.saveConfig()
     await flushPromises()
 
-    expect(window.alert).toHaveBeenCalledWith('Save failed: invalid config')
-    expect(window.alert).not.toHaveBeenCalledWith('Saved successfully')
+    expect(toastMessages('error')).toEqual(['Save failed: invalid config'])
+    expect(toastMessages('success')).toEqual([])
 
     wrapper.unmount()
   })

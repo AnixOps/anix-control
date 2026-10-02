@@ -3,10 +3,10 @@ import { mount, flushPromises } from '@vue/test-utils'
 import { createPinia, setActivePinia } from 'pinia'
 import { useUserStore } from '@/stores/user'
 import Subscribe from '@/views/user/Subscribe.vue'
+import { toastMessages } from './helpers/feedback'
 
 const mockGetSubscription = vi.fn()
 const mockFetch = vi.fn()
-const mockAlert = vi.fn()
 const mockWriteText = vi.fn()
 
 vi.mock('@/api/user', () => ({
@@ -22,12 +22,10 @@ describe('User Subscribe flow', () => {
 
     mockGetSubscription.mockReset()
     mockFetch.mockReset()
-    mockAlert.mockReset()
     mockWriteText.mockReset()
     mockWriteText.mockResolvedValue()
 
     vi.stubGlobal('fetch', mockFetch)
-    vi.stubGlobal('alert', mockAlert)
     Object.defineProperty(navigator, 'clipboard', {
       configurable: true,
       value: {
@@ -69,7 +67,12 @@ describe('User Subscribe flow', () => {
     await flushPromises()
 
     expect(mockGetSubscription).toHaveBeenNthCalledWith(2, true)
-    expect(mockAlert).toHaveBeenCalled()
+    expect(toastMessages('success')).toEqual(['Subscription cache refreshed.'])
+
+    mockGetSubscription.mockRejectedValueOnce(new Error('offline'))
+    await wrapper.find('.link-actions .btn.btn-primary').trigger('click')
+    await flushPromises()
+    expect(toastMessages('error')).toEqual(['The subscription cache wasn’t refreshed. Try again later.'])
   })
 
   it('previews subscription content and supports copy link', async () => {
@@ -96,12 +99,29 @@ describe('User Subscribe flow', () => {
     expect(mockWriteText).toHaveBeenCalledWith(
       expect.stringContaining('/s/sub-token-1')
     )
+    expect(toastMessages('success')).toEqual(['Copied to clipboard'])
 
     await firstRowButtons[1].trigger('click')
     await flushPromises()
 
     expect(mockFetch).toHaveBeenCalledWith(expect.stringContaining('/s/sub-token-1'))
     expect(wrapper.find('.preview-card textarea').element.value).toContain('preview-subscription-content')
+  })
+
+  it('reports a copy that fails in an error toast', async () => {
+    mockGetSubscription.mockResolvedValue({ data: { ExpireAt: 0, subscribe_path: '/s' } })
+    mockWriteText.mockRejectedValue(new Error('denied'))
+    const execCommand = document.execCommand
+    document.execCommand = () => false
+    try {
+      const wrapper = mount(Subscribe)
+      await flushPromises()
+      await wrapper.find('.link-item .link-row').findAll('button')[0].trigger('click')
+      await flushPromises()
+      expect(toastMessages('error')).toEqual(['Couldn’t copy automatically. Select the text and copy it by hand.'])
+    } finally {
+      document.execCommand = execCommand
+    }
   })
 
   it('switches the displayed subscription domain when multiple domains are configured', async () => {

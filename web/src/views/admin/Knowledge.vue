@@ -47,62 +47,53 @@
       </div>
     </div>
 
-    <div v-if="showModal" class="modal-overlay" @click.self="closeModal">
-      <div class="modal modal-lg">
-        <div class="modal-header">
-          <h3>{{ isEdit ? t('adminKnowledge.modal.editTitle') : t('adminKnowledge.modal.createTitle') }}</h3>
-          <button
-            class="btn btn-ghost btn-sm close-btn"
-            :aria-label="t('common.actions.close')"
-            :title="t('common.actions.close')"
-            @click="closeModal"
-          >
-            x
-          </button>
-        </div>
-        <div class="modal-body">
-          <div class="form-row">
-            <div class="form-group flex-2">
-              <label>{{ t('adminKnowledge.fields.title') }} <span class="required">*</span></label>
-              <input v-model="form.title" type="text" :placeholder="t('adminKnowledge.placeholders.title')" />
-            </div>
-            <div class="form-group">
-              <label>{{ t('adminKnowledge.fields.category') }}</label>
-              <select v-model="form.category">
-                <option v-for="category in categoryOptions" :key="category.value" :value="category.value">
-                  {{ category.label }}
-                </option>
-              </select>
-            </div>
+    <UiDialog v-model:open="showModal" size="lg" :title="isEdit ? t('adminKnowledge.modal.editTitle') : t('adminKnowledge.modal.createTitle')">
+      <div class="dialog-fields">
+        <div class="form-row">
+          <div class="form-group flex-2">
+            <label for="knowledge-title">{{ t('adminKnowledge.fields.title') }} <span class="required">*</span></label>
+            <input id="knowledge-title" v-model="form.title" type="text" data-test="knowledge-title" :placeholder="t('adminKnowledge.placeholders.title')" :aria-invalid="formError && !form.title.trim() ? 'true' : undefined" />
           </div>
           <div class="form-group">
-            <label>{{ t('adminKnowledge.fields.content') }} <span class="required">*</span></label>
-            <textarea
-              v-model="form.body"
-              rows="12"
-              :placeholder="t('adminKnowledge.placeholders.body')"
-            ></textarea>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>{{ t('adminKnowledge.fields.sort') }}</label>
-              <input v-model.number="form.sort" type="number" min="0" />
-            </div>
-            <div class="form-group">
-              <label>{{ t('adminKnowledge.fields.visibility') }}</label>
-              <select v-model="form.show">
-                <option :value="1">{{ t('adminKnowledge.visibility.visible') }}</option>
-                <option :value="0">{{ t('adminKnowledge.visibility.hidden') }}</option>
-              </select>
-            </div>
+            <label for="knowledge-category">{{ t('adminKnowledge.fields.category') }}</label>
+            <select id="knowledge-category" v-model="form.category">
+              <option v-for="category in categoryOptions" :key="category.value" :value="category.value">
+                {{ category.label }}
+              </option>
+            </select>
           </div>
         </div>
-        <div class="modal-footer">
-          <button class="btn" @click="closeModal">{{ t('common.actions.cancel') }}</button>
-          <button class="btn btn-primary" @click="saveArticle">{{ isEdit ? t('common.actions.save') : t('adminKnowledge.actions.publish') }}</button>
+        <div class="form-group">
+          <label for="knowledge-body">{{ t('adminKnowledge.fields.content') }} <span class="required">*</span></label>
+          <textarea
+            id="knowledge-body"
+            v-model="form.body"
+            rows="12"
+            data-test="knowledge-body"
+            :placeholder="t('adminKnowledge.placeholders.body')"
+            :aria-invalid="formError && !form.body.trim() ? 'true' : undefined"
+          ></textarea>
         </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="knowledge-sort">{{ t('adminKnowledge.fields.sort') }}</label>
+            <input id="knowledge-sort" v-model.number="form.sort" type="number" min="0" />
+          </div>
+          <div class="form-group">
+            <label for="knowledge-show">{{ t('adminKnowledge.fields.visibility') }}</label>
+            <select id="knowledge-show" v-model="form.show">
+              <option :value="1">{{ t('adminKnowledge.visibility.visible') }}</option>
+              <option :value="0">{{ t('adminKnowledge.visibility.hidden') }}</option>
+            </select>
+          </div>
+        </div>
+        <p v-if="formError" class="form-error" role="alert" data-test="knowledge-error">{{ formError }}</p>
       </div>
-    </div>
+      <template #footer="{ close }">
+        <UiButton :disabled="saving" @click="close">{{ t('common.actions.cancel') }}</UiButton>
+        <UiButton variant="primary" data-test="knowledge-save" :loading="saving" @click="saveArticle">{{ isEdit ? t('common.actions.save') : t('adminKnowledge.actions.publish') }}</UiButton>
+      </template>
+    </UiDialog>
   </div>
 </template>
 
@@ -110,8 +101,13 @@
 import { computed, onMounted, reactive, ref } from 'vue'
 import adminApi from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { UiButton, UiDialog, useConfirm, useToast } from '@/ui'
 
 const { t, formatDate } = useAppI18n()
+const toast = useToast()
+const confirm = useConfirm()
+const saving = ref(false)
+const formError = ref('')
 
 const KNOWLEDGE_CATEGORY_VALUES = Object.freeze({
   announcement: 'announcement',
@@ -204,6 +200,7 @@ const resetForm = () => {
   form.body = ''
   form.sort = 0
   form.show = 1
+  formError.value = ''
 }
 
 const openCreate = () => {
@@ -219,6 +216,7 @@ const editArticle = (article) => {
   form.body = article.body
   form.sort = article.sort
   form.show = article.show
+  formError.value = ''
   isEdit.value = true
   showModal.value = true
 }
@@ -228,11 +226,14 @@ const closeModal = () => {
 }
 
 const saveArticle = async () => {
+  if (saving.value) return
+  formError.value = ''
   if (!form.title.trim() || !form.body.trim()) {
-    window.alert(t('adminKnowledge.messages.requiredFields'))
+    formError.value = t('adminKnowledge.messages.requiredFields')
     return
   }
 
+  saving.value = true
   try {
     const payload = {
       title: form.title.trim(),
@@ -244,28 +245,38 @@ const saveArticle = async () => {
 
     if (isEdit.value) {
       await adminApi.updateKnowledge(form.id, payload)
-      window.alert(t('adminKnowledge.messages.saveSuccess'))
+      toast.success(t('adminKnowledge.messages.saveSuccess'))
     } else {
       await adminApi.createKnowledge(payload)
-      window.alert(t('adminKnowledge.messages.publishSuccess'))
+      toast.success(t('adminKnowledge.messages.publishSuccess'))
     }
 
     closeModal()
     await load()
   } catch (error) {
-    window.alert(error.message || t('adminKnowledge.messages.actionFailed'))
+    formError.value = error.message || t('adminKnowledge.messages.actionFailed')
+  } finally {
+    saving.value = false
   }
 }
 
 const removeArticle = async (article) => {
-  if (!window.confirm(t('adminKnowledge.messages.deleteConfirm', { title: article.title }))) return
-
-  try {
-    await adminApi.deleteKnowledge(article.id)
-    await load()
-  } catch (error) {
-    window.alert(error.message || t('adminKnowledge.messages.deleteFailed'))
-  }
+  const confirmed = await confirm({
+    title: t('adminKnowledge.confirm.deleteTitle', { title: article.title }),
+    message: t('adminKnowledge.confirm.deleteMessage'),
+    confirmLabel: t('adminKnowledge.confirm.deleteAction'),
+    tone: 'danger',
+    onConfirm: async () => {
+      try {
+        await adminApi.deleteKnowledge(article.id)
+      } catch (error) {
+        throw new Error(error.message || t('adminKnowledge.messages.deleteFailed'))
+      }
+    }
+  })
+  if (!confirmed) return
+  toast.success(t('adminKnowledge.messages.deleted', { title: article.title }))
+  await load()
 }
 </script>
 
@@ -366,15 +377,26 @@ const removeArticle = async (article) => {
   border-radius: var(--radius-lg);
 }
 
-.modal.modal-lg {
-  width: min(96vw, 760px);
-}
-
 .form-row .form-group.flex-2 {
   flex: 2;
 }
 
-.modal-body textarea {
+.dialog-fields {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.dialog-fields .form-group,
+.dialog-fields .form-row {
+  margin-bottom: 0;
+}
+
+.form-error {
+  margin: 0;
+  color: var(--danger);
+}
+
+textarea {
   resize: vertical;
   font-family: 'Consolas', 'Monaco', monospace;
 }

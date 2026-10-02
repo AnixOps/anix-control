@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import System from '@/views/admin/System.vue'
+import { answerConfirms, toastMessages } from './helpers/feedback'
 
 const adminApi = vi.hoisted(() => ({
   getSystemConfig: vi.fn(),
@@ -74,8 +75,6 @@ describe('System backup configuration', () => {
     adminApi.listForwardRuntimeJobs.mockResolvedValue({ data: { list: [] } })
     adminApi.getForwardRuntimeStatus.mockResolvedValue({ data: { data: null } })
     adminApi.runForwardRuntimeDoctor.mockResolvedValue({ data: { data: null } })
-    vi.spyOn(window, 'alert').mockImplementation(() => {})
-    vi.spyOn(window, 'confirm').mockImplementation(() => true)
   })
 
   it('sends preserve_existing_sensitive when sensitive S3 keys are left blank', async () => {
@@ -302,7 +301,6 @@ describe('System backup configuration', () => {
   it('does not report backup config save success when enveloped response fails', async () => {
     const wrapper = mountSystem()
     await flushPromises()
-    window.alert.mockClear()
     adminApi.updateBackupConfig.mockResolvedValueOnce({
       code: -1,
       msg: 'backup config save rejected',
@@ -313,8 +311,8 @@ describe('System backup configuration', () => {
     await wrapper.vm.saveBackupConfig()
     await flushPromises()
 
-    expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('backup config save rejected'))
-    expect(window.alert).not.toHaveBeenCalledWith(expect.stringContaining('Saved successfully'))
+    expect(toastMessages('error')).toEqual([expect.stringContaining('backup config save rejected')])
+    expect(toastMessages('success')).toEqual([])
 
     wrapper.unmount()
   })
@@ -322,7 +320,6 @@ describe('System backup configuration', () => {
   it('does not refresh backups when enveloped create response fails', async () => {
     const wrapper = mountSystem()
     await flushPromises()
-    window.alert.mockClear()
     adminApi.getBackups.mockClear()
     adminApi.getBackupStats.mockClear()
     adminApi.createBackup.mockResolvedValueOnce({
@@ -335,8 +332,8 @@ describe('System backup configuration', () => {
     await wrapper.vm.createBackupRequest()
     await flushPromises()
 
-    expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('backup create rejected'))
-    expect(window.alert).not.toHaveBeenCalledWith(expect.stringContaining('Backup started'))
+    expect(toastMessages('error')).toEqual([expect.stringContaining('backup create rejected')])
+    expect(toastMessages('success')).toEqual([])
     expect(adminApi.getBackups).not.toHaveBeenCalled()
     expect(adminApi.getBackupStats).not.toHaveBeenCalled()
 
@@ -346,7 +343,6 @@ describe('System backup configuration', () => {
   it('does not refresh backups when enveloped delete response fails', async () => {
     const wrapper = mountSystem()
     await flushPromises()
-    window.alert.mockClear()
     adminApi.getBackups.mockClear()
     adminApi.getBackupStats.mockClear()
     adminApi.deleteBackup.mockResolvedValueOnce({
@@ -356,10 +352,13 @@ describe('System backup configuration', () => {
       ts: 1783526400000
     })
 
+    const confirms = answerConfirms(true)
     await wrapper.vm.deleteBackupRequest({ id: 1, filename: 'rejected.zip' })
     await flushPromises()
 
-    expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('backup delete rejected'))
+    // The confirmation keeps the failure inline; nothing is refreshed.
+    expect(confirms.last()).toMatchObject({ tone: 'danger', title: 'Delete backup rejected.zip?' })
+    expect(confirms.errors.map(error => error.message)).toEqual([expect.stringContaining('backup delete rejected')])
     expect(adminApi.getBackups).not.toHaveBeenCalled()
     expect(adminApi.getBackupStats).not.toHaveBeenCalled()
 
@@ -369,7 +368,6 @@ describe('System backup configuration', () => {
   it('does not report restore success when enveloped response fails', async () => {
     const wrapper = mountSystem()
     await flushPromises()
-    window.alert.mockClear()
     adminApi.restoreBackup.mockResolvedValueOnce({
       code: -1,
       msg: 'backup restore rejected',
@@ -377,11 +375,13 @@ describe('System backup configuration', () => {
       ts: 1783526400000
     })
 
+    const confirms = answerConfirms(true)
     await wrapper.vm.restoreBackupRequest({ id: 1, filename: 'rejected.zip' })
     await flushPromises()
 
-    expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('backup restore rejected'))
-    expect(window.alert).not.toHaveBeenCalledWith(expect.stringContaining('Restore completed'))
+    expect(confirms.last()).toMatchObject({ tone: 'danger', title: 'Restore from backup rejected.zip?', confirmLabel: 'Restore backup' })
+    expect(confirms.errors.map(error => error.message)).toEqual([expect.stringContaining('backup restore rejected')])
+    expect(toastMessages('success')).toEqual([])
 
     wrapper.unmount()
   })
@@ -467,7 +467,6 @@ describe('System backup configuration', () => {
     const wrapper = mountSystem()
     await flushPromises()
     adminApi.getLoadBalancers.mockClear()
-    window.alert.mockClear()
     adminApi.createLoadBalancer.mockResolvedValueOnce({
       code: -1,
       msg: 'balancer save rejected',
@@ -488,7 +487,8 @@ describe('System backup configuration', () => {
     await wrapper.vm.saveBalancer()
     await flushPromises()
 
-    expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('balancer save rejected'))
+    expect(wrapper.vm.balancerError).toContain('balancer save rejected')
+    expect(toastMessages()).toEqual([])
     expect(wrapper.vm.showBalancerModal).toBe(true)
     expect(adminApi.getLoadBalancers).not.toHaveBeenCalled()
 
@@ -499,7 +499,6 @@ describe('System backup configuration', () => {
     const wrapper = mountSystem()
     await flushPromises()
     adminApi.getLoadBalancers.mockClear()
-    window.alert.mockClear()
     adminApi.runHealthCheck.mockResolvedValueOnce({
       code: -1,
       msg: 'health check rejected',
@@ -510,8 +509,8 @@ describe('System backup configuration', () => {
     await wrapper.vm.runHealthCheckRequest({ id: 1, name: 'Rejected LB' })
     await flushPromises()
 
-    expect(window.alert).toHaveBeenCalledWith(expect.stringContaining('health check rejected'))
-    expect(window.alert).not.toHaveBeenCalledWith(expect.stringContaining('Health check completed'))
+    expect(toastMessages('error')).toEqual([expect.stringContaining('health check rejected')])
+    expect(toastMessages('success')).toEqual([])
     expect(adminApi.getLoadBalancers).not.toHaveBeenCalled()
 
     wrapper.unmount()

@@ -43,12 +43,18 @@ export default {
     empty: {
       noData: '暂无优惠券'
     },
+    confirm: {
+      deleteTitle: '删除优惠券 {code}？',
+      deleteMessage: '用户将不能再使用这个优惠码。此操作无法撤销。',
+      deleteAction: '删除优惠券'
+    },
     messages: {
       fetchFailed: '加载优惠券失败',
-      requiredFields: '请填写优惠券码和优惠券名称',
+      codeRequired: '请填写优惠券码',
+      nameRequired: '请填写优惠券名称',
       createSuccess: '优惠券创建成功',
       createFailed: '优惠券创建失败',
-      deleteConfirm: '确定删除优惠券 {code} 吗？',
+      deleted: '已删除优惠券 {code}',
       deleteFailed: '删除优惠券失败'
     }
   },
@@ -116,15 +122,20 @@ export default {
       next: '下一页',
       info: '第 {page} / {totalPages} 页'
     },
+    confirm: {
+      markPaidTitle: '将订单 {tradeNo} 标记为已支付？',
+      markPaidMessage: '订单金额 {amount}，标记后按已支付处理。此操作无法撤销。',
+      cancelTitle: '取消订单 {tradeNo}？',
+      cancelMessage: '用户将不能再支付这笔订单。此操作无法撤销。',
+      cancelAction: '取消订单',
+      keepOrder: '保留订单'
+    },
     messages: {
       fetchOrdersFailed: '加载订单失败',
       fetchStatsFailed: '加载订单统计失败',
-      markPaidConfirm: '确定将订单 {tradeNo} 标记为已支付吗？',
       markPaidSuccess: '订单已标记为支付成功',
-      markPaidFailed: '标记订单支付失败：{message}',
       markPaidFailedShort: '标记失败',
-      cancelConfirm: '确定取消订单 {tradeNo} 吗？',
-      cancelFailed: '取消订单失败：{message}',
+      cancelSuccess: '已取消订单 {tradeNo}',
       cancelFailedShort: '取消失败'
     }
   },
@@ -266,6 +277,12 @@ export default {
         commission: '佣金'
       }
     },
+    confirm: {
+      approveTitle: '通过提现申请 #{id}？',
+      approveMessage: '将向 {account} 发放 {amount}。此操作无法撤销。',
+      rejectTitle: '拒绝提现申请 #{id}？',
+      rejectMessage: '这笔 {amount} 的申请会被拒绝。此操作无法撤销。'
+    },
     messages: {
       fetchConfigFailed: '加载邀请配置失败',
       fetchWithdrawalsFailed: '加载提现申请失败',
@@ -273,13 +290,9 @@ export default {
       saveSuccess: '邀请配置已保存',
       saveFailed: '保存邀请配置失败：{message}',
       saveFailedShort: '保存失败',
-      approveConfirm: '确定通过这笔提现申请吗？',
       approveSuccess: '提现申请已通过',
-      approveFailed: '通过提现申请失败：{message}',
       approveFailedShort: '审核失败',
-      rejectConfirm: '确定拒绝这笔提现申请吗？',
       rejectSuccess: '提现申请已拒绝',
-      rejectFailed: '拒绝提现申请失败：{message}',
       rejectFailedShort: '拒绝失败'
     }
   },
@@ -360,6 +373,10 @@ export default {
       markdown: '在支持的场景下，消息可使用 Telegram Markdown。',
       singleFirst: '建议先单发测试，再执行广播。'
     },
+    confirm: {
+      broadcastTitle: '向所有绑定用户广播这条消息？',
+      broadcastMessage: '消息会发送给每一位已绑定 Telegram 的用户，发出后无法撤回。'
+    },
     messages: {
       fetchConfigFailed: '加载 Telegram Bot 配置失败',
       fetchUsersFailed: '加载 Telegram 用户失败',
@@ -426,12 +443,17 @@ export default {
       content: '回复内容',
       placeholder: '输入回复内容...'
     },
+    confirm: {
+      closeTitle: '关闭工单 #{id}「{subject}」？',
+      closeMessage: '关闭后不能再回复，也无法重新打开。',
+      closeAction: '关闭工单'
+    },
     messages: {
       fetchFailed: '加载工单失败',
       replyRequired: '请输入回复内容',
       replySuccess: '回复发送成功',
       replyFailed: '回复发送失败',
-      closeConfirm: '确定关闭该工单吗？',
+      closed: '已关闭工单 #{id}',
       closeFailed: '关闭工单失败'
     }
   },
@@ -470,13 +492,18 @@ export default {
     empty: {
       noData: '暂无文章'
     },
+    confirm: {
+      deleteTitle: '删除文章“{title}”？',
+      deleteMessage: '文章会从帮助中心移除，用户将无法再看到它。此操作无法撤销。',
+      deleteAction: '删除文章'
+    },
     messages: {
       fetchFailed: '加载文章失败',
       requiredFields: '请填写标题和内容',
       saveSuccess: '文章保存成功',
       publishSuccess: '文章发布成功',
       actionFailed: '文章操作失败',
-      deleteConfirm: '确认删除文章“{title}”吗？',
+      deleted: '已删除文章“{title}”',
       deleteFailed: '删除文章失败'
     }
   }

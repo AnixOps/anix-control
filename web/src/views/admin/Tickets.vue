@@ -85,39 +85,34 @@
       </div>
     </section>
 
-    <div v-if="showReply" class="modal-overlay" @click.self="closeReply">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>{{ t('adminTickets.replyModal.title', { id: currentTicket?.id ?? '-' }) }}</h3>
-          <button
-            class="btn btn-ghost btn-sm close-btn"
-            :aria-label="t('common.actions.close')"
-            :title="t('common.actions.close')"
-            @click="closeReply"
-          >
-            x
-          </button>
-        </div>
-        <div class="modal-body">
-          <div class="ticket-info">
-            <p><strong>{{ t('adminTickets.replyModal.subject') }}</strong>{{ currentTicket?.subject }}</p>
-            <p><strong>{{ t('adminTickets.replyModal.userId') }}</strong>{{ currentTicket?.user_id }}</p>
-          </div>
-          <div class="form-group">
-            <label>{{ t('adminTickets.replyModal.content') }}</label>
-            <textarea
-              v-model="replyMessage"
-              rows="5"
-              :placeholder="t('adminTickets.replyModal.placeholder')"
-            ></textarea>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn" @click="closeReply">{{ t('common.actions.cancel') }}</button>
-          <button class="btn btn-primary" @click="submitReply">{{ t('adminTickets.actions.sendReply') }}</button>
-        </div>
+    <UiSheet
+      :open="showReply"
+      :title="t('adminTickets.replyModal.title', { id: currentTicket?.id ?? '-' })"
+      :dismissible="!replying"
+      @update:open="value => { if (!value) closeReply() }"
+    >
+      <div class="ticket-info">
+        <p><strong>{{ t('adminTickets.replyModal.subject') }}</strong>{{ currentTicket?.subject }}</p>
+        <p><strong>{{ t('adminTickets.replyModal.userId') }}</strong>{{ currentTicket?.user_id }}</p>
       </div>
-    </div>
+      <div class="form-group">
+        <label for="admin-ticket-reply">{{ t('adminTickets.replyModal.content') }}</label>
+        <textarea
+          id="admin-ticket-reply"
+          v-model="replyMessage"
+          rows="5"
+          data-test="ticket-reply-input"
+          :placeholder="t('adminTickets.replyModal.placeholder')"
+          :aria-invalid="replyError ? 'true' : undefined"
+          :aria-describedby="replyError ? 'admin-ticket-reply-error' : undefined"
+        ></textarea>
+        <p v-if="replyError" id="admin-ticket-reply-error" class="form-error" role="alert">{{ replyError }}</p>
+      </div>
+      <template #footer="{ close }">
+        <UiButton :disabled="replying" @click="close">{{ t('common.actions.cancel') }}</UiButton>
+        <UiButton variant="primary" data-test="ticket-reply-submit" :loading="replying" @click="submitReply">{{ t('adminTickets.actions.sendReply') }}</UiButton>
+      </template>
+    </UiSheet>
   </div>
 </template>
 
@@ -125,6 +120,7 @@
 import { computed, onMounted, ref } from 'vue'
 import adminApi from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { UiButton, UiSheet, useConfirm, useToast } from '@/ui'
 
 const { t, formatDateTime } = useAppI18n()
 
@@ -132,6 +128,10 @@ const tickets = ref([])
 const showReply = ref(false)
 const currentTicket = ref(null)
 const replyMessage = ref('')
+const replyError = ref('')
+const replying = ref(false)
+const toast = useToast()
+const confirm = useConfirm()
 
 const openCount = computed(() => tickets.value.filter((ticket) => ticket.status === 0).length)
 const answeredCount = computed(() => tickets.value.filter((ticket) => ticket.status === 1).length)
@@ -188,42 +188,58 @@ const formatTicketDate = (ts) => {
 const openReply = (ticket) => {
   currentTicket.value = ticket
   replyMessage.value = ''
+  replyError.value = ''
   showReply.value = true
 }
 
 const closeReply = () => {
+  if (replying.value) return
   showReply.value = false
   currentTicket.value = null
 }
 
 const submitReply = async () => {
+  if (replying.value) return
+  replyError.value = ''
   if (!replyMessage.value.trim()) {
-    window.alert(t('adminTickets.messages.replyRequired'))
+    replyError.value = t('adminTickets.messages.replyRequired')
     return
   }
 
+  replying.value = true
   try {
     await adminApi.replyTicket({
       ticket_id: currentTicket.value.id,
       message: replyMessage.value
     })
-    window.alert(t('adminTickets.messages.replySuccess'))
+    replying.value = false
+    toast.success(t('adminTickets.messages.replySuccess'))
     closeReply()
     await load()
   } catch (error) {
-    window.alert(error.message || t('adminTickets.messages.replyFailed'))
+    replyError.value = error.message || t('adminTickets.messages.replyFailed')
+  } finally {
+    replying.value = false
   }
 }
 
 const closeTicket = async (ticket) => {
-  if (!window.confirm(t('adminTickets.messages.closeConfirm'))) return
-
-  try {
-    await adminApi.closeTicket(ticket.id)
-    await load()
-  } catch (error) {
-    window.alert(error.message || t('adminTickets.messages.closeFailed'))
-  }
+  // There is no reopen endpoint: closing is final, so ask first.
+  const confirmed = await confirm({
+    title: t('adminTickets.confirm.closeTitle', { id: ticket.id, subject: ticket.subject || '' }),
+    message: t('adminTickets.confirm.closeMessage'),
+    confirmLabel: t('adminTickets.confirm.closeAction'),
+    onConfirm: async () => {
+      try {
+        await adminApi.closeTicket(ticket.id)
+      } catch (error) {
+        throw new Error(error.message || t('adminTickets.messages.closeFailed'))
+      }
+    }
+  })
+  if (!confirmed) return
+  toast.success(t('adminTickets.messages.closed', { id: ticket.id }))
+  await load()
 }
 </script>
 
@@ -316,7 +332,6 @@ const closeTicket = async (ticket) => {
   background: var(--surface-muted);
   padding: 12px 16px;
   border-radius: var(--radius-md);
-  margin-bottom: 16px;
 }
 
 .ticket-info p {
@@ -324,19 +339,18 @@ const closeTicket = async (ticket) => {
   font-size: 14px;
 }
 
-.modal-body .form-group {
-  margin-bottom: 16px;
-}
-
-.modal-body label {
+.form-group label {
   display: block;
-  margin-bottom: 6px;
-  font-size: 14px;
-  font-weight: 500;
+  margin-bottom: var(--space-2);
 }
 
-.modal-body textarea {
+.form-group textarea {
   resize: vertical;
+}
+
+.form-error {
+  margin: var(--space-2) 0 0;
+  color: var(--danger);
 }
 </style>
 

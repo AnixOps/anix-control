@@ -177,8 +177,7 @@ export default {
       loadFailed: 'Load failed',
       submitFailed: 'Submit failed',
       invalidCoupon: 'Invalid coupon code',
-      paymentPending: 'Payment is still being integrated. Please try again later.',
-      closeTicketConfirm: 'Are you sure you want to close this ticket?'
+      paymentPending: 'Payment is still being integrated. Please try again later.'
     }
   },
   pageTitles: {
@@ -470,6 +469,8 @@ export default {
       closePreview: 'Close',
       fetchPreviewFailed: 'Failed to fetch preview.',
       noPreviewContent: 'No subscription content returned.',
+      copyFailed: 'Couldn’t copy automatically. Select the text and copy it by hand.',
+      refreshFailed: 'The subscription cache wasn’t refreshed. Try again later.',
       refreshCompleted: 'Subscription cache refreshed.',
       formats: {
         auto: 'Auto (by User-Agent)',
@@ -495,6 +496,7 @@ export default {
       buyNow: 'Browse plans',
       unknownPlan: 'Unknown plan',
       detailTitle: 'Order details',
+      loadDetailFailed: 'The order details couldn’t be opened. Try again later.',
       headers: {
         tradeNo: 'Order #',
         plan: 'Plan',
@@ -532,7 +534,7 @@ export default {
       couponApplied: 'Coupon applied: {name} (-¥{value})',
       totalAmount: 'Total due',
       backToEdit: 'Back',
-      creatingOrder: 'Creating order...'
+      orderCreated: 'Order created. Pay for it in My Orders.'
     },
     tickets: {
       title: 'My Tickets',
@@ -550,7 +552,16 @@ export default {
       assistant: 'Support assistant',
       me: 'Me',
       updated: 'updated',
-      ticketId: 'Ticket #{id}'
+      ticketId: 'Ticket #{id}',
+      replyLabel: 'Reply',
+      sendReply: 'Send reply',
+      closeTicket: 'Close ticket',
+      closeConfirmTitle: 'Close the ticket “{subject}”?',
+      closeConfirmMessage: 'You can’t reply after closing it. Open a new ticket if you need more help.',
+      closed: 'Ticket closed',
+      created: 'Ticket sent. We’ll reply soon.',
+      fillSubjectMessage: 'Enter a subject and a message.',
+      loadDetailFailed: 'The ticket couldn’t be opened. Try again later.'
     },
     knowledge: {
       title: 'Guides',
@@ -777,16 +788,18 @@ export default {
         delete: 'Delete'
       },
       modal: {
-        eyebrow: 'Machine',
         titleEdit: 'Edit Ansible Machine',
         titleAdd: 'Add Ansible Machine',
-        deleteEyebrow: 'Delete',
-        deleteTitle: 'Delete Machine',
-        deleteConfirm: 'Delete {name} from the Ansible execution fleet?',
+        deleteTitle: 'Delete Ansible machine {name}?',
+        deleteConfirm: 'It is removed from the Ansible execution fleet. This can’t be undone.',
+        deleteAction: 'Delete machine',
         saveLoading: 'Saving...',
         save: 'Save',
-        cancel: 'Cancel',
-        deleteLoading: 'Deleting...'
+        cancel: 'Cancel'
+      },
+      messages: {
+        saved: '{name} saved',
+        deleted: '{name} deleted'
       },
       fields: {
         name: 'Name',
@@ -896,7 +909,6 @@ export default {
       emptyDirectTitle: 'No forwards yet',
       emptyDirectText: 'After you create the first forward, the direct table view will appear here.',
       editor: {
-        eyebrow: 'Forward',
         titleEdit: 'Edit Forward',
         titleAdd: 'Create Forward',
         fields: {
@@ -915,29 +927,23 @@ export default {
           remoteAddress: 'One target per line, for example:\n1.1.1.1:443\nexample.com:8443\n[2001:db8::1]:443'
         },
         remoteHint: 'Supports IPv4:port, domain:port, or [full IPv6]:port. Use one address per line for multiple targets.',
-        submitLoading: 'Submitting...',
         submitUpdate: 'Save Changes',
         submitCreate: 'Create Forward'
       },
       deleteModal: {
-        eyebrow: 'Delete',
-        title: 'Delete Forward',
-        confirmText: 'Delete {name}?',
-        hint: 'If regular deletion fails, a force-delete confirmation will be shown next.',
-        deleteLoading: 'Deleting...',
-        confirmDelete: 'Confirm Delete',
-        forceDeleteIntro: 'Regular delete failed: {message}',
-        forceDeleteQuestion: 'Do you want to force delete it?',
-        forceDeleteWarning: 'Warning: force delete does not verify whether the node-side forward service was removed.'
+        confirmText: 'Delete forward {name}?',
+        hint: 'If the regular delete fails, you are asked whether to force delete. This can’t be undone.',
+        confirmDelete: 'Delete forward',
+        forceDeleteTitle: 'Force delete {name}?',
+        forceDeleteAction: 'Force delete',
+        forceDeleteMessage: 'The regular delete failed ({message}). A force delete does not check that the forward service was removed from the node.'
       },
       addressModal: {
-        eyebrow: 'Address',
         copy: 'Copy',
         copying: 'Copying...',
         titleWithCount: '{title} ({count})'
       },
       exportModal: {
-        eyebrow: 'Export',
         title: 'Export Forward Data',
         subtitle: 'Format: relay-panel compatible JSON: {\'[{ "dest": ["host:port"], "listen_port": 10086, "name": "Rule" }\'}]',
         tunnelLabel: 'Select Export Tunnel',
@@ -949,9 +955,8 @@ export default {
         selectionHint: 'Exporting {count} selected forwards.'
       },
       importModal: {
-        eyebrow: 'Import',
         title: 'Import Forward Data',
-        subtitle: 'Supports relay-panel JSON and legacy remoteAddr|name|inPort lines. inPort may be blank.',
+        subtitle: 'Supports relay-panel JSON and legacy remoteAddr{\'|\'}name{\'|\'}inPort lines. inPort may be blank.',
         subtitleSecondary: 'JSON example: {\'[{ "dest": ["3.3.3.3:3", "4.4.4.4:4"], "listen_port": 10086, "name": "Business Entry" }\'}]',
         tunnelLabel: 'Select Import Tunnel',
         tunnelPlaceholder: 'Please select a tunnel',
@@ -961,11 +966,9 @@ export default {
         resultSummary: 'Success: {success} / Total: {total}',
         statusSuccess: 'Success',
         statusFailed: 'Failed',
-        importing: 'Importing...',
         startImport: 'Start Import'
       },
       diagnosis: {
-        eyebrow: 'Diagnosis',
         title: 'Forward Diagnosis Results',
         loading: 'Diagnosing forward connectivity...',
         connectionSuccess: 'Connection Succeeded',
@@ -980,7 +983,6 @@ export default {
         failedFallback: 'Diagnosis Failed',
         emptyTitle: 'No diagnosis data yet',
         emptyText: 'After you run a diagnosis, results aligned with the reference page will appear here.',
-        rerunning: 'Diagnosing...',
         rerun: 'Run Again'
       },
       status: {
@@ -1045,7 +1047,9 @@ export default {
         servicePaused: 'Pause request submitted',
         networkActionFailed: 'Network error, operation failed',
         bulkActionComplete: 'Batch completed: {success} succeeded, {failed} failed',
-        bulkDeleteConfirm: 'Delete {count} selected forwards? Failed regular deletes will not be force deleted in batch mode.',
+        bulkDeleteTitle: 'Delete {count} selected forwards?',
+        bulkDeleteMessage: 'In batch mode, forwards whose regular delete fails are not force deleted. This can’t be undone.',
+        bulkDeleteAction: 'Delete forwards',
         deleted: 'Deleted successfully',
         forceDeleted: 'Force delete succeeded',
         forceDeleteFailed: 'Force delete failed',
@@ -1107,18 +1111,14 @@ export default {
         trafficRatio: 'Traffic ratio'
       },
       modal: {
-        eyebrow: 'Tunnel',
         titleEdit: 'Edit tunnel',
         titleAdd: 'Create tunnel',
-        deleteEyebrow: 'Delete',
-        deleteTitle: 'Confirm deletion',
         deleteConfirmMessage: 'Delete tunnel {name}?',
-        deleteHint: 'If this tunnel is still referenced by forward rules or user entitlements, the backend will block deletion.',
+        deleteHint: 'If forward rules or user grants still use this tunnel, the delete is refused. This can’t be undone.',
         submitLoading: 'Submitting...',
         submitUpdate: 'Update',
         submitCreate: 'Create',
-        deleteLoading: 'Deleting...',
-        confirmDelete: 'Confirm delete'
+        confirmDelete: 'Delete tunnel'
       },
       fields: {
         name: 'Tunnel name',
@@ -1169,7 +1169,6 @@ export default {
         diagnosisRequestFailed: 'Diagnosis request failed'
       },
       diagnosis: {
-        eyebrow: 'Diagnosis',
         title: 'Tunnel Diagnosis Results',
         loading: 'Diagnosing tunnel connectivity...',
         targetAddress: 'Target Address',
@@ -1177,8 +1176,7 @@ export default {
         message: 'Message',
         emptyTitle: 'No diagnosis results yet',
         emptyText: 'There is currently no diagnosis data to display.',
-        rerun: 'Run Again',
-        rerunning: 'Diagnosing...'
+        rerun: 'Run Again'
       },
       validation: {
         nameRequired: 'Please enter a tunnel name',
@@ -1435,10 +1433,25 @@ export default {
         enabled: 'Enabled',
         disabled: 'Disabled'
       },
+      confirm: {
+        deleteConfigTitle: 'Delete config {key}?',
+        deleteConfigMessage: 'Features that read this config fall back to their defaults. This can’t be undone.',
+        deleteConfigAction: 'Delete config',
+        deleteBackupTitle: 'Delete backup {filename}?',
+        deleteBackupMessage: 'The backup file is deleted for good and can no longer be restored. This can’t be undone.',
+        deleteBackupAction: 'Delete backup',
+        restoreBackupTitle: 'Restore from backup {filename}?',
+        restoreBackupMessage: 'The backup overwrites the current data; every change made after it is lost. This can’t be undone.',
+        restoreBackupAction: 'Restore backup',
+        deleteBalancerTitle: 'Delete load balancer {name}?',
+        deleteBalancerMessage: 'The node group is no longer balanced or health-checked. This can’t be undone.',
+        deleteBalancerAction: 'Delete load balancer'
+      },
       messages: {
         fetchConfigsFailed: 'Failed to load configs',
         saveConfigFailed: 'Save failed: {message}',
-        deleteConfigConfirm: 'Delete config {key}?',
+        configSaved: 'Config {key} saved',
+        configDeleted: 'Config {key} deleted',
         deleteConfigFailed: 'Delete failed',
         fetchBackupConfigFailed: 'Failed to load backup config',
         backupConfigSaved: 'Saved successfully',
@@ -1447,15 +1460,15 @@ export default {
         backupStartFailed: 'Failed to create backup',
         fetchBackupsFailed: 'Failed to load backup list',
         fetchBackupStatsFailed: 'Failed to load backup stats',
-        deleteBackupConfirm: 'Delete backup {filename}?',
+        backupDeleted: 'Backup {filename} deleted',
         deleteBackupFailed: 'Delete failed',
-        restoreBackupConfirm: 'Restore backup {filename}? Current data will be overwritten.',
         restoreBackupSuccess: 'Restore completed',
         restoreBackupFailed: 'Restore failed: {message}',
         fetchBalancersFailed: 'Failed to load load balancers',
         weightsJsonInvalid: 'Weights JSON is invalid',
         saveBalancerFailed: 'Save failed: {message}',
-        deleteBalancerConfirm: 'Delete load balancer {name}?',
+        balancerSaved: 'Load balancer {name} saved',
+        balancerDeleted: 'Load balancer {name} deleted',
         deleteBalancerFailed: 'Delete failed',
         healthCheckCompleted: 'Health check completed',
         healthCheckFailed: 'Health check failed',
@@ -1490,7 +1503,6 @@ export default {
         disable: 'Disable',
         delete: 'Delete',
         startTest: 'Start Test',
-        confirmDelete: 'Confirm Delete',
         cancel: 'Cancel',
         saveChanges: 'Save Changes',
         createNode: 'Create Node',
@@ -1569,7 +1581,6 @@ export default {
         }
       },
       nodeModal: {
-        eyebrow: 'Node',
         titleEdit: 'Edit Relay/Exit Node',
         titleAdd: 'Add Relay/Exit Node',
         loading: 'Loading node detail...',
@@ -1603,11 +1614,9 @@ export default {
         }
       },
       ruleModal: {
-        eyebrow: 'Rule',
         titleEdit: 'Edit Legacy Rule',
         titleAdd: 'Add Legacy Rule',
         loading: 'Loading rule detail...',
-        saveLoading: 'Saving...',
         ownerReadOnlyHint: 'Current backend update API does not allow changing ownership fields. They are read-only in edit mode.',
         fields: {
           name: 'Rule Name',
@@ -1635,7 +1644,6 @@ export default {
         }
       },
       connectionModal: {
-        eyebrow: 'Gost API',
         title: 'Test Node Connection',
         fields: {
           host: 'Host',
@@ -1648,15 +1656,14 @@ export default {
           apiTokenHidden: 'The stored token is hidden; enter it to test'
         },
         success: 'Connection succeeded',
-        failed: 'Connection failed',
-        testing: 'Testing...'
+        failed: 'Connection failed'
       },
       deleteModal: {
-        title: 'Confirm Delete',
-        confirmNode: 'Confirm deleting node',
-        confirmRule: 'Confirm deleting rule',
-        warning: 'Deletion cannot be automatically reverted. Ensure no active forwarding relationships still depend on it.',
-        deleting: 'Deleting...'
+        titleNode: 'Delete forward node {name}?',
+        titleRule: 'Delete forward rule {name}?',
+        deleteNode: 'Delete forward node',
+        deleteRule: 'Delete rule',
+        warning: 'Deletion cannot be automatically reverted. Ensure no active forwarding relationships still depend on it.'
       },
       validation: {
         requestFailed: 'Request failed',
@@ -1763,17 +1770,13 @@ export default {
           speed: 'Enter speed limit (Mbps)',
           tunnel: 'Select a tunnel to bind'
         },
-        submitting: 'Submitting...',
         submitCreate: 'Create Rule',
         submitUpdate: 'Save Changes'
       },
       deleteModal: {
-        title: 'Delete Rule',
-        eyebrow: 'Confirm Deletion',
-        confirmText: 'Delete limit rule {name}?',
-        hint: 'This action cannot be undone. The rule will be permanently removed.',
-        deleting: 'Deleting...',
-        confirmDelete: 'Confirm Delete'
+        title: 'Delete limit rule {name}?',
+        hint: 'This can’t be undone. The rule is removed for good.',
+        confirmDelete: 'Delete rule'
       },
       values: {
         unlimited: 'Unlimited',
@@ -1952,7 +1955,9 @@ export default {
         node: 'Node',
         protocolName: 'Protocol / Name',
         port: 'Port',
-        linkedGroups: 'Linked Groups'
+        linkedGroups: 'Linked Groups',
+        selectAll: 'Select all protocols',
+        select: 'Select protocol {name}'
       },
       formats: {
         auto: 'Auto (By User-Agent)',
@@ -1971,17 +1976,22 @@ export default {
       availableProtocolsLoadError: 'Failed to load available protocols',
       groupProtocolsUpdated: 'Group protocol links updated',
       groupProtocolsUpdateFailed: 'Failed to update protocol links',
-      copyCombinedConfirm: 'Copy the combined subscription content for this group?',
       copied: 'Copied',
       copyError: 'Copy failed',
       copyFallbackNotice: 'Copied merged subscription content using the template-only fallback.',
       previewError: 'Failed to load preview content',
-      confirmDeleteGroup: 'Delete this subscription group?',
+      confirm: {
+        deleteGroupTitle: 'Delete subscription group {name}?',
+        deleteGroupMessage: 'Its templates and protocol links are deleted with it, and users of the group no longer receive these nodes. This can’t be undone.',
+        deleteGroupAction: 'Delete group',
+        deleteTemplateTitle: 'Delete subscription template {name}?',
+        deleteTemplateMessage: 'The node disappears from the group’s subscription. This can’t be undone.',
+        deleteTemplateAction: 'Delete template'
+      },
       groupDeleted: 'Subscription group deleted',
       deleteError: 'Delete failed',
       groupSaved: 'Subscription group saved',
       saveError: 'Save failed',
-      confirmDeleteTemplate: 'Delete this subscription template?',
       templateDeleted: 'Subscription template deleted',
       updateError: 'Update failed',
       templateSaved: 'Subscription template saved',
@@ -2006,6 +2016,14 @@ export default {
     nodes: {
       title: 'Node Management',
       addNode: 'Add Node',
+      confirm: {
+        deleteNodeTitle: 'Delete node {name}?',
+        deleteNodeMessage: 'The node and its credentials are removed. This can’t be undone.',
+        deleteNodeAction: 'Delete node',
+        deleteProtocolTitle: 'Delete protocol {type} :{port}?',
+        deleteProtocolMessage: 'Node {name} stops offering this protocol. This can’t be undone.',
+        deleteProtocolAction: 'Delete protocol'
+      },
       stats: {
         total: 'Total Nodes',
         online: 'Online',
@@ -2198,6 +2216,14 @@ export default {
           copy: 'Copy',
           fromTemplate: 'Load from Template'
         },
+        templatePicker: {
+          title: 'Load from template',
+          description: 'Pick a template. It replaces the JSON in the editor.',
+          label: 'Template',
+          placeholder: 'Choose a template',
+          required: 'Choose a template to load.',
+          apply: 'Load template'
+        },
         jsonStatus: {
           valid: 'JSON Valid',
           invalid: 'JSON Invalid'
@@ -2292,14 +2318,17 @@ export default {
         saveFailed: 'Save failed: {message}',
         syncSuccess: 'Node "{name}" accepted the sync operation',
         syncFailed: 'Sync failed: {message}',
-        deleteNodeConfirm: 'Delete node "{name}"?',
-        deleteFailed: 'Delete failed: {message}',
-        deleteProtocolConfirm: 'Delete this protocol?',
+        nodeCreated: 'Node {name} added',
+        nodeSaved: 'Node {name} saved',
+        nodeDeleted: 'Node {name} deleted',
+        protocolCreated: 'Protocol {type} :{port} added',
+        protocolSaved: 'Protocol {type} :{port} saved',
+        protocolDeleted: 'Protocol {type} :{port} deleted',
         generateFailed: 'Generation failed: {message}',
         deployLoadFailed: 'Failed to load parent node credentials',
         copied: 'Copied to clipboard',
-        copyFailed: 'Copy failed: {message}',
-        invalidJson: 'Invalid JSON',
+        copyFailedManual: 'Couldn’t copy automatically. Select the text and copy it.',
+        invalidJsonDetail: 'Invalid JSON: {message}',
         quotaExceededBanner: '{count} node(s) have exceeded their monthly quota. This is informational only, no automatic restriction is applied.'
       }
     }
@@ -2379,8 +2408,8 @@ export default {
       },
       placeholders: {
         name: 'Template name',
-        title: 'Supports variables: {username}, {site_name}',
-        content: 'Supports variables: {username}, {email}, {expire_time}'
+        title: "Supports variables: {'{'}username{'}'}, {'{'}site_name{'}'}",
+        content: "Supports variables: {'{'}username{'}'}, {'{'}email{'}'}, {'{'}expire_time{'}'}"
       }
     },
     testModal: {
@@ -2421,6 +2450,11 @@ export default {
       subject: 'Test Email',
       content: 'This is a test email. If you received it, the email configuration is working correctly.'
     },
+    confirm: {
+      deleteTitle: 'Delete template {name}?',
+      deleteMessage: 'Notifications that use this template stop being sent. This can’t be undone.',
+      deleteAction: 'Delete template'
+    },
     messages: {
       fetchTemplatesFailed: 'Failed to load notification templates',
       fetchLogsFailed: 'Failed to load notification logs',
@@ -2428,8 +2462,7 @@ export default {
       templateSaveSuccess: 'Template saved successfully',
       templateSaveFailed: 'Failed to save template: {message}',
       templateSaveFailedShort: 'Save failed',
-      deleteConfirm: 'Delete template "{name}"?',
-      deleteFailed: 'Failed to delete template: {message}',
+      deleteSuccess: 'Template {name} deleted',
       deleteFailedShort: 'Delete failed',
       emailSaveSuccess: 'Email configuration saved',
       emailSaveFailed: 'Failed to save email configuration: {message}',
@@ -2518,7 +2551,7 @@ export default {
         feeRate: 'Example: 0.01 = 1%',
         minAmount: 'Minimum payment amount',
         maxAmount: 'Maximum payment amount',
-        configJson: '{"app_id": "", "private_key": ""}'
+        configJson: "{'{'}\"app_id\": \"\", \"private_key\": \"\"{'}'}"
       }
     },
     types: {
@@ -2536,6 +2569,11 @@ export default {
       failed: 'Failed',
       refunded: 'Refunded'
     },
+    confirm: {
+      deleteTitle: 'Delete payment gateway {name}?',
+      deleteMessage: 'Users can no longer pay through this gateway. This can’t be undone.',
+      deleteAction: 'Delete gateway'
+    },
     messages: {
       fetchGatewaysFailed: 'Failed to load payment gateways',
       fetchRecordsFailed: 'Failed to load payment records',
@@ -2546,8 +2584,9 @@ export default {
       gatewaySaveFailedShort: 'Save failed',
       toggleFailed: 'Failed to change gateway status: {message}',
       toggleFailedShort: 'Operation failed',
-      deleteConfirm: 'Delete gateway "{name}"?',
-      deleteFailed: 'Failed to delete gateway: {message}',
+      gatewayEnabled: '{name} enabled',
+      gatewayDisabled: '{name} disabled',
+      gatewayDeleted: 'Gateway {name} deleted',
       deleteFailedShort: 'Delete failed'
     }
   },
@@ -2617,10 +2656,15 @@ export default {
       title: 'Template groups - {name}',
       description: 'Select the subscription groups this template grants.'
     },
+    confirm: {
+      deleteTitle: 'Delete subscription template {name}?',
+      deleteAction: 'Delete template'
+    },
     messages: {
       loadFailed: 'Failed to load subscription templates',
-      deleteConfirm: 'Delete this subscription template?',
-      nameRequired: 'Please enter a template name'
+      nameRequired: 'Please enter a template name',
+      deleted: 'Subscription template {name} deleted',
+      groupRemoved: 'Group {group} removed from template {plan}'
     }
   },
   adminPlans: {
@@ -2682,22 +2726,27 @@ export default {
       speedLimitMbps: '{value} Mbps',
       deviceLimitCount: '{value} devices'
     },
+    confirm: {
+      deleteTitle: 'Delete plan {name}?',
+      deleteMessage: 'This can’t be undone.',
+      deleteAction: 'Delete plan'
+    },
     messages: {
       loadFailed: 'Failed to load plans',
       loadGroupsFailed: 'Failed to load subscription groups',
-      deleteConfirm: 'Delete this plan?',
-      deleteFailed: 'Delete failed: {message}',
+      deleted: 'Plan {name} deleted',
       deleteFailedShort: 'Delete failed',
       nameRequired: 'Please enter a plan name',
       saveFailed: 'Save failed: {message}',
       saveFailedShort: 'Save failed',
+      saved: '{name} saved',
       userIdRequired: 'Please enter a user ID',
       assignSuccess: 'Assigned successfully',
       assignFailed: 'Assign failed: {message}',
       assignFailedShort: 'Assign failed',
       toggleGroupFailed: 'Failed to toggle group: {message}',
       toggleGroupFailedShort: 'Failed to toggle group',
-      removeGroupConfirm: 'Remove this subscription group?',
+      groupRemoved: 'Group {group} removed from plan {plan}',
       removeGroupFailed: 'Failed to remove group: {message}',
       removeGroupFailedShort: 'Remove failed'
     }
@@ -2843,15 +2892,28 @@ export default {
       },
       empty: 'No grants'
     },
+    confirm: {
+      resetSubscribeTitle: 'Reset the subscription link of {email}?',
+      resetSubscribeMessage: 'The old link stops working at once and the user has to import the subscription again. This can’t be undone.',
+      resetSubscribeAction: 'Reset link',
+      deleteGrantTitle: 'Delete tunnel grant #{id}?',
+      deleteGrantMessage: 'The user can no longer use tunnel {tunnel}. This can’t be undone.',
+      deleteGrantAction: 'Delete grant'
+    },
+    copyDialog: {
+      title: 'Copy subscription link',
+      description: 'The link could not be copied automatically. Copy it below.',
+      label: 'Subscription link'
+    },
     resetFlow: {
-      userTitle: 'Reset User Traffic',
-      userMessage: 'Confirm reset used traffic for user {email}?',
-      tunnelTitle: 'Reset Tunnel Grant Traffic',
-      tunnelMessage: 'Confirm reset used traffic for tunnel grant #{id}?',
+      userTitle: 'Reset the traffic of {email}?',
+      userMessage: 'Used traffic goes back to zero. This can’t be undone.',
+      tunnelTitle: 'Reset the traffic of tunnel grant #{id}?',
+      tunnelMessage: 'Used traffic of this grant goes back to zero. This can’t be undone.',
       usedFlow: 'Used flow',
       quota: 'Quota',
       resetting: 'Resetting...',
-      confirmAction: 'Confirm reset'
+      confirmAction: 'Reset traffic'
     },
     trafficModal: {
       title: 'Traffic Detail - {email}',
@@ -2893,8 +2955,9 @@ export default {
       fetchUsersFailed: 'Failed to fetch users',
       fetchStatsFailed: 'Failed to fetch statistics',
       saveFailed: 'Save failed: {message}',
-      confirmBan: 'Confirm ban for user {email}?',
-      confirmUnban: 'Confirm unban for user {email}?',
+      userSaved: '{email} saved',
+      userBanned: '{email} banned',
+      userUnbanned: '{email} unbanned',
       fetchTunnelListFailed: 'Failed to fetch tunnel list',
       fetchSpeedLimitFailed: 'Failed to fetch speed limit rules',
       fetchTunnelGrantFailed: 'Failed to fetch tunnel grants',
@@ -2905,7 +2968,7 @@ export default {
       grantUpdated: 'Grant updated successfully',
       grantCreated: 'Grant created successfully',
       grantActionFailed: 'Grant action failed',
-      confirmDeleteGrant: 'Confirm deleting tunnel grant #{id}?',
+      grantDeleted: 'Tunnel grant #{id} deleted',
       grantDeleteFailed: 'Failed to delete grant',
       resetFailed: 'Reset failed',
       userFlowReset: 'User traffic reset successfully',
@@ -2913,8 +2976,6 @@ export default {
       fetchUserFailed: 'Failed to load the user',
       noToken: 'This user has no subscription token',
       subscribeCopied: 'Subscription link copied to clipboard',
-      copyManual: 'Auto-copy failed, please copy the subscription link manually:',
-      resetSubscribeConfirm: 'Reset the subscription link for {email}? The old link will stop working immediately and the user must re-import.',
       resetSubscribeSuccess: 'Subscription link reset',
       resetSubscribeFailed: 'Failed to reset subscription'
     }
@@ -2922,7 +2983,7 @@ export default {
   control: {
     subtitle: 'Manage official signed packages, Control WebUI extensions, and lifecycle operations.',
     actions: {
-      refresh: 'Refresh', refreshing: 'Refreshing...', importRelease: 'Import release', importing: 'Importing...', install: 'Install',
+      refresh: 'Refresh', refreshing: 'Refreshing...', importRelease: 'Import release', install: 'Install',
       configure: 'Configure', enable: 'Enable', disable: 'Disable', upgrade: 'Upgrade', update: 'Upgrade', rollback: 'Rollback', cancel: 'Cancel operation', installOfficialOnly: 'Official release required',
       saving: 'Saving...', newAssignment: 'New assignment'
     },
@@ -2955,7 +3016,7 @@ export default {
     extensions: { errorsTitle: 'WebUI extension loading failed' },
     assignments: {
       node: 'Node', noNodes: 'No nodes available', agentPlugin: 'Agent plugin', loading: 'Loading assignments...', enabled: 'Assignment enabled',
-      createTitle: 'Create node assignment', editTitle: 'Edit node assignment', deleteConfirm: 'Delete {plugin} / {role} from this node?'
+      createTitle: 'Create node assignment', editTitle: 'Edit node assignment', deleteTitle: 'Delete {plugin} / {role} from this node?', deleteMessage: 'The node stops running this plugin role. This can’t be undone.', deleteAction: 'Delete assignment'
     },
     install: { title: 'Install official plugin', target: 'Runtime target', version: 'Release version', enableAfterInstall: 'Enable immediately after installation' },
     update: { title: 'Upgrade official plugin' },
@@ -2998,7 +3059,7 @@ export default {
     resolver: { title: 'Effective access preview', description: 'Preview the server-side allow-union for one user, optional plan, and service scope.', userID: 'User ID', planID: 'Plan ID (optional)', scope: 'Service scope', result: '{count} enabled groups apply', none: 'No enabled groups apply', policySummary: '{grants} grants and {quotas} quota policies are effective.' },
     editor: { createTitle: 'Create access group', editTitle: 'Edit access group', name: 'Group name', description: 'Description', enabled: 'Group is enabled' },
     messages: { groupCreated: 'Created access group {name}', groupSaved: 'Saved access group {name}', groupEnabled: 'Enabled access group {name}', groupDisabled: 'Disabled access group {name}', groupDeleted: 'Deleted access group {name}', memberAdded: 'Added user #{id}', memberRemoved: 'Removed user #{id}', planAdded: 'Added plan #{id}', planRemoved: 'Removed plan #{id}', grantAdded: 'Added resource grant', grantRemoved: 'Removed resource grant', quotaSaved: 'Saved quota policy', quotaRemoved: 'Removed quota policy' },
-    confirm: { deleteGroup: 'Delete access group {name}? Its memberships, grants, and quota policies will be removed.', removeMember: 'Remove user #{id} from this access group?', removePlan: 'Remove plan #{id} from this access group?', removeGrant: 'Remove resource grant #{id}?', removeQuota: 'Remove quota policy {key}?' },
+    confirm: { deleteGroupTitle: 'Delete access group {name}?', deleteGroup: 'Its memberships, resource grants and quota policies are deleted with it. This can’t be undone.', deleteGroupAction: 'Delete group', removeGrantTitle: 'Remove resource grant #{id}?', removeGrant: 'Members of this group lose access to {resource}. This can’t be undone.', removeGrantAction: 'Remove grant', removeQuotaTitle: 'Remove quota policy {key}?', removeQuota: 'The group is no longer limited by this quota. This can’t be undone.', removeQuotaAction: 'Remove policy' },
     errors: { load: 'Unable to load access control data', loadGroups: 'Unable to load access groups', loadDetail: 'Unable to load access group details', groupRequired: 'A service scope and group name are required', saveGroup: 'Unable to save access group', deleteGroup: 'Unable to delete access group', member: 'Unable to update user membership', plan: 'Unable to update plan membership', grant: 'Unable to update resource grant', quota: 'Unable to update quota policy', resolve: 'Unable to resolve effective access', invalidID: '{label} must be a positive integer', invalidJSON: '{label} must be valid JSON', scopeRequired: 'A service scope is required' }
   },
   legacy

@@ -43,12 +43,18 @@ export default {
     empty: {
       noData: 'No coupons'
     },
+    confirm: {
+      deleteTitle: 'Delete coupon {code}?',
+      deleteMessage: 'Users can no longer redeem this code. This can’t be undone.',
+      deleteAction: 'Delete coupon'
+    },
     messages: {
       fetchFailed: 'Failed to load coupons',
-      requiredFields: 'Please fill in coupon code and coupon name',
+      codeRequired: 'Enter a coupon code',
+      nameRequired: 'Enter a coupon name',
       createSuccess: 'Coupon created successfully',
       createFailed: 'Failed to create coupon',
-      deleteConfirm: 'Delete coupon {code}?',
+      deleted: 'Coupon {code} deleted',
       deleteFailed: 'Failed to delete coupon'
     }
   },
@@ -116,15 +122,20 @@ export default {
       next: 'Next',
       info: 'Page {page} of {totalPages}'
     },
+    confirm: {
+      markPaidTitle: 'Mark order {tradeNo} as paid?',
+      markPaidMessage: 'Order amount {amount}. The order is then treated as paid. This can’t be undone.',
+      cancelTitle: 'Cancel order {tradeNo}?',
+      cancelMessage: 'The user can no longer pay this order. This can’t be undone.',
+      cancelAction: 'Cancel order',
+      keepOrder: 'Keep order'
+    },
     messages: {
       fetchOrdersFailed: 'Failed to load orders',
       fetchStatsFailed: 'Failed to load order stats',
-      markPaidConfirm: 'Mark order {tradeNo} as paid?',
       markPaidSuccess: 'Order marked as paid',
-      markPaidFailed: 'Failed to mark order as paid: {message}',
       markPaidFailedShort: 'Mark paid failed',
-      cancelConfirm: 'Cancel order {tradeNo}?',
-      cancelFailed: 'Failed to cancel order: {message}',
+      cancelSuccess: 'Order {tradeNo} cancelled',
       cancelFailedShort: 'Cancel failed'
     }
   },
@@ -266,6 +277,12 @@ export default {
         commission: 'Commission'
       }
     },
+    confirm: {
+      approveTitle: 'Approve withdrawal #{id}?',
+      approveMessage: '{amount} will be paid to {account}. This can’t be undone.',
+      rejectTitle: 'Reject withdrawal #{id}?',
+      rejectMessage: 'The request for {amount} will be rejected. This can’t be undone.'
+    },
     messages: {
       fetchConfigFailed: 'Failed to load invite config',
       fetchWithdrawalsFailed: 'Failed to load withdrawal requests',
@@ -273,13 +290,9 @@ export default {
       saveSuccess: 'Invite config saved',
       saveFailed: 'Failed to save invite config: {message}',
       saveFailedShort: 'Save failed',
-      approveConfirm: 'Approve this withdrawal request?',
       approveSuccess: 'Withdrawal approved',
-      approveFailed: 'Failed to approve withdrawal: {message}',
       approveFailedShort: 'Approval failed',
-      rejectConfirm: 'Reject this withdrawal request?',
       rejectSuccess: 'Withdrawal rejected',
-      rejectFailed: 'Failed to reject withdrawal: {message}',
       rejectFailedShort: 'Rejection failed'
     }
   },
@@ -360,6 +373,10 @@ export default {
       markdown: 'Messages support Telegram Markdown where available.',
       singleFirst: 'Test with a single user before broadcasting.'
     },
+    confirm: {
+      broadcastTitle: 'Broadcast this message to every bound user?',
+      broadcastMessage: 'It goes to everyone who has bound Telegram and can’t be recalled once sent.'
+    },
     messages: {
       fetchConfigFailed: 'Failed to load Telegram bot config',
       fetchUsersFailed: 'Failed to load Telegram users',
@@ -426,12 +443,17 @@ export default {
       content: 'Reply content',
       placeholder: 'Write your reply...'
     },
+    confirm: {
+      closeTitle: 'Close ticket #{id} “{subject}”?',
+      closeMessage: 'A closed ticket takes no more replies and can’t be reopened.',
+      closeAction: 'Close ticket'
+    },
     messages: {
       fetchFailed: 'Failed to load tickets',
       replyRequired: 'Please enter a reply',
       replySuccess: 'Reply sent successfully',
       replyFailed: 'Failed to send reply',
-      closeConfirm: 'Close this ticket?',
+      closed: 'Ticket #{id} closed',
       closeFailed: 'Failed to close ticket'
     }
   },
@@ -470,13 +492,18 @@ export default {
     empty: {
       noData: 'No articles'
     },
+    confirm: {
+      deleteTitle: 'Delete article "{title}"?',
+      deleteMessage: 'The article is removed from the help center and users can no longer see it. This can’t be undone.',
+      deleteAction: 'Delete article'
+    },
     messages: {
       fetchFailed: 'Failed to load articles',
       requiredFields: 'Please fill in title and content',
       saveSuccess: 'Article saved successfully',
       publishSuccess: 'Article published successfully',
       actionFailed: 'Article operation failed',
-      deleteConfirm: 'Delete article "{title}"?',
+      deleted: 'Article "{title}" deleted',
       deleteFailed: 'Failed to delete article'
     }
   }

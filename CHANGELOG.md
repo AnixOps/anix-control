@@ -67,6 +67,48 @@
     filters, copies and revokes codes and says whether registration
     requires one; in commercial it links the Invite Rewards page, which is
     unchanged.
+- **Browser pop-ups replaced by in-app toasts and dialogs** (UI redesign
+  phase U4, `docs/reference/frontend-design.md` "Feedback and dialogs in
+  pages"). No admin or user page opens the browser's `alert`, `confirm` or
+  `prompt` any more, and every hand-rolled pop-up window is the shared
+  dialog or side sheet: same fields, buttons and API calls.
+  - **Results** appear as a toast at the bottom (success disappears after
+    3 s; errors stay until closed). Errors in a form stay in the open
+    dialog, next to the field or above its buttons, instead of a pop-up
+    that closed the form's context.
+  - **Undo instead of "are you sure?"** where the action has a real
+    inverse: banning or unbanning a user, enabling or disabling a payment
+    gateway, deleting the Telegram webhook, removing a group from a plan,
+    removing a member or plan from an access group. The toast offers 撤销
+    for 5 s.
+  - **Confirmations** for irreversible actions name the object and say what
+    happens, with a red button named after the action (「删除节点」, not
+    「确定」); a failure is shown inside the confirmation. Deleting a node, a
+    NodeX forward node or an Ansible machine now asks you to type its name.
+    Sending a Telegram broadcast now asks first.
+  - **Dialogs** trap focus, close with Esc and return focus to the button
+    that opened them, are named for screen readers, follow dark mode, and
+    form dialogs fill the screen on phones. Details open as a side sheet (a bottom sheet
+    on phones): a user's 30-day traffic, order and payment-record details,
+    tickets, a node's protocols, plugin details and deployment assignments.
+  - **Forward suite** (转发, 隧道, 限速, NodeX 转发节点, Ansible 机器): visual
+    change only; flows, including the second confirmation before a forward
+    force delete, are unchanged. Their result banners became toasts, so a
+    message is no longer hidden behind an open dialog.
+  - Fixed along the way: the forward import hint and the notification
+    template hint lost text to i18n placeholders; the payment gateway
+    config example logged errors; Subscriptions' protocol-pool checkboxes did
+    nothing and its icon buttons had no names; a failed subscription cache
+    refresh reported success; the plan group picker could not be used from
+    the keyboard; several dialog labels were not tied to their fields.
+  - Component library: a dialog stays within the screen width on phones; a
+    scrolling dialog body with read-only content can be scrolled from the
+    keyboard; the select placeholder and the `danger-soft` button meet
+    4.5:1 contrast.
+  - Lint: `no-alert` and the legacy `.modal*` classes are ESLint errors, and
+    `npm test` fails on a native dialog or `.modal-overlay`; the global
+    `.modal*` CSS and `useModalFocus` are removed.
+
 - **New navigation: admin and user shells rebuilt** (UI redesign phase U3,
   `docs/reference/frontend-design.md` "App shell").
   - **Admin sidebar** regrouped by object (plan §4.2): 概览, 用户, 网络 (节点,

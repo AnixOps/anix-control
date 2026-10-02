@@ -1,5 +1,9 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+import { answerConfirms, toastMessages } from './helpers/feedback'
+import { render, screen, waitFor, within } from '@testing-library/vue'
+import userEvent from '@testing-library/user-event'
+import UiHost from '@/ui/UiHost.vue'
 import { createPinia, setActivePinia } from 'pinia'
 import Subscriptions from '@/views/admin/Subscriptions.vue'
 import { setLocale } from '@/i18n'
@@ -185,8 +189,7 @@ describe('Admin Subscriptions', () => {
     await flushPromises()
 
     expect(wrapper.vm.groups).toEqual([])
-    expect(wrapper.vm.toastType).toBe('error')
-    expect(wrapper.vm.toastMessage).toBe('Failed to load subscription data')
+    expect(toastMessages('error')).toEqual(['Failed to load subscription data'])
 
     wrapper.unmount()
   })
@@ -214,8 +217,8 @@ describe('Admin Subscriptions', () => {
     await wrapper.vm.saveGroup()
     await flushPromises()
 
-    expect(wrapper.vm.toastType).toBe('error')
-    expect(wrapper.vm.toastMessage).toBe('Save failed')
+    expect(wrapper.vm.groupFormError).toBe('Save failed')
+    expect(toastMessages()).toEqual([])
     expect(wrapper.vm.showCreateGroupModal).toBe(true)
     expect(adminApiMock.getSubscriptionGroups).not.toHaveBeenCalled()
 
@@ -223,7 +226,7 @@ describe('Admin Subscriptions', () => {
   })
 
   it('does not refresh groups when enveloped delete fails', async () => {
-    vi.spyOn(window, 'confirm').mockImplementation(() => true)
+    const confirms = answerConfirms(true)
     adminApiMock.deleteSubscriptionGroup.mockResolvedValueOnce({
       code: -1,
       msg: 'group delete rejected',
@@ -238,8 +241,9 @@ describe('Admin Subscriptions', () => {
     await wrapper.vm.deleteGroup({ id: 10, name: 'Rejected Group' })
     await flushPromises()
 
-    expect(wrapper.vm.toastType).toBe('error')
-    expect(wrapper.vm.toastMessage).toBe('Delete failed')
+    expect(confirms.last()).toMatchObject({ tone: 'danger', title: 'Delete subscription group Rejected Group?' })
+    expect(confirms.errors.map(error => error.message)).toEqual(['group delete rejected'])
+    expect(toastMessages()).toEqual([])
     expect(adminApiMock.getSubscriptionGroups).not.toHaveBeenCalled()
 
     wrapper.unmount()
@@ -260,8 +264,7 @@ describe('Admin Subscriptions', () => {
     await flushPromises()
 
     expect(wrapper.vm.templates).toEqual([])
-    expect(wrapper.vm.toastType).toBe('error')
-    expect(wrapper.vm.toastMessage).toBe('Failed to load subscription data')
+    expect(toastMessages('error')).toEqual(['Failed to load subscription data'])
 
     wrapper.unmount()
   })
@@ -297,8 +300,8 @@ describe('Admin Subscriptions', () => {
     await wrapper.vm.saveTemplate()
     await flushPromises()
 
-    expect(wrapper.vm.toastType).toBe('error')
-    expect(wrapper.vm.toastMessage).toBe('Save failed')
+    expect(wrapper.vm.templateFormError).toBe('Save failed')
+    expect(toastMessages()).toEqual([])
     expect(wrapper.vm.showCreateTemplateModal).toBe(true)
     expect(adminApiMock.getSubscriptionTemplates).not.toHaveBeenCalled()
 
@@ -306,7 +309,7 @@ describe('Admin Subscriptions', () => {
   })
 
   it('does not refresh templates when enveloped template delete fails', async () => {
-    vi.spyOn(window, 'confirm').mockImplementation(() => true)
+    const confirms = answerConfirms(true)
     adminApiMock.deleteSubscriptionTemplate.mockResolvedValueOnce({
       code: -1,
       msg: 'template delete rejected',
@@ -322,8 +325,8 @@ describe('Admin Subscriptions', () => {
     await wrapper.vm.deleteTemplate({ id: 10, name: 'Rejected Template' })
     await flushPromises()
 
-    expect(wrapper.vm.toastType).toBe('error')
-    expect(wrapper.vm.toastMessage).toBe('Delete failed')
+    expect(confirms.last()).toMatchObject({ tone: 'danger', title: 'Delete subscription template Rejected Template?' })
+    expect(confirms.errors.map(error => error.message)).toEqual(['template delete rejected'])
     expect(adminApiMock.getSubscriptionTemplates).not.toHaveBeenCalled()
 
     wrapper.unmount()
@@ -345,8 +348,7 @@ describe('Admin Subscriptions', () => {
     await wrapper.vm.toggleTemplate({ id: 10, name: 'Rejected Template', enable: 1 })
     await flushPromises()
 
-    expect(wrapper.vm.toastType).toBe('error')
-    expect(wrapper.vm.toastMessage).toBe('Update failed')
+    expect(toastMessages('error')).toEqual(['Update failed'])
     expect(adminApiMock.getSubscriptionTemplates).not.toHaveBeenCalled()
 
     wrapper.unmount()
@@ -368,8 +370,7 @@ describe('Admin Subscriptions', () => {
     await flushPromises()
 
     expect(wrapper.vm.availableProtocols).toEqual([])
-    expect(wrapper.vm.toastType).toBe('error')
-    expect(wrapper.vm.toastMessage).toBe('Failed to load available protocols')
+    expect(toastMessages('error')).toEqual(['Failed to load available protocols'])
 
     wrapper.unmount()
   })
@@ -392,8 +393,8 @@ describe('Admin Subscriptions', () => {
     await wrapper.vm.saveGroupProtocols()
     await flushPromises()
 
-    expect(wrapper.vm.toastType).toBe('error')
-    expect(wrapper.vm.toastMessage).toBe('Failed to update protocol links')
+    expect(wrapper.vm.protocolsError).toBe('Failed to update protocol links')
+    expect(toastMessages()).toEqual([])
     expect(wrapper.vm.showManageProtocolsModal).toBe(true)
     expect(adminApiMock.getSubscriptionProtocols).not.toHaveBeenCalled()
 
@@ -422,5 +423,60 @@ describe('Admin Subscriptions', () => {
     expect(wrapper.vm.previewContent).toBe('Failed to load preview content')
 
     wrapper.unmount()
+  })
+
+  describe('dialogs and feedback', () => {
+    const Harness = { components: { Subscriptions, UiHost }, template: '<div><Subscriptions /><UiHost /></div>' }
+
+    async function renderPage() {
+      adminApiMock.getSubscriptionGroups.mockResolvedValue({ data: [{ id: 3, name: 'Asia', enable: 1, priority: 1 }] })
+      render(Harness)
+      await screen.findByRole('heading', { name: 'Asia' })
+    }
+
+    it('creates a group in a dialog that closes with Esc and returns focus', async () => {
+      const user = userEvent.setup()
+      adminApiMock.createSubscriptionGroup.mockResolvedValueOnce({ code: -1, msg: 'dup' }).mockResolvedValueOnce({ code: 0 })
+      await renderPage()
+      const opener = screen.getByRole('button', { name: 'Create Group' })
+      await user.click(opener)
+      let dialog = await screen.findByRole('dialog', { name: 'Create Group' })
+      await user.keyboard('{Escape}')
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+      await waitFor(() => expect(document.activeElement).toBe(opener))
+
+      await user.click(opener)
+      dialog = await screen.findByRole('dialog')
+      await user.type(within(dialog).getByLabelText(/Group Name/), 'Europe')
+      await user.click(within(dialog).getByRole('button', { name: 'Save' }))
+      expect((await within(dialog).findByRole('alert')).textContent).toBe('Save failed')
+      await user.click(within(dialog).getByRole('button', { name: 'Save' }))
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+      expect(adminApiMock.createSubscriptionGroup).toHaveBeenLastCalledWith(expect.objectContaining({ name: 'Europe' }))
+      expect(toastMessages('success')).toEqual(['Subscription group saved'])
+    })
+
+    it('asks before deleting a group; Cancel keeps it', async () => {
+      const user = userEvent.setup()
+      await renderPage()
+      await user.click(document.querySelector('.group-actions .btn-danger'))
+      const confirm = await screen.findByRole('alertdialog', { name: 'Delete subscription group Asia?' })
+      await user.click(within(confirm).getByRole('button', { name: 'Cancel' }))
+      await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+      expect(adminApiMock.deleteSubscriptionGroup).not.toHaveBeenCalled()
+
+      await user.click(document.querySelector('.group-actions .btn-danger'))
+      await user.click(within(await screen.findByRole('alertdialog')).getByRole('button', { name: 'Delete group' }))
+      await waitFor(() => expect(adminApiMock.deleteSubscriptionGroup).toHaveBeenCalledWith(3))
+      await waitFor(() => expect(toastMessages('success')).toEqual(['Subscription group deleted']))
+    })
+
+    it('lists the subscription links as copy fields', async () => {
+      const user = userEvent.setup()
+      await renderPage()
+      await user.click(screen.getByRole('button', { name: 'Copy Subscription Links' }))
+      const dialog = await screen.findByRole('dialog', { name: 'Subscription Links' })
+      expect(within(dialog).getAllByRole('button', { name: /Copy/ }).length).toBeGreaterThan(5)
+    })
   })
 })

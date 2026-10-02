@@ -146,8 +146,12 @@
           <input
             v-model="notifyForm.telegram_id"
             type="text"
+            data-test="telegram-notify-id"
             :placeholder="t('adminTelegram.placeholders.telegramId')"
+            :aria-invalid="notifyErrors.telegram_id ? 'true' : undefined"
+            :aria-describedby="notifyErrors.telegram_id ? 'telegram-notify-id-error' : undefined"
           />
+          <p v-if="notifyErrors.telegram_id" id="telegram-notify-id-error" class="field-error" role="alert">{{ notifyErrors.telegram_id }}</p>
         </div>
 
         <div class="form-group">
@@ -155,8 +159,12 @@
           <textarea
             v-model="notifyForm.message"
             rows="5"
+            data-test="telegram-notify-message"
             :placeholder="t('adminTelegram.placeholders.message')"
+            :aria-invalid="notifyErrors.message ? 'true' : undefined"
+            :aria-describedby="notifyErrors.message ? 'telegram-notify-message-error' : undefined"
           ></textarea>
+          <p v-if="notifyErrors.message" id="telegram-notify-message-error" class="field-error" role="alert">{{ notifyErrors.message }}</p>
         </div>
 
         <div class="form-actions">
@@ -191,8 +199,11 @@ import {
   updateTelegramUserNotify
 } from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { useConfirm, useToast } from '@/ui'
 
 const { t, formatDateTime } = useAppI18n()
+const toast = useToast()
+const confirm = useConfirm()
 
 const activeTab = ref('config')
 const userSearch = ref('')
@@ -209,6 +220,7 @@ const notifyForm = ref({
   telegram_id: '',
   message: ''
 })
+const notifyErrors = ref({ telegram_id: '', message: '' })
 
 const commands = computed(() => ([
   { cmd: '/start', desc: t('adminTelegram.commands.items.start') },
@@ -305,9 +317,9 @@ const saveBotConfig = async () => {
       await updateTelegramBot(botConfig.value),
       'adminTelegram.messages.saveFailedShort'
     )
-    window.alert(t('adminTelegram.messages.saveSuccess'))
+    toast.success(t('adminTelegram.messages.saveSuccess'))
   } catch (error) {
-    window.alert(t('adminTelegram.messages.saveFailed', { message: resolveApiError(error, 'adminTelegram.messages.saveFailedShort') }))
+    toast.error(t('adminTelegram.messages.saveFailed', { message: resolveApiError(error, 'adminTelegram.messages.saveFailedShort') }))
   }
 }
 
@@ -317,9 +329,10 @@ const setWebhookConfig = async () => {
       await setTelegramWebhook(webhookUrl.value || undefined),
       'adminTelegram.messages.webhookSetFailedShort'
     )
-    window.alert(t('adminTelegram.messages.webhookSetSuccess'))
+    toast.success(t('adminTelegram.messages.webhookSetSuccess'))
+    return true
   } catch (error) {
-    window.alert(t('adminTelegram.messages.webhookSetFailed', { message: resolveApiError(error, 'adminTelegram.messages.webhookSetFailedShort') }))
+    toast.error(t('adminTelegram.messages.webhookSetFailed', { message: resolveApiError(error, 'adminTelegram.messages.webhookSetFailedShort') }))
   }
 }
 
@@ -329,9 +342,10 @@ const deleteWebhookConfig = async () => {
       await deleteTelegramWebhook(),
       'adminTelegram.messages.webhookDeleteFailedShort'
     )
-    window.alert(t('adminTelegram.messages.webhookDeleteSuccess'))
+    // Setting the webhook again is the inverse: offer it as 撤销.
+    toast.success(t('adminTelegram.messages.webhookDeleteSuccess'), { undo: () => setWebhookConfig() })
   } catch (error) {
-    window.alert(t('adminTelegram.messages.webhookDeleteFailed', { message: resolveApiError(error, 'adminTelegram.messages.webhookDeleteFailedShort') }))
+    toast.error(t('adminTelegram.messages.webhookDeleteFailed', { message: resolveApiError(error, 'adminTelegram.messages.webhookDeleteFailedShort') }))
   }
 }
 
@@ -355,29 +369,33 @@ const toggleUserNotify = async (user) => {
     user.notify_traffic = !!updated.notify_traffic
     user.notify_ticket = !!updated.notify_ticket
   } catch (error) {
-    window.alert(t('adminTelegram.messages.toggleNotifyFailed', { message: resolveApiError(error, 'adminTelegram.messages.toggleNotifyFailedShort') }))
+    toast.error(t('adminTelegram.messages.toggleNotifyFailed', { message: resolveApiError(error, 'adminTelegram.messages.toggleNotifyFailedShort') }))
   }
 }
 
 const sendNotification = async () => {
-  if (!notifyForm.value.message) {
-    window.alert(t('adminTelegram.messages.messageRequired'))
-    return
+  const broadcast = notifyForm.value.type === 'broadcast'
+  notifyErrors.value = {
+    telegram_id: !broadcast && !notifyForm.value.telegram_id ? t('adminTelegram.messages.telegramIdRequired') : '',
+    message: notifyForm.value.message ? '' : t('adminTelegram.messages.messageRequired')
   }
+  if (notifyErrors.value.telegram_id || notifyErrors.value.message) return
+
+  // A broadcast reaches every bound user and cannot be recalled: ask first.
+  if (broadcast && !(await confirm({
+    title: t('adminTelegram.confirm.broadcastTitle'),
+    message: t('adminTelegram.confirm.broadcastMessage'),
+    confirmLabel: t('adminTelegram.actions.broadcast')
+  }))) return
 
   try {
-    if (notifyForm.value.type === 'broadcast') {
+    if (broadcast) {
       const res = await broadcastTelegram(notifyForm.value.message)
       const payload = readTelegramPayload(res, 'adminTelegram.messages.sendFailedShort')
-      window.alert(t('adminTelegram.messages.broadcastComplete', {
-        success: payload.success || 0,
-        failed: payload.failed || 0
-      }))
+      const counts = { success: payload.success || 0, failed: payload.failed || 0 }
+      if (counts.failed > 0) toast.warning(t('adminTelegram.messages.broadcastComplete', counts))
+      else toast.success(t('adminTelegram.messages.broadcastComplete', counts))
     } else {
-      if (!notifyForm.value.telegram_id) {
-        window.alert(t('adminTelegram.messages.telegramIdRequired'))
-        return
-      }
       ensureTelegramApiSuccess(
         await sendTelegramNotification({
           telegram_id: notifyForm.value.telegram_id,
@@ -385,11 +403,11 @@ const sendNotification = async () => {
         }),
         'adminTelegram.messages.sendFailedShort'
       )
-      window.alert(t('adminTelegram.messages.sendSuccess'))
+      toast.success(t('adminTelegram.messages.sendSuccess'))
     }
     notifyForm.value.message = ''
   } catch (error) {
-    window.alert(t('adminTelegram.messages.sendFailed', { message: resolveApiError(error, 'adminTelegram.messages.sendFailedShort') }))
+    toast.error(t('adminTelegram.messages.sendFailed', { message: resolveApiError(error, 'adminTelegram.messages.sendFailedShort') }))
   }
 }
 
@@ -447,6 +465,12 @@ onMounted(() => {
 .command-desc {
   color: var(--text-secondary);
   font-size: 13px;
+}
+
+.field-error {
+  margin: var(--space-1) 0 0;
+  color: var(--danger);
+  font-size: var(--type-callout-size);
 }
 
 .search-input {

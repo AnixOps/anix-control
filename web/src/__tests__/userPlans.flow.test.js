@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
 import Plans from '@/views/user/Plans.vue'
+import { inBody, toastMessages } from './helpers/feedback'
 
 const mockPush = vi.fn()
 const mockGetPlans = vi.fn()
@@ -18,6 +19,8 @@ vi.mock('@/api/user', () => ({
   checkCoupon: (...args) => mockCheckCoupon(...args),
   saveOrder: (...args) => mockSaveOrder(...args),
 }))
+
+enableAutoUnmount(afterEach)
 
 describe('User Plans flow', () => {
   beforeEach(() => {
@@ -41,7 +44,7 @@ describe('User Plans flow', () => {
     })
     mockSaveOrder.mockResolvedValue({ data: { id: 100 } })
 
-    const wrapper = mount(Plans)
+    const wrapper = mount(Plans, { attachTo: document.body })
     await flushPromises()
 
     expect(mockGetPlans).toHaveBeenCalledTimes(1)
@@ -50,9 +53,9 @@ describe('User Plans flow', () => {
     await wrapper.find('[data-test="plan-buy-button"]').trigger('click')
     await flushPromises()
 
-    expect(wrapper.find('.modal').exists()).toBe(true)
+    expect(inBody('[role="dialog"]').text()).toContain('Pro Plan')
 
-    await wrapper.find('.modal-footer .btn-primary').trigger('click')
+    await inBody('[data-test="order-submit-button"]').trigger('click')
     await flushPromises()
 
     expect(mockSaveOrder).toHaveBeenCalledWith({
@@ -61,6 +64,21 @@ describe('User Plans flow', () => {
       coupon_id: null,
     })
     expect(mockPush).toHaveBeenCalledWith('/user/orders')
+    expect(toastMessages('success')).toEqual(['Order created. Pay for it in My Orders.'])
+  })
+
+  it('keeps a failed order in the dialog with an inline error', async () => {
+    mockGetPlans.mockResolvedValue({ data: [{ id: 1, name: 'Pro Plan', month_price: 1200 }] })
+    mockSaveOrder.mockRejectedValue({ response: { data: { message: 'Plan sold out' } } })
+    const wrapper = mount(Plans, { attachTo: document.body })
+    await flushPromises()
+    await wrapper.find('[data-test="plan-buy-button"]').trigger('click')
+    await flushPromises()
+    await inBody('[data-test="order-submit-button"]').trigger('click')
+    await flushPromises()
+    expect(inBody('[data-test="order-error"]').text()).toBe('Plan sold out')
+    expect(inBody('[role="dialog"]').exists()).toBe(true)
+    expect(mockPush).not.toHaveBeenCalled()
   })
 
   it.each([
@@ -90,19 +108,20 @@ describe('User Plans flow', () => {
     })
     mockCheckCoupon.mockResolvedValue(couponResponse)
 
-    const wrapper = mount(Plans)
+    const wrapper = mount(Plans, { attachTo: document.body })
     await flushPromises()
 
     await wrapper.find('[data-test="plan-buy-button"]').trigger('click')
-    await wrapper.find('.coupon-input-group input').setValue('SPRING')
-    await wrapper.find('[data-test="coupon-verify-button"]').trigger('click')
+    await flushPromises()
+    await inBody('.coupon-input-group input').setValue('SPRING')
+    await inBody('[data-test="coupon-verify-button"]').trigger('click')
     await flushPromises()
 
     expect(mockCheckCoupon).toHaveBeenCalledWith({
       code: 'SPRING',
       plan_id: 2,
     })
-    expect(wrapper.find('[data-test="coupon-remove-button"]').exists()).toBe(true)
+    expect(inBody('[data-test="coupon-remove-button"]').exists()).toBe(true)
   })
 
   it('does not render plans when panel envelope loading fails', async () => {
@@ -114,7 +133,7 @@ describe('User Plans flow', () => {
       ts: 1783536000000,
     })
 
-    const wrapper = mount(Plans)
+    const wrapper = mount(Plans, { attachTo: document.body })
     await flushPromises()
 
     expect(wrapper.findAll('.plan-card')).toHaveLength(0)

@@ -108,74 +108,49 @@
       </div>
     </section>
 
-    <div v-if="editorOpen" class="modal-overlay" @click.self="closeEditor">
-      <div class="modal">
-        <div class="modal-header">
-          <div>
-            <p class="eyebrow">{{ t('runtime.ansibleMachines.modal.eyebrow') }}</p>
-            <h3>{{ editorMode ? t('runtime.ansibleMachines.modal.titleEdit') : t('runtime.ansibleMachines.modal.titleAdd') }}</h3>
-          </div>
-          <button class="modal-close" :aria-label="t('common.actions.close')" :title="t('common.actions.close')" @click="closeEditor">&times;</button>
-        </div>
-        <div class="modal-body">
-          <p class="inventory-hint compact">{{ t('runtime.ansibleMachines.inventoryHint') }}</p>
-          <div class="form-grid">
-            <label class="form-group">
-              <span>{{ t('runtime.ansibleMachines.fields.name') }}</span>
-              <input v-model.trim="form.name" type="text" :placeholder="t('runtime.ansibleMachines.placeholders.name')" />
-            </label>
-            <label class="form-group">
-              <span>{{ t('runtime.ansibleMachines.fields.host') }}</span>
-              <input v-model.trim="form.host" type="text" :placeholder="t('runtime.ansibleMachines.placeholders.host')" />
-            </label>
-          </div>
-          <div class="form-grid">
-            <label class="form-group">
-              <span>{{ t('runtime.ansibleMachines.fields.reachabilityPort') }}</span>
-              <input v-model.trim="form.port" type="number" min="1" max="65535" />
-            </label>
-            <label class="form-group">
-              <span>{{ t('runtime.ansibleMachines.fields.weight') }}</span>
-              <input v-model.trim="form.weight" type="number" min="1" />
-            </label>
-          </div>
-          <div class="form-grid">
-            <label class="form-group">
-              <span>{{ t('runtime.ansibleMachines.fields.region') }}</span>
-              <input v-model.trim="form.region" type="text" :placeholder="t('runtime.ansibleMachines.placeholders.region')" />
-            </label>
-            <label class="form-group">
-              <span>{{ t('runtime.ansibleMachines.fields.isp') }}</span>
-              <input v-model.trim="form.isp" type="text" :placeholder="t('runtime.ansibleMachines.placeholders.isp')" />
-            </label>
-          </div>
-          <p v-if="formError" class="form-error">{{ formError }}</p>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" @click="closeEditor">{{ t('runtime.ansibleMachines.modal.cancel') }}</button>
-          <button class="btn btn-primary" :disabled="saving" @click="submitForm">{{ saving ? t('runtime.ansibleMachines.modal.saveLoading') : t('runtime.ansibleMachines.modal.save') }}</button>
-        </div>
+    <UiDialog
+      :open="editorOpen"
+      :title="editorMode ? t('runtime.ansibleMachines.modal.titleEdit') : t('runtime.ansibleMachines.modal.titleAdd')"
+      :dismissible="!saving"
+      @update:open="value => { if (!value) closeEditor() }"
+    >
+      <p class="inventory-hint compact">{{ t('runtime.ansibleMachines.inventoryHint') }}</p>
+      <div class="form-grid">
+        <label class="form-group">
+          <span>{{ t('runtime.ansibleMachines.fields.name') }}</span>
+          <input v-model.trim="form.name" type="text" :placeholder="t('runtime.ansibleMachines.placeholders.name')" />
+        </label>
+        <label class="form-group">
+          <span>{{ t('runtime.ansibleMachines.fields.host') }}</span>
+          <input v-model.trim="form.host" type="text" :placeholder="t('runtime.ansibleMachines.placeholders.host')" />
+        </label>
       </div>
-    </div>
-
-    <div v-if="deleteTarget" class="modal-overlay" @click.self="deleteTarget = null">
-      <div class="modal modal-sm">
-        <div class="modal-header">
-          <div>
-            <p class="eyebrow">{{ t('runtime.ansibleMachines.modal.deleteEyebrow') }}</p>
-            <h3>{{ t('runtime.ansibleMachines.modal.deleteTitle') }}</h3>
-          </div>
-          <button class="modal-close" :aria-label="t('common.actions.close')" :title="t('common.actions.close')" @click="deleteTarget = null">&times;</button>
-        </div>
-        <div class="modal-body">
-          <p>{{ t('runtime.ansibleMachines.modal.deleteConfirm', { name: deleteTarget?.name || '' }) }}</p>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" @click="deleteTarget = null">{{ t('runtime.ansibleMachines.modal.cancel') }}</button>
-          <button class="btn btn-primary" :disabled="saving" @click="confirmDelete">{{ saving ? t('runtime.ansibleMachines.modal.deleteLoading') : t('runtime.ansibleMachines.actions.delete') }}</button>
-        </div>
+      <div class="form-grid">
+        <label class="form-group">
+          <span>{{ t('runtime.ansibleMachines.fields.reachabilityPort') }}</span>
+          <input v-model.trim="form.port" type="number" min="1" max="65535" />
+        </label>
+        <label class="form-group">
+          <span>{{ t('runtime.ansibleMachines.fields.weight') }}</span>
+          <input v-model.trim="form.weight" type="number" min="1" />
+        </label>
       </div>
-    </div>
+      <div class="form-grid">
+        <label class="form-group">
+          <span>{{ t('runtime.ansibleMachines.fields.region') }}</span>
+          <input v-model.trim="form.region" type="text" :placeholder="t('runtime.ansibleMachines.placeholders.region')" />
+        </label>
+        <label class="form-group">
+          <span>{{ t('runtime.ansibleMachines.fields.isp') }}</span>
+          <input v-model.trim="form.isp" type="text" :placeholder="t('runtime.ansibleMachines.placeholders.isp')" />
+        </label>
+      </div>
+      <p v-if="formError" class="form-error" role="alert">{{ formError }}</p>
+      <template #footer>
+        <UiButton :disabled="saving" @click="closeEditor">{{ t('runtime.ansibleMachines.modal.cancel') }}</UiButton>
+        <UiButton variant="primary" data-test="ansible-machine-save" :loading="saving" @click="submitForm">{{ t('runtime.ansibleMachines.modal.save') }}</UiButton>
+      </template>
+    </UiDialog>
   </div>
 </template>
 
@@ -192,6 +167,7 @@ import {
   toggleAnsibleMachine,
   updateAnsibleMachine
 } from '@/api/admin'
+import { UiButton, UiDialog, useConfirm, useToast } from '@/ui'
 
 const { t, translateLiteral } = useAppI18n()
 
@@ -203,7 +179,8 @@ const results = reactive({})
 const pendingAction = ref('')
 const editorOpen = ref(false)
 const editorMode = ref(false)
-const deleteTarget = ref(null)
+const toast = useToast()
+const confirm = useConfirm()
 const formError = ref('')
 const pageError = ref('')
 const form = reactive(createForm())
@@ -330,8 +307,10 @@ async function submitForm() {
     } else {
       await createAnsibleMachine(payload)
     }
+    const saved = form.name.trim()
     await refreshAll()
     closeEditor(true)
+    toast.success(t('runtime.ansibleMachines.messages.saved', { name: saved }))
   } catch (error) {
     formError.value = resolveRuntimeError(error, 'runtime.ansibleMachines.errors.saveFailed')
   } finally {
@@ -339,22 +318,27 @@ async function submitForm() {
   }
 }
 
-function openDelete(machine) {
-  deleteTarget.value = machine
-}
-
-async function confirmDelete() {
-  if (!deleteTarget.value?.id) return
-  saving.value = true
-  try {
-    await deleteAnsibleMachine(deleteTarget.value.id)
-    deleteTarget.value = null
-    await refreshAll()
-  } catch (error) {
-    pageError.value = resolveRuntimeError(error, 'runtime.ansibleMachines.errors.deleteFailed')
-  } finally {
-    saving.value = false
-  }
+// An execution machine is deleted only after its name is typed.
+async function openDelete(machine) {
+  if (!machine?.id) return
+  const name = machine.name && machine.name !== '-' ? machine.name : `#${machine.id}`
+  const confirmed = await confirm({
+    title: t('runtime.ansibleMachines.modal.deleteTitle', { name }),
+    message: t('runtime.ansibleMachines.modal.deleteConfirm'),
+    confirmLabel: t('runtime.ansibleMachines.modal.deleteAction'),
+    tone: 'danger',
+    requireText: name,
+    onConfirm: async () => {
+      try {
+        await deleteAnsibleMachine(machine.id)
+      } catch (error) {
+        throw new Error(resolveRuntimeError(error, 'runtime.ansibleMachines.errors.deleteFailed'))
+      }
+    }
+  })
+  if (!confirmed) return
+  toast.success(t('runtime.ansibleMachines.messages.deleted', { name }))
+  await refreshAll()
 }
 
 async function checkMachine(machine) {
@@ -427,7 +411,7 @@ onMounted(async () => {
 .stat-label { margin: 0; color: var(--text-secondary); }
 .stat-value { font-size: 28px; font-weight: 700; }
 .section-head { justify-content: space-between; align-items: flex-start; margin-bottom: 18px; }
-.filter-group, .form-group { display: flex; flex-direction: column; gap: 8px; }
+.filter-group, .form-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 0; }
 .filter-group select, .form-group input { border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-color); color: var(--text-color); padding: 12px 14px; }
 .machine-grid { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
 .machine-card { border: 1px solid var(--border-color); border-radius: 18px; background: var(--bg-color); padding: 18px; display: flex; flex-direction: column; gap: 14px; }
@@ -444,17 +428,9 @@ onMounted(async () => {
 .result-text.fail, .danger-text, .form-error { color: #b91c1c; }
 .state-card { padding: 16px; border: 1px solid var(--border-color); border-radius: 16px; background: var(--bg-color); }
 .state-error { color: #b91c1c; border-color: rgba(239,68,68,.24); background: rgba(239,68,68,.08); }
-.modal-overlay { position: fixed; inset: 0; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(15,23,42,.62); z-index: 1100; }
-.modal { width: min(100%, 720px); border-radius: 18px; border: 1px solid var(--border-color); background: var(--surface-color); }
-.modal-sm { width: min(100%, 420px); }
-.modal-header, .modal-footer { display: flex; justify-content: space-between; gap: 12px; padding: 18px 22px; border-bottom: 1px solid var(--border-color); }
-.modal-footer { border-top: 1px solid var(--border-color); border-bottom: 0; justify-content: flex-end; }
-.modal-body { padding: 20px 22px; display: flex; flex-direction: column; gap: 14px; }
-.modal-close { border: 0; background: transparent; color: var(--text-secondary); cursor: pointer; font-size: 0; line-height: 1; }
-.modal-close::before { content: '\00d7'; font-size: 24px; }
 .form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 @media (max-width: 900px) {
-  .hero-card, .section-head, .machine-head, .modal-header, .modal-footer { flex-direction: column; }
+  .hero-card, .section-head, .machine-head { flex-direction: column; }
   .meta-grid, .form-grid { grid-template-columns: 1fr; }
   .status-stack { align-items: flex-start; }
 }

@@ -1,6 +1,7 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
 import Orders from '@/views/user/Orders.vue'
+import { inBody, toastMessages } from './helpers/feedback'
 
 const mockGetOrders = vi.fn()
 const mockGetOrderDetail = vi.fn()
@@ -9,6 +10,8 @@ vi.mock('@/api/user', () => ({
   getOrders: (...args) => mockGetOrders(...args),
   getOrderDetail: (...args) => mockGetOrderDetail(...args),
 }))
+
+enableAutoUnmount(afterEach)
 
 describe('User Orders flow', () => {
   beforeEach(() => {
@@ -43,6 +46,7 @@ describe('User Orders flow', () => {
     })
 
     const wrapper = mount(Orders, {
+      attachTo: document.body,
       global: {
         stubs: {
           'router-link': true,
@@ -102,6 +106,7 @@ describe('User Orders flow', () => {
     })
 
     const wrapper = mount(Orders, {
+      attachTo: document.body,
       global: {
         stubs: {
           'router-link': true,
@@ -114,10 +119,25 @@ describe('User Orders flow', () => {
     await flushPromises()
 
     expect(mockGetOrderDetail).toHaveBeenCalledWith(5)
-    expect(wrapper.find('.modal').exists()).toBe(true)
-    expect(wrapper.find('.detail-grid').text()).toContain('ORD-200')
-    expect(wrapper.find('.detail-grid').text()).toContain('Enterprise')
-    expect(wrapper.find('.detail-grid').text()).toContain('2500.00')
+    expect(inBody('[role="dialog"]').text()).toContain('Order details')
+    expect(inBody('.detail-grid').text()).toContain('ORD-200')
+    expect(inBody('.detail-grid').text()).toContain('Enterprise')
+    expect(inBody('.detail-grid').text()).toContain('2500.00')
+  })
+
+  it('reports a detail that fails to load and an unavailable payment in toasts', async () => {
+    mockGetOrders.mockResolvedValue({ data: { list: [{ id: 6, trade_no: 'ORD-300', status: 0, total_amount: 100 }] } })
+    mockGetOrderDetail.mockRejectedValue(new Error('offline'))
+    const wrapper = mount(Orders, { attachTo: document.body, global: { stubs: { 'router-link': true } } })
+    await flushPromises()
+
+    await wrapper.find('[data-test="order-detail-button"]').trigger('click')
+    await flushPromises()
+    expect(inBody('[role="dialog"]').exists()).toBe(false)
+    expect(toastMessages('error')).toEqual(['The order details couldn’t be opened. Try again later.'])
+
+    await wrapper.find('.action-buttons .btn-primary').trigger('click')
+    expect(toastMessages('info')).toEqual(['Payment is still being integrated. Please try again later.'])
   })
 
   // The order answers carry plan as {id, name} and no buyer; an order whose
@@ -158,6 +178,7 @@ describe('User Orders flow', () => {
     })
 
     const wrapper = mount(Orders, {
+      attachTo: document.body,
       global: {
         stubs: {
           'router-link': true,
@@ -178,6 +199,7 @@ describe('User Orders flow', () => {
     mockGetOrders.mockResolvedValue({ data: { list: [] } })
 
     const wrapper = mount(Orders, {
+      attachTo: document.body,
       global: {
         stubs: {
           'router-link': true,

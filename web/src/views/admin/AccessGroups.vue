@@ -162,26 +162,31 @@
       </div>
     </section>
 
-    <div v-if="groupEditor.open" class="modal-overlay" @click.self="closeGroupEditor">
-      <section class="modal" role="dialog" aria-modal="true" aria-labelledby="access-group-editor-title">
-        <div class="modal-header"><h3 id="access-group-editor-title">{{ groupEditor.mode === 'create' ? t('accessGroups.editor.createTitle') : t('accessGroups.editor.editTitle') }}</h3><button class="btn btn-ghost close-btn" type="button" :aria-label="t('common.actions.close')" @click="closeGroupEditor">x</button></div>
-        <form @submit.prevent="saveGroup">
-          <div class="modal-body form-grid">
-            <div class="form-group"><label for="access-group-scope">{{ t('accessGroups.table.scope') }}</label><select id="access-group-scope" v-model="groupEditor.scopeID" :disabled="groupEditor.mode === 'edit'" required><option v-for="scope in scopes" :key="scope.id" :value="scope.id">{{ scope.name || scope.id }} ({{ scope.id }})</option></select></div>
-            <div class="form-group"><label for="access-group-name">{{ t('accessGroups.editor.name') }}</label><input id="access-group-name" v-model.trim="groupEditor.name" required maxlength="120" /></div>
-            <div class="form-group form-group-wide"><label for="access-group-description">{{ t('accessGroups.editor.description') }}</label><textarea id="access-group-description" v-model="groupEditor.description" rows="3" maxlength="4000"></textarea></div>
-            <label class="checkbox-row"><input v-model="groupEditor.enabled" type="checkbox" />{{ t('accessGroups.editor.enabled') }}</label>
-          </div>
-          <div class="modal-footer"><button class="btn" type="button" @click="closeGroupEditor">{{ t('common.actions.cancel') }}</button><button class="btn btn-primary" type="submit" :disabled="mutation">{{ mutation ? t('accessGroups.actions.saving') : t('common.actions.save') }}</button></div>
-        </form>
-      </section>
-    </div>
+    <UiDialog
+      :open="groupEditor.open"
+      :title="groupEditor.mode === 'create' ? t('accessGroups.editor.createTitle') : t('accessGroups.editor.editTitle')"
+      :dismissible="!mutation"
+      @update:open="value => { if (!value) closeGroupEditor() }"
+    >
+      <form id="access-group-editor-form" class="form-grid" data-test="access-group-editor" @submit.prevent="saveGroup">
+        <div class="form-group"><label for="access-group-scope">{{ t('accessGroups.table.scope') }}</label><select id="access-group-scope" v-model="groupEditor.scopeID" :disabled="groupEditor.mode === 'edit'" required><option v-for="scope in scopes" :key="scope.id" :value="scope.id">{{ scope.name || scope.id }} ({{ scope.id }})</option></select></div>
+        <div class="form-group"><label for="access-group-name">{{ t('accessGroups.editor.name') }}</label><input id="access-group-name" v-model.trim="groupEditor.name" required maxlength="120" /></div>
+        <div class="form-group form-group-wide"><label for="access-group-description">{{ t('accessGroups.editor.description') }}</label><textarea id="access-group-description" v-model="groupEditor.description" rows="3" maxlength="4000"></textarea></div>
+        <label class="checkbox-row"><input v-model="groupEditor.enabled" type="checkbox" />{{ t('accessGroups.editor.enabled') }}</label>
+        <p v-if="groupEditor.error" class="error-message form-group-wide" role="alert">{{ groupEditor.error }}</p>
+      </form>
+      <template #footer="{ close }">
+        <UiButton :disabled="mutation" @click="close">{{ t('common.actions.cancel') }}</UiButton>
+        <UiButton variant="primary" type="submit" form="access-group-editor-form" :loading="mutation">{{ t('common.actions.save') }}</UiButton>
+      </template>
+    </UiDialog>
   </div>
 </template>
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { UiButton, UiDialog, useConfirm, useToast } from '@/ui'
 import {
   addKernelAccessGroupPlan,
   addKernelAccessGroupUser,
@@ -201,6 +206,8 @@ import {
 } from '@/api/kernel'
 
 const { t } = useAppI18n()
+const toast = useToast()
+const confirm = useConfirm()
 const loading = ref(false)
 const detailLoading = ref(false)
 const mutation = ref(false)
@@ -216,7 +223,7 @@ const memberID = ref('')
 const planID = ref('')
 const resolvedAccess = ref(null)
 const resolver = reactive({ userID: '', planID: '', scopeID: '' })
-const groupEditor = reactive({ open: false, mode: 'create', id: 0, scopeID: '', name: '', description: '', enabled: true })
+const groupEditor = reactive({ open: false, mode: 'create', id: 0, scopeID: '', name: '', description: '', enabled: true, error: '' })
 const grantEditor = reactive({ resourceType: 'plugin_api', resourceID: '', permissions: '[]' })
 const quotaEditor = reactive({ key: '', policy: '{}' })
 
@@ -304,19 +311,21 @@ function openGroupEditor(group) {
   groupEditor.name = source.name || ''
   groupEditor.description = source.description || ''
   groupEditor.enabled = source.enabled !== false
+  groupEditor.error = ''
 }
 
 function closeGroupEditor() {
+  if (mutation.value) return
   groupEditor.open = false
 }
 
 async function saveGroup() {
   if (!groupEditor.scopeID || !groupEditor.name) {
-    error.value = t('accessGroups.errors.groupRequired')
+    groupEditor.error = t('accessGroups.errors.groupRequired')
     return
   }
   mutation.value = true
-  error.value = ''
+  groupEditor.error = ''
   try {
     if (groupEditor.mode === 'create') {
       const created = await createKernelAccessGroup({ scope_id: groupEditor.scopeID, name: groupEditor.name, description: groupEditor.description, enabled: groupEditor.enabled })
@@ -327,10 +336,11 @@ async function saveGroup() {
       selectedGroupID.value = groupEditor.id
       notice.value = t('accessGroups.messages.groupSaved', { name: groupEditor.name })
     }
+    mutation.value = false
     closeGroupEditor()
     await loadGroups()
   } catch (requestError) {
-    error.value = apiErrorMessage(requestError, t('accessGroups.errors.saveGroup'))
+    groupEditor.error = apiErrorMessage(requestError, t('accessGroups.errors.saveGroup'))
   } finally {
     mutation.value = false
   }
@@ -353,21 +363,27 @@ async function toggleGroup() {
 }
 
 async function removeGroup() {
-  if (!detail.value || !confirm(t('accessGroups.confirm.deleteGroup', { name: detail.value.group.name }))) return
-  mutation.value = true
+  if (!detail.value) return
+  const { id, name } = detail.value.group
+  const confirmed = await confirm({
+    title: t('accessGroups.confirm.deleteGroupTitle', { name }),
+    message: t('accessGroups.confirm.deleteGroup'),
+    confirmLabel: t('accessGroups.confirm.deleteGroupAction'),
+    tone: 'danger',
+    onConfirm: async () => {
+      try {
+        await deleteKernelAccessGroup(id)
+      } catch (requestError) {
+        throw new Error(apiErrorMessage(requestError, t('accessGroups.errors.deleteGroup')))
+      }
+    }
+  })
+  if (!confirmed) return
   error.value = ''
-  try {
-    const name = detail.value.group.name
-    await deleteKernelAccessGroup(detail.value.group.id)
-    selectedGroupID.value = 0
-    detail.value = null
-    notice.value = t('accessGroups.messages.groupDeleted', { name })
-    await loadGroups()
-  } catch (requestError) {
-    error.value = apiErrorMessage(requestError, t('accessGroups.errors.deleteGroup'))
-  } finally {
-    mutation.value = false
-  }
+  selectedGroupID.value = 0
+  detail.value = null
+  notice.value = t('accessGroups.messages.groupDeleted', { name })
+  await loadGroups()
 }
 
 async function refreshSelectedDetail() {
@@ -390,18 +406,31 @@ async function addMember() {
   }
 }
 
-async function removeMember(user) {
-  if (!detail.value || !confirm(t('accessGroups.confirm.removeMember', { id: user.id }))) return
+// Removing a member or a plan is undone by adding it back, so neither asks
+// first: the toast offers 撤销 instead (redesign plan §9).
+async function changeMembership(action, errorKey) {
   mutation.value = true
+  error.value = ''
   try {
-    await removeKernelAccessGroupUser(detail.value.group.id, user.id)
-    notice.value = t('accessGroups.messages.memberRemoved', { id: user.id })
+    await action()
     await refreshSelectedDetail()
+    return true
   } catch (requestError) {
-    error.value = apiErrorMessage(requestError, t('accessGroups.errors.member'))
+    error.value = apiErrorMessage(requestError, t(errorKey))
+    return false
   } finally {
     mutation.value = false
   }
+}
+
+async function removeMember(user) {
+  if (!detail.value) return
+  const groupID = detail.value.group.id
+  if (!(await changeMembership(() => removeKernelAccessGroupUser(groupID, user.id), 'accessGroups.errors.member'))) return
+  notice.value = ''
+  toast.success(t('accessGroups.messages.memberRemoved', { id: user.id }), {
+    undo: () => changeMembership(() => addKernelAccessGroupUser(groupID, user.id), 'accessGroups.errors.member')
+  })
 }
 
 async function addPlan() {
@@ -421,17 +450,13 @@ async function addPlan() {
 }
 
 async function removePlan(plan) {
-  if (!detail.value || !confirm(t('accessGroups.confirm.removePlan', { id: plan.id }))) return
-  mutation.value = true
-  try {
-    await removeKernelAccessGroupPlan(detail.value.group.id, plan.id)
-    notice.value = t('accessGroups.messages.planRemoved', { id: plan.id })
-    await refreshSelectedDetail()
-  } catch (requestError) {
-    error.value = apiErrorMessage(requestError, t('accessGroups.errors.plan'))
-  } finally {
-    mutation.value = false
-  }
+  if (!detail.value) return
+  const groupID = detail.value.group.id
+  if (!(await changeMembership(() => removeKernelAccessGroupPlan(groupID, plan.id), 'accessGroups.errors.plan'))) return
+  notice.value = ''
+  toast.success(t('accessGroups.messages.planRemoved', { id: plan.id }), {
+    undo: () => changeMembership(() => addKernelAccessGroupPlan(groupID, plan.id), 'accessGroups.errors.plan')
+  })
 }
 
 async function addGrant() {
@@ -452,17 +477,23 @@ async function addGrant() {
 }
 
 async function removeGrant(grant) {
-  if (!confirm(t('accessGroups.confirm.removeGrant', { id: grant.id }))) return
-  mutation.value = true
-  try {
-    await deleteKernelResourceGrant(grant.id)
-    notice.value = t('accessGroups.messages.grantRemoved')
-    await refreshSelectedDetail()
-  } catch (requestError) {
-    error.value = apiErrorMessage(requestError, t('accessGroups.errors.grant'))
-  } finally {
-    mutation.value = false
-  }
+  const confirmed = await confirm({
+    title: t('accessGroups.confirm.removeGrantTitle', { id: grant.id }),
+    message: t('accessGroups.confirm.removeGrant', { resource: `${grant.resource_type}/${grant.resource_id}` }),
+    confirmLabel: t('accessGroups.confirm.removeGrantAction'),
+    tone: 'danger',
+    onConfirm: async () => {
+      try {
+        await deleteKernelResourceGrant(grant.id)
+      } catch (requestError) {
+        throw new Error(apiErrorMessage(requestError, t('accessGroups.errors.grant')))
+      }
+    }
+  })
+  if (!confirmed) return
+  error.value = ''
+  notice.value = t('accessGroups.messages.grantRemoved')
+  await refreshSelectedDetail()
 }
 
 async function saveQuota() {
@@ -483,17 +514,23 @@ async function saveQuota() {
 }
 
 async function removeQuota(policy) {
-  if (!confirm(t('accessGroups.confirm.removeQuota', { key: policy.key }))) return
-  mutation.value = true
-  try {
-    await deleteKernelQuotaPolicy(policy.id)
-    notice.value = t('accessGroups.messages.quotaRemoved')
-    await refreshSelectedDetail()
-  } catch (requestError) {
-    error.value = apiErrorMessage(requestError, t('accessGroups.errors.quota'))
-  } finally {
-    mutation.value = false
-  }
+  const confirmed = await confirm({
+    title: t('accessGroups.confirm.removeQuotaTitle', { key: policy.key }),
+    message: t('accessGroups.confirm.removeQuota'),
+    confirmLabel: t('accessGroups.confirm.removeQuotaAction'),
+    tone: 'danger',
+    onConfirm: async () => {
+      try {
+        await deleteKernelQuotaPolicy(policy.id)
+      } catch (requestError) {
+        throw new Error(apiErrorMessage(requestError, t('accessGroups.errors.quota')))
+      }
+    }
+  })
+  if (!confirmed) return
+  error.value = ''
+  notice.value = t('accessGroups.messages.quotaRemoved')
+  await refreshSelectedDetail()
 }
 
 async function resolveAccess() {
@@ -557,6 +594,9 @@ onMounted(refresh)
 .form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
 .form-group-wide { grid-column: 1 / -1; }
 .checkbox-row { display: flex; align-items: center; gap: 8px; font-size: 14px; }
+.form-grid .form-group { margin-bottom: 0; }
+.form-grid .checkbox-row { grid-column: 1 / -1; }
+.checkbox-row input { width: auto; }
 @media (max-width: 980px) { .access-layout, .policy-grid { grid-template-columns: 1fr; } .policy-section-wide { grid-column: auto; } .grant-form, .quota-form, .resolver-form { grid-template-columns: 1fr; } .grant-form .btn, .quota-form .btn, .resolver-form .btn { justify-self: start; } }
 @media (max-width: 620px) { .access-toolbar { align-items: stretch; flex-direction: column; } .detail-heading { flex-direction: column; } .form-grid { grid-template-columns: 1fr; } .form-group-wide { grid-column: auto; } }
 </style>

@@ -1,7 +1,12 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises, mount } from '@vue/test-utils'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
+import { render, screen, waitFor, within } from '@testing-library/vue'
+import userEvent from '@testing-library/user-event'
+import UiHost from '@/ui/UiHost.vue'
+import { runAction } from '@/ui/composables/useToast'
 import Payment from '@/views/admin/Payment.vue'
 import { setLocale } from '@/i18n'
+import { inBody, toastMessages, toasts } from './helpers/feedback'
 
 const adminApi = vi.hoisted(() => ({
   createPaymentGateway: vi.fn(),
@@ -14,6 +19,8 @@ const adminApi = vi.hoisted(() => ({
 }))
 
 vi.mock('@/api/admin', () => adminApi)
+
+enableAutoUnmount(afterEach)
 
 describe('Admin Payment', () => {
   beforeEach(async () => {
@@ -176,7 +183,6 @@ describe('Admin Payment', () => {
   })
 
   it('shows panel envelope errors for gateway mutations', async () => {
-    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
     adminApi.getPaymentGateways.mockResolvedValue({
       code: 0,
       msg: '操作成功',
@@ -207,11 +213,101 @@ describe('Admin Payment', () => {
     await flushPromises()
 
     expect(adminApi.togglePaymentGateway).toHaveBeenCalledWith(1, true)
-    expect(alertSpy).toHaveBeenCalledWith(
-      expect.stringContaining('gateway not found')
-    )
+    expect(toastMessages('error')).toEqual([expect.stringContaining('gateway not found')])
     expect(adminApi.getPaymentGateways).toHaveBeenCalledTimes(1)
 
     wrapper.unmount()
+  })
+
+  describe('dialogs and feedback', () => {
+    const gateway = { enabled: true, fee_rate: 0.01, id: 4, max_amount: 1000, min_amount: 10, name: 'Stripe EU', type: 'stripe', config: { key: 'k' } }
+    const Harness = {
+      components: { Payment, UiHost },
+      template: '<div><Payment /><UiHost /></div>'
+    }
+
+    beforeEach(() => {
+      adminApi.getPaymentGateways.mockResolvedValue({ code: 0, data: { list: [gateway] } })
+      adminApi.getPaymentRecords.mockResolvedValue({ code: 0, data: { list: [{ id: 9, user_id: 3, gateway_type: 'stripe', trade_no: 'T-900', amount: 1234, status: 'paid', created_at: 1783526400 }] } })
+    })
+
+    it('disables a gateway at once and offers undo', async () => {
+      adminApi.togglePaymentGateway.mockResolvedValue({ code: 0 })
+      const wrapper = mount(Payment)
+      await flushPromises()
+
+      await wrapper.vm.toggleGatewayStatus(gateway)
+      expect(adminApi.togglePaymentGateway).toHaveBeenCalledWith(4, false)
+      const [toast] = toasts('success')
+      expect(toast.message).toBe('Stripe EU disabled')
+      await runAction(toast.id)
+      expect(adminApi.togglePaymentGateway).toHaveBeenLastCalledWith(4, true)
+    })
+
+    it('confirms deleting a gateway; Cancel keeps it, a failure stays inline', async () => {
+      const user = userEvent.setup()
+      adminApi.deletePaymentGateway.mockResolvedValueOnce({ code: -1, msg: 'gateway has payments' }).mockResolvedValueOnce({ code: 0 })
+      render(Harness)
+      await screen.findByText('Stripe EU')
+      const opener = screen.getByRole('button', { name: 'Delete' })
+
+      await user.click(opener)
+      let dialog = await screen.findByRole('alertdialog', { name: 'Delete payment gateway Stripe EU?' })
+      await user.click(within(dialog).getByRole('button', { name: 'Cancel' }))
+      await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+      expect(adminApi.deletePaymentGateway).not.toHaveBeenCalled()
+
+      await user.click(opener)
+      dialog = await screen.findByRole('alertdialog')
+      await user.click(within(dialog).getByRole('button', { name: 'Delete gateway' }))
+      expect((await within(dialog).findByRole('alert')).textContent).toContain('gateway has payments')
+      await user.click(within(dialog).getByRole('button', { name: 'Delete gateway' }))
+      await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+      expect(adminApi.deletePaymentGateway).toHaveBeenLastCalledWith(4)
+      expect(toastMessages('success')).toEqual(['Gateway Stripe EU deleted'])
+    })
+
+    it('keeps invalid JSON and save failures inside the gateway dialog', async () => {
+      adminApi.updatePaymentGateway.mockResolvedValueOnce({ code: -1, msg: 'name taken' }).mockResolvedValueOnce({ code: 0 })
+      const wrapper = mount(Payment, { attachTo: document.body })
+      await flushPromises()
+
+      wrapper.vm.openGatewayModal(gateway)
+      await flushPromises()
+      // The JSON example placeholder renders literally (no i18n compile error).
+      expect(inBody('[data-test="payment-gateway-config"]').attributes('placeholder')).toBe('{"app_id": "", "private_key": ""}')
+      await inBody('[data-test="payment-gateway-config"]').setValue('{bad json')
+      await inBody('[data-test="payment-gateway-save"]').trigger('click')
+      await flushPromises()
+      expect(inBody('#payment-gateway-config-error').text()).toBe('Configuration JSON is invalid')
+      expect(inBody('[data-test="payment-gateway-config"]').attributes('aria-invalid')).toBe('true')
+      expect(adminApi.updatePaymentGateway).not.toHaveBeenCalled()
+
+      await inBody('[data-test="payment-gateway-config"]').setValue('{"key":"k2"}')
+      await inBody('[data-test="payment-gateway-save"]').trigger('click')
+      await flushPromises()
+      expect(inBody('[data-test="payment-gateway-error"]').text()).toContain('name taken')
+      expect(wrapper.vm.showGatewayModal).toBe(true)
+      expect(toasts()).toHaveLength(0)
+
+      await inBody('[data-test="payment-gateway-save"]').trigger('click')
+      await flushPromises()
+      expect(adminApi.updatePaymentGateway).toHaveBeenLastCalledWith(4, expect.objectContaining({ config: { key: 'k2' } }))
+      expect(wrapper.vm.showGatewayModal).toBe(false)
+      expect(toastMessages('success')).toEqual(['Gateway saved successfully'])
+    })
+
+    it('shows a payment record in a side sheet that closes with Esc', async () => {
+      const user = userEvent.setup()
+      render(Harness)
+      await user.click(await screen.findByRole('button', { name: 'Records' }))
+      const opener = await screen.findByRole('button', { name: 'Details' })
+      await user.click(opener)
+      const sheet = await screen.findByRole('dialog', { name: 'Payment Details' })
+      expect(sheet.textContent).toContain('T-900')
+      await user.keyboard('{Escape}')
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+      await waitFor(() => expect(document.activeElement).toBe(opener))
+    })
   })
 })

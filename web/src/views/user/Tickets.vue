@@ -55,90 +55,82 @@
       </div>
     </div>
 
-    <div v-if="showCreate" class="modal-overlay" @click.self="showCreate = false">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>{{ t('user.tickets.newTicketTitle') }}</h3>
-          <button class="btn btn-ghost btn-sm close-btn normalized-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="showCreate = false">x</button>
-          <button class="close-btn" @click="showCreate = false">×</button>
+    <UiSheet v-model:open="showCreate" :title="t('user.tickets.newTicketTitle')" :dismissible="!submitting">
+      <div class="ticket-form">
+        <div class="form-group">
+          <label for="ticket-subject">{{ t('common.labels.subject') }}</label>
+          <input id="ticket-subject" v-model="createForm.subject" type="text" :placeholder="t('common.labels.subject')">
         </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>{{ t('common.labels.subject') }}</label>
-            <input v-model="createForm.subject" type="text" :placeholder="t('common.labels.subject')">
-          </div>
-          <div class="form-group">
-            <label>{{ t('common.labels.priority') }}</label>
-            <select v-model="createForm.level">
-              <option :value="0">{{ t('common.ticketPriority.low') }}</option>
-              <option :value="1">{{ t('common.ticketPriority.medium') }}</option>
-              <option :value="2">{{ t('common.ticketPriority.high') }}</option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label>{{ t('common.labels.message') }}</label>
-            <textarea v-model="createForm.message" rows="6" :placeholder="t('common.labels.message')"></textarea>
-          </div>
+        <div class="form-group">
+          <label for="ticket-level">{{ t('common.labels.priority') }}</label>
+          <select id="ticket-level" v-model="createForm.level">
+            <option :value="0">{{ t('common.ticketPriority.low') }}</option>
+            <option :value="1">{{ t('common.ticketPriority.medium') }}</option>
+            <option :value="2">{{ t('common.ticketPriority.high') }}</option>
+          </select>
         </div>
-        <div class="modal-footer">
-          <button class="btn" @click="showCreate = false">{{ t('common.actions.cancel') }}</button>
-          <button class="btn btn-primary" data-test="ticket-submit-button" :disabled="submitting" @click="submitCreate">
-            {{ submitting ? t('common.states.loading') : t('common.actions.submit') }}
-          </button>
+        <div class="form-group">
+          <label for="ticket-message">{{ t('common.labels.message') }}</label>
+          <textarea id="ticket-message" v-model="createForm.message" rows="6" :placeholder="t('common.labels.message')"></textarea>
+        </div>
+        <p v-if="createError" class="form-error" role="alert" data-test="ticket-create-error">{{ createError }}</p>
+      </div>
+      <template #footer="{ close }">
+        <UiButton :disabled="submitting" @click="close">{{ t('common.actions.cancel') }}</UiButton>
+        <UiButton variant="primary" data-test="ticket-submit-button" :loading="submitting" @click="submitCreate">
+          {{ t('common.actions.submit') }}
+        </UiButton>
+      </template>
+    </UiSheet>
+
+    <UiSheet v-model:open="showDetail" size="lg" class="ticket-detail-sheet" :title="detailTicket.subject || ''">
+      <template #description>
+        <span class="header-top">
+          <span :class="['status-badge', statusIndicator(detailTicket.status)]">{{ statusText(detailTicket.status) }}</span>
+          <span class="ticket-id">{{ t('user.tickets.ticketId', { id: detailTicket.id }) }}</span>
+        </span>
+      </template>
+
+      <div class="chat-container">
+        <div class="messages-list">
+          <div
+            v-for="message in detailTicket.messages || []"
+            :key="message.id"
+            :class="['message-item', message.is_admin ? 'admin' : 'user']"
+          >
+            <div class="message-bubble">
+              <div class="message-sender">{{ message.is_admin ? t('user.tickets.assistant') : t('user.tickets.me') }}</div>
+              <div class="message-content">{{ message.message }}</div>
+              <div class="message-time">{{ formatDateTime(message.created_at) }}</div>
+            </div>
+          </div>
         </div>
       </div>
-    </div>
 
-    <div v-if="showDetail" class="modal-overlay" @click.self="showDetail = false">
-      <div class="modal modal-lg ticket-detail-modal">
-        <div class="modal-header">
-          <div class="header-top">
-            <span :class="['status-badge', statusIndicator(detailTicket.status)]">{{ statusText(detailTicket.status) }}</span>
-            <span class="ticket-id">{{ t('user.tickets.ticketId', { id: detailTicket.id }) }}</span>
-          </div>
-          <h3>{{ detailTicket.subject }}</h3>
-          <button class="btn btn-ghost btn-sm close-btn normalized-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="showDetail = false">x</button>
-          <button class="close-btn" @click="showDetail = false">×</button>
-        </div>
-
-        <div class="modal-body chat-container">
-          <div class="messages-list">
-            <div
-              v-for="message in detailTicket.messages || []"
-              :key="message.id"
-              :class="['message-item', message.is_admin ? 'admin' : 'user']"
-            >
-              <div class="message-bubble">
-                <div class="message-sender">{{ message.is_admin ? t('user.tickets.assistant') : t('user.tickets.me') }}</div>
-                <div class="message-content">{{ message.message }}</div>
-                <div class="message-time">{{ formatDateTime(message.created_at) }}</div>
-              </div>
-            </div>
+      <template #footer="{ close }">
+        <div v-if="detailTicket.status !== 2" class="reply-input-wrapper">
+          <label class="visually-hidden" for="ticket-reply">{{ t('user.tickets.replyLabel') }}</label>
+          <textarea
+            id="ticket-reply"
+            v-model="replyMessage"
+            rows="2"
+            :placeholder="t('user.tickets.replyPlaceholder')"
+            @keyup.ctrl.enter="submitReply"
+          ></textarea>
+          <p v-if="replyError" class="form-error" role="alert" data-test="ticket-reply-error">{{ replyError }}</p>
+          <div class="reply-actions">
+            <UiButton variant="tertiary" data-test="ticket-close-button" @click="handleClose(detailTicket)">{{ t('user.tickets.closeTicket') }}</UiButton>
+            <UiButton variant="primary" data-test="ticket-reply-button" :loading="replying" @click="submitReply">
+              {{ t('user.tickets.sendReply') }}
+            </UiButton>
           </div>
         </div>
-
-        <div v-if="detailTicket.status !== 2" class="modal-footer footer-reply">
-          <div class="reply-input-wrapper">
-            <textarea
-              v-model="replyMessage"
-              rows="2"
-              :placeholder="t('user.tickets.replyPlaceholder')"
-              @keyup.ctrl.enter="submitReply"
-            ></textarea>
-            <div class="reply-actions">
-              <button class="btn btn-ghost" @click="handleClose(detailTicket.id)">{{ t('common.actions.close') }}</button>
-              <button class="btn btn-primary btn-sm" :disabled="replying" @click="submitReply">
-                {{ replying ? t('common.states.loading') : t('common.actions.submit') }}
-              </button>
-            </div>
-          </div>
-        </div>
-        <div v-else class="modal-footer">
+        <div v-else class="closed-footer">
           <div class="text-secondary">{{ t('user.tickets.closedHint') }}</div>
-          <button class="btn" @click="showDetail = false">{{ t('user.tickets.closeWindow') }}</button>
+          <UiButton @click="close">{{ t('user.tickets.closeWindow') }}</UiButton>
         </div>
-      </div>
-    </div>
+      </template>
+    </UiSheet>
   </div>
 </template>
 
@@ -146,6 +138,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { closeTicket, createTicket, getTicketDetail, getTickets, replyTicket } from '@/api/user'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { UiButton, UiSheet, useConfirm, useToast } from '@/ui'
 
 const { t, formatDate, formatDateTime } = useAppI18n()
 const tickets = ref([])
@@ -161,6 +154,10 @@ const createForm = ref({
 })
 const detailTicket = ref({})
 const replyMessage = ref('')
+const createError = ref('')
+const replyError = ref('')
+const toast = useToast()
+const confirm = useConfirm()
 
 const activeCount = computed(() => tickets.value.filter((ticket) => ticket.status !== 2).length)
 const resolvedCount = computed(() => tickets.value.filter((ticket) => ticket.status === 2).length)
@@ -190,8 +187,9 @@ function statusIndicator(status) {
 }
 
 async function submitCreate() {
+  createError.value = ''
   if (!createForm.value.subject || !createForm.value.message) {
-    alert(t('common.messages.submitFailed'))
+    createError.value = t('user.tickets.fillSubjectMessage')
     return
   }
   submitting.value = true
@@ -199,9 +197,10 @@ async function submitCreate() {
     await createTicket(createForm.value)
     showCreate.value = false
     createForm.value = { subject: '', level: 1, message: '' }
+    toast.success(t('user.tickets.created'))
     await fetchTickets()
   } catch (err) {
-    alert(err.response?.data?.message || t('common.messages.submitFailed'))
+    createError.value = err.response?.data?.message || t('common.messages.submitFailed')
   } finally {
     submitting.value = false
   }
@@ -211,9 +210,10 @@ async function viewDetail(ticket) {
   try {
     const res = await getTicketDetail(ticket.id)
     detailTicket.value = res.data || {}
+    replyError.value = ''
     showDetail.value = true
   } catch {
-    alert(t('common.messages.loadFailed'))
+    toast.error(t('user.tickets.loadDetailFailed'))
   }
 }
 
@@ -222,30 +222,37 @@ async function submitReply() {
     return
   }
   replying.value = true
+  replyError.value = ''
   try {
     await replyTicket(detailTicket.value.id, { message: replyMessage.value })
     replyMessage.value = ''
     const res = await getTicketDetail(detailTicket.value.id)
     detailTicket.value = res.data || {}
     await fetchTickets()
-  } catch {
-    alert(t('common.messages.submitFailed'))
+  } catch (err) {
+    replyError.value = err?.response?.data?.message || t('common.messages.submitFailed')
   } finally {
     replying.value = false
   }
 }
 
-async function handleClose(id) {
-  if (!confirm(t('common.messages.closeTicketConfirm'))) {
-    return
-  }
-  try {
-    await closeTicket(id)
-    showDetail.value = false
-    await fetchTickets()
-  } catch {
-    alert(t('common.messages.submitFailed'))
-  }
+async function handleClose(ticket) {
+  const closed = await confirm({
+    title: t('user.tickets.closeConfirmTitle', { subject: ticket.subject || `#${ticket.id}` }),
+    message: t('user.tickets.closeConfirmMessage'),
+    confirmLabel: t('user.tickets.closeTicket'),
+    onConfirm: async () => {
+      try {
+        await closeTicket(ticket.id)
+      } catch (err) {
+        throw new Error(err?.response?.data?.message || t('common.messages.submitFailed'))
+      }
+    }
+  })
+  if (!closed) return
+  showDetail.value = false
+  toast.success(t('user.tickets.closed'))
+  await fetchTickets()
 }
 
 onMounted(() => {
@@ -367,17 +374,20 @@ onMounted(() => {
   margin-left: 12px;
 }
 
-.ticket-detail-modal {
-  display: flex;
-  flex-direction: column;
-  height: 80vh;
+.ticket-form {
+  display: grid;
+}
+
+.form-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--type-callout-size);
 }
 
 .header-top {
   display: flex;
   align-items: center;
-  gap: 12px;
-  margin-bottom: 8px;
+  gap: var(--space-3);
 }
 
 .status-badge {
@@ -403,12 +413,12 @@ onMounted(() => {
 }
 
 .chat-container {
-  flex: 1;
-  overflow-y: auto;
-  padding: 20px;
-  background: var(--bg-color);
   display: flex;
+  flex: 1;
   flex-direction: column-reverse;
+  margin: calc(var(--space-6) * -1);
+  padding: var(--space-5);
+  background: var(--bg-grouped);
 }
 
 .messages-list {
@@ -449,10 +459,9 @@ onMounted(() => {
 }
 
 .message-sender {
-  font-size: 11px;
-  font-weight: 700;
-  margin-bottom: 4px;
-  opacity: 0.8;
+  font-size: var(--type-caption-size);
+  font-weight: var(--weight-bold);
+  margin-bottom: var(--space-1);
 }
 
 .message-content {
@@ -462,14 +471,12 @@ onMounted(() => {
 }
 
 .message-time {
-  font-size: 10px;
-  margin-top: 6px;
-  opacity: 0.6;
+  font-size: var(--type-caption-size);
+  margin-top: var(--space-2);
 }
 
-.footer-reply {
-  padding: 16px 20px;
-  border-top: 1px solid var(--border-color);
+.admin .message-time {
+  color: var(--label-2);
 }
 
 .reply-input-wrapper {
@@ -485,18 +492,17 @@ onMounted(() => {
   padding: 12px;
 }
 
-.reply-actions {
+.reply-actions,
+.closed-footer {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  gap: var(--space-3);
+  flex-wrap: wrap;
 }
 
-.modal-lg {
-  width: min(96vw, 760px);
-}
-
-.modal-header > .close-btn:not(.normalized-close) {
-  display: none;
+.closed-footer {
+  width: 100%;
 }
 
 .loading-state,

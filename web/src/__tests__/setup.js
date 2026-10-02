@@ -1,6 +1,9 @@
 import { config } from '@vue/test-utils'
 import { afterEach, beforeAll, beforeEach, vi } from 'vitest'
 import { resetEdition } from '@/composables/useEdition'
+import { resetConfirms } from '@/ui/composables/useConfirm'
+import { resetToasts } from '@/ui/composables/useToast'
+import { stopAnsweringConfirms } from './helpers/feedback'
 
 // No test reaches the backend for the public configuration: the edition is
 // community unless a test calls setEdition (or mocks getPublicConfig).
@@ -47,12 +50,12 @@ const sessionStorageMock = createStorageMock()
 global.localStorage = localStorageMock
 global.sessionStorage = sessionStorageMock
 
-if (typeof window.alert !== 'function') {
-  window.alert = () => {}
-}
-
-if (typeof window.confirm !== 'function') {
-  window.confirm = () => true
+// Pages give feedback through useToast/useConfirm (UI U4): a native dialog
+// in a test is a regression, so it fails loudly.
+for (const name of ['alert', 'confirm', 'prompt']) {
+  window[name] = (message) => {
+    throw new Error(`window.${name}() was called (${String(message ?? '')}); use useToast() or useConfirm()`)
+  }
 }
 
 let i18nModule = null
@@ -72,6 +75,11 @@ beforeEach(async () => {
 })
 
 afterEach(() => {
+  // Toasts and confirmations live in module-level queues (useToast,
+  // useConfirm): start every test with both empty.
+  stopAnsweringConfirms()
+  resetConfirms()
+  resetToasts()
   vi.unstubAllGlobals()
   vi.useRealTimers()
 })

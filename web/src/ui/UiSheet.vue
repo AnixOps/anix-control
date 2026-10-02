@@ -29,7 +29,7 @@
               <UiIcon :icon="X" :size="20" />
             </DialogClose>
           </header>
-          <div class="ui-sheet__body" :class="{ 'is-grouped': grouped }">
+          <div :ref="scrollable.setElement" class="ui-sheet__body" :class="{ 'is-grouped': grouped }" :tabindex="scrollable.tabindex.value">
             <slot :close="close" />
           </div>
           <footer v-if="$slots.footer" class="ui-sheet__footer">
@@ -53,6 +53,7 @@ import { useI18n } from 'vue-i18n'
 import { DialogClose, DialogContent, DialogDescription, DialogOverlay, DialogPortal, DialogRoot, DialogTitle, DialogTrigger } from 'reka-ui'
 import { X } from '@lucide/vue'
 import UiIcon from './UiIcon.vue'
+import { useScrollableFocus } from './internal/useScrollableFocus'
 
 defineOptions({ inheritAttrs: false })
 
@@ -71,6 +72,8 @@ const attrs = useAttrs()
 const { t } = useI18n()
 
 const contentRef = ref(null)
+// Read-only content that scrolls stays reachable from the keyboard.
+const scrollable = useScrollableFocus()
 
 // Text entry only: never land on a switch or a button, where a stray Space
 // would change something.
@@ -220,6 +223,11 @@ defineExpose({ close })
 .ui-sheet__close:focus-visible {
   outline: var(--focus-ring);
   outline-offset: var(--focus-ring-offset);
+}
+
+.ui-sheet__body:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: calc(-1 * var(--focus-ring-offset));
 }
 
 .ui-sheet__body {

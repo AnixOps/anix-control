@@ -86,9 +86,8 @@
       </div>
     </section>
 
-    <div v-if="showEditModal" class="modal-overlay" @click.self="showEditModal = false">
-      <div class="modal">
-        <h3>{{ t('adminUsers.editModal.title') }}</h3>
+    <UiDialog v-model:open="showEditModal" :title="t('adminUsers.editModal.title')">
+      <div class="dialog-form">
         <label>{{ t('adminUsers.editModal.fields.email') }}<input v-model="editingUser.email" type="email" /></label>
         <label v-if="isCommercial" data-test="user-balance-field">{{ t('adminUsers.editModal.fields.balance') }}<input v-model.number="editingUser.balance" type="number" /></label>
         <label>{{ t('adminUsers.editModal.fields.transfer') }}<input v-model.number="editingUser.transfer_enable" type="number" /></label>
@@ -103,13 +102,16 @@
         <label>{{ t('adminUsers.editModal.fields.expiredAt') }}<input v-model.number="editingUser.expired_at" type="number" /></label>
         <label>{{ t('adminUsers.editModal.fields.flowResetTime') }}<input v-model.number="editingUser.flowResetTime" type="number" min="0" max="31" /></label>
         <label>{{ t('adminUsers.editModal.fields.remark') }}<textarea v-model="editingUser.remark_content" rows="3"></textarea></label>
-        <div class="row"><button class="btn" @click="showEditModal = false">{{ t('common.actions.cancel') }}</button><button class="btn btn-primary" data-test="user-save-button" @click="saveUser">{{ t('common.actions.save') }}</button></div>
+        <p v-if="editError" class="error" role="alert" data-test="user-save-error">{{ editError }}</p>
       </div>
-    </div>
+      <template #footer="{ close }">
+        <UiButton :disabled="editSaving" @click="close">{{ t('common.actions.cancel') }}</UiButton>
+        <UiButton variant="primary" data-test="user-save-button" :loading="editSaving" @click="saveUser">{{ t('common.actions.save') }}</UiButton>
+      </template>
+    </UiDialog>
 
-    <div v-if="showCreateModal" class="modal-overlay" @click.self="showCreateModal = false">
-      <div class="modal">
-        <h3>{{ t('adminUsers.createModal.title') }}</h3>
+    <UiDialog v-model:open="showCreateModal" :title="t('adminUsers.createModal.title')">
+      <div class="dialog-form">
         <label>{{ t('adminUsers.createModal.fields.email') }} *<input v-model="newUser.email" type="email" :placeholder="t('adminUsers.createModal.placeholders.email')" /></label>
         <label>{{ t('adminUsers.createModal.fields.password') }} *<input v-model="newUser.password" type="password" :placeholder="t('adminUsers.createModal.placeholders.password')" /></label>
         <label>{{ t('adminUsers.createModal.fields.userType') }}
@@ -128,18 +130,20 @@
         <label>{{ t('adminUsers.createModal.fields.speedLimit') }}<input v-model.number="newUser.speed_limit" data-test="new-user-speed-limit-input" type="number" min="0" :placeholder="t('adminUsers.createModal.placeholders.speedLimit')" /></label>
         <label>{{ t('adminUsers.createModal.fields.deviceLimit') }}<input v-model.number="newUser.device_limit" data-test="new-user-device-limit-input" type="number" min="0" :placeholder="t('adminUsers.createModal.placeholders.deviceLimit')" /></label>
         <label>{{ t('adminUsers.createModal.fields.flowResetTime') }}<input v-model.number="newUser.flowResetTime" type="number" min="0" max="31" /></label>
-        <p v-if="createError" class="error">{{ createError }}</p>
-        <div class="row"><button class="btn" @click="showCreateModal = false">{{ t('common.actions.cancel') }}</button><button class="btn btn-primary" @click="handleCreateUser" :disabled="createLoading">{{ createLoading ? t('adminUsers.createModal.creating') : t('common.actions.create') }}</button></div>
+        <p v-if="createError" class="error" role="alert">{{ createError }}</p>
       </div>
-    </div>
+      <template #footer="{ close }">
+        <UiButton :disabled="createLoading" @click="close">{{ t('common.actions.cancel') }}</UiButton>
+        <UiButton variant="primary" data-test="user-create-button" :loading="createLoading" @click="handleCreateUser">{{ t('common.actions.create') }}</UiButton>
+      </template>
+    </UiDialog>
 
-    <div v-if="showTunnelModal" class="modal-overlay" @click.self="closeTunnelModal">
-      <div class="modal modal-wide">
-        <h3>{{ t('adminUsers.tunnelModal.title', { email: tunnelUser?.email || '-' }) }}</h3>
+    <UiDialog :open="showTunnelModal" size="lg" :title="t('adminUsers.tunnelModal.title', { email: tunnelUser?.email || '-' })" @update:open="value => { if (!value) closeTunnelModal() }">
+      <section class="dialog-section">
         <h4>{{ t('adminUsers.tunnelModal.sections.form') }}</h4>
-        <div class="grid">
+        <div class="grid dialog-form">
           <label>{{ t('adminUsers.tunnelModal.fields.tunnel') }}{{ editingTunnelId ? t('adminUsers.tunnelModal.fields.tunnelReadonlyHint') : '' }}
-            <select v-model="tunnelForm.tunnelId" :disabled="Boolean(editingTunnelId)" @change="handleTunnelChange">
+            <select v-model="tunnelForm.tunnelId" :disabled="Boolean(editingTunnelId)" :aria-invalid="tunnelFormError ? 'true' : undefined" :aria-describedby="tunnelFormError ? 'user-tunnel-form-error' : undefined" @change="handleTunnelChange">
               <option value="">{{ availableTunnelOptions.length === 0 && !editingTunnelId ? t('adminUsers.tunnelModal.options.noAssignableTunnel') : t('adminUsers.tunnelModal.options.selectTunnel') }}</option>
               <option v-for="item in availableTunnelOptions" :key="item.id" :value="item.id">{{ item.name }} (ID: {{ item.id }})</option>
             </select>
@@ -159,112 +163,128 @@
               <option v-for="item in availableSpeedLimitOptions" :key="item.id" :value="item.id">{{ formatSpeedLimitOptionLabel(item) }}</option>
             </select>
           </label>
-          <div class="row">
-            <button v-if="editingTunnelId" class="btn" @click="resetTunnelForm">{{ t('adminUsers.tunnelModal.actions.cancelEdit') }}</button>
-            <button class="btn btn-primary" :disabled="tunnelLoading" @click="submitTunnelForm">{{ tunnelLoading ? t('adminUsers.tunnelModal.actions.submitting') : (editingTunnelId ? t('adminUsers.tunnelModal.actions.updateGrant') : t('adminUsers.tunnelModal.actions.addGrant')) }}</button>
+          <p v-if="tunnelFormError" id="user-tunnel-form-error" class="error grid-full" role="alert">{{ tunnelFormError }}</p>
+          <div class="row grid-full">
+            <UiButton v-if="editingTunnelId" @click="resetTunnelForm">{{ t('adminUsers.tunnelModal.actions.cancelEdit') }}</UiButton>
+            <UiButton variant="primary" :loading="tunnelLoading" data-test="user-tunnel-submit" @click="submitTunnelForm">{{ editingTunnelId ? t('adminUsers.tunnelModal.actions.updateGrant') : t('adminUsers.tunnelModal.actions.addGrant') }}</UiButton>
           </div>
         </div>
+      </section>
 
+      <section class="dialog-section">
         <h4>{{ t('adminUsers.tunnelModal.sections.list') }}</h4>
-        <table class="data-table">
-          <thead>
-            <tr><th>{{ t('adminUsers.tunnelModal.table.id') }}</th><th>{{ t('adminUsers.tunnelModal.table.tunnel') }}</th><th>{{ t('adminUsers.tunnelModal.table.status') }}</th><th>{{ t('adminUsers.tunnelModal.table.flow') }}</th><th>{{ t('adminUsers.tunnelModal.table.num') }}</th><th>{{ t('adminUsers.tunnelModal.table.expireAt') }}</th><th>{{ t('adminUsers.tunnelModal.table.reset') }}</th><th>{{ t('adminUsers.tunnelModal.table.usedFlow') }}</th><th>{{ t('adminUsers.tunnelModal.table.rateLimit') }}</th><th>{{ t('adminUsers.table.actions') }}</th></tr>
-          </thead>
-          <tbody>
-            <tr v-if="tunnelListLoading"><td colspan="10" class="empty-row">{{ t('common.states.loading') }}</td></tr>
-            <tr v-for="item in userTunnels" :key="item.id">
-              <td>{{ item.id }}</td><td>{{ item.tunnelName || item.tunnelId }}</td>
-              <td><span :class="['status-badge', item.status === 1 ? 'status-active' : 'status-banned']">{{ item.status === 1 ? t('runtime.shared.enabled') : t('runtime.shared.disabled') }}</span></td>
-              <td>{{ item.flow ?? 0 }}</td><td>{{ item.num ?? 0 }}</td><td>{{ formatTunnelExpire(item.expTime) }}</td><td>{{ formatFlowResetDay(item.flowResetTime) }}</td><td>{{ formatBytes(calculateTunnelUsedFlow(item)) }}</td><td>{{ formatTunnelRateLimit(item) }}</td>
-              <td class="actions"><button class="btn btn-sm" @click="editTunnelGrant(item)">{{ t('common.actions.edit') }}</button><button class="btn btn-sm" @click="openResetTunnelDialog(item)">{{ t('adminUsers.actions.resetTraffic') }}</button><button class="btn btn-sm" @click="removeTunnelGrant(item)">{{ t('common.actions.delete') }}</button></td>
-            </tr>
-            <tr v-if="!tunnelListLoading && userTunnels.length === 0"><td colspan="10" class="empty-row">{{ t('adminUsers.tunnelModal.empty') }}</td></tr>
-          </tbody>
-        </table>
-        <div class="row"><button class="btn" @click="closeTunnelModal">{{ t('common.actions.close') }}</button></div>
-      </div>
-    </div>
+        <div class="table-wrap">
+          <table class="data-table">
+            <thead>
+              <tr><th>{{ t('adminUsers.tunnelModal.table.id') }}</th><th>{{ t('adminUsers.tunnelModal.table.tunnel') }}</th><th>{{ t('adminUsers.tunnelModal.table.status') }}</th><th>{{ t('adminUsers.tunnelModal.table.flow') }}</th><th>{{ t('adminUsers.tunnelModal.table.num') }}</th><th>{{ t('adminUsers.tunnelModal.table.expireAt') }}</th><th>{{ t('adminUsers.tunnelModal.table.reset') }}</th><th>{{ t('adminUsers.tunnelModal.table.usedFlow') }}</th><th>{{ t('adminUsers.tunnelModal.table.rateLimit') }}</th><th>{{ t('adminUsers.table.actions') }}</th></tr>
+            </thead>
+            <tbody>
+              <tr v-if="tunnelListLoading"><td colspan="10" class="empty-row">{{ t('common.states.loading') }}</td></tr>
+              <tr v-for="item in userTunnels" :key="item.id">
+                <td>{{ item.id }}</td><td>{{ item.tunnelName || item.tunnelId }}</td>
+                <td><span :class="['status-badge', item.status === 1 ? 'status-active' : 'status-banned']">{{ item.status === 1 ? t('runtime.shared.enabled') : t('runtime.shared.disabled') }}</span></td>
+                <td>{{ item.flow ?? 0 }}</td><td>{{ item.num ?? 0 }}</td><td>{{ formatTunnelExpire(item.expTime) }}</td><td>{{ formatFlowResetDay(item.flowResetTime) }}</td><td>{{ formatBytes(calculateTunnelUsedFlow(item)) }}</td><td>{{ formatTunnelRateLimit(item) }}</td>
+                <td class="actions"><button class="btn btn-sm" @click="editTunnelGrant(item)">{{ t('common.actions.edit') }}</button><button class="btn btn-sm" @click="openResetTunnelDialog(item)">{{ t('adminUsers.actions.resetTraffic') }}</button><button class="btn btn-sm" @click="removeTunnelGrant(item)">{{ t('common.actions.delete') }}</button></td>
+              </tr>
+              <tr v-if="!tunnelListLoading && userTunnels.length === 0"><td colspan="10" class="empty-row">{{ t('adminUsers.tunnelModal.empty') }}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <template #footer="{ close }">
+        <UiButton @click="close">{{ t('common.actions.close') }}</UiButton>
+      </template>
+    </UiDialog>
 
-    <div v-if="showResetFlowModal" class="modal-overlay" @click.self="closeResetFlowModal">
-      <div class="modal">
-        <h3>{{ resetFlowTitle }}</h3>
-        <p>{{ resetFlowMessage }}</p>
-        <div><strong>{{ t('adminUsers.resetFlow.usedFlow') }}</strong> {{ resetFlowUsedFlow }}</div>
-        <div v-if="resetFlowQuota"><strong>{{ t('adminUsers.resetFlow.quota') }}</strong> {{ resetFlowQuota }}</div>
-        <div class="row">
-          <button class="btn" :disabled="resetFlowLoading" @click="closeResetFlowModal">{{ t('common.actions.cancel') }}</button>
-          <button class="btn btn-primary" :disabled="resetFlowLoading" @click="confirmResetFlow">{{ resetFlowLoading ? t('adminUsers.resetFlow.resetting') : t('adminUsers.resetFlow.confirmAction') }}</button>
-        </div>
-      </div>
-    </div>
+    <UiConfirmDialog
+      :open="showResetFlowModal"
+      tone="danger"
+      :title="resetFlowTitle"
+      :message="resetFlowMessage"
+      :confirm-label="t('adminUsers.resetFlow.confirmAction')"
+      :loading="resetFlowLoading"
+      :error="resetFlowError"
+      @confirm="confirmResetFlow"
+      @cancel="closeResetFlowModal()"
+    >
+      <dl class="reset-flow-facts">
+        <div><dt>{{ t('adminUsers.resetFlow.usedFlow') }}</dt><dd>{{ resetFlowUsedFlow }}</dd></div>
+        <div v-if="resetFlowQuota"><dt>{{ t('adminUsers.resetFlow.quota') }}</dt><dd>{{ resetFlowQuota }}</dd></div>
+      </dl>
+    </UiConfirmDialog>
 
-    <div v-if="showTrafficModal" class="modal-overlay" @click.self="closeTrafficModal">
-      <div class="modal modal-wide traffic-modal">
-        <div class="traffic-modal-header">
-          <div>
-            <h3>{{ t('adminUsers.trafficModal.title', { email: trafficUser?.email || '-' }) }}</h3>
-            <p>{{ t('adminUsers.trafficModal.subtitle') }}</p>
-          </div>
-          <button class="btn" :disabled="trafficLoading" @click="loadTrafficDetail">{{ trafficLoading ? t('adminUsers.trafficModal.loading') : t('adminUsers.trafficModal.refresh') }}</button>
-        </div>
-        <p v-if="trafficError" class="error">{{ trafficError }}</p>
-        <div class="traffic-summary-grid">
-          <article class="traffic-summary-card">
-            <span>{{ t('adminUsers.trafficModal.summary.total30d') }}</span>
-            <strong>{{ formatBytes(trafficTotal30d) }}</strong>
-          </article>
-          <article class="traffic-summary-card">
-            <span>{{ t('adminUsers.trafficModal.summary.dailyPeak') }}</span>
-            <strong>{{ formatBytes(dailyPeak?.traffic || 0) }}</strong>
-            <small>{{ dailyPeak?.date || '-' }}</small>
-          </article>
-          <article class="traffic-summary-card">
-            <span>{{ t('adminUsers.trafficModal.summary.hourlyPeak') }}</span>
-            <strong>{{ formatBytes(hourlyPeak?.traffic || 0) }}</strong>
-            <small>{{ hourlyPeak ? formatHourTs(hourlyPeak.hour_ts) : '-' }}</small>
-          </article>
-        </div>
-        <div class="traffic-tables">
-          <section>
-            <h4>{{ t('adminUsers.trafficModal.dailyTitle') }}</h4>
-            <div class="traffic-table-wrap">
-              <table class="data-table compact-table">
-                <thead>
-                  <tr><th>{{ t('adminUsers.trafficModal.table.date') }}</th><th>{{ t('adminUsers.trafficModal.table.traffic') }}</th></tr>
-                </thead>
-                <tbody>
-                  <tr v-if="trafficLoading"><td colspan="2" class="empty-row">{{ t('common.states.loading') }}</td></tr>
-                  <tr v-for="item in dailyTrafficRows" :key="item.date">
-                    <td>{{ item.date }}</td>
-                    <td>{{ formatBytes(item.traffic) }}</td>
-                  </tr>
-                  <tr v-if="!trafficLoading && dailyTrafficRows.length === 0"><td colspan="2" class="empty-row">{{ t('adminUsers.trafficModal.empty') }}</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </section>
-          <section>
-            <h4>{{ t('adminUsers.trafficModal.hourlyTitle') }}</h4>
-            <div class="traffic-table-wrap">
-              <table class="data-table compact-table">
-                <thead>
-                  <tr><th>{{ t('adminUsers.trafficModal.table.hour') }}</th><th>{{ t('adminUsers.trafficModal.table.traffic') }}</th></tr>
-                </thead>
-                <tbody>
-                  <tr v-if="trafficLoading"><td colspan="2" class="empty-row">{{ t('common.states.loading') }}</td></tr>
-                  <tr v-for="item in hourlyTrafficRows" :key="item.hour_ts">
-                    <td>{{ formatHourTs(item.hour_ts) }}</td>
-                    <td>{{ formatBytes(item.traffic) }}</td>
-                  </tr>
-                  <tr v-if="!trafficLoading && hourlyTrafficRows.length === 0"><td colspan="2" class="empty-row">{{ t('adminUsers.trafficModal.empty') }}</td></tr>
-                </tbody>
-              </table>
-            </div>
-          </section>
-        </div>
-        <div class="row"><button class="btn" @click="closeTrafficModal">{{ t('common.actions.close') }}</button></div>
+    <UiSheet
+      :open="showTrafficModal"
+      size="lg"
+      :title="t('adminUsers.trafficModal.title', { email: trafficUser?.email || '-' })"
+      :description="t('adminUsers.trafficModal.subtitle')"
+      :dismissible="!trafficLoading"
+      @update:open="value => { if (!value) closeTrafficModal() }"
+    >
+      <template #header-actions>
+        <UiButton size="sm" :loading="trafficLoading" @click="loadTrafficDetail">{{ t('adminUsers.trafficModal.refresh') }}</UiButton>
+      </template>
+      <p v-if="trafficError" class="error" role="alert">{{ trafficError }}</p>
+      <div class="traffic-summary-grid">
+        <article class="traffic-summary-card">
+          <span>{{ t('adminUsers.trafficModal.summary.total30d') }}</span>
+          <strong>{{ formatBytes(trafficTotal30d) }}</strong>
+        </article>
+        <article class="traffic-summary-card">
+          <span>{{ t('adminUsers.trafficModal.summary.dailyPeak') }}</span>
+          <strong>{{ formatBytes(dailyPeak?.traffic || 0) }}</strong>
+          <small>{{ dailyPeak?.date || '-' }}</small>
+        </article>
+        <article class="traffic-summary-card">
+          <span>{{ t('adminUsers.trafficModal.summary.hourlyPeak') }}</span>
+          <strong>{{ formatBytes(hourlyPeak?.traffic || 0) }}</strong>
+          <small>{{ hourlyPeak ? formatHourTs(hourlyPeak.hour_ts) : '-' }}</small>
+        </article>
       </div>
-    </div>
+      <section class="traffic-section">
+        <h4 id="user-traffic-dailyTitle">{{ t('adminUsers.trafficModal.dailyTitle') }}</h4>
+        <div class="traffic-table-wrap" tabindex="0" role="region" aria-labelledby="user-traffic-dailyTitle">
+          <table class="data-table compact-table">
+            <thead>
+              <tr><th>{{ t('adminUsers.trafficModal.table.date') }}</th><th>{{ t('adminUsers.trafficModal.table.traffic') }}</th></tr>
+            </thead>
+            <tbody>
+              <tr v-if="trafficLoading"><td colspan="2" class="empty-row">{{ t('common.states.loading') }}</td></tr>
+              <tr v-for="item in dailyTrafficRows" :key="item.date">
+                <td>{{ item.date }}</td>
+                <td>{{ formatBytes(item.traffic) }}</td>
+              </tr>
+              <tr v-if="!trafficLoading && dailyTrafficRows.length === 0"><td colspan="2" class="empty-row">{{ t('adminUsers.trafficModal.empty') }}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+      <section class="traffic-section">
+        <h4 id="user-traffic-hourlyTitle">{{ t('adminUsers.trafficModal.hourlyTitle') }}</h4>
+        <div class="traffic-table-wrap" tabindex="0" role="region" aria-labelledby="user-traffic-hourlyTitle">
+          <table class="data-table compact-table">
+            <thead>
+              <tr><th>{{ t('adminUsers.trafficModal.table.hour') }}</th><th>{{ t('adminUsers.trafficModal.table.traffic') }}</th></tr>
+            </thead>
+            <tbody>
+              <tr v-if="trafficLoading"><td colspan="2" class="empty-row">{{ t('common.states.loading') }}</td></tr>
+              <tr v-for="item in hourlyTrafficRows" :key="item.hour_ts">
+                <td>{{ formatHourTs(item.hour_ts) }}</td>
+                <td>{{ formatBytes(item.traffic) }}</td>
+              </tr>
+              <tr v-if="!trafficLoading && hourlyTrafficRows.length === 0"><td colspan="2" class="empty-row">{{ t('adminUsers.trafficModal.empty') }}</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </section>
+    </UiSheet>
+
+    <UiDialog v-model:open="showCopyManual" size="sm" :title="t('adminUsers.copyDialog.title')" :description="t('adminUsers.copyDialog.description')">
+      <UiCopyField :value="copyManualUrl" :label="t('adminUsers.copyDialog.label')" stacked />
+      <template #footer="{ close }">
+        <UiButton @click="close">{{ t('common.actions.close') }}</UiButton>
+      </template>
+    </UiDialog>
   </div>
 </template>
 
@@ -281,6 +301,7 @@ import {
   unbanUser, updateAdminUserTunnel, updateUser
 } from '@/api/admin'
 import { getSubscriptionGroups } from '@/api/admin'
+import { UiButton, UiConfirmDialog, UiCopyField, UiDialog, UiSheet, copyText, useConfirm, useToast } from '@/ui'
 
 const { t, formatDate: i18nFormatDate, formatDateTime: i18nFormatDateTime } = useAppI18n()
 // The balance is commercial: the community edition hides the field and
@@ -305,6 +326,8 @@ const routeIntent = useRouteIntent(['email', 'create'], intent => {
 const filters = ref({ email: routeIntent.email || '', status: '' })
 const showEditModal = ref(false)
 const editingUser = ref({})
+const editSaving = ref(false)
+const editError = ref('')
 const showCreateModal = ref(routeIntent.create === '1')
 const createLoading = ref(false)
 const createError = ref('')
@@ -320,6 +343,7 @@ const tunnelListLoading = ref(false)
 const tunnelLoading = ref(false)
 const speedLimitLoading = ref(false)
 const editingTunnelId = ref(null)
+const tunnelFormError = ref('')
 const showResetFlowModal = ref(false)
 const resetFlowLoading = ref(false)
 const resetFlowTarget = ref(null)
@@ -327,11 +351,14 @@ const resetFlowTitle = ref('')
 const resetFlowMessage = ref('')
 const resetFlowUsedFlow = ref('')
 const resetFlowQuota = ref('')
+const resetFlowError = ref('')
 const showTrafficModal = ref(false)
 const trafficUser = ref(null)
 const trafficLoading = ref(false)
 const trafficError = ref('')
 const hourlyTrafficRows = ref([])
+const showCopyManual = ref(false)
+const copyManualUrl = ref('')
 const newTunnelForm = () => ({ tunnelId: '', flow: 0, num: 0, expTime: '', flowResetTime: 0, speedId: null, status: 1 })
 const tunnelForm = ref(newTunnelForm())
 
@@ -357,8 +384,8 @@ const dailyTrafficRows = computed(() => {
 })
 const dailyPeak = computed(() => dailyTrafficRows.value.reduce((peak, item) => (item.traffic > (peak?.traffic || 0) ? item : peak), null))
 const hourlyPeak = computed(() => hourlyTrafficRows.value.reduce((peak, item) => (Number(item?.traffic || 0) > Number(peak?.traffic || 0) ? item : peak), null))
-const notify = (message) => window.alert(message)
-const confirmAction = (message) => window.confirm(message)
+const toast = useToast()
+const confirm = useConfirm()
 
 const assertCompatSuccess = (res, fallback = t('adminUsers.messages.actionFailed')) => {
   if (res && typeof res.code === 'number' && res.code !== 0) throw new Error(res.msg || fallback)
@@ -408,7 +435,7 @@ const handleCreateUser = async () => {
     newUser.value = newBlankUser()
     fetchUsers()
     fetchStats()
-    notify(t('adminUsers.messages.userCreated'))
+    toast.success(t('adminUsers.messages.userCreated'))
   } catch (err) {
     createError.value = readApiError(err, t('adminUsers.messages.createFailed'))
   } finally {
@@ -451,9 +478,13 @@ const editUser = async (user) => {
     speed_limit: Number(merged?.speed_limit || 0),
     device_limit: Number(merged?.device_limit || 0)
   }
+  editError.value = ''
   showEditModal.value = true
 }
 const saveUser = async () => {
+  if (editSaving.value) return
+  editSaving.value = true
+  editError.value = ''
   try {
     assertCompatSuccess(await updateUser(editingUser.value.id, {
       email: editingUser.value.email, balance: editingUser.value.balance, transfer_enable: editingUser.value.transfer_enable,
@@ -462,27 +493,44 @@ const saveUser = async () => {
       group_id: editingUser.value.group_id || null
     }), t('adminUsers.messages.actionFailed'))
     showEditModal.value = false
+    toast.success(t('adminUsers.messages.userSaved', { email: editingUser.value.email || '' }))
     fetchUsers()
   } catch (err) {
-    notify(t('adminUsers.messages.saveFailed', { message: readApiError(err) }))
+    editError.value = t('adminUsers.messages.saveFailed', { message: readApiError(err) })
+  } finally {
+    editSaving.value = false
   }
 }
 
+// Ban and unban undo each other, so neither asks first: the toast offers
+// 撤销 for 5 s instead (redesign plan §9).
+const setBanned = async (user, banned) => {
+  try {
+    assertCompatSuccess(await (banned ? banUser(user.id) : unbanUser(user.id)))
+    fetchUsers()
+    fetchStats()
+    return true
+  } catch (err) {
+    toast.error(readApiError(err))
+    return false
+  }
+}
 const handleBan = async (user) => {
-  if (!confirmAction(t('adminUsers.messages.confirmBan', { email: user.email }))) return
-  try { assertCompatSuccess(await banUser(user.id)); fetchUsers(); fetchStats() } catch (err) { notify(readApiError(err)) }
+  if (!(await setBanned(user, true))) return
+  toast.success(t('adminUsers.messages.userBanned', { email: user.email }), { undo: () => setBanned(user, false) })
 }
 const handleUnban = async (user) => {
-  if (!confirmAction(t('adminUsers.messages.confirmUnban', { email: user.email }))) return
-  try { assertCompatSuccess(await unbanUser(user.id)); fetchUsers(); fetchStats() } catch (err) { notify(readApiError(err)) }
+  if (!(await setBanned(user, false))) return
+  toast.success(t('adminUsers.messages.userUnbanned', { email: user.email }), { undo: () => setBanned(user, true) })
 }
 
 const openResetUserDialog = (user) => {
   resetFlowTarget.value = { type: 'user', id: user.id }
-  resetFlowTitle.value = t('adminUsers.resetFlow.userTitle')
+  resetFlowTitle.value = t('adminUsers.resetFlow.userTitle', { email: user.email })
   resetFlowMessage.value = t('adminUsers.resetFlow.userMessage', { email: user.email })
   resetFlowUsedFlow.value = formatBytes((user.u || 0) + (user.d || 0))
   resetFlowQuota.value = user.transfer_enable ? formatBytes(user.transfer_enable) : ''
+  resetFlowError.value = ''
   showResetFlowModal.value = true
 }
 
@@ -496,32 +544,8 @@ const preferredSubscribeOrigin = computed(() => {
 
 const buildSubscribeUrl = (user) => `${preferredSubscribeOrigin.value}${subscriptionSettings.value.subscribe_path || '/s'}/${user.token}`
 
-// 复制到剪贴板。navigator.clipboard 只在 HTTPS/localhost 可用, HTTP+IP 直连时
-// 用隐藏 textarea + execCommand('copy') 兜底, 让明文 HTTP 也能复制。
-const copyToClipboard = async (text) => {
-  if (navigator.clipboard && window.isSecureContext) {
-    try {
-      await navigator.clipboard.writeText(text)
-      return true
-    } catch {
-      // 落到下面的兜底
-    }
-  }
-  try {
-    const ta = document.createElement('textarea')
-    ta.value = text
-    ta.style.position = 'fixed'
-    ta.style.top = '-9999px'
-    document.body.appendChild(ta)
-    ta.focus()
-    ta.select()
-    const ok = document.execCommand('copy')
-    document.body.removeChild(ta)
-    return ok
-  } catch {
-    return false
-  }
-}
+// 复制到剪贴板：copyText 在 HTTP + IP 直连时用 execCommand('copy') 兜底。
+const copyToClipboard = text => copyText(text)
 
 const readSubscriptionSettings = (res) => {
   const payload = getResData(res) || {}
@@ -537,19 +561,20 @@ const copySubscribe = async (user) => {
   try {
     token = (await fetchUserDetail(user.id)).token || ''
   } catch (err) {
-    notify(readApiError(err, t('adminUsers.messages.fetchUserFailed')))
+    toast.error(readApiError(err, t('adminUsers.messages.fetchUserFailed')))
     return
   }
   if (!token) {
-    notify(t('adminUsers.messages.noToken'))
+    toast.error(t('adminUsers.messages.noToken'))
     return
   }
   const url = buildSubscribeUrl({ token })
   if (await copyToClipboard(url)) {
-    notify(t('adminUsers.messages.subscribeCopied'))
+    toast.success(t('adminUsers.messages.subscribeCopied'))
   } else {
-    // 兜底也失败: 把链接直接弹出来让用户手动复制
-    window.prompt(t('adminUsers.messages.copyManual'), url)
+    // 兜底也失败：在对话框里显示链接，让管理员手动复制。
+    copyManualUrl.value = url
+    showCopyManual.value = true
   }
 }
 
@@ -563,14 +588,18 @@ const loadSubscriptionSettings = async () => {
 }
 
 const resetSubscribe = async (user) => {
-  if (!confirm(t('adminUsers.messages.resetSubscribeConfirm', { email: user.email }))) return
-  try {
-    assertCompatSuccess(await resetUserSubscribe(user.id), t('adminUsers.messages.resetSubscribeFailed'))
-    notify(t('adminUsers.messages.resetSubscribeSuccess'))
-    await fetchUsers()
-  } catch (err) {
-    notify(readApiError(err, t('adminUsers.messages.resetSubscribeFailed')))
-  }
+  const confirmed = await confirm({
+    title: t('adminUsers.confirm.resetSubscribeTitle', { email: user.email }),
+    message: t('adminUsers.confirm.resetSubscribeMessage'),
+    confirmLabel: t('adminUsers.confirm.resetSubscribeAction'),
+    tone: 'danger',
+    onConfirm: async () => {
+      assertCompatSuccess(await resetUserSubscribe(user.id), t('adminUsers.messages.resetSubscribeFailed'))
+    }
+  })
+  if (!confirmed) return
+  toast.success(t('adminUsers.messages.resetSubscribeSuccess'))
+  await fetchUsers()
 }
 
 const normalizeSpeedLimitList = items => Array.isArray(items) ? items.map(item => {
@@ -581,7 +610,7 @@ const normalizeSpeedLimitList = items => Array.isArray(items) ? items.map(item =
 
 const loadTunnelOptions = async () => {
   try { tunnelOptions.value = getResData(await getForwardTunnels(), t('adminUsers.messages.fetchTunnelListFailed')) || [] } catch (err) {
-    notify(err.response?.data?.msg || err.response?.data?.message || err.message || t('adminUsers.messages.fetchTunnelListFailed')); tunnelOptions.value = []
+    toast.error(err.response?.data?.msg || err.response?.data?.message || err.message || t('adminUsers.messages.fetchTunnelListFailed')); tunnelOptions.value = []
   }
 }
 const loadSpeedLimitOptions = async () => {
@@ -591,7 +620,7 @@ const loadSpeedLimitOptions = async () => {
     const list = Array.isArray(payload) ? payload : (payload?.list || [])
     speedLimitOptions.value = normalizeSpeedLimitList(list)
   } catch (err) {
-    notify(err.response?.data?.msg || err.response?.data?.message || err.message || t('adminUsers.messages.fetchSpeedLimitFailed')); speedLimitOptions.value = []
+    toast.error(err.response?.data?.msg || err.response?.data?.message || err.message || t('adminUsers.messages.fetchSpeedLimitFailed')); speedLimitOptions.value = []
   } finally {
     speedLimitLoading.value = false
   }
@@ -599,7 +628,7 @@ const loadSpeedLimitOptions = async () => {
 const loadUserTunnels = async (userId) => {
   tunnelListLoading.value = true
   try { userTunnels.value = getResData(await getAdminUserTunnelList({ userId }), t('adminUsers.messages.fetchTunnelGrantFailed')) || [] } catch (err) {
-    notify(err.response?.data?.msg || err.response?.data?.message || err.message || t('adminUsers.messages.fetchTunnelGrantFailed'))
+    toast.error(err.response?.data?.msg || err.response?.data?.message || err.message || t('adminUsers.messages.fetchTunnelGrantFailed'))
   } finally {
     tunnelListLoading.value = false
   }
@@ -639,12 +668,13 @@ const closeTunnelModal = () => {
   userTunnels.value = []
   resetTunnelForm()
 }
-const resetTunnelForm = () => { editingTunnelId.value = null; tunnelForm.value = newTunnelForm() }
+const resetTunnelForm = () => { editingTunnelId.value = null; tunnelForm.value = newTunnelForm(); tunnelFormError.value = '' }
 
 const submitTunnelForm = async () => {
   if (!tunnelUser.value) return
-  if (!tunnelForm.value.tunnelId) return notify(t('adminUsers.messages.selectTunnelFirst'))
-  if (!editingTunnelId.value && assignedTunnelIds.value.has(Number(tunnelForm.value.tunnelId))) return notify(t('adminUsers.messages.tunnelAlreadyAssigned'))
+  tunnelFormError.value = ''
+  if (!tunnelForm.value.tunnelId) return (tunnelFormError.value = t('adminUsers.messages.selectTunnelFirst'))
+  if (!editingTunnelId.value && assignedTunnelIds.value.has(Number(tunnelForm.value.tunnelId))) return (tunnelFormError.value = t('adminUsers.messages.tunnelAlreadyAssigned'))
   tunnelLoading.value = true
   try {
     const payload = {
@@ -654,42 +684,53 @@ const submitTunnelForm = async () => {
     }
     if (editingTunnelId.value) {
       assertCompatSuccess(await updateAdminUserTunnel({ id: Number(editingTunnelId.value), ...payload }), t('adminUsers.messages.grantUpdateFailed'))
-      notify(t('adminUsers.messages.grantUpdated'))
+      toast.success(t('adminUsers.messages.grantUpdated'))
     } else {
       assertCompatSuccess(await assignAdminUserTunnel({ userId: Number(tunnelUser.value.id), ...payload }), t('adminUsers.messages.grantCreateFailed'))
-      notify(t('adminUsers.messages.grantCreated'))
+      toast.success(t('adminUsers.messages.grantCreated'))
     }
     await loadUserTunnels(tunnelUser.value.id)
     resetTunnelForm()
   } catch (err) {
-    notify(err.response?.data?.msg || err.response?.data?.message || t('adminUsers.messages.grantActionFailed'))
+    tunnelFormError.value = err.response?.data?.msg || err.response?.data?.message || t('adminUsers.messages.grantActionFailed')
   } finally {
     tunnelLoading.value = false
   }
 }
 const editTunnelGrant = (item) => {
   editingTunnelId.value = item.id
+  tunnelFormError.value = ''
   tunnelForm.value = { tunnelId: item.tunnelId || '', flow: item.flow ?? 0, num: item.num ?? 0, expTime: toDateTimeLocal(item.expTime), flowResetTime: item.flowResetTime ?? 0, speedId: normalizeSpeedId(item.speedId ?? null, item.tunnelId || ''), status: item.status ?? 1 }
 }
 const removeTunnelGrant = async (item) => {
-  if (!confirmAction(t('adminUsers.messages.confirmDeleteGrant', { id: item.id }))) return
-  try {
-    assertCompatSuccess(await removeAdminUserTunnel({ id: item.id }), t('adminUsers.messages.grantDeleteFailed'))
-    if (tunnelUser.value) await loadUserTunnels(tunnelUser.value.id)
-    if (editingTunnelId.value === item.id) resetTunnelForm()
-  } catch (err) {
-    notify(err.response?.data?.msg || err.response?.data?.message || t('adminUsers.messages.grantDeleteFailed'))
-  }
+  const confirmed = await confirm({
+    title: t('adminUsers.confirm.deleteGrantTitle', { id: item.id }),
+    message: t('adminUsers.confirm.deleteGrantMessage', { tunnel: item.tunnelName || item.tunnelId || item.id }),
+    confirmLabel: t('adminUsers.confirm.deleteGrantAction'),
+    tone: 'danger',
+    onConfirm: async () => {
+      try {
+        assertCompatSuccess(await removeAdminUserTunnel({ id: item.id }), t('adminUsers.messages.grantDeleteFailed'))
+      } catch (err) {
+        throw new Error(err.response?.data?.msg || err.response?.data?.message || err.message || t('adminUsers.messages.grantDeleteFailed'))
+      }
+    }
+  })
+  if (!confirmed) return
+  toast.success(t('adminUsers.messages.grantDeleted', { id: item.id }))
+  if (tunnelUser.value) await loadUserTunnels(tunnelUser.value.id)
+  if (editingTunnelId.value === item.id) resetTunnelForm()
 }
 const calculateTunnelUsedFlow = item => Number(item?.inFlow || 0) + Number(item?.outFlow || 0)
 
 const openResetTunnelDialog = (item) => {
   if (!item?.id) return
   resetFlowTarget.value = { type: 'tunnel', id: item.id }
-  resetFlowTitle.value = t('adminUsers.resetFlow.tunnelTitle')
+  resetFlowTitle.value = t('adminUsers.resetFlow.tunnelTitle', { id: item.id })
   resetFlowMessage.value = t('adminUsers.resetFlow.tunnelMessage', { id: item.id })
   resetFlowUsedFlow.value = formatBytes(calculateTunnelUsedFlow(item))
   resetFlowQuota.value = Number(item?.flow || 0) > 0 ? `${item.flow} GB` : ''
+  resetFlowError.value = ''
   showResetFlowModal.value = true
 }
 const closeResetFlowModal = (force = false) => {
@@ -700,6 +741,7 @@ const closeResetFlowModal = (force = false) => {
   resetFlowMessage.value = ''
   resetFlowUsedFlow.value = ''
   resetFlowQuota.value = ''
+  resetFlowError.value = ''
 }
 const openTrafficModal = async (user) => {
   trafficUser.value = user
@@ -737,19 +779,20 @@ const loadTrafficDetail = async () => {
 const confirmResetFlow = async () => {
   if (!resetFlowTarget.value?.id) return
   resetFlowLoading.value = true
+  resetFlowError.value = ''
   try {
     if (resetFlowTarget.value.type === 'user') {
       assertCompatSuccess(await resetUserTraffic(resetFlowTarget.value.id), t('adminUsers.messages.resetFailed'))
       await fetchUsers()
-      notify(t('adminUsers.messages.userFlowReset'))
+      toast.success(t('adminUsers.messages.userFlowReset'))
     } else {
       assertCompatSuccess(await resetUserTunnelTraffic(resetFlowTarget.value.id), t('adminUsers.messages.resetFailed'))
       if (tunnelUser.value) await loadUserTunnels(tunnelUser.value.id)
-      notify(t('adminUsers.messages.tunnelFlowReset'))
+      toast.success(t('adminUsers.messages.tunnelFlowReset'))
     }
     closeResetFlowModal(true)
   } catch (err) {
-    notify(err.response?.data?.msg || err.response?.data?.message || err.message || t('adminUsers.messages.resetFailed'))
+    resetFlowError.value = err.response?.data?.msg || err.response?.data?.message || err.message || t('adminUsers.messages.resetFailed')
   } finally {
     resetFlowLoading.value = false
   }
@@ -947,55 +990,42 @@ const loadSubscriptionGroups = async () => {
   flex-wrap: wrap;
 }
 
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.42);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  z-index: 1000;
-}
-
-.modal {
-  width: min(96vw, 560px);
-  max-height: 90vh;
-  overflow: auto;
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 18px;
+.dialog-form {
   display: grid;
-  gap: 12px;
-  box-shadow: var(--shadow-lg);
+  gap: var(--space-3);
 }
 
-.modal-wide {
-  width: min(96vw, 1100px);
+.dialog-section {
+  display: grid;
+  gap: var(--space-3);
 }
 
-.traffic-modal {
-  width: min(96vw, 1180px);
-}
-
-.traffic-modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
-  gap: 16px;
-  flex-wrap: wrap;
-}
-
-.traffic-modal-header h3,
-.traffic-modal-header p {
+.dialog-section h4 {
   margin: 0;
 }
 
-.traffic-modal-header p {
-  margin-top: 4px;
-  color: var(--text-secondary);
-  font-size: 13px;
+.grid-full {
+  grid-column: 1 / -1;
+}
+
+.reset-flow-facts {
+  display: grid;
+  gap: var(--space-1);
+  margin: 0;
+}
+
+.reset-flow-facts div {
+  display: flex;
+  gap: var(--space-2);
+}
+
+.reset-flow-facts dt {
+  color: var(--label-2);
+}
+
+.reset-flow-facts dd {
+  margin: 0;
+  font-weight: var(--weight-semibold);
 }
 
 .traffic-summary-grid {
@@ -1022,14 +1052,13 @@ const loadSubscriptionGroups = async () => {
   font-size: 20px;
 }
 
-.traffic-tables {
-  display: grid;
-  grid-template-columns: minmax(260px, 0.8fr) minmax(360px, 1.2fr);
-  gap: 16px;
+.traffic-section h4 {
+  margin: 0 0 var(--space-2);
 }
 
-.traffic-tables h4 {
-  margin: 0 0 8px;
+.traffic-table-wrap:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .traffic-table-wrap {
@@ -1044,7 +1073,7 @@ const loadSubscriptionGroups = async () => {
   padding: 10px;
 }
 
-.modal label {
+.dialog-form label {
   display: grid;
   gap: 6px;
   font-size: 13px;
@@ -1076,8 +1105,7 @@ const loadSubscriptionGroups = async () => {
     grid-template-columns: 1fr;
   }
 
-  .traffic-summary-grid,
-  .traffic-tables {
+  .traffic-summary-grid {
     grid-template-columns: 1fr;
   }
 }

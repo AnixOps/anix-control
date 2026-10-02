@@ -47,24 +47,20 @@
       </div>
     </div>
 
-    <div v-if="showDetail" class="modal-overlay" @click.self="showDetail = false">
-      <div class="modal modal-lg article-detail-modal">
-        <div class="modal-header">
-          <div class="header-info">
-            <span class="category-tag">{{ detailArticle.category }}</span>
-            <span class="date text-secondary">{{ formatDate(detailArticle.updated_at) }} {{ t('user.knowledge.updated') }}</span>
-          </div>
-          <h3>{{ detailArticle.title }}</h3>
-          <button class="close-btn" @click="showDetail = false">×</button>
-        </div>
-        <div class="modal-body markdown-body">
-          <pre style="white-space: pre-wrap; font-family: inherit;">{{ detailArticle.body }}</pre>
-        </div>
-        <div class="modal-footer">
-          <button class="btn-primary" @click="showDetail = false">{{ t('user.knowledge.closeAction') }}</button>
-        </div>
+    <UiDialog v-model:open="showDetail" size="lg" class="article-detail-dialog" :title="detailArticle.title || ''">
+      <template #description>
+        <span class="header-info">
+          <span class="category-tag">{{ detailArticle.category }}</span>
+          <span class="date text-secondary">{{ formatDate(detailArticle.updated_at) }} {{ t('user.knowledge.updated') }}</span>
+        </span>
+      </template>
+      <div class="markdown-body">
+        <pre class="article-body">{{ detailArticle.body }}</pre>
       </div>
-    </div>
+      <template #footer="{ close }">
+        <UiButton variant="primary" @click="close">{{ t('user.knowledge.closeAction') }}</UiButton>
+      </template>
+    </UiDialog>
   </div>
 </template>
 
@@ -72,6 +68,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { getKnowledgeList } from '@/api/user'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { UiButton, UiDialog } from '@/ui'
 
 const { t, formatDate } = useAppI18n()
 const articles = ref([])
@@ -261,20 +258,18 @@ onMounted(() => {
   color: var(--primary-color);
 }
 
-.article-detail-modal .modal-header {
-  display: block;
-}
-
 .header-info {
   display: flex;
-  gap: 12px;
+  gap: var(--space-3);
   align-items: center;
-  margin-bottom: 8px;
+  flex-wrap: wrap;
 }
 
-.article-detail-modal h3 {
-  font-size: 24px;
-  margin-top: 4px;
+.article-body {
+  margin: 0;
+  font-family: inherit;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
 }
 
 .markdown-body {

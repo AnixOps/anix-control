@@ -28,12 +28,6 @@
       </div>
     </div>
 
-
-    <div v-if="feedback.message" :class="['feedback', `feedback-${feedback.type}`]">
-      <span>{{ feedback.message }}</span>
-      <button class="feedback-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="clearFeedback">&times;</button>
-    </div>
-
     <section class="stats-grid">
       <article v-for="item in statsCards" :key="item.key" class="stat-card">
         <p class="stat-label">{{ item.label }}</p>
@@ -328,19 +322,14 @@
       </div>
     </section>
 
-    <div v-if="nodeModalOpen" class="modal-overlay" @click.self="closeNodeModal">
-      <div class="modal modal-lg">
-        <div class="modal-header">
-          <div>
-            <p class="eyebrow">{{ t('runtime.nodeXTopology.nodeModal.eyebrow') }}</p>
-            <h3>
-              {{ nodeEditMode ? t('runtime.nodeXTopology.nodeModal.titleEdit') : t('runtime.nodeXTopology.nodeModal.titleAdd') }}
-            </h3>
-          </div>
-          <button class="modal-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeNodeModal">&times;</button>
-        </div>
-        <div class="modal-body">
-          <div v-if="nodeModalLoading" class="modal-loading">{{ t('runtime.nodeXTopology.nodeModal.loading') }}</div>
+    <UiDialog
+      :open="nodeModalOpen"
+      size="lg"
+      :title="nodeEditMode ? t('runtime.nodeXTopology.nodeModal.titleEdit') : t('runtime.nodeXTopology.nodeModal.titleAdd')"
+      :dismissible="!nodeModalSaving"
+      @update:open="value => { if (!value) closeNodeModal() }"
+    >
+          <div v-if="nodeModalLoading" class="modal-loading" role="status">{{ t('runtime.nodeXTopology.nodeModal.loading') }}</div>
           <template v-else>
             <div class="form-grid">
               <label class="form-group">
@@ -434,37 +423,24 @@
               </label>
             </div>
           </template>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" :disabled="nodeModalSaving" @click="closeNodeModal">
-            {{ t('runtime.nodeXTopology.actions.cancel') }}
-          </button>
-          <button class="btn btn-primary" :disabled="nodeModalSaving || nodeModalLoading" @click="submitNodeForm">
-            {{
-              nodeModalSaving
-                ? t('runtime.nodeXTopology.nodeModal.saveLoading')
-                : nodeEditMode
-                  ? t('runtime.nodeXTopology.actions.saveChanges')
-                  : t('runtime.nodeXTopology.actions.createNode')
-            }}
-          </button>
-        </div>
-      </div>
-    </div>
+      <template #footer>
+        <UiButton :disabled="nodeModalSaving" @click="closeNodeModal">
+          {{ t('runtime.nodeXTopology.actions.cancel') }}
+        </UiButton>
+        <UiButton variant="primary" data-test="forward-node-submit" :loading="nodeModalSaving" :disabled="nodeModalLoading" @click="submitNodeForm">
+          {{ nodeEditMode ? t('runtime.nodeXTopology.actions.saveChanges') : t('runtime.nodeXTopology.actions.createNode') }}
+        </UiButton>
+      </template>
+    </UiDialog>
 
-    <div v-if="ruleModalOpen" class="modal-overlay" @click.self="closeRuleModal">
-      <div class="modal modal-xl">
-        <div class="modal-header">
-          <div>
-            <p class="eyebrow">{{ t('runtime.nodeXTopology.ruleModal.eyebrow') }}</p>
-            <h3>
-              {{ ruleEditMode ? t('runtime.nodeXTopology.ruleModal.titleEdit') : t('runtime.nodeXTopology.ruleModal.titleAdd') }}
-            </h3>
-          </div>
-          <button class="modal-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeRuleModal">&times;</button>
-        </div>
-        <div class="modal-body">
-          <div v-if="ruleModalLoading" class="modal-loading">{{ t('runtime.nodeXTopology.ruleModal.loading') }}</div>
+    <UiDialog
+      :open="ruleModalOpen"
+      size="lg"
+      :title="ruleEditMode ? t('runtime.nodeXTopology.ruleModal.titleEdit') : t('runtime.nodeXTopology.ruleModal.titleAdd')"
+      :dismissible="!ruleModalSaving"
+      @update:open="value => { if (!value) closeRuleModal() }"
+    >
+          <div v-if="ruleModalLoading" class="modal-loading" role="status">{{ t('runtime.nodeXTopology.ruleModal.loading') }}</div>
           <template v-else>
             <div class="form-grid">
               <label class="form-group">
@@ -579,34 +555,22 @@
               </label>
             </div>
           </template>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" :disabled="ruleModalSaving" @click="closeRuleModal">
-            {{ t('runtime.nodeXTopology.actions.cancel') }}
-          </button>
-          <button class="btn btn-primary" :disabled="ruleModalSaving || ruleModalLoading" @click="submitRuleForm">
-            {{
-              ruleModalSaving
-                ? t('runtime.nodeXTopology.ruleModal.saveLoading')
-                : ruleEditMode
-                  ? t('runtime.nodeXTopology.actions.saveChanges')
-                  : t('runtime.nodeXTopology.actions.createRule')
-            }}
-          </button>
-        </div>
-      </div>
-    </div>
+      <template #footer>
+        <UiButton :disabled="ruleModalSaving" @click="closeRuleModal">
+          {{ t('runtime.nodeXTopology.actions.cancel') }}
+        </UiButton>
+        <UiButton variant="primary" data-test="forward-rule-submit" :loading="ruleModalSaving" :disabled="ruleModalLoading" @click="submitRuleForm">
+          {{ ruleEditMode ? t('runtime.nodeXTopology.actions.saveChanges') : t('runtime.nodeXTopology.actions.createRule') }}
+        </UiButton>
+      </template>
+    </UiDialog>
 
-    <div v-if="connectionModalOpen" class="modal-overlay" @click.self="closeConnectionModal">
-      <div class="modal modal-md">
-        <div class="modal-header">
-          <div>
-            <p class="eyebrow">{{ t('runtime.nodeXTopology.connectionModal.eyebrow') }}</p>
-            <h3>{{ t('runtime.nodeXTopology.connectionModal.title') }}</h3>
-          </div>
-          <button class="modal-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeConnectionModal">&times;</button>
-        </div>
-        <div class="modal-body">
+    <UiDialog
+      :open="connectionModalOpen"
+      :title="t('runtime.nodeXTopology.connectionModal.title')"
+      :dismissible="!connectionLoading"
+      @update:open="value => { if (!value) closeConnectionModal() }"
+    >
           <div class="form-grid">
             <label class="form-group">
               <span>{{ t('runtime.nodeXTopology.connectionModal.fields.host') }}</span>
@@ -649,49 +613,15 @@
               {{ t('runtime.nodeXTopology.meta.serviceCount') }}: {{ connectionResult.serviceCount }}
             </p>
           </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" :disabled="connectionLoading" @click="closeConnectionModal">
-            {{ t('runtime.nodeXTopology.actions.cancel') }}
-          </button>
-          <button class="btn btn-primary" :disabled="connectionLoading" @click="submitConnectionTest">
-            {{
-              connectionLoading
-                ? t('runtime.nodeXTopology.connectionModal.testing')
-                : t('runtime.nodeXTopology.actions.startTest')
-            }}
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <div v-if="deleteModalOpen" class="modal-overlay" @click.self="closeDeleteDialog">
-      <div class="modal modal-sm">
-        <div class="modal-header">
-          <h3>{{ t('runtime.nodeXTopology.deleteModal.title') }}</h3>
-          <button class="modal-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeDeleteDialog">&times;</button>
-        </div>
-        <div class="modal-body">
-          <p>
-            {{ deleteState.kind === 'node' ? t('runtime.nodeXTopology.deleteModal.confirmNode') : t('runtime.nodeXTopology.deleteModal.confirmRule') }}
-            <strong>{{ deleteTargetName }}</strong>?
-          </p>
-          <p class="helper-text">{{ t('runtime.nodeXTopology.deleteModal.warning') }}</p>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary btn-sm" :disabled="deleteLoading" @click="closeDeleteDialog">
-            {{ t('runtime.nodeXTopology.actions.cancel') }}
-          </button>
-          <button class="btn btn-danger btn-sm" :disabled="deleteLoading" @click="confirmDelete">
-            {{
-              deleteLoading
-                ? t('runtime.nodeXTopology.deleteModal.deleting')
-                : t('runtime.nodeXTopology.actions.confirmDelete')
-            }}
-          </button>
-        </div>
-      </div>
-    </div>
+      <template #footer>
+        <UiButton :disabled="connectionLoading" @click="closeConnectionModal">
+          {{ t('runtime.nodeXTopology.actions.cancel') }}
+        </UiButton>
+        <UiButton variant="primary" data-test="forward-connection-submit" :loading="connectionLoading" @click="submitConnectionTest">
+          {{ t('runtime.nodeXTopology.actions.startTest') }}
+        </UiButton>
+      </template>
+    </UiDialog>
   </div>
 </template>
 
@@ -716,11 +646,13 @@ import {
   updateForwardNode,
   updateForwardRule
 } from '@/api/admin'
+import { UiButton, UiDialog, useConfirm, useToast } from '@/ui'
 import { isMaskedSecret } from '@/constants/secrets'
 
 const { t, formatDateTime, translateLiteral } = useAppI18n()
 
-const feedback = reactive({ type: 'info', message: '' })
+const toast = useToast()
+const confirm = useConfirm()
 
 const stats = reactive({
   relay_nodes: 0,
@@ -813,9 +745,6 @@ const connectionResult = ref(null)
 const connectionForm = reactive({ host: '', apiPort: '', apiToken: '', apiTokenMasked: false })
 const connectionErrors = reactive({ host: '', apiPort: '' })
 
-const deleteModalOpen = ref(false)
-const deleteLoading = ref(false)
-const deleteState = reactive({ kind: 'node', id: null, name: '' })
 const nodeXScopeParams = Object.freeze({ params: { scope: 'nodex' } })
 
 const pageBusy = computed(() => statsLoading.value || nodeLoading.value || ruleLoading.value || nodeOptionsLoading.value)
@@ -823,7 +752,6 @@ const nodePageCount = computed(() => Math.max(1, Math.ceil(nodeTotal.value / nod
 const rulePageCount = computed(() => Math.max(1, Math.ceil(ruleTotal.value / rulePageSize.value)))
 const relayNodeOptions = computed(() => nodeOptions.value.filter(item => item.type === 'relay'))
 const exitNodeOptions = computed(() => nodeOptions.value.filter(item => item.type === 'exit'))
-const deleteTargetName = computed(() => deleteState.name || `#${deleteState.id || '-'}`)
 
 const nodeTypeOptions = computed(() => [
   { key: 'all', value: '', label: t('runtime.nodeXTopology.filters.all') },
@@ -886,13 +814,11 @@ const statsCards = computed(() => {
   ]
 })
 
-function clearFeedback() {
-  feedback.message = ''
-}
-
+// Results go to the shared toasts: success disappears, errors stay.
 function setFeedback(type, message) {
-  feedback.type = type
-  feedback.message = message
+  if (type === 'error') toast.error(message)
+  else if (type === 'success') toast.success(message)
+  else toast.info(message)
 }
 
 function typeLabel(value) {
@@ -1756,44 +1682,39 @@ async function submitConnectionTest() {
   }
 }
 
-function openDeleteDialog(kind, item) {
-  deleteState.kind = kind
-  deleteState.id = item?.id ?? null
-  deleteState.name = item?.name || ''
-  deleteModalOpen.value = true
-}
-
-function closeDeleteDialog(force = false) {
-  if (!force && deleteLoading.value) {
-    return
-  }
-  deleteModalOpen.value = false
-  deleteState.kind = 'node'
-  deleteState.id = null
-  deleteState.name = ''
-}
-
-async function confirmDelete() {
-  if (!deleteState.id) {
-    return
-  }
-
-  deleteLoading.value = true
-  try {
-    if (deleteState.kind === 'node') {
-      await deleteForwardNode(deleteState.id, nodeXScopeParams)
-      setFeedback('success', t('runtime.nodeXTopology.messages.nodeDeleted'))
-      await Promise.all([loadNodes(), loadNodeOptions(), loadRules(), loadStats()])
-    } else {
-      await deleteForwardRule(deleteState.id)
-      setFeedback('success', t('runtime.nodeXTopology.messages.ruleDeleted'))
-      await loadRules()
+// Deleting a forward node asks for its name (it carries rules and runtime
+// state); a rule asks for a plain confirmation. Same API calls as before.
+async function openDeleteDialog(kind, item) {
+  const id = item?.id ?? null
+  if (!id) return
+  const name = item?.name || `#${id}`
+  const isNode = kind === 'node'
+  const confirmed = await confirm({
+    title: isNode
+      ? t('runtime.nodeXTopology.deleteModal.titleNode', { name })
+      : t('runtime.nodeXTopology.deleteModal.titleRule', { name }),
+    message: t('runtime.nodeXTopology.deleteModal.warning'),
+    confirmLabel: isNode
+      ? t('runtime.nodeXTopology.deleteModal.deleteNode')
+      : t('runtime.nodeXTopology.deleteModal.deleteRule'),
+    tone: 'danger',
+    requireText: isNode ? name : '',
+    onConfirm: async () => {
+      try {
+        if (isNode) await deleteForwardNode(id, nodeXScopeParams)
+        else await deleteForwardRule(id)
+      } catch (error) {
+        throw new Error(extractErrorMessage(error, t('runtime.nodeXTopology.messages.deleteFailed')))
+      }
     }
-    closeDeleteDialog(true)
-  } catch (error) {
-    setFeedback('error', extractErrorMessage(error, t('runtime.nodeXTopology.messages.deleteFailed')))
-  } finally {
-    deleteLoading.value = false
+  })
+  if (!confirmed) return
+  if (isNode) {
+    setFeedback('success', t('runtime.nodeXTopology.messages.nodeDeleted'))
+    await Promise.all([loadNodes(), loadNodeOptions(), loadRules(), loadStats()])
+  } else {
+    setFeedback('success', t('runtime.nodeXTopology.messages.ruleDeleted'))
+    await loadRules()
   }
 }
 
@@ -1871,36 +1792,6 @@ onMounted(() => {
   flex-wrap: wrap;
 }
 
-.feedback {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 16px;
-  border-radius: 12px;
-  border: 1px solid transparent;
-}
-
-.feedback-success {
-  color: #047857;
-  background: rgba(16, 185, 129, 0.08);
-  border-color: rgba(16, 185, 129, 0.2);
-}
-
-.feedback-error {
-  color: #b91c1c;
-  background: rgba(239, 68, 68, 0.08);
-  border-color: rgba(239, 68, 68, 0.2);
-}
-
-.feedback-close {
-  border: 0;
-  background: transparent;
-  color: inherit;
-  cursor: pointer;
-  font-size: 18px;
-}
-
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
@@ -1961,6 +1852,7 @@ onMounted(() => {
   display: flex;
   flex-direction: column;
   gap: 6px;
+  margin-bottom: 0;
 }
 
 .filter-group {
@@ -2215,82 +2107,6 @@ onMounted(() => {
   border: 1px solid var(--border-color);
 }
 
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  background: rgba(15, 23, 42, 0.62);
-  z-index: 1100;
-}
-
-.modal {
-  width: min(100%, 640px);
-  max-height: min(90vh, 960px);
-  overflow: hidden;
-  border-radius: 18px;
-  border: 1px solid var(--border-color);
-  background: var(--surface-color);
-  box-shadow: 0 30px 70px rgba(15, 23, 42, 0.25);
-  display: flex;
-  flex-direction: column;
-}
-
-.modal-sm {
-  width: min(100%, 420px);
-}
-
-.modal-md {
-  width: min(100%, 560px);
-}
-
-.modal-lg {
-  width: min(100%, 820px);
-}
-
-.modal-xl {
-  width: min(100%, 920px);
-}
-
-.modal-header,
-.modal-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 18px 22px;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.modal-footer {
-  border-top: 1px solid var(--border-color);
-  border-bottom: 0;
-}
-
-.modal-header h3 {
-  margin: 6px 0 0;
-  font-size: 22px;
-}
-
-.modal-close {
-  border: 0;
-  background: transparent;
-  color: var(--text-secondary);
-  cursor: pointer;
-  font-size: 24px;
-  line-height: 1;
-}
-
-.modal-body {
-  padding: 20px 22px;
-  overflow: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
 .modal-loading {
   color: var(--text-secondary);
 }
@@ -2326,9 +2142,7 @@ onMounted(() => {
 
 @media (max-width: 900px) {
   .toolbar,
-  .section-header,
-  .modal-header,
-  .modal-footer {
+  .section-header {
     flex-direction: column;
     align-items: stretch;
   }

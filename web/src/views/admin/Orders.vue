@@ -140,61 +140,52 @@
       </div>
     </section>
 
-    <div v-if="showDetailModal" class="modal-overlay" @click.self="showDetailModal = false">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>{{ t('adminOrders.detailModal.title') }}</h3>
-          <button class="btn btn-ghost btn-sm close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="showDetailModal = false">x</button>
+    <UiSheet v-model:open="showDetailModal" :title="t('adminOrders.detailModal.title')">
+      <div class="order-detail" data-test="order-detail">
+        <div class="detail-row">
+          <span class="label">{{ t('adminOrders.detailModal.tradeNo') }}</span>
+          <span class="value">{{ selectedOrder.trade_no }}</span>
         </div>
-        <div class="modal-body">
-          <div class="detail-row">
-            <span class="label">{{ t('adminOrders.detailModal.tradeNo') }}</span>
-            <span class="value">{{ selectedOrder.trade_no }}</span>
-          </div>
-          <div class="detail-row">
-            <span class="label">{{ t('adminOrders.detailModal.userEmail') }}</span>
-            <span class="value">{{ selectedOrder.user?.email || '-' }}</span>
-          </div>
-          <div class="detail-row">
-            <span class="label">{{ t('adminOrders.detailModal.plan') }}</span>
-            <span class="value">{{ selectedOrder.plan?.name || '-' }}</span>
-          </div>
-          <div class="detail-row">
-            <span class="label">{{ t('adminOrders.detailModal.period') }}</span>
-            <span class="value">{{ getPeriodText(selectedOrder.period) }}</span>
-          </div>
-          <div class="detail-row">
-            <span class="label">{{ t('adminOrders.detailModal.amount') }}</span>
-            <span class="value amount">{{ formatMoney(selectedOrder.total_amount) }}</span>
-          </div>
-          <div class="detail-row">
-            <span class="label">{{ t('adminOrders.detailModal.status') }}</span>
-            <span :class="['value', 'status-badge', getStatusClass(selectedOrder.status)]">
-              {{ getStatusText(selectedOrder.status) }}
-            </span>
-          </div>
-          <div class="detail-row">
-            <span class="label">{{ t('adminOrders.detailModal.type') }}</span>
-            <span class="value">{{ getTypeText(selectedOrder.type) }}</span>
-          </div>
-          <div class="detail-row">
-            <span class="label">{{ t('adminOrders.detailModal.createdAt') }}</span>
-            <span class="value">{{ formatTimestamp(selectedOrder.created_at) }}</span>
-          </div>
-          <div v-if="selectedOrder.paid_at" class="detail-row">
-            <span class="label">{{ t('adminOrders.detailModal.paidAt') }}</span>
-            <span class="value">{{ formatPaidAt(selectedOrder.paid_at) }}</span>
-          </div>
-          <div v-if="selectedOrder.callback_no" class="detail-row">
-            <span class="label">{{ t('adminOrders.detailModal.callbackNo') }}</span>
-            <span class="value">{{ selectedOrder.callback_no }}</span>
-          </div>
+        <div class="detail-row">
+          <span class="label">{{ t('adminOrders.detailModal.userEmail') }}</span>
+          <span class="value">{{ selectedOrder.user?.email || '-' }}</span>
         </div>
-        <div class="modal-footer">
-          <button class="btn" @click="showDetailModal = false">{{ t('common.actions.close') }}</button>
+        <div class="detail-row">
+          <span class="label">{{ t('adminOrders.detailModal.plan') }}</span>
+          <span class="value">{{ selectedOrder.plan?.name || '-' }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="label">{{ t('adminOrders.detailModal.period') }}</span>
+          <span class="value">{{ getPeriodText(selectedOrder.period) }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="label">{{ t('adminOrders.detailModal.amount') }}</span>
+          <span class="value amount">{{ formatMoney(selectedOrder.total_amount) }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="label">{{ t('adminOrders.detailModal.status') }}</span>
+          <span :class="['value', 'status-badge', getStatusClass(selectedOrder.status)]">
+            {{ getStatusText(selectedOrder.status) }}
+          </span>
+        </div>
+        <div class="detail-row">
+          <span class="label">{{ t('adminOrders.detailModal.type') }}</span>
+          <span class="value">{{ getTypeText(selectedOrder.type) }}</span>
+        </div>
+        <div class="detail-row">
+          <span class="label">{{ t('adminOrders.detailModal.createdAt') }}</span>
+          <span class="value">{{ formatTimestamp(selectedOrder.created_at) }}</span>
+        </div>
+        <div v-if="selectedOrder.paid_at" class="detail-row">
+          <span class="label">{{ t('adminOrders.detailModal.paidAt') }}</span>
+          <span class="value">{{ formatPaidAt(selectedOrder.paid_at) }}</span>
+        </div>
+        <div v-if="selectedOrder.callback_no" class="detail-row">
+          <span class="label">{{ t('adminOrders.detailModal.callbackNo') }}</span>
+          <span class="value">{{ selectedOrder.callback_no }}</span>
         </div>
       </div>
-    </div>
+    </UiSheet>
   </div>
 </template>
 
@@ -202,6 +193,7 @@
 import { computed, onMounted, ref } from 'vue'
 import { cancelOrder, getOrderList, getOrderStats, markOrderPaid } from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { UiSheet, useConfirm, useToast } from '@/ui'
 
 const { currentLocale, t, formatDateTime } = useAppI18n()
 
@@ -216,6 +208,8 @@ const filters = ref({
   status: ''
 })
 const showDetailModal = ref(false)
+const toast = useToast()
+const confirm = useConfirm()
 const selectedOrder = ref({})
 
 const totalPages = computed(() => Math.ceil(total.value / pageSize.value) || 1)
@@ -299,43 +293,52 @@ const viewDetail = (order) => {
   showDetailModal.value = true
 }
 
+// Marking paid and cancelling are final for the order: ask first and keep a
+// failure inside the confirmation.
 const handleMarkPaid = async (order) => {
-  if (!window.confirm(t('adminOrders.messages.markPaidConfirm', { tradeNo: order.trade_no }))) {
-    return
-  }
-
-  try {
-    ensureOrderSuccess(
-      await markOrderPaid(order.id),
-      'adminOrders.messages.markPaidFailedShort'
-    )
-    window.alert(t('adminOrders.messages.markPaidSuccess'))
-    await fetchOrders()
-    await fetchStats()
-  } catch (error) {
-    window.alert(t('adminOrders.messages.markPaidFailed', {
-      message: resolveApiError(error, 'adminOrders.messages.markPaidFailedShort')
-    }))
-  }
+  const confirmed = await confirm({
+    title: t('adminOrders.confirm.markPaidTitle', { tradeNo: order.trade_no }),
+    message: t('adminOrders.confirm.markPaidMessage', { amount: formatMoney(order.total_amount) }),
+    confirmLabel: t('adminOrders.actions.markPaid'),
+    onConfirm: async () => {
+      try {
+        ensureOrderSuccess(
+          await markOrderPaid(order.id),
+          'adminOrders.messages.markPaidFailedShort'
+        )
+      } catch (error) {
+        throw new Error(resolveApiError(error, 'adminOrders.messages.markPaidFailedShort'))
+      }
+    }
+  })
+  if (!confirmed) return
+  toast.success(t('adminOrders.messages.markPaidSuccess'))
+  await fetchOrders()
+  await fetchStats()
 }
 
 const handleCancel = async (order) => {
-  if (!window.confirm(t('adminOrders.messages.cancelConfirm', { tradeNo: order.trade_no }))) {
-    return
-  }
-
-  try {
-    ensureOrderSuccess(
-      await cancelOrder(order.id),
-      'adminOrders.messages.cancelFailedShort'
-    )
-    await fetchOrders()
-    await fetchStats()
-  } catch (error) {
-    window.alert(t('adminOrders.messages.cancelFailed', {
-      message: resolveApiError(error, 'adminOrders.messages.cancelFailedShort')
-    }))
-  }
+  const confirmed = await confirm({
+    title: t('adminOrders.confirm.cancelTitle', { tradeNo: order.trade_no }),
+    message: t('adminOrders.confirm.cancelMessage'),
+    confirmLabel: t('adminOrders.confirm.cancelAction'),
+    cancelLabel: t('adminOrders.confirm.keepOrder'),
+    tone: 'danger',
+    onConfirm: async () => {
+      try {
+        ensureOrderSuccess(
+          await cancelOrder(order.id),
+          'adminOrders.messages.cancelFailedShort'
+        )
+      } catch (error) {
+        throw new Error(resolveApiError(error, 'adminOrders.messages.cancelFailedShort'))
+      }
+    }
+  })
+  if (!confirmed) return
+  toast.success(t('adminOrders.messages.cancelSuccess', { tradeNo: order.trade_no }))
+  await fetchOrders()
+  await fetchStats()
 }
 
 const getStatusClass = (status) => {
@@ -574,52 +577,9 @@ onMounted(() => {
   color: var(--text-secondary);
 }
 
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(15, 23, 42, 0.42);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  padding: 20px;
-}
-
-.modal {
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  width: 100%;
-  max-width: 500px;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: var(--shadow-lg);
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 20px;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.modal-header h3 {
-  font-size: 18px;
-  font-weight: 600;
-}
-
-.close-btn {
-  min-width: 36px;
-  font-size: 18px;
-}
-
-.modal-body {
-  padding: 20px;
-}
-
 .detail-row {
   display: flex;
+  align-items: baseline;
   justify-content: space-between;
   gap: 16px;
   padding: 12px 0;
@@ -638,21 +598,7 @@ onMounted(() => {
 .detail-row .value {
   font-weight: 500;
   font-size: 14px;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 16px 20px;
-  border-top: 1px solid var(--border-color);
-  flex-wrap: wrap;
-}
-
-@media (max-width: 768px) {
-  .detail-row {
-    flex-direction: column;
-    gap: 4px;
-  }
+  overflow-wrap: anywhere;
+  text-align: right;
 }
 </style>

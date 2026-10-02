@@ -177,62 +177,51 @@
       </div>
     </div>
 
-    <div v-if="showTaskModal" class="modal-overlay" @click.self="showTaskModal = false">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>{{ t('runtime.nodeXAgents.taskModal.title') }}</h3>
-          <button
-            class="close-btn"
-            :aria-label="t('common.actions.close')"
-            :title="t('common.actions.close')"
-            @click="showTaskModal = false"
-          >
-            ×
-          </button>
+    <UiDialog v-model:open="showTaskModal" :title="t('runtime.nodeXAgents.taskModal.title')" :dismissible="!taskSending">
+      <div class="dialog-fields">
+        <div class="form-group">
+          <label for="agent-task-node">{{ t('runtime.nodeXAgents.taskModal.targetNode') }}</label>
+          <input id="agent-task-node" :value="taskTargetNode?.node_id" disabled />
         </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>{{ t('runtime.nodeXAgents.taskModal.targetNode') }}</label>
-            <input :value="taskTargetNode?.node_id" disabled />
-          </div>
-          <div class="form-group">
-            <label>{{ t('runtime.nodeXAgents.taskModal.action') }}</label>
-            <select v-model="taskForm.action">
-              <option value="">{{ t('runtime.nodeXAgents.terminal.chooseAction') }}</option>
-              <option v-for="action in diagnosticActions" :key="action.value" :value="action.value">
-                {{ t(`runtime.nodeXAgents.diagnosticActions.${action.value}`) }}
-              </option>
-            </select>
-          </div>
-          <div class="form-group" v-if="taskActionSpec?.params.includes('service')">
-            <label>{{ t('runtime.nodeXAgents.fields.service') }}</label>
-            <select v-model="taskForm.service">
-              <option v-for="service in diagnosticServices" :key="service" :value="service">
-                {{ t(`runtime.nodeXAgents.services.${service}`) }}
-              </option>
-            </select>
-          </div>
-          <div class="form-group" v-if="taskActionSpec?.params.includes('lines')">
-            <label>{{ t('runtime.nodeXAgents.fields.lines') }}</label>
-            <input v-model.number="taskForm.lines" type="number" min="1" max="1000" />
-          </div>
-          <div class="form-group">
-            <label>{{ t('runtime.nodeXAgents.taskModal.timeoutSeconds') }}</label>
-            <input v-model.number="taskForm.timeout" type="number" />
-          </div>
+        <div class="form-group">
+          <label for="agent-task-action">{{ t('runtime.nodeXAgents.taskModal.action') }}</label>
+          <select id="agent-task-action" v-model="taskForm.action">
+            <option value="">{{ t('runtime.nodeXAgents.terminal.chooseAction') }}</option>
+            <option v-for="action in diagnosticActions" :key="action.value" :value="action.value">
+              {{ t(`runtime.nodeXAgents.diagnosticActions.${action.value}`) }}
+            </option>
+          </select>
         </div>
-        <div class="modal-footer">
-          <button class="btn-secondary" @click="showTaskModal = false">{{ t('runtime.nodeXAgents.actions.cancel') }}</button>
-          <button @click="sendTask">{{ t('runtime.nodeXAgents.actions.send') }}</button>
+        <div class="form-group" v-if="taskActionSpec?.params.includes('service')">
+          <label for="agent-task-service">{{ t('runtime.nodeXAgents.fields.service') }}</label>
+          <select id="agent-task-service" v-model="taskForm.service">
+            <option v-for="service in diagnosticServices" :key="service" :value="service">
+              {{ t(`runtime.nodeXAgents.services.${service}`) }}
+            </option>
+          </select>
         </div>
+        <div class="form-group" v-if="taskActionSpec?.params.includes('lines')">
+          <label for="agent-task-lines">{{ t('runtime.nodeXAgents.fields.lines') }}</label>
+          <input id="agent-task-lines" v-model.number="taskForm.lines" type="number" min="1" max="1000" />
+        </div>
+        <div class="form-group">
+          <label for="agent-task-timeout">{{ t('runtime.nodeXAgents.taskModal.timeoutSeconds') }}</label>
+          <input id="agent-task-timeout" v-model.number="taskForm.timeout" type="number" />
+        </div>
+        <p v-if="taskError" class="task-error" role="alert" data-test="agent-task-error">{{ taskError }}</p>
       </div>
-    </div>
+      <template #footer="{ close }">
+        <UiButton :disabled="taskSending" @click="close">{{ t('runtime.nodeXAgents.actions.cancel') }}</UiButton>
+        <UiButton variant="primary" data-test="agent-task-send" :loading="taskSending" @click="sendTask">{{ t('runtime.nodeXAgents.actions.send') }}</UiButton>
+      </template>
+    </UiDialog>
   </div>
 </template>
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { UiButton, UiDialog, useToast } from '@/ui'
 import { createAgentTask, executeAgentCommand, getAgents, listAgentDiagnosticTasks } from '@/api/admin'
 
 const { t, formatDateTime } = useAppI18n()
@@ -269,7 +258,9 @@ const taskForm = ref({
 const onlineAgents = computed(() => agents.value.filter(agent => agent.online))
 const selectedActionSpec = computed(() => diagnosticActionMap[selectedAction.value] || null)
 const taskActionSpec = computed(() => diagnosticActionMap[taskForm.value.action] || null)
-const notify = message => window.alert(message)
+const toast = useToast()
+const taskSending = ref(false)
+const taskError = ref('')
 
 const buildActionParams = (actionValue, service, lines) => {
   const spec = diagnosticActionMap[actionValue]
@@ -361,16 +352,17 @@ const openTaskModal = (agent) => {
     lines: 100,
     timeout: 30
   }
+  taskError.value = ''
   showTaskModal.value = true
 }
 
 const viewMonitor = (agent) => {
-  notify(t('runtime.nodeXAgents.hints.monitor', { id: agent.node_id }))
+  toast.info(t('runtime.nodeXAgents.hints.monitor', { id: agent.node_id }))
 }
 
 const executeCommand = async () => {
   if (!selectedNodeId.value || !selectedAction.value) {
-    notify(t('runtime.nodeXAgents.messages.selectActionFirst'))
+    toast.error(t('runtime.nodeXAgents.messages.selectActionFirst'))
     return
   }
 
@@ -416,13 +408,16 @@ const executeCommand = async () => {
 }
 
 const sendTask = async () => {
+  if (taskSending.value) return
+  taskError.value = ''
   if (!taskTargetNode.value || !taskForm.value.action) {
-    notify(t('runtime.nodeXAgents.messages.taskIncomplete'))
+    taskError.value = t('runtime.nodeXAgents.messages.taskIncomplete')
     return
   }
 
   const params = buildActionParams(taskForm.value.action, taskForm.value.service, taskForm.value.lines)
 
+  taskSending.value = true
   try {
     await createAgentTask({
       node_id: taskTargetNode.value.node_id,
@@ -432,13 +427,16 @@ const sendTask = async () => {
       timeout: taskForm.value.timeout
     })
 
+    taskSending.value = false
     showTaskModal.value = false
-    notify(t('runtime.nodeXAgents.messages.taskSent'))
+    toast.success(t('runtime.nodeXAgents.messages.taskSent'))
     await fetchTaskHistory()
   } catch (err) {
-    notify(t('runtime.nodeXAgents.messages.taskSendFailed', {
+    taskError.value = t('runtime.nodeXAgents.messages.taskSendFailed', {
       message: err.response?.data?.error || err.message
-    }))
+    })
+  } finally {
+    taskSending.value = false
   }
 }
 
@@ -667,12 +665,18 @@ onUnmounted(() => {
   color: var(--error-color);
 }
 
-.close-btn {
-  background: transparent;
-  border: none;
-  color: var(--text-secondary);
-  font-size: 20px;
-  cursor: pointer;
+.dialog-fields {
+  display: grid;
+  gap: var(--space-4);
+}
+
+.dialog-fields .form-group {
+  margin-bottom: 0;
+}
+
+.task-error {
+  margin: 0;
+  color: var(--danger);
 }
 
 code {

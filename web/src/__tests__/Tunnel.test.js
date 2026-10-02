@@ -1,7 +1,8 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises, mount } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import Tunnel from '@/views/admin/Tunnel.vue'
 import i18n, { setLocale } from '@/i18n'
+import { inBody } from './helpers/feedback'
 
 const adminApi = vi.hoisted(() => ({
   createForwardTunnel: vi.fn(),
@@ -16,8 +17,12 @@ const adminApi = vi.hoisted(() => ({
 
 vi.mock('@/api/admin', () => adminApi)
 
+enableAutoUnmount(afterEach)
+
 function mountTunnel() {
+  // The editor renders into document.body (UiDialog portal).
   return mount(Tunnel, {
+    attachTo: document.body,
     global: {
       stubs: {
         'router-link': {
@@ -86,14 +91,14 @@ describe('Tunnel.vue', () => {
     wrapper.vm.openCreateModal()
     await wrapper.vm.$nextTick()
 
-    expect(wrapper.find('[data-test="forward-entry-select"]').exists()).toBe(true)
-    expect(wrapper.find('[data-test="forward-exit-select"]').exists()).toBe(false)
-    expect(wrapper.find('[data-test="forward-execution-select"]').exists()).toBe(false)
+    expect(inBody('[data-test="forward-entry-select"]').exists()).toBe(true)
+    expect(inBody('[data-test="forward-exit-select"]').exists()).toBe(false)
+    expect(inBody('[data-test="forward-execution-select"]').exists()).toBe(false)
 
     wrapper.vm.form.type = 2
     await wrapper.vm.$nextTick()
 
-    expect(wrapper.find('[data-test="forward-exit-select"]').exists()).toBe(true)
+    expect(inBody('[data-test="forward-exit-select"]').exists()).toBe(true)
   })
 
   it('forces ansible mode to use execution node without entry node', async () => {
@@ -173,8 +178,8 @@ describe('Tunnel.vue', () => {
 
     expect(wrapper.vm.runtimeNodeXMode).toBe(false)
     expect(adminApi.getAnsibleMachines).toHaveBeenCalledWith({ page_size: 200, type: 'relay' })
-    expect(wrapper.find('[data-test="forward-entry-select"]').exists()).toBe(false)
-    expect(wrapper.find('[data-test="forward-execution-select"]').exists()).toBe(true)
+    expect(inBody('[data-test="forward-entry-select"]').exists()).toBe(false)
+    expect(inBody('[data-test="forward-execution-select"]').exists()).toBe(true)
   })
 
   it('shows local runtime compatibility warnings instead of mislabeling tunnel ownership', async () => {
@@ -299,7 +304,7 @@ describe('Tunnel.vue', () => {
     await wrapper.vm.$nextTick()
 
     expect(wrapper.vm.form.outNodeId).toBe(15)
-    expect(wrapper.find('[data-test="forward-entry-select"]').exists()).toBe(false)
-    expect(wrapper.find('[data-test="forward-execution-select"]').exists()).toBe(true)
+    expect(inBody('[data-test="forward-entry-select"]').exists()).toBe(false)
+    expect(inBody('[data-test="forward-execution-select"]').exists()).toBe(true)
   })
 })

@@ -1,7 +1,15 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+import { inBody } from './helpers/feedback'
 import { nextTick } from 'vue'
 import Plugins from '@/views/admin/Plugins.vue'
+
+// Dialogs and sheets render into document.body (UiDialog / UiSheet portal).
+function bodyGet(selector) {
+  const found = inBody(selector)
+  if (!found.exists()) throw new Error(`Unable to find ${selector} in document.body`)
+  return found
+}
 
 const kernelApi = vi.hoisted(() => ({
   getKernelPlugins: vi.fn(),
@@ -110,12 +118,12 @@ function mountPlugins() {
 }
 
 async function openTarget(wrapper, target) {
-  const row = wrapper.get('[data-testid="plugin-row-protocol-runtime"]')
+  const row = bodyGet('[data-testid="plugin-row-protocol-runtime"]')
   row.element.focus()
   await row.trigger('click')
   await flushPromises()
-  await wrapper.get(`[data-target="${target}"]`).trigger('click')
-  return wrapper.get('[data-testid="plugin-detail-drawer"]')
+  await bodyGet(`[data-target="${target}"]`).trigger('click')
+  return bodyGet('[data-testid="plugin-detail-drawer"]')
 }
 
 beforeEach(() => {
@@ -133,14 +141,14 @@ describe('Plugin Center', () => {
   it('renders nonempty extension runtime errors in an accessible Plugin Center alert', async () => {
     const emptyWrapper = mountPlugins()
     await flushPromises()
-    expect(emptyWrapper.find('[data-testid="plugin-extension-errors"]').exists()).toBe(false)
+    expect(inBody('[data-testid="plugin-extension-errors"]').exists()).toBe(false)
     emptyWrapper.unmount()
 
     extensionRuntime.errors.push({ plugin_id: 'protocol-runtime', message: 'bundle digest mismatch' })
     const wrapper = mountPlugins()
     await flushPromises()
 
-    const errorBand = wrapper.get('[data-testid="plugin-extension-errors"]')
+    const errorBand = bodyGet('[data-testid="plugin-extension-errors"]')
     expect(errorBand.attributes('role')).toBe('alert')
     expect(errorBand.text()).toContain('WebUI extension loading failed')
     expect(errorBand.text()).toContain('protocol-runtime')
@@ -153,15 +161,15 @@ describe('Plugin Center', () => {
     const wrapper = mountPlugins()
     await flushPromises()
 
-    const row = wrapper.get('[data-testid="plugin-row-protocol-runtime"]')
+    const row = bodyGet('[data-testid="plugin-row-protocol-runtime"]')
     await row.trigger('click')
     await flushPromises()
-    const drawer = wrapper.get('[data-testid="plugin-detail-drawer"]')
+    const drawer = bodyGet('[data-testid="plugin-detail-drawer"]')
     const install = drawer.get('[data-action="install"]')
     expect(install.attributes('disabled')).toBeDefined()
     expect(install.text()).toContain('Official release required')
     await install.trigger('click')
-    expect(wrapper.find('[data-testid="plugin-installation-dialog"]').exists()).toBe(false)
+    expect(inBody('[data-testid="plugin-installation-dialog"]').exists()).toBe(false)
   })
 
   it('loads only plugin resources, renders one grouped row, filters it, and restores row focus after close', async () => {
@@ -182,22 +190,22 @@ describe('Plugin Center', () => {
     expect(adminApi.getNodes).not.toHaveBeenCalled()
     expect(wrapper.findAll('[data-testid^="plugin-row-"]')).toHaveLength(1)
 
-    await wrapper.get('[data-testid="plugin-target-filter"]').setValue('agent')
+    await bodyGet('[data-testid="plugin-target-filter"]').setValue('agent')
     expect(wrapper.findAll('[data-testid^="plugin-row-"]')).toHaveLength(1)
-    await wrapper.get('[data-testid="plugin-health-filter"]').setValue('attention')
+    await bodyGet('[data-testid="plugin-health-filter"]').setValue('attention')
     expect(wrapper.findAll('[data-testid^="plugin-row-"]')).toHaveLength(0)
-    await wrapper.get('[data-testid="plugin-health-filter"]').setValue('healthy')
+    await bodyGet('[data-testid="plugin-health-filter"]').setValue('healthy')
     expect(wrapper.findAll('[data-testid^="plugin-row-"]')).toHaveLength(1)
-    await wrapper.get('[data-testid="plugin-search"]').setValue('unmatched')
+    await bodyGet('[data-testid="plugin-search"]').setValue('unmatched')
     expect(wrapper.findAll('[data-testid^="plugin-row-"]')).toHaveLength(0)
-    await wrapper.get('[data-testid="plugin-search"]').setValue('protocol')
+    await bodyGet('[data-testid="plugin-search"]').setValue('protocol')
 
-    const row = wrapper.get('[data-testid="plugin-row-protocol-runtime"]')
+    const row = bodyGet('[data-testid="plugin-row-protocol-runtime"]')
     row.element.focus()
     await row.trigger('click')
     await flushPromises()
-    expect(wrapper.get('[data-testid="plugin-detail-drawer"]').text()).toContain('agent')
-    await wrapper.get('[data-testid="plugin-detail-close"]').trigger('click')
+    expect(bodyGet('[data-testid="plugin-detail-drawer"]').text()).toContain('agent')
+    await bodyGet('[data-testid="plugin-detail-drawer"] [aria-label="Close"]').trigger('click')
     await nextTick()
     expect(document.activeElement).toBe(row.element)
   })
@@ -208,7 +216,7 @@ describe('Plugin Center', () => {
 
     const drawer = await openTarget(wrapper, 'control')
     await drawer.get('[data-action="install"]').trigger('click')
-    await wrapper.get('[data-action="save-installation"]').trigger('click')
+    await bodyGet('[data-action="save-installation"]').trigger('click')
     await flushPromises()
 
     expect(kernelApi.upsertKernelInstallation).toHaveBeenCalledWith({
@@ -244,11 +252,11 @@ describe('Plugin Center', () => {
     expect(kernelApi.runKernelInstallationAction).toHaveBeenLastCalledWith(1, 'enable', expect.objectContaining({
       idempotencyKey: expect.stringContaining('webui:1:enable:'),
     }))
-    expect(wrapper.get('[data-testid="plugin-operation-status"]').text()).toContain('Chain: plugin-operation-1')
+    expect(bodyGet('[data-testid="plugin-operation-status"]').text()).toContain('Chain: plugin-operation-1')
 
     await drawer.get('[data-action="upgrade"]').trigger('click')
-    await wrapper.get('#plugin-install-version').setValue('1.1.0')
-    await wrapper.get('[data-action="save-installation"]').trigger('click')
+    await bodyGet('#plugin-install-version').setValue('1.1.0')
+    await bodyGet('[data-action="save-installation"]').trigger('click')
     await flushPromises()
     expect(kernelApi.runKernelInstallationAction).toHaveBeenLastCalledWith(1, 'update', expect.objectContaining({
       targetVersion: '1.1.0',
@@ -342,8 +350,8 @@ describe('Plugin Center', () => {
     const drawer = await openTarget(wrapper, 'control')
     await drawer.get('[data-action="configure"]').trigger('click')
     await flushPromises()
-    await wrapper.get('#plugin-config-port').setValue('8443')
-    await wrapper.get('[data-testid="save-plugin-config"]').trigger('click')
+    await bodyGet('#plugin-config-port').setValue('8443')
+    await bodyGet('[data-testid="save-plugin-config"]').trigger('click')
     await flushPromises()
 
     expect(kernelApi.updateKernelInstallationConfig).toHaveBeenCalledWith(1, { port: 8443, enabled: true }, 3)
@@ -370,14 +378,14 @@ describe('Plugin Center', () => {
     const drawer = await openTarget(wrapper, 'control')
     await drawer.get('[data-action="configure"]').trigger('click')
     await flushPromises()
-    const portInput = wrapper.get('#plugin-config-port')
+    const portInput = bodyGet('#plugin-config-port')
     await portInput.setValue('8443')
-    await wrapper.get('[data-testid="save-plugin-config"]').trigger('click')
+    await bodyGet('[data-testid="save-plugin-config"]').trigger('click')
     await flushPromises()
 
-    expect(wrapper.get('[data-testid="plugin-detail-drawer"]').exists()).toBe(true)
-    expect(wrapper.get('[data-testid="plugin-config-dialog"]').text()).toContain('configuration revision conflict')
-    expect(wrapper.get('#plugin-config-port').element.value).toBe('8443')
+    expect(bodyGet('[data-testid="plugin-detail-drawer"]').exists()).toBe(true)
+    expect(bodyGet('[data-testid="plugin-config-dialog"]').text()).toContain('configuration revision conflict')
+    expect(bodyGet('#plugin-config-port').element.value).toBe('8443')
   })
 
   it('ignores a late configuration response after the editor is reopened for another target', async () => {
@@ -415,20 +423,20 @@ describe('Plugin Center', () => {
     await drawer.get('[data-action="configure"]').trigger('click')
     await nextTick()
     expect(kernelApi.getKernelInstallationConfig).toHaveBeenCalledWith(1)
-    await wrapper.get('[data-testid="plugin-config-dialog"]').find('button').trigger('click')
-    await wrapper.get('[data-target="agent"]').trigger('click')
+    await bodyGet('[data-testid="plugin-config-dialog"]').find('button').trigger('click')
+    await bodyGet('[data-target="agent"]').trigger('click')
     await drawer.get('[data-action="configure"]').trigger('click')
     await nextTick()
     expect(kernelApi.getKernelInstallationConfig).toHaveBeenCalledWith(2)
 
     agentConfig.resolve({ installation_id: 2, revision: 7, config: '{"port":8443,"enabled":true}' })
     await flushPromises()
-    expect(wrapper.get('#plugin-config-port').element.value).toBe('8443')
+    expect(bodyGet('#plugin-config-port').element.value).toBe('8443')
 
     controlConfig.resolve({ installation_id: 1, revision: 3, config: '{"port":443,"enabled":false}' })
     await flushPromises()
-    expect(wrapper.get('#plugin-config-port').element.value).toBe('8443')
-    await wrapper.get('[data-testid="save-plugin-config"]').trigger('click')
+    expect(bodyGet('#plugin-config-port').element.value).toBe('8443')
+    await bodyGet('[data-testid="save-plugin-config"]').trigger('click')
     await flushPromises()
     expect(kernelApi.updateKernelInstallationConfig).toHaveBeenCalledWith(2, { port: 8443, enabled: true }, 7)
   })
@@ -440,13 +448,13 @@ describe('Plugin Center', () => {
     const drawer = await openTarget(wrapper, 'control')
     await drawer.get('[data-action="install"]').trigger('click')
     kernelApi.getKernelPlugins.mockRejectedValueOnce(new Error('catalog refresh failed'))
-    await wrapper.get('[data-action="save-installation"]').trigger('click')
+    await bodyGet('[data-action="save-installation"]').trigger('click')
     await flushPromises()
 
     expect(extensionRuntime.refreshAdminExtensions).not.toHaveBeenCalled()
-    expect(wrapper.get('[data-testid="plugin-installation-dialog"]').exists()).toBe(true)
-    expect(wrapper.get('[data-testid="plugin-installation-dialog"]').text()).toContain('catalog refresh failed')
-    expect(wrapper.find('.notice-message').exists()).toBe(false)
+    expect(bodyGet('[data-testid="plugin-installation-dialog"]').exists()).toBe(true)
+    expect(bodyGet('[data-testid="plugin-installation-dialog"]').text()).toContain('catalog refresh failed')
+    expect(inBody('.notice-message').exists()).toBe(false)
   })
 
   it('refreshes operation state after an agent mutation and polls newly active plugin work', async () => {
@@ -506,19 +514,19 @@ describe('Plugin Center', () => {
     const wrapper = mountPlugins()
     await flushPromises()
 
-    await wrapper.get('[data-testid="import-plugin-release"]').trigger('click')
-    await wrapper.get('#plugin-release-manifest').setValue('{"id":"protocol-runtime","version":"1.2.0"}')
-    await wrapper.get('#plugin-release-signature').setValue('signed-release')
+    await bodyGet('[data-testid="import-plugin-release"]').trigger('click')
+    await bodyGet('#plugin-release-manifest').setValue('{"id":"protocol-runtime","version":"1.2.0"}')
+    await bodyGet('#plugin-release-signature').setValue('signed-release')
     const artifact = {
       name: 'runtime.tar.gz',
       size: 3,
       arrayBuffer: vi.fn(async () => new Uint8Array([1, 2, 3]).buffer),
     }
-    const artifactInput = wrapper.get('#plugin-release-artifact')
+    const artifactInput = bodyGet('#plugin-release-artifact')
     Object.defineProperty(artifactInput.element, 'files', { configurable: true, value: [artifact] })
     await artifactInput.trigger('change')
     await flushPromises()
-    await wrapper.get('[data-action="save-release"]').trigger('click')
+    await bodyGet('[data-action="save-release"]').trigger('click')
     await flushPromises()
 
     expect(kernelApi.registerKernelPluginRelease).toHaveBeenCalledWith('{"id":"protocol-runtime","version":"1.2.0"}', 'signed-release')
@@ -535,30 +543,30 @@ describe('Plugin Center', () => {
     const wrapper = mountPlugins()
     await flushPromises()
 
-    await wrapper.get('[data-testid="import-plugin-release"]').trigger('click')
-    await wrapper.get('#plugin-release-manifest').setValue('{"id":"protocol-runtime","version":"1.2.0"}')
-    await wrapper.get('#plugin-release-signature').setValue('signed-release')
+    await bodyGet('[data-testid="import-plugin-release"]').trigger('click')
+    await bodyGet('#plugin-release-manifest').setValue('{"id":"protocol-runtime","version":"1.2.0"}')
+    await bodyGet('#plugin-release-signature').setValue('signed-release')
     const artifact = {
       name: 'runtime.tar.gz',
       size: 3,
       arrayBuffer: vi.fn(async () => new Uint8Array([1, 2, 3]).buffer),
     }
-    const artifactInput = wrapper.get('#plugin-release-artifact')
+    const artifactInput = bodyGet('#plugin-release-artifact')
     Object.defineProperty(artifactInput.element, 'files', { configurable: true, value: [artifact] })
     await artifactInput.trigger('change')
     await flushPromises()
 
-    await wrapper.get('[data-action="save-release"]').trigger('click')
+    await bodyGet('[data-action="save-release"]').trigger('click')
     await flushPromises()
     expect(kernelApi.registerKernelPluginRelease).toHaveBeenCalledTimes(1)
     expect(kernelApi.uploadKernelPluginReleaseArtifact).toHaveBeenCalledTimes(1)
-    expect(wrapper.get('[data-testid="plugin-release-import-dialog"]').text()).toContain('artifact upload failed')
+    expect(bodyGet('[data-testid="plugin-release-import-dialog"]').text()).toContain('artifact upload failed')
 
-    await wrapper.get('[data-action="save-release"]').trigger('click')
+    await bodyGet('[data-action="save-release"]').trigger('click')
     await flushPromises()
     expect(kernelApi.registerKernelPluginRelease).toHaveBeenCalledTimes(1)
     expect(kernelApi.uploadKernelPluginReleaseArtifact).toHaveBeenCalledTimes(2)
-    expect(wrapper.find('[data-testid="plugin-release-import-dialog"]').exists()).toBe(false)
+    expect(inBody('[data-testid="plugin-release-import-dialog"]').exists()).toBe(false)
   })
 
   it('polls only active plugin operations, stops at terminal state, and clears its timer on unmount', async () => {
@@ -595,7 +603,7 @@ describe('Plugin Center', () => {
     const wrapper = mountPlugins()
     await flushPromises()
 
-    const history = wrapper.get('[data-testid="plugin-operation-history"]')
+    const history = bodyGet('[data-testid="plugin-operation-history"]')
     expect(history.text()).toContain('Recent plugin operations')
     expect(history.findAll('[data-testid^="operation-row-"]')).toHaveLength(2)
     expect(history.find('[data-testid="operation-row-plugin-op-2"]').text()).toContain('plugin.update')
@@ -604,7 +612,7 @@ describe('Plugin Center', () => {
     await history.get('[data-testid="cancel-operation-plugin-op-1"]').trigger('click')
     await flushPromises()
     expect(kernelApi.cancelKernelOperation).toHaveBeenCalledWith('plugin-op-1')
-    expect(wrapper.find('.notice-message').text()).toContain('Operation cancellation was requested')
+    expect(inBody('.notice-message').text()).toContain('Operation cancellation was requested')
     wrapper.unmount()
   })
 })

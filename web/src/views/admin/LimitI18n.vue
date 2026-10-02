@@ -19,11 +19,6 @@
       </div>
     </div>
 
-    <div v-if="feedback.message" :class="['feedback', `feedback-${feedback.type}`]">
-      <span>{{ feedback.message }}</span>
-      <button class="feedback-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="clearFeedback">×</button>
-    </div>
-
     <div v-if="loading" class="loading-state">
       <div class="spinner"></div>
       <span>{{ t('runtime.limitPage.loading') }}</span>
@@ -69,65 +64,37 @@
       </section>
     </template>
 
-    <div v-if="showFormModal" class="modal-overlay" @click.self="closeFormModal">
-      <div class="modal modal-md">
-        <div class="modal-header">
-          <div>
-            <p class="eyebrow">{{ isEditMode ? t('runtime.limitPage.formModal.titleEdit') : t('runtime.limitPage.formModal.titleCreate') }}</p>
-            <h3>{{ isEditMode ? t('runtime.limitPage.formModal.titleEdit') : t('runtime.limitPage.formModal.titleCreate') }}</h3>
-          </div>
-          <button class="modal-close" :aria-label="t('common.actions.close')" :title="t('common.actions.close')" @click="closeFormModal">×</button>
-        </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>{{ t('runtime.limitPage.formModal.fields.name') }}</label>
-            <input v-model.trim="form.name" type="text" :placeholder="t('runtime.limitPage.formModal.placeholders.name')" />
-            <p v-if="formError" class="form-error">{{ formError }}</p>
-          </div>
-          <div class="form-group">
-            <label>{{ t('runtime.limitPage.formModal.fields.speed') }}</label>
-            <input v-model.number="form.speed" type="number" min="1" step="1" :placeholder="t('runtime.limitPage.formModal.placeholders.speed')" />
-          </div>
-          <div class="form-group">
-            <label>{{ t('runtime.limitPage.formModal.fields.tunnel') }}</label>
-            <select v-model.number="form.tunnelId">
-              <option :value="0">{{ t('runtime.limitPage.formModal.placeholders.tunnel') }}</option>
-              <option v-for="t in tunnels" :key="t.id" :value="t.id">
-                {{ t.name || t('runtime.limitPage.values.tunnelFallback', { id: t.id }) }}
-              </option>
-            </select>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" :disabled="formSubmitting" @click="closeFormModal">{{ t('common.actions.cancel') }}</button>
-          <button class="btn btn-primary" :disabled="formSubmitting" @click="submitForm">
-            {{ formSubmitting ? t('runtime.limitPage.formModal.submitting') : (isEditMode ? t('runtime.limitPage.formModal.submitUpdate') : t('runtime.limitPage.formModal.submitCreate')) }}
-          </button>
-        </div>
+    <UiDialog
+      :open="showFormModal"
+      :title="isEditMode ? t('runtime.limitPage.formModal.titleEdit') : t('runtime.limitPage.formModal.titleCreate')"
+      :dismissible="!formSubmitting"
+      @update:open="value => { if (!value) closeFormModal() }"
+    >
+      <div class="form-group">
+        <label for="limit-form-name">{{ t('runtime.limitPage.formModal.fields.name') }}</label>
+        <input id="limit-form-name" v-model.trim="form.name" type="text" :placeholder="t('runtime.limitPage.formModal.placeholders.name')" :aria-invalid="formError ? 'true' : undefined" :aria-describedby="formError ? 'limit-form-error' : undefined" />
+        <p v-if="formError" id="limit-form-error" class="form-error" role="alert">{{ formError }}</p>
       </div>
-    </div>
-
-    <div v-if="showDeleteModal" class="modal-overlay" @click.self="closeDeleteModal">
-      <div class="modal">
-        <div class="modal-header">
-          <div>
-            <p class="eyebrow">{{ t('runtime.limitPage.deleteModal.eyebrow') }}</p>
-            <h3>{{ t('runtime.limitPage.deleteModal.title') }}</h3>
-          </div>
-          <button class="modal-close" :aria-label="t('common.actions.close')" :title="t('common.actions.close')" @click="closeDeleteModal">×</button>
-        </div>
-        <div class="modal-body">
-          <p class="modal-copy">{{ t('runtime.limitPage.deleteModal.confirmText', { name: deletingItem?.name || t('runtime.limitPage.values.ruleFallback', { id: deletingItem?.id || '-' }) }) }}</p>
-          <p class="hint">{{ t('runtime.limitPage.deleteModal.hint') }}</p>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" :disabled="deleteSubmitting" @click="closeDeleteModal">{{ t('common.actions.cancel') }}</button>
-          <button class="btn btn-primary danger" :disabled="deleteSubmitting" @click="confirmDelete">
-            {{ deleteSubmitting ? t('runtime.limitPage.deleteModal.deleting') : t('runtime.limitPage.deleteModal.confirmDelete') }}
-          </button>
-        </div>
+      <div class="form-group">
+        <label for="limit-form-speed">{{ t('runtime.limitPage.formModal.fields.speed') }}</label>
+        <input id="limit-form-speed" v-model.number="form.speed" type="number" min="1" step="1" :placeholder="t('runtime.limitPage.formModal.placeholders.speed')" />
       </div>
-    </div>
+      <div class="form-group">
+        <label for="limit-form-tunnel">{{ t('runtime.limitPage.formModal.fields.tunnel') }}</label>
+        <select id="limit-form-tunnel" v-model.number="form.tunnelId">
+          <option :value="0">{{ t('runtime.limitPage.formModal.placeholders.tunnel') }}</option>
+          <option v-for="t in tunnels" :key="t.id" :value="t.id">
+            {{ t.name || t('runtime.limitPage.values.tunnelFallback', { id: t.id }) }}
+          </option>
+        </select>
+      </div>
+      <template #footer>
+        <UiButton :disabled="formSubmitting" @click="closeFormModal">{{ t('common.actions.cancel') }}</UiButton>
+        <UiButton variant="primary" :loading="formSubmitting" data-test="limit-form-submit" @click="submitForm">
+          {{ isEditMode ? t('runtime.limitPage.formModal.submitUpdate') : t('runtime.limitPage.formModal.submitCreate') }}
+        </UiButton>
+      </template>
+    </UiDialog>
   </div>
 </template>
 
@@ -142,6 +109,7 @@ import {
   getSystemConfig,
   updateSpeedLimit
 } from '@/api/admin'
+import { UiButton, UiDialog, useConfirm, useToast } from '@/ui'
 import { humanizeForwardRuntimeBackend } from '@/utils/forwardRuntime'
 
 const { t, formatDateTime, translateLiteral } = useAppI18n()
@@ -170,12 +138,8 @@ const formSubmitting = ref(false)
 const formError = ref('')
 const form = ref(newForm())
 
-const showDeleteModal = ref(false)
-const deleteSubmitting = ref(false)
-const deletingItem = ref(null)
-
-const feedback = ref({ type: 'info', message: '' })
-let feedbackTimer = null
+const toast = useToast()
+const confirm = useConfirm()
 
 function newForm() {
   return { id: null, name: '', speed: 100, tunnelId: 0 }
@@ -212,15 +176,10 @@ async function loadRuntimeMode() {
   }
 }
 
+// Results go to the shared toasts: success disappears, errors stay.
 function setFeedback(type, message) {
-  feedback.value = { type, message }
-  if (feedbackTimer) clearTimeout(feedbackTimer)
-  feedbackTimer = setTimeout(() => { feedback.value.message = ''; feedbackTimer = null }, 3600)
-}
-
-function clearFeedback() {
-  if (feedbackTimer) { clearTimeout(feedbackTimer); feedbackTimer = null }
-  feedback.value.message = ''
+  if (type === 'error') toast.error(message)
+  else toast.success(message)
 }
 
 function formatErrorMessage(error, fallbackKey) {
@@ -357,29 +316,27 @@ async function submitForm() {
   }
 }
 
-function openDeleteModal(item) {
-  deletingItem.value = item
-  showDeleteModal.value = true
-}
-
-function closeDeleteModal() {
-  if (deleteSubmitting.value) return
-  showDeleteModal.value = false
-  deletingItem.value = null
-}
-
-async function confirmDelete() {
-  if (!deletingItem.value?.id) return
-  deleteSubmitting.value = true
+async function openDeleteModal(item) {
+  if (!item?.id) return
+  const confirmed = await confirm({
+    title: t('runtime.limitPage.deleteModal.title', { name: formatRuleName(item) }),
+    message: t('runtime.limitPage.deleteModal.hint'),
+    confirmLabel: t('runtime.limitPage.deleteModal.confirmDelete'),
+    tone: 'danger',
+    onConfirm: async () => {
+      try {
+        await deleteSpeedLimit(Number(item.id))
+      } catch (error) {
+        throw new Error(formatErrorMessage(error, 'runtime.limitPage.messages.deleteFailed'))
+      }
+    }
+  })
+  if (!confirmed) return
+  setFeedback('success', t('runtime.limitPage.messages.deleted'))
   try {
-    await deleteSpeedLimit(Number(deletingItem.value.id))
     await fetchLimits()
-    closeDeleteModal()
-    setFeedback('success', t('runtime.limitPage.messages.deleted'))
   } catch (error) {
-    setFeedback('error', formatErrorMessage(error, 'runtime.limitPage.messages.deleteFailed'))
-  } finally {
-    deleteSubmitting.value = false
+    setFeedback('error', formatErrorMessage(error, 'runtime.limitPage.messages.loadFailed'))
   }
 }
 
@@ -482,39 +439,7 @@ onMounted(async () => {
 
 .btn-sm { padding: 8px 12px; font-size: 12px; }
 
-.danger { background: #dc2626; }
-.danger:hover { background: #b91c1c; }
 .danger-text { color: #dc2626; }
-
-.feedback {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 14px 16px;
-  border-radius: var(--radius-md);
-  border: 1px solid transparent;
-}
-
-.feedback-success {
-  background: rgba(16, 185, 129, 0.14);
-  color: #047857;
-  border-color: rgba(16, 185, 129, 0.24);
-}
-
-.feedback-error {
-  background: rgba(239, 68, 68, 0.14);
-  color: #b91c1c;
-  border-color: rgba(239, 68, 68, 0.25);
-}
-
-.feedback-close, .modal-close {
-  background: transparent;
-  border: none;
-  color: inherit;
-  font-size: 22px;
-  cursor: pointer;
-}
 
 .loading-state {
   min-height: 300px;
@@ -655,57 +580,11 @@ onMounted(async () => {
 .empty-state h3 { margin: 0 0 8px; }
 .empty-state p { margin: 0 0 20px; color: var(--text-secondary); }
 
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: rgba(15, 23, 42, 0.7);
-  backdrop-filter: blur(6px);
-}
-
-.modal {
-  width: min(560px, 100%);
-  max-height: calc(100vh - 48px);
-  display: flex;
-  flex-direction: column;
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-radius: 24px;
-  overflow: hidden;
-  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.28);
-}
-
-.modal-md { width: min(640px, 100%); }
-
-.modal-header, .modal-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 18px 22px;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.modal-footer {
-  justify-content: flex-end;
-  border-top: 1px solid var(--border-color);
-  border-bottom: none;
-}
-
-.modal-body {
-  padding: 22px;
-  overflow: auto;
-}
-
 .form-group {
   display: flex;
   flex-direction: column;
   gap: 8px;
-  margin-bottom: 18px;
+  margin-bottom: 0;
 }
 
 .form-group label {
@@ -737,8 +616,6 @@ onMounted(async () => {
   color: #dc2626;
 }
 
-.modal-copy { margin: 0; line-height: 1.7; }
-.hint { margin: 6px 0 0; color: var(--text-secondary); font-size: 13px; }
 .text-secondary { color: var(--text-secondary); }
 .small { font-size: 13px; }
 
@@ -767,7 +644,5 @@ onMounted(async () => {
 @media (max-width: 768px) {
   .toolbar { flex-direction: column; align-items: stretch; }
   .card-grid { grid-template-columns: 1fr; }
-  .modal-overlay { padding: 12px; }
-  .form-group { margin-bottom: 14px; }
 }
 </style>
