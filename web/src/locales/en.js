@@ -777,16 +777,18 @@ export default {
         delete: 'Delete'
       },
       modal: {
-        eyebrow: 'Machine',
         titleEdit: 'Edit Ansible Machine',
         titleAdd: 'Add Ansible Machine',
-        deleteEyebrow: 'Delete',
-        deleteTitle: 'Delete Machine',
-        deleteConfirm: 'Delete {name} from the Ansible execution fleet?',
+        deleteTitle: 'Delete Ansible machine {name}?',
+        deleteConfirm: 'It is removed from the Ansible execution fleet. This can’t be undone.',
+        deleteAction: 'Delete machine',
         saveLoading: 'Saving...',
         save: 'Save',
-        cancel: 'Cancel',
-        deleteLoading: 'Deleting...'
+        cancel: 'Cancel'
+      },
+      messages: {
+        saved: '{name} saved',
+        deleted: '{name} deleted'
       },
       fields: {
         name: 'Name',

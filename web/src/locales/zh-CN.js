@@ -779,16 +779,18 @@ export default {
         delete: '\u5220\u9664'
       },
       modal: {
-        eyebrow: '\u673a\u5668',
         titleEdit: '\u7f16\u8f91 Ansible \u673a\u5668',
         titleAdd: '\u6dfb\u52a0 Ansible \u673a\u5668',
-        deleteEyebrow: '\u5220\u9664',
-        deleteTitle: '\u5220\u9664\u673a\u5668',
-        deleteConfirm: '\u786e\u5b9a\u5c06 {name} \u4ece Ansible \u6267\u884c\u673a\u7fa4\u4e2d\u5220\u9664\u5417\uff1f',
+        deleteTitle: '删除 Ansible 机器 {name}？',
+        deleteConfirm: '它将从 Ansible 执行机群中移除。此操作无法撤销。',
+        deleteAction: '删除机器',
         saveLoading: '\u4fdd\u5b58\u4e2d...',
         save: '\u4fdd\u5b58',
-        cancel: '\u53d6\u6d88',
-        deleteLoading: '\u5220\u9664\u4e2d...'
+        cancel: '\u53d6\u6d88'
+      },
+      messages: {
+        saved: '已保存 {name}',
+        deleted: '已删除 {name}'
       },
       fields: {
         name: '\u540d\u79f0',
