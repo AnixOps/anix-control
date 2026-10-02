@@ -103,8 +103,12 @@ function mountDeployments() {
   return mount(Deployments, { attachTo: document.body })
 }
 
+function deploymentTab(wrapper, mode) {
+  return wrapper.findAll('[role="tab"]').find(tab => tab.text() === (mode === 'targets' ? 'Assignments' : 'Topologies'))
+}
+
 async function openTargets(wrapper) {
-  await wrapper.get('[data-testid="deployment-targets"]').trigger('click')
+  await deploymentTab(wrapper, 'targets').trigger('mousedown', { button: 0 })
   await flushPromises()
 }
 
@@ -163,43 +167,31 @@ describe('Deployments', () => {
     expect(kernelApi.getKernelPlugins).not.toHaveBeenCalled()
     expect(kernelApi.getKernelPluginReleases).not.toHaveBeenCalled()
     expect(kernelApi.getKernelInstallations).not.toHaveBeenCalled()
-    expect(wrapper.get('[data-testid="deployment-topologies"]').attributes('aria-selected')).toBe('true')
+    expect(deploymentTab(wrapper, 'topologies').attributes('aria-selected')).toBe('true')
     wrapper.unmount()
   })
 
-  it('links deployment tabs to their panels and supports roving keyboard navigation', async () => {
+  it('shows topologies and node roles as UiTabs linked to their panels', async () => {
     resolveAssignmentState()
     const wrapper = mountDeployments()
     await flushPromises()
-    const topologiesTab = wrapper.get('[data-testid="deployment-topologies"]')
-    const targetsTab = wrapper.get('[data-testid="deployment-targets"]')
+    const topologiesTab = deploymentTab(wrapper, 'topologies')
+    const targetsTab = deploymentTab(wrapper, 'targets')
+    const tablist = wrapper.get('[role="tablist"]')
 
-    expect(topologiesTab.attributes('id')).toBe('deployment-tab-topologies')
-    expect(topologiesTab.attributes('aria-controls')).toBe('deployment-panel-topologies')
-    expect(targetsTab.attributes('id')).toBe('deployment-tab-targets')
-    expect(targetsTab.attributes('aria-controls')).toBe('deployment-panel-targets')
-    expect(wrapper.get('[data-testid="deployment-topology-panel"]').attributes('id')).toBe('deployment-panel-topologies')
-    expect(wrapper.get('[data-testid="deployment-topology-panel"]').attributes('aria-labelledby')).toBe('deployment-tab-topologies')
-    expect(wrapper.get('[data-testid="deployment-target-panel"]').attributes('id')).toBe('deployment-panel-targets')
-    expect(wrapper.get('[data-testid="deployment-target-panel"]').attributes('aria-labelledby')).toBe('deployment-tab-targets')
+    expect(tablist.attributes('aria-label')).toBe('Deployments')
+    expect(topologiesTab.attributes('aria-selected')).toBe('true')
+    const topologyPanel = wrapper.get('[data-testid="deployment-topology-panel"]').element.closest('[role="tabpanel"]')
+    expect(topologyPanel.id).toBe(topologiesTab.attributes('aria-controls'))
+    expect(topologyPanel.getAttribute('aria-labelledby')).toBe(topologiesTab.attributes('id'))
 
-    await topologiesTab.trigger('keydown', { key: 'ArrowRight' })
+    await targetsTab.trigger('mousedown', { button: 0 })
     await flushPromises()
     expect(targetsTab.attributes('aria-selected')).toBe('true')
-    expect(document.activeElement).toBe(targetsTab.element)
-
-    await targetsTab.trigger('keydown', { key: 'ArrowLeft' })
-    await flushPromises()
-    expect(topologiesTab.attributes('aria-selected')).toBe('true')
-    expect(document.activeElement).toBe(topologiesTab.element)
-
-    await topologiesTab.trigger('keydown', { key: 'End' })
-    await flushPromises()
-    expect(targetsTab.attributes('aria-selected')).toBe('true')
-
-    await targetsTab.trigger('keydown', { key: 'Home' })
-    await flushPromises()
-    expect(topologiesTab.attributes('aria-selected')).toBe('true')
+    const targetPanel = wrapper.get('[data-testid="deployment-target-panel"]').element.closest('[role="tabpanel"]')
+    expect(targetPanel.id).toBe(targetsTab.attributes('aria-controls'))
+    // Hidden panels stay mounted, so the topology table keeps its state.
+    expect(wrapper.find('[data-testid="deployment-topology-panel"]').exists()).toBe(true)
     wrapper.unmount()
   })
 
@@ -233,7 +225,7 @@ describe('Deployments', () => {
     adminApi.getNodes.mockReturnValue(nodesRequest.promise)
     const wrapper = mountDeployments()
 
-    await wrapper.get('[data-testid="deployment-targets"]').trigger('click')
+    await deploymentTab(wrapper, 'targets').trigger('mousedown', { button: 0 })
     expect(kernelApi.getKernelNodeAssignments).not.toHaveBeenCalled()
 
     nodesRequest.resolve({ code: 0, data: { list: [node] } })
@@ -254,7 +246,7 @@ describe('Deployments', () => {
     const wrapper = mountDeployments()
     await flushPromises()
 
-    await wrapper.get('[data-testid="deployment-targets"]').trigger('click')
+    await deploymentTab(wrapper, 'targets').trigger('mousedown', { button: 0 })
     await nextTick()
     await choose(wrapper, 'assignment-node-filter', 22)
     expect(wrapper.get('[data-testid="deployment-target-panel"]').text()).toContain('nat-egress')

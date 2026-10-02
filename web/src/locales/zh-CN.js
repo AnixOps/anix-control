@@ -204,7 +204,7 @@ export default {
       forwardAgents: 'NodeX Agents',
       control: '控制内核',
       plugins: '插件中心',
-      deployments: '部署',
+      deployments: '部署编排',
       accessGroups: '访问组',
       payment: '支付',
       notifications: '通知',

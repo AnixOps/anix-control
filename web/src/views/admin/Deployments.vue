@@ -14,59 +14,51 @@
       </template>
     </UiPageHeader>
 
-    <div class="view-switcher" role="tablist" :aria-label="t('pageTitles.admin.deployments')">
-      <button
-        v-for="(mode, index) in VIEW_MODES"
-        :id="`deployment-tab-${mode}`"
-        :key="mode"
-        class="view-tab"
-        :data-testid="mode === 'topologies' ? 'deployment-topologies' : 'deployment-targets'"
-        type="button"
-        role="tab"
-        :aria-controls="`deployment-panel-${mode}`"
-        :aria-selected="viewMode === mode"
-        :tabindex="viewMode === mode ? 0 : -1"
-        @click="setViewMode(mode)"
-        @keydown="moveViewTab($event, index)"
-      >
-        {{ mode === 'topologies' ? t('control.tabs.topologies') : t('control.tabs.assignments') }}
-      </button>
-    </div>
-
     <p v-if="error && loaded" class="page-message is-error" role="alert">{{ error }}</p>
     <p v-if="notice" class="page-message is-notice" role="status">{{ notice }}</p>
 
-    <DeploymentTopologiesPanel
-      v-show="viewMode === 'topologies'"
-      :topologies="topologies"
-      :latest-deployment-for="latestDeploymentFor"
-      :loading="loading && !loaded"
-      :error="loaded ? null : error"
-      :can-create="scopes.length > 0"
-      @create="openNewTopology"
-      @edit="openTopologyEditor"
-      @view-deployment="openDeploymentStatus"
-      @retry="loadInitial()"
-    />
-
-    <DeploymentAssignmentsPanel
-      v-show="viewMode === 'targets'"
-      :nodes="nodes"
-      :selected-node-i-d="selectedNodeID"
-      :assignments="assignments"
-      :loading="assignmentsLoading || (loading && !loaded)"
-      :error="loaded ? null : error"
-      :mutation-pending="targetMutationPending"
-      :plugin-name="pluginName"
-      :is-busy="isAssignmentBusy"
-      @select-node="selectAssignmentTarget"
-      @refresh="loadAssignments(selectedNodeID)"
-      @create="openAssignmentDrawer()"
-      @edit="openAssignmentDrawer"
-      @toggle="toggleAssignment"
-      @remove="removeAssignment"
-      @retry="loadInitial()"
-    />
+    <UiTabs
+      :model-value="viewMode"
+      :items="viewTabs"
+      :aria-label="t('pageTitles.admin.deployments')"
+      variant="segmented"
+      :unmount-on-hide="false"
+      data-testid="deployment-tabs"
+      @update:model-value="setViewMode"
+    >
+      <template #topologies>
+        <DeploymentTopologiesPanel
+          :topologies="topologies"
+          :latest-deployment-for="latestDeploymentFor"
+          :loading="loading && !loaded"
+          :error="loaded ? null : error"
+          :can-create="scopes.length > 0"
+          @create="openNewTopology"
+          @edit="openTopologyEditor"
+          @view-deployment="openDeploymentStatus"
+          @retry="loadInitial()"
+        />
+      </template>
+      <template #targets>
+        <DeploymentAssignmentsPanel
+          :nodes="nodes"
+          :selected-node-i-d="selectedNodeID"
+          :assignments="assignments"
+          :loading="assignmentsLoading || (loading && !loaded)"
+          :error="loaded ? null : error"
+          :mutation-pending="targetMutationPending"
+          :plugin-name="pluginName"
+          :is-busy="isAssignmentBusy"
+          @select-node="selectAssignmentTarget"
+          @refresh="loadAssignments(selectedNodeID)"
+          @create="openAssignmentDrawer()"
+          @edit="openAssignmentDrawer"
+          @toggle="toggleAssignment"
+          @remove="removeAssignment"
+          @retry="loadInitial()"
+        />
+      </template>
+    </UiTabs>
 
     <section class="activity-panel" data-testid="deployment-activity">
       <OperationTimeline
@@ -126,12 +118,14 @@
 // graph preview) and the node-role sheet (UiSheet). The state and every
 // kernel request live in deployments/useDeploymentCenter.js; the tables are
 // page-local panels on UiDataTable.
+import { computed } from 'vue'
 import { RefreshCw } from '@lucide/vue'
 import AssignmentDrawer from '@/components/admin/AssignmentDrawer.vue'
 import OperationTimeline from '@/components/admin/OperationTimeline.vue'
 import TopologyWorkspace from '@/components/admin/TopologyWorkspace.vue'
 import UiIconButton from '@/ui/UiIconButton.vue'
 import UiPageHeader from '@/ui/UiPageHeader.vue'
+import UiTabs from '@/ui/UiTabs.vue'
 import DeploymentAssignmentsPanel from './deployments/DeploymentAssignmentsPanel.vue'
 import DeploymentTopologiesPanel from './deployments/DeploymentTopologiesPanel.vue'
 import { useDeploymentCenter, VIEW_MODES } from './deployments/useDeploymentCenter'
@@ -160,7 +154,6 @@ const {
   latestDeploymentFor,
   loadInitial,
   setViewMode,
-  moveViewTab,
   loadAssignments,
   selectAssignmentTarget,
   openAssignmentDrawer,
@@ -183,6 +176,11 @@ const {
   rollbackDeployment,
   cancelOperation,
 } = useDeploymentCenter()
+
+const viewTabs = computed(() => VIEW_MODES.map(mode => ({
+  value: mode,
+  label: mode === 'topologies' ? t('control.tabs.topologies') : t('control.tabs.assignments')
+})))
 </script>
 
 <style scoped>
@@ -191,47 +189,6 @@ const {
   flex-direction: column;
   gap: var(--space-6);
   min-width: 0;
-}
-
-.view-switcher {
-  display: inline-flex;
-  align-self: flex-start;
-  max-width: 100%;
-  gap: var(--space-1);
-  padding: var(--space-1);
-  overflow-x: auto;
-  border-radius: var(--radius-pill);
-  background: var(--fill-1);
-}
-
-.view-tab {
-  min-height: 32px;
-  padding: var(--space-1) var(--space-4);
-  border: 0;
-  border-radius: var(--radius-pill);
-  background: transparent;
-  /* As UiTabs segmented: label-2 alone is 4.49:1 on fill-1 in light. */
-  color: color-mix(in srgb, var(--label-2) 85%, var(--label-1));
-  font-size: var(--type-callout-size);
-  font-weight: var(--weight-medium);
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.view-tab:hover {
-  color: var(--label-1);
-}
-
-.view-tab[aria-selected='true'] {
-  background: var(--bg-elevated);
-  box-shadow: var(--shadow-1);
-  color: var(--label-1);
-  font-weight: var(--weight-semibold);
-}
-
-.view-tab:focus-visible {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
 }
 
 .page-message {

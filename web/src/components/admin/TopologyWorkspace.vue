@@ -16,12 +16,15 @@
           <label for="new-topology-name">{{ t('control.topology.name') }}</label>
           <input id="new-topology-name" v-model.trim="newTopology.name" type="text" maxlength="160" :disabled="saving" />
         </div>
-        <div class="form-group">
-          <label for="new-topology-scope">{{ t('control.table.scope') }}</label>
-          <select id="new-topology-scope" v-model="newTopology.serviceScope" :disabled="saving">
-            <option v-for="scope in scopes" :key="scope.id" :value="scope.id">{{ scope.name || scope.id }} ({{ scope.id }})</option>
-          </select>
-        </div>
+        <UiSelect
+          id="new-topology-scope"
+          v-model="newTopology.serviceScope"
+          class="form-select"
+          size="md"
+          :label="t('control.table.scope')"
+          :options="scopeOptions"
+          :disabled="saving"
+        />
         <div class="form-group">
           <label for="new-topology-description">{{ t('control.table.description') }}</label>
           <textarea id="new-topology-description" v-model.trim="newTopology.description" rows="3" :disabled="saving"></textarea>
@@ -32,23 +35,29 @@
     <template v-else>
       <div class="workspace-body" :aria-busy="loading ? 'true' : undefined">
         <div class="editor-toolbar">
-          <div class="form-group">
-            <label for="topology-revision-selector">{{ t('control.topology.revision') }}</label>
-            <select id="topology-revision-selector" v-model.number="selectedRevisionID" :disabled="loading || saving" @change="selectRevision">
-              <option v-if="revisions.length === 0" :value="0">{{ t('control.topology.noRevisions') }}</option>
-              <option v-for="revision in revisions" :key="revision.id" :value="Number(revision.id)">r{{ revision.revision }} (#{{ revision.id }})</option>
-            </select>
-          </div>
+          <UiSelect
+            id="topology-revision-selector"
+            class="form-select"
+            size="md"
+            :model-value="selectedRevisionID"
+            :label="t('control.topology.revision')"
+            :options="revisionOptions"
+            :disabled="loading || saving || revisions.length === 0"
+            @update:model-value="selectRevision"
+          />
           <div class="form-group">
             <label for="topology-rollout-group">{{ t('control.table.rolloutGroup') }}</label>
             <input id="topology-rollout-group" v-model.trim="rolloutGroup" type="text" autocomplete="off" :disabled="saving" />
           </div>
-          <div class="form-group">
-            <label for="topology-failure-policy">{{ t('control.topology.failurePolicy') }}</label>
-            <select id="topology-failure-policy" v-model="failurePolicy" :disabled="saving">
-              <option value="stop_and_rollback">{{ t('control.topology.stopAndRollback') }}</option>
-            </select>
-          </div>
+          <UiSelect
+            id="topology-failure-policy"
+            v-model="failurePolicy"
+            class="form-select"
+            size="md"
+            :label="t('control.topology.failurePolicy')"
+            :options="failurePolicyOptions"
+            :disabled="saving"
+          />
         </div>
 
         <div class="form-group">
@@ -170,6 +179,7 @@ import { topologyInputFromJSON, topologyJSONFromDetail } from '@/composables/use
 import UiButton from '@/ui/UiButton.vue'
 import UiDialog from '@/ui/UiDialog.vue'
 import UiSegmentedControl from '@/ui/UiSegmentedControl.vue'
+import UiSelect from '@/ui/UiSelect.vue'
 import TopologyGraph from './TopologyGraph.vue'
 
 const props = defineProps({
@@ -197,6 +207,12 @@ const baselineMessage = ref('')
 const selectedRevisionID = ref(0)
 const rolloutGroup = ref('')
 const failurePolicy = ref('stop_and_rollback')
+const scopeOptions = computed(() => props.scopes.map(scope => ({ value: scope.id, label: `${scope.name || scope.id} (${scope.id})` })))
+// With no revision yet the select shows 「暂无 revision」 as its only choice.
+const revisionOptions = computed(() => (props.revisions.length === 0
+  ? [{ value: 0, label: t('control.topology.noRevisions') }]
+  : props.revisions.map(revision => ({ value: Number(revision.id), label: `r${revision.revision} (#${revision.id})` }))))
+const failurePolicyOptions = computed(() => [{ value: 'stop_and_rollback', label: t('control.topology.stopAndRollback') }])
 const applyConfirming = ref(false)
 const rollbackConfirming = ref(false)
 const confirmedDeploymentID = ref(0)
@@ -337,7 +353,8 @@ function options() {
   }
 }
 
-function selectRevision() {
+function selectRevision(value) {
+  if (value !== undefined) selectedRevisionID.value = Number(value) || 0
   clearConfirmation()
   emit('select-revision', { topologyID: Number(props.topology.id), revisionID: selectedRevisionID.value })
 }
@@ -444,7 +461,8 @@ function stateClass(state) {
 .editor-toolbar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
 .form-group { display: grid; min-width: 0; gap: var(--space-2); }
 .form-group label { color: var(--label-2); font-size: var(--type-caption-size); font-weight: var(--weight-bold); }
-.form-group input, .form-group select, .form-group textarea { box-sizing: border-box; width: 100%; }
+.form-group input, .form-group textarea { box-sizing: border-box; width: 100%; }
+.form-select { min-width: 0; }
 .form-group textarea { resize: vertical; }
 .json-textarea { font-family: var(--font-mono); font-size: var(--type-caption-size); }
 .graph-view-switch { justify-self: start; }
