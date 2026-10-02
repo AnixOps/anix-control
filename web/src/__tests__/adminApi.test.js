@@ -758,7 +758,9 @@ async function loadActualRequestModule({ token = '' } = {}) {
     }),
   }))
 
-  await vi.importActual('@/utils/request')
+  // axios and the interceptors load with the first request.
+  const { loadRequestClient } = await vi.importActual('@/utils/request')
+  await loadRequestClient()
 
   return {
     requestInterceptors,

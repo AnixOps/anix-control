@@ -1,30 +1,32 @@
 import { describe, expect, it } from 'vitest'
-import { manualChunks } from '../../vite.config'
+import { chunkGroupFor } from '../../vite.config'
 
-describe('vite manual chunking', () => {
+describe('vite code-splitting groups', () => {
   it('keeps heavy visualization dependencies in dedicated chunks', () => {
-    expect(manualChunks('/repo/web/node_modules/echarts/lib/echarts.js')).toBe('echarts')
-    expect(manualChunks('/repo/web/node_modules/zrender/lib/core/util.js')).toBe('echarts')
-    expect(manualChunks('/repo/web/node_modules/@antv/g6/esm/index.js')).toBe('g6')
+    expect(chunkGroupFor('/repo/web/node_modules/echarts/lib/echarts.js')).toBe('echarts')
+    expect(chunkGroupFor('/repo/web/node_modules/zrender/lib/core/util.js')).toBe('echarts')
+    expect(chunkGroupFor('/repo/web/node_modules/@antv/g6/esm/index.js')).toBe('g6')
   })
 
   it('keeps the QR encoder in its own on-demand chunk', () => {
-    expect(manualChunks('/repo/web/node_modules/uqr/dist/index.mjs')).toBe('qr')
+    expect(chunkGroupFor('/repo/web/node_modules/uqr/dist/index.mjs')).toBe('qr')
   })
 
-  it('keeps app infrastructure chunks stable for browser caching', () => {
-    expect(manualChunks('/repo/web/src/api/admin.js')).toBe('api')
-    expect(manualChunks('/repo/web/node_modules/vue-router/dist/vue-router.mjs')).toBe('router')
-    expect(manualChunks('/repo/web/node_modules/vue-i18n/dist/vue-i18n.mjs')).toBe('i18n')
-    expect(manualChunks('/repo/web/node_modules/axios/index.js')).toBe('network')
-    expect(manualChunks('/repo/web/src/locales/zh-CN.js')).toBe('locale-zh-CN')
-    expect(manualChunks('/repo/web/src/views/admin/Forward.vue')).toBeUndefined()
+  it('keeps framework chunks stable for browser caching', () => {
+    expect(chunkGroupFor('/repo/web/node_modules/vue/dist/vue.runtime.esm-bundler.js')).toBe('vue-vendor')
+    expect(chunkGroupFor('/repo/web/node_modules/@vue/runtime-core/dist/runtime-core.esm-bundler.js')).toBe('vue-vendor')
+    expect(chunkGroupFor('/repo/web/node_modules/pinia/dist/pinia.mjs')).toBe('vue-vendor')
+    expect(chunkGroupFor('/repo/web/node_modules/vue-router/dist/vue-router.mjs')).toBe('router')
+    expect(chunkGroupFor('/repo/web/node_modules/vue-i18n/dist/vue-i18n.mjs')).toBe('i18n')
+    expect(chunkGroupFor('/repo/web/node_modules/axios/index.js')).toBe('axios')
   })
 
-  it('keeps the component library primitives out of the app shell vendor chunks', () => {
-    expect(manualChunks('/repo/web/node_modules/reka-ui/dist/Dialog/DialogRoot.js')).toBe('ui-vendor')
-    expect(manualChunks('/repo/web/node_modules/@floating-ui/vue/dist/floating-ui.vue.mjs')).toBe('ui-vendor')
-    expect(manualChunks('/repo/web/node_modules/@vueuse/core/index.mjs')).toBe('ui-vendor')
-    expect(manualChunks('/repo/web/node_modules/vue/dist/vue.runtime.esm-bundler.js')).toBe('vue-vendor')
+  it('leaves app code, locales and the component library to automatic splitting', () => {
+    // API modules and message groups go with the routes that use them, and
+    // Reka UI primitives are shared only by the routes that render them.
+    expect(chunkGroupFor('/repo/web/src/api/admin.js')).toBeUndefined()
+    expect(chunkGroupFor('/repo/web/src/locales/zh-CN.js')).toBeUndefined()
+    expect(chunkGroupFor('/repo/web/src/views/admin/Forward.vue')).toBeUndefined()
+    expect(chunkGroupFor('/repo/web/node_modules/reka-ui/dist/Dialog/DialogRoot.js')).toBeUndefined()
   })
 })

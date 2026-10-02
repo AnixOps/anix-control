@@ -7,7 +7,7 @@ import '../design/fonts/inter/inter.css'
 import '../design/tokens.css'
 import '../styles/base.css'
 import './stories/story.css'
-import i18n, { setLocale } from '../i18n'
+import i18n, { loadMessageGroup, setLocale } from '../i18n'
 
 function syncTheme() {
   const root = document.documentElement
@@ -23,5 +23,6 @@ export const setupVue3 = defineSetupVue3(async ({ app }) => {
   app.use(i18n)
   const params = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null
   const lang = params?.get('lang') === 'en' ? 'en' : 'zh-CN'
+  await loadMessageGroup('admin')
   await setLocale(lang)
 })

@@ -210,18 +210,18 @@ function updateJSON() {
 
 <style scoped>
 .schema-field { min-width: 0; }
-.schema-field > label, .schema-group > legend, .group-label { display: block; margin-bottom: 6px; color: var(--text-secondary); font-size: 13px; font-weight: 700; }
+.schema-field > label, .schema-group > legend, .group-label { display: block; margin-bottom: 6px; color: var(--label-2); font-size: 13px; font-weight: 700; }
 .schema-field input:not([type='checkbox']), .schema-field select, .schema-field textarea { width: 100%; }
-.boolean-field { display: inline-flex !important; align-items: center; gap: 9px; color: var(--text-color) !important; }
+.boolean-field { display: inline-flex !important; align-items: center; gap: 9px; color: var(--label-1) !important; }
 .boolean-field input { width: 18px; height: 18px; margin: 0; }
 .field-help, .field-error, .array-empty { margin: 6px 0 0; font-size: 12px; line-height: 1.45; }
-.field-help, .array-empty { color: var(--text-secondary); }
-.field-error { color: var(--error-color); overflow-wrap: anywhere; }
-.schema-group { min-width: 0; margin: 0; padding: 12px 0 0 14px; border: 0; border-left: 2px solid var(--border-color); }
+.field-help, .array-empty { color: var(--label-2); }
+.field-error { color: var(--danger); overflow-wrap: anywhere; }
+.schema-group { min-width: 0; margin: 0; padding: 12px 0 0 14px; border: 0; border-left: 2px solid var(--separator); }
 .schema-children { display: grid; gap: 14px; }
 .array-heading { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
 .array-heading .group-label { margin: 0; }
-.array-item { position: relative; min-width: 0; padding: 12px 44px 12px 0; border-top: 1px solid var(--border-color); }
+.array-item { position: relative; min-width: 0; padding: 12px 44px 12px 0; border-top: 1px solid var(--separator); }
 .remove-item { position: absolute; top: 10px; right: 0; }
 .icon-button { width: 34px; height: 34px; min-height: 34px; padding: 0; }
 .json-editor { min-height: 120px; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 500; resize: vertical; }

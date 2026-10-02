@@ -1,0 +1,24 @@
+{
+  "boot": ["src/locales/zh-CN.js"],
+  "routes": {
+    "login": {
+      "modules": ["src/views/Login.vue"],
+      "after": ["chunk:axios"],
+      "maxGzipKB": 120,
+      "maxTotalGzipKB": 141
+    },
+    "user-dashboard": {
+      "modules": ["src/layouts/UserLayout.vue", "src/views/user/Dashboard.vue"],
+      "after": ["chunk:axios"],
+      "maxGzipKB": 178,
+      "maxTotalGzipKB": 197
+    },
+    "admin-dashboard": {
+      "modules": ["src/layouts/AdminLayout.vue", "src/views/admin/Dashboard.vue", "src/locales/zh-CN.admin.js"],
+      "after": ["chunk:axios"],
+      "maxGzipKB": 250,
+      "maxTotalGzipKB": 269
+    }
+  },
+  "chunks": { "maxGzipKB": 80, "exclude": ["^assets/echarts-", "^assets/g6-"] }
+}

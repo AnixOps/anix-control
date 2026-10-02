@@ -1,9 +1,9 @@
 import { createRouter, createWebHistory } from 'vue-router'
 import { useUserStore } from '@/stores/user'
-import { ensureAdminExtensions, resetAdminExtensions } from '@/extensions/runtime'
 import { resolveLegacyControlRedirect } from '@/router/controlLegacy'
 import { loadEdition, routeAllowedByEdition } from '@/composables/useEdition'
 import { scrollBehavior } from '@/router/scroll'
+import { loadMessageGroup } from '@/i18n'
 
 // Layouts: lazy, so the login page does not load the shells (and the
 // component library they use) before anyone has signed in.
@@ -57,6 +57,26 @@ const NOT_FOUND_META = Object.freeze({ titleKey: 'shell.status.notFound.title' }
 // Pages with wide tables keep to --size-content-wide instead of
 // --size-content-admin (AdminLayout).
 const WIDE = Object.freeze({ layout: 'wide' })
+
+// The extension runtime (and the kernel API it calls) is admin-only: it loads
+// with the first admin route, so the sign-in page does not carry it.
+let extensionRuntime = null
+
+function loadExtensionRuntime() {
+  return import('@/extensions/runtime').then((module) => {
+    extensionRuntime = module
+    return module
+  })
+}
+
+async function ensureAdminExtensions(targetRouter) {
+  return (await loadExtensionRuntime()).ensureAdminExtensions(targetRouter)
+}
+
+// Nothing to reset before the runtime has loaded.
+function resetAdminExtensions() {
+  extensionRuntime?.resetAdminExtensions()
+}
 
 const routes = [
   {
@@ -402,6 +422,13 @@ router.beforeEach(async (to, from, next) => {
   if (to.name === 'forbidden' || to.name === 'not-found') {
     next()
     return
+  }
+
+  // Admin messages load with the first admin page; an admin on a user page
+  // gets them too (⌘K and the account menu list admin pages). A failed load
+  // leaves the keys untranslated rather than blocking the navigation.
+  if (userStore.isAdmin) {
+    await loadMessageGroup('admin').catch(() => {})
   }
 
   // Commercial pages (meta.edition) exist only in the commercial edition.

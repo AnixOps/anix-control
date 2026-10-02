@@ -1,66 +1,20 @@
 /*
- * Legacy layer, bridged to AnixOps Design (src/design/tokens.css).
+ * Global layer on top of AnixOps Design (src/design/tokens.css and
+ * src/styles/base.css). Pages and components style themselves with the
+ * tokens and the component library (src/ui); nothing new goes here.
  *
- * Every pre-redesign variable below is an alias of a design token, so pages
- * that still use them follow the brand and both themes. The aliases and the
- * global classes (.btn, .card, .data-table, ...) stay until the pages
- * move to the component library (redesign plan U2-U9); then they are removed.
- * The .modal* dialog classes went in U4: dialogs are UiDialog and UiSheet.
- * New code uses the tokens directly. Map: docs/reference/frontend-design.md.
+ * What is left after the U9 cleanup:
+ * - #app and the skip link;
+ * - the baseline for bare <button>, <input>, <textarea> and <select>;
+ * - the classes that signed plugin WebUI bundles render (packages/<name>/webui,
+ *   anixops.webui/v1: .btn, .btn-secondary, .table-container, .data-table,
+ *   .empty-state) and that the plugin configuration forms use (.btn-primary,
+ *   .btn-sm, .btn-danger, .form-group, .required). Plugins ship separately,
+ *   so these stay as long as the WebUI contract does.
+ * The pre-redesign variable aliases (--primary-color, --text-color, ...) and
+ * the unused utility and page classes were removed in U9; the map from the
+ * old names to the tokens is in docs/reference/frontend-design.md.
  */
-:root {
-  /* Surfaces and text */
-  --bg-color: var(--bg);
-  --bg-accent: var(--bg-grouped);
-  --surface-color: var(--bg-elevated);
-  --surface-muted: var(--bg-grouped);
-  --surface-hover: var(--fill-1);
-  --border-color: var(--separator);
-  --border-strong: var(--separator-strong);
-  --text-color: var(--label-1);
-  --text-secondary: var(--label-2);
-  --text-tertiary: var(--label-3);
-
-  /* Accent and status (#0064FA migrates to the AnixOps accent) */
-  --primary-color: var(--accent);
-  --primary-hover: var(--accent-hover);
-  --primary-soft: var(--accent-soft);
-  --success-color: var(--success);
-  --warning-color: var(--warning);
-  --error-color: var(--danger);
-
-  /* Admin sidebar: light frosted material, dark in dark mode (plan D3) */
-  --admin-sidebar-surface: var(--material-sidebar);
-  --admin-sidebar-accent: var(--fill-2);
-  --admin-sidebar-hover: var(--fill-1);
-  --admin-sidebar-divider: var(--separator);
-  --admin-sidebar-text: var(--label-1);
-  --admin-sidebar-text-strong: var(--label-1);
-  --admin-sidebar-muted: var(--label-2);
-
-  /* Elevation and motion. --radius-sm/md/lg now come from the tokens
-     (10/14/20 px); the legacy 6/8/8 px values are gone. */
-  --shadow-sm: var(--shadow-1);
-  --shadow-md: var(--shadow-2);
-  --shadow-lg: var(--shadow-3);
-  --transition: all var(--dur-toggle) var(--ease-standard);
-
-  /* Arco-era names that were used but never defined, so dark mode fell back
-     to their light literals. */
-  --color-text-1: var(--label-1);
-  --color-text-2: var(--label-2);
-  --color-text-3: var(--label-3);
-  --color-bg-1: var(--bg-elevated);
-  --color-bg-2: var(--bg-elevated);
-  --color-border: var(--separator);
-  --background-color: var(--bg-grouped);
-  --bg-secondary: var(--fill-1);
-
-  /* Shell metrics */
-  --sidebar-width: 280px;
-  --sidebar-collapsed-width: 72px;
-  --header-height: 64px;
-}
 
 #app {
   min-height: 100vh;
@@ -86,28 +40,9 @@
   top: var(--space-4);
 }
 
-.container {
-  width: 100%;
-  max-width: 1440px;
-  margin: 0 auto;
-  padding: 0 20px;
-}
-
-@media (min-width: 640px) {
-  .container {
-    padding: 0 24px;
-  }
-}
-
-@media (min-width: 1024px) {
-  .container {
-    padding: 0 32px;
-  }
-}
-
-/* Buttons: pill shaped (radius-pill), 36 px default, 28 px small, 44 px large.
-   Bare buttons size by padding (no min-height), so page styles that set a
-   smaller height keep working. */
+/* Buttons: pill shaped (radius-pill); .btn is 36 px, .btn-sm 28 px. Bare
+   buttons size by padding (no min-height), so page styles that set their
+   own height keep working. */
 button,
 .btn {
   display: inline-flex;
@@ -183,29 +118,23 @@ button:disabled,
   background-color: var(--fill-1);
 }
 
-.btn-ghost {
-  background-color: transparent;
-  border-color: transparent;
-  color: var(--label-2);
-  box-shadow: none;
-}
-
-.btn-ghost:hover {
-  background-color: var(--fill-1);
-  color: var(--label-1);
-}
-
 .btn-sm {
   min-height: var(--size-control-sm);
   padding: var(--space-1) var(--space-3);
   font-size: var(--type-callout-size);
 }
 
-.btn-lg {
-  min-height: var(--size-control-lg);
-  padding: var(--space-2) var(--space-6);
-  font-size: var(--type-body-size);
-  font-weight: var(--weight-semibold);
+.btn-danger {
+  border-color: transparent;
+  background: var(--danger-soft);
+  color: var(--danger);
+}
+
+.btn-danger:hover,
+.btn-danger:active {
+  border-color: transparent;
+  background: var(--danger-fill);
+  color: var(--on-danger);
 }
 
 /* Fields: radius-sm, hairline border, accent border and focus ring on focus. */
@@ -257,78 +186,10 @@ textarea::placeholder {
   opacity: 1;
 }
 
-/* Cards: elevated surface, hairline, radius-md, resting shadow. */
-.card {
-  background-color: var(--bg-elevated);
-  border: 1px solid var(--separator);
-  border-radius: var(--radius-md);
-  padding: var(--space-6);
-  box-shadow: var(--shadow-1);
-}
-
-.grid {
-  display: grid;
-  gap: 16px;
-}
-
-.grid-cols-1 {
-  grid-template-columns: repeat(1, 1fr);
-}
-
-.grid-cols-2 {
-  grid-template-columns: repeat(2, 1fr);
-}
-
-.grid-cols-3 {
-  grid-template-columns: repeat(3, 1fr);
-}
-
-.grid-cols-4 {
-  grid-template-columns: repeat(4, 1fr);
-}
-
-@media (max-width: 640px) {
-  .sm\:grid-cols-1 {
-    grid-template-columns: repeat(1, 1fr);
-  }
-}
-
-@media (min-width: 768px) {
-  .md\:grid-cols-2 {
-    grid-template-columns: repeat(2, 1fr);
-  }
-
-  .md\:grid-cols-3 {
-    grid-template-columns: repeat(3, 1fr);
-  }
-}
-
-@media (min-width: 1024px) {
-  .lg\:grid-cols-3 {
-    grid-template-columns: repeat(3, 1fr);
-  }
-
-  .lg\:grid-cols-4 {
-    grid-template-columns: repeat(4, 1fr);
-  }
-}
-
-@media (max-width: 768px) {
-  /* Legacy: rem-based page styles shrink on phones. Removed with the old
-     breakpoints in U9; body text itself uses the px type tokens. */
-  html {
-    /* stylelint-disable-next-line declaration-property-value-allowed-list */
-    font-size: 14px;
-  }
-
-  button,
-  .btn {
-    min-height: 40px;
-  }
-}
-
+/* Touch screens: 44 px targets for the legacy buttons and the bare fields.
+   Bare <button>s size themselves (the old 40 / 44 px rule for every button
+   is gone; components no longer need min-height: 0 against it). */
 @media (hover: none) and (pointer: coarse) {
-  button,
   .btn,
   input,
   select,
@@ -337,208 +198,13 @@ textarea::placeholder {
   }
 }
 
-.text-center {
-  text-align: center;
-}
-
-.text-left {
-  text-align: left;
-}
-
-.text-right {
-  text-align: right;
-}
-
-.text-secondary {
-  color: var(--label-2);
-}
-
-.text-success {
-  color: var(--success);
-}
-
-.text-warning {
-  color: var(--warning);
-}
-
-.text-error {
-  color: var(--danger);
-}
-
-.flex {
-  display: flex;
-}
-
-.flex-col {
-  flex-direction: column;
-}
-
-.items-center {
-  align-items: center;
-}
-
-.justify-center {
-  justify-content: center;
-}
-
-.justify-between {
-  justify-content: space-between;
-}
-
-.gap-2 {
-  gap: 8px;
-}
-
-.gap-4 {
-  gap: 16px;
-}
-
-.gap-6 {
-  gap: 24px;
-}
-
-.w-full {
-  width: 100%;
-}
-
-.h-full {
-  height: 100%;
-}
-
-.min-h-screen {
-  min-height: 100vh;
-}
-
-.p-4 {
-  padding: 16px;
-}
-
-.p-6 {
-  padding: 24px;
-}
-
-.mt-4 {
-  margin-top: 16px;
-}
-
-.mt-6 {
-  margin-top: 24px;
-}
-
-.mb-4 {
-  margin-bottom: 16px;
-}
-
-.mb-6 {
-  margin-bottom: 24px;
-}
-
-.hidden {
-  display: none;
-}
-
-@media (min-width: 768px) {
-  .md\:block {
-    display: block;
-  }
-
-  .md\:flex {
-    display: flex;
-  }
-
-  .md\:hidden {
-    display: none;
-  }
-}
-
-.page-shell {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-5);
-}
-
-.page-toolbar {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--space-4);
-}
-
-.page-toolbar h1 {
-  font-size: var(--type-title-1-size);
-  line-height: var(--type-title-1-line);
-  font-weight: var(--type-title-1-weight);
-  letter-spacing: var(--type-title-1-tracking);
-}
-
-.page-toolbar p {
-  color: var(--label-2);
-}
-
-.section-panel {
-  background: var(--bg-elevated);
-  border: 1px solid var(--separator);
-  border-radius: var(--radius-md);
-  box-shadow: var(--shadow-1);
-}
-
-.toolbar,
-.filter-bar {
-  display: flex;
-  align-items: center;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-}
-
-/* Tabs render as a segmented control. */
-.tabs {
-  display: inline-flex;
-  align-items: center;
-  gap: var(--space-0-5);
-  padding: var(--space-0-5);
-  background: var(--fill-1);
-  border: 0;
-  border-radius: var(--radius-sm);
-  width: fit-content;
-}
-
-.tab {
-  min-height: var(--size-control-sm);
-  padding: 0 var(--space-3);
-  border: 0;
-  border-radius: calc(var(--radius-sm) - var(--space-0-5));
-  background: transparent;
-  color: var(--label-2);
-  box-shadow: none;
-  font-size: var(--type-callout-size);
-  font-weight: var(--weight-semibold);
-}
-
-.tab:hover {
-  background: transparent;
-  color: var(--label-1);
-}
-
-.tab.active {
-  background: var(--bg-elevated);
-  color: var(--label-1);
-  box-shadow: var(--shadow-1), 0 0 0 0.5px var(--separator);
-}
-
-.table-container,
-.data-panel {
-  overflow-x: auto;
-}
-
+/* Tables in plugin WebUI bundles. */
 .table-container {
+  overflow-x: auto;
   background: var(--bg-elevated);
   border: 1px solid var(--separator);
   border-radius: var(--radius-md);
   box-shadow: var(--shadow-1);
-}
-
-.table-wrap {
-  overflow-x: auto;
 }
 
 .data-table {
@@ -573,36 +239,9 @@ textarea::placeholder {
   background: var(--fill-1);
 }
 
-.empty-row,
 .empty-state {
   color: var(--label-2);
   text-align: center;
-}
-
-.status-badge,
-.type-badge {
-  display: inline-flex;
-  align-items: center;
-  min-height: 22px;
-  padding: 0 var(--space-2);
-  border-radius: var(--radius-pill);
-  font-size: var(--type-caption-size);
-  line-height: var(--type-caption-line);
-  font-weight: var(--weight-semibold);
-  white-space: nowrap;
-}
-
-.btn-danger {
-  border-color: transparent;
-  background: var(--danger-soft);
-  color: var(--danger);
-}
-
-.btn-danger:hover,
-.btn-danger:active {
-  border-color: transparent;
-  background: var(--danger-fill);
-  color: var(--on-danger);
 }
 
 .form-group {
@@ -618,31 +257,6 @@ textarea::placeholder {
   font-weight: var(--weight-semibold);
 }
 
-.form-row {
-  display: flex;
-  gap: var(--space-4);
-}
-
-.form-row .form-group {
-  flex: 1;
-}
-
 .required {
   color: var(--danger);
-}
-
-@media (max-width: 768px) {
-  .page-toolbar {
-    flex-direction: column;
-  }
-
-  .tabs {
-    width: 100%;
-    overflow-x: auto;
-  }
-
-  .form-row {
-    flex-direction: column;
-    gap: 0;
-  }
 }

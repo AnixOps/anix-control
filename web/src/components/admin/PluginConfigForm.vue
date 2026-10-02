@@ -173,6 +173,6 @@ function validateSchemaValue(schema, value, path) {
 .config-mode { display: flex; gap: 6px; flex-wrap: wrap; }
 .structured-fields { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 18px 20px; }
 .full-json-editor { min-height: 320px; font: 12px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; font-weight: 500; resize: vertical; }
-.field-error { margin: 0; color: var(--error-color); font-size: 12px; overflow-wrap: anywhere; }
+.field-error { margin: 0; color: var(--danger); font-size: 12px; overflow-wrap: anywhere; }
 @media (max-width: 720px) { .structured-fields { grid-template-columns: 1fr; } }
 </style>

@@ -64,6 +64,8 @@ beforeAll(async () => {
   i18nModule = await import('@/i18n')
   config.global.plugins = [i18nModule.default]
   await i18nModule.initI18n()
+  // Page tests mount admin views without the router guard that loads them.
+  await i18nModule.loadMessageGroup('admin')
 })
 
 beforeEach(async () => {
