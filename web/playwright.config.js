@@ -2,7 +2,8 @@ import { defineConfig, devices } from '@playwright/test'
 
 export default defineConfig({
   testDir: './e2e',
-  testIgnore: 'live-control-machine-telemetry.spec.js',
+  // e2e/visual runs in the Playwright image only (playwright.visual.config.js).
+  testIgnore: ['live-control-machine-telemetry.spec.js', 'visual/**'],
   timeout: 30_000,
   expect: { timeout: 5_000 },
   fullyParallel: true,
