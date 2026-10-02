@@ -44,7 +44,7 @@ describe('useFormat bytes', () => {
   it('accepts numeric strings and other precisions', () => {
     const { bytes } = createFormatter('en')
     expect(bytes('1536')).toBe('1.50 KB')
-    expect(bytes(137975824384, { digits: 1 })).toBe('128.5 GB')
+    expect(bytes(137975824384, { precision: 1 })).toBe('128.5 GB')
     expect(bytes(-2048)).toBe('-2.00 KB')
   })
 
@@ -90,7 +90,7 @@ describe('useFormat other formatters', () => {
   it('formats numbers and percents', () => {
     expect(en.number(1208)).toBe('1,208')
     expect(zh.percent(0.64)).toBe('64%')
-    expect(en.percent(0.6449, { digits: 1 })).toBe('64.5%')
+    expect(en.percent(0.6449, { precision: 1 })).toBe('64.5%')
   })
 
   it('writes dates as 2026-11-30 and times in 24 hours, in the local time zone', () => {

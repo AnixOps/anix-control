@@ -7,7 +7,7 @@ const rows = [
   ['bytes(0)', f.bytes(0)],
   ['bytes(1536)', f.bytes(1536)],
   ['bytes(137_975_824_384)', f.bytes(137975824384)],
-  ['bytes(137_975_824_384, { digits: 1 })', f.bytes(137975824384, { digits: 1 })],
+  ['bytes(137_975_824_384, { precision: 1 })', f.bytes(137975824384, { precision: 1 })],
   ['rate(12_500_000)  // bytes/s', f.rate(12500000)],
   ['rate(500, { input: "mbps" })', f.rate(500, { input: 'mbps' })],
   ['duration(273_600)', f.duration(273600)],

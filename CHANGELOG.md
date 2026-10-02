@@ -26,7 +26,8 @@
     one live region, F8), `useConfirm()` (a promise instead of
     `confirm()`), `useFormat()` (bytes, rates, durations, money, numbers,
     dates, relative times on Intl and the current locale; `formatBytes`
-    matches the page copies), `useDelayedLoading()` (the 300 ms rule).
+    matches the page copies, `{ precision: 1 }` for hero numbers),
+    `useDelayedLoading()` (the 300 ms rule).
   - Built-in strings in `zh-CN` and `en` under `ui.*`.
   - Histoire 1.0.0-beta.1 documents every component (`npm run story:dev`,
     `npm run story:build`), with the vendored tokens and a dark-mode

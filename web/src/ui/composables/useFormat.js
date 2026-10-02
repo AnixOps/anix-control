@@ -77,8 +77,9 @@ function spaceAfterNumber(parts, locale) {
 export function createFormatter(locale = 'zh-CN', translate = (key, n) => i18n.global.t(key, n, { locale })) {
   // Bytes in binary steps (1 KB = 1024 B) with the unit names the product
   // already uses. Defaults match the formatBytes copies in the pages:
-  // two decimals, '0 B' for zero or a missing value.
-  function bytes(value, { digits = 2, empty = '0 B' } = {}) {
+  // two decimals, '0 B' for zero or a missing value. Hero and summary
+  // numbers (user home, dashboard cards) pass { precision: 1 }.
+  function bytes(value, { precision = 2, empty = '0 B' } = {}) {
     const n = toNumber(value)
     if (!Number.isFinite(n) || n === 0) return empty
     let scaled = Math.abs(n)
@@ -88,8 +89,8 @@ export function createFormatter(locale = 'zh-CN', translate = (key, n) => i18n.g
       index += 1
     }
     const text = numberFormat(locale, {
-      minimumFractionDigits: digits,
-      maximumFractionDigits: digits,
+      minimumFractionDigits: precision,
+      maximumFractionDigits: precision,
       useGrouping: 'min2'
     }).format(scaled)
     return `${n < 0 ? '-' : ''}${text} ${BYTE_UNITS[index]}`
@@ -97,7 +98,7 @@ export function createFormatter(locale = 'zh-CN', translate = (key, n) => i18n.g
 
   // Network rates in decimal bit steps (1 Mbps = 1 000 000 bit/s).
   // `input`: 'bytes' (bytes per second, the default), 'bits' or 'mbps'.
-  function rate(value, { input = 'bytes', digits = 1, empty = EMPTY } = {}) {
+  function rate(value, { input = 'bytes', precision = 1, empty = EMPTY } = {}) {
     const n = toNumber(value)
     if (!Number.isFinite(n)) return empty
     let bits = n
@@ -110,7 +111,7 @@ export function createFormatter(locale = 'zh-CN', translate = (key, n) => i18n.g
       index += 1
     }
     const text = numberFormat(locale, {
-      maximumFractionDigits: index === 0 ? 0 : digits,
+      maximumFractionDigits: index === 0 ? 0 : precision,
       useGrouping: 'min2'
     }).format(scaled)
     return `${bits < 0 ? '-' : ''}${text} ${RATE_UNITS[index]}`
@@ -123,10 +124,10 @@ export function createFormatter(locale = 'zh-CN', translate = (key, n) => i18n.g
   }
 
   // `value` is a ratio: 0.42 → 42%.
-  function percent(value, { digits = 0, empty = EMPTY } = {}) {
+  function percent(value, { precision = 0, empty = EMPTY } = {}) {
     const n = toNumber(value)
     if (!Number.isFinite(n)) return empty
-    return numberFormat(locale, { style: 'percent', maximumFractionDigits: digits, minimumFractionDigits: digits }).format(n)
+    return numberFormat(locale, { style: 'percent', maximumFractionDigits: precision, minimumFractionDigits: precision }).format(n)
   }
 
   // Money. Amounts from the API are in cents (fen) unless `cents: false`.

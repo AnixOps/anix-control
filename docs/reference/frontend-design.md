@@ -164,8 +164,12 @@ shadow HTML elements: `import { UiButton, useToast } from '@/ui'`.
 `npm run story:dev`, `npm run story:build` (output in `web/.histoire/`).
 The preview loads the vendored tokens and `base.css`; the toolbar's
 dark-mode switch maps to `<html data-theme="dark">`, and `?lang=en` on the
-preview URL switches the built-in strings to English. Histoire declares
-Vite ^7; `package.json` overrides its `vite` peer to the project's Vite 8.
+preview URL switches the built-in strings to English.
+
+> Histoire is pinned at 1.0.0-beta.1, which declares Vite ^7, so
+> `package.json` has `overrides: { "vite": "$vite" }` to run it on the
+> project's Vite 8; drop the override once a stable Histoire supports Vite 8.
+
 
 **Mount once.** `<UiHost />` (toast region and confirmation host) goes in
 `App.vue` when the first page uses `useToast()` or `useConfirm()` (U4).
@@ -180,7 +184,7 @@ written separately for each language. Page text is passed in as props.
 |---|---|---|
 | An action | `UiButton` | One `primary` per view, rightmost; `secondary` otherwise; `tertiary` for low-emphasis text actions; `danger` only to confirm a destructive action, `danger-soft` for the button that starts one ("删除节点…"); `ghost` in toolbars. Sizes `sm` 28 (tables), `md` 36 (default), `lg` 44. Labels are verbs. |
 | An icon-only action | `UiIconButton` | `label` is required (aria-label and tooltip); toggles pass `pressed`. |
-| Text, numbers, passwords | `UiTextField`, `UiNumberField`, `UiPasswordField`, `UiTextarea` | Top label, help, error; units as `suffix`/`unit`. Height 44 by default (`md` 36 in toolbars, `sm` 28 in tables). |
+| Text, numbers, passwords | `UiTextField`, `UiNumberField`, `UiPasswordField`, `UiTextarea` | Top label, help, error; units as `suffix`/`unit`. Height 44 (`lg`) by default in forms and dialogs; `size="md"` (36) in toolbars, tables and sheets; `sm` 28 only inside dense table cells. Same sizes for `UiSelect` and `UiCombobox`. |
 | A custom control in a form | `UiField` | Gives the control its id, label, help and error wiring. |
 | One of a short list | `UiSelect` | Up to ~10 options. |
 | One of a long list, or search | `UiCombobox` | Filters as you type. |
@@ -233,7 +237,7 @@ written separately for each language. Page text is passed in as props.
 
 | Component | Behaviour |
 |---|---|
-| Fields | `<label for>`; help, units and error in `aria-describedby` (error first); `aria-invalid`; errors in a polite live region; native `required` with a visual-only asterisk. |
+| Fields | A 1 px `--label-3` border (3:1 or more in both themes, WCAG 1.4.11); `<label for>`; help, units and error in `aria-describedby` (error first); `aria-invalid`; errors in a polite live region; native `required` with a visual-only asterisk. |
 | Select / Combobox | `role="combobox"` + listbox; Space/Enter/↓ open, arrows move, typing jumps or filters, Enter selects, Esc closes and returns focus. |
 | NumberField | `role="spinbutton"` with min/max; ↑/↓ step, PageUp/PageDown ×10, Home/End; the wheel does not change it. |
 | Switch / Checkbox / Radio | `role="switch"` / `checkbox` (`mixed`) / `radiogroup` named by its label; boundaries at 3:1 or more. |
@@ -261,7 +265,10 @@ gives a fixed-locale set; `formatBytes()` is a plain helper.
 - `bytes`: binary steps, B/KB/MB/GB/TB, two decimals by default — the same
   output as the `formatBytes` copies in the pages (a test compares them over
   2 000 values in both locales), so U4+ can swap them without visible
-  change. `{ digits: 1 }` gives `128.5 GB`.
+  change. `{ precision: 1 }` gives `128.5 GB`: use it for hero and summary
+  numbers (user home, dashboard and metric cards) when those pages
+  migrate; tables and details keep the default. `rate` and `percent` take
+  `precision` too.
 - `rate`: decimal bits per second from bytes/s (`{ input: 'bits' | 'mbps' }`).
 - `duration`: the two largest units, 「3 天 4 小时」 / "3d 4h".
 - `money`: from cents, `¥` in both languages.

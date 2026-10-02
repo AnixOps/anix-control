@@ -10,7 +10,8 @@
 
 <script setup>
 // The visual box shared by text fields, the select trigger and the combobox:
-// 1 px separator-strong border, radius-sm, elevated background, and a focus
+// 1 px --label-3 border (3:1 or more against the surface in both themes,
+// WCAG 1.4.11), radius-sm, elevated background, and a focus
 // ring (2 px accent + soft halo) on :focus-within. Not exported.
 defineProps({
   as: { type: [String, Object], default: 'div' },
@@ -34,7 +35,7 @@ defineProps({
   min-width: 0;
   min-height: var(--ui-box-height);
   padding: 0;
-  border: 1px solid var(--separator-strong);
+  border: 1px solid var(--label-3);
   border-radius: var(--radius-sm);
   background: var(--bg-elevated);
   color: var(--label-1);
@@ -57,7 +58,12 @@ defineProps({
 }
 
 .ui-box:hover:not(.is-disabled, .is-readonly) {
-  border-color: var(--label-3);
+  border-color: var(--label-2);
+}
+
+/* Disabled controls are exempt from 1.4.11; keep them visibly quieter. */
+.ui-box.is-disabled {
+  border-color: var(--separator-strong);
 }
 
 /* The ring replaces the browser outline on the control inside. A
