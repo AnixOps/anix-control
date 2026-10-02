@@ -20,6 +20,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
+	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/AnixOps/anix-control/v4/internal/subscriber"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -417,6 +418,37 @@ func TestAgentControlUsersFollowTheChangeLog(t *testing.T) {
 		assert.Equal(t, []uint64{9}, upsertIDs([]*agentv1pb.UserDelta{second}))
 		assert.Equal(t, []uint64{104}, second.RemovedUserIds)
 		assert.Equal(t, environment.cursor(t), second.Cursor)
+		requireHeartbeatAckNext(t, stream, environment.nodeID(), helloAck.SessionId)
+	})
+}
+
+// A node's users follow its group, so moving the node to another group
+// records a change for each active user of either group: the session
+// removes the old group's users and adds the new group's.
+func TestAgentControlUsersFollowANodeGroupChange(t *testing.T) {
+	forEachUsersDatabase(t, func(t *testing.T, environment *agentUsersEnvironment) {
+		environment.seedUsers(t, 3)
+		stream, helloAck, cancel := environment.openUsersSession(t, usersCapabilities(), environment.cursor(t))
+		defer cancel()
+		requireHeartbeatAckNext(t, stream, environment.nodeID(), helloAck.SessionId)
+
+		other := environment.groupID + 1
+		require.NoError(t, service.NewNodeService().UpdateNode(environment.node.ID, map[string]any{"group_id": float64(other)}))
+		// Users 1 to 3 (the old group) and 104 (the new one), in batches
+		// of 3; banned, expired and exhausted users are on no list.
+		first := recvDelta(t, stream)
+		assert.Empty(t, upsertIDs([]*agentv1pb.UserDelta{first}))
+		assert.Equal(t, []uint64{1, 2, 3}, first.RemovedUserIds)
+		second := recvDelta(t, stream)
+		assert.Equal(t, []uint64{104}, upsertIDs([]*agentv1pb.UserDelta{second}))
+		assert.Empty(t, second.RemovedUserIds)
+		assert.Equal(t, environment.cursor(t), second.Cursor)
+		assert.Equal(t, []uint64{104}, environment.legacyUserIDs(t))
+
+		// Saving the same group records nothing.
+		cursor := environment.cursor(t)
+		require.NoError(t, service.NewNodeService().UpdateNode(environment.node.ID, map[string]any{"group_id": float64(other), "name": "renamed"}))
+		assert.Equal(t, cursor, environment.cursor(t))
 		requireHeartbeatAckNext(t, stream, environment.nodeID(), helloAck.SessionId)
 	})
 }

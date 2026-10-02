@@ -145,13 +145,20 @@ func PackageStorageSource(cfg *config.DatabaseConfig) (string, error) {
 	}
 }
 
+// sqliteConnectionString adds the connection settings Control needs to a
+// SQLite path: a busy timeout, WAL for file databases, and transactions that
+// begin IMMEDIATE. A deferred transaction that reads before it writes cannot
+// upgrade to a writer once another connection committed after its read
+// began, and SQLite fails it with "database is locked" at once, without
+// waiting out the busy timeout; an immediate one waits for the write lock at
+// BEGIN instead.
 func sqliteConnectionString(databasePath string) string {
 	databasePath = strings.TrimSpace(databasePath)
 	separator := "?"
 	if strings.Contains(databasePath, "?") {
 		separator = "&"
 	}
-	dsn := databasePath + separator + "_pragma=busy_timeout(5000)"
+	dsn := databasePath + separator + "_pragma=busy_timeout(5000)&_txlock=immediate"
 	if databasePath == ":memory:" || strings.HasPrefix(databasePath, "file::memory:") {
 		return dsn
 	}

@@ -95,13 +95,16 @@ func Open(ctx context.Context, leaser Leaser) (*Store, error) {
 	return &Store{DB: db, Lease: lease}, nil
 }
 
-// sqliteConnectionString matches the kernel's settings for the shared file.
+// sqliteConnectionString matches the kernel's settings for the shared file,
+// immediate transactions included: a deferred one that reads before it
+// writes fails with "database is locked" when another process committed
+// after its read began.
 func sqliteConnectionString(path string) string {
 	separator := "?"
 	if strings.Contains(path, "?") {
 		separator = "&"
 	}
-	return path + separator + "_pragma=busy_timeout(5000)&_pragma=journal_mode(WAL)"
+	return path + separator + "_pragma=busy_timeout(5000)&_txlock=immediate&_pragma=journal_mode(WAL)"
 }
 
 // Prefix is what the __PKG_PREFIX__ migration token expands to: the package

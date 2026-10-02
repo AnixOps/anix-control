@@ -72,6 +72,7 @@ WEIGHTS: dict[str, dict[str, float]] = {
         "internal/tests/notificationcompat": 33.4,
         "internal/tests/integration": 31.0,
         "internal/tests/nodeopsagent": 20.9,
+        "internal/subscriber": 10.0,
         "internal/tests/proxynodecompat": 10.2,
         "internal/tests/machinetelemetrycompat": 10.0,
         "internal/tests/nodesecretsplit": 9.6,

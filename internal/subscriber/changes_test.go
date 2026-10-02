@@ -99,3 +99,32 @@ func TestActiveMatchesNodeUserLists(t *testing.T) {
 	require.NoError(t, Active(db.Model(&model.User{}), now).Order("id").Pluck("id", &ids).Error)
 	require.Equal(t, []uint{1, 6}, ids)
 }
+
+// A node's group change records the active subscribers of both groups; a
+// node with no group serves everyone, so moving to or from it records every
+// active subscriber, and keeping the group records nothing.
+func TestNodeGroupChangeFeedsTheChangeLog(t *testing.T) {
+	db := openDB(t)
+	group := func(id uint) *uint { return &id }
+	require.NoError(t, db.Create(&[]model.User{
+		{ID: 1, Email: "a@example.test", Token: "t1", UUID: "u1", TransferEnable: 10, GroupID: group(1)},
+		{ID: 2, Email: "b@example.test", Token: "t2", UUID: "u2", TransferEnable: 10, GroupID: group(2)},
+		{ID: 3, Email: "c@example.test", Token: "t3", UUID: "u3", TransferEnable: 10, GroupID: group(3)},
+		{ID: 4, Email: "d@example.test", Token: "t4", UUID: "u4", TransferEnable: 10, GroupID: group(1), Banned: 1},
+	}).Error)
+	now := time.Now()
+	record := func(previous, next *uint) []uint {
+		t.Helper()
+		cursor, err := Cursor(db)
+		require.NoError(t, err)
+		require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
+			return RecordNodeGroupChangeTx(tx, previous, next, now)
+		}))
+		return changedUsers(t, db, cursor)
+	}
+	require.Equal(t, []uint{1, 2}, record(group(1), group(2)))
+	require.Equal(t, []uint{1, 2, 3}, record(nil, group(3)))
+	require.Equal(t, []uint{1, 2, 3}, record(group(2), nil))
+	require.Empty(t, record(group(2), group(2)))
+	require.Empty(t, record(nil, nil))
+}
