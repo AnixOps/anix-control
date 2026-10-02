@@ -31,17 +31,20 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "绠＄悊鍛樺湪鑺傜偣涓婃墽琛屽懡浠?// @Tags 绠＄悊绔?Agent",
+                "description": "管理员在节点上执行命令",
                 "consumes": [
                     "application/json"
                 ],
                 "produces": [
                     "application/json"
                 ],
-                "summary": "鎵ц鍛戒护",
+                "tags": [
+                    "管理端 Agent"
+                ],
+                "summary": "执行命令",
                 "parameters": [
                     {
-                        "description": "鍛戒护淇℃伅",
+                        "description": "命令信息",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -68,14 +71,14 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "绠＄悊鍛樿幏鍙栨墍鏈夊湪绾跨殑 Agent",
+                "description": "管理员获取所有在线的 Agent",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
-                    "绠＄悊绔?Agent"
+                    "管理端 Agent"
                 ],
-                "summary": "鑾峰彇鍦ㄧ嚎 Agent 鍒楄〃",
+                "summary": "获取在线 Agent 列表",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -174,7 +177,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "绠＄悊鍛樺悜鑺傜偣涓嬪彂浠诲姟",
+                "description": "管理员向节点下发任务",
                 "consumes": [
                     "application/json"
                 ],
@@ -182,12 +185,12 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "绠＄悊绔?Agent"
+                    "管理端 Agent"
                 ],
-                "summary": "鍒涘缓浠诲姟",
+                "summary": "创建任务",
                 "parameters": [
                     {
-                        "description": "浠诲姟淇℃伅",
+                        "description": "任务信息",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -1420,7 +1423,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "绠＄悊鍛樿幏鍙栭個璇风郴缁熼厤缃?",
+                "description": "管理员获取邀请系统配置",
                 "consumes": [
                     "application/json"
                 ],
@@ -1428,9 +1431,9 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "绠＄悊绔?绯荤粺"
+                    "管理端-系统"
                 ],
-                "summary": "鑾峰彇閭€璇烽厤缃?",
+                "summary": "获取邀请配置",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -1454,7 +1457,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "绠＄悊鍛樻洿鏂伴個璇风郴缁熼厤缃?",
+                "description": "管理员更新邀请系统配置",
                 "consumes": [
                     "application/json"
                 ],
@@ -1462,9 +1465,9 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "绠＄悊绔?绯荤粺"
+                    "管理端-系统"
                 ],
-                "summary": "鏇存柊閭€璇烽厤缃?",
+                "summary": "更新邀请配置",
                 "parameters": [
                     {
                         "description": "Invite configuration",
@@ -1508,7 +1511,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "绠＄悊鍛樿幏鍙栭個璇风郴缁熺粺璁℃暟鎹?",
+                "description": "管理员获取邀请系统统计数据",
                 "consumes": [
                     "application/json"
                 ],
@@ -1516,9 +1519,9 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "绠＄悊绔?绯荤粺"
+                    "管理端-系统"
                 ],
-                "summary": "鑾峰彇閭€璇风粺璁?",
+                "summary": "获取邀请统计",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -1537,7 +1540,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "绠＄悊鍛樿幏鍙栨彁鐜扮敵璇峰垪琛?",
+                "description": "管理员获取提现申请列表",
                 "consumes": [
                     "application/json"
                 ],
@@ -1545,9 +1548,9 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "绠＄悊绔?绯荤粺"
+                    "管理端-系统"
                 ],
-                "summary": "鑾峰彇鎻愮幇鐢宠鍒楄〃",
+                "summary": "获取提现申请列表",
                 "parameters": [
                     {
                         "type": "string",
@@ -1558,14 +1561,14 @@ const docTemplate = `{
                     {
                         "type": "integer",
                         "default": 1,
-                        "description": "椤电爜",
+                        "description": "页码",
                         "name": "page",
                         "in": "query"
                     },
                     {
                         "type": "integer",
                         "default": 20,
-                        "description": "姣忛〉鏁伴噺",
+                        "description": "每页数量",
                         "name": "page_size",
                         "in": "query"
                     }
@@ -1588,7 +1591,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "绠＄悊鍛樺鐞嗘彁鐜扮敵璇凤紝鎵瑰噯鎴栨嫆缁?",
+                "description": "管理员处理提现申请，批准或拒绝",
                 "consumes": [
                     "application/json"
                 ],
@@ -1596,19 +1599,19 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "绠＄悊绔?绯荤粺"
+                    "管理端-系统"
                 ],
-                "summary": "澶勭悊鎻愮幇鐢宠",
+                "summary": "处理提现申请",
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "鎻愮幇璁板綍ID",
+                        "description": "提现记录ID",
                         "name": "id",
                         "in": "path",
                         "required": true
                     },
                     {
-                        "description": "澶勭悊璇锋眰 {status, remark}",
+                        "description": "处理请求 {status, remark}",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -4895,7 +4898,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "管理员获取Telegram Bot的配置信�?",
+                "description": "管理员获取Telegram Bot的配置信息",
                 "consumes": [
                     "application/json"
                 ],
@@ -4903,7 +4906,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "管理�?通知"
+                    "管理端-通知"
                 ],
                 "summary": "获取Telegram Bot配置",
                 "responses": {
@@ -4929,7 +4932,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "管理员更新Telegram Bot的配置信�?",
+                "description": "管理员更新Telegram Bot的配置信息",
                 "consumes": [
                     "application/json"
                 ],
@@ -4937,7 +4940,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "管理�?通知"
+                    "管理端-通知"
                 ],
                 "summary": "更新Telegram Bot配置",
                 "parameters": [
@@ -4990,7 +4993,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "管理员通过Telegram广播消息给所有绑定用�?",
+                "description": "管理员通过Telegram广播消息给所有绑定用户",
                 "consumes": [
                     "application/json"
                 ],
@@ -4998,7 +5001,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "管理�?通知"
+                    "管理端-通知"
                 ],
                 "summary": "广播Telegram消息",
                 "parameters": [
@@ -5037,7 +5040,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "管理员通过Telegram发送通知给指定用�?",
+                "description": "管理员通过Telegram发送通知给指定用户",
                 "consumes": [
                     "application/json"
                 ],
@@ -5045,7 +5048,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "管理�?通知"
+                    "管理端-通知"
                 ],
                 "summary": "发送Telegram通知",
                 "parameters": [
@@ -5099,7 +5102,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "管理�?通知"
+                    "管理端-通知"
                 ],
                 "summary": "获取用户绑定列表",
                 "parameters": [
@@ -5136,24 +5139,27 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "绠＄悊鍛樻洿鏂版寚瀹歍elegram鐢ㄦ埛鐨勯€氱煡寮€鍏?// @Tags 绠＄悊绔?閫氱煡",
+                "description": "管理员更新指定Telegram用户的通知开关",
                 "consumes": [
                     "application/json"
                 ],
                 "produces": [
                     "application/json"
                 ],
-                "summary": "鏇存柊Telegram鐢ㄦ埛閫氱煡璁剧疆",
+                "tags": [
+                    "管理端-通知"
+                ],
+                "summary": "更新Telegram用户通知设置",
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "Telegram缁戝畾ID",
+                        "description": "Telegram绑定ID",
                         "name": "id",
                         "in": "path",
                         "required": true
                     },
                     {
-                        "description": "閫氱煡璁剧疆",
+                        "description": "通知设置",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -5203,7 +5209,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "管理�?通知"
+                    "管理端-通知"
                 ],
                 "summary": "设置Telegram Webhook",
                 "parameters": [
@@ -5255,7 +5261,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "管理�?通知"
+                    "管理端-通知"
                 ],
                 "summary": "删除Telegram Webhook",
                 "responses": {
@@ -5800,17 +5806,20 @@ const docTemplate = `{
         },
         "/api/v2/agent/heartbeat": {
             "post": {
-                "description": "Agent 瀹氭湡鍙戦€佸績璺?// @Tags Agent",
+                "description": "Agent 定期发送心跳",
                 "consumes": [
                     "application/json"
                 ],
                 "produces": [
                     "application/json"
                 ],
-                "summary": "Agent 蹇冭烦",
+                "tags": [
+                    "Agent"
+                ],
+                "summary": "Agent 心跳",
                 "parameters": [
                     {
-                        "description": "蹇冭烦淇℃伅",
+                        "description": "心跳信息",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -5832,7 +5841,7 @@ const docTemplate = `{
         },
         "/api/v2/agent/monitor": {
             "post": {
-                "description": "Agent 涓婃姤绯荤粺鐩戞帶鏁版嵁",
+                "description": "Agent 上报系统监控数据",
                 "consumes": [
                     "application/json"
                 ],
@@ -5842,10 +5851,10 @@ const docTemplate = `{
                 "tags": [
                     "Agent"
                 ],
-                "summary": "涓婃姤鐩戞帶鏁版嵁",
+                "summary": "上报监控数据",
                 "parameters": [
                     {
-                        "description": "鐩戞帶鏁版嵁",
+                        "description": "监控数据",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -5867,7 +5876,7 @@ const docTemplate = `{
         },
         "/api/v2/agent/register": {
             "post": {
-                "description": "Agent 鍚姩鏃舵敞鍐屽埌闈㈡澘",
+                "description": "Agent 启动时注册到面板",
                 "consumes": [
                     "application/json"
                 ],
@@ -5877,10 +5886,10 @@ const docTemplate = `{
                 "tags": [
                     "Agent"
                 ],
-                "summary": "Agent 娉ㄥ唽",
+                "summary": "Agent 注册",
                 "parameters": [
                     {
-                        "description": "娉ㄥ唽淇℃伅",
+                        "description": "注册信息",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -5902,7 +5911,7 @@ const docTemplate = `{
         },
         "/api/v2/agent/result": {
             "post": {
-                "description": "Agent 涓婃姤浠诲姟鎵ц缁撴灉",
+                "description": "Agent 上报任务执行结果",
                 "consumes": [
                     "application/json"
                 ],
@@ -5912,10 +5921,10 @@ const docTemplate = `{
                 "tags": [
                     "Agent"
                 ],
-                "summary": "涓婃姤浠诲姟缁撴灉",
+                "summary": "上报任务结果",
                 "parameters": [
                     {
-                        "description": "浠诲姟缁撴灉",
+                        "description": "任务结果",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -5937,17 +5946,18 @@ const docTemplate = `{
         },
         "/api/v2/agent/tasks": {
             "get": {
+                "description": "Agent 轮询获取待执行的任务",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Agent"
                 ],
-                "summary": "鑾峰彇寰呮墽琛屼换鍔?// @Description Agent 杞鑾峰彇寰呮墽琛岀殑浠诲姟",
+                "summary": "获取待执行任务",
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "鑺傜偣 ID",
+                        "description": "节点 ID",
                         "name": "node_id",
                         "in": "query",
                         "required": true
@@ -5966,8 +5976,11 @@ const docTemplate = `{
         },
         "/api/v2/agent/ws": {
             "get": {
-                "description": "Agent 寤虹珛 WebSocket 闀胯繛鎺?// @Tags Agent",
-                "summary": "WebSocket 杩炴帴",
+                "description": "Agent 建立 WebSocket 长连接",
+                "tags": [
+                    "Agent"
+                ],
+                "summary": "WebSocket 连接",
                 "responses": {
                     "101": {
                         "description": "Switching Protocols"
@@ -5977,18 +5990,18 @@ const docTemplate = `{
         },
         "/api/v2/forward/agent/rules": {
             "get": {
-                "description": "Agent 鑾峰彇璇ヨ妭鐐圭殑杞彂瑙勫垯",
+                "description": "Agent 获取该节点的转发规则",
                 "produces": [
                     "application/json"
                 ],
                 "tags": [
                     "Agent"
                 ],
-                "summary": "鑾峰彇杞彂瑙勫垯",
+                "summary": "获取转发规则",
                 "parameters": [
                     {
                         "type": "integer",
-                        "description": "鑺傜偣 ID",
+                        "description": "节点 ID",
                         "name": "node_id",
                         "in": "query",
                         "required": true
@@ -6588,7 +6601,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "鐢ㄦ埛鑾峰彇鑷繁鐨勯個璇风爜鍜屼剑閲戜俊鎭?",
+                "description": "用户获取自己的邀请码和佣金信息",
                 "consumes": [
                     "application/json"
                 ],
@@ -6596,9 +6609,9 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "鐢ㄦ埛绔?"
+                    "用户端"
                 ],
-                "summary": "鑾峰彇閭€璇蜂俊鎭?",
+                "summary": "获取邀请信息",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -6624,7 +6637,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "鐢ㄦ埛鑾峰彇鑷繁鐨勪剑閲戣褰曞垪琛?",
+                "description": "用户获取自己的佣金记录列表",
                 "consumes": [
                     "application/json"
                 ],
@@ -6632,21 +6645,21 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "鐢ㄦ埛绔?"
+                    "用户端"
                 ],
-                "summary": "鑾峰彇浣ｉ噾璁板綍",
+                "summary": "获取佣金记录",
                 "parameters": [
                     {
                         "type": "integer",
                         "default": 1,
-                        "description": "椤电爜",
+                        "description": "页码",
                         "name": "page",
                         "in": "query"
                     },
                     {
                         "type": "integer",
                         "default": 20,
-                        "description": "姣忛〉鏁伴噺",
+                        "description": "每页数量",
                         "name": "page_size",
                         "in": "query"
                     }
@@ -6676,7 +6689,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "鐢ㄦ埛鐢熸垚鏂扮殑閭€璇风爜",
+                "description": "用户生成新的邀请码",
                 "consumes": [
                     "application/json"
                 ],
@@ -6684,9 +6697,9 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "鐢ㄦ埛绔?"
+                    "用户端"
                 ],
-                "summary": "鐢熸垚閭€璇风爜",
+                "summary": "生成邀请码",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -6712,7 +6725,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "鐢ㄦ埛鐢宠浣ｉ噾鎻愮幇",
+                "description": "用户申请佣金提现",
                 "consumes": [
                     "application/json"
                 ],
@@ -6720,12 +6733,12 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "鐢ㄦ埛绔?"
+                    "用户端"
                 ],
-                "summary": "鐢宠鎻愮幇",
+                "summary": "申请提现",
                 "parameters": [
                     {
-                        "description": "鎻愮幇璇锋眰 {amount, method, account, name}",
+                        "description": "提现请求 {amount, method, account, name}",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -6760,7 +6773,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "鐢ㄦ埛鑾峰彇鑷繁鐨勬彁鐜拌褰曞垪琛?",
+                "description": "用户获取自己的提现记录列表",
                 "consumes": [
                     "application/json"
                 ],
@@ -6768,21 +6781,21 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "鐢ㄦ埛绔?"
+                    "用户端"
                 ],
-                "summary": "鑾峰彇鎻愮幇璁板綍",
+                "summary": "获取提现记录",
                 "parameters": [
                     {
                         "type": "integer",
                         "default": 1,
-                        "description": "椤电爜",
+                        "description": "页码",
                         "name": "page",
                         "in": "query"
                     },
                     {
                         "type": "integer",
                         "default": 20,
-                        "description": "姣忛〉鏁伴噺",
+                        "description": "每页数量",
                         "name": "page_size",
                         "in": "query"
                     }
@@ -7296,7 +7309,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "用户�?"
+                    "用户端"
                 ],
                 "summary": "更新Telegram通知设置",
                 "parameters": [
@@ -7335,7 +7348,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "用户获取自己的Telegram绑定状�?",
+                "description": "用户获取自己的Telegram绑定状态",
                 "consumes": [
                     "application/json"
                 ],
@@ -7343,9 +7356,9 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "用户�?"
+                    "用户端"
                 ],
-                "summary": "获取Telegram绑定状�?",
+                "summary": "获取Telegram绑定状态",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -7372,7 +7385,7 @@ const docTemplate = `{
                     "application/json"
                 ],
                 "tags": [
-                    "用户�?"
+                    "用户端"
                 ],
                 "summary": "解绑Telegram",
                 "responses": {

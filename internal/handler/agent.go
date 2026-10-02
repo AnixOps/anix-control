@@ -37,7 +37,7 @@ var (
 	agentWSWriteTimeout = 10 * time.Second
 )
 
-// AgentHandler Agent 绠＄悊 API
+// AgentHandler Agent 管理 API
 type AgentHandler struct {
 	db            *gorm.DB
 	connections   sync.Map // nodeID -> *AgentConnection
@@ -49,7 +49,7 @@ type AgentHandler struct {
 	maxRetries    int
 }
 
-// AgentConnection Agent 杩炴帴淇℃伅
+// AgentConnection Agent 连接信息
 type AgentConnection struct {
 	NodeID        uint
 	LastSeen      time.Time
@@ -116,7 +116,7 @@ func hashString(s string) string {
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// NewAgentHandler 鍒涘缓 Handler
+// NewAgentHandler 创建 Handler
 func NewAgentHandler() *AgentHandler {
 	db := database.Get()
 	return &AgentHandler{
@@ -655,15 +655,15 @@ func (h *AgentHandler) handleWebSocketMessage(agentConn *AgentConnection, raw []
 	}
 }
 
-// ========== Agent 璁よ瘉鍜屾敞鍐?==========
+// ========== Agent 认证和注册 ==========
 
 // AgentRegister godoc
-// @Summary Agent 娉ㄥ唽
-// @Description Agent 鍚姩鏃舵敞鍐屽埌闈㈡澘
+// @Summary Agent 注册
+// @Description Agent 启动时注册到面板
 // @Tags Agent
 // @Accept json
 // @Produce json
-// @Param request body AgentRegisterRequest true "娉ㄥ唽淇℃伅"
+// @Param request body AgentRegisterRequest true "注册信息"
 // @Success 200 {object} map[string]any
 // @Router /api/v2/agent/register [post]
 func (h *AgentHandler) AgentRegister(c *gin.Context) {
@@ -673,7 +673,7 @@ func (h *AgentHandler) AgentRegister(c *gin.Context) {
 		return
 	}
 
-	// 楠岃瘉 Token
+	// 验证 Token
 	isForwardNode, err := h.verifyForwardNodeToken(req.NodeID, req.Token)
 	if err != nil {
 		if errors.Is(err, errAgentInvalidToken) {
@@ -684,7 +684,7 @@ func (h *AgentHandler) AgentRegister(c *gin.Context) {
 		return
 	}
 
-	// 璁板綍杩炴帴
+	// 记录连接
 	conn := &AgentConnection{
 		NodeID:        req.NodeID,
 		LastSeen:      time.Now(),
@@ -702,7 +702,7 @@ func (h *AgentHandler) AgentRegister(c *gin.Context) {
 	})
 }
 
-// AgentRegisterRequest 娉ㄥ唽璇锋眰
+// AgentRegisterRequest 注册请求
 type AgentRegisterRequest struct {
 	NodeID       uint           `json:"node_id" binding:"required,gt=0"`
 	Token        string         `json:"token" binding:"required,min=1"`
@@ -711,14 +711,15 @@ type AgentRegisterRequest struct {
 	Capabilities []string       `json:"capabilities"`
 }
 
-// ========== Agent 蹇冭烦 ==========
+// ========== Agent 心跳 ==========
 
 // AgentHeartbeat godoc
-// @Summary Agent 蹇冭烦
-// @Description Agent 瀹氭湡鍙戦€佸績璺?// @Tags Agent
+// @Summary Agent 心跳
+// @Description Agent 定期发送心跳
+// @Tags Agent
 // @Accept json
 // @Produce json
-// @Param request body AgentHeartbeatRequest true "蹇冭烦淇℃伅"
+// @Param request body AgentHeartbeatRequest true "心跳信息"
 // @Success 200 {object} map[string]any
 // @Router /api/v2/agent/heartbeat [post]
 func (h *AgentHandler) AgentHeartbeat(c *gin.Context) {
@@ -736,26 +737,27 @@ func (h *AgentHandler) AgentHeartbeat(c *gin.Context) {
 		return
 	}
 
-	// 鏇存柊杩炴帴鏃堕棿
+	// 更新连接时间
 	h.markAgentSeen(nodeID, isForwardNode)
 
 	c.JSON(http.StatusOK, gin.H{"message": "ok"})
 }
 
-// AgentHeartbeatRequest 蹇冭烦璇锋眰
+// AgentHeartbeatRequest 心跳请求
 type AgentHeartbeatRequest struct {
 	NodeID    uint           `json:"node_id" binding:"required,gt=0"`
 	Status    string         `json:"status" binding:"omitempty,max=32"`
 	Resources map[string]any `json:"resources"`
 }
 
-// ========== 浠诲姟绠＄悊 ==========
+// ========== 任务管理 ==========
 
 // AgentGetTasks godoc
-// @Summary 鑾峰彇寰呮墽琛屼换鍔?// @Description Agent 杞鑾峰彇寰呮墽琛岀殑浠诲姟
+// @Summary 获取待执行任务
+// @Description Agent 轮询获取待执行的任务
 // @Tags Agent
 // @Produce json
-// @Param node_id query int true "鑺傜偣 ID"
+// @Param node_id query int true "节点 ID"
 // @Success 200 {object} map[string]any
 // @Router /api/v2/agent/tasks [get]
 func (h *AgentHandler) AgentGetTasks(c *gin.Context) {
@@ -850,16 +852,16 @@ func (h *AgentHandler) pullBridgeTasks(nodeID uint) []AgentTask {
 	return tasks
 }
 
-// AgentTask 浠诲姟瀹氫箟
+// AgentTask 任务定义
 type AgentTask = agentstreams.DiagnosticTask
 
 // AgentReportResult godoc
-// @Summary 涓婃姤浠诲姟缁撴灉
-// @Description Agent 涓婃姤浠诲姟鎵ц缁撴灉
+// @Summary 上报任务结果
+// @Description Agent 上报任务执行结果
 // @Tags Agent
 // @Accept json
 // @Produce json
-// @Param request body AgentTaskResult true "浠诲姟缁撴灉"
+// @Param request body AgentTaskResult true "任务结果"
 // @Success 200 {object} map[string]any
 // @Router /api/v2/agent/result [post]
 func (h *AgentHandler) AgentReportResult(c *gin.Context) {
@@ -942,7 +944,7 @@ func (h *AgentHandler) completeBridgeResult(result AgentTaskResult) (bool, bool,
 	return true, done, nil
 }
 
-// AgentTaskResult 浠诲姟缁撴灉
+// AgentTaskResult 任务结果
 type AgentTaskResult struct {
 	TaskID    string    `json:"task_id" binding:"required"`
 	NodeID    uint      `json:"node_id,omitempty"`
@@ -956,15 +958,15 @@ type AgentTaskResult struct {
 	Timestamp time.Time `json:"timestamp"`
 }
 
-// ========== 鐩戞帶鏁版嵁 ==========
+// ========== 监控数据 ==========
 
 // AgentMonitor godoc
-// @Summary 涓婃姤鐩戞帶鏁版嵁
-// @Description Agent 涓婃姤绯荤粺鐩戞帶鏁版嵁
+// @Summary 上报监控数据
+// @Description Agent 上报系统监控数据
 // @Tags Agent
 // @Accept json
 // @Produce json
-// @Param request body AgentMonitorRequest true "鐩戞帶鏁版嵁"
+// @Param request body AgentMonitorRequest true "监控数据"
 // @Success 200 {object} map[string]any
 // @Router /api/v2/agent/monitor [post]
 func (h *AgentHandler) AgentMonitor(c *gin.Context) {
@@ -999,7 +1001,7 @@ func (h *AgentHandler) AgentMonitor(c *gin.Context) {
 	})
 }
 
-// AgentMonitorRequest 鐩戞帶璇锋眰
+// AgentMonitorRequest 监控请求
 type AgentMonitorRequest struct {
 	NodeID uint           `json:"node_id" binding:"required"`
 	System map[string]any `json:"system"`
@@ -1012,11 +1014,12 @@ type AgentMonitorSnapshot struct {
 	UpdatedAt time.Time      `json:"updated_at"`
 }
 
-// ========== WebSocket 杩炴帴 ==========
+// ========== WebSocket 连接 ==========
 
 // AgentWebSocketUnified supports both legacy message-auth and header/query-auth.
-// @Summary WebSocket 杩炴帴
-// @Description Agent 寤虹珛 WebSocket 闀胯繛鎺?// @Tags Agent
+// @Summary WebSocket 连接
+// @Description Agent 建立 WebSocket 长连接
+// @Tags Agent
 // @Success 101
 // @Router /api/v2/agent/ws [get]
 func (h *AgentHandler) AgentWebSocketUnified(c *gin.Context) {
@@ -1076,16 +1079,16 @@ func (h *AgentHandler) AgentWebSocketUnified(c *gin.Context) {
 	}
 }
 
-// ========== 绠＄悊鎺ュ彛 ==========
+// ========== 管理接口 ==========
 
 // CreateTask godoc
-// @Summary 鍒涘缓浠诲姟
-// @Description 绠＄悊鍛樺悜鑺傜偣涓嬪彂浠诲姟
-// @Tags 绠＄悊绔?Agent
+// @Summary 创建任务
+// @Description 管理员向节点下发任务
+// @Tags 管理端 Agent
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param request body CreateTaskRequest true "浠诲姟淇℃伅"
+// @Param request body CreateTaskRequest true "任务信息"
 // @Success 200 {object} map[string]any
 // @Router /admin/agent/tasks [post]
 func (h *AgentHandler) CreateTask(c *gin.Context) {
@@ -1111,7 +1114,7 @@ func (h *AgentHandler) CreateTask(c *gin.Context) {
 	}
 	req.Type = agentDiagnosticTaskType
 
-	// 妫€鏌ヨ妭鐐规槸鍚﹀湪绾?
+	// 检查节点是否在线
 	conn, ok := h.connections.Load(req.NodeID)
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "node offline"})
@@ -1269,7 +1272,7 @@ func (w agentWebSockets) DiagnosticTransport(nodeID uint) (agentstreams.Diagnost
 	return &webSocketDiagnosticTransport{handler: w.handler, connection: conn}, true
 }
 
-// CreateTaskRequest 鍒涘缓浠诲姟璇锋眰
+// CreateTaskRequest 创建任务请求
 type CreateTaskRequest struct {
 	NodeID  uint           `json:"node_id" binding:"required"`
 	Type    string         `json:"type" binding:"required"`
@@ -1279,9 +1282,9 @@ type CreateTaskRequest struct {
 }
 
 // ListAgents godoc
-// @Summary 鑾峰彇鍦ㄧ嚎 Agent 鍒楄〃
-// @Description 绠＄悊鍛樿幏鍙栨墍鏈夊湪绾跨殑 Agent
-// @Tags 绠＄悊绔?Agent
+// @Summary 获取在线 Agent 列表
+// @Description 管理员获取所有在线的 Agent
+// @Tags 管理端 Agent
 // @Produce json
 // @Security BearerAuth
 // @Success 200 {object} map[string]any
@@ -1401,12 +1404,13 @@ func (h *AgentHandler) GetMonitor(c *gin.Context) {
 }
 
 // ExecuteCommand godoc
-// @Summary 鎵ц鍛戒护
-// @Description 绠＄悊鍛樺湪鑺傜偣涓婃墽琛屽懡浠?// @Tags 绠＄悊绔?Agent
+// @Summary 执行命令
+// @Description 管理员在节点上执行命令
+// @Tags 管理端 Agent
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param request body ExecuteCommandRequest true "鍛戒护淇℃伅"
+// @Param request body ExecuteCommandRequest true "命令信息"
 // @Success 200 {object} map[string]any
 // @Router /admin/agent/execute [post]
 func (h *AgentHandler) ExecuteCommand(c *gin.Context) {
@@ -1438,14 +1442,14 @@ type ExecuteCommandRequest struct {
 	Timeout int            `json:"timeout"`
 }
 
-// ========== 杞彂瑙勫垯鍚屾 ==========
+// ========== 转发规则同步 ==========
 
 // AgentGetForwardRules godoc
-// @Summary 鑾峰彇杞彂瑙勫垯
-// @Description Agent 鑾峰彇璇ヨ妭鐐圭殑杞彂瑙勫垯
+// @Summary 获取转发规则
+// @Description Agent 获取该节点的转发规则
 // @Tags Agent
 // @Produce json
-// @Param node_id query int true "鑺傜偣 ID"
+// @Param node_id query int true "节点 ID"
 // @Param X-API-Key header string true "forward node API token"
 // @Success 200 {object} map[string]any
 // @Failure 401 {object} map[string]any
@@ -1473,7 +1477,7 @@ func (h *AgentHandler) AgentGetForwardRules(c *gin.Context) {
 		Preload("ExitNode").
 		Find(&rules)
 
-	// 杞崲涓?Agent 闇€瑕佺殑鏍煎紡
+	// 转换为 Agent 需要的格式
 	var agentRules []ForwardRuleForAgent
 	for _, r := range rules {
 		agentRules = append(agentRules, ForwardRuleForAgent{
@@ -1523,7 +1527,7 @@ func (h *AgentHandler) authenticateForwardNodeRequest(c *gin.Context) (uint, err
 	return uint(nodeID), nil
 }
 
-// ForwardRuleForAgent 杞彂瑙勫垯锛圓gent 鏍煎紡锛?
+// ForwardRuleForAgent 转发规则（Agent 格式）
 type ForwardRuleForAgent struct {
 	ID         uint   `json:"id"`
 	Enabled    bool   `json:"enabled"`
@@ -1533,7 +1537,7 @@ type ForwardRuleForAgent struct {
 	TargetPort int    `json:"target_port"`
 }
 
-// ========== 杈呭姪鍑芥暟 ==========
+// ========== 辅助函数 ==========
 
 func generateMessageID() string {
 	return fmt.Sprintf("msg-%d", time.Now().UnixNano())

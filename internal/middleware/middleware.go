@@ -94,7 +94,7 @@ func NodeAuth() gin.HandlerFunc {
 	}
 }
 
-// NodeAPIKeyAuth 鑺傜偣 API Key 璁よ瘉涓棿浠?(鏂扮増)
+// NodeAPIKeyAuth 节点 API Key 认证中间件 (新版)
 func NodeAPIKeyAuth() gin.HandlerFunc {
 	return nodeAPIKeyAuth(true)
 }
@@ -109,7 +109,7 @@ func NodeAPIKeyHeaderAuth() gin.HandlerFunc {
 
 func nodeAPIKeyAuth(allowQuery bool) gin.HandlerFunc {
 	return func(c *gin.Context) {
-		// 浠?Header 鎴?Query 鑾峰彇 API Key
+		// 从 Header 或 Query 获取 API Key
 		apiKey := c.GetHeader("X-API-Key")
 		if allowQuery && apiKey == "" {
 			apiKey = c.Query("api_key")
@@ -119,7 +119,7 @@ func nodeAPIKeyAuth(allowQuery bool) gin.HandlerFunc {
 		}
 		if apiKey == "" {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"message": "缂哄皯 API Key",
+				"message": "缺少 API Key",
 			})
 			return
 		}
@@ -129,21 +129,21 @@ func nodeAPIKeyAuth(allowQuery bool) gin.HandlerFunc {
 		found, err := nodesecrets.NodeByAPIKey(database.GetDB(), apiKey, true)
 		if err != nil {
 			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
-				"message": "API Key 鏃犳晥",
+				"message": "API Key 无效",
 			})
 			return
 		}
 		node := *found
 
-		// 妫€鏌ヨ妭鐐圭姸鎬?
+		// 检查节点状态
 		if node.Status == model.NodeStatusDisabled {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"message": "鑺傜偣宸茶绂佺敤",
+				"message": "节点已被禁用",
 			})
 			return
 		}
 
-		// 灏嗚妭鐐逛俊鎭瓨鍏ヤ笂涓嬫枃
+		// 将节点信息存入上下文
 		c.Set("node_id", node.ID)
 		c.Set("node", &node)
 
@@ -151,14 +151,14 @@ func nodeAPIKeyAuth(allowQuery bool) gin.HandlerFunc {
 	}
 }
 
-// sha256Hash 璁＄畻 SHA256 鍝堝笇
+// sha256Hash 计算 SHA256 哈希
 func sha256Hash(s string) string {
 	h := sha256.New()
 	h.Write([]byte(s))
 	return hex.EncodeToString(h.Sum(nil))
 }
 
-// JWTAuth JWT 璁よ瘉涓棿浠?
+// JWTAuth JWT 认证中间件
 func JWTAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		authHeader := c.GetHeader("Authorization")
@@ -177,7 +177,7 @@ func JWTAuth() gin.HandlerFunc {
 			return
 		}
 
-		// 鏀寔 "Bearer token" 鍜?鐩存帴 "token" 涓ょ鏍煎紡
+		// 支持 "Bearer token" 和 直接 "token" 两种格式
 		token := authHeader
 		if strings.HasPrefix(authHeader, "Bearer ") {
 			token = strings.TrimPrefix(authHeader, "Bearer ")
@@ -191,7 +191,7 @@ func JWTAuth() gin.HandlerFunc {
 			return
 		}
 
-		// 灏嗙敤鎴蜂俊鎭瓨鍏ヤ笂涓嬫枃
+		// 将用户信息存入上下文
 		c.Set("user_id", claims.UserID)
 		c.Set("email", claims.Email)
 		c.Set("is_admin", claims.IsAdmin)
@@ -204,13 +204,13 @@ func JWTAuth() gin.HandlerFunc {
 	}
 }
 
-// AdminAuth 绠＄悊鍛樿璇佷腑闂翠欢
+// AdminAuth 管理员认证中间件
 func AdminAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		isAdmin, exists := c.Get("is_admin")
 		if !exists || isAdmin != true {
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
-				"message": "鏉冮檺涓嶈冻",
+				"message": "权限不足",
 			})
 			return
 		}
@@ -219,7 +219,7 @@ func AdminAuth() gin.HandlerFunc {
 	}
 }
 
-// CORS 璺ㄥ煙涓棿浠?
+// CORS 跨域中间件
 func AppTokenAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		cfg := config.Get()
@@ -347,7 +347,7 @@ func CORS() gin.HandlerFunc {
 	}
 }
 
-// Logger 鏃ュ織涓棿浠?
+// Logger 日志中间件
 func Logger() gin.HandlerFunc {
 	if logging.JSON() {
 		return logging.AccessLog()
@@ -355,7 +355,7 @@ func Logger() gin.HandlerFunc {
 	return gin.Logger()
 }
 
-// Recovery 鎭㈠涓棿浠?
+// Recovery 恢复中间件
 func Recovery() gin.HandlerFunc {
 	return gin.Recovery()
 }

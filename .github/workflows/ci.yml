@@ -194,6 +194,9 @@ jobs:
         with:
           fetch-depth: 0
 
+      - name: Reject GBK mojibake and broken UTF-8
+        run: python3 config/scripts/check_mojibake.py
+
       - name: Validate documentation sync script syntax
         run: bash -n config/scripts/check_docs_updated.sh
 

@@ -32,17 +32,17 @@ var (
 	testDBPath string
 )
 
-// ServiceTestSuite 鏈嶅姟娴嬭瘯鍩虹被
+// ServiceTestSuite 服务测试基类
 type ServiceTestSuite struct {
 	suite.Suite
 	cfg *config.Config
 }
 
 func (s *ServiceTestSuite) SetupSuite() {
-	// 鍒濆鍖栫紦瀛?
+	// 初始化缓存
 	cache.InitMemory()
 
-	// 浣跨敤 sync.Once 纭繚鏁版嵁搴撳彧鍒濆鍖栦竴娆?
+	// 使用 sync.Once 确保数据库只初始化一次
 	dbInitOnce.Do(func() {
 		testDBDir, dbInitErr = os.MkdirTemp("", "v2board-service-test-*")
 		if dbInitErr != nil {
@@ -58,7 +58,7 @@ func (s *ServiceTestSuite) SetupSuite() {
 			return
 		}
 
-		// 鑷姩杩佺Щ鎵€鏈夋ā鍨?
+		// 自动迁移所有模型
 		dbInitErr = database.AutoMigrate(
 			&model.User{},
 			&model.IdentityRevocation{},
@@ -122,7 +122,7 @@ func (s *ServiceTestSuite) SetupSuite() {
 	})
 	s.Require().NoError(dbInitErr)
 
-	// 娴嬭瘯閰嶇疆
+	// 测试配置
 	s.cfg = &config.Config{
 		JWT: config.JWTConfig{
 			Secret: "test-jwt-secret",
@@ -135,12 +135,12 @@ func (s *ServiceTestSuite) TearDownSuite() {
 	// Don't close database during test runs
 }
 
-// TestMain 娓呯悊娴嬭瘯鏁版嵁搴?
+// TestMain 清理测试数据库
 func TestMain(m *testing.M) {
-	// 杩愯娴嬭瘯
+	// 运行测试
 	code := m.Run()
 
-	// 娴嬭瘯瀹屾垚鍚庢竻鐞?
+	// 测试完成后清理
 	_ = database.Close()
 	cache.CloseMemory()
 	if testDBDir != "" {
@@ -183,7 +183,7 @@ func (s *ServiceTestSuite) TearDownTest() {
 	}
 }
 
-// AuthServiceTestSuite 璁よ瘉鏈嶅姟娴嬭瘯濂椾欢
+// AuthServiceTestSuite 认证服务测试套件
 type AuthServiceTestSuite struct {
 	ServiceTestSuite
 }
@@ -201,11 +201,11 @@ func (s *AuthServiceTestSuite) TestRegister_Success() {
 func (s *AuthServiceTestSuite) TestRegister_DuplicateEmail() {
 	svc := NewAuthService()
 
-	// 绗竴娆℃敞鍐?
+	// 第一次注册
 	_, _, err := svc.RegisterWithInvite("dup@example.com", "password123", "", s.cfg)
 	assert.NoError(s.T(), err)
 
-	// 绗簩娆℃敞鍐岀浉鍚岄偖绠?
+	// 第二次注册相同邮箱
 	_, _, err = svc.RegisterWithInvite("dup@example.com", "password456", "", s.cfg)
 	assert.Error(s.T(), err)
 	assert.Contains(s.T(), err.Error(), "该邮箱已被注册")
@@ -274,11 +274,11 @@ func (s *AuthServiceTestSuite) TestRegisterWithInvite_ConsumesInviteCode() {
 func (s *AuthServiceTestSuite) TestLogin_Success() {
 	svc := NewAuthService()
 
-	// 鍏堟敞鍐?
+	// 先注册
 	_, _, err := svc.RegisterWithInvite("login@example.com", "password123", "", s.cfg)
 	assert.NoError(s.T(), err)
 
-	// 鐧诲綍
+	// 登录
 	user, err := svc.Authenticate("login@example.com", "password123")
 	assert.NoError(s.T(), err)
 	assert.NotNil(s.T(), user)
@@ -291,11 +291,11 @@ func (s *AuthServiceTestSuite) TestLogin_Success() {
 func (s *AuthServiceTestSuite) TestLogin_WrongPassword() {
 	svc := NewAuthService()
 
-	// 鍏堟敞鍐?
+	// 先注册
 	_, _, err := svc.RegisterWithInvite("wrongpass@example.com", "password123", "", s.cfg)
 	assert.NoError(s.T(), err)
 
-	// 浣跨敤閿欒瀵嗙爜鐧诲綍
+	// 使用错误密码登录
 	_, err = svc.Authenticate("wrongpass@example.com", "wrongpassword")
 	assert.Error(s.T(), err)
 	assert.Contains(s.T(), err.Error(), "用户不存在或密码错误")
@@ -312,13 +312,13 @@ func (s *AuthServiceTestSuite) TestLogin_UserNotFound() {
 func (s *AuthServiceTestSuite) TestLogin_BannedUser() {
 	svc := NewAuthService()
 
-	// 娉ㄥ唽鐢ㄦ埛
+	// 注册用户
 	_, user, _ := svc.RegisterWithInvite("banned@example.com", "password123", "", s.cfg)
 
-	// 灏佺鐢ㄦ埛
+	// 封禁用户
 	database.Get().Model(user).Update("banned", 1)
 
-	// 灏濊瘯鐧诲綍
+	// 尝试登录
 	_, err := svc.Authenticate("banned@example.com", "password123")
 	assert.Error(s.T(), err)
 	assert.Contains(s.T(), err.Error(), "用户已被封禁")
@@ -342,7 +342,7 @@ func TestAuthService(t *testing.T) {
 	suite.Run(t, new(AuthServiceTestSuite))
 }
 
-// NodeServiceTestSuite 鑺傜偣鏈嶅姟娴嬭瘯濂椾欢
+// NodeServiceTestSuite 节点服务测试套件
 type NodeServiceTestSuite struct {
 	ServiceTestSuite
 	svc *NodeService
@@ -379,7 +379,7 @@ func (s *NodeServiceTestSuite) TestCreateNode() {
 }
 
 func (s *NodeServiceTestSuite) TestGetNode() {
-	// 鍒涘缓鑺傜偣
+	// 创建节点
 	node := &model.Node{
 		Name: "Get Test Node",
 		Host: "192.168.1.2",
@@ -388,7 +388,7 @@ func (s *NodeServiceTestSuite) TestGetNode() {
 		Show: 1,
 	}
 	assert.NoError(s.T(), s.svc.CreateNode(node))
-	// 鑾峰彇鑺傜偣
+	// 获取节点
 	found, err := s.svc.GetNode(node.ID)
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), node.Name, found.Name)
@@ -400,7 +400,7 @@ func (s *NodeServiceTestSuite) TestGetNode_NotFound() {
 }
 
 func (s *NodeServiceTestSuite) TestUpdateNode() {
-	// 鍒涘缓鑺傜偣
+	// 创建节点
 	node := &model.Node{
 		Name: "Update Test Node",
 		Host: "192.168.1.3",
@@ -409,7 +409,7 @@ func (s *NodeServiceTestSuite) TestUpdateNode() {
 		Show: 1,
 	}
 	assert.NoError(s.T(), s.svc.CreateNode(node))
-	// 鏇存柊鑺傜偣
+	// 更新节点
 	updates := map[string]any{
 		"name": "Updated Node",
 		"rate": 2.0,
@@ -417,7 +417,7 @@ func (s *NodeServiceTestSuite) TestUpdateNode() {
 	err := s.svc.UpdateNode(node.ID, updates)
 	assert.NoError(s.T(), err)
 
-	// 楠岃瘉鏇存柊
+	// 验证更新
 	found, _ := s.svc.GetNode(node.ID)
 	assert.Equal(s.T(), "Updated Node", found.Name)
 	assert.Equal(s.T(), 2.0, found.Rate)
@@ -446,7 +446,7 @@ func (s *NodeServiceTestSuite) TestUpdateNodeClearsNodeCacheKey() {
 }
 
 func (s *NodeServiceTestSuite) TestDeleteNode() {
-	// 鍒涘缓鑺傜偣
+	// 创建节点
 	node := &model.Node{
 		Name: "Delete Test Node",
 		Host: "192.168.1.4",
@@ -455,17 +455,17 @@ func (s *NodeServiceTestSuite) TestDeleteNode() {
 		Show: 1,
 	}
 	assert.NoError(s.T(), s.svc.CreateNode(node))
-	// 鍒犻櫎鑺傜偣
+	// 删除节点
 	err := s.svc.DeleteNode(node.ID)
 	assert.NoError(s.T(), err)
 
-	// 楠岃瘉鍒犻櫎
+	// 验证删除
 	_, err = s.svc.GetNode(node.ID)
 	assert.Error(s.T(), err)
 }
 
 func (s *NodeServiceTestSuite) TestGetNodes() {
-	// 鍒涘缓澶氫釜鑺傜偣
+	// 创建多个节点
 	for i := 1; i <= 3; i++ {
 		node := &model.Node{
 			Name: "List Test Node",
@@ -477,7 +477,7 @@ func (s *NodeServiceTestSuite) TestGetNodes() {
 		assert.NoError(s.T(), s.svc.CreateNode(node))
 	}
 
-	// 鑾峰彇鍒楄〃
+	// 获取列表
 	params := NodeListParams{
 		Page:     1,
 		PageSize: 10,
@@ -597,7 +597,7 @@ func TestNodeService(t *testing.T) {
 	suite.Run(t, new(NodeServiceTestSuite))
 }
 
-// UserServiceTestSuite 鐢ㄦ埛鏈嶅姟娴嬭瘯濂椾欢
+// UserServiceTestSuite 用户服务测试套件
 type UserServiceTestSuite struct {
 	ServiceTestSuite
 	svc *UserService
@@ -617,7 +617,7 @@ func (s *UserServiceTestSuite) SetupTest() {
 }
 
 func (s *UserServiceTestSuite) TestGetByID() {
-	// 鍒涘缓鐢ㄦ埛
+	// 创建用户
 	user := &model.User{
 		Email:          "getuser@example.com",
 		Password:       "hash",
@@ -627,7 +627,7 @@ func (s *UserServiceTestSuite) TestGetByID() {
 	}
 	database.Get().Create(user)
 
-	// 鑾峰彇鐢ㄦ埛
+	// 获取用户
 	found, err := s.svc.GetByID(user.ID)
 	assert.NoError(s.T(), err)
 	assert.Equal(s.T(), user.Email, found.Email)
@@ -675,11 +675,11 @@ func (s *UserServiceTestSuite) TestUpdateTraffic() {
 	}
 	database.Get().Create(user)
 
-	// 鏇存柊娴侀噺
+	// 更新流量
 	err := s.svc.UpdateTraffic(user.ID, 1024, 2048)
 	assert.NoError(s.T(), err)
 
-	// 楠岃瘉
+	// 验证
 	found, _ := s.svc.GetByID(user.ID)
 	assert.Equal(s.T(), int64(1024), found.U)
 	assert.Equal(s.T(), int64(2048), found.D)
@@ -706,7 +706,7 @@ func (s *UserServiceTestSuite) TestUpdateTrafficRejectsNegativeTraffic() {
 }
 
 func (s *UserServiceTestSuite) TestBatchUpdateTraffic() {
-	// 鍒涘缓澶氫釜鐢ㄦ埛
+	// 创建多个用户
 	users := []*model.User{
 		{Email: "batch1@example.com", Password: "hash", Token: "batch1", UUID: "batch1", TransferEnable: 10737418240},
 		{Email: "batch2@example.com", Password: "hash", Token: "batch2", UUID: "batch2", TransferEnable: 10737418240},
@@ -715,7 +715,7 @@ func (s *UserServiceTestSuite) TestBatchUpdateTraffic() {
 		database.Get().Create(u)
 	}
 
-	// 鎵归噺鏇存柊娴侀噺
+	// 批量更新流量
 	traffics := map[uint][2]int64{
 		users[0].ID: {1024, 2048},
 		users[1].ID: {2048, 4096},
@@ -723,7 +723,7 @@ func (s *UserServiceTestSuite) TestBatchUpdateTraffic() {
 	err := s.svc.BatchUpdateTraffic(traffics)
 	assert.NoError(s.T(), err)
 
-	// 楠岃瘉
+	// 验证
 	found1, _ := s.svc.GetByID(users[0].ID)
 	assert.Equal(s.T(), int64(1024), found1.U)
 
@@ -764,14 +764,14 @@ func (s *UserServiceTestSuite) TestBanUnban() {
 	}
 	database.Get().Create(user)
 
-	// 灏佺
+	// 封禁
 	err := s.svc.Ban(user.ID)
 	assert.NoError(s.T(), err)
 
 	found, _ := s.svc.GetByID(user.ID)
 	assert.Equal(s.T(), 1, found.Banned)
 
-	// 瑙ｅ皝
+	// 解封
 	err = s.svc.Unban(user.ID)
 	assert.NoError(s.T(), err)
 
@@ -844,7 +844,7 @@ func (s *UserServiceTestSuite) TestResetTraffic() {
 	}
 	database.Get().Create(user)
 
-	// 閲嶇疆娴侀噺
+	// 重置流量
 	err := s.svc.ResetTraffic(user.ID, "")
 	assert.NoError(s.T(), err)
 
@@ -905,7 +905,7 @@ func TestUserService(t *testing.T) {
 	suite.Run(t, new(UserServiceTestSuite))
 }
 
-// PlanServiceTestSuite 濂楅鏈嶅姟娴嬭瘯濂椾欢
+// PlanServiceTestSuite 套餐服务测试套件
 type PlanServiceTestSuite struct {
 	ServiceTestSuite
 	svc *PlanService
@@ -1043,7 +1043,7 @@ func (s *PlanServiceTestSuite) TestListPlans() {
 }
 
 func (s *PlanServiceTestSuite) TestAssignToUser() {
-	// 鍒涘缓濂楅
+	// 创建套餐
 	speedLimit := int64(100000000)
 	deviceLimit := 5
 	monthPrice := int64(1000)
@@ -1058,7 +1058,7 @@ func (s *PlanServiceTestSuite) TestAssignToUser() {
 		Show:           1,
 	}
 	assert.NoError(s.T(), s.svc.Create(plan))
-	// 鍒涘缓鐢ㄦ埛
+	// 创建用户
 	user := &model.User{
 		Email:          "planuser@example.com",
 		Password:       "hash",
@@ -1068,7 +1068,7 @@ func (s *PlanServiceTestSuite) TestAssignToUser() {
 	}
 	database.Get().Create(user)
 
-	// 鍒嗛厤濂楅
+	// 分配套餐
 	expireAt := time.Now().Add(30 * 24 * time.Hour).Unix()
 	requestID := PlanAssignmentRequestID(plan.ID, user.ID, &expireAt, "req-1")
 	err := s.svc.AssignToUser(plan.ID, user.ID, &expireAt, requestID)
@@ -1088,7 +1088,7 @@ func (s *PlanServiceTestSuite) TestAssignToUser() {
 	assert.NoError(s.T(), database.Get().Model(&model.Event{}).Where("type = ? AND payload LIKE ?", "plan.assigned", fmt.Sprintf(`%%"user_id":%d%%`, user.ID)).Count(&events).Error)
 	assert.Equal(s.T(), int64(2), events, "every answered request writes its event")
 
-	// 楠岃瘉鐢ㄦ埛鏇存柊
+	// 验证用户更新
 	var updatedUser model.User
 	database.Get().First(&updatedUser, user.ID)
 	assert.Equal(s.T(), plan.ID, *updatedUser.PlanID)
@@ -1128,7 +1128,7 @@ func TestPlanService(t *testing.T) {
 	suite.Run(t, new(PlanServiceTestSuite))
 }
 
-// OrderServiceTestSuite 璁㈠崟鏈嶅姟娴嬭瘯濂椾欢
+// OrderServiceTestSuite 订单服务测试套件
 type OrderServiceTestSuite struct {
 	ServiceTestSuite
 	svc      *OrderService
@@ -1152,11 +1152,11 @@ func (s *OrderServiceTestSuite) SetupTest() {
 	s.planSvc = NewPlanService()
 	s.authSvc = NewAuthService()
 
-	// 鍒涘缓娴嬭瘯鐢ㄦ埛
+	// 创建测试用户
 	_, user, _ := s.authSvc.RegisterWithInvite("order@example.com", "password123", "", s.cfg)
 	s.testUser = user
 
-	// 鍒涘缓娴嬭瘯濂楅
+	// 创建测试套餐
 	groupID := uint(1)
 	monthPrice := int64(1000)
 	quarterPrice := int64(2700)
@@ -1187,7 +1187,7 @@ func (s *OrderServiceTestSuite) TestCreateOrder_Monthly() {
 	assert.NotNil(s.T(), order)
 	assert.NotEmpty(s.T(), order.TradeNo)
 	assert.Equal(s.T(), int64(1000), order.TotalAmount)
-	assert.Equal(s.T(), 1, order.Type) // 鏂拌喘
+	assert.Equal(s.T(), 1, order.Type) // 新购
 	assert.Equal(s.T(), 0, order.Status)
 }
 
@@ -1315,7 +1315,7 @@ func (s *OrderServiceTestSuite) TestCancelOrder_NotFound() {
 }
 
 func (s *OrderServiceTestSuite) TestGetUserOrders() {
-	// 鍒涘缓澶氫釜璁㈠崟
+	// 创建多个订单
 	for i := 0; i < 3; i++ {
 		_, err := s.svc.Create(CreateOrderParams{
 			UserID: s.testUser.ID,
@@ -1332,7 +1332,7 @@ func (s *OrderServiceTestSuite) TestGetUserOrders() {
 }
 
 func (s *OrderServiceTestSuite) TestGetStats() {
-	// 鍒涘缓鍑犱釜璁㈠崟
+	// 创建几个订单
 	_, err := s.svc.Create(CreateOrderParams{
 		UserID: s.testUser.ID,
 		PlanID: s.testPlan.ID,
@@ -1361,7 +1361,7 @@ func TestOrderService(t *testing.T) {
 	suite.Run(t, new(OrderServiceTestSuite))
 }
 
-// StatsServiceTestSuite 缁熻鏈嶅姟娴嬭瘯濂椾欢
+// StatsServiceTestSuite 统计服务测试套件
 type StatsServiceTestSuite struct {
 	ServiceTestSuite
 	svc     *StatsService
@@ -1379,7 +1379,7 @@ func (s *StatsServiceTestSuite) TearDownSuite() {
 
 func (s *StatsServiceTestSuite) SetupTest() {
 	s.ServiceTestSuite.SetupTest()
-	// 閲嶇疆 statsServiceInstance 浠ヤ究鍒涘缓鏂板疄渚?
+	// 重置 statsServiceInstance 以便创建新实例
 	statsServiceInstance = nil
 	s.svc = NewStatsService()
 	s.authSvc = NewAuthService()
@@ -1387,7 +1387,7 @@ func (s *StatsServiceTestSuite) SetupTest() {
 }
 
 func (s *StatsServiceTestSuite) TestGetDashboardStats() {
-	// 鍒涘缓涓€浜涚敤鎴?
+	// 创建一些用户
 	for i := 0; i < 3; i++ {
 		_, _, err := s.authSvc.RegisterWithInvite(fmt.Sprintf("stats%d@example.com", i), "password123", "", s.cfg)
 		assert.NoError(s.T(), err)
@@ -1419,10 +1419,10 @@ func (s *StatsServiceTestSuite) TestGetDashboardStats_DBError() {
 }
 
 func (s *StatsServiceTestSuite) TestGetUserSubscription() {
-	// 鍒涘缓鐢ㄦ埛
+	// 创建用户
 	_, user, _ := s.authSvc.RegisterWithInvite("subuser@example.com", "password123", "", s.cfg)
 
-	// 鍒涘缓濂楅
+	// 创建套餐
 	groupID := uint(1)
 	monthPrice := int64(1000)
 	plan := &model.Plan{
@@ -1433,7 +1433,7 @@ func (s *StatsServiceTestSuite) TestGetUserSubscription() {
 		Show:           1,
 	}
 	assert.NoError(s.T(), s.planSvc.Create(plan))
-	// 鍒嗛厤濂楅缁欑敤鎴?
+	// 分配套餐给用户
 	expireAt := time.Now().Add(30 * 24 * time.Hour).Unix()
 	assert.NoError(s.T(), s.planSvc.AssignToUser(plan.ID, user.ID, &expireAt, ""))
 	sub, err := s.svc.GetUserSubscription(user.ID, false)
@@ -1446,11 +1446,11 @@ func (s *StatsServiceTestSuite) TestGetUserSubscription() {
 }
 
 func (s *StatsServiceTestSuite) TestGetUserSubscription_Expired() {
-	// 鍒涘缓鐢ㄦ埛
+	// 创建用户
 	_, user, _ := s.authSvc.RegisterWithInvite("expireduser@example.com", "password123", "", s.cfg)
 
-	// 璁剧疆杩囨湡鏃堕棿
-	expiredAt := time.Now().Add(-24 * time.Hour).Unix() // 鏄ㄥぉ杩囨湡
+	// 设置过期时间
+	expiredAt := time.Now().Add(-24 * time.Hour).Unix() // 昨天过期
 	database.Get().Model(user).Update("expired_at", expiredAt)
 
 	sub, err := s.svc.GetUserSubscription(user.ID, true)
@@ -1460,7 +1460,7 @@ func (s *StatsServiceTestSuite) TestGetUserSubscription_Expired() {
 }
 
 func (s *StatsServiceTestSuite) TestGetUserSubscription_NoPlan() {
-	// 鍒涘缓鏃犲椁愮敤鎴?
+	// 创建无套餐用户
 	_, user, _ := s.authSvc.RegisterWithInvite("noplanuser@example.com", "password123", "", s.cfg)
 
 	sub, err := s.svc.GetUserSubscription(user.ID, true)
@@ -1716,7 +1716,7 @@ func TestStatsService(t *testing.T) {
 	suite.Run(t, new(StatsServiceTestSuite))
 }
 
-// MFAServiceTestSuite MFA鏈嶅姟娴嬭瘯濂椾欢
+// MFAServiceTestSuite MFA服务测试套件
 type MFAServiceTestSuite struct {
 	ServiceTestSuite
 	svc      *MFAService
@@ -1734,7 +1734,7 @@ func (s *MFAServiceTestSuite) TearDownSuite() {
 func (s *MFAServiceTestSuite) SetupTest() {
 	s.ServiceTestSuite.SetupTest()
 
-	// 鍒涘缓娴嬭瘯閰嶇疆
+	// 创建测试配置
 	mfaConfig := &model.MFAConfig{
 		Enabled:         true,
 		EnforceForAll:   false,
@@ -1744,7 +1744,7 @@ func (s *MFAServiceTestSuite) SetupTest() {
 	}
 	s.svc = NewMFAService(database.Get(), mfaConfig)
 
-	// 鍒涘缓娴嬭瘯鐢ㄦ埛
+	// 创建测试用户
 	password, _ := bcrypt.GenerateFromPassword([]byte("password123"), bcrypt.DefaultCost)
 	s.testUser = &model.User{
 		Email:          "mfa@example.com",
@@ -1818,7 +1818,7 @@ func TestMFAService(t *testing.T) {
 	suite.Run(t, new(MFAServiceTestSuite))
 }
 
-// ForwardNodeServiceTestSuite 杞彂鑺傜偣鏈嶅姟娴嬭瘯濂椾欢
+// ForwardNodeServiceTestSuite 转发节点服务测试套件
 type ForwardNodeServiceTestSuite struct {
 	ServiceTestSuite
 	svc *ForwardNodeService
@@ -1964,7 +1964,7 @@ func TestForwardNodeService(t *testing.T) {
 	suite.Run(t, new(ForwardNodeServiceTestSuite))
 }
 
-// InviteServiceTestSuite 閭€璇锋湇鍔℃祴璇曞浠?
+// InviteServiceTestSuite 邀请服务测试套件
 type InviteServiceTestSuite struct {
 	ServiceTestSuite
 	svc      *InviteService
@@ -1983,7 +1983,7 @@ func (s *InviteServiceTestSuite) SetupTest() {
 	s.ServiceTestSuite.SetupTest()
 	s.svc = NewInviteService(database.Get())
 
-	// 鍒涘缓娴嬭瘯鐢ㄦ埛
+	// 创建测试用户
 	s.testUser = &model.User{
 		Email:             "invite@example.com",
 		Password:          "hash",
@@ -2159,7 +2159,7 @@ func TestInviteService(t *testing.T) {
 	suite.Run(t, new(InviteServiceTestSuite))
 }
 
-// SubscriptionServiceTestSuite 璁㈤槄鏈嶅姟娴嬭瘯濂椾欢
+// SubscriptionServiceTestSuite 订阅服务测试套件
 type SubscriptionServiceTestSuite struct {
 	ServiceTestSuite
 	svc      *SubscriptionService
@@ -2178,7 +2178,7 @@ func (s *SubscriptionServiceTestSuite) SetupTest() {
 	s.ServiceTestSuite.SetupTest()
 	s.svc = NewSubscriptionService()
 
-	// 鍒涘缓娴嬭瘯鐢ㄦ埛
+	// 创建测试用户
 	s.testUser = &model.User{
 		Email:          "sub@example.com",
 		Password:       "hash",
@@ -2277,7 +2277,7 @@ func (s *SubscriptionServiceTestSuite) TestDeleteGroup_NotFound() {
 }
 
 func (s *SubscriptionServiceTestSuite) TestGetGroups() {
-	// 鍒涘缓澶氫釜鍒嗙粍
+	// 创建多个分组
 	for i := 1; i <= 3; i++ {
 		group := &model.SubscriptionGroup{
 			Name:     fmt.Sprintf("Group %d", i),
@@ -2374,7 +2374,7 @@ func (s *SubscriptionServiceTestSuite) TestGetTemplatesByGroup() {
 		Enable:   1,
 	}
 	assert.NoError(s.T(), s.svc.CreateGroup(group))
-	// 鍒涘缓澶氫釜妯℃澘
+	// 创建多个模板
 	for i := 1; i <= 3; i++ {
 		tpl := &model.SubscriptionTemplate{
 			GroupID: group.ID,
@@ -2444,9 +2444,9 @@ func (s *SubscriptionServiceTestSuite) TestRemoveGroupFromUser() {
 		Enable:   1,
 	}
 	assert.NoError(s.T(), s.svc.CreateGroup(group))
-	// 鍒嗛厤
+	// 分配
 	assert.NoError(s.T(), s.svc.AssignGroupToUser(s.testUser.ID, group.ID, nil, nil, nil, ""))
-	// 绉婚櫎
+	// 移除
 	err := s.svc.RemoveGroupFromUser(s.testUser.ID, group.ID, "")
 	assert.NoError(s.T(), err)
 
@@ -2478,7 +2478,7 @@ func (s *SubscriptionServiceTestSuite) TestAssignGroupToPlan() {
 		Enable:   1,
 	}
 	assert.NoError(s.T(), s.svc.CreateGroup(group))
-	// 鍒涘缓濂楅
+	// 创建套餐
 	monthPrice := int64(1000)
 	plan := &model.Plan{
 		Name:           "Subscription Test Plan",
@@ -2537,9 +2537,9 @@ func (s *SubscriptionServiceTestSuite) TestRemoveGroupFromPlan() {
 	}
 	database.Get().Create(plan)
 
-	// 鍒嗛厤
+	// 分配
 	assert.NoError(s.T(), s.svc.AssignGroupToPlan(plan.ID, group.ID))
-	// 绉婚櫎
+	// 移除
 	err := s.svc.RemoveGroupFromPlan(plan.ID, group.ID)
 	assert.NoError(s.T(), err)
 
@@ -2582,7 +2582,7 @@ func (s *SubscriptionServiceTestSuite) TestGetUserSubscription_InvalidToken() {
 }
 
 func (s *SubscriptionServiceTestSuite) TestGetUserSubscription_Success() {
-	// 鍒涘缓鍒嗙粍鍜屾ā鏉?
+	// 创建分组和模板
 	group := &model.SubscriptionGroup{
 		Name:     "Sub Group",
 		Priority: 5,
@@ -2598,9 +2598,9 @@ func (s *SubscriptionServiceTestSuite) TestGetUserSubscription_Success() {
 		Enable:  1,
 	}
 	assert.NoError(s.T(), s.svc.CreateTemplate(tpl))
-	// 鍒嗛厤鍒嗙粍缁欑敤鎴?
+	// 分配分组给用户
 	assert.NoError(s.T(), s.svc.AssignGroupToUser(s.testUser.ID, group.ID, nil, nil, nil, ""))
-	// 鑾峰彇璁㈤槄
+	// 获取订阅
 	resp, err := s.svc.GetUserSubscription(&model.SubscriptionRequest{
 		Token:  s.testUser.Token,
 		Format: model.FormatV2Ray,
@@ -2716,7 +2716,7 @@ func TestDeriveSS2022ServerKey(t *testing.T) {
 		DeriveSS2022ServerKey(createdAt, "2022-blake3-aes-128-gcm"))
 }
 
-// NotificationServiceTestSuite 閫氱煡鏈嶅姟娴嬭瘯濂椾欢
+// NotificationServiceTestSuite 通知服务测试套件
 type NotificationServiceTestSuite struct {
 	ServiceTestSuite
 	svc      *NotificationService
@@ -2748,7 +2748,7 @@ func (s *NotificationServiceTestSuite) SetupTest() {
 	s.ServiceTestSuite.SetupTest()
 	s.svc = NewNotificationService(database.Get(), s.cfg)
 
-	// 鍒涘缓娴嬭瘯鐢ㄦ埛
+	// 创建测试用户
 	s.testUser = &model.User{
 		Email:          "notify@example.com",
 		Password:       "hash",
@@ -2760,7 +2760,7 @@ func (s *NotificationServiceTestSuite) SetupTest() {
 }
 
 func (s *NotificationServiceTestSuite) TestSend() {
-	// 璁剧疆閭欢閰嶇疆 (閬垮厤 email not configured 閿欒)
+	// 设置邮件配置 (避免 email not configured 错误)
 	s.svc.SetEmailConfig(&model.EmailConfig{
 		Host:        "smtp.example.com",
 		Port:        587,
@@ -2771,11 +2771,11 @@ func (s *NotificationServiceTestSuite) TestSend() {
 		Encryption:  "tls",
 	})
 
-	// 鍙戦€侀€氱煡 (瀹為檯閭欢鍙戦€佷細澶辫触鍥犱负娌℃湁鐪熷疄鐨凷MTP鏈嶅姟鍣紝浣嗘棩蹇楀簲璇ヨ鍒涘缓)
+	// 发送通知 (实际邮件发送会失败因为没有真实的SMTP服务器，但日志应该被创建)
 	err := s.svc.Send(&s.testUser.ID, "email", model.EventUserRegister, "Test Title", "Test Content", nil)
-	// 鐢变簬娌℃湁鐪熷疄鐨凷MTP鏈嶅姟鍣紝鎴戜滑棰勬湡浼氭湁閿欒锛屼絾鏃ュ織搴旇琚垱寤?
-	_ = err // 蹇界暐鍙戦€侀敊璇?
-	// 楠岃瘉鏃ュ織琚垱寤?
+	// 由于没有真实的SMTP服务器，我们预期会有错误，但日志应该被创建
+	_ = err // 忽略发送错误
+	// 验证日志被创建
 	var logCount int64
 	assert.NoError(s.T(), s.svc.db.Model(&model.NotificationLog{}).Count(&logCount).Error)
 	assert.GreaterOrEqual(s.T(), logCount, int64(1))
@@ -2901,7 +2901,7 @@ func TestNotificationService(t *testing.T) {
 	suite.Run(t, new(NotificationServiceTestSuite))
 }
 
-// PaymentGatewayServiceTestSuite 鏀粯缃戝叧鏈嶅姟娴嬭瘯濂椾欢
+// PaymentGatewayServiceTestSuite 支付网关服务测试套件
 type PaymentGatewayServiceTestSuite struct {
 	ServiceTestSuite
 	svc *PaymentGatewayService
@@ -3016,7 +3016,7 @@ func (s *PaymentGatewayServiceTestSuite) TestListGateways() {
 }
 
 func (s *PaymentGatewayServiceTestSuite) TestGetEnabledGateways() {
-	// 鍒涘缓鍚敤鍜岀鐢ㄧ殑缃戝叧
+	// 创建启用和禁用的网关
 	enabled := &model.PaymentGateway{
 		Name:    "Enabled Gateway",
 		Type:    model.PaymentGatewayEPay,
@@ -3155,7 +3155,7 @@ func TestPaymentGatewayService(t *testing.T) {
 	suite.Run(t, new(PaymentGatewayServiceTestSuite))
 }
 
-// LoadBalancerServiceTestSuite 璐熻浇鍧囪　鏈嶅姟娴嬭瘯濂椾欢
+// LoadBalancerServiceTestSuite 负载均衡服务测试套件
 type LoadBalancerServiceTestSuite struct {
 	ServiceTestSuite
 	svc *LoadBalancerService
@@ -3261,7 +3261,7 @@ func (s *LoadBalancerServiceTestSuite) TestSelectNode_NoNodes() {
 	}
 	assert.NoError(s.T(), s.svc.Create(lb))
 	_, err := s.svc.SelectNode(lb.ID)
-	assert.Error(s.T(), err) // 娌℃湁鑺傜偣锛屽簲璇ユ姤閿?
+	assert.Error(s.T(), err) // 没有节点，应该报错
 }
 
 func (s *LoadBalancerServiceTestSuite) TestSelectNode_DisabledLB() {
@@ -3295,7 +3295,7 @@ func TestLoadBalancerService(t *testing.T) {
 	suite.Run(t, new(LoadBalancerServiceTestSuite))
 }
 
-// TelegramUserServiceTestSuite Telegram鐢ㄦ埛鏈嶅姟娴嬭瘯濂椾欢
+// TelegramUserServiceTestSuite Telegram用户服务测试套件
 type TelegramUserServiceTestSuite struct {
 	ServiceTestSuite
 	svc      *TelegramUserService
@@ -3315,7 +3315,7 @@ func (s *TelegramUserServiceTestSuite) SetupTest() {
 	s.ServiceTestSuite.SetupTest()
 	s.svc = NewTelegramUserService(database.Get())
 
-	// 鍒涘缓娴嬭瘯鐢ㄦ埛
+	// 创建测试用户
 	s.testUser = &model.User{
 		Email:          "tg@example.com",
 		Password:       "hash",
@@ -3325,7 +3325,7 @@ func (s *TelegramUserServiceTestSuite) SetupTest() {
 	}
 	database.Get().Create(s.testUser)
 
-	// 鍒涘缓Telegram鐢ㄦ埛缁戝畾
+	// 创建Telegram用户绑定
 	s.tgUser = &model.TelegramUser{
 		UserID:     s.testUser.ID,
 		TelegramID: 123456789,
@@ -3351,7 +3351,7 @@ func TestTelegramUserService(t *testing.T) {
 	suite.Run(t, new(TelegramUserServiceTestSuite))
 }
 
-// SystemConfigServiceTestSuite 绯荤粺閰嶇疆鏈嶅姟娴嬭瘯濂椾欢
+// SystemConfigServiceTestSuite 系统配置服务测试套件
 type SystemConfigServiceTestSuite struct {
 	ServiceTestSuite
 	svc *SystemConfigService
@@ -3441,7 +3441,7 @@ func TestSystemConfigService(t *testing.T) {
 	suite.Run(t, new(SystemConfigServiceTestSuite))
 }
 
-// BackupServiceTestSuite 澶囦唤鏈嶅姟娴嬭瘯濂椾欢
+// BackupServiceTestSuite 备份服务测试套件
 type BackupServiceTestSuite struct {
 	ServiceTestSuite
 	svc *BackupService
@@ -3504,7 +3504,7 @@ func TestBackupService(t *testing.T) {
 	suite.Run(t, new(BackupServiceTestSuite))
 }
 
-// ForwardRuleServiceTestSuite 杞彂瑙勫垯鏈嶅姟娴嬭瘯濂椾欢
+// ForwardRuleServiceTestSuite 转发规则服务测试套件
 type ForwardRuleServiceTestSuite struct {
 	ServiceTestSuite
 	svc       *ForwardRuleService
@@ -3526,7 +3526,7 @@ func (s *ForwardRuleServiceTestSuite) SetupTest() {
 	s.nodeSvc = NewForwardNodeService(database.Get())
 	s.svc = NewForwardRuleService(database.Get(), s.nodeSvc)
 
-	// 鍒涘缓涓浆鑺傜偣
+	// 创建中转节点
 	s.relayNode = &model.ForwardNode{
 		Name:     "Test Relay",
 		Type:     model.ForwardNodeTypeRelay,
@@ -3539,7 +3539,7 @@ func (s *ForwardRuleServiceTestSuite) SetupTest() {
 	}
 	database.Get().Create(s.relayNode)
 
-	// 鍒涘缓钀藉湴鑺傜偣
+	// 创建落地节点
 	s.exitNode = &model.ForwardNode{
 		Name:    "Test Exit",
 		Type:    model.ForwardNodeTypeExit,
@@ -3574,17 +3574,17 @@ func TestForwardRuleService(t *testing.T) {
 	suite.Run(t, new(ForwardRuleServiceTestSuite))
 }
 
-// ptrString 杈呭姪鍑芥暟
+// ptrString 辅助函数
 func ptrString(s string) *string {
 	return &s
 }
 
 // Additional NodeService Tests
 func (s *NodeServiceTestSuite) TestRegisterNode() {
-	// 鍒涘缓鎺堟潈瀵嗛挜
+	// 创建授权密钥
 	key, rawKey, _ := s.svc.GenerateAuthKey("Register Test", 0)
 
-	// 娉ㄥ唽鑺傜偣
+	// 注册节点
 	resp, err := s.svc.RegisterNode(&model.NodeRegisterRequest{
 		AuthKey: rawKey,
 		Name:    "Registered Node",
@@ -3598,7 +3598,7 @@ func (s *NodeServiceTestSuite) TestRegisterNode() {
 	assert.NotEmpty(s.T(), resp.APIKey)
 	assert.NotEmpty(s.T(), resp.Secret)
 
-	// 楠岃瘉鎺堟潈瀵嗛挜宸茶浣跨敤
+	// 验证授权密钥已被使用
 	keys, _ := s.svc.GetAuthKeys()
 	for _, k := range keys {
 		if k.ID == key.ID {
@@ -3862,7 +3862,7 @@ func (s *NodeServiceTestSuite) TestGetNodeByAPIKey_NotFound() {
 }
 
 func (s *NodeServiceTestSuite) TestGetAuthKeys() {
-	// 鍒涘缓澶氫釜鎺堟潈瀵嗛挜
+	// 创建多个授权密钥
 	_, _, err := s.svc.GenerateAuthKey("Key 1", 0)
 	assert.NoError(s.T(), err)
 	_, _, err = s.svc.GenerateAuthKey("Key 2", 0)
@@ -3879,7 +3879,7 @@ func (s *NodeServiceTestSuite) TestDeleteAuthKey() {
 	err := s.svc.DeleteAuthKey(key.ID)
 	assert.NoError(s.T(), err)
 
-	// 楠岃瘉宸插垹闄?- keys should not contain this key
+	// 验证已删除 - keys should not contain this key
 	keys, _ := s.svc.GetAuthKeys()
 	for _, k := range keys {
 		assert.NotEqual(s.T(), key.ID, k.ID)
@@ -4207,7 +4207,7 @@ func (s *InviteServiceTestSuite) TestAddCommission() {
 }
 
 func (s *InviteServiceTestSuite) TestRequestWithdraw() {
-	// 娣诲姞浣ｉ噾浣欓
+	// 添加佣金余额
 	database.Get().Model(s.testUser).Update("commission_balance", 100.0)
 
 	withdraw, err := s.svc.RequestWithdraw(s.testUser.ID, 50.0, "alipay", "test@example.com", "Test User")

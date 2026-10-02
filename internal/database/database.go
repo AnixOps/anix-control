@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/config"
-	"github.com/glebarez/sqlite" // 绾疓o瀹炵幇鐨凷QLite椹卞姩锛屾棤闇€CGO
+	"github.com/glebarez/sqlite" // 纯Go实现的SQLite驱动，无需CGO
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -21,9 +21,9 @@ var (
 	initialized bool
 )
 
-// Init 鍒濆鍖栨暟鎹簱杩炴帴
+// Init 初始化数据库连接
 func Init(cfg *config.DatabaseConfig) error {
-	// 濡傛灉宸茬粡鍒濆鍖栵紝鐩存帴杩斿洖
+	// 如果已经初始化，直接返回
 	if initialized && db != nil {
 		return nil
 	}
@@ -33,10 +33,10 @@ func Init(cfg *config.DatabaseConfig) error {
 
 	switch cfg.Driver {
 	case "sqlite", "sqlite3", "":
-		// SQLite 涓洪粯璁ゆ暟鎹簱
+		// SQLite 为默认数据库
 		dbPath := SQLitePath(cfg)
 
-		// 纭繚鐩綍瀛樺湪
+		// 确保目录存在
 		dir := filepath.Dir(dbPath)
 		if dir != "" && dir != "." {
 			if err := os.MkdirAll(dir, 0o750); err != nil {
@@ -54,7 +54,7 @@ func Init(cfg *config.DatabaseConfig) error {
 		return fmt.Errorf("unsupported database driver: %s (supported: sqlite, postgres)", cfg.Driver)
 	}
 
-	// 閰嶇疆鏃ュ織绾у埆
+	// 配置日志级别
 	logLevel := logger.Info
 	switch cfg.LogLevel {
 	case "silent":
@@ -79,14 +79,14 @@ func Init(cfg *config.DatabaseConfig) error {
 		return fmt.Errorf("failed to connect database: %w", err)
 	}
 
-	// 鍙湁 PostgreSQL 闇€瑕佽缃繛鎺ユ睜
+	// 只有 PostgreSQL 需要设置连接池
 	if cfg.Driver == "postgres" || cfg.Driver == "postgresql" {
 		sqlDB, err := db.DB()
 		if err != nil {
 			return fmt.Errorf("failed to get database instance: %w", err)
 		}
 
-		// 璁剧疆杩炴帴姹?
+		// 设置连接池
 		if cfg.MaxIdleConns > 0 {
 			sqlDB.SetMaxIdleConns(cfg.MaxIdleConns)
 		}
@@ -158,17 +158,17 @@ func sqliteConnectionString(databasePath string) string {
 	return dsn + "&_pragma=journal_mode(WAL)"
 }
 
-// Get 鑾峰彇鏁版嵁搴撳疄渚?
+// Get 获取数据库实例
 func Get() *gorm.DB {
 	return db
 }
 
-// GetDB 鑾峰彇鏁版嵁搴撳疄渚?
+// GetDB 获取数据库实例
 func GetDB() *gorm.DB {
 	return db
 }
 
-// Close 鍏抽棴鏁版嵁搴撹繛鎺?
+// Close 关闭数据库连接
 func Close() error {
 	if db == nil {
 		return nil
@@ -191,7 +191,7 @@ func Reset() {
 	initialized = false
 }
 
-// AutoMigrate 鑷姩杩佺Щ鏁版嵁搴撹〃
+// AutoMigrate 自动迁移数据库表
 func AutoMigrate(models ...any) error {
 	return db.AutoMigrate(models...)
 }

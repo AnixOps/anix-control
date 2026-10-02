@@ -330,7 +330,7 @@ func TestScanHostOutputLinesBoundsLongLines(t *testing.T) {
 	require.Len(t, lines, 5)
 	require.Equal(t, "first", lines[0])
 	require.Equal(t, strings.Repeat("x", maxHostOutputLineBytes)+hostOutputTruncatedMarker, lines[1])
-	require.Equal(t, "second�[31m\tred", lines[2])
+	require.Equal(t, "second\uFFFD[31m\tred", lines[2])
 	require.Equal(t, strings.Repeat("y", maxHostOutputLineBytes)+hostOutputTruncatedMarker, lines[3])
 	require.Equal(t, "last", lines[4])
 }
