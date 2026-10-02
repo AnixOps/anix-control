@@ -49,8 +49,19 @@ function mountAccessGroups() {
   return mount(AccessGroups, { attachTo: document.body })
 }
 
-function formFor(wrapper, selector) {
-  return wrapper.findAll('form').find(form => form.find(selector).exists())
+// The group opens in a sheet (UI U6), which renders in document.body.
+async function openGroup(wrapper, id = 7) {
+  await wrapper.vm.openDetail(id)
+  await flushPromises()
+}
+
+function formFor(selector) {
+  return inBody(selector).element.closest('form')
+}
+
+async function submit(selector) {
+  formFor(selector).dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
+  await flushPromises()
 }
 
 enableAutoUnmount(afterEach)
@@ -78,12 +89,16 @@ describe('AccessGroups.vue', () => {
 
     expect(kernelApi.getKernelScopes).toHaveBeenCalledTimes(1)
     expect(kernelApi.getKernelAccessGroups).toHaveBeenCalledWith(undefined)
-    expect(kernelApi.getKernelAccessGroupDetail).toHaveBeenCalledWith(7)
     expect(wrapper.find('.access-groups-table').text()).toContain('Canary operators')
-    expect(wrapper.text()).toContain('operator@example.com')
-    expect(wrapper.text()).toContain('Canary plan')
-    expect(wrapper.text()).toContain('machine-telemetry.api')
-    expect(wrapper.text()).toContain('requests_per_minute')
+    // The detail loads when the group opens.
+    expect(kernelApi.getKernelAccessGroupDetail).not.toHaveBeenCalled()
+    await openGroup(wrapper)
+    expect(kernelApi.getKernelAccessGroupDetail).toHaveBeenCalledWith(7)
+    const sheet = inBody('[data-test="access-detail-sheet"]').text()
+    expect(sheet).toContain('operator@example.com')
+    expect(sheet).toContain('Canary plan')
+    expect(sheet).toContain('machine-telemetry.api')
+    expect(sheet).toContain('requests_per_minute')
     wrapper.unmount()
   })
 
@@ -91,9 +106,9 @@ describe('AccessGroups.vue', () => {
     const wrapper = mountAccessGroups()
     await flushPromises()
 
-    await wrapper.find('.page-header .btn-primary').trigger('click')
+    await wrapper.find('[data-test="access-new-group"]').trigger('click')
     await flushPromises()
-    await inBody('#access-group-scope').setValue('proxy')
+    wrapper.vm.groupEditor.scopeID = 'proxy'
     await inBody('#access-group-name').setValue('Proxy viewers')
     await inBody('#access-group-description').setValue('Scoped proxy permission')
     await inBody('[data-test="access-group-editor"]').trigger('submit')
@@ -109,28 +124,25 @@ describe('AccessGroups.vue', () => {
     const wrapper = mountAccessGroups()
     await flushPromises()
 
-    await wrapper.get('#access-member-id').setValue('42')
-    await formFor(wrapper, '#access-member-id').trigger('submit')
-    await flushPromises()
+    await openGroup(wrapper)
+    await inBody('#access-member-id').setValue('42')
+    await submit('#access-member-id')
     expect(kernelApi.addKernelAccessGroupUser).toHaveBeenCalledWith(7, 42)
 
-    await wrapper.get('#access-plan-id').setValue('5')
-    await formFor(wrapper, '#access-plan-id').trigger('submit')
-    await flushPromises()
+    await inBody('#access-plan-id').setValue('5')
+    await submit('#access-plan-id')
     expect(kernelApi.addKernelAccessGroupPlan).toHaveBeenCalledWith(7, 5)
 
-    await wrapper.get('#access-grant-id').setValue('machine-telemetry')
-    await wrapper.get('#access-grant-permissions').setValue('["machine-telemetry.api"]')
-    await formFor(wrapper, '#access-grant-id').trigger('submit')
-    await flushPromises()
+    await inBody('#access-grant-id').setValue('machine-telemetry')
+    await inBody('#access-grant-permissions').setValue('["machine-telemetry.api"]')
+    await submit('#access-grant-id')
     expect(kernelApi.createKernelResourceGrant).toHaveBeenCalledWith({
       group_id: 7, resource_type: 'plugin_api', resource_id: 'machine-telemetry', permissions: '["machine-telemetry.api"]',
     })
 
-    await wrapper.get('#access-quota-key').setValue('machine-telemetry.rate')
-    await wrapper.get('#access-quota-policy').setValue('{"requests_per_minute":120}')
-    await formFor(wrapper, '#access-quota-key').trigger('submit')
-    await flushPromises()
+    await inBody('#access-quota-key').setValue('machine-telemetry.rate')
+    await inBody('#access-quota-policy').setValue('{"requests_per_minute":120}')
+    await submit('#access-quota-key')
     expect(kernelApi.upsertKernelQuotaPolicy).toHaveBeenCalledWith({
       group_id: 7, key: 'machine-telemetry.rate', policy: '{"requests_per_minute":120}',
     })
@@ -144,8 +156,9 @@ describe('AccessGroups.vue', () => {
 
     await wrapper.get('#access-resolve-user').setValue('11')
     await wrapper.get('#access-resolve-plan').setValue('4')
-    await wrapper.get('#access-resolve-scope').setValue('forward')
-    await formFor(wrapper, '#access-resolve-user').trigger('submit')
+    // The scope defaults to the first one (forward).
+    expect(wrapper.vm.resolver.scopeID).toBe('forward')
+    await wrapper.get('#access-resolve-user').element.closest('form').dispatchEvent(new Event('submit', { bubbles: true, cancelable: true }))
     await flushPromises()
 
     expect(kernelApi.resolveKernelAccess).toHaveBeenCalledWith({ userID: 11, planID: 4, scopeID: 'forward' })
@@ -156,14 +169,14 @@ describe('AccessGroups.vue', () => {
   it('shows the kernel error without replacing a previously loaded policy view', async () => {
     const wrapper = mountAccessGroups()
     await flushPromises()
+    await openGroup(wrapper)
     kernelApi.addKernelAccessGroupUser.mockRejectedValueOnce({ response: { data: { error: { message: 'user does not exist' } } } })
 
-    await wrapper.get('#access-member-id').setValue('999')
-    await formFor(wrapper, '#access-member-id').trigger('submit')
-    await flushPromises()
+    await inBody('#access-member-id').setValue('999')
+    await submit('#access-member-id')
 
-    expect(wrapper.get('.error-message').text()).toBe('user does not exist')
-    expect(wrapper.text()).toContain('operator@example.com')
+    expect(inBody('.error-message').text()).toBe('user does not exist')
+    expect(inBody('[data-test="access-detail-sheet"]').text()).toContain('operator@example.com')
     wrapper.unmount()
   })
 
@@ -171,15 +184,18 @@ describe('AccessGroups.vue', () => {
     const Harness = { components: { AccessGroups, UiHost }, template: '<div><AccessGroups /><UiHost /></div>' }
 
     async function renderPage() {
+      const user = userEvent.setup()
       render(Harness)
+      await user.click(await screen.findByText('Canary operators'))
       await screen.findByText('operator@example.com')
     }
 
     it('keeps editor errors inside the dialog and closes it with Esc', async () => {
       const user = userEvent.setup()
       kernelApi.createKernelAccessGroup.mockRejectedValueOnce(new Error('name taken'))
-      await renderPage()
-      const opener = document.querySelector('.page-header .btn-primary')
+      render(Harness)
+      await screen.findByText('Canary operators')
+      const opener = screen.getByRole('button', { name: 'New group' })
       await user.click(opener)
       const dialog = await screen.findByRole('dialog')
       await user.type(within(dialog).getByLabelText(/name/i), 'Dup')
@@ -194,13 +210,14 @@ describe('AccessGroups.vue', () => {
       const user = userEvent.setup()
       kernelApi.deleteKernelAccessGroup.mockResolvedValue({})
       await renderPage()
-      await user.click(screen.getAllByRole('button', { name: 'Delete' })[0])
+      const sheet = screen.getByRole('dialog', { name: 'Canary operators' })
+      await user.click(within(sheet).getByRole('button', { name: 'Delete group' }))
       let confirm = await screen.findByRole('alertdialog', { name: 'Delete access group Canary operators?' })
       await user.click(within(confirm).getByRole('button', { name: 'Cancel' }))
       await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
       expect(kernelApi.deleteKernelAccessGroup).not.toHaveBeenCalled()
 
-      await user.click(screen.getAllByRole('button', { name: 'Delete' })[0])
+      await user.click(within(sheet).getByRole('button', { name: 'Delete group' }))
       confirm = await screen.findByRole('alertdialog')
       await user.click(within(confirm).getByRole('button', { name: 'Delete group' }))
       await waitFor(() => expect(kernelApi.deleteKernelAccessGroup).toHaveBeenCalledWith(7))
@@ -209,8 +226,7 @@ describe('AccessGroups.vue', () => {
     it('removes a member at once with undo in the toast', async () => {
       kernelApi.removeKernelAccessGroupUser.mockResolvedValue({})
       await renderPage()
-      const row = screen.getByText('operator@example.com').closest('li')
-      await userEvent.setup().click(within(row).getByRole('button', { name: 'Remove' }))
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Remove operator@example.com' }))
       await waitFor(() => expect(kernelApi.removeKernelAccessGroupUser).toHaveBeenCalledWith(7, 11))
       expect(screen.queryByRole('alertdialog')).toBeNull()
       await waitFor(() => expect(toastMessages('success')).toEqual(['Removed user #11']))
@@ -222,11 +238,46 @@ describe('AccessGroups.vue', () => {
       const user = userEvent.setup()
       kernelApi.deleteKernelResourceGrant.mockRejectedValue(new Error('grant in use'))
       await renderPage()
-      const row = screen.getByText('machine-telemetry', { selector: 'td code' }).closest('tr')
-      await user.click(within(row).getByRole('button', { name: 'Remove' }))
+      await user.click(screen.getByRole('button', { name: 'Actions for plugin_api/machine-telemetry' }))
+      await user.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: 'Remove' }))
       const confirm = await screen.findByRole('alertdialog', { name: 'Remove resource grant #9?' })
       await user.click(within(confirm).getByRole('button', { name: 'Remove grant' }))
       expect((await within(confirm).findByRole('alert')).textContent).toContain('grant in use')
+    })
+      it('opens a group from the row with Enter and shows a list load failure with retry', async () => {
+      const user = userEvent.setup()
+      kernelApi.getKernelScopes.mockRejectedValueOnce(new Error('kernel offline'))
+      render(Harness)
+      const alert = await screen.findByRole('alert')
+      expect(alert.textContent).toContain('kernel offline')
+      await user.click(within(alert).getByRole('button', { name: 'Try again' }))
+      const row = (await screen.findByText('Canary operators')).closest('tr')
+      row.focus()
+      await user.keyboard('{Enter}')
+      expect(await screen.findByRole('dialog', { name: 'Canary operators' })).toBeTruthy()
+      expect(kernelApi.getKernelAccessGroupDetail).toHaveBeenCalledWith(7)
+    })
+
+    it('deletes from the row menu', async () => {
+      const user = userEvent.setup()
+      kernelApi.deleteKernelAccessGroup.mockResolvedValue({})
+      render(Harness)
+      await screen.findByText('Canary operators')
+      await user.click(screen.getByRole('button', { name: 'Actions for Canary operators' }))
+      await user.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: 'Delete' }))
+      const confirm = await screen.findByRole('alertdialog', { name: 'Delete access group Canary operators?' })
+      await user.click(within(confirm).getByRole('button', { name: 'Delete group' }))
+      await waitFor(() => expect(kernelApi.deleteKernelAccessGroup).toHaveBeenCalledWith(7))
+      await waitFor(() => expect(toastMessages('success')).toEqual(['Deleted access group Canary operators']))
+    })
+
+    it('filters the groups by service scope on the server', async () => {
+      const user = userEvent.setup()
+      render(Harness)
+      await screen.findByText('Canary operators')
+      await user.click(screen.getByRole('combobox', { name: 'Filter by service scope' }))
+      await user.click(await screen.findByRole('option', { name: 'Proxy (proxy)' }))
+      await waitFor(() => expect(kernelApi.getKernelAccessGroups).toHaveBeenLastCalledWith('proxy'))
     })
   })
 })

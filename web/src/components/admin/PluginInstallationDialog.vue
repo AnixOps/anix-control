@@ -50,7 +50,8 @@
 import { computed, ref, watch } from 'vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { releaseTargets } from '@/utils/kernelPluginRelease'
-import { UiButton, UiDialog } from '@/ui'
+import UiButton from '@/ui/UiButton.vue'
+import UiDialog from '@/ui/UiDialog.vue'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -116,10 +117,24 @@ function save() {
 </script>
 
 <style scoped>
+/* Native selects keep their keyboard and screen reader behaviour; they are
+   drawn like the library's fields (44 px, --label-3 border, radius-sm). */
 .dialog-body { display: grid; gap: var(--space-4); }
 .form-group { display: grid; gap: var(--space-2); }
-.form-group label, .toggle-field { font-size: var(--type-callout-size); font-weight: var(--weight-semibold); }
-.form-group select { width: 100%; }
-.toggle-field { display: flex; align-items: center; gap: var(--space-2); font-weight: var(--weight-regular); }
-.dialog-error { margin: 0; color: var(--danger); overflow-wrap: anywhere; }
+.form-group label { color: var(--label-1); font-size: var(--type-callout-size); font-weight: var(--weight-medium); }
+.form-group select {
+  width: 100%;
+  height: var(--size-control-lg);
+  padding: 0 var(--space-3);
+  border: 1px solid var(--label-3);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  color: var(--label-1);
+  font: inherit;
+}
+.form-group select:focus-visible { border-color: var(--accent); outline: none; box-shadow: 0 0 0 1px var(--accent), 0 0 0 4px var(--accent-soft); }
+.form-group select:disabled { background: var(--fill-1); color: var(--label-2); }
+.toggle-field { display: flex; align-items: center; gap: var(--space-3); color: var(--label-1); font-size: var(--type-body-size); }
+.toggle-field input { width: 18px; height: 18px; accent-color: var(--accent-fill); }
+.dialog-error { margin: 0; color: var(--danger); font-size: var(--type-callout-size); overflow-wrap: anywhere; }
 </style>

@@ -5,10 +5,14 @@
     data-testid="plugin-detail-drawer"
     :title="row?.plugin?.name || row?.plugin?.id || ''"
     :dismissible="canClose"
+    grouped
     @update:open="value => { if (!value) requestClose() }"
   >
     <template v-if="row?.plugin?.id" #description>
       <code>{{ row.plugin.id }}</code>
+    </template>
+    <template v-if="row?.health?.state" #header-actions>
+      <UiBadge :tone="healthTone" :label="healthLabel" />
     </template>
     <p v-if="row?.plugin?.description" class="plugin-description">{{ row.plugin.description }}</p>
     <p v-if="row?.health?.error" class="health-error" role="alert">
@@ -41,28 +45,23 @@
       role="tabpanel"
       :aria-labelledby="`plugin-target-${currentTarget.target}`"
     >
-      <dl class="detail-list">
-        <div>
-          <dt>{{ t('control.table.release') }}</dt>
-          <dd><code>{{ currentTarget.latestRelease?.version || '-' }}</code></dd>
-        </div>
-        <div>
-          <dt>{{ t('control.labels.desired') }}</dt>
-          <dd><code>{{ currentTarget.installation?.desired_version || '-' }}</code></dd>
-        </div>
-        <div>
-          <dt>{{ t('control.labels.observed') }}</dt>
-          <dd><code>{{ currentTarget.installation?.observed_version || '-' }}</code></dd>
-        </div>
-        <div>
-          <dt>{{ t('control.table.state') }}</dt>
-          <dd>{{ currentTarget.installation?.state || t('control.states.catalogued') }}</dd>
-        </div>
-        <div v-if="currentTarget.installation">
-          <dt>{{ t('control.table.installation') }}</dt>
-          <dd>{{ currentTarget.installation.enabled ? t('control.states.enabled') : t('control.states.disabled') }}</dd>
-        </div>
-      </dl>
+      <UiGroupedList :title="t('control.pluginCenter.detail.versions')">
+        <UiGroupedListRow :label="t('control.table.release')">
+          <code>{{ currentTarget.latestRelease?.version || '—' }}</code>
+        </UiGroupedListRow>
+        <UiGroupedListRow :label="t('control.labels.desired')">
+          <code>{{ currentTarget.installation?.desired_version || '—' }}</code>
+        </UiGroupedListRow>
+        <UiGroupedListRow :label="t('control.labels.observed')">
+          <code>{{ currentTarget.installation?.observed_version || '—' }}</code>
+        </UiGroupedListRow>
+        <UiGroupedListRow :label="t('control.table.state')" :value="currentTarget.installation?.state || t('control.states.catalogued')" />
+        <UiGroupedListRow
+          v-if="currentTarget.installation"
+          :label="t('control.table.installation')"
+          :value="currentTarget.installation.enabled ? t('control.states.enabled') : t('control.states.disabled')"
+        />
+      </UiGroupedList>
 
       <p v-if="currentTarget.installation?.last_error" class="health-error" role="alert">
         <strong>{{ t('control.errors.action') }}</strong>
@@ -122,7 +121,11 @@
 // it stays open while a target action is busy.
 import { computed, ref, watch } from 'vue'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { UiButton, UiSheet } from '@/ui'
+import UiBadge from '@/ui/UiBadge.vue'
+import UiButton from '@/ui/UiButton.vue'
+import UiGroupedList from '@/ui/UiGroupedList.vue'
+import UiGroupedListRow from '@/ui/UiGroupedListRow.vue'
+import UiSheet from '@/ui/UiSheet.vue'
 
 const props = defineProps({
   row: { type: Object, default: null },
@@ -140,6 +143,13 @@ const targetBusy = computed(() => Boolean(
   props.busyTarget?.target === currentTarget.value?.target
 ))
 const canClose = computed(() => !props.busyTarget)
+const healthTone = computed(() => ({ healthy: 'success', attention: 'warning' })[props.row?.health?.state] || 'neutral')
+const healthLabel = computed(() => {
+  const state = props.row?.health?.state
+  if (state === 'healthy') return t('control.pluginCenter.states.healthy')
+  if (state === 'attention') return t('control.pluginCenter.states.attention')
+  return t('control.states.catalogued')
+})
 function requestClose() {
   if (canClose.value) emit('close')
 }
@@ -158,19 +168,15 @@ function emitLifecycle(action) {
 
 <style scoped>
 .plugin-description, .health-error { margin: 0; color: var(--label-2); line-height: var(--type-body-line); overflow-wrap: anywhere; }
-.health-error { color: var(--danger); }
+.health-error { padding: var(--space-3) var(--space-4); border-radius: var(--radius-sm); background: var(--danger-soft); color: color-mix(in srgb, var(--danger) 78%, var(--label-1)); }
 .health-error strong { display: block; }
-.target-tabs { display: flex; gap: var(--space-2); border-bottom: 1px solid var(--separator); }
-.target-tab { min-height: var(--size-control-md); border: 0; border-bottom: 2px solid transparent; background: transparent; color: var(--label-2); cursor: pointer; font: inherit; text-transform: capitalize; }
-.target-tab.active { border-bottom-color: var(--accent); color: var(--label-1); font-weight: var(--weight-bold); }
+/* Targets as a pill switch (tablist semantics kept). */
+.target-tabs { display: inline-flex; align-self: flex-start; gap: var(--space-0-5); padding: var(--space-0-5); border-radius: var(--radius-pill); background: var(--fill-1); }
+.target-tab { min-height: var(--size-control-sm); padding: 0 var(--space-4); border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--label-1); cursor: pointer; font: inherit; font-size: var(--type-callout-size); text-transform: capitalize; }
+.target-tab:hover { background: var(--fill-2); }
+.target-tab.active { background: var(--bg-elevated); box-shadow: var(--shadow-1); font-weight: var(--weight-semibold); }
 .target-tab:focus-visible { outline: var(--focus-ring); outline-offset: var(--focus-ring-offset); }
 .target-detail { display: grid; gap: var(--space-5); }
-.detail-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); margin: 0; }
-.detail-list div { display: grid; gap: var(--space-1); }
-.detail-list dt { color: var(--label-2); font-size: var(--type-caption-size); }
-.detail-list dd { margin: 0; overflow-wrap: anywhere; }
+.target-detail code { font-family: var(--font-mono); }
 .drawer-actions { display: flex; flex-wrap: wrap; gap: var(--space-2); }
-@media (max-width: 720px) {
-  .detail-list { grid-template-columns: 1fr; }
-}
 </style>

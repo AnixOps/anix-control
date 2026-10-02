@@ -1,271 +1,154 @@
 <template>
-  <div class="page-shell payment-page">
-    <div class="page-toolbar">
-      <div>
-        <h1>{{ t('adminPayment.title') }}</h1>
-        <p>{{ t('adminPayment.subtitle') }}</p>
-      </div>
-    </div>
+  <div class="list-page">
+    <UiPageHeader :title="t('adminPayment.title')" :description="t('adminPayment.subtitle')">
+      <template #actions>
+        <UiButton variant="primary" :icon="Plus" @click="openGatewayModal()">{{ t('adminPayment.actions.createGateway') }}</UiButton>
+      </template>
+    </UiPageHeader>
 
-    <div class="tabs">
-      <button :class="['tab', { active: activeTab === 'gateways' }]" @click="activeTab = 'gateways'">
-        {{ t('adminPayment.tabs.gateways') }}
-      </button>
-      <button :class="['tab', { active: activeTab === 'records' }]" @click="activeTab = 'records'">
-        {{ t('adminPayment.tabs.records') }}
-      </button>
-      <button :class="['tab', { active: activeTab === 'stats' }]" @click="activeTab = 'stats'">
-        {{ t('adminPayment.tabs.stats') }}
-      </button>
-    </div>
+    <UiTabs v-model="activeTab" :items="tabItems" :aria-label="t('adminPayment.tabs.label')" :unmount-on-hide="false">
+      <template #gateways>
+        <UiDataTable
+          :columns="gatewayColumns"
+          :rows="gateways"
+          :label="t('adminPayment.gateways.label')"
+          :row-label="gateway => gateway.name || String(gateway.id)"
+          storage-key="admin.payment.gateways"
+          :loading="gatewaysLoading"
+          :error="gatewaysError"
+          :error-title="t('adminPayment.messages.fetchGatewaysFailed')"
+          :empty-icon="CreditCard"
+          :empty-title="t('adminPayment.gateways.empty')"
+          :empty-description="t('adminPayment.gateways.emptyDescription')"
+          activatable
+          :row-actions="gatewayActions"
+          @row-activate="openGatewayModal"
+          @retry="fetchGateways"
+        >
+          <template #empty-actions>
+            <UiButton variant="primary" :icon="Plus" @click="openGatewayModal()">{{ t('adminPayment.actions.createGateway') }}</UiButton>
+          </template>
+          <template #cell-enabled="{ row }">
+            <UiBadge :tone="row.enabled ? 'success' : 'neutral'" :label="row.enabled ? t('adminPayment.status.enabled') : t('adminPayment.status.disabled')" />
+          </template>
+        </UiDataTable>
+      </template>
 
-    <div v-show="activeTab === 'gateways'">
-      <div class="toolbar">
-        <button class="btn btn-primary" @click="openGatewayModal()">
-          + {{ t('adminPayment.actions.createGateway') }}
-        </button>
-      </div>
+      <template #records>
+        <UiDataTable
+          :columns="recordColumns"
+          :rows="records"
+          :label="t('adminPayment.records.label')"
+          :row-label="record => record.trade_no || String(record.id)"
+          storage-key="admin.payment.records"
+          :page-size="20"
+          :loading="recordsLoading"
+          :error="recordsError"
+          :error-title="t('adminPayment.messages.fetchRecordsFailed')"
+          :filtered="Boolean(recordFilter.status || recordFilter.gateway_type)"
+          :empty-icon="Receipt"
+          :empty-title="t('adminPayment.records.empty')"
+          :empty-description="t('adminPayment.records.emptyDescription')"
+          activatable
+          :row-actions="record => [{ key: 'details', label: t('adminPayment.actions.details'), icon: Eye, onSelect: () => viewRecord(record) }]"
+          @row-activate="viewRecord"
+          @retry="fetchRecords"
+          @clear-filters="clearRecordFilters"
+        >
+          <template #toolbar>
+            <UiFilterChips v-model="recordFilter.status" :label="t('adminPayment.records.filters.status')" :options="statusChips" />
+            <UiFilterChips v-model="recordFilter.gateway_type" :label="t('adminPayment.records.filters.type')" :options="typeChips" />
+          </template>
+          <template #cell-trade_no="{ value }">
+            <span class="trade-no">{{ value }}</span>
+          </template>
+          <template #cell-status="{ row }">
+            <UiBadge :tone="recordTone(row.status)" :label="getPaymentStatusLabel(row.status)" />
+          </template>
+        </UiDataTable>
+      </template>
 
-      <div class="table-container">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>{{ t('adminPayment.gateways.table.id') }}</th>
-              <th>{{ t('adminPayment.gateways.table.name') }}</th>
-              <th>{{ t('adminPayment.gateways.table.type') }}</th>
-              <th>{{ t('adminPayment.gateways.table.feeRate') }}</th>
-              <th>{{ t('adminPayment.gateways.table.minAmount') }}</th>
-              <th>{{ t('adminPayment.gateways.table.maxAmount') }}</th>
-              <th>{{ t('adminPayment.gateways.table.status') }}</th>
-              <th>{{ t('adminPayment.gateways.table.actions') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="gateway in gateways" :key="gateway.id">
-              <td>{{ gateway.id }}</td>
-              <td>{{ gateway.name || '-' }}</td>
-              <td>
-                <span :class="['type-badge', gateway.type]">
-                  {{ getGatewayTypeLabel(gateway.type) }}
-                </span>
-              </td>
-              <td>{{ formatFeeRate(gateway.fee_rate) }}</td>
-              <td>{{ formatMoney(gateway.min_amount) }}</td>
-              <td>{{ formatMoney(gateway.max_amount) }}</td>
-              <td>
-                <span :class="['status-badge', gateway.enabled ? 'status-active' : 'status-disabled']">
-                  {{ gateway.enabled ? t('adminPayment.status.enabled') : t('adminPayment.status.disabled') }}
-                </span>
-              </td>
-              <td>
-                <div class="action-buttons">
-                  <button
-                    class="btn btn-sm"
-                    :title="gateway.enabled ? t('adminPayment.actions.disable') : t('adminPayment.actions.enable')"
-                    :aria-label="gateway.enabled ? t('adminPayment.actions.disable') : t('adminPayment.actions.enable')"
-                    @click="toggleGatewayStatus(gateway)"
-                  >
-                    {{ gateway.enabled ? t('adminPayment.actions.disable') : t('adminPayment.actions.enable') }}
-                  </button>
-                  <button
-                    class="btn btn-sm"
-                    :title="t('adminPayment.actions.edit')"
-                    :aria-label="t('adminPayment.actions.edit')"
-                    @click="openGatewayModal(gateway)"
-                  >
-                    {{ t('adminPayment.actions.edit') }}
-                  </button>
-                  <button
-                    class="btn btn-sm btn-danger"
-                    :title="t('adminPayment.actions.delete')"
-                    :aria-label="t('adminPayment.actions.delete')"
-                    @click="deleteGatewayItem(gateway)"
-                  >
-                    {{ t('adminPayment.actions.delete') }}
-                  </button>
-                </div>
-              </td>
-            </tr>
-            <tr v-if="gateways.length === 0">
-              <td colspan="8" class="empty-row">{{ t('adminPayment.gateways.empty') }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <div v-show="activeTab === 'records'">
-      <div class="toolbar">
-        <select v-model="recordFilter.status">
-          <option value="">{{ t('adminPayment.records.filters.allStatuses') }}</option>
-          <option v-for="status in paymentStatuses" :key="status" :value="status">
-            {{ getPaymentStatusLabel(status) }}
-          </option>
-        </select>
-        <select v-model="recordFilter.gateway_type">
-          <option value="">{{ t('adminPayment.records.filters.allTypes') }}</option>
-          <option v-for="type in gatewayTypes" :key="type" :value="type">
-            {{ getGatewayTypeLabel(type) }}
-          </option>
-        </select>
-        <button class="btn" @click="fetchRecords">{{ t('adminPayment.actions.search') }}</button>
-      </div>
-
-      <div class="table-container">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>{{ t('adminPayment.records.table.id') }}</th>
-              <th>{{ t('adminPayment.records.table.tradeNo') }}</th>
-              <th>{{ t('adminPayment.records.table.userId') }}</th>
-              <th>{{ t('adminPayment.records.table.gateway') }}</th>
-              <th>{{ t('adminPayment.records.table.amount') }}</th>
-              <th>{{ t('adminPayment.records.table.status') }}</th>
-              <th>{{ t('adminPayment.records.table.createdAt') }}</th>
-              <th>{{ t('adminPayment.records.table.actions') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="record in records" :key="record.id">
-              <td>{{ record.id }}</td>
-              <td>{{ record.trade_no || '-' }}</td>
-              <td>{{ record.user_id ?? '-' }}</td>
-              <td>{{ getGatewayTypeLabel(record.gateway_type) }}</td>
-              <td>{{ formatMoney(record.amount) }}</td>
-              <td>
-                <span :class="['status-badge', `status-${record.status}`]">
-                  {{ getPaymentStatusLabel(record.status) }}
-                </span>
-              </td>
-              <td>{{ formatTime(record.created_at) }}</td>
-              <td>
-                <div class="action-buttons">
-                  <button
-                    class="btn btn-sm"
-                    :title="t('adminPayment.actions.details')"
-                    :aria-label="t('adminPayment.actions.details')"
-                    @click="viewRecord(record)"
-                  >
-                    {{ t('adminPayment.actions.details') }}
-                  </button>
-                </div>
-              </td>
-            </tr>
-            <tr v-if="records.length === 0">
-              <td colspan="8" class="empty-row">{{ t('adminPayment.records.empty') }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <div v-show="activeTab === 'stats'">
-      <div class="stats-grid">
-        <div class="section-panel stat-card">
-          <div class="stat-value">{{ formatMoney(stats.total_amount) }}</div>
-          <div class="stat-label">{{ t('adminPayment.stats.totalAmount') }}</div>
+      <template #stats>
+        <UiErrorState v-if="statsError" :title="t('adminPayment.messages.fetchStatsFailed')" :error="statsError" @retry="fetchStats" />
+        <div v-else-if="showStatsSkeleton" class="stats-grid">
+          <UiSkeleton v-for="n in 4" :key="n" variant="card" />
         </div>
-        <div class="section-panel stat-card">
-          <div class="stat-value">{{ stats.total_orders || 0 }}</div>
-          <div class="stat-label">{{ t('adminPayment.stats.totalOrders') }}</div>
-        </div>
-        <div class="section-panel stat-card">
-          <div class="stat-value">{{ stats.success_orders || 0 }}</div>
-          <div class="stat-label">{{ t('adminPayment.stats.successOrders') }}</div>
-        </div>
-        <div class="section-panel stat-card">
-          <div class="stat-value">{{ formatSuccessRate(stats.success_rate) }}</div>
-          <div class="stat-label">{{ t('adminPayment.stats.successRate') }}</div>
-        </div>
-      </div>
-
-      <div class="section-panel chart-section">
-        <h3>{{ t('adminPayment.stats.gatewayDistribution') }}</h3>
-        <div class="gateway-stats">
-          <div v-for="[type, item] in gatewayStatsEntries" :key="type" class="gateway-stat-item">
-            <span class="gateway-name">{{ getGatewayTypeLabel(type) }}</span>
-            <div class="progress-bar">
-              <div class="progress-fill" :style="{ width: `${getGatewayPercent(type)}%` }"></div>
-            </div>
-            <span class="gateway-amount">{{ formatMoney(item?.amount) }}</span>
+        <template v-else>
+          <div class="stats-grid" data-test="payment-stats">
+            <UiCard class="stat-card">
+              <span class="stat-label">{{ t('adminPayment.stats.totalAmount') }}</span>
+              <strong class="stat-value">{{ formatMoney(stats.total_amount) }}</strong>
+            </UiCard>
+            <UiCard class="stat-card">
+              <span class="stat-label">{{ t('adminPayment.stats.totalOrders') }}</span>
+              <strong class="stat-value">{{ format.number(stats.total_orders || 0) }}</strong>
+            </UiCard>
+            <UiCard class="stat-card">
+              <span class="stat-label">{{ t('adminPayment.stats.successOrders') }}</span>
+              <strong class="stat-value">{{ format.number(stats.success_orders || 0) }}</strong>
+            </UiCard>
+            <UiCard class="stat-card">
+              <span class="stat-label">{{ t('adminPayment.stats.successRate') }}</span>
+              <strong class="stat-value">{{ formatSuccessRate(stats.success_rate) }}</strong>
+            </UiCard>
           </div>
-          <div v-if="gatewayStatsEntries.length === 0" class="empty-state">
-            {{ t('adminPayment.stats.empty') }}
-          </div>
-        </div>
-      </div>
-    </div>
+          <UiCard :title="t('adminPayment.stats.gatewayDistribution')" heading-tag="h2">
+            <ul v-if="gatewayStatsEntries.length" class="gateway-stats">
+              <li v-for="[type, item] in gatewayStatsEntries" :key="type" class="gateway-stat">
+                <span class="gateway-stat__name">{{ getGatewayTypeLabel(type) }}</span>
+                <UiUsageBar
+                  class="gateway-stat__bar"
+                  :value="getGatewayPercent(type)"
+                  :max="100"
+                  :warn-at="101"
+                  :danger-at="101"
+                  :text="`${formatMoney(item?.amount)} · ${getGatewayPercent(type)}%`"
+                />
+              </li>
+            </ul>
+            <UiEmptyState v-else compact :icon="ChartPie" :title="t('adminPayment.stats.empty')" />
+          </UiCard>
+        </template>
+      </template>
+    </UiTabs>
 
     <UiDialog
       v-model:open="showGatewayModal"
       :title="editingGateway ? t('adminPayment.modal.editTitle') : t('adminPayment.modal.createTitle')"
       :dismissible="!gatewaySaving"
     >
-      <div class="dialog-form">
-        <div class="form-group">
-          <label for="payment-gateway-name">{{ t('adminPayment.modal.fields.name') }} <span class="required">*</span></label>
-          <input
-            id="payment-gateway-name"
-            v-model="gatewayForm.name"
-            type="text"
-            :placeholder="t('adminPayment.modal.placeholders.name')"
-          />
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="payment-gateway-type">{{ t('adminPayment.modal.fields.type') }}</label>
-            <select id="payment-gateway-type" v-model="gatewayForm.type">
-              <option v-for="type in gatewayTypes" :key="type" :value="type">
-                {{ getGatewayTypeLabel(type) }}
-              </option>
-            </select>
-          </div>
-          <div class="form-group">
-            <label for="payment-gateway-fee">{{ t('adminPayment.modal.fields.feeRate') }}</label>
-            <input
-              id="payment-gateway-fee"
-              v-model.number="gatewayForm.fee_rate"
-              type="number"
-              step="0.001"
-              :placeholder="t('adminPayment.modal.placeholders.feeRate')"
-            />
-          </div>
-        </div>
-        <div class="form-row">
-          <div class="form-group">
-            <label for="payment-gateway-min">{{ t('adminPayment.modal.fields.minAmount') }}</label>
-            <input
-              id="payment-gateway-min"
-              v-model.number="gatewayForm.min_amount"
-              type="number"
-              :placeholder="t('adminPayment.modal.placeholders.minAmount')"
-            />
-          </div>
-          <div class="form-group">
-            <label for="payment-gateway-max">{{ t('adminPayment.modal.fields.maxAmount') }}</label>
-            <input
-              id="payment-gateway-max"
-              v-model.number="gatewayForm.max_amount"
-              type="number"
-              :placeholder="t('adminPayment.modal.placeholders.maxAmount')"
-            />
-          </div>
-        </div>
-        <div class="form-group">
-          <label for="payment-gateway-config">{{ t('adminPayment.modal.fields.configJson') }}</label>
-          <textarea
-            id="payment-gateway-config"
-            v-model="gatewayForm.config_json"
-            rows="4"
-            data-test="payment-gateway-config"
-            :placeholder="t('adminPayment.modal.placeholders.configJson')"
-            :aria-invalid="configJsonError ? 'true' : undefined"
-            :aria-describedby="configJsonError ? 'payment-gateway-config-error' : undefined"
-          ></textarea>
-          <p v-if="configJsonError" id="payment-gateway-config-error" class="form-error" role="alert">{{ configJsonError }}</p>
-        </div>
-        <p v-if="gatewayError" class="form-error" role="alert" data-test="payment-gateway-error">{{ gatewayError }}</p>
+      <div class="form-grid">
+        <UiTextField
+          id="payment-gateway-name"
+          v-model="gatewayForm.name"
+          class="form-grid__full"
+          required
+          :label="t('adminPayment.modal.fields.name')"
+          :placeholder="t('adminPayment.modal.placeholders.name')"
+        />
+        <UiSelect id="payment-gateway-type" v-model="gatewayForm.type" :label="t('adminPayment.modal.fields.type')" :options="gatewayTypeOptions" />
+        <UiTextField
+          id="payment-gateway-fee"
+          v-model.number="gatewayForm.fee_rate"
+          type="number"
+          step="0.001"
+          :label="t('adminPayment.modal.fields.feeRate')"
+          :help="t('adminPayment.modal.placeholders.feeRate')"
+        />
+        <UiTextField id="payment-gateway-min" v-model.number="gatewayForm.min_amount" type="number" :label="t('adminPayment.modal.fields.minAmount')" :help="t('adminPayment.modal.placeholders.minAmount')" />
+        <UiTextField id="payment-gateway-max" v-model.number="gatewayForm.max_amount" type="number" :label="t('adminPayment.modal.fields.maxAmount')" :help="t('adminPayment.modal.placeholders.maxAmount')" />
+        <UiTextarea
+          id="payment-gateway-config"
+          v-model="gatewayForm.config_json"
+          class="form-grid__full config-json"
+          :rows="5"
+          :label="t('adminPayment.modal.fields.configJson')"
+          :placeholder="t('adminPayment.modal.placeholders.configJson')"
+          :error="configJsonError"
+          data-test="payment-gateway-config"
+        />
       </div>
+      <p v-if="gatewayError" class="form-error" role="alert" data-test="payment-gateway-error">{{ gatewayError }}</p>
       <template #footer="{ close }">
         <UiButton :disabled="gatewaySaving" @click="close">{{ t('common.actions.cancel') }}</UiButton>
         <UiButton variant="primary" data-test="payment-gateway-save" :loading="gatewaySaving" @click="saveGateway">{{ t('common.actions.save') }}</UiButton>
@@ -274,21 +157,31 @@
 
     <UiSheet
       :open="Boolean(viewingRecord)"
-      size="sm"
+      grouped
       :title="t('adminPayment.records.detail.title')"
+      :description="viewingRecord?.trade_no || ''"
       @update:open="value => { if (!value) viewingRecord = null }"
     >
-      <dl v-if="viewingRecord" class="record-detail" data-test="payment-record-detail">
-        <div><dt>{{ t('adminPayment.records.detail.tradeNo') }}</dt><dd>{{ viewingRecord.trade_no || '-' }}</dd></div>
-        <div><dt>{{ t('adminPayment.records.detail.amount') }}</dt><dd>{{ formatMoney(viewingRecord.amount) }}</dd></div>
-        <div><dt>{{ t('adminPayment.records.detail.status') }}</dt><dd>{{ getPaymentStatusLabel(viewingRecord.status) }}</dd></div>
-      </dl>
+      <template #header-actions>
+        <UiBadge v-if="viewingRecord" :tone="recordTone(viewingRecord.status)" :label="getPaymentStatusLabel(viewingRecord.status)" />
+      </template>
+      <div v-if="viewingRecord" data-test="payment-record-detail">
+        <UiGroupedList>
+          <UiGroupedListRow :label="t('adminPayment.records.detail.tradeNo')" :value="viewingRecord.trade_no || '—'" />
+          <UiGroupedListRow :label="t('adminPayment.records.detail.amount')" :value="formatMoney(viewingRecord.amount)" />
+          <UiGroupedListRow :label="t('adminPayment.records.detail.status')" :value="getPaymentStatusLabel(viewingRecord.status)" />
+          <UiGroupedListRow :label="t('adminPayment.records.table.gateway')" :value="getGatewayTypeLabel(viewingRecord.gateway_type)" />
+          <UiGroupedListRow :label="t('adminPayment.records.table.userId')" :value="viewingRecord.user_id ?? '—'" />
+          <UiGroupedListRow :label="t('adminPayment.records.table.createdAt')" :value="formatTime(viewingRecord.created_at)" />
+        </UiGroupedList>
+      </div>
     </UiSheet>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onMounted, ref, watch } from 'vue'
+import { ChartPie, CreditCard, Eye, Pencil, Plus, Power, PowerOff, Receipt, Trash2 } from '@lucide/vue'
 import {
   createPaymentGateway,
   deletePaymentGateway,
@@ -299,9 +192,31 @@ import {
   updatePaymentGateway
 } from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { UiButton, UiDialog, UiSheet, useConfirm, useToast } from '@/ui'
+import UiBadge from '@/ui/UiBadge.vue'
+import UiButton from '@/ui/UiButton.vue'
+import UiCard from '@/ui/UiCard.vue'
+import UiDataTable from '@/ui/UiDataTable.vue'
+import UiDialog from '@/ui/UiDialog.vue'
+import UiEmptyState from '@/ui/UiEmptyState.vue'
+import UiErrorState from '@/ui/UiErrorState.vue'
+import UiFilterChips from '@/ui/UiFilterChips.vue'
+import UiGroupedList from '@/ui/UiGroupedList.vue'
+import UiGroupedListRow from '@/ui/UiGroupedListRow.vue'
+import UiPageHeader from '@/ui/UiPageHeader.vue'
+import UiSelect from '@/ui/UiSelect.vue'
+import UiSheet from '@/ui/UiSheet.vue'
+import UiSkeleton from '@/ui/UiSkeleton.vue'
+import UiTabs from '@/ui/UiTabs.vue'
+import UiTextField from '@/ui/UiTextField.vue'
+import UiTextarea from '@/ui/UiTextarea.vue'
+import UiUsageBar from '@/ui/UiUsageBar.vue'
+import { useConfirm } from '@/ui/composables/useConfirm'
+import { useDelayedLoading } from '@/ui/composables/useDelayedLoading'
+import { useFormat } from '@/ui/composables/useFormat'
+import { useToast } from '@/ui/composables/useToast'
 
-const { t, formatDateTime } = useAppI18n()
+const { t } = useAppI18n()
+const format = useFormat()
 const toast = useToast()
 const confirm = useConfirm()
 
@@ -322,6 +237,54 @@ const gatewaySaving = ref(false)
 const gatewayError = ref('')
 const configJsonError = ref('')
 const viewingRecord = ref(null)
+const gatewaysLoading = ref(false)
+const gatewaysError = ref(null)
+const recordsLoading = ref(false)
+const recordsError = ref(null)
+const statsLoading = ref(false)
+const statsError = ref(null)
+const showStatsSkeleton = useDelayedLoading(statsLoading)
+
+const tabItems = computed(() => [
+  { value: 'gateways', label: t('adminPayment.tabs.gateways') },
+  { value: 'records', label: t('adminPayment.tabs.records') },
+  { value: 'stats', label: t('adminPayment.tabs.stats') }
+])
+const gatewayTypeOptions = computed(() => gatewayTypes.map(type => ({ value: type, label: getGatewayTypeLabel(type) })))
+const gatewayColumns = computed(() => [
+  { key: 'name', label: t('adminPayment.gateways.table.name'), primary: true, sortable: true },
+  { key: 'enabled', label: t('adminPayment.gateways.table.status'), secondary: true, sortable: true, sortValue: gateway => (gateway.enabled ? 1 : 0) },
+  { key: 'type', label: t('adminPayment.gateways.table.type'), sortable: true, value: gateway => getGatewayTypeLabel(gateway.type) },
+  { key: 'fee_rate', label: t('adminPayment.gateways.table.feeRate'), numeric: true, align: 'end', sortable: true, format: value => formatFeeRate(value), sortValue: gateway => Number(gateway.fee_rate || 0) },
+  { key: 'min_amount', label: t('adminPayment.gateways.table.minAmount'), numeric: true, align: 'end', format: value => formatMoney(value) },
+  { key: 'max_amount', label: t('adminPayment.gateways.table.maxAmount'), numeric: true, align: 'end', format: value => formatMoney(value) },
+  { key: 'id', label: t('adminPayment.gateways.table.id'), numeric: true, sortable: true, hidden: true }
+])
+const gatewayActions = gateway => [
+  { key: 'edit', label: t('adminPayment.actions.edit'), icon: Pencil, onSelect: () => openGatewayModal(gateway) },
+  gateway.enabled
+    ? { key: 'disable', label: t('adminPayment.actions.disable'), icon: PowerOff, onSelect: () => toggleGatewayStatus(gateway) }
+    : { key: 'enable', label: t('adminPayment.actions.enable'), icon: Power, onSelect: () => toggleGatewayStatus(gateway) },
+  { key: 'delete', label: t('adminPayment.confirm.deleteAction'), icon: Trash2, danger: true, separatorBefore: true, onSelect: () => deleteGatewayItem(gateway) }
+]
+const recordColumns = computed(() => [
+  { key: 'trade_no', label: t('adminPayment.records.table.tradeNo'), primary: true, sortable: true },
+  { key: 'status', label: t('adminPayment.records.table.status'), secondary: true, sortable: true },
+  { key: 'gateway_type', label: t('adminPayment.records.table.gateway'), value: record => getGatewayTypeLabel(record.gateway_type), sortable: true },
+  { key: 'amount', label: t('adminPayment.records.table.amount'), numeric: true, align: 'end', sortable: true, firstDirection: 'desc', format: value => formatMoney(value), sortValue: record => Number(record.amount || 0) },
+  { key: 'user_id', label: t('adminPayment.records.table.userId'), numeric: true, sortable: true },
+  { key: 'created_at', label: t('adminPayment.records.table.createdAt'), numeric: true, nowrap: true, sortable: true, firstDirection: 'desc', format: value => formatTime(value) },
+  { key: 'id', label: t('adminPayment.records.table.id'), numeric: true, sortable: true, hidden: true }
+])
+// Status and gateway type are the record list's own query parameters.
+const statusChips = computed(() => paymentStatuses.map(status => ({ value: status, label: getPaymentStatusLabel(status) })))
+const typeChips = computed(() => gatewayTypes.map(type => ({ value: type, label: getGatewayTypeLabel(type) })))
+const recordTone = status => ({ pending: 'warning', paid: 'success', failed: 'danger', refunded: 'neutral' }[status] || 'neutral')
+const clearRecordFilters = () => {
+  recordFilter.value.status = ''
+  recordFilter.value.gateway_type = ''
+}
+watch(() => [recordFilter.value.status, recordFilter.value.gateway_type], () => fetchRecords())
 
 function createGatewayForm(source = {}) {
   return {
@@ -379,18 +342,13 @@ const paymentStatusKeyMap = {
   refunded: 'adminPayment.status.refunded'
 }
 
-const getGatewayTypeLabel = (type) => (gatewayTypeKeyMap[type] ? t(gatewayTypeKeyMap[type]) : type || '-')
-const getPaymentStatusLabel = (status) => (paymentStatusKeyMap[status] ? t(paymentStatusKeyMap[status]) : status || '-')
+const getGatewayTypeLabel = (type) => (gatewayTypeKeyMap[type] ? t(gatewayTypeKeyMap[type]) : type || '—')
+const getPaymentStatusLabel = (status) => (paymentStatusKeyMap[status] ? t(paymentStatusKeyMap[status]) : status || '—')
 
-const formatTime = (value) => {
-  if (!value) return '-'
-  return formatDateTime(value)
-}
+const formatTime = value => format.dateTime(value)
 
-const formatMoney = (value) => {
-  const amount = Number(value || 0)
-  return `${t('adminPayment.currencySymbol')}${amount.toFixed(2)}`
-}
+// The payment API answers in yuan, not cents.
+const formatMoney = value => format.money(Number(value || 0), { cents: false })
 
 const formatFeeRate = (value) => `${(Number(value || 0) * 100).toFixed(2)}%`
 
@@ -427,38 +385,50 @@ const readPaymentRecordList = (res) => {
 }
 
 const fetchGateways = async () => {
+  gatewaysLoading.value = true
   try {
     const res = ensurePaymentSuccess(
       await getPaymentGateways(),
       'adminPayment.messages.fetchGatewaysFailed'
     )
     gateways.value = readPaymentGatewayList(res)
+    gatewaysError.value = null
   } catch (error) {
-    console.error(t('adminPayment.messages.fetchGatewaysFailed'), error)
+    gatewaysError.value = error
+  } finally {
+    gatewaysLoading.value = false
   }
 }
 
 const fetchRecords = async () => {
+  recordsLoading.value = true
   try {
     const res = ensurePaymentSuccess(
       await getPaymentRecords(recordFilter.value),
       'adminPayment.messages.fetchRecordsFailed'
     )
     records.value = readPaymentRecordList(res)
+    recordsError.value = null
   } catch (error) {
-    console.error(t('adminPayment.messages.fetchRecordsFailed'), error)
+    recordsError.value = error
+  } finally {
+    recordsLoading.value = false
   }
 }
 
 const fetchStats = async () => {
+  statsLoading.value = true
   try {
     const res = ensurePaymentSuccess(
       await getPaymentStats(),
       'adminPayment.messages.fetchStatsFailed'
     )
     stats.value = readPaymentStats(res)
+    statsError.value = null
   } catch (error) {
-    console.error(t('adminPayment.messages.fetchStatsFailed'), error)
+    statsError.value = error
+  } finally {
+    statsLoading.value = false
   }
 }
 
@@ -587,183 +557,65 @@ onMounted(() => {
 </script>
 
 <style scoped>
-.tabs {
-  margin-bottom: 4px;
-}
-
-.toolbar {
-  margin-bottom: 16px;
-}
-
-.table-container {
-  margin-bottom: 20px;
-}
-
-.dialog-form > .form-group:last-child {
-  margin-bottom: 0;
-}
-
-.form-error {
-  margin: var(--space-1) 0 0;
-  color: var(--danger);
+.trade-no {
+  font-family: var(--font-mono);
   font-size: var(--type-callout-size);
-}
-
-.record-detail {
-  display: grid;
-  gap: var(--space-3);
-  margin: 0;
-}
-
-.record-detail div {
-  display: flex;
-  justify-content: space-between;
-  gap: var(--space-4);
-}
-
-.record-detail dt {
-  color: var(--label-2);
-}
-
-.record-detail dd {
-  margin: 0;
-  font-weight: var(--weight-semibold);
-  overflow-wrap: anywhere;
-  text-align: right;
 }
 
 .stats-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-  gap: 16px;
-  margin-bottom: 20px;
+  gap: var(--space-4);
+  margin-bottom: var(--space-6);
 }
 
 .stat-card {
-  padding: 20px;
-  text-align: center;
-}
-
-.stat-value {
-  font-size: 2rem;
-  font-weight: 700;
-  color: var(--primary-color);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
 }
 
 .stat-label {
-  color: var(--text-secondary);
-  margin-top: 8px;
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
 }
 
-.chart-section {
-  padding: 20px;
+.stat-value {
+  font-size: var(--type-title-2-size);
+  font-weight: var(--weight-semibold);
+  line-height: var(--type-title-2-line);
+  font-variant-numeric: tabular-nums;
 }
 
 .gateway-stats {
-  margin-top: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: 0;
+  margin: 0;
+  list-style: none;
 }
 
-.gateway-stat-item {
-  display: flex;
+.gateway-stat {
+  display: grid;
+  grid-template-columns: minmax(96px, 160px) minmax(0, 1fr);
+  gap: var(--space-4);
   align-items: center;
-  gap: 16px;
-  margin-bottom: 12px;
 }
 
-.gateway-name {
-  width: 80px;
-  color: var(--text-secondary);
+.gateway-stat__name {
+  font-weight: var(--weight-medium);
 }
 
-.progress-bar {
-  flex: 1;
-  height: 8px;
-  background: var(--border-color);
-  border-radius: 4px;
-  overflow: hidden;
+.config-json :deep(textarea) {
+  font-family: var(--font-mono);
+  font-size: var(--type-callout-size);
 }
 
-.progress-fill {
-  height: 100%;
-  background: var(--primary-color);
-  transition: width 0.3s;
-}
-
-.gateway-amount {
-  width: 100px;
-  text-align: right;
-  font-weight: 500;
-}
-
-.type-badge {
-  font-size: 12px;
-}
-
-.type-badge.alipay {
-  background: rgba(0, 132, 255, 0.15);
-  color: #0084ff;
-}
-
-.type-badge.wechat {
-  background: rgba(7, 193, 96, 0.15);
-  color: #07c160;
-}
-
-.type-badge.stripe {
-  background: rgba(99, 91, 255, 0.15);
-  color: #635bff;
-}
-
-.type-badge.usdt {
-  background: rgba(38, 161, 123, 0.15);
-  color: #26a17b;
-}
-
-.type-badge.epay {
-  background: rgba(255, 153, 0, 0.15);
-  color: #ff9900;
-}
-
-.action-buttons {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.btn-danger {
-  background: rgba(239, 68, 68, 0.1);
-  color: #ef4444;
-  border: 1px solid rgba(239, 68, 68, 0.2);
-}
-
-.btn-danger:hover {
-  background: rgba(239, 68, 68, 0.18);
-}
-
-.empty-state {
-  color: var(--text-secondary);
-  padding: 12px 0;
-}
-
-.status-active,
-.status-paid {
-  background: rgba(22, 163, 74, 0.08);
-  color: var(--success-color);
-}
-
-.status-disabled,
-.status-refunded {
-  background: var(--surface-muted);
-  color: var(--text-secondary);
-}
-
-.status-pending {
-  background: rgba(217, 119, 6, 0.08);
-  color: var(--warning-color);
-}
-
-.status-failed {
-  background: rgba(220, 38, 38, 0.08);
-  color: var(--error-color);
+@media (max-width: 639.98px) {
+  .gateway-stat {
+    grid-template-columns: 1fr;
+    gap: var(--space-1);
+  }
 }
 </style>

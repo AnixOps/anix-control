@@ -155,6 +155,35 @@ describe('Plugin Center', () => {
     expect(errorBand.text()).toContain('bundle digest mismatch')
   })
 
+  it('shows the catalog as App Store style cards with the official mark and health', async () => {
+    mountPlugins()
+    await flushPromises()
+    const list = bodyGet('[data-testid="plugin-list"]')
+    expect(list.element.tagName).toBe('UL')
+    const card = bodyGet('[data-testid="plugin-row-protocol-runtime"]')
+    expect(card.element.tagName).toBe('BUTTON')
+    expect(card.attributes('aria-haspopup')).toBe('dialog')
+    expect(card.text()).toContain('Protocol Runtime')
+    expect(card.text()).toContain('AnixOps')
+    expect(card.find('[aria-label="Official signed package"]').exists()).toBe(true)
+    expect(card.text()).toContain('1.1.0')
+  })
+
+  it('shows a load error with retry when the catalog fails, and an empty catalog with import', async () => {
+    kernelApi.getKernelPlugins.mockRejectedValueOnce(new Error('kernel unavailable'))
+    const wrapper = mountPlugins()
+    await flushPromises()
+    const alert = bodyGet('[data-error-state]')
+    expect(alert.text()).toContain('The plugin catalog didn’t load')
+    expect(alert.text()).toContain('kernel unavailable')
+    kernelApi.getKernelPlugins.mockResolvedValue([])
+    kernelApi.getKernelPluginReleases.mockResolvedValue([])
+    await alert.get('[data-error-retry]').trigger('click')
+    await flushPromises()
+    expect(wrapper.text()).toContain('No plugins yet')
+    expect(inBody('[data-error-state]').exists()).toBe(false)
+  })
+
   it('blocks installation controls for unverified catalog entries', async () => {
     const unverified = { ...plugin, official: false }
     kernelApi.getKernelPlugins.mockResolvedValue([unverified])
@@ -190,14 +219,19 @@ describe('Plugin Center', () => {
     expect(adminApi.getNodes).not.toHaveBeenCalled()
     expect(wrapper.findAll('[data-testid^="plugin-row-"]')).toHaveLength(1)
 
-    await bodyGet('[data-testid="plugin-target-filter"]').setValue('agent')
+    // Filters are toggle chips (UI U6): target, then health with counts.
+    await bodyGet('[data-testid="plugin-target-filter"] [data-filter="agent"]').trigger('click')
     expect(wrapper.findAll('[data-testid^="plugin-row-"]')).toHaveLength(1)
-    await bodyGet('[data-testid="plugin-health-filter"]').setValue('attention')
+    expect(bodyGet('[data-testid="plugin-health-filter"] [data-filter="healthy"]').text()).toBe('Healthy1')
+    await bodyGet('[data-testid="plugin-health-filter"] [data-filter="attention"]').trigger('click')
     expect(wrapper.findAll('[data-testid^="plugin-row-"]')).toHaveLength(0)
-    await bodyGet('[data-testid="plugin-health-filter"]').setValue('healthy')
+    expect(wrapper.text()).toContain('No plugins match the current filters')
+    await bodyGet('[data-testid="plugin-health-filter"] [data-filter="healthy"]').trigger('click')
     expect(wrapper.findAll('[data-testid^="plugin-row-"]')).toHaveLength(1)
     await bodyGet('[data-testid="plugin-search"]').setValue('unmatched')
     expect(wrapper.findAll('[data-testid^="plugin-row-"]')).toHaveLength(0)
+    await bodyGet('[data-clear-filters]').trigger('click')
+    expect(wrapper.findAll('[data-testid^="plugin-row-"]')).toHaveLength(1)
     await bodyGet('[data-testid="plugin-search"]').setValue('protocol')
 
     const row = bodyGet('[data-testid="plugin-row-protocol-runtime"]')

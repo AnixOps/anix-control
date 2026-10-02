@@ -1,131 +1,104 @@
 <template>
-  <div class="page-shell">
-    <div class="page-toolbar">
-      <div>
-        <h1>{{ pt('title') }}</h1>
-        <p>{{ pt('subtitle') }}</p>
-      </div>
-      <button class="btn btn-primary" @click="openCreateModal">{{ pt('actions.create') }}</button>
-    </div>
+  <div class="list-page">
+    <UiPageHeader :title="pt('title')" :description="pt('subtitle')">
+      <template #actions>
+        <UiButton variant="primary" :icon="Plus" data-test="plan-create-button" @click="openCreateModal">{{ pt('actions.create') }}</UiButton>
+      </template>
+    </UiPageHeader>
 
-    <section class="section-panel data-panel">
-      <table class="data-table">
-        <thead>
-          <tr>
-            <th>{{ t('miscPages.shared.id') }}</th>
-            <th>{{ pt('table.name') }}</th>
-            <th>{{ pt('table.transfer') }}</th>
-            <th>{{ pt('table.limits') }}</th>
-            <th v-if="isCommercial">{{ pt('table.monthPrice') }}</th>
-            <th>{{ pt('table.subscriptionGroups') }}</th>
-            <th>{{ pt('table.actions') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="plan in plans" :key="plan.id">
-            <td>{{ plan.id }}</td>
-            <td>{{ plan.name }}</td>
-            <td>{{ plan.transfer_enable }}</td>
-            <td>{{ formatPlanLimits(plan) }}</td>
-            <td v-if="isCommercial">{{ plan.month_price ?? '-' }}</td>
-            <td>
-              <div class="group-tags">
-                <span v-for="group in (planGroups[plan.id] || [])" :key="group.id" class="group-tag">
-                  {{ group.name }}
-                  <button
-                    class="tag-remove"
-                    :title="pt('actions.removeGroup')"
-                    :aria-label="pt('actions.removeGroup')"
-                    @click="removeGroup(plan, group)"
-                  >
-                    ×
-                  </button>
-                </span>
-                <button
-                  class="btn btn-sm"
-                  :title="pt('actions.manageGroups')"
-                  :aria-label="pt('actions.manageGroups')"
-                  @click="openGroupModal(plan)"
-                >
-                  {{ pt('actions.manageGroups') }}
-                </button>
-              </div>
-            </td>
-            <td>
-              <div class="action-buttons">
-                <button
-                  class="btn btn-sm"
-                  :title="pt('actions.edit')"
-                  :aria-label="pt('actions.edit')"
-                  @click="edit(plan)"
-                >
-                  {{ pt('actions.edit') }}
-                </button>
-                <button
-                  class="btn btn-sm"
-                  :title="pt('actions.delete')"
-                  :aria-label="pt('actions.delete')"
-                  @click="remove(plan)"
-                >
-                  {{ pt('actions.delete') }}
-                </button>
-                <button
-                  class="btn btn-sm"
-                  :title="pt('actions.assign')"
-                  :aria-label="pt('actions.assign')"
-                  @click="openAssign(plan)"
-                >
-                  {{ pt('actions.assign') }}
-                </button>
-              </div>
-            </td>
-          </tr>
-          <tr v-if="plans.length === 0">
-            <td :colspan="isCommercial ? 7 : 6" class="empty-row">{{ pt('empty.noData') }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </section>
+    <UiDataTable
+      :columns="columns"
+      :rows="filteredPlans"
+      :label="pt('table.label')"
+      :row-label="plan => plan.name"
+      storage-key="admin.plans"
+      :page-size="20"
+      :loading="listLoading"
+      :error="listError"
+      :error-title="pt('messages.loadFailed')"
+      :filtered="Boolean(search.trim())"
+      :empty-icon="Package"
+      :empty-title="pt('empty.title')"
+      :empty-description="pt('empty.description')"
+      activatable
+      :row-actions="planActions"
+      @row-activate="openDetail"
+      @retry="load"
+      @clear-filters="search = ''"
+    >
+      <template #toolbar>
+        <UiSearchField v-model="search" class="list-page__search" :label="pt('filters.search')" />
+      </template>
+      <template #empty-actions>
+        <UiButton variant="primary" :icon="Plus" @click="openCreateModal">{{ pt('actions.create') }}</UiButton>
+      </template>
+      <template #cell-groups="{ row }">
+        <span v-if="(planGroups[row.id] || []).length" class="plan-groups">
+          <UiBadge v-for="group in planGroups[row.id]" :key="group.id" tone="neutral" :dot="false" :label="group.name" />
+        </span>
+        <span v-else class="plan-groups__none">{{ pt('labels.noGroups') }}</span>
+      </template>
+    </UiDataTable>
+
+    <UiSheet
+      :open="Boolean(detailPlan)"
+      grouped
+      :title="detailPlan?.name || ''"
+      :description="detailPlan ? pt('detail.description', { id: detailPlan.id }) : ''"
+      data-test="plan-detail-sheet"
+      @update:open="value => { if (!value) detailPlan = null }"
+    >
+      <template v-if="detailPlan">
+        <UiGroupedList :title="pt('detail.limits')">
+          <UiGroupedListRow :label="pt('table.transfer')" :value="formatTransfer(detailPlan.transfer_enable)" />
+          <UiGroupedListRow :label="pt('table.limits')" :value="formatPlanLimits(detailPlan)" />
+          <UiGroupedListRow v-if="isCommercial" :label="pt('table.monthPrice')" :value="formatPrice(detailPlan.month_price)" />
+        </UiGroupedList>
+        <section class="plan-sheet-groups" aria-labelledby="plan-sheet-groups-title">
+          <div class="plan-sheet-groups__head">
+            <h3 id="plan-sheet-groups-title" class="plan-sheet-groups__title">{{ pt('table.subscriptionGroups') }}</h3>
+            <UiButton size="sm" @click="openGroupModal(detailPlan)">{{ pt('actions.manageGroups') }}</UiButton>
+          </div>
+          <ul v-if="(planGroups[detailPlan.id] || []).length" class="plan-sheet-groups__list">
+            <li v-for="group in planGroups[detailPlan.id]" :key="group.id" class="plan-sheet-groups__item">
+              <span>{{ group.name }}</span>
+              <UiIconButton :icon="X" size="sm" :label="pt('actions.removeGroupNamed', { name: group.name })" @click="removeGroup(detailPlan, group)" />
+            </li>
+          </ul>
+          <p v-else class="plan-sheet-groups__empty">{{ pt('labels.noGroupsHint') }}</p>
+        </section>
+        <UiGroupedList :title="pt('detail.actions')">
+          <UiGroupedListRow :label="pt('actions.edit')" @click="edit(detailPlan)" />
+          <UiGroupedListRow :label="pt('actions.assign')" @click="openAssign(detailPlan)" />
+          <UiGroupedListRow :label="pt('confirm.deleteAction')" @click="remove(detailPlan)" />
+        </UiGroupedList>
+      </template>
+    </UiSheet>
 
     <UiDialog
       :open="showPlanModal"
-      size="sm"
+      size="md"
       :title="editingPlanId ? pt('planModal.editTitle') : pt('planModal.createTitle')"
       :dismissible="!planSaving"
       @update:open="value => { if (!value) closePlanModal() }"
     >
-      <div class="dialog-form">
-        <div class="form-group">
-          <label for="plan-name">{{ pt('planModal.fields.name') }} <span class="required">*</span></label>
-          <input
-            id="plan-name"
-            v-model="form.name"
-            type="text"
-            data-test="plan-name-input"
-            :placeholder="pt('planModal.placeholders.name')"
-            :aria-invalid="nameError ? 'true' : undefined"
-            :aria-describedby="nameError ? 'plan-name-error' : undefined"
-          />
-          <p v-if="nameError" id="plan-name-error" class="form-error" role="alert">{{ nameError }}</p>
-        </div>
-        <div class="form-group">
-          <label for="plan-transfer">{{ pt('planModal.fields.transfer') }}</label>
-          <input id="plan-transfer" v-model.number="form.transfer_enable" type="number" min="0" />
-        </div>
-        <div class="form-group">
-          <label for="plan-speed-limit">{{ pt('planModal.fields.speedLimit') }}</label>
-          <input id="plan-speed-limit" v-model.number="form.speed_limit" data-test="plan-speed-limit-input" type="number" min="0" />
-        </div>
-        <div class="form-group">
-          <label for="plan-device-limit">{{ pt('planModal.fields.deviceLimit') }}</label>
-          <input id="plan-device-limit" v-model.number="form.device_limit" data-test="plan-device-limit-input" type="number" min="0" />
-        </div>
-        <div v-if="isCommercial" class="form-group" data-test="plan-month-price-field">
-          <label for="plan-month-price">{{ pt('planModal.fields.monthPrice') }}</label>
-          <input id="plan-month-price" v-model.number="form.month_price" type="number" min="0" />
-        </div>
-        <p v-if="planError" class="form-error" role="alert" data-test="plan-save-error">{{ planError }}</p>
+      <div class="form-grid">
+        <UiTextField
+          id="plan-name"
+          v-model="form.name"
+          class="form-grid__full"
+          required
+          data-test="plan-name-input"
+          :label="pt('planModal.fields.name')"
+          :placeholder="pt('planModal.placeholders.name')"
+          :error="nameError"
+        />
+        <UiTextField v-model.number="form.transfer_enable" type="number" min="0" suffix="GB" :label="pt('planModal.fields.transfer')" />
+        <UiTextField v-if="isCommercial" v-model.number="form.month_price" type="number" min="0" :label="pt('planModal.fields.monthPrice')" :help="formatPrice(form.month_price)" data-test="plan-month-price-field" />
+        <UiTextField v-model.number="form.speed_limit" type="number" min="0" suffix="Mbps" :label="pt('planModal.fields.speedLimit')" :help="pt('planModal.help.zeroUnlimited')" data-test="plan-speed-limit-input" />
+        <UiTextField v-model.number="form.device_limit" type="number" min="0" :label="pt('planModal.fields.deviceLimit')" :help="pt('planModal.help.zeroUnlimited')" data-test="plan-device-limit-input" />
       </div>
+      <p v-if="planError" class="form-error" role="alert" data-test="plan-save-error">{{ planError }}</p>
       <template #footer="{ close }">
         <UiButton :disabled="planSaving" @click="close">{{ t('common.actions.cancel') }}</UiButton>
         <UiButton variant="primary" data-test="plan-save-button" :loading="planSaving" @click="save">{{ t('common.actions.save') }}</UiButton>
@@ -136,29 +109,31 @@
       :open="showAssign"
       size="sm"
       :title="pt('assignModal.title')"
+      :description="assignPlanName"
       :dismissible="!assigning"
       @update:open="value => { if (!value) closeAssign() }"
     >
-      <div class="dialog-form">
-        <div class="form-group">
-          <label for="plan-assign-user">{{ pt('assignModal.fields.userId') }} <span class="required">*</span></label>
-          <input
-            id="plan-assign-user"
-            v-model.number="assignForm.user_id"
-            type="number"
-            data-test="plan-assign-user"
-            :placeholder="pt('assignModal.placeholders.userId')"
-            :aria-invalid="assignUserError ? 'true' : undefined"
-            :aria-describedby="assignUserError ? 'plan-assign-user-error' : undefined"
-          />
-          <p v-if="assignUserError" id="plan-assign-user-error" class="form-error" role="alert">{{ assignUserError }}</p>
-        </div>
-        <div class="form-group">
-          <label for="plan-assign-expire">{{ pt('assignModal.fields.expireAt') }}</label>
-          <input id="plan-assign-expire" v-model.number="assignForm.expire_at" type="number" />
-        </div>
-        <p v-if="assignError" class="form-error" role="alert" data-test="plan-assign-error">{{ assignError }}</p>
+      <div class="form-grid">
+        <UiTextField
+          id="plan-assign-user"
+          v-model.number="assignForm.user_id"
+          class="form-grid__full"
+          type="number"
+          required
+          data-test="plan-assign-user"
+          :label="pt('assignModal.fields.userId')"
+          :placeholder="pt('assignModal.placeholders.userId')"
+          :error="assignUserError"
+        />
+        <UiTextField
+          v-model.number="assignForm.expire_at"
+          class="form-grid__full"
+          type="number"
+          :label="pt('assignModal.fields.expireAt')"
+          :help="assignForm.expire_at ? format.dateTime(Number(assignForm.expire_at)) : pt('assignModal.help.expireAt')"
+        />
       </div>
+      <p v-if="assignError" class="form-error" role="alert" data-test="plan-assign-error">{{ assignError }}</p>
       <template #footer="{ close }">
         <UiButton :disabled="assigning" @click="close">{{ t('common.actions.cancel') }}</UiButton>
         <UiButton variant="primary" data-test="plan-assign-button" :loading="assigning" @click="assign">{{ pt('actions.assign') }}</UiButton>
@@ -171,30 +146,26 @@
       :description="pt('groupModal.description')"
       @update:open="value => { if (!value) closeGroupModal() }"
     >
-      <div v-if="allGroups.length === 0" class="empty-msg">
-        {{ pt('groupModal.empty') }}
-      </div>
-
-      <div v-else class="group-list">
-        <button
-          v-for="group in allGroups"
-          :key="group.id"
-          type="button"
-          class="group-item"
-          :class="{ selected: isGroupSelected(group.id) }"
-          :aria-pressed="isGroupSelected(group.id) ? 'true' : 'false'"
-          :disabled="togglingGroupId === group.id"
-          @click="toggleGroup(group)"
-        >
-          <span class="group-info">
-            <span class="group-name">{{ group.name }}</span>
-            <span class="group-desc">{{ group.description || pt('groupModal.noDescription') }}</span>
-          </span>
-          <span class="group-check" aria-hidden="true">
-            <span>{{ isGroupSelected(group.id) ? pt('groupModal.selectedShort') : '' }}</span>
-          </span>
-        </button>
-      </div>
+      <UiErrorState v-if="allGroupsError" compact heading-tag="h3" :title="pt('messages.loadGroupsFailed')" :error="allGroupsError" @retry="loadAllGroups" />
+      <UiEmptyState v-else-if="allGroups.length === 0" compact :icon="Layers" :title="pt('groupModal.empty')" />
+      <ul v-else class="group-list">
+        <li v-for="group in allGroups" :key="group.id">
+          <button
+            type="button"
+            class="group-item"
+            :class="{ 'is-selected': isGroupSelected(group.id) }"
+            :aria-pressed="isGroupSelected(group.id) ? 'true' : 'false'"
+            :disabled="togglingGroupId === group.id"
+            @click="toggleGroup(group)"
+          >
+            <span class="group-item__text">
+              <span class="group-item__name">{{ group.name }}</span>
+              <span class="group-item__desc">{{ group.description || pt('groupModal.noDescription') }}</span>
+            </span>
+            <UiIcon v-if="isGroupSelected(group.id)" class="group-item__check" :icon="Check" :size="18" />
+          </button>
+        </li>
+      </ul>
       <p v-if="groupError" class="form-error" role="alert" data-test="plan-group-error">{{ groupError }}</p>
       <template #footer="{ close }">
         <UiButton @click="close">{{ t('common.actions.close') }}</UiButton>
@@ -204,7 +175,8 @@
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
+import { Check, Layers, Package, Pencil, Plus, Trash2, UserPlus, X } from '@lucide/vue'
 import {
   addGroupToPlan,
   assignPlanToUser,
@@ -218,7 +190,23 @@ import {
 } from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useEdition } from '@/composables/useEdition'
-import { UiButton, UiDialog, useConfirm, useToast } from '@/ui'
+import UiBadge from '@/ui/UiBadge.vue'
+import UiButton from '@/ui/UiButton.vue'
+import UiDataTable from '@/ui/UiDataTable.vue'
+import UiDialog from '@/ui/UiDialog.vue'
+import UiEmptyState from '@/ui/UiEmptyState.vue'
+import UiErrorState from '@/ui/UiErrorState.vue'
+import UiGroupedList from '@/ui/UiGroupedList.vue'
+import UiGroupedListRow from '@/ui/UiGroupedListRow.vue'
+import UiIcon from '@/ui/UiIcon.vue'
+import UiIconButton from '@/ui/UiIconButton.vue'
+import UiPageHeader from '@/ui/UiPageHeader.vue'
+import UiSearchField from '@/ui/UiSearchField.vue'
+import UiSheet from '@/ui/UiSheet.vue'
+import UiTextField from '@/ui/UiTextField.vue'
+import { useConfirm } from '@/ui/composables/useConfirm'
+import { useFormat } from '@/ui/composables/useFormat'
+import { useToast } from '@/ui/composables/useToast'
 
 const { t, te } = useAppI18n()
 // The community edition calls plans subscription templates: no price, no
@@ -227,6 +215,7 @@ const { t, te } = useAppI18n()
 const { isCommercial } = useEdition()
 const toast = useToast()
 const confirm = useConfirm()
+const format = useFormat()
 const pt = (key, params) => (
   !isCommercial.value && te(`adminTemplates.${key}`)
     ? t(`adminTemplates.${key}`, params)
@@ -234,7 +223,12 @@ const pt = (key, params) => (
 )
 
 const plans = ref([])
+const listLoading = ref(false)
+const listError = ref(null)
+const search = ref('')
+const detailPlan = ref(null)
 const allGroups = ref([])
+const allGroupsError = ref(null)
 const planGroups = ref({})
 
 const showPlanModal = ref(false)
@@ -331,17 +325,53 @@ const loadPlanGroups = async (planId) => {
 }
 
 const load = async () => {
+  listLoading.value = true
   try {
     const res = ensurePlanSuccess(
       await getPlans(),
       'adminPlans.messages.loadFailed'
     )
     plans.value = readPlanList(res)
+    listError.value = null
     await Promise.all(plans.value.map((plan) => loadPlanGroups(plan.id)))
+    // The open details follow the reloaded row.
+    if (detailPlan.value) detailPlan.value = plans.value.find(plan => plan.id === detailPlan.value.id) || null
   } catch (error) {
-    console.error(pt('messages.loadFailed'), error)
+    listError.value = error
+  } finally {
+    listLoading.value = false
   }
 }
+
+const formatTransfer = value => `${format.number(Number(value || 0))} GB`
+const formatPrice = value => (value === null || value === undefined || value === '' ? '—' : format.money(value))
+
+const filteredPlans = computed(() => {
+  const query = search.value.trim().toLowerCase()
+  if (!query) return plans.value
+  return plans.value.filter(plan => String(plan.name || '').toLowerCase().includes(query) || String(plan.id) === query)
+})
+
+const columns = computed(() => [
+  { key: 'name', label: pt('table.name'), primary: true, sortable: true },
+  { key: 'transfer_enable', label: pt('table.transfer'), sortable: true, numeric: true, firstDirection: 'desc', format: value => formatTransfer(value) },
+  { key: 'limits', label: pt('table.limits'), value: plan => formatPlanLimits(plan) },
+  ...(isCommercial.value
+    ? [{ key: 'month_price', label: pt('table.monthPrice'), sortable: true, numeric: true, align: 'end', format: value => formatPrice(value) }]
+    : []),
+  { key: 'groups', label: pt('table.subscriptionGroups'), secondary: true, sortValue: plan => (planGroups.value[plan.id] || []).length },
+  { key: 'id', label: t('miscPages.shared.id'), numeric: true, sortable: true, hidden: true }
+])
+
+const planActions = plan => [
+  { key: 'edit', label: pt('actions.edit'), icon: Pencil, onSelect: () => edit(plan) },
+  { key: 'groups', label: pt('actions.manageGroups'), icon: Layers, onSelect: () => openGroupModal(plan) },
+  { key: 'assign', label: pt('actions.assign'), icon: UserPlus, onSelect: () => openAssign(plan) },
+  { key: 'delete', label: pt('actions.delete'), icon: Trash2, danger: true, separatorBefore: true, onSelect: () => remove(plan) }
+]
+
+const openDetail = (plan) => { detailPlan.value = plan }
+const assignPlanName = computed(() => plans.value.find(plan => plan.id === assignForm.plan_id)?.name || '')
 
 const loadAllGroups = async () => {
   try {
@@ -350,8 +380,9 @@ const loadAllGroups = async () => {
       'adminPlans.messages.loadGroupsFailed'
     )
     allGroups.value = readPlanList(res)
+    allGroupsError.value = null
   } catch (error) {
-    console.error(pt('messages.loadGroupsFailed'), error)
+    allGroupsError.value = error
   }
 }
 
@@ -574,112 +605,95 @@ const formatPlanLimits = (plan) => {
 </script>
 
 <style scoped>
-.data-panel {
-  overflow-x: auto;
-  padding: 0;
-}
-
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.data-table th,
-.data-table td {
-  padding: 14px 16px;
-  text-align: left;
-  border-bottom: 1px solid var(--border-color);
-  vertical-align: top;
-}
-
-.data-table th {
-  font-weight: 600;
-  font-size: 13px;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-}
-
-.group-tags {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  align-items: center;
-}
-
-.group-tag {
+.plan-groups {
   display: inline-flex;
-  align-items: center;
-  gap: 4px;
-  background: var(--primary-soft);
-  color: var(--primary-color);
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.tag-remove {
-  background: transparent;
-  border: none;
-  color: inherit;
-  cursor: pointer;
-  padding: 0;
-  font-size: 14px;
-  line-height: 1;
-  margin-left: 2px;
-  box-shadow: none;
-}
-
-.action-buttons {
-  display: flex;
-  gap: 6px;
   flex-wrap: wrap;
+  gap: var(--space-1);
 }
 
-.empty-row {
-  text-align: center;
-  color: var(--text-secondary);
-  padding: 40px !important;
-}
-
-.dialog-form > .form-group:last-child {
-  margin-bottom: 0;
-}
-
-.form-error {
-  margin: var(--space-1) 0 0;
-  color: var(--danger);
+.plan-groups__none,
+.plan-sheet-groups__empty {
+  color: var(--label-2);
   font-size: var(--type-callout-size);
 }
 
-.empty-msg {
-  text-align: center;
-  color: var(--text-secondary);
-  padding: 30px 20px;
+.plan-sheet-groups {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.plan-sheet-groups__head {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-4);
+}
+
+.plan-sheet-groups__title {
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
+  font-weight: var(--weight-regular);
+}
+
+.plan-sheet-groups__list {
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  margin: 0;
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  list-style: none;
+}
+
+.plan-sheet-groups__item {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: space-between;
+  min-height: 44px;
+  padding: var(--space-1) var(--space-2) var(--space-1) var(--space-4);
+  border-bottom: 1px solid var(--separator);
+}
+
+.plan-sheet-groups__item:last-child {
+  border-bottom: 0;
+}
+
+.plan-sheet-groups__empty {
+  padding: 0 var(--space-4);
 }
 
 .group-list {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--space-2);
+  padding: 0;
+  margin: 0;
+  list-style: none;
 }
 
 .group-item {
   display: flex;
-  width: 100%;
-  min-height: auto;
+  gap: var(--space-3);
   align-items: center;
   justify-content: space-between;
-  gap: var(--space-3);
+  width: 100%;
+  min-height: 52px;
+  padding: var(--space-2) var(--space-4);
+  border: 1px solid var(--separator-strong);
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
   color: var(--label-1);
   font: inherit;
   text-align: left;
-  padding: 12px 16px;
-  background: var(--surface-muted);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
+  white-space: normal;
   cursor: pointer;
-  transition: var(--transition);
+}
+
+.group-item:hover {
+  background: var(--fill-1);
 }
 
 .group-item:focus-visible {
@@ -687,46 +701,33 @@ const formatPlanLimits = (plan) => {
   outline-offset: var(--focus-ring-offset);
 }
 
-.group-item:hover {
-  border-color: var(--border-strong);
+.group-item.is-selected {
+  border-color: var(--accent);
+  background: var(--accent-soft);
 }
 
-.group-item.selected {
-  background: rgba(0, 100, 250, 0.06);
-  border-color: var(--primary-color);
-}
-
-.group-info {
+.group-item__text {
   display: flex;
-  flex: 1;
   flex-direction: column;
+  gap: var(--space-0-5);
+  min-width: 0;
 }
 
-.group-name {
-  font-weight: 600;
-  margin-bottom: 2px;
+.group-item__name {
+  font-weight: var(--weight-semibold);
 }
 
-.group-desc {
-  font-size: 12px;
-  color: var(--text-secondary);
+.group-item__desc {
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
 }
 
-.group-check {
-  min-width: 48px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: var(--accent-fill);
-  color: var(--on-accent);
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 700;
+.group-item.is-selected .group-item__desc {
+  /* --label-2 on the accent tint stays at 4.5:1. */
+  color: color-mix(in srgb, var(--label-2) 70%, var(--label-1));
 }
 
-.group-item:not(.selected) .group-check {
-  background: var(--border-color);
-  color: transparent;
+.group-item__check {
+  color: var(--accent);
 }
 </style>

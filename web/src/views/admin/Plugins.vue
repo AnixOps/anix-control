@@ -1,65 +1,136 @@
 <template>
-  <section class="plugin-center" :aria-busy="loading ? 'true' : 'false'">
-    <header class="page-header">
-      <div>
-        <h1>{{ t('pageTitles.admin.plugins') }}</h1>
-        <p class="page-subtitle">{{ t('control.subtitle') }}</p>
-      </div>
-      <div class="header-actions">
-        <button
-          class="icon-button"
+  <section class="list-page plugin-center" :aria-busy="loading ? 'true' : 'false'">
+    <UiPageHeader :title="t('pageTitles.admin.plugins')" :description="t('control.subtitle')">
+      <template #actions>
+        <UiIconButton
+          :icon="RefreshCw"
+          variant="secondary"
           data-testid="refresh-plugin-list"
-          type="button"
-          :aria-label="t('control.actions.refresh')"
-          :title="t('control.actions.refresh')"
+          :label="t('control.actions.refresh')"
           :disabled="loading"
           @click="refreshPluginResources()"
-        >
-          <RefreshCw :class="{ spinning: loading }" :size="18" aria-hidden="true" />
-          <span class="sr-only">{{ t('control.actions.refresh') }}</span>
-        </button>
-        <button class="btn btn-primary" data-testid="import-plugin-release" type="button" @click="openReleaseImport">
-          {{ t('control.actions.importRelease') }}
-        </button>
-      </div>
-    </header>
-
-    <div class="plugin-toolbar" role="search" :aria-label="t('pageTitles.admin.plugins')">
-      <label class="search-field" for="plugin-search">
-        <Search :size="17" aria-hidden="true" />
-        <span class="sr-only">{{ t('control.pluginCenter.filters.search') }}</span>
-        <input
-          id="plugin-search"
-          v-model.trim="search"
-          data-testid="plugin-search"
-          type="search"
-          :placeholder="t('control.pluginCenter.filters.search')"
         />
-      </label>
-      <label class="filter-field" for="plugin-health-filter">
-        <span>{{ t('control.pluginCenter.filters.health') }}</span>
-        <select id="plugin-health-filter" v-model="healthFilter" data-testid="plugin-health-filter">
-          <option value="all">{{ t('control.pluginCenter.filters.allHealth') }}</option>
-          <option value="healthy">{{ t('control.pluginCenter.states.healthy') }}</option>
-          <option value="attention">{{ t('control.pluginCenter.states.attention') }}</option>
-          <option value="catalogued">{{ t('control.states.catalogued') }}</option>
-        </select>
-      </label>
-      <label class="filter-field" for="plugin-target-filter">
-        <span>{{ t('control.pluginCenter.filters.target') }}</span>
-        <select id="plugin-target-filter" v-model="targetFilter" data-testid="plugin-target-filter">
-          <option value="all">{{ t('control.pluginCenter.filters.allTargets') }}</option>
-          <option value="control">control</option>
-          <option value="agent">agent</option>
-        </select>
-      </label>
+        <UiButton variant="primary" :icon="PackagePlus" data-testid="import-plugin-release" @click="openReleaseImport">
+          {{ t('control.actions.importRelease') }}
+        </UiButton>
+      </template>
+    </UiPageHeader>
+
+    <div class="plugin-toolbar">
+      <UiSearchField
+        v-model.trim="search"
+        class="list-page__search"
+        data-testid="plugin-search"
+        :label="t('control.pluginCenter.filters.search')"
+      />
+      <UiFilterChips
+        v-model="healthFilter"
+        data-testid="plugin-health-filter"
+        :label="t('control.pluginCenter.filters.health')"
+        :options="healthChips"
+      />
+      <UiFilterChips
+        v-model="targetFilter"
+        data-testid="plugin-target-filter"
+        :label="t('control.pluginCenter.filters.target')"
+        :options="targetChips"
+      />
     </div>
 
-    <div class="plugin-summary" :aria-label="t('control.pluginCenter.summary.label')">
-      <span class="summary-item healthy">{{ t('control.pluginCenter.summary.healthy', { count: summary.healthy }) }}</span>
-      <span class="summary-item attention">{{ t('control.pluginCenter.summary.attention', { count: summary.attention }) }}</span>
-      <span class="summary-item catalogued">{{ t('control.pluginCenter.summary.catalogued', { count: summary.catalogued }) }}</span>
+    <p v-if="error" class="plugin-banner is-error" role="alert">{{ error }}</p>
+    <p v-else-if="catalogError && rows.length" class="plugin-banner is-error" role="alert">{{ catalogError }}</p>
+    <p v-if="notice" class="plugin-banner notice-message" role="status">{{ notice }}</p>
+    <p v-if="lastPluginOperation" class="plugin-banner notice-message" data-testid="plugin-operation-status" role="status">
+      {{ t('control.messages.operationStatus', {
+        id: lastPluginOperation.id,
+        state: lastPluginOperation.state || 'pending',
+        chain: lastPluginOperation.operation_chain || lastPluginOperation.id,
+      }) }}
+    </p>
+    <section v-if="adminExtensionErrors.length" class="plugin-banner is-error extension-error-band" data-testid="plugin-extension-errors" role="alert">
+      <strong>{{ t('control.extensions.errorsTitle') }}</strong>
+      <ul>
+        <li v-for="(extensionError, index) in adminExtensionErrors" :key="`${extensionError.plugin_id || 'catalog'}-${index}`">
+          <code v-if="extensionError.plugin_id">{{ extensionError.plugin_id }}</code>
+          {{ extensionError.message }}
+        </li>
+      </ul>
+    </section>
+
+    <UiErrorState
+      v-if="catalogError && !rows.length && !loading"
+      :title="t('control.pluginCenter.loadFailed')"
+      :error="catalogError"
+      @retry="refreshPluginResources()"
+    />
+    <div v-else-if="showSkeleton" class="plugin-grid">
+      <UiSkeleton v-for="index in 6" :key="index" variant="card" :label="index === 1 ? t('control.states.loading') : ''" />
     </div>
+    <ul
+      v-else-if="loaded && filteredRows.length"
+      class="plugin-grid"
+      data-testid="plugin-list"
+      :aria-label="t('control.pluginCenter.listLabel')"
+    >
+      <li v-for="row in filteredRows" :key="row.key" class="plugin-grid__item">
+        <button
+          class="plugin-card"
+          :data-testid="`plugin-row-${row.plugin.id}`"
+          type="button"
+          aria-haspopup="dialog"
+          @click="openDrawer($event, row)"
+        >
+          <span class="plugin-card__head">
+            <span class="plugin-card__icon" aria-hidden="true">
+              <UiIcon :icon="Puzzle" :size="24" />
+            </span>
+            <span class="plugin-card__title">
+              <strong class="plugin-card__name">{{ row.plugin.name || row.plugin.id }}</strong>
+              <span class="plugin-card__publisher">
+                {{ row.plugin.publisher || row.plugin.id }}
+                <UiIcon v-if="row.plugin.official === true" :icon="BadgeCheck" :size="14" :label="t('control.pluginCenter.official')" />
+              </span>
+            </span>
+          </span>
+          <span v-if="row.plugin.description" class="plugin-card__description">{{ row.plugin.description }}</span>
+          <span class="plugin-card__targets">
+            <span v-for="target in row.targets" :key="target.target" class="plugin-card__target">
+              {{ target.target }} <code>{{ target.installation?.desired_version || target.latestRelease?.version || '—' }}</code>
+            </span>
+          </span>
+          <span class="plugin-card__foot">
+            <UiBadge :tone="healthTone(row.health.state)" :label="healthLabel(row.health.state)" />
+            <span class="plugin-card__version">
+              <code>{{ row.latestRelease?.version || '—' }}</code>
+              · {{ t('control.labels.releases', { count: row.releases.length }) }}
+            </span>
+          </span>
+          <span v-if="row.health.error" class="plugin-card__error">{{ row.health.error }}</span>
+        </button>
+      </li>
+    </ul>
+    <UiEmptyState
+      v-else-if="loaded && rows.length"
+      :icon="SearchX"
+      heading-tag="h2"
+      :title="t('ui.table.noMatches')"
+      :description="t('control.pluginCenter.empty')"
+    >
+      <template #actions>
+        <UiButton data-clear-filters @click="clearFilters">{{ t('ui.table.clearFilters') }}</UiButton>
+      </template>
+    </UiEmptyState>
+    <UiEmptyState
+      v-else-if="loaded"
+      :icon="Puzzle"
+      heading-tag="h2"
+      :title="t('control.pluginCenter.emptyCatalog.title')"
+      :description="t('control.pluginCenter.emptyCatalog.description')"
+    >
+      <template #actions>
+        <UiButton variant="primary" :icon="PackagePlus" @click="openReleaseImport">{{ t('control.actions.importRelease') }}</UiButton>
+      </template>
+    </UiEmptyState>
 
     <OperationTimeline
       :operations="pluginOperations"
@@ -72,64 +143,6 @@
       data-testid="plugin-operation-history"
       @cancel="cancelOperation"
     />
-
-    <p v-if="pageError" class="error-message" role="alert">{{ pageError }}</p>
-    <p v-if="notice" class="notice-message" role="status">{{ notice }}</p>
-    <p v-if="lastPluginOperation" class="notice-message" data-testid="plugin-operation-status" role="status">
-      {{ t('control.messages.operationStatus', {
-        id: lastPluginOperation.id,
-        state: lastPluginOperation.state || 'pending',
-        chain: lastPluginOperation.operation_chain || lastPluginOperation.id,
-      }) }}
-    </p>
-    <section v-if="adminExtensionErrors.length" class="extension-error-band" data-testid="plugin-extension-errors" role="alert">
-      <strong>{{ t('control.extensions.errorsTitle') }}</strong>
-      <ul>
-        <li v-for="(extensionError, index) in adminExtensionErrors" :key="`${extensionError.plugin_id || 'catalog'}-${index}`">
-          <code v-if="extensionError.plugin_id">{{ extensionError.plugin_id }}</code>
-          {{ extensionError.message }}
-        </li>
-      </ul>
-    </section>
-
-    <div class="plugin-list" data-testid="plugin-list" role="list">
-      <p v-if="loading && !loaded" class="state-message">{{ t('control.states.loading') }}</p>
-      <template v-else>
-        <div
-          v-for="row in filteredRows"
-          :key="row.key"
-          role="listitem"
-        >
-          <button
-            class="plugin-row"
-            :data-testid="`plugin-row-${row.plugin.id}`"
-            type="button"
-            aria-haspopup="dialog"
-            @click="openDrawer($event, row)"
-          >
-            <span class="plugin-primary">
-              <strong>{{ row.plugin.name || row.plugin.id }}</strong>
-              <code>{{ row.plugin.id }}</code>
-              <span v-if="row.plugin.description" class="plugin-description">{{ row.plugin.description }}</span>
-            </span>
-            <span class="target-summary">
-              <span v-for="target in row.targets" :key="target.target" class="target-chip">
-                <span>{{ target.target }}</span>
-                <code>{{ target.installation?.desired_version || target.latestRelease?.version || '-' }}</code>
-              </span>
-              <span v-if="row.targets.length === 0" class="muted">{{ t('control.states.catalogued') }}</span>
-            </span>
-            <span class="release-summary">
-              <code>{{ row.latestRelease?.version || '-' }}</code>
-              <span>{{ t('control.labels.releases', { count: row.releases.length }) }}</span>
-            </span>
-            <span :class="['health-badge', `health-${row.health.state}`]">{{ healthLabel(row.health.state) }}</span>
-            <span v-if="row.health.error" class="row-error">{{ row.health.error }}</span>
-          </button>
-        </div>
-        <p v-if="loaded && filteredRows.length === 0" class="state-message">{{ t('control.pluginCenter.empty') }}</p>
-      </template>
-    </div>
 
     <PluginDetailDrawer
       :open="drawerOpen"
@@ -163,14 +176,14 @@
       :dismissible="configCanClose"
       @update:open="value => { if (!value) closeConfig() }"
     >
-      <p v-if="configEditor.loading" class="state-message">{{ t('control.config.loading') }}</p>
+      <UiSkeleton v-if="configEditor.loading" :label="t('control.config.loading')" />
       <PluginConfigForm
         v-else
         v-model="configEditor.value"
         :schema="configEditor.schema"
         @validity="configEditor.valid = $event"
       />
-      <p v-if="configEditor.error" class="dialog-error" role="alert">{{ configEditor.error }}</p>
+      <p v-if="configEditor.error" class="form-error" role="alert">{{ configEditor.error }}</p>
       <template #footer>
         <span class="revision-label">{{ t('control.config.revision', { revision: configEditor.revision }) }}</span>
         <UiButton :disabled="configEditor.saving" @click="closeConfig">{{ t('common.actions.cancel') }}</UiButton>
@@ -199,7 +212,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { RefreshCw, Search } from '@lucide/vue'
+import { BadgeCheck, PackagePlus, Puzzle, RefreshCw, SearchX } from '@lucide/vue'
 import PluginConfigForm from '@/components/admin/PluginConfigForm.vue'
 import PluginDetailDrawer from '@/components/admin/PluginDetailDrawer.vue'
 import PluginInstallationDialog from '@/components/admin/PluginInstallationDialog.vue'
@@ -207,7 +220,18 @@ import PluginReleaseImportDialog from '@/components/admin/PluginReleaseImportDia
 import OperationTimeline from '@/components/admin/OperationTimeline.vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useKernelPlugins } from '@/composables/useKernelPlugins'
-import { UiButton, UiDialog } from '@/ui'
+import UiBadge from '@/ui/UiBadge.vue'
+import UiButton from '@/ui/UiButton.vue'
+import UiDialog from '@/ui/UiDialog.vue'
+import UiEmptyState from '@/ui/UiEmptyState.vue'
+import UiErrorState from '@/ui/UiErrorState.vue'
+import UiFilterChips from '@/ui/UiFilterChips.vue'
+import UiIcon from '@/ui/UiIcon.vue'
+import UiIconButton from '@/ui/UiIconButton.vue'
+import UiPageHeader from '@/ui/UiPageHeader.vue'
+import UiSearchField from '@/ui/UiSearchField.vue'
+import UiSkeleton from '@/ui/UiSkeleton.vue'
+import { useDelayedLoading } from '@/ui/composables/useDelayedLoading'
 import {
   getKernelInstallationConfig,
   getKernelInstallations,
@@ -237,8 +261,8 @@ const {
 } = useKernelPlugins()
 
 const search = ref('')
-const healthFilter = ref('all')
-const targetFilter = ref('all')
+const healthFilter = ref('')
+const targetFilter = ref('')
 const error = ref('')
 const notice = ref('')
 const selectedRow = ref(null)
@@ -261,24 +285,46 @@ let pollRequestRunning = false
 let disposed = false
 let configEditorSession = 0
 
-const filteredRows = computed(() => rows.value.filter(row => {
+// Search and target narrow the catalog; the health chips count what is left.
+const searchedRows = computed(() => rows.value.filter(row => {
   const query = search.value.toLocaleLowerCase()
   const searchable = [row.plugin?.name, row.plugin?.id, row.plugin?.description, row.health?.error]
     .filter(Boolean)
     .join(' ')
     .toLocaleLowerCase()
   const matchesSearch = !query || searchable.includes(query)
-  const matchesHealth = healthFilter.value === 'all' || row.health?.state === healthFilter.value
-  const matchesTarget = targetFilter.value === 'all' || row.targets.some(target => target.target === targetFilter.value)
-  return matchesSearch && matchesHealth && matchesTarget
+  const matchesTarget = !targetFilter.value || row.targets.some(target => target.target === targetFilter.value)
+  return matchesSearch && matchesTarget
 }))
+const filteredRows = computed(() => searchedRows.value.filter(row => !healthFilter.value || row.health?.state === healthFilter.value))
 
-const summary = computed(() => filteredRows.value.reduce((counts, row) => {
-  counts[row.health?.state] += 1
+const summary = computed(() => searchedRows.value.reduce((counts, row) => {
+  if (row.health?.state in counts) counts[row.health.state] += 1
   return counts
 }, { healthy: 0, attention: 0, catalogued: 0 }))
+const healthChips = computed(() => [
+  { value: 'healthy', label: t('control.pluginCenter.states.healthy'), count: summary.value.healthy },
+  { value: 'attention', label: t('control.pluginCenter.states.attention'), count: summary.value.attention },
+  { value: 'catalogued', label: t('control.states.catalogued'), count: summary.value.catalogued }
+])
+const targetChips = [
+  { value: 'control', label: 'control' },
+  { value: 'agent', label: 'agent' }
+]
+const showSkeleton = useDelayedLoading(() => loading.value && !loaded.value)
 
-const pageError = computed(() => error.value || catalogError.value)
+function clearFilters() {
+  search.value = ''
+  healthFilter.value = ''
+  targetFilter.value = ''
+}
+
+function healthTone(state) {
+  if (state === 'healthy') return 'success'
+  if (state === 'attention') return 'warning'
+  return 'neutral'
+}
+
 const pluginOperations = computed(() => operations.value.filter(isPluginLifecycleOperation))
 const pluginOperationIDs = computed(() => pluginOperations.value.map(operation => operation.id).filter(Boolean))
 
@@ -643,61 +689,193 @@ onBeforeUnmount(() => {
 </script>
 
 <style scoped>
-.plugin-center { display: grid; gap: 16px; min-width: 0; }
-.page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
-.page-header h1 { margin: 0; font-size: 24px; line-height: 1.25; }
-.page-subtitle { margin: 5px 0 0; color: var(--text-secondary); font-size: 13px; }
-.header-actions, .plugin-toolbar { display: flex; align-items: end; gap: 8px; flex-wrap: wrap; }
-.icon-button, .btn { min-height: 36px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--surface-color); color: var(--text-color); cursor: pointer; }
-.icon-button { display: inline-grid; width: 36px; place-items: center; padding: 0; }
-.btn { padding: 8px 12px; }
-.btn-primary { border-color: var(--accent-fill); background: var(--accent-fill); color: var(--on-accent); }
-.icon-button:disabled, .btn:disabled { cursor: not-allowed; opacity: .55; }
-.spinning { animation: plugin-spin .8s linear infinite; }
-@keyframes plugin-spin { to { transform: rotate(360deg); } }
-.plugin-toolbar { padding: 12px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--surface-color); }
-.search-field { display: flex; align-items: center; gap: 8px; min-width: min(280px, 100%); flex: 1 1 280px; border: 1px solid var(--border-color); border-radius: 6px; padding: 0 10px; background: var(--bg-color); color: var(--text-secondary); }
-.search-field input { min-width: 0; width: 100%; height: 36px; border: 0; outline: 0; background: transparent; color: var(--text-color); font: inherit; }
-.filter-field { display: grid; gap: 5px; color: var(--text-secondary); font-size: 12px; font-weight: 700; }
-.filter-field select { min-height: 36px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--bg-color); color: var(--text-color); font: inherit; padding: 6px 8px; }
-.plugin-summary { display: flex; gap: 12px; flex-wrap: wrap; color: var(--text-secondary); font-size: 12px; }
-.summary-item { display: inline-flex; align-items: center; gap: 6px; }
-.summary-item::before { width: 7px; height: 7px; border-radius: 50%; background: currentColor; content: ''; }
-.healthy { color: var(--success-color); }
-.attention { color: var(--warning-color); }
-.catalogued { color: var(--text-secondary); }
-.error-message, .notice-message, .dialog-error { margin: 0; overflow-wrap: anywhere; }
-.error-message, .dialog-error, .row-error { color: var(--error-color); }
-.notice-message { color: var(--success-color); }
-.extension-error-band { display: grid; gap: 8px; margin: 0; padding: 12px; border-left: 3px solid var(--error-color); background: rgba(220, 38, 38, .08); color: var(--error-color); }
-.extension-error-band ul { display: grid; gap: 4px; margin: 0; padding-left: 20px; }
-.extension-error-band li { overflow-wrap: anywhere; }
-.extension-error-band code { margin-right: 6px; color: var(--text-color); }
-.plugin-list { display: grid; gap: 8px; }
-.plugin-row { display: grid; grid-template-columns: minmax(220px, 1.55fr) minmax(170px, 1fr) minmax(110px, .6fr) auto; align-items: center; gap: 14px; width: 100%; border: 1px solid var(--border-color); border-radius: 6px; background: var(--surface-color); color: var(--text-color); cursor: pointer; padding: 12px 14px; text-align: left; }
-.plugin-row:hover, .plugin-row:focus-visible { border-color: var(--primary-color); outline: 2px solid transparent; background: var(--surface-hover); }
-.plugin-primary, .release-summary { display: grid; gap: 3px; min-width: 0; }
-.plugin-primary strong { overflow-wrap: anywhere; }
-.plugin-primary code, .release-summary span, .plugin-description, .muted { color: var(--text-secondary); font-size: 12px; overflow-wrap: anywhere; }
-.target-summary { display: flex; flex-wrap: wrap; gap: 6px; }
-.target-chip { display: inline-flex; align-items: center; gap: 5px; border: 1px solid var(--border-color); border-radius: 999px; padding: 3px 7px; color: var(--text-secondary); font-size: 11px; }
-.target-chip code { color: var(--text-color); }
-.health-badge { display: inline-flex; align-items: center; justify-content: center; min-height: 24px; border-radius: 999px; padding: 2px 8px; font-size: 11px; font-weight: 700; white-space: nowrap; }
-.health-healthy { background: rgba(22, 163, 74, .1); color: var(--success-color); }
-.health-attention { background: rgba(217, 119, 6, .1); color: var(--warning-color); }
-.health-catalogued { background: var(--surface-hover); color: var(--text-secondary); }
-.row-error { grid-column: 1 / -1; font-size: 12px; line-height: 1.4; }
-.state-message { margin: 0; padding: 24px 12px; color: var(--text-secondary); text-align: center; }
-.revision-label { align-self: center; margin-right: auto; color: var(--label-2); font-size: var(--type-caption-size); }
-.sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-@media (max-width: 760px) {
-  .plugin-center { gap: 12px; }
-  .page-header h1 { font-size: 20px; }
-  .header-actions { width: 100%; }
-  .header-actions .btn { flex: 1; }
-  .plugin-toolbar { align-items: stretch; }
-  .filter-field { flex: 1 1 140px; }
-  .plugin-row { grid-template-columns: 1fr; gap: 9px; }
-  .row-error { grid-column: auto; }
+.plugin-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.plugin-banner {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--fill-1);
+  color: var(--label-1);
+  font-size: var(--type-callout-size);
+  overflow-wrap: anywhere;
+}
+
+.plugin-banner.is-error {
+  background: var(--danger-soft);
+  color: color-mix(in srgb, var(--danger) 78%, var(--label-1));
+}
+
+.extension-error-band ul {
+  display: grid;
+  gap: var(--space-1);
+  padding-left: var(--space-5);
+  margin: var(--space-2) 0 0;
+}
+
+/* App Store style catalogue: cards of 280 px and up. */
+.plugin-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--space-4);
+  padding: 0;
+  margin: 0;
+  list-style: none;
+}
+
+.plugin-grid__item {
+  display: flex;
+  min-width: 0;
+}
+
+.plugin-card {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: var(--space-3);
+  align-items: stretch;
+  min-width: 0;
+  min-height: 0;
+  padding: var(--space-5);
+  border: 0;
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-1), 0 0 0 0.5px var(--separator);
+  color: var(--label-1);
+  font: inherit;
+  text-align: left;
+  white-space: normal;
+  cursor: pointer;
+  transition: box-shadow var(--dur-micro) var(--ease-standard), transform var(--dur-micro) var(--ease-standard);
+}
+
+.plugin-card:hover {
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-2), 0 0 0 0.5px var(--separator);
+  transform: translateY(-1px);
+}
+
+.plugin-card:active {
+  background: var(--bg-elevated);
+  transform: none;
+}
+
+.plugin-card:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.plugin-card__head {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  min-width: 0;
+}
+
+.plugin-card__icon {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-sm);
+  background: var(--accent-soft);
+  color: var(--accent);
+}
+
+.plugin-card__title {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+.plugin-card__name {
+  font-size: var(--type-title-3-size);
+  font-weight: var(--weight-semibold);
+  line-height: var(--type-title-3-line);
+  overflow-wrap: anywhere;
+}
+
+.plugin-card__publisher {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
+}
+
+.plugin-card__publisher :deep(svg) {
+  color: var(--accent);
+}
+
+.plugin-card__description {
+  display: -webkit-box;
+  overflow: hidden;
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
+  line-height: var(--type-callout-line);
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+
+.plugin-card__targets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.plugin-card__target {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+  padding: var(--space-0-5) var(--space-2);
+  border-radius: var(--radius-xs);
+  background: var(--fill-1);
+  color: var(--label-2);
+  font-size: var(--type-caption-size);
+}
+
+.plugin-card__target code,
+.plugin-card__version code {
+  color: var(--label-1);
+  font-family: var(--font-mono);
+}
+
+.plugin-card__foot {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: space-between;
+  margin-top: auto;
+}
+
+.plugin-card__version {
+  color: var(--label-2);
+  font-size: var(--type-caption-size);
+}
+
+.plugin-card__error {
+  color: color-mix(in srgb, var(--danger) 78%, var(--label-1));
+  font-size: var(--type-callout-size);
+  overflow-wrap: anywhere;
+}
+
+.revision-label {
+  margin-right: auto;
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .plugin-card:hover {
+    transform: none;
+  }
 }
 </style>

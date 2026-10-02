@@ -1,149 +1,87 @@
 <template>
-  <div class="ansible-machines-page">
-    <section class="hero-card">
-      <div>
-        <p class="eyebrow">{{ t('runtime.ansibleMachines.heroEyebrow') }}</p>
-        <h2>{{ t('runtime.ansibleMachines.title') }}</h2>
-        <p class="hero-text">
-          {{ t('runtime.ansibleMachines.heroText') }}
+  <div class="list-page ansible-machines-page">
+    <UiPageHeader :title="t('runtime.ansibleMachines.title')" :description="t('runtime.ansibleMachines.heroText')">
+      <template #meta>
+        <UiBadge tone="neutral" :dot="false" :label="t('runtime.ansibleMachines.heroEyebrow')" />
+      </template>
+      <template #actions>
+        <UiIconButton variant="secondary" :icon="RefreshCw" :label="t('common.actions.refresh')" :disabled="loading" data-test="ansible-refresh" @click="refreshAll" />
+        <UiButton variant="primary" :icon="Plus" data-test="ansible-add" @click="openEditor()">{{ t('runtime.ansibleMachines.addMachine') }}</UiButton>
+      </template>
+    </UiPageHeader>
+
+    <nav class="runtime-links" :aria-label="t('runtime.ansibleMachines.relatedPages')">
+      <RouterLink to="/admin/forward/local">{{ t('forwardSuite.nav.localRuntime') }}</RouterLink>
+      <RouterLink to="/admin/forward/nodes">{{ t('forwardSuite.nav.nodeXTopology') }}</RouterLink>
+      <RouterLink to="/admin/forward/agents">{{ t('forwardSuite.nav.nodeXAgents') }}</RouterLink>
+    </nav>
+
+    <p class="inventory-hint">
+      <UiIcon :icon="KeyRound" :size="16" />
+      <span>{{ t('runtime.ansibleMachines.inventoryHint') }}</span>
+    </p>
+
+    <UiDataTable
+      :columns="columns"
+      :rows="machines"
+      :label="t('runtime.ansibleMachines.sectionTitle')"
+      :row-label="machine => machine.name"
+      storage-key="admin.ansible-machines"
+      :loading="loading"
+      :error="pageError"
+      :error-title="t('runtime.ansibleMachines.errors.loadFailed')"
+      :filtered="statusFilter !== 'all'"
+      :empty-icon="Server"
+      :empty-title="t('runtime.ansibleMachines.empty')"
+      :empty-description="t('runtime.ansibleMachines.sectionCopy')"
+      :row-actions="machineActions"
+      @retry="refreshAll"
+      @clear-filters="statusFilter = 'all'"
+    >
+      <template #toolbar>
+        <UiFilterChips v-model="statusChip" :label="t('runtime.ansibleMachines.filterLabel')" :options="statusChips" />
+        <p class="list-page__summary">
+          <span>{{ t('runtime.ansibleMachines.stats.machines') }} <strong>{{ machines.length }}</strong></span>
+          <span>{{ t('runtime.ansibleMachines.stats.online') }} <strong>{{ onlineCount }}</strong></span>
+          <span>{{ t('runtime.ansibleMachines.stats.enabled') }} <strong>{{ enabledCount }}</strong></span>
         </p>
-      </div>
-      <div class="hero-actions">
-        <router-link class="btn btn-secondary" to="/admin/forward/local">{{ t('forwardSuite.nav.localRuntime') }}</router-link>
-        <router-link class="btn btn-secondary" to="/admin/forward/nodes">{{ t('forwardSuite.nav.nodeXTopology') }}</router-link>
-        <router-link class="btn btn-secondary" to="/admin/forward/agents">{{ t('forwardSuite.nav.nodeXAgents') }}</router-link>
-        <button class="btn btn-secondary" :disabled="loading" @click="refreshAll">{{ loading ? t('runtime.ansibleMachines.refreshLoading') : t('common.actions.refresh') }}</button>
-        <button class="btn btn-primary" @click="openEditor()">{{ t('runtime.ansibleMachines.addMachine') }}</button>
-      </div>
-    </section>
-
-
-    <section class="stats-grid">
-      <article class="stat-card">
-        <p class="stat-label">{{ t('runtime.ansibleMachines.stats.machines') }}</p>
-        <strong class="stat-value">{{ machines.length }}</strong>
-      </article>
-      <article class="stat-card">
-        <p class="stat-label">{{ t('runtime.ansibleMachines.stats.online') }}</p>
-        <strong class="stat-value">{{ onlineCount }}</strong>
-      </article>
-      <article class="stat-card">
-        <p class="stat-label">{{ t('runtime.ansibleMachines.stats.enabled') }}</p>
-        <strong class="stat-value">{{ enabledCount }}</strong>
-      </article>
-    </section>
-
-    <section class="panel-card">
-      <div class="section-head">
-        <div>
-          <p class="eyebrow">{{ t('runtime.ansibleMachines.sectionEyebrow') }}</p>
-          <h3>{{ t('runtime.ansibleMachines.sectionTitle') }}</h3>
-          <p class="section-copy">{{ t('runtime.ansibleMachines.sectionCopy') }}</p>
-        </div>
-        <label class="filter-group">
-          <span>{{ t('runtime.ansibleMachines.filterLabel') }}</span>
-          <select v-model="statusFilter" @change="refreshAll">
-            <option value="all">{{ t('runtime.ansibleMachines.filters.all') }}</option>
-            <option value="1">{{ t('runtime.ansibleMachines.filters.online') }}</option>
-            <option value="0">{{ t('runtime.ansibleMachines.filters.offline') }}</option>
-          </select>
-        </label>
-      </div>
-      <p class="inventory-hint">{{ t('runtime.ansibleMachines.inventoryHint') }}</p>
-
-      <div v-if="pageError" class="state-card state-error">{{ pageError }}</div>
-      <div v-else-if="loading" class="state-card">{{ t('runtime.ansibleMachines.loading') }}</div>
-      <div v-else-if="!machines.length" class="state-card">{{ t('runtime.ansibleMachines.empty') }}</div>
-      <div v-else class="machine-grid">
-        <article v-for="machine in machines" :key="machine.id" class="machine-card">
-          <div class="machine-head">
-            <div>
-              <p class="eyebrow">{{ t('runtime.ansibleMachines.machineEyebrow', { id: machine.id }) }}</p>
-              <h4>{{ machine.name }}</h4>
-              <p class="machine-meta">{{ machine.host }}:{{ machine.port }}</p>
-            </div>
-            <div class="status-stack">
-              <span :class="['tag', machine.enabled ? 'tag-success' : 'tag-muted']">{{ machine.enabled ? t('runtime.shared.enabled') : t('runtime.shared.disabled') }}</span>
-              <span :class="['tag', machine.status === 1 ? 'tag-success' : 'tag-danger']">{{ machine.status === 1 ? t('runtime.shared.online') : t('runtime.shared.offline') }}</span>
-            </div>
-          </div>
-
-          <div class="meta-grid">
-            <div class="meta-item">
-              <span class="meta-label">{{ t('runtime.ansibleMachines.meta.authSource') }}</span>
-              <strong>{{ t('runtime.ansibleMachines.meta.authSourceValue') }}</strong>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">{{ t('runtime.ansibleMachines.meta.regionIsp') }}</span>
-              <strong>{{ machine.region || '-' }} / {{ machine.isp || '-' }}</strong>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">{{ t('runtime.ansibleMachines.meta.currentConn') }}</span>
-              <strong>{{ machine.currentConn }}</strong>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">{{ t('runtime.ansibleMachines.meta.traffic') }}</span>
-              <strong>{{ formatBytes(machine.totalUpload) }} / {{ formatBytes(machine.totalDownload) }}</strong>
-            </div>
-          </div>
-
-          <p v-if="results[machine.id]" :class="['result-text', results[machine.id].success ? 'ok' : 'fail']">
-            {{ results[machine.id].message }}
-          </p>
-
-          <div class="card-actions">
-            <button class="btn btn-secondary btn-sm" @click="openEditor(machine)">{{ t('runtime.ansibleMachines.actions.edit') }}</button>
-            <button class="btn btn-secondary btn-sm" :disabled="pendingAction === `${machine.id}:check`" @click="checkMachine(machine)">
-              {{ pendingAction === `${machine.id}:check` ? t('runtime.ansibleMachines.actions.checking') : t('runtime.ansibleMachines.actions.check') }}
-            </button>
-            <button class="btn btn-secondary btn-sm" :disabled="pendingAction === `${machine.id}:sync`" @click="syncMachine(machine)">
-              {{ pendingAction === `${machine.id}:sync` ? t('runtime.ansibleMachines.actions.syncing') : t('runtime.ansibleMachines.actions.sync') }}
-            </button>
-            <button class="btn btn-secondary btn-sm" :disabled="pendingAction === `${machine.id}:toggle`" @click="toggleMachine(machine)">
-              {{ machine.enabled ? t('runtime.ansibleMachines.actions.disable') : t('runtime.ansibleMachines.actions.enable') }}
-            </button>
-            <button class="btn btn-secondary btn-sm danger-text" @click="openDelete(machine)">{{ t('runtime.ansibleMachines.actions.delete') }}</button>
-          </div>
-        </article>
-      </div>
-    </section>
+      </template>
+      <template #empty-actions>
+        <UiButton variant="primary" :icon="Plus" @click="openEditor()">{{ t('runtime.ansibleMachines.addMachine') }}</UiButton>
+      </template>
+      <template #cell-name="{ row }">
+        <span class="machine-name">
+          <span>{{ row.name }}</span>
+          <code class="machine-host">{{ row.host }}:{{ row.port }}</code>
+        </span>
+      </template>
+      <template #cell-status="{ row }">
+        <span class="status-stack">
+          <UiBadge :status="row.status === 1 ? 'online' : 'offline'" :label="row.status === 1 ? t('runtime.shared.online') : t('runtime.shared.offline')" />
+          <UiBadge v-if="!row.enabled" status="disabled" :label="t('runtime.shared.disabled')" />
+        </span>
+      </template>
+      <template #cell-result="{ row }">
+        <span v-if="pendingAction.startsWith(`${row.id}:`)" class="result-text">{{ pendingLabel(row) }}</span>
+        <span v-else-if="results[row.id]" :class="['result-text', results[row.id].success ? 'is-ok' : 'is-fail']">{{ results[row.id].message }}</span>
+        <span v-else>—</span>
+      </template>
+    </UiDataTable>
 
     <UiDialog
       :open="editorOpen"
       :title="editorMode ? t('runtime.ansibleMachines.modal.titleEdit') : t('runtime.ansibleMachines.modal.titleAdd')"
+      :description="t('runtime.ansibleMachines.inventoryHint')"
       :dismissible="!saving"
       @update:open="value => { if (!value) closeEditor() }"
     >
-      <p class="inventory-hint compact">{{ t('runtime.ansibleMachines.inventoryHint') }}</p>
       <div class="form-grid">
-        <label class="form-group">
-          <span>{{ t('runtime.ansibleMachines.fields.name') }}</span>
-          <input v-model.trim="form.name" type="text" :placeholder="t('runtime.ansibleMachines.placeholders.name')" />
-        </label>
-        <label class="form-group">
-          <span>{{ t('runtime.ansibleMachines.fields.host') }}</span>
-          <input v-model.trim="form.host" type="text" :placeholder="t('runtime.ansibleMachines.placeholders.host')" />
-        </label>
-      </div>
-      <div class="form-grid">
-        <label class="form-group">
-          <span>{{ t('runtime.ansibleMachines.fields.reachabilityPort') }}</span>
-          <input v-model.trim="form.port" type="number" min="1" max="65535" />
-        </label>
-        <label class="form-group">
-          <span>{{ t('runtime.ansibleMachines.fields.weight') }}</span>
-          <input v-model.trim="form.weight" type="number" min="1" />
-        </label>
-      </div>
-      <div class="form-grid">
-        <label class="form-group">
-          <span>{{ t('runtime.ansibleMachines.fields.region') }}</span>
-          <input v-model.trim="form.region" type="text" :placeholder="t('runtime.ansibleMachines.placeholders.region')" />
-        </label>
-        <label class="form-group">
-          <span>{{ t('runtime.ansibleMachines.fields.isp') }}</span>
-          <input v-model.trim="form.isp" type="text" :placeholder="t('runtime.ansibleMachines.placeholders.isp')" />
-        </label>
+        <UiTextField v-model.trim="form.name" required :label="t('runtime.ansibleMachines.fields.name')" :placeholder="t('runtime.ansibleMachines.placeholders.name')" />
+        <UiTextField v-model.trim="form.host" required :label="t('runtime.ansibleMachines.fields.host')" :placeholder="t('runtime.ansibleMachines.placeholders.host')" />
+        <UiTextField v-model.trim="form.port" required type="number" min="1" max="65535" :label="t('runtime.ansibleMachines.fields.reachabilityPort')" :help="t('runtime.ansibleMachines.fields.reachabilityHelp')" />
+        <UiTextField v-model.trim="form.weight" type="number" min="1" :label="t('runtime.ansibleMachines.fields.weight')" />
+        <UiTextField v-model.trim="form.region" :label="t('runtime.ansibleMachines.fields.region')" :placeholder="t('runtime.ansibleMachines.placeholders.region')" />
+        <UiTextField v-model.trim="form.isp" :label="t('runtime.ansibleMachines.fields.isp')" :placeholder="t('runtime.ansibleMachines.placeholders.isp')" />
       </div>
       <p v-if="formError" class="form-error" role="alert">{{ formError }}</p>
       <template #footer>
@@ -167,7 +105,19 @@ import {
   toggleAnsibleMachine,
   updateAnsibleMachine
 } from '@/api/admin'
-import { UiButton, UiDialog, useConfirm, useToast } from '@/ui'
+import { KeyRound, Pencil, Plus, Power, RefreshCw, RefreshCcwDot, Server, Stethoscope, Trash2 } from '@lucide/vue'
+import UiBadge from '@/ui/UiBadge.vue'
+import UiButton from '@/ui/UiButton.vue'
+import UiDataTable from '@/ui/UiDataTable.vue'
+import UiDialog from '@/ui/UiDialog.vue'
+import UiFilterChips from '@/ui/UiFilterChips.vue'
+import UiIcon from '@/ui/UiIcon.vue'
+import UiIconButton from '@/ui/UiIconButton.vue'
+import UiPageHeader from '@/ui/UiPageHeader.vue'
+import UiTextField from '@/ui/UiTextField.vue'
+import { useConfirm } from '@/ui/composables/useConfirm'
+import { useFormat } from '@/ui/composables/useFormat'
+import { useToast } from '@/ui/composables/useToast'
 
 const { t, translateLiteral } = useAppI18n()
 
@@ -187,6 +137,45 @@ const form = reactive(createForm())
 
 const onlineCount = computed(() => machines.value.filter(item => item.status === 1).length)
 const enabledCount = computed(() => machines.value.filter(item => item.enabled).length)
+const format = useFormat()
+
+// The status filter is the list's server-side `status` (1 reachable, 0 not).
+const statusChips = computed(() => [
+  { value: '1', label: t('runtime.ansibleMachines.filters.online') },
+  { value: '0', label: t('runtime.ansibleMachines.filters.offline') }
+])
+const statusChip = computed({
+  get: () => (statusFilter.value === 'all' ? '' : statusFilter.value),
+  set: (value) => {
+    statusFilter.value = value || 'all'
+    refreshAll()
+  }
+})
+const columns = computed(() => [
+  { key: 'name', label: t('runtime.ansibleMachines.fields.name'), primary: true, sortable: true },
+  { key: 'status', label: t('runtime.ansibleMachines.table.reachability'), secondary: true, sortable: true, sortValue: machine => machine.status },
+  { key: 'region', label: t('runtime.ansibleMachines.meta.regionIsp'), value: machine => [machine.region, machine.isp].filter(Boolean).join(' / ') },
+  { key: 'currentConn', label: t('runtime.ansibleMachines.meta.currentConn'), numeric: true, align: 'end', sortable: true, firstDirection: 'desc' },
+  { key: 'traffic', label: t('runtime.ansibleMachines.meta.traffic'), numeric: true, nowrap: true, value: machine => `${formatBytes(machine.totalUpload)} / ${formatBytes(machine.totalDownload)}`, sortValue: machine => machine.totalUpload + machine.totalDownload, sortable: true, firstDirection: 'desc', breakpoint: 'md' },
+  { key: 'weight', label: t('runtime.ansibleMachines.fields.weight'), numeric: true, hidden: true },
+  { key: 'result', label: t('runtime.ansibleMachines.table.lastResult'), card: false, breakpoint: 'lg' }
+])
+const machineActions = machine => {
+  const busy = pendingAction.value.startsWith(`${machine.id}:`)
+  return [
+    { key: 'edit', label: t('runtime.ansibleMachines.actions.edit'), icon: Pencil, onSelect: () => openEditor(machine) },
+    { key: 'check', label: t('runtime.ansibleMachines.actions.check'), icon: Stethoscope, disabled: busy, onSelect: () => checkMachine(machine) },
+    { key: 'sync', label: t('runtime.ansibleMachines.actions.sync'), icon: RefreshCcwDot, disabled: busy, onSelect: () => syncMachine(machine) },
+    { key: 'toggle', label: machine.enabled ? t('runtime.ansibleMachines.actions.disable') : t('runtime.ansibleMachines.actions.enable'), icon: Power, disabled: busy, onSelect: () => toggleMachine(machine) },
+    { key: 'delete', label: t('runtime.ansibleMachines.actions.delete'), icon: Trash2, danger: true, separatorBefore: true, onSelect: () => openDelete(machine) }
+  ]
+}
+function pendingLabel(machine) {
+  const action = pendingAction.value.split(':')[1]
+  if (action === 'check') return t('runtime.ansibleMachines.actions.checking')
+  if (action === 'sync') return t('runtime.ansibleMachines.actions.syncing')
+  return t('runtime.ansibleMachines.actions.updating', { name: machine.name })
+}
 
 function translateRuntimeText(value, fallback = '-') {
   const text = String(value ?? '').trim()
@@ -231,11 +220,7 @@ function normalizeMachine(node) {
 }
 
 function formatBytes(value) {
-  const size = Number(value || 0)
-  if (size < 1024) return `${size} B`
-  if (size < 1024 * 1024) return `${(size / 1024).toFixed(2)} KB`
-  if (size < 1024 * 1024 * 1024) return `${(size / (1024 * 1024)).toFixed(2)} MB`
-  return `${(size / (1024 * 1024 * 1024)).toFixed(2)} GB`
+  return format.bytes(Number(value || 0))
 }
 
 async function refreshAll() {
@@ -393,45 +378,70 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.ansible-machines-page { display: flex; flex-direction: column; gap: 20px; }
-.hero-card, .panel-card, .stat-card { border: 1px solid var(--border-color); border-radius: 20px; background: var(--surface-color); }
-.hero-card { display: flex; justify-content: space-between; gap: 20px; padding: 24px; background: radial-gradient(circle at top right, rgba(16,185,129,.14), transparent 28%), var(--surface-color); }
-.hero-text, .section-copy, .machine-meta, .meta-label { color: var(--text-secondary); line-height: 1.6; }
-.inventory-hint { margin: 0 0 18px; padding: 12px 14px; border: 1px solid rgba(16,185,129,.24); border-radius: 14px; background: rgba(16,185,129,.08); color: var(--text-secondary); line-height: 1.6; }
-.inventory-hint.compact { margin: 0; }
-.hero-actions, .section-head, .status-stack, .card-actions { display: flex; gap: 10px; flex-wrap: wrap; }
-.btn { display: inline-flex; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: 12px; padding: 10px 16px; text-decoration: none; cursor: pointer; }
-.btn-primary { background: var(--accent-fill); color: var(--on-accent); }
-.btn-secondary { background: var(--surface-color); color: var(--text-color); border-color: var(--border-color); }
-.btn-sm { padding: 8px 12px; font-size: 12px; }
-.eyebrow { margin: 0; text-transform: uppercase; letter-spacing: .08em; font-size: 12px; color: var(--text-secondary); }
-.stats-grid, .machine-grid, .meta-grid, .form-grid { display: grid; gap: 16px; }
-.stats-grid { grid-template-columns: repeat(auto-fit, minmax(180px, 1fr)); }
-.stat-card, .panel-card { padding: 20px; }
-.stat-label { margin: 0; color: var(--text-secondary); }
-.stat-value { font-size: 28px; font-weight: 700; }
-.section-head { justify-content: space-between; align-items: flex-start; margin-bottom: 18px; }
-.filter-group, .form-group { display: flex; flex-direction: column; gap: 8px; margin-bottom: 0; }
-.filter-group select, .form-group input { border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-color); color: var(--text-color); padding: 12px 14px; }
-.machine-grid { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
-.machine-card { border: 1px solid var(--border-color); border-radius: 18px; background: var(--bg-color); padding: 18px; display: flex; flex-direction: column; gap: 14px; }
-.machine-head { display: flex; justify-content: space-between; gap: 12px; }
-.status-stack { flex-direction: column; align-items: flex-end; }
-.meta-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-.meta-item { display: flex; flex-direction: column; gap: 4px; }
-.tag { display: inline-flex; align-items: center; justify-content: center; padding: 4px 10px; border-radius: 999px; font-size: 12px; font-weight: 700; }
-.tag-success { background: rgba(16,185,129,.14); color: #047857; }
-.tag-danger { background: rgba(239,68,68,.14); color: #b91c1c; }
-.tag-muted { background: rgba(148,163,184,.16); color: #475569; }
-.result-text { margin: 0; font-size: 13px; }
-.result-text.ok { color: #047857; }
-.result-text.fail, .danger-text, .form-error { color: #b91c1c; }
-.state-card { padding: 16px; border: 1px solid var(--border-color); border-radius: 16px; background: var(--bg-color); }
-.state-error { color: #b91c1c; border-color: rgba(239,68,68,.24); background: rgba(239,68,68,.08); }
-.form-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-@media (max-width: 900px) {
-  .hero-card, .section-head, .machine-head { flex-direction: column; }
-  .meta-grid, .form-grid { grid-template-columns: 1fr; }
-  .status-stack { align-items: flex-start; }
+.runtime-links {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-5);
+  margin-top: calc(-1 * var(--space-3));
+  font-size: var(--type-callout-size);
+}
+
+.runtime-links a {
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.runtime-links a:hover {
+  text-decoration: underline;
+}
+
+.inventory-hint {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--bg-grouped);
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
+  line-height: var(--type-callout-line);
+}
+
+.inventory-hint :deep(svg) {
+  flex: none;
+  margin-top: 2px;
+}
+
+.machine-name {
+  display: inline-flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  min-width: 0;
+}
+
+.machine-host {
+  color: color-mix(in srgb, var(--label-2) 70%, var(--label-1));
+  font-family: var(--font-mono);
+  font-size: var(--type-caption-size);
+}
+
+.status-stack {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+}
+
+.result-text {
+  color: color-mix(in srgb, var(--label-2) 70%, var(--label-1));
+  font-size: var(--type-callout-size);
+}
+
+.result-text.is-ok {
+  color: color-mix(in srgb, var(--success) 78%, var(--label-1));
+}
+
+.result-text.is-fail {
+  color: color-mix(in srgb, var(--danger) 78%, var(--label-1));
 }
 </style>

@@ -572,29 +572,27 @@ export default {
       heroEyebrow: 'Execution Fleet',
       title: 'Ansible Machines',
       heroText: 'This page is only for stateless Ansible execution machines. These hosts do not need Node-Agent and do not need a persistent control-plane connection.',
-      refreshLoading: 'Refreshing...',
-      addMachine: 'Add Machine',
+      addMachine: 'Add machine',
+      relatedPages: 'Related runtime pages',
+      table: {
+        reachability: 'Reachability',
+        lastResult: 'Last result'
+      },
       stats: {
         machines: 'Machines',
         online: 'Online',
         enabled: 'Enabled'
       },
-      sectionEyebrow: 'Machines',
       sectionTitle: 'Execution Targets',
       sectionCopy: 'These records only identify hosts for the local Ansible runtime. They are not NodeX control-plane nodes.',
       inventoryHint: 'SSH user, password, and private key are not stored on this page. Define them in Ansible inventory, playbooks, or Local Runtime environment settings.',
       filterLabel: 'Status',
       filters: {
-        all: 'All',
         online: 'Online',
         offline: 'Offline'
       },
-      loading: 'Loading Ansible machines...',
-      empty: 'No Ansible execution machines yet.',
-      machineEyebrow: 'Machine #{id}',
+      empty: 'No Ansible execution machines yet',
       meta: {
-        authSource: 'Auth Source',
-        authSourceValue: 'Inventory / Local Runtime',
         regionIsp: 'Region / ISP',
         currentConn: 'Current Conn',
         traffic: 'Traffic'
@@ -607,7 +605,8 @@ export default {
         syncing: 'Syncing...',
         disable: 'Disable',
         enable: 'Enable',
-        delete: 'Delete'
+        delete: 'Delete',
+        updating: 'Updating {name}…'
       },
       modal: {
         titleEdit: 'Edit Ansible Machine',
@@ -627,6 +626,7 @@ export default {
         name: 'Name',
         host: 'Host',
         reachabilityPort: 'Reachability Port',
+        reachabilityHelp: 'Control only checks that host:port accepts TCP connections.',
         weight: 'Weight',
         region: 'Region',
         isp: 'ISP'
@@ -1635,22 +1635,19 @@ export default {
       },
       actions: {
         refresh: 'Refresh',
-        execute: 'Execute',
+        execute: 'Run',
         send: 'Send',
         cancel: 'Cancel',
-        monitor: 'Monitor',
-        terminalShort: 'TTY',
-        taskShort: 'Task',
-        monitorShort: 'Mon'
+        monitor: 'Monitoring',
+        openTerminal: 'Open in terminal'
       },
       table: {
-        nodeId: 'Node ID',
+        nodeId: 'Node',
         version: 'Version',
         system: 'System',
         lastSeen: 'Last Seen',
         status: 'Status',
         capabilities: 'Capabilities',
-        action: 'Actions',
         taskId: 'Task ID',
         node: 'Node',
         command: 'Command / Action',
@@ -1666,13 +1663,17 @@ export default {
         failed: 'Failed'
       },
       empty: {
-        agents: 'No online agents',
-        tasks: 'No task history yet.'
+        agents: 'No agents online',
+        agentsDescription: 'An agent appears here when a NodeX node connects to Control.',
+        tasks: 'No task history yet',
+        tasksDescription: 'Commands you run in the terminal and tasks you send are listed here.'
       },
       terminal: {
         chooseNode: 'Choose node',
         nodeLabel: 'Node #{id}',
-        chooseAction: 'Choose action'
+        chooseAction: 'Choose action',
+        output: 'Terminal output',
+        hint: 'Choose an online node and an action, then run it. Only the diagnostic actions Control allows can run.'
       },
       diagnosticActions: {
         service_status: 'Check service status',
@@ -1688,7 +1689,6 @@ export default {
       },
       taskModal: {
         title: 'Send Task',
-        targetNode: 'Target Node',
         action: 'Action',
         timeoutSeconds: 'Timeout (seconds)'
       },
@@ -1696,7 +1696,8 @@ export default {
         monitor: 'View monitoring data for node #{id}'
       },
       messages: {
-        fetchFailed: 'Failed to fetch agent list',
+        fetchFailed: 'Agents didn’t load',
+        tasksFetchFailed: 'Task history didn’t load',
         taskIncomplete: 'Please fill in the required fields',
         taskSent: 'Task sent',
         taskSendFailed: 'Send failed: {message}',
@@ -2296,24 +2297,23 @@ export default {
     }
   },
   adminPayment: {
-    title: 'Payment Gateway Management',
-    subtitle: 'Manage gateways, payment records, and aggregated stats.',
-    currencySymbol: '¥',
+    title: 'Payments',
+    subtitle: 'Gateways users pay through, every payment, and how much came in.',
     tabs: {
+      label: 'Payment sections',
       gateways: 'Gateways',
       records: 'Records',
       stats: 'Stats'
     },
     actions: {
-      createGateway: 'Create gateway',
+      createGateway: 'New gateway',
       enable: 'Enable',
       disable: 'Disable',
       edit: 'Edit',
-      delete: 'Delete',
-      search: 'Search',
       details: 'Details'
     },
     gateways: {
+      label: 'Payment gateways',
       table: {
         id: 'ID',
         name: 'Name',
@@ -2321,15 +2321,16 @@ export default {
         feeRate: 'Fee Rate',
         minAmount: 'Min Amount',
         maxAmount: 'Max Amount',
-        status: 'Status',
-        actions: 'Actions'
+        status: 'Status'
       },
-      empty: 'No payment gateways'
+      empty: 'No payment gateways yet',
+      emptyDescription: 'Add a gateway so users can pay for plans.'
     },
     records: {
+      label: 'Payment records',
       filters: {
-        allStatuses: 'All statuses',
-        allTypes: 'All types'
+        status: 'Filter by status',
+        type: 'Filter by gateway'
       },
       table: {
         id: 'ID',
@@ -2338,8 +2339,7 @@ export default {
         gateway: 'Gateway',
         amount: 'Amount',
         status: 'Status',
-        createdAt: 'Created At',
-        actions: 'Actions'
+        createdAt: 'Created at'
       },
       detail: {
         title: 'Payment Details',
@@ -2347,7 +2347,8 @@ export default {
         amount: 'Amount',
         status: 'Status'
       },
-      empty: 'No payment records'
+      empty: 'No payments yet',
+      emptyDescription: 'Payments appear here when users pay for an order.'
     },
     stats: {
       totalAmount: 'Total Revenue',
@@ -2358,7 +2359,7 @@ export default {
       empty: 'No gateway statistics yet'
     },
     modal: {
-      createTitle: 'Create Gateway',
+      createTitle: 'New gateway',
       editTitle: 'Edit Gateway',
       fields: {
         name: 'Name',
@@ -2397,9 +2398,9 @@ export default {
       deleteAction: 'Delete gateway'
     },
     messages: {
-      fetchGatewaysFailed: 'Failed to load payment gateways',
-      fetchRecordsFailed: 'Failed to load payment records',
-      fetchStatsFailed: 'Failed to load payment statistics',
+      fetchGatewaysFailed: 'Payment gateways didn’t load',
+      fetchRecordsFailed: 'Payment records didn’t load',
+      fetchStatsFailed: 'Payment statistics didn’t load',
       invalidConfigJson: 'Configuration JSON is invalid',
       gatewaySaveSuccess: 'Gateway saved successfully',
       gatewaySaveFailed: 'Failed to save gateway: {message}',
@@ -2455,14 +2456,27 @@ export default {
   adminTemplates: {
     title: 'Subscription templates',
     subtitle: 'Free subscription templates: traffic quota, speed and device limits, and the subscription groups they grant. Assign one to a user to apply it.',
+    filters: {
+      search: 'Search templates'
+    },
+    table: {
+      label: 'Subscription templates'
+    },
     actions: {
-      create: 'Create template'
+      create: 'New template'
     },
     empty: {
-      noData: 'No subscription templates'
+      title: 'No subscription templates yet',
+      description: 'Create a template, then assign it to users to give them traffic and subscription groups.'
+    },
+    detail: {
+      description: 'Template ID {id}'
+    },
+    labels: {
+      noGroupsHint: 'This template grants no subscription groups yet.'
     },
     planModal: {
-      createTitle: 'Create subscription template',
+      createTitle: 'New subscription template',
       editTitle: 'Edit subscription template',
       fields: {
         name: 'Template name'
@@ -2490,15 +2504,18 @@ export default {
     }
   },
   adminPlans: {
-    title: 'Plan Management',
-    subtitle: 'Manage subscription plans, traffic quota, speed limits, and device limits.',
+    title: 'Plans',
+    subtitle: 'What users can buy: traffic quota, speed and device limits, price, and the subscription groups each plan grants.',
+    filters: {
+      search: 'Search plans'
+    },
     table: {
+      label: 'Plans',
       name: 'Name',
-      transfer: 'Traffic (GB)',
+      transfer: 'Traffic',
       limits: 'Limits',
-      monthPrice: 'Monthly price (cents)',
-      subscriptionGroups: 'Subscription groups',
-      actions: 'Actions'
+      monthPrice: 'Monthly price',
+      subscriptionGroups: 'Subscription groups'
     },
     actions: {
       create: 'Create plan',
@@ -2506,23 +2523,32 @@ export default {
       delete: 'Delete',
       assign: 'Assign',
       manageGroups: 'Manage groups',
-      removeGroup: 'Remove group'
+      removeGroupNamed: 'Remove group {name}'
     },
     empty: {
-      noData: 'No plans'
+      title: 'No plans yet',
+      description: 'Create a plan so users can buy traffic and get subscription groups.'
+    },
+    detail: {
+      description: 'Plan ID {id}',
+      limits: 'Quota and limits',
+      actions: 'Actions'
     },
     planModal: {
       createTitle: 'Create Plan',
       editTitle: 'Edit Plan',
       fields: {
         name: 'Plan name',
-        transfer: 'Traffic quota (GB)',
-        speedLimit: 'Speed limit (Mbps, 0 for unlimited)',
-        deviceLimit: 'Device limit (0 for unlimited)',
+        transfer: 'Traffic quota',
+        speedLimit: 'Speed limit',
+        deviceLimit: 'Device limit',
         monthPrice: 'Monthly price (cents)'
       },
       placeholders: {
         name: 'Enter plan name'
+      },
+      help: {
+        zeroUnlimited: '0 means no limit.'
       }
     },
     assignModal: {
@@ -2533,20 +2559,24 @@ export default {
       },
       placeholders: {
         userId: 'Enter user ID'
+      },
+      help: {
+        expireAt: 'Optional. Unix time in seconds.'
       }
     },
     groupModal: {
       title: 'Plan Groups - {name}',
       description: 'Select the subscription groups this plan can access.',
       empty: 'No subscription groups',
-      noDescription: 'No description',
-      selectedShort: 'Selected'
+      noDescription: 'No description'
     },
     labels: {
       noSpeedLimit: 'No speed limit',
       noDeviceLimit: 'No device limit',
       speedLimitMbps: '{value} Mbps',
-      deviceLimitCount: '{value} devices'
+      deviceLimitCount: '{value} devices',
+      noGroups: 'None',
+      noGroupsHint: 'This plan grants no subscription groups yet.'
     },
     confirm: {
       deleteTitle: 'Delete plan {name}?',
@@ -2803,10 +2833,14 @@ export default {
       saving: 'Saving...', newAssignment: 'New assignment'
     },
     pluginCenter: {
-      filters: { search: 'Search plugins', health: 'Health', target: 'Target', allHealth: 'All health', allTargets: 'All targets' },
+      filters: { search: 'Search plugins', health: 'Filter by health', target: 'Filter by target' },
       states: { healthy: 'Healthy', attention: 'Needs attention' },
-      summary: { label: 'Plugin catalog summary', healthy: '{count} healthy', attention: '{count} need attention', catalogued: '{count} catalogued' },
+      listLabel: 'Plugins',
+      official: 'Official signed package',
+      loadFailed: 'The plugin catalog didn’t load',
       empty: 'No plugins match the current filters',
+      emptyCatalog: { title: 'No plugins yet', description: 'Import an official signed release to add its plugin to the catalog.' },
+      detail: { versions: 'Versions and state' },
       operations: { title: 'Recent plugin operations', empty: 'No recent plugin operations' }
     },
     tabs: { assignments: 'Assignments', topologies: 'Topologies' },
@@ -2861,18 +2895,18 @@ export default {
   },
   accessGroups: {
     subtitle: 'Manage independent service-scope memberships, resource grants, and plugin-owned quota policies.',
-    actions: { refresh: 'Refresh', refreshing: 'Refreshing...', newGroup: 'New group', open: 'Open', enable: 'Enable', disable: 'Disable', add: 'Add', addGrant: 'Add grant', saveQuota: 'Save quota', resolve: 'Resolve access', resolving: 'Resolving...', saving: 'Saving...' },
-    filters: { title: 'Access group filters', scope: 'Service scope', allScopes: 'All service scopes' },
-    table: { group: 'Access group', scope: 'Scope', state: 'State', actions: 'Actions' },
+    actions: { refresh: 'Refresh', newGroup: 'New group', open: 'Open', editGroup: 'Edit name and description', enable: 'Enable', disable: 'Disable', add: 'Add', removeNamed: 'Remove {name}', addGrant: 'Add grant', saveQuota: 'Save quota', resolve: 'Resolve access' },
+    filters: { label: 'Filter by service scope', allScopes: 'All service scopes' },
+    table: { group: 'Access group', scope: 'Scope', state: 'State' },
     states: { enabled: 'Enabled', disabled: 'Disabled' },
-    groups: { title: 'Access groups', count: '{count} groups', empty: 'No access groups in this scope', noDescription: 'No description', directUnion: 'Direct and plan membership are combined as an allow-union.' },
-    detail: { loading: 'Loading access group details...', empty: 'Select an access group to manage its memberships and policies.' },
+    groups: { title: 'Access groups', empty: 'No access groups in this scope', emptyAll: 'No access groups yet', emptyDescription: 'An access group gives its users and plans resource grants and quota policies within one service scope.', noDescription: 'No description', directUnion: 'Direct and plan membership are combined as an allow-union.' },
+    detail: { title: 'Access group', loading: 'Loading access group details…', group: 'Group', danger: 'Danger zone' },
     members: { title: 'User members', userID: 'User ID', empty: 'No direct user members' },
     plans: { title: 'Plan memberships', planID: 'Plan ID', empty: 'No plan memberships' },
     grants: { title: 'Resource grants', resourceType: 'Resource type', resourceID: 'Resource ID', permissions: 'Permissions JSON', empty: 'No resource grants' },
     quotas: { title: 'Quota policies', key: 'Policy key', policy: 'Policy JSON', empty: 'No quota policies' },
     resolver: { title: 'Effective access preview', description: 'Preview the server-side allow-union for one user, optional plan, and service scope.', userID: 'User ID', planID: 'Plan ID (optional)', scope: 'Service scope', result: '{count} enabled groups apply', none: 'No enabled groups apply', policySummary: '{grants} grants and {quotas} quota policies are effective.' },
-    editor: { createTitle: 'Create access group', editTitle: 'Edit access group', name: 'Group name', description: 'Description', enabled: 'Group is enabled' },
+    editor: { createTitle: 'Create access group', editTitle: 'Edit access group', name: 'Group name', description: 'Description', enabled: 'Group is enabled', scopeFixed: 'The scope of an existing group can’t change.' },
     messages: { groupCreated: 'Created access group {name}', groupSaved: 'Saved access group {name}', groupEnabled: 'Enabled access group {name}', groupDisabled: 'Disabled access group {name}', groupDeleted: 'Deleted access group {name}', memberAdded: 'Added user #{id}', memberRemoved: 'Removed user #{id}', planAdded: 'Added plan #{id}', planRemoved: 'Removed plan #{id}', grantAdded: 'Added resource grant', grantRemoved: 'Removed resource grant', quotaSaved: 'Saved quota policy', quotaRemoved: 'Removed quota policy' },
     confirm: { deleteGroupTitle: 'Delete access group {name}?', deleteGroup: 'Its memberships, resource grants and quota policies are deleted with it. This can’t be undone.', deleteGroupAction: 'Delete group', removeGrantTitle: 'Remove resource grant #{id}?', removeGrant: 'Members of this group lose access to {resource}. This can’t be undone.', removeGrantAction: 'Remove grant', removeQuotaTitle: 'Remove quota policy {key}?', removeQuota: 'The group is no longer limited by this quota. This can’t be undone.', removeQuotaAction: 'Remove policy' },
     errors: { load: 'Unable to load access control data', loadGroups: 'Unable to load access groups', loadDetail: 'Unable to load access group details', groupRequired: 'A service scope and group name are required', saveGroup: 'Unable to save access group', deleteGroup: 'Unable to delete access group', member: 'Unable to update user membership', plan: 'Unable to update plan membership', grant: 'Unable to update resource grant', quota: 'Unable to update quota policy', resolve: 'Unable to resolve effective access', invalidID: '{label} must be a positive integer', invalidJSON: '{label} must be valid JSON', scopeRequired: 'A service scope is required' }

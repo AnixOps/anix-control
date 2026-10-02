@@ -136,21 +136,28 @@ describe('Admin Agent', () => {
     async function renderPage() {
       adminApi.getAgents.mockResolvedValue({ data: { agents: [{ node_id: 4, online: true, version: '1.0', hostname: 'hk' }] } })
       render(Harness)
-      await screen.findByRole('button', { name: 'Task' })
+      await screen.findByRole('button', { name: 'Actions for Node #4' })
+    }
+
+    // Row actions are in the row's "…" menu (UI U6).
+    async function rowAction(user, name) {
+      const trigger = screen.getByRole('button', { name: 'Actions for Node #4' })
+      await user.click(trigger)
+      await user.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name }))
+      return trigger
     }
 
     it('sends a task from a dialog with inline validation and errors', async () => {
       const user = userEvent.setup()
       adminApi.createAgentTask.mockRejectedValueOnce(new Error('agent offline')).mockResolvedValueOnce({ code: 0 })
       await renderPage()
-      const opener = screen.getByRole('button', { name: 'Task' })
-      await user.click(opener)
+      await rowAction(user, 'Send Task')
       const dialog = await screen.findByRole('dialog', { name: 'Send Task' })
       await user.click(within(dialog).getByRole('button', { name: 'Send' }))
       expect(within(dialog).getByRole('alert').textContent).toBe('Please fill in the required fields')
 
-      const action = within(dialog).getByLabelText('Action')
-      await user.selectOptions(action, action.options[1].value)
+      await user.click(within(dialog).getByRole('combobox', { name: 'Action' }))
+      await user.click(within(await screen.findByRole('listbox')).getByRole('option', { name: 'Check service status' }))
       await user.click(within(dialog).getByRole('button', { name: 'Send' }))
       expect((await within(dialog).findByRole('alert')).textContent).toContain('agent offline')
       await user.click(within(dialog).getByRole('button', { name: 'Send' }))
@@ -162,8 +169,7 @@ describe('Admin Agent', () => {
     it('closes the task dialog with Esc and returns focus', async () => {
       const user = userEvent.setup()
       await renderPage()
-      const opener = screen.getByRole('button', { name: 'Task' })
-      await user.click(opener)
+      const opener = await rowAction(user, 'Send Task')
       await screen.findByRole('dialog')
       await user.keyboard('{Escape}')
       await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
@@ -173,8 +179,37 @@ describe('Admin Agent', () => {
 
     it('explains the monitor shortcut in a toast', async () => {
       await renderPage()
-      await userEvent.setup().click(screen.getByRole('button', { name: 'Mon' }))
+      await rowAction(userEvent.setup(), 'Monitoring')
       expect(toastMessages('info')).toEqual(['View monitoring data for node #4'])
     })
+  })
+
+  it('lists agents in a table with status and shows a load error with retry', async () => {
+    const user = userEvent.setup()
+    adminApi.getAgents
+      .mockRejectedValueOnce(Object.assign(new Error('Network Error'), { response: { data: { msg: 'control restarting' } } }))
+      .mockResolvedValue({ data: { agents: [{ node_id: 9, online: false, version: '2.1.0', system: { os: 'linux', arch: 'amd64' }, capabilities: ['diagnostic'] }] } })
+    render(Agent)
+    const alert = await screen.findByRole('alert')
+    expect(alert.textContent).toContain('Agents didn’t load')
+    expect(alert.textContent).toContain('control restarting')
+    await user.click(within(alert).getByRole('button', { name: 'Try again' }))
+    const table = await screen.findByRole('table', { name: 'Online Agents' })
+    const row = within(table).getAllByRole('row')[1]
+    expect(row.textContent).toContain('Node #9')
+    expect(row.textContent).toContain('Offline')
+    expect(row.textContent).toContain('linux amd64')
+  })
+
+  it('switches between the agents, terminal and task history tabs', async () => {
+    const user = userEvent.setup()
+    adminApi.listAgentDiagnosticTasks.mockResolvedValue({ data: [{ task_id: 't-1', node_id: 4, action: 'log_tail', success: true, duration_ms: 12 }] })
+    render(Agent)
+    await user.click(await screen.findByRole('tab', { name: 'Task History' }))
+    const table = await screen.findByRole('table', { name: 'Task History' })
+    expect(table.textContent).toContain('Tail service log')
+    expect(table.textContent).toContain('12 ms')
+    await user.click(screen.getByRole('tab', { name: 'Remote Terminal' }))
+    expect(await screen.findByRole('log', { name: 'Terminal output' })).toBeTruthy()
   })
 })

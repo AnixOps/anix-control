@@ -1,215 +1,154 @@
 <template>
-  <div class="agent-page">
-    <div class="page-header">
-      <h1>{{ t('runtime.nodeXAgents.title') }}</h1>
-      <p class="text-secondary">{{ t('runtime.nodeXAgents.subtitle') }}</p>
-    </div>
+  <div class="list-page agent-page">
+    <UiPageHeader :title="t('runtime.nodeXAgents.title')" :description="t('runtime.nodeXAgents.subtitle')">
+      <template #actions>
+        <UiButton :icon="RefreshCw" :loading="agentsLoading" data-test="agent-refresh" @click="refreshAll">{{ t('runtime.nodeXAgents.actions.refresh') }}</UiButton>
+      </template>
+    </UiPageHeader>
 
-    <div class="tabs">
-      <button :class="['tab', { active: activeTab === 'agents' }]" @click="activeTab = 'agents'">
-        {{ t('runtime.nodeXAgents.tabs.agents') }}
-      </button>
-      <button :class="['tab', { active: activeTab === 'terminal' }]" @click="activeTab = 'terminal'">
-        {{ t('runtime.nodeXAgents.tabs.terminal') }}
-      </button>
-      <button :class="['tab', { active: activeTab === 'tasks' }]" @click="activeTab = 'tasks'">
-        {{ t('runtime.nodeXAgents.tabs.tasks') }}
-      </button>
-    </div>
+    <UiTabs v-model="activeTab" variant="segmented" :aria-label="t('runtime.nodeXAgents.title')" :items="tabItems" :unmount-on-hide="false">
+      <template #agents>
+        <UiDataTable
+          :columns="agentColumns"
+          :rows="agents"
+          row-key="node_id"
+          :label="t('runtime.nodeXAgents.tabs.agents')"
+          :row-label="agent => t('runtime.nodeXAgents.terminal.nodeLabel', { id: agent.node_id })"
+          storage-key="admin.agents"
+          :loading="agentsLoading"
+          :error="agentsError"
+          :error-title="t('runtime.nodeXAgents.messages.fetchFailed')"
+          :empty-icon="Server"
+          :empty-title="t('runtime.nodeXAgents.empty.agents')"
+          :empty-description="t('runtime.nodeXAgents.empty.agentsDescription')"
+          :row-actions="agentActions"
+          @retry="fetchAgents"
+        >
+          <template #cell-status="{ row }">
+            <UiBadge :status="row.online ? 'online' : 'offline'" :label="row.online ? t('runtime.nodeXAgents.status.online') : t('runtime.nodeXAgents.status.offline')" />
+          </template>
+          <template #cell-capabilities="{ row }">
+            <span v-if="(row.capabilities || []).length" class="capability-tags">
+              <span v-for="cap in row.capabilities" :key="cap" class="cap-tag">{{ cap }}</span>
+            </span>
+            <span v-else>—</span>
+          </template>
+        </UiDataTable>
+      </template>
 
-    <div v-show="activeTab === 'agents'">
-      <div class="toolbar">
-        <button class="btn-secondary" @click="fetchAgents">{{ t('runtime.nodeXAgents.actions.refresh') }}</button>
-      </div>
-
-      <div class="table-container">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>{{ t('runtime.nodeXAgents.table.nodeId') }}</th>
-              <th>{{ t('runtime.nodeXAgents.table.version') }}</th>
-              <th>{{ t('runtime.nodeXAgents.table.system') }}</th>
-              <th>{{ t('runtime.nodeXAgents.table.lastSeen') }}</th>
-              <th>{{ t('runtime.nodeXAgents.table.status') }}</th>
-              <th>{{ t('runtime.nodeXAgents.table.capabilities') }}</th>
-              <th>{{ t('runtime.nodeXAgents.table.action') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="agent in agents" :key="agent.node_id">
-              <td>{{ agent.node_id }}</td>
-              <td>{{ agent.version || '-' }}</td>
-              <td>
-                <span v-if="agent.system">
-                  {{ agent.system.os || '-' }} {{ agent.system.arch || '' }}
-                </span>
-                <span v-else>-</span>
-              </td>
-              <td>{{ formatTime(agent.last_seen) }}</td>
-              <td>
-                <span :class="['status-badge', agent.online ? 'status-active' : 'status-offline']">
-                  {{ agent.online ? t('runtime.nodeXAgents.status.online') : t('runtime.nodeXAgents.status.offline') }}
-                </span>
-              </td>
-              <td>
-                <div class="capability-tags">
-                  <span v-for="cap in (agent.capabilities || [])" :key="cap" class="cap-tag">
-                    {{ cap }}
-                  </span>
-                </div>
-              </td>
-              <td>
-                <div class="action-buttons">
-                  <button
-                    class="btn-sm btn-ghost"
-                    :title="t('runtime.nodeXAgents.tabs.terminal')"
-                    @click="openTerminal(agent)"
-                  >
-                    {{ t('runtime.nodeXAgents.actions.terminalShort') }}
-                  </button>
-                  <button
-                    class="btn-sm btn-ghost"
-                    :title="t('runtime.nodeXAgents.taskModal.title')"
-                    @click="openTaskModal(agent)"
-                  >
-                    {{ t('runtime.nodeXAgents.actions.taskShort') }}
-                  </button>
-                  <button
-                    class="btn-sm btn-ghost"
-                    :title="t('runtime.nodeXAgents.actions.monitor')"
-                    @click="viewMonitor(agent)"
-                  >
-                    {{ t('runtime.nodeXAgents.actions.monitorShort') }}
-                  </button>
-                </div>
-              </td>
-            </tr>
-            <tr v-if="agents.length === 0">
-              <td colspan="7" class="empty-row">{{ t('runtime.nodeXAgents.empty.agents') }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
-
-    <div v-show="activeTab === 'terminal'">
-      <div class="terminal-container">
-        <div class="terminal-header">
-          <select v-model="selectedNodeId" class="node-select">
-            <option value="">{{ t('runtime.nodeXAgents.terminal.chooseNode') }}</option>
-            <option v-for="agent in onlineAgents" :key="agent.node_id" :value="agent.node_id">
-              {{ t('runtime.nodeXAgents.terminal.nodeLabel', { id: agent.node_id }) }}
-            </option>
-          </select>
-          <span class="terminal-status" :class="{ connected: wsConnected }">
-            {{ wsConnected ? t('runtime.nodeXAgents.status.connected') : t('runtime.nodeXAgents.status.disconnected') }}
-          </span>
-        </div>
-        <div ref="terminalOutput" class="terminal-output">
-          <div v-for="(line, index) in terminalLines" :key="index" class="terminal-line">
-            <span class="line-prompt">{{ line.prompt }}</span>
-            <span class="line-content" :class="line.type">{{ line.content }}</span>
+      <template #terminal>
+        <section class="terminal" :aria-label="t('runtime.nodeXAgents.tabs.terminal')">
+          <div class="terminal__bar">
+            <UiSelect
+              v-model="selectedNodeId"
+              class="terminal__node"
+              size="md"
+              :aria-label="t('runtime.nodeXAgents.terminal.chooseNode')"
+              :placeholder="t('runtime.nodeXAgents.terminal.chooseNode')"
+              :options="nodeOptions"
+            />
+            <UiBadge :tone="wsConnected ? 'success' : 'neutral'" :label="wsConnected ? t('runtime.nodeXAgents.status.connected') : t('runtime.nodeXAgents.status.disconnected')" />
           </div>
-        </div>
-        <div class="terminal-input">
-          <select v-model="selectedAction" class="action-select" :disabled="!selectedNodeId">
-            <option value="">{{ t('runtime.nodeXAgents.terminal.chooseAction') }}</option>
-            <option v-for="action in diagnosticActions" :key="action.value" :value="action.value">
-              {{ t(`runtime.nodeXAgents.diagnosticActions.${action.value}`) }}
-            </option>
-          </select>
-          <select
-            v-if="selectedActionSpec?.params.includes('service')"
-            v-model="selectedService"
-            class="service-select"
+          <div
+            ref="terminalOutput"
+            class="terminal__output"
+            role="log"
+            tabindex="0"
+            :aria-label="t('runtime.nodeXAgents.terminal.output')"
           >
-            <option v-for="service in diagnosticServices" :key="service" :value="service">
-              {{ t(`runtime.nodeXAgents.services.${service}`) }}
-            </option>
-          </select>
-          <input
-            v-if="selectedActionSpec?.params.includes('lines')"
-            v-model.number="logLines"
-            type="number"
-            min="1"
-            max="1000"
-            class="lines-input"
-            :title="t('runtime.nodeXAgents.fields.lines')"
-          />
-          <button :disabled="!selectedNodeId || !selectedAction" @click="executeCommand">
-            {{ t('runtime.nodeXAgents.actions.execute') }}
-          </button>
-        </div>
-      </div>
-    </div>
+            <p v-if="!terminalLines.length" class="terminal__hint">{{ t('runtime.nodeXAgents.terminal.hint') }}</p>
+            <div v-for="(line, index) in terminalLines" :key="index" class="terminal__line">
+              <span class="terminal__prompt">{{ line.prompt }}</span>
+              <span class="terminal__content" :class="`is-${line.type}`">{{ line.content }}</span>
+            </div>
+          </div>
+          <div class="terminal__input">
+            <UiSelect
+              v-model="selectedAction"
+              size="md"
+              :aria-label="t('runtime.nodeXAgents.taskModal.action')"
+              :placeholder="t('runtime.nodeXAgents.terminal.chooseAction')"
+              :options="actionOptions"
+              :disabled="!selectedNodeId"
+            />
+            <UiSelect
+              v-if="selectedActionSpec?.params.includes('service')"
+              v-model="selectedService"
+              size="md"
+              :aria-label="t('runtime.nodeXAgents.fields.service')"
+              :options="serviceOptions"
+            />
+            <UiTextField
+              v-if="selectedActionSpec?.params.includes('lines')"
+              v-model.number="logLines"
+              class="terminal__lines"
+              size="md"
+              type="number"
+              min="1"
+              max="1000"
+              :aria-label="t('runtime.nodeXAgents.fields.lines')"
+              :suffix="t('runtime.nodeXAgents.fields.lines')"
+            />
+            <UiButton variant="primary" :icon="Play" :disabled="!selectedNodeId || !selectedAction" @click="executeCommand">
+              {{ t('runtime.nodeXAgents.actions.execute') }}
+            </UiButton>
+          </div>
+        </section>
+      </template>
 
-    <div v-show="activeTab === 'tasks'">
-      <div class="table-container">
-        <table class="data-table">
-          <thead>
-            <tr>
-              <th>{{ t('runtime.nodeXAgents.table.taskId') }}</th>
-              <th>{{ t('runtime.nodeXAgents.table.node') }}</th>
-              <th>{{ t('runtime.nodeXAgents.table.command') }}</th>
-              <th>{{ t('runtime.nodeXAgents.table.status') }}</th>
-              <th>{{ t('runtime.nodeXAgents.table.duration') }}</th>
-              <th>{{ t('runtime.nodeXAgents.table.time') }}</th>
-            </tr>
-          </thead>
-          <tbody>
-            <tr v-for="task in taskHistory" :key="task.task_id">
-              <td>{{ task.task_id }}</td>
-              <td>{{ t('runtime.nodeXAgents.terminal.nodeLabel', { id: task.node_id }) }}</td>
-              <td><code>{{ diagnosticActionMap[task.action] ? t(`runtime.nodeXAgents.diagnosticActions.${task.action}`) : task.action }}</code></td>
-              <td>
-                <span :class="['status-badge', task.success ? 'status-active' : 'status-error']">
-                  {{ task.success ? t('runtime.nodeXAgents.status.success') : t('runtime.nodeXAgents.status.failed') }}
-                </span>
-              </td>
-              <td>{{ task.duration_ms }} ms</td>
-              <td>{{ formatTime(task.timestamp) }}</td>
-            </tr>
-            <tr v-if="taskHistory.length === 0">
-              <td colspan="6" class="empty-row">{{ t('runtime.nodeXAgents.empty.tasks') }}</td>
-            </tr>
-          </tbody>
-        </table>
-      </div>
-    </div>
+      <template #tasks>
+        <UiDataTable
+          :columns="taskColumns"
+          :rows="taskHistory"
+          row-key="task_id"
+          :label="t('runtime.nodeXAgents.tabs.tasks')"
+          storage-key="admin.agent-tasks"
+          :page-size="20"
+          :loading="tasksLoading"
+          :error="tasksError"
+          :error-title="t('runtime.nodeXAgents.messages.tasksFetchFailed')"
+          :empty-icon="ListChecks"
+          :empty-title="t('runtime.nodeXAgents.empty.tasks')"
+          :empty-description="t('runtime.nodeXAgents.empty.tasksDescription')"
+          @retry="fetchTaskHistory"
+        >
+          <template #cell-command="{ row }">
+            <code>{{ diagnosticActionMap[row.action] ? t(`runtime.nodeXAgents.diagnosticActions.${row.action}`) : row.action }}</code>
+          </template>
+          <template #cell-status="{ row }">
+            <UiBadge :tone="row.success ? 'success' : 'danger'" :label="row.success ? t('runtime.nodeXAgents.status.success') : t('runtime.nodeXAgents.status.failed')" />
+          </template>
+        </UiDataTable>
+      </template>
+    </UiTabs>
 
-    <UiDialog v-model:open="showTaskModal" :title="t('runtime.nodeXAgents.taskModal.title')" :dismissible="!taskSending">
-      <div class="dialog-fields">
-        <div class="form-group">
-          <label for="agent-task-node">{{ t('runtime.nodeXAgents.taskModal.targetNode') }}</label>
-          <input id="agent-task-node" :value="taskTargetNode?.node_id" disabled />
-        </div>
-        <div class="form-group">
-          <label for="agent-task-action">{{ t('runtime.nodeXAgents.taskModal.action') }}</label>
-          <select id="agent-task-action" v-model="taskForm.action">
-            <option value="">{{ t('runtime.nodeXAgents.terminal.chooseAction') }}</option>
-            <option v-for="action in diagnosticActions" :key="action.value" :value="action.value">
-              {{ t(`runtime.nodeXAgents.diagnosticActions.${action.value}`) }}
-            </option>
-          </select>
-        </div>
-        <div class="form-group" v-if="taskActionSpec?.params.includes('service')">
-          <label for="agent-task-service">{{ t('runtime.nodeXAgents.fields.service') }}</label>
-          <select id="agent-task-service" v-model="taskForm.service">
-            <option v-for="service in diagnosticServices" :key="service" :value="service">
-              {{ t(`runtime.nodeXAgents.services.${service}`) }}
-            </option>
-          </select>
-        </div>
-        <div class="form-group" v-if="taskActionSpec?.params.includes('lines')">
-          <label for="agent-task-lines">{{ t('runtime.nodeXAgents.fields.lines') }}</label>
-          <input id="agent-task-lines" v-model.number="taskForm.lines" type="number" min="1" max="1000" />
-        </div>
-        <div class="form-group">
-          <label for="agent-task-timeout">{{ t('runtime.nodeXAgents.taskModal.timeoutSeconds') }}</label>
-          <input id="agent-task-timeout" v-model.number="taskForm.timeout" type="number" />
-        </div>
-        <p v-if="taskError" class="task-error" role="alert" data-test="agent-task-error">{{ taskError }}</p>
+    <UiDialog v-model:open="showTaskModal" :title="t('runtime.nodeXAgents.taskModal.title')" :description="taskTargetNode ? t('runtime.nodeXAgents.terminal.nodeLabel', { id: taskTargetNode.node_id }) : ''" :dismissible="!taskSending">
+      <div class="form-grid">
+        <UiSelect
+          v-model="taskForm.action"
+          class="form-grid__full"
+          required
+          :label="t('runtime.nodeXAgents.taskModal.action')"
+          :placeholder="t('runtime.nodeXAgents.terminal.chooseAction')"
+          :options="actionOptions"
+        />
+        <UiSelect
+          v-if="taskActionSpec?.params.includes('service')"
+          v-model="taskForm.service"
+          :label="t('runtime.nodeXAgents.fields.service')"
+          :options="serviceOptions"
+        />
+        <UiTextField
+          v-if="taskActionSpec?.params.includes('lines')"
+          v-model.number="taskForm.lines"
+          type="number"
+          min="1"
+          max="1000"
+          :label="t('runtime.nodeXAgents.fields.lines')"
+        />
+        <UiTextField v-model.number="taskForm.timeout" type="number" min="1" :label="t('runtime.nodeXAgents.taskModal.timeoutSeconds')" />
       </div>
+      <p v-if="taskError" class="form-error" role="alert" data-test="agent-task-error">{{ taskError }}</p>
       <template #footer="{ close }">
         <UiButton :disabled="taskSending" @click="close">{{ t('runtime.nodeXAgents.actions.cancel') }}</UiButton>
         <UiButton variant="primary" data-test="agent-task-send" :loading="taskSending" @click="sendTask">{{ t('runtime.nodeXAgents.actions.send') }}</UiButton>
@@ -220,11 +159,22 @@
 
 <script setup>
 import { computed, nextTick, onMounted, onUnmounted, ref } from 'vue'
+import { Activity, ListChecks, Play, RefreshCw, Send, Server, SquareTerminal } from '@lucide/vue'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { UiButton, UiDialog, useToast } from '@/ui'
+import UiBadge from '@/ui/UiBadge.vue'
+import UiButton from '@/ui/UiButton.vue'
+import UiDataTable from '@/ui/UiDataTable.vue'
+import UiDialog from '@/ui/UiDialog.vue'
+import UiPageHeader from '@/ui/UiPageHeader.vue'
+import UiSelect from '@/ui/UiSelect.vue'
+import UiTabs from '@/ui/UiTabs.vue'
+import UiTextField from '@/ui/UiTextField.vue'
+import { useFormat } from '@/ui/composables/useFormat'
+import { useToast } from '@/ui/composables/useToast'
 import { createAgentTask, executeAgentCommand, getAgents, listAgentDiagnosticTasks } from '@/api/admin'
 
-const { t, formatDateTime } = useAppI18n()
+const { t } = useAppI18n()
+const format = useFormat()
 
 // 与后端 internal/service/agent_diagnostic_actions.go 的白名单保持一致，
 // 前端不接受任意字符串动作，只能从这份列表里选。
@@ -259,6 +209,53 @@ const onlineAgents = computed(() => agents.value.filter(agent => agent.online))
 const selectedActionSpec = computed(() => diagnosticActionMap[selectedAction.value] || null)
 const taskActionSpec = computed(() => diagnosticActionMap[taskForm.value.action] || null)
 const toast = useToast()
+const agentsLoading = ref(false)
+const agentsError = ref(null)
+const tasksLoading = ref(false)
+const tasksError = ref(null)
+
+const tabItems = computed(() => [
+  { value: 'agents', label: t('runtime.nodeXAgents.tabs.agents'), count: agents.value.length },
+  { value: 'terminal', label: t('runtime.nodeXAgents.tabs.terminal') },
+  { value: 'tasks', label: t('runtime.nodeXAgents.tabs.tasks') }
+])
+const nodeOptions = computed(() => onlineAgents.value.map(agent => ({
+  value: agent.node_id,
+  label: t('runtime.nodeXAgents.terminal.nodeLabel', { id: agent.node_id })
+})))
+const actionOptions = computed(() => diagnosticActions.map(action => ({
+  value: action.value,
+  label: t(`runtime.nodeXAgents.diagnosticActions.${action.value}`)
+})))
+const serviceOptions = computed(() => diagnosticServices.map(service => ({
+  value: service,
+  label: t(`runtime.nodeXAgents.services.${service}`)
+})))
+// The list API answers node, version, system, last seen, capabilities and
+// online state; certificate expiry and the connection type (mTLS or the
+// legacy key) are not in it yet.
+const agentColumns = computed(() => [
+  { key: 'node_id', label: t('runtime.nodeXAgents.table.nodeId'), primary: true, sortable: true, numeric: true, format: value => t('runtime.nodeXAgents.terminal.nodeLabel', { id: value }) },
+  { key: 'status', label: t('runtime.nodeXAgents.table.status'), secondary: true, sortable: true, sortValue: agent => (agent.online ? 0 : 1) },
+  { key: 'version', label: t('runtime.nodeXAgents.table.version'), sortable: true },
+  { key: 'system', label: t('runtime.nodeXAgents.table.system'), value: agent => (agent.system ? [agent.system.os, agent.system.arch].filter(Boolean).join(' ') : '') },
+  { key: 'last_seen', label: t('runtime.nodeXAgents.table.lastSeen'), sortable: true, firstDirection: 'desc', nowrap: true, numeric: true, format: value => formatTime(value), sortValue: agent => new Date(agent.last_seen || 0).getTime() },
+  { key: 'capabilities', label: t('runtime.nodeXAgents.table.capabilities'), breakpoint: 'lg' }
+])
+const taskColumns = computed(() => [
+  { key: 'task_id', label: t('runtime.nodeXAgents.table.taskId'), primary: true },
+  { key: 'command', label: t('runtime.nodeXAgents.table.command'), secondary: true },
+  { key: 'node_id', label: t('runtime.nodeXAgents.table.node'), sortable: true, format: value => t('runtime.nodeXAgents.terminal.nodeLabel', { id: value }) },
+  { key: 'status', label: t('runtime.nodeXAgents.table.status'), sortable: true, sortValue: task => (task.success ? 0 : 1) },
+  { key: 'duration_ms', label: t('runtime.nodeXAgents.table.duration'), numeric: true, align: 'end', sortable: true, format: value => (value === undefined || value === null ? '—' : `${value} ms`) },
+  { key: 'timestamp', label: t('runtime.nodeXAgents.table.time'), sortable: true, firstDirection: 'desc', nowrap: true, numeric: true, format: value => formatTime(value), sortValue: task => new Date(task.timestamp || 0).getTime() }
+])
+const agentActions = agent => [
+  { key: 'terminal', label: t('runtime.nodeXAgents.actions.openTerminal'), icon: SquareTerminal, disabled: !agent.online, onSelect: () => openTerminal(agent) },
+  { key: 'task', label: t('runtime.nodeXAgents.taskModal.title'), icon: Send, onSelect: () => openTaskModal(agent) },
+  { key: 'monitor', label: t('runtime.nodeXAgents.actions.monitor'), icon: Activity, onSelect: () => viewMonitor(agent) }
+]
+const refreshAll = () => Promise.all([fetchAgents(), fetchTaskHistory()])
 const taskSending = ref(false)
 const taskError = ref('')
 
@@ -278,21 +275,29 @@ const buildActionParams = (actionValue, service, lines) => {
 }
 
 const fetchAgents = async () => {
+  agentsLoading.value = true
   try {
     const res = await getAgents()
     const payload = readAgentObject(res)
     agents.value = payload.agents || payload.list || []
+    agentsError.value = null
   } catch (err) {
-    console.error(t('runtime.nodeXAgents.messages.fetchFailed'), err)
+    agentsError.value = err
+  } finally {
+    agentsLoading.value = false
   }
 }
 
 const fetchTaskHistory = async () => {
+  tasksLoading.value = true
   try {
     const res = await listAgentDiagnosticTasks({ limit: 50 })
     taskHistory.value = readAgentList(res)
+    tasksError.value = null
   } catch (err) {
-    console.error(err)
+    tasksError.value = err
+  } finally {
+    tasksLoading.value = false
   }
 }
 
@@ -329,15 +334,7 @@ const readAgentList = (res) => {
   return []
 }
 
-const formatTime = (time) => {
-  if (!time) {
-    return '-'
-  }
-
-  return formatDateTime(time, {
-    second: '2-digit'
-  }) || String(time)
-}
+const formatTime = time => format.dateTime(time)
 
 const openTerminal = (agent) => {
   selectedNodeId.value = agent.node_id
@@ -453,237 +450,112 @@ onUnmounted(() => {
 </script>
 
 <style scoped>
-.tabs {
-  display: flex;
-  gap: 8px;
-  margin-bottom: 20px;
-}
-
-.tab {
-  padding: 10px 20px;
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  transition: var(--transition);
-}
-
-.tab.active {
-  background: var(--accent-fill);
-  color: var(--on-accent);
-  border-color: var(--accent-fill);
-}
-
-.toolbar {
-  display: flex;
-  justify-content: flex-end;
-  margin-bottom: 16px;
-}
-
-.table-container {
-  overflow-x: auto;
-}
-
-.action-buttons {
-  display: flex;
-  gap: 8px;
-}
-
-.btn-sm {
-  min-width: 32px;
-}
-
-.btn-ghost {
-  padding: 6px 10px;
-  background: transparent;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  color: var(--text-color);
-  cursor: pointer;
-}
-
-.btn-ghost:hover {
-  border-color: var(--primary-color);
-  color: var(--primary-color);
-}
-
 .capability-tags {
   display: flex;
   flex-wrap: wrap;
-  gap: 4px;
+  gap: var(--space-1);
 }
 
 .cap-tag {
-  font-size: 11px;
-  padding: 2px 6px;
-  background: rgba(59, 130, 246, 0.15);
-  color: #3b82f6;
-  border-radius: 4px;
+  padding: var(--space-0-5) var(--space-2);
+  border-radius: var(--radius-xs);
+  background: var(--fill-1);
+  /* Stays at 4.5:1 on a hovered or selected row too. */
+  color: color-mix(in srgb, var(--label-2) 70%, var(--label-1));
+  font-family: var(--font-mono);
+  font-size: var(--type-caption-size);
 }
 
-.terminal-container {
-  background: #1e1e1e;
-  border-radius: var(--radius-lg);
-  overflow: hidden;
+/* Remote terminal: a console in the page's own colours (light and dark). */
+.terminal {
   display: flex;
   flex-direction: column;
-  height: 500px;
-}
-
-.terminal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 12px 16px;
-  background: #2d2d2d;
-  border-bottom: 1px solid #3d3d3d;
-}
-
-.node-select {
-  background: #3d3d3d;
-  border: 1px solid #4d4d4d;
-  color: #fff;
-  padding: 8px 12px;
+  min-width: 0;
+  overflow: hidden;
   border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-1), 0 0 0 0.5px var(--separator);
 }
 
-.terminal-status {
-  font-size: 12px;
-  padding: 4px 12px;
-  border-radius: 12px;
-  background: rgba(239, 68, 68, 0.2);
-  color: #ef4444;
+.terminal__bar,
+.terminal__input {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  padding: var(--space-3) var(--space-4);
 }
 
-.terminal-status.connected {
-  background: rgba(34, 197, 94, 0.2);
-  color: #22c55e;
+.terminal__bar {
+  justify-content: space-between;
+  border-bottom: 1px solid var(--separator);
 }
 
-.terminal-output {
-  flex: 1;
+.terminal__node {
+  width: min(280px, 100%);
+}
+
+.terminal__input {
+  border-top: 1px solid var(--separator);
+}
+
+.terminal__input > :deep(*) {
+  flex: 0 1 220px;
+}
+
+.terminal__input > .terminal__lines {
+  flex-basis: 140px;
+}
+
+.terminal__output {
+  height: 420px;
+  padding: var(--space-4);
   overflow-y: auto;
-  padding: 16px;
-  font-family: Consolas, Monaco, monospace;
-  font-size: 13px;
-  line-height: 1.5;
+  background: var(--bg-grouped);
+  font-family: var(--font-mono);
+  font-size: var(--type-callout-size);
+  line-height: var(--type-callout-line);
 }
 
-.terminal-line {
-  margin-bottom: 4px;
+.terminal__output:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: calc(-1 * var(--focus-ring-offset));
 }
 
-.line-prompt {
-  color: #22c55e;
+.terminal__hint {
+  color: var(--label-2);
+  font-family: var(--font-sans);
 }
 
-.line-content {
-  color: #d4d4d4;
+.terminal__line {
+  margin-bottom: var(--space-1);
+}
+
+.terminal__prompt {
+  color: var(--success);
+}
+
+.terminal__content {
+  color: var(--label-1);
   white-space: pre-wrap;
   word-break: break-all;
 }
 
-.line-content.input {
-  color: #4fc3f7;
+.terminal__content.is-input {
+  color: var(--accent);
 }
 
-.line-content.error {
-  color: #ef4444;
-}
-
-.line-content.output {
-  color: #d4d4d4;
-}
-
-.terminal-input {
-  display: flex;
-  align-items: center;
-  padding: 12px 16px;
-  background: #2d2d2d;
-  border-top: 1px solid #3d3d3d;
-  gap: 8px;
-}
-
-.terminal-input .prompt {
-  color: #22c55e;
-  font-family: Consolas, Monaco, monospace;
-}
-
-.terminal-input input {
-  flex: 1;
-  background: transparent;
-  border: none;
-  color: #fff;
-  font-family: Consolas, Monaco, monospace;
-  font-size: 13px;
-  outline: none;
-}
-
-.terminal-input input::placeholder {
-  color: #666;
-}
-
-.action-select,
-.service-select {
-  background: #3d3d3d;
-  border: 1px solid #4d4d4d;
-  color: #fff;
-  padding: 8px 12px;
-  border-radius: var(--radius-md);
-}
-
-.action-select {
-  flex: 1;
-}
-
-.lines-input {
-  width: 80px;
-  background: #3d3d3d;
-  border: 1px solid #4d4d4d;
-  color: #fff;
-  padding: 8px 12px;
-  border-radius: var(--radius-md);
-  font-family: Consolas, Monaco, monospace;
-}
-
-.terminal-input button {
-  padding: 8px 16px;
-  background: var(--accent-fill);
-  border: none;
-  border-radius: var(--radius-md);
-  color: var(--on-accent);
-  cursor: pointer;
-}
-
-.terminal-input button:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.status-error {
-  background: rgba(239, 68, 68, 0.15);
-  color: var(--error-color);
-}
-
-.dialog-fields {
-  display: grid;
-  gap: var(--space-4);
-}
-
-.dialog-fields .form-group {
-  margin-bottom: 0;
-}
-
-.task-error {
-  margin: 0;
+.terminal__content.is-error {
   color: var(--danger);
 }
 
-code {
-  background: var(--bg-color);
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-family: Consolas, Monaco, monospace;
-  font-size: 12px;
+@media (max-width: 639.98px) {
+  .terminal__output {
+    height: 320px;
+  }
+
+  .terminal__input > :deep(*) {
+    flex: 1 1 100%;
+  }
 }
 </style>
