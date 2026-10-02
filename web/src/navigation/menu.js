@@ -1,3 +1,5 @@
+import { ADMIN_PAGE_SECTIONS } from './sections'
+
 // Navigation config: the one place that says what the shells show.
 //
 // The admin sidebar, the admin command palette, the user top navigation and
@@ -82,10 +84,10 @@ export const ADMIN_MENU = Object.freeze([
     labelKey: 'shell.admin.groups.system',
     items: [
       { id: 'settings', to: '/admin/system', icon: 'settings', labelKey: 'shell.admin.items.settings' },
-      { id: 'mfa', to: '/admin/mfa', icon: 'mfa', labelKey: 'shell.admin.items.mfa' },
-      { id: 'access-groups', to: '/admin/access-groups', icon: 'access-groups', labelKey: 'shell.admin.items.accessGroups' },
-      { id: 'notifications', to: '/admin/notifications', icon: 'notifications', labelKey: 'shell.admin.items.notifications' },
-      { id: 'telegram', to: '/admin/telegram', icon: 'telegram', labelKey: 'shell.admin.items.telegram' }
+      // 安全 holds the MFA policy and the access groups; 通知 holds e-mail,
+      // Telegram, templates and the log (UI U7). The old paths redirect.
+      { id: 'security', to: '/admin/security', icon: 'security', labelKey: 'shell.admin.items.security', match: ['/admin/mfa', '/admin/access-groups'] },
+      { id: 'notifications', to: '/admin/notifications', icon: 'notifications', labelKey: 'shell.admin.items.notifications', match: ['/admin/telegram'] }
     ]
   },
   {
@@ -129,6 +131,10 @@ export const FORWARD_SUITE_LINKS = Object.freeze({
     { id: 'forward-observability', to: '/admin/forward/observability', icon: 'observability', labelKey: 'forwardSuite.nav.observability', hintKey: 'forwardSuite.hints.observability' }
   ]
 })
+
+// Sections of settings-style pages: navigation/sections.js (kept apart so
+// the page titles in the entry chunk do not pull in this file).
+export { ADMIN_PAGE_SECTIONS }
 
 export function isForwardSuitePath(path) {
   return path === '/admin/forward' || String(path || '').startsWith('/admin/forward/')
@@ -313,6 +319,14 @@ export function paletteEntries({ t, groups }) {
   for (const entry of forwardSuiteEntries(t)) {
     const owner = activeMenuItem(groups, entry.to)
     if (owner) add(entry, `${owner.group.label} · ${owner.item.label}`)
+  }
+  // Sections of settings-style pages, under their page.
+  for (const group of groups) {
+    for (const item of group.items) {
+      for (const section of ADMIN_PAGE_SECTIONS[item.id] || []) {
+        add({ id: section.id, to: section.to, label: t(section.labelKey), icon: item.icon }, `${group.label} · ${item.label}`)
+      }
+    }
   }
   add({ id: 'account', to: ADMIN_ACCOUNT_PATH, label: t('shell.admin.items.account'), icon: 'account' }, '')
 

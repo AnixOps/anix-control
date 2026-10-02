@@ -66,12 +66,34 @@ describe('admin routes', () => {
       '/admin/deployments',
       '/admin/control',
       '/admin/access-groups',
+      '/admin/security',
+      '/admin/security/mfa',
+      '/admin/security/access-groups',
+      '/admin/system/general',
+      '/admin/system/audit',
+      '/admin/notifications/telegram',
+      '/admin/subscriptions/1',
     ]
 
-    const routePaths = router.getRoutes().map(route => route.path)
-
+    // Each resolves to a real route (a page, a page with a section
+    // parameter, or a redirect), never the catch-all.
     for (const path of expectedPaths) {
-      expect(routePaths).toContain(path)
+      const matched = router.resolve(path).matched
+      expect(matched.length > 0 && !matched.at(-1).path.includes(':pathMatch'), path).toBe(true)
+    }
+  })
+
+  it('keeps the old settings-style page URLs working (UI U7)', () => {
+    const redirects = {
+      '/admin/telegram': '/admin/notifications/telegram',
+      '/admin/mfa': '/admin/security/mfa',
+      '/admin/access-groups': '/admin/security/access-groups'
+    }
+    for (const [from, to] of Object.entries(redirects)) {
+      expect(router.resolve(from).matched.at(-1).redirect, from).toBe(to)
+    }
+    for (const path of ['/admin/system', '/admin/system/backup', '/admin/security', '/admin/notifications', '/admin/notifications/email', '/admin/subscriptions/3', '/admin/subscriptions/3/templates']) {
+      expect(router.resolve(path).matched.at(-1).path, path).not.toContain(':pathMatch')
     }
   })
 

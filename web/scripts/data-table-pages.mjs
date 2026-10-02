@@ -28,5 +28,21 @@ export const DATA_TABLE_PAGES = [
   // U7: forward suite
   'src/views/admin/Forward.vue',
   'src/views/admin/Tunnel.vue',
-  'src/views/admin/LimitI18n.vue'
+  'src/views/admin/LimitI18n.vue',
+  // U7: settings, subscription groups, notifications, security
+  'src/views/admin/System.vue',
+  'src/views/admin/system/SettingsGeneral.vue',
+  'src/views/admin/system/SettingsRuntime.vue',
+  'src/views/admin/system/SettingsBackup.vue',
+  'src/views/admin/system/SettingsBalancer.vue',
+  'src/views/admin/system/SettingsAudit.vue',
+  'src/views/admin/Subscriptions.vue',
+  'src/views/admin/SubscriptionGroup.vue',
+  'src/views/admin/subscriptions/GroupTemplates.vue',
+  'src/views/admin/subscriptions/GroupProtocols.vue',
+  'src/views/admin/Notifications.vue',
+  'src/views/admin/notifications/NotifyTelegram.vue',
+  'src/views/admin/notifications/NotifyTemplates.vue',
+  'src/views/admin/notifications/NotifyLogs.vue',
+  'src/views/admin/Security.vue'
 ]

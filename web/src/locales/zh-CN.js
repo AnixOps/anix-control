@@ -10,6 +10,7 @@ import shell from './modules/zh-CN/shell'
 import userPages from './modules/zh-CN/userPages'
 import adminNodes from './modules/zh-CN/adminNodes'
 import forwardNodesPage from './modules/zh-CN/forwardNodesPage'
+import adminSettingsPages from './modules/zh-CN/adminSettingsPages'
 import { AGENT_NAME, CONTROL_NAME } from '../constants/brand'
 
 const legacy = {
@@ -105,6 +106,7 @@ export default {
   ...shell,
   ...userPages,
   ...forwardNodesPage,
+  ...adminSettingsPages,
   common: {
     locale: {
       label: '语言',
@@ -205,7 +207,7 @@ export default {
       trafficHourly: '小时流量统计',
       users: '用户',
       nodes: '节点',
-      subscriptions: '订阅管理',
+      subscriptions: '订阅分组',
       orders: '订单',
       plans: '套餐',
       subscriptionTemplates: '订阅模板',
@@ -225,12 +227,11 @@ export default {
       deployments: '部署',
       accessGroups: '访问组',
       payment: '支付',
-      telegram: 'Telegram Bot 管理',
-      mfa: 'MFA 设置',
-      notifications: '通知管理',
+      notifications: '通知',
       invite: '邀请返佣',
       inviteCodes: '邀请码',
-      system: '系统管理',
+      system: '系统设置',
+      security: '安全',
       fallback: '管理面板'
     }
   },
@@ -1006,26 +1007,18 @@ export default {
       }
     },
     workbench: {
-      eyebrow: 'Forward Runtime',
-      title: 'Runtime Workbench',
-      subtitle: '\u53cc\u8fd0\u884c\u65f6\u63a7\u5236\u9762',
       actions: {
         refreshJobs: '\u5237\u65b0\u4efb\u52a1',
         openAnsibleMachines: '\u6253\u5f00 Ansible Machines',
-        openLocalRuntime: '\u6253\u5f00 Local Runtime',
-        openNodeXRuntime: '\u6253\u5f00 NodeX Runtime',
-        refreshActiveRuntime: '\u5237\u65b0\u5f53\u524d\u8fd0\u884c\u65f6',
         runDoctorActiveRuntime: '\u5bf9\u5f53\u524d\u8fd0\u884c\u65f6\u8fd0\u884c Doctor'
       },
       localCard: {
-        eyebrow: 'Local Runtime',
         title: '\u672c\u5730 Ansible \u6267\u884c\u5668',
         description: '\u9762\u677f\u4e3b\u673a\u65e0\u72b6\u6001\u6267\u884c\u3002Inventory\u3001playbook \u548c SSH \u8bbf\u95ee\u72ec\u7acb\u4e8e NodeX \u7ba1\u7406\u3002',
         currentState: '\u5f53\u524d\u72b6\u6001',
         manage: '\u7ba1\u7406 Local Runtime / Ansible'
       },
       nodeXCard: {
-        eyebrow: 'NodeX Runtime',
         title: '\u6709\u72b6\u6001 gost \u63a7\u5236\u9762',
         description: '\u9762\u677f\u4f1a\u76f4\u63a5\u8fde\u63a5\u5185\u90e8 NodeX \u63a7\u5236\u9762\u3002\u53ea\u6709 gost runtime \u4efb\u52a1\u6210\u529f\u540e\uff0crelay \u624d\u7b97\u771f\u6b63\u6302\u8f7d\u3002',
         manage: '\u7ba1\u7406 NodeX Runtime'
@@ -1042,11 +1035,9 @@ export default {
       },
       recentJobsTitle: '\u6700\u8fd1\u8fd0\u884c\u65f6\u4efb\u52a1',
       recentJobsSubtitle: '\u663e\u793a Local Runtime \u548c NodeX Runtime \u4e13\u7528\u9875\u9762\u6700\u8fd1\u6392\u961f\u6216\u5df2\u6267\u884c\u7684\u52a8\u4f5c\u3002',
-      loadingJobs: '\u52a0\u8f7d\u8fd0\u884c\u65f6\u4efb\u52a1\u4e2d...',
       noJobs: '\u6682\u65e0\u8fd0\u884c\u65f6\u4efb\u52a1\u3002',
       jobMeta: '{backend} / forward {forwardId} / tunnel {tunnelId} / node {nodeId}',
       doctor: {
-        eyebrow: 'Forward Runtime Doctor',
         title: '\u5f53\u524d\u8fd0\u884c\u65f6\u5feb\u7167',
         description: '\u53ef\u8fde\u901a\u53ea\u80fd\u8bf4\u660e\u63a7\u5236\u9762\u6216\u672c\u5730\u6267\u884c\u5668\u53ef\u4ee5\u8bbf\u95ee\uff0c\u5e76\u4e0d\u80fd\u8bc1\u660e relay \u5df2\u6302\u8f7d\u6210\u529f\uff0c\u4e5f\u4e0d\u4ee3\u8868 iptables \u89c4\u5219\u5df2\u5b58\u5728\u3002',
         note: '\u8fd9\u4e2a workbench \u53ea\u663e\u793a\u5f53\u524d\u6d3b\u8dc3 backend\u3002\u82e5\u8981\u7f16\u8f91\u914d\u7f6e\u6216\u8fd0\u884c\u6a21\u5f0f\u7279\u5b9a\u63a2\u6d4b\uff0c\u8bf7\u524d\u5f80 Local Runtime \u548c NodeX Runtime \u4e13\u9875\u3002',
@@ -1067,222 +1058,6 @@ export default {
       errors: {
         fetchStatusFailed: '\u83b7\u53d6 forward runtime \u72b6\u6001\u5931\u8d25',
         doctorFailed: 'Forward runtime Doctor \u6267\u884c\u5931\u8d25'
-      }
-    },
-    systemPage: {
-      title: '系统管理',
-      subtitle: '系统配置、数据备份与负载均衡',
-      tabs: {
-        config: '系统配置',
-        backup: '数据备份',
-        balancer: '负载均衡',
-        audit: '审计日志'
-      },
-      actions: {
-        addConfig: '新增配置',
-        createBalancer: '新建负载均衡器',
-        restore: '恢复',
-        healthCheck: '健康检查'
-      },
-      config: {
-        searchPlaceholder: '搜索配置项...',
-        table: {
-          key: '键名',
-          value: '值',
-          description: '描述',
-          updatedAt: '更新时间',
-          actions: '操作'
-        },
-        empty: '暂无配置数据'
-      },
-      subscription: {
-        eyebrow: '订阅',
-        title: '订阅域名',
-        description: '配置一个或多个用于用户订阅链接和 managed-config 输出的域名。',
-        pathLabel: '订阅路径',
-        currentDomainLabel: '当前请求 Host',
-        domainListLabel: '备用域名列表',
-        domainListPlaceholder: 'sub1.example.com\nsub2.example.com',
-        domainListHelp: '每行一个域名，也支持逗号或分号分隔。',
-        previewLabel: '链接预览',
-        previewEmpty: '未配置备用域名时，将使用当前请求 Host。',
-        actions: {
-          refresh: '刷新',
-          save: '保存域名',
-          saving: '保存中...'
-        },
-        messages: {
-          loadFailed: '加载订阅域名配置失败',
-          saveFailed: '保存订阅域名失败',
-          saveSuccess: '订阅域名已保存'
-        }
-      },
-      backup: {
-        title: '自动备份配置',
-        enabled: '启用自动备份',
-        intervalHours: '备份间隔 (小时)',
-        keepCount: '保留数量',
-        backupDatabase: '包含数据库',
-        backupFiles: '包含文件',
-        storageType: '存储类型',
-        storagePath: '本地存储路径',
-        storagePathPlaceholder: '例如：backups',
-        s3Bucket: 'S3 Bucket',
-        s3BucketPlaceholder: '例如：panel-backups',
-        s3Region: 'S3 Region',
-        s3RegionPlaceholder: '例如：us-east-1',
-        s3Endpoint: 'S3 Endpoint（可选）',
-        s3EndpointPlaceholder: '例如：https://s3.amazonaws.com',
-        s3AccessKey: 'S3 Access Key',
-        s3AccessKeyPlaceholder: '留空则保留当前密钥',
-        s3SecretKey: 'S3 Secret Key',
-        s3SecretKeyPlaceholder: '留空则保留当前密钥',
-        storageTypes: {
-          local: '本地',
-          s3: 'S3 兼容存储'
-        },
-        sensitiveHintWithValue: '敏感值已隐藏。留空将保留当前值，输入新值可进行轮换。',
-        sensitiveHintWithoutValue: '该敏感字段尚未设置，请输入后保存。',
-        saveConfig: '保存配置',
-        backupNow: '立即备份',
-        stats: {
-          totalCount: '总备份数:',
-          totalSize: '总大小:',
-          lastBackup: '最近备份:'
-        },
-        listTitle: '备份列表',
-        table: {
-          id: 'ID',
-          filename: '文件名',
-          size: '大小',
-          status: '状态',
-          createdAt: '创建时间',
-          actions: '操作'
-        },
-        empty: '暂无备份数据'
-      },
-      balancer: {
-        table: {
-          id: 'ID',
-          name: '名称',
-          group: '节点组',
-          strategy: '策略',
-          healthCheck: '健康检查',
-          enabled: '状态',
-          actions: '操作'
-        },
-        empty: '暂无负载均衡器'
-      },
-      audit: {
-        title: '操作审计日志',
-        actions: {
-          filter: '筛选',
-          refresh: '刷新'
-        },
-        filters: {
-          actionPlaceholder: '按 action 过滤',
-          targetTypePlaceholder: '按 target_type 过滤'
-        },
-        table: {
-          id: 'ID',
-          action: '动作',
-          module: '模块',
-          targetType: '目标类型',
-          username: '操作人',
-          content: '内容',
-          ip: 'IP',
-          status: '状态',
-          createdAt: '创建时间'
-        },
-        pagination: {
-          total: '总数: {total}',
-          pageSize: '每页',
-          page: '第 {page} / {totalPages} 页',
-          prev: '上一页',
-          next: '下一页'
-        },
-        empty: '暂无审计日志'
-      },
-      configModal: {
-        titleEdit: '编辑配置',
-        titleCreate: '新增配置',
-        key: '键名',
-        value: '值',
-        description: '描述',
-        keyPlaceholder: '如: site.name',
-        valuePlaceholder: '配置值，支持 JSON 格式',
-        descriptionPlaceholder: '配置说明',
-        sensitiveHintWithValue: '敏感值已隐藏。留空将保留当前值，输入新值将覆盖。',
-        sensitiveHintWithoutValue: '该配置为敏感项，请输入值后保存。'
-      },
-      balancerModal: {
-        titleEdit: '编辑负载均衡器',
-        titleCreate: '新建负载均衡器',
-        name: '名称',
-        namePlaceholder: '负载均衡器名称',
-        groupId: '节点组ID',
-        strategy: '策略',
-        healthCheck: '启用健康检查',
-        checkInterval: '检查间隔 (秒)',
-        weightsJson: '节点权重 (JSON)',
-        weightsPlaceholder: '{\'{"1": 10, "2": 5}\'}'
-      },
-      strategy: {
-        roundRobin: '轮询',
-        leastLoad: '最少负载',
-        latency: '最低延迟',
-        weight: '加权',
-        random: '随机'
-      },
-      status: {
-        pending: '处理中',
-        completed: '已完成',
-        failed: '失败'
-      },
-      booleans: {
-        enabled: '启用',
-        disabled: '禁用'
-      },
-      confirm: {
-        deleteConfigTitle: '删除配置 {key}？',
-        deleteConfigMessage: '依赖这项配置的功能会改用默认值。此操作无法撤销。',
-        deleteConfigAction: '删除配置',
-        deleteBackupTitle: '删除备份 {filename}？',
-        deleteBackupMessage: '备份文件会被永久删除，之后不能再用它恢复。此操作无法撤销。',
-        deleteBackupAction: '删除备份',
-        restoreBackupTitle: '用备份 {filename} 恢复？',
-        restoreBackupMessage: '当前数据会被这份备份覆盖，备份之后的改动都会丢失。此操作无法撤销。',
-        restoreBackupAction: '恢复备份',
-        deleteBalancerTitle: '删除负载均衡器 {name}？',
-        deleteBalancerMessage: '该节点组将不再做负载均衡和健康检查。此操作无法撤销。',
-        deleteBalancerAction: '删除负载均衡器'
-      },
-      messages: {
-        fetchConfigsFailed: '获取配置失败',
-        fetchAuditLogsFailed: '获取审计日志失败',
-        saveConfigFailed: '保存失败: {message}',
-        configSaved: '已保存配置 {key}',
-        configDeleted: '已删除配置 {key}',
-        deleteConfigFailed: '删除失败',
-        fetchBackupConfigFailed: '获取备份配置失败',
-        backupConfigSaved: '保存成功',
-        backupConfigSaveFailed: '保存失败',
-        backupStarted: '备份已开始',
-        backupStartFailed: '创建备份失败',
-        fetchBackupsFailed: '获取备份列表失败',
-        fetchBackupStatsFailed: '获取备份统计失败',
-        backupDeleted: '已删除备份 {filename}',
-        deleteBackupFailed: '删除失败',
-        restoreBackupSuccess: '恢复成功',
-        restoreBackupFailed: '恢复失败: {message}',
-        fetchBalancersFailed: '获取负载均衡器失败',
-        weightsJsonInvalid: '权重 JSON 格式错误',
-        saveBalancerFailed: '保存失败: {message}',
-        balancerSaved: '已保存负载均衡器 {name}',
-        balancerDeleted: '已删除负载均衡器 {name}',
-        deleteBalancerFailed: '删除失败',
-        healthCheckCompleted: '健康检查已完成',
-        healthCheckFailed: '健康检查失败'
       }
     },
     nodeXTopology: {
@@ -1649,276 +1424,7 @@ export default {
     }
   },
   admin: {
-    subscriptions: {
-      title: '订阅管理',
-      subtitle: '管理订阅分组、模板以及关联的物理节点协议。',
-      groups: '分组列表',
-      createGroup: '创建分组',
-      editGroup: '编辑分组',
-      groupName: '分组名称',
-      groupNamePlaceholder: '请输入分组名称',
-      description: '描述',
-      priority: '优先级',
-      enabled: '启用',
-      disabled: '禁用',
-      noDescription: '暂无描述',
-      templates: '模板数',
-      templatesFor: '模板列表',
-      createTemplate: '创建模板',
-      editTemplate: '编辑模板',
-      copySubscription: '复制订阅链接',
-      copyCombinedSubscription: '复制合并订阅',
-      preview: '预览',
-      previewTitle: '订阅预览',
-      format: '格式',
-      copyContent: '复制内容',
-      download: '下载',
-      subscriptionLinks: '订阅链接',
-      nodeName: '节点名称',
-      nodeNamePlaceholder: '美国节点',
-      protocol: '协议',
-      server: '服务器',
-      port: '端口',
-      tls: 'TLS',
-      tlsNone: '无',
-      tlsReality: 'Reality',
-      tlsEnabled: 'TLS',
-      status: '状态',
-      actions: '操作',
-      productionNodes: '物理节点协议',
-      manageRelations: '管理关联',
-      linkedProtocolsInfo: '已关联到此分组的协议',
-      visibilityShown: '显示',
-      visibilityHidden: '隐藏',
-      protocolOnline: '在线',
-      protocolOffline: '下线',
-      goToNode: '前往节点管理',
-      productionNodesEmpty: '此分组暂无关联的物理节点协议。',
-      manageProtocolsTitle: '管理物理节点协议关联',
-      manageProtocolsDescription: '勾选要包含在“{group}”分组中的节点协议。只有在“节点管理”中开启“显示在订阅中”的协议才会出现在这里。',
-      unknownNode: '未知节点',
-      confirmSave: '确认保存',
-      transport: '传输',
-      sni: 'SNI（服务器名称）',
-      realityPublicKey: 'Reality 公钥',
-      realityShortId: 'Reality Short ID',
-      tlsFingerprint: 'TLS 指纹',
-      defaultOption: '默认',
-      websocketPath: 'WebSocket 路径',
-      flow: 'Flow',
-      noneOption: '无',
-      productionTable: {
-        node: '节点',
-        protocol: '协议',
-        name: '名称',
-        port: '端口',
-        visibility: '可见',
-        status: '状态',
-        actions: '操作'
-      },
-      protocolPool: {
-        node: '节点',
-        protocolName: '协议 / 名称',
-        port: '端口',
-        linkedGroups: '已关联分组',
-        selectAll: '全选协议',
-        select: '选择协议 {name}'
-      },
-      formats: {
-        auto: '自动（按 User-Agent）',
-        v2ray: 'V2Ray（Base64）',
-        clash: 'Clash（YAML）',
-        stash: 'Stash（YAML）',
-        egern: 'Egern（YAML）',
-        surge: 'Surge',
-        loon: 'Loon',
-        shadowrocket: 'ShadowRocket',
-        quantumultx: 'QuantumultX',
-        json: 'JSON',
-        base64json: 'Base64 JSON'
-      },
-      loadError: '加载订阅数据失败',
-      availableProtocolsLoadError: '加载可用协议失败',
-      groupProtocolsUpdated: '分组协议关联已更新',
-      groupProtocolsUpdateFailed: '更新协议关联失败',
-      copied: '已复制',
-      copyError: '复制失败',
-      copyFallbackNotice: '已使用仅模板回退方案复制合并订阅内容。',
-      previewError: '加载预览内容失败',
-      confirm: {
-        deleteGroupTitle: '删除订阅分组 {name}？',
-        deleteGroupMessage: '分组内的订阅模板和协议关联会一并删除，使用该分组的用户将收不到这些节点。此操作无法撤销。',
-        deleteGroupAction: '删除分组',
-        deleteTemplateTitle: '删除订阅模板 {name}？',
-        deleteTemplateMessage: '该节点会从分组的订阅里消失。此操作无法撤销。',
-        deleteTemplateAction: '删除模板'
-      },
-      groupDeleted: '订阅分组已删除',
-      deleteError: '删除失败',
-      groupSaved: '订阅分组已保存',
-      saveError: '保存失败',
-      templateDeleted: '订阅模板已删除',
-      updateError: '更新失败',
-      templateSaved: '订阅模板已保存',
-      stats: {
-        totalGroups: '总分组数',
-        totalUsers: '总用户数',
-        totalTemplates: '总模板数',
-        totalTraffic: '总已用流量',
-        groupUsage: '分组使用情况',
-        groupName: '分组',
-        users: '用户数',
-        enabledUsers: '活跃用户',
-        templates: '模板数',
-        protocols: '协议数',
-        onlineNodes: '在线节点',
-        trafficUsed: '已用流量',
-        plans: '关联套餐',
-        view: '查看',
-        empty: '暂无订阅分组。'
-      }
-    },
     nodes: adminNodes
-  },
-  adminNotifications: {
-    title: '通知管理',
-    subtitle: '管理通知模板、SMTP 投递和发送日志。',
-    tabs: {
-      templates: '通知模板',
-      email: '邮件配置',
-      logs: '发送日志'
-    },
-    actions: {
-      createTemplate: '新增模板',
-      edit: '编辑',
-      delete: '删除',
-      search: '搜索',
-      sendTest: '发送测试邮件'
-    },
-    templates: {
-      table: {
-        id: 'ID',
-        name: '名称',
-        type: '类型',
-        event: '触发事件',
-        status: '状态',
-        actions: '操作'
-      },
-      empty: '暂无通知模板'
-    },
-    email: {
-      title: 'SMTP 配置',
-      fields: {
-        host: 'SMTP 服务器',
-        port: '端口',
-        username: '用户名',
-        password: '密码',
-        fromName: '发件人名称',
-        fromAddress: '发件人地址',
-        encryption: '启用 TLS 加密'
-      },
-      placeholders: {
-        host: 'smtp.example.com',
-        port: '465',
-        username: "your{'@'}email.com",
-        password: '请输入 SMTP 密码',
-        passwordStored: '密码已保存，留空则保留',
-        fromName: CONTROL_NAME,
-        fromAddress: "noreply{'@'}example.com"
-      }
-    },
-    logs: {
-      filters: {
-        allTypes: '全部类型',
-        allStatuses: '全部状态'
-      },
-      table: {
-        id: 'ID',
-        type: '类型',
-        recipient: '接收者',
-        title: '标题',
-        status: '状态',
-        sentAt: '发送时间'
-      },
-      empty: '暂无发送日志'
-    },
-    modal: {
-      createTitle: '新增模板',
-      editTitle: '编辑模板',
-      fields: {
-        name: '名称',
-        type: '类型',
-        event: '触发事件',
-        title: '标题模板',
-        content: '内容模板',
-        enabled: '启用'
-      },
-      placeholders: {
-        name: '模板名称',
-        title: "支持变量: {'{'}username{'}'}, {'{'}site_name{'}'}",
-        content: "支持变量: {'{'}username{'}'}, {'{'}email{'}'}, {'{'}expire_time{'}'}"
-      }
-    },
-    testModal: {
-      title: '发送测试邮件',
-      fields: {
-        recipient: '收件人地址'
-      },
-      placeholders: {
-        recipient: "test{'@'}example.com"
-      },
-      actions: {
-        send: '发送'
-      }
-    },
-    types: {
-      email: '邮件',
-      telegram: 'Telegram',
-      webhook: 'Webhook'
-    },
-    events: {
-      userRegister: '用户注册',
-      userLogin: '用户登录',
-      userExpire: '用户到期',
-      userTrafficLow: '流量不足',
-      orderPaid: '订单支付',
-      ticketReply: '工单回复',
-      nodeOffline: '节点离线',
-      nodeOnline: '节点上线'
-    },
-    status: {
-      enabled: '启用',
-      disabled: '禁用',
-      pending: '待发送',
-      success: '成功',
-      failed: '失败'
-    },
-    testPayload: {
-      subject: '测试邮件',
-      content: '这是一封测试邮件。如果您收到此邮件，说明邮件配置正确。'
-    },
-    confirm: {
-      deleteTitle: '删除模板 {name}？',
-      deleteMessage: '使用这个模板的通知将不再发送。此操作无法撤销。',
-      deleteAction: '删除模板'
-    },
-    messages: {
-      fetchTemplatesFailed: '加载通知模板失败',
-      fetchLogsFailed: '加载通知日志失败',
-      fetchEmailConfigFailed: '加载邮件配置失败',
-      templateSaveSuccess: '模板保存成功',
-      templateSaveFailed: '模板保存失败: {message}',
-      templateSaveFailedShort: '保存失败',
-      deleteSuccess: '已删除模板 {name}',
-      deleteFailedShort: '删除失败',
-      emailSaveSuccess: '邮件配置已保存',
-      emailSaveFailed: '邮件配置保存失败: {message}',
-      emailSaveFailedShort: '保存失败',
-      testRecipientRequired: '请输入收件人邮箱地址',
-      testSendSuccess: '测试邮件发送成功',
-      testSendFailed: '测试邮件发送失败: {message}',
-      testSendFailedShort: '发送失败'
-    }
   },
   adminPayment: {
     title: '支付',
@@ -2038,10 +1544,7 @@ export default {
     }
   },
   adminMfa: {
-    title: '\u591a\u56e0\u7d20\u8ba4\u8bc1\u7ba1\u7406',
-    subtitle: '\u914d\u7f6e\u5168\u5c40 MFA \u7b56\u7565',
     config: {
-      title: '\u5168\u5c40\u914d\u7f6e',
       enabled: '\u542f\u7528\u591a\u56e0\u7d20\u8ba4\u8bc1',
       enabledHelp: '\u542f\u7528\u540e\uff0c\u7528\u6237\u53ef\u9009\u62e9\u5f00\u542f MFA \u4fdd\u62a4\u8d26\u6237\u5b89\u5168',
       required: '\u5f3a\u5236\u542f\u7528 MFA',
@@ -2060,15 +1563,10 @@ export default {
       email: '\u90ae\u7bb1\u9a8c\u8bc1\u7801'
     },
     info: {
-      title: '\ud83d\udca1 \u4f7f\u7528\u8bf4\u660e',
-      totpTitle: 'TOTP \u8ba4\u8bc1',
       totpBody: '\u57fa\u4e8e\u65f6\u95f4\u7684\u4e00\u6b21\u6027\u5bc6\u7801\uff0c\u7528\u6237\u53ef\u4f7f\u7528 Google Authenticator\u3001Authy \u7b49\u5e94\u7528\u626b\u63cf\u4e8c\u7ef4\u7801\u7ed1\u5b9a\u3002',
-      backupTitle: '\u6062\u590d\u7801',
       backupBody: '\u5f53\u7528\u6237\u65e0\u6cd5\u4f7f\u7528\u8ba4\u8bc1\u5668\u65f6\uff0c\u53ef\u4f7f\u7528\u6062\u590d\u7801\u767b\u5f55\u3002\u6bcf\u4e2a\u6062\u590d\u7801\u53ea\u80fd\u4f7f\u7528\u4e00\u6b21\u3002',
-      lockoutTitle: '\u8d26\u6237\u9501\u5b9a',
       lockoutBody: '\u8fde\u7eed\u591a\u6b21 MFA \u9a8c\u8bc1\u5931\u8d25\u5c06\u89e6\u53d1\u8d26\u6237\u9501\u5b9a\uff0c\u9632\u6b62\u66b4\u529b\u7834\u89e3\u3002',
-      userOpsTitle: '\u7528\u6237\u7aef\u64cd\u4f5c',
-      userOpsBody: '\u7528\u6237\u53ef\u5728\u300c\u5b89\u5168\u8bbe\u7f6e\u300d\u9875\u9762\u81ea\u884c\u7ba1\u7406 MFA\uff0c\u5305\u62ec\u542f\u7528\u3001\u7981\u7528\u3001\u91cd\u65b0\u751f\u6210\u6062\u590d\u7801\u3002'
+      userOpsBody: '用户在自己的「账户」页开启、关闭两步验证，并重新生成恢复码。'
     },
     messages: {
       fetchFailed: '\u83b7\u53d6 MFA \u914d\u7f6e\u5931\u8d25',

@@ -10,6 +10,7 @@ import shell from './modules/en/shell'
 import userPages from './modules/en/userPages'
 import adminNodes from './modules/en/adminNodes'
 import forwardNodesPage from './modules/en/forwardNodesPage'
+import adminSettingsPages from './modules/en/adminSettingsPages'
 import { AGENT_NAME, CONTROL_NAME } from '../constants/brand'
 
 const legacy = {
@@ -103,6 +104,7 @@ export default {
   ...shell,
   ...userPages,
   ...forwardNodesPage,
+  ...adminSettingsPages,
   common: {
     locale: {
       label: 'Language',
@@ -203,7 +205,7 @@ export default {
       trafficHourly: 'Hourly Traffic',
       users: 'Users',
       nodes: 'Nodes',
-      subscriptions: 'Subscriptions',
+      subscriptions: 'Subscription groups',
       orders: 'Orders',
       plans: 'Plans',
       subscriptionTemplates: 'Subscription templates',
@@ -223,12 +225,11 @@ export default {
       deployments: 'Deployments',
       accessGroups: 'Access groups',
       payment: 'Payments',
-      telegram: 'Telegram Bot',
-      mfa: 'MFA',
       notifications: 'Notifications',
       invite: 'Referrals',
       inviteCodes: 'Invite codes',
-      system: 'System',
+      system: 'Settings',
+      security: 'Security',
       fallback: 'Admin Console'
     }
   },
@@ -1005,26 +1006,18 @@ export default {
       }
     },
     workbench: {
-      eyebrow: 'Forward Runtime',
-      title: 'Runtime Workbench',
-      subtitle: 'Dual runtime control plane',
       actions: {
         refreshJobs: 'Refresh jobs',
         openAnsibleMachines: 'Open Ansible Machines',
-        openLocalRuntime: 'Open Local Runtime',
-        openNodeXRuntime: 'Open NodeX Runtime',
-        refreshActiveRuntime: 'Refresh active runtime',
         runDoctorActiveRuntime: 'Run doctor on active runtime'
       },
       localCard: {
-        eyebrow: 'Local Runtime',
         title: 'Local Ansible executor',
         description: 'Stateless panel-host execution. Inventory, playbooks and SSH access are managed separately from NodeX.',
         currentState: 'Current state',
         manage: 'Manage Local Runtime / Ansible'
       },
       nodeXCard: {
-        eyebrow: 'NodeX Runtime',
         title: 'Stateful gost control-plane',
         description: 'Panel talks to the internal NodeX control-plane. Real relay attachment only exists after gost runtime jobs succeed.',
         manage: 'Manage NodeX Runtime'
@@ -1041,11 +1034,9 @@ export default {
       },
       recentJobsTitle: 'Recent runtime jobs',
       recentJobsSubtitle: 'Latest queued and executed actions across the dedicated Local Runtime and NodeX Runtime pages.',
-      loadingJobs: 'Loading runtime jobs...',
       noJobs: 'No runtime jobs yet.',
       jobMeta: '{backend} / forward {forwardId} / tunnel {tunnelId} / node {nodeId}',
       doctor: {
-        eyebrow: 'Forward Runtime Doctor',
         title: 'Active Runtime Snapshot',
         description: 'Reachability only means the control plane or local executor can be contacted. It is not proof that a relay has already attached or that iptables rules already exist.',
         note: 'This workbench only shows the currently active backend. Use the dedicated Local Runtime and NodeX Runtime pages to edit config and run mode-specific probes.',
@@ -1066,222 +1057,6 @@ export default {
       errors: {
         fetchStatusFailed: 'Failed to fetch forward runtime status',
         doctorFailed: 'Forward runtime doctor failed'
-      }
-    },
-    systemPage: {
-      title: 'System',
-      subtitle: 'System configuration, backups, and load balancers',
-      tabs: {
-        config: 'System Config',
-        backup: 'Backups',
-        balancer: 'Load Balancers',
-        audit: 'Audit Logs'
-      },
-      actions: {
-        addConfig: 'Add Config',
-        createBalancer: 'Create Balancer',
-        restore: 'Restore',
-        healthCheck: 'Health Check'
-      },
-      config: {
-        searchPlaceholder: 'Search config keys...',
-        table: {
-          key: 'Key',
-          value: 'Value',
-          description: 'Description',
-          updatedAt: 'Updated At',
-          actions: 'Actions'
-        },
-        empty: 'No config data'
-      },
-      subscription: {
-        eyebrow: 'Subscriptions',
-        title: 'Subscription Domains',
-        description: 'Publish one or more domains that should be used for user subscription links and managed-config output.',
-        pathLabel: 'Subscription path',
-        currentDomainLabel: 'Current request host',
-        domainListLabel: 'Alternate domains',
-        domainListPlaceholder: 'sub1.example.com\nsub2.example.com',
-        domainListHelp: 'Enter one domain per line. Commas and semicolons are also accepted.',
-        previewLabel: 'Preview links',
-        previewEmpty: 'No alternate domains configured. The current request host will be used.',
-        actions: {
-          refresh: 'Refresh',
-          save: 'Save domains',
-          saving: 'Saving...'
-        },
-        messages: {
-          loadFailed: 'Failed to load subscription domain settings',
-          saveFailed: 'Failed to save subscription domains',
-          saveSuccess: 'Subscription domains saved'
-        }
-      },
-      backup: {
-        title: 'Automatic Backup',
-        enabled: 'Enable automatic backup',
-        intervalHours: 'Backup Interval (hours)',
-        keepCount: 'Retention Count',
-        backupDatabase: 'Include database',
-        backupFiles: 'Include files',
-        storageType: 'Storage Type',
-        storagePath: 'Local Storage Path',
-        storagePathPlaceholder: 'For example: backups',
-        s3Bucket: 'S3 Bucket',
-        s3BucketPlaceholder: 'For example: panel-backups',
-        s3Region: 'S3 Region',
-        s3RegionPlaceholder: 'For example: us-east-1',
-        s3Endpoint: 'S3 Endpoint (optional)',
-        s3EndpointPlaceholder: 'For example: https://s3.amazonaws.com',
-        s3AccessKey: 'S3 Access Key',
-        s3AccessKeyPlaceholder: 'Leave blank to keep current key',
-        s3SecretKey: 'S3 Secret Key',
-        s3SecretKeyPlaceholder: 'Leave blank to keep current secret',
-        storageTypes: {
-          local: 'Local',
-          s3: 'S3 Compatible'
-        },
-        sensitiveHintWithValue: 'Sensitive value is hidden. Leave blank to keep current value, or enter a new value to rotate it.',
-        sensitiveHintWithoutValue: 'This sensitive field is not set yet. Enter a value to save it.',
-        saveConfig: 'Save Config',
-        backupNow: 'Backup Now',
-        stats: {
-          totalCount: 'Total backups:',
-          totalSize: 'Total size:',
-          lastBackup: 'Last backup:'
-        },
-        listTitle: 'Backup List',
-        table: {
-          id: 'ID',
-          filename: 'Filename',
-          size: 'Size',
-          status: 'Status',
-          createdAt: 'Created At',
-          actions: 'Actions'
-        },
-        empty: 'No backup data'
-      },
-      balancer: {
-        table: {
-          id: 'ID',
-          name: 'Name',
-          group: 'Node Group',
-          strategy: 'Strategy',
-          healthCheck: 'Health Check',
-          enabled: 'Status',
-          actions: 'Actions'
-        },
-        empty: 'No load balancers'
-      },
-      audit: {
-        title: 'Operation Audit Logs',
-        actions: {
-          filter: 'Filter',
-          refresh: 'Refresh'
-        },
-        filters: {
-          actionPlaceholder: 'Filter by action',
-          targetTypePlaceholder: 'Filter by target type'
-        },
-        table: {
-          id: 'ID',
-          action: 'Action',
-          module: 'Module',
-          targetType: 'Target Type',
-          username: 'Username',
-          content: 'Content',
-          ip: 'IP',
-          status: 'Status',
-          createdAt: 'Created At'
-        },
-        pagination: {
-          total: 'Total: {total}',
-          pageSize: 'Page size',
-          page: 'Page {page} / {totalPages}',
-          prev: 'Previous',
-          next: 'Next'
-        },
-        empty: 'No audit logs'
-      },
-      configModal: {
-        titleEdit: 'Edit Config',
-        titleCreate: 'Create Config',
-        key: 'Key',
-        value: 'Value',
-        description: 'Description',
-        keyPlaceholder: 'For example: site.name',
-        valuePlaceholder: 'Config value, JSON is supported',
-        descriptionPlaceholder: 'Config description',
-        sensitiveHintWithValue: 'Sensitive value is hidden. Leave blank to keep the current value, or enter a new value to replace it.',
-        sensitiveHintWithoutValue: 'This is a sensitive key. Enter a value to set it.'
-      },
-      balancerModal: {
-        titleEdit: 'Edit Load Balancer',
-        titleCreate: 'Create Load Balancer',
-        name: 'Name',
-        namePlaceholder: 'Load balancer name',
-        groupId: 'Node Group ID',
-        strategy: 'Strategy',
-        healthCheck: 'Enable health check',
-        checkInterval: 'Check Interval (seconds)',
-        weightsJson: 'Node Weights (JSON)',
-        weightsPlaceholder: '{\'{"1": 10, "2": 5}\'}'
-      },
-      strategy: {
-        roundRobin: 'Round Robin',
-        leastLoad: 'Least Load',
-        latency: 'Lowest Latency',
-        weight: 'Weighted',
-        random: 'Random'
-      },
-      status: {
-        pending: 'Pending',
-        completed: 'Completed',
-        failed: 'Failed'
-      },
-      booleans: {
-        enabled: 'Enabled',
-        disabled: 'Disabled'
-      },
-      confirm: {
-        deleteConfigTitle: 'Delete config {key}?',
-        deleteConfigMessage: 'Features that read this config fall back to their defaults. This can’t be undone.',
-        deleteConfigAction: 'Delete config',
-        deleteBackupTitle: 'Delete backup {filename}?',
-        deleteBackupMessage: 'The backup file is deleted for good and can no longer be restored. This can’t be undone.',
-        deleteBackupAction: 'Delete backup',
-        restoreBackupTitle: 'Restore from backup {filename}?',
-        restoreBackupMessage: 'The backup overwrites the current data; every change made after it is lost. This can’t be undone.',
-        restoreBackupAction: 'Restore backup',
-        deleteBalancerTitle: 'Delete load balancer {name}?',
-        deleteBalancerMessage: 'The node group is no longer balanced or health-checked. This can’t be undone.',
-        deleteBalancerAction: 'Delete load balancer'
-      },
-      messages: {
-        fetchConfigsFailed: 'Failed to load configs',
-        saveConfigFailed: 'Save failed: {message}',
-        configSaved: 'Config {key} saved',
-        configDeleted: 'Config {key} deleted',
-        deleteConfigFailed: 'Delete failed',
-        fetchBackupConfigFailed: 'Failed to load backup config',
-        backupConfigSaved: 'Saved successfully',
-        backupConfigSaveFailed: 'Save failed',
-        backupStarted: 'Backup started',
-        backupStartFailed: 'Failed to create backup',
-        fetchBackupsFailed: 'Failed to load backup list',
-        fetchBackupStatsFailed: 'Failed to load backup stats',
-        backupDeleted: 'Backup {filename} deleted',
-        deleteBackupFailed: 'Delete failed',
-        restoreBackupSuccess: 'Restore completed',
-        restoreBackupFailed: 'Restore failed: {message}',
-        fetchBalancersFailed: 'Failed to load load balancers',
-        weightsJsonInvalid: 'Weights JSON is invalid',
-        saveBalancerFailed: 'Save failed: {message}',
-        balancerSaved: 'Load balancer {name} saved',
-        balancerDeleted: 'Load balancer {name} deleted',
-        deleteBalancerFailed: 'Delete failed',
-        healthCheckCompleted: 'Health check completed',
-        healthCheckFailed: 'Health check failed',
-        fetchAuditLogsFailed: 'Failed to load audit logs'
       }
     },
     nodeXTopology: {
@@ -1648,276 +1423,7 @@ export default {
     }
   },
   admin: {
-    subscriptions: {
-      title: 'Subscription Management',
-      subtitle: 'Manage subscription groups, templates, and linked production node protocols.',
-      groups: 'Groups',
-      createGroup: 'Create Group',
-      editGroup: 'Edit Group',
-      groupName: 'Group Name',
-      groupNamePlaceholder: 'Enter group name',
-      description: 'Description',
-      priority: 'Priority',
-      enabled: 'Enabled',
-      disabled: 'Disabled',
-      noDescription: 'No description',
-      templates: 'Templates',
-      templatesFor: 'Templates For',
-      createTemplate: 'Create Template',
-      editTemplate: 'Edit Template',
-      copySubscription: 'Copy Subscription Links',
-      copyCombinedSubscription: 'Copy Combined Subscription',
-      preview: 'Preview',
-      previewTitle: 'Subscription Preview',
-      format: 'Format',
-      copyContent: 'Copy Content',
-      download: 'Download',
-      subscriptionLinks: 'Subscription Links',
-      nodeName: 'Node Name',
-      nodeNamePlaceholder: 'US Node',
-      protocol: 'Protocol',
-      server: 'Server',
-      port: 'Port',
-      tls: 'TLS',
-      tlsNone: 'None',
-      tlsReality: 'Reality',
-      tlsEnabled: 'TLS',
-      status: 'Status',
-      actions: 'Actions',
-      productionNodes: 'Production Node Protocols',
-      manageRelations: 'Manage Links',
-      linkedProtocolsInfo: 'Protocols already linked to this group',
-      visibilityShown: 'Shown',
-      visibilityHidden: 'Hidden',
-      protocolOnline: 'Online',
-      protocolOffline: 'Offline',
-      goToNode: 'Go to node management',
-      productionNodesEmpty: 'No production node protocols are linked to this group yet.',
-      manageProtocolsTitle: 'Manage Production Node Protocol Links',
-      manageProtocolsDescription: 'Select which node protocols should be included in the "{group}" group. Only protocols marked as visible in Node Management appear here.',
-      unknownNode: 'Unknown Node',
-      confirmSave: 'Confirm Save',
-      transport: 'Transport',
-      sni: 'SNI (Server Name)',
-      realityPublicKey: 'Reality Public Key',
-      realityShortId: 'Reality Short ID',
-      tlsFingerprint: 'TLS Fingerprint',
-      defaultOption: 'Default',
-      websocketPath: 'WebSocket Path',
-      flow: 'Flow',
-      noneOption: 'None',
-      productionTable: {
-        node: 'Node',
-        protocol: 'Protocol',
-        name: 'Name',
-        port: 'Port',
-        visibility: 'Visibility',
-        status: 'Status',
-        actions: 'Actions'
-      },
-      protocolPool: {
-        node: 'Node',
-        protocolName: 'Protocol / Name',
-        port: 'Port',
-        linkedGroups: 'Linked Groups',
-        selectAll: 'Select all protocols',
-        select: 'Select protocol {name}'
-      },
-      formats: {
-        auto: 'Auto (By User-Agent)',
-        v2ray: 'V2Ray (Base64)',
-        clash: 'Clash (YAML)',
-        stash: 'Stash (YAML)',
-        egern: 'Egern (YAML)',
-        surge: 'Surge',
-        loon: 'Loon',
-        shadowrocket: 'ShadowRocket',
-        quantumultx: 'QuantumultX',
-        json: 'JSON',
-        base64json: 'Base64 JSON'
-      },
-      loadError: 'Failed to load subscription data',
-      availableProtocolsLoadError: 'Failed to load available protocols',
-      groupProtocolsUpdated: 'Group protocol links updated',
-      groupProtocolsUpdateFailed: 'Failed to update protocol links',
-      copied: 'Copied',
-      copyError: 'Copy failed',
-      copyFallbackNotice: 'Copied merged subscription content using the template-only fallback.',
-      previewError: 'Failed to load preview content',
-      confirm: {
-        deleteGroupTitle: 'Delete subscription group {name}?',
-        deleteGroupMessage: 'Its templates and protocol links are deleted with it, and users of the group no longer receive these nodes. This can’t be undone.',
-        deleteGroupAction: 'Delete group',
-        deleteTemplateTitle: 'Delete subscription template {name}?',
-        deleteTemplateMessage: 'The node disappears from the group’s subscription. This can’t be undone.',
-        deleteTemplateAction: 'Delete template'
-      },
-      groupDeleted: 'Subscription group deleted',
-      deleteError: 'Delete failed',
-      groupSaved: 'Subscription group saved',
-      saveError: 'Save failed',
-      templateDeleted: 'Subscription template deleted',
-      updateError: 'Update failed',
-      templateSaved: 'Subscription template saved',
-      stats: {
-        totalGroups: 'Total Groups',
-        totalUsers: 'Total Users',
-        totalTemplates: 'Total Templates',
-        totalTraffic: 'Total Traffic Used',
-        groupUsage: 'Group Usage',
-        groupName: 'Group',
-        users: 'Users',
-        enabledUsers: 'Active',
-        templates: 'Templates',
-        protocols: 'Protocols',
-        onlineNodes: 'Online Nodes',
-        trafficUsed: 'Traffic Used',
-        plans: 'Plans',
-        view: 'View',
-        empty: 'No subscription groups yet.'
-      }
-    },
     nodes: adminNodes
-  },
-  adminNotifications: {
-    title: 'Notifications',
-    subtitle: 'Manage notification templates, SMTP delivery, and send logs.',
-    tabs: {
-      templates: 'Templates',
-      email: 'Email',
-      logs: 'Logs'
-    },
-    actions: {
-      createTemplate: 'Create template',
-      edit: 'Edit',
-      delete: 'Delete',
-      search: 'Search',
-      sendTest: 'Send test email'
-    },
-    templates: {
-      table: {
-        id: 'ID',
-        name: 'Name',
-        type: 'Type',
-        event: 'Trigger Event',
-        status: 'Status',
-        actions: 'Actions'
-      },
-      empty: 'No notification templates'
-    },
-    email: {
-      title: 'SMTP Configuration',
-      fields: {
-        host: 'SMTP Host',
-        port: 'Port',
-        username: 'Username',
-        password: 'Password',
-        fromName: 'From Name',
-        fromAddress: 'From Address',
-        encryption: 'Enable TLS encryption'
-      },
-      placeholders: {
-        host: 'smtp.example.com',
-        port: '465',
-        username: "your{'@'}email.com",
-        password: 'Enter SMTP password',
-        passwordStored: 'Password stored; leave blank to keep it',
-        fromName: CONTROL_NAME,
-        fromAddress: "noreply{'@'}example.com"
-      }
-    },
-    logs: {
-      filters: {
-        allTypes: 'All types',
-        allStatuses: 'All statuses'
-      },
-      table: {
-        id: 'ID',
-        type: 'Type',
-        recipient: 'Recipient',
-        title: 'Title',
-        status: 'Status',
-        sentAt: 'Sent At'
-      },
-      empty: 'No notification logs'
-    },
-    modal: {
-      createTitle: 'Create Template',
-      editTitle: 'Edit Template',
-      fields: {
-        name: 'Name',
-        type: 'Type',
-        event: 'Trigger Event',
-        title: 'Title Template',
-        content: 'Content Template',
-        enabled: 'Enabled'
-      },
-      placeholders: {
-        name: 'Template name',
-        title: "Supports variables: {'{'}username{'}'}, {'{'}site_name{'}'}",
-        content: "Supports variables: {'{'}username{'}'}, {'{'}email{'}'}, {'{'}expire_time{'}'}"
-      }
-    },
-    testModal: {
-      title: 'Send Test Email',
-      fields: {
-        recipient: 'Recipient Email'
-      },
-      placeholders: {
-        recipient: "test{'@'}example.com"
-      },
-      actions: {
-        send: 'Send'
-      }
-    },
-    types: {
-      email: 'Email',
-      telegram: 'Telegram',
-      webhook: 'Webhook'
-    },
-    events: {
-      userRegister: 'User Register',
-      userLogin: 'User Login',
-      userExpire: 'User Expire',
-      userTrafficLow: 'Low Traffic',
-      orderPaid: 'Order Paid',
-      ticketReply: 'Ticket Reply',
-      nodeOffline: 'Node Offline',
-      nodeOnline: 'Node Online'
-    },
-    status: {
-      enabled: 'Enabled',
-      disabled: 'Disabled',
-      pending: 'Pending',
-      success: 'Success',
-      failed: 'Failed'
-    },
-    testPayload: {
-      subject: 'Test Email',
-      content: 'This is a test email. If you received it, the email configuration is working correctly.'
-    },
-    confirm: {
-      deleteTitle: 'Delete template {name}?',
-      deleteMessage: 'Notifications that use this template stop being sent. This can’t be undone.',
-      deleteAction: 'Delete template'
-    },
-    messages: {
-      fetchTemplatesFailed: 'Failed to load notification templates',
-      fetchLogsFailed: 'Failed to load notification logs',
-      fetchEmailConfigFailed: 'Failed to load email configuration',
-      templateSaveSuccess: 'Template saved successfully',
-      templateSaveFailed: 'Failed to save template: {message}',
-      templateSaveFailedShort: 'Save failed',
-      deleteSuccess: 'Template {name} deleted',
-      deleteFailedShort: 'Delete failed',
-      emailSaveSuccess: 'Email configuration saved',
-      emailSaveFailed: 'Failed to save email configuration: {message}',
-      emailSaveFailedShort: 'Save failed',
-      testRecipientRequired: 'Please enter a recipient email address',
-      testSendSuccess: 'Test email sent successfully',
-      testSendFailed: 'Failed to send test email: {message}',
-      testSendFailedShort: 'Send failed'
-    }
   },
   adminPayment: {
     title: 'Payments',
@@ -2037,10 +1543,7 @@ export default {
     }
   },
   adminMfa: {
-    title: 'Multi-Factor Authentication Management',
-    subtitle: 'Configure the global MFA policy.',
     config: {
-      title: 'Global Configuration',
       enabled: 'Enable multi-factor authentication',
       enabledHelp: 'Once enabled, users can choose to turn on MFA to protect account security.',
       required: 'Require MFA',
@@ -2059,15 +1562,10 @@ export default {
       email: 'Email verification code'
     },
     info: {
-      title: '💡 Usage Guide',
-      totpTitle: 'TOTP Authentication',
       totpBody: 'Time-based one-time passwords. Users can scan a QR code with apps such as Google Authenticator or Authy to bind MFA.',
-      backupTitle: 'Recovery Codes',
       backupBody: 'When users cannot access their authenticator, they can use recovery codes to log in. Each recovery code can only be used once.',
-      lockoutTitle: 'Account Lockout',
       lockoutBody: 'Multiple consecutive MFA failures will trigger an account lockout to prevent brute-force attacks.',
-      userOpsTitle: 'User Operations',
-      userOpsBody: 'Users can manage MFA on the Security Settings page, including enabling, disabling, and regenerating recovery codes.'
+      userOpsBody: 'Users turn two-factor authentication on or off and make new recovery codes on their own Account page.'
     },
     messages: {
       fetchFailed: 'Failed to load MFA configuration',

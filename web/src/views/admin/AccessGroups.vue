@@ -1,11 +1,11 @@
 <template>
   <div class="list-page">
-    <UiPageHeader :title="t('pageTitles.admin.accessGroups')" :description="t('accessGroups.subtitle')">
+    <component :is="embedded ? UiSection : UiPageHeader" :title="t('pageTitles.admin.accessGroups')" :description="t('accessGroups.subtitle')">
       <template #actions>
         <UiButton :icon="RotateCw" :loading="loading" data-test="access-refresh" @click="refresh()">{{ t('accessGroups.actions.refresh') }}</UiButton>
         <UiButton variant="primary" :icon="Plus" :disabled="scopes.length === 0" data-test="access-new-group" @click="openGroupEditor()">{{ t('accessGroups.actions.newGroup') }}</UiButton>
       </template>
-    </UiPageHeader>
+    </component>
 
     <UiDataTable
       :columns="columns"
@@ -232,6 +232,7 @@ import UiGroupedList from '@/ui/UiGroupedList.vue'
 import UiGroupedListRow from '@/ui/UiGroupedListRow.vue'
 import UiIconButton from '@/ui/UiIconButton.vue'
 import UiPageHeader from '@/ui/UiPageHeader.vue'
+import UiSection from '@/ui/UiSection.vue'
 import UiSelect from '@/ui/UiSelect.vue'
 import UiSheet from '@/ui/UiSheet.vue'
 import UiSkeleton from '@/ui/UiSkeleton.vue'
@@ -258,6 +259,12 @@ import {
   updateKernelAccessGroup,
   upsertKernelQuotaPolicy,
 } from '@/api/kernel'
+
+// embedded: a section of 安全 (Security.vue), so its heading is an H2
+// under the page's H1 instead of the page header.
+defineProps({
+  embedded: { type: Boolean, default: false }
+})
 
 const { t } = useAppI18n()
 const toast = useToast()

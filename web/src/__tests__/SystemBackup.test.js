@@ -1,6 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
-import System from '@/views/admin/System.vue'
+import SettingsBackup from '@/views/admin/system/SettingsBackup.vue'
+import SettingsBalancer from '@/views/admin/system/SettingsBalancer.vue'
+import SettingsGeneral from '@/views/admin/system/SettingsGeneral.vue'
 import { answerConfirms, toastMessages } from './helpers/feedback'
 
 const adminApi = vi.hoisted(() => ({
@@ -28,8 +30,8 @@ const adminApi = vi.hoisted(() => ({
 
 vi.mock('@/api/admin', () => adminApi)
 
-function mountSystem() {
-  return mount(System, {
+function mountSection(component = SettingsBackup) {
+  return mount(component, {
     global: {
       stubs: {
         'router-link': true
@@ -41,7 +43,7 @@ function mountSystem() {
   })
 }
 
-describe('System backup configuration', () => {
+describe('System settings: backups, subscription domains and load balancers', () => {
   beforeEach(() => {
     vi.resetAllMocks()
     adminApi.getSystemConfig.mockResolvedValue({ data: { value: '' } })
@@ -55,6 +57,7 @@ describe('System backup configuration', () => {
         interval: 12,
         keep_count: 6,
         storage_type: 's3',
+        s3_bucket: 'panel-backups',
         s3_access_key_sensitive: true,
         s3_access_key_has_value: true,
         s3_secret_key_sensitive: true,
@@ -78,7 +81,7 @@ describe('System backup configuration', () => {
   })
 
   it('sends preserve_existing_sensitive when sensitive S3 keys are left blank', async () => {
-    const wrapper = mountSystem()
+    const wrapper = mountSection(SettingsBackup)
     await flushPromises()
     adminApi.updateBackupConfig.mockClear()
 
@@ -113,7 +116,7 @@ describe('System backup configuration', () => {
   })
 
   it('loads backup config from legacy and panel envelope payloads', async () => {
-    const wrapper = mountSystem()
+    const wrapper = mountSection(SettingsBackup)
     await flushPromises()
 
     expect(wrapper.vm.backupConfig.interval).toBe(12)
@@ -174,7 +177,7 @@ describe('System backup configuration', () => {
         ts: 1783526400000
       })
 
-    const wrapper = mountSystem()
+    const wrapper = mountSection(SettingsBackup)
     await flushPromises()
 
     expect(wrapper.vm.backups).toHaveLength(1)
@@ -211,7 +214,7 @@ describe('System backup configuration', () => {
         ts: 1783526400000
       })
 
-    const wrapper = mountSystem()
+    const wrapper = mountSection(SettingsGeneral)
     await flushPromises()
 
     expect(wrapper.vm.subscriptionPath).toBe('/sub')
@@ -246,22 +249,22 @@ describe('System backup configuration', () => {
         ts: 1783526400000
       })
 
-    const wrapper = mountSystem()
+    const wrapper = mountSection(SettingsBackup)
     await flushPromises()
 
     let statValues = wrapper.findAll('.backup-stats .stat-value').map(node => node.text())
-    expect(statValues).toEqual(['2', '2.00 KB', '-'])
+    expect(statValues).toEqual(['2', '2.00 KB', '—'])
 
     await wrapper.vm.fetchBackupStats()
     await flushPromises()
 
     statValues = wrapper.findAll('.backup-stats .stat-value').map(node => node.text())
-    expect(statValues).toEqual(['3', '4.00 KB', '-'])
+    expect(statValues).toEqual(['3', '4.00 KB', '—'])
 
     wrapper.unmount()
   })
 
-  it('logs backup panel envelope read failures instead of accepting empty payloads', async () => {
+  it('shows backup load failures as error states instead of empty lists', async () => {
     const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
     adminApi.getBackupConfig.mockResolvedValueOnce({
       code: -1,
@@ -282,24 +285,23 @@ describe('System backup configuration', () => {
       ts: 1783526400000
     })
 
-    const wrapper = mountSystem()
+    const wrapper = mountSection(SettingsBackup)
     await flushPromises()
 
-    const loggedErrors = consoleError.mock.calls.map(call => call[1]).filter(err => err instanceof Error)
-    expect(loggedErrors.map(err => err.message)).toEqual(expect.arrayContaining([
-      'backup config rejected',
-      'backup list rejected',
-      'backup stats rejected'
-    ]))
+    expect(wrapper.vm.backupConfigError).toBe('backup config rejected')
+    expect(wrapper.vm.backupsError).toBe('backup list rejected')
+    expect(wrapper.text()).toContain('backup config rejected')
+    expect(wrapper.text()).toContain('backup list rejected')
     expect(wrapper.vm.backups).toEqual([])
     expect(wrapper.vm.backupStats).toEqual({})
+    expect(consoleError.mock.calls.map(call => call[1]?.message)).toContain('backup stats rejected')
 
     consoleError.mockRestore()
     wrapper.unmount()
   })
 
   it('does not report backup config save success when enveloped response fails', async () => {
-    const wrapper = mountSystem()
+    const wrapper = mountSection(SettingsBackup)
     await flushPromises()
     adminApi.updateBackupConfig.mockResolvedValueOnce({
       code: -1,
@@ -318,7 +320,7 @@ describe('System backup configuration', () => {
   })
 
   it('does not refresh backups when enveloped create response fails', async () => {
-    const wrapper = mountSystem()
+    const wrapper = mountSection(SettingsBackup)
     await flushPromises()
     adminApi.getBackups.mockClear()
     adminApi.getBackupStats.mockClear()
@@ -341,7 +343,7 @@ describe('System backup configuration', () => {
   })
 
   it('does not refresh backups when enveloped delete response fails', async () => {
-    const wrapper = mountSystem()
+    const wrapper = mountSection(SettingsBackup)
     await flushPromises()
     adminApi.getBackups.mockClear()
     adminApi.getBackupStats.mockClear()
@@ -366,7 +368,7 @@ describe('System backup configuration', () => {
   })
 
   it('does not report restore success when enveloped response fails', async () => {
-    const wrapper = mountSystem()
+    const wrapper = mountSection(SettingsBackup)
     await flushPromises()
     adminApi.restoreBackup.mockResolvedValueOnce({
       code: -1,
@@ -379,7 +381,7 @@ describe('System backup configuration', () => {
     await wrapper.vm.restoreBackupRequest({ id: 1, filename: 'rejected.zip' })
     await flushPromises()
 
-    expect(confirms.last()).toMatchObject({ tone: 'danger', title: 'Restore from backup rejected.zip?', confirmLabel: 'Restore backup' })
+    expect(confirms.last()).toMatchObject({ tone: 'danger', title: 'Restore from rejected.zip?', confirmLabel: 'Restore backup' })
     expect(confirms.errors.map(error => error.message)).toEqual([expect.stringContaining('backup restore rejected')])
     expect(toastMessages('success')).toEqual([])
 
@@ -423,7 +425,7 @@ describe('System backup configuration', () => {
         ts: 1783526400000
       })
 
-    const wrapper = mountSystem()
+    const wrapper = mountSection(SettingsBalancer)
     await flushPromises()
 
     expect(wrapper.vm.balancers).toHaveLength(1)
@@ -442,8 +444,7 @@ describe('System backup configuration', () => {
     wrapper.unmount()
   })
 
-  it('logs load balancer panel envelope list failures instead of accepting empty lists', async () => {
-    const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {})
+  it('shows a load balancer list failure as the table error state', async () => {
     adminApi.getLoadBalancers.mockResolvedValueOnce({
       code: -1,
       msg: 'balancer list rejected',
@@ -451,20 +452,18 @@ describe('System backup configuration', () => {
       ts: 1783526400000
     })
 
-    const wrapper = mountSystem()
+    const wrapper = mountSection(SettingsBalancer)
     await flushPromises()
 
     expect(wrapper.vm.balancers).toEqual([])
-    expect(consoleError).toHaveBeenCalled()
-    expect(consoleError.mock.calls[0][1]).toBeInstanceOf(Error)
-    expect(consoleError.mock.calls[0][1].message).toBe('balancer list rejected')
+    expect(wrapper.vm.balancersError).toBe('balancer list rejected')
+    expect(wrapper.text()).toContain('balancer list rejected')
 
-    consoleError.mockRestore()
     wrapper.unmount()
   })
 
   it('keeps load balancer modal open when enveloped save fails', async () => {
-    const wrapper = mountSystem()
+    const wrapper = mountSection(SettingsBalancer)
     await flushPromises()
     adminApi.getLoadBalancers.mockClear()
     adminApi.createLoadBalancer.mockResolvedValueOnce({
@@ -496,7 +495,7 @@ describe('System backup configuration', () => {
   })
 
   it('does not report health-check success when enveloped response fails', async () => {
-    const wrapper = mountSystem()
+    const wrapper = mountSection(SettingsBalancer)
     await flushPromises()
     adminApi.getLoadBalancers.mockClear()
     adminApi.runHealthCheck.mockResolvedValueOnce({

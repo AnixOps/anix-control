@@ -6,7 +6,7 @@
       class="ui-row__inner"
     >
       <span v-if="$slots.leading" class="ui-row__leading"><slot name="leading" /></span>
-      <span class="ui-row__main">
+      <span v-if="hasMain" class="ui-row__main">
         <component :is="labelFor ? 'label' : 'span'" :for="labelFor || undefined" class="ui-row__label">
           <slot name="label">{{ label }}</slot>
         </component>
@@ -33,7 +33,7 @@
 // - href or @click: the whole row is a link / button with a chevron
 //   (navigation to a detail page or sheet); do not put controls inside it;
 // - stacked: the control goes under the label (wide inputs on phones).
-import { computed, useAttrs } from 'vue'
+import { computed, useAttrs, useSlots } from 'vue'
 import { ChevronRight } from '@lucide/vue'
 import UiIcon from './UiIcon.vue'
 
@@ -51,8 +51,11 @@ const props = defineProps({
 // `click` is deliberately not a declared emit: a parent @click arrives in
 // attrs, which is how the row knows to render as a button.
 const attrs = useAttrs()
+const slots = useSlots()
 
 const isAction = computed(() => Boolean(props.href) || Boolean(attrs.onClick))
+// A stacked row may hold only a control (a field with its own label).
+const hasMain = computed(() => Boolean(props.label || props.description || slots.label || slots.description))
 const actionTag = computed(() => (props.href ? 'a' : isAction.value ? 'button' : 'div'))
 const actionAttrs = computed(() => {
   if (props.href) return { ...attrs, href: props.href }
@@ -170,6 +173,10 @@ const actionAttrs = computed(() => {
 @media (max-width: 639px) {
   .ui-row__control:has(.ui-field) {
     flex-basis: auto;
+  }
+
+  .is-stacked .ui-row__control:has(.ui-field) {
+    flex-basis: 100%;
   }
 }
 </style>
