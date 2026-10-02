@@ -93,9 +93,26 @@ duplicate it here); the docs landing page is `docs/README.md`.
     - "Go Quality Gates" runs the static gates: protobuf and `go mod tidy`
       drift, the route, worker and package-boundary gates, the script unit
       tests, gofmt and `go vet`. It does not run the tests.
-    - "Backend Tests" is the single full Go test run. It takes coverage of
-      `./internal/...` (without `internal/tests/integration` and `e2e`),
-      then runs every other root-module package, then `sdk` and `identity`.
+    - "Backend Tests (1/3)" to "(3/3)" are the single full Go test run.
+      `config/scripts/plan_test_shards.py` splits the packages by measured
+      time, and each shard runs its packages four at a time (`-p=4`), except
+      the timing-sensitive `SERIAL_PACKAGES` (`internal/kernelnodeops`),
+      which run alone afterwards. Each
+      shard takes coverage of its share of `./internal/...` (without
+      `internal/tests/integration` and `e2e`) and runs its share of the
+      other root-module packages. Shard 1 also runs `sdk`, `identity` and
+      the Swagger gate.
+    - The required "Backend Tests" job aggregates the shards. It fails unless
+      every shard passed and every package ran exactly once. It then merges
+      the coverage profiles (`plan_test_shards.py --merge-coverage`) and
+      writes the coverage report.
+    - "Package Storage PostgreSQL (1/4)" to "(4/4)" split the PostgreSQL
+      package tests by measured time, each shard with its own PostgreSQL.
+      Inside a shard they run one at a time (`-p 1`): package schemas and
+      roles are named after package ids, so two test binaries on one
+      database would collide.
+    - When a test package gets much slower or faster, update its seconds in
+      `WEIGHTS` in `plan_test_shards.py` (`--summary` prints the split).
     - "Build Smoke Images" builds the Control image and the identity-platform
       module image once, with a buildx `type=gha` layer cache per image.
       "Docker Build Smoke" and "Kubernetes Smoke" load its archives and

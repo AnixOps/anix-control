@@ -263,6 +263,12 @@ check_release_workflow() {
     require_release_job_dependency "${dependency}" || failed=1
   done
   require_live_control_webui_gate || failed=1
+  # "Backend Tests" aggregates its shards: it must run when a shard fails and
+  # fail unless every shard passed.
+  require_job_dependency backend-test backend-test-shard || failed=1
+  require_job_text backend-test '!cancelled()' "Backend Tests runs when a shard fails" || failed=1
+  require_job_text backend-test 'test "${SHARDS_RESULT}" = success' "Backend Tests requires every shard to pass" || failed=1
+  require_job_text backend-test "--merge-coverage coverage.out" "Backend Tests merges the shard coverage profiles" || failed=1
 
   # Official packages: all of them, signed with the protected root.
   require_job_text plugin-package-publish "packages/shared/build_package.py" "official package builder" || failed=1
@@ -369,6 +375,9 @@ run_self_test() {
     "s/anix-control-linux-amd64.tar.gz/anix-control-linux.tar.gz/g" \
     "s/go-security, backend-test/backend-test/" \
     "s/--verify-release-archive/--skip-release-archive/" \
+    's/test "\${SHARDS_RESULT}" = success/true/' \
+    's/needs: \[changes, backend-test-shard\]/needs: [changes]/' \
+    's/!cancelled() && needs.changes.outputs.code/needs.changes.outputs.code/' \
     "s#tar -czvf release/anix-control-frontend.tar.gz -C web/public .#&\n          zip -r release/anix-control-frontend.zip web/public#"; do
     sed "${mutation}" "${original}" > "${tmpdir}/ci.yml"
     if cmp -s "${original}" "${tmpdir}/ci.yml"; then
