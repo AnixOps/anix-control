@@ -38,6 +38,13 @@ export default {
     qr: {
       failed: 'QR code unavailable'
     },
+    chart: {
+      loading: 'Loading {label}…',
+      loadFailed: 'Couldn’t load the chart',
+      empty: 'No data yet',
+      showTable: 'View as table',
+      showChart: 'View as chart'
+    },
     table: {
       settings: 'Table settings',
       columns: 'Columns',

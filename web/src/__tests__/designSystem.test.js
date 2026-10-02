@@ -104,7 +104,15 @@ describe('chart theme', () => {
 
   it('derives topology colours from the same tokens', () => {
     expect(buildGraphColors(tokens)).toEqual({
-      relay: 'c1', exit: 'c7', node: 'c5', offline: 'c8', label: 'l1', edge: 'ss', edgeLabel: 'l2'
+      relay: 'c1',
+      exit: 'c7',
+      node: 'c5',
+      offline: 'c8',
+      label: 'l1',
+      edge: 'ss',
+      edgeLabel: 'l2',
+      surface: 'bg',
+      palette: ['c1', 'c2', 'c3', 'c4', 'c5', 'c6', 'c7', 'c8']
     })
   })
 })

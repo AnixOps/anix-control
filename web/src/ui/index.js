@@ -48,6 +48,8 @@ export { default as UiFilterChips } from './UiFilterChips.vue'
 export { default as UiMenu } from './UiMenu.vue'
 export { default as UiErrorState } from './UiErrorState.vue'
 export { default as UiUsageBar } from './UiUsageBar.vue'
+export { default as UiChart } from './UiChart.vue'
+export { default as UiMetricCard } from './UiMetricCard.vue'
 
 export { useToast, TOAST_DURATIONS } from './composables/useToast'
 export { useConfirm } from './composables/useConfirm'
