@@ -242,8 +242,8 @@
         </article>
       </div>
       <section class="traffic-section">
-        <h4>{{ t('adminUsers.trafficModal.dailyTitle') }}</h4>
-        <div class="traffic-table-wrap">
+        <h4 id="user-traffic-dailyTitle">{{ t('adminUsers.trafficModal.dailyTitle') }}</h4>
+        <div class="traffic-table-wrap" tabindex="0" role="region" aria-labelledby="user-traffic-dailyTitle">
           <table class="data-table compact-table">
             <thead>
               <tr><th>{{ t('adminUsers.trafficModal.table.date') }}</th><th>{{ t('adminUsers.trafficModal.table.traffic') }}</th></tr>
@@ -260,8 +260,8 @@
         </div>
       </section>
       <section class="traffic-section">
-        <h4>{{ t('adminUsers.trafficModal.hourlyTitle') }}</h4>
-        <div class="traffic-table-wrap">
+        <h4 id="user-traffic-hourlyTitle">{{ t('adminUsers.trafficModal.hourlyTitle') }}</h4>
+        <div class="traffic-table-wrap" tabindex="0" role="region" aria-labelledby="user-traffic-hourlyTitle">
           <table class="data-table compact-table">
             <thead>
               <tr><th>{{ t('adminUsers.trafficModal.table.hour') }}</th><th>{{ t('adminUsers.trafficModal.table.traffic') }}</th></tr>
@@ -1054,6 +1054,11 @@ const loadSubscriptionGroups = async () => {
 
 .traffic-section h4 {
   margin: 0 0 var(--space-2);
+}
+
+.traffic-table-wrap:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 
 .traffic-table-wrap {
