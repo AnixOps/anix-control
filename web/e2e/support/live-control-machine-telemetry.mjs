@@ -228,6 +228,13 @@ async function loginAsLiveControlAdmin() {
 			return payload
 		}
 		last = { status: response.status, payload }
+		// The public route limiter (per IP) is shared with the browser under
+		// test, so a burst of page requests can briefly answer 429 here.
+		if (response.status === 429) {
+			const retryAfter = Number(response.headers.get('Retry-After')) || 1
+			await new Promise(resolve => setTimeout(resolve, retryAfter * 1000))
+			continue
+		}
 		if (response.status !== 503 || payload?.error?.code !== 'package_unavailable') {
 			throw new Error(`live Control login failed with ${response.status}: ${JSON.stringify(payload)}`)
 		}

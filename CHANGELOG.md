@@ -2,6 +2,61 @@
 
 ## Unreleased
 
+## 4.1.0-rc.5 - 2026-10-02
+
+4.1.0-rc.5 is the fifth 4.1.0 release candidate and completes the UI
+redesign: the page bodies that 4.1.0-rc.4 left as they were now use the
+AnixOps Design templates (sign-in, the user pages, every admin list, the node
+and forward pages, settings, the dashboard, 流量与监控 and 部署编排), the sign-in
+page downloads less than half as much as before (278 → 115 KB gzip), axe finds
+no serious or critical issue on the key screens in either theme, and a visual
+regression baseline guards them. It also makes the nftables forward path
+count traffic correctly and carry IPv6, lets users reset their own
+subscription link, and repairs four garbled API error messages.
+`docs/UPGRADE.md`, "Upgrading From 4.1.0-rc.4 To 4.1.0-rc.5", has the
+checklist.
+
+**For users:** a new sign-in card with six code boxes for two-step
+verification; new 概览, 订阅, 帮助中心, 工单 and 账户 pages; the subscription link
+has a scannable QR code and one-click import for the common clients, and
+users can **reset their own link** (订阅 → 重置链接…, with their password or a
+two-step code; the old `/s/<token>` link stops working, the proxy UUID is
+kept). "备用码" are now "恢复码" (recovery codes).
+
+**For admins:** every list is one table (search, filters and page kept in the
+URL, bulk actions, cards on phones); nodes, NodeX forward nodes and Ansible
+machines get their own pages (`/admin/nodes/:id`,
+`/admin/forward/nodes/:id`, `/admin/forward/ansible-machines/:id`); the
+forward suite's lists use the same table, with 上移 / 下移 next to the drag
+handle. Several pages merged into sectioned pages: 系统设置
+(`/admin/system/:section`), 安全 (`/admin/security/:section`), 通知
+(`/admin/notifications/:channel`) and 流量与监控 (`/admin/monitor/:section`).
+The old paths `/admin/mfa`, `/admin/access-groups`, `/admin/telegram`,
+`/admin/traffic-hourly` and `/admin/forward/observability` redirect, so
+bookmarks keep working. Settings pages ask before leaving with unsaved
+changes, and a node's API key is read only when 凭据 asks for it. Users no
+longer file a ticket to have their link reset.
+
+**For operators:** move the `identity-platform` installation to 4.1.0-rc.5:
+it serves the new reset route (identity group A; installations already cut
+over serve it natively with no further action). On the `nftables_ansible`
+forward path the table becomes `inet v2b_forward` (was `ip v2b_forward`) as
+each forward is next applied, relays need Linux 5.2+ and nft 0.9.1+, IPv6
+forwarding is turned on only where a forward has an IPv6 target, a tunnel's
+listen address is now honoured, and **traffic numbers jump to correct
+values**, so quotas are used up faster than before. The frontend is split
+into new chunks and per-language message files, so a proxy or CDN that caches
+`index.html` must be purged. The four repaired error messages (`缺少 API Key`,
+`API Key 无效`, `节点已被禁用`, `权限不足`) change text; anything that matched the
+garbled strings must match the readable ones. CI got faster without dropping
+a test or renaming a required check.
+
+**What did not change:** the database schema (no migration), configuration
+keys and environment variables, `config/editions.json`, the existing API
+routes and their answers (one route is new; the v2 catalog has 296 routes),
+the Agent contract, the gost / NodeX and clean-agent forward paths, and the
+forward suite's flows and Flux-compatible API.
+
 ### Added
 
 - **Users reset their own subscription link** (owner decision 2026-10-02):
@@ -12,10 +67,7 @@
     request ledger (`identity.user_reset_subscribe:<user>:<digest>`), so a
     retry with the same `Idempotency-Key` applies once. The answer is the
     new token in the v2 panel envelope.
-  - Re-authentication: the current password, or with two-step verification
-    on, a TOTP or recovery code. Three attempts that check a credential per
-    user and hour, then `Retry-After`. Audited as `user` /
-    `reset_subscribe`, without the body.
+  - Re-authenticated, rate-limited and audited (see Security).
   - identity-platform owns it as a group A route (it checks credentials,
     which identity owns once authoritative): native handler, identity
     bridge handler, parity tests on SQLite and PostgreSQL. Catalog: 296
@@ -23,7 +75,10 @@
   - 订阅 page: 「重置链接…」 opens a dialog for the password, or the code
     boxes / a recovery code, then shows the new link and its QR code and
     reloads the page (toast 订阅链接已重置，请在所有设备重新导入). The
-    reset-request ticket is gone.
+    reset-request ticket is gone. A profile request still in flight can no
+    longer put the old link back on the page after a reset
+    (`web/src/stores/user.js`); the user-portal e2e test holds the profile
+    answer until the reset is done, so it covers that race on every run.
   - While identity is authoritative, a group A route the stored route
     modes do not name resolves to native (`service.ResolvePackageRouteModes`,
     for the host's configuration and the group A check), so installations
@@ -32,169 +87,78 @@
 
 ### Changed
 
-- **CI: shorter critical path** (`.github/workflows/ci.yml`,
-  `config/scripts/classify_changes.py`, `config/scripts/plan_test_shards.py`).
-  No test is dropped, and the required check names are unchanged.
-  - The Go tests run in balanced shards. `plan_test_shards.py` splits the
-    packages by measured seconds, and every package lands in exactly one
-    shard.
-    - "Backend Tests (n/3)": three shards, each with packages running four
-      at a time (`-p=4`; repeated runs on four CPUs showed no shared state
-      between packages). `internal/kernelnodeops` has a 300 ms deadline
-      test that fails when other test binaries load the CPU, so it runs
-      alone after the others.
-    - "Backend Tests" stays the required check. It fails unless all shards
-      passed and every package ran once, then merges the coverage profiles
-      (one mode line, an error on any overlap) into the same report as
-      before.
-    - "Package Storage PostgreSQL (n/4)": four shards, each with its own
-      PostgreSQL. They stay `-p 1` inside a shard, since package schemas
-      and roles are named after package ids.
-  - "Go Quality Gates" keeps its static gates but no longer runs the full
-    test suite. "Backend Tests" runs it once: coverage of `./internal/...`
-    as before, then the remaining root-module packages (`cmd`, `packages`,
-    `api`, integration, e2e), `sdk` and `identity`. It vets only the
-    regenerated Swagger package, since Go Quality Gates vets the tree.
-  - The new job "Build Smoke Images" builds the Control and identity-platform
-    module images once, with a buildx GitHub Actions cache per image, and
-    hands them to "Docker Build Smoke" and "Kubernetes Smoke" as image
-    archives (`docker load`, `kind load image-archive`). Before, the
-    Kubernetes smoke rebuilt both images, the Docker smoke waited for Go
-    Quality Gates and Go Security Scans, and the Kubernetes smoke waited for
-    the Docker smoke: a 24-minute serial chain.
-  - "Smoke Tests" and "E2E Tests" no longer wait for Backend Tests and CLI
-    Tests.
-  - The edge publish keeps its gates. It now names Go Quality Gates and Go
-    Security Scans, which it used to inherit through the Docker smoke.
-    The edge builds also read the smoke layer caches, and the release image
-    reads the edge cache.
-  - A pull request that changes `ci.yml` only inside class-gated jobs runs
-    those classes instead of the full lane (AGENTS.md, "Workflow changes").
-    Other `.github/` files no longer force the full lane; `.github/actions/`
-    still does.
+- **Sign-in and user pages redesigned (UI redesign phase U5)**
+  (`web/src/views/Login.vue`, `views/user/*`, `views/Account.vue`;
+  `docs/reference/frontend-design.md` "Sign-in and user pages"). Same
+  endpoints and routes; page state (search, category, article, ticket, new
+  ticket) lives in the query.
+  - 登录: one centred card on a brand-tinted backdrop, the decorative stats
+    gone. Two-factor authentication is a second step with six code boxes
+    (paste, autofill, auto-advance, Backspace) that submits on the sixth
+    digit; 使用恢复码 appears only when the account has recovery codes. An
+    account the administrator requires to use two-factor authentication but
+    that has none gets steps to follow instead of a bare error. No
+    "忘记密码" link (there is no reset endpoint); registration and the invite
+    code follow the public config.
+  - 概览: greeting, a hero card with the remaining traffic in a brand-gradient
+    ring, status, expiry and usage, 复制订阅链接 and 导入到客户端, the first help
+    articles and the latest tickets; plans and orders in the commercial
+    edition.
+  - 订阅: the link with a real, scannable QR code, one-click import for
+    Clash Verge, Shadowrocket, sing-box, Stash, Surge, Quantumult X and Loon
+    (v2rayN copies its link), every other format with copy and preview, and
+    a danger zone that resets the link (see Added).
+  - 帮助中心: search (`/`), category cards, articles at reading width with a
+    table of contents and previous / next instead of a dialog; Markdown-style
+    bodies render as elements, never HTML.
+  - 工单: list and conversation side by side, full width on phones; new
+    tickets in a Sheet. 套餐 / 订单: store-style plan cards with a period
+    switch and checkout, orders with a details Sheet.
+  - 账户: two-factor setup with a QR code and the code boxes; "备用码" are
+    now "恢复码" / recovery codes, with a download. The admin MFA policy
+    page says 恢复码 / recovery codes too.
+  - Every page has a skeleton after 300 ms, an empty state, and an error
+    state with 重试 and 复制错误详情. Page titles follow the navigation
+    (概览, 订阅, 帮助中心, 工单, 套餐, 订单).
+  - New components `UiOtpField` and `UiQrCode` (the `uqr` 0.1.3 encoder, MIT,
+    3.8 KB gzip in its own chunk, loaded on first use). Badges and unselected
+    segmented-control items now reach 4.5:1 on every background they sit on.
+  - Bundle: the login page grows by about 12 KB gzip (form and code fields,
+    new strings), the user pages by 10–18 KB.
 
-- **Performance budget and legacy CSS cleanup (UI redesign phase U9)**
-  (`web/vite.config.js`, `web/src/i18n.js`, `web/src/locales/`,
-  `web/src/utils/request.js`, `web/src/style.css`,
-  `web/scripts/check-bundle-budget.mjs`, `web/bundle-budget.json`;
-  `docs/reference/frontend-design.md` "Bundle" and "Styles"). No API,
-  permission or edition change.
-  - First-visit gzip size (JS and CSS, zh-CN): sign-in 278 → 115 KB, user
-    home 289 → 168 KB, admin dashboard 307 → 237 KB (with its messages);
-    axios (18 KB) now loads with the first request.
-  - Locale messages are split into a core group and an admin group per
-    language. Only the active language loads (en no longer fetches zh-CN
-    as a fallback; `localeParity.test.js` keeps the keys equal); the admin
-    group loads when an administrator is signed in.
-  - The single `api` chunk is gone: API modules go with the routes that use
-    them; Vue's `@vue/*` packages join `vue-vendor`; Reka UI is shared per
-    route instead of one 52 KB `ui-vendor` chunk; the extension runtime
-    loads with the first admin page; vue-i18n drops its legacy API.
-  - `npm run bundle:budget` sums what the first visit to the sign-in page,
-    the user home and the admin dashboard downloads, and checks every lazy
-    chunk, against `web/bundle-budget.json` (sign-in 120 KB, the plan §13
-    budget; admin shell and dashboard 250 KB; route chunks 80 KB). CI runs
-    it after the build, and now runs ESLint and stylelint too.
-  - `style.css` loses the pre-redesign variable aliases (`--primary-color`,
-    `--text-color`, ...), the unused utility and page classes (`.card`,
-    `.tabs`, `.grid-*`, `.page-toolbar`, ...), the phone rule that set every
-    button to 40 / 44 px and the 14 px phone root size. What remains is the
-    element baseline and the classes signed plugin WebUI bundles render
-    (`.btn`, `.data-table`, `.empty-state`, ...). The stylelint rules are
-    errors now and reject the removed variables.
+- **Admin list pages on one template (UI redesign phase U6)**
+  (`web/src/ui/UiDataTable.vue`, `views/admin/*`;
+  `docs/reference/frontend-design.md` "List pages"). Same endpoints,
+  request fields, permission and edition checks.
+  - New `UiDataTable`: column definitions; sorting and pagination on the
+    client or the server (`UiPagination`); hidden columns and row height
+    remembered per table; row selection with a bulk bar that floats up from
+    the bottom; a "…" row menu (`UiMenu`); rows that open with a click or
+    Enter (↑/↓ move); error with 重试 / 复制错误详情, skeleton rows after
+    300 ms, empty and "no results" states; a header that sticks under the
+    top bar; one card per row on phones instead of sideways scrolling. Also
+    `UiSearchField` (`/` focuses it), `UiFilterChips`, `UiErrorState` (the
+    user pages' `LoadError` now wraps it) and `UiUsageBar`.
+  - Migrated: 用户 (status chips with counts, 流量用尽 for the loaded page,
+    usage bars, a detail Sheet, bulk 封禁 / 解封 with 撤销), 工单 (an inbox:
+    queue and ticket side by side, quick replies), 帮助中心内容 (Markdown
+    editor with a live preview that renders elements, never HTML), 插件中心
+    (card grid and details Sheet), NodeX Agents, Ansible 机器 (visuals only),
+    邀请码 (bulk copy and revoke), 访问组 (the group in a Sheet), and in the
+    commercial edition 订单, 优惠券, 套餐, 支付 and 邀请返佣. Page titles
+    follow the navigation (用户, 工单, 插件中心, 支付, 邀请返佣…).
+  - Bulk actions without a bulk endpoint (ban users, revoke invite codes)
+    call the existing per-item endpoint for each selected row.
+  - `web/scripts/data-table-pages.mjs` lists the migrated pages; ESLint
+    (`vue/no-restricted-html-elements`) and
+    `src/__tests__/dataTableGuard.test.js` reject a bare `<table>` in them.
+  - Library buttons, checkboxes, switches and chips no longer grow to 40 px
+    on phones through the legacy global `button` rule; selected rows, the
+    segmented tabs and the operation timeline badges reach 4.5:1.
+  - Bundle: `UiDataTable` and its parts are a shared chunk of about 10 KB
+    gzip; each migrated page changes by −0.6 to +1.4 KB gzip; the locale
+    files grow by about 2 KB each.
 
-- **Dashboard, 流量与监控 and 部署编排 (UI redesign phase U8)**
-  (`web/src/ui/UiChart.vue`, `UiMetricCard.vue`,
-  `web/src/views/admin/Dashboard.vue`, `Monitor.vue`, `Deployments.vue`,
-  `views/admin/{dashboard,monitor,deployments}/`;
-  `docs/reference/frontend-design.md` "Charts" and "Dashboards and
-  monitoring (U8)"). Same endpoints, request bodies, permission and edition
-  checks; no backend change.
-  - `UiChart`: the one ECharts wrapper. Tree-shaken (`echarts/core` with
-    line and bar series, grid, tooltip, legend, canvas), loaded on first
-    use into the `echarts` chunk (about 180 KB gzip, was 374 KB), never in
-    the entry chunk. The AnixOps Design theme comes from the tokens and
-    follows light / dark (pure black) live; it resizes with its box; it has
-    loading (delayed chart skeleton), empty and error (重试) states; the plot
-    is `role="img"` with a summary, and 以表格查看 shows the data as a table
-    that screen readers always read. `UiMetricCard`: label, big number,
-    trend with a word, detail line and an optional token-coloured sparkline.
-    Histoire stories and unit tests for both; `UiSkeleton` gains `chart`.
-  - 仪表盘 on the dashboard template (plan §7.4): 用户 / 在线节点 / 今日流量 /
-    待处理工单 cards (each opens its page), the 24-hour traffic chart, then
-    需要处理 (offline nodes, tickets waiting for a reply, stalled traffic
-    reports; pending orders in the commercial edition) and 最近操作 (the
-    audit log). Each block loads, fails and retries on its own; 刷新 asks
-    the dashboard API for fresh numbers.
-  - 流量与监控 (`/admin/monitor/:section`) merges 实时监控, 小时流量 and
-    转发可观测性: 实时节点 (the monitor WebSocket, now a `UiDataTable`), 用户流量
-    (all users or one), 节点延迟 (the prober's node targets) and 转发
-    (topology graph, ingress comparison, runtime jobs). The section is in
-    the path and the time range (1 小时 / 24 小时 / 7 天 / 30 天) in `?range=`
-    for the sections whose API takes one. `/admin/traffic-hourly` and
-    `/admin/forward/observability` redirect; the menu has one 流量与监控
-    entry and ⌘K lists its sections.
-  - 部署编排: the page is split into page-local panels and
-    `useDeploymentCenter.js`; topologies and node roles on `UiDataTable`;
-    the node-role editor (`AssignmentDrawer`) is a `UiSheet`; the G6
-    topology (`TopologyGraph.vue`, shared with 流量与监控) follows the theme
-    live; the operation timeline shared with 插件中心 is a timeline list
-    with state words instead of a bare table.
-- **CI: the Go race detector runs nightly only** (`.github/workflows/ci.yml`,
-  job "Go Race Detector"). It re-ran the whole suite serially and took about
-  28 minutes on every `go_dev` push and tag, so it is now limited to the
-  nightly schedule and manual runs, has a 40-minute timeout, and is no longer
-  a release dependency (`config/scripts/check_release_workflow.sh` updated).
-
-- **Mobile polish, accessibility to zero, visual regression baseline and
-  page follow-ups (UI redesign phase U9, polish)** (`web/src/ui/`,
-  `web/src/views/`, `web/src/components/`, `web/e2e/`,
-  `web/playwright.visual.config.js`, `.github/workflows/ci.yml` job
-  `frontend-visual`, `.github/workflows/frontend-visual-baselines.yml`;
-  `docs/reference/frontend-design.md` "Accessibility and visual regression
-  tests (U9)"). Same endpoints, request bodies, permission and edition
-  checks; no backend change.
-  - Every admin and user route swept at 390 and 360 px with touch
-    emulation, light and dark: no horizontal scroll; every control is a
-    44 px touch target on coarse pointers (an `::after` hit area where the
-    look stays: buttons, close buttons, switches, segmented tabs and
-    controls, locale options, data-table card titles, back links, suite
-    and mode navs, dashboard and help links); medium fields are 44 px tall
-    there; tab rows that do not fit fade on the clipped edge and keep the
-    active tab in view (subscription group tabs at 390); the forward
-    wizard footer clears the home indicator.
-  - Accessibility: axe finds no serious or critical issue on 23 admin and
-    user screens in both themes at 1440 and 390 px, and the moderate ones
-    found are fixed (the admin sidebar is a labelled complementary
-    landmark; search fields, table pagination and the traffic summary
-    carry their own names; heading levels on the forward node page). Charts
-    and topology graphs turn their animation off under
-    `prefers-reduced-motion`. `web/e2e/a11y.spec.js` (`@axe-core/playwright`,
-    a dev dependency) runs in the Frontend Build job and also checks the
-    skip link, landmarks, one `h1` and focus return after a dialog.
-  - Visual regression: 28 full-page screenshots of 12 key screens with the
-    API mocked, a fixed clock, UTC, English and no animation, compared in
-    the official Playwright image by the new Frontend Visual Regression job;
-    `npm run test:visual` / `test:visual:update` run the same image locally
-    with docker, and the Frontend Visual Baselines workflow regenerates them
-    without docker.
-  - Admin lists keep search, filter chips and page in the URL query (plan
-    §9): users, orders, tickets, plugins, agents, coupons and invite codes,
-    as nodes already did (`useListQuery`).
-  - 部署编排 is the page title in both locale layers; its tab bar is a
-    segmented `UiTabs`; the topology workspace's pickers are `UiSelect`; the
-    node config and deploy previews use `UiCodeBlock` (new `copyLabel`,
-    `copyDisabled`); the NodeX and local runtime pages use the settings
-    save / discard bar with the leave prompt.
-  - 转发 says when the runtime is nftables / Ansible that Primary / Backup
-    and Hash use only the first target and speed limits are not enforced.
-  - Safe areas: `viewport-fit=cover`, and the admin top bar and drawer, the
-    user bar and tab bar, sheets, the wizard footer and `body` (landscape)
-    pad themselves with `env(safe-area-inset-*)`; checked on an emulated
-    iPhone 13 with a notch. The skip link is a 44 px target.
-  - Known follow-ups: an open action menu sits outside the landmarks (axe
-    "region", moderate); the plugin drawer's target tabs move to `UiTabs`;
-    the topology workspace's text inputs move to `UiTextField`.
 - **Nodes: a list and a node page (UI redesign phase U7)**
   (`web/src/views/admin/Nodes.vue`, `NodeDetail.vue`, `views/admin/nodes/`;
   `docs/reference/frontend-design.md` "Node pages"). Same endpoints, request
@@ -221,6 +185,7 @@
     status 3 / 0) and deletes it after the name is typed.
   - The 3,272-line page is now 21 files, none over 480 lines; `admin.nodes`
     strings moved to `locales/modules/*/adminNodes.js`.
+
 - **转发节点 on the list and detail templates (UI redesign phase U7)**
   (`web/src/views/admin/ForwardNodes.vue`, `AnsibleMachines.vue`,
   `NodeX.vue`, `LocalRuntime.vue`, `views/admin/forward-nodes/`;
@@ -335,85 +300,158 @@
   - The subscription group page's section tabs are segmented, like the other
     detail pages.
 
-- **Admin list pages on one template (UI redesign phase U6)**
-  (`web/src/ui/UiDataTable.vue`, `views/admin/*`;
-  `docs/reference/frontend-design.md` "List pages"). Same endpoints,
-  request fields, permission and edition checks.
-  - New `UiDataTable`: column definitions; sorting and pagination on the
-    client or the server (`UiPagination`); hidden columns and row height
-    remembered per table; row selection with a bulk bar that floats up from
-    the bottom; a "…" row menu (`UiMenu`); rows that open with a click or
-    Enter (↑/↓ move); error with 重试 / 复制错误详情, skeleton rows after
-    300 ms, empty and "no results" states; a header that sticks under the
-    top bar; one card per row on phones instead of sideways scrolling. Also
-    `UiSearchField` (`/` focuses it), `UiFilterChips`, `UiErrorState` (the
-    user pages' `LoadError` now wraps it) and `UiUsageBar`.
-  - Migrated: 用户 (status chips with counts, 流量用尽 for the loaded page,
-    usage bars, a detail Sheet, bulk 封禁 / 解封 with 撤销), 工单 (an inbox:
-    queue and ticket side by side, quick replies), 帮助中心内容 (Markdown
-    editor with a live preview that renders elements, never HTML), 插件中心
-    (card grid and details Sheet), NodeX Agents, Ansible 机器 (visuals only),
-    邀请码 (bulk copy and revoke), 访问组 (the group in a Sheet), and in the
-    commercial edition 订单, 优惠券, 套餐, 支付 and 邀请返佣. Page titles
-    follow the navigation (用户, 工单, 插件中心, 支付, 邀请返佣…).
-  - Bulk actions without a bulk endpoint (ban users, revoke invite codes)
-    call the existing per-item endpoint for each selected row.
-  - `web/scripts/data-table-pages.mjs` lists the migrated pages; ESLint
-    (`vue/no-restricted-html-elements`) and
-    `src/__tests__/dataTableGuard.test.js` reject a bare `<table>` in them.
-  - Library buttons, checkboxes, switches and chips no longer grow to 40 px
-    on phones through the legacy global `button` rule; selected rows, the
-    segmented tabs and the operation timeline badges reach 4.5:1.
-  - Bundle: `UiDataTable` and its parts are a shared chunk of about 10 KB
-    gzip; each migrated page changes by −0.6 to +1.4 KB gzip; the locale
-    files grow by about 2 KB each.
+- **Dashboard, 流量与监控 and 部署编排 (UI redesign phase U8)**
+  (`web/src/ui/UiChart.vue`, `UiMetricCard.vue`,
+  `web/src/views/admin/Dashboard.vue`, `Monitor.vue`, `Deployments.vue`,
+  `views/admin/{dashboard,monitor,deployments}/`;
+  `docs/reference/frontend-design.md` "Charts" and "Dashboards and
+  monitoring (U8)"). Same endpoints, request bodies, permission and edition
+  checks; no backend change.
+  - `UiChart`: the one ECharts wrapper. Tree-shaken (`echarts/core` with
+    line and bar series, grid, tooltip, legend, canvas), loaded on first
+    use into the `echarts` chunk (about 180 KB gzip, was 374 KB), never in
+    the entry chunk. The AnixOps Design theme comes from the tokens and
+    follows light / dark (pure black) live; it resizes with its box; it has
+    loading (delayed chart skeleton), empty and error (重试) states; the plot
+    is `role="img"` with a summary, and 以表格查看 shows the data as a table
+    that screen readers always read. `UiMetricCard`: label, big number,
+    trend with a word, detail line and an optional token-coloured sparkline.
+    Histoire stories and unit tests for both; `UiSkeleton` gains `chart`.
+  - 仪表盘 on the dashboard template (plan §7.4): 用户 / 在线节点 / 今日流量 /
+    待处理工单 cards (each opens its page), the 24-hour traffic chart, then
+    需要处理 (offline nodes, tickets waiting for a reply, stalled traffic
+    reports; pending orders in the commercial edition) and 最近操作 (the
+    audit log). Each block loads, fails and retries on its own; 刷新 asks
+    the dashboard API for fresh numbers.
+  - 流量与监控 (`/admin/monitor/:section`) merges 实时监控, 小时流量 and
+    转发可观测性: 实时节点 (the monitor WebSocket, now a `UiDataTable`), 用户流量
+    (all users or one), 节点延迟 (the prober's node targets) and 转发
+    (topology graph, ingress comparison, runtime jobs). The section is in
+    the path and the time range (1 小时 / 24 小时 / 7 天 / 30 天) in `?range=`
+    for the sections whose API takes one. `/admin/traffic-hourly` and
+    `/admin/forward/observability` redirect; the menu has one 流量与监控
+    entry and ⌘K lists its sections.
+  - 部署编排: the page is split into page-local panels and
+    `useDeploymentCenter.js`; topologies and node roles on `UiDataTable`;
+    the node-role editor (`AssignmentDrawer`) is a `UiSheet`; the G6
+    topology (`TopologyGraph.vue`, shared with 流量与监控) follows the theme
+    live; the operation timeline shared with 插件中心 is a timeline list
+    with state words instead of a bare table.
 
-- **Sign-in and user pages redesigned (UI redesign phase U5)**
-  (`web/src/views/Login.vue`, `views/user/*`, `views/Account.vue`;
-  `docs/reference/frontend-design.md` "Sign-in and user pages"). Same
-  endpoints and routes; page state (search, category, article, ticket, new
-  ticket) lives in the query.
-  - 登录: one centred card on a brand-tinted backdrop, the decorative stats
-    gone. Two-factor authentication is a second step with six code boxes
-    (paste, autofill, auto-advance, Backspace) that submits on the sixth
-    digit; 使用恢复码 appears only when the account has recovery codes. An
-    account the administrator requires to use two-factor authentication but
-    that has none gets steps to follow instead of a bare error. No
-    "忘记密码" link (there is no reset endpoint); registration and the invite
-    code follow the public config.
-  - 概览: greeting, a hero card with the remaining traffic in a brand-gradient
-    ring, status, expiry and usage, 复制订阅链接 and 导入到客户端, the first help
-    articles and the latest tickets; plans and orders in the commercial
-    edition.
-  - 订阅: the link with a real, scannable QR code, one-click import for
-    Clash Verge, Shadowrocket, sing-box, Stash, Surge, Quantumult X and Loon
-    (v2rayN copies its link), every other format with copy and preview, and
-    a danger zone that resets the link (see Added).
-  - 帮助中心: search (`/`), category cards, articles at reading width with a
-    table of contents and previous / next instead of a dialog; Markdown-style
-    bodies render as elements, never HTML.
-  - 工单: list and conversation side by side, full width on phones; new
-    tickets in a Sheet. 套餐 / 订单: store-style plan cards with a period
-    switch and checkout, orders with a details Sheet.
-  - 账户: two-factor setup with a QR code and the code boxes; "备用码" are
-    now "恢复码" / recovery codes, with a download. The admin MFA policy
-    page says 恢复码 / recovery codes too.
-  - Every page has a skeleton after 300 ms, an empty state, and an error
-    state with 重试 and 复制错误详情. Page titles follow the navigation
-    (概览, 订阅, 帮助中心, 工单, 套餐, 订单).
-  - New components `UiOtpField` and `UiQrCode` (the `uqr` 0.1.3 encoder, MIT,
-    3.8 KB gzip in its own chunk, loaded on first use). Badges and unselected
-    segmented-control items now reach 4.5:1 on every background they sit on.
-  - Bundle: the login page grows by about 12 KB gzip (form and code fields,
-    new strings), the user pages by 10–18 KB.
+- **Performance budget and legacy CSS cleanup (UI redesign phase U9)**
+  (`web/vite.config.js`, `web/src/i18n.js`, `web/src/locales/`,
+  `web/src/utils/request.js`, `web/src/style.css`,
+  `web/scripts/check-bundle-budget.mjs`, `web/bundle-budget.json`;
+  `docs/reference/frontend-design.md` "Bundle" and "Styles"). No API,
+  permission or edition change.
+  - First-visit gzip size (JS and CSS, zh-CN): sign-in 278 → 115 KB, user
+    home 289 → 168 KB, admin dashboard 307 → 237 KB (with its messages);
+    axios (18 KB) now loads with the first request.
+  - Locale messages are split into a core group and an admin group per
+    language. Only the active language loads (en no longer fetches zh-CN
+    as a fallback; `localeParity.test.js` keeps the keys equal); the admin
+    group loads when an administrator is signed in.
+  - The single `api` chunk is gone: API modules go with the routes that use
+    them; Vue's `@vue/*` packages join `vue-vendor`; Reka UI is shared per
+    route instead of one 52 KB `ui-vendor` chunk; the extension runtime
+    loads with the first admin page; vue-i18n drops its legacy API.
+  - `npm run bundle:budget` sums what the first visit to the sign-in page,
+    the user home and the admin dashboard downloads, and checks every lazy
+    chunk, against `web/bundle-budget.json` (sign-in 120 KB, the plan §13
+    budget; admin shell and dashboard 250 KB; route chunks 80 KB). CI runs
+    it after the build, and now runs ESLint and stylelint too.
+  - `style.css` loses the pre-redesign variable aliases (`--primary-color`,
+    `--text-color`, ...), the unused utility and page classes (`.card`,
+    `.tabs`, `.grid-*`, `.page-toolbar`, ...), the phone rule that set every
+    button to 40 / 44 px and the 14 px phone root size. What remains is the
+    element baseline and the classes signed plugin WebUI bundles render
+    (`.btn`, `.data-table`, `.empty-state`, ...). The stylelint rules are
+    errors now and reject the removed variables.
+
+- **Mobile polish, accessibility to zero, visual regression baseline and
+  page follow-ups (UI redesign phase U9, polish)** (`web/src/ui/`,
+  `web/src/views/`, `web/src/components/`, `web/e2e/`,
+  `web/playwright.visual.config.js`, `.github/workflows/ci.yml` job
+  `frontend-visual`, `.github/workflows/frontend-visual-baselines.yml`;
+  `docs/reference/frontend-design.md` "Accessibility and visual regression
+  tests (U9)"). Same endpoints, request bodies, permission and edition
+  checks; no backend change.
+  - Every admin and user route swept at 390 and 360 px with touch
+    emulation, light and dark: no horizontal scroll; every control is a
+    44 px touch target on coarse pointers (an `::after` hit area where the
+    look stays: buttons, close buttons, switches, segmented tabs and
+    controls, locale options, data-table card titles, back links, suite
+    and mode navs, dashboard and help links); medium fields are 44 px tall
+    there; tab rows that do not fit fade on the clipped edge and keep the
+    active tab in view (subscription group tabs at 390); the forward
+    wizard footer clears the home indicator.
+  - Accessibility: axe finds no serious or critical issue on 23 admin and
+    user screens in both themes at 1440 and 390 px, and the moderate ones
+    found are fixed (the admin sidebar is a labelled complementary
+    landmark; search fields, table pagination and the traffic summary
+    carry their own names; heading levels on the forward node page). Charts
+    and topology graphs turn their animation off under
+    `prefers-reduced-motion`. `web/e2e/a11y.spec.js` (`@axe-core/playwright`,
+    a dev dependency) runs in the Frontend Build job and also checks the
+    skip link, landmarks, one `h1` and focus return after a dialog.
+  - Visual regression: 28 full-page screenshots of 12 key screens with the
+    API mocked, a fixed clock, UTC, English and no animation, compared in
+    the official Playwright image by the new Frontend Visual Regression job;
+    `npm run test:visual` / `test:visual:update` run the same image locally
+    with docker, and the Frontend Visual Baselines workflow regenerates them
+    without docker.
+  - Admin lists keep search, filter chips and page in the URL query (plan
+    §9): users, orders, tickets, plugins, agents, coupons and invite codes,
+    as nodes already did (`useListQuery`).
+  - 部署编排 is the page title in both locale layers; its tab bar is a
+    segmented `UiTabs`; the topology workspace's pickers are `UiSelect`; the
+    node config and deploy previews use `UiCodeBlock` (new `copyLabel`,
+    `copyDisabled`); the NodeX and local runtime pages use the settings
+    save / discard bar with the leave prompt.
+  - 转发 says when the runtime is nftables / Ansible that Primary / Backup
+    and Hash use only the first target and speed limits are not enforced.
+  - Safe areas: `viewport-fit=cover`, and the admin top bar and drawer, the
+    user bar and tab bar, sheets, the wizard footer and `body` (landscape)
+    pad themselves with `env(safe-area-inset-*)`; checked on an emulated
+    iPhone 13 with a notch. The skip link is a 44 px target.
+  - Known follow-ups: an open action menu sits outside the landmarks (axe
+    "region", moderate); the plugin drawer's target tabs move to `UiTabs`;
+    the topology workspace's text inputs move to `UiTextField`.
+
+- **CI: shorter critical path** (`.github/workflows/ci.yml`,
+  `config/scripts/classify_changes.py`, `config/scripts/plan_test_shards.py`;
+  AGENTS.md "Job graph"). Not user-facing. No test is dropped and the
+  required check names are unchanged.
+  - The Go tests run once, in "Backend Tests (1/3)" to "(3/3)", balanced by
+    measured time (`-p=4`; `internal/kernelnodeops` runs alone afterwards);
+    "Backend Tests" stays the required check, fails unless every package
+    ran exactly once, and merges the coverage. "Go Quality Gates" keeps only
+    the static gates. The PostgreSQL package tests run in four shards, each
+    with its own PostgreSQL.
+  - "Build Smoke Images" builds the Control and identity-platform images
+    once (buildx GitHub Actions cache) for "Docker Build Smoke" and
+    "Kubernetes Smoke", which no longer rebuild or wait for each other or
+    for the Go jobs (a 24-minute serial chain before). "Smoke Tests" and
+    "E2E Tests" start at once. The edge publish keeps its gates, now named
+    explicitly.
+  - The Go race detector (about 28 minutes) runs only nightly and on manual
+    runs, with a 40-minute timeout, and no release job waits for it
+    (`check_release_workflow.sh` updated).
+  - A pull request that changes `ci.yml` only inside class-gated jobs runs
+    those classes instead of the full lane; other `.github/` files no
+    longer force the full lane, `.github/actions/` still does.
 
 ### Fixed
+
+- **CI: the live Control WebUI E2E login retries on 429** (`web/e2e/support/live-control-machine-telemetry.mjs`). The public route limiter is per IP and shared with the browser under test, so a burst of page requests could fail the login; it now waits for `Retry-After` and retries within its deadline. Not user-facing.
 
 - **nftables forwards count traffic in both directions, support IPv6, and
   move to an `inet` table** (`nftables_ansible` backend;
   `config/deploy/ansible/playbooks/forward_*_nftables.yml`, new
   `playbooks/files/v2b_forward_nft.sh`, `internal/service/forward_nftables_plan.go`,
   `forward_ansible_stats_worker.go`; upgrade notes in `docs/UPGRADE.md`).
+  **Upgrade-impacting:** traffic numbers, and with them quota use, rise to
+  the real values.
   - Traffic was counted on the NAT chain, which sees only the first packet
     of each connection, and download was always 0. A `forward` hook chain
     now counts every packet into two named counters per forward and
@@ -442,10 +480,6 @@
   - Documented: `fifo` (主备) and `hash` use only the first target on this
     path, and speed limits are not enforced on it
     (`docs/guide/forward-tunnel-runtime-ops.md`).
-- Flux clone docs (`docs/guide/flux-forward-contract.md`,
-  `docs/guide/flux-panel-clone.md`) no longer say forward create, update,
-  delete, pause and resume are "mainly DB-layer": each runs
-  `syncForwardRuntime` on the selected backend.
 - GBK mojibake (UTF-8 once decoded as GBK and saved again) is repaired in
   `internal/handler/{agent,invite,telegram}.go`, `internal/middleware`,
   `internal/database` and `internal/service/service_test.go`, with the line
@@ -454,22 +488,29 @@
   `节点已被禁用`, `权限不足`). Regenerated Swagger: Chinese summaries and
   tags are readable, and the agent heartbeat and WebSocket, admin execute and
   Telegram user-notify operations get the tags their merged annotations had
-  lost. `docs/DEPLOYMENT.md` loses its BOM.
-- New gate `config/scripts/check_mojibake.py` (CI "Documentation Sync
+  lost. `docs/DEPLOYMENT.md` loses its BOM. A new gate,
+  `config/scripts/check_mojibake.py` (CI "Documentation Sync
   Check", so it runs on every pull request) rejects GBK mojibake runs,
   `U+FFFD`, private-use characters, BOMs and non-UTF-8 text in tracked files.
+- Flux clone docs (`docs/guide/flux-forward-contract.md`,
+  `docs/guide/flux-panel-clone.md`) no longer say forward create, update,
+  delete, pause and resume are "mainly DB-layer": each runs
+  `syncForwardRuntime` on the selected backend.
 - The legacy literal translator (`web/src/utils/legacyI18n.js`) wrote the
   first text it saw back over later updates, so labels that change in place
   (a copy button turning into "已复制", a form switching to registration)
   snapped back. It now treats any value it did not write as the new source.
 - Vue Router no longer warns about the unnamed empty-path child of the
   `admin` route (now `admin-index`).
-- **A reset subscription link no longer reverts to the old one** (UI U9):
-  the user shell's profile request could answer after a reset and put the
-  old token back on the page. The user store re-applies fields merged after
-  a profile request started (`web/src/stores/user.js`); the user-portal e2e
-  test now holds the profile answer until the reset is done, so it covers
-  the race on every run instead of flaking.
+
+### Security
+
+- **Self-service subscription reset re-authenticates.**
+  `POST /api/v2/user/subscription/reset` asks for the current password, or
+  with two-step verification on, a TOTP or recovery code. Three attempts
+  that check a credential per user and hour, then `Retry-After`. It is
+  audited like the administrator's reset, as `user` / `reset_subscribe`,
+  without the request body (it holds the credential).
 
 ## 4.1.0-rc.4 - 2026-10-02
 

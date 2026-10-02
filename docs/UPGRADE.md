@@ -62,6 +62,9 @@ Before touching production:
 - **Upgrading past 4.1.0-rc.3: move the `identity-platform` installation to
   the new release after the upgrade**
   ([rc.3 → rc.4 Checklist](#rc3--rc4-checklist)).
+- **Upgrading past 4.1.0-rc.4 with forwards on the `nftables_ansible`
+  backend: relays need Linux 5.2+ and nft 0.9.1+, and traffic numbers jump
+  to their real values** ([rc.4 → rc.5 Checklist](#rc4--rc5-checklist)).
 
 Evidence to keep:
 
@@ -1593,9 +1596,83 @@ in the community edition.
 - Commission, withdrawals, invite statistics and the invite configuration stay
   with the commercial `affiliate` package.
 
-## Upgrading Past 4.1.0-rc.4
+## Upgrading From 4.1.0-rc.4 To 4.1.0-rc.5
 
-These notes cover changes after 4.1.0-rc.4 (`CHANGELOG.md`, "Unreleased").
+These sections cover what changes from 4.1.0-rc.4 to 4.1.0-rc.5
+(`CHANGELOG.md`, "4.1.0-rc.5"): the rest of the UI redesign, users resetting
+their own subscription link, and the nftables forward path counting traffic
+correctly. There is no schema migration and no configuration key changes.
+**Two things need attention:** move `identity-platform` to this release's
+version, since it serves the new reset route, and, with forwards on the
+`nftables_ansible` backend, expect their traffic numbers to jump to the real
+values.
+
+### rc.4 → rc.5 Checklist
+
+Before the upgrade:
+
+1. Download and verify the release as in
+   [Artifact Verification](#artifact-verification), including the three
+   `identity-platform-<version>` assets (or take them from the packages
+   archive).
+2. **Forwards on `nftables_ansible` only.** Check every relay with
+   `uname -r` and `nft --version`: Linux 5.2+ and nft 0.9.1+ are needed
+   ([nftables Forwards](#nftables-forwards-move-to-the-inet-v2b_forward-table)).
+   Review quotas sized against the old, too-low numbers. The image ships the
+   playbooks; a host that runs Control with its own copy of
+   `config/deploy/ansible/playbooks/` replaces it with this release's (it
+   gains `files/v2b_forward_nft.sh`).
+3. If a reverse proxy or CDN in front of Control caches `index.html`,
+   plan to purge it after the upgrade. The frontend is split into new
+   chunks and per-language message files with new hashed names; a cached
+   `index.html` keeps pointing at the old ones, which are gone.
+
+After the upgrade:
+
+4. **Move `identity-platform` to this release**, as in the
+   [rc.3 → rc.4 Checklist](#rc3--rc4-checklist), step 3, with
+   `{"plugin_id": "identity-platform", "target": "control", "desired_version": "4.1.0-rc.5", "enabled": true}`
+   in `PUT /api/v3/plugin-installations`, and poll
+   `GET /api/v3/plugin-installations` until it is healthy. Start-up never
+   moves an existing installation. Until then the subscription reset answers
+   `404` `package_route_not_found`.
+5. Purge the proxy or CDN cache from step 3, and tell administrators to
+   reload once (a hard reload if a tab still shows an old page).
+6. **Forwards on `nftables_ansible` only.** Nothing changes on the relays at
+   upgrade time; each forward moves to `inet v2b_forward` on its next apply.
+   To move them now, pause and resume each forward, or save it unchanged,
+   then check a relay with `nft list table inet v2b_forward` (and that
+   `nft list table ip v2b_forward` is gone once its last forward moved).
+   Expect the traffic of moved forwards to rise to the real values.
+7. Check sign-in, the admin dashboard, a node page, the forward list,
+   系统设置 and the user 概览 on a phone, in light and dark.
+8. With a test account, reset the subscription link on 订阅 → 重置链接…: the
+   new link imports, the old `/s/<token>` link no longer does.
+9. Tell administrators and users where things moved
+   ([Pages That Moved](#pages-that-moved)).
+
+### Pages That Moved
+
+Page bodies moved onto the AnixOps Design templates; the API is unchanged
+apart from the new reset route. Old paths redirect, so bookmarks keep
+working.
+
+| Page | Now | Old paths that redirect |
+| --- | --- | --- |
+| 系统设置 | `/admin/system/:section` (通用, 转发运行时, 备份, 负载均衡, 审计日志, 关于; `/admin/system` shows 通用) | none |
+| 安全 | `/admin/security/:section` (MFA policy, access groups) | `/admin/mfa`, `/admin/access-groups` |
+| 通知 | `/admin/notifications/:channel` (e-mail, Telegram, templates, send log) | `/admin/telegram` |
+| 流量与监控 | `/admin/monitor/:section` (实时节点, 用户流量, 节点延迟, 转发), `?range=` | `/admin/traffic-hourly`, `/admin/forward/observability` |
+| Node page | `/admin/nodes/:id` (`?section=`) | none (new) |
+| NodeX forward node, Ansible machine | `/admin/forward/nodes/:id`, `/admin/forward/ansible-machines/:id` (`?tab=`) | none (new) |
+| Subscription group | `/admin/subscriptions/:id/:section` | none (new) |
+
+- The sidebar's 系统 group is 系统设置, 安全, 通知; `⌘K` / `Ctrl+K` lists
+  every section by name (访问组, 审计日志, ...).
+- Admin lists keep search, filters and page in the URL, so a copied link
+  opens the same view.
+- Users reset their own link on 订阅 instead of filing a ticket; "备用码"
+  are now "恢复码" (recovery codes).
 
 ### Users Reset Their Own Subscription Link
 
@@ -1609,9 +1686,8 @@ allows three attempts per user and hour. The reset-request ticket the
 subscription page filed before is gone.
 
 - The route is declared by `identity-platform`: move that installation to
-  the new release (as in the [rc.3 → rc.4 Checklist](#rc3--rc4-checklist),
-  step 3), or an older installed one answers it `404`
-  `package_route_not_found`.
+  this release ([rc.4 → rc.5 Checklist](#rc4--rc5-checklist), step 4), or an
+  older installed one answers it `404` `package_route_not_found`.
 - It belongs to identity group A, because it checks credentials. Before the
   identity cutover nothing changes: the cutover and rollback switch it with
   the rest of group A.
