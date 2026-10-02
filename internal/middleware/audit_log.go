@@ -47,13 +47,15 @@ func (r *auditBodyCapture) Read(p []byte) (int, error) {
 
 // AuditLog returns a gin middleware that records all admin API operations
 // to both structured slog output and the v2_audit_log database table.
-// It only applies to requests whose path starts with /api/v2/admin/.
+// It applies to requests whose path starts with /api/v2/admin/ or /api/v3/,
+// and to the user writes in auditedUserWrites.
 func AuditLog() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// The v3 control kernel is administrator-only at the router boundary.
 		// Keep v2's narrower admin prefix so public and user APIs remain out of
 		// the audit stream.
-		if !strings.HasPrefix(c.Request.URL.Path, auditLogPrefixV2) && !strings.HasPrefix(c.Request.URL.Path, auditLogPrefixV3) {
+		userWrite := auditedUserWrite(c.Request.Method, c.Request.URL.Path)
+		if !userWrite && !strings.HasPrefix(c.Request.URL.Path, auditLogPrefixV2) && !strings.HasPrefix(c.Request.URL.Path, auditLogPrefixV3) {
 			c.Next()
 			return
 		}
@@ -75,10 +77,12 @@ func AuditLog() gin.HandlerFunc {
 
 		// Kernel payloads can contain large declarative configurations. Preserve
 		// their body exactly and never persist their contents in audit records;
-		// secrets must only be referenced by ID in v3 contracts.
+		// secrets must only be referenced by ID in v3 contracts. An audited
+		// user write's body is its re-authentication (a password or a
+		// one-time code), so it is not kept either.
 		isV3 := strings.HasPrefix(c.Request.URL.Path, auditLogPrefixV3)
 		var capture *auditBodyCapture
-		if !isV3 && c.Request.Body != nil && c.Request.ContentLength != 0 {
+		if !isV3 && !userWrite && c.Request.Body != nil && c.Request.ContentLength != 0 {
 			capture = &auditBodyCapture{ReadCloser: c.Request.Body, limit: auditCaptureLimit}
 			c.Request.Body = capture
 		}
@@ -189,6 +193,20 @@ func persistAuditLog(db *gorm.DB, userID *uint, email, method, path, module, act
 // secrets, so these reads are recorded like writes, as "reveal".
 var revealPath = regexp.MustCompile(`^/api/v2/admin/nodes/[^/]+/credentials/?$`)
 
+// auditedUserWrites are the user API writes recorded in the audit log like
+// the administrator's: a user's reset of their own subscription link, the
+// self-service twin of POST /api/v2/admin/users/:id/reset-subscribe.
+var auditedUserWrites = map[string]struct{ module, action string }{
+	http.MethodPost + " /api/v2/user/subscription/reset": {module: "user", action: "reset_subscribe"},
+}
+
+// auditedUserWrite reports whether a user API request is recorded in the
+// audit log.
+func auditedUserWrite(method, path string) bool {
+	_, ok := auditedUserWrites[method+" "+strings.TrimSuffix(path, "/")]
+	return ok
+}
+
 // auditedRead reports whether a read is recorded in the audit log: one
 // that reveals a secret.
 func auditedRead(method, path string) bool {
@@ -197,6 +215,9 @@ func auditedRead(method, path string) bool {
 
 // extractModuleAndAction derives a human-readable module and action from the URL path and HTTP method.
 func extractModuleAndAction(path, method string) (module, action string) {
+	if write, ok := auditedUserWrites[method+" "+strings.TrimSuffix(path, "/")]; ok {
+		return write.module, write.action
+	}
 	// Strip the relevant administrator API prefix.
 	prefix := auditLogPrefixV2
 	if strings.HasPrefix(path, auditLogPrefixV3) {

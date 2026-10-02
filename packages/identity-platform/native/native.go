@@ -18,6 +18,9 @@
 //   - the administrator's traffic and subscription resets touch only the
 //     subscriber, through KernelSubscriber (ResetTraffic, ResetCredentials),
 //     and switch independently of the authority.
+//   - the user's reset of their own subscription link re-authenticates
+//     against identity's credentials (password or second factor) before
+//     the same KernelSubscriber.ResetCredentials, so it is part of group A.
 //
 // The user's invite codes are affiliate data: their routes belong to the
 // affiliate package.
@@ -53,8 +56,8 @@ type Kernel interface {
 }
 
 // Subscriber is the part of KernelSubscriber the native routes call: the
-// administrator's resets (kernel.subscriber.traffic.v1 and
-// kernel.subscriber.credentials.v1).
+// administrator's resets and the user's own subscription reset
+// (kernel.subscriber.traffic.v1 and kernel.subscriber.credentials.v1).
 type Subscriber interface {
 	ResetTraffic(ctx context.Context, in *kernelsubscriberv1.ResetTrafficRequest, opts ...grpc.CallOption) (*kernelsubscriberv1.ResetTrafficResponse, error)
 	ResetCredentials(ctx context.Context, in *kernelsubscriberv1.ResetCredentialsRequest, opts ...grpc.CallOption) (*kernelsubscriberv1.ResetCredentialsResponse, error)
@@ -80,8 +83,8 @@ type Service struct {
 	Open      func(ctx context.Context) (*Stores, error)
 	Kernel    Kernel
 	Directory Directory
-	// Subscriber is Control's KernelSubscriber; without it the resets stay
-	// legacy.
+	// Subscriber is Control's KernelSubscriber; without it the resets,
+	// the user's own included, stay legacy.
 	Subscriber Subscriber
 	// SigningKey returns the key that signs tokens now.
 	SigningKey func(ctx context.Context) (signingkey.Key, error)
@@ -119,6 +122,7 @@ func (s *Service) Handlers() map[string]pluginhostsdk.NativeHandler {
 	if s.Subscriber != nil {
 		handlers[ResetTrafficRouteID] = s.ResetTraffic
 		handlers[ResetSubscribeRouteID] = s.ResetSubscribe
+		handlers[UserSubscriptionResetRouteID] = s.ResetOwnSubscription
 	}
 	return handlers
 }

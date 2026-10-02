@@ -2330,6 +2330,14 @@
     },
     {
       "method": "POST",
+      "path": "/api/v2/user/subscription/reset",
+      "package_id": "identity-platform",
+      "route_id": "identity.user.subscription.reset.post",
+      "mode": "native-flagged",
+      "legacy": "identity-bridge"
+    },
+    {
+      "method": "POST",
       "path": "/api/v2/user/telegram/notify",
       "package_id": "notification",
       "route_id": "notification.user.telegram.notify.post",

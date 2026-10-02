@@ -218,6 +218,7 @@ func NewAllowlist(cfg *config.Config) (*packagebridge.Allowlist, error) {
 		"identity.user.mfa.disable.post":                 mfaHandler.DisableMFA,
 		"identity.user.mfa.verify.post":                  mfaHandler.VerifyMFA,
 		"identity.user.mfa.backup_codes.regenerate.post": mfaHandler.RegenerateBackupCodes,
+		"identity.user.subscription.reset.post":          userHandler.ResetSubscription,
 		"identity.admin.mfa.config.get":                  mfaHandler.GetAdminConfig,
 		"identity.admin.mfa.config.put":                  mfaHandler.UpdateAdminConfig,
 		"identity.admin.invite.codes.get":                inviteCodeHandler.ListCodes,

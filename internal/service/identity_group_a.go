@@ -17,8 +17,9 @@ const IdentityPlatformPackageID = "identity-platform"
 
 // IdentityGroupARoutes are identity-platform's routes that move from the
 // kernel's legacy handlers to identity together, with the authority state:
-// login, registration, MFA, the admin MFA configuration and the admin
-// account writes.
+// login, registration, MFA, the admin MFA configuration, the admin
+// account writes, and the user's own subscription reset, which checks the
+// user's password or second factor before it resets.
 var IdentityGroupARoutes = []string{
 	"identity.auth.login",
 	"identity.auth.register",
@@ -35,6 +36,7 @@ var IdentityGroupARoutes = []string{
 	"identity.admin.users.id.ban.post",
 	"identity.admin.users.id.unban.post",
 	"identity.admin.users.id.delete",
+	"identity.user.subscription.reset.post",
 }
 
 // IdentityAccountReadRoutes are identity-platform's read routes whose native

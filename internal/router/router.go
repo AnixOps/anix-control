@@ -533,6 +533,9 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 			authUser.POST("/user/mfa/verify", v2PackageGateway.Serve)
 			authUser.POST("/user/mfa/backup-codes/regenerate", v2PackageGateway.Serve)
 
+			// 用户自助重置订阅链接（需重新验证身份，所有版本）
+			authUser.POST("/user/subscription/reset", middleware.AuditLog(), v2PackageGateway.Serve)
+
 			// 用户通知
 			notificationHandler := handler.NewNotificationHandler()
 			authUser.GET("/user/notifications", registeredPackageRoute(v2PackageGateway.Serve, "notification", "notification.user.notifications.get", notificationHandler.GetUserNotifications))

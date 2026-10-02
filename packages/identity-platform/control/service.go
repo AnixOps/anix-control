@@ -33,6 +33,9 @@ const identityMigrationRoute = "migration.identity-platform.001_identity_platfor
 //     on the package's own storage (native.UserDirectory);
 //   - the administrator's traffic and subscription resets change only the
 //     subscriber, through KernelSubscriber, and switch at any time.
+//   - the user's reset of their own subscription link checks the user's
+//     password or second factor in identity's store before the same
+//     subscriber change, so it belongs to group A.
 var identityRoutes = map[string]struct{}{
 	"identity.admin.mfa.config.get":                  {},
 	"identity.admin.mfa.config.put":                  {},
@@ -56,6 +59,7 @@ var identityRoutes = map[string]struct{}{
 	"identity.user.mfa.totp.setup.post":              {},
 	"identity.user.mfa.verify.post":                  {},
 	"identity.user.profile.get":                      {},
+	"identity.user.subscription.reset.post":          {},
 }
 
 // bridgedRoutes are the package's compatibility routes without a native
