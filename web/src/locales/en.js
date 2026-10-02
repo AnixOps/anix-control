@@ -1490,7 +1490,6 @@ export default {
         disable: 'Disable',
         delete: 'Delete',
         startTest: 'Start Test',
-        confirmDelete: 'Confirm Delete',
         cancel: 'Cancel',
         saveChanges: 'Save Changes',
         createNode: 'Create Node',
@@ -1569,7 +1568,6 @@ export default {
         }
       },
       nodeModal: {
-        eyebrow: 'Node',
         titleEdit: 'Edit Relay/Exit Node',
         titleAdd: 'Add Relay/Exit Node',
         loading: 'Loading node detail...',
@@ -1603,11 +1601,9 @@ export default {
         }
       },
       ruleModal: {
-        eyebrow: 'Rule',
         titleEdit: 'Edit Legacy Rule',
         titleAdd: 'Add Legacy Rule',
         loading: 'Loading rule detail...',
-        saveLoading: 'Saving...',
         ownerReadOnlyHint: 'Current backend update API does not allow changing ownership fields. They are read-only in edit mode.',
         fields: {
           name: 'Rule Name',
@@ -1635,7 +1631,6 @@ export default {
         }
       },
       connectionModal: {
-        eyebrow: 'Gost API',
         title: 'Test Node Connection',
         fields: {
           host: 'Host',
@@ -1648,15 +1643,14 @@ export default {
           apiTokenHidden: 'The stored token is hidden; enter it to test'
         },
         success: 'Connection succeeded',
-        failed: 'Connection failed',
-        testing: 'Testing...'
+        failed: 'Connection failed'
       },
       deleteModal: {
-        title: 'Confirm Delete',
-        confirmNode: 'Confirm deleting node',
-        confirmRule: 'Confirm deleting rule',
-        warning: 'Deletion cannot be automatically reverted. Ensure no active forwarding relationships still depend on it.',
-        deleting: 'Deleting...'
+        titleNode: 'Delete forward node {name}?',
+        titleRule: 'Delete forward rule {name}?',
+        deleteNode: 'Delete forward node',
+        deleteRule: 'Delete rule',
+        warning: 'Deletion cannot be automatically reverted. Ensure no active forwarding relationships still depend on it.'
       },
       validation: {
         requestFailed: 'Request failed',

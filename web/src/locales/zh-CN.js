@@ -1491,7 +1491,6 @@ export default {
         disable: '\u7981\u7528',
         delete: '\u5220\u9664',
         startTest: '\u5f00\u59cb\u68c0\u6d4b',
-        confirmDelete: '\u786e\u8ba4\u5220\u9664',
         cancel: '\u53d6\u6d88',
         saveChanges: '\u4fdd\u5b58\u4fee\u6539',
         createNode: '\u521b\u5efa\u8282\u70b9',
@@ -1570,7 +1569,6 @@ export default {
         }
       },
       nodeModal: {
-        eyebrow: 'Node',
         titleEdit: '\u7f16\u8f91\u4e2d\u8f6c\u8282\u70b9',
         titleAdd: '\u65b0\u589e\u4e2d\u8f6c\u8282\u70b9',
         loading: '\u6b63\u5728\u52a0\u8f7d\u8282\u70b9\u8be6\u60c5...',
@@ -1604,11 +1602,9 @@ export default {
         }
       },
       ruleModal: {
-        eyebrow: 'Rule',
         titleEdit: '\u7f16\u8f91 Legacy \u89c4\u5219',
         titleAdd: '\u65b0\u589e Legacy \u89c4\u5219',
         loading: '\u6b63\u5728\u52a0\u8f7d\u89c4\u5219\u8be6\u60c5...',
-        saveLoading: '\u4fdd\u5b58\u4e2d...',
         ownerReadOnlyHint: '\u5f53\u524d\u540e\u7aef\u66f4\u65b0\u63a5\u53e3\u4e0d\u652f\u6301\u4fee\u6539\u5f52\u5c5e\u5b57\u6bb5\uff0c\u7f16\u8f91\u65f6\u53ea\u8bfb\u3002',
         fields: {
           name: '\u89c4\u5219\u540d\u79f0',
@@ -1636,7 +1632,6 @@ export default {
         }
       },
       connectionModal: {
-        eyebrow: 'Gost API',
         title: '\u6d4b\u8bd5\u8282\u70b9\u8fde\u63a5',
         fields: {
           host: '\u4e3b\u673a\u5730\u5740',
@@ -1649,15 +1644,14 @@ export default {
           apiTokenHidden: '\u5df2\u4fdd\u5b58\u7684\u4ee4\u724c\u4e0d\u518d\u663e\u793a\uff1b\u8bf7\u586b\u5199\u4ee4\u724c\u540e\u6d4b\u8bd5'
         },
         success: '\u8fde\u63a5\u6210\u529f',
-        failed: '\u8fde\u63a5\u5931\u8d25',
-        testing: '\u68c0\u6d4b\u4e2d...'
+        failed: '\u8fde\u63a5\u5931\u8d25'
       },
       deleteModal: {
-        title: '\u786e\u8ba4\u5220\u9664',
-        confirmNode: '\u786e\u8ba4\u5220\u9664\u8282\u70b9',
-        confirmRule: '\u786e\u8ba4\u5220\u9664\u89c4\u5219',
-        warning: '\u5220\u9664\u540e\u65e0\u6cd5\u81ea\u52a8\u6062\u590d\uff0c\u8bf7\u786e\u8ba4\u6ca1\u6709\u4ecd\u5728\u4f7f\u7528\u7684\u8f6c\u53d1\u5173\u7cfb\u3002',
-        deleting: '\u5220\u9664\u4e2d...'
+        titleNode: '删除转发节点 {name}？',
+        titleRule: '删除转发规则 {name}？',
+        deleteNode: '删除转发节点',
+        deleteRule: '删除规则',
+        warning: '\u5220\u9664\u540e\u65e0\u6cd5\u81ea\u52a8\u6062\u590d\uff0c\u8bf7\u786e\u8ba4\u6ca1\u6709\u4ecd\u5728\u4f7f\u7528\u7684\u8f6c\u53d1\u5173\u7cfb\u3002'
       },
       validation: {
         requestFailed: '\u8bf7\u6c42\u5931\u8d25',
