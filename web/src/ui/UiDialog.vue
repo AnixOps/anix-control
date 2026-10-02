@@ -127,6 +127,9 @@ defineExpose({ close })
   inset: 0;
   z-index: var(--z-modal);
   display: grid;
+  /* minmax(0, 1fr): wide content scrolls inside the dialog instead of
+     widening the column past the screen. */
+  grid-template-columns: minmax(0, 1fr);
   place-items: center;
   padding: var(--space-6) var(--space-4);
   overflow-y: auto;

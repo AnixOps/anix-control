@@ -114,7 +114,8 @@ const normalizedOptions = computed(() => props.options.map(option => (
 }
 
 .ui-select__trigger[data-placeholder] .ui-select__value {
-  color: var(--label-3);
+  /* Real text, not a native placeholder: it needs 4.5:1 (--label-3 is 3.6:1). */
+  color: var(--label-2);
 }
 
 .ui-select__value {
