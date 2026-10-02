@@ -77,7 +77,7 @@
       <UiGroupedList :title="t('runtime.shared.panelConfig')" heading-tag="h3">
         <UiGroupedListRow :label="t('runtime.nodeX.enableModeTitle')" :value="statusSummary.config?.nodeXMode ? t('runtime.nodeX.cards.modeOn') : t('runtime.nodeX.cards.modeOff')" />
         <UiGroupedListRow :label="t('runtime.nodeX.cards.backend')" :value="runtimeBackendLabel(statusSummary.config?.backend || (nodeXMode ? 'gost' : localBackend))" />
-        <UiGroupedListRow :label="t('runtime.nodeX.cards.baseUrl')" :value="statusSummary.config?.baseUrl || '-'" />
+        <UiGroupedListRow :label="t('runtime.nodeX.cards.baseUrl')" :description="statusSummary.config?.baseUrl || '-'" />
         <UiGroupedListRow :label="t('runtime.nodeX.cards.tokenConfigured')" :value="statusSummary.config?.tokenConfigured ? t('runtime.shared.yes') : t('runtime.shared.no')" />
         <UiGroupedListRow :label="t('runtime.nodeX.cards.timeout')" :value="`${statusSummary.config?.timeoutSeconds || nodeXTimeout || 15}s`" />
       </UiGroupedList>
@@ -93,7 +93,7 @@
           <template #value><UiBadge :status="statusSummary.runtimeReady?.ready ? 'online' : 'offline'" :label="statusSummary.runtimeReady?.ready ? t('runtime.shared.ready') : t('runtime.shared.notReady')" /></template>
         </UiGroupedListRow>
         <UiGroupedListRow :label="t('runtime.nodeX.cards.version')" :value="statusSummary.runtimeStatus?.version || '-'" />
-        <UiGroupedListRow :label="t('runtime.nodeX.cards.executePath')" :value="statusSummary.runtimeStatus?.executePath || '-'" />
+        <UiGroupedListRow :label="t('runtime.nodeX.cards.executePath')" :description="statusSummary.runtimeStatus?.executePath || '-'" />
       </UiGroupedList>
     </RuntimeStatusPanel>
 

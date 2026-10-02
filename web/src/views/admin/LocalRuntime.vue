@@ -90,7 +90,7 @@
         <UiGroupedListRow :label="t('runtime.shared.panelConfig')" :value="localModeActive ? t('runtime.localRuntime.cards.localActiveValue') : t('runtime.localRuntime.cards.standbyValue')" />
         <UiGroupedListRow :label="t('runtime.localRuntime.cards.backend')" :value="localBackendLabel(actualBackend)" />
         <UiGroupedListRow :label="t('runtime.localRuntime.cards.preferredLocalBackend')" :value="localBackendLabel(selectedLocalBackend)" />
-        <UiGroupedListRow :label="t('runtime.localRuntime.cards.attachment')" :value="statusSummary.attachment?.model || '-'" />
+        <UiGroupedListRow :label="t('runtime.localRuntime.cards.attachment')" :description="statusSummary.attachment?.model || '-'" />
       </UiGroupedList>
       <UiGroupedList :title="t('runtime.shared.reachability')" heading-tag="h3">
         <UiGroupedListRow :label="t('runtime.shared.reachability')" :description="translateRuntimeText(statusSummary.reachability?.reason)">
