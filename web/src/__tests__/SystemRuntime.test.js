@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import System from '@/views/admin/System.vue'
+import { toastMessages } from './helpers/feedback'
 
 const adminApi = vi.hoisted(() => ({
   getSystemConfig: vi.fn(),
@@ -179,7 +180,6 @@ describe('System runtime configuration', () => {
   })
 
   it('keeps the config modal open when an enveloped config save fails', async () => {
-    const alert = vi.spyOn(window, 'alert').mockImplementation(() => {})
     const wrapper = mountSystem()
     await flushPromises()
 
@@ -197,10 +197,10 @@ describe('System runtime configuration', () => {
     await wrapper.vm.saveConfig()
     await flushPromises()
 
-    expect(alert).toHaveBeenCalledWith(expect.stringContaining('config save rejected'))
+    expect(wrapper.vm.configError).toContain('config save rejected')
+    expect(toastMessages()).toEqual([])
     expect(wrapper.vm.showConfigModal).toBe(true)
     expect(adminApi.getSystemConfigs).not.toHaveBeenCalled()
 
-    alert.mockRestore()
   })
 })

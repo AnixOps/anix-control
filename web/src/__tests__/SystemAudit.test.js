@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest'
 import { mount, flushPromises } from '@vue/test-utils'
 import System from '@/views/admin/System.vue'
+import { toastMessages } from './helpers/feedback'
 
 const adminApi = vi.hoisted(() => ({
   getSystemConfig: vi.fn(),
@@ -65,7 +66,6 @@ describe('System audit logs', () => {
         }
       }
     })
-    vi.spyOn(window, 'alert').mockImplementation(() => {})
   })
 
   it('loads audit logs with default page and page_size', async () => {
@@ -144,7 +144,6 @@ describe('System audit logs', () => {
   })
 
   it('shows panel envelope errors when audit log loading fails', async () => {
-    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => {})
     adminApi.getSystemAuditLogs.mockResolvedValue({
       code: -1,
       msg: 'database unavailable',
@@ -155,7 +154,7 @@ describe('System audit logs', () => {
     const wrapper = mountSystem()
     await flushPromises()
 
-    expect(alertSpy).toHaveBeenCalledWith('database unavailable')
+    expect(toastMessages('error')).toEqual(['database unavailable'])
     expect(wrapper.vm.auditLogs).toEqual([])
     expect(wrapper.vm.auditTotal).toBe(0)
   })
