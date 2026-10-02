@@ -37,6 +37,9 @@ describe('edition route guard', () => {
     // Subscription templates stay.
     await router.push('/admin/plans')
     expect(router.currentRoute.value.path).toBe('/admin/plans')
+    // Invite codes stay: registration control, not affiliate rewards.
+    await router.push('/admin/invite-codes')
+    expect(router.currentRoute.value.path).toBe('/admin/invite-codes')
   })
 
   it('redirects users away from plans and orders in the community edition', async () => {

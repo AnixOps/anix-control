@@ -41,6 +41,7 @@ const AdminTelegram = () => import('@/views/admin/Telegram.vue')
 const AdminMFA = () => import('@/views/admin/MFA.vue')
 const AdminNotifications = () => import('@/views/admin/Notifications.vue')
 const AdminInvite = () => import('@/views/admin/Invite.vue')
+const AdminInviteCodes = () => import('@/views/admin/InviteCodes.vue')
 const AdminSystem = () => import('@/views/admin/System.vue')
 const AdminAgent = () => import('@/views/admin/Agent.vue')
 const AdminPlugins = () => import('@/views/admin/Plugins.vue')
@@ -233,6 +234,10 @@ const routes = [
         path: 'invite',
         component: AdminInvite,
         meta: { edition: 'commercial' }
+      },
+      {
+        path: 'invite-codes',
+        component: AdminInviteCodes
       },
       {
         path: 'system',

@@ -37,6 +37,7 @@ const PAGE_TITLE_KEYS = {
   '/admin/mfa': 'pageTitles.admin.mfa',
   '/admin/notifications': 'pageTitles.admin.notifications',
   '/admin/invite': 'pageTitles.admin.invite',
+  '/admin/invite-codes': 'pageTitles.admin.inviteCodes',
   '/admin/system': 'pageTitles.admin.system'
 }
 

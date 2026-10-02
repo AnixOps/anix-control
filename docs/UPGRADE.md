@@ -1504,6 +1504,27 @@ anix-control node-secrets status                           # back in dual_read
 - An interrupted `unsplit` is resumed by running it again.
 - From `dual_read`, `phase all dual_write` goes back further, as in P2.
 
+## Upgrading Past 4.1.0-rc.3
+
+### Administrators Manage Invite Codes In Every Edition
+
+In 4.1.0-rc.3 the community edition could not create invite codes, because
+their generator belongs to the commercial `affiliate` package, so
+`require_invite` registration only worked with codes that already existed.
+Administrators can now generate, list and revoke invite codes in every
+edition, on the admin "Invite codes" page (`/admin/invite-codes`;
+`GET`/`POST /api/v2/admin/invite/codes`,
+`DELETE /api/v2/admin/invite/codes/:id`). Users still cannot generate codes
+in the community edition.
+
+- These routes are declared by `identity-platform`: install the
+  `identity-platform` package of this release, or an older installed one
+  answers them `404` `package_route_not_found`.
+- Codes generated there belong to no user and attribute no referral; they do
+  not count toward any user's code limit.
+- Commission, withdrawals, invite statistics and the invite configuration stay
+  with the commercial `affiliate` package.
+
 ## Moving Logins To The Identity Module
 
 From 4.1 the identity module can own accounts, passwords, MFA and token

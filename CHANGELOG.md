@@ -8,6 +8,37 @@
   daylight-saving change in the machine's local zone: it compares expiries with the
   same calendar arithmetic as the handlers (`time.Now().AddDate`). Test code only.
 
+### Changed
+
+- **Administrators manage invite codes in every edition** (owner decision
+  2026-10-01; `internal/handler/invite_codes.go`,
+  `internal/service/invite_code_admin.go`, `docs/UPGRADE.md`). Invite codes
+  are registration control, so the community edition keeps them; the
+  commission, withdrawals, invite statistics and configuration stay with
+  the commercial `affiliate` package.
+  - **New routes, owned by `identity-platform`** (which owns registration
+    and ships in every release): `GET /api/v2/admin/invite/codes` (every
+    code, newest first, `status` = `unused`, `used` or `expired`, paged),
+    `POST /api/v2/admin/invite/codes` (`count` 1-50, optional
+    `expire_days`: empty uses the configured `code_expire_days`, `0` never
+    expires) and `DELETE /api/v2/admin/invite/codes/:id` (revokes an unused
+    code; a used code is kept as the record of who registered with it).
+    Panel envelope; errors are `code: -1` answers.
+  - **Bridged.** The identity-platform host relays them to the kernel's
+    handler (`bridgedRoutes`), like every route whose table only Control
+    reads: `v2_invite_code` is consumed by registration inside Control. The
+    v2 catalog grows to 295 routes (91 bridged, 173 native-flagged, 31
+    kernel-owned); `config/editions.json` is unchanged.
+  - **Codes made here belong to no user**: they admit a registration and
+    attribute no referral, and do not count toward a user's `code_count`
+    limit. The user's own generation (affiliate), its limit and its
+    advisory lock are unchanged.
+  - **Web app.** A new "邀请码 / Invite codes" admin page
+    (`/admin/invite-codes`, under Users in both editions) generates, lists,
+    filters, copies and revokes codes and says whether registration
+    requires one; in commercial it links the Invite Rewards page, which is
+    unchanged.
+
 ## 4.1.0-rc.3 - 2026-10-01
 
 4.1.0-rc.3 is the third 4.1.0 release candidate. **Two changes need action

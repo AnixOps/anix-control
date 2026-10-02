@@ -223,6 +223,7 @@ export default {
       mfa: 'MFA',
       notifications: 'Notifications',
       invite: 'Invite Rewards',
+      inviteCodes: 'Invite codes',
       system: 'System',
       fallback: 'Admin Console'
     }
@@ -272,6 +273,7 @@ export default {
         subscriptionTemplates: 'Subscription templates',
         coupons: 'Coupons',
         invite: 'Invite Rewards',
+        inviteCodes: 'Invite codes',
         payment: 'Payment',
         telegram: 'Telegram Bot',
         notifications: 'Notifications',

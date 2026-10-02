@@ -50,14 +50,26 @@ func TestCommunityEditionHidesExactlyTheCommercialRoutes(t *testing.T) {
 		"GET /api/v2/admin/plans", "POST /api/v2/admin/plans", "GET /api/v2/admin/plans/:id",
 		"PUT /api/v2/admin/plans/:id", "DELETE /api/v2/admin/plans/:id", "POST /api/v2/admin/plans/:id/assign",
 		"GET /api/v2/user/subscription", "GET /api/v2/user/profile",
-		// Registration keeps its invite codes (auth.registration.require_invite).
+		// Registration keeps its invite codes (auth.registration.require_invite),
+		// and administrators keep generating, listing and revoking them.
 		"POST /api/v2/register", "POST /api/v2/login",
+		"GET /api/v2/admin/invite/codes", "POST /api/v2/admin/invite/codes", "DELETE /api/v2/admin/invite/codes/:id",
 	} {
 		require.NotContains(t, hidden, kept)
 	}
 	for _, key := range hidden {
 		method, path, _ := strings.Cut(key, " ")
 		require.True(t, community.HidesRequest(method, path), key)
+	}
+	// Commissions, withdrawals, invite statistics and configuration stay
+	// commercial.
+	for _, commercialOnly := range []string{
+		"GET /api/v2/admin/invite/stats", "GET /api/v2/admin/invite/withdrawals",
+		"POST /api/v2/admin/invite/withdrawals/:id/process", "GET /api/v2/admin/invite/config",
+		"PUT /api/v2/admin/invite/config", "GET /api/v2/user/invite", "POST /api/v2/user/invite/generate",
+		"GET /api/v2/user/invite/commissions", "POST /api/v2/user/invite/withdraw", "GET /api/v2/user/invite/withdrawals",
+	} {
+		require.Contains(t, hidden, commercialOnly)
 	}
 
 	commercial := edition.New(config.EditionCommercial)
@@ -134,6 +146,33 @@ func TestEditionDecidesWhetherCommercialRoutesReachTheirPackages(t *testing.T) {
 			response = requestV2(t, router, cfg, http.MethodGet, test.path)
 			require.Equal(t, http.StatusOK, response.Code, response.Body.String())
 			require.Equal(t, test.routeID, host.lastRouteID)
+		})
+	}
+}
+
+// The administrator's invite codes reach identity-platform in both
+// editions; community hides the affiliate statistics next to them.
+func TestEditionServesAdministratorInviteCodesThroughIdentityPlatform(t *testing.T) {
+	for _, edition := range []string{config.EditionCommunity, config.EditionCommercial} {
+		t.Run(edition, func(t *testing.T) {
+			router, cfg, host := setupV2PackageRouterWithEdition(t, edition)
+			for _, route := range []struct{ method, path, routeID string }{
+				{http.MethodGet, "/api/v2/admin/invite/codes", "identity.admin.invite.codes.get"},
+				{http.MethodPost, "/api/v2/admin/invite/codes", "identity.admin.invite.codes.post"},
+				{http.MethodDelete, "/api/v2/admin/invite/codes/3", "identity.admin.invite.codes.id.delete"},
+			} {
+				host.lastRouteID = ""
+				response := requestV2Admin(t, router, cfg, route.method, route.path)
+				require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+				require.Equal(t, route.routeID, host.lastRouteID)
+			}
+			if edition == config.EditionCommunity {
+				host.lastRouteID = ""
+				stats := requestV2Admin(t, router, cfg, http.MethodGet, "/api/v2/admin/invite/stats")
+				require.Equal(t, http.StatusNotFound, stats.Code, stats.Body.String())
+				require.Contains(t, stats.Body.String(), "package_route_not_found")
+				require.Empty(t, host.lastRouteID)
+			}
 		})
 	}
 }

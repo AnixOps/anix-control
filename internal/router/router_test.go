@@ -150,7 +150,7 @@ func seedV2IdentityPackage(t *testing.T, publicKey ed25519.PublicKey, privateKey
 	t.Helper()
 	entrypoint := []byte("#!/bin/sh\nexit 0\n")
 	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[],"package_id":"identity-platform","version":"4.0.0"}`)
-	routes := []byte(`{"api_version":"v2","package_id":"identity-platform","routes":[{"method":"POST","legacy_path":"/api/v2/login","package_route":"identity.auth.login","envelope":"panel"},{"method":"POST","legacy_path":"/api/v2/register","package_route":"identity.auth.register","envelope":"panel"}]}`)
+	routes := []byte(`{"api_version":"v2","package_id":"identity-platform","routes":[{"method":"POST","legacy_path":"/api/v2/login","package_route":"identity.auth.login","envelope":"panel"},{"method":"POST","legacy_path":"/api/v2/register","package_route":"identity.auth.register","envelope":"panel"},{"method":"GET","legacy_path":"/api/v2/admin/invite/codes","package_route":"identity.admin.invite.codes.get","envelope":"panel"},{"method":"POST","legacy_path":"/api/v2/admin/invite/codes","package_route":"identity.admin.invite.codes.post","envelope":"panel"},{"method":"DELETE","legacy_path":"/api/v2/admin/invite/codes/:id","package_route":"identity.admin.invite.codes.id.delete","envelope":"panel"}]}`)
 	artifact := v2TestPackage(t, map[string][]byte{
 		"bin/control-host": entrypoint, "compat/v2-routes.json": routes, "migrations/index.json": migrations,
 	})
@@ -499,7 +499,7 @@ func TestAllCataloguedV2RoutesResolveThroughTheirPackageBridge(t *testing.T) {
 			require.NotNil(t, operation)
 		})
 	}
-	require.Equal(t, 22, identityRoutes)
+	require.Equal(t, 25, identityRoutes)
 	require.Equal(t, 270, bridgedRoutes)
 }
 

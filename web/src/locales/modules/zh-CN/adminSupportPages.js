@@ -128,6 +128,68 @@ export default {
       cancelFailedShort: '取消失败'
     }
   },
+  adminInviteCodes: {
+    title: '邀请码',
+    subtitle: '生成、复制和撤销用于注册的邀请码。',
+    rewardsLink: '邀请返利',
+    never: '永不过期',
+    empty: '暂无邀请码',
+    registration: {
+      required: '当前注册必须填写邀请码（auth.registration.require_invite）。',
+      optional: '当前注册无需邀请码；注册时填写的邀请码仍会被核销。'
+    },
+    generate: {
+      title: '生成邀请码',
+      count: '数量',
+      expireDays: '有效天数',
+      expireDaysPlaceholder: '使用配置的默认值',
+      expireDaysHelp: '留空：使用配置的有效期；0：永不过期。',
+      submit: '生成',
+      created: '已生成 {count} 个邀请码：'
+    },
+    filters: {
+      all: '全部邀请码'
+    },
+    status: {
+      unused: '未使用',
+      used: '已使用',
+      expired: '已过期'
+    },
+    owner: {
+      admin: '管理员',
+      user: '用户 #{id}'
+    },
+    table: {
+      code: '邀请码',
+      owner: '创建者',
+      status: '状态',
+      usedBy: '使用者',
+      expiresAt: '过期时间',
+      createdAt: '创建时间',
+      actions: '操作'
+    },
+    actions: {
+      copy: '复制',
+      copyAll: '全部复制',
+      revoke: '撤销',
+      refresh: '刷新'
+    },
+    pager: {
+      previous: '上一页',
+      next: '下一页',
+      summary: '第 {page} / {pages} 页（共 {total} 个）'
+    },
+    messages: {
+      failed: '请求失败',
+      fetchFailed: '加载邀请码失败',
+      countRange: '每次可生成 1 到 {max} 个邀请码。',
+      generateFailed: '生成邀请码失败：{message}',
+      revokeConfirm: '撤销邀请码 {code}？撤销后不能再用于注册。',
+      revokeFailed: '撤销邀请码失败：{message}',
+      copied: '已复制',
+      copyFailed: '复制失败'
+    }
+  },
   adminInvite: {
     title: '邀请返利',
     subtitle: '配置邀请佣金、审核提现申请并查看排行。',

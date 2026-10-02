@@ -128,6 +128,68 @@ export default {
       cancelFailedShort: 'Cancel failed'
     }
   },
+  adminInviteCodes: {
+    title: 'Invite codes',
+    subtitle: 'Generate, copy and revoke the codes that admit a registration.',
+    rewardsLink: 'Invite rewards',
+    never: 'Never',
+    empty: 'No invite codes',
+    registration: {
+      required: 'Registration currently requires an invite code (auth.registration.require_invite).',
+      optional: 'Registration does not require an invite code; a code given at sign-up is still consumed.'
+    },
+    generate: {
+      title: 'Generate codes',
+      count: 'How many',
+      expireDays: 'Expires after (days)',
+      expireDaysPlaceholder: 'Configured default',
+      expireDaysHelp: 'Empty: the configured expiry. 0: never expires.',
+      submit: 'Generate',
+      created: '{count} code(s) generated:'
+    },
+    filters: {
+      all: 'All codes'
+    },
+    status: {
+      unused: 'Unused',
+      used: 'Used',
+      expired: 'Expired'
+    },
+    owner: {
+      admin: 'Administrator',
+      user: 'User #{id}'
+    },
+    table: {
+      code: 'Code',
+      owner: 'Created by',
+      status: 'Status',
+      usedBy: 'Used by',
+      expiresAt: 'Expires',
+      createdAt: 'Created',
+      actions: 'Actions'
+    },
+    actions: {
+      copy: 'Copy',
+      copyAll: 'Copy all',
+      revoke: 'Revoke',
+      refresh: 'Refresh'
+    },
+    pager: {
+      previous: 'Previous',
+      next: 'Next',
+      summary: 'Page {page} of {pages} ({total} codes)'
+    },
+    messages: {
+      failed: 'Request failed',
+      fetchFailed: 'Failed to load invite codes',
+      countRange: 'Generate between 1 and {max} codes at a time.',
+      generateFailed: 'Failed to generate codes: {message}',
+      revokeConfirm: 'Revoke invite code {code}? It can no longer be used to register.',
+      revokeFailed: 'Failed to revoke the code: {message}',
+      copied: 'Copied',
+      copyFailed: 'Copy failed'
+    }
+  },
   adminInvite: {
     title: 'Invite Rewards',
     subtitle: 'Configure invite commissions, review withdrawals, and track rankings.',
