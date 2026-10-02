@@ -8,12 +8,16 @@ import UiHost from '@/ui/UiHost.vue'
 import { toastMessages } from './helpers/feedback'
 
 const mockGetSubscription = vi.fn()
+const mockGetMfaStatus = vi.fn()
+const mockResetSubscription = vi.fn()
 const mockCreateTicket = vi.fn()
 const mockFetch = vi.fn()
 
 vi.mock('@/api/user', () => ({
   getProfile: vi.fn(async () => ({ data: {} })),
   getSubscription: (...args) => mockGetSubscription(...args),
+  getMfaStatus: (...args) => mockGetMfaStatus(...args),
+  resetSubscription: (...args) => mockResetSubscription(...args),
   createTicket: (...args) => mockCreateTicket(...args),
 }))
 
@@ -63,6 +67,9 @@ describe('User Subscribe flow', () => {
     store.login('jwt', { id: 7, email: 'lin@example.com', token: 'sub-token-1' })
     mockGetSubscription.mockReset()
     mockCreateTicket.mockReset()
+    mockGetMfaStatus.mockReset()
+    mockGetMfaStatus.mockResolvedValue(ok({ enabled: false }))
+    mockResetSubscription.mockReset()
     mockFetch.mockReset()
     vi.stubGlobal('fetch', mockFetch)
   })
@@ -154,37 +161,112 @@ describe('User Subscribe flow', () => {
     click.mockRestore()
   })
 
-  it('confirms in place before asking an administrator to reset the link', async () => {
+  it('resets the link after the password and shows the new link and its QR code', async () => {
     mockGetSubscription.mockResolvedValue(ok(SUMMARY))
-    mockCreateTicket.mockResolvedValue(ok({ id: 2041, subject: 'Please reset my subscription link' }))
+    mockResetSubscription
+      .mockResolvedValueOnce({ code: -1, msg: 'invalid password', data: null })
+      .mockResolvedValueOnce(ok({ token: 'sub-token-2' }))
     const { user } = await renderPage()
 
-    const open = await screen.findByRole('button', { name: 'Request a reset…' })
-    await user.click(open)
-    const group = screen.getByRole('group', { name: 'Ask an administrator to reset your subscription link?' })
-    await waitFor(() => expect(document.activeElement).toBe(within(group).getByRole('button', { name: 'Cancel' })))
+    await user.click(await screen.findByRole('button', { name: 'Reset link…' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Reset your subscription link?' })
+    const password = await within(dialog).findByLabelText(/^Current password/)
+    await waitFor(() => expect(document.activeElement).toBe(password))
 
-    // Cancel (and Esc) put it away and return focus.
-    await user.keyboard('{Escape}')
-    await waitFor(() => expect(screen.queryByRole('group', { name: /reset your subscription link/ })).toBeNull())
-    await waitFor(() => expect(document.activeElement).toBe(screen.getByRole('button', { name: 'Request a reset…' })))
+    // Nothing is sent without a password.
+    await user.click(within(dialog).getByRole('button', { name: 'Reset link' }))
+    expect(await within(dialog).findByText('Enter your current password.')).toBeTruthy()
+    expect(mockResetSubscription).not.toHaveBeenCalled()
+
+    await user.type(password, 'wrong')
+    await user.click(within(dialog).getByRole('button', { name: 'Reset link' }))
+    expect(await within(dialog).findByText('That password is not correct.')).toBeTruthy()
+    expect(mockResetSubscription).toHaveBeenLastCalledWith({ password: 'wrong' })
+
+    await user.clear(password)
+    await user.type(password, 'correct-horse{Enter}')
+    await waitFor(() => expect(mockResetSubscription).toHaveBeenLastCalledWith({ password: 'correct-horse' }))
+    const done = await screen.findByRole('dialog', { name: 'Subscription link reset' })
+    const newLink = `${window.location.protocol}//${window.location.host}/s/sub-token-2`
+    expect(within(done).getByLabelText('New subscription link').value).toBe(newLink)
+    expect(within(done).getByRole('img', { name: 'QR code of your subscription link' })).toBeTruthy()
+    expect(toastMessages('success')).toEqual(['Subscription link reset. Import it again on all your devices.'])
+    // The page shows the new link and reloads its data; there is no ticket.
+    expect(screen.getByLabelText('Subscription link', { selector: '#subscribe-link' }).value).toBe(newLink)
+    expect(useUserStore().userInfo.token).toBe('sub-token-2')
+    expect(JSON.parse(localStorage.getItem('userInfo')).token).toBe('sub-token-2')
+    expect(mockGetSubscription).toHaveBeenLastCalledWith(true)
     expect(mockCreateTicket).not.toHaveBeenCalled()
 
-    await user.click(screen.getByRole('button', { name: 'Request a reset…' }))
-    await user.click(screen.getByRole('button', { name: 'Send request' }))
-    expect(mockCreateTicket).toHaveBeenCalledWith({ subject: 'Please reset my subscription link', level: 2, message: 'My subscription link may have leaked. Please reset it.' })
-    expect(await screen.findByText('Reset requested. Your administrator will reply in the ticket.')).toBeTruthy()
-    expect(screen.getByRole('link', { name: 'View ticket' }).getAttribute('href')).toBe('/user/tickets?ticket=2041')
+    await user.click(within(done).getByRole('button', { name: 'Done' }))
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
   })
 
-  it('keeps a failed reset request open with the error', async () => {
+  it('asks for the 6-digit code or a recovery code when two-factor authentication is on', async () => {
     mockGetSubscription.mockResolvedValue(ok(SUMMARY))
-    mockCreateTicket.mockResolvedValue({ code: 1, msg: '创建工单失败' })
+    mockGetMfaStatus.mockResolvedValue(ok({ enabled: true }))
+    mockResetSubscription
+      .mockResolvedValueOnce({ code: -1, msg: 'invalid mfa code', data: null })
+      .mockResolvedValueOnce(ok({ token: 'sub-token-3' }))
     const { user } = await renderPage()
-    await user.click(await screen.findByRole('button', { name: 'Request a reset…' }))
-    await user.click(screen.getByRole('button', { name: 'Send request' }))
-    expect((await screen.findByRole('alert')).textContent).toBe('The request was not sent: 创建工单失败')
-    expect(screen.getByRole('group', { name: /reset your subscription link/ })).toBeTruthy()
+
+    await user.click(await screen.findByRole('button', { name: 'Reset link…' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Reset your subscription link?' })
+    const boxes = await within(dialog).findAllByLabelText(/^Digit \d of 6$/)
+    expect(within(dialog).queryByLabelText(/^Current password/)).toBeNull()
+    await waitFor(() => expect(document.activeElement).toBe(boxes[0]))
+
+    // The sixth digit submits; a wrong code clears the boxes.
+    await user.keyboard('123456')
+    await waitFor(() => expect(mockResetSubscription).toHaveBeenCalledWith({ code: '123456', method: 'totp' }))
+    expect(await within(dialog).findByText('That code is not correct or has expired.')).toBeTruthy()
+    await waitFor(() => expect(within(dialog).getAllByLabelText(/^Digit \d of 6$/).map(box => box.value).join('')).toBe(''))
+
+    await user.click(within(dialog).getByRole('button', { name: 'Use a recovery code' }))
+    const field = await within(dialog).findByLabelText(/^Recovery code/)
+    await user.type(field, 'abc')
+    await user.click(within(dialog).getByRole('button', { name: 'Reset link' }))
+    expect(await within(dialog).findByText(/A recovery code has 8 letters or digits/)).toBeTruthy()
+    await user.clear(field)
+    await user.type(field, 'abcd 1234')
+    await user.click(within(dialog).getByRole('button', { name: 'Reset link' }))
+    await waitFor(() => expect(mockResetSubscription).toHaveBeenLastCalledWith({ code: 'ABCD-1234', method: 'backup' }))
+    expect(await screen.findByRole('dialog', { name: 'Subscription link reset' })).toBeTruthy()
+    expect(useUserStore().userInfo.token).toBe('sub-token-3')
+  })
+
+  it('switches to the code when the server asks for one, and explains the limit', async () => {
+    mockGetSubscription.mockResolvedValue(ok(SUMMARY))
+    mockGetMfaStatus.mockRejectedValue(new Error('offline'))
+    mockResetSubscription
+      .mockResolvedValueOnce({ code: -1, msg: 'mfa code required', data: null })
+      .mockResolvedValueOnce({ code: -1, msg: 'too many subscription reset attempts, please try again later', data: null })
+    const { user } = await renderPage()
+
+    await user.click(await screen.findByRole('button', { name: 'Reset link…' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Reset your subscription link?' })
+    await user.type(await within(dialog).findByLabelText(/^Current password/), 'correct-horse{Enter}')
+    const boxes = await within(dialog).findAllByLabelText(/^Digit \d of 6$/)
+    expect(boxes).toHaveLength(6)
+    await user.keyboard('654321')
+    expect(await within(dialog).findByText('Too many attempts. Try again in an hour.')).toBeTruthy()
+    expect(useUserStore().userInfo.token).toBe('sub-token-1')
+
+    // Esc closes it; nothing changed.
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    expect(screen.getByLabelText('Subscription link', { selector: '#subscribe-link' }).value).toContain('/s/sub-token-1')
+  })
+
+  it('shows a failed reset with the server message', async () => {
+    mockGetSubscription.mockResolvedValue(ok(SUMMARY))
+    mockResetSubscription.mockResolvedValue({ code: -1, msg: '重置订阅失败: database is locked', data: null })
+    const { user } = await renderPage()
+    await user.click(await screen.findByRole('button', { name: 'Reset link…' }))
+    const dialog = await screen.findByRole('dialog', { name: 'Reset your subscription link?' })
+    await user.type(await within(dialog).findByLabelText(/^Current password/), 'correct-horse{Enter}')
+    expect(await within(dialog).findByText('The link was not reset: 重置订阅失败: database is locked')).toBeTruthy()
+    expect(mockCreateTicket).not.toHaveBeenCalled()
   })
 
   it('shows a retryable error when the subscription cannot be loaded', async () => {

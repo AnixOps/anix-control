@@ -2584,6 +2584,15 @@
   },
   {
     "method": "POST",
+    "path": "/api/v2/user/subscription/reset",
+    "owner": "identity-platform",
+    "route_id": "identity.user.subscription.reset.post",
+    "envelope": "panel",
+    "middleware_group": "user",
+    "transport": "http"
+  },
+  {
+    "method": "POST",
     "path": "/api/v2/user/telegram/notify",
     "owner": "notification",
     "route_id": "notification.user.telegram.notify.post",

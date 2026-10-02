@@ -49,6 +49,7 @@ source of truth.
 | Auth | JWT authenticated user/admin APIs | Implemented | `middleware.JWTAuth`, `middleware.AdminAuth` | Continue permission tests for new routes. |
 | Auth | MFA setup, verification, and login challenge | Partial | User MFA API, admin MFA config, `/api/v2/login`, `web/src/views/Login.vue` | User-enabled TOTP/backup MFA gates token issuance, and global `enforce_for_all`/`enforce_for_admin` policies now return no-token enrollment-required responses; user-facing self-service enrollment UI still needs implementation evidence. |
 | User | Profile, dashboard, subscription summary | Implemented | `/api/v2/user/profile`, `/dashboard`, `/subscription` | Continue UI regression coverage as payloads evolve. |
+| User | Subscription link self-service reset | Implemented | `POST /api/v2/user/subscription/reset` (identity-platform, group A, every edition), 订阅 page danger zone dialog; re-authentication with the password or a TOTP/recovery code, three attempts per user and hour, audited; rotates the token as the administrator's reset does | None known. |
 | User | User plan browsing | Implemented (commercial edition) | `/api/v2/user/plan`, user Plans page, unified success/error envelopes; hidden in the community edition | None known. |
 | User | Order list, detail, and order creation | Implemented | `/api/v2/user/order*`; the caller's own orders with the plan's `id` and `name`, no buyer row | Keep amount/traffic boundary tests current. |
 | User | Coupon validation | Implemented (commercial edition) | `/api/v2/user/coupon/check`; hidden in the community edition | None known. |
@@ -60,7 +61,7 @@ source of truth.
 | User | User-managed forwarding/tunnel entries | Partial | `/api/v2/forward/*`, `/api/v2/tunnel/user/tunnel` | Close remaining Flux parity and runtime enforcement gaps. |
 | Admin | Dashboard and system info | Implemented | `/api/v2/admin/dashboard` success/database-error panel envelopes, `/system/info` | Add more operational health signals over time. |
 | Admin | Hourly traffic and user ranking | Implemented | `/api/v2/admin/traffic/hourly`, `/traffic/user-ranking` | Watch high-volume query performance in production. |
-| Admin | User management | Implemented | CRUD, ban/unban, traffic reset, subscribe reset with unified success/user-error envelopes | Continue authorization regression tests for new admin actions. |
+| Admin | User management | Implemented | CRUD, ban/unban, traffic reset, subscribe reset (users can also reset their own link) with unified success/user-error envelopes | Continue authorization regression tests for new admin actions. |
 | Admin | Plan management / subscription templates | Implemented | CRUD and assign with unified success/user-error envelopes; the community edition calls plans subscription templates (订阅模板) and hides prices | None known. |
 | Admin | Order management | Implemented (commercial edition) | list/detail/status/paid/cancel with unified success/user-error envelopes and localized admin error prompts; list and detail carry the plan's `id` and `name` and the buyer's `id` and `email` only | Payment provider callbacks remain separate. |
 | Admin | Node management and protocol configuration | Implemented | CRUD, credentials, raw config, protocol templates, auth keys | Keep AnixOps Agent and legacy V2bX compatibility tests current. |

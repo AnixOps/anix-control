@@ -106,6 +106,47 @@ GET /api/v2/user/subscription
 Authorization: Bearer <token>
 ```
 
+### 重置订阅链接
+
+```http
+POST /api/v2/user/subscription/reset
+Authorization: Bearer <token>
+Idempotency-Key: <optional, a retry with the same key applies once>
+
+{"password": "当前密码"}
+# 已开启两步验证时改为提交验证码或恢复码：
+{"code": "123456", "method": "totp"}
+{"code": "ABCD-1234", "method": "backup"}
+```
+
+The signed-in user issues themselves a new subscription token, exactly as
+`POST /api/v2/admin/users/:id/reset-subscribe` does: the old `/s/<token>`
+link stops working at once, the proxy UUID is kept (nodes and connected
+clients are unaffected), and the subscriber request ledger records it as
+`identity.user_reset_subscribe:<user>:<digest>`. Served by identity-platform
+(group A) in every edition; audited as `user` / `reset_subscribe` without
+the body.
+
+- Re-authentication: the current password; with two-step verification on,
+  a TOTP code or a recovery code instead (`method` `totp` or `backup`;
+  empty tries TOTP, then a recovery code, which is consumed).
+- Limit: three attempts that check a credential per user and hour,
+  successful or not; then `Retry-After`.
+
+**响应**（v2 panel envelope）:
+```json
+{"code": 0, "msg": "操作成功", "data": {"token": "<new subscription token>"}}
+```
+
+| `msg` (code ≠ 0) | Meaning |
+|---|---|
+| `参数错误` | body is not JSON |
+| `password required` / `invalid password` | no second factor: password missing or wrong |
+| `mfa code required` / `invalid mfa code` | second factor on: code missing or wrong |
+| `too many subscription reset attempts, please try again later` | limit reached (`Retry-After` header) |
+| `用户不存在` | the account no longer exists |
+| `重置订阅失败: …` | Control could not reset the token |
+
 ---
 
 ## 管理员接口
@@ -163,6 +204,10 @@ PUT /api/v2/admin/users/:id
 
 # 删除用户
 DELETE /api/v2/admin/users/:id
+
+# 重置流量 / 重置订阅链接（新 token，UUID 不变；用户也可自助重置，见「重置订阅链接」）
+POST /api/v2/admin/users/:id/reset-traffic
+POST /api/v2/admin/users/:id/reset-subscribe
 ```
 
 The list (`data.list`, with `data.total`) filters by `email` (substring),

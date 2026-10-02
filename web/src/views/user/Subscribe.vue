@@ -129,31 +129,10 @@
               <h3 class="danger-zone__title">{{ t('portal.subscribe.danger.resetTitle') }}</h3>
               <p class="danger-zone__description">{{ t('portal.subscribe.danger.resetDescription') }}</p>
             </div>
-            <UiButton
-              v-if="!reset.confirming"
-              ref="resetOpenRef"
-              variant="danger-soft"
-              :icon="RefreshCcw"
-              data-reset-open
-              @click="openReset"
-            >
+            <UiButton variant="danger-soft" :icon="RefreshCcw" data-reset-open @click="openReset">
               {{ t('portal.subscribe.danger.resetAction') }}
             </UiButton>
           </div>
-          <div v-if="reset.confirming" class="danger-zone__confirm" role="group" aria-labelledby="reset-question" data-reset-confirm @keydown.esc="cancelReset">
-            <p id="reset-question" class="danger-zone__question">{{ t('portal.subscribe.danger.confirmTitle') }}</p>
-            <p class="danger-zone__description">{{ t('portal.subscribe.danger.confirmDescription') }}</p>
-            <p v-if="reset.error" class="danger-zone__error" role="alert">{{ reset.error }}</p>
-            <div class="danger-zone__actions">
-              <UiButton ref="resetCancelRef" :disabled="reset.busy" data-reset-cancel @click="cancelReset">{{ t('portal.subscribe.danger.cancel') }}</UiButton>
-              <UiButton variant="danger" :loading="reset.busy" data-reset-confirm-button @click="submitReset">{{ t('portal.subscribe.danger.confirm') }}</UiButton>
-            </div>
-          </div>
-          <p v-if="reset.ticketId" class="danger-zone__done" role="status" data-reset-done>
-            <UiIcon :icon="CircleCheck" :size="16" />
-            <span>{{ t('portal.subscribe.danger.submitted') }}</span>
-            <RouterLink :to="{ path: '/user/tickets', query: { ticket: String(reset.ticketId) } }">{{ t('portal.subscribe.danger.viewTicket') }}</RouterLink>
-          </p>
         </div>
       </section>
     </template>
@@ -171,6 +150,93 @@
         <UiButton variant="primary" @click="close">{{ t('ui.actions.close') }}</UiButton>
       </template>
     </UiSheet>
+
+    <!-- Reset: re-authenticate (password, or a code with two-step verification), then the new link. -->
+    <UiDialog
+      v-model:open="reset.open"
+      size="sm"
+      :title="reset.step === 'done' ? t('portal.subscribe.danger.doneTitle') : t('portal.subscribe.danger.dialogTitle')"
+      :description="resetDialogDescription"
+      :dismissible="!reset.busy"
+      data-reset-dialog
+    >
+      <p v-if="reset.step === 'checking'" class="reset__muted" role="status">{{ t('portal.subscribe.danger.checking') }}</p>
+      <form v-else-if="reset.step === 'password'" id="subscribe-reset-form" class="reset__form" novalidate @submit.prevent="submitReset()">
+        <UiPasswordField
+          ref="resetPasswordRef"
+          v-model="reset.password"
+          :label="t('portal.subscribe.danger.password')"
+          :error="reset.error"
+          :disabled="reset.busy"
+          required
+          data-reset-password
+        />
+      </form>
+      <form v-else-if="reset.step === 'code'" id="subscribe-reset-form" class="reset__form" novalidate @submit.prevent="submitReset()">
+        <UiOtpField
+          ref="resetOtpRef"
+          v-model="reset.code"
+          :label="t('portal.subscribe.danger.code')"
+          :error="reset.error"
+          :disabled="reset.busy"
+          data-reset-code
+          @complete="submitReset"
+        />
+        <UiButton variant="tertiary" size="sm" class="reset__switch" data-reset-use-recovery @click="switchResetStep('recovery')">
+          {{ t('portal.subscribe.danger.useRecovery') }}
+        </UiButton>
+      </form>
+      <form v-else-if="reset.step === 'recovery'" id="subscribe-reset-form" class="reset__form" novalidate @submit.prevent="submitReset()">
+        <UiTextField
+          id="subscribe-reset-recovery"
+          ref="resetRecoveryRef"
+          v-model="reset.recovery"
+          :label="t('portal.subscribe.danger.recovery')"
+          placeholder="XXXX-XXXX"
+          :error="reset.error"
+          :disabled="reset.busy"
+          autocomplete="one-time-code"
+          autocapitalize="characters"
+          spellcheck="false"
+          maxlength="9"
+          class="reset__recovery"
+          aria-required="true"
+          data-reset-recovery
+          @blur="reset.recovery = formatRecovery(reset.recovery)"
+        />
+        <UiButton variant="tertiary" size="sm" class="reset__switch" data-reset-use-code @click="switchResetStep('code')">
+          {{ t('portal.subscribe.danger.useCode') }}
+        </UiButton>
+      </form>
+      <div v-else class="reset__done" data-reset-done>
+        <UiQrCode :value="sub.link.value" :label="t('portal.subscribe.qr.label')" :size="152" data-reset-qr />
+        <UiCopyField
+          :value="sub.link.value"
+          :label="t('portal.subscribe.danger.newLink')"
+          :copy-label="t('portal.subscribe.copy')"
+          size="md"
+          stacked
+          class="reset__link"
+          data-reset-link
+        />
+      </div>
+      <template #footer="{ close }">
+        <UiButton v-if="reset.step === 'done'" variant="primary" data-reset-close @click="close">{{ t('portal.subscribe.danger.close') }}</UiButton>
+        <template v-else>
+          <UiButton :disabled="reset.busy" data-reset-cancel @click="close">{{ t('portal.subscribe.danger.cancel') }}</UiButton>
+          <UiButton
+            variant="danger"
+            type="submit"
+            form="subscribe-reset-form"
+            :loading="reset.busy"
+            :disabled="reset.step === 'checking'"
+            data-reset-submit
+          >
+            {{ t('portal.subscribe.danger.confirm') }}
+          </UiButton>
+        </template>
+      </template>
+    </UiDialog>
   </div>
 </template>
 
@@ -178,28 +244,33 @@
 // 订阅 (plan §8.1): the link with copy and its QR code, one-click import for
 // the clients the kernel serves a format for (subscriptionClients.js), every
 // other format with copy and preview behind 「其他格式」, and the danger zone.
-// Users cannot reset their own link (only POST /admin/users/:id/reset-subscribe
-// exists), so 「申请重置」 confirms in place and files a ticket for the
-// administrator through POST /user/ticket.
+// 「重置链接…」 resets the link on the spot (POST /user/subscription/reset)
+// after the user proves it is them: the current password, or with two-step
+// verification on, a 6-digit code or a recovery code. The dialog then shows
+// the new link and its QR code, and the page reloads its data.
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-import { Check, CircleCheck, Copy, Download, FileText, Link2Off, RefreshCcw } from '@lucide/vue'
-import { createTicket } from '@/api/user'
+import { Check, Copy, Download, FileText, Link2Off, RefreshCcw } from '@lucide/vue'
+import { getMfaStatus, resetSubscription } from '@/api/user'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useEdition } from '@/composables/useEdition'
 import { useUserSubscription } from '@/composables/useUserSubscription'
+import { useUserStore } from '@/stores/user'
 import { panelErrorMessage, unwrapPanel } from '@/utils/panelResponse'
 import LoadError from '@/components/common/LoadError.vue'
 import { SUBSCRIPTION_CLIENTS, SUBSCRIPTION_FORMATS } from './subscriptionClients'
 import UiButton from '@/ui/UiButton.vue'
 import UiCopyField from '@/ui/UiCopyField.vue'
+import UiDialog from '@/ui/UiDialog.vue'
 import UiEmptyState from '@/ui/UiEmptyState.vue'
-import UiIcon from '@/ui/UiIcon.vue'
+import UiOtpField from '@/ui/UiOtpField.vue'
 import UiPageHeader from '@/ui/UiPageHeader.vue'
+import UiPasswordField from '@/ui/UiPasswordField.vue'
 import UiQrCode from '@/ui/UiQrCode.vue'
 import UiSelect from '@/ui/UiSelect.vue'
 import UiSheet from '@/ui/UiSheet.vue'
 import UiSkeleton from '@/ui/UiSkeleton.vue'
+import UiTextField from '@/ui/UiTextField.vue'
 import { copyText } from '@/ui/composables/useClipboard'
 import { useDelayedLoading } from '@/ui/composables/useDelayedLoading'
 import { useFormat } from '@/ui/composables/useFormat'
@@ -210,6 +281,7 @@ const format = useFormat()
 const toast = useToast()
 const { isCommercial } = useEdition()
 const sub = useUserSubscription()
+const userStore = useUserStore()
 const showSkeleton = useDelayedLoading(sub.loading)
 
 // One decimal, without a trailing ".0" (200 GB, not 200.0 GB).
@@ -285,42 +357,105 @@ function downloadPreview() {
 }
 
 // Danger zone ---------------------------------------------------------------
-const reset = reactive({ confirming: false, busy: false, error: '', ticketId: null })
-const resetOpenRef = ref(null)
-const resetCancelRef = ref(null)
+// step: 'checking' (reading whether two-step verification is on), then
+// 'password', 'code' or 'recovery', then 'done' with the new link.
+const reset = reactive({ open: false, step: 'checking', busy: false, password: '', code: '', recovery: '', error: '' })
+const resetPasswordRef = ref(null)
+const resetOtpRef = ref(null)
+const resetRecoveryRef = ref(null)
 
-function focusComponent(component) {
-  const el = component?.$el
-  ;(el?.matches?.('button, a') ? el : el?.querySelector?.('button, a'))?.focus()
+const resetDialogDescription = computed(() => {
+  switch (reset.step) {
+    case 'code': return t('portal.subscribe.danger.dialogCode')
+    case 'recovery': return t('portal.subscribe.danger.dialogRecovery')
+    case 'done': return t('portal.subscribe.danger.doneDescription')
+    default: return t('portal.subscribe.danger.dialogPassword')
+  }
+})
+
+// Move focus to what the step needs.
+function focusResetStep() {
+  nextTick(() => {
+    if (reset.step === 'password') resetPasswordRef.value?.focus()
+    else if (reset.step === 'code') resetOtpRef.value?.focus()
+    else if (reset.step === 'recovery') resetRecoveryRef.value?.focus()
+  })
 }
 
-function openReset() {
-  reset.confirming = true
-  reset.error = ''
-  nextTick(() => focusComponent(resetCancelRef.value))
+function switchResetStep(step) {
+  Object.assign(reset, { step, error: '', code: '', recovery: '' })
+  focusResetStep()
 }
 
-function cancelReset() {
-  if (reset.busy) return
-  reset.confirming = false
-  reset.error = ''
-  nextTick(() => focusComponent(resetOpenRef.value))
-}
-
-async function submitReset() {
-  reset.busy = true
-  reset.error = ''
+async function openReset() {
+  Object.assign(reset, { open: true, step: 'checking', busy: false, password: '', code: '', recovery: '', error: '' })
+  let step = 'password'
   try {
-    const ticket = unwrapPanel(await createTicket({
-      subject: t('portal.subscribe.danger.ticketSubject'),
-      level: 2,
-      message: t('portal.subscribe.danger.ticketMessage')
-    }))
-    reset.ticketId = ticket?.id || ticket?.ID || 0
-    reset.confirming = false
-    nextTick(() => focusComponent(resetOpenRef.value))
+    // With two-step verification on, the server takes a code, not the password.
+    if (unwrapPanel(await getMfaStatus())?.enabled === true) step = 'code'
+  } catch {
+    // Ask for the password; the server says when it wants a code instead.
+  }
+  if (reset.open && reset.step === 'checking') switchResetStep(step)
+}
+
+// Recovery codes are XXXX-XXXX from A-Z and 0-9 (identity/account/mfa.go)
+// and compared exactly: upper-case them and restore the hyphen.
+function formatRecovery(value) {
+  const clean = String(value || '').toUpperCase().replace(/[^A-Z0-9]/g, '')
+  if (clean.length !== 8) return String(value || '').toUpperCase().trim()
+  return `${clean.slice(0, 4)}-${clean.slice(4)}`
+}
+
+// The credentials of the current step, or '' after showing what is missing.
+function resetCredentials(value) {
+  if (reset.step === 'password') {
+    if (reset.password) return { password: reset.password }
+    reset.error = t('portal.subscribe.danger.errors.password')
+  } else if (reset.step === 'code') {
+    const digits = String(typeof value === 'string' ? value : reset.code).replace(/\D/g, '')
+    if (digits.length === 6) return { code: digits, method: 'totp' }
+    reset.error = t('portal.subscribe.danger.errors.code')
+  } else if (reset.step === 'recovery') {
+    reset.recovery = formatRecovery(reset.recovery)
+    if (/^[A-Z0-9]{4}-[A-Z0-9]{4}$/.test(reset.recovery)) return { code: reset.recovery, method: 'backup' }
+    reset.error = t('portal.subscribe.danger.errors.recoveryFormat')
+  }
+  focusResetStep()
+  return ''
+}
+
+function resetFailure(error) {
+  const message = panelErrorMessage(error)
+  if (/mfa code required/i.test(message)) {
+    switchResetStep('code')
+    return
+  }
+  if (error?.response?.status === 429 || /too many/i.test(message)) reset.error = t('portal.subscribe.danger.errors.rateLimited')
+  else if (/invalid password/i.test(message)) reset.error = t('portal.subscribe.danger.errors.passwordWrong')
+  else if (/invalid mfa code/i.test(message)) reset.error = t(reset.step === 'recovery' ? 'portal.subscribe.danger.errors.recoveryWrong' : 'portal.subscribe.danger.errors.codeWrong')
+  else reset.error = t('portal.subscribe.danger.errors.failed', { message: message || t('portal.subscribe.danger.errors.network') })
+  if (reset.step === 'code') nextTick(() => resetOtpRef.value?.clear())
+  else if (reset.step === 'recovery') nextTick(() => resetRecoveryRef.value?.select?.())
+  else focusResetStep()
+}
+
+async function submitReset(value) {
+  if (reset.busy || !['password', 'code', 'recovery'].includes(reset.step)) return
+  reset.error = ''
+  const credentials = resetCredentials(value)
+  if (!credentials) return
+  reset.busy = true
+  try {
+    const data = unwrapPanel(await resetSubscription(credentials))
+    const token = String(data?.token || '').trim()
+    if (token) userStore.updateUserInfo({ token })
+    Object.assign(reset, { step: 'done', password: '', code: '', recovery: '' })
+    toast.success(t('portal.subscribe.danger.done'))
+    // Refresh the summary as well; the link already uses the new token.
+    sub.load({ refresh: true })
   } catch (error) {
-    reset.error = t('portal.subscribe.danger.failed', { message: panelErrorMessage(error) })
+    resetFailure(error)
   } finally {
     reset.busy = false
   }
@@ -535,49 +670,42 @@ onBeforeUnmount(() => { if (copiedTimer) clearTimeout(copiedTimer) })
   line-height: var(--type-callout-line);
 }
 
-.danger-zone__confirm {
+/* ---- reset dialog ------------------------------------------------------------ */
+.reset__muted {
+  color: var(--label-2);
+}
+
+.reset__form {
   display: flex;
   flex-direction: column;
-  gap: var(--space-2);
-  padding: var(--space-4);
-  border-radius: var(--radius-sm);
-  background: var(--danger-soft);
-  animation: danger-in var(--dur-toggle) var(--ease-standard);
-}
-
-.danger-zone__question {
-  font-weight: var(--weight-semibold);
-}
-
-/* On the tinted fill, secondary text needs to be darker to keep 4.5:1. */
-.danger-zone__confirm .danger-zone__description {
-  color: color-mix(in srgb, var(--label-2) 60%, var(--label-1));
-}
-
-.danger-zone__error {
-  color: color-mix(in srgb, var(--danger) 80%, var(--label-1));
-  font-size: var(--type-callout-size);
-}
-
-.danger-zone__actions {
-  display: flex;
-  flex-wrap: wrap;
   gap: var(--space-3);
-  justify-content: flex-end;
-  margin-top: var(--space-2);
+  align-items: stretch;
 }
 
-.danger-zone__done {
+.reset__switch {
+  align-self: flex-start;
+}
+
+.reset__recovery :deep(input) {
+  font-family: var(--font-mono);
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.reset__done {
   display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
+  flex-direction: column;
+  gap: var(--space-5);
   align-items: center;
-  color: var(--label-1);
-  font-size: var(--type-callout-size);
 }
 
-.danger-zone__done :deep(.ui-icon) {
-  color: var(--success);
+.reset__link {
+  align-self: stretch;
+}
+
+.reset__link :deep(input) {
+  font-family: var(--font-mono);
+  font-size: var(--type-callout-size);
 }
 
 /* ---- preview ------------------------------------------------------------------ */
@@ -608,12 +736,6 @@ onBeforeUnmount(() => { if (copiedTimer) clearTimeout(copiedTimer) })
   color: var(--danger);
 }
 
-@keyframes danger-in {
-  from {
-    opacity: 0;
-  }
-}
-
 @media (prefers-reduced-motion: reduce) {
   .client {
     transition: none;
@@ -621,10 +743,6 @@ onBeforeUnmount(() => { if (copiedTimer) clearTimeout(copiedTimer) })
 
   .client:hover {
     transform: none;
-  }
-
-  .danger-zone__confirm {
-    animation: none;
   }
 }
 
@@ -663,10 +781,6 @@ onBeforeUnmount(() => { if (copiedTimer) clearTimeout(copiedTimer) })
 
   .client:hover {
     transform: none;
-  }
-
-  .danger-zone__actions :deep(.ui-button) {
-    flex: 1 1 auto;
   }
 }
 </style>

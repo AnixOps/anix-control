@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+### Added
+
+- **Users reset their own subscription link** (owner decision 2026-10-02):
+  `POST /api/v2/user/subscription/reset`
+  (`identity.user.subscription.reset.post`), in every edition.
+  - Rotates exactly what the administrator's reset rotates: a new
+    subscription token, the proxy UUID kept, recorded in the subscriber
+    request ledger (`identity.user_reset_subscribe:<user>:<digest>`), so a
+    retry with the same `Idempotency-Key` applies once. The answer is the
+    new token in the v2 panel envelope.
+  - Re-authentication: the current password, or with two-step verification
+    on, a TOTP or recovery code. Three attempts that check a credential per
+    user and hour, then `Retry-After`. Audited as `user` /
+    `reset_subscribe`, without the body.
+  - identity-platform owns it as a group A route (it checks credentials,
+    which identity owns once authoritative): native handler, identity
+    bridge handler, parity tests on SQLite and PostgreSQL. Catalog: 296
+    routes (174 native-flagged, 91 bridged, 31 kernel-owned).
+  - 订阅 page: 「重置链接…」 opens a dialog for the password, or the code
+    boxes / a recovery code, then shows the new link and its QR code and
+    reloads the page (toast 订阅链接已重置，请在所有设备重新导入). The
+    reset-request ticket is gone.
+  - While identity is authoritative, a group A route the stored route
+    modes do not name resolves to native (`service.ResolvePackageRouteModes`,
+    for the host's configuration and the group A check), so installations
+    cut over before this route joined group A serve it natively with no
+    operator action; before the cutover a missing route stays legacy.
+
 ### Changed
 
 - **Sign-in and user pages redesigned (UI redesign phase U5)**
@@ -24,8 +52,7 @@
   - 订阅: the link with a real, scannable QR code, one-click import for
     Clash Verge, Shadowrocket, sing-box, Stash, Surge, Quantumult X and Loon
     (v2rayN copies its link), every other format with copy and preview, and
-    a danger zone that asks an administrator for a reset through a ticket
-    (users cannot reset the link themselves).
+    a danger zone that resets the link (see Added).
   - 帮助中心: search (`/`), category cards, articles at reading width with a
     table of contents and previous / next instead of a dialog; Markdown-style
     bodies render as elements, never HTML.
@@ -33,7 +60,8 @@
     tickets in a Sheet. 套餐 / 订单: store-style plan cards with a period
     switch and checkout, orders with a details Sheet.
   - 账户: two-factor setup with a QR code and the code boxes; "备用码" are
-    now "恢复码" / recovery codes, with a download.
+    now "恢复码" / recovery codes, with a download. The admin MFA policy
+    page says 恢复码 / recovery codes too.
   - Every page has a skeleton after 300 ms, an empty state, and an error
     state with 重试 and 复制错误详情. Page titles follow the navigation
     (概览, 订阅, 帮助中心, 工单, 套餐, 订单).

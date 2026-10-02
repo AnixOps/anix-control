@@ -9,6 +9,7 @@ import (
 
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/edition"
+	"github.com/AnixOps/anix-control/v4/internal/utils"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
@@ -54,6 +55,8 @@ func TestCommunityEditionHidesExactlyTheCommercialRoutes(t *testing.T) {
 		// and administrators keep generating, listing and revoking them.
 		"POST /api/v2/register", "POST /api/v2/login",
 		"GET /api/v2/admin/invite/codes", "POST /api/v2/admin/invite/codes", "DELETE /api/v2/admin/invite/codes/:id",
+		// Users reset their own subscription link in every edition.
+		"POST /api/v2/user/subscription/reset",
 	} {
 		require.NotContains(t, hidden, kept)
 	}
@@ -173,6 +176,22 @@ func TestEditionServesAdministratorInviteCodesThroughIdentityPlatform(t *testing
 				require.Contains(t, stats.Body.String(), "package_route_not_found")
 				require.Empty(t, host.lastRouteID)
 			}
+		})
+	}
+}
+
+// A user's reset of their own subscription link reaches identity-platform
+// in both editions.
+func TestEditionServesTheUsersSubscriptionResetThroughIdentityPlatform(t *testing.T) {
+	for _, edition := range []string{config.EditionCommunity, config.EditionCommercial} {
+		t.Run(edition, func(t *testing.T) {
+			router, cfg, host := setupV2PackageRouterWithEdition(t, edition)
+			token, err := utils.GenerateToken(2, "member@example.com", false, cfg.JWT.Secret, cfg.JWT.Expire)
+			require.NoError(t, err)
+			host.lastRouteID = ""
+			response := requestV2WithToken(t, router, http.MethodPost, "/api/v2/user/subscription/reset", token)
+			require.Equal(t, http.StatusOK, response.Code, response.Body.String())
+			require.Equal(t, "identity.user.subscription.reset.post", host.lastRouteID)
 		})
 	}
 }

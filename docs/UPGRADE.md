@@ -1593,6 +1593,42 @@ in the community edition.
 - Commission, withdrawals, invite statistics and the invite configuration stay
   with the commercial `affiliate` package.
 
+## Upgrading Past 4.1.0-rc.4
+
+These notes cover changes after 4.1.0-rc.4 (`CHANGELOG.md`, "Unreleased").
+
+### Users Reset Their Own Subscription Link
+
+Users can reset their own subscription link on the 订阅 page
+(`POST /api/v2/user/subscription/reset`). It rotates what the
+administrator's reset rotates: a new subscription token, the proxy UUID
+kept, so nodes and connected clients are unaffected and only the old
+`/s/<token>` link stops working. It asks for the current password, or a
+TOTP or recovery code when the account has two-step verification, and
+allows three attempts per user and hour. The reset-request ticket the
+subscription page filed before is gone.
+
+- The route is declared by `identity-platform`: move that installation to
+  the new release (as in the [rc.3 → rc.4 Checklist](#rc3--rc4-checklist),
+  step 3), or an older installed one answers it `404`
+  `package_route_not_found`.
+- It belongs to identity group A, because it checks credentials. Before the
+  identity cutover nothing changes: the cutover and rollback switch it with
+  the rest of group A.
+- **Identity already authoritative** (cutover done before this upgrade):
+  nothing to do. The route modes the cutover stored do not name the new
+  route, and the kernel resolves a group A route the stored modes leave out
+  as `native` while identity is authoritative (`identity` or `finalized`)
+  and as `legacy` before (`service.ResolvePackageRouteModes`). So the
+  identity host serves the reset natively, with identity's credentials,
+  as soon as `identity-platform` is moved, and configuration writes that
+  do not name the route are not refused. A route stored explicitly as
+  `legacy` still counts as legacy: group A must stay native together.
+- The limit is counted in memory by the legacy handler, so with several
+  replicas before the cutover each replica allows three attempts an hour
+  (as for login, [container deployment](architecture/container-deployment.md));
+  after the cutover identity counts them in its shared table.
+
 ## Moving Logins To The Identity Module
 
 From 4.1 the identity module can own accounts, passwords, MFA and token

@@ -5,6 +5,7 @@ import { test, expect } from '@playwright/test'
 // and import from the subscription page. The API is mocked.
 const GIB = 1024 ** 3
 const TOKEN = '7f3k9q2m8x4v2c6b'
+const NEW_TOKEN = '2c6b8x4v7f3k9q2m'
 
 async function installFixtures(page, calls) {
   await page.route(url => url.pathname.startsWith('/api/'), async route => {
@@ -19,6 +20,11 @@ async function installFixtures(page, calls) {
       return json({ code: 0, data: { token: 'portal-e2e-token', is_admin: false, user_id: 7, email: body.email } })
     }
     if (path === '/api/v2/user/profile') return json({ code: 0, data: { id: 7, email: 'lin.xiao@example.test', token: TOKEN, is_admin: false } })
+    if (path === '/api/v2/user/mfa/status') return json({ code: 0, data: { enabled: true, has_backup_codes: true, remaining_codes: 8 } })
+    if (path === '/api/v2/user/subscription/reset') {
+      calls.push({ reset: request.postDataJSON() })
+      return json({ code: 0, data: { token: NEW_TOKEN } })
+    }
     if (path === '/api/v2/user/subscription') {
       return json({ code: 0, data: { plan_id: 3, plan_name: 'Standard', transfer_enable: 200 * GIB, used_traffic: 71.6 * GIB, expired_at: 1795996800, subscribe_path: '/s' } })
     }
@@ -56,4 +62,32 @@ test('signs in with a code and gets the subscription link in two clicks', async 
   await expect(page.getByRole('img', { name: 'QR code of your subscription link' })).toBeVisible()
   const clash = await page.getByRole('link', { name: 'Import to Clash Verge' }).getAttribute('href')
   expect(decodeURIComponent(clash)).toContain(`${link}?type=clash`)
+})
+
+// The danger zone resets the link on the spot: two-factor is on, so the
+// dialog takes the 6-digit code, then shows the new link and its QR code.
+test('resets the subscription link with a code and shows the new one', async ({ page, baseURL }) => {
+  await page.addInitScript(([token]) => {
+    localStorage.setItem('app.locale', 'en')
+    localStorage.setItem('token', 'portal-e2e-token')
+    localStorage.setItem('userInfo', JSON.stringify({ id: 7, email: 'lin.xiao@example.test', token, is_admin: false }))
+  }, [TOKEN])
+  const calls = []
+  await installFixtures(page, calls)
+
+  await page.goto('/user/subscribe')
+  await expect(page.getByRole('heading', { level: 1, name: 'Subscription' })).toBeVisible()
+  await page.getByRole('button', { name: 'Reset link…' }).click()
+  const dialog = page.getByRole('dialog', { name: 'Reset your subscription link?' })
+  await expect(dialog.getByLabel('Digit 1 of 6')).toBeFocused()
+  await page.keyboard.type('123456')
+
+  const done = page.getByRole('dialog', { name: 'Subscription link reset' })
+  const link = `${new URL(baseURL).origin}/s/${NEW_TOKEN}`
+  await expect(done.getByLabel('New subscription link')).toHaveValue(link)
+  await expect(done.getByRole('img', { name: 'QR code of your subscription link' })).toBeVisible()
+  await expect(page.getByText('Subscription link reset. Import it again on all your devices.')).toBeVisible()
+  expect(calls.at(-1)).toEqual({ reset: { code: '123456', method: 'totp' } })
+  await done.getByRole('button', { name: 'Done' }).click()
+  await expect(page.locator('#subscribe-link')).toHaveValue(link)
 })

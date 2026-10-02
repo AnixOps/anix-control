@@ -256,7 +256,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "管理员获取所有授权密钥列表",
+                "description": "管理员获取所有授权密钥列表。密钥值显示为 ********, 只在生成时返回一次。",
                 "consumes": [
                     "application/json"
                 ],
@@ -1284,6 +1284,127 @@ const docTemplate = `{
                     },
                     "400": {
                         "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/invite/codes": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Every invite code, newest first; status filters unused, used or expired codes.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin-invite-codes"
+                ],
+                "summary": "List invite codes",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "unused, used or expired",
+                        "name": "status",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 1,
+                        "description": "page",
+                        "name": "page",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "default": 20,
+                        "description": "page size",
+                        "name": "page_size",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Generates 1 to 50 codes that belong to no user. expire_days overrides the configured expiry (0: never).",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin-invite-codes"
+                ],
+                "summary": "Generate invite codes",
+                "parameters": [
+                    {
+                        "description": "{count, expire_days}",
+                        "name": "request",
+                        "in": "body",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/admin/invite/codes/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Deletes an unused invite code; a used code is kept.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "admin-invite-codes"
+                ],
+                "summary": "Revoke an invite code",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "invite code id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
                         "schema": {
                             "type": "object",
                             "additionalProperties": true
@@ -2349,7 +2470,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "管理员获取指定节点的 api_key / secret, 用于 AnixOps Agent 对接配置。\nNode.APIKey/Secret 在普通序列化里是隐藏字段 (json:\"-\"), 此接口显式返回,\n仅限管理员, 供 Ansible 等部署工具自动拉取节点凭证。",
+                "description": "管理员获取指定节点的 api_key / secret, 用于 AnixOps Agent 对接配置。\nNode.APIKey/Secret 在普通序列化里是隐藏字段 (json:\"-\"), 此接口显式返回,\n仅限管理员, 供 Ansible 等部署工具自动拉取节点凭证。\n每次读取都写入管理员审计日志 (action \"reveal\")。",
                 "consumes": [
                     "application/json"
                 ],
@@ -5871,8 +5992,50 @@ const docTemplate = `{
                         "name": "node_id",
                         "in": "query",
                         "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "forward node API token",
+                        "name": "X-API-Key",
+                        "in": "header",
+                        "required": true
                     }
                 ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "401": {
+                        "description": "Unauthorized",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/public/config": {
+            "get": {
+                "description": "产品版本 (community / commercial)、该版本隐藏的包，以及注册是否需要邀请码",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "系统"
+                ],
+                "summary": "公开配置",
                 "responses": {
                     "200": {
                         "description": "OK",
@@ -6378,7 +6541,7 @@ const docTemplate = `{
                         "BearerAuth": []
                     }
                 ],
-                "description": "用户创建自己的转发规则",
+                "description": "旧版转发规则只能由管理员创建或修改：规则直接运行在所选中转和落地节点上，用户的隧道权限不覆盖它们。普通用户收到错误，应通过已授权的隧道创建转发 (/forward/create)。",
                 "consumes": [
                     "application/json"
                 ],
@@ -6388,7 +6551,7 @@ const docTemplate = `{
                 "tags": [
                     "用户端"
                 ],
-                "summary": "用户创建转发规则",
+                "summary": "管理员创建自己的旧版转发规则",
                 "parameters": [
                     {
                         "description": "规则信息",
@@ -7071,6 +7234,53 @@ const docTemplate = `{
                 }
             }
         },
+        "/user/subscription/reset": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "用户为自己重新生成订阅 token，旧订阅链接立即失效（UUID 不变，与管理员重置相同）。需重新验证身份：未开启两步验证时提交当前密码，已开启时提交验证码或恢复码。每个用户每小时最多尝试 3 次。",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "用户端"
+                ],
+                "summary": "重置我的订阅链接",
+                "parameters": [
+                    {
+                        "description": "password，或 code 与可选的 method（totp / backup）",
+                        "name": "body",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.subscriptionResetRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "data.token 为新的订阅 token",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/user/telegram/notify": {
             "post": {
                 "security": [
@@ -7743,6 +7953,20 @@ const docTemplate = `{
                 },
                 "traffic_limit": {
                     "type": "integer"
+                }
+            }
+        },
+        "handler.subscriptionResetRequest": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "method": {
+                    "type": "string"
+                },
+                "password": {
+                    "type": "string"
                 }
             }
         },

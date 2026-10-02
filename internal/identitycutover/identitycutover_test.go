@@ -219,6 +219,61 @@ func allNative(t *testing.T) string {
 	return string(document)
 }
 
+// groupAIn is a route-mode document with every group A route in mode,
+// except the routes in except, which it leaves out.
+func groupAIn(t *testing.T, mode string, except map[string]bool) string {
+	t.Helper()
+	modes := map[string]string{}
+	for _, route := range service.IdentityGroupARoutes {
+		if !except[route] {
+			modes[route] = mode
+		}
+	}
+	document, err := json.Marshal(map[string]any{"routes": modes})
+	require.NoError(t, err)
+	return string(document)
+}
+
+func (f *fixture) setAuthority(t *testing.T, state string) {
+	t.Helper()
+	require.NoError(t, f.kernel.Save(&model.IdentityAuthority{ID: 1, State: state, UpdatedAt: f.now}).Error)
+}
+
+// A group A route the stored route modes do not name (an installation
+// whose cutover predates the route, such as the user's own subscription
+// reset) is native while identity is authoritative and legacy before; a
+// stored legacy mode still counts as legacy.
+func TestGroupARoutesMissingFromTheStoredModesFollowTheAuthority(t *testing.T) {
+	const added = "identity.user.subscription.reset.post"
+	require.Contains(t, service.IdentityGroupARoutes, added)
+	withoutAdded := groupAIn(t, packagebridge.RouteModeNative, map[string]bool{added: true})
+
+	t.Run("kernel state: missing is legacy", func(t *testing.T) {
+		f := newFixture(t)
+		require.NoError(t, f.setModes(`{"routes":{}}`))
+		require.Equal(t, map[string]int{packagebridge.RouteModeLegacy: len(service.IdentityGroupARoutes)}, f.groupAModes(t))
+		require.ErrorContains(t, f.setModes(withoutAdded), "switch together", "the missing route counts as legacy")
+	})
+
+	for _, state := range []string{model.IdentityAuthorityIdentity, model.IdentityAuthorityFinalized} {
+		t.Run(state+" state: missing is native", func(t *testing.T) {
+			f := newFixture(t)
+			f.setAuthority(t, state)
+			// The older document, written before the route joined group A:
+			// accepted, and the host is told to serve the route natively.
+			require.NoError(t, f.setModes(withoutAdded))
+			require.Equal(t, map[string]int{packagebridge.RouteModeNative: len(service.IdentityGroupARoutes)}, f.groupAModes(t))
+			// A configuration change that names no group A route is not refused.
+			require.NoError(t, f.setModes(`{"routes":{"identity.user.profile.get":"native"}}`))
+			require.Equal(t, map[string]int{packagebridge.RouteModeNative: len(service.IdentityGroupARoutes)}, f.groupAModes(t))
+			// A stored legacy mode is legacy: mixed group A is still refused,
+			// and so is all of it legacy.
+			require.ErrorContains(t, f.setModes(`{"routes":{"`+added+`":"legacy"}}`), "switch together")
+			require.ErrorContains(t, f.setModes(groupAIn(t, packagebridge.RouteModeLegacy, nil)), "stays native")
+		})
+	}
+}
+
 func (f *fixture) setModes(document string) error {
 	var installation model.PluginInstallation
 	if err := f.kernel.Take(&installation, "plugin_id = ?", service.IdentityPlatformPackageID).Error; err != nil {
@@ -266,8 +321,8 @@ func TestCutoverHandsGroupAToIdentityWithTheLatestLegacyChanges(t *testing.T) {
 	require.True(t, accounts[0].Banned)
 
 	// Group A cannot be switched back behind the authority's back.
-	require.ErrorContains(t, f.setModes(`{"routes":{}}`), "stays native")
-	require.ErrorContains(t, f.setModes(`{"routes":{"identity.auth.login":"native"}}`), "switch together")
+	require.ErrorContains(t, f.setModes(groupAIn(t, packagebridge.RouteModeLegacy, nil)), "stays native")
+	require.ErrorContains(t, f.setModes(`{"routes":{"identity.auth.login":"legacy"}}`), "switch together")
 	_, err = f.service.Importer.Run(ctx, true)
 	require.ErrorIs(t, err, identityimport.ErrNotImportable)
 	_, err = f.service.Cutover(ctx, 1)
@@ -341,7 +396,7 @@ func TestFinalizeRemovesLegacyCredentialsADayAfterTheCutover(t *testing.T) {
 	_, err = f.service.Rollback(ctx, 1)
 	require.ErrorIs(t, err, ErrFinal)
 	require.ErrorIs(t, f.service.Finalize(ctx, 1, true), ErrFinal)
-	require.ErrorContains(t, f.setModes(`{"routes":{}}`), "stays native")
+	require.ErrorContains(t, f.setModes(groupAIn(t, packagebridge.RouteModeLegacy, nil)), "stays native")
 }
 
 func TestOneAuthorityChangeAtATime(t *testing.T) {

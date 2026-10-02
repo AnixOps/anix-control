@@ -2422,8 +2422,8 @@ export default {
       required: 'Require MFA',
       requiredHelp: 'Require all users to enable MFA, otherwise they cannot use the service.',
       methods: 'Supported authentication methods',
-      backupCodesCount: 'Backup code count',
-      backupCodesHelp: 'Number of backup codes generated when users enable MFA.',
+      backupCodesCount: 'Recovery code count',
+      backupCodesHelp: 'Number of recovery codes generated when users enable MFA.',
       maxAttempts: 'Maximum login attempts',
       maxAttemptsHelp: 'Accounts will be temporarily locked after exceeding the limit.',
       lockoutDuration: 'Lockout duration (minutes)',
@@ -2438,12 +2438,12 @@ export default {
       title: '💡 Usage Guide',
       totpTitle: 'TOTP Authentication',
       totpBody: 'Time-based one-time passwords. Users can scan a QR code with apps such as Google Authenticator or Authy to bind MFA.',
-      backupTitle: 'Backup Codes',
-      backupBody: 'When users cannot access their authenticator, they can use backup codes to log in. Each backup code can only be used once.',
+      backupTitle: 'Recovery Codes',
+      backupBody: 'When users cannot access their authenticator, they can use recovery codes to log in. Each recovery code can only be used once.',
       lockoutTitle: 'Account Lockout',
       lockoutBody: 'Multiple consecutive MFA failures will trigger an account lockout to prevent brute-force attacks.',
       userOpsTitle: 'User Operations',
-      userOpsBody: 'Users can manage MFA on the Security Settings page, including enabling, disabling, and regenerating backup codes.'
+      userOpsBody: 'Users can manage MFA on the Security Settings page, including enabling, disabling, and regenerating recovery codes.'
     },
     messages: {
       fetchFailed: 'Failed to load MFA configuration',

@@ -166,6 +166,7 @@ func TestIdentityHostNativeHandlersAreTheNativeRoutes(t *testing.T) {
 	withoutSubscriber := (&native.Service{}).Handlers()
 	require.NotContains(t, withoutSubscriber, native.ResetTrafficRouteID)
 	require.NotContains(t, withoutSubscriber, native.ResetSubscribeRouteID)
+	require.NotContains(t, withoutSubscriber, native.UserSubscriptionResetRouteID)
 	require.Contains(t, withoutSubscriber, native.ProfileRouteID)
 }
 

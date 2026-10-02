@@ -135,3 +135,15 @@ export function regenerateBackupCodes() {
     method: 'post'
   })
 }
+
+// The signed-in user resets their own subscription link (identity package,
+// POST /api/v2/user/subscription/reset): `{ password }`, or with two-step
+// verification on, `{ code, method }` (method 'totp' or 'backup'). The
+// answer is the new subscription token.
+export function resetSubscription(credentials) {
+  return request({
+    url: '/user/subscription/reset',
+    method: 'post',
+    data: credentials
+  })
+}

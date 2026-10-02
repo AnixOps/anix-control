@@ -176,6 +176,13 @@
       "package_route": "identity.user.profile.get",
       "envelope": "panel",
       "transport": "http"
+    },
+    {
+      "method": "POST",
+      "legacy_path": "/api/v2/user/subscription/reset",
+      "package_route": "identity.user.subscription.reset.post",
+      "envelope": "panel",
+      "transport": "http"
     }
   ]
 }

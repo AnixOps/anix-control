@@ -500,9 +500,12 @@ page and time). No new endpoints or routes: page state lives in the query.
   Stash, Surge, Quantumult X and Loon open their own URL scheme with the
   format's link; v2rayN copies its link). 其他格式 lists every format with
   copy and a preview Sheet (fetched from the page's own origin) with
-  download. Users cannot reset their own link (only
-  `POST /admin/users/:id/reset-subscribe` exists), so the danger zone's
-  申请重置 confirms in place and files a ticket for the administrator.
+  download. The danger zone's 重置链接… opens a `UiDialog` that asks for the
+  current password, or with two-step verification on (`/user/mfa/status`,
+  or the server's `mfa code required`) the `UiOtpField` code or a recovery
+  code, and calls `POST /user/subscription/reset`; it then shows the new
+  link with its QR code, keeps the new token in the user store and reloads
+  the page data.
 - **帮助中心** (`views/user/Knowledge.vue`): a centred search (`/` focuses
   it; `?q=`), category cards with counts (`?category=`), and the list. An
   article opens in place (`?article=`) at `--size-content-read` (692 px)

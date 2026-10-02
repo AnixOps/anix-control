@@ -168,7 +168,11 @@ instance's generation.
 - **Group A — moves to identity, switched together at cutover:**
   - login and register;
   - user MFA (6) and admin MFA configuration (2);
-  - admin user create, update, ban, unban and delete.
+  - admin user create, update, ban, unban and delete;
+  - the user's own subscription reset
+    (`POST /api/v2/user/subscription/reset`): it checks the password or a
+    TOTP/recovery code in identity's store, then resets through
+    `KernelSubscriber.ResetCredentials` as the admin reset does.
 
   For admin create and update, identity handles the identity fields and
   passes the entitlement fields to `UpdateSubscriber`. Responses stay
@@ -388,9 +392,13 @@ expired (Control).
         `v2_user_mfa` row changed. Disabling MFA in legacy touches the
         user. Every import ends by deleting the identity accounts of deleted
         subscribers, sent as `ImportAccountsRequest.deleted_user_id` (new).
-      - **Consistency.** Configuration writes are refused unless group A's 15
+      - **Consistency.** Configuration writes are refused unless group A's 16
         routes are native together, and exactly while identity is
-        authoritative. Only the cutover and rollback change both. The account
+        authoritative. A group A route the stored modes do not name is
+        native while identity is authoritative and legacy before
+        (`service.ResolvePackageRouteModes`, used by the host's
+        configuration and by this check), so a route added to group A after
+        a cutover needs no configuration write. Only the cutover and rollback change both. The account
         reads (profile, dashboard, admin user detail) may leave legacy mode
         only while identity is authoritative; the rollback returns them to
         legacy too.

@@ -135,7 +135,11 @@ func (o PackageHostOperations) PackageConfig(ctx context.Context, host packagebr
 	if err != nil {
 		return packagebridge.PackageConfig{}, err
 	}
-	_, modes, _, err := splitPackageRouteModes(configuration.ConfigJSON)
+	_, stored, _, err := splitPackageRouteModes(configuration.ConfigJSON)
+	if err != nil {
+		return packagebridge.PackageConfig{}, err
+	}
+	modes, err := ResolvePackageRouteModes(o.DB.WithContext(ctx), host.PackageID, stored)
 	if err != nil {
 		return packagebridge.PackageConfig{}, err
 	}
