@@ -14,7 +14,7 @@
           @escape-key-down="onEscape"
           @interact-outside="onInteractOutside"
         >
-          <header class="ui-dialog__header">
+          <header class="ui-dialog__header" :class="{ 'ui-dialog__header--closable': !hideClose }">
             <DialogTitle class="ui-dialog__title">
               <slot name="title">{{ title }}</slot>
             </DialogTitle>
@@ -173,7 +173,12 @@ defineExpose({ close })
   display: flex;
   flex-direction: column;
   gap: var(--space-2);
-  padding: var(--space-6) var(--space-16) 0 var(--space-6);
+  padding: var(--space-6) var(--space-6) 0;
+}
+
+/* Room for the close button in the top right corner. */
+.ui-dialog__header--closable {
+  padding-right: var(--space-16);
 }
 
 .ui-dialog__title {

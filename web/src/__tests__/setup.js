@@ -1,6 +1,9 @@
 import { config } from '@vue/test-utils'
 import { afterEach, beforeAll, beforeEach, vi } from 'vitest'
 import { resetEdition } from '@/composables/useEdition'
+import { resetConfirms } from '@/ui/composables/useConfirm'
+import { resetToasts } from '@/ui/composables/useToast'
+import { stopAnsweringConfirms } from './helpers/feedback'
 
 // No test reaches the backend for the public configuration: the edition is
 // community unless a test calls setEdition (or mocks getPublicConfig).
@@ -72,6 +75,11 @@ beforeEach(async () => {
 })
 
 afterEach(() => {
+  // Toasts and confirmations live in module-level queues (useToast,
+  // useConfirm): start every test with both empty.
+  stopAnsweringConfirms()
+  resetConfirms()
+  resetToasts()
   vi.unstubAllGlobals()
   vi.useRealTimers()
 })
