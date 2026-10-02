@@ -1,5 +1,5 @@
 import { isCommercialEdition } from '@/composables/useEdition'
-import { ADMIN_PAGE_SECTIONS } from '@/navigation/menu'
+import { ADMIN_PAGE_SECTIONS } from '@/navigation/sections'
 
 const PAGE_TITLE_KEYS = {
   '/login': 'pageTitles.auth.login',

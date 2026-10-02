@@ -1,3 +1,5 @@
+import { ADMIN_PAGE_SECTIONS } from './sections'
+
 // Navigation config: the one place that says what the shells show.
 //
 // The admin sidebar, the admin command palette, the user top navigation and
@@ -130,29 +132,9 @@ export const FORWARD_SUITE_LINKS = Object.freeze({
   ]
 })
 
-// Sections of the pages built on the settings template (UI U7). The
-// sidebar shows only the page; the command palette lists every section
-// under it, so 访问组 or 审计日志 can still be found by name.
-export const ADMIN_PAGE_SECTIONS = Object.freeze({
-  settings: [
-    { id: 'settings-general', to: '/admin/system/general', labelKey: 'adminSettings.sections.general' },
-    { id: 'settings-runtime', to: '/admin/system/runtime', labelKey: 'adminSettings.sections.runtime' },
-    { id: 'settings-backup', to: '/admin/system/backup', labelKey: 'adminSettings.sections.backup' },
-    { id: 'settings-balancer', to: '/admin/system/balancer', labelKey: 'adminSettings.sections.balancer' },
-    { id: 'settings-audit', to: '/admin/system/audit', labelKey: 'adminSettings.sections.audit' },
-    { id: 'settings-about', to: '/admin/system/about', labelKey: 'adminSettings.sections.about' }
-  ],
-  security: [
-    { id: 'security-mfa', to: '/admin/security/mfa', labelKey: 'adminSecurity.sections.mfa' },
-    { id: 'security-access-groups', to: '/admin/security/access-groups', labelKey: 'adminSecurity.sections.accessGroups' }
-  ],
-  notifications: [
-    { id: 'notifications-email', to: '/admin/notifications/email', labelKey: 'adminNotify.channels.email' },
-    { id: 'notifications-telegram', to: '/admin/notifications/telegram', labelKey: 'adminNotify.channels.telegram' },
-    { id: 'notifications-templates', to: '/admin/notifications/templates', labelKey: 'adminNotify.channels.templates' },
-    { id: 'notifications-logs', to: '/admin/notifications/logs', labelKey: 'adminNotify.channels.logs' }
-  ]
-})
+// Sections of settings-style pages: navigation/sections.js (kept apart so
+// the page titles in the entry chunk do not pull in this file).
+export { ADMIN_PAGE_SECTIONS }
 
 export function isForwardSuitePath(path) {
   return path === '/admin/forward' || String(path || '').startsWith('/admin/forward/')
