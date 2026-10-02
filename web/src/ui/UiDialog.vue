@@ -22,7 +22,7 @@
               <slot name="description">{{ description }}</slot>
             </DialogDescription>
           </header>
-          <div v-if="$slots.default" class="ui-dialog__body">
+          <div v-if="$slots.default" :ref="scrollable.setElement" class="ui-dialog__body" :tabindex="scrollable.tabindex.value">
             <slot :close="close" />
           </div>
           <footer v-if="$slots.footer" class="ui-dialog__footer">
@@ -55,6 +55,7 @@ import { useI18n } from 'vue-i18n'
 import { DialogClose, DialogContent, DialogDescription, DialogOverlay, DialogPortal, DialogRoot, DialogTitle, DialogTrigger } from 'reka-ui'
 import { X } from '@lucide/vue'
 import UiIcon from './UiIcon.vue'
+import { useScrollableFocus } from './internal/useScrollableFocus'
 
 defineOptions({ inheritAttrs: false })
 
@@ -77,6 +78,8 @@ const emit = defineEmits(['update:open', 'close'])
 const attrs = useAttrs()
 const { t } = useI18n()
 const contentRef = ref(null)
+// Read-only content that scrolls stays reachable from the keyboard.
+const scrollable = useScrollableFocus()
 
 // Without a description, drop aria-describedby (Reka points it at an id that
 // would not exist).
@@ -192,6 +195,11 @@ defineExpose({ close })
   color: var(--label-2);
   font-size: var(--type-callout-size);
   line-height: var(--type-callout-line);
+}
+
+.ui-dialog__body:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: calc(-1 * var(--focus-ring-offset));
 }
 
 .ui-dialog__body {
