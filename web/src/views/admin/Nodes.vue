@@ -970,6 +970,7 @@ import {
 } from '@/api/admin'
 import { MASKED_SECRET, isMaskedSecret } from '@/constants/secrets'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { useRouteIntent } from '@/composables/useRouteIntent'
 import { AGENT_NAME } from '@/constants/brand'
 
 const { t, formatDateTime } = useAppI18n()
@@ -2277,7 +2278,15 @@ const formatLogTime = (log) => {
 }
 
 // Init
+// The command palette's 添加节点 opens this page with ?create=1.
+const routeIntent = useRouteIntent(['create'], intent => {
+  if (intent.create === '1') openCreateModal()
+})
+
 onMounted(async () => {
+  if (routeIntent.create === '1') {
+    openCreateModal()
+  }
   const nodesLoaded = await loadNodes()
   if (!nodesLoaded) {
     return

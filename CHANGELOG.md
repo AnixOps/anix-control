@@ -67,6 +67,44 @@
     filters, copies and revokes codes and says whether registration
     requires one; in commercial it links the Invite Rewards page, which is
     unchanged.
+- **New navigation: admin and user shells rebuilt** (UI redesign phase U3,
+  `docs/reference/frontend-design.md` "App shell").
+  - **Admin sidebar** regrouped by object (plan §4.2): 概览, 用户, 网络 (节点,
+    转发, 转发节点, NodeX Agents), 扩展, 系统, and 商业 in the commercial
+    edition only. Light frosted material (dark in dark mode), the selected
+    page a rounded fill with an accent icon, ↑/↓ between links, and a toggle
+    that collapses it to an icon rail (remembered). Below 834 px it is a
+    modal drawer. Everything it shows comes from one menu config
+    (`web/src/navigation/menu.js`) that merges the built-in items, the
+    edition, permissions and plugin menus (`services` and `operations` under
+    扩展, `system` under 系统).
+  - **Top bar**: breadcrumb, and a search button that opens the new command
+    palette (`⌘K` / `Ctrl+K`): jump to any page the admin can see, open the
+    existing create flows (添加节点, 添加用户, 转发快速向导), switch appearance
+    or language, and find users by email. The ticking clock and the fixed
+    subtitle are gone; admin content keeps to 1280 px (1440 px for wide
+    table pages).
+  - **Where things moved.** Language and theme are in the account menu
+    (avatar at the bottom of the sidebar; in the top bar on phones), with a
+    new "跟随系统" (system) choice; the sidebar's second language switcher and
+    the header theme toggle are gone. The version and build line moved from
+    the sidebar to 账户菜单 → 关于.
+  - **Forward suite**: its sub-navigation (快速配置向导, 流量转发, 隧道, 限速,
+    NodeX 拓扑, 更多) now appears once, as a segmented strip at the top of
+    every `/admin/forward*` page, instead of both in the sidebar and inside
+    four pages. Routes and the seven legacy redirects are unchanged.
+  - **User shell**: a 48 px frosted bar with centred links (概览, 订阅, 帮助中心,
+    工单, 账户) and the account menu; below 834 px a bottom tab bar with
+    safe-area padding replaces the side drawer and the text icons.
+  - **New pages**: 账户 (`/user/account`, `/admin/account`: profile,
+    two-factor authentication on the existing `/user/mfa/*` endpoints,
+    language, appearance), 404 for unknown paths, and 无权限 when a signed-in
+    user who is not an administrator opens an admin page (it used to
+    redirect silently to the user dashboard). `/admin` and `/user` open
+    their dashboards.
+  - Pages fade in (240 ms, 8 px rise; fade only under reduced motion); going
+    back restores the list's scroll position. The shells load after sign-in,
+    so the login page stays at 112 KB gzip.
 - **The web UI adopts AnixOps Design v1.0.2** (UI redesign phase U1,
   `docs/reference/frontend-design.md`). Colours, type, radii, shadows,
   favicon and app icons change; no page structure changes yet.

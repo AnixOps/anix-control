@@ -1,323 +1,245 @@
 <template>
-  <div class="admin-layout" :class="{ 'navigation-collapsed': sidebarCollapsed }">
-    <div class="sidebar-overlay" :class="{ active: sidebarOpen }" aria-hidden="true" @click="closeSidebar"></div>
+  <div class="admin-shell" :class="{ 'is-rail': railActive, 'is-drawer': drawerMode }">
+    <div class="admin-scrim" :class="{ 'is-open': sidebarOpen }" aria-hidden="true" @click="closeSidebar"></div>
 
-    <aside
+    <!-- Not a landmark itself: the <nav> inside is. As a drawer it is a modal dialog. -->
+    <div
       id="admin-sidebar"
-      class="sidebar"
       ref="sidebarElement"
-      :class="{ open: sidebarOpen }"
+      class="admin-sidebar"
+      :class="{ 'is-open': sidebarOpen }"
+      :role="drawerMode ? 'dialog' : undefined"
+      :aria-modal="drawerMode && sidebarOpen ? 'true' : undefined"
+      :aria-label="drawerMode ? t('shell.admin.navLabel') : undefined"
       :inert="drawerInactive"
       :aria-hidden="drawerInactive ? 'true' : undefined"
-      :aria-label="t('layout.admin.mobileTitle')"
       @keydown="handleDrawerKeydown"
     >
-      <div class="sidebar-top">
-        <div class="brand-block">
-          <BrandLockup />
-          <div class="brand-meta">{{ t('layout.admin.badge') }}</div>
-        </div>
-        <button
-          class="btn-ghost close-button"
+      <div class="admin-sidebar__top">
+        <router-link to="/admin/dashboard" class="admin-sidebar__brand" :title="railActive ? 'AnixOps Control' : undefined">
+          <BrandLockup size="sm" tile :mark-only="railActive" />
+          <span v-if="railActive" class="visually-hidden">AnixOps Control</span>
+        </router-link>
+        <UiIconButton
+          v-if="drawerMode"
           ref="closeButton"
-          type="button"
-          :aria-label="t('common.a11y.closeNavigation')"
-          :title="t('common.a11y.closeNavigation')"
+          class="admin-sidebar__close"
+          :label="t('common.a11y.closeNavigation')"
+          :icon="X"
           @click="closeSidebar"
-        >
-          <X :size="18" aria-hidden="true" />
-        </button>
+        />
       </div>
 
       <AdminNavigation
-        class="sidebar-nav"
-        :sections="navSections"
-        :collapsed="sidebarCollapsed"
-        :mobile="isTabletViewport"
-        @navigate="closeSidebar"
-        @toggle-collapse="toggleSidebarCollapse"
+        class="admin-sidebar__nav"
+        :groups="groups"
+        :active-id="active?.item.id || ''"
+        :rail="railActive"
+        @navigate="onNavigate"
       />
 
-      <div class="sidebar-footer">
-        <div class="operator-card">
-          <div class="operator-avatar" aria-hidden="true"><Users :size="18" /></div>
-          <div class="operator-copy">
-            <div class="operator-name">{{ t('layout.admin.adminUser') }}</div>
-            <div class="operator-email">{{ userStore.userInfo?.email || '-' }}</div>
-          </div>
-        </div>
-        <div v-if="systemVersionDisplay" class="version-line" :title="systemVersionTitle">
-          {{ systemVersionDisplay }}
-        </div>
-        <div class="sidebar-actions">
-          <LocaleSwitcher compact />
-          <button class="btn logout-button" type="button" :title="t('common.actions.logout')" @click="logout">
-            <LogOut :size="17" aria-hidden="true" />
-            <span class="logout-label">{{ t('common.actions.logout') }}</span>
-          </button>
-        </div>
+      <div class="admin-sidebar__footer">
+        <AccountMenu
+          variant="row"
+          role="admin"
+          :compact="railActive"
+          :account-path="ADMIN_ACCOUNT_PATH"
+          show-about
+          @about="aboutOpen = true"
+        />
       </div>
-    </aside>
+    </div>
 
-    <div class="workspace">
-      <header class="topbar">
-        <div class="topbar-primary">
-          <button
-            class="btn btn-ghost menu-button"
-            ref="menuButton"
-            type="button"
-            :aria-label="t('common.a11y.openNavigation')"
-            :title="t('common.a11y.openNavigation')"
-            aria-controls="admin-sidebar"
-            :aria-expanded="sidebarOpen ? 'true' : 'false'"
-            @click="toggleSidebar"
-          >
-            <Menu :size="20" aria-hidden="true" />
-          </button>
-          <div>
-            <div class="topbar-title">{{ pageTitle }}</div>
-            <div class="topbar-subtitle">{{ t('layout.admin.subtitle') }}</div>
-          </div>
-        </div>
-        <div class="topbar-actions">
-          <span class="current-time">{{ currentTime }}</span>
-          <ThemeToggle compact />
-          <LocaleSwitcher />
+    <div class="admin-workspace">
+      <header class="admin-topbar">
+        <UiIconButton
+          ref="menuButton"
+          class="admin-topbar__toggle"
+          :label="toggleLabel"
+          :icon="toggleIcon"
+          aria-controls="admin-sidebar"
+          :aria-expanded="drawerMode ? String(sidebarOpen) : String(!sidebarCollapsed)"
+          data-sidebar-toggle
+          @click="toggleSidebar"
+        />
+
+        <nav class="admin-crumbs" :aria-label="t('shell.admin.breadcrumb')">
+          <ol>
+            <li v-for="(crumb, index) in crumbs" :key="index" :class="{ 'is-current': index === crumbs.length - 1 }">
+              <router-link v-if="crumb.to && index < crumbs.length - 1" :to="crumb.to">{{ crumb.label }}</router-link>
+              <span v-else :aria-current="index === crumbs.length - 1 ? 'page' : undefined">{{ crumb.label }}</span>
+            </li>
+          </ol>
+        </nav>
+
+        <button
+          type="button"
+          class="admin-search"
+          :aria-label="t('shell.search.label', { shortcut: shortcutLabel })"
+          :aria-keyshortcuts="'Meta+K Control+K'"
+          aria-haspopup="dialog"
+          data-palette-trigger
+          @click="openPalette"
+        >
+          <UiIcon :icon="Search" />
+          <span class="admin-search__text">{{ t('shell.search.button') }}</span>
+          <kbd class="admin-search__kbd">{{ shortcutLabel }}</kbd>
+        </button>
+
+        <div v-if="drawerMode" class="admin-topbar__account">
+          <AccountMenu
+            variant="avatar"
+            role="admin"
+            :account-path="ADMIN_ACCOUNT_PATH"
+            show-about
+            @about="aboutOpen = true"
+          />
         </div>
       </header>
 
-      <main id="app-main-content" class="content" tabindex="-1" :aria-label="pageTitle">
-        <router-view></router-view>
+      <main id="app-main-content" class="admin-main" tabindex="-1" :aria-label="pageTitle">
+        <div class="admin-content" :class="{ 'is-wide': route.meta?.layout === 'wide' }">
+          <ForwardSuiteNav v-if="forwardSuite" class="admin-content__suite-nav" />
+          <ShellRouterView />
+        </div>
       </main>
     </div>
+
+    <CommandPalette :groups="groups" />
+    <AboutDialog v-model:open="aboutOpen" />
   </div>
 </template>
 
 <script setup>
-import { computed, nextTick, onMounted, onUnmounted, ref, watchEffect } from 'vue'
-import { LogOut, Menu, Users, X } from '@lucide/vue'
-import { useRoute, useRouter } from 'vue-router'
+// Admin shell (plan §8.3, D3). Light frosted sidebar (dark in dark mode)
+// with the lockup, the menu groups from navigation/menu.js and the account
+// menu; a top bar with the sidebar toggle, the breadcrumb, the ⌘K search
+// button (and the avatar when the sidebar is a drawer). On wide screens the
+// toggle switches the sidebar between full width and an icon rail
+// (remembered); below 834 px the sidebar is a modal drawer with its own
+// focus loop, Esc and focus return. Content keeps to --size-content-admin
+// unless the route asks for meta.layout = 'wide'.
+import { computed, nextTick, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { Menu, PanelLeftClose, PanelLeftOpen, Search, X } from '@lucide/vue'
+import { useRoute } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useAppI18n } from '@/composables/useAppI18n'
-import AdminNavigation from '@/components/admin/AdminNavigation.vue'
-import BrandLockup from '@/components/common/BrandLockup.vue'
-import LocaleSwitcher from '@/components/common/LocaleSwitcher.vue'
-import ThemeToggle from '@/components/common/ThemeToggle.vue'
+import { useMediaQuery, NARROW_QUERY } from '@/composables/useMediaQuery'
+import { loadEdition } from '@/composables/useEdition'
 import { resolveRoutePageTitle } from '@/utils/pageMeta'
-import { getSystemInfo } from '@/api/admin'
 import { adminExtensionMenus } from '@/extensions/runtime'
-import { extensionMenuAllowed, filterByEdition, isCommercialEdition, loadEdition } from '@/composables/useEdition'
-import {
-  WEBUI_MENU_FALLBACK_PARENT,
-  WEBUI_MENU_PARENT_REGISTRY,
-  normalizeWebUIMenuParent
-} from '@/extensions/menuRegistry'
+import { useAdminMenu } from '@/navigation/useNavigation'
+import { ADMIN_ACCOUNT_PATH, isForwardSuitePath } from '@/navigation/menu'
+import AdminNavigation from '@/components/admin/AdminNavigation.vue'
+import ForwardSuiteNav from '@/components/admin/ForwardSuiteNav.vue'
+import BrandLockup from '@/components/common/BrandLockup.vue'
+import AccountMenu from '@/components/shell/AccountMenu.vue'
+import AboutDialog from '@/components/shell/AboutDialog.vue'
+import CommandPalette from '@/components/shell/CommandPalette.vue'
+import ShellRouterView from '@/components/shell/ShellRouterView.vue'
+import { isPaletteShortcut, paletteShortcutLabel, usePalette } from '@/components/shell/usePalette'
+import UiIcon from '@/ui/UiIcon.vue'
+import UiIconButton from '@/ui/UiIconButton.vue'
 
-const DESKTOP_SIDEBAR_KEY = 'admin.sidebar.collapsed'
-const TABLET_BREAKPOINT = '(max-width: 1024px)'
+const SIDEBAR_RAIL_KEY = 'admin.sidebar.collapsed'
 
-const router = useRouter()
 const route = useRoute()
 const userStore = useUserStore()
-const { t, currentLocale, formatDateTime } = useAppI18n()
+const { t } = useAppI18n()
+const { groups, active } = useAdminMenu()
+const { open: paletteOpen, openPalette } = usePalette()
 
+const drawerMode = useMediaQuery(NARROW_QUERY)
 const sidebarOpen = ref(false)
-const sidebarCollapsed = ref(readSidebarCollapsePreference())
-const isTabletViewport = ref(readTabletViewport())
+const sidebarCollapsed = ref(readRailPreference())
+const aboutOpen = ref(false)
 const menuButton = ref(null)
 const closeButton = ref(null)
 const sidebarElement = ref(null)
-const currentTime = ref('')
-const systemVersion = ref('')
-const systemBuildCode = ref(import.meta.env.VITE_APP_BUILD_CODE || '')
-const systemBuildTime = ref('')
-const systemCommit = ref('')
-const frontendBuildCode = import.meta.env.VITE_APP_BUILD_CODE || ''
-const frontendBuildTime = import.meta.env.VITE_APP_BUILD_TIME || ''
+const shortcutLabel = paletteShortcutLabel()
 
-const drawerInactive = computed(() => isTabletViewport.value && !sidebarOpen.value)
+const railActive = computed(() => !drawerMode.value && sidebarCollapsed.value)
+const drawerInactive = computed(() => drawerMode.value && !sidebarOpen.value)
+const forwardSuite = computed(() => isForwardSuitePath(route.path))
 
-const extensionSectionTitleKeys = {
-  services: 'layout.admin.sections.extensionServices',
-  operations: 'layout.admin.sections.extensionOperations',
-  system: 'layout.admin.sections.extensionSystem',
-  [WEBUI_MENU_FALLBACK_PARENT]: 'layout.admin.sections.extensions'
-}
+const toggleIcon = computed(() => {
+  if (drawerMode.value) return Menu
+  return sidebarCollapsed.value ? PanelLeftOpen : PanelLeftClose
+})
+const toggleLabel = computed(() => {
+  if (drawerMode.value) return t('common.a11y.openNavigation')
+  return sidebarCollapsed.value ? t('shell.admin.expand') : t('shell.admin.collapse')
+})
 
-function readSidebarCollapsePreference() {
+const pageTitle = computed(() => {
+  if (route.meta?.titleKey) return t(route.meta.titleKey)
+  const extensionMenu = adminExtensionMenus.value.find(item => item.to === route.path && userStore.hasPermission(item.permission))
+  return extensionMenu?.label ||
+    resolveRoutePageTitle(t, route.path, '') ||
+    active.value?.item.label ||
+    t('pageTitles.admin.fallback')
+})
+
+// group › menu item (when the page is below it) › page title.
+const crumbs = computed(() => {
+  const out = []
+  const hit = active.value
+  if (hit) {
+    out.push({ label: hit.group.label })
+    if (hit.item.to !== route.path && hit.item.label !== pageTitle.value) {
+      out.push({ label: hit.item.label, to: hit.item.to })
+    }
+  }
+  out.push({ label: pageTitle.value })
+  return out
+})
+
+function readRailPreference() {
   try {
-    return localStorage.getItem(DESKTOP_SIDEBAR_KEY) === 'true'
+    return localStorage.getItem(SIDEBAR_RAIL_KEY) === 'true'
   } catch {
     return false
   }
 }
 
-function readTabletViewport() {
-  if (typeof window === 'undefined') {
-    return false
-  }
-  if (typeof window.matchMedia === 'function') {
-    return window.matchMedia(TABLET_BREAKPOINT).matches
-  }
-  return window.innerWidth <= 1024
+function focusElement(target) {
+  const element = target?.$el || target
+  element?.focus?.()
 }
-
-function compareExtensionMenus(left, right) {
-  const leftOrder = Number.isSafeInteger(left.order) ? left.order : 1000
-  const rightOrder = Number.isSafeInteger(right.order) ? right.order : 1000
-  return leftOrder - rightOrder ||
-    String(left.label || '').localeCompare(String(right.label || '')) ||
-    String(left.id || '').localeCompare(String(right.id || ''))
-}
-
-// filterSections drops the menu entries the edition does not serve
-// (`edition: 'commercial'`).
-function filterSections(sections) {
-  return sections.map(section => ({
-    ...section,
-    items: filterByEdition(section.items),
-    ...(section.advancedItems ? { advancedItems: filterByEdition(section.advancedItems) } : {})
-  }))
-}
-
-const navSections = computed(() => {
-  const extensionMenusByParent = new Map(WEBUI_MENU_PARENT_REGISTRY.map(parent => [parent, []]))
-  for (const item of adminExtensionMenus.value.filter(menu => userStore.hasPermission(menu.permission) && extensionMenuAllowed(menu))) {
-    const parent = normalizeWebUIMenuParent(item.parent)
-    extensionMenusByParent.get(parent).push({ ...item, parent })
-  }
-
-  const extensionGroups = WEBUI_MENU_PARENT_REGISTRY.flatMap(parent => {
-    const items = extensionMenusByParent.get(parent).sort(compareExtensionMenus)
-    return items.length > 0
-      ? [{ parent, label: t(extensionSectionTitleKeys[parent]), items }]
-      : []
-  })
-
-  return filterSections([
-    {
-      id: 'overview',
-      label: t('layout.admin.sections.overview'),
-      items: [
-        { to: '/admin/dashboard', icon: 'dashboard', label: t('layout.admin.nav.dashboard') },
-        { to: '/admin/monitor', icon: 'monitor', label: t('layout.admin.nav.monitor') },
-        { to: '/admin/traffic-hourly', icon: 'traffic', label: t('layout.admin.nav.trafficHourly') }
-      ]
-    },
-    {
-      id: 'business',
-      label: t('layout.admin.sections.business'),
-      items: [
-        { to: '/admin/users', icon: 'users', label: t('layout.admin.nav.users') },
-        { to: '/admin/invite-codes', icon: 'invite', label: t('layout.admin.nav.inviteCodes') },
-        { to: '/admin/orders', icon: 'orders', label: t('layout.admin.nav.orders'), edition: 'commercial' },
-        { to: '/admin/tickets', icon: 'tickets', label: t('layout.admin.nav.tickets') }
-      ],
-      advancedItems: [
-        { to: '/admin/subscriptions', icon: 'subscriptions', label: t('layout.admin.nav.subscriptions') },
-        { to: '/admin/plans', icon: 'plans', label: isCommercialEdition() ? t('layout.admin.nav.plans') : t('layout.admin.nav.subscriptionTemplates') },
-        { to: '/admin/coupons', icon: 'coupons', label: t('layout.admin.nav.coupons'), edition: 'commercial' },
-        { to: '/admin/invite', icon: 'invite', label: t('layout.admin.nav.invite'), edition: 'commercial' },
-        { to: '/admin/payment', icon: 'payment', label: t('layout.admin.nav.payment'), edition: 'commercial' },
-        { to: '/admin/knowledge', icon: 'knowledge', label: t('layout.admin.nav.knowledge') }
-      ]
-    },
-    {
-      id: 'network',
-      label: t('layout.admin.sections.network'),
-      kind: 'forward',
-      forwardLabel: t('layout.admin.sections.forwardSuite'),
-      items: [
-        { to: '/admin/nodes', icon: 'nodes', label: t('layout.admin.nav.nodes') }
-      ],
-      advancedItems: [
-        { to: '/admin/agent', icon: 'agents', label: t('layout.admin.nav.nodeXAgentsLegacy') }
-      ]
-    },
-    {
-      id: 'control-center',
-      label: t('layout.admin.sections.controlCenter'),
-      items: [
-        { to: '/admin/plugins', icon: 'plugins', label: t('layout.admin.nav.plugins') },
-        { to: '/admin/deployments', icon: 'deployments', label: t('layout.admin.nav.deployments') }
-      ],
-      advancedItems: [
-        { to: '/admin/control', icon: 'control', label: t('layout.admin.nav.control') }
-      ],
-      extensionGroups
-    },
-    {
-      id: 'system',
-      label: t('layout.admin.sections.system'),
-      items: [
-        { to: '/admin/mfa', icon: 'mfa', label: t('layout.admin.nav.mfa') },
-        { to: '/admin/access-groups', icon: 'access-groups', label: t('layout.admin.nav.accessGroups') },
-        { to: '/admin/system', icon: 'system', label: t('layout.admin.nav.system') }
-      ],
-      advancedItems: [
-        { to: '/admin/telegram', icon: 'system', label: t('layout.admin.nav.telegram') },
-        { to: '/admin/notifications', icon: 'system', label: t('layout.admin.nav.notifications') }
-      ]
-    }
-  ])
-})
-
-const pageTitle = computed(() => {
-  const extensionMenu = adminExtensionMenus.value.find(item => item.to === route.path && userStore.hasPermission(item.permission))
-  return extensionMenu?.label || resolveRoutePageTitle(t, route.path, t('pageTitles.admin.fallback'))
-})
-
-const systemVersionDisplay = computed(() => {
-  if (!systemVersion.value) {
-    return ''
-  }
-  if (systemVersion.value.includes('#')) {
-    return `AnixOps v${systemVersion.value}`
-  }
-  return systemBuildCode.value
-    ? `AnixOps v${systemVersion.value} #${systemBuildCode.value}`
-    : `AnixOps v${systemVersion.value}`
-})
-
-const systemVersionTitle = computed(() => {
-  const rows = []
-  if (systemBuildCode.value) {
-    rows.push(`Build code: ${systemBuildCode.value}`)
-  }
-  if (systemBuildTime.value) {
-    rows.push(`Backend build: ${systemBuildTime.value}`)
-  }
-  if (systemCommit.value && systemCommit.value !== 'unknown') {
-    rows.push(`Commit: ${systemCommit.value}`)
-  }
-  if (frontendBuildCode) {
-    rows.push(`Frontend build: ${frontendBuildCode}`)
-  }
-  if (frontendBuildTime) {
-    rows.push(`Frontend time: ${frontendBuildTime}`)
-  }
-  return rows.join('\n')
-})
 
 function closeSidebar() {
-  const restoreFocus = isTabletViewport.value && sidebarOpen.value
+  const restoreFocus = drawerMode.value && sidebarOpen.value
   sidebarOpen.value = false
   if (restoreFocus) {
-    nextTick(() => menuButton.value?.focus?.())
+    nextTick(() => focusElement(menuButton.value))
   }
 }
 
-function getDrawerFocusableElements() {
-  const selector = [
-    'a[href]',
-    'button:not([disabled])',
-    'input:not([disabled])',
-    'select:not([disabled])',
-    'textarea:not([disabled])',
-    'summary',
-    '[tabindex]:not([tabindex="-1"])'
-  ].join(', ')
+function openSidebar() {
+  sidebarOpen.value = true
+  nextTick(() => focusElement(closeButton.value))
+}
 
+function toggleSidebar() {
+  if (drawerMode.value) {
+    if (sidebarOpen.value) closeSidebar()
+    else openSidebar()
+    return
+  }
+  sidebarCollapsed.value = !sidebarCollapsed.value
+  try {
+    localStorage.setItem(SIDEBAR_RAIL_KEY, String(sidebarCollapsed.value))
+  } catch {
+    // Blocked storage only forgets the preference.
+  }
+}
+
+function onNavigate() {
+  if (drawerMode.value) closeSidebar()
+}
+
+function drawerFocusables() {
+  const selector = 'a[href], button:not([disabled]), input:not([disabled]), [tabindex]:not([tabindex="-1"])'
   return [...(sidebarElement.value?.querySelectorAll(selector) || [])].filter(element => (
     !element.hasAttribute('hidden') &&
     element.getAttribute('aria-hidden') !== 'true' &&
@@ -325,487 +247,397 @@ function getDrawerFocusableElements() {
   ))
 }
 
+// The open drawer is modal: Esc closes it, Tab and Shift+Tab stay inside.
 function handleDrawerKeydown(event) {
-  if (!isTabletViewport.value || !sidebarOpen.value) {
-    return
-  }
-
+  if (!drawerMode.value || !sidebarOpen.value) return
   if (event.key === 'Escape') {
     event.preventDefault()
     closeSidebar()
     return
   }
-
-  if (event.key !== 'Tab') {
-    return
-  }
-
-  const focusableElements = getDrawerFocusableElements()
-  if (focusableElements.length === 0) {
-    return
-  }
-
-  const firstElement = focusableElements[0]
-  const lastElement = focusableElements.at(-1)
-  if (event.shiftKey && document.activeElement === firstElement) {
+  if (event.key !== 'Tab') return
+  const focusables = drawerFocusables()
+  if (focusables.length === 0) return
+  const first = focusables[0]
+  const last = focusables.at(-1)
+  if (event.shiftKey && document.activeElement === first) {
     event.preventDefault()
-    lastElement.focus()
-  } else if (!event.shiftKey && document.activeElement === lastElement) {
+    last.focus()
+  } else if (!event.shiftKey && document.activeElement === last) {
     event.preventDefault()
-    firstElement.focus()
+    first.focus()
   }
 }
 
-function openSidebar() {
-  sidebarOpen.value = true
-  if (isTabletViewport.value) {
-    nextTick(() => closeButton.value?.focus?.())
+watch(drawerMode, isDrawer => {
+  if (!isDrawer && sidebarOpen.value) sidebarOpen.value = false
+})
+
+watch(() => route.path, () => {
+  if (drawerMode.value && sidebarOpen.value) sidebarOpen.value = false
+})
+
+function onGlobalKeydown(event) {
+  if (isPaletteShortcut(event)) {
+    event.preventDefault()
+    paletteOpen.value = !paletteOpen.value
   }
 }
-
-function toggleSidebar() {
-  if (sidebarOpen.value) {
-    closeSidebar()
-  } else {
-    openSidebar()
-  }
-}
-
-function toggleSidebarCollapse() {
-  sidebarCollapsed.value = !sidebarCollapsed.value
-  try {
-    localStorage.setItem(DESKTOP_SIDEBAR_KEY, String(sidebarCollapsed.value))
-  } catch {
-    // A blocked storage implementation should not prevent navigation from working.
-  }
-}
-
-function logout() {
-  userStore.logout()
-  router.push('/login')
-}
-
-function updateTime() {
-  currentTime.value = formatDateTime(new Date(), {
-    month: 'short',
-    day: 'numeric',
-    hour: '2-digit',
-    minute: '2-digit',
-    hour12: false
-  })
-}
-
-function updateTabletViewport(event) {
-  const nextIsTabletViewport = typeof event?.matches === 'boolean'
-    ? event.matches
-    : readTabletViewport()
-
-  if (isTabletViewport.value && !nextIsTabletViewport && sidebarOpen.value) {
-    closeSidebar()
-  }
-  isTabletViewport.value = nextIsTabletViewport
-}
-
-async function loadSystemInfo() {
-  try {
-    const res = await getSystemInfo()
-    const info = readSystemInfo(res)
-    systemVersion.value = info.version || ''
-    systemBuildCode.value = info.build_code || frontendBuildCode
-    systemBuildTime.value = info.build_time || ''
-    systemCommit.value = info.commit || ''
-  } catch {
-    // Ignore layout metadata failures so a transient version lookup cannot block routes.
-  }
-}
-
-function readSystemInfo(res) {
-  if (!res || typeof res !== 'object') {
-    return {}
-  }
-  const payload = Object.prototype.hasOwnProperty.call(res, 'code') ? res.data : (res.data ?? res)
-  return payload && typeof payload === 'object' ? payload : {}
-}
-
-let timer
-let tabletMediaQuery
-let useWindowResizeListener = false
 
 onMounted(() => {
   void loadEdition()
-  updateTime()
-  timer = setInterval(updateTime, 60000)
-  if (typeof window !== 'undefined' && window.matchMedia) {
-    tabletMediaQuery = window.matchMedia(TABLET_BREAKPOINT)
-    updateTabletViewport(tabletMediaQuery)
-    if (typeof tabletMediaQuery.addEventListener === 'function') {
-      tabletMediaQuery.addEventListener('change', updateTabletViewport)
-    } else if (typeof tabletMediaQuery.addListener === 'function') {
-      tabletMediaQuery.addListener(updateTabletViewport)
-    }
-  } else if (typeof window !== 'undefined') {
-    useWindowResizeListener = true
-    window.addEventListener('resize', updateTabletViewport)
-  }
+  window.addEventListener('keydown', onGlobalKeydown)
   if (userStore.isLoggedIn) {
     userStore.getUserInfo()
   }
-  loadSystemInfo()
 })
 
-onUnmounted(() => {
-  clearInterval(timer)
-  if (typeof tabletMediaQuery?.removeEventListener === 'function') {
-    tabletMediaQuery.removeEventListener('change', updateTabletViewport)
-  } else if (typeof tabletMediaQuery?.removeListener === 'function') {
-    tabletMediaQuery.removeListener(updateTabletViewport)
-  }
-  if (useWindowResizeListener && typeof window !== 'undefined') {
-    window.removeEventListener('resize', updateTabletViewport)
-  }
-})
-
-watchEffect(() => {
-  currentLocale.value
-  updateTime()
+onBeforeUnmount(() => {
+  window.removeEventListener('keydown', onGlobalKeydown)
+  paletteOpen.value = false
 })
 </script>
 
 <style scoped>
-.admin-layout {
+.admin-shell {
+  --admin-sidebar-width: 248px;
+  --admin-rail-width: 64px;
+
+  display: grid;
+  grid-template-columns: var(--admin-sidebar-width) minmax(0, 1fr);
   min-height: 100vh;
-  display: flex;
-  background: var(--bg-color);
+  min-height: 100dvh;
+  background: var(--bg);
 }
 
-.sidebar-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  background: var(--scrim);
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s ease;
+.admin-shell.is-rail {
+  grid-template-columns: var(--admin-rail-width) minmax(0, 1fr);
 }
 
-.sidebar-overlay.active {
-  opacity: 1;
-  pointer-events: auto;
+.admin-shell.is-drawer {
+  grid-template-columns: minmax(0, 1fr);
 }
 
-.sidebar {
+/* Sidebar: light frosted material (dark in dark mode); opaque where
+   backdrop-filter is missing or less transparency is asked for. */
+.admin-sidebar {
   position: sticky;
   top: 0;
   display: flex;
-  width: var(--sidebar-width);
-  height: 100vh;
-  flex: 0 0 var(--sidebar-width);
   flex-direction: column;
-  gap: 16px;
-  padding: 16px;
+  gap: var(--space-4);
+  height: 100vh;
+  height: 100dvh;
+  padding: var(--space-4) var(--space-3) var(--space-3);
   overflow: hidden;
-  border-right: 1px solid var(--admin-sidebar-divider);
-  background: var(--admin-sidebar-surface);
-  color: var(--admin-sidebar-text);
-  transition: width 0.2s ease, flex-basis 0.2s ease, padding 0.2s ease;
+  border-right: 1px solid var(--separator);
+  background: var(--bg-grouped);
 }
 
-/* Frosted material (plan D3); opaque where backdrop-filter is unsupported
-   or the user asks for less transparency. */
 @supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .sidebar {
+  .admin-sidebar {
+    background: var(--material-sidebar);
+    -webkit-backdrop-filter: saturate(180%) blur(20px);
+    backdrop-filter: saturate(180%) blur(20px);
+  }
+
+  .admin-topbar {
+    background: var(--material);
     -webkit-backdrop-filter: saturate(180%) blur(20px);
     backdrop-filter: saturate(180%) blur(20px);
   }
 }
 
-@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-  .sidebar {
-    background: var(--bg-grouped);
-  }
-}
-
 @media (prefers-reduced-transparency: reduce) {
-  .sidebar {
+  .admin-sidebar {
     background: var(--bg-grouped);
+  }
+
+  .admin-topbar {
+    background: var(--bg);
   }
 }
 
-.navigation-collapsed .sidebar {
-  width: var(--sidebar-collapsed-width);
-  flex-basis: var(--sidebar-collapsed-width);
-  padding: 16px 12px;
-}
-
-.sidebar-top,
-.operator-card,
-.topbar,
-.topbar-primary,
-.topbar-actions {
+.admin-sidebar__top {
   display: flex;
+  gap: var(--space-2);
   align-items: center;
-}
-
-.sidebar-top {
   justify-content: space-between;
-  gap: 8px;
+  min-height: 36px;
+  padding: 0 var(--space-3);
 }
 
-.brand-block {
-  display: flex;
-  min-width: 0;
-  flex-direction: column;
-  align-items: flex-start;
-  gap: var(--space-0-5);
-  padding: var(--space-1) var(--space-1) 0;
-}
-
-/* The badge lines up with the lockup text: mark (26 px) plus a third of it. */
-.brand-meta {
-  padding-left: calc(26px * 4 / 3);
-}
-
-.operator-avatar {
+.admin-sidebar__brand {
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  flex: 0 0 auto;
-  border: 1px solid var(--admin-sidebar-divider);
-  border-radius: var(--radius-md);
-  background: var(--admin-sidebar-accent);
-  color: var(--admin-sidebar-text-strong);
+  min-width: 0;
+  color: inherit;
+  text-decoration: none;
+  border-radius: var(--radius-xs);
 }
 
-.operator-copy {
+.admin-sidebar__nav {
+  flex: 1;
+  min-height: 0;
+  margin: 0 calc(var(--space-1) * -1);
+  padding: 0 var(--space-1);
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  scrollbar-width: thin;
+}
+
+.admin-sidebar__footer {
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--separator);
+}
+
+.admin-shell.is-rail .admin-sidebar {
+  padding-inline: var(--space-2);
+}
+
+.admin-shell.is-rail .admin-sidebar__top {
+  justify-content: center;
+  padding: 0;
+}
+
+.admin-shell.is-rail .admin-sidebar__footer :deep(.account-trigger) {
+  justify-content: center;
+  padding-inline: 0;
+}
+
+/* Workspace and top bar */
+.admin-workspace {
+  display: flex;
+  flex-direction: column;
   min-width: 0;
 }
 
-.operator-name {
-  overflow: hidden;
-  color: var(--admin-sidebar-text-strong);
-  font-weight: 700;
-  text-overflow: ellipsis;
+.admin-topbar {
+  position: sticky;
+  top: 0;
+  z-index: var(--z-sticky);
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  height: 52px;
+  padding: 0 var(--space-6) 0 var(--space-4);
+  border-bottom: 1px solid var(--separator);
+  background: var(--bg);
+}
+
+.admin-topbar__toggle {
+  flex: none;
+}
+
+.admin-crumbs {
+  min-width: 0;
+}
+
+.admin-crumbs ol {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  min-width: 0;
+  list-style: none;
+  color: var(--label-2);
+  font-size: var(--type-body-size);
   white-space: nowrap;
 }
 
-.brand-meta,
-.operator-email,
-.version-line {
-  color: var(--admin-sidebar-muted);
+.admin-crumbs li {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  min-width: 0;
+}
+
+.admin-crumbs li + li::before {
+  content: '›';
+  color: var(--label-3);
+}
+
+.admin-crumbs li.is-current {
+  overflow: hidden;
+  color: var(--label-1);
+  font-weight: var(--weight-medium);
+}
+
+.admin-crumbs li.is-current span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.admin-crumbs a {
+  color: inherit;
+  text-decoration: none;
+}
+
+.admin-crumbs a:hover {
+  color: var(--label-1);
+}
+
+.admin-search {
+  display: inline-flex;
+  flex: none;
+  gap: var(--space-2);
+  align-items: center;
+  width: 260px;
+  height: 32px;
+  margin-left: auto;
+  padding: 0 var(--space-2) 0 var(--space-3);
+  border: 0;
+  border-radius: var(--radius-sm);
+  /* An elevated field with a hairline: label-2 on a fill-1 field is under
+     4.5:1 in light mode. */
+  background: var(--bg-elevated);
+  box-shadow: inset 0 0 0 1px var(--separator);
+  color: var(--label-2);
+  font: inherit;
+  font-size: var(--type-callout-size);
+  cursor: pointer;
+  transition: background-color var(--dur-micro) var(--ease-standard);
+}
+
+.admin-search:hover {
+  box-shadow: inset 0 0 0 1px var(--separator-strong);
+}
+
+.admin-search__text {
+  flex: 1;
+  text-align: left;
+}
+
+.admin-search__kbd {
+  display: inline-grid;
+  place-items: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 var(--space-1);
+  border: 1px solid var(--separator);
+  border-radius: var(--radius-xs);
+  color: var(--label-2);
+  font-family: var(--font-sans);
   font-size: var(--type-caption-size);
 }
 
-.close-button {
-  display: none;
-  width: 40px;
-  min-height: 40px;
-  padding: 0;
-  border-radius: var(--radius-md);
-  color: var(--admin-sidebar-text);
+.admin-topbar__account {
+  display: flex;
+  flex: none;
 }
 
-.sidebar-nav {
-  min-height: 0;
+/* Content */
+.admin-main {
+  flex: 1;
 }
 
-.sidebar-footer {
+.admin-main:focus {
+  outline: none;
+}
+
+.admin-content {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-  padding-top: 14px;
-  border-top: 1px solid var(--admin-sidebar-divider);
-}
-
-.operator-card {
-  gap: 10px;
-}
-
-.operator-avatar {
-  width: 34px;
-  height: 34px;
-}
-
-.operator-email {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.version-line {
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.sidebar-actions {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-
-.logout-button {
-  justify-content: flex-start;
+  gap: var(--space-6);
   width: 100%;
+  max-width: var(--size-content-admin);
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-8) var(--space-16);
 }
 
-.workspace {
-  display: flex;
-  min-width: 0;
-  flex: 1;
-  flex-direction: column;
+.admin-content.is-wide {
+  max-width: var(--size-content-wide);
 }
 
-.topbar {
-  justify-content: space-between;
-  gap: 16px;
-  min-height: var(--header-height);
-  padding: 14px 24px;
-  border-bottom: 1px solid var(--border-color);
-  background: var(--surface-color);
-  box-shadow: var(--shadow-sm);
+.admin-content__suite-nav {
+  align-self: flex-start;
 }
 
-.topbar-primary {
-  min-width: 0;
-  gap: 12px;
-}
-
-.menu-button {
-  display: none;
-  width: 40px;
-  min-height: 40px;
-  padding: 0;
-  border-radius: var(--radius-md);
-}
-
-.topbar-title {
-  overflow: hidden;
-  color: var(--text-color);
-  font-size: var(--type-title-3-size);
-  font-weight: 700;
-  line-height: 1.2;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.topbar-subtitle {
-  max-width: 760px;
-  margin-top: 3px;
-  color: var(--text-secondary);
-  font-size: var(--type-callout-size);
-}
-
-.topbar-actions {
-  flex: 0 0 auto;
-  gap: 10px;
-}
-
-.current-time {
-  color: var(--text-secondary);
-  font-size: var(--type-callout-size);
-  white-space: nowrap;
-}
-
-.content {
-  flex: 1;
-  padding: 24px;
-}
-
-.navigation-collapsed .brand-meta,
-.navigation-collapsed .brand-block :deep(.brand-lockup-name),
-.navigation-collapsed .operator-copy,
-.navigation-collapsed .version-line,
-.navigation-collapsed .sidebar-actions :deep(.locale-switcher),
-.navigation-collapsed .logout-label {
+/* Drawer below 834 px */
+.admin-scrim {
   display: none;
 }
 
-.navigation-collapsed .sidebar-top,
-.navigation-collapsed .sidebar-footer,
-.navigation-collapsed .operator-card,
-.navigation-collapsed .sidebar-actions {
-  align-items: center;
+.admin-shell.is-drawer .admin-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: var(--z-drawer);
+  display: block;
+  background: var(--scrim);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-overlay) var(--ease-standard);
 }
 
-.navigation-collapsed .logout-button {
+.admin-shell.is-drawer .admin-scrim.is-open {
+  opacity: 1;
+  pointer-events: auto;
+}
+
+.admin-shell.is-drawer .admin-sidebar {
+  position: fixed;
+  inset: 0 auto 0 0;
+  z-index: calc(var(--z-drawer) + 1);
+  width: min(88vw, 300px);
+  padding-bottom: calc(var(--space-3) + env(safe-area-inset-bottom, 0px));
+  box-shadow: var(--shadow-3);
+  transform: translateX(-100%);
+  visibility: hidden;
+  transition:
+    transform var(--dur-overlay) var(--ease-emphasized),
+    visibility 0s linear var(--dur-overlay);
+}
+
+.admin-shell.is-drawer .admin-sidebar.is-open {
+  transform: none;
+  visibility: visible;
+  transition: transform var(--dur-overlay) var(--ease-emphasized);
+}
+
+.admin-shell.is-drawer .admin-topbar {
+  gap: var(--space-2);
+  padding: 0 var(--space-3);
+}
+
+.admin-shell.is-drawer .admin-crumbs li:not(.is-current) {
+  display: none;
+}
+
+.admin-shell.is-drawer .admin-crumbs li.is-current::before {
+  content: none;
+}
+
+.admin-shell.is-drawer .admin-search {
   justify-content: center;
-  width: 40px;
-  min-height: 40px;
+  width: var(--size-control-md);
+  height: var(--size-control-md);
   padding: 0;
+  border-radius: 50%;
+  background: transparent;
+  box-shadow: none;
 }
 
-@media (max-width: 1024px) {
-  .sidebar,
-  .navigation-collapsed .sidebar {
-    position: fixed;
-    inset: 0 auto 0 0;
-    z-index: 1010;
-    width: min(88vw, var(--sidebar-width));
-    height: 100dvh;
-    flex-basis: min(88vw, var(--sidebar-width));
-    padding: 16px;
-    transform: translateX(-100%);
-    transition: transform 0.2s ease;
-  }
+.admin-shell.is-drawer .admin-search:hover {
+  background: var(--fill-1);
+}
 
-  .sidebar.open {
-    transform: translateX(0);
-  }
+.admin-shell.is-drawer .admin-search__text,
+.admin-shell.is-drawer .admin-search__kbd {
+  display: none;
+}
 
-  .menu-button,
-  .close-button {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-  }
+.admin-shell.is-drawer .admin-content {
+  padding: var(--space-6) var(--space-4) var(--space-12);
+}
 
-  .navigation-collapsed .brand-meta,
-  .navigation-collapsed .brand-block :deep(.brand-lockup-name),
-  .navigation-collapsed .operator-copy,
-  .navigation-collapsed .version-line,
-  .navigation-collapsed .logout-label {
-    display: block;
-  }
-
-  .navigation-collapsed .sidebar-actions :deep(.locale-switcher) {
-    display: inline-flex;
-  }
-
-  .navigation-collapsed .sidebar-top,
-  .navigation-collapsed .sidebar-footer,
-  .navigation-collapsed .operator-card,
-  .navigation-collapsed .sidebar-actions {
-    align-items: stretch;
-  }
-
-  .navigation-collapsed .logout-button {
-    justify-content: flex-start;
-    width: 100%;
-    padding: 10px 16px;
+@media (max-width: 1067.98px) {
+  .admin-search {
+    width: 200px;
   }
 }
 
-@media (max-width: 768px) {
-  .topbar {
-    align-items: flex-start;
-    flex-direction: column;
-    padding: 14px 18px;
-  }
-
-  .topbar-actions {
-    flex-wrap: wrap;
-  }
-
-  .current-time {
-    display: none;
-  }
-
-  .topbar-subtitle {
-    display: none;
-  }
-
-  .content {
-    padding: 18px;
+@media (pointer: coarse) {
+  .admin-shell.is-drawer .admin-search {
+    width: 44px;
+    height: 44px;
   }
 }
 </style>

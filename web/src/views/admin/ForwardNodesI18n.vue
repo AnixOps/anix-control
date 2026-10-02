@@ -28,7 +28,6 @@
       </div>
     </div>
 
-    <ForwardSuiteNav />
 
     <div v-if="feedback.message" :class="['feedback', `feedback-${feedback.type}`]">
       <span>{{ feedback.message }}</span>
@@ -699,7 +698,6 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { useAppI18n } from '@/composables/useAppI18n'
-import ForwardSuiteNav from '@/components/admin/ForwardSuiteNav.vue'
 import {
   checkForwardNode,
   createForwardNode,

@@ -17,7 +17,6 @@
       </div>
     </section>
 
-    <ForwardSuiteNav />
 
     <section class="stats-grid">
       <article class="stat-card">
@@ -193,7 +192,6 @@ import {
   toggleAnsibleMachine,
   updateAnsibleMachine
 } from '@/api/admin'
-import ForwardSuiteNav from '@/components/admin/ForwardSuiteNav.vue'
 
 const { t, translateLiteral } = useAppI18n()
 

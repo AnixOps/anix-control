@@ -1,345 +1,183 @@
 <template>
   <nav
-    class="admin-navigation"
-    :class="{
-      'admin-navigation-collapsed': collapsed && !mobile,
-      'admin-navigation-mobile': mobile,
-    }"
-    :aria-label="t('layout.admin.mobileTitle')"
+    ref="navRef"
+    class="admin-nav"
+    :class="{ 'is-rail': rail }"
+    :aria-label="t('shell.admin.navLabel')"
+    @keydown="onKeydown"
   >
-    <section
-      v-for="section in sections"
-      :key="section.id"
-      class="nav-section"
-      :class="{ 'nav-section-forward': section.kind === 'forward' }"
-      :data-nav-group="section.id"
+    <div
+      v-for="group in groups"
+      :key="group.id"
+      class="admin-nav__group"
+      :data-nav-group="group.id"
     >
-      <div class="nav-section-title">{{ section.label }}</div>
-
-      <router-link
-        v-for="item in section.items"
-        :key="item.to"
-        :to="item.to"
-        class="nav-link"
-        active-class="nav-link-active"
-        :aria-label="itemDescription(item)"
-        :title="itemDescription(item)"
-        @click="onNavigate"
-      >
-        <AdminNavIcon :name="item.icon" />
-        <span class="nav-link-label">{{ item.label }}</span>
-      </router-link>
-
-      <template v-if="section.kind === 'forward'">
-        <div class="nav-subsection-title">{{ section.forwardLabel }}</div>
-        <ForwardSuiteNav sidebar :collapsed="collapsed && !mobile" @navigate="onNavigate" />
-      </template>
-
-      <details
-        v-if="section.advancedItems?.length"
-        class="nav-details"
-        :open="containsCurrentRoute(section.advancedItems)"
-      >
-        <summary
-          class="nav-disclosure"
-          :aria-label="t('layout.admin.sections.more')"
-          :title="t('layout.admin.sections.more')"
-        >
-          <AdminNavIcon name="more" />
-          <span class="nav-disclosure-label">{{ t('layout.admin.sections.more') }}</span>
-          <ChevronDown class="nav-disclosure-chevron" :size="16" aria-hidden="true" />
-        </summary>
-        <div class="nav-advanced-list">
+      <div :id="headingId(group.id)" class="admin-nav__heading" :class="{ 'visually-hidden': rail }">{{ group.label }}</div>
+      <ul class="admin-nav__list" :aria-labelledby="headingId(group.id)">
+        <li v-for="item in group.items" :key="item.id">
           <router-link
-            v-for="item in section.advancedItems"
-            :key="item.to"
             :to="item.to"
-            class="nav-link nav-link-advanced"
-            active-class="nav-link-active"
-            :aria-label="itemDescription(item)"
-            :title="itemDescription(item)"
-            @click="onNavigate"
+            class="admin-nav__link"
+            :class="{ 'is-active': item.id === activeId }"
+            active-class=""
+            exact-active-class=""
+            :aria-current="item.id === activeId ? 'page' : undefined"
+            :title="rail ? item.label : undefined"
+            :data-nav-item="item.id"
+            :data-nav-source="item.source"
+            @click="emit('navigate')"
           >
-            <AdminNavIcon :name="item.icon" />
-            <span class="nav-link-label">{{ item.label }}</span>
+            <AdminNavIcon :name="item.icon" class="admin-nav__icon" />
+            <span class="admin-nav__label" :class="{ 'visually-hidden': rail }">{{ item.label }}</span>
           </router-link>
-        </div>
-      </details>
-
-      <div v-if="section.extensionGroups?.length" class="extension-menu-groups">
-        <section
-          v-for="group in section.extensionGroups"
-          :key="group.parent"
-          class="extension-menu-group"
-          :data-extension-parent="group.parent"
-        >
-          <div class="extension-menu-heading">{{ group.label }}</div>
-          <router-link
-            v-for="item in group.items"
-            :key="item.to"
-            :to="item.to"
-            class="nav-link nav-link-extension"
-            active-class="nav-link-active"
-            :aria-label="itemDescription(item)"
-            :title="itemDescription(item)"
-            @click="onNavigate"
-          >
-            <AdminNavIcon :name="item.icon" />
-            <span class="nav-link-label">{{ item.label }}</span>
-          </router-link>
-        </section>
-      </div>
-    </section>
-
-    <button
-      v-if="!mobile"
-      class="navigation-collapse-control"
-      type="button"
-      :aria-label="collapseLabel"
-      :title="collapseLabel"
-      @click="emit('toggle-collapse')"
-    >
-      <PanelLeftOpen v-if="collapsed" :size="18" aria-hidden="true" />
-      <PanelLeftClose v-else :size="18" aria-hidden="true" />
-    </button>
+        </li>
+      </ul>
+    </div>
   </nav>
 </template>
 
 <script setup>
-import { computed } from 'vue'
-import { ChevronDown, PanelLeftClose, PanelLeftOpen } from '@lucide/vue'
-import { useRoute } from 'vue-router'
+// The admin sidebar's link list. It renders the groups from
+// navigation/menu.js as they come (built-in items, edition, permissions and
+// plugin menus are merged there) and marks the one active item.
+// The selected item is a rounded fill with an accent icon; hover is a lighter
+// fill. As an icon rail the labels stay in the accessibility tree (visually
+// hidden) and show as tooltips. Every link is in the Tab order; ↑/↓, Home
+// and End also move between links.
+import { ref } from 'vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import AdminNavIcon from '@/components/admin/AdminNavIcon.vue'
-import ForwardSuiteNav from '@/components/admin/ForwardSuiteNav.vue'
 
-const props = defineProps({
-  sections: {
-    type: Array,
-    default: () => []
-  },
-  collapsed: {
-    type: Boolean,
-    default: false
-  },
-  mobile: {
-    type: Boolean,
-    default: false
-  }
+defineProps({
+  groups: { type: Array, default: () => [] },
+  activeId: { type: String, default: '' },
+  rail: { type: Boolean, default: false }
 })
 
-const emit = defineEmits(['navigate', 'toggle-collapse'])
-const route = useRoute()
+const emit = defineEmits(['navigate'])
 const { t } = useAppI18n()
+const navRef = ref(null)
 
-const collapseLabel = computed(() => (
-  props.collapsed
-    ? t('layout.admin.expandNavigation')
-    : t('layout.admin.collapseNavigation')
-))
-
-function itemDescription(item) {
-  return item.hint ? `${item.label}: ${item.hint}` : item.label
+function headingId(groupId) {
+  return `admin-nav-group-${groupId}`
 }
 
-function containsCurrentRoute(items) {
-  return items.some(item => route.path === item.to || route.path.startsWith(`${item.to}/`))
-}
-
-function onNavigate() {
-  emit('navigate')
+function onKeydown(event) {
+  if (!['ArrowDown', 'ArrowUp', 'Home', 'End'].includes(event.key)) return
+  const links = [...(navRef.value?.querySelectorAll('.admin-nav__link') || [])]
+  if (links.length === 0) return
+  const index = links.indexOf(document.activeElement)
+  if (index < 0) return
+  event.preventDefault()
+  let next = index
+  if (event.key === 'ArrowDown') next = (index + 1) % links.length
+  if (event.key === 'ArrowUp') next = (index - 1 + links.length) % links.length
+  if (event.key === 'Home') next = 0
+  if (event.key === 'End') next = links.length - 1
+  links[next].focus()
 }
 </script>
 
 <style scoped>
-.admin-navigation {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 18px;
-  min-height: 0;
-  overflow-y: auto;
-  padding-right: 4px;
-}
-
-.nav-section {
+.admin-nav {
   display: flex;
   flex-direction: column;
-  gap: 4px;
+  gap: var(--space-4);
 }
 
-.nav-section-title,
-.nav-subsection-title,
-.extension-menu-heading {
-  padding: 0 8px;
-  color: var(--admin-sidebar-muted);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0;
-  text-transform: uppercase;
-}
-
-.nav-section-title {
-  margin-bottom: 4px;
-}
-
-.nav-subsection-title {
-  margin: 12px 0 4px;
-}
-
-.nav-link,
-.nav-disclosure {
+.admin-nav__group {
   display: flex;
-  align-items: center;
-  gap: 10px;
-  min-height: 40px;
-  padding: 9px 10px;
-  border-radius: var(--radius-md);
-  color: var(--admin-sidebar-text);
-  text-decoration: none;
-  transition: var(--transition);
+  flex-direction: column;
 }
 
-.nav-link:hover,
-.nav-link-active,
-.nav-disclosure:hover,
-.nav-details[open] > .nav-disclosure {
-  background: var(--admin-sidebar-hover);
-  color: var(--admin-sidebar-text-strong);
+.admin-nav__heading {
+  padding: var(--space-2) var(--space-3) var(--space-1);
+  color: var(--label-2);
+  font-size: var(--type-caption-size);
+  font-weight: var(--weight-semibold);
+  line-height: var(--type-caption-line);
 }
 
-.nav-link :deep(.admin-nav-icon),
-.nav-disclosure :deep(.admin-nav-icon) {
-  flex: 0 0 auto;
-}
-
-.nav-link-label,
-.nav-disclosure-label {
-  min-width: 0;
-}
-
-.nav-details {
-  margin: 0;
-}
-
-.nav-disclosure {
-  cursor: pointer;
+.admin-nav__list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
   list-style: none;
 }
 
-.nav-disclosure::-webkit-details-marker {
-  display: none;
-}
-
-.nav-disclosure-chevron {
-  flex: 0 0 auto;
-  margin-left: auto;
-  transition: transform 0.2s ease;
-}
-
-.nav-details[open] .nav-disclosure-chevron {
-  transform: rotate(180deg);
-}
-
-.nav-advanced-list {
+.admin-nav__link {
   display: flex;
-  flex-direction: column;
-  gap: 4px;
-  margin: 4px 0 0 20px;
-  padding-left: 8px;
-  border-left: 1px solid var(--admin-sidebar-divider);
-}
-
-.nav-link-advanced {
-  min-height: 36px;
-}
-
-.extension-menu-groups {
-  display: flex;
-  flex-direction: column;
-  gap: 12px;
-  margin-top: 10px;
-  padding-top: 10px;
-  border-top: 1px solid var(--admin-sidebar-divider);
-}
-
-.extension-menu-group {
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-.extension-menu-heading {
-  padding-top: 2px;
-}
-
-.navigation-collapse-control {
-  display: inline-flex;
+  gap: var(--space-3);
   align-items: center;
+  min-height: 32px;
+  padding: var(--space-1) var(--space-3);
+  border-radius: var(--radius-sm);
+  color: var(--label-1);
+  font-size: var(--type-body-size);
+  line-height: var(--type-callout-line);
+  text-decoration: none;
+  transition: background-color var(--dur-micro) var(--ease-standard);
+}
+
+.admin-nav__icon {
+  flex: none;
+  color: var(--label-2);
+}
+
+.admin-nav__label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.admin-nav__link:hover {
+  background: var(--fill-1);
+}
+
+/* Selected: a stronger fill, medium weight and the accent icon. */
+.admin-nav__link.is-active {
+  background: var(--fill-2);
+  font-weight: var(--weight-medium);
+}
+
+.admin-nav__link.is-active .admin-nav__icon {
+  color: var(--accent);
+}
+
+.admin-nav__link:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: calc(var(--focus-ring-offset) * -1);
+}
+
+/* Icon rail: one centred icon per row, groups separated by a hairline. */
+.admin-nav.is-rail {
+  gap: var(--space-2);
+}
+
+.admin-nav.is-rail .admin-nav__group + .admin-nav__group {
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--separator);
+}
+
+.admin-nav.is-rail .admin-nav__link {
   justify-content: center;
   width: 40px;
   min-height: 40px;
-  margin-top: auto;
-  border: 1px solid var(--admin-sidebar-divider);
-  border-radius: var(--radius-md);
-  background: transparent;
-  color: var(--admin-sidebar-muted);
-  cursor: pointer;
+  margin-inline: auto;
+  padding: 0;
 }
 
-.navigation-collapse-control:hover {
-  background: var(--admin-sidebar-hover);
-  color: var(--admin-sidebar-text-strong);
+@media (pointer: coarse) {
+  .admin-nav__link {
+    min-height: 44px;
+  }
 }
 
-.admin-navigation-collapsed {
-  align-items: center;
-  overflow-x: hidden;
-  padding-right: 0;
-}
-
-.admin-navigation-collapsed .nav-section {
-  width: 100%;
-  align-items: center;
-}
-
-.admin-navigation-collapsed .nav-section-title,
-.admin-navigation-collapsed .nav-subsection-title,
-.admin-navigation-collapsed .extension-menu-heading,
-.admin-navigation-collapsed .nav-link-label,
-.admin-navigation-collapsed .nav-disclosure-label,
-.admin-navigation-collapsed .nav-disclosure-chevron,
-.admin-navigation-collapsed :deep(.forward-suite-link .link-copy) {
-  display: none;
-}
-
-.admin-navigation-collapsed .nav-link,
-.admin-navigation-collapsed .nav-disclosure,
-.admin-navigation-collapsed :deep(.forward-suite-link) {
-  justify-content: center;
-  width: 40px;
-  padding: 9px;
-}
-
-.admin-navigation-collapsed .nav-advanced-list {
-  align-items: center;
-  margin-left: 0;
-  padding-left: 0;
-  border-left: 0;
-}
-
-.admin-navigation-collapsed .extension-menu-groups {
-  width: 100%;
-  align-items: center;
-}
-
-.admin-navigation-collapsed .extension-menu-group {
-  align-items: center;
-}
-
-@media (max-width: 1024px) {
-  .navigation-collapse-control {
-    display: none;
+@media (forced-colors: active) {
+  .admin-nav__link.is-active {
+    outline: 2px solid transparent;
+    text-decoration: underline;
   }
 }
 </style>

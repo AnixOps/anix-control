@@ -9,7 +9,6 @@
         <button class="btn btn-primary" @click="openCreateModal">{{ t('runtime.tunnel.actions.add') }}</button>
       </div>
     </div>
-    <ForwardSuiteNav />
     <p class="text-secondary small runtime-note">{{ t('runtime.tunnel.note') }}</p>
     <div class="runtime-context-bar">
       <span class="tag tag-primary">{{ runtimeModeLabel }}</span>
@@ -332,7 +331,6 @@ import {
   getSystemConfig,
   updateForwardTunnel
 } from '@/api/admin'
-import ForwardSuiteNav from '@/components/admin/ForwardSuiteNav.vue'
 import { humanizeForwardRuntimeBackend } from '@/utils/forwardRuntime'
 
 const { t, translateLiteral } = useAppI18n()

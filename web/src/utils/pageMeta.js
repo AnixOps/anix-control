@@ -8,6 +8,7 @@ const PAGE_TITLE_KEYS = {
   '/user/tickets': 'pageTitles.user.tickets',
   '/user/plans': 'pageTitles.user.plans',
   '/user/orders': 'pageTitles.user.orders',
+  '/user/account': 'shell.accountPage.title',
   '/admin/dashboard': 'pageTitles.admin.dashboard',
   '/admin/monitor': 'pageTitles.admin.monitor',
   '/admin/traffic-hourly': 'pageTitles.admin.trafficHourly',
@@ -38,7 +39,8 @@ const PAGE_TITLE_KEYS = {
   '/admin/notifications': 'pageTitles.admin.notifications',
   '/admin/invite': 'pageTitles.admin.invite',
   '/admin/invite-codes': 'pageTitles.admin.inviteCodes',
-  '/admin/system': 'pageTitles.admin.system'
+  '/admin/system': 'pageTitles.admin.system',
+  '/admin/account': 'shell.accountPage.title'
 }
 
 const DESCRIPTION_RULES = [

@@ -1,0 +1,157 @@
+/* Drop-down menus of the app shell (account menu, forward suite "更多"),
+   on Reka DropdownMenu. Global (<style src>, not scoped): Reka renders the
+   content inside a popper wrapper, which is what a scoped attribute would
+   land on. Every selector starts with .shell-menu. Frosted material
+   with an opaque fallback, radius-md, shadow-2, 32 px items; the highlighted
+   item is an accent fill (keyboard and pointer alike). */
+.shell-menu {
+  z-index: var(--z-dropdown);
+  min-width: 224px;
+  max-width: min(320px, calc(100vw - 2 * var(--space-4)));
+  max-height: var(--reka-dropdown-menu-content-available-height, 480px);
+  padding: var(--space-1);
+  overflow-y: auto;
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-2), 0 0 0 1px var(--separator);
+  color: var(--label-1);
+  font-size: var(--type-body-size);
+  transform-origin: var(--reka-dropdown-menu-content-transform-origin, var(--reka-dropdown-menu-sub-content-transform-origin));
+}
+
+@supports ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  .shell-menu {
+    /* Mostly opaque: menu text must stay legible over busy pages. */
+    background: color-mix(in srgb, var(--bg-elevated) 88%, transparent);
+    -webkit-backdrop-filter: saturate(180%) blur(24px);
+    backdrop-filter: saturate(180%) blur(24px);
+  }
+}
+
+@media (prefers-reduced-transparency: reduce) {
+  .shell-menu {
+    background: var(--bg-elevated);
+  }
+}
+
+.shell-menu[data-state='open'] {
+  animation: shell-menu-in var(--dur-micro) var(--ease-emphasized);
+}
+
+@keyframes shell-menu-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.shell-menu__header {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  min-width: 0;
+  padding: var(--space-2) var(--space-3) var(--space-2);
+}
+
+.shell-menu__header-name {
+  overflow: hidden;
+  font-weight: var(--weight-semibold);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shell-menu__header-meta {
+  overflow: hidden;
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shell-menu__item {
+  position: relative;
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  min-height: 32px;
+  padding: 0 var(--space-3);
+  border-radius: calc(var(--radius-sm) - 2px);
+  outline: none;
+  color: var(--label-1);
+  text-decoration: none;
+  cursor: default;
+  user-select: none;
+}
+
+.shell-menu__item svg {
+  color: var(--label-2);
+}
+
+.shell-menu__item[data-highlighted] {
+  background: var(--accent-fill);
+  color: var(--on-accent);
+}
+
+.shell-menu__item[data-highlighted] svg,
+.shell-menu__item[data-highlighted] .shell-menu__value {
+  color: var(--on-accent);
+}
+
+.shell-menu__item[data-disabled] {
+  color: var(--label-3);
+}
+
+.shell-menu__item.is-current {
+  font-weight: var(--weight-semibold);
+}
+
+.shell-menu__label {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.shell-menu__value {
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
+  white-space: nowrap;
+}
+
+.shell-menu__check {
+  display: inline-flex;
+  width: 16px;
+  margin-left: auto;
+}
+
+.shell-menu__separator {
+  height: 1px;
+  margin: var(--space-1) var(--space-2);
+  background: var(--separator);
+}
+
+@media (pointer: coarse) {
+  .shell-menu__item {
+    min-height: 44px;
+  }
+}
+
+@media (forced-colors: active) {
+  .shell-menu__item[data-highlighted] {
+    outline: 2px solid transparent;
+    text-decoration: underline;
+  }
+}
+
+.shell-menu__group-label {
+  padding: var(--space-2) var(--space-3) var(--space-1);
+  color: var(--label-2);
+  font-size: var(--type-caption-size);
+  font-weight: var(--weight-semibold);
+}

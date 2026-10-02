@@ -125,8 +125,9 @@ classes are removed when the last page stops using them.
 `web/src/components/common/BrandLockup.vue` renders the lockup from
 `brand.md` §2.4: the inline glyph (from the vendored `mark-glyph.svg`), then
 "AnixOps" in 600 and the product word in 400. `tile` puts the glyph on the
-brand-gradient tile (login page); `inverse` sets the text in white for the
-slate backdrop; `size` is `sm`, `md` or `lg`. Page titles use "AnixOps
+brand-gradient tile (login page, admin sidebar); `inverse` sets the text in
+white for the slate backdrop; `size` is `sm`, `md` or `lg`; `markOnly`
+drops the name (the sidebar's icon rail). Page titles use "AnixOps
 Control".
 
 ## Charts
@@ -156,8 +157,8 @@ Neither command fails on warnings, and CI does not run them yet.
 `web/src/ui/` is the component library (phase U2). It is built on
 [Reka UI](https://reka-ui.com) 2.10.5 (headless primitives with the
 keyboard, focus and ARIA behaviour; pinned) and our own scoped CSS that uses
-only tokens (stylelint reports zero warnings for `src/ui/`). Pages do not
-use it yet; U4 onwards migrates them. Names carry a `Ui` prefix so they never
+only tokens (stylelint reports zero warnings for `src/ui/`). The app shells
+(U3) and the account page use it; U4 onwards migrates the other pages. Names carry a `Ui` prefix so they never
 shadow HTML elements: `import { UiButton, useToast } from '@/ui'`.
 
 **Stories.** Every component has a Histoire story (`src/ui/stories/`):
@@ -171,8 +172,9 @@ preview URL switches the built-in strings to English.
 > project's Vite 8; drop the override once a stable Histoire supports Vite 8.
 
 
-**Mount once.** `<UiHost />` (toast region and confirmation host) goes in
-`App.vue` when the first page uses `useToast()` or `useConfirm()` (U4).
+**Mount once.** `<UiHost />` (toast region and confirmation host) is in
+`App.vue` (an async component, so the login page does not load it); any
+page can call `useToast()` and `useConfirm()`.
 
 **Strings.** Built-in text (close, cancel, copied, undo, loading, status
 words, units) comes from `ui.*` in `src/locales/modules/{zh-CN,en}/ui.js`,
@@ -276,11 +278,141 @@ gives a fixed-locale set; `formatBytes()` is a plain helper.
   `relativeTime` 「3 分钟前」 (show `dateTime` on hover).
 - Missing values render as `—` (option `empty`).
 
-### Bundle
+## App shell
+
+Phase U3 (plan §4, §8.3, §9–§11). Two shells, both lazy-loaded by the
+router, so the login page loads neither.
+
+### Admin shell (`web/src/layouts/AdminLayout.vue`)
+
+- **Sidebar** (248 px): light frosted material, dark in dark mode
+  (`--material-sidebar`, opaque `--bg-grouped` without `backdrop-filter` or
+  under `prefers-reduced-transparency`). The lockup on the brand tile, the
+  menu groups, and the account menu at the bottom. The selected item is a
+  `--fill-2` rounded fill with medium weight and an `--accent` icon; hover is
+  `--fill-1`. Every link is in the Tab order; ↑/↓, Home and End also move
+  between links (`components/admin/AdminNavigation.vue`).
+- **Icon rail.** The top-bar toggle collapses the sidebar to a 64 px rail
+  and back; the choice is stored (`admin.sidebar.collapsed`). In the rail the
+  labels stay in the accessibility tree (visually hidden) and show as
+  tooltips.
+- **Below 834 px** the sidebar is a drawer: a modal dialog with a scrim,
+  focus on its close button, Tab kept inside, Esc and the scrim close it and
+  focus returns to the toggle; choosing a page closes it. The top bar then
+  holds the account avatar too.
+- **Top bar** (52 px, frosted): the sidebar toggle, the breadcrumb (group ›
+  menu item › page; just the page below 834 px), the search button that
+  opens the command palette (`⌘K` on Apple platforms, `Ctrl K` elsewhere,
+  both accepted). No clock, no subtitle; no notification bell, because no
+  admin notification feed exists (the bell comes with one).
+- **Content** keeps to `--size-content-admin` (1280 px); routes with
+  `meta.layout: 'wide'` (users, nodes, orders, deployments, forward rules,
+  tunnels, limits, forward nodes, Ansible machines) use
+  `--size-content-wide` (1440 px).
+- **Forward suite.** On `/admin/forward*` the shell renders
+  `ForwardSuiteNav` once above the page: the flux-panel sub-navigation as a
+  segmented strip of links (快速配置向导, 流量转发, 隧道, 限速, NodeX 拓扑)
+  and a 更多 menu (Ansible 机器, 本地运行时, NodeX 运行时, NodeX Agents,
+  可观测性) whose button names the current page when it is one of them. The
+  pages and the sidebar no longer repeat it; routes and the seven legacy
+  redirects are unchanged.
+
+### User shell (`web/src/layouts/UserLayout.vue`)
+
+- 834 px and wider: a 48 px frosted bar with the lockup, centred links
+  (概览, 订阅, 帮助中心, 工单, 账户; 套餐 and 订单 in the commercial edition)
+  and the account avatar; content keeps to `--size-content-user` (980 px).
+- Below 834 px: the bar keeps the lockup and the avatar, and a bottom tab bar
+  (概览, 订阅, 帮助, 工单, 账户; 24 px icons, the current tab in `--accent`)
+  with `env(safe-area-inset-bottom)` padding takes the navigation.
+  Commercial pages that do not fit move into the account menu.
+
+### Menu config (`web/src/navigation/menu.js`)
+
+The one place that says what the shells show. `ADMIN_MENU` lists the groups
+(概览, 用户, 网络, 扩展, 系统, 商业) and their items; `buildAdminMenu()`
+merges, in this order:
+
+1. the built-in items (`id`, `to`, `icon`, `labelKey`, optional `match`
+   paths that also select the item);
+2. the edition (`edition: 'commercial' | 'community'`; 商业 only in the
+   commercial edition, 订阅模板 under 用户 only in the community edition);
+3. permissions (`permission`, checked with `userStore.hasPermission`);
+4. the plugin menus from `extensions/menuRegistry.js`: `services` and
+   `operations` go to 扩展, `system` to 系统, unknown parents to 扩展,
+   sorted by `order` then label; each needs its permission and must not
+   belong to a package the edition hides.
+
+Items marked `optional` appear only when the router has their route (a page
+whose route lands in another pull request). Empty
+groups are dropped. `activeMenuItem()` selects exactly one item per path (an
+exact `to`, then a `match` entry, then a sub-path). `Node` (节点,
+`/admin/nodes`) and `ForwardNode` (转发节点, `/admin/forward/nodes`) are
+separate items. `useAdminMenu()` / `useUserMenu()`
+(`navigation/useNavigation.js`) wire it to the stores; the sidebar,
+breadcrumb, palette and user navigation all render from it. Icons come from
+the closed map in `navigation/icons.js`.
+
+To add a page: add the route, then one item in `ADMIN_MENU` (or
+`FORWARD_SUITE_LINKS` for a forward suite page, or `USER_MENU`) with keys in
+`locales/modules/{zh-CN,en}/shell.js`.
+
+### Command palette (`components/shell/CommandPalette.vue`)
+
+A Reka `Dialog` around a Reka `Listbox` driven from its filter input, which
+has the combobox role (`aria-controls` the listbox, `aria-activedescendant`
+the highlighted option). Type to filter, ↑/↓ move, Enter opens, Esc closes and
+focus returns to where it was. It lists:
+
+- **Pages**: every page the admin can see (the menu config, the forward
+  suite pages placed where the sidebar puts them, the account page);
+  matching is case-insensitive on the label, the group and the route words,
+  so "tunnel" also finds 隧道管理.
+- **Actions**: the existing create flows of visible pages: 添加节点
+  (`/admin/nodes?create=1`), 添加用户 (`/admin/users?create=1`) and 转发快速向导
+  (`/admin/forward/setup`); appearance and language switches. The pages read
+  the one-shot query with `useRouteIntent()` and remove it from the URL.
+- **Users** (two characters or more, 250 ms debounce): the email filter of
+  `GET /admin/users?email=`, five results, opening the user list filtered
+  to that email. Nodes and forward rules have no list endpoint with a search
+  parameter, so the palette does not search them.
+
+### Account menu, account page, status pages
+
+- **Account menu** (`components/shell/AccountMenu.vue`, Reka DropdownMenu):
+  avatar → 账户, 外观 (跟随系统 / 浅色 / 深色), 语言 (简体中文 / English, each
+  in its own language), 关于 (admin: version, build and commit, the line that
+  used to sit at the bottom of the sidebar; Settings → 关于 takes it over in
+  U7), 退出登录. Submenus on wide screens, inline radio groups on phones.
+  `useTheme().setThemePreference('system')` forgets the stored theme and
+  follows the system again.
+- **账户** (`/user/account`, `/admin/account`, `views/Account.vue`): the
+  profile (read-only, `GET /user/profile`), two-factor authentication
+  (`/user/mfa/*`: status, turn on with a setup key and the first code, backup
+  codes shown once, new backup codes, turn off with the current password),
+  language and appearance. Password change and signed-in devices have no
+  endpoint, so they are not shown.
+- **404 and 无权限** (`views/StatusPage.vue`, `UiEmptyState` with the page's
+  H1): unknown paths under `/admin` and `/user` render inside their shell;
+  other unknown paths, and an admin page opened by a signed-in user who is
+  not an administrator, render a standalone page with the lockup. The URL
+  stays as typed. Signed-out visitors still go to the login page.
+
+### Motion and scrolling
+
+- Pages fade in over 240 ms while rising 8 px (`ShellRouterView.vue`); the
+  old page leaves at once. Under `prefers-reduced-motion` only the fade
+  remains.
+- `router/scroll.js`: a new page starts at the top, back and forward restore
+  the position (waiting up to 1.5 s for the list to load), and a change of
+  only the query keeps the position.
+
+## Bundle
 
 Reka UI and its helpers (`@floating-ui`, `@vueuse`, …) build into a
 `ui-vendor` chunk, kept out of `vue-vendor`. With every component imported
-it is about 45 KB gzip (the components add 14 KB JS and 7 KB CSS); the set
-the app shell will need first — `UiHost` and `UiButton` — costs about 9 KB
-of it, against the 250 KB admin shell budget (plan §13). Import components
-from the pages that use them so routes stay lazy.
+it is about 45 KB gzip (the components add 14 KB JS and 7 KB CSS). The
+login page loads none of it (112 KB gzip in total, against the 120 KB budget
+of plan §13). The admin shell adds its layout chunk and `ui-vendor`: about
+165 KB gzip before the first page, against the 250 KB budget. Import
+components from the pages that use them so routes stay lazy.
