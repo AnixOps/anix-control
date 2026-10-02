@@ -1,517 +1,452 @@
 <template>
-  <div class="page-shell plans-page">
-    <div class="page-toolbar">
-      <div>
-        <h1>{{ t('user.plans.title') }}</h1>
-        <p>{{ t('user.plans.subtitle') }}</p>
+  <div class="plans">
+    <UiPageHeader :title="t('portal.plans.title')" :description="t('portal.plans.description')" />
+
+    <div v-if="state === 'loading'">
+      <div v-if="showSkeleton" class="plans__grid">
+        <div v-for="index in 3" :key="index" class="plan-card"><UiSkeleton variant="card" /></div>
       </div>
     </div>
+    <LoadError v-else-if="state === 'failed'" :title="t('portal.plans.loadFailed')" :error="loadError" @retry="load" />
+    <UiEmptyState v-else-if="!plans.length" :icon="Package" :title="t('portal.plans.empty')" :description="t('portal.plans.emptyHint')" heading-tag="h2" data-plans-empty />
 
-    <section v-if="loading" class="section-panel loading-state">
-      <div class="spinner"></div>
-      <p>{{ t('user.plans.loading') }}</p>
-    </section>
-
-    <div v-else class="plans-grid">
-      <div v-for="plan in plans" :key="plan.id" class="plan-card">
-        <div v-if="plan.onetime_price" class="plan-badge">{{ t('user.plans.permanentBadge') }}</div>
-        <h3 class="plan-name">{{ plan.name }}</h3>
-        <div class="plan-price">
-          <span class="currency">¥</span>
-          <span class="amount">{{ formatPrice(getDisplayPrice(plan)) }}</span>
-          <span class="period">/ {{ displayPeriodLabel(plan) }}</span>
-        </div>
-
-        <div class="plan-features">
-          <div class="feature-item">
-            <span class="icon">T</span>
-            <span>{{ t('user.plans.trafficFeature', { value: formatBytes(plan.transfer_enable * 1024 * 1024 * 1024) }) }}</span>
-          </div>
-          <div v-if="plan.speed_limit" class="feature-item">
-            <span class="icon">S</span>
-            <span>{{ t('user.plans.speedLimitFeature', { value: plan.speed_limit }) }}</span>
-          </div>
-          <div v-if="plan.device_limit" class="feature-item">
-            <span class="icon">D</span>
-            <span>{{ t('user.plans.deviceLimitFeature', { value: plan.device_limit }) }}</span>
-          </div>
-          <div class="feature-item">
-            <span class="icon">N</span>
-            <span>{{ t('user.plans.unlimitedFeature') }}</span>
-          </div>
-        </div>
-
-        <button class="btn btn-primary w-full" data-test="plan-buy-button" @click="openPurchase(plan)">{{ t('common.actions.buyNow') }}</button>
+    <template v-else>
+      <div v-if="periodOptions.length > 1" class="plans__periods">
+        <UiSegmentedControl v-model="period" :options="periodOptions" :aria-label="t('portal.plans.period')" data-plans-period />
       </div>
-    </div>
 
-    <UiDialog :open="showPurchase" :title="t('user.plans.confirmOrder')" :dismissible="!creatingOrder" @update:open="value => { if (!value) closePurchase() }">
-      <div class="order-summary">
-        <div class="summary-item">
-          <span class="label">{{ t('user.plans.selectedPlan') }}</span>
-          <span class="value">{{ selectedPlan?.name }}</span>
-        </div>
-
-        <div class="form-group mt-4">
-          <label id="plan-period-label">{{ t('user.plans.choosePeriod') }}</label>
-          <div class="period-selector" role="group" aria-labelledby="plan-period-label">
-            <button
-              v-for="item in availablePeriods"
-              :key="item.key"
-              :class="['period-btn', { active: selectedPeriod === item.key }]"
-              :aria-pressed="selectedPeriod === item.key ? 'true' : 'false'"
-              @click="selectedPeriod = item.key"
-            >
-              <span class="period-name">{{ item.label }}</span>
-              <span class="period-price normalized-amount">{{ formatCurrency(item.price) }}</span>
-              <span class="period-price">¥{{ formatPrice(item.price) }}</span>
-            </button>
-          </div>
-        </div>
-
-        <div class="coupon-section mt-4">
-          <label for="plan-coupon">{{ t('user.plans.optionalCoupon') }}</label>
-          <div class="coupon-input-group">
-            <input
-              id="plan-coupon"
-              v-model.trim="couponCode"
-              type="text"
-              :placeholder="t('user.plans.couponPlaceholder')"
-              :disabled="couponApplied"
-            >
-            <button
-              v-if="!couponApplied"
-              class="btn"
-              data-test="coupon-verify-button"
-              :disabled="checkingCoupon"
-              @click="applyCoupon"
-            >
-              {{ checkingCoupon ? t('common.actions.refresh') : t('common.actions.verify') }}
-            </button>
-            <button v-else class="btn btn-ghost text-error" data-test="coupon-remove-button" @click="removeCoupon">{{ t('common.actions.remove') }}</button>
-          </div>
-          <p v-if="couponError" class="coupon-tip text-error">{{ couponError }}</p>
-          <p v-if="couponApplied" class="coupon-tip text-success">
-            {{ t('user.plans.couponApplied', { name: couponData.name, value: formatPrice(discountAmount) }) }}
+      <ul class="plans__grid">
+        <li v-for="plan in plans" :key="plan.id" class="plan-card" :class="{ 'is-unavailable': priceOf(plan, period) === null }" data-plan-card>
+          <h2 class="plan-card__name">{{ plan.name }}</h2>
+          <p class="plan-card__price">
+            <template v-if="priceOf(plan, period) !== null">
+              <span class="plan-card__amount">{{ format.money(priceOf(plan, period)) }}</span>
+              <span class="plan-card__per">{{ t(`portal.plans.per.${period}`) }}</span>
+            </template>
+            <span v-else class="plan-card__none">{{ t('portal.plans.notOffered') }}</span>
           </p>
-        </div>
-      </div>
+          <ul class="plan-card__features">
+            <li v-if="plan.transfer_enable > 0">
+              <UiIcon :icon="Gauge" :size="16" />
+              <span>{{ t('portal.plans.traffic', { value: format.bytes(plan.transfer_enable * GIB, { precision: 0 }) }) }}</span>
+            </li>
+            <li v-if="plan.speed_limit">
+              <UiIcon :icon="Zap" :size="16" />
+              <span>{{ t('portal.plans.speed', { value: plan.speed_limit }) }}</span>
+            </li>
+            <li v-if="plan.device_limit">
+              <UiIcon :icon="MonitorSmartphone" :size="16" />
+              <span>{{ t('portal.plans.devices', { n: plan.device_limit }, plan.device_limit) }}</span>
+            </li>
+            <li v-for="(line, index) in contentLines(plan)" :key="index">
+              <UiIcon :icon="Check" :size="16" />
+              <span>{{ line }}</span>
+            </li>
+          </ul>
+          <UiButton
+            variant="primary"
+            block
+            :disabled="priceOf(plan, period) === null"
+            :aria-label="`${t('portal.plans.buy')} ${plan.name}`"
+            data-plan-buy
+            @click="openCheckout(plan)"
+          >
+            {{ t('portal.plans.buy') }}
+          </UiButton>
+        </li>
+      </ul>
+    </template>
 
-      <div class="order-total mt-6">
-        <div class="total-row">
-          <span>{{ t('user.plans.totalAmount') }}</span>
-          <span class="total-price normalized-amount">{{ formatCurrency(finalPrice) }}</span>
-          <span class="total-price">¥{{ formatPrice(finalPrice) }}</span>
+    <UiDialog
+      :open="checkout.open"
+      :title="t('portal.plans.checkout.title')"
+      :dismissible="!checkout.busy"
+      data-checkout
+      @update:open="value => { if (!value) closeCheckout() }"
+    >
+      <form v-if="checkout.plan" id="checkout-form" class="checkout" novalidate @submit.prevent="submitOrder">
+        <dl class="checkout__summary">
+          <div>
+            <dt>{{ t('portal.plans.checkout.plan') }}</dt>
+            <dd>{{ checkout.plan.name }}</dd>
+          </div>
+        </dl>
+        <UiField :label="t('portal.plans.checkout.period')" label-tag="span">
+          <UiSegmentedControl
+            v-model="checkout.period"
+            :options="checkoutPeriods"
+            :aria-label="t('portal.plans.checkout.period')"
+            block
+            data-checkout-period
+          />
+        </UiField>
+        <div class="checkout__coupon">
+          <UiTextField
+            v-model.trim="checkout.coupon"
+            :label="t('portal.plans.checkout.coupon')"
+            :placeholder="t('portal.plans.checkout.couponPlaceholder')"
+            :error="checkout.couponError"
+            :readonly="Boolean(checkout.couponData)"
+            autocomplete="off"
+            class="checkout__coupon-field"
+            data-coupon-code
+            @keydown.enter.prevent="applyCoupon"
+          />
+          <UiButton v-if="!checkout.couponData" size="lg" :loading="checkout.checking" :disabled="!checkout.coupon" data-coupon-apply @click="applyCoupon">{{ t('portal.plans.checkout.apply') }}</UiButton>
+          <UiButton v-else variant="tertiary" size="lg" data-coupon-remove @click="removeCoupon">{{ t('portal.plans.checkout.remove') }}</UiButton>
         </div>
-      </div>
-      <p v-if="orderError" class="coupon-tip text-error" role="alert" data-test="order-error">{{ orderError }}</p>
+        <p v-if="checkout.couponData" class="checkout__applied" role="status">
+          <UiIcon :icon="BadgePercent" :size="16" />
+          {{ t('portal.plans.checkout.couponApplied', { name: checkout.couponData.name || checkout.coupon }) }}
+        </p>
+        <dl class="checkout__totals">
+          <div>
+            <dt>{{ t('portal.plans.checkout.subtotal') }}</dt>
+            <dd>{{ format.money(subtotal) }}</dd>
+          </div>
+          <div v-if="discount > 0">
+            <dt>{{ t('portal.plans.checkout.discount') }}</dt>
+            <dd>−{{ format.money(discount) }}</dd>
+          </div>
+          <div class="checkout__total">
+            <dt>{{ t('portal.plans.checkout.total') }}</dt>
+            <dd data-checkout-total>{{ format.money(total) }}</dd>
+          </div>
+        </dl>
+        <p v-if="checkout.error" class="checkout__error" role="alert" data-checkout-error>{{ checkout.error }}</p>
+      </form>
       <template #footer>
-        <UiButton variant="tertiary" :disabled="creatingOrder" @click="closePurchase">{{ t('user.plans.backToEdit') }}</UiButton>
-        <UiButton variant="primary" data-test="order-submit-button" :loading="creatingOrder" @click="submitOrder">
-          {{ t('common.actions.submit') }}
-        </UiButton>
+        <UiButton :disabled="checkout.busy" @click="closeCheckout">{{ t('portal.plans.checkout.back') }}</UiButton>
+        <UiButton type="submit" form="checkout-form" variant="primary" :loading="checkout.busy" data-checkout-submit>{{ t('portal.plans.checkout.submit') }}</UiButton>
       </template>
     </UiDialog>
   </div>
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+// 套餐 (commercial edition only; plan §8.1): store-style plan cards with
+// the price large, a billing-period segmented control, the plan's limits and
+// its description lines, and a checkout dialog with a coupon. Data: GET
+// /user/plan, POST /user/coupon/check, POST /user/order/save. Prices are in
+// fen and go through useFormat().money().
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
+import { BadgePercent, Check, Gauge, MonitorSmartphone, Package, Zap } from '@lucide/vue'
 import { checkCoupon, getPlans, saveOrder } from '@/api/user'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { UiButton, UiDialog, useToast } from '@/ui'
+import { listOf, panelErrorMessage, unwrapPanel } from '@/utils/panelResponse'
+import LoadError from '@/components/common/LoadError.vue'
+import UiButton from '@/ui/UiButton.vue'
+import UiDialog from '@/ui/UiDialog.vue'
+import UiEmptyState from '@/ui/UiEmptyState.vue'
+import UiField from '@/ui/UiField.vue'
+import UiIcon from '@/ui/UiIcon.vue'
+import UiPageHeader from '@/ui/UiPageHeader.vue'
+import UiSegmentedControl from '@/ui/UiSegmentedControl.vue'
+import UiSkeleton from '@/ui/UiSkeleton.vue'
+import UiTextField from '@/ui/UiTextField.vue'
+import { useDelayedLoading } from '@/ui/composables/useDelayedLoading'
+import { useFormat } from '@/ui/composables/useFormat'
+import { useToast } from '@/ui/composables/useToast'
 
-const router = useRouter()
-const toast = useToast()
-const orderError = ref('')
+const GIB = 1024 ** 3
+const PERIODS = [
+  ['month', 'month_price'],
+  ['quarter', 'quarter_price'],
+  ['half_year', 'half_year_price'],
+  ['year', 'year_price'],
+  ['two_year', 'two_year_price'],
+  ['three_year', 'three_year_price'],
+  ['onetime', 'onetime_price']
+]
+
 const { t } = useAppI18n()
+const format = useFormat()
+const toast = useToast()
+const router = useRouter()
 
 const plans = ref([])
-const loading = ref(true)
-const showPurchase = ref(false)
-const selectedPlan = ref(null)
-const selectedPeriod = ref('month')
-const couponCode = ref('')
-const couponApplied = ref(false)
-const couponData = ref(null)
-const checkingCoupon = ref(false)
-const couponError = ref('')
-const creatingOrder = ref(false)
+const state = ref('loading')
+const loadError = ref(null)
+const showSkeleton = useDelayedLoading(computed(() => state.value === 'loading'))
+const period = ref('month')
 
-function readPanelEnvelopeError(res) {
-  const candidates = [res, res?.data]
-  for (const candidate of candidates) {
-    if (!candidate || typeof candidate !== 'object') continue
-    if (!Object.prototype.hasOwnProperty.call(candidate, 'code')) continue
-    if (Number(candidate.code) === 0) return null
-    return candidate.msg || candidate.message || candidate.error || ''
-  }
-  return null
+function priceOf(plan, key) {
+  const field = PERIODS.find(([name]) => name === key)?.[1]
+  const value = plan?.[field]
+  return value === null || value === undefined || value === '' || Number(value) <= 0 ? null : Number(value)
 }
 
-function ensureUserApiSuccess(res, fallbackMessage) {
-  const message = readPanelEnvelopeError(res)
-  if (message !== null) {
-    throw new Error(message || fallbackMessage)
-  }
-  return res
-}
+const periodOptions = computed(() => PERIODS
+  .filter(([key]) => plans.value.some(plan => priceOf(plan, key) !== null))
+  .map(([key]) => ({ value: key, label: t(`portal.plans.periods.${key}`) })))
 
-function readPlanList(res) {
-  if (Array.isArray(res)) return res
-  if (Array.isArray(res?.data)) return res.data
-  if (Array.isArray(res?.data?.data)) return res.data.data
-  return []
-}
-
-async function loadPlans() {
-  loading.value = true
+async function load() {
+  state.value = 'loading'
+  loadError.value = null
   try {
-    const res = ensureUserApiSuccess(await getPlans(), 'Failed to load plans')
-    plans.value = readPlanList(res)
-  } catch (err) {
-    console.error('Failed to load plans:', err)
-  } finally {
-    loading.value = false
+    plans.value = listOf(unwrapPanel(await getPlans()))
+    period.value = periodOptions.value[0]?.value || 'month'
+    state.value = 'ready'
+  } catch (error) {
+    loadError.value = error
+    state.value = 'failed'
   }
 }
 
-function getDisplayPrice(plan) {
-  if (plan.month_price) return plan.month_price
-  if (plan.onetime_price) return plan.onetime_price
-  return 0
+// The plan's description, one feature per line, without markup.
+function contentLines(plan) {
+  return String(plan?.content || '')
+    .replace(/<br\s*\/?>/gi, '\n')
+    .replace(/<[^>]*>/g, '')
+    .split('\n')
+    .map(line => line.replace(/^[\s\-*•·]+/, '').trim())
+    .filter(Boolean)
+    .slice(0, 6)
 }
 
-function displayPeriodLabel(plan) {
-  return plan.month_price ? t('common.periods.month') : t('common.periods.onetime')
-}
-
-const availablePeriods = computed(() => {
-  if (!selectedPlan.value) return []
-  const plan = selectedPlan.value
-  const list = []
-  if (plan.month_price) list.push({ key: 'month', label: t('common.periods.month'), price: plan.month_price })
-  if (plan.quarter_price) list.push({ key: 'quarter', label: t('common.periods.quarter'), price: plan.quarter_price })
-  if (plan.half_year_price) list.push({ key: 'half_year', label: t('common.periods.halfYear'), price: plan.half_year_price })
-  if (plan.year_price) list.push({ key: 'year', label: t('common.periods.year'), price: plan.year_price })
-  if (plan.two_year_price) list.push({ key: 'two_year', label: t('common.periods.twoYear'), price: plan.two_year_price })
-  if (plan.three_year_price) list.push({ key: 'three_year', label: t('common.periods.threeYear'), price: plan.three_year_price })
-  if (plan.onetime_price) list.push({ key: 'onetime', label: t('common.periods.onetime'), price: plan.onetime_price })
-  return list
+// --- checkout --------------------------------------------------------------------
+const checkout = reactive({
+  open: false, plan: null, period: 'month', coupon: '', couponData: null, couponError: '', checking: false, busy: false, error: ''
 })
 
-const currentPeriodPrice = computed(() => availablePeriods.value.find((item) => item.key === selectedPeriod.value)?.price || 0)
+const checkoutPeriods = computed(() => PERIODS
+  .filter(([key]) => priceOf(checkout.plan, key) !== null)
+  .map(([key]) => ({ value: key, label: t(`portal.plans.periods.${key}`) })))
 
-const discountAmount = computed(() => {
-  if (!couponApplied.value || !couponData.value) return 0
-  if (couponData.value.type === 1) {
-    return currentPeriodPrice.value * couponData.value.value / 100
-  }
-  return couponData.value.value
+const subtotal = computed(() => priceOf(checkout.plan, checkout.period) || 0)
+const discount = computed(() => {
+  const coupon = checkout.couponData
+  if (!coupon) return 0
+  const value = Number(coupon.value) || 0
+  return Math.min(subtotal.value, Number(coupon.type) === 1 ? Math.round(subtotal.value * value / 100) : value)
 })
+const total = computed(() => Math.max(0, subtotal.value - discount.value))
 
-const finalPrice = computed(() => Math.max(0, currentPeriodPrice.value - discountAmount.value))
-
-function formatPrice(amount) {
-  return ((amount || 0) / 100).toFixed(2)
+function openCheckout(plan) {
+  Object.assign(checkout, { plan, coupon: '', couponData: null, couponError: '', checking: false, busy: false, error: '' })
+  checkout.period = priceOf(plan, period.value) !== null ? period.value : (checkoutPeriods.value[0]?.value || 'month')
+  checkout.open = true
 }
 
-function formatCurrency(amount) {
-  return `\u00a5${formatPrice(amount)}`
-}
-
-function formatBytes(bytes) {
-  if (!bytes) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  let value = bytes
-  let index = 0
-  while (value >= 1024 && index < units.length - 1) {
-    value /= 1024
-    index += 1
-  }
-  return `${value.toFixed(2)} ${units[index]}`
-}
-
-function openPurchase(plan) {
-  selectedPlan.value = plan
-  selectedPeriod.value = availablePeriods.value[0]?.key || 'month'
-  orderError.value = ''
-  showPurchase.value = true
-}
-
-function closePurchase() {
-  if (creatingOrder.value) return
-  showPurchase.value = false
-  removeCoupon()
+function closeCheckout() {
+  if (checkout.busy) return
+  checkout.open = false
 }
 
 async function applyCoupon() {
-  if (!couponCode.value || !selectedPlan.value) {
-    return
-  }
-  checkingCoupon.value = true
-  couponError.value = ''
+  if (!checkout.coupon || checkout.couponData) return
+  checkout.checking = true
+  checkout.couponError = ''
   try {
-    const res = await checkCoupon({
-      code: couponCode.value,
-      plan_id: selectedPlan.value.id
-    })
-    couponData.value = res.data
-    couponApplied.value = true
-  } catch (err) {
-    couponError.value = err.response?.data?.message || t('common.messages.invalidCoupon')
+    const data = unwrapPanel(await checkCoupon({ code: checkout.coupon, plan_id: checkout.plan.id }))
+    if (!data) throw new Error(t('portal.plans.checkout.couponInvalid'))
+    checkout.couponData = data
+  } catch (error) {
+    checkout.couponError = panelErrorMessage(error) || t('portal.plans.checkout.couponInvalid')
   } finally {
-    checkingCoupon.value = false
+    checkout.checking = false
   }
 }
 
 function removeCoupon() {
-  couponCode.value = ''
-  couponApplied.value = false
-  couponData.value = null
-  couponError.value = ''
+  checkout.coupon = ''
+  checkout.couponData = null
+  checkout.couponError = ''
 }
 
 async function submitOrder() {
-  if (creatingOrder.value) return
-  creatingOrder.value = true
-  orderError.value = ''
+  if (checkout.busy) return
+  checkout.busy = true
+  checkout.error = ''
   try {
-    await saveOrder({
-      plan_id: selectedPlan.value.id,
-      period: selectedPeriod.value,
-      coupon_id: couponApplied.value ? couponData.value.id : null
-    })
-    creatingOrder.value = false
-    showPurchase.value = false
-    toast.success(t('user.plans.orderCreated'))
+    unwrapPanel(await saveOrder({
+      plan_id: checkout.plan.id,
+      period: checkout.period,
+      coupon_id: checkout.couponData ? checkout.couponData.id : null
+    }))
+    checkout.busy = false
+    checkout.open = false
+    toast.success(t('portal.plans.checkout.created'))
     router.push('/user/orders')
-  } catch (err) {
-    orderError.value = err.response?.data?.message || t('common.messages.submitFailed')
+  } catch (error) {
+    checkout.error = t('portal.plans.checkout.failed', { message: panelErrorMessage(error) })
   } finally {
-    creatingOrder.value = false
+    checkout.busy = false
   }
 }
 
-onMounted(() => {
-  loadPlans()
-})
+onMounted(load)
 </script>
 
 <style scoped>
-.plans-grid {
+.plans {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-10);
+}
+
+.plans__periods {
+  display: flex;
+  justify-content: center;
+}
+
+.plans__grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: var(--space-5);
+  list-style: none;
 }
 
 .plan-card {
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+  padding: var(--space-8) var(--space-6);
   border-radius: var(--radius-lg);
-  padding: 32px;
-  position: relative;
-  transition: var(--transition);
+  background: var(--bg-elevated);
+  box-shadow: 0 0 0 0.5px var(--separator), var(--shadow-1);
+}
+
+.plan-card__name {
+  font-size: var(--type-title-3-size);
+  font-weight: var(--type-title-3-weight);
+  line-height: var(--type-title-3-line);
+}
+
+.plan-card__price {
   display: flex;
-  flex-direction: column;
-  box-shadow: var(--shadow-sm);
-}
-
-.plan-card:hover {
-  border-color: var(--primary-color);
-  box-shadow: var(--shadow-md);
-}
-
-.plan-badge {
-  position: absolute;
-  top: 16px;
-  right: 16px;
-  background: var(--accent-fill);
-  color: var(--on-accent);
-  padding: 4px 12px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.plan-name {
-  font-size: 20px;
-  font-weight: 700;
-  margin-bottom: 16px;
-}
-
-.plan-price {
-  margin-bottom: 24px;
-  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
   align-items: baseline;
-  gap: 4px;
+  min-height: 48px;
 }
 
-.currency {
-  font-size: 18px;
-  font-weight: 600;
+.plan-card__amount {
+  font-size: var(--type-title-1-size);
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: var(--type-title-1-tracking);
 }
 
-.amount {
-  font-size: 36px;
-  font-weight: 800;
-  color: var(--primary-color);
+.plan-card__per,
+.plan-card__none {
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
 }
 
-.period {
-  font-size: 14px;
-  color: var(--text-secondary);
-}
-
-.plan-features {
-  margin-bottom: 32px;
+.plan-card__features {
+  display: flex;
   flex: 1;
-}
-
-.feature-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  margin-bottom: 12px;
-  font-size: 14px;
-}
-
-.feature-item .icon {
-  font-size: 14px;
-  width: 24px;
-  display: inline-flex;
-  justify-content: center;
-  font-weight: 700;
-}
-
-.order-summary {
-  background: var(--surface-muted);
-  padding: 20px;
-  border-radius: var(--radius-md);
-}
-
-.summary-item {
-  display: flex;
-  justify-content: space-between;
-  margin-bottom: 8px;
-}
-
-.summary-item .label {
-  color: var(--text-secondary);
-}
-
-.summary-item .value {
-  font-weight: 600;
-}
-
-.period-selector {
-  display: grid;
-  grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
-  margin-top: 10px;
-}
-
-.period-btn {
-  padding: 12px;
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-md);
-  cursor: pointer;
-  display: flex;
   flex-direction: column;
-  align-items: center;
-  transition: var(--transition);
+  gap: var(--space-3);
+  padding-top: var(--space-5);
+  border-top: 1px solid var(--separator);
+  list-style: none;
 }
 
-.period-btn:hover {
-  border-color: var(--primary-color);
+.plan-card__features li {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+  font-size: var(--type-callout-size);
+  line-height: var(--type-callout-line);
 }
 
-.period-btn.active {
-  background: var(--primary-soft);
-  border-color: var(--primary-color);
+.plan-card__features :deep(.ui-icon) {
+  flex: none;
+  margin-top: 1px;
+  color: var(--accent);
 }
 
-.period-name {
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.period-price {
-  font-size: var(--type-caption-size);
+.plan-card.is-unavailable .plan-card__features {
   color: var(--label-2);
 }
 
-.period-btn.active .period-price {
-  color: var(--label-1);
-}
-
-.coupon-input-group {
-  display: flex;
-  gap: 8px;
-  margin-top: 8px;
-}
-
-.coupon-input-group input {
-  flex: 1;
-}
-
-.coupon-tip {
-  font-size: 12px;
-  margin-top: 4px;
-}
-
-.order-total {
-  padding: 16px 0;
-  border-top: 1px dashed var(--border-color);
-}
-
-.total-row {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-}
-
-.total-price {
-  font-size: 24px;
-  font-weight: 800;
-  color: var(--primary-color);
-}
-
-.period-name + .normalized-amount + .period-price,
-.total-row .normalized-amount + .total-price {
-  display: none;
-}
-
-.text-error {
-  color: var(--error-color);
-}
-
-.text-success {
-  color: var(--success-color);
-}
-
-.loading-state {
+/* ---- checkout ------------------------------------------------------------------ */
+.checkout {
   display: flex;
   flex-direction: column;
+  gap: var(--space-5);
+}
+
+.checkout__summary div,
+.checkout__totals div {
+  display: flex;
+  gap: var(--space-4);
+  justify-content: space-between;
+}
+
+.checkout__summary dt,
+.checkout__totals dt {
+  color: var(--label-2);
+}
+
+.checkout__summary dd,
+.checkout__totals dd {
+  margin: 0;
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.checkout__coupon {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-start;
+}
+
+.checkout__coupon-field {
+  flex: 1;
+  min-width: 0;
+}
+
+/* Level with the input (below the field's label), even when the field
+   shows an error under it. */
+.checkout__coupon > :deep(.ui-button) {
+  margin-top: calc(var(--type-callout-size) * var(--type-callout-line) + var(--space-2));
+}
+
+.checkout__applied {
+  display: flex;
+  gap: var(--space-2);
   align-items: center;
-  padding: 100px 0;
+  margin-top: calc(var(--space-3) * -1);
+  color: var(--success);
+  font-size: var(--type-callout-size);
 }
 
-.spinner {
-  width: 40px;
-  height: 40px;
-  border: 4px solid rgba(59, 130, 246, 0.1);
-  border-top-color: var(--primary-color);
-  border-radius: 50%;
-  animation: rotate 1s linear infinite;
-  margin-bottom: 16px;
+.checkout__totals {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  margin: 0;
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--separator);
 }
 
-@keyframes rotate {
-  to {
-    transform: rotate(360deg);
+.checkout__total {
+  padding-top: var(--space-2);
+  font-size: var(--type-title-3-size);
+}
+
+.checkout__total dt {
+  color: var(--label-1);
+  font-weight: var(--weight-semibold);
+}
+
+.checkout__error {
+  color: var(--danger);
+  font-size: var(--type-callout-size);
+}
+
+@media (max-width: 833px) {
+  .plans {
+    gap: var(--space-8);
+  }
+
+  .plans__periods {
+    overflow-x: auto;
+    justify-content: flex-start;
   }
 }
 </style>

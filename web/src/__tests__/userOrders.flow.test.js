@@ -1,7 +1,8 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
+import { describe, it, expect, beforeEach, vi } from 'vitest'
+import { render, screen, waitFor, within } from '@testing-library/vue'
+import userEvent from '@testing-library/user-event'
 import Orders from '@/views/user/Orders.vue'
-import { inBody, toastMessages } from './helpers/feedback'
+import { toastMessages } from './helpers/feedback'
 
 const mockGetOrders = vi.fn()
 const mockGetOrderDetail = vi.fn()
@@ -11,7 +12,21 @@ vi.mock('@/api/user', () => ({
   getOrderDetail: (...args) => mockGetOrderDetail(...args),
 }))
 
-enableAutoUnmount(afterEach)
+vi.mock('vue-router', async () => {
+  const { h } = await vi.importActual('vue')
+  return { RouterLink: { props: ['to'], setup: (props, { slots }) => () => h('a', { href: props.to }, slots.default?.()) } }
+})
+
+const ORDERS = [
+  { id: 1, trade_no: 'ORD-100', plan: { id: 2, name: 'Pro' }, period: 'month', total_amount: 1200, status: 0, created_at: 1790000000 },
+  { id: 2, trade_no: 'ORD-101', plan: { id: 3, name: 'Plus' }, period: 'year', total_amount: 9900, discount_amount: 100, status: 3, created_at: 1780000000, paid_at: 1780000300 },
+]
+
+function renderPage() {
+  const user = userEvent.setup()
+  render(Orders)
+  return { user }
+}
 
 describe('User Orders flow', () => {
   beforeEach(() => {
@@ -19,196 +34,68 @@ describe('User Orders flow', () => {
     mockGetOrderDetail.mockReset()
   })
 
-  it('loads orders and renders table rows with status and amount', async () => {
-    mockGetOrders.mockResolvedValue({
-      data: {
-        list: [
-          {
-            id: 1,
-            trade_no: 'ORD-100',
-            plan: { id: 2, name: 'Pro' },
-            period: 'month',
-            total_amount: 12345,
-            status: 0,
-            created_at: '2026-04-05T00:00:00.000Z',
-          },
-          {
-            id: 2,
-            trade_no: 'ORD-101',
-            plan: { id: 3, name: 'Plus' },
-            period: 'quarter',
-            total_amount: 67890,
-            status: 1,
-            created_at: '2026-04-05T01:00:00.000Z',
-          },
-        ],
-      },
-    })
-
-    const wrapper = mount(Orders, {
-      attachTo: document.body,
-      global: {
-        stubs: {
-          'router-link': true,
-        },
-      },
-    })
-    await flushPromises()
-
+  it('lists orders with plan, period, amount and status', async () => {
+    mockGetOrders.mockResolvedValue({ data: { list: ORDERS, total: 2 } })
+    renderPage()
+    const rows = await screen.findAllByRole('button', { name: /^Details:/ })
     expect(mockGetOrders).toHaveBeenCalledWith({ page: 1, page_size: 50 })
-    const rows = wrapper.findAll('tbody tr')
     expect(rows).toHaveLength(2)
-
-    const firstRow = rows[0]
-    expect(firstRow.find('.trade-no').text()).toBe('ORD-100')
-    expect(firstRow.find('.status-badge').classes()).toContain('pending')
-    expect(firstRow.find('.status-badge').text()).not.toBe('')
-    expect(firstRow.text()).toContain('123.45')
-
-    const secondRow = rows[1]
-    expect(secondRow.text()).toContain('Plus')
-    expect(secondRow.find('.status-badge').classes()).toContain('paid')
-    expect(secondRow.text()).toContain('678.90')
+    expect(rows[0].textContent).toContain('Pro')
+    expect(rows[0].textContent).toContain('Monthly')
+    expect(rows[0].textContent).toContain('¥12.00')
+    expect(within(rows[0]).getByText('Unpaid')).toBeTruthy()
+    expect(within(rows[1]).getByText('Completed')).toBeTruthy()
+    // Only an unpaid order offers to pay.
+    expect(screen.getAllByRole('button', { name: 'Pay' })).toHaveLength(1)
   })
 
-  it('opens detail modal after clicking view detail button', async () => {
-    mockGetOrders.mockResolvedValue({
-      code: 0,
-      msg: '操作成功',
-      ts: 1783536000000,
-      data: {
-        list: [
-          {
-            id: 5,
-            trade_no: 'ORD-200',
-            period: 'year',
-            total_amount: 250000,
-            status: 2,
-            created_at: '2026-04-05T02:00:00.000Z',
-          },
-        ],
-      },
-    })
-    mockGetOrderDetail.mockResolvedValue({
-      code: 0,
-      msg: '操作成功',
-      ts: 1783536000001,
-      data: {
-        id: 5,
-        trade_no: 'ORD-200',
-        period: 'year',
-        total_amount: 250000,
-        status: 2,
-        created_at: '2026-04-05T02:00:00.000Z',
-        paid_at: 1710003600,
-        plan: { id: 4, name: 'Enterprise' },
-      },
-    })
-
-    const wrapper = mount(Orders, {
-      attachTo: document.body,
-      global: {
-        stubs: {
-          'router-link': true,
-        },
-      },
-    })
-    await flushPromises()
-
-    await wrapper.find('[data-test="order-detail-button"]').trigger('click')
-    await flushPromises()
-
-    expect(mockGetOrderDetail).toHaveBeenCalledWith(5)
-    expect(inBody('[role="dialog"]').text()).toContain('Order details')
-    expect(inBody('.detail-grid').text()).toContain('ORD-200')
-    expect(inBody('.detail-grid').text()).toContain('Enterprise')
-    expect(inBody('.detail-grid').text()).toContain('2500.00')
+  it('opens the details in a sheet', async () => {
+    mockGetOrders.mockResolvedValue({ code: 0, data: { list: ORDERS } })
+    mockGetOrderDetail.mockResolvedValue({ code: 0, data: ORDERS[1] })
+    const { user } = renderPage()
+    await user.click((await screen.findAllByRole('button', { name: /^Details:/ }))[1])
+    const sheet = await screen.findByRole('dialog', { name: 'Order details' })
+    expect(mockGetOrderDetail).toHaveBeenCalledWith(2)
+    await waitFor(() => expect(within(sheet).getByText('ORD-101')).toBeTruthy())
+    expect(within(sheet).getByText('¥100.00')).toBeTruthy()
+    expect(within(sheet).getByText('−¥1.00')).toBeTruthy()
+    expect(within(sheet).getByText('¥99.00')).toBeTruthy()
   })
 
-  it('reports a detail that fails to load and an unavailable payment in toasts', async () => {
+  it('says why a detail could not load, and that online payment is not available yet', async () => {
     mockGetOrders.mockResolvedValue({ data: { list: [{ id: 6, trade_no: 'ORD-300', status: 0, total_amount: 100 }] } })
     mockGetOrderDetail.mockRejectedValue(new Error('offline'))
-    const wrapper = mount(Orders, { attachTo: document.body, global: { stubs: { 'router-link': true } } })
-    await flushPromises()
-
-    await wrapper.find('[data-test="order-detail-button"]').trigger('click')
-    await flushPromises()
-    expect(inBody('[role="dialog"]').exists()).toBe(false)
-    expect(toastMessages('error')).toEqual(['The order details couldn’t be opened. Try again later.'])
-
-    await wrapper.find('.action-buttons .btn-primary').trigger('click')
-    expect(toastMessages('info')).toEqual(['Payment is still being integrated. Please try again later.'])
+    const { user } = renderPage()
+    await user.click(await screen.findByRole('button', { name: /^Details:/ }))
+    const sheet = await screen.findByRole('dialog', { name: 'Order details' })
+    expect((await within(sheet).findByRole('alert')).textContent).toContain('Could not open the order.')
+    await user.keyboard('{Escape}')
+    await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+    await user.click(screen.getByRole('button', { name: 'Pay' }))
+    expect(toastMessages('info')).toEqual(['Online payment isn’t available yet. Contact your administrator to pay.'])
   })
 
-  // The order answers carry plan as {id, name} and no buyer; an order whose
-  // plan no longer exists has no plan.
-  it('renders the slim order answer and an order without a plan', async () => {
-    mockGetOrders.mockResolvedValue({
-      code: 0,
-      msg: '操作成功',
-      ts: 1783536000000,
-      data: {
-        total: 2,
-        list: [
-          {
-            id: 7,
-            user_id: 3,
-            plan_id: 2,
-            trade_no: 'ORD-300',
-            period: 'month',
-            total_amount: 3000,
-            discount_amount: 0,
-            status: 3,
-            paid_at: 1700000000,
-            created_at: '2026-09-01T08:00:00Z',
-            plan: { id: 2, name: 'Pro' },
-          },
-          {
-            id: 8,
-            user_id: 3,
-            plan_id: 404,
-            trade_no: 'ORD-301',
-            period: 'month',
-            total_amount: 1000,
-            status: 0,
-            created_at: '2026-09-01T09:00:00Z',
-          },
-        ],
-      },
-    })
-
-    const wrapper = mount(Orders, {
-      attachTo: document.body,
-      global: {
-        stubs: {
-          'router-link': true,
-        },
-      },
-    })
-    await flushPromises()
-
-    const rows = wrapper.findAll('tbody tr')
-    expect(rows).toHaveLength(2)
-    expect(rows[0].text()).toContain('Pro')
-    expect(rows[0].find('.status-badge').classes()).toContain('completed')
-    expect(rows[1].text()).not.toContain('Pro')
-    expect(rows[1].text()).not.toContain('undefined')
+  it('names an order whose plan no longer exists', async () => {
+    mockGetOrders.mockResolvedValue({ data: { list: [{ id: 7, plan_id: 404, trade_no: 'ORD-301', status: 2, total_amount: 500, period: 'onetime' }] } })
+    renderPage()
+    const [row] = await screen.findAllByRole('button', { name: /^Details:/ })
+    expect(row.textContent).toContain('Plan no longer offered')
+    expect(row.textContent).toContain('One-time')
+    expect(within(row).getByText('Cancelled')).toBeTruthy()
   })
 
-  it('shows empty state when no orders are returned', async () => {
+  it('shows an empty state that leads to the plans', async () => {
     mockGetOrders.mockResolvedValue({ data: { list: [] } })
+    renderPage()
+    expect(await screen.findByRole('heading', { level: 2, name: 'No orders yet' })).toBeTruthy()
+    expect(screen.getByRole('link', { name: 'Choose a plan' }).getAttribute('href')).toBe('/user/plans')
+  })
 
-    const wrapper = mount(Orders, {
-      attachTo: document.body,
-      global: {
-        stubs: {
-          'router-link': true,
-        },
-      },
-    })
-    await flushPromises()
-
-    expect(wrapper.find('.empty-state').exists()).toBe(true)
-    expect(wrapper.find('table').exists()).toBe(false)
+  it('offers a retry when the orders cannot be loaded', async () => {
+    mockGetOrders.mockRejectedValueOnce(new Error('offline')).mockResolvedValueOnce({ data: { list: ORDERS } })
+    const { user } = renderPage()
+    expect(await screen.findByRole('heading', { name: 'Could not load your orders.' })).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(await screen.findAllByRole('button', { name: /^Details:/ })).toHaveLength(2)
   })
 })
