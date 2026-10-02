@@ -10,7 +10,7 @@ open work in [`../../TODO.md`](../../TODO.md).
 
 > 中文摘要：v4.0.0 的「插件化」只到路由层；本文定义「一个领域真正住在插件里」
 > 的验收标准、目标机制（存储租约 + 按路由模式 + 类型化内核操作，均已实现）、
-> 保留下来的旧计划约束，以及 M0–M4 里程碑。295 条 v2 路由中，173 条
+> 保留下来的旧计划约束，以及 M0–M4 里程碑。296 条 v2 路由中，174 条
 > `native-flagged`，91 条 `bridged`（待契约），31 条 `kernel-owned`（按设计留在内核）。
 
 Markers used below: **CURRENT** = true in the tree today; **PLANNED** = accepted
@@ -21,18 +21,18 @@ context, not a commitment.
 
 v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
 
-- All 295 `/api/v2` routes in `config/v2-package-route-catalog.json` enter the
+- All 296 `/api/v2` routes in `config/v2-package-route-catalog.json` enter the
   package gateway. 267 are registered with `registeredPackageRoute`
   (`internal/router/router.go`), which registers the legacy gin handler into
-  `packagebridge.DefaultRouteRegistry()` and returns the gateway; the 25
+  `packagebridge.DefaultRouteRegistry()` and returns the gateway; the 26
   `identity-platform` routes use the bare `v2PackageGateway.Serve` (their
   legacy handlers are in the identity bridge); the 3 WebSocket routes use
   `registeredPackageWebSocketRoute`.
 - `config/package-extraction.json` records each route's extraction mode
   (`bridged`, `kernel-owned`, `native-flagged` or `native`; section 3.2) and
   where its legacy handler lives
-  (`router`, `identity-bridge` or `none`). 173 routes are `native-flagged`:
-  identity-platform (22: group A's 15, the profile, dashboard, user detail,
+  (`router`, `identity-bridge` or `none`). 174 routes are `native-flagged`:
+  identity-platform (23: group A's 16, the profile, dashboard, user detail,
   user list and user statistics, and the traffic and subscription resets),
   affiliate (10), forward (21), gost-mesh (3), knowledge (6),
   machine-telemetry (3), notification (23), order (13), payment (20), plan
@@ -67,7 +67,8 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
 
   They are now `registeredPackageRoute` routes. identity-platform keeps 22,
   whose legacy handlers are in the identity bridge, and has since gained the
-  administrator's invite codes (3, bridged; see Identity leftovers). `internal/compat/v2/moved_routes.go`
+  administrator's invite codes (3, bridged; see Identity leftovers) and the
+  user's own subscription reset (1, group A). `internal/compat/v2/moved_routes.go`
   lists the moves: the kernel accepts the old route ids from old
   identity-platform releases and, while both packages declare a route,
   prefers the new owner. There are now 18 packages. All but nat-egress and
@@ -88,7 +89,7 @@ Route modes per package (2026-10-01):
 | affiliate | 10 | 0 | 0 |
 | forward | 21 | 53 | 11 |
 | gost-mesh | 3 | 0 | 0 |
-| identity-platform | 22 | 3 | 0 |
+| identity-platform | 23 | 3 | 0 |
 | knowledge | 6 | 0 | 0 |
 | machine-telemetry | 3 | 0 | 2 |
 | notification | 23 | 1 | 0 |
@@ -101,7 +102,7 @@ Route modes per package (2026-10-01):
 | subscription | 21 | 4 | 0 |
 | ticket | 8 | 0 | 0 |
 | wireguard | 1 | 0 | 0 |
-| **all** | **173** | **91** | **31** |
+| **all** | **174** | **91** | **31** |
 
 Reusable pieces that already exist:
 
@@ -195,7 +196,7 @@ by `check_plugin_only_routes.py` (counts in section 1).
 
 | Mode | Meaning | Routes |
 |---|---|---|
-| `native-flagged` | the package host has a native handler, proved by a parity test; the legacy handler stays, so every runtime mode works | 173 |
+| `native-flagged` | the package host has a native handler, proved by a parity test; the legacy handler stays, so every runtime mode works | 174 |
 | `native` | the legacy handler is deleted and the host answers alone | 0 |
 | `bridged` | the host only relays, until a kernel contract lets the package serve the route | 91 |
 | `kernel-owned` | the host only relays, by design: the route stays in the kernel, and the row's `reason` says why | 31 |
@@ -642,6 +643,20 @@ The planned `kernel.entitlement.apply.v1` became
     `v2_invite_code`. An administrator's codes belong to no user and do not
     count toward a user's `code_count`; the user's generation, its limit
     and advisory lock are unchanged.
+  - **User's own subscription reset (group A, every edition).**
+    `POST /api/v2/user/subscription/reset`
+    (`identity.user.subscription.reset.post`, owner decision 2026-10-02).
+    It is identity-platform's, beside the administrator's reset, and in
+    group A rather than among the resets that switch at any time: before it
+    resets, it checks the user's password or second factor, which identity
+    owns once authoritative (and the kernel no longer holds after finalize).
+    The reset itself is the administrator's: `KernelSubscriber.ResetCredentials`
+    with `subscription_token` only, under
+    `identity.user_reset_subscribe:<user>:<digest>`. Both sides allow three
+    attempts that check a credential per user and hour (the kernel in
+    memory, identity in its `throttle` table), and the kernel's audit
+    middleware records it as `user` / `reset_subscribe` in every mode.
+    Proved by `internal/tests/identitycompat/subscription_reset_test.go`.
 - **Subscription (in place).** 20 of 25 routes run on the adopted
   `v2_subscription_group`, `v2_subscription_template`,
   `v2_plan_subscription_group` and `v2_subscription_group_node_protocols`
@@ -1080,7 +1095,7 @@ shapes; the first extraction step adopts the existing `v2_*` tables in place.
 | wireguard (T12) | 1 | peer lifecycle, generated config | package migration (names not fixed) | Needs anix-agent revival |
 | protocol-runtime (T12) | 20 | protocol composition, runtime-adapter selection, Agent task/monitor | package migration (names not fixed) | Needs anix-agent revival |
 | machine-telemetry, nftables-forward, gost-mesh, nat-egress (T12) | 5 / 0 / 3 / 0 | keep runtime semantics; add v2 entrypoint, generation, `RuntimeStatus` reports | — | Agent-target runtime packages |
-| identity-platform | 25 | group A switches with the identity cutover | — | 22 native-flagged (section 3.4); the user's two invite routes moved to affiliate; the administrator's 3 invite code routes are bridged |
+| identity-platform | 26 | group A switches with the identity cutover | — | 23 native-flagged (section 3.4); the user's two invite routes moved to affiliate; the administrator's 3 invite code routes are bridged; the user's own subscription reset is group A |
 | platform | 12 | system configuration, audit, backup | — | Moved from identity-platform after v4.0.0; bridged |
 | affiliate | 10 | invite codes, commissions, withdrawals, invite statistics and configuration | — | Moved from identity-platform after v4.0.0; all native-flagged (section 3.4) |
 
