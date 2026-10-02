@@ -224,7 +224,10 @@ function onClick(event) {
 .ui-button--danger-soft {
   --ui-button-bg: var(--danger-soft);
   --ui-button-bg-hover: var(--danger-soft);
-  --ui-button-fg: var(--danger);
+  /* --danger on its own soft tint is 4.2:1 in dark mode (on an elevated
+     surface less); mixing in the label colour keeps 4.5:1 or more in both
+     themes (darker red in light, lighter in dark). */
+  --ui-button-fg: color-mix(in srgb, var(--danger) 65%, var(--label-1));
 }
 
 .ui-button--danger-soft:hover {
