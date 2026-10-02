@@ -1,0 +1,92 @@
+/* Shared page layouts of the redesign (UI U6): the list page template
+   (plan §7.1) and the forms inside its dialogs and sheets. Tokens only.
+   Components bring their own styles; these classes only arrange them. */
+
+/* List page: PageHeader → toolbar + DataTable → bulk bar (in the table). */
+.list-page {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  min-width: 0;
+}
+
+.list-page__search {
+  flex: 1 1 220px;
+  max-width: 320px;
+}
+
+.list-page__note {
+  margin-top: calc(-1 * var(--space-4));
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
+}
+
+/* Summary row above a table: a few counts, not cards. */
+.list-page__summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-6);
+  margin: 0;
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
+}
+
+.list-page__summary strong {
+  color: var(--label-1);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Two columns of top-labelled fields; one on phones. */
+.form-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-4);
+}
+
+.form-grid__full {
+  grid-column: 1 / -1;
+}
+
+.form-error {
+  margin: var(--space-3) 0 0;
+  color: var(--danger);
+  font-size: var(--type-callout-size);
+}
+
+.dialog-section {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.dialog-section + .dialog-section {
+  margin-top: var(--space-6);
+}
+
+.dialog-section__title {
+  color: var(--label-1);
+  font-size: var(--type-body-size);
+  font-weight: var(--weight-semibold);
+}
+
+.dialog-section__actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  justify-content: flex-end;
+}
+
+@media (max-width: 639.98px) {
+  .list-page {
+    gap: var(--space-5);
+  }
+
+  .list-page__search {
+    max-width: none;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+}

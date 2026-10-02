@@ -86,7 +86,10 @@ describe('Admin Users flow', () => {
     const wrapper = mount(Users, { attachTo: document.body })
     await flushPromises()
 
-    expect(wrapper.text()).toContain('20 Mbps / 2 devices')
+    // Limits are in the details (and an optional column).
+    wrapper.vm.openDetail(wrapper.vm.users[0])
+    await flushPromises()
+    expect(inBody('[data-test="user-detail-sheet"]').text()).toContain('20 Mbps / 2 devices')
 
     await wrapper.vm.editUser(user)
     await nextTick()
@@ -128,14 +131,14 @@ describe('Admin Users flow', () => {
     const wrapper = mount(Users, { attachTo: document.body })
     await flushPromises()
 
-    let metricValues = wrapper.findAll('.metric-card strong').map(node => node.text())
-    expect(metricValues).toEqual(['12', '9', '2', '1'])
+    // The counts sit on the status filter chips.
+    const chipCounts = () => wrapper.findAll('.ui-filter-chips__count').map(node => node.text())
+    expect(chipCounts()).toEqual(['9', '2', '1'])
 
     await wrapper.vm.fetchStats()
     await flushPromises()
 
-    metricValues = wrapper.findAll('.metric-card strong').map(node => node.text())
-    expect(metricValues).toEqual(['21', '18', '2', '1'])
+    expect(chipCounts()).toEqual(['18', '2', '1'])
   })
 
   it('builds subscribe links from legacy and panel envelope subscription settings', async () => {
@@ -335,8 +338,11 @@ describe('Admin Users flow', () => {
     const wrapper = mount(Users, { attachTo: document.body })
     await flushPromises()
 
-    const planCells = wrapper.findAll('tbody tr').map(row => row.findAll('td')[2]?.text())
-    expect(planCells).toEqual(['Pro', '-', '-'])
+    const headers = wrapper.findAll('thead th').map(th => th.text())
+    const column = headers.indexOf('Subscription template')
+    expect(column).toBeGreaterThan(0)
+    const planCells = wrapper.findAll('tbody tr').map(row => row.findAll('td')[column]?.text())
+    expect(planCells).toEqual(['Pro', '—', '—'])
   })
 
   it('copies the subscription link with the token of the user detail', async () => {
@@ -418,7 +424,7 @@ describe('Admin Users flow', () => {
     await flushPromises()
 
     expect(inBody('[data-test="user-balance-field"]').exists()).toBe(false)
-    expect(wrapper.find('[data-test="user-plan-column"]').text()).toBe('Subscription template')
+    expect(wrapper.findAll('thead th').map(th => th.text())).toContain('Subscription template')
     await wrapper.vm.saveUser()
     expect(mockUpdateUser).toHaveBeenCalledWith(11, expect.objectContaining({ balance: 9 }))
   })
@@ -435,6 +441,6 @@ describe('Admin Users flow', () => {
     await flushPromises()
 
     expect(inBody('[data-test="user-balance-field"]').exists()).toBe(true)
-    expect(wrapper.find('[data-test="user-plan-column"]').text()).toBe('Plan')
+    expect(wrapper.findAll('thead th').map(th => th.text())).toContain('Plan')
   })
 })

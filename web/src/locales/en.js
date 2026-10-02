@@ -206,7 +206,7 @@ export default {
       subscriptionTemplates: 'Subscription templates',
       tickets: 'Tickets',
       coupons: 'Coupons',
-      knowledge: 'Knowledge Base',
+      knowledge: 'Help Center content',
       forward: 'Forward Management',
       forwardTunnel: 'Tunnels',
       forwardLimit: 'Limits',
@@ -216,14 +216,14 @@ export default {
       forwardNodeX: 'NodeX Runtime',
       forwardAgents: 'NodeX Agents',
       control: 'Control Kernel',
-      plugins: 'Plugins',
+      plugins: 'Plugin Center',
       deployments: 'Deployments',
-      accessGroups: 'Access Groups',
-      payment: 'Payment Gateways',
+      accessGroups: 'Access groups',
+      payment: 'Payments',
       telegram: 'Telegram Bot',
       mfa: 'MFA',
       notifications: 'Notifications',
-      invite: 'Invite Rewards',
+      invite: 'Referrals',
       inviteCodes: 'Invite codes',
       system: 'System',
       fallback: 'Admin Console'
@@ -2574,59 +2574,53 @@ export default {
     }
   },
   adminUsers: {
-    title: 'User Management',
-    subtitle: 'Manage all registered users.',
-    stats: {
-      totalUsers: 'Total users',
-      activeUsers: 'Active users',
-      expiredUsers: 'Expired users',
-      bannedUsers: 'Banned users'
-    },
+    title: 'Users',
+    subtitle: 'Accounts, subscriptions and traffic. Select a user to see the details.',
     filters: {
-      searchEmail: 'Search email...',
-      allStatus: 'All status'
+      searchEmail: 'Search by email',
+      label: 'Filter by status',
+      exhaustedHint: '“Out of traffic” narrows the users on this page only; the server has no such filter.'
     },
     table: {
+      label: 'Users',
       id: 'ID',
       email: 'Email',
       plan: 'Plan',
       subscriptionTemplate: 'Subscription template',
-      traffic: 'Traffic',
+      traffic: 'Used / total',
       limits: 'Limits',
       expireAt: 'Expires at',
       status: 'Status',
-      createdAt: 'Created at',
-      actions: 'Actions'
+      createdAt: 'Created at'
     },
     status: {
       active: 'Active',
       expired: 'Expired',
-      banned: 'Banned'
+      banned: 'Banned',
+      exhausted: 'Out of traffic'
     },
     actions: {
-      search: 'Search',
-      addUser: 'Add user',
+      addUser: 'New user',
       editUser: 'Edit user',
       manageTunnel: 'Manage tunnel grants',
-      manageTunnelShort: 'Tunnel',
       ban: 'Ban',
       unban: 'Unban',
       resetTraffic: 'Reset traffic',
-      resetShort: 'Reset',
       copySubscribe: 'Copy subscription link',
-      copySubscribeShort: 'Copy Sub',
-      resetSubscribe: 'Reset subscription link (old link invalidated)',
-      resetSubscribeShort: 'Reset Sub',
-      viewTraffic: 'View traffic for last 30 days',
-      viewTrafficShort: 'Traffic'
+      resetSubscribe: 'Reset subscription link',
+      viewTraffic: 'Traffic in the last 30 days'
     },
     empty: {
-      noData: 'No data'
+      title: 'No users yet',
+      description: 'Add the first user to give them a subscription.'
     },
-    pagination: {
-      prev: 'Previous',
-      next: 'Next',
-      info: 'Page {page} / {totalPages}'
+    detail: {
+      description: 'ID {id} · joined {date}',
+      subscription: 'Subscription',
+      flowReset: 'Traffic resets',
+      actions: 'Actions',
+      danger: 'Danger zone',
+      dangerFooter: 'A new subscription link means every client has to import it again. Reset traffic can’t be undone.'
     },
     editModal: {
       title: 'Edit User',
@@ -2646,8 +2640,8 @@ export default {
       }
     },
     createModal: {
-      title: 'Add User',
-      creating: 'Creating...',
+      title: 'New user',
+      submit: 'Create user',
       fields: {
         email: 'Email',
         password: 'Password',
@@ -2665,9 +2659,6 @@ export default {
         speedLimit: '0 means no speed limit',
         deviceLimit: '0 means no device limit'
       },
-      groupOptions: {
-        unassigned: 'Unassigned'
-      },
       userTypes: {
         normal: 'Normal user',
         admin: 'Admin'
@@ -2676,12 +2667,13 @@ export default {
     tunnelModal: {
       title: 'Tunnel Grants - {email}',
       sections: {
-        form: 'Grant form',
+        form: 'New grant',
+        editForm: 'Edit grant #{id}',
         list: 'Current grants'
       },
       fields: {
         tunnel: 'Tunnel',
-        tunnelReadonlyHint: ' (read-only while editing)',
+        tunnelReadonlyHint: 'The tunnel can’t be changed while editing a grant.',
         status: 'Status',
         flowQuota: 'Flow quota',
         numQuota: 'Quantity quota',
@@ -2697,7 +2689,6 @@ export default {
       },
       actions: {
         cancelEdit: 'Cancel edit',
-        submitting: 'Submitting...',
         updateGrant: 'Update grant',
         addGrant: 'Add grant'
       },
@@ -2734,14 +2725,12 @@ export default {
       tunnelMessage: 'Used traffic of this grant goes back to zero. This can’t be undone.',
       usedFlow: 'Used flow',
       quota: 'Quota',
-      resetting: 'Resetting...',
       confirmAction: 'Reset traffic'
     },
     trafficModal: {
       title: 'Traffic Detail - {email}',
       subtitle: 'Daily totals and hourly detail for the last 30 days.',
       refresh: 'Refresh',
-      loading: 'Loading...',
       dailyTitle: 'Daily Traffic',
       hourlyTitle: 'Hourly Traffic',
       empty: 'No traffic records',
@@ -2766,7 +2755,8 @@ export default {
       deviceLimitCount: '{value} devices',
       noReset: 'No reset',
       monthlyDay: 'Day {day} of every month',
-      permanent: 'Permanent'
+      permanent: 'Permanent',
+      trafficUnlimited: '{used} used · no limit'
     },
     messages: {
       actionFailed: 'Operation failed',
@@ -2774,7 +2764,10 @@ export default {
       passwordTooShort: 'Password must be at least 6 characters',
       userCreated: 'User created successfully',
       createFailed: 'Create failed',
-      fetchUsersFailed: 'Failed to fetch users',
+      fetchUsersFailed: 'Users didn’t load',
+      bulkBanned: '{count} users banned',
+      bulkUnbanned: '{count} users unbanned',
+      bulkPartial: '{done} of {total} users changed. {message}',
       fetchStatsFailed: 'Failed to fetch statistics',
       saveFailed: 'Save failed: {message}',
       userSaved: '{email} saved',

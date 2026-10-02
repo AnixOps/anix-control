@@ -1,12 +1,12 @@
 <template>
   <DropdownMenuRoot v-model:open="open" :modal="false">
-    <DropdownMenuTrigger as-child>
+    <DropdownMenuTrigger ref="triggerRef" as-child>
       <slot name="trigger">
         <UiIconButton :icon="icon" :label="label" :size="size" v-bind="$attrs" />
       </slot>
     </DropdownMenuTrigger>
     <DropdownMenuPortal>
-      <DropdownMenuContent class="ui-menu" :align="align" :side-offset="4" :collision-padding="12">
+      <DropdownMenuContent class="ui-menu" :align="align" :side-offset="4" :collision-padding="12" @close-auto-focus="runPending">
         <slot :close="close">
           <template v-for="(item, index) in visibleItems" :key="item.key || index">
             <DropdownMenuSeparator v-if="item.separatorBefore && index > 0" class="ui-menu__separator" />
@@ -15,7 +15,7 @@
               :class="{ 'is-danger': item.danger }"
               :disabled="item.disabled"
               :data-menu-item="item.key || undefined"
-              @select="item.onSelect?.()"
+              @select="queue(item)"
             >
               <UiIcon v-if="item.icon" :icon="item.icon" :size="16" />
               <span class="ui-menu__label">{{ item.label }}</span>
@@ -51,10 +51,30 @@ const props = defineProps({
 })
 
 const open = ref(false)
+const triggerRef = ref(null)
+// An item's action runs once the menu has closed and focus is back on the
+// trigger, so a dialog it opens returns focus there when it closes.
+let pending = null
 const visibleItems = computed(() => props.items.filter(item => item && !item.hidden))
 
 function close() {
   open.value = false
+}
+
+function queue(item) {
+  pending = item.onSelect || null
+}
+
+function runPending(event) {
+  const action = pending
+  pending = null
+  if (!action) return
+  // Put focus back on the trigger ourselves, then run the action: a dialog
+  // it opens remembers the trigger as the place to return focus to.
+  event?.preventDefault?.()
+  const trigger = triggerRef.value?.$el
+  if (trigger && typeof trigger.focus === 'function') trigger.focus()
+  action()
 }
 </script>
 

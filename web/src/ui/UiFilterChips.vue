@@ -63,6 +63,7 @@ function toggle(value) {
   gap: var(--space-1);
   align-items: center;
   height: var(--size-control-sm);
+  min-height: 0;
   padding: 0 var(--space-3);
   border: 1px solid var(--separator-strong);
   border-radius: var(--radius-pill);

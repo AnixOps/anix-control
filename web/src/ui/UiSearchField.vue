@@ -1,5 +1,5 @@
 <template>
-  <div class="ui-search" :class="{ 'has-value': Boolean(modelValue) }" role="search">
+  <div class="ui-search" :class="[$attrs.class, { 'has-value': Boolean(modelValue) }]" :style="$attrs.style" role="search">
     <UiIcon class="ui-search__icon" :icon="Search" :size="16" />
     <input
       ref="inputRef"
@@ -11,7 +11,7 @@
       :placeholder="placeholder || label"
       :aria-label="label"
       :aria-keyshortcuts="shortcut ? '/' : undefined"
-      v-bind="$attrs"
+      v-bind="inputAttrs"
       @input="onInput"
       @keydown.enter.prevent="emit('submit', modelValue)"
       @keydown.esc="onEscape"
@@ -34,7 +34,7 @@
 // clear button, Esc clears. `/` focuses it from anywhere on the page
 // (plan §9) unless `shortcut` is false. Emits update:modelValue on input
 // (debounce in the page when it calls the server) and submit on Enter.
-import { onBeforeUnmount, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, useAttrs } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { Search, X } from '@lucide/vue'
 import UiIcon from './UiIcon.vue'
@@ -51,6 +51,12 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue', 'submit'])
 const { t } = useI18n()
 const inputRef = ref(null)
+// class and style size the box; everything else (data-*, aria-*) is the input's.
+const attrs = useAttrs()
+const inputAttrs = computed(() => {
+  const { class: _class, style: _style, ...rest } = attrs
+  return rest
+})
 
 function onInput(event) {
   emit('update:modelValue', event.target.value)
@@ -157,6 +163,7 @@ defineExpose({ focus: () => inputRef.value?.focus() })
   place-items: center;
   width: var(--size-control-sm);
   height: var(--size-control-sm);
+  min-height: 0;
   padding: 0;
   border: 0;
   border-radius: var(--radius-pill);

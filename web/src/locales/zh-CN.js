@@ -200,15 +200,15 @@ export default {
       dashboard: '仪表盘',
       monitor: '实时监控',
       trafficHourly: '小时流量统计',
-      users: '用户管理',
+      users: '用户',
       nodes: '节点管理',
       subscriptions: '订阅管理',
-      orders: '订单管理',
-      plans: '套餐管理',
+      orders: '订单',
+      plans: '套餐',
       subscriptionTemplates: '订阅模板',
-      tickets: '工单管理',
-      coupons: '优惠券管理',
-      knowledge: '知识库管理',
+      tickets: '工单',
+      coupons: '优惠券',
+      knowledge: '帮助中心内容',
       forward: '流量转发管理',
       forwardTunnel: '隧道管理',
       forwardLimit: '限速管理',
@@ -218,14 +218,14 @@ export default {
       forwardNodeX: 'NodeX 运行时',
       forwardAgents: 'NodeX Agents',
       control: '控制内核',
-      plugins: '插件',
+      plugins: '插件中心',
       deployments: '部署',
       accessGroups: '访问组',
-      payment: '支付网关管理',
+      payment: '支付',
       telegram: 'Telegram Bot 管理',
       mfa: 'MFA 设置',
       notifications: '通知管理',
-      invite: '邀请返利管理',
+      invite: '邀请返佣',
       inviteCodes: '邀请码',
       system: '系统管理',
       fallback: '管理面板'
@@ -2575,59 +2575,53 @@ export default {
     }
   },
   adminUsers: {
-    title: '用户管理',
-    subtitle: '管理所有注册用户。',
-    stats: {
-      totalUsers: '总用户数',
-      activeUsers: '有效用户',
-      expiredUsers: '已过期',
-      bannedUsers: '已封禁'
-    },
+    title: '用户',
+    subtitle: '账户、订阅和流量。选中一个用户查看详情。',
     filters: {
-      searchEmail: '搜索邮箱...',
-      allStatus: '全部状态'
+      searchEmail: '搜索邮箱',
+      label: '按状态筛选',
+      exhaustedHint: '「流量用尽」只筛选本页的用户，服务器没有这个筛选条件。'
     },
     table: {
+      label: '用户列表',
       id: 'ID',
       email: '邮箱',
       plan: '套餐',
       subscriptionTemplate: '订阅模板',
-      traffic: '流量',
+      traffic: '已用 / 总流量',
       limits: '限制',
       expireAt: '到期时间',
       status: '状态',
-      createdAt: '注册时间',
-      actions: '操作'
+      createdAt: '注册时间'
     },
     status: {
-      active: '有效',
-      expired: '已过期',
-      banned: '已封禁'
+      active: '正常',
+      expired: '已到期',
+      banned: '已封禁',
+      exhausted: '流量用尽'
     },
     actions: {
-      search: '搜索',
-      addUser: '新增用户',
+      addUser: '新建用户',
       editUser: '编辑用户',
       manageTunnel: '管理隧道授权',
-      manageTunnelShort: '隧道',
       ban: '封禁',
       unban: '解封',
       resetTraffic: '重置流量',
-      resetShort: '重置',
       copySubscribe: '复制订阅链接',
-      copySubscribeShort: '复制订阅',
-      resetSubscribe: '重置订阅链接 (旧链接失效)',
-      resetSubscribeShort: '重置订阅',
-      viewTraffic: '查看最近 30 天流量',
-      viewTrafficShort: '流量详情'
+      resetSubscribe: '重置订阅链接',
+      viewTraffic: '最近 30 天流量'
     },
     empty: {
-      noData: '暂无数据'
+      title: '还没有用户',
+      description: '添加第一个用户后，就能给他分配订阅。'
     },
-    pagination: {
-      prev: '上一页',
-      next: '下一页',
-      info: '第 {page} / {totalPages} 页'
+    detail: {
+      description: 'ID {id} · 注册于 {date}',
+      subscription: '订阅',
+      flowReset: '流量重置',
+      actions: '操作',
+      danger: '危险操作',
+      dangerFooter: '重置订阅链接后，所有客户端都要重新导入；重置流量无法撤销。'
     },
     editModal: {
       title: '编辑用户',
@@ -2647,8 +2641,8 @@ export default {
       }
     },
     createModal: {
-      title: '新增用户',
-      creating: '创建中...',
+      title: '新建用户',
+      submit: '创建用户',
       fields: {
         email: '邮箱',
         password: '密码',
@@ -2666,9 +2660,6 @@ export default {
         speedLimit: '0 表示不限速',
         deviceLimit: '0 表示不限设备'
       },
-      groupOptions: {
-        unassigned: '未分配'
-      },
       userTypes: {
         normal: '普通用户',
         admin: '管理员'
@@ -2677,12 +2668,13 @@ export default {
     tunnelModal: {
       title: '隧道授权 - {email}',
       sections: {
-        form: '授权表单',
+        form: '新增授权',
+        editForm: '编辑授权 #{id}',
         list: '当前授权列表'
       },
       fields: {
         tunnel: '隧道',
-        tunnelReadonlyHint: '（编辑时不可修改）',
+        tunnelReadonlyHint: '编辑授权时不能更换隧道。',
         status: '状态',
         flowQuota: '流量配额',
         numQuota: '数量配额',
@@ -2698,7 +2690,6 @@ export default {
       },
       actions: {
         cancelEdit: '取消编辑',
-        submitting: '提交中...',
         updateGrant: '更新授权',
         addGrant: '新增授权'
       },
@@ -2735,14 +2726,12 @@ export default {
       tunnelMessage: '这条授权的已用流量将清零。此操作无法撤销。',
       usedFlow: '当前已用',
       quota: '当前配额',
-      resetting: '重置中...',
       confirmAction: '重置流量'
     },
     trafficModal: {
       title: '流量详情 - {email}',
       subtitle: '最近 30 天每日汇总和每小时明细。',
       refresh: '刷新',
-      loading: '加载中...',
       dailyTitle: '每日流量',
       hourlyTitle: '每小时流量',
       empty: '暂无流量记录',
@@ -2767,7 +2756,8 @@ export default {
       deviceLimitCount: '{value} 台',
       noReset: '不重置',
       monthlyDay: '每月第 {day} 天',
-      permanent: '永久'
+      permanent: '永久',
+      trafficUnlimited: '已用 {used} · 不限'
     },
     messages: {
       actionFailed: '操作失败',
@@ -2775,7 +2765,10 @@ export default {
       passwordTooShort: '密码长度至少 6 位',
       userCreated: '用户创建成功',
       createFailed: '创建失败',
-      fetchUsersFailed: '获取用户列表失败',
+      fetchUsersFailed: '用户列表没有加载出来',
+      bulkBanned: '已封禁 {count} 个用户',
+      bulkUnbanned: '已解封 {count} 个用户',
+      bulkPartial: '{total} 个用户中 {done} 个已更改。{message}',
       fetchStatsFailed: '获取统计失败',
       saveFailed: '保存失败：{message}',
       userSaved: '已保存 {email}',

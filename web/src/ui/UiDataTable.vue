@@ -95,13 +95,13 @@
           :data-row-key="keyOf(row, index)"
         >
           <div class="ui-data-table__card-head">
-            <UiCheckbox
-              v-if="selectable"
-              class="ui-data-table__card-check"
-              :model-value="isSelected(row, index)"
-              :aria-label="t('ui.table.selectRow', { name: nameOf(row) })"
-              @update:model-value="value => toggleRow(row, index, value)"
-            />
+            <span v-if="selectable" class="ui-data-table__card-check">
+              <UiCheckbox
+                :model-value="isSelected(row, index)"
+                :aria-label="t('ui.table.selectRow', { name: nameOf(row) })"
+                @update:model-value="value => toggleRow(row, index, value)"
+              />
+            </span>
             <div class="ui-data-table__card-title-wrap">
               <component
                 :is="activatable ? 'button' : 'span'"
@@ -659,6 +659,7 @@ defineExpose({ clearSelection, setPage })
   gap: var(--space-1);
   align-items: center;
   height: 28px;
+  min-height: 0;
   padding: 0 var(--space-1);
   margin: 0 calc(-1 * var(--space-1));
   border: 0;
@@ -732,7 +733,14 @@ th[aria-sort='descending'] .ui-data-table__sort-icon {
 }
 
 .ui-data-table__table tbody tr.is-selected {
-  background: var(--accent-soft);
+  /* A lighter tint than --accent-soft keeps status badges and secondary
+     text at 4.5:1 on selected rows in both themes; the checkbox and the
+     accent bar on the first cell mark the selection too. */
+  background: color-mix(in srgb, var(--accent-soft) 40%, transparent);
+}
+
+.ui-data-table__table tbody tr.is-selected > td:first-child {
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .ui-data-table__table tbody tr:focus-visible {
@@ -802,7 +810,8 @@ th[aria-sort='descending'] .ui-data-table__sort-icon {
 }
 
 .ui-data-table__card.is-selected {
-  background: var(--accent-soft);
+  background: color-mix(in srgb, var(--accent-soft) 40%, transparent);
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .ui-data-table__card:first-child.is-selected {
@@ -822,7 +831,10 @@ th[aria-sort='descending'] .ui-data-table__sort-icon {
 }
 
 .ui-data-table__card-check {
-  padding-top: var(--space-1);
+  display: flex;
+  flex: none;
+  align-items: center;
+  min-height: 32px;
 }
 
 .ui-data-table__card-title-wrap {
@@ -834,7 +846,12 @@ th[aria-sort='descending'] .ui-data-table__sort-icon {
 }
 
 .ui-data-table__card-title {
+  display: block;
+  width: 100%;
   min-width: 0;
+  min-height: 0;
+  border-radius: 0;
+  white-space: normal;
   padding: 0;
   border: 0;
   background: none;
@@ -848,6 +865,11 @@ th[aria-sort='descending'] .ui-data-table__sort-icon {
 .ui-data-table__card-title.is-action {
   min-height: 32px;
   cursor: pointer;
+}
+
+.ui-data-table__card-title:hover,
+.ui-data-table__card-title:active {
+  background: none;
 }
 
 .ui-data-table__card-title.is-action:focus-visible {

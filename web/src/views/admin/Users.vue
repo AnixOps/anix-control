@@ -1,109 +1,121 @@
 <template>
-  <div class="page-shell">
-    <div class="page-toolbar">
-      <div>
-        <h1>{{ t('adminUsers.title') }}</h1>
-        <p>{{ t('adminUsers.subtitle') }}</p>
-      </div>
-      <button class="btn btn-primary" @click="showCreateModal = true">{{ t('adminUsers.actions.addUser') }}</button>
-    </div>
+  <div class="list-page">
+    <UiPageHeader :title="t('adminUsers.title')" :description="t('adminUsers.subtitle')">
+      <template #actions>
+        <UiButton variant="primary" :icon="Plus" data-test="user-add-button" @click="showCreateModal = true">{{ t('adminUsers.actions.addUser') }}</UiButton>
+      </template>
+    </UiPageHeader>
 
-    <section class="metrics-grid">
-      <article class="section-panel metric-card">
-        <span class="metric-code primary">USR</span>
-        <strong>{{ stats.total_users || 0 }}</strong>
-        <span>{{ t('adminUsers.stats.totalUsers') }}</span>
-      </article>
-      <article class="section-panel metric-card">
-        <span class="metric-code success">ACT</span>
-        <strong>{{ stats.active_users || 0 }}</strong>
-        <span>{{ t('adminUsers.stats.activeUsers') }}</span>
-      </article>
-      <article class="section-panel metric-card">
-        <span class="metric-code warning">EXP</span>
-        <strong>{{ stats.expired_users || 0 }}</strong>
-        <span>{{ t('adminUsers.stats.expiredUsers') }}</span>
-      </article>
-      <article class="section-panel metric-card">
-        <span class="metric-code danger">BAN</span>
-        <strong>{{ stats.banned_users || 0 }}</strong>
-        <span>{{ t('adminUsers.stats.bannedUsers') }}</span>
-      </article>
-    </section>
+    <UiDataTable
+      v-model:selected="selectedIds"
+      :columns="columns"
+      :rows="visibleUsers"
+      :label="t('adminUsers.table.label')"
+      :row-label="user => user.email"
+      storage-key="admin.users"
+      manual-pagination
+      :page="page"
+      :page-size="pageSize"
+      :total="statusFilter === 'exhausted' ? visibleUsers.length : total"
+      :loading="listLoading"
+      :error="listError"
+      :error-title="t('adminUsers.messages.fetchUsersFailed')"
+      :filtered="Boolean(filters.email || statusFilter)"
+      :empty-icon="UsersIcon"
+      :empty-title="t('adminUsers.empty.title')"
+      :empty-description="t('adminUsers.empty.description')"
+      selectable
+      activatable
+      :row-actions="userActions"
+      @update:page="goToPage"
+      @row-activate="openDetail"
+      @retry="fetchUsers"
+      @clear-filters="clearFilters"
+    >
+      <template #toolbar>
+        <UiSearchField
+          v-model="filters.email"
+          class="list-page__search"
+          :label="t('adminUsers.filters.searchEmail')"
+          data-test="user-search"
+          @update:model-value="scheduleSearch"
+          @submit="searchNow"
+        />
+        <UiFilterChips v-model="statusFilter" :label="t('adminUsers.filters.label')" :options="statusChips" />
+      </template>
+      <template #empty-actions>
+        <UiButton variant="primary" :icon="Plus" @click="showCreateModal = true">{{ t('adminUsers.actions.addUser') }}</UiButton>
+      </template>
+      <template #cell-email="{ row }">
+        <span class="user-email">
+          <span class="user-email__text">{{ row.email }}</span>
+          <UiBadge v-if="row.is_admin === 1" tone="info" :dot="false" :label="t('adminUsers.labels.admin')" />
+        </span>
+      </template>
+      <template #cell-status="{ row }">
+        <UiBadge :tone="statusOf(row).tone" :label="statusOf(row).label" />
+      </template>
+      <template #cell-traffic="{ row }">
+        <UiUsageBar :value="usedOf(row)" :max="Number(row.transfer_enable || 0)" :text="trafficText(row)" />
+      </template>
+      <template #bulk-actions="{ rows: chosen }">
+        <UiButton size="sm" :icon="Ban" :loading="bulkBusy" data-test="bulk-ban" @click="bulkSetBanned(chosen, true)">{{ t('adminUsers.actions.ban') }}</UiButton>
+        <UiButton size="sm" :icon="ShieldCheck" :disabled="bulkBusy" data-test="bulk-unban" @click="bulkSetBanned(chosen, false)">{{ t('adminUsers.actions.unban') }}</UiButton>
+      </template>
+    </UiDataTable>
+    <p v-if="statusFilter === 'exhausted'" class="list-page__note" data-test="user-exhausted-note">{{ t('adminUsers.filters.exhaustedHint') }}</p>
 
-    <section class="section-panel filter-panel">
-      <div class="filter-row">
-        <input v-model="filters.email" type="text" :placeholder="t('adminUsers.filters.searchEmail')" @keyup.enter="fetchUsers" />
-        <select v-model="filters.status" @change="fetchUsers">
-          <option value="">{{ t('adminUsers.filters.allStatus') }}</option>
-          <option value="active">{{ t('adminUsers.status.active') }}</option>
-          <option value="expired">{{ t('adminUsers.status.expired') }}</option>
-          <option value="banned">{{ t('adminUsers.status.banned') }}</option>
-        </select>
-        <button class="btn" @click="fetchUsers">{{ t('adminUsers.actions.search') }}</button>
-      </div>
-    </section>
+    <UiSheet
+      :open="Boolean(detailUser)"
+      size="md"
+      grouped
+      :title="detailUser?.email || ''"
+      :description="detailUser ? t('adminUsers.detail.description', { id: detailUser.id, date: formatDateTime(detailUser.created_at) }) : ''"
+      data-test="user-detail-sheet"
+      @update:open="value => { if (!value) detailUser = null }"
+    >
+      <template #header-actions>
+        <UiBadge v-if="detailUser" :tone="statusOf(detailUser).tone" :label="statusOf(detailUser).label" />
+      </template>
+      <template v-if="detailUser">
+        <UiGroupedList :title="t('adminUsers.detail.subscription')">
+          <UiGroupedListRow :label="isCommercial ? t('adminUsers.table.plan') : t('adminUsers.table.subscriptionTemplate')" :value="detailUser.plan?.name || '—'" />
+          <UiGroupedListRow :label="t('adminUsers.table.traffic')">
+            <UiUsageBar :value="usedOf(detailUser)" :max="Number(detailUser.transfer_enable || 0)" :text="trafficText(detailUser)" />
+          </UiGroupedListRow>
+          <UiGroupedListRow :label="t('adminUsers.table.expireAt')" :value="formatDate(detailUser.expired_at)" />
+          <UiGroupedListRow :label="t('adminUsers.detail.flowReset')" :value="formatFlowResetDay(detailUser.flowResetTime)" />
+          <UiGroupedListRow :label="t('adminUsers.table.limits')" :value="formatUserLimits(detailUser)" />
+          <UiGroupedListRow v-if="isCommercial" :label="t('adminUsers.editModal.fields.balance')" :value="String(detailUser.balance ?? 0)" />
+        </UiGroupedList>
+        <UiGroupedList :title="t('adminUsers.detail.actions')">
+          <UiGroupedListRow :label="t('adminUsers.actions.editUser')" @click="runFromDetail(editUser)" />
+          <UiGroupedListRow :label="t('adminUsers.actions.viewTraffic')" @click="runFromDetail(openTrafficModal)" />
+          <UiGroupedListRow :label="t('adminUsers.actions.manageTunnel')" @click="runFromDetail(openTunnelModal)" />
+          <UiGroupedListRow :label="t('adminUsers.actions.copySubscribe')" @click="copySubscribe(detailUser)" />
+        </UiGroupedList>
+        <UiGroupedList :title="t('adminUsers.detail.danger')" :footer="t('adminUsers.detail.dangerFooter')">
+          <UiGroupedListRow v-if="detailUser.banned === 0" :label="t('adminUsers.actions.ban')" @click="handleBan(detailUser)" />
+          <UiGroupedListRow v-else :label="t('adminUsers.actions.unban')" @click="handleUnban(detailUser)" />
+          <UiGroupedListRow :label="t('adminUsers.actions.resetTraffic')" @click="openResetUserDialog(detailUser)" />
+          <UiGroupedListRow :label="t('adminUsers.actions.resetSubscribe')" @click="resetSubscribe(detailUser)" />
+        </UiGroupedList>
+      </template>
+    </UiSheet>
 
-    <section class="section-panel data-panel">
-      <div class="table-wrap">
-        <table class="data-table">
-        <thead>
-          <tr>
-            <th>{{ t('adminUsers.table.id') }}</th><th>{{ t('adminUsers.table.email') }}</th><th data-test="user-plan-column">{{ isCommercial ? t('adminUsers.table.plan') : t('adminUsers.table.subscriptionTemplate') }}</th><th>{{ t('adminUsers.table.traffic') }}</th><th>{{ t('adminUsers.table.limits') }}</th>
-            <th>{{ t('adminUsers.table.expireAt') }}</th><th>{{ t('adminUsers.table.status') }}</th><th>{{ t('adminUsers.table.createdAt') }}</th><th>{{ t('adminUsers.table.actions') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="user in users" :key="user.id">
-            <td>{{ user.id }}</td>
-            <td><span v-if="user.is_admin === 1" class="admin-badge">{{ t('adminUsers.labels.admin') }}</span> {{ user.email }}</td>
-            <td>{{ user.plan?.name || '-' }}</td>
-            <td>{{ formatBytes((user.u || 0) + (user.d || 0)) }} / {{ formatBytes(user.transfer_enable || 0) }}</td>
-            <td>{{ formatUserLimits(user) }}</td>
-            <td>{{ formatDate(user.expired_at) }}</td>
-            <td><span :class="['status-badge', getStatusClass(user)]">{{ getStatusText(user) }}</span></td>
-            <td>{{ formatDateTime(user.created_at) }}</td>
-            <td class="actions">
-              <button class="btn btn-sm" @click="editUser(user)" :title="t('adminUsers.actions.editUser')">{{ t('common.actions.edit') }}</button>
-              <button class="btn btn-sm" @click="openTunnelModal(user)" :title="t('adminUsers.actions.manageTunnel')">{{ t('adminUsers.actions.manageTunnelShort') }}</button>
-              <button v-if="user.banned === 0" class="btn btn-sm" @click="handleBan(user)" :title="t('adminUsers.actions.ban')">{{ t('adminUsers.actions.ban') }}</button>
-              <button v-else class="btn btn-sm" @click="handleUnban(user)" :title="t('adminUsers.actions.unban')">{{ t('adminUsers.actions.unban') }}</button>
-              <button class="btn btn-sm" @click="openTrafficModal(user)" :title="t('adminUsers.actions.viewTraffic')">{{ t('adminUsers.actions.viewTrafficShort') }}</button>
-              <button class="btn btn-sm" @click="copySubscribe(user)" :title="t('adminUsers.actions.copySubscribe')">{{ t('adminUsers.actions.copySubscribeShort') }}</button>
-              <button class="btn btn-sm" @click="resetSubscribe(user)" :title="t('adminUsers.actions.resetSubscribe')">{{ t('adminUsers.actions.resetSubscribeShort') }}</button>
-              <button class="btn btn-sm" @click="openResetUserDialog(user)" :title="t('adminUsers.actions.resetTraffic')">{{ t('adminUsers.actions.resetShort') }}</button>
-            </td>
-          </tr>
-          <tr v-if="users.length === 0"><td colspan="9" class="empty-row">{{ t('adminUsers.empty.noData') }}</td></tr>
-        </tbody>
-        </table>
+    <UiDialog v-model:open="showEditModal" :title="t('adminUsers.editModal.title')" :description="editingUser.email || ''">
+      <div class="form-grid">
+        <UiTextField v-model="editingUser.email" class="form-grid__full" type="email" :label="t('adminUsers.editModal.fields.email')" />
+        <UiTextField v-if="isCommercial" v-model.number="editingUser.balance" type="number" :label="t('adminUsers.editModal.fields.balance')" data-test="user-balance-field" />
+        <UiTextField v-model.number="editingUser.transfer_enable" type="number" :label="t('adminUsers.editModal.fields.transfer')" :help="formatBytes(editingUser.transfer_enable || 0)" />
+        <UiTextField v-model.number="editingUser.speed_limit" type="number" min="0" :label="t('adminUsers.editModal.fields.speedLimit')" data-test="user-speed-limit-input" />
+        <UiTextField v-model.number="editingUser.device_limit" type="number" min="0" :label="t('adminUsers.editModal.fields.deviceLimit')" data-test="user-device-limit-input" />
+        <UiSelect v-model="editGroup" :label="t('adminUsers.editModal.fields.groupId')" :options="groupOptions" />
+        <UiTextField v-model.number="editingUser.flowResetTime" type="number" min="0" max="31" :label="t('adminUsers.editModal.fields.flowResetTime')" />
+        <UiTextField v-model.number="editingUser.expired_at" class="form-grid__full" type="number" :label="t('adminUsers.editModal.fields.expiredAt')" :help="editingUser.expired_at ? formatDateTime(Number(editingUser.expired_at) * 1000) : t('adminUsers.labels.permanent')" />
+        <UiTextarea v-model="editingUser.remark_content" class="form-grid__full" :rows="3" :label="t('adminUsers.editModal.fields.remark')" />
       </div>
-
-      <div class="pagination">
-        <button class="btn" :disabled="page <= 1" @click="page--; fetchUsers()">{{ t('adminUsers.pagination.prev') }}</button>
-        <span>{{ t('adminUsers.pagination.info', { page, totalPages }) }}</span>
-        <button class="btn" :disabled="page >= totalPages" @click="page++; fetchUsers()">{{ t('adminUsers.pagination.next') }}</button>
-      </div>
-    </section>
-
-    <UiDialog v-model:open="showEditModal" :title="t('adminUsers.editModal.title')">
-      <div class="dialog-form">
-        <label>{{ t('adminUsers.editModal.fields.email') }}<input v-model="editingUser.email" type="email" /></label>
-        <label v-if="isCommercial" data-test="user-balance-field">{{ t('adminUsers.editModal.fields.balance') }}<input v-model.number="editingUser.balance" type="number" /></label>
-        <label>{{ t('adminUsers.editModal.fields.transfer') }}<input v-model.number="editingUser.transfer_enable" type="number" /></label>
-        <label>{{ t('adminUsers.editModal.fields.speedLimit') }}<input v-model.number="editingUser.speed_limit" data-test="user-speed-limit-input" type="number" min="0" /></label>
-        <label>{{ t('adminUsers.editModal.fields.deviceLimit') }}<input v-model.number="editingUser.device_limit" data-test="user-device-limit-input" type="number" min="0" /></label>
-        <label>{{ t('adminUsers.editModal.fields.groupId') }}
-          <select v-model="editingUser.group_id">
-            <option :value="null">{{ t('adminUsers.editModal.groupOptions.unassigned') }}</option>
-            <option v-for="g in subscriptionGroups" :key="g.id" :value="g.id">{{ g.name }}</option>
-          </select>
-        </label>
-        <label>{{ t('adminUsers.editModal.fields.expiredAt') }}<input v-model.number="editingUser.expired_at" type="number" /></label>
-        <label>{{ t('adminUsers.editModal.fields.flowResetTime') }}<input v-model.number="editingUser.flowResetTime" type="number" min="0" max="31" /></label>
-        <label>{{ t('adminUsers.editModal.fields.remark') }}<textarea v-model="editingUser.remark_content" rows="3"></textarea></label>
-        <p v-if="editError" class="error" role="alert" data-test="user-save-error">{{ editError }}</p>
-      </div>
+      <p v-if="editError" class="form-error" role="alert" data-test="user-save-error">{{ editError }}</p>
       <template #footer="{ close }">
         <UiButton :disabled="editSaving" @click="close">{{ t('common.actions.cancel') }}</UiButton>
         <UiButton variant="primary" data-test="user-save-button" :loading="editSaving" @click="saveUser">{{ t('common.actions.save') }}</UiButton>
@@ -111,85 +123,80 @@
     </UiDialog>
 
     <UiDialog v-model:open="showCreateModal" :title="t('adminUsers.createModal.title')">
-      <div class="dialog-form">
-        <label>{{ t('adminUsers.createModal.fields.email') }} *<input v-model="newUser.email" type="email" :placeholder="t('adminUsers.createModal.placeholders.email')" /></label>
-        <label>{{ t('adminUsers.createModal.fields.password') }} *<input v-model="newUser.password" type="password" :placeholder="t('adminUsers.createModal.placeholders.password')" /></label>
-        <label>{{ t('adminUsers.createModal.fields.userType') }}
-          <select v-model="newUser.is_admin">
-            <option :value="0">{{ t('adminUsers.createModal.userTypes.normal') }}</option>
-            <option :value="1">{{ t('adminUsers.createModal.userTypes.admin') }}</option>
-          </select>
-        </label>
-        <label>{{ t('adminUsers.createModal.fields.groupId') }}
-          <select v-model="newUser.group_id">
-            <option :value="null">{{ t('adminUsers.createModal.groupOptions.unassigned') }}</option>
-            <option v-for="g in subscriptionGroups" :key="g.id" :value="g.id">{{ g.name }}</option>
-          </select>
-        </label>
-        <label>{{ t('adminUsers.createModal.fields.transferEnable') }}<input v-model.number="newUser.transfer_enable" type="number" min="0" :placeholder="t('adminUsers.createModal.placeholders.transferEnable')" /></label>
-        <label>{{ t('adminUsers.createModal.fields.speedLimit') }}<input v-model.number="newUser.speed_limit" data-test="new-user-speed-limit-input" type="number" min="0" :placeholder="t('adminUsers.createModal.placeholders.speedLimit')" /></label>
-        <label>{{ t('adminUsers.createModal.fields.deviceLimit') }}<input v-model.number="newUser.device_limit" data-test="new-user-device-limit-input" type="number" min="0" :placeholder="t('adminUsers.createModal.placeholders.deviceLimit')" /></label>
-        <label>{{ t('adminUsers.createModal.fields.flowResetTime') }}<input v-model.number="newUser.flowResetTime" type="number" min="0" max="31" /></label>
-        <p v-if="createError" class="error" role="alert">{{ createError }}</p>
+      <div class="form-grid">
+        <UiTextField v-model="newUser.email" class="form-grid__full" type="email" required :label="t('adminUsers.createModal.fields.email')" :placeholder="t('adminUsers.createModal.placeholders.email')" />
+        <UiPasswordField v-model="newUser.password" class="form-grid__full" required :label="t('adminUsers.createModal.fields.password')" :help="t('adminUsers.createModal.placeholders.password')" />
+        <UiSelect v-model="newUser.is_admin" :label="t('adminUsers.createModal.fields.userType')" :options="userTypeOptions" />
+        <UiSelect v-model="newGroup" :label="t('adminUsers.createModal.fields.groupId')" :options="groupOptions" />
+        <UiTextField v-model.number="newUser.transfer_enable" type="number" min="0" :label="t('adminUsers.createModal.fields.transferEnable')" :help="t('adminUsers.createModal.placeholders.transferEnable')" />
+        <UiTextField v-model.number="newUser.speed_limit" type="number" min="0" :label="t('adminUsers.createModal.fields.speedLimit')" :help="t('adminUsers.createModal.placeholders.speedLimit')" data-test="new-user-speed-limit-input" />
+        <UiTextField v-model.number="newUser.device_limit" type="number" min="0" :label="t('adminUsers.createModal.fields.deviceLimit')" :help="t('adminUsers.createModal.placeholders.deviceLimit')" data-test="new-user-device-limit-input" />
+        <UiTextField v-model.number="newUser.flowResetTime" type="number" min="0" max="31" :label="t('adminUsers.createModal.fields.flowResetTime')" />
       </div>
+      <p v-if="createError" class="form-error" role="alert">{{ createError }}</p>
       <template #footer="{ close }">
         <UiButton :disabled="createLoading" @click="close">{{ t('common.actions.cancel') }}</UiButton>
-        <UiButton variant="primary" data-test="user-create-button" :loading="createLoading" @click="handleCreateUser">{{ t('common.actions.create') }}</UiButton>
+        <UiButton variant="primary" data-test="user-create-button" :loading="createLoading" @click="handleCreateUser">{{ t('adminUsers.createModal.submit') }}</UiButton>
       </template>
     </UiDialog>
 
     <UiDialog :open="showTunnelModal" size="lg" :title="t('adminUsers.tunnelModal.title', { email: tunnelUser?.email || '-' })" @update:open="value => { if (!value) closeTunnelModal() }">
-      <section class="dialog-section">
-        <h4>{{ t('adminUsers.tunnelModal.sections.form') }}</h4>
-        <div class="grid dialog-form">
-          <label>{{ t('adminUsers.tunnelModal.fields.tunnel') }}{{ editingTunnelId ? t('adminUsers.tunnelModal.fields.tunnelReadonlyHint') : '' }}
-            <select v-model="tunnelForm.tunnelId" :disabled="Boolean(editingTunnelId)" :aria-invalid="tunnelFormError ? 'true' : undefined" :aria-describedby="tunnelFormError ? 'user-tunnel-form-error' : undefined" @change="handleTunnelChange">
-              <option value="">{{ availableTunnelOptions.length === 0 && !editingTunnelId ? t('adminUsers.tunnelModal.options.noAssignableTunnel') : t('adminUsers.tunnelModal.options.selectTunnel') }}</option>
-              <option v-for="item in availableTunnelOptions" :key="item.id" :value="item.id">{{ item.name }} (ID: {{ item.id }})</option>
-            </select>
-          </label>
-          <label v-if="editingTunnelId">{{ t('adminUsers.tunnelModal.fields.status') }}
-            <select v-model.number="tunnelForm.status"><option :value="1">{{ t('runtime.shared.enabled') }}</option><option :value="0">{{ t('runtime.shared.disabled') }}</option></select>
-          </label>
-          <label>{{ t('adminUsers.tunnelModal.fields.flowQuota') }}<input v-model.number="tunnelForm.flow" type="number" min="0" /></label>
-          <label>{{ t('adminUsers.tunnelModal.fields.numQuota') }}<input v-model.number="tunnelForm.num" type="number" min="0" /></label>
-          <label>{{ t('adminUsers.tunnelModal.fields.expTime') }}<input v-model="tunnelForm.expTime" type="datetime-local" /></label>
-          <label>{{ t('adminUsers.tunnelModal.fields.flowResetTime') }}<input v-model.number="tunnelForm.flowResetTime" type="number" min="0" /></label>
-          <label>{{ t('adminUsers.tunnelModal.fields.rateLimit') }}
-            <select v-model="tunnelForm.speedId" :disabled="speedLimitLoading || !tunnelForm.tunnelId" @change="handleSpeedLimitChange">
-              <option :value="null">{{ t('adminUsers.labels.noLimit') }}</option>
-              <option v-if="!tunnelForm.tunnelId" disabled value="">{{ t('adminUsers.tunnelModal.options.selectTunnelFirst') }}</option>
-              <option v-else-if="!speedLimitLoading && availableSpeedLimitOptions.length === 0" disabled value="">{{ t('adminUsers.tunnelModal.options.noRateLimitRules') }}</option>
-              <option v-for="item in availableSpeedLimitOptions" :key="item.id" :value="item.id">{{ formatSpeedLimitOptionLabel(item) }}</option>
-            </select>
-          </label>
-          <p v-if="tunnelFormError" id="user-tunnel-form-error" class="error grid-full" role="alert">{{ tunnelFormError }}</p>
-          <div class="row grid-full">
-            <UiButton v-if="editingTunnelId" @click="resetTunnelForm">{{ t('adminUsers.tunnelModal.actions.cancelEdit') }}</UiButton>
-            <UiButton variant="primary" :loading="tunnelLoading" data-test="user-tunnel-submit" @click="submitTunnelForm">{{ editingTunnelId ? t('adminUsers.tunnelModal.actions.updateGrant') : t('adminUsers.tunnelModal.actions.addGrant') }}</UiButton>
-          </div>
+      <section class="dialog-section" aria-labelledby="user-tunnel-form-title">
+        <h3 id="user-tunnel-form-title" class="dialog-section__title">{{ editingTunnelId ? t('adminUsers.tunnelModal.sections.editForm', { id: editingTunnelId }) : t('adminUsers.tunnelModal.sections.form') }}</h3>
+        <div class="form-grid">
+          <UiSelect
+            v-model="tunnelForm.tunnelId"
+            :label="t('adminUsers.tunnelModal.fields.tunnel')"
+            :help="editingTunnelId ? t('adminUsers.tunnelModal.fields.tunnelReadonlyHint') : ''"
+            :placeholder="availableTunnelOptions.length === 0 && !editingTunnelId ? t('adminUsers.tunnelModal.options.noAssignableTunnel') : t('adminUsers.tunnelModal.options.selectTunnel')"
+            :options="tunnelSelectOptions"
+            :disabled="Boolean(editingTunnelId)"
+            :aria-invalid="tunnelFormError ? 'true' : undefined"
+            size="md"
+            data-test="user-tunnel-select"
+            @update:model-value="handleTunnelChange"
+          />
+          <UiSelect v-if="editingTunnelId" v-model="tunnelForm.status" size="md" :label="t('adminUsers.tunnelModal.fields.status')" :options="tunnelStatusOptions" />
+          <UiTextField v-model.number="tunnelForm.flow" size="md" type="number" min="0" :label="t('adminUsers.tunnelModal.fields.flowQuota')" />
+          <UiTextField v-model.number="tunnelForm.num" size="md" type="number" min="0" :label="t('adminUsers.tunnelModal.fields.numQuota')" />
+          <UiTextField v-model="tunnelForm.expTime" size="md" type="datetime-local" :label="t('adminUsers.tunnelModal.fields.expTime')" />
+          <UiTextField v-model.number="tunnelForm.flowResetTime" size="md" type="number" min="0" :label="t('adminUsers.tunnelModal.fields.flowResetTime')" />
+          <UiSelect
+            v-model="tunnelSpeed"
+            size="md"
+            :label="t('adminUsers.tunnelModal.fields.rateLimit')"
+            :help="!tunnelForm.tunnelId ? t('adminUsers.tunnelModal.options.selectTunnelFirst') : (!speedLimitLoading && availableSpeedLimitOptions.length === 0 ? t('adminUsers.tunnelModal.options.noRateLimitRules') : '')"
+            :options="speedSelectOptions"
+            :disabled="speedLimitLoading || !tunnelForm.tunnelId"
+          />
+        </div>
+        <p v-if="tunnelFormError" id="user-tunnel-form-error" class="form-error" role="alert">{{ tunnelFormError }}</p>
+        <div class="dialog-section__actions">
+          <UiButton v-if="editingTunnelId" @click="resetTunnelForm">{{ t('adminUsers.tunnelModal.actions.cancelEdit') }}</UiButton>
+          <UiButton variant="primary" :loading="tunnelLoading" data-test="user-tunnel-submit" @click="submitTunnelForm">{{ editingTunnelId ? t('adminUsers.tunnelModal.actions.updateGrant') : t('adminUsers.tunnelModal.actions.addGrant') }}</UiButton>
         </div>
       </section>
 
-      <section class="dialog-section">
-        <h4>{{ t('adminUsers.tunnelModal.sections.list') }}</h4>
-        <div class="table-wrap">
-          <table class="data-table">
-            <thead>
-              <tr><th>{{ t('adminUsers.tunnelModal.table.id') }}</th><th>{{ t('adminUsers.tunnelModal.table.tunnel') }}</th><th>{{ t('adminUsers.tunnelModal.table.status') }}</th><th>{{ t('adminUsers.tunnelModal.table.flow') }}</th><th>{{ t('adminUsers.tunnelModal.table.num') }}</th><th>{{ t('adminUsers.tunnelModal.table.expireAt') }}</th><th>{{ t('adminUsers.tunnelModal.table.reset') }}</th><th>{{ t('adminUsers.tunnelModal.table.usedFlow') }}</th><th>{{ t('adminUsers.tunnelModal.table.rateLimit') }}</th><th>{{ t('adminUsers.table.actions') }}</th></tr>
-            </thead>
-            <tbody>
-              <tr v-if="tunnelListLoading"><td colspan="10" class="empty-row">{{ t('common.states.loading') }}</td></tr>
-              <tr v-for="item in userTunnels" :key="item.id">
-                <td>{{ item.id }}</td><td>{{ item.tunnelName || item.tunnelId }}</td>
-                <td><span :class="['status-badge', item.status === 1 ? 'status-active' : 'status-banned']">{{ item.status === 1 ? t('runtime.shared.enabled') : t('runtime.shared.disabled') }}</span></td>
-                <td>{{ item.flow ?? 0 }}</td><td>{{ item.num ?? 0 }}</td><td>{{ formatTunnelExpire(item.expTime) }}</td><td>{{ formatFlowResetDay(item.flowResetTime) }}</td><td>{{ formatBytes(calculateTunnelUsedFlow(item)) }}</td><td>{{ formatTunnelRateLimit(item) }}</td>
-                <td class="actions"><button class="btn btn-sm" @click="editTunnelGrant(item)">{{ t('common.actions.edit') }}</button><button class="btn btn-sm" @click="openResetTunnelDialog(item)">{{ t('adminUsers.actions.resetTraffic') }}</button><button class="btn btn-sm" @click="removeTunnelGrant(item)">{{ t('common.actions.delete') }}</button></td>
-              </tr>
-              <tr v-if="!tunnelListLoading && userTunnels.length === 0"><td colspan="10" class="empty-row">{{ t('adminUsers.tunnelModal.empty') }}</td></tr>
-            </tbody>
-          </table>
-        </div>
+      <section class="dialog-section" aria-labelledby="user-tunnel-list-title">
+        <h3 id="user-tunnel-list-title" class="dialog-section__title">{{ t('adminUsers.tunnelModal.sections.list') }}</h3>
+        <UiDataTable
+          :columns="grantColumns"
+          :rows="userTunnels"
+          :label="t('adminUsers.tunnelModal.sections.list')"
+          :row-label="item => item.tunnelName || String(item.tunnelId)"
+          :loading="tunnelListLoading"
+          :empty-title="t('adminUsers.tunnelModal.empty')"
+          :row-actions="grantActions"
+          :settings="false"
+          :sticky-header="false"
+          state-heading-tag="h4"
+          default-density="compact"
+          flat
+        >
+          <template #cell-status="{ row }">
+            <UiBadge :tone="row.status === 1 ? 'success' : 'neutral'" :label="row.status === 1 ? t('runtime.shared.enabled') : t('runtime.shared.disabled')" />
+          </template>
+        </UiDataTable>
       </section>
       <template #footer="{ close }">
         <UiButton @click="close">{{ t('common.actions.close') }}</UiButton>
@@ -222,61 +229,59 @@
       @update:open="value => { if (!value) closeTrafficModal() }"
     >
       <template #header-actions>
-        <UiButton size="sm" :loading="trafficLoading" @click="loadTrafficDetail">{{ t('adminUsers.trafficModal.refresh') }}</UiButton>
+        <UiButton size="sm" :icon="RotateCw" :loading="trafficLoading" @click="loadTrafficDetail">{{ t('adminUsers.trafficModal.refresh') }}</UiButton>
       </template>
-      <p v-if="trafficError" class="error" role="alert">{{ trafficError }}</p>
-      <div class="traffic-summary-grid">
-        <article class="traffic-summary-card">
-          <span>{{ t('adminUsers.trafficModal.summary.total30d') }}</span>
-          <strong>{{ formatBytes(trafficTotal30d) }}</strong>
-        </article>
-        <article class="traffic-summary-card">
-          <span>{{ t('adminUsers.trafficModal.summary.dailyPeak') }}</span>
-          <strong>{{ formatBytes(dailyPeak?.traffic || 0) }}</strong>
-          <small>{{ dailyPeak?.date || '-' }}</small>
-        </article>
-        <article class="traffic-summary-card">
-          <span>{{ t('adminUsers.trafficModal.summary.hourlyPeak') }}</span>
-          <strong>{{ formatBytes(hourlyPeak?.traffic || 0) }}</strong>
-          <small>{{ hourlyPeak ? formatHourTs(hourlyPeak.hour_ts) : '-' }}</small>
-        </article>
-      </div>
-      <section class="traffic-section">
-        <h4 id="user-traffic-dailyTitle">{{ t('adminUsers.trafficModal.dailyTitle') }}</h4>
-        <div class="traffic-table-wrap" tabindex="0" role="region" aria-labelledby="user-traffic-dailyTitle">
-          <table class="data-table compact-table">
-            <thead>
-              <tr><th>{{ t('adminUsers.trafficModal.table.date') }}</th><th>{{ t('adminUsers.trafficModal.table.traffic') }}</th></tr>
-            </thead>
-            <tbody>
-              <tr v-if="trafficLoading"><td colspan="2" class="empty-row">{{ t('common.states.loading') }}</td></tr>
-              <tr v-for="item in dailyTrafficRows" :key="item.date">
-                <td>{{ item.date }}</td>
-                <td>{{ formatBytes(item.traffic) }}</td>
-              </tr>
-              <tr v-if="!trafficLoading && dailyTrafficRows.length === 0"><td colspan="2" class="empty-row">{{ t('adminUsers.trafficModal.empty') }}</td></tr>
-            </tbody>
-          </table>
+      <UiErrorState v-if="trafficError" compact heading-tag="h3" :title="t('adminUsers.trafficModal.fetchFailed')" :error="trafficError" @retry="loadTrafficDetail" />
+      <template v-else>
+        <div class="traffic-summary">
+          <div class="traffic-summary__item">
+            <span>{{ t('adminUsers.trafficModal.summary.total30d') }}</span>
+            <strong class="tabular-nums">{{ formatBytes(trafficTotal30d) }}</strong>
+          </div>
+          <div class="traffic-summary__item">
+            <span>{{ t('adminUsers.trafficModal.summary.dailyPeak') }}</span>
+            <strong class="tabular-nums">{{ formatBytes(dailyPeak?.traffic || 0) }}</strong>
+            <small>{{ dailyPeak?.date || '—' }}</small>
+          </div>
+          <div class="traffic-summary__item">
+            <span>{{ t('adminUsers.trafficModal.summary.hourlyPeak') }}</span>
+            <strong class="tabular-nums">{{ formatBytes(hourlyPeak?.traffic || 0) }}</strong>
+            <small>{{ hourlyPeak ? formatHourTs(hourlyPeak.hour_ts) : '—' }}</small>
+          </div>
         </div>
-      </section>
-      <section class="traffic-section">
-        <h4 id="user-traffic-hourlyTitle">{{ t('adminUsers.trafficModal.hourlyTitle') }}</h4>
-        <div class="traffic-table-wrap" tabindex="0" role="region" aria-labelledby="user-traffic-hourlyTitle">
-          <table class="data-table compact-table">
-            <thead>
-              <tr><th>{{ t('adminUsers.trafficModal.table.hour') }}</th><th>{{ t('adminUsers.trafficModal.table.traffic') }}</th></tr>
-            </thead>
-            <tbody>
-              <tr v-if="trafficLoading"><td colspan="2" class="empty-row">{{ t('common.states.loading') }}</td></tr>
-              <tr v-for="item in hourlyTrafficRows" :key="item.hour_ts">
-                <td>{{ formatHourTs(item.hour_ts) }}</td>
-                <td>{{ formatBytes(item.traffic) }}</td>
-              </tr>
-              <tr v-if="!trafficLoading && hourlyTrafficRows.length === 0"><td colspan="2" class="empty-row">{{ t('adminUsers.trafficModal.empty') }}</td></tr>
-            </tbody>
-          </table>
-        </div>
-      </section>
+        <section class="dialog-section" aria-labelledby="user-traffic-daily">
+          <h3 id="user-traffic-daily" class="dialog-section__title">{{ t('adminUsers.trafficModal.dailyTitle') }}</h3>
+          <UiDataTable
+            :columns="dailyColumns"
+            :rows="dailyTrafficRows"
+            row-key="date"
+            :label="t('adminUsers.trafficModal.dailyTitle')"
+            :loading="trafficLoading"
+            :empty-title="t('adminUsers.trafficModal.empty')"
+            :settings="false"
+            :sticky-header="false"
+            :page-size="10"
+            state-heading-tag="h4"
+            default-density="compact"
+          />
+        </section>
+        <section class="dialog-section" aria-labelledby="user-traffic-hourly">
+          <h3 id="user-traffic-hourly" class="dialog-section__title">{{ t('adminUsers.trafficModal.hourlyTitle') }}</h3>
+          <UiDataTable
+            :columns="hourlyColumns"
+            :rows="hourlyTrafficRows"
+            row-key="hour_ts"
+            :label="t('adminUsers.trafficModal.hourlyTitle')"
+            :loading="trafficLoading"
+            :empty-title="t('adminUsers.trafficModal.empty')"
+            :settings="false"
+            :sticky-header="false"
+            :page-size="24"
+            state-heading-tag="h4"
+            default-density="compact"
+          />
+        </section>
+      </template>
     </UiSheet>
 
     <UiDialog v-model:open="showCopyManual" size="sm" :title="t('adminUsers.copyDialog.title')" :description="t('adminUsers.copyDialog.description')">
@@ -289,7 +294,8 @@
 </template>
 
 <script setup>
-import { computed, onMounted, ref } from 'vue'
+import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
+import { Ban, Copy, Gauge, KeyRound, Pencil, Plus, RotateCcw, RotateCw, Route, ShieldCheck, Users as UsersIcon } from '@lucide/vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useEdition } from '@/composables/useEdition'
 import { useRouteIntent } from '@/composables/useRouteIntent'
@@ -301,9 +307,30 @@ import {
   unbanUser, updateAdminUserTunnel, updateUser
 } from '@/api/admin'
 import { getSubscriptionGroups } from '@/api/admin'
-import { UiButton, UiConfirmDialog, UiCopyField, UiDialog, UiSheet, copyText, useConfirm, useToast } from '@/ui'
+import UiBadge from '@/ui/UiBadge.vue'
+import UiButton from '@/ui/UiButton.vue'
+import UiConfirmDialog from '@/ui/UiConfirmDialog.vue'
+import UiCopyField from '@/ui/UiCopyField.vue'
+import UiDataTable from '@/ui/UiDataTable.vue'
+import UiDialog from '@/ui/UiDialog.vue'
+import UiErrorState from '@/ui/UiErrorState.vue'
+import UiFilterChips from '@/ui/UiFilterChips.vue'
+import UiGroupedList from '@/ui/UiGroupedList.vue'
+import UiGroupedListRow from '@/ui/UiGroupedListRow.vue'
+import UiPageHeader from '@/ui/UiPageHeader.vue'
+import UiPasswordField from '@/ui/UiPasswordField.vue'
+import UiSearchField from '@/ui/UiSearchField.vue'
+import UiSelect from '@/ui/UiSelect.vue'
+import UiSheet from '@/ui/UiSheet.vue'
+import UiTextField from '@/ui/UiTextField.vue'
+import UiTextarea from '@/ui/UiTextarea.vue'
+import UiUsageBar from '@/ui/UiUsageBar.vue'
+import { copyText } from '@/ui/composables/useClipboard'
+import { useConfirm } from '@/ui/composables/useConfirm'
+import { useFormat } from '@/ui/composables/useFormat'
+import { useToast } from '@/ui/composables/useToast'
 
-const { t, formatDate: i18nFormatDate, formatDateTime: i18nFormatDateTime } = useAppI18n()
+const { t } = useAppI18n()
 // The balance is commercial: the community edition hides the field and
 // sends the stored value back unchanged.
 const { isCommercial } = useEdition()
@@ -324,6 +351,14 @@ const routeIntent = useRouteIntent(['email', 'create'], intent => {
   if (intent.create === '1') showCreateModal.value = true
 })
 const filters = ref({ email: routeIntent.email || '', status: '' })
+// 已封禁 / 已到期 / 正常 are the list's server-side status filter;
+// 流量用尽 has no server filter, so it narrows the loaded page only.
+const statusFilter = ref('')
+const listLoading = ref(false)
+const listError = ref(null)
+const selectedIds = ref([])
+const detailUser = ref(null)
+const bulkBusy = ref(false)
 const showEditModal = ref(false)
 const editingUser = ref({})
 const editSaving = ref(false)
@@ -362,7 +397,171 @@ const copyManualUrl = ref('')
 const newTunnelForm = () => ({ tunnelId: '', flow: 0, num: 0, expTime: '', flowResetTime: 0, speedId: null, status: 1 })
 const tunnelForm = ref(newTunnelForm())
 
-const totalPages = computed(() => Math.ceil(total.value / pageSize.value) || 1)
+const usedOf = user => Number(user?.u || 0) + Number(user?.d || 0)
+const isExhausted = user => Number(user?.transfer_enable || 0) > 0 && usedOf(user) >= Number(user.transfer_enable)
+const isExpired = user => Boolean(user?.expired_at) && user.expired_at < Date.now() / 1000
+const visibleUsers = computed(() => (statusFilter.value === 'exhausted' ? users.value.filter(isExhausted) : users.value))
+const statusOf = (user) => {
+  if (user.banned === 1) return { tone: 'danger', label: t('adminUsers.status.banned') }
+  if (isExpired(user)) return { tone: 'warning', label: t('adminUsers.status.expired') }
+  if (isExhausted(user)) return { tone: 'warning', label: t('adminUsers.status.exhausted') }
+  return { tone: 'success', label: t('adminUsers.status.active') }
+}
+const trafficText = user => (Number(user?.transfer_enable || 0) > 0
+  ? `${formatBytes(usedOf(user))} / ${formatBytes(user.transfer_enable)}`
+  : t('adminUsers.labels.trafficUnlimited', { used: formatBytes(usedOf(user)) }))
+
+const columns = computed(() => [
+  { key: 'email', label: t('adminUsers.table.email'), primary: true, sortable: true },
+  { key: 'status', label: t('adminUsers.table.status'), secondary: true, sortable: true, sortValue: user => statusOf(user).label },
+  { key: 'plan', label: isCommercial.value ? t('adminUsers.table.plan') : t('adminUsers.table.subscriptionTemplate'), value: user => user.plan?.name, sortable: true },
+  { key: 'traffic', label: t('adminUsers.table.traffic'), sortable: true, firstDirection: 'desc', sortValue: usedOf },
+  { key: 'expired_at', label: t('adminUsers.table.expireAt'), sortable: true, numeric: true, nowrap: true, format: value => formatDate(value), sortValue: user => user.expired_at || Number.MAX_SAFE_INTEGER },
+  { key: 'limits', label: t('adminUsers.table.limits'), value: user => formatUserLimits(user), breakpoint: 'lg', hidden: true },
+  { key: 'created_at', label: t('adminUsers.table.createdAt'), sortable: true, numeric: true, nowrap: true, format: value => formatDateTime(value), breakpoint: 'lg' },
+  { key: 'id', label: t('adminUsers.table.id'), numeric: true, sortable: true, hidden: true }
+])
+const statusChips = computed(() => [
+  { value: 'active', label: t('adminUsers.status.active'), count: stats.value.active_users },
+  { value: 'expired', label: t('adminUsers.status.expired'), count: stats.value.expired_users },
+  { value: 'banned', label: t('adminUsers.status.banned'), count: stats.value.banned_users },
+  { value: 'exhausted', label: t('adminUsers.status.exhausted') }
+])
+const groupOptions = computed(() => [
+  { value: 'none', label: t('adminUsers.editModal.groupOptions.unassigned') },
+  ...subscriptionGroups.value.map(group => ({ value: group.id, label: group.name }))
+])
+const userTypeOptions = computed(() => [
+  { value: 0, label: t('adminUsers.createModal.userTypes.normal') },
+  { value: 1, label: t('adminUsers.createModal.userTypes.admin') }
+])
+const editGroup = computed({
+  get: () => editingUser.value.group_id ?? 'none',
+  set: (value) => { editingUser.value.group_id = value === 'none' ? null : value }
+})
+const newGroup = computed({
+  get: () => newUser.value.group_id ?? 'none',
+  set: (value) => { newUser.value.group_id = value === 'none' ? null : value }
+})
+
+const userActions = user => [
+  { key: 'edit', label: t('adminUsers.actions.editUser'), icon: Pencil, onSelect: () => editUser(user) },
+  { key: 'traffic', label: t('adminUsers.actions.viewTraffic'), icon: Gauge, onSelect: () => openTrafficModal(user) },
+  { key: 'tunnel', label: t('adminUsers.actions.manageTunnel'), icon: Route, onSelect: () => openTunnelModal(user) },
+  { key: 'copy', label: t('adminUsers.actions.copySubscribe'), icon: Copy, onSelect: () => copySubscribe(user) },
+  user.banned === 0
+    ? { key: 'ban', label: t('adminUsers.actions.ban'), icon: Ban, separatorBefore: true, onSelect: () => handleBan(user) }
+    : { key: 'unban', label: t('adminUsers.actions.unban'), icon: ShieldCheck, separatorBefore: true, onSelect: () => handleUnban(user) },
+  { key: 'reset-traffic', label: t('adminUsers.actions.resetTraffic'), icon: RotateCcw, danger: true, onSelect: () => openResetUserDialog(user) },
+  { key: 'reset-subscribe', label: t('adminUsers.actions.resetSubscribe'), icon: KeyRound, danger: true, onSelect: () => resetSubscribe(user) }
+]
+
+const openDetail = (user) => { detailUser.value = user }
+const goToPage = (value) => {
+  page.value = value
+  selectedIds.value = []
+  fetchUsers()
+}
+const searchNow = () => {
+  clearTimeout(searchTimer)
+  page.value = 1
+  fetchUsers()
+}
+let searchTimer = null
+const scheduleSearch = () => {
+  clearTimeout(searchTimer)
+  searchTimer = setTimeout(searchNow, 300)
+}
+onBeforeUnmount(() => clearTimeout(searchTimer))
+const clearFilters = () => {
+  filters.value.email = ''
+  statusFilter.value = ''
+  searchNow()
+}
+watch(statusFilter, (value, previous) => {
+  const next = value === 'exhausted' ? '' : value
+  const before = previous === 'exhausted' ? '' : previous
+  filters.value.status = next
+  if (next !== before) {
+    page.value = 1
+    fetchUsers()
+  }
+})
+
+// Bulk ban / unban: there is no bulk endpoint, so each selected user goes
+// through the same per-user endpoint as the row action, one after another.
+const bulkSetBanned = async (chosen, banned) => {
+  const targets = chosen.filter(user => (banned ? user.banned === 0 : user.banned === 1))
+  if (!targets.length || bulkBusy.value) return
+  bulkBusy.value = true
+  const done = []
+  let failure = null
+  for (const user of targets) {
+    try {
+      assertCompatSuccess(await (banned ? banUser(user.id) : unbanUser(user.id)))
+      done.push(user)
+    } catch (err) {
+      failure = failure || err
+    }
+  }
+  bulkBusy.value = false
+  selectedIds.value = []
+  fetchUsers()
+  fetchStats()
+  if (failure) toast.error(t('adminUsers.messages.bulkPartial', { done: done.length, total: targets.length, message: readApiError(failure) }))
+  if (!done.length) return
+  const message = banned ? t('adminUsers.messages.bulkBanned', { count: done.length }) : t('adminUsers.messages.bulkUnbanned', { count: done.length })
+  toast.success(message, {
+    undo: async () => {
+      for (const user of done) {
+        try { await (banned ? unbanUser(user.id) : banUser(user.id)) } catch { /* the list shows the result */ }
+      }
+      fetchUsers()
+      fetchStats()
+    }
+  })
+}
+
+const tunnelSelectOptions = computed(() => availableTunnelOptions.value.map(item => ({ value: item.id, label: `${item.name} (ID: ${item.id})` })))
+const tunnelStatusOptions = computed(() => [
+  { value: 1, label: t('runtime.shared.enabled') },
+  { value: 0, label: t('runtime.shared.disabled') }
+])
+const speedSelectOptions = computed(() => [
+  { value: 'none', label: t('adminUsers.labels.noLimit') },
+  ...availableSpeedLimitOptions.value.map(item => ({ value: item.id, label: formatSpeedLimitOptionLabel(item) }))
+])
+const tunnelSpeed = computed({
+  get: () => tunnelForm.value.speedId ?? 'none',
+  set: (value) => {
+    tunnelForm.value.speedId = value === 'none' ? null : value
+    handleSpeedLimitChange()
+  }
+})
+const grantColumns = computed(() => [
+  { key: 'tunnel', label: t('adminUsers.tunnelModal.table.tunnel'), primary: true, value: item => item.tunnelName || item.tunnelId },
+  { key: 'status', label: t('adminUsers.tunnelModal.table.status'), secondary: true },
+  { key: 'flow', label: t('adminUsers.tunnelModal.table.flow'), numeric: true, value: item => item.flow ?? 0 },
+  { key: 'num', label: t('adminUsers.tunnelModal.table.num'), numeric: true, value: item => item.num ?? 0 },
+  { key: 'used', label: t('adminUsers.tunnelModal.table.usedFlow'), numeric: true, value: item => formatBytes(calculateTunnelUsedFlow(item)) },
+  { key: 'expTime', label: t('adminUsers.tunnelModal.table.expireAt'), value: item => formatTunnelExpire(item.expTime) },
+  { key: 'reset', label: t('adminUsers.tunnelModal.table.reset'), value: item => formatFlowResetDay(item.flowResetTime) },
+  { key: 'rate', label: t('adminUsers.tunnelModal.table.rateLimit'), value: item => formatTunnelRateLimit(item) },
+  { key: 'id', label: t('adminUsers.tunnelModal.table.id'), numeric: true }
+])
+const grantActions = item => [
+  { key: 'edit', label: t('common.actions.edit'), icon: Pencil, onSelect: () => editTunnelGrant(item) },
+  { key: 'reset', label: t('adminUsers.actions.resetTraffic'), icon: RotateCcw, onSelect: () => openResetTunnelDialog(item) },
+  { key: 'delete', label: t('common.actions.delete'), danger: true, separatorBefore: true, onSelect: () => removeTunnelGrant(item) }
+]
+const dailyColumns = computed(() => [
+  { key: 'date', label: t('adminUsers.trafficModal.table.date'), primary: true, sortable: true, firstDirection: 'desc' },
+  { key: 'traffic', label: t('adminUsers.trafficModal.table.traffic'), numeric: true, align: 'end', sortable: true, firstDirection: 'desc', format: value => formatBytes(value) }
+])
+const hourlyColumns = computed(() => [
+  { key: 'hour_ts', label: t('adminUsers.trafficModal.table.hour'), primary: true, sortable: true, firstDirection: 'desc', format: value => formatHourTs(value) },
+  { key: 'traffic', label: t('adminUsers.trafficModal.table.traffic'), numeric: true, align: 'end', sortable: true, firstDirection: 'desc', format: value => formatBytes(value) }
+])
 const assignedTunnelIds = computed(() => new Set(userTunnels.value.map(item => Number(item?.tunnelId || 0)).filter(id => id > 0)))
 const availableTunnelOptions = computed(() => editingTunnelId.value ? tunnelOptions.value : tunnelOptions.value.filter(item => !assignedTunnelIds.value.has(Number(item?.id || 0))))
 const availableSpeedLimitOptions = computed(() => {
@@ -386,6 +585,7 @@ const dailyPeak = computed(() => dailyTrafficRows.value.reduce((peak, item) => (
 const hourlyPeak = computed(() => hourlyTrafficRows.value.reduce((peak, item) => (Number(item?.traffic || 0) > Number(peak?.traffic || 0) ? item : peak), null))
 const toast = useToast()
 const confirm = useConfirm()
+const format = useFormat()
 
 const assertCompatSuccess = (res, fallback = t('adminUsers.messages.actionFailed')) => {
   if (res && typeof res.code === 'number' && res.code !== 0) throw new Error(res.msg || fallback)
@@ -444,13 +644,19 @@ const handleCreateUser = async () => {
 }
 
 const fetchUsers = async () => {
+  listLoading.value = true
   try {
     const res = await getUserList({ page: page.value, page_size: pageSize.value, email: filters.value.email, status: filters.value.status })
     const payload = getResData(res) || {}
     users.value = payload.list || []
     total.value = payload.total || 0
+    listError.value = null
+    // The open detail follows the reloaded row (ban, edit, reset).
+    if (detailUser.value) detailUser.value = users.value.find(item => item.id === detailUser.value.id) || detailUser.value
   } catch (err) {
-    console.error(t('adminUsers.messages.fetchUsersFailed'), err)
+    listError.value = err
+  } finally {
+    listLoading.value = false
   }
 }
 const fetchStats = async () => {
@@ -814,17 +1020,7 @@ const formatTunnelExpire = (value) => {
   if (!value) return t('adminUsers.labels.permanent')
   const date = new Date(value < 1000000000000 ? value * 1000 : value)
   if (Number.isNaN(date.getTime())) return '-'
-  return i18nFormatDateTime(date) || '-'
-}
-const getStatusClass = (user) => {
-  if (user.banned === 1) return 'status-banned'
-  if (user.expired_at && user.expired_at < Date.now() / 1000) return 'status-expired'
-  return 'status-active'
-}
-const getStatusText = (user) => {
-  if (user.banned === 1) return t('adminUsers.status.banned')
-  if (user.expired_at && user.expired_at < Date.now() / 1000) return t('adminUsers.status.expired')
-  return t('adminUsers.status.active')
+  return format.dateTime(date)
 }
 const formatBytes = (bytes) => {
   if (!bytes) return '0 B'
@@ -834,19 +1030,20 @@ const formatBytes = (bytes) => {
   while (value >= 1024 && i < units.length - 1) { value /= 1024; i += 1 }
   return `${value.toFixed(2)} ${units[i]}`
 }
-const formatDate = (timestamp) => (!timestamp ? t('adminUsers.labels.permanent') : (i18nFormatDate(Number(timestamp) * 1000) || '-'))
-const formatDateTime = (datetime) => (!datetime ? '-' : (i18nFormatDateTime(datetime) || '-'))
+// One date style on the page (useFormat: 2026-11-30, 2026-11-30 14:05).
+const formatDate = (timestamp) => (!timestamp ? t('adminUsers.labels.permanent') : format.date(Number(timestamp)))
+const formatDateTime = (datetime) => format.dateTime(datetime)
 const formatDayTs = (timestamp) => {
   if (!timestamp) return ''
   const date = new Date(timestamp * 1000)
   if (Number.isNaN(date.getTime())) return ''
-  return i18nFormatDate(date) || date.toISOString().slice(0, 10)
+  return format.date(date, { empty: '' }) || date.toISOString().slice(0, 10)
 }
 const formatHourTs = (timestamp) => {
   if (!timestamp) return '-'
   const date = new Date(timestamp * 1000)
   if (Number.isNaN(date.getTime())) return '-'
-  return i18nFormatDateTime(date) || date.toLocaleString()
+  return format.dateTime(date)
 }
 
 onMounted(() => { fetchUsers(); fetchStats(); loadSubscriptionGroups(); loadSubscriptionSettings() })
@@ -863,149 +1060,16 @@ const loadSubscriptionGroups = async () => {
 </script>
 
 <style scoped>
-.metrics-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
-  gap: 16px;
-}
-
-.metric-card {
-  padding: 18px;
-  display: grid;
-  gap: 6px;
-}
-
-.metric-card strong {
-  font-size: 30px;
-  line-height: 1.1;
-}
-
-.metric-card span:last-child {
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-
-.metric-code {
-  width: fit-content;
-  min-width: 44px;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.metric-code.primary { background: rgba(0, 100, 250, 0.08); color: var(--primary-color); }
-.metric-code.success { background: rgba(22, 163, 74, 0.08); color: var(--success-color); }
-.metric-code.warning { background: rgba(217, 119, 6, 0.08); color: var(--warning-color); }
-.metric-code.danger { background: rgba(220, 38, 38, 0.08); color: var(--error-color); }
-
-.filter-panel,
-.data-panel {
-  padding: 18px;
-}
-
-.filter-row {
-  display: flex;
-  gap: 12px;
-  flex-wrap: wrap;
-}
-
-.filter-row input {
-  flex: 1;
-  min-width: 260px;
-}
-
-.filter-row select {
-  width: 180px;
-}
-
-.table-wrap {
-  overflow-x: auto;
-}
-
-.data-table {
-  width: 100%;
-  border-collapse: collapse;
-}
-
-.data-table th,
-.data-table td {
-  padding: 14px 10px;
-  border-bottom: 1px solid var(--border-color);
-  text-align: left;
-  white-space: nowrap;
-  vertical-align: top;
-}
-
-.data-table th {
-  font-size: 12px;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-}
-
-.admin-badge {
+.user-email {
   display: inline-flex;
-  align-items: center;
-  min-height: 20px;
-  padding: 0 8px;
-  border-radius: 999px;
-  background: var(--primary-soft);
-  color: var(--primary-color);
-  margin-right: 6px;
-  font-size: 10px;
-  font-weight: 700;
-}
-
-.status-badge {
-  display: inline-flex;
-  align-items: center;
-  min-height: 24px;
-  padding: 0 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.status-active { background: rgba(22, 163, 74, 0.08); color: var(--success-color); }
-.status-expired { background: rgba(217, 119, 6, 0.08); color: var(--warning-color); }
-.status-banned { background: rgba(220, 38, 38, 0.08); color: var(--error-color); }
-
-.actions {
-  display: flex;
-  gap: 6px;
   flex-wrap: wrap;
-}
-
-.empty-row {
-  text-align: center;
-  color: var(--text-secondary);
-}
-
-.pagination {
-  margin-top: 16px;
-  display: flex;
+  gap: var(--space-2);
   align-items: center;
-  justify-content: center;
-  gap: 12px;
-  flex-wrap: wrap;
+  min-width: 0;
 }
 
-.dialog-form {
-  display: grid;
-  gap: var(--space-3);
-}
-
-.dialog-section {
-  display: grid;
-  gap: var(--space-3);
-}
-
-.dialog-section h4 {
-  margin: 0;
-}
-
-.grid-full {
-  grid-column: 1 / -1;
+.user-email__text {
+  overflow-wrap: anywhere;
 }
 
 .reset-flow-facts {
@@ -1028,84 +1092,34 @@ const loadSubscriptionGroups = async () => {
   font-weight: var(--weight-semibold);
 }
 
-.traffic-summary-grid {
+.traffic-summary {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 12px;
+  gap: var(--space-3);
 }
 
-.traffic-summary-card {
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-  padding: 12px;
-  display: grid;
-  gap: 4px;
-}
-
-.traffic-summary-card span,
-.traffic-summary-card small {
-  color: var(--text-secondary);
-  font-size: 12px;
-}
-
-.traffic-summary-card strong {
-  font-size: 20px;
-}
-
-.traffic-section h4 {
-  margin: 0 0 var(--space-2);
-}
-
-.traffic-table-wrap:focus-visible {
-  outline: var(--focus-ring);
-  outline-offset: var(--focus-ring-offset);
-}
-
-.traffic-table-wrap {
-  max-height: 420px;
-  overflow: auto;
-  border: 1px solid var(--border-color);
-  border-radius: 8px;
-}
-
-.compact-table th,
-.compact-table td {
-  padding: 10px;
-}
-
-.dialog-form label {
-  display: grid;
-  gap: 6px;
-  font-size: 13px;
-  font-weight: 700;
-  color: var(--text-secondary);
-}
-
-.grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
-}
-
-.row {
+.traffic-summary__item {
   display: flex;
-  gap: 8px;
-  justify-content: flex-end;
-  align-items: center;
-  flex-wrap: wrap;
+  flex-direction: column;
+  gap: var(--space-1);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--bg-grouped);
 }
 
-.error {
-  color: var(--error-color);
-  margin: 0;
+.traffic-summary__item span,
+.traffic-summary__item small {
+  color: var(--label-2);
+  font-size: var(--type-caption-size);
 }
 
-@media (max-width: 900px) {
-  .grid {
-    grid-template-columns: 1fr;
-  }
+.traffic-summary__item strong {
+  font-size: var(--type-title-3-size);
+  font-weight: var(--weight-semibold);
+}
 
-  .traffic-summary-grid {
+@media (max-width: 639.98px) {
+  .traffic-summary {
     grid-template-columns: 1fr;
   }
 }

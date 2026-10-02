@@ -120,6 +120,7 @@ function go(page) {
 .ui-pagination__page {
   min-width: var(--size-control-sm);
   height: var(--size-control-sm);
+  min-height: 0;
   padding: 0 var(--space-2);
   border: 0;
   border-radius: var(--radius-pill);
