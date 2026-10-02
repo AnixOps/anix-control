@@ -187,6 +187,16 @@ removes the key before applying the package's own `config_schema`, so package
 schemas need not declare it. A Control `plugin.configure` operation completes
 immediately, because hosts pull their configuration.
 
+Operators switch route modes with the route-mode administration rather than
+editing `routes` by hand: the admin API under `/api/v4/kernel/route-modes`,
+the CLI `anix-control routes` and the admin page
+(`internal/service/package_route_mode_admin.go`). It writes through the same
+configuration path, so every rule above holds, and adds its own: `native` only
+for `native-flagged` routes, no switch of `kernel-owned` routes or of identity
+group A (identity cutover only), super administrators only, a confirmation and
+a reason for `native`. Each switch is audited and recorded per route in
+`v4_kernel_route_mode_revision`.
+
 Hosts read their configuration with the package bridge RPC
 `GetPackageConfig`, which returns the revision, the configuration hash and the
 non-legacy route modes. Unlike `Invoke` and `OpenWebSocket`, session-scoped

@@ -60,7 +60,7 @@ func TestAgentCommandCreatesEnrollmentCredentials(t *testing.T) {
 func TestTakeAdminCommand(t *testing.T) {
 	saved := os.Args
 	t.Cleanup(func() { os.Args = saved })
-	for _, command := range []string{"module", "agent"} {
+	for _, command := range []string{"module", "agent", "routes"} {
 		os.Args = []string{"anix-control", command, "token", "create"}
 		require.Equal(t, []string{command, "token", "create"}, takeAdminCommand())
 		require.Equal(t, []string{"anix-control"}, os.Args)

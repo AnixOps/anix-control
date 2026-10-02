@@ -1723,6 +1723,52 @@ export default {
       topologyPreview: 'Unable to preview topology deployment', topologyStatus: 'Unable to load deployment status', topologyApply: 'Unable to apply topology deployment', topologyRollback: 'Unable to roll back topology deployment', topologyCreate: 'Unable to create topology'
     }
   },
+  routeModes: {
+    open: 'Route modes',
+    subtitle: 'Switch each package’s v2 routes between legacy, shadow and native, and roll back to legacy.',
+    back: 'Plugin Center',
+    package: 'Package',
+    packageMeta: 'Version {version} · config revision {revision}',
+    packageDisabled: 'Disabled',
+    superAdminOnly: 'Only super admins can switch route modes.',
+    loadFailed: 'Route modes didn’t load',
+    empty: { title: 'No packages with v2 routes', description: 'Install and enable a package that declares v2 routes to manage its route modes.' },
+    modes: { legacy: 'Legacy', shadow: 'Shadow', native: 'Native' },
+    catalog: { 'native-flagged': 'Native-flagged', bridged: 'Bridged', 'kernel-owned': 'Kernel-owned', native: 'Native', none: 'Undeclared' },
+    locked: { kernel_owned: 'Kernel-owned', identity_group_a: 'Identity cutover', websocket: 'WebSocket', not_declared: 'Not declared' },
+    columns: { route: 'Route', endpoint: 'Method / path', catalog: 'Eligibility', configured: 'Configured', effective: 'Effective', shadow: 'Shadow (total / mismatch / errors)', mode: 'Switch to' },
+    routesLabel: 'Routes of {package}',
+    routeMode: 'Mode of {route}',
+    effectiveDiffers: 'Differs from configured',
+    hostEffective: 'Host: {mode}',
+    packageMode: 'Mode for the whole package',
+    setPackage: 'Set whole package',
+    rollback: 'Roll back to legacy',
+    wholePackage: 'Whole package',
+    wholePackageTarget: '{package} (whole package)',
+    dialog: {
+      setTitle: 'Switch {target} to {mode}?',
+      setMessage: 'Routes that can’t take this mode are skipped. The change is recorded in the revision history.',
+      nativeMessage: 'In native mode the package implementation answers instead of the legacy kernel handler. Confirm and give a reason for the audit trail.',
+      rollbackTitle: 'Roll {package} back to legacy?',
+      rollbackMessage: 'Every route of the package returns to legacy.',
+      reason: 'Reason',
+      reasonHelp: 'Optional; stored with the revision.',
+      reasonRequired: 'Required to switch to native.',
+      confirmSet: 'Switch mode',
+      confirmNative: 'Switch to native',
+      confirmRollback: 'Roll back'
+    },
+    result: '{changed} routes changed, {skipped} skipped (config revision {revision})',
+    errors: { switch: 'Couldn’t switch the route mode', rollback: 'Couldn’t roll back', revisions: 'Revision history didn’t load' },
+    revisions: {
+      title: 'Revision history',
+      label: 'Route mode revisions',
+      empty: 'No route mode changes yet',
+      time: 'Time', route: 'Route', change: 'Change', actor: 'Actor', reason: 'Reason', revision: 'Revision',
+      actions: { set: 'Set', rollback: 'Rollback' }
+    }
+  },
   accessGroups: {
     subtitle: 'Manage independent service-scope memberships, resource grants, and plugin-owned quota policies.',
     actions: { refresh: 'Refresh', newGroup: 'New group', open: 'Open', editGroup: 'Edit name and description', enable: 'Enable', disable: 'Disable', add: 'Add', removeNamed: 'Remove {name}', addGrant: 'Add grant', saveQuota: 'Save quota', resolve: 'Resolve access' },

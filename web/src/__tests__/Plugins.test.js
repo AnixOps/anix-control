@@ -37,6 +37,7 @@ const extensionRuntime = vi.hoisted(() => ({
 }))
 
 const router = vi.hoisted(() => ({
+  push: vi.fn(),
   addRoute: vi.fn(),
   getRoutes: vi.fn(() => []),
 }))
@@ -675,5 +676,15 @@ describe('Plugin Center', () => {
     expect(kernelApi.cancelKernelOperation).toHaveBeenCalledWith('plugin-op-1')
     expect(inBody('.notice-message').text()).toContain('Operation cancellation was requested')
     wrapper.unmount()
+  })
+})
+
+describe('Plugin Center header', () => {
+  it('links to the route modes page', async () => {
+    const wrapper = mountPlugins()
+    await flushPromises()
+    await bodyGet('[data-testid="open-route-modes"]').trigger('click')
+    expect(router.push).toHaveBeenCalledWith('/admin/plugins/route-modes')
+    expect(wrapper.exists()).toBe(true)
   })
 })

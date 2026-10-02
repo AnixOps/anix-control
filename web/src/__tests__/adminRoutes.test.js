@@ -63,6 +63,7 @@ describe('admin routes', () => {
       '/admin/system',
       '/admin/agent',
       '/admin/plugins',
+      '/admin/plugins/route-modes',
       '/admin/deployments',
       '/admin/control',
       '/admin/access-groups',

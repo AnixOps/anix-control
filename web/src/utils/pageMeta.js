@@ -31,6 +31,7 @@ const PAGE_TITLE_KEYS = {
   '/admin/agent': 'pageTitles.admin.forwardAgents',
   '/admin/control': 'pageTitles.admin.control',
   '/admin/plugins': 'pageTitles.admin.plugins',
+  '/admin/plugins/route-modes': 'pageTitles.admin.routeModes',
   '/admin/deployments': 'pageTitles.admin.deployments',
   '/admin/access-groups': 'pageTitles.admin.accessGroups',
   '/admin/payment': 'pageTitles.admin.payment',

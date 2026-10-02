@@ -10,6 +10,9 @@
           :disabled="loading"
           @click="refreshPluginResources()"
         />
+        <UiButton :icon="Waypoints" data-testid="open-route-modes" @click="router.push('/admin/plugins/route-modes')">
+          {{ t('routeModes.open') }}
+        </UiButton>
         <UiButton variant="primary" :icon="PackagePlus" data-testid="import-plugin-release" @click="openReleaseImport">
           {{ t('control.actions.importRelease') }}
         </UiButton>
@@ -212,7 +215,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { BadgeCheck, PackagePlus, Puzzle, RefreshCw, SearchX } from '@lucide/vue'
+import { BadgeCheck, PackagePlus, Puzzle, RefreshCw, SearchX, Waypoints } from '@lucide/vue'
 import PluginConfigForm from '@/components/admin/PluginConfigForm.vue'
 import PluginDetailDrawer from '@/components/admin/PluginDetailDrawer.vue'
 import PluginInstallationDialog from '@/components/admin/PluginInstallationDialog.vue'

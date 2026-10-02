@@ -1,9 +1,14 @@
 import request from '@/utils/request'
 
 const KERNEL_API_BASE_URL = '/api/v3'
+const KERNEL_V4_API_BASE_URL = '/api/v4'
 
 function v3(config) {
   return request({ ...config, baseURL: KERNEL_API_BASE_URL })
+}
+
+function v4(config) {
+  return request({ ...config, baseURL: KERNEL_V4_API_BASE_URL })
 }
 
 function unwrap(response) {
@@ -261,4 +266,30 @@ export async function cancelKernelOperation(operationID) {
 
 export async function getKernelExtensions() {
   return unwrap(await v3({ url: '/extensions', method: 'get' }))
+}
+
+// Per-package v2 route modes (legacy / shadow / native), /api/v4.
+export async function getKernelRouteModes(packageID) {
+  const config = { url: '/kernel/route-modes', method: 'get' }
+  if (packageID) config.params = { package_id: packageID }
+  return unwrap(await v4(config))
+}
+
+// input: { package_id, routes?, mode, reason?, confirm? }; switching to
+// native needs confirm: true and a reason.
+export async function setKernelRouteModes(input) {
+  return unwrap(await v4({ url: '/kernel/route-modes', method: 'post', data: input }))
+}
+
+export async function rollbackKernelRouteModes(packageID, reason = '') {
+  const data = { package_id: packageID }
+  if (reason) data.reason = reason
+  return unwrap(await v4({ url: '/kernel/route-modes/rollback', method: 'post', data }))
+}
+
+export async function getKernelRouteModeRevisions(packageID, limit) {
+  const params = {}
+  if (packageID) params.package_id = packageID
+  if (limit) params.limit = limit
+  return unwrap(await v4({ url: '/kernel/route-modes/revisions', method: 'get', params }))
 }
