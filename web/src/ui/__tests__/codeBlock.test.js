@@ -22,4 +22,12 @@ describe('UiCodeBlock', () => {
     render(UiCodeBlock, { props: { code: 'x', copyable: false } })
     expect(screen.queryByRole('button')).toBeNull()
   })
+
+  it('takes a specific copy label and can block copying', async () => {
+    const { rerender } = render(UiCodeBlock, { props: { label: 'config.json', code: '{}', copyLabel: 'Copy config', copyDisabled: true } })
+    const button = screen.getByRole('button', { name: /Copy config/ })
+    expect(button.disabled).toBe(true)
+    await rerender({ copyDisabled: false })
+    expect(screen.getByRole('button', { name: /Copy config/ }).disabled).toBe(false)
+  })
 })

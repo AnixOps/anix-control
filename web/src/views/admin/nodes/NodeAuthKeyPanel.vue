@@ -30,13 +30,13 @@
     </div>
     <p v-if="deploy.authKeyError" class="form-error" role="alert" data-testid="auth-key-error">{{ deploy.authKeyError }}</p>
 
-    <NodeCodeBlock
-      :title="t('admin.nodes.authKey.configTitle')"
+    <UiCodeBlock
+      :label="t('admin.nodes.authKey.configTitle')"
       :code="deploy.configSnippet"
       :copy-label="t('admin.nodes.authKey.copyConfig')"
-      :disabled="!deploy.pluginSupervisorCanaryReady"
+      :copy-disabled="!deploy.pluginSupervisorCanaryReady"
+      max-height="320px"
       data-testid="agent-config"
-      @copy="copyWithToast"
     />
     <p class="node-auth-key__note">
       {{ t('admin.nodes.authKey.configHint') }}
@@ -56,8 +56,7 @@ import { KeyRound } from '@lucide/vue'
 import UiButton from '@/ui/UiButton.vue'
 import UiCopyField from '@/ui/UiCopyField.vue'
 import { useAppI18n } from '@/composables/useAppI18n'
-import NodeCodeBlock from './NodeCodeBlock.vue'
-import { useNodeCopy } from './useNodeCopy'
+import UiCodeBlock from '@/ui/UiCodeBlock.vue'
 
 defineProps({
   // reactive(useNodeDeploy())
@@ -68,7 +67,6 @@ defineProps({
 })
 const emit = defineEmits(['edit-settings'])
 const { t } = useAppI18n()
-const copyWithToast = useNodeCopy()
 </script>
 
 <style scoped>

@@ -59,9 +59,9 @@
 
     <section class="dialog-section">
       <h3 class="dialog-section__title">{{ t('admin.nodes.deploy.outputTitle') }}</h3>
-      <NodeCodeBlock title="inventory.ini" :code="deploy.deployInventoryPreview" @copy="copyWithToast" />
-      <NodeCodeBlock title="group_vars/all.yml" :code="deploy.deployGroupVarsPreview" @copy="copyWithToast" />
-      <NodeCodeBlock :title="t('admin.nodes.deploy.commandsLabel')" :code="deploy.deployCommandsPreview" @copy="copyWithToast" />
+      <UiCodeBlock label="inventory.ini" :code="deploy.deployInventoryPreview" max-height="320px" />
+      <UiCodeBlock label="group_vars/all.yml" :code="deploy.deployGroupVarsPreview" max-height="320px" />
+      <UiCodeBlock :label="t('admin.nodes.deploy.commandsLabel')" :code="deploy.deployCommandsPreview" max-height="320px" />
     </section>
 
     <template #footer="{ close }">
@@ -85,9 +85,8 @@ import UiSkeleton from '@/ui/UiSkeleton.vue'
 import UiTextField from '@/ui/UiTextField.vue'
 import { useDelayedLoading } from '@/ui/composables/useDelayedLoading'
 import { useAppI18n } from '@/composables/useAppI18n'
-import NodeCodeBlock from './NodeCodeBlock.vue'
+import UiCodeBlock from '@/ui/UiCodeBlock.vue'
 import NodeDeploySettings from './NodeDeploySettings.vue'
-import { useNodeCopy } from './useNodeCopy'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -98,7 +97,6 @@ const props = defineProps({
 })
 const emit = defineEmits(['update:open'])
 const { t } = useAppI18n()
-const copyWithToast = useNodeCopy()
 const ARCHES = ['amd64', 'arm64']
 const authModes = computed(() => [
   { value: 'password', label: t('admin.nodes.deploy.authModes.password') },
