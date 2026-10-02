@@ -181,7 +181,7 @@ func Build(ctx context.Context, db *gorm.DB, policy Policy, options Options) (In
 		if _, ok := newestCertificate[key]; ok {
 			continue
 		}
-		node := agentcontrol.AgentNode{Kind: certificate.NodeKind, ID: uint32(certificate.NodeID)}
+		node := agentcontrol.AgentNode{Kind: certificate.NodeKind, ID: uint32(certificate.NodeID)} // #nosec G115 -- node ids are uint32 on every agent channel.
 		newestCertificate[key] = &Certificate{
 			Serial: certificate.Serial, NotAfter: certificate.NotAfter.UTC(),
 			SPIFFEID: agentcontrol.AgentIdentity{Cluster: certificate.Cluster, Node: node}.String(),
@@ -191,7 +191,7 @@ func Build(ctx context.Context, db *gorm.DB, policy Policy, options Options) (In
 	add := func(kind string, id uint, name string, enabled bool, fallbackVersion string) {
 		key := nodeKey{kind, id}
 		node := NodeTransports{
-			Node: agentcontrol.AgentNode{Kind: kind, ID: uint32(id)}.String(), Kind: kind, ID: id, Name: name,
+			Node: agentcontrol.AgentNode{Kind: kind, ID: uint32(id)}.String(), Kind: kind, ID: id, Name: name, // #nosec G115 -- node ids are uint32 on every agent channel.
 			Enabled: enabled, Certificate: newestCertificate[key], Transports: seen[key],
 		}
 		if node.Transports == nil {

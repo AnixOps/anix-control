@@ -10,7 +10,6 @@ import (
 
 	"github.com/AnixOps/anix-control/v4/internal/agenttransport"
 	"github.com/AnixOps/anix-control/v4/internal/config"
-	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
@@ -70,15 +69,17 @@ func TestAgentTransportsHandlerListsTheInventory(t *testing.T) {
 // middleware's signals reach the WebSocket handshake answer, and the
 // session is recorded in the transport inventory.
 func TestAgentWebSocketCarriesDeprecationAndIsRecorded(t *testing.T) {
-	initTestDB()
-	db := database.Get()
-	require.NoError(t, db.AutoMigrate(&model.AgentTransport{}))
-	t.Cleanup(agenttransport.SetDefault(agenttransport.NewRecorder(database.Get)))
+	db := newKernelHandlerTestDB(t, &model.Node{}, &model.ForwardNode{}, &model.AgentTransport{})
+	sqlDB, err := db.DB()
+	require.NoError(t, err)
+	sqlDB.SetMaxOpenConns(1)
+	t.Cleanup(agenttransport.SetDefault(agenttransport.NewRecorder(func() *gorm.DB { return db })))
 	forward := model.ForwardNode{ID: 7701, Name: "ws-relay", Host: "198.51.100.77", Port: 22, APIToken: "ws-relay-token", Enabled: true}
 	require.NoError(t, db.Create(&forward).Error)
-	t.Cleanup(func() { db.Delete(&model.ForwardNode{}, forward.ID) })
 
 	h := NewAgentHandler()
+	h.db = db
+	h.wsUpgrader.CheckOrigin = func(*http.Request) bool { return true }
 	router := gin.New()
 	router.GET("/api/v2/agent/ws",
 		agenttransport.LegacyHTTP(agenttransport.Policy{Mode: config.AgentMTLSPreferred}, model.AgentTransportWebSocket),
