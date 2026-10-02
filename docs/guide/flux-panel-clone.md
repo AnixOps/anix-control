@@ -140,8 +140,10 @@ The forward suite keeps its own sub-navigation (快速配置向导, 流量转发
 Agents, 可观测性) and its routes, including the seven legacy redirects. Since
 UI phase U3 the admin shell renders it once, above every `/admin/forward*`
 page except the 转发节点 pages (see U7 below); the pages and the sidebar no
-longer repeat it. A new forward page adds
-its link to `FORWARD_SUITE_LINKS`, not to the page.
+longer repeat it. Since U7 流量转发 / 隧道 / 限速 form its segmented control,
+with the wizard before it and NodeX 拓扑 and 更多 after it (same links, order
+and routes). A new forward page adds its link to `FORWARD_SUITE_LINKS`, not
+to the page.
 
 UI phase U4 changed the forward suite visually only. Forward, Tunnel, Limit,
 NodeX forward nodes and Ansible machines now use the shared `UiDialog`,
@@ -151,8 +153,8 @@ including Forward's second confirmation before a force delete. The one
 addition is a safeguard: deleting a forward node (NodeX or Ansible machine)
 now asks for its name to be typed.
 
-UI phase U7 restyled the execution-plane pages behind the sidebar item
-转发节点 and left the Flux control plane (Forward, Tunnel, Limit) alone.
+The forward-nodes part of UI phase U7 restyled the execution-plane pages
+behind the sidebar item 转发节点.
 NodeX 拓扑 (`/admin/forward/nodes`), Ansible 机器, 本地运行时 and NodeX 运行时
 keep their own routes, endpoints and inventory scopes (`?scope=nodex` versus
 `/admin/forward/ansible-machines`): NodeX and local Ansible stay separate
@@ -167,6 +169,39 @@ the sections 概览, 配置 and 危险操作. The legacy rules
 (`/admin/forward/rules*`) stay on the NodeX page. Fields, calls, payloads
 and confirmations are unchanged, and "online" still means only `host:port`
 TCP reachability.
+
+The forward part of UI phase U7 restyled the Flux control plane, again
+changing visuals and interaction components only. The
+fields, endpoints, request bodies, permission checks and flows are those of
+`flux-forward-contract.md`; no runtime backend selector, runtime job table,
+installer or inventory control was added.
+
+- 流量转发 (`Forward.vue`, flux `forward.tsx`): the direct view is a
+  `UiDataTable` (search, tunnel filter, 运行中 / 已暂停 / 错误 chips,
+  selection with the bulk bar for 恢复 / 暂停 / 导出 / 删除, the service switch
+  and status badges in the row). The grouped view (one section per user, one
+  collapsible group per tunnel) stays, with a 直连 / 分组 switch in the toolbar
+  that is still remembered in `forward-view-mode`. Drag to reorder keeps its
+  handle; the row menu adds 上移 / 下移, which send the same
+  `forward/update-order` payload. 编辑, 诊断 and 删除 are in the row's "…"
+  menu (删除 still asks a second time before `forward/force-delete`); 导入 and
+  导出 moved into the page's "…" menu. The editor is a Sheet with the same
+  fields and validation. Diagnosis results are shown as a timeline built
+  from the existing `results[]` fields (`description`, `nodeName`, `nodeId`,
+  `targetIp`, `targetPort`, `averageTime`, `packetLoss`, `message`) and the
+  response `timestamp`; nothing new is requested. A failed first load shows
+  an error state with 重试.
+- 隧道 (`Tunnel.vue`, flux `tunnel.tsx`): a `UiDataTable` with the same
+  information as the old cards (type, runtime compatibility, ingress /
+  execution or egress node, flow accounting, ratio, status); the editor and
+  the diagnosis (timeline) are Sheets.
+- 限速 (`LimitI18n.vue`, flux `limit.tsx`): a `UiDataTable` and an editor
+  Sheet; the same `/speed-limit/*` calls.
+- 快速配置向导 (`ForwardWizard.vue`): the wizard template (steps on the left,
+  the form on the right, 上一步 / 下一步 at the bottom). The five steps, their
+  fields and their API calls are unchanged; 上一步 only shows the previous
+  step again (what was created stays and can be picked from its "使用现有"
+  list).
 
 ## Current Forward/Tunnel Base
 

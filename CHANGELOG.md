@@ -92,6 +92,37 @@
     (they now load the shared `UiDataTable`, section, switch and state
     chunks); the detail pages load 15.4 KB (node) and 11.1 KB (machine).
 
+- **Forward suite redesigned (UI redesign phase U7, forward part)**
+  (`web/src/views/admin/Forward.vue` + `views/admin/forward/`, `Tunnel.vue`,
+  `LimitI18n.vue`, `ForwardWizard.vue`, `components/admin/ForwardSuiteNav.vue`;
+  `docs/guide/flux-panel-clone.md`, `docs/reference/frontend-design.md`
+  "Forward suite and the wizard template"). Flux-panel clone: visuals and
+  interaction components only. Same endpoints, request bodies (including the
+  order payload), fields, permission checks and flows; no runtime backend
+  selector, runtime job table, installer or inventory control.
+  - Sub-navigation: 流量转发 / 隧道 / 限速 are a segmented control, with
+    快速配置向导 before it and NodeX 拓扑 / 更多 after it (same links and
+    routes).
+  - 流量转发: the direct view is a `UiDataTable` (search, tunnel filter,
+    status chips, selection with a bulk bar for 恢复 / 暂停 / 导出 / 删除, the
+    service switch in the row); the grouped view (user → tunnel) stays,
+    behind a 直连 / 分组 switch. 编辑 / 诊断 / 删除 and the new 上移 / 下移 (the
+    keyboard and touch alternative to the drag handle, same
+    `forward/update-order` payload) are in the row menu; 导入 / 导出 in the
+    page's "…" menu. The editor is a Sheet; the diagnosis is a timeline in
+    a Sheet built from the existing `results[]`; a failed first load shows
+    重试. `Forward.vue` went from 3 425 to about 1 900 lines (page-local
+    table, grouped view, dialogs, and the pure helpers in `forwardModel.js`).
+  - 隧道 and 限速: `UiDataTable` lists with editor Sheets (the tunnel
+    diagnosis as a timeline), error states with 重试.
+  - 快速配置向导: the wizard template, steps on the left, the form on the
+    right, 上一步 / 下一步 at the bottom; the five steps, fields and API calls
+    are unchanged; a generated node token is a copy field.
+  - New `components/admin/forward/DiagnosisTimeline.vue`. Forward, Tunnel and
+    LimitI18n join the `UiDataTable` guard list.
+  - `UiRadioGroup`: the radio no longer stretches to 40 / 44 px on phones
+    through the legacy global `button` rule.
+
 - **Admin list pages on one template (UI redesign phase U6)**
   (`web/src/ui/UiDataTable.vue`, `views/admin/*`;
   `docs/reference/frontend-design.md` "List pages"). Same endpoints,
