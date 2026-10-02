@@ -61,7 +61,7 @@ describe('Account.vue', () => {
     expect(screen.queryByRole('heading', { name: /password|device|session/i })).toBeNull()
   })
 
-  it('turns on two-factor authentication with a setup key and the first code, then shows the backup codes', async () => {
+  it('turns on two-factor authentication with a QR code and the first code, then shows the recovery codes', async () => {
     const user = userEvent.setup()
     api.setupTotp.mockResolvedValue(ok({ secret: 'JBSWY3DPEHPK3PXP', url: 'otpauth://totp/AnixOps:lin?secret=JBSWY3DPEHPK3PXP', qr_code: 'otpauth://totp/AnixOps:lin?secret=JBSWY3DPEHPK3PXP', backup_codes: ['1111-2222', '3333-4444'] }))
     api.enableTotp.mockResolvedValue(ok({ message: 'MFA enabled successfully' }))
@@ -70,24 +70,31 @@ describe('Account.vue', () => {
 
     await user.click(screen.getByRole('button', { name: 'Turn on two-factor authentication' }))
     const dialog = await screen.findByRole('dialog', { name: 'Turn on two-factor authentication' })
-    await waitFor(() => expect(within(dialog).getByLabelText('Setup key').value).toBe('JBSWY3DPEHPK3PXP'))
+    // Scan the code, or type the key by hand.
+    expect(await within(dialog).findByRole('img', { name: 'QR code for setting up two-factor authentication' })).toBeTruthy()
+    await waitFor(() => expect(within(dialog).getByLabelText(/Enter the setup key instead/).value).toBe('JBSWY3DPEHPK3PXP'))
     expect(within(dialog).getByRole('link', { name: 'Open in an authenticator on this device' }).getAttribute('href')).toMatch(/^otpauth:\/\/totp\//)
 
-    const code = within(dialog).getByLabelText(/6-digit code/)
-    expect(code.getAttribute('autocomplete')).toBe('one-time-code')
-    await user.type(code, '12ab')
+    // One box per digit; the first one takes a one-time-code autofill.
+    const boxes = within(dialog).getAllByLabelText(/^Digit \d of 6$/)
+    expect(boxes).toHaveLength(6)
+    expect(boxes[0].getAttribute('autocomplete')).toBe('one-time-code')
+    await user.click(boxes[0])
+    await user.keyboard('12ab')
+    expect(boxes.map(box => box.value).join('')).toBe('12')
     await user.click(within(dialog).getByRole('button', { name: 'Verify and turn on' }))
     expect(await within(dialog).findByText('Enter the 6-digit code')).toBeTruthy()
     expect(api.enableTotp).not.toHaveBeenCalled()
 
-    await user.clear(code)
-    await user.type(code, '123456')
+    // The sixth digit completes the code and submits it.
     api.getMfaStatus.mockResolvedValue(ok({ enabled: true, has_backup_codes: true, remaining_codes: 2, last_used: null }))
-    await user.click(within(dialog).getByRole('button', { name: 'Verify and turn on' }))
-    expect(api.enableTotp).toHaveBeenCalledWith('123456')
+    await user.click(boxes[2])
+    await user.keyboard('3456')
+    await waitFor(() => expect(api.enableTotp).toHaveBeenCalledWith('123456'))
 
-    const codes = await screen.findByRole('dialog', { name: 'Save your backup codes' })
+    const codes = await screen.findByRole('dialog', { name: 'Save your recovery codes' })
     expect(within(codes).getAllByRole('listitem').map(item => item.textContent)).toEqual(['1111-2222', '3333-4444'])
+    expect(within(codes).getByRole('button', { name: 'Download' })).toBeTruthy()
     expect(await screen.findByText('On')).toBeTruthy()
     expect(screen.getByText('2 left')).toBeTruthy()
   })
@@ -98,7 +105,7 @@ describe('Account.vue', () => {
     await renderPage()
     await user.click(await screen.findByRole('button', { name: 'Turn on two-factor authentication' }))
     const dialog = await screen.findByRole('dialog', { name: 'Turn on two-factor authentication' })
-    await waitFor(() => expect(within(dialog).getByLabelText('Setup key').value).toBe('ABC'))
+    await waitFor(() => expect(within(dialog).getByLabelText(/Enter the setup key instead/).value).toBe('ABC'))
     expect(within(dialog).queryByRole('link')).toBeNull()
   })
 
@@ -127,15 +134,15 @@ describe('Account.vue', () => {
     expect(await screen.findByText('Off')).toBeTruthy()
   })
 
-  it('creates new backup codes after a confirmation', async () => {
+  it('creates new recovery codes after a confirmation', async () => {
     const user = userEvent.setup()
     api.getMfaStatus.mockResolvedValue(ok({ enabled: true, has_backup_codes: true, remaining_codes: 1 }))
     api.regenerateBackupCodes.mockResolvedValue(ok({ backup_codes: ['9999-0000'] }))
     await renderPage()
-    await user.click(await screen.findByRole('button', { name: 'New backup codes…' }))
-    const confirm = await screen.findByRole('alertdialog', { name: 'Create new backup codes?' })
+    await user.click(await screen.findByRole('button', { name: 'New recovery codes…' }))
+    const confirm = await screen.findByRole('alertdialog', { name: 'Create new recovery codes?' })
     await user.click(within(confirm).getByRole('button', { name: 'Create new codes' }))
-    const codes = await screen.findByRole('dialog', { name: 'Save your backup codes' })
+    const codes = await screen.findByRole('dialog', { name: 'Save your recovery codes' })
     expect(within(codes).getByText('9999-0000')).toBeTruthy()
     expect(api.regenerateBackupCodes).toHaveBeenCalledTimes(1)
   })

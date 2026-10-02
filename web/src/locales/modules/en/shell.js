@@ -148,13 +148,13 @@ export default {
         status: 'Status',
         on: 'On',
         off: 'Off',
-        backupCodes: 'Backup codes',
+        backupCodes: 'Recovery codes',
         remaining: '{count} left',
         none: 'None',
         lastUsed: 'Last used',
         enable: 'Turn on two-factor authentication',
         disable: 'Turn off…',
-        regenerate: 'New backup codes…',
+        regenerate: 'New recovery codes…',
         loadFailed: 'Couldn’t load the two-factor status.',
         retry: 'Try again',
         setup: {
@@ -163,6 +163,10 @@ export default {
           secret: 'Setup key',
           secretHelp: 'In the app, choose “Enter a setup key” and paste this key.',
           openApp: 'Open in an authenticator on this device',
+          scan: 'Scan the QR code with your authenticator app',
+          qrLabel: 'QR code for setting up two-factor authentication',
+          manual: 'Can’t scan? Enter the setup key instead',
+          enterCode: 'Enter the 6-digit code the app shows',
           code: '6-digit code',
           codeHelp: 'The app shows a new code every 30 seconds.',
           confirm: 'Verify and turn on',
@@ -170,9 +174,10 @@ export default {
           enabled: 'Two-factor authentication is on'
         },
         backup: {
-          title: 'Save your backup codes',
-          description: 'If you lose your phone, sign in with a backup code. Each code works once; keep them somewhere safe.',
+          title: 'Save your recovery codes',
+          description: 'If you lose your phone, sign in with a recovery code. Each code works once; keep them somewhere safe.',
           copyAll: 'Copy all',
+          download: 'Download',
           done: 'I’ve saved them'
         },
         disableDialog: {
@@ -183,8 +188,8 @@ export default {
           done: 'Two-factor authentication is off'
         },
         regenerateDialog: {
-          title: 'Create new backup codes?',
-          description: 'Your current backup codes stop working right away.',
+          title: 'Create new recovery codes?',
+          description: 'Your current recovery codes stop working right away.',
           confirm: 'Create new codes'
         },
         errors: {
