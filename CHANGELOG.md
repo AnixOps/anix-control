@@ -31,6 +31,36 @@
   same transaction as the configuration revision; package hosts apply it at
   their next configuration poll, as before. See "Switching Route Modes" in
   `docs/UPGRADE.md`.
+- **Design: Forward SDK for v4.2** (`docs/architecture/forward-sdk.md`),
+  with a draft contract `sdk/api/forward/v1` (`anixops.forward.v1`) and
+  draft planner fixtures in `contracts/forward/v1`, approved by the owner
+  (H11 to H14). Nothing changes in behaviour: nothing serves the contract and no
+  planner or driver exists yet.
+  - **Model.** A route is a chain of hops (entry, relays, exit) to one or
+    more targets; each hop picks its engine: nftables for trusted links,
+    gost v3 for the public internet, the AnixOps protocol in v4.3. A pure
+    planner turns routes into one desired state per node, allocates ports,
+    wires the chain and puts bandwidth, quota, connection and expiry limits
+    on the entry.
+  - **Drivers.** The Agent applies the state through drivers that own their
+    objects: an `inet anixops_fwd` table with per-direction counters,
+    numgen/jhash maps, named quotas, `ct count` and tc HTB; an Agent-managed
+    gost that replaces NodeX; Ansible only as a fallback for hosts without
+    an Agent.
+  - **Failover.** Round robin, random, IP hash, least connections and
+    failover at the exit and target levels, a circuit breaker, entry HA via
+    DDNS, per-hop latency probes and end-to-end diagnosis, all running on
+    the nodes while Control is down.
+  - **Also covered:** the Control and Agent transport (`config.v1` and
+    `PackageReport`), nyanpass-style one-command node onboarding, the v4.2
+    upgrade (archive the flux forwarding data, clean the nodes, drop the
+    tables; irreversible, H15), metering, editions, testing, security, the
+    PR plan, and the open questions H11 to H14 and H18 to H23 with
+    recommendations.
+  - The draft contract joins the CI generated-code check and the proto
+    golden file under the draft golden policy (its own lines may change
+    until the first change that serves it), and `internal/tests/protocompat`
+    checks the fixtures parse as the draft contract and are consistent.
 
 ### Fixed
 

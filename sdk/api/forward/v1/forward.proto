@@ -1,0 +1,657 @@
+syntax = "proto3";
+
+package anixops.forward.v1;
+
+option go_package = "github.com/AnixOps/anix-control/sdk/api/forward/v1;forwardv1";
+
+// DRAFT, UNRELEASED. This contract is the F1 draft of the v4.2 forwarding
+// redesign (docs/architecture/forward-sdk.md), published for the owner's
+// review (gate H11). Nothing serves it: no Control route, no Agent, no
+// driver. Until the first change that serves it (F3 for ForwardNode, F5 for
+// ForwardControl) any element may still change, and a change may edit this
+// package's own lines in contracts/proto/descriptors.golden in the same PR.
+// From then on it grows by additions only, like every other AnixOps
+// contract (internal/tests/protocompat). No sdk/v* tag is cut for it before
+// the owner approves H11 and H12.
+//
+// Forwarding is a first-class AnixOps SDK capability. A Route is a chain of
+// hops from an entry node through optional relay nodes to an exit node, and
+// on to one or more targets. Every hop picks its own engine: NFTABLES for
+// trusted links (kernel DNAT, no encryption), GOST for the public internet
+// (TLS, WSS, QUIC, gRPC, multiplexing), ANIXOPS for the AnixOps relay
+// protocol (v4.3). Control owns every route; the planner turns a route into
+// one NodeForwardState per node, and the node's Agent applies it through the
+// engine's driver. Nothing on a node accepts routes from anywhere but
+// Control.
+//
+// Wire conventions, as in the other AnixOps contracts: times are Unix
+// milliseconds (int64 *_unix_ms), byte counts are uint64, ports are uint32 in
+// 1..65535 (0 means "not set" or "planner allocates"), node references are
+// the Agent identity names (node-ops-service.md D9, "forward-<id>" or
+// "proxy-<id>").
+
+// ForwardControl is Control's forwarding API: route CRUD, a dry-run planner,
+// statistics, health and end-to-end diagnosis. Control serves it to its own
+// UI and API handlers, to the operator CLI ("anix-control forward ...") and
+// to other AnixOps products. Every caller goes through Control; there is no
+// node-side or standalone equivalent.
+service ForwardControl {
+  // CreateRoute validates and plans a route and stores it. request_id makes
+  // a retry apply once. INVALID_ARGUMENT for a route that fails validation
+  // or planning (the answer's violations say why), FAILED_PRECONDITION when
+  // a port the route asks for is taken or a node lacks a capability the
+  // route needs.
+  rpc CreateRoute(CreateRouteRequest) returns (CreateRouteResponse);
+  // UpdateRoute replaces a route. expected_revision guards against a lost
+  // update (ABORTED when it differs).
+  rpc UpdateRoute(UpdateRouteRequest) returns (UpdateRouteResponse);
+  // DeleteRoute removes a route; its hops leave every node's state in the
+  // next generation, and its port allocations are released after a grace
+  // period.
+  rpc DeleteRoute(DeleteRouteRequest) returns (DeleteRouteResponse);
+  rpc GetRoute(GetRouteRequest) returns (GetRouteResponse);
+  rpc ListRoutes(ListRoutesRequest) returns (ListRoutesResponse);
+  // PlanRoute runs the planner without storing anything and answers the
+  // hops each node would run. It is what the UI previews and what the
+  // golden fixtures in contracts/forward/v1 record.
+  rpc PlanRoute(PlanRouteRequest) returns (PlanRouteResponse);
+  // GetRouteStats answers the route's raw counters per hop and direction,
+  // as nodes reported them. Billing multipliers are not applied here.
+  rpc GetRouteStats(GetRouteStatsRequest) returns (GetRouteStatsResponse);
+  // GetRouteHealth answers the health of every upstream of every hop, with
+  // the latest per-hop latency probes.
+  rpc GetRouteHealth(GetRouteHealthRequest) returns (GetRouteHealthResponse);
+  // DiagnoseRoute runs an end-to-end check through the route's nodes:
+  // listen ownership and port conflicts on each hop (nat table included),
+  // reachability of each next hop, delivery proved on the last hop, and a
+  // real UDP exchange for UDP routes.
+  rpc DiagnoseRoute(DiagnoseRouteRequest) returns (DiagnoseRouteResponse);
+}
+
+// ForwardNode is the node side: what an Agent's forwarding component does
+// with its node's desired state. It is not a network listener. Control
+// carries Apply as part of the node's configuration snapshot (config.v1),
+// Observe as reports over the Agent stream (PackageReport), and Probe as a
+// desired operation; the service exists so drivers, the conformance suite
+// and the Agent share one typed boundary.
+service ForwardNode {
+  // GetCapabilities answers what the node's drivers can do.
+  rpc GetCapabilities(GetNodeCapabilitiesRequest) returns (NodeCapabilities);
+  // Apply makes the node run exactly the given state, replacing the
+  // previous one atomically per engine. A state with no hops removes every
+  // rule, service and object the drivers own. Applying an older generation
+  // than the one applied is refused (FAILED_PRECONDITION).
+  rpc Apply(NodeForwardState) returns (ApplyResult);
+  // Observe answers the node's counters and health now.
+  rpc Observe(ObserveRequest) returns (NodeForwardReport);
+  // Probe runs one diagnostic step on the node.
+  rpc Probe(ProbeRequest) returns (ProbeResult);
+}
+
+// ---------------------------------------------------------------------------
+// Model
+// ---------------------------------------------------------------------------
+
+// Engine is what moves a hop's traffic on its node.
+enum Engine {
+  ENGINE_UNSPECIFIED = 0;
+  // Kernel nftables DNAT and masquerade. No encryption; for trusted links
+  // (IEPL/IPLC private lines, same-provider intranets) and plain public
+  // forwarding.
+  ENGINE_NFTABLES = 1;
+  // gost v3, managed by the Agent: TLS, WSS, QUIC, gRPC, multiplexing.
+  ENGINE_GOST = 2;
+  // The AnixOps relay protocol (v4.3). Refused by the planner until a node
+  // advertises it.
+  ENGINE_ANIXOPS = 3;
+}
+
+// HopRole is a hop's place in the route.
+enum HopRole {
+  HOP_ROLE_UNSPECIFIED = 0;
+  // ENTRY accepts the clients' connections on Route.listen.
+  HOP_ROLE_ENTRY = 1;
+  // RELAY forwards between two hops.
+  HOP_ROLE_RELAY = 2;
+  // EXIT forwards to the route's targets. A one-hop route's only hop is
+  // ENTRY and dials the targets itself.
+  HOP_ROLE_EXIT = 3;
+}
+
+// L4Protocol is what a listener accepts.
+enum L4Protocol {
+  L4_PROTOCOL_UNSPECIFIED = 0;
+  L4_PROTOCOL_TCP = 1;
+  L4_PROTOCOL_UDP = 2;
+  L4_PROTOCOL_TCP_UDP = 3;
+}
+
+// LinkSecurity is how one hop carries traffic to the next. The hop that
+// dials must be able to originate it and the hop that listens must be able
+// to terminate it; NFTABLES does only LINK_SECURITY_RAW.
+enum LinkSecurity {
+  LINK_SECURITY_UNSPECIFIED = 0;
+  // Plain TCP/UDP, as the client sent it.
+  LINK_SECURITY_RAW = 1;
+  LINK_SECURITY_TLS = 2;
+  LINK_SECURITY_WSS = 3;
+  LINK_SECURITY_QUIC = 4;
+  LINK_SECURITY_GRPC = 5;
+  // The AnixOps relay protocol (v4.3).
+  LINK_SECURITY_ANIXOPS = 6;
+}
+
+// BalanceStrategy picks an upstream for a new connection.
+enum BalanceStrategy {
+  BALANCE_STRATEGY_UNSPECIFIED = 0;
+  BALANCE_STRATEGY_ROUND_ROBIN = 1;
+  BALANCE_STRATEGY_RANDOM = 2;
+  // IP_HASH keeps a client address on one upstream while it is healthy.
+  BALANCE_STRATEGY_IP_HASH = 3;
+  // LEAST_CONN prefers the upstream with the fewest live connections. The
+  // nftables and gost drivers approximate it by re-weighting upstreams from
+  // their connection counts (forward-sdk.md section 7.1).
+  BALANCE_STRATEGY_LEAST_CONN = 4;
+  // FAILOVER sends everything to the healthy upstream with the lowest
+  // priority value, and moves on when it fails.
+  BALANCE_STRATEGY_FAILOVER = 5;
+}
+
+// DirectMode is the private-line "direct from entry" policy: whether an
+// entry on a trusted link may skip the relay/exit chain and dial the targets
+// itself.
+enum DirectMode {
+  DIRECT_MODE_UNSPECIFIED = 0;
+  // OFF: the chain as written.
+  DIRECT_MODE_OFF = 1;
+  // PREFERRED: dial the targets directly while they are reachable from the
+  // entry, fall back to the chain otherwise.
+  DIRECT_MODE_PREFERRED = 2;
+  // FORCED: the entry dials the targets; the planner rejects a route whose
+  // later hops would then be unused.
+  DIRECT_MODE_FORCED = 3;
+}
+
+// TargetPolicy says which target addresses a route may reach.
+enum TargetPolicy {
+  TARGET_POLICY_UNSPECIFIED = 0;
+  // PUBLIC_ONLY (the default) refuses loopback, private, link-local,
+  // multicast and other special-purpose addresses, also when a host name
+  // resolves to one, as the v4.1 forward path does.
+  TARGET_POLICY_PUBLIC_ONLY = 1;
+  // ALLOW_PRIVATE lets an administrator's route reach private addresses on
+  // the exit's own network (an IEPL exit in front of an intranet). Never
+  // loopback; never on a user's route.
+  TARGET_POLICY_ALLOW_PRIVATE = 2;
+}
+
+// Route is one forwarding route as Control stores it.
+message Route {
+  // id is assigned by Control (a ULID) and never reused.
+  string id = 1;
+  // owner is "admin" or "user:<id>".
+  string owner = 2;
+  string name = 3;
+  // listen is where clients connect, on every ENTRY node.
+  Listen listen = 4;
+  // hops are ordered from ENTRY to EXIT. The first is ENTRY; with more than
+  // one hop, the last is EXIT and those between are RELAY.
+  repeated Hop hops = 5;
+  // targets are dialled by the last hop.
+  repeated Target targets = 6;
+  Policy policy = 7;
+  Limits limits = 8;
+  map<string, string> labels = 9;
+  // paused keeps the route stored but on no node.
+  bool paused = 10;
+  // revision increases with every stored change.
+  uint64 revision = 11;
+  int64 created_at_unix_ms = 12;
+  int64 updated_at_unix_ms = 13;
+}
+
+// Listen is a client-facing listener.
+message Listen {
+  // address is the local address to bind on the entry; empty for every
+  // address of the node.
+  string address = 1;
+  // port is 0 for "the planner allocates one from the entry's range".
+  uint32 port = 2;
+  L4Protocol protocol = 3;
+  // entry_hostname is the DNS name clients use. With several entry nodes,
+  // Control keeps it pointed at the healthy ones (DDNS or CNAME,
+  // forward-sdk.md section 7.4).
+  string entry_hostname = 4;
+}
+
+// Hop is one stage of a route.
+message Hop {
+  HopRole role = 1;
+  Engine engine = 2;
+  // node_refs are the nodes that serve this hop. Several nodes on ENTRY
+  // are entry HA (each runs the same listener); several on RELAY or EXIT
+  // are the previous hop's upstreams, balanced by Policy.next_hop (the
+  // exit-level failover).
+  repeated string node_refs = 3;
+  // ingress is how the previous hop reaches this one. Ignored on ENTRY,
+  // whose ingress is Route.listen.
+  LinkTransport ingress = 4;
+  // port is the port this hop listens on for the previous hop; 0 lets the
+  // planner allocate one from each node's range. Ignored on ENTRY.
+  uint32 port = 5;
+  // dial_address overrides the address the previous hop dials, for a
+  // private-line address. Empty uses the node's primary address. Only with
+  // a single node in node_refs.
+  string dial_address = 6;
+}
+
+// LinkTransport is the transport between two hops.
+message LinkTransport {
+  LinkSecurity security = 1;
+  // mux multiplexes connections over few carrier connections (gost mux,
+  // the AnixOps protocol).
+  bool mux = 2;
+  // server_name is the TLS SNI and HTTP host the dialer presents; empty for
+  // the node's Agent identity name.
+  string server_name = 3;
+  // path is the WebSocket path or gRPC service name.
+  string path = 4;
+}
+
+// Target is a destination behind the last hop.
+message Target {
+  // host is an IPv4 or IPv6 address or a DNS name. Names are re-resolved by
+  // the last hop's node (forward-sdk.md section 6.1).
+  string host = 1;
+  uint32 port = 2;
+  // weight is used by ROUND_ROBIN, RANDOM and LEAST_CONN; 0 means 1.
+  uint32 weight = 3;
+  // priority orders FAILOVER: lower first, ties broken by order.
+  uint32 priority = 4;
+}
+
+// Policy is a route's balancing, health and failover behaviour.
+message Policy {
+  // next_hop balances over a RELAY or EXIT hop's nodes (exit level).
+  BalanceStrategy next_hop = 1;
+  // target balances over the targets (target level).
+  BalanceStrategy target = 2;
+  HealthCheck health = 3;
+  CircuitBreaker circuit_breaker = 4;
+  DirectMode direct = 5;
+  TargetPolicy target_policy = 6;
+}
+
+// HealthCheck is the active check each node runs against its upstreams.
+message HealthCheck {
+  // interval_ms between checks; 0 for the default (5000).
+  uint32 interval_ms = 1;
+  // timeout_ms per check; 0 for the default (2000).
+  uint32 timeout_ms = 2;
+  // disabled turns active checks off; passive failures still count.
+  bool disabled = 3;
+}
+
+// CircuitBreaker takes a failing upstream out of rotation.
+message CircuitBreaker {
+  // failures in a row (active checks or dials) that open the breaker; 0
+  // for the default (3).
+  uint32 failure_threshold = 1;
+  // open_ms the upstream is skipped before one trial; 0 for the default
+  // (30000).
+  uint32 open_ms = 2;
+}
+
+// Limits are a route's enforced limits. The planner puts them on the ENTRY
+// hop (forward-sdk.md section 5.3).
+message Limits {
+  // bandwidth_bps caps each direction; 0 for none.
+  uint64 bandwidth_bps = 1;
+  // quota_bytes caps upload plus download over the route's life; 0 for
+  // none.
+  uint64 quota_bytes = 2;
+  // max_conns caps the route's concurrent connections; 0 for none.
+  uint32 max_conns = 3;
+  // expires_at_unix_ms stops the route; 0 for never.
+  int64 expires_at_unix_ms = 4;
+}
+
+// Counters are a hop's raw, cumulative traffic on one node. They only grow
+// within one counter_epoch; a new epoch (table re-created, gost restarted,
+// node rebooted) starts from zero, and Control adds the deltas.
+message Counters {
+  string route_id = 1;
+  // hop_index is the hop's index in Route.hops, 0 for ENTRY.
+  uint32 hop_index = 2;
+  string node_ref = 3;
+  // up is client to target, down is target to client.
+  uint64 up_bytes = 4;
+  uint64 down_bytes = 5;
+  uint64 up_packets = 6;
+  uint64 down_packets = 7;
+  // active_conns now; total_conns since the epoch began.
+  uint32 active_conns = 8;
+  uint64 total_conns = 9;
+  string counter_epoch = 10;
+  int64 observed_at_unix_ms = 11;
+}
+
+// ---------------------------------------------------------------------------
+// Node side
+// ---------------------------------------------------------------------------
+
+// NodeInfo is what the planner knows about a node: Control's inventory, or
+// the nodes of a PlanRouteRequest.
+message NodeInfo {
+  string node_ref = 1;
+  // addresses the node is reachable at, primary first.
+  repeated string addresses = 2;
+  PortRange port_range = 3;
+  repeated EngineCapabilities engines = 4;
+  // labels such as "link=iepl" mark trusted links.
+  map<string, string> labels = 5;
+}
+
+message PortRange {
+  uint32 first = 1;
+  uint32 last = 2;
+}
+
+// NodeForwardState is one node's whole desired forwarding state, rendered by
+// the planner from every route that has a hop on the node.
+message NodeForwardState {
+  string node_ref = 1;
+  // generation increases with every change of the node's state. The Agent
+  // applies only a newer one and reports the generation it runs.
+  uint64 generation = 2;
+  // state_hash is the lowercase hex SHA-256 of the canonical encoding of
+  // hops, so Control and the node agree without comparing contents.
+  string state_hash = 3;
+  repeated NodeHop hops = 4;
+}
+
+// NodeHop is what one node does for one hop of one route.
+message NodeHop {
+  string route_id = 1;
+  // hop_index is the hop's index in Route.hops, 0 for ENTRY.
+  uint32 hop_index = 2;
+  HopRole role = 3;
+  Engine engine = 4;
+  // listen is the node's listener: Route.listen on ENTRY, the allocated
+  // port otherwise.
+  Listen listen = 5;
+  // ingress is the transport the listener terminates.
+  LinkTransport ingress = 6;
+  // upstreams are the next hop's nodes, or the targets on the last hop.
+  repeated Upstream upstreams = 7;
+  BalanceStrategy balance = 8;
+  HealthCheck health = 9;
+  CircuitBreaker circuit_breaker = 10;
+  // limits are set only on the hop that enforces them.
+  Limits limits = 11;
+  TargetPolicy target_policy = 12;
+  bool paused = 13;
+  // mark is the route's connection mark on this node, allocated by the
+  // planner within the driver's mark range (nftables counters and tc).
+  uint32 mark = 14;
+  // ingress_sources are the addresses allowed to reach the listener of a
+  // RELAY or EXIT hop: every address of the previous hop's nodes. Empty on
+  // ENTRY, which serves clients.
+  repeated string ingress_sources = 15;
+  // ingress_peers are the Agent identities (SPIFFE ids) allowed to dial an
+  // encrypted ingress: the previous hop's nodes.
+  repeated string ingress_peers = 16;
+}
+
+// Upstream is where a hop sends traffic.
+message Upstream {
+  // address and port are dialled. address may be a DNS name.
+  string address = 1;
+  uint32 port = 2;
+  uint32 weight = 3;
+  uint32 priority = 4;
+  // egress is the transport to dial with.
+  LinkTransport egress = 5;
+  // node_ref is the next hop's node, empty for a target.
+  string node_ref = 6;
+  // peer_identity is the Agent identity (SPIFFE id) the dialled node must
+  // present on an encrypted link; empty for RAW links and targets.
+  string peer_identity = 7;
+}
+
+// EngineCapabilities is what one driver on a node can do.
+message EngineCapabilities {
+  Engine engine = 1;
+  // version is the driver's and its engine's version ("nft 1.0.9",
+  // "gost 3.0.0").
+  string version = 2;
+  bool available = 3;
+  // unavailable_reason is set when available is false.
+  string unavailable_reason = 4;
+  bool ipv6 = 5;
+  bool udp = 6;
+  repeated BalanceStrategy strategies = 7;
+  repeated LinkSecurity link_securities = 8;
+  bool bandwidth_limit = 9;
+  bool quota = 10;
+  bool max_conns = 11;
+}
+
+message GetNodeCapabilitiesRequest {}
+
+// NodeCapabilities is reported at enrollment and with every Agent hello.
+message NodeCapabilities {
+  string node_ref = 1;
+  repeated EngineCapabilities engines = 2;
+  string kernel_version = 3;
+  // cgroup is "v2", "v1" or "none".
+  string cgroup = 4;
+  bool ipv6 = 5;
+  string agent_version = 6;
+}
+
+message ApplyResult {
+  uint64 generation = 1;
+  string state_hash = 2;
+  bool applied = 3;
+  repeated HopError errors = 4;
+}
+
+// HopError is one hop the node could not apply. Other hops keep running.
+message HopError {
+  string route_id = 1;
+  uint32 hop_index = 2;
+  Engine engine = 3;
+  string message = 4;
+}
+
+message ObserveRequest {}
+
+// NodeForwardReport is a node's observed forwarding state. It travels as a
+// PackageReport (latest value wins), so counters are cumulative and a lost
+// report loses nothing.
+message NodeForwardReport {
+  string node_ref = 1;
+  // generation and state_hash the node runs now.
+  uint64 generation = 2;
+  string state_hash = 3;
+  bool applied = 4;
+  repeated HopError errors = 5;
+  repeated Counters counters = 6;
+  repeated UpstreamHealth health = 7;
+  int64 observed_at_unix_ms = 8;
+}
+
+enum HealthState {
+  HEALTH_STATE_UNSPECIFIED = 0;
+  HEALTH_STATE_HEALTHY = 1;
+  HEALTH_STATE_UNHEALTHY = 2;
+  // CIRCUIT_OPEN: skipped until circuit_open_until_unix_ms.
+  HEALTH_STATE_CIRCUIT_OPEN = 3;
+}
+
+// UpstreamHealth is a node's view of one upstream of one hop, with its
+// latest latency probe.
+message UpstreamHealth {
+  string route_id = 1;
+  uint32 hop_index = 2;
+  string address = 3;
+  uint32 port = 4;
+  HealthState state = 5;
+  uint32 consecutive_failures = 6;
+  int64 circuit_open_until_unix_ms = 7;
+  // rtt_us is the last connect round trip; 0 when it failed.
+  uint32 rtt_us = 8;
+  int64 checked_at_unix_ms = 9;
+}
+
+enum ProbeKind {
+  PROBE_KIND_UNSPECIFIED = 0;
+  // LISTEN checks the hop's listener is ours and no other rule or process
+  // holds the port (nat table included).
+  PROBE_KIND_LISTEN = 1;
+  // TCP_CONNECT dials each upstream.
+  PROBE_KIND_TCP_CONNECT = 2;
+  // UDP_EXCHANGE sends a datagram and waits for an answer.
+  PROBE_KIND_UDP_EXCHANGE = 3;
+  // DELIVERY watches the hop's counters for a nonce flow sent from the
+  // entry, proving the traffic reached the last hop and left it.
+  PROBE_KIND_DELIVERY = 4;
+}
+
+message ProbeRequest {
+  string probe_id = 1;
+  string route_id = 2;
+  uint32 hop_index = 3;
+  ProbeKind kind = 4;
+  uint32 timeout_ms = 5;
+}
+
+message ProbeResult {
+  string probe_id = 1;
+  bool ok = 2;
+  string message = 3;
+  uint32 rtt_us = 4;
+  int64 observed_at_unix_ms = 5;
+}
+
+// ---------------------------------------------------------------------------
+// ForwardControl requests
+// ---------------------------------------------------------------------------
+
+// Violation is one reason a route was refused.
+message Violation {
+  // field is a path into the route ("hops[1].ingress.security").
+  string field = 1;
+  string message = 2;
+}
+
+message CreateRouteRequest {
+  string request_id = 1;
+  Route route = 2;
+}
+
+message CreateRouteResponse {
+  Route route = 1;
+  repeated Violation violations = 2;
+}
+
+message UpdateRouteRequest {
+  string request_id = 1;
+  Route route = 2;
+  uint64 expected_revision = 3;
+}
+
+message UpdateRouteResponse {
+  Route route = 1;
+  repeated Violation violations = 2;
+}
+
+message DeleteRouteRequest {
+  string request_id = 1;
+  string route_id = 2;
+}
+
+message DeleteRouteResponse {}
+
+message GetRouteRequest {
+  string route_id = 1;
+}
+
+message GetRouteResponse {
+  Route route = 1;
+}
+
+message ListRoutesRequest {
+  // owner filters by owner; empty for every route the caller may see.
+  string owner = 1;
+  string node_ref = 2;
+  uint32 page_size = 3;
+  string page_token = 4;
+}
+
+message ListRoutesResponse {
+  repeated Route routes = 1;
+  string next_page_token = 2;
+}
+
+message PlanRouteRequest {
+  Route route = 1;
+  // nodes replaces Control's inventory for the nodes it lists (fixtures and
+  // tests). Control uses its own inventory for any node not listed.
+  repeated NodeInfo nodes = 2;
+}
+
+// PortAllocation is a port the planner gave a hop on a node. Allocations
+// stick to (route, hop, node) across replans.
+message PortAllocation {
+  string route_id = 1;
+  uint32 hop_index = 2;
+  string node_ref = 3;
+  uint32 port = 4;
+}
+
+message PlanRouteResponse {
+  // states hold only this route's hops, at generation 0 and without a
+  // state_hash. Control merges every route's hops into each node's
+  // NodeForwardState and then sets both.
+  repeated NodeForwardState states = 1;
+  repeated PortAllocation allocations = 2;
+  repeated Violation violations = 3;
+  repeated string warnings = 4;
+}
+
+message GetRouteStatsRequest {
+  string route_id = 1;
+}
+
+message GetRouteStatsResponse {
+  // counters are per node and hop, summed over counter epochs.
+  repeated Counters counters = 1;
+}
+
+message GetRouteHealthRequest {
+  string route_id = 1;
+}
+
+message GetRouteHealthResponse {
+  repeated UpstreamHealth health = 1;
+}
+
+message DiagnoseRouteRequest {
+  string route_id = 1;
+  uint32 timeout_ms = 2;
+}
+
+// DiagnoseStep is one probe on one node.
+message DiagnoseStep {
+  string node_ref = 1;
+  uint32 hop_index = 2;
+  ProbeKind kind = 3;
+  ProbeResult result = 4;
+}
+
+message DiagnoseRouteResponse {
+  bool ok = 1;
+  repeated DiagnoseStep steps = 2;
+}

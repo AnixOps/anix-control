@@ -1,0 +1,81 @@
+{
+  "$comment": "DRAFT, illustrative (F1, owner review H11). Routes the planner must refuse. Each case's route is an anixops.forward.v1.Route in protojson with proto field names; field is the Violation.field the planner must report. The nodes are those of plan-nft-entry-gost-relay-exit-failover.json. See docs/architecture/forward-sdk.md section 4.4.",
+  "status": "draft",
+  "nodes_from": "plan-nft-entry-gost-relay-exit-failover.json",
+  "cases": [
+    {
+      "name": "nftables hop cannot originate TLS",
+      "route": {
+        "id": "01JF1N00000000000000000N01",
+        "owner": "admin",
+        "listen": {"port": 40002, "protocol": "L4_PROTOCOL_TCP"},
+        "hops": [
+          {"role": "HOP_ROLE_ENTRY", "engine": "ENGINE_NFTABLES", "node_refs": ["forward-21"]},
+          {"role": "HOP_ROLE_EXIT", "engine": "ENGINE_GOST", "node_refs": ["forward-41"], "ingress": {"security": "LINK_SECURITY_TLS"}}
+        ],
+        "targets": [{"host": "198.51.100.7", "port": 8443}]
+      },
+      "field": "hops[1].ingress.security",
+      "reason": "hop 0 runs ENGINE_NFTABLES, which only dials LINK_SECURITY_RAW"
+    },
+    {
+      "name": "user route to a private target",
+      "route": {
+        "id": "01JF1N00000000000000000N02",
+        "owner": "user:1042",
+        "listen": {"port": 40003, "protocol": "L4_PROTOCOL_TCP"},
+        "hops": [
+          {"role": "HOP_ROLE_ENTRY", "engine": "ENGINE_NFTABLES", "node_refs": ["forward-21"]}
+        ],
+        "targets": [{"host": "10.0.0.5", "port": 22}],
+        "policy": {"target_policy": "TARGET_POLICY_ALLOW_PRIVATE"}
+      },
+      "field": "policy.target_policy",
+      "reason": "only an administrator's route may reach private targets"
+    },
+    {
+      "name": "loopback target is refused even for an administrator",
+      "route": {
+        "id": "01JF1N00000000000000000N03",
+        "owner": "admin",
+        "listen": {"port": 40004, "protocol": "L4_PROTOCOL_TCP"},
+        "hops": [
+          {"role": "HOP_ROLE_ENTRY", "engine": "ENGINE_NFTABLES", "node_refs": ["forward-21"]}
+        ],
+        "targets": [{"host": "127.0.0.1", "port": 22}],
+        "policy": {"target_policy": "TARGET_POLICY_ALLOW_PRIVATE"}
+      },
+      "field": "targets[0].host",
+      "reason": "loopback targets are never allowed"
+    },
+    {
+      "name": "engine the node does not advertise",
+      "route": {
+        "id": "01JF1N00000000000000000N04",
+        "owner": "admin",
+        "listen": {"port": 40005, "protocol": "L4_PROTOCOL_TCP"},
+        "hops": [
+          {"role": "HOP_ROLE_ENTRY", "engine": "ENGINE_ANIXOPS", "node_refs": ["forward-21"]}
+        ],
+        "targets": [{"host": "198.51.100.7", "port": 8443}]
+      },
+      "field": "hops[0].engine",
+      "reason": "forward-21 does not advertise ENGINE_ANIXOPS"
+    },
+    {
+      "name": "dial_address with several nodes",
+      "route": {
+        "id": "01JF1N00000000000000000N05",
+        "owner": "admin",
+        "listen": {"port": 40006, "protocol": "L4_PROTOCOL_TCP"},
+        "hops": [
+          {"role": "HOP_ROLE_ENTRY", "engine": "ENGINE_GOST", "node_refs": ["forward-31"]},
+          {"role": "HOP_ROLE_EXIT", "engine": "ENGINE_GOST", "node_refs": ["forward-41", "forward-42"], "ingress": {"security": "LINK_SECURITY_TLS"}, "dial_address": "203.0.113.41"}
+        ],
+        "targets": [{"host": "198.51.100.7", "port": 8443}]
+      },
+      "field": "hops[1].dial_address",
+      "reason": "dial_address needs exactly one node in node_refs"
+    }
+  ]
+}

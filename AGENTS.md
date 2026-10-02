@@ -165,7 +165,7 @@ python3 config/scripts/check_mojibake.py                            # GBK mojiba
 python3 config/scripts/check_release_version.py --self-test
 GOWORK=off python3 config/scripts/check_plugin_only_routes.py      # 296 /api/v2 routes vs catalog and packages
 GOWORK=off python3 -m unittest discover -s config/scripts -p '*_test.py'
-for c in pluginhost packagebridge modulepki identity kernelidentity kernelsubscriber kernelsettings kernelorder kerneltelemetry kernelnodeops agent; do bash sdk/api/$c/gen.sh; done  # needs protoc 29.2; then git diff must be empty
+for c in pluginhost packagebridge modulepki identity kernelidentity kernelsubscriber kernelsettings kernelorder kerneltelemetry kernelnodeops forward agent; do bash sdk/api/$c/gen.sh; done  # needs protoc 29.2; then git diff must be empty
 GOWORK=off go test ./internal/tests/protocompat                     # contracts may only grow
 ```
 
