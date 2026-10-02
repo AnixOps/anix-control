@@ -1101,18 +1101,14 @@ export default {
         trafficRatio: '\u6d41\u91cf\u500d\u7387'
       },
       modal: {
-        eyebrow: 'Tunnel',
         titleEdit: '\u7f16\u8f91\u96a7\u9053',
         titleAdd: '\u65b0\u589e\u96a7\u9053',
-        deleteEyebrow: 'Delete',
-        deleteTitle: '\u786e\u8ba4\u5220\u9664',
-        deleteConfirmMessage: '\u786e\u8ba4\u5220\u9664\u96a7\u9053 {name} \u5417\uff1f',
-        deleteHint: '\u5982\u679c\u8be5\u96a7\u9053\u4ecd\u88ab\u8f6c\u53d1\u89c4\u5219\u6216\u7528\u6237\u6743\u9650\u5f15\u7528\uff0c\u540e\u7aef\u4f1a\u963b\u6b62\u5220\u9664\u3002',
+        deleteConfirmMessage: '删除隧道 {name}？',
+        deleteHint: '如果该隧道仍被转发规则或用户授权引用，将无法删除。此操作无法撤销。',
         submitLoading: '\u63d0\u4ea4\u4e2d...',
         submitUpdate: '\u66f4\u65b0',
         submitCreate: '\u521b\u5efa',
-        deleteLoading: '\u5220\u9664\u4e2d...',
-        confirmDelete: '\u786e\u8ba4\u5220\u9664'
+        confirmDelete: '删除隧道'
       },
       fields: {
         name: '\u96a7\u9053\u540d\u79f0',
@@ -1163,7 +1159,6 @@ export default {
         diagnosisRequestFailed: '\u8bca\u65ad\u8bf7\u6c42\u5931\u8d25'
       },
       diagnosis: {
-        eyebrow: 'Diagnosis',
         title: '\u96a7\u9053\u8bca\u65ad\u7ed3\u679c',
         loading: '\u6b63\u5728\u8bca\u65ad\u96a7\u9053\u8fde\u901a\u6027...',
         targetAddress: '\u76ee\u6807\u5730\u5740',
@@ -1171,8 +1166,7 @@ export default {
         message: '\u4fe1\u606f',
         emptyTitle: '\u6682\u65e0\u8bca\u65ad\u7ed3\u679c',
         emptyText: '\u5f53\u524d\u6ca1\u6709\u53ef\u5c55\u793a\u7684\u8282\u70b9\u8bca\u65ad\u6570\u636e\u3002',
-        rerun: '\u91cd\u65b0\u8bca\u65ad',
-        rerunning: '\u8bca\u65ad\u4e2d...'
+        rerun: '\u91cd\u65b0\u8bca\u65ad'
       },
       validation: {
         nameRequired: '\u8bf7\u8f93\u5165\u96a7\u9053\u540d\u79f0',

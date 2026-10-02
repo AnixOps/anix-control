@@ -1100,18 +1100,14 @@ export default {
         trafficRatio: 'Traffic ratio'
       },
       modal: {
-        eyebrow: 'Tunnel',
         titleEdit: 'Edit tunnel',
         titleAdd: 'Create tunnel',
-        deleteEyebrow: 'Delete',
-        deleteTitle: 'Confirm deletion',
         deleteConfirmMessage: 'Delete tunnel {name}?',
-        deleteHint: 'If this tunnel is still referenced by forward rules or user entitlements, the backend will block deletion.',
+        deleteHint: 'If forward rules or user grants still use this tunnel, the delete is refused. This can’t be undone.',
         submitLoading: 'Submitting...',
         submitUpdate: 'Update',
         submitCreate: 'Create',
-        deleteLoading: 'Deleting...',
-        confirmDelete: 'Confirm delete'
+        confirmDelete: 'Delete tunnel'
       },
       fields: {
         name: 'Tunnel name',
@@ -1162,7 +1158,6 @@ export default {
         diagnosisRequestFailed: 'Diagnosis request failed'
       },
       diagnosis: {
-        eyebrow: 'Diagnosis',
         title: 'Tunnel Diagnosis Results',
         loading: 'Diagnosing tunnel connectivity...',
         targetAddress: 'Target Address',
@@ -1170,8 +1165,7 @@ export default {
         message: 'Message',
         emptyTitle: 'No diagnosis results yet',
         emptyText: 'There is currently no diagnosis data to display.',
-        rerun: 'Run Again',
-        rerunning: 'Diagnosing...'
+        rerun: 'Run Again'
       },
       validation: {
         nameRequired: 'Please enter a tunnel name',
