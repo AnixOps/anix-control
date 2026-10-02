@@ -174,18 +174,28 @@ export const useUserStore = defineStore('user', () => {
     localStorage.removeItem('userInfo')
   }
 
+  // Fields merged locally, numbered so that a profile request that was
+  // already in flight cannot answer with older values (a reset
+  // subscription token would otherwise revert to the old one).
+  let patchRevision = 0
+  let localPatches = []
+
   // Merge fields the client learned from an answer (a reset subscription
   // token) without refetching the profile.
   function updateUserInfo(patch) {
+    patchRevision += 1
+    localPatches = [...localPatches.slice(-15), { revision: patchRevision, patch }]
     userInfo.value = normalizeUserInfo({ ...userInfo.value, ...patch })
     localStorage.setItem('userInfo', JSON.stringify(userInfo.value))
   }
 
   async function getUserInfo() {
+    const startedAt = patchRevision
     try {
       const res = await getProfile()
       if (res.data) {
-        const profile = normalizeUserInfo(res.data)
+        const newer = localPatches.filter(entry => entry.revision > startedAt)
+        const profile = normalizeUserInfo(Object.assign({}, res.data, ...newer.map(entry => entry.patch)))
         const profileHasPermissionMetadata = hasOwnPermissions(profile) || hasOwnPermissionMode(profile) || hasOwnRestrictedPlugins(profile)
         if (!profileHasPermissionMetadata) {
           if (hasOwnPermissions(userInfo.value)) {
