@@ -3,6 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import InviteCodes from '@/views/admin/InviteCodes.vue'
 import { setLocale } from '@/i18n'
 import { resetEdition, setEdition } from '@/composables/useEdition'
+import { answerConfirms, toastMessages } from './helpers/feedback'
 
 const adminApi = vi.hoisted(() => ({
   getInviteCodes: vi.fn(),
@@ -94,7 +95,6 @@ describe('Admin invite codes', () => {
 
   it('leaves the expiry to the configuration when empty and refuses a bad count', async () => {
     setEdition('community')
-    const alert = vi.spyOn(window, 'alert').mockImplementation(() => {})
     adminApi.generateInviteCodes.mockResolvedValue(panel({ codes: [] }))
     const wrapper = mountPage()
     await flushPromises()
@@ -107,13 +107,12 @@ describe('Admin invite codes', () => {
     await wrapper.get('[data-testid="generate-invite-codes"]').trigger('click')
     await flushPromises()
     expect(adminApi.generateInviteCodes).toHaveBeenCalledTimes(1)
-    expect(alert).toHaveBeenCalledWith('Generate between 1 and 50 codes at a time.')
+    expect(toastMessages('error')).toContain('Generate between 1 and 50 codes at a time.')
   })
 
   it('revokes an unused code after confirmation and reports a panel error', async () => {
     setEdition('community')
-    const confirm = vi.spyOn(window, 'confirm').mockReturnValue(true)
-    const alert = vi.spyOn(window, 'alert').mockImplementation(() => {})
+    const confirms = answerConfirms(true)
     adminApi.revokeInviteCode
       .mockResolvedValueOnce(panel({ message: 'invite code revoked' }))
       .mockResolvedValueOnce(panel(null, -1, 'invite code already used'))
@@ -122,13 +121,13 @@ describe('Admin invite codes', () => {
 
     await wrapper.findAll('[data-testid="revoke-invite-code"]')[0].trigger('click')
     await flushPromises()
-    expect(confirm).toHaveBeenCalled()
+    expect(confirms.last()).toMatchObject({ tone: 'danger' })
     expect(adminApi.revokeInviteCode).toHaveBeenCalledWith(3)
     expect(adminApi.getInviteCodes).toHaveBeenCalledTimes(2)
 
     await wrapper.findAll('[data-testid="revoke-invite-code"]')[0].trigger('click')
     await flushPromises()
-    expect(alert).toHaveBeenCalledWith('Failed to revoke the code: invite code already used')
+    expect(toastMessages('error')).toContain('Failed to revoke the code: invite code already used')
   })
 
   it('filters by status from the first page', async () => {

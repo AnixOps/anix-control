@@ -120,11 +120,14 @@ import { computed, onMounted, reactive, ref } from 'vue'
 import { generateInviteCodes, getInviteCodes, revokeInviteCode } from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useEdition } from '@/composables/useEdition'
+import { useConfirm, useToast } from '@/ui'
 
 // Invite codes are registration control and served in every edition
 // (identity-platform). Commissions, withdrawals and statistics are the
 // commercial Invite Rewards page.
 const { t, formatDateTime } = useAppI18n()
+const toast = useToast()
+const confirm = useConfirm()
 const { isCommercial, requireInvite, loadEdition } = useEdition()
 
 const maxBatch = 50
@@ -189,7 +192,7 @@ function goTo(next) {
 async function generate() {
   const count = Number(form.count)
   if (!Number.isInteger(count) || count < 1 || count > maxBatch) {
-    window.alert(t('adminInviteCodes.messages.countRange', { max: maxBatch }))
+    toast.error(t('adminInviteCodes.messages.countRange', { max: maxBatch }))
     return
   }
   const payload = { count }
@@ -202,19 +205,24 @@ async function generate() {
     generated.value = Array.isArray(data.codes) ? data.codes : []
     await reload()
   } catch (error) {
-    window.alert(t('adminInviteCodes.messages.generateFailed', { message: errorMessage(error) }))
+    toast.error(t('adminInviteCodes.messages.generateFailed', { message: errorMessage(error) }))
   } finally {
     generating.value = false
   }
 }
 
 async function revoke(item) {
-  if (!window.confirm(t('adminInviteCodes.messages.revokeConfirm', { code: item.code }))) return
+  const confirmed = await confirm({
+    title: t('adminInviteCodes.messages.revokeConfirm', { code: item.code }),
+    confirmLabel: t('adminInviteCodes.actions.revoke'),
+    tone: 'danger'
+  })
+  if (!confirmed) return
   try {
     readPanel(await revokeInviteCode(item.id))
     await fetchCodes()
   } catch (error) {
-    window.alert(t('adminInviteCodes.messages.revokeFailed', { message: errorMessage(error) }))
+    toast.error(t('adminInviteCodes.messages.revokeFailed', { message: errorMessage(error) }))
   }
 }
 
@@ -244,7 +252,8 @@ async function copy(text) {
       copied = false
     }
   }
-  window.alert(copied ? t('adminInviteCodes.messages.copied') : t('adminInviteCodes.messages.copyFailed'))
+  if (copied) toast.success(t('adminInviteCodes.messages.copied'))
+  else toast.error(t('adminInviteCodes.messages.copyFailed'))
 }
 
 onMounted(() => {
