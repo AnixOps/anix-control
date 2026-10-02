@@ -1,59 +1,57 @@
 <template>
-  <div class="step-form">
+  <form id="wizard-step-form" class="step-form" novalidate @submit.prevent="handleConfirm">
     <p class="step-intro">{{ t('forwardWizard.steps.mode.intro') }}</p>
 
-    <div v-if="loadingCurrent" class="mode-loading">{{ t('forwardWizard.loading') }}</div>
+    <UiSkeleton v-if="loadingCurrent" variant="text" :lines="4" :label="t('forwardWizard.loading')" />
 
     <template v-else>
-      <div class="mode-cards">
-        <button
-          v-for="card in cards"
-          :key="card.key"
-          type="button"
-          class="mode-card"
-          :class="{ 'mode-card-active': selectedKey === card.key }"
-          @click="selectCard(card.key)"
-        >
-          <div class="mode-card-head">
-            <span class="mode-card-label">{{ card.label }}</span>
-            <span v-if="currentKey === card.key" class="mode-card-badge">{{ t('forwardWizard.steps.mode.currentBadge') }}</span>
-          </div>
-          <p class="mode-card-description">{{ card.description }}</p>
-        </button>
+      <div class="mode-options">
+        <UiRadioGroup
+          v-model="selectedKey"
+          :label="t('forwardWizard.steps.mode.chooseLabel')"
+          :options="modeOptions"
+          required
+          @update:model-value="selectCard"
+        />
       </div>
 
-      <div v-if="needsNodeXSetup" class="nodex-setup">
-        <p class="nodex-setup-hint">{{ t('forwardWizard.steps.mode.nodeXSetupHint') }}</p>
+      <section v-if="needsNodeXSetup" class="nodex-setup" aria-labelledby="wizard-nodex-setup">
+        <p id="wizard-nodex-setup" class="nodex-setup__hint">{{ t('forwardWizard.steps.mode.nodeXSetupHint') }}</p>
         <div class="form-grid">
-          <label class="form-group">
-            <span>{{ t('runtime.nodeX.fields.baseUrl') }}</span>
-            <input v-model.trim="nodeXBaseUrl" type="text" placeholder="https://nodex.example.com" />
-            <p class="hint">{{ t('runtime.nodeX.fields.baseUrlHint') }}</p>
-          </label>
-          <label class="form-group">
-            <span>{{ t('runtime.nodeX.fields.token') }}</span>
-            <input v-model.trim="nodeXToken" type="password" />
-            <p class="hint">{{ t('runtime.nodeX.fields.tokenHint') }}</p>
-          </label>
+          <UiTextField
+            v-model.trim="nodeXBaseUrl"
+            :label="t('runtime.nodeX.fields.baseUrl')"
+            placeholder="https://nodex.example.com"
+            :help="t('runtime.nodeX.fields.baseUrlHint')"
+            type="url"
+            required
+            size="md"
+          />
+          <UiPasswordField
+            v-model.trim="nodeXToken"
+            :label="t('runtime.nodeX.fields.token')"
+            :help="t('runtime.nodeX.fields.tokenHint')"
+            autocomplete="off"
+            required
+            size="md"
+          />
         </div>
-        <p v-if="errors.nodeX" class="form-error">{{ errors.nodeX }}</p>
-      </div>
+        <p v-if="errors.nodeX" class="form-error" role="alert">{{ errors.nodeX }}</p>
+      </section>
 
-      <p v-if="submitError" class="form-error">{{ submitError }}</p>
-
-      <div class="step-actions">
-        <button class="btn btn-primary" :disabled="!selectedKey || submitLoading" @click="handleConfirm">
-          {{ submitLoading ? t('runtime.nodeX.saveLoading') : t('forwardWizard.steps.mode.confirmAndContinue') }}
-        </button>
-      </div>
+      <p v-if="submitError" class="form-error" role="alert">{{ submitError }}</p>
     </template>
-  </div>
+  </form>
 </template>
 
 <script setup>
 import { computed, onMounted, reactive, ref } from 'vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { getSystemConfig, setSystemConfig } from '@/api/admin'
+import UiPasswordField from '@/ui/UiPasswordField.vue'
+import UiRadioGroup from '@/ui/UiRadioGroup.vue'
+import UiSkeleton from '@/ui/UiSkeleton.vue'
+import UiTextField from '@/ui/UiTextField.vue'
 
 const emit = defineEmits(['selected'])
 
@@ -100,6 +98,16 @@ const cards = computed(() => ([
     description: t('forwardWizard.steps.mode.cards.gostTunnel.description')
   }
 ]))
+
+// The wizard footer reads these (UI U7: 上一步 / 下一步 at the bottom).
+const modeOptions = computed(() => cards.value.map(card => ({
+  value: card.key,
+  label: currentKey.value === card.key ? `${card.label} · ${t('forwardWizard.steps.mode.currentBadge')}` : card.label,
+  description: card.description
+})))
+const primaryLabel = computed(() => t('forwardWizard.steps.mode.confirmAndContinue'))
+const canSubmit = computed(() => Boolean(selectedKey.value) && !loadingCurrent.value)
+defineExpose({ submit: handleConfirm, busy: submitLoading, canSubmit, primaryLabel })
 
 const needsNodeXSetup = computed(() =>
   selectedKey.value !== CARD_LOCAL && (!nodeXBaseUrlConfigured.value || !nodeXTokenConfigured.value)
@@ -218,39 +226,56 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.step-form { display: flex; flex-direction: column; gap: 16px; }
-.step-intro { margin: 0; color: var(--text-secondary); line-height: 1.6; }
-.mode-loading { color: var(--text-secondary); text-align: center; padding: 40px 0; }
-.mode-cards { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
-.mode-card {
+.step-form {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  text-align: left;
-  border: 1px solid var(--border-color);
-  border-radius: 14px;
-  padding: 16px;
-  background: var(--bg-color);
-  color: var(--text-color);
-  cursor: pointer;
+  gap: var(--space-5);
 }
-.mode-card-active { border-color: var(--primary-color); box-shadow: 0 0 0 2px var(--primary-color) inset; }
-.mode-card-head { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
-.mode-card-label { font-weight: 600; }
-.mode-card-badge { font-size: 11px; padding: 2px 8px; border-radius: 999px; background: var(--accent-fill); color: var(--on-accent); }
-.mode-card-description { margin: 0; font-size: 13px; color: var(--text-secondary); line-height: 1.5; }
-.nodex-setup { border: 1px solid var(--border-color); border-radius: 14px; padding: 14px 16px; background: var(--bg-color); display: flex; flex-direction: column; gap: 12px; }
-.nodex-setup-hint { margin: 0; color: var(--text-secondary); font-size: 13px; }
-.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-.form-group { display: flex; flex-direction: column; gap: 8px; }
-.form-group input { border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-color); color: var(--text-color); padding: 12px 14px; }
-.hint { margin: 0; font-size: 12px; color: var(--text-secondary); }
-.form-error { margin: 0; color: #b91c1c; }
-.step-actions { display: flex; justify-content: flex-end; }
-.btn { display: inline-flex; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: 12px; padding: 10px 16px; cursor: pointer; }
-.btn-primary { background: var(--accent-fill); color: var(--on-accent); }
-@media (max-width: 720px) {
-  .mode-cards { grid-template-columns: 1fr; }
-  .form-grid { grid-template-columns: 1fr; }
+
+.step-intro {
+  margin: 0;
+  color: var(--label-2);
+}
+
+/* The three ways as selectable cards (a radio group underneath). */
+.mode-options :deep(.ui-radio-group__items) {
+  gap: var(--space-3);
+}
+
+.mode-options :deep(.ui-radio) {
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  box-shadow: 0 0 0 1px var(--separator);
+  transition: box-shadow var(--dur-toggle) var(--ease-standard);
+}
+
+.mode-options :deep(.ui-radio:has([data-state='checked'])) {
+  box-shadow: 0 0 0 2px var(--accent);
+}
+
+.nodex-setup {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border-radius: var(--radius-md);
+  background: var(--fill-1);
+}
+
+.nodex-setup__hint {
+  margin: 0;
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
+}
+
+.form-error {
+  margin: 0;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mode-options :deep(.ui-radio) {
+    transition: none;
+  }
 }
 </style>

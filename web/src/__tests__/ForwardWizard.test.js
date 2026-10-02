@@ -45,7 +45,50 @@ describe('ForwardWizard.vue', () => {
     await wrapper.vm.$nextTick()
 
     const notice = wrapper.get('[data-testid="wizard-node-token"]')
-    expect(notice.text()).toContain('generated-relay-token')
+    expect(notice.text()).toContain('relay-hk')
+    expect(notice.get('input').element.value).toBe('generated-relay-token')
     expect(wrapper.vm.stepIndex).toBe(2)
   })
+
+  it('puts 上一步 / 下一步 in the footer: the primary button submits the step form', async () => {
+    const step = {
+      template: '<form id="wizard-step-form" @submit.prevent="submit"><span data-test="step" /></form>',
+      setup(_, { expose }) {
+        const calls = []
+        const submit = () => calls.push('submit')
+        expose({ submit, busy: false, canSubmit: true, primaryLabel: 'Create and continue', calls })
+        return { submit }
+      }
+    }
+    const wrapper = mount(ForwardWizard, {
+      attachTo: document.body,
+      global: {
+        stubs: { StepForwardModeForm: step, StepMachineForm: step, StepNodeForm: step, StepTunnelForm: step, StepForwardForm: step, RouterLink: true }
+      }
+    })
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-test="wizard-back"]').exists()).toBe(false)
+    const next = wrapper.get('[data-test="wizard-next"]')
+    expect(next.attributes('type')).toBe('submit')
+    expect(next.attributes('form')).toBe('wizard-step-form')
+    expect(next.text()).toBe('Create and continue')
+
+    wrapper.vm.handleModeSelected({ nodeXMode: false, tunnelType: 1 })
+    await wrapper.vm.$nextTick()
+    expect(wrapper.vm.stepIndex).toBe(1)
+    expect(wrapper.findAll('.wizard-step')[0].classes()).toContain('complete')
+    await wrapper.get('[data-test="wizard-back"]').trigger('click')
+    expect(wrapper.vm.stepIndex).toBe(0)
+
+    wrapper.vm.handleModeSelected({ nodeXMode: false, tunnelType: 1 })
+    wrapper.vm.handleNodeCreated({ id: 3, name: 'relay-1' })
+    wrapper.vm.handleTunnelCreated({ id: 4, name: 'tunnel-1' })
+    wrapper.vm.handleForwardCreated({ id: 5, name: 'forward-1' })
+    await wrapper.vm.$nextTick()
+    expect(wrapper.find('[data-test="wizard-next"]').exists()).toBe(false)
+    await wrapper.get('[data-test="wizard-create-another"]').trigger('click')
+    expect(wrapper.vm.stepIndex).toBe(3)
+    wrapper.unmount()
+  })
 })
+

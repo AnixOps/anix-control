@@ -1,89 +1,35 @@
 <template>
-  <div class="step-form">
+  <form id="wizard-step-form" class="step-form" novalidate @submit.prevent="submitForm">
     <p class="step-intro">{{ t('forwardWizard.steps.node.intro') }}</p>
 
-    <div v-if="nodes.length" class="existing-list">
-      <p class="existing-label">{{ t('forwardWizard.shared.existingLabel') }}</p>
-      <ul>
-        <li v-for="node in nodes" :key="node.id" class="existing-item">
-          <div>
-            <strong>{{ node.name }}</strong>
-            <span class="existing-meta">{{ node.host }}:{{ node.port }} · {{ node.type }}</span>
-          </div>
-          <button class="btn btn-secondary btn-sm" @click="useExisting(node)">
-            {{ t('forwardWizard.shared.useExisting') }}
-          </button>
-        </li>
-      </ul>
-    </div>
+    <WizardExistingList
+      v-if="nodes.length"
+      :items="nodes.map(node => ({ ...node, title: node.name, meta: `${node.host}:${node.port} · ${node.type}` }))"
+      @use="useExisting"
+    />
 
     <div class="form-grid">
-      <label class="form-group">
-        <span>{{ t('runtime.nodeXTopology.nodeModal.fields.name') }}</span>
-        <input v-model.trim="form.name" type="text" :placeholder="t('runtime.nodeXTopology.nodeModal.placeholders.name')" />
-        <small v-if="errors.name" class="field-error">{{ errors.name }}</small>
-      </label>
-      <label class="form-group">
-        <span>{{ t('runtime.nodeXTopology.nodeModal.fields.type') }}</span>
-        <select v-model="form.type">
-          <option value="relay">{{ t('runtime.nodeXTopology.filters.relay') }}</option>
-          <option value="exit">{{ t('runtime.nodeXTopology.filters.exit') }}</option>
-        </select>
-      </label>
+      <UiTextField v-model.trim="form.name" :label="t('runtime.nodeXTopology.nodeModal.fields.name')" :placeholder="t('runtime.nodeXTopology.nodeModal.placeholders.name')" :error="errors.name" required size="md" />
+      <UiSelect v-model="form.type" :label="t('runtime.nodeXTopology.nodeModal.fields.type')" :options="typeOptions" size="md" />
+      <UiTextField v-model.trim="form.host" :label="t('runtime.nodeXTopology.nodeModal.fields.host')" :placeholder="t('runtime.nodeXTopology.nodeModal.placeholders.host')" :error="errors.host" required size="md" />
+      <UiTextField v-model.trim="form.port" type="number" min="1" max="65535" inputmode="numeric" :label="t('runtime.nodeXTopology.nodeModal.fields.servicePort')" :error="errors.port" required size="md" />
+      <UiTextField v-model.trim="form.apiPort" type="number" min="1" max="65535" inputmode="numeric" :label="t('runtime.nodeXTopology.nodeModal.fields.apiPort')" :help="t('runtime.nodeXTopology.nodeModal.hints.apiPort')" :error="errors.apiPort" required size="md" />
+      <UiTextField v-model.trim="form.apiToken" :label="t('runtime.nodeXTopology.nodeModal.fields.apiToken')" :placeholder="t('runtime.nodeXTopology.nodeModal.placeholders.apiToken')" autocomplete="off" size="md" />
+      <UiTextField v-model.trim="form.metricsPort" type="number" min="1" max="65535" inputmode="numeric" :label="t('runtime.nodeXTopology.nodeModal.fields.metricsPort')" :help="t('runtime.nodeXTopology.nodeModal.hints.metricsPort')" size="md" />
+      <UiTextField v-model.trim="form.region" :label="t('runtime.nodeXTopology.nodeModal.fields.region')" :placeholder="t('runtime.nodeXTopology.nodeModal.placeholders.region')" size="md" />
+      <UiTextField v-model.trim="form.isp" :label="t('runtime.nodeXTopology.nodeModal.fields.isp')" :placeholder="t('runtime.nodeXTopology.nodeModal.placeholders.isp')" size="md" />
     </div>
-    <div class="form-grid">
-      <label class="form-group">
-        <span>{{ t('runtime.nodeXTopology.nodeModal.fields.host') }}</span>
-        <input v-model.trim="form.host" type="text" :placeholder="t('runtime.nodeXTopology.nodeModal.placeholders.host')" />
-        <small v-if="errors.host" class="field-error">{{ errors.host }}</small>
-      </label>
-      <label class="form-group">
-        <span>{{ t('runtime.nodeXTopology.nodeModal.fields.servicePort') }}</span>
-        <input v-model.trim="form.port" type="number" min="1" max="65535" />
-        <small v-if="errors.port" class="field-error">{{ errors.port }}</small>
-      </label>
-    </div>
-    <div class="form-grid">
-      <label class="form-group">
-        <span>{{ t('runtime.nodeXTopology.nodeModal.fields.apiPort') }}</span>
-        <input v-model.trim="form.apiPort" type="number" min="1" max="65535" />
-        <small v-if="errors.apiPort" class="field-error">{{ errors.apiPort }}</small>
-        <small v-else class="field-hint">{{ t('runtime.nodeXTopology.nodeModal.hints.apiPort') }}</small>
-      </label>
-      <label class="form-group">
-        <span>{{ t('runtime.nodeXTopology.nodeModal.fields.apiToken') }}</span>
-        <input v-model.trim="form.apiToken" type="text" :placeholder="t('runtime.nodeXTopology.nodeModal.placeholders.apiToken')" />
-      </label>
-    </div>
-    <div class="form-grid">
-      <label class="form-group">
-        <span>{{ t('runtime.nodeXTopology.nodeModal.fields.metricsPort') }}</span>
-        <input v-model.trim="form.metricsPort" type="number" min="1" max="65535" />
-        <small class="field-hint">{{ t('runtime.nodeXTopology.nodeModal.hints.metricsPort') }}</small>
-      </label>
-      <label class="form-group">
-        <span>{{ t('runtime.nodeXTopology.nodeModal.fields.region') }}</span>
-        <input v-model.trim="form.region" type="text" :placeholder="t('runtime.nodeXTopology.nodeModal.placeholders.region')" />
-      </label>
-      <label class="form-group">
-        <span>{{ t('runtime.nodeXTopology.nodeModal.fields.isp') }}</span>
-        <input v-model.trim="form.isp" type="text" :placeholder="t('runtime.nodeXTopology.nodeModal.placeholders.isp')" />
-      </label>
-    </div>
-
-    <div class="step-actions">
-      <button class="btn btn-primary" :disabled="saving" @click="submitForm">
-        {{ saving ? t('runtime.nodeXTopology.nodeModal.saveLoading') : t('forwardWizard.steps.node.createAndContinue') }}
-      </button>
-    </div>
-  </div>
+  </form>
 </template>
 
 <script setup>
-import { onMounted, reactive, ref } from 'vue'
+import { computed, onMounted, reactive, ref } from 'vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { createForwardNode, getForwardNodes } from '@/api/admin'
 import { isMaskedSecret } from '@/constants/secrets'
+import UiSelect from '@/ui/UiSelect.vue'
+import UiTextField from '@/ui/UiTextField.vue'
+import WizardExistingList from './WizardExistingList.vue'
 
 const emit = defineEmits(['created'])
 
@@ -208,28 +154,30 @@ async function submitForm() {
   }
 }
 
+const typeOptions = computed(() => [
+  { value: 'relay', label: t('runtime.nodeXTopology.filters.relay') },
+  { value: 'exit', label: t('runtime.nodeXTopology.filters.exit') }
+])
+
+// The wizard footer reads these (UI U7: 上一步 / 下一步 at the bottom).
+defineExpose({ submit: submitForm, busy: saving, canSubmit: true, primaryLabel: computed(() => t('forwardWizard.steps.node.createAndContinue')) })
+
 onMounted(loadNodes)
 </script>
 
 <style scoped>
-.step-form { display: flex; flex-direction: column; gap: 16px; }
-.step-intro { margin: 0; color: var(--text-secondary); line-height: 1.6; }
-.existing-list { border: 1px solid var(--border-color); border-radius: 14px; padding: 12px 14px; background: var(--bg-color); }
-.existing-label { margin: 0 0 8px; font-size: 12px; text-transform: uppercase; letter-spacing: .06em; color: var(--text-secondary); }
-.existing-list ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
-.existing-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.existing-meta { margin-left: 8px; color: var(--text-secondary); font-size: 13px; }
-.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
-.form-group { display: flex; flex-direction: column; gap: 8px; }
-.form-group input, .form-group select { border: 1px solid var(--border-color); border-radius: 12px; background: var(--bg-color); color: var(--text-color); padding: 12px 14px; }
-.field-error { color: #b91c1c; }
-.field-hint { color: var(--text-secondary); }
-.step-actions { display: flex; justify-content: flex-end; }
-.btn { display: inline-flex; align-items: center; justify-content: center; border: 1px solid transparent; border-radius: 12px; padding: 10px 16px; cursor: pointer; }
-.btn-primary { background: var(--accent-fill); color: var(--on-accent); }
-.btn-secondary { background: var(--surface-color); color: var(--text-color); border-color: var(--border-color); }
-.btn-sm { padding: 6px 12px; font-size: 12px; }
-@media (max-width: 720px) {
-  .form-grid { grid-template-columns: 1fr; }
+.step-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-5);
+}
+
+.step-intro {
+  margin: 0;
+  color: var(--label-2);
+}
+
+.form-error {
+  margin: 0;
 }
 </style>
