@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { DOMWrapper, flushPromises, mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import Deployments from '@/views/admin/Deployments.vue'
+import UiSelect from '@/ui/UiSelect.vue'
 import { answerConfirms } from './helpers/feedback'
 
 const kernelApi = vi.hoisted(() => ({
@@ -123,6 +124,18 @@ function assignmentDrawer() {
   return inBody('[data-testid="assignment-drawer"]')
 }
 
+// UiSelect (Reka) has no native value: read and set it through the component.
+function selectField(wrapper, id) {
+  const found = wrapper.findAllComponents(UiSelect).find(select => select.props('id') === id)
+  if (!found) throw new Error(`Unable to find the select #${id}`)
+  return found
+}
+
+async function choose(wrapper, id, value) {
+  selectField(wrapper, id).vm.$emit('update:modelValue', value)
+  await flushPromises()
+}
+
 async function openAssignmentDrawer(wrapper) {
   await wrapper.get('[data-testid="new-assignment"]').trigger('click')
   await flushPromises()
@@ -206,11 +219,11 @@ describe('Deployments', () => {
     expect(kernelApi.getKernelPlugins).toHaveBeenCalledTimes(1)
     expect(kernelApi.getKernelPluginReleases).toHaveBeenCalledTimes(1)
     expect(kernelApi.getKernelInstallations).toHaveBeenCalledTimes(1)
-    expect(drawer.get('#assignment-node').element.value).toBe('11')
-    expect(drawer.get('#assignment-plugin').element.value).toBe('gost-mesh')
-    expect(drawer.get('#assignment-scope').element.value).toBe('forward')
+    expect(selectField(wrapper, 'assignment-node').props('modelValue')).toBe(11)
+    expect(selectField(wrapper, 'assignment-plugin').props('modelValue')).toBe('gost-mesh')
+    expect(selectField(wrapper, 'assignment-scope').props('modelValue')).toBe('forward')
     expect(drawer.get('#assignment-role').element.value).toBe('relay')
-    expect(drawer.get('#assignment-version').element.value).toBe('1.0.0')
+    expect(selectField(wrapper, 'assignment-version').props('modelValue')).toBe('1.0.0')
     expect(drawer.get('#assignment-config-revision').element.value).toBe('6')
     wrapper.unmount()
   })
@@ -243,10 +256,7 @@ describe('Deployments', () => {
 
     await wrapper.get('[data-testid="deployment-targets"]').trigger('click')
     await nextTick()
-    const picker = wrapper.get('#assignment-node-filter')
-    picker.element.value = '22'
-    await picker.trigger('change')
-    await flushPromises()
+    await choose(wrapper, 'assignment-node-filter', 22)
     expect(wrapper.get('[data-testid="deployment-target-panel"]').text()).toContain('nat-egress')
 
     firstAssignments.resolve([firstAssignment])
@@ -311,12 +321,12 @@ describe('Deployments', () => {
     await openTargets(wrapper)
     const drawer = await openAssignmentDrawer(wrapper)
 
-    await drawer.get('#assignment-node').setValue('22')
+    await choose(wrapper, 'assignment-node', 22)
     await drawer.get('[data-testid="save-assignment"]').trigger('click')
     await flushPromises()
 
     expect(kernelApi.upsertKernelNodeAssignment).toHaveBeenCalledWith(22, expect.objectContaining({ plugin_id: 'gost-mesh' }))
-    expect(wrapper.get('#assignment-node-filter').element.value).toBe('22')
+    expect(selectField(wrapper, 'assignment-node-filter').props('modelValue')).toBe(22)
     expect(kernelApi.getKernelNodeAssignments.mock.calls.filter(([nodeID]) => nodeID === 22)).toHaveLength(1)
     expect(kernelApi.getKernelOperations).toHaveBeenCalledTimes(2)
     expect(wrapper.get('[data-testid="deployment-target-panel"]').text()).toContain('tokyo-canary')
@@ -355,7 +365,7 @@ describe('Deployments', () => {
     expect(kernelApi.getKernelOperations).toHaveBeenCalledTimes(2)
 
     const drawer = await openAssignmentDrawer(wrapper)
-    await drawer.get('#assignment-node').setValue('22')
+    await choose(wrapper, 'assignment-node', 22)
     await drawer.get('[data-testid="save-assignment"]').trigger('click')
     await flushPromises()
     expect(kernelApi.getKernelOperations).toHaveBeenCalledTimes(3)
@@ -477,12 +487,12 @@ describe('Deployments', () => {
     await nextTick()
     expect(kernelApi.upsertKernelNodeAssignment).toHaveBeenCalledWith(11, expect.objectContaining({ enabled: false }))
     const picker = wrapper.get('#assignment-node-filter')
-    expect(picker.attributes('disabled')).toBeDefined()
+    expect(picker.attributes('data-disabled')).toBeDefined()
 
     wrapper.vm.$.setupState.selectedNodeID = 22
     await nextTick()
     await flushPromises()
-    expect(picker.element.value).toBe('22')
+    expect(selectField(wrapper, 'assignment-node-filter').props('modelValue')).toBe(22)
     mutation.resolve({ id: 7 })
     await flushPromises()
 
@@ -513,7 +523,8 @@ describe('Deployments', () => {
     await flushPromises()
     const drawer = assignmentDrawer()
     for (const selector of ['#assignment-node', '#assignment-plugin', '#assignment-scope', '#assignment-role']) {
-      expect(drawer.get(selector).attributes('disabled')).toBeDefined()
+      // A native input says disabled; the Reka select trigger data-disabled.
+      expect(drawer.get(selector).attributes('disabled') ?? drawer.get(selector).attributes('data-disabled')).toBeDefined()
     }
     await drawer.get('#assignment-config-revision').setValue('8')
     await drawer.get('#assignment-rollout-group').setValue('canary-b')

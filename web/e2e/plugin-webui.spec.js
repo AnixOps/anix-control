@@ -216,7 +216,7 @@ test('installs a signed WebUI bundle and isolates invalid plugin routes from cor
   await seedAdmin(page, ['browser-fixture.view'])
 
   await page.goto('/admin/dashboard')
-  await expect(page.locator('.page-toolbar h1')).toHaveText('Dashboard')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dashboard')
   await expect(page.locator('a[href="/admin/extensions/browser-fixture"]')).toBeVisible()
   await expect(page.locator('a[href="/admin/extensions/route-collision"]')).toHaveCount(0)
   await expect(page.locator('a[href="/admin/extensions/forbidden-fixture"]')).toHaveCount(0)
@@ -308,7 +308,7 @@ test('disabled and tampered plugins fail closed without contaminating core admin
   await seedAdmin(page, ['tampered-fixture.view'])
 
   await page.goto('/admin/dashboard')
-  await expect(page.locator('.page-toolbar h1')).toHaveText('Dashboard')
+  await expect(page.getByRole('heading', { level: 1 })).toHaveText('Dashboard')
   await expect(page.locator('a[href="/admin/extensions/disabled-fixture"]')).toHaveCount(0)
   await expect(page.locator('a[href="/admin/extensions/tampered-fixture"]')).toHaveCount(0)
   await expect(page.getByRole('navigation', { name: 'Admin navigation' }).getByRole('link', { name: 'Dashboard', exact: true })).toBeVisible()

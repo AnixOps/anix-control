@@ -1,78 +1,99 @@
 <template>
-  <section class="operation-timeline" data-testid="operation-timeline" :aria-label="heading || t('control.activity.title')">
+  <section class="operation-timeline" data-testid="operation-timeline" :aria-labelledby="headingId">
     <header class="timeline-header">
-      <div>
-        <h2>{{ heading || (expanded ? t('control.activity.all') : t('control.activity.scoped')) }}</h2>
-      </div>
-      <button
+      <h2 :id="headingId" class="timeline-title">{{ heading || (expanded ? t('control.activity.all') : t('control.activity.scoped')) }}</h2>
+      <UiButton
         v-if="showToggle"
-        class="btn timeline-toggle"
+        size="sm"
+        :icon="History"
         data-testid="show-all-activity"
-        type="button"
         :aria-expanded="expanded ? 'true' : 'false'"
         @click="expanded = !expanded"
       >
-        <History :size="16" aria-hidden="true" />
-        <span>{{ expanded ? t('control.activity.showScoped') : t('control.activity.showAll') }}</span>
-      </button>
+        {{ expanded ? t('control.activity.showScoped') : t('control.activity.showAll') }}
+      </UiButton>
     </header>
 
-    <div class="timeline-table-wrap">
-      <table class="timeline-table">
-        <thead>
-          <tr>
-            <th>{{ t('control.table.operation') }}</th>
-            <th>{{ t('control.table.plugin') }}</th>
-            <th>{{ t('control.table.target') }}</th>
-            <th>{{ t('control.table.version') }}</th>
-            <th>{{ t('control.table.revision') }}</th>
-            <th>{{ t('control.table.deadline') }}</th>
-            <th>{{ t('control.table.state') }}</th>
-            <th>{{ t('control.table.actions') }}</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-for="operation in visibleOperations" :key="operation.id" :data-testid="`operation-row-${operation.id}`">
-            <td :data-label="t('control.table.operation')">
-              <code>{{ operation.kind || '-' }}</code>
-              <code class="secondary-cell">{{ operation.id }}</code>
-              <code class="secondary-cell" :data-testid="`operation-chain-${operation.id}`">{{ t('control.table.chain') }}: {{ operation.operation_chain || operation.id || '-' }}</code>
-            </td>
-            <td :data-label="t('control.table.plugin')">{{ operation.plugin_id || '-' }}</td>
-            <td :data-label="t('control.table.target')">{{ operationTarget(operation) }}</td>
-            <td :data-label="t('control.table.version')"><code>{{ operation.target_version || '-' }}</code></td>
-            <td :data-label="t('control.table.revision')">{{ operation.revision ?? '-' }}</td>
-            <td :data-label="t('control.table.deadline')">{{ formatDate(operation.deadline_at || operation.created_at) }}</td>
-            <td :data-label="t('control.table.state')">
-              <span :class="['state-badge', stateClass(operation.state)]">{{ operation.state || '-' }}</span>
-              <span v-if="operation.last_error" class="row-error">{{ operation.last_error }}</span>
-            </td>
-            <td :data-label="t('control.table.actions')">
-              <button
-                v-if="isCancellable(operation)"
-                class="btn btn-danger"
-                :data-testid="`cancel-operation-${operation.id}`"
-                type="button"
-                :disabled="busyOperationID === operation.id"
-                @click="cancel(operation)"
-              >
-                {{ t('control.actions.cancel') }}
-              </button>
-            </td>
-          </tr>
-          <tr v-if="visibleOperations.length === 0">
-            <td colspan="8" class="empty-row">{{ emptyLabel || (expanded ? t('control.empty.operations') : t('control.activity.empty')) }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+    <ol v-if="visibleOperations.length" class="timeline-list">
+      <li
+        v-for="operation in visibleOperations"
+        :key="operation.id"
+        class="timeline-item"
+        :class="`is-${stateTone(operation.state)}`"
+        :data-testid="`operation-row-${operation.id}`"
+      >
+        <span class="timeline-marker" aria-hidden="true" />
+        <div class="timeline-body">
+          <div class="timeline-line">
+            <code class="timeline-kind">{{ operation.kind || '-' }}</code>
+            <UiBadge :tone="stateTone(operation.state)" :label="operation.state || '-'" />
+            <time class="timeline-time" :datetime="operation.deadline_at || operation.created_at || undefined">
+              {{ formatDate(operation.deadline_at || operation.created_at) }}
+            </time>
+          </div>
+          <dl class="timeline-fields">
+            <div>
+              <dt>{{ t('control.table.plugin') }}</dt>
+              <dd>{{ operation.plugin_id || '-' }}</dd>
+            </div>
+            <div>
+              <dt>{{ t('control.table.target') }}</dt>
+              <dd>{{ operationTarget(operation) }}</dd>
+            </div>
+            <div>
+              <dt>{{ t('control.table.version') }}</dt>
+              <dd><code>{{ operation.target_version || '-' }}</code></dd>
+            </div>
+            <div>
+              <dt>{{ t('control.table.revision') }}</dt>
+              <dd>{{ operation.revision ?? '-' }}</dd>
+            </div>
+          </dl>
+          <p class="timeline-meta">
+            <code>{{ operation.id }}</code>
+            <code :data-testid="`operation-chain-${operation.id}`">{{ t('control.table.chain') }}: {{ operation.operation_chain || operation.id || '-' }}</code>
+          </p>
+          <p v-if="operation.last_error" class="timeline-error">{{ operation.last_error }}</p>
+        </div>
+        <UiButton
+          v-if="isCancellable(operation)"
+          class="timeline-cancel"
+          size="sm"
+          variant="danger-soft"
+          :data-testid="`cancel-operation-${operation.id}`"
+          :disabled="busyOperationID === operation.id"
+          @click="cancel(operation)"
+        >
+          {{ t('control.actions.cancel') }}
+        </UiButton>
+      </li>
+    </ol>
+    <UiEmptyState
+      v-else
+      compact
+      :icon="History"
+      heading-tag="h3"
+      :title="emptyLabel || (expanded ? t('control.empty.operations') : t('control.activity.empty'))"
+    />
   </section>
 </template>
 
 <script setup>
+// The kernel operation ledger as a vertical timeline (UI U8), newest first:
+// a marker and a state badge (the state word, not colour alone), the kind,
+// plugin, target, version, revision, time, the operation chain, the last
+// error, and 取消操作 for pending / dispatching / running operations.
+// Shared by 部署编排 (scoped to the open deployment or node, 显示全部活动
+// shows the rest) and 插件中心 (plugin operations, no toggle, at most 8).
+// An ordered list, not a UiDataTable: it is listed in
+// scripts/data-table-pages.mjs so a bare <table> does not come back.
 import { computed, ref, watch } from 'vue'
 import { History } from '@lucide/vue'
+import { useId } from 'reka-ui'
 import { useAppI18n } from '@/composables/useAppI18n'
+import UiBadge from '@/ui/UiBadge.vue'
+import UiButton from '@/ui/UiButton.vue'
+import UiEmptyState from '@/ui/UiEmptyState.vue'
 
 const CANCELLABLE_OPERATION_STATES = new Set(['pending', 'dispatching', 'running'])
 
@@ -88,6 +109,7 @@ const props = defineProps({
 const emit = defineEmits(['cancel'])
 const { t, formatDateTime } = useAppI18n()
 const expanded = ref(false)
+const headingId = useId(undefined, 'operation-timeline')
 const scopedIDs = computed(() => new Set(props.scopedOperationIDs.map(String)))
 const sortedOperations = computed(() => {
   const sorted = props.operations.slice().sort((left, right) => {
@@ -124,45 +146,178 @@ function formatDate(value) {
   return formatDateTime(value, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', hour12: false }) || '-'
 }
 
-function stateClass(state) {
-  if (state === 'healthy' || state === 'enabled' || state === 'succeeded' || state === 'completed') return 'state-active'
-  if (state === 'failed' || state === 'superseded' || state === 'disabled' || state === 'cancel_requested' || state === 'cancelled' || state === 'timed_out') return 'state-error'
-  return 'state-pending'
+function stateTone(state) {
+  if (state === 'healthy' || state === 'enabled' || state === 'succeeded' || state === 'completed') return 'success'
+  if (state === 'failed' || state === 'superseded' || state === 'disabled' || state === 'cancel_requested' || state === 'cancelled' || state === 'timed_out') return 'danger'
+  return 'warning'
 }
 </script>
 
 <style scoped>
-.operation-timeline { display: grid; gap: 12px; min-width: 0; }
-.timeline-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.timeline-header h2 { margin: 0; font-size: 16px; }
-.timeline-toggle { display: inline-flex; align-items: center; gap: 7px; }
-.timeline-table-wrap { overflow-x: auto; border: 1px solid var(--border-color); border-radius: 8px; }
-.timeline-table { width: 100%; min-width: 820px; border-collapse: collapse; font-size: 13px; }
-.timeline-table th, .timeline-table td { padding: 10px 12px; border-bottom: 1px solid var(--border-color); text-align: left; vertical-align: top; }
-.timeline-table th { color: var(--text-secondary); font-size: 11px; font-weight: 700; text-transform: uppercase; }
-.timeline-table tbody tr:last-child td { border-bottom: 0; }
-.secondary-cell, .row-error { display: block; margin-top: 3px; overflow-wrap: anywhere; }
-.secondary-cell { color: var(--text-secondary); font-size: 11px; }
-.row-error { color: var(--error-color); font-size: 11px; }
-.state-badge { display: inline-flex; border-radius: 6px; padding: 3px 7px; font-size: 12px; }
-.state-active { color: color-mix(in srgb, var(--success) 78%, var(--label-1)); background: var(--success-soft); }
-.state-error { color: color-mix(in srgb, var(--danger) 78%, var(--label-1)); background: var(--danger-soft); }
-.state-pending { color: color-mix(in srgb, var(--warning) 78%, var(--label-1)); background: var(--warning-soft); }
-.empty-row { color: var(--text-secondary); text-align: center; }
-.btn { min-height: 32px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--surface-color); color: var(--text-color); cursor: pointer; padding: 6px 10px; }
-.btn-danger { border-color: var(--error-color); color: var(--error-color); }
-.btn:disabled { cursor: not-allowed; opacity: .55; }
-@media (max-width: 720px) {
-  .timeline-header { align-items: flex-start; flex-wrap: wrap; }
-  .timeline-table-wrap { overflow: visible; border: 0; }
-  .timeline-table { display: block; min-width: 0; border-collapse: separate; border-spacing: 0; }
-  .timeline-table thead { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
-  .timeline-table tbody { display: block; }
-  .timeline-table tbody tr { display: block; min-width: 0; padding: 12px; border: 1px solid var(--border-color); border-radius: 6px; }
-  .timeline-table tbody tr + tr { margin-top: 10px; }
-  .timeline-table td { display: grid; grid-template-columns: minmax(96px, 38%) minmax(0, 1fr); gap: 8px; min-width: 0; padding: 7px 0; border: 0; }
-  .timeline-table td::before { content: attr(data-label); color: var(--text-secondary); font-size: 11px; font-weight: 700; text-transform: uppercase; }
-  .timeline-table .empty-row { display: block; padding: 0; text-align: left; }
-  .timeline-table .empty-row::before { content: none; }
+.operation-timeline {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+  padding: var(--space-5);
+  border-radius: var(--radius-md);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-1), 0 0 0 0.5px var(--separator);
+}
+
+.timeline-header {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: space-between;
+}
+
+.timeline-title {
+  margin: 0;
+  font-size: var(--type-title-3-size);
+  font-weight: var(--weight-semibold);
+  line-height: var(--type-title-3-line);
+}
+
+.timeline-list {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.timeline-item {
+  position: relative;
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  gap: var(--space-3);
+  align-items: start;
+  padding-bottom: var(--space-5);
+}
+
+.timeline-item:last-child {
+  padding-bottom: 0;
+}
+
+/* The rail between markers. */
+.timeline-item:not(:last-child)::before {
+  position: absolute;
+  top: 18px;
+  bottom: 0;
+  left: 7px;
+  width: 2px;
+  background: var(--separator);
+  content: '';
+}
+
+.timeline-marker {
+  width: 12px;
+  height: 12px;
+  margin: 4px 2px 0;
+  border: 2px solid var(--bg-elevated);
+  border-radius: 50%;
+  background: var(--warning);
+  box-shadow: 0 0 0 1px var(--warning);
+}
+
+.is-success .timeline-marker {
+  background: var(--success);
+  box-shadow: 0 0 0 1px var(--success);
+}
+
+.is-danger .timeline-marker {
+  background: var(--danger);
+  box-shadow: 0 0 0 1px var(--danger);
+}
+
+.timeline-body {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  min-width: 0;
+}
+
+.timeline-line {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+}
+
+.timeline-kind {
+  color: var(--label-1);
+  font-family: var(--font-mono);
+  font-size: var(--type-callout-size);
+  font-weight: var(--weight-semibold);
+  overflow-wrap: anywhere;
+}
+
+.timeline-time {
+  color: var(--label-2);
+  font-size: var(--type-caption-size);
+  font-variant-numeric: tabular-nums;
+}
+
+.timeline-fields {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-5);
+  margin: 0;
+  font-size: var(--type-caption-size);
+}
+
+.timeline-fields div {
+  display: flex;
+  gap: var(--space-1);
+  min-width: 0;
+}
+
+.timeline-fields dt {
+  color: var(--label-2);
+}
+
+.timeline-fields dd {
+  margin: 0;
+  color: var(--label-1);
+  overflow-wrap: anywhere;
+}
+
+.timeline-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-4);
+  margin: 0;
+  color: var(--label-2);
+  font-size: var(--type-caption-size);
+}
+
+.timeline-meta code,
+.timeline-fields code {
+  font-family: var(--font-mono);
+  overflow-wrap: anywhere;
+}
+
+.timeline-error {
+  margin: 0;
+  color: var(--danger);
+  font-size: var(--type-caption-size);
+  overflow-wrap: anywhere;
+}
+
+@media (max-width: 639.98px) {
+  .operation-timeline {
+    padding: var(--space-4);
+  }
+
+  .timeline-item {
+    grid-template-columns: 16px minmax(0, 1fr);
+  }
+
+  .timeline-cancel {
+    grid-column: 2;
+    justify-self: start;
+  }
 }
 </style>

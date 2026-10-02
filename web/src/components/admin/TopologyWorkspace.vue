@@ -55,11 +55,32 @@
           <label for="topology-revision-message">{{ t('control.topology.message') }}</label>
           <input id="topology-revision-message" v-model.trim="message" type="text" maxlength="500" :disabled="saving" />
         </div>
-        <div class="form-group">
+        <UiSegmentedControl
+          v-model="graphView"
+          class="graph-view-switch"
+          size="sm"
+          :aria-label="t('control.topology.viewLabel')"
+          :options="[{ value: 'json', label: t('control.topology.viewJSON') }, { value: 'graph', label: t('control.topology.viewGraph') }]"
+          data-testid="topology-view-switch"
+        />
+        <div v-show="graphView === 'json'" class="form-group">
           <label for="topology-editor-json">{{ t('control.topology.graphJSON') }}</label>
           <textarea id="topology-editor-json" v-model="json" rows="16" spellcheck="false" class="json-textarea" :disabled="saving"></textarea>
           <p class="field-help">{{ t('control.topology.graphHelp') }}</p>
         </div>
+        <TopologyGraph
+          v-if="graphView === 'graph'"
+          data-testid="topology-graph-preview"
+          layout="dagre"
+          :height="360"
+          :nodes="graphPreview.nodes"
+          :edges="graphPreview.edges"
+          :label="t('control.topology.graphLabel')"
+          :summary="t('control.topology.graphSummary', { nodes: graphPreview.nodes.length, edges: graphPreview.edges.length })"
+          :empty-title="graphPreview.invalid ? t('control.topology.invalidJSON') : t('control.topology.graphEmpty')"
+          :empty-description="graphPreview.invalid ? t('control.topology.graphInvalidHint') : t('control.topology.graphEmptyHint')"
+          :error-title="t('control.topology.graphFailed')"
+        />
 
         <p v-if="dirty" class="topology-dirty" role="status">{{ t('control.topology.unsavedChanges') }}</p>
         <section v-if="validation" class="topology-validation" :class="validation.valid ? 'is-valid' : 'is-invalid'" role="status">
@@ -139,11 +160,17 @@
 
 <script setup>
 // Topology create / revision editor (UiDialog: focus trap, Esc, focus
-// return). It cannot be dismissed while saving or validating.
+// return). It cannot be dismissed while saving or validating. JSON / 图示
+// switches the editor for a read-only G6 preview of the JSON being edited
+// (UI U8): G6 loads only when the preview opens, and the graph follows the
+// light / dark theme.
 import { computed, reactive, ref, watch } from 'vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { topologyInputFromJSON, topologyJSONFromDetail } from '@/composables/useKernelDeployments'
-import { UiButton, UiDialog } from '@/ui'
+import UiButton from '@/ui/UiButton.vue'
+import UiDialog from '@/ui/UiDialog.vue'
+import UiSegmentedControl from '@/ui/UiSegmentedControl.vue'
+import TopologyGraph from './TopologyGraph.vue'
 
 const props = defineProps({
   open: { type: Boolean, default: false },
@@ -195,6 +222,37 @@ const confirmationMatchesCurrentDeployment = computed(() => (
   confirmedDeploymentID.value > 0 && Number(props.deploymentID) === confirmedDeploymentID.value
 ))
 const visibleError = computed(() => localError.value || props.error)
+const graphView = ref('json')
+// Vertices → nodes (coloured by kind, a stable palette slot per kind),
+// edges → links labelled with their protocol. Invalid JSON → empty state.
+const graphPreview = computed(() => {
+  let value
+  try {
+    value = JSON.parse(json.value || '{}')
+  } catch {
+    return { nodes: [], edges: [], invalid: true }
+  }
+  const kinds = []
+  const nodes = (Array.isArray(value?.vertices) ? value.vertices : [])
+    .filter(vertex => vertex && String(vertex.key || '').trim())
+    .map(vertex => {
+      const kind = String(vertex.kind || '')
+      if (!kinds.includes(kind)) kinds.push(kind)
+      return {
+        id: String(vertex.key).trim(),
+        label: String(vertex.key).trim(),
+        detail: vertex.role || vertex.plugin_id || kind,
+        tone: `chart-${(kinds.indexOf(kind) % 7) + 1}`,
+      }
+    })
+  const edges = (Array.isArray(value?.edges) ? value.edges : []).map((edge, index) => ({
+    id: `${edge?.source_key}-${edge?.target_key}-${index}`,
+    source: String(edge?.source_key || '').trim(),
+    target: String(edge?.target_key || '').trim(),
+    label: edge?.protocol || '',
+  }))
+  return { nodes, edges, invalid: false }
+})
 function requestClose() {
   if (canClose.value) emit('close')
 }
@@ -209,6 +267,7 @@ watch([
   () => deploymentState.value,
 ], ([isOpen, topologyID, revisionID, detail]) => {
   if (!isOpen) {
+    graphView.value = 'json'
     clearConfirmation()
     baselineTopologyID.value = 0
     baselineRevisionID.value = 0
@@ -388,6 +447,7 @@ function stateClass(state) {
 .form-group input, .form-group select, .form-group textarea { box-sizing: border-box; width: 100%; }
 .form-group textarea { resize: vertical; }
 .json-textarea { font-family: var(--font-mono); font-size: var(--type-caption-size); }
+.graph-view-switch { justify-self: start; }
 .field-help, .workspace-error { margin: 0; overflow-wrap: anywhere; }
 .field-help { color: var(--label-2); font-size: var(--type-caption-size); }
 .workspace-error { color: var(--danger); }

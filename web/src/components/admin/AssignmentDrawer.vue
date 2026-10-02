@@ -7,66 +7,84 @@
     :dismissible="canClose"
     @update:open="value => { if (!value) requestClose() }"
   >
-    <form class="assignment-form-grid" @submit.prevent="save">
-      <div class="form-group">
-        <label for="assignment-node">{{ t('control.assignments.node') }}</label>
-        <select id="assignment-node" v-model.number="draft.nodeID" :disabled="editing || saving">
-          <option v-for="node in nodes" :key="node.id" :value="Number(node.id)">
-            {{ node.name || node.host || `#${node.id}` }} (#{{ node.id }})
-          </option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label for="assignment-plugin">{{ t('control.assignments.agentPlugin') }}</label>
-        <select id="assignment-plugin" v-model="draft.pluginID" :disabled="editing || saving">
-          <option v-for="option in agentPluginOptions" :key="option.pluginID" :value="option.pluginID">
-            {{ option.name }} ({{ option.pluginID }})
-          </option>
-          <option v-if="draft.pluginID && !agentPluginOptions.some(option => option.pluginID === draft.pluginID)" :value="draft.pluginID">
-            {{ pluginName(draft.pluginID) }} ({{ draft.pluginID }})
-          </option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label for="assignment-scope">{{ t('control.table.scope') }}</label>
-        <select id="assignment-scope" v-model="draft.serviceScope" :disabled="editing || saving">
-          <option v-for="scope in scopes" :key="scope.id" :value="scope.id">{{ scope.name || scope.id }} ({{ scope.id }})</option>
-          <option v-if="draft.serviceScope && !scopes.some(scope => scope.id === draft.serviceScope)" :value="draft.serviceScope">{{ draft.serviceScope }}</option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label for="assignment-role">{{ t('control.table.role') }}</label>
-        <input id="assignment-role" v-model.trim="draft.role" type="text" list="assignment-role-options" :disabled="editing || saving" autocomplete="off" />
-        <datalist id="assignment-role-options">
-          <option v-for="role in roleSuggestions" :key="role" :value="role"></option>
-        </datalist>
-      </div>
-      <div class="form-group">
-        <label for="assignment-version">{{ t('control.install.version') }}</label>
-        <select id="assignment-version" v-model="draft.desiredVersion" :disabled="saving">
-          <option v-for="release in compatibleReleases" :key="release.id" :value="release.version">{{ release.version }}</option>
-          <option v-if="draft.desiredVersion && !compatibleReleases.some(release => release.version === draft.desiredVersion)" :value="draft.desiredVersion">
-            {{ draft.desiredVersion }}
-          </option>
-        </select>
-      </div>
-      <div class="form-group">
-        <label for="assignment-config-revision">{{ t('control.table.configRevision') }}</label>
-        <input id="assignment-config-revision" v-model.number="draft.desiredConfigRevision" type="number" min="0" step="1" :disabled="saving" />
-      </div>
-      <div class="form-group assignment-rollout-field">
-        <label for="assignment-rollout-group">{{ t('control.table.rolloutGroup') }}</label>
-        <input id="assignment-rollout-group" v-model.trim="draft.rolloutGroup" type="text" autocomplete="off" :disabled="saving" />
-      </div>
-      <label class="enabled-field assignment-enabled-field" for="assignment-enabled">
-        <input id="assignment-enabled" v-model="draft.enabled" type="checkbox" :disabled="saving" />
-        <span>{{ t('control.assignments.enabled') }}</span>
-      </label>
-      <p v-if="error" class="drawer-error" role="alert">{{ error }}</p>
+    <form id="assignment-form" class="form-grid" @submit.prevent="save">
+      <UiSelect
+        id="assignment-node"
+        v-model="draft.nodeID"
+        size="md"
+        :label="t('control.assignments.node')"
+        :options="nodeOptions"
+        :disabled="editing || saving"
+      />
+      <UiSelect
+        id="assignment-plugin"
+        v-model="draft.pluginID"
+        size="md"
+        :label="t('control.assignments.agentPlugin')"
+        :options="pluginOptions"
+        :disabled="editing || saving"
+      />
+      <UiSelect
+        id="assignment-scope"
+        v-model="draft.serviceScope"
+        size="md"
+        :label="t('control.table.scope')"
+        :options="scopeOptions"
+        :disabled="editing || saving"
+      />
+      <UiTextField
+        id="assignment-role"
+        v-model.trim="draft.role"
+        size="md"
+        :label="t('control.table.role')"
+        :help="roleSuggestions.length ? t('control.assignments.roleHelp', { roles: roleSuggestions.join(' / ') }) : ''"
+        list="assignment-role-options"
+        autocomplete="off"
+        :disabled="editing || saving"
+      />
+      <datalist id="assignment-role-options">
+        <option v-for="role in roleSuggestions" :key="role" :value="role"></option>
+      </datalist>
+      <UiSelect
+        id="assignment-version"
+        v-model="draft.desiredVersion"
+        size="md"
+        :label="t('control.install.version')"
+        :options="versionOptions"
+        :disabled="saving"
+      />
+      <UiTextField
+        id="assignment-config-revision"
+        :model-value="draft.desiredConfigRevision"
+        size="md"
+        type="number"
+        inputmode="numeric"
+        min="0"
+        step="1"
+        :label="t('control.table.configRevision')"
+        :disabled="saving"
+        @update:model-value="value => { draft.desiredConfigRevision = value === '' ? '' : Number(value) }"
+      />
+      <UiTextField
+        id="assignment-rollout-group"
+        v-model.trim="draft.rolloutGroup"
+        size="md"
+        :label="t('control.table.rolloutGroup')"
+        autocomplete="off"
+        :disabled="saving"
+      />
+      <UiCheckbox
+        id="assignment-enabled"
+        v-model="draft.enabled"
+        class="assignment-enabled-field"
+        :label="t('control.assignments.enabled')"
+        :disabled="saving"
+      />
+      <p v-if="error" class="form-error form-grid__full" role="alert">{{ error }}</p>
     </form>
     <template #footer>
       <UiButton :disabled="saving" @click="requestClose">{{ t('common.actions.cancel') }}</UiButton>
-      <UiButton variant="primary" data-testid="save-assignment" :loading="saving" :disabled="!valid" @click="save">
+      <UiButton variant="primary" type="submit" form="assignment-form" data-testid="save-assignment" :loading="saving" :disabled="!valid" @click.prevent="save">
         {{ t('common.actions.save') }}
       </UiButton>
     </template>
@@ -75,10 +93,16 @@
 
 <script setup>
 // Create or edit a node assignment in a side sheet (UiSheet: focus trap,
-// Esc, focus return); it cannot be dismissed while saving.
+// Esc, focus return); it cannot be dismissed while saving. A standard sheet
+// form (UI U8): top-labelled Ui fields in a .form-grid; the node, plugin,
+// scope and role are fixed when editing. Enter in a field saves.
 import { computed, reactive, watch } from 'vue'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { UiButton, UiSheet } from '@/ui'
+import UiButton from '@/ui/UiButton.vue'
+import UiCheckbox from '@/ui/UiCheckbox.vue'
+import UiSelect from '@/ui/UiSelect.vue'
+import UiSheet from '@/ui/UiSheet.vue'
+import UiTextField from '@/ui/UiTextField.vue'
 import { assignmentPayload } from '@/composables/useKernelDeployments'
 import { releaseTargets } from '@/utils/kernelPluginRelease'
 
@@ -127,6 +151,33 @@ const agentPluginOptions = computed(() => props.installations
 const compatibleReleases = computed(() => props.releases
   .filter(release => release?.plugin_id === draft.pluginID && releaseTargets(release).includes('agent')))
 const roleSuggestions = computed(() => OFFICIAL_PLUGIN_ROLES[draft.pluginID] || [])
+// Options of the selects; a value the lists no longer have (an edited
+// assignment's old release) stays selectable, as before.
+const nodeOptions = computed(() => props.nodes.map(node => ({
+  value: Number(node.id),
+  label: `${node.name || node.host || `#${node.id}`} (#${node.id})`,
+})))
+const pluginOptions = computed(() => {
+  const options = agentPluginOptions.value.map(option => ({ value: option.pluginID, label: `${option.name} (${option.pluginID})` }))
+  if (draft.pluginID && !options.some(option => option.value === draft.pluginID)) {
+    options.push({ value: draft.pluginID, label: `${pluginName(draft.pluginID)} (${draft.pluginID})` })
+  }
+  return options
+})
+const scopeOptions = computed(() => {
+  const options = props.scopes.map(scope => ({ value: scope.id, label: `${scope.name || scope.id} (${scope.id})` }))
+  if (draft.serviceScope && !options.some(option => option.value === draft.serviceScope)) {
+    options.push({ value: draft.serviceScope, label: draft.serviceScope })
+  }
+  return options
+})
+const versionOptions = computed(() => {
+  const options = compatibleReleases.value.map(release => ({ value: release.version, label: release.version }))
+  if (draft.desiredVersion && !options.some(option => option.value === draft.desiredVersion)) {
+    options.push({ value: draft.desiredVersion, label: draft.desiredVersion })
+  }
+  return options
+})
 const valid = computed(() => Boolean(
   draft.nodeID &&
   draft.pluginID &&
@@ -226,16 +277,8 @@ function save() {
 </script>
 
 <style scoped>
-.assignment-form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: var(--space-4); align-content: start; }
-.form-group { display: grid; min-width: 0; gap: var(--space-2); }
-.form-group label, .enabled-field { font-size: var(--type-callout-size); font-weight: var(--weight-semibold); }
-.form-group input, .form-group select { box-sizing: border-box; width: 100%; }
-.assignment-rollout-field { grid-column: 1 / 2; }
-.enabled-field { display: flex; align-items: center; gap: var(--space-2); align-self: end; min-height: var(--size-control-md); font-weight: var(--weight-regular); }
-.enabled-field input { width: 18px; height: 18px; margin: 0; }
-.drawer-error { grid-column: 1 / -1; margin: 0; color: var(--danger); overflow-wrap: anywhere; }
-@media (max-width: 640px) {
-  .assignment-form-grid { grid-template-columns: 1fr; }
-  .assignment-rollout-field { grid-column: auto; }
+.assignment-enabled-field {
+  align-self: end;
+  min-height: var(--size-control-md);
 }
 </style>

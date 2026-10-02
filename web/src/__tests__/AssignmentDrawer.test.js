@@ -3,6 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import { inBody } from './helpers/feedback'
 import { nextTick } from 'vue'
 import AssignmentDrawer from '@/components/admin/AssignmentDrawer.vue'
+import UiSelect from '@/ui/UiSelect.vue'
 
 const nodes = [{ id: 11, name: 'Shanghai entry', host: '10.0.0.11' }]
 const plugins = [{ id: 'gost-mesh', name: 'GOST Mesh' }]
@@ -21,6 +22,11 @@ const installations = [{
   enabled: true,
 }]
 const scopes = [{ id: 'forward', name: 'Forward' }]
+
+// UiSelect (Reka) has no native value: read it from the component.
+function selectValue(wrapper, id) {
+  return wrapper.findAllComponents(UiSelect).find(select => select.props('id') === id)?.props('modelValue')
+}
 
 function mountDrawer(props = {}) {
   return mount(AssignmentDrawer, {
@@ -43,11 +49,13 @@ describe('AssignmentDrawer', () => {
     const wrapper = mountDrawer()
     await nextTick()
 
-    expect(inBody('#assignment-node').element.value).toBe('11')
-    expect(inBody('#assignment-plugin').element.value).toBe('gost-mesh')
-    expect(inBody('#assignment-scope').element.value).toBe('forward')
+    expect(selectValue(wrapper, 'assignment-node')).toBe(11)
+    expect(selectValue(wrapper, 'assignment-plugin')).toBe('gost-mesh')
+    expect(selectValue(wrapper, 'assignment-scope')).toBe('forward')
     expect(inBody('#assignment-role').element.value).toBe('relay')
-    expect(inBody('#assignment-version').element.value).toBe('1.0.0')
+    expect(selectValue(wrapper, 'assignment-version')).toBe('1.0.0')
+    // The labels name the controls (top labels, plan D5).
+    expect(inBody('label[for="assignment-rollout-group"]').exists()).toBe(true)
     expect(inBody('#assignment-config-revision').element.value).toBe('6')
     wrapper.unmount()
   })
@@ -69,16 +77,18 @@ describe('AssignmentDrawer', () => {
     await nextTick()
 
     for (const selector of ['#assignment-node', '#assignment-plugin', '#assignment-scope', '#assignment-role']) {
-      expect(inBody(selector).attributes('disabled')).toBeDefined()
+      // A native input says disabled; the Reka select trigger data-disabled.
+      expect(inBody(selector).attributes('disabled') ?? inBody(selector).attributes('data-disabled')).toBeDefined()
     }
     for (const selector of ['#assignment-version', '#assignment-config-revision', '#assignment-rollout-group']) {
-      expect(inBody(selector).attributes('disabled')).toBeUndefined()
+      expect(inBody(selector).attributes('disabled') ?? inBody(selector).attributes('data-disabled')).toBeUndefined()
     }
     expect(inBody('#assignment-enabled').attributes('disabled')).toBeUndefined()
 
     await inBody('#assignment-config-revision').setValue('8')
     await inBody('#assignment-rollout-group').setValue('canary-b')
-    await inBody('#assignment-enabled').setValue(true)
+    expect(inBody('#assignment-enabled').attributes('aria-checked')).toBe('false')
+    await inBody('#assignment-enabled').trigger('click')
     await inBody('[data-testid="save-assignment"]').trigger('click')
 
     expect(wrapper.emitted('save')).toEqual([[

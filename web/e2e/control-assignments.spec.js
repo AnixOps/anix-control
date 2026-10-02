@@ -112,7 +112,8 @@ test('runs the assignment lifecycle in a narrow viewport without page overflow',
   }
 
   await page.locator('[data-testid="deployment-targets"]').click()
-  await expect(page.locator('#assignment-node-filter')).toHaveValue('11')
+  // The node picker is a UiSelect (a combobox button showing the choice).
+  await expect(page.locator('#assignment-node-filter')).toContainText('Shanghai entry (#11)')
   await expect(page.locator('[data-testid="deployment-target-panel"]')).toBeVisible()
   expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true)
 
