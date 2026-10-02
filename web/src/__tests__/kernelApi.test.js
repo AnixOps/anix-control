@@ -254,4 +254,23 @@ describe('kernel API', () => {
     await kernelApi.createKernelTopology(topology)
     expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v3', url: '/topologies', method: 'post', data: topology })
   })
+
+  it('reads and switches route modes through the v4 kernel', async () => {
+    await kernelApi.getKernelRouteModes('legacy-api')
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/route-modes', method: 'get', params: { package_id: 'legacy-api' } })
+    await kernelApi.getKernelRouteModes()
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/route-modes', method: 'get' })
+
+    const input = { package_id: 'legacy-api', routes: ['tickets.list'], mode: 'native', reason: 'canary', confirm: true }
+    await kernelApi.setKernelRouteModes(input)
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/route-modes', method: 'post', data: input })
+
+    await kernelApi.rollbackKernelRouteModes('legacy-api', 'mismatch')
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/route-modes/rollback', method: 'post', data: { package_id: 'legacy-api', reason: 'mismatch' } })
+    await kernelApi.rollbackKernelRouteModes('legacy-api')
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/route-modes/rollback', method: 'post', data: { package_id: 'legacy-api' } })
+
+    await kernelApi.getKernelRouteModeRevisions('legacy-api', 100)
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/route-modes/revisions', method: 'get', params: { package_id: 'legacy-api', limit: 100 } })
+  })
 })

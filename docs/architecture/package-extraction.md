@@ -184,7 +184,11 @@ every 5 s through the bridge RPC `GetPackageConfig`
   and counts mismatches.
 - `native`: the host answers; the legacy handler is not called.
 - Rollback sets the route back to `legacy`, effective within 5 s and audited
-  through the configuration revision history.
+  through the configuration revision history. Operators switch and roll
+  back with `anix-control routes`, the admin API
+  `/api/v4/kernel/route-modes` or the admin page; each switch is audited and
+  recorded per route in `v4_kernel_route_mode_revision`, and `routes
+  rollback` returns a whole package to `legacy` in one revision.
 - `sdk/pluginhostsdk.Router` implements the modes, and `sdk/v2compat` keeps
   the output byte-identical. Route modes and shadow counters are exported
   on `/metrics`. A route without a native handler stays `legacy`

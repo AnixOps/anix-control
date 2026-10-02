@@ -2,6 +2,36 @@
 
 ## Unreleased
 
+### Added
+
+- Route modes have their own tooling. Until now a package's routes moved
+  between `legacy`, `shadow` and `native` only by editing the reserved
+  `routes` key of the package configuration. Now:
+  - the admin API `GET /api/v4/kernel/route-modes` lists every v2 Control
+    package route with its configured and effective mode, the modes it may
+    switch to (from `config/package-extraction.json`) and the running
+    host's native and shadow counters; `POST /api/v4/kernel/route-modes`
+    switches named routes or a whole package, `POST
+    /api/v4/kernel/route-modes/rollback` returns a whole package to legacy
+    in one change, and `GET /api/v4/kernel/route-modes/revisions` lists the
+    history;
+  - the CLI `anix-control routes list|set|rollback|history` does the same
+    from the server;
+  - the admin page 插件中心 → 路由模式 (`/admin/plugins/route-modes`).
+
+  Only a super administrator may switch: an administrator who is not staff
+  and not banned, checked against the database on each request. Switching
+  anything to `native` needs an explicit confirmation and a reason
+  (`confirm: true` and `reason`, or `--yes` and `--reason`); a rollback
+  needs neither. The existing rules still hold: `shadow` only for GET
+  routes, `native` only for `native-flagged` routes, `kernel-owned` and
+  WebSocket routes do not switch, and identity group A moves only with the
+  identity cutover and rollback. Every switch writes an audit log entry and
+  one row per route to the new table `v4_kernel_route_mode_revision`, in the
+  same transaction as the configuration revision; package hosts apply it at
+  their next configuration poll, as before. See "Switching Route Modes" in
+  `docs/UPGRADE.md`.
+
 ### Fixed
 
 - SQLite deployments no longer fail writes with "database is locked" under

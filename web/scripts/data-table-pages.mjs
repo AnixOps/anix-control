@@ -6,6 +6,7 @@ export const DATA_TABLE_PAGES = [
   'src/views/admin/Users.vue',
   'src/views/admin/Tickets.vue',
   'src/views/admin/Plugins.vue',
+  'src/views/admin/RouteModes.vue',
   'src/views/admin/Agent.vue',
   'src/views/admin/Orders.vue',
   'src/views/admin/Coupons.vue',

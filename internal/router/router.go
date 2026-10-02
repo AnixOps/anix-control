@@ -783,6 +783,11 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.GET("/kernel/modules/runtimes", modules.ListRuntimes)
 		v4.PUT("/kernel/modules/runtimes/:plugin_id", modules.SetRuntime)
 		v4.GET("/kernel/node-operations", handler.NewKernelNodeOperationsHandler().List)
+		routeModes := handler.NewRouteModeHandler()
+		v4.GET("/kernel/route-modes", routeModes.List)
+		v4.POST("/kernel/route-modes", routeModes.Set)
+		v4.POST("/kernel/route-modes/rollback", routeModes.Rollback)
+		v4.GET("/kernel/route-modes/revisions", routeModes.Revisions)
 		agents := handler.NewAgentPKIHandler()
 		v4.POST("/kernel/agents/enrollment-tokens", agents.CreateEnrollmentToken)
 	}

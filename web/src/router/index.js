@@ -48,6 +48,7 @@ const AdminInviteCodes = () => import('@/views/admin/InviteCodes.vue')
 const AdminSystem = () => import('@/views/admin/System.vue')
 const AdminAgent = () => import('@/views/admin/Agent.vue')
 const AdminPlugins = () => import('@/views/admin/Plugins.vue')
+const AdminRouteModes = () => import('@/views/admin/RouteModes.vue')
 const AdminDeployments = () => import('@/views/admin/Deployments.vue')
 const Account = () => import('@/views/Account.vue')
 const StatusPage = () => import('@/views/StatusPage.vue')
@@ -337,6 +338,12 @@ const routes = [
       {
         path: 'plugins',
         component: AdminPlugins
+      },
+      {
+        // Per-package v2 route modes (legacy / shadow / native), below 插件中心.
+        path: 'plugins/route-modes',
+        component: AdminRouteModes,
+        meta: WIDE
       },
       {
         path: 'deployments',

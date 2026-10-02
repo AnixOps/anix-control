@@ -202,6 +202,7 @@ export default {
       forwardAgents: 'NodeX Agents',
       control: 'Control Kernel',
       plugins: 'Plugin Center',
+      routeModes: 'Route modes',
       deployments: 'Deployments',
       accessGroups: 'Access groups',
       payment: 'Payments',

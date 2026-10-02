@@ -1816,6 +1816,65 @@ Run it after at least a day on identity, once no rollback is expected:
 - Control no longer creates a default administrator. Create administrators
   through the admin API.
 
+## Switching Route Modes
+
+Each v2 route of a Control package runs in one of three modes: `legacy` (the
+kernel's legacy handler answers; the default), `shadow` (GET routes only:
+legacy answers and the package's native implementation runs alongside and
+counts mismatches) or `native` (the package answers). The modes are stored in
+the package configuration; package hosts apply a change at their next
+configuration poll, about 5 seconds later. Switch them with the CLI, the
+admin API or the admin page 插件中心 → 路由模式; editing the `routes` key of
+the configuration by hand still works but records no route-mode revision.
+
+Only a super administrator may switch modes: an administrator (`is_admin`)
+who is not staff and not banned. Every switch writes an audit log entry
+(module `kernel`, action `route_mode_set` or `route_mode_rollback`) and the
+revision history (`v4_kernel_route_mode_revision`). The CLI records the
+actor `system/cli`.
+
+```bash
+# What runs where, and which modes each route may take.
+anix-control routes list --package knowledge
+
+# Shadow first: GET routes only.
+anix-control routes set --package knowledge --mode shadow \
+  --reason "batch 1 shadow"
+
+# Watch anixops_package_shadow_mismatches_total on /metrics, then go
+# native. Native needs a reason and --yes.
+anix-control routes set --package knowledge --mode native \
+  --reason "batch 1: 48 h of shadow, no mismatch" --yes
+
+# Or single routes (repeat --route).
+anix-control routes set --package knowledge --route knowledge.article.list \
+  --mode native --reason "hot path first" --yes
+
+# What changed, by whom and why.
+anix-control routes history --package knowledge
+```
+
+Add `--json` for machine-readable output. Without `--route`, `set` switches
+every route of the package that may take the mode and lists the others as
+skipped: `shadow` needs a GET route, `native` a route that
+`config/package-extraction.json` marks `native-flagged`; `bridged` routes
+stay `legacy`, `kernel-owned` and WebSocket routes do not switch, and
+identity group A moves only with the identity cutover and rollback
+("Moving Logins To The Identity Module").
+
+### Route Mode Rollback
+
+One command returns a whole package to `legacy`, in one configuration
+revision, with no confirmation (the reason is optional):
+
+```bash
+anix-control routes rollback --package knowledge --reason "mismatch in orders"
+```
+
+The admin API equivalent is `POST /api/v4/kernel/route-modes/rollback` with
+`{"package_id":"knowledge","reason":"..."}`. Identity group A is left as it
+is; roll it back with the identity rollback.
+
 ## Rollback
 
 Rollback should restore the exact previous artifact and config set.

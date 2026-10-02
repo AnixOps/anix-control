@@ -1722,6 +1722,52 @@ export default {
       topologyPreview: '无法预览拓扑部署', topologyStatus: '无法加载部署状态', topologyApply: '无法应用拓扑部署', topologyRollback: '无法回滚拓扑部署', topologyCreate: '无法创建拓扑'
     }
   },
+  routeModes: {
+    open: '路由模式',
+    subtitle: '按软件包切换 v2 路由的旧版、影子和原生模式，并可回滚到旧版。',
+    back: '插件中心',
+    package: '软件包',
+    packageMeta: '版本 {version} · 配置修订 {revision}',
+    packageDisabled: '已停用',
+    superAdminOnly: '仅超级管理员可以切换路由模式。',
+    loadFailed: '路由模式加载失败',
+    empty: { title: '没有声明 v2 路由的软件包', description: '安装并启用声明了 v2 路由的软件包后，即可在这里管理其路由模式。' },
+    modes: { legacy: '旧版', shadow: '影子', native: '原生' },
+    catalog: { 'native-flagged': '可切原生', bridged: '桥接', 'kernel-owned': '内核接管', native: '原生', none: '未声明' },
+    locked: { kernel_owned: '内核接管', identity_group_a: '身份切换', websocket: 'WebSocket', not_declared: '未声明' },
+    columns: { route: '路由', endpoint: '方法 / 路径', catalog: '资格', configured: '配置模式', effective: '生效模式', shadow: '影子（总数 / 不一致 / 错误）', mode: '切换为' },
+    routesLabel: '{package} 的路由',
+    routeMode: '{route} 的模式',
+    effectiveDiffers: '与配置模式不同',
+    hostEffective: '宿主：{mode}',
+    packageMode: '整个软件包的模式',
+    setPackage: '设置整个软件包',
+    rollback: '回滚到旧版',
+    wholePackage: '整个软件包',
+    wholePackageTarget: '{package}（整个软件包）',
+    dialog: {
+      setTitle: '将 {target} 切换为{mode}模式？',
+      setMessage: '不支持该模式的路由会被跳过。此次变更会记入修订历史。',
+      nativeMessage: '原生模式下，请求由软件包自身的实现处理，不再经过内核的旧版处理器。请确认并填写原因，以便审计。',
+      rollbackTitle: '将 {package} 回滚到旧版？',
+      rollbackMessage: '该软件包的所有路由都会恢复为旧版模式。',
+      reason: '原因',
+      reasonHelp: '选填，会随修订一并保存。',
+      reasonRequired: '切换到原生模式时必须填写。',
+      confirmSet: '切换模式',
+      confirmNative: '切换到原生',
+      confirmRollback: '回滚'
+    },
+    result: '已变更 {changed} 条路由，跳过 {skipped} 条（配置修订 {revision}）',
+    errors: { switch: '路由模式切换失败', rollback: '回滚失败', revisions: '修订历史加载失败' },
+    revisions: {
+      title: '修订历史',
+      label: '路由模式修订',
+      empty: '暂无路由模式变更',
+      time: '时间', route: '路由', change: '变更', actor: '操作人', reason: '原因', revision: '修订',
+      actions: { set: '设置', rollback: '回滚' }
+    }
+  },
   accessGroups: {
     subtitle: '管理独立服务作用域的成员关系、资源授权和插件私有配额策略。',
     actions: { refresh: '刷新', newGroup: '新建访问组', open: '打开', editGroup: '编辑名称和说明', enable: '启用', disable: '禁用', add: '添加', removeNamed: '移除 {name}', addGrant: '添加授权', saveQuota: '保存配额', resolve: '解析有效授权' },
