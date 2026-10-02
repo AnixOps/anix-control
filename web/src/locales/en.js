@@ -2983,7 +2983,7 @@ export default {
   control: {
     subtitle: 'Manage official signed packages, Control WebUI extensions, and lifecycle operations.',
     actions: {
-      refresh: 'Refresh', refreshing: 'Refreshing...', importRelease: 'Import release', importing: 'Importing...', install: 'Install',
+      refresh: 'Refresh', refreshing: 'Refreshing...', importRelease: 'Import release', install: 'Install',
       configure: 'Configure', enable: 'Enable', disable: 'Disable', upgrade: 'Upgrade', update: 'Upgrade', rollback: 'Rollback', cancel: 'Cancel operation', installOfficialOnly: 'Official release required',
       saving: 'Saving...', newAssignment: 'New assignment'
     },

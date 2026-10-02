@@ -154,59 +154,37 @@
       @save="saveInstallation"
     />
 
-    <div v-if="configEditor.open" class="plugin-config-backdrop" @click.self="closeConfig">
-      <section
-        ref="configDialog"
-        class="plugin-config-dialog"
-        data-testid="plugin-config-dialog"
-        role="dialog"
-        aria-modal="true"
-        aria-labelledby="plugin-config-title"
-        @keydown="handleConfigKeydown"
-      >
-        <header class="dialog-header">
-          <div>
-            <h2 id="plugin-config-title">{{ t('control.config.title') }}</h2>
-            <p class="dialog-meta">{{ selectedRow?.plugin?.name || selectedRow?.plugin?.id }} / {{ configEditor.target?.target }}</p>
-          </div>
-          <button
-            ref="configCloseButton"
-            class="icon-button"
-            type="button"
-            :aria-label="t('common.actions.close')"
-            :title="t('common.actions.close')"
-            :disabled="configEditor.saving"
-            @click="requestConfigClose"
-          >
-            <X :size="20" aria-hidden="true" />
-            <span class="sr-only">{{ t('common.actions.close') }}</span>
-          </button>
-        </header>
-        <div class="dialog-body">
-          <p v-if="configEditor.loading" class="state-message">{{ t('control.config.loading') }}</p>
-          <PluginConfigForm
-            v-else
-            v-model="configEditor.value"
-            :schema="configEditor.schema"
-            @validity="configEditor.valid = $event"
-          />
-          <p v-if="configEditor.error" class="dialog-error" role="alert">{{ configEditor.error }}</p>
-        </div>
-        <footer class="dialog-footer">
-          <span class="revision-label">{{ t('control.config.revision', { revision: configEditor.revision }) }}</span>
-          <button class="btn" type="button" :disabled="configEditor.saving" @click="requestConfigClose">{{ t('common.actions.cancel') }}</button>
-          <button
-            class="btn btn-primary"
-            data-testid="save-plugin-config"
-            type="button"
-            :disabled="configEditor.loading || configEditor.saving || !configEditor.valid"
-            @click="saveConfig()"
-          >
-            {{ configEditor.saving ? t('control.actions.saving') : t('common.actions.save') }}
-          </button>
-        </footer>
-      </section>
-    </div>
+    <UiDialog
+      :open="configEditor.open"
+      size="lg"
+      data-testid="plugin-config-dialog"
+      :title="t('control.config.title')"
+      :description="`${selectedRow?.plugin?.name || selectedRow?.plugin?.id || ''} / ${configEditor.target?.target || ''}`"
+      :dismissible="configCanClose"
+      @update:open="value => { if (!value) closeConfig() }"
+    >
+      <p v-if="configEditor.loading" class="state-message">{{ t('control.config.loading') }}</p>
+      <PluginConfigForm
+        v-else
+        v-model="configEditor.value"
+        :schema="configEditor.schema"
+        @validity="configEditor.valid = $event"
+      />
+      <p v-if="configEditor.error" class="dialog-error" role="alert">{{ configEditor.error }}</p>
+      <template #footer>
+        <span class="revision-label">{{ t('control.config.revision', { revision: configEditor.revision }) }}</span>
+        <UiButton :disabled="configEditor.saving" @click="closeConfig">{{ t('common.actions.cancel') }}</UiButton>
+        <UiButton
+          variant="primary"
+          data-testid="save-plugin-config"
+          :loading="configEditor.saving"
+          :disabled="configEditor.loading || !configEditor.valid"
+          @click="saveConfig()"
+        >
+          {{ t('common.actions.save') }}
+        </UiButton>
+      </template>
+    </UiDialog>
 
     <PluginReleaseImportDialog
       :open="releaseImport.open"
@@ -221,7 +199,7 @@
 <script setup>
 import { computed, nextTick, onBeforeUnmount, onMounted, reactive, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { RefreshCw, Search, X } from '@lucide/vue'
+import { RefreshCw, Search } from '@lucide/vue'
 import PluginConfigForm from '@/components/admin/PluginConfigForm.vue'
 import PluginDetailDrawer from '@/components/admin/PluginDetailDrawer.vue'
 import PluginInstallationDialog from '@/components/admin/PluginInstallationDialog.vue'
@@ -229,7 +207,7 @@ import PluginReleaseImportDialog from '@/components/admin/PluginReleaseImportDia
 import OperationTimeline from '@/components/admin/OperationTimeline.vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useKernelPlugins } from '@/composables/useKernelPlugins'
-import { useModalFocus } from '@/composables/useModalFocus'
+import { UiButton, UiDialog } from '@/ui'
 import {
   getKernelInstallationConfig,
   getKernelInstallations,
@@ -276,9 +254,6 @@ const polling = ref(false)
 const installationEditor = reactive({ open: false, target: null, saving: false, error: '' })
 const configEditor = reactive({ open: false, target: null, schema: {}, value: {}, revision: 0, valid: true, loading: false, saving: false, error: '' })
 const releaseImport = reactive({ open: false, saving: false, error: '', registeredRelease: null, inputKey: '', artifactUploaded: false })
-const configDialog = ref(null)
-const configCloseButton = ref(null)
-const configOpen = computed(() => configEditor.open)
 const configCanClose = computed(() => !configEditor.saving)
 
 let pollTimer = null
@@ -306,14 +281,6 @@ const summary = computed(() => filteredRows.value.reduce((counts, row) => {
 const pageError = computed(() => error.value || catalogError.value)
 const pluginOperations = computed(() => operations.value.filter(isPluginLifecycleOperation))
 const pluginOperationIDs = computed(() => pluginOperations.value.map(operation => operation.id).filter(Boolean))
-
-const { handleKeydown: handleConfigKeydown, requestClose: requestConfigClose } = useModalFocus({
-  open: configOpen,
-  canClose: configCanClose,
-  container: configDialog,
-  initialFocus: configCloseButton,
-  close: () => closeConfig(),
-})
 
 function createIdempotencyToken() {
   return globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random().toString(16).slice(2)}`
@@ -679,7 +646,7 @@ onBeforeUnmount(() => {
 .plugin-center { display: grid; gap: 16px; min-width: 0; }
 .page-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 .page-header h1 { margin: 0; font-size: 24px; line-height: 1.25; }
-.page-subtitle, .dialog-meta { margin: 5px 0 0; color: var(--text-secondary); font-size: 13px; }
+.page-subtitle { margin: 5px 0 0; color: var(--text-secondary); font-size: 13px; }
 .header-actions, .plugin-toolbar { display: flex; align-items: end; gap: 8px; flex-wrap: wrap; }
 .icon-button, .btn { min-height: 36px; border: 1px solid var(--border-color); border-radius: 6px; background: var(--surface-color); color: var(--text-color); cursor: pointer; }
 .icon-button { display: inline-grid; width: 36px; place-items: center; padding: 0; }
@@ -721,13 +688,7 @@ onBeforeUnmount(() => {
 .health-catalogued { background: var(--surface-hover); color: var(--text-secondary); }
 .row-error { grid-column: 1 / -1; font-size: 12px; line-height: 1.4; }
 .state-message { margin: 0; padding: 24px 12px; color: var(--text-secondary); text-align: center; }
-.plugin-config-backdrop { position: fixed; inset: 0; z-index: 1300; display: flex; align-items: center; justify-content: center; padding: 20px; background: rgba(15, 23, 42, .62); }
-.plugin-config-dialog { width: min(100%, 760px); max-height: calc(100dvh - 40px); overflow-y: auto; border: 1px solid var(--border-color); border-radius: 8px; background: var(--surface-color); color: var(--text-color); box-shadow: 0 18px 32px rgba(15, 23, 42, .2); }
-.dialog-header, .dialog-footer { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; padding: 18px 20px; border-bottom: 1px solid var(--border-color); }
-.dialog-header h2 { margin: 0; font-size: 18px; line-height: 1.35; }
-.dialog-body { display: grid; gap: 14px; padding: 20px; }
-.dialog-footer { align-items: center; justify-content: flex-end; border-top: 1px solid var(--border-color); border-bottom: 0; }
-.revision-label { margin-right: auto; color: var(--text-secondary); font-size: 12px; }
+.revision-label { align-self: center; margin-right: auto; color: var(--label-2); font-size: var(--type-caption-size); }
 .sr-only { position: absolute; width: 1px; height: 1px; padding: 0; margin: -1px; overflow: hidden; clip: rect(0, 0, 0, 0); white-space: nowrap; border: 0; }
 @media (max-width: 760px) {
   .plugin-center { gap: 12px; }
@@ -738,8 +699,5 @@ onBeforeUnmount(() => {
   .filter-field { flex: 1 1 140px; }
   .plugin-row { grid-template-columns: 1fr; gap: 9px; }
   .row-error { grid-column: auto; }
-  .plugin-config-backdrop { padding: 0; }
-  .plugin-config-dialog { width: 100vw; max-height: none; min-height: 100dvh; border: 0; border-radius: 0; display: flex; flex-direction: column; }
-  .dialog-body { flex: 1; align-content: start; }
 }
 </style>

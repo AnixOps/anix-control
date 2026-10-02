@@ -2984,7 +2984,7 @@ export default {
   control: {
     subtitle: '管理官方签名软件包、Control WebUI 扩展与生命周期操作。',
     actions: {
-      refresh: '刷新', refreshing: '刷新中...', importRelease: '导入发行版', importing: '导入中...', install: '安装',
+      refresh: '刷新', refreshing: '刷新中...', importRelease: '导入发行版', install: '安装',
       configure: '配置', enable: '启用', disable: '禁用', upgrade: '升级', update: '升级', rollback: '回滚', cancel: '取消操作', installOfficialOnly: '需要官方发行版',
       saving: '保存中...', newAssignment: '新建角色'
     },

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import { mount } from '@vue/test-utils'
+import { inBody } from './helpers/feedback'
 import { nextTick } from 'vue'
 import OperationTimeline from '@/components/admin/OperationTimeline.vue'
 import TopologyWorkspace from '@/components/admin/TopologyWorkspace.vue'
@@ -8,6 +9,13 @@ const revisionDetail = {
   revision: { id: 7, message: 'Published revision' },
   vertices: [{ key: 'entry', kind: 'agent', node_id: 11, plugin_id: 'gost-mesh', role: 'relay', config: '{"port":443}' }],
   edges: [],
+}
+
+// The workspace is a UiDialog: it renders into document.body.
+function bodyGet(selector) {
+  const found = inBody(selector)
+  if (!found.exists()) throw new Error(`Unable to find ${selector} in document.body`)
+  return found
 }
 
 function mountWorkspace(props = {}) {
@@ -30,12 +38,33 @@ function mountWorkspace(props = {}) {
 }
 
 describe('TopologyWorkspace', () => {
+  it('is a labelled dialog that closes on Escape only while idle', async () => {
+    const wrapper = mountWorkspace()
+    await nextTick()
+    await nextTick()
+    const dialog = bodyGet('[data-testid="topology-workspace"]')
+    expect(dialog.attributes('role')).toBe('dialog')
+    expect(document.getElementById(dialog.attributes('aria-labelledby')).textContent).toContain('Topology')
+    expect(dialog.element.contains(document.activeElement)).toBe(true)
+    await dialog.trigger('keydown', { key: 'Escape' })
+    expect(wrapper.emitted('close')).toHaveLength(1)
+    wrapper.unmount()
+
+    const busy = mountWorkspace({ saving: true })
+    await nextTick()
+    await nextTick()
+    await bodyGet('[data-testid="topology-workspace"]').trigger('keydown', { key: 'Escape' })
+    await bodyGet('[data-testid="topology-workspace"] [aria-label="Close"]').trigger('click')
+    expect(busy.emitted('close')).toBeUndefined()
+    busy.unmount()
+  })
+
   it('requires named confirmations before applying or rolling back a clean immutable revision', async () => {
     const wrapper = mountWorkspace()
     await nextTick()
     await nextTick()
 
-    await wrapper.get('#topology-diagnose').trigger('click')
+    await bodyGet('#topology-diagnose').trigger('click')
     expect(wrapper.emitted('diagnose')).toEqual([[
       expect.objectContaining({
         topologyID: 3,
@@ -44,21 +73,21 @@ describe('TopologyWorkspace', () => {
       }),
     ]])
 
-    await wrapper.get('#topology-preview').trigger('click')
-    await wrapper.get('#topology-plan').trigger('click')
+    await bodyGet('#topology-preview').trigger('click')
+    await bodyGet('#topology-plan').trigger('click')
     expect(wrapper.emitted('preview')).toHaveLength(1)
     expect(wrapper.emitted('plan')).toHaveLength(1)
 
-    await wrapper.get('#topology-apply').trigger('click')
+    await bodyGet('#topology-apply').trigger('click')
     expect(wrapper.emitted('apply')).toBeUndefined()
-    expect(wrapper.get('[data-testid="apply-confirmation"]').text()).toContain('Regional mesh')
-    await wrapper.get('[data-testid="confirm-apply"]').trigger('click')
+    expect(bodyGet('[data-testid="apply-confirmation"]').text()).toContain('Regional mesh')
+    await bodyGet('[data-testid="confirm-apply"]').trigger('click')
     expect(wrapper.emitted('apply')).toEqual([[{ deploymentID: 13 }]])
 
-    await wrapper.get('#topology-rollback').trigger('click')
+    await bodyGet('#topology-rollback').trigger('click')
     expect(wrapper.emitted('rollback')).toBeUndefined()
-    expect(wrapper.get('[data-testid="rollback-confirmation"]').text()).toContain('Regional mesh')
-    await wrapper.get('[data-testid="confirm-rollback"]').trigger('click')
+    expect(bodyGet('[data-testid="rollback-confirmation"]').text()).toContain('Regional mesh')
+    await bodyGet('[data-testid="confirm-rollback"]').trigger('click')
     expect(wrapper.emitted('rollback')).toEqual([[{ deploymentID: 13 }]])
     wrapper.unmount()
   })
@@ -68,9 +97,9 @@ describe('TopologyWorkspace', () => {
     await nextTick()
     await nextTick()
 
-    await wrapper.get('#topology-rollback').trigger('click')
-    const confirm = wrapper.get('[data-testid="confirm-rollback"]')
-    await wrapper.get('#topology-editor-json').setValue('{"vertices":[],"edges":[]}')
+    await bodyGet('#topology-rollback').trigger('click')
+    const confirm = bodyGet('[data-testid="confirm-rollback"]')
+    await bodyGet('#topology-editor-json').setValue('{"vertices":[],"edges":[]}')
 
     expect(confirm.attributes('disabled')).toBeDefined()
     await confirm.trigger('click')
@@ -83,20 +112,20 @@ describe('TopologyWorkspace', () => {
     await nextTick()
     await nextTick()
 
-    await wrapper.get('#topology-apply').trigger('click')
-    expect(wrapper.get('[data-testid="apply-confirmation"]').text()).toContain('#13')
-    expect(wrapper.get('#topology-plan').attributes('disabled')).toBeDefined()
+    await bodyGet('#topology-apply').trigger('click')
+    expect(bodyGet('[data-testid="apply-confirmation"]').text()).toContain('#13')
+    expect(bodyGet('#topology-plan').attributes('disabled')).toBeDefined()
 
     await wrapper.setProps({
       deploymentID: 14,
       deploymentStatus: { deployment: { id: 14, state: 'planned' }, operations: [] },
     })
-    expect(wrapper.find('[data-testid="apply-confirmation"]').exists()).toBe(false)
+    expect(inBody('[data-testid="apply-confirmation"]').exists()).toBe(false)
 
-    await wrapper.get('#topology-rollback').trigger('click')
-    expect(wrapper.find('[data-testid="rollback-confirmation"]').exists()).toBe(true)
+    await bodyGet('#topology-rollback').trigger('click')
+    expect(inBody('[data-testid="rollback-confirmation"]').exists()).toBe(true)
     await wrapper.setProps({ deploymentStatus: { deployment: { id: 14, state: 'applying' }, operations: [] } })
-    expect(wrapper.find('[data-testid="rollback-confirmation"]').exists()).toBe(false)
+    expect(inBody('[data-testid="rollback-confirmation"]').exists()).toBe(false)
     wrapper.unmount()
   })
 
@@ -105,13 +134,13 @@ describe('TopologyWorkspace', () => {
     await nextTick()
     await nextTick()
 
-    await wrapper.get('#topology-editor-json').setValue('{"vertices":[],"edges":[]}')
-    expect(wrapper.get('.topology-dirty').text()).toContain('unsaved changes')
+    await bodyGet('#topology-editor-json').setValue('{"vertices":[],"edges":[]}')
+    expect(bodyGet('.topology-dirty').text()).toContain('unsaved changes')
     for (const selector of ['#topology-plan', '#topology-apply', '#topology-rollback']) {
-      expect(wrapper.get(selector).attributes('disabled')).toBeDefined()
+      expect(bodyGet(selector).attributes('disabled')).toBeDefined()
     }
 
-    await wrapper.get('#topology-save-revision').trigger('click')
+    await bodyGet('#topology-save-revision').trigger('click')
     expect(wrapper.emitted('save-revision')).toEqual([[
       {
         topologyID: 3,
@@ -130,11 +159,11 @@ describe('TopologyWorkspace', () => {
     await nextTick()
     await nextTick()
 
-    await wrapper.get('#topology-editor-json').setValue('{"vertices":[],"edges":[]}')
+    await bodyGet('#topology-editor-json').setValue('{"vertices":[],"edges":[]}')
     await wrapper.setProps({ topology: { id: 3, name: 'Regional mesh refreshed' } })
 
-    expect(wrapper.get('#topology-editor-json').element.value).toBe('{"vertices":[],"edges":[]}')
-    expect(wrapper.get('.topology-dirty').exists()).toBe(true)
+    expect(bodyGet('#topology-editor-json').element.value).toBe('{"vertices":[],"edges":[]}')
+    expect(bodyGet('.topology-dirty').exists()).toBe(true)
     wrapper.unmount()
   })
 
@@ -143,8 +172,8 @@ describe('TopologyWorkspace', () => {
     await nextTick()
     await nextTick()
 
-    await wrapper.get('#topology-editor-json').setValue('{"vertices":[],"edges":[]}')
-    await wrapper.get('#topology-revision-message').setValue('Local draft')
+    await bodyGet('#topology-editor-json').setValue('{"vertices":[],"edges":[]}')
+    await bodyGet('#topology-revision-message').setValue('Local draft')
     await wrapper.setProps({
       revisionDetail: {
         revision: { id: 7, message: 'Server refresh' },
@@ -153,9 +182,9 @@ describe('TopologyWorkspace', () => {
       },
     })
 
-    expect(wrapper.get('#topology-editor-json').element.value).toBe('{"vertices":[],"edges":[]}')
-    expect(wrapper.get('#topology-revision-message').element.value).toBe('Local draft')
-    expect(wrapper.get('.topology-dirty').exists()).toBe(true)
+    expect(bodyGet('#topology-editor-json').element.value).toBe('{"vertices":[],"edges":[]}')
+    expect(bodyGet('#topology-revision-message').element.value).toBe('Local draft')
+    expect(bodyGet('.topology-dirty').exists()).toBe(true)
     wrapper.unmount()
   })
 
@@ -174,9 +203,9 @@ describe('TopologyWorkspace', () => {
       },
     })
 
-    expect(wrapper.get('#topology-editor-json').element.value).toContain('new-entry')
-    expect(wrapper.get('#topology-revision-message').element.value).toBe('New revision')
-    expect(wrapper.find('.topology-dirty').exists()).toBe(false)
+    expect(bodyGet('#topology-editor-json').element.value).toContain('new-entry')
+    expect(bodyGet('#topology-revision-message').element.value).toBe('New revision')
+    expect(inBody('.topology-dirty').exists()).toBe(false)
     wrapper.unmount()
   })
 
@@ -185,8 +214,8 @@ describe('TopologyWorkspace', () => {
     await nextTick()
     await nextTick()
 
-    await wrapper.get('#topology-rollout-group').setValue('canary-a')
-    await wrapper.get('#topology-plan').trigger('click')
+    await bodyGet('#topology-rollout-group').setValue('canary-a')
+    await bodyGet('#topology-plan').trigger('click')
 
     expect(wrapper.emitted('plan')).toEqual([[
       {
@@ -205,10 +234,10 @@ describe('TopologyWorkspace', () => {
     const wrapper = mountWorkspace({ topology: null, revisionID: 0, revisionDetail: null })
     await nextTick()
 
-    await wrapper.get('#new-topology-name').setValue('China egress')
-    await wrapper.get('#new-topology-scope').setValue('forward')
-    await wrapper.get('#new-topology-description').setValue('Regional egress rollout')
-    await wrapper.get('#create-topology').trigger('click')
+    await bodyGet('#new-topology-name').setValue('China egress')
+    await bodyGet('#new-topology-scope').setValue('forward')
+    await bodyGet('#new-topology-description').setValue('Regional egress rollout')
+    await bodyGet('#create-topology').trigger('click')
 
     expect(wrapper.emitted('create-topology')).toEqual([[
       { name: 'China egress', service_scope: 'forward', description: 'Regional egress rollout' },
