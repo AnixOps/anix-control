@@ -119,6 +119,7 @@ Repository gates you can run locally:
 bash config/scripts/check_docs_updated.sh --base origin/go_dev --head HEAD
 bash config/scripts/check_docs_updated.sh --self-test
 bash config/scripts/check_release_workflow.sh
+python3 config/scripts/check_mojibake.py                            # GBK mojibake, U+FFFD, private-use, BOM
 python3 config/scripts/check_release_version.py --self-test
 GOWORK=off python3 config/scripts/check_plugin_only_routes.py      # 296 /api/v2 routes vs catalog and packages
 GOWORK=off python3 -m unittest discover -s config/scripts -p '*_test.py'
@@ -315,3 +316,6 @@ The `/admin/forward*` pages clone upstream
   `web/src/views/admin/` (`Forward.vue`, `Tunnel.vue`, `Limit.vue`, `ForwardNodes.vue`).
 - 对话框关闭按钮统一使用 `×` 或 `✕`。
 - In change notes, separate terminal display problems from real corruption.
+- `python3 config/scripts/check_mojibake.py` (CI "Documentation Sync Check")
+  rejects these signals in tracked files; intentional examples go in its
+  `ALLOWLIST`.

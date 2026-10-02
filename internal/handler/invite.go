@@ -16,7 +16,7 @@ import (
 	"gorm.io/gorm"
 )
 
-// InviteHandler 閭€璇峰鐞嗗櫒
+// InviteHandler 邀请处理器
 type InviteHandler struct {
 	inviteService       *service.InviteService
 	configService       *service.SystemConfigService
@@ -241,7 +241,7 @@ func inviteWithdrawalResponse(record model.CommissionWithdraw) gin.H {
 	}
 }
 
-// NewInviteHandler 鍒涘缓澶勭悊鍣?
+// NewInviteHandler 创建处理器
 func NewInviteHandler() *InviteHandler {
 	db := database.Get()
 	return &InviteHandler{
@@ -294,12 +294,12 @@ func (h *InviteHandler) saveFrontendConfig(cfg inviteFrontendConfig) error {
 	)
 }
 
-// ========== 鐢ㄦ埛鎺ュ彛 ==========
+// ========== 用户接口 ==========
 
 // GetInviteInfo godoc
-// @Summary 鑾峰彇閭€璇蜂俊鎭?
-// @Description 鐢ㄦ埛鑾峰彇鑷繁鐨勯個璇风爜鍜屼剑閲戜俊鎭?
-// @Tags 鐢ㄦ埛绔?
+// @Summary 获取邀请信息
+// @Description 用户获取自己的邀请码和佣金信息
+// @Tags 用户端
 // @Accept json
 // @Produce json
 // @Security BearerAuth
@@ -309,21 +309,21 @@ func (h *InviteHandler) saveFrontendConfig(cfg inviteFrontendConfig) error {
 func (h *InviteHandler) GetInviteInfo(c *gin.Context) {
 	userID := c.GetUint("user_id")
 
-	// 鑾峰彇鐢ㄦ埛閭€璇风爜
+	// 获取用户邀请码
 	codes, err := h.inviteService.GetUserInviteCodes(userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// 鑾峰彇缁熻
+	// 获取统计
 	stats, err := h.inviteService.GetInviteStats(userID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// 鑾峰彇鐢ㄦ埛浣ｉ噾浣欓
+	// 获取用户佣金余额
 	var user model.User
 	if err := database.Get().Select("commission_balance").First(&user, userID).Error; err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to load user commission balance"})
@@ -338,9 +338,9 @@ func (h *InviteHandler) GetInviteInfo(c *gin.Context) {
 }
 
 // GenerateCode godoc
-// @Summary 鐢熸垚閭€璇风爜
-// @Description 鐢ㄦ埛鐢熸垚鏂扮殑閭€璇风爜
-// @Tags 鐢ㄦ埛绔?
+// @Summary 生成邀请码
+// @Description 用户生成新的邀请码
+// @Tags 用户端
 // @Accept json
 // @Produce json
 // @Security BearerAuth
@@ -365,14 +365,14 @@ func (h *InviteHandler) GenerateCode(c *gin.Context) {
 }
 
 // GetCommissionRecords godoc
-// @Summary 鑾峰彇浣ｉ噾璁板綍
-// @Description 鐢ㄦ埛鑾峰彇鑷繁鐨勪剑閲戣褰曞垪琛?
-// @Tags 鐢ㄦ埛绔?
+// @Summary 获取佣金记录
+// @Description 用户获取自己的佣金记录列表
+// @Tags 用户端
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param page query int false "椤电爜" default(1)
-// @Param page_size query int false "姣忛〉鏁伴噺" default(20)
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页数量" default(20)
 // @Success 200 {object} map[string]any
 // @Failure 500 {object} map[string]any
 // @Router /user/invite/commissions [get]
@@ -396,13 +396,13 @@ func (h *InviteHandler) GetCommissionRecords(c *gin.Context) {
 }
 
 // RequestWithdraw godoc
-// @Summary 鐢宠鎻愮幇
-// @Description 鐢ㄦ埛鐢宠浣ｉ噾鎻愮幇
-// @Tags 鐢ㄦ埛绔?
+// @Summary 申请提现
+// @Description 用户申请佣金提现
+// @Tags 用户端
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param request body map[string]any true "鎻愮幇璇锋眰 {amount, method, account, name}"
+// @Param request body map[string]any true "提现请求 {amount, method, account, name}"
 // @Success 200 {object} map[string]any
 // @Failure 400 {object} map[string]any
 // @Router /user/invite/withdraw [post]
@@ -430,14 +430,14 @@ func (h *InviteHandler) RequestWithdraw(c *gin.Context) {
 }
 
 // GetWithdrawRecords godoc
-// @Summary 鑾峰彇鎻愮幇璁板綍
-// @Description 鐢ㄦ埛鑾峰彇鑷繁鐨勬彁鐜拌褰曞垪琛?
-// @Tags 鐢ㄦ埛绔?
+// @Summary 获取提现记录
+// @Description 用户获取自己的提现记录列表
+// @Tags 用户端
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param page query int false "椤电爜" default(1)
-// @Param page_size query int false "姣忛〉鏁伴噺" default(20)
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页数量" default(20)
 // @Success 200 {object} map[string]any
 // @Failure 500 {object} map[string]any
 // @Router /user/invite/withdrawals [get]
@@ -460,12 +460,12 @@ func (h *InviteHandler) GetWithdrawRecords(c *gin.Context) {
 	})
 }
 
-// ========== 绠＄悊鍛樻帴鍙?==========
+// ========== 管理员接口 ==========
 
 // GetConfig godoc
-// @Summary 鑾峰彇閭€璇烽厤缃?
-// @Description 绠＄悊鍛樿幏鍙栭個璇风郴缁熼厤缃?
-// @Tags 绠＄悊绔?绯荤粺
+// @Summary 获取邀请配置
+// @Description 管理员获取邀请系统配置
+// @Tags 管理端-系统
 // @Accept json
 // @Produce json
 // @Security BearerAuth
@@ -487,9 +487,9 @@ func (h *InviteHandler) GetConfig(c *gin.Context) {
 }
 
 // UpdateConfig godoc
-// @Summary 鏇存柊閭€璇烽厤缃?
-// @Description 绠＄悊鍛樻洿鏂伴個璇风郴缁熼厤缃?
-// @Tags 绠＄悊绔?绯荤粺
+// @Summary 更新邀请配置
+// @Description 管理员更新邀请系统配置
+// @Tags 管理端-系统
 // @Accept json
 // @Produce json
 // @Security BearerAuth
@@ -720,15 +720,15 @@ func (h *InviteHandler) UpdateConfig(c *gin.Context) {
 }
 
 // GetWithdrawals godoc
-// @Summary 鑾峰彇鎻愮幇鐢宠鍒楄〃
-// @Description 绠＄悊鍛樿幏鍙栨彁鐜扮敵璇峰垪琛?
-// @Tags 绠＄悊绔?绯荤粺
+// @Summary 获取提现申请列表
+// @Description 管理员获取提现申请列表
+// @Tags 管理端-系统
 // @Accept json
 // @Produce json
 // @Security BearerAuth
 // @Param status query string false "Status filter"
-// @Param page query int false "椤电爜" default(1)
-// @Param page_size query int false "姣忛〉鏁伴噺" default(20)
+// @Param page query int false "页码" default(1)
+// @Param page_size query int false "每页数量" default(20)
 // @Success 200 {object} map[string]any
 // @Router /admin/invite/withdrawals [get]
 func (h *InviteHandler) GetWithdrawals(c *gin.Context) {
@@ -781,14 +781,14 @@ func (h *InviteHandler) GetWithdrawals(c *gin.Context) {
 }
 
 // ProcessWithdraw godoc
-// @Summary 澶勭悊鎻愮幇鐢宠
-// @Description 绠＄悊鍛樺鐞嗘彁鐜扮敵璇凤紝鎵瑰噯鎴栨嫆缁?
-// @Tags 绠＄悊绔?绯荤粺
+// @Summary 处理提现申请
+// @Description 管理员处理提现申请，批准或拒绝
+// @Tags 管理端-系统
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param id path int true "鎻愮幇璁板綍ID"
-// @Param request body map[string]any true "澶勭悊璇锋眰 {status, remark}"
+// @Param id path int true "提现记录ID"
+// @Param request body map[string]any true "处理请求 {status, remark}"
 // @Success 200 {object} map[string]any
 // @Failure 400 {object} map[string]any
 // @Failure 404 {object} map[string]any
@@ -882,9 +882,9 @@ func (h *InviteHandler) ProcessWithdraw(c *gin.Context) {
 }
 
 // GetInviteStats godoc
-// @Summary 鑾峰彇閭€璇风粺璁?
-// @Description 绠＄悊鍛樿幏鍙栭個璇风郴缁熺粺璁℃暟鎹?
-// @Tags 绠＄悊绔?绯荤粺
+// @Summary 获取邀请统计
+// @Description 管理员获取邀请系统统计数据
+// @Tags 管理端-系统
 // @Accept json
 // @Produce json
 // @Security BearerAuth

@@ -106,6 +106,18 @@
 
 ### Fixed
 
+- GBK mojibake (UTF-8 once decoded as GBK and saved again) is repaired in
+  `internal/handler/{agent,invite,telegram}.go`, `internal/middleware`,
+  `internal/database` and `internal/service/service_test.go`, with the line
+  breaks and separators the lost bytes had swallowed. Four API error
+  messages read correctly again (`缺少 API Key`, `API Key 无效`,
+  `节点已被禁用`, `权限不足`). Regenerated Swagger: Chinese summaries and
+  tags are readable, and the agent heartbeat and WebSocket, admin execute and
+  Telegram user-notify operations get the tags their merged annotations had
+  lost. `docs/DEPLOYMENT.md` loses its BOM.
+- New gate `config/scripts/check_mojibake.py` (CI "Documentation Sync
+  Check", so it runs on every pull request) rejects GBK mojibake runs,
+  `U+FFFD`, private-use characters, BOMs and non-UTF-8 text in tracked files.
 - The legacy literal translator (`web/src/utils/legacyI18n.js`) wrote the
   first text it saw back over later updates, so labels that change in place
   (a copy button turning into "已复制", a form switching to registration)

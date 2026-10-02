@@ -19,12 +19,12 @@ import (
 	"gorm.io/gorm"
 )
 
-// TelegramHandler Telegram Bot处理�?
+// TelegramHandler Telegram Bot处理器
 type TelegramHandler struct {
 	botService *service.TelegramBotService
 }
 
-// NewTelegramHandler 创建处理�?
+// NewTelegramHandler 创建处理器
 func NewTelegramHandler() *TelegramHandler {
 	return &TelegramHandler{
 		botService: service.NewTelegramBotService(database.Get()),
@@ -160,8 +160,8 @@ func extractMessage(raw any) string {
 
 // GetBot godoc
 // @Summary 获取Telegram Bot配置
-// @Description 管理员获取Telegram Bot的配置信�?
-// @Tags 管理�?通知
+// @Description 管理员获取Telegram Bot的配置信息
+// @Tags 管理端-通知
 // @Accept json
 // @Produce json
 // @Security BearerAuth
@@ -193,8 +193,8 @@ func (h *TelegramHandler) GetBot(c *gin.Context) {
 
 // UpdateBot godoc
 // @Summary 更新Telegram Bot配置
-// @Description 管理员更新Telegram Bot的配置信�?
-// @Tags 管理�?通知
+// @Description 管理员更新Telegram Bot的配置信息
+// @Tags 管理端-通知
 // @Accept json
 // @Produce json
 // @Security BearerAuth
@@ -280,7 +280,7 @@ func (h *TelegramHandler) UpdateBot(c *gin.Context) {
 // SetWebhook godoc
 // @Summary 设置Telegram Webhook
 // @Description 管理员设置Telegram Bot的Webhook地址
-// @Tags 管理�?通知
+// @Tags 管理端-通知
 // @Accept json
 // @Produce json
 // @Security BearerAuth
@@ -322,7 +322,7 @@ func (h *TelegramHandler) SetWebhook(c *gin.Context) {
 // DeleteWebhook godoc
 // @Summary 删除Telegram Webhook
 // @Description 管理员删除Telegram Bot的Webhook配置
-// @Tags 管理�?通知
+// @Tags 管理端-通知
 // @Accept json
 // @Produce json
 // @Security BearerAuth
@@ -367,8 +367,8 @@ func (h *TelegramHandler) TelegramWebhook(c *gin.Context) {
 
 // SendNotification godoc
 // @Summary 发送Telegram通知
-// @Description 管理员通过Telegram发送通知给指定用�?
-// @Tags 管理�?通知
+// @Description 管理员通过Telegram发送通知给指定用户
+// @Tags 管理端-通知
 // @Accept json
 // @Produce json
 // @Security BearerAuth
@@ -423,8 +423,8 @@ func (h *TelegramHandler) SendNotification(c *gin.Context) {
 
 // Broadcast godoc
 // @Summary 广播Telegram消息
-// @Description 管理员通过Telegram广播消息给所有绑定用�?
-// @Tags 管理�?通知
+// @Description 管理员通过Telegram广播消息给所有绑定用户
+// @Tags 管理端-通知
 // @Accept json
 // @Produce json
 // @Security BearerAuth
@@ -473,7 +473,7 @@ func (h *TelegramHandler) Broadcast(c *gin.Context) {
 // GetUserBindings godoc
 // @Summary 获取用户绑定列表
 // @Description 管理员获取Telegram用户绑定列表
-// @Tags 管理�?通知
+// @Tags 管理端-通知
 // @Accept json
 // @Produce json
 // @Security BearerAuth
@@ -549,13 +549,14 @@ func (h *TelegramHandler) GetUserBindings(c *gin.Context) {
 }
 
 // UpdateUserNotify godoc
-// @Summary 鏇存柊Telegram鐢ㄦ埛閫氱煡璁剧疆
-// @Description 绠＄悊鍛樻洿鏂版寚瀹歍elegram鐢ㄦ埛鐨勯€氱煡寮€鍏?// @Tags 绠＄悊绔?閫氱煡
+// @Summary 更新Telegram用户通知设置
+// @Description 管理员更新指定Telegram用户的通知开关
+// @Tags 管理端-通知
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param id path int true "Telegram缁戝畾ID"
-// @Param request body map[string]any true "閫氱煡璁剧疆"
+// @Param id path int true "Telegram绑定ID"
+// @Param request body map[string]any true "通知设置"
 // @Success 200 {object} map[string]any
 // @Failure 400 {object} map[string]any
 // @Failure 404 {object} map[string]any
@@ -647,9 +648,9 @@ func (h *TelegramHandler) UpdateUserNotify(c *gin.Context) {
 // ========== 用户接口 ==========
 
 // GetTelegramStatus godoc
-// @Summary 获取Telegram绑定状�?
-// @Description 用户获取自己的Telegram绑定状�?
-// @Tags 用户�?
+// @Summary 获取Telegram绑定状态
+// @Description 用户获取自己的Telegram绑定状态
+// @Tags 用户端
 // @Accept json
 // @Produce json
 // @Security BearerAuth
@@ -680,7 +681,7 @@ func (h *TelegramHandler) GetTelegramStatus(c *gin.Context) {
 // UnbindTelegram godoc
 // @Summary 解绑Telegram
 // @Description 用户解绑自己的Telegram账号
-// @Tags 用户�?
+// @Tags 用户端
 // @Accept json
 // @Produce json
 // @Security BearerAuth
@@ -704,7 +705,7 @@ func (h *TelegramHandler) UnbindTelegram(c *gin.Context) {
 // UpdateNotifySettings godoc
 // @Summary 更新Telegram通知设置
 // @Description 用户更新自己的Telegram通知设置
-// @Tags 用户�?
+// @Tags 用户端
 // @Accept json
 // @Produce json
 // @Security BearerAuth
@@ -730,7 +731,7 @@ func (h *TelegramHandler) UpdateNotifySettings(c *gin.Context) {
 	panelSuccess(c, gin.H{"message": "settings updated"})
 }
 
-// ========== 请求结构�?==========
+// ========== 请求结构体 ==========
 
 // UpdateBotRequest 更新Bot请求
 type UpdateBotRequest struct {

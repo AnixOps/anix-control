@@ -1,4 +1,4 @@
-﻿# AnixOps Control 部署指南
+# AnixOps Control 部署指南
 
 本文档覆盖本项目的常见部署方式：本地开发、Docker Compose、生产环境部署与运维。
 
