@@ -2517,6 +2517,11 @@ export default {
       failed: 'Failed',
       refunded: 'Refunded'
     },
+    confirm: {
+      deleteTitle: 'Delete payment gateway {name}?',
+      deleteMessage: 'Users can no longer pay through this gateway. This can’t be undone.',
+      deleteAction: 'Delete gateway'
+    },
     messages: {
       fetchGatewaysFailed: 'Failed to load payment gateways',
       fetchRecordsFailed: 'Failed to load payment records',
@@ -2527,8 +2532,9 @@ export default {
       gatewaySaveFailedShort: 'Save failed',
       toggleFailed: 'Failed to change gateway status: {message}',
       toggleFailedShort: 'Operation failed',
-      deleteConfirm: 'Delete gateway "{name}"?',
-      deleteFailed: 'Failed to delete gateway: {message}',
+      gatewayEnabled: '{name} enabled',
+      gatewayDisabled: '{name} disabled',
+      gatewayDeleted: 'Gateway {name} deleted',
       deleteFailedShort: 'Delete failed'
     }
   },

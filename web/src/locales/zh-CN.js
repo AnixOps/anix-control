@@ -2518,6 +2518,11 @@ export default {
       failed: '失败',
       refunded: '已退款'
     },
+    confirm: {
+      deleteTitle: '删除支付网关 {name}？',
+      deleteMessage: '用户将无法再通过这个网关付款。此操作无法撤销。',
+      deleteAction: '删除网关'
+    },
     messages: {
       fetchGatewaysFailed: '加载支付网关失败',
       fetchRecordsFailed: '加载支付记录失败',
@@ -2528,8 +2533,9 @@ export default {
       gatewaySaveFailedShort: '保存失败',
       toggleFailed: '切换网关状态失败: {message}',
       toggleFailedShort: '操作失败',
-      deleteConfirm: '确定删除网关 "{name}"？',
-      deleteFailed: '删除网关失败: {message}',
+      gatewayEnabled: '已启用 {name}',
+      gatewayDisabled: '已禁用 {name}',
+      gatewayDeleted: '已删除网关 {name}',
       deleteFailedShort: '删除失败'
     }
   },

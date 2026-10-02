@@ -196,74 +196,94 @@
       </div>
     </div>
 
-    <div v-if="showGatewayModal" class="modal-overlay" @click.self="showGatewayModal = false">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>{{ editingGateway ? t('adminPayment.modal.editTitle') : t('adminPayment.modal.createTitle') }}</h3>
-          <button class="btn btn-ghost btn-sm close-btn normalized-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="showGatewayModal = false">x</button>
-          <button class="close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="showGatewayModal = false">×</button>
+    <UiDialog
+      v-model:open="showGatewayModal"
+      :title="editingGateway ? t('adminPayment.modal.editTitle') : t('adminPayment.modal.createTitle')"
+      :dismissible="!gatewaySaving"
+    >
+      <div class="dialog-form">
+        <div class="form-group">
+          <label for="payment-gateway-name">{{ t('adminPayment.modal.fields.name') }} <span class="required">*</span></label>
+          <input
+            id="payment-gateway-name"
+            v-model="gatewayForm.name"
+            type="text"
+            :placeholder="t('adminPayment.modal.placeholders.name')"
+          />
         </div>
-        <div class="modal-body">
+        <div class="form-row">
           <div class="form-group">
-            <label>{{ t('adminPayment.modal.fields.name') }} <span class="required">*</span></label>
+            <label for="payment-gateway-type">{{ t('adminPayment.modal.fields.type') }}</label>
+            <select id="payment-gateway-type" v-model="gatewayForm.type">
+              <option v-for="type in gatewayTypes" :key="type" :value="type">
+                {{ getGatewayTypeLabel(type) }}
+              </option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label for="payment-gateway-fee">{{ t('adminPayment.modal.fields.feeRate') }}</label>
             <input
-              v-model="gatewayForm.name"
-              type="text"
-              :placeholder="t('adminPayment.modal.placeholders.name')"
+              id="payment-gateway-fee"
+              v-model.number="gatewayForm.fee_rate"
+              type="number"
+              step="0.001"
+              :placeholder="t('adminPayment.modal.placeholders.feeRate')"
             />
           </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>{{ t('adminPayment.modal.fields.type') }}</label>
-              <select v-model="gatewayForm.type">
-                <option v-for="type in gatewayTypes" :key="type" :value="type">
-                  {{ getGatewayTypeLabel(type) }}
-                </option>
-              </select>
-            </div>
-            <div class="form-group">
-              <label>{{ t('adminPayment.modal.fields.feeRate') }}</label>
-              <input
-                v-model.number="gatewayForm.fee_rate"
-                type="number"
-                step="0.001"
-                :placeholder="t('adminPayment.modal.placeholders.feeRate')"
-              />
-            </div>
-          </div>
-          <div class="form-row">
-            <div class="form-group">
-              <label>{{ t('adminPayment.modal.fields.minAmount') }}</label>
-              <input
-                v-model.number="gatewayForm.min_amount"
-                type="number"
-                :placeholder="t('adminPayment.modal.placeholders.minAmount')"
-              />
-            </div>
-            <div class="form-group">
-              <label>{{ t('adminPayment.modal.fields.maxAmount') }}</label>
-              <input
-                v-model.number="gatewayForm.max_amount"
-                type="number"
-                :placeholder="t('adminPayment.modal.placeholders.maxAmount')"
-              />
-            </div>
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label for="payment-gateway-min">{{ t('adminPayment.modal.fields.minAmount') }}</label>
+            <input
+              id="payment-gateway-min"
+              v-model.number="gatewayForm.min_amount"
+              type="number"
+              :placeholder="t('adminPayment.modal.placeholders.minAmount')"
+            />
           </div>
           <div class="form-group">
-            <label>{{ t('adminPayment.modal.fields.configJson') }}</label>
-            <textarea
-              v-model="gatewayForm.config_json"
-              rows="4"
-              :placeholder="t('adminPayment.modal.placeholders.configJson')"
-            ></textarea>
+            <label for="payment-gateway-max">{{ t('adminPayment.modal.fields.maxAmount') }}</label>
+            <input
+              id="payment-gateway-max"
+              v-model.number="gatewayForm.max_amount"
+              type="number"
+              :placeholder="t('adminPayment.modal.placeholders.maxAmount')"
+            />
           </div>
         </div>
-        <div class="modal-footer">
-          <button class="btn" @click="showGatewayModal = false">{{ t('common.actions.cancel') }}</button>
-          <button class="btn btn-primary" @click="saveGateway">{{ t('common.actions.save') }}</button>
+        <div class="form-group">
+          <label for="payment-gateway-config">{{ t('adminPayment.modal.fields.configJson') }}</label>
+          <textarea
+            id="payment-gateway-config"
+            v-model="gatewayForm.config_json"
+            rows="4"
+            data-test="payment-gateway-config"
+            :placeholder="t('adminPayment.modal.placeholders.configJson')"
+            :aria-invalid="configJsonError ? 'true' : undefined"
+            :aria-describedby="configJsonError ? 'payment-gateway-config-error' : undefined"
+          ></textarea>
+          <p v-if="configJsonError" id="payment-gateway-config-error" class="form-error" role="alert">{{ configJsonError }}</p>
         </div>
+        <p v-if="gatewayError" class="form-error" role="alert" data-test="payment-gateway-error">{{ gatewayError }}</p>
       </div>
-    </div>
+      <template #footer="{ close }">
+        <UiButton :disabled="gatewaySaving" @click="close">{{ t('common.actions.cancel') }}</UiButton>
+        <UiButton variant="primary" data-test="payment-gateway-save" :loading="gatewaySaving" @click="saveGateway">{{ t('common.actions.save') }}</UiButton>
+      </template>
+    </UiDialog>
+
+    <UiSheet
+      :open="Boolean(viewingRecord)"
+      size="sm"
+      :title="t('adminPayment.records.detail.title')"
+      @update:open="value => { if (!value) viewingRecord = null }"
+    >
+      <dl v-if="viewingRecord" class="record-detail" data-test="payment-record-detail">
+        <div><dt>{{ t('adminPayment.records.detail.tradeNo') }}</dt><dd>{{ viewingRecord.trade_no || '-' }}</dd></div>
+        <div><dt>{{ t('adminPayment.records.detail.amount') }}</dt><dd>{{ formatMoney(viewingRecord.amount) }}</dd></div>
+        <div><dt>{{ t('adminPayment.records.detail.status') }}</dt><dd>{{ getPaymentStatusLabel(viewingRecord.status) }}</dd></div>
+      </dl>
+    </UiSheet>
   </div>
 </template>
 
@@ -279,8 +299,11 @@ import {
   updatePaymentGateway
 } from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { UiButton, UiDialog, UiSheet, useConfirm, useToast } from '@/ui'
 
 const { t, formatDateTime } = useAppI18n()
+const toast = useToast()
+const confirm = useConfirm()
 
 const gatewayTypes = ['alipay', 'wechat', 'stripe', 'usdt', 'epay']
 const paymentStatuses = ['pending', 'paid', 'failed', 'refunded']
@@ -295,6 +318,10 @@ const recordFilter = ref({ status: '', gateway_type: '' })
 const showGatewayModal = ref(false)
 const editingGateway = ref(null)
 const gatewayForm = ref(createGatewayForm())
+const gatewaySaving = ref(false)
+const gatewayError = ref('')
+const configJsonError = ref('')
+const viewingRecord = ref(null)
 
 function createGatewayForm(source = {}) {
   return {
@@ -455,20 +482,26 @@ const openGatewayModal = (gateway = null) => {
     editingGateway.value = null
     gatewayForm.value = createGatewayForm()
   }
+  gatewayError.value = ''
+  configJsonError.value = ''
   showGatewayModal.value = true
 }
 
 const saveGateway = async () => {
-  try {
-    const payload = { ...gatewayForm.value }
-    if (payload.config_json) {
-      try {
-        payload.config = JSON.parse(payload.config_json)
-      } catch (error) {
-        window.alert(t('adminPayment.messages.invalidConfigJson'))
-        return
-      }
+  if (gatewaySaving.value) return
+  gatewayError.value = ''
+  configJsonError.value = ''
+  const payload = { ...gatewayForm.value }
+  if (payload.config_json) {
+    try {
+      payload.config = JSON.parse(payload.config_json)
+    } catch (error) {
+      configJsonError.value = t('adminPayment.messages.invalidConfigJson')
+      return
     }
+  }
+  gatewaySaving.value = true
+  try {
     delete payload.config_json
 
     if (editingGateway.value) {
@@ -482,58 +515,68 @@ const saveGateway = async () => {
         'adminPayment.messages.gatewaySaveFailedShort'
       )
     }
-    window.alert(t('adminPayment.messages.gatewaySaveSuccess'))
+    toast.success(t('adminPayment.messages.gatewaySaveSuccess'))
     showGatewayModal.value = false
     await fetchGateways()
   } catch (error) {
-    window.alert(
-      t('adminPayment.messages.gatewaySaveFailed', {
-        message: resolveApiError(error, 'adminPayment.messages.gatewaySaveFailedShort')
-      })
-    )
+    gatewayError.value = t('adminPayment.messages.gatewaySaveFailed', {
+      message: resolveApiError(error, 'adminPayment.messages.gatewaySaveFailedShort')
+    })
+  } finally {
+    gatewaySaving.value = false
   }
 }
 
-const toggleGatewayStatus = async (gateway) => {
+const setGatewayEnabled = async (gateway, enabled) => {
   try {
     ensurePaymentSuccess(
-      await togglePaymentGateway(gateway.id, !gateway.enabled),
+      await togglePaymentGateway(gateway.id, enabled),
       'adminPayment.messages.toggleFailedShort'
     )
     await fetchGateways()
+    return true
   } catch (error) {
-    window.alert(
-      t('adminPayment.messages.toggleFailed', {
-        message: resolveApiError(error, 'adminPayment.messages.toggleFailedShort')
-      })
-    )
+    toast.error(t('adminPayment.messages.toggleFailed', {
+      message: resolveApiError(error, 'adminPayment.messages.toggleFailedShort')
+    }))
+    return false
   }
+}
+
+// Enable and disable undo each other: no confirmation, 撤销 in the toast.
+const toggleGatewayStatus = async (gateway) => {
+  const enabled = !gateway.enabled
+  if (!(await setGatewayEnabled(gateway, enabled))) return
+  toast.success(
+    t(enabled ? 'adminPayment.messages.gatewayEnabled' : 'adminPayment.messages.gatewayDisabled', { name: gateway.name }),
+    { undo: () => setGatewayEnabled(gateway, !enabled) }
+  )
 }
 
 const deleteGatewayItem = async (gateway) => {
-  if (!window.confirm(t('adminPayment.messages.deleteConfirm', { name: gateway.name }))) return
-  try {
-    ensurePaymentSuccess(
-      await deletePaymentGateway(gateway.id),
-      'adminPayment.messages.deleteFailedShort'
-    )
-    await fetchGateways()
-  } catch (error) {
-    window.alert(
-      t('adminPayment.messages.deleteFailed', {
-        message: resolveApiError(error, 'adminPayment.messages.deleteFailedShort')
-      })
-    )
-  }
+  const confirmed = await confirm({
+    title: t('adminPayment.confirm.deleteTitle', { name: gateway.name }),
+    message: t('adminPayment.confirm.deleteMessage'),
+    confirmLabel: t('adminPayment.confirm.deleteAction'),
+    tone: 'danger',
+    onConfirm: async () => {
+      try {
+        ensurePaymentSuccess(
+          await deletePaymentGateway(gateway.id),
+          'adminPayment.messages.deleteFailedShort'
+        )
+      } catch (error) {
+        throw new Error(resolveApiError(error, 'adminPayment.messages.deleteFailedShort'))
+      }
+    }
+  })
+  if (!confirmed) return
+  toast.success(t('adminPayment.messages.gatewayDeleted', { name: gateway.name }))
+  await fetchGateways()
 }
 
 const viewRecord = (record) => {
-  window.alert([
-    t('adminPayment.records.detail.title'),
-    `${t('adminPayment.records.detail.tradeNo')}: ${record.trade_no || '-'}`,
-    `${t('adminPayment.records.detail.amount')}: ${formatMoney(record.amount)}`,
-    `${t('adminPayment.records.detail.status')}: ${getPaymentStatusLabel(record.status)}`
-  ].join('\n'))
+  viewingRecord.value = record
 }
 
 onMounted(() => {
@@ -556,8 +599,37 @@ onMounted(() => {
   margin-bottom: 20px;
 }
 
-.modal-header > .close-btn:not(.normalized-close) {
-  display: none;
+.dialog-form .form-group:last-child {
+  margin-bottom: 0;
+}
+
+.form-error {
+  margin: var(--space-1) 0 0;
+  color: var(--danger);
+  font-size: var(--type-callout-size);
+}
+
+.record-detail {
+  display: grid;
+  gap: var(--space-3);
+  margin: 0;
+}
+
+.record-detail div {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.record-detail dt {
+  color: var(--label-2);
+}
+
+.record-detail dd {
+  margin: 0;
+  font-weight: var(--weight-semibold);
+  overflow-wrap: anywhere;
+  text-align: right;
 }
 
 .stats-grid {
