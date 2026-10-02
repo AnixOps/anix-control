@@ -3,8 +3,9 @@
  *
  * Every pre-redesign variable below is an alias of a design token, so pages
  * that still use them follow the brand and both themes. The aliases and the
- * global classes (.btn, .card, .data-table, .modal, ...) stay until the pages
+ * global classes (.btn, .card, .data-table, ...) stay until the pages
  * move to the component library (redesign plan U2-U9); then they are removed.
+ * The .modal* dialog classes went in U4: dialogs are UiDialog and UiSheet.
  * New code uses the tokens directly. Map: docs/reference/frontend-design.md.
  */
 :root {
@@ -602,69 +603,6 @@ textarea::placeholder {
   border-color: transparent;
   background: var(--danger-fill);
   color: var(--on-danger);
-}
-
-/* Dialogs: scrim, radius-lg sheet, large soft shadow. */
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: var(--space-5);
-  background: var(--scrim);
-  z-index: var(--z-modal);
-}
-
-.modal {
-  width: min(96vw, 560px);
-  max-height: 90vh;
-  overflow-y: auto;
-  background: var(--bg-elevated);
-  border: 0;
-  border-radius: var(--radius-lg);
-  box-shadow: var(--shadow-3);
-}
-
-.modal-lg {
-  width: min(96vw, 860px);
-}
-
-.modal-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: var(--space-3);
-  padding: var(--space-5) var(--space-6);
-  border-bottom: 1px solid var(--separator);
-}
-
-.modal-header h3 {
-  margin: 0;
-  font-size: var(--type-title-3-size);
-  line-height: var(--type-title-3-line);
-  font-weight: var(--type-title-3-weight);
-}
-
-.modal-body {
-  padding: var(--space-6);
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: var(--space-3);
-  flex-wrap: wrap;
-  padding: var(--space-4) var(--space-6);
-  border-top: 1px solid var(--separator);
-}
-
-.close-btn {
-  min-width: var(--size-control-md);
-  padding: 0;
-  color: var(--label-2);
-  font-size: var(--type-title-3-size);
-  line-height: 1;
 }
 
 .form-group {

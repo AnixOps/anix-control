@@ -1,7 +1,8 @@
 // Minimal ESLint setup for the redesign rules (docs/reference/frontend-design.md).
-// no-alert warns for now; the redesign plan (U4) replaces every alert,
-// confirm and prompt with the Toast and ConfirmDialog components and then
-// makes it an error.
+// Since U4 every alert, confirm and prompt is a toast, a ConfirmDialog or a
+// UiDialog, and every overlay is UiDialog or UiSheet: no-alert and the
+// legacy modal classes are errors (src/__tests__/nativeDialogs.test.js
+// checks the same in CI).
 import pluginVue from 'eslint-plugin-vue'
 import globals from 'globals'
 
@@ -16,7 +17,8 @@ export default [
       globals: { ...globals.browser }
     },
     rules: {
-      'no-alert': 'warn'
+      'no-alert': 'error',
+      'vue/no-restricted-class': ['error', 'modal-overlay', 'modal', 'modal-lg', 'modal-header', 'modal-body', 'modal-footer']
     }
   }
 ]

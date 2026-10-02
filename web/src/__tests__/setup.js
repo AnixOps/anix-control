@@ -50,12 +50,12 @@ const sessionStorageMock = createStorageMock()
 global.localStorage = localStorageMock
 global.sessionStorage = sessionStorageMock
 
-if (typeof window.alert !== 'function') {
-  window.alert = () => {}
-}
-
-if (typeof window.confirm !== 'function') {
-  window.confirm = () => true
+// Pages give feedback through useToast/useConfirm (UI U4): a native dialog
+// in a test is a regression, so it fails loudly.
+for (const name of ['alert', 'confirm', 'prompt']) {
+  window[name] = (message) => {
+    throw new Error(`window.${name}() was called (${String(message ?? '')}); use useToast() or useConfirm()`)
+  }
 }
 
 let i18nModule = null
