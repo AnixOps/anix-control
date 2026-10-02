@@ -16,4 +16,11 @@ describe('vite manual chunking', () => {
     expect(manualChunks('/repo/web/src/locales/zh-CN.js')).toBe('locale-zh-CN')
     expect(manualChunks('/repo/web/src/views/admin/Forward.vue')).toBeUndefined()
   })
+
+  it('keeps the component library primitives out of the app shell vendor chunks', () => {
+    expect(manualChunks('/repo/web/node_modules/reka-ui/dist/Dialog/DialogRoot.js')).toBe('ui-vendor')
+    expect(manualChunks('/repo/web/node_modules/@floating-ui/vue/dist/floating-ui.vue.mjs')).toBe('ui-vendor')
+    expect(manualChunks('/repo/web/node_modules/@vueuse/core/index.mjs')).toBe('ui-vendor')
+    expect(manualChunks('/repo/web/node_modules/vue/dist/vue.runtime.esm-bundler.js')).toBe('vue-vendor')
+  })
 })

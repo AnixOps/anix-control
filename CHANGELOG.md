@@ -8,6 +8,34 @@
   daylight-saving change in the machine's local zone: it compares expiries with the
   same calendar arithmetic as the handlers (`time.Now().AddDate`). Test code only.
 
+### Added
+
+- **Web component library, first batch (UI redesign phase U2)**
+  (`web/src/ui/`, `docs/reference/frontend-design.md` "Components"). Not
+  used by any page yet; U4 onwards migrates pages to it.
+  - Built on Reka UI 2.10.5 (headless; pinned) with our own scoped CSS on
+    AnixOps Design tokens only: Button, IconButton, Field, TextField,
+    Textarea, PasswordField, NumberField, Select, Combobox, Switch,
+    Checkbox, RadioGroup, SegmentedControl, Tabs, Dialog, ConfirmDialog
+    (typed-name variant for destructive actions), Sheet (right drawer,
+    bottom sheet below 834 px), Toast, Badge and StatusDot (one status
+    map), EmptyState, Skeleton, CopyField, PageHeader, Card, Section and
+    GroupedList. Keyboard operable, announced correctly, token focus
+    ring, reduced motion, light and dark, 390 px.
+  - Composables: `useToast()` (success 3 s, errors persistent, undo 5 s,
+    one live region, F8), `useConfirm()` (a promise instead of
+    `confirm()`), `useFormat()` (bytes, rates, durations, money, numbers,
+    dates, relative times on Intl and the current locale; `formatBytes`
+    matches the page copies), `useDelayedLoading()` (the 300 ms rule).
+  - Built-in strings in `zh-CN` and `en` under `ui.*`.
+  - Histoire 1.0.0-beta.1 documents every component (`npm run story:dev`,
+    `npm run story:build`), with the vendored tokens and a dark-mode
+    toggle. `package.json` overrides Histoire's `vite` peer range (^7) to
+    the project's Vite 8.
+  - `reka-ui` and its helpers build into their own `ui-vendor` chunk. No
+    page imports the library yet, so the app bundle is unchanged apart
+    from the new strings (+0.7 KB gzip in the locale chunks).
+
 ### Changed
 
 - **Administrators manage invite codes in every edition** (owner decision

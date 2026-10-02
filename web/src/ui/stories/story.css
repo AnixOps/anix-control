@@ -1,0 +1,51 @@
+/* Layout helpers for Histoire stories only (loaded by histoire.setup.js).
+   Tokens only, like the components. */
+/* Histoire forces html and body to transparent (the host page paints a
+   background preset); paint the story root with the page token instead, so
+   dark mode is pure black like the app. */
+.__histoire-render-story {
+  background: var(--bg);
+  color: var(--label-1);
+}
+
+.story {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  max-width: 760px;
+  padding: var(--space-6);
+}
+
+.story-grouped {
+  background: var(--bg-grouped);
+}
+
+.story-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-3);
+  align-items: center;
+}
+
+.story-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--space-5);
+}
+
+.story-label {
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
+  font-weight: var(--weight-medium);
+}
+
+.story-note {
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
+}
+
+@media (max-width: 639px) {
+  .story {
+    padding: var(--space-4);
+  }
+}
