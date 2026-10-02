@@ -343,7 +343,7 @@ function createAnotherForward() {
   gap: var(--space-3);
   align-items: center;
   justify-content: space-between;
-  padding: var(--space-4) var(--space-6);
+  padding: var(--space-4) var(--space-6) calc(var(--space-4) + env(safe-area-inset-bottom, 0px));
   border-top: 0.5px solid var(--separator);
   border-radius: 0 0 var(--radius-lg) var(--radius-lg);
   background: var(--bg-elevated);

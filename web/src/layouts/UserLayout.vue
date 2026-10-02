@@ -144,6 +144,8 @@ onMounted(() => {
 .user-bar__brand {
   display: inline-flex;
   flex: none;
+  align-items: center;
+  min-height: var(--size-control-lg);
   color: inherit;
   text-decoration: none;
 }

@@ -248,9 +248,11 @@ function onClick(event) {
   .ui-button--sm::after,
   .ui-button--md::after {
     position: absolute;
-    inset: 50% 0 auto;
+    top: 50%;
+    left: 50%;
+    width: max(100%, var(--size-control-lg));
     min-height: var(--size-control-lg);
-    transform: translateY(-50%);
+    transform: translate(-50%, -50%);
     content: '';
   }
 }

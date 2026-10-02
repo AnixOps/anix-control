@@ -128,6 +128,25 @@ describe('UiSegmentedControl', () => {
 })
 
 describe('UiTabs', () => {
+  it('fades the clipped edge of a tab row that scrolls', async () => {
+    render({
+      components: { UiTabs },
+      template: `<UiTabs model-value="a" aria-label="Groups" :items="['a', 'b', 'c']" />`
+    })
+    const list = screen.getByRole('tablist', { name: 'Groups' })
+    expect(list.classList.contains('is-clipped-end')).toBe(false)
+    // happy-dom has no layout: give the row a width and more content.
+    Object.defineProperty(list, 'clientWidth', { configurable: true, value: 200 })
+    Object.defineProperty(list, 'scrollWidth', { configurable: true, value: 500 })
+    list.dispatchEvent(new Event('scroll'))
+    await waitFor(() => expect(list.classList.contains('is-clipped-end')).toBe(true))
+    expect(list.classList.contains('is-clipped-start')).toBe(false)
+    list.scrollLeft = 300
+    list.dispatchEvent(new Event('scroll'))
+    await waitFor(() => expect(list.classList.contains('is-clipped-start')).toBe(true))
+    expect(list.classList.contains('is-clipped-end')).toBe(false)
+  })
+
   it('wires tabs to panels and switches with arrow keys', async () => {
     const user = userEvent.setup()
     const tab = ref('overview')

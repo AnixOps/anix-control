@@ -64,6 +64,7 @@ export default {
       showing: '正在查看 {user}',
       clearUser: '查看全部用户',
       summary: {
+        label: '流量汇总',
         total: '区间总流量',
         peak: '峰值小时',
         latestReport: '最近上报',

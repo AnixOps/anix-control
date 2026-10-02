@@ -5,6 +5,7 @@ export default {
   shell: {
     admin: {
       navLabel: 'Admin navigation',
+      sidebarLabel: 'Sidebar',
       collapse: 'Collapse sidebar',
       expand: 'Expand sidebar',
       breadcrumb: 'Location',

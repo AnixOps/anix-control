@@ -5,6 +5,7 @@ export default {
   shell: {
     admin: {
       navLabel: '管理导航',
+      sidebarLabel: '侧栏',
       collapse: '收起侧栏',
       expand: '展开侧栏',
       breadcrumb: '位置',

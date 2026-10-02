@@ -129,6 +129,19 @@ const hasLabel = computed(() => Boolean(props.label || slots.default))
 }
 
 /* Windows high-contrast: system colours for the track and thumb. */
+/* Touch: a 44 px hit area around the 51 × 31 track. */
+@media (pointer: coarse) {
+  .ui-switch__control::before {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 100%;
+    height: var(--size-control-lg);
+    transform: translate(-50%, -50%);
+    content: '';
+  }
+}
+
 @media (forced-colors: active) {
   .ui-switch__control {
     border: 1px solid ButtonText;

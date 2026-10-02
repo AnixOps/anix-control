@@ -225,6 +225,23 @@ defineExpose({ close })
   outline-offset: var(--focus-ring-offset);
 }
 
+/* Touch: a 44 px hit area around the close button. */
+@media (pointer: coarse) {
+  .ui-sheet__close {
+    position: relative;
+  }
+
+  .ui-sheet__close::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: var(--size-control-lg);
+    height: var(--size-control-lg);
+    transform: translate(-50%, -50%);
+    content: '';
+  }
+}
+
 .ui-sheet__body:focus-visible {
   outline: var(--focus-ring);
   outline-offset: calc(-1 * var(--focus-ring-offset));

@@ -1,5 +1,5 @@
 <template>
-  <div class="ui-search" :class="[$attrs.class, { 'has-value': Boolean(modelValue) }]" :style="$attrs.style" role="search">
+  <div class="ui-search" :class="[$attrs.class, { 'has-value': Boolean(modelValue) }]" :style="$attrs.style" role="search" :aria-label="label">
     <UiIcon class="ui-search__icon" :icon="Search" :size="16" />
     <input
       ref="inputRef"

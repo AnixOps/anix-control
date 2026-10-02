@@ -2,15 +2,16 @@
   <div class="admin-shell" :class="{ 'is-rail': railActive, 'is-drawer': drawerMode }">
     <div class="admin-scrim" :class="{ 'is-open': sidebarOpen }" aria-hidden="true" @click="closeSidebar"></div>
 
-    <!-- Not a landmark itself: the <nav> inside is. As a drawer it is a modal dialog. -->
+    <!-- A complementary landmark (brand, the <nav> and the account menu all sit
+         in a landmark); as a drawer it is a modal dialog. -->
     <div
       id="admin-sidebar"
       ref="sidebarElement"
       class="admin-sidebar"
       :class="{ 'is-open': sidebarOpen }"
-      :role="drawerMode ? 'dialog' : undefined"
+      :role="drawerMode ? 'dialog' : 'complementary'"
       :aria-modal="drawerMode && sidebarOpen ? 'true' : undefined"
-      :aria-label="drawerMode ? t('shell.admin.navLabel') : undefined"
+      :aria-label="drawerMode ? t('shell.admin.navLabel') : t('shell.admin.sidebarLabel')"
       :inert="drawerInactive"
       :aria-hidden="drawerInactive ? 'true' : undefined"
       @keydown="handleDrawerKeydown"

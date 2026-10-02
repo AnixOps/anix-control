@@ -543,8 +543,22 @@ onMounted(async () => {
 }
 
 .home-panel__link {
+  position: relative;
   font-size: var(--type-callout-size);
   text-decoration: none;
+}
+
+/* Touch: a 44 px hit area around the text link. */
+@media (pointer: coarse) {
+  .home-panel__link::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, var(--size-control-lg));
+    height: var(--size-control-lg);
+    transform: translate(-50%, -50%);
+    content: '';
+  }
 }
 
 .home-panel__link:hover {
@@ -572,6 +586,7 @@ onMounted(async () => {
 }
 
 .home-list__item {
+  position: relative;
   display: flex;
   gap: var(--space-3);
   padding: var(--space-4) 0;
@@ -614,6 +629,13 @@ onMounted(async () => {
   font-weight: var(--weight-medium);
   text-decoration: none;
   overflow-wrap: anywhere;
+}
+
+/* The whole row is the link's target (a 44 px+ touch target). */
+.home-list__title::after {
+  position: absolute;
+  inset: 0;
+  content: '';
 }
 
 .home-list__title:hover {

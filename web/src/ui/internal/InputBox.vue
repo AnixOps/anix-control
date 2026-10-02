@@ -50,6 +50,13 @@ defineProps({
   --ui-box-height: var(--size-control-md);
 }
 
+/* Touch: medium fields and pickers grow to the 44 px touch size. */
+@media (pointer: coarse) {
+  .ui-box--md {
+    --ui-box-height: var(--size-control-lg);
+  }
+}
+
 .ui-box--sm {
   --ui-box-height: var(--size-control-sm);
   --ui-box-pad: var(--space-2);

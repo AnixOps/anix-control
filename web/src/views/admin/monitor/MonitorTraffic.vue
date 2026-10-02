@@ -14,7 +14,7 @@
       <UiButton class="monitor-section__end" :icon="RotateCw" :loading="loading" data-monitor-refresh @click="refreshAll">{{ t('adminMonitor.refresh') }}</UiButton>
     </div>
 
-    <section class="monitor-section__metrics" :aria-label="t('adminMonitor.traffic.chart.title')">
+    <section class="monitor-section__metrics" :aria-label="t('adminMonitor.traffic.summary.label')">
       <UiMetricCard :label="t('adminMonitor.traffic.summary.total')" :value="format.bytes(totalTraffic)" :detail="selectedLabel" :loading="loading && !points.length" data-summary="total" />
       <UiMetricCard :label="t('adminMonitor.traffic.summary.peak')" :value="peak ? format.bytes(peak.traffic) : '—'" :detail="peak ? format.dateTime(peak.hour_ts) : ''" :loading="loading && !points.length" data-summary="peak" />
       <UiMetricCard

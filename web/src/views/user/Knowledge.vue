@@ -700,4 +700,21 @@ onBeforeUnmount(() => {
     text-align: left;
   }
 }
+
+/* Touch: a 44 px hit area around the back link without changing the look. */
+@media (pointer: coarse) {
+  .help-article__back {
+    position: relative;
+  }
+
+  .help-article__back::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: max(100%, var(--size-control-lg));
+    height: max(100%, var(--size-control-lg));
+    transform: translate(-50%, -50%);
+    content: '';
+  }
+}
 </style>
