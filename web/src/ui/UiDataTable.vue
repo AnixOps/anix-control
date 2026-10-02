@@ -223,6 +223,7 @@
         <div
           v-if="selectable && selectedKeys.length"
           class="ui-bulk-bar"
+          :class="{ 'is-under-overlay': modalOpen }"
           role="region"
           :aria-label="t('ui.table.bulkActions')"
           data-bulk-bar
@@ -289,6 +290,7 @@ import UiPagination from './UiPagination.vue'
 import UiSkeleton from './UiSkeleton.vue'
 import { useDelayedLoading } from './composables/useDelayedLoading'
 import { PHONE_QUERY, useMediaQuery } from './composables/useMediaQuery'
+import { useModalOpen } from './composables/useModalOpen'
 import { DENSITIES, useTablePreferences } from './composables/useTablePreferences'
 import { ariaSort, cellText, cellValue, nextSort, rowKeyOf, sortRows } from './internal/tableModel'
 
@@ -337,6 +339,9 @@ const emit = defineEmits(['update:sort', 'update:page', 'update:selected', 'row-
 const { t } = useI18n()
 
 const isPhone = useMediaQuery(PHONE_QUERY)
+// The bulk bar sits under the overlays (--z-sticky < --z-drawer / --z-modal)
+// and fades out while one is open, so it never looks like part of a dialog.
+const modalOpen = useModalOpen()
 const { hidden, density } = useTablePreferences(props.storageKey, {
   hidden: props.columns.filter(column => column.hidden).map(column => column.key),
   density: props.defaultDensity
@@ -914,6 +919,7 @@ th[aria-sort='descending'] .ui-data-table__sort-icon {
   position: fixed;
   bottom: calc(var(--space-6) + env(safe-area-inset-bottom, 0px));
   left: 50%;
+  /* Layer order: above the sticky header, below drawers and modals. */
   z-index: calc(var(--z-sticky) + 1);
   display: flex;
   gap: var(--space-2);
@@ -933,6 +939,12 @@ th[aria-sort='descending'] .ui-data-table__sort-icon {
     -webkit-backdrop-filter: saturate(180%) blur(24px);
     backdrop-filter: saturate(180%) blur(24px);
   }
+}
+
+.ui-bulk-bar.is-under-overlay {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--dur-toggle) var(--ease-standard);
 }
 
 .ui-bulk-bar__count {
