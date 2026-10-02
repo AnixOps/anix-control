@@ -4,13 +4,28 @@ export const LOCALE_STORAGE_KEY = 'app.locale'
 export const DEFAULT_LOCALE = 'zh-CN'
 export const SUPPORTED_LOCALES = ['zh-CN', 'en']
 
+// Messages come in groups, one chunk per locale and group, so a page loads
+// only what it shows: `core` (sign-in, user portal, shell, components) at
+// startup, `admin` (the admin console and forward suite) once an admin route
+// opens or an admin is signed in (router/index.js). Only the active locale is
+// loaded; en and zh-CN carry the same keys (localeParity.test.js), so the
+// fallback locale is not fetched up front.
 const localeLoaders = {
-  'zh-CN': () => import('./locales/zh-CN.js'),
-  en: () => import('./locales/en.js')
+  'zh-CN': {
+    core: () => import('./locales/zh-CN.js'),
+    admin: () => import('./locales/zh-CN.admin.js')
+  },
+  en: {
+    core: () => import('./locales/en.js'),
+    admin: () => import('./locales/en.admin.js')
+  }
 }
 
-const loadedLocales = new Set()
-const loadingLocales = new Map()
+export const MESSAGE_GROUPS = ['core', 'admin']
+
+const activeGroups = new Set(['core'])
+const loadedGroups = new Set()
+const loadingGroups = new Map()
 
 function normalizeLocale(value) {
   const raw = typeof value === 'string' ? value.trim().toLowerCase() : ''
@@ -55,47 +70,53 @@ function applyLocaleState(locale, { persist = true } = {}) {
   return locale
 }
 
-async function loadLocaleMessages(locale) {
-  const nextLocale = normalizeLocale(locale)
-  if (loadedLocales.has(nextLocale)) {
-    return nextLocale
+function loadLocaleGroup(locale, group) {
+  const key = `${locale}:${group}`
+  if (loadedGroups.has(key)) {
+    return Promise.resolve(locale)
   }
 
-  const pending = loadingLocales.get(nextLocale)
+  const pending = loadingGroups.get(key)
   if (pending) {
     return pending
   }
 
-  const loader = localeLoaders[nextLocale]
+  const loader = localeLoaders[locale]?.[group]
   if (!loader) {
-    throw new Error(`Unsupported locale: ${nextLocale}`)
+    return Promise.reject(new Error(`Unsupported locale or message group: ${key}`))
   }
 
   const promise = loader()
     .then((module) => {
-      const messages = module.default || module
-      i18n.global.setLocaleMessage(nextLocale, messages)
-      loadedLocales.add(nextLocale)
-      loadingLocales.delete(nextLocale)
-      return nextLocale
+      // Groups have disjoint top-level keys, so merging keeps each one whole.
+      i18n.global.mergeLocaleMessage(locale, module.default || module)
+      loadedGroups.add(key)
+      loadingGroups.delete(key)
+      return locale
     })
     .catch((error) => {
-      loadingLocales.delete(nextLocale)
+      loadingGroups.delete(key)
       throw error
     })
 
-  loadingLocales.set(nextLocale, promise)
+  loadingGroups.set(key, promise)
   return promise
 }
 
-async function ensureLocaleChain(locale) {
+async function ensureLocale(locale) {
   const nextLocale = normalizeLocale(locale)
-  const requiredLocales = nextLocale === DEFAULT_LOCALE
-    ? [nextLocale]
-    : [nextLocale, DEFAULT_LOCALE]
-
-  await Promise.all(requiredLocales.map(loadLocaleMessages))
+  await Promise.all([...activeGroups].map((group) => loadLocaleGroup(nextLocale, group)))
   return nextLocale
+}
+
+// Load a message group for the current locale, and for every locale switched
+// to afterwards.
+export async function loadMessageGroup(group) {
+  if (!MESSAGE_GROUPS.includes(group)) {
+    throw new Error(`Unknown message group: ${group}`)
+  }
+  activeGroups.add(group)
+  await loadLocaleGroup(normalizeLocale(i18n.global.locale.value), group)
 }
 
 const initialLocale = resolveInitialLocale()
@@ -110,14 +131,14 @@ let initPromise = null
 
 export async function initI18n() {
   if (!initPromise) {
-    initPromise = ensureLocaleChain(initialLocale).then(() => applyLocaleState(initialLocale, { persist: false }))
+    initPromise = ensureLocale(initialLocale).then(() => applyLocaleState(initialLocale, { persist: false }))
   }
   return initPromise
 }
 
 export async function setLocale(locale) {
   const nextLocale = normalizeLocale(locale)
-  await ensureLocaleChain(nextLocale)
+  await ensureLocale(nextLocale)
   return applyLocaleState(nextLocale)
 }
 

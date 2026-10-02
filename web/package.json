@@ -7,6 +7,7 @@
     "dev": "vite",
     "build": "vite build",
     "bundle:report": "node scripts/report-bundle-size.mjs",
+    "bundle:budget": "node scripts/check-bundle-budget.mjs",
     "design:sync": "node scripts/sync-design.mjs",
     "design:check": "node scripts/sync-design.mjs --check",
     "preview": "vite preview",

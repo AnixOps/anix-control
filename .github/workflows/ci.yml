@@ -1557,6 +1557,12 @@ jobs:
         working-directory: web
         run: npm run bundle:report
 
+      # Performance budget (web/bundle-budget.json, plan §13): first-visit
+      # gzip size of the login, user and admin routes and of every lazy chunk.
+      - name: Check frontend performance budget
+        working-directory: web
+        run: npm run bundle:budget
+
       - name: Upload frontend artifacts
         uses: actions/upload-artifact@v7
         with:
@@ -1564,6 +1570,7 @@ jobs:
           path: web/public/
 
       - name: Upload frontend bundle size report
+        if: ${{ !cancelled() }}
         uses: actions/upload-artifact@v7
         with:
           name: frontend-bundle-size

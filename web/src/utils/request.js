@@ -1,10 +1,8 @@
-import axios from 'axios'
 import { useUserStore } from '@/stores/user'
 
-const service = axios.create({
-  baseURL: '/api/v2',
-  timeout: 5000
-})
+// axios (about 18 KB gzip) loads with the first request instead of with the
+// app, which keeps it off the sign-in page's critical path (performance
+// budget, docs/reference/frontend-design.md "Bundle").
 
 let unauthorizedRedirectPending = false
 
@@ -77,40 +75,67 @@ function redirectToLogin() {
   window.location.href = '/login'
 }
 
-// Request interceptor
-service.interceptors.request.use(
-  config => {
-    const userStore = getUserStoreSafely()
-    const token = userStore?.token || readStoredToken()
-    const authorization = formatAuthorizationHeader(token)
+let clientPromise = null
 
-    config.headers = config.headers || {}
-    if (authorization && !config.headers.Authorization) {
-      config.headers.Authorization = authorization
+function createClient(axios) {
+  const service = axios.create({
+    baseURL: '/api/v2',
+    timeout: 5000
+  })
+
+  // Request interceptor
+  service.interceptors.request.use(
+    config => {
+      const userStore = getUserStoreSafely()
+      const token = userStore?.token || readStoredToken()
+      const authorization = formatAuthorizationHeader(token)
+
+      config.headers = config.headers || {}
+      if (authorization && !config.headers.Authorization) {
+        config.headers.Authorization = authorization
+      }
+      return config
+    },
+    error => {
+      return Promise.reject(error)
     }
-    return config
-  },
-  error => {
-    return Promise.reject(error)
-  }
-)
+  )
 
-// Response interceptor
-service.interceptors.response.use(
-  response => {
-    // Kernel lifecycle writes need response headers for operation identity and
-    // dependency-chain display. Keep the historical body-only contract for
-    // every other caller and opt in per request.
-    return response.config?.rawResponse ? response : response.data
-  },
-  error => {
-    console.error('Request error:', error)
-    if (error?.response?.status === 401 && !isAuthEndpoint(error.config)) {
-      clearAuthState()
-      redirectToLogin()
+  // Response interceptor
+  service.interceptors.response.use(
+    response => {
+      // Kernel lifecycle writes need response headers for operation identity and
+      // dependency-chain display. Keep the historical body-only contract for
+      // every other caller and opt in per request.
+      return response.config?.rawResponse ? response : response.data
+    },
+    error => {
+      console.error('Request error:', error)
+      if (error?.response?.status === 401 && !isAuthEndpoint(error.config)) {
+        clearAuthState()
+        redirectToLogin()
+      }
+      return Promise.reject(error)
     }
-    return Promise.reject(error)
-  }
-)
+  )
 
-export default service
+  return service
+}
+
+// The configured axios instance, created on first use.
+export function loadRequestClient() {
+  if (!clientPromise) {
+    clientPromise = import('axios')
+      .then(({ default: axios }) => createClient(axios))
+      .catch((error) => {
+        clientPromise = null
+        throw error
+      })
+  }
+  return clientPromise
+}
+
+export default async function request(config) {
+  const service = await loadRequestClient()
+  return service(config)
+}
