@@ -38,6 +38,12 @@ export function manualChunks(id) {
     return undefined
   }
 
+  // The component library's headless primitives and their helpers
+  // (@floating-ui/vue would otherwise land in vue-vendor via its "/vue/" path).
+  if (/node_modules\/(reka-ui|@floating-ui|@vueuse|@internationalized|@tanstack|aria-hidden|defu|ohash)\//.test(id)) {
+    return 'ui-vendor'
+  }
+
   if (id.includes('vue-i18n')) {
     return 'i18n'
   }

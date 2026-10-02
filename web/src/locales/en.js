@@ -5,6 +5,7 @@ import adminSupportPages from './modules/en/adminSupportPages'
 import adminDashboard from './modules/en/adminDashboard'
 import adminMonitor from './modules/en/adminMonitor'
 import adminTrafficHourly from './modules/en/adminTrafficHourly'
+import ui from './modules/en/ui'
 import { AGENT_NAME, CONTROL_NAME } from '../constants/brand'
 
 const legacy = {
@@ -94,6 +95,7 @@ export default {
   ...adminDashboard,
   ...adminMonitor,
   ...adminTrafficHourly,
+  ...ui,
   common: {
     locale: {
       label: 'Language',

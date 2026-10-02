@@ -150,3 +150,137 @@ literals and native dialogs in U4, the type and radius scale in U9).
 | `npm run lint` (ESLint, `web/eslint.config.js`) | `no-alert`: `alert`, `confirm`, `prompt` | 117 |
 
 Neither command fails on warnings, and CI does not run them yet.
+
+## Components
+
+`web/src/ui/` is the component library (phase U2). It is built on
+[Reka UI](https://reka-ui.com) 2.10.5 (headless primitives with the
+keyboard, focus and ARIA behaviour; pinned) and our own scoped CSS that uses
+only tokens (stylelint reports zero warnings for `src/ui/`). Pages do not
+use it yet; U4 onwards migrates them. Names carry a `Ui` prefix so they never
+shadow HTML elements: `import { UiButton, useToast } from '@/ui'`.
+
+**Stories.** Every component has a Histoire story (`src/ui/stories/`):
+`npm run story:dev`, `npm run story:build` (output in `web/.histoire/`).
+The preview loads the vendored tokens and `base.css`; the toolbar's
+dark-mode switch maps to `<html data-theme="dark">`, and `?lang=en` on the
+preview URL switches the built-in strings to English.
+
+> Histoire is pinned at 1.0.0-beta.1, which declares Vite ^7, so
+> `package.json` has `overrides: { "vite": "$vite" }` to run it on the
+> project's Vite 8; drop the override once a stable Histoire supports Vite 8.
+
+
+**Mount once.** `<UiHost />` (toast region and confirmation host) goes in
+`App.vue` when the first page uses `useToast()` or `useConfirm()` (U4).
+
+**Strings.** Built-in text (close, cancel, copied, undo, loading, status
+words, units) comes from `ui.*` in `src/locales/modules/{zh-CN,en}/ui.js`,
+written separately for each language. Page text is passed in as props.
+
+### Which component
+
+| Need | Use | Notes |
+|---|---|---|
+| An action | `UiButton` | One `primary` per view, rightmost; `secondary` otherwise; `tertiary` for low-emphasis text actions; `danger` only to confirm a destructive action, `danger-soft` for the button that starts one ("删除节点…"); `ghost` in toolbars. Sizes `sm` 28 (tables), `md` 36 (default), `lg` 44. Labels are verbs. |
+| An icon-only action | `UiIconButton` | `label` is required (aria-label and tooltip); toggles pass `pressed`. |
+| Text, numbers, passwords | `UiTextField`, `UiNumberField`, `UiPasswordField`, `UiTextarea` | Top label, help, error; units as `suffix`/`unit`. Height 44 (`lg`) by default in forms and dialogs; `size="md"` (36) in toolbars, tables and sheets; `sm` 28 only inside dense table cells. Same sizes for `UiSelect` and `UiCombobox`. |
+| A custom control in a form | `UiField` | Gives the control its id, label, help and error wiring. |
+| One of a short list | `UiSelect` | Up to ~10 options. |
+| One of a long list, or search | `UiCombobox` | Filters as you type. |
+| A setting that applies at once | `UiSwitch` | On/off; label left, switch right. |
+| A choice applied on submit | `UiCheckbox` | `'indeterminate'` for "select all". |
+| One of a few visible options | `UiRadioGroup` | When the options need descriptions. |
+| A value that changes the view in place | `UiSegmentedControl` | 2–5 values (time range, list or grouped view). |
+| Switching content panels | `UiTabs` | `underline` for detail sections; `variant="segmented"` for the pill look at the top of a page (转发规则 / 隧道 / 限速). |
+| A focused task | `UiDialog` | sm 420 / md 560 / lg 760; full screen below 834 px for md and lg. |
+| Confirming an irreversible action | `useConfirm()` / `UiConfirmDialog` | `requireText` for deleting nodes and users. |
+| Details or an editor next to a list | `UiSheet` | Right drawer; bottom sheet below 834 px. |
+| The result of an action | `useToast()` | See the rules below. |
+| A status | `UiBadge`, `UiStatusDot` | `status` online, offline, disabled, pending, error; always a word. |
+| Nothing to show, or a failed load | `UiEmptyState` | What will appear and the first action; for errors, retry and "复制错误详情". |
+| Loading | `UiSkeleton` + `useDelayedLoading()` | text, card, table-row. |
+| A link, token or command to copy | `UiCopyField` | `secret` masks it. |
+| Page title | `UiPageHeader` | The only H1, one sentence, actions with the primary last. |
+| Surfaces and settings rows | `UiCard`, `UiSection`, `UiGroupedList` + `UiGroupedListRow` | System Settings style rows: label left; value, control or chevron right. |
+| Numbers, bytes, rates, money, dates | `useFormat()` | One implementation on Intl and the current locale. |
+
+### Interaction rules (redesign plan §9)
+
+- **Feedback.** Success: a toast that disappears after 3 s. An action that
+  can be undone (delete a forward rule, ban a user): a toast with "撤销" for
+  5 s instead of a confirmation. Errors: inline in the form first; otherwise
+  an error toast that stays until dismissed; system-wide problems use a
+  banner (later phase). At most three toasts; timers pause on hover, on
+  focus and while the page is hidden.
+- **Confirmation.** Only for irreversible or wide-reaching actions. Name the
+  object and the consequence: 「删除节点 hk-01？」 + 「此操作无法撤销。」; the
+  button says what happens (「删除节点」, never 「确定」). Deleting a node or a
+  user requires typing its name. With `onConfirm` the dialog shows the
+  button as busy, closes on success and shows the error inline on failure.
+- **Loading.** Nothing for the first 300 ms, then a skeleton
+  (`useDelayedLoading`). A submitting button shows `loading`: it keeps its
+  width and name, sets `aria-busy` and ignores further clicks.
+- **Empty and error states** say what will appear here and offer the first
+  action; errors add retry and "复制错误详情" (with the request id).
+- **Forms.** Top labels; validate on blur and on submit; mark required
+  fields; units as a suffix; help for risky fields (ports, keys); secrets
+  masked with reveal and copy.
+- **Keyboard.** Everything is reachable with Tab and shows the 2 px accent
+  ring with a 2 px offset; Esc closes overlays and returns focus; arrows move
+  within selects, radio groups, segmented controls and tabs; F8 jumps to the
+  toasts.
+- **Copy.** Short, active, about the result; Chinese and English written
+  separately; a space between a number and its unit (`128.4 GB`, `3 分钟前`).
+
+### Accessibility built in
+
+| Component | Behaviour |
+|---|---|
+| Fields | A 1 px `--label-3` border (3:1 or more in both themes, WCAG 1.4.11); `<label for>`; help, units and error in `aria-describedby` (error first); `aria-invalid`; errors in a polite live region; native `required` with a visual-only asterisk. |
+| Select / Combobox | `role="combobox"` + listbox; Space/Enter/↓ open, arrows move, typing jumps or filters, Enter selects, Esc closes and returns focus. |
+| NumberField | `role="spinbutton"` with min/max; ↑/↓ step, PageUp/PageDown ×10, Home/End; the wheel does not change it. |
+| Switch / Checkbox / Radio | `role="switch"` / `checkbox` (`mixed`) / `radiogroup` named by its label; boundaries at 3:1 or more. |
+| SegmentedControl | Named `group` of `aria-pressed` buttons with roving focus; one selection always. |
+| Tabs | `tablist` / `tab` / `tabpanel` with `aria-controls`; arrows move and activate. |
+| Dialog / Sheet | `role="dialog"`, `aria-modal`, labelled by the title and described by the description; focus trapped and returned; Esc; page scroll locked; the close button (Lucide x) is named "关闭" and comes last in tab order. A sheet focuses its first text field, else the close button. |
+| ConfirmDialog | `role="alertdialog"`; focus on the typed field, else Cancel for danger, else the confirm button; the scrim does not close it. |
+| Toast | One polite `role="status"` region announces each toast (with "按 F8 前往通知" when it has an action); the toasts are a named region. |
+| Badge / StatusDot | Always a word next to the colour. |
+| Skeleton | `role="status"` with a hidden "加载中…"; bones hidden; shimmer runs three times, none under reduced motion. |
+| CopyField | "已复制" announced; a masked secret is a read-only password field; reveal is a pressed toggle. |
+
+Motion uses the token durations and easings, only `opacity` and
+`transform`; under `prefers-reduced-motion` overlays fade instead of
+scaling or sliding. Touch: controls smaller than 44 px get a 44 px hit area
+on coarse pointers; inputs are 16 px on phones.
+
+### `useFormat()`
+
+`useFormat()` returns `bytes`, `rate`, `number`, `percent`, `money`,
+`duration`, `date`, `dateTime` and `relativeTime`; each reads the current
+locale when called, so templates follow a locale switch. `createFormatter(locale)`
+gives a fixed-locale set; `formatBytes()` is a plain helper.
+
+- `bytes`: binary steps, B/KB/MB/GB/TB, two decimals by default — the same
+  output as the `formatBytes` copies in the pages (a test compares them over
+  2 000 values in both locales), so U4+ can swap them without visible
+  change. `{ precision: 1 }` gives `128.5 GB`: use it for hero and summary
+  numbers (user home, dashboard and metric cards) when those pages
+  migrate; tables and details keep the default. `rate` and `percent` take
+  `precision` too.
+- `rate`: decimal bits per second from bytes/s (`{ input: 'bits' | 'mbps' }`).
+- `duration`: the two largest units, 「3 天 4 小时」 / "3d 4h".
+- `money`: from cents, `¥` in both languages.
+- `date` `2026-11-30`, `dateTime` `2026-11-30 14:05` (24-hour, local time);
+  `relativeTime` 「3 分钟前」 (show `dateTime` on hover).
+- Missing values render as `—` (option `empty`).
+
+### Bundle
+
+Reka UI and its helpers (`@floating-ui`, `@vueuse`, …) build into a
+`ui-vendor` chunk, kept out of `vue-vendor`. With every component imported
+it is about 45 KB gzip (the components add 14 KB JS and 7 KB CSS); the set
+the app shell will need first — `UiHost` and `UiButton` — costs about 9 KB
+of it, against the 250 KB admin shell budget (plan §13). Import components
+from the pages that use them so routes stay lazy.

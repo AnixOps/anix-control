@@ -1,0 +1,46 @@
+// AnixOps Control component library (UI redesign, phase U2).
+// Reka UI headless primitives + our own CSS on AnixOps Design tokens.
+// Usage rules: docs/reference/frontend-design.md, "Components".
+// Stories: npm run story:dev (Histoire).
+export { default as UiIcon } from './UiIcon.vue'
+export { default as UiSpinner } from './UiSpinner.vue'
+export { default as UiButton } from './UiButton.vue'
+export { default as UiIconButton } from './UiIconButton.vue'
+
+export { default as UiField } from './UiField.vue'
+export { default as UiTextField } from './UiTextField.vue'
+export { default as UiTextarea } from './UiTextarea.vue'
+export { default as UiPasswordField } from './UiPasswordField.vue'
+export { default as UiNumberField } from './UiNumberField.vue'
+export { default as UiSelect } from './UiSelect.vue'
+export { default as UiCombobox } from './UiCombobox.vue'
+export { default as UiSwitch } from './UiSwitch.vue'
+export { default as UiCheckbox } from './UiCheckbox.vue'
+export { default as UiRadioGroup } from './UiRadioGroup.vue'
+export { default as UiSegmentedControl } from './UiSegmentedControl.vue'
+export { default as UiTabs } from './UiTabs.vue'
+
+export { default as UiDialog } from './UiDialog.vue'
+export { default as UiConfirmDialog } from './UiConfirmDialog.vue'
+export { default as UiSheet } from './UiSheet.vue'
+export { default as UiToastRegion } from './UiToastRegion.vue'
+export { default as UiConfirmHost } from './UiConfirmHost.vue'
+export { default as UiHost } from './UiHost.vue'
+
+export { default as UiBadge } from './UiBadge.vue'
+export { default as UiStatusDot } from './UiStatusDot.vue'
+export { default as UiEmptyState } from './UiEmptyState.vue'
+export { default as UiSkeleton } from './UiSkeleton.vue'
+export { default as UiCopyField } from './UiCopyField.vue'
+export { default as UiPageHeader } from './UiPageHeader.vue'
+export { default as UiCard } from './UiCard.vue'
+export { default as UiSection } from './UiSection.vue'
+export { default as UiGroupedList } from './UiGroupedList.vue'
+export { default as UiGroupedListRow } from './UiGroupedListRow.vue'
+
+export { useToast, TOAST_DURATIONS } from './composables/useToast'
+export { useConfirm } from './composables/useConfirm'
+export { useFormat, createFormatter, formatBytes } from './composables/useFormat'
+export { useDelayedLoading, LOADING_DELAY } from './composables/useDelayedLoading'
+export { copyText } from './composables/useClipboard'
+export { STATUS_TONES, statusTone } from './status'
