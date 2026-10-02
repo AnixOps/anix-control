@@ -5,6 +5,7 @@
     @dragover="onDragOver"
     @drop="onDrop"
   >
+    <TooltipProvider>
     <UiDataTable
       :columns="columns"
       :rows="rows"
@@ -61,7 +62,7 @@
           >
             <UiIcon :icon="GripVertical" :size="16" />
           </span>
-          <span class="rule-name__text">{{ row.name }}</span>
+          <span class="rule-name__text" :class="{ 'is-truncated': !card }" :title="card ? undefined : row.name">{{ row.name }}</span>
         </span>
       </template>
       <template #cell-ingress="{ row }">
@@ -84,8 +85,8 @@
         >{{ formatRemoteAddress(row.remoteAddr) }}</button>
         <span v-else>—</span>
       </template>
-      <template #cell-status="{ row }">
-        <span class="rule-status">
+      <template #cell-status="{ row, card }">
+        <span class="rule-status" :class="{ 'is-card': card }">
           <span class="rule-status__line">
             <UiSwitch
               :model-value="row.serviceRunning"
@@ -94,10 +95,24 @@
               data-test="forward-service-switch"
               @update:model-value="emit('toggle', row)"
             />
-            <UiBadge :tone="presenters.statusMeta(row.status).tone" :label="presenters.statusMeta(row.status).text" />
-            <UiBadge v-if="presenters.runtimeMeta(row)" :tone="presenters.runtimeMeta(row).tone" :label="presenters.runtimeMeta(row).text" />
+            <TooltipRoot v-if="!card && statusDetail(row)" :delay-duration="200">
+              <TooltipTrigger as-child>
+                <button type="button" class="rule-status__badge-button" data-test="forward-status-detail">
+                  <UiBadge :tone="combinedStatus(row).tone" :label="combinedStatus(row).text" />
+                  <span class="visually-hidden">{{ statusDetail(row) }}</span>
+                </button>
+              </TooltipTrigger>
+              <TooltipPortal>
+                <TooltipContent class="rule-status__tooltip" side="top" :side-offset="6" :collision-padding="12">
+                  {{ statusDetail(row) }}
+                </TooltipContent>
+              </TooltipPortal>
+            </TooltipRoot>
+            <span v-else class="rule-status__badge">
+              <UiBadge :tone="combinedStatus(row).tone" :label="combinedStatus(row).text" />
+            </span>
           </span>
-          <span v-if="presenters.runtimeSummary(row)" class="rule-status__summary">{{ presenters.runtimeSummary(row) }}</span>
+          <span v-if="card && statusDetail(row)" class="rule-status__detail" :title="statusDetail(row)">{{ statusDetail(row) }}</span>
         </span>
       </template>
       <template #cell-traffic="{ row }">
@@ -107,6 +122,7 @@
         </span>
       </template>
     </UiDataTable>
+    </TooltipProvider>
   </div>
 </template>
 
@@ -117,6 +133,7 @@
 // the grouped view uses it flat, once per tunnel group. Every action is
 // emitted: the page keeps the state and the flux-panel API calls.
 import { computed, ref } from 'vue'
+import { TooltipContent, TooltipPortal, TooltipProvider, TooltipRoot, TooltipTrigger } from 'reka-ui'
 import { ArrowDown, ArrowLeftRight, ArrowUp, GripVertical, Pencil, Stethoscope, Trash2 } from '@lucide/vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import UiBadge from '@/ui/UiBadge.vue'
@@ -157,14 +174,34 @@ const emit = defineEmits(['update:selected', 'edit', 'diagnose', 'delete', 'togg
 const { t, translateLiteral } = useAppI18n()
 const presenters = createForwardPresenters(t, translateLiteral)
 
+// One badge per row: the worst of the forward status and the runtime state
+// (异常 / 同步失败 > 执行中 / 待下发 > 暂停 > 已应用 / 已同步 > 正常). The
+// other state and the runtime message are the detail: a tooltip on the
+// badge in the table (also read by screen readers), a second line on cards.
+function combinedStatus(forward) {
+  const status = presenters.statusMeta(forward.status)
+  const runtime = presenters.runtimeMeta(forward)
+  if (status.tone === 'danger') return status
+  if (runtime && runtime.tone !== 'success') return runtime
+  if (Number(forward.status) !== 1) return status
+  return runtime || status
+}
+
+function statusDetail(forward) {
+  const shown = combinedStatus(forward).text
+  const states = [presenters.statusMeta(forward.status).text, presenters.runtimeMeta(forward)?.text]
+    .filter(text => text && text !== shown)
+  return [...states, presenters.runtimeSummary(forward)].filter(Boolean).join(' · ')
+}
+
 const columns = computed(() => allColumns.value.filter(column => !(props.hideTunnel && column.key === 'tunnel')))
 const allColumns = computed(() => [
-  { key: 'name', label: t('runtime.forward.table.ruleName'), primary: true, hideable: false, width: 200 },
+  { key: 'name', label: t('runtime.forward.table.ruleName'), primary: true, hideable: false },
   { key: 'tunnel', label: t('runtime.forward.table.tunnel'), secondary: true, nowrap: true, value: forward => forward.tunnelName || t('runtime.forward.references.tunnel', { id: forward.tunnelId }) },
   { key: 'ingress', label: t('runtime.forward.table.ingress'), value: forward => formatInAddress(forward.inIp, forward.inPort) },
   { key: 'target', label: t('runtime.forward.table.target'), value: forward => formatRemoteAddress(forward.remoteAddr) },
   { key: 'strategy', label: t('runtime.forward.table.policy'), value: forward => presenters.strategyText(forward.strategy), nowrap: true, breakpoint: 'lg', card: false },
-  { key: 'status', label: t('runtime.forward.table.status') },
+  { key: 'status', label: t('runtime.forward.table.status'), nowrap: true },
   { key: 'traffic', label: t('runtime.forward.table.traffic'), numeric: true, breakpoint: 'md' }
 ])
 
@@ -239,6 +276,14 @@ function onDragEnd() {
   overflow-wrap: anywhere;
 }
 
+/* One line in the table (the full name is the title and the row's label). */
+.rule-name__text.is-truncated {
+  max-width: 220px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .rule-name__handle {
   display: inline-flex;
   flex: none;
@@ -266,9 +311,14 @@ function onDragEnd() {
   box-shadow: inset 0 2px 0 var(--accent);
 }
 
+/* Undo the legacy global button rule (inline-flex, centred, pill, fill). */
 .address-button {
+  display: inline;
   max-width: 100%;
   min-height: 0;
+  border-radius: 0;
+  font-weight: var(--weight-regular);
+  line-height: inherit;
   padding: 0;
   border: 0;
   background: none;
@@ -277,11 +327,16 @@ function onDragEnd() {
   font-family: var(--font-mono);
   font-size: var(--type-callout-size);
   text-align: start;
-  overflow-wrap: anywhere;
+  /* A whole address is the column's minimum width in the table; on phone
+     cards (two addresses side by side) a long one still breaks. */
+  overflow-wrap: break-word;
+  white-space: normal;
   cursor: pointer;
 }
 
-.address-button:hover {
+.address-button:hover,
+.address-button:active {
+  background: none;
   text-decoration: underline;
 }
 
@@ -300,22 +355,69 @@ function onDragEnd() {
 
 .rule-status__line {
   display: inline-flex;
-  flex-wrap: wrap;
   gap: var(--space-2);
   align-items: center;
+  white-space: nowrap;
 }
 
-.rule-status__summary {
-  max-width: 26ch;
+/* An opaque base under the translucent badge keeps its contrast on hovered
+   and selected rows. */
+.rule-status__badge,
+.rule-status__badge-button {
+  display: inline-flex;
+  border-radius: var(--radius-pill);
+  background: var(--bg-elevated);
+}
+
+.rule-status__badge-button,
+.rule-status__badge-button:hover,
+.rule-status__badge-button:active {
+  background: var(--bg-elevated);
+}
+
+.rule-status__badge-button {
+  min-height: 0;
+  padding: 0;
+  border: 0;
+  cursor: help;
+}
+
+.rule-status__badge-button:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.rule-status__detail {
+  display: block;
+  max-width: 100%;
+  overflow: hidden;
   color: var(--label-2);
   font-size: var(--type-caption-size);
-  overflow-wrap: anywhere;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .rule-traffic {
   display: flex;
   flex-direction: column;
-  gap: var(--space-0-5);
+  font-size: var(--type-callout-size);
+  line-height: 1.35;
   white-space: nowrap;
+}
+</style>
+
+<style>
+/* The tooltip is portalled to <body>, outside the scoped styles. */
+.rule-status__tooltip {
+  z-index: var(--z-tooltip);
+  max-width: 320px;
+  padding: var(--space-2) var(--space-3);
+  border-radius: var(--radius-sm);
+  background: var(--label-1);
+  box-shadow: var(--shadow-2);
+  color: var(--bg);
+  font-size: var(--type-caption-size);
+  line-height: 1.45;
+  overflow-wrap: anywhere;
 }
 </style>

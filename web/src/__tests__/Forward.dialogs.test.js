@@ -253,4 +253,24 @@ describe('Forward dialogs', () => {
     await user.click(screen.getByRole('button', { name: 'Direct' }))
     await waitFor(() => expect(container.querySelector('[data-test="forward-direct-view"]')).not.toBeNull())
   })
+
+  // The tooltip itself is checked in a browser; jsdom has no pointer events
+  // for Reka's tooltip. The detail is also in the trigger's accessible name.
+  it('shows one status badge per row, the worst state, with the detail in a tooltip', async () => {
+    adminApi.getForwardList.mockResolvedValue({
+      code: 0,
+      data: [
+        { ...forward, runtimeBackend: 'nftables_ansible', runtimeStatus: 2 },
+        { ...forward, id: 12, name: 'Broken Entry', inx: 2, runtimeBackend: 'nftables_ansible', runtimeStatus: 3, runtimeMessage: 'ansible apply failed: host unreachable' }
+      ]
+    })
+    const { container } = await renderPage()
+    const rows = container.querySelectorAll('tbody tr')
+    const badges = row => [...row.querySelectorAll('.ui-badge')].map(badge => badge.textContent.trim())
+    expect(badges(rows[0])).toEqual(['Applied'])
+    expect(badges(rows[1])).toEqual(['Sync Failed'])
+    const detail = within(rows[1]).getByRole('button', { name: /Sync Failed/ })
+    expect(detail.textContent).toContain('ansible apply failed: host unreachable')
+  })
 })
+
