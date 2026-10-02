@@ -1,5 +1,10 @@
-import { beforeEach, describe, expect, it, vi } from 'vitest'
-import { flushPromises, mount } from '@vue/test-utils'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
+import { render, screen, waitFor, within } from '@testing-library/vue'
+import userEvent from '@testing-library/user-event'
+import UiHost from '@/ui/UiHost.vue'
+import { runAction } from '@/ui/composables/useToast'
+import { inBody, toastMessages, toasts } from './helpers/feedback'
 import AccessGroups from '@/views/admin/AccessGroups.vue'
 
 const kernelApi = vi.hoisted(() => ({
@@ -41,17 +46,18 @@ function detailFixture() {
 }
 
 function mountAccessGroups() {
-  return mount(AccessGroups)
+  return mount(AccessGroups, { attachTo: document.body })
 }
 
 function formFor(wrapper, selector) {
   return wrapper.findAll('form').find(form => form.find(selector).exists())
 }
 
+enableAutoUnmount(afterEach)
+
 describe('AccessGroups.vue', () => {
   beforeEach(() => {
     vi.resetAllMocks()
-    vi.spyOn(globalThis, 'confirm').mockReturnValue(true)
     kernelApi.getKernelScopes.mockResolvedValue([
       { id: 'forward', name: 'Forward', description: 'Forwarding access' },
       { id: 'proxy', name: 'Proxy', description: 'Proxy access' },
@@ -86,10 +92,11 @@ describe('AccessGroups.vue', () => {
     await flushPromises()
 
     await wrapper.find('.page-header .btn-primary').trigger('click')
-    await wrapper.get('#access-group-scope').setValue('proxy')
-    await wrapper.get('#access-group-name').setValue('Proxy viewers')
-    await wrapper.get('#access-group-description').setValue('Scoped proxy permission')
-    await wrapper.get('[aria-labelledby="access-group-editor-title"] form').trigger('submit')
+    await flushPromises()
+    await inBody('#access-group-scope').setValue('proxy')
+    await inBody('#access-group-name').setValue('Proxy viewers')
+    await inBody('#access-group-description').setValue('Scoped proxy permission')
+    await inBody('[data-test="access-group-editor"]').trigger('submit')
     await flushPromises()
 
     expect(kernelApi.createKernelAccessGroup).toHaveBeenCalledWith({
@@ -158,5 +165,68 @@ describe('AccessGroups.vue', () => {
     expect(wrapper.get('.error-message').text()).toBe('user does not exist')
     expect(wrapper.text()).toContain('operator@example.com')
     wrapper.unmount()
+  })
+
+  describe('dialogs and feedback', () => {
+    const Harness = { components: { AccessGroups, UiHost }, template: '<div><AccessGroups /><UiHost /></div>' }
+
+    async function renderPage() {
+      render(Harness)
+      await screen.findByText('operator@example.com')
+    }
+
+    it('keeps editor errors inside the dialog and closes it with Esc', async () => {
+      const user = userEvent.setup()
+      kernelApi.createKernelAccessGroup.mockRejectedValueOnce(new Error('name taken'))
+      await renderPage()
+      const opener = document.querySelector('.page-header .btn-primary')
+      await user.click(opener)
+      const dialog = await screen.findByRole('dialog')
+      await user.type(within(dialog).getByLabelText(/name/i), 'Dup')
+      await user.click(within(dialog).getByRole('button', { name: 'Save' }))
+      expect((await within(dialog).findByRole('alert')).textContent).toBe('name taken')
+      await user.keyboard('{Escape}')
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+      await waitFor(() => expect(document.activeElement).toBe(opener))
+    })
+
+    it('asks before deleting a group; Cancel keeps it', async () => {
+      const user = userEvent.setup()
+      kernelApi.deleteKernelAccessGroup.mockResolvedValue({})
+      await renderPage()
+      await user.click(screen.getAllByRole('button', { name: 'Delete' })[0])
+      let confirm = await screen.findByRole('alertdialog', { name: 'Delete access group Canary operators?' })
+      await user.click(within(confirm).getByRole('button', { name: 'Cancel' }))
+      await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+      expect(kernelApi.deleteKernelAccessGroup).not.toHaveBeenCalled()
+
+      await user.click(screen.getAllByRole('button', { name: 'Delete' })[0])
+      confirm = await screen.findByRole('alertdialog')
+      await user.click(within(confirm).getByRole('button', { name: 'Delete group' }))
+      await waitFor(() => expect(kernelApi.deleteKernelAccessGroup).toHaveBeenCalledWith(7))
+    })
+
+    it('removes a member at once with undo in the toast', async () => {
+      kernelApi.removeKernelAccessGroupUser.mockResolvedValue({})
+      await renderPage()
+      const row = screen.getByText('operator@example.com').closest('li')
+      await userEvent.setup().click(within(row).getByRole('button', { name: 'Remove' }))
+      await waitFor(() => expect(kernelApi.removeKernelAccessGroupUser).toHaveBeenCalledWith(7, 11))
+      expect(screen.queryByRole('alertdialog')).toBeNull()
+      await waitFor(() => expect(toastMessages('success')).toEqual(['Removed user #11']))
+      await runAction(toasts('success')[0].id)
+      expect(kernelApi.addKernelAccessGroupUser).toHaveBeenCalledWith(7, 11)
+    })
+
+    it('shows a failed grant removal inside the confirmation', async () => {
+      const user = userEvent.setup()
+      kernelApi.deleteKernelResourceGrant.mockRejectedValue(new Error('grant in use'))
+      await renderPage()
+      const row = screen.getByText('machine-telemetry', { selector: 'td code' }).closest('tr')
+      await user.click(within(row).getByRole('button', { name: 'Remove' }))
+      const confirm = await screen.findByRole('alertdialog', { name: 'Remove resource grant #9?' })
+      await user.click(within(confirm).getByRole('button', { name: 'Remove grant' }))
+      expect((await within(confirm).findByRole('alert')).textContent).toContain('grant in use')
+    })
   })
 })
