@@ -443,6 +443,8 @@ forward suite's flows and Flux-compatible API.
 
 ### Fixed
 
+- **CI: the live Control WebUI E2E login retries on 429** (`web/e2e/support/live-control-machine-telemetry.mjs`). The public route limiter is per IP and shared with the browser under test, so a burst of page requests could fail the login; it now waits for `Retry-After` and retries within its deadline. Not user-facing.
+
 - **nftables forwards count traffic in both directions, support IPv6, and
   move to an `inet` table** (`nftables_ansible` backend;
   `config/deploy/ansible/playbooks/forward_*_nftables.yml`, new
