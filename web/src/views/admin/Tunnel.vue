@@ -1,227 +1,206 @@
 <template>
-  <div class="tunnel-page">
-    <div class="toolbar">
-      <div class="toolbar-copy">
-        <p class="eyebrow">{{ t('miscPages.shared.compatibilityEyebrow') }}</p>
-        <h2>{{ t('pageTitles.admin.forwardTunnel') }}</h2>
-      </div>
-      <div class="toolbar-actions">
-        <button class="btn btn-primary" @click="openCreateModal">{{ t('runtime.tunnel.actions.add') }}</button>
-      </div>
-    </div>
-    <p class="text-secondary small runtime-note">{{ t('runtime.tunnel.note') }}</p>
-    <div class="runtime-context-bar">
-      <span class="tag tag-primary">{{ runtimeModeLabel }}</span>
-      <span class="runtime-context-summary">{{ runtimeModeSummary }}</span>
-      <div class="runtime-context-links">
-        <router-link class="btn btn-secondary btn-sm" to="/admin/forward/local">{{ t('forwardSuite.nav.localRuntime') }}</router-link>
-        <router-link class="btn btn-secondary btn-sm" to="/admin/forward/nodex">{{ t('forwardSuite.nav.nodeXRuntime') }}</router-link>
-      </div>
-    </div>
-    <p class="text-secondary small runtime-note runtime-compatibility-note">
-      {{ t('runtime.tunnel.modeCompatibilityHint') }}
-    </p>
+  <div class="list-page tunnel-page">
+    <UiPageHeader :title="t('pageTitles.admin.forwardTunnel')" :description="t('runtime.tunnel.note')">
+      <template #meta>
+        <UiBadge tone="neutral" :dot="false" :label="t('miscPages.shared.compatibilityEyebrow')" />
+        <UiBadge tone="info" :dot="false" :label="runtimeModeLabel" data-test="tunnel-runtime-mode" />
+      </template>
+      <template #actions>
+        <UiButton variant="primary" :icon="Plus" data-test="tunnel-add" @click="openCreateModal">{{ t('runtime.tunnel.actions.add') }}</UiButton>
+      </template>
+    </UiPageHeader>
 
+    <nav class="runtime-context" :aria-label="t('runtime.tunnel.runtimeLinks')">
+      <span class="runtime-context__summary">{{ runtimeModeSummary }}</span>
+      <span class="runtime-context__links">
+        <router-link to="/admin/forward/local">{{ t('forwardSuite.nav.localRuntime') }}</router-link>
+        <router-link to="/admin/forward/nodex">{{ t('forwardSuite.nav.nodeXRuntime') }}</router-link>
+      </span>
+    </nav>
+    <p class="list-page__note runtime-compatibility-note">{{ t('runtime.tunnel.modeCompatibilityHint') }}</p>
 
-    <div v-if="loading" class="loading-state">
-      <div class="spinner"></div>
-      <span>{{ t('runtime.tunnel.loading') }}</span>
-    </div>
+    <UiDataTable
+      :columns="columns"
+      :rows="tunnels"
+      :label="t('runtime.tunnel.table.label')"
+      :row-label="tunnel => tunnel.name"
+      storage-key="admin.forward.tunnels"
+      :loading="loading"
+      :error="tunnels.length ? null : pageError"
+      :error-title="t('runtime.tunnel.messages.loadListFailed')"
+      :empty-icon="Waypoints"
+      :empty-title="t('runtime.tunnel.emptyTitle')"
+      :empty-description="t('runtime.tunnel.emptyText')"
+      :row-actions="tunnelActions"
+      activatable
+      data-test="tunnel-table"
+      @row-activate="openEditModal"
+      @retry="loadData(true)"
+    >
+      <template #empty-actions>
+        <UiButton variant="primary" :icon="Plus" @click="openCreateModal">{{ t('runtime.tunnel.actions.add') }}</UiButton>
+      </template>
+      <template #cell-name="{ row }">
+        <span class="tunnel-name">{{ row.name }}</span>
+      </template>
+      <template #cell-type="{ row }">
+        <UiBadge :tone="Number(row.type) === 2 ? 'info' : 'neutral'" :dot="false" :label="resolveTypeMeta(row.type).text" />
+      </template>
+      <template #cell-compatibility="{ row }">
+        <UiBadge :tone="resolveRuntimeCompatibility(row).tone" :label="resolveRuntimeCompatibility(row).text" />
+      </template>
+      <template #cell-ingress="{ row }">
+        <span class="node-cell">
+          <span>{{ resolveNodeName(row.inNodeId) }}</span>
+          <code>{{ row.inIp || '—' }}</code>
+        </span>
+      </template>
+      <template #cell-execution="{ row }">
+        <span class="node-cell">
+          <span>{{ resolveNodeName(row.outNodeId || row.inNodeId) }}</span>
+          <code>{{ row.outIp || row.inIp || '—' }}</code>
+        </span>
+      </template>
+      <template #cell-status="{ row }">
+        <UiBadge :tone="resolveStatusMeta(row.status).tone" :label="resolveStatusMeta(row.status).text" />
+      </template>
+    </UiDataTable>
 
-    <template v-else>
-      <section v-if="tunnels.length" class="card-grid">
-        <article v-for="tunnel in tunnels" :key="tunnel.id" class="tunnel-card">
-          <div class="card-head">
-            <div class="card-title">
-              <h3>{{ tunnel.name }}</h3>
-              <p>{{ resolveTypeMeta(tunnel.type).text }}</p>
-              <p class="card-mode">{{ resolveRuntimeCompatibility(tunnel).text }}</p>
-            </div>
-            <div class="card-head-actions">
-              <span :class="['tag', resolveTypeMeta(tunnel.type).className]">
-                {{ resolveTypeMeta(tunnel.type).text }}
-              </span>
-              <span :class="['tag', resolveRuntimeCompatibility(tunnel).className]">
-                {{ resolveRuntimeCompatibility(tunnel).text }}
-              </span>
-              <span :class="['tag', resolveStatusMeta(tunnel.status).className]">
-                {{ resolveStatusMeta(tunnel.status).text }}
-              </span>
-            </div>
-          </div>
-
-          <div class="meta-list">
-            <div v-if="runtimeNodeXMode" class="meta-item">
-              <span class="meta-label">{{ t('runtime.tunnel.meta.ingressNode') }}</span>
-              <strong>{{ resolveNodeName(tunnel.inNodeId) }}</strong>
-              <code>{{ tunnel.inIp || '-' }}</code>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">
-                {{ runtimeNodeXMode ? t('runtime.tunnel.meta.egressNode') : t('runtime.tunnel.meta.executionNode') }}
-              </span>
-              <strong>{{ resolveNodeName(tunnel.outNodeId || tunnel.inNodeId) }}</strong>
-              <code>{{ tunnel.outIp || tunnel.inIp || '-' }}</code>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">{{ t('runtime.tunnel.meta.flowAccounting') }}</span>
-              <strong>{{ resolveFlowLabel(tunnel.flow) }}</strong>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">{{ t('runtime.tunnel.meta.trafficRatio') }}</span>
-              <strong>{{ formatTrafficRatio(tunnel.trafficRatio) }}</strong>
-            </div>
-          </div>
-
-          <div class="card-actions">
-            <button class="btn btn-secondary btn-sm" @click="openEditModal(tunnel)">{{ t('runtime.tunnel.actions.edit') }}</button>
-            <button class="btn btn-secondary btn-sm" @click="openDiagnosisModal(tunnel)">{{ t('runtime.tunnel.actions.diagnose') }}</button>
-            <button class="btn btn-secondary btn-sm danger-text" @click="openDeleteModal(tunnel)">{{ t('runtime.tunnel.actions.delete') }}</button>
-          </div>
-        </article>
-      </section>
-
-      <section v-else class="empty-state">
-        <h3>{{ t('runtime.tunnel.emptyTitle') }}</h3>
-        <p>{{ t('runtime.tunnel.emptyText') }}</p>
-      </section>
-    </template>
-
-    <UiDialog
+    <UiSheet
       :open="modalOpen"
-      size="lg"
+      size="md"
       :title="isEdit ? t('runtime.tunnel.modal.titleEdit') : t('runtime.tunnel.modal.titleAdd')"
+      :description="isEdit ? form.name : runtimeModeLabel"
+      :dismissible="!submitLoading"
+      data-test="tunnel-editor-sheet"
       @update:open="value => { if (!value) closeEditorModal() }"
     >
-      <div class="dialog-form">
+      <form id="tunnel-editor-form" class="editor-form" novalidate @submit.prevent="handleSubmit">
+        <UiTextField
+          v-model.trim="form.name"
+          :label="t('runtime.tunnel.fields.name')"
+          :placeholder="t('runtime.tunnel.placeholders.name')"
+          :error="errors.name"
+          maxlength="50"
+          required
+          size="md"
+        />
         <div class="form-grid">
-          <div class="form-group">
-            <label for="tunnel-dialog-fields-name">{{ t('runtime.tunnel.fields.name') }}</label>
-            <input id="tunnel-dialog-fields-name" v-model.trim="form.name" type="text" maxlength="50" :placeholder="t('runtime.tunnel.placeholders.name')" />
-            <p v-if="errors.name" class="form-error">{{ errors.name }}</p>
-          </div>
-
-          <div class="form-group">
-            <label for="tunnel-dialog-fields-tunnel-type">{{ t('runtime.tunnel.fields.tunnelType') }}</label>
-            <select id="tunnel-dialog-fields-tunnel-type" v-model.number="form.type" :disabled="isEdit || !runtimeNodeXMode">
-              <option :value="1">{{ t('runtime.tunnel.options.portForward') }}</option>
-              <option :value="2">{{ t('runtime.tunnel.options.tunnelForward') }}</option>
-            </select>
-            <p v-if="errors.type" class="form-error">{{ errors.type }}</p>
-          </div>
+          <UiSelect
+            :model-value="Number(form.type)"
+            :label="t('runtime.tunnel.fields.tunnelType')"
+            :options="typeOptions"
+            :disabled="isEdit || !runtimeNodeXMode"
+            :error="errors.type"
+            size="md"
+            @update:model-value="value => { form.type = Number(value) }"
+          />
+          <UiSelect
+            :model-value="Number(form.flow)"
+            :label="t('runtime.tunnel.fields.flowAccounting')"
+            :options="flowOptions"
+            size="md"
+            @update:model-value="value => { form.flow = Number(value) }"
+          />
         </div>
+        <UiNumberField
+          v-model="form.trafficRatio"
+          :label="t('runtime.tunnel.fields.trafficRatio')"
+          :min="0.1"
+          :max="100"
+          :step="0.1"
+          :format-options="{ useGrouping: false, maximumFractionDigits: 2 }"
+          unit="x"
+          :error="errors.trafficRatio"
+          size="md"
+        />
 
-        <div class="form-grid">
-          <div class="form-group">
-            <label for="tunnel-dialog-fields-flow-accounting">{{ t('runtime.tunnel.fields.flowAccounting') }}</label>
-            <select id="tunnel-dialog-fields-flow-accounting" v-model.number="form.flow">
-              <option :value="1">{{ t('runtime.tunnel.options.oneWayAccounting') }}</option>
-              <option :value="2">{{ t('runtime.tunnel.options.twoWayAccounting') }}</option>
-            </select>
-          </div>
-
-          <div class="form-group">
-            <label for="tunnel-dialog-fields-traffic-ratio">{{ t('runtime.tunnel.fields.trafficRatio') }}</label>
-            <input id="tunnel-dialog-fields-traffic-ratio" v-model.number="form.trafficRatio" type="number" min="0.1" max="100" step="0.1" />
-            <p v-if="errors.trafficRatio" class="form-error">{{ errors.trafficRatio }}</p>
-          </div>
+        <div v-if="runtimeNodeXMode" data-test="forward-entry-select">
+          <UiSelect
+            :model-value="form.inNodeId || undefined"
+            :label="t('runtime.tunnel.fields.ingressNode')"
+            :placeholder="t('runtime.tunnel.validation.ingressRequired')"
+            :options="relayNodeSelectOptions('ingress')"
+            :disabled="isEdit"
+            :help="t('runtime.tunnel.hints.ingressNode')"
+            :error="errors.inNodeId"
+            required
+            size="md"
+            @update:model-value="value => { form.inNodeId = Number(value) || 0 }"
+          />
         </div>
-
-        <div class="form-grid">
-          <div v-if="runtimeNodeXMode" class="form-group">
-            <label for="tunnel-dialog-fields-ingress-node">{{ t('runtime.tunnel.fields.ingressNode') }}</label>
-            <select id="tunnel-dialog-fields-ingress-node"
-              data-test="forward-entry-select"
-              v-model.number="form.inNodeId"
-              :disabled="isEdit"
-            >
-              <option :value="0">{{ t('runtime.tunnel.validation.ingressRequired') }}</option>
-              <option v-for="node in relayNodeOptions" :key="node.id" :value="node.id">
-                {{ node.name }} · {{ t('runtime.tunnel.meta.ingressNode') }} · {{ node.host }}
-              </option>
-            </select>
-            <p class="hint">{{ t('runtime.tunnel.hints.ingressNode') }}</p>
-            <p v-if="errors.inNodeId" class="form-error">{{ errors.inNodeId }}</p>
-          </div>
-          <div v-else class="form-group">
-            <label for="tunnel-dialog-fields-execution-node">{{ t('runtime.tunnel.fields.executionNode') }}</label>
-            <select id="tunnel-dialog-fields-execution-node" data-test="forward-execution-select" v-model.number="form.outNodeId" :disabled="isEdit">
-              <option :value="0">{{ t('runtime.tunnel.validation.executionRequired') }}</option>
-              <option
-                v-for="node in relayNodeOptions"
-                :key="`exec-${node.id}`"
-                :value="node.id"
-              >
-                {{ node.name }} · {{ t('runtime.tunnel.meta.executionNode') }} · {{ node.host }}
-              </option>
-            </select>
-            <p class="hint">{{ t('runtime.tunnel.hints.executionNode') }}</p>
-            <p v-if="errors.outNodeId" class="form-error">{{ errors.outNodeId }}</p>
-          </div>
-
-          <div class="form-group">
-            <label for="tunnel-dialog-fields-tcp-listen-addr">{{ t('runtime.tunnel.fields.tcpListenAddr') }}</label>
-            <input id="tunnel-dialog-fields-tcp-listen-addr" v-model.trim="form.tcpListenAddr" type="text" placeholder="[::]" />
-            <p v-if="errors.tcpListenAddr" class="form-error">{{ errors.tcpListenAddr }}</p>
-          </div>
-        </div>
-
-        <div class="form-grid">
-          <div class="form-group">
-            <label for="tunnel-dialog-fields-udp-listen-addr">{{ t('runtime.tunnel.fields.udpListenAddr') }}</label>
-            <input id="tunnel-dialog-fields-udp-listen-addr" v-model.trim="form.udpListenAddr" type="text" placeholder="[::]" />
-            <p v-if="errors.udpListenAddr" class="form-error">{{ errors.udpListenAddr }}</p>
-          </div>
-
-          <div v-if="form.type === 2" class="form-group">
-            <label for="tunnel-dialog-fields-interface-name">{{ t('runtime.tunnel.fields.interfaceName') }}</label>
-            <input id="tunnel-dialog-fields-interface-name" v-model.trim="form.interfaceName" type="text" :placeholder="t('runtime.tunnel.placeholders.interfaceName')" />
-          </div>
+        <div v-else data-test="forward-execution-select">
+          <UiSelect
+            :model-value="form.outNodeId || undefined"
+            :label="t('runtime.tunnel.fields.executionNode')"
+            :placeholder="t('runtime.tunnel.validation.executionRequired')"
+            :options="relayNodeSelectOptions('execution')"
+            :disabled="isEdit"
+            :help="t('runtime.tunnel.hints.executionNode')"
+            :error="errors.outNodeId"
+            required
+            size="md"
+            @update:model-value="value => { form.outNodeId = Number(value) || 0 }"
+          />
         </div>
 
         <div v-if="runtimeNodeXMode && form.type === 2" class="form-grid">
-          <div class="form-group">
-            <label for="tunnel-dialog-fields-protocol">{{ t('runtime.tunnel.fields.protocol') }}</label>
-            <select id="tunnel-dialog-fields-protocol" v-model="form.protocol">
-              <option value="tls">tls</option>
-              <option value="tcp">tcp</option>
-              <option value="udp">udp</option>
-              <option value="ws">ws</option>
-              <option value="wss">wss</option>
-              <option value="grpc">grpc</option>
-              <option value="quic">quic</option>
-            </select>
-            <p v-if="errors.protocol" class="form-error">{{ errors.protocol }}</p>
-          </div>
-
-          <div class="form-group">
-            <label for="tunnel-dialog-fields-egress-node">{{ t('runtime.tunnel.fields.egressNode') }}</label>
-            <select id="tunnel-dialog-fields-egress-node"
-              data-test="forward-exit-select"
-              v-model.number="form.outNodeId"
+          <UiSelect
+            v-model="form.protocol"
+            :label="t('runtime.tunnel.fields.protocol')"
+            :options="protocolOptions"
+            :error="errors.protocol"
+            size="md"
+          />
+          <div data-test="forward-exit-select">
+            <UiSelect
+              :model-value="form.outNodeId || undefined"
+              :label="t('runtime.tunnel.fields.egressNode')"
+              :placeholder="t('runtime.tunnel.validation.egressRequired')"
+              :options="exitNodeSelectOptions"
               :disabled="isEdit"
-            >
-              <option :value="0">{{ t('runtime.tunnel.validation.egressRequired') }}</option>
-              <option
-                v-for="node in exitNodeOptions"
-                :key="`out-${node.id}`"
-                :value="node.id"
-              >
-                {{ node.name }} · {{ t('runtime.tunnel.meta.egressNode') }} · {{ node.host }}
-              </option>
-            </select>
-            <p class="hint">{{ t('runtime.tunnel.hints.egressNode') }}</p>
-            <p v-if="errors.outNodeId" class="form-error">{{ errors.outNodeId }}</p>
+              :error="errors.outNodeId"
+              required
+              size="md"
+              @update:model-value="value => { form.outNodeId = Number(value) || 0 }"
+            />
           </div>
+          <p class="editor-form__hint form-grid__full">{{ t('runtime.tunnel.hints.egressNode') }}</p>
         </div>
-      </div>
+
+        <div class="form-grid">
+          <UiTextField
+            v-model.trim="form.tcpListenAddr"
+            :label="t('runtime.tunnel.fields.tcpListenAddr')"
+            placeholder="[::]"
+            :error="errors.tcpListenAddr"
+            required
+            size="md"
+          />
+          <UiTextField
+            v-model.trim="form.udpListenAddr"
+            :label="t('runtime.tunnel.fields.udpListenAddr')"
+            placeholder="[::]"
+            :error="errors.udpListenAddr"
+            required
+            size="md"
+          />
+        </div>
+        <UiTextField
+          v-if="form.type === 2"
+          v-model.trim="form.interfaceName"
+          :label="t('runtime.tunnel.fields.interfaceName')"
+          :placeholder="t('runtime.tunnel.placeholders.interfaceName')"
+          size="md"
+        />
+      </form>
       <template #footer>
         <UiButton :disabled="submitLoading" @click="closeEditorModal">{{ t('common.actions.cancel') }}</UiButton>
-        <UiButton variant="primary" :loading="submitLoading" data-test="tunnel-editor-submit" @click="handleSubmit">
+        <UiButton type="submit" form="tunnel-editor-form" variant="primary" :loading="submitLoading" data-test="tunnel-editor-submit">
           {{ isEdit ? t('runtime.tunnel.modal.submitUpdate') : t('runtime.tunnel.modal.submitCreate') }}
         </UiButton>
       </template>
-    </UiDialog>
+    </UiSheet>
 
     <UiConfirmDialog
       :open="deleteModalOpen"
@@ -235,62 +214,48 @@
       @cancel="closeDeleteModal"
     />
 
-    <UiDialog
+    <UiSheet
       v-model:open="diagnosisModalOpen"
-      size="lg"
+      size="md"
       :title="t('runtime.tunnel.diagnosis.title')"
       :description="currentDiagnosisTunnel?.name || ''"
+      data-test="tunnel-diagnosis-sheet"
     >
-      <div v-if="diagnosisLoading" class="loading-state compact">
-        <div class="spinner"></div>
+      <div v-if="diagnosisLoading" class="diagnosis-loading" role="status">
+        <UiSpinner />
         <span>{{ t('runtime.tunnel.diagnosis.loading') }}</span>
       </div>
-
-      <div v-else-if="diagnosisResult?.results?.length" class="diagnosis-list">
-        <article v-for="(result, index) in diagnosisResult.results" :key="`${result.nodeId}-${index}`" class="diagnosis-card">
-          <div class="diagnosis-head">
-            <div>
-              <h4>{{ result.description }}</h4>
-              <p>{{ result.nodeName }} · Node {{ result.nodeId }}</p>
-            </div>
-            <span :class="['tag', result.success ? 'tag-success' : 'tag-danger']">
-              {{ result.success ? t('runtime.shared.success') : t('runtime.shared.failed') }}
-            </span>
-          </div>
-
-          <div class="diagnosis-meta">
-            <div>
-              <span class="meta-label">{{ t('runtime.tunnel.diagnosis.targetAddress') }}</span>
-              <code>{{ formatAddress(result.targetIp, result.targetPort) }}</code>
-            </div>
-            <div v-if="result.averageTime">
-              <span class="meta-label">{{ t('runtime.tunnel.diagnosis.duration') }}</span>
-              <strong>{{ result.averageTime.toFixed(0) }} ms</strong>
-            </div>
-            <div v-if="result.message">
-              <span class="meta-label">{{ t('runtime.tunnel.diagnosis.message') }}</span>
-              <strong>{{ translateLiteral(result.message) }}</strong>
-            </div>
-          </div>
-        </article>
-      </div>
-
-      <div v-else class="empty-state compact">
-        <h3>{{ t('runtime.tunnel.diagnosis.emptyTitle') }}</h3>
-        <p>{{ t('runtime.tunnel.diagnosis.emptyText') }}</p>
-      </div>
+      <DiagnosisTimeline
+        v-else-if="diagnosisSteps.length"
+        :steps="diagnosisSteps"
+        :label="t('runtime.tunnel.diagnosis.title')"
+        :summary="diagnosisSummary"
+        :checked-at="diagnosisCheckedAt"
+      />
+      <UiEmptyState
+        v-else
+        compact
+        :icon="Stethoscope"
+        :title="t('runtime.tunnel.diagnosis.emptyTitle')"
+        :description="t('runtime.tunnel.diagnosis.emptyText')"
+      />
       <template #footer="{ close }">
         <UiButton @click="close">{{ t('common.actions.close') }}</UiButton>
-        <UiButton variant="primary" :loading="diagnosisLoading" @click="rerunDiagnosis">
+        <UiButton variant="primary" :icon="RotateCw" :loading="diagnosisLoading" @click="rerunDiagnosis">
           {{ t('runtime.tunnel.diagnosis.rerun') }}
         </UiButton>
       </template>
-    </UiDialog>
+    </UiSheet>
   </div>
 </template>
 
 <script setup>
+// 隧道 (/admin/forward/tunnel): flux-panel tunnel.tsx with the local
+// dual-runtime fields. UI U7 changed visuals and interaction components
+// only: the tunnels are a UiDataTable, the editor and the diagnosis are
+// Sheets (the diagnosis as a timeline). Same endpoints and fields.
 import { computed, onMounted, reactive, ref } from 'vue'
+import { Pencil, Plus, RotateCw, Stethoscope, Trash2, Waypoints } from '@lucide/vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import {
   createForwardTunnel,
@@ -303,11 +268,26 @@ import {
   updateForwardTunnel
 } from '@/api/admin'
 import { humanizeForwardRuntimeBackend } from '@/utils/forwardRuntime'
-import { UiButton, UiConfirmDialog, UiDialog, useToast } from '@/ui'
+import UiBadge from '@/ui/UiBadge.vue'
+import UiButton from '@/ui/UiButton.vue'
+import UiConfirmDialog from '@/ui/UiConfirmDialog.vue'
+import UiDataTable from '@/ui/UiDataTable.vue'
+import UiEmptyState from '@/ui/UiEmptyState.vue'
+import UiNumberField from '@/ui/UiNumberField.vue'
+import UiPageHeader from '@/ui/UiPageHeader.vue'
+import UiSelect from '@/ui/UiSelect.vue'
+import UiSheet from '@/ui/UiSheet.vue'
+import UiSpinner from '@/ui/UiSpinner.vue'
+import UiTextField from '@/ui/UiTextField.vue'
+import { useFormat } from '@/ui/composables/useFormat'
+import { useToast } from '@/ui/composables/useToast'
+import DiagnosisTimeline from '@/components/admin/forward/DiagnosisTimeline.vue'
 
 const { t, translateLiteral } = useAppI18n()
 
+const format = useFormat()
 const loading = ref(true)
+const pageError = ref(null)
 const tunnels = ref([])
 const nodes = ref([])
 const runtimeNodeXModeKey = 'forward.runtime.nodex_mode'
@@ -337,6 +317,67 @@ const runtimeModeSummary = computed(() =>
     ? t('runtime.tunnel.modeSummaryNodeX')
     : t('runtime.tunnel.modeSummaryLocal')
 )
+
+// Interaction components (UI U7) ----------------------------------------
+const columns = computed(() => [
+  { key: 'name', label: t('runtime.tunnel.fields.name'), primary: true, hideable: false },
+  { key: 'type', label: t('runtime.tunnel.fields.tunnelType'), secondary: true, value: tunnel => resolveTypeMeta(tunnel.type).text },
+  { key: 'compatibility', label: t('runtime.tunnel.table.compatibility'), value: tunnel => resolveRuntimeCompatibility(tunnel).text },
+  ...(runtimeNodeXMode.value
+    ? [{ key: 'ingress', label: t('runtime.tunnel.meta.ingressNode'), value: tunnel => resolveNodeName(tunnel.inNodeId), breakpoint: 'md' }]
+    : []),
+  {
+    key: 'execution',
+    label: runtimeNodeXMode.value ? t('runtime.tunnel.meta.egressNode') : t('runtime.tunnel.meta.executionNode'),
+    value: tunnel => resolveNodeName(tunnel.outNodeId || tunnel.inNodeId)
+  },
+  { key: 'flow', label: t('runtime.tunnel.meta.flowAccounting'), value: tunnel => resolveFlowLabel(tunnel.flow), breakpoint: 'lg', card: false },
+  { key: 'trafficRatio', label: t('runtime.tunnel.meta.trafficRatio'), numeric: true, value: tunnel => formatTrafficRatio(tunnel.trafficRatio), breakpoint: 'lg', card: false },
+  { key: 'status', label: t('runtime.tunnel.table.status'), value: tunnel => resolveStatusMeta(tunnel.status).text }
+])
+const tunnelActions = tunnel => [
+  { key: 'edit', label: t('runtime.tunnel.actions.edit'), icon: Pencil, onSelect: () => openEditModal(tunnel) },
+  { key: 'diagnose', label: t('runtime.tunnel.actions.diagnose'), icon: Stethoscope, onSelect: () => openDiagnosisModal(tunnel) },
+  { key: 'delete', label: t('runtime.tunnel.actions.delete'), icon: Trash2, danger: true, separatorBefore: true, onSelect: () => openDeleteModal(tunnel) }
+]
+const typeOptions = computed(() => [
+  { value: 1, label: t('runtime.tunnel.options.portForward') },
+  { value: 2, label: t('runtime.tunnel.options.tunnelForward') }
+])
+const flowOptions = computed(() => [
+  { value: 1, label: t('runtime.tunnel.options.oneWayAccounting') },
+  { value: 2, label: t('runtime.tunnel.options.twoWayAccounting') }
+])
+const protocolOptions = ['tls', 'tcp', 'udp', 'ws', 'wss', 'grpc', 'quic']
+function relayNodeSelectOptions(role) {
+  const roleLabel = role === 'ingress' ? t('runtime.tunnel.meta.ingressNode') : t('runtime.tunnel.meta.executionNode')
+  return relayNodeOptions.value.map(node => ({ value: node.id, label: `${node.name} · ${roleLabel} · ${node.host}` }))
+}
+const exitNodeSelectOptions = computed(() => exitNodeOptions.value.map(node => ({
+  value: node.id,
+  label: `${node.name} · ${t('runtime.tunnel.meta.egressNode')} · ${node.host}`
+})))
+const diagnosisSteps = computed(() => (diagnosisResult.value?.results || []).map((result, index) => {
+  const fields = [{ label: t('runtime.tunnel.diagnosis.targetAddress'), value: formatAddress(result.targetIp, result.targetPort), mono: true }]
+  if (result.averageTime) {
+    fields.push({ label: t('runtime.tunnel.diagnosis.duration'), value: `${result.averageTime.toFixed(0)} ms`, numeric: true })
+  }
+  return {
+    key: `${result.nodeId}-${index}`,
+    title: result.description,
+    meta: `${result.nodeName} · Node ${result.nodeId}`,
+    success: Boolean(result.success),
+    statusLabel: result.success ? t('runtime.shared.success') : t('runtime.shared.failed'),
+    fields,
+    message: result.message ? translateLiteral(result.message) : ''
+  }
+}))
+const diagnosisSummary = computed(() => {
+  const steps = diagnosisSteps.value
+  if (!steps.length) return ''
+  return t('runtime.tunnel.diagnosis.summary', { passed: steps.filter(step => step.success).length, total: steps.length })
+})
+const diagnosisCheckedAt = computed(() => (diagnosisResult.value?.timestamp ? format.dateTime(diagnosisResult.value.timestamp) : ''))
 
 const modalOpen = ref(false)
 const deleteModalOpen = ref(false)
@@ -509,17 +550,27 @@ async function loadData(showLoading = true) {
 
     if (tunnelRes.code === 0) {
       tunnels.value = Array.isArray(tunnelRes.data) ? tunnelRes.data.map(normalizeTunnel) : []
+      pageError.value = null
     } else {
-      setFeedback('error', translateMessage(tunnelRes.msg, t('runtime.tunnel.messages.loadListFailed')))
+      reportLoadError(translateMessage(tunnelRes.msg, t('runtime.tunnel.messages.loadListFailed')))
     }
 
     nodes.value = extractNodeList(nodeRes)
   } catch (error) {
     console.error('Failed to load tunnel page data:', error)
-    setFeedback('error', t('runtime.tunnel.messages.loadDataFailed'))
+    reportLoadError(error?.response ? error : t('runtime.tunnel.messages.loadDataFailed'))
   } finally {
     loading.value = false
   }
+}
+
+// Nothing listed yet: the table's error state (重试); otherwise a toast.
+function reportLoadError(error) {
+  if (tunnels.value.length) {
+    setFeedback('error', typeof error === 'string' ? error : t('runtime.tunnel.messages.loadDataFailed'))
+    return
+  }
+  pageError.value = error
 }
 
 function resolveNodeName(nodeId) {
@@ -529,14 +580,14 @@ function resolveNodeName(nodeId) {
 
 function resolveTypeMeta(type) {
   return Number(type) === 2
-    ? { text: t('runtime.tunnel.options.tunnelForward'), className: 'tag-primary' }
-    : { text: t('runtime.tunnel.options.portForward'), className: 'tag-neutral' }
+    ? { text: t('runtime.tunnel.options.tunnelForward'), tone: 'info' }
+    : { text: t('runtime.tunnel.options.portForward'), tone: 'neutral' }
 }
 
 function resolveStatusMeta(status) {
   return Number(status) === 1
-    ? { text: t('runtime.shared.enabled'), className: 'tag-success' }
-    : { text: t('runtime.shared.disabled'), className: 'tag-danger' }
+    ? { text: t('runtime.shared.enabled'), tone: 'success' }
+    : { text: t('runtime.shared.disabled'), tone: 'danger' }
 }
 
 function resolveFlowLabel(flow) {
@@ -548,21 +599,21 @@ function resolveRuntimeCompatibility(tunnel) {
 
   if (runtimeNodeXMode.value) {
     if (!Number(tunnel?.inNodeId || 0)) {
-      return { text: t('runtime.tunnel.compatibility.nodeXNeedsIngress'), className: 'tag-danger' }
+      return { text: t('runtime.tunnel.compatibility.nodeXNeedsIngress'), tone: 'danger' }
     }
     if (Number(tunnel?.type) === 2 && !Number(tunnel?.outNodeId || 0)) {
-      return { text: t('runtime.tunnel.compatibility.nodeXNeedsEgress'), className: 'tag-danger' }
+      return { text: t('runtime.tunnel.compatibility.nodeXNeedsEgress'), tone: 'danger' }
     }
-    return { text: t('runtime.tunnel.compatibility.nodeXReady'), className: 'tag-success' }
+    return { text: t('runtime.tunnel.compatibility.nodeXReady'), tone: 'success' }
   }
 
   if (Number(tunnel?.type) !== 1) {
-    return { text: t('runtime.tunnel.compatibility.localOnlyPortForward'), className: 'tag-danger' }
+    return { text: t('runtime.tunnel.compatibility.localOnlyPortForward'), tone: 'danger' }
   }
   if (!executionNodeId) {
-    return { text: t('runtime.tunnel.compatibility.localNeedsExecution'), className: 'tag-danger' }
+    return { text: t('runtime.tunnel.compatibility.localNeedsExecution'), tone: 'danger' }
   }
-  return { text: t('runtime.tunnel.compatibility.localReady'), className: 'tag-success' }
+  return { text: t('runtime.tunnel.compatibility.localReady'), tone: 'success' }
 }
 
 function formatTrafficRatio(value) {
@@ -608,6 +659,7 @@ function openEditModal(tunnel) {
 }
 
 function closeEditorModal() {
+  if (submitLoading.value) return
   modalOpen.value = false
 }
 
@@ -828,282 +880,79 @@ async function rerunDiagnosis() {
 </script>
 
 <style scoped>
-.tunnel-page {
-  display: grid;
-  gap: 20px;
-}
-
-.toolbar {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-}
-
-.toolbar-copy h2 {
-  margin: 4px 0 0;
-  font-size: 28px;
-}
-
-.eyebrow {
-  margin: 0;
-  color: var(--text-secondary);
-  text-transform: uppercase;
-  letter-spacing: 0.14em;
-  font-size: 12px;
-}
-
-.toolbar-actions {
-  display: flex;
-  gap: 12px;
-}
-
-.btn {
-  border: 1px solid var(--border-color);
-  border-radius: 14px;
-  padding: 10px 16px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: 0.2s ease;
-}
-
-.btn:disabled {
-  cursor: not-allowed;
-  opacity: 0.65;
-}
-
-.btn-primary {
-  background: linear-gradient(135deg, #1d4ed8, #2563eb);
-  color: #fff;
-  border-color: transparent;
-}
-
-.btn-secondary {
-  background: var(--surface-color);
-  color: var(--text-color);
-}
-
-.btn-sm {
-  padding: 8px 12px;
-  border-radius: 12px;
-  font-size: 13px;
-}
-
-.danger {
-  background: linear-gradient(135deg, #b91c1c, #dc2626);
-}
-
-.danger-text {
-  color: #dc2626;
-}
-
-
-
-
-
-.loading-state,
-.empty-state {
-  display: grid;
-  place-items: center;
-  gap: 12px;
-  min-height: 220px;
-  padding: 32px;
-  border-radius: 20px;
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  text-align: center;
-}
-
-.loading-state.compact,
-.empty-state.compact {
-  min-height: 160px;
-}
-
-.spinner {
-  width: 36px;
-  height: 36px;
-  border-radius: 50%;
-  border: 3px solid rgba(37, 99, 235, 0.18);
-  border-top-color: #2563eb;
-  animation: spin 0.8s linear infinite;
-}
-
-.card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 18px;
-}
-
-.tunnel-card,
-.diagnosis-card {
-  display: grid;
-  gap: 16px;
-  padding: 20px;
-  border-radius: 20px;
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent), var(--surface-color);
-  border: 1px solid var(--border-color);
-}
-
-.card-head,
-.diagnosis-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.card-title h3,
-.diagnosis-head h4 {
-  margin: 0;
-  font-size: 20px;
-}
-
-.card-title p,
-.diagnosis-head p,
-.hint,
-.meta-label {
-  margin: 4px 0 0;
-  color: var(--text-secondary);
-}
-
-.runtime-context-bar {
+.runtime-context {
   display: flex;
   flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
+  gap: var(--space-2) var(--space-4);
+  align-items: baseline;
+  margin-top: calc(-1 * var(--space-3));
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
 }
 
-.runtime-context-summary {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.runtime-context-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-left: auto;
-}
-
-.card-head-actions,
-.card-actions {
-  display: flex;
-  gap: 8px;
-  flex-wrap: wrap;
-}
-
-.meta-list,
-.diagnosis-meta {
-  display: grid;
-  gap: 12px;
-}
-
-.meta-item {
-  display: grid;
-  gap: 4px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  background: rgba(148, 163, 184, 0.08);
-}
-
-.meta-item code,
-.diagnosis-meta code {
-  word-break: break-all;
-}
-
-.tag {
+.runtime-context__links {
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  border-radius: 999px;
-  padding: 6px 10px;
-  font-size: 12px;
-  font-weight: 700;
-  background: rgba(148, 163, 184, 0.12);
-}
-
-.tag-primary {
-  background: rgba(37, 99, 235, 0.16);
-  color: #2563eb;
-}
-
-.tag-success {
-  background: rgba(22, 163, 74, 0.16);
-  color: #16a34a;
-}
-
-.tag-danger {
-  background: rgba(220, 38, 38, 0.16);
-  color: #dc2626;
-}
-
-.tag-neutral {
-  background: rgba(148, 163, 184, 0.14);
-  color: var(--text-color);
-}
-
-.dialog-form {
-  display: grid;
+  flex-wrap: wrap;
   gap: var(--space-4);
 }
 
-.form-grid {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+.runtime-context__links a {
+  color: var(--accent);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
 }
 
-.form-group {
-  display: grid;
-  align-content: start;
-  gap: 8px;
+.runtime-context__links a:hover {
+  text-decoration: underline;
 }
 
-.form-group input,
-.form-group select {
-  width: 100%;
-  padding: 12px 14px;
-  border-radius: 14px;
-  border: 1px solid var(--border-color);
-  background: var(--bg-color);
-  color: var(--text-color);
+.runtime-context__links a:focus-visible {
+  border-radius: var(--radius-xs);
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 
-.form-group input:disabled,
-.form-group select:disabled {
-  opacity: 0.7;
-  cursor: not-allowed;
+.runtime-compatibility-note {
+  margin-top: calc(-1 * var(--space-4));
 }
 
-.form-error {
-  margin: 0;
-  color: #dc2626;
-  font-size: 13px;
+.tunnel-name {
+  font-weight: var(--weight-medium);
+  overflow-wrap: anywhere;
 }
 
-.diagnosis-list {
-  display: grid;
-  gap: 14px;
+.node-cell {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-0-5);
+  min-width: 0;
 }
 
-@keyframes spin {
-  to {
-    transform: rotate(360deg);
-  }
+.node-cell code {
+  color: var(--label-2);
+  font-family: var(--font-mono);
+  font-size: var(--type-caption-size);
+  overflow-wrap: anywhere;
 }
 
-@media (max-width: 768px) {
-  .toolbar,
-  .card-head,
-  .diagnosis-head {
-    flex-direction: column;
-    align-items: stretch;
-  }
+.editor-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
 
-  .form-grid {
-    grid-template-columns: 1fr;
-  }
+.editor-form__hint {
+  margin: calc(-1 * var(--space-2)) 0 0;
+  color: var(--label-2);
+  font-size: var(--type-caption-size);
+}
+
+.diagnosis-loading {
+  display: flex;
+  gap: var(--space-3);
+  align-items: center;
+  justify-content: center;
+  min-height: 160px;
+  color: var(--label-2);
 }
 </style>
-

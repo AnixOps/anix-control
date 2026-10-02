@@ -49,6 +49,20 @@ function mountForward() {
   return wrapper
 }
 
+// UI U7: the rules are a UiDataTable; its row checkboxes are Reka
+// checkboxes and the bulk bar is teleported to document.body.
+function rowCheckboxes(wrapper) {
+  return wrapper.findAll('tbody [role="checkbox"]')
+}
+
+async function selectAllRows(wrapper) {
+  await wrapper.find('[data-select-all]').trigger('click')
+}
+
+function bulkButton(test) {
+  return document.body.querySelector(`[data-bulk-bar] [data-test="${test}"]`)
+}
+
 describe('Forward.vue', () => {
   beforeEach(async () => {
     setActivePinia(createPinia())
@@ -97,14 +111,15 @@ describe('Forward.vue', () => {
     wrapper.vm.openCreateModal()
     await wrapper.vm.$nextTick()
 
-    const options = allInBody('[data-test="forward-tunnel-select"] option').map(option => option.text())
+    const options = wrapper.vm.tunnelOptions.map(option => option.label)
 
     expect(wrapper.text()).toContain(i18n.global.t('runtime.forward.modeCompatibilityHint'))
+    expect(allInBody('[data-test="forward-tunnel-select"]')).toHaveLength(1)
     expect(options.some(text => text.includes('Port Tunnel'))).toBe(true)
     expect(options.some(text => text.includes('NodeX Tunnel'))).toBe(false)
   })
 
-  it('renders direct forwards in the compact table without duplicate suite nav', async () => {
+  it('renders direct forwards in the data table without duplicate suite nav', async () => {
     adminApi.getForwardList.mockResolvedValue({
       code: 0,
       data: [
@@ -132,9 +147,9 @@ describe('Forward.vue', () => {
     const wrapper = mountForward()
     await flushPromises()
 
-    expect(wrapper.find('.forward-table').exists()).toBe(true)
+    expect(wrapper.find('[data-test="forward-direct-view"] table').exists()).toBe(true)
     expect(wrapper.find('.forward-suite-nav').exists()).toBe(false)
-    expect(wrapper.text()).toContain(i18n.global.t('runtime.forward.table.rule'))
+    expect(wrapper.text()).toContain(i18n.global.t('runtime.forward.table.ruleName'))
     expect(wrapper.text()).toContain('Web Entry')
     expect(wrapper.text()).toContain('Port Tunnel')
     expect(wrapper.text()).toContain('203.0.113.10:10001')
@@ -202,31 +217,31 @@ describe('Forward.vue', () => {
     expect(wrapper.text()).not.toContain('Beta API')
     expect(wrapper.text()).not.toContain('Gamma Fault')
 
-    await wrapper.find('[data-test="forward-select-all"]').setValue(true)
+    await selectAllRows(wrapper)
     expect(wrapper.vm.selectedDirectForwards.map(item => item.id)).toEqual([51])
 
-    await wrapper.find('[data-test="forward-filter-clear"]').trigger('click')
+    wrapper.vm.clearDirectFilters()
     await wrapper.vm.$nextTick()
-    await wrapper.find('[data-test="forward-filter-tunnel"]').setValue('2')
+    wrapper.vm.tunnelFilter = '2'
     await wrapper.vm.$nextTick()
 
     expect(wrapper.text()).not.toContain('Alpha Web')
     expect(wrapper.text()).toContain('Beta API')
     expect(wrapper.text()).not.toContain('Gamma Fault')
 
-    await wrapper.find('[data-test="forward-select-all"]').setValue(true)
+    await selectAllRows(wrapper)
     expect(wrapper.vm.selectedDirectForwards.map(item => item.id)).toEqual([52])
 
-    await wrapper.find('[data-test="forward-filter-clear"]').trigger('click')
+    wrapper.vm.clearDirectFilters()
     await wrapper.vm.$nextTick()
-    await wrapper.find('[data-test="forward-filter-status"]').setValue('error')
+    await wrapper.find('[data-test="forward-filter-status"] [data-filter="error"]').trigger('click')
     await wrapper.vm.$nextTick()
 
     expect(wrapper.text()).not.toContain('Alpha Web')
     expect(wrapper.text()).not.toContain('Beta API')
     expect(wrapper.text()).toContain('Gamma Fault')
 
-    await wrapper.find('[data-test="forward-select-all"]').setValue(true)
+    await selectAllRows(wrapper)
     expect(wrapper.vm.selectedDirectForwards.map(item => item.id)).toEqual([53])
   })
 
@@ -272,7 +287,7 @@ describe('Forward.vue', () => {
     expect(wrapper.text()).toContain('Alice Web')
     expect(wrapper.text()).toContain('Bob API')
 
-    await wrapper.find('[data-test="forward-select-all"]').setValue(true)
+    await selectAllRows(wrapper)
     expect(wrapper.vm.selectedDirectForwards.map(item => item.id)).toEqual([21, 22])
   })
 
@@ -347,14 +362,14 @@ describe('Forward.vue', () => {
     const wrapper = mountForward()
     await flushPromises()
 
-    await wrapper.findAll('[data-test="forward-row-select"]')[0].setValue(true)
-    await wrapper.find('[data-test="forward-bulk-pause"]').trigger('click')
+    await rowCheckboxes(wrapper)[0].trigger('click')
+    bulkButton('forward-bulk-pause').click()
     await flushPromises()
 
     expect(adminApi.pauseForwardService).toHaveBeenCalledTimes(1)
     expect(adminApi.pauseForwardService).toHaveBeenCalledWith(11)
     expect(adminApi.pauseForwardService).not.toHaveBeenCalledWith(12)
-    expect(wrapper.find('[data-test="forward-bulk-toolbar"]').exists()).toBe(false)
+    expect(document.body.querySelector('[data-bulk-bar]')).toBeNull()
   })
 
   it('runs batch pause only for forwards that are currently running', async () => {
@@ -405,11 +420,11 @@ describe('Forward.vue', () => {
     const wrapper = mountForward()
     await flushPromises()
 
-    const selectors = wrapper.findAll('[data-test="forward-row-select"]')
-    await selectors[0].setValue(true)
-    await selectors[1].setValue(true)
-    await selectors[2].setValue(true)
-    await wrapper.find('[data-test="forward-bulk-pause"]').trigger('click')
+    const selectors = rowCheckboxes(wrapper)
+    await selectors[0].trigger('click')
+    await selectors[1].trigger('click')
+    await selectors[2].trigger('click')
+    bulkButton('forward-bulk-pause').click()
     await flushPromises()
 
     expect(adminApi.pauseForwardService).toHaveBeenCalledTimes(1)
@@ -467,11 +482,11 @@ describe('Forward.vue', () => {
     const wrapper = mountForward()
     await flushPromises()
 
-    const selectors = wrapper.findAll('[data-test="forward-row-select"]')
-    await selectors[0].setValue(true)
-    await selectors[1].setValue(true)
-    await selectors[2].setValue(true)
-    await wrapper.find('[data-test="forward-bulk-resume"]').trigger('click')
+    const selectors = rowCheckboxes(wrapper)
+    await selectors[0].trigger('click')
+    await selectors[1].trigger('click')
+    await selectors[2].trigger('click')
+    bulkButton('forward-bulk-resume').click()
     await flushPromises()
 
     expect(adminApi.resumeForwardService).toHaveBeenCalledTimes(1)
@@ -503,8 +518,8 @@ describe('Forward.vue', () => {
     const wrapper = mountForward()
     await flushPromises()
 
-    await wrapper.find('[data-test="forward-row-select"]').setValue(true)
-    await wrapper.find('[data-test="forward-bulk-export"]').trigger('click')
+    await rowCheckboxes(wrapper)[0].trigger('click')
+    bulkButton('forward-bulk-export').click()
     await wrapper.vm.$nextTick()
 
     expect(JSON.parse(wrapper.vm.exportData)).toEqual([

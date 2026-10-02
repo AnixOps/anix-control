@@ -1,105 +1,111 @@
 <template>
-  <div class="limit-page">
-    <div class="toolbar">
-      <div class="toolbar-copy">
-        <p class="eyebrow">{{ t('runtime.limitPage.heroEyebrow') }}</p>
-        <h2>{{ t('runtime.limitPage.title') }}</h2>
-      </div>
-      <div class="toolbar-actions">
-        <button class="btn btn-primary" @click="openCreateModal">{{ t('runtime.limitPage.actions.create') }}</button>
-      </div>
-    </div>
-    <p class="text-secondary small runtime-note">{{ t('runtime.limitPage.note') }}</p>
-    <div class="runtime-context-bar">
-      <span class="tag tag-primary">{{ runtimeModeLabel }}</span>
-      <span class="runtime-context-summary">{{ runtimeModeSummary }}</span>
-      <div class="runtime-context-links">
-        <router-link class="btn btn-secondary btn-sm" to="/admin/forward/local">{{ t('forwardSuite.nav.localRuntime') }}</router-link>
-        <router-link class="btn btn-secondary btn-sm" to="/admin/forward/nodex">{{ t('forwardSuite.nav.nodeXRuntime') }}</router-link>
-      </div>
-    </div>
+  <div class="list-page limit-page">
+    <UiPageHeader :title="t('runtime.limitPage.title')" :description="t('runtime.limitPage.note')">
+      <template #meta>
+        <UiBadge tone="neutral" :dot="false" :label="t('runtime.limitPage.heroEyebrow')" />
+        <UiBadge tone="info" :dot="false" :label="runtimeModeLabel" data-test="limit-runtime-mode" />
+      </template>
+      <template #actions>
+        <UiButton variant="primary" :icon="Plus" data-test="limit-add" @click="openCreateModal">{{ t('runtime.limitPage.actions.create') }}</UiButton>
+      </template>
+    </UiPageHeader>
 
-    <div v-if="loading" class="loading-state">
-      <div class="spinner"></div>
-      <span>{{ t('runtime.limitPage.loading') }}</span>
-    </div>
+    <nav class="runtime-context" :aria-label="t('runtime.limitPage.runtimeLinks')">
+      <span class="runtime-context__summary">{{ runtimeModeSummary }}</span>
+      <span class="runtime-context__links">
+        <router-link to="/admin/forward/local">{{ t('forwardSuite.nav.localRuntime') }}</router-link>
+        <router-link to="/admin/forward/nodex">{{ t('forwardSuite.nav.nodeXRuntime') }}</router-link>
+      </span>
+    </nav>
 
-    <template v-else>
-      <section v-if="limits.length" class="card-grid">
-        <article v-for="item in limits" :key="item.id" class="limit-card">
-          <div class="card-head">
-            <div class="card-title">
-              <h3>{{ formatRuleName(item) }}</h3>
-              <p>{{ formatTunnel(item) }}</p>
-            </div>
-            <div class="card-head-actions">
-              <span :class="['tag', item.status === 1 ? 'tag-success' : 'tag-danger']">
-                {{ item.status === 1 ? t('runtime.limitPage.status.active') : t('runtime.limitPage.status.error') }}
-              </span>
-            </div>
-          </div>
+    <UiDataTable
+      :columns="columns"
+      :rows="limits"
+      :label="t('runtime.limitPage.table.label')"
+      :row-label="formatRuleName"
+      storage-key="admin.forward.limits"
+      :loading="loading"
+      :error="limits.length ? null : pageError"
+      :error-title="t('runtime.limitPage.messages.loadFailed')"
+      :empty-icon="Gauge"
+      :empty-title="t('runtime.limitPage.empty.title')"
+      :empty-description="t('runtime.limitPage.empty.text')"
+      :row-actions="limitActions"
+      activatable
+      data-test="limit-table"
+      @row-activate="openEditModal"
+      @retry="refreshAll"
+    >
+      <template #empty-actions>
+        <UiButton variant="primary" :icon="Plus" @click="openCreateModal">{{ t('runtime.limitPage.actions.createNow') }}</UiButton>
+      </template>
+      <template #cell-name="{ row }">
+        <span class="limit-name">{{ formatRuleName(row) }}</span>
+      </template>
+      <template #cell-status="{ row }">
+        <UiBadge
+          :tone="row.status === 1 ? 'success' : 'danger'"
+          :label="row.status === 1 ? t('runtime.limitPage.status.active') : t('runtime.limitPage.status.error')"
+        />
+      </template>
+    </UiDataTable>
 
-          <div class="meta-list">
-            <div class="meta-item">
-              <span class="meta-label">{{ t('runtime.limitPage.cards.speed') }}</span>
-              <strong>{{ formatSpeed(item.speed) }}</strong>
-            </div>
-            <div class="meta-item">
-              <span class="meta-label">{{ t('runtime.limitPage.cards.updatedAt') }}</span>
-              <strong>{{ formatTime(item.updatedTime || item.createdTime) }}</strong>
-            </div>
-          </div>
-
-          <div class="card-actions">
-            <button class="btn btn-secondary btn-sm" @click="openEditModal(item)">{{ t('runtime.limitPage.actions.edit') }}</button>
-            <button class="btn btn-secondary btn-sm danger-text" @click="openDeleteModal(item)">{{ t('runtime.limitPage.actions.delete') }}</button>
-          </div>
-        </article>
-      </section>
-
-      <section v-else class="empty-state">
-        <h3>{{ t('runtime.limitPage.empty.title') }}</h3>
-        <p>{{ t('runtime.limitPage.empty.text') }}</p>
-        <button class="btn btn-primary" @click="openCreateModal">{{ t('runtime.limitPage.actions.createNow') }}</button>
-      </section>
-    </template>
-
-    <UiDialog
+    <UiSheet
       :open="showFormModal"
+      size="sm"
       :title="isEditMode ? t('runtime.limitPage.formModal.titleEdit') : t('runtime.limitPage.formModal.titleCreate')"
+      :description="isEditMode ? formatRuleName(form) : t('runtime.limitPage.note')"
       :dismissible="!formSubmitting"
+      data-test="limit-form-sheet"
       @update:open="value => { if (!value) closeFormModal() }"
     >
-      <div class="form-group">
-        <label for="limit-form-name">{{ t('runtime.limitPage.formModal.fields.name') }}</label>
-        <input id="limit-form-name" v-model.trim="form.name" type="text" :placeholder="t('runtime.limitPage.formModal.placeholders.name')" :aria-invalid="formError ? 'true' : undefined" :aria-describedby="formError ? 'limit-form-error' : undefined" />
+      <form id="limit-form" class="editor-form" novalidate @submit.prevent="submitForm">
+        <UiTextField
+          id="limit-form-name"
+          v-model.trim="form.name"
+          :label="t('runtime.limitPage.formModal.fields.name')"
+          :placeholder="t('runtime.limitPage.formModal.placeholders.name')"
+          maxlength="50"
+          required
+          size="md"
+        />
+        <UiNumberField
+          v-model="form.speed"
+          :label="t('runtime.limitPage.formModal.fields.speed')"
+          :placeholder="t('runtime.limitPage.formModal.placeholders.speed')"
+          :min="1"
+          :step="1"
+          unit="Mbps"
+          required
+          size="md"
+        />
+        <UiSelect
+          :model-value="form.tunnelId || undefined"
+          :label="t('runtime.limitPage.formModal.fields.tunnel')"
+          :placeholder="t('runtime.limitPage.formModal.placeholders.tunnel')"
+          :options="tunnelOptions"
+          required
+          size="md"
+          @update:model-value="value => { form.tunnelId = Number(value) || 0 }"
+        />
         <p v-if="formError" id="limit-form-error" class="form-error" role="alert">{{ formError }}</p>
-      </div>
-      <div class="form-group">
-        <label for="limit-form-speed">{{ t('runtime.limitPage.formModal.fields.speed') }}</label>
-        <input id="limit-form-speed" v-model.number="form.speed" type="number" min="1" step="1" :placeholder="t('runtime.limitPage.formModal.placeholders.speed')" />
-      </div>
-      <div class="form-group">
-        <label for="limit-form-tunnel">{{ t('runtime.limitPage.formModal.fields.tunnel') }}</label>
-        <select id="limit-form-tunnel" v-model.number="form.tunnelId">
-          <option :value="0">{{ t('runtime.limitPage.formModal.placeholders.tunnel') }}</option>
-          <option v-for="t in tunnels" :key="t.id" :value="t.id">
-            {{ t.name || t('runtime.limitPage.values.tunnelFallback', { id: t.id }) }}
-          </option>
-        </select>
-      </div>
+      </form>
       <template #footer>
         <UiButton :disabled="formSubmitting" @click="closeFormModal">{{ t('common.actions.cancel') }}</UiButton>
-        <UiButton variant="primary" :loading="formSubmitting" data-test="limit-form-submit" @click="submitForm">
+        <UiButton type="submit" form="limit-form" variant="primary" :loading="formSubmitting" data-test="limit-form-submit">
           {{ isEditMode ? t('runtime.limitPage.formModal.submitUpdate') : t('runtime.limitPage.formModal.submitCreate') }}
         </UiButton>
       </template>
-    </UiDialog>
+    </UiSheet>
   </div>
 </template>
 
 <script setup>
+// 限速 (/admin/forward/limit): flux-panel limit.tsx. UI U7 changed visuals
+// and interaction components only: the rules are a UiDataTable and the
+// editor is a Sheet. Same /speed-limit/* endpoints and fields.
 import { computed, onMounted, ref } from 'vue'
+import { Gauge, Pencil, Plus, Trash2 } from '@lucide/vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import {
   createSpeedLimit,
@@ -109,12 +115,22 @@ import {
   getSystemConfig,
   updateSpeedLimit
 } from '@/api/admin'
-import { UiButton, UiDialog, useConfirm, useToast } from '@/ui'
+import UiBadge from '@/ui/UiBadge.vue'
+import UiButton from '@/ui/UiButton.vue'
+import UiDataTable from '@/ui/UiDataTable.vue'
+import UiNumberField from '@/ui/UiNumberField.vue'
+import UiPageHeader from '@/ui/UiPageHeader.vue'
+import UiSelect from '@/ui/UiSelect.vue'
+import UiSheet from '@/ui/UiSheet.vue'
+import UiTextField from '@/ui/UiTextField.vue'
+import { useConfirm } from '@/ui/composables/useConfirm'
+import { useToast } from '@/ui/composables/useToast'
 import { humanizeForwardRuntimeBackend } from '@/utils/forwardRuntime'
 
 const { t, formatDateTime, translateLiteral } = useAppI18n()
 
-const loading = ref(false)
+const loading = ref(true)
+const pageError = ref(null)
 const limits = ref([])
 const tunnels = ref([])
 
@@ -130,7 +146,7 @@ const runtimeModeLabel = computed(() => (
 const runtimeModeSummary = computed(() => (
   runtimeNodeXMode.value
     ? t('runtime.limitPage.modeSummaryNodeX')
-    : t('runtime.limitPage.modeSummaryLocal')
+    : t('runtime.limitPage.modeSummaryLocal', { backend: humanizeForwardRuntimeBackend(t, runtimeBackend.value) })
 ))
 
 const showFormModal = ref(false)
@@ -144,6 +160,23 @@ const confirm = useConfirm()
 function newForm() {
   return { id: null, name: '', speed: 100, tunnelId: 0 }
 }
+
+// Interaction components (UI U7) ----------------------------------------
+const columns = computed(() => [
+  { key: 'name', label: t('runtime.limitPage.formModal.fields.name'), primary: true, hideable: false, value: formatRuleName },
+  { key: 'tunnel', label: t('runtime.limitPage.formModal.fields.tunnel'), secondary: true, value: formatTunnel },
+  { key: 'speed', label: t('runtime.limitPage.cards.speed'), numeric: true, value: item => formatSpeed(item.speed) },
+  { key: 'status', label: t('runtime.limitPage.table.status'), value: item => (item.status === 1 ? t('runtime.limitPage.status.active') : t('runtime.limitPage.status.error')) },
+  { key: 'updatedAt', label: t('runtime.limitPage.cards.updatedAt'), numeric: true, value: item => formatTime(item.updatedTime || item.createdTime), breakpoint: 'md' }
+])
+const limitActions = item => [
+  { key: 'edit', label: t('runtime.limitPage.actions.edit'), icon: Pencil, onSelect: () => openEditModal(item) },
+  { key: 'delete', label: t('runtime.limitPage.actions.delete'), icon: Trash2, danger: true, separatorBefore: true, onSelect: () => openDeleteModal(item) }
+]
+const tunnelOptions = computed(() => tunnels.value.map(item => ({
+  value: item.id,
+  label: item.name || t('runtime.limitPage.values.tunnelFallback', { id: item.id })
+})))
 
 const isEditMode = computed(() => Number(form.value.id || 0) > 0)
 const selectedTunnel = computed(() => tunnels.value.find(item => Number(item.id) === Number(form.value.tunnelId || 0)) || null)
@@ -247,8 +280,11 @@ async function refreshAll() {
   try {
     await fetchTunnels()
     await fetchLimits()
+    pageError.value = null
   } catch (error) {
-    setFeedback('error', formatErrorMessage(error, 'runtime.limitPage.messages.loadFailed'))
+    // Nothing listed yet: the table's error state (重试); otherwise a toast.
+    if (limits.value.length) setFeedback('error', formatErrorMessage(error, 'runtime.limitPage.messages.loadFailed'))
+    else pageError.value = error?.response ? error : formatErrorMessage(error, 'runtime.limitPage.messages.loadFailed')
   } finally {
     loading.value = false
   }
@@ -370,279 +406,50 @@ onMounted(async () => {
 </script>
 
 <style scoped>
-.limit-page {
-  display: grid;
-  gap: 20px;
-}
-
-.toolbar {
+.runtime-context {
   display: flex;
-  justify-content: space-between;
-  align-items: center;
-  gap: 16px;
-  padding: 22px 24px;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  background:
-    radial-gradient(circle at top right, rgba(37, 99, 235, 0.14), transparent 32%),
-    linear-gradient(180deg, rgba(15, 23, 42, 0.03), transparent 60%),
-    var(--surface-color);
+  flex-wrap: wrap;
+  gap: var(--space-2) var(--space-4);
+  align-items: baseline;
+  margin-top: calc(-1 * var(--space-3));
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
 }
 
-.toolbar-copy h2 {
-  margin: 4px 0 0;
-  font-size: 26px;
-  line-height: 1.1;
-}
-
-.eyebrow {
-  margin: 0;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  color: var(--text-secondary);
-}
-
-.toolbar-actions {
-  display: flex;
-  gap: 12px;
-}
-
-.btn {
+.runtime-context__links {
   display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  gap: 8px;
-  border: 1px solid transparent;
-  border-radius: var(--radius-md);
-  padding: 10px 16px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: var(--transition);
+  flex-wrap: wrap;
+  gap: var(--space-4);
 }
 
-.btn:disabled { opacity: 0.6; cursor: not-allowed; }
-
-.btn-primary {
-  background: var(--forward-accent, #2563eb);
-  color: #fff;
-  box-shadow: 0 14px 32px rgba(37, 99, 235, 0.2);
+.runtime-context__links a {
+  color: var(--accent);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
 }
 
-.btn-secondary {
-  background: var(--surface-color);
-  color: var(--text-color);
-  border-color: var(--border-color);
+.runtime-context__links a:hover {
+  text-decoration: underline;
 }
 
-.btn-sm { padding: 8px 12px; font-size: 12px; }
-
-.danger-text { color: #dc2626; }
-
-.loading-state {
-  min-height: 300px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  border: 1px dashed rgba(37, 99, 235, 0.2);
-  border-radius: var(--radius-lg);
-  background: linear-gradient(180deg, rgba(37, 99, 235, 0.04), transparent 55%), var(--surface-color);
-  color: var(--text-secondary);
+.runtime-context__links a:focus-visible {
+  border-radius: var(--radius-xs);
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
 }
 
-.spinner {
-  width: 22px;
-  height: 22px;
-  border-radius: 999px;
-  border: 3px solid rgba(37, 99, 235, 0.2);
-  border-top-color: var(--forward-accent, #2563eb);
-  animation: spin 0.8s linear infinite;
+.limit-name {
+  font-weight: var(--weight-medium);
+  overflow-wrap: anywhere;
 }
 
-.card-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
-  gap: 16px;
-}
-
-.limit-card {
+.editor-form {
   display: flex;
   flex-direction: column;
-  gap: 14px;
-  padding: 18px;
-  border-radius: 20px;
-  border: 1px solid var(--border-color);
-  background:
-    radial-gradient(circle at top right, rgba(37, 99, 235, 0.08), transparent 28%),
-    linear-gradient(180deg, rgba(15, 23, 42, 0.04), transparent 60%),
-    var(--surface-color);
-  box-shadow: 0 14px 30px rgba(15, 23, 42, 0.08);
-  transition: transform 0.2s ease, border-color 0.2s ease, box-shadow 0.2s ease;
+  gap: var(--space-4);
 }
 
-.limit-card:hover {
-  transform: translateY(-3px);
-  border-color: rgba(37, 99, 235, 0.24);
-  box-shadow: 0 20px 38px rgba(15, 23, 42, 0.12);
-}
-
-.card-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: 12px;
-}
-
-.card-title { min-width: 0; }
-
-.card-title h3 {
+.editor-form .form-error {
   margin: 0;
-  font-size: 15px;
-}
-
-.card-title p {
-  margin: 6px 0 0;
-  color: var(--text-secondary);
-  font-size: 12px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.card-head-actions {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  flex-shrink: 0;
-}
-
-.card-actions {
-  display: flex;
-  gap: 10px;
-  flex-wrap: wrap;
-  padding-top: 4px;
-}
-
-.meta-list {
-  display: grid;
-  gap: 12px;
-}
-
-.meta-item {
-  display: grid;
-  gap: 4px;
-  padding: 12px 14px;
-  border-radius: 16px;
-  background: rgba(148, 163, 184, 0.08);
-}
-
-.meta-item strong { word-break: break-all; }
-
-.tag {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-height: 28px;
-  padding: 6px 10px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 700;
-  background: rgba(148, 163, 184, 0.16);
-  color: var(--text-secondary);
-}
-
-.tag-success {
-  background: rgba(16, 185, 129, 0.14);
-  color: #047857;
-}
-
-.tag-danger {
-  background: rgba(239, 68, 68, 0.14);
-  color: #b91c1c;
-}
-
-.tag-primary {
-  background: rgba(37, 99, 235, 0.12);
-  color: #1d4ed8;
-}
-
-.empty-state {
-  padding: 42px 24px;
-  text-align: center;
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  background: var(--surface-color);
-}
-
-.empty-state h3 { margin: 0 0 8px; }
-.empty-state p { margin: 0 0 20px; color: var(--text-secondary); }
-
-.form-group {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  margin-bottom: 0;
-}
-
-.form-group label {
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.form-group input, .form-group select {
-  width: 100%;
-  padding: 12px 14px;
-  border: 1px solid var(--border-color);
-  border-radius: 14px;
-  background: rgba(15, 23, 42, 0.04);
-  color: var(--text-color);
-  font-size: 14px;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
-}
-
-.form-group input:focus, .form-group select:focus {
-  outline: none;
-  border-color: rgba(37, 99, 235, 0.4);
-  box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.12);
-  background: rgba(37, 99, 235, 0.03);
-}
-
-.form-error {
-  margin: 0;
-  font-size: 12px;
-  color: #dc2626;
-}
-
-.text-secondary { color: var(--text-secondary); }
-.small { font-size: 13px; }
-
-.runtime-context-bar {
-  display: flex;
-  flex-wrap: wrap;
-  align-items: center;
-  gap: 10px;
-  margin-bottom: 14px;
-}
-
-.runtime-context-summary {
-  font-size: 12px;
-  color: var(--text-secondary);
-}
-
-.runtime-context-links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 8px;
-  margin-left: auto;
-}
-
-@keyframes spin { to { transform: rotate(360deg); } }
-
-@media (max-width: 768px) {
-  .toolbar { flex-direction: column; align-items: stretch; }
-  .card-grid { grid-template-columns: 1fr; }
 }
 </style>

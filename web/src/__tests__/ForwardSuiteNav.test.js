@@ -72,4 +72,15 @@ describe('ForwardSuiteNav.vue', () => {
     await user.keyboard('{Enter}')
     await waitFor(() => expect(router.currentRoute.value.path).toBe('/admin/forward/local'))
   })
+
+  it('groups 流量转发 / 隧道 / 限速 as the segmented control (UI U7)', async () => {
+    await renderNav('/admin/forward/limit')
+    const nav = screen.getByRole('navigation', { name: 'Forward suite' })
+    const segments = nav.querySelector('.forward-suite-segments')
+    expect([...segments.querySelectorAll('a')].map(link => link.getAttribute('href'))).toEqual([
+      '/admin/forward', '/admin/forward/tunnel', '/admin/forward/limit'
+    ])
+    expect(segments.querySelector('[aria-current="page"]').getAttribute('href')).toBe('/admin/forward/limit')
+  })
 })
+

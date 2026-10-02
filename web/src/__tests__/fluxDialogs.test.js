@@ -75,6 +75,12 @@ afterEach(() => {
   vi.restoreAllMocks()
 })
 
+// Limit rows keep their actions in the row's "…" menu (UI U7).
+async function limitRowAction(user, name, row = 'gold-100') {
+  await user.click(screen.getByRole('button', { name: `Actions for ${row}` }))
+  await user.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name }))
+}
+
 describe('Limit rules page', () => {
   it('creates a rule in a dialog with inline validation; Esc closes it', async () => {
     const user = userEvent.setup()
@@ -95,8 +101,10 @@ describe('Limit rules page', () => {
     expect(within(dialog).getByRole('alert').textContent).toBeTruthy()
     expect(api.createSpeedLimit).not.toHaveBeenCalled()
 
-    await user.type(within(dialog).getByLabelText('Rule Name'), 'silver')
-    await user.selectOptions(within(dialog).getByLabelText('Bound Tunnel'), '3')
+    await user.type(within(dialog).getByRole('textbox', { name: 'Rule Name' }), 'silver')
+    // UI U7: the editor is a Sheet with library fields (Reka select).
+    await user.click(within(dialog).getByRole('combobox', { name: 'Bound Tunnel' }))
+    await user.click(await screen.findByRole('option', { name: 'hk-tunnel' }))
     await user.click(within(dialog).getByRole('button', { name: 'Create Rule' }))
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(api.createSpeedLimit).toHaveBeenCalledWith({ name: 'silver', speed: 100, tunnelId: 3, tunnelName: 'hk-tunnel' })
@@ -109,13 +117,13 @@ describe('Limit rules page', () => {
     renderPage(LimitI18n)
     await screen.findByText('gold-100')
 
-    await user.click(screen.getByRole('button', { name: 'Delete' }))
+    await limitRowAction(user, 'Delete')
     let confirm = await screen.findByRole('alertdialog', { name: 'Delete limit rule gold-100?' })
     await user.click(within(confirm).getByRole('button', { name: 'Cancel' }))
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
     expect(api.deleteSpeedLimit).not.toHaveBeenCalled()
 
-    await user.click(screen.getByRole('button', { name: 'Delete' }))
+    await limitRowAction(user, 'Delete')
     confirm = await screen.findByRole('alertdialog')
     await user.click(within(confirm).getByRole('button', { name: 'Delete rule' }))
     expect((await within(confirm).findByRole('alert')).textContent).toContain('rule in use')
@@ -125,6 +133,17 @@ describe('Limit rules page', () => {
     await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
     expect(api.deleteSpeedLimit).toHaveBeenLastCalledWith(11)
     expect(toastMessages('success')).toHaveLength(1)
+  })
+  it('shows the rules in a table, the empty state and a load failure with retry', async () => {
+    const user = userEvent.setup()
+    api.getSpeedLimitList
+      .mockRejectedValueOnce({ response: { status: 502, data: { msg: 'limit store offline' } } })
+      .mockResolvedValueOnce({ code: 0, data: [] })
+    renderPage(LimitI18n)
+    expect(await screen.findByText('limit store offline')).toBeTruthy()
+    await user.click(screen.getByRole('button', { name: 'Try again' }))
+    expect(await screen.findByText('No limit rules yet')).toBeTruthy()
+    expect(screen.getByRole('button', { name: 'Create Now' })).toBeTruthy()
   })
 })
 
