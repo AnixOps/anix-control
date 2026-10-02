@@ -267,6 +267,7 @@ import AssignmentDrawer from '@/components/admin/AssignmentDrawer.vue'
 import OperationTimeline from '@/components/admin/OperationTimeline.vue'
 import TopologyWorkspace from '@/components/admin/TopologyWorkspace.vue'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { useConfirm } from '@/ui'
 import { extractNodes } from '@/composables/useKernelDeployments'
 import { getNodes } from '@/api/admin'
 import {
@@ -300,6 +301,7 @@ const POLL_INTERVAL_MS = 2000
 const VIEW_MODES = ['topologies', 'targets']
 
 const { t } = useAppI18n()
+const confirm = useConfirm()
 const viewMode = ref('topologies')
 const loading = ref(false)
 const loaded = ref(false)
@@ -664,7 +666,13 @@ async function toggleAssignment(assignment) {
 }
 
 async function removeAssignment(assignment) {
-  if (!confirm(t('control.assignments.deleteConfirm', { plugin: pluginName(assignment.plugin_id), role: assignment.role }))) return
+  const confirmed = await confirm({
+    title: t('control.assignments.deleteTitle', { plugin: pluginName(assignment.plugin_id), role: assignment.role }),
+    message: t('control.assignments.deleteMessage'),
+    confirmLabel: t('control.assignments.deleteAction'),
+    tone: 'danger'
+  })
+  if (!confirmed) return
   const targetNodeID = Number(assignment.node_id || selectedNodeID.value)
   setAssignmentBusy(assignment, 'delete')
   error.value = ''

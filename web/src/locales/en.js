@@ -2986,7 +2986,7 @@ export default {
     extensions: { errorsTitle: 'WebUI extension loading failed' },
     assignments: {
       node: 'Node', noNodes: 'No nodes available', agentPlugin: 'Agent plugin', loading: 'Loading assignments...', enabled: 'Assignment enabled',
-      createTitle: 'Create node assignment', editTitle: 'Edit node assignment', deleteConfirm: 'Delete {plugin} / {role} from this node?'
+      createTitle: 'Create node assignment', editTitle: 'Edit node assignment', deleteTitle: 'Delete {plugin} / {role} from this node?', deleteMessage: 'The node stops running this plugin role. This can’t be undone.', deleteAction: 'Delete assignment'
     },
     install: { title: 'Install official plugin', target: 'Runtime target', version: 'Release version', enableAfterInstall: 'Enable immediately after installation' },
     update: { title: 'Upgrade official plugin' },

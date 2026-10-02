@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { nextTick } from 'vue'
 import Deployments from '@/views/admin/Deployments.vue'
+import { answerConfirms } from './helpers/feedback'
 
 const kernelApi = vi.hoisted(() => ({
   applyKernelDeployment: vi.fn(),
@@ -487,7 +488,7 @@ describe('Deployments', () => {
       enabled: false,
     }
     resolveAssignmentState([assignment])
-    const confirmSpy = vi.spyOn(globalThis, 'confirm').mockReturnValue(true)
+    answerConfirms(true)
     const wrapper = mountDeployments()
     await flushPromises()
     await openTargets(wrapper)
@@ -527,7 +528,6 @@ describe('Deployments', () => {
     await flushPromises()
     expect(kernelApi.deleteKernelNodeAssignment).toHaveBeenCalledWith(11, 7)
     wrapper.unmount()
-    confirmSpy.mockRestore()
   })
 
   it('requires explicit confirmation before deleting an assignment', async () => {
@@ -543,23 +543,22 @@ describe('Deployments', () => {
       enabled: true,
     }
     resolveAssignmentState([assignment])
-    const confirmSpy = vi.spyOn(globalThis, 'confirm')
-      .mockReturnValueOnce(false)
-      .mockReturnValueOnce(true)
+    const answers = [false, true]
+    const confirms = answerConfirms(() => answers.shift())
     const wrapper = mountDeployments()
     await flushPromises()
     await openTargets(wrapper)
 
     await wrapper.get('[data-testid="delete-assignment-7"]').trigger('click')
     await flushPromises()
-    expect(confirmSpy).toHaveBeenCalledTimes(1)
+    expect(confirms.calls).toHaveLength(1)
+    expect(confirms.last()).toMatchObject({ tone: 'danger', title: 'Delete gost-mesh / relay from this node?', confirmLabel: 'Delete assignment' })
     expect(kernelApi.deleteKernelNodeAssignment).not.toHaveBeenCalled()
 
     await wrapper.get('[data-testid="delete-assignment-7"]').trigger('click')
     await flushPromises()
     expect(kernelApi.deleteKernelNodeAssignment).toHaveBeenCalledWith(11, 7)
     wrapper.unmount()
-    confirmSpy.mockRestore()
   })
 
   it('creates a topology and opens its revision workspace', async () => {

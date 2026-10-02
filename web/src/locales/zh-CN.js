@@ -2987,7 +2987,7 @@ export default {
     extensions: { errorsTitle: 'WebUI 扩展加载失败' },
     assignments: {
       node: '节点', noNodes: '暂无可用节点', agentPlugin: 'Agent 插件', loading: '正在加载节点角色...', enabled: '启用该节点角色',
-      createTitle: '新建节点角色', editTitle: '编辑节点角色', deleteConfirm: '确认从该节点删除 {plugin} / {role} 吗？'
+      createTitle: '新建节点角色', editTitle: '编辑节点角色', deleteTitle: '从该节点删除 {plugin} / {role}？', deleteMessage: '该节点会停止运行这个插件角色。此操作无法撤销。', deleteAction: '删除节点角色'
     },
     install: { title: '安装官方插件', target: '运行目标', version: '发行版本', enableAfterInstall: '安装后立即启用' },
     update: { title: '升级官方插件' },
