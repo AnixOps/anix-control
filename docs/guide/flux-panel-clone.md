@@ -389,9 +389,9 @@ Extra rules:
 
 | Surface | Flux semantics that must be matched | Current local gap |
 |------|------|------|
-| `forward/create` | save DB state, create runtime, rollback DB on runtime failure | local clone is still mainly DB-layer |
+| `forward/create` | save DB state, create runtime, rollback DB on runtime failure | saves the row, then runs `syncForwardRuntime`; on runtime failure the row stays and is marked `status = -1` instead of being rolled back |
 | `forward/update` | rebuild runtime when tunnel/runtime config changes and mark forward error on runtime failure | runtime error state is not fully cloned |
-| `forward/delete` | delete runtime before deleting DB record | local delete can still be DB-first semantics |
+| `forward/delete` | delete runtime before deleting DB record | runs the runtime delete first; for queued backends such as `nftables_ansible` the row is removed only after the delete job succeeds |
 | `forward/force-delete` | DB-only escape hatch that skips runtime deletion | this branch must stay distinct from normal delete |
 | `forward/pause` / `resume` | update runtime services and re-check permissions/quota on resume | remote side effects and resume pre-checks are still incomplete |
 | `forward/diagnose` | different node-chain behavior for direct vs tunnel forwarding | local diagnosis is still panel-side |

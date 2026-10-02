@@ -204,6 +204,43 @@
 
 ### Fixed
 
+- **nftables forwards count traffic in both directions, support IPv6, and
+  move to an `inet` table** (`nftables_ansible` backend;
+  `config/deploy/ansible/playbooks/forward_*_nftables.yml`, new
+  `playbooks/files/v2b_forward_nft.sh`, `internal/service/forward_nftables_plan.go`,
+  `forward_ansible_stats_worker.go`; upgrade notes in `docs/UPGRADE.md`).
+  - Traffic was counted on the NAT chain, which sees only the first packet
+    of each connection, and download was always 0. A `forward` hook chain
+    now counts every packet into two named counters per forward and
+    protocol: conntrack original direction as upload, reply direction as
+    download (the gost path's `u`/`d`, with the same ratio and one-way /
+    two-way billing). The counters survive re-apply and pause; the stats
+    playbook prints both, and the worker keeps them on their own traffic
+    cursor (`nftables_ansible:ct`) so the switch from the old counter is not
+    read as a reset.
+  - The table is `inet v2b_forward` (was `ip v2b_forward`). IPv6 targets
+    (`[v6]:port`) and IPv6 listen addresses work, with IPv6 masquerade;
+    target lists with both families are balanced per family. IPv6
+    forwarding is enabled only when a forward has an IPv6 target. A forward's
+    first apply after the upgrade removes it from the old table in the same
+    nft transaction; the old table goes with its last forward. Pause and
+    delete clean both tables.
+  - Each apply is one atomic `nft -f` transaction, and the panel renders the
+    ruleset (validated targets and interface names). `round`/`rand` over
+    several targets did not load before (a `vmap` cannot hold `dnat`); they
+    now jump to one chain per target. Changing a tunnel's protocol or a
+    forward's targets no longer leaves the old protocol's or targets' rules
+    behind.
+  - The stats playbook printed its lines only as task stdout, which the
+    default Ansible callback does not show; a debug task prints them now,
+    and the worker reads both forms.
+  - Documented: `fifo` (主备) and `hash` use only the first target on this
+    path, and speed limits are not enforced on it
+    (`docs/guide/forward-tunnel-runtime-ops.md`).
+- Flux clone docs (`docs/guide/flux-forward-contract.md`,
+  `docs/guide/flux-panel-clone.md`) no longer say forward create, update,
+  delete, pause and resume are "mainly DB-layer": each runs
+  `syncForwardRuntime` on the selected backend.
 - GBK mojibake (UTF-8 once decoded as GBK and saved again) is repaired in
   `internal/handler/{agent,invite,telegram}.go`, `internal/middleware`,
   `internal/database` and `internal/service/service_test.go`, with the line

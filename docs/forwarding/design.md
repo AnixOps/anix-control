@@ -127,6 +127,11 @@ Execution chain:
 4. Ansible connects to the relay host using configured inventory.
 5. Relay host receives nftables or iptables rules.
 
+The `nftables_ansible` rule layout (one `inet v2b_forward` table, IPv4 and
+IPv6), its traffic counters, and its limits (`fifo`/`hash` use the first
+target, speed limits are not enforced) are described in
+`docs/guide/forward-tunnel-runtime-ops.md`.
+
 `ForwardNode` does not store SSH credentials. SSH users, passwords, keys, and
 sudo behavior live in Ansible inventory and config files.
 
@@ -199,6 +204,10 @@ Delta and snapshot writes update:
 Snapshot ingestion uses `ForwardTrafficCursor` so a collector can send cumulative
 runtime totals without double-counting. Counter resets become new positive
 baselines.
+
+For `nftables_ansible`, `ForwardAnsibleStatsWorker` reads two counters per
+forward and protocol: the conntrack original direction as upload and the reply
+direction as download, the same meaning as the gost path's `u`/`d`.
 
 ## State Transitions
 

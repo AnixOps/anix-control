@@ -55,4 +55,5 @@ Legacy iptables playbooks remain available:
 ## Notes
 
 - The Flux-compatible `/admin/forward` page stays unchanged. Runtime controls now live on the dedicated `Local Runtime`, `Ansible Machines`, and `NodeX Runtime` pages.
-- The bundled playbooks already handle `tcp`, `udp`, `both`, and multi-target `round` or `rand` strategies.
+- The bundled playbooks handle `tcp`, `udp`, `both`, IPv4 and IPv6 targets, and multi-target `round` or `rand` strategies. `fifo` and `hash` use only the first target of each address family, and speed limits are not enforced on this path.
+- The nftables playbooks run `playbooks/files/v2b_forward_nft.sh` on the relay and need Linux 5.2+ and nft 0.9.1+. Layout, counters and the migration from the old `ip v2b_forward` table: `docs/guide/forward-tunnel-runtime-ops.md`.

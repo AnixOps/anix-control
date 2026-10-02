@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strconv"
 	"strings"
 	"time"
 
@@ -603,7 +604,7 @@ func (s *PanelForwardRuntimeService) buildAnsibleRuntimePayload(backend, action 
 	if err != nil {
 		return nil, err
 	}
-	return &panelForwardAnsibleRuntimePayload{
+	payload := &panelForwardAnsibleRuntimePayload{
 		Backend:        backend,
 		FirewallDriver: forwardRuntimeLocalFirewallDriver(backend),
 		Action:         action,
@@ -644,7 +645,15 @@ func (s *PanelForwardRuntimeService) buildAnsibleRuntimePayload(backend, action 
 		},
 		Limiter: limiter,
 		Targets: targets,
-	}, nil
+	}
+	if payload.FirewallDriver == defaultForwardLocalAnsibleFirewallDriverNft {
+		plan, err := buildForwardNftablesPayload(action, payload.Forward, payload.Tunnel)
+		if err != nil {
+			return nil, err
+		}
+		payload.Nftables = plan
+	}
+	return payload, nil
 }
 
 func (s *PanelForwardRuntimeService) loadPanelForwardAnsibleConfigForDiagnosticsWithBackend(backend string) (*panelForwardAnsibleConfig, error) {
@@ -741,7 +750,9 @@ func buildPanelForwardAnsibleTargets(remoteAddr string) ([]panelForwardAnsibleTa
 		count++
 		targets = append(targets, panelForwardAnsibleTargetPayload{
 			Name: fmt.Sprintf("target-%d", count),
-			Addr: fmt.Sprintf("%s:%d", host, port),
+			Addr: net.JoinHostPort(host, strconv.Itoa(port)),
+			Host: host,
+			Port: port,
 		})
 	}
 	if len(targets) == 0 {

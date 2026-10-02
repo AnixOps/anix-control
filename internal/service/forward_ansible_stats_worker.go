@@ -30,8 +30,15 @@ var forwardAnsibleStatsBackends = []string{
 }
 
 // ForwardAnsibleStatsWorker 定期为 nftables_ansible/iptables_ansible 后端的转发采集流量统计。
-// nftables/iptables 的 NAT 计数器只统计经过 DNAT 链的字节数（近似上行方向），没有独立的回程方向
-// 计数，因此这里只记录 uploadTotal，downloadTotal 恒为 0，这是计数器本身的限制而非实现遗漏。
+//
+// nftables 路径在 forward hook 的记账链里用两个具名计数器统计每个转发：
+// ct direction original 记为 upload（客户端到目标），ct direction reply 记为
+// download（目标回到客户端），与 gost 路径的 u/d 同义，再经同一套
+// traffic_ratio / flow 计费换算。具名计数器在重新下发时保留，只在删除转发时清除。
+//
+// 尚未迁移到 inet 表的转发（以及 iptables 路径）只上报 nat 链计数，
+// 那是每条连接首包的字节数，只能当作 upload，download 为 0。两种快照使用
+// 不同的游标键，迁移时不会互相抵消。
 type ForwardAnsibleStatsWorker struct {
 	db           *gorm.DB
 	runtimeSvc   *PanelForwardRuntimeService
@@ -106,7 +113,7 @@ func (w *ForwardAnsibleStatsWorker) runOnce(ctx context.Context) (int, error) {
 	panelService := NewPanelForwardService(w.db)
 
 	for i := range forwards {
-		uploadTotal, found, err := w.collectForwardTrafficTotal(ctx, &forwards[i])
+		snapshot, found, err := w.collectForwardTrafficTotal(ctx, &forwards[i])
 		if err != nil {
 			if errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded) {
 				return len(forwards), err
@@ -118,12 +125,9 @@ func (w *ForwardAnsibleStatsWorker) runOnce(ctx context.Context) (int, error) {
 		if !found {
 			continue
 		}
-		if err := panelService.ApplyForwardTrafficSnapshots([]PanelForwardTrafficSnapshot{{
-			ForwardID:     forwards[i].ID,
-			Backend:       forwards[i].RuntimeBackend,
-			UploadTotal:   uploadTotal,
-			DownloadTotal: 0,
-		}}); err != nil {
+		if err := panelService.ApplyForwardTrafficSnapshots([]PanelForwardTrafficSnapshot{
+			snapshot.trafficSnapshot(forwards[i].ID, forwards[i].RuntimeBackend),
+		}); err != nil {
 			w.errorLogger.Logf("apply:"+strconvFormatUint(forwards[i].ID), "forward ansible stats apply failed for forward %d: %v", forwards[i].ID, err)
 			continue
 		}
@@ -142,26 +146,26 @@ func (w *ForwardAnsibleStatsWorker) queryDB() *gorm.DB {
 	})
 }
 
-func (w *ForwardAnsibleStatsWorker) collectForwardTrafficTotal(ctx context.Context, forward *model.Forward) (int64, bool, error) {
+func (w *ForwardAnsibleStatsWorker) collectForwardTrafficTotal(ctx context.Context, forward *model.Forward) (forwardAnsibleStatsTotals, bool, error) {
 	if forward == nil || forward.Tunnel == nil {
-		return 0, false, nil
+		return forwardAnsibleStatsTotals{}, false, nil
 	}
 	backend := forward.RuntimeBackend
 
 	node, err := w.runtimeSvc.loadExecutionNode(forward.Tunnel)
 	if err != nil {
-		return 0, false, err
+		return forwardAnsibleStatsTotals{}, false, err
 	}
 
 	payload, err := w.runtimeSvc.buildAnsibleRuntimePayload(backend, model.ForwardRuntimeJobActionSync, forward, forward.Tunnel, node)
 	if err != nil {
-		return 0, false, err
+		return forwardAnsibleStatsTotals{}, false, err
 	}
 	payload.Playbook = forwardAnsibleStatsPlaybookPathForBackend(backend)
 
 	args, err := payload.commandArgs()
 	if err != nil {
-		return 0, false, err
+		return forwardAnsibleStatsTotals{}, false, err
 	}
 
 	jobCtx, cancel := context.WithTimeout(ctx, payload.timeout(defaultForwardRuntimeJobTimeout))
@@ -169,11 +173,11 @@ func (w *ForwardAnsibleStatsWorker) collectForwardTrafficTotal(ctx context.Conte
 
 	output, runErr := w.runner.Run(jobCtx, payload.commandName(), args, payload.workingDirectory(), payload.environment())
 	if runErr != nil {
-		return 0, false, fmt.Errorf("run ansible stats playbook: %w (%s)", runErr, strings.TrimSpace(output))
+		return forwardAnsibleStatsTotals{}, false, fmt.Errorf("run ansible stats playbook: %w (%s)", runErr, strings.TrimSpace(output))
 	}
 
-	total, found := parseForwardAnsibleStatsOutput(output)
-	return total, found, nil
+	totals, found := parseForwardAnsibleStatsOutput(output)
+	return totals, found, nil
 }
 
 func forwardAnsibleStatsPlaybookPathForBackend(backend string) string {
@@ -183,26 +187,101 @@ func forwardAnsibleStatsPlaybookPathForBackend(backend string) string {
 	return forwardAnsibleStatsNftablesPlaybookPath
 }
 
-func parseForwardAnsibleStatsOutput(output string) (int64, bool) {
-	var total int64
-	found := false
+// forwardAnsibleStatsCtCursorSuffix keys the traffic cursor of the
+// ct-direction counters apart from the legacy nat-chain cursor, so the
+// switch from one counter to the other on migration is not read as a
+// counter reset or a jump.
+const forwardAnsibleStatsCtCursorSuffix = ":ct"
+
+// forwardAnsibleStatsTotals is the cumulative traffic of one forward over all
+// its protocols. Legacy is set when the node only had the old nat-chain
+// counter (upload only).
+type forwardAnsibleStatsTotals struct {
+	Upload   int64
+	Download int64
+	Legacy   bool
+}
+
+func (t forwardAnsibleStatsTotals) trafficSnapshot(forwardID uint, backend string) PanelForwardTrafficSnapshot {
+	cursor := backend
+	if !t.Legacy {
+		cursor = backend + forwardAnsibleStatsCtCursorSuffix
+	}
+	return PanelForwardTrafficSnapshot{
+		ForwardID:     forwardID,
+		Backend:       cursor,
+		UploadTotal:   t.Upload,
+		DownloadTotal: t.Download,
+	}
+}
+
+type forwardAnsibleStatsEntry struct {
+	Protocol string `json:"protocol"`
+	Upload   *int64 `json:"upload"`
+	Download *int64 `json:"download"`
+	Bytes    *int64 `json:"bytes"`
+	Legacy   bool   `json:"legacy"`
+}
+
+// parseForwardAnsibleStatsOutput reads the STATS_JSON lines of a stats
+// playbook run. A line is either the raw script output or the same text
+// inside an Ansible debug message (quotes escaped as \"). Each line carries a
+// cumulative total for one protocol, so a protocol printed twice (for
+// example raw and in the debug task with -v) counts once. Lines with
+// upload/download are the ct-direction counters; lines with only bytes are
+// the legacy nat-chain counters and count as upload. When both kinds are
+// present the ct-direction counters win.
+func parseForwardAnsibleStatsOutput(output string) (forwardAnsibleStatsTotals, bool) {
+	type protoTotals struct{ upload, download int64 }
+	current := map[string]protoTotals{}
+	legacy := map[string]protoTotals{}
+
 	scanner := bufio.NewScanner(strings.NewReader(output))
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 	for scanner.Scan() {
-		line := strings.TrimSpace(scanner.Text())
+		line := scanner.Text()
 		idx := strings.Index(line, "STATS_JSON ")
 		if idx == -1 {
 			continue
 		}
-		jsonPart := strings.TrimSpace(line[idx+len("STATS_JSON "):])
-		var entry struct {
-			Protocol string `json:"protocol"`
-			Bytes    int64  `json:"bytes"`
-		}
-		if err := json.Unmarshal([]byte(jsonPart), &entry); err != nil {
+		jsonPart := strings.ReplaceAll(line[idx+len("STATS_JSON "):], `\"`, `"`)
+		var entry forwardAnsibleStatsEntry
+		if err := json.NewDecoder(strings.NewReader(jsonPart)).Decode(&entry); err != nil {
 			continue
 		}
-		found = true
-		total += entry.Bytes
+		protocol := strings.ToLower(strings.TrimSpace(entry.Protocol))
+		switch {
+		case entry.Upload != nil || entry.Download != nil:
+			var totals protoTotals
+			if entry.Upload != nil {
+				totals.upload = *entry.Upload
+			}
+			if entry.Download != nil {
+				totals.download = *entry.Download
+			}
+			if totals.upload < 0 || totals.download < 0 {
+				continue
+			}
+			current[protocol] = totals
+		case entry.Bytes != nil:
+			if *entry.Bytes < 0 {
+				continue
+			}
+			legacy[protocol] = protoTotals{upload: *entry.Bytes}
+		}
 	}
-	return total, found
+
+	source, isLegacy := current, false
+	if len(current) == 0 {
+		source, isLegacy = legacy, true
+	}
+	if len(source) == 0 {
+		return forwardAnsibleStatsTotals{}, false
+	}
+	result := forwardAnsibleStatsTotals{Legacy: isLegacy}
+	for _, totals := range source {
+		result.Upload += totals.upload
+		result.Download += totals.download
+	}
+	return result, true
 }

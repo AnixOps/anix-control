@@ -379,8 +379,8 @@ Do not "simplify" this distinction unless the reference changes.
 
 | Area | Flux Reference | Local Current State |
 |------|------|------|
-| create/update/delete | changes Gost / remote runtime | mainly DB compatibility layer |
-| pause/resume | runtime side effects + persistence | mainly local status persistence |
+| create/update/delete | changes Gost / remote runtime | each call runs `syncForwardRuntime` on the selected backend (NodeX synchronously; `nftables_ansible` and `clean_agent` through a queued job). A failed create or update marks the forward `status = -1` instead of rolling back the row; a normal delete runs the runtime delete first and, for queued backends, removes the row only after the job succeeds; force delete removes the row even when the runtime delete fails |
+| pause/resume | runtime side effects + persistence | each call runs `syncForwardRuntime` (pause removes the rules, resume re-applies them); non-admin resume re-checks user and tunnel traffic first; a failed resume marks the forward `status = -1` |
 | diagnose | node-chain diagnosis | mostly panel-side direct dialing |
 | user-tunnel quota | active flow/expire/status linkage | partially cloned; reset route, grant checks, monthly reset scheduling, expired-user forward pause, and expired-grant disablement exist, but stored relation counters and full `FlowController` parity are still missing |
 | user-tunnel admin UI | speed-limit selector, reset dialogs, filtered tunnel picker | partially cloned; local pages now include the speed-limit selector and dedicated reset modals, but exact `user.tsx` / `limit.tsx` visual flow still differs |

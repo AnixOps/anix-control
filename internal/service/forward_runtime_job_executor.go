@@ -98,7 +98,10 @@ type PanelForwardRuntimeJobExecutor struct {
 
 type panelForwardAnsibleTargetPayload struct {
 	Name string `json:"name"`
+	// Addr is host:port, with IPv6 hosts in brackets ([2001:db8::1]:443).
 	Addr string `json:"addr"`
+	Host string `json:"host,omitempty"`
+	Port int    `json:"port,omitempty"`
 }
 
 type panelForwardAnsibleForwardPayload struct {
@@ -143,6 +146,7 @@ type panelForwardAnsibleRuntimePayload struct {
 	Node           panelForwardAnsibleNodePayload     `json:"node"`
 	Limiter        *panelForwardLimiterPayload        `json:"limiter,omitempty"`
 	Targets        []panelForwardAnsibleTargetPayload `json:"targets"`
+	Nftables       *panelForwardNftablesPayload       `json:"nftables,omitempty"`
 	Command        string                             `json:"command,omitempty"`
 	WorkingDir     string                             `json:"workingDir,omitempty"`
 	TargetPattern  string                             `json:"targetPattern,omitempty"`
@@ -491,6 +495,9 @@ func (p *panelForwardAnsibleRuntimePayload) buildExtraVars() map[string]any {
 		result["limiter"] = p.Limiter
 	}
 	result["targets"] = p.Targets
+	if p.Nftables != nil {
+		result["nftables"] = p.Nftables
+	}
 	result["forwardId"] = p.Forward.ID
 	result["tunnelId"] = p.Tunnel.ID
 	result["nodeId"] = p.Node.ID
