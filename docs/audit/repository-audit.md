@@ -77,7 +77,7 @@ Current observations:
 Open gaps:
 
 - Schema-helper-specific rollback evidence is not yet complete for every future schema change.
-- Some service tests share fixed SQLite temp paths, so package tests must run serially (`-p=1`) until test isolation is improved.
+- Service tests used to share fixed SQLite temp paths and had to run serially (`-p=1`). The service suite now opens its database under `os.MkdirTemp`, repeated `-p=4` runs (2026-10-02) showed no collision, and CI runs the non-PostgreSQL packages with `-p=4`; the PostgreSQL package storage tests stay serial per database (package-id-named schemas and roles).
 - Large traffic/stat tables need explicit index and retention review.
 
 ## HTTP, gRPC, WebSocket, And Node APIs

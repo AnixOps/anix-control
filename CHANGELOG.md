@@ -33,8 +33,23 @@
 ### Changed
 
 - **CI: shorter critical path** (`.github/workflows/ci.yml`,
-  `config/scripts/classify_changes.py`). No test is dropped, and the
-  required check names are unchanged.
+  `config/scripts/classify_changes.py`, `config/scripts/plan_test_shards.py`).
+  No test is dropped, and the required check names are unchanged.
+  - The Go tests run in balanced shards. `plan_test_shards.py` splits the
+    packages by measured seconds, and every package lands in exactly one
+    shard.
+    - "Backend Tests (n/3)": three shards, each with packages running four
+      at a time (`-p=4`; repeated runs on four CPUs showed no shared state
+      between packages). `internal/kernelnodeops` has a 300 ms deadline
+      test that fails when other test binaries load the CPU, so it runs
+      alone after the others.
+    - "Backend Tests" stays the required check. It fails unless all shards
+      passed and every package ran once, then merges the coverage profiles
+      (one mode line, an error on any overlap) into the same report as
+      before.
+    - "Package Storage PostgreSQL (n/4)": four shards, each with its own
+      PostgreSQL. They stay `-p 1` inside a shard, since package schemas
+      and roles are named after package ids.
   - "Go Quality Gates" keeps its static gates but no longer runs the full
     test suite. "Backend Tests" runs it once: coverage of `./internal/...`
     as before, then the remaining root-module packages (`cmd`, `packages`,

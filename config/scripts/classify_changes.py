@@ -84,6 +84,8 @@ CLASS_PATTERNS: dict[str, tuple[str, ...]] = {
         "packages/identity-platform/*",
         "identity/*",
         "sdk/packagestoresdk/*",
+        # It splits the PostgreSQL package storage tests into shards.
+        "config/scripts/plan_test_shards.py",
     ),
     "modules": (
         "Dockerfile*",
