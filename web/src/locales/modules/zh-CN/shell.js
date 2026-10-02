@@ -18,8 +18,7 @@ export default {
       },
       items: {
         dashboard: '仪表盘',
-        monitor: '实时监控',
-        trafficHourly: '小时流量',
+        monitor: '流量与监控',
         users: '用户',
         inviteCodes: '邀请码',
         subscriptions: '订阅分组',

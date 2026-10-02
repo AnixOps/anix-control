@@ -27,6 +27,8 @@ function load(ms) {
         </div>
         <span class="story-label">table-row</span>
         <UiCard :padded="false"><UiSkeleton variant="table-row" :rows="3" :columns="5" /></UiCard>
+        <span class="story-label">chart</span>
+        <UiCard><UiSkeleton variant="chart" :height="180" /></UiCard>
       </div>
     </Variant>
     <Variant title="300 ms rule">
@@ -49,7 +51,7 @@ function load(ms) {
 # Skeleton
 
 Loading placeholder for anything slower than 300 ms: gate it with
-`useDelayedLoading(loading)`. Variants: text, card, table-row. It is a
+`useDelayedLoading(loading)`. Variants: text, card, table-row, chart. It is a
 `role="status"` with a hidden "加载中…"; the shimmer runs three times and
 none under reduced motion.
 </docs>

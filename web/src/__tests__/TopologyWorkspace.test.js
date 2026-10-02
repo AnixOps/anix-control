@@ -1,9 +1,26 @@
-import { describe, expect, it } from 'vitest'
-import { mount } from '@vue/test-utils'
+import { describe, expect, it, vi } from 'vitest'
+import { flushPromises, mount } from '@vue/test-utils'
 import { inBody } from './helpers/feedback'
 import { nextTick } from 'vue'
 import OperationTimeline from '@/components/admin/OperationTimeline.vue'
 import TopologyWorkspace from '@/components/admin/TopologyWorkspace.vue'
+import UiSegmentedControl from '@/ui/UiSegmentedControl.vue'
+
+// G6 draws on canvas; record what the preview hands it instead.
+const g6 = vi.hoisted(() => ({ graphs: [] }))
+vi.mock('@antv/g6', () => ({
+  Graph: class {
+    constructor(options) {
+      this.options = options
+      this.destroyed = false
+      g6.graphs.push(this)
+    }
+    render() { return Promise.resolve() }
+    resize() {}
+    fitView() { return Promise.resolve() }
+    destroy() { this.destroyed = true }
+  }
+}))
 
 const revisionDetail = {
   revision: { id: 7, message: 'Published revision' },
@@ -246,6 +263,43 @@ describe('TopologyWorkspace', () => {
   })
 })
 
+describe('TopologyWorkspace graph preview', () => {
+  it('loads G6 only for the 图示 view and draws the JSON being edited', async () => {
+    g6.graphs.length = 0
+    const wrapper = mountWorkspace({
+      revisionDetail: {
+        revision: { id: 7, message: 'Published revision' },
+        vertices: [
+          { key: 'entry', kind: 'agent', node_id: 11, plugin_id: 'gost-mesh', role: 'relay', config: '{}' },
+          { key: 'exit', kind: 'agent', node_id: 12, plugin_id: 'nat-egress', role: 'nat_egress', config: '{}' },
+        ],
+        edges: [{ source_key: 'entry', target_key: 'exit', protocol: 'tls', config: '{}' }],
+      },
+    })
+    await nextTick()
+    await nextTick()
+    expect(inBody('[data-testid="topology-graph-preview"]').exists()).toBe(false)
+    await flushPromises()
+    expect(g6.graphs).toHaveLength(0)
+
+    wrapper.findComponent(UiSegmentedControl).vm.$emit('update:modelValue', 'graph')
+    await flushPromises()
+    await flushPromises()
+    const preview = bodyGet('[data-testid="topology-graph-preview"]')
+    expect(preview.get('[role="img"]').attributes('aria-label')).toContain('2')
+    expect(preview.text()).toContain('entry → exit')
+    expect(g6.graphs).toHaveLength(1)
+    const data = g6.graphs[0].options.data
+    expect(data.nodes.map(node => node.id)).toEqual(['entry', 'exit'])
+    expect(data.edges).toEqual([expect.objectContaining({ source: 'entry', target: 'exit', style: { labelText: 'tls' } })])
+
+    await bodyGet('#topology-editor-json').setValue('{ not json')
+    await flushPromises()
+    expect(bodyGet('[data-testid="topology-graph-preview"]').text()).toContain('invalid')
+    wrapper.unmount()
+  })
+})
+
 describe('OperationTimeline', () => {
   it('shows scoped activity first, exposes global history explicitly, and only cancels cancellable operations', async () => {
     const wrapper = mount(OperationTimeline, {
@@ -267,6 +321,22 @@ describe('OperationTimeline', () => {
     const rows = wrapper.findAll('[data-testid^="operation-row-"]')
     expect(rows.map(row => row.attributes('data-testid'))).toEqual(['operation-row-completed', 'operation-row-running'])
     expect(wrapper.find('[data-testid="cancel-operation-completed"]').exists()).toBe(false)
+    // The state is a word in a badge, not only the marker colour.
+    expect(wrapper.get('[data-testid="operation-row-completed"]').text()).toContain('completed')
+    expect(wrapper.get('[data-testid="operation-row-completed"]').text()).toContain('none')
+    expect(wrapper.get('ol').exists()).toBe(true)
+    wrapper.unmount()
+  })
+
+  it('shows an empty state and keeps a heading for its region', () => {
+    const wrapper = mount(OperationTimeline, {
+      props: { operations: [], heading: 'Recent plugin operations', emptyLabel: 'No recent plugin operations', showToggle: false },
+    })
+    const region = wrapper.get('[data-testid="operation-timeline"]')
+    expect(region.attributes('aria-labelledby')).toBe(wrapper.get('h2').attributes('id'))
+    expect(wrapper.get('h2').text()).toBe('Recent plugin operations')
+    expect(wrapper.text()).toContain('No recent plugin operations')
+    expect(wrapper.find('[data-testid="show-all-activity"]').exists()).toBe(false)
     wrapper.unmount()
   })
 })

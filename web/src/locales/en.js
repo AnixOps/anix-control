@@ -4,7 +4,6 @@ import miscPages from './modules/en/miscPages'
 import adminSupportPages from './modules/en/adminSupportPages'
 import adminDashboard from './modules/en/adminDashboard'
 import adminMonitor from './modules/en/adminMonitor'
-import adminTrafficHourly from './modules/en/adminTrafficHourly'
 import ui from './modules/en/ui'
 import shell from './modules/en/shell'
 import userPages from './modules/en/userPages'
@@ -99,7 +98,6 @@ export default {
   ...adminSupportPages,
   ...adminDashboard,
   ...adminMonitor,
-  ...adminTrafficHourly,
   ...ui,
   ...shell,
   ...userPages,
@@ -201,8 +199,7 @@ export default {
     },
     admin: {
       dashboard: 'Dashboard',
-      monitor: 'Monitor',
-      trafficHourly: 'Hourly Traffic',
+      monitor: 'Traffic & Monitoring',
       users: 'Users',
       nodes: 'Nodes',
       subscriptions: 'Subscription groups',
@@ -273,8 +270,7 @@ export default {
       localRuntime: 'Local Runtime',
       nodeXTopology: 'NodeX Topology',
       nodeXRuntime: 'NodeX Runtime',
-      nodeXAgents: 'NodeX Agents',
-      observability: 'Observability'
+      nodeXAgents: 'NodeX Agents'
     },
     hints: {
       setupWizard: 'Configure nodes, tunnels and forwards step by step',
@@ -282,8 +278,7 @@ export default {
       localRuntime: 'Stateless panel-host executor',
       nodeXTopology: 'Stateful relay/exit topology',
       nodeXRuntime: 'Stateful gost control-plane',
-      nodeXAgents: 'Stateful agent task channel',
-      observability: 'Network topology & latency metrics'
+      nodeXAgents: 'Stateful agent task channel'
     }
   },
   forwardWizard: {
@@ -353,58 +348,6 @@ export default {
         gotoNode: 'Go to machine/node management',
         createAnother: 'Create another forward'
       }
-    }
-  },
-  observability: {
-    title: 'Forward Observability',
-    subtitle: 'Latency trends, topology and runtime job timeline',
-    refresh: 'Refresh',
-    tabs: {
-      trend: 'Latency Trend',
-      topology: 'Topology',
-      multiIngress: 'Multi-Ingress',
-      jobs: 'Job Timeline'
-    },
-    trend: {
-      targetLabel: 'Target',
-      selectTarget: 'Select a target',
-      noTargets: 'No probe targets yet. Targets appear once forwards/tunnels/nodes are active.',
-      noData: 'No samples in the selected window.',
-      avg: 'Avg',
-      p95: 'P95',
-      max: 'Max',
-      latencyAxis: 'Latency (ms)',
-      online: 'Online',
-      offline: 'Offline'
-    },
-    topology: {
-      empty: 'No relay/exit nodes to display.',
-      relay: 'Relay',
-      exit: 'Exit',
-      proxy: 'Proxy'
-    },
-    multiIngress: {
-      forwardLabel: 'Forward',
-      selectForward: 'Select a forward',
-      tunnel: 'Tunnel',
-      ingress: 'Ingress',
-      ingressIp: 'Ingress IP',
-      avgRtt: 'Avg RTT (ms)',
-      loss: 'Loss (%)',
-      status: 'Status',
-      empty: 'Select a forward to compare ingress paths.',
-      noRows: 'No ingress data for this forward.'
-    },
-    jobs: {
-      empty: 'No runtime jobs.',
-      action: 'Action',
-      backend: 'Backend',
-      status: 'Status',
-      createdAt: 'Created',
-      pending: 'Pending',
-      running: 'Running',
-      success: 'Success',
-      failed: 'Failed'
     }
   },
   runtime: {
@@ -1973,7 +1916,7 @@ export default {
     labels: { releases: '{count} releases', desired: 'Desired', observed: 'Observed' },
     states: { catalogued: 'Catalogued', enabled: 'Enabled', disabled: 'Disabled', loading: 'Loading control state...' },
     empty: { assignments: 'No assignments for this node', topologies: 'No topologies', operations: 'No operations' },
-    activity: { title: 'Activity', scoped: 'Selected activity', all: 'All activity', showAll: 'Show all activity', showScoped: 'Show selected activity', empty: 'No activity for the selected scope' },
+    activity: { scoped: 'Selected activity', all: 'All activity', showAll: 'Show all activity', showScoped: 'Show selected activity', empty: 'No activity for the selected scope' },
     topology: {
       select: 'Topology', new: 'New topology', newTitle: 'Create topology', create: 'Create topology', name: 'Name', edit: 'Edit revision', status: 'View status', noDeployment: 'No deployment', editorTitle: 'Topology revision editor', revision: 'Revision',
       noRevisions: 'No revisions', failurePolicy: 'Failure policy', stopAndRollback: 'Stop and rollback', message: 'Revision message', graphJSON: 'Graph JSON',
@@ -1981,12 +1924,16 @@ export default {
       unsavedChanges: 'This revision has unsaved changes. Save a new immutable revision before previewing or planning.',
       valid: 'Topology is valid', invalid: 'Topology has validation issues', invalidJSON: 'Topology JSON is invalid', saveRevision: 'Save revision', plan: 'Plan deployment',
       apply: 'Apply deployment', rollback: 'Rollback deployment', deployment: 'Deployment', applyConfirm: 'Apply {topology} (deployment #{deployment})?', rollbackConfirm: 'Request rollback for {topology} (deployment #{deployment})?',
-      preview: 'Read-only deployment preview', previewAction: 'Preview', previewSteps: '{count} planned steps'
+      preview: 'Read-only deployment preview', previewAction: 'Preview', previewSteps: '{count} planned steps',
+      emptyHint: 'Create a topology, describe its vertices and links, and save a revision to plan a deployment.',
+      viewLabel: 'Edit as', viewJSON: 'JSON', viewGraph: 'Graph', graphLabel: 'Topology graph', graphSummary: '{nodes} vertices, {edges} links',
+      graphEmpty: 'No vertices yet', graphEmptyHint: 'Add vertices to the JSON and the topology is drawn here.', graphInvalidHint: 'Fix the JSON and the topology is drawn here.', graphFailed: 'Couldn’t draw the topology'
     },
     extensions: { errorsTitle: 'WebUI extension loading failed' },
     assignments: {
-      node: 'Node', noNodes: 'No nodes available', agentPlugin: 'Agent plugin', loading: 'Loading assignments...', enabled: 'Assignment enabled',
-      createTitle: 'Create node assignment', editTitle: 'Edit node assignment', deleteTitle: 'Delete {plugin} / {role} from this node?', deleteMessage: 'The node stops running this plugin role. This can’t be undone.', deleteAction: 'Delete assignment'
+      node: 'Node', noNodes: 'No nodes available', agentPlugin: 'Agent plugin', enabled: 'Assignment enabled',
+      createTitle: 'Create node assignment', editTitle: 'Edit node assignment', deleteTitle: 'Delete {plugin} / {role} from this node?', deleteMessage: 'The node stops running this plugin role. This can’t be undone.', deleteAction: 'Delete assignment',
+      emptyHint: 'Give this node a role: pick the plugin, scope and version.', roleHelp: 'Common roles: {roles}'
     },
     install: { title: 'Install official plugin', target: 'Runtime target', version: 'Release version', enableAfterInstall: 'Enable immediately after installation' },
     update: { title: 'Upgrade official plugin' },

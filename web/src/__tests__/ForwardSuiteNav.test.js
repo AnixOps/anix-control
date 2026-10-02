@@ -7,7 +7,7 @@ import ForwardSuiteNav from '@/components/admin/ForwardSuiteNav.vue'
 const paths = [
   '/admin/forward/setup', '/admin/forward', '/admin/forward/tunnel', '/admin/forward/limit',
   '/admin/forward/ansible-machines', '/admin/forward/local', '/admin/forward/nodes', '/admin/forward/nodex',
-  '/admin/forward/agents', '/admin/forward/observability'
+  '/admin/forward/agents'
 ]
 
 async function renderNav(startPath = '/admin/forward') {
@@ -35,7 +35,7 @@ describe('ForwardSuiteNav.vue', () => {
     await user.click(within(nav).getByRole('button', { name: 'More forwarding tools' }))
     const menu = await screen.findByRole('menu')
     expect(within(menu).getAllByRole('menuitem').map(item => item.getAttribute('href'))).toEqual([
-      '/admin/forward/ansible-machines', '/admin/forward/local', '/admin/forward/nodex', '/admin/forward/agents', '/admin/forward/observability'
+      '/admin/forward/ansible-machines', '/admin/forward/local', '/admin/forward/nodex', '/admin/forward/agents'
     ])
     expect(within(menu).getByRole('menuitem', { name: /Ansible Machines/ }).textContent).toContain('Stateless execution machines')
   })

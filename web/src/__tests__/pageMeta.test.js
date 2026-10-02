@@ -5,8 +5,8 @@ import { CONTROL_NAME } from '@/constants/brand'
 const messages = {
   'pageTitles.auth.login': 'Sign In',
   'pageTitles.user.dashboard': 'Dashboard',
-  'pageTitles.admin.monitor': 'Monitor',
-  'pageTitles.admin.trafficHourly': 'Hourly Traffic',
+  'pageTitles.admin.monitor': 'Traffic & Monitoring',
+  'adminMonitor.sections.traffic': 'User traffic',
   'pageTitles.admin.forwardNodeX': 'NodeX Runtime',
   'pageTitles.admin.control': 'Control Kernel',
   'pageTitles.admin.plugins': 'Plugins',
@@ -27,8 +27,8 @@ describe('pageMeta helpers', () => {
   it('resolves known page titles by route', () => {
     expect(resolveRoutePageTitle(t, '/login', 'Fallback')).toBe('Sign In')
     expect(resolveRoutePageTitle(t, '/user/dashboard', 'Fallback')).toBe('Dashboard')
-    expect(resolveRoutePageTitle(t, '/admin/monitor', 'Fallback')).toBe('Monitor')
-    expect(resolveRoutePageTitle(t, '/admin/traffic-hourly', 'Fallback')).toBe('Hourly Traffic')
+    expect(resolveRoutePageTitle(t, '/admin/monitor', 'Fallback')).toBe('Traffic & Monitoring')
+    expect(resolveRoutePageTitle(t, '/admin/monitor/traffic', 'Fallback')).toBe('User traffic')
     expect(resolveRoutePageTitle(t, '/admin/forward/nodex', 'Fallback')).toBe('NodeX Runtime')
     expect(resolveRoutePageTitle(t, '/admin/control', 'Fallback')).toBe('Control Kernel')
     expect(resolveRoutePageTitle(t, '/admin/plugins', 'Fallback')).toBe('Plugins')

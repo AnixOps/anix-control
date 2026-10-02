@@ -4,7 +4,6 @@ import miscPages from './modules/zh-CN/miscPages'
 import adminSupportPages from './modules/zh-CN/adminSupportPages'
 import adminDashboard from './modules/zh-CN/adminDashboard'
 import adminMonitor from './modules/zh-CN/adminMonitor'
-import adminTrafficHourly from './modules/zh-CN/adminTrafficHourly'
 import ui from './modules/zh-CN/ui'
 import shell from './modules/zh-CN/shell'
 import userPages from './modules/zh-CN/userPages'
@@ -101,7 +100,6 @@ export default {
   ...adminSupportPages,
   ...adminDashboard,
   ...adminMonitor,
-  ...adminTrafficHourly,
   ...ui,
   ...shell,
   ...userPages,
@@ -203,8 +201,7 @@ export default {
     },
     admin: {
       dashboard: '仪表盘',
-      monitor: '实时监控',
-      trafficHourly: '小时流量统计',
+      monitor: '流量与监控',
       users: '用户',
       nodes: '节点',
       subscriptions: '订阅分组',
@@ -275,8 +272,7 @@ export default {
       localRuntime: '本地运行时',
       nodeXTopology: 'NodeX 拓扑',
       nodeXRuntime: 'NodeX 运行时',
-      nodeXAgents: 'NodeX Agents',
-      observability: '可观测性'
+      nodeXAgents: 'NodeX Agents'
     },
     hints: {
       setupWizard: '一步步配置节点、隧道和转发',
@@ -284,8 +280,7 @@ export default {
       localRuntime: '无状态面板宿主执行器',
       nodeXTopology: '有状态 relay/exit 拓扑',
       nodeXRuntime: '有状态 gost 控制面',
-      nodeXAgents: '有状态 agent 任务通道',
-      observability: '网络拓扑与延迟指标'
+      nodeXAgents: '有状态 agent 任务通道'
     }
   },
   forwardWizard: {
@@ -355,58 +350,6 @@ export default {
         gotoNode: '前往机器/节点管理',
         createAnother: '再建一条转发'
       }
-    }
-  },
-  observability: {
-    title: '转发可观测性',
-    subtitle: '延迟趋势、网络拓扑与运行时作业时间线',
-    refresh: '刷新',
-    tabs: {
-      trend: '延迟趋势',
-      topology: '拓扑图',
-      multiIngress: '多入口',
-      jobs: '作业时间线'
-    },
-    trend: {
-      targetLabel: '目标',
-      selectTarget: '选择探测目标',
-      noTargets: '暂无探测目标。转发/隧道/节点激活后将自动出现。',
-      noData: '所选时间范围内无采样数据。',
-      avg: '平均',
-      p95: 'P95',
-      max: '最大',
-      latencyAxis: '延迟 (ms)',
-      online: '在线',
-      offline: '离线'
-    },
-    topology: {
-      empty: '暂无 relay/exit 节点可展示。',
-      relay: '中转',
-      exit: '出口',
-      proxy: '代理'
-    },
-    multiIngress: {
-      forwardLabel: '转发',
-      selectForward: '选择转发',
-      tunnel: '隧道',
-      ingress: '入口',
-      ingressIp: '入口 IP',
-      avgRtt: '平均 RTT (ms)',
-      loss: '丢包率 (%)',
-      status: '状态',
-      empty: '选择一个转发以对比入口路径。',
-      noRows: '该转发暂无入口数据。'
-    },
-    jobs: {
-      empty: '暂无运行时作业。',
-      action: '动作',
-      backend: '后端',
-      status: '状态',
-      createdAt: '创建时间',
-      pending: '等待中',
-      running: '运行中',
-      success: '成功',
-      failed: '失败'
     }
   },
   runtime: {
@@ -1974,7 +1917,7 @@ export default {
     labels: { releases: '{count} 个发行版', desired: '期望', observed: '实际' },
     states: { catalogued: '已登记', enabled: '已启用', disabled: '已禁用', loading: '正在加载控制状态...' },
     empty: { assignments: '该节点暂无服务角色', topologies: '暂无拓扑', operations: '暂无操作' },
-    activity: { title: '活动', scoped: '当前范围活动', all: '全部活动', showAll: '显示全部活动', showScoped: '显示当前范围活动', empty: '当前范围暂无活动' },
+    activity: { scoped: '当前范围活动', all: '全部活动', showAll: '显示全部活动', showScoped: '显示当前范围活动', empty: '当前范围暂无活动' },
     topology: {
       select: '拓扑', new: '新建拓扑', newTitle: '新建拓扑', create: '创建拓扑', name: '名称', edit: '编辑修订', status: '查看状态', noDeployment: '暂无部署', editorTitle: '拓扑修订编辑器', revision: '修订',
       noRevisions: '暂无修订', failurePolicy: '失败策略', stopAndRollback: '停止并回滚', message: '修订说明', graphJSON: '拓扑图 JSON',
@@ -1982,12 +1925,16 @@ export default {
       unsavedChanges: '当前修订存在未保存修改。请先保存新的不可变修订，再进行预览或规划。',
       valid: '拓扑校验通过', invalid: '拓扑存在校验问题', invalidJSON: '拓扑 JSON 无效', saveRevision: '保存修订', plan: '规划部署',
       apply: '应用部署', rollback: '回滚部署', deployment: '部署', applyConfirm: '确认应用 {topology}（部署 #{deployment}）吗？', rollbackConfirm: '确认请求回滚 {topology}（部署 #{deployment}）吗？',
-      preview: '只读部署预览', previewAction: '预览', previewSteps: '{count} 个计划步骤'
+      preview: '只读部署预览', previewAction: '预览', previewSteps: '{count} 个计划步骤',
+      emptyHint: '新建一个拓扑，写入顶点与连接，保存修订后即可规划部署。',
+      viewLabel: '编辑方式', viewJSON: 'JSON', viewGraph: '图示', graphLabel: '拓扑图示', graphSummary: '{nodes} 个顶点，{edges} 条连接',
+      graphEmpty: '还没有顶点', graphEmptyHint: '在 JSON 的 vertices 中添加顶点后，这里会画出拓扑。', graphInvalidHint: '修正 JSON 后这里会画出拓扑。', graphFailed: '拓扑图示加载失败'
     },
     extensions: { errorsTitle: 'WebUI 扩展加载失败' },
     assignments: {
-      node: '节点', noNodes: '暂无可用节点', agentPlugin: 'Agent 插件', loading: '正在加载节点角色...', enabled: '启用该节点角色',
-      createTitle: '新建节点角色', editTitle: '编辑节点角色', deleteTitle: '从该节点删除 {plugin} / {role}？', deleteMessage: '该节点会停止运行这个插件角色。此操作无法撤销。', deleteAction: '删除节点角色'
+      node: '节点', noNodes: '暂无可用节点', agentPlugin: 'Agent 插件', enabled: '启用该节点角色',
+      createTitle: '新建节点角色', editTitle: '编辑节点角色', deleteTitle: '从该节点删除 {plugin} / {role}？', deleteMessage: '该节点会停止运行这个插件角色。此操作无法撤销。', deleteAction: '删除节点角色',
+      emptyHint: '为该节点新建一个角色，指定插件、作用域与版本。', roleHelp: '常用角色：{roles}'
     },
     install: { title: '安装官方插件', target: '运行目标', version: '发行版本', enableAfterInstall: '安装后立即启用' },
     update: { title: '升级官方插件' },

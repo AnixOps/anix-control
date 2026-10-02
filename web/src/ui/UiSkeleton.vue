@@ -17,6 +17,16 @@
         <span class="ui-skeleton__bone ui-skeleton__line" style="width: 75%" />
       </div>
     </template>
+    <template v-else-if="variant === 'chart'">
+      <div class="ui-skeleton__chart" :style="{ height: typeof height === 'number' ? `${height}px` : height }" aria-hidden="true">
+        <span
+          v-for="(bar, index) in CHART_BARS"
+          :key="index"
+          class="ui-skeleton__bone ui-skeleton__bar"
+          :style="{ height: bar }"
+        />
+      </div>
+    </template>
     <template v-else>
       <div
         v-for="row in rows"
@@ -45,15 +55,18 @@
 import { useI18n } from 'vue-i18n'
 
 defineProps({
-  variant: { type: String, default: 'text', validator: value => ['text', 'card', 'table-row'].includes(value) },
+  variant: { type: String, default: 'text', validator: value => ['text', 'card', 'table-row', 'chart'].includes(value) },
   lines: { type: Number, default: 3 },
   rows: { type: Number, default: 3 },
   columns: { type: Number, default: 4 },
-  label: { type: String, default: '' }
+  label: { type: String, default: '' },
+  // chart: the plot's height (px number or a CSS length).
+  height: { type: [Number, String], default: 240 }
 })
 
 const { t } = useI18n()
 const WIDTHS = ['92%', '78%', '64%', '86%', '58%']
+const CHART_BARS = ['38%', '52%', '46%', '64%', '58%', '72%', '66%', '80%', '62%', '70%', '54%', '60%']
 
 function lineWidth(index) {
   return WIDTHS[index % WIDTHS.length]
@@ -93,6 +106,19 @@ function lineWidth(index) {
   border-radius: var(--radius-md);
   background: var(--bg-elevated);
   box-shadow: var(--shadow-1), 0 0 0 0.5px var(--separator);
+}
+
+.ui-skeleton__chart {
+  display: flex;
+  gap: var(--space-2);
+  align-items: flex-end;
+  padding: var(--space-4) 0 0;
+  border-bottom: 1px solid var(--separator);
+}
+
+.ui-skeleton__bar {
+  flex: 1;
+  border-radius: var(--radius-xs) var(--radius-xs) 0 0;
 }
 
 .ui-skeleton--table-row {

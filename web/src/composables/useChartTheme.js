@@ -73,8 +73,28 @@ export function buildGraphColors(tokens) {
     offline: tokens['chart-8'],
     label: tokens['label-1'],
     edge: tokens['separator-strong'],
-    edgeLabel: tokens['label-2']
+    edgeLabel: tokens['label-2'],
+    // The node ring: the elevated surface the graph is drawn on.
+    surface: tokens['bg-elevated'],
+    // The whole palette, for graphs that colour nodes by an arbitrary kind.
+    palette: Array.from({ length: 8 }, (_, index) => tokens[`chart-${index + 1}`]).filter(Boolean)
   }
+}
+
+function documentMode(fallback) {
+  if (typeof document === 'undefined') return fallback
+  return document.documentElement.getAttribute('data-theme') || fallback
+}
+
+// watchDocumentTheme runs callback whenever <html data-theme> changes: the
+// app's theme toggle and Histoire's dark-mode switch both write it, and the
+// tokens a canvas chart reads follow it. Returns a stop function; call it
+// on unmount.
+export function watchDocumentTheme(callback) {
+  if (typeof MutationObserver !== 'function' || typeof document === 'undefined') return () => {}
+  const observer = new MutationObserver(() => callback(documentMode('light')))
+  observer.observe(document.documentElement, { attributes: true, attributeFilter: ['data-theme'] })
+  return () => observer.disconnect()
 }
 
 // useChartTheme: themeFor(echarts) registers the theme for the active mode
@@ -84,7 +104,7 @@ export function useChartTheme() {
   const { currentTheme } = useTheme()
 
   function themeFor(echarts) {
-    const name = `anixops-${currentTheme.value}`
+    const name = `anixops-${documentMode(currentTheme.value)}`
     echarts.registerTheme?.(name, buildEChartsTheme(readChartTokens()))
     return name
   }

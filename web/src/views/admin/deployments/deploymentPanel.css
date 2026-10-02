@@ -1,0 +1,44 @@
+/* Shared by the 部署编排 panels (UI U8). Tokens only. */
+.deployment-panel {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+  min-width: 0;
+}
+
+.deployment-panel__hint {
+  margin: 0;
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
+}
+
+.deployment-panel__name {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-1) var(--space-2);
+  align-items: baseline;
+  min-width: 0;
+}
+
+.deployment-panel__name code,
+.deployment-panel code {
+  color: var(--label-2);
+  font-family: var(--font-mono);
+  font-size: var(--type-caption-size);
+  overflow-wrap: anywhere;
+}
+
+.deployment-panel__muted {
+  color: var(--label-2);
+}
+
+.deployment-panel__actions {
+  display: inline-flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.deployment-panel__picker {
+  flex: 1 1 240px;
+  max-width: 360px;
+}

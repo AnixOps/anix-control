@@ -38,6 +38,13 @@ export default {
     qr: {
       failed: '无法生成二维码'
     },
+    chart: {
+      loading: '正在加载{label}…',
+      loadFailed: '图表加载失败',
+      empty: '暂无数据',
+      showTable: '以表格查看',
+      showChart: '以图表查看'
+    },
     table: {
       settings: '表格设置',
       columns: '显示的列',

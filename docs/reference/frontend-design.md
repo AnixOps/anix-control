@@ -133,11 +133,40 @@ Control".
 
 ## Charts
 
-`web/src/composables/useChartTheme.js` resolves the chart palette
-(`--chart-1` … `--chart-8`) and the neutral roles from the document,
-registers an ECharts theme per mode (`anixops-light`, `anixops-dark`), and
-re-themes live charts with `chart.setTheme()` when the theme changes. The G6
-topology takes node, label and edge colours from the same tokens.
+Pages draw every chart with `UiChart` (`web/src/ui/UiChart.vue`) and every
+headline number with `UiMetricCard`; neither imports ECharts in the page.
+
+- **Engine.** `src/ui/internal/echarts.js` is the tree-shaken ECharts
+  build (`echarts/core` with line and bar series, grid, tooltip, legend,
+  canvas renderer). `UiChart` imports it on first use, so it lands in the
+  lazy `echarts` chunk (about 180 KB gzip) and never in the entry chunk or a
+  page without a chart. A new series type is imported and listed in `use()`
+  there.
+- **Theme.** `web/src/composables/useChartTheme.js` resolves the chart
+  palette (`--chart-1` … `--chart-8`) and the neutral roles from the
+  document, registers an ECharts theme per mode (`anixops-light`,
+  `anixops-dark`), and `watchDocumentTheme()` re-themes live charts with
+  `chart.setTheme()` when `<html data-theme>` changes. Options passed to
+  `UiChart` carry no colours. The G6 topology (`components/admin/
+  TopologyGraph.vue`) takes node, label and edge colours from the same
+  tokens (`buildGraphColors`) and redraws on the same signal.
+- **Size.** The chart resizes with its box (`ResizeObserver`), not only the
+  window; `height` sets the plot height.
+- **States.** `loading` shows the chart skeleton (`UiSkeleton
+  variant="chart"`) after 300 ms on the first load and dims the plot on a
+  reload; `empty` shows `UiEmptyState` (`emptyTitle`, `emptyDescription`);
+  `error` shows `UiErrorState` with 重试 (`@retry`). A failure to load
+  ECharts shows the error state too.
+- **Accessibility.** The plot is `role="img"` named by `label` and
+  `summary` (one sentence: range, total, peak). `table`
+  (`{ columns: [{ key, label, numeric, format }], rows }`) adds the data as
+  a table, visually hidden but read by screen readers, and 以表格查看 shows
+  it (plan §11).
+- **Metric cards.** `UiMetricCard`: `label`, `value`, `icon`, `trend` with
+  `trendDirection` and `trendTone` (an arrow and a word, never colour
+  alone), `detail`, an optional `sparkline` (number array, an inline SVG in
+  the accent token, decorative) and `loading`. Wrap it in a link when it
+  opens a page.
 
 ## Lint rules
 
@@ -225,6 +254,8 @@ written separately for each language. Page text is passed in as props.
 | More actions on a row or toolbar | `UiMenu` | "…" trigger with `label`; danger items last after a separator. |
 | A failed load | `UiErrorState` | What failed, the message, 重试 and 复制错误详情 (status, request id, page, time). `LoadError` of the user pages wraps it. |
 | Used of a total | `UiUsageBar` | The text carries the value; the bar is decorative, amber at 75 %, red at 90 %. |
+| A chart | `UiChart` | ECharts with the token theme, resize, states and a data table; see "Charts". |
+| A headline number | `UiMetricCard` | Label, value, trend word, detail, optional sparkline. |
 
 ### Interaction rules (redesign plan §9)
 
@@ -748,6 +779,32 @@ Old URLs redirect: `/admin/mfa`, `/admin/access-groups`, `/admin/telegram`.
 订阅分组 is a list page with a detail page (plan §7.2,
 `/admin/subscriptions/:id/:section`: 概览, 节点模板, 节点协议, 成员, 订阅输出).
 Its sections are segmented `UiTabs` bound to the path, like the node and forward-node detail pages.
+
+## Dashboards and monitoring (U8)
+
+The dashboard template (plan §7.4): 3–4 metric cards → one main chart →
+two columns (what needs attention, recent activity). Each block loads,
+fails and retries on its own, so one failing endpoint never blanks the page.
+
+| Page | Path | Content |
+|---|---|---|
+| 仪表盘 | `/admin/dashboard` | 用户, 在线节点 / 总数, 今日流量, 待处理工单 cards; 24 h traffic (`/admin/traffic/hourly`); 需要处理 (offline nodes, tickets waiting for a reply, stalled traffic reports, pending orders in the commercial edition); 最近操作 (audit log) |
+| 流量与监控 | `/admin/monitor/:section` | 实时节点 (default, `/admin/monitor`: the monitor WebSocket in a `UiDataTable`), `traffic` 用户流量, `latency` 节点延迟, `forward` 转发 (topology, ingress comparison, runtime jobs) |
+| 部署编排 | `/admin/deployments` | Topologies and node roles (tabs), the operation timeline, the topology workspace (dialog) and the node-role sheet |
+
+- 流量与监控's sections are segmented `UiTabs` bound to the path and listed in
+  `ADMIN_PAGE_SECTIONS.monitor` (menu match, ⌘K). The time range
+  (`views/admin/monitor/useMonitorRange.js`: 1h, 24h, 7d, 30d) is in
+  `?range=` (24h leaves it out) and is offered only by the sections whose
+  API takes one (用户流量, 节点延迟). Only 实时节点 opens the WebSocket.
+- Old URLs redirect: `/admin/traffic-hourly` → `/admin/monitor/traffic`,
+  `/admin/forward/observability` → `/admin/monitor/forward` (query kept).
+- `components/admin/OperationTimeline.vue` (部署编排 and 插件中心) is an
+  ordered timeline list with a state badge per operation; it is listed in
+  `scripts/data-table-pages.mjs` so no bare table comes back.
+- 部署编排 keeps its state and API calls in
+  `views/admin/deployments/useDeploymentCenter.js`; the panels next to it
+  only render.
 
 ## Bundle
 
