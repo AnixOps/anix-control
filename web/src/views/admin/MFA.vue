@@ -35,16 +35,16 @@
 
         <UiGroupedList :title="t('adminSecurity.mfa.recovery')" :footer="t('adminMfa.info.backupBody')">
           <UiGroupedListRow :label="t('adminMfa.config.backupCodesCount')" :description="t('adminMfa.config.backupCodesHelp')" label-for="mfa-backup-codes">
-            <UiNumberField id="mfa-backup-codes" v-model="config.backup_codes_count" size="md" :min="1" :max="20" :error="errors.backup_codes_count" />
+            <UiNumberField class="settings-number" id="mfa-backup-codes" v-model="config.backup_codes_count" size="md" :min="1" :max="20" :error="errors.backup_codes_count" />
           </UiGroupedListRow>
         </UiGroupedList>
 
         <UiGroupedList :title="t('adminSecurity.mfa.lockout')" :footer="t('adminMfa.info.lockoutBody')">
           <UiGroupedListRow :label="t('adminMfa.config.maxAttempts')" :description="t('adminMfa.config.maxAttemptsHelp')" label-for="mfa-max-attempts">
-            <UiNumberField id="mfa-max-attempts" v-model="config.max_attempts" size="md" :min="1" :max="10" :error="errors.max_attempts" />
+            <UiNumberField class="settings-number" id="mfa-max-attempts" v-model="config.max_attempts" size="md" :min="1" :max="10" :error="errors.max_attempts" />
           </UiGroupedListRow>
           <UiGroupedListRow :label="t('adminSecurity.mfa.lockoutDuration')" :description="t('adminMfa.config.lockoutDurationHelp')" label-for="mfa-lockout">
-            <UiNumberField id="mfa-lockout" v-model="config.lockout_duration" size="md" :min="1" :unit="t('adminSecurity.mfa.minutes')" :error="errors.lockout_duration" />
+            <UiNumberField class="settings-number" id="mfa-lockout" v-model="config.lockout_duration" size="md" :min="1" :unit="t('adminSecurity.mfa.minutes')" :error="errors.lockout_duration" />
           </UiGroupedListRow>
         </UiGroupedList>
       </template>
@@ -202,5 +202,10 @@ onMounted(fetchConfig)
 
 .form-error {
   margin: calc(-1 * var(--space-4)) 0 0;
+}
+
+.settings-number {
+  width: 160px;
+  max-width: 100%;
 }
 </style>

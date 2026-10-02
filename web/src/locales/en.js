@@ -1565,7 +1565,7 @@ export default {
       totpBody: 'Time-based one-time passwords. Users can scan a QR code with apps such as Google Authenticator or Authy to bind MFA.',
       backupBody: 'When users cannot access their authenticator, they can use recovery codes to log in. Each recovery code can only be used once.',
       lockoutBody: 'Multiple consecutive MFA failures will trigger an account lockout to prevent brute-force attacks.',
-      userOpsBody: 'Users can manage MFA on the Security Settings page, including enabling, disabling, and regenerating recovery codes.'
+      userOpsBody: 'Users turn two-factor authentication on or off and make new recovery codes on their own Account page.'
     },
     messages: {
       fetchFailed: 'Failed to load MFA configuration',

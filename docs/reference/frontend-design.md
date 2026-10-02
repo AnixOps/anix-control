@@ -214,6 +214,7 @@ written separately for each language. Page text is passed in as props.
 | Nothing to show, or a failed load | `UiEmptyState` | What will appear and the first action; for errors, retry and "复制错误详情". |
 | Loading | `UiSkeleton` + `useDelayedLoading()` | text, card, table-row. |
 | A link, token or command to copy | `UiCopyField` | `secret` masks it. |
+| Generated text, output, commands | `UiCodeBlock` | Monospace, scrolls inside itself (`maxHeight`; `wrap` wraps instead), label and 复制; focusable for keyboard scrolling. |
 | Page title | `UiPageHeader` | The only H1, one sentence, actions with the primary last. |
 | Surfaces and settings rows | `UiCard`, `UiSection`, `UiGroupedList` + `UiGroupedListRow` | System Settings style rows: label left; value, control or chevron right. |
 | Numbers, bytes, rates, money, dates | `useFormat()` | One implementation on Intl and the current locale. |
@@ -443,7 +444,7 @@ focus returns to where it was. It lists:
   avatar → 账户, 外观 (跟随系统 / 浅色 / 深色), 语言 (简体中文 / English, each
   in its own language), 关于 (admin: version, build and commit, the line that
   used to sit at the bottom of the sidebar; Settings → 关于 takes it over in
-  U7), 退出登录. Submenus on wide screens, inline radio groups on phones.
+  U7: 系统设置 → 关于 shows the same rows, `aboutRows`), 退出登录. Submenus on wide screens, inline radio groups on phones.
   `useTheme().setThemePreference('system')` forgets the stored theme and
   follows the system again.
 - **账户** (`/user/account`, `/admin/account`, `views/Account.vue`): the
@@ -721,6 +722,32 @@ endpoints and flows.
   fields and API calls, renders `<form id="wizard-step-form">` and exposes
   `submit`, `busy`, `canSubmit` and `primaryLabel` for the footer. Records
   a step can reuse are a `WizardExistingList` with "使用现有".
+
+## Settings pages (U7)
+
+Settings-style admin pages use the settings template (plan §7.3):
+`components/admin/settings/SettingsLayout.vue` (section list on the left;
+below 834 px the page without a section shows only the list and a section
+shows a back link) and `SettingsSaveBar.vue` (保存 / 放弃, floats up at the
+bottom while a form differs from what was loaded; 保存 is disabled while a
+field is invalid). `composables/useUnsavedChanges.js` asks 「放弃未保存的更改？」
+before the route or its path changes (a query change never asks) and lets
+the browser prompt on reload. Sections are routes (`/admin/<page>/:section`)
+and render their own component, which loads its own data; the sections are
+listed once in `navigation/menu.js` (`ADMIN_PAGE_SECTIONS`), which feeds the
+section list, the page titles and breadcrumb (`utils/pageMeta.js`) and the
+command palette.
+
+| Page | Path | Sections |
+|---|---|---|
+| 系统设置 | `/admin/system/:section` | 通用 (subscription domains, configuration keys), 转发运行时 (backend status, doctor, jobs, operator commands), 备份, 负载均衡, 审计日志, 关于 |
+| 安全 | `/admin/security/:section` | 两步验证 (`MFA.vue`), 访问组 (`AccessGroups.vue` with `embedded`: its header becomes an H2) |
+| 通知 | `/admin/notifications/:channel` | 邮件, Telegram, 模板, 发送记录 as segmented tabs (`UiTabs variant="segmented"`) |
+
+Old URLs redirect: `/admin/mfa`, `/admin/access-groups`, `/admin/telegram`.
+订阅分组 is a list page with a detail page (plan §7.2,
+`/admin/subscriptions/:id/:section`: 概览, 节点模板, 节点协议, 成员, 订阅输出).
+Its sections are `UiTabs` (underline) bound to the path.
 
 ## Bundle
 

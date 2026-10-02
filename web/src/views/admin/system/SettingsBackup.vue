@@ -17,6 +17,7 @@
           </UiGroupedListRow>
           <UiGroupedListRow :label="t('adminSettings.backup.auto.interval')" label-for="backup-interval">
             <UiNumberField
+              class="settings-number"
               id="backup-interval"
               v-model="backupConfig.interval"
               size="md"
@@ -27,6 +28,7 @@
           </UiGroupedListRow>
           <UiGroupedListRow :label="t('adminSettings.backup.auto.keepCount')" :description="t('adminSettings.backup.auto.keepCountHelp')" label-for="backup-keep-count">
             <UiNumberField
+              class="settings-number"
               id="backup-keep-count"
               v-model="backupConfig.keep_count"
               size="md"
@@ -521,5 +523,10 @@ onMounted(() => {
 
 .backup-stats dd {
   margin: 0;
+}
+
+.settings-number {
+  width: 160px;
+  max-width: 100%;
 }
 </style>

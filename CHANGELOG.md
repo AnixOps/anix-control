@@ -130,6 +130,42 @@
   - `UiRadioGroup`: the radio no longer stretches to 40 / 44 px on phones
     through the legacy global `button` rule.
 
+- **Settings, subscription groups, notifications and security (UI redesign
+  phase U7)** (`web/src/views/admin/{System,Subscriptions,SubscriptionGroup,Notifications,Security,MFA}.vue`
+  and their folders; `docs/reference/frontend-design.md` "Settings pages").
+  Same endpoints, request fields, permission and edition checks.
+  - 系统设置 on the settings template: a section list on the left (a list,
+    then the section with a back link, on phones) and the section in the
+    path, `/admin/system/:section` (通用, 转发运行时, 备份, 负载均衡,
+    审计日志, 关于; `/admin/system` shows 通用). Each section loads its own
+    data. Forms validate as you type; a 保存 / 放弃 bar floats up while
+    they have unsaved changes, and leaving the section or the page asks
+    first (`useUnsavedChanges`). The audit log (filters and page in the
+    query), configuration keys, backups, load balancers and runtime jobs are
+    `UiDataTable`s; load failures are error states with 重试 instead of empty
+    lists. 关于 lists the same version and build rows as the account menu's
+    关于 (`aboutRows` in `utils/systemInfo.js`). The runtime workbench (backend
+    status, doctor, jobs, operator commands) stays here, not on the forward
+    pages.
+  - 订阅分组: the groups in a `UiDataTable` with their usage; a group page,
+    `/admin/subscriptions/:id/:section`, with 概览, 节点模板, 节点协议 (picker
+    dialog), 成员 (counts: the API has no member list) and 订阅输出 (server
+    preview in the new `UiCodeBlock`, copy and download).
+  - 通知: e-mail (SMTP settings with the save bar and 测试发送), Telegram (bot
+    with the save bar, webhook, send to one user or everyone, linked users,
+    commands), templates and the send log in one page with segmented tabs,
+    `/admin/notifications/:channel`. `/admin/telegram` redirects.
+  - 安全: the MFA policy (now switches, ranges and the save bar) and the
+    access groups as sections, `/admin/security/:section`; `/admin/mfa` and
+    `/admin/access-groups` redirect. There is no third section because the
+    API has no administrator tokens.
+  - The sidebar's 系统 group is 系统设置, 安全, 通知; the command palette
+    lists every section under its page, so 访问组 or 审计日志 are still
+    found by name. The breadcrumb no longer repeats a group named like the
+    page (用户 › 用户) and names the section (系统 › 系统设置 › 备份).
+  - `UiGroupedListRow`: a row with only a control, and stacked fields on
+    phones, take the full width.
+
 - **Admin list pages on one template (UI redesign phase U6)**
   (`web/src/ui/UiDataTable.vue`, `views/admin/*`;
   `docs/reference/frontend-design.md` "List pages"). Same endpoints,
