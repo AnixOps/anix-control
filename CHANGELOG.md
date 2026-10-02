@@ -68,7 +68,8 @@
     local Ansible are separate runtime paths with separate endpoints, see
     AGENTS.md) but share the header 转发节点 and a run-mode switch: NodeX
     拓扑 · Ansible 机器 · 本地运行时 · NodeX 运行时, and a link to NodeX
-    Agents.
+    Agents. The forward suite navigation (a control-plane control) no longer
+    shows above these pages; the sidebar item 转发 leads back.
   - NodeX 拓扑: the node cards became a `UiDataTable` with server pages,
     type and reachability chips, the stats as a summary row and the
     actions in the row menu; the legacy rules are a second table with the

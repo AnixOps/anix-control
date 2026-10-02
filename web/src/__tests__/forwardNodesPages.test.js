@@ -10,7 +10,7 @@ import ForwardNodeDetail from '@/views/admin/forward-nodes/ForwardNodeDetail.vue
 import AnsibleMachineDetail from '@/views/admin/forward-nodes/AnsibleMachineDetail.vue'
 import ForwardNodesModeNav from '@/views/admin/forward-nodes/ForwardNodesModeNav.vue'
 import UiHost from '@/ui/UiHost.vue'
-import { ADMIN_MENU, activeMenuItem, buildAdminMenu } from '@/navigation/menu'
+import { ADMIN_MENU, activeMenuItem, buildAdminMenu, showsForwardSuiteNav } from '@/navigation/menu'
 import { toastMessages } from './helpers/feedback'
 
 const api = vi.hoisted(() => ({
@@ -237,6 +237,17 @@ describe('run-mode switch and routes', () => {
     ])
     expect(within(nav).getByRole('link', { name: 'Local Runtime' }).getAttribute('aria-current')).toBe('page')
     expect(links.filter(link => link.getAttribute('aria-current'))).toHaveLength(1)
+  })
+
+  it('leaves the forward suite navigation to the Flux control-plane pages', () => {
+    for (const path of ['/admin/forward/nodes', '/admin/forward/nodes/5', '/admin/forward/ansible-machines', '/admin/forward/ansible-machines/7', '/admin/forward/local', '/admin/forward/nodex']) {
+      expect(showsForwardSuiteNav(path)).toBe(false)
+    }
+    for (const path of ['/admin/forward', '/admin/forward/tunnel', '/admin/forward/limit', '/admin/forward/setup', '/admin/forward/agents', '/admin/forward/observability']) {
+      expect(showsForwardSuiteNav(path)).toBe(true)
+    }
+    expect(showsForwardSuiteNav('/admin/forward/nodesx')).toBe(true)
+    expect(showsForwardSuiteNav('/admin/users')).toBe(false)
   })
 
   it('keeps 转发节点 selected in the sidebar on the detail pages', () => {

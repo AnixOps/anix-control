@@ -110,7 +110,8 @@ export const EXTENSION_PARENT_GROUPS = Object.freeze({
 })
 
 // The forward suite (flux-panel clone): its own sub-navigation, rendered once
-// at the top of every /admin/forward* page (ForwardSuiteNav). The sidebar
+// at the top of every /admin/forward* page except the 转发节点 pages
+// (ForwardSuiteNav, showsForwardSuiteNav). The sidebar
 // only links into it (转发, 转发节点, NodeX Agents).
 export const FORWARD_SUITE_LINKS = Object.freeze({
   core: [
@@ -131,6 +132,21 @@ export const FORWARD_SUITE_LINKS = Object.freeze({
 
 export function isForwardSuitePath(path) {
   return path === '/admin/forward' || String(path || '').startsWith('/admin/forward/')
+}
+
+// 转发节点 (UI U7): the execution-plane pages (NodeX nodes, Ansible machines,
+// the local and NodeX runtimes, and their detail pages) live under
+// /admin/forward/ but show their own run-mode switch instead of the forward
+// suite navigation, which belongs to the Flux control plane.
+const FORWARD_NODE_PATHS = ['/admin/forward/nodes', '/admin/forward/ansible-machines', '/admin/forward/local', '/admin/forward/nodex']
+
+export function isForwardNodesPath(path) {
+  const value = String(path || '')
+  return FORWARD_NODE_PATHS.some(base => value === base || value.startsWith(`${base}/`))
+}
+
+export function showsForwardSuiteNav(path) {
+  return isForwardSuitePath(path) && !isForwardNodesPath(path)
 }
 
 // Quick actions in the command palette open an existing create flow. Each is

@@ -129,7 +129,7 @@ import { loadEdition } from '@/composables/useEdition'
 import { resolveRoutePageTitle } from '@/utils/pageMeta'
 import { adminExtensionMenus } from '@/extensions/runtime'
 import { useAdminMenu } from '@/navigation/useNavigation'
-import { ADMIN_ACCOUNT_PATH, isForwardSuitePath } from '@/navigation/menu'
+import { ADMIN_ACCOUNT_PATH, showsForwardSuiteNav } from '@/navigation/menu'
 import AdminNavigation from '@/components/admin/AdminNavigation.vue'
 import ForwardSuiteNav from '@/components/admin/ForwardSuiteNav.vue'
 import BrandLockup from '@/components/common/BrandLockup.vue'
@@ -160,7 +160,7 @@ const shortcutLabel = paletteShortcutLabel()
 
 const railActive = computed(() => !drawerMode.value && sidebarCollapsed.value)
 const drawerInactive = computed(() => drawerMode.value && !sidebarOpen.value)
-const forwardSuite = computed(() => isForwardSuitePath(route.path))
+const forwardSuite = computed(() => showsForwardSuiteNav(route.path))
 
 const toggleIcon = computed(() => {
   if (drawerMode.value) return Menu
