@@ -2005,6 +2005,14 @@ export default {
     nodes: {
       title: 'Node Management',
       addNode: 'Add Node',
+      confirm: {
+        deleteNodeTitle: 'Delete node {name}?',
+        deleteNodeMessage: 'The node and its credentials are removed. This can’t be undone.',
+        deleteNodeAction: 'Delete node',
+        deleteProtocolTitle: 'Delete protocol {type} :{port}?',
+        deleteProtocolMessage: 'Node {name} stops offering this protocol. This can’t be undone.',
+        deleteProtocolAction: 'Delete protocol'
+      },
       stats: {
         total: 'Total Nodes',
         online: 'Online',
@@ -2197,6 +2205,14 @@ export default {
           copy: 'Copy',
           fromTemplate: 'Load from Template'
         },
+        templatePicker: {
+          title: 'Load from template',
+          description: 'Pick a template. It replaces the JSON in the editor.',
+          label: 'Template',
+          placeholder: 'Choose a template',
+          required: 'Choose a template to load.',
+          apply: 'Load template'
+        },
         jsonStatus: {
           valid: 'JSON Valid',
           invalid: 'JSON Invalid'
@@ -2291,14 +2307,17 @@ export default {
         saveFailed: 'Save failed: {message}',
         syncSuccess: 'Node "{name}" accepted the sync operation',
         syncFailed: 'Sync failed: {message}',
-        deleteNodeConfirm: 'Delete node "{name}"?',
-        deleteFailed: 'Delete failed: {message}',
-        deleteProtocolConfirm: 'Delete this protocol?',
+        nodeCreated: 'Node {name} added',
+        nodeSaved: 'Node {name} saved',
+        nodeDeleted: 'Node {name} deleted',
+        protocolCreated: 'Protocol {type} :{port} added',
+        protocolSaved: 'Protocol {type} :{port} saved',
+        protocolDeleted: 'Protocol {type} :{port} deleted',
         generateFailed: 'Generation failed: {message}',
         deployLoadFailed: 'Failed to load parent node credentials',
         copied: 'Copied to clipboard',
-        copyFailed: 'Copy failed: {message}',
-        invalidJson: 'Invalid JSON',
+        copyFailedManual: 'Couldn’t copy automatically. Select the text and copy it.',
+        invalidJsonDetail: 'Invalid JSON: {message}',
         quotaExceededBanner: '{count} node(s) have exceeded their monthly quota. This is informational only, no automatic restriction is applied.'
       }
     }

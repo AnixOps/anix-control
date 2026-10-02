@@ -157,14 +157,14 @@
       </button>
     </div>
 
-    <!-- Create/edit node modal -->
-    <div class="modal-overlay" v-if="showNodeModal" @click.self="closeNodeModal">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>{{ editingNode ? t('admin.nodes.nodeModal.titleEdit') : t('admin.nodes.nodeModal.titleCreate') }}</h3>
-          <button class="close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeNodeModal">×</button>
-        </div>
-        <div class="modal-body">
+    <!-- Create/edit node dialog -->
+    <UiDialog
+      :open="showNodeModal"
+      :title="editingNode ? t('admin.nodes.nodeModal.titleEdit') : t('admin.nodes.nodeModal.titleCreate')"
+      :dismissible="!saving"
+      @update:open="value => { if (!value) closeNodeModal() }"
+    >
+        <div class="dialog-fields">
           <div class="form-group">
             <label>{{ t('admin.nodes.nodeModal.fields.name') }}</label>
             <input v-model="nodeForm.name" type="text" :placeholder="t('admin.nodes.nodeModal.placeholders.name')" />
@@ -221,24 +221,21 @@
               <option :value="3">{{ t('admin.nodes.statusText.disabled') }}</option>
             </select>
           </div>
+          <p v-if="nodeFormError" class="form-error" role="alert" data-testid="node-form-error">{{ nodeFormError }}</p>
         </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" @click="closeNodeModal">{{ t('admin.nodes.actions.cancel') }}</button>
-          <button class="btn btn-primary" @click="saveNode" :disabled="saving">
-            {{ saving ? t('admin.nodes.actions.saving') : t('admin.nodes.actions.save') }}
-          </button>
-        </div>
-      </div>
-    </div>
+      <template #footer="{ close }">
+        <UiButton :disabled="saving" @click="close">{{ t('admin.nodes.actions.cancel') }}</UiButton>
+        <UiButton variant="primary" data-testid="save-node" :loading="saving" @click="saveNode">{{ t('admin.nodes.actions.save') }}</UiButton>
+      </template>
+    </UiDialog>
 
-    <!-- Auth Key modal -->
-    <div class="modal-overlay" v-if="showAuthKeyModal" @click.self="closeAuthKeyModal">
-      <div class="modal">
-        <div class="modal-header">
-          <h3>{{ t('admin.nodes.authKeyModal.title') }}</h3>
-          <button class="close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeAuthKeyModal">×</button>
-        </div>
-        <div class="modal-body">
+    <!-- Auth Key dialog -->
+    <UiDialog
+      :open="showAuthKeyModal"
+      :title="t('admin.nodes.authKeyModal.title')"
+      @update:open="value => { if (!value) closeAuthKeyModal() }"
+    >
+        <div class="dialog-fields">
           <p class="auth-key-hint">{{ t('admin.nodes.authKeyModal.hint') }}</p>
           <div class="auth-key-display">
             <code class="auth-key-value" data-testid="auth-key-value">{{ authKey || (authKeyMasked ? t('admin.nodes.authKeyModal.hiddenKey') : t('admin.nodes.authKeyModal.noKey')) }}</code>
@@ -249,6 +246,7 @@
               {{ authKeyGenerating ? t('admin.nodes.authKeyModal.generating') : t('admin.nodes.authKeyModal.generate') }}
             </button>
           </div>
+          <p v-if="authKeyError" class="form-error" role="alert" data-testid="auth-key-error">{{ authKeyError }}</p>
           <p v-if="authKey" class="field-hint">{{ t('admin.nodes.authKeyModal.shownOnce') }}</p>
           <p v-else-if="authKeyMasked" class="field-hint">{{ t('admin.nodes.authKeyModal.hiddenHint') }}</p>
           <div class="auth-key-usage" v-if="authKeyUsed > 0">
@@ -263,19 +261,18 @@
             </p>
           </div>
         </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" @click="closeAuthKeyModal">{{ t('common.actions.close') }}</button>
-        </div>
-      </div>
-    </div>
+      <template #footer="{ close }">
+        <UiButton @click="close">{{ t('common.actions.close') }}</UiButton>
+      </template>
+    </UiDialog>
 
-    <div class="modal-overlay" v-if="showDeployModal" @click.self="closeDeployModal">
-      <div class="modal modal-xl">
-        <div class="modal-header">
-          <h3>{{ t('admin.nodes.deployModal.title') }}</h3>
-          <button class="close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeDeployModal">×</button>
-        </div>
-        <div class="modal-body">
+    <UiDialog
+      :open="showDeployModal"
+      size="lg"
+      :title="t('admin.nodes.deployModal.title')"
+      @update:open="value => { if (!value) closeDeployModal() }"
+    >
+        <div class="dialog-fields">
           <div class="deploy-summary">
             <div>
               <p class="eyebrow">{{ t('admin.nodes.deployModal.summaryEyebrow') }}</p>
@@ -357,7 +354,8 @@
           <div v-if="deployError" class="form-error">{{ deployError }}</div>
           <div v-if="deployLoading" class="empty-message">{{ t('admin.nodes.deployModal.loading') }}</div>
 
-          <table v-else class="table deploy-table">
+          <div v-else class="dialog-table-wrap">
+          <table class="table deploy-table">
             <thead>
               <tr>
                 <th>{{ t('admin.nodes.deployModal.table.alias') }}</th>
@@ -405,6 +403,7 @@
               </tr>
             </tbody>
           </table>
+          </div>
 
           <div class="deploy-output-grid">
             <div class="deploy-output-panel">
@@ -431,17 +430,19 @@
             <textarea readonly rows="6" :value="deployCommandsPreview"></textarea>
           </div>
         </div>
-      </div>
-    </div>
+      <template #footer="{ close }">
+        <UiButton @click="close">{{ t('common.actions.close') }}</UiButton>
+      </template>
+    </UiDialog>
 
-    <!-- Node log modal -->
-    <div class="modal-overlay" v-if="showLogModal" @click.self="closeLogModal">
-      <div class="modal modal-xl">
-        <div class="modal-header">
-          <h3>{{ t('admin.nodes.logModal.title', { name: logNode?.name || '-' }) }}</h3>
-          <button class="close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeLogModal">×</button>
-        </div>
-        <div class="modal-body">
+    <!-- Node log sheet -->
+    <UiSheet
+      :open="showLogModal"
+      size="lg"
+      :title="t('admin.nodes.logModal.title', { name: logNode?.name || '-' })"
+      @update:open="value => { if (!value) closeLogModal() }"
+    >
+        <div class="dialog-fields">
           <div class="log-toolbar">
             <select v-model="logFilter.level">
               <option value="">{{ t('admin.nodes.logModal.filters.allLevels') }}</option>
@@ -467,7 +468,8 @@
 
           <div v-if="logLoading" class="empty-message">{{ t('admin.nodes.logModal.loading') }}</div>
 
-          <table v-else-if="nodeLogs.length > 0" class="table node-log-table">
+          <div v-else-if="nodeLogs.length > 0" class="dialog-table-wrap">
+          <table class="table node-log-table">
             <thead>
               <tr>
                 <th>{{ t('admin.nodes.logModal.table.time') }}</th>
@@ -498,10 +500,11 @@
               </tr>
             </tbody>
           </table>
+          </div>
 
           <div v-else class="empty-message">{{ t('admin.nodes.logModal.empty') }}</div>
 
-          <div class="pagination modal-pagination" v-if="logPagination.total > logPagination.size">
+          <div class="pagination log-pagination" v-if="logPagination.total > logPagination.size">
             <button :disabled="logPagination.page === 1 || logLoading" @click="changeLogPage(logPagination.page - 1)">
               {{ t('admin.nodes.pagination.previous') }}
             </button>
@@ -514,24 +517,24 @@
             </button>
           </div>
         </div>
-      </div>
-    </div>
+    </UiSheet>
 
-    <!-- Protocol management modal -->
-    <div class="modal-overlay" v-if="showProtocolModal" @click.self="closeProtocolModal">
-      <div class="modal modal-lg">
-        <div class="modal-header">
-          <h3>{{ t('admin.nodes.protocolModal.title', { name: selectedNode?.name || "-" }) }}</h3>
-          <button class="close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeProtocolModal">×</button>
-        </div>
-        <div class="modal-body">
+    <!-- Protocol management sheet -->
+    <UiSheet
+      :open="showProtocolModal"
+      size="lg"
+      :title="t('admin.nodes.protocolModal.title', { name: selectedNode?.name || '-' })"
+      @update:open="value => { if (!value) closeProtocolModal() }"
+    >
+        <div class="dialog-fields">
           <div class="protocol-header">
             <button class="btn btn-primary btn-sm" @click="openAddProtocol">
               + {{ t('admin.nodes.protocolModal.addProtocol') }}
             </button>
           </div>
 
-          <table class="table" v-if="protocols.length > 0">
+          <div v-if="protocols.length > 0" class="dialog-table-wrap">
+          <table class="table">
             <thead>
               <tr>
                 <th>{{ t('admin.nodes.protocolModal.table.type') }}</th>
@@ -558,19 +561,20 @@
               </tr>
             </tbody>
           </table>
+          </div>
           <div v-else class="empty-message">{{ t('admin.nodes.protocolModal.empty') }}</div>
         </div>
-      </div>
-    </div>
+    </UiSheet>
 
-    <!-- Create/edit protocol modal (JSON-first) -->
-    <div class="modal-overlay" v-if="showProtocolFormModal" @click.self="closeProtocolFormModal">
-      <div class="modal modal-lg">
-        <div class="modal-header">
-          <h3>{{ editingProtocol ? t('admin.nodes.protocolForm.titleEdit') : t('admin.nodes.protocolForm.titleCreate') }}</h3>
-          <button class="close-btn" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeProtocolFormModal">×</button>
-        </div>
-        <div class="modal-body">
+    <!-- Create/edit protocol dialog (JSON-first) -->
+    <UiDialog
+      :open="showProtocolFormModal"
+      size="lg"
+      :title="editingProtocol ? t('admin.nodes.protocolForm.titleEdit') : t('admin.nodes.protocolForm.titleCreate')"
+      :dismissible="!savingProtocol"
+      @update:open="value => { if (!value) closeProtocolFormModal() }"
+    >
+        <div class="dialog-fields">
           <!-- Template quick-select (only when creating) -->
           <div class="form-group" v-if="!editingProtocol">
             <label>{{ t('admin.nodes.protocolForm.templateLibrary') }}</label>
@@ -946,15 +950,35 @@
               ></textarea>
             </details>
           </div>
+          <p v-if="protocolFormError" class="form-error" role="alert" data-testid="protocol-form-error">{{ protocolFormError }}</p>
         </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" @click="closeProtocolFormModal">{{ t('admin.nodes.actions.cancel') }}</button>
-          <button class="btn btn-primary" @click="saveProtocol" :disabled="savingProtocol">
-            {{ savingProtocol ? t('admin.nodes.actions.saving') : t('admin.nodes.actions.save') }}
-          </button>
-        </div>
-      </div>
-    </div>
+      <template #footer="{ close }">
+        <UiButton :disabled="savingProtocol" @click="close">{{ t('admin.nodes.actions.cancel') }}</UiButton>
+        <UiButton variant="primary" data-testid="save-protocol" :loading="savingProtocol" @click="saveProtocol">{{ t('admin.nodes.actions.save') }}</UiButton>
+      </template>
+    </UiDialog>
+
+    <!-- Template picker for the JSON editor (replaces prompt()) -->
+    <UiDialog
+      v-model:open="showTemplatePicker"
+      size="sm"
+      :title="t('admin.nodes.protocolForm.templatePicker.title')"
+      :description="t('admin.nodes.protocolForm.templatePicker.description')"
+    >
+      <UiSelect
+        v-model="templatePickIndex"
+        data-testid="template-picker-select"
+        :label="t('admin.nodes.protocolForm.templatePicker.label')"
+        :placeholder="t('admin.nodes.protocolForm.templatePicker.placeholder')"
+        :options="templatePickerOptions"
+        :error="templatePickError"
+        required
+      />
+      <template #footer="{ close }">
+        <UiButton @click="close">{{ t('admin.nodes.actions.cancel') }}</UiButton>
+        <UiButton variant="primary" data-testid="template-picker-apply" @click="applyPickedTemplate">{{ t('admin.nodes.protocolForm.templatePicker.apply') }}</UiButton>
+      </template>
+    </UiDialog>
   </div>
 </template>
 
@@ -972,8 +996,11 @@ import { MASKED_SECRET, isMaskedSecret } from '@/constants/secrets'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useRouteIntent } from '@/composables/useRouteIntent'
 import { AGENT_NAME } from '@/constants/brand'
+import { UiButton, UiDialog, UiSelect, UiSheet, copyText, useConfirm, useToast } from '@/ui'
 
 const { t, formatDateTime } = useAppI18n()
+const toast = useToast()
+const confirm = useConfirm()
 
 // State
 const loading = ref(false)
@@ -987,6 +1014,12 @@ const pagination = reactive({ page: 1, size: 20, total: 0 })
 
 const showNodeModal = ref(false)
 const editingNode = ref(null)
+const nodeFormError = ref('')
+const protocolFormError = ref('')
+const authKeyError = ref('')
+const showTemplatePicker = ref(false)
+const templatePickIndex = ref(undefined)
+const templatePickError = ref('')
 const nodeForm = reactive({
   name: '',
   address: '',
@@ -1252,7 +1285,7 @@ const createWireGuardKeypair = async () => {
     wireGuardForm.serverPrivateKey = payload?.private_key || ''
     wireGuardForm.serverPublicKey = payload?.public_key || ''
   } catch (error) {
-    alert(t('admin.nodes.messages.generateFailed', { message: readNodeApiError(error) }))
+    protocolFormError.value = t('admin.nodes.messages.generateFailed', { message: readNodeApiError(error) })
   }
 }
 
@@ -1472,21 +1505,36 @@ function formatJson() {
   }
 }
 
-async function copyJson() {
-  try {
-    await navigator.clipboard.writeText(jsonEditorContent.value)
-  } catch (e) {
-    alert(t('admin.nodes.messages.copyFailed') + ': ' + (e.message || e))
-  }
+// Copy to the clipboard and say how it went (copyText falls back to
+// execCommand('copy') on plain HTTP).
+async function copyWithToast(text) {
+  if (await copyText(text)) toast.success(t('admin.nodes.messages.copied'))
+  else toast.error(t('admin.nodes.messages.copyFailedManual'))
 }
 
+async function copyJson() {
+  await copyWithToast(jsonEditorContent.value)
+}
+
+watch(templatePickIndex, () => { templatePickError.value = '' })
+
+const templatePickerOptions = computed(() => protocolTemplates.value.map((tpl, index) => ({ value: index, label: tpl.name })))
+
+// Pick a template for the JSON editor in a small dialog.
 function loadTemplateAsJson() {
   if (protocolTemplates.value.length === 0) return
-  // Show a simple prompt to pick template
-  const names = protocolTemplates.value.map((tpl, i) => `${i + 1}. ${tpl.name}`).join('\n')
-  const pick = prompt(`Select template number:\n${names}`)
-  const idx = parseInt(pick) - 1
-  if (isNaN(idx) || idx < 0 || idx >= protocolTemplates.value.length) return
+  templatePickIndex.value = undefined
+  templatePickError.value = ''
+  showTemplatePicker.value = true
+}
+
+function applyPickedTemplate() {
+  const idx = Number(templatePickIndex.value)
+  if (templatePickIndex.value === undefined || templatePickIndex.value === null || isNaN(idx) || idx < 0 || idx >= protocolTemplates.value.length) {
+    templatePickError.value = t('admin.nodes.protocolForm.templatePicker.required')
+    return
+  }
+  showTemplatePicker.value = false
   const tpl = protocolTemplates.value[idx]
   const json = {
     type: tpl.type,
@@ -1632,7 +1680,7 @@ const createAuthKey = async () => {
     authKeyMasked.value = false
     authKeyUsed.value = 0
   } catch (e) {
-    alert(t('admin.nodes.messages.generateFailed', { message: readNodeApiError(e) }))
+    authKeyError.value = t('admin.nodes.messages.generateFailed', { message: readNodeApiError(e) })
   } finally {
     authKeyGenerating.value = false
   }
@@ -1740,6 +1788,7 @@ const deployCommandsPreview = computed(() => {
 
 // Node actions
 const openAuthKeyModal = async () => {
+  authKeyError.value = ''
   await loadAuthKeysPreview()
   showAuthKeyModal.value = true
 }
@@ -1750,31 +1799,16 @@ const closeAuthKeyModal = () => {
 
 const copyAuthKey = async () => {
   if (!authKey.value) return
-  try {
-    await navigator.clipboard.writeText(authKey.value)
-    alert(t('admin.nodes.messages.copied'))
-  } catch {
-    alert(t('admin.nodes.messages.copyFailed'))
-  }
+  await copyWithToast(authKey.value)
 }
 
 const copyConfig = async () => {
   if (!pluginSupervisorCanaryReady.value) return
-  try {
-    await navigator.clipboard.writeText(configSnippet.value)
-    alert(t('admin.nodes.messages.copied'))
-  } catch {
-    alert(t('admin.nodes.messages.copyFailed'))
-  }
+  await copyWithToast(configSnippet.value)
 }
 
 const copyDeployText = async (text) => {
-  try {
-    await navigator.clipboard.writeText(text)
-    alert(t('admin.nodes.messages.copied'))
-  } catch {
-    alert(t('admin.nodes.messages.copyFailed'))
-  }
+  await copyWithToast(text)
 }
 
 const configSnippet = computed(() => {
@@ -1875,6 +1909,7 @@ const openCreateModal = () => {
     monthly_limit_gb: null,
     monthly_reset_day: 1
   })
+  nodeFormError.value = ''
   showNodeModal.value = true
 }
 
@@ -1891,17 +1926,21 @@ const openEditModal = (node) => {
     monthly_limit_gb: node.monthly_limit ? node.monthly_limit / BYTES_PER_GB : null,
     monthly_reset_day: node.monthly_reset_day || 1
   })
+  nodeFormError.value = ''
   showNodeModal.value = true
 }
 
 const closeNodeModal = () => {
   showNodeModal.value = false
   editingNode.value = null
+  nodeFormError.value = ''
 }
 
 const saveNode = async () => {
+  if (saving.value) return
+  nodeFormError.value = ''
   if (!nodeForm.name || !nodeForm.address) {
-    alert(t('admin.nodes.messages.requiredFields'))
+    nodeFormError.value = t('admin.nodes.messages.requiredFields')
     return
   }
   saving.value = true
@@ -1916,31 +1955,45 @@ const saveNode = async () => {
       monthly_limit: nodeForm.monthly_limit_gb ? Math.round(Number(nodeForm.monthly_limit_gb) * BYTES_PER_GB) : null,
       monthly_reset_day: Number(nodeForm.monthly_reset_day) || 1
     }
-    if (editingNode.value) {
+    const editing = Boolean(editingNode.value)
+    if (editing) {
       payload.status = Number(nodeForm.status)
       await updateNode(editingNode.value.id, payload)
     } else {
       await createNode(payload)
     }
     closeNodeModal()
+    toast.success(t(editing ? 'admin.nodes.messages.nodeSaved' : 'admin.nodes.messages.nodeCreated', { name: payload.name }))
     loadNodes()
     loadStats()
   } catch (e) {
-    alert(t('admin.nodes.messages.saveFailed', { message: readNodeApiError(e) }))
+    nodeFormError.value = t('admin.nodes.messages.saveFailed', { message: readNodeApiError(e) })
   } finally {
     saving.value = false
   }
 }
 
+// Deleting a node removes its protocols and stops every subscription that
+// lists it: type the node name to confirm.
 const confirmDelete = async (node) => {
-  if (!confirm(t('admin.nodes.messages.deleteNodeConfirm', { name: node.name }))) return
-  try {
-    await deleteNode(node.id)
-    loadNodes()
-    loadStats()
-  } catch (e) {
-    alert(t('admin.nodes.messages.deleteFailed', { message: readNodeApiError(e) }))
-  }
+  const confirmed = await confirm({
+    title: t('admin.nodes.confirm.deleteNodeTitle', { name: node.name }),
+    message: t('admin.nodes.confirm.deleteNodeMessage'),
+    confirmLabel: t('admin.nodes.confirm.deleteNodeAction'),
+    tone: 'danger',
+    requireText: String(node.name || node.id),
+    onConfirm: async () => {
+      try {
+        await deleteNode(node.id)
+      } catch (e) {
+        throw new Error(readNodeApiError(e))
+      }
+    }
+  })
+  if (!confirmed) return
+  toast.success(t('admin.nodes.messages.nodeDeleted', { name: node.name }))
+  loadNodes()
+  loadStats()
 }
 
 const syncNode = async (node) => {
@@ -1948,9 +2001,9 @@ const syncNode = async (node) => {
   syncingNodeIds.add(node.id)
   try {
     await syncNodeProtocol(node.id)
-    alert(t('admin.nodes.messages.syncSuccess', { name: node.name }))
+    toast.success(t('admin.nodes.messages.syncSuccess', { name: node.name }))
   } catch (e) {
-    alert(t('admin.nodes.messages.syncFailed', { message: readNodeApiError(e) }))
+    toast.error(t('admin.nodes.messages.syncFailed', { message: readNodeApiError(e) }))
   } finally {
     syncingNodeIds.delete(node.id)
   }
@@ -2055,6 +2108,7 @@ const openAddProtocol = () => {
     reality_settings: {}
   }, null, 2)
   jsonParseError.value = ''
+  protocolFormError.value = ''
   showProtocolFormModal.value = true
 }
 
@@ -2093,12 +2147,14 @@ const editProtocol = (protocol) => {
 
   // Start in JSON mode
   protocolForm.mode = 'json'
+  protocolFormError.value = ''
   showProtocolFormModal.value = true
 }
 
 const closeProtocolFormModal = () => {
   showProtocolFormModal.value = false
   editingProtocol.value = null
+  protocolFormError.value = ''
 }
 
 const applyTemplate = (tpl) => {
@@ -2129,6 +2185,8 @@ const applyTemplate = (tpl) => {
 }
 
 const saveProtocol = async () => {
+  if (savingProtocol.value) return
+  protocolFormError.value = ''
   let payload
 
   if (protocolForm.mode === 'json') {
@@ -2151,13 +2209,13 @@ const saveProtocol = async () => {
         payload.custom_config = typeof json.custom_config === 'string' ? json.custom_config : JSON.stringify(json.custom_config)
       }
     } catch (e) {
-      alert(t('admin.nodes.messages.invalidJson') + ': ' + e.message)
+      protocolFormError.value = t('admin.nodes.messages.invalidJsonDetail', { message: e.message })
       return
     }
   } else {
     // Parse from visual form
     if (!protocolForm.type || !protocolForm.port) {
-      alert(t('admin.nodes.messages.requiredFields'))
+      protocolFormError.value = t('admin.nodes.messages.requiredFields')
       return
     }
     const json = visualToJson()
@@ -2177,30 +2235,47 @@ const saveProtocol = async () => {
 
   savingProtocol.value = true
   try {
-    if (editingProtocol.value) {
+    const editing = Boolean(editingProtocol.value)
+    if (editing) {
       await updateNodeProtocol(selectedNode.value.id, editingProtocol.value.id, payload)
     } else {
       await createNodeProtocol(selectedNode.value.id, payload)
     }
 
     closeProtocolFormModal()
+    toast.success(t(editing ? 'admin.nodes.messages.protocolSaved' : 'admin.nodes.messages.protocolCreated', { type: String(payload.type || '').toUpperCase(), port: payload.port }))
     const res = await getNodeProtocols(selectedNode.value.id)
     protocols.value = readNodeList(res)
   } catch (e) {
-    alert(t('admin.nodes.messages.saveFailed', { message: readNodeApiError(e) }))
+    protocolFormError.value = t('admin.nodes.messages.saveFailed', { message: readNodeApiError(e) })
   } finally {
     savingProtocol.value = false
   }
 }
 
 const deleteProtocol = async (protocol) => {
-  if (!confirm(t('admin.nodes.messages.deleteProtocolConfirm'))) return
+  const node = selectedNode.value
+  const label = { type: String(protocol.type || 'unknown').toUpperCase(), port: protocol.port, name: node?.name || '-' }
+  const confirmed = await confirm({
+    title: t('admin.nodes.confirm.deleteProtocolTitle', label),
+    message: t('admin.nodes.confirm.deleteProtocolMessage', label),
+    confirmLabel: t('admin.nodes.confirm.deleteProtocolAction'),
+    tone: 'danger',
+    onConfirm: async () => {
+      try {
+        await deleteNodeProtocol(node.id, protocol.id)
+      } catch (e) {
+        throw new Error(readNodeApiError(e))
+      }
+    }
+  })
+  if (!confirmed) return
+  toast.success(t('admin.nodes.messages.protocolDeleted', label))
   try {
-    await deleteNodeProtocol(selectedNode.value.id, protocol.id)
-    const res = await getNodeProtocols(selectedNode.value.id)
+    const res = await getNodeProtocols(node.id)
     protocols.value = readNodeList(res)
   } catch (e) {
-    alert(t('admin.nodes.messages.deleteFailed', { message: readNodeApiError(e) }))
+    console.error('Failed to load protocols:', e)
   }
 }
 
@@ -2592,80 +2667,17 @@ onMounted(async () => {
   opacity: 0.4;
 }
 
-/* Modal */
-.modal-overlay {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.7);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-  backdrop-filter: blur(4px);
+/* Dialog and sheet content (UiDialog / UiSheet bodies) */
+.dialog-table-wrap {
+  max-width: 100%;
+  overflow-x: auto;
 }
 
-.modal {
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-lg);
-  width: 480px;
-  max-width: 90%;
-  max-height: 90vh;
-  overflow-y: auto;
-  box-shadow: var(--shadow-lg);
-}
-
-.modal-lg {
-  width: 720px;
-}
-
-.modal-xl {
-  width: min(1080px, 96vw);
-}
-
-.modal-header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 20px 24px;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.modal-header h3 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: var(--text-color);
-}
-
-.close-btn {
-  background: none;
-  border: none;
-  font-size: 24px;
-  cursor: pointer;
-  color: var(--text-secondary);
-  padding: 4px;
-  line-height: 1;
-  transition: var(--transition);
-}
-
-.close-btn:hover {
-  color: var(--text-color);
-}
-
-.modal-body {
-  padding: 24px;
-}
-
-.modal-footer {
-  display: flex;
-  justify-content: flex-end;
-  gap: 12px;
-  padding: 20px 24px;
-  border-top: 1px solid var(--border-color);
+.form-error {
+  margin: 0 0 var(--space-4);
+  color: var(--danger);
+  font-size: var(--type-callout-size);
+  line-height: var(--type-callout-line);
 }
 
 /* Form styles */
@@ -2981,10 +2993,6 @@ onMounted(async () => {
     flex-direction: column;
   }
 
-  .modal {
-    max-width: 95%;
-  }
-
   .log-toolbar {
     grid-template-columns: 1fr;
   }
@@ -3236,7 +3244,7 @@ onMounted(async () => {
   color: #fca5a5;
 }
 
-.modal-pagination {
+.log-pagination {
   padding: 16px 0 0;
 }
 </style>

@@ -2006,6 +2006,14 @@ export default {
     nodes: {
       title: '节点管理',
       addNode: '添加节点',
+      confirm: {
+        deleteNodeTitle: '删除节点 {name}？',
+        deleteNodeMessage: '节点和它的凭据会被移除。此操作无法撤销。',
+        deleteNodeAction: '删除节点',
+        deleteProtocolTitle: '删除协议 {type} :{port}？',
+        deleteProtocolMessage: '节点 {name} 将不再提供这个协议。此操作无法撤销。',
+        deleteProtocolAction: '删除协议'
+      },
       stats: {
         total: '总节点',
         online: '在线',
@@ -2198,6 +2206,14 @@ export default {
           copy: '复制',
           fromTemplate: '从模板加载'
         },
+        templatePicker: {
+          title: '从模板加载',
+          description: '选择一个模板，编辑器中的 JSON 会被替换。',
+          label: '模板',
+          placeholder: '选择模板',
+          required: '请先选择要加载的模板。',
+          apply: '加载模板'
+        },
         jsonStatus: {
           valid: 'JSON 有效',
           invalid: 'JSON 无效'
@@ -2292,14 +2308,17 @@ export default {
         saveFailed: '保存失败: {message}',
         syncSuccess: '\u8282\u70b9 "{name}" \u5df2\u63a5\u6536\u540c\u6b65\u64cd\u4f5c',
         syncFailed: '\u540c\u6b65\u5931\u8d25: {message}',
-        deleteNodeConfirm: '确定要删除节点 "{name}" 吗？',
-        deleteFailed: '删除失败: {message}',
-        deleteProtocolConfirm: '确定要删除此协议吗？',
+        nodeCreated: '已添加节点 {name}',
+        nodeSaved: '已保存节点 {name}',
+        nodeDeleted: '已删除节点 {name}',
+        protocolCreated: '已添加协议 {type} :{port}',
+        protocolSaved: '已保存协议 {type} :{port}',
+        protocolDeleted: '已删除协议 {type} :{port}',
         generateFailed: '生成失败: {message}',
         deployLoadFailed: '加载父节点凭据失败',
         copied: '已复制到剪贴板',
-        copyFailed: '复制失败: {message}',
-        invalidJson: 'JSON 格式无效',
+        copyFailedManual: '无法自动复制，请手动选中文本后复制。',
+        invalidJsonDetail: 'JSON 格式无效：{message}',
         quotaExceededBanner: '有 {count} 个节点本月流量已超限，仅作提示，不会自动限制'
       }
     }

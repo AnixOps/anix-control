@@ -1,5 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest'
-import { mount, flushPromises } from '@vue/test-utils'
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
+import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
+import { inBody } from './helpers/feedback'
 import Nodes from '@/views/admin/Nodes.vue'
 
 const adminApi = vi.hoisted(() => ({
@@ -23,7 +24,9 @@ const adminApi = vi.hoisted(() => ({
 vi.mock('@/api/admin', () => adminApi)
 
 function mountNodes() {
+  // Dialogs and sheets render into document.body.
   return mount(Nodes, {
+    attachTo: document.body,
     global: {
       mocks: {
         $t: (_key, fallback) => fallback || _key
@@ -35,6 +38,8 @@ function mountNodes() {
 function parseAgentConfigSnippet(snippet) {
   return JSON.parse(String(snippet).slice(String(snippet).indexOf('\n') + 1))
 }
+
+enableAutoUnmount(afterEach)
 
 describe('Nodes.vue', () => {
   beforeEach(() => {
@@ -154,16 +159,16 @@ describe('Nodes.vue', () => {
 
     expect(wrapper.vm.authKey).toBe('')
     expect(wrapper.vm.authKeyMasked).toBe(true)
-    expect(wrapper.get('.auth-key-display button').attributes('disabled')).toBeDefined()
+    expect(inBody('.auth-key-display button').attributes('disabled')).toBeDefined()
     expect(parseAgentConfigSnippet(wrapper.vm.configSnippet).Nodes[0].AuthKey).toBe('<your-auth-key>')
 
-    await wrapper.get('[data-testid="generate-auth-key"]').trigger('click')
+    await inBody('[data-testid="generate-auth-key"]').trigger('click')
     await flushPromises()
 
     expect(adminApi.generateAuthKey).toHaveBeenCalledWith(expect.objectContaining({ expire_days: 0 }))
     expect(adminApi.generateAuthKey.mock.calls[0][0].name).toBeTruthy()
     expect(wrapper.vm.authKey).toBe('fresh-registration-key')
-    expect(wrapper.get('[data-testid="auth-key-value"]').text()).toBe('fresh-registration-key')
+    expect(inBody('[data-testid="auth-key-value"]').text()).toBe('fresh-registration-key')
     expect(parseAgentConfigSnippet(wrapper.vm.configSnippet).Nodes[0].AuthKey).toBe('fresh-registration-key')
 
     // Reopening the modal reads the masked list again and keeps the key it issued.
@@ -251,14 +256,14 @@ describe('Nodes.vue', () => {
     await wrapper.vm.openDeployModal()
     await wrapper.vm.$nextTick()
 
-    const toggle = wrapper.get('[data-testid="plugin-supervisor-enabled"]')
+    const toggle = inBody('[data-testid="plugin-supervisor-enabled"]')
     expect(toggle.element.checked).toBe(false)
     await toggle.setValue(true)
 
     expect(wrapper.vm.pluginSupervisorCanaryReady).toBe(false)
-    expect(wrapper.get('[data-testid="plugin-root"]').exists()).toBe(true)
-    expect(wrapper.get('[data-testid="plugin-socket-dir"]').exists()).toBe(true)
-    expect(wrapper.get('[data-testid="plugin-official-public-key"]').exists()).toBe(true)
+    expect(inBody('[data-testid="plugin-root"]').exists()).toBe(true)
+    expect(inBody('[data-testid="plugin-socket-dir"]').exists()).toBe(true)
+    expect(inBody('[data-testid="plugin-official-public-key"]').exists()).toBe(true)
 
     Object.assign(wrapper.vm.deploySettings, {
       grpcUseTLS: true,
