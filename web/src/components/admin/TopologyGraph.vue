@@ -143,6 +143,8 @@ async function render() {
       container: containerEl.value,
       data: graphData(),
       autoFit: 'view',
+      // prefers-reduced-motion: place nodes without G6's layout tweens.
+      animation: !(typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches),
       layout: props.layout === 'dagre'
         ? { type: 'antv-dagre', rankdir: 'LR', nodesep: 32, ranksep: 72 }
         : { type: 'force', preventOverlap: true, linkDistance: 160 },

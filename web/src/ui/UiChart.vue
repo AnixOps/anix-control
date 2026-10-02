@@ -152,6 +152,10 @@ function tableCell(row, column) {
   return text === null || text === undefined || text === '' ? '—' : text
 }
 
+function prefersReducedMotion() {
+  return typeof window !== 'undefined' && typeof window.matchMedia === 'function' && window.matchMedia('(prefers-reduced-motion: reduce)').matches
+}
+
 async function loadEngine() {
   if (!engine) engine = await import('./internal/echarts.js')
   return engine
@@ -165,7 +169,8 @@ async function render() {
     if (!chart.value) {
       chart.value = echarts.init(canvasEl.value, themeFor(echarts))
     }
-    chart.value.setOption(props.option, { notMerge: true })
+    // prefers-reduced-motion: draw the final state without ECharts' tweens.
+    chart.value.setOption(prefersReducedMotion() ? { ...props.option, animation: false } : props.option, { notMerge: true })
     engineError.value = null
   } catch (cause) {
     engineError.value = cause instanceof Error ? cause : new Error(String(cause))
