@@ -1,7 +1,11 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+import { render, screen, waitFor, within } from '@testing-library/vue'
+import userEvent from '@testing-library/user-event'
+import UiHost from '@/ui/UiHost.vue'
 import Coupons from '@/views/admin/Coupons.vue'
 import { setLocale } from '@/i18n'
+import { toastMessages, toasts } from './helpers/feedback'
 
 const adminApi = vi.hoisted(() => ({
   createCoupon: vi.fn(),
@@ -79,5 +83,67 @@ describe('Admin Coupons', () => {
     expect(wrapper.text()).not.toContain('LEGACY10')
 
     wrapper.unmount()
+  })
+
+  describe('dialogs and feedback', () => {
+    const Harness = {
+      components: { Coupons, UiHost },
+      template: '<div><Coupons /><UiHost /></div>'
+    }
+
+    beforeEach(() => {
+      adminApi.getCoupons.mockResolvedValue({ data: [{ id: 3, code: 'SUMMER', name: 'Summer', type: 1, value: 10, use_count: 0, limit_use: 10, started_at: 1783526400, ended_at: 1786118400 }] })
+    })
+
+    it('creates a coupon in a dialog with inline field and API errors', async () => {
+      const user = userEvent.setup()
+      adminApi.createCoupon.mockRejectedValueOnce(new Error('code exists')).mockResolvedValueOnce({})
+      render(Harness)
+      await screen.findByText('SUMMER')
+      const opener = screen.getByRole('button', { name: 'Create Coupon' })
+      await user.click(opener)
+      const dialog = await screen.findByRole('dialog', { name: 'Create Coupon' })
+
+      await user.click(within(dialog).getByRole('button', { name: 'Create' }))
+      expect(within(dialog).getByLabelText(/Coupon code/).getAttribute('aria-invalid')).toBe('true')
+      expect(dialog.textContent).toContain('Enter a coupon code')
+      expect(dialog.textContent).toContain('Enter a coupon name')
+      expect(adminApi.createCoupon).not.toHaveBeenCalled()
+
+      await user.type(within(dialog).getByLabelText(/Coupon code/), 'new10')
+      await user.type(within(dialog).getByLabelText(/Coupon name/), 'New')
+      await user.click(within(dialog).getByRole('button', { name: 'Create' }))
+      await waitFor(() => expect(dialog.textContent).toContain('code exists'))
+      expect(toasts()).toHaveLength(0)
+
+      await user.click(within(dialog).getByRole('button', { name: 'Create' }))
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+      expect(adminApi.createCoupon).toHaveBeenLastCalledWith(expect.objectContaining({ code: 'NEW10', name: 'New' }))
+      expect(toastMessages('success')).toEqual(['Coupon created successfully'])
+      await waitFor(() => expect(document.activeElement).toBe(opener))
+    })
+
+    it('confirms deleting a coupon; Esc keeps it, a failure stays inline', async () => {
+      const user = userEvent.setup()
+      adminApi.deleteCoupon.mockRejectedValueOnce(new Error('coupon in use')).mockResolvedValueOnce({})
+      render(Harness)
+      await screen.findByText('SUMMER')
+      const opener = screen.getByRole('button', { name: 'Delete' })
+
+      await user.click(opener)
+      await screen.findByRole('alertdialog', { name: 'Delete coupon SUMMER?' })
+      await user.keyboard('{Escape}')
+      await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+      expect(adminApi.deleteCoupon).not.toHaveBeenCalled()
+
+      await user.click(opener)
+      const dialog = await screen.findByRole('alertdialog')
+      await user.click(within(dialog).getByRole('button', { name: 'Delete coupon' }))
+      expect((await within(dialog).findByRole('alert')).textContent).toContain('coupon in use')
+      await user.click(within(dialog).getByRole('button', { name: 'Delete coupon' }))
+      await waitFor(() => expect(screen.queryByRole('alertdialog')).toBeNull())
+      expect(adminApi.deleteCoupon).toHaveBeenLastCalledWith(3)
+      expect(toastMessages('success')).toEqual(['Coupon SUMMER deleted'])
+    })
   })
 })

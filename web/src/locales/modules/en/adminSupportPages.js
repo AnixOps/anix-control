@@ -43,12 +43,18 @@ export default {
     empty: {
       noData: 'No coupons'
     },
+    confirm: {
+      deleteTitle: 'Delete coupon {code}?',
+      deleteMessage: 'Users can no longer redeem this code. This can’t be undone.',
+      deleteAction: 'Delete coupon'
+    },
     messages: {
       fetchFailed: 'Failed to load coupons',
-      requiredFields: 'Please fill in coupon code and coupon name',
+      codeRequired: 'Enter a coupon code',
+      nameRequired: 'Enter a coupon name',
       createSuccess: 'Coupon created successfully',
       createFailed: 'Failed to create coupon',
-      deleteConfirm: 'Delete coupon {code}?',
+      deleted: 'Coupon {code} deleted',
       deleteFailed: 'Failed to delete coupon'
     }
   },

@@ -43,12 +43,18 @@ export default {
     empty: {
       noData: '暂无优惠券'
     },
+    confirm: {
+      deleteTitle: '删除优惠券 {code}？',
+      deleteMessage: '用户将不能再使用这个优惠码。此操作无法撤销。',
+      deleteAction: '删除优惠券'
+    },
     messages: {
       fetchFailed: '加载优惠券失败',
-      requiredFields: '请填写优惠券码和优惠券名称',
+      codeRequired: '请填写优惠券码',
+      nameRequired: '请填写优惠券名称',
       createSuccess: '优惠券创建成功',
       createFailed: '优惠券创建失败',
-      deleteConfirm: '确定删除优惠券 {code} 吗？',
+      deleted: '已删除优惠券 {code}',
       deleteFailed: '删除优惠券失败'
     }
   },
