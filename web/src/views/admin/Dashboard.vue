@@ -1,285 +1,401 @@
 <template>
-  <div class="page-shell">
-    <div class="page-toolbar">
-      <div>
-        <h1>{{ t('adminDashboard.title') }}</h1>
-        <p>{{ t('adminDashboard.subtitle') }}</p>
+  <div class="dashboard-page" :aria-busy="loading ? 'true' : undefined">
+    <UiPageHeader :title="t('adminDashboard.title')" :description="t('adminDashboard.subtitle')">
+      <template #actions>
+        <span v-if="stats.cached_at" class="dashboard-page__updated">
+          {{ t('adminDashboard.updatedAt', { time: format.relativeTime(stats.cached_at) }) }}
+        </span>
+        <UiButton :icon="RotateCw" :loading="loading" data-dashboard-refresh @click="refresh">{{ t('adminDashboard.refresh') }}</UiButton>
+      </template>
+    </UiPageHeader>
+
+    <UiErrorState v-if="statsError && !statsLoaded" :title="t('adminDashboard.loadFailed')" :error="statsError" @retry="loadStats()" />
+
+    <template v-else>
+      <section class="dashboard-page__metrics" :aria-label="t('adminDashboard.metrics.label')">
+        <RouterLink v-for="metric in metrics" :key="metric.key" :to="metric.to" class="dashboard-page__metric-link" :data-metric="metric.key">
+          <UiMetricCard
+            :label="metric.label"
+            :icon="metric.icon"
+            :value="metric.value"
+            :detail="metric.detail"
+            :trend="metric.trend"
+            :trend-direction="metric.trendDirection"
+            :trend-tone="metric.trendTone"
+            :sparkline="metric.sparkline"
+            :loading="metric.loading"
+          />
+        </RouterLink>
+      </section>
+
+      <UiCard :title="t('adminDashboard.traffic.title')" :description="t('adminDashboard.traffic.description')" as="section">
+        <template #actions>
+          <RouterLink class="dashboard-page__link" to="/admin/monitor/traffic">{{ t('adminDashboard.traffic.open') }}</RouterLink>
+        </template>
+        <UiChart
+          :option="trafficChartOption"
+          :label="t('adminDashboard.traffic.label')"
+          :summary="trafficSummary"
+          :height="260"
+          :loading="trafficLoading"
+          :error="trafficError"
+          :error-title="t('adminDashboard.traffic.loadFailed')"
+          :empty="!trafficHasData"
+          :empty-title="t('adminDashboard.traffic.empty')"
+          :empty-description="t('adminDashboard.traffic.emptyDescription')"
+          :table="trafficTable"
+          data-dashboard-traffic
+          @retry="loadTraffic"
+        />
+      </UiCard>
+
+      <div class="dashboard-page__columns">
+        <DashboardAlerts
+          :offline-nodes="offlineNodes"
+          :nodes-error="nodesError"
+          :nodes-loading="nodesLoading"
+          :open-tickets="openTickets"
+          :tickets-error="ticketsError"
+          :pending-orders="isCommercial ? Number(stats.pending_orders || 0) : 0"
+          :latest-report-at="latestReportAt"
+          @retry-nodes="loadNodes"
+          @retry-tickets="loadTickets"
+        />
+        <DashboardActivity
+          :entries="activity"
+          :loading="activityLoading"
+          :error="activityError"
+          @retry="loadActivity"
+        />
       </div>
-      <button class="btn btn-primary" @click="refreshData" :disabled="loading">
-        {{ loading ? t('adminDashboard.actions.refreshing') : t('adminDashboard.actions.refresh') }}
-      </button>
-    </div>
 
-    <section class="metrics-grid">
-      <article v-for="metric in metrics" :key="metric.label" class="metric-card section-panel">
-        <div class="metric-top">
-          <span class="metric-tag" :class="metric.tone">{{ metric.code }}</span>
-          <span class="metric-label">{{ metric.label }}</span>
+      <UiSection v-if="isCommercial" :title="t('adminDashboard.commerce.title')">
+        <div class="dashboard-page__metrics">
+          <RouterLink v-for="metric in commerceMetrics" :key="metric.key" :to="metric.to" class="dashboard-page__metric-link" :data-metric="metric.key">
+            <UiMetricCard :label="metric.label" :icon="metric.icon" :value="metric.value" :detail="metric.detail" :loading="metric.loading" />
+          </RouterLink>
         </div>
-        <div class="metric-value">{{ metric.value }}</div>
-        <div class="metric-detail">{{ metric.detail }}</div>
-      </article>
-    </section>
-
-    <section class="detail-grid">
-      <article v-if="isCommercial" class="section-panel detail-card">
-        <div class="detail-header">
-          <h2>{{ t('adminDashboard.orders.title') }}</h2>
-        </div>
-        <div class="detail-list">
-          <div class="detail-row">
-            <span>{{ t('adminDashboard.orders.total') }}</span>
-            <strong>{{ formatNumber(stats.total_orders) }}</strong>
-          </div>
-          <div class="detail-row">
-            <span>{{ t('adminDashboard.orders.pending') }}</span>
-            <strong class="text-warning">{{ stats.pending_orders || 0 }}</strong>
-          </div>
-          <div class="detail-row">
-            <span>{{ t('adminDashboard.orders.completed') }}</span>
-            <strong class="text-success">{{ stats.paid_orders || 0 }}</strong>
-          </div>
-        </div>
-      </article>
-
-      <article class="section-panel detail-card">
-        <div class="detail-header">
-          <h2>{{ t('adminDashboard.traffic.title') }}</h2>
-        </div>
-        <div class="detail-list">
-          <div class="detail-row">
-            <span>{{ t('adminDashboard.traffic.totalUsed') }}</span>
-            <strong>{{ formatBytes(stats.total_traffic_used) }}</strong>
-          </div>
-          <div class="detail-row">
-            <span>{{ t('adminDashboard.traffic.today') }}</span>
-            <strong>{{ formatBytes(stats.today_traffic) }}</strong>
-          </div>
-          <div v-if="stats.cached_at" class="detail-row muted-row">
-            <span>{{ t('adminDashboard.cache.cachedAt', { time: formatDateTime(stats.cached_at) }) }}</span>
-          </div>
-        </div>
-      </article>
-    </section>
+      </UiSection>
+    </template>
   </div>
 </template>
 
 <script setup>
+// 仪表盘 (plan §7.4 dashboard template, §8.2): four metric cards (users,
+// online / total nodes, today's traffic, open tickets) → the 24-hour traffic
+// chart → two columns: what needs attention (offline nodes, open tickets,
+// stalled traffic reports; pending orders in the commercial edition) and
+// the recent audit log. Every number comes from an existing endpoint:
+// GET /admin/dashboard (cached 60 s; 刷新 asks refresh=true),
+// /admin/traffic/hourly (24 h), /admin/ticket, /admin/nodes (offline ones)
+// and /admin/system/audit-logs. Each block loads, fails and retries on its
+// own. Revenue and orders stay commercial-only.
 import { computed, onMounted, ref } from 'vue'
-import { getDashboard } from '@/api/admin'
+import { RouterLink } from 'vue-router'
+import { Activity, CircleDollarSign, LifeBuoy, ReceiptText, RotateCw, Server, Users } from '@lucide/vue'
+import { getDashboard, getNodes, getSystemAuditLogs, getTickets, getTrafficHourly } from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { filterByEdition, useEdition } from '@/composables/useEdition'
+import { useEdition } from '@/composables/useEdition'
+import UiButton from '@/ui/UiButton.vue'
+import UiCard from '@/ui/UiCard.vue'
+import UiChart from '@/ui/UiChart.vue'
+import UiErrorState from '@/ui/UiErrorState.vue'
+import UiMetricCard from '@/ui/UiMetricCard.vue'
+import UiPageHeader from '@/ui/UiPageHeader.vue'
+import UiSection from '@/ui/UiSection.vue'
+import { useFormat } from '@/ui/composables/useFormat'
+import { readNodeList, statusName } from './nodes/nodeData'
+import { errorText, hasTraffic, peakPoint, readTrafficMeta, readTrafficSeries, trafficOption, trafficTotal } from './monitor/trafficData'
+import DashboardActivity from './dashboard/DashboardActivity.vue'
+import DashboardAlerts from './dashboard/DashboardAlerts.vue'
 
-const { t, formatDateTime } = useAppI18n()
-// Revenue and orders are commercial.
+const ACTIVITY_SIZE = 6
+const OPEN_TICKET = 0
+const ANSWERED_TICKET = 1
+
+const { t } = useAppI18n()
+const format = useFormat()
 const { isCommercial } = useEdition()
+
 const stats = ref({})
-const loading = ref(false)
+const statsLoaded = ref(false)
+const statsLoading = ref(false)
+const statsError = ref(null)
 
-const metrics = computed(() => filterByEdition([
-  {
-    code: 'USR',
-    tone: 'primary',
-    label: t('adminDashboard.stats.totalUsers'),
-    value: formatNumber(stats.value.total_users),
-    detail: `${t('adminDashboard.stats.todayNewUsers')} +${stats.value.today_new_users || 0}`
-  },
-  {
-    code: 'ACT',
-    tone: 'success',
-    label: t('adminDashboard.stats.activeUsers'),
-    value: formatNumber(stats.value.active_users),
-    detail: t('adminDashboard.stats.expiredBanned', {
-      expired: stats.value.expired_users || 0,
-      banned: stats.value.banned_users || 0
-    })
-  },
-  {
-    code: 'NOD',
-    tone: 'info',
-    label: t('adminDashboard.stats.activeNodes'),
-    value: `${stats.value.active_nodes || 0} / ${stats.value.total_nodes || 0}`,
-    detail: `${t('adminDashboard.stats.onlineUsers')} ${formatNumber(stats.value.online_users)}`
-  },
-  {
-    code: 'REV',
-    edition: 'commercial',
-    tone: 'warning',
-    label: t('adminDashboard.stats.monthlyIncome'),
-    value: `¥${formatMoney(stats.value.monthly_income)}`,
-    detail: t('adminDashboard.stats.incomeSummary', {
-      today: formatMoney(stats.value.today_income),
-      total: formatMoney(stats.value.total_revenue)
-    })
-  }
-]))
+const points = ref([])
+const trafficMeta = ref({})
+const trafficLoading = ref(false)
+const trafficError = ref(null)
 
-const fetchData = async (refresh = false) => {
-  loading.value = true
-  try {
-    const res = await getDashboard(refresh)
-    stats.value = readDashboardStats(res)
-  } catch (err) {
-    console.error(t('adminDashboard.messages.fetchFailed'), err)
-  } finally {
-    loading.value = false
-  }
-}
+const tickets = ref(null)
+const ticketsLoading = ref(false)
+const ticketsError = ref(null)
 
-const refreshData = () => {
-  fetchData(true)
-}
+const nodes = ref([])
+const nodesLoading = ref(false)
+const nodesError = ref(null)
 
-function readDashboardStats(res) {
-  if (!res || typeof res !== 'object') {
-    return {}
-  }
+const activity = ref([])
+const activityLoading = ref(false)
+const activityError = ref(null)
+
+const loading = computed(() => statsLoading.value || trafficLoading.value || ticketsLoading.value || nodesLoading.value || activityLoading.value)
+
+function readPayload(res) {
+  if (!res || typeof res !== 'object') return {}
   const payload = Object.prototype.hasOwnProperty.call(res, 'code') ? res.data : (res.data ?? res)
   return payload && typeof payload === 'object' ? payload : {}
 }
 
-function formatNumber(num) {
-  if (!num) return '0'
-  return num.toLocaleString()
+function readList(res) {
+  if (res && typeof res.code === 'number' && res.code !== 0) throw new Error(res.msg || res.message || 'request failed')
+  const payload = readPayload(res)
+  if (Array.isArray(payload)) return payload
+  return Array.isArray(payload.list) ? payload.list : []
 }
 
-function formatMoney(cents) {
-  if (!cents) return '0.00'
-  return (cents / 100).toFixed(2)
+const count = value => format.number(Number(value || 0))
+
+const openTickets = computed(() => (tickets.value || []).filter(ticket => Number(ticket.status) === OPEN_TICKET))
+const answeredTickets = computed(() => (tickets.value || []).filter(ticket => Number(ticket.status) === ANSWERED_TICKET))
+const offlineNodes = computed(() => nodes.value.filter(node => statusName(node.status) === 'offline'))
+const latestReportAt = computed(() => Number(trafficMeta.value?.latest_log_at || 0))
+
+const metrics = computed(() => {
+  const s = stats.value
+  const waitingStats = statsLoading.value && !statsLoaded.value
+  const newUsers = Number(s.today_new_users || 0)
+  return [
+    {
+      key: 'users',
+      to: '/admin/users',
+      icon: Users,
+      label: t('adminDashboard.metrics.users'),
+      value: count(s.total_users),
+      trend: newUsers > 0 ? t('adminDashboard.metrics.usersToday', { count: count(newUsers) }) : '',
+      trendDirection: 'up',
+      trendTone: 'positive',
+      detail: t('adminDashboard.metrics.usersDetail', { active: count(s.active_users), expired: count(s.expired_users), banned: count(s.banned_users) }),
+      loading: waitingStats
+    },
+    {
+      key: 'nodes',
+      to: '/admin/monitor',
+      icon: Server,
+      label: t('adminDashboard.metrics.nodes'),
+      value: `${count(s.active_nodes)} / ${count(s.total_nodes)}`,
+      detail: t('adminDashboard.metrics.nodesDetail', { count: count(s.online_users) }),
+      loading: waitingStats
+    },
+    {
+      key: 'traffic',
+      to: '/admin/monitor/traffic',
+      icon: Activity,
+      label: t('adminDashboard.metrics.traffic'),
+      value: format.bytes(s.today_traffic, { precision: 1 }),
+      detail: t('adminDashboard.metrics.trafficDetail', { total: format.bytes(s.total_traffic_used) }),
+      sparkline: points.value.map(point => point.traffic),
+      loading: waitingStats
+    },
+    {
+      key: 'tickets',
+      to: '/admin/tickets',
+      icon: LifeBuoy,
+      label: t('adminDashboard.metrics.tickets'),
+      value: tickets.value ? count(openTickets.value.length) : '—',
+      detail: tickets.value
+        ? t('adminDashboard.metrics.ticketsDetail', { count: count(answeredTickets.value.length) })
+        : (ticketsError.value ? t('adminDashboard.metrics.ticketsUnknown') : ''),
+      loading: ticketsLoading.value && !tickets.value
+    }
+  ]
+})
+
+const commerceMetrics = computed(() => {
+  const s = stats.value
+  const waitingStats = statsLoading.value && !statsLoaded.value
+  return [
+    {
+      key: 'revenue',
+      to: '/admin/orders',
+      icon: CircleDollarSign,
+      label: t('adminDashboard.metrics.revenue'),
+      value: format.money(s.monthly_income || 0),
+      detail: t('adminDashboard.metrics.revenueDetail', { today: format.money(s.today_income || 0), total: format.money(s.total_revenue || 0) }),
+      loading: waitingStats
+    },
+    {
+      key: 'orders',
+      to: '/admin/orders',
+      icon: ReceiptText,
+      label: t('adminDashboard.metrics.orders'),
+      value: count(s.pending_orders),
+      detail: t('adminDashboard.metrics.ordersDetail', { total: count(s.total_orders), paid: count(s.paid_orders) }),
+      loading: waitingStats
+    }
+  ]
+})
+
+const hourLabel = ts => {
+  const date = new Date(ts * 1000)
+  return `${String(date.getHours()).padStart(2, '0')}:00`
 }
 
-function formatBytes(bytes) {
-  if (!bytes) return '0 B'
-  const units = ['B', 'KB', 'MB', 'GB', 'TB']
-  let value = bytes
-  let index = 0
-  while (value >= 1024 && index < units.length - 1) {
-    value /= 1024
-    index += 1
+const trafficHasData = computed(() => hasTraffic(points.value))
+const trafficChartOption = computed(() => (trafficHasData.value
+  ? trafficOption(points.value, { label: hourLabel, bytes: format.bytes, seriesName: t('adminDashboard.traffic.series') })
+  : null))
+const trafficSummary = computed(() => {
+  const peak = peakPoint(points.value)
+  if (!peak) return t('adminDashboard.traffic.summaryEmpty')
+  return t('adminDashboard.traffic.summary', {
+    total: format.bytes(trafficTotal(points.value)),
+    peak: format.bytes(peak.traffic),
+    hour: format.dateTime(peak.hour_ts)
+  })
+})
+const trafficTable = computed(() => ({
+  columns: [
+    { key: 'hour_ts', label: t('adminDashboard.traffic.hour'), format: value => format.dateTime(value) },
+    { key: 'traffic', label: t('adminDashboard.traffic.value'), numeric: true, format: value => format.bytes(value) }
+  ],
+  rows: points.value
+}))
+
+async function loadStats(refreshCache = false) {
+  statsLoading.value = true
+  try {
+    stats.value = readPayload(await getDashboard(refreshCache))
+    statsLoaded.value = true
+    statsError.value = null
+  } catch (error) {
+    statsError.value = error
+  } finally {
+    statsLoading.value = false
   }
-  return `${value.toFixed(2)} ${units[index]}`
 }
 
-onMounted(() => fetchData())
+async function loadTraffic() {
+  trafficLoading.value = true
+  try {
+    const res = await getTrafficHourly(24, 0)
+    points.value = readTrafficSeries(res)
+    trafficMeta.value = readTrafficMeta(res)
+    trafficError.value = null
+  } catch (error) {
+    trafficError.value = errorText(error, t('adminDashboard.traffic.loadFailed'))
+  } finally {
+    trafficLoading.value = false
+  }
+}
+
+async function loadTickets() {
+  ticketsLoading.value = true
+  try {
+    tickets.value = readList(await getTickets())
+    ticketsError.value = null
+  } catch (error) {
+    ticketsError.value = error
+  } finally {
+    ticketsLoading.value = false
+  }
+}
+
+async function loadNodes() {
+  nodesLoading.value = true
+  try {
+    nodes.value = readNodeList(await getNodes({ page: 1, page_size: 200 }))
+    nodesError.value = null
+  } catch (error) {
+    nodesError.value = error
+  } finally {
+    nodesLoading.value = false
+  }
+}
+
+async function loadActivity() {
+  activityLoading.value = true
+  try {
+    const res = await getSystemAuditLogs({ page: 1, page_size: ACTIVITY_SIZE })
+    const payload = res?.data?.data || res?.data || {}
+    activity.value = Array.isArray(payload.list) ? payload.list.slice(0, ACTIVITY_SIZE) : []
+    activityError.value = null
+  } catch (error) {
+    activityError.value = error
+  } finally {
+    activityLoading.value = false
+  }
+}
+
+function loadAll(refreshCache = false) {
+  return Promise.all([loadStats(refreshCache), loadTraffic(), loadTickets(), loadNodes(), loadActivity()])
+}
+
+function refresh() {
+  return loadAll(true)
+}
+
+onMounted(() => loadAll(false))
 </script>
 
 <style scoped>
-.metrics-grid,
-.detail-grid {
-  display: grid;
-  gap: 20px;
-}
-
-.metrics-grid {
-  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
-}
-
-.detail-grid {
-  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
-}
-
-.metric-card,
-.detail-card {
-  padding: 20px;
-}
-
-.metric-card {
-  min-height: 168px;
-}
-
-.metric-top,
-.detail-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
-
-.metric-top {
-  gap: 12px;
-}
-
-.metric-tag {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  min-width: 48px;
-  height: 28px;
-  padding: 0 10px;
-  border-radius: 999px;
-  font-size: 11px;
-  font-weight: 800;
-}
-
-.metric-tag.primary {
-  color: var(--primary-color);
-  background: rgba(0, 100, 250, 0.08);
-}
-
-.metric-tag.success {
-  color: var(--success-color);
-  background: rgba(22, 163, 74, 0.08);
-}
-
-.metric-tag.info {
-  color: #2563eb;
-  background: rgba(37, 99, 235, 0.08);
-}
-
-.metric-tag.warning {
-  color: var(--warning-color);
-  background: rgba(217, 119, 6, 0.08);
-}
-
-.metric-label,
-.detail-row span {
-  color: var(--text-secondary);
-}
-
-.metric-value {
-  margin-top: 18px;
-  font-size: 34px;
-  line-height: 1.1;
-  font-weight: 700;
-}
-
-.metric-detail {
-  margin-top: 18px;
-  padding-top: 14px;
-  border-top: 1px solid var(--border-color);
-  color: var(--text-secondary);
-  font-size: 13px;
-}
-
-.detail-header {
-  margin-bottom: 16px;
-}
-
-.detail-header h2 {
-  font-size: 18px;
-  line-height: 1.2;
-}
-
-.detail-list {
+.dashboard-page {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-6);
+  min-width: 0;
 }
 
-.detail-row {
-  min-height: 48px;
-  padding: 12px 14px;
-  border-radius: 8px;
-  background: var(--surface-muted);
+.dashboard-page__updated {
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
 }
 
-.muted-row {
-  justify-content: flex-start;
-  font-size: 13px;
+.dashboard-page__metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
+  gap: var(--space-4);
 }
 
-@media (max-width: 768px) {
-  .metric-value {
-    font-size: 28px;
+.dashboard-page__metric-link {
+  display: block;
+  min-width: 0;
+  border-radius: var(--radius-md);
+  color: inherit;
+  text-decoration: none;
+  transition: transform var(--dur-micro) var(--ease-standard);
+}
+
+.dashboard-page__metric-link:hover {
+  transform: translateY(-1px);
+}
+
+.dashboard-page__metric-link:focus-visible {
+  outline: var(--focus-ring);
+  outline-offset: 2px;
+}
+
+.dashboard-page__link {
+  color: var(--accent);
+  font-size: var(--type-callout-size);
+  font-weight: var(--weight-medium);
+  text-decoration: none;
+}
+
+.dashboard-page__link:hover {
+  text-decoration: underline;
+}
+
+.dashboard-page__columns {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 380px), 1fr));
+  gap: var(--space-4);
+  align-items: start;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .dashboard-page__metric-link:hover {
+    transform: none;
   }
 }
 </style>
