@@ -191,7 +191,9 @@ When migrating clients from Flux-shaped `/api/v1` expectations:
 5. Verify runtime attachment through job and relay evidence, not only list
    responses.
 6. Do not assume speed-limit runtime enforcement is complete just because CRUD
-   exists.
+   exists. The `nftables_ansible` path does not enforce speed limits at all,
+   and its `fifo` and `hash` strategies use only the first target (see
+   `docs/guide/forward-tunnel-runtime-ops.md`).
 
 ## Completion Criteria For Future Clone Work
 

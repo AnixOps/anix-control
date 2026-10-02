@@ -1629,6 +1629,42 @@ subscription page filed before is gone.
   (as for login, [container deployment](architecture/container-deployment.md));
   after the cutover identity counts them in its shared table.
 
+### nftables Forwards Move To The `inet v2b_forward` Table
+
+Only for forwards on the `nftables_ansible` backend. The playbooks now keep
+every forward in an `inet v2b_forward` table (IPv4 and IPv6) instead of the
+IPv4-only `ip v2b_forward` table, and count traffic in both directions.
+
+- Nothing changes on the relays at upgrade time. The old rules keep working
+  until the forward is next applied (created, saved, resumed, or its tunnel
+  changed). That apply removes the forward from `ip v2b_forward` in the same
+  nft transaction that adds it to `inet v2b_forward`, so no connection is
+  translated twice; the old table is deleted with the last forward that used
+  it. Pause and delete clean both tables. To migrate a forward now, pause and
+  resume it, or save it unchanged.
+- The relay needs Linux 5.2+ and nft 0.9.1+ (NAT chains in an `inet` table).
+  On an older relay the apply fails, the old rules stay in place, and the
+  forward is marked as an error.
+- Traffic numbers jump to correct values after the forward migrates. Before,
+  the counter sat on the NAT chain, which sees only the first packet of each
+  connection, download was always 0, and with the default Ansible output
+  settings the stats playbook's numbers did not reach the panel at all. Now
+  upload counts every packet from client to target and download every packet
+  back. Usage, quotas and quota-triggered pauses for affected users and
+  tunnel grants will rise accordingly; check quotas that were sized against
+  the old, too-low numbers. Totals already recorded are not changed. Until a
+  forward migrates, its old counter is read (upload only).
+- IPv6 targets (`[2001:db8::1]:443`) now work. `net.ipv6.conf.all.forwarding`
+  is turned on only on relays with an IPv6 target; on a relay that takes its
+  IPv6 default route from router advertisements, set `accept_ra=2` on that
+  interface first.
+- A specific tunnel listen address is now honoured: `0.0.0.0` accepts IPv4
+  clients only, a concrete address only traffic to that address. Empty,
+  `::` and `[::]` accept both families as before.
+- `fifo` (主备) and `hash` still use only the first target, and speed limits
+  are still not enforced on this path
+  ([layout and limits](guide/forward-tunnel-runtime-ops.md#nftables_ansible-rule-layout)).
+
 ## Moving Logins To The Identity Module
 
 From 4.1 the identity module can own accounts, passwords, MFA and token

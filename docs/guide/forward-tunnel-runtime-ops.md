@@ -143,6 +143,138 @@ Check all three layers:
   - inspect `nft` ruleset for the default path, or `iptables-save` for the legacy path
   - confirm the expected rule exists or was removed
 
+### `nftables_ansible` rule layout
+
+The panel renders each forward's ruleset
+(`internal/service/forward_nftables_plan.go`) and sends it to the playbooks as
+the `nftables` extra var. `config/deploy/ansible/playbooks/files/v2b_forward_nft.sh`
+then replaces the forward's rules in one `nft -f` transaction, so a failed
+apply leaves the previous rules in place.
+
+All forwards share one table, `inet v2b_forward`, with three base chains:
+
+- `prerouting` (nat, priority dstnat): one rule per forward and protocol that
+  matches the in port (plus `iifname` and the tunnel listen address when set)
+  and jumps to `v2b_fwd_<id>_<proto>`.
+- `postrouting` (nat, priority srcnat): `masquerade` for the forward's
+  connections, IPv4 and IPv6.
+- `forward` (filter, priority filter): jumps to the accounting chain
+  `v2b_acct_<id>_<proto>` for every packet of the forward's connections.
+
+Rules in the base chains are found by their comment
+(`v2b-forward-<id>-<proto>-prerouting|forward|postrouting`). Example for
+forward 12, TCP, `round` over two IPv4 targets and one IPv6 target
+(`nft list table inet v2b_forward`):
+
+```
+table inet v2b_forward {
+	counter fwd_12_tcp_up {
+		packets 0 bytes 0
+	}
+
+	counter fwd_12_tcp_down {
+		packets 0 bytes 0
+	}
+
+	chain prerouting {
+		type nat hook prerouting priority dstnat; policy accept;
+		tcp dport 8080 jump v2b_fwd_12_tcp comment "v2b-forward-12-tcp-prerouting"
+	}
+
+	chain postrouting {
+		type nat hook postrouting priority srcnat; policy accept;
+		ct status dnat meta l4proto tcp ct original proto-dst 8080 masquerade comment "v2b-forward-12-tcp-postrouting"
+	}
+
+	chain forward {
+		type filter hook forward priority filter; policy accept;
+		ct status dnat meta l4proto tcp ct original proto-dst 8080 jump v2b_acct_12_tcp comment "v2b-forward-12-tcp-forward"
+	}
+
+	chain v2b_fwd_12_tcp {
+		meta nfproto ipv4 numgen inc mod 2 vmap { 0 : goto v2b_fwd_12_tcp_v4_0, 1 : goto v2b_fwd_12_tcp_v4_1 }
+		meta nfproto ipv6 meta l4proto tcp dnat ip6 to [2001:db8::1]:443
+	}
+
+	chain v2b_fwd_12_tcp_v4_0 {
+		meta l4proto tcp dnat ip to 10.0.0.1:80
+	}
+
+	chain v2b_fwd_12_tcp_v4_1 {
+		meta l4proto tcp dnat ip to 10.0.0.2:80
+	}
+
+	chain v2b_acct_12_tcp {
+		ct direction original counter name "fwd_12_tcp_up"
+		ct direction reply counter name "fwd_12_tcp_down"
+	}
+}
+```
+
+Requirements: Linux 5.2 or later and nft 0.9.1 or later on the relay (NAT
+chains in an `inet` table). If the host firewall drops forwarded packets
+(for example an iptables `FORWARD` policy of `DROP`, as Docker sets), allow
+the forwarded traffic there; an accept in this table does not override a drop
+in another table.
+
+#### Traffic accounting
+
+- `fwd_<id>_<proto>_up` counts the conntrack original direction (client to
+  target) and is reported as upload; `fwd_<id>_<proto>_down` counts the reply
+  direction (target to client) and is reported as download. This is the same
+  meaning as the gost path's `u`/`d`, and both go through the same
+  `traffic_ratio` and one-way/two-way (`flow`) conversion, so
+  `out_flow` += upload and `in_flow` += download as for gost.
+- The counters are table objects, not rule counters: re-applying a forward
+  flushes and rebuilds its chains but keeps the counters. Pause keeps them;
+  delete removes them. After a relay reboot the counters start again from
+  zero; the traffic cursor treats a lower total as a reset and counts the new
+  total.
+- The counters count whole IP packets (headers included), so totals are a
+  few percent higher than gost's payload byte counts for the same traffic.
+- `ForwardAnsibleStatsWorker` runs `forward_collect_stats_nftables.yml` every
+  60 seconds and records the totals under the cursor key
+  `nftables_ansible:ct`.
+
+#### IPv6
+
+- Targets can be `host:port` or `[v6]:port`. Host names are treated as IPv4
+  targets (nft resolves them when it loads the rules).
+- An IPv4 client can only be forwarded to an IPv4 target and an IPv6 client
+  to an IPv6 target (nft cannot translate between families). A target list
+  with both families is handled per family: IPv4 clients use the IPv4 targets
+  and IPv6 clients the IPv6 targets, each with the forward's strategy.
+- The tunnel listen address selects the ingress family: empty, `::` or `[::]`
+  accepts both; `0.0.0.0` accepts IPv4 only; a concrete address matches only
+  that address. When no target matches an accepted family, the apply fails
+  with a clear error and the forward is marked as an error.
+- `net.ipv6.conf.all.forwarding=1` is set only when the forward has an IPv6
+  target. Turning it on makes the kernel ignore router advertisements on
+  interfaces with `accept_ra=1`; on a relay that gets its IPv6 default route
+  by SLAAC, set `accept_ra=2` on that interface first.
+
+#### Known limits of the nftables path
+
+- `round` and `rand` balance new connections over the targets of a family
+  (`numgen inc` / `numgen random`).
+- `fifo` (主备) and `hash` use only the first target of each family. There is
+  no health check or failover, and no source-hash balancing.
+- Speed limits (`speedId` on a user tunnel) are not enforced on this path.
+  The limiter is still sent in the payload, but no rule uses it; only the
+  gost path applies speed limits.
+- Rules do not survive a relay reboot; re-apply the forwards (pause and
+  resume, or save them again) after a reboot.
+
+#### Migration from the `ip v2b_forward` table
+
+Before v4.1.0-rc.5 the playbooks used an IPv4-only `ip v2b_forward` table.
+The first apply of a forward after the upgrade removes that forward's rules
+from the old table in the same transaction that adds the new ones, so a
+connection is never translated twice; the old table is deleted together with
+the last forward that used it. Pause and delete clean both tables. Until a
+forward is re-applied, the stats worker keeps reading its old nat-chain
+counter (upload only, as before).
+
 ## Current Misleading Signals
 
 Do not over-read the current UI indicators.
