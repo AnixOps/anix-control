@@ -29,6 +29,7 @@
     </UiEmptyState>
     <UiTabs
       v-else-if="group"
+      variant="segmented"
       :model-value="section"
       :items="tabs"
       :aria-label="t('adminSubscriptionGroups.detail.sections')"
@@ -190,6 +191,10 @@ onMounted(load)
   flex-direction: column;
   gap: var(--space-8);
   min-width: 0;
+}
+
+.detail-page :deep(.ui-tabs__list) {
+  max-width: 100%;
 }
 
 .detail-page :deep(.ui-tabs__panel) {

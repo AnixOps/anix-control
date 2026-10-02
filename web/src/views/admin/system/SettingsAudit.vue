@@ -54,11 +54,11 @@
           />
         </template>
         <template #cell-status="{ row }">
-          <UiBadge v-if="row.status" :tone="statusTone(row.status)" :label="row.status" />
+          <UiBadge v-if="row.status" :tone="statusTone(row.status)" :label="resultLabel(row.status)" />
           <span v-else>—</span>
         </template>
         <template #cell-content="{ row }">
-          <span class="audit-content">{{ row.content || '—' }}</span>
+          <span class="audit-content" :title="row.content || undefined">{{ row.content || '—' }}</span>
         </template>
       </UiDataTable>
     </UiSection>
@@ -106,14 +106,27 @@ const auditTotalPages = computed(() => {
   return Math.max(1, Math.ceil(total / pageSize))
 })
 
+// Known values get a label; anything else shows as the server sent it.
+const ACTIONS = ['create', 'update', 'delete', 'login', 'logout', 'enable', 'disable', 'reset', 'restore']
+const MODULES = ['system', 'forward', 'users', 'user', 'auth', 'nodes', 'node', 'subscription', 'plugins', 'backup', 'orders', 'tickets']
+const RESULTS = ['success', 'failed']
+const labelOf = (group, list, value) => {
+  const raw = String(value || '')
+  const key = raw.toLowerCase()
+  return list.includes(key) ? t(`adminSettings.audit.${group}.${key}`) : (raw || '—')
+}
+const actionLabel = log => labelOf('actions', ACTIONS, log.action)
+const moduleLabel = log => labelOf('modules', MODULES, log.module)
+const resultLabel = status => labelOf('results', RESULTS, statusTone(status) === 'success' ? 'success' : statusTone(status) === 'danger' ? 'failed' : status)
+
 const auditColumns = computed(() => [
-  { key: 'action', label: t('adminSettings.audit.columns.action'), primary: true, hideable: false, value: log => log.action || '—' },
-  { key: 'content', label: t('adminSettings.audit.columns.content'), secondary: true },
-  { key: 'username', label: t('adminSettings.audit.columns.username'), value: log => log.username || '—' },
-  { key: 'module', label: t('adminSettings.audit.columns.module'), breakpoint: 'lg', value: log => log.module || '—' },
-  { key: 'target_type', label: t('adminSettings.audit.columns.targetType'), breakpoint: 'md', value: log => log.target_type || '—' },
-  { key: 'status', label: t('adminSettings.audit.columns.status') },
-  { key: 'ip', label: t('adminSettings.audit.columns.ip'), hidden: true, value: log => log.ip || '—' },
+  { key: 'action', label: t('adminSettings.audit.columns.action'), primary: true, hideable: false, nowrap: true, minWidth: 56, value: actionLabel },
+  { key: 'content', label: t('adminSettings.audit.columns.content'), secondary: true, minWidth: 160 },
+  { key: 'username', label: t('adminSettings.audit.columns.username'), truncate: true, maxWidth: 150, value: log => log.username || '—' },
+  { key: 'module', label: t('adminSettings.audit.columns.module'), breakpoint: 'lg', nowrap: true, minWidth: 64, value: moduleLabel },
+  { key: 'target_type', label: t('adminSettings.audit.columns.targetType'), breakpoint: 'md', nowrap: true, value: log => log.target_type || '—' },
+  { key: 'status', label: t('adminSettings.audit.columns.status'), nowrap: true, minWidth: 64 },
+  { key: 'ip', label: t('adminSettings.audit.columns.ip'), hidden: true, nowrap: true, value: log => log.ip || '—' },
   { key: 'created_at', label: t('adminSettings.audit.columns.createdAt'), nowrap: true, format: value => (value ? format.dateTime(value) : '—') },
   { key: 'id', label: 'ID', numeric: true, hidden: true, value: log => log.id ?? '—' }
 ])
@@ -265,10 +278,11 @@ onBeforeUnmount(() => clearTimeout(filterTimer))
 .audit-content {
   display: -webkit-box;
   overflow: hidden;
-  overflow-wrap: anywhere;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 2;
   line-clamp: 2;
+  overflow-wrap: break-word;
+  word-break: normal;
 }
 
 @media (max-width: 639.98px) {

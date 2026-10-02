@@ -112,10 +112,10 @@ const protocolsError = ref('')
 const columns = computed(() => [
   { key: 'node', label: t('adminSubscriptionGroups.protocols.node'), primary: true, sortable: true, value: protocol => protocol.node?.name || t('adminSubscriptionGroups.protocols.nodeIdFallback', { id: protocol.node_id }) },
   { key: 'name', label: t('adminSubscriptionGroups.protocols.name'), secondary: true, sortable: true },
-  { key: 'type', label: t('adminSubscriptionGroups.protocols.protocol') },
+  { key: 'type', label: t('adminSubscriptionGroups.protocols.protocol'), nowrap: true },
   { key: 'port', label: t('adminSubscriptionGroups.protocols.port'), numeric: true, align: 'end' },
-  { key: 'show', label: t('adminSubscriptionGroups.protocols.visibility'), breakpoint: 'md' },
-  { key: 'enable', label: t('adminSubscriptionGroups.protocols.status') }
+  { key: 'show', label: t('adminSubscriptionGroups.protocols.visibility'), breakpoint: 'md', nowrap: true },
+  { key: 'enable', label: t('adminSubscriptionGroups.protocols.status'), nowrap: true }
 ])
 
 const allSelected = computed(() => availableProtocols.value.length > 0 && selectedProtocolIds.value.length === availableProtocols.value.length)

@@ -255,8 +255,8 @@ const runtimeDisplayedCommands = computed(() => {
 })
 
 const jobColumns = computed(() => [
-  { key: 'job', label: t('adminSettings.runtime.jobColumns.job'), primary: true, hideable: false },
-  { key: 'status', label: t('adminSettings.runtime.jobColumns.status'), secondary: true },
+  { key: 'job', label: t('adminSettings.runtime.jobColumns.job'), primary: true, hideable: false, minWidth: 280 },
+  { key: 'status', label: t('adminSettings.runtime.jobColumns.status'), secondary: true, nowrap: true },
   { key: 'time', label: t('adminSettings.runtime.jobColumns.time'), nowrap: true, value: formatRuntimeJobTime }
 ])
 

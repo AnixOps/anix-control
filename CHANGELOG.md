@@ -148,7 +148,7 @@
     status, doctor, jobs, operator commands) stays here, not on the forward
     pages.
   - 订阅分组: the groups in a `UiDataTable` with their usage; a group page,
-    `/admin/subscriptions/:id/:section`, with 概览, 节点模板, 节点协议 (picker
+    `/admin/subscriptions/:id/:section`, with segmented tabs for 概览, 节点模板, 节点协议 (picker
     dialog), 成员 (counts: the API has no member list) and 订阅输出 (server
     preview in the new `UiCodeBlock`, copy and download).
   - 通知: e-mail (SMTP settings with the save bar and 测试发送), Telegram (bot
@@ -165,6 +165,12 @@
     page (用户 › 用户) and names the section (系统 › 系统设置 › 备份).
   - `UiGroupedListRow`: a row with only a control, and stacked fields on
     phones, take the full width.
+  - `UiDataTable` columns take `nowrap`, `truncate` (ellipsis, full text in
+    the cell's title), `minWidth` and `maxWidth`. The audit log keeps short
+    columns on one line, labels known actions, modules and results
+    (更新, 删除, 成功…), truncates the operator and clamps 内容 to two lines.
+  - The subscription group page's section tabs are segmented, like the other
+    detail pages.
 
 - **Admin list pages on one template (UI redesign phase U6)**
   (`web/src/ui/UiDataTable.vue`, `views/admin/*`;

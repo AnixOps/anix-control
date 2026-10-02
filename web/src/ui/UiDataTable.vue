@@ -191,7 +191,7 @@
                 @update:model-value="value => toggleRow(row, index, value)"
               />
             </td>
-            <td v-for="column in visibleColumns" :key="column.key" :class="columnClass(column)">
+            <td v-for="column in visibleColumns" :key="column.key" :class="columnClass(column)" :style="cellStyle(column)" :title="column.truncate ? cellText(row, column) : undefined">
               <slot :name="`cell-${column.key}`" :row="row" :value="cellValue(row, column)" :card="false">{{ cellText(row, column) }}</slot>
             </td>
             <td v-if="rowActions" class="ui-data-table__actions-cell">
@@ -253,7 +253,9 @@
 // header, the cells, the phone cards, sorting and the column settings:
 //
 //   { key, label, sortable, firstDirection: 'desc', align: 'end', numeric,
-//     width, value: row => …, format: (value, row) => text,
+//     width, minWidth, maxWidth, nowrap (one line), truncate (one line
+//     with an ellipsis, the full text as the cell's title; give maxWidth),
+//     value: row => …, format: (value, row) => text,
 //     sortValue: row => …, hideable (default true), hidden (default off),
 //     breakpoint: 'md' | 'lg' (hidden in the table below it),
 //     primary / secondary (card title / subtitle), card: false }
@@ -403,13 +405,26 @@ function columnClass(column) {
     [`is-align-${column.align || 'start'}`]: true,
     'tabular-nums': column.numeric,
     'is-nowrap': column.nowrap,
+    'is-truncate': column.truncate,
     [`is-from-${column.breakpoint}`]: Boolean(column.breakpoint),
     [column.class || '']: Boolean(column.class)
   }
 }
 
+const cssLength = value => (typeof value === 'number' ? `${value}px` : value)
+
 function columnStyle(column) {
-  return column.width ? { width: typeof column.width === 'number' ? `${column.width}px` : column.width } : undefined
+  const style = {}
+  if (column.width) style.width = cssLength(column.width)
+  if (column.minWidth) style.minWidth = cssLength(column.minWidth)
+  return Object.keys(style).length ? style : undefined
+}
+
+// Body cells also take maxWidth, which truncate needs to stop growing.
+function cellStyle(column) {
+  const style = { ...(columnStyle(column) || {}) }
+  if (column.maxWidth) style.maxWidth = cssLength(column.maxWidth)
+  return Object.keys(style).length ? style : undefined
 }
 
 function sortIcon(column) {
@@ -767,6 +782,12 @@ th[aria-sort='descending'] .ui-data-table__sort-icon {
 }
 
 .is-nowrap {
+  white-space: nowrap;
+}
+
+.is-truncate {
+  overflow: hidden;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

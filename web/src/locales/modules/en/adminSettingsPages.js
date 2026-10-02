@@ -229,6 +229,9 @@ export default {
       filterTargetType: 'Filter by target type',
       pageSize: 'Rows per page',
       perPage: '{size} per page',
+      actions: { create: 'Create', update: 'Update', delete: 'Delete', login: 'Sign in', logout: 'Sign out', enable: 'Enable', disable: 'Disable', reset: 'Reset', restore: 'Restore' },
+      modules: { system: 'System', forward: 'Forwarding', users: 'Users', user: 'Users', auth: 'Sign-in', nodes: 'Nodes', node: 'Nodes', subscription: 'Subscriptions', plugins: 'Plugins', backup: 'Backups', orders: 'Orders', tickets: 'Tickets' },
+      results: { success: 'Succeeded', failed: 'Failed' },
       columns: {
         action: 'Action',
         content: 'Details',

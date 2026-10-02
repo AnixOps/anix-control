@@ -344,9 +344,9 @@ const getStatusLabel = (status) => {
 }
 
 const backupColumns = computed(() => [
-  { key: 'filename', label: t('adminSettings.backup.list.filename'), primary: true, sortable: true, hideable: false },
-  { key: 'status', label: t('adminSettings.backup.list.status'), secondary: true },
-  { key: 'size', label: t('adminSettings.backup.list.size'), numeric: true, align: 'end', sortable: true, format: value => formatSize(value) },
+  { key: 'filename', label: t('adminSettings.backup.list.filename'), primary: true, sortable: true, hideable: false, truncate: true, minWidth: 200, maxWidth: 360 },
+  { key: 'status', label: t('adminSettings.backup.list.status'), secondary: true, nowrap: true },
+  { key: 'size', label: t('adminSettings.backup.list.size'), numeric: true, align: 'end', sortable: true, nowrap: true, format: value => formatSize(value) },
   { key: 'created_at', label: t('adminSettings.backup.list.createdAt'), nowrap: true, sortable: true, firstDirection: 'desc', format: value => (value ? format.dateTime(value) : '—') },
   { key: 'id', label: 'ID', numeric: true, hidden: true }
 ])

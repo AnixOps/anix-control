@@ -378,8 +378,8 @@ const filteredConfigs = computed(() => {
 })
 
 const configColumns = computed(() => [
-  { key: 'key', label: t('adminSettings.general.configs.key'), primary: true, sortable: true, hideable: false },
-  { key: 'value', label: t('adminSettings.general.configs.value'), secondary: true, value: config => truncateValue(getConfigDisplayValue(config)) },
+  { key: 'key', label: t('adminSettings.general.configs.key'), primary: true, sortable: true, hideable: false, truncate: true, minWidth: 160, maxWidth: 300 },
+  { key: 'value', label: t('adminSettings.general.configs.value'), secondary: true, truncate: true, maxWidth: 280, value: config => truncateValue(getConfigDisplayValue(config)) },
   { key: 'description', label: t('adminSettings.general.configs.descriptionField'), breakpoint: 'md', value: config => translateText(config.description, '—') },
   { key: 'updated_at', label: t('adminSettings.general.configs.updatedAt'), nowrap: true, breakpoint: 'lg', sortable: true, firstDirection: 'desc', format: value => (value ? format.dateTime(value) : '—') }
 ])

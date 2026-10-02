@@ -262,7 +262,7 @@ const filteredUsers = computed(() => {
 })
 
 const userColumns = computed(() => [
-  { key: 'user_email', label: t('adminNotify.telegram.users.email'), primary: true, sortable: true, value: user => user.user_email || '—' },
+  { key: 'user_email', label: t('adminNotify.telegram.users.email'), primary: true, sortable: true, truncate: true, maxWidth: 280, value: user => user.user_email || '—' },
   { key: 'telegram_id', label: t('adminNotify.telegram.users.telegramId'), secondary: true, numeric: true },
   { key: 'user_id', label: t('adminNotify.telegram.users.userId'), numeric: true, breakpoint: 'md' },
   { key: 'created_at', label: t('adminNotify.telegram.users.boundAt'), nowrap: true, breakpoint: 'lg', sortable: true, firstDirection: 'desc', format: value => (value ? format.dateTime(value) : '—') },

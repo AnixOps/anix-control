@@ -71,9 +71,9 @@ const statusChips = computed(() => LOG_STATUSES.map(value => ({ value, label: st
 
 const columns = computed(() => [
   { key: 'title', label: t('adminNotify.logs.subject'), primary: true, value: log => log.title || '—' },
-  { key: 'recipient', label: t('adminNotify.logs.recipient'), secondary: true, value: log => log.recipient || '—' },
-  { key: 'type', label: t('adminNotify.logs.type') },
-  { key: 'status', label: t('adminNotify.logs.status') },
+  { key: 'recipient', label: t('adminNotify.logs.recipient'), secondary: true, truncate: true, maxWidth: 240, value: log => log.recipient || '—' },
+  { key: 'type', label: t('adminNotify.logs.type'), nowrap: true },
+  { key: 'status', label: t('adminNotify.logs.status'), nowrap: true },
   { key: 'created_at', label: t('adminNotify.logs.sentAt'), nowrap: true, sortable: true, firstDirection: 'desc', format: value => (value ? format.dateTime(value) : '—') },
   { key: 'id', label: 'ID', numeric: true, hidden: true }
 ])

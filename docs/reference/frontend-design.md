@@ -565,7 +565,7 @@ UiDialog          create / edit forms with Ui fields in a .form-grid
 - **Columns** are objects: `key`, `label`, `sortable` (`firstDirection:
   'desc'` for dates and amounts), `align: 'end'`, `numeric` (tabular
   numbers), `width`, `value(row)`, `format(value, row)`, `sortValue(row)`,
-  `hidden` (off by default), `hideable: false`, `breakpoint: 'md' | 'lg'`
+  `hidden` (off by default), `hideable: false`, `nowrap` (one line), `truncate` (one line with an ellipsis and the full text as the cell's `title`; set `maxWidth`), `minWidth` / `maxWidth`, `breakpoint: 'md' | 'lg'`
   (left out of the table below that width), `primary` / `secondary` (title
   and subtitle of the phone card), `card: false`. Cells render text (empty is
   `—`) or the slot `#cell-<key>="{ row, value, card }"`.
@@ -747,7 +747,7 @@ command palette.
 Old URLs redirect: `/admin/mfa`, `/admin/access-groups`, `/admin/telegram`.
 订阅分组 is a list page with a detail page (plan §7.2,
 `/admin/subscriptions/:id/:section`: 概览, 节点模板, 节点协议, 成员, 订阅输出).
-Its sections are `UiTabs` (underline) bound to the path.
+Its sections are segmented `UiTabs` bound to the path, like the node and forward-node detail pages.
 
 ## Bundle
 

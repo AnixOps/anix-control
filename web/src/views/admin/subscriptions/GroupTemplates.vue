@@ -230,11 +230,11 @@ const errors = computed(() => ({
 }))
 
 const columns = computed(() => [
-  { key: 'name', label: t('adminSubscriptionGroups.templates.name'), primary: true, sortable: true, hideable: false },
-  { key: 'type', label: t('adminSubscriptionGroups.templates.protocol'), secondary: true, sortable: true },
-  { key: 'server', label: t('adminSubscriptionGroups.templates.server'), breakpoint: 'md' },
+  { key: 'name', label: t('adminSubscriptionGroups.templates.name'), primary: true, sortable: true, hideable: false, nowrap: true },
+  { key: 'type', label: t('adminSubscriptionGroups.templates.protocol'), secondary: true, sortable: true, nowrap: true },
+  { key: 'server', label: t('adminSubscriptionGroups.templates.server'), breakpoint: 'md', truncate: true, maxWidth: 260 },
   { key: 'port', label: t('adminSubscriptionGroups.templates.port'), numeric: true, align: 'end' },
-  { key: 'tls', label: t('adminSubscriptionGroups.templates.tls') },
+  { key: 'tls', label: t('adminSubscriptionGroups.templates.tls'), nowrap: true },
   { key: 'enable', label: t('adminSubscriptionGroups.templates.enabled'), card: false }
 ])
 

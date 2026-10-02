@@ -105,6 +105,21 @@ describe('System audit logs', () => {
     expect(text).toContain('updated runtime_backend')
     expect(text).toContain('admin')
     expect(text).toContain('config')
+    // Known actions, modules and results show as labels.
+    const cells = wrapper.findAll('tbody td').map(cell => cell.text())
+    expect(cells).toContain('Update')
+    expect(cells).toContain('System')
+    expect(cells).toContain('Succeeded')
+    expect(wrapper.find('tbody td.is-truncate').attributes('title')).toBe('admin')
+    expect(wrapper.find('.audit-content').attributes('title')).toBe('updated runtime_backend')
+  })
+
+  it('shows unknown actions and modules as sent', async () => {
+    adminApi.getSystemAuditLogs.mockResolvedValue({ code: 0, data: { list: [{ id: 3, action: 'rotate_key', module: 'kms', status: 'partial', content: 'x' }], total: 1 } })
+    const wrapper = mountSystem()
+    await flushPromises()
+    const cells = wrapper.findAll('tbody td').map(cell => cell.text())
+    expect(cells).toEqual(expect.arrayContaining(['rotate_key', 'kms', 'partial']))
   })
 
   it('renders audit log row content from panel envelope response', async () => {

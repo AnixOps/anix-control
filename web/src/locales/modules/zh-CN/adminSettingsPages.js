@@ -228,6 +228,9 @@ export default {
       filterTargetType: '按目标类型筛选',
       pageSize: '每页条数',
       perPage: '每页 {size} 条',
+      actions: { create: '创建', update: '更新', delete: '删除', login: '登录', logout: '退出', enable: '启用', disable: '停用', reset: '重置', restore: '恢复' },
+      modules: { system: '系统', forward: '转发', users: '用户', user: '用户', auth: '认证', nodes: '节点', node: '节点', subscription: '订阅', plugins: '插件', backup: '备份', orders: '订单', tickets: '工单' },
+      results: { success: '成功', failed: '失败' },
       columns: {
         action: '动作',
         content: '内容',

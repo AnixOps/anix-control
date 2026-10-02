@@ -134,7 +134,7 @@ const statusChips = computed(() => [
 
 const columns = computed(() => [
   { key: 'name', label: t('adminSubscriptionGroups.table.name'), primary: true, sortable: true, hideable: false },
-  { key: 'enable', label: t('adminSubscriptionGroups.table.status'), secondary: true, sortable: true },
+  { key: 'enable', label: t('adminSubscriptionGroups.table.status'), secondary: true, sortable: true, nowrap: true },
   { key: 'user_count', label: t('adminSubscriptionGroups.table.users'), numeric: true, align: 'end', sortable: true, firstDirection: 'desc', format: value => format.number(value) },
   { key: 'template_count', label: t('adminSubscriptionGroups.table.templates'), numeric: true, align: 'end', sortable: true, format: value => format.number(value) },
   { key: 'protocol_count', label: t('adminSubscriptionGroups.table.protocols'), numeric: true, align: 'end', sortable: true, breakpoint: 'md', format: value => format.number(value) },

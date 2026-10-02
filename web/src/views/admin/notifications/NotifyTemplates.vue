@@ -141,8 +141,8 @@ const filteredTemplates = computed(() => (typeFilter.value ? templates.value.fil
 const columns = computed(() => [
   { key: 'name', label: t('adminNotify.templates.name'), primary: true, sortable: true, hideable: false, value: template => template.name || '—' },
   { key: 'event', label: t('adminNotify.templates.event'), secondary: true, sortable: true, value: template => eventLabel(template.event) },
-  { key: 'type', label: t('adminNotify.templates.type') },
-  { key: 'enabled', label: t('adminNotify.templates.state') },
+  { key: 'type', label: t('adminNotify.templates.type'), nowrap: true },
+  { key: 'enabled', label: t('adminNotify.templates.state'), nowrap: true },
   { key: 'id', label: 'ID', numeric: true, hidden: true }
 ])
 

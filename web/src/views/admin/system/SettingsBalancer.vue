@@ -171,11 +171,11 @@ function getStrategyLabel(strategy) {
 }
 
 const balancerColumns = computed(() => [
-  { key: 'name', label: t('adminSettings.balancer.name'), primary: true, sortable: true, hideable: false },
-  { key: 'group_name', label: t('adminSettings.balancer.group'), secondary: true, value: lb => lb.group_name || '—' },
-  { key: 'strategy', label: t('adminSettings.balancer.strategy') },
-  { key: 'health_check', label: t('adminSettings.balancer.healthCheckColumn') },
-  { key: 'enabled', label: t('adminSettings.balancer.state') },
+  { key: 'name', label: t('adminSettings.balancer.name'), primary: true, sortable: true, hideable: false, truncate: true, minWidth: 120, maxWidth: 260 },
+  { key: 'group_name', label: t('adminSettings.balancer.group'), secondary: true, nowrap: true, value: lb => lb.group_name || '—' },
+  { key: 'strategy', label: t('adminSettings.balancer.strategy'), nowrap: true },
+  { key: 'health_check', label: t('adminSettings.balancer.healthCheckColumn'), nowrap: true },
+  { key: 'enabled', label: t('adminSettings.balancer.state'), nowrap: true },
   { key: 'id', label: 'ID', numeric: true, hidden: true }
 ])
 

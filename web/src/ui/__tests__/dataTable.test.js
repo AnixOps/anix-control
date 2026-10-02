@@ -360,6 +360,22 @@ describe('UiSearchField', () => {
     await user.keyboard('{Escape}')
     expect(value.value).toBe('')
   })
+
+  it('keeps nowrap and truncated columns on one line, with min and max widths', () => {
+    const columns = [
+      { key: 'name', label: 'Name', primary: true, nowrap: true, minWidth: 80 },
+      { key: 'email', label: 'Email', truncate: true, maxWidth: 160 }
+    ]
+    const { container } = render(UiDataTable, { props: { columns, rows: [{ id: 1, name: 'update', email: 'ops@example.com' }], label: 'Log' } })
+    const [nameCell, emailCell] = container.querySelectorAll('tbody td')
+    expect(nameCell.classList.contains('is-nowrap')).toBe(true)
+    expect(nameCell.style.minWidth).toBe('80px')
+    expect(container.querySelector('th').style.minWidth).toBe('80px')
+    expect(emailCell.classList.contains('is-truncate')).toBe(true)
+    expect(emailCell.style.maxWidth).toBe('160px')
+    expect(emailCell.getAttribute('title')).toBe('ops@example.com')
+    expect(nameCell.hasAttribute('title')).toBe(false)
+  })
 })
 
 describe('UiDataTable bulk bar under overlays', () => {
