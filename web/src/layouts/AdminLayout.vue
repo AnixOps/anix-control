@@ -302,6 +302,8 @@ onBeforeUnmount(() => {
 .admin-shell {
   --admin-sidebar-width: 248px;
   --admin-rail-width: 64px;
+  /* Sticky table headers (UiDataTable) stop under the top bar. */
+  --shell-topbar-height: 52px;
 
   display: grid;
   grid-template-columns: var(--admin-sidebar-width) minmax(0, 1fr);
@@ -418,7 +420,7 @@ onBeforeUnmount(() => {
   display: flex;
   gap: var(--space-3);
   align-items: center;
-  height: 52px;
+  height: var(--shell-topbar-height);
   padding: 0 var(--space-6) 0 var(--space-4);
   border-bottom: 1px solid var(--separator);
   background: var(--bg);
