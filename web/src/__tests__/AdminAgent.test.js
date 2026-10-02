@@ -2,6 +2,10 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import Agent from '@/views/admin/Agent.vue'
 import { setLocale } from '@/i18n'
+import { render, screen, waitFor, within } from '@testing-library/vue'
+import userEvent from '@testing-library/user-event'
+import UiHost from '@/ui/UiHost.vue'
+import { toastMessages } from './helpers/feedback'
 
 const adminApi = vi.hoisted(() => ({
   createAgentTask: vi.fn(),
@@ -16,7 +20,6 @@ describe('Admin Agent', () => {
   beforeEach(async () => {
     vi.resetAllMocks()
     vi.spyOn(console, 'error').mockImplementation(() => {})
-    vi.spyOn(window, 'alert').mockImplementation(() => {})
     await setLocale('en')
 
     adminApi.getAgents.mockResolvedValue({ data: { agents: [] } })
@@ -125,5 +128,53 @@ describe('Admin Agent', () => {
     expect(wrapper.vm.terminalLines.some(line => line.content === 'service is running')).toBe(true)
 
     wrapper.unmount()
+  })
+
+  describe('task dialog and feedback', () => {
+    const Harness = { components: { Agent, UiHost }, template: '<div><Agent /><UiHost /></div>' }
+
+    async function renderPage() {
+      adminApi.getAgents.mockResolvedValue({ data: { agents: [{ node_id: 4, online: true, version: '1.0', hostname: 'hk' }] } })
+      render(Harness)
+      await screen.findByRole('button', { name: 'Task' })
+    }
+
+    it('sends a task from a dialog with inline validation and errors', async () => {
+      const user = userEvent.setup()
+      adminApi.createAgentTask.mockRejectedValueOnce(new Error('agent offline')).mockResolvedValueOnce({ code: 0 })
+      await renderPage()
+      const opener = screen.getByRole('button', { name: 'Task' })
+      await user.click(opener)
+      const dialog = await screen.findByRole('dialog', { name: 'Send Task' })
+      await user.click(within(dialog).getByRole('button', { name: 'Send' }))
+      expect(within(dialog).getByRole('alert').textContent).toBe('Please fill in the required fields')
+
+      const action = within(dialog).getByLabelText('Action')
+      await user.selectOptions(action, action.options[1].value)
+      await user.click(within(dialog).getByRole('button', { name: 'Send' }))
+      expect((await within(dialog).findByRole('alert')).textContent).toContain('agent offline')
+      await user.click(within(dialog).getByRole('button', { name: 'Send' }))
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+      expect(toastMessages('success')).toEqual(['Task sent'])
+      expect(adminApi.createAgentTask).toHaveBeenLastCalledWith(expect.objectContaining({ node_id: 4, type: 'diagnostic' }))
+    })
+
+    it('closes the task dialog with Esc and returns focus', async () => {
+      const user = userEvent.setup()
+      await renderPage()
+      const opener = screen.getByRole('button', { name: 'Task' })
+      await user.click(opener)
+      await screen.findByRole('dialog')
+      await user.keyboard('{Escape}')
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+      await waitFor(() => expect(document.activeElement).toBe(opener))
+      expect(adminApi.createAgentTask).not.toHaveBeenCalled()
+    })
+
+    it('explains the monitor shortcut in a toast', async () => {
+      await renderPage()
+      await userEvent.setup().click(screen.getByRole('button', { name: 'Mon' }))
+      expect(toastMessages('info')).toEqual(['View monitoring data for node #4'])
+    })
   })
 })
