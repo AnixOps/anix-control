@@ -1738,6 +1738,48 @@ jobs:
           name: frontend-bundle-size
           path: web/bundle-reports/
 
+  # Visual regression (plan §15): key screens with the API mocked, compared
+  # with web/e2e/visual/__screenshots__. It runs in the official Playwright
+  # image so fonts and rendering match the baselines, which are made in the
+  # same image (`npm run test:visual:update`, web/scripts/visual-docker.sh).
+  frontend-visual:
+    name: Frontend Visual Regression
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: ${{ needs.changes.outputs.web == 'true' }}
+    container:
+      image: mcr.microsoft.com/playwright:v1.61.1-noble
+      options: --ipc=host
+    timeout-minutes: 20
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Install dependencies
+        working-directory: web
+        run: npm ci
+
+      - name: Check the image matches @playwright/test
+        working-directory: web
+        run: |
+          locked=$(node -p "require('./package-lock.json').packages['node_modules/@playwright/test'].version")
+          test "${locked}" = "1.61.1" || { echo "::error::@playwright/test is ${locked}; update the frontend-visual image tag and regenerate the baselines"; exit 1; }
+
+      - name: Compare key screens with the baselines
+        working-directory: web
+        env:
+          HOME: /root
+        run: npx playwright test --config playwright.visual.config.js
+
+      - name: Upload visual diffs
+        if: failure()
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend-visual-diffs
+          path: |
+            web/test-results/visual/
+            web/playwright-visual-report/
+
   backend-build:
     name: Backend Build
     runs-on: ubuntu-latest
