@@ -266,7 +266,19 @@ onBeforeUnmount(() => resizeObserver?.disconnect())
   }
 
   .ui-tabs--segmented .ui-tabs__tab {
+    position: relative;
     height: 40px;
+  }
+
+  /* The 40 px pills sit in a 44 px track: the hit area spans the track. */
+  .ui-tabs--segmented .ui-tabs__tab::after {
+    position: absolute;
+    top: 50%;
+    left: 0;
+    width: 100%;
+    height: var(--size-control-lg);
+    transform: translateY(-50%);
+    content: '';
   }
 }
 

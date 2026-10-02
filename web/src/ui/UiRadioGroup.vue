@@ -124,7 +124,7 @@ const normalizedOptions = computed(() => props.options.map(option => (
   place-items: center;
   width: 18px;
   height: 18px;
-  /* The legacy global button rule (40 / 44 px) must not stretch it. */
+  /* A fixed 18 px circle; the label is the touch target. */
   min-height: 0;
   margin-top: 2px;
   padding: 0;

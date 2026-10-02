@@ -63,7 +63,7 @@ const descId = computed(() => `${checkboxId.value}-desc`)
   place-items: center;
   width: 18px;
   height: 18px;
-  /* The legacy global button rule sets 40/44 px on phones. */
+  /* A fixed 18 px box; the label is the touch target. */
   min-height: 0;
   margin-top: 2px;
   padding: 0;

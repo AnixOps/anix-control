@@ -311,7 +311,7 @@ function onDragEnd() {
   box-shadow: inset 0 2px 0 var(--accent);
 }
 
-/* Undo the legacy global button rule (inline-flex, centred, pill, fill). */
+/* Undo the global button rule (inline-flex, centred, pill, fill). */
 .address-button {
   display: inline;
   max-width: 100%;
