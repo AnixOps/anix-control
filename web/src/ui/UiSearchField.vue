@@ -196,5 +196,16 @@ defineExpose({ focus: () => inputRef.value?.focus() })
   .ui-search {
     height: 44px;
   }
+
+  /* A 44 px hit area around the 28 px clear button. */
+  .ui-search__clear::after {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: var(--size-control-lg);
+    height: var(--size-control-lg);
+    transform: translate(-50%, -50%);
+    content: '';
+  }
 }
 </style>
