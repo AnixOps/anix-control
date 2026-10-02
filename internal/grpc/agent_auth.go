@@ -9,9 +9,12 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
+	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	"github.com/AnixOps/anix-control/v4/internal/agentpki"
 	"github.com/AnixOps/anix-control/v4/internal/agentstreams"
+	"github.com/AnixOps/anix-control/v4/internal/agenttransport"
 	"github.com/AnixOps/anix-control/v4/internal/config"
+	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/modulepki"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -30,6 +33,10 @@ const agentServicePrefix = "/anix.agent.v1."
 // a legacy node credential in agent_control.mtls: preferred.
 const legacyAuthDeprecation = "node API key authentication is deprecated; enroll with anix.agent.v1.AgentEnrollment and present the client certificate"
 
+// mtlsRequiredMessage refuses a legacy node credential on the Agent
+// services in agent_control.mtls: required.
+const mtlsRequiredMessage = agentcontrol.ErrorCodeMTLSRequired + ": an agent client certificate is required (agent_control.mtls: required)"
+
 // AgentAuthenticator authenticates AnixOps Agents on the node-facing
 // listener: by client certificate (agent PKI) or by the legacy node
 // credential, as agent_control.mtls allows. The zero value and nil accept
@@ -39,8 +46,12 @@ type AgentAuthenticator struct {
 	// PKI verifies client certificates and serves AgentEnrollment; nil when
 	// the built-in module PKI is off.
 	PKI *agentpki.Service
-	// Mode is agent_control.mtls; empty means optional.
+	// Mode is agent_control.mtls; empty means the configuration default
+	// (preferred). A nil authenticator is optional.
 	Mode string
+	// Sunset is agent_control.legacy_sunset, announced with the deprecation
+	// header; zero announces none.
+	Sunset time.Time
 }
 
 func (a *AgentAuthenticator) mode() string {
@@ -50,11 +61,22 @@ func (a *AgentAuthenticator) mode() string {
 	return config.AgentControlConfig{MTLS: a.Mode}.MTLSOrDefault()
 }
 
+// pki is the agent PKI the listener verifies certificates with: none in
+// agent_control.mtls: off, which neither requests nor accepts them.
 func (a *AgentAuthenticator) pki() *agentpki.Service {
-	if a == nil {
+	if a == nil || a.mode() == config.AgentMTLSOff {
 		return nil
 	}
 	return a.PKI
+}
+
+// policy is the transition policy of the listener's mode.
+func (a *AgentAuthenticator) policy() agenttransport.Policy {
+	policy := agenttransport.Policy{Mode: a.mode()}
+	if a != nil {
+		policy.Sunset = a.Sunset
+	}
+	return policy
 }
 
 // agentPrincipal is an authenticated agent.
@@ -155,13 +177,35 @@ func (a *AgentAuthenticator) certificatePrincipal(ctx context.Context) (agentPri
 	}, true, nil
 }
 
-// deprecationHeader is the deprecation header of a legacy node
-// credential in agent_control.mtls: preferred.
+// deprecationHeader is the deprecation metadata of a legacy node
+// credential in agent_control.mtls: preferred: the deprecation notice, the
+// sunset date when one is configured, and the upgrade guide.
 func (a *AgentAuthenticator) deprecationHeader() metadata.MD {
 	if a.mode() != config.AgentMTLSPreferred {
 		return nil
 	}
-	return metadata.Pairs(agentcontrol.MetadataAuthDeprecated, legacyAuthDeprecation)
+	return a.deprecationMetadata()
+}
+
+func (a *AgentAuthenticator) deprecationMetadata() metadata.MD {
+	policy := a.policy()
+	md := metadata.Pairs(agentcontrol.MetadataAuthDeprecated, legacyAuthDeprecation,
+		agentcontrol.MetadataAuthDeprecationLink, agenttransport.UpgradeGuideURL)
+	if sunset := policy.SunsetHeader(); sunset != "" {
+		md.Set(agentcontrol.MetadataAuthSunset, sunset)
+	}
+	return md
+}
+
+// refuseLegacy answers a legacy node credential in agent_control.mtls:
+// required: counted, with the error code and the deprecation metadata in
+// the trailer.
+func (a *AgentAuthenticator) refuseLegacy(method string, setTrailer func(metadata.MD)) error {
+	agenttransport.CountRefused(method)
+	trailer := a.deprecationMetadata()
+	trailer.Set(agentcontrol.MetadataErrorCode, agentcontrol.ErrorCodeMTLSRequired)
+	setTrailer(trailer)
+	return status.Error(codes.Unauthenticated, mtlsRequiredMessage)
 }
 
 // authenticateControlStream authenticates an AgentControlService stream:
@@ -183,19 +227,44 @@ func (a *AgentAuthenticator) authenticateControlStream(stream grpc.ServerStream)
 		}
 		return principal, nil
 	}
+	method := agentv1pb.AgentControlService_ControlStream_FullMethodName
 	if a.mode() == config.AgentMTLSRequired {
-		return agentPrincipal{}, status.Error(codes.Unauthenticated, "an agent client certificate is required (agent_control.mtls: required)")
+		return agentPrincipal{}, a.refuseLegacy(method, stream.SetTrailer)
 	}
 	nodeID, err := authenticatedStreamNodeID(ctx)
 	if err != nil {
 		return agentPrincipal{}, err
 	}
+	agenttransport.CountLegacy(method)
 	if header := a.deprecationHeader(); header != nil {
 		if err := stream.SetHeader(header); err != nil {
 			return agentPrincipal{}, err
 		}
+		// The trailer repeats it for clients that read only the status.
+		stream.SetTrailer(header)
 	}
 	return agentPrincipal{Node: agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: nodeID}}, nil
+}
+
+// transport names how principal reached the stream, for the transport
+// inventory.
+func (p agentPrincipal) transport() string {
+	if p.Certificate {
+		return model.AgentTransportMTLSStream
+	}
+	return model.AgentTransportAPIKeyStream
+}
+
+// sighting is the inventory record of principal on the stream.
+func (p agentPrincipal) sighting(agentVersion string) agenttransport.Sighting {
+	sighting := agenttransport.Sighting{
+		Node: p.Node, Transport: p.transport(), AgentVersion: agentVersion, Identity: p.identity(),
+	}
+	if p.Certificate {
+		notAfter := p.NotAfter
+		sighting.CertSerial, sighting.CertNotAfter = p.Serial, &notAfter
+	}
+	return sighting
 }
 
 // remoteHost returns the client's address without the port.

@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
+	"github.com/AnixOps/anix-control/v4/internal/agentstreams"
+	"github.com/AnixOps/anix-control/v4/internal/agenttransport"
 	"github.com/AnixOps/anix-control/v4/internal/authn"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/service"
@@ -137,6 +139,16 @@ func authenticateNode(ctx context.Context) (nodeID uint32, authed bool, err erro
 	return uint32(claimed), true, nil
 }
 
+// recordV2boardSighting records a node the v2board services authenticated
+// in the transport inventory. agent_control.mtls never applies to these
+// services: third-party node software shares them.
+func recordV2boardSighting(ctx context.Context, nodeID uint32, identity string) {
+	agenttransport.Seen(ctx, agenttransport.Sighting{
+		Node:      agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: nodeID},
+		Transport: model.AgentTransportV2boardGRPC, Identity: identity,
+	})
+}
+
 // AuthInterceptor 认证拦截器: 先校验节点自身 x-api-key, 否则回退到全局
 // API Token / JWT 两种认证方式 (管理端/兼容旧调用)
 func AuthInterceptor(apiToken, jwtSecret string) grpc.UnaryServerInterceptor {
@@ -161,12 +173,14 @@ func AuthInterceptorWithAgents(apiToken, jwtSecret string, agents *AgentAuthenti
 		if principal, ok, err := v2boardCertificatePrincipal(ctx, agents); err != nil {
 			return nil, err
 		} else if ok {
+			recordV2boardSighting(ctx, principal.Node.ID, principal.identity())
 			return handler(withNodeCaller(ctx, principal.Node.ID), req)
 		}
 
 		if nodeID, authed, err := authenticateNode(ctx); err != nil {
 			return nil, err
 		} else if authed {
+			recordV2boardSighting(ctx, nodeID, agentstreams.IdentityAPIKey)
 			return handler(withNodeCaller(ctx, nodeID), req)
 		}
 
@@ -223,12 +237,14 @@ func StreamAuthInterceptorWithAgents(apiToken, jwtSecret string, agents *AgentAu
 		if principal, ok, err := v2boardCertificatePrincipal(ss.Context(), agents); err != nil {
 			return err
 		} else if ok {
+			recordV2boardSighting(ss.Context(), principal.Node.ID, principal.identity())
 			return handler(srv, &streamWithContext{ServerStream: ss, ctx: withNodeCaller(ss.Context(), principal.Node.ID)})
 		}
 
 		if nodeID, authed, err := authenticateNode(ss.Context()); err != nil {
 			return err
 		} else if authed {
+			recordV2boardSighting(ss.Context(), nodeID, agentstreams.IdentityAPIKey)
 			return handler(srv, &streamWithContext{ServerStream: ss, ctx: withNodeCaller(ss.Context(), nodeID)})
 		}
 

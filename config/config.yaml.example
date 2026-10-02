@@ -240,14 +240,22 @@ grpc:
   tls_cert_file: ""
   tls_key_file: ""
 
-# Agent client certificates on the gRPC listener (AgentEnrollment).
+# Agent client certificates on the AnixOps Agent channels (AgentEnrollment).
+# off: certificates are neither requested nor accepted, legacy node keys only;
 # optional: verify a certificate when an agent presents one, else accept the
-# node API key; preferred: same, with a deprecation header for API keys;
-# required: the Agent services take certificates only. preferred and required
-# need grpc.tls_cert_file and the built-in CA (module_runtime.ca_kek; the
-# module runtime itself may stay disabled).
+# node API key silently; preferred (default): the same, and legacy agents get
+# deprecation signals (Deprecation/Sunset/Link headers on the legacy agent
+# paths, x-anix-auth-deprecated on the stream); required (the 4.2 default):
+# the AnixOps Agent channels take certificates only and the legacy agent paths
+# answer 403 agent_mtls_required. UniProxy and the v2board gRPC services stay
+# open to third-party node software in every mode. required needs gRPC
+# (grpc.enabled, grpc.tls_cert_file) and the built-in CA (module_runtime.ca_kek;
+# the module runtime itself may stay disabled). Check with
+# `anix-control agents transports --legacy-only` before switching.
 agent_control:
-  mtls: "optional"
+  mtls: "preferred"
+  # Optional Sunset date announced to legacy agents (YYYY-MM-DD).
+  legacy_sunset: ""
 
 admin:
   email: "control@anixops.com"

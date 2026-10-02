@@ -1465,11 +1465,16 @@ One mTLS stream per node carries everything:
     deleting it (`RetireNode`) revokes its certificates.
   - The listener refuses revoked serials, with a cache of at most 30 s, as
     the module listener does.
-- **Listener.** Mode `agent_control.mtls`:
-  - `optional` (the first release): a client certificate is verified when
-    given; without one, the legacy metadata authenticates;
-  - `preferred`: legacy still works, but answers deprecation signals;
-  - `required` (v5): certificates only.
+- **Listener.** Mode `agent_control.mtls` (section 5.6 has the full
+  table; owner decision H5 of 2026-10-02 sets the defaults):
+  - `off`: no client certificate is requested or accepted, and
+    `AgentEnrollment` is unavailable; a rollback switch;
+  - `optional` (the 4.1 release candidates): a client certificate is
+    verified when given; without one, the legacy metadata authenticates;
+  - `preferred` (the default from 4.1.0): legacy still works, but answers
+    deprecation signals;
+  - `required` (the default from 4.2): certificates only on the AnixOps
+    Agent channels.
 
   The server keeps its public TLS certificate (`TLSCertFile`), and agents
   verify it as today. Client certificates are verified against the module
@@ -1639,35 +1644,95 @@ advertised them.
 
 ### 5.6 Transition for agents in the field
 
-| Agent \ Control | Before A2 (4.1) | 4.x with A2 (`mtls: optional`, then `preferred`) | 5.0 (`mtls: required`) |
+Owner decision H5 (2026-10-02) supersedes the earlier plan, which kept
+legacy agents until 5.0: 4.1.0 makes `preferred` the default, and 4.2 makes
+`required` the default. Before upgrading to 4.2, every node must run an
+Agent that has enrolled (mTLS); legacy API-key agents are refused.
+
+| Agent \ Control | 4.1.0-rc (`optional`) | 4.1.0 (`preferred`, default) | 4.2 (`required`, default) |
 |---|---|---|---|
-| **Today's agents** (v1.1.0 SDK) | REST, WebSocket, v2board gRPC; stream for operations only | unchanged: every legacy path is served. Deprecation headers and metrics, and the node inventory shows "legacy" | only what F3 keeps for third-party nodes (UniProxy, v2board gRPC) still answers them; they must be upgraded before 5.0 |
-| **A2 agents** | `Enroll` is unimplemented, so they keep the API key. No `server_capabilities`, so data stays on the legacy paths | they enroll with their API key, then everything moves to the mTLS stream; the legacy paths are a fallback while the stream is down | mTLS stream only |
+| **Today's agents** (v1.1.0 SDK) | REST, WebSocket, v2board gRPC; stream for operations only | unchanged: every legacy path is served, with deprecation signals and counters; the transport inventory shows the node as `legacy` | the AnixOps Agent channels refuse them (`agent_mtls_required`); only UniProxy and v2board gRPC, which third-party node software shares, still answer them. They must be upgraded and enrolled before 4.2 |
+| **A2 agents** | they enroll with their API key, then everything moves to the mTLS stream | the same; the legacy paths are a fallback while the stream is down | mTLS stream only |
+
+**The modes** (A2-6). `agent_control.mtls`
+(`ANIX_CONTROL_AGENT_CONTROL_MTLS`):
+
+| Mode | Client certificate | Legacy credential on the AnixOps Agent channels | Signals |
+|---|---|---|---|
+| `off` | neither requested nor accepted; `Enroll` answers `FailedPrecondition` | served | none |
+| `optional` | verified when presented | served | none |
+| `preferred` (4.1.0 default) | verified when presented | served | `Deprecation`, `Sunset`, `Link` headers; `x-anix-auth-deprecated` on the stream |
+| `required` (4.2 default) | required | refused: HTTP 403 `{"code":"agent_mtls_required"}`, gRPC `Unauthenticated` with the trailer `x-anix-error-code: agent_mtls_required`; `Enroll` takes only one-time enrollment credentials | the refusal carries the deprecation headers |
+
+- Only `required` needs, at startup, the gRPC listener with TLS and the
+  built-in CA: an enrolled agent could not connect otherwise. `preferred`
+  and `optional` start without them; agents then cannot enroll yet, which
+  the startup log says (`Agent transports: agent_control.mtls=...`).
+- **Scope of `required`.** The AnixOps Agent channels only:
+  - API key authentication on `AgentControlService.ControlStream`, and the
+    API key bootstrap of `AgentEnrollment.Enroll`;
+  - `/api/v2/agent/*` (register, heartbeat, tasks, result, monitor, ws);
+  - `/api/v2/node/*` (register, heartbeat, runtime-health, ws);
+  - `/api/v2/forward/agent/rules` (the forward agent's rule pull);
+  - the clean agent endpoints `/api/v2/forward-agent/register`,
+    `heartbeat` and `report` (`install.sh` is an operator download and
+    stays).
+
+  Not affected, in any mode: UniProxy (`/api/v1|v2/server/UniProxy/*`) and
+  the v2board gRPC services (`NodeService`, `UserService`,
+  `TrafficService`, `NodeLogService`), which XrayR, V2bX and other
+  third-party node software use (the F3 decision); the admin APIs. These
+  are read from the router (`internal/router`, `legacyAgentHTTP` and
+  `legacyAgentWebSocket`) and the gRPC interceptors
+  (`internal/grpc/interceptor.go`).
+- **Signals.** On a legacy HTTP or WebSocket agent path, `preferred`
+  answers `Deprecation: true`, `Link: <docs/UPGRADE.md#agent-transports-preparing-for-v42>;
+  rel="deprecation"` and, when `agent_control.legacy_sunset` is set, `Sunset`
+  (RFC 8594). The stream's header and trailer carry
+  `x-anix-auth-deprecated`, `x-anix-auth-deprecation-link` and
+  `x-anix-auth-sunset`. No Sunset is sent by default: the 4.2 release date
+  is not fixed, and a Sunset date that passes while the server still answers
+  would teach clients to ignore it. Operators who plan their 4.2 upgrade set
+  the date.
+- **Metrics.** `anixops_agent_legacy_requests_total{path}` counts the
+  requests a legacy AnixOps Agent channel served, in every mode, so the
+  legacy traffic can be watched draining; `path` is the route template or
+  the gRPC method. `anixops_agent_legacy_refused_total{path}` counts
+  `required`'s refusals, and `anixops_agent_mtls_mode{mode}` is 1 for the
+  mode in force. The names follow the repository's `anixops_` prefix
+  (this section's draft said `anix_agent_legacy_requests_total`).
+- **Transport inventory.** `GET /api/v4/kernel/agents/transports` (admin;
+  `legacy_only=true` filters) and `anix-control agents transports [--json]
+  [--legacy-only]` list every proxy and forward node with the transport it
+  was last seen on (`mtls-stream`, `apikey-stream`, `http-legacy`,
+  `websocket`, `clean-agent`, `uniproxy`, `v2board-grpc`), its agent
+  version (from the stream's `Hello`, else the node row or the clean
+  agent), its newest valid certificate (serial, expiry) and when it was last
+  seen. A node's status follows its newest AnixOps Agent channel: `mtls`,
+  `legacy`, `third-party` (UniProxy or v2board gRPC only) or `unseen`.
+  - Sightings live in memory and in the new table
+    `v4_kernel_agent_transport` (one row per node kind, id and transport;
+    protected). A row is written at most once a minute per node and
+    transport, and at once when the version or identity changes; the API
+    overlays this process's newer sightings, the CLI reads the table.
+  - Clean agents are read from `v2_forward_clean_agent`, not recorded.
+  - The admin page NodeX Agents → Agent 连接方式
+    (`/admin/agent/transports`) shows it with a warning on legacy nodes.
 
 Stages:
 
-- **T1, the 4.x release with A2-1 to A2-5.**
-  - Additions only: the legacy routes, the WebSocket, UniProxy and the
-    v2board services stay.
-  - The release notes announce the removal at 5.0. That is the "one major
-    version" ahead, aligned with the v2 API policy (only v4 after v5) and
-    decision D8.
-- **T2, the next 4.x.**
-  - `mtls: preferred` becomes the default.
-  - `GET /api/v4/kernel/agents/transports` lists each node's transport,
-    agent version and identity.
-  - The legacy agent endpoints answer `Deprecation` and `Sunset` headers
-    and count `anix_agent_legacy_requests_total{path}`.
-- **T3, 5.0.**
-  - The transports only AnixOps agents use are removed:
-    - the agent and node WebSocket;
-    - `/api/v2/agent/*` and `/api/v2/node/*`;
-    - the clean agent endpoints, whose agents become anix-agent with the
-      forward plugins (A5).
-  - API key authentication on the stream is removed too.
-  - This removes the 7 agent-channel routes that section 6 marks
-    `kernel-owned`, and the 7 agent routes that are kernel-owned already
-    (protocol-runtime's 6 and proxy-node's WebSocket).
+- **T1, the 4.1 release candidates with A2-1 to A2-5.** Additions only, in
+  `optional`.
+- **T2, 4.1.0 (A2-6).** `preferred` is the default; the inventory, the
+  signals and the counters above. The release notes and `docs/UPGRADE.md`
+  ("Agent transports: preparing for v4.2") announce `required` for 4.2.
+- **T3, 4.2.** `required` becomes the default: the AnixOps Agent channels
+  accept enrolled agents only. An operator may still set `preferred` for a
+  while; the removal of the legacy agent routes themselves (the agent and
+  node WebSocket, `/api/v2/agent/*`, `/api/v2/node/*`, the clean agent
+  endpoints, API key authentication on the stream; the 7 agent-channel
+  routes section 6 marks `kernel-owned` and the 7 agent routes that are
+  kernel-owned already) follows in a later release.
   - anix-agent no longer uses UniProxy or the v2board `NodeService`,
     `UserService`, `TrafficService` and `NodeLogService`. Third-party node
     software (V2bX, XrayR) may still. Whether the kernel keeps serving them
@@ -1707,7 +1772,8 @@ PRs AG-1 to AG-7 (section 7):
   - The stream is on by default when the server advertises A2.
   - `ValidateForProduction` (on `origin/dev_new`) requires a certificate
     and refuses `AgentControlAllowInsecure`.
-  - The legacy transports remain as a fallback until 5.0.
+  - The legacy transports remain as a fallback until 4.2 makes
+    `agent_control.mtls: required` the default (H5, section 5.6).
 - **Forward nodes.**
   - An agent on a forward node enrolls as `forward-<id>` with its token.
   - Plugin rule counters feed `TrafficReport` for forwards. This joins A5.
@@ -2003,7 +2069,7 @@ it up to A2-3.
 | R6 | **Kernel memory and restarts**: sessions, handles and acknowledgement waiters live in one process | Durable operations through `KernelOperationBridge`; waits are bounded and answer the current state; handles expire with their request; HA stays out of scope |
 | R7 | **Churn in the draft contract** | Reviewed before NO-1; binding and additive since NO-1 (section 3.10) |
 | R8 | **Size and half-way states**: 90 routes, about 29 PRs | Per-route modes; legacy stays the default; every PR keeps both sides working; parity on SQLite and PostgreSQL |
-| R9 | **Field agents not upgraded by 5.0** | The transport inventory, deprecation signals a major ahead, and automatic enrollment with the existing key |
+| R9 | **Field agents not upgraded by 4.2** (H5) | The transport inventory and `anix-control agents transports --legacy-only`, deprecation signals from 4.1.0, automatic enrollment with the existing key, and `preferred` kept available as an override |
 | R10 | **Cross-package cascades** (a node deletes its protocols; a protocol deletes subscription links) | The kernel performs the cascade in its transaction, as today (Q11); the steps are idempotent by request id |
 
 ## 9. Test strategy
@@ -2107,7 +2173,7 @@ Implementation follows section 7 in that order.
 | D5 | Secrets at rest: in clear in the protected tables (parity), or sealed under a new `node_secrets.kek` | clear now; sealing in a later PR |
 | D6 | Finalize (P3) on production: when, and who runs it | not in this phase; on production at least one release after P2, with your approval, after a staging rehearsal |
 | D7 | Validate on build: enforce (rows failing validation are left out of node configurations), or stay report-only | enforce one release after report-only shows zero exclusions on a staging copy |
-| D8 | Legacy agent transports removed in 5.0 (announced in the 4.x release with A2) or in 6.0 | 5.0, aligned with the v2 API policy |
+| D8 | Legacy agent transports removed in 5.0 (announced in the 4.x release with A2) or in 6.0 | 5.0, aligned with the v2 API policy. Superseded by H5 (2026-10-02): refused by default from 4.2 (`agent_control.mtls: required`), section 5.6 |
 | D9 | Agent certificates: a 7-day lifetime (modules: 24 h), and node names `proxy-<id>` and `forward-<id>` in the SAN | as proposed |
 | D10 (Q10) | Diagnosis vantage: Control by default (parity), the node's agent when it advertises `diag.v1`; never from package hosts | as proposed |
 | D11 (Q11) | Cascades: the kernel deletes a node's protocols and a protocol's subscription group links in `RetireNode` and `RetireProtocol` (parity), or packages react to events | the kernel, for parity; events later |

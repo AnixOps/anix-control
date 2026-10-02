@@ -305,30 +305,51 @@ for the current state (`running`, `restarting`, `failed`, `exited`,
 ## Agent Client Certificates
 
 `agent_control.mtls` (`ANIX_CONTROL_AGENT_CONTROL_MTLS`) sets how AnixOps
-Agents authenticate on the gRPC listener (`grpc.*`):
+Agents authenticate on their channels: the gRPC listener (`grpc.*`) and the
+legacy agent HTTP and WebSocket paths.
 
 ```yaml
 agent_control:
-  mtls: "optional"   # optional | preferred | required
+  mtls: "preferred"     # off | optional | preferred | required
+  legacy_sunset: ""     # optional YYYY-MM-DD, announced to legacy agents
 ```
 
 | Mode | Agents without a client certificate |
 |------|------|
-| `optional` (default) | authenticate with their node API key, as before |
-| `preferred` | still authenticate; the control stream answers with `x-anix-auth-deprecated` |
-| `required` | are refused by the Agent services; `Enroll` takes only one-time enrollment credentials |
+| `off` | authenticate with their node API key; certificates are neither requested nor accepted and `Enroll` is unavailable (a rollback switch) |
+| `optional` | authenticate with their node API key, silently |
+| `preferred` (default from 4.1.0) | still authenticate, and get deprecation signals: `Deprecation: true`, `Link` to the upgrade guide and, with `legacy_sunset`, `Sunset` on the legacy HTTP paths; `x-anix-auth-deprecated` (with `x-anix-auth-deprecation-link`, `x-anix-auth-sunset`) on the control stream |
+| `required` (default from 4.2) | are refused on the AnixOps Agent channels: HTTP 403 with `"code": "agent_mtls_required"`, gRPC `Unauthenticated` with the trailer `x-anix-error-code: agent_mtls_required`; `Enroll` takes only one-time enrollment credentials |
 
+- **Scope.** The AnixOps Agent channels are the control stream's API key
+  authentication, `/api/v2/agent/*`, `/api/v2/node/*`,
+  `/api/v2/forward/agent/rules` and the clean agent endpoints
+  (`/api/v2/forward-agent/register|heartbeat|report`). UniProxy
+  (`/api/v1|v2/server/UniProxy/*`) and the v2board gRPC services, which
+  third-party node software (XrayR, V2bX) uses, are never signalled or
+  refused.
 - Agents get certificates from `anix.agent.v1.AgentEnrollment`, signed by the
   built-in CA. It needs only `module_runtime.ca_kek`
   (`ANIX_CONTROL_MODULE_RUNTIME_CA_KEK`, 32 bytes, base64 or hex) with
   `module_runtime.pki: builtin`; `module_runtime.enabled` and the module
-  listener are not needed. Without the CA, or with `pki: external`,
-  `optional` behaves exactly as before.
-- `preferred` and `required` need `grpc.tls_cert_file`, `grpc.tls_key_file`
-  and the built-in CA; startup fails otherwise.
+  listener are not needed. Without the CA, or with `pki: external`, `off`,
+  `optional` and `preferred` start, but agents cannot enroll (the startup log
+  line `Agent transports: ...` says so).
+- `required` needs `grpc.enabled`, `grpc.tls_cert_file`,
+  `grpc.tls_key_file` and the built-in CA; startup fails otherwise.
+- `legacy_sunset` (`ANIX_CONTROL_AGENT_CONTROL_LEGACY_SUNSET`) is empty by
+  default, so no `Sunset` header is sent until an operator fixes a date.
+- Before switching to `required`, run `anix-control agents transports
+  --legacy-only` (or open NodeX Agents → Agent 连接方式): every node it
+  lists must first run an enrolled agent. `/metrics` has
+  `anixops_agent_legacy_requests_total{path}`,
+  `anixops_agent_legacy_refused_total{path}` and
+  `anixops_agent_mtls_mode{mode}`.
 - Enrollment credentials: `anix-control agent token create -node proxy-12`
   or `POST /api/v4/kernel/agents/enrollment-tokens`. Details in
-  [`../architecture/module-runtime.md`](../architecture/module-runtime.md#agent-pki).
+  [`../architecture/module-runtime.md`](../architecture/module-runtime.md#agent-pki)
+  and [`../architecture/node-ops-service.md`](../architecture/node-ops-service.md)
+  section 5.6.
 
 ## Related Docs
 

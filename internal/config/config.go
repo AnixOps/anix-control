@@ -48,33 +48,71 @@ type Config struct {
 }
 
 // AgentControlConfig configures how AnixOps Agents authenticate on the
-// node-facing gRPC listener (grpc.*).
+// node-facing gRPC listener (grpc.*) and on the legacy AnixOps-agent HTTP
+// and WebSocket paths (node-ops-service.md, section 5.6).
 type AgentControlConfig struct {
-	// MTLS selects the client certificate mode of the agent listener:
-	// "optional" (default: a client certificate is verified when given,
-	// otherwise the legacy node credential authenticates), "preferred"
-	// (legacy credentials still work; the control stream answers them with
-	// a deprecation header) or "required" (the Agent services accept
-	// certificates only).
+	// MTLS selects the client certificate mode of the AnixOps Agent
+	// channels:
+	//   - "off": client certificates are neither requested nor accepted and
+	//     AgentEnrollment is unavailable; every agent uses its legacy node
+	//     credential, without deprecation signals (a rollback switch);
+	//   - "optional": a client certificate is verified when given, otherwise
+	//     the legacy node credential authenticates, silently;
+	//   - "preferred" (the default from 4.1.0): as optional, but legacy
+	//     authentication is answered with deprecation signals (the
+	//     x-anix-auth-deprecated stream header, and Deprecation, Sunset and
+	//     Link on the legacy HTTP agent paths);
+	//   - "required" (the default planned for 4.2): the AnixOps Agent
+	//     channels accept certificates only; the legacy agent paths and API
+	//     key authentication on the stream are refused. Third-party node
+	//     protocols (UniProxy, the v2board gRPC services) are not affected.
 	// Certificates come from AgentEnrollment and need the built-in CA
 	// (module_runtime.ca_kek with pki builtin; module_runtime.enabled is not
 	// needed) and grpc.tls_cert_file.
 	MTLS string `yaml:"mtls"`
+	// LegacySunset is the date after which the legacy agent transports may
+	// stop answering, as YYYY-MM-DD or RFC 3339. When set, the deprecation
+	// signals carry it (the HTTP Sunset header, x-anix-auth-sunset on the
+	// stream). Empty sends no Sunset: the 4.2 release date is not fixed.
+	LegacySunset string `yaml:"legacy_sunset"`
 }
 
 // Agent listener client certificate modes (agent_control.mtls).
 const (
+	AgentMTLSOff       = "off"
 	AgentMTLSOptional  = "optional"
 	AgentMTLSPreferred = "preferred"
 	AgentMTLSRequired  = "required"
+	// AgentMTLSDefault is the mode when agent_control.mtls is empty.
+	AgentMTLSDefault = AgentMTLSPreferred
 )
 
-// MTLSOrDefault returns the configured mode, "optional" when empty.
+// AgentMTLSModes lists the agent_control.mtls modes, weakest first.
+var AgentMTLSModes = []string{AgentMTLSOff, AgentMTLSOptional, AgentMTLSPreferred, AgentMTLSRequired}
+
+// MTLSOrDefault returns the configured mode, AgentMTLSDefault (preferred)
+// when empty.
 func (a AgentControlConfig) MTLSOrDefault() string {
 	if mode := strings.ToLower(strings.TrimSpace(a.MTLS)); mode != "" {
 		return mode
 	}
-	return AgentMTLSOptional
+	return AgentMTLSDefault
+}
+
+// LegacySunsetTime parses LegacySunset: the zero time when it is empty.
+func (a AgentControlConfig) LegacySunsetTime() (time.Time, error) {
+	value := strings.TrimSpace(a.LegacySunset)
+	if value == "" {
+		return time.Time{}, nil
+	}
+	if day, err := time.Parse(time.DateOnly, value); err == nil {
+		return day.UTC(), nil
+	}
+	parsed, err := time.Parse(time.RFC3339, value)
+	if err != nil {
+		return time.Time{}, fmt.Errorf("invalid agent_control.legacy_sunset %q: want YYYY-MM-DD or RFC 3339", a.LegacySunset)
+	}
+	return parsed.UTC(), nil
 }
 
 // IdentityConfig configures the identity module when Control runs it as a
@@ -549,21 +587,28 @@ func (c *Config) ValidateForServer() error {
 	return nil
 }
 
-// validateAgentControl checks agent_control.mtls. Modes other than optional
-// need what verifies client certificates: TLS on the gRPC listener and the
+// validateAgentControl checks agent_control. Only required needs what
+// verifies client certificates up front: TLS on the gRPC listener and the
 // built-in CA that signs agent certificates (module_runtime.ca_kek with pki
-// builtin; the module listener need not run).
+// builtin; the module listener need not run), and the gRPC listener itself,
+// the only way an enrolled agent connects once the legacy paths are refused.
+// preferred and optional start without them (agents then cannot enroll yet,
+// which the startup log says), so the 4.1 default does not break a kernel
+// without gRPC TLS.
 func (c *Config) validateAgentControl() error {
+	if _, err := c.AgentControl.LegacySunsetTime(); err != nil {
+		return err
+	}
 	mode := c.AgentControl.MTLSOrDefault()
 	switch mode {
-	case AgentMTLSOptional:
+	case AgentMTLSOff, AgentMTLSOptional, AgentMTLSPreferred:
 		return nil
-	case AgentMTLSPreferred, AgentMTLSRequired:
+	case AgentMTLSRequired:
 	default:
-		return fmt.Errorf("agent_control.mtls must be %q, %q or %q", AgentMTLSOptional, AgentMTLSPreferred, AgentMTLSRequired)
+		return fmt.Errorf("agent_control.mtls must be %q, %q, %q or %q", AgentMTLSOff, AgentMTLSOptional, AgentMTLSPreferred, AgentMTLSRequired)
 	}
 	if !c.GRPC.Enable {
-		return nil
+		return fmt.Errorf("agent_control.mtls %q needs the gRPC listener (grpc.enabled): it refuses the legacy agent paths, so enrolled agents can only connect there", mode)
 	}
 	if strings.TrimSpace(c.GRPC.TLSCertFile) == "" || strings.TrimSpace(c.GRPC.TLSKeyFile) == "" {
 		return fmt.Errorf("agent_control.mtls %q needs TLS on the gRPC listener (grpc.tls_cert_file and grpc.tls_key_file)", mode)

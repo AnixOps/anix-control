@@ -3,12 +3,14 @@ package router
 import (
 	"time"
 
+	"github.com/AnixOps/anix-control/v4/internal/agenttransport"
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/edition"
 	"github.com/AnixOps/anix-control/v4/internal/handler"
 	"github.com/AnixOps/anix-control/v4/internal/health"
 	"github.com/AnixOps/anix-control/v4/internal/kernelnodeops"
 	"github.com/AnixOps/anix-control/v4/internal/middleware"
+	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
 	"github.com/gin-gonic/gin"
 	swaggerFiles "github.com/swaggo/files"
@@ -45,6 +47,17 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	// The configured edition (app.edition) hides its commercial /api/v2
 	// routes here, and only here.
 	r.Use(editionRouteFilter(edition.For(cfg)))
+
+	// agent_control.mtls on the legacy AnixOps-agent paths
+	// (node-ops-service.md, section 5.6): deprecation signals in preferred,
+	// refusal in required, counters in every mode.
+	agentControl := config.AgentControlConfig{}
+	if cfg != nil {
+		agentControl = cfg.AgentControl
+	}
+	agentPolicy := agenttransport.PolicyFrom(agentControl)
+	legacyAgentHTTP := agenttransport.LegacyHTTP(agentPolicy, model.AgentTransportHTTPLegacy)
+	legacyAgentWebSocket := agenttransport.LegacyHTTP(agentPolicy, model.AgentTransportWebSocket)
 
 	// 速率限制器 (测试模式跳过)
 	exemptPaths := []string{"/health", "/livez", "/readyz", "/metrics", "/swagger/"}
@@ -127,10 +140,12 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		forwardAgentPublic := v2.Group("/forward-agent")
 		forwardAgentPublic.Use(publicLimiter.Middleware())
 		{
+			// The install script is a download for the operator, not agent
+			// traffic: agent_control.mtls does not guard it.
 			forwardAgentPublic.GET("/install.sh", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.forward_agent.install_sh.get", cleanAgentHandler.InstallScript))
-			forwardAgentPublic.POST("/register", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.forward_agent.register.post", cleanAgentHandler.Register))
-			forwardAgentPublic.POST("/heartbeat", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.forward_agent.heartbeat.post", cleanAgentHandler.Heartbeat))
-			forwardAgentPublic.POST("/report", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.forward_agent.report.post", cleanAgentHandler.Report))
+			forwardAgentPublic.POST("/register", legacyAgentHTTP, registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.forward_agent.register.post", cleanAgentHandler.Register))
+			forwardAgentPublic.POST("/heartbeat", legacyAgentHTTP, registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.forward_agent.heartbeat.post", cleanAgentHandler.Heartbeat))
+			forwardAgentPublic.POST("/report", legacyAgentHTTP, registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.forward_agent.report.post", cleanAgentHandler.Report))
 		}
 
 		// 支付接口
@@ -578,13 +593,14 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		nodePublic.Use(publicLimiter.Middleware())
 		{
 			nodeHandler := handler.NewNodeHandler()
-			nodePublic.POST("/register", registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.node.register.post", nodeHandler.Register))
-			nodePublic.GET("/ws", registeredPackageWebSocketRoute(v2WebSocketGateway.Serve, "proxy-node", "proxy.node.ws.get", agentHandler.AgentWebSocketUnified, agentHandler.PrepareWebSocketBridge))
+			nodePublic.POST("/register", legacyAgentHTTP, registeredPackageRoute(v2PackageGateway.Serve, "proxy-node", "proxy.node.register.post", nodeHandler.Register))
+			nodePublic.GET("/ws", legacyAgentWebSocket, registeredPackageWebSocketRoute(v2WebSocketGateway.Serve, "proxy-node", "proxy.node.ws.get", agentHandler.AgentWebSocketUnified, agentHandler.PrepareWebSocketBridge))
 		}
 
 		// 节点通信 API (需要 API Key 认证 + 可选签名验证)
 		nodeAPI := v2.Group("/node")
 		nodeAPI.Use(userLimiter.Middleware())
+		nodeAPI.Use(legacyAgentHTTP)
 		nodeAPI.Use(middleware.NodeAPIKeyAuth())
 		nodeAPI.Use(middleware.SignatureAuth())    // 签名验证 (向后兼容，可选)
 		nodeAPI.Use(middleware.NodeSecureLogger()) // 安全审计日志
@@ -595,8 +611,11 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		}
 
 		// UniProxy API (节点通信接口)
+		// UniProxy is shared with third-party node software (V2bX, XrayR):
+		// agent_control.mtls never applies; the inventory records it.
 		uniproxy := v2.Group("/server/UniProxy")
 		uniproxy.Use(userLimiter.Middleware())
+		uniproxy.Use(agenttransport.ThirdPartyHTTP(model.AgentTransportUniProxy))
 		uniproxy.Use(middleware.NodeAuth())
 		{
 			h := handler.NewUniProxyHandler()
@@ -610,6 +629,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		// UniProxy API v1 (兼容旧版 V2bX)
 		uniproxyV1 := r.Group("/api/v1/server/UniProxy")
 		uniproxyV1.Use(userLimiter.Middleware())
+		uniproxyV1.Use(agenttransport.ThirdPartyHTTP(model.AgentTransportUniProxy))
 		uniproxyV1.Use(middleware.NodeAuth())
 		{
 			h := handler.NewUniProxyHandler()
@@ -626,16 +646,16 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		agentPublic := v2.Group("/agent")
 		agentPublic.Use(userLimiter.Middleware())
 		{
-			agentPublic.POST("/register", registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.agent.register.post", agentHandler.AgentRegister))
-			agentPublic.POST("/heartbeat", agentHandler.RequireAgentNode, registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.agent.heartbeat.post", agentHandler.AgentHeartbeat))
-			agentPublic.GET("/tasks", agentHandler.RequireAgentNode, registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.agent.tasks.get", agentHandler.AgentGetTasks))
-			agentPublic.POST("/result", agentHandler.RequireAgentNode, registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.agent.result.post", agentHandler.AgentReportResult))
-			agentPublic.POST("/monitor", agentHandler.RequireAgentNode, registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.agent.monitor.post", agentHandler.AgentMonitor))
-			agentPublic.GET("/ws", registeredPackageWebSocketRoute(v2WebSocketGateway.Serve, "protocol-runtime", "protocol.agent.ws.get", agentHandler.AgentWebSocketUnified, agentHandler.PrepareWebSocketBridge))
+			agentPublic.POST("/register", legacyAgentHTTP, registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.agent.register.post", agentHandler.AgentRegister))
+			agentPublic.POST("/heartbeat", legacyAgentHTTP, agentHandler.RequireAgentNode, registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.agent.heartbeat.post", agentHandler.AgentHeartbeat))
+			agentPublic.GET("/tasks", legacyAgentHTTP, agentHandler.RequireAgentNode, registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.agent.tasks.get", agentHandler.AgentGetTasks))
+			agentPublic.POST("/result", legacyAgentHTTP, agentHandler.RequireAgentNode, registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.agent.result.post", agentHandler.AgentReportResult))
+			agentPublic.POST("/monitor", legacyAgentHTTP, agentHandler.RequireAgentNode, registeredPackageRoute(v2PackageGateway.Serve, "protocol-runtime", "protocol.agent.monitor.post", agentHandler.AgentMonitor))
+			agentPublic.GET("/ws", legacyAgentWebSocket, registeredPackageWebSocketRoute(v2WebSocketGateway.Serve, "protocol-runtime", "protocol.agent.ws.get", agentHandler.AgentWebSocketUnified, agentHandler.PrepareWebSocketBridge))
 		}
 
 		// 转发规则同步 (Agent 使用)
-		v2.GET("/forward/agent/rules", registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.forward.agent.rules.get", agentHandler.AgentGetForwardRules))
+		v2.GET("/forward/agent/rules", legacyAgentHTTP, registeredPackageRoute(v2PackageGateway.Serve, "forward", "forward.forward.agent.rules.get", agentHandler.AgentGetForwardRules))
 
 		// Agent 管理接口 (管理员)
 		agentAdmin := v2.Group("/admin/agent")
@@ -790,5 +810,6 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.GET("/kernel/route-modes/revisions", routeModes.Revisions)
 		agents := handler.NewAgentPKIHandler()
 		v4.POST("/kernel/agents/enrollment-tokens", agents.CreateEnrollmentToken)
+		v4.GET("/kernel/agents/transports", handler.NewAgentTransportsHandler(agentPolicy).List)
 	}
 }

@@ -62,6 +62,7 @@ describe('admin routes', () => {
       '/admin/mfa',
       '/admin/system',
       '/admin/agent',
+      '/admin/agent/transports',
       '/admin/plugins',
       '/admin/plugins/route-modes',
       '/admin/deployments',

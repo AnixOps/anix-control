@@ -1177,7 +1177,20 @@ func mayMatchV2Namespace(routePath string) bool {
 	return true
 }
 
+// transitionMiddleware are the agent_control.mtls guards of the legacy
+// AnixOps-agent paths (internal/agenttransport). They signal, count or
+// refuse legacy agents but authenticate nobody, so they do not change a
+// route's middleware group.
+var transitionMiddleware = map[string]bool{"legacyAgentHTTP": true, "legacyAgentWebSocket": true}
+
 func classifyMiddleware(middleware []string) (string, error) {
+	filtered := make([]string, 0, len(middleware))
+	for _, current := range middleware {
+		if !transitionMiddleware[current] {
+			filtered = append(filtered, current)
+		}
+	}
+	middleware = filtered
 	contains := func(identifier string) bool {
 		for _, current := range middleware {
 			if current == identifier {

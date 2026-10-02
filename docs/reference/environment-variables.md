@@ -29,7 +29,8 @@ This table is generated from the code and checked by
 |----------|-----|------|------------------|
 | `ANIX_CONTROL_ADMIN_EMAIL` | `admin.email` | string |  |
 | `ANIX_CONTROL_ADMIN_PASSWORD` | `admin.password` | string | secret, no default |
-| `ANIX_CONTROL_AGENT_CONTROL_MTLS` | `agent_control.mtls` | string | `optional` |
+| `ANIX_CONTROL_AGENT_CONTROL_LEGACY_SUNSET` | `agent_control.legacy_sunset` | string |  |
+| `ANIX_CONTROL_AGENT_CONTROL_MTLS` | `agent_control.mtls` | string | `preferred` |
 | `ANIX_CONTROL_APP_API_TOKEN` | `app.api_token` | string | secret, no default |
 | `ANIX_CONTROL_APP_EDITION` | `app.edition` | string | `community` |
 | `ANIX_CONTROL_APP_NAME` | `app.name` | string | `AnixOps Control` |

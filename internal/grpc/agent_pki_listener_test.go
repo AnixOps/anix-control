@@ -23,6 +23,7 @@ import (
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	pb "github.com/AnixOps/anix-control/v4/api/grpc/v2boardpb"
 	"github.com/AnixOps/anix-control/v4/internal/agentpki"
+	"github.com/AnixOps/anix-control/v4/internal/agenttransport"
 	"github.com/AnixOps/anix-control/v4/internal/cache"
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
@@ -54,12 +55,22 @@ type agentListener struct {
 
 func startAgentListener(t *testing.T, mode string, withPKI bool) *agentListener {
 	t.Helper()
+	return startAgentListenerWith(t, mode, withPKI, nil)
+}
+
+// startAgentListenerWith is startAgentListener with configure applied to
+// the server configuration before the listener starts.
+func startAgentListenerWith(t *testing.T, mode string, withPKI bool, configure func(*ServerConfig)) *agentListener {
+	t.Helper()
 	cache.InitMemory()
 	requireInMemoryDatabase(t)
 	requireAutoMigrate(t, &model.Node{}, &model.NodeProtocol{}, &model.AuthorizedKey{}, &model.ForwardNode{},
 		&model.ServiceCA{}, &model.AgentEnrollment{}, &model.AgentCertificate{}, &model.OperationLog{},
-		&model.NodeServiceAssignment{}, &model.PluginTelemetryState{}, &model.NodePluginObservedState{})
+		&model.NodeServiceAssignment{}, &model.PluginTelemetryState{}, &model.NodePluginObservedState{}, &model.AgentTransport{})
 	db := database.Get()
+	// A fresh transport recorder: its throttle must not carry sightings of
+	// an earlier test's node with the same id.
+	t.Cleanup(agenttransport.SetDefault(agenttransport.NewRecorder(database.Get)))
 
 	l := &agentListener{proxyKey: "agent-pki-proxy-key", forwardToken: "agent-pki-forward-token"}
 	l.proxy = model.Node{Name: "proxy", Host: "127.0.0.1", APIKeyHash: apiKeyHashForTest(l.proxyKey), Status: model.NodeStatusOnline}
@@ -80,6 +91,9 @@ func startAgentListener(t *testing.T, mode string, withPKI bool) *agentListener 
 		l.pki, err = agentpki.New(agentpki.Options{DB: db, Authority: l.authority})
 		require.NoError(t, err)
 		cfg.AgentPKI = l.pki
+	}
+	if configure != nil {
+		configure(cfg)
 	}
 	l.server = NewServer(cfg)
 	require.NoError(t, l.server.Start())
