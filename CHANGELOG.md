@@ -32,6 +32,43 @@
 
 ### Changed
 
+- **Dashboard, 流量与监控 and 部署编排 (UI redesign phase U8)**
+  (`web/src/ui/UiChart.vue`, `UiMetricCard.vue`,
+  `web/src/views/admin/Dashboard.vue`, `Monitor.vue`, `Deployments.vue`,
+  `views/admin/{dashboard,monitor,deployments}/`;
+  `docs/reference/frontend-design.md` "Charts" and "Dashboards and
+  monitoring (U8)"). Same endpoints, request bodies, permission and edition
+  checks; no backend change.
+  - `UiChart`: the one ECharts wrapper. Tree-shaken (`echarts/core` with
+    line and bar series, grid, tooltip, legend, canvas), loaded on first
+    use into the `echarts` chunk (about 180 KB gzip, was 374 KB), never in
+    the entry chunk. The AnixOps Design theme comes from the tokens and
+    follows light / dark (pure black) live; it resizes with its box; it has
+    loading (delayed chart skeleton), empty and error (重试) states; the plot
+    is `role="img"` with a summary, and 以表格查看 shows the data as a table
+    that screen readers always read. `UiMetricCard`: label, big number,
+    trend with a word, detail line and an optional token-coloured sparkline.
+    Histoire stories and unit tests for both; `UiSkeleton` gains `chart`.
+  - 仪表盘 on the dashboard template (plan §7.4): 用户 / 在线节点 / 今日流量 /
+    待处理工单 cards (each opens its page), the 24-hour traffic chart, then
+    需要处理 (offline nodes, tickets waiting for a reply, stalled traffic
+    reports; pending orders in the commercial edition) and 最近操作 (the
+    audit log). Each block loads, fails and retries on its own; 刷新 asks
+    the dashboard API for fresh numbers.
+  - 流量与监控 (`/admin/monitor/:section`) merges 实时监控, 小时流量 and
+    转发可观测性: 实时节点 (the monitor WebSocket, now a `UiDataTable`), 用户流量
+    (all users or one), 节点延迟 (the prober's node targets) and 转发
+    (topology graph, ingress comparison, runtime jobs). The section is in
+    the path and the time range (1 小时 / 24 小时 / 7 天 / 30 天) in `?range=`
+    for the sections whose API takes one. `/admin/traffic-hourly` and
+    `/admin/forward/observability` redirect; the menu has one 流量与监控
+    entry and ⌘K lists its sections.
+  - 部署编排: the page is split into page-local panels and
+    `useDeploymentCenter.js`; topologies and node roles on `UiDataTable`;
+    the node-role editor (`AssignmentDrawer`) is a `UiSheet`; the G6
+    topology (`TopologyGraph.vue`, shared with 流量与监控) follows the theme
+    live; the operation timeline shared with 插件中心 is a timeline list
+    with state words instead of a bare table.
 - **Nodes: a list and a node page (UI redesign phase U7)**
   (`web/src/views/admin/Nodes.vue`, `NodeDetail.vue`, `views/admin/nodes/`;
   `docs/reference/frontend-design.md` "Node pages"). Same endpoints, request
