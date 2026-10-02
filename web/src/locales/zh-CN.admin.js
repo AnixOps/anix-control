@@ -353,6 +353,8 @@ export default {
       modeSummaryNodeX: '\u8bf7\u5728\u4e13\u7528\u7684 NodeX Runtime \u9875\u9762\u7f16\u8f91 NodeX \u63a7\u5236\u9762 URL\u3001Token \u548c gost \u64cd\u4f5c\u68c0\u67e5\u3002',
       modeSummaryLocal: '\u8bf7\u5728\u4e13\u7528\u7684 Local Runtime \u9875\u9762\u7f16\u8f91 inventory\u3001playbook \u548c\u9762\u677f\u4e3b\u673a\u6267\u884c\u5668\u914d\u7f6e\u3002',
       modeCompatibilityHint: '\u8f6c\u53d1\u7f16\u8f91\u5668\u4f1a\u6309\u5f53\u524d runtime \u81ea\u52a8\u8fc7\u6ee4\u53ef\u9009 tunnel\u3002\u672c\u5730 Ansible runtime \u53ea\u63a5\u53d7 Port Forward \u96a7\u9053\uff0cNodeX/gost \u5219\u53ef\u4ee5\u9644\u7740\u517c\u5bb9\u7684 Port Forward \u548c Tunnel Forward \u5e03\u5c40\u3002',
+      nftablesHint: '当前运行时为 nftables / Ansible：「主备」和「Hash」策略只转发到第一个目标，限速不会生效。要在多个目标间分流请用「轮询」或「随机」，需要限速请使用 NodeX 运行时。',
+      nftablesStrategyHint: '在 nftables / Ansible 运行时上，「主备」和「Hash」只使用第一个目标。',
       modeHintNodeX: 'NodeX/gost \u6a21\u5f0f\u4fdd\u7559 ingress \u548c exit \u8bed\u4e49\u3002\u5373\u4f7f\u5df2\u9009\u62e9 tunnel\uff0c\u4e5f\u4ecd\u9700 NodeX runtime \u4efb\u52a1\u6267\u884c\u6210\u529f\uff0c\u8f6c\u53d1\u624d\u7b97\u771f\u6b63\u6302\u8f7d\u3002',
       modeHintLocal: '\u672c\u5730 Ansible \u6a21\u5f0f\u53ea\u8bb0\u5f55\u6267\u884c\u8282\u70b9\u3002SSH \u8bbf\u95ee\u4f9d\u8d56\u5df2\u914d\u7f6e\u7684 ansible inventory \u548c local runtime \u53c2\u6570\uff0c\u4e0d\u6765\u81ea NodeX \u62d3\u6251\u8bb0\u5f55\u3002',
       tunnelHintNodeX: '{name} \u5c06\u901a\u8fc7 NodeX/gost \u6302\u8f7d\u3002\u9762\u677f\u4fa7\u201c\u5728\u7ebf\u201d\u6216\u72b6\u6001\u68c0\u67e5\u4e0d\u80fd\u8bc1\u660e\u8fdc\u7a0b relay \u5df2\u5b8c\u6210\u6302\u8f7d\u3002',

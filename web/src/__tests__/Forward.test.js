@@ -119,6 +119,18 @@ describe('Forward.vue', () => {
     expect(options.some(text => text.includes('NodeX Tunnel'))).toBe(false)
   })
 
+  it('says what the nftables runtime does not do, and only there', async () => {
+    wrapper = mountForward()
+    await flushPromises()
+    expect(wrapper.get('[data-test="forward-nftables-hint"]').text()).toBe(i18n.global.t('runtime.forward.nftablesHint'))
+    wrapper.unmount()
+
+    adminApi.getSystemConfig.mockImplementation(key => Promise.resolve({ data: { value: key === 'forward.runtime_backend' ? 'gost' : '' } }))
+    wrapper = mountForward()
+    await flushPromises()
+    expect(wrapper.find('[data-test="forward-nftables-hint"]').exists()).toBe(false)
+  })
+
   it('renders direct forwards in the data table without duplicate suite nav', async () => {
     adminApi.getForwardList.mockResolvedValue({
       code: 0,
