@@ -180,12 +180,13 @@ const pageTitle = computed(() => {
     t('pageTitles.admin.fallback')
 })
 
-// group › menu item (when the page is below it) › page title.
+// group › menu item (when the page is below it) › page title. A group named
+// like the page (用户 › 用户) shows once.
 const crumbs = computed(() => {
   const out = []
   const hit = active.value
   if (hit) {
-    out.push({ label: hit.group.label })
+    if (hit.group.label !== pageTitle.value) out.push({ label: hit.group.label })
     if (hit.item.to !== route.path && hit.item.label !== pageTitle.value) {
       out.push({ label: hit.item.label, to: hit.item.to })
     }

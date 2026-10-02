@@ -127,6 +127,14 @@ describe('AdminLayout.vue', () => {
     expect(wrapper.get('.admin-crumbs [aria-current="page"]').text()).toBe('Tunnels')
   })
 
+  it('shows a group named like the page only once in the breadcrumb', async () => {
+    const { wrapper } = await mountLayout('/admin/users')
+    mounted = wrapper
+    const crumbs = wrapper.findAll('.admin-crumbs li').map(item => item.text())
+    expect(crumbs).toEqual(['Users'])
+    expect(wrapper.get('.admin-crumbs [aria-current="page"]').text()).toBe('Users')
+  })
+
   it('renders the forward suite navigation once, only on forward pages', async () => {
     const { wrapper, router } = await mountLayout('/admin/forward/tunnel')
     mounted = wrapper
