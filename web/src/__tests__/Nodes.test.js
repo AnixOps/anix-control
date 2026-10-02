@@ -1,15 +1,21 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest'
-import { mount, flushPromises, enableAutoUnmount } from '@vue/test-utils'
+// Node list (UI U7): the list template on UiDataTable, server search and
+// status chips in the URL, rows that open the node page, and the
+// registration key and parent-node deployment sheets.
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
+import { createMemoryHistory, createRouter } from 'vue-router'
 import { inBody } from './helpers/feedback'
 import Nodes from '@/views/admin/Nodes.vue'
 
 const adminApi = vi.hoisted(() => ({
   getNodes: vi.fn(),
+  getNode: vi.fn(),
   getNodeStats: vi.fn(),
   getNodeLogs: vi.fn(),
   createNode: vi.fn(),
   updateNode: vi.fn(),
   deleteNode: vi.fn(),
+  syncNodeProtocol: vi.fn(),
   getNodeCredentials: vi.fn(),
   getNodeProtocols: vi.fn(),
   createNodeProtocol: vi.fn(),
@@ -23,16 +29,21 @@ const adminApi = vi.hoisted(() => ({
 
 vi.mock('@/api/admin', () => adminApi)
 
-function mountNodes() {
-  // Dialogs and sheets render into document.body.
-  return mount(Nodes, {
-    attachTo: document.body,
-    global: {
-      mocks: {
-        $t: (_key, fallback) => fallback || _key
-      }
-    }
+const Stub = { template: '<div />' }
+
+async function mountNodes(path = '/admin/nodes') {
+  const router = createRouter({
+    history: createMemoryHistory(),
+    routes: [
+      { path: '/admin/nodes', component: Nodes },
+      { path: '/admin/nodes/:id', component: Stub }
+    ]
   })
+  await router.push(path)
+  await router.isReady()
+  const wrapper = mount(Nodes, { attachTo: document.body, global: { plugins: [router] } })
+  await flushPromises()
+  return { wrapper, router }
 }
 
 function parseAgentConfigSnippet(snippet) {
@@ -47,100 +58,66 @@ describe('Nodes.vue', () => {
     vi.spyOn(console, 'error').mockImplementation(() => {})
     adminApi.getNodes.mockResolvedValue({ data: { list: [], total: 0 } })
     adminApi.getNodeStats.mockResolvedValue({ data: { total: 0, online: 0, offline: 0, pending: 0 } })
-    adminApi.getNodeLogs.mockResolvedValue({ data: { list: [], total: 0 } })
     adminApi.getNodeCredentials.mockResolvedValue({ data: { api_key: '' } })
-    adminApi.getNodeProtocols.mockResolvedValue({ data: [] })
-    adminApi.getProtocolTemplates.mockResolvedValue({ data: [] })
     adminApi.getAuthKeys.mockResolvedValue({ data: [] })
-    adminApi.generateWireGuardKeypair.mockResolvedValue({ data: { private_key: '', public_key: '' } })
   })
 
-  it('stops follow-up admin requests when the initial nodes load fails', async () => {
+  it('stops follow-up requests and shows the error state when the nodes do not load', async () => {
     adminApi.getNodes.mockRejectedValueOnce(new Error('401'))
 
-    mountNodes()
-    await flushPromises()
+    const { wrapper } = await mountNodes()
 
     expect(adminApi.getNodes).toHaveBeenCalledTimes(1)
     expect(adminApi.getNodeStats).not.toHaveBeenCalled()
-    expect(adminApi.getProtocolTemplates).not.toHaveBeenCalled()
     expect(adminApi.getAuthKeys).not.toHaveBeenCalled()
-  })
+    expect(wrapper.text()).toContain('Couldn’t load nodes')
 
-  it('loads stats, templates, and auth keys after nodes load succeeds', async () => {
-    mountNodes()
+    adminApi.getNodes.mockResolvedValueOnce({ data: { list: [{ id: 1, name: 'hk-01', host: 'hk.example' }], total: 1 } })
+    await wrapper.findAll('button').find(button => button.text() === 'Try again').trigger('click')
     await flushPromises()
-
-    expect(adminApi.getNodes).toHaveBeenCalledTimes(1)
+    expect(wrapper.text()).toContain('hk-01')
     expect(adminApi.getNodeStats).toHaveBeenCalledTimes(1)
-    expect(adminApi.getProtocolTemplates).toHaveBeenCalledTimes(1)
-    expect(adminApi.getAuthKeys).toHaveBeenCalledTimes(1)
   })
 
-  it('renders node stats from legacy and panel envelope payloads', async () => {
-    adminApi.getNodeStats
-      .mockResolvedValueOnce({ data: { total: 12, online: 7, offline: 4, pending: 1 } })
-      .mockResolvedValueOnce({
-        code: 0,
-        msg: '操作成功',
-        data: { total: 21, online: 18, offline: 2, pending: 1 },
-        ts: 1783526400000
-      })
-
-    const wrapper = mountNodes()
-    await flushPromises()
-
-    let metricValues = wrapper.findAll('.stat-card .stat-value').map(node => node.text())
-    expect(metricValues).toEqual(['12', '7', '4', '1'])
-
-    await wrapper.vm.loadStats()
-    await flushPromises()
-
-    metricValues = wrapper.findAll('.stat-card .stat-value').map(node => node.text())
-    expect(metricValues).toEqual(['21', '18', '2', '1'])
-  })
-
-  it('loads node list resources from legacy, panel, and nested payloads', async () => {
-    adminApi.getNodes.mockResolvedValueOnce({
-      data: { list: [{ id: 1, name: 'Legacy Node', host: 'legacy.example' }], total: 1 }
-    })
-    adminApi.getProtocolTemplates.mockResolvedValueOnce({ data: [{ name: 'Legacy Template' }] })
-    adminApi.getAuthKeys.mockResolvedValueOnce({ data: [{ key: 'legacy-key', used: 2 }] })
-
-    const wrapper = mountNodes()
-    await flushPromises()
-
-    expect(wrapper.vm.nodes[0].name).toBe('Legacy Node')
-    expect(wrapper.vm.nodes[0].address).toBe('legacy.example')
-    expect(wrapper.vm.pagination.total).toBe(1)
-    expect(wrapper.vm.protocolTemplates[0].name).toBe('Legacy Template')
-    expect(wrapper.vm.authKey).toBe('legacy-key')
-    expect(wrapper.vm.authKeyUsed).toBe(2)
-
+  it('reads the list and the stats from legacy and panel envelopes', async () => {
     adminApi.getNodes.mockResolvedValueOnce({
       code: 0,
       msg: '操作成功',
-      data: { list: [{ id: 2, name: 'Envelope Node', host: 'env.example' }], total: 3 },
+      data: { list: [{ id: 2, name: 'Envelope Node', host: 'env.example', protocols: [{ id: 1 }, { id: 2 }] }], total: 3 },
       ts: 1783526400000
     })
-    await wrapper.vm.loadNodes()
+    adminApi.getNodeStats.mockResolvedValueOnce({ data: { total: 12, online: 7, offline: 4, pending: 1 } })
 
-    expect(wrapper.vm.nodes[0].name).toBe('Envelope Node')
+    const { wrapper } = await mountNodes()
+
+    expect(wrapper.vm.nodes[0]).toMatchObject({ name: 'Envelope Node', address: 'env.example' })
     expect(wrapper.vm.pagination.total).toBe(3)
+    expect(wrapper.find('[data-testid="node-stats"]').text()).toContain('12')
+    expect(wrapper.find('tbody').text()).toContain('env.example')
 
-    adminApi.getProtocolTemplates.mockResolvedValueOnce({
-      code: 0,
-      msg: '操作成功',
-      data: [{ name: 'Envelope Template' }],
-      ts: 1783526400000
-    })
-    await wrapper.vm.loadProtocolTemplates()
-    expect(wrapper.vm.protocolTemplates[0].name).toBe('Envelope Template')
+    adminApi.getNodeStats.mockResolvedValueOnce({ code: 0, msg: '操作成功', data: { total: 21, online: 18, offline: 2, pending: 1 }, ts: 1 })
+    await wrapper.vm.loadStats()
+    expect(wrapper.vm.stats).toMatchObject({ total: 21, online: 18, offline: 2, pending: 1 })
+  })
 
-    adminApi.getAuthKeys.mockResolvedValueOnce({ data: { data: [{ key: 'nested-key', used: 4 }] } })
-    await wrapper.vm.loadAuthKeysPreview()
-    expect(wrapper.vm.authKey).toBe('nested-key')
-    expect(wrapper.vm.authKeyUsed).toBe(4)
+  it('searches and filters on the server and keeps the list state in the URL', async () => {
+    const { wrapper, router } = await mountNodes('/admin/nodes?q=hk&status=offline&page=2')
+
+    expect(adminApi.getNodes).toHaveBeenLastCalledWith({ page: 2, page_size: 20, search: 'hk', status: 2 })
+
+    await wrapper.findAll('[aria-pressed]').find(chip => chip.text() === 'Disabled').trigger('click')
+    await flushPromises()
+    expect(adminApi.getNodes).toHaveBeenLastCalledWith({ page: 1, page_size: 20, search: 'hk', status: 3 })
+    expect(router.currentRoute.value.query).toEqual({ q: 'hk', status: 'disabled' })
+  })
+
+  it('opens the node page from a row', async () => {
+    adminApi.getNodes.mockResolvedValue({ data: { list: [{ id: 5, name: 'hk-01', host: 'hk.example', status: 1 }], total: 1 } })
+    const { wrapper, router } = await mountNodes()
+
+    await wrapper.find('tbody tr').trigger('click')
+    await flushPromises()
+    expect(router.currentRoute.value.fullPath).toBe('/admin/nodes/5')
   })
 
   it('shows a registration key once: the list masks keys, a generated key stays shown', async () => {
@@ -152,304 +129,49 @@ describe('Nodes.vue', () => {
       ts: 1783526400000
     })
 
-    const wrapper = mountNodes()
+    const { wrapper } = await mountNodes()
+    await wrapper.find('[data-testid="open-auth-key"]').trigger('click')
     await flushPromises()
-    await wrapper.vm.openAuthKeyModal()
-    await wrapper.vm.$nextTick()
 
-    expect(wrapper.vm.authKey).toBe('')
-    expect(wrapper.vm.authKeyMasked).toBe(true)
-    expect(inBody('.auth-key-display button').attributes('disabled')).toBeDefined()
-    expect(parseAgentConfigSnippet(wrapper.vm.configSnippet).Nodes[0].AuthKey).toBe('<your-auth-key>')
+    const deploy = wrapper.vm.deploy
+    expect(deploy.authKey).toBe('')
+    expect(deploy.authKeyMasked).toBe(true)
+    expect(inBody('[data-testid="auth-key-empty"]').text()).toContain('Hidden (********)')
+    expect(parseAgentConfigSnippet(deploy.configSnippet).Nodes[0].AuthKey).toBe('<your-auth-key>')
 
     await inBody('[data-testid="generate-auth-key"]').trigger('click')
     await flushPromises()
 
     expect(adminApi.generateAuthKey).toHaveBeenCalledWith(expect.objectContaining({ expire_days: 0 }))
     expect(adminApi.generateAuthKey.mock.calls[0][0].name).toBeTruthy()
-    expect(wrapper.vm.authKey).toBe('fresh-registration-key')
-    expect(inBody('[data-testid="auth-key-value"]').text()).toBe('fresh-registration-key')
-    expect(parseAgentConfigSnippet(wrapper.vm.configSnippet).Nodes[0].AuthKey).toBe('fresh-registration-key')
+    expect(deploy.authKey).toBe('fresh-registration-key')
+    // Masked in a password field with a reveal toggle.
+    const field = inBody('[data-testid="auth-key-value"] input')
+    expect(field.attributes('type')).toBe('password')
+    expect(field.element.value).toBe('fresh-registration-key')
+    expect(parseAgentConfigSnippet(deploy.configSnippet).Nodes[0].AuthKey).toBe('fresh-registration-key')
 
-    // Reopening the modal reads the masked list again and keeps the key it issued.
+    // Reading the masked list again keeps the key this page issued.
     adminApi.getAuthKeys.mockResolvedValue({ data: [{ id: 4, key: '********', used: 0 }, { id: 3, key: '********', used: 1 }] })
-    await wrapper.vm.openAuthKeyModal()
-    expect(wrapper.vm.authKey).toBe('fresh-registration-key')
+    await deploy.loadAuthKeysPreview()
+    expect(deploy.authKey).toBe('fresh-registration-key')
   })
 
-  it('saves masked protocol secrets back as the placeholder, which keeps the stored values', async () => {
-    adminApi.getNodes.mockResolvedValueOnce({ data: { list: [{ id: 9, name: 'Root Node', host: 'root.example' }], total: 1 } })
-    adminApi.getNodeProtocols.mockResolvedValue({
-      data: [{
-        id: 91,
-        type: 'vless',
-        port: 443,
-        tls: 2,
-        settings: '{"flow":"xtls-rprx-vision"}',
-        reality_settings: '{"private_key":"********","public_key":"reality-public","short_id":"ab"}'
-      }]
+  it('reads the parent nodes’ API keys into the Ansible inventory', async () => {
+    adminApi.getNodes.mockResolvedValue({
+      data: { list: [{ id: 9, name: 'Root Node', host: 'root.example' }, { id: 10, name: 'Child', host: 'child.example', parent_id: 9 }], total: 2 }
     })
-    adminApi.updateNodeProtocol.mockResolvedValueOnce({ data: { message: 'ok' } })
+    adminApi.getNodeCredentials.mockResolvedValueOnce({ code: 0, msg: '操作成功', data: { api_key: 'node-api-key' }, ts: 1 })
 
-    const wrapper = mountNodes()
-    await flushPromises()
-    await wrapper.vm.openProtocols(wrapper.vm.nodes[0])
-    wrapper.vm.editProtocol(wrapper.vm.protocols[0])
-    await wrapper.vm.saveProtocol()
-
-    expect(adminApi.updateNodeProtocol).toHaveBeenCalledTimes(1)
-    const [nodeId, protocolId, payload] = adminApi.updateNodeProtocol.mock.calls[0]
-    expect([nodeId, protocolId]).toEqual([9, 91])
-    expect(JSON.parse(payload.reality_settings)).toEqual({ private_key: '********', public_key: 'reality-public', short_id: 'ab' })
-  })
-
-  it('loads node protocols, logs, and deploy credentials from panel envelopes', async () => {
-    adminApi.getNodes.mockResolvedValueOnce({
-      code: 0,
-      msg: '操作成功',
-      data: { list: [{ id: 9, name: 'Root Node', host: 'root.example' }], total: 1 },
-      ts: 1783526400000
-    })
-    adminApi.getNodeProtocols.mockResolvedValueOnce({
-      code: 0,
-      msg: '操作成功',
-      data: [{ id: 91, type: 'vless' }],
-      ts: 1783526400000
-    })
-    adminApi.getNodeLogs.mockResolvedValueOnce({
-      code: 0,
-      msg: '操作成功',
-      data: { list: [{ id: 1, message: 'node started' }], total: 1 },
-      ts: 1783526400000
-    })
-    adminApi.getNodeCredentials.mockResolvedValueOnce({
-      code: 0,
-      msg: '操作成功',
-      data: { api_key: 'node-api-key' },
-      ts: 1783526400000
-    })
-
-    const wrapper = mountNodes()
+    const { wrapper } = await mountNodes()
+    await wrapper.find('[data-testid="open-deploy"]').trigger('click')
     await flushPromises()
 
-    await wrapper.vm.openProtocols(wrapper.vm.nodes[0])
-    expect(wrapper.vm.protocols[0].type).toBe('vless')
-
-    await wrapper.vm.openLogModal(wrapper.vm.nodes[0])
-    expect(wrapper.vm.nodeLogs[0].message).toBe('node started')
-    expect(wrapper.vm.logPagination.total).toBe(1)
-
-    await wrapper.vm.openDeployModal()
-    expect(wrapper.vm.deployRows[0].apiKey).toBe('node-api-key')
-  })
-
-  it('keeps the Plugin Supervisor canary off by default and emits its complete Agent config only after explicit opt-in', async () => {
-    const wrapper = mountNodes()
-    await flushPromises()
-
-    let config = parseAgentConfigSnippet(wrapper.vm.configSnippet)
-    expect(config.Nodes[0]).not.toHaveProperty('PluginSupervisorEnabled')
-    expect(config.Nodes[0]).not.toHaveProperty('PluginRoot')
-    expect(config.Nodes[0]).not.toHaveProperty('PluginSocketDir')
-    expect(config.Nodes[0]).not.toHaveProperty('PluginOfficialPublicKey')
-
-    await wrapper.vm.openDeployModal()
-    await wrapper.vm.$nextTick()
-
-    const toggle = inBody('[data-testid="plugin-supervisor-enabled"]')
-    expect(toggle.element.checked).toBe(false)
-    await toggle.setValue(true)
-
-    expect(wrapper.vm.pluginSupervisorCanaryReady).toBe(false)
-    expect(inBody('[data-testid="plugin-root"]').exists()).toBe(true)
-    expect(inBody('[data-testid="plugin-socket-dir"]').exists()).toBe(true)
-    expect(inBody('[data-testid="plugin-official-public-key"]').exists()).toBe(true)
-
-    Object.assign(wrapper.vm.deploySettings, {
-      grpcUseTLS: true,
-      pluginRoot: '/var/lib/anixops/plugins',
-      pluginSocketDir: '/run/anixops/plugins',
-      pluginOfficialPublicKey: 'lvbhRmhzVbSAbrw3vm0k7vYqpEu4/dF/ZqVbp2gS7uM='
-    })
-    await wrapper.vm.$nextTick()
-
-    expect(wrapper.vm.pluginSupervisorCanaryReady).toBe(true)
-    config = parseAgentConfigSnippet(wrapper.vm.configSnippet)
-    expect(config.Nodes[0]).toMatchObject({
-      AgentControlEnabled: true,
-      PluginSupervisorEnabled: true,
-      PluginRoot: '/var/lib/anixops/plugins',
-      PluginSocketDir: '/run/anixops/plugins',
-      PluginOfficialPublicKey: 'lvbhRmhzVbSAbrw3vm0k7vYqpEu4/dF/ZqVbp2gS7uM='
-    })
-  })
-
-  it('refuses a plaintext external gRPC endpoint even when the admin page itself is on loopback', async () => {
-    const wrapper = mountNodes()
-    await flushPromises()
-
-    Object.assign(wrapper.vm.deploySettings, {
-      panelApiHost: 'https://panel.example.test',
-      grpcHost: 'control.example.test:50051',
-      grpcUseTLS: false,
-      pluginSupervisorEnabled: true,
-      pluginRoot: '/var/lib/anixops/plugins',
-      pluginSocketDir: '/run/anixops/plugins',
-      pluginOfficialPublicKey: 'lvbhRmhzVbSAbrw3vm0k7vYqpEu4/dF/ZqVbp2gS7uM='
-    })
-    await wrapper.vm.$nextTick()
-
-    expect(wrapper.vm.agentControlEnabled).toBe(false)
-    expect(wrapper.vm.pluginSupervisorCanaryReady).toBe(false)
-    const config = parseAgentConfigSnippet(wrapper.vm.configSnippet)
-    expect(config.Nodes[0]).toMatchObject({
-      ApiHost: 'https://panel.example.test',
-      AgentControlEnabled: false,
-      GRPCUseTLS: false
-    })
-    expect(config.Nodes[0]).not.toHaveProperty('PluginSupervisorEnabled')
-  })
-
-  it('requires a syntactically valid Ed25519 trust root before emitting Supervisor config', async () => {
-    const wrapper = mountNodes()
-    await flushPromises()
-
-    Object.assign(wrapper.vm.deploySettings, {
-      grpcHost: '[::1]:50051',
-      grpcUseTLS: false,
-      pluginSupervisorEnabled: true,
-      pluginRoot: '/var/lib/anixops/plugins',
-      pluginSocketDir: '/run/anixops/plugins',
-      pluginOfficialPublicKey: 'not-a-public-key'
-    })
-    await wrapper.vm.$nextTick()
-
-    expect(wrapper.vm.agentControlEnabled).toBe(true)
-    expect(wrapper.vm.pluginSupervisorCanaryReady).toBe(false)
-    expect(wrapper.vm.pluginSupervisorCanaryError).toContain('Ed25519')
-    expect(parseAgentConfigSnippet(wrapper.vm.configSnippet).Nodes[0]).not.toHaveProperty('PluginSupervisorEnabled')
-
-    wrapper.vm.deploySettings.pluginOfficialPublicKey = 'lvbhRmhzVbSAbrw3vm0k7vYqpEu4/dF/ZqVbp2gS7uM'
-    await wrapper.vm.$nextTick()
-    expect(wrapper.vm.pluginSupervisorCanaryReady).toBe(false)
-    expect(parseAgentConfigSnippet(wrapper.vm.configSnippet).Nodes[0]).not.toHaveProperty('PluginSupervisorEnabled')
-  })
-
-  it('carries a ready Plugin Supervisor canary through the Ansible group-vars preview', async () => {
-    const wrapper = mountNodes()
-    await flushPromises()
-
-    Object.assign(wrapper.vm.deploySettings, {
-      panelApiHost: 'https://panel.example.test',
-      grpcHost: 'grpc.example.test:443',
-      grpcUseTLS: true,
-      grpcServerName: 'grpc.example.test',
-      pluginSupervisorEnabled: true,
-      pluginRoot: '/var/lib/anixops/plugins',
-      pluginSocketDir: '/run/anixops/plugins',
-      pluginOfficialPublicKey: 'lvbhRmhzVbSAbrw3vm0k7vYqpEu4/dF/ZqVbp2gS7uM='
-    })
-    await wrapper.vm.$nextTick()
-
-    expect(wrapper.vm.pluginSupervisorCanaryReady).toBe(true)
-    expect(wrapper.vm.deployGroupVarsPreview).toContain('agent_control_enabled: true')
-    expect(wrapper.vm.deployGroupVarsPreview).toContain('agent_control_allow_insecure: false')
-    expect(wrapper.vm.deployGroupVarsPreview).toContain('plugin_supervisor_enabled: true')
-    expect(wrapper.vm.deployGroupVarsPreview).toContain('plugin_root: "/var/lib/anixops/plugins"')
-    expect(wrapper.vm.deployGroupVarsPreview).toContain('plugin_socket_dir: "/run/anixops/plugins"')
-    expect(wrapper.vm.deployGroupVarsPreview).toContain('plugin_official_public_key: "lvbhRmhzVbSAbrw3vm0k7vYqpEu4/dF/ZqVbp2gS7uM="')
-  })
-
-  it('builds WireGuard relay JSON from the visual protocol form', async () => {
-    const wrapper = mountNodes()
-    await flushPromises()
-
-    wrapper.vm.openAddProtocol()
-    wrapper.vm.protocolForm.mode = 'visual'
-    await wrapper.vm.$nextTick()
-    wrapper.vm.protocolForm.type = 'wireguard'
-    await wrapper.vm.$nextTick()
-
-    Object.assign(wrapper.vm.wireGuardForm, {
-      cidr: '10.88.0.0/24',
-      serverAddress: '10.88.0.1/24',
-      serverPrivateKey: 'server-private',
-      serverPublicKey: 'server-public',
-      role: 'exit',
-      wssCompat: true,
-      wssPath: '/wireguard',
-      wssCertFile: '/etc/v2bx/relay-cert.pem',
-      wssKeyFile: '/etc/v2bx/relay-key.pem',
-      relayServerPort: 9443,
-      tunPort: 8422,
-      entryTunAddress: '172.31.88.2/24',
-      exitTunAddress: '172.31.88.1/24',
-      outboundIface: 'eth0',
-      routingTable: 32088,
-      routingPriority: 12088
-    })
-
-    const json = wrapper.vm.visualToJson()
-
-    expect(json.type).toBe('wireguard')
-    expect(json.port).toBe(51820)
-    expect(json.transport).toBe('udp')
-    expect(json.settings.cidr).toBe('10.88.0.0/24')
-    expect(json.settings.tunnel_type).toBe('wss')
-    expect(json.settings.relay.mode).toBe('relay+wss')
-    expect(json.settings.relay.role).toBe('exit')
-    expect(json.settings.relay.wss_compat).toBe(true)
-    expect(json.settings.relay.wss_path).toBe('/wireguard')
-    expect(json.settings.relay.wss_secure).toBe(false)
-    expect(json.settings.relay.wss_cert_file).toBe('/etc/v2bx/relay-cert.pem')
-    expect(json.settings.relay.wss_key_file).toBe('/etc/v2bx/relay-key.pem')
-    expect(json.settings.relay.entry_tun_address).toBe('172.31.88.2/24')
-    expect(json.settings.relay.exit_tun_address).toBe('172.31.88.1/24')
-    expect(json.settings.relay.outbound_iface).toBe('eth0')
-    expect(json.show).toBe(0)
-    expect(json.settings.server_private_key).toBe('')
-    expect(json.settings.server_public_key).toBe('')
-  })
-
-  it('saves WireGuard visual protocol settings through the node protocol API', async () => {
-    adminApi.createNodeProtocol.mockResolvedValueOnce({ data: { id: 101 } })
-    adminApi.getNodeProtocols.mockResolvedValueOnce({ data: [] })
-
-    const wrapper = mountNodes()
-    await flushPromises()
-
-    wrapper.vm.selectedNode = { id: 77, name: 'Entry Node' }
-    wrapper.vm.openAddProtocol()
-    wrapper.vm.protocolForm.mode = 'visual'
-    await wrapper.vm.$nextTick()
-    wrapper.vm.protocolForm.type = 'wireguard'
-    await wrapper.vm.$nextTick()
-
-    Object.assign(wrapper.vm.wireGuardForm, {
-      cidr: '10.77.0.0/24',
-      serverAddress: '10.77.0.1/24',
-      serverPrivateKey: 'server-private',
-      serverPublicKey: 'server-public',
-      role: 'entry',
-      relayServer: 'exit.example.com',
-      relayServerPort: 8443,
-      wssCompat: false
-    })
-
-    await wrapper.vm.saveProtocol()
-    await flushPromises()
-
-    expect(adminApi.createNodeProtocol).toHaveBeenCalledTimes(1)
-    const [nodeID, payload] = adminApi.createNodeProtocol.mock.calls[0]
-    expect(nodeID).toBe(77)
-    expect(payload.type).toBe('wireguard')
-    expect(payload.port).toBe(51820)
-    expect(payload.transport).toBe('udp')
-    const settings = JSON.parse(payload.settings)
-    expect(settings.tunnel_type).toBe('quic')
-    expect(settings.relay.mode).toBe('relay+quic')
-    expect(settings.relay.role).toBe('entry')
-    expect(settings.relay.server).toBe('exit.example.com')
-    expect(settings.relay.server_port).toBe(8443)
+    expect(adminApi.getNodeCredentials).toHaveBeenCalledTimes(1)
+    expect(adminApi.getNodeCredentials).toHaveBeenCalledWith(9)
+    expect(wrapper.vm.deploy.deployRows).toHaveLength(1)
+    expect(wrapper.vm.deploy.deployInventoryPreview).toContain('root-node ansible_host=root.example')
+    expect(wrapper.vm.deploy.deployInventoryPreview).toContain('node_id=9 api_key=node-api-key')
+    expect(inBody('[data-testid="node-deploy-sheet"]').text()).toContain('inventory.ini')
   })
 })

@@ -24,6 +24,7 @@ const AdminTrafficHourly = () => import('@/views/admin/TrafficHourly.vue')
 const AdminUsers = () => import('@/views/admin/Users.vue')
 const AdminOrders = () => import('@/views/admin/Orders.vue')
 const AdminNodes = () => import('@/views/admin/Nodes.vue')
+const AdminNodeDetail = () => import('@/views/admin/NodeDetail.vue')
 const AdminSubscriptions = () => import('@/views/admin/Subscriptions.vue')
 const AdminPlans = () => import('@/views/admin/Plans.vue')
 const AdminTickets = () => import('@/views/admin/Tickets.vue')
@@ -145,6 +146,12 @@ const routes = [
         path: 'nodes',
         component: AdminNodes,
         meta: WIDE
+      },
+      {
+        // A node's page (UI U7); ?section= picks the section.
+        path: 'nodes/:id(\\d+)',
+        component: AdminNodeDetail,
+        meta: { ...WIDE, titleKey: 'admin.nodes.detail.title' }
       },
       {
         path: 'orders',

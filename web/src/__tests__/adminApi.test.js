@@ -54,6 +54,10 @@ describe('admin api mapping', () => {
         expected: { url: '/admin/nodes', method: 'get', params: { page: 1 } },
       },
       {
+        call: () => adminApi.getNode(5),
+        expected: { url: '/admin/nodes/5', method: 'get' },
+      },
+      {
         call: () => adminApi.getNodeStats(),
         expected: { url: '/admin/nodes/stats', method: 'get' },
       },
