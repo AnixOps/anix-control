@@ -96,10 +96,16 @@ func expiryTime(value *time.Time) any {
 	if value == nil {
 		return nil
 	}
-	until := time.Until(*value)
-	days := math.Round(until.Hours() / 24)
-	if days >= 1 && math.Abs(until.Hours()-days*24) < 0.2 && !value.Equal(value.Truncate(time.Second)) {
-		return fmt.Sprintf("<now+%.0fd>", days)
+	// The handlers add whole calendar days in the local zone
+	// (time.Now().AddDate), so across a daylight-saving change the expiry is
+	// a day count plus or minus an hour from now: compare with the same
+	// calendar arithmetic instead of a fixed number of hours.
+	days := math.Round(time.Until(*value).Hours() / 24)
+	if days >= 1 && !value.Equal(value.Truncate(time.Second)) {
+		expected := time.Now().AddDate(0, 0, int(days))
+		if d := value.Sub(expected); d > -10*time.Minute && d < 10*time.Minute {
+			return fmt.Sprintf("<now+%.0fd>", days)
+		}
 	}
 	return value.UTC().Format(time.RFC3339Nano)
 }

@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+### Fixed
+
+- The affiliate invite-code parity test no longer fails when a 30-day expiry crosses a
+  daylight-saving change in the machine's local zone: it compares expiries with the
+  same calendar arithmetic as the handlers (`time.Now().AddDate`). Test code only.
+
 ## 4.1.0-rc.3 - 2026-10-01
 
 4.1.0-rc.3 is the third 4.1.0 release candidate. **Two changes need action
