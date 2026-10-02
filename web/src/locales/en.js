@@ -898,7 +898,6 @@ export default {
       emptyDirectTitle: 'No forwards yet',
       emptyDirectText: 'After you create the first forward, the direct table view will appear here.',
       editor: {
-        eyebrow: 'Forward',
         titleEdit: 'Edit Forward',
         titleAdd: 'Create Forward',
         fields: {
@@ -917,29 +916,23 @@ export default {
           remoteAddress: 'One target per line, for example:\n1.1.1.1:443\nexample.com:8443\n[2001:db8::1]:443'
         },
         remoteHint: 'Supports IPv4:port, domain:port, or [full IPv6]:port. Use one address per line for multiple targets.',
-        submitLoading: 'Submitting...',
         submitUpdate: 'Save Changes',
         submitCreate: 'Create Forward'
       },
       deleteModal: {
-        eyebrow: 'Delete',
-        title: 'Delete Forward',
-        confirmText: 'Delete {name}?',
-        hint: 'If regular deletion fails, a force-delete confirmation will be shown next.',
-        deleteLoading: 'Deleting...',
-        confirmDelete: 'Confirm Delete',
-        forceDeleteIntro: 'Regular delete failed: {message}',
-        forceDeleteQuestion: 'Do you want to force delete it?',
-        forceDeleteWarning: 'Warning: force delete does not verify whether the node-side forward service was removed.'
+        confirmText: 'Delete forward {name}?',
+        hint: 'If the regular delete fails, you are asked whether to force delete. This can’t be undone.',
+        confirmDelete: 'Delete forward',
+        forceDeleteTitle: 'Force delete {name}?',
+        forceDeleteAction: 'Force delete',
+        forceDeleteMessage: 'The regular delete failed ({message}). A force delete does not check that the forward service was removed from the node.'
       },
       addressModal: {
-        eyebrow: 'Address',
         copy: 'Copy',
         copying: 'Copying...',
         titleWithCount: '{title} ({count})'
       },
       exportModal: {
-        eyebrow: 'Export',
         title: 'Export Forward Data',
         subtitle: 'Format: relay-panel compatible JSON: {\'[{ "dest": ["host:port"], "listen_port": 10086, "name": "Rule" }\'}]',
         tunnelLabel: 'Select Export Tunnel',
@@ -951,9 +944,8 @@ export default {
         selectionHint: 'Exporting {count} selected forwards.'
       },
       importModal: {
-        eyebrow: 'Import',
         title: 'Import Forward Data',
-        subtitle: 'Supports relay-panel JSON and legacy remoteAddr|name|inPort lines. inPort may be blank.',
+        subtitle: 'Supports relay-panel JSON and legacy remoteAddr{\'|\'}name{\'|\'}inPort lines. inPort may be blank.',
         subtitleSecondary: 'JSON example: {\'[{ "dest": ["3.3.3.3:3", "4.4.4.4:4"], "listen_port": 10086, "name": "Business Entry" }\'}]',
         tunnelLabel: 'Select Import Tunnel',
         tunnelPlaceholder: 'Please select a tunnel',
@@ -963,11 +955,9 @@ export default {
         resultSummary: 'Success: {success} / Total: {total}',
         statusSuccess: 'Success',
         statusFailed: 'Failed',
-        importing: 'Importing...',
         startImport: 'Start Import'
       },
       diagnosis: {
-        eyebrow: 'Diagnosis',
         title: 'Forward Diagnosis Results',
         loading: 'Diagnosing forward connectivity...',
         connectionSuccess: 'Connection Succeeded',
@@ -982,7 +972,6 @@ export default {
         failedFallback: 'Diagnosis Failed',
         emptyTitle: 'No diagnosis data yet',
         emptyText: 'After you run a diagnosis, results aligned with the reference page will appear here.',
-        rerunning: 'Diagnosing...',
         rerun: 'Run Again'
       },
       status: {
@@ -1047,7 +1036,9 @@ export default {
         servicePaused: 'Pause request submitted',
         networkActionFailed: 'Network error, operation failed',
         bulkActionComplete: 'Batch completed: {success} succeeded, {failed} failed',
-        bulkDeleteConfirm: 'Delete {count} selected forwards? Failed regular deletes will not be force deleted in batch mode.',
+        bulkDeleteTitle: 'Delete {count} selected forwards?',
+        bulkDeleteMessage: 'In batch mode, forwards whose regular delete fails are not force deleted. This can’t be undone.',
+        bulkDeleteAction: 'Delete forwards',
         deleted: 'Deleted successfully',
         forceDeleted: 'Force delete succeeded',
         forceDeleteFailed: 'Force delete failed',

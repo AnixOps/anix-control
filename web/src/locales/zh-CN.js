@@ -900,7 +900,6 @@ export default {
       emptyDirectTitle: '\u6682\u65e0\u8f6c\u53d1\u914d\u7f6e',
       emptyDirectText: '\u521b\u5efa\u7b2c\u4e00\u6761\u8f6c\u53d1\u540e\uff0c\u8fd9\u91cc\u4f1a\u663e\u793a\u5f53\u524d\u8f6c\u53d1\u7684\u76f4\u8fde\u8868\u683c\u89c6\u56fe\u3002',
       editor: {
-        eyebrow: 'Forward',
         titleEdit: '\u7f16\u8f91\u8f6c\u53d1',
         titleAdd: '\u65b0\u589e\u8f6c\u53d1',
         fields: {
@@ -919,29 +918,23 @@ export default {
           remoteAddress: '\u6bcf\u884c\u4e00\u4e2a\u76ee\u6807\uff0c\u4f8b\u5982\uff1a\n1.1.1.1:443\nexample.com:8443\n[2001:db8::1]:443'
         },
         remoteHint: '\u652f\u6301 IPv4:port\u3001domain:port\u3001[\u5b8c\u6574 IPv6]:port\u3002\u591a\u5730\u5740\u8bf7\u6bcf\u884c\u4e00\u4e2a\u3002',
-        submitLoading: '\u63d0\u4ea4\u4e2d...',
         submitUpdate: '\u4fdd\u5b58\u4fee\u6539',
         submitCreate: '\u521b\u5efa\u8f6c\u53d1'
       },
       deleteModal: {
-        eyebrow: 'Delete',
-        title: '\u5220\u9664\u8f6c\u53d1',
-        confirmText: '\u786e\u8ba4\u5220\u9664 {name} \u5417\uff1f',
-        hint: '\u5e38\u89c4\u5220\u9664\u5931\u8d25\u65f6\uff0c\u4f1a\u7ee7\u7eed\u7ed9\u51fa\u5f3a\u5236\u5220\u9664\u786e\u8ba4\u3002',
-        deleteLoading: '\u5220\u9664\u4e2d...',
-        confirmDelete: '\u786e\u8ba4\u5220\u9664',
-        forceDeleteIntro: '\u5e38\u89c4\u5220\u9664\u5931\u8d25\uff1a{message}',
-        forceDeleteQuestion: '\u662f\u5426\u9700\u8981\u5f3a\u5236\u5220\u9664\uff1f',
-        forceDeleteWarning: '\u8b66\u544a\uff1a\u5f3a\u5236\u5220\u9664\u4e0d\u4f1a\u9a8c\u8bc1\u8282\u70b9\u7aef\u662f\u5426\u5df2\u5220\u9664\u5bf9\u5e94\u7684\u8f6c\u53d1\u670d\u52a1\u3002'
+        confirmText: '删除转发 {name}？',
+        hint: '常规删除失败时，会再询问是否强制删除。此操作无法撤销。',
+        confirmDelete: '删除转发',
+        forceDeleteTitle: '强制删除 {name}？',
+        forceDeleteAction: '强制删除',
+        forceDeleteMessage: '常规删除失败（{message}）。强制删除不会确认节点上的转发服务是否已移除。'
       },
       addressModal: {
-        eyebrow: 'Address',
         copy: '\u590d\u5236',
         copying: '\u590d\u5236\u4e2d...',
         titleWithCount: '{title} ({count})'
       },
       exportModal: {
-        eyebrow: 'Export',
         title: '\u5bfc\u51fa\u8f6c\u53d1\u6570\u636e',
         subtitle: '格式：兼容 relay-panel 的 JSON：{\'[{ "dest": ["host:port"], "listen_port": 10086, "name": "规则" }\'}]',
         tunnelLabel: '\u9009\u62e9\u5bfc\u51fa\u96a7\u9053',
@@ -953,9 +946,8 @@ export default {
         selectionHint: '正在导出已选择的 {count} 条转发。'
       },
       importModal: {
-        eyebrow: 'Import',
         title: '\u5bfc\u5165\u8f6c\u53d1\u6570\u636e',
-        subtitle: '支持 relay-panel JSON 和旧格式 remoteAddr|name|inPort，inPort 可留空。',
+        subtitle: '支持 relay-panel JSON 和旧格式 remoteAddr{\'|\'}name{\'|\'}inPort，inPort 可留空。',
         subtitleSecondary: 'JSON 示例：{\'[{ "dest": ["3.3.3.3:3", "4.4.4.4:4"], "listen_port": 10086, "name": "业务入口" }\'}]',
         tunnelLabel: '\u9009\u62e9\u5bfc\u5165\u96a7\u9053',
         tunnelPlaceholder: '\u8bf7\u9009\u62e9\u96a7\u9053',
@@ -965,11 +957,9 @@ export default {
         resultSummary: '\u6210\u529f\uff1a{success} / \u603b\u8ba1\uff1a{total}',
         statusSuccess: '\u6210\u529f',
         statusFailed: '\u5931\u8d25',
-        importing: '\u5bfc\u5165\u4e2d...',
         startImport: '\u5f00\u59cb\u5bfc\u5165'
       },
       diagnosis: {
-        eyebrow: 'Diagnosis',
         title: '\u8f6c\u53d1\u8bca\u65ad\u7ed3\u679c',
         loading: '\u6b63\u5728\u8bca\u65ad\u8f6c\u53d1\u8fde\u63a5...',
         connectionSuccess: '\u8fde\u63a5\u6210\u529f',
@@ -984,7 +974,6 @@ export default {
         failedFallback: '\u8bca\u65ad\u5931\u8d25',
         emptyTitle: '\u6682\u65e0\u8bca\u65ad\u6570\u636e',
         emptyText: '\u53d1\u8d77\u4e00\u6b21\u8bca\u65ad\u540e\uff0c\u8fd9\u91cc\u4f1a\u5c55\u793a\u4e0e\u53c2\u8003\u9875\u4e00\u81f4\u7684\u7ed3\u679c\u5361\u7247\u3002',
-        rerunning: '\u8bca\u65ad\u4e2d...',
         rerun: '\u91cd\u65b0\u8bca\u65ad'
       },
       status: {
@@ -1048,7 +1037,9 @@ export default {
         servicePaused: '\u6682\u505c\u8bf7\u6c42\u5df2\u63d0\u4ea4',
         networkActionFailed: '\u7f51\u7edc\u9519\u8bef\uff0c\u64cd\u4f5c\u5931\u8d25',
         bulkActionComplete: '批量操作完成：成功 {success} 条，失败 {failed} 条',
-        bulkDeleteConfirm: '确认删除已选择的 {count} 条转发吗？批量模式下常规删除失败不会自动强制删除。',
+        bulkDeleteTitle: '删除选中的 {count} 条转发？',
+        bulkDeleteMessage: '批量模式下，常规删除失败的转发不会被强制删除。此操作无法撤销。',
+        bulkDeleteAction: '删除转发',
         deleted: '\u5220\u9664\u6210\u529f',
         forceDeleted: '\u5f3a\u5236\u5220\u9664\u6210\u529f',
         forceDeleteFailed: '\u5f3a\u5236\u5220\u9664\u5931\u8d25',

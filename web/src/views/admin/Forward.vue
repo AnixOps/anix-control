@@ -373,306 +373,259 @@
       </section>
     </template>
 
-    <div v-if="modalOpen" class="modal-overlay" @click.self="closeEditorModal">
-      <div class="modal modal-lg">
-        <div class="modal-header">
-          <div>
-            <p class="eyebrow">{{ t('runtime.forward.editor.eyebrow') }}</p>
-            <h3>{{ isEdit ? t('runtime.forward.editor.titleEdit') : t('runtime.forward.editor.titleAdd') }}</h3>
-          </div>
-          <button class="modal-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="closeEditorModal">×</button>
-        </div>
-
-        <div class="modal-body">
-          <div class="form-grid">
-            <div class="form-group">
-              <label>{{ t('runtime.forward.editor.fields.name') }}</label>
-              <input v-model.trim="form.name" type="text" maxlength="50" :placeholder="t('runtime.forward.editor.placeholders.name')" />
-              <p v-if="errors.name" class="form-error">{{ errors.name }}</p>
-            </div>
-
-            <div class="form-group">
-              <label>{{ t('runtime.forward.editor.fields.tunnel') }}</label>
-              <select data-test="forward-tunnel-select" :value="form.tunnelId ?? ''" @change="handleTunnelChange($event.target.value)">
-                <option value="">{{ t('runtime.forward.editor.placeholders.tunnel') }}</option>
-                <option v-for="tunnel in selectableTunnels" :key="tunnel.id" :value="tunnel.id">
-                  {{ tunnel.name }} · {{ tunnelTypeLabel(tunnel.type) }}
-                </option>
-              </select>
-              <p v-if="errors.tunnelId" class="form-error">{{ errors.tunnelId }}</p>
-              <p class="hint">{{ selectedTunnelModeHint }}</p>
-            </div>
-          </div>
-
-          <div class="form-grid">
-            <div class="form-group">
-              <label>{{ t('runtime.forward.editor.fields.ingressPort') }}</label>
-              <input v-model="portInput" type="number" min="1" max="65535" :placeholder="t('runtime.forward.editor.placeholders.ingressPort')" />
-              <p v-if="selectedTunnel && selectedTunnel.inNodePortSta && selectedTunnel.inNodePortEnd" class="hint">
-                {{ t('runtime.forward.portRange', { start: selectedTunnel.inNodePortSta, end: selectedTunnel.inNodePortEnd }) }}
-              </p>
-              <p v-else class="hint">{{ selectedTunnelPortHint }}</p>
-              <p v-if="errors.inPort" class="form-error">{{ errors.inPort }}</p>
-            </div>
-
-            <div class="form-group">
-              <label>{{ t('runtime.forward.editor.fields.interfaceName') }}</label>
-              <input v-model.trim="form.interfaceName" type="text" :placeholder="t('runtime.forward.editor.placeholders.interfaceName')" />
-            </div>
+    <UiDialog
+      :open="modalOpen"
+      size="lg"
+      :title="isEdit ? t('runtime.forward.editor.titleEdit') : t('runtime.forward.editor.titleAdd')"
+      data-test="forward-editor-dialog"
+      @update:open="value => { if (!value) closeEditorModal() }"
+    >
+      <div class="dialog-form">
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="forward-dialog-fields-name">{{ t('runtime.forward.editor.fields.name') }}</label>
+            <input id="forward-dialog-fields-name" v-model.trim="form.name" type="text" maxlength="50" :placeholder="t('runtime.forward.editor.placeholders.name')" />
+            <p v-if="errors.name" class="form-error">{{ errors.name }}</p>
           </div>
 
           <div class="form-group">
-            <label>{{ t('runtime.forward.editor.fields.remoteAddress') }}</label>
-            <textarea
-              v-model="form.remoteAddr"
-              rows="7"
-              :placeholder="t('runtime.forward.editor.placeholders.remoteAddress')"
-            ></textarea>
-            <p class="hint">{{ t('runtime.forward.editor.remoteHint') }}</p>
-            <p v-if="errors.remoteAddr" class="form-error">{{ errors.remoteAddr }}</p>
-          </div>
-
-          <div v-if="addressLineCount > 1" class="form-group">
-            <label>{{ t('runtime.forward.editor.fields.strategy') }}</label>
-            <select v-model="form.strategy">
-              <option value="fifo">{{ t('runtime.forward.strategy.fifo') }}</option>
-              <option value="round">{{ t('runtime.forward.strategy.round') }}</option>
-              <option value="rand">{{ t('runtime.forward.strategy.rand') }}</option>
-              <option value="hash">{{ t('runtime.forward.strategy.hash') }}</option>
+            <label for="forward-dialog-fields-tunnel">{{ t('runtime.forward.editor.fields.tunnel') }}</label>
+            <select id="forward-dialog-fields-tunnel" data-test="forward-tunnel-select" :value="form.tunnelId ?? ''" @change="handleTunnelChange($event.target.value)">
+              <option value="">{{ t('runtime.forward.editor.placeholders.tunnel') }}</option>
+              <option v-for="tunnel in selectableTunnels" :key="tunnel.id" :value="tunnel.id">
+                {{ tunnel.name }} · {{ tunnelTypeLabel(tunnel.type) }}
+              </option>
             </select>
+            <p v-if="errors.tunnelId" class="form-error">{{ errors.tunnelId }}</p>
+            <p class="hint">{{ selectedTunnelModeHint }}</p>
           </div>
         </div>
 
-        <div class="modal-footer">
-          <button class="btn btn-secondary" @click="closeEditorModal">{{ t('common.actions.cancel') }}</button>
-          <button class="btn btn-primary" :disabled="submitLoading" @click="handleSubmit">
-            {{ submitLoading ? t('runtime.forward.editor.submitLoading') : (isEdit ? t('runtime.forward.editor.submitUpdate') : t('runtime.forward.editor.submitCreate')) }}
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <div v-if="deleteModalOpen" class="modal-overlay" @click.self="deleteModalOpen = false">
-      <div class="modal">
-        <div class="modal-header">
-          <div>
-            <p class="eyebrow">{{ t('runtime.forward.deleteModal.eyebrow') }}</p>
-            <h3>{{ t('runtime.forward.deleteModal.title') }}</h3>
-          </div>
-          <button class="modal-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="deleteModalOpen = false">×</button>
-        </div>
-        <div class="modal-body">
-          <p class="modal-copy">{{ t('runtime.forward.deleteModal.confirmText', { name: forwardToDelete?.name || '-' }) }}</p>
-          <p class="hint">{{ t('runtime.forward.deleteModal.hint') }}</p>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" @click="deleteModalOpen = false">{{ t('common.actions.cancel') }}</button>
-          <button class="btn btn-primary danger" :disabled="deleteLoading" @click="confirmDelete">
-            {{ deleteLoading ? t('runtime.forward.deleteModal.deleteLoading') : t('runtime.forward.deleteModal.confirmDelete') }}
-          </button>
-        </div>
-      </div>
-    </div>
-
-    <div v-if="addressModalOpen" class="modal-overlay" @click.self="addressModalOpen = false">
-      <div class="modal modal-lg">
-        <div class="modal-header">
-          <div>
-            <p class="eyebrow">{{ t('runtime.forward.addressModal.eyebrow') }}</p>
-            <h3>{{ addressModalTitle }}</h3>
-          </div>
-          <button class="modal-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="addressModalOpen = false">×</button>
-        </div>
-        <div class="modal-body">
-          <div class="modal-toolbar">
-            <button class="btn btn-secondary btn-sm" @click="copyAllAddresses">{{ t('runtime.forward.actions.copyAll') }}</button>
-          </div>
-          <div class="list-stack">
-            <div v-for="item in addressList" :key="item.id" class="list-item">
-              <code>{{ item.address }}</code>
-              <button class="btn btn-secondary btn-sm" :disabled="item.copying" @click="copyAddress(item)">
-                {{ item.copying ? t('runtime.forward.addressModal.copying') : t('runtime.forward.addressModal.copy') }}
-              </button>
-            </div>
-          </div>
-        </div>
-      </div>
-    </div>
-
-    <div v-if="exportModalOpen" class="modal-overlay" @click.self="exportModalOpen = false">
-      <div class="modal modal-lg">
-        <div class="modal-header">
-          <div>
-            <p class="eyebrow">{{ t('runtime.forward.exportModal.eyebrow') }}</p>
-            <h3>{{ t('runtime.forward.exportModal.title') }}</h3>
-            <p class="modal-subtitle">{{ t('runtime.forward.exportModal.subtitle') }}</p>
-          </div>
-          <button class="modal-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="exportModalOpen = false">×</button>
-        </div>
-        <div class="modal-body">
-          <div v-if="exportDataSource === 'tunnel'" class="form-group">
-            <label>{{ t('runtime.forward.exportModal.tunnelLabel') }}</label>
-            <select :value="selectedTunnelForExport ?? ''" @change="handleExportTunnelChange($event.target.value)">
-              <option value="">{{ t('runtime.forward.exportModal.tunnelPlaceholder') }}</option>
-              <option v-for="tunnel in tunnels" :key="tunnel.id" :value="tunnel.id">{{ tunnel.name }}</option>
-            </select>
-          </div>
-          <p v-else class="hint">{{ t('runtime.forward.exportModal.selectionHint', { count: exportSelectionCount }) }}</p>
-
-          <div v-if="exportData" class="modal-toolbar">
-            <button v-if="exportDataSource === 'tunnel'" class="btn btn-primary btn-sm" :disabled="exportLoading" @click="executeExport">
-              {{ exportLoading ? t('runtime.forward.exportModal.generating') : t('runtime.forward.exportModal.regenerate') }}
-            </button>
-            <button class="btn btn-secondary btn-sm" @click="copyExportData">{{ t('common.actions.copy') }}</button>
+        <div class="form-grid">
+          <div class="form-group">
+            <label for="forward-dialog-fields-ingress-port">{{ t('runtime.forward.editor.fields.ingressPort') }}</label>
+            <input id="forward-dialog-fields-ingress-port" v-model="portInput" type="number" min="1" max="65535" :placeholder="t('runtime.forward.editor.placeholders.ingressPort')" />
+            <p v-if="selectedTunnel && selectedTunnel.inNodePortSta && selectedTunnel.inNodePortEnd" class="hint">
+              {{ t('runtime.forward.portRange', { start: selectedTunnel.inNodePortSta, end: selectedTunnel.inNodePortEnd }) }}
+            </p>
+            <p v-else class="hint">{{ selectedTunnelPortHint }}</p>
+            <p v-if="errors.inPort" class="form-error">{{ errors.inPort }}</p>
           </div>
 
-          <div v-else-if="exportDataSource === 'tunnel'" class="modal-toolbar align-end">
-            <button class="btn btn-primary btn-sm" :disabled="exportLoading || !selectedTunnelForExport" @click="executeExport">
-              {{ exportLoading ? t('runtime.forward.exportModal.generating') : t('runtime.forward.exportModal.generate') }}
-            </button>
+          <div class="form-group">
+            <label for="forward-dialog-fields-interface-name">{{ t('runtime.forward.editor.fields.interfaceName') }}</label>
+            <input id="forward-dialog-fields-interface-name" v-model.trim="form.interfaceName" type="text" :placeholder="t('runtime.forward.editor.placeholders.interfaceName')" />
           </div>
+        </div>
 
-          <textarea
-            v-if="exportData"
-            :value="exportData"
-            class="mono-area"
-            rows="12"
-            readonly
-            :placeholder="t('runtime.forward.exportModal.noDataPlaceholder')"
+        <div class="form-group">
+          <label for="forward-dialog-fields-remote-address">{{ t('runtime.forward.editor.fields.remoteAddress') }}</label>
+          <textarea id="forward-dialog-fields-remote-address"
+            v-model="form.remoteAddr"
+            rows="7"
+            :placeholder="t('runtime.forward.editor.placeholders.remoteAddress')"
           ></textarea>
+          <p class="hint">{{ t('runtime.forward.editor.remoteHint') }}</p>
+          <p v-if="errors.remoteAddr" class="form-error">{{ errors.remoteAddr }}</p>
         </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" @click="exportModalOpen = false">{{ t('common.actions.close') }}</button>
+
+        <div v-if="addressLineCount > 1" class="form-group">
+          <label for="forward-dialog-fields-strategy">{{ t('runtime.forward.editor.fields.strategy') }}</label>
+          <select id="forward-dialog-fields-strategy" v-model="form.strategy">
+            <option value="fifo">{{ t('runtime.forward.strategy.fifo') }}</option>
+            <option value="round">{{ t('runtime.forward.strategy.round') }}</option>
+            <option value="rand">{{ t('runtime.forward.strategy.rand') }}</option>
+            <option value="hash">{{ t('runtime.forward.strategy.hash') }}</option>
+          </select>
         </div>
       </div>
-    </div>
+      <template #footer>
+        <UiButton :disabled="submitLoading" @click="closeEditorModal">{{ t('common.actions.cancel') }}</UiButton>
+        <UiButton variant="primary" :loading="submitLoading" data-test="forward-editor-submit" @click="handleSubmit">
+          {{ isEdit ? t('runtime.forward.editor.submitUpdate') : t('runtime.forward.editor.submitCreate') }}
+        </UiButton>
+      </template>
+    </UiDialog>
 
-    <div v-if="importModalOpen" class="modal-overlay" @click.self="importModalOpen = false">
-      <div class="modal modal-xl">
-        <div class="modal-header">
-          <div>
-            <p class="eyebrow">{{ t('runtime.forward.importModal.eyebrow') }}</p>
-            <h3>{{ t('runtime.forward.importModal.title') }}</h3>
-            <p class="modal-subtitle">{{ t('runtime.forward.importModal.subtitle') }}</p>
-            <p class="modal-subtitle muted">{{ t('runtime.forward.importModal.subtitleSecondary') }}</p>
-          </div>
-          <button class="modal-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="importModalOpen = false">×</button>
-        </div>
-        <div class="modal-body">
-          <div class="form-group">
-            <label>{{ t('runtime.forward.importModal.tunnelLabel') }}</label>
-            <select :value="selectedTunnelForImport ?? ''" @change="handleImportTunnelChange($event.target.value)">
-              <option value="">{{ t('runtime.forward.importModal.tunnelPlaceholder') }}</option>
-              <option v-for="tunnel in tunnels" :key="tunnel.id" :value="tunnel.id">{{ tunnel.name }}</option>
-            </select>
-          </div>
+    <UiConfirmDialog
+      :open="deleteModalOpen"
+      tone="danger"
+      :title="t('runtime.forward.deleteModal.confirmText', { name: forwardToDelete?.name || '-' })"
+      :message="t('runtime.forward.deleteModal.hint')"
+      :confirm-label="t('runtime.forward.deleteModal.confirmDelete')"
+      :loading="deleteLoading"
+      :error="deleteError"
+      @confirm="confirmDelete"
+      @cancel="closeDeleteModal"
+    />
 
-          <div class="form-group">
-            <label>{{ t('runtime.forward.importModal.dataLabel') }}</label>
-            <textarea
-              v-model="importData"
-              class="mono-area"
-              rows="10"
-              :placeholder="t('runtime.forward.importModal.placeholder')"
-            ></textarea>
-          </div>
-
-          <div v-if="importResults.length" class="result-panel">
-            <div class="result-head">
-              <h4>{{ t('runtime.forward.importModal.resultTitle') }}</h4>
-              <span>{{ t('runtime.forward.importModal.resultSummary', { success: importSuccessCount, total: importResults.length }) }}</span>
-            </div>
-            <div class="result-list">
-              <div
-                v-for="(result, index) in importResults"
-                :key="`${result.line}-${index}`"
-                :class="['result-item', result.success ? 'result-success' : 'result-failed']"
-              >
-                <div class="result-status">{{ result.success ? t('runtime.forward.importModal.statusSuccess') : t('runtime.forward.importModal.statusFailed') }}</div>
-                <code>{{ result.line }}</code>
-                <p>{{ result.message }}</p>
-              </div>
-            </div>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" @click="importModalOpen = false">{{ t('common.actions.close') }}</button>
-          <button class="btn btn-primary" :disabled="importLoading || !importData.trim() || !selectedTunnelForImport" @click="executeImport">
-            {{ importLoading ? t('runtime.forward.importModal.importing') : t('runtime.forward.importModal.startImport') }}
+    <UiDialog v-model:open="addressModalOpen" size="lg" :title="addressModalTitle">
+      <div class="dialog-toolbar">
+        <button class="btn btn-secondary btn-sm" @click="copyAllAddresses">{{ t('runtime.forward.actions.copyAll') }}</button>
+      </div>
+      <div class="list-stack">
+        <div v-for="item in addressList" :key="item.id" class="list-item">
+          <code>{{ item.address }}</code>
+          <button class="btn btn-secondary btn-sm" :disabled="item.copying" @click="copyAddress(item)">
+            {{ item.copying ? t('runtime.forward.addressModal.copying') : t('runtime.forward.addressModal.copy') }}
           </button>
         </div>
       </div>
-    </div>
+    </UiDialog>
 
-    <div v-if="diagnosisModalOpen" class="modal-overlay" @click.self="diagnosisModalOpen = false">
-      <div class="modal modal-xl">
-        <div class="modal-header">
-          <div>
-            <p class="eyebrow">{{ t('runtime.forward.diagnosis.eyebrow') }}</p>
-            <h3>{{ t('runtime.forward.diagnosis.title') }}</h3>
-            <p v-if="currentDiagnosisForward" class="modal-subtitle">{{ currentDiagnosisForward.name }}</p>
-          </div>
-          <button class="modal-close" :title="t('common.actions.close')" :aria-label="t('common.actions.close')" @click="diagnosisModalOpen = false">×</button>
+    <UiDialog
+      v-model:open="exportModalOpen"
+      size="lg"
+      :title="t('runtime.forward.exportModal.title')"
+      :description="t('runtime.forward.exportModal.subtitle')"
+    >
+      <div v-if="exportDataSource === 'tunnel'" class="form-group">
+        <label for="forward-dialog-export-modal-tunnel-label">{{ t('runtime.forward.exportModal.tunnelLabel') }}</label>
+        <select id="forward-dialog-export-modal-tunnel-label" :value="selectedTunnelForExport ?? ''" @change="handleExportTunnelChange($event.target.value)">
+          <option value="">{{ t('runtime.forward.exportModal.tunnelPlaceholder') }}</option>
+          <option v-for="tunnel in tunnels" :key="tunnel.id" :value="tunnel.id">{{ tunnel.name }}</option>
+        </select>
+      </div>
+      <p v-else class="hint">{{ t('runtime.forward.exportModal.selectionHint', { count: exportSelectionCount }) }}</p>
+
+      <div v-if="exportData" class="dialog-toolbar">
+        <button v-if="exportDataSource === 'tunnel'" class="btn btn-primary btn-sm" :disabled="exportLoading" @click="executeExport">
+          {{ exportLoading ? t('runtime.forward.exportModal.generating') : t('runtime.forward.exportModal.regenerate') }}
+        </button>
+        <button class="btn btn-secondary btn-sm" @click="copyExportData">{{ t('common.actions.copy') }}</button>
+      </div>
+
+      <div v-else-if="exportDataSource === 'tunnel'" class="dialog-toolbar align-end">
+        <button class="btn btn-primary btn-sm" :disabled="exportLoading || !selectedTunnelForExport" @click="executeExport">
+          {{ exportLoading ? t('runtime.forward.exportModal.generating') : t('runtime.forward.exportModal.generate') }}
+        </button>
+      </div>
+
+      <textarea
+        v-if="exportData"
+        :value="exportData"
+        class="mono-area"
+        rows="12"
+        readonly
+        :placeholder="t('runtime.forward.exportModal.noDataPlaceholder')"
+      ></textarea>
+      <template #footer="{ close }">
+        <UiButton @click="close">{{ t('common.actions.close') }}</UiButton>
+      </template>
+    </UiDialog>
+
+    <UiDialog
+      v-model:open="importModalOpen"
+      size="lg"
+      :title="t('runtime.forward.importModal.title')"
+      :description="t('runtime.forward.importModal.subtitle')"
+    >
+      <p class="hint import-example">{{ t('runtime.forward.importModal.subtitleSecondary') }}</p>
+      <div class="form-group">
+        <label for="forward-dialog-import-modal-tunnel-label">{{ t('runtime.forward.importModal.tunnelLabel') }}</label>
+        <select id="forward-dialog-import-modal-tunnel-label" :value="selectedTunnelForImport ?? ''" @change="handleImportTunnelChange($event.target.value)">
+          <option value="">{{ t('runtime.forward.importModal.tunnelPlaceholder') }}</option>
+          <option v-for="tunnel in tunnels" :key="tunnel.id" :value="tunnel.id">{{ tunnel.name }}</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="forward-dialog-import-modal-data-label">{{ t('runtime.forward.importModal.dataLabel') }}</label>
+        <textarea id="forward-dialog-import-modal-data-label"
+          v-model="importData"
+          class="mono-area"
+          rows="10"
+          :placeholder="t('runtime.forward.importModal.placeholder')"
+        ></textarea>
+      </div>
+
+      <div v-if="importResults.length" class="result-panel">
+        <div class="result-head">
+          <h4>{{ t('runtime.forward.importModal.resultTitle') }}</h4>
+          <span>{{ t('runtime.forward.importModal.resultSummary', { success: importSuccessCount, total: importResults.length }) }}</span>
         </div>
-        <div class="modal-body">
-          <div v-if="diagnosisLoading" class="loading-state compact">
-            <div class="spinner"></div>
-            <span>{{ t('runtime.forward.diagnosis.loading') }}</span>
+        <div class="result-list">
+          <div
+            v-for="(result, index) in importResults"
+            :key="`${result.line}-${index}`"
+            :class="['result-item', result.success ? 'result-success' : 'result-failed']"
+          >
+            <div class="result-status">{{ result.success ? t('runtime.forward.importModal.statusSuccess') : t('runtime.forward.importModal.statusFailed') }}</div>
+            <code>{{ result.line }}</code>
+            <p>{{ result.message }}</p>
           </div>
-
-          <div v-else-if="diagnosisResult && diagnosisResult.results?.length" class="diagnosis-list">
-            <article v-for="(result, index) in diagnosisResult.results" :key="`${result.targetIp}-${index}`" class="diagnosis-card">
-              <div class="diagnosis-head">
-                <div>
-                  <h4>{{ result.description }}</h4>
-                  <p>{{ formatDiagnosisNodeMeta(result) }}</p>
-                </div>
-                <span :class="['tag', result.success ? 'tag-success' : 'tag-danger']">
-                  {{ result.success ? t('runtime.forward.diagnosis.connectionSuccess') : t('runtime.forward.diagnosis.connectionFailed') }}
-                </span>
-              </div>
-
-              <div class="diagnosis-body">
-                <div class="diagnosis-metric">
-                  <span>{{ t('runtime.forward.diagnosis.targetAddress') }}</span>
-                  <code>{{ result.targetIp }}<template v-if="result.targetPort">:{{ result.targetPort }}</template></code>
-                </div>
-
-                <template v-if="result.success">
-                  <div class="metric-grid">
-                    <div class="metric-card">
-                      <span>{{ t('runtime.forward.diagnosis.averageLatency') }}</span>
-                      <strong>{{ result.averageTime?.toFixed(0) || '0' }} ms</strong>
-                    </div>
-                    <div class="metric-card">
-                      <span>{{ t('runtime.forward.diagnosis.packetLoss') }}</span>
-                      <strong>{{ result.packetLoss?.toFixed(1) || '0.0' }}%</strong>
-                    </div>
-                    <div class="metric-card">
-                      <span>{{ t('runtime.forward.diagnosis.quality') }}</span>
-                      <strong>{{ getQualityMeta(result.averageTime, result.packetLoss).text }}</strong>
-                    </div>
-                  </div>
-                </template>
-
-                <p v-else class="diagnosis-error">{{ translateLiteral(result.message) || t('runtime.forward.diagnosis.failedFallback') }}</p>
-              </div>
-            </article>
-          </div>
-
-          <div v-else class="empty-state compact">
-            <h3>{{ t('runtime.forward.diagnosis.emptyTitle') }}</h3>
-            <p>{{ t('runtime.forward.diagnosis.emptyText') }}</p>
-          </div>
-        </div>
-        <div class="modal-footer">
-          <button class="btn btn-secondary" @click="diagnosisModalOpen = false">{{ t('common.actions.close') }}</button>
-          <button v-if="currentDiagnosisForward" class="btn btn-primary" :disabled="diagnosisLoading" @click="openDiagnosisModal(currentDiagnosisForward)">
-            {{ diagnosisLoading ? t('runtime.forward.diagnosis.rerunning') : t('runtime.forward.diagnosis.rerun') }}
-          </button>
         </div>
       </div>
-    </div>
+      <template #footer="{ close }">
+        <UiButton @click="close">{{ t('common.actions.close') }}</UiButton>
+        <UiButton variant="primary" :loading="importLoading" :disabled="!importData.trim() || !selectedTunnelForImport" @click="executeImport">
+          {{ t('runtime.forward.importModal.startImport') }}
+        </UiButton>
+      </template>
+    </UiDialog>
+
+    <UiDialog
+      v-model:open="diagnosisModalOpen"
+      size="lg"
+      :title="t('runtime.forward.diagnosis.title')"
+      :description="currentDiagnosisForward?.name || ''"
+    >
+      <div v-if="diagnosisLoading" class="loading-state compact">
+        <div class="spinner"></div>
+        <span>{{ t('runtime.forward.diagnosis.loading') }}</span>
+      </div>
+
+      <div v-else-if="diagnosisResult && diagnosisResult.results?.length" class="diagnosis-list">
+        <article v-for="(result, index) in diagnosisResult.results" :key="`${result.targetIp}-${index}`" class="diagnosis-card">
+          <div class="diagnosis-head">
+            <div>
+              <h4>{{ result.description }}</h4>
+              <p>{{ formatDiagnosisNodeMeta(result) }}</p>
+            </div>
+            <span :class="['tag', result.success ? 'tag-success' : 'tag-danger']">
+              {{ result.success ? t('runtime.forward.diagnosis.connectionSuccess') : t('runtime.forward.diagnosis.connectionFailed') }}
+            </span>
+          </div>
+
+          <div class="diagnosis-body">
+            <div class="diagnosis-metric">
+              <span>{{ t('runtime.forward.diagnosis.targetAddress') }}</span>
+              <code>{{ result.targetIp }}<template v-if="result.targetPort">:{{ result.targetPort }}</template></code>
+            </div>
+
+            <template v-if="result.success">
+              <div class="metric-grid">
+                <div class="metric-card">
+                  <span>{{ t('runtime.forward.diagnosis.averageLatency') }}</span>
+                  <strong>{{ result.averageTime?.toFixed(0) || '0' }} ms</strong>
+                </div>
+                <div class="metric-card">
+                  <span>{{ t('runtime.forward.diagnosis.packetLoss') }}</span>
+                  <strong>{{ result.packetLoss?.toFixed(1) || '0.0' }}%</strong>
+                </div>
+                <div class="metric-card">
+                  <span>{{ t('runtime.forward.diagnosis.quality') }}</span>
+                  <strong>{{ getQualityMeta(result.averageTime, result.packetLoss).text }}</strong>
+                </div>
+              </div>
+            </template>
+
+            <p v-else class="diagnosis-error">{{ translateLiteral(result.message) || t('runtime.forward.diagnosis.failedFallback') }}</p>
+          </div>
+        </article>
+      </div>
+
+      <div v-else class="empty-state compact">
+        <h3>{{ t('runtime.forward.diagnosis.emptyTitle') }}</h3>
+        <p>{{ t('runtime.forward.diagnosis.emptyText') }}</p>
+      </div>
+      <template #footer="{ close }">
+        <UiButton @click="close">{{ t('common.actions.close') }}</UiButton>
+        <UiButton v-if="currentDiagnosisForward" variant="primary" :loading="diagnosisLoading" @click="openDiagnosisModal(currentDiagnosisForward)">
+          {{ t('runtime.forward.diagnosis.rerun') }}
+        </UiButton>
+      </template>
+    </UiDialog>
   </div>
 </template>
 
@@ -694,8 +647,10 @@ import {
   getSystemConfig
 } from '@/api/admin'
 import { humanizeForwardRuntimeBackend } from '@/utils/forwardRuntime'
+import { UiButton, UiConfirmDialog, UiDialog, useConfirm } from '@/ui'
 
 const { t, translateLiteral } = useAppI18n()
+const confirm = useConfirm()
 const userStore = useUserStore()
 
 const loading = ref(true)
@@ -736,6 +691,7 @@ const importLoading = ref(false)
 const bulkLoading = ref(false)
 
 const forwardToDelete = ref(null)
+const deleteError = ref('')
 const currentDiagnosisForward = ref(null)
 const diagnosisResult = ref(null)
 const addressModalTitle = ref('')
@@ -1730,7 +1686,12 @@ async function bulkDeleteSelected() {
     return
   }
 
-  const confirmed = window.confirm(t('runtime.forward.messages.bulkDeleteConfirm', { count: items.length }))
+  const confirmed = await confirm({
+    title: t('runtime.forward.messages.bulkDeleteTitle', { count: items.length }),
+    message: t('runtime.forward.messages.bulkDeleteMessage'),
+    confirmLabel: t('runtime.forward.messages.bulkDeleteAction'),
+    tone: 'danger'
+  })
   if (!confirmed) {
     return
   }
@@ -1766,7 +1727,16 @@ async function bulkDeleteSelected() {
 
 function openDeleteModal(forward) {
   forwardToDelete.value = forward
+  deleteError.value = ''
   deleteModalOpen.value = true
+}
+
+function closeDeleteModal() {
+  if (deleteLoading.value) {
+    return
+  }
+  deleteModalOpen.value = false
+  deleteError.value = ''
 }
 
 async function confirmDelete() {
@@ -1774,9 +1744,11 @@ async function confirmDelete() {
     return
   }
 
+  const forward = forwardToDelete.value
   deleteLoading.value = true
+  deleteError.value = ''
   try {
-    const response = await deleteForward(forwardToDelete.value.id)
+    const response = await deleteForward(forward.id)
     if (response.code === 0) {
       deleteModalOpen.value = false
       setFeedback('success', t('runtime.forward.messages.deleted'))
@@ -1784,36 +1756,37 @@ async function confirmDelete() {
       return
     }
 
-    const shouldForceDelete = window.confirm(
-      buildForceDeleteConfirmMessage(translateMessage(response.msg, 'runtime.forward.messages.deleteFailed'))
-    )
+    // Same flow as before: a failed regular delete asks a second time
+    // whether to force delete.
+    const shouldForceDelete = await confirm({
+      title: t('runtime.forward.deleteModal.forceDeleteTitle', { name: forward.name || '-' }),
+      message: buildForceDeleteConfirmMessage(translateMessage(response.msg, 'runtime.forward.messages.deleteFailed')),
+      confirmLabel: t('runtime.forward.deleteModal.forceDeleteAction'),
+      tone: 'danger'
+    })
 
     if (!shouldForceDelete) {
       return
     }
 
-    const forceResponse = await forceDeleteForward(forwardToDelete.value.id)
+    const forceResponse = await forceDeleteForward(forward.id)
     if (forceResponse.code === 0) {
       deleteModalOpen.value = false
       setFeedback('success', t('runtime.forward.messages.forceDeleted'))
       await loadData(true, { force: true })
     } else {
-      setFeedback('error', translateMessage(forceResponse.msg, 'runtime.forward.messages.forceDeleteFailed'))
+      deleteError.value = translateMessage(forceResponse.msg, 'runtime.forward.messages.forceDeleteFailed')
     }
   } catch (error) {
     console.error('Failed to delete forward:', error)
-    setFeedback('error', t('runtime.forward.messages.deleteFailed'))
+    deleteError.value = t('runtime.forward.messages.deleteFailed')
   } finally {
     deleteLoading.value = false
   }
 }
 
 function buildForceDeleteConfirmMessage(message) {
-  return [
-    t('runtime.forward.deleteModal.forceDeleteIntro', { message }),
-    t('runtime.forward.deleteModal.forceDeleteQuestion'),
-    t('runtime.forward.deleteModal.forceDeleteWarning')
-  ].join('\n\n')
+  return t('runtime.forward.deleteModal.forceDeleteMessage', { message })
 }
 
 function buildDiagnosisFallback(forward, title, message) {
@@ -2612,8 +2585,7 @@ function onDragEnd() {
   border-color: rgba(37, 99, 235, 0.24);
 }
 
-.feedback-close,
-.modal-close {
+.feedback-close {
   background: transparent;
   border: none;
   color: inherit;
@@ -2674,13 +2646,11 @@ function onDragEnd() {
 }
 
 .user-group-head h3,
-.empty-state h3,
-.modal-header h3 {
+.empty-state h3 {
   margin: 4px 0 0;
 }
 
 .group-summary,
-.modal-subtitle,
 .hint {
   margin: 6px 0 0;
   color: var(--text-secondary);
@@ -3065,7 +3035,7 @@ function onDragEnd() {
 
 .card-stats,
 .card-actions,
-.modal-toolbar,
+.dialog-toolbar,
 .result-head {
   display: flex;
   align-items: center;
@@ -3150,64 +3120,6 @@ function onDragEnd() {
   padding: 26px 20px;
 }
 
-.modal-overlay {
-  position: fixed;
-  inset: 0;
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 24px;
-  background: rgba(15, 23, 42, 0.7);
-  backdrop-filter: blur(6px);
-}
-
-.modal {
-  width: min(560px, 100%);
-  max-height: calc(100vh - 48px);
-  display: flex;
-  flex-direction: column;
-  background: var(--surface-color);
-  border: 1px solid var(--border-color);
-  border-radius: 24px;
-  overflow: hidden;
-  box-shadow: 0 28px 70px rgba(15, 23, 42, 0.28);
-}
-
-.modal-lg {
-  width: min(760px, 100%);
-}
-
-.modal-xl {
-  width: min(900px, 100%);
-}
-
-.modal-header,
-.modal-footer {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  padding: 18px 22px;
-  border-bottom: 1px solid var(--border-color);
-}
-
-.modal-footer {
-  justify-content: flex-end;
-  border-top: 1px solid var(--border-color);
-  border-bottom: none;
-}
-
-.modal-body {
-  padding: 22px;
-  overflow: auto;
-}
-
-.modal-copy {
-  margin: 0;
-  line-height: 1.7;
-}
-
 .form-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -3260,6 +3172,11 @@ function onDragEnd() {
   margin: 0;
   font-size: 12px;
   color: #dc2626;
+}
+
+.import-example {
+  margin: 0;
+  overflow-wrap: anywhere;
 }
 
 .align-end {
@@ -3525,17 +3442,6 @@ function onDragEnd() {
     grid-template-columns: 1fr;
   }
 
-  .modal-overlay {
-    padding: 12px;
-  }
-
-  .modal {
-    max-height: calc(100vh - 24px);
-  }
-
-  .modal-header,
-  .modal-body,
-  .modal-footer,
   .toolbar,
   .user-group-head,
   .accordion summary {
