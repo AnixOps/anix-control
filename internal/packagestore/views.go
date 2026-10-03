@@ -16,6 +16,10 @@ type KernelAPIView struct {
 	// Source is the kernel table the view reads.
 	Source string
 	Query  string
+	// PostgresQuery, when set, replaces Query on PostgreSQL: for a view
+	// that filters rows by the reading package's role, which SQLite does
+	// not have.
+	PostgresQuery string
 	// RowFilter marks a view that shows only some rows of its source. On
 	// PostgreSQL it is a security_barrier view, so a function in a
 	// package's query cannot see the rows the filter hides before the
@@ -174,7 +178,23 @@ var KernelAPIViews = []KernelAPIView{
 			strings.Join(ForwardRuntimeSettingKeys, "', '") + "')",
 		RowFilter: true,
 	},
+	{
+		// The latest package report of each node, plugin and kind
+		// (docs/architecture/package-reports.md): the payload the kernel
+		// sanitized, when it was observed and received. On PostgreSQL a
+		// package's role sees only the rows of its own plugin_id. SQLite has
+		// no roles, so there the view shows every row and a package filters
+		// by its own id; SQLite package storage isolates nothing anyway.
+		Name:   "kapi_package_report_v1",
+		Source: "v4_kernel_package_report_state",
+		Query:  "SELECT " + packageReportViewColumns + " FROM v4_kernel_package_report_state",
+		PostgresQuery: "SELECT " + packageReportViewColumns + " FROM v4_kernel_package_report_state " +
+			"WHERE '" + RolePrefix + "' || replace(plugin_id, '-', '_') = current_user",
+		RowFilter: true,
+	},
 }
+
+const packageReportViewColumns = "node_kind, node_id, plugin_id, kind, version, payload_json, observed_at, received_at"
 
 // The views of the node credential split's remainder (node-ops-service.md
 // section 4.6). Each exists only once its source is finalized: before that,
@@ -378,11 +398,19 @@ func EnsureKernelAPIViews(db *gorm.DB) error {
 		if barrier {
 			options = " WITH (security_barrier)"
 		}
-		if err := db.Exec("CREATE VIEW " + quoteIdent(view.Name) + options + " AS " + view.Query).Error; err != nil {
+		if err := db.Exec("CREATE VIEW " + quoteIdent(view.Name) + options + " AS " + view.query(db.Name())).Error; err != nil {
 			return fmt.Errorf("create kernel API view %s: %w", view.Name, err)
 		}
 	}
 	return nil
+}
+
+// query is the view's definition on driver.
+func (view KernelAPIView) query(driver string) string {
+	if driver == DriverPostgres && view.PostgresQuery != "" {
+		return view.PostgresQuery
+	}
+	return view.Query
 }
 
 func viewExists(db *gorm.DB, name string) (bool, error) {

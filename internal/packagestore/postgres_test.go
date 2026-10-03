@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/jackc/pgx/v5/pgconn"
@@ -750,4 +751,60 @@ func TestPostgresForwardViewsHideTokensAndOtherKeys(t *testing.T) {
 	}))
 	require.NotContains(t, seen, "nodex-secret-"+suffix)
 	require.Contains(t, seen, "gost-"+suffix)
+}
+
+// A role granted kapi_package_report_v1 reads only its own package's
+// reports: the view filters by the reading role, as a security barrier, and
+// neither the table nor a write through the view is allowed.
+func TestPostgresPackageReportViewShowsOnlyTheOwnPackage(t *testing.T) {
+	kernel, kernelDSN := openPostgresKernel(t)
+	require.NoError(t, kernel.AutoMigrate(&model.PackageReportState{}))
+	require.NoError(t, EnsureKernelAPIViews(kernel))
+	suffix := randomSuffix(t)
+	own, other := "pkgrpt-a-"+suffix, "pkgrpt-b-"+suffix
+	t.Cleanup(func() {
+		dropPackageStorage(t, kernel, own)
+		dropPackageStorage(t, kernel, other)
+		_ = kernel.Exec("DELETE FROM v4_kernel_package_report_state WHERE plugin_id IN (?, ?)", own, other).Error
+	})
+	now := time.Now().UTC()
+	for _, pluginID := range []string{own, other} {
+		require.NoError(t, kernel.Create(&model.PackageReportState{
+			NodeKind: "proxy", NodeID: 9, PluginID: pluginID, Kind: "systemd.services", Version: "4.1.0",
+			PayloadJSON: `{"supported":true}`, ObservedAt: now, ReceivedAt: now, UpdatedAt: now,
+		}).Error)
+	}
+
+	var options []string
+	require.NoError(t, kernel.Raw("SELECT unnest(reloptions) FROM pg_class WHERE relname = 'kapi_package_report_v1' AND relnamespace = current_schema()::regnamespace").Scan(&options).Error)
+	require.Contains(t, options, "security_barrier=true")
+	var kernelSees int64
+	require.NoError(t, kernel.Raw("SELECT count(*) FROM kapi_package_report_v1 WHERE plugin_id IN (?, ?)", own, other).Scan(&kernelSees).Error)
+	require.Zero(t, kernelSees, "the kernel role is no package")
+
+	store := Store{DB: kernel, Driver: "postgres", DSN: kernelDSN}
+	lease, err := store.Lease(context.Background(), Holder{PackageID: own, Version: "4.1.0", Generation: 1},
+		Grants{Storage: true, Views: []string{"kapi_package_report_v1"}})
+	require.NoError(t, err)
+	pkg := openPostgres(t, lease.DSN)
+	var plugins []string
+	require.NoError(t, pkg.Raw("SELECT plugin_id FROM kapi_package_report_v1").Scan(&plugins).Error)
+	require.Equal(t, []string{own}, plugins)
+	var payload string
+	require.NoError(t, pkg.Raw("SELECT payload_json FROM kapi_package_report_v1 WHERE node_id = 9").Scan(&payload).Error)
+	require.JSONEq(t, `{"supported":true}`, payload)
+	var updatedAt []time.Time
+	require.ErrorContains(t, pkg.Raw("SELECT updated_at FROM kapi_package_report_v1").Scan(&updatedAt).Error, "does not exist")
+	var count int64
+	requirePermissionDenied(t, pkg.Raw("SELECT count(*) FROM v4_kernel_package_report_state").Scan(&count).Error)
+	requirePermissionDenied(t, pkg.Exec("UPDATE kapi_package_report_v1 SET payload_json = '{}'").Error)
+	requirePermissionDenied(t, pkg.Exec("DELETE FROM kapi_package_report_v1").Error)
+
+	// The other package's role sees its own row and not this one.
+	lease, err = store.Lease(context.Background(), Holder{PackageID: other, Version: "4.1.0", Generation: 1},
+		Grants{Storage: true, Views: []string{"kapi_package_report_v1"}})
+	require.NoError(t, err)
+	plugins = nil
+	require.NoError(t, openPostgres(t, lease.DSN).Raw("SELECT plugin_id FROM kapi_package_report_v1").Scan(&plugins).Error)
+	require.Equal(t, []string{other}, plugins)
 }

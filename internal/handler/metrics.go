@@ -151,6 +151,8 @@ v2board_go_gc_duration_seconds ` + formatFloat(float64(m.PauseTotalNs)/1e9) + `
 	controlgrpc.WriteAgentUsersPrometheus(&body)
 	// Configuration push on the Agent Control stream.
 	controlgrpc.WriteAgentConfigPrometheus(&body)
+	// Package reports on the Agent Control stream: accepted and refused.
+	controlgrpc.WriteAgentPackageReportPrometheus(&body)
 	// The agent transport transition: legacy requests served and refused,
 	// and the agent_control.mtls mode.
 	agenttransport.WritePrometheus(&body)

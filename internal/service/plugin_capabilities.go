@@ -122,6 +122,13 @@ var (
 		// agent_control.mtls to required. A package that could write it
 		// could make a legacy node look enrolled.
 		"v4_kernel_agent_transport": true,
+		// Package reports (package-reports.v1): the latest report of each
+		// node, plugin and kind, which the kernel authorized and sanitized.
+		// A package reads its own rows through kapi_package_report_v1; one
+		// that could write the table could show another package's data or a
+		// field the sanitizer drops. Protected by the prefix; named so the
+		// rule survives a prefix change.
+		"v4_kernel_package_report_state": true,
 	}
 )
 

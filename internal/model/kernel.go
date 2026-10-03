@@ -502,6 +502,6 @@ func KernelModels() []any {
 		&NodeCredential{}, &ProtocolSecret{}, &NodeSecretSplit{},
 		&KernelNodeOperation{}, &KernelNodeOperationTarget{}, &KernelNodeOperationEvent{},
 		&AgentEnrollment{}, &AgentCertificate{}, &AgentReportBatch{}, &KernelNodeDesiredConfig{}, &KernelNodeConfigStatus{},
-		&RouteModeRevision{}, &AgentTransport{}, &ShadowMismatchSample{},
+		&RouteModeRevision{}, &AgentTransport{}, &ShadowMismatchSample{}, &PackageReportState{},
 	}
 }
