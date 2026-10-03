@@ -1,0 +1,54 @@
+{
+  "node_ref": "forward-21",
+  "hops": [
+    {
+      "route_id": "01JF1D000000000000000000D1",
+      "role": "HOP_ROLE_ENTRY",
+      "engine": "ENGINE_NFTABLES",
+      "listen": {
+        "port": 40102,
+        "protocol": "L4_PROTOCOL_TCP_UDP",
+        "entry_hostname": "edge.fwd.example.com"
+      },
+      "ingress": {
+        "security": "LINK_SECURITY_RAW"
+      },
+      "upstreams": [
+        {
+          "address": "203.0.113.71",
+          "port": 30000,
+          "weight": 1,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          },
+          "node_ref": "forward-71"
+        },
+        {
+          "address": "203.0.113.72",
+          "port": 30000,
+          "weight": 1,
+          "priority": 1,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          },
+          "node_ref": "forward-72"
+        }
+      ],
+      "balance": "BALANCE_STRATEGY_FAILOVER",
+      "health": {
+        "interval_ms": 5000,
+        "timeout_ms": 2000
+      },
+      "circuit_breaker": {
+        "failure_threshold": 3,
+        "open_ms": 30000
+      },
+      "limits": {
+        "bandwidth_bps": "20000000",
+        "max_conns": 100
+      },
+      "target_policy": "TARGET_POLICY_PUBLIC_ONLY",
+      "mark": 2
+    }
+  ]
+}

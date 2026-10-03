@@ -6,8 +6,10 @@ shared validation (`sdk/forward/validate`) and the planner
 (`sdk/forward/planner`). F2a is implemented: the driver interface
 (`sdk/forward/driver`), an in-memory fake driver
 (`sdk/forward/driver/fake`) and the driver conformance suite
-(`sdk/forward/driver/conformance`). Nothing serves forwarding with them yet
-and no behaviour changes. The draft contract is
+(`sdk/forward/driver/conformance`). F2b is implemented: the nftables
+driver's Render (`sdk/forward/driver/nftables`) with golden scripts in
+`contracts/forward/v1/nft`. Nothing serves forwarding with them yet and no
+behaviour changes. The draft contract is
 `sdk/api/forward/v1` (`anixops.forward.v1`, DRAFT, UNRELEASED); the draft
 planner goldens are in `contracts/forward/v1`. This is phase F1 of the v4.2
 forwarding redesign. It replaces the flux-panel clone (`/api/v2/forward/*`)
@@ -141,7 +143,7 @@ Everything lives in the existing `sdk/` module
 | Contract | `sdk/api/forward/v1` | `forward.proto`: the model, `NodeForwardState`, `NodeForwardReport`, the services `ForwardControl` and `ForwardNode` (this PR, draft) |
 | Model and validation | `sdk/forward/model`, `sdk/forward/validate` | Go domain types with lossless conversion to and from the contract and the defaults (`model/defaults.go`); one set of validation rules used by Control, the planner and the Agent (F1b, implemented) |
 | Planner | `sdk/forward/planner` | routes and node inventory in, per-node states, port and mark allocations and generations out; pure functions (F1c, implemented) |
-| Drivers | `sdk/forward/driver`, `.../driver/fake`, `.../driver/conformance`, `.../driver/nftables`, `.../driver/gost`, `.../driver/ansible` | the driver interface, registry, fake driver and conformance suite (F2a, implemented) and the engine implementations (F2b–F2d, F4) |
+| Drivers | `sdk/forward/driver`, `.../driver/fake`, `.../driver/conformance`, `.../driver/nftables`, `.../driver/gost`, `.../driver/ansible` | the driver interface, registry, fake driver and conformance suite (F2a, implemented), the nftables driver's Render (F2b, implemented) and the engine implementations (F2c–F2d, F4) |
 | Client | `sdk/forward/forwardctl` | a Go client for `ForwardControl` (F5) |
 
 Consumers:
@@ -511,89 +513,154 @@ rules every driver keeps:
 
 ### 6.1 nftables
 
-**Ownership.** One table, `inet anixops_fwd`. The driver creates, rewrites
-and deletes only this table, its own tc handles and its own sysctl drop-in.
-It never runs `flush ruleset` and never edits another table.
+Render is implemented in F2b (`sdk/forward/driver/nftables`; the package
+documentation is normative). Apply, Observe, `SetUpstreams` and Remove
+answer `ErrUnsupported` until F2c, and `Capabilities` reports a static
+configuration (`nftables.Config`) until F2c probes the host.
 
-**Shape** (illustrative; exact syntax is settled in F2 with the netns
-tests). For fixture `plan-single-hop-nftables-iepl.json`:
+**Ownership.** One table, `inet anixops_fwd`, marked by its comment
+`anixops-forward-driver v1`. The driver creates, rewrites and deletes only
+this table, its own tc handles and its own sysctl drop-in. It never runs
+`flush ruleset` and never edits another table.
+
+**Shape.** Render produces one `nft -f` script, one transaction in three
+steps: a `table inet anixops_fwd` block declaring the table with its
+comment and every object with no elements and no rules; `flush table` and a
+`flush set`/`flush map` for each admission set and balancing map (`flush
+table` keeps elements, and re-adding a changed interval fails); a second
+block adding the elements and rules. Counters, quotas and the `ct count`
+sets are never flushed, so they keep their values. The script deletes
+nothing: Apply (F2c) deletes the objects of removed hops after reading their
+final counters, and must check the ownership comment before running the
+script, whose flush would empty a foreign table of the same name. nft cannot
+change a table comment in place, so the comment is constant and F2c records
+the applied generation and digest elsewhere. The rules and elements for
+fixture `plan-single-hop-nftables-iepl.json` (golden
+`contracts/forward/v1/nft/plan-single-hop-nftables-iepl-forward-11.nft`; declarations and flushes
+omitted):
 
 ```
 table inet anixops_fwd {
-  counter r1_h0_up {}
-  counter r1_h0_down {}
-  quota r1_q { over 1099511627776 bytes used 0 bytes }
-  set r1_conns { typeof ct mark; flags dynamic; }
-  map r1_up4 { typeof numgen inc mod 1 : ip daddr . th dport; elements = { 0 : 10.88.0.20 . 443 } }
-
-  chain prerouting {
-    type nat hook prerouting priority dstnat; policy accept;
-    meta l4proto { tcp, udp } th dport 30001 fib daddr type local goto r1_h0_dnat
-  }
-  chain r1_h0_dnat {
-    ct mark set 0x00010000
-    meta nfproto ipv4 dnat ip to numgen inc mod 1 map @r1_up4
-  }
-  chain forward {
-    type filter hook forward priority filter; policy accept;
-    ct mark and 0x0fff0000 == 0x00010000 jump r1_h0_acct
-  }
-  chain r1_h0_acct {
-    ct state new add @r1_conns { ct mark ct count over 2000 } reject
-    quota name "r1_q" drop
-    ct direction original counter name "r1_h0_up" meta mark set ct mark
-    ct direction reply counter name "r1_h0_down" meta mark set ct mark or 0x1
-  }
-  chain postrouting {
-    type nat hook postrouting priority srcnat; policy accept;
-    ct mark and 0x0fff0000 == 0x00010000 masquerade
-  }
+	map r_01JF1A000000000000000000A1_h0_lb4 {
+		type mark : ipv4_addr . inet_service
+		flags interval
+		elements = {
+			0-127 : 10.88.0.20 . 443,
+		}
+	}
+	chain r_01JF1A000000000000000000A1_h0_dnat {
+		ct mark set ct mark and 0xf000ffff or 0x00010000
+		meta nfproto ipv4 meta l4proto { tcp, udp } dnat ip to numgen inc mod 128 map @r_01JF1A000000000000000000A1_h0_lb4
+		drop
+	}
+	chain r_01JF1A000000000000000000A1_h0_acct {
+		ct state new add @r_01JF1A000000000000000000A1_h0_conns { ct mark ct count over 2000 } reject
+		quota name "r_01JF1A000000000000000000A1_h0_quota" drop
+		ct direction original counter name "r_01JF1A000000000000000000A1_h0_up" meta mark set meta mark and 0xf000fffe or 0x00010000
+		ct direction reply counter name "r_01JF1A000000000000000000A1_h0_down" meta mark set meta mark and 0xf000fffe or 0x00010001
+	}
+	chain prerouting {
+		type nat hook prerouting priority dstnat; policy accept;
+		meta l4proto { tcp, udp } th dport 30001 fib daddr type local goto r_01JF1A000000000000000000A1_h0_dnat
+	}
+	chain forward {
+		type filter hook forward priority filter; policy accept;
+		ct mark and 0x0fff0000 vmap {
+			0x00010000 : jump r_01JF1A000000000000000000A1_h0_acct,
+		}
+	}
+	chain postrouting {
+		type nat hook postrouting priority srcnat; policy accept;
+		ct mark and 0x0fff0000 {
+			0x00010000,
+		} masquerade
+	}
 }
 ```
 
+- **Names.** Every object of a hop is `r_<route id>_h<hop index>_<suffix>`:
+  counters `_up` and `_down`, quota `_quota`, `ct count` set `_conns`,
+  admission sets `_src4`/`_src6`, balancing maps `_lb4`/`_lb6`, chains
+  `_dnat` and `_acct`. A route id that is not 1 to 64 ASCII letters and
+  digits is rejected, never escaped; only checked literals (these names,
+  numbers, addresses parsed by `net/netip`) reach the script. Labels, host
+  names, node references and the state's identity never do.
 - **inet family**, IPv4 and IPv6. A listener DNATs a v4 client to v4
-  upstreams and a v6 client to v6 upstreams (one map per family); the
-  planner warns when a family has no upstream.
+  upstreams and a v6 client to v6 upstreams (one map per family); a family
+  without upstreams is dropped in the `_dnat` chain so it never reaches
+  local input on the listen port. One protocol is matched with `tcp dport` or
+  `udp dport` (nft accepts `meta l4proto tcp th dport` but cannot read it
+  back), both with `meta l4proto { tcp, udp } th dport`. A listen address
+  pins the listener to that address, otherwise `fib daddr type local`.
+- **Admission.** Relay and exit hops must carry `ingress_sources` (an
+  open relay is rejected); their `_dnat` chain drops every other source.
 - **Counters per direction.** Named counters in the filter `forward` chain,
-  selected by `ct direction original|reply` on the route's connection mark.
-  This fixes v4.1's undercounting (counters in the nat hook see only a
-  connection's first packet). Named counters survive rule rewrites.
-- **Load balancing maps.** `numgen inc` (round robin), `numgen random`
-  (random), `jhash ip saddr` (IP hash), weighted intervals for weights and
-  approximate least-conn, a one-element map for failover. Failover and
-  health only rewrite map elements (`SetUpstreams`), never rules.
-- **Named quota** for `quota_bytes`. When a route's quota changes, the quota
-  object is re-created with `used` set to the bytes already counted, so a
-  limit change never resets usage.
-- **`ct count`** in a dynamic set keyed by the route's mark for
-  `max_conns`.
-- **Bandwidth: tc HTB + ct mark.** The filter chain copies the connection
-  mark to the packet mark, with the low bit for direction. On each egress
-  interface the driver owns one HTB qdisc handle and one class per route and
-  direction at `bandwidth_bps`, selected by a `fw` filter on the mark. Both
-  directions leave the node as egress, so no ifb is needed.
-- **Marks.** The driver owns a mark mask (proposed `0x0fff0000`: 4095 hops
-  per node); the planner allocates `NodeHop.mark` within it. The mask is
-  configurable per node to avoid other mark users (Docker, WireGuard,
-  policy routing).
-- **Flowtable** (optional, off by default): offloaded flows skip the forward
-  chain, so it is allowed only on routes without bandwidth or quota limits,
-  and counters then come from conntrack accounting.
-- **MSS clamping** on encapsulating egress interfaces; `ip_forward` and IPv6
+  reached through a verdict map on the connection mark and split by
+  `ct direction original|reply`. This fixes v4.1's undercounting (counters
+  in the nat hook see only a connection's first packet). Named counters
+  survive rule rewrites.
+- **Load balancing maps.** Each map has a fixed number of slots
+  (`Config.Slots`, default 128, enough for 64 targets plus 16 next-hop
+  nodes) keyed by `numgen inc` (round robin, failover), `numgen random`
+  (random, least-conn) or `jhash ip saddr`/`jhash ip6 saddr` (IP hash),
+  modulo the slots. The maps are `type mark : ipv4_addr . inet_service`
+  (the `typeof numgen ... : ip daddr . th dport` form cannot be read back).
+  Slots go to upstreams by weight, at least one each: interleaved in smooth
+  weighted round-robin order for `numgen inc`, one run per upstream
+  otherwise. Failover maps only the upstreams of the best priority. Since
+  the modulus never changes, failover and health only rewrite map elements
+  (`SetUpstreams`), never rules. Least-conn is weighted random until the
+  Agent re-weights it (L1).
+- **Named quota** for `quota_bytes`, over both directions. Re-declaring a
+  quota updates its limit in place and keeps its usage.
+- **`ct count`** in a dynamic set keyed by the hop's mark for `max_conns`;
+  excess new connections are rejected.
+- **Bandwidth: tc HTB + ct mark.** For a hop with `bandwidth_bps` the
+  `_acct` chain copies the hop's mark to the packet mark, with
+  `Config.DirectionBit` (default `0x1`) on reply packets, keeping the other
+  packet mark bits. On each egress interface the driver owns one HTB qdisc
+  handle and one class per route and direction at `bandwidth_bps`, selected
+  by a `fw` filter on the mark (F2c). Both directions leave the node as
+  egress, so no ifb is needed.
+- **Marks.** The driver owns a mark mask (`0x0fff0000` by default: 4095
+  hops per node; configurable per node to avoid other mark users such as
+  Docker, WireGuard and policy routing, H13). `NodeHop.mark` is an index
+  from the planner, 1 up to the mask's width, shifted into the mask; the
+  other connection mark bits are kept. Hops that share a mark or an
+  overlapping listener are all rejected, whatever their order.
+- **Paused hops** keep every object; their `_dnat` chain drops new
+  connections and their `_acct` chain drops established ones, uncounted.
+- **Flowtable** (optional, off by default, not rendered yet): offloaded
+  flows skip the forward chain, so it is allowed only on routes without
+  bandwidth or quota limits, and counters then come from conntrack
+  accounting.
+- **MSS clamping** on encapsulating egress interfaces
+  (`Config.MSSClampInterfaces`): SYNs of the driver's connections leaving
+  them get `tcp option maxseg size set rt mtu`. `ip_forward` and IPv6
   forwarding via a sysctl drop-in written at install.
-- **DNS targets.** The Agent resolves target names (honouring TTL, at most
-  every 60 s), re-checks the target policy on every answer, and rewrites
-  the maps.
-- **Atomic apply.** Render produces one script. Apply diffs the desired
-  objects against `nft -j list table inet anixops_fwd`, then builds one
-  transaction: ensure the table, flush the chains it keeps, delete chains,
-  maps and sets that are gone, re-add rules and map elements, add new
-  counters and quotas, and delete counters of removed hops after their
-  final values are reported. `nft -c -f` checks it, `nft -f` applies it. A
-  failed apply leaves the previous ruleset in place.
+- **DNS targets.** Render takes IP literals only and rejects a name
+  (`ErrUnsupported`). The Agent resolves target names (honouring TTL, at
+  most every 60 s), re-checks the target policy on every answer, and
+  rewrites the maps; Render re-checks literal targets against the target
+  policy too.
+- **Atomic apply** (F2c). Apply diffs the desired objects against
+  `nft -j list table inet anixops_fwd`, deletes counters, quotas, sets,
+  maps and chains of removed hops after their final values are reported,
+  and runs the rendered transaction. `nft -c -f` checks it, `nft -f` applies
+  it. A failed apply leaves the previous ruleset in place.
 - **Persistence.** nftables rules do not survive a reboot. The Agent
   re-applies its last applied state at start, before it connects to
   Control. Counters then start a new `counter_epoch`.
+- **Goldens.** `contracts/forward/v1/nft` holds, per case, the input
+  (`<case>.state.json`), the script (`<case>.nft`) and the rejected hops
+  (`<case>.errors.txt`). The `plan-<fixture>-<node>` cases are every node
+  state with an nftables hop in the planner goldens, and
+  `planner-single-hop-nftables-iepl-paused-forward-11` is a live planner run
+  of a paused route; they must render without hop errors. `go test ./forward/driver/nftables -update` rewrites them. The
+  tests run `nft -c -f` on every golden and conformance state where nft and
+  `CAP_NET_ADMIN` are available (in a fresh network namespace as root); CI
+  installs nftables and runs them under sudo. `FuzzRender` checks that any
+  state renders without panic into the script grammar.
 
 ### 6.2 gost
 
@@ -909,7 +976,8 @@ features go into which edition is open (H23). The proposal:
   Golden -update` rewrites them) and run the negative cases; F1c added
   goldens for UDP with IPv6 targets, several entry nodes behind an entry
   hostname, a sticky re-plan, port exhaustion and a multi-route plan with
-  generations. F2/F4 add the rendered nft and gost artifacts per fixture.
+  generations. F2/F4 add the rendered nft and gost artifacts: the nft
+  goldens are in `contracts/forward/v1/nft` (F2b, section 6.1).
 - **Planner unit and property tests**: allocation stickiness, collisions,
   exhaustion, wiring, generations; properties: re-planning is idempotent,
   ports and marks never collide on a node, every port is in range and not
@@ -994,7 +1062,7 @@ Agent-repository PRs are marked (agent).
 | | F1b | `sdk/forward/model` and `validate` (implemented) | M | |
 | | F1c | `sdk/forward/planner`: allocation, wiring, generations, golden runner (implemented) | L | |
 | F2 | F2a | driver interface, fake driver, conformance suite (implemented) | M | |
-| | F2b | nftables Render and nft goldens | L | H13 |
+| | F2b | nftables Render and nft goldens (implemented) | L | H13 |
 | | F2c | nftables Apply, Observe, `SetUpstreams`, tc HTB | L | H13 |
 | | F2d | netns end-to-end CI job | M | H14 |
 | F3 | F3a | Control: `forward.v1`, `nodeconfig/v2`, the `forward` report and traffic ledger | M | H25 |

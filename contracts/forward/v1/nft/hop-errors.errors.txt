@@ -1,0 +1,7 @@
+route 01JF2A000000000000000000B1 hop 0 (ENGINE_NFTABLES): forward driver: unsupported: ingress: nftables carries RAW links only, not LINK_SECURITY_TLS
+route 01JF2A000000000000000000C1 hop 0 (ENGINE_NFTABLES): forward driver: unsupported: upstreams[0]: "target.example.com" is a name; the Agent resolves names before Render
+route 01JF2A000000000000000000E1 hop 0 (ENGINE_NFTABLES): forward driver: invalid state: upstreams[0]: 127.0.0.1 cannot be forwarded to
+route 01JF2A000000000000000000F1 hop 0 (ENGINE_NFTABLES): forward driver: invalid state: mark 6 is used by 2 hops
+route 01JF2A000000000000000000F2 hop 0 (ENGINE_NFTABLES): forward driver: invalid state: mark 6 is used by 2 hops
+route 01JF2A000000000000000000F3 hop 0 (ENGINE_NFTABLES): forward driver: unsupported: balance strategy BALANCE_STRATEGY_LEAST_CONN not enabled
+route x"; flush ruleset; # hop 0 (ENGINE_NFTABLES): forward driver: invalid state: route id must be 1 to 64 letters and digits

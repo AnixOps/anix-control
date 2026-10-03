@@ -1,0 +1,74 @@
+#!/usr/sbin/nft -f
+# Rendered by sdk/forward/driver/nftables (anixops forward driver v1); do not edit.
+# One transaction that touches table inet anixops_fwd only: declare every
+# object, flush the rules and the balancing and admission elements, then add
+# them again. Counters, quotas and connection counts keep their values.
+# Apply checks the table's ownership comment before running it, and deletes
+# the objects of removed hops after reading their counters (F2c).
+
+table inet anixops_fwd {
+	comment "anixops-forward-driver v1"
+	counter r_01JF1A000000000000000000A1_h0_up {
+	}
+	counter r_01JF1A000000000000000000A1_h0_down {
+	}
+	quota r_01JF1A000000000000000000A1_h0_quota {
+		over 1099511627776 bytes
+	}
+	set r_01JF1A000000000000000000A1_h0_conns {
+		type mark
+		flags dynamic
+	}
+	map r_01JF1A000000000000000000A1_h0_lb4 {
+		type mark : ipv4_addr . inet_service
+		flags interval
+	}
+	chain r_01JF1A000000000000000000A1_h0_dnat {
+	}
+	chain r_01JF1A000000000000000000A1_h0_acct {
+	}
+	chain prerouting {
+		type nat hook prerouting priority dstnat; policy accept;
+	}
+	chain forward {
+		type filter hook forward priority filter; policy accept;
+	}
+	chain postrouting {
+		type nat hook postrouting priority srcnat; policy accept;
+	}
+}
+
+flush table inet anixops_fwd
+flush map inet anixops_fwd r_01JF1A000000000000000000A1_h0_lb4
+
+table inet anixops_fwd {
+	map r_01JF1A000000000000000000A1_h0_lb4 {
+		type mark : ipv4_addr . inet_service
+		flags interval
+		elements = {
+			0-127 : 10.88.0.20 . 443,
+		}
+	}
+	chain r_01JF1A000000000000000000A1_h0_dnat {
+		drop
+	}
+	chain r_01JF1A000000000000000000A1_h0_acct {
+		drop
+	}
+	chain prerouting {
+		type nat hook prerouting priority dstnat; policy accept;
+		meta l4proto { tcp, udp } th dport 30001 fib daddr type local goto r_01JF1A000000000000000000A1_h0_dnat
+	}
+	chain forward {
+		type filter hook forward priority filter; policy accept;
+		ct mark and 0x0fff0000 vmap {
+			0x00010000 : jump r_01JF1A000000000000000000A1_h0_acct,
+		}
+	}
+	chain postrouting {
+		type nat hook postrouting priority srcnat; policy accept;
+		ct mark and 0x0fff0000 {
+			0x00010000,
+		} masquerade
+	}
+}

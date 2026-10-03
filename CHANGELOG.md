@@ -135,6 +135,31 @@
   fake passes it; mutant drivers prove the suite catches each violation.
   Nothing uses the drivers yet.
 
+- Forward SDK F2b (`docs/architecture/forward-sdk.md` section 6.1):
+  `sdk/forward/driver/nftables`, the nftables driver's `Render`. It turns a
+  node's nftables hops into one deterministic `nft -f` transaction that
+  touches only `table inet anixops_fwd` (owned through its comment):
+  objects declared, rules and balancing elements flushed and re-added, so
+  counters, quotas and connection counts keep their values. Covered: DNAT
+  for TCP, UDP or both over IPv4, IPv6 and dual stack with masquerade;
+  round robin, random, IP hash, least connections (weighted random until
+  re-weighting) and failover through fixed-size slot maps that failover can
+  rewrite without touching rules; named counters per hop and direction,
+  named quotas, `ct count` limits, the hop's connection mark inside a
+  configurable mask (default `0x0fff0000`), packet marks for tc, MSS
+  clamping, admission of relay and exit sources, and paused hops (kept,
+  traffic dropped). Hops it cannot run are rejected one by one with the
+  others still rendered; names are derived only from checked route ids and
+  every address is a checked literal. Goldens with their input states are
+  in `contracts/forward/v1/nft` (`-update` rewrites them), including every
+  nftables node state of the planner goldens and a planned paused route, checked with
+  `nft -c` where nft is available (CI installs it), and `FuzzRender` keeps
+  any input inside the script grammar. `Capabilities` is static until host
+  probing, and `Apply`, `Observe`, `SetUpstreams` and `Remove` answer
+  `ErrUnsupported` until F2c. The conformance suite's generated hops now
+  use the planner's mark semantics (an index the driver shifts into its
+  mask). Nothing uses the driver yet.
+
 ### Fixed
 
 - The live Control WebUI E2E gate defaults to ports 24175 and 28080 instead
