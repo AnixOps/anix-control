@@ -60,7 +60,20 @@ func tcLines(t testing.TB, d *Driver) []string {
 // class in place; a removed hop loses its classes; no limited hop left
 // removes the qdisc. The foreign qdisc on the other interface stays.
 func TestNetnsBandwidthClasses(t *testing.T) {
+	forTCOutputs(t, testBandwidthClasses)
+}
+
+// forTCOutputs runs a test with tc's JSON listings and with the text
+// listings older iproute2 prints.
+func forTCOutputs(t *testing.T, f func(t *testing.T, text bool)) {
+	for _, text := range []bool{false, true} {
+		t.Run(map[bool]string{false: "json", true: "text"}[text], func(t *testing.T) { f(t, text) })
+	}
+}
+
+func testBandwidthClasses(t *testing.T, text bool) {
 	e := newNsEnv(t)
+	e.run.textTC = text
 	e.PlantForeign(t)
 	foreign := e.Foreign(t)
 	d := e.driver(t)
@@ -70,10 +83,10 @@ func TestNetnsBandwidthClasses(t *testing.T) {
 	mustApply(t, d, conformance.State(node, 1, limited(b, conformance.RouteA, 0, 100_000_000), limited(b, conformance.RouteB, 1, 8_000_000)))
 	want := []string{
 		"tc lim0 qdisc htb af00:",
-		"tc lim0 class af00:2 rate 100000000bit",
-		"tc lim0 class af00:3 rate 100000000bit",
-		"tc lim0 class af00:4 rate 8000000bit",
-		"tc lim0 class af00:5 rate 8000000bit",
+		"tc lim0 class af00:2 rate 100Mbit",
+		"tc lim0 class af00:3 rate 100Mbit",
+		"tc lim0 class af00:4 rate 8Mbit",
+		"tc lim0 class af00:5 rate 8Mbit",
 		"tc lim0 filter 0x10000 -> af00:2",
 		"tc lim0 filter 0x10001 -> af00:3",
 		"tc lim0 filter 0x20000 -> af00:4",
@@ -87,8 +100,8 @@ func TestNetnsBandwidthClasses(t *testing.T) {
 	mustApply(t, d, conformance.State(node, 2, limited(b, conformance.RouteB, 1, 16_000_000)))
 	want = []string{
 		"tc lim0 qdisc htb af00:",
-		"tc lim0 class af00:4 rate 16000000bit",
-		"tc lim0 class af00:5 rate 16000000bit",
+		"tc lim0 class af00:4 rate 16Mbit",
+		"tc lim0 class af00:5 rate 16Mbit",
 		"tc lim0 filter 0x20000 -> af00:4",
 		"tc lim0 filter 0x20001 -> af00:5",
 	}
@@ -126,7 +139,12 @@ func TestNetnsBandwidthClasses(t *testing.T) {
 // TestNetnsBandwidthRollback: when the kernel refuses the transaction,
 // the tc classes added for it are removed and changed rates restored.
 func TestNetnsBandwidthRollback(t *testing.T) {
+	forTCOutputs(t, testBandwidthRollback)
+}
+
+func testBandwidthRollback(t *testing.T, text bool) {
 	e := newNsEnv(t)
+	e.run.textTC = text
 	d := e.driver(t)
 	b := e2eBuilder(t, d)
 	node := b.Top.NodeRef

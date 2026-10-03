@@ -523,8 +523,9 @@ the `nftables.Config` that `New` takes, so Render stays a function of its
 configuration; it also warns, without changing anything, about another
 table's forward chain with a drop policy (Docker's `ip filter FORWARD`).
 Minimum versions: nft 0.9.7 and Linux 5.10 (table, counter and set element
-comments); tested with nft 1.0.9 on the CI runner and nft 1.1.3 on Linux
-6.12.
+comments); tested with nft 1.0.9 (iproute2 6.1, whose `tc -j class show`
+prints text, which the driver also reads) on the CI runner and nft 1.1.3 on
+Linux 6.12.
 
 **Ownership.** One table, `inet anixops_fwd`, marked by its comment
 `anixops-forward-driver v1`. The driver creates, rewrites and deletes only

@@ -46,7 +46,7 @@ type tcIface struct {
 	exists  bool              // the interface exists
 	qdisc   bool              // the driver's root qdisc is there
 	foreign string            // a foreign root qdisc ("htb 1:"), or ""
-	classes map[uint16]uint64 // minor -> rate in bytes per second
+	classes map[uint16]tcRate // minor -> rate
 	filters map[uint32]uint16 // mark -> class minor
 }
 
@@ -90,7 +90,7 @@ func (d *Driver) tcSpecs(m *manifest) []tcClassSpec {
 
 // readTC reads what the driver owns on one interface.
 func (d *Driver) readTC(ctx context.Context, name string) (*tcIface, error) {
-	t := &tcIface{name: name, classes: map[uint16]uint64{}, filters: map[uint32]uint16{}}
+	t := &tcIface{name: name, classes: map[uint16]tcRate{}, filters: map[uint32]uint16{}}
 	out, err := d.run(ctx, "tc", nil, "-j", "qdisc", "show", "dev", name)
 	if err != nil {
 		if s := stderrOf(err); strings.Contains(s, "Cannot find device") || strings.Contains(s, "does not exist") {
@@ -124,29 +124,55 @@ func (d *Driver) readTC(ctx context.Context, name string) (*tcIface, error) {
 		return nil, err
 	}
 	var classes []map[string]any
-	if err := decodeJSON(out, &classes); err != nil {
-		return nil, fmt.Errorf("nftables driver: tc class show %s: %w", name, err)
-	}
-	for _, c := range classes {
-		h, _ := c["handle"].(string)
-		minor, ok := d.ownMinor(h)
-		if !ok {
-			continue
+	if decodeJSON(out, &classes) == nil {
+		for _, c := range classes {
+			h, _ := c["handle"].(string)
+			if minor, ok := d.ownMinor(h); ok {
+				t.classes[minor] = tcRate{bytes: item{fields: c}.num("rate"), exact: true}
+			}
 		}
-		t.classes[minor] = item{fields: c}.num("rate")
+	} else {
+		// iproute2 before 6.3 prints classes as text even with -j:
+		// "class htb af00:2 root prio 0 rate 100Mbit ceil 100Mbit ...".
+		for _, line := range strings.Split(string(out), "\n") {
+			f := strings.Fields(line)
+			if len(f) < 3 || f[0] != "class" {
+				continue
+			}
+			minor, ok := d.ownMinor(f[2])
+			if !ok {
+				continue
+			}
+			bits, ok := parseRateText(fieldAfter(f, "rate"))
+			if !ok {
+				return nil, fmt.Errorf("nftables driver: tc class show %s: cannot read %q", name, line)
+			}
+			t.classes[minor] = tcRate{bytes: bits / 8}
+		}
 	}
 	out, err = d.run(ctx, "tc", nil, "-j", "filter", "show", "dev", name, "parent", d.tcMajor())
 	if err != nil {
 		return nil, err
 	}
 	var filters []map[string]any
-	if err := decodeJSON(out, &filters); err != nil {
-		return nil, fmt.Errorf("nftables driver: tc filter show %s: %w", name, err)
-	}
-	for _, f := range filters {
-		mark, minor, ok := d.parseFilter(f)
-		if ok {
-			t.filters[mark] = minor
+	if decodeJSON(out, &filters) == nil {
+		for _, f := range filters {
+			if mark, minor, ok := d.parseFilter(f); ok {
+				t.filters[mark] = minor
+			}
+		}
+	} else {
+		// The text form: "filter parent af00: protocol all pref 10 fw
+		// chain 0 handle 0x10000/0xfff0001 classid af00:2".
+		for _, line := range strings.Split(string(out), "\n") {
+			f := strings.Fields(line)
+			m := map[string]any{"kind": "fw", "handle": fieldAfter(f, "handle"), "options": map[string]any{"classid": fieldAfter(f, "classid")}}
+			if !slices.Contains(f, "fw") {
+				continue
+			}
+			if mark, minor, ok := d.parseFilter(m); ok {
+				t.filters[mark] = minor
+			}
 		}
 	}
 	return t, nil
@@ -265,8 +291,8 @@ func (d *Driver) planIface(p *tcPlan, t *tcIface, specs []tcClassSpec) {
 		switch {
 		case !ok:
 			p.pre = append(p.pre, tcStep{args: classArgs("add", s.minor, s.bps), undo: classArgs("del", s.minor, 0)})
-		case old != s.bps/8:
-			p.pre = append(p.pre, tcStep{args: classArgs("change", s.minor, s.bps), undo: classArgs("change", s.minor, old*8)})
+		case !old.equals(s.bps / 8):
+			p.pre = append(p.pre, tcStep{args: classArgs("change", s.minor, s.bps), undo: classArgs("change", s.minor, old.bytes*8)})
 		}
 	}
 	for _, s := range specs {
@@ -352,13 +378,76 @@ func (d *Driver) tcListing(ctx context.Context) ([]string, error) {
 		}
 		out = append(out, fmt.Sprintf("tc %s qdisc htb %s", name, d.tcMajor()))
 		for _, minor := range slices.Sorted(maps.Keys(t.classes)) {
-			out = append(out, fmt.Sprintf("tc %s class %s rate %dbit", name, d.tcClassID(minor), t.classes[minor]*8))
+			out = append(out, fmt.Sprintf("tc %s class %s rate %s", name, d.tcClassID(minor), rateText(t.classes[minor].bytes)))
 		}
 		for _, mark := range slices.SortedFunc(maps.Keys(t.filters), cmp.Compare[uint32]) {
 			out = append(out, fmt.Sprintf("tc %s filter %#x -> %s", name, mark, d.tcClassID(t.filters[mark])))
 		}
 	}
 	return out, nil
+}
+
+// tcRate is a class's rate as tc reports it: exact bytes per second from
+// JSON, or what the text form keeps (rateText) from older iproute2.
+type tcRate struct {
+	bytes uint64
+	exact bool
+}
+
+func (r tcRate) equals(bytes uint64) bool {
+	if r.exact {
+		return r.bytes == bytes
+	}
+	return rateText(r.bytes) == rateText(bytes)
+}
+
+// rateText formats a rate in bytes per second as tc's text output does
+// (print_rate in iproute2's tc_util.c, SI units): exact below a megabit or
+// when divisible, truncated otherwise.
+func rateText(bytes uint64) string {
+	units := []string{"", "K", "M", "G", "T"}
+	rate := bytes * 8
+	i := 0
+	for ; i < len(units)-1; i++ {
+		if rate < 1000 || (rate%1000 != 0 && rate < 1000*1000) {
+			break
+		}
+		rate /= 1000
+	}
+	return strconv.FormatUint(rate, 10) + units[i] + "bit"
+}
+
+// parseRateText reads tc's text rate ("100Mbit", "1600bit") into bits.
+func parseRateText(s string) (uint64, bool) {
+	num, ok := strings.CutSuffix(s, "bit")
+	if !ok {
+		return 0, false
+	}
+	mult := uint64(1)
+	for _, u := range []struct {
+		suffix string
+		mult   uint64
+	}{{"K", 1e3}, {"M", 1e6}, {"G", 1e9}, {"T", 1e12}} {
+		if n, ok := strings.CutSuffix(num, u.suffix); ok {
+			num, mult = n, u.mult
+			break
+		}
+	}
+	n, err := strconv.ParseUint(num, 10, 64)
+	if err != nil {
+		return 0, false
+	}
+	return n * mult, true
+}
+
+// fieldAfter answers the field after key, or "".
+func fieldAfter(f []string, key string) string {
+	for i := 0; i+1 < len(f); i++ {
+		if f[i] == key {
+			return f[i+1]
+		}
+	}
+	return ""
 }
 
 func decodeJSON(b []byte, v any) error {

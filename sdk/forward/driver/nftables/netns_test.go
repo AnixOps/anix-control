@@ -133,6 +133,9 @@ type nsRunner struct {
 	applies  int
 	failNext bool
 	log      []string
+	// textTC drops -j from tc class and filter listings, as iproute2
+	// before 6.3 effectively does for classes.
+	textTC bool
 }
 
 // failLine makes the kernel refuse the whole transaction.
@@ -141,6 +144,9 @@ const failLine = "delete chain inet anixops_fwd anixops_no_such_chain\n"
 func (r *nsRunner) Run(ctx context.Context, name string, args []string, stdin []byte) ([]byte, error) {
 	full := name == "nft" && slices.Equal(args, []string{"-f", "-"}) && bytes.Contains(stdin, []byte("# Rendered by sdk/forward/driver/nftables"))
 	r.mu.Lock()
+	if r.textTC && name == "tc" && len(args) > 1 && args[0] == "-j" && (args[1] == "class" || args[1] == "filter") {
+		args = args[1:]
+	}
 	if full && r.failNext {
 		r.failNext = false
 		stdin = append(slices.Clone(stdin), failLine...)

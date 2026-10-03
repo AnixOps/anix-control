@@ -116,6 +116,9 @@
 // unavailable when the core ones fail. Tested with nft 1.0.9 (Ubuntu 24.04,
 // CI) and nft 1.1.3 on Linux 6.12, on which re-declaring a quota updates
 // its limit and keeps its usage (TestNetnsQuotaKeepsUsage).
+// tc is read with -j; iproute2 before 6.3 (6.1 on Ubuntu 24.04) prints
+// classes as text even then, so the driver falls back to the text form and
+// compares rates as tc prints them.
 //
 // # Names
 //

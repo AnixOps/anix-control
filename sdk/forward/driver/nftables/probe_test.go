@@ -207,3 +207,23 @@ func TestParseManifestRefuses(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestRateText(t *testing.T) {
+	for bits, want := range map[uint64]string{
+		800: "800bit", 100_000_000: "100Mbit", 1_600: "1600bit", 999_992: "999992bit",
+		12_345_678_896: "12345Mbit", 8_000: "8Kbit", 1_000_000_000_000_000: "1000Tbit",
+	} {
+		if got := rateText(bits / 8); got != want {
+			t.Errorf("%d: %s, want %s", bits, got, want)
+		}
+		if b, ok := parseRateText(want); !ok || rateText(b/8) != want {
+			t.Errorf("round trip %s: %d %v", want, b, ok)
+		}
+	}
+	if (tcRate{bytes: 12_345_000_000 / 8, exact: true}).equals(12_345_678_896 / 8) {
+		t.Error("exact rates compared loosely")
+	}
+	if !(tcRate{bytes: 12_345_000_000 / 8, exact: false}).equals(12_345_678_896 / 8) {
+		t.Error("text rates compared exactly")
+	}
+}
