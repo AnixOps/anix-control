@@ -34,8 +34,9 @@ table; it owns a kind, which the kernel reviews and accepts.
 - **Authorization.** The node must have an enabled assignment of
   `plugin_id` at `version`, and that release must be a signed official
   Agent release whose manifest still verifies and declares the kind's
-  capability. `machine-telemetry` declares `telemetry.systemd.read` from
-  its 4.1 release on; until then the kernel refuses its systemd reports.
+  capability. `machine-telemetry` will declare `telemetry.systemd.read`
+  in its 4.1 release (PR 5 of the panel); until then the kernel refuses its
+  systemd reports.
 
 ## Kernel storage
 

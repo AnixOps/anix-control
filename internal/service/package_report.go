@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"slices"
 	"strings"
 	"time"
 
@@ -192,7 +193,7 @@ func (s *NodeService) authorizePackageReport(input PackageReportInput, capabilit
 	if len(versions) == 0 {
 		return refusePackageReport(PackageReportRefusedNotAssigned, "%s is not enabled on the node", input.PluginID)
 	}
-	if !containsPluginCapability(versions, input.Version) {
+	if !slices.Contains(versions, input.Version) {
 		return refusePackageReport(PackageReportRefusedVersionMismatch, "the node is assigned %s %s, not %s", input.PluginID, strings.Join(versions, ", "), input.Version)
 	}
 	var official int64

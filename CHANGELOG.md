@@ -14,7 +14,7 @@
   - Control accepts a report only when the node's assigned release of the
     plugin is a signed official Agent release declaring the kind's
     capability (`systemd.services`: `telemetry.systemd.read`, which
-    `machine-telemetry` declares from 4.1), and stores the payload as the
+    `machine-telemetry` will declare from 4.1), and stores the payload as the
     kind's sanitizer re-encodes it in the new table
     `v4_kernel_package_report_state` (latest only, no history; stale after
     25 minutes). Packages read their own rows through the kernel API view
