@@ -1548,7 +1548,9 @@ advertised them.
     (starts at 1, grows by one when the hash changes, never otherwise),
     `config_hash` (the SHA-256 of the canonical document: sorted keys,
     no whitespace, so the same configuration always has the same hash),
-    `format` (`anixops.nodeconfig/v1`), `config_json` (the document, with
+    `format` (`anixops.nodeconfig/v1`; `anixops.nodeconfig/v2`, with the
+    node's forwarding state, for a node whose Agent negotiated `forward.v1`,
+    `forward-sdk.md` section 8.1), `config_json` (the document, with
     the node's protocol secrets: the table is protected and no call
     answers it), `excluded_protocols` and `built_at`. A proxy node's
     document is its node row, raw configuration and enabled protocols
