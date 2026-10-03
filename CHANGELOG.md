@@ -189,6 +189,34 @@
   sequences without privileges. Minimum nft 0.9.7 and Linux 5.10; tested
   with nft 1.0.9 and 1.1.3. Nothing uses the driver yet.
 
+- Forward SDK F2d (`docs/architecture/forward-sdk.md` section 13): the
+  multi-namespace end-to-end suite, `sdk/forward/e2e`. Each test builds
+  client, entry, relay, exit and target network namespaces joined by veth
+  pairs (IPv4 and IPv6, forwarding on inside the node namespaces only) and
+  drives them as Control and the Agents will: model routes, validation
+  against an inventory of the namespace nodes with their probed
+  capabilities, the planner and its generations, then Render and Apply by
+  each node's nftables driver in its namespace. Echo servers (the test
+  binary re-executed in the target namespaces) answer real TCP and UDP
+  traffic: one hop over IPv4 and IPv6 with counters matching the bytes
+  moved per direction (UDP exactly), two and three hops with every hop
+  counting and admitting only the previous node, each balance strategy
+  over three targets (round robin in turn and by weight, random and least
+  connections in proportion, IP hash stable per client address), failover
+  through `SetUpstreams` driven by a simulated health loop when the primary
+  dies, quota exhaustion, the connection limit, a tc HTB bandwidth limit
+  within 0.5 to 1.5 times the rate, pause and unpause with counters kept,
+  an Agent restart observing the same state with a no-op re-apply, and
+  Remove leaving foreign tables and qdiscs alone. A failed test writes the
+  namespaces' state to `ANIXOPS_FORWARD_E2E_LOGDIR`; leftovers of a dead
+  run are removed before the next. It needs root and
+  `ANIXOPS_FORWARD_E2E=1`. CI: the new "Forward Netns E2E" job runs it
+  under sudo on the hosted runner (H14) on pull requests in the `forward`
+  change class, which now also covers `sdk/forward`, `sdk/api/forward` and
+  `contracts/forward`, nightly and on manual runs; it is not a required
+  check until it has been green for two weeks. The SDK module now requires
+  `golang.org/x/sys` directly (it was indirect), for `setns`.
+
 ### Fixed
 
 - The live Control WebUI E2E gate defaults to ports 24175 and 28080 instead

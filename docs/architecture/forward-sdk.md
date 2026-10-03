@@ -143,7 +143,7 @@ Everything lives in the existing `sdk/` module
 | Contract | `sdk/api/forward/v1` | `forward.proto`: the model, `NodeForwardState`, `NodeForwardReport`, the services `ForwardControl` and `ForwardNode` (this PR, draft) |
 | Model and validation | `sdk/forward/model`, `sdk/forward/validate` | Go domain types with lossless conversion to and from the contract and the defaults (`model/defaults.go`); one set of validation rules used by Control, the planner and the Agent (F1b, implemented) |
 | Planner | `sdk/forward/planner` | routes and node inventory in, per-node states, port and mark allocations and generations out; pure functions (F1c, implemented) |
-| Drivers | `sdk/forward/driver`, `.../driver/fake`, `.../driver/conformance`, `.../driver/nftables`, `.../driver/gost`, `.../driver/ansible` | the driver interface, registry, fake driver and conformance suite (F2a, implemented), the nftables driver (Render F2b, Apply, Observe, failover and tc F2c, implemented) and the engine implementations (F2d, F4) |
+| Drivers | `sdk/forward/driver`, `.../driver/fake`, `.../driver/conformance`, `.../driver/nftables`, `.../driver/gost`, `.../driver/ansible` | the driver interface, registry, fake driver and conformance suite (F2a, implemented), the nftables driver (Render F2b, Apply, Observe, failover and tc F2c, implemented) and the other engines (F4) |
 | Client | `sdk/forward/forwardctl` | a Go client for `ForwardControl` (F5) |
 
 Consumers:
@@ -158,8 +158,8 @@ Consumers:
   `ForwardControl`.
 
 Drivers run only inside the Agent and inside test harnesses (the
-conformance suite and the netns end-to-end tests). There is no
-`cmd/anixops-forward`.
+conformance suite and the netns end-to-end suite, `sdk/forward/e2e`).
+There is no `cmd/anixops-forward`.
 
 ## 4. Model
 
@@ -712,7 +712,9 @@ table inet anixops_fwd {
   ruleset and qdiscs are never touched. CI runs them under sudo in Backend
   Tests shard 1 (H14). Unprivileged replay tests
   (`testdata/replay`, recorded with `ANIXOPS_NFT_RECORD=1`) check the exact
-  command sequence of an apply lifecycle and of the refusals.
+  command sequence of an apply lifecycle and of the refusals. The
+  multi-namespace suite (F2d, section 13) runs the driver behind the
+  planner, node by node, with real traffic through several hops.
 
 ### 6.2 gost
 
@@ -1038,7 +1040,8 @@ features go into which edition is open (H23). The proposal:
 - **Driver conformance suite** (F2a, implemented:
   `sdk/forward/driver/conformance`). `conformance.Run(t, factory)` runs one
   scenario list against every driver, each scenario on a fresh `Env` (the
-  host: an in-memory one for the fake, namespaces for F2d). The required
+  host: an in-memory one for the fake, a namespace for the nftables driver,
+  F2c). The required
   `Env` methods make driver instances (a second one is an Agent restart),
   list owned objects, and plant and list foreign ones; optional interfaces
   (`Damager`, `TrafficSource`, `ApplyFaulter`, `ConflictPlanter`,
@@ -1061,13 +1064,86 @@ features go into which edition is open (H23). The proposal:
   foreign objects must be unchanged at the end and every observation is
   checked for counter monotonicity within an epoch. The fake driver
   (`sdk/forward/driver/fake`) passes it in unit tests under several
-  capability sets, and mutant drivers prove each rule is enforced.- **netns end-to-end** (F2d): client, entry, relay and target namespaces
-  joined by veth pairs, running the real nftables and gost drivers; checks
-  traffic, counters, quota, connection limit, bandwidth (with tolerance) and
-  failover by killing a target. It needs root and `CAP_NET_ADMIN` (H14).
-  GitHub-hosted Ubuntu runners are VMs with passwordless sudo, so the job
-  can run `sudo -E go test -tags netns` directly; no privileged container is
-  needed.
+  capability sets, and mutant drivers prove each rule is enforced.
+- **netns end-to-end** (F2d, implemented: `sdk/forward/e2e`). Each test
+  builds its own network namespaces (`ip netns add`, named
+  `afe2e-<pid>-<lab>-<role>`) joined by veth pairs: a client, an entry
+  node, relay and exit nodes and target hosts, addressed in IPv4 (TEST-NET)
+  and IPv6 (`2001:db8::/32`), with forwarding switched on inside the node
+  namespaces only. It drives them as Control and the Agents will: routes
+  from `sdk/forward/model`, `validate.Route` against an inventory of the
+  namespace nodes with the capabilities their drivers probed in the
+  namespace (`nftables.Probe`), `planner.Plan` with the previous
+  allocations and `planner.Stamp`, then `Render` and `Apply` by each
+  node's nftables driver through a runner that runs nft and tc in the
+  node's namespace. The targets are echo servers (the test binary
+  re-executed with `ip netns exec`); the client dials from its namespace
+  (`setns` on a locked thread). Every scenario moves real traffic and reads
+  the replies:
+  - one hop, TCP and UDP over IPv4 and IPv6; the entry hop's counters match
+    the bytes moved in each direction: UDP exactly (payload plus 28 or 48
+    header bytes per datagram), TCP within the header range of the counted
+    packets (TSO segments, so not wire packets), plus 10% and 16 KiB for
+    retransmissions;
+  - two hops (entry, exit) and three (entry, relay, exit) over RAW links:
+    every hop counts the same traffic and admits only the previous node's
+    addresses; the client routed straight to the exit's port times out,
+    while it reaches a server of the exit's own;
+  - balancing over three targets: round robin 10/10/10 (within 1) of 30
+    connections after an apply and 2:1:1 weights within 2 of 20/10/10,
+    random and least connections at least 15 of 90 per target (30
+    expected; a sample that misses is retried twice), IP hash stable for
+    each of 24 client addresses and spread over more than one target;
+  - failover: the primary target killed, new connections fail until a
+    simulated health loop (TCP checks from the entry node) calls
+    `SetUpstreams` with the backup; traffic moves without a new generation,
+    digest or counter epoch, and returns to the primary when it is back and
+    every upstream is restored;
+  - quota (300 000 bytes): exchanges stop before the quota, new connections
+    fail and the counters stay under it; raising it keeps the usage and
+    traffic resumes;
+  - connection limit 3: the fourth connection is refused while three stay
+    open, and closing one frees its slot;
+  - bandwidth 8 Mbit/s with tc HTB: the steady echo rate is within 0.5 to
+    1.5 times the limit (the same path unlimited is many times faster), and
+    both directions pass their hop's HTB classes; skipped when tc HTB is
+    unavailable;
+  - pause: new and established traffic is dropped uncounted, counters keep
+    their epoch and values, and counting resumes on unpause;
+  - Agent restart: a new driver instance observes the same generation,
+    hash, digest, counters and rotation; re-applying, directly or through
+    a re-plan, changes nothing and keeps an established connection;
+  - Remove: the table and the tc qdiscs go, another table and a qdisc on
+    another interface stay, and a second Remove succeeds;
+  - leftovers: namespaces of the suite whose test process is gone are
+    removed with the processes inside them (the suite does this before it
+    starts); a live run's namespaces and every other namespace stay.
+
+  A failed test writes each namespace's ruleset, qdiscs and classes,
+  addresses, routes and sockets and the echo servers' logs to
+  `ANIXOPS_FORWARD_E2E_LOGDIR` (or the test log). The suite needs root
+  (`CAP_NET_ADMIN`, and `CAP_SYS_ADMIN` for the namespaces) and runs only
+  with `ANIXOPS_FORWARD_E2E=1`; otherwise it skips, and with the variable
+  set a missing tool fails. It is gated by that variable, not a build tag,
+  so every lane compiles, vets and lints it. To run it locally:
+
+  ```sh
+  go -C sdk test -c -o /tmp/forward-e2e.test ./forward/e2e
+  sudo ANIXOPS_FORWARD_E2E=1 /tmp/forward-e2e.test -test.v
+  # or through go test; sudo's secure_path drops the Go toolchain, so pass
+  # PATH (this leaves root-owned entries in your Go build cache):
+  sudo -E env "PATH=$PATH" ANIXOPS_FORWARD_E2E=1 go -C sdk test ./forward/e2e -count=1 -v
+  ```
+
+  CI runs it in the "Forward Netns E2E" job: on the GitHub-hosted Ubuntu
+  runner, a VM with passwordless sudo, so the test binary runs under sudo
+  and no privileged container is needed (H14). It runs on pull requests in
+  the `forward` change class (which covers `sdk/forward`,
+  `sdk/api/forward` and `contracts/forward`), nightly and on manual runs,
+  with a 20-minute timeout, and is not a required check until it has been
+  green for two weeks (H14). Backend Tests shard 1 keeps running the
+  nftables driver's real-kernel conformance tests (section 6.1) on every
+  change. The gost driver joins the suite with F4c (mixed engines).
 - **Cross-repository E2E** with anix-agent (the A2-7 suite): config.v1 with
   `forward.v1`, reports, probes.
 - **Chaos**: stop Control and check forwarding, failover and counters
@@ -1116,7 +1192,7 @@ Agent-repository PRs are marked (agent).
 | F2 | F2a | driver interface, fake driver, conformance suite (implemented) | M | |
 | | F2b | nftables Render and nft goldens (implemented) | L | H13 |
 | | F2c | nftables Apply, Observe, `SetUpstreams`, tc HTB, host probe, real-kernel conformance (implemented) | L | H13 |
-| | F2d | netns end-to-end CI job | M | H14 |
+| | F2d | netns end-to-end suite and CI job (implemented) | M | H14 |
 | F3 | F3a | Control: `forward.v1`, `nodeconfig/v2`, the `forward` report and traffic ledger | M | H25 |
 | | F3b | (agent) forward component: drivers, persisted state, apply at boot, health loop, reports | L | H25 |
 | | F3c | probes and diagnosis plumbing | M | |
