@@ -40,6 +40,7 @@ Use this tree like NodeX:
 - Official package signing root rotation: [`guide/release-root-rotation.md`](guide/release-root-rotation.md)
 - In-place Control migration: [`guide/control-migration.md`](guide/control-migration.md)
 - Legacy panel migration: [`guide/legacy-migration.md`](guide/legacy-migration.md)
+- Route cutover staging rehearsal (legacy → shadow → native, batch sign-off): [`guide/staging-rehearsal.md`](guide/staging-rehearsal.md)
 - SQLite to PostgreSQL migration: [`reference/sqlite-to-postgres-migration.md`](reference/sqlite-to-postgres-migration.md)
 - Manual intervention requirements: [`manual-intervention.md`](manual-intervention.md)
 - Brand and compatibility migration: [`BRAND_MIGRATION.md`](BRAND_MIGRATION.md)

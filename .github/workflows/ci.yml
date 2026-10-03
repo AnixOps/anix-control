@@ -386,6 +386,58 @@ jobs:
       - name: Run critical benchmark smoke tests
         run: go test -run '^$' -bench=. -benchtime=1x ./internal/service ./internal/handler ./internal/router ./internal/compat/v2
 
+  staging-rehearsal-smoke:
+    name: Staging Rehearsal Smoke
+    runs-on: ubuntu-latest
+    needs: [changes]
+    if: ${{ needs.changes.outputs.full == 'true' }}
+    timeout-minutes: 20
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      # Local staging rehearsal (scripts/staging, docs/guide/staging-rehearsal.md)
+      # on batch 1 only, with the smoke thresholds (20 compared requests and
+      # 2 minutes of shadow per read route): Compose stack on an internal
+      # network, synthetic data, shadow replay, parity suites and the write
+      # reconciliation twins. Only the packages of batch 1 are built.
+      - name: Bring the staging stack up
+        env:
+          STAGING_PACKAGES: knowledge,ticket
+          STAGING_WORK: ${{ runner.temp }}/staging
+        run: scripts/staging/rehearse.sh up
+
+      - name: Rehearse batch 1 (smoke)
+        env:
+          STAGING_WORK: ${{ runner.temp }}/staging
+        run: scripts/staging/rehearse.sh --batch 1 --smoke
+
+      - name: Upload the batch report
+        if: ${{ always() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: staging-rehearsal-batch-1
+          path: ${{ runner.temp }}/staging/reports/
+          if-no-files-found: ignore
+
+      - name: Control logs
+        if: ${{ failure() }}
+        env:
+          STAGING_WORK: ${{ runner.temp }}/staging
+        run: scripts/staging/rehearse.sh logs control | tail -150
+
+      - name: Tear the stack down
+        if: ${{ always() }}
+        env:
+          STAGING_WORK: ${{ runner.temp }}/staging
+        run: scripts/staging/rehearse.sh down
+
   go-lint:
     name: Go Lint Gate
     runs-on: ubuntu-latest
