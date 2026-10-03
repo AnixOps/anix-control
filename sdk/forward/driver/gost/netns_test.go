@@ -10,6 +10,7 @@ import (
 	"crypto/x509"
 	"crypto/x509/pkix"
 	"encoding/hex"
+	"encoding/json"
 	"encoding/pem"
 	"fmt"
 	"math/big"
@@ -415,6 +416,7 @@ var (
 	_ conformance.ConflictPlanter = (*nsEnv)(nil)
 	_ conformance.ImpostorPlanter = (*nsEnv)(nil)
 	_ conformance.ApplyCounter    = (*nsEnv)(nil)
+	_ conformance.TrafficSource   = (*nsEnv)(nil)
 )
 
 func newNsEnv(t testing.TB) *nsEnv {
@@ -422,6 +424,12 @@ func newNsEnv(t testing.TB) *nsEnv {
 	ns := newNetns(t)
 	top := conformance.DefaultTopology()
 	pki := linkPKI(t, shortDir(t), top.NodeRef)
+	// The topology's IPv4 upstreams answer: an echo server on each, so
+	// Traffic moves bytes through the hops.
+	for _, a := range top.UpstreamsV4 {
+		ns.addAddress(t, a)
+		startEcho(t, ns, fmt.Sprintf("%s:%d", a, top.UpstreamPort))
+	}
 	e := &nsEnv{node: newNode(t, ns, top.NodeRef, pki), foreign: &syncBuffer{}}
 	// Registered before the suite's own cleanup, so it runs after the
 	// suite checked the foreign objects.
@@ -509,6 +517,50 @@ func (e *nsEnv) Foreign(t testing.TB) []string {
 // Damage kills gost, as a crash would.
 func (e *nsEnv) Damage(testing.TB) { e.sup.Kill() }
 
+// Traffic sends a line through the hop's TCP listener to the echo server
+// behind it and reads the answer.
+func (e *nsEnv) Traffic(t testing.TB, hop driver.HopKey) {
+	t.Helper()
+	b, err := os.ReadFile(filepath.Join(e.cfg.Dir, gost.StateFile))
+	if err != nil {
+		t.Fatalf("Traffic: %v", err)
+	}
+	var st struct {
+		Hops []struct {
+			Route     string
+			Hop       uint32
+			Listeners []struct {
+				Network string
+				Port    uint32
+			}
+		}
+	}
+	if err := json.Unmarshal(b, &st); err != nil {
+		t.Fatal(err)
+	}
+	for _, h := range st.Hops {
+		if h.Route != hop.RouteID || h.Hop != hop.HopIndex {
+			continue
+		}
+		for _, l := range h.Listeners {
+			if l.Network != "tcp" {
+				continue
+			}
+			c, err := e.ns.dial("tcp", fmt.Sprintf("127.0.0.1:%d", l.Port))
+			if err != nil {
+				t.Fatalf("Traffic: %v", err)
+			}
+			got, err := exchange(c, strings.Repeat("t", 200))
+			_ = c.Close()
+			if err != nil || !strings.HasPrefix(got, "echo:") {
+				t.Fatalf("Traffic through %s: %q %v", hop, got, err)
+			}
+			return
+		}
+	}
+	t.Fatalf("Traffic: hop %s has no TCP listener", hop)
+}
+
 func (e *nsEnv) FailNextApply(testing.TB) {
 	e.sup.mu.Lock()
 	e.sup.failNext = true
@@ -533,25 +585,12 @@ func (e *nsEnv) PlantImpostor(t testing.TB) {
 	}
 }
 
-// f4bScenarios need hot updates through gost's web API or counters from its
-// metrics (F4b).
-var f4bScenarios = []string{
-	"set-upstreams-failover",
-	"set-upstreams-weights",
-	"set-upstreams-reset-by-apply",
-	"set-upstreams-survives-restart",
-	"concurrent-calls",
-}
-
-// TestNetnsConformance runs the conformance suite against the real driver
-// and the real gost, one namespace per scenario.
+// TestNetnsConformance runs the whole conformance suite against the real
+// driver and the real gost, one namespace per scenario, with traffic
+// through the hops (TrafficSource).
 func TestNetnsConformance(t *testing.T) {
 	requireNetns(t)
-	opts := []conformance.Option{conformance.WithTimeout(60 * time.Second)}
-	for _, s := range f4bScenarios {
-		opts = append(opts, conformance.Skip(s, "F4b: SetUpstreams changes gost's nodes through its web API"))
-	}
-	conformance.Run(t, func(t *testing.T) conformance.Env { return newNsEnv(t) }, opts...)
+	conformance.Run(t, func(t *testing.T) conformance.Env { return newNsEnv(t) }, conformance.WithTimeout(60*time.Second))
 }
 
 // TestNetnsGoldens loads every golden case's configuration in a real gost:

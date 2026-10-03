@@ -22,6 +22,9 @@ type hostState struct {
 	StateHash  string        `json:"state_hash,omitempty"`
 	Digest     string        `json:"digest,omitempty"`
 	Hops       []manifestHop `json:"hops,omitempty"`
+	// Loads counts the starts and reloads Apply made gost do: each one
+	// re-creates every service, so it is part of the counter epoch.
+	Loads uint64 `json:"loads,omitempty"`
 }
 
 func (s *hostState) applied() bool { return s != nil && s.Digest != "" }
