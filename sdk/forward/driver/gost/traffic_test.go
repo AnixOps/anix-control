@@ -132,8 +132,9 @@ func exchange(c net.Conn, msg string) (string, error) {
 // TLS out) and a gost exit (TLS in, RAW to the target) in one namespace,
 // checks that an apply that changes the relay reloads gost without
 // dropping an established connection or ending the counter epoch, that a
-// paused hop refuses new connections, and that the exit refuses a TLS
-// client without a link certificate of its CA.
+// paused hop refuses new connections, that the bandwidth and connection
+// limits hold, and that the exit refuses a TLS client without a link
+// certificate of its CA.
 func TestNetnsTraffic(t *testing.T) {
 	ns := newNetns(t)
 	for _, a := range []string{"10.231.0.1", "10.231.0.2", "10.231.0.10"} {
@@ -256,6 +257,50 @@ func TestNetnsTraffic(t *testing.T) {
 		if err == nil {
 			t.Fatalf("a paused hop forwarded a new connection: %q", got)
 		}
+	}
+
+	// Limits: 800 kbit/s (100 KB/s each way) and two connections.
+	limited := &forwardv1.NodeHop{
+		RouteId: "01JF4A000000000000000000C1", HopIndex: 0, Role: forwardv1.HopRole_HOP_ROLE_ENTRY, Engine: gostE,
+		Listen:       &forwardv1.Listen{Address: "10.231.0.1", Port: 30003, Protocol: forwardv1.L4Protocol_L4_PROTOCOL_TCP},
+		Upstreams:    []*forwardv1.Upstream{{Address: "10.231.0.10", Port: 7000}},
+		TargetPolicy: forwardv1.TargetPolicy_TARGET_POLICY_ALLOW_PRIVATE,
+		Limits:       &forwardv1.Limits{BandwidthBps: 800_000, MaxConns: 2},
+	}
+	if _, err := rd.Apply(t.Context(), render(t, rd, conformance.State("forward-31", 4, limited))); err != nil {
+		t.Fatal(err)
+	}
+	var conns []net.Conn
+	for i := range 3 {
+		c, err := ns.dial("tcp", "10.231.0.1:30003")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = c.Close() }()
+		conns = append(conns, c)
+		if i < 2 {
+			if got, err := exchange(c, "conn"); err != nil || got != "echo:conn" {
+				t.Fatalf("connection %d under the limit: %q %v", i, got, err)
+			}
+		}
+	}
+	if got, err := exchange(conns[2], "conn"); err == nil {
+		t.Fatalf("a third connection passed the limit of 2: %q", got)
+	}
+	_ = conns[1].Close()
+	_ = conns[2].Close()
+	big := strings.Repeat("x", 300_000)
+	_ = conns[0].SetDeadline(time.Now().Add(30 * time.Second))
+	start := time.Now()
+	if _, err := io.WriteString(conns[0], big+"\n"); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := io.ReadFull(conns[0], make([]byte, len("echo:")+len(big)+1)); err != nil {
+		t.Fatal(err)
+	}
+	// 300 KB up and 300 KB down at 100 KB/s, less the limiter's burst.
+	if d := time.Since(start); d < 3*time.Second || d > 20*time.Second {
+		t.Fatalf("600 KB through a 100 KB/s limit took %v", d)
 	}
 
 	// Mutual TLS: the exit refuses a client without a certificate.
