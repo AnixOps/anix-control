@@ -1,0 +1,11 @@
+{
+  "$comment": "Advisories waived for development dependencies only. Shipped (production) dependencies are always audited strictly. Each entry expires; after its expiry CI fails again. Owner approved GHSA-vfj7-8cjw-p6xm on 2026-10-03.",
+  "advisories": [
+    {
+      "id": "GHSA-vfj7-8cjw-p6xm",
+      "package": "braces",
+      "reason": "Stack exhaustion on deeply nested patterns. Every braces version is affected and no fix exists. It is reached only through build tools (histoire, stylelint via micromatch/fast-glob/globby) that run on trusted patterns from this repository; it is not in the shipped frontend.",
+      "expires": "2026-11-02"
+    }
+  ]
+}

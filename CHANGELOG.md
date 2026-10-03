@@ -2,6 +2,24 @@
 
 ## Unreleased
 
+### Changed
+
+- CI's frontend dependency audit (`npm run audit:check`,
+  `web/scripts/check-npm-audit.mjs`) still fails on any advisory of moderate
+  severity or above in production dependencies. In development dependencies
+  it accepts only advisories listed in `web/audit-allowlist.json`, each with
+  a reason and an expiry date; an expired or stale entry fails the check.
+  The first entry is GHSA-vfj7-8cjw-p6xm (braces, no fixed version, reached
+  only through histoire and stylelint), waived until 2026-11-02 with the
+  owner's approval.
+
+- `agent_control.mtls` defaults to `preferred` instead of `optional`
+  (decision H5): legacy API-key agents keep working and now get the
+  deprecation signals. `preferred` no longer needs gRPC TLS and the
+  built-in CA to start (only `required` does, together with
+  `grpc.enabled`); without them agents cannot enroll, which the startup log
+  says. Set `optional` to keep the release candidates' silent behaviour.
+
 ### Added
 
 - Route modes have their own tooling. Until now a package's routes moved
@@ -113,15 +131,6 @@
   hextets; request bodies are never stored. Hosts built with the 4.0.0 SDK
   keep working and report no samples. See "Reading Shadow Mismatches" in
   `docs/UPGRADE.md`.
-
-### Changed
-
-- `agent_control.mtls` defaults to `preferred` instead of `optional`
-  (decision H5): legacy API-key agents keep working and now get the
-  deprecation signals. `preferred` no longer needs gRPC TLS and the
-  built-in CA to start (only `required` does, together with
-  `grpc.enabled`); without them agents cannot enroll, which the startup log
-  says. Set `optional` to keep the release candidates' silent behaviour.
 
 ### Deprecated
 
