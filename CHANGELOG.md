@@ -54,6 +54,39 @@
 
 ### Added
 
+- **Staging rehearsal of route cutovers** (`scripts/staging/`, runbook
+  `docs/guide/staging-rehearsal.md`), for the batch sign-offs of v4.1.0
+  (H6, H7). Synthetic data only (H4); nothing reads a backup or a production
+  database, and the containers run on an internal network with no route out.
+  - `scripts/staging/rehearse.sh up` builds Control and every package
+    (commercial edition, signed with a throwaway key) from the checkout,
+    starts PostgreSQL and Control with Compose (no image is built), installs
+    and enables the packages through `/api/v3`, seeds a deterministic data
+    set (`STAGING_SEED`: administrators, staff, members with plans, banned,
+    expired and empty members, orders in every status, payments, coupons,
+    invitations and commissions, tickets, multi-language knowledge articles,
+    notifications, audit logs, nodes, subscription groups, forwards, traffic;
+    TEST-NET addresses and example.com only) and keeps it as a template.
+  - `rehearse.sh --batch N` switches the batch's `native-flagged` read routes
+    to `shadow` as the super administrator, replays read traffic as members,
+    administrators and anonymous callers (pagination, filters, empty
+    results, not found, invalid input, permission errors) until every route
+    has `--min-requests` (200) compared requests and `--min-shadow-duration`
+    (2h) in shadow, runs the batch's packagecompat suites, replays the write
+    routes on two throwaway twins started from copies of the seeded
+    database (one legacy, one native) and compares their answers and tables
+    row by row (ignored columns listed per table), and writes
+    `reports/batch-N/report.md` and `report.json` with one PASS or FAIL.
+    `--smoke` lowers the thresholds to 20 requests and 2 minutes. It never
+    switches the rehearsal instance to native: the report prints the
+    `rehearse.sh routes set … --mode native` commands for after the sign-off;
+    `--rollback` returns the batch to legacy.
+  - Batches: 1 knowledge + ticket; 2 notification + platform +
+    machine-telemetry + protocol-runtime; 3 plan + order + payment +
+    affiliate; 4 subscription + forward + proxy-node + gost-mesh + wireguard.
+    identity-platform has its own cutover.
+  - CI: the job "Staging Rehearsal Smoke" runs batch 1 with `--smoke` in the
+    full lane only; it is not a required check.
 - Route modes have their own tooling. Until now a package's routes moved
   between `legacy`, `shadow` and `native` only by editing the reserved
   `routes` key of the package configuration. Now:

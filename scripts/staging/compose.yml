@@ -1,0 +1,122 @@
+# AnixOps Control: local staging rehearsal stack (synthetic data only).
+#
+# Driven by scripts/staging/rehearse.sh; runbook: docs/guide/staging-rehearsal.md.
+# Every container runs on an internal network with no route out of the host,
+# so background workers and request handlers cannot reach real
+# infrastructure (Telegram, SMTP, payment providers, nodes). No image is
+# built: Control and the staging tool are static binaries built from this
+# checkout into ${STAGING_WORK} and mounted into the distroless base image.
+#
+#   control        the rehearsal instance (database "staging"): read routes
+#                  of a batch run in shadow here
+#   recon-legacy   write reconciliation twins, started from the seeded
+#   recon-native   template "staging_seed": the same write requests go to
+#                  both, routes legacy on one and native on the other
+#   tool           stagingctl (seeder, replayer, reconciler, reports)
+name: ${STAGING_PROJECT:-anix-staging}
+
+x-control: &control
+  image: gcr.io/distroless/static-debian12:nonroot
+  entrypoint: ["/app/anix-control"]
+  user: "65532:65532"
+  read_only: true
+  tmpfs:
+    - /tmp:rw,exec,mode=1777
+    # Package host sockets and artifact copies: a private directory (the
+    # host manager refuses a group- or world-writable ancestor).
+    - /var/lib/anixops:rw,exec,mode=0700,uid=65532,gid=65532
+  volumes:
+    - ${STAGING_WORK:?run scripts/staging/rehearse.sh up}/bin/anix-control:/app/anix-control:ro
+    - ${STAGING_WORK}/bootstrap:/app/bootstrap/identity-platform:ro
+  environment: &control-env
+    ANIX_CONTROL_ENV: production
+    ANIX_CONTROL_APP_EDITION: commercial
+    ANIX_CONTROL_LOG_FORMAT: json
+    ANIX_CONTROL_DATABASE_DRIVER: postgres
+    ANIX_CONTROL_DATABASE_HOST: postgres
+    ANIX_CONTROL_DATABASE_PORT: "5432"
+    ANIX_CONTROL_DATABASE_USERNAME: staging
+    ANIX_CONTROL_DATABASE_PASSWORD: ${STAGING_DB_PASSWORD:?}
+    ANIX_CONTROL_DATABASE_DATABASE: staging
+    ANIX_CONTROL_DATABASE_SSLMODE: disable
+    ANIX_CONTROL_JWT_SECRET: ${STAGING_JWT_SECRET:?}
+    ANIX_CONTROL_ADMIN_EMAIL: root@staging.example.com
+    ANIX_CONTROL_ADMIN_PASSWORD: ${STAGING_ADMIN_PASSWORD:?}
+    ANIX_CONTROL_PLUGINS_OFFICIAL_PUBLIC_KEY: ${STAGING_PACKAGE_PUBLIC_KEY:?}
+    ANIX_CONTROL_PLUGINS_CONTROL_EXECUTION_ENABLED: "true"
+    ANIX_CONTROL_PLUGINS_IDENTITY_BOOTSTRAP_PACKAGE_DIR: /app/bootstrap/identity-platform
+    ANIX_CONTROL_PLUGINS_CONTROL_HOST_RUNTIME_DIR: /var/lib/anixops/hosts
+    ANIX_CONTROL_PLUGINS_CONTROL_HOST_ARTIFACT_DIR: /var/lib/anixops/artifacts
+    TZ: UTC
+  networks:
+    - staging
+  stop_grace_period: 30s
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: staging
+      POSTGRES_USER: staging
+      POSTGRES_PASSWORD: ${STAGING_DB_PASSWORD:?}
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U staging -d staging"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+    networks:
+      - staging
+
+  migrate:
+    <<: *control
+    command: ["migrate"]
+    restart: "no"
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  control:
+    <<: *control
+    depends_on:
+      migrate:
+        condition: service_completed_successfully
+
+  recon-legacy:
+    <<: *control
+    profiles: [reconcile]
+    environment:
+      <<: *control-env
+      ANIX_CONTROL_DATABASE_DATABASE: recon_legacy
+
+  recon-native:
+    <<: *control
+    profiles: [reconcile]
+    environment:
+      <<: *control-env
+      ANIX_CONTROL_DATABASE_DATABASE: recon_native
+
+  tool:
+    image: gcr.io/distroless/static-debian12:nonroot
+    profiles: [tool]
+    entrypoint: ["/work/bin/stagingctl"]
+    user: "${STAGING_UID:-65532}:${STAGING_GID:-65532}"
+    read_only: true
+    volumes:
+      - ${STAGING_WORK}:/work
+    working_dir: /work
+    environment:
+      STAGING_DB_PASSWORD: ${STAGING_DB_PASSWORD:?}
+      STAGING_ADMIN_PASSWORD: ${STAGING_ADMIN_PASSWORD:?}
+      STAGING_JWT_SECRET: ${STAGING_JWT_SECRET:?}
+      STAGING_SEED: ${STAGING_SEED:-20261002}
+    networks:
+      - staging
+
+volumes:
+  postgres-data:
+
+networks:
+  staging:
+    internal: true
