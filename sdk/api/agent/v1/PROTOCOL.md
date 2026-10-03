@@ -79,6 +79,7 @@ are additions to `anix.agent.v1`:
 | Agent → Control | `AgentToControl.logs` (`LogBatch` of `LogEntry`) | `reports.v1` |
 | Agent → Control | `AgentToControl.status` (`NodeStatus`) | `reports.v1` |
 | Control → Agent | `ControlToAgent.report_ack` (`ReportAck`) | `reports.v1` |
+| Agent → Control | `AgentToControl.package_report` (`PackageReport`) | `package-reports.v1` |
 
 `Hello` gains `config_revision` and `users_cursor`, and `HelloAck` gains
 `server_capabilities`.
@@ -87,7 +88,7 @@ are additions to `anix.agent.v1`:
 
 - A capability written `config.v1` is the `Capability` with name `config`
   and version `v1`; `sdk/agentcontrol` names them (`CapabilityConfig`,
-  `CapabilityUsers`, `CapabilityReports`).
+  `CapabilityUsers`, `CapabilityReports`, `CapabilityPackageReports`).
 - The Agent lists the ones it implements in `Hello.capabilities`. Control
   lists the ones it serves in `HelloAck.server_capabilities`.
 - A capability is in use on a session only when both lists have it
@@ -97,9 +98,9 @@ are additions to `anix.agent.v1`:
     `config.v1`, and `UserDelta` only with `users.v1`. It reads
     `Hello.config_revision` and `Hello.users_cursor` only then.
   - The Agent sends `ConfigStatus` only with `config.v1`, and `TrafficReport`,
-    `LogBatch` and `NodeStatus` only with `reports.v1`, in
-    `HelloAck.server_capabilities`. Without them it keeps the legacy
-    transports.
+    `LogBatch` and `NodeStatus` only with `reports.v1`, and `PackageReport`
+    only with `package-reports.v1`, in `HelloAck.server_capabilities`.
+    Without them it keeps the legacy transports.
 - Older Agents send none of these capabilities or `Hello` fields and skip
   `server_capabilities`, so nothing changes for them.
 - Control serves `config.v1`, `users.v1` and `reports.v1`.
@@ -108,9 +109,12 @@ are additions to `anix.agent.v1`:
   forward node has no user list and is not offered it); and `reports.v1`
   when the Agent's `Hello` lists it too, for proxy nodes (a forward node's
   stream is not offered it yet; its reports join with the forward plugins).
+  It serves `package-reports.v1` when the Agent's `Hello` lists it, for
+  proxy nodes; forward nodes are not offered it yet.
   An Agent that sends a payload the session did not negotiate
   (`config_status` without `config.v1`, or `traffic`, `logs` or `status`
-  without `reports.v1`, in both lists) gets `InvalidArgument`, naming the
+  without `reports.v1`, `package_report` without `package-reports.v1`, in
+  both lists) gets `InvalidArgument`, naming the
   capability it lacks, and the stream ends. A Control built before these payloads existed answers
   them the same way, as an unknown payload ("control message payload is
   required").
@@ -247,6 +251,44 @@ are additions to `anix.agent.v1`:
     previous one, and Control does not acknowledge it.
   - A report whose envelope `node_id` is not the stream's node ends the
     stream with `PermissionDenied`, as any other message does.
+- **Package reports** (`package-reports.v1`). A `PackageReport` is the latest
+  observation of one `kind` that an Agent plugin package makes on the node,
+  such as the systemd services table of `machine-telemetry`
+  (`docs/architecture/package-reports.md`).
+  - **Fields.** `plugin_id` is the reporting package. `kind` names the
+    payload schema: lowercase dot-separated words, at most 64 bytes
+    (`systemd.services`); a new schema version is a new kind. `version` is
+    the release of `plugin_id` the Agent runs. `payload_json` is a JSON
+    object in the kind's schema, at most 256 KiB
+    (`agentcontrol.MaxPackageReportPayloadBytes`). `observed_at_unix_ms` is
+    when the plugin took the observation; 0 means when Control received it.
+  - **Latest value wins.** Control keeps one report per node, `plugin_id`
+    and `kind`: a report replaces the stored one unless that one was
+    observed later, and no history is kept. Control does not acknowledge a
+    `PackageReport`; the Agent neither spools nor resends it, and sends the
+    next observation instead.
+  - **Authorization.** Control accepts a report only when the node has an
+    enabled assignment of `plugin_id` at `version`, and that release is a
+    signed official (AnixOps) Agent release, still verifying against the
+    trust root, whose manifest declares the capability the kind requires.
+    Control knows each kind it accepts; a package cannot add one.
+
+    | Kind | Capability | Schema |
+    |---|---|---|
+    | `systemd.services` | `telemetry.systemd.read` | `sdk/telemetry/systemdreport` |
+  - **Sanitizing.** Control stores the payload only as the kind's sanitizer
+    re-encodes it: unknown fields are dropped, and a payload the sanitizer
+    refuses is refused. For `systemd.services` that is a payload with a
+    `Description` or `ExecStart` field, more than 512 units, a unit name
+    over 256 bytes, or a malformed field.
+  - **Refusal.** A report that is malformed, oversize, observed more than a
+    minute in the future, of an unknown kind, not authorized or refused by
+    its sanitizer is dropped, logged and counted
+    (`anixops_agent_package_reports_refused_total{reason}`); so is one
+    Control cannot record now (`anixops_agent_package_reports_total{result="unrecorded"}`).
+    The stream stays open.
+  - Packages read the reports of their own `plugin_id` through the kernel
+    API view `kapi_package_report_v1`.
 
 The checked-in Go files are generated, not handwritten. From the repository
 root, run:

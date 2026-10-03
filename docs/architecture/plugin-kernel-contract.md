@@ -350,7 +350,13 @@ credentials. `kapi_forward_node_v1` exposes every column of
 (`forward.runtime.nodex_mode`, `forward.runtime_backend`,
 `forward.runtime.ansible.backend`) and no other row. `kapi_traffic_log_v1`
 exposes `user_id`, `u`, `d`, `rate` and `log_at` of `v2_server_log`: each
-node traffic report's bytes per user, for traffic charts. A view that filters
+node traffic report's bytes per user, for traffic charts.
+`kapi_package_report_v1` exposes `node_kind`, `node_id`, `plugin_id`, `kind`,
+`version`, `payload_json`, `observed_at` and `received_at` of
+`v4_kernel_package_report_state`, the latest package report of each node,
+plugin and kind (`docs/architecture/package-reports.md`); on PostgreSQL a
+package role sees only the rows of its own `plugin_id`, while on SQLite, which
+has no roles, every row is visible. A view that filters
 rows is created `WITH
 (security_barrier)` on PostgreSQL, so a package's own functions never see the
 rows it hides. If a view cannot be created, or its source table does not
