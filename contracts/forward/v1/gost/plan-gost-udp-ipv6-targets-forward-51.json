@@ -31,6 +31,10 @@
     {
       "name": "r01JF1C000000000000000000C1-h0-udp",
       "addr": ":10001",
+      "admission": "r01JF1C000000000000000000C1-h0",
+      "metadata": {
+        "enableStats": true
+      },
       "handler": {
         "type": "udp",
         "chain": "r01JF1C000000000000000000C1-h0"
@@ -58,37 +62,49 @@
       "name": "r01JF1C000000000000000000C1-h0",
       "hops": [
         {
-          "name": "r01JF1C000000000000000000C1-h0",
-          "selector": {
-            "strategy": "round",
-            "maxFails": 3,
-            "failTimeout": "30s"
-          },
-          "nodes": [
-            {
-              "name": "u0",
-              "addr": "[2001:db8:61::1]:10000",
-              "connector": {
-                "type": "relay"
-              },
-              "dialer": {
-                "type": "wss",
-                "tls": {
-                  "certFile": "/var/lib/anixops-gost/tls/link.crt",
-                  "keyFile": "/var/lib/anixops-gost/tls/link.key",
-                  "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
-                  "secure": true,
-                  "serverName": "edge.example.com"
-                },
-                "metadata": {
-                  "host": "edge.example.com",
-                  "path": "/ws"
-                }
-              }
-            }
-          ]
+          "name": "r01JF1C000000000000000000C1-h0"
         }
       ]
+    }
+  ],
+  "hops": [
+    {
+      "name": "r01JF1C000000000000000000C1-h0",
+      "selector": {
+        "strategy": "round",
+        "maxFails": 3,
+        "failTimeout": "30s"
+      },
+      "nodes": [
+        {
+          "name": "u0",
+          "addr": "[2001:db8:61::1]:10000",
+          "connector": {
+            "type": "relay"
+          },
+          "dialer": {
+            "type": "wss",
+            "tls": {
+              "certFile": "/var/lib/anixops-gost/tls/link.crt",
+              "keyFile": "/var/lib/anixops-gost/tls/link.key",
+              "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
+              "secure": true,
+              "serverName": "edge.example.com"
+            },
+            "metadata": {
+              "host": "edge.example.com",
+              "path": "/ws"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "admissions": [
+    {
+      "name": "r01JF1C000000000000000000C1-h0",
+      "whitelist": false,
+      "matchers": []
     }
   ],
   "log": {
@@ -96,8 +112,11 @@
     "format": "json",
     "output": "stderr"
   },
+  "api": {
+    "addr": "unix:///run/anixops-gost/api.sock"
+  },
   "metrics": {
     "addr": "unix:///run/anixops-gost/metrics.sock",
-    "path": "/anixops-c210023fc8702ccf"
+    "path": "/anixops-5436aa6cee2b0354"
   }
 }

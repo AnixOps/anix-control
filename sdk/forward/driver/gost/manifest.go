@@ -24,10 +24,13 @@ type manifest struct {
 }
 
 type manifestHop struct {
-	Route     string             `json:"route"`
-	Hop       uint32             `json:"hop"`
-	Balance   string             `json:"balance"`
-	Paused    bool               `json:"paused,omitempty"`
+	Route   string `json:"route"`
+	Hop     uint32 `json:"hop"`
+	Balance string `json:"balance"`
+	Paused  bool   `json:"paused,omitempty"`
+	// Quota is the hop's quota_bytes, which EnforceQuotas keeps (gost has
+	// no byte quota of its own).
+	Quota     uint64             `json:"quota,omitempty"`
 	Services  []string           `json:"services"`
 	Listeners []manifestListener `json:"listeners"`
 	Upstreams []manifestUpstream `json:"upstreams"`

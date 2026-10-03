@@ -38,6 +38,7 @@ type star struct {
 	cli     *netns
 	client  *link // entry (a) to client (b)
 	entry   *node
+	engine  model.Engine // the entry's
 	targets []*targetHost
 }
 
@@ -48,10 +49,17 @@ type targetHost struct {
 	srv    *server
 }
 
+// newStar builds a star around an nftables entry.
 func newStar(t *testing.T, ids ...string) *star {
 	t.Helper()
+	return newStarOf(t, model.EngineNFTables, ids...)
+}
+
+// newStarOf builds a star around an entry of the engine.
+func newStarOf(t *testing.T, engine model.Engine, ids ...string) *star {
+	t.Helper()
 	l := newLab(t)
-	s := &star{lab: l, cli: l.netns("cli")}
+	s := &star{lab: l, cli: l.netns("cli"), engine: engine}
 	ent := l.netns("ent")
 	s.client = l.connect(ent, s.cli, clientNet4, clientNet6)
 	limit := []string{s.client.aIf}
@@ -66,7 +74,11 @@ func newStar(t *testing.T, ids ...string) *star {
 		s.targets = append(s.targets, th)
 	}
 	addrs = append(addrs, s.client.a4, s.client.a6)
-	s.entry = l.node(entry1, ent, limit, addrs...)
+	if engine == model.EngineGost {
+		s.entry = l.gostNode(entry1, ent, addrs...)
+	} else {
+		s.entry = l.node(entry1, ent, limit, addrs...)
+	}
 	return s
 }
 
@@ -77,7 +89,9 @@ func (s *star) singleHop(protocol model.L4Protocol) model.Route {
 	for _, th := range s.targets {
 		targets = append(targets, target(th.a4))
 	}
-	return route(routeA, protocol, []model.Hop{entryHop(entry1)}, targets...)
+	entry := entryHop(entry1)
+	entry.Engine = s.engine
+	return route(routeA, protocol, []model.Hop{entry}, targets...)
 }
 
 // in answers where the client reaches the route over IPv4.

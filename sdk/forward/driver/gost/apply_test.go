@@ -9,7 +9,6 @@ import (
 	"testing"
 	"time"
 
-	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
 	"github.com/AnixOps/anix-control/sdk/forward/driver"
 	"github.com/AnixOps/anix-control/sdk/forward/driver/conformance"
 	"github.com/AnixOps/anix-control/sdk/forward/driver/gost"
@@ -128,31 +127,4 @@ func TestApplyRefusesForeignUnit(t *testing.T) {
 	if strings.Contains(strings.Join(r.calls, ";"), "stop") {
 		t.Fatalf("Remove stopped a foreign unit: %v", r.calls)
 	}
-}
-
-// TestObserveCountersEpoch: counters are 0 with the gost instance as
-// epoch; "stopped" when gost does not run.
-func TestObserveCountersEpoch(t *testing.T) {
-	d, f, _ := fakeDriver(t)
-	hop := builder(t).Simple(conformance.RouteA, 0)
-	if _, err := d.Apply(t.Context(), render(t, d, conformance.State("forward-11", 1, hop))); err != nil {
-		t.Fatal(err)
-	}
-	o, err := d.Observe(t.Context())
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(o.Counters) != 1 || o.Counters[0].GetCounterEpoch() != "fake-1" || o.Counters[0].GetUpBytes() != 0 {
-		t.Fatalf("counters %v", o.Counters)
-	}
-	if err := f.Stop(t.Context()); err != nil {
-		t.Fatal(err)
-	}
-	if o, _ = d.Observe(t.Context()); o.Counters[0].GetCounterEpoch() != "stopped" {
-		t.Fatalf("epoch of a stopped gost: %s", o.Counters[0].GetCounterEpoch())
-	}
-	if len(o.Rotation) != 1 || len(o.Rotation[0].Active) != 3 {
-		t.Fatalf("rotation %+v", o.Rotation)
-	}
-	_ = forwardv1.Engine_ENGINE_GOST
 }

@@ -38,11 +38,14 @@ const (
 	DefaultLinkCA   = DefaultDir + "/tls/link-ca.crt"
 	// DefaultBinary is where the Agent's package installs the pinned gost.
 	DefaultBinary = "/usr/lib/anixops-agent/gost"
-	// ConfigFile, StateFile and MetricsSocket are file names inside Dir
-	// and RuntimeDir.
+	// ConfigFile, StateFile, MetricsSocket and APISocket are file names
+	// inside Dir and RuntimeDir. gost creates both sockets; the API socket
+	// is the driver's only way to change a running gost without a reload,
+	// and its file permissions are its only key (no auth is configured).
 	ConfigFile    = "gost.json"
 	StateFile     = "state.json"
 	MetricsSocket = "metrics.sock"
+	APISocket     = "api.sock"
 	// DefaultReadyTimeout bounds the wait for gost to serve a configuration
 	// after a start or a reload.
 	DefaultReadyTimeout = 10 * time.Second
@@ -68,10 +71,14 @@ type Config struct {
 	// Strategies are the balance strategies the driver renders (Render).
 	Strategies []forwardv1.BalanceStrategy
 	// BandwidthLimit and MaxConns allow hops with those limits (Render).
-	// gost has no byte quota, so a hop with quota_bytes is always
-	// unsupported.
 	BandwidthLimit bool
 	MaxConns       bool
+	// SoftQuota allows hops with quota_bytes (Render) and reports the quota
+	// capability. gost has no byte quota: EnforceQuotas refuses a hop's
+	// new connections once its counters reach the quota, checked as often
+	// as the Agent calls it (forward-sdk.md section 6.2). Without it a hop
+	// with quota_bytes is unsupported.
+	SoftQuota bool
 	// LinkCert, LinkKey and LinkCA are the node's link certificate, its
 	// key and the CA bundle that signs its peers' link certificates, as
 	// paths gost reads (Render). Without all three the driver carries RAW
@@ -101,8 +108,8 @@ func AllStrategies() []forwardv1.BalanceStrategy {
 
 // DefaultConfig answers a configuration with every feature on, the
 // default directories and link certificate paths (Probe drops the paths
-// when the files are missing, leaving RAW links only) and no Version (so
-// an unprobed driver reports itself unavailable).
+// when the files are missing, leaving RAW links only), the soft quota, and
+// no Version (so an unprobed driver reports itself unavailable).
 func DefaultConfig() Config {
 	return Config{
 		IPv6:           true,
@@ -110,6 +117,7 @@ func DefaultConfig() Config {
 		Strategies:     AllStrategies(),
 		BandwidthLimit: true,
 		MaxConns:       true,
+		SoftQuota:      true,
 		LinkCert:       DefaultLinkCert,
 		LinkKey:        DefaultLinkKey,
 		LinkCA:         DefaultLinkCA,
@@ -167,7 +175,7 @@ func (c Config) check() error {
 	if set != 0 && set != 3 {
 		return fmt.Errorf("%w: LinkCert, LinkKey and LinkCA go together", ErrInvalidConfig)
 	}
-	if len(c.metricsPath()) > 107 {
+	if len(c.metricsPath()) > 107 || len(c.apiPath()) > 107 {
 		return fmt.Errorf("%w: RuntimeDir %q is too long for a unix socket path", ErrInvalidConfig, c.RuntimeDir)
 	}
 	if c.ReadyTimeout <= 0 {
@@ -182,7 +190,9 @@ func (c Config) check() error {
 // linkTLS reports whether the configuration carries encrypted links.
 func (c Config) linkTLS() bool { return c.LinkCert != "" }
 
-// configPath, statePath and metricsPath are the files the driver uses.
+// configPath, statePath, metricsPath and apiPath are the files the driver
+// uses.
 func (c Config) configPath() string  { return filepath.Join(c.Dir, ConfigFile) }
 func (c Config) statePath() string   { return filepath.Join(c.Dir, StateFile) }
 func (c Config) metricsPath() string { return filepath.Join(c.RuntimeDir, MetricsSocket) }
+func (c Config) apiPath() string     { return filepath.Join(c.RuntimeDir, APISocket) }

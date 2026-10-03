@@ -80,6 +80,16 @@
 // its epoch and history survive a pause, and it appears in Observe with
 // its rotation; the driver refuses or drops its traffic.
 //
+// # Soft quota
+//
+// A driver whose engine has no byte quota of its own may still report the
+// quota capability by keeping quota_bytes softly: it implements
+// QuotaEnforcer, and the Agent calls EnforceQuotas after every Observe and
+// Apply. A hop whose counters in its current epoch reached its quota then
+// refuses new connections, as a paused hop does (objects, counters and
+// epoch stay), until the quota is raised above them. The gost driver does
+// this; the nftables driver's named quota is exact and in the kernel.
+//
 // # Remove
 //
 // Remove deletes every owned object and nothing else, and is idempotent.

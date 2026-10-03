@@ -175,7 +175,7 @@ func TestProbe(t *testing.T) {
 			t.Fatal(err)
 		}
 		caps, _ := d.Capabilities(ctx)
-		if !slices.Equal(caps.GetLinkSecurities(), []forwardv1.LinkSecurity{forwardv1.LinkSecurity_LINK_SECURITY_RAW}) || caps.GetQuota() {
+		if !slices.Equal(caps.GetLinkSecurities(), []forwardv1.LinkSecurity{forwardv1.LinkSecurity_LINK_SECURITY_RAW}) || !caps.GetQuota() {
 			t.Fatalf("capabilities %v", caps)
 		}
 	})

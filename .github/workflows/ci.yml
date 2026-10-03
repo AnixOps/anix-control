@@ -1015,8 +1015,10 @@ jobs:
       # GOST_VERSION, archive and binary checked by SHA-256 as the package
       # jobs do. gost parses every golden configuration; under sudo, each
       # TestNetns test runs gost in a throwaway network namespace (`ip netns
-      # add`, `ip netns exec`): the conformance suite, every golden loaded and
-      # served, TCP and UDP through a mutual-TLS relay. Nothing touches the
+      # add`, `ip netns exec`): the whole conformance suite with traffic,
+      # every golden loaded and served, TCP and UDP through a mutual-TLS
+      # relay, hot changes through gost's web API (failover, soft quota,
+      # pause) and least-connections re-weighting. Nothing touches the
       # runner's own network or systemd units.
       - name: Check the gost forward driver against the pinned gost (netns)
         if: ${{ matrix.shard == 1 }}
@@ -1640,8 +1642,10 @@ jobs:
   # The forward SDK's multi-namespace end-to-end suite (sdk/forward/e2e,
   # forward-sdk.md section 13): client, entry, relay and target network
   # namespaces joined by veth pairs, routes planned by the planner and
-  # applied by the nftables driver in each node's namespace, and real TCP
-  # and UDP traffic. It needs root, so the test binary runs under sudo on the
+  # applied by the nftables driver in each node's namespace (and by the gost
+  # driver, with the pinned gost running in the entry's namespace, for a
+  # gost entry's counters and failover), and real TCP and UDP traffic. It
+  # needs root, so the test binary runs under sudo on the
   # hosted runner, which is a VM (H14); every namespace is a throwaway one and
   # the runner's own ruleset, qdiscs and sysctls are never touched. It runs
   # on forward changes, nightly and on manual runs, and is not a required
@@ -1680,6 +1684,21 @@ jobs:
           tc -V
           uname -r
 
+      # The gost release the Agent pins (H20), checked by SHA-256 as Backend
+      # Tests shard 1 does.
+      - name: Download the pinned gost
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="${RUNNER_TEMP}/gost_${GOST_VERSION}_linux_amd64.tar.gz"
+          curl --fail --location --retry 3 --output "${archive}" \
+            "https://github.com/go-gost/gost/releases/download/v${GOST_VERSION}/gost_${GOST_VERSION}_linux_amd64.tar.gz"
+          echo "${GOST_LINUX_AMD64_ARCHIVE_SHA256}  ${archive}" | sha256sum --check --strict
+          mkdir -p "${RUNNER_TEMP}/gost"
+          tar -xzf "${archive}" -C "${RUNNER_TEMP}/gost" gost
+          echo "${GOST_LINUX_AMD64_BINARY_SHA256}  ${RUNNER_TEMP}/gost/gost" | sha256sum --check --strict
+          "${RUNNER_TEMP}/gost/gost" -V
+
       - name: Build the end-to-end test binary
         run: go -C sdk test -c -o "${RUNNER_TEMP}/forward-e2e.test" ./forward/e2e
 
@@ -1689,7 +1708,7 @@ jobs:
           set -euo pipefail
           mkdir -p "${LOG_DIR}"
           cd sdk/forward/e2e
-          sudo ANIXOPS_FORWARD_E2E=1 ANIXOPS_FORWARD_E2E_LOGDIR="${LOG_DIR}" \
+          sudo ANIXOPS_FORWARD_E2E=1 ANIXOPS_FORWARD_E2E_LOGDIR="${LOG_DIR}" ANIXOPS_GOST_BIN="${RUNNER_TEMP}/gost/gost" \
             "${RUNNER_TEMP}/forward-e2e.test" -test.v -test.timeout=15m 2>&1 | tee "${LOG_DIR}/go-test.log"
 
       - name: Make the logs readable

@@ -107,6 +107,7 @@ type hopPlan struct {
 	sources      []netip.Prefix // admission; nil admits every source
 	paused       bool
 	bandwidthBps uint64
+	quotaBytes   uint64 // the soft quota EnforceQuotas keeps
 	maxConns     uint32
 	maxFails     uint32
 	failTimeout  time.Duration
@@ -298,7 +299,10 @@ func (d *Driver) planHop(h *forwardv1.NodeHop) (*hopPlan, error) {
 		p.bandwidthBps = lim.GetBandwidthBps()
 	}
 	if lim.GetQuotaBytes() > 0 {
-		return nil, unsupported("gost has no byte quota (an exact quota needs an NFTABLES entry)")
+		if !d.cfg.SoftQuota {
+			return nil, unsupported("gost has no byte quota and the soft quota is off (an exact quota needs an NFTABLES entry)")
+		}
+		p.quotaBytes = lim.GetQuotaBytes()
 	}
 	if lim.GetMaxConns() > 0 {
 		if !d.cfg.MaxConns {

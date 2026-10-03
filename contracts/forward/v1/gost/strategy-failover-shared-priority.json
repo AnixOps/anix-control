@@ -43,6 +43,10 @@
     {
       "name": "r01JF2A000000000000000000A1-h0-tcp",
       "addr": ":30001",
+      "admission": "r01JF2A000000000000000000A1-h0",
+      "metadata": {
+        "enableStats": true
+      },
       "handler": {
         "type": "tcp"
       },
@@ -50,26 +54,39 @@
         "type": "tcp"
       },
       "forwarder": {
-        "nodes": [
-          {
-            "name": "u0",
-            "addr": "192.0.2.20:443"
-          },
-          {
-            "name": "u1",
-            "addr": "192.0.2.21:443"
-          },
-          {
-            "name": "u2",
-            "addr": "192.0.2.22:443"
-          }
-        ],
-        "selector": {
-          "strategy": "fifo",
-          "maxFails": 3,
-          "failTimeout": "30s"
-        }
+        "hop": "r01JF2A000000000000000000A1-h0"
       }
+    }
+  ],
+  "hops": [
+    {
+      "name": "r01JF2A000000000000000000A1-h0",
+      "selector": {
+        "strategy": "fifo",
+        "maxFails": 3,
+        "failTimeout": "30s"
+      },
+      "nodes": [
+        {
+          "name": "u0",
+          "addr": "192.0.2.20:443"
+        },
+        {
+          "name": "u1",
+          "addr": "192.0.2.21:443"
+        },
+        {
+          "name": "u2",
+          "addr": "192.0.2.22:443"
+        }
+      ]
+    }
+  ],
+  "admissions": [
+    {
+      "name": "r01JF2A000000000000000000A1-h0",
+      "whitelist": false,
+      "matchers": []
     }
   ],
   "log": {
@@ -77,8 +94,11 @@
     "format": "json",
     "output": "stderr"
   },
+  "api": {
+    "addr": "unix:///run/anixops-gost/api.sock"
+  },
   "metrics": {
     "addr": "unix:///run/anixops-gost/metrics.sock",
-    "path": "/anixops-f2bfdc21a5004af4"
+    "path": "/anixops-c821f07b3cb7edc8"
   }
 }

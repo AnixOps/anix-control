@@ -60,6 +60,21 @@ type Driver interface {
 	Remove(ctx context.Context) error
 }
 
+// QuotaEnforcer is implemented by drivers whose engine has no byte quota of
+// its own (gost) and that report the quota capability all the same: they
+// keep quota_bytes softly. The Agent calls EnforceQuotas after every
+// Observe and every Apply; a driver with an exact quota in the engine
+// (nftables) does not implement it.
+type QuotaEnforcer interface {
+	// EnforceQuotas compares every applied hop's counters in its current
+	// counter epoch with its quota_bytes, refuses the new connections of
+	// the hops that reached it and admits them again once the quota was
+	// raised above their counters. It answers the hops it holds for their
+	// quota. It changes neither the applied digest, generation nor any
+	// counter epoch.
+	EnforceQuotas(ctx context.Context) ([]HopKey, error)
+}
+
 // Upstream names one of a hop's rendered upstreams for SetUpstreams by its
 // address and port, with the weight to use. Weight 0 keeps the weight the
 // hop was rendered with.

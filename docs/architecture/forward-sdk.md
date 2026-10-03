@@ -149,7 +149,7 @@ Everything lives in the existing `sdk/` module
 | Wire | `sdk/forward/wire` | how forwarding rides the Agent Control stream: the `forward.v1` Hello attribute, the `anixops.nodeconfig/v2` member, the forward report and their checks (F3a, implemented) |
 | Model and validation | `sdk/forward/model`, `sdk/forward/validate` | Go domain types with lossless conversion to and from the contract and the defaults (`model/defaults.go`); one set of validation rules used by Control, the planner and the Agent (F1b, implemented) |
 | Planner | `sdk/forward/planner` | routes and node inventory in, per-node states, port and mark allocations and generations out; pure functions (F1c, implemented) |
-| Drivers | `sdk/forward/driver`, `.../driver/fake`, `.../driver/conformance`, `.../driver/nftables`, `.../driver/gost`, `.../driver/ansible` | the driver interface, registry, fake driver and conformance suite (F2a, implemented), the nftables driver (Render F2b, Apply, Observe, failover and tc F2c, implemented), the gost driver (Render and process management F4a, implemented; Observe and hot updates F4b) and the Ansible fallback |
+| Drivers | `sdk/forward/driver`, `.../driver/fake`, `.../driver/conformance`, `.../driver/nftables`, `.../driver/gost`, `.../driver/ansible` | the driver interface, registry, fake driver and conformance suite (F2a, implemented), the nftables driver (Render F2b, Apply, Observe, failover and tc F2c, implemented), the gost driver (Render and process management F4a; Observe, hot updates over gost's web API, failover and the soft quota F4b; implemented), least-connections re-weighting (`sdk/forward/leastconn`, L1, implemented) and the Ansible fallback |
 | Client | `sdk/forward/forwardctl` | a Go client for `ForwardControl` (F5) |
 
 Consumers:
@@ -527,6 +527,12 @@ rules every driver keeps:
 - **Paused hops** stay applied: their objects and counters remain (so the
   epoch and history survive a pause), they appear in Observe, and the
   driver refuses or drops their traffic.
+- **Soft quota** (F4b). A driver whose engine has no byte quota may
+  report the `quota` capability by implementing `QuotaEnforcer`: the Agent
+  calls `EnforceQuotas` after every Observe and Apply, and a hop whose
+  counters in its current epoch reached `quota_bytes` refuses new
+  connections as a paused hop does until the quota is raised above them.
+  The gost driver does; nftables' quota is exact and in the kernel.
 - **Remove** deletes every owned object and nothing else; it is idempotent.
 - **Context and concurrency.** A call with a done context returns
   `ctx.Err()` and changes nothing. Every method is safe for concurrent use;
@@ -742,8 +748,10 @@ table inet anixops_fwd {
 
 Render, Capabilities, the host probe and the process management of Apply
 and Remove are implemented in F4a (`sdk/forward/driver/gost`; the package
-documentation is normative). F4b reads the counters and changes upstreams
-without a reload. gost v3 (MIT; the licence ships in the release archive
+documentation is normative); F4b (implemented) adds gost's web API: Apply
+changes upstreams, sources, pauses, limits and quotas without a reload,
+`SetUpstreams` fails over in place, Observe reads every service's
+statistics, and the driver keeps a soft quota. gost v3 (MIT; the licence ships in the release archive
 and was checked) replaces the NodeX dependency. The Agent manages it;
 Control never talks to gost or NodeX. The SDK does not import gost: the
 driver writes gost's configuration and runs the unmodified binary.
@@ -782,8 +790,8 @@ driver writes gost's configuration and runs the unmodified binary.
   first configuration and after every apply that succeeded), and `tls/`,
   the link certificate (the installer gives the gost user read access;
   `Probe` only sees that the files exist). gost's metrics socket is in its
-  `RuntimeDirectory` (`/run/anixops-gost`); the Agent is in the unit's
-  group. A configuration without the driver's state file, or a state file
+  `RuntimeDirectory` (`/run/anixops-gost`), with its web API's socket
+  (`api.sock`, F4b); the Agent is in the unit's group. A configuration without the driver's state file, or a state file
   without its mark, is foreign: Apply refuses it, Remove leaves it.
 - **Configuration: JSON.** gost loads JSON and YAML alike; `encoding/json`
   writes typed values deterministically, does all the quoting (no name or
@@ -797,15 +805,19 @@ driver writes gost's configuration and runs the unmodified binary.
     (`tls`, `mtls` for TLS with mux, `wss`, `mwss`, `quic`, `grpc`, `mtcp`
     for RAW with mux) whose `relay` handler carries TCP and UDP. QUIC and
     gRPC multiplex natively. UDP listeners keep a client's session for
-    60 s after its last datagram;
-  - upstreams: `RAW` upstreams are the service's forwarder nodes, dialled
-    directly. Relayed upstreams (an encrypted or multiplexed next hop) are
-    the nodes of chain `r<route>-h<hop>`, each with gost's relay connector
-    and the link's dialer; the forwarder then holds one placeholder node,
-    since the next node's relay handler forwards to its own upstreams
-    whatever address it is sent. A hop mixing both kinds (direct mode
-    `PREFERRED` with an encrypted next hop) is `ErrUnsupported`;
-  - the selector from `balance` (section 7.1): `round`, `rand`, `hash` on
+    60 s after its last datagram. Every service keeps gost's statistics
+    (`enableStats`, F4b);
+  - upstreams: the nodes of a top-level gost hop `r<route>-h<hop>` (F4b),
+    which the service names, so it can be replaced alone. `RAW` upstreams
+    are dialled directly: the service's forwarder names the hop. Relayed
+    upstreams (an encrypted or multiplexed next hop) carry gost's relay
+    connector and the link's dialer; the service dials through chain
+    `r<route>-h<hop>`, which names the hop, and the forwarder holds one
+    placeholder node, since the next node's relay handler forwards to its
+    own upstreams whatever address it is sent. A hop mixing both kinds
+    (direct mode `PREFERRED` with an encrypted next hop) is
+    `ErrUnsupported`;
+  - the hop's selector from `balance` (section 7.1): `round`, `rand`, `hash` on
     the client address, `fifo` over the upstreams sorted by priority for
     failover (ties in route order), `rand` for least connections.
     `rand` reads the weights; `round` and `hash` ignore weights, so a hop
@@ -816,30 +828,57 @@ driver writes gost's configuration and runs the unmodified binary.
     default, H21), and an upstream comes back after one trial succeeds
     (counted per gost node: an upstream listed w times is skipped once each
     of its entries failed);
-  - an admission whitelist of `ingress_sources` (required on relay and exit
-    hops, so no relay is open);
+  - an admission on every hop (F4b): a whitelist of `ingress_sources`
+    (required on relay and exit hops, so no relay is open), an empty
+    blacklist on an entry without sources;
   - a traffic limiter for `bandwidth_bps` (the hop's services together, in
     each direction) and a connection limiter for `max_conns`;
   - a paused hop keeps its services and admits nobody: new connections are
-    refused, established ones run until they close (nftables drops them);
-  - metrics on the unix socket, under a path named by a hash of the rest of
-    the configuration, and warnings only in gost's log.
+    refused, established ones run until they close (nftables drops them;
+    gost can close a listener but not the connections it accepted, so no
+    API call closes them, F4b);
+  - gost's web API on a unix socket in the runtime directory, without
+    authentication (F4b, below);
+  - metrics on another unix socket, under a path named by a hash of the
+    configuration's structure (services, chains, log, API), and warnings
+    only in gost's log.
+
+  Services, chains, the log and the API are the configuration's
+  structure: changing them makes gost re-create every service (a reload).
+  Hops, admissions and limiters are hot objects (F4b): gost resolves them
+  by name at every connection, so the driver replaces them through the
+  web API and no service, listener, established connection, UDP session,
+  mux carrier or counter is touched.
 - **Apply.** It compares the host with the artifact: the recorded digest,
   the configuration file's bytes, gost serving the configuration's metrics
   path and every listener bound. All equal is a no-op that at most records
   a newer generation. Otherwise it reads the listening sockets with `ss`
   (no privilege needed) and refuses a listener whose port a socket holds
   that the running, applied configuration does not declare (`ErrConflict`,
-  before anything changes); writes the configuration (a temporary file and
-  a rename); reloads gost with SIGHUP, or starts it; and waits until gost
-  serves the new metrics path with every listener bound. A reload keeps
-  the process, so established TCP connections and the counter epoch survive
-  it (tested); it re-creates every service of the node, so UDP sessions
-  and mux carriers may restart. gost's reload is not atomic (a listener it
-  cannot bind closes the old services first), so when the new
-  configuration is not served within `Config.ReadyTimeout` Apply writes the
-  previous one back and restarts gost on it, or stops gost after a first
-  apply, and fails. An empty artifact stops gost and deletes the files.
+  before anything changes). When gost runs the recorded configuration and
+  the artifact keeps its structure (the same metrics path), Apply writes
+  the configuration (a temporary file and a rename, so a restart loads
+  it) and replaces through the web API every hop (which also restores
+  every upstream `SetUpstreams` took out of rotation) and the admissions
+  and limiters that changed (F4b): upstreams, weights, strategy, sources,
+  a pause, limits' values and quotas change without touching a service.
+  Otherwise it writes the configuration, reloads gost with SIGHUP (or
+  starts it, or restarts it when gost already serves that structure, since
+  a reload would not move the metrics path) and waits until gost serves
+  the new metrics path with every listener bound. A reload keeps the
+  process, so established TCP connections survive it (tested); it
+  re-creates every service of the node, so UDP sessions and mux carriers
+  may restart and every hop's counters start a new epoch (the
+  `WithRetiredCounters` hook gets every hop's counters read just before;
+  what moves between that read and the reload, and what surviving
+  connections move afterwards, is not counted). gost's reload is
+  not atomic (a listener it cannot bind closes the old services first), so
+  when the new configuration is not served within `Config.ReadyTimeout`,
+  or an API change is refused, Apply writes the previous one back and
+  restarts gost on it, or stops gost after a first apply, and fails. An
+  empty artifact stops gost and deletes the files. Making structural
+  changes per service through the API too (adding a route then re-creates
+  no other route's services) is left to F4c.
 - **TLS and peer identities.** Links between nodes are mutual TLS with the
   node's link certificate (`Config.LinkCert`, `LinkKey`, `LinkCA`). The
   listener requires a client certificate `LinkCA` signed; the dialler
@@ -858,21 +897,60 @@ driver writes gost's configuration and runs the unmodified binary.
   the Agent certificate; until it exists (Control after F3a, the Agent in
   F3b) encrypted gost links cannot be set up on real nodes. No key material
   travels in the state.
-- **Not in F4a.** Counters (Observe answers 0 with the gost instance as
-  the epoch) and `SetUpstreams` (it checks its arguments and answers
-  `ErrUnsupported`) are F4b: hot updates through gost's web API on a unix
-  socket in the runtime directory, whose file permissions are its only
-  key, touching one service per changed hop, and the counters from the
-  metrics socket (gost labels them per client address as well, an
-  unbounded label set on a public entry; F4b decides between the metrics
-  and the services' stats observer). Health checks are the Agent's loop
-  (section 7.3). Target names are rejected like nftables' (the Agent
+- **Web API (F4b).** gost's web API listens on `api.sock` in the runtime
+  directory, without authentication: the socket's permissions are its only
+  key. Under the unit, gost creates it with `UMask=0007` in its
+  `RuntimeDirectory` of mode 0750 (owner `anixops-gost`), so the gost user
+  and its group, which the Agent is in, reach it and nobody else; no key
+  or password exists to leak. The driver uses `GET /config` (the running
+  configuration, every service with its creation time and statistics) and
+  `PUT /config/{hops,admissions,limiters,climiters}/<name>` (one hot
+  object). The API decodes bodies with `encoding/json`, so a duration is
+  an integer of nanoseconds there.
+- **Counters (F4b).** Observe sums, per hop, its services' statistics from
+  `GET /config`: bounded, one entry per service. gost's Prometheus metrics
+  label every series with the client address, an unbounded set on a public
+  entry, so the driver does not read them. `up_bytes` is what the services
+  read from their clients and `down_bytes` what they wrote back (payload,
+  or the carrier's bytes on an encrypted or multiplexed ingress; the
+  end-to-end suite finds a gost entry's counters equal to the payload
+  moved); `total_conns` and `active_conns` are the accepted connections
+  (UDP sessions and the streams inside a mux carrier are not); gost counts
+  no packets, so packets are 0. The `counter_epoch` names the statistics
+  objects: a hash of the gost instance (the unit's InvocationID), the
+  starts and reloads Apply made (recorded in `state.json`) and the creation
+  time of each of the hop's services. A start, a reload or the re-creation
+  of a service ends it; hot changes, `SetUpstreams` and the soft quota keep
+  it. While gost does not run every hop reports 0 in the epoch `stopped`.
+  gost's fail marking is not exposed, so `Health` stays empty and the
+  Agent's checks are the source of truth.
+- **Failover (F4b).** `SetUpstreams` replaces the running hop through the
+  API with the selected upstreams (the nodes Render would give them, with
+  their weights) and records the selection in the hop's metadata, where
+  Observe reads it: the rotation lives in the running gost, so it survives
+  an Agent restart and a no-op Apply, and a start, a reload or a changing
+  Apply restores every rendered upstream (the health loop re-asserts its
+  selection, also after gost restarted). No file, generation, digest or
+  counter epoch changes, and established flows keep their upstream.
+- **Quota.** gost has no byte quota. With `Config.SoftQuota` (default on,
+  F4b) the driver reports `quota` true, renders `quota_bytes` into its
+  manifest and keeps it softly: `EnforceQuotas` (the optional
+  `driver.QuotaEnforcer`, which the Agent calls after every Observe and
+  Apply) closes the admission of a hop whose up and down bytes in the
+  current counter epoch reached the quota, as a pause does, and opens it
+  again once the quota was raised above them. It holds within one
+  observation interval; established connections run until they close; a
+  new counter epoch starts it again, as nftables' named quota restarts
+  when its object is re-created. Control's ledger over every epoch and
+  entry stays the authority (section 5.3). Entries that need an exact
+  quota should be `NFTABLES`. Health checks are the Agent's loop
+  (section 7.3); target names are rejected like nftables' (the Agent
   resolves them).
-- **Quota.** gost has no byte quota: the driver reports `quota` false and
-  rejects a hop with `quota_bytes` (`ErrUnsupported`). The Agent's soft
-  quota (stopping the service when the counters reach it, granularity the
-  observe interval) needs F4b's counters. Entries that need an exact quota
-  should be `NFTABLES`.
+- **Least connections (L1).** `ActiveConns` answers the host's established
+  TCP connections and connected UDP sockets per upstream address and port
+  (`ss`, no privilege), the gost source of `sdk/forward/leastconn`
+  (section 7.1): exact for RAW upstreams, carriers on an encrypted or
+  multiplexed link, and shared by every hop with the same upstream.
 - **Goldens.** `contracts/forward/v1/gost` holds, per case, the input
   (`<case>.state.json`), the configuration (`<case>.json`) and the rejected
   hops (`<case>.errors.txt`): `plan-<fixture>-<node>` for every planner
@@ -885,18 +963,24 @@ driver writes gost's configuration and runs the unmodified binary.
   ./forward/driver/gost -run Goldens -update` rewrites them.
 - **Tests.** Without privileges: the render scenarios of the conformance
   suite (with and without a link certificate), the whole suite against a
-  simulated gost and host, and unit tests. With a gost binary
-  (`ANIXOPS_GOST_BIN` or `PATH`), gost parses every golden. With
-  `ANIXOPS_GOST_E2E=1` as root, gost runs in a throwaway network
-  namespace per test: the whole conformance suite (the `SetUpstreams` and
-  concurrency scenarios skip until F4b), every golden applied and served
-  with certificates of a test CA, and TCP and UDP through a mutual-TLS mux
-  relay to an exit (a reload keeps an established connection and the
-  epoch, a paused hop refuses new connections, the exit refuses a client
-  without a certificate). CI runs them under sudo in Backend Tests shard 1
+  simulated gost and host (which serves the web API and counts simulated
+  traffic), and unit tests. With a gost binary (`ANIXOPS_GOST_BIN` or
+  `PATH`), gost parses every golden. With `ANIXOPS_GOST_E2E=1` as root,
+  gost runs in a throwaway network namespace per test: the whole
+  conformance suite with no scenario skipped and traffic through the hops
+  (`TrafficSource`), every golden applied and served with certificates of
+  a test CA, TCP and UDP through a mutual-TLS mux relay to an exit (a hot
+  change keeps established flows, the UDP session and the counter epoch;
+  a structural reload keeps an established TCP connection and starts a
+  new epoch; a paused hop refuses new connections; the exit refuses a
+  client without a certificate), failover through the API with a held TCP
+  connection and UDP session, the soft quota and a pause
+  (`TestNetnsHotChanges`), and least-connections re-weighting
+  (`TestNetnsLeastConn`). CI runs them under sudo in Backend Tests shard 1
   with the pinned release, after the nftables driver's real-kernel tests:
-  every change runs them, as for nftables; the Forward Netns E2E job adds
-  gost hops with F4c.
+  every change runs them, as for nftables. The Forward Netns E2E job runs a
+  gost entry too (exact payload counters over TCP and UDP, IPv4 and IPv6,
+  and failover); mixed-engine chains are F4c.
 
 ### 6.3 Ansible fallback
 
@@ -928,9 +1012,9 @@ fallback to a real site on authentication failure) is a separate document
 | IPv6 | yes | yes | yes |
 | Encrypted links | no | TLS, WSS, QUIC, gRPC, mux | no |
 | Round robin, random, IP hash, failover | yes | yes | yes, slow failover |
-| Least connections | approximate (re-weighting) | approximate (re-weighting) | no |
+| Least connections | approximate (re-weighting; the Agent supplies conntrack counts) | approximate (re-weighting from socket counts) | no |
 | Bandwidth limit | tc HTB | traffic limiter | tc HTB |
-| Byte quota | exact (named quota) | soft (Agent stops service) | exact |
+| Byte quota | exact (named quota) | soft (`EnforceQuotas` closes the hop's admission within an observation interval) | exact |
 | Connection limit | `ct count` | connection limiter | `ct count` |
 | Counters per direction | yes | yes | yes, polled |
 | Failover without Control | yes | yes | no |
@@ -944,11 +1028,27 @@ fallback to a real site on authentication failure) is a separate document
 | `ROUND_ROBIN` | in turn, by weight | `numgen inc` over weighted intervals | `round` |
 | `RANDOM` | random, by weight | `numgen random` | `rand` |
 | `IP_HASH` | a client address sticks to one upstream while it is healthy | `jhash ip saddr` | `hash` on the client address |
-| `LEAST_CONN` | fewest live connections | the Agent re-weights the random map every 10 s from conntrack counts per upstream | the Agent re-weights the gost nodes from metrics |
+| `LEAST_CONN` | fewest live connections | the Agent re-weights the random map every 10 s from conntrack counts per upstream (a Source the Agent supplies) | the Agent re-weights the gost hop every 10 s from the established sockets per upstream (`ActiveConns`) |
 | `FAILOVER` | the healthy upstream with the lowest priority | one-element map | `fifo` |
 
 Neither engine has a native least-connections scheduler; the approximation
-is documented in the UI.
+is documented in the UI. L1 (implemented, `sdk/forward/leastconn`): every
+`DefaultLeastConnReweight` (10 s, H21) a `Reweighter` reads the live
+connections per upstream address and port from a `Source` once and, for
+every `LEAST_CONN` hop the health loop hands it (only the upstreams the
+loop keeps in rotation, with their rendered weights), sets through
+`SetUpstreams` each weight to the rendered weight divided by the
+upstream's connections plus one, scaled so the largest is 100 and none is
+below 1; an idle hop keeps its rendered weights, and a weighting equal to
+the driver's reported rotation is not set again. Sources: the gost
+driver's `ActiveConns` (`ss`: exact for RAW upstreams, carriers on an
+encrypted or multiplexed link, shared by every hop with the same
+upstream); for nftables the forwarded connections are conntrack entries,
+which the standard-library-only SDK cannot read, so the Agent (F3b)
+supplies a `Source` from conntrack over netlink (the original direction's
+destination after DNAT), and until it does, `LEAST_CONN` on nftables
+stays weighted random by the rendered weights. The fake driver answers
+`Host.SetUpstreamConns`.
 
 ### 7.2 Two levels
 
@@ -1444,7 +1544,7 @@ features go into which edition is open (H23). The proposal:
 
   ```sh
   go -C sdk test -c -o /tmp/forward-e2e.test ./forward/e2e
-  sudo ANIXOPS_FORWARD_E2E=1 /tmp/forward-e2e.test -test.v
+  sudo ANIXOPS_FORWARD_E2E=1 ANIXOPS_GOST_BIN=/path/to/gost /tmp/forward-e2e.test -test.v
   # or through go test; sudo's secure_path drops the Go toolchain, so pass
   # PATH (this leaves root-owned entries in your Go build cache):
   sudo -E env "PATH=$PATH" ANIXOPS_FORWARD_E2E=1 go -C sdk test ./forward/e2e -count=1 -v
@@ -1459,7 +1559,11 @@ features go into which edition is open (H23). The proposal:
   green for two weeks (H14). Backend Tests shard 1 keeps running the
   nftables driver's real-kernel conformance tests (section 6.1) on every
   change, and the gost driver's conformance suite against the pinned gost
-  (section 6.2). The gost driver joins this suite with F4c (mixed engines).
+  (section 6.2). F4b adds a gost entry to this suite (`TestGost*`: the
+  gost driver with the pinned gost in the entry's namespace, which the job
+  downloads and checks; exact payload counters over TCP and UDP, IPv4 and
+  IPv6, and failover through gost's web API with a connection held across
+  it); mixed-engine chains are F4c.
 - **Cross-repository E2E** with anix-agent (the A2-7 suite): config.v1 with
   `forward.v1`, reports, probes.
 - **Chaos**: stop Control and check forwarding, failover and counters
@@ -1495,7 +1599,10 @@ features go into which edition is open (H23). The proposal:
 - **No secrets in state.** Node-to-node TLS uses the nodes' own link
   certificates and keys (H28); the state names identities, not keys. gost's
   web API (F4b) and metrics listen on unix sockets in its runtime
-  directory, guarded by file permissions, so there is no API key at all.
+  directory, guarded by file permissions (the unit's `UMask=0007` in a
+  `RuntimeDirectory` of mode 0750: the gost user and its group, which only
+  the Agent is in), so there is no API key at all. The API can change
+  every gost object; nothing but the Agent may join that group.
 - **Every change goes through Control**, authorized and audited there.
 
 ## 15. Rollout
@@ -1520,9 +1627,9 @@ Agent-repository PRs are marked (agent).
 | | O3 | uninstall | S | |
 | | O4 | staged upgrades with canary and rollback | L | H19 |
 | F4 | F4a | gost driver: Render, process management (implemented) | L | H20 |
-| | F4b | gost Observe, hot updates, failover | M | H20 |
+| | F4b | gost Observe, hot updates, failover (implemented) | M | H20 |
 | | F4c | mixed-engine end-to-end | M | |
-| | L1 | least-connections re-weighting | S | H21 |
+| | L1 | least-connections re-weighting (implemented) | S | H21 |
 | | L2 | entry HA via DDNS and CNAME | M | H21 |
 | F5 | F5a | Control forward package: `ForwardControl`, `/api/v4/forward/*`, `anix-control forward` | L | H23 |
 | | F5b | new forwarding UI | L | H16 |
