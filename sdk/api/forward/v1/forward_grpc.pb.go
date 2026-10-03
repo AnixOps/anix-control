@@ -38,20 +38,35 @@ const (
 // statistics, health and end-to-end diagnosis. Control serves it to its own
 // UI and API handlers, to the operator CLI ("anix-control forward ...") and
 // to other AnixOps products. Every caller goes through Control; there is no
-// node-side or standalone equivalent.
+// node-side or standalone equivalent. The kernel serves it to official
+// packages that declare kernel.forward.v1, authorized on every call.
 type ForwardControlClient interface {
-	// CreateRoute validates and plans a route and stores it. request_id makes
-	// a retry apply once. INVALID_ARGUMENT for a route that fails validation
-	// or planning (the answer's violations say why), FAILED_PRECONDITION when
-	// a port the route asks for is taken or a node lacks a capability the
-	// route needs.
+	// CreateRoute validates and plans a route and stores it. Control assigns
+	// id (INVALID_ARGUMENT when the request sets one), revision 1 and the
+	// times. request_id (1 to 128 bytes) makes a retry apply once: a repeat
+	// with the same request answers the recorded response, one with another
+	// request FAILED_PRECONDITION; a refused request is not recorded. Every
+	// route is planned together and any violation refuses the change
+	// (forward-sdk.md section 5.1): INVALID_ARGUMENT for a route that fails
+	// validation, FAILED_PRECONDITION when the nodes cannot host it (a port
+	// the route asks for is taken, ports or marks are exhausted, a node is
+	// unknown, has no address or lacks a capability the route needs) or
+	// another stored route no longer plans. The status's details then carry
+	// a CreateRouteResponse whose violations say why, each with the route
+	// it belongs to.
 	CreateRoute(ctx context.Context, in *CreateRouteRequest, opts ...grpc.CallOption) (*CreateRouteResponse, error)
-	// UpdateRoute replaces a route. expected_revision guards against a lost
-	// update (ABORTED when it differs).
+	// UpdateRoute replaces a route; id, created_at and revision stay
+	// Control's. expected_revision is required and guards against a lost
+	// update (ABORTED when it differs). NOT_FOUND for an unknown route;
+	// request_id and refusals as CreateRoute, with an UpdateRouteResponse in
+	// the status's details.
 	UpdateRoute(ctx context.Context, in *UpdateRouteRequest, opts ...grpc.CallOption) (*UpdateRouteResponse, error)
 	// DeleteRoute removes a route; its hops leave every node's state in the
 	// next generation, and its port allocations are released after a grace
-	// period.
+	// period (10 minutes). NOT_FOUND for an unknown route; request_id as
+	// CreateRoute. FAILED_PRECONDITION when the other stored routes no longer
+	// plan, with a PlanRouteResponse in the status's details whose violations
+	// name them.
 	DeleteRoute(ctx context.Context, in *DeleteRouteRequest, opts ...grpc.CallOption) (*DeleteRouteResponse, error)
 	GetRoute(ctx context.Context, in *GetRouteRequest, opts ...grpc.CallOption) (*GetRouteResponse, error)
 	ListRoutes(ctx context.Context, in *ListRoutesRequest, opts ...grpc.CallOption) (*ListRoutesResponse, error)
@@ -68,7 +83,7 @@ type ForwardControlClient interface {
 	// DiagnoseRoute runs an end-to-end check through the route's nodes:
 	// listen ownership and port conflicts on each hop (nat table included),
 	// reachability of each next hop, delivery proved on the last hop, and a
-	// real UDP exchange for UDP routes.
+	// real UDP exchange for UDP routes. UNIMPLEMENTED until F3c.
 	DiagnoseRoute(ctx context.Context, in *DiagnoseRouteRequest, opts ...grpc.CallOption) (*DiagnoseRouteResponse, error)
 }
 
@@ -178,20 +193,35 @@ func (c *forwardControlClient) DiagnoseRoute(ctx context.Context, in *DiagnoseRo
 // statistics, health and end-to-end diagnosis. Control serves it to its own
 // UI and API handlers, to the operator CLI ("anix-control forward ...") and
 // to other AnixOps products. Every caller goes through Control; there is no
-// node-side or standalone equivalent.
+// node-side or standalone equivalent. The kernel serves it to official
+// packages that declare kernel.forward.v1, authorized on every call.
 type ForwardControlServer interface {
-	// CreateRoute validates and plans a route and stores it. request_id makes
-	// a retry apply once. INVALID_ARGUMENT for a route that fails validation
-	// or planning (the answer's violations say why), FAILED_PRECONDITION when
-	// a port the route asks for is taken or a node lacks a capability the
-	// route needs.
+	// CreateRoute validates and plans a route and stores it. Control assigns
+	// id (INVALID_ARGUMENT when the request sets one), revision 1 and the
+	// times. request_id (1 to 128 bytes) makes a retry apply once: a repeat
+	// with the same request answers the recorded response, one with another
+	// request FAILED_PRECONDITION; a refused request is not recorded. Every
+	// route is planned together and any violation refuses the change
+	// (forward-sdk.md section 5.1): INVALID_ARGUMENT for a route that fails
+	// validation, FAILED_PRECONDITION when the nodes cannot host it (a port
+	// the route asks for is taken, ports or marks are exhausted, a node is
+	// unknown, has no address or lacks a capability the route needs) or
+	// another stored route no longer plans. The status's details then carry
+	// a CreateRouteResponse whose violations say why, each with the route
+	// it belongs to.
 	CreateRoute(context.Context, *CreateRouteRequest) (*CreateRouteResponse, error)
-	// UpdateRoute replaces a route. expected_revision guards against a lost
-	// update (ABORTED when it differs).
+	// UpdateRoute replaces a route; id, created_at and revision stay
+	// Control's. expected_revision is required and guards against a lost
+	// update (ABORTED when it differs). NOT_FOUND for an unknown route;
+	// request_id and refusals as CreateRoute, with an UpdateRouteResponse in
+	// the status's details.
 	UpdateRoute(context.Context, *UpdateRouteRequest) (*UpdateRouteResponse, error)
 	// DeleteRoute removes a route; its hops leave every node's state in the
 	// next generation, and its port allocations are released after a grace
-	// period.
+	// period (10 minutes). NOT_FOUND for an unknown route; request_id as
+	// CreateRoute. FAILED_PRECONDITION when the other stored routes no longer
+	// plan, with a PlanRouteResponse in the status's details whose violations
+	// name them.
 	DeleteRoute(context.Context, *DeleteRouteRequest) (*DeleteRouteResponse, error)
 	GetRoute(context.Context, *GetRouteRequest) (*GetRouteResponse, error)
 	ListRoutes(context.Context, *ListRoutesRequest) (*ListRoutesResponse, error)
@@ -208,7 +238,7 @@ type ForwardControlServer interface {
 	// DiagnoseRoute runs an end-to-end check through the route's nodes:
 	// listen ownership and port conflicts on each hop (nat table included),
 	// reachability of each next hop, delivery proved on the last hop, and a
-	// real UDP exchange for UDP routes.
+	// real UDP exchange for UDP routes. UNIMPLEMENTED until F3c.
 	DiagnoseRoute(context.Context, *DiagnoseRouteRequest) (*DiagnoseRouteResponse, error)
 	mustEmbedUnimplementedForwardControlServer()
 }
@@ -491,10 +521,13 @@ const (
 //
 // ForwardNode is the node side: what an Agent's forwarding component does
 // with its node's desired state. It is not a network listener. Control
-// carries Apply as part of the node's configuration snapshot (config.v1),
-// Observe as reports over the Agent stream (PackageReport), and Probe as a
-// desired operation; the service exists so drivers, the conformance suite
-// and the Agent share one typed boundary.
+// carries Apply as part of the node's configuration snapshot (config.v1,
+// format anixops.nodeconfig/v2), Observe as reports over the Agent stream
+// (PackageReport, plugin_id "forward", kind "forward.report", version
+// "v1"), GetCapabilities in the Agent's Hello (the forward.v1 capability's
+// attribute "node_capabilities"), and Probe as a desired operation (F3c);
+// the service exists so drivers, the conformance suite and the Agent share
+// one typed boundary. sdk/forward/wire encodes and checks all three.
 type ForwardNodeClient interface {
 	// GetCapabilities answers what the node's drivers can do.
 	GetCapabilities(ctx context.Context, in *GetNodeCapabilitiesRequest, opts ...grpc.CallOption) (*NodeCapabilities, error)
@@ -563,10 +596,13 @@ func (c *forwardNodeClient) Probe(ctx context.Context, in *ProbeRequest, opts ..
 //
 // ForwardNode is the node side: what an Agent's forwarding component does
 // with its node's desired state. It is not a network listener. Control
-// carries Apply as part of the node's configuration snapshot (config.v1),
-// Observe as reports over the Agent stream (PackageReport), and Probe as a
-// desired operation; the service exists so drivers, the conformance suite
-// and the Agent share one typed boundary.
+// carries Apply as part of the node's configuration snapshot (config.v1,
+// format anixops.nodeconfig/v2), Observe as reports over the Agent stream
+// (PackageReport, plugin_id "forward", kind "forward.report", version
+// "v1"), GetCapabilities in the Agent's Hello (the forward.v1 capability's
+// attribute "node_capabilities"), and Probe as a desired operation (F3c);
+// the service exists so drivers, the conformance suite and the Agent share
+// one typed boundary. sdk/forward/wire encodes and checks all three.
 type ForwardNodeServer interface {
 	// GetCapabilities answers what the node's drivers can do.
 	GetCapabilities(context.Context, *GetNodeCapabilitiesRequest) (*NodeCapabilities, error)

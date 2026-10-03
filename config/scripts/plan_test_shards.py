@@ -88,6 +88,8 @@ WEIGHTS: dict[str, dict[str, float]] = {
         "internal/tests/wireguardcompat": 0.1,
         "internal/agentreports": 0.1,
         "internal/shadowsamples": 0.2,
+        # Not measured in CI yet: the local PostgreSQL run of F3a.
+        "internal/kernelforward": 3.0,
     },
 }
 

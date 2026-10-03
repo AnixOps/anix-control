@@ -132,7 +132,8 @@ func TestAgentControlPackageReportsNegotiation(t *testing.T) {
 	})
 }
 
-// A forward node's stream is not offered package-reports.v1 yet.
+// A forward node's stream is offered package-reports.v1 only with
+// forward.v1, for its forward reports (agent_control_forward_test.go).
 func TestAgentControlPackageReportsNotOfferedToForwardNodes(t *testing.T) {
 	server := &AgentControlGRPCServer{}
 	offered := func(node agentcontrol.AgentNode, agent []*agentv1pb.Capability) bool {

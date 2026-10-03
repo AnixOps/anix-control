@@ -96,9 +96,13 @@ func (rt *serverRuntime) startModuleRuntime(cfg *config.Config, hosts *pluginhos
 	if err != nil {
 		return fmt.Errorf("module runtime kernel node operations: %w", err)
 	}
+	forward, err := identitybridge.NewKernelForward(cfg)
+	if err != nil {
+		return fmt.Errorf("module runtime kernel forwarding: %w", err)
+	}
 	server := &moduleruntime.Listener{
 		TLS: source, Cluster: cluster, PKI: authority, Bridge: bridge, KernelIdentity: identity, KernelSubscriber: subscribers,
-		KernelSettings: kernelSettings, KernelTelemetry: telemetry, KernelNodeOps: nodeOps,
+		KernelSettings: kernelSettings, KernelTelemetry: telemetry, KernelNodeOps: nodeOps, KernelForward: forward,
 	}
 	server.KernelOrder = orders
 	rt.workers.Go("module listener", func(ctx context.Context) {

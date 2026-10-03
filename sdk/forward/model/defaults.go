@@ -5,23 +5,29 @@ import "time"
 // The defaults a zero field stands for. They are the single source for the
 // planner, the drivers and the UI.
 //
-// PROPOSED, H21: the health-check, circuit-breaker and balancing defaults
-// are the design's proposal (forward-sdk.md section 7.3, from RelayPanel's
-// practice) and owner decision H21 is still open. Change them here only.
+// Decided, H21 (owner, 2026-10-03): the health-check, circuit-breaker,
+// balancing and least-connections defaults are the design's recommendation
+// (forward-sdk.md section 7.3, from RelayPanel's practice): checks every 5 s
+// with a 2 s timeout, 3 failures in a row open the breaker for 30 s, and
+// least-connections re-weights every 10 s. Change them here only.
 const (
-	// DefaultHealthInterval is HealthCheck.interval_ms when 0 (proposed, H21).
+	// DefaultHealthInterval is HealthCheck.interval_ms when 0 (H21).
 	DefaultHealthInterval = 5 * time.Second
-	// DefaultHealthTimeout is HealthCheck.timeout_ms when 0 (proposed, H21).
+	// DefaultHealthTimeout is HealthCheck.timeout_ms when 0 (H21).
 	DefaultHealthTimeout = 2 * time.Second
 	// DefaultFailureThreshold is CircuitBreaker.failure_threshold when 0:
-	// failures in a row that open the breaker (proposed, H21).
+	// failures in a row that open the breaker (H21).
 	DefaultFailureThreshold uint32 = 3
 	// DefaultBreakerOpen is CircuitBreaker.open_ms when 0: how long an open
-	// upstream is skipped before one trial (proposed, H21).
+	// upstream is skipped before one trial (H21).
 	DefaultBreakerOpen = 30 * time.Second
 	// DefaultBalance is Policy.next_hop and Policy.target when unspecified
-	// (proposed, H21).
+	// (H21).
 	DefaultBalance = BalanceRoundRobin
+	// DefaultLeastConnReweight is how often the Agent re-weights a
+	// LEAST_CONN hop's upstreams from their live connection counts
+	// (forward-sdk.md section 7.1, H21).
+	DefaultLeastConnReweight = 10 * time.Second
 	// DefaultDirect is Policy.direct when unspecified: the chain as written.
 	DefaultDirect = DirectOff
 	// DefaultTargetPolicy is Policy.target_policy when unspecified, as the

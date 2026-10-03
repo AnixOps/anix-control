@@ -48,6 +48,10 @@ const (
 	// PackageReportRefusedBadPayload: the kind's sanitizer refused the
 	// payload.
 	PackageReportRefusedBadPayload = "bad_payload"
+	// PackageReportRefusedUnnegotiated: a forward report (plugin_id
+	// "forward", kind "forward.report") on a session that did not negotiate
+	// forward.v1.
+	PackageReportRefusedUnnegotiated = "unnegotiated"
 )
 
 // PackageReportRefusalReasons lists every refusal reason, in metric order.
@@ -55,6 +59,7 @@ var PackageReportRefusalReasons = []string{
 	PackageReportRefusedInvalid, PackageReportRefusedOversize, PackageReportRefusedFuture,
 	PackageReportRefusedUnknownKind, PackageReportRefusedNotAssigned, PackageReportRefusedVersionMismatch,
 	PackageReportRefusedUnsigned, PackageReportRefusedMissingCapability, PackageReportRefusedBadPayload,
+	PackageReportRefusedUnnegotiated,
 }
 
 const (

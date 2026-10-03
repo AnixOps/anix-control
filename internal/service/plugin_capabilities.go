@@ -40,6 +40,10 @@ const (
 	// CapabilitySubscriberSummary reads one subscriber's cached
 	// subscription summary (kernel-caches.md).
 	CapabilitySubscriberSummary = "kernel.subscriber.summary.v1"
+	// CapabilityForward lets an official package call ForwardControl
+	// (forward-sdk.md section 8, F3a): route writes and reads, the dry-run
+	// planner, statistics and health of the kernel's forwarding state.
+	CapabilityForward = "kernel.forward.v1"
 	// CapabilityTelemetryDashboard lets an official package call
 	// KernelTelemetry.GetDashboard (kernel-caches.md): the administrator
 	// dashboard's snapshot from the kernel's cache, with the online users
@@ -129,6 +133,18 @@ var (
 		// field the sanitizer drops. Protected by the prefix; named so the
 		// rule survives a prefix change.
 		"v4_kernel_package_report_state": true,
+		// The kernel's forwarding state (forward-sdk.md section 8, F3a):
+		// routes, their port and mark allocations, the node inventory with
+		// the Agents' capabilities, every node's desired state and latest
+		// report, the traffic ledger, the request ledger and the plan lock.
+		// A package that could write them could push forwarding to any node
+		// or change metered traffic; packages use ForwardControl
+		// (kernel.forward.v1). Protected by the prefix; named so the rule
+		// survives a prefix change.
+		"v4_kernel_forward_route": true, "v4_kernel_forward_allocation": true, "v4_kernel_forward_node": true,
+		"v4_kernel_forward_node_state": true, "v4_kernel_forward_node_report": true,
+		"v4_kernel_forward_counter": true, "v4_kernel_forward_traffic": true,
+		"v4_kernel_forward_request": true, "v4_kernel_forward_plan": true,
 	}
 )
 
@@ -184,7 +200,7 @@ func validateManifestCapabilities(capabilities []string) error {
 			capability == CapabilitySubscriberCredentials, capability == CapabilitySubscriberBalance,
 			capability == CapabilitySubscriberDirectory, capability == CapabilitySubscriberGroups,
 			capability == CapabilitySubscriberSummary, capability == CapabilityTelemetryDashboard,
-			isNodeOpsCapability(capability):
+			capability == CapabilityForward, isNodeOpsCapability(capability):
 		case capability == CapabilityStorage:
 			storage = true
 		case strings.HasPrefix(capability, capabilityStorageAdoptPrefix):

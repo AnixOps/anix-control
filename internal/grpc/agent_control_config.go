@@ -61,6 +61,9 @@ const (
 	configTriggerHello   = "hello"
 	configTriggerSync    = "sync"
 	configTriggerRefresh = "refresh"
+	// configTriggerForward: a plan moved the node's forwarding generation
+	// (agent_control_forward.go).
+	configTriggerForward = "forward"
 )
 
 // configStatusUnrecorded labels a ConfigStatus the kernel could not record.
@@ -100,7 +103,7 @@ func (c *AgentControlConnection) sendConfig(snapshot *agentv1pb.ConfigSnapshot, 
 // pushDesiredConfig rebuilds the node's desired configuration from its rows
 // (stored when it changed) and sends it unless the agent has it. A database
 // error is logged and nothing is sent; only a send error is returned.
-func (s *AgentControlGRPCServer) pushDesiredConfig(ctx context.Context, connection *AgentControlConnection, node agentcontrol.AgentNode, trigger string) error {
+func pushDesiredConfig(ctx context.Context, connection *AgentControlConnection, node agentcontrol.AgentNode, trigger string) error {
 	row, _, err := kernelnodeops.RefreshDesiredConfig(ctx, databaseForAgentChecks(), node, time.Now())
 	if err != nil {
 		if ctx.Err() == nil {
@@ -127,7 +130,7 @@ func (s *AgentControlGRPCServer) startConfigRefresh(ctx context.Context, connect
 			case <-ctx.Done():
 				return
 			case <-ticker.C:
-				if err := s.pushDesiredConfig(ctx, connection, node, configTriggerRefresh); err != nil {
+				if err := pushDesiredConfig(ctx, connection, node, configTriggerRefresh); err != nil {
 					// The stream is gone; the session ends on its own.
 					return
 				}
@@ -257,7 +260,7 @@ type configMetrics struct {
 // configTriggers and configResults are the label values, in the order the
 // metrics are written.
 var (
-	configTriggers = []string{configTriggerHello, configTriggerSync, configTriggerRefresh}
+	configTriggers = []string{configTriggerHello, configTriggerSync, configTriggerRefresh, configTriggerForward}
 	configResults  = []string{model.ConfigVerdictApplied, model.ConfigVerdictFailed, model.ConfigVerdictStale, model.ConfigVerdictMismatch, configStatusUnrecorded}
 )
 
@@ -292,7 +295,7 @@ func (m *configMetrics) status(verdict string) {
 // WriteAgentConfigPrometheus renders the configuration push counters and
 // the lagging-node gauge in the Prometheus text format.
 func WriteAgentConfigPrometheus(body *strings.Builder) {
-	body.WriteString("# HELP anixops_agent_config_snapshots_sent_total ConfigSnapshot messages sent on the Agent Control stream, by trigger: hello (reconcile), sync (node.sync) or refresh (a rebuild moved the revision).\n")
+	body.WriteString("# HELP anixops_agent_config_snapshots_sent_total ConfigSnapshot messages sent on the Agent Control stream, by trigger: hello (reconcile), sync (node.sync), refresh (a rebuild moved the revision) or forward (a plan moved the node's forwarding generation).\n")
 	body.WriteString("# TYPE anixops_agent_config_snapshots_sent_total counter\n")
 	for _, trigger := range configTriggers {
 		body.WriteString("anixops_agent_config_snapshots_sent_total{trigger=\"" + trigger + "\"} " + strconv.FormatUint(agentConfigMetrics.snapshots[trigger].Load(), 10) + "\n")

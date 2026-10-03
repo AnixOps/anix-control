@@ -239,6 +239,32 @@ jobs:
 
           bash config/scripts/check_docs_updated.sh --base "${base}" --head HEAD
 
+      # internal/tests/protocompat rejects a contract element that is gone;
+      # this keeps the golden file itself from losing or rewriting a line.
+      - name: Keep the protobuf contract golden additions-only
+        shell: bash
+        run: |
+          if [[ "${GITHUB_REF_TYPE:-}" == "tag" ]]; then
+            echo "Release tag build; the golden file was checked when the commit landed."
+            exit 0
+          fi
+
+          if [[ "${GITHUB_EVENT_NAME}" == "pull_request" ]]; then
+            base="${{ github.event.pull_request.base.sha }}"
+          else
+            base="${{ github.event.before }}"
+          fi
+
+          if [[ -z "${base}" || "${base}" =~ ^0+$ ]]; then
+            base="HEAD~1"
+          fi
+
+          if [[ "${base}" != "HEAD~1" ]] && ! git cat-file -e "${base}^{commit}" 2>/dev/null; then
+            git fetch --depth=1 origin "${base}" || true
+          fi
+
+          python3 config/scripts/check_proto_golden.py --base "${base}" --head HEAD
+
   release-workflow-policy:
     name: Release Workflow Policy Check
     runs-on: ubuntu-latest
@@ -1122,7 +1148,7 @@ jobs:
         shard: [1, 2, 3, 4]
     env:
       PACKAGES: >-
-        ./internal/packagestore ./internal/tests/integration ./internal/tests/packagecompat ./internal/tests/identitycompat ./internal/tests/knowledgecompat ./internal/tests/ticketcompat ./internal/tests/notificationcompat ./internal/tests/platformcompat ./internal/tests/plancompat ./internal/tests/ordercompat ./internal/tests/paymentcompat ./internal/tests/affiliatecompat ./internal/tests/subscriptioncompat ./internal/tests/proxynodecompat ./internal/tests/forwardcompat ./internal/tests/protocolruntimecompat ./internal/tests/machinetelemetrycompat ./internal/tests/gostmeshcompat ./internal/tests/wireguardcompat ./internal/nodesecrets ./internal/tests/nodesecretsplit ./internal/kernelnodeops ./internal/tests/bridgecontract ./internal/agentpki ./internal/agentreports ./internal/tests/nodeopsagent ./internal/subscriber ./internal/shadowsamples
+        ./internal/packagestore ./internal/tests/integration ./internal/tests/packagecompat ./internal/tests/identitycompat ./internal/tests/knowledgecompat ./internal/tests/ticketcompat ./internal/tests/notificationcompat ./internal/tests/platformcompat ./internal/tests/plancompat ./internal/tests/ordercompat ./internal/tests/paymentcompat ./internal/tests/affiliatecompat ./internal/tests/subscriptioncompat ./internal/tests/proxynodecompat ./internal/tests/forwardcompat ./internal/tests/protocolruntimecompat ./internal/tests/machinetelemetrycompat ./internal/tests/gostmeshcompat ./internal/tests/wireguardcompat ./internal/nodesecrets ./internal/tests/nodesecretsplit ./internal/kernelnodeops ./internal/tests/bridgecontract ./internal/agentpki ./internal/agentreports ./internal/tests/nodeopsagent ./internal/subscriber ./internal/shadowsamples ./internal/kernelforward
     services:
       postgres:
         image: postgres:16

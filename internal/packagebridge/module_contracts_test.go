@@ -4,6 +4,7 @@ import (
 	"context"
 	"testing"
 
+	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
 	kernelidentityv1 "github.com/AnixOps/anix-control/sdk/api/kernelidentity/v1"
 	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
 	kernelorderv1 "github.com/AnixOps/anix-control/sdk/api/kernelorder/v1"
@@ -42,6 +43,7 @@ func TestModuleContractServersForwardEveryMethod(t *testing.T) {
 		{kernelsubscriberv1.KernelSubscriber_ServiceDesc, bridge.KernelSubscriberServer(nil)},
 		{kerneltelemetryv1.KernelTelemetry_ServiceDesc, bridge.KernelTelemetryServer(nil)},
 		{kernelnodeopsv1.KernelNodeOps_ServiceDesc, bridge.KernelNodeOpsServer(nil)},
+		{forwardv1.ForwardControl_ServiceDesc, bridge.KernelForwardServer(nil)},
 	}
 	for _, contract := range contracts {
 		require.NotEmpty(t, contract.desc.Methods, contract.desc.ServiceName)

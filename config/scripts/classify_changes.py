@@ -80,6 +80,7 @@ CLASS_PATTERNS: dict[str, tuple[str, ...]] = {
         # The node credential split's writer and its PostgreSQL tests.
         "internal/nodesecrets/*",
         "internal/kernelnodeops/*",
+        "internal/kernelforward/*",
         "internal/agentpki/*",
         "sdk/v2compat/*",
         "packages/identity-platform/*",
@@ -122,6 +123,8 @@ CLASS_PATTERNS: dict[str, tuple[str, ...]] = {
         "sdk/forward/*",
         "sdk/api/forward/*",
         "contracts/forward/*",
+        # The kernel's forwarding state, served to packages and Agents (F3a).
+        "internal/kernelforward/*",
     ),
     "agent": (
         "internal/grpc/*",
@@ -302,6 +305,7 @@ def self_test() -> None:
     check(["sdk/forward/e2e/scenarios_test.go"], {"code", "modules", "forward"})
     check(["sdk/api/forward/v1/forward.pb.go"], {"code", "modules", "forward"})
     check(["contracts/forward/v1/nft/plan-single-hop-nftables-iepl-forward-11.nft"], {"code", "forward"})
+    check(["internal/kernelforward/plan.go"], {"code", "db", "forward"})
     check(["sdk/agentcontrol/identity.go"], {"code", "modules"})
     check(["internal/grpc/node_server.go"], {"code", "agent"})
     check(["internal/agentpki/enrollment.go"], {"code", "db", "agent"})

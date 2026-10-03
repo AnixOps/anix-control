@@ -7,8 +7,8 @@ import (
 )
 
 // Caps and bounds. The design fixes only the port range (1..65535); the
-// other numbers are PROPOSED here (with the defaults of model, owner
-// decision H21) and are the one place to change them.
+// other numbers are PROPOSED here and are the one place to change them (the
+// defaults of model are decided, owner decision H21).
 const (
 	// MaxPort is the largest port.
 	MaxPort = 65535
@@ -38,8 +38,8 @@ const (
 	MaxFailureThreshold = 100
 )
 
-// Health-check and circuit-breaker bounds for values that are set; 0 means
-// the default of model (proposed, H21).
+// Health-check and circuit-breaker bounds for values that are set
+// (proposed); 0 means the default of model (H21).
 const (
 	MinHealthInterval = 500 * time.Millisecond
 	MaxHealthInterval = time.Hour
