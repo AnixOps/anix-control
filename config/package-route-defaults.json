@@ -1,0 +1,263 @@
+{
+  "format": "anixops.package-route-defaults/v1",
+  "comment": "Routes that run natively by default (package_routes.default_mode: rehearsed) when the Control installation stores no mode for them and the installed package release is at least min_version. Each package passed the staging rehearsal (R5, 2026-10-03: every read route at least 200 shadow comparisons with 0 mismatches over at least 2 hours; every write route reconciled with 0 differences) and was signed off by the owner (H7, H8). A route enters this list only by an explicit change here and in internal/service/testdata/rehearsed-routes.json; being native-flagged in package-extraction.json is not enough.",
+  "default_mode": "native",
+  "packages": [
+    {
+      "package_id": "knowledge",
+      "batch": 1,
+      "min_version": "4.1.0-rc.5",
+      "routes": [
+        "knowledge.admin.knowledge.get",
+        "knowledge.admin.knowledge.id.delete",
+        "knowledge.admin.knowledge.id.put",
+        "knowledge.admin.knowledge.post",
+        "knowledge.article.list",
+        "knowledge.user.knowledge.id.get"
+      ]
+    },
+    {
+      "package_id": "ticket",
+      "batch": 1,
+      "min_version": "4.1.0-rc.5",
+      "routes": [
+        "ticket.admin.ticket.get",
+        "ticket.admin.ticket.id.close.post",
+        "ticket.admin.ticket.reply.post",
+        "ticket.user.ticket.get",
+        "ticket.user.ticket.id.close.post",
+        "ticket.user.ticket.id.get",
+        "ticket.user.ticket.id.reply.post",
+        "ticket.user.ticket.post"
+      ]
+    },
+    {
+      "package_id": "notification",
+      "batch": 2,
+      "min_version": "4.1.0-rc.5",
+      "routes": [
+        "notification.admin.notification.email.config.get",
+        "notification.admin.notification.email.config.put",
+        "notification.admin.notification.logs.get",
+        "notification.admin.notification.templates.get",
+        "notification.admin.notification.templates.id.delete",
+        "notification.admin.notification.templates.id.put",
+        "notification.admin.notification.templates.post",
+        "notification.admin.notification.test.post",
+        "notification.admin.telegram.bot.get",
+        "notification.admin.telegram.bot.put",
+        "notification.admin.telegram.broadcast.post",
+        "notification.admin.telegram.notify.post",
+        "notification.admin.telegram.users.get",
+        "notification.admin.telegram.users.id.notify.put",
+        "notification.admin.telegram.webhook.delete",
+        "notification.admin.telegram.webhook.post",
+        "notification.user.notifications.get",
+        "notification.user.notifications.id.read.post",
+        "notification.user.notifications.read_all.post",
+        "notification.user.notifications.unread_count.get",
+        "notification.user.telegram.notify.post",
+        "notification.user.telegram.status.get",
+        "notification.user.telegram.unbind.post"
+      ]
+    },
+    {
+      "package_id": "platform",
+      "batch": 2,
+      "min_version": "4.1.0-rc.5",
+      "routes": [
+        "platform.admin.system.audit_logs.get",
+        "platform.admin.system.backup.config.get",
+        "platform.admin.system.backup.config.put",
+        "platform.admin.system.backup.stats.get",
+        "platform.admin.system.backups.get"
+      ]
+    },
+    {
+      "package_id": "machine-telemetry",
+      "batch": 2,
+      "min_version": "4.1.0-rc.5",
+      "routes": [
+        "telemetry.admin.dashboard.get",
+        "telemetry.admin.traffic.hourly.get",
+        "telemetry.admin.traffic.user_ranking.get"
+      ]
+    },
+    {
+      "package_id": "protocol-runtime",
+      "batch": 2,
+      "min_version": "4.1.0-rc.5",
+      "routes": [
+        "protocol.admin.agent.tasks.get",
+        "protocol.admin.agent.tasks.task_id.get",
+        "protocol.admin.protocol_templates.get"
+      ]
+    },
+    {
+      "package_id": "plan",
+      "batch": 3,
+      "min_version": "4.1.0-rc.5",
+      "routes": [
+        "plan.admin.plans.get",
+        "plan.admin.plans.id.assign.post",
+        "plan.admin.plans.id.delete",
+        "plan.admin.plans.id.get",
+        "plan.admin.plans.id.put",
+        "plan.admin.plans.post",
+        "plan.user.plan.get"
+      ]
+    },
+    {
+      "package_id": "order",
+      "batch": 3,
+      "min_version": "4.1.0-rc.5",
+      "routes": [
+        "order.admin.coupon.get",
+        "order.admin.coupon.id.delete",
+        "order.admin.coupon.post",
+        "order.admin.orders.get",
+        "order.admin.orders.id.cancel.post",
+        "order.admin.orders.id.get",
+        "order.admin.orders.id.paid.post",
+        "order.admin.orders.id.status.put",
+        "order.admin.orders.stats.get",
+        "order.user.coupon.check.post",
+        "order.user.order.get",
+        "order.user.order.id.get",
+        "order.user.order.save.post"
+      ]
+    },
+    {
+      "package_id": "payment",
+      "batch": 3,
+      "min_version": "4.1.0-rc.5",
+      "routes": [
+        "payment.admin.payment.gateways.get",
+        "payment.admin.payment.gateways.id.delete",
+        "payment.admin.payment.gateways.id.put",
+        "payment.admin.payment.gateways.id.toggle.post",
+        "payment.admin.payment.gateways.post",
+        "payment.admin.payment.records.get",
+        "payment.admin.payment.stats.get",
+        "payment.callback",
+        "payment.payment.fiat.create.post",
+        "payment.payment.methods.get",
+        "payment.payment.paypal.webhook.post",
+        "payment.payment.status.trade_no.get",
+        "payment.payment.stripe.webhook.post",
+        "payment.payment.x402.callback.post",
+        "payment.payment.x402.check.id.get",
+        "payment.payment.x402.create.post",
+        "payment.user.payment.channels.get",
+        "payment.user.payment.create.post",
+        "payment.user.payment.records.get",
+        "payment.user.payment.status.trade_no.get"
+      ]
+    },
+    {
+      "package_id": "affiliate",
+      "batch": 3,
+      "min_version": "4.1.0-rc.5",
+      "routes": [
+        "affiliate.admin.invite.config.get",
+        "affiliate.admin.invite.config.put",
+        "affiliate.admin.invite.stats.get",
+        "affiliate.admin.invite.withdrawals.get",
+        "affiliate.admin.invite.withdrawals.id.process.post",
+        "affiliate.user.invite.commissions.get",
+        "affiliate.user.invite.generate.post",
+        "affiliate.user.invite.get",
+        "affiliate.user.invite.withdraw.post",
+        "affiliate.user.invite.withdrawals.get"
+      ]
+    },
+    {
+      "package_id": "subscription",
+      "batch": 4,
+      "min_version": "4.1.0-rc.5",
+      "routes": [
+        "subscription.admin.subscription.formats.get",
+        "subscription.admin.subscription.groups.get",
+        "subscription.admin.subscription.groups.id.delete",
+        "subscription.admin.subscription.groups.id.get",
+        "subscription.admin.subscription.groups.id.protocols.post",
+        "subscription.admin.subscription.groups.id.put",
+        "subscription.admin.subscription.groups.id.templates.get",
+        "subscription.admin.subscription.groups.id.templates.post",
+        "subscription.admin.subscription.groups.post",
+        "subscription.admin.subscription.plans.plan_id.groups.get",
+        "subscription.admin.subscription.plans.plan_id.groups.group_id.delete",
+        "subscription.admin.subscription.plans.plan_id.groups.post",
+        "subscription.admin.subscription.protocols.get",
+        "subscription.admin.subscription.stats.get",
+        "subscription.admin.subscription.templates.id.delete",
+        "subscription.admin.subscription.templates.id.get",
+        "subscription.admin.subscription.templates.id.put",
+        "subscription.admin.subscription.users.user_id.groups.get",
+        "subscription.admin.subscription.users.user_id.groups.group_id.delete",
+        "subscription.admin.subscription.users.user_id.groups.post",
+        "subscription.user.subscription.get"
+      ]
+    },
+    {
+      "package_id": "forward",
+      "batch": 4,
+      "min_version": "4.1.0-rc.5",
+      "routes": [
+        "forward.admin.forward.list.post",
+        "forward.admin.forward.observability.multi_ingress.get",
+        "forward.admin.forward.stats.get",
+        "forward.admin.forward.update_order.post",
+        "forward.admin.tunnel.create.post",
+        "forward.admin.tunnel.delete.post",
+        "forward.admin.tunnel.list.post",
+        "forward.admin.tunnel.user.assign.post",
+        "forward.admin.tunnel.user.list.post",
+        "forward.admin.tunnel.user.tunnel.post",
+        "forward.forward.list.post",
+        "forward.forward.update_order.post",
+        "forward.speed_limit.create.post",
+        "forward.speed_limit.delete.post",
+        "forward.speed_limit.list.post",
+        "forward.speed_limit.tunnels.post",
+        "forward.tunnel.user.assign.post",
+        "forward.tunnel.user.list.post",
+        "forward.tunnel.user.tunnel.post",
+        "forward.user.forward.rules.get",
+        "forward.user.reset.post"
+      ]
+    },
+    {
+      "package_id": "proxy-node",
+      "batch": 4,
+      "min_version": "4.1.0-rc.5",
+      "routes": [
+        "proxy.admin.nodes.id.logs.get",
+        "proxy.admin.nodes.stats.get",
+        "proxy.loadbalancer.get",
+        "proxy.loadbalancer.id.delete",
+        "proxy.loadbalancer.id.get",
+        "proxy.loadbalancer.id.put",
+        "proxy.loadbalancer.post"
+      ]
+    },
+    {
+      "package_id": "gost-mesh",
+      "batch": 4,
+      "min_version": "4.1.0-rc.5",
+      "routes": [
+        "gost.admin.forward.nodex.doctor.get",
+        "gost.admin.forward.nodex.status.get",
+        "gost.admin.forward.test_connection.post"
+      ]
+    },
+    {
+      "package_id": "wireguard",
+      "batch": 4,
+      "min_version": "4.1.0-rc.5",
+      "routes": [
+        "wireguard.admin.wireguard.keypair.post"
+      ]
+    }
+  ]
+}

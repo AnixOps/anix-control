@@ -41,8 +41,15 @@ var routeModeAdminCatalog = map[string]RouteCatalogEntry{
 }
 
 // seedRouteModePackage registers, stores and installs a signed v2 Control
-// release of packageID that declares routes.
+// release 4.0.1 of packageID that declares routes. 4.0.1 is older than any
+// rehearsed release, so no route of it defaults to native.
 func seedRouteModePackage(t *testing.T, db *gorm.DB, packageID string, routes []compatibilityRoute) (ed25519.PublicKey, model.PluginInstallation) {
+	t.Helper()
+	return seedRouteModePackageVersion(t, db, packageID, "4.0.1", routes)
+}
+
+// seedRouteModePackageVersion is seedRouteModePackage at version.
+func seedRouteModePackageVersion(t *testing.T, db *gorm.DB, packageID, version string, routes []compatibilityRoute) (ed25519.PublicKey, model.PluginInstallation) {
 	t.Helper()
 	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
@@ -60,13 +67,13 @@ func seedRouteModePackage(t *testing.T, db *gorm.DB, packageID string, routes []
 	routeDocument, err := json.Marshal(map[string]any{"api_version": "v2", "package_id": packageID, "routes": declared})
 	require.NoError(t, err)
 	entrypoint := []byte("#!/bin/sh\nexit 0\n")
-	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[],"package_id":"` + packageID + `","version":"4.0.1"}`)
+	migrations := []byte(`{"format":"anixops.migrations/v1","migrations":[],"package_id":"` + packageID + `","version":"` + version + `"}`)
 	artifact := kernelTestV2Package(t, map[string][]byte{
 		"bin/control-host": entrypoint, "compat/v2-routes.json": routeDocument, "migrations/index.json": migrations,
 	})
 	digest := func(value []byte) string { sum := sha256.Sum256(value); return hex.EncodeToString(sum[:]) }
 	manifest := PluginManifest{
-		ID: packageID, Name: packageID, Version: "4.0.1", APIVersion: pluginManifestAPIVersionV2, Publisher: "AnixOps",
+		ID: packageID, Name: packageID, Version: version, APIVersion: pluginManifestAPIVersionV2, Publisher: "AnixOps",
 		Targets: []string{"control"}, ArtifactSHA256: digest(artifact),
 		ControlEntrypoint:   &PluginEntrypoint{Path: "bin/control-host", SHA256: digest(entrypoint)},
 		Migrations:          &PluginMigrations{Index: "migrations/index.json", SHA256: digest(migrations)},
@@ -80,7 +87,7 @@ func seedRouteModePackage(t *testing.T, db *gorm.DB, packageID string, routes []
 	_, err = StorePluginArtifact(db, release.ID, artifact)
 	require.NoError(t, err)
 	installation := model.PluginInstallation{
-		PluginID: packageID, Target: "control", DesiredVersion: "4.0.1", ObservedVersion: "4.0.1",
+		PluginID: packageID, Target: "control", DesiredVersion: version, ObservedVersion: version,
 		State: "healthy", Enabled: true, LifecycleGeneration: 7,
 	}
 	require.NoError(t, db.Create(&installation).Error)

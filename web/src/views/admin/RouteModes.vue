@@ -78,6 +78,7 @@
         <UiBadge tone="neutral" :label="t('routeModes.packageDisabled')" />
       </p>
       <p v-if="selectedPackage.error" class="route-modes__banner is-error" role="alert">{{ selectedPackage.error }}</p>
+      <p v-if="defaultsNotice" class="route-modes__banner" role="status" data-testid="route-modes-defaults">{{ defaultsNotice }}</p>
       <p v-if="loadError" class="route-modes__banner is-error" role="alert">{{ loadError }}</p>
 
       <UiDataTable
@@ -112,7 +113,9 @@
           <span class="route-modes__effective" :data-route-effective="row.route_id">
             <UiBadge
               :tone="row.effective !== row.configured ? 'warning' : modeTone(row.effective)"
-              :label="modeLabel(row.effective)"
+              :label="row.source === 'default' ? t('routeModes.modeDefault', { mode: modeLabel(row.effective) }) : modeLabel(row.effective)"
+              :title="row.source ? t(`routeModes.sources.${row.source}`) : undefined"
+              :data-route-source="row.source"
             />
             <span v-if="row.effective !== row.configured" class="route-modes__drift">{{ t('routeModes.effectiveDiffers') }}</span>
             <span v-if="hostDiffers(row)" class="route-modes__drift" data-host-drift>
@@ -336,6 +339,15 @@ const dialogMessage = computed(() => {
 const dialogConfirmLabel = computed(() => {
   if (dialog.kind === 'rollback') return t('routeModes.dialog.confirmRollback')
   return dialog.mode === 'native' ? t('routeModes.dialog.confirmNative') : t('routeModes.dialog.confirmSet')
+})
+
+const defaultsNotice = computed(() => {
+  const defaults = selectedPackage.value?.defaults
+  if (defaults?.source === 'kill-switch') return t('routeModes.defaults.kill-switch')
+  if (defaults?.source === 'package-too-old') {
+    return t('routeModes.defaults.package-too-old', { version: selectedPackage.value.version || '—', min: defaults.min_version })
+  }
+  return ''
 })
 
 function modeLabel(mode) {

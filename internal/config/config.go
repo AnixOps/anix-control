@@ -45,6 +45,45 @@ type Config struct {
 	ModuleRuntime  ModuleRuntimeConfig  `yaml:"module_runtime"`
 	Identity       IdentityConfig       `yaml:"identity"`
 	AgentControl   AgentControlConfig   `yaml:"agent_control"`
+	PackageRoutes  PackageRoutesConfig  `yaml:"package_routes"`
+}
+
+// PackageRoutesConfig sets the route modes the kernel hands v2 Control
+// package hosts for routes whose installation stores no mode.
+type PackageRoutesConfig struct {
+	// DefaultMode is the default policy:
+	//   - "rehearsed" (the default from 4.1.0): the routes listed in
+	//     config/package-route-defaults.json, which passed the staging
+	//     rehearsal, run natively when the installation stores no mode for
+	//     them and the installed package release is at least the rehearsed
+	//     one;
+	//   - "legacy": no route defaults to native; every route without a
+	//     stored mode runs its legacy handler, as in 4.0 (the kill switch).
+	// A stored mode (anix-control routes set/rollback) always wins.
+	DefaultMode string `yaml:"default_mode"`
+}
+
+// Package route default policies (package_routes.default_mode).
+const (
+	PackageRoutesDefaultRehearsed = "rehearsed"
+	PackageRoutesDefaultLegacy    = "legacy"
+)
+
+// DefaultModeOrDefault returns the configured policy, rehearsed when
+// empty.
+func (p PackageRoutesConfig) DefaultModeOrDefault() string {
+	if mode := strings.ToLower(strings.TrimSpace(p.DefaultMode)); mode != "" {
+		return mode
+	}
+	return PackageRoutesDefaultRehearsed
+}
+
+func (p PackageRoutesConfig) validate() error {
+	switch p.DefaultModeOrDefault() {
+	case PackageRoutesDefaultRehearsed, PackageRoutesDefaultLegacy:
+		return nil
+	}
+	return fmt.Errorf("invalid package_routes.default_mode %q: use rehearsed or legacy", p.DefaultMode)
 }
 
 // AgentControlConfig configures how AnixOps Agents authenticate on the
@@ -538,6 +577,9 @@ func load(path string, environ []string) (*Config, error) {
 	}
 	if _, err := requestorigin.NewPolicy(loaded.Server.TrustedProxies); err != nil {
 		return nil, fmt.Errorf("server.trusted_proxies: %w", err)
+	}
+	if err := loaded.PackageRoutes.validate(); err != nil {
+		return nil, err
 	}
 	switch loaded.Log.Format {
 	case "", "text", "json":

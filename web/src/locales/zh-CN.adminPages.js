@@ -1710,6 +1710,19 @@ export default {
     loadFailed: '路由模式加载失败',
     empty: { title: '没有声明 v2 路由的软件包', description: '安装并启用声明了 v2 路由的软件包后，即可在这里管理其路由模式。' },
     modes: { legacy: '旧版', shadow: '影子', native: '原生' },
+    modeDefault: '{mode}（默认）',
+    sources: {
+      stored: '已明确设置',
+      default: '演练通过的默认值：未保存模式',
+      'kill-switch': '默认值已关闭：package_routes.default_mode 为 legacy',
+      'package-too-old': '默认值未生效：软件包早于演练版本',
+      'identity-authority': '跟随身份权威状态',
+      unset: '未保存模式'
+    },
+    defaults: {
+      'kill-switch': '默认原生已关闭（package_routes.default_mode: legacy），未保存模式的路由都走旧版。',
+      'package-too-old': '版本 {version} 早于演练版本 {min}，其路由默认走旧版。'
+    },
     catalog: { 'native-flagged': '可切原生', bridged: '桥接', 'kernel-owned': '内核接管', native: '原生', none: '未声明' },
     locked: { kernel_owned: '内核接管', identity_group_a: '身份切换', websocket: 'WebSocket', not_declared: '未声明' },
     columns: { route: '路由', endpoint: '方法 / 路径', catalog: '资格', configured: '配置模式', effective: '生效模式', shadow: '影子（总数 / 不一致 / 错误）', mismatch: '不一致率', mode: '切换为' },
@@ -1727,7 +1740,7 @@ export default {
       setMessage: '不支持该模式的路由会被跳过。此次变更会记入修订历史。',
       nativeMessage: '原生模式下，请求由软件包自身的实现处理，不再经过内核的旧版处理器。请确认并填写原因，以便审计。',
       rollbackTitle: '将 {package} 回滚到旧版？',
-      rollbackMessage: '该软件包的所有路由都会恢复为旧版模式。',
+      rollbackMessage: '该软件包的所有路由都会恢复为旧版模式，包括默认走原生的路由。',
       reason: '原因',
       reasonHelp: '选填，会随修订一并保存。',
       reasonRequired: '切换到原生模式时必须填写。',

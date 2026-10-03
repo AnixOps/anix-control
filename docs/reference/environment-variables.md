@@ -131,6 +131,7 @@ This table is generated from the code and checked by
 | `ANIX_CONTROL_MODULE_RUNTIME_LISTEN` | `module_runtime.listen` | string | `:7443` |
 | `ANIX_CONTROL_MODULE_RUNTIME_PKI` | `module_runtime.pki` | string | `builtin` |
 | `ANIX_CONTROL_MODULE_RUNTIME_TRUST_BUNDLE_FILE` | `module_runtime.trust_bundle_file` | string |  |
+| `ANIX_CONTROL_PACKAGE_ROUTES_DEFAULT_MODE` | `package_routes.default_mode` | string | `rehearsed` |
 | `ANIX_CONTROL_PLUGINS_CONTROL_EXECUTION_ENABLED` | `plugins.control_execution_enabled` | bool | `true` |
 | `ANIX_CONTROL_PLUGINS_CONTROL_HOST_ARTIFACT_DIR` | `plugins.control_host_artifact_dir` | string |  |
 | `ANIX_CONTROL_PLUGINS_CONTROL_HOST_MAX_REQUEST_BYTES` | `plugins.control_host_max_request_bytes` | int | `0` |

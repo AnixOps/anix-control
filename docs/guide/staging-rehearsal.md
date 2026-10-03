@@ -177,7 +177,16 @@ scripts/staging/rehearse.sh routes set --package knowledge --mode native \
 `rehearse.sh routes …` runs `anix-control routes …` inside the rehearsal
 Control container (actor `system/cli`); `routes list` and `routes history`
 show the state. Packages whose batch passes are the candidates for
-"native by default" in v4.1.0 (H8), which a later release change makes.
+"native by default" (H8). The four batches of R5 passed and were signed off,
+so from 4.1.0 their 151 routes are native by default
+(`config/package-route-defaults.json`): on a fresh stack built from 4.1.0,
+`rehearse.sh routes list` shows them `native` with `SOURCE default` before
+any switch. To rehearse from the 4.0 baseline (every route legacy), bring
+the stack up with `STAGING_ROUTE_DEFAULT_MODE=legacy scripts/staging/rehearse.sh up`;
+the write reconciliation's legacy twin always runs with
+`package_routes.default_mode: legacy`. A route joins the default set only by
+an explicit change of that file and of
+`internal/service/testdata/rehearsed-routes.json`, after its batch passed.
 
 ## Roll Back
 

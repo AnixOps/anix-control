@@ -119,3 +119,10 @@ agent_control:
   # Sunset date of the legacy agent transports (YYYY-MM-DD); empty sends no
   # Sunset header.
   legacy_sunset: ""
+package_routes:
+  # Route modes of v2 Control packages whose installation stores none:
+  # rehearsed (the 4.1 default) runs the routes that passed the staging
+  # rehearsal (config/package-route-defaults.json) natively once the
+  # installed package is at least the rehearsed release; legacy keeps every
+  # such route on its legacy handler, as in 4.0 (the kill switch).
+  default_mode: "rehearsed"

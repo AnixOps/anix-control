@@ -193,9 +193,19 @@ maps v2 route ids to a route mode:
 
 | Mode | Meaning |
 |------|---------|
-| `legacy` (default, also when absent) | the host passes the request through the bridge to the legacy handler |
+| `legacy` (default, also when absent, except below) | the host passes the request through the bridge to the legacy handler |
 | `shadow` | GET only: the legacy result is returned, the host runs its native implementation in the background and counts mismatches |
 | `native` | the host answers with its native implementation |
+
+A route the map does not name is `legacy`, with two exceptions the kernel
+resolves (`ResolveEffectivePackageRouteModes`): identity group A follows the
+identity authority, and a route of the rehearsed default set
+(`config/package-route-defaults.json`) is `native` while
+`package_routes.default_mode` is `rehearsed` (the default) and the installed
+release is at least the package's `min_version`. A stored mode, `legacy`
+included, always wins; the route-mode administration therefore stores an
+explicit `legacy` for a route of the default set (any other `legacy` is
+removed from the map).
 
 A route's runtime mode is not its extraction mode, which
 `config/package-extraction.json` records per route
@@ -224,7 +234,9 @@ a reason for `native`. Each switch is audited and recorded per route in
 
 Hosts read their configuration with the package bridge RPC
 `GetPackageConfig`, which returns the revision, the configuration hash and the
-non-legacy route modes. Unlike `Invoke` and `OpenWebSocket`, session-scoped
+non-legacy route modes, resolved as above (never the raw stored map). It is
+the only way a host learns its modes: the lifecycle operation's
+configuration document is not read for them. Unlike `Invoke` and `OpenWebSocket`, session-scoped
 RPCs carry no per-request capability. The caller is authorized by the session
 identity, i.e. the package id, version and lifecycle generation that the
 kernel bound to the inherited socketpair when it started the host. Every call

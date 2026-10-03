@@ -26,6 +26,14 @@ Do not use it for:
 
 Those operations require their own operator approval and rollback plan.
 
+**Upgrading to 4.1.0: 15 packages now default to native routes.** After the
+upgrade, 151 rehearsed v2 routes are answered by their packages' native
+handlers unless a mode is stored for them. `package_routes.default_mode:
+legacy` keeps the 4.0 behaviour exactly; `anix-control routes rollback
+--package <id>` rolls one package back. Read
+["Upgrading To 4.1.0: Packages Now Default To Native Routes"](#upgrading-to-410-packages-now-default-to-native-routes)
+before you upgrade.
+
 ## Fixed Legacy Native Layout
 
 For the specific legacy layout discovered on the old native host
@@ -1741,6 +1749,100 @@ IPv4-only `ip v2b_forward` table, and count traffic in both directions.
   are still not enforced on this path
   ([layout and limits](guide/forward-tunnel-runtime-ops.md#nftables_ansible-rule-layout)).
 
+## Upgrading To 4.1.0: Packages Now Default To Native Routes
+
+**Behaviour changes on upgrade.** From 4.1.0 the 151 v2 routes of the 15
+packages that passed the staging rehearsal run their packages' native
+handlers by default instead of the kernel's legacy handlers (decision H8).
+**One setting turns this off and gives zero behaviour change:**
+`package_routes.default_mode: legacy` (or
+`ANIX_CONTROL_PACKAGE_ROUTES_DEFAULT_MODE=legacy`). **One command rolls a
+package back:** `anix-control routes rollback --package <id>`.
+
+The packages, by rehearsal batch (route counts in brackets; the exact list is
+`config/package-route-defaults.json`):
+
+| Batch | Packages |
+|---|---|
+| 1 | `knowledge` (6), `ticket` (8) |
+| 2 | `notification` (23), `platform` (5), `machine-telemetry` (3), `protocol-runtime` (3) |
+| 3 | `plan` (7), `order` (13), `payment` (20), `affiliate` (10) |
+| 4 | `subscription` (21), `forward` (21), `proxy-node` (7), `gost-mesh` (3), `wireguard` (1) |
+
+Each batch passed the R5 rehearsal on the local staging stack (every read
+route at least 200 shadow comparisons with 0 mismatches over at least 2
+hours; every write route reconciled against the database with 0 differences;
+the SQLite and PostgreSQL parity suites green) and was signed off by the
+owner (H7).
+
+What changes, exactly:
+
+- A listed route runs natively only when **all** of these hold: the
+  installation stores no mode for it (no `routes` entry); the installed
+  package release is at least `4.1.0-rc.5`, the rehearsed release (signed
+  4.0.0 packages stay installable and stay `legacy`); and
+  `package_routes.default_mode` is `rehearsed`, the default.
+- A stored mode always wins. A route you switched with `routes set` (to
+  any mode, `legacy` included) or rolled back keeps that mode.
+- Nothing else defaults to native: not identity-platform (group A still
+  moves only with the identity cutover), not kernel-owned or WebSocket
+  routes, and not routes that become native-flagged later; a route joins
+  the default set only by an explicit change in a release.
+- Package hosts learn the resolved modes at their next configuration poll
+  (about 5 seconds after the kernel starts); no package needs a restart.
+
+**Before upgrading**, decide:
+
+- Keep the 4.0 behaviour for now: set the kill switch before the new
+  binary starts, then move packages one by one with `routes set` when you
+  are ready (or remove the switch later).
+
+  ```yaml
+  package_routes:
+    default_mode: legacy   # rehearsed (default) | legacy
+  ```
+
+- Take the defaults: nothing to do. The startup log states the policy:
+  `package route defaults: policy rehearsed (package_routes.default_mode):
+  151 routes of 15 packages default to native ...`.
+
+**See what runs where** and why. `SOURCE` (`source` in the API) is `stored`
+(set explicitly), `default` (native by default), `kill-switch` (default off
+by `package_routes.default_mode`), `package-too-old` (the installed release
+is older than the rehearsed one), `identity-authority` (identity group A)
+or `unset` (legacy, no default):
+
+```bash
+anix-control routes list --package order
+anix-control routes list --json | jq '[.[] | .routes[] | select(.source == "default")] | length'
+```
+
+The admin page 插件中心 → 路由模式 shows a defaulted route as
+“原生（默认）” / “Native (default)” and says when a package's defaults are
+off and why. `GET /api/v4/kernel/route-modes` returns `source` per route and
+a `defaults` object per package (`policy`, `routes`, `min_version`,
+`source`, `note`).
+
+**Roll back** one package (no confirmation needed; the reason is optional):
+
+```bash
+anix-control routes rollback --package payment --reason "mismatch in callbacks"
+# or one route
+anix-control routes set --package payment --route <route-id> --mode legacy
+```
+
+Rollback and `set --mode legacy` work on the effective mode: a route that
+runs natively by default gets an explicit stored `legacy`, recorded in the
+revision history and the audit log like any switch, so it stays legacy
+whatever the default policy becomes. A rollback while the kill switch is on
+changes nothing (every unstored route is already legacy); if you want a
+package pinned to legacy for when you lift the switch, lift it first and
+then roll the package back, or set its routes to `legacy` explicitly.
+
+**All packages at once**: set `package_routes.default_mode: legacy` and
+restart Control. Routes with a stored `native` or `shadow` mode keep it;
+`anix-control routes list` shows them with `SOURCE stored`.
+
 ## Moving Logins To The Identity Module
 
 From 4.1 the identity module can own accounts, passwords, MFA and token
@@ -1898,7 +2000,9 @@ because the v4.2 release date is not fixed.
 ## Switching Route Modes
 
 Each v2 route of a Control package runs in one of three modes: `legacy` (the
-kernel's legacy handler answers; the default), `shadow` (GET routes only:
+kernel's legacy handler answers; the default for a route without a stored
+mode, except the rehearsed default set, see "Upgrading To 4.1.0: Packages
+Now Default To Native Routes"), `shadow` (GET routes only:
 legacy answers and the package's native implementation runs alongside and
 counts mismatches) or `native` (the package answers). The modes are stored in
 the package configuration; package hosts apply a change at their next
@@ -2007,6 +2111,11 @@ anix-control routes rollback --package knowledge --reason "mismatch in orders"
 The admin API equivalent is `POST /api/v4/kernel/route-modes/rollback` with
 `{"package_id":"knowledge","reason":"..."}`. Identity group A is left as it
 is; roll it back with the identity rollback.
+
+The rollback works on the effective modes: routes that run natively only by
+default (`source` `default`) get an explicit stored `legacy`, with a revision
+row each, so the rollback holds whatever `package_routes.default_mode`
+becomes. The same holds for `routes set --mode legacy`.
 
 ## Rollback
 

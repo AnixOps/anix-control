@@ -177,14 +177,26 @@ route) and what an installation runs (the runtime mode).
 every 5 s through the bridge RPC `GetPackageConfig`
 ([`plugin-kernel-contract.md`](plugin-kernel-contract.md#package-configuration)).
 
-- `legacy` (the default): the host relays the request through the bridge to
-  the legacy handler.
+- `legacy` (the default for a route without a stored mode): the host relays
+  the request through the bridge to the legacy handler.
+- Rehearsed default (4.1.0, decision H8): the 151 routes of
+  `config/package-route-defaults.json`, the 15 packages that passed the
+  staging rehearsal (R5) and were signed off (H7), run `native` when no mode
+  is stored for them, the installed release is at least the package's
+  `min_version` (`4.1.0-rc.5`) and `package_routes.default_mode` is
+  `rehearsed` (the default; `legacy` is the kill switch). The kernel
+  resolves this (`ResolveEffectivePackageRouteModes`) and hands the host
+  the resolved map. The set is explicit: a route that becomes
+  `native-flagged` later does not default to native until it is added to
+  the file and to the gate test's record
+  (`internal/service/testdata/rehearsed-routes.json`).
 - `shadow` (GET only): the legacy result is returned; the host runs its
   native implementation in the background, compares the normalized output
   and counts mismatches.
 - `native`: the host answers; the legacy handler is not called.
 - Rollback sets the route back to `legacy`, effective within 5 s and audited
-  through the configuration revision history. Operators switch and roll
+  through the configuration revision history. It acts on the effective
+  mode: a route native by default gets an explicit stored `legacy`. Operators switch and roll
   back with `anix-control routes`, the admin API
   `/api/v4/kernel/route-modes` or the admin page; each switch is audited and
   recorded per route in `v4_kernel_route_mode_revision`, and `routes

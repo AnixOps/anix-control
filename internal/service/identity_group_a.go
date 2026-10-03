@@ -77,9 +77,11 @@ func IdentityAuthoritative(state string) bool {
 }
 
 // ResolvePackageRouteModes returns a package's effective route modes from
-// its stored route-mode map. It is where every reader resolves them (the
-// package host's configuration and the configuration check), so the rule
-// below holds for any group A route, today's and future ones:
+// its stored route-mode map, for identity group A. Every reader resolves
+// through it (the configuration check directly; the package host's
+// configuration and the route-mode administration through
+// ResolveEffectivePackageRouteModes, which adds the rehearsed defaults), so
+// the rule below holds for any group A route, today's and future ones:
 // identity-platform's group A routes that the stored map does not name are
 // native while identity is authoritative (state identity or finalized),
 // because group A is native exactly then. An installation whose map
@@ -158,9 +160,27 @@ func validateIdentityGroupA(tx *gorm.DB, packageID string, modes map[string]stri
 }
 
 // SetPackageRouteModesTx sets route modes in a Control installation's
-// configuration inside tx, keeping the rest of the document. It fails with
+// configuration inside tx, keeping the rest of the document. Legacy removes
+// the route from the map, except for a route of the rehearsed default set
+// (config/package-route-defaults.json), which keeps an explicit legacy so
+// the default does not take it back. It fails with
 // ErrPluginConfigurationConflict if the document changes concurrently.
 func SetPackageRouteModesTx(tx *gorm.DB, publicKey ed25519.PublicKey, installationID uint, modes map[string]string, actorID uint) (*model.PluginConfiguration, error) {
+	defaults, err := LoadPackageRouteDefaults()
+	if err != nil {
+		return nil, err
+	}
+	var installation model.PluginInstallation
+	if err := tx.Select("id", "plugin_id").First(&installation, installationID).Error; err != nil {
+		return nil, err
+	}
+	pin := func(route string) bool { return defaults.Includes(installation.PluginID, route) }
+	return setPackageRouteModesTx(tx, publicKey, installationID, modes, actorID, pin)
+}
+
+// setPackageRouteModesTx is SetPackageRouteModesTx; pin names the routes
+// whose legacy mode is stored explicitly instead of removed.
+func setPackageRouteModesTx(tx *gorm.DB, publicKey ed25519.PublicKey, installationID uint, modes map[string]string, actorID uint, pin func(string) bool) (*model.PluginConfiguration, error) {
 	if len(publicKey) != ed25519.PublicKeySize {
 		return nil, ErrPluginTrustRootRequired
 	}
@@ -179,7 +199,7 @@ func SetPackageRouteModesTx(tx *gorm.DB, publicKey ed25519.PublicKey, installati
 		}
 	}
 	for route, mode := range modes {
-		if mode == packagebridge.RouteModeLegacy {
+		if mode == packagebridge.RouteModeLegacy && (pin == nil || !pin(route)) {
 			delete(routes, route)
 			continue
 		}
