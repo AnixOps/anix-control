@@ -202,7 +202,9 @@ message Route {
   Policy policy = 7;
   Limits limits = 8;
   map<string, string> labels = 9;
-  // paused keeps the route stored but on no node.
+  // paused stops the route's traffic without removing it: the planner
+  // keeps rendering its hops with NodeHop.paused set, so its ports, marks,
+  // counters and quota are preserved, and the drivers drop its traffic.
   bool paused = 10;
   // revision increases with every stored change.
   uint64 revision = 11;
@@ -390,9 +392,13 @@ message NodeHop {
   // limits are set only on the hop that enforces them.
   Limits limits = 11;
   TargetPolicy target_policy = 12;
+  // paused is Route.paused: the hop stays rendered (ports, marks, counters
+  // and quota are preserved) and the driver drops its traffic.
   bool paused = 13;
-  // mark is the route's connection mark on this node, allocated by the
-  // planner within the driver's mark range (nftables counters and tc).
+  // mark is this hop's connection mark on this node (nftables counters and
+  // tc), allocated by the planner per (route, hop, node): unique on the
+  // node, 1..4095, which the driver shifts into its configured mark mask
+  // (forward-sdk.md section 6.1). It sticks across replans.
   uint32 mark = 14;
   // ingress_sources are the addresses allowed to reach the listener of a
   // RELAY or EXIT hop: every address of the previous hop's nodes. Empty on
@@ -607,13 +613,15 @@ message PlanRouteRequest {
   repeated NodeInfo nodes = 2;
 }
 
-// PortAllocation is a port the planner gave a hop on a node. Allocations
-// stick to (route, hop, node) across replans.
+// PortAllocation is the port and connection mark the planner gave a hop on
+// a node. Allocations stick to (route, hop, node) across replans.
 message PortAllocation {
   string route_id = 1;
   uint32 hop_index = 2;
   string node_ref = 3;
   uint32 port = 4;
+  // mark is the hop's connection mark on the node (NodeHop.mark).
+  uint32 mark = 5;
 }
 
 message PlanRouteResponse {

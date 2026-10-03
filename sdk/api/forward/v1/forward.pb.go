@@ -569,7 +569,9 @@ type Route struct {
 	Policy  *Policy           `protobuf:"bytes,7,opt,name=policy,proto3" json:"policy,omitempty"`
 	Limits  *Limits           `protobuf:"bytes,8,opt,name=limits,proto3" json:"limits,omitempty"`
 	Labels  map[string]string `protobuf:"bytes,9,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
-	// paused keeps the route stored but on no node.
+	// paused stops the route's traffic without removing it: the planner
+	// keeps rendering its hops with NodeHop.paused set, so its ports, marks,
+	// counters and quota are preserved, and the drivers drop its traffic.
 	Paused bool `protobuf:"varint,10,opt,name=paused,proto3" json:"paused,omitempty"`
 	// revision increases with every stored change.
 	Revision        uint64 `protobuf:"varint,11,opt,name=revision,proto3" json:"revision,omitempty"`
@@ -1658,9 +1660,13 @@ type NodeHop struct {
 	// limits are set only on the hop that enforces them.
 	Limits       *Limits      `protobuf:"bytes,11,opt,name=limits,proto3" json:"limits,omitempty"`
 	TargetPolicy TargetPolicy `protobuf:"varint,12,opt,name=target_policy,json=targetPolicy,proto3,enum=anixops.forward.v1.TargetPolicy" json:"target_policy,omitempty"`
-	Paused       bool         `protobuf:"varint,13,opt,name=paused,proto3" json:"paused,omitempty"`
-	// mark is the route's connection mark on this node, allocated by the
-	// planner within the driver's mark range (nftables counters and tc).
+	// paused is Route.paused: the hop stays rendered (ports, marks, counters
+	// and quota are preserved) and the driver drops its traffic.
+	Paused bool `protobuf:"varint,13,opt,name=paused,proto3" json:"paused,omitempty"`
+	// mark is this hop's connection mark on this node (nftables counters and
+	// tc), allocated by the planner per (route, hop, node): unique on the
+	// node, 1..4095, which the driver shifts into its configured mark mask
+	// (forward-sdk.md section 6.1). It sticks across replans.
 	Mark uint32 `protobuf:"varint,14,opt,name=mark,proto3" json:"mark,omitempty"`
 	// ingress_sources are the addresses allowed to reach the listener of a
 	// RELAY or EXIT hop: every address of the previous hop's nodes. Empty on
@@ -3336,14 +3342,16 @@ func (x *PlanRouteRequest) GetNodes() []*NodeInfo {
 	return nil
 }
 
-// PortAllocation is a port the planner gave a hop on a node. Allocations
-// stick to (route, hop, node) across replans.
+// PortAllocation is the port and connection mark the planner gave a hop on
+// a node. Allocations stick to (route, hop, node) across replans.
 type PortAllocation struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	RouteId       string                 `protobuf:"bytes,1,opt,name=route_id,json=routeId,proto3" json:"route_id,omitempty"`
-	HopIndex      uint32                 `protobuf:"varint,2,opt,name=hop_index,json=hopIndex,proto3" json:"hop_index,omitempty"`
-	NodeRef       string                 `protobuf:"bytes,3,opt,name=node_ref,json=nodeRef,proto3" json:"node_ref,omitempty"`
-	Port          uint32                 `protobuf:"varint,4,opt,name=port,proto3" json:"port,omitempty"`
+	state    protoimpl.MessageState `protogen:"open.v1"`
+	RouteId  string                 `protobuf:"bytes,1,opt,name=route_id,json=routeId,proto3" json:"route_id,omitempty"`
+	HopIndex uint32                 `protobuf:"varint,2,opt,name=hop_index,json=hopIndex,proto3" json:"hop_index,omitempty"`
+	NodeRef  string                 `protobuf:"bytes,3,opt,name=node_ref,json=nodeRef,proto3" json:"node_ref,omitempty"`
+	Port     uint32                 `protobuf:"varint,4,opt,name=port,proto3" json:"port,omitempty"`
+	// mark is the hop's connection mark on the node (NodeHop.mark).
+	Mark          uint32 `protobuf:"varint,5,opt,name=mark,proto3" json:"mark,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3402,6 +3410,13 @@ func (x *PortAllocation) GetNodeRef() string {
 func (x *PortAllocation) GetPort() uint32 {
 	if x != nil {
 		return x.Port
+	}
+	return 0
+}
+
+func (x *PortAllocation) GetMark() uint32 {
+	if x != nil {
+		return x.Mark
 	}
 	return 0
 }
@@ -4073,12 +4088,13 @@ const file_api_forward_v1_forward_proto_rawDesc = "" +
 	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"w\n" +
 	"\x10PlanRouteRequest\x12/\n" +
 	"\x05route\x18\x01 \x01(\v2\x19.anixops.forward.v1.RouteR\x05route\x122\n" +
-	"\x05nodes\x18\x02 \x03(\v2\x1c.anixops.forward.v1.NodeInfoR\x05nodes\"w\n" +
+	"\x05nodes\x18\x02 \x03(\v2\x1c.anixops.forward.v1.NodeInfoR\x05nodes\"\x8b\x01\n" +
 	"\x0ePortAllocation\x12\x19\n" +
 	"\broute_id\x18\x01 \x01(\tR\arouteId\x12\x1b\n" +
 	"\thop_index\x18\x02 \x01(\rR\bhopIndex\x12\x19\n" +
 	"\bnode_ref\x18\x03 \x01(\tR\anodeRef\x12\x12\n" +
-	"\x04port\x18\x04 \x01(\rR\x04port\"\xf2\x01\n" +
+	"\x04port\x18\x04 \x01(\rR\x04port\x12\x12\n" +
+	"\x04mark\x18\x05 \x01(\rR\x04mark\"\xf2\x01\n" +
 	"\x11PlanRouteResponse\x12<\n" +
 	"\x06states\x18\x01 \x03(\v2$.anixops.forward.v1.NodeForwardStateR\x06states\x12D\n" +
 	"\vallocations\x18\x02 \x03(\v2\".anixops.forward.v1.PortAllocationR\vallocations\x12=\n" +

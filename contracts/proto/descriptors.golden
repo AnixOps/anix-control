@@ -493,6 +493,7 @@ field anixops.forward.v1.Policy.next_hop = 1 optional anixops.forward.v1.Balance
 field anixops.forward.v1.Policy.target = 2 optional anixops.forward.v1.BalanceStrategy
 field anixops.forward.v1.Policy.target_policy = 6 optional anixops.forward.v1.TargetPolicy
 field anixops.forward.v1.PortAllocation.hop_index = 2 optional uint32
+field anixops.forward.v1.PortAllocation.mark = 5 optional uint32
 field anixops.forward.v1.PortAllocation.node_ref = 3 optional string
 field anixops.forward.v1.PortAllocation.port = 4 optional uint32
 field anixops.forward.v1.PortAllocation.route_id = 1 optional string

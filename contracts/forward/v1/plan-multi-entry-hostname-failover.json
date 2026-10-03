@@ -1,72 +1,60 @@
 {
-  "$comment": "DRAFT (F1, owner review H11). Hand-written in F1a, now produced by the planner (F1c): request is an anixops.forward.v1.PlanRouteRequest and response the PlanRouteResponse that sdk/forward/planner.PlanRoute (Options.Cluster \"example\") answers, both in protojson with proto field names. Regenerate with: go -C sdk test ./forward/planner -run Golden -update. See docs/architecture/forward-sdk.md sections 5 and 7.",
-  "name": "nftables entry, gost relay over TLS to two exits (exit-level failover), two targets (target-level failover)",
+  "$comment": "DRAFT (F1). Two nftables entries behind one entry_hostname share one allocated port, the lowest free on both: 40100 is reserved on forward-22 and 40101 is held on forward-21 by another route (taken_allocations, Options.Taken). Limits land on both entries. The exits fail over by node order and the targets by priority. request is an anixops.forward.v1.PlanRouteRequest and response the PlanRouteResponse the planner (sdk/forward/planner.PlanRoute, Options.Cluster \"example\") answers, both in protojson with proto field names. Regenerate with: go -C sdk test ./forward/planner -run Golden -update. See docs/architecture/forward-sdk.md section 5.",
+  "name": "two nftables entries with an entry hostname, two nftables exits (exit-level failover), targets with priorities",
   "status": "draft",
   "request": {
     "route": {
-      "id": "01JF1B000000000000000000B1",
-      "owner": "user:1042",
-      "name": "sh-to-jp",
+      "id": "01JF1D000000000000000000D1",
+      "owner": "admin",
+      "name": "edge-ha",
       "listen": {
-        "port": 40001,
-        "protocol": "L4_PROTOCOL_TCP",
-        "entry_hostname": "r1042.fwd.example.com"
+        "protocol": "L4_PROTOCOL_TCP_UDP",
+        "entry_hostname": "edge.fwd.example.com"
       },
       "hops": [
         {
           "role": "HOP_ROLE_ENTRY",
           "engine": "ENGINE_NFTABLES",
           "node_refs": [
-            "forward-21"
+            "forward-21",
+            "forward-22"
           ]
         },
         {
-          "role": "HOP_ROLE_RELAY",
-          "engine": "ENGINE_GOST",
+          "role": "HOP_ROLE_EXIT",
+          "engine": "ENGINE_NFTABLES",
           "node_refs": [
-            "forward-31"
+            "forward-71",
+            "forward-72"
           ],
           "ingress": {
             "security": "LINK_SECURITY_RAW"
-          },
-          "dial_address": "172.16.5.31"
-        },
-        {
-          "role": "HOP_ROLE_EXIT",
-          "engine": "ENGINE_GOST",
-          "node_refs": [
-            "forward-41",
-            "forward-42"
-          ],
-          "ingress": {
-            "security": "LINK_SECURITY_TLS",
-            "mux": true
           }
         }
       ],
       "targets": [
         {
-          "host": "198.51.100.7",
-          "port": 8443
+          "host": "198.51.100.10",
+          "port": 443
         },
         {
-          "host": "origin.example.net",
-          "port": 8443,
-          "priority": 10
+          "host": "198.51.100.11",
+          "port": 443,
+          "weight": 2
+        },
+        {
+          "host": "198.51.100.12",
+          "port": 443,
+          "priority": 5
         }
       ],
       "policy": {
         "next_hop": "BALANCE_STRATEGY_FAILOVER",
-        "target": "BALANCE_STRATEGY_FAILOVER",
-        "circuit_breaker": {
-          "failure_threshold": 3,
-          "open_ms": 30000
-        }
+        "target": "BALANCE_STRATEGY_FAILOVER"
       },
       "limits": {
-        "bandwidth_bps": "50000000",
-        "max_conns": 500,
-        "expires_at_unix_ms": "1798761600000"
+        "bandwidth_bps": "20000000",
+        "max_conns": 100
       }
     },
     "nodes": [
@@ -106,21 +94,19 @@
         }
       },
       {
-        "node_ref": "forward-31",
+        "node_ref": "forward-22",
         "addresses": [
-          "198.51.100.31",
-          "172.16.5.31"
+          "192.0.2.22"
         ],
         "port_range": {
-          "first": 20000,
-          "last": 20999
+          "first": 40100,
+          "last": 40199
         },
         "engines": [
           {
-            "engine": "ENGINE_GOST",
-            "version": "gost 3.0.0",
+            "engine": "ENGINE_NFTABLES",
+            "version": "nft 1.0.9",
             "available": true,
-            "ipv6": true,
             "udp": true,
             "strategies": [
               "BALANCE_STRATEGY_ROUND_ROBIN",
@@ -130,32 +116,28 @@
               "BALANCE_STRATEGY_FAILOVER"
             ],
             "link_securities": [
-              "LINK_SECURITY_RAW",
-              "LINK_SECURITY_TLS",
-              "LINK_SECURITY_WSS",
-              "LINK_SECURITY_QUIC",
-              "LINK_SECURITY_GRPC"
+              "LINK_SECURITY_RAW"
             ],
             "bandwidth_limit": true,
+            "quota": true,
             "max_conns": true
           }
         ]
       },
       {
-        "node_ref": "forward-41",
+        "node_ref": "forward-71",
         "addresses": [
-          "203.0.113.41"
+          "203.0.113.71"
         ],
         "port_range": {
-          "first": 20000,
-          "last": 20999
+          "first": 30000,
+          "last": 30099
         },
         "engines": [
           {
-            "engine": "ENGINE_GOST",
-            "version": "gost 3.0.0",
+            "engine": "ENGINE_NFTABLES",
+            "version": "nft 1.0.9",
             "available": true,
-            "ipv6": true,
             "udp": true,
             "strategies": [
               "BALANCE_STRATEGY_ROUND_ROBIN",
@@ -165,32 +147,28 @@
               "BALANCE_STRATEGY_FAILOVER"
             ],
             "link_securities": [
-              "LINK_SECURITY_RAW",
-              "LINK_SECURITY_TLS",
-              "LINK_SECURITY_WSS",
-              "LINK_SECURITY_QUIC",
-              "LINK_SECURITY_GRPC"
+              "LINK_SECURITY_RAW"
             ],
             "bandwidth_limit": true,
+            "quota": true,
             "max_conns": true
           }
         ]
       },
       {
-        "node_ref": "forward-42",
+        "node_ref": "forward-72",
         "addresses": [
-          "203.0.113.42"
+          "203.0.113.72"
         ],
         "port_range": {
-          "first": 20000,
-          "last": 20999
+          "first": 30000,
+          "last": 30099
         },
         "engines": [
           {
-            "engine": "ENGINE_GOST",
-            "version": "gost 3.0.0",
+            "engine": "ENGINE_NFTABLES",
+            "version": "nft 1.0.9",
             "available": true,
-            "ipv6": true,
             "udp": true,
             "strategies": [
               "BALANCE_STRATEGY_ROUND_ROBIN",
@@ -200,17 +178,28 @@
               "BALANCE_STRATEGY_FAILOVER"
             ],
             "link_securities": [
-              "LINK_SECURITY_RAW",
-              "LINK_SECURITY_TLS",
-              "LINK_SECURITY_WSS",
-              "LINK_SECURITY_QUIC",
-              "LINK_SECURITY_GRPC"
+              "LINK_SECURITY_RAW"
             ],
             "bandwidth_limit": true,
+            "quota": true,
             "max_conns": true
           }
         ]
       }
+    ]
+  },
+  "taken_allocations": [
+    {
+      "route_id": "01JF1Z000000000000000000Z9",
+      "hop_index": 0,
+      "node_ref": "forward-21",
+      "port": 40101,
+      "mark": 1
+    }
+  ],
+  "reserved_ports": {
+    "forward-22": [
+      40100
     ]
   },
   "response": {
@@ -219,26 +208,36 @@
         "node_ref": "forward-21",
         "hops": [
           {
-            "route_id": "01JF1B000000000000000000B1",
+            "route_id": "01JF1D000000000000000000D1",
             "role": "HOP_ROLE_ENTRY",
             "engine": "ENGINE_NFTABLES",
             "listen": {
-              "port": 40001,
-              "protocol": "L4_PROTOCOL_TCP",
-              "entry_hostname": "r1042.fwd.example.com"
+              "port": 40102,
+              "protocol": "L4_PROTOCOL_TCP_UDP",
+              "entry_hostname": "edge.fwd.example.com"
             },
             "ingress": {
               "security": "LINK_SECURITY_RAW"
             },
             "upstreams": [
               {
-                "address": "172.16.5.31",
-                "port": 20000,
+                "address": "203.0.113.71",
+                "port": 30000,
                 "weight": 1,
                 "egress": {
                   "security": "LINK_SECURITY_RAW"
                 },
-                "node_ref": "forward-31"
+                "node_ref": "forward-71"
+              },
+              {
+                "address": "203.0.113.72",
+                "port": 30000,
+                "weight": 1,
+                "priority": 1,
+                "egress": {
+                  "security": "LINK_SECURITY_RAW"
+                },
+                "node_ref": "forward-72"
               }
             ],
             "balance": "BALANCE_STRATEGY_FAILOVER",
@@ -251,9 +250,62 @@
               "open_ms": 30000
             },
             "limits": {
-              "bandwidth_bps": "50000000",
-              "max_conns": 500,
-              "expires_at_unix_ms": "1798761600000"
+              "bandwidth_bps": "20000000",
+              "max_conns": 100
+            },
+            "target_policy": "TARGET_POLICY_PUBLIC_ONLY",
+            "mark": 2
+          }
+        ]
+      },
+      {
+        "node_ref": "forward-22",
+        "hops": [
+          {
+            "route_id": "01JF1D000000000000000000D1",
+            "role": "HOP_ROLE_ENTRY",
+            "engine": "ENGINE_NFTABLES",
+            "listen": {
+              "port": 40102,
+              "protocol": "L4_PROTOCOL_TCP_UDP",
+              "entry_hostname": "edge.fwd.example.com"
+            },
+            "ingress": {
+              "security": "LINK_SECURITY_RAW"
+            },
+            "upstreams": [
+              {
+                "address": "203.0.113.71",
+                "port": 30000,
+                "weight": 1,
+                "egress": {
+                  "security": "LINK_SECURITY_RAW"
+                },
+                "node_ref": "forward-71"
+              },
+              {
+                "address": "203.0.113.72",
+                "port": 30000,
+                "weight": 1,
+                "priority": 1,
+                "egress": {
+                  "security": "LINK_SECURITY_RAW"
+                },
+                "node_ref": "forward-72"
+              }
+            ],
+            "balance": "BALANCE_STRATEGY_FAILOVER",
+            "health": {
+              "interval_ms": 5000,
+              "timeout_ms": 2000
+            },
+            "circuit_breaker": {
+              "failure_threshold": 3,
+              "open_ms": 30000
+            },
+            "limits": {
+              "bandwidth_bps": "20000000",
+              "max_conns": 100
             },
             "target_policy": "TARGET_POLICY_PUBLIC_ONLY",
             "mark": 1
@@ -261,46 +313,45 @@
         ]
       },
       {
-        "node_ref": "forward-31",
+        "node_ref": "forward-71",
         "hops": [
           {
-            "route_id": "01JF1B000000000000000000B1",
+            "route_id": "01JF1D000000000000000000D1",
             "hop_index": 1,
-            "role": "HOP_ROLE_RELAY",
-            "engine": "ENGINE_GOST",
+            "role": "HOP_ROLE_EXIT",
+            "engine": "ENGINE_NFTABLES",
             "listen": {
-              "address": "172.16.5.31",
-              "port": 20000,
-              "protocol": "L4_PROTOCOL_TCP"
+              "port": 30000,
+              "protocol": "L4_PROTOCOL_TCP_UDP"
             },
             "ingress": {
               "security": "LINK_SECURITY_RAW"
             },
             "upstreams": [
               {
-                "address": "203.0.113.41",
-                "port": 20000,
+                "address": "198.51.100.10",
+                "port": 443,
                 "weight": 1,
                 "egress": {
-                  "security": "LINK_SECURITY_TLS",
-                  "mux": true,
-                  "server_name": "forward-41"
-                },
-                "node_ref": "forward-41",
-                "peer_identity": "spiffe://anixops/example/agent/forward-41"
+                  "security": "LINK_SECURITY_RAW"
+                }
               },
               {
-                "address": "203.0.113.42",
-                "port": 20000,
-                "weight": 1,
-                "priority": 1,
+                "address": "198.51.100.11",
+                "port": 443,
+                "weight": 2,
                 "egress": {
-                  "security": "LINK_SECURITY_TLS",
-                  "mux": true,
-                  "server_name": "forward-42"
-                },
-                "node_ref": "forward-42",
-                "peer_identity": "spiffe://anixops/example/agent/forward-42"
+                  "security": "LINK_SECURITY_RAW"
+                }
+              },
+              {
+                "address": "198.51.100.12",
+                "port": 443,
+                "weight": 1,
+                "priority": 5,
+                "egress": {
+                  "security": "LINK_SECURITY_RAW"
+                }
               }
             ],
             "balance": "BALANCE_STRATEGY_FAILOVER",
@@ -316,42 +367,49 @@
             "mark": 1,
             "ingress_sources": [
               "192.0.2.21",
-              "172.16.5.21"
+              "172.16.5.21",
+              "192.0.2.22"
             ]
           }
         ]
       },
       {
-        "node_ref": "forward-41",
+        "node_ref": "forward-72",
         "hops": [
           {
-            "route_id": "01JF1B000000000000000000B1",
-            "hop_index": 2,
+            "route_id": "01JF1D000000000000000000D1",
+            "hop_index": 1,
             "role": "HOP_ROLE_EXIT",
-            "engine": "ENGINE_GOST",
+            "engine": "ENGINE_NFTABLES",
             "listen": {
-              "port": 20000,
-              "protocol": "L4_PROTOCOL_TCP"
+              "port": 30000,
+              "protocol": "L4_PROTOCOL_TCP_UDP"
             },
             "ingress": {
-              "security": "LINK_SECURITY_TLS",
-              "mux": true,
-              "server_name": "forward-41"
+              "security": "LINK_SECURITY_RAW"
             },
             "upstreams": [
               {
-                "address": "198.51.100.7",
-                "port": 8443,
+                "address": "198.51.100.10",
+                "port": 443,
                 "weight": 1,
                 "egress": {
                   "security": "LINK_SECURITY_RAW"
                 }
               },
               {
-                "address": "origin.example.net",
-                "port": 8443,
+                "address": "198.51.100.11",
+                "port": 443,
+                "weight": 2,
+                "egress": {
+                  "security": "LINK_SECURITY_RAW"
+                }
+              },
+              {
+                "address": "198.51.100.12",
+                "port": 443,
                 "weight": 1,
-                "priority": 10,
+                "priority": 5,
                 "egress": {
                   "security": "LINK_SECURITY_RAW"
                 }
@@ -369,68 +427,9 @@
             "target_policy": "TARGET_POLICY_PUBLIC_ONLY",
             "mark": 1,
             "ingress_sources": [
-              "198.51.100.31",
-              "172.16.5.31"
-            ],
-            "ingress_peers": [
-              "spiffe://anixops/example/agent/forward-31"
-            ]
-          }
-        ]
-      },
-      {
-        "node_ref": "forward-42",
-        "hops": [
-          {
-            "route_id": "01JF1B000000000000000000B1",
-            "hop_index": 2,
-            "role": "HOP_ROLE_EXIT",
-            "engine": "ENGINE_GOST",
-            "listen": {
-              "port": 20000,
-              "protocol": "L4_PROTOCOL_TCP"
-            },
-            "ingress": {
-              "security": "LINK_SECURITY_TLS",
-              "mux": true,
-              "server_name": "forward-42"
-            },
-            "upstreams": [
-              {
-                "address": "198.51.100.7",
-                "port": 8443,
-                "weight": 1,
-                "egress": {
-                  "security": "LINK_SECURITY_RAW"
-                }
-              },
-              {
-                "address": "origin.example.net",
-                "port": 8443,
-                "weight": 1,
-                "priority": 10,
-                "egress": {
-                  "security": "LINK_SECURITY_RAW"
-                }
-              }
-            ],
-            "balance": "BALANCE_STRATEGY_FAILOVER",
-            "health": {
-              "interval_ms": 5000,
-              "timeout_ms": 2000
-            },
-            "circuit_breaker": {
-              "failure_threshold": 3,
-              "open_ms": 30000
-            },
-            "target_policy": "TARGET_POLICY_PUBLIC_ONLY",
-            "mark": 1,
-            "ingress_sources": [
-              "198.51.100.31",
-              "172.16.5.31"
-            ],
-            "ingress_peers": [
-              "spiffe://anixops/example/agent/forward-31"
+              "192.0.2.21",
+              "172.16.5.21",
+              "192.0.2.22"
             ]
           }
         ]
@@ -438,30 +437,29 @@
     ],
     "allocations": [
       {
-        "route_id": "01JF1B000000000000000000B1",
+        "route_id": "01JF1D000000000000000000D1",
         "node_ref": "forward-21",
-        "port": 40001,
+        "port": 40102,
+        "mark": 2
+      },
+      {
+        "route_id": "01JF1D000000000000000000D1",
+        "node_ref": "forward-22",
+        "port": 40102,
         "mark": 1
       },
       {
-        "route_id": "01JF1B000000000000000000B1",
+        "route_id": "01JF1D000000000000000000D1",
         "hop_index": 1,
-        "node_ref": "forward-31",
-        "port": 20000,
+        "node_ref": "forward-71",
+        "port": 30000,
         "mark": 1
       },
       {
-        "route_id": "01JF1B000000000000000000B1",
-        "hop_index": 2,
-        "node_ref": "forward-41",
-        "port": 20000,
-        "mark": 1
-      },
-      {
-        "route_id": "01JF1B000000000000000000B1",
-        "hop_index": 2,
-        "node_ref": "forward-42",
-        "port": 20000,
+        "route_id": "01JF1D000000000000000000D1",
+        "hop_index": 1,
+        "node_ref": "forward-72",
+        "port": 30000,
         "mark": 1
       }
     ]

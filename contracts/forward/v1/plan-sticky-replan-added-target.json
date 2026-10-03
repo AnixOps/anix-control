@@ -1,0 +1,247 @@
+{
+  "$comment": "DRAFT (F1). Re-plan of a stored route after a second target was added: previous_allocations (the route's allocations from the last plan, Control's table) keep their ports and marks although lower ones are free, so adding a target moves no port. request is an anixops.forward.v1.PlanRouteRequest and response the PlanRouteResponse the planner (sdk/forward/planner.PlanRoute, Options.Cluster \"example\") answers, both in protojson with proto field names. Regenerate with: go -C sdk test ./forward/planner -run Golden -update. See docs/architecture/forward-sdk.md section 5.",
+  "name": "sticky re-plan: a target is added, ports and marks stay",
+  "status": "draft",
+  "request": {
+    "route": {
+      "id": "01JF1E000000000000000000E1",
+      "owner": "user:7",
+      "name": "sticky",
+      "listen": {
+        "protocol": "L4_PROTOCOL_TCP"
+      },
+      "hops": [
+        {
+          "role": "HOP_ROLE_ENTRY",
+          "engine": "ENGINE_GOST",
+          "node_refs": [
+            "forward-31"
+          ]
+        },
+        {
+          "role": "HOP_ROLE_EXIT",
+          "engine": "ENGINE_GOST",
+          "node_refs": [
+            "forward-41"
+          ],
+          "ingress": {
+            "security": "LINK_SECURITY_TLS"
+          }
+        }
+      ],
+      "targets": [
+        {
+          "host": "198.51.100.7",
+          "port": 8443
+        },
+        {
+          "host": "198.51.100.8",
+          "port": 8443
+        }
+      ],
+      "revision": "2"
+    },
+    "nodes": [
+      {
+        "node_ref": "forward-31",
+        "addresses": [
+          "198.51.100.31"
+        ],
+        "port_range": {
+          "first": 20000,
+          "last": 20999
+        },
+        "engines": [
+          {
+            "engine": "ENGINE_GOST",
+            "version": "gost 3.0.0",
+            "available": true,
+            "ipv6": true,
+            "udp": true,
+            "strategies": [
+              "BALANCE_STRATEGY_ROUND_ROBIN",
+              "BALANCE_STRATEGY_RANDOM",
+              "BALANCE_STRATEGY_IP_HASH",
+              "BALANCE_STRATEGY_LEAST_CONN",
+              "BALANCE_STRATEGY_FAILOVER"
+            ],
+            "link_securities": [
+              "LINK_SECURITY_RAW",
+              "LINK_SECURITY_TLS",
+              "LINK_SECURITY_WSS",
+              "LINK_SECURITY_QUIC",
+              "LINK_SECURITY_GRPC"
+            ],
+            "bandwidth_limit": true,
+            "max_conns": true
+          }
+        ]
+      },
+      {
+        "node_ref": "forward-41",
+        "addresses": [
+          "203.0.113.41"
+        ],
+        "port_range": {
+          "first": 20000,
+          "last": 20999
+        },
+        "engines": [
+          {
+            "engine": "ENGINE_GOST",
+            "version": "gost 3.0.0",
+            "available": true,
+            "ipv6": true,
+            "udp": true,
+            "strategies": [
+              "BALANCE_STRATEGY_ROUND_ROBIN",
+              "BALANCE_STRATEGY_RANDOM",
+              "BALANCE_STRATEGY_IP_HASH",
+              "BALANCE_STRATEGY_LEAST_CONN",
+              "BALANCE_STRATEGY_FAILOVER"
+            ],
+            "link_securities": [
+              "LINK_SECURITY_RAW",
+              "LINK_SECURITY_TLS",
+              "LINK_SECURITY_WSS",
+              "LINK_SECURITY_QUIC",
+              "LINK_SECURITY_GRPC"
+            ],
+            "bandwidth_limit": true,
+            "max_conns": true
+          }
+        ]
+      }
+    ]
+  },
+  "previous_allocations": [
+    {
+      "route_id": "01JF1E000000000000000000E1",
+      "hop_index": 0,
+      "node_ref": "forward-31",
+      "port": 20005,
+      "mark": 3
+    },
+    {
+      "route_id": "01JF1E000000000000000000E1",
+      "hop_index": 1,
+      "node_ref": "forward-41",
+      "port": 20017,
+      "mark": 2
+    }
+  ],
+  "response": {
+    "states": [
+      {
+        "node_ref": "forward-31",
+        "hops": [
+          {
+            "route_id": "01JF1E000000000000000000E1",
+            "role": "HOP_ROLE_ENTRY",
+            "engine": "ENGINE_GOST",
+            "listen": {
+              "port": 20005,
+              "protocol": "L4_PROTOCOL_TCP"
+            },
+            "ingress": {
+              "security": "LINK_SECURITY_RAW"
+            },
+            "upstreams": [
+              {
+                "address": "203.0.113.41",
+                "port": 20017,
+                "weight": 1,
+                "egress": {
+                  "security": "LINK_SECURITY_TLS",
+                  "server_name": "forward-41"
+                },
+                "node_ref": "forward-41",
+                "peer_identity": "spiffe://anixops/example/agent/forward-41"
+              }
+            ],
+            "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+            "health": {
+              "interval_ms": 5000,
+              "timeout_ms": 2000
+            },
+            "circuit_breaker": {
+              "failure_threshold": 3,
+              "open_ms": 30000
+            },
+            "target_policy": "TARGET_POLICY_PUBLIC_ONLY",
+            "mark": 3
+          }
+        ]
+      },
+      {
+        "node_ref": "forward-41",
+        "hops": [
+          {
+            "route_id": "01JF1E000000000000000000E1",
+            "hop_index": 1,
+            "role": "HOP_ROLE_EXIT",
+            "engine": "ENGINE_GOST",
+            "listen": {
+              "port": 20017,
+              "protocol": "L4_PROTOCOL_TCP"
+            },
+            "ingress": {
+              "security": "LINK_SECURITY_TLS",
+              "server_name": "forward-41"
+            },
+            "upstreams": [
+              {
+                "address": "198.51.100.7",
+                "port": 8443,
+                "weight": 1,
+                "egress": {
+                  "security": "LINK_SECURITY_RAW"
+                }
+              },
+              {
+                "address": "198.51.100.8",
+                "port": 8443,
+                "weight": 1,
+                "egress": {
+                  "security": "LINK_SECURITY_RAW"
+                }
+              }
+            ],
+            "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+            "health": {
+              "interval_ms": 5000,
+              "timeout_ms": 2000
+            },
+            "circuit_breaker": {
+              "failure_threshold": 3,
+              "open_ms": 30000
+            },
+            "target_policy": "TARGET_POLICY_PUBLIC_ONLY",
+            "mark": 2,
+            "ingress_sources": [
+              "198.51.100.31"
+            ],
+            "ingress_peers": [
+              "spiffe://anixops/example/agent/forward-31"
+            ]
+          }
+        ]
+      }
+    ],
+    "allocations": [
+      {
+        "route_id": "01JF1E000000000000000000E1",
+        "node_ref": "forward-31",
+        "port": 20005,
+        "mark": 3
+      },
+      {
+        "route_id": "01JF1E000000000000000000E1",
+        "hop_index": 1,
+        "node_ref": "forward-41",
+        "port": 20017,
+        "mark": 2
+      }
+    ]
+  }
+}

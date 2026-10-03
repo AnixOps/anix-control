@@ -1,9 +1,10 @@
 # Forward SDK: routes, hops, engines and drivers
 
 Status: DESIGN APPROVED (gates H11–H14 decided by the owner on 2026-10-02).
-F1b is implemented: the domain model (`sdk/forward/model`) and the shared
-validation (`sdk/forward/validate`). F2a is implemented: the driver
-interface (`sdk/forward/driver`), an in-memory fake driver
+F1b and F1c are implemented: the domain model (`sdk/forward/model`), the
+shared validation (`sdk/forward/validate`) and the planner
+(`sdk/forward/planner`). F2a is implemented: the driver interface
+(`sdk/forward/driver`), an in-memory fake driver
 (`sdk/forward/driver/fake`) and the driver conformance suite
 (`sdk/forward/driver/conformance`). Nothing serves forwarding with them yet
 and no behaviour changes. The draft contract is
@@ -139,7 +140,7 @@ Everything lives in the existing `sdk/` module
 |---|---|---|
 | Contract | `sdk/api/forward/v1` | `forward.proto`: the model, `NodeForwardState`, `NodeForwardReport`, the services `ForwardControl` and `ForwardNode` (this PR, draft) |
 | Model and validation | `sdk/forward/model`, `sdk/forward/validate` | Go domain types with lossless conversion to and from the contract and the defaults (`model/defaults.go`); one set of validation rules used by Control, the planner and the Agent (F1b, implemented) |
-| Planner | `sdk/forward/planner` | routes and node inventory in, per-node states and port allocations out; pure functions (F1c) |
+| Planner | `sdk/forward/planner` | routes and node inventory in, per-node states, port and mark allocations and generations out; pure functions (F1c, implemented) |
 | Drivers | `sdk/forward/driver`, `.../driver/fake`, `.../driver/conformance`, `.../driver/nftables`, `.../driver/gost`, `.../driver/ansible` | the driver interface, registry, fake driver and conformance suite (F2a, implemented) and the engine implementations (F2b–F2d, F4) |
 | Client | `sdk/forward/forwardctl` | a Go client for `ForwardControl` (F5) |
 
@@ -239,7 +240,8 @@ main rules:
   terminates `hops[i+1].ingress`;
 - `dial_address` only with exactly one node on that hop;
 - ports in 1..65535, inside the node's range, not reserved (section 14),
-  not taken by another route's listener on the node;
+  not taken by another route's listener on the node (this one needs every
+  route, so the planner checks it, section 5.2);
 - targets: syntax, and the target policy (section 14);
 - limits: non-negative; `expires_at` in the future on create.
 - size caps (hops, nodes per hop, targets, labels, the encoded route) and
@@ -249,39 +251,93 @@ main rules:
 
 ## 5. Planner
 
+Implemented in F1c: `sdk/forward/planner` (the package documentation is
+the reference; this section is the summary).
+
 ### 5.1 Contract
 
 ```go
-// Plan renders every route that touches the given nodes into one state per
-// node. It reads nothing but its arguments and returns the same output for
-// the same input.
-func Plan(routes []*forwardv1.Route, nodes []*forwardv1.NodeInfo, previous Allocations) (Result, error)
+// Plan renders every route into one state per node of the inventory. It
+// reads nothing but its arguments and returns the same output for the
+// same input.
+func Plan(routes []*forwardv1.Route, nodes []*forwardv1.NodeInfo, previous Allocations, opts Options) (Result, error)
+
+// PlanRoute is ForwardControl.PlanRoute: one route, only its hops, only on
+// the nodes it uses, generation 0 and no state_hash.
+func PlanRoute(req *forwardv1.PlanRouteRequest, inventory []*forwardv1.NodeInfo, previous Allocations, opts Options) (*forwardv1.PlanRouteResponse, error)
+
+// Stamp sets state_hash and generation from the previous generations.
+func Stamp(states map[string]*forwardv1.NodeForwardState, previous map[string]Generation) map[string]Generation
 
 type Result struct {
     States      map[string]*forwardv1.NodeForwardState // by node_ref, generation 0, no state_hash
     Allocations Allocations                            // (route, hop, node) -> port and mark
-    Violations  []*forwardv1.Violation
+    Violations  []RouteViolation                       // validate.Violation with the route's id
     Warnings    []string
+}
+
+type Options struct {
+    Cluster       string              // names the Agent identities pinned on encrypted links
+    ReservedPorts map[string][]uint32 // per node: never allocated, refused by validation
+    Taken         Allocations         // held outside this plan: grace period, other routes
+    EnableAnixOps, OnCreate bool; Now time.Time // passed to validation
 }
 ```
 
-Control keeps the allocations and the generation counters in its own
-tables, and sets `generation` and `state_hash` after merging. `PlanRoute`
-exposes a single-route run for previews and the goldens in
-`contracts/forward/v1`.
+- **Validation first.** Every route runs through `sdk/forward/validate`
+  with the inventory. The planner adds the rules that need every route on a
+  node, with codes in the same list (`validate/violation.go`):
+  `port_in_use`, `port_exhausted`, `no_port_range`, `mark_exhausted`,
+  `no_address`; `Plan` also needs a distinct, non-empty id per route
+  (`required`, `duplicate` on `id`). **Any violation refuses the whole
+  plan**: no states, no allocations, so Control keeps every node on its
+  previous generation and a node never gets half a change. The error
+  return is only for a misuse of the planner (`Options.Cluster` missing
+  when a route has an encrypted link).
+- Control keeps the allocations and the generations in its own tables and
+  passes them back on the next plan. The contract's `PortAllocation`
+  carries both the port and the mark (`mark = 5`, added in F1c under the
+  draft golden policy); `planner.AllocationsFromProto` turns the stored
+  list back into `Allocations`, so sticky ports and marks round-trip.
+- `PlanRoute` is what the goldens in `contracts/forward/v1` record (section
+  13). Its route id may be empty (a preview before the route is stored);
+  `previous` holds the route's own allocations and `Options.Taken` every
+  other route's.
 
 ### 5.2 Port allocation
 
-- The entry listens on `Route.listen.port`; 0 asks the planner for one from
-  the entry nodes' ranges (the same port on every entry node, so DNS-based
-  entry HA works).
+- The entry listens on `Route.listen.port`; 0 asks the planner for one. The
+  entry's nodes share **one** port, the lowest free on all of them, so
+  DNS-based entry HA works.
 - Every other hop listens on `Hop.port`, or on a port the planner allocates
-  from each node's range when it is 0. Nodes of one hop may get different
-  ports; the previous hop dials each on its own.
-- **Allocations stick.** A `(route, hop, node)` keeps its port across
-  replans, so editing a route's targets never moves its relay port. A
-  deleted route's ports are released after a grace period (proposed 10
-  minutes), so a late packet never reaches a new route.
+  per node when it is 0. Nodes of one hop may get different ports; the
+  previous hop dials each on its own.
+- Allocation runs in three passes, each in route id, hop index and node
+  order, so it is deterministic:
+  1. **Allocations stick.** A `(route, hop, node)` keeps its previous port
+     while that is still legal: inside the node's range, not reserved, not
+     taken, and for an explicit port still the one the route asks for.
+     Editing a route's targets never moves its relay port.
+  2. Explicit ports are claimed. A port already held on the node, by
+     another route, another hop of the same route or a route in its grace
+     period, is refused (`port_in_use`), so the route that holds a port
+     keeps it.
+  3. The remaining hops get the lowest port of the node's range that is
+     free, not in `Options.ReservedPorts` and not in `Options.Taken`; none
+     is `port_exhausted`, no range is `no_port_range`.
+- A sticky port that had to move (the range shrank, the port became
+  reserved) is reported in `Warnings`. A port is held per node for TCP and
+  UDP together.
+- A route that is no longer planned holds nothing. A deleted route's ports
+  are released after a grace period (proposed 10 minutes) so a late packet
+  never reaches a new route: the planner is clock-free, so Control passes
+  them in `Options.Taken` until the grace period ends. `Taken` entries of
+  a route being planned are ignored, so Control may pass every stored
+  allocation.
+- **Marks.** Every hop on a node gets a connection mark in 1..4095
+  (`planner.MaxMark`), unique on the node and sticky like ports. The
+  driver shifts it into its mark mask (section 6.1); `mark_exhausted` when a
+  node already runs 4095 hops.
 - The planner refuses a port that another listener of ours holds on the
   node. The Agent's preflight and the `LISTEN` probe catch ports held by
   others (section 7.6).
@@ -290,19 +346,39 @@ exposes a single-route run for previews and the goldens in
 
 For each hop *i* and each of its nodes the planner emits a `NodeHop`:
 
-- `listen`: `Route.listen` on the entry; the allocated port (bound to
-  `dial_address` when one is set) otherwise;
-- `ingress`: the link it terminates (`RAW` on the entry);
-- `upstreams`: hop *i+1*'s nodes, each with its address (`dial_address` or
-  the node's primary address), allocated port, the link to dial with and,
-  for encrypted links, the next node's pinned Agent identity; on the last
-  hop, the targets;
+- `listen`: `Route.listen` with the entry's port on the entry; the
+  allocated port (bound to `dial_address` when one is set) with the route's
+  protocol otherwise;
+- `ingress`: the link it terminates (`RAW` on the entry); an encrypted link
+  without a `server_name` presents the node's identity name
+  (`forward-41`);
+- `upstreams`: hop *i+1*'s nodes in `node_refs` order, which is also their
+  failover `priority` (0, 1, ...), each with its address (`dial_address` or
+  the node's first address), allocated port, weight 1, the link to dial
+  with (`hops[i+1].ingress`, server name filled in as above) and, for
+  encrypted links, the next node's pinned Agent identity
+  (`spiffe://anixops/<cluster>/agent/<node>`, `Options.Cluster`); on the
+  last hop, the targets in route order with their weight (0 is 1) and
+  priority, dialled `RAW`;
 - `balance`: `Policy.next_hop` towards nodes, `Policy.target` towards
   targets;
-- `health` and `circuit_breaker` with defaults filled in (section 7.3);
-- `ingress_sources` and `ingress_peers`: the previous hop's node addresses
-  and identities, so a relay or exit port is not an open proxy;
-- `mark`: a per-node connection mark for the route (section 6.1).
+- `health`, `circuit_breaker` and `target_policy` with defaults filled in
+  (section 7.3), on every hop;
+- `ingress_sources` and `ingress_peers`: every address of the previous
+  hop's nodes (in order, once each) and, on an encrypted link, their
+  identities, so a relay or exit port is not an open proxy; empty on the
+  entry;
+- `mark`: the hop's connection mark on the node (section 5.2);
+- `paused`: a paused route stays in the states with `paused` set on its
+  hops, so its ports, marks, counters and quota survive the pause; the
+  drivers drop its traffic (`Route.paused` and `NodeHop.paused` say so in
+  the contract).
+
+States list their hops sorted by route id and hop index; `PlanRoute`
+answers states sorted by node. An nftables hop that accepts clients of an
+address family (its listen address, or the node's addresses) without an
+upstream of that family gets a warning, since the driver keeps one DNAT map
+per family (section 6.1).
 
 **Limits land on the entry hop** and only there. The entry is where clients
 connect, so it is the one place that sees all of a route's traffic exactly
@@ -321,11 +397,15 @@ With several entry nodes:
 
 ### 5.4 Generations
 
-- A node's `generation` increases whenever any hop on the node changes. A
-  change to one route bumps only the nodes it touches.
-- `state_hash` is the SHA-256 of the canonical (deterministic protobuf)
-  encoding of the state's hops. Control and the Agent compare hashes, never
-  contents.
+- `state_hash` is the lowercase hex SHA-256 of the deterministic protobuf
+  encoding of a `NodeForwardState` holding only the node's (sorted) hops.
+  Control and the Agent compare hashes, never contents.
+- `Stamp` keeps a node's `generation` while its hash is unchanged and
+  bumps it by one when the hash changes (1 for a new node, whose empty
+  state is a state too). A change to one route bumps only the nodes whose
+  state it changes, and re-planning identical input bumps nothing.
+  `Plan` answers a state for every node of the inventory, so a node that
+  loses its last hop gets a new, empty generation.
 - The Agent applies only a newer generation, persists the last applied
   state locally, and reports the generation and hash it runs. Control shows
   a node as converged when they match.
@@ -333,10 +413,12 @@ With several entry nodes:
 ### 5.5 Direct mode
 
 `Policy.direct` is the private-line "direct from entry" policy. `PREFERRED`
-renders the targets as extra upstreams of the entry with a better priority
-than the next hop, so the entry dials them while they are healthy and falls
-back to the chain otherwise; `FORCED` renders only the targets and the
-planner refuses a route whose later hops would then be unused.
+renders the targets as the first upstreams of the entry, with their own
+priorities, followed by the next hop's nodes with priorities after the
+targets' highest, all balanced with `Policy.target`; so the entry dials the
+targets while they are healthy and falls back to the chain otherwise.
+`FORCED` renders only the targets, and validation refuses it on a route
+with later hops (`unused_hops`).
 
 ## 6. Drivers
 
@@ -822,10 +904,17 @@ features go into which edition is open (H23). The proposal:
   expected violation. This PR adds three drafts;
   `internal/tests/protocompat` keeps them parseable as the draft contract
   and internally consistent (ports, wiring, ingress sources, where limits
-  land). F1c's planner tests compare its output with them byte for byte,
-  and F2/F4 add the rendered nft and gost artifacts per fixture.
-- **Planner unit tests**: allocation stickiness, generations, every
-  validation rule.
+  land). F1c's planner tests produce them byte for byte (canonical
+  protojson, two-space indented; `go -C sdk test ./forward/planner -run
+  Golden -update` rewrites them) and run the negative cases; F1c added
+  goldens for UDP with IPv6 targets, several entry nodes behind an entry
+  hostname, a sticky re-plan, port exhaustion and a multi-route plan with
+  generations. F2/F4 add the rendered nft and gost artifacts per fixture.
+- **Planner unit and property tests**: allocation stickiness, collisions,
+  exhaustion, wiring, generations; properties: re-planning is idempotent,
+  ports and marks never collide on a node, every port is in range and not
+  reserved, removing a route frees its ports, and a generation bumps
+  exactly when the node's state bytes change.
 - **Driver conformance suite** (F2a, implemented:
   `sdk/forward/driver/conformance`). `conformance.Run(t, factory)` runs one
   scenario list against every driver, each scenario on a fresh `Env` (the
@@ -852,8 +941,7 @@ features go into which edition is open (H23). The proposal:
   foreign objects must be unchanged at the end and every observation is
   checked for counter monotonicity within an epoch. The fake driver
   (`sdk/forward/driver/fake`) passes it in unit tests under several
-  capability sets, and mutant drivers prove each rule is enforced.
-- **netns end-to-end** (F2d): client, entry, relay and target namespaces
+  capability sets, and mutant drivers prove each rule is enforced.- **netns end-to-end** (F2d): client, entry, relay and target namespaces
   joined by veth pairs, running the real nftables and gost drivers; checks
   traffic, counters, quota, connection limit, bandwidth (with tolerance) and
   failover by killing a target. It needs root and `CAP_NET_ADMIN` (H14).
@@ -904,7 +992,7 @@ Agent-repository PRs are marked (agent).
 |---|---|---|---|---|
 | F1 | F1a | this design, draft contract, draft fixtures | M | H11 |
 | | F1b | `sdk/forward/model` and `validate` (implemented) | M | |
-| | F1c | `sdk/forward/planner`: allocation, wiring, generations, golden runner | L | |
+| | F1c | `sdk/forward/planner`: allocation, wiring, generations, golden runner (implemented) | L | |
 | F2 | F2a | driver interface, fake driver, conformance suite (implemented) | M | |
 | | F2b | nftables Render and nft goldens | L | H13 |
 | | F2c | nftables Apply, Observe, `SetUpstreams`, tc HTB | L | H13 |

@@ -70,6 +70,27 @@ const (
 	// CodePortReserved: a port reserved on the node (SSH, the Agent's own
 	// ports, a per-node list).
 	CodePortReserved Code = "port_reserved"
+
+	// The planner (sdk/forward/planner) raises the codes below. They need
+	// every route on a node, so validation alone never answers them.
+
+	// CodePortInUse: a port the route asks for is held on the node by
+	// another route's listener, by another hop of the same route, or by a
+	// route deleted within the grace period.
+	CodePortInUse Code = "port_in_use"
+	// CodePortExhausted: no port of the node's range is free for a hop that
+	// asks the planner to allocate one (with several entry nodes, no port
+	// is free on all of them).
+	CodePortExhausted Code = "port_exhausted"
+	// CodeNoPortRange: a hop asks the planner to allocate a port on a node
+	// that has no port range.
+	CodeNoPortRange Code = "no_port_range"
+	// CodeMarkExhausted: the node already runs as many hops as the driver's
+	// connection mark range holds.
+	CodeMarkExhausted Code = "mark_exhausted"
+	// CodeNoAddress: the previous hop must dial a node that has no address
+	// and no dial_address.
+	CodeNoAddress Code = "no_address"
 )
 
 // Violation is one reason a route is refused.
