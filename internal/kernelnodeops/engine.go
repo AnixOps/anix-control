@@ -74,8 +74,9 @@ type Engine struct {
 }
 
 type activeRun struct {
-	run    *Run
-	cancel context.CancelFunc
+	run      *Run
+	cancel   context.CancelFunc
+	deadline time.Time
 }
 
 func (e *Engine) now() time.Time {
@@ -164,9 +165,11 @@ func (e *Engine) Run(ctx context.Context) {
 	if e.DB == nil {
 		return
 	}
-	if err := e.recoverStarted(ctx); err != nil && ctx.Err() == nil {
+	recovery, cancelRecovery := statementContext(ctx)
+	if err := e.recoverStarted(recovery); err != nil && ctx.Err() == nil {
 		log.Printf("Kernel node operations: recovery failed: %v", err)
 	}
+	cancelRecovery()
 	var pruned time.Time
 	ticker := time.NewTicker(e.pollInterval())
 	defer ticker.Stop()
@@ -175,9 +178,11 @@ func (e *Engine) Run(ctx context.Context) {
 			log.Printf("Kernel node operations: dispatch failed: %v", err)
 		}
 		if time.Since(pruned) >= pruneInterval {
-			if _, err := e.Prune(ctx, e.now()); err != nil && ctx.Err() == nil {
+			pruning, cancelPruning := statementContext(ctx)
+			if _, err := e.Prune(pruning, e.now()); err != nil && ctx.Err() == nil {
 				log.Printf("Kernel node operations: prune failed: %v", err)
 			}
+			cancelPruning()
 			pruned = time.Now()
 		}
 		select {
@@ -188,6 +193,12 @@ func (e *Engine) Run(ctx context.Context) {
 		case <-e.wakeChannel():
 		}
 	}
+}
+
+// statementContext is ctx for the dispatcher's own statements: they run
+// to completion when ctx ends, bounded by recordTimeout (see tick).
+func statementContext(ctx context.Context) (context.Context, context.CancelFunc) {
+	return context.WithTimeout(context.WithoutCancel(ctx), recordTimeout)
 }
 
 func (e *Engine) awaitRuns(grace time.Duration) {
@@ -203,13 +214,20 @@ func (e *Engine) awaitRuns(grace time.Duration) {
 }
 
 func (e *Engine) tick(ctx context.Context) error {
-	if err := e.expire(ctx); err != nil {
+	// A tick's statements are short and run to completion when the
+	// dispatcher stops, bounded by recordTimeout, instead of being
+	// interrupted: the SQLite driver's interrupt on a cancelled context
+	// races its connection close (a data race in glebarez/go-sqlite).
+	// Executors still run under ctx.
+	statements, cancel := statementContext(ctx)
+	defer cancel()
+	if err := e.expire(statements); err != nil {
 		return err
 	}
-	if err := e.passCancellations(ctx); err != nil {
+	if err := e.passCancellations(statements); err != nil {
 		return err
 	}
-	return e.claim(ctx)
+	return e.claim(ctx, statements)
 }
 
 // expire ends the operations past their deadline TIMED_OUT, pending or
@@ -229,10 +247,28 @@ func (e *Engine) expire(ctx context.Context) error {
 			return err
 		}
 		if applied {
-			e.stop(due[i].OperationID)
+			e.stopExpired(due[i].OperationID)
 		}
 	}
 	return nil
+}
+
+// stopExpired stops the executor of an operation that passed its
+// deadline. Its context carries that deadline, so once the deadline has
+// passed by the wall clock the context ends DeadlineExceeded by itself;
+// cancelling it here would race that timer and could hand the executor
+// context.Canceled instead. Only a run whose context deadline is still
+// ahead (the ledger's clock, Engine.Now, ran ahead of it) is cancelled.
+func (e *Engine) stopExpired(operationID string) {
+	e.mu.Lock()
+	defer e.mu.Unlock()
+	active, ok := e.running[operationID]
+	if !ok {
+		return
+	}
+	if active.deadline.IsZero() || time.Now().Before(active.deadline) {
+		active.cancel()
+	}
 }
 
 // passCancellations cancels the executors of operations cancelled through
@@ -277,14 +313,14 @@ func (e *Engine) stop(operationID string) {
 
 // claim starts pending operations, oldest first, at most one per resource
 // at a time and at most MaxRunning at once.
-func (e *Engine) claim(ctx context.Context) error {
+func (e *Engine) claim(ctx, statements context.Context) error {
 	e.mu.Lock()
 	free := e.maxRunning() - len(e.running)
 	e.mu.Unlock()
 	if free <= 0 {
 		return nil
 	}
-	db := e.DB.WithContext(ctx)
+	db := e.DB.WithContext(statements)
 	var pending []model.KernelNodeOperation
 	if err := db.Where("state = ?", statePending).Order("id").Limit(free * 4).Find(&pending).Error; err != nil {
 		return err
@@ -302,14 +338,15 @@ func (e *Engine) claim(ctx context.Context) error {
 		busy[key] = true
 	}
 	for i := range pending {
-		if free == 0 {
+		if free == 0 || ctx.Err() != nil {
+			// A stopping dispatcher starts nothing more.
 			break
 		}
 		op := pending[i]
 		if op.ResourceKey != "" && busy[op.ResourceKey] {
 			continue
 		}
-		claimed, err := e.claimOne(ctx, &op)
+		claimed, err := e.claimOne(statements, &op)
 		if err != nil {
 			return err
 		}
@@ -320,7 +357,7 @@ func (e *Engine) claim(ctx context.Context) error {
 			busy[op.ResourceKey] = true
 		}
 		free--
-		e.dispatch(ctx, op)
+		e.dispatch(ctx, statements, op)
 	}
 	return nil
 }
@@ -349,7 +386,7 @@ func (e *Engine) claimOne(ctx context.Context, op *model.KernelNodeOperation) (b
 // dispatch hands a claimed operation to its executor. A kind without one
 // (a kernel rolled back past the release that served it) ends FAILED at
 // once: an operation never waits for an executor that is not there.
-func (e *Engine) dispatch(ctx context.Context, op model.KernelNodeOperation) {
+func (e *Engine) dispatch(ctx, statements context.Context, op model.KernelNodeOperation) {
 	executor, served := e.Executors.Lookup(op.Kind)
 	if !served {
 		e.endLogged(op.OperationID, startedStates, ending{state: stateFailed, err: &kernelnodeopsv1.OperationError{
@@ -361,7 +398,7 @@ func (e *Engine) dispatch(ctx context.Context, op model.KernelNodeOperation) {
 	operation, err := decodeOperation(op.Operation)
 	var targets map[string][]*kernelnodeopsv1.NodeRef
 	if err == nil {
-		targets, err = loadTargets(e.DB.WithContext(ctx), []string{op.OperationID})
+		targets, err = loadTargets(e.DB.WithContext(statements), []string{op.OperationID})
 	}
 	if err != nil {
 		e.endLogged(op.OperationID, startedStates, ending{state: stateFailed, err: &kernelnodeopsv1.OperationError{
@@ -379,7 +416,7 @@ func (e *Engine) dispatch(ctx context.Context, op model.KernelNodeOperation) {
 	if e.running == nil {
 		e.running = map[string]*activeRun{}
 	}
-	e.running[op.OperationID] = &activeRun{run: run, cancel: cancel}
+	e.running[op.OperationID] = &activeRun{run: run, cancel: cancel, deadline: op.DeadlineAt}
 	e.mu.Unlock()
 	if op.CancelRequestedAt != nil {
 		cancel()

@@ -488,8 +488,13 @@ func TestDiagnoseForwardDialsPublicTargetsOnly(t *testing.T) {
 		network.lookups["internal.example.test"] = []netip.Addr{netip.MustParseAddr("10.0.0.9")}
 		network.lookups["public.example.test"] = []netip.Addr{netip.MustParseAddr("203.0.113.7")}
 		h := diagnosisHarness(t, db, network, nil)
-		h.start(t)
 		client := h.client(forwardHost, allow(service.CapabilityNodeOpsDiagnose))
+		// A forward deleted since the submission is TARGET_GONE. It is
+		// submitted and deleted before the dispatcher runs, so the
+		// executor cannot reach it first.
+		submitted := submit(t, client, "diagnose.forward:41", diagnoseForward(41, kernelnodeopsv1.Vantage_VANTAGE_UNSPECIFIED))
+		require.NoError(t, db.Delete(&model.Forward{}, 41).Error)
+		h.start(t)
 
 		operation := submitWait(t, client, "diagnose.forward:40", diagnoseForward(40, kernelnodeopsv1.Vantage_VANTAGE_UNSPECIFIED))
 		require.Equal(t, succeeded, operation.GetState(), "%v", operation.GetError())
@@ -523,9 +528,7 @@ func TestDiagnoseForwardDialsPublicTargetsOnly(t *testing.T) {
 		require.NoError(t, err)
 		requireProtoEqual(t, legacyOutcomes(legacy.Results), withoutTimings(diagnosis.GetOutcomes()))
 
-		// A forward deleted since the submission is TARGET_GONE.
-		submitted := submit(t, client, "diagnose.forward:41", diagnoseForward(41, kernelnodeopsv1.Vantage_VANTAGE_UNSPECIFIED))
-		require.NoError(t, db.Delete(&model.Forward{}, 41).Error)
+		// The forward deleted since its submission is TARGET_GONE.
 		gone := eventually(t, get(t, client, submitted.GetOperation().GetOperationId()), inState(failed))
 		require.Equal(t, kernelnodeopsv1.ErrorCode_ERROR_CODE_TARGET_GONE, gone.GetError().GetCode())
 		require.Equal(t, "转发不存在", gone.GetError().GetMessage())
@@ -539,8 +542,13 @@ func TestDiagnoseTunnel(t *testing.T) {
 		prepareForward(t, db, "203.0.113.1:80")
 		network := newFakeNetwork(map[string]string{"198.51.100.10:22": "ok"})
 		h := diagnosisHarness(t, db, network, nil)
-		h.start(t)
 		client := h.client(forwardHost, allow(service.CapabilityNodeOpsDiagnose))
+		// A tunnel deleted since the submission is TARGET_GONE. It is
+		// submitted and deleted before the dispatcher runs, so the
+		// executor cannot reach it first.
+		submitted := submit(t, client, "diagnose.tunnel:31", diagnoseTunnel(31, kernelnodeopsv1.Vantage_VANTAGE_UNSPECIFIED))
+		require.NoError(t, db.Delete(&model.ForwardTunnel{}, 31).Error)
+		h.start(t)
 
 		operation := submitWait(t, client, "diagnose.tunnel:30", diagnoseTunnel(30, kernelnodeopsv1.Vantage_VANTAGE_UNSPECIFIED))
 		require.Equal(t, succeeded, operation.GetState(), "%v", operation.GetError())
@@ -576,9 +584,7 @@ func TestDiagnoseTunnel(t *testing.T) {
 			{Description: "管理端->出口节点", NodeName: "exit", NodeId: "11", TargetIp: "198.51.100.11", TargetPort: 22, Message: "dial tcp 198.51.100.11:22: connect: connection refused"},
 		}, withoutTimings(stopped.GetOperation().GetResult().GetDiagnosis().GetOutcomes()))
 
-		// A tunnel deleted since the submission is TARGET_GONE.
-		submitted := submit(t, client, "diagnose.tunnel:31", diagnoseTunnel(31, kernelnodeopsv1.Vantage_VANTAGE_UNSPECIFIED))
-		require.NoError(t, db.Delete(&model.ForwardTunnel{}, 31).Error)
+		// The tunnel deleted since its submission is TARGET_GONE.
 		gone := eventually(t, get(t, client, submitted.GetOperation().GetOperationId()), inState(failed))
 		require.Equal(t, kernelnodeopsv1.ErrorCode_ERROR_CODE_TARGET_GONE, gone.GetError().GetCode())
 		require.Equal(t, "隧道不存在", gone.GetError().GetMessage())

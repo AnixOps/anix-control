@@ -164,6 +164,19 @@
   group's one by one as they changed, or at its next resync. Updating a
   node's `group_id` now records a change for each active user of the old
   and the new group (every active user when either is "all").
+- KernelNodeOps: an executor whose operation passes its deadline now
+  always sees `context.DeadlineExceeded`. The dispatcher's deadline sweep
+  could cancel the executor's context just before the context's own
+  deadline fired, handing it `context.Canceled` instead. The dispatcher's
+  own statements now also finish when it stops instead of being
+  interrupted, which avoided a data race in the SQLite driver.
+- Flaky tests made deterministic: `internal/kernelnodeops`
+  (`TestDeadlinesEndStartedOperationsTimedOut`, and the TARGET_GONE steps
+  of `TestDiagnoseForwardDialsPublicTargetsOnly` and `TestDiagnoseTunnel`,
+  which could run the diagnosis before the target was deleted) and
+  `internal/tests/nodeopsagent` (the scripted agent announced an operation
+  before acknowledging it, so a test's terminal report could overtake the
+  acknowledgement and Control closed the stream).
 
 ## 4.1.0-rc.5 - 2026-10-02
 
