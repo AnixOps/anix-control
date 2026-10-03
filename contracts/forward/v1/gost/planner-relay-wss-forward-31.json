@@ -39,6 +39,9 @@
       "name": "r01JF1B000000000000000000B1-h1-tcp",
       "addr": "172.16.5.31:20000",
       "admission": "r01JF1B000000000000000000B1-h1",
+      "metadata": {
+        "enableStats": true
+      },
       "handler": {
         "type": "tcp",
         "chain": "r01JF1B000000000000000000B1-h1"
@@ -61,56 +64,61 @@
       "name": "r01JF1B000000000000000000B1-h1",
       "hops": [
         {
-          "name": "r01JF1B000000000000000000B1-h1",
-          "selector": {
-            "strategy": "fifo",
-            "maxFails": 3,
-            "failTimeout": "30s"
+          "name": "r01JF1B000000000000000000B1-h1"
+        }
+      ]
+    }
+  ],
+  "hops": [
+    {
+      "name": "r01JF1B000000000000000000B1-h1",
+      "selector": {
+        "strategy": "fifo",
+        "maxFails": 3,
+        "failTimeout": "30s"
+      },
+      "nodes": [
+        {
+          "name": "u0",
+          "addr": "203.0.113.41:20000",
+          "connector": {
+            "type": "relay"
           },
-          "nodes": [
-            {
-              "name": "u0",
-              "addr": "203.0.113.41:20000",
-              "connector": {
-                "type": "relay"
-              },
-              "dialer": {
-                "type": "wss",
-                "tls": {
-                  "certFile": "/var/lib/anixops-gost/tls/link.crt",
-                  "keyFile": "/var/lib/anixops-gost/tls/link.key",
-                  "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
-                  "secure": true,
-                  "serverName": "forward-41"
-                },
-                "metadata": {
-                  "host": "forward-41",
-                  "path": "/anixops"
-                }
-              }
+          "dialer": {
+            "type": "wss",
+            "tls": {
+              "certFile": "/var/lib/anixops-gost/tls/link.crt",
+              "keyFile": "/var/lib/anixops-gost/tls/link.key",
+              "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
+              "secure": true,
+              "serverName": "forward-41"
             },
-            {
-              "name": "u1",
-              "addr": "203.0.113.42:20000",
-              "connector": {
-                "type": "relay"
-              },
-              "dialer": {
-                "type": "wss",
-                "tls": {
-                  "certFile": "/var/lib/anixops-gost/tls/link.crt",
-                  "keyFile": "/var/lib/anixops-gost/tls/link.key",
-                  "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
-                  "secure": true,
-                  "serverName": "forward-42"
-                },
-                "metadata": {
-                  "host": "forward-42",
-                  "path": "/anixops"
-                }
-              }
+            "metadata": {
+              "host": "forward-41",
+              "path": "/anixops"
             }
-          ]
+          }
+        },
+        {
+          "name": "u1",
+          "addr": "203.0.113.42:20000",
+          "connector": {
+            "type": "relay"
+          },
+          "dialer": {
+            "type": "wss",
+            "tls": {
+              "certFile": "/var/lib/anixops-gost/tls/link.crt",
+              "keyFile": "/var/lib/anixops-gost/tls/link.key",
+              "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
+              "secure": true,
+              "serverName": "forward-42"
+            },
+            "metadata": {
+              "host": "forward-42",
+              "path": "/anixops"
+            }
+          }
         }
       ]
     }
@@ -130,8 +138,11 @@
     "format": "json",
     "output": "stderr"
   },
+  "api": {
+    "addr": "unix:///run/anixops-gost/api.sock"
+  },
   "metrics": {
     "addr": "unix:///run/anixops-gost/metrics.sock",
-    "path": "/anixops-64f147fa072c6f4c"
+    "path": "/anixops-354d60cfa00bd628"
   }
 }

@@ -38,6 +38,9 @@
       "name": "r01JF1C000000000000000000C1-h1-wss",
       "addr": ":10000",
       "admission": "r01JF1C000000000000000000C1-h1",
+      "metadata": {
+        "enableStats": true
+      },
       "handler": {
         "type": "relay"
       },
@@ -53,30 +56,36 @@
         }
       },
       "forwarder": {
-        "nodes": [
-          {
-            "name": "u0-0",
-            "addr": "[2001:db8:100::7]:27015"
-          },
-          {
-            "name": "u0-1",
-            "addr": "[2001:db8:100::7]:27015"
-          },
-          {
-            "name": "u1-0",
-            "addr": "[2001:db8:100::8]:27015"
-          },
-          {
-            "name": "u0-2",
-            "addr": "[2001:db8:100::7]:27015"
-          }
-        ],
-        "selector": {
-          "strategy": "round",
-          "maxFails": 3,
-          "failTimeout": "30s"
-        }
+        "hop": "r01JF1C000000000000000000C1-h1"
       }
+    }
+  ],
+  "hops": [
+    {
+      "name": "r01JF1C000000000000000000C1-h1",
+      "selector": {
+        "strategy": "round",
+        "maxFails": 3,
+        "failTimeout": "30s"
+      },
+      "nodes": [
+        {
+          "name": "u0-0",
+          "addr": "[2001:db8:100::7]:27015"
+        },
+        {
+          "name": "u0-1",
+          "addr": "[2001:db8:100::7]:27015"
+        },
+        {
+          "name": "u1-0",
+          "addr": "[2001:db8:100::8]:27015"
+        },
+        {
+          "name": "u0-2",
+          "addr": "[2001:db8:100::7]:27015"
+        }
+      ]
     }
   ],
   "admissions": [
@@ -94,8 +103,11 @@
     "format": "json",
     "output": "stderr"
   },
+  "api": {
+    "addr": "unix:///run/anixops-gost/api.sock"
+  },
   "metrics": {
     "addr": "unix:///run/anixops-gost/metrics.sock",
-    "path": "/anixops-fe2c3a0b5486f857"
+    "path": "/anixops-b04f46f93bdcf99c"
   }
 }

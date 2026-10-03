@@ -45,6 +45,9 @@
       "name": "r01JF1B000000000000000000B1-h1-tcp",
       "addr": "172.16.5.31:20000",
       "admission": "r01JF1B000000000000000000B1-h1",
+      "metadata": {
+        "enableStats": true
+      },
       "handler": {
         "type": "tcp",
         "chain": "r01JF1B000000000000000000B1-h1"
@@ -65,6 +68,9 @@
       "name": "r01JF1B000000000000000000B1-h1-udp",
       "addr": "172.16.5.31:20000",
       "admission": "r01JF1B000000000000000000B1-h1",
+      "metadata": {
+        "enableStats": true
+      },
       "handler": {
         "type": "udp",
         "chain": "r01JF1B000000000000000000B1-h1"
@@ -92,48 +98,53 @@
       "name": "r01JF1B000000000000000000B1-h1",
       "hops": [
         {
-          "name": "r01JF1B000000000000000000B1-h1",
-          "selector": {
-            "strategy": "fifo",
-            "maxFails": 3,
-            "failTimeout": "30s"
+          "name": "r01JF1B000000000000000000B1-h1"
+        }
+      ]
+    }
+  ],
+  "hops": [
+    {
+      "name": "r01JF1B000000000000000000B1-h1",
+      "selector": {
+        "strategy": "fifo",
+        "maxFails": 3,
+        "failTimeout": "30s"
+      },
+      "nodes": [
+        {
+          "name": "u0",
+          "addr": "203.0.113.41:20000",
+          "connector": {
+            "type": "relay"
           },
-          "nodes": [
-            {
-              "name": "u0",
-              "addr": "203.0.113.41:20000",
-              "connector": {
-                "type": "relay"
-              },
-              "dialer": {
-                "type": "tls",
-                "tls": {
-                  "certFile": "/var/lib/anixops-gost/tls/link.crt",
-                  "keyFile": "/var/lib/anixops-gost/tls/link.key",
-                  "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
-                  "secure": true,
-                  "serverName": "forward-41"
-                }
-              }
-            },
-            {
-              "name": "u1",
-              "addr": "203.0.113.42:20000",
-              "connector": {
-                "type": "relay"
-              },
-              "dialer": {
-                "type": "tls",
-                "tls": {
-                  "certFile": "/var/lib/anixops-gost/tls/link.crt",
-                  "keyFile": "/var/lib/anixops-gost/tls/link.key",
-                  "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
-                  "secure": true,
-                  "serverName": "forward-42"
-                }
-              }
+          "dialer": {
+            "type": "tls",
+            "tls": {
+              "certFile": "/var/lib/anixops-gost/tls/link.crt",
+              "keyFile": "/var/lib/anixops-gost/tls/link.key",
+              "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
+              "secure": true,
+              "serverName": "forward-41"
             }
-          ]
+          }
+        },
+        {
+          "name": "u1",
+          "addr": "203.0.113.42:20000",
+          "connector": {
+            "type": "relay"
+          },
+          "dialer": {
+            "type": "tls",
+            "tls": {
+              "certFile": "/var/lib/anixops-gost/tls/link.crt",
+              "keyFile": "/var/lib/anixops-gost/tls/link.key",
+              "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
+              "secure": true,
+              "serverName": "forward-42"
+            }
+          }
         }
       ]
     }
@@ -153,8 +164,11 @@
     "format": "json",
     "output": "stderr"
   },
+  "api": {
+    "addr": "unix:///run/anixops-gost/api.sock"
+  },
   "metrics": {
     "addr": "unix:///run/anixops-gost/metrics.sock",
-    "path": "/anixops-9bbb0db3401fdd3c"
+    "path": "/anixops-81ef6b53e63e6950"
   }
 }

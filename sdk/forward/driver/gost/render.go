@@ -2,6 +2,7 @@ package gost
 
 import (
 	"bytes"
+	"cmp"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
@@ -51,6 +52,13 @@ func (d *Driver) Render(state *forwardv1.NodeForwardState) (driver.Artifact, err
 // (github.com/go-gost/x/config) the driver writes, with gost's own key
 // spellings. Field order is fixed, so encoding/json writes the same bytes
 // for the same plans.
+//
+// The objects split in two. Services, chains, the log and the API are the
+// configuration's structure: changing them needs gost to re-create its
+// services (a reload), and the metrics path names them. Hops, admissions
+// and limiters are referenced by name from the structure and resolved by
+// gost at every connection, so Apply and SetUpstreams replace them
+// through the web API without re-creating a service (hot objects).
 type (
 	gostConfig struct {
 		// AnixOps is the manifest: what Apply, Observe and SetUpstreams
@@ -58,21 +66,29 @@ type (
 		AnixOps    *manifest     `json:"anixops"`
 		Services   []service     `json:"services,omitempty"`
 		Chains     []chain       `json:"chains,omitempty"`
+		Hops       []hopConfig   `json:"hops,omitempty"`
 		Admissions []admission   `json:"admissions,omitempty"`
 		Limiters   []limiter     `json:"limiters,omitempty"`
 		CLimiters  []limiter     `json:"climiters,omitempty"`
 		Log        *logConfig    `json:"log,omitempty"`
+		API        *apiBlock     `json:"api,omitempty"`
 		Metrics    *metricsBlock `json:"metrics,omitempty"`
 	}
 	service struct {
-		Name      string    `json:"name"`
-		Addr      string    `json:"addr"`
-		Admission string    `json:"admission,omitempty"`
-		Limiter   string    `json:"limiter,omitempty"`
-		CLimiter  string    `json:"climiter,omitempty"`
-		Handler   handler   `json:"handler"`
-		Listener  endpoint  `json:"listener"`
-		Forwarder forwarder `json:"forwarder"`
+		Name      string          `json:"name"`
+		Addr      string          `json:"addr"`
+		Admission string          `json:"admission,omitempty"`
+		Limiter   string          `json:"limiter,omitempty"`
+		CLimiter  string          `json:"climiter,omitempty"`
+		Metadata  serviceMetadata `json:"metadata"`
+		Handler   handler         `json:"handler"`
+		Listener  endpoint        `json:"listener"`
+		Forwarder forwarder       `json:"forwarder"`
+	}
+	// serviceMetadata turns on the service's statistics (connections and
+	// bytes), which gost's web API reports and Observe reads.
+	serviceMetadata struct {
+		EnableStats bool `json:"enableStats"`
 	}
 	handler struct {
 		Type  string `json:"type"`
@@ -91,9 +107,11 @@ type (
 		Secure     bool   `json:"secure,omitempty"`
 		ServerName string `json:"serverName,omitempty"`
 	}
+	// forwarder names the hop whose nodes a RAW service dials, or holds
+	// the placeholder node of a service that dials through a chain.
 	forwarder struct {
-		Nodes    []node    `json:"nodes"`
-		Selector *selector `json:"selector,omitempty"`
+		Hop   string `json:"hop,omitempty"`
+		Nodes []node `json:"nodes,omitempty"`
 	}
 	node struct {
 		Name      string            `json:"name"`
@@ -107,14 +125,23 @@ type (
 		MaxFails    uint32 `json:"maxFails"`
 		FailTimeout string `json:"failTimeout"`
 	}
+	// hopConfig is a top-level hop: the upstreams of one gost hop with
+	// their selector. Services (RAW) and chains (relayed) name it, so
+	// SetUpstreams replaces it alone. Metadata carries the rotation a
+	// SetUpstreams put there (rotationKey); Render never sets it.
+	hopConfig struct {
+		Name     string            `json:"name"`
+		Selector *selector         `json:"selector"`
+		Nodes    []node            `json:"nodes"`
+		Metadata map[string]string `json:"metadata,omitempty"`
+	}
 	chain struct {
 		Name string     `json:"name"`
 		Hops []chainHop `json:"hops"`
 	}
+	// chainHop names a top-level hop.
 	chainHop struct {
-		Name     string    `json:"name"`
-		Selector *selector `json:"selector"`
-		Nodes    []node    `json:"nodes"`
+		Name string `json:"name"`
 	}
 	admission struct {
 		Name      string   `json:"name"`
@@ -129,6 +156,13 @@ type (
 		Level  string `json:"level"`
 		Format string `json:"format"`
 		Output string `json:"output"`
+	}
+	// apiBlock is gost's web API, on a unix socket in the runtime
+	// directory and without authentication: the socket's permissions are
+	// its only key (the unit's UMask 0007 and RuntimeDirectoryMode 0750
+	// leave it to the gost user and its group, which the Agent is in).
+	apiBlock struct {
+		Addr string `json:"addr"`
 	}
 	metricsBlock struct {
 		Addr string `json:"addr"`
@@ -150,17 +184,27 @@ func (d *Driver) render(plans []*hopPlan) ([]byte, error) {
 	}
 	if len(plans) > 0 {
 		cfg.Log = &logConfig{Level: "warn", Format: "json", Output: "stderr"}
-		// The metrics path names the configuration (a hash of everything
-		// above it), so Apply knows gost serves this one and not the
-		// previous: a reload that failed keeps the old path.
-		body, err := encode(cfg)
+		cfg.API = &apiBlock{Addr: "unix://" + d.cfg.apiPath()}
+		path, err := structurePath(cfg)
 		if err != nil {
 			return nil, err
 		}
-		sum := sha256.Sum256(body)
-		cfg.Metrics = &metricsBlock{Addr: "unix://" + d.cfg.metricsPath(), Path: "/anixops-" + hex.EncodeToString(sum[:8])}
+		cfg.Metrics = &metricsBlock{Addr: "unix://" + d.cfg.metricsPath(), Path: path}
 	}
 	return encode(cfg)
+}
+
+// structurePath answers the metrics path of a configuration: a hash of its
+// structure (services, chains, log, API), so gost serves a new path
+// exactly when a start or a reload loaded a new structure (a reload that
+// failed keeps the old one), and a change to hot objects alone keeps it.
+func structurePath(cfg *gostConfig) (string, error) {
+	body, err := encode(&gostConfig{Services: cfg.Services, Chains: cfg.Chains, Log: cfg.Log, API: cfg.API})
+	if err != nil {
+		return "", err
+	}
+	sum := sha256.Sum256(body)
+	return "/anixops-" + hex.EncodeToString(sum[:8]), nil
 }
 
 func encode(v any) ([]byte, error) {
@@ -173,25 +217,23 @@ func encode(v any) ([]byte, error) {
 	return b.Bytes(), nil
 }
 
-// renderHop adds a hop's services, chain, admission and limiters.
+// renderHop adds a hop's services, hop, chain, admission and limiters.
 func (d *Driver) renderHop(cfg *gostConfig, p *hopPlan) {
 	mh := manifestHop{
 		Route:   p.key.RouteID,
 		Hop:     p.key.HopIndex,
 		Balance: p.balance.String(),
 		Paused:  p.paused,
+		Quota:   p.quotaBytes,
 	}
-	var adm, lim, clim string
-	if len(p.sources) > 0 || p.paused {
-		adm = p.name
-		a := admission{Name: adm, Whitelist: true, Matchers: []string{}}
-		if !p.paused { // a paused hop admits nobody: it keeps its listener and refuses every connection
-			for _, s := range p.sources {
-				a.Matchers = append(a.Matchers, prefixText(s))
-			}
-		}
-		cfg.Admissions = append(cfg.Admissions, a)
-	}
+	// Every hop has an admission, so pausing and resuming it, and the soft
+	// quota, replace the admission alone and never a service: a paused hop
+	// keeps its listener and its counters (and their epoch) and admits
+	// nobody; an entry without sources admits everybody (an empty
+	// blacklist).
+	adm := admissionOf(p)
+	cfg.Admissions = append(cfg.Admissions, adm)
+	var lim, clim string
 	if p.bandwidthBps > 0 {
 		lim = p.name
 		rate := strconv.FormatUint(max(1, p.bandwidthBps/8), 10) + "B"
@@ -202,14 +244,13 @@ func (d *Driver) renderHop(cfg *gostConfig, p *hopPlan) {
 		cfg.CLimiters = append(cfg.CLimiters, limiter{Name: clim, Limits: []string{"$ " + strconv.FormatUint(uint64(p.maxConns), 10)}})
 	}
 
-	sel := &selector{Strategy: strategyName(p.balance), MaxFails: p.maxFails, FailTimeout: p.failTimeout.String()}
-	nodes := d.nodes(p)
-	fwd := forwarder{Nodes: nodes, Selector: sel}
+	cfg.Hops = append(cfg.Hops, hopConfig{Name: p.name, Selector: selectorOf(p), Nodes: d.nodes(p)})
+	fwd := forwarder{Hop: p.name}
 	h := handler{}
 	if p.chain {
 		fwd = forwarder{Nodes: []node{{Name: "next", Addr: placeholder}}}
 		h.Chain = p.name
-		cfg.Chains = append(cfg.Chains, chain{Name: p.name, Hops: []chainHop{{Name: p.name, Selector: sel, Nodes: nodes}}})
+		cfg.Chains = append(cfg.Chains, chain{Name: p.name, Hops: []chainHop{{Name: p.name}}})
 	}
 
 	addr := ":" + strconv.FormatUint(uint64(p.port), 10)
@@ -220,9 +261,10 @@ func (d *Driver) renderHop(cfg *gostConfig, p *hopPlan) {
 		s := service{
 			Name:      p.name + "-" + l.gostType,
 			Addr:      addr,
-			Admission: adm,
+			Admission: adm.Name,
 			Limiter:   lim,
 			CLimiter:  clim,
+			Metadata:  serviceMetadata{EnableStats: true},
 			Handler:   handler{Type: l.handler, Chain: h.Chain},
 			Listener:  d.listenerEndpoint(l, p.ingress),
 			Forwarder: fwd,
@@ -241,6 +283,25 @@ func (d *Driver) renderHop(cfg *gostConfig, p *hopPlan) {
 	cfg.AnixOps.Hops = append(cfg.AnixOps.Hops, mh)
 }
 
+// admissionOf answers a hop's admission: a whitelist of its sources, a
+// whitelist of nobody when it is paused, an empty blacklist (everybody)
+// for an entry without sources.
+func admissionOf(p *hopPlan) admission {
+	a := admission{Name: p.name, Whitelist: len(p.sources) > 0 || p.paused, Matchers: []string{}}
+	if !p.paused {
+		for _, s := range p.sources {
+			a.Matchers = append(a.Matchers, prefixText(s))
+		}
+	}
+	return a
+}
+
+// selectorOf answers the selector of a hop's upstreams, with the circuit
+// breaker as its fail filter.
+func selectorOf(p *hopPlan) *selector {
+	return &selector{Strategy: strategyName(p.balance), MaxFails: p.maxFails, FailTimeout: p.failTimeout.String()}
+}
+
 // strategyName maps a balance strategy to gost's selector strategy.
 // LEAST_CONN is weighted random, which the Agent re-weights every
 // model.DefaultLeastConnReweight (H21) through SetUpstreams (F4b, L1).
@@ -256,34 +317,46 @@ func strategyName(s forwardv1.BalanceStrategy) string {
 	return "round"
 }
 
-// nodes answers a hop's gost nodes: one per upstream, named u<index>, in
-// the order its strategy needs. FAILOVER lists them by priority (ties in
-// state order) for gost's fifo; RANDOM and LEAST_CONN carry the weight as
-// metadata; weighted ROUND_ROBIN and IP_HASH list an upstream once per
-// entry of spread (u<index>-<k>), since gost's round and hash ignore
-// weights.
+// nodes answers a hop's gost nodes for all its upstreams.
 func (d *Driver) nodes(p *hopPlan) []node {
-	ups := slices.Clone(p.upstreams)
-	mk := func(u upstream, name string) node {
-		n := node{Name: name, Addr: u.addrPort().String()}
+	ups := make([]nodeUpstream, 0, len(p.upstreams))
+	for _, u := range p.upstreams {
+		n := nodeUpstream{index: u.index, addr: u.addrPort().String(), weight: u.weight, priority: u.priority}
 		if !u.egress.raw() {
-			n.Connector = &endpoint{Type: "relay"}
-			n.Dialer = d.dialerEndpoint(u.egress)
+			n.connector = &endpoint{Type: "relay"}
+			n.dialer = d.dialerEndpoint(u.egress)
 		}
-		return n
+		ups = append(ups, n)
 	}
-	name := func(u upstream) string { return "u" + strconv.Itoa(u.index) }
-	switch p.balance {
+	return buildNodes(p.balance, ups)
+}
+
+// nodeUpstream is one upstream as a gost node needs it: Render makes them
+// from the hop, SetUpstreams from the applied configuration.
+type nodeUpstream struct {
+	index     int    // in the state's upstream list: the node is u<index>
+	addr      string // host:port
+	weight    uint32 // at least 1
+	priority  uint32
+	connector *endpoint // relayed upstreams only
+	dialer    *endpoint
+}
+
+// buildNodes answers the gost nodes of upstreams (in state order), named
+// u<index>, in the order the strategy needs. FAILOVER lists them by
+// priority (ties in state order) for gost's fifo; RANDOM and LEAST_CONN
+// carry the weight as metadata; weighted ROUND_ROBIN and IP_HASH list an
+// upstream once per entry of spread (u<index>-<k>), since gost's round
+// and hash ignore weights.
+func buildNodes(balance forwardv1.BalanceStrategy, ups []nodeUpstream) []node {
+	ups = slices.Clone(ups)
+	mk := func(u nodeUpstream, name string) node {
+		return node{Name: name, Addr: u.addr, Connector: u.connector, Dialer: u.dialer}
+	}
+	name := func(u nodeUpstream) string { return "u" + strconv.Itoa(u.index) }
+	switch balance {
 	case forwardv1.BalanceStrategy_BALANCE_STRATEGY_FAILOVER:
-		slices.SortStableFunc(ups, func(a, b upstream) int {
-			switch {
-			case a.priority < b.priority:
-				return -1
-			case a.priority > b.priority:
-				return 1
-			}
-			return 0
-		})
+		slices.SortStableFunc(ups, func(a, b nodeUpstream) int { return cmp.Compare(a.priority, b.priority) })
 	case forwardv1.BalanceStrategy_BALANCE_STRATEGY_RANDOM, forwardv1.BalanceStrategy_BALANCE_STRATEGY_LEAST_CONN:
 		out := make([]node, 0, len(ups))
 		for _, u := range ups {

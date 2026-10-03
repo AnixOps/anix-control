@@ -3,7 +3,6 @@ route 01JF2A000000000000000000C2 hop 0 (ENGINE_GOST): forward driver: unsupporte
 route 01JF2A000000000000000000E1 hop 0 (ENGINE_GOST): forward driver: invalid state: upstreams[0]: 127.0.0.1 cannot be forwarded to
 route 01JF2A000000000000000000F1 hop 0 (ENGINE_GOST): forward driver: invalid state: listener tcp port 30006 overlaps another hop's
 route 01JF2A000000000000000000F2 hop 0 (ENGINE_GOST): forward driver: invalid state: listener tcp port 30006 overlaps another hop's
-route 01JF2A000000000000000000F3 hop 0 (ENGINE_GOST): forward driver: unsupported: gost has no byte quota (an exact quota needs an NFTABLES entry)
 route 01JF2A000000000000000000F4 hop 0 (ENGINE_GOST): forward driver: unsupported: the hop mixes RAW upstreams with relayed ones; gost balances one kind per hop
 route 01JF2A000000000000000000F5 hop 1 (ENGINE_GOST): forward driver: invalid state: HOP_ROLE_RELAY hop without ingress sources would be an open relay
 route 01JF2A000000000000000000F6 hop 1 (ENGINE_GOST): forward driver: invalid state: encrypted ingress without ingress_peers

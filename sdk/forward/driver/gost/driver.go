@@ -94,8 +94,8 @@ func (d *Driver) Config() Config {
 
 // Capabilities answers the capabilities of the configuration, which Probe
 // filled from the host: a configuration without a Version is unavailable.
-// TLS, WSS, QUIC and gRPC links need the link certificate; gost has no
-// byte quota.
+// TLS, WSS, QUIC and gRPC links need the link certificate. The quota is
+// the soft one (Config.SoftQuota, EnforceQuotas): gost has no byte quota.
 func (d *Driver) Capabilities(ctx context.Context) (*forwardv1.EngineCapabilities, error) {
 	if err := ctx.Err(); err != nil {
 		return nil, err
@@ -109,6 +109,7 @@ func (d *Driver) Capabilities(ctx context.Context) (*forwardv1.EngineCapabilitie
 		Strategies:     slices.Clone(d.cfg.Strategies),
 		LinkSecurities: []forwardv1.LinkSecurity{forwardv1.LinkSecurity_LINK_SECURITY_RAW},
 		BandwidthLimit: d.cfg.BandwidthLimit,
+		Quota:          d.cfg.SoftQuota,
 		MaxConns:       d.cfg.MaxConns,
 	}
 	if d.cfg.linkTLS() {
@@ -373,12 +374,14 @@ func (d *Driver) recoverPrevious(ctx context.Context, h *host) error {
 	return nil
 }
 
-// removeStaleSocket deletes the metrics socket a gost that was killed left
-// behind, which would stop the next gost from listening on it. gost is not
-// running when it is called. Under systemd the unit's RuntimeDirectory goes
-// with the process, and the Agent may lack the right to delete in it.
+// removeStaleSocket deletes the metrics and API sockets a gost that was
+// killed left behind, which would stop the next gost from listening on
+// them. gost is not running when it is called. Under systemd the unit's
+// RuntimeDirectory goes with the process, and the Agent may lack the
+// right to delete in it.
 func (d *Driver) removeStaleSocket() {
 	_ = os.Remove(d.cfg.metricsPath())
+	_ = os.Remove(d.cfg.apiPath())
 }
 
 func keysOf(hops []manifestHop) []driver.HopKey {

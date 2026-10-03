@@ -53,7 +53,9 @@ func TestRenderIsPlainJSON(t *testing.T) {
 }
 
 // TestRenderMetricsPathNamesTheConfiguration: the metrics path changes with
-// any hop, not with the state's identity.
+// the configuration's structure (a listener), not with the hot objects
+// (upstreams, weights, pause, sources, limits' values) or the state's
+// identity.
 func TestRenderMetricsPathNamesTheConfiguration(t *testing.T) {
 	d := newDriver(t, nil)
 	b := builder(t)
@@ -66,11 +68,21 @@ func TestRenderMetricsPathNamesTheConfiguration(t *testing.T) {
 		return c.Metrics.Path
 	}
 	h := b.Simple(conformance.RouteA, 0)
+	h.Limits = &forwardv1.Limits{BandwidthBps: 8_000_000, MaxConns: 10}
 	p1 := path(h)
-	h2 := proto.Clone(h).(*forwardv1.NodeHop)
-	h2.Upstreams[2].Weight = 9
-	if p2 := path(h2); p2 == p1 || !strings.HasPrefix(p1, "/anixops-") {
-		t.Fatalf("metrics paths %s %s", p1, p2)
+	hot := proto.Clone(h).(*forwardv1.NodeHop)
+	hot.Upstreams[2].Weight = 9
+	hot.Upstreams = hot.Upstreams[1:]
+	hot.Balance = forwardv1.BalanceStrategy_BALANCE_STRATEGY_RANDOM
+	hot.Paused = true
+	hot.Limits = &forwardv1.Limits{BandwidthBps: 1_000_000, MaxConns: 3, QuotaBytes: 1 << 30}
+	if p2 := path(hot); p2 != p1 || !strings.HasPrefix(p1, "/anixops-") {
+		t.Fatalf("a change of hot objects moved the metrics path %s -> %s", p1, p2)
+	}
+	structural := proto.Clone(h).(*forwardv1.NodeHop)
+	structural.Listen.Port++
+	if p3 := path(structural); p3 == p1 {
+		t.Fatalf("a listener change kept the metrics path %s", p1)
 	}
 	s := conformance.State("forward-99", 7, h)
 	if a := render(t, d, s); !bytes.Contains(a.Content, []byte(p1)) {

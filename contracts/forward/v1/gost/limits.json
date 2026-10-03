@@ -42,8 +42,12 @@
     {
       "name": "r01JF2A000000000000000000A1-h0-tcp",
       "addr": ":30001",
+      "admission": "r01JF2A000000000000000000A1-h0",
       "limiter": "r01JF2A000000000000000000A1-h0",
       "climiter": "r01JF2A000000000000000000A1-h0",
+      "metadata": {
+        "enableStats": true
+      },
       "handler": {
         "type": "tcp"
       },
@@ -51,32 +55,18 @@
         "type": "tcp"
       },
       "forwarder": {
-        "nodes": [
-          {
-            "name": "u1-0",
-            "addr": "192.0.2.21:443"
-          },
-          {
-            "name": "u0-0",
-            "addr": "192.0.2.20:443"
-          },
-          {
-            "name": "u1-1",
-            "addr": "192.0.2.21:443"
-          }
-        ],
-        "selector": {
-          "strategy": "round",
-          "maxFails": 3,
-          "failTimeout": "30s"
-        }
+        "hop": "r01JF2A000000000000000000A1-h0"
       }
     },
     {
       "name": "r01JF2A000000000000000000A1-h0-udp",
       "addr": ":30001",
+      "admission": "r01JF2A000000000000000000A1-h0",
       "limiter": "r01JF2A000000000000000000A1-h0",
       "climiter": "r01JF2A000000000000000000A1-h0",
+      "metadata": {
+        "enableStats": true
+      },
       "handler": {
         "type": "udp"
       },
@@ -89,26 +79,39 @@
         }
       },
       "forwarder": {
-        "nodes": [
-          {
-            "name": "u1-0",
-            "addr": "192.0.2.21:443"
-          },
-          {
-            "name": "u0-0",
-            "addr": "192.0.2.20:443"
-          },
-          {
-            "name": "u1-1",
-            "addr": "192.0.2.21:443"
-          }
-        ],
-        "selector": {
-          "strategy": "round",
-          "maxFails": 3,
-          "failTimeout": "30s"
-        }
+        "hop": "r01JF2A000000000000000000A1-h0"
       }
+    }
+  ],
+  "hops": [
+    {
+      "name": "r01JF2A000000000000000000A1-h0",
+      "selector": {
+        "strategy": "round",
+        "maxFails": 3,
+        "failTimeout": "30s"
+      },
+      "nodes": [
+        {
+          "name": "u1-0",
+          "addr": "192.0.2.21:443"
+        },
+        {
+          "name": "u0-0",
+          "addr": "192.0.2.20:443"
+        },
+        {
+          "name": "u1-1",
+          "addr": "192.0.2.21:443"
+        }
+      ]
+    }
+  ],
+  "admissions": [
+    {
+      "name": "r01JF2A000000000000000000A1-h0",
+      "whitelist": false,
+      "matchers": []
     }
   ],
   "limiters": [
@@ -132,8 +135,11 @@
     "format": "json",
     "output": "stderr"
   },
+  "api": {
+    "addr": "unix:///run/anixops-gost/api.sock"
+  },
   "metrics": {
     "addr": "unix:///run/anixops-gost/metrics.sock",
-    "path": "/anixops-c744ccafd22f0118"
+    "path": "/anixops-26242abb336fc916"
   }
 }

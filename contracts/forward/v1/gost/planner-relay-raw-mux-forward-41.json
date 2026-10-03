@@ -38,6 +38,9 @@
       "name": "r01JF1B000000000000000000B1-h2-mtcp",
       "addr": ":20000",
       "admission": "r01JF1B000000000000000000B1-h2",
+      "metadata": {
+        "enableStats": true
+      },
       "handler": {
         "type": "relay"
       },
@@ -45,22 +48,28 @@
         "type": "mtcp"
       },
       "forwarder": {
-        "nodes": [
-          {
-            "name": "u0",
-            "addr": "198.51.100.7:8443"
-          },
-          {
-            "name": "u1",
-            "addr": "198.51.100.8:8443"
-          }
-        ],
-        "selector": {
-          "strategy": "fifo",
-          "maxFails": 3,
-          "failTimeout": "30s"
-        }
+        "hop": "r01JF1B000000000000000000B1-h2"
       }
+    }
+  ],
+  "hops": [
+    {
+      "name": "r01JF1B000000000000000000B1-h2",
+      "selector": {
+        "strategy": "fifo",
+        "maxFails": 3,
+        "failTimeout": "30s"
+      },
+      "nodes": [
+        {
+          "name": "u0",
+          "addr": "198.51.100.7:8443"
+        },
+        {
+          "name": "u1",
+          "addr": "198.51.100.8:8443"
+        }
+      ]
     }
   ],
   "admissions": [
@@ -78,8 +87,11 @@
     "format": "json",
     "output": "stderr"
   },
+  "api": {
+    "addr": "unix:///run/anixops-gost/api.sock"
+  },
   "metrics": {
     "addr": "unix:///run/anixops-gost/metrics.sock",
-    "path": "/anixops-68481bf2c230e397"
+    "path": "/anixops-89cc599589206abe"
   }
 }

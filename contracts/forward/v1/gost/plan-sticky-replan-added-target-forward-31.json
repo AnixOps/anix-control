@@ -31,6 +31,10 @@
     {
       "name": "r01JF1E000000000000000000E1-h0-tcp",
       "addr": ":20005",
+      "admission": "r01JF1E000000000000000000E1-h0",
+      "metadata": {
+        "enableStats": true
+      },
       "handler": {
         "type": "tcp",
         "chain": "r01JF1E000000000000000000E1-h0"
@@ -53,33 +57,45 @@
       "name": "r01JF1E000000000000000000E1-h0",
       "hops": [
         {
-          "name": "r01JF1E000000000000000000E1-h0",
-          "selector": {
-            "strategy": "round",
-            "maxFails": 3,
-            "failTimeout": "30s"
-          },
-          "nodes": [
-            {
-              "name": "u0",
-              "addr": "203.0.113.41:20017",
-              "connector": {
-                "type": "relay"
-              },
-              "dialer": {
-                "type": "tls",
-                "tls": {
-                  "certFile": "/var/lib/anixops-gost/tls/link.crt",
-                  "keyFile": "/var/lib/anixops-gost/tls/link.key",
-                  "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
-                  "secure": true,
-                  "serverName": "forward-41"
-                }
-              }
-            }
-          ]
+          "name": "r01JF1E000000000000000000E1-h0"
         }
       ]
+    }
+  ],
+  "hops": [
+    {
+      "name": "r01JF1E000000000000000000E1-h0",
+      "selector": {
+        "strategy": "round",
+        "maxFails": 3,
+        "failTimeout": "30s"
+      },
+      "nodes": [
+        {
+          "name": "u0",
+          "addr": "203.0.113.41:20017",
+          "connector": {
+            "type": "relay"
+          },
+          "dialer": {
+            "type": "tls",
+            "tls": {
+              "certFile": "/var/lib/anixops-gost/tls/link.crt",
+              "keyFile": "/var/lib/anixops-gost/tls/link.key",
+              "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
+              "secure": true,
+              "serverName": "forward-41"
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "admissions": [
+    {
+      "name": "r01JF1E000000000000000000E1-h0",
+      "whitelist": false,
+      "matchers": []
     }
   ],
   "log": {
@@ -87,8 +103,11 @@
     "format": "json",
     "output": "stderr"
   },
+  "api": {
+    "addr": "unix:///run/anixops-gost/api.sock"
+  },
   "metrics": {
     "addr": "unix:///run/anixops-gost/metrics.sock",
-    "path": "/anixops-501ff592d7b74f09"
+    "path": "/anixops-04efcc5a8504f519"
   }
 }
