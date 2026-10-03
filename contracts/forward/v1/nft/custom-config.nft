@@ -1,0 +1,87 @@
+#!/usr/sbin/nft -f
+# Rendered by sdk/forward/driver/nftables (anixops forward driver v1); do not edit.
+# One transaction that touches table inet anixops_fwd only: declare every
+# object, flush the rules and the balancing and admission elements, then add
+# them again. Counters, quotas and connection counts keep their values.
+# Apply checks the table's ownership comment before running it, and deletes
+# the objects of removed hops after reading their counters (F2c).
+
+table inet anixops_fwd {
+	comment "anixops-forward-driver v1"
+	counter r_01JF2A000000000000000000A1_h0_up {
+	}
+	counter r_01JF2A000000000000000000A1_h0_down {
+	}
+	map r_01JF2A000000000000000000A1_h0_lb4 {
+		type mark : ipv4_addr . inet_service
+		flags interval
+	}
+	map r_01JF2A000000000000000000A1_h0_lb6 {
+		type mark : ipv6_addr . inet_service
+		flags interval
+	}
+	chain r_01JF2A000000000000000000A1_h0_dnat {
+	}
+	chain r_01JF2A000000000000000000A1_h0_acct {
+	}
+	chain prerouting {
+		type nat hook prerouting priority dstnat; policy accept;
+	}
+	chain forward {
+		type filter hook forward priority filter; policy accept;
+	}
+	chain postrouting {
+		type nat hook postrouting priority srcnat; policy accept;
+	}
+}
+
+flush table inet anixops_fwd
+flush map inet anixops_fwd r_01JF2A000000000000000000A1_h0_lb4
+flush map inet anixops_fwd r_01JF2A000000000000000000A1_h0_lb6
+
+table inet anixops_fwd {
+	map r_01JF2A000000000000000000A1_h0_lb4 {
+		type mark : ipv4_addr . inet_service
+		flags interval
+		elements = {
+			0-2 : 192.0.2.20 . 443,
+			3-7 : 192.0.2.21 . 443,
+			8-15 : 192.0.2.22 . 443,
+		}
+	}
+	map r_01JF2A000000000000000000A1_h0_lb6 {
+		type mark : ipv6_addr . inet_service
+		flags interval
+		elements = {
+			0-4 : 2001:db8::20 . 443,
+			5-15 : 2001:db8::21 . 443,
+		}
+	}
+	chain r_01JF2A000000000000000000A1_h0_dnat {
+		ct mark set ct mark and 0xffff00ff or 0x00000100
+		meta nfproto ipv4 meta l4proto { tcp, udp } dnat ip to jhash ip saddr mod 16 seed 0x0 map @r_01JF2A000000000000000000A1_h0_lb4
+		meta nfproto ipv6 meta l4proto { tcp, udp } dnat ip6 to jhash ip6 saddr mod 16 seed 0x0 map @r_01JF2A000000000000000000A1_h0_lb6
+		drop
+	}
+	chain r_01JF2A000000000000000000A1_h0_acct {
+		ct direction original counter name "r_01JF2A000000000000000000A1_h0_up" meta mark set meta mark and 0xfffe00ff or 0x00000100
+		ct direction reply counter name "r_01JF2A000000000000000000A1_h0_down" meta mark set meta mark and 0xfffe00ff or 0x00010100
+	}
+	chain prerouting {
+		type nat hook prerouting priority dstnat; policy accept;
+		meta l4proto { tcp, udp } th dport 30001 fib daddr type local goto r_01JF2A000000000000000000A1_h0_dnat
+	}
+	chain forward {
+		type filter hook forward priority filter; policy accept;
+		ct mark and 0x0000ff00 != 0x0 oifname { "eth1", "wg0" } tcp flags & (syn | rst) == syn tcp option maxseg size set rt mtu
+		ct mark and 0x0000ff00 vmap {
+			0x00000100 : jump r_01JF2A000000000000000000A1_h0_acct,
+		}
+	}
+	chain postrouting {
+		type nat hook postrouting priority srcnat; policy accept;
+		ct mark and 0x0000ff00 {
+			0x00000100,
+		} masquerade
+	}
+}

@@ -127,7 +127,9 @@ func (b Builder) Entry(route string, port int, p forwardv1.L4Protocol, s forward
 		Health:         &forwardv1.HealthCheck{IntervalMs: 5000, TimeoutMs: 2000},
 		CircuitBreaker: &forwardv1.CircuitBreaker{FailureThreshold: 3, OpenMs: 30000},
 		TargetPolicy:   forwardv1.TargetPolicy_TARGET_POLICY_ALLOW_PRIVATE,
-		Mark:           0x00010000 + uint32(port)<<16, // #nosec G115 -- port < 4
+		// The planner's mark is an index (1..4095) that the driver shifts
+		// into its mark mask (forward-sdk.md section 6.1).
+		Mark: uint32(port) + 1, // #nosec G115 -- port < 4
 	}
 }
 

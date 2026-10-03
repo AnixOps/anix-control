@@ -1,0 +1,8 @@
+#!/usr/sbin/nft -f
+# Rendered by sdk/forward/driver/nftables (anixops forward driver v1); do not edit.
+# One transaction that touches table inet anixops_fwd only: declare every
+# object, flush the rules and the balancing and admission elements, then add
+# them again. Counters, quotas and connection counts keep their values.
+# Apply checks the table's ownership comment before running it, and deletes
+# the objects of removed hops after reading their counters (F2c).
+# No hops: applying this artifact removes table inet anixops_fwd.
