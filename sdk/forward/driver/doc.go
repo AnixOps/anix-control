@@ -3,7 +3,7 @@
 // Agent splits a NodeForwardState by engine (Registry.Render), applies each
 // engine's Artifact through that engine's Driver, runs one health loop that
 // calls SetUpstreams, and reports Observe. The nftables driver (F2b/F2c) and
-// the gost driver (F4) implement it; sdk/forward/driver/fake is an in-memory
+// the gost driver (F4a/F4b) implement it; sdk/forward/driver/fake is an in-memory
 // one for tests; sdk/forward/driver/conformance checks any of them against
 // the rules below.
 //

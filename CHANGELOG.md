@@ -291,6 +291,42 @@
     opens after 3 failures for 30 s, least-connections re-weights every 10 s
     (`sdk/forward/model/defaults.go`).
 
+- Forward SDK F4a (`docs/architecture/forward-sdk.md` section 6.2): the
+  gost driver, `sdk/forward/driver/gost`, renders and runs a node's gost
+  hops with the gost v3 release the Agent pins (3.2.6, MIT, owner decision
+  H20; the SDK does not import gost). Render writes one JSON configuration:
+  a service per listener (RAW `tcp`/`udp` forwarding; `relay` over `tls`,
+  `mtls`, `wss`, `mwss`, `quic`, `grpc` or `mtcp` for the other links, with
+  mutual TLS from the node's link certificate), forwarder nodes or a relay
+  chain to the upstreams with the balance strategy as gost's selector
+  (weighted round robin and IP hash by entry repetition) and the circuit
+  breaker as its fail filter, an admission whitelist of the ingress sources
+  (deny-all for a paused hop), traffic and connection limiters, and metrics
+  on a unix socket under a path that names the configuration; a top-level
+  manifest gost ignores carries what Apply needs. Unsupported hops (a byte
+  quota, target names, `ANIXOPS` links, a hop mixing RAW and relayed
+  upstreams) are rejected alone. `Apply` writes the configuration
+  atomically to the driver's directory with its state file (ownership mark,
+  generation, digest), refuses ports that foreign sockets hold
+  (`ErrConflict`, read with `ss`) and foreign directories or units
+  (`ErrNotOwned`), reloads gost with SIGHUP or starts it and waits until
+  gost serves the new configuration, else restores the previous one; an
+  established TCP connection and the counter epoch survive the reload.
+  gost runs as `anixops-gost.service` (`gost.UnitFile`: its own user with
+  `CAP_NET_BIND_SERVICE` only and a systemd sandbox) managed with
+  systemctl, or as a child process (`ProcessSupervisor`). `Observe` reports
+  the applied identity and rotation with counters at 0 and `SetUpstreams`
+  answers `ErrUnsupported` until F4b. Goldens in `contracts/forward/v1/gost`
+  (planner outputs over TLS, WSS, QUIC, gRPC and mux, UDP, failover, and the
+  unit file). The conformance suite passes on a simulated host and, under
+  sudo in Backend Tests shard 1, against the pinned gost (downloaded and
+  checked by SHA-256 in CI) in network namespaces, with every golden loaded
+  and TCP and UDP through a mutual-TLS relay. Owner decisions recorded: H20
+  (the pinned gost and its unit) and H28 (forward link certificates from a
+  dedicated forward link CA, built later in Control and F3b; until then
+  encrypted gost links cannot be set up on real nodes). Nothing uses the
+  driver yet.
+
 ### Fixed
 
 - The live Control WebUI E2E gate defaults to ports 24175 and 28080 instead

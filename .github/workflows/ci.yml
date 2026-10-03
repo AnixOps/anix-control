@@ -1011,6 +1011,30 @@ jobs:
           cd sdk/forward/driver/nftables
           sudo ANIXOPS_NFT_CHECK=1 ANIXOPS_NFT_E2E=1 "${RUNNER_TEMP}/nftables.test" -test.run '^(TestNFTCheck|TestNetns)' -test.v
 
+      # The gost driver against the gost release the Agent pins (H20):
+      # GOST_VERSION, archive and binary checked by SHA-256 as the package
+      # jobs do. gost parses every golden configuration; under sudo, each
+      # TestNetns test runs gost in a throwaway network namespace (`ip netns
+      # add`, `ip netns exec`): the conformance suite, every golden loaded and
+      # served, TCP and UDP through a mutual-TLS relay. Nothing touches the
+      # runner's own network or systemd units.
+      - name: Check the gost forward driver against the pinned gost (netns)
+        if: ${{ matrix.shard == 1 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          archive="${RUNNER_TEMP}/gost_${GOST_VERSION}_linux_amd64.tar.gz"
+          curl --fail --location --retry 3 --output "${archive}" \
+            "https://github.com/go-gost/gost/releases/download/v${GOST_VERSION}/gost_${GOST_VERSION}_linux_amd64.tar.gz"
+          echo "${GOST_LINUX_AMD64_ARCHIVE_SHA256}  ${archive}" | sha256sum --check --strict
+          mkdir -p "${RUNNER_TEMP}/gost"
+          tar -xzf "${archive}" -C "${RUNNER_TEMP}/gost" gost
+          echo "${GOST_LINUX_AMD64_BINARY_SHA256}  ${RUNNER_TEMP}/gost/gost" | sha256sum --check --strict
+          "${RUNNER_TEMP}/gost/gost" -V
+          go -C sdk test -c -o "${RUNNER_TEMP}/gost.test" ./forward/driver/gost
+          cd sdk/forward/driver/gost
+          sudo ANIXOPS_GOST_E2E=1 ANIXOPS_GOST_BIN="${RUNNER_TEMP}/gost/gost" "${RUNNER_TEMP}/gost.test" -test.run '^(TestGostParsesGoldens|TestNetns)' -test.v
+
       # After the tests, so every shard tests the committed Swagger package;
       # "Go Quality Gates" vets the tree as committed.
       - name: Verify dependencies and vet the generated Swagger docs
