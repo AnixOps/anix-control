@@ -960,9 +960,27 @@ enrollment (`internal/agentpki`).
 
 ## 10. Upgrade from v4.1
 
-Decided: old forwarding data is not migrated. v4.2's upgrade runs three
-steps in this order. The last one is **IRREVERSIBLE** and is gate **H15**,
-confirmed on its own.
+Decided: old forwarding data is not migrated.
+
+**Order (owner decision, 2026-10-04).** v4.2 makes
+`agent_control.mtls: required` the default (H5), which refuses the clean
+agent's register, heartbeat and report endpoints. Control v4.2 could then no
+longer reach a clean agent node to clean it, so the old runtime is removed
+before Control is upgraded:
+
+1. **Release the new Agent first** (AG-2 and the forward component, F3b).
+   On install it removes the old forward runtime locally, without relying on
+   Control: the `inet v2b_forward` and `ip v2b_forward` tables (the Ansible
+   path), the `ip anixops_forward` table (the canary Agent plugin), and the
+   gost services the flux runtime and the clean agent created. Like the
+   uninstaller (section 9), it touches no other table or service.
+2. **Switch every forward node to the new Agent**, NodeX nodes included
+   (H20). `anix-control agents transports --legacy-only` must list no node.
+3. **Upgrade Control to v4.2**, with `agent_control.mtls` defaulting to
+   `required` (H5).
+
+**The upgrade itself (F5c)** then runs three steps in this order. The last
+one is **IRREVERSIBLE** and is gate **H15**, confirmed on its own.
 
 1. **Archive.** Export `v2_forward`, `v2_forward_tunnel`,
    `v2_forward_user_tunnel`, `v2_speed_limit`, `v2_forward_rule` and
@@ -972,13 +990,13 @@ confirmed on its own.
    Node tokens and other secrets are left out. Forward nodes
    (`v2_forward_node`) are not dropped: they are node inventory and the
    Agent identity (`forward-<id>`).
-2. **Clean the nodes.** Before any table is dropped, Control removes the old
-   runtime from every node: the `inet v2b_forward` and `ip v2b_forward`
-   tables (Ansible path), the `ip anixops_forward` table (the canary Agent
-   plugin), and the gost services NodeX or the flux runtime created. Agent
-   nodes get a `forward.legacy_cleanup` operation, Ansible hosts a cleanup
-   playbook, NodeX hosts NodeX's delete calls. Each node's result is
-   recorded and re-checked by listing.
+2. **Check the nodes are clean.** Agent nodes cleaned themselves in step 1
+   of the order above; F5c only verifies them, from the Agent's report.
+   Control still cleans the hosts the Agent channels do not reach, which
+   `required` does not affect: NodeX hosts through NodeX's own HTTP API
+   (its delete calls), and hosts on the Ansible fallback (section 6.3)
+   with a cleanup playbook over SSH. Each node's result is recorded and
+   re-checked by listing.
 3. **Drop the tables.** Only when every node reports clean, or an
    administrator marks the unreachable ones as abandoned (listed by name),
    and only after the H15 confirmation. A rollback to v4.1 after this step
@@ -987,6 +1005,35 @@ confirmed on its own.
 
 The flux v2 routes, `forwardcompat`, the route catalog entries and the
 flux guardrails in AGENTS.md go in the same release (F5, H17).
+
+**The 53 bridged forward routes.** `config/package-extraction.json` has 53
+`bridged` routes in the `forward` package (its `native-flagged` and
+`kernel-owned` routes are not counted here). None of them is moved to a
+native handler: M3-4 and M3-5 (`node-ops-service.md` section 7) are
+cancelled. They split three ways:
+
+- **30 flux routes, deleted by F5d:**
+  - administrator forwards: `POST /admin/forward/create`, `update`,
+    `delete`, `force-delete`, `pause`, `resume` and `diagnose` (7);
+  - legacy rules: `GET`/`POST /admin/forward/rules`, and `GET`, `PUT`,
+    `DELETE` and `POST .../toggle` on `/admin/forward/rules/:id` (6);
+  - `POST /admin/forward/sync-backend` (1) and
+    `GET /admin/forward/runtime/jobs` (1);
+  - tunnels: `POST /admin/tunnel/diagnose`, `update`, `user/remove` and
+    `user/update` (4);
+  - user forwards: `POST /forward/create`, `update`, `delete`,
+    `force-delete`, `pause`, `resume` and `diagnose` (7);
+  - `POST /speed-limit/update` (1), `POST /tunnel/user/remove` and
+    `update` (2), and `POST /user/forward/rules` (1).
+- **19 node management routes, rewritten in F5a** as `/api/v4/forward/*`:
+  forward nodes (`/admin/forward/nodes`, 8), Ansible machines
+  (`/admin/forward/ansible-machines`, 8) and observability
+  (`/admin/forward/observability/targets`, `topology` and `trend`, 3). The
+  v2 routes go with F5d.
+- **4 clean agent routes, retired with the switch to the new Agent:**
+  `GET`/`POST /admin/forward/agents`,
+  `POST /admin/forward/agents/:id/revoke` and
+  `GET /forward-agent/install.sh`.
 
 ## 11. Metering
 
@@ -1207,11 +1254,12 @@ Agent-repository PRs are marked (agent).
 | | L2 | entry HA via DDNS and CNAME | M | H21 |
 | F5 | F5a | Control forward package: `ForwardControl`, `/api/v4/forward/*`, `anix-control forward` | L | H23 |
 | | F5b | new forwarding UI | L | H16 |
-| | F5c | upgrade: archive, node cleanup, drop tables | M | H15 |
+| | F5c | upgrade: archive, check the nodes are clean (Control cleans NodeX and Ansible hosts), drop tables | M | H15 |
 | | F5d | remove flux routes, `forwardcompat`, catalog entries; rewrite AGENTS.md rules; archive the flux docs | M | H17 |
 
 F1a–F1c and F2 do not depend on the Agent line. F3 needs AG-1. F5c runs
-last and only after its own confirmation.
+last, after every forward node runs the new Agent (section 10), and only
+after its own confirmation.
 
 **Draft golden policy.** As with KernelNodeOps before NO-1
 (`node-ops-service.md` section 3.10), `anixops.forward.v1` is in
@@ -1250,6 +1298,15 @@ Decided by the owner (2026-10-02):
 - **H14:** the netns suite runs on GitHub-hosted runners with sudo, on
   forward changes and nightly. It becomes a required check after two green
   weeks.
+
+Decided by the owner (2026-10-04):
+
+- **Upgrade order:** the new Agent first, cleaning the old forward runtime
+  on install; then every forward node switches to it; then Control v4.2,
+  keeping the `required` default (section 10). M3-4 and M3-5 are cancelled.
+- **H25:** anix-agent uses Control's version numbers and is released with
+  it (for example `v4.2.0-rc.N` for both), and Control's CI pins the same
+  Agent commit. Each Agent tag is still asked first.
 
 H18–H23 are still open; each is asked before the work it gates.
 

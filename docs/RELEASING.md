@@ -1,11 +1,14 @@
 # Releasing
 
-A release is a `vX.Y.Z` tag on a commit that is already on `go_dev`. GitHub
-Actions builds, signs and publishes everything. Nothing is built locally.
+A release is a `vX.Y.Z` tag on a commit that landed through a pull request,
+on `go_dev` or on a maintenance branch `release/vX.Y`
+([Release Branches](#release-branches)). GitHub Actions builds, signs and
+publishes everything. Nothing is built locally.
 
 ## Cut A Release
 
-1. On a branch from `go_dev`, set the version and date the changelog:
+1. On a branch from `go_dev` (or from the release branch), set the version
+   and date the changelog:
 
    ```bash
    python3 config/scripts/prepare_release.py 4.1.0
@@ -32,6 +35,50 @@ Actions builds, signs and publishes everything. Nothing is built locally.
 
 A suffix (`v4.1.0-rc.1`, `-beta.2`, `-alpha.3`) publishes a prerelease. Only
 unsuffixed tags become the latest release.
+
+## Release Branches
+
+When `go_dev` already holds work for the next minor version, release from a
+maintenance branch `release/vX.Y` instead. v4.1.0 is the first release cut
+this way: `release/v4.1` is cut from the v4.1.0-rc.6 commit, because `go_dev`
+already holds v4.2 work.
+
+1. **Cut the branch** from the previous release's tag or commit, with the
+   owner's approval:
+
+   ```bash
+   git push origin <tag-or-commit>:refs/heads/release/v4.1
+   ```
+
+   The branch is protected like `go_dev` (`.github/BRANCH_PROTECTION.md`).
+2. **Bump on the branch.** Branch from `release/vX.Y`, run
+   `prepare_release.py`, and open the pull request (`release: v4.1.0`)
+   against `release/vX.Y`, not `go_dev`. CI runs on pull requests to
+   `release/**` with the same required checks.
+3. **Tag the release branch commit** that the pull request merged, as above.
+   The tag pipeline does not depend on the branch that holds the commit.
+4. **Merge back.** Open a follow-up pull request to `go_dev` with the
+   release's CHANGELOG section and, when they apply, its version surfaces:
+   - the `## X.Y.Z - <date>` section goes directly under `go_dev`'s
+     `## Unreleased`, or below a newer release section `go_dev` already has
+     (`## 4.2.0-rc.1`, say). The first dated section must stay the version
+     `go_dev` declares, since `check_release_version.py` reads the first one;
+   - entries that shipped in the release leave `go_dev`'s `## Unreleased`;
+   - the version surfaces come back only while `go_dev` declares an older
+     version (`4.1.0-rc.6` → `4.1.0`). Never lower `go_dev`'s version.
+
+**Patch releases** (`vX.Y.Z`, Z > 0) of that line use the same branch. Land
+the fix on `go_dev` first, then bring it to `release/vX.Y` in a pull request
+(cherry-pick). A fix for the old line only goes to the release branch alone,
+and its pull request says so. Then bump, tag and merge back as above.
+
+**`latest` on a superseded line.** An unsuffixed tag becomes the latest GitHub
+Release and moves the image's `latest` tag (`make_latest` and `latest=auto` in
+`ci.yml`), and the frozen `scripts/install.sh` installs `releases/latest` when
+no version is pinned. A patch on a line that a newer release has superseded
+(`v4.1.1` after `v4.2.0`) would move both back to the older line. The pipeline
+does not handle that yet: before tagging such a release, change it to mark
+only the highest version `latest`.
 
 ## What The Tag Pipeline Does
 

@@ -8,8 +8,10 @@ implemented: the gateway seals node secrets into handles, and the kernel
 verifies request bindings (section 3.7). NO-7 is implemented: the kernel
 executes the forward family and the gost API connection test, runtime job
 payloads carry no token, and forward node tokens are pinned to their
-endpoints (sections 3.8, 3.11 and 6.1). This is phase 3 of the 2026-10
-plan, done together with Agent line A2.
+endpoints (sections 3.8, 3.11 and 6.1). M3-4 and M3-5 are cancelled
+(2026-10-04): v4.2's forwarding redesign deletes or rewrites their routes
+(section 7). This is phase 3 of the 2026-10 plan, done together with Agent
+line A2.
 
 > 中文摘要：剩余桥接路由里，有 83 条在等“内核代办节点操作”和“节点凭据外置”，
 > 另有 7 条在等节点/Agent 通道的决定。本文给出三件事的设计：
@@ -571,10 +573,10 @@ pinned to the endpoint it was issued for:
   (`ForwardNodeService.Create`, `Update` and the Ansible machine routes),
   which re-derive the endpoint from the row they just wrote
   (`nodesecrets.Sync`). Today every write of `v2_forward_node` goes through
-  them, driven by the administrator's `PUT /admin/forward/nodes/:id`; once
-  the table is adopted (M3-4), only the `SyncNode` bound to that request
-  moves it (NO-5/NO-6). A write that bypasses them, a package's or a direct
-  SQL one, leaves the pin where it was.
+  them, driven by the administrator's `PUT /admin/forward/nodes/:id`; had
+  the table been adopted (M3-4, cancelled: section 7), only the `SyncNode`
+  bound to that request would move it (NO-5/NO-6). A write that bypasses
+  them, a package's or a direct SQL one, leaves the pin where it was.
 - **Before the backfill** a node has no credential row and so no pin: its
   token is presented as before the split, and the read is counted
   (`anixops_node_secrets_pin_total{reason="unpinned"}`). Run
@@ -959,7 +961,7 @@ executes `node.sync` (nodeconfig), `agent.operation` (agents) and
 **Forward operations, as NO-7 built them** (`kernelnodeops.Forward`). The
 kernel executes `ApplyForward`, `ApplyTunnel`, `SyncForwardBackend` and
 `ApplyLegacyRule`, and `GetCapabilities` lists them. No route switches to
-native; M3-4 and M3-5 do that.
+native, and none will: M3-4 and M3-5 are cancelled (section 7).
 
 - **One implementation.** Each kind runs the legacy routes' code
   (`PanelForwardService.ApplyForwardRuntime`,
@@ -1858,6 +1860,13 @@ router answers from the legacy handler.
 
 ### 6.1 forward (59)
 
+**Superseded (2026-10-04).** The native modes below are not built: M3-4
+and M3-5 are cancelled (section 7). v4.2's forwarding redesign deletes the
+flux routes in F5d, rewrites the node management routes as
+`/api/v4/forward/*` in F5a, and retires the clean agent routes with the
+switch to the new Agent (`forward-sdk.md` section 10). The tables are kept
+as the record of the plan.
+
 **Forward nodes (8): native.** These are rows of `v2_forward_node`. Forward
 adopts the table once it is finalized; the token is pinned in the kernel.
 
@@ -2024,8 +2033,8 @@ handlers ship `native-flagged`, and operators choose the runtime mode.
 | M3-1 | protocol-runtime: 11 routes native, `protocolruntimecompat` with fake agents | NO-4, NO-5, NO-6, NO-9 | control | M |
 | M3-2 | proxy-node: 14 routes native | NO-4, NO-5, NO-6, NO-8, NO-9 | control | L |
 | M3-3 | subscription: 2 routes native | NO-9 | control | S |
-| M3-4 | forward: nodes, Ansible machines, clean agents, runtime jobs (20 routes) | NO-4, NO-5, NO-7, NO-8, NO-9 | control | L |
-| M3-5 | forward: changes, tunnels, permissions, legacy rules (28 routes) | NO-7, NO-8 | control | L |
+| M3-4 | ~~forward: nodes, Ansible machines, clean agents, runtime jobs (20 routes)~~ **Cancelled** (2026-10-04, superseded by forward F5a/F5d) | NO-4, NO-5, NO-7, NO-8, NO-9 | control | L |
+| M3-5 | ~~forward: changes, tunnels, permissions, legacy rules (28 routes)~~ **Cancelled** (2026-10-04, superseded by forward F5d) | NO-7, NO-8 | control | L |
 | A2-1 | Agent PKI: `v4_kernel_agent_enrollment` and `_certificate`, the `AgentEnrollment` service, optional client certificates on the agent listener, the SAN as node identity (including forward nodes on the stream), enrollment admin API and CLI | none | control | L |
 | A2-2 | Stream data-plane contract: the additive `agent.proto` payloads, the descriptor test as a superset, the golden | none | control | S |
 | A2-3 | Configuration push: snapshots from the desired configuration, `Hello` reconcile, `ConfigStatus`. Done: section 5.5 | A2-2, NO-6 | control | M |
@@ -2040,6 +2049,18 @@ handlers ship `native-flagged`, and operators choose the runtime mode.
 | AG-5 | Reports on the stream, with the spool | AG-1, A2-5 | agent | M |
 | AG-6 | Stream on by default; production validation requires mTLS | AG-2 to AG-5 | agent | S |
 | AG-7 | Forward-node agents on the stream; plugin counters to traffic (joins A5) | AG-6 | agent | M |
+
+**M3-4 and M3-5 are cancelled** (owner decision, 2026-10-04). v4.2 drops
+flux compatibility, so a native port of these routes would be thrown away
+in the same release: their flux routes go with F5d, the forward node and
+Ansible machine routes are rewritten as `/api/v4/forward/*` in F5a, and the
+clean agent routes retire with the switch to the new Agent (`forward-sdk.md`
+section 10).
+
+**Agent versions (H25, 2026-10-04).** anix-agent follows Control's version
+numbers: the two are released together (for example `v4.2.0-rc.N` for
+both), and Control's CI pins the same Agent commit. AG-1 and AG-2 start now;
+each Agent tag is asked first.
 
 **The critical path:** NO-1 and NO-2 → NO-3 → NO-5 and NO-7 → NO-9 → M3-*.
 NO-4, NO-6 and NO-8 run beside it, and the A2 and AG line is independent of
