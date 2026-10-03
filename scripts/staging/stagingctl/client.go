@@ -129,9 +129,23 @@ func (c *Client) Login(ctx context.Context, email, password string) (string, err
 		return token, nil
 	}
 	body, _ := json.Marshal(map[string]string{"email": email, "password": password})
-	response, err := c.do(ctx, http.MethodPost, "/api/v2/login", nil, body, "")
-	if err != nil {
-		return "", err
+	// Right after a start, /readyz answers before the identity-platform host
+	// runs, and the login route answers 503 package_unavailable meanwhile.
+	var response Response
+	var err error
+	for attempt := 0; ; attempt++ {
+		response, err = c.do(ctx, http.MethodPost, "/api/v2/login", nil, body, "")
+		if err != nil {
+			return "", err
+		}
+		if response.Status != http.StatusServiceUnavailable || attempt == 60 {
+			break
+		}
+		select {
+		case <-ctx.Done():
+			return "", ctx.Err()
+		case <-time.After(3 * time.Second):
+		}
 	}
 	var envelope struct {
 		Data struct {
