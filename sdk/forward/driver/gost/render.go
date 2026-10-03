@@ -242,7 +242,8 @@ func (d *Driver) renderHop(cfg *gostConfig, p *hopPlan) {
 }
 
 // strategyName maps a balance strategy to gost's selector strategy.
-// LEAST_CONN is weighted random until the Agent re-weights it (F4b).
+// LEAST_CONN is weighted random, which the Agent re-weights every
+// model.DefaultLeastConnReweight (H21) through SetUpstreams (F4b, L1).
 func strategyName(s forwardv1.BalanceStrategy) string {
 	switch s {
 	case forwardv1.BalanceStrategy_BALANCE_STRATEGY_RANDOM, forwardv1.BalanceStrategy_BALANCE_STRATEGY_LEAST_CONN:

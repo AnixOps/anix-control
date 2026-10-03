@@ -307,8 +307,9 @@ func (d *Driver) planHop(h *forwardv1.NodeHop) (*hopPlan, error) {
 		p.maxConns = lim.GetMaxConns()
 	}
 
-	// The circuit breaker becomes the selector's fail filter. The health
-	// check is the Agent's (forward-sdk.md section 7.3).
+	// The circuit breaker becomes the selector's fail filter, with the
+	// decided defaults of model (H21: 3 failures, 30 s). The health check
+	// is the Agent's (forward-sdk.md section 7.3).
 	cb := h.GetCircuitBreaker()
 	p.maxFails = cmp.Or(cb.GetFailureThreshold(), model.DefaultFailureThreshold)
 	if p.maxFails > validate.MaxFailureThreshold {
