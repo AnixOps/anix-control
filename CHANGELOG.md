@@ -377,6 +377,43 @@
   encrypted gost links cannot be set up on real nodes). Nothing uses the
   driver yet.
 
+- Forward SDK F4b and L1 (`docs/architecture/forward-sdk.md` sections 6.2
+  and 7.1): the gost driver talks to gost's web API, on `api.sock` in its
+  runtime directory without authentication (the socket's 0770
+  `anixops-gost` owner and group permissions, from the unit's `UMask` and
+  `RuntimeDirectoryMode`, are its only key). Render now gives every gost hop
+  a top-level gost hop with its upstreams (named by the service's forwarder
+  or its chain), an admission on every hop and statistics on every service,
+  and names the metrics path after the configuration's structure only;
+  goldens regenerated. `Apply` takes changes of these hot objects
+  (upstreams, weights, strategy, sources, pause, limits' values, quota)
+  through the API without re-creating any service, so listeners,
+  established connections, UDP sessions, mux carriers and counters stay; a
+  structural change still reloads gost (every hop then starts a new counter
+  epoch), and a refused API change restores the previous configuration.
+  `SetUpstreams` replaces the running hop with the selection and records it
+  in the hop's metadata, so failover and re-weighting need no apply and
+  survive an Agent restart; a changing apply restores every upstream.
+  `Observe` reads every service's connections and bytes from `GET /config`
+  (bounded, never per client as gost's Prometheus labels are), packets 0,
+  with a counter epoch that ends exactly when gost re-creates the service.
+  The soft quota (`Config.SoftQuota`, on by default, so the gost driver now
+  reports the `quota` capability and validation accepts a byte quota on a
+  gost entry): `EnforceQuotas`, the new optional `driver.QuotaEnforcer` the
+  Agent calls after every Observe and Apply, closes a hop's admission once
+  its current-epoch bytes reach `quota_bytes` and opens it when the quota is
+  raised. A paused or quota-closed gost hop refuses new connections while
+  established ones run until they close (gost cannot close accepted
+  connections). L1, `sdk/forward/leastconn`: `Reweighter` sets each
+  `LEAST_CONN` hop's weights to its rendered weight divided by live
+  connections plus one, every 10 s, over the upstreams the health loop
+  keeps; sources are the gost driver's `ActiveConns` (established sockets
+  per upstream) and the fake driver; nftables needs a conntrack source from
+  the Agent (F3b). The conformance suite now passes against gost 3.2.6 in
+  network namespaces with no scenario skipped and traffic through the hops,
+  and the Forward Netns E2E job runs a gost entry (exact payload counters,
+  failover) with the pinned gost.
+
 ### Fixed
 
 - The live Control WebUI E2E gate defaults to ports 24175 and 28080 instead
