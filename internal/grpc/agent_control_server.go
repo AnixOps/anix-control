@@ -76,6 +76,9 @@ type AgentControlConnection struct {
 	configMu         sync.Mutex
 	configRevision   uint64
 	configSentMax    uint64
+	// forwardNegotiated is whether the session negotiated forward.v1
+	// (agent_control_forward.go); set before the session is registered.
+	forwardNegotiated bool
 }
 
 func (c *AgentControlConnection) send(message *agentv1pb.ControlToAgent) error {
@@ -625,13 +628,15 @@ func NewAgentControlGRPCServer(manager *AgentControlManager) *AgentControlGRPCSe
 	if manager == nil {
 		manager = GetAgentControlManager()
 	}
-	return &AgentControlGRPCServer{
+	server := &AgentControlGRPCServer{
 		manager:                  manager,
 		forwardManager:           GetForwardAgentControlManager(),
 		nodeService:              service.NewNodeService(),
 		reports:                  newAgentReportSinks(),
 		heartbeatIntervalSeconds: defaultAgentHeartbeatIntervalSeconds,
 	}
+	followForwardStates(server.manager, server.forwardManager)
+	return server
 }
 
 // WithAuthenticator sets how agents authenticate: by client certificate
@@ -715,11 +720,15 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 	if connection.configNegotiated {
 		connection.configRevision = hello.GetConfigRevision()
 	}
+	connection.forwardNegotiated = agentcontrol.Negotiated(hello.Capabilities, connection.ServerCapabilities, agentcontrol.CapabilityForward)
 
 	agenttransport.Seen(stream.Context(), principal.sighting(hello.AgentVersion))
 	if err := s.touchNode(agentNode); err != nil {
 		slog.Warn("failed to persist agent hello heartbeat", "component", "agent-control", "node", agentNode.String(), "error", err)
 	}
+	// The node's forwarding capabilities and configuration format, before
+	// the session starts and the Hello reconcile builds its configuration.
+	s.recordForwardHello(stream.Context(), connection, agentNode, hello)
 
 	if err := connection.send(&agentv1pb.ControlToAgent{
 		RequestId:    first.RequestId,
@@ -730,7 +739,7 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 			HelloAck: &agentv1pb.HelloAck{
 				SessionId:                connection.SessionID,
 				ServerTimeUnixMs:         time.Now().UnixMilli(),
-				HeartbeatIntervalSeconds: s.heartbeatIntervalSeconds,
+				HeartbeatIntervalSeconds: s.heartbeatInterval(agentNode, connection.forwardNegotiated),
 				DesiredRevision:          desiredRevision,
 				ServerCapabilities:       cloneCapabilities(connection.ServerCapabilities),
 			},
@@ -747,7 +756,7 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 	if connection.configNegotiated {
 		// Hello reconcile: the desired configuration, unless the agent
 		// reported its revision.
-		if err := s.pushDesiredConfig(stream.Context(), connection, agentNode, configTriggerHello); err != nil {
+		if err := pushDesiredConfig(stream.Context(), connection, agentNode, configTriggerHello); err != nil {
 			return err
 		}
 		stopConfigRefresh := s.startConfigRefresh(stream.Context(), connection, agentNode)
@@ -992,6 +1001,9 @@ func (s *AgentControlGRPCServer) serverCapabilities(node agentcontrol.AgentNode,
 	}
 	if s.servesPackageReports(node, agent) {
 		capabilities = append(capabilities, &agentv1pb.Capability{Name: agentcontrol.CapabilityPackageReports, Version: agentcontrol.CapabilityVersionV1})
+	}
+	if s.servesForward(node, agent) {
+		capabilities = append(capabilities, &agentv1pb.Capability{Name: agentcontrol.CapabilityForward, Version: agentcontrol.CapabilityVersionV1})
 	}
 	return capabilities
 }

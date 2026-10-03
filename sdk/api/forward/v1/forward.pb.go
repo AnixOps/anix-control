@@ -2083,7 +2083,10 @@ func (*GetNodeCapabilitiesRequest) Descriptor() ([]byte, []int) {
 	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{16}
 }
 
-// NodeCapabilities is reported at enrollment and with every Agent hello.
+// NodeCapabilities is reported with every Agent hello: protojson in the
+// attribute "node_capabilities" of the Hello's forward.v1 capability, at
+// most 16 KiB (sdk/forward/wire). node_ref, when set, must name the
+// stream's node.
 type NodeCapabilities struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	NodeRef       string                 `protobuf:"bytes,1,opt,name=node_ref,json=nodeRef,proto3" json:"node_ref,omitempty"`
@@ -2343,8 +2346,13 @@ func (*ObserveRequest) Descriptor() ([]byte, []int) {
 }
 
 // NodeForwardReport is a node's observed forwarding state. It travels as a
-// PackageReport (latest value wins), so counters are cumulative and a lost
-// report loses nothing.
+// PackageReport (plugin_id "forward", kind "forward.report", version "v1",
+// payload_json its protojson; latest value wins), so counters are
+// cumulative and a lost report loses nothing. node_ref must name the
+// stream's node; a Counters entry's node_ref is empty or the same.
+// Control keeps the latest report per node and adds each counter's growth
+// within its counter_epoch to its traffic ledger (forward-sdk.md section
+// 11).
 type NodeForwardReport struct {
 	state   protoimpl.MessageState `protogen:"open.v1"`
 	NodeRef string                 `protobuf:"bytes,1,opt,name=node_ref,json=nodeRef,proto3" json:"node_ref,omitempty"`
@@ -2719,7 +2727,11 @@ type Violation struct {
 	// code names the broken rule for programs ("link_unsupported"), so a UI
 	// can highlight or translate it without parsing message. The codes are
 	// those of sdk/forward/validate; a code keeps its meaning once used.
-	Code          string `protobuf:"bytes,3,opt,name=code,proto3" json:"code,omitempty"`
+	Code string `protobuf:"bytes,3,opt,name=code,proto3" json:"code,omitempty"`
+	// route_id is the route the violation belongs to when Control planned
+	// several routes together (ForwardControl refusals); empty for the route
+	// of the request when it has no id yet.
+	RouteId       string `protobuf:"bytes,4,opt,name=route_id,json=routeId,proto3" json:"route_id,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2771,6 +2783,13 @@ func (x *Violation) GetMessage() string {
 func (x *Violation) GetCode() string {
 	if x != nil {
 		return x.Code
+	}
+	return ""
+}
+
+func (x *Violation) GetRouteId() string {
+	if x != nil {
+		return x.RouteId
 	}
 	return ""
 }
@@ -4044,11 +4063,12 @@ const file_api_forward_v1_forward_proto_rawDesc = "" +
 	"\x02ok\x18\x02 \x01(\bR\x02ok\x12\x18\n" +
 	"\amessage\x18\x03 \x01(\tR\amessage\x12\x15\n" +
 	"\x06rtt_us\x18\x04 \x01(\rR\x05rttUs\x12-\n" +
-	"\x13observed_at_unix_ms\x18\x05 \x01(\x03R\x10observedAtUnixMs\"O\n" +
+	"\x13observed_at_unix_ms\x18\x05 \x01(\x03R\x10observedAtUnixMs\"j\n" +
 	"\tViolation\x12\x14\n" +
 	"\x05field\x18\x01 \x01(\tR\x05field\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12\x12\n" +
-	"\x04code\x18\x03 \x01(\tR\x04code\"d\n" +
+	"\x04code\x18\x03 \x01(\tR\x04code\x12\x19\n" +
+	"\broute_id\x18\x04 \x01(\tR\arouteId\"d\n" +
 	"\x12CreateRouteRequest\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12/\n" +

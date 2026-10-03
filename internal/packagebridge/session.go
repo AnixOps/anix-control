@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
 	kernelidentityv1 "github.com/AnixOps/anix-control/sdk/api/kernelidentity/v1"
 	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
 	kernelorderv1 "github.com/AnixOps/anix-control/sdk/api/kernelorder/v1"
@@ -81,6 +82,9 @@ type SessionOptions struct {
 	// KernelNodeOps, when set, serves the KernelNodeOps contract on the
 	// session, authorized per operation family on every call.
 	KernelNodeOps KernelNodeOpsProvider
+	// KernelForward, when set, serves the ForwardControl contract on the
+	// session, authorized for kernel.forward.v1 on every call.
+	KernelForward KernelForwardProvider
 }
 
 func (o SessionOptions) responseLimit() int64 {
@@ -476,6 +480,9 @@ func NewSessionWithOptions(identity HostIdentity, handler *Allowlist, options Se
 	}
 	if options.KernelNodeOps != nil {
 		kernelnodeopsv1.RegisterKernelNodeOpsServer(session.server, options.KernelNodeOps(identity))
+	}
+	if options.KernelForward != nil {
+		forwardv1.RegisterForwardControlServer(session.server, options.KernelForward(identity))
 	}
 	server, listener := session.server, session.listener
 	go func() { _ = server.Serve(listener) }()

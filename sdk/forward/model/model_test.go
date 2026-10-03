@@ -129,6 +129,10 @@ func TestDefaults(t *testing.T) {
 	if (Target{}).EffectiveWeight() != 1 || (Target{Weight: 4}).EffectiveWeight() != 4 {
 		t.Fatalf("effective weight")
 	}
+	// H21 (decided): least-connections re-weights every 10 seconds.
+	if DefaultLeastConnReweight != 10*time.Second {
+		t.Fatalf("least-conn re-weighting: %v", DefaultLeastConnReweight)
+	}
 }
 
 func TestMillisFromDuration(t *testing.T) {

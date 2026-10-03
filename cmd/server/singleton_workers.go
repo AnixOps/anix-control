@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/database"
+	"github.com/AnixOps/anix-control/v4/internal/kernelforward"
 	"github.com/AnixOps/anix-control/v4/internal/kernelnodeops"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 )
@@ -71,5 +72,8 @@ func runSingletonWorkers(ctx context.Context, bridgeEnabled bool) {
 	// The KernelNodeOps dispatcher recovers the operations a stopped
 	// process left started, so it runs in the lease holder only.
 	run(kernelnodeops.EngineFor(database.Get()).Run)
+	// The forwarding state's timed work: expired routes are paused,
+	// request ids are forgotten after a week.
+	run(kernelforward.New(database.Get()).Run)
 	wg.Wait()
 }

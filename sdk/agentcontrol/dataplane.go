@@ -24,6 +24,13 @@ const (
 	// CapabilityPackageReports: the Agent sends PackageReport, the latest
 	// observation of a plugin package; Control does not acknowledge it.
 	CapabilityPackageReports = "package-reports"
+	// CapabilityForward: the node forwards (forward-sdk.md section 8).
+	// Control carries the node's NodeForwardState in an
+	// anixops.nodeconfig/v2 ConfigSnapshot (so it needs config.v1 too) and
+	// accepts the node's NodeForwardReport as a PackageReport (with
+	// package-reports.v1). The Agent's Hello lists it with the node's
+	// NodeCapabilities in an attribute (sdk/forward/wire).
+	CapabilityForward = "forward"
 )
 
 // Negotiated reports whether a data-plane capability is in use on a session:

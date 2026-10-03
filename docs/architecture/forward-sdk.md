@@ -8,12 +8,14 @@ shared validation (`sdk/forward/validate`) and the planner
 (`sdk/forward/driver/fake`) and the driver conformance suite
 (`sdk/forward/driver/conformance`). F2b is implemented: the nftables
 driver's Render (`sdk/forward/driver/nftables`) with golden scripts in
-`contracts/forward/v1/nft`. Nothing serves forwarding with them yet and no
-behaviour changes. The draft contract is
-`sdk/api/forward/v1` (`anixops.forward.v1`, DRAFT, UNRELEASED); the draft
-planner goldens are in `contracts/forward/v1`. This is phase F1 of the v4.2
-forwarding redesign. It replaces the flux-panel clone (`/api/v2/forward/*`)
-in v4.2.
+`contracts/forward/v1/nft`. F3a is implemented: Control serves the
+contract (`internal/kernelforward`, section 8): routes, planning and
+generations, the node state over the Agent Control stream, the reports and
+the traffic ledger, and `ForwardControl` for official packages. The
+contract is `sdk/api/forward/v1` (`anixops.forward.v1`), binding since F3a:
+additions only (section 15); the planner goldens are in
+`contracts/forward/v1`. This is the v4.2 forwarding redesign. It replaces
+the flux-panel clone (`/api/v2/forward/*`) in v4.2.
 
 > 中文摘要：v4.2 把转发做成 AnixOps SDK 的一等能力，不再兼容 flux，也不提供独立 CLI，
 > 所有操作都经过 Control。
@@ -140,7 +142,8 @@ Everything lives in the existing `sdk/` module
 
 | Layer | Path | Contents |
 |---|---|---|
-| Contract | `sdk/api/forward/v1` | `forward.proto`: the model, `NodeForwardState`, `NodeForwardReport`, the services `ForwardControl` and `ForwardNode` (this PR, draft) |
+| Contract | `sdk/api/forward/v1` | `forward.proto`: the model, `NodeForwardState`, `NodeForwardReport`, the services `ForwardControl` and `ForwardNode` (F1a; binding since F3a) |
+| Wire | `sdk/forward/wire` | how forwarding rides the Agent Control stream: the `forward.v1` Hello attribute, the `anixops.nodeconfig/v2` member, the forward report and their checks (F3a, implemented) |
 | Model and validation | `sdk/forward/model`, `sdk/forward/validate` | Go domain types with lossless conversion to and from the contract and the defaults (`model/defaults.go`); one set of validation rules used by Control, the planner and the Agent (F1b, implemented) |
 | Planner | `sdk/forward/planner` | routes and node inventory in, per-node states, port and mark allocations and generations out; pure functions (F1c, implemented) |
 | Drivers | `sdk/forward/driver`, `.../driver/fake`, `.../driver/conformance`, `.../driver/nftables`, `.../driver/gost`, `.../driver/ansible` | the driver interface, registry, fake driver and conformance suite (F2a, implemented), the nftables driver (Render F2b, Apply, Observe, failover and tc F2c, implemented) and the other engines (F4) |
@@ -150,10 +153,12 @@ Consumers:
 
 - **Agent** (anix-agent): embeds the drivers. Receives `NodeForwardState`
   in `config.v1` and reports `NodeForwardReport` as a `PackageReport`
-  (section 8).
-- **Control**: a new forward package built on the planner and serving
-  `ForwardControl`, with a native API under `/api/v4/forward/*`, the
-  operator CLI `anix-control forward ...` and a new UI (F5).
+  (section 8), both through `sdk/forward/wire`.
+- **Control**: the kernel's forwarding state (`internal/kernelforward`,
+  F3a) runs the planner and serves `ForwardControl` to official packages
+  (section 8); a new forward package builds on it a native API under
+  `/api/v4/forward/*`, the operator CLI `anix-control forward ...` and a
+  new UI (F5).
 - **Other AnixOps products**: import `sdk/forward` and call
   `ForwardControl`.
 
@@ -396,6 +401,20 @@ With several entry nodes:
   remainder as counters arrive;
 - `expires_at_unix_ms` is enforced by Control (pause) and by the Agent
   (a local timer), for the same reason.
+
+Decided by default with F3a (the owner may revisit): global quota across
+several entries is Control-authoritative with a local remainder, as above.
+F3a implements the Control side: when the entry hop's metered bytes (both
+directions, every entry node, every counter epoch; section 11) reach
+`quota_bytes`, or `expires_at_unix_ms` has passed (checked every minute),
+Control plans the route as paused (`KernelForwardRoute.enforced` is
+`quota` or `expired`) without changing the stored route, so its hops,
+ports and counters survive; raising the quota or the expiry lifts it at
+the next plan. Rendering each entry's local remainder is **deferred**:
+until then every entry carries the full `quota_bytes`, so while Control is
+down several entries can together pass the quota (each stops at it).
+Re-rendering per node on every report would move generations continuously
+and needs a throttle of its own.
 
 ### 5.4 Generations
 
@@ -863,16 +882,80 @@ Probes travel as Agent desired operations (section 8.3).
 
 ## 8. Control and Agent transport
 
+Implemented in F3a: `internal/kernelforward` (the kernel's forwarding
+state and `ForwardControl`), `internal/grpc/agent_control_forward.go` (the
+stream) and `sdk/forward/wire` (the wire rules both sides share);
+`sdk/api/agent/v1/PROTOCOL.md`, "Forwarding", is the Agent's reference.
+
+### 8.0 The kernel's forwarding state
+
+Nine new kernel tables, protected (no package can adopt them), written only
+by `internal/kernelforward`:
+
+| Table | Holds |
+|---|---|
+| `v4_kernel_forward_route` | each route as protojson, its owner and revision, and `enforced` (Control's own pause, section 5.3) |
+| `v4_kernel_forward_allocation` | the port and mark of each (route, hop, node), sticky across plans; a deleted route's rows get `released_at` and stay taken for 10 minutes |
+| `v4_kernel_forward_node` | the inventory: per node the persisted `negotiated` flag, the Agent's `NodeCapabilities` and their hash, and the node's settings (port range, reserved ports, addresses, labels) |
+| `v4_kernel_forward_node_state` | each node's stamped `NodeForwardState`, `generation` and `state_hash` |
+| `v4_kernel_forward_node_report` | each node's latest `NodeForwardReport` without its counters |
+| `v4_kernel_forward_counter` | the traffic ledger's cursor: per route, hop, node and counter epoch the largest values reported |
+| `v4_kernel_forward_traffic` | the traffic ledger: the raw growth per route, hop, node and UTC hour, by direction |
+| `v4_kernel_forward_request` | applied `ForwardControl` writes by request id, kept 7 days |
+| `v4_kernel_forward_plan` | the lock row every plan takes, and the last plan's outcome |
+
+- **Inventory.** A proxy or forward node is in it once its Agent
+  negotiated `forward.v1` or it has forwarding settings
+  (`Service.SetNodeSettings`, the internal API F5a exposes), while its node
+  row exists and is enabled; a disabled node drops out, so a route on it
+  becomes `unknown_node`. Its engines are those of its last `forward.v1`
+  Hello (none before one). Its addresses are its settings', else the node
+  row's host when that is an IP address (for a proxy node with a DNS host,
+  its reported server IP): the planner needs literals for
+  `ingress_sources`. Its port range defaults to 30000-39999; SSH (22) and
+  the node's own service ports (a forward node's port, API and metrics
+  ports; a proxy node's port and protocol ports) are always reserved.
+- **Plans.** Every route write and every inventory change runs
+  `planner.Plan` over every stored route with the inventory, the active
+  allocations as previous and the held ones as `Options.Taken`, under the
+  lock row (one plan at a time across Control processes), then
+  `planner.Stamp` from the stored generations. Nodes whose generation moved
+  are written and their sessions pushed (8.1); a node that left the
+  inventory with hops gets an empty state, so it never keeps a deleted
+  route. Any violation refuses the whole plan: a route write is refused
+  (8.6); an inventory change (a Hello with other capabilities, new
+  settings) leaves every node on its generation, logs, and records the
+  violations (`Service.PlanStatus`, gauge `anixops_forward_plan_refused`).
+- **Internal Go API** (`kernelforward.Service`): route writes and reads,
+  `PlanRoute`, `RouteStats`, `RouteHealth`, `Traffic` (the hourly ledger),
+  `State`, `Nodes`, `SetNodeSettings`, `RecordHello`, `RecordReport`,
+  `Replan`, `PlanStatus`, `Maintain` (the singleton worker's minute tick:
+  expiry, request-id retention), and the package functions
+  `NodeConfigMember`, `NodeConvergence`, `OnStateChange` and
+  `WritePrometheus`.
+
 ### 8.1 Desired state
 
 - A new capability, `forward.v1`, in `Hello.capabilities` and
-  `HelloAck.server_capabilities`.
+  `HelloAck.server_capabilities`. The Agent lists it with its
+  `NodeCapabilities` as protojson in the attribute `node_capabilities` (at
+  most 16 KiB; `sdk/forward/wire`), so Control knows what the node can do
+  before it builds the node's first snapshot. Control serves it for proxy
+  and forward nodes when the Hello lists it with a valid attribute and the
+  session gets `config.v1`; a malformed attribute only withholds it.
 - The node's forwarding state rides in `config.v1`: `ConfigSnapshot` with a
   new format `anixops.nodeconfig/v2`, which is `anixops.nodeconfig/v1` plus
-  a `forward` member holding the `NodeForwardState` (protojson). Control
-  sends v2 only to Agents that negotiated `forward.v1`; an older Agent
+  a `forward` member holding the `NodeForwardState` (protojson, proto field
+  names, decoded and re-encoded with sorted keys so the document hash
+  depends only on the state). The format follows the node's persisted flag
+  (whether its last Hello negotiated `forward.v1`), never the live session,
+  so every builder (the Hello reconcile, the minute refresh, `node.sync`)
+  builds the same document and the revision does not flap; an older Agent
   keeps v1 and gets no forwarding. Every new generation bumps
-  `config_revision`.
+  `config_revision`, and the plan that made it pushes the snapshot to the
+  node's session at once (trigger `forward` of
+  `anixops_agent_config_snapshots_sent_total`). `generation` 0 means
+  Control has no state for the node yet: the Agent keeps what it runs.
 - `ConfigStatus` answers the snapshot as today. Per-hop errors go in the
   report.
 
@@ -890,13 +973,27 @@ report added for the systemd services panel, `systemd-services-v4.2`):
   the last value per (node, route, hop, epoch) and adds the difference; a
   new epoch adds its full value. A lost report loses nothing.
 - Control accepts the `forward` report from Agents that negotiated
-  `forward.v1`, not from package releases. The kernel's report handler
-  must allow this alongside the systemd panel's release-capability check.
+  `forward.v1`, not from package releases: the stream routes the kind
+  before the release-capability check of other kinds. Forward nodes are
+  offered `package-reports.v1` with `forward.v1`. Refusals are counted
+  with the package reports' (`anixops_agent_package_reports_refused_total`,
+  new reason `unnegotiated`); the stream stays open. The report must name
+  the stream's node and stay within the bounds of `wire.CheckReport`; the
+  256 KiB payload cap holds about 800 hops of counters, and chunking a
+  larger node's counters is deferred.
+- Control stores the report without its counters as the node's latest
+  (dropped when one observed later is stored) and meters the counters
+  (section 11). Gauges: `anixops_forward_nodes`,
+  `anixops_forward_lagging_nodes` (reported generation behind the desired
+  one, or never reported), `anixops_forward_unreported_nodes`,
+  `anixops_forward_generation_lag_max`, `anixops_forward_hop_errors`.
 
 ### 8.3 Probes
 
 `ForwardNode.Probe` is a `DesiredOperation` of kind `forward.probe` with a
 `ProbeRequest` as payload; the `ObservedState` carries the `ProbeResult`.
+F3c implements it; until then `ForwardControl.DiagnoseRoute` answers
+`UNIMPLEMENTED`.
 
 ### 8.4 Connection
 
@@ -905,8 +1002,13 @@ panel connections):
 
 - one long-lived Agent Control stream per node; no per-route or polling
   connections;
-- a low-frequency heartbeat (proposed 60 s for forward nodes, against
-  today's default of 20 s) with jitter;
+- a low-frequency heartbeat (60 s for forward nodes, against today's
+  default of 20 s) with jitter. Decided by default with F3a (the owner may
+  revisit): `HelloAck.heartbeat_interval_seconds` is 60 for a forward
+  node's session that negotiated `forward.v1`, the existing per-session
+  field, so older Agents and proxy nodes keep 20 s. A certificate revoked
+  while the stream is open ends it at the next heartbeat, so within a
+  minute on these sessions;
 - reconnects with exponential backoff and jitter, from 1 s to 5 minutes;
 - several Control endpoints (IPv6, alternate domains), from enrollment and
   updated in the configuration.
@@ -918,6 +1020,30 @@ the kernel and gost keeps running, health checks and failover keep running,
 counters keep counting, local quota and expiry still apply. On reconnect
 the Agent sends its `config_revision`; Control sends a newer snapshot if
 there is one, and the next report brings the counters up to date.
+
+### 8.6 ForwardControl for packages
+
+The kernel serves `ForwardControl` to official packages that declare the
+kernel capability `kernel.forward.v1`, on local bridge sessions and the
+module listener, authorized on every call against the host's generation
+(as `KernelNodeOps`). The forward package (F5a) builds `/api/v4/forward/*`
+and the CLI on it.
+
+- Writes take a `request_id` (1 to 128 bytes): a retry answers the recorded
+  response once; the same id with another request is
+  `FAILED_PRECONDITION`; a refused write is not recorded.
+  `CreateRoute` assigns the id (a ULID), revision 1 and the times;
+  `UpdateRoute` needs `expected_revision` (`ABORTED` when stale).
+- Refusals: `INVALID_ARGUMENT` for a malformed route, `FAILED_PRECONDITION`
+  when the nodes cannot host it (unknown or disabled node, missing engine or
+  capability, port taken, reserved or out of range, ports or marks
+  exhausted, no address) or another stored route no longer plans. The
+  status's details carry the method's response (`PlanRouteResponse` for
+  `DeleteRoute`) whose violations name their route
+  (`Violation.route_id`, empty for the new route of a create).
+- `PlanRoute` previews without storing; `GetRouteStats` answers the
+  ledger's totals per hop and node; `GetRouteHealth` the upstream health of
+  the route's nodes' latest reports.
 
 ## 9. Node onboarding
 
@@ -1041,6 +1167,17 @@ cancelled. They split three ways:
   and direction, plus connections. It applies no multiplier.
 - **Control keeps a traffic ledger** of the deltas (section 8.2), per
   route, hop, node and direction, and enforces `quota_bytes` on raw bytes.
+  Implemented in F3a: `v4_kernel_forward_counter` keeps, per route, hop,
+  node and counter epoch, the largest cumulative values reported; a report
+  adds each field's growth over them to `v4_kernel_forward_traffic` (the
+  hour of its observation, up and down bytes and packets, new
+  connections). Epoch rules: within an epoch only growth counts, and a
+  field that went down adds nothing and keeps the stored value; a new
+  epoch (reset, re-created hop, restart) counts its values in full; a
+  report observed before the node's stored one is dropped whole. A route's
+  metered traffic is the sum of its epoch rows (`GetRouteStats`), its
+  entry's sum drives the quota (section 5.3), and no multiplier is applied
+  anywhere in the kernel.
 - **Billing applies multipliers**: billable bytes =
   Σ over billed hops (up × hop multiplier × up multiplier + down × hop
   multiplier × down multiplier). A one-way plan is a direction multiplier
@@ -1240,7 +1377,7 @@ Agent-repository PRs are marked (agent).
 | | F2b | nftables Render and nft goldens (implemented) | L | H13 |
 | | F2c | nftables Apply, Observe, `SetUpstreams`, tc HTB, host probe, real-kernel conformance (implemented) | L | H13 |
 | | F2d | netns end-to-end suite and CI job (implemented) | M | H14 |
-| F3 | F3a | Control: `forward.v1`, `nodeconfig/v2`, the `forward` report and traffic ledger | M | H25 |
+| F3 | F3a | Control: `forward.v1`, `nodeconfig/v2`, the `forward` report and traffic ledger (implemented) | L | H25 |
 | | F3b | (agent) forward component: drivers, persisted state, apply at boot, health loop, reports | L | H25 |
 | | F3c | probes and diagnosis plumbing | M | |
 | | O1 | `install.sh`, group tokens, mirrors | M | H18 |
@@ -1261,12 +1398,16 @@ F1a–F1c and F2 do not depend on the Agent line. F3 needs AG-1. F5c runs
 last, after every forward node runs the new Agent (section 10), and only
 after its own confirmation.
 
-**Draft golden policy.** As with KernelNodeOps before NO-1
+**Golden policy.** As with KernelNodeOps before NO-1
 (`node-ops-service.md` section 3.10), `anixops.forward.v1` is in
-`contracts/proto/descriptors.golden` and the CI generated-code check from
-this PR, so its generated code cannot drift. Until the first change that
-serves it (F3a), a design change may edit this package's own golden lines
-in the PR that changes the proto. From then on, additions only.
+`contracts/proto/descriptors.golden` and the CI generated-code check. Until
+F3a, which serves it, a design change could edit this package's own golden
+lines in the PR that changed the proto. **Since F3a, additions only:** a
+field, message, RPC or enum value is never removed, renumbered or retyped.
+`internal/tests/protocompat` rejects an element that disappears, and
+`config/scripts/check_proto_golden.py` (Documentation Sync Check job)
+rejects a golden file that lost or rewrote a line of the base revision;
+its `DRAFT_PACKAGES` is empty. F3a added only `Violation.route_id`.
 
 ## 16. Open questions for owner review
 
@@ -1286,7 +1427,7 @@ when decided.
 | H22 | AnixOps protocol design review (threat model, cryptography, REALITY-like fallback) | Separate design document before any prototype; prototype off by default and marked experimental in v4.2 |
 | H23 | Community vs commercial boundary for forwarding | Section 12: core forwarding, LB, failover and onboarding in both; self-service, plans, multipliers and resellers commercial |
 
-Decided by the owner (2026-10-02):
+Decided by the owner (2026-10-02; H21 2026-10-03):
 
 - **H11:** approved as drafted. The contract freezes when F3a serves it.
 - **H12:** `sdk/v0.x` through v4.2's release candidates, then `sdk/v1.0.0`
@@ -1298,6 +1439,10 @@ Decided by the owner (2026-10-02):
 - **H14:** the netns suite runs on GitHub-hosted runners with sudo, on
   forward changes and nightly. It becomes a required check after two green
   weeks.
+- **H21** (defaults part, 2026-10-03): health checks every 5 s with a 2 s
+  timeout, the breaker opens after 3 failures in a row for 30 s,
+  least-connections re-weights every 10 s
+  (`sdk/forward/model/defaults.go`). The DDNS providers settle with L2.
 
 Decided by the owner (2026-10-04):
 
@@ -1308,15 +1453,18 @@ Decided by the owner (2026-10-04):
   it (for example `v4.2.0-rc.N` for both), and Control's CI pins the same
   Agent commit. Each Agent tag is still asked first.
 
-H18–H23 are still open; each is asked before the work it gates.
+H18–H20, H22 and H23 are still open; each is asked before the work it
+gates.
 
-Smaller questions raised by this design, to settle with the gates above:
+Smaller questions raised by this design:
 
-- Is the 60 s heartbeat for forward nodes acceptable (section 8.4; H11)?
-- Global quota across several entries: Control-authoritative with a local
-  remainder (section 5.3; H11)?
+- The 60 s heartbeat for forward nodes (section 8.4): decided by default
+  with F3a, the owner may revisit.
+- Global quota across several entries, Control-authoritative with a local
+  remainder (section 5.3): decided by default with F3a, the owner may
+  revisit; the local remainder's rendering is deferred.
 - Forward nodes (`v2_forward_node`) kept through the v4.2 upgrade as node
-  inventory (section 10; H15)?
+  inventory (section 10; H15)? Still open; F3a's inventory uses them.
 
 ## 17. Not in scope
 

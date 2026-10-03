@@ -104,7 +104,7 @@ func TestDesiredConfigStoreSerializesWriters(t *testing.T) {
 		variants := make([]*DesiredConfig, 0, 4)
 		for i := 0; i < 4; i++ {
 			document := map[string]any{"kind": "proxy", "variant": i}
-			cfg, err := newDesiredConfig(node, document)
+			cfg, err := newDesiredConfig(node, DesiredConfigFormat, document)
 			require.NoError(t, err)
 			variants = append(variants, cfg)
 		}

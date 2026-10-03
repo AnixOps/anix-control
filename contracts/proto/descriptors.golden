@@ -552,6 +552,7 @@ field anixops.forward.v1.UpstreamHealth.state = 5 optional anixops.forward.v1.He
 field anixops.forward.v1.Violation.code = 3 optional string
 field anixops.forward.v1.Violation.field = 1 optional string
 field anixops.forward.v1.Violation.message = 2 optional string
+field anixops.forward.v1.Violation.route_id = 4 optional string
 field anixops.identity.v1.Account.account_uuid = 2 optional string
 field anixops.identity.v1.Account.banned = 6 optional bool
 field anixops.identity.v1.Account.created_at_unix = 9 optional int64

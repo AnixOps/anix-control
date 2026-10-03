@@ -9,6 +9,7 @@ import (
 
 	agentcontrol "github.com/AnixOps/anix-control/sdk/agentcontrol"
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
+	"github.com/AnixOps/anix-control/sdk/forward/wire"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -32,11 +33,15 @@ import (
 
 // servesPackageReports tells whether the HelloAck advertises
 // package-reports.v1: when the agent lists it and the stream's node is a
-// proxy node, whose plugin assignments authorize the reports. Forward-node
-// package reports join with the forward plugins.
+// proxy node, whose plugin assignments authorize the reports, or a forward
+// node served forward.v1, whose forward reports ride it
+// (agent_control_forward.go). A forward node's other package reports are
+// refused (not_assigned): it has no plugin assignments.
 func (s *AgentControlGRPCServer) servesPackageReports(node agentcontrol.AgentNode, agent []*agentv1pb.Capability) bool {
-	return node.Kind == agentcontrol.NodeKindProxy &&
-		agentcontrol.HasCapabilityVersion(agent, agentcontrol.CapabilityPackageReports, agentcontrol.CapabilityVersionV1)
+	if !agentcontrol.HasCapabilityVersion(agent, agentcontrol.CapabilityPackageReports, agentcontrol.CapabilityVersionV1) {
+		return false
+	}
+	return node.Kind == agentcontrol.NodeKindProxy || (node.Kind == agentcontrol.NodeKindForward && s.servesForward(node, agent))
 }
 
 // handlePackageReport records one PackageReport for the stream's node. It
@@ -47,6 +52,10 @@ func (s *AgentControlGRPCServer) handlePackageReport(connection *AgentControlCon
 	}
 	if report == nil {
 		return status.Error(codes.InvalidArgument, "package_report payload is required")
+	}
+	if wire.IsReport(report) {
+		s.handleForwardReport(connection, node, report)
+		return nil
 	}
 	input := service.PackageReportInput{
 		NodeKind: node.Kind, NodeID: uint(node.ID),

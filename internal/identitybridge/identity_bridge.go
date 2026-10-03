@@ -18,6 +18,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/handler"
+	"github.com/AnixOps/anix-control/v4/internal/kernelforward"
 	"github.com/AnixOps/anix-control/v4/internal/kernelidentity"
 	"github.com/AnixOps/anix-control/v4/internal/kernelnodeops"
 	"github.com/AnixOps/anix-control/v4/internal/kernelorder"
@@ -65,7 +66,24 @@ func NewFactory(cfg *config.Config) (packagebridge.SessionFactory, error) {
 		KernelSettings:       kernelSettings(operations),
 		KernelTelemetry:      kernelTelemetry(operations),
 		KernelNodeOps:        kernelNodeOps(operations),
+		KernelForward:        kernelForward(operations),
 	}), nil
+}
+
+// NewKernelForward returns the ForwardControl provider for the module
+// listener; local sessions get the same one from NewFactory. Both answer
+// from the kernel's forwarding state (internal/kernelforward).
+func NewKernelForward(cfg *config.Config) (packagebridge.KernelForwardProvider, error) {
+	operations, err := newHostOperations(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return kernelForward(operations), nil
+}
+
+func kernelForward(operations service.PackageHostOperations) packagebridge.KernelForwardProvider {
+	server := &kernelforward.Server{Service: kernelforward.New(operations.DB), Authorizer: operations}
+	return server.For
 }
 
 // NewKernelNodeOps returns the KernelNodeOps provider for the module

@@ -71,6 +71,8 @@ func newAgentControlTestEnvironment(t *testing.T) *agentControlTestEnvironment {
 	cache.InitMemory()
 	requireInMemoryDatabase(t)
 	requireAutoMigrate(t, &model.Node{}, &model.NodeServiceAssignment{}, &model.PluginTelemetryState{}, &model.NodePluginObservedState{}, &model.Plugin{}, &model.PluginRelease{}, &model.PluginTrustRoot{})
+	// Every Hello records the node's forwarding flag, as in production.
+	requireAutoMigrate(t, model.KernelForwardModels()...)
 
 	apiKey := "agent-control-test-key"
 	hash := sha256.Sum256([]byte(apiKey))

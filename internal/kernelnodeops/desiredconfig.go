@@ -10,6 +10,8 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
+	"github.com/AnixOps/anix-control/sdk/forward/wire"
+	"github.com/AnixOps/anix-control/v4/internal/kernelforward"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v4/internal/service"
@@ -23,6 +25,12 @@ import (
 // and the UniProxy answers (legacy_pull); a forward node's legacy rules and
 // tunnels.
 const DesiredConfigFormat = "anixops.nodeconfig/v1"
+
+// ForwardConfigFormat is the format of a node whose Agent negotiated
+// forward.v1 (forward-sdk.md section 8.1): DesiredConfigFormat plus the
+// member "forward" holding the node's NodeForwardState
+// (kernelforward.NodeConfigMember, sdk/forward/wire).
+const ForwardConfigFormat = wire.NodeConfigFormat
 
 // ErrNodeGone reports a node whose row no longer exists.
 var ErrNodeGone = errors.New("node does not exist")
@@ -59,16 +67,25 @@ func BuildDesiredConfig(db *gorm.DB, node agentcontrol.AgentNode) (*DesiredConfi
 	if err != nil {
 		return nil, err
 	}
-	return newDesiredConfig(node, document)
+	format := DesiredConfigFormat
+	negotiated, member, err := kernelforward.NodeConfigMember(db, node)
+	if err != nil {
+		return nil, err
+	}
+	if negotiated {
+		format = ForwardConfigFormat
+		document[wire.NodeConfigMember] = member
+	}
+	return newDesiredConfig(node, format, document)
 }
 
-func newDesiredConfig(node agentcontrol.AgentNode, document map[string]any) (*DesiredConfig, error) {
+func newDesiredConfig(node agentcontrol.AgentNode, format string, document map[string]any) (*DesiredConfig, error) {
 	encoded, err := json.Marshal(document)
 	if err != nil {
 		return nil, fmt.Errorf("encode desired configuration: %w", err)
 	}
 	sum := sha256.Sum256(encoded)
-	return &DesiredConfig{Node: node, Format: DesiredConfigFormat, Document: document, JSON: encoded, Hash: hex.EncodeToString(sum[:])}, nil
+	return &DesiredConfig{Node: node, Format: format, Document: document, JSON: encoded, Hash: hex.EncodeToString(sum[:])}, nil
 }
 
 // buildProxyDesiredConfig renders a proxy node: its enabled protocols

@@ -172,7 +172,14 @@ GOWORK=off python3 config/scripts/check_plugin_only_routes.py      # 296 /api/v2
 GOWORK=off python3 -m unittest discover -s config/scripts -p '*_test.py'
 for c in pluginhost packagebridge modulepki identity kernelidentity kernelsubscriber kernelsettings kernelorder kerneltelemetry kernelnodeops forward agent; do bash sdk/api/$c/gen.sh; done  # needs protoc 29.2; then git diff must be empty
 GOWORK=off go test ./internal/tests/protocompat                     # contracts may only grow
+python3 config/scripts/check_proto_golden.py --base origin/go_dev   # the golden file only grows (no draft package left)
 ```
+
+Every contract in `contracts/proto/descriptors.golden` is additions-only,
+`anixops.forward.v1` included since F3a served it: never remove,
+renumber or retype a field, message, RPC or enum value, and never edit a
+golden line by hand (`check_proto_golden.py`, in the Documentation Sync
+Check job, compares with the base revision).
 
 The route gate, the release-script unit tests, and the generated-code drift
 checks for `api/grpc` and every `sdk/api/*` contract all run in the

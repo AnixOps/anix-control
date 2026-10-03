@@ -239,6 +239,58 @@
   check until it has been green for two weeks. The SDK module now requires
   `golang.org/x/sys` directly (it was indirect), for `setns`.
 
+- Forward F3a (`docs/architecture/forward-sdk.md` section 8): Control serves
+  `anixops.forward.v1`. The contract is binding from here on: additions
+  only (`Violation.route_id = 4` added, so a refusal names the route it
+  belongs to), and the new gate `config/scripts/check_proto_golden.py`
+  (Documentation Sync Check job) fails a pull request whose
+  `contracts/proto/descriptors.golden` loses or rewrites a line of the base
+  revision; no package is in the draft policy any more.
+  - **Kernel forwarding state** (`internal/kernelforward`), in nine new
+    protected tables (`v4_kernel_forward_route`, `_allocation`, `_node`,
+    `_node_state`, `_node_report`, `_counter`, `_traffic`, `_request`,
+    `_plan`): routes, their sticky port and mark allocations, the node
+    inventory (proxy and forward nodes whose Agent negotiated `forward.v1`
+    or that have forwarding settings; default port range 30000-39999, SSH
+    and the node's own ports reserved), `planner.Plan` on every change under
+    one lock row, and per-node generations (`planner.Stamp`). Any violation
+    refuses the whole plan: a route write is refused, an inventory change
+    keeps every node's state and records why (`PlanStatus`, the
+    `anixops_forward_plan_refused` gauge). A deleted route's ports stay held
+    for 10 minutes.
+  - **`ForwardControl`** for official packages declaring the new kernel
+    capability `kernel.forward.v1`, on local bridge sessions and the module
+    listener, authorized on every call: route writes with request ids and
+    revisions, refusals as `INVALID_ARGUMENT` or `FAILED_PRECONDITION` with
+    the response and its violations in the status details, `PlanRoute`,
+    `GetRouteStats` and `GetRouteHealth`. `DiagnoseRoute` answers
+    `UNIMPLEMENTED` until F3c.
+  - **Agent Control stream.** An Agent lists `forward.v1` with its
+    `NodeCapabilities` in the attribute `node_capabilities`
+    (`sdk/forward/wire` encodes and checks it); Control serves it with
+    `config.v1` to proxy and forward nodes. Such a node's configuration is
+    `anixops.nodeconfig/v2`, the v1 document plus `forward`, its
+    `NodeForwardState`, and every generation change pushes it at once;
+    Agents without `forward.v1` keep v1 and get no forwarding. Forward nodes
+    are offered `package-reports.v1` with it and asked for a 60-second
+    heartbeat (decided by default, section 8.4).
+  - **Reports and the traffic ledger.** The `NodeForwardReport` arrives as
+    a `PackageReport` (`forward`, `forward.report`, `v1`), accepted only on a
+    `forward.v1` session (else refused `unnegotiated`), checked for the
+    stream's node, kept as the node's latest, and its counters metered:
+    per route, hop, node and counter epoch the largest values reported, and
+    their raw growth per hour and direction. A reset or re-created hop adds
+    its new epoch in full, a decrease adds nothing, an older report is
+    dropped; no multiplier is applied. Gauges for nodes behind their
+    desired generation, the largest lag and hop errors.
+  - **Control-authoritative limits** (section 5.3, decided by default): a
+    route whose entry traffic reaches `quota_bytes`, or whose expiry passed,
+    is planned paused without changing the stored route; raising the quota
+    lifts it. Rendering each entry's local remainder is deferred.
+  - H21 is decided: health checks every 5 s with a 2 s timeout, the breaker
+    opens after 3 failures for 30 s, least-connections re-weights every 10 s
+    (`sdk/forward/model/defaults.go`).
+
 ### Fixed
 
 - The live Control WebUI E2E gate defaults to ports 24175 and 28080 instead

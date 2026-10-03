@@ -345,7 +345,7 @@ func TestAgentStreamsPushConfig(t *testing.T) {
 	_, err = broken.sendConfig(newer, true, configTriggerSync)
 	require.Error(t, err)
 	server := NewAgentControlGRPCServer(env.manager)
-	assert.Error(t, server.pushDesiredConfig(ctx, broken, env.agentNode(), configTriggerHello))
+	assert.Error(t, pushDesiredConfig(ctx, broken, env.agentNode(), configTriggerHello))
 	setConfigRefreshInterval(time.Millisecond)
 	stop := server.startConfigRefresh(ctx, broken, env.agentNode())
 	time.Sleep(50 * time.Millisecond)

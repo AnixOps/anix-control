@@ -11,6 +11,7 @@ import (
 	"sync"
 	"time"
 
+	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
 	kernelidentityv1 "github.com/AnixOps/anix-control/sdk/api/kernelidentity/v1"
 	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
 	kernelorderv1 "github.com/AnixOps/anix-control/sdk/api/kernelorder/v1"
@@ -67,6 +68,9 @@ type Listener struct {
 	// KernelNodeOps, when set, is served to bound instances; see
 	// ModuleBridge.KernelNodeOpsServer.
 	KernelNodeOps packagebridge.KernelNodeOpsProvider
+	// KernelForward, when set, serves ForwardControl to bound instances;
+	// see ModuleBridge.KernelForwardServer.
+	KernelForward packagebridge.KernelForwardProvider
 
 	revocations revocationCache
 }
@@ -139,6 +143,9 @@ func (l *Listener) newServer() (*grpc.Server, error) {
 	}
 	if l.KernelNodeOps != nil {
 		kernelnodeopsv1.RegisterKernelNodeOpsServer(server, l.Bridge.KernelNodeOpsServer(l.KernelNodeOps))
+	}
+	if l.KernelForward != nil {
+		forwardv1.RegisterForwardControlServer(server, l.Bridge.KernelForwardServer(l.KernelForward))
 	}
 	return server, nil
 }

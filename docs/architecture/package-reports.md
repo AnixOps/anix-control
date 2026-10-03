@@ -30,8 +30,18 @@ table; it owns a kind, which the kernel reviews and accepts.
   |---|---|---|---|
   | `systemd.services` | `telemetry.systemd.read` | `sdk/telemetry/systemdreport` | 25 minutes |
 
-  A new kind, such as a forward report, adds a row here, an SDK schema
-  package with its sanitizer, and an entry in `packageReportKinds`.
+  A new kind adds a row here, an SDK schema package with its sanitizer,
+  and an entry in `packageReportKinds`.
+- **The forward report** (F3a) is the one kind a release does not
+  authorize: `plugin_id` `forward`, kind `forward.report`, version `v1`,
+  the node's `NodeForwardReport`. The stream routes it before the checks
+  above and accepts it only from a session that negotiated `forward.v1`
+  (else it is refused `unnegotiated`); `sdk/forward/wire` checks it, and
+  `internal/kernelforward` stores it in its own tables
+  (`v4_kernel_forward_node_report`, the traffic ledger), not in
+  `v4_kernel_package_report_state` (forward-sdk.md section 8.2). Forward
+  nodes are offered `package-reports.v1` with `forward.v1`; their other
+  kinds are refused `not_assigned`.
 - **Authorization.** The node must have an enabled assignment of
   `plugin_id` at `version`, and that release must be a signed official
   Agent release whose manifest still verifies and declares the kind's
@@ -46,7 +56,7 @@ plugin and kind:
 
 | Column | Type | Note |
 |---|---|---|
-| `node_kind` | varchar(16), key | `proxy` (forward nodes are not offered the capability yet) |
+| `node_kind` | varchar(16), key | `proxy` (a forward node's only accepted kind is the forward report, stored elsewhere) |
 | `node_id` | integer, key | |
 | `plugin_id` | varchar(120), key | |
 | `kind` | varchar(64), key | |

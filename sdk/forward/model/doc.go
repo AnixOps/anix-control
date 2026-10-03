@@ -25,7 +25,7 @@
 //
 // Defaults. A zero field means "the default" wherever the contract says so.
 // The defaults are in one place, defaults.go; WithDefaults fills them in.
-// The health-check and circuit-breaker defaults are proposals awaiting
+// The health-check, circuit-breaker and least-connections defaults are
 // owner decision H21.
 //
 // Validation lives in sdk/forward/validate, which Control, the planner and
