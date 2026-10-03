@@ -1,8 +1,11 @@
 // Keep the default ports away from the normal development listener (8080),
 // Playwright's Vite listener (4173), and the common production test listener
-// (18080). Callers can override both values for a shared CI executor.
-const DEFAULT_WEBUI_PORT = 34175
-const DEFAULT_API_PORT = 38080
+// (18080), and below Linux's ephemeral range (32768-60999): a port in that
+// range can be held by any outgoing connection an earlier CI step left open,
+// which made the live gate fail with EADDRINUSE. Callers can override both
+// values for a shared CI executor.
+const DEFAULT_WEBUI_PORT = 24175
+const DEFAULT_API_PORT = 28080
 
 function parsePort(raw, fallback, name) {
   if (raw === undefined || raw === '') {

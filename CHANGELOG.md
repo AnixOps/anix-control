@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+### Fixed
+
+- The live Control WebUI E2E gate defaults to ports 24175 and 28080 instead
+  of 34175 and 38080. The old ports sat in Linux's ephemeral range, so an
+  outgoing connection left open by an earlier CI step could hold one and fail
+  the gate with `EADDRINUSE` (seen twice on go_dev).
+
 ## 4.1.0-rc.6 - 2026-10-03
 
 ### Changed
