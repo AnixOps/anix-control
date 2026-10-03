@@ -52,7 +52,10 @@ body {
 
 /* Buttons: pill shaped (radius-pill); .btn is 36 px, .btn-sm 28 px. Bare
    buttons size by padding (no min-height), so page styles that set their
-   own height keep working. */
+   own height keep working.
+   .btn, .btn-secondary, .table-container, .data-table and .empty-state are
+   the plugin WebUI class contract (docs/architecture/plugin-kernel-contract.md,
+   "WebUI CSS Classes"): never remove or rename them. */
 button,
 .btn {
   display: inline-flex;
@@ -208,7 +211,7 @@ textarea::placeholder {
   }
 }
 
-/* Tables in plugin WebUI bundles. */
+/* Tables in plugin WebUI bundles (the WebUI class contract, see above). */
 .table-container {
   overflow-x: auto;
   background: var(--bg-elevated);

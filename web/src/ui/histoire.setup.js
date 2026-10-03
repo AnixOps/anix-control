@@ -24,5 +24,6 @@ export const setupVue3 = defineSetupVue3(async ({ app }) => {
   const params = typeof location !== 'undefined' ? new URLSearchParams(location.search) : null
   const lang = params?.get('lang') === 'en' ? 'en' : 'zh-CN'
   await loadMessageGroup('admin')
+  await loadMessageGroup('adminPages')
   await setLocale(lang)
 })

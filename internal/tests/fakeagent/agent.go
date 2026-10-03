@@ -193,12 +193,21 @@ func (a *Agent) serve() {
 		a.mu.Lock()
 		a.received = append(a.received, proto.Clone(desired).(*agentv1pb.DesiredOperation))
 		a.mu.Unlock()
-		select {
-		case a.arrivals <- desired:
-		default:
+		// A test awaiting the operation hears of it once the agent
+		// acknowledged it, as a real agent acknowledges before it reports:
+		// a Complete sent earlier would race the acknowledgement, and
+		// Control refuses an acknowledgement of an operation that already
+		// ended.
+		arrived := func() {
+			select {
+			case a.arrivals <- desired:
+			default:
+			}
 		}
 		if desired.GetKind() == "operation.cancel" {
-			if err := a.ack(desired, true, ""); err != nil {
+			err := a.ack(desired, true, "")
+			arrived()
+			if err != nil {
 				return
 			}
 			if err := a.observe(desired, agentv1pb.ObservedPhase_OBSERVED_PHASE_SUPERSEDED, "cancelled by Control", nil); err != nil {
@@ -207,13 +216,16 @@ func (a *Agent) serve() {
 			continue
 		}
 		if a.script.Silent {
+			arrived()
 			continue
 		}
 		accepted, reason := true, ""
 		if a.script.Ack != nil {
 			accepted, reason = a.script.Ack(desired)
 		}
-		if err := a.ack(desired, accepted, reason); err != nil {
+		err = a.ack(desired, accepted, reason)
+		arrived()
+		if err != nil {
 			return
 		}
 		if !accepted || a.script.Hold {

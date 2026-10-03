@@ -6,22 +6,26 @@ export const SUPPORTED_LOCALES = ['zh-CN', 'en']
 
 // Messages come in groups, one chunk per locale and group, so a page loads
 // only what it shows: `core` (sign-in, user portal, shell, components) at
-// startup, `admin` (the admin console and forward suite) once an admin route
-// opens or an admin is signed in (router/index.js). Only the active locale is
-// loaded; en and zh-CN carry the same keys (localeParity.test.js), so the
-// fallback locale is not fetched up front.
+// startup, `admin` (the admin shell: navigation, ⌘K, the dashboard) once an
+// admin route opens or an admin is signed in, and `adminPages` (every other
+// admin page and the forward suite) before the first of those pages opens
+// (router/index.js). Only the active locale is loaded; en and zh-CN carry the
+// same keys (localeParity.test.js), so the fallback locale is not fetched up
+// front.
 const localeLoaders = {
   'zh-CN': {
     core: () => import('./locales/zh-CN.js'),
-    admin: () => import('./locales/zh-CN.admin.js')
+    admin: () => import('./locales/zh-CN.admin.js'),
+    adminPages: () => import('./locales/zh-CN.adminPages.js')
   },
   en: {
     core: () => import('./locales/en.js'),
-    admin: () => import('./locales/en.admin.js')
+    admin: () => import('./locales/en.admin.js'),
+    adminPages: () => import('./locales/en.adminPages.js')
   }
 }
 
-export const MESSAGE_GROUPS = ['core', 'admin']
+export const MESSAGE_GROUPS = ['core', 'admin', 'adminPages']
 
 const activeGroups = new Set(['core'])
 const loadedGroups = new Set()
@@ -88,7 +92,7 @@ function loadLocaleGroup(locale, group) {
 
   const promise = loader()
     .then((module) => {
-      // Groups have disjoint top-level keys, so merging keeps each one whole.
+      // Groups share no message key, so merging keeps each one whole.
       i18n.global.mergeLocaleMessage(locale, module.default || module)
       loadedGroups.add(key)
       loadingGroups.delete(key)

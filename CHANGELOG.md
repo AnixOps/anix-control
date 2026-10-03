@@ -20,6 +20,38 @@
   `grpc.enabled`); without them agents cannot enroll, which the startup log
   says. Set `optional` to keep the release candidates' silent behaviour.
 
+
+- `agent_control.mtls` defaults to `preferred` instead of `optional`
+  (decision H5): legacy API-key agents keep working and now get the
+  deprecation signals. `preferred` no longer needs gRPC TLS and the
+  built-in CA to start (only `required` does, together with
+  `grpc.enabled`); without them agents cannot enroll, which the startup log
+  says. Set `optional` to keep the release candidates' silent behaviour.
+- The admin console's first visit downloads less: the admin messages are
+  split into `admin` (shell, navigation, ⌘K, dashboard) and `adminPages`
+  (every other admin page and the forward suite), which the router loads
+  before the first of those pages opens, or when the browser is idle. The
+  admin dashboard's first visit went from 239.8 KB to 210.2 KB gzip
+  (258.0 KB to 228.4 KB with axios), against unchanged budgets of 250 KB
+  and 269 KB.
+- The package parity tests (`internal/tests/*compat`, harness
+  `internal/tests/packagecompat`) run about twice as fast on PostgreSQL:
+  the cases of one test share a migrated database per side instead of
+  creating, migrating and dropping two schemas per case. Each case still
+  starts empty: what the previous case added is dropped, rows are deleted
+  and id sequences restart, a dropped foreign key is added back, and any
+  other schema change gets a newly migrated database. Locally,
+  `ordercompat` went from 27.1 s to 14.7 s and `paymentcompat` from
+  29.6 s to 13.9 s with PostgreSQL (in CI's PostgreSQL shards 48.9 s to
+  24.1 s and 52.6 s to 22.7 s; their shard weights are updated); every
+  compat package passes unchanged.
+- The CSS classes plugin WebUI bundles render (`.btn`, `.btn-secondary`,
+  `.table-container`, `.data-table`, `.empty-state`) are documented as a
+  stable contract ("WebUI CSS Classes" in
+  `docs/architecture/plugin-kernel-contract.md`): Control must not remove
+  or rename them. A web test fails when one loses its rule in
+  `web/src/style.css`.
+
 ### Added
 
 - Route modes have their own tooling. Until now a package's routes moved
@@ -164,6 +196,23 @@
   group's one by one as they changed, or at its next resync. Updating a
   node's `group_id` now records a change for each active user of the old
   and the new group (every active user when either is "all").
+- KernelNodeOps: an executor whose operation passes its deadline now
+  always sees `context.DeadlineExceeded`. The dispatcher's deadline sweep
+  could cancel the executor's context just before the context's own
+  deadline fired, handing it `context.Canceled` instead. The dispatcher's
+  own statements now also finish when it stops instead of being
+  interrupted, which avoided a data race in the SQLite driver.
+- Flaky tests made deterministic: `internal/kernelnodeops`
+  (`TestDeadlinesEndStartedOperationsTimedOut`, and the TARGET_GONE steps
+  of `TestDiagnoseForwardDialsPublicTargetsOnly` and `TestDiagnoseTunnel`,
+  which could run the diagnosis before the target was deleted) and
+  `internal/tests/nodeopsagent` (the scripted agent announced an operation
+  before acknowledging it, so a test's terminal report could overtake the
+  acknowledgement and Control closed the stream).
+- The 流量转发管理 page header reads fully in Chinese: its description,
+  runtime badge and runtime summary no longer mix in English ("runtime",
+  "tunnel", "Port Forward", "Local Runtime"); product names such as NodeX,
+  gost, nftables and Ansible stay as they are. English is unchanged.
 
 ## 4.1.0-rc.5 - 2026-10-02
 
