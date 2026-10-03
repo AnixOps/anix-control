@@ -82,6 +82,9 @@ Load order (`web/src/main.js`): `design/fonts/inter/inter.css`,
   plugin configuration forms also use `.btn-primary`, `.btn-sm`,
   `.btn-danger`, `.form-group` and `.required`. Plugins ship separately, so
   these classes stay while the WebUI contract does; nothing new goes there.
+  The five WebUI classes are a stable contract ("WebUI CSS Classes" in
+  `docs/architecture/plugin-kernel-contract.md`), guarded by
+  `src/__tests__/pluginWebuiClasses.test.js`.
   On touch screens `.btn` and the bare fields keep a 44 px minimum height;
   bare buttons size themselves (the old rule that set every button to
   40 / 44 px on phones is gone).

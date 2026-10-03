@@ -64,6 +64,31 @@ the current admin profile grants that permission. Existing admin profiles with
 no explicit permission list remain legacy-compatible as super-admins during the
 3.x transition.
 
+### WebUI CSS Classes
+
+A package WebUI bundle renders into the admin console and is styled by
+Control's global stylesheet (`web/src/style.css`), not by CSS of its own.
+These classes are a **stable contract** for plugin WebUIs:
+
+| Class | What it styles |
+|---|---|
+| `.btn` | a button (pill, 36 px; 44 px minimum on touch screens) |
+| `.btn-secondary` | the secondary button look, with `.btn` |
+| `.table-container` | the scrolling, rounded frame around a table |
+| `.data-table` | a table: cell padding, header row, separators, row hover |
+| `.empty-state` | the muted, centred "nothing here" text (a table cell) |
+
+Plugins ship and are signed separately from Control, so an installed plugin
+keeps rendering these classes across Control upgrades: Control must not
+remove or rename them, nor change what they mean (it may restyle them with
+the design tokens). A change that has to break one is a WebUI contract
+change (`anixops.webui/v2`), not a Control refactor.
+`web/src/__tests__/pluginWebuiClasses.test.js` fails when one of them loses
+its rule in `style.css`, and checks that the bundled packages use them.
+Other class names a bundle uses (`page-header`, `stats-grid`, ...) are
+the plugin's own: Control gives them no style and promises nothing about
+them.
+
 Backend package APIs are admitted only through the kernel gateway namespace
 `/api/v3/plugins/<plugin-id>/...`. A signed manifest may register exact routes
 or `/*` suffix wildcard prefixes in `control_routes`, and any plugin declaring

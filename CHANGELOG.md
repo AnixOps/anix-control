@@ -156,6 +156,12 @@
   other schema change gets a newly migrated database. Locally,
   `ordercompat` went from 27.1 s to 14.7 s and `paymentcompat` from
   29.6 s to 13.9 s with PostgreSQL; every compat package passes unchanged.
+- The CSS classes plugin WebUI bundles render (`.btn`, `.btn-secondary`,
+  `.table-container`, `.data-table`, `.empty-state`) are documented as a
+  stable contract ("WebUI CSS Classes" in
+  `docs/architecture/plugin-kernel-contract.md`): Control must not remove
+  or rename them. A web test fails when one loses its rule in
+  `web/src/style.css`.
 
 ### Deprecated
 
