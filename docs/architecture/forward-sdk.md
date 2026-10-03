@@ -2,7 +2,10 @@
 
 Status: DESIGN APPROVED (gates H11–H14 decided by the owner on 2026-10-02).
 F1b is implemented: the domain model (`sdk/forward/model`) and the shared
-validation (`sdk/forward/validate`). Nothing serves forwarding with them yet
+validation (`sdk/forward/validate`). F2a is implemented: the driver
+interface (`sdk/forward/driver`), an in-memory fake driver
+(`sdk/forward/driver/fake`) and the driver conformance suite
+(`sdk/forward/driver/conformance`). Nothing serves forwarding with them yet
 and no behaviour changes. The draft contract is
 `sdk/api/forward/v1` (`anixops.forward.v1`, DRAFT, UNRELEASED); the draft
 planner goldens are in `contracts/forward/v1`. This is phase F1 of the v4.2
@@ -137,7 +140,7 @@ Everything lives in the existing `sdk/` module
 | Contract | `sdk/api/forward/v1` | `forward.proto`: the model, `NodeForwardState`, `NodeForwardReport`, the services `ForwardControl` and `ForwardNode` (this PR, draft) |
 | Model and validation | `sdk/forward/model`, `sdk/forward/validate` | Go domain types with lossless conversion to and from the contract and the defaults (`model/defaults.go`); one set of validation rules used by Control, the planner and the Agent (F1b, implemented) |
 | Planner | `sdk/forward/planner` | routes and node inventory in, per-node states and port allocations out; pure functions (F1c) |
-| Drivers | `sdk/forward/driver`, `.../driver/nftables`, `.../driver/gost`, `.../driver/ansible` | the driver interface and its implementations (F2, F4) |
+| Drivers | `sdk/forward/driver`, `.../driver/fake`, `.../driver/conformance`, `.../driver/nftables`, `.../driver/gost`, `.../driver/ansible` | the driver interface, registry, fake driver and conformance suite (F2a, implemented) and the engine implementations (F2b–F2d, F4) |
 | Client | `sdk/forward/forwardctl` | a Go client for `ForwardControl` (F5) |
 
 Consumers:
@@ -339,8 +342,13 @@ planner refuses a route whose later hops would then be unused.
 
 ### 6.0 Interface
 
+Implemented in F2a (`sdk/forward/driver`; the package documentation is
+normative and `sdk/forward/driver/conformance` checks every rule below).
+
 ```go
 type Driver interface {
+    // Engine is the engine the driver serves; Registry keys drivers by it.
+    Engine() forwardv1.Engine
     // Capabilities probes the host: engine version, IPv6, UDP, strategies,
     // link securities, limits support. Unavailable drivers say why.
     Capabilities(ctx context.Context) (*forwardv1.EngineCapabilities, error)
@@ -349,20 +357,70 @@ type Driver interface {
     Render(state *forwardv1.NodeForwardState) (Artifact, error)
     // Apply makes the host run exactly the artifact, atomically, touching
     // only objects the driver owns.
-    Apply(ctx context.Context, artifact Artifact) error
-    // Observe reads counters and upstream health.
+    Apply(ctx context.Context, artifact Artifact) (ApplyResult, error)
+    // Observe reads counters, the engine's view of upstream health and
+    // the upstreams in rotation.
     Observe(ctx context.Context) (Observation, error)
     // SetUpstreams changes which upstreams of a hop are in rotation
-    // (failover) without a full apply.
+    // (failover) and their weights (least-conn) without a full apply.
     SetUpstreams(ctx context.Context, routeID string, hopIndex uint32, active []Upstream) error
     // Remove deletes everything the driver owns.
     Remove(ctx context.Context) error
 }
+
+type Artifact struct { Engine; NodeRef; Generation; StateHash; Hops []HopKey; Content []byte; Digest string }
+type ApplyResult struct { Changed bool; Generation; StateHash; Digest }
+type Observation struct { Engine; Applied; NodeRef; Generation; StateHash; Digest;
+    Counters []*Counters; Health []*UpstreamHealth; Rotation []HopRotation; ObservedAt }
+type Upstream struct { Address string; Port, Weight uint32 } // weight 0 keeps the rendered weight
 ```
 
-The Agent splits a node's state by engine, renders and applies each part,
-and runs one health loop that calls `SetUpstreams`. A hop that fails to
-apply is reported as a `HopError`; the node's other hops keep running.
+The Agent splits a node's state by engine (`Registry.Render`), renders and
+applies each part, and runs one health loop that calls `SetUpstreams`. The
+rules every driver keeps:
+
+- **Ownership** (H13). A driver touches only objects it owns and marks
+  (the nftables driver: `inet anixops_fwd`, its tc handles, its sysctl
+  drop-in). An object with its name but not its mark is foreign: Apply
+  refuses it with `ErrNotOwned`, Remove leaves it. An artifact that would
+  collide with a foreign object (a listen port another table or process
+  holds) is `ErrConflict`; neither side changes.
+- **Render** is pure and deterministic and reads only its engine's hops, in
+  any order. `Content` and `Digest` (SHA-256 of `Content`) exclude the
+  generation, `state_hash` and `node_ref`, so a generation bump caused by
+  another engine leaves this engine's artifact unchanged. A hop the driver
+  cannot run is left out and reported as a `HopError` (`ErrUnsupported`,
+  `ErrInvalidState`) inside a `RenderError` returned *with* the artifact of
+  the other hops: the Agent applies that and reports the hop errors, so a
+  hop that fails is reported while the node's other hops keep running. A
+  state without the engine's hops renders an empty artifact, and applying
+  it removes everything the driver owns.
+- **Apply** is atomic (all of the artifact or the previous state) and
+  compares the host with the artifact, not with its memory: applying what
+  the host runs is a no-op (`Changed` false; a newer generation is only
+  recorded), applying onto partial or damaged owned state repairs it. The
+  applied generation, `state_hash` and digest are recorded on the host, so
+  a restarted Agent's new driver instance observes them. An older
+  generation is `ErrStaleGeneration` (the contract's `FAILED_PRECONDITION`),
+  the same generation with another digest `ErrGenerationConflict`.
+- **Counters.** Cumulative fields never decrease within a `counter_epoch`.
+  The epoch belongs to one hop's counter objects and ends only when they
+  are re-created from zero (hop removed and re-added, objects lost, reboot,
+  engine restart, Remove then Apply); a generation change or a rewrite of
+  the hop keeps epoch and values.
+- **SetUpstreams** selects a non-empty subset of a hop's rendered upstreams
+  (`ErrInvalidArgument` for an empty or duplicate selection, `ErrNotFound`
+  for an unknown hop or upstream) and rewrites map elements or gost nodes
+  only: digest, generation and counter epochs stay. The rotation lives on
+  the host (it survives a restart and a no-op apply); an Apply that changes
+  the host puts every rendered upstream back and the health loop
+  re-asserts its selection. Keeping the last upstream when all are down
+  (section 7.3) is the health loop's decision, not the driver's.
+- **Remove** deletes every owned object and nothing else; it is idempotent.
+- **Context and concurrency.** A call with a done context returns
+  `ctx.Err()` and changes nothing. Every method is safe for concurrent use;
+  Apply, SetUpstreams and Remove are serialised and Observe never sees a
+  half-applied state.
 
 ### 6.1 nftables
 
@@ -763,11 +821,33 @@ features go into which edition is open (H23). The proposal:
   and F2/F4 add the rendered nft and gost artifacts per fixture.
 - **Planner unit tests**: allocation stickiness, generations, every
   validation rule.
-- **Driver conformance suite** (F2a): one scenario list run against every
-  driver: single target, each strategy, failover and recovery, limits,
-  IPv4 and IPv6, TCP and UDP, idempotent re-apply, counters kept across
-  re-apply, removal leaving nothing behind. A fake driver runs it in unit
-  tests.
+- **Driver conformance suite** (F2a, implemented:
+  `sdk/forward/driver/conformance`). `conformance.Run(t, factory)` runs one
+  scenario list against every driver, each scenario on a fresh `Env` (the
+  host: an in-memory one for the fake, namespaces for F2d). The required
+  `Env` methods make driver instances (a second one is an Agent restart),
+  list owned objects, and plant and list foreign ones; optional interfaces
+  (`Damager`, `TrafficSource`, `ApplyFaulter`, `ConflictPlanter`,
+  `ImpostorPlanter`, `ApplyCounter`) unlock the scenarios that need them,
+  which skip otherwise. Data-driven state cases, each run when the driver's
+  capabilities cover it, on a topology the harness may override: single
+  target, each strategy (failover included), TCP+UDP, UDP, IPv6, dual stack,
+  limits, several routes, a paused hop. Scenarios: render determinism,
+  order independence, identity excluded from the digest, other engines
+  ignored, empty state, input not mutated, unsupported capability and
+  unknown enums (`ErrUnsupported`, per hop), invalid state; apply of every
+  case, idempotent re-apply, newer generation with the same content, stale
+  generation, generation conflict, invalid artifact, restart, repair of
+  partial state, failed apply keeps the previous state, conflict with a
+  foreign object, impostor not owned, empty artifact removes; counters kept
+  across re-apply, re-created hops, monotonic observation; failover and
+  recovery through `SetUpstreams`, weights, its errors, reset by a changing
+  apply, rotation surviving a restart; removal leaving nothing behind;
+  cancelled and expired contexts; concurrent calls. In every scenario the
+  foreign objects must be unchanged at the end and every observation is
+  checked for counter monotonicity within an epoch. The fake driver
+  (`sdk/forward/driver/fake`) passes it in unit tests under several
+  capability sets, and mutant drivers prove each rule is enforced.
 - **netns end-to-end** (F2d): client, entry, relay and target namespaces
   joined by veth pairs, running the real nftables and gost drivers; checks
   traffic, counters, quota, connection limit, bandwidth (with tolerance) and
@@ -820,7 +900,7 @@ Agent-repository PRs are marked (agent).
 | F1 | F1a | this design, draft contract, draft fixtures | M | H11 |
 | | F1b | `sdk/forward/model` and `validate` (implemented) | M | |
 | | F1c | `sdk/forward/planner`: allocation, wiring, generations, golden runner | L | |
-| F2 | F2a | driver interface, fake driver, conformance suite | M | |
+| F2 | F2a | driver interface, fake driver, conformance suite (implemented) | M | |
 | | F2b | nftables Render and nft goldens | L | H13 |
 | | F2c | nftables Apply, Observe, `SetUpstreams`, tc HTB | L | H13 |
 | | F2d | netns end-to-end CI job | M | H14 |

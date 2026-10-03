@@ -45,6 +45,24 @@
   it breaks only the rule it documents). Nothing serves forwarding with them
   yet.
 
+- Forward SDK F2a (`docs/architecture/forward-sdk.md` sections 6.0 and 13):
+  `sdk/forward/driver`, the interface every forwarding engine driver
+  implements (`Engine`, `Capabilities`, `Render`, `Apply`, `Observe`,
+  `SetUpstreams` for failover without a full apply, `Remove`), its shared
+  types (`Artifact` with a SHA-256 digest that excludes the generation,
+  `ApplyResult`, `Observation`, `HopError`/`RenderError`), typed errors
+  (`ErrUnsupported`, `ErrConflict`, `ErrNotOwned`, `ErrStaleGeneration`,
+  ...) and a `Registry` keyed by engine that splits a node state by engine;
+  `sdk/forward/driver/fake`, an in-memory driver with a simulated host,
+  traffic, health and fault injection; and
+  `sdk/forward/driver/conformance`, the suite (`conformance.Run(t,
+  factory)`) the nftables and gost drivers will have to pass: data-driven
+  state cases gated on capabilities and 33 scenarios covering determinism,
+  idempotency, generations, restart and repair, ownership of foreign
+  objects, counter epochs, failover, removal, contexts and concurrency. The
+  fake passes it; mutant drivers prove the suite catches each violation.
+  Nothing uses the drivers yet.
+
 ### Fixed
 
 - The live Control WebUI E2E gate defaults to ports 24175 and 28080 instead
