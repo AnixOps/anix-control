@@ -151,9 +151,12 @@
 //     every listener bound. A reload keeps the gost process, so
 //     established TCP connections survive it (tested), but it re-creates
 //     every service of the node: UDP sessions and mux carriers may
-//     restart and every hop's counters start a new epoch. gost's reload is
-//     not atomic (a listener it cannot bind closes the old services
-//     first).
+//     restart and every hop's counters start a new epoch: the
+//     WithRetiredCounters hook gets every hop's counters read just before
+//     (what moves between that read and the reload, and what connections
+//     that survive the reload move afterwards, is not counted). gost's
+//     reload is not atomic (a listener it cannot bind closes the old
+//     services first).
 //
 // When either fails (an API change refused, gost not serving the new
 // configuration in Config.ReadyTimeout), Apply writes the previous

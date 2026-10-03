@@ -868,7 +868,10 @@ driver writes gost's configuration and runs the unmodified binary.
   the new metrics path with every listener bound. A reload keeps the
   process, so established TCP connections survive it (tested); it
   re-creates every service of the node, so UDP sessions and mux carriers
-  may restart and every hop's counters start a new epoch. gost's reload is
+  may restart and every hop's counters start a new epoch (the
+  `WithRetiredCounters` hook gets every hop's counters read just before;
+  what moves between that read and the reload, and what surviving
+  connections move afterwards, is not counted). gost's reload is
   not atomic (a listener it cannot bind closes the old services first), so
   when the new configuration is not served within `Config.ReadyTimeout`,
   or an API change is refused, Apply writes the previous one back and

@@ -7,6 +7,7 @@ import (
 	"net/netip"
 	"slices"
 	"testing"
+	"time"
 
 	"google.golang.org/protobuf/proto"
 
@@ -172,11 +173,10 @@ func TestSetUpstreamsReplacesTheHop(t *testing.T) {
 			}
 			got = nil
 			f.object("hops", name, &got)
-			rb, _ := json.Marshal(rendered)
-			gb, _ := json.Marshal(got)
 			// The API takes the selector's failTimeout in nanoseconds.
 			rendered["selector"].(map[string]any)["failTimeout"] = 3e10
-			rb, _ = json.Marshal(rendered)
+			rb, _ := json.Marshal(rendered)
+			gb, _ := json.Marshal(got)
 			if string(rb) != string(gb) {
 				t.Fatalf("restoring every upstream runs\n%s\nnot the rendered hop\n%s", gb, rb)
 			}
@@ -296,5 +296,33 @@ func TestActiveConns(t *testing.T) {
 	}
 	if !maps.Equal(got, want) {
 		t.Fatalf("ActiveConns %v, want %v", got, want)
+	}
+}
+
+// TestRetiredCounters: an apply that reloads gost hands every hop's last
+// counters to the hook; a hot apply ends no epoch and hands nothing.
+func TestRetiredCounters(t *testing.T) {
+	f, cfg := newFakeGost(t)
+	cfg.ReadyTimeout = 300 * time.Millisecond
+	var retired []*forwardv1.Counters
+	d, err := gost.New(cfg, gost.WithRunner(f), gost.WithSupervisor(f), gost.WithRetiredCounters(func(c []*forwardv1.Counters) { retired = append(retired, c...) }))
+	if err != nil {
+		t.Fatal(err)
+	}
+	b := builder(t)
+	a := b.Simple(conformance.RouteA, 0)
+	k := driver.KeyOf(a)
+	apply(t, d, 1, a)
+	f.traffic("r"+k.RouteID+"-h0", 70, 90)
+	epoch := countersOf(t, observe(t, d), k).GetCounterEpoch()
+	a2 := proto.Clone(a).(*forwardv1.NodeHop)
+	a2.Upstreams = a2.Upstreams[:1]
+	apply(t, d, 2, a2)
+	if len(retired) != 0 {
+		t.Fatalf("a hot apply retired %v", retired)
+	}
+	apply(t, d, 3, a2, b.Simple(conformance.RouteB, 1))
+	if len(retired) != 1 || retired[0].GetUpBytes() != 70 || retired[0].GetDownBytes() != 90 || retired[0].GetCounterEpoch() != epoch {
+		t.Fatalf("retired %v, want route A's 70/90 in epoch %s", retired, epoch)
 	}
 }

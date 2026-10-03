@@ -41,9 +41,11 @@ type Driver struct {
 	cfg    Config
 	runner Runner
 	sup    Supervisor
-	now    func() time.Time
-	client *http.Client // the metrics socket
-	api    *http.Client // the web API socket
+	// retired receives the last counters of the epochs a reload ends.
+	retired func([]*forwardv1.Counters)
+	now     func() time.Time
+	client  *http.Client // the metrics socket
+	api     *http.Client // the web API socket
 
 	mu sync.RWMutex
 }
@@ -60,6 +62,17 @@ func WithRunner(r Runner) Option { return func(d *Driver) { d.runner = r } }
 // WithSupervisor runs gost through s instead of a SystemdSupervisor on
 // the driver's runner.
 func WithSupervisor(s Supervisor) Option { return func(d *Driver) { d.sup = s } }
+
+// WithRetiredCounters calls f after an Apply that reloaded or restarted a
+// running gost, with every hop's counters read just before: a reload
+// re-creates every service, so their counter epochs end there, and f
+// gets their last values (the Agent reports them, as for the nftables
+// driver's removed hops). Traffic between that read and the reload, and
+// what connections that survive the reload move afterwards, is not
+// counted.
+func WithRetiredCounters(f func([]*forwardv1.Counters)) Option {
+	return func(d *Driver) { d.retired = f }
+}
 
 // New answers a driver with the given configuration, or ErrInvalidConfig.
 // The configuration usually comes from Probe.
@@ -329,6 +342,12 @@ func (d *Driver) Apply(ctx context.Context, a driver.Artifact) (driver.ApplyResu
 		return res, nil
 	}
 
+	var last []*forwardv1.Counters
+	if d.retired != nil && status.Running && status.Instance != "" && h.state.applied() {
+		if live, err := d.readLive(ctx); err == nil {
+			last = d.hopCounters(h.state, live, status.Instance)
+		}
+	}
 	if err := writeFileAtomic(d.cfg.configPath(), a.Content, 0o640); err != nil {
 		return driver.ApplyResult{}, fmt.Errorf("gost driver: write configuration: %w", err)
 	}
@@ -363,6 +382,9 @@ func (d *Driver) Apply(ctx context.Context, a driver.Artifact) (driver.ApplyResu
 	next.Loads++
 	if err := d.writeState(next); err != nil {
 		return driver.ApplyResult{}, err
+	}
+	if len(last) > 0 {
+		d.retired(last)
 	}
 	res.Changed = true
 	return res, nil
@@ -514,39 +536,58 @@ func (d *Driver) Observe(ctx context.Context) (driver.Observation, error) {
 	}
 	st := h.state
 	o.Applied, o.NodeRef, o.Generation, o.StateHash, o.Digest = true, st.Node, st.Generation, st.StateHash, st.Digest
-	for _, mh := range st.Hops {
-		c := &forwardv1.Counters{
-			RouteId: mh.Route, HopIndex: mh.Hop, NodeRef: st.Node,
-			CounterEpoch: "stopped", ObservedAtUnixMs: now.UnixMilli(),
+	if live != nil {
+		o.Counters = d.hopCounters(st, live, status.Instance)
+	}
+	for i, mh := range st.Hops {
+		if live == nil {
+			o.Counters = append(o.Counters, &forwardv1.Counters{
+				RouteId: mh.Route, HopIndex: mh.Hop, NodeRef: st.Node,
+				CounterEpoch: "stopped", ObservedAtUnixMs: now.UnixMilli(),
+			})
+		} else {
+			o.Counters[i].ObservedAtUnixMs = now.UnixMilli()
 		}
 		active := renderedRotation(mh)
 		if live != nil {
-			var active64 uint64
-			created := make([]int64, 0, len(mh.Services))
-			for _, name := range mh.Services {
-				ls := live.service(name)
-				if ls == nil || ls.Status == nil {
-					created = append(created, -1)
-					continue
-				}
-				created = append(created, ls.Status.CreateTime)
-				if x := ls.Status.Stats; x != nil {
-					c.UpBytes += x.InputBytes
-					c.DownBytes += x.OutputBytes
-					c.TotalConns += x.TotalConns
-					active64 += x.CurrentConns
-				}
-			}
-			c.ActiveConns = uint32(min(active64, math.MaxUint32)) // #nosec G115 -- clamped
-			c.CounterEpoch = counterEpoch(status.Instance, st.Loads, created)
 			if r, ok := liveRotation(live.hop(hopName(mh.key()))); ok {
 				active = r
 			}
 		}
-		o.Counters = append(o.Counters, c)
 		o.Rotation = append(o.Rotation, driver.HopRotation{RouteID: mh.Route, HopIndex: mh.Hop, Active: active})
 	}
 	return o, nil
+}
+
+// hopCounters answers the counters of every recorded hop from the running
+// configuration: the sums of each hop's services' statistics, in the
+// epoch of their statistics objects.
+func (d *Driver) hopCounters(st *hostState, live *liveConfig, instance string) []*forwardv1.Counters {
+	now := d.now().UnixMilli()
+	out := make([]*forwardv1.Counters, 0, len(st.Hops))
+	for _, mh := range st.Hops {
+		c := &forwardv1.Counters{RouteId: mh.Route, HopIndex: mh.Hop, NodeRef: st.Node, ObservedAtUnixMs: now}
+		var active uint64
+		created := make([]int64, 0, len(mh.Services))
+		for _, name := range mh.Services {
+			ls := live.service(name)
+			if ls == nil || ls.Status == nil {
+				created = append(created, -1)
+				continue
+			}
+			created = append(created, ls.Status.CreateTime)
+			if x := ls.Status.Stats; x != nil {
+				c.UpBytes += x.InputBytes
+				c.DownBytes += x.OutputBytes
+				c.TotalConns += x.TotalConns
+				active += x.CurrentConns
+			}
+		}
+		c.ActiveConns = uint32(min(active, math.MaxUint32)) // #nosec G115 -- clamped
+		c.CounterEpoch = counterEpoch(instance, st.Loads, created)
+		out = append(out, c)
+	}
+	return out
 }
 
 // counterEpoch names the statistics objects of a hop's services: they
@@ -681,7 +722,11 @@ func (d *Driver) selectionHop(h *host, mh *manifestHop, weights map[string]uint3
 			w = u.Weight
 		}
 		same = same && w == u.Weight
-		nu := nodeUpstream{index: i, addr: netip.AddrPortFrom(netip.MustParseAddr(u.Address), uint16(u.Port)).String(), weight: w, priority: u.Priority} // #nosec G115 -- a rendered port
+		a, err := netip.ParseAddr(u.Address)
+		if err != nil || u.Port == 0 || u.Port > 65535 {
+			return apiHop{}, fmt.Errorf("%w: recorded upstream %s:%d of %s", driver.ErrInvalidArtifact, u.Address, u.Port, mh.key())
+		}
+		nu := nodeUpstream{index: i, addr: netip.AddrPortFrom(a, uint16(u.Port)).String(), weight: w, priority: u.Priority} // #nosec G115 -- checked
 		if tmpl := templateNode(rendered.Nodes, i); tmpl != nil {
 			nu.connector, nu.dialer = tmpl.Connector, tmpl.Dialer
 		}
