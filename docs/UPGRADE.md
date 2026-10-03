@@ -1948,6 +1948,27 @@ API-key agents will be refused** on the AnixOps Agent channels.
 - **The new table.** `v4_kernel_agent_transport`, created at startup,
   records which transport each node was last seen on (at most one write a
   minute per node and transport).
+- **Enrolled is not enough: the Agent must also negotiate the data plane.**
+  An enrolled Agent that still sends its heartbeat, runtime health or
+  maintenance events over REST or the WebSocket loses them under
+  `required`. Every legacy path has a stream equivalent (Agent contract,
+  `PROTOCOL.md`, "Data plane"); the Agent release for v4.2 uses them. Check
+  each node's live session in `GET /api/v4/kernel/agents/transports` (the
+  `session` of a node: `authentication`, the certificate, and
+  `negotiated_capabilities`) or `GET /admin/nodes/:id/agent-control`: a proxy
+  node is ready when it shows `mtls` and negotiates `config.v1`, `users.v1`,
+  `reports.v1` and, with the plugin supervisor on, `maintenance.v1`.
+- **Maintenance events land in the node log.** With `maintenance.v1`, the
+  plugin supervisor's incidents and recoveries (until now sent only on the
+  WebSocket, which Control did not answer) are stored once each as node log
+  entries of source `maintenance`; `/metrics` counts them in
+  `anixops_agent_maintenance_events_total{result}`.
+- **Why an Agent was refused.** Refusals of a certificate carry a code the
+  Agent logs: `agent_cert_revoked` (also a disabled or deleted node),
+  `agent_cert_expired`, `agent_cert_invalid`, `agent_cert_wrong_cluster`,
+  `agent_cert_wrong_node` (a configuration error on the node), and
+  `agent_enrollment_rejected` for an unusable enrollment credential. The
+  first four make the Agent enroll again.
 
 ### The Checklist
 

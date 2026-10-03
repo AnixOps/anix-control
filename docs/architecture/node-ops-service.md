@@ -1393,7 +1393,7 @@ the maintenance WebSocket outbox and plugin secret materials. Branch
 | Path | What flows | Authentication | Default |
 |---|---|---|---|
 | **REST** (`api/panel`) | UniProxy `config` (protocols, keys), `user` (UUIDs, WireGuard peer keys), `push` (traffic), `alive`/`alivelist` (online IPs); `node/register`; `node/runtime-health` | `X-API-Key` plus `node_id`; HMAC signing only with `AutoRegister` and `EnableSign` | yes (`Transport: http`) |
-| **WebSocket** (`node/sync.go`, `/api/v2/agent/ws`, fallback `/api/v2/node/ws`) | Control → agent: `config_update`, `user_update`, `user_ban`, `rule_update`, `cert_update`, `ping`, `force_reload`; agent → Control: `heartbeat`, `ack`, `pong` | `X-API-Key`, `X-Node-ID` | on for REST nodes; 60 s polling fallback |
+| **WebSocket** (`node/sync.go`, `/api/v2/agent/ws`, fallback `/api/v2/node/ws`) | Control → agent: `config_update`, `user_update`, `user_ban`, `rule_update`, `cert_update`, `ping`, `force_reload`; agent → Control: `heartbeat`, `ack`, `pong`, and `maintenance_events` (the plugin supervisor's durable outbox, answered by `maintenance_ack`; gRPC agents open a WebSocket for it alone). Control itself sends only `task.assign` (diagnostics), `ack` and `auth`, and never answered `maintenance_events` | `X-API-Key`, `X-Node-ID` | on for REST nodes; 60 s polling fallback |
 | **Legacy v2board gRPC** (`api/grpc`) | `NodeService.Register/GetConfig/ReportStatus`, `UserService.GetUsers`, `TrafficService.ReportTraffic/ReportOnline`, `NodeLogService.ReportLogs` (logs and runtime health) | metadata `x-node-id`, `x-api-key` | when `Transport: grpc` |
 | **Agent Control stream** (`api/agent`, `node/agent_control.go`) | operations only: `agent.ping`, `node.reload` and `users.reload` (both re-pull over the legacy transport), `operation.cancel`, `plugin.*`; heartbeats with plugin observations | metadata `x-node-id`, `x-api-key`; TLS without client certificates | opt-in (`AgentControlEnabled`) |
 
@@ -1420,6 +1420,7 @@ One mTLS stream per node carries everything:
 | agent → Control | `LogBatch` | `NodeLogService.ReportLogs` |
 | agent → Control | `NodeStatus`: system and runtime health | `ReportStatus`, `node/runtime-health`, `node/heartbeat` |
 | agent → Control | `ConfigStatus`: applied or failed, per configuration revision | (none; runtime health today) |
+| agent → Control | `MaintenanceEvents`, answered by `MaintenanceAck` per event (`maintenance.v1`) | WebSocket `maintenance_events` and `maintenance_ack` |
 | both | `Hello`, `HelloAck`, `Heartbeat`, `OperationAck`, `ObservedState` (as today) | |
 
 ### 5.3 Identity and enrollment
@@ -1467,6 +1468,17 @@ One mTLS stream per node carries everything:
     deleting it (`RetireNode`) revokes its certificates.
   - The listener refuses revoked serials, with a cache of at most 30 s, as
     the module listener does.
+- **Refusal codes.** Every refusal of a certificate or a bootstrap names
+  its reason in the `x-anix-error-code` trailer, as `agent_mtls_required`
+  does: `agent_cert_revoked` (also a node disabled or deleted, which revokes
+  its certificates), `agent_cert_expired`, `agent_cert_invalid`,
+  `agent_cert_wrong_cluster`, `agent_cert_wrong_node` and, for `Enroll`,
+  `agent_enrollment_rejected` (`sdk/agentcontrol`, `ErrorCode*`;
+  `PROTOCOL.md`, "Error codes"). The stream sets it at connection and when
+  the heartbeat's recheck ends an open session; `Renew`,
+  `GetTrustBundle` and the v2board services set it too. A transient
+  `Unavailable` carries none. An Agent tells "enroll again" from "retry"
+  by the code alone.
 - **Listener.** Mode `agent_control.mtls` (section 5.6 has the full
   table; owner decision H5 of 2026-10-02 sets the defaults):
   - `off`: no client certificate is requested or accepted, and
@@ -1723,6 +1735,43 @@ Agent that has enrolled (mTLS); legacy API-key agents are refused.
   - The admin page NodeX Agents → Agent 连接方式
     (`/admin/agent/transports`) shows it with a warning on legacy nodes.
 
+- **Stream equivalents of the refused paths.** Under `required` an agent
+  that negotiates the data plane needs none of the paths above
+  (`PROTOCOL.md`, "Data plane", lists each one's equivalent):
+  - `/api/v2/node/heartbeat` and `/api/v2/node/runtime-health` are
+    `NodeStatus` (`reports.v1`), which writes the same columns, the node's
+    online status, and a sighting of `mtls-stream` in the inventory;
+  - the WebSocket's agent → Control traffic is `Heartbeat` and, for the
+    maintenance outbox, `MaintenanceEvents` (`maintenance.v1`, new: each
+    event stored once per node and event id as a node log row of source
+    `maintenance`, answered per event); its Control → agent `task.assign` is
+    the `agent.diagnostic` operation;
+  - `/api/v2/node/register` is `Enroll` with a one-time credential.
+
+  `internal/grpc`'s `TestAgentStreamUnderRequiredNeedsNoLegacyPath` walks
+  it: an agent enrolled with a one-time credential under `required`
+  negotiates `config.v1`, `users.v1`, `reports.v1` and `maintenance.v1`;
+  configuration, users, heartbeats, status and runtime health, traffic,
+  logs, maintenance events and a diagnostic task all flow; no legacy
+  counter moves and the inventory lists the node on `mtls-stream` only.
+- **The offer rule.** `HelloAck.server_capabilities` lists a data-plane
+  capability only when the agent's `Hello` lists it (it listed `users.v1`
+  to every proxy node before), so it is the session's negotiated set.
+- **Sessions.** `AgentControlSnapshot` (`GET /admin/nodes/:id/agent-control`)
+  and the inventory's `session` (`GET /api/v4/kernel/agents/transports`)
+  show how a live stream session authenticated (`mtls` or `api-key`), its
+  certificate's serial, expiry and SAN, and its negotiated capabilities.
+- **Prerequisites for the v4.2 default.** `required` can become the
+  default only when the Agent release that operators install runs
+  everything on the stream: anix-agent AG-3 (configuration, `config.v1`),
+  AG-4 (users, `users.v1`), AG-5 (reports and status, `reports.v1`), and
+  the maintenance outbox on `maintenance.v1`, on top of AG-2 (enrollment,
+  which reads the refusal codes), and a Control with these stream
+  equivalents. One Control-side gap remains:
+  the legacy admin routes `POST /admin/agent/tasks` and
+  `/admin/agent/execute` reach only WebSocket agents (KernelNodeOps
+  `agent.diagnostic` already uses the stream).
+
 Stages:
 
 - **T1, the 4.1 release candidates with A2-1 to A2-5.** Additions only, in
@@ -1769,7 +1818,10 @@ PRs AG-1 to AG-7 (section 7):
   are written.
 - **Reports on the stream.**
   - Traffic, online IPs, logs and node status move to the stream, with
-    batch ids and the on-disk spool.
+    batch ids and the on-disk spool. Node status replaces the REST
+    heartbeat and runtime-health reports.
+  - The maintenance outbox moves to `maintenance.v1`; the maintenance-only
+    WebSocket of gRPC agents is no longer needed.
   - The legacy reporters stop while the stream is healthy and resume for
     new data after the grace period.
 - **Defaults.**
@@ -2043,12 +2095,13 @@ handlers ship `native-flagged`, and operators choose the runtime mode.
 | A2-4 | User deltas from the subscriber change log, cursor, paged resync | A2-2 | control | M |
 | A2-5 | Reports: traffic, online, logs and status with batch ids, `ReportAck`, `diag.*` for the node vantage | A2-2 | control | M |
 | A2-6 | Transition: transport inventory, deprecation headers and metrics, the `agent_control.mtls` modes | A2-1 to A2-5 | control | S |
+| A2-6b | The `required` prerequisites on Control (section 5.6): stream equivalents of the refused paths (`maintenance.v1`; `NodeStatus` for the heartbeat and runtime-health reports), certificate refusal codes, the capability offer as an intersection, session identity in the snapshot and the inventory. Done | A2-6 | control | M |
 | A2-7 | Cross-repo E2E and chaos suite with the real agent (section 9) | AG-2 to AG-5 | control | M |
 | AG-1 | anix-agent on the Control SDK with the A2 messages (after an `sdk/v*` tag or pseudo-version) | A2-1, A2-2 | agent | S |
 | AG-2 | Identity: enroll, store, renew, mTLS dial, no API key once enrolled | AG-1 | agent | M |
 | AG-3 | Configuration from the stream | AG-1, A2-3 | agent | M |
 | AG-4 | Users from the stream | AG-1, A2-4 | agent | M |
-| AG-5 | Reports on the stream, with the spool | AG-1, A2-5 | agent | M |
+| AG-5 | Reports on the stream, with the spool; node status in place of the REST heartbeat and runtime-health; the maintenance outbox on `maintenance.v1` | AG-1, A2-5, A2-6b | agent | M |
 | AG-6 | Stream on by default; production validation requires mTLS | AG-2 to AG-5 | agent | S |
 | AG-7 | Forward-node agents on the stream; plugin counters to traffic (joins A5) | AG-6 | agent | M |
 
