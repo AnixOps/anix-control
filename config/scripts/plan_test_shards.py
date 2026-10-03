@@ -86,6 +86,7 @@ WEIGHTS: dict[str, dict[str, float]] = {
         "internal/tests/packagecompat": 0.6,
         "internal/tests/wireguardcompat": 0.1,
         "internal/agentreports": 0.1,
+        "internal/shadowsamples": 0.2,
     },
 }
 

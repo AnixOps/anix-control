@@ -272,6 +272,12 @@ describe('kernel API', () => {
 
     await kernelApi.getKernelRouteModeRevisions('legacy-api', 100)
     expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/route-modes/revisions', method: 'get', params: { package_id: 'legacy-api', limit: 100 } })
+
+
+    await kernelApi.getKernelRouteModeMismatches({ packageID: 'legacy-api', routeID: 'tickets.list', limit: 50 })
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/route-modes/mismatches', method: 'get', params: { package_id: 'legacy-api', route_id: 'tickets.list', limit: 50 } })
+    await kernelApi.getKernelRouteModeMismatches()
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/route-modes/mismatches', method: 'get', params: {} })
   })
 
   it('reads the agent transport inventory through the v4 kernel', async () => {

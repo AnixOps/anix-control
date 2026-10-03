@@ -1941,6 +1941,60 @@ stay `legacy`, `kernel-owned` and WebSocket routes do not switch, and
 identity group A moves only with the identity cutover and rollback
 ("Moving Logins To The Identity Module").
 
+### Reading Shadow Mismatches
+
+Before switching a route to `native`, check what its shadow runs disagree
+on. The admin page 插件中心 → 路由模式 shows each route's mismatch rate
+(mismatches / shadow runs since the package host started) and when the last
+mismatch happened; 样本 opens the stored samples of the route with a
+structural diff of the two answers. The same data is in the admin API:
+
+```bash
+# Rates: host.mismatch_rate, host.last_mismatch_at and mismatch_samples
+# (stored, last_observed_at) of each route.
+curl -H "Authorization: Bearer $TOKEN" \
+  "https://panel.example.com/api/v4/kernel/route-modes?package_id=knowledge"
+
+# Samples, newest first (limit defaults to 50, at most 100).
+curl -H "Authorization: Bearer $TOKEN" \
+  "https://panel.example.com/api/v4/kernel/route-modes/mismatches?package_id=knowledge&route_id=knowledge.article.list&limit=20"
+```
+
+Any administrator may read samples. Each one has the route, method, path
+template (query values masked), the legacy and native status codes, the
+request id (to find the request in the logs), and a diff of the JSON paths
+that differ, with both sides masked and at most 64 paths or 8 KB. Request
+bodies are never stored. `anixops_package_shadow_mismatches_total` on
+`/metrics` still counts every mismatch; samples show what differed.
+
+How samples reach the kernel: the package host keeps its latest 32 samples
+(for 10 minutes) in its Health details document, and the kernel reads them
+at its health poll, every 30 seconds. Hosts built with the 4.0.0 SDK report
+no samples; their counters still work. The host masks every value before it
+leaves the process, and the kernel masks it again before storing it.
+
+Privacy: these masking rules apply on both sides.
+
+- Fully masked (`***`): every value under a field whose name contains
+  token, secret, password, pwd, key, uuid, sign, cookie, authorization or
+  auth, hash, salt, credential, private, session, nonce, otp or a
+  subscription URL name (case-insensitive), whatever its type; and anywhere,
+  whatever the field name, strings that look like a JWT, a UUID, a password
+  hash, a PEM private key or a long hex or base64 secret, and `Bearer` or
+  `Basic` credentials.
+- URLs keep only their scheme and host (`https://sub.example.com/***`);
+  share links and URLs with user information keep only the scheme
+  (`vless://***`).
+- E-mail addresses keep the first character and the domain
+  (`a***@example.com`).
+- IPv4 addresses keep the first two octets (`10.2.*.*`), IPv6 addresses
+  the first two hextets (`2001:db8:*:*:*:*:*:*`).
+
+Retention: samples are kept in `v4_kernel_shadow_mismatch_sample` for 7
+days and at most 100 per route (the oldest go first); the hourly retention
+job deletes the rest. The kernel stores samples only for routes that
+`config/package-extraction.json` assigns to the reporting package.
+
 ### Route Mode Rollback
 
 One command returns a whole package to `legacy`, in one configuration

@@ -302,3 +302,13 @@ export async function getKernelAgentTransports(legacyOnly = false) {
   if (legacyOnly) config.params = { legacy_only: true }
   return unwrap(await v4(config))
 }
+
+// Sanitized shadow-mode mismatch samples (newest first, at most 100):
+// { samples, retention_days, max_per_route }.
+export async function getKernelRouteModeMismatches({ packageID, routeID, limit } = {}) {
+  const params = {}
+  if (packageID) params.package_id = packageID
+  if (routeID) params.route_id = routeID
+  if (limit) params.limit = limit
+  return unwrap(await v4({ url: '/kernel/route-modes/mismatches', method: 'get', params }))
+}

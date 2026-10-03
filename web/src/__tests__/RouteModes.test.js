@@ -10,6 +10,7 @@ const kernelApi = vi.hoisted(() => ({
   getKernelRouteModeRevisions: vi.fn(),
   setKernelRouteModes: vi.fn(),
   rollbackKernelRouteModes: vi.fn(),
+  getKernelRouteModeMismatches: vi.fn(),
 }))
 
 const router = vi.hoisted(() => ({ push: vi.fn() }))
@@ -39,7 +40,8 @@ function routeModes(canSwitch = true) {
             allowed_modes: ['legacy', 'shadow', 'native'],
             locked: '',
             locked_reason: '',
-            host: { mode: 'shadow', effective: 'shadow', native_total: 0, native_errors: 0, shadow_total: 120, shadow_mismatch: 3, shadow_errors: 1, shadow_skipped: 0 },
+            host: { mode: 'shadow', effective: 'shadow', native_total: 0, native_errors: 0, shadow_total: 120, shadow_mismatch: 3, shadow_errors: 1, shadow_skipped: 0, mismatch_rate: 0.025, last_mismatch_at: '2026-10-01T09:00:00Z' },
+            mismatch_samples: { stored: 2, last_observed_at: '2026-10-01T09:00:00Z' },
           },
           {
             route_id: 'auth.login',
@@ -68,6 +70,24 @@ const revisions = [
   },
 ]
 
+const mismatchSamples = {
+  retention_days: 7,
+  max_per_route: 100,
+  samples: [
+    {
+      id: 9, sample_id: '0123456789abcdef0123456789abcdef', package_id: 'legacy-tickets', package_version: '2.1.0',
+      route_id: 'tickets.list', method: 'GET', path: '/api/v2/user/tickets?token=***', legacy_status: 200, native_status: 500,
+      diff: [{ path: '$.data.email', kind: 'changed', legacy: 'a***@example.com', native: 'b***@example.com' }],
+      diff_truncated: true, request_id: 'req-7', observed_at: '2026-10-01T09:00:00Z',
+    },
+    {
+      id: 8, sample_id: 'fedcba9876543210fedcba9876543210', package_id: 'legacy-tickets', package_version: '2.1.0',
+      route_id: 'tickets.list', method: 'GET', path: '/api/v2/user/tickets', legacy_status: 200, native_status: 200,
+      diff: [{ path: '$.data.total', kind: 'changed', legacy: 3, native: 4 }], diff_truncated: false, request_id: '', observed_at: '2026-10-01T08:00:00Z',
+    },
+  ],
+}
+
 const mounted = []
 
 async function mountPage() {
@@ -93,6 +113,7 @@ beforeEach(async () => {
   await setLocale('en')
   kernelApi.getKernelRouteModes.mockResolvedValue(routeModes())
   kernelApi.getKernelRouteModeRevisions.mockResolvedValue({ revisions })
+  kernelApi.getKernelRouteModeMismatches.mockResolvedValue(mismatchSamples)
   kernelApi.setKernelRouteModes.mockResolvedValue({ group_id: 'g2', package_id: 'legacy-tickets', mode: 'native', config_revision: 8, changes: [{ route_id: 'tickets.list', from: 'shadow', to: 'native' }], skipped: [] })
   kernelApi.rollbackKernelRouteModes.mockResolvedValue({ group_id: 'g3', package_id: 'legacy-tickets', mode: 'legacy', config_revision: 9, changes: [{ route_id: 'tickets.list', from: 'shadow', to: 'legacy' }], skipped: [{ route_id: 'auth.login', reason: 'already legacy' }] })
 })
@@ -220,5 +241,31 @@ describe('Route modes page', () => {
     selectBy(wrapper, 'data-route-mode', 'tickets.list').vm.$emit('update:modelValue', 'native')
     await flushPromises()
     expect(inBody('[data-testid="route-mode-dialog"]').exists()).toBe(false)
+  })
+
+  it('shows mismatch rates and opens the sanitized samples of a route', async () => {
+    const wrapper = await mountPage()
+
+    const cell = wrapper.get('[data-route-mismatch="tickets.list"]')
+    expect(cell.text()).toContain('2.5%')
+    expect(cell.text()).toContain('Last')
+    expect(wrapper.find('[data-route-mismatch="auth.login"]').text()).toContain('—')
+    expect(wrapper.find('[data-route-samples="auth.login"]').exists()).toBe(false)
+    expect(kernelApi.getKernelRouteModeMismatches).not.toHaveBeenCalled()
+
+    await wrapper.get('[data-route-samples="tickets.list"]').trigger('click')
+    await vi.dynamicImportSettled()
+    await flushPromises()
+
+    expect(kernelApi.getKernelRouteModeMismatches).toHaveBeenCalledWith({ packageID: 'legacy-tickets', routeID: 'tickets.list', limit: 100 })
+    const sheet = body('[data-testid="route-mismatch-sheet"]')
+    expect(sheet.text()).toContain('Shadow mismatch samples')
+    expect(body('[data-testid="route-mismatch-privacy"]').text()).toContain('100 samples for 7 days')
+    expect(body('[data-testid="route-mismatch-samples"]').text()).toContain('200 → 500')
+    const detail = body('[data-testid="route-mismatch-detail"]')
+    expect(detail.text()).toContain('req-7')
+    expect(detail.text()).toContain('/api/v2/user/tickets?token=***')
+    expect(detail.text()).toContain('Diff shortened')
+    expect(detail.text()).toContain('a***@example.com')
   })
 })

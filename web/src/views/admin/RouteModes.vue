@@ -128,6 +128,31 @@
           </span>
           <span v-else>—</span>
         </template>
+        <template #cell-mismatch="{ row }">
+          <span class="route-modes__mismatch" :data-route-mismatch="row.route_id">
+            <span
+              v-if="row.host && row.host.shadow_total > 0"
+              class="route-modes__rate"
+              :class="{ 'is-warning': row.host.mismatch_rate > 0 }"
+            >
+              {{ mismatchRate(row.host.mismatch_rate) }}
+            </span>
+            <span v-else class="route-modes__hint">—</span>
+            <span v-if="lastMismatch(row)" class="route-modes__hint" :title="format.dateTime(lastMismatch(row))">
+              {{ t('routeModes.mismatches.lastSeen', { time: format.relativeTime(lastMismatch(row)) }) }}
+            </span>
+            <UiButton
+              v-if="row.mismatch_samples?.stored || row.host?.shadow_mismatch"
+              size="sm"
+              variant="secondary"
+              :icon="FileDiff"
+              :data-route-samples="row.route_id"
+              @click="openMismatches(row)"
+            >
+              {{ t('routeModes.mismatches.open', { count: row.mismatch_samples?.stored ?? 0 }) }}
+            </UiButton>
+          </span>
+        </template>
         <template #cell-mode="{ row }">
           <div class="route-modes__row-mode">
             <UiSelect
@@ -209,13 +234,20 @@
         </UiButton>
       </template>
     </UiDialog>
+
+    <RouteMismatchSheet
+      v-if="mismatchSheet.loaded"
+      v-model:open="mismatchSheet.open"
+      :package-id="mismatchSheet.packageID"
+      :route="mismatchSheet.route"
+    />
   </section>
 </template>
 
 <script setup>
-import { computed, onMounted, reactive, ref, watch } from 'vue'
+import { computed, defineAsyncComponent, onMounted, reactive, ref, watch } from 'vue'
 import { useRouter } from 'vue-router'
-import { ArrowLeft, History, RefreshCw, Undo2, Waypoints } from '@lucide/vue'
+import { ArrowLeft, FileDiff, History, RefreshCw, Undo2, Waypoints } from '@lucide/vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import UiBadge from '@/ui/UiBadge.vue'
 import UiButton from '@/ui/UiButton.vue'
@@ -237,6 +269,9 @@ import {
   setKernelRouteModes,
 } from '@/api/kernel'
 
+// The samples sheet is its own chunk, loaded when it is first opened.
+const RouteMismatchSheet = defineAsyncComponent(() => import('@/components/admin/RouteMismatchSheet.vue'))
+
 const MODES = ['legacy', 'shadow', 'native']
 const REVISION_LIMIT = 100
 
@@ -256,6 +291,7 @@ const revisions = ref([])
 const revisionsLoading = ref(false)
 const revisionsError = ref('')
 const dialog = reactive({ open: false, kind: 'set', mode: '', routes: null, reason: '', saving: false, error: '' })
+const mismatchSheet = reactive({ loaded: false, open: false, packageID: '', route: null })
 
 let revisionsRequest = 0
 
@@ -272,6 +308,7 @@ const routeColumns = computed(() => [
   { key: 'configured', label: t('routeModes.columns.configured'), value: row => row.configured, sortable: true, nowrap: true },
   { key: 'effective', label: t('routeModes.columns.effective'), value: row => row.effective, sortable: true },
   { key: 'shadow', label: t('routeModes.columns.shadow'), value: row => row.host?.shadow_total ?? -1, numeric: true, nowrap: true, breakpoint: 'lg' },
+  { key: 'mismatch', label: t('routeModes.columns.mismatch'), value: row => (row.host?.shadow_total ? row.host.mismatch_rate ?? 0 : -1), sortable: true, firstDirection: 'desc' },
   { key: 'mode', label: t('routeModes.columns.mode'), hideable: false, minWidth: '150px' }
 ])
 
@@ -337,6 +374,32 @@ function actionLabel(action) {
 
 function hostDiffers(row) {
   return Boolean(row.host?.effective) && row.host.effective !== row.effective
+}
+
+// Small non-zero rates keep enough digits not to read as 0%.
+function mismatchRate(rate) {
+  const value = Number(rate) || 0
+  const precision = value === 0 || value >= 0.1 ? 0 : value >= 0.001 ? 1 : 2
+  return format.percent(value, { precision })
+}
+
+function lastMismatch(row) {
+  const times = [row.host?.last_mismatch_at, row.mismatch_samples?.last_observed_at]
+    .filter(Boolean)
+    .map(value => new Date(value))
+    .filter(value => !Number.isNaN(value.getTime()) && value.getTime() > 0)
+  if (!times.length) return null
+  return new Date(Math.max(...times.map(value => value.getTime())))
+}
+
+function openMismatches(row) {
+  if (!selectedPackage.value) return
+  Object.assign(mismatchSheet, {
+    loaded: true,
+    open: true,
+    packageID: selectedPackage.value.package_id,
+    route: { route_id: row.route_id, method: row.method, path: row.path }
+  })
 }
 
 function rowModes(row) {
@@ -525,6 +588,22 @@ defineExpose({ load })
 
 .route-modes__counters .is-error {
   color: var(--danger);
+}
+
+.route-modes__mismatch {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-1);
+  align-items: flex-start;
+  min-width: 0;
+}
+
+.route-modes__rate {
+  font-variant-numeric: tabular-nums;
+}
+
+.route-modes__rate.is-warning {
+  color: var(--warning);
 }
 
 .route-modes__row-mode {

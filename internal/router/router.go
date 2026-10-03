@@ -808,6 +808,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.POST("/kernel/route-modes", routeModes.Set)
 		v4.POST("/kernel/route-modes/rollback", routeModes.Rollback)
 		v4.GET("/kernel/route-modes/revisions", routeModes.Revisions)
+		v4.GET("/kernel/route-modes/mismatches", routeModes.Mismatches)
 		agents := handler.NewAgentPKIHandler()
 		v4.POST("/kernel/agents/enrollment-tokens", agents.CreateEnrollmentToken)
 		v4.GET("/kernel/agents/transports", handler.NewAgentTransportsHandler(agentPolicy).List)

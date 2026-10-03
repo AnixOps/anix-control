@@ -17,6 +17,7 @@ import (
 	configtables "github.com/AnixOps/anix-control/v4/config"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
+	"github.com/AnixOps/anix-control/v4/internal/shadowsamples"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
 )
@@ -87,6 +88,20 @@ func PackageRouteCatalog() (map[string]RouteCatalogEntry, error) {
 	return routeCatalogValue, routeCatalogErr
 }
 
+// ShadowSampleRoute looks a route up in the package extraction map for the
+// shadow sample collector: the package that owns it and its path template.
+func ShadowSampleRoute(routeID string) (shadowsamples.RouteInfo, bool) {
+	catalog, err := PackageRouteCatalog()
+	if err != nil {
+		return shadowsamples.RouteInfo{}, false
+	}
+	entry, ok := catalog[routeID]
+	if !ok || entry.PackageID == "" {
+		return shadowsamples.RouteInfo{}, false
+	}
+	return shadowsamples.RouteInfo{PackageID: entry.PackageID, Path: entry.Path}, true
+}
+
 func parsePackageRouteCatalog(raw []byte) (map[string]RouteCatalogEntry, error) {
 	var document struct {
 		Routes []RouteCatalogEntry `json:"routes"`
@@ -122,6 +137,20 @@ type RouteHostObservation struct {
 	ShadowMismatch uint64 `json:"shadow_mismatch"`
 	ShadowErrors   uint64 `json:"shadow_errors"`
 	ShadowSkipped  uint64 `json:"shadow_skipped"`
+	// MismatchRate is ShadowMismatch / ShadowTotal (0 without shadow
+	// runs).
+	MismatchRate float64 `json:"mismatch_rate"`
+	// LastMismatchAt is when the host last saw a mismatch.
+	LastMismatchAt *time.Time `json:"last_mismatch_at,omitempty"`
+}
+
+// WithRate returns the observation with MismatchRate computed.
+func (o RouteHostObservation) WithRate() RouteHostObservation {
+	o.MismatchRate = 0
+	if o.ShadowTotal > 0 {
+		o.MismatchRate = float64(o.ShadowMismatch) / float64(o.ShadowTotal)
+	}
+	return o
 }
 
 // RouteModeEntry is one compatibility route of a package and its modes.
@@ -143,6 +172,10 @@ type RouteModeEntry struct {
 	LockedReason string   `json:"locked_reason"`
 	// Host is the running host's report, when there is one.
 	Host *RouteHostObservation `json:"host,omitempty"`
+	// MismatchSamples summarizes the stored shadow mismatch samples of the
+	// route (GET /api/v4/kernel/route-modes/mismatches), when there are
+	// any.
+	MismatchSamples *shadowsamples.Summary `json:"mismatch_samples,omitempty"`
 }
 
 // PackageRouteModes is one package's routes and their modes.
@@ -347,6 +380,10 @@ func (a *RouteModeAdmin) List(ctx context.Context, packageID string, hosts map[s
 	if packageID != "" && len(installations) == 0 {
 		return nil, ErrRouteModePackageNotInstalled
 	}
+	summaries, err := shadowsamples.Summaries(db, packageID)
+	if err != nil {
+		return nil, err
+	}
 	packages := make([]PackageRouteModes, 0, len(installations))
 	for _, installation := range installations {
 		entry := PackageRouteModes{
@@ -375,8 +412,12 @@ func (a *RouteModeAdmin) List(ctx context.Context, packageID string, hosts map[s
 				AllowedModes: allowed, Locked: locked, LockedReason: reason,
 			}
 			if observation, ok := hosts[installation.PluginID][route.PackageRoute]; ok {
-				observation := observation
+				observation := observation.WithRate()
 				row.Host = &observation
+			}
+			if summary, ok := summaries[installation.PluginID][route.PackageRoute]; ok {
+				summary := summary
+				row.MismatchSamples = &summary
 			}
 			entry.Routes = append(entry.Routes, row)
 		}

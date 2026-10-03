@@ -7,11 +7,13 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
 	"github.com/AnixOps/anix-control/v4/internal/service"
+	"github.com/AnixOps/anix-control/v4/internal/shadowsamples"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
 )
@@ -102,11 +104,16 @@ func (h *RouteModeHandler) hostObservations() map[string]map[string]service.Rout
 			if observations[stats.PackageID] == nil {
 				observations[stats.PackageID] = map[string]service.RouteHostObservation{}
 			}
-			observations[stats.PackageID][route] = service.RouteHostObservation{
+			observation := service.RouteHostObservation{
 				Mode: detail.Mode, Effective: detail.Effective, NativeTotal: detail.Native, NativeErrors: detail.NativeErrors,
 				ShadowTotal: detail.Shadow, ShadowMismatch: detail.ShadowMismatch, ShadowErrors: detail.ShadowErrors,
 				ShadowSkipped: detail.ShadowSkipped,
 			}
+			if detail.LastMismatch > 0 {
+				last := time.Unix(detail.LastMismatch, 0).UTC()
+				observation.LastMismatchAt = &last
+			}
+			observations[stats.PackageID][route] = observation
 		}
 	}
 	return observations
@@ -160,7 +167,7 @@ func routeModeError(c *gin.Context, err error) {
 
 // List godoc
 // @Summary List package route modes
-// @Description Every v2 Control package's compatibility routes with their configured and effective mode, the modes each may switch to, and the running host's native and shadow counters. can_switch tells whether the caller may switch them.
+// @Description Every v2 Control package's compatibility routes with their configured and effective mode, the modes each may switch to, the running host's native and shadow counters with the mismatch rate, and how many sanitized shadow mismatch samples are stored. can_switch tells whether the caller may switch them.
 // @Tags Kernel route modes
 // @Produce json
 // @Security BearerAuth
@@ -280,4 +287,43 @@ func (h *RouteModeHandler) Revisions(c *gin.Context) {
 		return
 	}
 	kernelData(c, http.StatusOK, gin.H{"revisions": revisions})
+}
+
+// Mismatches godoc
+// @Summary List shadow mismatch samples
+// @Description The newest sanitized shadow-mode mismatch samples, of one package or route or of all: the route, method, path template with masked query values, legacy and native status, and a structural diff whose values are masked (tokens, passwords, UUIDs, keys and other secrets fully; e-mail addresses keep their first character and domain, IPv4 addresses two octets, IPv6 addresses two hextets). Samples are kept for 7 days and at most 100 per route. Any administrator may read them.
+// @Tags Kernel route modes
+// @Produce json
+// @Security BearerAuth
+// @Param package_id query string false "Package id"
+// @Param route_id query string false "Route id"
+// @Param limit query int false "At most this many samples (default 50, at most 100)"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Router /api/v4/kernel/route-modes/mismatches [get]
+func (h *RouteModeHandler) Mismatches(c *gin.Context) {
+	db := h.db()
+	if db == nil {
+		kernelError(c, http.StatusServiceUnavailable, "database_unavailable", "database is not initialized")
+		return
+	}
+	limit := 0
+	if raw := strings.TrimSpace(c.Query("limit")); raw != "" {
+		parsed, err := strconv.Atoi(raw)
+		if err != nil || parsed <= 0 {
+			kernelError(c, http.StatusBadRequest, "invalid_limit", "limit must be a positive integer")
+			return
+		}
+		limit = parsed
+	}
+	samples, err := shadowsamples.List(db.WithContext(c.Request.Context()), shadowsamples.Filter{
+		PackageID: strings.TrimSpace(c.Query("package_id")), RouteID: strings.TrimSpace(c.Query("route_id")), Limit: limit,
+	})
+	if err != nil {
+		kernelDBError(c, err)
+		return
+	}
+	kernelData(c, http.StatusOK, gin.H{
+		"samples": samples, "retention_days": int(shadowsamples.Retention / (24 * time.Hour)), "max_per_route": shadowsamples.MaxPerRoute,
+	})
 }

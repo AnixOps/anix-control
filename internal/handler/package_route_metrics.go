@@ -23,6 +23,7 @@ type packageHostHealthDetails struct {
 		ShadowMismatch uint64 `json:"shadow_mismatch"`
 		ShadowErrors   uint64 `json:"shadow_errors"`
 		ShadowSkipped  uint64 `json:"shadow_skipped"`
+		LastMismatch   int64  `json:"last_mismatch_unix"`
 	} `json:"routes"`
 }
 

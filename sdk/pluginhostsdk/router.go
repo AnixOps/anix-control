@@ -2,6 +2,8 @@ package pluginhostsdk
 
 import (
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -14,6 +16,7 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/packagebridgesdk"
+	"github.com/AnixOps/anix-control/sdk/shadowsample"
 	"github.com/AnixOps/anix-control/sdk/v2compat"
 )
 
@@ -28,6 +31,11 @@ const (
 	defaultConfigPollInterval = 5 * time.Second
 	defaultShadowTimeout      = 5 * time.Second
 	defaultShadowConcurrency  = 4
+	// maxShadowSamples bounds the shadow mismatch samples a router keeps
+	// for its Health details, and shadowSampleMaxAge how long it reports
+	// one: long enough for several kernel health polls to collect it.
+	maxShadowSamples   = 32
+	shadowSampleMaxAge = 10 * time.Minute
 )
 
 // IndexMigrationPrefix starts the id of a migration run that applies a
@@ -147,6 +155,8 @@ type Router struct {
 	configHash    string
 	configChecked time.Time
 	routeStats    map[string]*routeStatistics
+	// samples are the latest sanitized shadow mismatches, oldest first.
+	samples []shadowsample.Sample
 }
 
 type routeStatistics struct {
@@ -375,8 +385,32 @@ func (r *Router) startShadow(request DispatchRequest, legacy DispatchResponse) {
 		})
 		if err == nil && !matched {
 			r.config.Logf("package %s: shadow mismatch on route %s", r.config.PackageID, request.RouteID)
+			r.recordSample(request, legacy, native, now)
 		}
 	}()
+}
+
+// recordSample keeps a sanitized description of a shadow mismatch for the
+// Health details, from which the kernel stores it. The request body is
+// never kept; the diff holds only sanitized values (package shadowsample).
+func (r *Router) recordSample(request DispatchRequest, legacy DispatchResponse, native NativeResponse, observedAt int64) {
+	var id [16]byte
+	if _, err := rand.Read(id[:]); err != nil {
+		return
+	}
+	diff, truncated := shadowsample.Diff(legacy.ResponseBody, native.Body)
+	sample := shadowsample.Sanitize(shadowsample.Sample{
+		ID: hex.EncodeToString(id[:]), RouteID: request.RouteID, Method: request.Method,
+		Path:         shadowsample.SanitizePath(request.Metadata.Path, request.Metadata.PathParams, request.Metadata.Query),
+		LegacyStatus: legacy.StatusCode, NativeStatus: native.StatusCode,
+		Diff: diff, DiffTruncated: truncated, RequestID: request.RequestID, ObservedAt: observedAt,
+	})
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	r.samples = append(r.samples, sample)
+	if len(r.samples) > maxShadowSamples {
+		r.samples = append([]shadowsample.Sample(nil), r.samples[len(r.samples)-maxShadowSamples:]...)
+	}
 }
 
 func defaultShadowCompare(legacy, native NativeResponse) bool {
@@ -461,6 +495,10 @@ type routerHealthDetails struct {
 	Bridge string                       `json:"bridge"`
 	Config routerConfigDetails          `json:"config"`
 	Routes map[string]routeHealthDetail `json:"routes,omitempty"`
+	// ShadowSamples are the latest sanitized shadow mismatches, at most
+	// maxShadowSamples, none older than shadowSampleMaxAge. A kernel that
+	// does not read them ignores the field.
+	ShadowSamples []shadowsample.Sample `json:"shadow_samples,omitempty"`
 }
 
 type routerConfigDetails struct {
@@ -507,6 +545,12 @@ func (r *Router) healthDetails() routerHealthDetails {
 	stats := make(map[string]routeStatistics, len(r.routeStats))
 	for id, entry := range r.routeStats {
 		stats[id] = *entry
+	}
+	oldest := r.config.Now().Add(-shadowSampleMaxAge).Unix()
+	for _, sample := range r.samples {
+		if sample.ObservedAt >= oldest {
+			details.ShadowSamples = append(details.ShadowSamples, sample)
+		}
 	}
 	r.mu.RUnlock()
 	if len(ids) == 0 {

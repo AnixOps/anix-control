@@ -6,10 +6,12 @@ import (
 	"encoding/json"
 	"net/http"
 	"testing"
+	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
 	"github.com/AnixOps/anix-control/v4/internal/service"
+	"github.com/AnixOps/anix-control/v4/internal/shadowsamples"
 	"github.com/AnixOps/anix-control/v4/internal/tests/routemodefixture"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
@@ -199,4 +201,70 @@ func TestRouteModeHandlerNeedsTheTrustRootToSwitch(t *testing.T) {
 	code, response := routeModeRequest(t, handler.Rollback, http.MethodPost, "/route-modes/rollback", "/route-modes/rollback", `{"package_id":"knowledge"}`, 1)
 	require.Equal(t, http.StatusServiceUnavailable, code, response)
 	require.Equal(t, "plugin_trust_root_unconfigured", routeModeErrorCode(response))
+}
+
+func TestRouteModeHandlerShowsMismatchRatesAndSamples(t *testing.T) {
+	handler, db := newRouteModeHandlerFixture(t)
+	handler.hosts = func() []pluginhost.HostStats {
+		return []pluginhost.HostStats{{PackageID: "knowledge", HealthDetailsJSON: `{"routes":{"knowledge.article.list":{"mode":"shadow","effective":"shadow","shadow_total":4,"shadow_mismatch":1,"last_mismatch_unix":1800000000}}}`}}
+	}
+	observed := time.Unix(1_800_000_000, 0).UTC()
+	collector := &shadowsamples.Collector{
+		DB:  db,
+		Now: func() time.Time { return observed.Add(time.Minute) },
+		Route: func(id string) (shadowsamples.RouteInfo, bool) {
+			if id == "knowledge.article.list" {
+				return shadowsamples.RouteInfo{PackageID: "knowledge", Path: "/api/v2/user/knowledge"}, true
+			}
+			return shadowsamples.RouteInfo{}, false
+		},
+	}
+	details := `{"shadow_samples":[{"id":"0123456789abcdef0123456789abcdef","route_id":"knowledge.article.list","method":"GET",` +
+		`"path":"/api/v2/user/knowledge?token=secret-token","legacy_status":200,"native_status":200,"observed_at_unix":1800000000,` +
+		`"diff":[{"path":"$.data.email","kind":"changed","legacy":"alice@example.com","native":"bob@example.com"}]}]}`
+	stored, err := collector.Ingest(t.Context(), shadowsamples.Report{PackageID: "knowledge", Version: "1.0.0", DetailsJSON: details})
+	require.NoError(t, err)
+	require.Equal(t, 1, stored)
+
+	// Any administrator may read: user 2 is not a super administrator.
+	code, response := routeModeRequest(t, handler.List, http.MethodGet, "/route-modes?package_id=knowledge", "/route-modes", "", 2)
+	require.Equal(t, http.StatusOK, code, response)
+	data := response["data"].(map[string]any)
+	routes := data["packages"].([]any)[0].(map[string]any)["routes"].([]any)
+	var article map[string]any
+	for _, route := range routes {
+		if route.(map[string]any)["route_id"] == "knowledge.article.list" {
+			article = route.(map[string]any)
+		}
+	}
+	require.NotNil(t, article)
+	host := article["host"].(map[string]any)
+	require.InDelta(t, 0.25, host["mismatch_rate"], 1e-9)
+	require.Equal(t, "2027-01-15T08:00:00Z", host["last_mismatch_at"])
+	summary := article["mismatch_samples"].(map[string]any)
+	require.EqualValues(t, 1, summary["stored"])
+
+	code, response = routeModeRequest(t, handler.Mismatches, http.MethodGet, "/route-modes/mismatches?package_id=knowledge&route_id=knowledge.article.list&limit=10", "/route-modes/mismatches", "", 2)
+	require.Equal(t, http.StatusOK, code, response)
+	data = response["data"].(map[string]any)
+	require.EqualValues(t, 7, data["retention_days"])
+	require.EqualValues(t, 100, data["max_per_route"])
+	samples := data["samples"].([]any)
+	require.Len(t, samples, 1)
+	sample := samples[0].(map[string]any)
+	require.Equal(t, "/api/v2/user/knowledge?token=***", sample["path"])
+	encoded, err := json.Marshal(sample["diff"])
+	require.NoError(t, err)
+	require.JSONEq(t, `[{"path":"$.data.email","kind":"changed","legacy":"a***@example.com","native":"b***@example.com"}]`, string(encoded))
+	raw, err := json.Marshal(response)
+	require.NoError(t, err)
+	require.NotContains(t, string(raw), "secret-token")
+	require.NotContains(t, string(raw), "alice")
+
+	code, response = routeModeRequest(t, handler.Mismatches, http.MethodGet, "/route-modes/mismatches?limit=0", "/route-modes/mismatches", "", 2)
+	require.Equal(t, http.StatusBadRequest, code)
+	require.Equal(t, "invalid_limit", routeModeErrorCode(response))
+	code, response = routeModeRequest(t, handler.Mismatches, http.MethodGet, "/route-modes/mismatches?package_id=ticket", "/route-modes/mismatches", "", 1)
+	require.Equal(t, http.StatusOK, code)
+	require.Empty(t, response["data"].(map[string]any)["samples"])
 }
