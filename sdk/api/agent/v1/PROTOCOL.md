@@ -455,6 +455,16 @@ equivalent.
   - Metric: `anixops_agent_maintenance_events_total{result}` (`persisted`,
     `duplicate`, `refused`, `unrecorded`).
 
+## Agent health metrics
+
+`Heartbeat.metrics` carries plugin telemetry (`plugin.*`, persisted per
+assigned plugin) and the Agent's own health: names `agent_control_*`,
+`agent_identity_*` and `agent_dataplane_*` (lowercase letters, digits and
+`_`, at most 108 bytes), finite values, at most 64. Control keeps the latest
+heartbeat's set of these with the live session and shows it in the session
+views (the node's agent-control status, the transport inventory); a
+heartbeat without any keeps the last set. Other names are dropped.
+
 ## Error codes
 
 A refused call names its reason in the `x-anix-error-code` trailer

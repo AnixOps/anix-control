@@ -75,7 +75,10 @@
     (`GET /admin/nodes/:id/agent-control`) and a new `session` per node in
     `GET /api/v4/kernel/agents/transports` show a live stream session's
     authentication (`mtls` or `api-key`), its certificate's serial, expiry
-    and SAN, and its negotiated capabilities.
+    and SAN, and its negotiated capabilities, and the Agent's own health
+    metrics from its latest heartbeat (`agent_metrics`:
+    `agent_control_*`, `agent_identity_*`, `agent_dataplane_*`), which
+    Control used to drop.
   - `TestAgentStreamUnderRequiredNeedsNoLegacyPath` walks an Agent enrolled
     under `required` through configuration, users, heartbeats, status and
     runtime health, traffic, logs, maintenance events and a diagnostic task

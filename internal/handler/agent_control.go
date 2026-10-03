@@ -110,6 +110,7 @@ func (s proxyNodeStreams) Session(node agentcontrol.AgentNode) (agentstreams.Ses
 		InstanceID: snapshot.InstanceID, Capabilities: snapshot.Capabilities, ConnectedAt: snapshot.ConnectedAt, LastSeen: snapshot.LastSeen,
 		DesiredRevision: snapshot.DesiredRev, ObservedRevision: snapshot.ObservedRev, Identity: identity,
 		Authentication: snapshot.Authentication, Certificate: snapshot.Certificate, NegotiatedCapabilities: snapshot.NegotiatedCapabilities,
+		AgentMetrics: snapshot.AgentMetrics, AgentMetricsAt: snapshot.AgentMetricsAt,
 	}, true
 }
 

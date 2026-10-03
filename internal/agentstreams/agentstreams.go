@@ -78,6 +78,11 @@ type Session struct {
 	// stream session (both its Hello and HelloAck list them), as
 	// name.version.
 	NegotiatedCapabilities []string
+	// AgentMetrics are the Agent's own health metrics (agent_control_*,
+	// agent_identity_*, agent_dataplane_*) from the stream session's latest
+	// heartbeat that carried any, reported at AgentMetricsAt.
+	AgentMetrics   map[string]float64
+	AgentMetricsAt *time.Time
 }
 
 // Errors a Streams implementation reports from Dispatch and Cancel. They

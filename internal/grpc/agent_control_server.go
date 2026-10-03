@@ -68,9 +68,14 @@ type AgentControlConnection struct {
 	// principal is how the session authenticated, with its certificate;
 	// set before the session is registered.
 	principal agentPrincipal
-	stream    agentv1pb.AgentControlService_ControlStreamServer
-	sendMu    sync.Mutex
-	stateMu   sync.RWMutex
+	// agentMetrics are the Agent health metrics of the latest heartbeat
+	// that carried any, reported at agentMetricsAt; under stateMu
+	// (agent_session_metrics.go).
+	agentMetrics   map[string]float64
+	agentMetricsAt time.Time
+	stream         agentv1pb.AgentControlService_ControlStreamServer
+	sendMu         sync.Mutex
+	stateMu        sync.RWMutex
 	// configNegotiated is whether the session negotiated config.v1; set
 	// before the session is registered. Under configMu, configRevision is
 	// the configuration revision the agent has (its Hello's, then the last
@@ -130,6 +135,11 @@ type AgentControlSnapshot struct {
 	// Certificate is the client certificate of an mtls session (serial,
 	// expiry, URI SAN); nil for api-key.
 	Certificate *agentstreams.SessionCertificate `json:"certificate"`
+	// AgentMetrics are the Agent's own health metrics from its latest
+	// heartbeat that carried any (agent_control_*, agent_identity_*,
+	// agent_dataplane_*), reported at AgentMetricsAt; nil before one.
+	AgentMetrics   map[string]float64 `json:"agent_metrics"`
+	AgentMetricsAt *time.Time         `json:"agent_metrics_at"`
 }
 
 // AgentControlManager owns live streams and correlates desired operations with ACKs.
@@ -231,6 +241,7 @@ func (m *AgentControlManager) Connection(nodeID uint32) (AgentControlSnapshot, b
 			capabilities = append(capabilities, capability.Name)
 		}
 	}
+	agentMetrics, agentMetricsAt := connection.agentMetricsCopyLocked()
 	return AgentControlSnapshot{
 		NodeID:                 connection.NodeID,
 		SessionID:              connection.SessionID,
@@ -248,6 +259,8 @@ func (m *AgentControlManager) Connection(nodeID uint32) (AgentControlSnapshot, b
 		Transport:              connection.principal.transport(),
 		Identity:               connection.identity(),
 		Certificate:            connection.principal.certificate(),
+		AgentMetrics:           agentMetrics,
+		AgentMetricsAt:         agentMetricsAt,
 	}, true
 }
 
@@ -854,6 +867,7 @@ func (s *AgentControlGRPCServer) controlStream(stream agentv1pb.AgentControlServ
 				return err
 			}
 			connection.touch(payload.Heartbeat.ObservedRevision)
+			connection.recordAgentMetrics(payload.Heartbeat.Metrics, time.Now())
 			// Throttled by the recorder: at most one write a minute.
 			agenttransport.Seen(stream.Context(), principal.sighting(hello.AgentVersion))
 			if err := s.touchNode(agentNode); err != nil {

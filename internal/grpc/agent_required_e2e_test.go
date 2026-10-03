@@ -247,7 +247,11 @@ func TestAgentStreamUnderRequiredNeedsNoLegacyPath(t *testing.T) {
 		StateJson: []byte(`{"success":true,"output":"pong"}`), ObservedAtUnixMs: time.Now().UnixMilli(), SessionId: agent.session,
 	}}})
 	// A heartbeat round trip orders every message above before the checks.
-	agent.send("heartbeat-2", 0, &agentv1pb.AgentToControl{Payload: &agentv1pb.AgentToControl_Heartbeat{Heartbeat: &agentv1pb.Heartbeat{SessionId: agent.session, UptimeSeconds: 60}}})
+	// It carries the Agent's own health metrics, which the session keeps.
+	agent.send("heartbeat-2", 0, &agentv1pb.AgentToControl{Payload: &agentv1pb.AgentToControl_Heartbeat{Heartbeat: &agentv1pb.Heartbeat{
+		SessionId: agent.session, UptimeSeconds: 60,
+		Metrics: map[string]float64{"agent_dataplane_spool_depth": 3, "agent_identity_expires_in_seconds": 600000, "other_metric": 1},
+	}}})
 	agent.await("heartbeat_ack")
 	observed, ok := GetAgentStreams().Observed(l.proxyNode())
 	require.True(t, ok)
@@ -289,6 +293,9 @@ func TestAgentStreamUnderRequiredNeedsNoLegacyPath(t *testing.T) {
 	assert.Equal(t, issued.GetSpiffeId(), session.Certificate.SPIFFEID)
 	assert.Equal(t, issued.GetNotAfterUnix(), session.Certificate.NotAfter.Unix())
 	assert.Equal(t, []string{"config.v1", "users.v1", "reports.v1", "maintenance.v1"}, session.NegotiatedCapabilities)
+	agentMetrics := map[string]float64{"agent_dataplane_spool_depth": 3, "agent_identity_expires_in_seconds": 600000}
+	assert.Equal(t, agentMetrics, session.AgentMetrics)
+	require.NotNil(t, session.AgentMetricsAt)
 	encoded, err := json.Marshal(session)
 	require.NoError(t, err)
 	assert.Contains(t, string(encoded), `"authentication":"mtls"`)
@@ -316,6 +323,7 @@ func TestAgentStreamUnderRequiredNeedsNoLegacyPath(t *testing.T) {
 	assert.Equal(t, agentstreams.AuthenticationMTLS, entry.Session.Authentication)
 	assert.Equal(t, issued.GetSerial(), entry.Session.Certificate.Serial)
 	assert.Equal(t, []string{"config.v1", "users.v1", "reports.v1", "maintenance.v1"}, entry.Session.NegotiatedCapabilities)
+	assert.Equal(t, agentMetrics, entry.Session.AgentMetrics)
 
 	require.NoError(t, stream.CloseSend())
 	select {

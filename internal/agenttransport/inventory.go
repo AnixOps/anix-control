@@ -85,6 +85,11 @@ type LiveSession struct {
 	// NegotiatedCapabilities are the data-plane capabilities in use on the
 	// session (name.version, such as config.v1).
 	NegotiatedCapabilities []string `json:"negotiated_capabilities"`
+	// AgentMetrics are the Agent's own health metrics (agent_control_*,
+	// agent_identity_*, agent_dataplane_*: stream, certificate, spool depth
+	// and drops, apply failures) from its latest heartbeat that carried any.
+	AgentMetrics   map[string]float64 `json:"agent_metrics"`
+	AgentMetricsAt *time.Time         `json:"agent_metrics_at"`
 }
 
 // Summary counts the inventory's nodes by status.
@@ -225,6 +230,7 @@ func Build(ctx context.Context, db *gorm.DB, policy Policy, options Options) (In
 				SessionID: session.SessionID, Authentication: session.Authentication, Identity: session.Identity,
 				Certificate: session.Certificate, AgentVersion: session.AgentVersion, ConnectedAt: session.ConnectedAt.UTC(),
 				LastSeenAt: session.LastSeen.UTC(), NegotiatedCapabilities: negotiated,
+				AgentMetrics: session.AgentMetrics, AgentMetricsAt: session.AgentMetricsAt,
 			}
 		}
 	}

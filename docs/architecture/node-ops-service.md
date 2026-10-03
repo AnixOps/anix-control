@@ -1767,10 +1767,31 @@ Agent that has enrolled (mTLS); legacy API-key agents are refused.
   AG-4 (users, `users.v1`), AG-5 (reports and status, `reports.v1`), and
   the maintenance outbox on `maintenance.v1`, on top of AG-2 (enrollment,
   which reads the refusal codes), and a Control with these stream
-  equivalents. One Control-side gap remains:
-  the legacy admin routes `POST /admin/agent/tasks` and
-  `/admin/agent/execute` reach only WebSocket agents (KernelNodeOps
-  `agent.diagnostic` already uses the stream).
+  equivalents. Control-side gaps that remain open (reported by AG-2 to
+  AG-5):
+  - the legacy admin routes `POST /admin/agent/tasks` and
+    `/admin/agent/execute` reach only WebSocket agents (KernelNodeOps
+    `agent.diagnostic` already uses the stream);
+  - UniProxy `alivelist` (each user's online device count across nodes) has
+    no stream equivalent, so with `users.v1` alone device limits see only
+    the node's own connections;
+  - plugin artifacts and manifests (`/api/v3/agent/plugin-releases/...`)
+    authenticate by node API key only, which `required` does not refuse but
+    an enrolled Agent no longer holds; they need a path authenticated by
+    the client certificate;
+  - `ReportAck.error` and `ConfigStatus.error` are free text, without a
+    machine-readable code or a retry hint;
+  - `diag.v1` is reserved: no `diag.*` operations or schemas exist yet
+    (deferred, not a `required` blocker).
+
+  Each needs an addition to the Agent contract and is left to a follow-up.
+- **Agent health on the session.** The Agent's own heartbeat metrics
+  (`agent_control_*`, `agent_identity_*`, `agent_dataplane_*`: the stream,
+  the certificate, spool depth and drops, apply failures; at most 64,
+  finite values) are kept with the live session, the latest heartbeat's
+  set, and shown as `agent_metrics` in `AgentControlSnapshot` and in the
+  inventory's `session`. Plugin telemetry (`plugin.*`) is persisted as
+  before; other names are dropped.
 
 Stages:
 
