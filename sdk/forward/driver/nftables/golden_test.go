@@ -20,6 +20,7 @@ import (
 	"github.com/AnixOps/anix-control/sdk/forward/driver"
 	"github.com/AnixOps/anix-control/sdk/forward/driver/conformance"
 	"github.com/AnixOps/anix-control/sdk/forward/driver/nftables"
+	"github.com/AnixOps/anix-control/sdk/forward/planner"
 )
 
 var update = flag.Bool("update", false, "rewrite the nft goldens in contracts/forward/v1/nft from the cases in golden_test.go")
@@ -47,10 +48,6 @@ const (
 	leastC   = forwardv1.BalanceStrategy_BALANCE_STRATEGY_LEAST_CONN
 	failover = forwardv1.BalanceStrategy_BALANCE_STRATEGY_FAILOVER
 )
-
-func raw() *forwardv1.LinkTransport {
-	return &forwardv1.LinkTransport{Security: forwardv1.LinkSecurity_LINK_SECURITY_RAW}
-}
 
 // testConfig is the default configuration with a version, so the driver is
 // available.
@@ -94,59 +91,6 @@ func goldenCases(t testing.TB) []goldenCase {
 	}
 	ups := func(addrs []string, n int) []*forwardv1.Upstream { return b.Upstreams(addrs, n) }
 
-	// From contracts/forward/v1/plan-single-hop-nftables-iepl.json
-	// (response.states[0]): failover over two private targets on an IEPL
-	// line, with every limit.
-	iepl := &forwardv1.NodeHop{
-		RouteId: "01JF1A000000000000000000A1", HopIndex: 0,
-		Role: forwardv1.HopRole_HOP_ROLE_ENTRY, Engine: nftE,
-		Listen:  &forwardv1.Listen{Port: 30001, Protocol: both},
-		Ingress: raw(),
-		Upstreams: []*forwardv1.Upstream{
-			{Address: "10.88.0.20", Port: 443, Weight: 1, Priority: 0, Egress: raw()},
-			{Address: "10.88.0.21", Port: 443, Weight: 1, Priority: 10, Egress: raw()},
-		},
-		Balance:        failover,
-		Health:         &forwardv1.HealthCheck{IntervalMs: 5000, TimeoutMs: 2000},
-		CircuitBreaker: &forwardv1.CircuitBreaker{FailureThreshold: 3, OpenMs: 30000},
-		Limits:         &forwardv1.Limits{BandwidthBps: 100000000, QuotaBytes: 1099511627776, MaxConns: 2000},
-		TargetPolicy:   forwardv1.TargetPolicy_TARGET_POLICY_ALLOW_PRIVATE,
-		Mark:           1,
-	}
-	// From contracts/forward/v1/plan-nft-entry-gost-relay-exit-failover.json
-	// (the state of forward-21): an nftables entry that hands TCP to a gost
-	// relay over a private network, with a bandwidth and a connection
-	// limit. The expiry is the Agent's timer, not a rule.
-	toRelay := &forwardv1.NodeHop{
-		RouteId: "01JF1B000000000000000000B1", HopIndex: 0,
-		Role: forwardv1.HopRole_HOP_ROLE_ENTRY, Engine: nftE,
-		Listen:  &forwardv1.Listen{Port: 40001, Protocol: tcp, EntryHostname: "r1042.fwd.example.com"},
-		Ingress: raw(),
-		Upstreams: []*forwardv1.Upstream{
-			{Address: "172.16.5.31", Port: 20000, Weight: 1, Priority: 0, Egress: raw(), NodeRef: "forward-31"},
-		},
-		Balance:        failover,
-		Health:         &forwardv1.HealthCheck{IntervalMs: 5000, TimeoutMs: 2000},
-		CircuitBreaker: &forwardv1.CircuitBreaker{FailureThreshold: 3, OpenMs: 30000},
-		Limits:         &forwardv1.Limits{BandwidthBps: 50000000, MaxConns: 500, ExpiresAtUnixMs: 1798761600000},
-		TargetPolicy:   forwardv1.TargetPolicy_TARGET_POLICY_PUBLIC_ONLY,
-		Mark:           1,
-	}
-	gostRelay := &forwardv1.NodeHop{
-		RouteId: "01JF1B000000000000000000B1", HopIndex: 1,
-		Role: forwardv1.HopRole_HOP_ROLE_RELAY, Engine: forwardv1.Engine_ENGINE_GOST,
-		Listen:  &forwardv1.Listen{Address: "172.16.5.31", Port: 20000, Protocol: tcp},
-		Ingress: raw(),
-		Upstreams: []*forwardv1.Upstream{{
-			Address: "203.0.113.41", Port: 20000, Weight: 1,
-			Egress:  &forwardv1.LinkTransport{Security: forwardv1.LinkSecurity_LINK_SECURITY_TLS, Mux: true, ServerName: "forward-41"},
-			NodeRef: "forward-41", PeerIdentity: "spiffe://anixops/example/agent/forward-41",
-		}},
-		Balance:        failover,
-		IngressSources: []string{"172.16.5.21"},
-		Mark:           2,
-	}
-
 	failoverTied := entry(tcp, failover, ups(v4, 3))
 	failoverTied.Upstreams[1].Priority = 0
 	failoverTied.Upstreams[2].Priority = 0
@@ -188,10 +132,8 @@ func goldenCases(t testing.TB) []goldenCase {
 	custom := entry(both, ipHash, append(ups(v4, 3), ups(v6, 2)...))
 	custom.Limits = &forwardv1.Limits{BandwidthBps: 10_000_000}
 
-	return []goldenCase{
+	return append(plannerCases(t), []goldenCase{
 		{name: "empty", state: state()},
-		{name: "iepl-single-hop", state: conformance.State("forward-11", 1, iepl)},
-		{name: "entry-to-gost-relay", state: conformance.State("forward-21", 1, toRelay, gostRelay)},
 		{name: "strategy-round-robin", state: state(entry(tcp, rr, ups(v4, 3)))},
 		{name: "strategy-random", state: state(entry(tcp, random, ups(v4, 3)))},
 		{name: "strategy-ip-hash", state: state(entry(tcp, ipHash, ups(v4, 3)))},
@@ -215,7 +157,78 @@ func goldenCases(t testing.TB) []goldenCase {
 			c.Slots = 16
 			c.MSSClampInterfaces = []string{"wg0", "eth1"}
 		}},
+	}...)
+}
+
+// fixtureDir holds the planner goldens.
+const fixtureDir = "../../../../contracts/forward/v1"
+
+// plannerCases are the planner's own output: every node state with an
+// nftables hop in the planner goldens (contracts/forward/v1/plan-*.json,
+// which sdk/forward/planner reproduces byte for byte), named
+// plan-<fixture>-<node>, and live planner runs of fixture requests with a
+// change (planner-<fixture>-<change>-<node>).
+func plannerCases(t testing.TB) []goldenCase {
+	t.Helper()
+	files, err := filepath.Glob(filepath.Join(fixtureDir, "plan-*.json"))
+	if err != nil || len(files) == 0 {
+		t.Fatalf("no planner fixtures: %v", err)
 	}
+	var cases []goldenCase
+	add := func(prefix string, states []*forwardv1.NodeForwardState) {
+		for _, s := range states {
+			if slices.ContainsFunc(s.GetHops(), func(h *forwardv1.NodeHop) bool { return h.GetEngine() == nftE }) {
+				cases = append(cases, goldenCase{name: prefix + "-" + s.GetNodeRef(), state: s})
+			}
+		}
+	}
+	for _, f := range files {
+		b, err := os.ReadFile(f) // #nosec G304 -- a planner golden
+		if err != nil {
+			t.Fatal(err)
+		}
+		var fx struct {
+			Request  json.RawMessage   `json:"request"`
+			Response json.RawMessage   `json:"response"`
+			States   []json.RawMessage `json:"states"`
+		}
+		if err := json.Unmarshal(b, &fx); err != nil {
+			t.Fatalf("%s: %v", f, err)
+		}
+		name := strings.TrimSuffix(strings.TrimPrefix(filepath.Base(f), "plan-"), ".json")
+		var states []*forwardv1.NodeForwardState
+		if len(fx.Response) > 0 {
+			var resp forwardv1.PlanRouteResponse
+			if err := protojson.Unmarshal(fx.Response, &resp); err != nil {
+				t.Fatalf("%s: %v", f, err)
+			}
+			states = resp.GetStates()
+		}
+		for _, raw := range fx.States {
+			var s forwardv1.NodeForwardState
+			if err := protojson.Unmarshal(raw, &s); err != nil {
+				t.Fatalf("%s: %v", f, err)
+			}
+			states = append(states, &s)
+		}
+		add("plan-"+name, states)
+
+		// A paused route stays rendered with paused hops (forward-sdk.md
+		// section 5.3): plan the single-hop IEPL route paused.
+		if name == "single-hop-nftables-iepl" {
+			var req forwardv1.PlanRouteRequest
+			if err := protojson.Unmarshal(fx.Request, &req); err != nil {
+				t.Fatalf("%s: %v", f, err)
+			}
+			req.Route.Paused = true
+			resp, err := planner.PlanRoute(&req, nil, nil, planner.Options{})
+			if err != nil || len(resp.GetViolations()) > 0 {
+				t.Fatalf("planning %s paused: %v %v", f, err, resp.GetViolations())
+			}
+			add("planner-"+name+"-paused", resp.GetStates())
+		}
+	}
+	return cases
 }
 
 // stateJSON is the canonical JSON of a state: protojson re-indented, since
@@ -264,6 +277,9 @@ func TestGoldens(t *testing.T) {
 			}
 			if err := a.Verify(nftE); err != nil {
 				t.Fatal(err)
+			}
+			if strings.HasPrefix(c.name, "plan") && err != nil {
+				t.Fatalf("the planner's state does not render: %v", err)
 			}
 			files := map[string][]byte{
 				c.name + ".state.json": stateJSON(t, c.state),

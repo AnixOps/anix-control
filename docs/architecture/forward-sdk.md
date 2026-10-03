@@ -536,7 +536,7 @@ script, whose flush would empty a foreign table of the same name. nft cannot
 change a table comment in place, so the comment is constant and F2c records
 the applied generation and digest elsewhere. The rules and elements for
 fixture `plan-single-hop-nftables-iepl.json` (golden
-`contracts/forward/v1/nft/iepl-single-hop.nft`; declarations and flushes
+`contracts/forward/v1/nft/plan-single-hop-nftables-iepl-forward-11.nft`; declarations and flushes
 omitted):
 
 ```
@@ -653,8 +653,10 @@ table inet anixops_fwd {
   Control. Counters then start a new `counter_epoch`.
 - **Goldens.** `contracts/forward/v1/nft` holds, per case, the input
   (`<case>.state.json`), the script (`<case>.nft`) and the rejected hops
-  (`<case>.errors.txt`), including two states taken from the planner
-  fixtures. `go test ./forward/driver/nftables -update` rewrites them. The
+  (`<case>.errors.txt`). The `plan-<fixture>-<node>` cases are every node
+  state with an nftables hop in the planner goldens, and
+  `planner-single-hop-nftables-iepl-paused-forward-11` is a live planner run
+  of a paused route; they must render without hop errors. `go test ./forward/driver/nftables -update` rewrites them. The
   tests run `nft -c -f` on every golden and conformance state where nft and
   `CAP_NET_ADMIN` are available (in a fresh network namespace as root); CI
   installs nftables and runs them under sudo. `FuzzRender` checks that any

@@ -1,7 +1,5 @@
 {
   "node_ref": "forward-11",
-  "generation": "1",
-  "state_hash": "cfac217fa86677103bfc8b4bc30afc6ed72033e6e4c45bfa9898f10b0a424920",
   "hops": [
     {
       "route_id": "01JF1A000000000000000000A1",

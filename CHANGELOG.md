@@ -151,7 +151,8 @@
   traffic dropped). Hops it cannot run are rejected one by one with the
   others still rendered; names are derived only from checked route ids and
   every address is a checked literal. Goldens with their input states are
-  in `contracts/forward/v1/nft` (`-update` rewrites them), checked with
+  in `contracts/forward/v1/nft` (`-update` rewrites them), including every
+  nftables node state of the planner goldens and a planned paused route, checked with
   `nft -c` where nft is available (CI installs it), and `FuzzRender` keeps
   any input inside the script grammar. `Capabilities` is static until host
   probing, and `Apply`, `Observe`, `SetUpstreams` and `Remove` answer
