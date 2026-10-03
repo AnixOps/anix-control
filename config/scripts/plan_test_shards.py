@@ -58,9 +58,10 @@ WEIGHTS: dict[str, dict[str, float]] = {
         "internal/kernelsubscriber": 1.1,
     },
     "postgres": {
-        # Sharded CI run of PR #149 (fresh PostgreSQL per shard).
-        "internal/tests/ordercompat": 308.0,
-        "internal/tests/paymentcompat": 220.0,
+        # Sharded CI run of PR #149 (fresh PostgreSQL per shard); ordercompat
+        # and paymentcompat from PR #156 (shared migrated databases).
+        "internal/tests/ordercompat": 24.1,
+        "internal/tests/paymentcompat": 22.7,
         "internal/tests/forwardcompat": 100.5,
         "internal/tests/identitycompat": 61.6,
         "internal/tests/subscriptioncompat": 60.2,

@@ -155,7 +155,9 @@
   and id sequences restart, a dropped foreign key is added back, and any
   other schema change gets a newly migrated database. Locally,
   `ordercompat` went from 27.1 s to 14.7 s and `paymentcompat` from
-  29.6 s to 13.9 s with PostgreSQL; every compat package passes unchanged.
+  29.6 s to 13.9 s with PostgreSQL (in CI's PostgreSQL shards 48.9 s to
+  24.1 s and 52.6 s to 22.7 s; their shard weights are updated); every
+  compat package passes unchanged.
 - The CSS classes plugin WebUI bundles render (`.btn`, `.btn-secondary`,
   `.table-container`, `.data-table`, `.empty-state`) are documented as a
   stable contract ("WebUI CSS Classes" in
