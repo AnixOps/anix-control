@@ -85,14 +85,17 @@ are additions to `anix.agent.v1`:
 | Agent → Control | `AgentToControl.package_report` of kind `forward.report` (`NodeForwardReport`) | `forward.v1` with `package-reports.v1` |
 | Agent → Control | `AgentToControl.maintenance_events` (`MaintenanceEvents`) | `maintenance.v1` |
 | Control → Agent | `ControlToAgent.maintenance_ack` (`MaintenanceAck` of `MaintenanceEventResult`) | `maintenance.v1` |
+| Control → Agent | `ControlToAgent.alive_list` (`AliveList` of `UserAlive`) | `alive.v1` |
+| Agent → Control | `AgentArtifacts.GetPluginManifest`, `DownloadPluginArtifact` (`artifacts.proto`; a service, not a stream payload) | `artifacts.v1` |
 
 `Hello` gains `config_revision` and `users_cursor`, and `HelloAck` gains
 `server_capabilities`.
 
-An Agent that negotiates `config.v1`, `users.v1`, `reports.v1` and, when it
-runs the plugin supervisor, `maintenance.v1` needs no legacy path: under
-`agent_control.mtls: required`, which refuses them, each has a stream
-equivalent.
+An Agent that negotiates `config.v1`, `users.v1`, `reports.v1`, `alive.v1`
+and, when it runs the plugin supervisor, `maintenance.v1` and
+`artifacts.v1` needs no legacy path and no node API key: under
+`agent_control.mtls: required`, which refuses the legacy paths, each has a
+stream equivalent.
 
 | Legacy path | Stream equivalent |
 |---|---|
@@ -106,14 +109,17 @@ equivalent.
 | UniProxy `config`, the WebSocket's `config_update` | `ConfigSnapshot` (`config.v1`) |
 | UniProxy `user`, the WebSocket's `user_update` and `user_ban` | `UserDelta` (`users.v1`) |
 | UniProxy `push` and `alive`, `NodeLogService.ReportLogs` | `TrafficReport` and `LogBatch` (`reports.v1`) |
+| UniProxy `alivelist` | `AliveList` (`alive.v1`) |
+| `GET /api/v3/agent/plugin-releases/{plugin_id}/{version}/manifest` and `/artifact` (`X-API-Key`) | `AgentArtifacts.GetPluginManifest` and `DownloadPluginArtifact` by the client certificate (`artifacts.v1`) |
+| `POST /admin/agent/tasks`, `/admin/agent/execute` (administrator routes that sent `task.assign` on the WebSocket) | the same routes send the `agent.diagnostic` operation on the stream when the node has no WebSocket and its Agent lists that capability |
 
 ### Negotiation
 
 - A capability written `config.v1` is the `Capability` with name `config`
   and version `v1`; `sdk/agentcontrol` names them (`CapabilityConfig`,
   `CapabilityUsers`, `CapabilityReports`, `CapabilityPackageReports`,
-  `CapabilityForward`, `CapabilityMaintenance`; `DataPlaneCapabilities`
-  lists them).
+  `CapabilityForward`, `CapabilityMaintenance`, `CapabilityAlive`,
+  `CapabilityArtifacts`; `DataPlaneCapabilities` lists them).
 - The Agent lists the ones it implements in `Hello.capabilities`. Control
   lists the ones it serves in `HelloAck.server_capabilities`.
 - A capability is in use on a session only when both lists have it
@@ -125,7 +131,9 @@ equivalent.
   - The Agent sends `ConfigStatus` only with `config.v1`, and `TrafficReport`,
     `LogBatch` and `NodeStatus` only with `reports.v1`, `PackageReport`
     only with `package-reports.v1`, and `MaintenanceEvents` only with
-    `maintenance.v1`, in `HelloAck.server_capabilities`.
+    `maintenance.v1`, in `HelloAck.server_capabilities`. Control sends
+    `AliveList` only with `alive.v1`. The Agent calls `AgentArtifacts`
+    only with `artifacts.v1`.
     Without them it keeps the legacy transports.
 - Older Agents send none of these capabilities or `Hello` fields and skip
   `server_capabilities`, so nothing changes for them.
@@ -144,7 +152,16 @@ equivalent.
     `Hello` lists it with a valid `node_capabilities` attribute and Control
     serves the session `config.v1`;
   - `maintenance.v1` (see "Maintenance events"): proxy nodes, whose node log
-    stores the events.
+    stores the events;
+  - `alive.v1` (see "Alive list"): proxy nodes, whose users have device
+    limits;
+  - `artifacts.v1` (see "Plugin artifacts"): proxy nodes, on a session
+    authenticated by client certificate (`AgentArtifacts` reads no node
+    API key, so a session on the API key is not offered it).
+
+  `reports.v1` carries one attribute: an Agent that lists it with
+  `transient_ack: "v1"` asks for transient report acknowledgements ("Error
+  codes"); Control's `reports.v1` echoes the attribute when it sends them.
 
   Before this rule Control 4.1 listed `users.v1` for every proxy node
   whatever the Agent listed. Nothing changes for any Agent: a capability
@@ -158,7 +175,8 @@ equivalent.
   without `reports.v1`, `package_report` without `package-reports.v1`,
   `maintenance_events` without `maintenance.v1`, in
   both lists) gets `InvalidArgument`, naming the
-  capability it lacks, and the stream ends. A Control built before these payloads existed answers
+  capability it lacks, with the code `agent_capability_not_negotiated` in
+  the trailer, and the stream ends. A Control built before these payloads existed answers
   them the same way, as an unknown payload ("control message payload is
   required").
 - `diag.v1` is reserved for node-side diagnostics (`diag.*` operations). It
@@ -284,9 +302,12 @@ equivalent.
       64-bit counter range, `fields_json` that is not JSON, or a node that
       no longer exists.
 
-    In each case the Agent drops the batch from its spool. Control sends no
+    In each case the Agent drops the batch from its spool. Each refusal
+    names its `error_code` ("Codes in acknowledgements"). Control sends no
     `ReportAck` for a batch it cannot record for now (its database failed),
-    and keeps the stream open; the Agent resends the batch later. A refused
+    and keeps the stream open; the Agent resends the batch later. An Agent
+    that negotiated `transient_ack` gets `report_unavailable` with a retry
+    hint instead. A refused
     or unrecorded batch is not remembered, so a resend after the fault is
     applied.
   - A batch stays on the stream: the Agent never resends it over a legacy
@@ -443,7 +464,10 @@ equivalent.
       node that no longer exists); Control refuses it again on every
       delivery, so the Agent may drop it;
     - `persisted: false` without an `error`: Control could not store it now
-      (its database failed); the Agent keeps it and sends it again.
+      (its database failed); the Agent keeps it and sends it again, not
+      before `retry_after_ms`. The result carries `maintenance_unavailable`.
+
+    Every refusal names its `error_code` ("Codes in acknowledgements").
 
     A bad event never ends the stream; only `maintenance_events` without
     `maintenance.v1` negotiated does. A result has the fields of the
@@ -454,6 +478,61 @@ equivalent.
     WebSocket did not drain against it.
   - Metric: `anixops_agent_maintenance_events_total{result}` (`persisted`,
     `duplicate`, `refused`, `unrecorded`).
+
+- **Alive list** (`alive.v1`). Every user's number of online devices
+  (distinct IPs) across all nodes: what UniProxy `alivelist` answers,
+  counted from the same source (the online sets `TrafficReport.online` and
+  UniProxy `alive` replace per node). The Agent enforces
+  `NodeUser.device_limit` against it; with `users.v1` alone it counted
+  only its own node's connections.
+  - **The list.** `AliveList.entries` are the users with at least one
+    device online, in user id order, each with `alive_count`; a user not
+    listed has none. One list may span several messages of at most 10 000
+    entries, each with the list's `revision` (it grows by one with every
+    list sent on the session); the last has `last_page`. The Agent replaces
+    its whole list when `last_page` arrives; an empty list is one empty
+    page. `computed_at_unix_ms` is when Control counted.
+  - **When.** After `HelloAck`, then whenever the counts change, checked
+    once a minute (the default `pull_interval` at which Agents pulled
+    `alivelist`). Control counts at most once every 10 seconds for all
+    sessions. A lost list is replaced by the next one; a reconnect starts
+    with a new list.
+  - The list holds every user, not only the node's: it is what
+    `alivelist` answers, and the Agent reads the entries of its users.
+- **Plugin artifacts** (`artifacts.v1`). `AgentArtifacts`
+  (`artifacts.proto`, a separate file of the same package) serves an
+  enrolled Agent the signed plugin releases assigned to its node: what
+  `GET /api/v3/agent/plugin-releases/{plugin_id}/{version}/manifest` and
+  `/artifact` serve to the node API key.
+  - **Authentication.** A valid agent client certificate of a proxy node,
+    enabled; no `x-api-key` is read. The node is the certificate's.
+  - **Authorization**, as the HTTP download's: the node has an enabled
+    assignment of `plugin_id` at `version`, the installation is enabled,
+    and the release is a signed official AnixOps release still verifying
+    against the trust root.
+  - **Addresses.** The request names the content address the
+    `agent.plugin.install` operation's configuration carries: its
+    `manifest` or `artifact` `sha256` and `size`, with `plugin_id` and
+    `version` (the HTTP URL's path). The configuration is unchanged: an
+    Agent with `artifacts.v1` reads the same fields and calls the service
+    instead of the URL. Another address is refused.
+  - **Answers.** `GetPluginManifest` returns the canonical manifest bytes
+    with `PluginRelease`, the release as the HTTP download's `X-AnixOps-*`
+    headers describe it (artifact and manifest digests and sizes,
+    `signature`, `signature_algorithm` `ed25519`, `publisher`, `key_id`,
+    `plugin_api_version`). `DownloadPluginArtifact` streams the artifact
+    (at most 64 MiB) in chunks of at most 1 MiB with their `offset`, the
+    first carrying `PluginRelease`. The bytes are the HTTP download's, so
+    the Agent verifies them unchanged: the sizes and SHA-256 of both
+    documents against the configuration, the manifest's ed25519 signature
+    against its trust root, and the artifact's digest in the manifest.
+  - A node runs at most 2 downloads at once (`ResourceExhausted`,
+    `plugin_release_download_busy`: retry later).
+  - The HTTP download stays: `agent_control.mtls: required` does not
+    refuse it (it is not a legacy Agent channel), so an Agent that has not
+    enrolled yet, or a Control without `artifacts.v1`, still installs over
+    it with the node API key. An enrolled Agent no longer holds the key and
+    uses `AgentArtifacts`.
 
 ## Agent health metrics
 
@@ -482,9 +561,71 @@ their JSON body.
 | `agent_cert_wrong_node` | `Unauthenticated`, or `PermissionDenied` for an envelope or the v2board services | `ControlStream`, the v2board services | the certificate names another node than `x-node-id` or `x-node-kind`, an envelope's `node_id`, or is a forward node's on the proxy-only v2board services: a configuration error of the Agent; keep the certificate |
 | `agent_enrollment_rejected` | `Unauthenticated` | `Enroll` | the bootstrap is unusable (unknown, used, expired or revoked enrollment credential, wrong node key or token, malformed `x-node-id` or `x-node-kind`, none given); one answer for all, so credentials cannot be probed |
 
-A transient failure (`Unavailable`: the certificate check could not reach
-the database) carries no code: retry. `sdk/agentcontrol` names the codes
-(`ErrorCode*`).
+| `agent_capability_not_negotiated` | `InvalidArgument` | `ControlStream` | a data-plane payload whose capability the session did not negotiate; the stream ends: an Agent bug |
+| `invalid_plugin_release_address` | `InvalidArgument` | `AgentArtifacts` | the address lacks `plugin_id`, `version`, a 64-hex `sha256` or a positive `size` |
+| `plugin_release_address_mismatch` | `InvalidArgument` | `AgentArtifacts` | the address is not the release's verified content: reconcile the operation again |
+| `plugin_release_not_assigned` | `PermissionDenied` | `AgentArtifacts` | the certificate's node has no enabled assignment of the release (another node's release, a forward node, a disabled installation or an unofficial release) |
+| `plugin_release_not_found` | `NotFound` | `AgentArtifacts` | the assigned release or its artifact is gone |
+| `plugin_release_integrity_failed` | `FailedPrecondition` | `AgentArtifacts` | the stored release no longer verifies; an operator must republish it |
+| `plugin_release_download_busy` | `ResourceExhausted` | `AgentArtifacts.DownloadPluginArtifact` | the node runs as many downloads as allowed: retry later |
+
+On `AgentArtifacts` the certificate codes above apply too (`agent_cert_*`,
+and `agent_cert_revoked` with `PermissionDenied` for a disabled or deleted
+node), and `agent_cert_invalid` answers a call without a certificate.
+
+A transient failure (`Unavailable`: the certificate check or the release
+could not be read from the database) carries no code: retry.
+`sdk/agentcontrol` names the codes (`ErrorCode*`).
+
+### Codes in acknowledgements
+
+The data plane's answers carry a machine-readable `error_code` next to
+their text `error`, which stays for people. A code is lowercase words joined
+by `_`, at most 64 bytes; a later Control may add codes, and an Agent treats
+an unknown refusal code as it treated a non-empty `error` before codes
+existed. `sdk/agentcontrol` names them (`ReportErrorCode*`,
+`MaintenanceErrorCode*`, `ConfigErrorCode*`).
+
+| Code | In | Meaning, and what the Agent does |
+|---|---|---|
+| `report_batch_id_invalid` | `ReportAck` | no `batch_id`, or one over 128 bytes: refused for good, drop the batch |
+| `report_invalid` | `ReportAck` | a malformed entry (a `user_id` of 0, `fields_json` that is not JSON): drop |
+| `report_counter_overflow` | `ReportAck` | bytes beyond the 64-bit counter range: drop |
+| `report_node_gone` | `ReportAck` | the node no longer exists: drop |
+| `report_unavailable` | `ReportAck` (`applied` false, `error` empty, `retry_after_ms` set) | Control could not record the batch now: keep it, send it again not before `retry_after_ms` |
+| `maintenance_schema_unsupported` | `MaintenanceEventResult` | the batch's `version` is not `anixops.maintenance/v1`: refused for good |
+| `maintenance_batch_too_large` | `MaintenanceEventResult` | more than 50 events or 256 KiB in the batch: refused; send smaller batches |
+| `maintenance_event_invalid` | `MaintenanceEventResult` | the event is not a valid `anixops.maintenance/v1` event: refused for good |
+| `maintenance_event_wrong_node` | `MaintenanceEventResult` | the event's `node_id` is not the stream's node: refused for good |
+| `maintenance_node_gone` | `MaintenanceEventResult` | the node no longer exists: refused for good |
+| `maintenance_unavailable` | `MaintenanceEventResult` (`persisted` false, `error` empty, `retry_after_ms` set) | Control could not store the event now: keep it, send it again not before `retry_after_ms` |
+| `config_format_unsupported` | `ConfigStatus` (set by the Agent) | the snapshot's `format` is unknown to the Agent |
+| `config_hash_mismatch` | `ConfigStatus` (Agent) | `config_hash` is not the SHA-256 of `config_json` |
+| `config_invalid` | `ConfigStatus` (Agent) | the document does not parse or fails the Agent's checks |
+| `config_apply_failed` | `ConfigStatus` (Agent) | the Agent could not run the configuration |
+
+- **Every refusal has a code.** A `ReportAck` with an `error` and a
+  `MaintenanceEventResult` with an `error` always carry their code.
+- **Transient answers.** A `MaintenanceEventResult` that is neither
+  persisted nor refused carries `maintenance_unavailable` and
+  `retry_after_ms` (30 s). Its `error` stays empty, so an Agent built
+  before codes keeps the event, as before.
+- **Transient report acknowledgements are negotiated.** Before codes,
+  Control sent no `ReportAck` for a batch it could not record, because an
+  Agent drops a batch on any `ReportAck`. Control keeps that silence for
+  every Agent except one whose `Hello` lists `reports.v1` with the
+  attribute `transient_ack: "v1"`
+  (`agentcontrol.ReportsAttributeTransientAck`); Control echoes the
+  attribute on its `reports.v1` (`agentcontrol.TransientReportAcks`) and
+  then answers such a batch with `applied: false`, no `error`,
+  `report_unavailable` and `retry_after_ms` (15 s). Such an Agent keeps a
+  batch answered with `report_unavailable`.
+- **Configuration.** Control sends nothing back for a `ConfigStatus`; the
+  Agent sets `error_code` when `applied` is false. Control keeps it with
+  the node's last status (`v4_kernel_node_config_status.reported_error_code`;
+  a malformed code is not kept, unknown well-formed ones are) and a
+  `node.sync` that fails on the status reports it at the start of its
+  message (`config_apply_failed: <error>`).
 
 The checked-in Go files are generated, not handwritten. From the repository
 root, run:
@@ -494,7 +635,8 @@ bash sdk/api/agent/gen.sh
 ```
 
 The script maps the virtual path `api/grpc/agent/v1` onto this directory so the
-registered file name stays `api/grpc/agent/v1/agent.proto`.
+registered file name stays `api/grpc/agent/v1/agent.proto` (and
+`agent_enrollment.proto`, `artifacts.proto` beside it).
 
 Verified generator versions: `libprotoc 29.2`, `protoc-gen-go v1.36.11`, and
 `protoc-gen-go-grpc 1.6.1`.

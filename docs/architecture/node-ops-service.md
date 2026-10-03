@@ -1746,14 +1746,43 @@ Agent that has enrolled (mTLS); legacy API-key agents are refused.
     event stored once per node and event id as a node log row of source
     `maintenance`, answered per event); its Control → agent `task.assign` is
     the `agent.diagnostic` operation;
-  - `/api/v2/node/register` is `Enroll` with a one-time credential.
+  - `/api/v2/node/register` is `Enroll` with a one-time credential;
+  - UniProxy `alivelist` (each user's online device count across nodes,
+    for device limits) is `AliveList` (`alive.v1`, new): the same counts,
+    from the same online sets, after `HelloAck` and whenever they change
+    (checked once a minute);
+  - the plugin release download (`/api/v3/agent/plugin-releases/...`, by
+    node API key, which an enrolled agent no longer holds) is the
+    `AgentArtifacts` service (`artifacts.proto`, `artifacts.v1`, new),
+    authenticated by the client certificate: the same assignment checks,
+    content addresses and verified bytes, the artifact in 1 MiB chunks.
+    The HTTP download is not refused under `required` (it is not a legacy
+    agent channel) and stays for agents that have not enrolled;
+  - the administrator routes `POST /admin/agent/tasks` and
+    `/admin/agent/execute` send the task as the `agent.diagnostic`
+    operation on the stream when the node has no WebSocket and its agent
+    advertises the operation, as the KernelNodeOps executor does.
 
   `internal/grpc`'s `TestAgentStreamUnderRequiredNeedsNoLegacyPath` walks
   it: an agent enrolled with a one-time credential under `required`
-  negotiates `config.v1`, `users.v1`, `reports.v1` and `maintenance.v1`;
-  configuration, users, heartbeats, status and runtime health, traffic,
-  logs, maintenance events and a diagnostic task all flow; no legacy
+  negotiates `config.v1`, `users.v1`, `reports.v1`, `maintenance.v1`,
+  `alive.v1` and `artifacts.v1`; configuration, users, heartbeats, status
+  and runtime health, traffic, logs, maintenance events, the alive list
+  (counting the online IP the traffic report carried), a plugin release
+  download by certificate and a diagnostic task all flow; no legacy
   counter moves and the inventory lists the node on `mtls-stream` only.
+- **Codes in acknowledgements.** `ReportAck` and `MaintenanceEventResult`
+  carry an `error_code` on every refusal, and the agent sets one on a
+  `ConfigStatus` that was not applied (kept as the node's
+  `reported_error_code`, and leading a failed `node.sync`'s message).
+  Transient answers carry a retry hint: `maintenance_unavailable` with
+  `retry_after_ms` on every maintenance result Control could not store,
+  and `report_unavailable` with `retry_after_ms` on a report batch, only
+  to an agent that negotiated the `transient_ack` attribute of
+  `reports.v1` (any other drops a batch on any `ReportAck`, so it still
+  gets none). Stream refusals of an unnegotiated payload carry
+  `agent_capability_not_negotiated`. `PROTOCOL.md`, "Error codes", lists
+  them.
 - **The offer rule.** `HelloAck.server_capabilities` lists a data-plane
   capability only when the agent's `Hello` lists it (it listed `users.v1`
   to every proxy node before), so it is the session's negotiated set.
@@ -1767,24 +1796,20 @@ Agent that has enrolled (mTLS); legacy API-key agents are refused.
   AG-4 (users, `users.v1`), AG-5 (reports and status, `reports.v1`), and
   the maintenance outbox on `maintenance.v1`, on top of AG-2 (enrollment,
   which reads the refusal codes), and a Control with these stream
-  equivalents. Control-side gaps that remain open (reported by AG-2 to
-  AG-5):
-  - the legacy admin routes `POST /admin/agent/tasks` and
-    `/admin/agent/execute` reach only WebSocket agents (KernelNodeOps
-    `agent.diagnostic` already uses the stream);
-  - UniProxy `alivelist` (each user's online device count across nodes) has
-    no stream equivalent, so with `users.v1` alone device limits see only
-    the node's own connections;
-  - plugin artifacts and manifests (`/api/v3/agent/plugin-releases/...`)
-    authenticate by node API key only, which `required` does not refuse but
-    an enrolled Agent no longer holds; they need a path authenticated by
-    the client certificate;
-  - `ReportAck.error` and `ConfigStatus.error` are free text, without a
-    machine-readable code or a retry hint;
-  - `diag.v1` is reserved: no `diag.*` operations or schemas exist yet
-    (deferred, not a `required` blocker).
+  equivalents. The Control-side gaps AG-2 to AG-5 reported are closed by
+  additions to the Agent contract (owner approval of 2026-10-04: new
+  fields and messages only):
+  - done: the legacy admin routes `POST /admin/agent/tasks` and
+    `/admin/agent/execute` reach stream agents through `agent.diagnostic`;
+  - done: UniProxy `alivelist` has its stream equivalent, `alive.v1`;
+  - done: plugin artifacts and manifests download from `AgentArtifacts`
+    by the client certificate (`artifacts.v1`);
+  - done: `ReportAck`, `MaintenanceEventResult` and `ConfigStatus` carry
+    machine-readable codes, with retry hints on transient answers.
 
-  Each needs an addition to the Agent contract and is left to a follow-up.
+  Still open: `diag.v1` is reserved: no `diag.*` operations or schemas
+  exist yet (deferred, not a `required` blocker). The Agent side of the
+  three additions is anix-agent work (section 5.7).
 - **Agent health on the session.** The Agent's own heartbeat metrics
   (`agent_control_*`, `agent_identity_*`, `agent_dataplane_*`: the stream,
   the certificate, spool depth and drops, apply failures; at most 64,
@@ -1843,6 +1868,15 @@ PRs AG-1 to AG-7 (section 7):
     heartbeat and runtime-health reports.
   - The maintenance outbox moves to `maintenance.v1`; the maintenance-only
     WebSocket of gRPC agents is no longer needed.
+  - Device limits read the alive list from `alive.v1` (`AliveList`
+    replaces the `alivelist` pull) instead of counting only the node's
+    own connections.
+  - Plugin installs download from `AgentArtifacts` once enrolled
+    (`artifacts.v1`), with the same verification, and keep the HTTP
+    download with the node API key until then.
+  - Acknowledgements are decided on their `error_code`; the agent sets
+    `ConfigStatus.error_code`, lists `transient_ack: "v1"` on `reports.v1`
+    and honors `retry_after_ms`.
   - The legacy reporters stop while the stream is healthy and resume for
     new data after the grace period.
 - **Defaults.**
