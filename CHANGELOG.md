@@ -2,6 +2,34 @@
 
 ## Unreleased
 
+### Added
+
+- **Package reports on the Agent Control stream** (systemd services panel
+  1/7). The Agent contract gains `PackageReport` (`plugin_id`, `kind`,
+  `version`, `payload_json`, `observed_at_unix_ms`) as
+  `AgentToControl.package_report = 18`, sent with the new capability
+  `package-reports.v1`, which Control offers to proxy nodes. Additions only:
+  v4.0.0 Agents and hosts are unaffected. The latest report per node,
+  plugin and kind wins; there is no acknowledgement or spool.
+  - Control accepts a report only when the node's assigned release of the
+    plugin is a signed official Agent release declaring the kind's
+    capability (`systemd.services`: `telemetry.systemd.read`, which
+    `machine-telemetry` will declare from 4.1), and stores the payload as the
+    kind's sanitizer re-encodes it in the new table
+    `v4_kernel_package_report_state` (latest only, no history; stale after
+    25 minutes). Packages read their own rows through the kernel API view
+    `kapi_package_report_v1` (on PostgreSQL a security-barrier view scoped
+    to the reading package's role).
+  - `sdk/telemetry/systemdreport` is the `systemd.services` schema and
+    sanitizer the Agent and Control share. Per `.service` unit only the
+    name, ActiveState, SubState, the 10-minute average and peak CPU and the
+    current and peak memory; `Description` and `ExecStart` are refused,
+    `user@*` and `run-*` units dropped, at most 512 units with names of at
+    most 256 bytes (owner decision H24).
+  - Metrics: `anixops_agent_package_reports_total{result}` and
+    `anixops_agent_package_reports_refused_total{reason}`.
+  - Design and privacy notes: `docs/architecture/package-reports.md`.
+
 ### Fixed
 
 - The live Control WebUI E2E gate defaults to ports 24175 and 28080 instead

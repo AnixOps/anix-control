@@ -90,7 +90,12 @@ func TestKernelAPIViewsDeclareSourceAndRowFilter(t *testing.T) {
 	for _, view := range KernelAPIViews {
 		require.NotEmpty(t, view.Source, view.Name)
 		require.Contains(t, view.Query, "FROM "+view.Source, view.Name)
-		require.Equal(t, strings.Contains(strings.ToUpper(view.Query), " WHERE "), view.RowFilter, view.Name)
+		filtered := strings.Contains(strings.ToUpper(view.Query), " WHERE ")
+		if view.PostgresQuery != "" {
+			require.Contains(t, view.PostgresQuery, "FROM "+view.Source, view.Name)
+			filtered = filtered || strings.Contains(strings.ToUpper(view.PostgresQuery), " WHERE ")
+		}
+		require.Equal(t, filtered, view.RowFilter, view.Name)
 	}
 }
 
@@ -309,4 +314,34 @@ func TestForwardRuntimeSettingsViewShowsTheBackendKeys(t *testing.T) {
 	require.Equal(t, []struct{ Key, Value string }{
 		{"forward.runtime.ansible.backend", "nftables_ansible"}, {"forward.runtime.nodex_mode", "true"}, {"forward.runtime_backend", "gost"},
 	}, rows)
+}
+
+// kapi_package_report_v1 shows the stored package reports without the
+// kernel's bookkeeping column. SQLite has no roles: every row is visible.
+func TestPackageReportViewShowsTheLatestReports(t *testing.T) {
+	db, path := openSQLiteKernel(t)
+	exists, err := viewExists(db, "kapi_package_report_v1")
+	require.NoError(t, err)
+	require.False(t, exists, "no view without v4_kernel_package_report_state")
+	require.NoError(t, db.AutoMigrate(&model.PackageReportState{}))
+	require.NoError(t, EnsureKernelAPIViews(db))
+	var columns []string
+	require.NoError(t, db.Raw("SELECT name FROM pragma_table_info('kapi_package_report_v1') ORDER BY cid").Scan(&columns).Error)
+	require.Equal(t, []string{"node_kind", "node_id", "plugin_id", "kind", "version", "payload_json", "observed_at", "received_at"}, columns)
+
+	now := time.Now().UTC()
+	for _, pluginID := range []string{"machine-telemetry", "forward"} {
+		require.NoError(t, db.Create(&model.PackageReportState{
+			NodeKind: "proxy", NodeID: 1, PluginID: pluginID, Kind: "systemd.services", Version: "4.1.0",
+			PayloadJSON: `{}`, ObservedAt: now, ReceivedAt: now, UpdatedAt: now,
+		}).Error)
+	}
+	var plugins []string
+	require.NoError(t, db.Raw("SELECT plugin_id FROM kapi_package_report_v1 ORDER BY plugin_id").Scan(&plugins).Error)
+	require.Equal(t, []string{"forward", "machine-telemetry"}, plugins)
+
+	lease, err := Store{DB: db, Driver: "sqlite", DSN: path}.Lease(context.Background(),
+		Holder{PackageID: "machine-telemetry", Version: "4.1.0", Generation: 1}, Grants{Storage: true, Views: []string{"kapi_package_report_v1"}})
+	require.NoError(t, err)
+	require.Equal(t, []string{"kapi_package_report_v1"}, lease.Views)
 }

@@ -37,6 +37,9 @@ type agentControlTestEnvironment struct {
 	conn    *grpc.ClientConn
 	server  *grpc.Server
 	errCh   <-chan error
+	// signer signs the environment's plugin releases: the kernel trusts
+	// one AnixOps root, so further releases must use it too.
+	signer ed25519.PrivateKey
 }
 
 type blockingAgentControlStream struct {
@@ -107,6 +110,7 @@ func newAgentControlTestEnvironment(t *testing.T) *agentControlTestEnvironment {
 		conn:    conn,
 		server:  server,
 		errCh:   errCh,
+		signer:  privateKey,
 	}
 	t.Cleanup(func() {
 		requireClientConnClosed(t, conn)

@@ -840,6 +840,10 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 			if err := s.handleReport(manager, connection, agentNode, message); err != nil {
 				return err
 			}
+		case *agentv1pb.AgentToControl_PackageReport:
+			if err := s.handlePackageReport(connection, agentNode, payload.PackageReport); err != nil {
+				return err
+			}
 		default:
 			return status.Error(codes.InvalidArgument, "control message payload is required")
 		}
@@ -985,6 +989,9 @@ func (s *AgentControlGRPCServer) serverCapabilities(node agentcontrol.AgentNode,
 	}
 	if s.servesReports(node, agent) {
 		capabilities = append(capabilities, &agentv1pb.Capability{Name: agentcontrol.CapabilityReports, Version: agentcontrol.CapabilityVersionV1})
+	}
+	if s.servesPackageReports(node, agent) {
+		capabilities = append(capabilities, &agentv1pb.Capability{Name: agentcontrol.CapabilityPackageReports, Version: agentcontrol.CapabilityVersionV1})
 	}
 	return capabilities
 }

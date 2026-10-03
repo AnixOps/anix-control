@@ -34,8 +34,9 @@ message HelloAck {
   uint32 heartbeat_interval_seconds = 3;
   uint64 desired_revision = 4;
   // server_capabilities lists the data-plane features this Control serves on
-  // the stream: config.v1, users.v1 and reports.v1 (Capability name "config",
-  // "users" or "reports", version "v1"). A feature is in use on a session only
+  // the stream: config.v1, users.v1, reports.v1 and package-reports.v1
+  // (Capability name "config", "users", "reports" or "package-reports",
+  // version "v1"). A feature is in use on a session only
   // when Hello.capabilities lists it too. Empty from a Control that serves
   // none; Agents built before this field ignore it.
   repeated Capability server_capabilities = 5;
@@ -130,6 +131,8 @@ message AgentToControl {
     TrafficReport traffic = 15;
     LogBatch logs = 16;
     NodeStatus status = 17;
+    // Sent only with package-reports.v1 negotiated. Never acknowledged.
+    PackageReport package_report = 18;
   }
 }
 
@@ -268,4 +271,28 @@ message NodeStatus {
   bool runtime_healthy = 5;
   string runtime_error = 6;
   int64 observed_at_unix_ms = 7;
+}
+
+// PackageReport is the latest observation of one kind that an Agent plugin
+// package reports for the node (package-reports.v1). Each one replaces the
+// previous report of the same node, plugin_id and kind; Control keeps no
+// history and does not acknowledge it, and the Agent neither spools nor
+// resends it. Control accepts it only when the node's assigned release of
+// plugin_id at version is a signed official Agent release whose manifest
+// declares the capability Control requires for kind; otherwise it drops the
+// report and the stream stays open. PROTOCOL.md, "Package reports".
+message PackageReport {
+  // plugin_id is the package that produced the report.
+  string plugin_id = 1;
+  // kind names the payload schema, lowercase dot-separated words such as
+  // systemd.services; a new schema version is a new kind.
+  string kind = 2;
+  // version is the release of plugin_id the Agent runs; it must be the
+  // version assigned to the node.
+  string version = 3;
+  // payload_json is a JSON object in the schema of kind, at most 256 KiB.
+  bytes payload_json = 4;
+  // observed_at_unix_ms is when the plugin took the observation; 0 means
+  // when Control received it.
+  int64 observed_at_unix_ms = 5;
 }
