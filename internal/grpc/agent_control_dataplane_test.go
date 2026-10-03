@@ -7,6 +7,7 @@ import (
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
+	"github.com/AnixOps/anix-control/v4/internal/agentstreams"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -75,6 +76,16 @@ func TestAgentControlServerAdvertisesTheDataPlane(t *testing.T) {
 	require.True(t, connected)
 	assert.Contains(t, snapshot.Capabilities, agentcontrol.CapabilityReports)
 	assert.Contains(t, snapshot.ServerCapabilities, "config.v1")
+	// The session shows how it authenticated and what it negotiated.
+	assert.Equal(t, []string{"config.v1", "users.v1", "reports.v1"}, snapshot.NegotiatedCapabilities)
+	assert.Equal(t, agentstreams.AuthenticationAPIKey, snapshot.Authentication)
+	assert.Equal(t, model.AgentTransportAPIKeyStream, snapshot.Transport)
+	assert.Equal(t, agentstreams.IdentityAPIKey, snapshot.Identity)
+	assert.Nil(t, snapshot.Certificate)
+	session, ok := NewAgentStreams(environment.manager, nil).Session(agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: uint32(environment.node.ID)})
+	require.True(t, ok)
+	assert.Equal(t, agentstreams.AuthenticationAPIKey, session.Authentication)
+	assert.Equal(t, snapshot.NegotiatedCapabilities, session.NegotiatedCapabilities)
 
 	// The Hello's cursor (1234) is ahead of the empty change log, so the
 	// node's (empty) user set is sent as a full resync; with the heartbeat

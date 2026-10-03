@@ -12,6 +12,7 @@ import (
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	pb "github.com/AnixOps/anix-control/v4/api/grpc/v2boardpb"
+	"github.com/AnixOps/anix-control/v4/internal/agenttransport"
 	"github.com/AnixOps/anix-control/v4/internal/cache"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
@@ -428,6 +429,36 @@ func TestAgentControlNodeStatusUpdatesNodeWithoutAck(t *testing.T) {
 	require.NotNil(t, node.RuntimeCheckedAt)
 	require.NotNil(t, node.LastCheckAt)
 	assert.Equal(t, model.NodeStatusOnline, node.Status)
+	require.NoError(t, stream.CloseSend())
+}
+
+// A NodeStatus is a sighting of the session's transport in the inventory,
+// as the legacy heartbeat and runtime-health requests are.
+func TestAgentControlNodeStatusRecordsTheTransport(t *testing.T) {
+	environment := newReportsTestEnvironment(t)
+	requireAutoMigrate(t, &model.AgentTransport{})
+	nodeID := uint32(environment.node.ID)
+	stream, _ := openReportsSession(t, environment, reportCapabilities())
+	// A fresh recorder, and no row: what follows is the status's sighting.
+	t.Cleanup(agenttransport.SetDefault(agenttransport.NewRecorder(database.Get)))
+	require.NoError(t, database.GetDB().Where("1 = 1").Delete(&model.AgentTransport{}).Error)
+
+	require.NoError(t, stream.Send(&agentv1pb.AgentToControl{
+		RequestId: "status-1", NodeId: nodeID, SentAtUnixMs: time.Now().UnixMilli(),
+		Payload: &agentv1pb.AgentToControl_Status{Status: &agentv1pb.NodeStatus{RuntimeHealthy: true}},
+	}))
+	// A log batch records no sighting; its acknowledgement orders the
+	// status before the check.
+	require.NoError(t, stream.Send(logsMessage("logs-1", nodeID, &agentv1pb.LogBatch{BatchId: "node:proxy-1:boot:9"})))
+	expectReportAck(t, stream, "logs-1")
+
+	var rows []model.AgentTransport
+	require.NoError(t, database.GetDB().Find(&rows).Error)
+	require.Len(t, rows, 1)
+	assert.Equal(t, model.AgentTransportAPIKeyStream, rows[0].Transport)
+	assert.Equal(t, uint(nodeID), rows[0].NodeID)
+	assert.Equal(t, "api-key", rows[0].Identity)
+	assert.Equal(t, validAgentHello(nodeID).GetHello().AgentVersion, rows[0].AgentVersion)
 	require.NoError(t, stream.CloseSend())
 }
 
