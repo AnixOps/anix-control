@@ -67,7 +67,7 @@
       "route": {
         "id": "01JF1N00000000000000000N05",
         "owner": "admin",
-        "listen": {"port": 40006, "protocol": "L4_PROTOCOL_TCP"},
+        "listen": {"port": 20006, "protocol": "L4_PROTOCOL_TCP"},
         "hops": [
           {"role": "HOP_ROLE_ENTRY", "engine": "ENGINE_GOST", "node_refs": ["forward-31"]},
           {"role": "HOP_ROLE_EXIT", "engine": "ENGINE_GOST", "node_refs": ["forward-41", "forward-42"], "ingress": {"security": "LINK_SECURITY_TLS"}, "dial_address": "203.0.113.41"}

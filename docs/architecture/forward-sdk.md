@@ -1,7 +1,9 @@
 # Forward SDK: routes, hops, engines and drivers
 
 Status: DESIGN APPROVED (gates H11–H14 decided by the owner on 2026-10-02).
-Nothing is implemented and no behaviour changes. The draft contract is
+F1b is implemented: the domain model (`sdk/forward/model`) and the shared
+validation (`sdk/forward/validate`). Nothing serves forwarding with them yet
+and no behaviour changes. The draft contract is
 `sdk/api/forward/v1` (`anixops.forward.v1`, DRAFT, UNRELEASED); the draft
 planner goldens are in `contracts/forward/v1`. This is phase F1 of the v4.2
 forwarding redesign. It replaces the flux-panel clone (`/api/v2/forward/*`)
@@ -133,7 +135,7 @@ Everything lives in the existing `sdk/` module
 | Layer | Path | Contents |
 |---|---|---|
 | Contract | `sdk/api/forward/v1` | `forward.proto`: the model, `NodeForwardState`, `NodeForwardReport`, the services `ForwardControl` and `ForwardNode` (this PR, draft) |
-| Model and validation | `sdk/forward/model`, `sdk/forward/validate` | helpers over the generated types; one set of validation rules used by Control, the planner and the Agent (F1b) |
+| Model and validation | `sdk/forward/model`, `sdk/forward/validate` | Go domain types with lossless conversion to and from the contract and the defaults (`model/defaults.go`); one set of validation rules used by Control, the planner and the Agent (F1b, implemented) |
 | Planner | `sdk/forward/planner` | routes and node inventory in, per-node states and port allocations out; pure functions (F1c) |
 | Drivers | `sdk/forward/driver`, `.../driver/nftables`, `.../driver/gost`, `.../driver/ansible` | the driver interface and its implementations (F2, F4) |
 | Client | `sdk/forward/forwardctl` | a Go client for `ForwardControl` (F5) |
@@ -215,11 +217,16 @@ links. The Agent reports capabilities at enrollment and in every hello.
 
 ### 4.4 Validation
 
-`sdk/forward/validate` holds the rules. Control runs them before storing a
-route, the planner runs them again, and the Agent re-checks what it can
-see (target addresses after resolution, section 14). Each failure is a
-`Violation{field, message}` with a path into the route
-(`hops[1].ingress.security`). The main rules:
+`sdk/forward/validate` holds the rules (implemented in F1b; the package
+documentation lists every rule and its code). Control runs them before
+storing a route, the planner runs them again, and the Agent re-checks what
+it can see (target addresses after resolution with
+`validate.CheckTargetAddress`, section 14). Each failure is a
+`Violation{field, code, message}` with a path into the route
+(`hops[1].ingress.security`) and a stable code (`link_unsupported`); the
+contract's `Violation` has no code field, so its message starts with the
+code. Rules that need the node inventory run only when one is given. The
+main rules:
 
 - hop roles in order; every node exists, is enabled, and advertises the
   hop's engine with every feature the route needs (strategy, link
@@ -231,6 +238,10 @@ see (target addresses after resolution, section 14). Each failure is a
   not taken by another route's listener on the node;
 - targets: syntax, and the target policy (section 14);
 - limits: non-negative; `expires_at` in the future on create.
+- size caps (hops, nodes per hop, targets, labels, the encoded route) and
+  the health and breaker bounds are proposals in
+  `sdk/forward/validate/caps.go`; the defaults (section 7.3, H21) are in
+  `sdk/forward/model/defaults.go`.
 
 ## 5. Planner
 
@@ -806,7 +817,7 @@ Agent-repository PRs are marked (agent).
 | Phase | PR | Content | Size | Gate |
 |---|---|---|---|---|
 | F1 | F1a | this design, draft contract, draft fixtures | M | H11 |
-| | F1b | `sdk/forward/model` and `validate` | M | |
+| | F1b | `sdk/forward/model` and `validate` (implemented) | M | |
 | | F1c | `sdk/forward/planner`: allocation, wiring, generations, golden runner | L | |
 | F2 | F2a | driver interface, fake driver, conformance suite | M | |
 | | F2b | nftables Render and nft goldens | L | H13 |
