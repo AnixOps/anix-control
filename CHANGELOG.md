@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Changed
+
+- CI builds the Agent from anix-agent `1b155dee` (was `c459383`), which
+  accepts the machine-telemetry `systemd_services` setting and collects the
+  systemd services report (anix-agent #5). Older Agents refuse that setting,
+  so the services panel needs this Agent.
+
+
 ### Added
 
 - **Package reports on the Agent Control stream** (systemd services panel
