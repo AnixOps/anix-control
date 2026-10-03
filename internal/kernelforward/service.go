@@ -82,7 +82,7 @@ func (e *RefusedError) Error() string {
 		return "forward route refused"
 	}
 	first := e.Violations[0]
-	return fmt.Sprintf("forward route refused: %s %s (and %d more)", first.RouteID, first.Violation.Error(), len(e.Violations)-1)
+	return fmt.Sprintf("forward route refused: %s %s (and %d more)", first.RouteID, first.Error(), len(e.Violations)-1)
 }
 
 // ProtoViolations answers the violations in the contract, each with its

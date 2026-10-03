@@ -14,6 +14,7 @@ import (
 	compatv2 "github.com/AnixOps/anix-control/v4/internal/compat/v2"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	controlgrpc "github.com/AnixOps/anix-control/v4/internal/grpc"
+	"github.com/AnixOps/anix-control/v4/internal/kernelforward"
 	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
 	"github.com/gin-gonic/gin"
@@ -153,6 +154,9 @@ v2board_go_gc_duration_seconds ` + formatFloat(float64(m.PauseTotalNs)/1e9) + `
 	controlgrpc.WriteAgentConfigPrometheus(&body)
 	// Package reports on the Agent Control stream: accepted and refused.
 	controlgrpc.WriteAgentPackageReportPrometheus(&body)
+	// Forwarding: nodes behind their desired generation, hop errors and a
+	// refused plan (internal/kernelforward).
+	kernelforward.WritePrometheus(&body, database.Get())
 	// The agent transport transition: legacy requests served and refused,
 	// and the agent_control.mtls mode.
 	agenttransport.WritePrometheus(&body)

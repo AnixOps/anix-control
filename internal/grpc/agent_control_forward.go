@@ -46,6 +46,9 @@ import (
 // heartbeat, so within a minute on these sessions.
 const forwardHeartbeatIntervalSeconds = uint32(60)
 
+// forwardHelloTimeout bounds recording a Hello, its plan included.
+const forwardHelloTimeout = 30 * time.Second
+
 // forwardCapabilities decodes the node capabilities of a Hello that lists
 // forward.v1: nil when it does not, or when its attribute is malformed (the
 // session then does not negotiate forward.v1).
@@ -85,6 +88,10 @@ func (s *AgentControlGRPCServer) recordForwardHello(ctx context.Context, connect
 	if db == nil {
 		return
 	}
+	// The Hello is recorded whole even when the stream ends meanwhile: a
+	// plan it starts runs to its commit or rollback.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), forwardHelloTimeout)
+	defer cancel()
 	caps, listed := forwardCapabilities(node, hello.GetCapabilities())
 	if listed && caps.err != nil {
 		slog.Warn("agent forward: the Hello's node capabilities were refused; forward.v1 is not served", "component", "agent-control",
@@ -95,7 +102,7 @@ func (s *AgentControlGRPCServer) recordForwardHello(ctx context.Context, connect
 		recorded = caps.caps
 	}
 	_, _, err := kernelforward.New(db).RecordHello(ctx, node, recorded, hello.GetAgentVersion())
-	if err != nil && ctx.Err() == nil {
+	if err != nil {
 		slog.Warn("agent forward: the Hello could not be recorded", "component", "agent-control", "node", node.String(), "error", err)
 	}
 }
@@ -203,7 +210,11 @@ func pushForwardStates(nodes []agentcontrol.AgentNode) {
 	forwardStateMu.Unlock()
 	for i, connection := range targets {
 		go func(connection *AgentControlConnection, node agentcontrol.AgentNode) {
-			if err := pushDesiredConfig(connection.stream.Context(), connection, node, configTriggerForward); err != nil {
+			// The build is not cut off halfway when the stream ends; the
+			// send then fails and the next session's Hello reconciles.
+			ctx, cancel := context.WithTimeout(context.WithoutCancel(connection.stream.Context()), forwardHelloTimeout)
+			defer cancel()
+			if err := pushDesiredConfig(ctx, connection, node, configTriggerForward); err != nil {
 				slog.Debug("agent forward: the configuration push failed", "component", "agent-control", "node", node.String(), "error", err)
 			}
 		}(connection, targetNodes[i])

@@ -289,7 +289,10 @@ are additions to `anix.agent.v1`:
     snapshot at once; `config_revision` grows with it. `ConfigStatus`
     answers the snapshot as for v1 (`applied` false only when the document
     as a whole cannot be applied); hop errors go in the report. An Agent
-    without `forward.v1` keeps v1 and never receives forwarding.
+    without `forward.v1` keeps v1 and never receives forwarding. A v1
+    snapshot carries no forwarding and leaves the forwarding state the
+    Agent applied as it is; only a v2 state without the hops (an empty
+    state removes everything the drivers own) takes them away.
   - **Reports.** The Agent sends its `anixops.forward.v1.NodeForwardReport`
     as a `PackageReport` with `plugin_id` `forward`, `kind`
     `forward.report`, `version` `v1` and `payload_json` its protojson, every

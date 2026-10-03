@@ -726,6 +726,9 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 	if err := s.touchNode(agentNode); err != nil {
 		slog.Warn("failed to persist agent hello heartbeat", "component", "agent-control", "node", agentNode.String(), "error", err)
 	}
+	// The node's forwarding capabilities and configuration format, before
+	// the session starts and the Hello reconcile builds its configuration.
+	s.recordForwardHello(stream.Context(), connection, agentNode, hello)
 
 	if err := connection.send(&agentv1pb.ControlToAgent{
 		RequestId:    first.RequestId,
@@ -750,9 +753,6 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 	defer manager.unregister(connection)
 	// The data plane, per negotiated capability (PROTOCOL.md, "Data plane").
 	// Each sender stops before the connection is unregistered.
-	// The node's forwarding capabilities and configuration format, before
-	// the Hello reconcile builds its configuration.
-	s.recordForwardHello(stream.Context(), connection, agentNode, hello)
 	if connection.configNegotiated {
 		// Hello reconcile: the desired configuration, unless the agent
 		// reported its revision.

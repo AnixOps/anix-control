@@ -109,7 +109,6 @@ type fixture struct {
 var (
 	entry = agentcontrol.AgentNode{Kind: agentcontrol.NodeKindForward, ID: 11}
 	exit  = agentcontrol.AgentNode{Kind: agentcontrol.NodeKindForward, ID: 12}
-	off   = agentcontrol.AgentNode{Kind: agentcontrol.NodeKindForward, ID: 13}
 	proxy = agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: 21}
 	// proxyMissing has no node row.
 	proxyMissing = agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: 99}
