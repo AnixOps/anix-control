@@ -75,7 +75,8 @@ duplicate it here); the docs landing page is `docs/README.md`.
     - PostgreSQL jobs for schema, storage and service code;
     - Docker and Kubernetes smokes for the module runtime, identity and
       deployment;
-    - forward, Agent and package jobs for their areas.
+    - forward, Agent and package jobs for their areas (the `forward` class
+      also covers the forward SDK, for the "Forward Netns E2E" job).
 
     Documentation-only PRs skip the Go jobs.
   - **Full lane.** Every job, including benchmarks.

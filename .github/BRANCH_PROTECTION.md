@@ -46,6 +46,12 @@ Deliberately not required:
   `control-center-workers.yml`): they are path-filtered to `control-center/**`
   and do not run on every PR, so requiring them would leave unrelated PRs
   pending forever.
+- `Forward Netns E2E`: the forward SDK's multi-namespace end-to-end suite
+  (forward-sdk.md section 13), run on pull requests in the `forward` change
+  class, nightly and on manual runs. Owner decision H14: it becomes
+  required only after two weeks of green runs (added 2026-10-03, so not
+  before 2026-10-17); pull requests outside the class skip it, which counts
+  as passed.
 - The remaining `ci.yml` jobs (race detector, integration-style gates, package
   release contracts, Docker smoke, and so on) run on every PR and should be
   green before merge, but are not merge-blocking.
