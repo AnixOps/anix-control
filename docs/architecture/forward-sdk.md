@@ -330,7 +330,9 @@ type Options struct {
 - A route that is no longer planned holds nothing. A deleted route's ports
   are released after a grace period (proposed 10 minutes) so a late packet
   never reaches a new route: the planner is clock-free, so Control passes
-  them in `Options.Taken` until the grace period ends.
+  them in `Options.Taken` until the grace period ends. `Taken` entries of
+  a route being planned are ignored, so Control may pass every stored
+  allocation.
 - **Marks.** Every hop on a node gets a connection mark in 1..4095
   (`planner.MaxMark`), unique on the node and sticky like ports. The
   driver shifts it into its mark mask (section 6.1); `mark_exhausted` when a

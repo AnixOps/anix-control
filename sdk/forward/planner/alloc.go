@@ -103,7 +103,9 @@ type allocator struct {
 	warnings []string
 }
 
-func newAllocator(nodes map[string]*model.NodeInfo, opts Options, previous Allocations,
+// newAllocator starts from opts.Taken, without the entries of the routes
+// being planned (planned), whose own previous allocations stick instead.
+func newAllocator(nodes map[string]*model.NodeInfo, opts Options, previous Allocations, planned map[string]bool,
 	report func(routeID, field string, code validate.Code, format string, args ...any),
 ) *allocator {
 	a := &allocator{
@@ -122,6 +124,9 @@ func newAllocator(nodes map[string]*model.NodeInfo, opts Options, previous Alloc
 		a.reserved[ref] = set
 	}
 	for _, t := range opts.Taken.Sorted() {
+		if t.RouteID != "" && planned[t.RouteID] {
+			continue
+		}
 		u := a.nodeUse(t.NodeRef)
 		if t.Port != 0 {
 			if _, ok := u.ports[t.Port]; !ok {

@@ -186,6 +186,12 @@ func TestStickyAllocations(t *testing.T) {
 		t.Fatalf("moved: %v %v", got, res.Warnings)
 	}
 
+	// The route's own allocations in Options.Taken do not block it.
+	res = mustPlan(t, []*forwardv1.Route{r}, previous, Options{Taken: previous})
+	if fmt.Sprint(res.Allocations.Sorted()) != fmt.Sprint(previous.Sorted()) {
+		t.Fatalf("own taken: %v", res.Allocations.Sorted())
+	}
+
 	// An explicit port replaces the sticky one.
 	r.Hops[1].Port = 20030
 	res = mustPlan(t, []*forwardv1.Route{r}, previous, Options{})

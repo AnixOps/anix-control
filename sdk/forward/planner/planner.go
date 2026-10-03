@@ -27,7 +27,9 @@ type Options struct {
 	// Taken are ports and marks held by hops outside this plan: routes
 	// deleted within the grace period (forward-sdk.md section 5.2), and for
 	// PlanRoute every other stored route. The planner never hands them out
-	// and refuses a route that asks for one of their ports.
+	// and refuses a route that asks for one of their ports. Entries of a
+	// route being planned are ignored, so Control may pass every stored
+	// allocation.
 	Taken Allocations
 	// EnableAnixOps, OnCreate and Now are passed to validation
 	// (validate.Options).
@@ -198,7 +200,11 @@ func (p *plan) run(routes []model.Route) (Result, error) {
 		return Result{Violations: p.violations}, nil
 	}
 
-	alloc := newAllocator(p.nodes, p.opts, p.previous, p.report)
+	planned := map[string]bool{}
+	for i := range routes {
+		planned[routes[i].ID] = true
+	}
+	alloc := newAllocator(p.nodes, p.opts, p.previous, planned, p.report)
 	var slots []*slot
 	for i := range routes {
 		slots = append(slots, routeSlots(&routes[i])...)
