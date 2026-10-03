@@ -910,8 +910,9 @@ script adds up gzip sizes from it and fails when a number is over
 - **Routes, first visit.** *Initial* is what the route needs before it
   renders: the entry with its static imports and CSS, the default locale's
   core messages (`boot`), and the route's layout and page chunks with
-  theirs (for the admin route also its message group, which the router
-  awaits). *With deferred* adds what loads right after (`after`: axios,
+  theirs (for the admin route also the `admin` message group, which the
+  router awaits; the `adminPages` group of the other admin pages is not
+  part of it, see below). *With deferred* adds what loads right after (`after`: axios,
   with the first request).
 - **Lazy chunks.** Every chunk except the entry, against one limit;
   `echarts` and `g6` are excluded (they load only with the pages that draw
@@ -927,7 +928,21 @@ script adds up gzip sizes from it and fails when a number is over
 | Admin shell + dashboard, with axios | 255 KB | 269 KB | measured + 5 % |
 | Largest lazy chunk (`vue-vendor`) | 42 KB | 80 KB | plan §13, per route chunk |
 
-Before U9 the same measurement gave 278, 289 and 307 KB. When a change
+Before U9 the same measurement gave 278, 289 and 307 KB. After the
+v4.1.0 follow-ups split the admin messages (below) the admin route
+measures 210 KB initial and 228 KB with axios, against the same limits.
+
+Admin messages come in two groups (`web/src/i18n.js`): `admin`
+(`src/locales/<locale>.admin.js`) holds only what the shell and the
+dashboard read (navigation and ⌘K labels, the settings save bar, the
+dashboard), and `adminPages` (`<locale>.adminPages.js`) every other admin
+page and the forward suite. The router awaits `adminPages` before the
+first admin page other than the dashboard opens and otherwise loads it
+when the browser is idle. A new admin namespace goes in `adminPages`
+unless the shell reads it; `localeParity.test.js` pins the `admin` group's
+namespaces.
+
+When a change
 needs more, raise the limit in `bundle-budget.json` in the same PR and say
 why in the CHANGELOG; `--verbose` lists every file of every route by size.
 

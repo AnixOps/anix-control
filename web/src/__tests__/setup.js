@@ -66,6 +66,7 @@ beforeAll(async () => {
   await i18nModule.initI18n()
   // Page tests mount admin views without the router guard that loads them.
   await i18nModule.loadMessageGroup('admin')
+  await i18nModule.loadMessageGroup('adminPages')
 })
 
 beforeEach(async () => {

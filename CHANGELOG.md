@@ -132,6 +132,22 @@
   keep working and report no samples. See "Reading Shadow Mismatches" in
   `docs/UPGRADE.md`.
 
+### Changed
+
+- `agent_control.mtls` defaults to `preferred` instead of `optional`
+  (decision H5): legacy API-key agents keep working and now get the
+  deprecation signals. `preferred` no longer needs gRPC TLS and the
+  built-in CA to start (only `required` does, together with
+  `grpc.enabled`); without them agents cannot enroll, which the startup log
+  says. Set `optional` to keep the release candidates' silent behaviour.
+- The admin console's first visit downloads less: the admin messages are
+  split into `admin` (shell, navigation, ⌘K, dashboard) and `adminPages`
+  (every other admin page and the forward suite), which the router loads
+  before the first of those pages opens, or when the browser is idle. The
+  admin dashboard's first visit went from 239.8 KB to 210.2 KB gzip
+  (258.0 KB to 228.4 KB with axios), against unchanged budgets of 250 KB
+  and 269 KB.
+
 ### Deprecated
 
 - Legacy AnixOps Agent authentication: the node API key on the Agent

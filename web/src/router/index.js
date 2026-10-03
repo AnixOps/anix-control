@@ -427,6 +427,17 @@ function forbiddenLocation(to) {
   }
 }
 
+// Admin paths that need only the `admin` message group.
+const ADMIN_SHELL_PATHS = new Set(['/admin', '/admin/', '/admin/dashboard'])
+
+function whenIdle(task) {
+  if (typeof window !== 'undefined' && typeof window.requestIdleCallback === 'function') {
+    window.requestIdleCallback(task, { timeout: 3000 })
+  } else {
+    setTimeout(task, 1000)
+  }
+}
+
 router.beforeEach(async (to, from, next) => {
   const userStore = useUserStore()
   const isAdminTarget = to.path === '/admin' || to.path.startsWith('/admin/')
@@ -443,6 +454,14 @@ router.beforeEach(async (to, from, next) => {
   // leaves the keys untranslated rather than blocking the navigation.
   if (userStore.isAdmin) {
     await loadMessageGroup('admin').catch(() => {})
+    // The other admin pages' messages load before the first of them opens;
+    // the dashboard, an admin's first visit, renders without them and they
+    // follow once the browser is idle.
+    if (isAdminTarget && !ADMIN_SHELL_PATHS.has(to.path)) {
+      await loadMessageGroup('adminPages').catch(() => {})
+    } else {
+      whenIdle(() => loadMessageGroup('adminPages').catch(() => {}))
+    }
   }
 
   // Commercial pages (meta.edition) exist only in the commercial edition.
