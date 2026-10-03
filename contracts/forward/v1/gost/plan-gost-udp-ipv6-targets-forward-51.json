@@ -1,0 +1,103 @@
+{
+  "anixops": {
+    "driver": "anixops-forward-driver gost v1",
+    "note": "Rendered by sdk/forward/driver/gost; do not edit. gost ignores this key; Apply reads it.",
+    "hops": [
+      {
+        "route": "01JF1C000000000000000000C1",
+        "hop": 0,
+        "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+        "services": [
+          "r01JF1C000000000000000000C1-h0-udp"
+        ],
+        "listeners": [
+          {
+            "network": "udp",
+            "port": 10001
+          }
+        ],
+        "upstreams": [
+          {
+            "address": "2001:db8:61::1",
+            "port": 10000,
+            "weight": 1,
+            "priority": 0
+          }
+        ]
+      }
+    ]
+  },
+  "services": [
+    {
+      "name": "r01JF1C000000000000000000C1-h0-udp",
+      "addr": ":10001",
+      "handler": {
+        "type": "udp",
+        "chain": "r01JF1C000000000000000000C1-h0"
+      },
+      "listener": {
+        "type": "udp",
+        "metadata": {
+          "keepalive": "true",
+          "readBufferSize": "65536",
+          "ttl": "60s"
+        }
+      },
+      "forwarder": {
+        "nodes": [
+          {
+            "name": "next",
+            "addr": "0.0.0.0:0"
+          }
+        ]
+      }
+    }
+  ],
+  "chains": [
+    {
+      "name": "r01JF1C000000000000000000C1-h0",
+      "hops": [
+        {
+          "name": "r01JF1C000000000000000000C1-h0",
+          "selector": {
+            "strategy": "round",
+            "maxFails": 3,
+            "failTimeout": "30s"
+          },
+          "nodes": [
+            {
+              "name": "u0",
+              "addr": "[2001:db8:61::1]:10000",
+              "connector": {
+                "type": "relay"
+              },
+              "dialer": {
+                "type": "wss",
+                "tls": {
+                  "certFile": "/var/lib/anixops-gost/tls/link.crt",
+                  "keyFile": "/var/lib/anixops-gost/tls/link.key",
+                  "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
+                  "secure": true,
+                  "serverName": "edge.example.com"
+                },
+                "metadata": {
+                  "host": "edge.example.com",
+                  "path": "/ws"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "log": {
+    "level": "warn",
+    "format": "json",
+    "output": "stderr"
+  },
+  "metrics": {
+    "addr": "unix:///run/anixops-gost/metrics.sock",
+    "path": "/anixops-c210023fc8702ccf"
+  }
+}

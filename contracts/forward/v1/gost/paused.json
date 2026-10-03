@@ -1,0 +1,219 @@
+{
+  "anixops": {
+    "driver": "anixops-forward-driver gost v1",
+    "note": "Rendered by sdk/forward/driver/gost; do not edit. gost ignores this key; Apply reads it.",
+    "hops": [
+      {
+        "route": "01JF2A000000000000000000A1",
+        "hop": 0,
+        "balance": "BALANCE_STRATEGY_FAILOVER",
+        "paused": true,
+        "services": [
+          "r01JF2A000000000000000000A1-h0-tcp"
+        ],
+        "listeners": [
+          {
+            "network": "tcp",
+            "port": 30001
+          }
+        ],
+        "upstreams": [
+          {
+            "address": "192.0.2.20",
+            "port": 443,
+            "weight": 1,
+            "priority": 0
+          },
+          {
+            "address": "192.0.2.21",
+            "port": 443,
+            "weight": 2,
+            "priority": 10
+          },
+          {
+            "address": "192.0.2.22",
+            "port": 443,
+            "weight": 3,
+            "priority": 20
+          }
+        ]
+      },
+      {
+        "route": "01JF2A000000000000000000B1",
+        "hop": 0,
+        "balance": "BALANCE_STRATEGY_FAILOVER",
+        "services": [
+          "r01JF2A000000000000000000B1-h0-tcp"
+        ],
+        "listeners": [
+          {
+            "network": "tcp",
+            "port": 30002
+          }
+        ],
+        "upstreams": [
+          {
+            "address": "192.0.2.20",
+            "port": 443,
+            "weight": 1,
+            "priority": 0
+          },
+          {
+            "address": "192.0.2.21",
+            "port": 443,
+            "weight": 2,
+            "priority": 10
+          },
+          {
+            "address": "192.0.2.22",
+            "port": 443,
+            "weight": 3,
+            "priority": 20
+          }
+        ]
+      },
+      {
+        "route": "01JF2A000000000000000000C1",
+        "hop": 1,
+        "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+        "paused": true,
+        "services": [
+          "r01JF2A000000000000000000C1-h1-tcp"
+        ],
+        "listeners": [
+          {
+            "network": "tcp",
+            "port": 30003
+          }
+        ],
+        "upstreams": [
+          {
+            "address": "192.0.2.20",
+            "port": 443,
+            "weight": 1,
+            "priority": 0
+          }
+        ]
+      }
+    ]
+  },
+  "services": [
+    {
+      "name": "r01JF2A000000000000000000A1-h0-tcp",
+      "addr": ":30001",
+      "admission": "r01JF2A000000000000000000A1-h0",
+      "climiter": "r01JF2A000000000000000000A1-h0",
+      "handler": {
+        "type": "tcp"
+      },
+      "listener": {
+        "type": "tcp"
+      },
+      "forwarder": {
+        "nodes": [
+          {
+            "name": "u0",
+            "addr": "192.0.2.20:443"
+          },
+          {
+            "name": "u1",
+            "addr": "192.0.2.21:443"
+          },
+          {
+            "name": "u2",
+            "addr": "192.0.2.22:443"
+          }
+        ],
+        "selector": {
+          "strategy": "fifo",
+          "maxFails": 3,
+          "failTimeout": "30s"
+        }
+      }
+    },
+    {
+      "name": "r01JF2A000000000000000000B1-h0-tcp",
+      "addr": ":30002",
+      "handler": {
+        "type": "tcp"
+      },
+      "listener": {
+        "type": "tcp"
+      },
+      "forwarder": {
+        "nodes": [
+          {
+            "name": "u0",
+            "addr": "192.0.2.20:443"
+          },
+          {
+            "name": "u1",
+            "addr": "192.0.2.21:443"
+          },
+          {
+            "name": "u2",
+            "addr": "192.0.2.22:443"
+          }
+        ],
+        "selector": {
+          "strategy": "fifo",
+          "maxFails": 3,
+          "failTimeout": "30s"
+        }
+      }
+    },
+    {
+      "name": "r01JF2A000000000000000000C1-h1-tcp",
+      "addr": ":30003",
+      "admission": "r01JF2A000000000000000000C1-h1",
+      "handler": {
+        "type": "tcp"
+      },
+      "listener": {
+        "type": "tcp"
+      },
+      "forwarder": {
+        "nodes": [
+          {
+            "name": "u0",
+            "addr": "192.0.2.20:443"
+          }
+        ],
+        "selector": {
+          "strategy": "round",
+          "maxFails": 3,
+          "failTimeout": "30s"
+        }
+      }
+    }
+  ],
+  "admissions": [
+    {
+      "name": "r01JF2A000000000000000000A1-h0",
+      "whitelist": true,
+      "matchers": []
+    },
+    {
+      "name": "r01JF2A000000000000000000C1-h1",
+      "whitelist": true,
+      "matchers": []
+    }
+  ],
+  "climiters": [
+    {
+      "name": "r01JF2A000000000000000000A1-h0",
+      "limits": [
+        "$ 10"
+      ]
+    }
+  ],
+  "log": {
+    "level": "warn",
+    "format": "json",
+    "output": "stderr"
+  },
+  "metrics": {
+    "addr": "unix:///run/anixops-gost/metrics.sock",
+    "path": "/anixops-a4d8a04a3087aedb"
+  }
+}

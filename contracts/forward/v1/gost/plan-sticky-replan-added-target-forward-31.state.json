@@ -1,0 +1,41 @@
+{
+  "node_ref": "forward-31",
+  "hops": [
+    {
+      "route_id": "01JF1E000000000000000000E1",
+      "role": "HOP_ROLE_ENTRY",
+      "engine": "ENGINE_GOST",
+      "listen": {
+        "port": 20005,
+        "protocol": "L4_PROTOCOL_TCP"
+      },
+      "ingress": {
+        "security": "LINK_SECURITY_RAW"
+      },
+      "upstreams": [
+        {
+          "address": "203.0.113.41",
+          "port": 20017,
+          "weight": 1,
+          "egress": {
+            "security": "LINK_SECURITY_TLS",
+            "server_name": "forward-41"
+          },
+          "node_ref": "forward-41",
+          "peer_identity": "spiffe://anixops/example/agent/forward-41"
+        }
+      ],
+      "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+      "health": {
+        "interval_ms": 5000,
+        "timeout_ms": 2000
+      },
+      "circuit_breaker": {
+        "failure_threshold": 3,
+        "open_ms": 30000
+      },
+      "target_policy": "TARGET_POLICY_PUBLIC_ONLY",
+      "mark": 3
+    }
+  ]
+}

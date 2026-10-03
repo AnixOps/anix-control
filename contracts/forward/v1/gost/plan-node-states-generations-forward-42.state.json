@@ -1,0 +1,44 @@
+{
+  "node_ref": "forward-42",
+  "generation": "6",
+  "state_hash": "e803121dc619be6f598ddf1f0659c488f1b8ea8f2dd1ea89d8d9a4fdc5e9e54c",
+  "hops": [
+    {
+      "route_id": "01JF1F000000000000000000F2",
+      "hop_index": 1,
+      "role": "HOP_ROLE_EXIT",
+      "engine": "ENGINE_GOST",
+      "listen": {
+        "port": 20000,
+        "protocol": "L4_PROTOCOL_TCP"
+      },
+      "ingress": {
+        "security": "LINK_SECURITY_RAW"
+      },
+      "upstreams": [
+        {
+          "address": "198.51.100.9",
+          "port": 443,
+          "weight": 1,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        }
+      ],
+      "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+      "health": {
+        "interval_ms": 5000,
+        "timeout_ms": 2000
+      },
+      "circuit_breaker": {
+        "failure_threshold": 3,
+        "open_ms": 30000
+      },
+      "target_policy": "TARGET_POLICY_PUBLIC_ONLY",
+      "mark": 1,
+      "ingress_sources": [
+        "192.0.2.21"
+      ]
+    }
+  ]
+}

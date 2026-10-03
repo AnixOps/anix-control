@@ -1,0 +1,90 @@
+{
+  "anixops": {
+    "driver": "anixops-forward-driver gost v1",
+    "note": "Rendered by sdk/forward/driver/gost; do not edit. gost ignores this key; Apply reads it.",
+    "hops": [
+      {
+        "route": "01JF1B000000000000000000B1",
+        "hop": 2,
+        "balance": "BALANCE_STRATEGY_FAILOVER",
+        "services": [
+          "r01JF1B000000000000000000B1-h2-tls"
+        ],
+        "listeners": [
+          {
+            "network": "tcp",
+            "port": 20000
+          }
+        ],
+        "upstreams": [
+          {
+            "address": "198.51.100.7",
+            "port": 8443,
+            "weight": 1,
+            "priority": 0
+          },
+          {
+            "address": "198.51.100.8",
+            "port": 8443,
+            "weight": 1,
+            "priority": 10
+          }
+        ]
+      }
+    ]
+  },
+  "services": [
+    {
+      "name": "r01JF1B000000000000000000B1-h2-tls",
+      "addr": ":20000",
+      "admission": "r01JF1B000000000000000000B1-h2",
+      "handler": {
+        "type": "relay"
+      },
+      "listener": {
+        "type": "tls",
+        "tls": {
+          "certFile": "/var/lib/anixops-gost/tls/link.crt",
+          "keyFile": "/var/lib/anixops-gost/tls/link.key",
+          "caFile": "/var/lib/anixops-gost/tls/link-ca.crt"
+        }
+      },
+      "forwarder": {
+        "nodes": [
+          {
+            "name": "u0",
+            "addr": "198.51.100.7:8443"
+          },
+          {
+            "name": "u1",
+            "addr": "198.51.100.8:8443"
+          }
+        ],
+        "selector": {
+          "strategy": "fifo",
+          "maxFails": 3,
+          "failTimeout": "30s"
+        }
+      }
+    }
+  ],
+  "admissions": [
+    {
+      "name": "r01JF1B000000000000000000B1-h2",
+      "whitelist": true,
+      "matchers": [
+        "172.16.5.31",
+        "198.51.100.31"
+      ]
+    }
+  ],
+  "log": {
+    "level": "warn",
+    "format": "json",
+    "output": "stderr"
+  },
+  "metrics": {
+    "addr": "unix:///run/anixops-gost/metrics.sock",
+    "path": "/anixops-afbd626df6263b0f"
+  }
+}

@@ -11,11 +11,14 @@ driver's Render (`sdk/forward/driver/nftables`) with golden scripts in
 `contracts/forward/v1/nft`. F3a is implemented: Control serves the
 contract (`internal/kernelforward`, section 8): routes, planning and
 generations, the node state over the Agent Control stream, the reports and
-the traffic ledger, and `ForwardControl` for official packages. The
-contract is `sdk/api/forward/v1` (`anixops.forward.v1`), binding since F3a:
-additions only (section 15); the planner goldens are in
-`contracts/forward/v1`. This is the v4.2 forwarding redesign. It replaces
-the flux-panel clone (`/api/v2/forward/*`) in v4.2.
+the traffic ledger, and `ForwardControl` for official packages. F4a is
+implemented: the gost driver's Render and process management
+(`sdk/forward/driver/gost`) with golden configurations in
+`contracts/forward/v1/gost` (section 6.2). The contract is
+`sdk/api/forward/v1` (`anixops.forward.v1`), binding since F3a: additions
+only (section 15); the planner goldens are in `contracts/forward/v1`. This
+is the v4.2 forwarding redesign. It replaces the flux-panel clone
+(`/api/v2/forward/*`) in v4.2.
 
 > 中文摘要：v4.2 把转发做成 AnixOps SDK 的一等能力，不再兼容 flux，也不提供独立 CLI，
 > 所有操作都经过 Control。
@@ -146,7 +149,7 @@ Everything lives in the existing `sdk/` module
 | Wire | `sdk/forward/wire` | how forwarding rides the Agent Control stream: the `forward.v1` Hello attribute, the `anixops.nodeconfig/v2` member, the forward report and their checks (F3a, implemented) |
 | Model and validation | `sdk/forward/model`, `sdk/forward/validate` | Go domain types with lossless conversion to and from the contract and the defaults (`model/defaults.go`); one set of validation rules used by Control, the planner and the Agent (F1b, implemented) |
 | Planner | `sdk/forward/planner` | routes and node inventory in, per-node states, port and mark allocations and generations out; pure functions (F1c, implemented) |
-| Drivers | `sdk/forward/driver`, `.../driver/fake`, `.../driver/conformance`, `.../driver/nftables`, `.../driver/gost`, `.../driver/ansible` | the driver interface, registry, fake driver and conformance suite (F2a, implemented), the nftables driver (Render F2b, Apply, Observe, failover and tc F2c, implemented) and the other engines (F4) |
+| Drivers | `sdk/forward/driver`, `.../driver/fake`, `.../driver/conformance`, `.../driver/nftables`, `.../driver/gost`, `.../driver/ansible` | the driver interface, registry, fake driver and conformance suite (F2a, implemented), the nftables driver (Render F2b, Apply, Observe, failover and tc F2c, implemented), the gost driver (Render and process management F4a, implemented; Observe and hot updates F4b) and the Ansible fallback |
 | Client | `sdk/forward/forwardctl` | a Go client for `ForwardControl` (F5) |
 
 Consumers:
@@ -737,36 +740,163 @@ table inet anixops_fwd {
 
 ### 6.2 gost
 
-gost v3 (MIT) replaces the NodeX dependency. The Agent manages it; Control
-never talks to gost or NodeX.
+Render, Capabilities, the host probe and the process management of Apply
+and Remove are implemented in F4a (`sdk/forward/driver/gost`; the package
+documentation is normative). F4b reads the counters and changes upstreams
+without a reload. gost v3 (MIT; the licence ships in the release archive
+and was checked) replaces the NodeX dependency. The Agent manages it;
+Control never talks to gost or NodeX. The SDK does not import gost: the
+driver writes gost's configuration and runs the unmodified binary.
 
-- **Binary.** A pinned gost v3 release, shipped in the Agent's package with
-  its checksum, upgraded only with the Agent (H20).
-- **Process.** A separate systemd unit, `anixops-gost.service`, owned by the
-  Agent: restarting or upgrading the Agent does not drop forwarded
-  connections. It runs as its own user with `CAP_NET_BIND_SERVICE` only.
-- **Configuration.** Render produces the full gost YAML. One gost service
-  per `NodeHop`, named `r<route>-h<hop>`:
-  - listener and handler from `ingress` (`tcp`/`udp` with a forwarder for
-    `RAW`; `relay` over `tls`, `wss`, `quic` or `grpc`, `mtls`/`mwss` for
-    mux);
-  - a chain whose hop holds one gost node per upstream, dialing with
-    `egress`;
-  - the selector from `balance` (`round`, `rand`, `hash`, `fifo` for
-    failover) with `maxFails` and `failTimeout` from the circuit breaker;
-  - a traffic limiter for `bandwidth_bps` and a connection limiter for
-    `max_conns`;
-  - metrics on a loopback listener for per-service input and output bytes.
-- **Hot updates** go through gost's web API, bound to loopback with a
-  random key the Agent generates. A change to one hop touches one service;
-  the full file is written for restarts.
-- **TLS.** Links between nodes are mutual TLS with the nodes' AgentPKI
-  certificates. The dialler pins `Upstream.peer_identity`; the listener
-  accepts only `ingress_peers`. No key material travels in the state.
-- **Quota.** gost has no byte quota. The Agent enforces `quota_bytes` on a
-  gost entry from the observed counters and stops the service when it is
-  used up (granularity: the observe interval, proposed 10 s). Entries that
-  need an exact quota should be `NFTABLES`.
+- **Binary (H20, decided).** One gost v3 release per Agent release, shipped
+  in the Agent's package with its checksum and upgraded only with the
+  Agent: `gost.PinnedVersion` 3.2.6, the release ci.yml's `GOST_VERSION`
+  downloads and checks by SHA-256 (a test keeps the two equal).
+  `gost.Probe` runs `gost -V` and `ss -V` and checks the unit: gost or ss
+  missing, a gost that is not v3 or is older than 3.2, or a missing or
+  foreign unit make the driver unavailable with the reason; another 3.x
+  release is a warning. Without the link certificate files the driver
+  carries RAW links only.
+- **Process (H20).** `anixops-gost.service` is a unit of its own, so
+  restarting or upgrading the Agent keeps forwarding. The installer writes
+  it from `gost.UnitFile` (golden
+  `contracts/forward/v1/gost/anixops-gost.service`), enables it and lets the
+  Agent start, reload and stop it (a polkit rule); the driver
+  (`SystemdSupervisor`, systemctl through its runner) does only that, and
+  refuses a unit of that name whose Description lacks its mark
+  (`ErrNotOwned`). gost runs as its own user `anixops-gost` with
+  `CAP_NET_BIND_SERVICE` only: it forwards sockets and needs no
+  `CAP_NET_ADMIN`, which is the Agent's (H13). Sandbox: `NoNewPrivileges`,
+  `ProtectSystem=strict` (everything read only but its
+  `RuntimeDirectory`), `ProtectHome`, `PrivateTmp`, `PrivateDevices`, the
+  kernel, cgroup, clock and hostname protections, `ProtectProc=invisible`,
+  `RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX`, `RestrictNamespaces`,
+  `MemoryDenyWriteExecute`, `SystemCallFilter=@system-service
+  ~@privileged`, and `ConditionPathExists` on the configuration, so it
+  never starts without one. `ExecReload` sends SIGHUP. Tests and
+  containers use `ProcessSupervisor`, gost as a child process.
+- **Files.** `Config.Dir` (`/var/lib/anixops-gost`, owned by the Agent,
+  group `anixops-gost`, mode 0750) holds `gost.json`, the configuration
+  gost runs, `state.json`, the driver's record (its ownership mark, node,
+  generation, `state_hash`, digest and the applied hops; written before the
+  first configuration and after every apply that succeeded), and `tls/`,
+  the link certificate (the installer gives the gost user read access;
+  `Probe` only sees that the files exist). gost's metrics socket is in its
+  `RuntimeDirectory` (`/run/anixops-gost`); the Agent is in the unit's
+  group. A configuration without the driver's state file, or a state file
+  without its mark, is foreign: Apply refuses it, Remove leaves it.
+- **Configuration: JSON.** gost loads JSON and YAML alike; `encoding/json`
+  writes typed values deterministically, does all the quoting (no name or
+  path can inject a key) and keeps the SDK free of a YAML dependency. A
+  top-level `anixops` member, which gost ignores, is the manifest Apply
+  reads. Names come from the route id only (1 to 64 letters and digits,
+  rejected otherwise). Per `NodeHop`:
+  - services `r<route>-h<hop>-<listener>`: a `RAW` ingress listens with
+    `tcp` and `udp` listeners (both for `TCP_UDP`) whose handlers forward
+    the client's bytes; every other ingress is one carrier listener
+    (`tls`, `mtls` for TLS with mux, `wss`, `mwss`, `quic`, `grpc`, `mtcp`
+    for RAW with mux) whose `relay` handler carries TCP and UDP. QUIC and
+    gRPC multiplex natively. UDP listeners keep a client's session for
+    60 s after its last datagram;
+  - upstreams: `RAW` upstreams are the service's forwarder nodes, dialled
+    directly. Relayed upstreams (an encrypted or multiplexed next hop) are
+    the nodes of chain `r<route>-h<hop>`, each with gost's relay connector
+    and the link's dialer; the forwarder then holds one placeholder node,
+    since the next node's relay handler forwards to its own upstreams
+    whatever address it is sent. A hop mixing both kinds (direct mode
+    `PREFERRED` with an encrypted next hop) is `ErrUnsupported`;
+  - the selector from `balance` (section 7.1): `round`, `rand`, `hash` on
+    the client address, `fifo` over the upstreams sorted by priority for
+    failover (ties in route order), `rand` for least connections.
+    `rand` reads the weights; `round` and `hash` ignore weights, so a hop
+    with unequal weights lists each upstream once per entry in smooth
+    weighted round-robin order (at most about 128 entries). The circuit
+    breaker is the selector's fail filter: `maxFails` is
+    `failure_threshold`, `failTimeout` is `open_ms` (3 and 30 s by
+    default, H21), and an upstream comes back after one trial succeeds
+    (counted per gost node: an upstream listed w times is skipped once each
+    of its entries failed);
+  - an admission whitelist of `ingress_sources` (required on relay and exit
+    hops, so no relay is open);
+  - a traffic limiter for `bandwidth_bps` (the hop's services together, in
+    each direction) and a connection limiter for `max_conns`;
+  - a paused hop keeps its services and admits nobody: new connections are
+    refused, established ones run until they close (nftables drops them);
+  - metrics on the unix socket, under a path named by a hash of the rest of
+    the configuration, and warnings only in gost's log.
+- **Apply.** It compares the host with the artifact: the recorded digest,
+  the configuration file's bytes, gost serving the configuration's metrics
+  path and every listener bound. All equal is a no-op that at most records
+  a newer generation. Otherwise it reads the listening sockets with `ss`
+  (no privilege needed) and refuses a listener whose port a socket holds
+  that the running, applied configuration does not declare (`ErrConflict`,
+  before anything changes); writes the configuration (a temporary file and
+  a rename); reloads gost with SIGHUP, or starts it; and waits until gost
+  serves the new metrics path with every listener bound. A reload keeps
+  the process, so established TCP connections and the counter epoch survive
+  it (tested); it re-creates every service of the node, so UDP sessions
+  and mux carriers may restart. gost's reload is not atomic (a listener it
+  cannot bind closes the old services first), so when the new
+  configuration is not served within `Config.ReadyTimeout` Apply writes the
+  previous one back and restarts gost on it, or stops gost after a first
+  apply, and fails. An empty artifact stops gost and deletes the files.
+- **TLS and peer identities.** Links between nodes are mutual TLS with the
+  node's link certificate (`Config.LinkCert`, `LinkKey`, `LinkCA`). The
+  listener requires a client certificate `LinkCA` signed; the dialler
+  verifies the next node's certificate for the link's server name (default:
+  the node's identity name, `forward-41`) under `LinkCA` and presents its
+  own. gost cannot match a SPIFFE URI, so `Upstream.peer_identity` is pinned
+  through that server name and `ingress_peers` is required on encrypted
+  ingress but not matched per identity; the admission of `ingress_sources`
+  narrows the listener to the previous hop's addresses. The link
+  certificates therefore need the node's identity name as a DNS name, both
+  serverAuth and clientAuth, and a CA that signs forward nodes' link
+  certificates only; today's Agent certificates (client auth, URI name,
+  the CA that also signs module and kernel certificates) do not qualify,
+  and gost must not hold the Agent's Control key. Decided (H28): a
+  dedicated forward link CA issues them, requested and renewed alongside
+  the Agent certificate; until it exists (Control after F3a, the Agent in
+  F3b) encrypted gost links cannot be set up on real nodes. No key material
+  travels in the state.
+- **Not in F4a.** Counters (Observe answers 0 with the gost instance as
+  the epoch) and `SetUpstreams` (it checks its arguments and answers
+  `ErrUnsupported`) are F4b: hot updates through gost's web API on a unix
+  socket in the runtime directory, whose file permissions are its only
+  key, touching one service per changed hop, and the counters from the
+  metrics socket (gost labels them per client address as well, an
+  unbounded label set on a public entry; F4b decides between the metrics
+  and the services' stats observer). Health checks are the Agent's loop
+  (section 7.3). Target names are rejected like nftables' (the Agent
+  resolves them).
+- **Quota.** gost has no byte quota: the driver reports `quota` false and
+  rejects a hop with `quota_bytes` (`ErrUnsupported`). The Agent's soft
+  quota (stopping the service when the counters reach it, granularity the
+  observe interval) needs F4b's counters. Entries that need an exact quota
+  should be `NFTABLES`.
+- **Goldens.** `contracts/forward/v1/gost` holds, per case, the input
+  (`<case>.state.json`), the configuration (`<case>.json`) and the rejected
+  hops (`<case>.errors.txt`): `plan-<fixture>-<node>` for every planner
+  golden state with a gost hop (the exits of
+  `plan-nft-entry-gost-relay-exit-failover` keep the error for their target
+  name), `planner-<variant>-<node>` from live planner runs of that route
+  with IP targets (TLS with and without mux, WSS, QUIC, gRPC, RAW with
+  mux, TCP and UDP over TLS, a paused weighted round robin, a gost entry
+  with limits), synthetic cases, and the unit file. `go -C sdk test
+  ./forward/driver/gost -run Goldens -update` rewrites them.
+- **Tests.** Without privileges: the render scenarios of the conformance
+  suite (with and without a link certificate), the whole suite against a
+  simulated gost and host, and unit tests. With a gost binary
+  (`ANIXOPS_GOST_BIN` or `PATH`), gost parses every golden. With
+  `ANIXOPS_GOST_E2E=1` as root, gost runs in a throwaway network
+  namespace per test: the whole conformance suite (the `SetUpstreams` and
+  concurrency scenarios skip until F4b), every golden applied and served
+  with certificates of a test CA, and TCP and UDP through a mutual-TLS mux
+  relay to an exit (a reload keeps an established connection and the
+  epoch, a paused hop refuses new connections, the exit refuses a client
+  without a certificate). CI runs them under sudo in Backend Tests shard 1
+  with the pinned release, after the nftables driver's real-kernel tests:
+  every change runs them, as for nftables; the Forward Netns E2E job adds
+  gost hops with F4c.
 
 ### 6.3 Ansible fallback
 
@@ -1215,7 +1345,8 @@ features go into which edition is open (H23). The proposal:
   goldens for UDP with IPv6 targets, several entry nodes behind an entry
   hostname, a sticky re-plan, port exhaustion and a multi-route plan with
   generations. F2/F4 add the rendered nft and gost artifacts: the nft
-  goldens are in `contracts/forward/v1/nft` (F2b, section 6.1).
+  goldens are in `contracts/forward/v1/nft` (F2b, section 6.1), the gost
+  configurations in `contracts/forward/v1/gost` (F4a, section 6.2).
 - **Planner unit and property tests**: allocation stickiness, collisions,
   exhaustion, wiring, generations; properties: re-planning is idempotent,
   ports and marks never collide on a node, every port is in range and not
@@ -1327,7 +1458,8 @@ features go into which edition is open (H23). The proposal:
   with a 20-minute timeout, and is not a required check until it has been
   green for two weeks (H14). Backend Tests shard 1 keeps running the
   nftables driver's real-kernel conformance tests (section 6.1) on every
-  change. The gost driver joins the suite with F4c (mixed engines).
+  change, and the gost driver's conformance suite against the pinned gost
+  (section 6.2). The gost driver joins this suite with F4c (mixed engines).
 - **Cross-repository E2E** with anix-agent (the A2-7 suite): config.v1 with
   `forward.v1`, reports, probes.
 - **Chaos**: stop Control and check forwarding, failover and counters
@@ -1341,9 +1473,11 @@ features go into which edition is open (H23). The proposal:
 - **Privileges** (H13). Proposed: the installer runs as root once (packages,
   sysctl drop-in, units); the Agent runs as a dedicated user with ambient
   `CAP_NET_ADMIN` (nftables and tc over netlink) and `CAP_NET_BIND_SERVICE`;
-  gost runs as another user with `CAP_NET_BIND_SERVICE` only. systemd
-  sandboxing: `NoNewPrivileges`, `ProtectSystem=strict`,
-  `ReadWritePaths=/var/lib/anixops-agent`, `ProtectHome`, `PrivateTmp`,
+  gost runs as another user with `CAP_NET_BIND_SERVICE` only, in the
+  sandbox of its own unit (section 6.2). systemd sandboxing of the Agent:
+  `NoNewPrivileges`, `ProtectSystem=strict`,
+  `ReadWritePaths=/var/lib/anixops-agent /var/lib/anixops-gost` (the second
+  is the gost driver's directory), `ProtectHome`, `PrivateTmp`,
   `RestrictAddressFamilies=AF_INET AF_INET6 AF_NETLINK AF_UNIX`. Agent
   self-upgrade then needs a small root-owned updater unit that installs only
   signed artifacts.
@@ -1358,9 +1492,10 @@ features go into which edition is open (H23). The proposal:
   ingress only `ingress_peers`.
 - **Reserved ports.** The planner never allocates, and validation refuses,
   the node's SSH port, the Agent's ports and a per-node reserved list.
-- **No secrets in state.** Node-to-node TLS uses the nodes' own AgentPKI
-  keys; the state names identities, not keys. The gost API key never leaves
-  the node.
+- **No secrets in state.** Node-to-node TLS uses the nodes' own link
+  certificates and keys (H28); the state names identities, not keys. gost's
+  web API (F4b) and metrics listen on unix sockets in its runtime
+  directory, guarded by file permissions, so there is no API key at all.
 - **Every change goes through Control**, authorized and audited there.
 
 ## 15. Rollout
@@ -1384,7 +1519,7 @@ Agent-repository PRs are marked (agent).
 | | O2 | preflight and offline package | M | H18 |
 | | O3 | uninstall | S | |
 | | O4 | staged upgrades with canary and rollback | L | H19 |
-| F4 | F4a | gost driver: Render, process management | L | H20 |
+| F4 | F4a | gost driver: Render, process management (implemented) | L | H20 |
 | | F4b | gost Observe, hot updates, failover | M | H20 |
 | | F4c | mixed-engine end-to-end | M | |
 | | L1 | least-connections re-weighting | S | H21 |
@@ -1426,8 +1561,9 @@ when decided.
 | H21 | LB and failover defaults: circuit breaker, check interval, DDNS providers | Breaker 3 failures → skip 30 s; checks every 5 s with a 2 s timeout; least-conn re-weighting every 10 s; DDNS: Cloudflare, Alibaba Cloud DNS, DNSPod, Huawei Cloud DNS, generic webhook |
 | H22 | AnixOps protocol design review (threat model, cryptography, REALITY-like fallback) | Separate design document before any prototype; prototype off by default and marked experimental in v4.2 |
 | H23 | Community vs commercial boundary for forwarding | Section 12: core forwarding, LB, failover and onboarding in both; self-service, plans, multipliers and resellers commercial |
+| H28 | Forward link certificates for encrypted gost links (F3b, AgentPKI): gost verifies a certificate chain and the dialled server name, not SPIFFE URIs, and must not hold the Agent's Control key | AgentPKI issues each forward node a separate link certificate: DNS name = the node's identity name (`forward-41`, the planner's default `server_name`), URI = its SPIFFE identity, serverAuth and clientAuth, from a link CA (an intermediate) that signs nothing else, with the same lifetime and rotation as the Agent certificate. The Agent writes it, its own key and the link CA bundle to `/var/lib/anixops-gost/tls` and reloads gost on rotation. An operator-chosen `server_name` (a CDN name on WSS) then needs that name in the exit's link certificate, or stays unsupported. Per-identity matching of `ingress_peers` would need a gost plugin; source admission plus the link CA is the v4.2 boundary |
 
-Decided by the owner (2026-10-02; H21 2026-10-03):
+Decided by the owner (2026-10-02; H20 and H21 2026-10-03):
 
 - **H11:** approved as drafted. The contract freezes when F3a serves it.
 - **H12:** `sdk/v0.x` through v4.2's release candidates, then `sdk/v1.0.0`
@@ -1443,6 +1579,12 @@ Decided by the owner (2026-10-02; H21 2026-10-03):
   timeout, the breaker opens after 3 failures in a row for 30 s,
   least-connections re-weights every 10 s
   (`sdk/forward/model/defaults.go`). The DDNS providers settle with L2.
+- **H20** (2026-10-03): one pinned gost v3 release per Agent release
+  (3.2.6, MIT), shipped with the Agent and run as `anixops-gost.service`, a
+  unit the Agent owns and manages, so Agent upgrades keep forwarding; NodeX
+  is removed in v4.2. gost runs as its own user with `CAP_NET_BIND_SERVICE`
+  only and the sandbox of section 6.2 (H13 gives `CAP_NET_ADMIN` to the
+  Agent, not to gost).
 
 Decided by the owner (2026-10-04):
 
@@ -1452,8 +1594,15 @@ Decided by the owner (2026-10-04):
 - **H25:** anix-agent uses Control's version numbers and is released with
   it (for example `v4.2.0-rc.N` for both), and Control's CI pins the same
   Agent commit. Each Agent tag is still asked first.
+- **H28** (forward link certificates): as recommended. A dedicated forward
+  link CA, separate from the CA of modules, the kernel and Agents, issues
+  each forward node a link certificate (DNS name = the node's identity
+  name, its SPIFFE identity as URI, serverAuth and clientAuth), requested
+  and renewed alongside the Agent certificate. gost holds only the link
+  certificate and its key, never the Agent's Control key. The link CA is
+  built later (Control after F3a, the Agent in F3b), not in F4a.
 
-H18–H20, H22 and H23 are still open; each is asked before the work it
+H18, H19, H22 and H23 are still open; each is asked before the work it
 gates.
 
 Smaller questions raised by this design:

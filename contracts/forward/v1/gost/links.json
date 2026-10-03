@@ -1,0 +1,1436 @@
+{
+  "anixops": {
+    "driver": "anixops-forward-driver gost v1",
+    "note": "Rendered by sdk/forward/driver/gost; do not edit. gost ignores this key; Apply reads it.",
+    "hops": [
+      {
+        "route": "01JF2A00000000000000000L00",
+        "hop": 1,
+        "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+        "services": [
+          "r01JF2A00000000000000000L00-h1-tls"
+        ],
+        "listeners": [
+          {
+            "network": "tcp",
+            "port": 31000
+          }
+        ],
+        "upstreams": [
+          {
+            "address": "192.0.2.20",
+            "port": 443,
+            "weight": 1,
+            "priority": 0
+          }
+        ]
+      },
+      {
+        "route": "01JF2A00000000000000000L01",
+        "hop": 0,
+        "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+        "services": [
+          "r01JF2A00000000000000000L01-h0-tcp",
+          "r01JF2A00000000000000000L01-h0-udp"
+        ],
+        "listeners": [
+          {
+            "network": "tcp",
+            "port": 32000
+          },
+          {
+            "network": "udp",
+            "port": 32000
+          }
+        ],
+        "upstreams": [
+          {
+            "address": "192.0.2.20",
+            "port": 443,
+            "weight": 1,
+            "priority": 0
+          },
+          {
+            "address": "192.0.2.21",
+            "port": 443,
+            "weight": 2,
+            "priority": 10
+          }
+        ]
+      },
+      {
+        "route": "01JF2A00000000000000000L10",
+        "hop": 1,
+        "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+        "services": [
+          "r01JF2A00000000000000000L10-h1-mtls"
+        ],
+        "listeners": [
+          {
+            "network": "tcp",
+            "port": 31001
+          }
+        ],
+        "upstreams": [
+          {
+            "address": "192.0.2.20",
+            "port": 443,
+            "weight": 1,
+            "priority": 0
+          }
+        ]
+      },
+      {
+        "route": "01JF2A00000000000000000L11",
+        "hop": 0,
+        "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+        "services": [
+          "r01JF2A00000000000000000L11-h0-tcp",
+          "r01JF2A00000000000000000L11-h0-udp"
+        ],
+        "listeners": [
+          {
+            "network": "tcp",
+            "port": 32001
+          },
+          {
+            "network": "udp",
+            "port": 32001
+          }
+        ],
+        "upstreams": [
+          {
+            "address": "192.0.2.20",
+            "port": 443,
+            "weight": 1,
+            "priority": 0
+          },
+          {
+            "address": "192.0.2.21",
+            "port": 443,
+            "weight": 2,
+            "priority": 10
+          }
+        ]
+      },
+      {
+        "route": "01JF2A00000000000000000L20",
+        "hop": 1,
+        "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+        "services": [
+          "r01JF2A00000000000000000L20-h1-wss"
+        ],
+        "listeners": [
+          {
+            "network": "tcp",
+            "port": 31002
+          }
+        ],
+        "upstreams": [
+          {
+            "address": "192.0.2.20",
+            "port": 443,
+            "weight": 1,
+            "priority": 0
+          }
+        ]
+      },
+      {
+        "route": "01JF2A00000000000000000L21",
+        "hop": 0,
+        "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+        "services": [
+          "r01JF2A00000000000000000L21-h0-tcp",
+          "r01JF2A00000000000000000L21-h0-udp"
+        ],
+        "listeners": [
+          {
+            "network": "tcp",
+            "port": 32002
+          },
+          {
+            "network": "udp",
+            "port": 32002
+          }
+        ],
+        "upstreams": [
+          {
+            "address": "192.0.2.20",
+            "port": 443,
+            "weight": 1,
+            "priority": 0
+          },
+          {
+            "address": "192.0.2.21",
+            "port": 443,
+            "weight": 2,
+            "priority": 10
+          }
+        ]
+      },
+      {
+        "route": "01JF2A00000000000000000L30",
+        "hop": 1,
+        "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+        "services": [
+          "r01JF2A00000000000000000L30-h1-mwss"
+        ],
+        "listeners": [
+          {
+            "network": "tcp",
+            "port": 31003
+          }
+        ],
+        "upstreams": [
+          {
+            "address": "192.0.2.20",
+            "port": 443,
+            "weight": 1,
+            "priority": 0
+          }
+        ]
+      },
+      {
+        "route": "01JF2A00000000000000000L31",
+        "hop": 0,
+        "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+        "services": [
+          "r01JF2A00000000000000000L31-h0-tcp",
+          "r01JF2A00000000000000000L31-h0-udp"
+        ],
+        "listeners": [
+          {
+            "network": "tcp",
+            "port": 32003
+          },
+          {
+            "network": "udp",
+            "port": 32003
+          }
+        ],
+        "upstreams": [
+          {
+            "address": "192.0.2.20",
+            "port": 443,
+            "weight": 1,
+            "priority": 0
+          },
+          {
+            "address": "192.0.2.21",
+            "port": 443,
+            "weight": 2,
+            "priority": 10
+          }
+        ]
+      },
+      {
+        "route": "01JF2A00000000000000000L40",
+        "hop": 1,
+        "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+        "services": [
+          "r01JF2A00000000000000000L40-h1-quic"
+        ],
+        "listeners": [
+          {
+            "network": "udp",
+            "port": 31004
+          }
+        ],
+        "upstreams": [
+          {
+            "address": "192.0.2.20",
+            "port": 443,
+            "weight": 1,
+            "priority": 0
+          }
+        ]
+      },
+      {
+        "route": "01JF2A00000000000000000L41",
+        "hop": 0,
+        "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+        "services": [
+          "r01JF2A00000000000000000L41-h0-tcp",
+          "r01JF2A00000000000000000L41-h0-udp"
+        ],
+        "listeners": [
+          {
+            "network": "tcp",
+            "port": 32004
+          },
+          {
+            "network": "udp",
+            "port": 32004
+          }
+        ],
+        "upstreams": [
+          {
+            "address": "192.0.2.20",
+            "port": 443,
+            "weight": 1,
+            "priority": 0
+          },
+          {
+            "address": "192.0.2.21",
+            "port": 443,
+            "weight": 2,
+            "priority": 10
+          }
+        ]
+      },
+      {
+        "route": "01JF2A00000000000000000L50",
+        "hop": 1,
+        "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+        "services": [
+          "r01JF2A00000000000000000L50-h1-grpc"
+        ],
+        "listeners": [
+          {
+            "network": "tcp",
+            "port": 31005
+          }
+        ],
+        "upstreams": [
+          {
+            "address": "192.0.2.20",
+            "port": 443,
+            "weight": 1,
+            "priority": 0
+          }
+        ]
+      },
+      {
+        "route": "01JF2A00000000000000000L51",
+        "hop": 0,
+        "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+        "services": [
+          "r01JF2A00000000000000000L51-h0-tcp",
+          "r01JF2A00000000000000000L51-h0-udp"
+        ],
+        "listeners": [
+          {
+            "network": "tcp",
+            "port": 32005
+          },
+          {
+            "network": "udp",
+            "port": 32005
+          }
+        ],
+        "upstreams": [
+          {
+            "address": "192.0.2.20",
+            "port": 443,
+            "weight": 1,
+            "priority": 0
+          },
+          {
+            "address": "192.0.2.21",
+            "port": 443,
+            "weight": 2,
+            "priority": 10
+          }
+        ]
+      },
+      {
+        "route": "01JF2A00000000000000000L60",
+        "hop": 1,
+        "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+        "services": [
+          "r01JF2A00000000000000000L60-h1-mtcp"
+        ],
+        "listeners": [
+          {
+            "network": "tcp",
+            "port": 31006
+          }
+        ],
+        "upstreams": [
+          {
+            "address": "192.0.2.20",
+            "port": 443,
+            "weight": 1,
+            "priority": 0
+          }
+        ]
+      },
+      {
+        "route": "01JF2A00000000000000000L61",
+        "hop": 0,
+        "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+        "services": [
+          "r01JF2A00000000000000000L61-h0-tcp",
+          "r01JF2A00000000000000000L61-h0-udp"
+        ],
+        "listeners": [
+          {
+            "network": "tcp",
+            "port": 32006
+          },
+          {
+            "network": "udp",
+            "port": 32006
+          }
+        ],
+        "upstreams": [
+          {
+            "address": "192.0.2.20",
+            "port": 443,
+            "weight": 1,
+            "priority": 0
+          },
+          {
+            "address": "192.0.2.21",
+            "port": 443,
+            "weight": 2,
+            "priority": 10
+          }
+        ]
+      }
+    ]
+  },
+  "services": [
+    {
+      "name": "r01JF2A00000000000000000L00-h1-tls",
+      "addr": ":31000",
+      "admission": "r01JF2A00000000000000000L00-h1",
+      "handler": {
+        "type": "relay"
+      },
+      "listener": {
+        "type": "tls",
+        "tls": {
+          "certFile": "/var/lib/anixops-gost/tls/link.crt",
+          "keyFile": "/var/lib/anixops-gost/tls/link.key",
+          "caFile": "/var/lib/anixops-gost/tls/link-ca.crt"
+        }
+      },
+      "forwarder": {
+        "nodes": [
+          {
+            "name": "u0",
+            "addr": "192.0.2.20:443"
+          }
+        ],
+        "selector": {
+          "strategy": "round",
+          "maxFails": 3,
+          "failTimeout": "30s"
+        }
+      }
+    },
+    {
+      "name": "r01JF2A00000000000000000L01-h0-tcp",
+      "addr": ":32000",
+      "handler": {
+        "type": "tcp",
+        "chain": "r01JF2A00000000000000000L01-h0"
+      },
+      "listener": {
+        "type": "tcp"
+      },
+      "forwarder": {
+        "nodes": [
+          {
+            "name": "next",
+            "addr": "0.0.0.0:0"
+          }
+        ]
+      }
+    },
+    {
+      "name": "r01JF2A00000000000000000L01-h0-udp",
+      "addr": ":32000",
+      "handler": {
+        "type": "udp",
+        "chain": "r01JF2A00000000000000000L01-h0"
+      },
+      "listener": {
+        "type": "udp",
+        "metadata": {
+          "keepalive": "true",
+          "readBufferSize": "65536",
+          "ttl": "60s"
+        }
+      },
+      "forwarder": {
+        "nodes": [
+          {
+            "name": "next",
+            "addr": "0.0.0.0:0"
+          }
+        ]
+      }
+    },
+    {
+      "name": "r01JF2A00000000000000000L10-h1-mtls",
+      "addr": ":31001",
+      "admission": "r01JF2A00000000000000000L10-h1",
+      "handler": {
+        "type": "relay"
+      },
+      "listener": {
+        "type": "mtls",
+        "tls": {
+          "certFile": "/var/lib/anixops-gost/tls/link.crt",
+          "keyFile": "/var/lib/anixops-gost/tls/link.key",
+          "caFile": "/var/lib/anixops-gost/tls/link-ca.crt"
+        }
+      },
+      "forwarder": {
+        "nodes": [
+          {
+            "name": "u0",
+            "addr": "192.0.2.20:443"
+          }
+        ],
+        "selector": {
+          "strategy": "round",
+          "maxFails": 3,
+          "failTimeout": "30s"
+        }
+      }
+    },
+    {
+      "name": "r01JF2A00000000000000000L11-h0-tcp",
+      "addr": ":32001",
+      "handler": {
+        "type": "tcp",
+        "chain": "r01JF2A00000000000000000L11-h0"
+      },
+      "listener": {
+        "type": "tcp"
+      },
+      "forwarder": {
+        "nodes": [
+          {
+            "name": "next",
+            "addr": "0.0.0.0:0"
+          }
+        ]
+      }
+    },
+    {
+      "name": "r01JF2A00000000000000000L11-h0-udp",
+      "addr": ":32001",
+      "handler": {
+        "type": "udp",
+        "chain": "r01JF2A00000000000000000L11-h0"
+      },
+      "listener": {
+        "type": "udp",
+        "metadata": {
+          "keepalive": "true",
+          "readBufferSize": "65536",
+          "ttl": "60s"
+        }
+      },
+      "forwarder": {
+        "nodes": [
+          {
+            "name": "next",
+            "addr": "0.0.0.0:0"
+          }
+        ]
+      }
+    },
+    {
+      "name": "r01JF2A00000000000000000L20-h1-wss",
+      "addr": ":31002",
+      "admission": "r01JF2A00000000000000000L20-h1",
+      "handler": {
+        "type": "relay"
+      },
+      "listener": {
+        "type": "wss",
+        "tls": {
+          "certFile": "/var/lib/anixops-gost/tls/link.crt",
+          "keyFile": "/var/lib/anixops-gost/tls/link.key",
+          "caFile": "/var/lib/anixops-gost/tls/link-ca.crt"
+        },
+        "metadata": {
+          "path": "/anixops/ws"
+        }
+      },
+      "forwarder": {
+        "nodes": [
+          {
+            "name": "u0",
+            "addr": "192.0.2.20:443"
+          }
+        ],
+        "selector": {
+          "strategy": "round",
+          "maxFails": 3,
+          "failTimeout": "30s"
+        }
+      }
+    },
+    {
+      "name": "r01JF2A00000000000000000L21-h0-tcp",
+      "addr": ":32002",
+      "handler": {
+        "type": "tcp",
+        "chain": "r01JF2A00000000000000000L21-h0"
+      },
+      "listener": {
+        "type": "tcp"
+      },
+      "forwarder": {
+        "nodes": [
+          {
+            "name": "next",
+            "addr": "0.0.0.0:0"
+          }
+        ]
+      }
+    },
+    {
+      "name": "r01JF2A00000000000000000L21-h0-udp",
+      "addr": ":32002",
+      "handler": {
+        "type": "udp",
+        "chain": "r01JF2A00000000000000000L21-h0"
+      },
+      "listener": {
+        "type": "udp",
+        "metadata": {
+          "keepalive": "true",
+          "readBufferSize": "65536",
+          "ttl": "60s"
+        }
+      },
+      "forwarder": {
+        "nodes": [
+          {
+            "name": "next",
+            "addr": "0.0.0.0:0"
+          }
+        ]
+      }
+    },
+    {
+      "name": "r01JF2A00000000000000000L30-h1-mwss",
+      "addr": ":31003",
+      "admission": "r01JF2A00000000000000000L30-h1",
+      "handler": {
+        "type": "relay"
+      },
+      "listener": {
+        "type": "mwss",
+        "tls": {
+          "certFile": "/var/lib/anixops-gost/tls/link.crt",
+          "keyFile": "/var/lib/anixops-gost/tls/link.key",
+          "caFile": "/var/lib/anixops-gost/tls/link-ca.crt"
+        }
+      },
+      "forwarder": {
+        "nodes": [
+          {
+            "name": "u0",
+            "addr": "192.0.2.20:443"
+          }
+        ],
+        "selector": {
+          "strategy": "round",
+          "maxFails": 3,
+          "failTimeout": "30s"
+        }
+      }
+    },
+    {
+      "name": "r01JF2A00000000000000000L31-h0-tcp",
+      "addr": ":32003",
+      "handler": {
+        "type": "tcp",
+        "chain": "r01JF2A00000000000000000L31-h0"
+      },
+      "listener": {
+        "type": "tcp"
+      },
+      "forwarder": {
+        "nodes": [
+          {
+            "name": "next",
+            "addr": "0.0.0.0:0"
+          }
+        ]
+      }
+    },
+    {
+      "name": "r01JF2A00000000000000000L31-h0-udp",
+      "addr": ":32003",
+      "handler": {
+        "type": "udp",
+        "chain": "r01JF2A00000000000000000L31-h0"
+      },
+      "listener": {
+        "type": "udp",
+        "metadata": {
+          "keepalive": "true",
+          "readBufferSize": "65536",
+          "ttl": "60s"
+        }
+      },
+      "forwarder": {
+        "nodes": [
+          {
+            "name": "next",
+            "addr": "0.0.0.0:0"
+          }
+        ]
+      }
+    },
+    {
+      "name": "r01JF2A00000000000000000L40-h1-quic",
+      "addr": ":31004",
+      "admission": "r01JF2A00000000000000000L40-h1",
+      "handler": {
+        "type": "relay"
+      },
+      "listener": {
+        "type": "quic",
+        "tls": {
+          "certFile": "/var/lib/anixops-gost/tls/link.crt",
+          "keyFile": "/var/lib/anixops-gost/tls/link.key",
+          "caFile": "/var/lib/anixops-gost/tls/link-ca.crt"
+        }
+      },
+      "forwarder": {
+        "nodes": [
+          {
+            "name": "u0",
+            "addr": "192.0.2.20:443"
+          }
+        ],
+        "selector": {
+          "strategy": "round",
+          "maxFails": 3,
+          "failTimeout": "30s"
+        }
+      }
+    },
+    {
+      "name": "r01JF2A00000000000000000L41-h0-tcp",
+      "addr": ":32004",
+      "handler": {
+        "type": "tcp",
+        "chain": "r01JF2A00000000000000000L41-h0"
+      },
+      "listener": {
+        "type": "tcp"
+      },
+      "forwarder": {
+        "nodes": [
+          {
+            "name": "next",
+            "addr": "0.0.0.0:0"
+          }
+        ]
+      }
+    },
+    {
+      "name": "r01JF2A00000000000000000L41-h0-udp",
+      "addr": ":32004",
+      "handler": {
+        "type": "udp",
+        "chain": "r01JF2A00000000000000000L41-h0"
+      },
+      "listener": {
+        "type": "udp",
+        "metadata": {
+          "keepalive": "true",
+          "readBufferSize": "65536",
+          "ttl": "60s"
+        }
+      },
+      "forwarder": {
+        "nodes": [
+          {
+            "name": "next",
+            "addr": "0.0.0.0:0"
+          }
+        ]
+      }
+    },
+    {
+      "name": "r01JF2A00000000000000000L50-h1-grpc",
+      "addr": ":31005",
+      "admission": "r01JF2A00000000000000000L50-h1",
+      "handler": {
+        "type": "relay"
+      },
+      "listener": {
+        "type": "grpc",
+        "tls": {
+          "certFile": "/var/lib/anixops-gost/tls/link.crt",
+          "keyFile": "/var/lib/anixops-gost/tls/link.key",
+          "caFile": "/var/lib/anixops-gost/tls/link-ca.crt"
+        },
+        "metadata": {
+          "path": "/anixops.Tunnel/Relay"
+        }
+      },
+      "forwarder": {
+        "nodes": [
+          {
+            "name": "u0",
+            "addr": "192.0.2.20:443"
+          }
+        ],
+        "selector": {
+          "strategy": "round",
+          "maxFails": 3,
+          "failTimeout": "30s"
+        }
+      }
+    },
+    {
+      "name": "r01JF2A00000000000000000L51-h0-tcp",
+      "addr": ":32005",
+      "handler": {
+        "type": "tcp",
+        "chain": "r01JF2A00000000000000000L51-h0"
+      },
+      "listener": {
+        "type": "tcp"
+      },
+      "forwarder": {
+        "nodes": [
+          {
+            "name": "next",
+            "addr": "0.0.0.0:0"
+          }
+        ]
+      }
+    },
+    {
+      "name": "r01JF2A00000000000000000L51-h0-udp",
+      "addr": ":32005",
+      "handler": {
+        "type": "udp",
+        "chain": "r01JF2A00000000000000000L51-h0"
+      },
+      "listener": {
+        "type": "udp",
+        "metadata": {
+          "keepalive": "true",
+          "readBufferSize": "65536",
+          "ttl": "60s"
+        }
+      },
+      "forwarder": {
+        "nodes": [
+          {
+            "name": "next",
+            "addr": "0.0.0.0:0"
+          }
+        ]
+      }
+    },
+    {
+      "name": "r01JF2A00000000000000000L60-h1-mtcp",
+      "addr": ":31006",
+      "admission": "r01JF2A00000000000000000L60-h1",
+      "handler": {
+        "type": "relay"
+      },
+      "listener": {
+        "type": "mtcp"
+      },
+      "forwarder": {
+        "nodes": [
+          {
+            "name": "u0",
+            "addr": "192.0.2.20:443"
+          }
+        ],
+        "selector": {
+          "strategy": "round",
+          "maxFails": 3,
+          "failTimeout": "30s"
+        }
+      }
+    },
+    {
+      "name": "r01JF2A00000000000000000L61-h0-tcp",
+      "addr": ":32006",
+      "handler": {
+        "type": "tcp",
+        "chain": "r01JF2A00000000000000000L61-h0"
+      },
+      "listener": {
+        "type": "tcp"
+      },
+      "forwarder": {
+        "nodes": [
+          {
+            "name": "next",
+            "addr": "0.0.0.0:0"
+          }
+        ]
+      }
+    },
+    {
+      "name": "r01JF2A00000000000000000L61-h0-udp",
+      "addr": ":32006",
+      "handler": {
+        "type": "udp",
+        "chain": "r01JF2A00000000000000000L61-h0"
+      },
+      "listener": {
+        "type": "udp",
+        "metadata": {
+          "keepalive": "true",
+          "readBufferSize": "65536",
+          "ttl": "60s"
+        }
+      },
+      "forwarder": {
+        "nodes": [
+          {
+            "name": "next",
+            "addr": "0.0.0.0:0"
+          }
+        ]
+      }
+    }
+  ],
+  "chains": [
+    {
+      "name": "r01JF2A00000000000000000L01-h0",
+      "hops": [
+        {
+          "name": "r01JF2A00000000000000000L01-h0",
+          "selector": {
+            "strategy": "round",
+            "maxFails": 3,
+            "failTimeout": "30s"
+          },
+          "nodes": [
+            {
+              "name": "u1-0",
+              "addr": "192.0.2.21:443",
+              "connector": {
+                "type": "relay"
+              },
+              "dialer": {
+                "type": "tls",
+                "tls": {
+                  "certFile": "/var/lib/anixops-gost/tls/link.crt",
+                  "keyFile": "/var/lib/anixops-gost/tls/link.key",
+                  "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
+                  "secure": true,
+                  "serverName": "forward-41"
+                }
+              }
+            },
+            {
+              "name": "u0-0",
+              "addr": "192.0.2.20:443",
+              "connector": {
+                "type": "relay"
+              },
+              "dialer": {
+                "type": "tls",
+                "tls": {
+                  "certFile": "/var/lib/anixops-gost/tls/link.crt",
+                  "keyFile": "/var/lib/anixops-gost/tls/link.key",
+                  "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
+                  "secure": true,
+                  "serverName": "forward-40"
+                }
+              }
+            },
+            {
+              "name": "u1-1",
+              "addr": "192.0.2.21:443",
+              "connector": {
+                "type": "relay"
+              },
+              "dialer": {
+                "type": "tls",
+                "tls": {
+                  "certFile": "/var/lib/anixops-gost/tls/link.crt",
+                  "keyFile": "/var/lib/anixops-gost/tls/link.key",
+                  "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
+                  "secure": true,
+                  "serverName": "forward-41"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "r01JF2A00000000000000000L11-h0",
+      "hops": [
+        {
+          "name": "r01JF2A00000000000000000L11-h0",
+          "selector": {
+            "strategy": "round",
+            "maxFails": 3,
+            "failTimeout": "30s"
+          },
+          "nodes": [
+            {
+              "name": "u1-0",
+              "addr": "192.0.2.21:443",
+              "connector": {
+                "type": "relay"
+              },
+              "dialer": {
+                "type": "mtls",
+                "tls": {
+                  "certFile": "/var/lib/anixops-gost/tls/link.crt",
+                  "keyFile": "/var/lib/anixops-gost/tls/link.key",
+                  "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
+                  "secure": true,
+                  "serverName": "forward-41"
+                }
+              }
+            },
+            {
+              "name": "u0-0",
+              "addr": "192.0.2.20:443",
+              "connector": {
+                "type": "relay"
+              },
+              "dialer": {
+                "type": "mtls",
+                "tls": {
+                  "certFile": "/var/lib/anixops-gost/tls/link.crt",
+                  "keyFile": "/var/lib/anixops-gost/tls/link.key",
+                  "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
+                  "secure": true,
+                  "serverName": "forward-40"
+                }
+              }
+            },
+            {
+              "name": "u1-1",
+              "addr": "192.0.2.21:443",
+              "connector": {
+                "type": "relay"
+              },
+              "dialer": {
+                "type": "mtls",
+                "tls": {
+                  "certFile": "/var/lib/anixops-gost/tls/link.crt",
+                  "keyFile": "/var/lib/anixops-gost/tls/link.key",
+                  "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
+                  "secure": true,
+                  "serverName": "forward-41"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "r01JF2A00000000000000000L21-h0",
+      "hops": [
+        {
+          "name": "r01JF2A00000000000000000L21-h0",
+          "selector": {
+            "strategy": "round",
+            "maxFails": 3,
+            "failTimeout": "30s"
+          },
+          "nodes": [
+            {
+              "name": "u1-0",
+              "addr": "192.0.2.21:443",
+              "connector": {
+                "type": "relay"
+              },
+              "dialer": {
+                "type": "wss",
+                "tls": {
+                  "certFile": "/var/lib/anixops-gost/tls/link.crt",
+                  "keyFile": "/var/lib/anixops-gost/tls/link.key",
+                  "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
+                  "secure": true,
+                  "serverName": "forward-41"
+                },
+                "metadata": {
+                  "host": "forward-41",
+                  "path": "/anixops/ws"
+                }
+              }
+            },
+            {
+              "name": "u0-0",
+              "addr": "192.0.2.20:443",
+              "connector": {
+                "type": "relay"
+              },
+              "dialer": {
+                "type": "wss",
+                "tls": {
+                  "certFile": "/var/lib/anixops-gost/tls/link.crt",
+                  "keyFile": "/var/lib/anixops-gost/tls/link.key",
+                  "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
+                  "secure": true,
+                  "serverName": "forward-40"
+                },
+                "metadata": {
+                  "host": "forward-40",
+                  "path": "/anixops/ws"
+                }
+              }
+            },
+            {
+              "name": "u1-1",
+              "addr": "192.0.2.21:443",
+              "connector": {
+                "type": "relay"
+              },
+              "dialer": {
+                "type": "wss",
+                "tls": {
+                  "certFile": "/var/lib/anixops-gost/tls/link.crt",
+                  "keyFile": "/var/lib/anixops-gost/tls/link.key",
+                  "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
+                  "secure": true,
+                  "serverName": "forward-41"
+                },
+                "metadata": {
+                  "host": "forward-41",
+                  "path": "/anixops/ws"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "r01JF2A00000000000000000L31-h0",
+      "hops": [
+        {
+          "name": "r01JF2A00000000000000000L31-h0",
+          "selector": {
+            "strategy": "round",
+            "maxFails": 3,
+            "failTimeout": "30s"
+          },
+          "nodes": [
+            {
+              "name": "u1-0",
+              "addr": "192.0.2.21:443",
+              "connector": {
+                "type": "relay"
+              },
+              "dialer": {
+                "type": "mwss",
+                "tls": {
+                  "certFile": "/var/lib/anixops-gost/tls/link.crt",
+                  "keyFile": "/var/lib/anixops-gost/tls/link.key",
+                  "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
+                  "secure": true,
+                  "serverName": "forward-41"
+                },
+                "metadata": {
+                  "host": "forward-41"
+                }
+              }
+            },
+            {
+              "name": "u0-0",
+              "addr": "192.0.2.20:443",
+              "connector": {
+                "type": "relay"
+              },
+              "dialer": {
+                "type": "mwss",
+                "tls": {
+                  "certFile": "/var/lib/anixops-gost/tls/link.crt",
+                  "keyFile": "/var/lib/anixops-gost/tls/link.key",
+                  "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
+                  "secure": true,
+                  "serverName": "forward-40"
+                },
+                "metadata": {
+                  "host": "forward-40"
+                }
+              }
+            },
+            {
+              "name": "u1-1",
+              "addr": "192.0.2.21:443",
+              "connector": {
+                "type": "relay"
+              },
+              "dialer": {
+                "type": "mwss",
+                "tls": {
+                  "certFile": "/var/lib/anixops-gost/tls/link.crt",
+                  "keyFile": "/var/lib/anixops-gost/tls/link.key",
+                  "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
+                  "secure": true,
+                  "serverName": "forward-41"
+                },
+                "metadata": {
+                  "host": "forward-41"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "r01JF2A00000000000000000L41-h0",
+      "hops": [
+        {
+          "name": "r01JF2A00000000000000000L41-h0",
+          "selector": {
+            "strategy": "round",
+            "maxFails": 3,
+            "failTimeout": "30s"
+          },
+          "nodes": [
+            {
+              "name": "u1-0",
+              "addr": "192.0.2.21:443",
+              "connector": {
+                "type": "relay"
+              },
+              "dialer": {
+                "type": "quic",
+                "tls": {
+                  "certFile": "/var/lib/anixops-gost/tls/link.crt",
+                  "keyFile": "/var/lib/anixops-gost/tls/link.key",
+                  "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
+                  "secure": true,
+                  "serverName": "forward-41"
+                }
+              }
+            },
+            {
+              "name": "u0-0",
+              "addr": "192.0.2.20:443",
+              "connector": {
+                "type": "relay"
+              },
+              "dialer": {
+                "type": "quic",
+                "tls": {
+                  "certFile": "/var/lib/anixops-gost/tls/link.crt",
+                  "keyFile": "/var/lib/anixops-gost/tls/link.key",
+                  "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
+                  "secure": true,
+                  "serverName": "forward-40"
+                }
+              }
+            },
+            {
+              "name": "u1-1",
+              "addr": "192.0.2.21:443",
+              "connector": {
+                "type": "relay"
+              },
+              "dialer": {
+                "type": "quic",
+                "tls": {
+                  "certFile": "/var/lib/anixops-gost/tls/link.crt",
+                  "keyFile": "/var/lib/anixops-gost/tls/link.key",
+                  "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
+                  "secure": true,
+                  "serverName": "forward-41"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "r01JF2A00000000000000000L51-h0",
+      "hops": [
+        {
+          "name": "r01JF2A00000000000000000L51-h0",
+          "selector": {
+            "strategy": "round",
+            "maxFails": 3,
+            "failTimeout": "30s"
+          },
+          "nodes": [
+            {
+              "name": "u1-0",
+              "addr": "192.0.2.21:443",
+              "connector": {
+                "type": "relay"
+              },
+              "dialer": {
+                "type": "grpc",
+                "tls": {
+                  "certFile": "/var/lib/anixops-gost/tls/link.crt",
+                  "keyFile": "/var/lib/anixops-gost/tls/link.key",
+                  "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
+                  "secure": true,
+                  "serverName": "forward-41"
+                },
+                "metadata": {
+                  "host": "forward-41",
+                  "path": "/anixops.Tunnel/Relay"
+                }
+              }
+            },
+            {
+              "name": "u0-0",
+              "addr": "192.0.2.20:443",
+              "connector": {
+                "type": "relay"
+              },
+              "dialer": {
+                "type": "grpc",
+                "tls": {
+                  "certFile": "/var/lib/anixops-gost/tls/link.crt",
+                  "keyFile": "/var/lib/anixops-gost/tls/link.key",
+                  "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
+                  "secure": true,
+                  "serverName": "forward-40"
+                },
+                "metadata": {
+                  "host": "forward-40",
+                  "path": "/anixops.Tunnel/Relay"
+                }
+              }
+            },
+            {
+              "name": "u1-1",
+              "addr": "192.0.2.21:443",
+              "connector": {
+                "type": "relay"
+              },
+              "dialer": {
+                "type": "grpc",
+                "tls": {
+                  "certFile": "/var/lib/anixops-gost/tls/link.crt",
+                  "keyFile": "/var/lib/anixops-gost/tls/link.key",
+                  "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
+                  "secure": true,
+                  "serverName": "forward-41"
+                },
+                "metadata": {
+                  "host": "forward-41",
+                  "path": "/anixops.Tunnel/Relay"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "name": "r01JF2A00000000000000000L61-h0",
+      "hops": [
+        {
+          "name": "r01JF2A00000000000000000L61-h0",
+          "selector": {
+            "strategy": "round",
+            "maxFails": 3,
+            "failTimeout": "30s"
+          },
+          "nodes": [
+            {
+              "name": "u1-0",
+              "addr": "192.0.2.21:443",
+              "connector": {
+                "type": "relay"
+              },
+              "dialer": {
+                "type": "mtcp"
+              }
+            },
+            {
+              "name": "u0-0",
+              "addr": "192.0.2.20:443",
+              "connector": {
+                "type": "relay"
+              },
+              "dialer": {
+                "type": "mtcp"
+              }
+            },
+            {
+              "name": "u1-1",
+              "addr": "192.0.2.21:443",
+              "connector": {
+                "type": "relay"
+              },
+              "dialer": {
+                "type": "mtcp"
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "admissions": [
+    {
+      "name": "r01JF2A00000000000000000L00-h1",
+      "whitelist": true,
+      "matchers": [
+        "198.51.100.7"
+      ]
+    },
+    {
+      "name": "r01JF2A00000000000000000L10-h1",
+      "whitelist": true,
+      "matchers": [
+        "198.51.100.7"
+      ]
+    },
+    {
+      "name": "r01JF2A00000000000000000L20-h1",
+      "whitelist": true,
+      "matchers": [
+        "198.51.100.7"
+      ]
+    },
+    {
+      "name": "r01JF2A00000000000000000L30-h1",
+      "whitelist": true,
+      "matchers": [
+        "198.51.100.7"
+      ]
+    },
+    {
+      "name": "r01JF2A00000000000000000L40-h1",
+      "whitelist": true,
+      "matchers": [
+        "198.51.100.7"
+      ]
+    },
+    {
+      "name": "r01JF2A00000000000000000L50-h1",
+      "whitelist": true,
+      "matchers": [
+        "198.51.100.7"
+      ]
+    },
+    {
+      "name": "r01JF2A00000000000000000L60-h1",
+      "whitelist": true,
+      "matchers": [
+        "198.51.100.7"
+      ]
+    }
+  ],
+  "log": {
+    "level": "warn",
+    "format": "json",
+    "output": "stderr"
+  },
+  "metrics": {
+    "addr": "unix:///run/anixops-gost/metrics.sock",
+    "path": "/anixops-3d301fca594a8dc9"
+  }
+}
