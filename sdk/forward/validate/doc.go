@@ -50,6 +50,15 @@
 // support the limits that are set; explicit ports are inside each node's
 // range.
 //
+// Rules the planner (sdk/forward/planner) adds, because they need every
+// route on a node: a route's explicit ports are not held by another route,
+// another hop of the same route or a route in its grace period
+// (CodePortInUse); a hop with port 0 gets a free port of each node's range
+// (CodePortExhausted, CodeNoPortRange); every hop on a node gets a
+// connection mark (CodeMarkExhausted); every dialled node has an address
+// (CodeNoAddress). Their codes are in violation.go with the others, so
+// there is one list of codes.
+//
 // The caps and bounds are proposals in caps.go; the defaults are in
 // sdk/forward/model.
 package validate

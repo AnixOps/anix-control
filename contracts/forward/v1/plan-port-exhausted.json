@@ -1,0 +1,93 @@
+{
+  "$comment": "DRAFT (F1). The entry's range 45000-45002 has no free port: 45000 is reserved and 45001-45002 are held by another route. The planner refuses the route with port_exhausted and plans nothing. request is an anixops.forward.v1.PlanRouteRequest and response the PlanRouteResponse the planner (sdk/forward/planner.PlanRoute, Options.Cluster \"example\") answers, both in protojson with proto field names. Regenerate with: go -C sdk test ./forward/planner -run Golden -update. See docs/architecture/forward-sdk.md section 5.",
+  "name": "port exhaustion is a violation",
+  "status": "draft",
+  "request": {
+    "route": {
+      "id": "01JF1G000000000000000000G1",
+      "owner": "admin",
+      "name": "full",
+      "listen": {
+        "protocol": "L4_PROTOCOL_TCP"
+      },
+      "hops": [
+        {
+          "role": "HOP_ROLE_ENTRY",
+          "engine": "ENGINE_NFTABLES",
+          "node_refs": [
+            "forward-81"
+          ]
+        }
+      ],
+      "targets": [
+        {
+          "host": "198.51.100.7",
+          "port": 443
+        }
+      ]
+    },
+    "nodes": [
+      {
+        "node_ref": "forward-81",
+        "addresses": [
+          "192.0.2.81"
+        ],
+        "port_range": {
+          "first": 45000,
+          "last": 45002
+        },
+        "engines": [
+          {
+            "engine": "ENGINE_NFTABLES",
+            "version": "nft 1.0.9",
+            "available": true,
+            "udp": true,
+            "strategies": [
+              "BALANCE_STRATEGY_ROUND_ROBIN",
+              "BALANCE_STRATEGY_RANDOM",
+              "BALANCE_STRATEGY_IP_HASH",
+              "BALANCE_STRATEGY_LEAST_CONN",
+              "BALANCE_STRATEGY_FAILOVER"
+            ],
+            "link_securities": [
+              "LINK_SECURITY_RAW"
+            ],
+            "bandwidth_limit": true,
+            "quota": true,
+            "max_conns": true
+          }
+        ]
+      }
+    ]
+  },
+  "taken_allocations": [
+    {
+      "route_id": "01JF1Z000000000000000000Z8",
+      "hop_index": 0,
+      "node_ref": "forward-81",
+      "port": 45001,
+      "mark": 1
+    },
+    {
+      "route_id": "01JF1Z000000000000000000Z9",
+      "hop_index": 0,
+      "node_ref": "forward-81",
+      "port": 45002,
+      "mark": 2
+    }
+  ],
+  "reserved_ports": {
+    "forward-81": [
+      45000
+    ]
+  },
+  "response": {
+    "violations": [
+      {
+        "field": "listen.port",
+        "message": "no free port in forward-81's range 45000-45002",
+        "code": "port_exhausted"
+      }
+    ]
+  }
+}

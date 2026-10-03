@@ -1,0 +1,475 @@
+{
+  "$comment": "DRAFT (F1). Plan (sdk/forward/planner.Plan, Options.Cluster \"example\") of two stored routes over four nodes, then Stamp. routes and nodes are anixops.forward.v1 Route and NodeInfo in protojson; previous_allocations and previous_generations are what Control kept from the last plan; states are the NodeForwardStates with generation and state_hash; allocations and generations are what Control keeps for the next plan. Route F2's targets changed since the last plan: only its exit forward-42 changes, so only forward-42's generation bumps; forward-43 runs nothing and gets its first, empty state. The test re-plans with the answered allocations and generations and checks nothing moves. Regenerate with: go -C sdk test ./forward/planner -run Golden -update.",
+  "name": "two routes merged per node; generations bump only where a node's state changed",
+  "status": "draft",
+  "routes": [
+    {
+      "id": "01JF1F000000000000000000F1",
+      "owner": "admin",
+      "name": "a",
+      "listen": {
+        "port": 40001,
+        "protocol": "L4_PROTOCOL_TCP"
+      },
+      "hops": [
+        {
+          "role": "HOP_ROLE_ENTRY",
+          "engine": "ENGINE_NFTABLES",
+          "node_refs": [
+            "forward-21"
+          ]
+        },
+        {
+          "role": "HOP_ROLE_EXIT",
+          "engine": "ENGINE_GOST",
+          "node_refs": [
+            "forward-41"
+          ],
+          "ingress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        }
+      ],
+      "targets": [
+        {
+          "host": "198.51.100.7",
+          "port": 443
+        }
+      ]
+    },
+    {
+      "id": "01JF1F000000000000000000F2",
+      "owner": "admin",
+      "name": "b",
+      "listen": {
+        "port": 40002,
+        "protocol": "L4_PROTOCOL_TCP"
+      },
+      "hops": [
+        {
+          "role": "HOP_ROLE_ENTRY",
+          "engine": "ENGINE_NFTABLES",
+          "node_refs": [
+            "forward-21"
+          ]
+        },
+        {
+          "role": "HOP_ROLE_EXIT",
+          "engine": "ENGINE_GOST",
+          "node_refs": [
+            "forward-42"
+          ],
+          "ingress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        }
+      ],
+      "targets": [
+        {
+          "host": "198.51.100.9",
+          "port": 443
+        }
+      ]
+    }
+  ],
+  "nodes": [
+    {
+      "node_ref": "forward-21",
+      "addresses": [
+        "192.0.2.21"
+      ],
+      "port_range": {
+        "first": 40000,
+        "last": 49999
+      },
+      "engines": [
+        {
+          "engine": "ENGINE_NFTABLES",
+          "version": "nft 1.0.9",
+          "available": true,
+          "udp": true,
+          "strategies": [
+            "BALANCE_STRATEGY_ROUND_ROBIN",
+            "BALANCE_STRATEGY_RANDOM",
+            "BALANCE_STRATEGY_IP_HASH",
+            "BALANCE_STRATEGY_LEAST_CONN",
+            "BALANCE_STRATEGY_FAILOVER"
+          ],
+          "link_securities": [
+            "LINK_SECURITY_RAW"
+          ],
+          "bandwidth_limit": true,
+          "quota": true,
+          "max_conns": true
+        }
+      ]
+    },
+    {
+      "node_ref": "forward-41",
+      "addresses": [
+        "203.0.113.41"
+      ],
+      "port_range": {
+        "first": 20000,
+        "last": 20999
+      },
+      "engines": [
+        {
+          "engine": "ENGINE_GOST",
+          "version": "gost 3.0.0",
+          "available": true,
+          "ipv6": true,
+          "udp": true,
+          "strategies": [
+            "BALANCE_STRATEGY_ROUND_ROBIN",
+            "BALANCE_STRATEGY_RANDOM",
+            "BALANCE_STRATEGY_IP_HASH",
+            "BALANCE_STRATEGY_LEAST_CONN",
+            "BALANCE_STRATEGY_FAILOVER"
+          ],
+          "link_securities": [
+            "LINK_SECURITY_RAW",
+            "LINK_SECURITY_TLS",
+            "LINK_SECURITY_WSS",
+            "LINK_SECURITY_QUIC",
+            "LINK_SECURITY_GRPC"
+          ],
+          "bandwidth_limit": true,
+          "max_conns": true
+        }
+      ]
+    },
+    {
+      "node_ref": "forward-42",
+      "addresses": [
+        "203.0.113.42"
+      ],
+      "port_range": {
+        "first": 20000,
+        "last": 20999
+      },
+      "engines": [
+        {
+          "engine": "ENGINE_GOST",
+          "version": "gost 3.0.0",
+          "available": true,
+          "ipv6": true,
+          "udp": true,
+          "strategies": [
+            "BALANCE_STRATEGY_ROUND_ROBIN",
+            "BALANCE_STRATEGY_RANDOM",
+            "BALANCE_STRATEGY_IP_HASH",
+            "BALANCE_STRATEGY_LEAST_CONN",
+            "BALANCE_STRATEGY_FAILOVER"
+          ],
+          "link_securities": [
+            "LINK_SECURITY_RAW",
+            "LINK_SECURITY_TLS",
+            "LINK_SECURITY_WSS",
+            "LINK_SECURITY_QUIC",
+            "LINK_SECURITY_GRPC"
+          ],
+          "bandwidth_limit": true,
+          "max_conns": true
+        }
+      ]
+    },
+    {
+      "node_ref": "forward-43",
+      "addresses": [
+        "203.0.113.43"
+      ],
+      "port_range": {
+        "first": 20000,
+        "last": 20999
+      },
+      "engines": [
+        {
+          "engine": "ENGINE_GOST",
+          "version": "gost 3.0.0",
+          "available": true,
+          "ipv6": true,
+          "udp": true,
+          "strategies": [
+            "BALANCE_STRATEGY_ROUND_ROBIN",
+            "BALANCE_STRATEGY_RANDOM",
+            "BALANCE_STRATEGY_IP_HASH",
+            "BALANCE_STRATEGY_LEAST_CONN",
+            "BALANCE_STRATEGY_FAILOVER"
+          ],
+          "link_securities": [
+            "LINK_SECURITY_RAW",
+            "LINK_SECURITY_TLS",
+            "LINK_SECURITY_WSS",
+            "LINK_SECURITY_QUIC",
+            "LINK_SECURITY_GRPC"
+          ],
+          "bandwidth_limit": true,
+          "max_conns": true
+        }
+      ]
+    }
+  ],
+  "previous_allocations": [
+    {
+      "route_id": "01JF1F000000000000000000F1",
+      "hop_index": 0,
+      "node_ref": "forward-21",
+      "port": 40001,
+      "mark": 1
+    },
+    {
+      "route_id": "01JF1F000000000000000000F1",
+      "hop_index": 1,
+      "node_ref": "forward-41",
+      "port": 20000,
+      "mark": 1
+    },
+    {
+      "route_id": "01JF1F000000000000000000F2",
+      "hop_index": 0,
+      "node_ref": "forward-21",
+      "port": 40002,
+      "mark": 2
+    },
+    {
+      "route_id": "01JF1F000000000000000000F2",
+      "hop_index": 1,
+      "node_ref": "forward-42",
+      "port": 20000,
+      "mark": 1
+    }
+  ],
+  "previous_generations": {
+    "forward-21": {
+      "generation": 7,
+      "state_hash": "b139141b534efe05249137c2faaf80881d122fbf23fefb885f309af5fc186923"
+    },
+    "forward-41": {
+      "generation": 3,
+      "state_hash": "66d3a94337fdc781f99ca4e7580250a1ca371aa39047a073a834a7e60fe8dbd5"
+    },
+    "forward-42": {
+      "generation": 5,
+      "state_hash": "0000000000000000000000000000000000000000000000000000000000000000"
+    }
+  },
+  "states": [
+    {
+      "node_ref": "forward-21",
+      "generation": "7",
+      "state_hash": "b139141b534efe05249137c2faaf80881d122fbf23fefb885f309af5fc186923",
+      "hops": [
+        {
+          "route_id": "01JF1F000000000000000000F1",
+          "role": "HOP_ROLE_ENTRY",
+          "engine": "ENGINE_NFTABLES",
+          "listen": {
+            "port": 40001,
+            "protocol": "L4_PROTOCOL_TCP"
+          },
+          "ingress": {
+            "security": "LINK_SECURITY_RAW"
+          },
+          "upstreams": [
+            {
+              "address": "203.0.113.41",
+              "port": 20000,
+              "weight": 1,
+              "egress": {
+                "security": "LINK_SECURITY_RAW"
+              },
+              "node_ref": "forward-41"
+            }
+          ],
+          "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+          "health": {
+            "interval_ms": 5000,
+            "timeout_ms": 2000
+          },
+          "circuit_breaker": {
+            "failure_threshold": 3,
+            "open_ms": 30000
+          },
+          "target_policy": "TARGET_POLICY_PUBLIC_ONLY",
+          "mark": 1
+        },
+        {
+          "route_id": "01JF1F000000000000000000F2",
+          "role": "HOP_ROLE_ENTRY",
+          "engine": "ENGINE_NFTABLES",
+          "listen": {
+            "port": 40002,
+            "protocol": "L4_PROTOCOL_TCP"
+          },
+          "ingress": {
+            "security": "LINK_SECURITY_RAW"
+          },
+          "upstreams": [
+            {
+              "address": "203.0.113.42",
+              "port": 20000,
+              "weight": 1,
+              "egress": {
+                "security": "LINK_SECURITY_RAW"
+              },
+              "node_ref": "forward-42"
+            }
+          ],
+          "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+          "health": {
+            "interval_ms": 5000,
+            "timeout_ms": 2000
+          },
+          "circuit_breaker": {
+            "failure_threshold": 3,
+            "open_ms": 30000
+          },
+          "target_policy": "TARGET_POLICY_PUBLIC_ONLY",
+          "mark": 2
+        }
+      ]
+    },
+    {
+      "node_ref": "forward-41",
+      "generation": "3",
+      "state_hash": "66d3a94337fdc781f99ca4e7580250a1ca371aa39047a073a834a7e60fe8dbd5",
+      "hops": [
+        {
+          "route_id": "01JF1F000000000000000000F1",
+          "hop_index": 1,
+          "role": "HOP_ROLE_EXIT",
+          "engine": "ENGINE_GOST",
+          "listen": {
+            "port": 20000,
+            "protocol": "L4_PROTOCOL_TCP"
+          },
+          "ingress": {
+            "security": "LINK_SECURITY_RAW"
+          },
+          "upstreams": [
+            {
+              "address": "198.51.100.7",
+              "port": 443,
+              "weight": 1,
+              "egress": {
+                "security": "LINK_SECURITY_RAW"
+              }
+            }
+          ],
+          "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+          "health": {
+            "interval_ms": 5000,
+            "timeout_ms": 2000
+          },
+          "circuit_breaker": {
+            "failure_threshold": 3,
+            "open_ms": 30000
+          },
+          "target_policy": "TARGET_POLICY_PUBLIC_ONLY",
+          "mark": 1,
+          "ingress_sources": [
+            "192.0.2.21"
+          ]
+        }
+      ]
+    },
+    {
+      "node_ref": "forward-42",
+      "generation": "6",
+      "state_hash": "e803121dc619be6f598ddf1f0659c488f1b8ea8f2dd1ea89d8d9a4fdc5e9e54c",
+      "hops": [
+        {
+          "route_id": "01JF1F000000000000000000F2",
+          "hop_index": 1,
+          "role": "HOP_ROLE_EXIT",
+          "engine": "ENGINE_GOST",
+          "listen": {
+            "port": 20000,
+            "protocol": "L4_PROTOCOL_TCP"
+          },
+          "ingress": {
+            "security": "LINK_SECURITY_RAW"
+          },
+          "upstreams": [
+            {
+              "address": "198.51.100.9",
+              "port": 443,
+              "weight": 1,
+              "egress": {
+                "security": "LINK_SECURITY_RAW"
+              }
+            }
+          ],
+          "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+          "health": {
+            "interval_ms": 5000,
+            "timeout_ms": 2000
+          },
+          "circuit_breaker": {
+            "failure_threshold": 3,
+            "open_ms": 30000
+          },
+          "target_policy": "TARGET_POLICY_PUBLIC_ONLY",
+          "mark": 1,
+          "ingress_sources": [
+            "192.0.2.21"
+          ]
+        }
+      ]
+    },
+    {
+      "node_ref": "forward-43",
+      "generation": "1",
+      "state_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  ],
+  "allocations": [
+    {
+      "route_id": "01JF1F000000000000000000F1",
+      "hop_index": 0,
+      "node_ref": "forward-21",
+      "port": 40001,
+      "mark": 1
+    },
+    {
+      "route_id": "01JF1F000000000000000000F1",
+      "hop_index": 1,
+      "node_ref": "forward-41",
+      "port": 20000,
+      "mark": 1
+    },
+    {
+      "route_id": "01JF1F000000000000000000F2",
+      "hop_index": 0,
+      "node_ref": "forward-21",
+      "port": 40002,
+      "mark": 2
+    },
+    {
+      "route_id": "01JF1F000000000000000000F2",
+      "hop_index": 1,
+      "node_ref": "forward-42",
+      "port": 20000,
+      "mark": 1
+    }
+  ],
+  "generations": {
+    "forward-21": {
+      "generation": 7,
+      "state_hash": "b139141b534efe05249137c2faaf80881d122fbf23fefb885f309af5fc186923"
+    },
+    "forward-41": {
+      "generation": 3,
+      "state_hash": "66d3a94337fdc781f99ca4e7580250a1ca371aa39047a073a834a7e60fe8dbd5"
+    },
+    "forward-42": {
+      "generation": 6,
+      "state_hash": "e803121dc619be6f598ddf1f0659c488f1b8ea8f2dd1ea89d8d9a4fdc5e9e54c"
+    },
+    "forward-43": {
+      "generation": 1,
+      "state_hash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    }
+  }
+}

@@ -30,6 +30,36 @@
     `anixops_agent_package_reports_refused_total{reason}`.
   - Design and privacy notes: `docs/architecture/package-reports.md`.
 
+- Forward SDK F1c (`docs/architecture/forward-sdk.md` section 5):
+  `sdk/forward/planner`, the pure, deterministic planner. `Plan` validates
+  every route with `sdk/forward/validate` and renders them into one
+  `NodeForwardState` per node; `PlanRoute` is the single-route plan of
+  `ForwardControl.PlanRoute`; `Stamp` sets `state_hash` (SHA-256 of the
+  deterministic encoding of the node's sorted hops) and bumps a node's
+  `generation` only when that hash changes.
+  - Ports: the entry's nodes share one port; previous allocations stick
+    across re-plans while legal; explicit ports already held are refused;
+    the rest get the lowest free port of the node's range outside reserved
+    and taken ports (grace period). Connection marks 1..4095 per node,
+    sticky too.
+  - Wiring: next-hop nodes in `node_refs` order (their failover priority)
+    at `dial_address` or the first address, with the link's server name
+    and the pinned Agent identity on encrypted links; targets on the last
+    hop; ingress sources and peers from the previous hop; limits on the
+    entry only; `DIRECT_MODE_PREFERRED`; paused routes kept with `paused`
+    set.
+  - New violation codes, listed with validate's: `port_in_use`,
+    `port_exhausted`, `no_port_range`, `mark_exhausted`, `no_address`. Any
+    violation refuses the whole plan.
+  - The two F1a plan fixtures in `contracts/forward/v1` are now produced by
+    the planner byte for byte (canonical, re-indented protojson; zero
+    values such as `"priority": 0` are omitted, and the single-hop fixture
+    gains a warning that its node's IPv6 clients have no upstream), with
+    `-update` to regenerate. New goldens: UDP over WSS to IPv6 targets,
+    two entry nodes behind an entry hostname with failover, a sticky
+    re-plan after adding a target, port exhaustion, and a multi-route plan
+    with generations. Property tests cover idempotent re-plans, collision
+    free and in-range allocations, freed ports and generation bumps.
 - Forward SDK F1b (`docs/architecture/forward-sdk.md`): `sdk/forward/model`,
   Go domain types for the draft `anixops.forward.v1` contract (routes, hops,
   targets, policy, limits, counters, node inventory) with lossless

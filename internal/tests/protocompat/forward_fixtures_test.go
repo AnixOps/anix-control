@@ -16,11 +16,11 @@ import (
 )
 
 // The forward fixtures (contracts/forward/v1) are the draft planner goldens
-// of docs/architecture/forward-sdk.md. Until the planner exists (F1c),
-// these tests keep them parseable as the draft contract, internally
-// consistent, and in agreement with the shared validation
-// (sdk/forward/validate); the planner's own tests will compare its output
-// with them.
+// of docs/architecture/forward-sdk.md. The planner's own tests
+// (sdk/forward/planner, F1c) produce them byte for byte; these tests keep
+// them parseable as the draft contract, internally consistent, and in
+// agreement with the shared validation (sdk/forward/validate) from the
+// kernel module's side.
 
 func forwardFixturePath(name string) string {
 	return filepath.Join("..", "..", "..", "contracts", "forward", "v1", name)
@@ -48,6 +48,9 @@ func TestForwardPlanFixturesAreConsistent(t *testing.T) {
 	for _, name := range []string{
 		"plan-single-hop-nftables-iepl.json",
 		"plan-nft-entry-gost-relay-exit-failover.json",
+		"plan-gost-udp-ipv6-targets.json",
+		"plan-multi-entry-hostname-failover.json",
+		"plan-sticky-replan-added-target.json",
 	} {
 		t.Run(name, func(t *testing.T) {
 			fixture := readForwardFixture(t, name)

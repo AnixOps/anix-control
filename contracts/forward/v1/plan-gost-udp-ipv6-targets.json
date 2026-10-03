@@ -1,0 +1,248 @@
+{
+  "$comment": "DRAFT (F1). UDP over a gost WSS link to IPv6 targets; both listen ports are allocated, the entry's skipping a reserved port. reserved_ports is planner input the contract's request does not carry (Options.ReservedPorts). request is an anixops.forward.v1.PlanRouteRequest and response the PlanRouteResponse the planner (sdk/forward/planner.PlanRoute, Options.Cluster \"example\") answers, both in protojson with proto field names. Regenerate with: go -C sdk test ./forward/planner -run Golden -update. See docs/architecture/forward-sdk.md section 5.",
+  "name": "gost entry and exit over WSS, UDP, IPv6 targets with weights, allocated ports",
+  "status": "draft",
+  "request": {
+    "route": {
+      "id": "01JF1C000000000000000000C1",
+      "owner": "admin",
+      "name": "udp-v6-game",
+      "listen": {
+        "protocol": "L4_PROTOCOL_UDP"
+      },
+      "hops": [
+        {
+          "role": "HOP_ROLE_ENTRY",
+          "engine": "ENGINE_GOST",
+          "node_refs": [
+            "forward-51"
+          ]
+        },
+        {
+          "role": "HOP_ROLE_EXIT",
+          "engine": "ENGINE_GOST",
+          "node_refs": [
+            "forward-61"
+          ],
+          "ingress": {
+            "security": "LINK_SECURITY_WSS",
+            "server_name": "edge.example.com",
+            "path": "/ws"
+          }
+        }
+      ],
+      "targets": [
+        {
+          "host": "2001:db8:100::7",
+          "port": 27015,
+          "weight": 3
+        },
+        {
+          "host": "2001:db8:100::8",
+          "port": 27015
+        }
+      ],
+      "policy": {
+        "target": "BALANCE_STRATEGY_ROUND_ROBIN",
+        "health": {
+          "interval_ms": 10000,
+          "timeout_ms": 3000
+        }
+      }
+    },
+    "nodes": [
+      {
+        "node_ref": "forward-51",
+        "addresses": [
+          "198.51.100.51",
+          "2001:db8:51::1"
+        ],
+        "port_range": {
+          "first": 10000,
+          "last": 10099
+        },
+        "engines": [
+          {
+            "engine": "ENGINE_GOST",
+            "version": "gost 3.0.0",
+            "available": true,
+            "ipv6": true,
+            "udp": true,
+            "strategies": [
+              "BALANCE_STRATEGY_ROUND_ROBIN",
+              "BALANCE_STRATEGY_RANDOM",
+              "BALANCE_STRATEGY_IP_HASH",
+              "BALANCE_STRATEGY_LEAST_CONN",
+              "BALANCE_STRATEGY_FAILOVER"
+            ],
+            "link_securities": [
+              "LINK_SECURITY_RAW",
+              "LINK_SECURITY_TLS",
+              "LINK_SECURITY_WSS",
+              "LINK_SECURITY_QUIC",
+              "LINK_SECURITY_GRPC"
+            ],
+            "bandwidth_limit": true,
+            "max_conns": true
+          }
+        ]
+      },
+      {
+        "node_ref": "forward-61",
+        "addresses": [
+          "2001:db8:61::1",
+          "203.0.113.61"
+        ],
+        "port_range": {
+          "first": 10000,
+          "last": 10099
+        },
+        "engines": [
+          {
+            "engine": "ENGINE_GOST",
+            "version": "gost 3.0.0",
+            "available": true,
+            "ipv6": true,
+            "udp": true,
+            "strategies": [
+              "BALANCE_STRATEGY_ROUND_ROBIN",
+              "BALANCE_STRATEGY_RANDOM",
+              "BALANCE_STRATEGY_IP_HASH",
+              "BALANCE_STRATEGY_LEAST_CONN",
+              "BALANCE_STRATEGY_FAILOVER"
+            ],
+            "link_securities": [
+              "LINK_SECURITY_RAW",
+              "LINK_SECURITY_TLS",
+              "LINK_SECURITY_WSS",
+              "LINK_SECURITY_QUIC",
+              "LINK_SECURITY_GRPC"
+            ],
+            "bandwidth_limit": true,
+            "max_conns": true
+          }
+        ]
+      }
+    ]
+  },
+  "reserved_ports": {
+    "forward-51": [
+      10000
+    ]
+  },
+  "response": {
+    "states": [
+      {
+        "node_ref": "forward-51",
+        "hops": [
+          {
+            "route_id": "01JF1C000000000000000000C1",
+            "role": "HOP_ROLE_ENTRY",
+            "engine": "ENGINE_GOST",
+            "listen": {
+              "port": 10001,
+              "protocol": "L4_PROTOCOL_UDP"
+            },
+            "ingress": {
+              "security": "LINK_SECURITY_RAW"
+            },
+            "upstreams": [
+              {
+                "address": "2001:db8:61::1",
+                "port": 10000,
+                "weight": 1,
+                "egress": {
+                  "security": "LINK_SECURITY_WSS",
+                  "server_name": "edge.example.com",
+                  "path": "/ws"
+                },
+                "node_ref": "forward-61",
+                "peer_identity": "spiffe://anixops/example/agent/forward-61"
+              }
+            ],
+            "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+            "health": {
+              "interval_ms": 10000,
+              "timeout_ms": 3000
+            },
+            "circuit_breaker": {
+              "failure_threshold": 3,
+              "open_ms": 30000
+            },
+            "target_policy": "TARGET_POLICY_PUBLIC_ONLY",
+            "mark": 1
+          }
+        ]
+      },
+      {
+        "node_ref": "forward-61",
+        "hops": [
+          {
+            "route_id": "01JF1C000000000000000000C1",
+            "hop_index": 1,
+            "role": "HOP_ROLE_EXIT",
+            "engine": "ENGINE_GOST",
+            "listen": {
+              "port": 10000,
+              "protocol": "L4_PROTOCOL_UDP"
+            },
+            "ingress": {
+              "security": "LINK_SECURITY_WSS",
+              "server_name": "edge.example.com",
+              "path": "/ws"
+            },
+            "upstreams": [
+              {
+                "address": "2001:db8:100::7",
+                "port": 27015,
+                "weight": 3,
+                "egress": {
+                  "security": "LINK_SECURITY_RAW"
+                }
+              },
+              {
+                "address": "2001:db8:100::8",
+                "port": 27015,
+                "weight": 1,
+                "egress": {
+                  "security": "LINK_SECURITY_RAW"
+                }
+              }
+            ],
+            "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+            "health": {
+              "interval_ms": 10000,
+              "timeout_ms": 3000
+            },
+            "circuit_breaker": {
+              "failure_threshold": 3,
+              "open_ms": 30000
+            },
+            "target_policy": "TARGET_POLICY_PUBLIC_ONLY",
+            "mark": 1,
+            "ingress_sources": [
+              "198.51.100.51",
+              "2001:db8:51::1"
+            ],
+            "ingress_peers": [
+              "spiffe://anixops/example/agent/forward-51"
+            ]
+          }
+        ]
+      }
+    ],
+    "allocations": [
+      {
+        "route_id": "01JF1C000000000000000000C1",
+        "node_ref": "forward-51",
+        "port": 10001
+      },
+      {
+        "route_id": "01JF1C000000000000000000C1",
+        "hop_index": 1,
+        "node_ref": "forward-61",
+        "port": 10000
+      }
+    ]
+  }
+}
