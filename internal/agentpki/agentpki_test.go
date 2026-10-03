@@ -1,8 +1,13 @@
 package agentpki_test
 
 import (
+	"crypto/ecdsa"
+	"crypto/elliptic"
+	"crypto/rand"
 	"crypto/x509"
 	"errors"
+	"math/big"
+	"net/url"
 	"strings"
 	"sync"
 	"testing"
@@ -265,6 +270,7 @@ func TestRenewAtTwoThirdsOfTheLifetime(t *testing.T) {
 		f.clock.Advance(lifetime/3 + time.Minute)
 		_, _, err = f.pki.VerifyPeer(t.Context(), [][]byte{issued.CertificateDER})
 		require.ErrorIs(t, err, agentpki.ErrInvalidCertificate)
+		require.ErrorIs(t, err, agentpki.ErrCertificateExpired, "an expired certificate of this CA is told apart")
 
 		// A revoked certificate cannot renew.
 		require.NoError(t, agentpki.RevokeNode(t.Context(), f.db, f.proxyNode(), agentpki.RevokeReasonCredentialsRevoked))
@@ -343,6 +349,25 @@ func TestVerifyPeerRefusesForeignCertificates(t *testing.T) {
 		require.NoError(t, err)
 		_, _, err = f.pki.VerifyPeer(t.Context(), [][]byte{leaf.CertificateDER})
 		require.ErrorIs(t, err, agentpki.ErrInvalidCertificate)
+		require.ErrorIs(t, err, agentpki.ErrCertificateWrongCluster)
+
+		// Neither the kernel's certificate nor an expired one of another
+		// CA is reported as an expired agent certificate.
+		f.clock.Advance(2 * time.Hour)
+		_, _, err = f.pki.VerifyPeer(t.Context(), kernel.Certificate)
+		require.ErrorIs(t, err, agentpki.ErrInvalidCertificate)
+		require.NotErrorIs(t, err, agentpki.ErrCertificateExpired)
+		otherKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+		require.NoError(t, err)
+		foreignTemplate := &x509.Certificate{
+			SerialNumber: big.NewInt(9), NotBefore: f.clock.Now().Add(-3 * time.Hour), NotAfter: f.clock.Now().Add(-time.Hour),
+			ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}, URIs: []*url.URL{identity.URL()},
+		}
+		foreign, err := x509.CreateCertificate(rand.Reader, foreignTemplate, foreignTemplate, &otherKey.PublicKey, otherKey)
+		require.NoError(t, err)
+		_, _, err = f.pki.VerifyPeer(t.Context(), [][]byte{foreign})
+		require.ErrorIs(t, err, agentpki.ErrInvalidCertificate)
+		require.NotErrorIs(t, err, agentpki.ErrCertificateExpired)
 
 		_, _, err = f.pki.VerifyPeer(t.Context(), [][]byte{[]byte("garbage")})
 		require.ErrorIs(t, err, agentpki.ErrInvalidCertificate)

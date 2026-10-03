@@ -34,11 +34,12 @@ message HelloAck {
   uint32 heartbeat_interval_seconds = 3;
   uint64 desired_revision = 4;
   // server_capabilities lists the data-plane features this Control serves on
-  // the stream: config.v1, users.v1, reports.v1 and package-reports.v1
-  // (Capability name "config", "users", "reports" or "package-reports",
-  // version "v1"). A feature is in use on a session only
-  // when Hello.capabilities lists it too. Empty from a Control that serves
-  // none; Agents built before this field ignore it.
+  // the session: config.v1, users.v1, reports.v1, package-reports.v1,
+  // forward.v1 and maintenance.v1 (Capability name "config", "users",
+  // "reports", "package-reports", "forward" or "maintenance", version "v1").
+  // Control lists only features that Hello.capabilities lists too, so the
+  // list is the negotiated set. Empty from a Control that serves none;
+  // Agents built before this field ignore it.
   repeated Capability server_capabilities = 5;
 }
 
@@ -133,6 +134,9 @@ message AgentToControl {
     NodeStatus status = 17;
     // Sent only with package-reports.v1 negotiated. Never acknowledged.
     PackageReport package_report = 18;
+    // Sent only with maintenance.v1 negotiated: a batch of the Agent's
+    // maintenance outbox. Control answers it with maintenance_ack.
+    MaintenanceEvents maintenance_events = 19;
   }
 }
 
@@ -152,6 +156,9 @@ message ControlToAgent {
     ConfigSnapshot config = 13;
     UserDelta users = 14;
     ReportAck report_ack = 15;
+    // Answers maintenance_events (maintenance.v1), with the request_id of
+    // the message it answers.
+    MaintenanceAck maintenance_ack = 16;
   }
 }
 
@@ -295,4 +302,39 @@ message PackageReport {
   // observed_at_unix_ms is when the plugin took the observation; 0 means
   // when Control received it.
   int64 observed_at_unix_ms = 5;
+}
+
+// MaintenanceEvents is a batch of the Agent's durable maintenance outbox
+// (maintenance.v1): the plugin health incidents and recoveries the Agent
+// keeps until Control has stored them. It carries what the legacy agent
+// WebSocket's maintenance_events message carries. PROTOCOL.md,
+// "Maintenance events".
+message MaintenanceEvents {
+  // version is the event schema, anixops.maintenance/v1.
+  string version = 1;
+  // events_json are the events, oldest first: each one JSON object of the
+  // version's event schema, at most 16 KiB, and at most 50 per batch.
+  repeated bytes events_json = 2;
+}
+
+// MaintenanceAck answers MaintenanceEvents with one result per event, in
+// the batch's order.
+message MaintenanceAck {
+  // version is the version of the batch it answers.
+  string version = 1;
+  repeated MaintenanceEventResult events = 2;
+}
+
+// MaintenanceEventResult is Control's answer for one maintenance event.
+message MaintenanceEventResult {
+  // event_id is the event's event_id, empty when the event could not be
+  // read.
+  string event_id = 1;
+  // persisted is true when Control has stored the event, by this delivery
+  // or an earlier one: the Agent removes it from its outbox.
+  bool persisted = 2;
+  // error is set when Control refuses the event for good; it refuses it
+  // again on every delivery. persisted false without an error means Control
+  // could not store the event now, and the Agent sends it again later.
+  string error = 3;
 }

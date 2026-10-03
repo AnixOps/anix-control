@@ -60,16 +60,24 @@ func TestDecideUsersStart(t *testing.T) {
 	}
 }
 
-// Forward nodes have no user list, so they are not offered users.v1.
+// users.v1 is offered only to an agent that lists it, and only for proxy
+// nodes: forward nodes have no user list.
 func TestAgentControlUsersServedToProxyNodesOnly(t *testing.T) {
 	server := &AgentControlGRPCServer{}
-	// With no data-plane capability from the agent only users.v1 is offered.
+	// An agent without data-plane capabilities is offered none.
 	agent := validAgentHello(1).GetHello().Capabilities
+	assert.Empty(t, server.serverCapabilities(agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: 1}, agent))
+
+	agent = append(agent, &agentv1pb.Capability{Name: agentcontrol.CapabilityUsers, Version: agentcontrol.CapabilityVersionV1})
 	proxy := server.serverCapabilities(agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: 1}, agent)
 	require.Len(t, proxy, 1)
 	assert.Equal(t, agentcontrol.CapabilityUsers, proxy[0].Name)
 	assert.Equal(t, agentcontrol.CapabilityVersionV1, proxy[0].Version)
 	assert.Empty(t, server.serverCapabilities(agentcontrol.AgentNode{Kind: agentcontrol.NodeKindForward, ID: 1}, agent))
+
+	// Another version of users is not v1.
+	other := append(validAgentHello(1).GetHello().Capabilities, &agentv1pb.Capability{Name: agentcontrol.CapabilityUsers, Version: "v2"})
+	assert.Empty(t, server.serverCapabilities(agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: 1}, other))
 }
 
 // agentUsersEnvironment is an Agent Control server over a node with a plan
@@ -293,13 +301,14 @@ func requireHeartbeatAckNext(t *testing.T, stream agentv1pb.AgentControlService_
 	require.NotNil(t, message.GetHeartbeatAck(), "got %T", message.Payload)
 }
 
-// An Agent without users.v1 gets nothing new: the server lists the
-// capability, but no delta is sent, as before A2-4.
+// An Agent without users.v1 gets nothing new: the server does not list the
+// capability, and no delta is sent, as before A2-4.
 func TestAgentControlUsersNotSentWithoutCapability(t *testing.T) {
 	environment := newAgentUsersEnvironment(t, func(t *testing.T) { requireInMemoryDatabase(t) })
 	environment.seedUsers(t, 3)
 	stream, helloAck, _ := environment.openUsersSession(t, []*agentv1pb.Capability{{Name: "agent.ping", Version: "v1"}}, 0)
-	assert.True(t, agentcontrol.HasCapabilityVersion(helloAck.ServerCapabilities, agentcontrol.CapabilityUsers, agentcontrol.CapabilityVersionV1))
+	assert.False(t, agentcontrol.HasCapabilityVersion(helloAck.ServerCapabilities, agentcontrol.CapabilityUsers, agentcontrol.CapabilityVersionV1))
+	assert.Empty(t, helloAck.ServerCapabilities)
 	assert.False(t, agentcontrol.Negotiated([]*agentv1pb.Capability{{Name: "agent.ping", Version: "v1"}}, helloAck.ServerCapabilities, agentcontrol.CapabilityUsers))
 	requireHeartbeatAckNext(t, stream, environment.nodeID(), helloAck.SessionId)
 	require.NoError(t, stream.CloseSend())

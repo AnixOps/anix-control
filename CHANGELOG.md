@@ -34,6 +34,56 @@
 
 ### Added
 
+- **The `agent_control.mtls: required` prerequisites on Control (A2-6b).**
+  An Agent that negotiates the data plane now needs no legacy HTTP or
+  WebSocket path, so v4.2 can make `required` the default once the Agent
+  release uses the stream (anix-agent AG-3 to AG-5). Additions only to
+  `anix.agent.v1`; older Agents are unaffected.
+  - **Maintenance events on the stream** (`maintenance.v1`, new
+    capability). `AgentToControl.maintenance_events = 19`
+    (`MaintenanceEvents`: `version`, `events_json`) carries the Agent's
+    durable maintenance outbox (`anixops.maintenance/v1`, at most 50 events
+    of 16 KiB), which until now went only to the agent WebSocket, where
+    Control never answered it. Control stores each event once per node and
+    event id as a node log entry of source `maintenance` and answers every
+    batch with `ControlToAgent.maintenance_ack = 16` (`MaintenanceAck` of
+    `MaintenanceEventResult`: `event_id`, `persisted`, `error`), one result
+    per event in order: persisted, refused for good, or (database failure)
+    neither, to be resent. Offered to proxy nodes. Metric
+    `anixops_agent_maintenance_events_total{result}`. `sdk/agentcontrol`
+    has the schema, its bounds and `ParseMaintenanceEvent`.
+  - **Heartbeat and runtime health.** `NodeStatus` (`reports.v1`) is the
+    stream equivalent of `POST /api/v2/node/heartbeat` and
+    `/api/v2/node/runtime-health`, with their side effects together, and
+    now also records the session's transport (`mtls-stream`) in the
+    transport inventory as the legacy requests did. `PROTOCOL.md` maps every
+    path `required` refuses to its stream equivalent.
+  - **Certificate refusal codes.** Every refusal of an agent certificate
+    carries `x-anix-error-code`, as `agent_mtls_required` did:
+    `agent_cert_revoked`, `agent_cert_expired`, `agent_cert_invalid`,
+    `agent_cert_wrong_cluster`, `agent_cert_wrong_node`, and
+    `agent_enrollment_rejected` for `Enroll`; on the stream (at connection
+    and at the heartbeat that ends a revoked or expired session),
+    `Renew`, `GetTrustBundle` and the v2board services. Constants in
+    `sdk/agentcontrol` (`ErrorCode*`).
+  - **The capability offer is an intersection.**
+    `HelloAck.server_capabilities` lists a data-plane capability only when
+    the Agent's `Hello` lists it; Control used to list `users.v1` to every
+    proxy node. No Agent behaves differently: a capability was in use only
+    when both sides listed it.
+  - **Session identity.** `AgentControlSnapshot`
+    (`GET /admin/nodes/:id/agent-control`) and a new `session` per node in
+    `GET /api/v4/kernel/agents/transports` show a live stream session's
+    authentication (`mtls` or `api-key`), its certificate's serial, expiry
+    and SAN, and its negotiated capabilities, and the Agent's own health
+    metrics from its latest heartbeat (`agent_metrics`:
+    `agent_control_*`, `agent_identity_*`, `agent_dataplane_*`), which
+    Control used to drop.
+  - `TestAgentStreamUnderRequiredNeedsNoLegacyPath` walks an Agent enrolled
+    under `required` through configuration, users, heartbeats, status and
+    runtime health, traffic, logs, maintenance events and a diagnostic task
+    on the stream alone.
+
 - **Package reports on the Agent Control stream** (systemd services panel
   1/7). The Agent contract gains `PackageReport` (`plugin_id`, `kind`,
   `version`, `payload_json`, `observed_at_unix_ms`) as

@@ -16,6 +16,7 @@ import (
 
 	agentcontrol "github.com/AnixOps/anix-control/sdk/agentcontrol"
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
+	"github.com/AnixOps/anix-control/v4/internal/agentstreams"
 	"github.com/AnixOps/anix-control/v4/internal/agenttransport"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/service"
@@ -64,9 +65,17 @@ type AgentControlConnection struct {
 	// Identity is the authenticated identity: the agent's SPIFFE ID, or
 	// agentstreams.IdentityAPIKey for a node key or forward token.
 	Identity string
-	stream   agentv1pb.AgentControlService_ControlStreamServer
-	sendMu   sync.Mutex
-	stateMu  sync.RWMutex
+	// principal is how the session authenticated, with its certificate;
+	// set before the session is registered.
+	principal agentPrincipal
+	// agentMetrics are the Agent health metrics of the latest heartbeat
+	// that carried any, reported at agentMetricsAt; under stateMu
+	// (agent_session_metrics.go).
+	agentMetrics   map[string]float64
+	agentMetricsAt time.Time
+	stream         agentv1pb.AgentControlService_ControlStreamServer
+	sendMu         sync.Mutex
+	stateMu        sync.RWMutex
 	// configNegotiated is whether the session negotiated config.v1; set
 	// before the session is registered. Under configMu, configRevision is
 	// the configuration revision the agent has (its Hello's, then the last
@@ -113,6 +122,24 @@ type AgentControlSnapshot struct {
 	// diag.v1, so a diagnostic may run from the node's vantage.
 	ServerCapabilities []string `json:"server_capabilities"`
 	Diagnostics        bool     `json:"diagnostics"`
+	// NegotiatedCapabilities are the data-plane capabilities in use on the
+	// session, listed by both the Hello and the HelloAck (name.version).
+	NegotiatedCapabilities []string `json:"negotiated_capabilities"`
+	// Authentication is how the session authenticated: "mtls" (an agent
+	// client certificate) or "api-key" (the node API key or forward token).
+	// Transport is the transport inventory's name for it (mtls-stream,
+	// apikey-stream) and Identity the SPIFFE ID or "api-key".
+	Authentication string `json:"authentication"`
+	Transport      string `json:"transport"`
+	Identity       string `json:"identity"`
+	// Certificate is the client certificate of an mtls session (serial,
+	// expiry, URI SAN); nil for api-key.
+	Certificate *agentstreams.SessionCertificate `json:"certificate"`
+	// AgentMetrics are the Agent's own health metrics from its latest
+	// heartbeat that carried any (agent_control_*, agent_identity_*,
+	// agent_dataplane_*), reported at AgentMetricsAt; nil before one.
+	AgentMetrics   map[string]float64 `json:"agent_metrics"`
+	AgentMetricsAt *time.Time         `json:"agent_metrics_at"`
 }
 
 // AgentControlManager owns live streams and correlates desired operations with ACKs.
@@ -214,19 +241,41 @@ func (m *AgentControlManager) Connection(nodeID uint32) (AgentControlSnapshot, b
 			capabilities = append(capabilities, capability.Name)
 		}
 	}
+	agentMetrics, agentMetricsAt := connection.agentMetricsCopyLocked()
 	return AgentControlSnapshot{
-		NodeID:             connection.NodeID,
-		SessionID:          connection.SessionID,
-		AgentVersion:       connection.AgentVersion,
-		InstanceID:         connection.InstanceID,
-		Capabilities:       capabilities,
-		ConnectedAt:        connection.ConnectedAt,
-		LastSeen:           connection.LastSeen,
-		DesiredRev:         connection.DesiredRev,
-		ObservedRev:        connection.ObservedRev,
-		ServerCapabilities: capabilityVersions(connection.ServerCapabilities),
-		Diagnostics:        connection.Diagnostics,
+		NodeID:                 connection.NodeID,
+		SessionID:              connection.SessionID,
+		AgentVersion:           connection.AgentVersion,
+		InstanceID:             connection.InstanceID,
+		Capabilities:           capabilities,
+		ConnectedAt:            connection.ConnectedAt,
+		LastSeen:               connection.LastSeen,
+		DesiredRev:             connection.DesiredRev,
+		ObservedRev:            connection.ObservedRev,
+		ServerCapabilities:     capabilityVersions(connection.ServerCapabilities),
+		Diagnostics:            connection.Diagnostics,
+		NegotiatedCapabilities: connection.negotiatedCapabilities(),
+		Authentication:         connection.principal.authentication(),
+		Transport:              connection.principal.transport(),
+		Identity:               connection.identity(),
+		Certificate:            connection.principal.certificate(),
+		AgentMetrics:           agentMetrics,
+		AgentMetricsAt:         agentMetricsAt,
 	}, true
+}
+
+// negotiatedCapabilities lists the data-plane capabilities in use on the
+// session, as name.version.
+func (c *AgentControlConnection) negotiatedCapabilities() []string {
+	return agentcontrol.NegotiatedCapabilities(c.Capabilities, c.ServerCapabilities)
+}
+
+// identity is the session's authenticated identity, api-key when unset.
+func (c *AgentControlConnection) identity() string {
+	if c.Identity == "" {
+		return agentstreams.IdentityAPIKey
+	}
+	return c.Identity
 }
 
 func (m *AgentControlManager) ObservedState(nodeID uint32) (*agentv1pb.ObservedState, bool) {
@@ -659,8 +708,25 @@ func (s *AgentControlGRPCServer) touchNode(node agentcontrol.AgentNode) error {
 
 // ControlStream serves one agent's control stream. The stream's node comes
 // from the client certificate (proxy or forward node) or from the legacy
-// node API key (proxy nodes); every envelope's node_id must name it.
+// node API key (proxy nodes); every envelope's node_id must name it. A
+// refusal ends the stream with its error code in the x-anix-error-code
+// trailer (agent_refusals.go).
 func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlService_ControlStreamServer) error {
+	err := s.controlStream(stream)
+	setRefusalTrailer(err, stream.SetTrailer)
+	return err
+}
+
+// wrongNode refuses an envelope whose node_id is not the stream's node,
+// with agent_cert_wrong_node when a certificate named the node.
+func wrongNode(principal agentPrincipal, message string) error {
+	if principal.Certificate {
+		return refuseAgent(agentcontrol.ErrorCodeCertWrongNode, codes.PermissionDenied, message)
+	}
+	return status.Error(codes.PermissionDenied, message)
+}
+
+func (s *AgentControlGRPCServer) controlStream(stream agentv1pb.AgentControlService_ControlStreamServer) error {
 	principal, err := s.auth.authenticateControlStream(stream)
 	if err != nil {
 		return err
@@ -681,7 +747,7 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 		return status.Error(codes.FailedPrecondition, "hello must be the first control message")
 	}
 	if first.NodeId != nodeID {
-		return status.Error(codes.PermissionDenied, "hello node_id does not match authenticated node")
+		return wrongNode(principal, "hello node_id does not match authenticated node")
 	}
 	if strings.TrimSpace(first.RequestId) == "" {
 		return status.Error(codes.InvalidArgument, "hello request_id is required")
@@ -712,6 +778,7 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 		DesiredRev:   desiredRevision,
 		ObservedRev:  first.Revision,
 		Identity:     principal.identity(),
+		principal:    principal,
 		stream:       stream,
 	}
 	connection.ServerCapabilities = s.serverCapabilities(agentNode, hello.Capabilities)
@@ -779,7 +846,7 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 			return status.Error(codes.Aborted, "agent stream replaced by a newer session")
 		}
 		if message.NodeId != nodeID {
-			return status.Error(codes.PermissionDenied, "message node_id does not match authenticated node")
+			return wrongNode(principal, "message node_id does not match authenticated node")
 		}
 		if strings.TrimSpace(message.RequestId) == "" {
 			return status.Error(codes.InvalidArgument, "control message request_id is required")
@@ -800,6 +867,7 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 				return err
 			}
 			connection.touch(payload.Heartbeat.ObservedRevision)
+			connection.recordAgentMetrics(payload.Heartbeat.Metrics, time.Now())
 			// Throttled by the recorder: at most one write a minute.
 			agenttransport.Seen(stream.Context(), principal.sighting(hello.AgentVersion))
 			if err := s.touchNode(agentNode); err != nil {
@@ -851,6 +919,10 @@ func (s *AgentControlGRPCServer) ControlStream(stream agentv1pb.AgentControlServ
 			}
 		case *agentv1pb.AgentToControl_PackageReport:
 			if err := s.handlePackageReport(connection, agentNode, payload.PackageReport); err != nil {
+				return err
+			}
+		case *agentv1pb.AgentToControl_MaintenanceEvents:
+			if err := s.handleMaintenanceEvents(manager, connection, agentNode, message); err != nil {
 				return err
 			}
 		default:
@@ -985,15 +1057,16 @@ func authenticatedStreamNodeID(ctx context.Context) (uint32, error) {
 
 // serverCapabilities lists the data-plane features this Control serves to
 // node, HelloAck.server_capabilities (PROTOCOL.md, "Data plane"), given the
-// Agent's Hello capabilities. Each feature appends its capability here; a
-// payload is sent on a session only when the Agent's Hello lists the
-// capability too (agentcontrol.Negotiated).
+// Agent's Hello capabilities. Each feature appends its capability here,
+// and only when the Agent's Hello lists it at v1: the list is the
+// intersection of what the Agent implements and what Control serves the
+// node, so it is the session's negotiated set (agentcontrol.Negotiated).
 func (s *AgentControlGRPCServer) serverCapabilities(node agentcontrol.AgentNode, agent []*agentv1pb.Capability) []*agentv1pb.Capability {
 	var capabilities []*agentv1pb.Capability
 	if s.servesConfig(node, agent) {
 		capabilities = append(capabilities, &agentv1pb.Capability{Name: agentcontrol.CapabilityConfig, Version: agentcontrol.CapabilityVersionV1})
 	}
-	if s.servesUserDeltas(node) {
+	if s.servesUserDeltas(node, agent) {
 		capabilities = append(capabilities, &agentv1pb.Capability{Name: agentcontrol.CapabilityUsers, Version: agentcontrol.CapabilityVersionV1})
 	}
 	if s.servesReports(node, agent) {
@@ -1004,6 +1077,9 @@ func (s *AgentControlGRPCServer) serverCapabilities(node agentcontrol.AgentNode,
 	}
 	if s.servesForward(node, agent) {
 		capabilities = append(capabilities, &agentv1pb.Capability{Name: agentcontrol.CapabilityForward, Version: agentcontrol.CapabilityVersionV1})
+	}
+	if s.servesMaintenance(node, agent) {
+		capabilities = append(capabilities, &agentv1pb.Capability{Name: agentcontrol.CapabilityMaintenance, Version: agentcontrol.CapabilityVersionV1})
 	}
 	return capabilities
 }

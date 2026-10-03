@@ -33,10 +33,6 @@ const agentServicePrefix = "/anix.agent.v1."
 // a legacy node credential in agent_control.mtls: preferred.
 const legacyAuthDeprecation = "node API key authentication is deprecated; enroll with anix.agent.v1.AgentEnrollment and present the client certificate"
 
-// mtlsRequiredMessage refuses a legacy node credential on the Agent
-// services in agent_control.mtls: required.
-const mtlsRequiredMessage = agentcontrol.ErrorCodeMTLSRequired + ": an agent client certificate is required (agent_control.mtls: required)"
-
 // AgentAuthenticator authenticates AnixOps Agents on the node-facing
 // listener: by client certificate (agent PKI) or by the legacy node
 // credential, as agent_control.mtls allows. The zero value and nil accept
@@ -108,14 +104,14 @@ func (a *AgentAuthenticator) recheck(ctx context.Context, principal agentPrincip
 		return nil
 	}
 	if !time.Now().Before(principal.NotAfter) {
-		return status.Error(codes.Unauthenticated, "agent client certificate expired")
+		return refuseAgent(agentcontrol.ErrorCodeCertExpired, codes.Unauthenticated, "agent client certificate expired")
 	}
 	revoked, err := pki.IsRevoked(ctx, principal.Serial, principal.Node)
 	if err != nil {
 		return nil // keep the stream through a transient database error
 	}
 	if revoked {
-		return status.Error(codes.Unauthenticated, "agent client certificate revoked")
+		return refuseAgent(agentcontrol.ErrorCodeCertRevoked, codes.Unauthenticated, "agent client certificate revoked")
 	}
 	return nil
 }
@@ -140,9 +136,11 @@ func peerCertificateChain(ctx context.Context) [][]byte {
 
 // certificatePrincipal verifies the client certificate of the call. It
 // answers ok=false when the client presented none, and an Unauthenticated
-// error when the certificate does not authenticate an agent: an invalid,
+// refusal when the certificate does not authenticate an agent: an invalid,
 // expired, revoked or foreign certificate never falls back to legacy
 // credentials. A node id in the metadata must name the certificate's node.
+// Each refusal carries its agentcontrol error code (agent_refusals.go); a
+// failed check (Unavailable) carries none.
 func (a *AgentAuthenticator) certificatePrincipal(ctx context.Context) (agentPrincipal, bool, error) {
 	chain := peerCertificateChain(ctx)
 	if len(chain) == 0 {
@@ -150,25 +148,23 @@ func (a *AgentAuthenticator) certificatePrincipal(ctx context.Context) (agentPri
 	}
 	pki := a.pki()
 	if pki == nil {
-		return agentPrincipal{}, false, status.Error(codes.Unauthenticated, "agent client certificates are not accepted: the agent PKI is not enabled")
+		return agentPrincipal{}, false, refuseAgent(agentcontrol.ErrorCodeCertInvalid, codes.Unauthenticated, "agent client certificates are not accepted: the agent PKI is not enabled")
 	}
 	identity, leaf, err := pki.VerifyPeer(ctx, chain)
-	switch {
-	case errors.Is(err, agentpki.ErrCertificateRevoked):
-		return agentPrincipal{}, false, status.Error(codes.Unauthenticated, "agent client certificate revoked")
-	case errors.Is(err, agentpki.ErrInvalidCertificate):
-		return agentPrincipal{}, false, status.Error(codes.Unauthenticated, "the client certificate is not a valid agent certificate of this cluster")
-	case err != nil:
-		return agentPrincipal{}, false, status.Error(codes.Unavailable, "agent certificate check failed")
+	if refusal := certificateRefusal(err); refusal != nil {
+		if refusalCode(refusal) == "" {
+			return agentPrincipal{}, false, status.Error(codes.Unavailable, "agent certificate check failed")
+		}
+		return agentPrincipal{}, false, refusal
 	}
 	if md, ok := metadata.FromIncomingContext(ctx); ok {
 		if ids := md.Get(agentcontrol.MetadataNodeID); len(ids) > 0 && strings.TrimSpace(ids[0]) != "" &&
 			strings.TrimSpace(ids[0]) != strconv.FormatUint(uint64(identity.Node.ID), 10) {
-			return agentPrincipal{}, false, status.Error(codes.Unauthenticated, "x-node-id does not match the client certificate")
+			return agentPrincipal{}, false, refuseAgent(agentcontrol.ErrorCodeCertWrongNode, codes.Unauthenticated, "x-node-id does not match the client certificate")
 		}
 		if kinds := md.Get(agentcontrol.MetadataNodeKind); len(kinds) > 0 && strings.TrimSpace(kinds[0]) != "" &&
 			strings.TrimSpace(kinds[0]) != identity.Node.Kind {
-			return agentPrincipal{}, false, status.Error(codes.Unauthenticated, "x-node-kind does not match the client certificate")
+			return agentPrincipal{}, false, refuseAgent(agentcontrol.ErrorCodeCertWrongNode, codes.Unauthenticated, "x-node-kind does not match the client certificate")
 		}
 	}
 	return agentPrincipal{
@@ -198,14 +194,14 @@ func (a *AgentAuthenticator) deprecationMetadata() metadata.MD {
 }
 
 // refuseLegacy answers a legacy node credential in agent_control.mtls:
-// required: counted, with the error code and the deprecation metadata in
-// the trailer.
-func (a *AgentAuthenticator) refuseLegacy(method string, setTrailer func(metadata.MD)) error {
+// required: counted, refused with the error code, and with the deprecation
+// metadata in the refusal's trailer.
+func (a *AgentAuthenticator) refuseLegacy(method string) error {
 	agenttransport.CountRefused(method)
-	trailer := a.deprecationMetadata()
-	trailer.Set(agentcontrol.MetadataErrorCode, agentcontrol.ErrorCodeMTLSRequired)
-	setTrailer(trailer)
-	return status.Error(codes.Unauthenticated, mtlsRequiredMessage)
+	refusal := refuseAgent(agentcontrol.ErrorCodeMTLSRequired, codes.Unauthenticated,
+		"an agent client certificate is required (agent_control.mtls: required)").(*agentRefusal)
+	refusal.trailer = a.deprecationMetadata()
+	return refusal
 }
 
 // authenticateControlStream authenticates an AgentControlService stream:
@@ -221,7 +217,9 @@ func (a *AgentAuthenticator) authenticateControlStream(stream grpc.ServerStream)
 	if ok {
 		if err := agentpki.CheckNodeEnabled(ctx, databaseForAgentChecks(), principal.Node); err != nil {
 			if errors.Is(err, agentpki.ErrInvalidNode) {
-				return agentPrincipal{}, status.Error(codes.PermissionDenied, "node is disabled or no longer exists")
+				// Disabling or deleting a node revokes its certificates;
+				// this check closes the revocation cache's window.
+				return agentPrincipal{}, refuseAgent(agentcontrol.ErrorCodeCertRevoked, codes.PermissionDenied, "node is disabled or no longer exists")
 			}
 			return agentPrincipal{}, status.Error(codes.Unavailable, "node check failed")
 		}
@@ -229,7 +227,7 @@ func (a *AgentAuthenticator) authenticateControlStream(stream grpc.ServerStream)
 	}
 	method := agentv1pb.AgentControlService_ControlStream_FullMethodName
 	if a.mode() == config.AgentMTLSRequired {
-		return agentPrincipal{}, a.refuseLegacy(method, stream.SetTrailer)
+		return agentPrincipal{}, a.refuseLegacy(method)
 	}
 	nodeID, err := authenticatedStreamNodeID(ctx)
 	if err != nil {
@@ -244,6 +242,23 @@ func (a *AgentAuthenticator) authenticateControlStream(stream grpc.ServerStream)
 		stream.SetTrailer(header)
 	}
 	return agentPrincipal{Node: agentcontrol.AgentNode{Kind: agentcontrol.NodeKindProxy, ID: nodeID}}, nil
+}
+
+// authentication names how principal authenticated
+// (agentstreams.Authentication*).
+func (p agentPrincipal) authentication() string {
+	if p.Certificate {
+		return agentstreams.AuthenticationMTLS
+	}
+	return agentstreams.AuthenticationAPIKey
+}
+
+// certificate describes principal's client certificate, nil without one.
+func (p agentPrincipal) certificate() *agentstreams.SessionCertificate {
+	if !p.Certificate {
+		return nil
+	}
+	return &agentstreams.SessionCertificate{Serial: p.Serial, NotAfter: p.NotAfter, SPIFFEID: p.SPIFFEID}
 }
 
 // transport names how principal reached the stream, for the transport

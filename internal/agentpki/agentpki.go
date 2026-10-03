@@ -65,6 +65,12 @@ var (
 	// authenticate an agent of this cluster: unparsable, not chaining to the
 	// trust bundle, expired, or carrying another identity.
 	ErrInvalidCertificate = errors.New("invalid agent client certificate")
+	// ErrCertificateExpired is the ErrInvalidCertificate of an agent
+	// certificate of this CA whose not_after has passed.
+	ErrCertificateExpired = fmt.Errorf("%w: the certificate has expired", ErrInvalidCertificate)
+	// ErrCertificateWrongCluster is the ErrInvalidCertificate of an agent
+	// certificate of another cluster.
+	ErrCertificateWrongCluster = fmt.Errorf("%w: the certificate belongs to another cluster", ErrInvalidCertificate)
 	// ErrInvalidNode reports an enrollment credential request for a node
 	// that does not exist or is disabled.
 	ErrInvalidNode = errors.New("agent node not found or disabled")
@@ -202,10 +208,23 @@ func (s *Service) VerifyPeer(ctx context.Context, rawCerts [][]byte) (agentcontr
 		intermediates.AddCert(certificate)
 	}
 	leaf := certificates[0]
-	if _, err := leaf.Verify(x509.VerifyOptions{
-		Roots: roots, Intermediates: intermediates, CurrentTime: s.now(),
-		KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
-	}); err != nil {
+	now := s.now()
+	verify := func(at time.Time) error {
+		_, err := leaf.Verify(x509.VerifyOptions{
+			Roots: roots, Intermediates: intermediates, CurrentTime: at,
+			KeyUsages: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth},
+		})
+		return err
+	}
+	if err := verify(now); err != nil {
+		// An expired certificate of this CA is told apart from any other
+		// invalid one: it chains to the trust bundle at its last valid
+		// second.
+		if now.After(leaf.NotAfter) && !leaf.NotAfter.Before(leaf.NotBefore) && verify(leaf.NotAfter) == nil {
+			if _, identityErr := agentcontrol.AgentIdentityFromCertificate(leaf); identityErr == nil {
+				return agentcontrol.AgentIdentity{}, nil, fmt.Errorf("%w (not_after %s)", ErrCertificateExpired, leaf.NotAfter.UTC().Format(time.RFC3339))
+			}
+		}
 		return agentcontrol.AgentIdentity{}, nil, fmt.Errorf("%w: %v", ErrInvalidCertificate, err)
 	}
 	identity, err := agentcontrol.AgentIdentityFromCertificate(leaf)
@@ -213,7 +232,7 @@ func (s *Service) VerifyPeer(ctx context.Context, rawCerts [][]byte) (agentcontr
 		return agentcontrol.AgentIdentity{}, nil, fmt.Errorf("%w: %v", ErrInvalidCertificate, err)
 	}
 	if identity.Cluster != s.cluster {
-		return agentcontrol.AgentIdentity{}, nil, fmt.Errorf("%w: %s belongs to another cluster", ErrInvalidCertificate, identity)
+		return agentcontrol.AgentIdentity{}, nil, fmt.Errorf("%w: %s", ErrCertificateWrongCluster, identity)
 	}
 	revoked, err := s.IsRevoked(ctx, modulepki.SerialString(leaf.SerialNumber), identity.Node)
 	if err != nil {

@@ -31,7 +31,18 @@ const (
 	// package-reports.v1). The Agent's Hello lists it with the node's
 	// NodeCapabilities in an attribute (sdk/forward/wire).
 	CapabilityForward = "forward"
+	// CapabilityMaintenance: the Agent sends its maintenance outbox as
+	// MaintenanceEvents, and Control answers each batch with
+	// MaintenanceAck (maintenance.go; PROTOCOL.md, "Maintenance events").
+	CapabilityMaintenance = "maintenance"
 )
+
+// DataPlaneCapabilities are the capabilities of the data plane, the ones
+// Control lists in HelloAck.server_capabilities when it serves them and the
+// Agent's Hello lists them.
+var DataPlaneCapabilities = []string{
+	CapabilityConfig, CapabilityUsers, CapabilityReports, CapabilityPackageReports, CapabilityForward, CapabilityMaintenance,
+}
 
 // Negotiated reports whether a data-plane capability is in use on a session:
 // both the Agent's Hello.capabilities and Control's
@@ -39,4 +50,17 @@ const (
 func Negotiated(agent, server []*agentv1pb.Capability, name string) bool {
 	return HasCapabilityVersion(agent, name, CapabilityVersionV1) &&
 		HasCapabilityVersion(server, name, CapabilityVersionV1)
+}
+
+// NegotiatedCapabilities lists the data-plane capabilities in use on a
+// session (Negotiated), as name.version (config.v1), in the order of
+// DataPlaneCapabilities.
+func NegotiatedCapabilities(agent, server []*agentv1pb.Capability) []string {
+	negotiated := []string{}
+	for _, name := range DataPlaneCapabilities {
+		if Negotiated(agent, server, name) {
+			negotiated = append(negotiated, name+"."+CapabilityVersionV1)
+		}
+	}
+	return negotiated
 }

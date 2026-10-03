@@ -12,6 +12,7 @@ import (
 	agentcontrol "github.com/AnixOps/anix-control/sdk/agentcontrol"
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	"github.com/AnixOps/anix-control/v4/internal/agentreports"
+	"github.com/AnixOps/anix-control/v4/internal/agenttransport"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"google.golang.org/grpc/codes"
@@ -121,6 +122,10 @@ func (s *AgentControlGRPCServer) handleReport(manager *AgentControlManager, conn
 		if err := s.applyNodeStatus(node, payload.Status); err != nil {
 			slog.Warn("failed to record agent node status", "component", "agent-control", "node", node.String(), "error", err)
 		}
+		// As the legacy heartbeat and runtime-health requests are, the
+		// status is a sighting of the session's transport (mtls-stream or
+		// apikey-stream); the recorder writes at most once a minute.
+		agenttransport.Seen(connection.stream.Context(), connection.principal.sighting(connection.AgentVersion))
 		return nil
 	default:
 		return status.Error(codes.InvalidArgument, "control message payload is required")

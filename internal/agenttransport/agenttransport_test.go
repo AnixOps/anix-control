@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
+	"github.com/AnixOps/anix-control/v4/internal/agentstreams"
 	"github.com/AnixOps/anix-control/v4/internal/agentws"
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/model"
@@ -349,6 +350,46 @@ func TestInventory(t *testing.T) {
 	inventory, err = Build(context.Background(), db, Policy{Mode: config.AgentMTLSRequired}, Options{})
 	require.NoError(t, err)
 	require.Nil(t, inventory.Sunset)
+	for _, node := range inventory.Nodes {
+		require.Nil(t, node.Session, "no sessions are read without a provider")
+	}
+
+	// The live sessions: each node's Agent Control stream session, with
+	// how it authenticated and what it negotiated; WebSocket sessions are
+	// not shown.
+	notAfter := now.Add(48 * time.Hour)
+	inventory, err = Build(context.Background(), db, policy, Options{Now: now, Sessions: func() []agentstreams.Session {
+		return []agentstreams.Session{
+			{
+				Node: agentcontrol.AgentNode{Kind: "proxy", ID: 1}, Transport: agentstreams.TransportControlStream, SessionID: "session-1",
+				AgentVersion: "2.0.0", ConnectedAt: now.Add(-time.Hour), LastSeen: now, Identity: "spiffe://anixops/prod/agent/proxy-1",
+				Authentication: agentstreams.AuthenticationMTLS, NegotiatedCapabilities: []string{"config.v1", "reports.v1"},
+				Certificate: &agentstreams.SessionCertificate{Serial: "new", NotAfter: notAfter, SPIFFEID: "spiffe://anixops/prod/agent/proxy-1"},
+			},
+			{Node: agentcontrol.AgentNode{Kind: "proxy", ID: 2}, Transport: agentstreams.TransportWebSocket, Identity: agentstreams.IdentityAPIKey},
+			{
+				Node: agentcontrol.AgentNode{Kind: "forward", ID: 1}, Transport: agentstreams.TransportControlStream, SessionID: "session-f",
+				Identity: agentstreams.IdentityAPIKey, Authentication: agentstreams.AuthenticationAPIKey,
+			},
+		}
+	}})
+	require.NoError(t, err)
+	byNode = map[string]NodeTransports{}
+	for _, node := range inventory.Nodes {
+		byNode[node.Node] = node
+	}
+	session := byNode["proxy-1"].Session
+	require.NotNil(t, session)
+	require.Equal(t, "session-1", session.SessionID)
+	require.Equal(t, agentstreams.AuthenticationMTLS, session.Authentication)
+	require.Equal(t, "new", session.Certificate.Serial)
+	require.Equal(t, []string{"config.v1", "reports.v1"}, session.NegotiatedCapabilities)
+	require.Nil(t, byNode["proxy-2"].Session, "a WebSocket session is not a stream session")
+	forward := byNode["forward-1"].Session
+	require.NotNil(t, forward, "forward and proxy nodes of one id are told apart")
+	require.Equal(t, agentstreams.AuthenticationAPIKey, forward.Authentication)
+	require.Nil(t, forward.Certificate)
+	require.NotNil(t, forward.NegotiatedCapabilities)
 }
 
 func TestOverlayKeepsTheNewestSighting(t *testing.T) {

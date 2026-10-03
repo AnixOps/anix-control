@@ -47,10 +47,22 @@ func (s *AgentEnrollmentGRPCServer) service() (*agentpki.Service, error) {
 	return nil, status.Error(codes.FailedPrecondition, agentpki.ErrDisabled.Error())
 }
 
+// answer sets the x-anix-error-code trailer of a refused enrollment call
+// (agent_refusals.go).
+func answer[T any](ctx context.Context, response T, err error) (T, error) {
+	setRefusalTrailer(err, func(md metadata.MD) { _ = grpc.SetTrailer(ctx, md) })
+	return response, err
+}
+
 // Enroll issues a node's first certificate for a bootstrap credential: a
 // one-time enrollment credential, or the node credential in metadata
 // (refused when agent_control.mtls is required).
 func (s *AgentEnrollmentGRPCServer) Enroll(ctx context.Context, request *agentv1pb.EnrollAgentRequest) (*agentv1pb.EnrollAgentResponse, error) {
+	response, err := s.enroll(ctx, request)
+	return answer(ctx, response, err)
+}
+
+func (s *AgentEnrollmentGRPCServer) enroll(ctx context.Context, request *agentv1pb.EnrollAgentRequest) (*agentv1pb.EnrollAgentResponse, error) {
 	pki, err := s.service()
 	if err != nil {
 		return nil, err
@@ -93,11 +105,11 @@ func (s *AgentEnrollmentGRPCServer) bootstrap(ctx context.Context, credential st
 	if rawID := first(agentcontrol.MetadataNodeID); rawID != "" {
 		id, err := strconv.ParseUint(rawID, 10, 32)
 		if err != nil || id == 0 {
-			return agentpki.Bootstrap{}, status.Error(codes.Unauthenticated, "invalid x-node-id")
+			return agentpki.Bootstrap{}, refuseAgent(agentcontrol.ErrorCodeEnrollmentRejected, codes.Unauthenticated, "invalid x-node-id")
 		}
 		node = agentcontrol.AgentNode{Kind: kind, ID: uint32(id)}
 		if !node.Valid() {
-			return agentpki.Bootstrap{}, status.Error(codes.Unauthenticated, "invalid x-node-kind")
+			return agentpki.Bootstrap{}, refuseAgent(agentcontrol.ErrorCodeEnrollmentRejected, codes.Unauthenticated, "invalid x-node-kind")
 		}
 	}
 	if credential != "" {
@@ -105,12 +117,11 @@ func (s *AgentEnrollmentGRPCServer) bootstrap(ctx context.Context, credential st
 	}
 	if s.auth.mode() == config.AgentMTLSRequired {
 		agenttransport.CountRefused(agentv1pb.AgentEnrollment_Enroll_FullMethodName)
-		_ = grpc.SetTrailer(ctx, metadata.Pairs(agentcontrol.MetadataErrorCode, agentcontrol.ErrorCodeMTLSRequired))
-		return agentpki.Bootstrap{}, status.Error(codes.Unauthenticated, agentcontrol.ErrorCodeMTLSRequired+": an enrollment credential is required (agent_control.mtls: required)")
+		return agentpki.Bootstrap{}, refuseAgent(agentcontrol.ErrorCodeMTLSRequired, codes.Unauthenticated, "an enrollment credential is required (agent_control.mtls: required)")
 	}
 	secret := first(agentcontrol.MetadataAPIKey)
 	if secret == "" || node == (agentcontrol.AgentNode{}) {
-		return agentpki.Bootstrap{}, status.Error(codes.Unauthenticated, "an enrollment credential or x-node-id and x-api-key are required")
+		return agentpki.Bootstrap{}, refuseAgent(agentcontrol.ErrorCodeEnrollmentRejected, codes.Unauthenticated, "an enrollment credential or x-node-id and x-api-key are required")
 	}
 	method := model.AgentEnrollmentMethodNodeAPIKey
 	if node.Kind == agentcontrol.NodeKindForward {
@@ -121,13 +132,18 @@ func (s *AgentEnrollmentGRPCServer) bootstrap(ctx context.Context, credential st
 
 // Renew issues a new certificate to the holder of a valid one.
 func (s *AgentEnrollmentGRPCServer) Renew(ctx context.Context, request *agentv1pb.RenewAgentCertificateRequest) (*agentv1pb.RenewAgentCertificateResponse, error) {
+	response, err := s.renew(ctx, request)
+	return answer(ctx, response, err)
+}
+
+func (s *AgentEnrollmentGRPCServer) renew(ctx context.Context, request *agentv1pb.RenewAgentCertificateRequest) (*agentv1pb.RenewAgentCertificateResponse, error) {
 	pki, err := s.service()
 	if err != nil {
 		return nil, err
 	}
 	chain := peerCertificateChain(ctx)
 	if len(chain) == 0 {
-		return nil, status.Error(codes.Unauthenticated, "renewal requires the current agent client certificate")
+		return nil, refuseAgent(agentcontrol.ErrorCodeCertInvalid, codes.Unauthenticated, "renewal requires the current agent client certificate")
 	}
 	_, leaf, err := pki.VerifyPeer(ctx, chain)
 	if err != nil {
@@ -142,7 +158,12 @@ func (s *AgentEnrollmentGRPCServer) Renew(ctx context.Context, request *agentv1p
 
 // GetTrustBundle returns the CAs of agent certificates to an agent that
 // holds one.
-func (s *AgentEnrollmentGRPCServer) GetTrustBundle(ctx context.Context, _ *agentv1pb.GetAgentTrustBundleRequest) (*agentv1pb.GetAgentTrustBundleResponse, error) {
+func (s *AgentEnrollmentGRPCServer) GetTrustBundle(ctx context.Context, request *agentv1pb.GetAgentTrustBundleRequest) (*agentv1pb.GetAgentTrustBundleResponse, error) {
+	response, err := s.getTrustBundle(ctx, request)
+	return answer(ctx, response, err)
+}
+
+func (s *AgentEnrollmentGRPCServer) getTrustBundle(ctx context.Context, _ *agentv1pb.GetAgentTrustBundleRequest) (*agentv1pb.GetAgentTrustBundleResponse, error) {
 	pki, err := s.service()
 	if err != nil {
 		return nil, err
@@ -150,7 +171,7 @@ func (s *AgentEnrollmentGRPCServer) GetTrustBundle(ctx context.Context, _ *agent
 	if _, ok, err := s.auth.certificatePrincipal(ctx); err != nil {
 		return nil, err
 	} else if !ok {
-		return nil, status.Error(codes.Unauthenticated, "an agent client certificate is required")
+		return nil, refuseAgent(agentcontrol.ErrorCodeCertInvalid, codes.Unauthenticated, "an agent client certificate is required")
 	}
 	bundle, err := pki.TrustBundle(ctx)
 	if err != nil {
@@ -172,17 +193,16 @@ func agentCertificateMessage(issued agentpki.Issued) *agentv1pb.AgentCertificate
 }
 
 // agentPKIStatus maps agent PKI errors to gRPC statuses without details
-// that would let a caller probe credentials.
+// that would let a caller probe credentials. Refusals carry their error
+// code (agent_refusals.go).
 func agentPKIStatus(err error) error {
 	switch {
 	case status.Code(err) != codes.Unknown:
 		return err
 	case errors.Is(err, agentpki.ErrEnrollmentRejected):
-		return status.Error(codes.Unauthenticated, agentpki.ErrEnrollmentRejected.Error())
-	case errors.Is(err, agentpki.ErrCertificateRevoked):
-		return status.Error(codes.Unauthenticated, agentpki.ErrCertificateRevoked.Error())
-	case errors.Is(err, agentpki.ErrInvalidCertificate):
-		return status.Error(codes.Unauthenticated, "the client certificate is not a valid agent certificate of this cluster")
+		return refuseAgent(agentcontrol.ErrorCodeEnrollmentRejected, codes.Unauthenticated, agentpki.ErrEnrollmentRejected.Error())
+	case errors.Is(err, agentpki.ErrCertificateRevoked), errors.Is(err, agentpki.ErrInvalidCertificate):
+		return certificateRefusal(err)
 	case errors.Is(err, modulepki.ErrInvalidRequest):
 		return status.Error(codes.InvalidArgument, err.Error())
 	case errors.Is(err, modulepki.ErrNoAuthority):

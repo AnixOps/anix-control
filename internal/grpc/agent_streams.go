@@ -82,21 +82,19 @@ func (s *AgentStreams) Sessions() []agentstreams.Session {
 func (c *AgentControlConnection) session(kind string) agentstreams.Session {
 	c.stateMu.RLock()
 	defer c.stateMu.RUnlock()
+	agentMetrics, agentMetricsAt := c.agentMetricsCopyLocked()
 	capabilities := make([]string, 0, len(c.Capabilities))
 	for _, capability := range c.Capabilities {
 		if capability != nil && capability.Name != "" {
 			capabilities = append(capabilities, capability.Name)
 		}
 	}
-	identity := c.Identity
-	if identity == "" {
-		identity = agentstreams.IdentityAPIKey
-	}
 	return agentstreams.Session{
 		Node: agentcontrol.AgentNode{Kind: kind, ID: c.NodeID}, Transport: agentstreams.TransportControlStream,
 		SessionID: c.SessionID, AgentVersion: c.AgentVersion, InstanceID: c.InstanceID, Capabilities: capabilities,
 		ConnectedAt: c.ConnectedAt, LastSeen: c.LastSeen, DesiredRevision: c.DesiredRev, ObservedRevision: c.ObservedRev,
-		Identity: identity,
+		Identity: c.identity(), Authentication: c.principal.authentication(), Certificate: c.principal.certificate(),
+		NegotiatedCapabilities: c.negotiatedCapabilities(), AgentMetrics: agentMetrics, AgentMetricsAt: agentMetricsAt,
 	}
 }
 

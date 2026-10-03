@@ -31,7 +31,8 @@ or a one-time `anixagt_...` `enrollment_credential`; `Renew` and
 are renewed after `renew_after_unix`, two thirds of the lifetime. With a
 certificate the stream's node comes from it, every envelope's `node_id`
 must name it, and `x-api-key` is not needed. `sdk/agentcontrol` has the
-identity helpers and metadata keys.
+identity helpers and metadata keys. Every refusal names its reason in the
+`x-anix-error-code` trailer ("Error codes" below).
 
 The client declares capabilities in `Hello`, sends application heartbeats,
 automatically reconnects with jittered exponential backoff, acknowledges
@@ -82,16 +83,37 @@ are additions to `anix.agent.v1`:
 | Agent → Control | `AgentToControl.package_report` (`PackageReport`) | `package-reports.v1` |
 | Control → Agent | `ControlToAgent.config` in format `anixops.nodeconfig/v2` (`NodeForwardState`) | `forward.v1` with `config.v1` |
 | Agent → Control | `AgentToControl.package_report` of kind `forward.report` (`NodeForwardReport`) | `forward.v1` with `package-reports.v1` |
+| Agent → Control | `AgentToControl.maintenance_events` (`MaintenanceEvents`) | `maintenance.v1` |
+| Control → Agent | `ControlToAgent.maintenance_ack` (`MaintenanceAck` of `MaintenanceEventResult`) | `maintenance.v1` |
 
 `Hello` gains `config_revision` and `users_cursor`, and `HelloAck` gains
 `server_capabilities`.
+
+An Agent that negotiates `config.v1`, `users.v1`, `reports.v1` and, when it
+runs the plugin supervisor, `maintenance.v1` needs no legacy path: under
+`agent_control.mtls: required`, which refuses them, each has a stream
+equivalent.
+
+| Legacy path | Stream equivalent |
+|---|---|
+| `POST /api/v2/node/register` | `AgentEnrollment.Enroll` with a one-time `anixagt_` credential |
+| `POST /api/v2/node/heartbeat` (`cpu_usage`, `memory_usage`, `disk_usage`, `uptime`) | `NodeStatus` (`reports.v1`); liveness also from `Heartbeat` |
+| `POST /api/v2/node/heartbeat` (`online_users`, `upload`, `download`) | `TrafficReport` (`reports.v1`): `online`, and the per-user bytes, which Control adds to the node's counters |
+| `POST /api/v2/node/runtime-health` (`healthy`, `error`) | `NodeStatus.runtime_healthy` and `runtime_error` (`reports.v1`) |
+| `GET /api/v2/agent/ws`, `/api/v2/node/ws`: `heartbeat`, `pong` | `Heartbeat` |
+| the WebSocket's `maintenance_events` and `maintenance_ack` | `MaintenanceEvents` and `MaintenanceAck` (`maintenance.v1`) |
+| the WebSocket's `task.assign` (and `GET /api/v2/agent/tasks`, `POST /api/v2/agent/result`) | the `agent.diagnostic` operation, for an Agent that lists that capability: `DesiredOperation`, `OperationAck`, `ObservedState` |
+| UniProxy `config`, the WebSocket's `config_update` | `ConfigSnapshot` (`config.v1`) |
+| UniProxy `user`, the WebSocket's `user_update` and `user_ban` | `UserDelta` (`users.v1`) |
+| UniProxy `push` and `alive`, `NodeLogService.ReportLogs` | `TrafficReport` and `LogBatch` (`reports.v1`) |
 
 ### Negotiation
 
 - A capability written `config.v1` is the `Capability` with name `config`
   and version `v1`; `sdk/agentcontrol` names them (`CapabilityConfig`,
   `CapabilityUsers`, `CapabilityReports`, `CapabilityPackageReports`,
-  `CapabilityForward`).
+  `CapabilityForward`, `CapabilityMaintenance`; `DataPlaneCapabilities`
+  lists them).
 - The Agent lists the ones it implements in `Hello.capabilities`. Control
   lists the ones it serves in `HelloAck.server_capabilities`.
 - A capability is in use on a session only when both lists have it
@@ -101,26 +123,40 @@ are additions to `anix.agent.v1`:
     `config.v1`, and `UserDelta` only with `users.v1`. It reads
     `Hello.config_revision` and `Hello.users_cursor` only then.
   - The Agent sends `ConfigStatus` only with `config.v1`, and `TrafficReport`,
-    `LogBatch` and `NodeStatus` only with `reports.v1`, and `PackageReport`
-    only with `package-reports.v1`, in `HelloAck.server_capabilities`.
+    `LogBatch` and `NodeStatus` only with `reports.v1`, `PackageReport`
+    only with `package-reports.v1`, and `MaintenanceEvents` only with
+    `maintenance.v1`, in `HelloAck.server_capabilities`.
     Without them it keeps the legacy transports.
 - Older Agents send none of these capabilities or `Hello` fields and skip
   `server_capabilities`, so nothing changes for them.
-- Control serves `config.v1`, `users.v1` and `reports.v1`.
-  `server_capabilities` lists `config.v1` when the Agent's `Hello` lists it,
-  for proxy and forward nodes; `users.v1` for every proxy node (`v2_node`; a
-  forward node has no user list and is not offered it); and `reports.v1`
-  when the Agent's `Hello` lists it too, for proxy nodes (a forward node's
-  stream is not offered it yet; its reports join with the forward plugins).
-  It serves `package-reports.v1` when the Agent's `Hello` lists it, for
-  proxy nodes, and for forward nodes served `forward.v1` (their other
-  package reports are refused: they have no plugin assignments). It serves
-  `forward.v1` (see "Forwarding") when the Agent's `Hello` lists it with a
-  valid `node_capabilities` attribute and Control serves the session
-  `config.v1`, for proxy and forward nodes.
-  An Agent that sends a payload the session did not negotiate
+- **The offer rule.** Control lists a capability in `server_capabilities`
+  only when the Agent's `Hello` lists it at `v1` **and** Control serves it
+  to the stream's node: the list is the intersection, so it is the
+  session's negotiated set. What Control serves, by node kind:
+  - `config.v1`: proxy and forward nodes;
+  - `users.v1`: proxy nodes (`v2_node`; a forward node has no user list);
+  - `reports.v1`: proxy nodes (a forward node's stream is not offered it
+    yet; its reports join with the forward plugins);
+  - `package-reports.v1`: proxy nodes, and forward nodes served `forward.v1`
+    (their other package reports are refused: they have no plugin
+    assignments);
+  - `forward.v1` (see "Forwarding"): proxy and forward nodes, when the
+    `Hello` lists it with a valid `node_capabilities` attribute and Control
+    serves the session `config.v1`;
+  - `maintenance.v1` (see "Maintenance events"): proxy nodes, whose node log
+    stores the events.
+
+  Before this rule Control 4.1 listed `users.v1` for every proxy node
+  whatever the Agent listed. Nothing changes for any Agent: a capability
+  was in use only when both lists had it, so an Agent that did not list
+  `users.v1` never used it. An Agent built before advertisement lists no
+  data-plane capability, is offered none and ignores the empty list; it
+  keeps its legacy transports. An Agent reads `server_capabilities` as the
+  negotiated set and must not assume a capability it did not list.
+- An Agent that sends a payload the session did not negotiate
   (`config_status` without `config.v1`, or `traffic`, `logs` or `status`
-  without `reports.v1`, `package_report` without `package-reports.v1`, in
+  without `reports.v1`, `package_report` without `package-reports.v1`,
+  `maintenance_events` without `maintenance.v1`, in
   both lists) gets `InvalidArgument`, naming the
   capability it lacks, and the stream ends. A Control built before these payloads existed answers
   them the same way, as an unknown payload ("control message payload is
@@ -256,7 +292,20 @@ are additions to `anix.agent.v1`:
   - A batch stays on the stream: the Agent never resends it over a legacy
     transport, which has no batch ids and could count it twice.
   - `NodeStatus` is the node's system and runtime health. Each replaces the
-    previous one, and Control does not acknowledge it.
+    previous one, and Control does not acknowledge it. It replaces both
+    `POST /api/v2/node/heartbeat` and `POST /api/v2/node/runtime-health`,
+    with their side effects together: the CPU, memory and disk usage and
+    the uptime, `last_check_at` and the node's status (online, never
+    re-enabling a disabled node), `runtime_healthy`, `runtime_error` (cut
+    to 4096 bytes) and `runtime_checked_at`, and a sighting of the
+    session's transport in the transport inventory (`mtls-stream` or
+    `apikey-stream`, at most one write a minute). Unlike the legacy
+    runtime-health report, a `NodeStatus` always carries both: when the
+    runtime health changes between two system samples, the Agent sends a
+    `NodeStatus` with its current system usage too (zeros would be
+    recorded). `online_users` comes from `TrafficReport.online`, and the
+    heartbeat's `upload` and `download` from the per-user bytes of
+    `TrafficReport`.
   - A report whose envelope `node_id` is not the stream's node ends the
     stream with `PermissionDenied`, as any other message does.
 - **Forwarding** (`forward.v1`; `docs/architecture/forward-sdk.md` section
@@ -359,6 +408,83 @@ are additions to `anix.agent.v1`:
     The stream stays open.
   - Packages read the reports of their own `plugin_id` through the kernel
     API view `kapi_package_report_v1`.
+- **Maintenance events** (`maintenance.v1`). The Agent keeps the plugin
+  supervisor's health incidents and recoveries in a durable outbox until
+  Control has stored them. Before `maintenance.v1` it sent them only on the
+  legacy agent WebSocket (`maintenance_events`, answered by
+  `maintenance_ack`), which `agent_control.mtls: required` refuses; a gRPC
+  Agent opened a WebSocket for them alone.
+  - **The batch.** `MaintenanceEvents.version` is the event schema,
+    `anixops.maintenance/v1` (`agentcontrol.MaintenanceSchemaV1`), and
+    `events_json` holds the events oldest first, each one JSON object of
+    that schema, the same object the WebSocket batch carries: at most 16 KiB
+    per event, 50 events and 256 KiB per batch
+    (`agentcontrol.MaxMaintenance*`). Control checks each event as the
+    Agent's outbox does before it queues one
+    (`agentcontrol.ParseMaintenanceEvent`: `schema_version` 1, identities,
+    error code, times, enumerations, a failure or a recovery that is
+    consistent) and that its `node_id` is the stream's node. Fields the
+    schema does not know are dropped.
+  - **Stored once.** Control stores each event once per node and
+    `event_id`, as a row of the node's log (`v2_node_log`, source
+    `maintenance`, `trace_id` the event id when it fits, `fields_json` the
+    event, `logged_at` its `occurred_at`; level `error` for P0 and P1,
+    `warning` for P2, `info` for P3 and recoveries), in the transaction that
+    records the event id (kept 7 days).
+  - **The answer.** Control answers every batch with one `MaintenanceAck`
+    with the `request_id` of the batch, its `version`, and one
+    `MaintenanceEventResult` per event, in the batch's order, with the
+    `event_id` when the event could be read:
+    - `persisted: true`: stored, by this delivery or an earlier one (a
+      resend after a lost acknowledgement is not stored again); the Agent
+      removes the event from its outbox;
+    - `persisted: false` with an `error`: refused for good (malformed,
+      another node's, a batch of another `version` or over the bounds, a
+      node that no longer exists); Control refuses it again on every
+      delivery, so the Agent may drop it;
+    - `persisted: false` without an `error`: Control could not store it now
+      (its database failed); the Agent keeps it and sends it again.
+
+    A bad event never ends the stream; only `maintenance_events` without
+    `maintenance.v1` negotiated does. A result has the fields of the
+    WebSocket protocol's per-event acknowledgement (`event_id`,
+    `persisted`, `error`), so the Agent's outbox applies it unchanged (it
+    removes persisted events only). Control never answered
+    `maintenance_events` on the WebSocket: an outbox that had only the
+    WebSocket did not drain against it.
+  - Metric: `anixops_agent_maintenance_events_total{result}` (`persisted`,
+    `duplicate`, `refused`, `unrecorded`).
+
+## Agent health metrics
+
+`Heartbeat.metrics` carries plugin telemetry (`plugin.*`, persisted per
+assigned plugin) and the Agent's own health: names `agent_control_*`,
+`agent_identity_*` and `agent_dataplane_*` (lowercase letters, digits and
+`_`, at most 108 bytes), finite values, at most 64. Control keeps the latest
+heartbeat's set of these with the live session and shows it in the session
+views (the node's agent-control status, the transport inventory); a
+heartbeat without any keeps the last set. Other names are dropped.
+
+## Error codes
+
+A refused call names its reason in the `x-anix-error-code` trailer
+(`agentcontrol.MetadataErrorCode`), and its status message starts with the
+same code. HTTP answers of the legacy agent paths carry it as the `code` of
+their JSON body.
+
+| Code | Status | Where | Meaning, and what the Agent does |
+|---|---|---|---|
+| `agent_mtls_required` | `Unauthenticated` | `ControlStream`, `Enroll`, the legacy HTTP and WebSocket agent paths (HTTP 403) | `agent_control.mtls: required` refuses the node API key (and its `Enroll` bootstrap): enroll with a one-time credential and present the certificate |
+| `agent_cert_revoked` | `Unauthenticated` (`PermissionDenied` when the node was found disabled or deleted after the certificate check) | `ControlStream` (at connection, and on an open stream at the next `Heartbeat`), `Renew`, `GetTrustBundle`, the v2board services | the certificate, its enrollment or its node's credentials were revoked, or the node was disabled or deleted, which revokes them: discard it and enroll again |
+| `agent_cert_expired` | `Unauthenticated` | the same | the certificate's `not_after` has passed: discard it and enroll again |
+| `agent_cert_invalid` | `Unauthenticated` | the same; `Renew` and `GetTrustBundle` without a certificate | not an agent certificate of this Control: unparsable, not chaining to the agent trust bundle, not yet valid, without client-auth usage or exactly one agent SPIFFE ID, or presented to a Control without the agent PKI: enroll again |
+| `agent_cert_wrong_cluster` | `Unauthenticated` | the same | an agent certificate of another cluster: enroll with this Control |
+| `agent_cert_wrong_node` | `Unauthenticated`, or `PermissionDenied` for an envelope or the v2board services | `ControlStream`, the v2board services | the certificate names another node than `x-node-id` or `x-node-kind`, an envelope's `node_id`, or is a forward node's on the proxy-only v2board services: a configuration error of the Agent; keep the certificate |
+| `agent_enrollment_rejected` | `Unauthenticated` | `Enroll` | the bootstrap is unusable (unknown, used, expired or revoked enrollment credential, wrong node key or token, malformed `x-node-id` or `x-node-kind`, none given); one answer for all, so credentials cannot be probed |
+
+A transient failure (`Unavailable`: the certificate check could not reach
+the database) carries no code: retry. `sdk/agentcontrol` names the codes
+(`ErrorCode*`).
 
 The checked-in Go files are generated, not handwritten. From the repository
 root, run:

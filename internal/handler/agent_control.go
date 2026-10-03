@@ -101,10 +101,16 @@ func (s proxyNodeStreams) Session(node agentcontrol.AgentNode) (agentstreams.Ses
 	if !ok {
 		return agentstreams.Session{}, false
 	}
+	identity := snapshot.Identity
+	if identity == "" {
+		identity = agentstreams.IdentityAPIKey
+	}
 	return agentstreams.Session{
 		Node: node, Transport: agentstreams.TransportControlStream, SessionID: snapshot.SessionID, AgentVersion: snapshot.AgentVersion,
 		InstanceID: snapshot.InstanceID, Capabilities: snapshot.Capabilities, ConnectedAt: snapshot.ConnectedAt, LastSeen: snapshot.LastSeen,
-		DesiredRevision: snapshot.DesiredRev, ObservedRevision: snapshot.ObservedRev, Identity: agentstreams.IdentityAPIKey,
+		DesiredRevision: snapshot.DesiredRev, ObservedRevision: snapshot.ObservedRev, Identity: identity,
+		Authentication: snapshot.Authentication, Certificate: snapshot.Certificate, NegotiatedCapabilities: snapshot.NegotiatedCapabilities,
+		AgentMetrics: snapshot.AgentMetrics, AgentMetricsAt: snapshot.AgentMetricsAt,
 	}, true
 }
 
