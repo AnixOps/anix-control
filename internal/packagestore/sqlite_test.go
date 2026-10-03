@@ -345,3 +345,45 @@ func TestPackageReportViewShowsTheLatestReports(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, []string{"kapi_package_report_v1"}, lease.Views)
 }
+
+// kapi_plugin_configuration_v1 shows each installation's configuration with
+// its package, target and desired version. SQLite has no roles: every row
+// is visible.
+func TestPluginConfigurationViewShowsTheInstallationsDocuments(t *testing.T) {
+	db, path := openSQLiteKernel(t)
+	exists, err := viewExists(db, "kapi_plugin_configuration_v1")
+	require.NoError(t, err)
+	require.False(t, exists, "no view without v3_kernel_plugin_configuration")
+	require.NoError(t, db.AutoMigrate(&model.PluginConfiguration{}))
+	require.NoError(t, EnsureKernelAPIViews(db))
+	exists, err = viewExists(db, "kapi_plugin_configuration_v1")
+	require.NoError(t, err)
+	require.False(t, exists, "no view without v3_kernel_plugin_installation")
+	require.NoError(t, db.AutoMigrate(&model.PluginInstallation{}))
+	require.NoError(t, EnsureKernelAPIViews(db))
+	var columns []string
+	require.NoError(t, db.Raw("SELECT name FROM pragma_table_info('kapi_plugin_configuration_v1') ORDER BY cid").Scan(&columns).Error)
+	require.Equal(t, []string{"plugin_id", "target", "desired_version", "revision", "config_json", "updated_at"}, columns)
+
+	installation := model.PluginInstallation{PluginID: "machine-telemetry", Target: "agent", DesiredVersion: "4.1.0", State: "enabled"}
+	require.NoError(t, db.Create(&installation).Error)
+	require.NoError(t, db.Create(&model.PluginConfiguration{
+		InstallationID: installation.ID, Revision: 3, ConfigJSON: `{"interval_seconds":30}`, ConfigHash: strings.Repeat("a", 64),
+	}).Error)
+	var rows []struct {
+		PluginID, Target, DesiredVersion, ConfigJSON string
+		Revision                                     int64
+	}
+	require.NoError(t, db.Raw("SELECT plugin_id, target, desired_version, revision, config_json FROM kapi_plugin_configuration_v1").Scan(&rows).Error)
+	require.Len(t, rows, 1)
+	require.Equal(t, "machine-telemetry", rows[0].PluginID)
+	require.Equal(t, "agent", rows[0].Target)
+	require.Equal(t, "4.1.0", rows[0].DesiredVersion)
+	require.EqualValues(t, 3, rows[0].Revision)
+	require.JSONEq(t, `{"interval_seconds":30}`, rows[0].ConfigJSON)
+
+	lease, err := Store{DB: db, Driver: "sqlite", DSN: path}.Lease(context.Background(),
+		Holder{PackageID: "machine-telemetry", Version: "4.1.0", Generation: 1}, Grants{Storage: true, Views: []string{"kapi_plugin_configuration_v1"}})
+	require.NoError(t, err)
+	require.Equal(t, []string{"kapi_plugin_configuration_v1"}, lease.Views)
+}

@@ -1,9 +1,36 @@
+import { FIXED_NOW_MS } from './clock.js'
 import { LOGS, NODES, PROTOCOLS, TEMPLATES, envelope } from './nodeData.js'
+
+// 服务: node 108 runs machine-telemetry 4.1.0, whose release declares the
+// services table, and reported it two minutes ago.
+const SERVICES_RELEASE = {
+  id: 41, plugin_id: 'machine-telemetry', version: '4.1.0', api_version: 'v2',
+  manifest: JSON.stringify({ id: 'machine-telemetry', version: '4.1.0', capabilities: ['telemetry.read', 'telemetry.systemd.read'] })
+}
+const SERVICE_UNITS = [
+  ['nginx.service', 'active', 'running', 3.42, 18.5, 87_031_808, 121_634_816],
+  ['xray.service', 'active', 'running', 11.8, 46.25, 214_958_080, 268_435_456],
+  ['anix-agent.service', 'active', 'running', 0.9, 4.1, 31_457_280, 39_845_888],
+  ['ssh.service', 'active', 'running', 0.05, 1.2, 6_291_456, 9_437_184],
+  ['cron.service', 'active', 'running', 0, 0.3, 2_097_152, 3_145_728],
+  ['systemd-journald.service', 'active', 'running', 0.4, 2.6, 25_165_824, 41_943_040],
+  ['backup-offsite.service', 'failed', 'failed', 0, 22.4, 0, 402_653_184],
+  ['certbot.service', 'inactive', 'dead', 0, 7.5, 0, 58_720_256],
+  ['unattended-upgrades.service', 'inactive', 'dead', 0, 0, 0, 0]
+].map(([name, active, sub, cpuAvg, cpuPeak, memory, memoryPeak]) => ({
+  name, active_state: active, sub_state: sub, cpu_avg_percent: cpuAvg, cpu_peak_percent: cpuPeak, memory_bytes: memory, memory_peak_bytes: memoryPeak
+}))
+const SERVICES = {
+  node_id: 108, enabled: true, include: [], exclude: ['user-*.service'], reported: true, supported: true, unsupported_reason: '',
+  stale: false, observed_at: new Date(FIXED_NOW_MS - 2 * 60_000).toISOString(), version: '4.1.0', window_seconds: 600,
+  summary: { total: 9, failed: 1, active: 6, inactive: 2 },
+  units: SERVICE_UNITS
+}
 
 const SECTION = {
   overview: '', overviewChild: '', protocols: 'protocols', protocolEdit: 'protocols', protocolNew: 'protocols', protocolVisual: 'protocols',
   protocolsEmpty: 'protocols', credentials: 'credentials', credentialsShown: 'credentials', deploy: 'deploy', deployHelper: 'deploy',
-  logs: 'logs', logsEmpty: 'logs', logsError: 'logs', danger: 'danger', disableConfirm: 'danger', deleteConfirm: 'danger', edit: '',
+  logs: 'logs', logsEmpty: 'logs', logsError: 'logs', services: 'services', servicesDisabled: 'services', danger: 'danger', disableConfirm: 'danger', deleteConfirm: 'danger', edit: '',
   notFound: '', error: '', loading: ''
 }
 
@@ -33,6 +60,14 @@ export default {
       return envelope({ list: LOGS, total: 86 })
     }
     if (/\/credentials$/.test(path)) return envelope({ node_id: 108, api_key: 'nk_4b1f0c9e2d7a6b5c8e3f1a0d9c7b6e5a', secret: 'never-shown' })
+    if (/^\/api\/v3\/nodes\/\d+\/assignments$/.test(path) && scenario.startsWith('services')) {
+      return { data: [{ id: 9, node_id: 108, service_scope: 'default', plugin_id: 'machine-telemetry', role: 'agent', desired_version: '4.1.0', enabled: true }] }
+    }
+    if (path === '/api/v3/plugin-releases' && scenario.startsWith('services')) return { data: [SERVICES_RELEASE] }
+    if (path === '/api/v3/plugins/machine-telemetry/nodes/108/services') {
+      if (scenario === 'servicesDisabled') return { data: { ...SERVICES, enabled: false, reported: false, observed_at: null, units: [], summary: { total: 0, failed: 0, active: 0, inactive: 0 } } }
+      return { data: SERVICES }
+    }
     if (path === '/api/v2/admin/auth-keys') return envelope([{ id: 3, name: 'Panel key', key: '********', used: 12 }])
     return undefined
   },
@@ -68,6 +103,8 @@ export default {
     logs: async () => {},
     logsEmpty: async () => {},
     logsError: async () => {},
+    services: async () => {},
+    servicesDisabled: async () => {},
     danger: async () => {},
     disableConfirm: async (page) => {
       await page.getByTestId('disable-node').click()

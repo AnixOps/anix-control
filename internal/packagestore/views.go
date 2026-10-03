@@ -15,6 +15,9 @@ type KernelAPIView struct {
 	Name string
 	// Source is the kernel table the view reads.
 	Source string
+	// Joined are the other kernel tables the view reads; like Source, each
+	// must exist before the view is created.
+	Joined []string
 	Query  string
 	// PostgresQuery, when set, replaces Query on PostgreSQL: for a view
 	// that filters rows by the reading package's role, which SQLite does
@@ -192,9 +195,33 @@ var KernelAPIViews = []KernelAPIView{
 			"WHERE '" + RolePrefix + "' || replace(plugin_id, '-', '_') = current_user",
 		RowFilter: true,
 	},
+	{
+		// Each installation's configuration document as the kernel stored
+		// it (v3_kernel_plugin_configuration), with the installation's
+		// package, target and desired version: what a package needs to read
+		// its own settings, such as machine-telemetry's per-node services
+		// switch in its Agent installation's document. On PostgreSQL a
+		// package's role sees only the rows of its own plugin_id. SQLite
+		// has no roles, so there it shows every row and a package filters
+		// by its own id. No official package declares secret_fields, so
+		// no document holds a secret.
+		Name:   "kapi_plugin_configuration_v1",
+		Source: "v3_kernel_plugin_configuration",
+		Joined: []string{"v3_kernel_plugin_installation"},
+		Query:  "SELECT " + pluginConfigurationViewColumns + " " + pluginConfigurationViewFrom,
+		PostgresQuery: "SELECT " + pluginConfigurationViewColumns + " " + pluginConfigurationViewFrom +
+			" WHERE '" + RolePrefix + "' || replace(i.plugin_id, '-', '_') = current_user",
+		RowFilter: true,
+	},
 }
 
 const packageReportViewColumns = "node_kind, node_id, plugin_id, kind, version, payload_json, observed_at, received_at"
+
+const (
+	pluginConfigurationViewColumns = "i.plugin_id AS plugin_id, i.target AS target, i.desired_version AS desired_version, " +
+		"c.revision AS revision, c.config_json AS config_json, c.updated_at AS updated_at"
+	pluginConfigurationViewFrom = "FROM v3_kernel_plugin_configuration c JOIN v3_kernel_plugin_installation i ON i.id = c.installation_id"
+)
 
 // The views of the node credential split's remainder (node-ops-service.md
 // section 4.6). Each exists only once its source is finalized: before that,
@@ -391,7 +418,7 @@ func EnsureKernelAPIViews(db *gorm.DB) error {
 			}
 			continue
 		}
-		if !db.Migrator().HasTable(view.Source) {
+		if !db.Migrator().HasTable(view.Source) || !hasTables(db, view.Joined) {
 			continue
 		}
 		options := ""
@@ -411,6 +438,15 @@ func (view KernelAPIView) query(driver string) string {
 		return view.PostgresQuery
 	}
 	return view.Query
+}
+
+func hasTables(db *gorm.DB, tables []string) bool {
+	for _, table := range tables {
+		if !db.Migrator().HasTable(table) {
+			return false
+		}
+	}
+	return true
 }
 
 func viewExists(db *gorm.DB, name string) (bool, error) {

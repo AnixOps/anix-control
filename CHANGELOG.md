@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Changed
+
+- CI builds the Agent from anix-agent `1b155dee` (was `c459383`), which
+  accepts the machine-telemetry `systemd_services` setting and collects the
+  systemd services report (anix-agent #5). Older Agents refuse that setting,
+  so the services panel needs this Agent.
+
+
 ### Added
 
 - **Package reports on the Agent Control stream** (systemd services panel
@@ -29,6 +37,33 @@
   - Metrics: `anixops_agent_package_reports_total{result}` and
     `anixops_agent_package_reports_refused_total{reason}`.
   - Design and privacy notes: `docs/architecture/package-reports.md`.
+- **Read-only systemd services panel** (systemd services panel 5–6/7).
+  - `machine-telemetry` declares `telemetry.systemd.read`, the permission
+    `machine-telemetry.services.view` and the control route
+    `GET /api/v3/plugins/machine-telemetry/nodes/:id/services` (admin only).
+    The package answers it itself from `kapi_package_report_v1`: the node's
+    units (name, ActiveState, SubState, 10-minute average and peak CPU,
+    current and peak memory), a summary `{total, failed, active, inactive}`,
+    `observed_at`, `window_seconds`, `supported` / `unsupported_reason`,
+    `stale` (older than 25 minutes) and the node's `enabled` setting.
+  - Collection is off on every node until enabled: the package configuration
+    gains `systemd_services.nodes.<node_id>` with `enabled` and optional
+    `include` / `exclude` globs (`path.Match` syntax). Control pushes the
+    document to the package's nodes with `plugin.configure`; the Agent
+    collector (anix-agent, panel 3–4/7) reads its own node's entry
+    (`sdk/telemetry/systemdreport.ParseConfig`). Control validates the globs
+    when the configuration of a release declaring `telemetry.systemd.read`
+    is saved.
+  - New kernel API view `kapi_plugin_configuration_v1`: each installation's
+    configuration document with its package, target and desired version
+    (on PostgreSQL scoped to the reading package's role), so a package can
+    read its own settings.
+  - Node page: a 服务 / Services section, shown when the node's
+    machine-telemetry release declares the capability, with filters by name
+    and state, sortable columns, the totals line
+    “总计 N | 失败 N | 每 10 分钟更新一次”, a stale banner, the unsupported
+    reason, and a per-node switch with the include / exclude patterns. No
+    start, stop or restart. The Machine Telemetry WebUI links each node to it.
 
 - Forward SDK F1b (`docs/architecture/forward-sdk.md`): `sdk/forward/model`,
   Go domain types for the draft `anixops.forward.v1` contract (routes, hops,

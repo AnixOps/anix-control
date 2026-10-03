@@ -45,6 +45,7 @@ export const SCREENS = {
   'admin-plugins': { fixture: plugins, scenario: 'list' },
   'admin-nodes': { fixture: nodes, scenario: 'list' },
   'admin-node-detail': { fixture: nodeDetail, scenario: 'overview' },
+  'admin-node-services': { fixture: nodeDetail, scenario: 'services' },
   'admin-forward': { fixture: forward, scenario: 'list' },
   'admin-subscriptions': { fixture: subscriptions, scenario: 'list' },
   'admin-system': { fixture: system, scenario: 'general' },

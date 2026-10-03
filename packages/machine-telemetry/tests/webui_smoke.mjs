@@ -63,5 +63,7 @@ assert.match(rendered, /edge-one/)
 assert.match(rendered, /12\.5%/)
 assert.match(rendered, /Online/)
 assert.match(rendered, /1h 1m/)
+assert.match(rendered, /"href":"\/admin\/nodes\/7\?section=services"/)
+assert.match(rendered, /View services/)
 
 console.log('machine-telemetry WebUI smoke test passed')

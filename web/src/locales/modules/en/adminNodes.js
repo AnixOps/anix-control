@@ -73,6 +73,7 @@ export default {
       credentials: 'Credentials',
       deploy: 'Deployment',
       logs: 'Logs',
+      services: 'Services',
       danger: 'Danger zone'
     }
   },
@@ -256,6 +257,68 @@ export default {
       tls: 'TLS',
       status: 'Status',
       show: 'In subscriptions'
+    }
+  },
+  services: {
+    title: 'Services',
+    description: 'Read-only systemd services on this node: state, CPU over the last 10 minutes and memory.',
+    tableLabel: 'Services of {name}',
+    refresh: 'Refresh services',
+    settings: 'Settings',
+    loadFailed: 'Couldn’t load the services',
+    totals: "Total {total} {'|'} Failed {failed} {'|'} Updated every 10 minutes",
+    observedAt: 'Reported {time}',
+    stale: 'The last report is from {time}. The table may be out of date: the node or its collector may be offline.',
+    unsupported: 'This node can’t report its services',
+    unsupportedReason: 'Reason: {reason}',
+    unsupportedNoReason: 'The node needs systemd and cgroup v2.',
+    waiting: 'Waiting for the first report',
+    waitingDescription: 'The node sends its services table about once a minute after collection is enabled.',
+    empty: 'No services match the node’s filters',
+    emptyDescription: 'Change the include or exclude patterns in Settings.',
+    disabled: {
+      title: 'Not enabled on this node',
+      description: 'The services table is off by default. Enable it to collect the unit names, states, CPU and memory of this node’s systemd services. Nothing else is collected.',
+      enable: 'Enable for this node'
+    },
+    filters: {
+      label: 'Filter by state',
+      all: 'All',
+      search: 'Search services',
+      searchPlaceholder: 'Unit name'
+    },
+    states: {
+      active: 'Active',
+      failed: 'Failed',
+      inactive: 'Inactive',
+      activating: 'Activating',
+      deactivating: 'Deactivating',
+      reloading: 'Reloading'
+    },
+    columns: {
+      name: 'Service',
+      state: 'State',
+      cpuAvg: 'CPU (10 min avg)',
+      cpuPeak: 'CPU peak',
+      memory: 'Memory',
+      memoryPeak: 'Memory peak'
+    },
+    form: {
+      title: 'Services settings',
+      description: 'Node {name}',
+      enabled: 'Collect services on this node',
+      enabledHelp: 'Read-only: the table never starts, stops or restarts a service.',
+      include: 'Include patterns',
+      includeHelp: 'One pattern per line, such as nginx*.service. Leave empty to include every service.',
+      exclude: 'Exclude patterns',
+      excludeHelp: 'One pattern per line. Matching services are left out.',
+      invalidGlob: 'Not a valid pattern: {glob}',
+      tooManyGlobs: 'At most {max} patterns',
+      save: 'Save',
+      saved: 'Services settings saved. The node applies them with its next configuration.',
+      saveFailed: 'Couldn’t save the services settings',
+      conflict: 'The settings changed elsewhere. Reloaded the latest; review and save again.',
+      noInstallation: 'Machine Telemetry has no Agent installation. Install it under Plugins first.'
     }
   },
   logs: {

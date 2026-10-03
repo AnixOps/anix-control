@@ -18,6 +18,7 @@ const SHOTS = [
   ['admin-dashboard', [DESKTOP, PHONE]],
   ['admin-users', [DESKTOP, PHONE]],
   ['admin-node-detail', [DESKTOP]],
+  ['admin-node-services', [DESKTOP]],
   ['admin-forward', [DESKTOP]],
   ['admin-system', [DESKTOP]],
   ['admin-monitor', [DESKTOP]],

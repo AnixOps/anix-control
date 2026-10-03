@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/AnixOps/anix-control/sdk/telemetry/systemdreport"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/pluginhost"
 	"github.com/google/uuid"
@@ -2078,6 +2079,9 @@ func updatePluginConfigurationTx(tx *gorm.DB, publicKey ed25519.PublicKey, insta
 		if err := validatePluginConfigurationSchema(*manifest, packageConfig); err != nil {
 			return err
 		}
+		if err := validatePluginConfigurationCapabilities(*manifest, packageConfig); err != nil {
+			return err
+		}
 		if validator != nil {
 			if err := validator(manifest.ID, manifest.Version, json.RawMessage(packageConfig)); err != nil {
 				return fmt.Errorf("plugin configuration semantic validation failed: %w", err)
@@ -2127,6 +2131,21 @@ func updatePluginConfigurationTx(tx *gorm.DB, publicKey ed25519.PublicKey, insta
 		return nil, err
 	}
 	return result, nil
+}
+
+// validatePluginConfigurationCapabilities checks the settings a capability
+// gives a package, which JSON Schema cannot express: for a release that
+// declares telemetry.systemd.read, the per-node systemd_services settings,
+// with the glob syntax the Agent's collector applies
+// (sdk/telemetry/systemdreport.ParseConfig).
+func validatePluginConfigurationCapabilities(manifest PluginManifest, canonicalConfig string) error {
+	if !containsPluginCapability(manifest.Capabilities, systemdreport.Capability) {
+		return nil
+	}
+	if _, err := systemdreport.ParseConfig([]byte(canonicalConfig)); err != nil {
+		return fmt.Errorf("plugin config does not satisfy its schema: %w", err)
+	}
+	return nil
 }
 
 func validatePluginConfigurationSchema(manifest PluginManifest, canonicalConfig string) error {

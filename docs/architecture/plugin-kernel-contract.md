@@ -356,7 +356,15 @@ node traffic report's bytes per user, for traffic charts.
 `v4_kernel_package_report_state`, the latest package report of each node,
 plugin and kind (`docs/architecture/package-reports.md`); on PostgreSQL a
 package role sees only the rows of its own `plugin_id`, while on SQLite, which
-has no roles, every row is visible. A view that filters
+has no roles, every row is visible. `kapi_plugin_configuration_v1` exposes
+`plugin_id`, `target`, `desired_version`, `revision`, `config_json` and
+`updated_at`: each installation's configuration document
+(`v3_kernel_plugin_configuration` joined with
+`v3_kernel_plugin_installation`), so a package can read its own settings,
+such as the per-node services switch of `machine-telemetry`; it is scoped
+the same way, to the reading package's own `plugin_id` on PostgreSQL. No
+official package declares `secret_fields`, so no document holds a secret. A
+view that filters
 rows is created `WITH
 (security_barrier)` on PostgreSQL, so a package's own functions never see the
 rows it hides. If a view cannot be created, or its source table does not

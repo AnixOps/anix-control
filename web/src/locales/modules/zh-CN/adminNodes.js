@@ -73,6 +73,7 @@ export default {
       credentials: '凭据',
       deploy: '部署',
       logs: '日志',
+      services: '服务',
       danger: '危险区'
     }
   },
@@ -256,6 +257,68 @@ export default {
       tls: 'TLS',
       status: '状态',
       show: '订阅中'
+    }
+  },
+  services: {
+    title: '服务',
+    description: '此节点的 systemd 服务（只读）：状态、最近 10 分钟的 CPU 和内存。',
+    tableLabel: '{name} 的服务',
+    refresh: '刷新服务',
+    settings: '设置',
+    loadFailed: '无法加载服务',
+    totals: "总计 {total} {'|'} 失败 {failed} {'|'} 每 10 分钟更新一次",
+    observedAt: '上报于 {time}',
+    stale: '最近一次上报在 {time}。表格可能已过时：节点或其采集器可能已离线。',
+    unsupported: '此节点无法上报服务',
+    unsupportedReason: '原因：{reason}',
+    unsupportedNoReason: '节点需要 systemd 和 cgroup v2。',
+    waiting: '正在等待首次上报',
+    waitingDescription: '启用采集后，节点大约每分钟发送一次服务表。',
+    empty: '没有符合节点筛选规则的服务',
+    emptyDescription: '请在设置中修改包含或排除规则。',
+    disabled: {
+      title: '此节点未启用',
+      description: '服务表默认关闭。启用后会采集此节点 systemd 服务的单元名称、状态、CPU 和内存，不采集其他内容。',
+      enable: '为此节点启用'
+    },
+    filters: {
+      label: '按状态筛选',
+      all: '全部',
+      search: '搜索服务',
+      searchPlaceholder: '单元名称'
+    },
+    states: {
+      active: '运行中',
+      failed: '失败',
+      inactive: '未运行',
+      activating: '启动中',
+      deactivating: '停止中',
+      reloading: '重新加载中'
+    },
+    columns: {
+      name: '服务',
+      state: '状态',
+      cpuAvg: 'CPU（10 分钟平均）',
+      cpuPeak: 'CPU 峰值',
+      memory: '内存',
+      memoryPeak: '内存峰值'
+    },
+    form: {
+      title: '服务设置',
+      description: '节点 {name}',
+      enabled: '采集此节点的服务',
+      enabledHelp: '只读：服务表不会启动、停止或重启任何服务。',
+      include: '包含规则',
+      includeHelp: '每行一条，例如 nginx*.service。留空则包含所有服务。',
+      exclude: '排除规则',
+      excludeHelp: '每行一条。匹配的服务不会显示。',
+      invalidGlob: '规则无效：{glob}',
+      tooManyGlobs: '最多 {max} 条规则',
+      save: '保存',
+      saved: '服务设置已保存，节点会在下次接收配置时应用。',
+      saveFailed: '无法保存服务设置',
+      conflict: '设置已在别处修改，已重新加载最新设置，请检查后再次保存。',
+      noInstallation: '机器遥测没有 Agent 安装。请先在插件中安装。'
     }
   },
   logs: {

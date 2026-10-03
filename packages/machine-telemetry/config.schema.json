@@ -8,6 +8,55 @@
       "maximum": 3600,
       "minimum": 5,
       "type": "integer"
+    },
+    "systemd_services": {
+      "additionalProperties": false,
+      "description": "Per-node systemd services table (read-only). Off on every node until enabled here.",
+      "properties": {
+        "nodes": {
+          "additionalProperties": {
+            "additionalProperties": false,
+            "properties": {
+              "enabled": {
+                "default": false,
+                "type": "boolean"
+              },
+              "exclude": {
+                "items": {
+                  "maxLength": 256,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9:_.\\\\@*?\\[\\]^-]+$",
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "type": "array",
+                "uniqueItems": true
+              },
+              "include": {
+                "items": {
+                  "maxLength": 256,
+                  "minLength": 1,
+                  "pattern": "^[A-Za-z0-9:_.\\\\@*?\\[\\]^-]+$",
+                  "type": "string"
+                },
+                "maxItems": 32,
+                "type": "array",
+                "uniqueItems": true
+              }
+            },
+            "required": [
+              "enabled"
+            ],
+            "type": "object"
+          },
+          "maxProperties": 4096,
+          "propertyNames": {
+            "pattern": "^[1-9][0-9]{0,9}$"
+          },
+          "type": "object"
+        }
+      },
+      "type": "object"
     }
   },
   "required": [

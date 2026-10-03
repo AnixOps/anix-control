@@ -41,6 +41,13 @@ function uptime(value) {
   return days > 0 ? `${days}d ${hours}h` : hours > 0 ? `${hours}h ${minutes}m` : `${minutes}m`
 }
 
+// The node page's 服务 section: the node's read-only systemd services table
+// (GET /api/v3/plugins/machine-telemetry/nodes/:id/services).
+function servicesPath(node) {
+  const id = Number(node?.id)
+  return Number.isInteger(id) && id > 0 ? `/admin/nodes/${id}?section=services` : ''
+}
+
 function stateLabel(node) {
   if (node?.status === 'disabled' || node?.status === 3) {
     return 'Disabled'
@@ -129,7 +136,7 @@ export default function create(host) {
           h('div', { class: 'table-container' }, [
             h('table', { class: 'data-table' }, [
               h('thead', [h('tr', [
-                h('th', 'Node'), h('th', 'State'), h('th', 'CPU'), h('th', 'Memory'), h('th', 'Disk'), h('th', 'Uptime'), h('th', 'Users'),
+                h('th', 'Node'), h('th', 'State'), h('th', 'CPU'), h('th', 'Memory'), h('th', 'Disk'), h('th', 'Uptime'), h('th', 'Users'), h('th', 'Services'),
               ])]),
               h('tbody', value.nodes.length > 0
                 ? value.nodes.map(node => h('tr', { key: node.id }, [
@@ -140,8 +147,9 @@ export default function create(host) {
                   h('td', percent(node.disk_usage)),
                   h('td', uptime(node.uptime)),
                   h('td', String(node.online_users ?? 0)),
+                  h('td', servicesPath(node) ? [h('a', { href: servicesPath(node), class: 'machine-telemetry-services-link' }, 'View services')] : 'n/a'),
                 ]))
-                : [h('tr', { key: 'empty' }, [h('td', { colspan: 7, class: 'empty-state' }, 'No telemetry')])]),
+                : [h('tr', { key: 'empty' }, [h('td', { colspan: 8, class: 'empty-state' }, 'No telemetry')])]),
             ]),
           ]),
         ])

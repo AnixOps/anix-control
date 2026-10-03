@@ -12,23 +12,91 @@
   "artifact_sha256": "__ARTIFACT_SHA256__",
   "capabilities": [
     "telemetry.read",
+    "telemetry.systemd.read",
     "kernel.storage.v1",
     "kernel.view:kapi_traffic_log_v1",
     "kernel.view:kapi_user_directory_v1",
+    "kernel.view:kapi_package_report_v1",
+    "kernel.view:kapi_plugin_configuration_v1",
     "kernel.telemetry.dashboard.v1"
   ],
   "dependencies": [],
   "conflicts": [],
   "permissions": [
     "machine-telemetry.view",
-    "machine-telemetry.api"
+    "machine-telemetry.api",
+    "machine-telemetry.services.view"
   ],
-  "config_schema": {},
+  "config_schema": {
+    "$id": "urn:anixops:plugin:machine-telemetry:config:v2",
+    "$schema": "https://json-schema.org/draft/2020-12/schema",
+    "additionalProperties": false,
+    "properties": {
+      "interval_seconds": {
+        "default": 30,
+        "maximum": 3600,
+        "minimum": 5,
+        "type": "integer"
+      },
+      "systemd_services": {
+        "additionalProperties": false,
+        "description": "Per-node systemd services table (read-only). Off on every node until enabled here.",
+        "properties": {
+          "nodes": {
+            "type": "object",
+            "maxProperties": 4096,
+            "propertyNames": {
+              "pattern": "^[1-9][0-9]{0,9}$"
+            },
+            "additionalProperties": {
+              "type": "object",
+              "additionalProperties": false,
+              "required": [
+                "enabled"
+              ],
+              "properties": {
+                "enabled": {
+                  "type": "boolean",
+                  "default": false
+                },
+                "include": {
+                  "type": "array",
+                  "maxItems": 32,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256,
+                    "pattern": "^[A-Za-z0-9:_.\\\\@*?\\[\\]^-]+$"
+                  }
+                },
+                "exclude": {
+                  "type": "array",
+                  "maxItems": 32,
+                  "uniqueItems": true,
+                  "items": {
+                    "type": "string",
+                    "minLength": 1,
+                    "maxLength": 256,
+                    "pattern": "^[A-Za-z0-9:_.\\\\@*?\\[\\]^-]+$"
+                  }
+                }
+              }
+            }
+          }
+        },
+        "type": "object"
+      }
+    },
+    "title": "Machine Telemetry Configuration",
+    "type": "object"
+  },
   "secret_fields": [],
   "entrypoints": {},
   "migration_version": 1,
   "control_routes": [
-    "/api/v3/plugins/machine-telemetry/status"
+    "/api/v3/plugins/machine-telemetry/status",
+    "/api/v3/plugins/machine-telemetry/nodes/*"
   ],
   "frontend_sha256": "__WEBUI_SHA256__",
   "webui": {

@@ -29,6 +29,14 @@ const api = vi.hoisted(() => ({
 
 vi.mock('@/api/admin', () => api)
 
+const telemetry = vi.hoisted(() => ({
+  nodeHasServicesTable: vi.fn(),
+  getNodeServices: vi.fn(),
+  saveNodeServicesSettings: vi.fn()
+}))
+
+vi.mock('@/api/machineTelemetry', async importOriginal => ({ ...(await importOriginal()), ...telemetry }))
+
 const Harness = {
   components: { NodeDetail, UiHost },
   template: '<div><NodeDetail /><UiHost /></div>'
@@ -81,6 +89,8 @@ describe('NodeDetail', () => {
     })
     api.getNodeLogs.mockResolvedValue({ data: { list: [{ id: 1, level: 'error', source: 'xray', message: 'listen failed', created_at: 1790000000 }], total: 1 } })
     api.getAuthKeys.mockResolvedValue({ data: [] })
+    for (const fn of Object.values(telemetry)) fn.mockReset()
+    telemetry.nodeHasServicesTable.mockResolvedValue(false)
   })
 
   afterEach(() => {
@@ -108,6 +118,27 @@ describe('NodeDetail', () => {
     await waitFor(() => expect(router.currentRoute.value.query).toEqual({ section: 'protocols' }))
     await user.click(screen.getByRole('tab', { name: 'Overview' }))
     await waitFor(() => expect(router.currentRoute.value.query).toEqual({}))
+  })
+
+  it('shows 服务 only when the node’s machine-telemetry release reports services', async () => {
+    await renderPage()
+    await screen.findByRole('heading', { level: 1, name: 'hk-01' })
+    await waitFor(() => expect(telemetry.nodeHasServicesTable).toHaveBeenCalledWith('5'))
+    expect(screen.queryByRole('tab', { name: 'Services' })).toBeNull()
+  })
+
+  it('opens 服务 from the URL once the capability is known', async () => {
+    telemetry.nodeHasServicesTable.mockResolvedValue(true)
+    telemetry.getNodeServices.mockResolvedValue({
+      node_id: 5, enabled: true, include: [], exclude: [], reported: true, supported: true, unsupported_reason: '', stale: false,
+      observed_at: new Date().toISOString(), version: '4.1.0', window_seconds: 600,
+      summary: { total: 1, failed: 0, active: 1, inactive: 0 },
+      units: [{ name: 'nginx.service', active_state: 'active', sub_state: 'running', cpu_avg_percent: 1.5, cpu_peak_percent: 3, memory_bytes: 1048576, memory_peak_bytes: 2097152 }]
+    })
+    await renderPage('/admin/nodes/5?section=services')
+    expect(await screen.findByRole('tab', { name: 'Services', selected: true })).toBeTruthy()
+    expect(await screen.findByText('nginx.service')).toBeTruthy()
+    expect(telemetry.getNodeServices).toHaveBeenCalledWith(5)
   })
 
   it('syncs from the header and reports with a toast', async () => {

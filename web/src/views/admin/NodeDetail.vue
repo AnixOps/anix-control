@@ -59,6 +59,9 @@
       <template #logs>
         <NodeLogsSection :node="node" />
       </template>
+      <template v-if="hasServices" #services>
+        <NodeServicesSection :node="node" />
+      </template>
       <template #danger>
         <NodeDangerSection :node="node" @changed="load" @deleted="router.push(backTo)" />
       </template>
@@ -70,13 +73,16 @@
 
 <script setup>
 // The node page (plan §7.2, §8.2): back link, name, status and the main
-// actions, then sections — 概览 / 协议 / 凭据 / 部署 / 日志 / 危险区 — kept in
-// the URL (?section=protocols). Reads GET /admin/nodes/:id; every action
-// calls the same endpoints as the node list.
-import { computed, reactive, ref, watch } from 'vue'
+// actions, then sections — 概览 / 协议 / 凭据 / 部署 / 日志 / 服务 / 危险区 —
+// kept in the URL (?section=protocols). Reads GET /admin/nodes/:id; every
+// action calls the same endpoints as the node list. 服务 shows only when the
+// node's machine-telemetry release reports a services table, and loads its
+// code when opened.
+import { computed, defineAsyncComponent, reactive, ref, watch } from 'vue'
 import { RouterLink, useRoute, useRouter } from 'vue-router'
 import { ChevronLeft, Pencil, RefreshCcw, ServerOff } from '@lucide/vue'
 import { getNode, getNodes } from '@/api/admin'
+import { nodeHasServicesTable } from '@/api/machineTelemetry'
 import UiBadge from '@/ui/UiBadge.vue'
 import UiButton from '@/ui/UiButton.vue'
 import UiEmptyState from '@/ui/UiEmptyState.vue'
@@ -95,10 +101,12 @@ import NodeLogsSection from './nodes/NodeLogsSection.vue'
 import NodeOverviewSection from './nodes/NodeOverviewSection.vue'
 import NodeProtocolsSection from './nodes/NodeProtocolsSection.vue'
 import {
-  NODE_SECTIONS, displayStatus, knownNodeName, listQuery, normalizeNode, readNodeList, readNodePayload, statusName
+  NODE_SECTIONS, OPTIONAL_NODE_SECTIONS, displayStatus, knownNodeName, listQuery, normalizeNode, readNodeList, readNodePayload, statusName
 } from './nodes/nodeData'
 import { useNodeActions } from './nodes/useNodeActions'
 import { useNodeDeploy } from './nodes/useNodeDeploy'
+
+const NodeServicesSection = defineAsyncComponent(() => import('./nodes/NodeServicesSection.vue'))
 
 const { t } = useAppI18n()
 const route = useRoute()
@@ -122,13 +130,19 @@ const status = computed(() => (node.value ? displayStatus(node.value) : 0))
 const headerTitle = computed(() => node.value?.name || (notFound.value || error.value ? t('admin.nodes.detail.title') : t('admin.nodes.detail.loading')))
 const parentName = computed(() => (node.value?.parent_id ? knownNodeName(node.value.parent_id) : ''))
 
-const sectionItems = computed(() => NODE_SECTIONS.map(value => ({ value, label: t(`admin.nodes.detail.sectionNames.${value}`) })))
+// Whether 服务 applies: null while unknown, then true or false.
+const servicesAvailable = ref(null)
+const hasServices = computed(() => servicesAvailable.value === true)
+const sections = computed(() => NODE_SECTIONS.filter(value => !OPTIONAL_NODE_SECTIONS.includes(value) || (value === 'services' && hasServices.value)))
+const sectionItems = computed(() => sections.value.map(value => ({ value, label: t(`admin.nodes.detail.sectionNames.${value}`) })))
 
-// ?section= in the URL; 概览 is the default and leaves the query clean.
+// ?section= in the URL; 概览 is the default and leaves the query clean. A
+// link to 服务 waits for the capability check instead of falling back.
 const section = computed({
   get: () => {
     const value = String(route.query.section || '')
-    return NODE_SECTIONS.includes(value) ? value : 'overview'
+    if (value === 'services' && servicesAvailable.value === null) return value
+    return sections.value.includes(value) ? value : 'overview'
   },
   set: (value) => {
     const query = { ...route.query }
@@ -173,9 +187,24 @@ async function openEdit() {
   }
 }
 
+// The services capability is looked up apart from the node: a failure
+// only hides 服务.
+async function checkServices() {
+  const id = nodeId.value
+  servicesAvailable.value = null
+  let available = false
+  try {
+    available = id ? await nodeHasServicesTable(id) : false
+  } catch {
+    available = false
+  }
+  if (nodeId.value === id) servicesAvailable.value = available
+}
+
 watch(nodeId, () => {
   node.value = null
   load()
+  checkServices()
 }, { immediate: true })
 
 defineExpose({ node, load, section })
