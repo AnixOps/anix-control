@@ -54,7 +54,8 @@ func WithRunner(r Runner) Option { return func(d *Driver) { d.runner = r } }
 
 // WithRetiredCounters calls f after an Apply that deleted hops, with their
 // last counters (read just before the transaction that deleted them), so
-// the Agent can report the end of their counter epochs.
+// the Agent can report the end of their counter epochs. It runs after
+// Apply released the driver, so it may call it.
 func WithRetiredCounters(f func([]*forwardv1.Counters)) Option {
 	return func(d *Driver) { d.retired = f }
 }
@@ -206,6 +207,13 @@ func (d *Driver) Apply(ctx context.Context, a driver.Artifact) (driver.ApplyResu
 	if err != nil {
 		return driver.ApplyResult{}, err
 	}
+	// The hook runs after the lock is released, so it may call the driver.
+	var retired []*forwardv1.Counters
+	defer func() {
+		if d.retired != nil && len(retired) > 0 {
+			d.retired(retired)
+		}
+	}()
 	d.mu.Lock()
 	defer d.mu.Unlock()
 
@@ -226,7 +234,7 @@ func (d *Driver) Apply(ctx context.Context, a driver.Artifact) (driver.ApplyResu
 	}
 	res := driver.ApplyResult{Generation: a.Generation, StateHash: a.StateHash, Digest: a.Digest}
 	if a.Empty() {
-		return d.applyEmpty(ctx, h, res)
+		return d.applyEmpty(ctx, h, res, &retired)
 	}
 
 	tcp, err := d.planTC(ctx, m)
@@ -249,7 +257,7 @@ func (d *Driver) Apply(ctx context.Context, a driver.Artifact) (driver.ApplyResu
 		return driver.ApplyResult{}, err
 	}
 
-	script, retired := d.transaction(a, m, h)
+	script, gone := d.transaction(a, m, h)
 	if _, err := d.run(ctx, "nft", script, "-c", "-f", "-"); err != nil {
 		return driver.ApplyResult{}, fmt.Errorf("nftables driver: nft -c refused the transaction: %w", err)
 	}
@@ -273,15 +281,13 @@ func (d *Driver) Apply(ctx context.Context, a driver.Artifact) (driver.ApplyResu
 	if _, err := d.runTC(tidy, tcp.post); err != nil {
 		return driver.ApplyResult{}, fmt.Errorf("nftables driver: tc cleanup: %w", err)
 	}
-	if d.retired != nil && len(retired) > 0 {
-		d.retired(retired)
-	}
+	retired = gone
 	res.Changed = true
 	return res, nil
 }
 
 // applyEmpty removes everything the driver owns.
-func (d *Driver) applyEmpty(ctx context.Context, h *host, res driver.ApplyResult) (driver.ApplyResult, error) {
+func (d *Driver) applyEmpty(ctx context.Context, h *host, res driver.ApplyResult, retired *[]*forwardv1.Counters) (driver.ApplyResult, error) {
 	tcp, err := d.planTC(ctx, nil)
 	if err != nil {
 		return driver.ApplyResult{}, err
@@ -299,8 +305,8 @@ func (d *Driver) applyEmpty(ctx context.Context, h *host, res driver.ApplyResult
 	if _, err := d.runTC(tidy, tcp.post); err != nil {
 		return driver.ApplyResult{}, fmt.Errorf("nftables driver: tc cleanup: %w", err)
 	}
-	if d.retired != nil && h.doc != nil {
-		d.retired(d.counters(h, h.doc.Hops, h.doc.Node, d.now()))
+	if h.doc != nil {
+		*retired = d.counters(h, h.doc.Hops, h.doc.Node, d.now())
 	}
 	res.Changed = true
 	return res, nil
