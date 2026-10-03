@@ -192,14 +192,17 @@ func (l *lab) serve(ns *netns, id string, addrs ...netip.Addr) *server {
 	return s
 }
 
-// node is a forwarding node: a namespace with forwarding on and the
-// nftables driver, probed there as the Agent probes its host.
+// node is a forwarding node: a namespace with forwarding on and a driver,
+// probed there as the Agent probes its host: the nftables driver (node),
+// or the gost driver with gost running in the namespace (gostNode).
 type node struct {
 	ref   string
 	ns    *netns
 	addrs []netip.Addr
-	cfg   nftables.Config
-	drv   *nftables.Driver
+	cfg   nftables.Config // the nftables driver's probed configuration
+	drv   driver.Driver
+	// mk makes a driver instance on the node.
+	mk func(testing.TB) driver.Driver
 }
 
 // node makes ns a forwarding node. addrs are its NodeInfo addresses: the
@@ -224,6 +227,14 @@ func (l *lab) node(ref string, ns *netns, limitIfs []string, addrs ...netip.Addr
 		l.t.Logf("%s: probe: %s", ref, w)
 	}
 	n := &node{ref: ref, ns: ns, addrs: addrs, cfg: cfg}
+	n.mk = func(t testing.TB) driver.Driver {
+		t.Helper()
+		d, err := nftables.New(n.cfg, nftables.WithRunner(nsRunner{n.ns}))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return d
+	}
 	n.drv = n.newDriver(l.t)
 	l.nodes = append(l.nodes, n)
 	return n
@@ -231,13 +242,9 @@ func (l *lab) node(ref string, ns *netns, limitIfs []string, addrs ...netip.Addr
 
 // newDriver answers a new driver instance on the node, as a restarted
 // Agent makes one from the same probed configuration.
-func (n *node) newDriver(t testing.TB) *nftables.Driver {
+func (n *node) newDriver(t testing.TB) driver.Driver {
 	t.Helper()
-	d, err := nftables.New(n.cfg, nftables.WithRunner(nsRunner{n.ns}))
-	if err != nil {
-		t.Fatal(err)
-	}
-	return d
+	return n.mk(t)
 }
 
 // inventory answers the nodes as Control knows them: addresses, port range
