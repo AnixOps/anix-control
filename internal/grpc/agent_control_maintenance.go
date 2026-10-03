@@ -100,7 +100,7 @@ func (s *AgentControlGRPCServer) handleMaintenanceEvents(manager *AgentControlMa
 			// Transient: neither persisted nor refused (no error), so the
 			// Agent keeps the event and sends it again, after the hint.
 			result.ErrorCode = agentcontrol.MaintenanceErrorCodeUnavailable
-			result.RetryAfterMs = uint32(maintenanceRetryAfter.Milliseconds())
+			result.RetryAfterMs = maintenanceRetryAfterMs
 			agentMaintenanceMetrics.result(maintenanceUnrecorded)
 			slog.Warn("failed to record agent maintenance event", "component", "agent-control", "node", node.String(), "event_id", logValue(event.EventID), "error", err)
 		}
@@ -114,9 +114,9 @@ func (s *AgentControlGRPCServer) handleMaintenanceEvents(manager *AgentControlMa
 	})
 }
 
-// maintenanceRetryAfter is MaintenanceEventResult.retry_after_ms of an
-// event Control could not store now (maintenance_unavailable).
-var maintenanceRetryAfter = 30 * time.Second
+// maintenanceRetryAfterMs is MaintenanceEventResult.retry_after_ms of an
+// event Control could not store now (maintenance_unavailable): 30 s.
+const maintenanceRetryAfterMs uint32 = 30000
 
 // maintenanceBatchRefusal is why a whole batch is refused, with its error
 // code; both empty when its events are read one by one.

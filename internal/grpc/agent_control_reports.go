@@ -58,9 +58,9 @@ func newAgentReportSinks() *agentReportSinks {
 	return &agentReportSinks{server: service.NewServerService(), logs: service.NewNodeLogService()}
 }
 
-// reportRetryAfter is ReportAck.retry_after_ms of a batch Control could
-// not record now (report_unavailable). A variable so tests can read it.
-var reportRetryAfter = 15 * time.Second
+// reportRetryAfterMs is ReportAck.retry_after_ms of a batch Control could
+// not record now (report_unavailable): 15 s.
+const reportRetryAfterMs uint32 = 15000
 
 // reportRefused is a permanent refusal of a batch: the agent drops it. code
 // is its ReportAck.error_code (agentcontrol.ReportErrorCode*).
@@ -177,7 +177,7 @@ func (s *AgentControlGRPCServer) handleReport(manager *AgentControlManager, conn
 		}
 		ack.Applied = false
 		ack.ErrorCode = agentcontrol.ReportErrorCodeUnavailable
-		ack.RetryAfterMs = uint32(reportRetryAfter.Milliseconds())
+		ack.RetryAfterMs = reportRetryAfterMs
 	}
 	return connection.send(&agentv1pb.ControlToAgent{
 		RequestId:    message.RequestId,

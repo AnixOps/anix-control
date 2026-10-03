@@ -439,7 +439,7 @@ func TestAgentControlTrafficReportTransientAckWhenNegotiated(t *testing.T) {
 	assert.False(t, ack.Applied)
 	assert.Empty(t, ack.Error, "not a refusal: the agent keeps the batch")
 	assert.Equal(t, agentcontrol.ReportErrorCodeUnavailable, ack.ErrorCode)
-	assert.Equal(t, uint32(reportRetryAfter.Milliseconds()), ack.RetryAfterMs)
+	assert.Equal(t, reportRetryAfterMs, ack.RetryAfterMs)
 
 	requireAutoMigrate(t, &model.AgentReportBatch{})
 	require.NoError(t, stream.Send(trafficMessage("traffic-1-again", nodeID, report)))

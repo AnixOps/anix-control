@@ -143,8 +143,9 @@ func RunAgentDiagnosticOnStream(ctx context.Context, db *gorm.DB, sources AgentS
 		stream.dispatch.release()
 		return run, true, nil
 	}
+	// The result outlives the request: its context's values, not its end.
+	waitCtx, cancel := context.WithDeadline(context.WithoutCancel(ctx), deadline)
 	go func() {
-		waitCtx, cancel := context.WithDeadline(context.Background(), deadline)
 		defer cancel()
 		observed, err := stream.dispatch.awaitTerminal(waitCtx, sources.Streams, node)
 		if err != nil {

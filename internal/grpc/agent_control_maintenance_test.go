@@ -176,7 +176,7 @@ func TestAgentControlMaintenanceEventsUnrecordedAndGoneNode(t *testing.T) {
 	require.Len(t, ack.Events, 1)
 	assert.Equal(t, &agentv1pb.MaintenanceEventResult{EventId: "event-transient"}, stripResult(ack.Events[0]))
 	assert.Equal(t, agentcontrol.MaintenanceErrorCodeUnavailable, ack.Events[0].ErrorCode, "transient: a code, no error")
-	assert.Equal(t, uint32(maintenanceRetryAfter.Milliseconds()), ack.Events[0].RetryAfterMs)
+	assert.Equal(t, maintenanceRetryAfterMs, ack.Events[0].RetryAfterMs)
 	assert.Equal(t, unrecorded+1, agentMaintenanceMetrics.results[maintenanceUnrecorded].Load())
 	var claims int64
 	require.NoError(t, database.GetDB().Model(&model.AgentReportBatch{}).Where("batch_id = ?", agentreports.MaintenanceBatchID("event-transient")).Count(&claims).Error)
