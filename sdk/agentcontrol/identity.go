@@ -40,6 +40,40 @@ const (
 	ErrorCodeMTLSRequired = "agent_mtls_required"
 )
 
+// Error codes of a refused agent client certificate, in the
+// MetadataErrorCode trailer of an Unauthenticated (or, for
+// ErrorCodeCertWrongNode on an envelope, PermissionDenied) answer of
+// ControlStream, Renew, GetTrustBundle and the v2board services. An Agent
+// that gets one discards the certificate and enrolls again, except for
+// ErrorCodeCertWrongNode, which names its own configuration error. A
+// transient failure (Unavailable) carries no code: retry it.
+const (
+	// ErrorCodeCertRevoked: the certificate, its enrollment or its node's
+	// credentials were revoked, or the node was disabled or deleted (which
+	// revokes them).
+	ErrorCodeCertRevoked = "agent_cert_revoked"
+	// ErrorCodeCertExpired: the certificate's not_after has passed, at
+	// connection or, on an open stream, at a heartbeat.
+	ErrorCodeCertExpired = "agent_cert_expired"
+	// ErrorCodeCertInvalid: the certificate does not authenticate an agent
+	// of this Control: unparsable, not chaining to the agent trust bundle,
+	// not yet valid, without client-auth usage, without exactly one agent
+	// SPIFFE ID, or presented while Control runs no agent PKI.
+	ErrorCodeCertInvalid = "agent_cert_invalid"
+	// ErrorCodeCertWrongNode: the certificate names another node than the
+	// call: x-node-id or x-node-kind, an envelope's node_id, or a forward
+	// node's certificate on the proxy-only v2board services.
+	ErrorCodeCertWrongNode = "agent_cert_wrong_node"
+	// ErrorCodeCertWrongCluster: the certificate is an agent certificate of
+	// another cluster.
+	ErrorCodeCertWrongCluster = "agent_cert_wrong_cluster"
+	// ErrorCodeEnrollmentRejected answers AgentEnrollment.Enroll for any
+	// unusable bootstrap credential (unknown, used, expired or revoked
+	// enrollment credential, wrong node key or token, disabled node): one
+	// answer, so credentials cannot be probed.
+	ErrorCodeEnrollmentRejected = "agent_enrollment_rejected"
+)
+
 // Node kinds of an agent identity.
 const (
 	// NodeKindProxy is a proxy node, a v2_node row.

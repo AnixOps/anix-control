@@ -4,6 +4,8 @@
 package agentreports
 
 import (
+	"crypto/sha256"
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"time"
@@ -17,7 +19,22 @@ import (
 const (
 	KindTraffic = "traffic"
 	KindLogs    = "logs"
+	// KindMaintenance records maintenance events (maintenance.v1), one
+	// record per event: MaintenanceBatchID.
+	KindMaintenance = "maintenance"
 )
+
+// maintenancePrefix starts the batch id of a maintenance event, so it never
+// meets a report batch id (node:<kind>-<id>:...).
+const maintenancePrefix = "maintenance:"
+
+// MaintenanceBatchID is the batch id that records a maintenance event,
+// from its event id: the prefix and the event id's hex SHA-256, within
+// MaxBatchIDLength whatever the event id's length.
+func MaintenanceBatchID(eventID string) string {
+	digest := sha256.Sum256([]byte(eventID))
+	return maintenancePrefix + hex.EncodeToString(digest[:])
+}
 
 // MaxBatchIDLength bounds a batch id, as the subscriber request ledger
 // bounds its request ids.

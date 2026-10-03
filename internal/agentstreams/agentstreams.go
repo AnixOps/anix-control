@@ -33,6 +33,23 @@ const (
 	IdentityAPIKey = "api-key"
 )
 
+// How a session authenticated.
+const (
+	// AuthenticationMTLS: an agent client certificate.
+	AuthenticationMTLS = "mtls"
+	// AuthenticationAPIKey: the node's API key or forward token.
+	AuthenticationAPIKey = "api-key"
+)
+
+// SessionCertificate describes the client certificate of an mTLS session:
+// its serial, expiry and URI SAN (the agent's SPIFFE ID). None of it is
+// secret; the transport inventory shows the same.
+type SessionCertificate struct {
+	Serial   string    `json:"serial"`
+	NotAfter time.Time `json:"not_after"`
+	SPIFFEID string    `json:"spiffe_id"`
+}
+
 // Session is one live agent session, without its credentials.
 type Session struct {
 	Node         agentcontrol.AgentNode
@@ -52,6 +69,15 @@ type Session struct {
 	// Identity is the session's authenticated identity: the agent's SPIFFE
 	// ID, or IdentityAPIKey.
 	Identity string
+	// Authentication is AuthenticationMTLS or AuthenticationAPIKey; empty
+	// on the WebSocket, which authenticates by API key only.
+	Authentication string
+	// Certificate is the client certificate of an mTLS stream session.
+	Certificate *SessionCertificate
+	// NegotiatedCapabilities are the data-plane capabilities in use on a
+	// stream session (both its Hello and HelloAck list them), as
+	// name.version.
+	NegotiatedCapabilities []string
 }
 
 // Errors a Streams implementation reports from Dispatch and Cancel. They

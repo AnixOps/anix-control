@@ -154,6 +154,8 @@ v2board_go_gc_duration_seconds ` + formatFloat(float64(m.PauseTotalNs)/1e9) + `
 	controlgrpc.WriteAgentConfigPrometheus(&body)
 	// Package reports on the Agent Control stream: accepted and refused.
 	controlgrpc.WriteAgentPackageReportPrometheus(&body)
+	// Maintenance events on the Agent Control stream (maintenance.v1).
+	controlgrpc.WriteAgentMaintenancePrometheus(&body)
 	// Forwarding: nodes behind their desired generation, hop errors and a
 	// refused plan (internal/kernelforward).
 	kernelforward.WritePrometheus(&body, database.Get())

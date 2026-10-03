@@ -3,9 +3,11 @@ package service
 import (
 	"encoding/json"
 	"errors"
+	"fmt"
 	"strings"
 	"time"
 
+	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/v4/internal/agentreports"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
@@ -199,4 +201,65 @@ func (s *NodeLogService) GetLogs(params NodeLogListParams) (*NodeLogListResult, 
 		Total: total,
 		List:  logs,
 	}, nil
+}
+
+// NodeLogSourceMaintenance is the source of the node log rows that record
+// an Agent's maintenance events (maintenance.v1).
+const NodeLogSourceMaintenance = "maintenance"
+
+// RecordAgentMaintenanceEvent records one maintenance event of the Agent
+// Control stream (maintenance.v1) once per node and event id: a v2_node_log
+// row of source "maintenance" whose fields_json is the event, inserted in
+// the transaction that claims the event's record (internal/agentreports,
+// kind maintenance). It reports whether this call recorded the event; false
+// means a committed transaction recorded it before. gorm.ErrRecordNotFound
+// means the node does not exist.
+func (s *NodeLogService) RecordAgentMaintenanceEvent(nodeKind string, nodeID uint, event agentcontrol.MaintenanceEvent) (bool, error) {
+	fields, err := json.Marshal(event)
+	if err != nil {
+		return false, err
+	}
+	occurredAt := event.OccurredAt.UTC()
+	input := NodeLogInput{
+		Level: maintenanceLogLevel(event), Source: NodeLogSourceMaintenance, Message: maintenanceLogMessage(event),
+		FieldsJSON: string(fields), LoggedAt: &occurredAt,
+	}
+	if len(event.EventID) <= 120 {
+		input.TraceID = event.EventID
+	}
+	applied := false
+	err = s.db.Transaction(func(tx *gorm.DB) error {
+		seen, err := agentreports.ClaimTx(tx, nodeKind, nodeID, agentreports.MaintenanceBatchID(event.EventID), agentreports.KindMaintenance, time.Now())
+		if err != nil || seen {
+			return err
+		}
+		applied = true
+		return s.RecordLogsTx(tx, nodeID, []NodeLogInput{input})
+	})
+	if err != nil {
+		applied = false
+	}
+	return applied, err
+}
+
+// maintenanceLogLevel is the node log level of a maintenance event: a
+// recovery is info; an incident error at P0 and P1, warning at P2, info at
+// P3.
+func maintenanceLogLevel(event agentcontrol.MaintenanceEvent) string {
+	switch {
+	case event.Status == "recovered", event.Severity == "P3":
+		return NodeLogLevelInfo
+	case event.Severity == "P0", event.Severity == "P1":
+		return NodeLogLevelError
+	}
+	return NodeLogLevelWarning
+}
+
+// maintenanceLogMessage is the node log line of a maintenance event.
+func maintenanceLogMessage(event agentcontrol.MaintenanceEvent) string {
+	message := fmt.Sprintf("maintenance %s: plugin %s instance %s %s (%s)", event.Status, event.PluginID, event.InstanceID, event.ErrorCode, event.Severity)
+	if summary := strings.TrimSpace(event.RedactedSummary); summary != "" {
+		message += ": " + summary
+	}
+	return message
 }

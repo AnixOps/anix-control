@@ -88,15 +88,12 @@ func (c *AgentControlConnection) session(kind string) agentstreams.Session {
 			capabilities = append(capabilities, capability.Name)
 		}
 	}
-	identity := c.Identity
-	if identity == "" {
-		identity = agentstreams.IdentityAPIKey
-	}
 	return agentstreams.Session{
 		Node: agentcontrol.AgentNode{Kind: kind, ID: c.NodeID}, Transport: agentstreams.TransportControlStream,
 		SessionID: c.SessionID, AgentVersion: c.AgentVersion, InstanceID: c.InstanceID, Capabilities: capabilities,
 		ConnectedAt: c.ConnectedAt, LastSeen: c.LastSeen, DesiredRevision: c.DesiredRev, ObservedRevision: c.ObservedRev,
-		Identity: identity,
+		Identity: c.identity(), Authentication: c.principal.authentication(), Certificate: c.principal.certificate(),
+		NegotiatedCapabilities: c.negotiatedCapabilities(),
 	}
 }
 

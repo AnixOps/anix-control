@@ -171,6 +171,7 @@ func AuthInterceptorWithAgents(apiToken, jwtSecret string, agents *AgentAuthenti
 		}
 
 		if principal, ok, err := v2boardCertificatePrincipal(ctx, agents); err != nil {
+			setRefusalTrailer(err, func(md metadata.MD) { _ = grpc.SetTrailer(ctx, md) })
 			return nil, err
 		} else if ok {
 			recordV2boardSighting(ctx, principal.Node.ID, principal.identity())
@@ -235,6 +236,7 @@ func StreamAuthInterceptorWithAgents(apiToken, jwtSecret string, agents *AgentAu
 		}
 
 		if principal, ok, err := v2boardCertificatePrincipal(ss.Context(), agents); err != nil {
+			setRefusalTrailer(err, ss.SetTrailer)
 			return err
 		} else if ok {
 			recordV2boardSighting(ss.Context(), principal.Node.ID, principal.identity())
@@ -290,7 +292,7 @@ func v2boardCertificatePrincipal(ctx context.Context, agents *AgentAuthenticator
 		return agentPrincipal{}, false, err
 	}
 	if principal.Node.Kind != agentcontrol.NodeKindProxy {
-		return agentPrincipal{}, false, status.Error(codes.PermissionDenied, "only proxy node certificates may call the v2board services")
+		return agentPrincipal{}, false, refuseAgent(agentcontrol.ErrorCodeCertWrongNode, codes.PermissionDenied, "only proxy node certificates may call the v2board services")
 	}
 	return principal, true, nil
 }

@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
+	"github.com/AnixOps/anix-control/v4/internal/agentstreams"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"gorm.io/gorm"
 )
@@ -63,6 +64,27 @@ type NodeTransports struct {
 	Certificate  *Certificate `json:"certificate"`
 	// Transports lists every transport seen, newest first.
 	Transports []TransportSeen `json:"transports"`
+	// Session is the node's live Agent Control stream session in this
+	// process, nil when it has none (or the caller reads no sessions).
+	Session *LiveSession `json:"session"`
+}
+
+// LiveSession is a node's live Agent Control stream session: how it
+// authenticated and what it negotiated. It carries no credential.
+type LiveSession struct {
+	SessionID string `json:"session_id"`
+	// Authentication is mtls or api-key; Identity the SPIFFE ID or api-key.
+	Authentication string `json:"authentication"`
+	Identity       string `json:"identity"`
+	// Certificate is the client certificate of an mtls session: serial,
+	// expiry and URI SAN.
+	Certificate  *agentstreams.SessionCertificate `json:"certificate"`
+	AgentVersion string                           `json:"agent_version,omitempty"`
+	ConnectedAt  time.Time                        `json:"connected_at"`
+	LastSeenAt   time.Time                        `json:"last_seen_at"`
+	// NegotiatedCapabilities are the data-plane capabilities in use on the
+	// session (name.version, such as config.v1).
+	NegotiatedCapabilities []string `json:"negotiated_capabilities"`
 }
 
 // Summary counts the inventory's nodes by status.
@@ -111,6 +133,10 @@ type Options struct {
 	Live *Recorder
 	// Now is the inventory's clock; zero means time.Now.
 	Now time.Time
+	// Sessions lists this process's live agent sessions; their Agent
+	// Control stream sessions are shown with their nodes. Nil shows none
+	// (the CLI, another process).
+	Sessions func() []agentstreams.Session
 }
 
 // Build reads the transport inventory: every proxy and forward node with
@@ -188,11 +214,26 @@ func Build(ctx context.Context, db *gorm.DB, policy Policy, options Options) (In
 		}
 	}
 
+	liveSessions := map[nodeKey]*LiveSession{}
+	if options.Sessions != nil {
+		for _, session := range options.Sessions() {
+			if session.Transport != agentstreams.TransportControlStream {
+				continue
+			}
+			negotiated := append([]string{}, session.NegotiatedCapabilities...)
+			liveSessions[nodeKey{session.Node.Kind, uint(session.Node.ID)}] = &LiveSession{
+				SessionID: session.SessionID, Authentication: session.Authentication, Identity: session.Identity,
+				Certificate: session.Certificate, AgentVersion: session.AgentVersion, ConnectedAt: session.ConnectedAt.UTC(),
+				LastSeenAt: session.LastSeen.UTC(), NegotiatedCapabilities: negotiated,
+			}
+		}
+	}
+
 	add := func(kind string, id uint, name string, enabled bool, fallbackVersion string) {
 		key := nodeKey{kind, id}
 		node := NodeTransports{
 			Node: agentcontrol.AgentNode{Kind: kind, ID: uint32(id)}.String(), Kind: kind, ID: id, Name: name, // #nosec G115 -- node ids are uint32 on every agent channel.
-			Enabled: enabled, Certificate: newestCertificate[key], Transports: seen[key],
+			Enabled: enabled, Certificate: newestCertificate[key], Transports: seen[key], Session: liveSessions[key],
 		}
 		if node.Transports == nil {
 			node.Transports = []TransportSeen{}
