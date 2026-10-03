@@ -42,7 +42,10 @@
         "enableStats": true
       },
       "handler": {
-        "type": "relay"
+        "type": "relay",
+        "metadata": {
+          "nodelay": "true"
+        }
       },
       "listener": {
         "type": "tls",
@@ -96,6 +99,6 @@
   },
   "metrics": {
     "addr": "unix:///run/anixops-gost/metrics.sock",
-    "path": "/anixops-91c12f4561ceaaf6"
+    "path": "/anixops-7af3ce2a2ba68b30"
   }
 }

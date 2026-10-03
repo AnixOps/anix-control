@@ -91,8 +91,9 @@ type (
 		EnableStats bool `json:"enableStats"`
 	}
 	handler struct {
-		Type  string `json:"type"`
-		Chain string `json:"chain,omitempty"`
+		Type     string            `json:"type"`
+		Chain    string            `json:"chain,omitempty"`
+		Metadata map[string]string `json:"metadata,omitempty"`
 	}
 	// endpoint is a listener or a dialer.
 	endpoint struct {
@@ -265,7 +266,7 @@ func (d *Driver) renderHop(cfg *gostConfig, p *hopPlan) {
 			Limiter:   lim,
 			CLimiter:  clim,
 			Metadata:  serviceMetadata{EnableStats: true},
-			Handler:   handler{Type: l.handler, Chain: h.Chain},
+			Handler:   handler{Type: l.handler, Chain: h.Chain, Metadata: handlerMetadata(l.handler)},
 			Listener:  d.listenerEndpoint(l, p.ingress),
 			Forwarder: fwd,
 		}
@@ -281,6 +282,17 @@ func (d *Driver) renderHop(cfg *gostConfig, p *hopPlan) {
 		mh.Upstreams = append(mh.Upstreams, manifestUpstream{Address: u.addr.String(), Port: u.port, Weight: u.weight, Priority: u.priority})
 	}
 	cfg.AnixOps.Hops = append(cfg.AnixOps.Hops, mh)
+}
+
+// handlerMetadata answers a handler's metadata: a relay handler answers
+// the relay request as soon as it dialled its upstream (nodelay), as the
+// relay connector of the previous hop sends it (see nodes), so a protocol
+// whose server speaks first works through the link.
+func handlerMetadata(handler string) map[string]string {
+	if handler == "relay" {
+		return map[string]string{"nodelay": "true"}
+	}
+	return nil
 }
 
 // admissionOf answers a hop's admission: a whitelist of its sources, a
@@ -323,7 +335,11 @@ func (d *Driver) nodes(p *hopPlan) []node {
 	for _, u := range p.upstreams {
 		n := nodeUpstream{index: u.index, addr: u.addrPort().String(), weight: u.weight, priority: u.priority}
 		if !u.egress.raw() {
-			n.connector = &endpoint{Type: "relay"}
+			// nodelay: the relay request goes out when the connection is
+			// dialled, not with the client's first bytes, so a protocol
+			// whose server speaks first (SSH, SMTP, the databases) works
+			// through an encrypted or multiplexed link.
+			n.connector = &endpoint{Type: "relay", Metadata: map[string]string{"nodelay": "true"}}
 			n.dialer = d.dialerEndpoint(u.egress)
 		}
 		ups = append(ups, n)

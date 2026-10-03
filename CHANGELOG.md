@@ -452,6 +452,33 @@
   and the Forward Netns E2E job runs a gost entry (exact payload counters,
   failover) with the pinned gost.
 
+- Forward SDK F4c (`docs/architecture/forward-sdk.md` sections 6.2 and
+  13): the gost driver's `Apply` makes structural changes through gost's
+  web API, object by object (`POST`/`DELETE /config/services|chains|...`,
+  `PUT` for hot objects): adding, changing or removing a route creates,
+  re-creates or deletes only that route's services, chains, admissions and
+  limiters, so every other route's listeners, established connections, UDP
+  sessions, mux carriers and statistics stay (before, any route change
+  reloaded gost and re-created every service on the node). A reload remains
+  the fallback when the web API does not answer, gost does not run the
+  recorded configuration or the log, API or metrics address change. A call
+  gost refuses is rolled back through the web API, restarting gost only
+  when that fails too. Counter epochs end per hop: a sequence number in
+  `state.json` per hop whose services were deleted or created, and
+  `WithRetiredCounters` gets exactly those hops' last counters; the state
+  file also records the metrics path gost loaded last. gost's relay handler
+  and connector now run with `nodelay`, so protocols whose server speaks
+  first (SSH, SMTP, databases) work over encrypted and multiplexed links
+  (they hung before; gost goldens regenerated); a client's TCP half-close
+  arrives as a full close over such links. Conformance: new scenario
+  `apply-leaves-unrelated-hops` (gost, nftables and the fake pass; a fake
+  mutant proves it). The Forward Netns E2E job runs mixed-engine chains:
+  an nftables entry, a gost relay and two gost exits over RAW and
+  mutual-TLS mux links (TCP, UDP, per-hop counters, failover at the gost
+  relay, and another route added and removed on the relay without
+  disturbing a held connection or UDP session), and a gost entry before an
+  nftables exit.
+
 ### Fixed
 
 - UniProxy `alivelist` answered an empty list with the built-in memory

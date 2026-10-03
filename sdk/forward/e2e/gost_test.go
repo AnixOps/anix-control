@@ -20,7 +20,7 @@ import (
 )
 
 // The gost engine in the suite (F4b: one gost entry, failover and
-// counters; mixed-engine chains are F4c). gost runs inside the node's
+// counters; F4c: mixed-engine chains, mixed_test.go). gost runs inside the node's
 // namespace as a child process (gost.ProcessSupervisor), the binary from
 // ANIXOPS_GOST_BIN or PATH: with the suite enabled a missing gost fails.
 
@@ -91,6 +91,14 @@ func (l *logBuffer) String() string {
 // directory of the test.
 func (l *lab) gostNode(ref string, ns *netns, addrs ...netip.Addr) *node {
 	l.t.Helper()
+	return l.gostNodeWith(ref, ns, nil, addrs...)
+}
+
+// gostNodeWith makes ns a gost node with the link certificate, key and CA
+// of certs (linkCerts), so it carries encrypted links too; nil carries RAW
+// links only.
+func (l *lab) gostNodeWith(ref string, ns *netns, certs *[3]string, addrs ...netip.Addr) *node {
+	l.t.Helper()
 	bin := gostBinary(l.t)
 	root, err := os.MkdirTemp("", "afe2e")
 	if err != nil {
@@ -100,6 +108,9 @@ func (l *lab) gostNode(ref string, ns *netns, addrs ...netip.Addr) *node {
 	base := gost.DefaultConfig()
 	base.Dir, base.RuntimeDir = filepath.Join(root, "d"), filepath.Join(root, "r")
 	base.LinkCert, base.LinkKey, base.LinkCA = "", "", ""
+	if certs != nil {
+		base.LinkCert, base.LinkKey, base.LinkCA = certs[0], certs[1], certs[2]
+	}
 	base.ReadyTimeout = 10 * time.Second
 	for _, d := range []string{base.Dir, base.RuntimeDir} {
 		if err := os.MkdirAll(d, 0o750); err != nil {
@@ -129,7 +140,7 @@ func (l *lab) gostNode(ref string, ns *netns, addrs ...netip.Addr) *node {
 			l.t.Logf("gost on %s:\n%s", ref, log.String())
 		}
 	})
-	n := &node{ref: ref, ns: ns, addrs: addrs}
+	n := &node{ref: ref, ns: ns, addrs: addrs, gost: sup}
 	n.mk = func(t testing.TB) driver.Driver {
 		t.Helper()
 		d, err := gost.New(cfg, gost.WithRunner(run), gost.WithSupervisor(sup))

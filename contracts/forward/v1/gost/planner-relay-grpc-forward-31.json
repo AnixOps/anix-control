@@ -82,7 +82,10 @@
           "name": "u0",
           "addr": "203.0.113.41:20000",
           "connector": {
-            "type": "relay"
+            "type": "relay",
+            "metadata": {
+              "nodelay": "true"
+            }
           },
           "dialer": {
             "type": "grpc",
@@ -102,7 +105,10 @@
           "name": "u1",
           "addr": "203.0.113.42:20000",
           "connector": {
-            "type": "relay"
+            "type": "relay",
+            "metadata": {
+              "nodelay": "true"
+            }
           },
           "dialer": {
             "type": "grpc",

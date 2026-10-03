@@ -80,7 +80,10 @@
           "name": "u0",
           "addr": "[2001:db8:61::1]:10000",
           "connector": {
-            "type": "relay"
+            "type": "relay",
+            "metadata": {
+              "nodelay": "true"
+            }
           },
           "dialer": {
             "type": "wss",

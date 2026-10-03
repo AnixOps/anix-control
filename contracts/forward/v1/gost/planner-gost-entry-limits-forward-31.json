@@ -44,7 +44,10 @@
       },
       "handler": {
         "type": "relay",
-        "chain": "r01JF1B000000000000000000B1-h1"
+        "chain": "r01JF1B000000000000000000B1-h1",
+        "metadata": {
+          "nodelay": "true"
+        }
       },
       "listener": {
         "type": "tls",
@@ -87,7 +90,10 @@
           "name": "u0",
           "addr": "203.0.113.41:20000",
           "connector": {
-            "type": "relay"
+            "type": "relay",
+            "metadata": {
+              "nodelay": "true"
+            }
           },
           "dialer": {
             "type": "mtls",
@@ -104,7 +110,10 @@
           "name": "u1",
           "addr": "203.0.113.42:20000",
           "connector": {
-            "type": "relay"
+            "type": "relay",
+            "metadata": {
+              "nodelay": "true"
+            }
           },
           "dialer": {
             "type": "mtls",
@@ -140,6 +149,6 @@
   },
   "metrics": {
     "addr": "unix:///run/anixops-gost/metrics.sock",
-    "path": "/anixops-7f606920bdb05bbd"
+    "path": "/anixops-ad89f73e68ef51d7"
   }
 }

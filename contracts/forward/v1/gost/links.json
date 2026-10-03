@@ -399,7 +399,10 @@
         "enableStats": true
       },
       "handler": {
-        "type": "relay"
+        "type": "relay",
+        "metadata": {
+          "nodelay": "true"
+        }
       },
       "listener": {
         "type": "tls",
@@ -472,7 +475,10 @@
         "enableStats": true
       },
       "handler": {
-        "type": "relay"
+        "type": "relay",
+        "metadata": {
+          "nodelay": "true"
+        }
       },
       "listener": {
         "type": "mtls",
@@ -545,7 +551,10 @@
         "enableStats": true
       },
       "handler": {
-        "type": "relay"
+        "type": "relay",
+        "metadata": {
+          "nodelay": "true"
+        }
       },
       "listener": {
         "type": "wss",
@@ -621,7 +630,10 @@
         "enableStats": true
       },
       "handler": {
-        "type": "relay"
+        "type": "relay",
+        "metadata": {
+          "nodelay": "true"
+        }
       },
       "listener": {
         "type": "mwss",
@@ -694,7 +706,10 @@
         "enableStats": true
       },
       "handler": {
-        "type": "relay"
+        "type": "relay",
+        "metadata": {
+          "nodelay": "true"
+        }
       },
       "listener": {
         "type": "quic",
@@ -767,7 +782,10 @@
         "enableStats": true
       },
       "handler": {
-        "type": "relay"
+        "type": "relay",
+        "metadata": {
+          "nodelay": "true"
+        }
       },
       "listener": {
         "type": "grpc",
@@ -843,7 +861,10 @@
         "enableStats": true
       },
       "handler": {
-        "type": "relay"
+        "type": "relay",
+        "metadata": {
+          "nodelay": "true"
+        }
       },
       "listener": {
         "type": "mtcp"
@@ -989,7 +1010,10 @@
           "name": "u1-0",
           "addr": "192.0.2.21:443",
           "connector": {
-            "type": "relay"
+            "type": "relay",
+            "metadata": {
+              "nodelay": "true"
+            }
           },
           "dialer": {
             "type": "tls",
@@ -1006,7 +1030,10 @@
           "name": "u0-0",
           "addr": "192.0.2.20:443",
           "connector": {
-            "type": "relay"
+            "type": "relay",
+            "metadata": {
+              "nodelay": "true"
+            }
           },
           "dialer": {
             "type": "tls",
@@ -1023,7 +1050,10 @@
           "name": "u1-1",
           "addr": "192.0.2.21:443",
           "connector": {
-            "type": "relay"
+            "type": "relay",
+            "metadata": {
+              "nodelay": "true"
+            }
           },
           "dialer": {
             "type": "tls",
@@ -1064,7 +1094,10 @@
           "name": "u1-0",
           "addr": "192.0.2.21:443",
           "connector": {
-            "type": "relay"
+            "type": "relay",
+            "metadata": {
+              "nodelay": "true"
+            }
           },
           "dialer": {
             "type": "mtls",
@@ -1081,7 +1114,10 @@
           "name": "u0-0",
           "addr": "192.0.2.20:443",
           "connector": {
-            "type": "relay"
+            "type": "relay",
+            "metadata": {
+              "nodelay": "true"
+            }
           },
           "dialer": {
             "type": "mtls",
@@ -1098,7 +1134,10 @@
           "name": "u1-1",
           "addr": "192.0.2.21:443",
           "connector": {
-            "type": "relay"
+            "type": "relay",
+            "metadata": {
+              "nodelay": "true"
+            }
           },
           "dialer": {
             "type": "mtls",
@@ -1139,7 +1178,10 @@
           "name": "u1-0",
           "addr": "192.0.2.21:443",
           "connector": {
-            "type": "relay"
+            "type": "relay",
+            "metadata": {
+              "nodelay": "true"
+            }
           },
           "dialer": {
             "type": "wss",
@@ -1160,7 +1202,10 @@
           "name": "u0-0",
           "addr": "192.0.2.20:443",
           "connector": {
-            "type": "relay"
+            "type": "relay",
+            "metadata": {
+              "nodelay": "true"
+            }
           },
           "dialer": {
             "type": "wss",
@@ -1181,7 +1226,10 @@
           "name": "u1-1",
           "addr": "192.0.2.21:443",
           "connector": {
-            "type": "relay"
+            "type": "relay",
+            "metadata": {
+              "nodelay": "true"
+            }
           },
           "dialer": {
             "type": "wss",
@@ -1226,7 +1274,10 @@
           "name": "u1-0",
           "addr": "192.0.2.21:443",
           "connector": {
-            "type": "relay"
+            "type": "relay",
+            "metadata": {
+              "nodelay": "true"
+            }
           },
           "dialer": {
             "type": "mwss",
@@ -1246,7 +1297,10 @@
           "name": "u0-0",
           "addr": "192.0.2.20:443",
           "connector": {
-            "type": "relay"
+            "type": "relay",
+            "metadata": {
+              "nodelay": "true"
+            }
           },
           "dialer": {
             "type": "mwss",
@@ -1266,7 +1320,10 @@
           "name": "u1-1",
           "addr": "192.0.2.21:443",
           "connector": {
-            "type": "relay"
+            "type": "relay",
+            "metadata": {
+              "nodelay": "true"
+            }
           },
           "dialer": {
             "type": "mwss",
@@ -1310,7 +1367,10 @@
           "name": "u1-0",
           "addr": "192.0.2.21:443",
           "connector": {
-            "type": "relay"
+            "type": "relay",
+            "metadata": {
+              "nodelay": "true"
+            }
           },
           "dialer": {
             "type": "quic",
@@ -1327,7 +1387,10 @@
           "name": "u0-0",
           "addr": "192.0.2.20:443",
           "connector": {
-            "type": "relay"
+            "type": "relay",
+            "metadata": {
+              "nodelay": "true"
+            }
           },
           "dialer": {
             "type": "quic",
@@ -1344,7 +1407,10 @@
           "name": "u1-1",
           "addr": "192.0.2.21:443",
           "connector": {
-            "type": "relay"
+            "type": "relay",
+            "metadata": {
+              "nodelay": "true"
+            }
           },
           "dialer": {
             "type": "quic",
@@ -1385,7 +1451,10 @@
           "name": "u1-0",
           "addr": "192.0.2.21:443",
           "connector": {
-            "type": "relay"
+            "type": "relay",
+            "metadata": {
+              "nodelay": "true"
+            }
           },
           "dialer": {
             "type": "grpc",
@@ -1406,7 +1475,10 @@
           "name": "u0-0",
           "addr": "192.0.2.20:443",
           "connector": {
-            "type": "relay"
+            "type": "relay",
+            "metadata": {
+              "nodelay": "true"
+            }
           },
           "dialer": {
             "type": "grpc",
@@ -1427,7 +1499,10 @@
           "name": "u1-1",
           "addr": "192.0.2.21:443",
           "connector": {
-            "type": "relay"
+            "type": "relay",
+            "metadata": {
+              "nodelay": "true"
+            }
           },
           "dialer": {
             "type": "grpc",
@@ -1472,7 +1547,10 @@
           "name": "u1-0",
           "addr": "192.0.2.21:443",
           "connector": {
-            "type": "relay"
+            "type": "relay",
+            "metadata": {
+              "nodelay": "true"
+            }
           },
           "dialer": {
             "type": "mtcp"
@@ -1482,7 +1560,10 @@
           "name": "u0-0",
           "addr": "192.0.2.20:443",
           "connector": {
-            "type": "relay"
+            "type": "relay",
+            "metadata": {
+              "nodelay": "true"
+            }
           },
           "dialer": {
             "type": "mtcp"
@@ -1492,7 +1573,10 @@
           "name": "u1-1",
           "addr": "192.0.2.21:443",
           "connector": {
-            "type": "relay"
+            "type": "relay",
+            "metadata": {
+              "nodelay": "true"
+            }
           },
           "dialer": {
             "type": "mtcp"
@@ -1597,6 +1681,6 @@
   },
   "metrics": {
     "addr": "unix:///run/anixops-gost/metrics.sock",
-    "path": "/anixops-c96c938a0678a422"
+    "path": "/anixops-d52c07ea919cc8bd"
   }
 }
