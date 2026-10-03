@@ -81,8 +81,10 @@
 // per identity. The link certificates must carry the node's identity name
 // as a DNS name with both serverAuth and clientAuth, from a CA that signs
 // forward nodes' link certificates only; the Agent's Control certificate
-// (client auth only, URI name only) does not qualify (forward-sdk.md
-// section 16, H28).
+// (client auth only, URI name only) does not qualify, and gost never holds
+// its key. Owner decision H28 (forward-sdk.md section 16): a dedicated
+// forward link CA issues them, requested and renewed alongside the Agent
+// certificate; it is built after F4a (Control, and the Agent in F3b).
 //
 // # Process and files
 //
