@@ -38,7 +38,8 @@
   failures for 30 s: proposed, owner decision H21 still open); and
   `sdk/forward/validate`, the route rules Control, the planner and the Agent
   share, answering violations with a field path, a stable code and a
-  message. The draft fixtures in `contracts/forward/v1` now run through it:
+  message. The draft contract's `Violation` gains `code` (field 3) so the
+  code reaches UIs and API clients. The draft fixtures in `contracts/forward/v1` now run through it:
   the two plans validate and the five negative routes fail at the documented
   fields (the last negative case's entry port moved into its node's range so
   it breaks only the rule it documents). Nothing serves forwarding with them

@@ -437,7 +437,7 @@ func TestLinkMessageMatchesFixture(t *testing.T) {
 		t.Fatalf("got %v", vs)
 	}
 	if got := vs.ToProto(); len(got) != 1 || got[0].GetField() != "hops[1].ingress.security" ||
-		!strings.HasPrefix(got[0].GetMessage(), "link_unsupported: ") {
+		got[0].GetCode() != "link_unsupported" || got[0].GetMessage() != vs[0].Message {
 		t.Fatalf("proto violations: %v", got)
 	}
 	if !strings.Contains(vs.Error(), "hops[1].ingress.security") || vs.Err() == nil {

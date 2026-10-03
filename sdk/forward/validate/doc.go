@@ -7,8 +7,8 @@
 // Route and Proto answer Violations: every failure, each with the field
 // path into the route in the contract's field names
 // ("hops[1].ingress.security"), a stable Code and an English message.
-// Violations.ToProto converts them for the contract's Violation, whose
-// message then starts with the code. Validation is pure: it asks no DNS and
+// Violations.ToProto converts them for the contract's Violation (field,
+// message, code). Validation is pure: it asks no DNS and
 // reads no clock but Options.Now.
 //
 // Rules that need only the route:

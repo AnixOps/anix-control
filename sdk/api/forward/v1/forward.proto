@@ -543,7 +543,12 @@ message ProbeResult {
 message Violation {
   // field is a path into the route ("hops[1].ingress.security").
   string field = 1;
+  // message says why, in English, for people.
   string message = 2;
+  // code names the broken rule for programs ("link_unsupported"), so a UI
+  // can highlight or translate it without parsing message. The codes are
+  // those of sdk/forward/validate; a code keeps its meaning once used.
+  string code = 3;
 }
 
 message CreateRouteRequest {

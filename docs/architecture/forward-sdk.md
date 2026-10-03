@@ -222,10 +222,11 @@ documentation lists every rule and its code). Control runs them before
 storing a route, the planner runs them again, and the Agent re-checks what
 it can see (target addresses after resolution with
 `validate.CheckTargetAddress`, section 14). Each failure is a
-`Violation{field, code, message}` with a path into the route
-(`hops[1].ingress.security`) and a stable code (`link_unsupported`); the
-contract's `Violation` has no code field, so its message starts with the
-code. Rules that need the node inventory run only when one is given. The
+`Violation{field, message, code}` with a path into the route
+(`hops[1].ingress.security`), an English message and a stable code
+(`link_unsupported`) that UIs and API clients act on without parsing the
+message (`Violation.code`, added in F1b under the draft golden policy).
+Rules that need the node inventory run only when one is given. The
 main rules:
 
 - hop roles in order; every node exists, is enabled, and advertises the

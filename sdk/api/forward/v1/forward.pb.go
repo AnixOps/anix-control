@@ -2707,8 +2707,13 @@ func (x *ProbeResult) GetObservedAtUnixMs() int64 {
 type Violation struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
 	// field is a path into the route ("hops[1].ingress.security").
-	Field         string `protobuf:"bytes,1,opt,name=field,proto3" json:"field,omitempty"`
-	Message       string `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	Field string `protobuf:"bytes,1,opt,name=field,proto3" json:"field,omitempty"`
+	// message says why, in English, for people.
+	Message string `protobuf:"bytes,2,opt,name=message,proto3" json:"message,omitempty"`
+	// code names the broken rule for programs ("link_unsupported"), so a UI
+	// can highlight or translate it without parsing message. The codes are
+	// those of sdk/forward/validate; a code keeps its meaning once used.
+	Code          string `protobuf:"bytes,3,opt,name=code,proto3" json:"code,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2753,6 +2758,13 @@ func (x *Violation) GetField() string {
 func (x *Violation) GetMessage() string {
 	if x != nil {
 		return x.Message
+	}
+	return ""
+}
+
+func (x *Violation) GetCode() string {
+	if x != nil {
+		return x.Code
 	}
 	return ""
 }
@@ -4017,10 +4029,11 @@ const file_api_forward_v1_forward_proto_rawDesc = "" +
 	"\x02ok\x18\x02 \x01(\bR\x02ok\x12\x18\n" +
 	"\amessage\x18\x03 \x01(\tR\amessage\x12\x15\n" +
 	"\x06rtt_us\x18\x04 \x01(\rR\x05rttUs\x12-\n" +
-	"\x13observed_at_unix_ms\x18\x05 \x01(\x03R\x10observedAtUnixMs\";\n" +
+	"\x13observed_at_unix_ms\x18\x05 \x01(\x03R\x10observedAtUnixMs\"O\n" +
 	"\tViolation\x12\x14\n" +
 	"\x05field\x18\x01 \x01(\tR\x05field\x12\x18\n" +
-	"\amessage\x18\x02 \x01(\tR\amessage\"d\n" +
+	"\amessage\x18\x02 \x01(\tR\amessage\x12\x12\n" +
+	"\x04code\x18\x03 \x01(\tR\x04code\"d\n" +
 	"\x12CreateRouteRequest\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12/\n" +

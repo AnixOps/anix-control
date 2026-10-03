@@ -89,10 +89,9 @@ func (v Violation) Error() string {
 	return fmt.Sprintf("%s: %s (%s)", v.Field, v.Message, v.Code)
 }
 
-// ToProto converts the violation to the contract. The contract's Violation
-// has no code field, so the code travels at the start of the message.
+// ToProto converts the violation to the contract.
 func (v Violation) ToProto() *forwardv1.Violation {
-	return &forwardv1.Violation{Field: v.Field, Message: fmt.Sprintf("%s: %s", v.Code, v.Message)}
+	return &forwardv1.Violation{Field: v.Field, Message: v.Message, Code: string(v.Code)}
 }
 
 // Violations are every reason a route is refused, in rule order. Empty

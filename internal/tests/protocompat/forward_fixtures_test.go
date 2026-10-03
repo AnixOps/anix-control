@@ -183,6 +183,7 @@ func TestForwardNegativeFixturesAreWellFormed(t *testing.T) {
 		Name   string          `json:"name"`
 		Route  json.RawMessage `json:"route"`
 		Field  string          `json:"field"`
+		Code   string          `json:"code"`
 		Reason string          `json:"reason"`
 	}
 	require.NoError(t, json.Unmarshal(fixture["cases"], &cases))
@@ -194,14 +195,6 @@ func TestForwardNegativeFixturesAreWellFormed(t *testing.T) {
 	unmarshalForward(t, nodesFixture["request"], nodesRequest, nodesFrom)
 	require.NotEmpty(t, nodesRequest.GetNodes())
 
-	// The code each documented reason maps to in sdk/forward/validate.
-	wantCodes := map[string]validate.Code{
-		"nftables hop cannot originate TLS":                    validate.CodeLinkUnsupported,
-		"user route to a private target":                       validate.CodeForbidden,
-		"loopback target is refused even for an administrator": validate.CodeTargetNotAllowed,
-		"engine the node does not advertise":                   validate.CodeEngineNotAdvertised,
-		"dial_address with several nodes":                      validate.CodeRequiresSingleNode,
-	}
 	seen := map[string]bool{}
 	for _, testCase := range cases {
 		require.False(t, seen[testCase.Name], "duplicate case %s", testCase.Name)
@@ -211,11 +204,16 @@ func TestForwardNegativeFixturesAreWellFormed(t *testing.T) {
 		require.NotEmpty(t, testCase.Field, testCase.Name)
 		require.NotEmpty(t, testCase.Reason, testCase.Name)
 
-		code, ok := wantCodes[testCase.Name]
-		require.True(t, ok, "%s: map the case to its validation code", testCase.Name)
+		require.NotEmpty(t, testCase.Code, testCase.Name)
+		code := validate.Code(testCase.Code)
 		violations := validate.PlanRequest(&forwardv1.PlanRouteRequest{Route: route, Nodes: nodesRequest.GetNodes()}, validate.Options{})
 		require.True(t, violations.Has(testCase.Field, code),
 			"%s: want %s at %s (%s), got %v", testCase.Name, code, testCase.Field, testCase.Reason, violations)
+		wire := false
+		for _, violation := range violations.ToProto() {
+			wire = wire || (violation.GetField() == testCase.Field && violation.GetCode() == testCase.Code)
+		}
+		require.True(t, wire, "%s: the contract's Violation carries the code", testCase.Name)
 		// Each case breaks one rule. The user's private target is also
 		// refused as a target, since a user's route is checked as
 		// PUBLIC_ONLY.
@@ -226,5 +224,4 @@ func TestForwardNegativeFixturesAreWellFormed(t *testing.T) {
 			require.Equal(t, testCase.Field, violation.Field, "%s: unexpected %v", testCase.Name, violation)
 		}
 	}
-	require.Len(t, seen, len(wantCodes))
 }
