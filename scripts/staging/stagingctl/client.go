@@ -9,6 +9,7 @@ import (
 	"io"
 	"net/http"
 	"net/url"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -38,7 +39,28 @@ type Response struct {
 	Header http.Header
 }
 
+// do sends one request. Control rate-limits every client address (admin
+// routes 10 requests per second); the staging tool is one address, so a 429
+// is waited out and retried instead of becoming part of a result.
 func (c *Client) do(ctx context.Context, method, path string, query url.Values, body []byte, token string) (Response, error) {
+	for attempt := 0; ; attempt++ {
+		response, err := c.once(ctx, method, path, query, body, token)
+		if err != nil || response.Status != http.StatusTooManyRequests || attempt == 20 {
+			return response, err
+		}
+		wait := time.Second
+		if seconds, convErr := strconv.Atoi(response.Header.Get("Retry-After")); convErr == nil && seconds > 0 && seconds < 30 {
+			wait = time.Duration(seconds) * time.Second
+		}
+		select {
+		case <-ctx.Done():
+			return response, ctx.Err()
+		case <-time.After(wait):
+		}
+	}
+}
+
+func (c *Client) once(ctx context.Context, method, path string, query url.Values, body []byte, token string) (Response, error) {
 	target := c.BaseURL + path
 	if len(query) > 0 {
 		target += "?" + query.Encode()

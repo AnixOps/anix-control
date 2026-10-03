@@ -210,6 +210,10 @@ reports are uploaded as the artifact `staging-rehearsal-batch-1`.
 
 ## Limits
 
+- Control rate-limits each client address (administrator routes: 10
+  requests per second). All traffic comes from the tool container, so the
+  tool waits out a `429` and retries the request; `429` answers never become
+  part of a result.
 - Requests a kernel middleware answers (401, 403 before the package) never
   reach a package host, so they are replayed but not compared; the
   compared count is what the thresholds use.
