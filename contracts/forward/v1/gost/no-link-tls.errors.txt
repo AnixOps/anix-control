@@ -1,0 +1,1 @@
+route 01JF2A000000000000000000B1 hop 1 (ENGINE_GOST): forward driver: unsupported: ingress: LINK_SECURITY_TLS needs the node's link certificate, which is not configured

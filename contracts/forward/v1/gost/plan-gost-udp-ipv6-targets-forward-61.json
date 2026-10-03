@@ -1,0 +1,101 @@
+{
+  "anixops": {
+    "driver": "anixops-forward-driver gost v1",
+    "note": "Rendered by sdk/forward/driver/gost; do not edit. gost ignores this key; Apply reads it.",
+    "hops": [
+      {
+        "route": "01JF1C000000000000000000C1",
+        "hop": 1,
+        "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+        "services": [
+          "r01JF1C000000000000000000C1-h1-wss"
+        ],
+        "listeners": [
+          {
+            "network": "tcp",
+            "port": 10000
+          }
+        ],
+        "upstreams": [
+          {
+            "address": "2001:db8:100::7",
+            "port": 27015,
+            "weight": 3,
+            "priority": 0
+          },
+          {
+            "address": "2001:db8:100::8",
+            "port": 27015,
+            "weight": 1,
+            "priority": 0
+          }
+        ]
+      }
+    ]
+  },
+  "services": [
+    {
+      "name": "r01JF1C000000000000000000C1-h1-wss",
+      "addr": ":10000",
+      "admission": "r01JF1C000000000000000000C1-h1",
+      "handler": {
+        "type": "relay"
+      },
+      "listener": {
+        "type": "wss",
+        "tls": {
+          "certFile": "/var/lib/anixops-gost/tls/link.crt",
+          "keyFile": "/var/lib/anixops-gost/tls/link.key",
+          "caFile": "/var/lib/anixops-gost/tls/link-ca.crt"
+        },
+        "metadata": {
+          "path": "/ws"
+        }
+      },
+      "forwarder": {
+        "nodes": [
+          {
+            "name": "u0-0",
+            "addr": "[2001:db8:100::7]:27015"
+          },
+          {
+            "name": "u0-1",
+            "addr": "[2001:db8:100::7]:27015"
+          },
+          {
+            "name": "u1-0",
+            "addr": "[2001:db8:100::8]:27015"
+          },
+          {
+            "name": "u0-2",
+            "addr": "[2001:db8:100::7]:27015"
+          }
+        ],
+        "selector": {
+          "strategy": "round",
+          "maxFails": 3,
+          "failTimeout": "30s"
+        }
+      }
+    }
+  ],
+  "admissions": [
+    {
+      "name": "r01JF1C000000000000000000C1-h1",
+      "whitelist": true,
+      "matchers": [
+        "198.51.100.51",
+        "2001:db8:51::1"
+      ]
+    }
+  ],
+  "log": {
+    "level": "warn",
+    "format": "json",
+    "output": "stderr"
+  },
+  "metrics": {
+    "addr": "unix:///run/anixops-gost/metrics.sock",
+    "path": "/anixops-fe2c3a0b5486f857"
+  }
+}

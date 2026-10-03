@@ -1,0 +1,78 @@
+{
+  "anixops": {
+    "driver": "anixops-forward-driver gost v1",
+    "note": "Rendered by sdk/forward/driver/gost; do not edit. gost ignores this key; Apply reads it.",
+    "hops": [
+      {
+        "route": "01JF2A000000000000000000A1",
+        "hop": 0,
+        "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+        "services": [
+          "r01JF2A000000000000000000A1-h0-tcp"
+        ],
+        "listeners": [
+          {
+            "network": "tcp",
+            "port": 30001
+          }
+        ],
+        "upstreams": [
+          {
+            "address": "192.0.2.20",
+            "port": 443,
+            "weight": 1,
+            "priority": 0
+          },
+          {
+            "address": "192.0.2.21",
+            "port": 443,
+            "weight": 2,
+            "priority": 10
+          }
+        ]
+      }
+    ]
+  },
+  "services": [
+    {
+      "name": "r01JF2A000000000000000000A1-h0-tcp",
+      "addr": ":30001",
+      "handler": {
+        "type": "tcp"
+      },
+      "listener": {
+        "type": "tcp"
+      },
+      "forwarder": {
+        "nodes": [
+          {
+            "name": "u1-0",
+            "addr": "192.0.2.21:443"
+          },
+          {
+            "name": "u0-0",
+            "addr": "192.0.2.20:443"
+          },
+          {
+            "name": "u1-1",
+            "addr": "192.0.2.21:443"
+          }
+        ],
+        "selector": {
+          "strategy": "round",
+          "maxFails": 5,
+          "failTimeout": "1.5s"
+        }
+      }
+    }
+  ],
+  "log": {
+    "level": "warn",
+    "format": "json",
+    "output": "stderr"
+  },
+  "metrics": {
+    "addr": "unix:///run/anixops-gost/metrics.sock",
+    "path": "/anixops-610dc21b266a409a"
+  }
+}

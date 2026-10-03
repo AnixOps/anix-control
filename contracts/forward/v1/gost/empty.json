@@ -1,0 +1,7 @@
+{
+  "anixops": {
+    "driver": "anixops-forward-driver gost v1",
+    "note": "Rendered by sdk/forward/driver/gost; do not edit. gost ignores this key; Apply reads it.",
+    "hops": []
+  }
+}

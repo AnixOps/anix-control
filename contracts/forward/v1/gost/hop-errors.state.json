@@ -1,0 +1,631 @@
+{
+  "node_ref": "forward-11",
+  "generation": "1",
+  "state_hash": "b525e607d5bb082c3139eb494ef3a5735baac36f3613a491b44f3d17b7262735",
+  "hops": [
+    {
+      "route_id": "01JF2A000000000000000000A1",
+      "role": "HOP_ROLE_ENTRY",
+      "engine": "ENGINE_GOST",
+      "listen": {
+        "port": 30001,
+        "protocol": "L4_PROTOCOL_TCP"
+      },
+      "ingress": {
+        "security": "LINK_SECURITY_RAW"
+      },
+      "upstreams": [
+        {
+          "address": "192.0.2.20",
+          "port": 443,
+          "weight": 1,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        },
+        {
+          "address": "192.0.2.21",
+          "port": 443,
+          "weight": 2,
+          "priority": 10,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        },
+        {
+          "address": "192.0.2.22",
+          "port": 443,
+          "weight": 3,
+          "priority": 20,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        }
+      ],
+      "balance": "BALANCE_STRATEGY_FAILOVER",
+      "health": {
+        "interval_ms": 5000,
+        "timeout_ms": 2000
+      },
+      "circuit_breaker": {
+        "failure_threshold": 3,
+        "open_ms": 30000
+      },
+      "target_policy": "TARGET_POLICY_ALLOW_PRIVATE",
+      "mark": 1
+    },
+    {
+      "route_id": "01JF2A000000000000000000B2",
+      "role": "HOP_ROLE_ENTRY",
+      "engine": "ENGINE_GOST",
+      "listen": {
+        "port": 30002,
+        "protocol": "L4_PROTOCOL_TCP"
+      },
+      "ingress": {
+        "security": "LINK_SECURITY_ANIXOPS"
+      },
+      "upstreams": [
+        {
+          "address": "192.0.2.20",
+          "port": 443,
+          "weight": 1,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        },
+        {
+          "address": "192.0.2.21",
+          "port": 443,
+          "weight": 2,
+          "priority": 10,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        },
+        {
+          "address": "192.0.2.22",
+          "port": 443,
+          "weight": 3,
+          "priority": 20,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        }
+      ],
+      "balance": "BALANCE_STRATEGY_FAILOVER",
+      "health": {
+        "interval_ms": 5000,
+        "timeout_ms": 2000
+      },
+      "circuit_breaker": {
+        "failure_threshold": 3,
+        "open_ms": 30000
+      },
+      "target_policy": "TARGET_POLICY_ALLOW_PRIVATE",
+      "mark": 2
+    },
+    {
+      "route_id": "01JF2A000000000000000000C2",
+      "role": "HOP_ROLE_ENTRY",
+      "engine": "ENGINE_GOST",
+      "listen": {
+        "port": 30003,
+        "protocol": "L4_PROTOCOL_TCP"
+      },
+      "ingress": {
+        "security": "LINK_SECURITY_RAW"
+      },
+      "upstreams": [
+        {
+          "address": "target.example.com",
+          "port": 443,
+          "weight": 1,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        },
+        {
+          "address": "192.0.2.21",
+          "port": 443,
+          "weight": 2,
+          "priority": 10,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        },
+        {
+          "address": "192.0.2.22",
+          "port": 443,
+          "weight": 3,
+          "priority": 20,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        }
+      ],
+      "balance": "BALANCE_STRATEGY_FAILOVER",
+      "health": {
+        "interval_ms": 5000,
+        "timeout_ms": 2000
+      },
+      "circuit_breaker": {
+        "failure_threshold": 3,
+        "open_ms": 30000
+      },
+      "target_policy": "TARGET_POLICY_ALLOW_PRIVATE",
+      "mark": 3
+    },
+    {
+      "route_id": "x\"; \"services\": [], \"y\": \"",
+      "role": "HOP_ROLE_ENTRY",
+      "engine": "ENGINE_GOST",
+      "listen": {
+        "port": 30004,
+        "protocol": "L4_PROTOCOL_TCP"
+      },
+      "ingress": {
+        "security": "LINK_SECURITY_RAW"
+      },
+      "upstreams": [
+        {
+          "address": "192.0.2.20",
+          "port": 443,
+          "weight": 1,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        },
+        {
+          "address": "192.0.2.21",
+          "port": 443,
+          "weight": 2,
+          "priority": 10,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        },
+        {
+          "address": "192.0.2.22",
+          "port": 443,
+          "weight": 3,
+          "priority": 20,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        }
+      ],
+      "balance": "BALANCE_STRATEGY_FAILOVER",
+      "health": {
+        "interval_ms": 5000,
+        "timeout_ms": 2000
+      },
+      "circuit_breaker": {
+        "failure_threshold": 3,
+        "open_ms": 30000
+      },
+      "target_policy": "TARGET_POLICY_ALLOW_PRIVATE",
+      "mark": 4
+    },
+    {
+      "route_id": "01JF2A000000000000000000E1",
+      "role": "HOP_ROLE_ENTRY",
+      "engine": "ENGINE_GOST",
+      "listen": {
+        "port": 30005,
+        "protocol": "L4_PROTOCOL_TCP"
+      },
+      "ingress": {
+        "security": "LINK_SECURITY_RAW"
+      },
+      "upstreams": [
+        {
+          "address": "127.0.0.1",
+          "port": 443,
+          "weight": 1,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        }
+      ],
+      "balance": "BALANCE_STRATEGY_FAILOVER",
+      "health": {
+        "interval_ms": 5000,
+        "timeout_ms": 2000
+      },
+      "circuit_breaker": {
+        "failure_threshold": 3,
+        "open_ms": 30000
+      },
+      "target_policy": "TARGET_POLICY_ALLOW_PRIVATE",
+      "mark": 1
+    },
+    {
+      "route_id": "01JF2A000000000000000000F1",
+      "role": "HOP_ROLE_ENTRY",
+      "engine": "ENGINE_GOST",
+      "listen": {
+        "port": 30006,
+        "protocol": "L4_PROTOCOL_TCP"
+      },
+      "ingress": {
+        "security": "LINK_SECURITY_RAW"
+      },
+      "upstreams": [
+        {
+          "address": "192.0.2.20",
+          "port": 443,
+          "weight": 1,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        },
+        {
+          "address": "192.0.2.21",
+          "port": 443,
+          "weight": 2,
+          "priority": 10,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        },
+        {
+          "address": "192.0.2.22",
+          "port": 443,
+          "weight": 3,
+          "priority": 20,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        }
+      ],
+      "balance": "BALANCE_STRATEGY_FAILOVER",
+      "health": {
+        "interval_ms": 5000,
+        "timeout_ms": 2000
+      },
+      "circuit_breaker": {
+        "failure_threshold": 3,
+        "open_ms": 30000
+      },
+      "target_policy": "TARGET_POLICY_ALLOW_PRIVATE",
+      "mark": 1
+    },
+    {
+      "route_id": "01JF2A000000000000000000F2",
+      "role": "HOP_ROLE_ENTRY",
+      "engine": "ENGINE_GOST",
+      "listen": {
+        "port": 30006,
+        "protocol": "L4_PROTOCOL_TCP"
+      },
+      "ingress": {
+        "security": "LINK_SECURITY_RAW"
+      },
+      "upstreams": [
+        {
+          "address": "192.0.2.20",
+          "port": 443,
+          "weight": 1,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        },
+        {
+          "address": "192.0.2.21",
+          "port": 443,
+          "weight": 2,
+          "priority": 10,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        },
+        {
+          "address": "192.0.2.22",
+          "port": 443,
+          "weight": 3,
+          "priority": 20,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        }
+      ],
+      "balance": "BALANCE_STRATEGY_FAILOVER",
+      "health": {
+        "interval_ms": 5000,
+        "timeout_ms": 2000
+      },
+      "circuit_breaker": {
+        "failure_threshold": 3,
+        "open_ms": 30000
+      },
+      "target_policy": "TARGET_POLICY_ALLOW_PRIVATE",
+      "mark": 1
+    },
+    {
+      "route_id": "01JF2A000000000000000000F3",
+      "role": "HOP_ROLE_ENTRY",
+      "engine": "ENGINE_GOST",
+      "listen": {
+        "port": 30008,
+        "protocol": "L4_PROTOCOL_TCP"
+      },
+      "ingress": {
+        "security": "LINK_SECURITY_RAW"
+      },
+      "upstreams": [
+        {
+          "address": "192.0.2.20",
+          "port": 443,
+          "weight": 1,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        },
+        {
+          "address": "192.0.2.21",
+          "port": 443,
+          "weight": 2,
+          "priority": 10,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        },
+        {
+          "address": "192.0.2.22",
+          "port": 443,
+          "weight": 3,
+          "priority": 20,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        }
+      ],
+      "balance": "BALANCE_STRATEGY_FAILOVER",
+      "health": {
+        "interval_ms": 5000,
+        "timeout_ms": 2000
+      },
+      "circuit_breaker": {
+        "failure_threshold": 3,
+        "open_ms": 30000
+      },
+      "limits": {
+        "quota_bytes": "1073741824"
+      },
+      "target_policy": "TARGET_POLICY_ALLOW_PRIVATE",
+      "mark": 1
+    },
+    {
+      "route_id": "01JF2A000000000000000000F4",
+      "role": "HOP_ROLE_ENTRY",
+      "engine": "ENGINE_GOST",
+      "listen": {
+        "port": 30009,
+        "protocol": "L4_PROTOCOL_TCP"
+      },
+      "ingress": {
+        "security": "LINK_SECURITY_RAW"
+      },
+      "upstreams": [
+        {
+          "address": "192.0.2.20",
+          "port": 443,
+          "weight": 1,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        },
+        {
+          "address": "192.0.2.21",
+          "port": 443,
+          "weight": 2,
+          "priority": 10,
+          "egress": {
+            "security": "LINK_SECURITY_TLS",
+            "server_name": "forward-41"
+          },
+          "node_ref": "forward-41",
+          "peer_identity": "spiffe://anixops/example/agent/forward-41"
+        },
+        {
+          "address": "192.0.2.22",
+          "port": 443,
+          "weight": 3,
+          "priority": 20,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        }
+      ],
+      "balance": "BALANCE_STRATEGY_FAILOVER",
+      "health": {
+        "interval_ms": 5000,
+        "timeout_ms": 2000
+      },
+      "circuit_breaker": {
+        "failure_threshold": 3,
+        "open_ms": 30000
+      },
+      "target_policy": "TARGET_POLICY_ALLOW_PRIVATE",
+      "mark": 1
+    },
+    {
+      "route_id": "01JF2A000000000000000000F5",
+      "hop_index": 1,
+      "role": "HOP_ROLE_RELAY",
+      "engine": "ENGINE_GOST",
+      "listen": {
+        "port": 30010,
+        "protocol": "L4_PROTOCOL_TCP"
+      },
+      "ingress": {
+        "security": "LINK_SECURITY_RAW"
+      },
+      "upstreams": [
+        {
+          "address": "192.0.2.20",
+          "port": 443,
+          "weight": 1,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        }
+      ],
+      "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+      "health": {
+        "interval_ms": 5000,
+        "timeout_ms": 2000
+      },
+      "circuit_breaker": {
+        "failure_threshold": 3,
+        "open_ms": 30000
+      },
+      "target_policy": "TARGET_POLICY_ALLOW_PRIVATE",
+      "mark": 1
+    },
+    {
+      "route_id": "01JF2A000000000000000000F6",
+      "hop_index": 1,
+      "role": "HOP_ROLE_RELAY",
+      "engine": "ENGINE_GOST",
+      "listen": {
+        "port": 30011,
+        "protocol": "L4_PROTOCOL_TCP"
+      },
+      "ingress": {
+        "security": "LINK_SECURITY_TLS"
+      },
+      "upstreams": [
+        {
+          "address": "192.0.2.20",
+          "port": 443,
+          "weight": 1,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        }
+      ],
+      "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+      "health": {
+        "interval_ms": 5000,
+        "timeout_ms": 2000
+      },
+      "circuit_breaker": {
+        "failure_threshold": 3,
+        "open_ms": 30000
+      },
+      "target_policy": "TARGET_POLICY_ALLOW_PRIVATE",
+      "mark": 1,
+      "ingress_sources": [
+        "198.51.100.7"
+      ]
+    },
+    {
+      "route_id": "01JF2A000000000000000000F7",
+      "role": "HOP_ROLE_ENTRY",
+      "engine": "ENGINE_GOST",
+      "listen": {
+        "port": 30012,
+        "protocol": "L4_PROTOCOL_TCP"
+      },
+      "ingress": {
+        "security": "LINK_SECURITY_RAW"
+      },
+      "upstreams": [
+        {
+          "address": "192.0.2.20",
+          "port": 443,
+          "weight": 1,
+          "egress": {
+            "security": "LINK_SECURITY_TLS",
+            "server_name": "forward-41"
+          }
+        },
+        {
+          "address": "192.0.2.21",
+          "port": 443,
+          "weight": 2,
+          "priority": 10,
+          "egress": {
+            "security": "LINK_SECURITY_TLS",
+            "server_name": "forward-41"
+          }
+        },
+        {
+          "address": "192.0.2.22",
+          "port": 443,
+          "weight": 3,
+          "priority": 20,
+          "egress": {
+            "security": "LINK_SECURITY_TLS",
+            "server_name": "forward-41"
+          }
+        }
+      ],
+      "balance": "BALANCE_STRATEGY_FAILOVER",
+      "health": {
+        "interval_ms": 5000,
+        "timeout_ms": 2000
+      },
+      "circuit_breaker": {
+        "failure_threshold": 3,
+        "open_ms": 30000
+      },
+      "target_policy": "TARGET_POLICY_ALLOW_PRIVATE",
+      "mark": 1
+    },
+    {
+      "route_id": "01JF2A000000000000000000F8",
+      "role": "HOP_ROLE_ENTRY",
+      "engine": "ENGINE_GOST",
+      "listen": {
+        "port": 30013,
+        "protocol": "L4_PROTOCOL_TCP"
+      },
+      "ingress": {
+        "security": "LINK_SECURITY_RAW",
+        "path": "/ws"
+      },
+      "upstreams": [
+        {
+          "address": "192.0.2.20",
+          "port": 443,
+          "weight": 1,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        },
+        {
+          "address": "192.0.2.21",
+          "port": 443,
+          "weight": 2,
+          "priority": 10,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        },
+        {
+          "address": "192.0.2.22",
+          "port": 443,
+          "weight": 3,
+          "priority": 20,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        }
+      ],
+      "balance": "BALANCE_STRATEGY_FAILOVER",
+      "health": {
+        "interval_ms": 5000,
+        "timeout_ms": 2000
+      },
+      "circuit_breaker": {
+        "failure_threshold": 3,
+        "open_ms": 30000
+      },
+      "target_policy": "TARGET_POLICY_ALLOW_PRIVATE",
+      "mark": 1
+    }
+  ]
+}

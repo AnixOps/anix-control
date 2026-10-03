@@ -1,0 +1,94 @@
+{
+  "anixops": {
+    "driver": "anixops-forward-driver gost v1",
+    "note": "Rendered by sdk/forward/driver/gost; do not edit. gost ignores this key; Apply reads it.",
+    "hops": [
+      {
+        "route": "01JF1E000000000000000000E1",
+        "hop": 0,
+        "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+        "services": [
+          "r01JF1E000000000000000000E1-h0-tcp"
+        ],
+        "listeners": [
+          {
+            "network": "tcp",
+            "port": 20005
+          }
+        ],
+        "upstreams": [
+          {
+            "address": "203.0.113.41",
+            "port": 20017,
+            "weight": 1,
+            "priority": 0
+          }
+        ]
+      }
+    ]
+  },
+  "services": [
+    {
+      "name": "r01JF1E000000000000000000E1-h0-tcp",
+      "addr": ":20005",
+      "handler": {
+        "type": "tcp",
+        "chain": "r01JF1E000000000000000000E1-h0"
+      },
+      "listener": {
+        "type": "tcp"
+      },
+      "forwarder": {
+        "nodes": [
+          {
+            "name": "next",
+            "addr": "0.0.0.0:0"
+          }
+        ]
+      }
+    }
+  ],
+  "chains": [
+    {
+      "name": "r01JF1E000000000000000000E1-h0",
+      "hops": [
+        {
+          "name": "r01JF1E000000000000000000E1-h0",
+          "selector": {
+            "strategy": "round",
+            "maxFails": 3,
+            "failTimeout": "30s"
+          },
+          "nodes": [
+            {
+              "name": "u0",
+              "addr": "203.0.113.41:20017",
+              "connector": {
+                "type": "relay"
+              },
+              "dialer": {
+                "type": "tls",
+                "tls": {
+                  "certFile": "/var/lib/anixops-gost/tls/link.crt",
+                  "keyFile": "/var/lib/anixops-gost/tls/link.key",
+                  "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
+                  "secure": true,
+                  "serverName": "forward-41"
+                }
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "log": {
+    "level": "warn",
+    "format": "json",
+    "output": "stderr"
+  },
+  "metrics": {
+    "addr": "unix:///run/anixops-gost/metrics.sock",
+    "path": "/anixops-501ff592d7b74f09"
+  }
+}

@@ -1,0 +1,645 @@
+{
+  "node_ref": "forward-11",
+  "generation": "1",
+  "state_hash": "3ffa8f1e0a17ac7e55e7f7c32ff39be5efe38867265c75eb435352d8ea158ef1",
+  "hops": [
+    {
+      "route_id": "01JF2A00000000000000000L00",
+      "hop_index": 1,
+      "role": "HOP_ROLE_EXIT",
+      "engine": "ENGINE_GOST",
+      "listen": {
+        "port": 31000,
+        "protocol": "L4_PROTOCOL_TCP_UDP"
+      },
+      "ingress": {
+        "security": "LINK_SECURITY_TLS",
+        "server_name": "forward-11"
+      },
+      "upstreams": [
+        {
+          "address": "192.0.2.20",
+          "port": 443,
+          "weight": 1,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        }
+      ],
+      "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+      "health": {
+        "interval_ms": 5000,
+        "timeout_ms": 2000
+      },
+      "circuit_breaker": {
+        "failure_threshold": 3,
+        "open_ms": 30000
+      },
+      "target_policy": "TARGET_POLICY_ALLOW_PRIVATE",
+      "mark": 1,
+      "ingress_sources": [
+        "198.51.100.7"
+      ],
+      "ingress_peers": [
+        "spiffe://anixops/example/agent/forward-21"
+      ]
+    },
+    {
+      "route_id": "01JF2A00000000000000000L01",
+      "role": "HOP_ROLE_ENTRY",
+      "engine": "ENGINE_GOST",
+      "listen": {
+        "port": 32000,
+        "protocol": "L4_PROTOCOL_TCP_UDP"
+      },
+      "ingress": {
+        "security": "LINK_SECURITY_RAW"
+      },
+      "upstreams": [
+        {
+          "address": "192.0.2.20",
+          "port": 443,
+          "weight": 1,
+          "egress": {
+            "security": "LINK_SECURITY_TLS",
+            "server_name": "forward-40"
+          },
+          "node_ref": "forward-40",
+          "peer_identity": "spiffe://anixops/example/agent/forward-40"
+        },
+        {
+          "address": "192.0.2.21",
+          "port": 443,
+          "weight": 2,
+          "priority": 10,
+          "egress": {
+            "security": "LINK_SECURITY_TLS",
+            "server_name": "forward-41"
+          },
+          "node_ref": "forward-41",
+          "peer_identity": "spiffe://anixops/example/agent/forward-41"
+        }
+      ],
+      "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+      "health": {
+        "interval_ms": 5000,
+        "timeout_ms": 2000
+      },
+      "circuit_breaker": {
+        "failure_threshold": 3,
+        "open_ms": 30000
+      },
+      "target_policy": "TARGET_POLICY_ALLOW_PRIVATE",
+      "mark": 1
+    },
+    {
+      "route_id": "01JF2A00000000000000000L10",
+      "hop_index": 1,
+      "role": "HOP_ROLE_EXIT",
+      "engine": "ENGINE_GOST",
+      "listen": {
+        "port": 31001,
+        "protocol": "L4_PROTOCOL_TCP_UDP"
+      },
+      "ingress": {
+        "security": "LINK_SECURITY_TLS",
+        "mux": true,
+        "server_name": "forward-11"
+      },
+      "upstreams": [
+        {
+          "address": "192.0.2.20",
+          "port": 443,
+          "weight": 1,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        }
+      ],
+      "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+      "health": {
+        "interval_ms": 5000,
+        "timeout_ms": 2000
+      },
+      "circuit_breaker": {
+        "failure_threshold": 3,
+        "open_ms": 30000
+      },
+      "target_policy": "TARGET_POLICY_ALLOW_PRIVATE",
+      "mark": 1,
+      "ingress_sources": [
+        "198.51.100.7"
+      ],
+      "ingress_peers": [
+        "spiffe://anixops/example/agent/forward-21"
+      ]
+    },
+    {
+      "route_id": "01JF2A00000000000000000L11",
+      "role": "HOP_ROLE_ENTRY",
+      "engine": "ENGINE_GOST",
+      "listen": {
+        "port": 32001,
+        "protocol": "L4_PROTOCOL_TCP_UDP"
+      },
+      "ingress": {
+        "security": "LINK_SECURITY_RAW"
+      },
+      "upstreams": [
+        {
+          "address": "192.0.2.20",
+          "port": 443,
+          "weight": 1,
+          "egress": {
+            "security": "LINK_SECURITY_TLS",
+            "mux": true,
+            "server_name": "forward-40"
+          },
+          "node_ref": "forward-40",
+          "peer_identity": "spiffe://anixops/example/agent/forward-40"
+        },
+        {
+          "address": "192.0.2.21",
+          "port": 443,
+          "weight": 2,
+          "priority": 10,
+          "egress": {
+            "security": "LINK_SECURITY_TLS",
+            "mux": true,
+            "server_name": "forward-41"
+          },
+          "node_ref": "forward-41",
+          "peer_identity": "spiffe://anixops/example/agent/forward-41"
+        }
+      ],
+      "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+      "health": {
+        "interval_ms": 5000,
+        "timeout_ms": 2000
+      },
+      "circuit_breaker": {
+        "failure_threshold": 3,
+        "open_ms": 30000
+      },
+      "target_policy": "TARGET_POLICY_ALLOW_PRIVATE",
+      "mark": 1
+    },
+    {
+      "route_id": "01JF2A00000000000000000L20",
+      "hop_index": 1,
+      "role": "HOP_ROLE_EXIT",
+      "engine": "ENGINE_GOST",
+      "listen": {
+        "port": 31002,
+        "protocol": "L4_PROTOCOL_TCP_UDP"
+      },
+      "ingress": {
+        "security": "LINK_SECURITY_WSS",
+        "server_name": "forward-11",
+        "path": "/anixops/ws"
+      },
+      "upstreams": [
+        {
+          "address": "192.0.2.20",
+          "port": 443,
+          "weight": 1,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        }
+      ],
+      "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+      "health": {
+        "interval_ms": 5000,
+        "timeout_ms": 2000
+      },
+      "circuit_breaker": {
+        "failure_threshold": 3,
+        "open_ms": 30000
+      },
+      "target_policy": "TARGET_POLICY_ALLOW_PRIVATE",
+      "mark": 1,
+      "ingress_sources": [
+        "198.51.100.7"
+      ],
+      "ingress_peers": [
+        "spiffe://anixops/example/agent/forward-21"
+      ]
+    },
+    {
+      "route_id": "01JF2A00000000000000000L21",
+      "role": "HOP_ROLE_ENTRY",
+      "engine": "ENGINE_GOST",
+      "listen": {
+        "port": 32002,
+        "protocol": "L4_PROTOCOL_TCP_UDP"
+      },
+      "ingress": {
+        "security": "LINK_SECURITY_RAW"
+      },
+      "upstreams": [
+        {
+          "address": "192.0.2.20",
+          "port": 443,
+          "weight": 1,
+          "egress": {
+            "security": "LINK_SECURITY_WSS",
+            "server_name": "forward-40",
+            "path": "/anixops/ws"
+          },
+          "node_ref": "forward-40",
+          "peer_identity": "spiffe://anixops/example/agent/forward-40"
+        },
+        {
+          "address": "192.0.2.21",
+          "port": 443,
+          "weight": 2,
+          "priority": 10,
+          "egress": {
+            "security": "LINK_SECURITY_WSS",
+            "server_name": "forward-41",
+            "path": "/anixops/ws"
+          },
+          "node_ref": "forward-41",
+          "peer_identity": "spiffe://anixops/example/agent/forward-41"
+        }
+      ],
+      "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+      "health": {
+        "interval_ms": 5000,
+        "timeout_ms": 2000
+      },
+      "circuit_breaker": {
+        "failure_threshold": 3,
+        "open_ms": 30000
+      },
+      "target_policy": "TARGET_POLICY_ALLOW_PRIVATE",
+      "mark": 1
+    },
+    {
+      "route_id": "01JF2A00000000000000000L30",
+      "hop_index": 1,
+      "role": "HOP_ROLE_EXIT",
+      "engine": "ENGINE_GOST",
+      "listen": {
+        "port": 31003,
+        "protocol": "L4_PROTOCOL_TCP_UDP"
+      },
+      "ingress": {
+        "security": "LINK_SECURITY_WSS",
+        "mux": true,
+        "server_name": "forward-11"
+      },
+      "upstreams": [
+        {
+          "address": "192.0.2.20",
+          "port": 443,
+          "weight": 1,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        }
+      ],
+      "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+      "health": {
+        "interval_ms": 5000,
+        "timeout_ms": 2000
+      },
+      "circuit_breaker": {
+        "failure_threshold": 3,
+        "open_ms": 30000
+      },
+      "target_policy": "TARGET_POLICY_ALLOW_PRIVATE",
+      "mark": 1,
+      "ingress_sources": [
+        "198.51.100.7"
+      ],
+      "ingress_peers": [
+        "spiffe://anixops/example/agent/forward-21"
+      ]
+    },
+    {
+      "route_id": "01JF2A00000000000000000L31",
+      "role": "HOP_ROLE_ENTRY",
+      "engine": "ENGINE_GOST",
+      "listen": {
+        "port": 32003,
+        "protocol": "L4_PROTOCOL_TCP_UDP"
+      },
+      "ingress": {
+        "security": "LINK_SECURITY_RAW"
+      },
+      "upstreams": [
+        {
+          "address": "192.0.2.20",
+          "port": 443,
+          "weight": 1,
+          "egress": {
+            "security": "LINK_SECURITY_WSS",
+            "mux": true,
+            "server_name": "forward-40"
+          },
+          "node_ref": "forward-40",
+          "peer_identity": "spiffe://anixops/example/agent/forward-40"
+        },
+        {
+          "address": "192.0.2.21",
+          "port": 443,
+          "weight": 2,
+          "priority": 10,
+          "egress": {
+            "security": "LINK_SECURITY_WSS",
+            "mux": true,
+            "server_name": "forward-41"
+          },
+          "node_ref": "forward-41",
+          "peer_identity": "spiffe://anixops/example/agent/forward-41"
+        }
+      ],
+      "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+      "health": {
+        "interval_ms": 5000,
+        "timeout_ms": 2000
+      },
+      "circuit_breaker": {
+        "failure_threshold": 3,
+        "open_ms": 30000
+      },
+      "target_policy": "TARGET_POLICY_ALLOW_PRIVATE",
+      "mark": 1
+    },
+    {
+      "route_id": "01JF2A00000000000000000L40",
+      "hop_index": 1,
+      "role": "HOP_ROLE_EXIT",
+      "engine": "ENGINE_GOST",
+      "listen": {
+        "port": 31004,
+        "protocol": "L4_PROTOCOL_TCP_UDP"
+      },
+      "ingress": {
+        "security": "LINK_SECURITY_QUIC",
+        "server_name": "forward-11"
+      },
+      "upstreams": [
+        {
+          "address": "192.0.2.20",
+          "port": 443,
+          "weight": 1,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        }
+      ],
+      "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+      "health": {
+        "interval_ms": 5000,
+        "timeout_ms": 2000
+      },
+      "circuit_breaker": {
+        "failure_threshold": 3,
+        "open_ms": 30000
+      },
+      "target_policy": "TARGET_POLICY_ALLOW_PRIVATE",
+      "mark": 1,
+      "ingress_sources": [
+        "198.51.100.7"
+      ],
+      "ingress_peers": [
+        "spiffe://anixops/example/agent/forward-21"
+      ]
+    },
+    {
+      "route_id": "01JF2A00000000000000000L41",
+      "role": "HOP_ROLE_ENTRY",
+      "engine": "ENGINE_GOST",
+      "listen": {
+        "port": 32004,
+        "protocol": "L4_PROTOCOL_TCP_UDP"
+      },
+      "ingress": {
+        "security": "LINK_SECURITY_RAW"
+      },
+      "upstreams": [
+        {
+          "address": "192.0.2.20",
+          "port": 443,
+          "weight": 1,
+          "egress": {
+            "security": "LINK_SECURITY_QUIC",
+            "server_name": "forward-40"
+          },
+          "node_ref": "forward-40",
+          "peer_identity": "spiffe://anixops/example/agent/forward-40"
+        },
+        {
+          "address": "192.0.2.21",
+          "port": 443,
+          "weight": 2,
+          "priority": 10,
+          "egress": {
+            "security": "LINK_SECURITY_QUIC",
+            "server_name": "forward-41"
+          },
+          "node_ref": "forward-41",
+          "peer_identity": "spiffe://anixops/example/agent/forward-41"
+        }
+      ],
+      "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+      "health": {
+        "interval_ms": 5000,
+        "timeout_ms": 2000
+      },
+      "circuit_breaker": {
+        "failure_threshold": 3,
+        "open_ms": 30000
+      },
+      "target_policy": "TARGET_POLICY_ALLOW_PRIVATE",
+      "mark": 1
+    },
+    {
+      "route_id": "01JF2A00000000000000000L50",
+      "hop_index": 1,
+      "role": "HOP_ROLE_EXIT",
+      "engine": "ENGINE_GOST",
+      "listen": {
+        "port": 31005,
+        "protocol": "L4_PROTOCOL_TCP_UDP"
+      },
+      "ingress": {
+        "security": "LINK_SECURITY_GRPC",
+        "server_name": "forward-11",
+        "path": "/anixops.Tunnel/Relay"
+      },
+      "upstreams": [
+        {
+          "address": "192.0.2.20",
+          "port": 443,
+          "weight": 1,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        }
+      ],
+      "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+      "health": {
+        "interval_ms": 5000,
+        "timeout_ms": 2000
+      },
+      "circuit_breaker": {
+        "failure_threshold": 3,
+        "open_ms": 30000
+      },
+      "target_policy": "TARGET_POLICY_ALLOW_PRIVATE",
+      "mark": 1,
+      "ingress_sources": [
+        "198.51.100.7"
+      ],
+      "ingress_peers": [
+        "spiffe://anixops/example/agent/forward-21"
+      ]
+    },
+    {
+      "route_id": "01JF2A00000000000000000L51",
+      "role": "HOP_ROLE_ENTRY",
+      "engine": "ENGINE_GOST",
+      "listen": {
+        "port": 32005,
+        "protocol": "L4_PROTOCOL_TCP_UDP"
+      },
+      "ingress": {
+        "security": "LINK_SECURITY_RAW"
+      },
+      "upstreams": [
+        {
+          "address": "192.0.2.20",
+          "port": 443,
+          "weight": 1,
+          "egress": {
+            "security": "LINK_SECURITY_GRPC",
+            "server_name": "forward-40",
+            "path": "/anixops.Tunnel/Relay"
+          },
+          "node_ref": "forward-40",
+          "peer_identity": "spiffe://anixops/example/agent/forward-40"
+        },
+        {
+          "address": "192.0.2.21",
+          "port": 443,
+          "weight": 2,
+          "priority": 10,
+          "egress": {
+            "security": "LINK_SECURITY_GRPC",
+            "server_name": "forward-41",
+            "path": "/anixops.Tunnel/Relay"
+          },
+          "node_ref": "forward-41",
+          "peer_identity": "spiffe://anixops/example/agent/forward-41"
+        }
+      ],
+      "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+      "health": {
+        "interval_ms": 5000,
+        "timeout_ms": 2000
+      },
+      "circuit_breaker": {
+        "failure_threshold": 3,
+        "open_ms": 30000
+      },
+      "target_policy": "TARGET_POLICY_ALLOW_PRIVATE",
+      "mark": 1
+    },
+    {
+      "route_id": "01JF2A00000000000000000L60",
+      "hop_index": 1,
+      "role": "HOP_ROLE_EXIT",
+      "engine": "ENGINE_GOST",
+      "listen": {
+        "port": 31006,
+        "protocol": "L4_PROTOCOL_TCP_UDP"
+      },
+      "ingress": {
+        "security": "LINK_SECURITY_RAW",
+        "mux": true,
+        "server_name": "forward-11"
+      },
+      "upstreams": [
+        {
+          "address": "192.0.2.20",
+          "port": 443,
+          "weight": 1,
+          "egress": {
+            "security": "LINK_SECURITY_RAW"
+          }
+        }
+      ],
+      "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+      "health": {
+        "interval_ms": 5000,
+        "timeout_ms": 2000
+      },
+      "circuit_breaker": {
+        "failure_threshold": 3,
+        "open_ms": 30000
+      },
+      "target_policy": "TARGET_POLICY_ALLOW_PRIVATE",
+      "mark": 1,
+      "ingress_sources": [
+        "198.51.100.7"
+      ],
+      "ingress_peers": [
+        "spiffe://anixops/example/agent/forward-21"
+      ]
+    },
+    {
+      "route_id": "01JF2A00000000000000000L61",
+      "role": "HOP_ROLE_ENTRY",
+      "engine": "ENGINE_GOST",
+      "listen": {
+        "port": 32006,
+        "protocol": "L4_PROTOCOL_TCP_UDP"
+      },
+      "ingress": {
+        "security": "LINK_SECURITY_RAW"
+      },
+      "upstreams": [
+        {
+          "address": "192.0.2.20",
+          "port": 443,
+          "weight": 1,
+          "egress": {
+            "security": "LINK_SECURITY_RAW",
+            "mux": true,
+            "server_name": "forward-40"
+          },
+          "node_ref": "forward-40",
+          "peer_identity": "spiffe://anixops/example/agent/forward-40"
+        },
+        {
+          "address": "192.0.2.21",
+          "port": 443,
+          "weight": 2,
+          "priority": 10,
+          "egress": {
+            "security": "LINK_SECURITY_RAW",
+            "mux": true,
+            "server_name": "forward-41"
+          },
+          "node_ref": "forward-41",
+          "peer_identity": "spiffe://anixops/example/agent/forward-41"
+        }
+      ],
+      "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+      "health": {
+        "interval_ms": 5000,
+        "timeout_ms": 2000
+      },
+      "circuit_breaker": {
+        "failure_threshold": 3,
+        "open_ms": 30000
+      },
+      "target_policy": "TARGET_POLICY_ALLOW_PRIVATE",
+      "mark": 1
+    }
+  ]
+}

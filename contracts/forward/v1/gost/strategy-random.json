@@ -1,0 +1,93 @@
+{
+  "anixops": {
+    "driver": "anixops-forward-driver gost v1",
+    "note": "Rendered by sdk/forward/driver/gost; do not edit. gost ignores this key; Apply reads it.",
+    "hops": [
+      {
+        "route": "01JF2A000000000000000000A1",
+        "hop": 0,
+        "balance": "BALANCE_STRATEGY_RANDOM",
+        "services": [
+          "r01JF2A000000000000000000A1-h0-tcp"
+        ],
+        "listeners": [
+          {
+            "network": "tcp",
+            "port": 30001
+          }
+        ],
+        "upstreams": [
+          {
+            "address": "192.0.2.20",
+            "port": 443,
+            "weight": 1,
+            "priority": 0
+          },
+          {
+            "address": "192.0.2.21",
+            "port": 443,
+            "weight": 2,
+            "priority": 10
+          },
+          {
+            "address": "192.0.2.22",
+            "port": 443,
+            "weight": 3,
+            "priority": 20
+          }
+        ]
+      }
+    ]
+  },
+  "services": [
+    {
+      "name": "r01JF2A000000000000000000A1-h0-tcp",
+      "addr": ":30001",
+      "handler": {
+        "type": "tcp"
+      },
+      "listener": {
+        "type": "tcp"
+      },
+      "forwarder": {
+        "nodes": [
+          {
+            "name": "u0",
+            "addr": "192.0.2.20:443",
+            "metadata": {
+              "weight": "1"
+            }
+          },
+          {
+            "name": "u1",
+            "addr": "192.0.2.21:443",
+            "metadata": {
+              "weight": "2"
+            }
+          },
+          {
+            "name": "u2",
+            "addr": "192.0.2.22:443",
+            "metadata": {
+              "weight": "3"
+            }
+          }
+        ],
+        "selector": {
+          "strategy": "rand",
+          "maxFails": 3,
+          "failTimeout": "30s"
+        }
+      }
+    }
+  ],
+  "log": {
+    "level": "warn",
+    "format": "json",
+    "output": "stderr"
+  },
+  "metrics": {
+    "addr": "unix:///run/anixops-gost/metrics.sock",
+    "path": "/anixops-856df3ed24b9a00b"
+  }
+}
