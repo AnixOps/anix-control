@@ -143,7 +143,7 @@ Everything lives in the existing `sdk/` module
 | Contract | `sdk/api/forward/v1` | `forward.proto`: the model, `NodeForwardState`, `NodeForwardReport`, the services `ForwardControl` and `ForwardNode` (this PR, draft) |
 | Model and validation | `sdk/forward/model`, `sdk/forward/validate` | Go domain types with lossless conversion to and from the contract and the defaults (`model/defaults.go`); one set of validation rules used by Control, the planner and the Agent (F1b, implemented) |
 | Planner | `sdk/forward/planner` | routes and node inventory in, per-node states, port and mark allocations and generations out; pure functions (F1c, implemented) |
-| Drivers | `sdk/forward/driver`, `.../driver/fake`, `.../driver/conformance`, `.../driver/nftables`, `.../driver/gost`, `.../driver/ansible` | the driver interface, registry, fake driver and conformance suite (F2a, implemented), the nftables driver's Render (F2b, implemented) and the engine implementations (F2c–F2d, F4) |
+| Drivers | `sdk/forward/driver`, `.../driver/fake`, `.../driver/conformance`, `.../driver/nftables`, `.../driver/gost`, `.../driver/ansible` | the driver interface, registry, fake driver and conformance suite (F2a, implemented), the nftables driver (Render F2b, Apply, Observe, failover and tc F2c, implemented) and the engine implementations (F2d, F4) |
 | Client | `sdk/forward/forwardctl` | a Go client for `ForwardControl` (F5) |
 
 Consumers:
@@ -513,10 +513,19 @@ rules every driver keeps:
 
 ### 6.1 nftables
 
-Render is implemented in F2b (`sdk/forward/driver/nftables`; the package
-documentation is normative). Apply, Observe, `SetUpstreams` and Remove
-answer `ErrUnsupported` until F2c, and `Capabilities` reports a static
-configuration (`nftables.Config`) until F2c probes the host.
+Render is implemented in F2b, Apply, Observe, `SetUpstreams`, Remove, the
+host probe and the tc limits in F2c (`sdk/forward/driver/nftables`; the
+package documentation is normative). The driver runs `nft` and `tc`
+through an injectable `Runner`. `nftables.Probe` checks the host once
+(`nft --version`, `CAP_NET_ADMIN`, and every kernel feature with `nft -c`
+of a snippet inside the driver's own table name, never committed) and fills
+the `nftables.Config` that `New` takes, so Render stays a function of its
+configuration; it also warns, without changing anything, about another
+table's forward chain with a drop policy (Docker's `ip filter FORWARD`).
+Minimum versions: nft 0.9.7 and Linux 5.10 (table, counter and set element
+comments); tested with nft 1.0.9 (iproute2 6.1, whose `tc -j class show`
+prints text, which the driver also reads) on the CI runner and nft 1.1.3 on
+Linux 6.12.
 
 **Ownership.** One table, `inet anixops_fwd`, marked by its comment
 `anixops-forward-driver v1`. The driver creates, rewrites and deletes only
@@ -529,12 +538,12 @@ comment and every object with no elements and no rules; `flush table` and a
 `flush set`/`flush map` for each admission set and balancing map (`flush
 table` keeps elements, and re-adding a changed interval fails); a second
 block adding the elements and rules. Counters, quotas and the `ct count`
-sets are never flushed, so they keep their values. The script deletes
-nothing: Apply (F2c) deletes the objects of removed hops after reading their
-final counters, and must check the ownership comment before running the
-script, whose flush would empty a foreign table of the same name. nft cannot
-change a table comment in place, so the comment is constant and F2c records
-the applied generation and digest elsewhere. The rules and elements for
+sets are never flushed, so they keep their values. A manifest of comment
+lines after the header (`# anixops-hop`, `# anixops-upstream`) carries what
+Apply needs and the objects do not: every rendered upstream with weight and
+priority (failover's backups are in no map), the listener and the
+bandwidth. The script itself deletes nothing; Apply adds the deletions and
+the recorded state to the same transaction (below). The rules and elements for
 fixture `plan-single-hop-nftables-iepl.json` (golden
 `contracts/forward/v1/nft/plan-single-hop-nftables-iepl-forward-11.nft`; declarations and flushes
 omitted):
@@ -619,9 +628,15 @@ table inet anixops_fwd {
   `_acct` chain copies the hop's mark to the packet mark, with
   `Config.DirectionBit` (default `0x1`) on reply packets, keeping the other
   packet mark bits. On each egress interface the driver owns one HTB qdisc
-  handle and one class per route and direction at `bandwidth_bps`, selected
-  by a `fw` filter on the mark (F2c). Both directions leave the node as
-  egress, so no ifb is needed.
+  handle (`Config.TCHandle`, default `af00:`) and, per rate-limited hop,
+  one class per direction at `bandwidth_bps` (minor `2*mark` up,
+  `2*mark+1` down), selected by a `fw` filter on the mark under
+  `MarkMask|DirectionBit`. Both directions leave the node as egress, so no
+  ifb is needed. The interfaces are `Config.LimitInterfaces`; without one
+  the probe turns `bandwidth_limit` off. A foreign root qdisc (another
+  non-zero handle) on one of them makes an artifact with limited hops
+  `ErrConflict`; the kernel's default root qdisc is replaced and comes back
+  when the driver deletes its own.
 - **Marks.** The driver owns a mark mask (`0x0fff0000` by default: 4095
   hops per node; configurable per node to avoid other mark users such as
   Docker, WireGuard and policy routing, H13). `NodeHop.mark` is an index
@@ -643,11 +658,38 @@ table inet anixops_fwd {
   most every 60 s), re-checks the target policy on every answer, and
   rewrites the maps; Render re-checks literal targets against the target
   policy too.
-- **Atomic apply** (F2c). Apply diffs the desired objects against
-  `nft -j list table inet anixops_fwd`, deletes counters, quotas, sets,
-  maps and chains of removed hops after their final values are reported,
-  and runs the rendered transaction. `nft -c -f` checks it, `nft -f` applies
-  it. A failed apply leaves the previous ruleset in place.
+- **Atomic apply** (F2c). Apply reads `nft -j list table inet
+  anixops_fwd`; a table of that name without the ownership comment is
+  `ErrNotOwned` before anything runs (the script's `flush table` would
+  empty it). It compares the host with the artifact: the recorded digest,
+  the table's fingerprint against the seal recorded after the last change,
+  and the tc objects. A match is a no-op that at most records a newer
+  generation. Otherwise it refuses foreign DNAT or redirect rules on the
+  artifact's listen ports (`ErrConflict`, read from `nft -j list ruleset`),
+  checks the transaction with `nft -c -f`, adds the tc qdisc and classes it
+  needs, and runs one `nft -f` transaction: counter declarations carrying a
+  new epoch nonce, the rendered script, `delete` of every object the script
+  does not declare (removed hops; their last counters go to the
+  `WithRetiredCounters` hook), and the state document. If nft refuses it,
+  the tc additions are undone, so the host keeps its previous state; after
+  it, the seal is recorded and tc classes no longer needed are deleted.
+- **State on the host** (F2c). Nothing lives in the driver's memory, so a
+  restarted Agent observes and guards what it applied. Set `anixops_state`
+  holds the state document (node_ref, generation, `state_hash`, digest, and
+  per hop the strategy, rendered upstreams and current rotation) as
+  base64url JSON in 120-character element comments (nft allows 128),
+  flushed and re-added in the same transaction as the rules. Set
+  `anixops_seal` holds the SHA-256 of the normalized listing (handles,
+  counter values, quota usage, dynamic and state elements left out), so a
+  damaged table is detected and repaired by the next Apply. The counter
+  epoch is the nonce of the hop's counter comments: nft keeps the comment
+  of an existing counter, so the epoch ends exactly when a counter is
+  re-created. `active_conns` and `total_conns` are not counted (0).
+- **Failover** (F2c). `SetUpstreams` rewrites the hop's map elements from
+  the selected upstreams with Render's slot layout (failover keeps the best
+  priority among them), records the rotation in the state document in the
+  same transaction and re-seals; selecting every upstream with weight 0
+  restores the rendered elements.
 - **Persistence.** nftables rules do not survive a reboot. The Agent
   re-applies its last applied state at start, before it connects to
   Control. Counters then start a new `counter_epoch`.
@@ -660,7 +702,17 @@ table inet anixops_fwd {
   tests run `nft -c -f` on every golden and conformance state where nft and
   `CAP_NET_ADMIN` are available (in a fresh network namespace as root); CI
   installs nftables and runs them under sudo. `FuzzRender` checks that any
-  state renders without panic into the script grammar.
+  state renders without panic into the script grammar and that Apply can
+  read its manifest.
+- **Real-kernel tests** (F2c). With `ANIXOPS_NFT_E2E=1` as root, the
+  `TestNetns` tests run the whole conformance suite against the real driver
+  (every optional `Env` interface, traffic from a client namespace over a
+  veth pair) and the tc, quota-usage, rollback, foreign-qdisc and probe
+  tests, each in a throwaway namespace (`ip netns add`); the host's own
+  ruleset and qdiscs are never touched. CI runs them under sudo in Backend
+  Tests shard 1 (H14). Unprivileged replay tests
+  (`testdata/replay`, recorded with `ANIXOPS_NFT_RECORD=1`) check the exact
+  command sequence of an apply lifecycle and of the refusals.
 
 ### 6.2 gost
 
@@ -1063,7 +1115,7 @@ Agent-repository PRs are marked (agent).
 | | F1c | `sdk/forward/planner`: allocation, wiring, generations, golden runner (implemented) | L | |
 | F2 | F2a | driver interface, fake driver, conformance suite (implemented) | M | |
 | | F2b | nftables Render and nft goldens (implemented) | L | H13 |
-| | F2c | nftables Apply, Observe, `SetUpstreams`, tc HTB | L | H13 |
+| | F2c | nftables Apply, Observe, `SetUpstreams`, tc HTB, host probe, real-kernel conformance (implemented) | L | H13 |
 | | F2d | netns end-to-end CI job | M | H14 |
 | F3 | F3a | Control: `forward.v1`, `nodeconfig/v2`, the `forward` report and traffic ledger | M | H25 |
 | | F3b | (agent) forward component: drivers, persisted state, apply at boot, health loop, reports | L | H25 |

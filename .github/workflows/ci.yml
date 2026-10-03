@@ -962,18 +962,24 @@ jobs:
             go -C identity test ./... -count=1
           fi
 
-      # nft -c needs CAP_NET_ADMIN: the test binary runs under sudo and the
-      # check runs in a fresh network namespace; nothing is applied.
-      - name: Check the rendered nftables forward scripts with nft -c
+      # nft -c and the real-kernel driver tests need CAP_NET_ADMIN: the test
+      # binary runs under sudo (H14). The nft -c checks run in a fresh
+      # network namespace and apply nothing; the TestNetns tests (the whole
+      # conformance suite, tc limits, quota usage, the probe) create a
+      # throwaway namespace per test with `ip netns add` and never touch the
+      # runner's own ruleset or qdiscs.
+      - name: Check the nftables forward driver on the kernel (nft -c, netns)
         if: ${{ matrix.shard == 1 }}
         shell: bash
         run: |
           set -euo pipefail
           command -v nft >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends nftables; }
           nft --version
+          tc -V
+          uname -r
           go -C sdk test -c -o "${RUNNER_TEMP}/nftables.test" ./forward/driver/nftables
           cd sdk/forward/driver/nftables
-          sudo ANIXOPS_NFT_CHECK=1 "${RUNNER_TEMP}/nftables.test" -test.run '^TestNFTCheck' -test.v
+          sudo ANIXOPS_NFT_CHECK=1 ANIXOPS_NFT_E2E=1 "${RUNNER_TEMP}/nftables.test" -test.run '^(TestNFTCheck|TestNetns)' -test.v
 
       # After the tests, so every shard tests the committed Swagger package;
       # "Go Quality Gates" vets the tree as committed.

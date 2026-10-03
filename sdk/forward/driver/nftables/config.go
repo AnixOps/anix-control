@@ -22,23 +22,34 @@ const (
 	DefaultDirectionBit uint32 = 0x00000001
 	// DefaultSlots is the size of every hop's balancing map: the modulus
 	// of its numgen or jhash expression. It is fixed when the hop is
-	// rendered, so SetUpstreams (F2c) can change which upstreams are in
+	// rendered, so SetUpstreams can change which upstreams are in
 	// rotation and their weights by rewriting map elements only. It covers
 	// the most upstreams a hop can have (64 targets plus 16 next-hop nodes
 	// under the PREFERRED direct mode).
 	DefaultSlots uint32 = 128
 	// MaxSlots bounds Config.Slots.
 	MaxSlots uint32 = 4096
+	// DefaultTCHandle is the major handle of the HTB root qdisc the driver
+	// owns on each of Config.LimitInterfaces ("af00:"). A root qdisc with
+	// another handle is foreign: the driver never replaces it.
+	DefaultTCHandle uint16 = 0xaf00
 )
+
+// maxTCMark is the largest mark index of a rate-limited hop: its tc class
+// minors are 2*mark and 2*mark+1, below 0xffff.
+const maxTCMark = 0x7ffe
 
 // Config is the driver's static configuration. The zero value is not
 // usable; start from DefaultConfig.
 type Config struct {
 	// Version is the engine version Capabilities reports ("nft 1.0.9").
-	// Empty means the host was not probed, and Capabilities answers
-	// Available false. Probing the host (nft --version, kernel features)
-	// comes with Apply in F2c and will fill the capability fields below.
+	// Empty means the driver is unavailable (Unavailable says why), and
+	// Capabilities answers Available false. Probe fills it, and turns off
+	// the features below the host lacks, before New.
 	Version string
+	// Unavailable is why the driver cannot run on this host when Version
+	// is empty ("nft not installed", "no CAP_NET_ADMIN").
+	Unavailable string
 	// IPv6 and UDP allow hops that need them.
 	IPv6 bool
 	UDP  bool
@@ -47,8 +58,9 @@ type Config struct {
 	// re-weights it from connection counts (forward-sdk.md section 7.1).
 	Strategies []forwardv1.BalanceStrategy
 	// BandwidthLimit, Quota and MaxConns allow hops with those limits.
-	// Render marks packets of rate-limited hops for tc; the tc classes
-	// themselves come with Apply (F2c).
+	// Render marks packets of rate-limited hops for tc; Apply adds an HTB
+	// class per hop and direction on every LimitInterfaces device, so
+	// BandwidthLimit needs at least one (Probe turns it off without).
 	BandwidthLimit bool
 	Quota          bool
 	MaxConns       bool
@@ -66,6 +78,14 @@ type Config struct {
 	// SYNs of forwarded connections have their MSS clamped to the route's
 	// MTU. Empty for none.
 	MSSClampInterfaces []string
+	// LimitInterfaces are the egress interfaces on which Apply limits the
+	// bandwidth of rate-limited hops (both directions of a forwarded
+	// connection leave the node as egress, on the interface facing the
+	// client or the upstream). Empty for none.
+	LimitInterfaces []string
+	// TCHandle is the major handle of the driver's root qdisc on
+	// LimitInterfaces; see DefaultTCHandle.
+	TCHandle uint16
 }
 
 // AllStrategies lists every balance strategy the driver can render.
@@ -93,6 +113,7 @@ func DefaultConfig() Config {
 		MarkMask:       DefaultMarkMask,
 		DirectionBit:   DefaultDirectionBit,
 		Slots:          DefaultSlots,
+		TCHandle:       DefaultTCHandle,
 	}
 }
 
@@ -105,6 +126,9 @@ var interfaceName = regexp.MustCompile(`^[A-Za-z0-9_.-]{1,15}$`)
 
 // versionText is what Capabilities may report as a version.
 var versionText = regexp.MustCompile(`^[ -~]{0,64}$`)
+
+// reasonText is what Capabilities may report as an unavailable reason.
+var reasonText = regexp.MustCompile(`^[ -~]{0,512}$`)
 
 func (c Config) check() error {
 	bad := func(format string, args ...any) error {
@@ -131,18 +155,26 @@ func (c Config) check() error {
 			return bad("unknown strategy %v", s)
 		}
 	}
-	seen := map[string]bool{}
-	for _, name := range c.MSSClampInterfaces {
-		if !interfaceName.MatchString(name) {
-			return bad("MSS clamp interface %q is not an interface name", name)
+	for _, list := range []struct {
+		what  string
+		names []string
+	}{{"MSS clamp", c.MSSClampInterfaces}, {"limit", c.LimitInterfaces}} {
+		seen := map[string]bool{}
+		for _, name := range list.names {
+			if !interfaceName.MatchString(name) {
+				return bad("%s interface %q is not an interface name", list.what, name)
+			}
+			if seen[name] {
+				return bad("%s interface %q twice", list.what, name)
+			}
+			seen[name] = true
 		}
-		if seen[name] {
-			return bad("MSS clamp interface %q twice", name)
-		}
-		seen[name] = true
 	}
-	if !versionText.MatchString(c.Version) {
-		return bad("version is not short printable text")
+	if c.TCHandle == 0 || c.TCHandle == 0xffff {
+		return bad("tc handle %#x is reserved", c.TCHandle)
+	}
+	if !versionText.MatchString(c.Version) || !reasonText.MatchString(c.Unavailable) {
+		return bad("version or unavailable reason is not short printable text")
 	}
 	return nil
 }

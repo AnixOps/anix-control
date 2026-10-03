@@ -1,7 +1,8 @@
 // Package conformance is the forward driver conformance suite
 // (docs/architecture/forward-sdk.md section 13): one list of scenarios that
-// every driver in sdk/forward/driver must pass, the in-memory fake now, the
-// nftables (F2b/F2c) and gost (F4) drivers later.
+// every driver in sdk/forward/driver must pass: the in-memory fake, the
+// nftables driver (on a real kernel in a network namespace,
+// nftables.TestNetnsConformance) and the gost driver (F4).
 //
 // A driver's test plugs in an environment and runs the suite:
 //
@@ -14,8 +15,8 @@
 // and lists foreign objects. Optional interfaces (Damager, TrafficSource,
 // ApplyFaulter, ConflictPlanter, ImpostorPlanter, ApplyCounter) unlock the
 // scenarios that need them; without one, those scenarios skip and say
-// which interface is missing. A netns harness (F2d) starts with the
-// required four methods and adds the rest as it learns to.
+// which interface is missing. The nftables netns harness implements all
+// of them.
 //
 // The suite is data-driven twice over. StateCases are the states it
 // renders and applies (single target, every strategy, TCP and UDP, IPv4,

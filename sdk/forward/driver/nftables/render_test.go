@@ -92,26 +92,17 @@ func TestCapabilities(t *testing.T) {
 	}
 }
 
-// TestHostMethodsNotYet: Apply, Observe, SetUpstreams and Remove come with
-// F2c; until then they refuse, after honouring a done context.
-func TestHostMethodsNotYet(t *testing.T) {
+// TestHostMethodsDoneContext: Apply, Observe, SetUpstreams and Remove
+// honour a done context before touching the host.
+func TestHostMethodsDoneContext(t *testing.T) {
 	d := newDriver(t, nil)
 	ctx := t.Context()
-	_, errA := d.Apply(ctx, driver.Artifact{})
-	_, errO := d.Observe(ctx)
-	errS := d.SetUpstreams(ctx, conformance.RouteA, 0, nil)
-	errR := d.Remove(ctx)
-	for i, err := range []error{errA, errO, errS, errR} {
-		if !errors.Is(err, driver.ErrUnsupported) {
-			t.Fatalf("method %d: %v, want ErrUnsupported", i, err)
-		}
-	}
 	done, cancel := context.WithCancel(ctx)
 	cancel()
-	_, errA = d.Apply(done, driver.Artifact{})
-	_, errO = d.Observe(done)
-	errS = d.SetUpstreams(done, conformance.RouteA, 0, nil)
-	errR = d.Remove(done)
+	_, errA := d.Apply(done, driver.Artifact{})
+	_, errO := d.Observe(done)
+	errS := d.SetUpstreams(done, conformance.RouteA, 0, nil)
+	errR := d.Remove(done)
 	for i, err := range []error{errA, errO, errS, errR} {
 		if !errors.Is(err, context.Canceled) {
 			t.Fatalf("method %d with a done context: %v", i, err)

@@ -3,8 +3,15 @@
 # One transaction that touches table inet anixops_fwd only: declare every
 # object, flush the rules and the balancing and admission elements, then add
 # them again. Counters, quotas and connection counts keep their values.
-# Apply checks the table's ownership comment before running it, and deletes
-# the objects of removed hops after reading their counters (F2c).
+# Apply checks the table's ownership comment before running it, adds the
+# state it records on the host and deletes the objects of removed hops in the
+# same transaction. The anixops-hop and anixops-upstream lines are the
+# manifest Apply reads: every rendered upstream, the bandwidth for tc.
+
+# anixops-hop route=01JF1F000000000000000000F1 hop=0 mark=1 balance=BALANCE_STRATEGY_ROUND_ROBIN listen=tcp/40001 address=any bandwidth=0
+# anixops-upstream route=01JF1F000000000000000000F1 hop=0 address=203.0.113.41 port=20000 weight=1 priority=0
+# anixops-hop route=01JF1F000000000000000000F2 hop=0 mark=2 balance=BALANCE_STRATEGY_ROUND_ROBIN listen=tcp/40002 address=any bandwidth=0
+# anixops-upstream route=01JF1F000000000000000000F2 hop=0 address=203.0.113.42 port=20000 weight=1 priority=0
 
 table inet anixops_fwd {
 	comment "anixops-forward-driver v1"

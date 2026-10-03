@@ -70,8 +70,10 @@ const header = `#!/usr/sbin/nft -f
 # One transaction that touches table inet anixops_fwd only: declare every
 # object, flush the rules and the balancing and admission elements, then add
 # them again. Counters, quotas and connection counts keep their values.
-# Apply checks the table's ownership comment before running it, and deletes
-# the objects of removed hops after reading their counters (F2c).
+# Apply checks the table's ownership comment before running it, adds the
+# state it records on the host and deletes the objects of removed hops in the
+# same transaction. The anixops-hop and anixops-upstream lines are the
+# manifest Apply reads: every rendered upstream, the bandwidth for tc.
 `
 
 const emptyNote = "# No hops: applying this artifact removes table inet anixops_fwd.\n"
@@ -85,6 +87,9 @@ func (d *Driver) script(plans []*hopPlan) []byte {
 		return []byte(w.b.String())
 	}
 	tbl := Family + " " + Table
+
+	w.blank()
+	d.writeManifest(w, plans)
 
 	// 1. Declare every object, without elements or rules, so the flushes
 	// below find them on a host that has none yet.
@@ -290,7 +295,7 @@ func (d *Driver) hopChains(w *writer, p *hopPlan) {
 	up := fmt.Sprintf("ct direction original counter name %q", p.base+"_up")
 	down := fmt.Sprintf("ct direction reply counter name %q", p.base+"_down")
 	if p.bandwidth {
-		// tc (F2c) classifies on the packet mark: the hop's mark, plus the
+		// tc classifies on the packet mark: the hop's mark, plus the
 		// direction bit on reply packets. Other packet mark bits are kept.
 		keep := hexMark(^(d.cfg.MarkMask | d.cfg.DirectionBit))
 		up += fmt.Sprintf(" meta mark set meta mark and %s or %s", keep, hexMark(p.mark))

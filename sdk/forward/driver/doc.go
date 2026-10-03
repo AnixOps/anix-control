@@ -43,7 +43,7 @@
 //     repairs it (Changed true).
 //
 // The driver records the applied generation, state_hash and digest on the
-// host (a table comment, a config file), so a new driver instance after an
+// host (a set in its own table, a config file), so a new driver instance after an
 // Agent restart observes them. An artifact with an older generation than
 // the host runs is ErrStaleGeneration (the contract's FAILED_PRECONDITION);
 // the same generation with another digest is ErrGenerationConflict. Both

@@ -39,6 +39,7 @@ type hopPlan struct {
 	sources      bool
 	src4, src6   []netip.Prefix
 	bandwidth    bool
+	bandwidthBps uint64
 	quotaBytes   uint64
 	maxConns     uint32
 	paused       bool
@@ -229,6 +230,7 @@ func (d *Driver) planHop(h *forwardv1.NodeHop) (*hopPlan, error) {
 			return nil, unsupported("bandwidth limit not enabled")
 		}
 		p.bandwidth = true
+		p.bandwidthBps = lim.GetBandwidthBps()
 	}
 	if lim.GetQuotaBytes() > 0 {
 		if !d.cfg.Quota {
@@ -248,6 +250,9 @@ func (d *Driver) planHop(h *forwardv1.NodeHop) (*hopPlan, error) {
 		return nil, invalid("mark %d outside 1..%d", m, d.cfg.maxMark())
 	}
 	p.markIndex = h.GetMark()
+	if p.bandwidth && p.markIndex > maxTCMark {
+		return nil, unsupported("mark %d of a rate-limited hop is over %d, the most the tc class ids hold", p.markIndex, maxTCMark)
+	}
 	p.mark = h.GetMark() << d.cfg.markShift()
 	return p, nil
 }
