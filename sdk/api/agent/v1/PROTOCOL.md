@@ -80,6 +80,8 @@ are additions to `anix.agent.v1`:
 | Agent → Control | `AgentToControl.status` (`NodeStatus`) | `reports.v1` |
 | Control → Agent | `ControlToAgent.report_ack` (`ReportAck`) | `reports.v1` |
 | Agent → Control | `AgentToControl.package_report` (`PackageReport`) | `package-reports.v1` |
+| Control → Agent | `ControlToAgent.config` in format `anixops.nodeconfig/v2` (`NodeForwardState`) | `forward.v1` with `config.v1` |
+| Agent → Control | `AgentToControl.package_report` of kind `forward.report` (`NodeForwardReport`) | `forward.v1` with `package-reports.v1` |
 
 `Hello` gains `config_revision` and `users_cursor`, and `HelloAck` gains
 `server_capabilities`.
@@ -88,7 +90,8 @@ are additions to `anix.agent.v1`:
 
 - A capability written `config.v1` is the `Capability` with name `config`
   and version `v1`; `sdk/agentcontrol` names them (`CapabilityConfig`,
-  `CapabilityUsers`, `CapabilityReports`, `CapabilityPackageReports`).
+  `CapabilityUsers`, `CapabilityReports`, `CapabilityPackageReports`,
+  `CapabilityForward`).
 - The Agent lists the ones it implements in `Hello.capabilities`. Control
   lists the ones it serves in `HelloAck.server_capabilities`.
 - A capability is in use on a session only when both lists have it
@@ -110,7 +113,11 @@ are additions to `anix.agent.v1`:
   when the Agent's `Hello` lists it too, for proxy nodes (a forward node's
   stream is not offered it yet; its reports join with the forward plugins).
   It serves `package-reports.v1` when the Agent's `Hello` lists it, for
-  proxy nodes; forward nodes are not offered it yet.
+  proxy nodes, and for forward nodes served `forward.v1` (their other
+  package reports are refused: they have no plugin assignments). It serves
+  `forward.v1` (see "Forwarding") when the Agent's `Hello` lists it with a
+  valid `node_capabilities` attribute and Control serves the session
+  `config.v1`, for proxy and forward nodes.
   An Agent that sends a payload the session did not negotiate
   (`config_status` without `config.v1`, or `traffic`, `logs` or `status`
   without `reports.v1`, `package_report` without `package-reports.v1`, in
@@ -129,7 +136,8 @@ are additions to `anix.agent.v1`:
   configuration at `config_revision`: Control's desired configuration of the
   node, as stored. `config_hash` is the lowercase hex SHA-256 of the exact
   `config_json` bytes, and `format` names their schema
-  (`anixops.nodeconfig/v1`). The revision grows by one each time the hash
+  (`anixops.nodeconfig/v1`, or `anixops.nodeconfig/v2` for a node whose
+  Agent negotiated `forward.v1`, see "Forwarding"). The revision grows by one each time the hash
   changes, and only then.
   - **What it carries.** The document of a proxy node holds its node row,
     `raw_config`, its enabled `protocols` (each `config` is what the v2board
@@ -251,6 +259,62 @@ are additions to `anix.agent.v1`:
     previous one, and Control does not acknowledge it.
   - A report whose envelope `node_id` is not the stream's node ends the
     stream with `PermissionDenied`, as any other message does.
+- **Forwarding** (`forward.v1`; `docs/architecture/forward-sdk.md` section
+  8). The node forwards for Control's routes. `sdk/forward/wire` encodes
+  and checks every rule below; the Agent and Control both use it.
+  - **Hello.** The Agent lists `forward.v1` with the attribute
+    `node_capabilities`: its `anixops.forward.v1.NodeCapabilities` (the
+    drivers' `EngineCapabilities`, kernel, cgroup, IPv6, Agent version) as
+    protojson with the proto field names, at most 16 KiB, at most 8
+    engines, each a known engine once, enums the contract defines, texts
+    within 1 KiB; `node_ref`, when set, names the stream's node. An Agent
+    that lists `forward.v1` lists `config.v1` and `package-reports.v1` too.
+    A missing or malformed attribute is not an error: Control leaves
+    `forward.v1` out of `server_capabilities` and the stream goes on.
+  - **Inventory.** On each `Hello` Control records the node's capabilities
+    and whether the session negotiated `forward.v1`; a `Hello` without it
+    clears that flag. A node whose last `Hello` negotiated it is in
+    Control's forwarding inventory, and a change of its capabilities
+    replans every route before the `Hello`'s snapshot is built.
+  - **Desired state.** While the flag is set, the node's configuration
+    (every snapshot, whatever triggered it) has the format
+    `anixops.nodeconfig/v2`: the `anixops.nodeconfig/v1` document plus the
+    member `forward`, the node's `NodeForwardState` as protojson with the
+    proto field names (`generation` and other 64-bit numbers as strings).
+    `generation` 0 means Control has no state for the node yet (its first
+    plan was refused): the Agent keeps what it runs. Otherwise the Agent
+    applies the state only when `generation` is newer than the one it
+    runs, compares `state_hash` (never contents) and persists the applied
+    state. Every plan that moves the node's generation pushes a new
+    snapshot at once; `config_revision` grows with it. `ConfigStatus`
+    answers the snapshot as for v1 (`applied` false only when the document
+    as a whole cannot be applied); hop errors go in the report. An Agent
+    without `forward.v1` keeps v1 and never receives forwarding.
+  - **Reports.** The Agent sends its `anixops.forward.v1.NodeForwardReport`
+    as a `PackageReport` with `plugin_id` `forward`, `kind`
+    `forward.report`, `version` `v1` and `payload_json` its protojson, every
+    60 s and after an apply or a health change (at most one every 10 s).
+    Control accepts it only on a session that negotiated `forward.v1`, not
+    from a plugin release, and refuses (drops, logs and counts; the stream
+    stays open) one sent without it (`unnegotiated`), another `version`
+    (`invalid`), an oversize or future one, and one whose payload fails the
+    checks (`bad_payload`): `node_ref` must be the stream's node; a
+    `Counters.node_ref` empty or the same; route ids of 1 to 64 ASCII
+    letters and digits; hop indexes below 8; `counter_epoch` 1 to 128
+    bytes, each (route, hop, epoch) once; at most 16384 counters, health
+    entries and errors; counters within the signed 64-bit range. The
+    256 KiB payload cap bounds a report to roughly 800 hops of counters.
+  - **Counters.** Cumulative within a `counter_epoch`, which ends only when
+    the hop's counter objects are re-created (the driver's rule). Control
+    keeps, per route, hop, node and epoch, the largest values reported and
+    adds their growth to its traffic ledger; a new epoch counts in full, a
+    decrease counts nothing, and a report observed before the stored one
+    is dropped whole. A lost or repeated report therefore loses or doubles
+    nothing.
+  - **Heartbeat.** `HelloAck.heartbeat_interval_seconds` is 60 for a
+    forward node's session that negotiated `forward.v1` (20 otherwise). A
+    certificate revoked while the stream is open ends it at the next
+    heartbeat, so within a minute on such a session.
 - **Package reports** (`package-reports.v1`). A `PackageReport` is the latest
   observation of one `kind` that an Agent plugin package makes on the node,
   such as the systemd services table of `machine-telemetry`
@@ -276,6 +340,9 @@ are additions to `anix.agent.v1`:
     | Kind | Capability | Schema |
     |---|---|---|
     | `systemd.services` | `telemetry.systemd.read` | `sdk/telemetry/systemdreport` |
+
+    The kind `forward.report` of `plugin_id` `forward` is not authorized by
+    a release: it needs `forward.v1` on the session (see "Forwarding").
   - **Sanitizing.** Control stores the payload only as the kind's sanitizer
     re-encodes it: unknown fields are dropped, and a payload the sanitizer
     refuses is refused. For `systemd.services` that is a payload with a
