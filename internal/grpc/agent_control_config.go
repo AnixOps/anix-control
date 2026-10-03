@@ -164,7 +164,7 @@ func (s *AgentControlGRPCServer) handleConfigStatus(ctx context.Context, manager
 		verdict = ""
 	}
 	if verdict == model.ConfigVerdictFailed {
-		slog.Warn("agent config: the agent could not apply the configuration", "component", "agent-control", "node", node.String(), "config_revision", configStatus.GetConfigRevision(), "error", configStatus.GetError())
+		slog.Warn("agent config: the agent could not apply the configuration", "component", "agent-control", "node", node.String(), "config_revision", configStatus.GetConfigRevision(), "error_code", kernelnodeops.ConfigStatusErrorCode(configStatus), "error", configStatus.GetError())
 	}
 	agentConfigMetrics.status(verdict)
 	manager.deliverConfigStatus(connection.NodeID, connection.SessionID, configStatus, verdict)

@@ -83,7 +83,7 @@ func ParseMaintenanceEvent(raw []byte, node AgentNode, now time.Time) (Maintenan
 		return MaintenanceEvent{}, err
 	}
 	if event.NodeID != strconv.FormatUint(uint64(node.ID), 10) {
-		return MaintenanceEvent{}, fmt.Errorf("%w: node_id %s is not the stream's node", ErrInvalidMaintenanceEvent, event.NodeID)
+		return MaintenanceEvent{}, fmt.Errorf("%w: %w: node_id %s is not the stream's node", ErrInvalidMaintenanceEvent, ErrMaintenanceEventWrongNode, event.NodeID)
 	}
 	return event, nil
 }

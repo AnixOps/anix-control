@@ -42,12 +42,16 @@ type KernelNodeConfigStatus struct {
 	// ReportedRevision, ReportedHash, ReportedApplied and ReportedError are
 	// the last ConfigStatus as the agent sent it (the error cut to 1024
 	// bytes); Verdict is how the kernel judged it (ConfigVerdict*).
-	ReportedRevision uint64    `gorm:"not null;default:0" json:"reported_revision"`
-	ReportedHash     string    `gorm:"size:64;not null" json:"reported_hash"`
-	ReportedApplied  bool      `gorm:"not null;default:false" json:"reported_applied"`
-	ReportedError    string    `gorm:"size:1024;not null" json:"reported_error"`
-	Verdict          string    `gorm:"size:16;not null" json:"verdict"`
-	ReportedAt       time.Time `gorm:"not null" json:"reported_at"`
+	ReportedRevision uint64 `gorm:"not null;default:0" json:"reported_revision"`
+	ReportedHash     string `gorm:"size:64;not null" json:"reported_hash"`
+	ReportedApplied  bool   `gorm:"not null;default:false" json:"reported_applied"`
+	ReportedError    string `gorm:"size:1024;not null" json:"reported_error"`
+	// ReportedErrorCode is the status's error_code
+	// (agentcontrol.ConfigErrorCode*), empty when applied, from an agent
+	// built before codes, or when the code is malformed.
+	ReportedErrorCode string    `gorm:"size:64;not null;default:''" json:"reported_error_code"`
+	Verdict           string    `gorm:"size:16;not null" json:"verdict"`
+	ReportedAt        time.Time `gorm:"not null" json:"reported_at"`
 	// AppliedRevision and AppliedHash are the last configuration the kernel
 	// verified as applied; zero and empty until one is.
 	AppliedRevision uint64     `gorm:"not null;default:0" json:"applied_revision"`

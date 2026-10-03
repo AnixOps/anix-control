@@ -36,7 +36,10 @@ import (
 //     the bounds, a node that no longer exists); refused again on every
 //     delivery;
 //   - neither: Control could not store it now (its database failed); the
-//     Agent sends it again.
+//     Agent sends it again. The result says so with the code
+//     maintenance_unavailable and a retry hint.
+//
+// Every refusal carries its error code (agentcontrol.MaintenanceErrorCode*).
 //
 // A bad event never ends the stream; only a batch sent without the
 // capability negotiated does, as every data-plane payload does.
@@ -60,20 +63,23 @@ func (s *AgentControlGRPCServer) handleMaintenanceEvents(manager *AgentControlMa
 	if batch == nil {
 		return status.Error(codes.InvalidArgument, "maintenance_events payload is required")
 	}
-	refusal := maintenanceBatchRefusal(batch)
+	refusalCode, refusal := maintenanceBatchRefusal(batch)
 	now := time.Now()
 	ack := &agentv1pb.MaintenanceAck{Version: batch.Version, Events: make([]*agentv1pb.MaintenanceEventResult, 0, len(batch.EventsJson))}
 	for _, raw := range batch.EventsJson {
 		result := &agentv1pb.MaintenanceEventResult{EventId: agentcontrol.MaintenanceEventID(raw)}
 		ack.Events = append(ack.Events, result)
 		if refusal != "" {
-			result.Error = refusal
+			result.Error, result.ErrorCode = refusal, refusalCode
 			agentMaintenanceMetrics.result(maintenanceRefused)
 			continue
 		}
 		event, err := agentcontrol.ParseMaintenanceEvent(raw, node, now)
 		if err != nil {
-			result.Error = err.Error()
+			result.Error, result.ErrorCode = err.Error(), agentcontrol.MaintenanceErrorCodeEventInvalid
+			if errors.Is(err, agentcontrol.ErrMaintenanceEventWrongNode) {
+				result.ErrorCode = agentcontrol.MaintenanceErrorCodeWrongNode
+			}
 			agentMaintenanceMetrics.result(maintenanceRefused)
 			slog.Warn("refused agent maintenance event", "component", "agent-control", "node", node.String(), "event_id", logValue(result.EventId), "error", err)
 			continue
@@ -88,11 +94,13 @@ func (s *AgentControlGRPCServer) handleMaintenanceEvents(manager *AgentControlMa
 				agentMaintenanceMetrics.result(maintenanceDuplicate)
 			}
 		case errors.Is(err, gorm.ErrRecordNotFound):
-			result.Error = "the node no longer exists"
+			result.Error, result.ErrorCode = "the node no longer exists", agentcontrol.MaintenanceErrorCodeNodeGone
 			agentMaintenanceMetrics.result(maintenanceRefused)
 		default:
-			// Transient: neither persisted nor refused, so the Agent keeps
-			// the event and sends it again.
+			// Transient: neither persisted nor refused (no error), so the
+			// Agent keeps the event and sends it again, after the hint.
+			result.ErrorCode = agentcontrol.MaintenanceErrorCodeUnavailable
+			result.RetryAfterMs = uint32(maintenanceRetryAfter.Milliseconds())
 			agentMaintenanceMetrics.result(maintenanceUnrecorded)
 			slog.Warn("failed to record agent maintenance event", "component", "agent-control", "node", node.String(), "event_id", logValue(event.EventID), "error", err)
 		}
@@ -106,23 +114,29 @@ func (s *AgentControlGRPCServer) handleMaintenanceEvents(manager *AgentControlMa
 	})
 }
 
-// maintenanceBatchRefusal is why a whole batch is refused, empty when its
-// events are read one by one.
-func maintenanceBatchRefusal(batch *agentv1pb.MaintenanceEvents) string {
+// maintenanceRetryAfter is MaintenanceEventResult.retry_after_ms of an
+// event Control could not store now (maintenance_unavailable).
+var maintenanceRetryAfter = 30 * time.Second
+
+// maintenanceBatchRefusal is why a whole batch is refused, with its error
+// code; both empty when its events are read one by one.
+func maintenanceBatchRefusal(batch *agentv1pb.MaintenanceEvents) (string, string) {
 	if batch.Version != agentcontrol.MaintenanceSchemaV1 {
-		return fmt.Sprintf("unsupported maintenance schema %q, want %s", logValue(batch.Version), agentcontrol.MaintenanceSchemaV1)
+		return agentcontrol.MaintenanceErrorCodeSchemaUnsupported,
+			fmt.Sprintf("unsupported maintenance schema %q, want %s", logValue(batch.Version), agentcontrol.MaintenanceSchemaV1)
 	}
 	if len(batch.EventsJson) > agentcontrol.MaxMaintenanceBatchEvents {
-		return fmt.Sprintf("the batch has %d events, more than %d", len(batch.EventsJson), agentcontrol.MaxMaintenanceBatchEvents)
+		return agentcontrol.MaintenanceErrorCodeBatchTooLarge,
+			fmt.Sprintf("the batch has %d events, more than %d", len(batch.EventsJson), agentcontrol.MaxMaintenanceBatchEvents)
 	}
 	size := 0
 	for _, raw := range batch.EventsJson {
 		size += len(raw)
 	}
 	if size > agentcontrol.MaxMaintenanceBatchBytes {
-		return fmt.Sprintf("the batch's events exceed %d bytes", agentcontrol.MaxMaintenanceBatchBytes)
+		return agentcontrol.MaintenanceErrorCodeBatchTooLarge, fmt.Sprintf("the batch's events exceed %d bytes", agentcontrol.MaxMaintenanceBatchBytes)
 	}
-	return ""
+	return "", ""
 }
 
 // The result label of anixops_agent_maintenance_events_total.

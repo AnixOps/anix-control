@@ -153,6 +153,7 @@ func (s *Server) Start() error {
 	agents := s.agentAuthenticator()
 	agentv1pb.RegisterAgentControlServiceServer(s.grpcServer, NewAgentControlGRPCServer(nil).WithAuthenticator(agents))
 	agentv1pb.RegisterAgentEnrollmentServer(s.grpcServer, NewAgentEnrollmentGRPCServer(agents))
+	agentv1pb.RegisterAgentArtifactsServer(s.grpcServer, NewAgentArtifactsGRPCServer(agents))
 
 	// 启动服务器
 	go func() {
