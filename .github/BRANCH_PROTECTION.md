@@ -35,6 +35,7 @@ These are job names from `.github/workflows/ci.yml` and must match exactly:
 - `Frontend Build`
 - `Documentation Sync Check`
 - `Release Workflow Policy Check`
+- `Frontend Visual Regression` (required since 2026-10-03, after 26 green runs; owner decision H9)
 
 Deliberately not required:
 

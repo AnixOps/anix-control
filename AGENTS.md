@@ -65,7 +65,8 @@ duplicate it here); the docs landing page is `docs/README.md`.
   `master` or `production`.
 - The `go_dev` ruleset (`.github/BRANCH_PROTECTION.md`) requires a PR with
   0 approvals and these checks: Go Quality Gates, Go Lint Gate, Backend Tests,
-  Frontend Build, Documentation Sync Check, Release Workflow Policy Check. No
+  Frontend Build, Documentation Sync Check, Release Workflow Policy Check,
+  Frontend Visual Regression. No
   force pushes or deletions; administrators may bypass only by merging a PR.
 - CI has two lanes (`config/scripts/classify_changes.py`, job "Classify
   Changes").
