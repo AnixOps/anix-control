@@ -2,7 +2,13 @@
 
 ## Unreleased
 
+## 4.1.0-rc.6 - 2026-10-03
+
 ### Changed
+
+- The `go_dev` ruleset now also requires the `Frontend Visual Regression`
+  check (26 green runs since it was added; owner decision H9). It skips on
+  changes that cannot affect the UI, which counts as passing.
 
 - **Behaviour change: the rehearsed packages default to native routes**
   (decision H8). The 151 v2 routes of the 15 packages that passed the
