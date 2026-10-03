@@ -1997,6 +1997,33 @@ To announce a date to legacy agents, set
 header and the `x-anix-auth-sunset` stream metadata. It is unset by default
 because the v4.2 release date is not fixed.
 
+### Forward Nodes: The New Agent First, Then Control
+
+The steps above are written for proxy nodes. Forward nodes have one more
+constraint: v4.2 replaces the flux-compatible forwarding, retires the clean
+agent and NodeX, and (once you confirm it) drops the old forwarding tables. A
+clean agent node still on its old agent when Control moves to v4.2 is refused
+(`agent_mtls_required`), and Control can then no longer clean it. Upgrade in
+this order:
+
+1. **Install the new anix-agent on every forward node first**, while Control
+   is still on 4.1, clean agent and NodeX nodes included. On install it
+   removes the legacy forward runtime locally, without Control: the
+   `inet v2b_forward` and `ip v2b_forward` tables, the `ip anixops_forward`
+   table, and the gost services the flux runtime or the clean agent created.
+   It touches no other table or service.
+2. **Check** that `anix-control agents transports --legacy-only` prints
+   "refuses none".
+3. **Then upgrade Control to v4.2.** Its upgrade checks that every forward
+   node is clean before it drops the old tables, and asks you to confirm that
+   step on its own: it cannot be undone. Control cleans NodeX hosts through
+   NodeX's HTTP API and Ansible hosts over SSH; neither depends on
+   `agent_control.mtls`.
+
+That Agent release is not out yet. This section will name its version, and
+the v4.2 upgrade notes will repeat the order
+([design](architecture/forward-sdk.md#10-upgrade-from-v41)).
+
 ## Switching Route Modes
 
 Each v2 route of a Control package runs in one of three modes: `legacy` (the

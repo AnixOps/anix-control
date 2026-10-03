@@ -1,19 +1,23 @@
 name: CI/CD Pipeline
 
+# Maintenance branches (release/vX.Y, docs/RELEASING.md) get the same checks
+# as go_dev: their pull requests run the fast lane and their pushes the full
+# lane. Release tags may be on either.
 on:
   push:
-    branches: [ go_dev ]
+    branches: [ go_dev, 'release/**' ]
     tags: [ 'v*.*.*' ]
   pull_request:
-    branches: [ go_dev ]
+    branches: [ go_dev, 'release/**' ]
     types: [ opened, synchronize, reopened, labeled ]
   schedule:
     # Nightly full run on go_dev.
     - cron: '17 19 * * *'
   workflow_dispatch:
 
-# Superseded pull-request runs are cancelled; go_dev pushes, tags and manual
-# runs always finish so release and baseline evidence is never cut short.
+# Superseded pull-request runs are cancelled; go_dev and release branch pushes,
+# tags and manual runs always finish so release and baseline evidence is never
+# cut short.
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}

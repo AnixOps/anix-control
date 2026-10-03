@@ -60,14 +60,17 @@ duplicate it here); the docs landing page is `docs/README.md`.
 
 ## Branch And PR Workflow
 
-- `go_dev` is the only long-lived branch. Branch from it, open a PR back to it,
+- `go_dev` is the integration branch. Branch from it, open a PR back to it,
   and squash-merge. Do not push to `go_dev` directly and do not recreate
-  `master` or `production`.
+  `master` or `production`. The only other long-lived branches are the
+  maintenance branches `release/vX.Y`, cut with the owner's approval and
+  changed through PRs like `go_dev` (`docs/RELEASING.md`).
 - The `go_dev` ruleset (`.github/BRANCH_PROTECTION.md`) requires a PR with
   0 approvals and these checks: Go Quality Gates, Go Lint Gate, Backend Tests,
   Frontend Build, Documentation Sync Check, Release Workflow Policy Check,
   Frontend Visual Regression. No
   force pushes or deletions; administrators may bypass only by merging a PR.
+  The intended `release/**` ruleset has the same rules.
 - CI has two lanes (`config/scripts/classify_changes.py`, job "Classify
   Changes").
   - **Fast lane.** Pull requests run the required checks plus the heavy jobs
@@ -80,9 +83,9 @@ duplicate it here); the docs landing page is `docs/README.md`.
 
     Documentation-only PRs skip the Go jobs.
   - **Full lane.** Every job, including benchmarks.
-    It runs on `go_dev` pushes, tags, the nightly schedule, manual runs,
-    PRs labelled `ci:full`, and PRs that change the Go dependencies, the
-    classifier or `.github/actions/`.
+    It runs on `go_dev` and `release/**` pushes, tags, the nightly
+    schedule, manual runs, PRs labelled `ci:full`, and PRs that change the Go
+    dependencies, the classifier or `.github/actions/`.
   - **Workflow changes.** A PR that changes `ci.yml` runs the full lane,
     unless the change stays inside the bodies of jobs gated on one class
     (`if: ${{ needs.changes.outputs.<class> == 'true' }}`) or of always-run
@@ -206,7 +209,9 @@ A release tag `vX.Y.Z[-alpha|-beta|-rc.N]` must match every surface checked by
 ## Release Policy
 
 - Releases are built only by GitHub Actions: a `v*.*.*` tag on a commit that
-  landed on `go_dev` runs the `ci.yml` tag pipeline.
+  landed through a PR on `go_dev` or on a `release/vX.Y` branch runs the
+  `ci.yml` tag pipeline. A release branch's version bump is merged back to
+  `go_dev` in a follow-up PR (`docs/RELEASING.md`).
   - It produces signed packages for every package under `packages/`, the
     binaries, a signed GHCR image with SBOM and provenance, the source SBOM,
     checksums and the manifest.

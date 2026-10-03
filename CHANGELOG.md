@@ -8,6 +8,28 @@
   accepts the machine-telemetry `systemd_services` setting and collects the
   systemd services report (anix-agent #5). Older Agents refuse that setting,
   so the services panel needs this Agent.
+- **Release branches and the v4.2 upgrade order** (owner decisions of
+  2026-10-04; documentation and CI triggers only).
+  - A release may now be cut from a maintenance branch `release/vX.Y` started
+    at an earlier release's tag or commit: the version bump PR targets the
+    branch, the tag goes on the branch's commit, and a follow-up PR merges
+    the bump and CHANGELOG section back to `go_dev`. Patch releases of that
+    line use the same branch (`docs/RELEASING.md`). `ci.yml` now runs on pull
+    requests to and pushes on `release/**`, with the same required checks;
+    the intended `release/**` ruleset is in `.github/BRANCH_PROTECTION.md`.
+    v4.1.0 is to be cut this way, from the v4.1.0-rc.6 commit.
+  - The v4.2 forward upgrade order (`docs/architecture/forward-sdk.md`
+    section 10, `docs/UPGRADE.md`): first the new Agent, which removes the
+    legacy forward runtime locally on install; then every forward node
+    switches to it; then Control v4.2 with `agent_control.mtls: required`.
+    The upgrade (F5c) then verifies the nodes are clean, cleans NodeX hosts
+    through NodeX's API and Ansible hosts over SSH, and drops the tables
+    after H15. Of the 53 bridged forward routes, F5d deletes the 30 flux
+    routes, F5a rewrites the 19 node management routes as
+    `/api/v4/forward/*`, and the 4 clean agent routes retire with the switch.
+  - M3-4 and M3-5 are cancelled (`docs/architecture/node-ops-service.md`
+    section 7), and anix-agent releases follow Control's version numbers,
+    with Control's CI pinning the same Agent commit (H25).
 
 
 ### Added
