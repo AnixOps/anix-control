@@ -548,6 +548,7 @@ field anixops.forward.v1.UpstreamHealth.port = 4 optional uint32
 field anixops.forward.v1.UpstreamHealth.route_id = 1 optional string
 field anixops.forward.v1.UpstreamHealth.rtt_us = 8 optional uint32
 field anixops.forward.v1.UpstreamHealth.state = 5 optional anixops.forward.v1.HealthState
+field anixops.forward.v1.Violation.code = 3 optional string
 field anixops.forward.v1.Violation.field = 1 optional string
 field anixops.forward.v1.Violation.message = 2 optional string
 field anixops.identity.v1.Account.account_uuid = 2 optional string

@@ -9,15 +9,18 @@ import (
 	"testing"
 
 	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
+	"github.com/AnixOps/anix-control/sdk/forward/validate"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/protobuf/encoding/protojson"
 	"google.golang.org/protobuf/proto"
 )
 
 // The forward fixtures (contracts/forward/v1) are the draft planner goldens
-// of docs/architecture/forward-sdk.md. Until the planner exists (F1 code),
-// these tests keep them parseable as the draft contract and internally
-// consistent; the planner's own tests will compare its output with them.
+// of docs/architecture/forward-sdk.md. Until the planner exists (F1c),
+// these tests keep them parseable as the draft contract, internally
+// consistent, and in agreement with the shared validation
+// (sdk/forward/validate); the planner's own tests will compare its output
+// with them.
 
 func forwardFixturePath(name string) string {
 	return filepath.Join("..", "..", "..", "contracts", "forward", "v1", name)
@@ -53,6 +56,9 @@ func TestForwardPlanFixturesAreConsistent(t *testing.T) {
 			unmarshalForward(t, fixture["request"], request, name+": request")
 			unmarshalForward(t, fixture["response"], response, name+": response")
 			checkForwardPlan(t, request, response)
+			// The shared validation (sdk/forward/validate) accepts the
+			// fixture's route with the fixture's nodes.
+			require.Empty(t, validate.PlanRequest(request, validate.Options{}), name)
 		})
 	}
 }
@@ -177,10 +183,18 @@ func TestForwardNegativeFixturesAreWellFormed(t *testing.T) {
 		Name   string          `json:"name"`
 		Route  json.RawMessage `json:"route"`
 		Field  string          `json:"field"`
+		Code   string          `json:"code"`
 		Reason string          `json:"reason"`
 	}
 	require.NoError(t, json.Unmarshal(fixture["cases"], &cases))
 	require.NotEmpty(t, cases)
+
+	// The cases run against the nodes of the fixture they name.
+	nodesFixture := readForwardFixture(t, nodesFrom)
+	nodesRequest := &forwardv1.PlanRouteRequest{}
+	unmarshalForward(t, nodesFixture["request"], nodesRequest, nodesFrom)
+	require.NotEmpty(t, nodesRequest.GetNodes())
+
 	seen := map[string]bool{}
 	for _, testCase := range cases {
 		require.False(t, seen[testCase.Name], "duplicate case %s", testCase.Name)
@@ -189,5 +203,25 @@ func TestForwardNegativeFixturesAreWellFormed(t *testing.T) {
 		unmarshalForward(t, testCase.Route, route, testCase.Name)
 		require.NotEmpty(t, testCase.Field, testCase.Name)
 		require.NotEmpty(t, testCase.Reason, testCase.Name)
+
+		require.NotEmpty(t, testCase.Code, testCase.Name)
+		code := validate.Code(testCase.Code)
+		violations := validate.PlanRequest(&forwardv1.PlanRouteRequest{Route: route, Nodes: nodesRequest.GetNodes()}, validate.Options{})
+		require.True(t, violations.Has(testCase.Field, code),
+			"%s: want %s at %s (%s), got %v", testCase.Name, code, testCase.Field, testCase.Reason, violations)
+		wire := false
+		for _, violation := range violations.ToProto() {
+			wire = wire || (violation.GetField() == testCase.Field && violation.GetCode() == testCase.Code)
+		}
+		require.True(t, wire, "%s: the contract's Violation carries the code", testCase.Name)
+		// Each case breaks one rule. The user's private target is also
+		// refused as a target, since a user's route is checked as
+		// PUBLIC_ONLY.
+		for _, violation := range violations {
+			if testCase.Name == "user route to a private target" && violation.Field == "targets[0].host" {
+				continue
+			}
+			require.Equal(t, testCase.Field, violation.Field, "%s: unexpected %v", testCase.Name, violation)
+		}
 	}
 }

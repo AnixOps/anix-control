@@ -1,5 +1,5 @@
 {
-  "$comment": "DRAFT, illustrative (F1, owner review H11). Routes the planner must refuse. Each case's route is an anixops.forward.v1.Route in protojson with proto field names; field is the Violation.field the planner must report. The nodes are those of plan-nft-entry-gost-relay-exit-failover.json. See docs/architecture/forward-sdk.md section 4.4.",
+  "$comment": "DRAFT, illustrative (F1, owner review H11). Routes the planner must refuse. Each case's route is an anixops.forward.v1.Route in protojson with proto field names; field and code are the Violation.field and Violation.code the planner must report (codes of sdk/forward/validate). The nodes are those of plan-nft-entry-gost-relay-exit-failover.json. See docs/architecture/forward-sdk.md section 4.4.",
   "status": "draft",
   "nodes_from": "plan-nft-entry-gost-relay-exit-failover.json",
   "cases": [
@@ -16,6 +16,7 @@
         "targets": [{"host": "198.51.100.7", "port": 8443}]
       },
       "field": "hops[1].ingress.security",
+      "code": "link_unsupported",
       "reason": "hop 0 runs ENGINE_NFTABLES, which only dials LINK_SECURITY_RAW"
     },
     {
@@ -31,6 +32,7 @@
         "policy": {"target_policy": "TARGET_POLICY_ALLOW_PRIVATE"}
       },
       "field": "policy.target_policy",
+      "code": "forbidden",
       "reason": "only an administrator's route may reach private targets"
     },
     {
@@ -46,6 +48,7 @@
         "policy": {"target_policy": "TARGET_POLICY_ALLOW_PRIVATE"}
       },
       "field": "targets[0].host",
+      "code": "target_not_allowed",
       "reason": "loopback targets are never allowed"
     },
     {
@@ -60,6 +63,7 @@
         "targets": [{"host": "198.51.100.7", "port": 8443}]
       },
       "field": "hops[0].engine",
+      "code": "engine_not_advertised",
       "reason": "forward-21 does not advertise ENGINE_ANIXOPS"
     },
     {
@@ -67,7 +71,7 @@
       "route": {
         "id": "01JF1N00000000000000000N05",
         "owner": "admin",
-        "listen": {"port": 40006, "protocol": "L4_PROTOCOL_TCP"},
+        "listen": {"port": 20006, "protocol": "L4_PROTOCOL_TCP"},
         "hops": [
           {"role": "HOP_ROLE_ENTRY", "engine": "ENGINE_GOST", "node_refs": ["forward-31"]},
           {"role": "HOP_ROLE_EXIT", "engine": "ENGINE_GOST", "node_refs": ["forward-41", "forward-42"], "ingress": {"security": "LINK_SECURITY_TLS"}, "dial_address": "203.0.113.41"}
@@ -75,6 +79,7 @@
         "targets": [{"host": "198.51.100.7", "port": 8443}]
       },
       "field": "hops[1].dial_address",
+      "code": "requires_single_node",
       "reason": "dial_address needs exactly one node in node_refs"
     }
   ]

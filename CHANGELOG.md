@@ -30,6 +30,21 @@
     `anixops_agent_package_reports_refused_total{reason}`.
   - Design and privacy notes: `docs/architecture/package-reports.md`.
 
+- Forward SDK F1b (`docs/architecture/forward-sdk.md`): `sdk/forward/model`,
+  Go domain types for the draft `anixops.forward.v1` contract (routes, hops,
+  targets, policy, limits, counters, node inventory) with lossless
+  conversion to and from the protobuf messages and the defaults in one place
+  (health checks every 5 s with a 2 s timeout, circuit breaker after 3
+  failures for 30 s: proposed, owner decision H21 still open); and
+  `sdk/forward/validate`, the route rules Control, the planner and the Agent
+  share, answering violations with a field path, a stable code and a
+  message. The draft contract's `Violation` gains `code` (field 3) so the
+  code reaches UIs and API clients. The draft fixtures in `contracts/forward/v1` now run through it:
+  the two plans validate and the five negative routes fail at the documented
+  fields (the last negative case's entry port moved into its node's range so
+  it breaks only the rule it documents). Nothing serves forwarding with them
+  yet.
+
 ### Fixed
 
 - The live Control WebUI E2E gate defaults to ports 24175 and 28080 instead
