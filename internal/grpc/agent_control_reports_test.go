@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -17,10 +18,12 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
+	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"gorm.io/gorm"
 )
 
 // reportsTestEnvironment is the agent control environment with the tables
@@ -327,10 +330,12 @@ func TestAgentControlTrafficReportRefusedForGood(t *testing.T) {
 		name   string
 		report *agentv1pb.TrafficReport
 		want   string
+		code   string
 	}{
-		{name: "no batch id", report: &agentv1pb.TrafficReport{Users: []*agentv1pb.UserTraffic{{UserId: 7, UploadBytes: 1}}}, want: "batch_id is required"},
-		{name: "bytes out of range", report: &agentv1pb.TrafficReport{BatchId: "b2", Users: []*agentv1pb.UserTraffic{{UserId: 7, UploadBytes: math.MaxUint64}}}, want: "exceed the counter range"},
-		{name: "no user", report: &agentv1pb.TrafficReport{BatchId: "b3", Users: []*agentv1pb.UserTraffic{{UploadBytes: 1}}}, want: "user_id is required"},
+		{name: "no batch id", report: &agentv1pb.TrafficReport{Users: []*agentv1pb.UserTraffic{{UserId: 7, UploadBytes: 1}}}, want: "batch_id is required", code: agentcontrol.ReportErrorCodeBatchIDInvalid},
+		{name: "bytes out of range", report: &agentv1pb.TrafficReport{BatchId: "b2", Users: []*agentv1pb.UserTraffic{{UserId: 7, UploadBytes: math.MaxUint64}}}, want: "exceed the counter range", code: agentcontrol.ReportErrorCodeCounterOverflow},
+		{name: "no user", report: &agentv1pb.TrafficReport{BatchId: "b3", Users: []*agentv1pb.UserTraffic{{UploadBytes: 1}}}, want: "user_id is required", code: agentcontrol.ReportErrorCodeInvalid},
+		{name: "no online user", report: &agentv1pb.TrafficReport{BatchId: "b4", Online: []*agentv1pb.OnlineUser{{Ips: []string{"203.0.113.1"}}}}, want: "user_id is required", code: agentcontrol.ReportErrorCodeInvalid},
 	}
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
@@ -339,6 +344,8 @@ func TestAgentControlTrafficReportRefusedForGood(t *testing.T) {
 			assert.Equal(t, test.report.BatchId, ack.BatchId)
 			assert.False(t, ack.Applied)
 			assert.Contains(t, ack.Error, test.want)
+			assert.Equal(t, test.code, ack.ErrorCode)
+			assert.Zero(t, ack.RetryAfterMs)
 		})
 	}
 	upload, _ := userCounters(t, 7)
@@ -400,7 +407,60 @@ func TestAgentControlLogBatchReachesNodeLogs(t *testing.T) {
 	ack = expectReportAck(t, stream, "logs-bad")
 	assert.False(t, ack.Applied)
 	assert.Contains(t, ack.Error, "fields_json is not JSON")
+	assert.Equal(t, agentcontrol.ReportErrorCodeInvalid, ack.ErrorCode)
+
 	require.NoError(t, stream.CloseSend())
+}
+
+// transientAckCapabilities is reportCapabilities with reports.v1 asking
+// for transient acknowledgements.
+func transientAckCapabilities() []*agentv1pb.Capability {
+	capabilities := reportCapabilities()
+	capabilities[1].Attributes = map[string]string{agentcontrol.ReportsAttributeTransientAck: agentcontrol.ReportsTransientAckV1}
+	return capabilities
+}
+
+// An agent whose reports.v1 carries transient_ack v1 is offered it back,
+// and a batch Control cannot record now is answered with
+// report_unavailable and a retry hint instead of silence; the resend is
+// applied once the fault is gone.
+func TestAgentControlTrafficReportTransientAckWhenNegotiated(t *testing.T) {
+	environment := newReportsTestEnvironment(t)
+	nodeID := uint32(environment.node.ID)
+	capabilities := transientAckCapabilities()
+	stream, helloAck := openReportsSession(t, environment, capabilities)
+	require.True(t, agentcontrol.TransientReportAcks(capabilities, helloAck.ServerCapabilities), "%v", helloAck.ServerCapabilities)
+
+	require.NoError(t, database.GetDB().Exec("DROP TABLE v4_kernel_agent_report_batch").Error)
+	report := &agentv1pb.TrafficReport{BatchId: "node:proxy-1:boot-t:1", Users: []*agentv1pb.UserTraffic{{UserId: 7, UploadBytes: 10, DownloadBytes: 20}}}
+	require.NoError(t, stream.Send(trafficMessage("traffic-1", nodeID, report)))
+	ack := expectReportAck(t, stream, "traffic-1")
+	assert.Equal(t, report.BatchId, ack.BatchId)
+	assert.False(t, ack.Applied)
+	assert.Empty(t, ack.Error, "not a refusal: the agent keeps the batch")
+	assert.Equal(t, agentcontrol.ReportErrorCodeUnavailable, ack.ErrorCode)
+	assert.Equal(t, uint32(reportRetryAfter.Milliseconds()), ack.RetryAfterMs)
+
+	requireAutoMigrate(t, &model.AgentReportBatch{})
+	require.NoError(t, stream.Send(trafficMessage("traffic-1-again", nodeID, report)))
+	ack = expectReportAck(t, stream, "traffic-1-again")
+	assert.True(t, ack.Applied)
+	assert.Empty(t, ack.ErrorCode)
+	require.NoError(t, stream.CloseSend())
+}
+
+// The transient_ack attribute is echoed only to an agent that asked for
+// it at v1; without it reports.v1 carries no attribute.
+func TestReportsServerCapabilityEchoesTransientAck(t *testing.T) {
+	assert.Empty(t, reportsServerCapability(reportCapabilities()).Attributes)
+	echoed := reportsServerCapability(transientAckCapabilities())
+	assert.Equal(t, map[string]string{agentcontrol.ReportsAttributeTransientAck: agentcontrol.ReportsTransientAckV1}, echoed.Attributes)
+	other := reportCapabilities()
+	other[1].Attributes = map[string]string{agentcontrol.ReportsAttributeTransientAck: "v2"}
+	assert.Empty(t, reportsServerCapability(other).Attributes)
+	assert.Equal(t, agentcontrol.ReportErrorCodeInvalid, reportRefusalCode(service.ErrNegativeTraffic))
+	assert.Equal(t, agentcontrol.ReportErrorCodeNodeGone, reportRefusalCode(fmt.Errorf("load node: %w", gorm.ErrRecordNotFound)))
+	assert.Empty(t, reportRefusalCode(errors.New("database is down")))
 }
 
 // A NodeStatus updates the columns ReportStatus and the runtime-health

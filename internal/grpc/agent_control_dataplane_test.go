@@ -197,6 +197,7 @@ func TestAgentControlStreamRejectsUnnegotiatedDataPlanePayloads(t *testing.T) {
 			require.Error(t, err)
 			assert.Equal(t, codes.InvalidArgument, status.Code(err))
 			assert.Contains(t, status.Convert(err).Message(), test.want)
+			assert.Equal(t, []string{agentcontrol.ErrorCodeCapabilityNotNegotiated}, stream.Trailer().Get(agentcontrol.MetadataErrorCode))
 		})
 	}
 }

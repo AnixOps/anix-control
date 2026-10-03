@@ -192,14 +192,18 @@ func TestSyncNodeEndsOnConfigStatus(t *testing.T) {
 		assert.Equal(t, kernelnodeopsv1.OperationState_OPERATION_STATE_RUNNING, still.GetOperation().GetState(), "neither status ends the operation")
 
 		// The agent could not apply it: FAILED with its error.
-		require.NoError(t, agent.SendConfigStatus(&agentv1pb.ConfigStatus{ConfigRevision: snapshot.GetConfigRevision(), ConfigHash: snapshot.GetConfigHash(), Error: "xray refused the configuration"}))
+		require.NoError(t, agent.SendConfigStatus(&agentv1pb.ConfigStatus{
+			ConfigRevision: snapshot.GetConfigRevision(), ConfigHash: snapshot.GetConfigHash(), Error: "xray refused the configuration",
+			ErrorCode: agentcontrol.ConfigErrorCodeApplyFailed,
+		}))
 		failed := awaitState(t, client, operationID, kernelnodeopsv1.OperationState_OPERATION_STATE_FAILED)
 		assert.Equal(t, kernelnodeopsv1.ErrorCode_ERROR_CODE_BACKEND_FAILED, failed.GetError().GetCode())
-		assert.Equal(t, "xray refused the configuration", failed.GetError().GetMessage())
+		assert.Equal(t, "config_apply_failed: xray refused the configuration", failed.GetError().GetMessage(), "the agent's code leads the message")
 		assert.False(t, failed.GetResult().GetNodeSync().GetAck().GetAccepted())
 		row, _ := f.configStatus(f.proxyNode())
 		assert.Equal(t, model.ConfigVerdictFailed, row.Verdict)
 		assert.Equal(t, "xray refused the configuration", row.ReportedError)
+		assert.Equal(t, agentcontrol.ConfigErrorCodeApplyFailed, row.ReportedErrorCode)
 		assert.Zero(t, row.AppliedRevision)
 
 		// Forced again, and applied: SUCCEEDED, the applied revision moves.
