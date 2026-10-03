@@ -1711,6 +1711,19 @@ export default {
     loadFailed: 'Route modes didn’t load',
     empty: { title: 'No packages with v2 routes', description: 'Install and enable a package that declares v2 routes to manage its route modes.' },
     modes: { legacy: 'Legacy', shadow: 'Shadow', native: 'Native' },
+    modeDefault: '{mode} (default)',
+    sources: {
+      stored: 'Set explicitly',
+      default: 'Rehearsed default: no mode is stored',
+      'kill-switch': 'Default off: package_routes.default_mode is legacy',
+      'package-too-old': 'Default off: the package is older than the rehearsed release',
+      'identity-authority': 'Follows the identity authority',
+      unset: 'No mode stored'
+    },
+    defaults: {
+      'kill-switch': 'Native defaults are off (package_routes.default_mode: legacy). Routes without a stored mode run legacy.',
+      'package-too-old': 'Version {version} is older than {min}, the rehearsed release: its routes default to legacy.'
+    },
     catalog: { 'native-flagged': 'Native-flagged', bridged: 'Bridged', 'kernel-owned': 'Kernel-owned', native: 'Native', none: 'Undeclared' },
     locked: { kernel_owned: 'Kernel-owned', identity_group_a: 'Identity cutover', websocket: 'WebSocket', not_declared: 'Not declared' },
     columns: { route: 'Route', endpoint: 'Method / path', catalog: 'Eligibility', configured: 'Configured', effective: 'Effective', shadow: 'Shadow (total / mismatch / errors)', mismatch: 'Mismatch rate', mode: 'Switch to' },
@@ -1728,7 +1741,7 @@ export default {
       setMessage: 'Routes that can’t take this mode are skipped. The change is recorded in the revision history.',
       nativeMessage: 'In native mode the package implementation answers instead of the legacy kernel handler. Confirm and give a reason for the audit trail.',
       rollbackTitle: 'Roll {package} back to legacy?',
-      rollbackMessage: 'Every route of the package returns to legacy.',
+      rollbackMessage: 'Every route of the package returns to legacy, routes native by default included.',
       reason: 'Reason',
       reasonHelp: 'Optional; stored with the revision.',
       reasonRequired: 'Required to switch to native.',

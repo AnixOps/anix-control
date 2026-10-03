@@ -23,10 +23,15 @@ const routesCommandUsage = `usage:
   anix-control routes history [--package <id>] [--limit 100] [--json]
 
 list prints each v2 Control package route with its configured and effective
-mode and the modes it may switch to. set switches the named routes, or
+mode, where the effective mode comes from (SOURCE: stored, default,
+kill-switch, package-too-old, identity-authority or unset) and the modes it
+may switch to. Since 4.1.0 the routes that passed the staging rehearsal run
+natively by default (source default) unless a mode is stored for them;
+package_routes.default_mode=legacy turns that off. set switches the named routes, or
 without --route every route of the package that may switch to the mode;
 switching to native needs --reason and --yes. rollback returns the whole
-package to legacy in one change (identity group A excepted: it moves only
+package to legacy in one change, routes native by default included (they get
+an explicit legacy) (identity group A excepted: it moves only
 with the identity cutover and rollback). history prints the latest switches.
 
 Every switch is written to the audit log and the revision history as
@@ -178,11 +183,14 @@ func encodeRoutesJSON(stdout io.Writer, value any) error {
 
 func printRouteModes(stdout io.Writer, packages []service.PackageRouteModes) error {
 	writer := tabwriter.NewWriter(stdout, 0, 4, 2, ' ', 0)
-	_, _ = fmt.Fprintln(writer, "PACKAGE\tROUTE\tMETHOD\tCATALOG\tCONFIGURED\tEFFECTIVE\tALLOWED")
+	_, _ = fmt.Fprintln(writer, "PACKAGE\tROUTE\tMETHOD\tCATALOG\tCONFIGURED\tEFFECTIVE\tSOURCE\tALLOWED")
 	for _, pkg := range packages {
 		if pkg.Error != "" {
-			_, _ = fmt.Fprintf(writer, "%s\t(error: %s)\t\t\t\t\t\n", pkg.PackageID, pkg.Error)
+			_, _ = fmt.Fprintf(writer, "%s\t(error: %s)\t\t\t\t\t\t\n", pkg.PackageID, pkg.Error)
 			continue
+		}
+		if pkg.Defaults.Note != "" {
+			_, _ = fmt.Fprintf(writer, "%s\t(defaults: %s)\t\t\t\t\t\t\n", pkg.PackageID, pkg.Defaults.Note)
 		}
 		for _, route := range pkg.Routes {
 			allowed := strings.Join(route.AllowedModes, ",")
@@ -193,8 +201,8 @@ func printRouteModes(stdout io.Writer, packages []service.PackageRouteModes) err
 			if catalog == "" {
 				catalog = "-"
 			}
-			_, _ = fmt.Fprintf(writer, "%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
-				pkg.PackageID, route.RouteID, route.Method, catalog, route.Configured, route.Effective, allowed)
+			_, _ = fmt.Fprintf(writer, "%s\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n",
+				pkg.PackageID, route.RouteID, route.Method, catalog, route.Configured, route.Effective, route.Source, allowed)
 		}
 	}
 	return writer.Flush()

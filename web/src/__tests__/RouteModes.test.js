@@ -268,4 +268,43 @@ describe('Route modes page', () => {
     expect(detail.text()).toContain('Diff shortened')
     expect(detail.text()).toContain('a***@example.com')
   })
+
+  it('marks routes native by default and lets them switch to legacy', async () => {
+    const data = routeModes()
+    data.packages[0].defaults = { policy: 'rehearsed', routes: 1, min_version: '4.1.0-rc.5', source: 'default' }
+    Object.assign(data.packages[0].routes[0], { configured: 'native', effective: 'native', source: 'default', host: undefined, mismatch_samples: undefined })
+    kernelApi.getKernelRouteModes.mockResolvedValue(data)
+    const wrapper = await mountPage()
+
+    const effective = wrapper.get('[data-route-effective="tickets.list"]')
+    expect(effective.text()).toContain('Native (default)')
+    expect(effective.text()).not.toContain('Differs from configured')
+    expect(effective.get('[data-route-source="default"]').attributes('title')).toContain('Rehearsed default')
+    expect(wrapper.find('[data-testid="route-modes-defaults"]').exists()).toBe(false)
+
+    // The row's select shows native, so legacy is a real switch.
+    const select = selectBy(wrapper, 'data-route-mode', 'tickets.list')
+    expect(select.props('modelValue')).toBe('native')
+    select.vm.$emit('update:modelValue', 'legacy')
+    await flushPromises()
+    expect(body('[data-testid="route-mode-dialog"]').text()).toContain('Switch tickets.list to Legacy?')
+
+    await setLocale('zh-CN')
+    await flushPromises()
+    expect(wrapper.get('[data-route-effective="tickets.list"]').text()).toContain('原生（默认）')
+  })
+
+  it('says why routes do not default to native', async () => {
+    const data = routeModes()
+    data.packages[0].defaults = { policy: 'rehearsed', routes: 1, min_version: '4.1.0-rc.5', source: 'package-too-old' }
+    kernelApi.getKernelRouteModes.mockResolvedValue(data)
+    let wrapper = await mountPage()
+    expect(wrapper.get('[data-testid="route-modes-defaults"]').text()).toContain('Version 2.1.0 is older than 4.1.0-rc.5')
+    wrapper.unmount()
+    mounted.pop()
+
+    data.packages[0].defaults = { policy: 'legacy', routes: 1, min_version: '4.1.0-rc.5', source: 'kill-switch' }
+    wrapper = await mountPage()
+    expect(wrapper.get('[data-testid="route-modes-defaults"]').text()).toContain('package_routes.default_mode: legacy')
+  })
 })

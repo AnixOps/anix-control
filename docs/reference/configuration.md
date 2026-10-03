@@ -351,6 +351,30 @@ agent_control:
   and [`../architecture/node-ops-service.md`](../architecture/node-ops-service.md)
   section 5.6.
 
+## Package Route Defaults
+
+`package_routes.default_mode` (`ANIX_CONTROL_PACKAGE_ROUTES_DEFAULT_MODE`)
+sets the route mode of v2 Control package routes whose installation stores
+no mode (`anix-control routes`, [`../UPGRADE.md`](../UPGRADE.md#switching-route-modes)).
+
+```yaml
+package_routes:
+  default_mode: "rehearsed"   # rehearsed | legacy
+```
+
+| Policy | Routes without a stored mode |
+|------|------|
+| `rehearsed` (default from 4.1.0) | the 151 routes of `config/package-route-defaults.json` (15 packages that passed the staging rehearsal) run natively when the installed package release is at least its `min_version` (`4.1.0-rc.5`); every other route runs legacy |
+| `legacy` | every route runs legacy, exactly as in 4.0 (the kill switch) |
+
+A stored mode always wins, and identity group A follows the identity
+authority in both policies. Any other value fails startup. The startup log
+line `package route defaults: policy ...` states the policy and how many
+routes default to native; `anix-control routes list` shows each route's
+`SOURCE` (`stored`, `default`, `kill-switch`, `package-too-old`,
+`identity-authority`, `unset`). Package hosts pick a changed policy up at
+their next configuration poll after the restart.
+
 ## Related Docs
 
 - [`forward-runtime-migration.md`](forward-runtime-migration.md)

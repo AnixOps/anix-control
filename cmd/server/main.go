@@ -393,6 +393,14 @@ func run() int {
 	} else {
 		logging.Setup(cfg.Log)
 	}
+	// Route modes of v2 Control packages without a stored mode
+	// (package_routes.default_mode); the routes command resolves them too.
+	service.SetPackageRouteDefaultPolicy(cfg.PackageRoutes.DefaultModeOrDefault())
+	if summary, err := service.PackageRouteDefaultsSummary(); err != nil {
+		log.Fatalf("Invalid package route defaults: %v", err)
+	} else if adminArguments == nil {
+		log.Print(summary)
+	}
 
 	// 打印环境信息
 	driver := strings.ToLower(cfg.Database.Driver)

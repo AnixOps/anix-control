@@ -4,6 +4,33 @@
 
 ### Changed
 
+- **Behaviour change: the rehearsed packages default to native routes**
+  (decision H8). The 151 v2 routes of the 15 packages that passed the
+  staging rehearsal (H7: `knowledge`, `ticket`, `notification`, `platform`,
+  `machine-telemetry`, `protocol-runtime`, `plan`, `order`, `payment`,
+  `affiliate`, `subscription`, `forward`, `proxy-node`, `gost-mesh`,
+  `wireguard`) run their packages' native handlers when the installation
+  stores no mode for them and the installed package is at least
+  `4.1.0-rc.5`, the rehearsed release; older packages (signed 4.0.0 ones
+  included) stay `legacy`. The set is explicit data,
+  `config/package-route-defaults.json`, with a gate test against the R5
+  record: a route that becomes native-flagged later does not default to
+  native until a release adds it. A stored mode always wins. **Kill switch:**
+  `package_routes.default_mode: legacy`
+  (`ANIX_CONTROL_PACKAGE_ROUTES_DEFAULT_MODE`, default `rehearsed`) keeps
+  every unstored route legacy, exactly the 4.0 behaviour; the startup log
+  states the policy and how many routes default to native. **Rollback:**
+  `anix-control routes rollback --package <id>` and `routes set --mode
+  legacy` now act on the effective mode: defaulted routes get an explicit
+  stored `legacy` with revision rows and an audit entry, and whole-package
+  `set` compares against the effective mode. Package hosts receive the
+  resolved modes through GetPackageConfig. `routes list` has a `SOURCE`
+  column, the route-mode API returns `source` per route (`stored`,
+  `default`, `kill-switch`, `package-too-old`, `identity-authority`,
+  `unset`) and `defaults` per package, and the admin page shows
+  “原生（默认）” / “Native (default)”. See `docs/UPGRADE.md`, "Upgrading To
+  4.1.0: Packages Now Default To Native Routes".
+
 - CI's frontend dependency audit (`npm run audit:check`,
   `web/scripts/check-npm-audit.mjs`) still fails on any advisory of moderate
   severity or above in production dependencies. In development dependencies

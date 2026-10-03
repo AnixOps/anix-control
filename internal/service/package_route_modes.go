@@ -139,7 +139,10 @@ func (o PackageHostOperations) PackageConfig(ctx context.Context, host packagebr
 	if err != nil {
 		return packagebridge.PackageConfig{}, err
 	}
-	modes, err := ResolvePackageRouteModes(o.DB.WithContext(ctx), host.PackageID, stored)
+	// The resolved modes, never the raw stored map: identity group A
+	// follows the authority and the rehearsed default set runs natively
+	// without a stored mode (ResolveEffectivePackageRouteModes).
+	modes, _, err := ResolveEffectivePackageRouteModes(o.DB.WithContext(ctx), host.PackageID, installation.DesiredVersion, stored)
 	if err != nil {
 		return packagebridge.PackageConfig{}, err
 	}

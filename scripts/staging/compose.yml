@@ -44,6 +44,9 @@ x-control: &control
     ANIX_CONTROL_ADMIN_PASSWORD: ${STAGING_ADMIN_PASSWORD:?}
     ANIX_CONTROL_PLUGINS_OFFICIAL_PUBLIC_KEY: ${STAGING_PACKAGE_PUBLIC_KEY:?}
     ANIX_CONTROL_PLUGINS_CONTROL_EXECUTION_ENABLED: "true"
+    # Route defaults (package_routes.default_mode): rehearsed, as shipped,
+    # or legacy to rehearse from the 4.0 baseline.
+    ANIX_CONTROL_PACKAGE_ROUTES_DEFAULT_MODE: ${STAGING_ROUTE_DEFAULT_MODE:-rehearsed}
     ANIX_CONTROL_PLUGINS_IDENTITY_BOOTSTRAP_PACKAGE_DIR: /app/bootstrap/identity-platform
     ANIX_CONTROL_PLUGINS_CONTROL_HOST_RUNTIME_DIR: /var/lib/anixops/hosts
     ANIX_CONTROL_PLUGINS_CONTROL_HOST_ARTIFACT_DIR: /var/lib/anixops/artifacts
@@ -89,6 +92,8 @@ services:
     environment:
       <<: *control-env
       ANIX_CONTROL_DATABASE_DATABASE: recon_legacy
+      # The legacy twin runs every route on its legacy handler.
+      ANIX_CONTROL_PACKAGE_ROUTES_DEFAULT_MODE: legacy
 
   recon-native:
     <<: *control

@@ -62,6 +62,11 @@ func TestRoutesCommandSetsAndRollsBackRouteModes(t *testing.T) {
 	require.NoError(t, err)
 	require.Contains(t, output, "knowledge.article.list")
 	require.Contains(t, output, "legacy,shadow,native")
+	// The 4.0.1 fixture is older than the rehearsed release: its routes do
+	// not default to native, and the list says so.
+	require.Contains(t, output, "SOURCE")
+	require.Contains(t, output, "package-too-old")
+	require.Contains(t, output, "4.0.1 is older than 4.1.0-rc.5")
 
 	output, err = run("set", "--package", "knowledge", "--route", "knowledge.article.list", "--mode", "shadow")
 	require.NoError(t, err)

@@ -162,11 +162,17 @@ type RouteModeEntry struct {
 	// Catalog is the route's package extraction mode ("" when the
 	// extraction map does not list it).
 	Catalog string `json:"catalog"`
-	// Configured is the stored mode (legacy when the map does not name
-	// the route); Effective is what the kernel hands the host
-	// (ResolvePackageRouteModes).
-	Configured   string   `json:"configured"`
-	Effective    string   `json:"effective"`
+	// Configured is the stored mode or, when the map does not name the
+	// route, the default policy's (native for a route of the rehearsed
+	// default set, legacy otherwise); Effective is what the kernel hands
+	// the host (ResolveEffectivePackageRouteModes), which differs only for
+	// identity group A. Stored is the raw stored mode ("" when none).
+	Configured string `json:"configured"`
+	Effective  string `json:"effective"`
+	Stored     string `json:"stored,omitempty"`
+	// Source is where the effective mode comes from: stored, default,
+	// kill-switch, package-too-old, identity-authority or unset.
+	Source       string   `json:"source"`
 	AllowedModes []string `json:"allowed_modes"`
 	Locked       string   `json:"locked"`
 	LockedReason string   `json:"locked_reason"`
@@ -180,13 +186,15 @@ type RouteModeEntry struct {
 
 // PackageRouteModes is one package's routes and their modes.
 type PackageRouteModes struct {
-	PackageID      string           `json:"package_id"`
-	InstallationID uint             `json:"installation_id"`
-	Version        string           `json:"version"`
-	Enabled        bool             `json:"enabled"`
-	ConfigRevision int64            `json:"config_revision"`
-	Error          string           `json:"error,omitempty"`
-	Routes         []RouteModeEntry `json:"routes"`
+	PackageID      string `json:"package_id"`
+	InstallationID uint   `json:"installation_id"`
+	Version        string `json:"version"`
+	Enabled        bool   `json:"enabled"`
+	ConfigRevision int64  `json:"config_revision"`
+	Error          string `json:"error,omitempty"`
+	// Defaults is how the rehearsed default set applies to the package.
+	Defaults PackageRouteDefaultState `json:"defaults"`
+	Routes   []RouteModeEntry         `json:"routes"`
 }
 
 // RouteModeChangeRequest asks for routes of a package to switch to Mode.
@@ -269,6 +277,7 @@ type packageRouteState struct {
 	routes        []compatibilityRoute
 	stored        map[string]string
 	effective     map[string]string
+	sources       map[string]string
 	authoritative bool
 }
 
@@ -306,7 +315,7 @@ func (a *RouteModeAdmin) loadState(tx *gorm.DB, installation model.PluginInstall
 		stored = map[string]string{}
 	}
 	state.stored = stored
-	if state.effective, err = ResolvePackageRouteModes(tx, installation.PluginID, stored); err != nil {
+	if state.effective, state.sources, err = ResolveEffectivePackageRouteModes(tx, installation.PluginID, installation.DesiredVersion, stored); err != nil {
 		return state, err
 	}
 	if installation.PluginID == IdentityPlatformPackageID {
@@ -319,11 +328,33 @@ func (a *RouteModeAdmin) loadState(tx *gorm.DB, installation model.PluginInstall
 	return state, nil
 }
 
+// configured is the route's stored mode or, without one, the default
+// policy's: native for a defaulted route, legacy otherwise. Only identity
+// group A's authority-driven mode is left out (see effectiveMode).
 func (s *packageRouteState) configured(route string) string {
 	if mode, ok := s.stored[route]; ok && mode != "" {
 		return mode
 	}
+	if s.sources[route] == RouteModeSourceDefault {
+		return packagebridge.RouteModeNative
+	}
 	return packagebridge.RouteModeLegacy
+}
+
+// effectiveMode is the mode the kernel hands the host for route.
+func (s *packageRouteState) effectiveMode(route string) string {
+	if mode := s.effective[route]; mode != "" {
+		return mode
+	}
+	return packagebridge.RouteModeLegacy
+}
+
+// source is where route's effective mode comes from.
+func (s *packageRouteState) source(route string) string {
+	if source := s.sources[route]; source != "" {
+		return source
+	}
+	return RouteModeSourceUnset
 }
 
 // routeModeRules returns the modes a route may switch to through the
@@ -390,6 +421,11 @@ func (a *RouteModeAdmin) List(ctx context.Context, packageID string, hosts map[s
 			PackageID: installation.PluginID, InstallationID: installation.ID, Version: installation.DesiredVersion,
 			Enabled: installation.Enabled, ConfigRevision: installation.ConfigRevision, Routes: []RouteModeEntry{},
 		}
+		if defaults, err := LoadPackageRouteDefaults(); err == nil {
+			entry.Defaults = packageRouteDefaultState(defaults, installation.PluginID, installation.DesiredVersion)
+		} else {
+			entry.Defaults = PackageRouteDefaultState{Policy: PackageRouteDefaultPolicy(), Note: err.Error()}
+		}
 		state, err := a.loadState(db, installation)
 		if errors.Is(err, errNoCompatibilityRoutes) && packageID == "" {
 			continue
@@ -402,14 +438,11 @@ func (a *RouteModeAdmin) List(ctx context.Context, packageID string, hosts map[s
 		entry.ConfigRevision = state.configuration.Revision
 		for _, route := range state.routes {
 			allowed, locked, reason := routeModeRules(installation.PluginID, route, catalog, state.authoritative)
-			effective := state.effective[route.PackageRoute]
-			if effective == "" {
-				effective = packagebridge.RouteModeLegacy
-			}
 			row := RouteModeEntry{
 				RouteID: route.PackageRoute, Method: route.Method, Path: route.LegacyPath, Transport: route.Transport,
-				Catalog: catalog[route.PackageRoute].Mode, Configured: state.configured(route.PackageRoute), Effective: effective,
-				AllowedModes: allowed, Locked: locked, LockedReason: reason,
+				Catalog: catalog[route.PackageRoute].Mode, Configured: state.configured(route.PackageRoute),
+				Effective: state.effectiveMode(route.PackageRoute), Stored: state.stored[route.PackageRoute],
+				Source: state.source(route.PackageRoute), AllowedModes: allowed, Locked: locked, LockedReason: reason,
 			}
 			if observation, ok := hosts[installation.PluginID][route.PackageRoute]; ok {
 				observation := observation.WithRate()
@@ -446,8 +479,10 @@ func (a *RouteModeAdmin) Set(ctx context.Context, request RouteModeChangeRequest
 }
 
 // Rollback returns every route of a package to legacy in one change, except
-// identity group A, which only the identity rollback switches. It needs no
-// confirmation; the reason is optional.
+// identity group A, which only the identity rollback switches. It works on
+// the effective modes: a route that runs natively only by default (no
+// stored mode) gets an explicit legacy, so it stays legacy whatever the
+// default policy becomes. It needs no confirmation; the reason is optional.
 func (a *RouteModeAdmin) Rollback(ctx context.Context, packageID, reason string, actor RouteModeActor) (RouteModeResult, error) {
 	request := RouteModeChangeRequest{PackageID: packageID, Mode: packagebridge.RouteModeLegacy, Reason: strings.TrimSpace(reason)}
 	return a.apply(ctx, request, actor, model.RouteModeRevisionActionRollback)
@@ -459,8 +494,11 @@ func plan(state *packageRouteState, catalog map[string]RouteCatalogEntry, reques
 	modes := map[string]string{}
 	var changes []RouteModeChange
 	skipped := []RouteModeSkip{}
+	// Changes compare against the effective mode: a defaulted native route
+	// switched to legacy is a change (stored as an explicit legacy), one
+	// already running natively by default switched to native is not.
 	add := func(route, to string) {
-		from := state.configured(route)
+		from := state.effectiveMode(route)
 		if from == to {
 			return
 		}
@@ -473,16 +511,26 @@ func plan(state *packageRouteState, catalog map[string]RouteCatalogEntry, reques
 	}
 	switch {
 	case action == model.RouteModeRevisionActionRollback:
-		// Every stored mode returns to legacy, routes the release no
-		// longer declares included, except group A.
-		routes := make([]string, 0, len(state.stored))
+		// Every stored mode and every route running in shadow or native
+		// mode (defaulted ones included) returns to legacy, routes the
+		// release no longer declares included, except group A.
+		named := make(map[string]bool, len(state.stored)+len(state.effective))
 		for route := range state.stored {
+			named[route] = true
+		}
+		for route, mode := range state.effective {
+			if mode == packagebridge.RouteModeShadow || mode == packagebridge.RouteModeNative {
+				named[route] = true
+			}
+		}
+		routes := make([]string, 0, len(named))
+		for route := range named {
 			routes = append(routes, route)
 		}
 		sort.Strings(routes)
 		for _, route := range routes {
 			if packageID == IdentityPlatformPackageID && slices.Contains(IdentityGroupARoutes, route) {
-				if state.configured(route) != packagebridge.RouteModeLegacy {
+				if state.effectiveMode(route) != packagebridge.RouteModeLegacy {
 					skipped = append(skipped, RouteModeSkip{RouteID: route, Reason: "identity group A: use the identity rollback"})
 				}
 				continue
@@ -502,7 +550,7 @@ func plan(state *packageRouteState, catalog map[string]RouteCatalogEntry, reques
 				add(route.PackageRoute, request.Mode)
 				continue
 			}
-			if state.configured(route.PackageRoute) != request.Mode {
+			if state.effectiveMode(route.PackageRoute) != request.Mode {
 				if reason == "" {
 					reason = fmt.Sprintf("%s mode is not allowed for %s %s", request.Mode, route.Method, route.PackageRoute)
 				}
@@ -579,7 +627,19 @@ func (a *RouteModeAdmin) apply(ctx context.Context, request RouteModeChangeReque
 		if len(changes) == 0 {
 			return nil
 		}
-		configuration, err := SetPackageRouteModesTx(tx, a.PublicKey, installation.ID, modes, actor.UserID)
+		// A route of the default set keeps an explicit legacy, or the
+		// default would take it back; a route the release does not declare
+		// cannot be stored and is removed.
+		defaults, err := LoadPackageRouteDefaults()
+		if err != nil {
+			return err
+		}
+		declared := make(map[string]bool, len(state.routes))
+		for _, route := range state.routes {
+			declared[route.PackageRoute] = true
+		}
+		pin := func(route string) bool { return declared[route] && defaults.Includes(installation.PluginID, route) }
+		configuration, err := setPackageRouteModesTx(tx, a.PublicKey, installation.ID, modes, actor.UserID, pin)
 		if err != nil {
 			return fmt.Errorf("%w: %w", ErrRouteModeRejected, err)
 		}
