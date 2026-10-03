@@ -100,8 +100,8 @@
     "stdout": "[{\"class\":\"htb\",\"handle\":\"af00:2\",\"root\":true,\"prio\":0,\"rate\":12500000,\"ceil\":12500000,\"burst\":1600,\"cburst\":1600},{\"class\":\"htb\",\"handle\":\"af00:3\",\"root\":true,\"prio\":0,\"rate\":12500000,\"ceil\":12500000,\"burst\":1600,\"cburst\":1600}]\n"
   },
   {
-    "cmd": "tc -j filter show dev lim0 parent af00:",
-    "stdout": "[{\"protocol\":\"all\",\"pref\":10,\"kind\":\"fw\",\"chain\":0},{\"protocol\":\"all\",\"pref\":10,\"kind\":\"fw\",\"chain\":0,\"options\":{\"fw\":{\"mark\":\"0x10001\",\"mask\":\"0xfff0001\"},\"classid\":\"af00:3\"}},{\"protocol\":\"all\",\"pref\":10,\"kind\":\"fw\",\"chain\":0,\"options\":{\"fw\":{\"mark\":\"0x10000\",\"mask\":\"0xfff0001\"},\"classid\":\"af00:2\"}}]\n"
+    "cmd": "tc filter show dev lim0 parent af00:",
+    "stdout": "filter protocol all pref 10 fw chain 0 \nfilter protocol all pref 10 fw chain 0 handle 0x10001/0xfff0001 classid af00:3 \nfilter protocol all pref 10 fw chain 0 handle 0x10000/0xfff0001 classid af00:2 \n"
   },
   {
     "cmd": "nft -j list table inet anixops_fwd",
@@ -116,8 +116,8 @@
     "stdout": "[{\"class\":\"htb\",\"handle\":\"af00:2\",\"root\":true,\"prio\":0,\"rate\":12500000,\"ceil\":12500000,\"burst\":1600,\"cburst\":1600},{\"class\":\"htb\",\"handle\":\"af00:3\",\"root\":true,\"prio\":0,\"rate\":12500000,\"ceil\":12500000,\"burst\":1600,\"cburst\":1600}]\n"
   },
   {
-    "cmd": "tc -j filter show dev lim0 parent af00:",
-    "stdout": "[{\"protocol\":\"all\",\"pref\":10,\"kind\":\"fw\",\"chain\":0},{\"protocol\":\"all\",\"pref\":10,\"kind\":\"fw\",\"chain\":0,\"options\":{\"fw\":{\"mark\":\"0x10001\",\"mask\":\"0xfff0001\"},\"classid\":\"af00:3\"}},{\"protocol\":\"all\",\"pref\":10,\"kind\":\"fw\",\"chain\":0,\"options\":{\"fw\":{\"mark\":\"0x10000\",\"mask\":\"0xfff0001\"},\"classid\":\"af00:2\"}}]\n"
+    "cmd": "tc filter show dev lim0 parent af00:",
+    "stdout": "filter protocol all pref 10 fw chain 0 \nfilter protocol all pref 10 fw chain 0 handle 0x10001/0xfff0001 classid af00:3 \nfilter protocol all pref 10 fw chain 0 handle 0x10000/0xfff0001 classid af00:2 \n"
   },
   {
     "cmd": "nft -f -",
@@ -160,8 +160,8 @@
     "stdout": "[{\"class\":\"htb\",\"handle\":\"af00:2\",\"root\":true,\"prio\":0,\"rate\":12500000,\"ceil\":12500000,\"burst\":1600,\"cburst\":1600},{\"class\":\"htb\",\"handle\":\"af00:3\",\"root\":true,\"prio\":0,\"rate\":12500000,\"ceil\":12500000,\"burst\":1600,\"cburst\":1600}]\n"
   },
   {
-    "cmd": "tc -j filter show dev lim0 parent af00:",
-    "stdout": "[{\"protocol\":\"all\",\"pref\":10,\"kind\":\"fw\",\"chain\":0},{\"protocol\":\"all\",\"pref\":10,\"kind\":\"fw\",\"chain\":0,\"options\":{\"fw\":{\"mark\":\"0x10001\",\"mask\":\"0xfff0001\"},\"classid\":\"af00:3\"}},{\"protocol\":\"all\",\"pref\":10,\"kind\":\"fw\",\"chain\":0,\"options\":{\"fw\":{\"mark\":\"0x10000\",\"mask\":\"0xfff0001\"},\"classid\":\"af00:2\"}}]\n"
+    "cmd": "tc filter show dev lim0 parent af00:",
+    "stdout": "filter protocol all pref 10 fw chain 0 \nfilter protocol all pref 10 fw chain 0 handle 0x10001/0xfff0001 classid af00:3 \nfilter protocol all pref 10 fw chain 0 handle 0x10000/0xfff0001 classid af00:2 \n"
   },
   {
     "cmd": "nft -j list ruleset",
@@ -196,8 +196,8 @@
     "stdout": "[{\"class\":\"htb\",\"handle\":\"af00:2\",\"root\":true,\"prio\":0,\"rate\":12500000,\"ceil\":12500000,\"burst\":1600,\"cburst\":1600},{\"class\":\"htb\",\"handle\":\"af00:3\",\"root\":true,\"prio\":0,\"rate\":12500000,\"ceil\":12500000,\"burst\":1600,\"cburst\":1600}]\n"
   },
   {
-    "cmd": "tc -j filter show dev lim0 parent af00:",
-    "stdout": "[{\"protocol\":\"all\",\"pref\":10,\"kind\":\"fw\",\"chain\":0},{\"protocol\":\"all\",\"pref\":10,\"kind\":\"fw\",\"chain\":0,\"options\":{\"fw\":{\"mark\":\"0x10001\",\"mask\":\"0xfff0001\"},\"classid\":\"af00:3\"}},{\"protocol\":\"all\",\"pref\":10,\"kind\":\"fw\",\"chain\":0,\"options\":{\"fw\":{\"mark\":\"0x10000\",\"mask\":\"0xfff0001\"},\"classid\":\"af00:2\"}}]\n"
+    "cmd": "tc filter show dev lim0 parent af00:",
+    "stdout": "filter protocol all pref 10 fw chain 0 \nfilter protocol all pref 10 fw chain 0 handle 0x10001/0xfff0001 classid af00:3 \nfilter protocol all pref 10 fw chain 0 handle 0x10000/0xfff0001 classid af00:2 \n"
   },
   {
     "cmd": "nft delete table inet anixops_fwd"

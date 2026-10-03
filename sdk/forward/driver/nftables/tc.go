@@ -150,29 +150,22 @@ func (d *Driver) readTC(ctx context.Context, name string) (*tcIface, error) {
 			t.classes[minor] = tcRate{bytes: bits / 8}
 		}
 	}
-	out, err = d.run(ctx, "tc", nil, "-j", "filter", "show", "dev", name, "parent", d.tcMajor())
+	// Filters are read as text: iproute2's fw printer writes text even
+	// with -j before 6.3 ("filter parent af00: protocol all pref 10 fw
+	// chain 0 handle 0x10000/0xfff0001 classid af00:2"), and the text form
+	// is the same in every version.
+	out, err = d.run(ctx, "tc", nil, "filter", "show", "dev", name, "parent", d.tcMajor())
 	if err != nil {
 		return nil, err
 	}
-	var filters []map[string]any
-	if decodeJSON(out, &filters) == nil {
-		for _, f := range filters {
-			if mark, minor, ok := d.parseFilter(f); ok {
-				t.filters[mark] = minor
-			}
+	for _, line := range strings.Split(string(out), "\n") {
+		f := strings.Fields(line)
+		if !slices.Contains(f, "fw") {
+			continue
 		}
-	} else {
-		// The text form: "filter parent af00: protocol all pref 10 fw
-		// chain 0 handle 0x10000/0xfff0001 classid af00:2".
-		for _, line := range strings.Split(string(out), "\n") {
-			f := strings.Fields(line)
-			m := map[string]any{"kind": "fw", "handle": fieldAfter(f, "handle"), "options": map[string]any{"classid": fieldAfter(f, "classid")}}
-			if !slices.Contains(f, "fw") {
-				continue
-			}
-			if mark, minor, ok := d.parseFilter(m); ok {
-				t.filters[mark] = minor
-			}
+		m := map[string]any{"kind": "fw", "handle": fieldAfter(f, "handle"), "options": map[string]any{"classid": fieldAfter(f, "classid")}}
+		if mark, minor, ok := d.parseFilter(m); ok {
+			t.filters[mark] = minor
 		}
 	}
 	return t, nil
@@ -191,9 +184,10 @@ func (d *Driver) ownMinor(classID string) (uint16, bool) {
 	return uint16(n), true
 }
 
-// parseFilter reads a fw filter of `tc -j filter show`: iproute2 prints
-// {"options":{"fw":{"mark":"0x10000","mask":"0xfff0001"},"classid":"af00:2"}}
-// (older versions "handle":"0x10000/0xfff0001").
+// parseFilter reads a fw filter, as `tc -j filter show` of iproute2 6.3 or
+// later prints it ({"options":{"fw":{"mark":"0x10000","mask":"0xfff0001"},
+// "classid":"af00:2"}}) or as readTC builds it from the text form
+// ({"handle":"0x10000/0xfff0001","options":{"classid":"af00:2"}}).
 func (d *Driver) parseFilter(f map[string]any) (uint32, uint16, bool) {
 	if k, _ := f["kind"].(string); k != "fw" {
 		return 0, 0, false
