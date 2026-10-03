@@ -388,18 +388,6 @@ func createPostgresSchema(label string) (cfg *config.DatabaseConfig, db *gorm.DB
 	return &config.DatabaseConfig{Driver: "postgres", DSN: dsn, LogLevel: "silent"}, db, drop, nil
 }
 
-// openPostgresSchema returns a fresh PostgreSQL schema.
-func openPostgresSchema(t *testing.T, label string, _ []any) (*config.DatabaseConfig, *gorm.DB, bool) {
-	t.Helper()
-	cfg, db, drop, err := createPostgresSchema(label)
-	if errors.Is(err, errUnsafePostgres) {
-		t.Skip(err.Error())
-	}
-	require.NoError(t, err)
-	t.Cleanup(drop)
-	return cfg, db, false
-}
-
 func closeOnCleanup(t *testing.T, db *gorm.DB) {
 	t.Cleanup(func() {
 		if sqlDB, err := db.DB(); err == nil {
