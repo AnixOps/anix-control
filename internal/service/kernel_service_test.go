@@ -1510,3 +1510,40 @@ func TestCancelKernelOperationRejectsTerminalStateAndIsIdempotentWhileRequested(
 	require.NoError(t, err)
 	require.Equal(t, "cancel_requested", again.State)
 }
+
+// A release declaring telemetry.systemd.read gets its per-node
+// systemd_services settings checked with the collector's glob syntax, which
+// JSON Schema cannot express; other releases are left alone.
+func TestUpdatePluginConfigurationChecksSystemdServicesSettings(t *testing.T) {
+	db := newKernelTestDB(t)
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	register := func(id string, capabilities []string) model.PluginInstallation {
+		manifest := kernelTestWebUIManifest(id)
+		manifest.Capabilities = capabilities
+		canonical, err := CanonicalPluginManifest(manifest)
+		require.NoError(t, err)
+		signature := base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, canonical))
+		_, err = RegisterPluginRelease(db, string(canonical), signature, publicKey)
+		require.NoError(t, err)
+		installation := model.PluginInstallation{PluginID: manifest.ID, Target: "control", DesiredVersion: manifest.Version, State: "disabled"}
+		require.NoError(t, db.Create(&installation).Error)
+		return installation
+	}
+	declaring := register("systemd-config", []string{"telemetry.systemd.read"})
+	other := register("other-config", nil)
+
+	valid := `{"systemd_services":{"nodes":{"12":{"enabled":true,"include":["nginx*.service"],"exclude":["*-debug.service"]}}}}`
+	_, err = UpdatePluginConfigurationWithValidatorAndHook(db, publicKey, declaring.ID, valid, nil, 1, nil, nil)
+	require.NoError(t, err)
+	for _, invalid := range []string{
+		`{"systemd_services":{"nodes":{"12":{"enabled":true,"include":["nginx["]}}}}`,
+		`{"systemd_services":{"nodes":{"edge":{"enabled":true}}}}`,
+		`{"systemd_services":{"nodes":{},"all":true}}`,
+	} {
+		_, err = UpdatePluginConfigurationWithValidatorAndHook(db, publicKey, declaring.ID, invalid, nil, 1, nil, nil)
+		require.ErrorContains(t, err, "does not satisfy its schema", invalid)
+		_, err = UpdatePluginConfigurationWithValidatorAndHook(db, publicKey, other.ID, invalid, nil, 1, nil, nil)
+		require.NoError(t, err, "a release without the capability has no such settings: %s", invalid)
+	}
+}

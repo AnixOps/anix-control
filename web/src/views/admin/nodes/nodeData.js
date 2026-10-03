@@ -11,7 +11,11 @@ export const NODE_STATUS = Object.freeze({ pending: 0, online: 1, offline: 2, di
 const STATUS_KEYS = ['pending', 'online', 'offline', 'disabled']
 
 // Sections of the node page, in order; ?section= names one.
-export const NODE_SECTIONS = ['overview', 'protocols', 'credentials', 'deploy', 'logs', 'danger']
+export const NODE_SECTIONS = ['overview', 'protocols', 'credentials', 'deploy', 'logs', 'services', 'danger']
+
+// Sections a node shows only when it supports them: 服务 needs a
+// machine-telemetry release that declares the services capability.
+export const OPTIONAL_NODE_SECTIONS = ['services']
 
 // The answer's data: a panel envelope ({ code, data }), axios ({ data }),
 // a nested axios envelope ({ data: { data } }) or the value itself.

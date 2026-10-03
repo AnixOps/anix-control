@@ -369,7 +369,12 @@ func main() {
 
             manifest = json.loads((output / "machine-telemetry-4.0.0.manifest.json").read_text(encoding="utf-8"))
             self.assertEqual(list(platforms), manifest["architectures"])
-            self.assertEqual(["/api/v3/plugins/machine-telemetry/status"], manifest["control_routes"])
+            self.assertEqual(
+                ["/api/v3/plugins/machine-telemetry/status", "/api/v3/plugins/machine-telemetry/nodes/*"],
+                manifest["control_routes"],
+            )
+            self.assertIn("telemetry.systemd.read", manifest["capabilities"])
+            self.assertIn("systemd_services", manifest["config_schema"]["properties"])
             self.assertEqual("bin/control-entrypoints.json", manifest["control_entrypoint"]["path"])
             self.assertEqual("agent/entrypoints.json", manifest["agent_entrypoint"]["path"])
 

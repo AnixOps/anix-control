@@ -97,9 +97,10 @@ func TestMachineTelemetryHostRoutesAreThePackageRoutes(t *testing.T) {
 	require.Equal(t, want, got)
 }
 
-// The package reads the traffic log and the user directory through kernel
-// views, the dashboard through KernelTelemetry, and adopts no table;
-// telemetry.read is its agent capability.
+// The package reads the traffic log, the user directory, its package
+// reports and its configuration through kernel views, the dashboard through
+// KernelTelemetry, and adopts no table; telemetry.read and
+// telemetry.systemd.read are its agent capabilities.
 func TestMachineTelemetryManifestCapabilities(t *testing.T) {
 	raw, err := os.ReadFile("../manifest.template.json")
 	require.NoError(t, err)
@@ -108,7 +109,8 @@ func TestMachineTelemetryManifestCapabilities(t *testing.T) {
 	}
 	require.NoError(t, json.Unmarshal(raw, &manifest))
 	require.ElementsMatch(t, []string{
-		"telemetry.read", "kernel.storage.v1", "kernel.view:kapi_traffic_log_v1", "kernel.view:kapi_user_directory_v1",
+		"telemetry.read", "telemetry.systemd.read", "kernel.storage.v1", "kernel.view:kapi_traffic_log_v1",
+		"kernel.view:kapi_user_directory_v1", "kernel.view:kapi_package_report_v1", "kernel.view:kapi_plugin_configuration_v1",
 		"kernel.telemetry.dashboard.v1",
 	}, manifest.Capabilities)
 }
@@ -170,7 +172,7 @@ func TestMachineTelemetryHostServesTheDashboardThroughKernelTelemetry(t *testing
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
 
-	dispatchDashboard := func(service *pluginhostsdk.Router, refresh string) pluginhostsdk.DispatchResponse {
+	dispatchDashboard := func(service *machineTelemetryHost, refresh string) pluginhostsdk.DispatchResponse {
 		response, err := service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
 			RouteID: native.DashboardRouteID, Method: "GET", BridgeCapability: make([]byte, 32),
 			DeadlineUnixMillis: time.Now().Add(5 * time.Second).UnixMilli(),
@@ -203,4 +205,60 @@ func TestMachineTelemetryHostServesTheDashboardThroughKernelTelemetry(t *testing
 	service.Refresh(context.Background())
 	dispatchDashboard(service, "true")
 	require.Equal(t, native.DashboardRouteID, legacy.operation, "without the contract the dashboard stays legacy")
+}
+
+// The per-node services table is the package's own control route: the host
+// answers it itself, whatever the route modes say, and never relays it to
+// the kernel. Without storage it answers 503; a malformed principal is an
+// error.
+func TestHostAnswersTheServicesRouteItself(t *testing.T) {
+	bridge := &bridgeStub{}
+	service, err := newMachineTelemetryService(bridge, "lease-1")
+	require.NoError(t, err)
+	var _ pluginhostsdk.WebSocketPackage = service
+	var _ interface{ Run(context.Context) } = service
+	request := pluginhostsdk.DispatchRequest{
+		RouteID: native.NodesRouteID, Method: "GET", BridgeCapability: make([]byte, 32),
+		DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(), PrincipalJSON: []byte(`{"actor_id":1,"admin":true,"plugin_id":"machine-telemetry"}`),
+		Metadata: pluginhostsdk.RequestMetadata{Path: "/api/v3/plugins/machine-telemetry/nodes/7/services"},
+	}
+	response, err := service.Dispatch(context.Background(), request)
+	require.NoError(t, err)
+	require.Empty(t, bridge.operation, "the services route is not relayed")
+	require.EqualValues(t, 503, response.StatusCode)
+	require.JSONEq(t, `{"error":{"code":"storage_unavailable","message":"package storage is unavailable"}}`, string(response.ResponseBody))
+
+	request.PrincipalJSON = []byte(`{"actor_id":1,"admin":true}`)
+	request.Metadata.Path = "/api/v3/plugins/machine-telemetry/nodes/007/services"
+	response, err = service.Dispatch(context.Background(), request)
+	require.NoError(t, err)
+	require.EqualValues(t, 404, response.StatusCode)
+
+	request.PrincipalJSON = []byte(`{"actor_id":2,"admin":false}`)
+	request.Metadata.Path = "/api/v3/plugins/machine-telemetry/nodes/7/services"
+	response, err = service.Dispatch(context.Background(), request)
+	require.NoError(t, err)
+	require.EqualValues(t, 403, response.StatusCode)
+
+	request.PrincipalJSON = []byte(`not json`)
+	_, err = service.Dispatch(context.Background(), request)
+	require.Error(t, err)
+	require.Empty(t, bridge.operation)
+}
+
+// The route id is the kernel's for the declared route: the package id,
+// ".control." and the SHA-256 of "machine-telemetry\x00<route>".
+func TestServicesRouteIDIsDerivedFromTheDeclaredRoute(t *testing.T) {
+	require.Equal(t, native.NodesRoute, "/api/v3/plugins/machine-telemetry/nodes/*")
+	require.True(t, strings.HasPrefix(native.NodesRouteID, pluginControlRoutePrefix))
+	require.Len(t, native.NodesRouteID, len(pluginControlRoutePrefix)+64)
+	raw, err := os.ReadFile("../manifest.template.json")
+	require.NoError(t, err)
+	var manifest struct {
+		ControlRoutes []string `json:"control_routes"`
+		Permissions   []string `json:"permissions"`
+	}
+	require.NoError(t, json.Unmarshal(raw, &manifest))
+	require.Equal(t, []string{"/api/v3/plugins/machine-telemetry/status", native.NodesRoute}, manifest.ControlRoutes)
+	require.Contains(t, manifest.Permissions, "machine-telemetry.services.view")
 }

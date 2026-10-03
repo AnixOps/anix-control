@@ -2,7 +2,11 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"log"
+	"net/http"
 	"strings"
 
 	kerneltelemetryv1 "github.com/AnixOps/anix-control/sdk/api/kerneltelemetry/v1"
@@ -28,8 +32,10 @@ type machineTelemetryBridge interface {
 // it legacy). Such a route serves natively once the kernel sets its mode,
 // and falls back to the legacy handler otherwise. The routes in
 // bridgedRoutes always relay to the legacy handler, the monitoring
-// WebSocket included.
-func newMachineTelemetryService(bridge machineTelemetryBridge, leaseID string) (*pluginhostsdk.Router, error) {
+// WebSocket included. Of the package's own control routes, the per-node
+// services table (native.NodesRoute) is the package's alone and always
+// served here; the others relay to the kernel.
+func newMachineTelemetryService(bridge machineTelemetryBridge, leaseID string) (*machineTelemetryHost, error) {
 	storage := packagestoresdk.SharedOpener(bridge)
 	service := &native.Service{Open: func(ctx context.Context) (*gorm.DB, error) {
 		store, err := storage(ctx)
@@ -43,7 +49,7 @@ func newMachineTelemetryService(bridge machineTelemetryBridge, leaseID string) (
 	}); ok && conn.Conn() != nil {
 		service.Telemetry = kerneltelemetryv1.NewKernelTelemetryClient(conn.Conn())
 	}
-	return pluginhostsdk.NewRouter(pluginhostsdk.RouterConfig{
+	router, err := pluginhostsdk.NewRouter(pluginhostsdk.RouterConfig{
 		PackageID: "machine-telemetry", LeaseID: leaseID, Bridge: bridge, Logf: log.Printf,
 		AllowRoute: func(routeID string) bool {
 			_, nativeRoute := machineTelemetryRoutes[routeID]
@@ -54,6 +60,60 @@ func newMachineTelemetryService(bridge machineTelemetryBridge, leaseID string) (
 		},
 		Native: service.Handlers(),
 	})
+	if err != nil {
+		return nil, err
+	}
+	return &machineTelemetryHost{Router: router, owned: map[string]pluginhostsdk.NativeHandler{
+		native.NodesRouteID: service.NodeServices,
+	}}, nil
+}
+
+// machineTelemetryHost is the router plus the control routes the package
+// owns outright. Route modes apply to compatibility routes, which have a
+// legacy handler to fall back to; an owned control route has none, so it
+// is always answered by the package.
+type machineTelemetryHost struct {
+	*pluginhostsdk.Router
+	owned map[string]pluginhostsdk.NativeHandler
+}
+
+// Dispatch answers an owned control route itself and hands every other
+// route to the router.
+func (h *machineTelemetryHost) Dispatch(ctx context.Context, request pluginhostsdk.DispatchRequest) (pluginhostsdk.DispatchResponse, error) {
+	handler, owned := h.owned[request.RouteID]
+	if !owned {
+		return h.Router.Dispatch(ctx, request)
+	}
+	response, err := runOwned(ctx, handler, request)
+	if err != nil {
+		return pluginhostsdk.DispatchResponse{}, err
+	}
+	return pluginhostsdk.DispatchResponse{StatusCode: response.StatusCode, ResponseBody: response.Body, Headers: response.Headers}, nil
+}
+
+// errOwnedRoutePanicked reports a recovered panic in an owned route.
+var errOwnedRoutePanicked = errors.New("owned route panicked")
+
+func runOwned(ctx context.Context, handler pluginhostsdk.NativeHandler, request pluginhostsdk.DispatchRequest) (response pluginhostsdk.NativeResponse, err error) {
+	var principal pluginhostsdk.Principal
+	if len(request.PrincipalJSON) > 0 {
+		if err := json.Unmarshal(request.PrincipalJSON, &principal); err != nil {
+			return pluginhostsdk.NativeResponse{}, errors.New("package request principal is invalid")
+		}
+	}
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("%w: route %s: %v", errOwnedRoutePanicked, request.RouteID, recovered)
+		}
+	}()
+	response, err = handler(ctx, pluginhostsdk.NativeRequest{
+		RouteID: request.RouteID, Method: request.Method, Body: request.RequestBody, Principal: principal,
+		Metadata: request.Metadata,
+	})
+	if err == nil && response.StatusCode == 0 {
+		response.StatusCode = http.StatusOK
+	}
+	return response, err
 }
 
 // machineTelemetryRoutes are the package's compatibility routes with a
