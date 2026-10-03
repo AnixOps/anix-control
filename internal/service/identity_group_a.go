@@ -77,9 +77,11 @@ func IdentityAuthoritative(state string) bool {
 }
 
 // ResolvePackageRouteModes returns a package's effective route modes from
-// its stored route-mode map. It is where every reader resolves them (the
-// package host's configuration and the configuration check), so the rule
-// below holds for any group A route, today's and future ones:
+// its stored route-mode map, for identity group A. Every reader resolves
+// through it (the configuration check directly; the package host's
+// configuration and the route-mode administration through
+// ResolveEffectivePackageRouteModes, which adds the rehearsed defaults), so
+// the rule below holds for any group A route, today's and future ones:
 // identity-platform's group A routes that the stored map does not name are
 // native while identity is authoritative (state identity or finalized),
 // because group A is native exactly then. An installation whose map
