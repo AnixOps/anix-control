@@ -6,7 +6,9 @@
 // Every run seeds two independent databases: the legacy handler reads the
 // kernel's global database, the native handler gets its own connection. They
 // are SQLite files by default; with ANIX_TEST_POSTGRES_DSN set, RunRead and
-// RunWrite also run on two PostgreSQL schemas.
+// RunWrite also run on two PostgreSQL schemas. Each case starts from empty
+// databases with the route's Models migrated; the cases a test runs share
+// the migrated databases, emptied between cases (shared.go).
 package packagecompat
 
 import (
@@ -16,6 +18,7 @@ import (
 	"crypto/tls"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -177,15 +180,21 @@ func CompareAnswers(legacy, native Result) error {
 	return nil
 }
 
-// opener returns a fresh, empty database: its config for database.Init and
-// a connection for the native side.
-type opener func(t *testing.T, label string) (*config.DatabaseConfig, *gorm.DB)
+// opener returns an empty database for one side of a case: its config for
+// database.Init, a connection for the native side, and whether the route's
+// Models are already migrated into it.
+type opener func(t *testing.T, label string, models []any) (*config.DatabaseConfig, *gorm.DB, bool)
 
+// forEachBackend runs body on SQLite and, with ANIX_TEST_POSTGRES_DSN, on
+// PostgreSQL. The databases are shared by the cases a test runs through
+// t: migrated once per side and backend, and emptied before each case
+// (shared.go).
 func forEachBackend(t *testing.T, name string, body func(*testing.T, opener)) {
 	t.Helper()
-	t.Run(name+"/sqlite", func(t *testing.T) { body(t, openSQLite) })
+	pool := poolFor(t)
+	t.Run(name+"/sqlite", func(t *testing.T) { body(t, pool.opener(backendSQLite)) })
 	if strings.TrimSpace(os.Getenv(PostgresDSNEnvironment)) != "" {
-		t.Run(name+"/postgres", func(t *testing.T) { body(t, openPostgresSchema) })
+		t.Run(name+"/postgres", func(t *testing.T) { body(t, pool.opener(backendPostgres)) })
 	}
 }
 
@@ -193,7 +202,7 @@ func run(t *testing.T, open opener, route Route, c Case) (Result, Result) {
 	t.Helper()
 	gin.SetMode(gin.TestMode)
 
-	legacyConfig, _ := open(t, "legacy")
+	legacyConfig, _, migrated := open(t, "legacy", route.Models)
 	database.Reset()
 	require.NoError(t, database.Init(legacyConfig))
 	t.Cleanup(func() {
@@ -201,7 +210,7 @@ func run(t *testing.T, open opener, route Route, c Case) (Result, Result) {
 		database.Reset()
 	})
 	legacyDB := database.GetDB()
-	prepare(t, legacyDB, route, c)
+	prepare(t, legacyDB, route, c, migrated)
 	legacy := serve(t, route.Method, route.Pattern, c, func(ctx *gin.Context) {
 		ctx.Set("user_id", c.Principal.ActorID)
 		ctx.Set("is_admin", c.Principal.Admin)
@@ -211,8 +220,8 @@ func run(t *testing.T, open opener, route Route, c Case) (Result, Result) {
 		legacy.State = c.Snapshot(t, legacyDB)
 	}
 
-	_, nativeDB := open(t, "native")
-	prepare(t, nativeDB, route, c)
+	_, nativeDB, migrated := open(t, "native", route.Models)
+	prepare(t, nativeDB, route, c, migrated)
 	handler := route.Native(nativeDB)
 	native := serve(t, route.Method, route.Pattern, c, func(ctx *gin.Context) {
 		params := make(map[string]string, len(ctx.Params))
@@ -263,9 +272,9 @@ func forwardedHeaders(c Case) map[string][]string {
 	return headers
 }
 
-func prepare(t *testing.T, db *gorm.DB, route Route, c Case) {
+func prepare(t *testing.T, db *gorm.DB, route Route, c Case, migrated bool) {
 	t.Helper()
-	if len(route.Models) > 0 {
+	if len(route.Models) > 0 && !migrated {
 		require.NoError(t, db.AutoMigrate(route.Models...))
 	}
 	if c.Seed != nil {
@@ -308,40 +317,87 @@ func serve(t *testing.T, method, pattern string, c Case, handler gin.HandlerFunc
 	return send(c.Body)
 }
 
-func openSQLite(t *testing.T, label string) (*config.DatabaseConfig, *gorm.DB) {
+// openSQLite returns a fresh SQLite file.
+func openSQLite(t *testing.T, label string, _ []any) (*config.DatabaseConfig, *gorm.DB, bool) {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), label+".db")
-	cfg := &config.DatabaseConfig{Driver: "sqlite", Database: path, LogLevel: "silent"}
-	db, err := gorm.Open(sqlite.Open(path+"?_pragma=busy_timeout(5000)"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	cfg, db, err := createSQLite(t.TempDir(), label)
 	require.NoError(t, err)
 	closeOnCleanup(t, db)
-	return cfg, db
+	return cfg, db, false
 }
 
-// openPostgresSchema creates a throwaway schema and points a connection's
-// search_path at it.
-func openPostgresSchema(t *testing.T, label string) (*config.DatabaseConfig, *gorm.DB) {
-	t.Helper()
+func createSQLite(dir, label string) (*config.DatabaseConfig, *gorm.DB, error) {
+	path := filepath.Join(dir, label+".db")
+	cfg := &config.DatabaseConfig{Driver: "sqlite", Database: path, LogLevel: "silent"}
+	db, err := gorm.Open(sqlite.Open(path+"?_pragma=busy_timeout(5000)"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	return cfg, db, err
+}
+
+// errUnsafePostgres refuses a PostgreSQL database whose name does not say
+// it is for tests.
+var errUnsafePostgres = errors.New("refusing to run destructive postgres test")
+
+// createPostgresSchema creates a throwaway schema and points a connection's
+// search_path at it; drop removes the schema and closes the connections.
+func createPostgresSchema(label string) (cfg *config.DatabaseConfig, db *gorm.DB, drop func(), err error) {
 	base := strings.TrimSpace(os.Getenv(PostgresDSNEnvironment))
 	admin, err := gorm.Open(postgres.Open(base), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
-	require.NoError(t, err)
-	closeOnCleanup(t, admin)
+	if err != nil {
+		return nil, nil, nil, err
+	}
+	closeAdmin := func() {
+		if sqlDB, err := admin.DB(); err == nil {
+			_ = sqlDB.Close()
+		}
+	}
 	var databaseName string
-	require.NoError(t, admin.Raw("SELECT current_database()").Scan(&databaseName).Error)
+	if err := admin.Raw("SELECT current_database()").Scan(&databaseName).Error; err != nil {
+		closeAdmin()
+		return nil, nil, nil, err
+	}
 	if !strings.Contains(strings.ToLower(databaseName), "test") && os.Getenv("ANIX_TEST_POSTGRES_ALLOW_UNSAFE") != "1" {
-		t.Skipf("refusing to run destructive postgres test against database %q", databaseName)
+		closeAdmin()
+		return nil, nil, nil, fmt.Errorf("%w against database %q", errUnsafePostgres, databaseName)
 	}
 	suffix := make([]byte, 4)
-	_, err = rand.Read(suffix)
-	require.NoError(t, err)
+	if _, err := rand.Read(suffix); err != nil {
+		closeAdmin()
+		return nil, nil, nil, err
+	}
 	schema := "packagecompat_" + label + "_" + hex.EncodeToString(suffix)
-	require.NoError(t, admin.Exec(`CREATE SCHEMA "`+schema+`"`).Error)
-	t.Cleanup(func() { _ = admin.Exec(`DROP SCHEMA IF EXISTS "` + schema + `" CASCADE`).Error })
+	if err := admin.Exec(`CREATE SCHEMA "` + schema + `"`).Error; err != nil {
+		closeAdmin()
+		return nil, nil, nil, err
+	}
+	dropSchema := func() {
+		_ = admin.Exec(`DROP SCHEMA IF EXISTS "` + schema + `" CASCADE`).Error
+		closeAdmin()
+	}
 	dsn := base + " search_path=" + schema
-	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	db, err = gorm.Open(postgres.Open(dsn), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
+	if err != nil {
+		dropSchema()
+		return nil, nil, nil, err
+	}
+	drop = func() {
+		if sqlDB, err := db.DB(); err == nil {
+			_ = sqlDB.Close()
+		}
+		dropSchema()
+	}
+	return &config.DatabaseConfig{Driver: "postgres", DSN: dsn, LogLevel: "silent"}, db, drop, nil
+}
+
+// openPostgresSchema returns a fresh PostgreSQL schema.
+func openPostgresSchema(t *testing.T, label string, _ []any) (*config.DatabaseConfig, *gorm.DB, bool) {
+	t.Helper()
+	cfg, db, drop, err := createPostgresSchema(label)
+	if errors.Is(err, errUnsafePostgres) {
+		t.Skip(err.Error())
+	}
 	require.NoError(t, err)
-	closeOnCleanup(t, db)
-	return &config.DatabaseConfig{Driver: "postgres", DSN: dsn, LogLevel: "silent"}, db
+	t.Cleanup(drop)
+	return cfg, db, false
 }
 
 func closeOnCleanup(t *testing.T, db *gorm.DB) {

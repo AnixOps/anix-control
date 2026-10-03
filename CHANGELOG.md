@@ -147,6 +147,15 @@
   admin dashboard's first visit went from 239.8 KB to 210.2 KB gzip
   (258.0 KB to 228.4 KB with axios), against unchanged budgets of 250 KB
   and 269 KB.
+- The package parity tests (`internal/tests/*compat`, harness
+  `internal/tests/packagecompat`) run about twice as fast on PostgreSQL:
+  the cases of one test share a migrated database per side instead of
+  creating, migrating and dropping two schemas per case. Each case still
+  starts empty: what the previous case added is dropped, rows are deleted
+  and id sequences restart, a dropped foreign key is added back, and any
+  other schema change gets a newly migrated database. Locally,
+  `ordercompat` went from 27.1 s to 14.7 s and `paymentcompat` from
+  29.6 s to 13.9 s with PostgreSQL; every compat package passes unchanged.
 
 ### Deprecated
 
