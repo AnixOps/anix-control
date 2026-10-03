@@ -244,6 +244,13 @@ func TestHostAnswersTheServicesRouteItself(t *testing.T) {
 	_, err = service.Dispatch(context.Background(), request)
 	require.Error(t, err)
 	require.Empty(t, bridge.operation)
+
+	// A drained host refuses the owned route too.
+	request.PrincipalJSON = []byte(`{"actor_id":1,"admin":true}`)
+	_, err = service.Drain(context.Background())
+	require.NoError(t, err)
+	_, err = service.Dispatch(context.Background(), request)
+	require.ErrorContains(t, err, "package is unavailable")
 }
 
 // The route id is the kernel's for the declared route: the package id,

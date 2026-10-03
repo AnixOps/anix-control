@@ -68,6 +68,26 @@ describe('machine-telemetry services API', () => {
     }, 7)
   })
 
+  it('keeps the rest of a stored document the kernel answers as a string', async () => {
+    kernel.getKernelInstallations.mockResolvedValue([{ id: 4, plugin_id: 'machine-telemetry', target: 'agent' }])
+    kernel.getKernelInstallationConfig.mockResolvedValue({
+      revision: 2, config: '{"interval_seconds":45,"systemd_services":{"nodes":{"9":{"enabled":true,"exclude":["a*"]}}}}'
+    })
+    kernel.updateKernelInstallationConfig.mockResolvedValue({ revision: 3 })
+    await saveNodeServicesSettings(5, { enabled: false })
+    expect(kernel.updateKernelInstallationConfig).toHaveBeenCalledWith(4, {
+      interval_seconds: 45,
+      systemd_services: { nodes: { 9: { enabled: true, exclude: ['a*'] }, 5: { enabled: false } } }
+    }, 2)
+
+    kernel.updateKernelInstallationConfig.mockClear()
+    kernel.getKernelInstallationConfig.mockResolvedValue({ revision: 2, config: 'not json' })
+    await expect(saveNodeServicesSettings(5, { enabled: true })).rejects.toThrow()
+    kernel.getKernelInstallationConfig.mockResolvedValue({ revision: 0, config: '{}' })
+    await saveNodeServicesSettings(5, { enabled: true })
+    expect(kernel.updateKernelInstallationConfig).toHaveBeenCalledWith(4, { systemd_services: { nodes: { 5: { enabled: true } } } }, 0)
+  })
+
   it('refuses to save without an Agent installation', async () => {
     kernel.getKernelInstallations.mockResolvedValue([{ id: 3, plugin_id: 'machine-telemetry', target: 'control' }])
     await expect(saveNodeServicesSettings(5, { enabled: true })).rejects.toMatchObject({ code: 'no_installation' })

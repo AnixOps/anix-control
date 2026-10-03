@@ -84,6 +84,9 @@ func (h *machineTelemetryHost) Dispatch(ctx context.Context, request pluginhosts
 	if !owned {
 		return h.Router.Dispatch(ctx, request)
 	}
+	if h.Draining() {
+		return pluginhostsdk.DispatchResponse{}, errors.New("package is unavailable")
+	}
 	response, err := runOwned(ctx, handler, request)
 	if err != nil {
 		return pluginhostsdk.DispatchResponse{}, err

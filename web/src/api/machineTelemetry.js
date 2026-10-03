@@ -94,6 +94,18 @@ export function withNodeServices(config, nodeID, { enabled, include, exclude }) 
   return document
 }
 
+// The kernel answers the stored document as a JSON string; never save over
+// a document it could not read.
+function parseConfig(raw) {
+  if (raw === undefined || raw === null || raw === '') return {}
+  if (typeof raw !== 'string') return raw
+  const parsed = JSON.parse(raw)
+  if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
+    throw new Error('the stored machine-telemetry configuration is not a JSON object')
+  }
+  return parsed
+}
+
 // Saves one node's services settings: reads the Agent installation's
 // configuration, replaces the node's entry and saves it at the revision it
 // read, so a concurrent change answers 409 instead of being overwritten.
@@ -101,7 +113,7 @@ export function withNodeServices(config, nodeID, { enabled, include, exclude }) 
 export async function saveNodeServicesSettings(nodeID, settings) {
   const installation = await agentInstallation()
   const current = unwrap(await getKernelInstallationConfig(installation.id)) || {}
-  const config = withNodeServices(current.config, nodeID, settings)
+  const config = withNodeServices(parseConfig(current.config), nodeID, settings)
   return updateKernelInstallationConfig(installation.id, config, Number(current.revision || 0))
 }
 
