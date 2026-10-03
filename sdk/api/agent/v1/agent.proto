@@ -35,8 +35,11 @@ message HelloAck {
   uint64 desired_revision = 4;
   // server_capabilities lists the data-plane features this Control serves on
   // the session: config.v1, users.v1, reports.v1, package-reports.v1,
-  // forward.v1 and maintenance.v1 (Capability name "config", "users",
-  // "reports", "package-reports", "forward" or "maintenance", version "v1").
+  // forward.v1, maintenance.v1, alive.v1 and artifacts.v1 (Capability name
+  // "config", "users", "reports", "package-reports", "forward",
+  // "maintenance", "alive" or "artifacts", version "v1"). artifacts.v1
+  // offers the AgentArtifacts service (artifacts.proto) and adds no
+  // payload.
   // Control lists only features that Hello.capabilities lists too, so the
   // list is the negotiated set. Empty from a Control that serves none;
   // Agents built before this field ignore it.
@@ -159,6 +162,9 @@ message ControlToAgent {
     // Answers maintenance_events (maintenance.v1), with the request_id of
     // the message it answers.
     MaintenanceAck maintenance_ack = 16;
+    // Sent only with alive.v1 negotiated: one page of the online device
+    // counts of every user, across all nodes (UniProxy alivelist).
+    AliveList alive_list = 17;
   }
 }
 
@@ -185,6 +191,11 @@ message ConfigStatus {
   string config_hash = 2;
   bool applied = 3;
   string error = 4;
+  // error_code names why the configuration was not applied, one of the
+  // agentcontrol.ConfigErrorCode* codes (config_format_unsupported,
+  // config_hash_mismatch, config_invalid, config_apply_failed); empty when
+  // applied, and from Agents built before it. error stays the text.
+  string error_code = 5;
 }
 
 // NodeUser is one user the node serves.
@@ -265,6 +276,18 @@ message ReportAck {
   string batch_id = 1;
   bool applied = 2;
   string error = 3;
+  // error_code names the refusal, one of the agentcontrol.ReportErrorCode*
+  // codes, whenever error is set. With report_unavailable (error empty),
+  // Control could not record the batch now: the Agent keeps it and sends
+  // it again, not before retry_after_ms. Control sends that transient
+  // answer only to an Agent whose Hello listed reports.v1 with the
+  // attribute transient_ack "v1", and echoes the attribute in
+  // HelloAck.server_capabilities; other Agents get no ReportAck for such a
+  // batch, as before. PROTOCOL.md, "Error codes".
+  string error_code = 4;
+  // retry_after_ms is the least wait before the batch is sent again; set
+  // only with report_unavailable.
+  uint32 retry_after_ms = 5;
 }
 
 // NodeStatus is the node's system and runtime health (reports.v1). Each one
@@ -337,4 +360,36 @@ message MaintenanceEventResult {
   // again on every delivery. persisted false without an error means Control
   // could not store the event now, and the Agent sends it again later.
   string error = 3;
+  // error_code names the refusal, one of the
+  // agentcontrol.MaintenanceErrorCode* codes, whenever error is set. With
+  // maintenance_unavailable (error empty, persisted false) Control could
+  // not store the event now: the Agent keeps it and sends it again, not
+  // before retry_after_ms.
+  string error_code = 4;
+  // retry_after_ms is the least wait before the event is sent again; set
+  // only with maintenance_unavailable.
+  uint32 retry_after_ms = 5;
+}
+
+// AliveList is the number of online devices (distinct IPs) of every user
+// with at least one, across all nodes (alive.v1): what UniProxy alivelist
+// answers, from the same source. The Agent enforces NodeUser.device_limit
+// against it. One list may span several messages, the users in id order,
+// each page with the same revision: the Agent replaces its whole list when
+// the page with last_page arrives. Control sends a list after HelloAck and
+// then whenever the counts change, at most once a minute. A user missing
+// from the list has no device online. PROTOCOL.md, "Alive list".
+message AliveList {
+  // revision increases with every list Control sends on the session.
+  uint64 revision = 1;
+  bool last_page = 2;
+  repeated UserAlive entries = 3;
+  // computed_at_unix_ms is when Control counted the devices.
+  int64 computed_at_unix_ms = 4;
+}
+
+// UserAlive is one user's online device count in an AliveList.
+message UserAlive {
+  uint64 user_id = 1;
+  uint32 alive_count = 2;
 }

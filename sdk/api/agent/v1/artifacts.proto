@@ -1,0 +1,89 @@
+syntax = "proto3";
+
+package anix.agent.v1;
+
+option go_package = "github.com/AnixOps/anix-control/sdk/api/agent/v1;agentv1pb";
+
+// AgentArtifacts serves an enrolled Agent the signed plugin releases
+// assigned to its node: the same manifests and artifacts as
+// GET /api/v3/agent/plugin-releases/{plugin_id}/{version}/{manifest|artifact},
+// authenticated by the agent client certificate instead of the node API key.
+// It is served on Control's node-facing agent listener, next to
+// AgentControlService, and lives in its own file so the descriptor of
+// agent.proto stays the one Agents in the field run.
+//
+// Every call needs a valid agent client certificate of a proxy node (no
+// x-api-key is read). Control answers only a release the certificate's node
+// has an enabled assignment of, whose installation is enabled, and that is
+// a signed official AnixOps release still verifying against the trust root,
+// exactly as the HTTP download does. The request names the content address
+// the agent.plugin.install operation's configuration carries (plugin_id,
+// version, sha256, size); another address is refused. The Agent verifies
+// what it receives as it verifies the HTTP download: the size and SHA-256
+// of each document, the ed25519 signature of the manifest, and the
+// artifact's digest in the manifest. A Control serves it to a session that
+// negotiated artifacts.v1 (HelloAck.server_capabilities). PROTOCOL.md,
+// "Plugin artifacts".
+service AgentArtifacts {
+  // GetPluginManifest returns the canonical manifest of a release.
+  rpc GetPluginManifest(GetPluginManifestRequest) returns (GetPluginManifestResponse);
+  // DownloadPluginArtifact streams the artifact of a release in chunks of
+  // at most 1 MiB, in order. The first chunk carries the release.
+  rpc DownloadPluginArtifact(DownloadPluginArtifactRequest) returns (stream PluginArtifactChunk);
+}
+
+// PluginReleaseAddress is the immutable content address of a release
+// document: the manifest or the artifact address of the agent.plugin.install
+// configuration.
+message PluginReleaseAddress {
+  string plugin_id = 1;
+  string version = 2;
+  // sha256 is the lowercase hex SHA-256 of the document.
+  string sha256 = 3;
+  // size is the document's length in bytes.
+  int64 size = 4;
+}
+
+// PluginRelease describes a verified release: what the HTTP download sends
+// as its X-AnixOps-* headers.
+message PluginRelease {
+  string plugin_id = 1;
+  string version = 2;
+  string artifact_sha256 = 3;
+  int64 artifact_size = 4;
+  string manifest_sha256 = 5;
+  int64 manifest_size = 6;
+  // signature is the release's ed25519 signature of the manifest, as
+  // stored (X-AnixOps-Signature).
+  string signature = 7;
+  // signature_algorithm is ed25519.
+  string signature_algorithm = 8;
+  string publisher = 9;
+  // key_id names the trust root key that signed the release.
+  string key_id = 10;
+  // plugin_api_version is the manifest's api_version.
+  string plugin_api_version = 11;
+}
+
+message GetPluginManifestRequest {
+  PluginReleaseAddress manifest = 1;
+}
+
+message GetPluginManifestResponse {
+  PluginRelease release = 1;
+  // manifest_json is the canonical manifest, the bytes the address names.
+  bytes manifest_json = 2;
+}
+
+message DownloadPluginArtifactRequest {
+  PluginReleaseAddress artifact = 1;
+}
+
+// PluginArtifactChunk is one piece of an artifact.
+message PluginArtifactChunk {
+  // release is set on the first chunk only.
+  PluginRelease release = 1;
+  // offset is the position of data in the artifact.
+  int64 offset = 2;
+  bytes data = 3;
+}
