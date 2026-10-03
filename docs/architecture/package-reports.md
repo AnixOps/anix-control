@@ -1,8 +1,9 @@
 # Package reports
 
-Status: Control side implemented (systemd services panel, PRs 1 and 2 of 7).
-The Agent collector, the `machine-telemetry` 4.1 route and the NodeDetail
-"服务" section follow in later PRs.
+Status: Control side implemented (systemd services panel, PRs 1, 2, 5 and 6
+of 7): the channel, the kernel store, the `machine-telemetry` route and
+settings, and the node page's "服务" section. The Agent collector (PRs 3 and
+4, anix-agent) and the cross-repository E2E (PR 7) follow.
 
 A package report is the latest observation of one kind that an Agent plugin
 package makes on a node: the per-node systemd services table of
@@ -34,9 +35,9 @@ table; it owns a kind, which the kernel reviews and accepts.
 - **Authorization.** The node must have an enabled assignment of
   `plugin_id` at `version`, and that release must be a signed official
   Agent release whose manifest still verifies and declares the kind's
-  capability. `machine-telemetry` will declare `telemetry.systemd.read`
-  in its 4.1 release (PR 5 of the panel); until then the kernel refuses its
-  systemd reports.
+  capability. `machine-telemetry` declares `telemetry.systemd.read` from
+  its 4.1 release; the kernel refuses the systemd reports of older
+  releases.
 
 ## Kernel storage
 
@@ -69,6 +70,111 @@ Packages read through the kernel API view `kapi_package_report_v1`
 package role only the rows whose `plugin_id` is its own package
 (`anix_pkg_<id>`). SQLite has no roles: there the view shows every row,
 and package storage on SQLite isolates nothing anyway.
+
+## Consumer: the machine-telemetry services table
+
+The first consumer is the per-node systemd services table of
+`machine-telemetry` (PRs 5 and 6 of the panel).
+
+### Settings: off until enabled per node
+
+The collector is off on every node. An administrator enables it for one node
+in the node page's "服务" section, which saves the package's **Agent
+installation** configuration through the kernel's plugin configuration API
+(`PUT /api/v3/plugin-installations/:id/config`, with `expected_revision`).
+The settings are the key `systemd_services` of that document:
+
+```json
+{
+  "interval_seconds": 30,
+  "systemd_services": {
+    "nodes": {
+      "12": { "enabled": true, "include": ["nginx*.service"], "exclude": ["*-debug.service"] }
+    }
+  }
+}
+```
+
+- `nodes` maps a proxy node id, in decimal without leading zeros (1 to
+  4294967295), to that node's settings; at most 4096 nodes.
+- `enabled` (required in an entry) turns collection on. A node without an
+  entry, or with `enabled: false`, collects nothing.
+- `include` and `exclude` are optional lists of at most 32 globs each, at
+  most 256 bytes, in `path.Match` syntax over the unit name alphabet. With
+  includes, a unit must match one; it must match no exclude.
+  `systemdreport.Selected` applies them, after the fixed rules
+  (`.service` only, no `user@*` or `run-*`).
+
+The manifest's `config_schema` describes the shape. When the configuration
+of a release declaring `telemetry.systemd.read` is saved, the kernel also
+parses it with `systemdreport.ParseConfig`, so a malformed glob is refused
+with 422 (`invalid_plugin_configuration`).
+
+**How it reaches the node.** Saving the Agent installation's configuration
+queues `plugin.configure` for every node the package is assigned to
+(`SyncAgentInstallationAssignments`). The operation's `payload_json` is the
+`anixops.operation/v1` envelope whose `config` is the whole document. Every
+node gets every node's entry; the Agent collector reads only its own, by the
+node id of its Control stream: `systemdreport.ParseConfig(config)` then
+`.Node(nodeID)`, and filters units with `NodeConfig.Selected`. Changing one
+node's switch therefore re-pushes the configuration to all of the package's
+nodes.
+
+An Agent plugin binary that rejects unknown configuration keys (the
+`machine-telemetry` plugin before the collector, anix-agent `c459383`)
+fails to configure once `systemd_services` is present. Ship the 4.1 package
+only with an Agent plugin that accepts the key, and enable the table only on
+nodes running it: the node page shows the section only when the node's
+assigned release declares `telemetry.systemd.read`.
+
+### Route
+
+`GET /api/v3/plugins/machine-telemetry/nodes/:id/services`, declared as the
+control route `/api/v3/plugins/machine-telemetry/nodes/*`. The kernel
+gateway requires an administrator with `machine-telemetry.api`; the package
+host answers the route itself (it is not a compatibility route, so route
+modes do not apply), accepts only `GET` and a decimal node id without
+leading zeros, and again requires an administrator. The manifest declares
+the permission `machine-telemetry.services.view` for the WebUI.
+
+The host reads its Agent installation's settings through
+`kapi_plugin_configuration_v1` and the node's report through
+`kapi_package_report_v1`, sanitizes the payload again, applies the node's
+current globs and counts the units:
+
+```json
+{"data": {
+  "node_id": 12, "enabled": true, "include": [], "exclude": ["*-debug.service"],
+  "reported": true, "supported": true, "unsupported_reason": "", "stale": false,
+  "observed_at": "2026-10-03T11:55:00Z", "version": "4.1.0", "window_seconds": 600,
+  "summary": {"total": 3, "failed": 1, "active": 1, "inactive": 1},
+  "units": [
+    {"name": "nginx.service", "active_state": "active", "sub_state": "running",
+     "cpu_avg_percent": 1.5, "cpu_peak_percent": 12.25,
+     "memory_bytes": 52428800, "memory_peak_bytes": 73400320}
+  ]
+}}
+```
+
+- A node that is not enabled answers `enabled: false` and no units, even
+  with a stored report.
+- `reported: false` means no report yet; `supported: false` comes with the
+  collector's `unsupported_reason` (no systemd, cgroup v1).
+- `summary` counts by `active_state`; units activating, deactivating or
+  reloading count only in `total`.
+- Errors use the kernel shape `{"error": {"code", "message"}}`: 404
+  `not_found`, 405, 403 `forbidden`, 503 `storage_unavailable`.
+
+### Node page
+
+The node page (`/admin/nodes/:id?section=services`) shows "服务" when the
+node's enabled `machine-telemetry` assignment is at a release whose manifest
+declares `telemetry.systemd.read`. The section loads on demand. It has the
+table (filter by name and by state, sortable name, state, CPU average and
+peak, memory and memory peak), the totals line "总计 N | 失败 N | 每 10
+分钟更新一次", a banner when the report is stale, the unsupported reason,
+the "not enabled on this node" state with a switch, and the include /
+exclude editor. It never starts, stops or restarts a unit.
 
 ## Refusals and metrics
 
@@ -113,4 +219,4 @@ it for that node, with optional include and exclude globs per node.
   history. A report older than 25 minutes is shown as stale.
 - **Who reads it.** Control and the reporting package (`machine-telemetry`)
   through `kapi_package_report_v1`; on PostgreSQL no other package's role
-  can read it.
+  can read it. In the panel, administrators only.

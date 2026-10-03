@@ -36,6 +36,22 @@ The generated signed-manifest input declares both `control` and `agent`
 targets and maps `agent-linux-amd64` to
 `agent/linux-amd64/plugin`. Other GOOS/GOARCH pairs use the same naming rule.
 
+## Systemd Services Table
+
+From 4.1 the package declares `telemetry.systemd.read` and serves the
+read-only per-node services table at
+`GET /api/v3/plugins/machine-telemetry/nodes/:id/services` (administrators;
+the node page's 服务 section). Collection is off on every node until enabled
+in the Agent installation's configuration:
+
+```json
+{"systemd_services": {"nodes": {"12": {"enabled": true, "include": ["nginx*.service"], "exclude": []}}}}
+```
+
+The Agent collector reads its own node's entry with
+`sdk/telemetry/systemdreport.ParseConfig`. Details, the response and the
+privacy rules: `docs/architecture/package-reports.md`.
+
 ## Build
 
 The input binary must be a non-empty regular executable file. The package
