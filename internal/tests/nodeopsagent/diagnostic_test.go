@@ -1,8 +1,10 @@
 package nodeopsagent
 
 import (
+	"context"
 	"encoding/json"
 	"testing"
+	"time"
 
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
@@ -138,5 +140,76 @@ func TestAgentDiagnosticFailureReport(t *testing.T) {
 		assert.Equal(t, model.AgentDiagnosticTaskStatusFailed, row.Status)
 		assert.Equal(t, "unit gost.service not found", row.Error)
 		assert.Equal(t, int64(3), row.DurationMS)
+	})
+}
+
+// awaitTaskStatus waits until the task's row reaches status.
+func awaitTaskStatus(t *testing.T, f *fixture, taskID, status string) model.AgentDiagnosticTask {
+	t.Helper()
+	var row model.AgentDiagnosticTask
+	require.Eventually(t, func() bool {
+		return f.db.Where("task_id = ?", taskID).First(&row).Error == nil && row.Status == status
+	}, 10*time.Second, 10*time.Millisecond, "task %s never became %s (last %q)", taskID, status, row.Status)
+	return row
+}
+
+// The legacy admin routes (POST /admin/agent/tasks, /admin/agent/execute)
+// reach a stream agent that advertises agent.diagnostic: the answer is the
+// acknowledgement, and the agent's report completes the row later. A node
+// without such a stream is not served there; a refused action records
+// nothing; a result that never comes fails the row.
+func TestLegacyDiagnosticRouteOnTheStream(t *testing.T) {
+	forEachBackend(t, func(t *testing.T, f *fixture) {
+		ctx := context.Background()
+		sources := kernelnodeops.AgentSources{Streams: f.control.Streams}
+		request := kernelnodeops.AgentDiagnosticRequest{NodeID: f.proxy.ID, Action: "service_status", Params: map[string]any{"service": "gost"}}
+
+		_, onStream, err := kernelnodeops.RunAgentDiagnosticOnStream(ctx, f.db, sources, request)
+		require.NoError(t, err)
+		assert.False(t, onStream, "no agent is connected")
+		_, onStream, _ = kernelnodeops.RunAgentDiagnosticOnStream(ctx, f.db, kernelnodeops.AgentSources{}, request)
+		assert.False(t, onStream, "no streams")
+
+		f.proxyAgent(fakeagent.Script{Capabilities: []string{"agent.control", "agent.ping"}})
+		_, onStream, err = kernelnodeops.RunAgentDiagnosticOnStream(ctx, f.db, sources, request)
+		require.NoError(t, err)
+		assert.False(t, onStream, "the agent does not run diagnostics")
+
+		agent := f.proxyAgent(fakeagent.Script{Result: func(*agentv1pb.DesiredOperation) []byte {
+			return []byte(`{"success":true,"output":"active (running)","duration_ms":7}`)
+		}})
+		run, onStream, err := kernelnodeops.RunAgentDiagnosticOnStream(ctx, f.db, sources, request)
+		require.NoError(t, err)
+		require.True(t, onStream)
+		assert.True(t, run.Dispatch.AckReceived)
+		assert.NoError(t, run.Dispatch.DispatchError)
+		assert.Equal(t, agent.SessionID(), run.Dispatch.Ack.SessionID)
+		row := awaitTaskStatus(t, f, run.Task.ID, model.AgentDiagnosticTaskStatusCompleted)
+		assert.True(t, row.Success)
+		assert.Equal(t, "active (running)", row.Output)
+
+		_, onStream, err = kernelnodeops.RunAgentDiagnosticOnStream(ctx, f.db, sources, kernelnodeops.AgentDiagnosticRequest{NodeID: f.proxy.ID, Action: "rm -rf /"})
+		assert.True(t, onStream)
+		var refused *kernelnodeops.DiagnosticValidationError
+		assert.ErrorAs(t, err, &refused)
+
+		// An agent that refuses the task: not sent, the row failed.
+		f.proxyAgent(fakeagent.Script{Ack: func(*agentv1pb.DesiredOperation) (bool, string) { return false, "busy" }})
+		run, onStream, err = kernelnodeops.RunAgentDiagnosticOnStream(ctx, f.db, sources, request)
+		require.NoError(t, err)
+		require.True(t, onStream)
+		assert.Error(t, run.Dispatch.DispatchError)
+		awaitTaskStatus(t, f, run.Task.ID, model.AgentDiagnosticTaskStatusFailed)
+
+		// An agent that never reports: the row fails after the timeout.
+		defer kernelnodeops.SetDiagnosticResultGraceForTest(0)()
+		f.proxyAgent(fakeagent.Script{Hold: true})
+		timed := request
+		timed.Timeout = 1
+		run, onStream, err = kernelnodeops.RunAgentDiagnosticOnStream(ctx, f.db, sources, timed)
+		require.NoError(t, err)
+		require.True(t, onStream)
+		assert.True(t, run.Dispatch.AckReceived)
+		awaitTaskStatus(t, f, run.Task.ID, model.AgentDiagnosticTaskStatusFailed)
 	})
 }

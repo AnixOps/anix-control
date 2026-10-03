@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"math"
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
@@ -85,6 +86,74 @@ func RunAgentDiagnostic(ctx context.Context, db *gorm.DB, request AgentDiagnosti
 	_ = tasks.MarkStatus(task.ID, model.AgentDiagnosticTaskStatusDispatched)
 	run.Row, _ = tasks.GetTask(task.ID)
 	return run, nil
+}
+
+// Bounds of a legacy route's diagnostic on the stream
+// (RunAgentDiagnosticOnStream).
+const (
+	// defaultDiagnosticTimeout is a task's timeout when the request names
+	// none, as the whitelist's tasks run.
+	defaultDiagnosticTimeout = 30 * time.Second
+	// maxDiagnosticTimeout caps the timeout a request asks for.
+	maxDiagnosticTimeout = 10 * time.Minute
+)
+
+// diagnosticResultGrace is how long after the task's timeout its result
+// is still awaited. A variable so tests can shorten it.
+var diagnosticResultGrace = time.Minute
+
+// SetDiagnosticResultGraceForTest sets diagnosticResultGrace and returns
+// the function that restores it.
+func SetDiagnosticResultGraceForTest(grace time.Duration) (restore func()) {
+	previous := diagnosticResultGrace
+	diagnosticResultGrace = grace
+	return func() { diagnosticResultGrace = previous }
+}
+
+// RunAgentDiagnosticOnStream runs a diagnostic task of the legacy admin
+// routes (POST /admin/agent/tasks and /admin/agent/execute) on the node's
+// Agent Control stream, as the agent.diagnostic executor runs it: when the
+// node's agent is connected on a stream of sources and advertises
+// agent.diagnostic. ok is false otherwise, and nothing was recorded. The
+// task row is written as RunAgentDiagnostic writes it; the answer is the
+// agent's acknowledgement. After an accepted acknowledgement the result is
+// awaited in the background, until the task's timeout plus a minute, and
+// recorded in the row as the executor records it (the agent API's result
+// report); without one in time the row is marked failed.
+func RunAgentDiagnosticOnStream(ctx context.Context, db *gorm.DB, sources AgentSources, request AgentDiagnosticRequest) (*AgentDiagnostic, bool, error) {
+	if sources.Streams == nil || request.NodeID == 0 || uint64(request.NodeID) > math.MaxUint32 {
+		return nil, false, nil
+	}
+	node := proxyAgentNode(uint64(request.NodeID))
+	session, connected := sources.Streams.Session(node)
+	if !connected || !hasCapability(session.Capabilities, AgentDiagnosticOperation) {
+		return nil, false, nil
+	}
+	timeout := defaultDiagnosticTimeout
+	if request.Timeout > 0 {
+		timeout = min(time.Duration(request.Timeout)*time.Second, maxDiagnosticTimeout)
+	}
+	deadline := time.Now().Add(timeout + diagnosticResultGrace)
+	stream := &streamDiagnosticTransport{streams: sources.Streams, node: node, deadline: deadline, timeout: ackTimeout(uint32(timeout / time.Second))}
+	run, err := RunAgentDiagnostic(ctx, db, request, stream)
+	if err != nil || stream.dispatch == nil {
+		return run, true, err
+	}
+	if !run.Dispatch.AckReceived {
+		stream.dispatch.release()
+		return run, true, nil
+	}
+	go func() {
+		waitCtx, cancel := context.WithDeadline(context.Background(), deadline)
+		defer cancel()
+		observed, err := stream.dispatch.awaitTerminal(waitCtx, sources.Streams, node)
+		if err != nil {
+			_ = service.NewAgentDiagnosticTaskService(db).MarkStatus(run.Task.ID, model.AgentDiagnosticTaskStatusFailed)
+			return
+		}
+		completeDiagnosticTask(db, run.Task, node, observed)
+	}()
+	return run, true, nil
 }
 
 // streamDiagnosticTransport carries a task on the node's Agent Control
