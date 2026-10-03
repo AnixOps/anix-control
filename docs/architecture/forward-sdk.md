@@ -368,12 +368,14 @@ type Driver interface {
     Remove(ctx context.Context) error
 }
 
-type Artifact struct { Engine; NodeRef; Generation; StateHash; Hops []HopKey; Content []byte; Digest string }
-type ApplyResult struct { Changed bool; Generation; StateHash; Digest }
-type Observation struct { Engine; Applied; NodeRef; Generation; StateHash; Digest;
-    Counters []*Counters; Health []*UpstreamHealth; Rotation []HopRotation; ObservedAt }
-type Upstream struct { Address string; Port, Weight uint32 } // weight 0 keeps the rendered weight
 ```
+
+The shared types (fields abridged): `Artifact` (engine, node, generation,
+`state_hash`, the hops it runs, opaque `Content` and its SHA-256 `Digest`),
+`ApplyResult` (`Changed`, and the generation, hash and digest now run),
+`Observation` (applied identity, `Counters` and `UpstreamHealth` from the
+contract, the `Rotation` per hop, the time) and `Upstream` (address, port
+and a weight, 0 keeping the rendered one).
 
 The Agent splits a node's state by engine (`Registry.Render`), renders and
 applies each part, and runs one health loop that calls `SetUpstreams`. The
@@ -416,6 +418,9 @@ rules every driver keeps:
   the host puts every rendered upstream back and the health loop
   re-asserts its selection. Keeping the last upstream when all are down
   (section 7.3) is the health loop's decision, not the driver's.
+- **Paused hops** stay applied: their objects and counters remain (so the
+  epoch and history survive a pause), they appear in Observe, and the
+  driver refuses or drops their traffic.
 - **Remove** deletes every owned object and nothing else; it is idempotent.
 - **Context and concurrency.** A call with a done context returns
   `ctx.Err()` and changes nothing. Every method is safe for concurrent use;

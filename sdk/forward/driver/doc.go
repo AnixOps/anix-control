@@ -74,6 +74,12 @@
 // restart and a no-op Apply; an Apply that changes the host puts every
 // rendered upstream back, and the health loop re-asserts its selection.
 //
+// # Paused hops
+//
+// A hop with paused set stays applied: its objects and counters remain, so
+// its epoch and history survive a pause, and it appears in Observe with
+// its rotation; the driver refuses or drops its traffic.
+//
 // # Remove
 //
 // Remove deletes every owned object and nothing else, and is idempotent.
