@@ -70,8 +70,10 @@ const header = `#!/usr/sbin/nft -f
 # One transaction that touches table inet anixops_fwd only: declare every
 # object, flush the rules and the balancing and admission elements, then add
 # them again. Counters, quotas and connection counts keep their values.
-# Apply checks the table's ownership comment before running it, and deletes
-# the objects of removed hops after reading their counters (F2c).
+# Apply checks the table's ownership comment before running it, adds the
+# state it records on the host and deletes the objects of removed hops in the
+# same transaction. The anixops-hop and anixops-upstream lines are the
+# manifest Apply reads: every rendered upstream, the bandwidth for tc.
 `
 
 const emptyNote = "# No hops: applying this artifact removes table inet anixops_fwd.\n"
@@ -85,6 +87,9 @@ func (d *Driver) script(plans []*hopPlan) []byte {
 		return []byte(w.b.String())
 	}
 	tbl := Family + " " + Table
+
+	w.blank()
+	d.writeManifest(w, plans)
 
 	// 1. Declare every object, without elements or rules, so the flushes
 	// below find them on a host that has none yet.

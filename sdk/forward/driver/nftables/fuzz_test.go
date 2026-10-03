@@ -29,6 +29,9 @@ var (
 )
 
 // checkScript reports what in a rendered script is outside the grammar.
+// manifestLine is the grammar of the manifest comments Apply reads.
+var manifestLine = regexp.MustCompile(`^# anixops-(hop route=[0-9A-Za-z]{1,64} hop=[0-9]+ mark=[0-9]+ balance=BALANCE_STRATEGY_[A-Z_]+ listen=(tcp|udp|tcp,udp)/[0-9]+ address=(any|[0-9a-fA-F:.]+) bandwidth=[0-9]+|upstream route=[0-9A-Za-z]{1,64} hop=[0-9]+ address=[0-9a-fA-F:.]+ port=[0-9]+ weight=[0-9]+ priority=[0-9]+)$`)
+
 func checkScript(content []byte, hops int) error {
 	lines := strings.Split(string(content), "\n")
 	if lines[len(lines)-1] != "" {
@@ -40,6 +43,9 @@ func checkScript(content []byte, hops int) error {
 		case l == "":
 			continue
 		case strings.HasPrefix(l, "#"):
+			if depth == 0 && manifestLine.MatchString(l) {
+				continue
+			}
 			if depth != 0 || !bytes.Contains(headerAndNote, []byte(l+"\n")) {
 				return errors.New("unexpected comment line " + l)
 			}
@@ -150,6 +156,9 @@ func FuzzRender(f *testing.F) {
 		}
 		if err := checkScript(a.Content, len(a.Hops)); err != nil {
 			t.Fatalf("%v\n%s", err, a.Content)
+		}
+		if err := nftables.CheckManifest(a); err != nil {
+			t.Fatalf("manifest: %v\n%s", err, a.Content)
 		}
 		again, _ := d.Render(&s)
 		if again.Digest != a.Digest {
