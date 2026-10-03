@@ -193,6 +193,10 @@
   `internal/tests/nodeopsagent` (the scripted agent announced an operation
   before acknowledging it, so a test's terminal report could overtake the
   acknowledgement and Control closed the stream).
+- The 流量转发管理 page header reads fully in Chinese: its description,
+  runtime badge and runtime summary no longer mix in English ("runtime",
+  "tunnel", "Port Forward", "Local Runtime"); product names such as NodeX,
+  gost, nftables and Ansible stay as they are. English is unchanged.
 
 ## 4.1.0-rc.5 - 2026-10-02
 
