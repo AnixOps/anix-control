@@ -41,8 +41,8 @@ var planFixtures = []string{
 	"plan-node-states-generations.json",
 }
 
-// allocationJSON is an allocation in a fixture: the contract's
-// PortAllocation plus the mark, which the contract carries in NodeHop.
+// allocationJSON is an allocation in a fixture, with the field names of
+// the contract's PortAllocation.
 type allocationJSON struct {
 	RouteID  string `json:"route_id"`
 	HopIndex uint32 `json:"hop_index"`

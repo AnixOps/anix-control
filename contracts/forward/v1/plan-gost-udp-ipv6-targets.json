@@ -235,13 +235,15 @@
       {
         "route_id": "01JF1C000000000000000000C1",
         "node_ref": "forward-51",
-        "port": 10001
+        "port": 10001,
+        "mark": 1
       },
       {
         "route_id": "01JF1C000000000000000000C1",
         "hop_index": 1,
         "node_ref": "forward-61",
-        "port": 10000
+        "port": 10000,
+        "mark": 1
       }
     ]
   }

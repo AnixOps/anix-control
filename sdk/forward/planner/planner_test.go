@@ -401,6 +401,29 @@ func TestPlanRoute(t *testing.T) {
 	}
 }
 
+func TestAllocationsRoundTripThroughTheContract(t *testing.T) {
+	// A plan's allocations, stored as PortAllocation and passed back,
+	// keep ports and marks.
+	r := twoHop("", 0)
+	taken := Allocations{{RouteID: routeID(9), NodeRef: "forward-21"}: {Port: 40000, Mark: 1}}
+	first, err := PlanRoute(&forwardv1.PlanRouteRequest{Route: r}, testNodes(), nil, Options{Taken: taken})
+	if err != nil || len(first.GetViolations()) > 0 {
+		t.Fatal(err, first.GetViolations())
+	}
+	if first.GetAllocations()[0].GetMark() != 2 || first.GetAllocations()[0].GetPort() != 40001 {
+		t.Fatalf("allocations carry the mark: %v", first.GetAllocations())
+	}
+	// The other route is gone: the lowest port and mark are free, but the
+	// stored ones stick.
+	again, err := PlanRoute(&forwardv1.PlanRouteRequest{Route: r}, testNodes(), AllocationsFromProto(first.GetAllocations()), Options{})
+	if err != nil || !proto.Equal(first, again) {
+		t.Fatalf("round trip: %v\n%v\n%v", err, first, again)
+	}
+	if AllocationsFromProto(nil) != nil {
+		t.Fatal("none is nil")
+	}
+}
+
 func TestStamp(t *testing.T) {
 	res := mustPlan(t, []*forwardv1.Route{twoHop(routeID(1), 0), twoHop(routeID(2), 0)}, nil, Options{})
 	gens := Stamp(res.States, nil)

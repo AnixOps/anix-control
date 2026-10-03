@@ -58,13 +58,27 @@ func (a Allocations) Sorted() []Allocation {
 	return out
 }
 
-// ToProto answers the allocations as the contract's PortAllocation, sorted.
-// The contract carries ports only; the marks are in the states' hops.
+// ToProto answers the allocations as the contract's PortAllocation (port
+// and mark), sorted.
 func (a Allocations) ToProto() []*forwardv1.PortAllocation {
 	sorted := a.Sorted()
 	out := make([]*forwardv1.PortAllocation, len(sorted))
 	for i, s := range sorted {
-		out[i] = &forwardv1.PortAllocation{RouteId: s.RouteID, HopIndex: s.HopIndex, NodeRef: s.NodeRef, Port: s.Port}
+		out[i] = &forwardv1.PortAllocation{RouteId: s.RouteID, HopIndex: s.HopIndex, NodeRef: s.NodeRef, Port: s.Port, Mark: s.Mark}
+	}
+	return out
+}
+
+// AllocationsFromProto answers the contract's allocations (what Control
+// stored from PlanRouteResponse.allocations) as Allocations, nil for none.
+// A later entry for the same (route, hop, node) wins.
+func AllocationsFromProto(in []*forwardv1.PortAllocation) Allocations {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make(Allocations, len(in))
+	for _, p := range in {
+		out[Key{RouteID: p.GetRouteId(), HopIndex: p.GetHopIndex(), NodeRef: p.GetNodeRef()}] = Slot{Port: p.GetPort(), Mark: p.GetMark()}
 	}
 	return out
 }

@@ -296,8 +296,9 @@ type Options struct {
   when a route has an encrypted link).
 - Control keeps the allocations and the generations in its own tables and
   passes them back on the next plan. The contract's `PortAllocation`
-  carries the port; the mark is in `NodeHop.mark`, from which Control
-  restores the Go `Allocations`.
+  carries both the port and the mark (`mark = 5`, added in F1c under the
+  draft golden policy); `planner.AllocationsFromProto` turns the stored
+  list back into `Allocations`, so sticky ports and marks round-trip.
 - `PlanRoute` is what the goldens in `contracts/forward/v1` record (section
   13). Its route id may be empty (a preview before the route is stored);
   `previous` holds the route's own allocations and `Options.Taken` every
@@ -370,7 +371,8 @@ For each hop *i* and each of its nodes the planner emits a `NodeHop`:
 - `mark`: the hop's connection mark on the node (section 5.2);
 - `paused`: a paused route stays in the states with `paused` set on its
   hops, so its ports, marks, counters and quota survive the pause; the
-  drivers forward nothing for it.
+  drivers drop its traffic (`Route.paused` and `NodeHop.paused` say so in
+  the contract).
 
 States list their hops sorted by route id and hop index; `PlanRoute`
 answers states sorted by node. An nftables hop that accepts clients of an

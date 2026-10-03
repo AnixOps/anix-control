@@ -48,6 +48,13 @@
     hop; ingress sources and peers from the previous hop; limits on the
     entry only; `DIRECT_MODE_PREFERRED`; paused routes kept with `paused`
     set.
+  - Contract (draft golden policy, `anixops.forward.v1` only):
+    `PortAllocation.mark = 5`, so stored allocations carry the sticky mark
+    (`planner.AllocationsFromProto` reads them back); the `NodeHop.mark`
+    comment says it is per route, hop and node, unique on the node,
+    1..4095 within the driver's mask; `Route.paused` and `NodeHop.paused`
+    say a paused route stays rendered (ports, marks, counters, quota kept)
+    with its traffic dropped.
   - New violation codes, listed with validate's: `port_in_use`,
     `port_exhausted`, `no_port_range`, `mark_exhausted`, `no_address`. Any
     violation refuses the whole plan.

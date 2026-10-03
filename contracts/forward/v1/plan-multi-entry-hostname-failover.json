@@ -439,24 +439,28 @@
       {
         "route_id": "01JF1D000000000000000000D1",
         "node_ref": "forward-21",
-        "port": 40102
+        "port": 40102,
+        "mark": 2
       },
       {
         "route_id": "01JF1D000000000000000000D1",
         "node_ref": "forward-22",
-        "port": 40102
+        "port": 40102,
+        "mark": 1
       },
       {
         "route_id": "01JF1D000000000000000000D1",
         "hop_index": 1,
         "node_ref": "forward-71",
-        "port": 30000
+        "port": 30000,
+        "mark": 1
       },
       {
         "route_id": "01JF1D000000000000000000D1",
         "hop_index": 1,
         "node_ref": "forward-72",
-        "port": 30000
+        "port": 30000,
+        "mark": 1
       }
     ]
   }

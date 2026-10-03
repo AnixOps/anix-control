@@ -142,7 +142,8 @@
       {
         "route_id": "01JF1A000000000000000000A1",
         "node_ref": "forward-11",
-        "port": 30001
+        "port": 30001,
+        "mark": 1
       }
     ],
     "warnings": [

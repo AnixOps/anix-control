@@ -232,13 +232,15 @@
       {
         "route_id": "01JF1E000000000000000000E1",
         "node_ref": "forward-31",
-        "port": 20005
+        "port": 20005,
+        "mark": 3
       },
       {
         "route_id": "01JF1E000000000000000000E1",
         "hop_index": 1,
         "node_ref": "forward-41",
-        "port": 20017
+        "port": 20017,
+        "mark": 2
       }
     ]
   }
