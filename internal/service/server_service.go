@@ -381,27 +381,41 @@ func (s *ServerService) GetUserOnlineCount(userID uint) (int64, error) {
 
 // GetAllUsersOnlineCount 获取所有用户的在线IP数量
 func (s *ServerService) GetAllUsersOnlineCount() (map[string]int, error) {
-	result := make(map[string]int)
+	counts, err := UserAliveCounts()
+	result := make(map[string]int, len(counts))
+	for userID, count := range counts {
+		result[strconv.FormatUint(userID, 10)] = count
+	}
+	return result, err
+}
 
-	// 获取所有在线记录的键
-	keys, err := cache.Keys("online:*:*:*")
+// UserAliveCounts counts each user's online IPs across all nodes: the sets
+// UpdateOnlineStatus keeps per node and user (online:<type>:<node>:<user>),
+// added up per user. Users without any are left out. It is the source of
+// UniProxy alivelist and of the Agent Control stream's AliveList
+// (alive.v1).
+func UserAliveCounts() (map[uint64]int, error) {
+	result := make(map[uint64]int)
+	// "online:*" and not "online:*:*:*": the memory cache matches a
+	// pattern by the prefix before its first "*" only.
+	keys, err := cache.Keys("online:*")
 	if err != nil {
 		return result, err
 	}
-
-	// 统计每个用户的在线IP数
 	for _, key := range keys {
 		parts := strings.Split(key, ":")
-		if len(parts) < 4 {
+		if len(parts) != 4 || parts[0] != "online" {
 			continue
 		}
-		userID := parts[len(parts)-1]
+		userID, err := strconv.ParseUint(parts[3], 10, 64)
+		if err != nil || userID == 0 {
+			continue
+		}
 		count, err := cache.SCard(key)
-		if err == nil {
+		if err == nil && count > 0 {
 			result[userID] += int(count)
 		}
 	}
-
 	return result, nil
 }
 

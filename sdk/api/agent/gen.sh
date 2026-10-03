@@ -17,6 +17,8 @@ PROTO_FILE="${PROTO_VIRTUAL_DIR}/agent.proto"
 # AgentEnrollment is a separate file of the same package, so agent.proto's
 # descriptor stays the one v1.1.0 Agents run.
 ENROLLMENT_PROTO_FILE="${PROTO_VIRTUAL_DIR}/agent_enrollment.proto"
+# AgentArtifacts (plugin downloads by client certificate) likewise.
+ARTIFACTS_PROTO_FILE="${PROTO_VIRTUAL_DIR}/artifacts.proto"
 
 cd "${SDK_ROOT}"
 
@@ -62,6 +64,7 @@ protoc \
   --go-grpc_out=. \
   --go-grpc_opt="module=${MODULE_PATH}" \
   "${PROTO_FILE}" \
-  "${ENROLLMENT_PROTO_FILE}"
+  "${ENROLLMENT_PROTO_FILE}" \
+  "${ARTIFACTS_PROTO_FILE}"
 
 echo "Generated agent gRPC bindings."

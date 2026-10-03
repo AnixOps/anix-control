@@ -1957,7 +1957,27 @@ API-key agents will be refused** on the AnixOps Agent channels.
   `session` of a node: `authentication`, the certificate, and
   `negotiated_capabilities`) or `GET /admin/nodes/:id/agent-control`: a proxy
   node is ready when it shows `mtls` and negotiates `config.v1`, `users.v1`,
-  `reports.v1` and, with the plugin supervisor on, `maintenance.v1`.
+  `reports.v1`, `alive.v1` (device limits across nodes) and, with the plugin
+  supervisor on, `maintenance.v1` and `artifacts.v1` (plugin downloads).
+- **Plugin downloads by certificate.** An enrolled Agent no longer holds
+  its node API key, so it downloads assigned plugin releases from the
+  `AgentArtifacts` gRPC service on the agent listener, by its client
+  certificate (`artifacts.v1`). The HTTP download
+  `/api/v3/agent/plugin-releases/...` stays, with the node API key, in
+  every mode, including `required`: it serves Agents that have not enrolled
+  yet. Nothing to configure.
+- **Device limits across nodes.** With `alive.v1` the Agent receives every
+  user's online device count from the stream instead of pulling UniProxy
+  `alivelist`. The counts and `alivelist`'s now come from the same reader,
+  which also fixes `alivelist` answering an empty list with the built-in
+  memory cache: device limits that counted only one node's connections now
+  count every node's, for Agents on either path.
+- **Diagnostic tasks reach stream Agents.** `POST /admin/agent/tasks` and
+  `/admin/agent/execute` (NodeX Agents → 诊断) send the task on the Agent
+  Control stream when the node has no agent WebSocket and its Agent
+  advertises `agent.diagnostic`; before, they answered "node offline". The
+  answer adds `"channel": "agent_control"`; the result reaches the task as
+  before.
 - **Maintenance events land in the node log.** With `maintenance.v1`, the
   plugin supervisor's incidents and recoveries (until now sent only on the
   WebSocket, which Control did not answer) are stored once each as node log
@@ -1968,7 +1988,11 @@ API-key agents will be refused** on the AnixOps Agent channels.
   `agent_cert_expired`, `agent_cert_invalid`, `agent_cert_wrong_cluster`,
   `agent_cert_wrong_node` (a configuration error on the node), and
   `agent_enrollment_rejected` for an unusable enrollment credential. The
-  first four make the Agent enroll again.
+  first four make the Agent enroll again. Acknowledgements of reports,
+  maintenance events and configuration carry codes too (`report_*`,
+  `maintenance_*`, `config_*`); a failed configuration's code is kept with
+  the node's configuration status and leads the failed `node.sync`'s
+  message (`config_apply_failed: ...`).
 
 ### The Checklist
 

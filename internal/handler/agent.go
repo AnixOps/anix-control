@@ -1154,12 +1154,27 @@ func (h *AgentHandler) CreateTask(c *gin.Context) {
 
 	// 检查节点是否在线
 	conn, ok := h.connections.Load(req.NodeID)
+	var agentConn *AgentConnection
+	if ok {
+		agentConn = conn.(*AgentConnection)
+	}
+	if agentConn == nil || agentConn.WsConn == nil {
+		// Without the node's WebSocket, an agent that runs diagnostics on
+		// its Agent Control stream (agent.diagnostic) gets the task there,
+		// as the KernelNodeOps agent.diagnostic executor sends it. Under
+		// agent_control.mtls: required, which refuses the WebSocket, that
+		// is the only way.
+		run, onStream, err := kernelnodeops.RunAgentDiagnosticOnStream(c.Request.Context(), h.db, kernelnodeops.DefaultAgentSources(),
+			kernelnodeops.AgentDiagnosticRequest{NodeID: req.NodeID, Action: req.Action, Params: req.Params, Timeout: req.Timeout})
+		if onStream {
+			answerStreamDiagnostic(c, req.NodeID, run, err)
+			return
+		}
+	}
 	if !ok {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "node offline"})
 		return
 	}
-
-	agentConn := conn.(*AgentConnection)
 	if agentConn.WsConn == nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "node websocket unavailable"})
 		return
@@ -1221,6 +1236,34 @@ func (h *AgentHandler) CreateTask(c *gin.Context) {
 		"ack_received": true,
 		"ack":          dispatch.RawAck,
 		"data":         run.Row,
+	})
+}
+
+// answerStreamDiagnostic answers a diagnostic task sent on the node's Agent
+// Control stream: as the WebSocket answer, at the agent's acknowledgement;
+// the agent's result reaches the task's row later.
+func answerStreamDiagnostic(c *gin.Context, nodeID uint, run *kernelnodeops.AgentDiagnostic, err error) {
+	if err != nil {
+		var refused *kernelnodeops.DiagnosticValidationError
+		if errors.As(err, &refused) {
+			c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	dispatch := run.Dispatch
+	if dispatch.DispatchError != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "send failed", "task_id": run.Task.ID, "message_id": dispatch.MessageID,
+			"dispatch_err": dispatch.DispatchError.Error(), "channel": "agent_control", "data": run.Row,
+		})
+		return
+	}
+	panelSuccess(c, gin.H{
+		"message": "task sent", "task_id": run.Task.ID, "node_id": nodeID, "success": true, "output": "task dispatched",
+		"duration_ms": int64(0), "message_id": dispatch.MessageID, "ack_received": true, "ack": dispatch.RawAck,
+		"channel": "agent_control", "data": run.Row,
 	})
 }
 

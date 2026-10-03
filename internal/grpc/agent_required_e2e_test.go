@@ -38,7 +38,7 @@ type streamAgent struct {
 
 func newStreamAgent(t *testing.T, stream agentv1pb.AgentControlService_ControlStreamClient, node uint32, session string) *streamAgent {
 	agent := &streamAgent{t: t, stream: stream, node: node, session: session, messages: map[string]chan *agentv1pb.ControlToAgent{}, done: make(chan error, 1)}
-	for _, kind := range []string{"config", "users", "heartbeat_ack", "report_ack", "maintenance_ack", "desired_operation"} {
+	for _, kind := range []string{"config", "users", "heartbeat_ack", "report_ack", "maintenance_ack", "desired_operation", "alive_list"} {
 		agent.messages[kind] = make(chan *agentv1pb.ControlToAgent, 64)
 	}
 	go func() {
@@ -62,6 +62,8 @@ func newStreamAgent(t *testing.T, stream agentv1pb.AgentControlService_ControlSt
 				kind = "maintenance_ack"
 			case *agentv1pb.ControlToAgent_DesiredOperation:
 				kind = "desired_operation"
+			case *agentv1pb.ControlToAgent_AliveList:
+				kind = "alive_list"
 			default:
 				agent.done <- io.ErrUnexpectedEOF
 				return
@@ -112,9 +114,16 @@ func legacyCounters() string {
 // one-time credential and negotiates every data-plane capability on the
 // mTLS stream needs no legacy HTTP or WebSocket path: configuration, users,
 // heartbeats, runtime health and system status, traffic, logs, maintenance
-// events and diagnostic tasks all flow on the stream, with the side effects
-// of the legacy paths, and no legacy channel is served or refused.
+// events, the alive list (UniProxy alivelist) and diagnostic tasks all flow
+// on the stream, plugin releases download from AgentArtifacts by the
+// certificate, with the side effects of the legacy paths, and no legacy
+// channel is served or refused.
 func TestAgentStreamUnderRequiredNeedsNoLegacyPath(t *testing.T) {
+	previousInterval, previousRefresh, previousShared := aliveListInterval, aliveListRefresh, sharedAliveCounts
+	aliveListInterval, aliveListRefresh, sharedAliveCounts = 20*time.Millisecond, 0, &aliveCounts{}
+	t.Cleanup(func() {
+		aliveListInterval, aliveListRefresh, sharedAliveCounts = previousInterval, previousRefresh, previousShared
+	})
 	l := startAgentListener(t, config.AgentMTLSRequired, true)
 	db := database.Get()
 	requireAutoMigrate(t, append(model.KernelNodeOperationModels(), model.KernelForwardModels()...)...)
@@ -157,7 +166,8 @@ func TestAgentStreamUnderRequiredNeedsNoLegacyPath(t *testing.T) {
 	require.NoError(t, err)
 
 	capabilities := []*agentv1pb.Capability{{Name: "agent.ping", Version: agentcontrol.CapabilityVersionV1}, {Name: "agent.diagnostic", Version: agentcontrol.CapabilityVersionV1}}
-	for _, name := range []string{agentcontrol.CapabilityConfig, agentcontrol.CapabilityUsers, agentcontrol.CapabilityReports, agentcontrol.CapabilityMaintenance} {
+	for _, name := range []string{agentcontrol.CapabilityConfig, agentcontrol.CapabilityUsers, agentcontrol.CapabilityReports, agentcontrol.CapabilityMaintenance,
+		agentcontrol.CapabilityAlive, agentcontrol.CapabilityArtifacts} {
 		capabilities = append(capabilities, &agentv1pb.Capability{Name: name, Version: agentcontrol.CapabilityVersionV1})
 	}
 	stream, err := agentv1pb.NewAgentControlServiceClient(l.dial(t, certificate)).ControlStream(ctx)
@@ -169,7 +179,7 @@ func TestAgentStreamUnderRequiredNeedsNoLegacyPath(t *testing.T) {
 	require.NoError(t, err)
 	helloAck := first.GetHelloAck()
 	require.NotNil(t, helloAck)
-	assert.Equal(t, []string{"config.v1", "users.v1", "reports.v1", "maintenance.v1"}, capabilityVersions(helloAck.ServerCapabilities),
+	assert.Equal(t, []string{"config.v1", "users.v1", "reports.v1", "maintenance.v1", "alive.v1", "artifacts.v1"}, capabilityVersions(helloAck.ServerCapabilities),
 		"Control offers exactly what the Agent listed and serves")
 	agent := newStreamAgent(t, stream, nodeID, helloAck.SessionId)
 
@@ -208,6 +218,16 @@ func TestAgentStreamUnderRequiredNeedsNoLegacyPath(t *testing.T) {
 		Online: []*agentv1pb.OnlineUser{{UserId: 7, Ips: []string{"203.0.113.7"}}}, WindowEndUnixMs: time.Now().UnixMilli(),
 	}}})
 	assert.True(t, agent.await("report_ack").GetReportAck().GetApplied())
+	// The alive list (UniProxy alivelist) counts the online IP the report
+	// carried, from the same source.
+	for {
+		alive := agent.await("alive_list").GetAliveList()
+		if len(alive.GetEntries()) == 1 && alive.GetEntries()[0].GetUserId() == 7 {
+			assert.Equal(t, uint32(1), alive.GetEntries()[0].GetAliveCount())
+			assert.True(t, alive.GetLastPage())
+			break
+		}
+	}
 	agent.send("logs", 0, &agentv1pb.AgentToControl{Payload: &agentv1pb.AgentToControl_Logs{Logs: &agentv1pb.LogBatch{
 		BatchId: "node:proxy-1:boot:2", Entries: []*agentv1pb.LogEntry{{Level: "info", Source: "core", Message: "started", LoggedAtUnixMs: time.Now().UnixMilli()}},
 	}}})
@@ -218,6 +238,16 @@ func TestAgentStreamUnderRequiredNeedsNoLegacyPath(t *testing.T) {
 	maintenance := agent.await("maintenance_ack").GetMaintenanceAck()
 	require.Len(t, maintenance.GetEvents(), 1)
 	assert.True(t, maintenance.GetEvents()[0].GetPersisted())
+
+	// A plugin release (GET /api/v3/agent/plugin-releases/..., by node API
+	// key) downloads from AgentArtifacts by the certificate.
+	release := seedArtifactRelease(t, db, newReleaseSigner(t), l.proxy.ID, "required-telemetry", 4096)
+	artifacts := agentv1pb.NewAgentArtifactsClient(l.dial(t, certificate))
+	manifest, err := artifacts.GetPluginManifest(ctx, &agentv1pb.GetPluginManifestRequest{Manifest: release.manifestAddress()})
+	require.NoError(t, err)
+	artifact, artifactRelease, _, _, err := downloadArtifact(ctx, artifacts, release.artifactAddress())
+	require.NoError(t, err)
+	verifyLikeTheAgent(t, release, manifest.GetManifestJson(), artifact, artifactRelease)
 
 	// A diagnostic task (the WebSocket's task.assign, /api/v2/agent/tasks
 	// and /result), as the agent.diagnostic executor dispatches it.
@@ -292,14 +322,14 @@ func TestAgentStreamUnderRequiredNeedsNoLegacyPath(t *testing.T) {
 	assert.Equal(t, issued.GetSerial(), session.Certificate.Serial)
 	assert.Equal(t, issued.GetSpiffeId(), session.Certificate.SPIFFEID)
 	assert.Equal(t, issued.GetNotAfterUnix(), session.Certificate.NotAfter.Unix())
-	assert.Equal(t, []string{"config.v1", "users.v1", "reports.v1", "maintenance.v1"}, session.NegotiatedCapabilities)
+	assert.Equal(t, []string{"config.v1", "users.v1", "reports.v1", "maintenance.v1", "alive.v1", "artifacts.v1"}, session.NegotiatedCapabilities)
 	agentMetrics := map[string]float64{"agent_dataplane_spool_depth": 3, "agent_identity_expires_in_seconds": 600000}
 	assert.Equal(t, agentMetrics, session.AgentMetrics)
 	require.NotNil(t, session.AgentMetricsAt)
 	encoded, err := json.Marshal(session)
 	require.NoError(t, err)
 	assert.Contains(t, string(encoded), `"authentication":"mtls"`)
-	assert.Contains(t, string(encoded), `"negotiated_capabilities":["config.v1","users.v1","reports.v1","maintenance.v1"]`)
+	assert.Contains(t, string(encoded), `"negotiated_capabilities":["config.v1","users.v1","reports.v1","maintenance.v1","alive.v1","artifacts.v1"]`)
 
 	// No legacy channel was served or refused, and the inventory has the
 	// node on the mTLS stream only, ready for required.
@@ -322,7 +352,7 @@ func TestAgentStreamUnderRequiredNeedsNoLegacyPath(t *testing.T) {
 	assert.Equal(t, agent.session, entry.Session.SessionID)
 	assert.Equal(t, agentstreams.AuthenticationMTLS, entry.Session.Authentication)
 	assert.Equal(t, issued.GetSerial(), entry.Session.Certificate.Serial)
-	assert.Equal(t, []string{"config.v1", "users.v1", "reports.v1", "maintenance.v1"}, entry.Session.NegotiatedCapabilities)
+	assert.Equal(t, []string{"config.v1", "users.v1", "reports.v1", "maintenance.v1", "alive.v1", "artifacts.v1"}, entry.Session.NegotiatedCapabilities)
 	assert.Equal(t, agentMetrics, entry.Session.AgentMetrics)
 
 	require.NoError(t, stream.CloseSend())

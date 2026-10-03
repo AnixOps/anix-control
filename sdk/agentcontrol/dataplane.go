@@ -35,6 +35,15 @@ const (
 	// MaintenanceEvents, and Control answers each batch with
 	// MaintenanceAck (maintenance.go; PROTOCOL.md, "Maintenance events").
 	CapabilityMaintenance = "maintenance"
+	// CapabilityAlive: Control sends AliveList, every user's online device
+	// count across all nodes (UniProxy alivelist), so the Agent enforces
+	// device limits against every node's connections.
+	CapabilityAlive = "alive"
+	// CapabilityArtifacts: Control serves the AgentArtifacts service
+	// (artifacts.proto) to the session's client certificate, so the Agent
+	// downloads its node's plugin releases without the node API key. It
+	// adds no stream payload.
+	CapabilityArtifacts = "artifacts"
 )
 
 // DataPlaneCapabilities are the capabilities of the data plane, the ones
@@ -42,6 +51,7 @@ const (
 // Agent's Hello lists them.
 var DataPlaneCapabilities = []string{
 	CapabilityConfig, CapabilityUsers, CapabilityReports, CapabilityPackageReports, CapabilityForward, CapabilityMaintenance,
+	CapabilityAlive, CapabilityArtifacts,
 }
 
 // Negotiated reports whether a data-plane capability is in use on a session:

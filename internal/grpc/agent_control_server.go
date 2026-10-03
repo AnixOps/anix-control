@@ -781,7 +781,7 @@ func (s *AgentControlGRPCServer) controlStream(stream agentv1pb.AgentControlServ
 		principal:    principal,
 		stream:       stream,
 	}
-	connection.ServerCapabilities = s.serverCapabilities(agentNode, hello.Capabilities)
+	connection.ServerCapabilities = s.sessionCapabilities(principal, hello.Capabilities)
 	connection.Diagnostics = agentcontrol.HasCapabilityVersion(hello.Capabilities, agentcontrol.CapabilityDiag, agentcontrol.CapabilityVersionV1)
 	connection.configNegotiated = agentcontrol.Negotiated(hello.Capabilities, connection.ServerCapabilities, agentcontrol.CapabilityConfig)
 	if connection.configNegotiated {
@@ -832,6 +832,10 @@ func (s *AgentControlGRPCServer) controlStream(stream agentv1pb.AgentControlServ
 	if agentcontrol.Negotiated(hello.Capabilities, connection.ServerCapabilities, agentcontrol.CapabilityUsers) {
 		stopUserDeltas := s.startUserDeltas(stream.Context(), connection, agentNode, hello.UsersCursor)
 		defer stopUserDeltas()
+	}
+	if agentcontrol.Negotiated(hello.Capabilities, connection.ServerCapabilities, agentcontrol.CapabilityAlive) {
+		stopAliveList := s.startAliveList(stream.Context(), connection)
+		defer stopAliveList()
 	}
 
 	for {
@@ -1070,7 +1074,7 @@ func (s *AgentControlGRPCServer) serverCapabilities(node agentcontrol.AgentNode,
 		capabilities = append(capabilities, &agentv1pb.Capability{Name: agentcontrol.CapabilityUsers, Version: agentcontrol.CapabilityVersionV1})
 	}
 	if s.servesReports(node, agent) {
-		capabilities = append(capabilities, &agentv1pb.Capability{Name: agentcontrol.CapabilityReports, Version: agentcontrol.CapabilityVersionV1})
+		capabilities = append(capabilities, reportsServerCapability(agent))
 	}
 	if s.servesPackageReports(node, agent) {
 		capabilities = append(capabilities, &agentv1pb.Capability{Name: agentcontrol.CapabilityPackageReports, Version: agentcontrol.CapabilityVersionV1})
@@ -1081,6 +1085,20 @@ func (s *AgentControlGRPCServer) serverCapabilities(node agentcontrol.AgentNode,
 	if s.servesMaintenance(node, agent) {
 		capabilities = append(capabilities, &agentv1pb.Capability{Name: agentcontrol.CapabilityMaintenance, Version: agentcontrol.CapabilityVersionV1})
 	}
+	if s.servesAlive(node, agent) {
+		capabilities = append(capabilities, &agentv1pb.Capability{Name: agentcontrol.CapabilityAlive, Version: agentcontrol.CapabilityVersionV1})
+	}
+	return capabilities
+}
+
+// sessionCapabilities is HelloAck.server_capabilities of a session:
+// serverCapabilities, and artifacts.v1 when the session authenticated by
+// client certificate, which AgentArtifacts requires (agent_artifacts.go).
+func (s *AgentControlGRPCServer) sessionCapabilities(principal agentPrincipal, agent []*agentv1pb.Capability) []*agentv1pb.Capability {
+	capabilities := s.serverCapabilities(principal.Node, agent)
+	if servesArtifacts(principal, agent) {
+		capabilities = append(capabilities, &agentv1pb.Capability{Name: agentcontrol.CapabilityArtifacts, Version: agentcontrol.CapabilityVersionV1})
+	}
 	return capabilities
 }
 
@@ -1089,11 +1107,12 @@ func (s *AgentControlGRPCServer) serverCapabilities(node agentcontrol.AgentNode,
 // capability, and this server did not list it on the session. The answer is
 // InvalidArgument, ending the stream, as from a Control built before these
 // payloads existed: there they arrive as an unknown payload ("control
-// message payload is required").
+// message payload is required"). The trailer names
+// agent_capability_not_negotiated.
 func unnegotiatedPayload(payload, capability string) error {
-	return status.Errorf(codes.InvalidArgument,
-		"control message payload %s requires the %s.%s server capability, which this server does not advertise",
-		payload, capability, agentcontrol.CapabilityVersionV1)
+	return refuseAgent(agentcontrol.ErrorCodeCapabilityNotNegotiated, codes.InvalidArgument,
+		fmt.Sprintf("control message payload %s requires the %s.%s server capability, which this server does not advertise",
+			payload, capability, agentcontrol.CapabilityVersionV1))
 }
 
 func cloneCapabilities(capabilities []*agentv1pb.Capability) []*agentv1pb.Capability {

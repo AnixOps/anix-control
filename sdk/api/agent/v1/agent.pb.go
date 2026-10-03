@@ -243,8 +243,11 @@ type HelloAck struct {
 	DesiredRevision          uint64                 `protobuf:"varint,4,opt,name=desired_revision,json=desiredRevision,proto3" json:"desired_revision,omitempty"`
 	// server_capabilities lists the data-plane features this Control serves on
 	// the session: config.v1, users.v1, reports.v1, package-reports.v1,
-	// forward.v1 and maintenance.v1 (Capability name "config", "users",
-	// "reports", "package-reports", "forward" or "maintenance", version "v1").
+	// forward.v1, maintenance.v1, alive.v1 and artifacts.v1 (Capability name
+	// "config", "users", "reports", "package-reports", "forward",
+	// "maintenance", "alive" or "artifacts", version "v1"). artifacts.v1
+	// offers the AgentArtifacts service (artifacts.proto) and adds no
+	// payload.
 	// Control lists only features that Hello.capabilities lists too, so the
 	// list is the negotiated set. Empty from a Control that serves none;
 	// Agents built before this field ignore it.
@@ -1140,6 +1143,7 @@ type ControlToAgent struct {
 	//	*ControlToAgent_Users
 	//	*ControlToAgent_ReportAck
 	//	*ControlToAgent_MaintenanceAck
+	//	*ControlToAgent_AliveList
 	Payload       isControlToAgent_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1273,6 +1277,15 @@ func (x *ControlToAgent) GetMaintenanceAck() *MaintenanceAck {
 	return nil
 }
 
+func (x *ControlToAgent) GetAliveList() *AliveList {
+	if x != nil {
+		if x, ok := x.Payload.(*ControlToAgent_AliveList); ok {
+			return x.AliveList
+		}
+	}
+	return nil
+}
+
 type isControlToAgent_Payload interface {
 	isControlToAgent_Payload()
 }
@@ -1310,6 +1323,12 @@ type ControlToAgent_MaintenanceAck struct {
 	MaintenanceAck *MaintenanceAck `protobuf:"bytes,16,opt,name=maintenance_ack,json=maintenanceAck,proto3,oneof"`
 }
 
+type ControlToAgent_AliveList struct {
+	// Sent only with alive.v1 negotiated: one page of the online device
+	// counts of every user, across all nodes (UniProxy alivelist).
+	AliveList *AliveList `protobuf:"bytes,17,opt,name=alive_list,json=aliveList,proto3,oneof"`
+}
+
 func (*ControlToAgent_HelloAck) isControlToAgent_Payload() {}
 
 func (*ControlToAgent_HeartbeatAck) isControlToAgent_Payload() {}
@@ -1323,6 +1342,8 @@ func (*ControlToAgent_Users) isControlToAgent_Payload() {}
 func (*ControlToAgent_ReportAck) isControlToAgent_Payload() {}
 
 func (*ControlToAgent_MaintenanceAck) isControlToAgent_Payload() {}
+
+func (*ControlToAgent_AliveList) isControlToAgent_Payload() {}
 
 // ConfigSnapshot is a node's whole configuration at one revision (config.v1).
 // Control sends it after HelloAck when Hello.config_revision is older, and
@@ -1409,8 +1430,13 @@ type ConfigStatus struct {
 	ConfigHash     string                 `protobuf:"bytes,2,opt,name=config_hash,json=configHash,proto3" json:"config_hash,omitempty"`
 	Applied        bool                   `protobuf:"varint,3,opt,name=applied,proto3" json:"applied,omitempty"`
 	Error          string                 `protobuf:"bytes,4,opt,name=error,proto3" json:"error,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// error_code names why the configuration was not applied, one of the
+	// agentcontrol.ConfigErrorCode* codes (config_format_unsupported,
+	// config_hash_mismatch, config_invalid, config_apply_failed); empty when
+	// applied, and from Agents built before it. error stays the text.
+	ErrorCode     string `protobuf:"bytes,5,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *ConfigStatus) Reset() {
@@ -1467,6 +1493,13 @@ func (x *ConfigStatus) GetApplied() bool {
 func (x *ConfigStatus) GetError() string {
 	if x != nil {
 		return x.Error
+	}
+	return ""
+}
+
+func (x *ConfigStatus) GetErrorCode() string {
+	if x != nil {
+		return x.ErrorCode
 	}
 	return ""
 }
@@ -1966,10 +1999,22 @@ func (x *LogEntry) GetTraceId() string {
 // Agent drops the batch from its spool. Control sends no ReportAck for a batch
 // it cannot record for now, and the Agent resends it later.
 type ReportAck struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	BatchId       string                 `protobuf:"bytes,1,opt,name=batch_id,json=batchId,proto3" json:"batch_id,omitempty"`
-	Applied       bool                   `protobuf:"varint,2,opt,name=applied,proto3" json:"applied,omitempty"`
-	Error         string                 `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	BatchId string                 `protobuf:"bytes,1,opt,name=batch_id,json=batchId,proto3" json:"batch_id,omitempty"`
+	Applied bool                   `protobuf:"varint,2,opt,name=applied,proto3" json:"applied,omitempty"`
+	Error   string                 `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
+	// error_code names the refusal, one of the agentcontrol.ReportErrorCode*
+	// codes, whenever error is set. With report_unavailable (error empty),
+	// Control could not record the batch now: the Agent keeps it and sends
+	// it again, not before retry_after_ms. Control sends that transient
+	// answer only to an Agent whose Hello listed reports.v1 with the
+	// attribute transient_ack "v1", and echoes the attribute in
+	// HelloAck.server_capabilities; other Agents get no ReportAck for such a
+	// batch, as before. PROTOCOL.md, "Error codes".
+	ErrorCode string `protobuf:"bytes,4,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
+	// retry_after_ms is the least wait before the batch is sent again; set
+	// only with report_unavailable.
+	RetryAfterMs  uint32 `protobuf:"varint,5,opt,name=retry_after_ms,json=retryAfterMs,proto3" json:"retry_after_ms,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2023,6 +2068,20 @@ func (x *ReportAck) GetError() string {
 		return x.Error
 	}
 	return ""
+}
+
+func (x *ReportAck) GetErrorCode() string {
+	if x != nil {
+		return x.ErrorCode
+	}
+	return ""
+}
+
+func (x *ReportAck) GetRetryAfterMs() uint32 {
+	if x != nil {
+		return x.RetryAfterMs
+	}
+	return 0
 }
 
 // NodeStatus is the node's system and runtime health (reports.v1). Each one
@@ -2339,7 +2398,16 @@ type MaintenanceEventResult struct {
 	// error is set when Control refuses the event for good; it refuses it
 	// again on every delivery. persisted false without an error means Control
 	// could not store the event now, and the Agent sends it again later.
-	Error         string `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
+	Error string `protobuf:"bytes,3,opt,name=error,proto3" json:"error,omitempty"`
+	// error_code names the refusal, one of the
+	// agentcontrol.MaintenanceErrorCode* codes, whenever error is set. With
+	// maintenance_unavailable (error empty, persisted false) Control could
+	// not store the event now: the Agent keeps it and sends it again, not
+	// before retry_after_ms.
+	ErrorCode string `protobuf:"bytes,4,opt,name=error_code,json=errorCode,proto3" json:"error_code,omitempty"`
+	// retry_after_ms is the least wait before the event is sent again; set
+	// only with maintenance_unavailable.
+	RetryAfterMs  uint32 `protobuf:"varint,5,opt,name=retry_after_ms,json=retryAfterMs,proto3" json:"retry_after_ms,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -2393,6 +2461,151 @@ func (x *MaintenanceEventResult) GetError() string {
 		return x.Error
 	}
 	return ""
+}
+
+func (x *MaintenanceEventResult) GetErrorCode() string {
+	if x != nil {
+		return x.ErrorCode
+	}
+	return ""
+}
+
+func (x *MaintenanceEventResult) GetRetryAfterMs() uint32 {
+	if x != nil {
+		return x.RetryAfterMs
+	}
+	return 0
+}
+
+// AliveList is the number of online devices (distinct IPs) of every user
+// with at least one, across all nodes (alive.v1): what UniProxy alivelist
+// answers, from the same source. The Agent enforces NodeUser.device_limit
+// against it. One list may span several messages, the users in id order,
+// each page with the same revision: the Agent replaces its whole list when
+// the page with last_page arrives. Control sends a list after HelloAck and
+// then whenever the counts change, at most once a minute. A user missing
+// from the list has no device online. PROTOCOL.md, "Alive list".
+type AliveList struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// revision increases with every list Control sends on the session.
+	Revision uint64       `protobuf:"varint,1,opt,name=revision,proto3" json:"revision,omitempty"`
+	LastPage bool         `protobuf:"varint,2,opt,name=last_page,json=lastPage,proto3" json:"last_page,omitempty"`
+	Entries  []*UserAlive `protobuf:"bytes,3,rep,name=entries,proto3" json:"entries,omitempty"`
+	// computed_at_unix_ms is when Control counted the devices.
+	ComputedAtUnixMs int64 `protobuf:"varint,4,opt,name=computed_at_unix_ms,json=computedAtUnixMs,proto3" json:"computed_at_unix_ms,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *AliveList) Reset() {
+	*x = AliveList{}
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[27]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *AliveList) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*AliveList) ProtoMessage() {}
+
+func (x *AliveList) ProtoReflect() protoreflect.Message {
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[27]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use AliveList.ProtoReflect.Descriptor instead.
+func (*AliveList) Descriptor() ([]byte, []int) {
+	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{27}
+}
+
+func (x *AliveList) GetRevision() uint64 {
+	if x != nil {
+		return x.Revision
+	}
+	return 0
+}
+
+func (x *AliveList) GetLastPage() bool {
+	if x != nil {
+		return x.LastPage
+	}
+	return false
+}
+
+func (x *AliveList) GetEntries() []*UserAlive {
+	if x != nil {
+		return x.Entries
+	}
+	return nil
+}
+
+func (x *AliveList) GetComputedAtUnixMs() int64 {
+	if x != nil {
+		return x.ComputedAtUnixMs
+	}
+	return 0
+}
+
+// UserAlive is one user's online device count in an AliveList.
+type UserAlive struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	UserId        uint64                 `protobuf:"varint,1,opt,name=user_id,json=userId,proto3" json:"user_id,omitempty"`
+	AliveCount    uint32                 `protobuf:"varint,2,opt,name=alive_count,json=aliveCount,proto3" json:"alive_count,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UserAlive) Reset() {
+	*x = UserAlive{}
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[28]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UserAlive) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UserAlive) ProtoMessage() {}
+
+func (x *UserAlive) ProtoReflect() protoreflect.Message {
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[28]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UserAlive.ProtoReflect.Descriptor instead.
+func (*UserAlive) Descriptor() ([]byte, []int) {
+	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{28}
+}
+
+func (x *UserAlive) GetUserId() uint64 {
+	if x != nil {
+		return x.UserId
+	}
+	return 0
+}
+
+func (x *UserAlive) GetAliveCount() uint32 {
+	if x != nil {
+		return x.AliveCount
+	}
+	return 0
 }
 
 var File_api_grpc_agent_v1_agent_proto protoreflect.FileDescriptor
@@ -2500,7 +2713,7 @@ const file_api_grpc_agent_v1_agent_proto_rawDesc = "" +
 	"\x06status\x18\x11 \x01(\v2\x19.anix.agent.v1.NodeStatusH\x00R\x06status\x12E\n" +
 	"\x0epackage_report\x18\x12 \x01(\v2\x1c.anix.agent.v1.PackageReportH\x00R\rpackageReport\x12Q\n" +
 	"\x12maintenance_events\x18\x13 \x01(\v2 .anix.agent.v1.MaintenanceEventsH\x00R\x11maintenanceEventsB\t\n" +
-	"\apayload\"\xd2\x04\n" +
+	"\apayload\"\x8d\x05\n" +
 	"\x0eControlToAgent\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x17\n" +
@@ -2515,7 +2728,9 @@ const file_api_grpc_agent_v1_agent_proto_rawDesc = "" +
 	"\x05users\x18\x0e \x01(\v2\x18.anix.agent.v1.UserDeltaH\x00R\x05users\x129\n" +
 	"\n" +
 	"report_ack\x18\x0f \x01(\v2\x18.anix.agent.v1.ReportAckH\x00R\treportAck\x12H\n" +
-	"\x0fmaintenance_ack\x18\x10 \x01(\v2\x1d.anix.agent.v1.MaintenanceAckH\x00R\x0emaintenanceAckB\t\n" +
+	"\x0fmaintenance_ack\x18\x10 \x01(\v2\x1d.anix.agent.v1.MaintenanceAckH\x00R\x0emaintenanceAck\x129\n" +
+	"\n" +
+	"alive_list\x18\x11 \x01(\v2\x18.anix.agent.v1.AliveListH\x00R\taliveListB\t\n" +
 	"\apayload\"\x93\x01\n" +
 	"\x0eConfigSnapshot\x12'\n" +
 	"\x0fconfig_revision\x18\x01 \x01(\x04R\x0econfigRevision\x12\x1f\n" +
@@ -2523,13 +2738,15 @@ const file_api_grpc_agent_v1_agent_proto_rawDesc = "" +
 	"configHash\x12\x16\n" +
 	"\x06format\x18\x03 \x01(\tR\x06format\x12\x1f\n" +
 	"\vconfig_json\x18\x04 \x01(\fR\n" +
-	"configJson\"\x88\x01\n" +
+	"configJson\"\xa7\x01\n" +
 	"\fConfigStatus\x12'\n" +
 	"\x0fconfig_revision\x18\x01 \x01(\x04R\x0econfigRevision\x12\x1f\n" +
 	"\vconfig_hash\x18\x02 \x01(\tR\n" +
 	"configHash\x12\x18\n" +
 	"\aapplied\x18\x03 \x01(\bR\aapplied\x12\x14\n" +
-	"\x05error\x18\x04 \x01(\tR\x05error\"\xa3\x01\n" +
+	"\x05error\x18\x04 \x01(\tR\x05error\x12\x1d\n" +
+	"\n" +
+	"error_code\x18\x05 \x01(\tR\terrorCode\"\xa3\x01\n" +
 	"\bNodeUser\x12\x17\n" +
 	"\auser_id\x18\x01 \x01(\x04R\x06userId\x12\x12\n" +
 	"\x04uuid\x18\x02 \x01(\tR\x04uuid\x12(\n" +
@@ -2566,11 +2783,14 @@ const file_api_grpc_agent_v1_agent_proto_rawDesc = "" +
 	"\x11logged_at_unix_ms\x18\x04 \x01(\x03R\x0eloggedAtUnixMs\x12\x1f\n" +
 	"\vfields_json\x18\x05 \x01(\fR\n" +
 	"fieldsJson\x12\x19\n" +
-	"\btrace_id\x18\x06 \x01(\tR\atraceId\"V\n" +
+	"\btrace_id\x18\x06 \x01(\tR\atraceId\"\x9b\x01\n" +
 	"\tReportAck\x12\x19\n" +
 	"\bbatch_id\x18\x01 \x01(\tR\abatchId\x12\x18\n" +
 	"\aapplied\x18\x02 \x01(\bR\aapplied\x12\x14\n" +
-	"\x05error\x18\x03 \x01(\tR\x05error\"\xbc\x02\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\x12\x1d\n" +
+	"\n" +
+	"error_code\x18\x04 \x01(\tR\terrorCode\x12$\n" +
+	"\x0eretry_after_ms\x18\x05 \x01(\rR\fretryAfterMs\"\xbc\x02\n" +
 	"\n" +
 	"NodeStatus\x12*\n" +
 	"\x11cpu_usage_percent\x18\x01 \x01(\x01R\x0fcpuUsagePercent\x120\n" +
@@ -2592,11 +2812,23 @@ const file_api_grpc_agent_v1_agent_proto_rawDesc = "" +
 	"eventsJson\"i\n" +
 	"\x0eMaintenanceAck\x12\x18\n" +
 	"\aversion\x18\x01 \x01(\tR\aversion\x12=\n" +
-	"\x06events\x18\x02 \x03(\v2%.anix.agent.v1.MaintenanceEventResultR\x06events\"g\n" +
+	"\x06events\x18\x02 \x03(\v2%.anix.agent.v1.MaintenanceEventResultR\x06events\"\xac\x01\n" +
 	"\x16MaintenanceEventResult\x12\x19\n" +
 	"\bevent_id\x18\x01 \x01(\tR\aeventId\x12\x1c\n" +
 	"\tpersisted\x18\x02 \x01(\bR\tpersisted\x12\x14\n" +
-	"\x05error\x18\x03 \x01(\tR\x05error*\xc1\x01\n" +
+	"\x05error\x18\x03 \x01(\tR\x05error\x12\x1d\n" +
+	"\n" +
+	"error_code\x18\x04 \x01(\tR\terrorCode\x12$\n" +
+	"\x0eretry_after_ms\x18\x05 \x01(\rR\fretryAfterMs\"\xa7\x01\n" +
+	"\tAliveList\x12\x1a\n" +
+	"\brevision\x18\x01 \x01(\x04R\brevision\x12\x1b\n" +
+	"\tlast_page\x18\x02 \x01(\bR\blastPage\x122\n" +
+	"\aentries\x18\x03 \x03(\v2\x18.anix.agent.v1.UserAliveR\aentries\x12-\n" +
+	"\x13computed_at_unix_ms\x18\x04 \x01(\x03R\x10computedAtUnixMs\"E\n" +
+	"\tUserAlive\x12\x17\n" +
+	"\auser_id\x18\x01 \x01(\x04R\x06userId\x12\x1f\n" +
+	"\valive_count\x18\x02 \x01(\rR\n" +
+	"aliveCount*\xc1\x01\n" +
 	"\rObservedPhase\x12\x1e\n" +
 	"\x1aOBSERVED_PHASE_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17OBSERVED_PHASE_ACCEPTED\x10\x01\x12\x1b\n" +
@@ -2620,7 +2852,7 @@ func file_api_grpc_agent_v1_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_api_grpc_agent_v1_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_api_grpc_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 30)
+var file_api_grpc_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 32)
 var file_api_grpc_agent_v1_agent_proto_goTypes = []any{
 	(ObservedPhase)(0),             // 0: anix.agent.v1.ObservedPhase
 	(*Capability)(nil),             // 1: anix.agent.v1.Capability
@@ -2650,16 +2882,18 @@ var file_api_grpc_agent_v1_agent_proto_goTypes = []any{
 	(*MaintenanceEvents)(nil),      // 25: anix.agent.v1.MaintenanceEvents
 	(*MaintenanceAck)(nil),         // 26: anix.agent.v1.MaintenanceAck
 	(*MaintenanceEventResult)(nil), // 27: anix.agent.v1.MaintenanceEventResult
-	nil,                            // 28: anix.agent.v1.Capability.AttributesEntry
-	nil,                            // 29: anix.agent.v1.Hello.LabelsEntry
-	nil,                            // 30: anix.agent.v1.Heartbeat.MetricsEntry
+	(*AliveList)(nil),              // 28: anix.agent.v1.AliveList
+	(*UserAlive)(nil),              // 29: anix.agent.v1.UserAlive
+	nil,                            // 30: anix.agent.v1.Capability.AttributesEntry
+	nil,                            // 31: anix.agent.v1.Hello.LabelsEntry
+	nil,                            // 32: anix.agent.v1.Heartbeat.MetricsEntry
 }
 var file_api_grpc_agent_v1_agent_proto_depIdxs = []int32{
-	28, // 0: anix.agent.v1.Capability.attributes:type_name -> anix.agent.v1.Capability.AttributesEntry
+	30, // 0: anix.agent.v1.Capability.attributes:type_name -> anix.agent.v1.Capability.AttributesEntry
 	1,  // 1: anix.agent.v1.Hello.capabilities:type_name -> anix.agent.v1.Capability
-	29, // 2: anix.agent.v1.Hello.labels:type_name -> anix.agent.v1.Hello.LabelsEntry
+	31, // 2: anix.agent.v1.Hello.labels:type_name -> anix.agent.v1.Hello.LabelsEntry
 	1,  // 3: anix.agent.v1.HelloAck.server_capabilities:type_name -> anix.agent.v1.Capability
-	30, // 4: anix.agent.v1.Heartbeat.metrics:type_name -> anix.agent.v1.Heartbeat.MetricsEntry
+	32, // 4: anix.agent.v1.Heartbeat.metrics:type_name -> anix.agent.v1.Heartbeat.MetricsEntry
 	5,  // 5: anix.agent.v1.Heartbeat.plugin_observations:type_name -> anix.agent.v1.PluginObservedState
 	6,  // 6: anix.agent.v1.PluginObservedState.rule_counters:type_name -> anix.agent.v1.PluginRuleCounter
 	0,  // 7: anix.agent.v1.ObservedState.phase:type_name -> anix.agent.v1.ObservedPhase
@@ -2680,18 +2914,20 @@ var file_api_grpc_agent_v1_agent_proto_depIdxs = []int32{
 	16, // 22: anix.agent.v1.ControlToAgent.users:type_name -> anix.agent.v1.UserDelta
 	22, // 23: anix.agent.v1.ControlToAgent.report_ack:type_name -> anix.agent.v1.ReportAck
 	26, // 24: anix.agent.v1.ControlToAgent.maintenance_ack:type_name -> anix.agent.v1.MaintenanceAck
-	15, // 25: anix.agent.v1.UserDelta.upserts:type_name -> anix.agent.v1.NodeUser
-	18, // 26: anix.agent.v1.TrafficReport.users:type_name -> anix.agent.v1.UserTraffic
-	19, // 27: anix.agent.v1.TrafficReport.online:type_name -> anix.agent.v1.OnlineUser
-	21, // 28: anix.agent.v1.LogBatch.entries:type_name -> anix.agent.v1.LogEntry
-	27, // 29: anix.agent.v1.MaintenanceAck.events:type_name -> anix.agent.v1.MaintenanceEventResult
-	11, // 30: anix.agent.v1.AgentControlService.ControlStream:input_type -> anix.agent.v1.AgentToControl
-	12, // 31: anix.agent.v1.AgentControlService.ControlStream:output_type -> anix.agent.v1.ControlToAgent
-	31, // [31:32] is the sub-list for method output_type
-	30, // [30:31] is the sub-list for method input_type
-	30, // [30:30] is the sub-list for extension type_name
-	30, // [30:30] is the sub-list for extension extendee
-	0,  // [0:30] is the sub-list for field type_name
+	28, // 25: anix.agent.v1.ControlToAgent.alive_list:type_name -> anix.agent.v1.AliveList
+	15, // 26: anix.agent.v1.UserDelta.upserts:type_name -> anix.agent.v1.NodeUser
+	18, // 27: anix.agent.v1.TrafficReport.users:type_name -> anix.agent.v1.UserTraffic
+	19, // 28: anix.agent.v1.TrafficReport.online:type_name -> anix.agent.v1.OnlineUser
+	21, // 29: anix.agent.v1.LogBatch.entries:type_name -> anix.agent.v1.LogEntry
+	27, // 30: anix.agent.v1.MaintenanceAck.events:type_name -> anix.agent.v1.MaintenanceEventResult
+	29, // 31: anix.agent.v1.AliveList.entries:type_name -> anix.agent.v1.UserAlive
+	11, // 32: anix.agent.v1.AgentControlService.ControlStream:input_type -> anix.agent.v1.AgentToControl
+	12, // 33: anix.agent.v1.AgentControlService.ControlStream:output_type -> anix.agent.v1.ControlToAgent
+	33, // [33:34] is the sub-list for method output_type
+	32, // [32:33] is the sub-list for method input_type
+	32, // [32:32] is the sub-list for extension type_name
+	32, // [32:32] is the sub-list for extension extendee
+	0,  // [0:32] is the sub-list for field type_name
 }
 
 func init() { file_api_grpc_agent_v1_agent_proto_init() }
@@ -2719,6 +2955,7 @@ func file_api_grpc_agent_v1_agent_proto_init() {
 		(*ControlToAgent_Users)(nil),
 		(*ControlToAgent_ReportAck)(nil),
 		(*ControlToAgent_MaintenanceAck)(nil),
+		(*ControlToAgent_AliveList)(nil),
 	}
 	type x struct{}
 	out := protoimpl.TypeBuilder{
@@ -2726,7 +2963,7 @@ func file_api_grpc_agent_v1_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_grpc_agent_v1_agent_proto_rawDesc), len(file_api_grpc_agent_v1_agent_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   30,
+			NumMessages:   32,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

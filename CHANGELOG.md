@@ -34,6 +34,44 @@
 
 ### Added
 
+- **The last Agent contract gaps before `required` (owner approval of
+  2026-10-04: additions only to `anix.agent.v1`).** Older Agents are
+  unaffected; `contracts/proto/descriptors.golden` only gains lines.
+  - **Alive list on the stream** (`alive.v1`, new capability).
+    `ControlToAgent.alive_list = 17` (`AliveList`: `revision = 1`,
+    `last_page = 2`, `entries = 3` of `UserAlive` {`user_id = 1`,
+    `alive_count = 2`}, `computed_at_unix_ms = 4`) carries what UniProxy
+    `alivelist` answers, each user's online device count across all nodes,
+    after `HelloAck` and whenever it changes (checked once a minute; pages
+    of at most 10 000 users). Proxy nodes only, offered only to an Agent that
+    lists it.
+  - **Plugin downloads by client certificate** (`artifacts.v1`, new
+    capability). The new service `AgentArtifacts` (`artifacts.proto`:
+    `GetPluginManifest`, `DownloadPluginArtifact` streaming 1 MiB
+    `PluginArtifactChunk`s; `PluginReleaseAddress`, `PluginRelease`) serves
+    an enrolled Agent the releases assigned to its node with the HTTP
+    download's authorization, content addresses and verified bytes, so the
+    Agent verifies them unchanged. Offered only on a certificate-
+    authenticated proxy session; at most 2 downloads per node at once.
+    The node API key download stays for Agents not yet enrolled.
+  - **Codes in acknowledgements.** `ReportAck.error_code = 4` and
+    `retry_after_ms = 5`, `MaintenanceEventResult.error_code = 4` and
+    `retry_after_ms = 5`, `ConfigStatus.error_code = 5` (set by the Agent;
+    kept as `v4_kernel_node_config_status.reported_error_code`). Every
+    refusal carries its code (`report_*`, `maintenance_*`; the Agent's
+    `config_*`), a maintenance event Control cannot store now carries
+    `maintenance_unavailable` with a 30 s hint, and a report batch it cannot
+    record now is answered with `report_unavailable` and a 15 s hint, only
+    to an Agent that lists `reports.v1` with `transient_ack: "v1"` (others
+    still get no answer, since they drop a batch on any `ReportAck`). A
+    payload sent without its capability ends the stream with
+    `agent_capability_not_negotiated` in the trailer. `sdk/agentcontrol`
+    names every code.
+  - **Legacy diagnostic routes reach stream Agents.** `POST
+    /admin/agent/tasks` and `/admin/agent/execute` send the task as the
+    `agent.diagnostic` operation on the stream when the node has no agent
+    WebSocket and its Agent advertises the operation.
+
 - **The `agent_control.mtls: required` prerequisites on Control (A2-6b).**
   An Agent that negotiates the data plane now needs no legacy HTTP or
   WebSocket path, so v4.2 can make `required` the default once the Agent
@@ -416,6 +454,10 @@
 
 ### Fixed
 
+- UniProxy `alivelist` answered an empty list with the built-in memory
+  cache (its key pattern matched nothing there), so device limits counted
+  only each node's own connections. It now counts the online sets of every
+  node, through the reader `alive.v1` shares.
 - The live Control WebUI E2E gate defaults to ports 24175 and 28080 instead
   of 34175 and 38080. The old ports sat in Linux's ephemeral range, so an
   outgoing connection left open by an earlier CI step could hold one and fail

@@ -85,10 +85,15 @@ func TestAgentControlMaintenanceEventsStoredOncePerEvent(t *testing.T) {
 	assert.Equal(t, "event-other-node", ack.Events[1].EventId)
 	assert.False(t, ack.Events[1].Persisted)
 	assert.Contains(t, ack.Events[1].Error, "not the stream's node")
+	assert.Equal(t, agentcontrol.MaintenanceErrorCodeWrongNode, ack.Events[1].ErrorCode)
 	assert.Equal(t, "event-bad", ack.Events[2].EventId)
 	assert.Contains(t, ack.Events[2].Error, "schema_version")
+	assert.Equal(t, agentcontrol.MaintenanceErrorCodeEventInvalid, ack.Events[2].ErrorCode)
 	assert.Empty(t, ack.Events[3].EventId, "an unreadable event has no id to echo")
 	assert.NotEmpty(t, ack.Events[3].Error)
+	assert.Equal(t, agentcontrol.MaintenanceErrorCodeEventInvalid, ack.Events[3].ErrorCode)
+	assert.Empty(t, ack.Events[0].ErrorCode, "a stored event has no code")
+	assert.Zero(t, ack.Events[0].RetryAfterMs)
 
 	rows := maintenanceLogRows(t, environment.node.ID)
 	require.Len(t, rows, 1)
@@ -122,11 +127,13 @@ func TestAgentControlMaintenanceEventsStoredOncePerEvent(t *testing.T) {
 	require.Len(t, ack.Events, agentcontrol.MaxMaintenanceBatchEvents+1)
 	assert.Equal(t, "event-many-0", ack.Events[0].EventId)
 	assert.Contains(t, ack.Events[0].Error, "more than 50")
+	assert.Equal(t, agentcontrol.MaintenanceErrorCodeBatchTooLarge, ack.Events[0].ErrorCode)
 	require.NoError(t, stream.Send(maintenanceMessage("batch-4", nodeID, "anixops.maintenance/v2", maintenanceEventJSON(t, nodeID, "event-v2"))))
 	ack = expectMaintenanceAck(t, stream, "batch-4")
 	assert.Equal(t, "anixops.maintenance/v2", ack.Version)
 	require.Len(t, ack.Events, 1)
 	assert.Contains(t, ack.Events[0].Error, "unsupported maintenance schema")
+	assert.Equal(t, agentcontrol.MaintenanceErrorCodeSchemaUnsupported, ack.Events[0].ErrorCode)
 	large := make([][]byte, 0, 20)
 	for index := 0; index < 20; index++ {
 		large = append(large, []byte(`{"event_id":"large-`+strconv.Itoa(index)+`","pad":"`+strings.Repeat("x", 15<<10)+`"}`))
@@ -134,6 +141,7 @@ func TestAgentControlMaintenanceEventsStoredOncePerEvent(t *testing.T) {
 	require.NoError(t, stream.Send(maintenanceMessage("batch-5", nodeID, agentcontrol.MaintenanceSchemaV1, large...)))
 	ack = expectMaintenanceAck(t, stream, "batch-5")
 	assert.Contains(t, ack.Events[0].Error, "exceed")
+	assert.Equal(t, agentcontrol.MaintenanceErrorCodeBatchTooLarge, ack.Events[0].ErrorCode)
 	assert.Len(t, maintenanceLogRows(t, environment.node.ID), 1)
 
 	assert.Equal(t, persisted+1, agentMaintenanceMetrics.results[maintenancePersisted].Load())
@@ -167,6 +175,8 @@ func TestAgentControlMaintenanceEventsUnrecordedAndGoneNode(t *testing.T) {
 	ack := expectMaintenanceAck(t, stream, "batch-1")
 	require.Len(t, ack.Events, 1)
 	assert.Equal(t, &agentv1pb.MaintenanceEventResult{EventId: "event-transient"}, stripResult(ack.Events[0]))
+	assert.Equal(t, agentcontrol.MaintenanceErrorCodeUnavailable, ack.Events[0].ErrorCode, "transient: a code, no error")
+	assert.Equal(t, maintenanceRetryAfterMs, ack.Events[0].RetryAfterMs)
 	assert.Equal(t, unrecorded+1, agentMaintenanceMetrics.results[maintenanceUnrecorded].Load())
 	var claims int64
 	require.NoError(t, database.GetDB().Model(&model.AgentReportBatch{}).Where("batch_id = ?", agentreports.MaintenanceBatchID("event-transient")).Count(&claims).Error)
@@ -176,6 +186,8 @@ func TestAgentControlMaintenanceEventsUnrecordedAndGoneNode(t *testing.T) {
 	require.NoError(t, stream.Send(maintenanceMessage("batch-2", nodeID, agentcontrol.MaintenanceSchemaV1, event)))
 	ack = expectMaintenanceAck(t, stream, "batch-2")
 	assert.True(t, ack.Events[0].Persisted)
+	assert.Empty(t, ack.Events[0].ErrorCode)
+	assert.Zero(t, ack.Events[0].RetryAfterMs)
 	assert.Len(t, maintenanceLogRows(t, environment.node.ID), 1)
 
 	require.NoError(t, database.GetDB().Delete(&model.Node{}, environment.node.ID).Error)
@@ -183,6 +195,8 @@ func TestAgentControlMaintenanceEventsUnrecordedAndGoneNode(t *testing.T) {
 	ack = expectMaintenanceAck(t, stream, "batch-3")
 	assert.False(t, ack.Events[0].Persisted)
 	assert.Equal(t, "the node no longer exists", ack.Events[0].Error)
+	assert.Equal(t, agentcontrol.MaintenanceErrorCodeNodeGone, ack.Events[0].ErrorCode)
+	assert.Zero(t, ack.Events[0].RetryAfterMs)
 	require.NoError(t, stream.CloseSend())
 }
 

@@ -3,6 +3,7 @@ package kernelnodeops
 import (
 	"context"
 	"errors"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
@@ -74,6 +75,22 @@ func ConfigVerdict(desired model.KernelNodeDesiredConfig, found bool, status *ag
 	return model.ConfigVerdictFailed
 }
 
+// configErrorCodePattern is the form of an error code: lowercase words
+// joined by "_", at most 64 bytes (agentcontrol, "Error codes").
+var configErrorCodePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
+
+// ConfigStatusErrorCode is the error_code of a status that was not
+// applied, as the kernel keeps it: empty for an applied status and for a
+// code that is not of the error code form. Codes the contract does not
+// define (agentcontrol.ConfigErrorCodes) are kept, for a newer Agent.
+func ConfigStatusErrorCode(status *agentv1pb.ConfigStatus) string {
+	code := status.GetErrorCode()
+	if status.GetApplied() || !configErrorCodePattern.MatchString(code) {
+		return ""
+	}
+	return code
+}
+
 // RecordConfigStatus records a ConfigStatus the node's agent sent on
 // session sessionID and returns the verdict on it (ConfigVerdict). Every
 // status is recorded as the node's last report; only an applied one that
@@ -89,15 +106,16 @@ func RecordConfigStatus(ctx context.Context, db *gorm.DB, node agentcontrol.Agen
 	verdict := ConfigVerdict(desired, found, status)
 	now = now.UTC()
 	reportedError := truncateUTF8(status.GetError(), maxConfigStatusError)
+	reportedErrorCode := ConfigStatusErrorCode(status)
 	reportedHash := truncateUTF8(status.GetConfigHash(), 64)
 	row := model.KernelNodeConfigStatus{
 		NodeKind: node.Kind, NodeID: uint64(node.ID), SessionID: truncateUTF8(sessionID, 64),
 		ReportedRevision: status.GetConfigRevision(), ReportedHash: reportedHash, ReportedApplied: status.GetApplied(),
-		ReportedError: reportedError, Verdict: verdict, ReportedAt: now, CreatedAt: now, UpdatedAt: now,
+		ReportedError: reportedError, ReportedErrorCode: reportedErrorCode, Verdict: verdict, ReportedAt: now, CreatedAt: now, UpdatedAt: now,
 	}
 	updates := map[string]any{
 		"session_id": row.SessionID, "reported_revision": row.ReportedRevision, "reported_hash": row.ReportedHash,
-		"reported_applied": row.ReportedApplied, "reported_error": row.ReportedError, "verdict": verdict,
+		"reported_applied": row.ReportedApplied, "reported_error": row.ReportedError, "reported_error_code": reportedErrorCode, "verdict": verdict,
 		"reported_at": now, "updated_at": now,
 	}
 	if verdict == model.ConfigVerdictApplied {

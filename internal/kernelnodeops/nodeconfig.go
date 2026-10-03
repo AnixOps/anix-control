@@ -228,6 +228,9 @@ func awaitSnapshotStatus(ctx context.Context, run *Run, sync *NodeSync, result *
 	if message == "" {
 		message = "the agent could not apply the configuration"
 	}
+	if code := ConfigStatusErrorCode(status); code != "" {
+		message = code + ": " + message
+	}
 	return Failed(kernelnodeopsv1.ErrorCode_ERROR_CODE_BACKEND_FAILED, message, true).WithResult(result)
 }
 

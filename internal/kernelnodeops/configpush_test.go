@@ -54,6 +54,17 @@ func TestAnswersSnapshot(t *testing.T) {
 	assert.False(t, answersSnapshot(snapshot, report(5, "def", "")))
 }
 
+func TestConfigStatusErrorCode(t *testing.T) {
+	for _, code := range agentcontrol.ConfigErrorCodes {
+		assert.Equal(t, code, ConfigStatusErrorCode(&agentv1pb.ConfigStatus{ErrorCode: code}))
+	}
+	assert.Equal(t, "config_newer_reason", ConfigStatusErrorCode(&agentv1pb.ConfigStatus{ErrorCode: "config_newer_reason"}), "a newer Agent's code is kept")
+	assert.Empty(t, ConfigStatusErrorCode(&agentv1pb.ConfigStatus{Applied: true, ErrorCode: agentcontrol.ConfigErrorCodeInvalid}), "an applied status has none")
+	assert.Empty(t, ConfigStatusErrorCode(&agentv1pb.ConfigStatus{ErrorCode: strings.Repeat("a", 65)}))
+	assert.Empty(t, ConfigStatusErrorCode(&agentv1pb.ConfigStatus{ErrorCode: "config-invalid"}))
+	assert.Empty(t, ConfigStatusErrorCode(nil))
+}
+
 func TestTruncateUTF8(t *testing.T) {
 	assert.Equal(t, "short", truncateUTF8("short", 10))
 	assert.Equal(t, "ab", truncateUTF8("abé", 3), "never half a rune")
@@ -91,7 +102,7 @@ func TestRecordConfigStatus(t *testing.T) {
 		assert.True(t, applied)
 
 		long := strings.Repeat("e", 3000)
-		verdict, err = RecordConfigStatus(ctx, db, proxy, "s3", &agentv1pb.ConfigStatus{ConfigRevision: row.Revision, ConfigHash: row.ConfigHash, Error: long}, now.Add(time.Second))
+		verdict, err = RecordConfigStatus(ctx, db, proxy, "s3", &agentv1pb.ConfigStatus{ConfigRevision: row.Revision, ConfigHash: row.ConfigHash, Error: long, ErrorCode: agentcontrol.ConfigErrorCodeApplyFailed}, now.Add(time.Second))
 		require.NoError(t, err)
 		assert.Equal(t, model.ConfigVerdictFailed, verdict)
 		status, found, err := LoadConfigStatus(ctx, db, proxy)
@@ -99,6 +110,7 @@ func TestRecordConfigStatus(t *testing.T) {
 		require.True(t, found)
 		assert.Equal(t, "s3", status.SessionID)
 		assert.Len(t, status.ReportedError, maxConfigStatusError)
+		assert.Equal(t, agentcontrol.ConfigErrorCodeApplyFailed, status.ReportedErrorCode)
 		assert.False(t, status.ReportedApplied)
 		assert.Equal(t, row.Revision, status.AppliedRevision, "a failure keeps the applied revision")
 		assert.Equal(t, row.ConfigHash, status.AppliedHash)
@@ -106,6 +118,13 @@ func TestRecordConfigStatus(t *testing.T) {
 		var count int64
 		require.NoError(t, db.Model(&model.KernelNodeConfigStatus{}).Count(&count).Error)
 		assert.Equal(t, int64(1), count, "one row per node")
+
+		// A later status replaces the code: a malformed one is not kept.
+		_, err = RecordConfigStatus(ctx, db, proxy, "s4", &agentv1pb.ConfigStatus{ConfigRevision: row.Revision, ConfigHash: row.ConfigHash, Error: "x", ErrorCode: "Not A Code"}, now.Add(2*time.Second))
+		require.NoError(t, err)
+		status, _, err = LoadConfigStatus(ctx, db, proxy)
+		require.NoError(t, err)
+		assert.Empty(t, status.ReportedErrorCode)
 
 		lagging, err := ConfigLaggingNodes(ctx, db)
 		require.NoError(t, err)
