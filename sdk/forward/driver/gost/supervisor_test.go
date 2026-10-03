@@ -86,6 +86,10 @@ func TestSystemdSupervisor(t *testing.T) {
 		t.Fatalf("commands\n got  %q\n want %q", r.calls, want)
 	}
 
+	r.show = "ActiveState=activating\n"
+	if st, _ := s.Status(ctx); st.Running || !st.Starting {
+		t.Fatalf("activating unit: %+v", st)
+	}
 	r.show = "LoadState=not-found\nActiveState=inactive\n"
 	if err := s.Check(ctx); !errors.Is(err, gost.ErrNoUnit) {
 		t.Fatalf("Check of a missing unit: %v", err)

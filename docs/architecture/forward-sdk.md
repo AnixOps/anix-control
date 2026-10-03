@@ -780,7 +780,8 @@ driver writes gost's configuration and runs the unmodified binary.
   gost runs, `state.json`, the driver's record (its ownership mark, node,
   generation, `state_hash`, digest and the applied hops; written before the
   first configuration and after every apply that succeeded), and `tls/`,
-  the link certificate. gost's metrics socket is in its
+  the link certificate (the installer gives the gost user read access;
+  `Probe` only sees that the files exist). gost's metrics socket is in its
   `RuntimeDirectory` (`/run/anixops-gost`); the Agent is in the unit's
   group. A configuration without the driver's state file, or a state file
   without its mark, is foreign: Apply refuses it, Remove leaves it.
@@ -812,7 +813,9 @@ driver writes gost's configuration and runs the unmodified binary.
     weighted round-robin order (at most about 128 entries). The circuit
     breaker is the selector's fail filter: `maxFails` is
     `failure_threshold`, `failTimeout` is `open_ms` (3 and 30 s by
-    default, H21), and an upstream comes back after one trial succeeds;
+    default, H21), and an upstream comes back after one trial succeeds
+    (counted per gost node: an upstream listed w times is skipped once each
+    of its entries failed);
   - an admission whitelist of `ingress_sources` (required on relay and exit
     hops, so no relay is open);
   - a traffic limiter for `bandwidth_bps` (the hop's services together, in

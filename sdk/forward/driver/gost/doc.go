@@ -49,7 +49,9 @@
 //     entry in smooth weighted round-robin order (spread, at most about
 //     MaxEntries entries). The circuit breaker is the selector's fail
 //     filter: maxFails failure_threshold (default 3), failTimeout open_ms
-//     (default 30 s, H21). Health checks are the Agent's;
+//     (default 30 s, H21), counted per gost node, so an upstream listed w
+//     times is skipped only once each of its entries failed. Health checks
+//     are the Agent's;
 //   - admission r<route>-h<hop>: a whitelist of ingress_sources (required
 //     on relay and exit hops, so a relay is never open). A paused hop keeps
 //     its services and admits nobody: new connections are refused, while
@@ -80,7 +82,7 @@
 // as a DNS name with both serverAuth and clientAuth, from a CA that signs
 // forward nodes' link certificates only; the Agent's Control certificate
 // (client auth only, URI name only) does not qualify (forward-sdk.md
-// section 16, H26).
+// section 16, H28).
 //
 // # Process and files
 //
@@ -94,7 +96,11 @@
 // systemctl (the unit must carry OwnerMark in its Description; UnitFile
 // renders it); ProcessSupervisor runs gost as a child process, which the
 // tests do inside a network namespace. The Runner runs gost (Probe), ss
-// (the listening sockets) and systemctl, nothing else.
+// (the listening sockets) and systemctl, nothing else. Probe checks that
+// the link certificate files exist as the Agent sees them; that the gost
+// user can read them (group anixops-gost) is the installer's to set up.
+// Without the unit (ErrNoUnit) nothing can run gost, so Remove then
+// deletes the driver's files only.
 //
 // # Apply
 //

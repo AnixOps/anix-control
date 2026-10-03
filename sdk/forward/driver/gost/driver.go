@@ -171,7 +171,7 @@ func (d *Driver) waitServing(ctx context.Context, p *parsed) error {
 		if err != nil {
 			return err
 		}
-		if !st.Running {
+		if !st.Running && !st.Starting {
 			return errors.New("gost driver: gost exited instead of serving the configuration")
 		}
 		if time.Now().After(deadline) {
@@ -180,6 +180,25 @@ func (d *Driver) waitServing(ctx context.Context, p *parsed) error {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
+		case <-time.After(50 * time.Millisecond):
+		}
+	}
+}
+
+// status answers the supervisor's status once gost is not starting: a
+// start in progress (systemd restarting a crashed gost) is waited for, at
+// most ReadyTimeout, so Apply then reloads a running gost or starts a
+// stopped one.
+func (d *Driver) status(ctx context.Context) (Status, error) {
+	deadline := time.Now().Add(d.cfg.ReadyTimeout)
+	for {
+		st, err := d.sup.Status(ctx)
+		if err != nil || !st.Starting || time.Now().After(deadline) {
+			return st, err
+		}
+		select {
+		case <-ctx.Done():
+			return Status{}, ctx.Err()
 		case <-time.After(50 * time.Millisecond):
 		}
 	}
@@ -237,7 +256,7 @@ func (d *Driver) Apply(ctx context.Context, a driver.Artifact) (driver.ApplyResu
 	if a.Empty() {
 		return d.applyEmpty(ctx, h, res)
 	}
-	status, err := d.sup.Status(ctx)
+	status, err := d.status(ctx)
 	if err != nil {
 		return driver.ApplyResult{}, err
 	}
@@ -264,7 +283,7 @@ func (d *Driver) Apply(ctx context.Context, a driver.Artifact) (driver.ApplyResu
 		return driver.ApplyResult{}, err
 	}
 	var ours []manifestListener
-	if status.Running && h.state.applied() {
+	if (status.Running || status.Starting) && h.state.applied() {
 		ours = listenerSet(h.state.Hops)
 	}
 	if err := conflicts(socks, listenerSet(p.hops), ours); err != nil {
@@ -285,7 +304,9 @@ func (d *Driver) Apply(ctx context.Context, a driver.Artifact) (driver.ApplyResu
 	}
 	started := !status.Running
 	if started {
-		d.removeStaleSocket()
+		if !status.Starting {
+			d.removeStaleSocket()
+		}
 		err = d.sup.Start(ctx)
 	} else {
 		err = d.sup.Reload(ctx)
@@ -374,7 +395,7 @@ func (d *Driver) applyEmpty(ctx context.Context, h *host, res driver.ApplyResult
 	if err != nil {
 		return driver.ApplyResult{}, err
 	}
-	if !h.present && !status.Running {
+	if !h.present && !status.Running && !status.Starting {
 		return res, nil
 	}
 	if err := d.sup.Stop(ctx); err != nil {

@@ -46,6 +46,10 @@ var ErrNoUnit = errors.New("gost driver: the gost unit is not installed")
 type Status struct {
 	Running  bool
 	Instance string
+	// Starting is set while the supervisor (re)starts gost (systemd's
+	// "activating", an automatic restart after a crash included): it is
+	// not serving yet, but the sockets of its configuration are its own.
+	Starting bool
 }
 
 // SystemdSupervisor manages UnitName (or Unit) with systemctl through a
@@ -107,6 +111,8 @@ func (s SystemdSupervisor) Status(ctx context.Context) (Status, error) {
 	switch m["ActiveState"] {
 	case "active", "reloading":
 		return Status{Running: true, Instance: m["InvocationID"]}, nil
+	case "activating":
+		return Status{Starting: true}, nil
 	}
 	return Status{}, nil
 }
