@@ -140,9 +140,9 @@ func exchange(c net.Conn, msg string) (string, error) {
 
 // TestNetnsTraffic moves TCP and UDP through a gost relay (RAW in, mutual
 // TLS out) and a gost exit (TLS in, RAW to the target) in one namespace,
-// checks that a hot change to the relay (its sources) keeps established
-// connections, the UDP session and the counter epoch, that an apply that
-// changes the relay's structure reloads gost without dropping an
+// checks that a hot change to the relay (its sources) and adding another
+// route (through the web API) keep established connections, the UDP
+// session and the counter epoch, that the reload fallback keeps an
 // established TCP connection and starts a new counter epoch, that a
 // paused hop refuses new connections, that the bandwidth and connection
 // limits hold, and that the exit refuses a TLS client without a link
@@ -241,9 +241,13 @@ func TestNetnsTraffic(t *testing.T) {
 		t.Fatalf("a hot change: counters %v -> %v", b, h)
 	}
 
-	// A structural change reloads gost: the established TCP connection
-	// survives; every service is re-created, so the counters start a new
-	// epoch.
+	// A structural change (another route) goes through gost's API too:
+	// the new route's services are created, the relay hop's are not
+	// touched, so its established connection, its UDP session (and the
+	// exit's mux carrier) and its counter epoch stay, and gost is not
+	// reloaded.
+	loads := relay.sup.applies
+	pid := relay.sup.pid(t)
 	relay2 := conformance.State("forward-31", 3, sourced, &forwardv1.NodeHop{
 		RouteId: "01JF4A000000000000000000B1", HopIndex: 0, Role: forwardv1.HopRole_HOP_ROLE_ENTRY, Engine: gostE,
 		Listen:       &forwardv1.Listen{Address: "10.231.0.1", Port: 30002, Protocol: forwardv1.L4Protocol_L4_PROTOCOL_TCP},
@@ -254,14 +258,20 @@ func TestNetnsTraffic(t *testing.T) {
 		t.Fatalf("changing apply: %+v %v", r, err)
 	}
 	if got, err := exchange(tcpConn, "two"); err != nil || got != "echo:two" {
-		t.Fatalf("established TCP connection after the reload: %q %v", got, err)
+		t.Fatalf("established TCP connection after another route was added: %q %v", got, err)
 	}
-	after, err := rd.Observe(t.Context())
+	if got, err := exchange(udpConn, "two"); err != nil || got != "echo:two" {
+		t.Fatalf("UDP session after another route was added: %q %v", got, err)
+	}
+	added, err := rd.Observe(t.Context())
 	if err != nil {
 		t.Fatal(err)
 	}
-	if b, a := hot.Counters[0].GetCounterEpoch(), after.Counters[0].GetCounterEpoch(); a == b {
-		t.Fatalf("the reload kept the counter epoch %s although it re-created the services", a)
+	if b, a := hot.Counters[0], added.Counters[0]; a.GetCounterEpoch() != b.GetCounterEpoch() || a.GetUpBytes() <= b.GetUpBytes() {
+		t.Fatalf("adding another route: relay counters %v -> %v", b, a)
+	}
+	if relay.sup.applies != loads || relay.sup.pid(t) != pid {
+		t.Fatal("adding a route reloaded or restarted gost")
 	}
 	direct, err := ns.dial("tcp", "10.231.0.1:30002")
 	if err != nil {
@@ -272,10 +282,34 @@ func TestNetnsTraffic(t *testing.T) {
 		t.Fatalf("the added hop: %q %v", got, err)
 	}
 
+	// The reload fallback (here: a configuration file that is not the
+	// recorded one): the established TCP connection survives; every
+	// service is re-created, so the counters start a new epoch.
+	cf := filepath.Join(relay.cfg.Dir, gost.ConfigFile)
+	if b, err := os.ReadFile(cf); err != nil || os.WriteFile(cf, append(b, '\n'), 0o600) != nil { // #nosec G304 G306 -- the test's own file
+		t.Fatal(err)
+	}
+	if r, err := rd.Apply(t.Context(), render(t, rd, conformance.State("forward-31", 4, relay2.GetHops()...))); err != nil || !r.Changed {
+		t.Fatalf("apply over a changed file: %+v %v", r, err)
+	}
+	if relay.sup.applies != loads+1 {
+		t.Fatal("a configuration file that is not the recorded one did not reload gost")
+	}
+	if got, err := exchange(tcpConn, "four"); err != nil || got != "echo:four" {
+		t.Fatalf("established TCP connection after the reload: %q %v", got, err)
+	}
+	after, err := rd.Observe(t.Context())
+	if err != nil {
+		t.Fatal(err)
+	}
+	if b, a := added.Counters[0].GetCounterEpoch(), after.Counters[0].GetCounterEpoch(); a == b {
+		t.Fatalf("the reload kept the counter epoch %s although it re-created the services", a)
+	}
+
 	// A paused hop keeps its listener and refuses new connections.
 	paused := proto.Clone(relayHop).(*forwardv1.NodeHop)
 	paused.Paused = true
-	if _, err := rd.Apply(t.Context(), render(t, rd, conformance.State("forward-31", 4, paused))); err != nil {
+	if _, err := rd.Apply(t.Context(), render(t, rd, conformance.State("forward-31", 5, paused))); err != nil {
 		t.Fatal(err)
 	}
 	if c, err := ns.dial("tcp", "10.231.0.1:30001"); err == nil {
@@ -294,7 +328,7 @@ func TestNetnsTraffic(t *testing.T) {
 		TargetPolicy: forwardv1.TargetPolicy_TARGET_POLICY_ALLOW_PRIVATE,
 		Limits:       &forwardv1.Limits{BandwidthBps: 800_000, MaxConns: 2},
 	}
-	if _, err := rd.Apply(t.Context(), render(t, rd, conformance.State("forward-31", 5, limited))); err != nil {
+	if _, err := rd.Apply(t.Context(), render(t, rd, conformance.State("forward-31", 6, limited))); err != nil {
 		t.Fatal(err)
 	}
 	var conns []net.Conn

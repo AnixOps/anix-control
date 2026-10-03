@@ -25,6 +25,55 @@ type hostState struct {
 	// Loads counts the starts and reloads Apply made gost do: each one
 	// re-creates every service, so it is part of the counter epoch.
 	Loads uint64 `json:"loads,omitempty"`
+	// Served is the metrics path of the configuration gost loaded at the
+	// start or reload Apply made last. Changes through the web API keep
+	// it (no API call moves the metrics path), so it differs from the
+	// configuration file's once Apply changed services that way.
+	Served string `json:"served,omitempty"`
+	// Seq counts the applies that deleted or created services through the
+	// web API, and Created holds, per hop name, the Seq of the last one
+	// that deleted or created one of the hop's services: part of the
+	// hop's counter epoch, which those end. gost's own creation times
+	// have a resolution of a second, too coarse to tell two re-creations
+	// apart.
+	Seq     uint64            `json:"seq,omitempty"`
+	Created map[string]uint64 `json:"created,omitempty"`
+}
+
+// carry copies what outlives an apply from the recorded state: the
+// loads, the served metrics path and the hops' creations, the latter for
+// the hops of next only.
+func (s *hostState) carry(from *hostState) {
+	if from == nil {
+		return
+	}
+	s.Loads, s.Served, s.Seq = from.Loads, from.Served, from.Seq
+	s.Created = nil
+	for _, h := range s.Hops {
+		if v, ok := from.Created[hopName(h.key())]; ok {
+			if s.Created == nil {
+				s.Created = map[string]uint64{}
+			}
+			s.Created[hopName(h.key())] = v
+		}
+	}
+}
+
+// recreated records that an apply deleted or created services of the
+// named hops: the counter epochs of those the state has end.
+func (s *hostState) recreated(hops map[string]bool) {
+	if len(hops) == 0 {
+		return
+	}
+	s.Seq++
+	for _, h := range s.Hops {
+		if name := hopName(h.key()); hops[name] {
+			if s.Created == nil {
+				s.Created = map[string]uint64{}
+			}
+			s.Created[name] = s.Seq
+		}
+	}
 }
 
 func (s *hostState) applied() bool { return s != nil && s.Digest != "" }

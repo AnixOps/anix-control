@@ -31,8 +31,11 @@ import (
 // version). A reload that cannot bind a listener closes every service, as
 // gost's does. The API keeps per service the statistics Traffic adds and
 // a creation time from a counter, re-created by every start and reload,
-// and lets the driver replace hops, admissions and limiters; it refuses a
-// hop whose failTimeout is not a number, as gost's binding would zero it.
+// and lets the driver create, replace and delete services, chains, hops,
+// admissions and limiters as gost's does: it refuses a service whose
+// listener cannot bind (and the next service after FailNextApply), a
+// duplicate or a missing object, and a hop whose failTimeout is not a
+// number, as gost's binding would zero it.
 type fakeGost struct {
 	config, socket, apiSocket, dir string
 
@@ -46,9 +49,11 @@ type fakeGost struct {
 	hidden   []string // foreign sockets ss does not show yet (taken after a check)
 	conns    []string // ss lines of established sockets
 	failNext bool
-	failAPI  int // the next failAPI hot changes fail
+	failAPI  int  // the next failAPI changes fail
+	apiDown  bool // the API socket does not answer
 	applies  int
-	puts     int
+	puts     int // API changes of hot objects
+	structs  int // API creations and deletions of services
 	created  int64
 	live     *fakeLive
 }
@@ -62,11 +67,49 @@ type fakeLive struct {
 
 type fakeService struct {
 	Name    string
+	Line    string // the ss line of its socket
 	Created int64
 	Stats   struct{ TotalConns, CurrentConns, InputBytes, OutputBytes uint64 }
 }
 
-var hotKinds = []string{"hops", "admissions", "limiters", "climiters"}
+// objKinds are the kinds of objects other than services the fake keeps.
+var objKinds = []string{"chains", "hops", "admissions", "limiters", "climiters"}
+
+// socketLine answers the ss line of a service's listener.
+func socketLine(raw json.RawMessage) (name, line string, ok bool) {
+	var s struct {
+		Name     string
+		Addr     string
+		Listener struct{ Type string }
+	}
+	if json.Unmarshal(raw, &s) != nil || s.Name == "" {
+		return "", "", false
+	}
+	i := strings.LastIndexByte(s.Addr, ':')
+	if i < 0 {
+		return "", "", false
+	}
+	host, port := s.Addr[:i], s.Addr[i+1:]
+	if host == "" {
+		host = "*"
+	}
+	network, state := "tcp", "LISTEN"
+	if s.Listener.Type == "udp" || s.Listener.Type == "quic" {
+		network, state = "udp", "UNCONN"
+	}
+	return s.Name, fmt.Sprintf("%s %s 0 4096 %s:%s *:*", network, state, host, port), true
+}
+
+// boundLocked answers the ss lines of the running services.
+func (f *fakeGost) boundLocked() []string {
+	var out []string
+	if f.live != nil {
+		for _, s := range f.live.services {
+			out = append(out, s.Line)
+		}
+	}
+	return out
+}
 
 func newFakeGost(t testing.TB) (*fakeGost, gost.Config) {
 	t.Helper()
@@ -118,15 +161,7 @@ func (f *fakeGost) load() (path string, bound []string, live *fakeLive, ok bool)
 		return "", nil, nil, false
 	}
 	var c struct {
-		AnixOps struct {
-			Hops []struct {
-				Listeners []struct {
-					Network, Address string
-					Port             uint32
-				}
-			}
-		}
-		Services []struct{ Name string }
+		Services []json.RawMessage
 		Metrics  struct{ Path string }
 	}
 	var objs map[string]json.RawMessage
@@ -134,7 +169,7 @@ func (f *fakeGost) load() (path string, bound []string, live *fakeLive, ok bool)
 		return "", nil, nil, false
 	}
 	live = &fakeLive{objects: map[string]map[string]json.RawMessage{}, order: map[string][]string{}}
-	for _, kind := range hotKinds {
+	for _, kind := range objKinds {
 		var list []json.RawMessage
 		_ = json.Unmarshal(objs[kind], &list)
 		live.objects[kind] = map[string]json.RawMessage{}
@@ -145,25 +180,14 @@ func (f *fakeGost) load() (path string, bound []string, live *fakeLive, ok bool)
 			live.order[kind] = append(live.order[kind], n.Name)
 		}
 	}
-	for _, s := range c.Services {
-		f.created++
-		live.services = append(live.services, &fakeService{Name: s.Name, Created: f.created})
-	}
-	for _, h := range c.AnixOps.Hops {
-		for _, l := range h.Listeners {
-			addr := "*"
-			if l.Address != "" {
-				addr = l.Address
-				if strings.Contains(addr, ":") {
-					addr = "[" + addr + "]"
-				}
-			}
-			state := "LISTEN"
-			if l.Network == "udp" {
-				state = "UNCONN"
-			}
-			bound = append(bound, fmt.Sprintf("%s %s 0 4096 %s:%d *:*", l.Network, state, addr, l.Port))
+	for _, raw := range c.Services {
+		name, line, ok := socketLine(raw)
+		if !ok {
+			return "", nil, nil, false
 		}
+		f.created++
+		live.services = append(live.services, &fakeService{Name: name, Line: line, Created: f.created})
+		bound = append(bound, line)
 	}
 	return c.Metrics.Path, bound, live, true
 }
@@ -233,11 +257,12 @@ func (f *fakeGost) Start(ctx context.Context) error {
 	return nil
 }
 
-// serveAPI answers GET /config and PUT /config/<hot kind>/<name>.
+// serveAPI answers GET /config, and POST /config/<kind>, PUT and DELETE
+// /config/<kind>/<name> for services, chains and the hot objects.
 func (f *fakeGost) serveAPI(w http.ResponseWriter, r *http.Request) {
 	f.mu.Lock()
 	defer f.mu.Unlock()
-	if f.live == nil {
+	if f.live == nil || f.apiDown {
 		http.Error(w, `{"msg":"not running"}`, http.StatusServiceUnavailable)
 		return
 	}
@@ -251,7 +276,7 @@ func (f *fakeGost) serveAPI(w http.ResponseWriter, r *http.Request) {
 			}})
 		}
 		out["services"] = svcs
-		for _, kind := range hotKinds {
+		for _, kind := range objKinds {
 			var list []json.RawMessage
 			for _, n := range f.live.order[kind] {
 				list = append(list, f.live.objects[kind][n])
@@ -261,36 +286,105 @@ func (f *fakeGost) serveAPI(w http.ResponseWriter, r *http.Request) {
 		_ = json.NewEncoder(w).Encode(out)
 		return
 	}
-	kind, name, ok := strings.Cut(strings.TrimPrefix(r.URL.Path, "/config/"), "/")
-	if r.Method != http.MethodPut || !ok || f.live.objects[kind] == nil {
-		http.Error(w, `{"msg":"unsupported"}`, http.StatusNotFound)
+	fail := func(status int, code int, msg string) {
+		w.WriteHeader(status)
+		_ = json.NewEncoder(w).Encode(map[string]any{"code": code, "msg": msg})
+	}
+	kind, name, _ := strings.Cut(strings.TrimPrefix(r.URL.Path, "/config/"), "/")
+	if kind != "services" && f.live.objects[kind] == nil {
+		fail(http.StatusNotFound, 40400, "unsupported")
 		return
 	}
-	if _, ok := f.live.objects[kind][name]; !ok {
-		http.Error(w, `{"code":40004,"msg":"`+kind+` `+name+` not found"}`, http.StatusBadRequest)
-		return
+	exists := func(n string) bool {
+		if kind == "services" {
+			return slices.ContainsFunc(f.live.services, func(s *fakeService) bool { return s.Name == n })
+		}
+		_, ok := f.live.objects[kind][n]
+		return ok
 	}
-	body, err := io.ReadAll(r.Body)
-	var obj map[string]any
-	if err != nil || json.Unmarshal(body, &obj) != nil || obj["name"] != name {
-		http.Error(w, `{"code":40001,"msg":"invalid body"}`, http.StatusBadRequest)
-		return
-	}
-	if kind == "hops" {
-		sel, _ := obj["selector"].(map[string]any)
-		if _, isNumber := sel["failTimeout"].(float64); !isNumber {
-			http.Error(w, `{"code":40001,"msg":"failTimeout is not a duration in nanoseconds"}`, http.StatusBadRequest)
+	var body []byte
+	if r.Method == http.MethodPost || r.Method == http.MethodPut {
+		var err error
+		body, err = io.ReadAll(r.Body)
+		var obj map[string]any
+		if err != nil || json.Unmarshal(body, &obj) != nil {
+			fail(http.StatusBadRequest, 40001, "invalid body")
 			return
 		}
+		if r.Method == http.MethodPut && obj["name"] != name {
+			fail(http.StatusBadRequest, 40001, "invalid body")
+			return
+		}
+		if r.Method == http.MethodPost {
+			name, _ = obj["name"].(string)
+		}
+		if kind == "hops" {
+			sel, _ := obj["selector"].(map[string]any)
+			if _, isNumber := sel["failTimeout"].(float64); !isNumber {
+				fail(http.StatusBadRequest, 40001, "failTimeout is not a duration in nanoseconds")
+				return
+			}
+		}
+	}
+	switch {
+	case r.Method == http.MethodPost && exists(name):
+		fail(http.StatusBadRequest, 40002, kind+" "+name+" already exists")
+		return
+	case r.Method != http.MethodPost && !exists(name):
+		fail(http.StatusBadRequest, 40004, kind+" "+name+" not found")
+		return
+	case r.Method == http.MethodPut && kind == "services":
+		fail(http.StatusBadRequest, 40001, "the fake does not replace services")
+		return
 	}
 	if f.failAPI > 0 {
 		f.failAPI--
-		http.Error(w, `{"code":50000,"msg":"injected failure"}`, http.StatusInternalServerError)
+		fail(http.StatusInternalServerError, 50000, "injected failure")
 		return
 	}
-	f.puts++
-	f.live.objects[kind][name] = body
+	switch r.Method {
+	case http.MethodPost:
+		if kind == "services" {
+			_, line, ok := socketLine(body)
+			if !ok || f.failNext || f.taken([]string{line}) || slices.Contains(f.boundLocked(), line) {
+				f.failNext = false
+				fail(http.StatusInternalServerError, 40003, "create service "+name+" failed: bind: address already in use")
+				return
+			}
+			f.created++
+			f.structs++
+			f.live.services = append(f.live.services, &fakeService{Name: name, Line: line, Created: f.created})
+			f.bound = f.boundLocked()
+			break
+		}
+		f.puts++
+		f.live.objects[kind][name] = body
+		f.live.order[kind] = append(f.live.order[kind], name)
+	case http.MethodPut:
+		f.puts++
+		f.live.objects[kind][name] = body
+	case http.MethodDelete:
+		if kind == "services" {
+			f.structs++
+			f.live.services = slices.DeleteFunc(f.live.services, func(s *fakeService) bool { return s.Name == name })
+			f.bound = f.boundLocked()
+			break
+		}
+		f.puts++
+		delete(f.live.objects[kind], name)
+		f.live.order[kind] = slices.DeleteFunc(f.live.order[kind], func(n string) bool { return n == name })
+	default:
+		fail(http.StatusMethodNotAllowed, 40500, "method")
+		return
+	}
 	_, _ = io.WriteString(w, `{"msg":"OK"}`)
+}
+
+// with runs fn with the fake locked, for tests that change its fields.
+func (f *fakeGost) with(fn func()) {
+	f.mu.Lock()
+	defer f.mu.Unlock()
+	fn()
 }
 
 // object answers a running object of the fake, decoded.

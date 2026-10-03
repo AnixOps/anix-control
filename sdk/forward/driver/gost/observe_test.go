@@ -5,6 +5,8 @@ import (
 	"errors"
 	"maps"
 	"net/netip"
+	"os"
+	"path/filepath"
 	"slices"
 	"testing"
 	"time"
@@ -47,8 +49,9 @@ func apply(t testing.TB, d *gost.Driver, gen uint64, hops ...*forwardv1.NodeHop)
 }
 
 // TestObserveCounters: the counters are the hop's services' statistics;
-// a hot apply keeps their epoch and values, a reload starts a new epoch,
-// and a stopped gost reports 0 in the epoch "stopped".
+// a hot apply keeps their epoch and values, an apply that creates or
+// re-creates a hop's services through the web API starts a new epoch for
+// that hop only, and a stopped gost reports 0 in the epoch "stopped".
 func TestObserveCounters(t *testing.T) {
 	d, f, _ := fakeDriver(t)
 	b := builder(t)
@@ -91,14 +94,33 @@ func TestObserveCounters(t *testing.T) {
 		t.Fatalf("paused hop's admission %+v", adm)
 	}
 
-	// A new hop changes the structure: gost reloads, every service is
-	// re-created and every hop starts a new epoch.
+	// A new hop changes the structure: its services are created through
+	// the web API, without a reload, and every other hop keeps its epoch
+	// and values. Twice in a row: gost then serves a metrics path the
+	// configuration file no longer names.
+	kc := driver.KeyOf(b.Simple(conformance.RouteC, 2))
 	apply(t, d, 3, a2, b2, b.Simple(conformance.RouteC, 2))
-	if f.applies == applies {
-		t.Fatal("a structural change did not reload gost")
+	o3 := observe(t, d)
+	if c3 := countersOf(t, o3, ka); c3.GetCounterEpoch() != epoch || c3.GetUpBytes() != 101 {
+		t.Fatalf("after route C was added: counters %v, epoch was %s", c3, epoch)
 	}
-	if c3 := countersOf(t, observe(t, d), ka); c3.GetCounterEpoch() == epoch || c3.GetUpBytes() != 0 {
-		t.Fatalf("after a reload: counters %v, epoch was %s", c3, epoch)
+	epochB := countersOf(t, o3, kb).GetCounterEpoch()
+	f.traffic("r"+kc.RouteID+"-h0", 5, 5)
+	moved := proto.Clone(b2).(*forwardv1.NodeHop)
+	moved.Listen.Port = 30004
+	apply(t, d, 4, a2, moved, b.Simple(conformance.RouteC, 2))
+	if f.applies != applies {
+		t.Fatal("a structural change reloaded gost")
+	}
+	o4 := observe(t, d)
+	if c4 := countersOf(t, o4, ka); c4.GetCounterEpoch() != epoch || c4.GetUpBytes() != 101 {
+		t.Fatalf("after route B moved: counters %v, epoch was %s", c4, epoch)
+	}
+	if c4 := countersOf(t, o4, kc); c4.GetUpBytes() != 5 {
+		t.Fatalf("route C after route B moved: %v", c4)
+	}
+	if countersOf(t, o4, kb).GetCounterEpoch() == epochB {
+		t.Fatal("route B's re-created service kept its counter epoch")
 	}
 
 	if err := f.Stop(t.Context()); err != nil {
@@ -184,8 +206,8 @@ func TestSetUpstreamsReplacesTheHop(t *testing.T) {
 	}
 }
 
-// TestApplyHotFailureRecovers: an API change that fails puts the previous
-// configuration back and restarts gost on it.
+// TestApplyHotFailureRecovers: an API change that fails is rolled back
+// through the API: gost keeps running, the previous artifact runs.
 func TestApplyHotFailureRecovers(t *testing.T) {
 	d, f, _ := fakeDriver(t)
 	b := builder(t)
@@ -197,14 +219,13 @@ func TestApplyHotFailureRecovers(t *testing.T) {
 	inst := f.instance
 	a2h := proto.Clone(a).(*forwardv1.NodeHop)
 	a2h.Upstreams = a2h.Upstreams[:1]
-	f.mu.Lock()
-	f.failAPI = 1
-	f.mu.Unlock()
+	a2h.Limits = &forwardv1.Limits{MaxConns: 10}
+	f.with(func() { f.failAPI = 2 }) // the climiter is created, the hop refused
 	if _, err := d.Apply(t.Context(), render(t, d, conformance.State("forward-11", 2, a2h))); err == nil {
 		t.Fatal("Apply succeeded although the API refused a change")
 	}
-	if f.instance == inst {
-		t.Fatal("gost was not restarted on the previous configuration")
+	if f.instance != inst {
+		t.Fatal("gost was restarted")
 	}
 	if r, err := d.Apply(t.Context(), a1); err != nil || r.Changed {
 		t.Fatalf("the host does not run the previous artifact: %+v %v", r, err)
@@ -299,8 +320,10 @@ func TestActiveConns(t *testing.T) {
 	}
 }
 
-// TestRetiredCounters: an apply that reloads gost hands every hop's last
-// counters to the hook; a hot apply ends no epoch and hands nothing.
+// TestRetiredCounters: an apply that deletes or re-creates a hop's
+// services hands that hop's last counters to the hook; an apply that
+// adds a hop or changes hot objects only retires nothing; a reload
+// retires every hop.
 func TestRetiredCounters(t *testing.T) {
 	f, cfg := newFakeGost(t)
 	cfg.ReadyTimeout = 300 * time.Millisecond
@@ -310,19 +333,43 @@ func TestRetiredCounters(t *testing.T) {
 		t.Fatal(err)
 	}
 	b := builder(t)
-	a := b.Simple(conformance.RouteA, 0)
-	k := driver.KeyOf(a)
+	a, bb := b.Simple(conformance.RouteA, 0), b.Simple(conformance.RouteB, 1)
+	ka, kb := driver.KeyOf(a), driver.KeyOf(bb)
 	apply(t, d, 1, a)
-	f.traffic("r"+k.RouteID+"-h0", 70, 90)
-	epoch := countersOf(t, observe(t, d), k).GetCounterEpoch()
+	f.traffic("r"+ka.RouteID+"-h0", 70, 90)
+	epoch := countersOf(t, observe(t, d), ka).GetCounterEpoch()
 	a2 := proto.Clone(a).(*forwardv1.NodeHop)
 	a2.Upstreams = a2.Upstreams[:1]
 	apply(t, d, 2, a2)
+	apply(t, d, 3, a2, bb)
 	if len(retired) != 0 {
-		t.Fatalf("a hot apply retired %v", retired)
+		t.Fatalf("a hot apply or an added route retired %v", retired)
 	}
-	apply(t, d, 3, a2, b.Simple(conformance.RouteB, 1))
+	f.traffic("r"+kb.RouteID+"-h0", 7, 9)
+	epochB := countersOf(t, observe(t, d), kb).GetCounterEpoch()
+	apply(t, d, 4, a2)
+	if len(retired) != 1 || retired[0].GetRouteId() != kb.RouteID || retired[0].GetUpBytes() != 7 || retired[0].GetCounterEpoch() != epochB {
+		t.Fatalf("retired %v, want route B's 7/9 in epoch %s", retired, epochB)
+	}
+	retired = nil
+	a3 := proto.Clone(a2).(*forwardv1.NodeHop)
+	a3.Listen.Protocol = forwardv1.L4Protocol_L4_PROTOCOL_TCP_UDP // a udp service is added
+	apply(t, d, 5, a3)
 	if len(retired) != 1 || retired[0].GetUpBytes() != 70 || retired[0].GetDownBytes() != 90 || retired[0].GetCounterEpoch() != epoch {
 		t.Fatalf("retired %v, want route A's 70/90 in epoch %s", retired, epoch)
+	}
+	if c := countersOf(t, observe(t, d), ka); c.GetCounterEpoch() == epoch {
+		t.Fatal("route A kept its epoch although a service was added")
+	}
+	// A configuration file that is not the recorded one makes Apply
+	// reload: every hop's epoch ends.
+	retired = nil
+	cf := filepath.Join(cfg.Dir, gost.ConfigFile)
+	if b, err := os.ReadFile(cf); err != nil || os.WriteFile(cf, append(b, '\n'), 0o600) != nil {
+		t.Fatal(err)
+	}
+	apply(t, d, 6, a3, bb)
+	if len(retired) != 1 || retired[0].GetRouteId() != ka.RouteID {
+		t.Fatalf("a reload retired %v, want route A", retired)
 	}
 }
