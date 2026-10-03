@@ -3,6 +3,7 @@ package fake
 import (
 	"context"
 	"fmt"
+	"maps"
 	"net/netip"
 	"slices"
 	"sort"
@@ -51,6 +52,7 @@ type Host struct {
 	ports    map[uint32]string // listen ports held by foreign objects
 	faults   map[Op][]error
 	applies  int
+	conns    map[netip.AddrPort]uint64 // what ActiveConns answers
 }
 
 // owned is the state the driver owns on the host: what a real driver would
@@ -216,6 +218,15 @@ func (h *Host) AddTraffic(key driver.HopKey, t Traffic) error {
 	ho.totalConns += t.NewConns
 	ho.activeConns = t.ActiveConns
 	return nil
+}
+
+// SetUpstreamConns sets the live connections per upstream address and
+// port that ActiveConns answers, as an engine that counts them would
+// (least-connections re-weighting, sdk/forward/leastconn).
+func (h *Host) SetUpstreamConns(conns map[netip.AddrPort]uint64) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.conns = maps.Clone(conns)
 }
 
 // SetHealth records the engine's own view of one upstream of an applied
@@ -656,6 +667,21 @@ func (d *Driver) SetUpstreams(ctx context.Context, routeID string, hopIndex uint
 	}
 	ho.rotation = next
 	return nil
+}
+
+// ActiveConns answers the connections Host.SetUpstreamConns set: the
+// fake is a leastconn.Source.
+func (d *Driver) ActiveConns(ctx context.Context) (map[netip.AddrPort]uint64, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
+	d.host.mu.Lock()
+	defer d.host.mu.Unlock()
+	out := maps.Clone(d.host.conns)
+	if out == nil {
+		out = map[netip.AddrPort]uint64{}
+	}
+	return out, nil
 }
 
 // Remove implements driver.Driver.

@@ -24,6 +24,7 @@ import (
 	"github.com/AnixOps/anix-control/sdk/forward/driver"
 	"github.com/AnixOps/anix-control/sdk/forward/driver/conformance"
 	"github.com/AnixOps/anix-control/sdk/forward/driver/gost"
+	"github.com/AnixOps/anix-control/sdk/forward/leastconn"
 )
 
 // envEcho turns the test binary into a TCP and UDP echo server on the
@@ -527,5 +528,98 @@ func TestNetnsHotChanges(t *testing.T) {
 	}
 	if c := counters(); c.GetCounterEpoch() != epoch || n.sup.pid(t) != pid {
 		t.Fatalf("hot changes ended the epoch or restarted gost: %v", c)
+	}
+}
+
+// TestNetnsLeastConn re-weights a real gost LEAST_CONN hop from the
+// connections ActiveConns sees (L1): three connections held on t1 make t2
+// take most new connections, without a reload.
+func TestNetnsLeastConn(t *testing.T) {
+	ns := newNetns(t)
+	for _, a := range []string{"10.233.0.1", "10.233.0.10", "10.233.0.11"} {
+		ns.addAddress(t, a)
+	}
+	startEcho(t, ns, "10.233.0.10:7000", "t1")
+	startEcho(t, ns, "10.233.0.11:7000", "t2")
+	n := newNode(t, ns, "forward-11", linkPKI(t, shortDir(t), "forward-11"))
+	d := n.driver(t)
+	const route = "01JF4C000000000000000000A1"
+	t1 := driver.Upstream{Address: "10.233.0.10", Port: 7000, Weight: 1}
+	t2 := driver.Upstream{Address: "10.233.0.11", Port: 7000, Weight: 1}
+	hop := &forwardv1.NodeHop{
+		RouteId: route, HopIndex: 0, Role: forwardv1.HopRole_HOP_ROLE_ENTRY, Engine: gostE,
+		Listen:       &forwardv1.Listen{Address: "10.233.0.1", Port: 30001, Protocol: tcp},
+		Upstreams:    []*forwardv1.Upstream{{Address: t1.Address, Port: 7000, Weight: 1}, {Address: t2.Address, Port: 7000, Weight: 1}},
+		Balance:      leastC,
+		TargetPolicy: forwardv1.TargetPolicy_TARGET_POLICY_ALLOW_PRIVATE,
+		Mark:         1,
+	}
+	if _, err := d.Apply(t.Context(), render(t, d, conformance.State("forward-11", 1, hop))); err != nil {
+		t.Fatal(err)
+	}
+	hit := func() string {
+		t.Helper()
+		c, err := ns.dial("tcp", "10.233.0.1:30001")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = c.Close() }()
+		got, err := exchange(c, "x")
+		if err != nil {
+			t.Fatal(err)
+		}
+		return strings.TrimSuffix(got, ":x")
+	}
+	// Three connections held on t1.
+	if err := d.SetUpstreams(t.Context(), route, 0, []driver.Upstream{t1}); err != nil {
+		t.Fatal(err)
+	}
+	for range 3 {
+		c, err := ns.dial("tcp", "10.233.0.1:30001")
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = c.Close() }()
+		if got, err := exchange(c, "held"); err != nil || got != "t1:held" {
+			t.Fatalf("held connection: %q %v", got, err)
+		}
+	}
+	if err := d.SetUpstreams(t.Context(), route, 0, []driver.Upstream{t1, t2}); err != nil {
+		t.Fatal(err)
+	}
+	if conns, err := d.ActiveConns(t.Context()); err != nil || conns[netip.MustParseAddrPort("10.233.0.10:7000")] != 3 {
+		t.Fatalf("ActiveConns %v %v, want 3 on t1", conns, err)
+	}
+
+	rotation := func() []driver.Upstream {
+		t.Helper()
+		o, err := d.Observe(t.Context())
+		if err != nil {
+			t.Fatal(err)
+		}
+		return o.Rotation[0].Active
+	}
+	pid := n.sup.pid(t)
+	rw := leastconn.Reweighter{Source: d, Setter: d}
+	lh := leastconn.Hop{RouteID: route, Upstreams: []driver.Upstream{t1, t2}, Rotation: rotation()}
+	if err := rw.Tick(t.Context(), []leastconn.Hop{lh}); err != nil {
+		t.Fatal(err)
+	}
+	got := rotation()
+	if len(got) != 2 || got[0].Weight != 25 || got[1].Weight != 100 {
+		t.Fatalf("rotation after re-weighting %+v, want t1 25 and t2 100", got)
+	}
+	// 1:4 expects 20 of 100 on t1; even weights would put 50 there. More
+	// than 33 is 3.4 standard deviations off the first and 3.3 below the
+	// second.
+	count := map[string]int{}
+	for range 100 {
+		count[hit()]++
+	}
+	if count["t1"] > 33 {
+		t.Fatalf("100 new connections after re-weighting: %v", count)
+	}
+	if n.sup.pid(t) != pid {
+		t.Fatal("re-weighting restarted gost")
 	}
 }
