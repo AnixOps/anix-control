@@ -273,8 +273,15 @@ func TestPlanRefusesInvalidInput(t *testing.T) {
 		t.Fatalf("validation: %v", res.Violations)
 	}
 
+	// A duplicated inventory node: the last wins, as in validation.
+	nodes := append(testNodes(), gostNode("forward-41", 21000, 21009, "203.0.113.141"))
+	res, err := Plan([]*forwardv1.Route{twoHop(routeID(1), 0)}, nodes, nil, Options{})
+	if err != nil || res.Allocations[Key{RouteID: routeID(1), HopIndex: 1, NodeRef: "forward-41"}].Port != 21000 {
+		t.Fatalf("duplicate node: %v %v", err, res.Allocations)
+	}
+
 	// Without an inventory nothing can be planned.
-	res, err := Plan([]*forwardv1.Route{twoHop(routeID(1), 0)}, nil, nil, Options{})
+	res, err = Plan([]*forwardv1.Route{twoHop(routeID(1), 0)}, nil, nil, Options{})
 	if err != nil || !hasViolation(res, routeID(1), "hops[0].node_refs[0]", validate.CodeUnknownNode) {
 		t.Fatalf("no inventory: %v %v", err, res.Violations)
 	}

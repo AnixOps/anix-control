@@ -278,6 +278,22 @@ func TestGoldenPlan(t *testing.T) {
 			f.Generations = generationsToJSON(generations)
 			checkGolden(t, name, encodeFixture(t, f), file)
 
+			// The fixture's previous hashes are the current hashes of the
+			// nodes it calls unchanged, copied by hand: if the encoding
+			// ever changes, fail here rather than let -update absorb it.
+			unchanged := 0
+			for ref, prev := range f.PreviousGenerations {
+				if res.States[ref] != nil && prev.StateHash == StateHash(res.States[ref].GetHops()) {
+					unchanged++
+					if generations[ref].Generation != prev.Generation {
+						t.Fatalf("%s is unchanged but bumped", ref)
+					}
+				}
+			}
+			if unchanged == 0 {
+				t.Fatal("no node of the fixture is unchanged: refresh previous_generations by hand")
+			}
+
 			// Re-planning the same routes with what this plan answered
 			// changes nothing: same allocations, same generations.
 			again, err := Plan(routes, nodes, res.Allocations, goldenOptions(f))

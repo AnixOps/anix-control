@@ -161,9 +161,8 @@ func newPlan(nodes []*forwardv1.NodeInfo, previous Allocations, opts Options) *p
 	inventory := model.NodesFromProto(nodes)
 	index := make(map[string]*model.NodeInfo, len(inventory))
 	for i := range inventory {
-		if _, dup := index[inventory[i].NodeRef]; !dup {
-			index[inventory[i].NodeRef] = &inventory[i]
-		}
+		// The last of duplicated references wins, as in validation.
+		index[inventory[i].NodeRef] = &inventory[i]
 	}
 	return &plan{nodes: index, inventory: inventory, previous: previous, opts: opts}
 }
