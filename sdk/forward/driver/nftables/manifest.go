@@ -255,7 +255,7 @@ func parseUpstreamLine(s string) (driver.HopKey, upstream, error) {
 		if err != nil {
 			return driver.HopKey{}, upstream{}, fmt.Errorf("bad upstream %s %q", n.name, f[n.name])
 		}
-		*n.dst = uint32(v)
+		*n.dst = uint32(v) // #nosec G115 -- parsed with at most 32 bits
 	}
 	if u.port == 0 || u.weight == 0 {
 		return driver.HopKey{}, upstream{}, fmt.Errorf("upstream %s port or weight zero", addr)

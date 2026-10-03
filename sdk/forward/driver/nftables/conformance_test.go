@@ -8,8 +8,9 @@ import (
 	"github.com/AnixOps/anix-control/sdk/forward/driver/conformance"
 )
 
-// renderOnlyEnv is a host the driver never touches: F2b has Render only,
-// so the conformance scenarios that apply are skipped until F2c.
+// renderOnlyEnv is a host the driver never touches, for the scenarios that
+// only render: they run everywhere, without privileges. The whole suite
+// runs on a real kernel in TestNetnsConformance (ANIXOPS_NFT_E2E=1, root).
 type renderOnlyEnv struct{}
 
 func (renderOnlyEnv) NewDriver(t testing.TB) driver.Driver { return newDriver(t, nil) }
@@ -34,13 +35,12 @@ var renderScenarios = []string{
 }
 
 // TestConformanceRender runs the render scenarios of the conformance
-// suite. The suite runs whole with Apply in F2c and on network namespaces
-// in F2d.
+// suite without a host.
 func TestConformanceRender(t *testing.T) {
 	var opts []conformance.Option
 	for _, sc := range conformance.Scenarios() {
 		if !slices.Contains(renderScenarios, sc.Name) {
-			opts = append(opts, conformance.Skip(sc.Name, "needs Apply (F2c)"))
+			opts = append(opts, conformance.Skip(sc.Name, "needs a host: TestNetnsConformance runs it"))
 		}
 	}
 	conformance.Run(t, func(*testing.T) conformance.Env { return renderOnlyEnv{} }, opts...)

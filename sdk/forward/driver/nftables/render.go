@@ -295,7 +295,7 @@ func (d *Driver) hopChains(w *writer, p *hopPlan) {
 	up := fmt.Sprintf("ct direction original counter name %q", p.base+"_up")
 	down := fmt.Sprintf("ct direction reply counter name %q", p.base+"_down")
 	if p.bandwidth {
-		// tc (F2c) classifies on the packet mark: the hop's mark, plus the
+		// tc classifies on the packet mark: the hop's mark, plus the
 		// direction bit on reply packets. Other packet mark bits are kept.
 		keep := hexMark(^(d.cfg.MarkMask | d.cfg.DirectionBit))
 		up += fmt.Sprintf(" meta mark set meta mark and %s or %s", keep, hexMark(p.mark))

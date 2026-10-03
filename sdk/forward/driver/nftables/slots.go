@@ -5,7 +5,7 @@ package nftables
 // from numgen inc (round robin, failover), numgen random (random, least
 // connections) or jhash of the client address (IP hash), always modulo
 // Slots, so the rule never changes when the upstreams in rotation or their
-// weights do: SetUpstreams (F2c) rewrites the map elements only.
+// weights do: SetUpstreams rewrites the map elements only.
 
 // slotRun is a run of consecutive slots lo..hi that go to upstream idx.
 type slotRun struct {

@@ -279,7 +279,7 @@ func (e *nsEnv) Foreign(t testing.TB) []string {
 	if tb, ok := own.table(Family, Table); ok && tb.str("comment") == OwnerComment {
 		rest := &listing{}
 		for _, it := range l.items {
-			if !(it.family() == Family && it.tableName() == Table) {
+			if it.family() != Family || it.tableName() != Table {
 				rest.items = append(rest.items, it)
 			}
 		}

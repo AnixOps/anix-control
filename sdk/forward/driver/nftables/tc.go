@@ -43,9 +43,9 @@ type tcClassSpec struct {
 // tcIface is what the driver owns on one interface now.
 type tcIface struct {
 	name    string
-	exists  bool   // the interface exists
-	qdisc   bool   // the driver's root qdisc is there
-	foreign string // a foreign root qdisc ("htb 1:"), or ""
+	exists  bool              // the interface exists
+	qdisc   bool              // the driver's root qdisc is there
+	foreign string            // a foreign root qdisc ("htb 1:"), or ""
 	classes map[uint16]uint64 // minor -> rate in bytes per second
 	filters map[uint32]uint16 // mark -> class minor
 }
@@ -81,7 +81,7 @@ func (d *Driver) tcSpecs(m *manifest) []tcClassSpec {
 		}
 		mark := h.mark << d.cfg.markShift()
 		out = append(out,
-			tcClassSpec{minor: uint16(2 * h.mark), bps: h.bandwidth, mark: mark},                         // #nosec G115 -- mark <= maxTCMark
+			tcClassSpec{minor: uint16(2 * h.mark), bps: h.bandwidth, mark: mark},                        // #nosec G115 -- mark <= maxTCMark
 			tcClassSpec{minor: uint16(2*h.mark + 1), bps: h.bandwidth, mark: mark | d.cfg.DirectionBit}, // #nosec G115 -- as above
 		)
 	}

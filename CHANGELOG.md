@@ -160,6 +160,35 @@
   use the planner's mark semantics (an index the driver shifts into its
   mask). Nothing uses the driver yet.
 
+- Forward SDK F2c (`docs/architecture/forward-sdk.md` section 6.1): the
+  nftables driver runs on a host. `nftables.Probe` checks nft, the
+  `CAP_NET_ADMIN` the Agent needs and every kernel feature (with `nft -c`
+  inside the driver's own table name, never committed), fills the
+  configuration (`Capabilities` reports it, unavailable with a reason) and
+  warns about another table's forward chain that drops by default
+  (Docker). `Apply` refuses a foreign `inet anixops_fwd` table before
+  anything runs (`ErrNotOwned`), checks generations, compares the host with
+  the artifact (recorded digest, a fingerprint seal of the table, the tc
+  objects), so applying what runs changes nothing and a damaged table is
+  repaired, refuses foreign DNAT rules on its listen ports (`ErrConflict`)
+  and runs one `nft -f` transaction that also deletes the objects of
+  removed hops (their last counters go to a hook) and records the state in
+  a set of the driver's own table, so a restarted Agent observes it.
+  `Observe` reads counters per direction with a counter epoch that ends
+  only when a counter is re-created, `SetUpstreams` rewrites the balancing
+  map elements for failover and weights and keeps the rotation on the host,
+  and `Remove` deletes only what the driver owns. Bandwidth limits are tc
+  HTB classes per hop and direction on the configured egress interfaces
+  under a driver-owned root qdisc (`af00:`), added before the nft
+  transaction and removed again when it fails; a foreign root qdisc is
+  `ErrConflict`. Render adds a manifest of comment lines to the script
+  (goldens rewritten). The whole conformance suite passes on a real kernel
+  in throwaway network namespaces, with traffic, damage, faults, conflicts
+  and impostors; CI runs it with the tc, quota and probe tests under sudo
+  in Backend Tests shard 1, and replay tests check the exact command
+  sequences without privileges. Minimum nft 0.9.7 and Linux 5.10; tested
+  with nft 1.0.9 and 1.1.3. Nothing uses the driver yet.
+
 ### Fixed
 
 - The live Control WebUI E2E gate defaults to ports 24175 and 28080 instead
