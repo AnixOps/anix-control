@@ -242,8 +242,9 @@ type HelloAck struct {
 	HeartbeatIntervalSeconds uint32                 `protobuf:"varint,3,opt,name=heartbeat_interval_seconds,json=heartbeatIntervalSeconds,proto3" json:"heartbeat_interval_seconds,omitempty"`
 	DesiredRevision          uint64                 `protobuf:"varint,4,opt,name=desired_revision,json=desiredRevision,proto3" json:"desired_revision,omitempty"`
 	// server_capabilities lists the data-plane features this Control serves on
-	// the stream: config.v1, users.v1 and reports.v1 (Capability name "config",
-	// "users" or "reports", version "v1"). A feature is in use on a session only
+	// the stream: config.v1, users.v1, reports.v1 and package-reports.v1
+	// (Capability name "config", "users", "reports" or "package-reports",
+	// version "v1"). A feature is in use on a session only
 	// when Hello.capabilities lists it too. Empty from a Control that serves
 	// none; Agents built before this field ignore it.
 	ServerCapabilities []*Capability `protobuf:"bytes,5,rep,name=server_capabilities,json=serverCapabilities,proto3" json:"server_capabilities,omitempty"`
@@ -891,6 +892,7 @@ type AgentToControl struct {
 	//	*AgentToControl_Traffic
 	//	*AgentToControl_Logs
 	//	*AgentToControl_Status
+	//	*AgentToControl_PackageReport
 	Payload       isAgentToControl_Payload `protobuf_oneof:"payload"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -1033,6 +1035,15 @@ func (x *AgentToControl) GetStatus() *NodeStatus {
 	return nil
 }
 
+func (x *AgentToControl) GetPackageReport() *PackageReport {
+	if x != nil {
+		if x, ok := x.Payload.(*AgentToControl_PackageReport); ok {
+			return x.PackageReport
+		}
+	}
+	return nil
+}
+
 type isAgentToControl_Payload interface {
 	isAgentToControl_Payload()
 }
@@ -1072,6 +1083,11 @@ type AgentToControl_Status struct {
 	Status *NodeStatus `protobuf:"bytes,17,opt,name=status,proto3,oneof"`
 }
 
+type AgentToControl_PackageReport struct {
+	// Sent only with package-reports.v1 negotiated. Never acknowledged.
+	PackageReport *PackageReport `protobuf:"bytes,18,opt,name=package_report,json=packageReport,proto3,oneof"`
+}
+
 func (*AgentToControl_Hello) isAgentToControl_Payload() {}
 
 func (*AgentToControl_Heartbeat) isAgentToControl_Payload() {}
@@ -1087,6 +1103,8 @@ func (*AgentToControl_Traffic) isAgentToControl_Payload() {}
 func (*AgentToControl_Logs) isAgentToControl_Payload() {}
 
 func (*AgentToControl_Status) isAgentToControl_Payload() {}
+
+func (*AgentToControl_PackageReport) isAgentToControl_Payload() {}
 
 type ControlToAgent struct {
 	state        protoimpl.MessageState `protogen:"open.v1"`
@@ -2065,6 +2083,98 @@ func (x *NodeStatus) GetObservedAtUnixMs() int64 {
 	return 0
 }
 
+// PackageReport is the latest observation of one kind that an Agent plugin
+// package reports for the node (package-reports.v1). Each one replaces the
+// previous report of the same node, plugin_id and kind; Control keeps no
+// history and does not acknowledge it, and the Agent neither spools nor
+// resends it. Control accepts it only when the node's assigned release of
+// plugin_id at version is a signed official Agent release whose manifest
+// declares the capability Control requires for kind; otherwise it drops the
+// report and the stream stays open. PROTOCOL.md, "Package reports".
+type PackageReport struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// plugin_id is the package that produced the report.
+	PluginId string `protobuf:"bytes,1,opt,name=plugin_id,json=pluginId,proto3" json:"plugin_id,omitempty"`
+	// kind names the payload schema, lowercase dot-separated words such as
+	// systemd.services; a new schema version is a new kind.
+	Kind string `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`
+	// version is the release of plugin_id the Agent runs; it must be the
+	// version assigned to the node.
+	Version string `protobuf:"bytes,3,opt,name=version,proto3" json:"version,omitempty"`
+	// payload_json is a JSON object in the schema of kind, at most 256 KiB.
+	PayloadJson []byte `protobuf:"bytes,4,opt,name=payload_json,json=payloadJson,proto3" json:"payload_json,omitempty"`
+	// observed_at_unix_ms is when the plugin took the observation; 0 means
+	// when Control received it.
+	ObservedAtUnixMs int64 `protobuf:"varint,5,opt,name=observed_at_unix_ms,json=observedAtUnixMs,proto3" json:"observed_at_unix_ms,omitempty"`
+	unknownFields    protoimpl.UnknownFields
+	sizeCache        protoimpl.SizeCache
+}
+
+func (x *PackageReport) Reset() {
+	*x = PackageReport{}
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[23]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *PackageReport) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*PackageReport) ProtoMessage() {}
+
+func (x *PackageReport) ProtoReflect() protoreflect.Message {
+	mi := &file_api_grpc_agent_v1_agent_proto_msgTypes[23]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use PackageReport.ProtoReflect.Descriptor instead.
+func (*PackageReport) Descriptor() ([]byte, []int) {
+	return file_api_grpc_agent_v1_agent_proto_rawDescGZIP(), []int{23}
+}
+
+func (x *PackageReport) GetPluginId() string {
+	if x != nil {
+		return x.PluginId
+	}
+	return ""
+}
+
+func (x *PackageReport) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *PackageReport) GetVersion() string {
+	if x != nil {
+		return x.Version
+	}
+	return ""
+}
+
+func (x *PackageReport) GetPayloadJson() []byte {
+	if x != nil {
+		return x.PayloadJson
+	}
+	return nil
+}
+
+func (x *PackageReport) GetObservedAtUnixMs() int64 {
+	if x != nil {
+		return x.ObservedAtUnixMs
+	}
+	return 0
+}
+
 var File_api_grpc_agent_v1_agent_proto protoreflect.FileDescriptor
 
 const file_api_grpc_agent_v1_agent_proto_rawDesc = "" +
@@ -2152,7 +2262,7 @@ const file_api_grpc_agent_v1_agent_proto_rawDesc = "" +
 	"state_json\x18\x05 \x01(\fR\tstateJson\x12-\n" +
 	"\x13observed_at_unix_ms\x18\x06 \x01(\x03R\x10observedAtUnixMs\x12\x1d\n" +
 	"\n" +
-	"session_id\x18\a \x01(\tR\tsessionId\"\xeb\x04\n" +
+	"session_id\x18\a \x01(\tR\tsessionId\"\xb2\x05\n" +
 	"\x0eAgentToControl\x12\x1d\n" +
 	"\n" +
 	"request_id\x18\x01 \x01(\tR\trequestId\x12\x17\n" +
@@ -2167,7 +2277,8 @@ const file_api_grpc_agent_v1_agent_proto_rawDesc = "" +
 	"\rconfig_status\x18\x0e \x01(\v2\x1b.anix.agent.v1.ConfigStatusH\x00R\fconfigStatus\x128\n" +
 	"\atraffic\x18\x0f \x01(\v2\x1c.anix.agent.v1.TrafficReportH\x00R\atraffic\x12-\n" +
 	"\x04logs\x18\x10 \x01(\v2\x17.anix.agent.v1.LogBatchH\x00R\x04logs\x123\n" +
-	"\x06status\x18\x11 \x01(\v2\x19.anix.agent.v1.NodeStatusH\x00R\x06statusB\t\n" +
+	"\x06status\x18\x11 \x01(\v2\x19.anix.agent.v1.NodeStatusH\x00R\x06status\x12E\n" +
+	"\x0epackage_report\x18\x12 \x01(\v2\x1c.anix.agent.v1.PackageReportH\x00R\rpackageReportB\t\n" +
 	"\apayload\"\x88\x04\n" +
 	"\x0eControlToAgent\x12\x1d\n" +
 	"\n" +
@@ -2246,7 +2357,13 @@ const file_api_grpc_agent_v1_agent_proto_rawDesc = "" +
 	"\x0euptime_seconds\x18\x04 \x01(\x03R\ruptimeSeconds\x12'\n" +
 	"\x0fruntime_healthy\x18\x05 \x01(\bR\x0eruntimeHealthy\x12#\n" +
 	"\rruntime_error\x18\x06 \x01(\tR\fruntimeError\x12-\n" +
-	"\x13observed_at_unix_ms\x18\a \x01(\x03R\x10observedAtUnixMs*\xc1\x01\n" +
+	"\x13observed_at_unix_ms\x18\a \x01(\x03R\x10observedAtUnixMs\"\xac\x01\n" +
+	"\rPackageReport\x12\x1b\n" +
+	"\tplugin_id\x18\x01 \x01(\tR\bpluginId\x12\x12\n" +
+	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x18\n" +
+	"\aversion\x18\x03 \x01(\tR\aversion\x12!\n" +
+	"\fpayload_json\x18\x04 \x01(\fR\vpayloadJson\x12-\n" +
+	"\x13observed_at_unix_ms\x18\x05 \x01(\x03R\x10observedAtUnixMs*\xc1\x01\n" +
 	"\rObservedPhase\x12\x1e\n" +
 	"\x1aOBSERVED_PHASE_UNSPECIFIED\x10\x00\x12\x1b\n" +
 	"\x17OBSERVED_PHASE_ACCEPTED\x10\x01\x12\x1b\n" +
@@ -2270,7 +2387,7 @@ func file_api_grpc_agent_v1_agent_proto_rawDescGZIP() []byte {
 }
 
 var file_api_grpc_agent_v1_agent_proto_enumTypes = make([]protoimpl.EnumInfo, 1)
-var file_api_grpc_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 26)
+var file_api_grpc_agent_v1_agent_proto_msgTypes = make([]protoimpl.MessageInfo, 27)
 var file_api_grpc_agent_v1_agent_proto_goTypes = []any{
 	(ObservedPhase)(0),          // 0: anix.agent.v1.ObservedPhase
 	(*Capability)(nil),          // 1: anix.agent.v1.Capability
@@ -2296,16 +2413,17 @@ var file_api_grpc_agent_v1_agent_proto_goTypes = []any{
 	(*LogEntry)(nil),            // 21: anix.agent.v1.LogEntry
 	(*ReportAck)(nil),           // 22: anix.agent.v1.ReportAck
 	(*NodeStatus)(nil),          // 23: anix.agent.v1.NodeStatus
-	nil,                         // 24: anix.agent.v1.Capability.AttributesEntry
-	nil,                         // 25: anix.agent.v1.Hello.LabelsEntry
-	nil,                         // 26: anix.agent.v1.Heartbeat.MetricsEntry
+	(*PackageReport)(nil),       // 24: anix.agent.v1.PackageReport
+	nil,                         // 25: anix.agent.v1.Capability.AttributesEntry
+	nil,                         // 26: anix.agent.v1.Hello.LabelsEntry
+	nil,                         // 27: anix.agent.v1.Heartbeat.MetricsEntry
 }
 var file_api_grpc_agent_v1_agent_proto_depIdxs = []int32{
-	24, // 0: anix.agent.v1.Capability.attributes:type_name -> anix.agent.v1.Capability.AttributesEntry
+	25, // 0: anix.agent.v1.Capability.attributes:type_name -> anix.agent.v1.Capability.AttributesEntry
 	1,  // 1: anix.agent.v1.Hello.capabilities:type_name -> anix.agent.v1.Capability
-	25, // 2: anix.agent.v1.Hello.labels:type_name -> anix.agent.v1.Hello.LabelsEntry
+	26, // 2: anix.agent.v1.Hello.labels:type_name -> anix.agent.v1.Hello.LabelsEntry
 	1,  // 3: anix.agent.v1.HelloAck.server_capabilities:type_name -> anix.agent.v1.Capability
-	26, // 4: anix.agent.v1.Heartbeat.metrics:type_name -> anix.agent.v1.Heartbeat.MetricsEntry
+	27, // 4: anix.agent.v1.Heartbeat.metrics:type_name -> anix.agent.v1.Heartbeat.MetricsEntry
 	5,  // 5: anix.agent.v1.Heartbeat.plugin_observations:type_name -> anix.agent.v1.PluginObservedState
 	6,  // 6: anix.agent.v1.PluginObservedState.rule_counters:type_name -> anix.agent.v1.PluginRuleCounter
 	0,  // 7: anix.agent.v1.ObservedState.phase:type_name -> anix.agent.v1.ObservedPhase
@@ -2317,23 +2435,24 @@ var file_api_grpc_agent_v1_agent_proto_depIdxs = []int32{
 	17, // 13: anix.agent.v1.AgentToControl.traffic:type_name -> anix.agent.v1.TrafficReport
 	20, // 14: anix.agent.v1.AgentToControl.logs:type_name -> anix.agent.v1.LogBatch
 	23, // 15: anix.agent.v1.AgentToControl.status:type_name -> anix.agent.v1.NodeStatus
-	3,  // 16: anix.agent.v1.ControlToAgent.hello_ack:type_name -> anix.agent.v1.HelloAck
-	7,  // 17: anix.agent.v1.ControlToAgent.heartbeat_ack:type_name -> anix.agent.v1.HeartbeatAck
-	8,  // 18: anix.agent.v1.ControlToAgent.desired_operation:type_name -> anix.agent.v1.DesiredOperation
-	13, // 19: anix.agent.v1.ControlToAgent.config:type_name -> anix.agent.v1.ConfigSnapshot
-	16, // 20: anix.agent.v1.ControlToAgent.users:type_name -> anix.agent.v1.UserDelta
-	22, // 21: anix.agent.v1.ControlToAgent.report_ack:type_name -> anix.agent.v1.ReportAck
-	15, // 22: anix.agent.v1.UserDelta.upserts:type_name -> anix.agent.v1.NodeUser
-	18, // 23: anix.agent.v1.TrafficReport.users:type_name -> anix.agent.v1.UserTraffic
-	19, // 24: anix.agent.v1.TrafficReport.online:type_name -> anix.agent.v1.OnlineUser
-	21, // 25: anix.agent.v1.LogBatch.entries:type_name -> anix.agent.v1.LogEntry
-	11, // 26: anix.agent.v1.AgentControlService.ControlStream:input_type -> anix.agent.v1.AgentToControl
-	12, // 27: anix.agent.v1.AgentControlService.ControlStream:output_type -> anix.agent.v1.ControlToAgent
-	27, // [27:28] is the sub-list for method output_type
-	26, // [26:27] is the sub-list for method input_type
-	26, // [26:26] is the sub-list for extension type_name
-	26, // [26:26] is the sub-list for extension extendee
-	0,  // [0:26] is the sub-list for field type_name
+	24, // 16: anix.agent.v1.AgentToControl.package_report:type_name -> anix.agent.v1.PackageReport
+	3,  // 17: anix.agent.v1.ControlToAgent.hello_ack:type_name -> anix.agent.v1.HelloAck
+	7,  // 18: anix.agent.v1.ControlToAgent.heartbeat_ack:type_name -> anix.agent.v1.HeartbeatAck
+	8,  // 19: anix.agent.v1.ControlToAgent.desired_operation:type_name -> anix.agent.v1.DesiredOperation
+	13, // 20: anix.agent.v1.ControlToAgent.config:type_name -> anix.agent.v1.ConfigSnapshot
+	16, // 21: anix.agent.v1.ControlToAgent.users:type_name -> anix.agent.v1.UserDelta
+	22, // 22: anix.agent.v1.ControlToAgent.report_ack:type_name -> anix.agent.v1.ReportAck
+	15, // 23: anix.agent.v1.UserDelta.upserts:type_name -> anix.agent.v1.NodeUser
+	18, // 24: anix.agent.v1.TrafficReport.users:type_name -> anix.agent.v1.UserTraffic
+	19, // 25: anix.agent.v1.TrafficReport.online:type_name -> anix.agent.v1.OnlineUser
+	21, // 26: anix.agent.v1.LogBatch.entries:type_name -> anix.agent.v1.LogEntry
+	11, // 27: anix.agent.v1.AgentControlService.ControlStream:input_type -> anix.agent.v1.AgentToControl
+	12, // 28: anix.agent.v1.AgentControlService.ControlStream:output_type -> anix.agent.v1.ControlToAgent
+	28, // [28:29] is the sub-list for method output_type
+	27, // [27:28] is the sub-list for method input_type
+	27, // [27:27] is the sub-list for extension type_name
+	27, // [27:27] is the sub-list for extension extendee
+	0,  // [0:27] is the sub-list for field type_name
 }
 
 func init() { file_api_grpc_agent_v1_agent_proto_init() }
@@ -2350,6 +2469,7 @@ func file_api_grpc_agent_v1_agent_proto_init() {
 		(*AgentToControl_Traffic)(nil),
 		(*AgentToControl_Logs)(nil),
 		(*AgentToControl_Status)(nil),
+		(*AgentToControl_PackageReport)(nil),
 	}
 	file_api_grpc_agent_v1_agent_proto_msgTypes[11].OneofWrappers = []any{
 		(*ControlToAgent_HelloAck)(nil),
@@ -2365,7 +2485,7 @@ func file_api_grpc_agent_v1_agent_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_grpc_agent_v1_agent_proto_rawDesc), len(file_api_grpc_agent_v1_agent_proto_rawDesc)),
 			NumEnums:      1,
-			NumMessages:   26,
+			NumMessages:   27,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

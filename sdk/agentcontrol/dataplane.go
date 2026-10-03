@@ -21,6 +21,9 @@ const (
 	// operations), so Control may choose the node as a vantage. It adds no
 	// payload; Control records it on the session.
 	CapabilityDiag = "diag"
+	// CapabilityPackageReports: the Agent sends PackageReport, the latest
+	// observation of a plugin package; Control does not acknowledge it.
+	CapabilityPackageReports = "package-reports"
 )
 
 // Negotiated reports whether a data-plane capability is in use on a session:
