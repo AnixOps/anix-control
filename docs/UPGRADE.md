@@ -2511,3 +2511,24 @@ After a successful upgrade, record:
 - rollback artifacts retained and retention period
 
 Do not delete backups until the rollback window has expired.
+
+## Forward Entry HA Through DNS (v4.2)
+
+v4.2 can keep a forwarding route's `entry_hostname` on its healthy entry
+nodes through a DNS provider (L2; design:
+[`architecture/forward-sdk.md`](architecture/forward-sdk.md) section 7.4;
+setup: [`guide/forward-entry-ha.md`](guide/forward-entry-ha.md)).
+
+- **New tables.** `v4_kernel_forward_dns_provider`,
+  `v4_kernel_forward_dns_binding` and `v4_kernel_forward_dns_node` are
+  created at startup (protected kernel tables; no existing table changes).
+  Nothing happens until a route is bound. Rolling back to a release without
+  them leaves them unused, and the DNS records stay as last published.
+- **`module_runtime.ca_kek` seals the provider credentials.** Without it a
+  provider cannot be added. Keep the key with the database backup: a
+  restored database with another key cannot open the credentials (the
+  bindings then report `error` until the provider is updated with new
+  credentials).
+- **Routes that relied on hand-made DNS** keep working unbound. Binding one
+  in DDNS mode makes Control the owner of the name's A/AAAA records in that
+  zone: it replaces records it did not write.
