@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"flag"
 	"fmt"
 	"io"
@@ -41,6 +42,16 @@ func takeAdminCommand() []string {
 		return arguments
 	}
 	return nil
+}
+
+// adminCommandExitCode is the exit status of a failed admin command: 3 when
+// `agents transports --check-required` finds nodes required would refuse
+// (the upgrade gate), 2 on any other error.
+func adminCommandExitCode(err error) int {
+	if errors.Is(err, errAgentsNotReady) {
+		return 3
+	}
+	return 2
 }
 
 // runAdminCommand runs a command taken by takeAdminCommand.

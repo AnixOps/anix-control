@@ -292,10 +292,18 @@ func TestInventory(t *testing.T) {
 
 	inventory, err := Build(context.Background(), db, policy, Options{Now: now})
 	require.NoError(t, err)
-	require.Equal(t, config.AgentMTLSPreferred, inventory.Mode)
+	require.Equal(t, config.AgentMTLSPreferred, inventory.Mode, "the 4.1 default; readiness is computed in every mode")
 	require.NotNil(t, inventory.Sunset)
 	require.Equal(t, UpgradeGuideURL, inventory.UpgradeGuide)
-	require.Equal(t, Summary{Total: 5, MTLS: 1, Legacy: 2, ThirdParty: 1, Unseen: 1}, inventory.Summary)
+	counts := inventory.Summary
+	counts.ReadyForRequired, counts.RequiredReasons, counts.RequiredBlockers = false, nil, nil
+	require.Equal(t, Summary{Total: 5, MTLS: 1, Legacy: 2, ThirdParty: 1, Unseen: 1}, counts)
+	require.False(t, inventory.Summary.ReadyForRequired)
+	require.Len(t, inventory.Summary.RequiredBlockers, 2, "the disabled unseen node does not count")
+	require.Equal(t, "proxy-2", inventory.Summary.RequiredBlockers[0].Node)
+	require.Equal(t, model.AgentTransportHTTPLegacy, inventory.Summary.RequiredBlockers[0].Transport)
+	require.Equal(t, "forward-1", inventory.Summary.RequiredBlockers[1].Node)
+	require.Equal(t, model.AgentTransportCleanAgent, inventory.Summary.RequiredBlockers[1].Transport)
 	byNode := map[string]NodeTransports{}
 	for _, node := range inventory.Nodes {
 		byNode[node.Node] = node
@@ -335,6 +343,7 @@ func TestInventory(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, inventory.Nodes, 2)
 	require.Equal(t, 2, inventory.Summary.Legacy)
+	require.Len(t, inventory.Summary.RequiredBlockers, 2, "readiness covers every node, also with legacy_only")
 
 	// The live overlay: node 2 enrolled a second ago, not written yet.
 	live := newTestRecorder(nil, &clock{now: now})
@@ -349,6 +358,76 @@ func TestInventory(t *testing.T) {
 	inventory, err = Build(context.Background(), db, Policy{Mode: config.AgentMTLSRequired}, Options{})
 	require.NoError(t, err)
 	require.Nil(t, inventory.Sunset)
+}
+
+// TestRequiredReadiness: ready_for_required and its reasons from an
+// inventory: enabled legacy nodes (recent or not) and enabled nodes that
+// never enrolled block; mTLS, third-party, enrolled-but-unseen and
+// disabled nodes do not.
+func TestRequiredReadiness(t *testing.T) {
+	db := openSQLite(t)
+	now := time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC)
+
+	inventory, err := Build(context.Background(), db, Policy{Mode: config.AgentMTLSRequired}, Options{Now: now})
+	require.NoError(t, err)
+	require.True(t, inventory.Summary.ReadyForRequired, "no node, nothing to refuse")
+	require.Empty(t, inventory.Summary.RequiredReasons)
+	require.NotNil(t, inventory.Summary.RequiredReasons, "an empty list, not null")
+	require.NotNil(t, inventory.Summary.RequiredBlockers)
+
+	require.NoError(t, db.Create(&[]model.Node{
+		{ID: 1, Name: "mtls", APIKey: "k1", Status: model.NodeStatusOnline},
+		{ID: 2, Name: "recent-legacy", APIKey: "k2", Status: model.NodeStatusOnline},
+		{ID: 3, Name: "stale-legacy", APIKey: "k3", Status: model.NodeStatusOffline},
+		{ID: 4, Name: "disabled-legacy", APIKey: "k4", Status: model.NodeStatusDisabled},
+		{ID: 5, Name: "v2bx", APIKey: "k5", Status: model.NodeStatusOnline},
+		{ID: 6, Name: "enrolled-unseen", APIKey: "k6", Status: model.NodeStatusOnline},
+		{ID: 7, Name: "never", APIKey: "k7", Status: model.NodeStatusOnline},
+		{ID: 8, Name: "disabled-never", APIKey: "k8", Status: model.NodeStatusDisabled},
+	}).Error)
+	require.NoError(t, db.Create(&[]model.ForwardNode{{ID: 1, Name: "relay-never", Host: "198.51.100.1", Port: 22, Enabled: true}}).Error)
+	require.NoError(t, db.Create(&model.AgentCertificate{Serial: "c6", NodeKind: "proxy", NodeID: 6, Cluster: "prod", EnrollmentID: "e", IssuerKeyID: "k", NotAfter: now.Add(time.Hour)}).Error)
+	days := func(n int) time.Time { return now.Add(time.Duration(-n) * 24 * time.Hour) }
+	require.NoError(t, db.Create(&[]model.AgentTransport{
+		{NodeKind: "proxy", NodeID: 1, Transport: model.AgentTransportMTLSStream, FirstSeenAt: days(3), LastSeenAt: days(0)},
+		{NodeKind: "proxy", NodeID: 2, Transport: model.AgentTransportAPIKeyStream, FirstSeenAt: days(30), LastSeenAt: days(1)},
+		{NodeKind: "proxy", NodeID: 2, Transport: model.AgentTransportUniProxy, FirstSeenAt: days(30), LastSeenAt: days(0)},
+		{NodeKind: "proxy", NodeID: 3, Transport: model.AgentTransportHTTPLegacy, FirstSeenAt: days(30), LastSeenAt: days(10)},
+		{NodeKind: "proxy", NodeID: 4, Transport: model.AgentTransportWebSocket, FirstSeenAt: days(30), LastSeenAt: days(1)},
+		{NodeKind: "proxy", NodeID: 5, Transport: model.AgentTransportUniProxy, FirstSeenAt: days(30), LastSeenAt: days(0)},
+	}).Error)
+
+	inventory, err = Build(context.Background(), db, Policy{Mode: config.AgentMTLSRequired}, Options{Now: now, LegacyOnly: true})
+	require.NoError(t, err)
+	summary := inventory.Summary
+	require.False(t, summary.ReadyForRequired)
+	blockers := map[string]RequiredBlocker{}
+	for _, blocker := range summary.RequiredBlockers {
+		blockers[blocker.Node] = blocker
+	}
+	require.Len(t, blockers, 4, "%+v", summary.RequiredBlockers)
+	require.Equal(t, RequiredBlocker{Node: "proxy-2", Name: "recent-legacy", Reason: BlockerLegacy, Transport: model.AgentTransportAPIKeyStream,
+		LastSeenAt: blockers["proxy-2"].LastSeenAt, Recent: true}, blockers["proxy-2"])
+	require.True(t, blockers["proxy-2"].LastSeenAt.Equal(days(1)), "the legacy sighting's time, not the later UniProxy one")
+	require.Equal(t, BlockerLegacy, blockers["proxy-3"].Reason)
+	require.False(t, blockers["proxy-3"].Recent, "seen 10 days ago")
+	require.Equal(t, BlockerNeverEnrolled, blockers["proxy-7"].Reason)
+	require.Nil(t, blockers["proxy-7"].LastSeenAt)
+	require.Equal(t, BlockerNeverEnrolled, blockers["forward-1"].Reason)
+	legacy, recent, never := summary.RequiredBlockerCounts()
+	require.Equal(t, [3]int{2, 1, 2}, [3]int{legacy, recent, never})
+	require.Equal(t, []string{
+		"2 enabled node(s) still on a legacy AnixOps Agent channel (1 seen within the last 7 days): upgrade their Agents and let them enroll",
+		"2 enabled node(s) never enrolled (no agent certificate, never seen): install or enroll their Agents, or disable the nodes",
+	}, summary.RequiredReasons)
+
+	// Moving the nodes clears the blockers.
+	require.NoError(t, db.Model(&model.Node{}).Where("id IN ?", []uint{2, 3, 7}).Update("status", model.NodeStatusDisabled).Error)
+	require.NoError(t, db.Model(&model.ForwardNode{}).Where("id = ?", 1).Update("enabled", false).Error)
+	inventory, err = Build(context.Background(), db, Policy{Mode: config.AgentMTLSPreferred}, Options{Now: now})
+	require.NoError(t, err)
+	require.True(t, inventory.Summary.ReadyForRequired, "%+v", inventory.Summary)
+	require.Empty(t, inventory.Summary.RequiredReasons)
 }
 
 func TestOverlayKeepsTheNewestSighting(t *testing.T) {

@@ -27,7 +27,7 @@ func NewAgentTransportsHandler(policy agenttransport.Policy) *AgentTransportsHan
 
 // List godoc
 // @Summary Agent transport inventory
-// @Description Lists every proxy and forward node with the transport its agent was last seen on (mtls-stream, apikey-stream, http-legacy, websocket, clean-agent, uniproxy, v2board-grpc), its agent version, its newest valid agent certificate and when it was last seen. legacy_only=true keeps the nodes agent_control.mtls: required would refuse.
+// @Description Lists every proxy and forward node with the transport its agent was last seen on (mtls-stream, apikey-stream, http-legacy, websocket, clean-agent, uniproxy, v2board-grpc), its agent version, its newest valid agent certificate and when it was last seen. legacy_only=true keeps the nodes on a legacy AnixOps Agent channel. summary.ready_for_required (with required_reasons and required_blockers, computed over every node) is false while agent_control.mtls: required, the default from v4.2, would refuse an enabled node: a legacy one or one that never enrolled.
 // @Tags Kernel
 // @Produce json
 // @Security BearerAuth

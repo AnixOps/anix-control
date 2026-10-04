@@ -146,6 +146,6 @@ func agentTransportPolicyLog(cfg *config.Config, grpcSrv *grpcserver.Server) str
 	case strings.TrimSpace(cfg.GRPC.TLSCertFile) == "":
 		enrollment = "unavailable for client certificates: no TLS on the gRPC listener (grpc.tls_cert_file)"
 	}
-	return fmt.Sprintf("Agent transports: agent_control.mtls=%s: %s; legacy sunset: %s; agent enrollment: %s. Check `anix-control agents transports --legacy-only` before v4.2 makes required the default.",
+	return fmt.Sprintf("Agent transports: agent_control.mtls=%s: %s; legacy sunset: %s; agent enrollment: %s. Check `anix-control agents transports --check-required` before v4.2 makes required the default.",
 		mode, effect, sunset, enrollment)
 }

@@ -1949,6 +1949,28 @@ API-key agents will be refused** on the AnixOps Agent channels.
   records which transport each node was last seen on (at most one write a
   minute per node and transport).
 
+### Before Upgrading To v4.2
+
+Run the readiness gate on the 4.1 installation first. It reports whether
+`agent_control.mtls: required` would refuse any enabled node, whatever mode
+runs now (4.1 keeps `preferred` as its default):
+
+```bash
+anix-control agents transports --check-required
+# For scripts: the same, as JSON (ready_for_required, required_reasons,
+# required_blockers).
+anix-control agents transports --check-required --json
+```
+
+It exits with status 0 when no enabled node blocks, 3 when one does and 2
+on any other error. A node blocks when it is enabled and either its newest
+AnixOps Agent channel is legacy (`legacy`; a sighting within the last 7 days
+counts as recent) or it was never seen and holds no valid agent certificate
+(`never_enrolled`). Disabled and third-party nodes never block. Upgrade only
+once it exits 0, or keep `agent_control.mtls: preferred` on v4.2 while the
+listed nodes migrate. `GET /api/v4/kernel/agents/transports` reports the same
+in `summary.ready_for_required`.
+
 ### The Checklist
 
 ```bash
@@ -1956,8 +1978,7 @@ API-key agents will be refused** on the AnixOps Agent channels.
 # certificate and last sighting.
 anix-control agents transports
 
-# The nodes v4.2 would refuse. This must print "refuses none" before you
-# upgrade (or before you set agent_control.mtls: required yourself).
+# The nodes on a legacy AnixOps Agent channel.
 anix-control agents transports --legacy-only
 
 # The same for scripts.

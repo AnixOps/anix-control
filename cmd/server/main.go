@@ -454,7 +454,7 @@ func run() int {
 	if adminArguments != nil {
 		if err := runAdminCommand(context.Background(), cfg, database.Get(), adminArguments, os.Stdout); err != nil {
 			log.Printf("%s: %v", adminArguments[0], err)
-			return 2
+			return adminCommandExitCode(err)
 		}
 		return 0
 	}
