@@ -13,7 +13,6 @@ import Users from '@/views/admin/Users.vue'
 // The U6 list pages keep their filters in the URL query (plan §9): a reload
 // or a shared link shows the same list; changes replace the history entry.
 const adminApi = vi.hoisted(() => ({
-  assignAdminUserTunnel: vi.fn(),
   banUser: vi.fn(),
   cancelOrder: vi.fn(),
   closeTicket: vi.fn(),
@@ -24,14 +23,11 @@ const adminApi = vi.hoisted(() => ({
   executeAgentCommand: vi.fn(),
   generateInviteCodes: vi.fn(),
   getAdminUser: vi.fn(),
-  getAdminUserTunnelList: vi.fn(),
   getAgents: vi.fn(),
   getCoupons: vi.fn(),
-  getForwardTunnels: vi.fn(),
   getInviteCodes: vi.fn(),
   getOrderList: vi.fn(),
   getOrderStats: vi.fn(),
-  getSpeedLimitList: vi.fn(),
   getSubscriptionGroups: vi.fn(),
   getSubscriptionSettings: vi.fn(),
   getTickets: vi.fn(),
@@ -40,14 +36,11 @@ const adminApi = vi.hoisted(() => ({
   getUserStats: vi.fn(),
   listAgentDiagnosticTasks: vi.fn(),
   markOrderPaid: vi.fn(),
-  removeAdminUserTunnel: vi.fn(),
   replyTicket: vi.fn(),
   resetUserSubscribe: vi.fn(),
   resetUserTraffic: vi.fn(),
-  resetUserTunnelTraffic: vi.fn(),
   revokeInviteCode: vi.fn(),
   unbanUser: vi.fn(),
-  updateAdminUserTunnel: vi.fn(),
   updateUser: vi.fn()
 }))
 

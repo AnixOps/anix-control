@@ -2,14 +2,11 @@ import { describe, expect, it } from 'vitest'
 import {
   ADMIN_MENU,
   ADMIN_PAGE_SECTIONS,
-  FORWARD_SUITE_LINKS,
   activeMenuItem,
   buildAdminMenu,
   buildUserMenu,
-  isForwardSuitePath,
   matchesQuery,
-  paletteEntries,
-  showsForwardSuiteNav
+  paletteEntries
 } from '@/navigation/menu'
 import { normalizeWebUIMenuParent } from '@/extensions/menuRegistry'
 import router from '@/router'
@@ -36,17 +33,16 @@ const extensionMenus = [
 ]
 
 describe('navigation/menu.js: buildAdminMenu', () => {
-  it('orders the groups as plan §4.2 and keeps Node and ForwardNode apart', () => {
+  it('orders the groups as plan §4.2 and keeps Node and the forwarding area apart', () => {
     const groups = buildAdminMenu({ t, editionAllows: commercial })
     expect(groups.map(group => group.id)).toEqual(['overview', 'users', 'network', 'extensions', 'system', 'commerce'])
     const network = groups.find(group => group.id === 'network').items
+    // 转发 (the forwarding area) needs the forward package's v4 API; the
+    // flux-clone 转发 and 转发节点 were removed in v4.2 (F5d).
     expect(network.map(item => [item.id, item.to])).toEqual([
       ['nodes', '/admin/nodes'],
-      ['forward', '/admin/forward'],
-      ['forward-nodes', '/admin/forward/nodes'],
       ['agents', '/admin/agent']
     ])
-    expect(network.find(item => item.id === 'forward-nodes').label).toBe('shell.admin.items.forwardNodes')
   })
 
   it('hides 商业 and shows subscription templates in the community edition', () => {
@@ -79,10 +75,8 @@ describe('navigation/menu.js: buildAdminMenu', () => {
       const matched = router.resolve(path).matched
       expect(matched.length > 0 && !matched.at(-1).path.includes(':pathMatch'), path).toBe(true)
     }
-    // The legacy redirect and the duplicated forward-suite links are not in the sidebar.
+    // The legacy redirect is not in the sidebar.
     expect(paths).not.toContain('/admin/control')
-    expect(paths).not.toContain('/admin/forward/tunnel')
-    expect(paths).not.toContain('/admin/forward/agents')
   })
 
   it('lists invite codes under 用户 in both editions', () => {
@@ -149,18 +143,8 @@ describe('navigation/menu.js: active item', () => {
 
   it.each([
     ['/admin/dashboard', 'dashboard'],
-    ['/admin/forward', 'forward'],
-    ['/admin/forward/setup', 'forward'],
-    ['/admin/forward/tunnel', 'forward'],
-    ['/admin/forward/limit', 'forward'],
-    ['/admin/forward/observability', 'monitor'],
     ['/admin/monitor', 'monitor'],
     ['/admin/monitor/traffic', 'monitor'],
-    ['/admin/forward/nodes', 'forward-nodes'],
-    ['/admin/forward/local', 'forward-nodes'],
-    ['/admin/forward/nodex', 'forward-nodes'],
-    ['/admin/forward/ansible-machines', 'forward-nodes'],
-    ['/admin/forward/agents', 'agents'],
     ['/admin/agent', 'agents'],
     ['/admin/nodes', 'nodes'],
     ['/admin/plans', 'plans']
@@ -172,30 +156,19 @@ describe('navigation/menu.js: active item', () => {
     expect(activeMenuItem(groups, '/admin/account')).toBeNull()
     expect(activeMenuItem(groups, '/admin/nowhere')).toBeNull()
   })
-
-  it('knows the forward suite paths', () => {
-    expect(isForwardSuitePath('/admin/forward')).toBe(true)
-    expect(isForwardSuitePath('/admin/forward/local')).toBe(true)
-    expect(isForwardSuitePath('/admin/forwarding')).toBe(false)
-    expect(isForwardSuitePath('/admin/nodes')).toBe(false)
-  })
 })
 
 describe('navigation/menu.js: palette entries', () => {
-  it('offers every visible page, the forward suite pages and the account, without duplicates', () => {
+  it('offers every visible page and the account, without duplicates', () => {
     const groups = buildAdminMenu({ t, editionAllows: community })
     const { pages, actions } = paletteEntries({ t, groups })
     const paths = pages.map(page => page.to)
     expect(new Set(paths).size).toBe(paths.length)
-    for (const link of [...FORWARD_SUITE_LINKS.core, ...FORWARD_SUITE_LINKS.advanced]) {
-      expect(paths).toContain(link.to)
-    }
     expect(paths).toContain('/admin/account')
     expect(paths).not.toContain('/admin/orders')
-    // Forward suite pages carry the sidebar entry that owns them.
-    expect(pages.find(page => page.to === '/admin/forward/local').context).toBe('shell.admin.groups.network · shell.admin.items.forwardNodes')
-    expect(pages.find(page => page.to === '/admin/forward/tunnel').context).toBe('shell.admin.groups.network · shell.admin.items.forward')
-    expect(actions.map(action => action.id)).toEqual(['add-node', 'add-user', 'forward-wizard'])
+    // The flux-clone pages and their wizard were removed in v4.2 (F5d).
+    expect(paths.filter(path => path.startsWith('/admin/forward'))).toEqual([])
+    expect(actions.map(action => action.id)).toEqual(['add-node', 'add-user'])
     expect(actions.find(action => action.id === 'add-node').to).toEqual({ path: '/admin/nodes', query: { create: '1' } })
   })
 
@@ -227,7 +200,6 @@ describe('navigation/menu.js: palette entries', () => {
     const groups = buildAdminMenu({ t, editionAllows: community })
     const ids = groups.flatMap(group => group.items.map(item => item.id))
     expect(ids).not.toContain('traffic-hourly')
-    expect(FORWARD_SUITE_LINKS.advanced.map(link => link.id)).not.toContain('forward-observability')
     const { pages } = paletteEntries({ t, groups })
     for (const section of ADMIN_PAGE_SECTIONS.monitor) {
       expect(pages.find(page => page.id === section.id)).toMatchObject({
@@ -235,7 +207,9 @@ describe('navigation/menu.js: palette entries', () => {
         context: 'shell.admin.groups.overview · shell.admin.items.monitor'
       })
     }
-    expect(matchesQuery(pages.find(page => page.id === 'monitor-latency'), 'monitor latency')).toBe(true)
+    expect(matchesQuery(pages.find(page => page.id === 'monitor-traffic'), 'monitor traffic')).toBe(true)
+    // 节点延迟 and 转发 went with the flux observability API (F5d).
+    expect(ADMIN_PAGE_SECTIONS.monitor.map(section => section.id)).toEqual(['monitor-live', 'monitor-traffic'])
   })
 
   it('matches every query word against label, context and route words', () => {
@@ -265,27 +239,22 @@ describe('navigation/menu.js: buildUserMenu', () => {
 
 // F5b: the v4.2 forwarding area needs the forward package's v4 API.
 describe('forwarding area capability', () => {
-  it('shows 转发 for the v4 pages only with the capability, and renames the flux-clone item', () => {
+  it('shows 转发 for the forwarding area only with the capability', () => {
     const without = buildAdminMenu({ t, editionAllows: () => true })
     const network = groups => groups.find(group => group.id === 'network').items
     expect(network(without).map(item => item.id)).not.toContain('forward-v4')
-    expect(network(without).find(item => item.id === 'forward').label).toBe('shell.admin.items.forward')
 
     const withV4 = buildAdminMenu({ t, editionAllows: () => true, hasCapability: name => name === 'forward.v4' })
     const items = network(withV4)
-    expect(items.map(item => item.id)).toContain('forward-v4')
-    expect(items.find(item => item.id === 'forward').label).toBe('shell.admin.items.forwardLegacy')
-    expect(items.find(item => item.id === 'forward-nodes').label).toBe('shell.admin.items.forwardNodesLegacy')
+    expect(items.map(item => [item.id, item.label])).toEqual([
+      ['nodes', 'shell.admin.items.nodes'],
+      ['forward-v4', 'shell.admin.items.forward'],
+      ['agents', 'shell.admin.items.agents']
+    ])
     for (const path of ['/admin/forward/overview', '/admin/forward/routes/01J/edit', '/admin/forward/inventory/forward-41']) {
       expect(activeMenuItem(withV4, path)?.item.id).toBe('forward-v4')
     }
-    expect(activeMenuItem(withV4, '/admin/forward')?.item.id).toBe('forward')
-  })
-
-  it('keeps the flux-clone suite navigation off the v4 pages', () => {
-    expect(isForwardSuitePath('/admin/forward/routes')).toBe(true)
-    expect(showsForwardSuiteNav('/admin/forward/routes')).toBe(false)
-    expect(showsForwardSuiteNav('/admin/forward/inventory/forward-41')).toBe(false)
-    expect(showsForwardSuiteNav('/admin/forward/tunnel')).toBe(true)
+    const { actions } = paletteEntries({ t, groups: withV4 })
+    expect(actions.map(action => action.id)).toContain('forward-route')
   })
 })

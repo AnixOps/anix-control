@@ -91,7 +91,6 @@
         <UiGroupedList :title="t('adminUsers.detail.actions')">
           <UiGroupedListRow :label="t('adminUsers.actions.editUser')" @click="runFromDetail(editUser)" />
           <UiGroupedListRow :label="t('adminUsers.actions.viewTraffic')" @click="runFromDetail(openTrafficModal)" />
-          <UiGroupedListRow :label="t('adminUsers.actions.manageTunnel')" @click="runFromDetail(openTunnelModal)" />
           <UiGroupedListRow :label="t('adminUsers.actions.copySubscribe')" @click="copySubscribe(detailUser)" />
         </UiGroupedList>
         <UiGroupedList :title="t('adminUsers.detail.danger')" :footer="t('adminUsers.detail.dangerFooter')">
@@ -137,69 +136,6 @@
       <template #footer="{ close }">
         <UiButton :disabled="createLoading" @click="close">{{ t('common.actions.cancel') }}</UiButton>
         <UiButton variant="primary" data-test="user-create-button" :loading="createLoading" @click="handleCreateUser">{{ t('adminUsers.createModal.submit') }}</UiButton>
-      </template>
-    </UiDialog>
-
-    <UiDialog :open="showTunnelModal" size="lg" :title="t('adminUsers.tunnelModal.title', { email: tunnelUser?.email || '-' })" @update:open="value => { if (!value) closeTunnelModal() }">
-      <section class="dialog-section" aria-labelledby="user-tunnel-form-title">
-        <h3 id="user-tunnel-form-title" class="dialog-section__title">{{ editingTunnelId ? t('adminUsers.tunnelModal.sections.editForm', { id: editingTunnelId }) : t('adminUsers.tunnelModal.sections.form') }}</h3>
-        <div class="form-grid">
-          <UiSelect
-            v-model="tunnelForm.tunnelId"
-            :label="t('adminUsers.tunnelModal.fields.tunnel')"
-            :help="editingTunnelId ? t('adminUsers.tunnelModal.fields.tunnelReadonlyHint') : ''"
-            :placeholder="availableTunnelOptions.length === 0 && !editingTunnelId ? t('adminUsers.tunnelModal.options.noAssignableTunnel') : t('adminUsers.tunnelModal.options.selectTunnel')"
-            :options="tunnelSelectOptions"
-            :disabled="Boolean(editingTunnelId)"
-            :aria-invalid="tunnelFormError ? 'true' : undefined"
-            size="md"
-            data-test="user-tunnel-select"
-            @update:model-value="handleTunnelChange"
-          />
-          <UiSelect v-if="editingTunnelId" v-model="tunnelForm.status" size="md" :label="t('adminUsers.tunnelModal.fields.status')" :options="tunnelStatusOptions" />
-          <UiTextField v-model.number="tunnelForm.flow" size="md" type="number" min="0" :label="t('adminUsers.tunnelModal.fields.flowQuota')" />
-          <UiTextField v-model.number="tunnelForm.num" size="md" type="number" min="0" :label="t('adminUsers.tunnelModal.fields.numQuota')" />
-          <UiTextField v-model="tunnelForm.expTime" size="md" type="datetime-local" :label="t('adminUsers.tunnelModal.fields.expTime')" />
-          <UiTextField v-model.number="tunnelForm.flowResetTime" size="md" type="number" min="0" :label="t('adminUsers.tunnelModal.fields.flowResetTime')" />
-          <UiSelect
-            v-model="tunnelSpeed"
-            size="md"
-            :label="t('adminUsers.tunnelModal.fields.rateLimit')"
-            :help="!tunnelForm.tunnelId ? t('adminUsers.tunnelModal.options.selectTunnelFirst') : (!speedLimitLoading && availableSpeedLimitOptions.length === 0 ? t('adminUsers.tunnelModal.options.noRateLimitRules') : '')"
-            :options="speedSelectOptions"
-            :disabled="speedLimitLoading || !tunnelForm.tunnelId"
-          />
-        </div>
-        <p v-if="tunnelFormError" id="user-tunnel-form-error" class="form-error" role="alert">{{ tunnelFormError }}</p>
-        <div class="dialog-section__actions">
-          <UiButton v-if="editingTunnelId" @click="resetTunnelForm">{{ t('adminUsers.tunnelModal.actions.cancelEdit') }}</UiButton>
-          <UiButton variant="primary" :loading="tunnelLoading" data-test="user-tunnel-submit" @click="submitTunnelForm">{{ editingTunnelId ? t('adminUsers.tunnelModal.actions.updateGrant') : t('adminUsers.tunnelModal.actions.addGrant') }}</UiButton>
-        </div>
-      </section>
-
-      <section class="dialog-section" aria-labelledby="user-tunnel-list-title">
-        <h3 id="user-tunnel-list-title" class="dialog-section__title">{{ t('adminUsers.tunnelModal.sections.list') }}</h3>
-        <UiDataTable
-          :columns="grantColumns"
-          :rows="userTunnels"
-          :label="t('adminUsers.tunnelModal.sections.list')"
-          :row-label="item => item.tunnelName || String(item.tunnelId)"
-          :loading="tunnelListLoading"
-          :empty-title="t('adminUsers.tunnelModal.empty')"
-          :row-actions="grantActions"
-          :settings="false"
-          :sticky-header="false"
-          state-heading-tag="h4"
-          default-density="compact"
-          flat
-        >
-          <template #cell-status="{ row }">
-            <UiBadge :tone="row.status === 1 ? 'success' : 'neutral'" :label="row.status === 1 ? t('runtime.shared.enabled') : t('runtime.shared.disabled')" />
-          </template>
-        </UiDataTable>
-      </section>
-      <template #footer="{ close }">
-        <UiButton @click="close">{{ t('common.actions.close') }}</UiButton>
       </template>
     </UiDialog>
 
@@ -295,17 +231,17 @@
 
 <script setup>
 import { computed, onBeforeUnmount, onMounted, ref, watch } from 'vue'
-import { Ban, Copy, Gauge, KeyRound, Pencil, Plus, RotateCcw, RotateCw, Route, ShieldCheck, Users as UsersIcon } from '@lucide/vue'
+import { Ban, Copy, Gauge, KeyRound, Pencil, Plus, RotateCcw, RotateCw, ShieldCheck, Users as UsersIcon } from '@lucide/vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useEdition } from '@/composables/useEdition'
 import { useListQuery } from '@/composables/useListQuery'
 import { useRouteIntent } from '@/composables/useRouteIntent'
 import {
-  assignAdminUserTunnel, banUser, createUser, getAdminUserTunnelList, getForwardTunnels, getSpeedLimitList,
+  banUser, createUser,
   getAdminUser, getTrafficHourly,
   getSubscriptionSettings,
-  getUserList, getUserStats, removeAdminUserTunnel, resetUserSubscribe, resetUserTraffic, resetUserTunnelTraffic,
-  unbanUser, updateAdminUserTunnel, updateUser
+  getUserList, getUserStats, resetUserSubscribe, resetUserTraffic,
+  unbanUser, updateUser
 } from '@/api/admin'
 import { getSubscriptionGroups } from '@/api/admin'
 import UiBadge from '@/ui/UiBadge.vue'
@@ -377,16 +313,6 @@ const createError = ref('')
 const subscriptionSettings = ref({ subscribe_path: '/s', subscribe_domains: [] })
 const newBlankUser = () => ({ email: '', password: '', is_admin: 0, flowResetTime: 0, group_id: null, transfer_enable: 0, speed_limit: 0, device_limit: 0 })
 const newUser = ref(newBlankUser())
-const showTunnelModal = ref(false)
-const tunnelUser = ref(null)
-const tunnelOptions = ref([])
-const speedLimitOptions = ref([])
-const userTunnels = ref([])
-const tunnelListLoading = ref(false)
-const tunnelLoading = ref(false)
-const speedLimitLoading = ref(false)
-const editingTunnelId = ref(null)
-const tunnelFormError = ref('')
 const showResetFlowModal = ref(false)
 const resetFlowLoading = ref(false)
 const resetFlowTarget = ref(null)
@@ -402,8 +328,6 @@ const trafficError = ref('')
 const hourlyTrafficRows = ref([])
 const showCopyManual = ref(false)
 const copyManualUrl = ref('')
-const newTunnelForm = () => ({ tunnelId: '', flow: 0, num: 0, expTime: '', flowResetTime: 0, speedId: null, status: 1 })
-const tunnelForm = ref(newTunnelForm())
 
 const usedOf = user => Number(user?.u || 0) + Number(user?.d || 0)
 const isExhausted = user => Number(user?.transfer_enable || 0) > 0 && usedOf(user) >= Number(user.transfer_enable)
@@ -455,7 +379,6 @@ const newGroup = computed({
 const userActions = user => [
   { key: 'edit', label: t('adminUsers.actions.editUser'), icon: Pencil, onSelect: () => editUser(user) },
   { key: 'traffic', label: t('adminUsers.actions.viewTraffic'), icon: Gauge, onSelect: () => openTrafficModal(user) },
-  { key: 'tunnel', label: t('adminUsers.actions.manageTunnel'), icon: Route, onSelect: () => openTunnelModal(user) },
   { key: 'copy', label: t('adminUsers.actions.copySubscribe'), icon: Copy, onSelect: () => copySubscribe(user) },
   user.banned === 0
     ? { key: 'ban', label: t('adminUsers.actions.ban'), icon: Ban, separatorBefore: true, onSelect: () => handleBan(user) }
@@ -530,38 +453,6 @@ const bulkSetBanned = async (chosen, banned) => {
   })
 }
 
-const tunnelSelectOptions = computed(() => availableTunnelOptions.value.map(item => ({ value: item.id, label: `${item.name} (ID: ${item.id})` })))
-const tunnelStatusOptions = computed(() => [
-  { value: 1, label: t('runtime.shared.enabled') },
-  { value: 0, label: t('runtime.shared.disabled') }
-])
-const speedSelectOptions = computed(() => [
-  { value: 'none', label: t('adminUsers.labels.noLimit') },
-  ...availableSpeedLimitOptions.value.map(item => ({ value: item.id, label: formatSpeedLimitOptionLabel(item) }))
-])
-const tunnelSpeed = computed({
-  get: () => tunnelForm.value.speedId ?? 'none',
-  set: (value) => {
-    tunnelForm.value.speedId = value === 'none' ? null : value
-    handleSpeedLimitChange()
-  }
-})
-const grantColumns = computed(() => [
-  { key: 'tunnel', label: t('adminUsers.tunnelModal.table.tunnel'), primary: true, value: item => item.tunnelName || item.tunnelId },
-  { key: 'status', label: t('adminUsers.tunnelModal.table.status'), secondary: true },
-  { key: 'flow', label: t('adminUsers.tunnelModal.table.flow'), numeric: true, value: item => item.flow ?? 0 },
-  { key: 'num', label: t('adminUsers.tunnelModal.table.num'), numeric: true, value: item => item.num ?? 0 },
-  { key: 'used', label: t('adminUsers.tunnelModal.table.usedFlow'), numeric: true, value: item => formatBytes(calculateTunnelUsedFlow(item)) },
-  { key: 'expTime', label: t('adminUsers.tunnelModal.table.expireAt'), value: item => formatTunnelExpire(item.expTime) },
-  { key: 'reset', label: t('adminUsers.tunnelModal.table.reset'), value: item => formatFlowResetDay(item.flowResetTime) },
-  { key: 'rate', label: t('adminUsers.tunnelModal.table.rateLimit'), value: item => formatTunnelRateLimit(item) },
-  { key: 'id', label: t('adminUsers.tunnelModal.table.id'), numeric: true }
-])
-const grantActions = item => [
-  { key: 'edit', label: t('common.actions.edit'), icon: Pencil, onSelect: () => editTunnelGrant(item) },
-  { key: 'reset', label: t('adminUsers.actions.resetTraffic'), icon: RotateCcw, onSelect: () => openResetTunnelDialog(item) },
-  { key: 'delete', label: t('common.actions.delete'), danger: true, separatorBefore: true, onSelect: () => removeTunnelGrant(item) }
-]
 const dailyColumns = computed(() => [
   { key: 'date', label: t('adminUsers.trafficModal.table.date'), primary: true, sortable: true, firstDirection: 'desc' },
   { key: 'traffic', label: t('adminUsers.trafficModal.table.traffic'), numeric: true, align: 'end', sortable: true, firstDirection: 'desc', format: value => formatBytes(value) }
@@ -570,12 +461,6 @@ const hourlyColumns = computed(() => [
   { key: 'hour_ts', label: t('adminUsers.trafficModal.table.hour'), primary: true, sortable: true, firstDirection: 'desc', format: value => formatHourTs(value) },
   { key: 'traffic', label: t('adminUsers.trafficModal.table.traffic'), numeric: true, align: 'end', sortable: true, firstDirection: 'desc', format: value => formatBytes(value) }
 ])
-const assignedTunnelIds = computed(() => new Set(userTunnels.value.map(item => Number(item?.tunnelId || 0)).filter(id => id > 0)))
-const availableTunnelOptions = computed(() => editingTunnelId.value ? tunnelOptions.value : tunnelOptions.value.filter(item => !assignedTunnelIds.value.has(Number(item?.id || 0))))
-const availableSpeedLimitOptions = computed(() => {
-  const targetTunnelId = Number(tunnelForm.value.tunnelId || 0)
-  return targetTunnelId ? speedLimitOptions.value.filter(item => Number(item?.tunnelId || 0) === targetTunnelId) : []
-})
 const trafficTotal30d = computed(() => hourlyTrafficRows.value.reduce((sum, item) => sum + Number(item?.traffic || 0), 0))
 const dailyTrafficRows = computed(() => {
   const buckets = new Map()
@@ -620,17 +505,6 @@ const getResData = (res, fallback = t('adminUsers.messages.actionFailed')) => {
   }
   return res.data ?? res
 }
-
-const toDateTimeLocal = (timestamp) => {
-  if (!timestamp) return ''
-  let value = Number(timestamp)
-  if (!Number.isFinite(value) || value <= 0) return ''
-  if (value < 1000000000000) value *= 1000
-  const date = new Date(value)
-  const pad = n => String(n).padStart(2, '0')
-  return `${date.getFullYear()}-${pad(date.getMonth() + 1)}-${pad(date.getDate())}T${pad(date.getHours())}:${pad(date.getMinutes())}`
-}
-const fromDateTimeLocal = value => (!value ? 0 : (Number.isNaN(Date.parse(value)) ? 0 : Date.parse(value)))
 
 const handleCreateUser = async () => {
   if (!newUser.value.email || !newUser.value.password) return (createError.value = t('adminUsers.messages.fillEmailPassword'))
@@ -817,137 +691,6 @@ const resetSubscribe = async (user) => {
   await fetchUsers()
 }
 
-const normalizeSpeedLimitList = items => Array.isArray(items) ? items.map(item => {
-  const id = Number(item?.id || 0)
-  if (!Number.isFinite(id) || id <= 0) return null
-  return { id, name: item?.name || `Rule-${id}`, speed: Number(item?.speed || 0), tunnelId: Number(item?.tunnelId ?? item?.tunnel_id ?? 0) }
-}).filter(Boolean) : []
-
-const loadTunnelOptions = async () => {
-  try { tunnelOptions.value = getResData(await getForwardTunnels(), t('adminUsers.messages.fetchTunnelListFailed')) || [] } catch (err) {
-    toast.error(err.response?.data?.msg || err.response?.data?.message || err.message || t('adminUsers.messages.fetchTunnelListFailed')); tunnelOptions.value = []
-  }
-}
-const loadSpeedLimitOptions = async () => {
-  speedLimitLoading.value = true
-  try {
-    const payload = getResData(await getSpeedLimitList(), t('adminUsers.messages.fetchSpeedLimitFailed'))
-    const list = Array.isArray(payload) ? payload : (payload?.list || [])
-    speedLimitOptions.value = normalizeSpeedLimitList(list)
-  } catch (err) {
-    toast.error(err.response?.data?.msg || err.response?.data?.message || err.message || t('adminUsers.messages.fetchSpeedLimitFailed')); speedLimitOptions.value = []
-  } finally {
-    speedLimitLoading.value = false
-  }
-}
-const loadUserTunnels = async (userId) => {
-  tunnelListLoading.value = true
-  try { userTunnels.value = getResData(await getAdminUserTunnelList({ userId }), t('adminUsers.messages.fetchTunnelGrantFailed')) || [] } catch (err) {
-    toast.error(err.response?.data?.msg || err.response?.data?.message || err.message || t('adminUsers.messages.fetchTunnelGrantFailed'))
-  } finally {
-    tunnelListLoading.value = false
-  }
-}
-
-const normalizeSpeedId = (speedId, tunnelId) => {
-  if (speedId === null || speedId === '' || typeof speedId === 'undefined') return null
-  const value = Number(speedId)
-  if (!Number.isFinite(value) || value <= 0) return null
-  const currentTunnelId = Number(tunnelId || 0)
-  if (!currentTunnelId) return null
-  return speedLimitOptions.value.some(item => Number(item.id) === value && Number(item.tunnelId || 0) === currentTunnelId) ? value : null
-}
-const handleSpeedLimitChange = () => { tunnelForm.value.speedId = normalizeSpeedId(tunnelForm.value.speedId, tunnelForm.value.tunnelId) }
-const handleTunnelChange = () => { tunnelForm.value.speedId = normalizeSpeedId(tunnelForm.value.speedId, tunnelForm.value.tunnelId) }
-const formatSpeedLimitOptionLabel = item => (item?.name || `Rule-${item?.id}`)
-const formatTunnelRateLimit = (item) => {
-  if (item?.speedLimitName) return item.speedLimitName
-  const speedId = Number(item?.speedId || 0)
-  if (speedId > 0) {
-    const found = speedLimitOptions.value.find(limit => Number(limit?.id || 0) === speedId)
-    if (found) return formatSpeedLimitOptionLabel(found)
-    return speedId
-  }
-  return t('adminUsers.labels.noLimit')
-}
-
-const openTunnelModal = async (user) => {
-  tunnelUser.value = user
-  resetTunnelForm()
-  showTunnelModal.value = true
-  await Promise.all([loadTunnelOptions(), loadSpeedLimitOptions(), loadUserTunnels(user.id)])
-}
-const closeTunnelModal = () => {
-  showTunnelModal.value = false
-  tunnelUser.value = null
-  userTunnels.value = []
-  resetTunnelForm()
-}
-const resetTunnelForm = () => { editingTunnelId.value = null; tunnelForm.value = newTunnelForm(); tunnelFormError.value = '' }
-
-const submitTunnelForm = async () => {
-  if (!tunnelUser.value) return
-  tunnelFormError.value = ''
-  if (!tunnelForm.value.tunnelId) return (tunnelFormError.value = t('adminUsers.messages.selectTunnelFirst'))
-  if (!editingTunnelId.value && assignedTunnelIds.value.has(Number(tunnelForm.value.tunnelId))) return (tunnelFormError.value = t('adminUsers.messages.tunnelAlreadyAssigned'))
-  tunnelLoading.value = true
-  try {
-    const payload = {
-      tunnelId: Number(tunnelForm.value.tunnelId), flow: Number(tunnelForm.value.flow || 0), num: Number(tunnelForm.value.num || 0),
-      expTime: fromDateTimeLocal(tunnelForm.value.expTime), flowResetTime: Number(tunnelForm.value.flowResetTime || 0),
-      speedId: normalizeSpeedId(tunnelForm.value.speedId, tunnelForm.value.tunnelId), status: Number(tunnelForm.value.status || 1)
-    }
-    if (editingTunnelId.value) {
-      assertCompatSuccess(await updateAdminUserTunnel({ id: Number(editingTunnelId.value), ...payload }), t('adminUsers.messages.grantUpdateFailed'))
-      toast.success(t('adminUsers.messages.grantUpdated'))
-    } else {
-      assertCompatSuccess(await assignAdminUserTunnel({ userId: Number(tunnelUser.value.id), ...payload }), t('adminUsers.messages.grantCreateFailed'))
-      toast.success(t('adminUsers.messages.grantCreated'))
-    }
-    await loadUserTunnels(tunnelUser.value.id)
-    resetTunnelForm()
-  } catch (err) {
-    tunnelFormError.value = err.response?.data?.msg || err.response?.data?.message || t('adminUsers.messages.grantActionFailed')
-  } finally {
-    tunnelLoading.value = false
-  }
-}
-const editTunnelGrant = (item) => {
-  editingTunnelId.value = item.id
-  tunnelFormError.value = ''
-  tunnelForm.value = { tunnelId: item.tunnelId || '', flow: item.flow ?? 0, num: item.num ?? 0, expTime: toDateTimeLocal(item.expTime), flowResetTime: item.flowResetTime ?? 0, speedId: normalizeSpeedId(item.speedId ?? null, item.tunnelId || ''), status: item.status ?? 1 }
-}
-const removeTunnelGrant = async (item) => {
-  const confirmed = await confirm({
-    title: t('adminUsers.confirm.deleteGrantTitle', { id: item.id }),
-    message: t('adminUsers.confirm.deleteGrantMessage', { tunnel: item.tunnelName || item.tunnelId || item.id }),
-    confirmLabel: t('adminUsers.confirm.deleteGrantAction'),
-    tone: 'danger',
-    onConfirm: async () => {
-      try {
-        assertCompatSuccess(await removeAdminUserTunnel({ id: item.id }), t('adminUsers.messages.grantDeleteFailed'))
-      } catch (err) {
-        throw new Error(err.response?.data?.msg || err.response?.data?.message || err.message || t('adminUsers.messages.grantDeleteFailed'))
-      }
-    }
-  })
-  if (!confirmed) return
-  toast.success(t('adminUsers.messages.grantDeleted', { id: item.id }))
-  if (tunnelUser.value) await loadUserTunnels(tunnelUser.value.id)
-  if (editingTunnelId.value === item.id) resetTunnelForm()
-}
-const calculateTunnelUsedFlow = item => Number(item?.inFlow || 0) + Number(item?.outFlow || 0)
-
-const openResetTunnelDialog = (item) => {
-  if (!item?.id) return
-  resetFlowTarget.value = { type: 'tunnel', id: item.id }
-  resetFlowTitle.value = t('adminUsers.resetFlow.tunnelTitle', { id: item.id })
-  resetFlowMessage.value = t('adminUsers.resetFlow.tunnelMessage', { id: item.id })
-  resetFlowUsedFlow.value = formatBytes(calculateTunnelUsedFlow(item))
-  resetFlowQuota.value = Number(item?.flow || 0) > 0 ? `${item.flow} GB` : ''
-  resetFlowError.value = ''
-  showResetFlowModal.value = true
-}
 const closeResetFlowModal = (force = false) => {
   if (resetFlowLoading.value && !force) return
   showResetFlowModal.value = false
@@ -1000,10 +743,6 @@ const confirmResetFlow = async () => {
       assertCompatSuccess(await resetUserTraffic(resetFlowTarget.value.id), t('adminUsers.messages.resetFailed'))
       await fetchUsers()
       toast.success(t('adminUsers.messages.userFlowReset'))
-    } else {
-      assertCompatSuccess(await resetUserTunnelTraffic(resetFlowTarget.value.id), t('adminUsers.messages.resetFailed'))
-      if (tunnelUser.value) await loadUserTunnels(tunnelUser.value.id)
-      toast.success(t('adminUsers.messages.tunnelFlowReset'))
     }
     closeResetFlowModal(true)
   } catch (err) {
@@ -1024,12 +763,6 @@ const formatUserLimits = (user) => {
   const speedText = speedLimit > 0 ? t('adminUsers.labels.speedLimitMbps', { value: speedLimit }) : t('adminUsers.labels.noSpeedLimit')
   const deviceText = deviceLimit > 0 ? t('adminUsers.labels.deviceLimitCount', { value: deviceLimit }) : t('adminUsers.labels.noDeviceLimit')
   return `${speedText} / ${deviceText}`
-}
-const formatTunnelExpire = (value) => {
-  if (!value) return t('adminUsers.labels.permanent')
-  const date = new Date(value < 1000000000000 ? value * 1000 : value)
-  if (Number.isNaN(date.getTime())) return '-'
-  return format.dateTime(date)
 }
 const formatBytes = (bytes) => {
   if (!bytes) return '0 B'

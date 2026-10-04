@@ -18,16 +18,14 @@ import { ADMIN_PAGE_SECTIONS } from './sections'
 //              whose route lands in a separate pull request)
 //   capability shown only when a package provides it (extensions/runtime.js
 //              catalogCapabilities, e.g. forward.v4)
-//   capabilityLabelKeys  { capability: labelKey }: the label while that
-//              capability is present (转发 → 转发（旧版）)
 //
 // Plugin menus (extensions/runtime.js, signed WebUI contract) are merged in
 // by their `parent`: services and operations go to 扩展 (Extensions),
 // system to 系统 (System), unknown parents to 扩展. Each plugin menu needs
 // its permission and must not belong to a package the edition hides.
 
-// The v4.2 forwarding area (F5b): its sections live beside the flux-clone
-// pages under /admin/forward/ on paths those never used.
+// The forwarding area (F5b): its sections under /admin/forward/. The
+// flux-clone pages that shared the prefix were removed in v4.2 (F5d).
 export const FORWARD_V4_PATHS = Object.freeze(['/admin/forward/overview', '/admin/forward/routes', '/admin/forward/inventory', '/admin/forward/dns'])
 
 export function isForwardV4Path(path) {
@@ -62,10 +60,10 @@ export const ADMIN_MENU = Object.freeze([
   {
     id: 'network',
     labelKey: 'shell.admin.groups.network',
-    // Node (proxy service, /admin/nodes) and ForwardNode (forward execution,
-    // /admin/forward/nodes) are different resources: separate items.
-    // With the forward package's v4 API (F5b) 转发 is the new forwarding
-    // area; the flux-clone pages stay reachable as 转发（旧版） until F5d.
+    // Node (proxy service, /admin/nodes) and the forwarding area's nodes
+    // (/admin/forward/inventory) are different resources: separate items.
+    // 转发 needs the forward package's v4 API (F5b); the flux-clone pages
+    // (转发（旧版）, 转发节点（旧版）) were removed in v4.2 (F5d).
     items: [
       { id: 'nodes', to: '/admin/nodes', icon: 'nodes', labelKey: 'shell.admin.items.nodes' },
       {
@@ -76,24 +74,7 @@ export const ADMIN_MENU = Object.freeze([
         capability: 'forward.v4',
         match: FORWARD_V4_PATHS.map(path => `${path}/`).concat(FORWARD_V4_PATHS)
       },
-      {
-        id: 'forward',
-        to: '/admin/forward',
-        icon: 'forward',
-        labelKey: 'shell.admin.items.forward',
-        capabilityLabelKeys: { 'forward.v4': 'shell.admin.items.forwardLegacy' },
-        exact: true,
-        match: ['/admin/forward/setup', '/admin/forward/tunnel', '/admin/forward/limit']
-      },
-      {
-        id: 'forward-nodes',
-        to: '/admin/forward/nodes',
-        icon: 'forward-nodes',
-        labelKey: 'shell.admin.items.forwardNodes',
-        capabilityLabelKeys: { 'forward.v4': 'shell.admin.items.forwardNodesLegacy' },
-        match: ['/admin/forward/ansible-machines', '/admin/forward/ansible-machines/', '/admin/forward/local', '/admin/forward/nodex']
-      },
-      { id: 'agents', to: '/admin/agent', icon: 'agents', labelKey: 'shell.admin.items.agents', match: ['/admin/forward/agents'] }
+      { id: 'agents', to: '/admin/agent', icon: 'agents', labelKey: 'shell.admin.items.agents' }
     ]
   },
   {
@@ -136,55 +117,15 @@ export const EXTENSION_PARENT_GROUPS = Object.freeze({
   extensions: 'extensions'
 })
 
-// The forward suite (flux-panel clone): its own sub-navigation, rendered once
-// at the top of every /admin/forward* page except the 转发节点 pages
-// (ForwardSuiteNav, showsForwardSuiteNav). The sidebar
-// only links into it (转发, 转发节点, NodeX Agents).
-export const FORWARD_SUITE_LINKS = Object.freeze({
-  core: [
-    { id: 'forward-setup', to: '/admin/forward/setup', icon: 'setup', labelKey: 'forwardSuite.nav.setupWizard', hintKey: 'forwardSuite.hints.setupWizard' },
-    { id: 'forward-rules', to: '/admin/forward', icon: 'forward', labelKey: 'forwardSuite.nav.forwards' },
-    { id: 'forward-tunnel', to: '/admin/forward/tunnel', icon: 'tunnel', labelKey: 'forwardSuite.nav.tunnels' },
-    { id: 'forward-limit', to: '/admin/forward/limit', icon: 'limits', labelKey: 'forwardSuite.nav.limits' },
-    { id: 'forward-topology', to: '/admin/forward/nodes', icon: 'forward-nodes', labelKey: 'forwardSuite.nav.nodeXTopology', hintKey: 'forwardSuite.hints.nodeXTopology' }
-  ],
-  advanced: [
-    { id: 'forward-ansible', to: '/admin/forward/ansible-machines', icon: 'ansible', labelKey: 'forwardSuite.nav.ansibleMachines', hintKey: 'forwardSuite.hints.ansibleMachines' },
-    { id: 'forward-local', to: '/admin/forward/local', icon: 'local', labelKey: 'forwardSuite.nav.localRuntime', hintKey: 'forwardSuite.hints.localRuntime' },
-    { id: 'forward-nodex', to: '/admin/forward/nodex', icon: 'nodex', labelKey: 'forwardSuite.nav.nodeXRuntime', hintKey: 'forwardSuite.hints.nodeXRuntime' },
-    { id: 'forward-agents', to: '/admin/forward/agents', icon: 'agents', labelKey: 'forwardSuite.nav.nodeXAgents', hintKey: 'forwardSuite.hints.nodeXAgents' }
-  ]
-})
-
 // Sections of settings-style pages: navigation/sections.js (kept apart so
 // the page titles in the entry chunk do not pull in this file).
 export { ADMIN_PAGE_SECTIONS }
-
-export function isForwardSuitePath(path) {
-  return path === '/admin/forward' || String(path || '').startsWith('/admin/forward/')
-}
-
-// 转发节点 (UI U7): the execution-plane pages (NodeX nodes, Ansible machines,
-// the local and NodeX runtimes, and their detail pages) live under
-// /admin/forward/ but show their own run-mode switch instead of the forward
-// suite navigation, which belongs to the Flux control plane.
-const FORWARD_NODE_PATHS = ['/admin/forward/nodes', '/admin/forward/ansible-machines', '/admin/forward/local', '/admin/forward/nodex']
-
-export function isForwardNodesPath(path) {
-  const value = String(path || '')
-  return FORWARD_NODE_PATHS.some(base => value === base || value.startsWith(`${base}/`))
-}
-
-export function showsForwardSuiteNav(path) {
-  return isForwardSuitePath(path) && !isForwardNodesPath(path) && !isForwardV4Path(path)
-}
 
 // Quick actions in the command palette open an existing create flow. Each is
 // shown only when its page is in the visible menu (`page` = menu item id).
 export const ADMIN_QUICK_ACTIONS = Object.freeze([
   { id: 'add-node', page: 'nodes', icon: 'nodes', labelKey: 'shell.palette.actions.addNode', to: { path: '/admin/nodes', query: { create: '1' } } },
   { id: 'add-user', page: 'users', icon: 'users', labelKey: 'shell.palette.actions.addUser', to: { path: '/admin/users', query: { create: '1' } } },
-  { id: 'forward-wizard', page: 'forward', icon: 'setup', labelKey: 'shell.palette.actions.forwardWizard', to: { path: '/admin/forward/setup' } },
   { id: 'forward-route', page: 'forward-v4', icon: 'forward', labelKey: 'shell.palette.actions.newForwardRoute', to: { path: '/admin/forward/routes/new' } }
 ])
 
@@ -209,11 +150,6 @@ function itemVisible(item, { editionAllows, hasPermission, routeExists, hasCapab
   if (item.capability && !hasCapability(item.capability)) return false
   if (item.optional && routeExists && !routeExists(item.to)) return false
   return true
-}
-
-function capabilityLabelKey(item, hasCapability) {
-  const entry = Object.entries(item.capabilityLabelKeys || {}).find(([capability]) => hasCapability(capability))
-  return entry ? entry[1] : item.labelKey
 }
 
 function compareExtensionMenus(left, right) {
@@ -252,7 +188,7 @@ export function buildAdminMenu({
       .map(item => ({
         id: item.id,
         to: item.to,
-        label: t(capabilityLabelKey(item, hasCapability)),
+        label: t(item.labelKey),
         icon: item.icon,
         match: item.match || [],
         exact: Boolean(item.exact),
@@ -319,19 +255,10 @@ export function activeMenuItem(groups, path) {
   return items.find(({ item }) => menuItemMatches(item, path)) || null
 }
 
-function forwardSuiteEntries(t) {
-  return [...FORWARD_SUITE_LINKS.core, ...FORWARD_SUITE_LINKS.advanced].map(link => ({
-    id: link.id,
-    to: link.to,
-    label: t(link.labelKey),
-    icon: link.icon
-  }))
-}
-
 /**
  * paletteEntries lists what the command palette can open: every visible
- * page (sidebar items, the forward suite pages when 转发 is visible, the
- * account page) and the quick actions whose page is visible.
+ * page (sidebar items, the sections of settings-style pages, the account
+ * page) and the quick actions whose page is visible.
  */
 export function paletteEntries({ t, groups }) {
   const pages = []
@@ -345,12 +272,6 @@ export function paletteEntries({ t, groups }) {
     for (const item of group.items) {
       add({ id: item.id, to: item.to, label: item.label, icon: item.icon }, group.label)
     }
-  }
-  // Forward suite pages, placed where the sidebar puts them (网络 · 转发,
-  // 网络 · 转发节点, ...); only when the sidebar shows that entry.
-  for (const entry of forwardSuiteEntries(t)) {
-    const owner = activeMenuItem(groups, entry.to)
-    if (owner) add(entry, `${owner.group.label} · ${owner.item.label}`)
   }
   // Sections of settings-style pages, under their page.
   for (const group of groups) {

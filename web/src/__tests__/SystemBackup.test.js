@@ -23,7 +23,6 @@ const adminApi = vi.hoisted(() => ({
   updateLoadBalancer: vi.fn(),
   deleteLoadBalancer: vi.fn(),
   runHealthCheck: vi.fn(),
-  listForwardRuntimeJobs: vi.fn(),
   getForwardRuntimeStatus: vi.fn(),
   runForwardRuntimeDoctor: vi.fn()
 }))
@@ -75,7 +74,6 @@ describe('System settings: backups, subscription domains and load balancers', ()
     adminApi.updateLoadBalancer.mockResolvedValue({})
     adminApi.deleteLoadBalancer.mockResolvedValue({})
     adminApi.runHealthCheck.mockResolvedValue({})
-    adminApi.listForwardRuntimeJobs.mockResolvedValue({ data: { list: [] } })
     adminApi.getForwardRuntimeStatus.mockResolvedValue({ data: { data: null } })
     adminApi.runForwardRuntimeDoctor.mockResolvedValue({ data: { data: null } })
   })

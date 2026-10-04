@@ -98,13 +98,13 @@ describe('AdminLayout.vue', () => {
   })
 
   it('renders the menu config groups and marks one selected item', async () => {
-    const { wrapper } = await mountLayout('/admin/forward/tunnel')
+    const { wrapper } = await mountLayout('/admin/agent/transports')
     mounted = wrapper
     const groups = wrapper.findAll('[data-nav-group]').map(group => group.attributes('data-nav-group'))
     expect(groups).toEqual(['overview', 'users', 'network', 'extensions', 'system'])
     const current = wrapper.findAll('#admin-sidebar [aria-current="page"]')
     expect(current).toHaveLength(1)
-    expect(current[0].attributes('data-nav-item')).toBe('forward')
+    expect(current[0].attributes('data-nav-item')).toBe('agents')
     expect(current[0].classes()).toContain('is-active')
   })
 
@@ -122,12 +122,12 @@ describe('AdminLayout.vue', () => {
   })
 
   it('shows group › item › page in the breadcrumb', async () => {
-    const { wrapper } = await mountLayout('/admin/forward/tunnel')
+    const { wrapper } = await mountLayout('/admin/agent/transports')
     mounted = wrapper
     const crumbs = wrapper.findAll('.admin-crumbs li').map(item => item.text())
-    expect(crumbs).toEqual(['Network', 'Forwarding', 'Tunnels'])
-    expect(wrapper.get('.admin-crumbs a').attributes('href')).toBe('/admin/forward')
-    expect(wrapper.get('.admin-crumbs [aria-current="page"]').text()).toBe('Tunnels')
+    expect(crumbs).toEqual(['Network', 'NodeX Agents', 'Agent transports'])
+    expect(wrapper.get('.admin-crumbs a').attributes('href')).toBe('/admin/agent')
+    expect(wrapper.get('.admin-crumbs [aria-current="page"]').text()).toBe('Agent transports')
   })
 
   it('shows a group named like the page only once in the breadcrumb', async () => {
@@ -145,25 +145,9 @@ describe('AdminLayout.vue', () => {
     expect(wrapper.get('.admin-crumbs a').attributes('href')).toBe('/admin/system')
   })
 
-  it('renders the forward suite navigation once, only on forward pages', async () => {
-    const { wrapper, router } = await mountLayout('/admin/forward/tunnel')
-    mounted = wrapper
-    expect(wrapper.findAll('[data-forward-suite-nav]')).toHaveLength(1)
-    expect(wrapper.find('#admin-sidebar [data-forward-suite-nav]').exists()).toBe(false)
-    // 转发节点 pages (execution plane, UI U7) show their run-mode switch instead.
-    for (const path of ['/admin/forward/nodes', '/admin/forward/nodes/5', '/admin/forward/ansible-machines/7', '/admin/forward/local', '/admin/forward/nodex']) {
-      await router.push(path)
-      await flushPromises()
-      expect(wrapper.find('[data-forward-suite-nav]').exists()).toBe(false)
-    }
-    await router.push('/admin/users')
-    await flushPromises()
-    expect(wrapper.find('[data-forward-suite-nav]').exists()).toBe(false)
-  })
-
-  // F5b: with the forward package's v4 API the sidebar gets the new 转发
-  // area, the flux-clone pages stay as 转发（旧版）, the package's own menu
-  // entry is left out, and the v4 pages show no forward suite navigation.
+  // F5b: with the forward package's v4 API the sidebar gets 转发, the
+  // forwarding area; the package's own menu entry is left out. The
+  // flux-clone pages (转发（旧版）, 转发节点（旧版）) were removed in F5d.
   it('adds the v4 forwarding area when the forward package provides it', async () => {
     mockAdminCapabilities.value = ['forward.v4']
     mockAdminExtensionMenus.value = [{ pluginID: 'forward', id: 'forward.main', parent: 'operations', label: 'Forward', icon: 'network', to: '/admin/extensions/forward', permission: 'forward.view', order: 150 }]
@@ -172,11 +156,10 @@ describe('AdminLayout.vue', () => {
       mounted = wrapper
       const paths = sidebarPaths(wrapper)
       expect(paths).toContain('/admin/forward/overview')
-      expect(paths).toContain('/admin/forward')
+      expect(paths).not.toContain('/admin/forward')
+      expect(paths).not.toContain('/admin/forward/nodes')
       expect(paths).not.toContain('/admin/extensions/forward')
-      expect(wrapper.get('#admin-sidebar a[href="/admin/forward"]').text()).toContain('Forwarding (legacy)')
       expect(wrapper.get('#admin-sidebar a[href="/admin/forward/overview"]').attributes('aria-current')).toBe('page')
-      expect(wrapper.find('[data-forward-suite-nav]').exists()).toBe(false)
       await router.push('/admin/forward/inventory/forward-41')
       await flushPromises()
       expect(wrapper.get('#admin-sidebar a[href="/admin/forward/overview"]').attributes('aria-current')).toBe('page')
@@ -186,12 +169,11 @@ describe('AdminLayout.vue', () => {
     }
   })
 
-  it('keeps the flux-clone forwarding pages as 转发 without the v4 API', async () => {
+  it('shows no forwarding entry without the v4 API', async () => {
     const { wrapper } = await mountLayout('/admin/dashboard')
     mounted = wrapper
     const paths = sidebarPaths(wrapper)
-    expect(paths).not.toContain('/admin/forward/overview')
-    expect(wrapper.get('#admin-sidebar a[href="/admin/forward"]').text()).not.toContain('legacy')
+    expect(paths.filter(path => path.startsWith('/admin/forward'))).toEqual([])
   })
 
   it('keeps content to the admin width unless the route is wide', async () => {
@@ -360,12 +342,9 @@ describe('AdminLayout.vue', () => {
     mounted = wrapper
     const title = () => wrapper.get('.admin-crumbs [aria-current="page"]').text()
     expect(title()).toBe('Telegram')
-    await router.push('/admin/forward/ansible-machines')
+    await router.push('/admin/agent/transports')
     await flushPromises()
-    expect(title()).toBe('Ansible Machines')
-    await router.push('/admin/forward/nodex')
-    await flushPromises()
-    expect(title()).toBe('NodeX Runtime')
+    expect(title()).toBe('Agent transports')
     await router.push('/admin/account')
     await flushPromises()
     expect(title()).toBe('Account')

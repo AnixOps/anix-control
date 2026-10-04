@@ -10,10 +10,6 @@
             <UiGroupedListRow :label="t('runtime.localRuntime.fields.inventory')" :value="runtimeAnsibleForm.inventory || '—'" />
             <UiGroupedListRow :label="t('runtime.localRuntime.fields.command')" :value="runtimeAnsibleForm.command || defaultRuntimeAnsibleConfig.command" />
           </UiGroupedList>
-          <div class="runtime-mode__links">
-            <UiButton size="sm" as="router-link" to="/admin/forward/local" :icon-end="ArrowRight">{{ t('runtime.workbench.localCard.manage') }}</UiButton>
-            <UiButton size="sm" variant="tertiary" as="router-link" to="/admin/forward/ansible-machines">{{ t('runtime.workbench.actions.openAnsibleMachines') }}</UiButton>
-          </div>
         </UiCard>
         <UiCard :class="['runtime-mode', { 'is-active': runtimeNodeXMode }]" heading-tag="h3" :title="t('runtime.workbench.nodeXCard.title')" :description="t('runtime.workbench.nodeXCard.description')">
           <UiGroupedList>
@@ -23,9 +19,6 @@
             <UiGroupedListRow :label="t('runtime.nodeX.cards.baseUrl')" :value="runtimeNodeXBaseUrl || '—'" />
             <UiGroupedListRow :label="t('runtime.nodeX.cards.tokenConfigured')" :value="runtimeNodeXToken ? t('runtime.shared.yes') : t('runtime.shared.no')" />
           </UiGroupedList>
-          <div class="runtime-mode__links">
-            <UiButton size="sm" as="router-link" to="/admin/forward/nodex" :icon-end="ArrowRight">{{ t('runtime.workbench.nodeXCard.manage') }}</UiButton>
-          </div>
         </UiCard>
       </div>
     </UiSection>
@@ -81,39 +74,6 @@
       <p class="settings-note">{{ t('runtime.workbench.doctor.note') }}</p>
     </UiSection>
 
-    <UiSection :title="t('runtime.workbench.recentJobsTitle')" :description="t('runtime.workbench.recentJobsSubtitle')">
-      <template #actions>
-        <UiButton :icon="RotateCw" :loading="runtimeJobsLoading" data-test="runtime-refresh-jobs" @click="fetchForwardRuntimeJobs">{{ t('runtime.workbench.actions.refreshJobs') }}</UiButton>
-      </template>
-      <UiDataTable
-        :columns="jobColumns"
-        :rows="runtimeJobs"
-        :label="t('runtime.workbench.recentJobsTitle')"
-        :row-label="job => `#${job.id} ${job.action}`"
-        storage-key="admin.system.runtimeJobs"
-        :loading="runtimeJobsLoading"
-        :error="runtimeJobsError"
-        :error-title="t('adminSettings.runtime.jobsLoadFailed')"
-        :empty-icon="ListChecks"
-        :empty-title="t('runtime.workbench.noJobs')"
-        :empty-description="t('adminSettings.runtime.jobsEmptyDescription')"
-        state-heading-tag="h3"
-        :settings="false"
-        @retry="fetchForwardRuntimeJobs"
-      >
-        <template #cell-job="{ row }">
-          <span class="runtime-job">
-            <strong>#{{ row.id }} {{ row.action }}</strong>
-            <span class="runtime-job__meta">{{ t('runtime.workbench.jobMeta', { backend: runtimeBackendLabel(row.backend), forwardId: row.forwardId || '-', tunnelId: row.tunnelId || '-', nodeId: row.nodeId || '-' }) }}</span>
-            <code v-if="formatRuntimeJobMessage(row)" class="runtime-job__message">{{ formatRuntimeJobMessage(row) }}</code>
-          </span>
-        </template>
-        <template #cell-status="{ row }">
-          <UiBadge :tone="JOB_TONES[row.status] || 'neutral'" :label="getRuntimeJobStatusLabel(row.status)" />
-        </template>
-      </UiDataTable>
-    </UiSection>
-
     <UiSection :title="t('adminSettings.runtime.commands.title')" :description="t('runtime.workbench.doctor.summary')">
       <div class="runtime-commands">
         <UiCodeBlock :label="t('runtime.shared.bash')" :code="runtimeDisplayedCommands.bash.join('\n')" wrap max-height="" />
@@ -132,15 +92,14 @@
 </template>
 
 <script setup>
-// 系统设置 → 转发运行时: the execution plane's settings live here, not on the
-// flux-panel forward pages (AGENTS.md, flux-panel-clone.md): the active
-// backend (NodeX or local Ansible, read from the system config keys; it is
-// edited on the 本地运行时 and NodeX 运行时 pages), the runtime doctor, the
-// runtime job table and the operator commands. Read-only plus the doctor,
-// exactly as before; endpoints unchanged.
+// 系统设置 → 转发运行时: the v4.1 flux forwarding runtime, read-only: the
+// active backend (NodeX or local Ansible, read from the system config
+// keys), the runtime doctor and the operator commands. The flux pages that
+// edited it and the runtime job list were removed in v4.2 (F5d); the
+// runtime itself goes with the legacy cleanup (F5c).
 import { computed, onMounted, ref } from 'vue'
-import { ArrowRight, ListChecks, RotateCw, Stethoscope, TriangleAlert } from '@lucide/vue'
-import { getForwardRuntimeStatus, getSystemConfig, listForwardRuntimeJobs, runForwardRuntimeDoctor } from '@/api/admin'
+import { RotateCw, Stethoscope, TriangleAlert } from '@lucide/vue'
+import { getForwardRuntimeStatus, getSystemConfig, runForwardRuntimeDoctor } from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { humanizeForwardRuntimeBackend } from '@/utils/forwardRuntime'
 import { isMaskedSecret } from '@/constants/secrets'
@@ -148,7 +107,6 @@ import UiBadge from '@/ui/UiBadge.vue'
 import UiButton from '@/ui/UiButton.vue'
 import UiCard from '@/ui/UiCard.vue'
 import UiCodeBlock from '@/ui/UiCodeBlock.vue'
-import UiDataTable from '@/ui/UiDataTable.vue'
 import UiErrorState from '@/ui/UiErrorState.vue'
 import UiGroupedList from '@/ui/UiGroupedList.vue'
 import UiGroupedListRow from '@/ui/UiGroupedListRow.vue'
@@ -156,12 +114,8 @@ import UiIcon from '@/ui/UiIcon.vue'
 import UiSection from '@/ui/UiSection.vue'
 import UiSkeleton from '@/ui/UiSkeleton.vue'
 import { useDelayedLoading } from '@/ui/composables/useDelayedLoading'
-import { useFormat } from '@/ui/composables/useFormat'
 
 const { t, translateLiteral } = useAppI18n()
-const format = useFormat()
-
-const JOB_TONES = { 0: 'neutral', 1: 'info', 2: 'success', 3: 'danger' }
 
 const runtimeNodeXModeKey = 'forward.runtime.nodex_mode'
 const runtimeBackendKey = 'forward.runtime_backend'
@@ -188,9 +142,6 @@ const runtimeNodeXBaseUrl = ref('')
 const runtimeNodeXToken = ref('')
 const runtimeNodeXTimeout = ref(15)
 const runtimeAnsibleForm = ref(createRuntimeAnsibleForm())
-const runtimeJobs = ref([])
-const runtimeJobsLoading = ref(false)
-const runtimeJobsError = ref(null)
 const runtimeStatus = ref(null)
 const runtimeStatusLoading = ref(false)
 const runtimeStatusError = ref('')
@@ -254,12 +205,6 @@ const runtimeDisplayedCommands = computed(() => {
   }
 })
 
-const jobColumns = computed(() => [
-  { key: 'job', label: t('adminSettings.runtime.jobColumns.job'), primary: true, hideable: false, minWidth: 280 },
-  { key: 'status', label: t('adminSettings.runtime.jobColumns.status'), secondary: true, nowrap: true },
-  { key: 'time', label: t('adminSettings.runtime.jobColumns.time'), nowrap: true, value: formatRuntimeJobTime }
-])
-
 function parseRuntimeBoolean(value) {
   if (typeof value === 'boolean') return value
   if (typeof value === 'number') return value !== 0
@@ -320,19 +265,6 @@ function normalizeRuntimeAnsibleForm(source = {}) {
   }
 }
 
-const normalizeRuntimeJob = (raw) => ({
-  ...raw,
-  id: Number(raw.id),
-  status: Number(raw.status ?? 0),
-  forwardId: raw.forwardId ?? raw.forward_id ?? null,
-  tunnelId: raw.tunnelId ?? raw.tunnel_id ?? null,
-  nodeId: raw.nodeId ?? raw.node_id ?? null,
-  createdAt: raw.createdAt ?? raw.created_at ?? null,
-  updatedAt: raw.updatedAt ?? raw.updated_at ?? null,
-  startedAt: raw.startedAt ?? raw.started_at ?? null,
-  completedAt: raw.completedAt ?? raw.completed_at ?? null
-})
-
 const translateRuntimeText = (value, fallback = '-') => {
   const text = String(value ?? '').trim()
   if (!text) return fallback
@@ -345,43 +277,6 @@ const resolveRuntimeError = (error, fallbackKey) => (
 
 const yesNo = value => (value ? t('runtime.shared.yes') : t('runtime.shared.no'))
 const runtimeBackendLabel = value => humanizeForwardRuntimeBackend(t, value)
-
-const getRuntimeJobStatusLabel = (status) => {
-  switch (Number(status)) {
-    case 0: return t('runtime.shared.pending')
-    case 1: return t('runtime.shared.running')
-    case 2: return t('runtime.shared.success')
-    case 3: return t('runtime.shared.failed')
-    default: return t('runtime.shared.unknown')
-  }
-}
-
-function formatRuntimeJobTime(job) {
-  const value = job.completedAt || job.startedAt || job.updatedAt || job.createdAt
-  return value ? format.dateTime(value) : '—'
-}
-
-const formatRuntimeJobMessage = (job) => {
-  const source = job.error || job.result || job.payload || ''
-  const text = String(source).trim()
-  if (!text) return ''
-  const translated = translateLiteral(text)
-  return translated.length > 220 ? `${translated.slice(0, 217)}...` : translated
-}
-
-const fetchForwardRuntimeJobs = async () => {
-  runtimeJobsLoading.value = true
-  runtimeJobsError.value = null
-  try {
-    const res = await listForwardRuntimeJobs({ limit: 10 })
-    runtimeJobs.value = Array.isArray(res.data?.list) ? res.data.list.map(normalizeRuntimeJob) : []
-  } catch (err) {
-    runtimeJobs.value = []
-    runtimeJobsError.value = resolveRuntimeError(err, 'adminSettings.runtime.jobsLoadFailed')
-  } finally {
-    runtimeJobsLoading.value = false
-  }
-}
 
 const fetchRuntimeStatusSafe = async () => {
   runtimeStatusLoading.value = true
@@ -492,7 +387,6 @@ const fetchForwardRuntimeConfig = async () => {
 
 onMounted(async () => {
   await fetchForwardRuntimeConfig()
-  fetchForwardRuntimeJobs()
   fetchRuntimeStatusSafe()
 })
 </script>
@@ -526,13 +420,6 @@ onMounted(async () => {
   box-shadow: none;
 }
 
-.runtime-mode__links {
-  display: flex;
-  flex-wrap: wrap;
-  gap: var(--space-2);
-  margin-top: auto;
-}
-
 .runtime-status {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -545,25 +432,6 @@ onMounted(async () => {
 
 .runtime-warning-icon {
   color: var(--warning);
-}
-
-.runtime-job {
-  display: flex;
-  flex-direction: column;
-  gap: var(--space-0-5);
-  min-width: 0;
-}
-
-.runtime-job__meta {
-  color: var(--label-2);
-  font-size: var(--type-callout-size);
-}
-
-.runtime-job__message {
-  color: var(--label-2);
-  font-family: var(--font-mono);
-  font-size: var(--type-caption-size);
-  overflow-wrap: anywhere;
 }
 
 .runtime-commands {

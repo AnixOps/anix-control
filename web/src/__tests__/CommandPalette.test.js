@@ -62,20 +62,24 @@ describe('CommandPalette.vue', () => {
     // Actions first, then every page the admin can see.
     const groups = within(dialog).getAllByRole('group').map(group => group.getAttribute('data-palette-group'))
     expect(groups).toEqual(['actions', 'pages'])
-    expect(optionNames(dialog)).toEqual(expect.arrayContaining(['Add a node', 'Add a user', 'Forward setup wizard', 'Dashboard', 'Tunnels', 'Account']))
+    expect(optionNames(dialog)).toEqual(expect.arrayContaining(['Add a node', 'Add a user', 'Dashboard', 'Plugin Center', 'Account']))
+    // The flux-clone pages and their setup wizard were removed (F5d).
+    expect(optionNames(dialog)).not.toContain('Forward setup wizard')
+    expect(optionNames(dialog)).not.toContain('Tunnels')
     // The community edition has no commercial pages.
     expect(optionNames(dialog)).not.toContain('Orders')
   })
 
   it('filters as you type, moves with the arrows and opens with Enter', async () => {
+    mockGetUserList.mockResolvedValue({ code: 0, data: { list: [], total: 0 } })
     const user = userEvent.setup()
     const router = await renderPalette()
     const { dialog, input } = await openPalette()
-    await user.type(input, 'tunnel')
-    await waitFor(() => expect(optionNames(dialog)).toEqual(['Tunnels']))
+    await user.type(input, 'plugin')
+    await waitFor(() => expect(optionNames(dialog)).toEqual(['Plugin Center']))
     await waitFor(() => expect(input.getAttribute('aria-activedescendant')).toBeTruthy())
     await user.keyboard('{Enter}')
-    await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/admin/forward/tunnel'))
+    await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/admin/plugins'))
     expect(usePalette().open.value).toBe(false)
   })
 

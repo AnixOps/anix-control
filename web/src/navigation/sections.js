@@ -5,9 +5,7 @@ export const ADMIN_PAGE_SECTIONS = Object.freeze({
   // 流量与监控 (UI U8): 实时节点 is the page itself (/admin/monitor).
   monitor: [
     { id: 'monitor-live', to: '/admin/monitor/live', labelKey: 'adminMonitor.sections.live' },
-    { id: 'monitor-traffic', to: '/admin/monitor/traffic', labelKey: 'adminMonitor.sections.traffic' },
-    { id: 'monitor-latency', to: '/admin/monitor/latency', labelKey: 'adminMonitor.sections.latency' },
-    { id: 'monitor-forward', to: '/admin/monitor/forward', labelKey: 'adminMonitor.sections.forward' }
+    { id: 'monitor-traffic', to: '/admin/monitor/traffic', labelKey: 'adminMonitor.sections.traffic' }
   ],
   settings: [
     { id: 'settings-general', to: '/admin/system/general', labelKey: 'adminSettings.sections.general' },

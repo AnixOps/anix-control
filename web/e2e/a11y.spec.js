@@ -6,7 +6,7 @@ import { SCREENS, openScreen } from './support/screens.js'
 // and phone, with the API mocked. Serious and critical findings fail the
 // build; WCAG 2.2 AA rules plus best practices.
 const VIEWPORTS = { desktop: { width: 1440, height: 900 }, phone: { width: 390, height: 844 } }
-// admin-forward-no-capability leads to the flux-clone page (admin-forward).
+// admin-forward-no-capability leads to 插件中心 (admin-plugins).
 const SKIP = new Set(['admin-dashboard-error', 'admin-users-empty', 'admin-forward-no-capability', 'admin-forward-editor-blank'])
 
 for (const name of Object.keys(SCREENS).filter(screen => !SKIP.has(screen))) {

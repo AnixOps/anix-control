@@ -33,11 +33,6 @@ const STATUS = {
   localAnsible: { command: 'ansible-playbook', commandFound: true, inventoryExists: true, applyPlaybookExists: true, removePlaybookExists: true, workingDirExists: true },
   warnings: ['inventory has 1 host without ansible_user']
 }
-const JOBS = [
-  { id: 88, action: 'apply', backend: 'nftables_ansible', forward_id: 12, tunnel_id: 3, node_id: 5, status: 2, completed_at: '2026-10-02T08:55:00Z' },
-  { id: 87, action: 'remove', backend: 'nftables_ansible', forward_id: 9, tunnel_id: 3, node_id: 5, status: 3, error: 'ssh: connect to host 198.51.100.7 port 22: Connection timed out', completed_at: '2026-10-02T08:40:00Z' },
-  { id: 86, action: 'apply', backend: 'nftables_ansible', forward_id: 8, status: 1, started_at: '2026-10-02T08:39:00Z' }
-]
 const SECTION = {
   general: 'general', dirty: 'general', invalid: 'general', configDialog: 'general', configError: 'general',
   runtime: 'runtime',
@@ -76,7 +71,6 @@ export default {
       return { code: 0, data: { list: AUDIT, total: 46, page: Number(query.page) || 1, page_size: 20 } }
     }
     if (path === '/api/v2/admin/forward/runtime/status') return { code: 0, data: STATUS }
-    if (path === '/api/v2/admin/forward/runtime/jobs') return { code: 0, data: { list: JOBS } }
     if (path === '/api/v2/admin/system/info') {
       if (scenario === 'aboutError') return { __status: 502, body: { msg: '遥测插件没有响应' } }
       return { code: 0, data: { version: '4.1.0-rc.4', build_code: '202610020001', commit: 'a1b2c3d4e5f6', build_time: '2026-10-02T01:00:00Z' } }

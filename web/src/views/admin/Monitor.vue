@@ -18,28 +18,26 @@
 </template>
 
 <script setup>
-// 流量与监控 (plan §4.2, §8.2): the old 实时监控 (Monitor), 小时流量
-// (TrafficHourly) and 转发可观测性 (Observability) pages as sections of one
-// page, by dimension — 实时节点 (the live WebSocket fleet), 用户流量
-// (hourly traffic of all users or one), 节点延迟 (the prober's node
-// targets) and 转发 (topology, ingress comparison, runtime jobs). The
-// section is in the path (/admin/monitor/:section; 实时节点 is
-// /admin/monitor) and the time range of the traffic and latency sections in
-// ?range=. /admin/traffic-hourly and /admin/forward/observability redirect
-// here. Sections mount when shown, so the WebSocket is open only on
-// 实时节点 and each section loads its own data.
+// 流量与监控 (plan §4.2, §8.2): the old 实时监控 (Monitor) and 小时流量
+// (TrafficHourly) pages as sections of one page, by dimension — 实时节点
+// (the live WebSocket fleet) and 用户流量 (hourly traffic of all users or
+// one). The section is in the path (/admin/monitor/:section; 实时节点 is
+// /admin/monitor) and the traffic section's time range in ?range=.
+// /admin/traffic-hourly redirects here. The 节点延迟 and 转发 sections read
+// the flux observability API, removed in v4.2 (F5d): /admin/monitor/forward
+// and /admin/forward/observability open the forwarding area's overview,
+// and an unknown section opens 实时节点. Sections mount when shown, so the
+// WebSocket is open only on 实时节点 and each section loads its own data.
 import { computed, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { ADMIN_PAGE_SECTIONS } from '@/navigation/sections'
 import UiPageHeader from '@/ui/UiPageHeader.vue'
 import UiTabs from '@/ui/UiTabs.vue'
-import MonitorForward from './monitor/MonitorForward.vue'
-import MonitorLatency from './monitor/MonitorLatency.vue'
 import MonitorLive from './monitor/MonitorLive.vue'
 import MonitorTraffic from './monitor/MonitorTraffic.vue'
 
-const PANELS = { live: MonitorLive, traffic: MonitorTraffic, latency: MonitorLatency, forward: MonitorForward }
+const PANELS = { live: MonitorLive, traffic: MonitorTraffic }
 const DEFAULT_SECTION = 'live'
 
 const { t } = useAppI18n()

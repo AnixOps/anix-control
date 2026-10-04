@@ -2,27 +2,18 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
 import Monitor from '@/views/admin/Monitor.vue'
-import MonitorForward from '@/views/admin/monitor/MonitorForward.vue'
-import MonitorLatency from '@/views/admin/monitor/MonitorLatency.vue'
 import MonitorLive from '@/views/admin/monitor/MonitorLive.vue'
 import MonitorTraffic from '@/views/admin/monitor/MonitorTraffic.vue'
 
 const adminApi = vi.hoisted(() => ({
   getTrafficHourly: vi.fn(),
-  getUserTrafficRanking: vi.fn(),
-  getForwardObservabilityTargets: vi.fn(),
-  getForwardObservabilityTrend: vi.fn(),
-  getForwardObservabilityTopology: vi.fn(),
-  getForwardObservabilityMultiIngress: vi.fn(),
-  listForwardRuntimeJobs: vi.fn()
+  getUserTrafficRanking: vi.fn()
 }))
 
 const engine = vi.hoisted(() => ({ charts: [], init: vi.fn(), registerTheme: vi.fn() }))
-const g6 = vi.hoisted(() => ({ graphs: [], Graph: vi.fn() }))
 
 vi.mock('@/api/admin', () => adminApi)
 vi.mock('@/ui/internal/echarts.js', () => ({ init: engine.init, registerTheme: engine.registerTheme }))
-vi.mock('@antv/g6', () => ({ Graph: g6.Graph }))
 
 function deferred() {
   let resolve
@@ -39,6 +30,7 @@ async function mountWithRouter(component, path) {
     history: createMemoryHistory(),
     routes: [
       { path: '/admin/monitor/:section?', component: Monitor },
+      { path: '/admin/forward/overview', component: { template: '<div />' } },
       { path: '/admin/dashboard', component: { template: '<div />' } }
     ]
   })
@@ -80,25 +72,11 @@ beforeEach(() => {
     engine.charts.push(chart)
     return chart
   })
-  g6.graphs = []
-  g6.Graph.mockImplementation(function Graph(options) {
-    this.options = options
-    this.render = vi.fn(async () => {})
-    this.destroy = vi.fn()
-    this.resize = vi.fn()
-    this.fitView = vi.fn(async () => {})
-    g6.graphs.push(this)
-  })
   vi.spyOn(console, 'error').mockImplementation(() => {})
   FakeSocket.instances = []
   vi.stubGlobal('WebSocket', FakeSocket)
   adminApi.getTrafficHourly.mockResolvedValue({ data: [{ hour_ts: 1700000000, traffic: 0 }], meta: { latest_log_at: 0 } })
   adminApi.getUserTrafficRanking.mockResolvedValue({ data: [] })
-  adminApi.getForwardObservabilityTargets.mockResolvedValue({ code: 0, data: { list: [] } })
-  adminApi.getForwardObservabilityTrend.mockResolvedValue({ code: 0, data: { points: [] } })
-  adminApi.getForwardObservabilityTopology.mockResolvedValue({ code: 0, data: { nodes: [], edges: [] } })
-  adminApi.getForwardObservabilityMultiIngress.mockResolvedValue({ code: 0, data: { list: [] } })
-  adminApi.listForwardRuntimeJobs.mockResolvedValue({ code: 0, data: { list: [] } })
 })
 
 afterEach(() => {
@@ -113,7 +91,7 @@ describe('流量与监控 page', () => {
 
     expect(wrapper.get('h1').text()).toBe('Traffic & Monitoring')
     const tabs = wrapper.findAll('[role="tab"]')
-    expect(tabs.map(tab => tab.text())).toEqual(['Live nodes', 'User traffic', 'Node latency', 'Forwards'])
+    expect(tabs.map(tab => tab.text())).toEqual(['Live nodes', 'User traffic'])
     expect(tabs[0].attributes('aria-selected')).toBe('true')
     expect(wrapper.find('[data-monitor-live]').exists()).toBe(true)
     expect(FakeSocket.instances).toHaveLength(1)
@@ -128,16 +106,24 @@ describe('流量与监控 page', () => {
   })
 
   it('goes to a section from its tab and keeps the range', async () => {
-    const { wrapper, router } = await mountWithRouter(Monitor, '/admin/monitor/traffic?range=30d')
-    const latencyTab = wrapper.findAll('[role="tab"]').find(tab => tab.text() === 'Node latency')
-    await latencyTab.trigger('mousedown', { button: 0 })
+    const { wrapper, router } = await mountWithRouter(Monitor, '/admin/monitor?range=30d')
+    const trafficTab = wrapper.findAll('[role="tab"]').find(tab => tab.text() === 'User traffic')
+    await trafficTab.trigger('mousedown', { button: 0 })
     await flushPromises()
-    expect(router.currentRoute.value.fullPath).toBe('/admin/monitor/latency?range=30d')
+    expect(router.currentRoute.value.fullPath).toBe('/admin/monitor/traffic?range=30d')
     wrapper.unmount()
   })
 
   it('sends an unknown section back to the page', async () => {
     const { wrapper, router } = await mountWithRouter(Monitor, '/admin/monitor/nowhere')
+    await flushPromises()
+    expect(router.currentRoute.value.path).toBe('/admin/monitor')
+    wrapper.unmount()
+  })
+
+  // 节点延迟 and 转发 read the flux observability API, removed in v4.2 (F5d).
+  it('has no 节点延迟 section any more', async () => {
+    const { wrapper, router } = await mountWithRouter(Monitor, '/admin/monitor/latency')
     await flushPromises()
     expect(router.currentRoute.value.path).toBe('/admin/monitor')
     wrapper.unmount()
@@ -288,87 +274,5 @@ describe('用户流量', () => {
     expect(wrapper.get('[data-summary="total"] [data-metric-value]').text()).toBe('1.50 KB')
     expect(wrapper.get('[data-monitor-traffic-chart] [data-chart-canvas]').attributes('aria-label')).toContain('1.50 KB in total')
     wrapper.unmount()
-  })
-})
-
-describe('节点延迟', () => {
-  const targets = [
-    { targetKey: 'node:1', targetType: 'node', targetId: 1, label: 'hk-01', host: '10.0.0.1', port: 443, latestAvgRtt: 12.5, latestLoss: 0, online: true },
-    { targetKey: 'node:2', targetType: 'node', targetId: 2, label: 'jp-02', host: '10.0.0.2', port: 443, latestAvgRtt: 40, latestLoss: 2, online: false },
-    { targetKey: 'forward:9', targetType: 'forward', targetId: 9, label: 'web', host: '1.1.1.1', port: 80 }
-  ]
-
-  it('asks the trend of the first node target over the range and draws avg, P95 and max', async () => {
-    adminApi.getForwardObservabilityTargets.mockResolvedValue({ code: 0, data: { list: targets } })
-    adminApi.getForwardObservabilityTrend.mockResolvedValue({ code: 0, data: { points: [{ bucketAt: 1700000000000, avg: 10, p95: 20, max: 30 }, { bucketAt: 1700000060000, avg: 12, p95: 25, max: 31 }] } })
-    const { wrapper } = await mountWithRouter(MonitorLatency, '/admin/monitor/latency?range=7d')
-
-    const params = adminApi.getForwardObservabilityTrend.mock.calls[0][0]
-    expect(params.targetKey).toBe('node:1')
-    expect(params.to - params.from).toBe(168 * 3600 * 1000)
-    expect(lastOption().series.map(series => series.name)).toEqual(['Average', 'P95', 'Max'])
-    expect(wrapper.findAll('[data-monitor-targets] tbody tr')).toHaveLength(2)
-    expect(wrapper.get('[data-monitor-latency-chart] [data-chart-canvas]').attributes('aria-label')).toContain('Average 11 ms, highest P95 25 ms')
-
-    await wrapper.findAll('[data-monitor-targets] tbody tr')[1].trigger('click')
-    await flushPromises()
-    expect(adminApi.getForwardObservabilityTrend).toHaveBeenLastCalledWith(expect.objectContaining({ targetKey: 'node:2' }))
-    wrapper.unmount()
-  })
-
-  it('says when there are no targets', async () => {
-    const { wrapper } = await mountWithRouter(MonitorLatency, '/admin/monitor/latency')
-    expect(adminApi.getForwardObservabilityTrend).not.toHaveBeenCalled()
-    expect(wrapper.text()).toContain('No probe targets yet')
-    wrapper.unmount()
-  })
-})
-
-describe('转发', () => {
-  it('draws the topology, compares the first forward’s ingresses and lists the runtime jobs', async () => {
-    adminApi.getForwardObservabilityTargets.mockResolvedValue({ code: 0, data: { list: [{ targetKey: 'forward:9', targetType: 'forward', targetId: 9, label: 'web', host: '1.1.1.1', port: 80 }] } })
-    adminApi.getForwardObservabilityTopology.mockResolvedValue({
-      code: 0,
-      data: {
-        nodes: [
-          { id: 'relay-1', label: 'relay-hk', kind: 'relay', online: true, latencyMs: 8 },
-          { id: 'exit-1', label: 'exit-jp', kind: 'exit', online: false, latencyMs: 30 }
-        ],
-        edges: [{ id: 'e1', source: 'relay-1', target: 'exit-1', label: 'tls' }]
-      }
-    })
-    adminApi.getForwardObservabilityMultiIngress.mockResolvedValue({ code: 0, data: { list: [{ tunnelId: 1, tunnelName: 'hk-jp', ingressLabel: 'hk', ingressIp: '10.1.1.1', avgRtt: 21.4, loss: 0.5, online: true }] } })
-    adminApi.listForwardRuntimeJobs.mockResolvedValue({ code: 0, data: { list: [{ id: 5, action: 'apply', backend: 'gost', status: 3, created_at: '2026-10-01T10:00:00Z' }] } })
-
-    const { wrapper } = await mountWithRouter(MonitorForward, '/admin/monitor/forward')
-    await flushPromises()
-
-    expect(adminApi.getForwardObservabilityMultiIngress).toHaveBeenCalledWith('9')
-    expect(adminApi.listForwardRuntimeJobs).toHaveBeenCalledWith({ limit: 50 })
-    expect(g6.graphs).toHaveLength(1)
-    const data = g6.graphs[0].options.data
-    expect(data.nodes.map(node => node.id)).toEqual(['relay-1', 'exit-1'])
-    expect(data.edges[0]).toMatchObject({ source: 'relay-1', target: 'exit-1' })
-    expect(wrapper.get('[data-topology-canvas]').attributes('aria-label')).toBe('Forward topology graph: 2 nodes, 1 paths')
-    expect(wrapper.get('[data-topology-text]').text()).toContain('relay-hk → exit-jp')
-    expect(wrapper.get('[data-monitor-ingress]').text()).toContain('hk-jp')
-    expect(wrapper.get('[data-monitor-jobs]').text()).toContain('Failed')
-    wrapper.unmount()
-    expect(g6.graphs[0].destroy).toHaveBeenCalled()
-  })
-
-  it('redraws the topology when the theme changes', async () => {
-    adminApi.getForwardObservabilityTopology.mockResolvedValue({ code: 0, data: { nodes: [{ id: 'a', label: 'a', kind: 'relay', online: true }], edges: [] } })
-    document.documentElement.setAttribute('data-theme', 'light')
-    const { wrapper } = await mountWithRouter(MonitorForward, '/admin/monitor/forward')
-    await flushPromises()
-    expect(g6.graphs).toHaveLength(1)
-    document.documentElement.setAttribute('data-theme', 'dark')
-    await new Promise(resolve => setTimeout(resolve, 0))
-    await flushPromises()
-    expect(g6.graphs).toHaveLength(2)
-    expect(g6.graphs[0].destroy).toHaveBeenCalled()
-    wrapper.unmount()
-    document.documentElement.removeAttribute('data-theme')
   })
 })
