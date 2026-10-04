@@ -189,7 +189,7 @@ func runTrafficBuckets(t *testing.T, db *gorm.DB) {
 		state := f.state(entry)
 		_, err := f.service.RecordReport(f.ctx, entry, &forwardv1.NodeForwardReport{
 			NodeRef: "forward-11", Generation: state.GetGeneration(), StateHash: state.GetStateHash(), Applied: true,
-			Counters: []*forwardv1.Counters{{RouteId: route.GetId(), NodeRef: "forward-11", UpBytes: up, DownBytes: 2 * up, CounterEpoch: "e1"}},
+			Counters:         []*forwardv1.Counters{{RouteId: route.GetId(), NodeRef: "forward-11", UpBytes: up, DownBytes: 2 * up, CounterEpoch: "e1"}},
 			ObservedAtUnixMs: f.clock.Now().UnixMilli(),
 		}, f.clock.Now(), f.clock.Now())
 		require.NoError(t, err)
