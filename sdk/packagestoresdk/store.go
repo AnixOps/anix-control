@@ -146,6 +146,29 @@ func (s *Store) Table(name string) string {
 	return s.Prefix() + name
 }
 
+// Leased reports whether the lease adopts the kernel table, or grants the
+// kernel view, called name. Some grants are conditional: the kernel honours
+// an adoption of v2_node, v2_node_protocol or v2_forward_node, and grants
+// the views of the node credential split, only once that split is
+// finalized (docs/architecture/node-ops-service.md section 4.3). On SQLite
+// the package shares the kernel's database file, where such a table is
+// there either way, so a route on it must ask the lease, not the database.
+// The lease is taken when the store is opened: a grant the kernel gives
+// later is seen by a host started after it.
+func (s *Store) Leased(name string) bool {
+	if s == nil {
+		return false
+	}
+	for _, granted := range [][]string{s.Lease.AdoptedTables, s.Lease.Views} {
+		for _, candidate := range granted {
+			if candidate == name {
+				return true
+			}
+		}
+	}
+	return false
+}
+
 // Close closes the connection pool.
 func (s *Store) Close() error {
 	if s == nil || s.DB == nil {

@@ -153,9 +153,11 @@ func TestSubscriptionHostRoutesAreThePackageRoutes(t *testing.T) {
 }
 
 // The package adopts its four tables and reads the plan, entitlement,
-// membership and node views. It adopts no v2_user* table, reads no user
-// directory view (e-mail addresses; the summary carries the caller's own)
-// and no node or protocol settings, and of KernelSubscriber calls only the
+// membership and node views. It adopts no v2_user* table and reads no user
+// directory view (e-mail addresses; the summary carries the caller's own).
+// It reads node and protocol settings only through the public views of the
+// node credential split, which the kernel grants once the split is
+// finalized and which show no key. Of KernelSubscriber it calls only the
 // subscription group membership family and the subscription summary.
 func TestSubscriptionManifestCapabilities(t *testing.T) {
 	raw, err := os.ReadFile("../manifest.template.json")
@@ -168,7 +170,8 @@ func TestSubscriptionManifestCapabilities(t *testing.T) {
 		"kernel.storage.v1", "kernel.storage.adopt:v2_subscription_group", "kernel.storage.adopt:v2_subscription_template",
 		"kernel.storage.adopt:v2_plan_subscription_group", "kernel.storage.adopt:v2_subscription_group_node_protocols",
 		"kernel.view:kapi_plan_catalog_v1", "kernel.view:kapi_subscriber_entitlement_v1", "kernel.view:kapi_user_subscription_group_v1",
-		"kernel.view:kapi_node_protocol_v1", "kernel.view:kapi_node_heartbeat_v1", "kernel.subscriber.groups.v1",
+		"kernel.view:kapi_node_protocol_v1", "kernel.view:kapi_node_heartbeat_v1",
+		"kernel.view:kapi_node_protocol_public_v1", "kernel.view:kapi_node_public_v1", "kernel.subscriber.groups.v1",
 		"kernel.subscriber.summary.v1",
 	}, manifest.Capabilities)
 }
@@ -193,7 +196,7 @@ func TestSubscriptionHostServesNativeRoutesOnTheLease(t *testing.T) {
 
 	link, get := "subscription.admin.subscription.groups.id.protocols.post", "subscription.admin.subscription.groups.id.get"
 	stub := &bridgeStub{
-		modes: map[string]string{link: "native", get: "native"},
+		modes: map[string]string{link: "native", get: "native", native.GroupProtocolsRouteID: "native"},
 		lease: packagebridgesdk.StorageLease{
 			Driver: "sqlite", DSN: path, TablePrefix: "pkg_subscription_",
 			AdoptedTables: []string{
@@ -219,6 +222,12 @@ func TestSubscriptionHostServesNativeRoutesOnTheLease(t *testing.T) {
 
 	response = dispatch(t, service, get, pluginhostsdk.DispatchRequest{Method: "GET", Metadata: params})
 	require.JSONEq(t, `"hk"`, mustField(t, response.ResponseBody, "data", "templates", "0", "name"))
+
+	// The lease grants no view of the node credential split's remainder
+	// (the split is not finalized), so a group's protocols are answered by
+	// the legacy handler although the route is native.
+	dispatch(t, service, native.GroupProtocolsRouteID, pluginhostsdk.DispatchRequest{Method: "GET", Metadata: params})
+	require.Equal(t, native.GroupProtocolsRouteID, stub.operation)
 }
 
 // Native membership changes reach KernelSubscriber on the bridge

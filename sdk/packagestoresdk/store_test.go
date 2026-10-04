@@ -121,3 +121,11 @@ func TestStepsDigestIsOrderIndependentAndLowercase(t *testing.T) {
 	want := sha256.Sum256([]byte("001_a:aa\n002_b:bb\n"))
 	require.Equal(t, hex.EncodeToString(want[:]), StepsDigest([]MigrationStep{{ID: "002_b", SHA256: "BB"}, {ID: "001_a", SHA256: "aa"}}))
 }
+
+func TestLeasedNamesTheAdoptedTablesAndGrantedViews(t *testing.T) {
+	store := &Store{Lease: packagebridgesdk.StorageLease{AdoptedTables: []string{"v2_node"}, Views: []string{"kapi_node_public_v1"}}}
+	require.True(t, store.Leased("v2_node"))
+	require.True(t, store.Leased("kapi_node_public_v1"))
+	require.False(t, store.Leased("v2_node_protocol"))
+	require.False(t, (*Store)(nil).Leased("v2_node"))
+}

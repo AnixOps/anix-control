@@ -240,3 +240,22 @@ reports are uploaded as the artifact `staging-rehearsal-batch-1`.
 - Handlers that reach outside (test e-mail, Telegram, payment providers,
   connection tests) fail at once on both twins, so only their error paths
   are compared.
+- Routes on the node credential split's remainder answer natively only once
+  the split is finalized (`docs/architecture/node-ops-service.md` sections
+  4.3 and 6): the protocol pool of batch 4 (M3-3). The seed does not
+  finalize, so on a fresh stack their shadow runs are skipped (the host
+  answers from the legacy handler) and the batch reports them not
+  compared. To rehearse them, finalize the staging database after `up` and
+  before the batch (`docs/UPGRADE.md`, "Finalizing The Node Credential
+  Split (Phase P3)"), then restart Control so the package hosts lease the
+  views:
+
+  ```bash
+  docker compose -p <project> exec control /app/anix-control node-secrets backfill
+  docker compose -p <project> exec control /app/anix-control node-secrets verify
+  docker compose -p <project> exec control /app/anix-control node-secrets phase -by staging all dual_read
+  docker compose -p <project> exec control /app/anix-control node-secrets finalize -confirm -by staging all
+  ```
+
+  These routes are not in `config/package-route-defaults.json`; they stay
+  legacy by default until such a rehearsal and the owner's sign-off.

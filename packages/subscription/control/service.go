@@ -28,17 +28,29 @@ type subscriptionBridge interface {
 // legacy handler otherwise. Deleting a group, granting or taking away a
 // user's group and the user's subscription summary call the kernel's
 // KernelSubscriber over the bridge connection (local socket or module
-// listener); a bridge without one leaves them legacy. The routes in
-// bridgedRoutes always relay to the legacy handler.
+// listener); a bridge without one leaves them legacy. A group's protocols
+// and the protocol pool read kapi_node_protocol_public_v1 and
+// kapi_node_public_v1, which the kernel grants only once the node credential
+// split of v2_node_protocol and v2_node is finalized; until the lease grants
+// both, they answer from the legacy handler. The lease is taken when the
+// host first opens its storage, so a host started before the finalize keeps
+// them legacy until it restarts. The routes in bridgedRoutes always relay to
+// the legacy handler.
 func newSubscriptionService(bridge subscriptionBridge, leaseID string) (*pluginhostsdk.Router, error) {
 	storage := packagestoresdk.SharedOpener(bridge)
-	service := &native.Service{Open: func(ctx context.Context) (*gorm.DB, error) {
-		store, err := storage(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return store.DB.WithContext(ctx), nil
-	}}
+	service := &native.Service{
+		Open: func(ctx context.Context) (*gorm.DB, error) {
+			store, err := storage(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return store.DB.WithContext(ctx), nil
+		},
+		Leased: func(ctx context.Context, name string) bool {
+			store, err := storage(ctx)
+			return err == nil && store.Leased(name)
+		},
+	}
 	if conn, ok := bridge.(interface {
 		Conn() grpc.ClientConnInterface
 	}); ok && conn.Conn() != nil {
@@ -79,24 +91,24 @@ var subscriptionRoutes = map[string]struct{}{
 	"subscription.admin.subscription.users.user_id.groups.group_id.delete": {},
 	"subscription.admin.subscription.stats.get":                            {},
 	"subscription.user.subscription.get":                                   {},
+	"subscription.admin.subscription.groups.id.protocols.get":              {},
+	"subscription.admin.subscription.protocols.available.get":              {},
 }
 
 // bridgedRoutes are the package's compatibility routes without a native
 // handler; they always relay to the kernel's legacy handler.
 var bridgedRoutes = map[string]struct{}{
-	// These answer whole proxy-node rows: v2_node_protocol with its
-	// settings, TLS and Reality settings (private keys included) and custom
-	// configuration, and the v2_node it runs on. No kernel view may carry
-	// keys, and the rows are the proxy-node package's.
-	"subscription.admin.subscription.groups.id.protocols.get": {},
-	"subscription.admin.subscription.protocols.available.get": {},
 	// The preview renders a user's subscription with the kernel's renderer:
 	// it reads the user's subscription token and proxy UUID, the plan, the
 	// nodes and their protocols, and creates WireGuard peers and keys for
-	// the user.
+	// the user. Whether the renderer stays in the kernel is an open decision
+	// (package-extraction.md section 3.2, "What unblocks the bridged
+	// routes").
 	"subscription.admin.subscription.preview.post": {},
 	// The subscription link settings combine the kernel's process
 	// configuration (app.subscribe_path) with app.subscribe_domains in the
-	// protected v2_system_config; a package can see neither.
+	// protected v2_system_config; a package can see neither. A KernelSettings
+	// namespace for the subscription link, carrying the process
+	// configuration too, would unblock it.
 	"subscription.admin.system.subscription_settings.get": {},
 }

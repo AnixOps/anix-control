@@ -8,12 +8,14 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+
+	"github.com/AnixOps/anix-control/sdk/v2compat"
 )
 
 // Placeholder stands for a node secret in administrators' answers
 // (service.NodeSecretPlaceholder). A finalized JSON column keeps it at every
 // secret position.
-const Placeholder = "********"
+const Placeholder = v2compat.NodeSecretPlaceholder
 
 // IsSecretKey reports whether a key of a node protocol's settings, or of a
 // node's raw configuration, names a secret: Reality's and TLS's
@@ -23,29 +25,7 @@ const Placeholder = "********"
 // secret, token, credential or seed. Public keys, Reality's short_id and the
 // paths of key files (key_file, wss_key_file) are not secrets.
 func IsSecretKey(key string) bool {
-	compact := strings.ToLower(strings.TrimSpace(key))
-	compact = strings.NewReplacer("_", "", "-", "", ".", "", " ", "").Replace(compact)
-	if compact == "" {
-		return false
-	}
-	if strings.Contains(compact, "public") || strings.Contains(compact, "publishable") ||
-		compact == "shortid" || compact == "shortids" ||
-		strings.HasSuffix(compact, "file") || strings.HasSuffix(compact, "path") {
-		return false
-	}
-	switch compact {
-	case "psk", "pass", "auth", "authstr", "seed":
-		return true
-	}
-	if strings.HasSuffix(compact, "key") || strings.HasSuffix(compact, "keys") {
-		return true
-	}
-	for _, marker := range []string{"secret", "password", "passwd", "token", "credential"} {
-		if strings.Contains(compact, marker) {
-			return true
-		}
-	}
-	return false
+	return v2compat.IsNodeSecretKey(key)
 }
 
 // Position is one secret of a column: its RFC 6901 JSON pointer and the
@@ -110,61 +90,14 @@ func collectPositions(value any, pointer string, positions *[]Position) {
 // administrators' masked answer (service.RedactNodeSecretsJSON) and the
 // document a finalized JSON column keeps (section 4.4).
 func Redact(document string) string {
-	if strings.TrimSpace(document) == "" {
-		return document
-	}
-	value, ok := decodeJSON(document)
-	if !ok {
-		return Placeholder
-	}
-	if !redactValue(value) {
-		return document
-	}
-	encoded := encodeJSON(value)
-	if encoded == "" {
-		return Placeholder
-	}
-	return encoded
-}
-
-// redactValue replaces the secrets of value in place; it reports whether
-// it replaced any.
-func redactValue(value any) bool {
-	changed := false
-	switch typed := value.(type) {
-	case map[string]any:
-		for key, item := range typed {
-			if object, ok := item.(map[string]any); ok {
-				changed = redactValue(object) || changed
-				continue
-			}
-			if IsSecretKey(key) && hasSecretValue(item) {
-				typed[key] = Placeholder
-				changed = true
-				continue
-			}
-			changed = redactValue(item) || changed
-		}
-	case []any:
-		for _, item := range typed {
-			changed = redactValue(item) || changed
-		}
-	}
-	return changed
+	return v2compat.RedactNodeSecrets(document)
 }
 
 // hasSecretValue reports whether a value under a secret key holds a secret:
 // a non-empty string or array. Empty values, null, numbers and booleans are
 // not secrets.
 func hasSecretValue(value any) bool {
-	switch typed := value.(type) {
-	case string:
-		return strings.TrimSpace(typed) != ""
-	case []any:
-		return len(typed) > 0
-	default:
-		return false
-	}
+	return v2compat.HasNodeSecretValue(value)
 }
 
 // escapePointerToken escapes one reference token of a JSON pointer.

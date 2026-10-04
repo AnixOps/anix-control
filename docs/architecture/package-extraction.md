@@ -10,8 +10,8 @@ open work in [`../../TODO.md`](../../TODO.md).
 
 > 中文摘要：v4.0.0 的「插件化」只到路由层；本文定义「一个领域真正住在插件里」
 > 的验收标准、目标机制（存储租约 + 按路由模式 + 类型化内核操作，均已实现）、
-> 保留下来的旧计划约束，以及 M0–M4 里程碑。296 条 v2 路由中，174 条
-> `native-flagged`，91 条 `bridged`（待契约），31 条 `kernel-owned`（按设计留在内核）。
+> 保留下来的旧计划约束，以及 M0–M4 里程碑。296 条 v2 路由中，176 条
+> `native-flagged`，89 条 `bridged`（待契约），31 条 `kernel-owned`（按设计留在内核）。
 
 Markers used below: **CURRENT** = true in the tree today; **PLANNED** = accepted
 design, not implemented yet; **HISTORICAL** = preserved from a retired plan for
@@ -31,14 +31,14 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
 - `config/package-extraction.json` records each route's extraction mode
   (`bridged`, `kernel-owned`, `native-flagged` or `native`; section 3.2) and
   where its legacy handler lives
-  (`router`, `identity-bridge` or `none`). 174 routes are `native-flagged`:
+  (`router`, `identity-bridge` or `none`). 176 routes are `native-flagged`:
   identity-platform (23: group A's 16, the profile, dashboard, user detail,
   user list and user statistics, and the traffic and subscription resets),
   affiliate (10), forward (21), gost-mesh (3), knowledge (6),
   machine-telemetry (3), notification (23), order (13), payment (20), plan
-  (7), platform (5), protocol-runtime (3), proxy-node (7), subscription (21),
+  (7), platform (5), protocol-runtime (3), proxy-node (7), subscription (23),
   ticket (8) and wireguard (1). 31 routes are `kernel-owned`: they stay in the
-  kernel by design, and each row says why. The other 91 are `bridged` until a
+  kernel by design, and each row says why. The other 89 are `bridged` until a
   kernel contract lets their package serve them (section 3.2 lists what
   unblocks them). None is `native` yet. The identity routes are
   `identity-bridge`. `check_plugin_only_routes.py` enforces the map against
@@ -99,10 +99,10 @@ Route modes per package (2026-10-01):
 | platform | 5 | 0 | 7 |
 | protocol-runtime | 3 | 11 | 6 |
 | proxy-node | 7 | 19 | 5 |
-| subscription | 21 | 4 | 0 |
+| subscription | 23 | 2 | 0 |
 | ticket | 8 | 0 | 0 |
 | wireguard | 1 | 0 | 0 |
-| **all** | **174** | **91** | **31** |
+| **all** | **176** | **89** | **31** |
 
 Reusable pieces that already exist:
 
@@ -214,9 +214,9 @@ by `check_plugin_only_routes.py` (counts in section 1).
 
 | Mode | Meaning | Routes |
 |---|---|---|
-| `native-flagged` | the package host has a native handler, proved by a parity test; the legacy handler stays, so every runtime mode works | 174 |
+| `native-flagged` | the package host has a native handler, proved by a parity test; the legacy handler stays, so every runtime mode works | 176 |
 | `native` | the legacy handler is deleted and the host answers alone | 0 |
-| `bridged` | the host only relays, until a kernel contract lets the package serve the route | 91 |
+| `bridged` | the host only relays, until a kernel contract lets the package serve the route | 89 |
 | `kernel-owned` | the host only relays, by design: the route stays in the kernel, and the row's `reason` says why | 31 |
 
 A `bridged` or `kernel-owned` route is registered and relayed alike: it is
@@ -248,7 +248,7 @@ What unblocks the `bridged` routes:
 
 | Unblocked by | Routes | Count |
 |---|---|---|
-| KernelNodeOps and the node credential split (section 3.3) | forward: nodes, Ansible machines, clean agent tokens, every change applied on a node (a speed limit update included), runtime jobs; proxy-node: node administration, raw configuration, authorization keys, load balancer checks; protocol-runtime: node protocols, sync, Agent Control and agent operations; subscription: a group's protocols and the protocol pool | 76 |
+| KernelNodeOps and the node credential split (section 3.3) | forward: nodes, Ansible machines, clean agent tokens, every change applied on a node (a speed limit update included), runtime jobs; proxy-node: node administration, raw configuration, authorization keys, load balancer checks; protocol-runtime: node protocols, sync, Agent Control and agent operations | 74 |
 | Open decision: whether UniProxy and the subscription renderer stay in the kernel | UniProxy (5) and the subscription preview | 6 |
 | A proxy node view with parent and load | forward observability targets, trend and topology | 3 |
 | A read of Control's process configuration `forward_runtime.clean_agent.public_url` (a KernelSettings-style namespace, or the host's environment) | the clean agent install script: its panel URL is that setting when set, else the request's scheme and host | 1 |
@@ -645,7 +645,6 @@ The planned `kernel.entitlement.apply.v1` became
     answer adds the commission balance and invite statistics that join the
     order and affiliate packages' tables. They belong with the affiliate
     package.
-- **Subscription (in place).** 21 of 25 routes run on the adopted
   - **Moved to affiliate:** the user's invite codes and their generation,
     affiliate data rather than identity's (see Affiliate).
   - **Administrator's invite codes (bridged, every edition).**
@@ -675,14 +674,15 @@ The planned `kernel.entitlement.apply.v1` became
     memory, identity in its `throttle` table), and the kernel's audit
     middleware records it as `user` / `reset_subscribe` in every mode.
     Proved by `internal/tests/identitycompat/subscription_reset_test.go`.
-- **Subscription (in place).** 20 of 25 routes run on the adopted
+- **Subscription (in place).** 23 of 25 routes run on the adopted
   `v2_subscription_group`, `v2_subscription_template`,
   `v2_plan_subscription_group` and `v2_subscription_group_node_protocols`
   tables, proved by `internal/tests/subscriptioncompat`: groups (list, read,
   create, update, delete) and templates (list, read, create, update,
   delete), a group's node protocol links, a plan's groups, a user's groups
-  (list, grant, take away), the statistics, the two static lists, and the
-  user's subscription summary. The
+  (list, grant, take away), the statistics, the two static lists, the
+  user's subscription summary, and a group's protocols and the protocol
+  pool once the node credential split is finalized (below). The
   subscription link endpoints (`/s/:token`,
   `/api/v1/client/subscribe`) are kernel routes outside the package gate and
   stay in the kernel with the renderer.
@@ -690,8 +690,10 @@ The planned `kernel.entitlement.apply.v1` became
     plan exists), `kapi_subscriber_entitlement_v1` (whether a user exists,
     and their traffic), and the new `kapi_user_subscription_group_v1` (the
     groups a subscriber holds, until when), `kapi_node_protocol_v1` (a
-    protocol's node) and `kapi_node_heartbeat_v1` (a node's last report). No
-    view shows a token, UUID, e-mail address, key or protocol settings.
+    protocol's node) and `kapi_node_heartbeat_v1` (a node's last report);
+    after the split's finalize also `kapi_node_protocol_public_v1` and
+    `kapi_node_public_v1` (below). No view shows a token, UUID, e-mail
+    address or key, and protocol settings only redacted.
   - The kernel's renderer, order completion and
     `kapi_plan_subscription_group_v1` read the adopted tables; the module's
     writes leave the rows the legacy handlers leave. The kernel caches
@@ -735,15 +737,31 @@ The planned `kernel.entitlement.apply.v1` became
     handler calls. Both modes therefore answer the same entry with the same
     `cached_at`, and `refresh=true` rebuilds it. The answer carries no
     token or UUID. Without a bridge connection the route stays legacy.
-  - Four routes stay bridged:
-    - a group's protocols and the protocol pool: they answer whole
-      `v2_node_protocol` and `v2_node` rows, Reality private keys and custom
-      configuration included, which no view may carry;
+  - **A group's protocols and the protocol pool read the split's public
+    views (M3-3).** They answer whole node protocols with their nodes, so
+    they read `kapi_node_protocol_public_v1` and `kapi_node_public_v1`
+    ([`node-ops-service.md`](node-ops-service.md) section 4.6): every
+    column but the node's API key, key hash and shared secret, the JSON
+    columns in the redacted form a finalized table keeps. The kernel
+    creates both views, and grants them to the package's lease, only once
+    `v2_node_protocol` and `v2_node` are finalized. Until the lease grants
+    both, the routes answer from the legacy handler in every mode, also on
+    SQLite, where the package shares the database file that holds the
+    tables. The lease is taken when the host first opens its storage: a
+    host started before the finalize serves them natively after a restart.
+    The answer masks every secret position again
+    (`v2compat.RedactNodeSecrets`, the kernel's rule, which
+    `internal/nodesecrets` calls), so a value written past the kernel's
+    writers is masked as the legacy answer masks it.
+  - Two routes stay bridged:
     - the preview: the kernel's renderer, with the user's token and UUID,
-      the nodes, and the WireGuard peers it creates;
+      the nodes, and the WireGuard peers it creates (whether the renderer
+      stays in the kernel is an open decision);
     - the subscription link settings: `app.subscribe_path` is process
       configuration and `app.subscribe_domains` lives in the protected
-      `v2_system_config`.
+      `v2_system_config`. A KernelSettings namespace can carry only
+      `v2_system_config` and `v2_backup_config` keys, so this needs a new
+      kind of namespace with the process configuration.
 - **Proxy node (in place).** 7 of proxy-node's 31 routes run natively,
   proved by `internal/tests/proxynodecompat`: the load balancer list,
   detail, creation, update and deletion on the adopted `v2_load_balancer`

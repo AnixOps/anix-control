@@ -22,9 +22,13 @@
 //   - kapi_user_subscription_group_v1 for the subscription groups a user
 //     holds and until when;
 //   - kapi_node_protocol_v1 and kapi_node_heartbeat_v1 for which node a
-//     protocol belongs to and when it last reported.
+//     protocol belongs to and when it last reported;
+//   - kapi_node_protocol_public_v1 and kapi_node_public_v1 for a group's
+//     protocols and the protocol pool, once the kernel grants them: only
+//     after the node credential split of v2_node_protocol and v2_node is
+//     finalized, when they show the redacted documents (pool.go).
 //
-// Four routes have no native handler and stay bridged; see bridgedRoutes in
+// Two routes have no native handler and stay bridged; see bridgedRoutes in
 // packages/subscription/control.
 package native
 
@@ -56,6 +60,12 @@ type Service struct {
 	// that change subscription group membership and the user's
 	// subscription summary have no native handler and stay legacy.
 	Subscriber Subscriber
+	// Leased reports whether the package's storage lease adopts the kernel
+	// table, or grants the kernel view, called name
+	// (packagestoresdk.Store.Leased). The protocol pool reads views the
+	// kernel grants only once the node credential split is finalized; nil
+	// leaves those routes legacy.
+	Leased func(ctx context.Context, name string) bool
 	// Now defaults to time.Now.
 	Now func() time.Time
 	// NewToken names a request that carries neither an Idempotency-Key nor
@@ -83,6 +93,8 @@ func (s *Service) Handlers() map[string]pluginhostsdk.NativeHandler {
 		"subscription.admin.subscription.plans.plan_id.groups.group_id.delete": s.RemovePlanGroup,
 		"subscription.admin.subscription.users.user_id.groups.get":             s.UserGroups,
 		"subscription.admin.subscription.stats.get":                            s.Stats,
+		GroupProtocolsRouteID:                                                  s.GroupProtocols,
+		AvailableProtocolsRouteID:                                              s.AvailableProtocols,
 	}
 	if s.Subscriber != nil {
 		handlers[DeleteGroupRouteID] = s.DeleteGroup

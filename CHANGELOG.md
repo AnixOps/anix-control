@@ -55,6 +55,23 @@
   desired records, each entry's reason, the last error and the next
   attempt, and 解除绑定 with purge. zh-CN and English, unit, e2e and
   visual tests ([`docs/guide/forward-entry-ha.md`](docs/guide/forward-entry-ha.md)).
+- **Subscription: a group's protocols and the protocol pool run natively
+  (M3-3).** `GET /api/v2/admin/subscription/groups/:id/protocols` and
+  `GET /api/v2/admin/subscription/protocols/available` are `native-flagged`
+  (176 native-flagged, 89 bridged, 31 kernel-owned of 296). They read the
+  node credential split's public views `kapi_node_protocol_public_v1` and
+  `kapi_node_public_v1`, which the subscription manifest now declares and
+  the kernel grants only once `v2_node_protocol` and `v2_node` are
+  finalized; until the package's lease grants both they answer from the
+  legacy handler in every mode, SQLite included (restart the package host
+  after `node-secrets finalize`). Answers are byte for byte the legacy
+  ones, secrets masked (`internal/tests/subscriptioncompat`, SQLite and
+  PostgreSQL). The preview and the subscription link settings stay
+  bridged. New SDK pieces: `packagestoresdk.Store.Leased` (whether the lease
+  adopts a table or grants a view) and `v2compat.RedactNodeSecrets` /
+  `IsNodeSecretKey` (the kernel's node secret rule, which
+  `internal/nodesecrets` now calls). Not in `package-route-defaults.json`:
+  the routes stay legacy by default until rehearsed.
 - **Fresh Control installs are ready for enrolled Agents** (owner decision
   2026-10-04). Every shipped install path generates the built-in CA's
   key-encryption key (`module_runtime.ca_kek`, 32 random bytes) on a fresh

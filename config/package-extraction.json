@@ -1083,7 +1083,7 @@
       "path": "/api/v2/admin/subscription/groups/:id/protocols",
       "package_id": "subscription",
       "route_id": "subscription.admin.subscription.groups.id.protocols.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -1155,7 +1155,7 @@
       "path": "/api/v2/admin/subscription/protocols/available",
       "package_id": "subscription",
       "route_id": "subscription.admin.subscription.protocols.available.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
