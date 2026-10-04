@@ -5,13 +5,11 @@ import (
 	"errors"
 	"fmt"
 	"net"
-	"sort"
 	"strings"
 	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 const (
@@ -41,13 +39,6 @@ type PanelRuntimeJobFilter struct {
 	Limit     int
 }
 
-type panelForwardPermissionOptions struct {
-	ExcludeForwardID        uint
-	CheckUserTraffic        bool
-	CheckTunnelTraffic      bool
-	CheckTunnelForwardQuota bool
-}
-
 func NewPanelForwardService(db *gorm.DB) *PanelForwardService {
 	return &PanelForwardService{
 		db:             db,
@@ -60,15 +51,6 @@ func (s *PanelForwardService) resolveRuntimeBackend() (string, error) {
 		return model.ForwardRuntimeBackendGost, nil
 	}
 	return s.runtimeService.resolveBackend()
-}
-
-func (s *PanelForwardService) resolveEffectiveForwardRuntimeBackend(record *model.Forward) (string, error) {
-	if record != nil {
-		if backend, ok := normalizeForwardRuntimeBackend(record.RuntimeBackend); ok {
-			return backend, nil
-		}
-	}
-	return s.resolveRuntimeBackend()
 }
 
 type PanelForwardInput struct {
@@ -396,73 +378,6 @@ func (s *PanelForwardService) CreateTunnel(input PanelTunnelInput) (*PanelAdminT
 	return &item, nil
 }
 
-func (s *PanelForwardService) UpdateTunnel(input PanelTunnelUpdateInput) (*PanelAdminTunnelItem, error) {
-	if input.ID == 0 {
-		return nil, errors.New("缺少隧道 ID")
-	}
-
-	input.Name = strings.TrimSpace(input.Name)
-	input.InterfaceName = strings.TrimSpace(input.InterfaceName)
-	input.Protocol = strings.TrimSpace(input.Protocol)
-	input.TCPListenAddr = normalizePanelTunnelListenAddr(input.TCPListenAddr)
-	input.UDPListenAddr = normalizePanelTunnelListenAddr(input.UDPListenAddr)
-
-	trafficRatio := normalizePanelTunnelTrafficRatio(input.TrafficRatio)
-	record, err := s.getTunnelByID(input.ID)
-	if err != nil {
-		return nil, err
-	}
-	backend, err := s.resolveRuntimeBackend()
-	if err != nil {
-		return nil, err
-	}
-	requireProtocol := !isForwardRuntimeExecutionNodeBackend(backend) && record.Type == 2
-	if err := validatePanelTunnelUpdateInput(input, trafficRatio, requireProtocol); err != nil {
-		return nil, err
-	}
-	if err := s.ensureTunnelNameUnique(input.Name, record.ID); err != nil {
-		return nil, err
-	}
-
-	runtimeChanged := strings.TrimSpace(record.Protocol) != input.Protocol ||
-		strings.TrimSpace(record.TCPListenAddr) != input.TCPListenAddr ||
-		strings.TrimSpace(record.UDPListenAddr) != input.UDPListenAddr ||
-		strings.TrimSpace(record.InterfaceName) != input.InterfaceName
-
-	record.Name = input.Name
-	record.Flow = input.Flow
-	record.TrafficRatio = trafficRatio
-	record.InterfaceName = input.InterfaceName
-	if requireProtocol {
-		record.Protocol = input.Protocol
-	} else {
-		record.Protocol = ""
-	}
-	record.TCPListenAddr = input.TCPListenAddr
-	record.UDPListenAddr = input.UDPListenAddr
-
-	if err := s.db.Transaction(func(tx *gorm.DB) error {
-		if err := tx.Save(record).Error; err != nil {
-			return err
-		}
-		if runtimeChanged {
-			return s.rebuildActiveTunnelForwardPortBindingsTx(tx, record.ID)
-		}
-		return nil
-	}); err != nil {
-		return nil, err
-	}
-
-	if runtimeChanged {
-		if err := s.syncActiveTunnelForwards(record.ID); err != nil {
-			return nil, fmt.Errorf("隧道更新成功，但部分转发同步失败: %w", err)
-		}
-	}
-
-	item := buildPanelAdminTunnelItem(record)
-	return &item, nil
-}
-
 func (s *PanelForwardService) DeleteTunnel(id uint) error {
 	record, err := s.getTunnelByID(id)
 	if err != nil {
@@ -486,299 +401,6 @@ func (s *PanelForwardService) DeleteTunnel(id uint) error {
 	}
 
 	return s.db.Delete(&model.ForwardTunnel{}, record.ID).Error
-}
-
-func (s *PanelForwardService) CreateForward(userID uint, isAdmin bool, input PanelForwardInput) (*PanelForwardListItem, error) {
-	if err := validatePanelForwardInput(input); err != nil {
-		return nil, err
-	}
-
-	var user model.User
-	if err := s.db.First(&user, userID).Error; err != nil {
-		return nil, errors.New("用户不存在")
-	}
-
-	tunnel, err := s.getActiveTunnel(input.TunnelID)
-	if err != nil {
-		return nil, err
-	}
-	backend, err := s.resolveRuntimeBackend()
-	if err != nil {
-		return nil, err
-	}
-	if err := validatePanelForwardTunnelCompatibility(tunnel, backend); err != nil {
-		return nil, err
-	}
-	if !isAdmin {
-		if _, _, err := s.validateForwardPermission(userID, tunnel.ID, panelForwardPermissionOptions{
-			CheckUserTraffic:        true,
-			CheckTunnelTraffic:      true,
-			CheckTunnelForwardQuota: true,
-		}); err != nil {
-			return nil, err
-		}
-		if err := validateUserForwardTargets(input.RemoteAddr); err != nil {
-			return nil, err
-		}
-	}
-
-	var record *model.Forward
-	if err := s.db.Transaction(func(tx *gorm.DB) error {
-		inPort, err := s.resolvePortTx(tx, tunnel, backend, input.InPort, 0)
-		if err != nil {
-			return err
-		}
-
-		nextInx, err := s.nextIndexForUserTx(tx, userID)
-		if err != nil {
-			return err
-		}
-
-		record = &model.Forward{
-			UserID:         user.ID,
-			UserName:       resolveForwardUserName(&user),
-			Name:           strings.TrimSpace(input.Name),
-			TunnelID:       tunnel.ID,
-			InPort:         inPort,
-			RemoteAddr:     normalizeRemoteAddr(input.RemoteAddr),
-			InterfaceName:  strings.TrimSpace(input.InterfaceName),
-			Strategy:       normalizeStrategy(input.Strategy, input.RemoteAddr),
-			Status:         model.ForwardStatusActive,
-			RuntimeBackend: backend,
-			Inx:            nextInx,
-		}
-
-		if err := tx.Create(record).Error; err != nil {
-			return err
-		}
-		return s.replaceForwardPortBindingsTx(tx, record.ID, tunnel, backend, record.InPort)
-	}); err != nil {
-		return nil, err
-	}
-
-	if err := s.db.Preload("Tunnel").First(record, record.ID).Error; err != nil {
-		return nil, err
-	}
-
-	if _, runtimeErr := s.syncForwardRuntime(record, model.ForwardRuntimeJobActionCreate); runtimeErr != nil {
-		record.Status = model.ForwardStatusError
-		if saveErr := s.db.Save(record).Error; saveErr != nil {
-			return nil, saveErr
-		}
-	}
-
-	item := buildPanelForwardItem(record)
-	return &item, nil
-}
-
-func (s *PanelForwardService) UpdateForward(userID uint, isAdmin bool, input PanelForwardUpdateInput) (*PanelForwardListItem, error) {
-	if input.ID == 0 {
-		return nil, errors.New("缺少转发 ID")
-	}
-	if err := validatePanelForwardInput(PanelForwardInput{
-		Name:          input.Name,
-		TunnelID:      input.TunnelID,
-		InPort:        input.InPort,
-		RemoteAddr:    input.RemoteAddr,
-		InterfaceName: input.InterfaceName,
-		Strategy:      input.Strategy,
-	}); err != nil {
-		return nil, err
-	}
-
-	record, err := s.getForwardForActor(input.ID, userID, isAdmin)
-	if err != nil {
-		return nil, err
-	}
-
-	tunnel, err := s.getActiveTunnel(input.TunnelID)
-	if err != nil {
-		return nil, err
-	}
-	backend, err := s.resolveEffectiveForwardRuntimeBackend(record)
-	if err != nil {
-		return nil, err
-	}
-	if err := validatePanelForwardTunnelCompatibility(tunnel, backend); err != nil {
-		return nil, err
-	}
-	if !isAdmin {
-		if _, _, err := s.validateForwardPermission(userID, tunnel.ID, panelForwardPermissionOptions{
-			ExcludeForwardID:        record.ID,
-			CheckUserTraffic:        true,
-			CheckTunnelTraffic:      true,
-			CheckTunnelForwardQuota: true,
-		}); err != nil {
-			return nil, err
-		}
-		if err := validateUserForwardTargets(input.RemoteAddr); err != nil {
-			return nil, err
-		}
-	} else if record.UserID != userID && record.TunnelID != tunnel.ID {
-		if _, _, err := s.validateForwardPermission(record.UserID, tunnel.ID, panelForwardPermissionOptions{
-			ExcludeForwardID:        record.ID,
-			CheckUserTraffic:        true,
-			CheckTunnelTraffic:      true,
-			CheckTunnelForwardQuota: true,
-		}); err != nil {
-			return nil, err
-		}
-	}
-
-	if err := s.db.Transaction(func(tx *gorm.DB) error {
-		inPort, err := s.resolvePortTx(tx, tunnel, backend, input.InPort, record.ID)
-		if err != nil {
-			return err
-		}
-
-		record.Name = strings.TrimSpace(input.Name)
-		record.TunnelID = tunnel.ID
-		record.InPort = inPort
-		record.RemoteAddr = normalizeRemoteAddr(input.RemoteAddr)
-		record.InterfaceName = strings.TrimSpace(input.InterfaceName)
-		record.Strategy = normalizeStrategy(input.Strategy, input.RemoteAddr)
-		if record.Status == model.ForwardStatusError {
-			record.Status = model.ForwardStatusActive
-		}
-
-		// The record still carries the tunnel it was loaded with. Saving
-		// that association set tunnel_id back to it, so a forward never
-		// moved to another tunnel while its port bindings did.
-		if err := tx.Omit(clause.Associations).Save(record).Error; err != nil {
-			return err
-		}
-		return s.replaceForwardPortBindingsTx(tx, record.ID, tunnel, backend, record.InPort)
-	}); err != nil {
-		return nil, err
-	}
-	if err := s.db.Preload("Tunnel").First(record, record.ID).Error; err != nil {
-		return nil, err
-	}
-
-	if record.Status == model.ForwardStatusActive {
-		if _, runtimeErr := s.syncForwardRuntime(record, model.ForwardRuntimeJobActionUpdate); runtimeErr != nil {
-			record.Status = model.ForwardStatusError
-			if saveErr := s.db.Save(record).Error; saveErr != nil {
-				return nil, saveErr
-			}
-		}
-	}
-
-	item := buildPanelForwardItem(record)
-	return &item, nil
-}
-
-func (s *PanelForwardService) DeleteForward(userID uint, isAdmin bool, forwardID uint, force bool) error {
-	record, err := s.getForwardForActor(forwardID, userID, isAdmin)
-	if err != nil {
-		return err
-	}
-
-	if !force && record.Status == model.ForwardStatusActive {
-		return errors.New("转发服务正在运行，请先暂停或使用强制删除")
-	}
-
-	result, runtimeErr := s.syncForwardRuntime(record, model.ForwardRuntimeJobActionDelete)
-	if runtimeErr != nil && !force {
-		return runtimeErr
-	}
-	if !force && result != nil && result.Async {
-		return nil
-	}
-
-	return s.db.Transaction(func(tx *gorm.DB) error {
-		return deletePanelForwardRecordTx(tx, record.ID)
-	})
-}
-
-func (s *PanelForwardService) SetForwardStatus(userID uint, isAdmin bool, forwardID uint, status int) error {
-	if status != model.ForwardStatusPaused && status != model.ForwardStatusActive {
-		return errors.New("status must be 0 or 1")
-	}
-
-	record, err := s.getForwardForActor(forwardID, userID, isAdmin)
-	if err != nil {
-		return err
-	}
-
-	job, err := s.getForwardRuntimeJobInProgress(record.ID)
-	if err != nil {
-		return err
-	}
-	if job != nil {
-		if record.Status == status && isForwardRuntimeJobDuplicateForStatus(job.Action, status) {
-			return nil
-		}
-		return errForwardRuntimeJobInProgress
-	}
-	if record.Status == status {
-		return nil
-	}
-
-	if !isAdmin && status == model.ForwardStatusActive {
-		if _, _, err := s.validateForwardPermission(userID, record.TunnelID, panelForwardPermissionOptions{
-			ExcludeForwardID:   record.ID,
-			CheckUserTraffic:   true,
-			CheckTunnelTraffic: true,
-		}); err != nil {
-			return err
-		}
-	}
-
-	if status == model.ForwardStatusActive {
-		backend, err := s.resolveEffectiveForwardRuntimeBackend(record)
-		if err != nil {
-			return err
-		}
-		if err := validatePanelForwardTunnelCompatibility(record.Tunnel, backend); err != nil {
-			return err
-		}
-		record.Status = model.ForwardStatusActive
-		if err := s.db.Save(record).Error; err != nil {
-			return err
-		}
-		if _, runtimeErr := s.syncForwardRuntime(record, model.ForwardRuntimeJobActionResume); runtimeErr != nil {
-			record.Status = model.ForwardStatusError
-			if saveErr := s.db.Save(record).Error; saveErr != nil {
-				return saveErr
-			}
-			return runtimeErr
-		}
-		return nil
-	}
-
-	if _, runtimeErr := s.syncForwardRuntime(record, model.ForwardRuntimeJobActionPause); runtimeErr != nil {
-		return runtimeErr
-	}
-
-	record.Status = status
-	return s.db.Save(record).Error
-}
-
-func (s *PanelForwardService) getForwardRuntimeJobInProgress(forwardID uint) (*model.ForwardRuntimeJob, error) {
-	var job model.ForwardRuntimeJob
-	err := s.db.Where("forward_id = ? AND status IN ?", forwardID, []int{
-		model.ForwardRuntimeJobStatusPending,
-		model.ForwardRuntimeJobStatusRunning,
-	}).Order("id DESC").First(&job).Error
-	if errors.Is(err, gorm.ErrRecordNotFound) {
-		return nil, nil
-	}
-	if err != nil {
-		return nil, err
-	}
-	return &job, nil
-}
-
-func isForwardRuntimeJobDuplicateForStatus(action string, status int) bool {
-	switch status {
-	case model.ForwardStatusPaused:
-		return action == model.ForwardRuntimeJobActionPause
-	case model.ForwardStatusActive:
-		return action == model.ForwardRuntimeJobActionResume
-	default:
-		return false
-	}
 }
 
 func (s *PanelForwardService) UpdateOrder(userID uint, isAdmin bool, updates []PanelForwardOrderUpdate) error {
@@ -935,88 +557,6 @@ func (s *PanelForwardService) ListUserTunnels(query PanelUserTunnelQueryInput) (
 	return items, nil
 }
 
-func (s *PanelForwardService) RemoveUserTunnel(id uint) error {
-	record, err := s.getUserTunnelByID(id)
-	if err != nil {
-		return err
-	}
-
-	forwards, err := s.listUserTunnelForwards(record.UserID, record.TunnelID, 0)
-	if err != nil {
-		return err
-	}
-	var firstRuntimeErr error
-	hasAsyncDelete := false
-	for i := range forwards {
-		result, err := s.syncForwardRuntime(&forwards[i], model.ForwardRuntimeJobActionDelete)
-		if err != nil && firstRuntimeErr == nil {
-			firstRuntimeErr = err
-		}
-		if result != nil && result.Async {
-			hasAsyncDelete = true
-		}
-	}
-	if firstRuntimeErr != nil {
-		return firstRuntimeErr
-	}
-	if hasAsyncDelete {
-		return errors.New("转发运行时删除已排队，请等待完成后重试取消授权")
-	}
-	forwardIDs := collectForwardIDs(forwards)
-
-	return s.db.Transaction(func(tx *gorm.DB) error {
-		if len(forwardIDs) > 0 {
-			if err := tx.Where("forward_id IN ?", forwardIDs).Delete(&model.ForwardPortBinding{}).Error; err != nil {
-				return err
-			}
-		}
-		if err := tx.Where("user_id = ? AND tunnel_id = ?", record.UserID, record.TunnelID).
-			Delete(&model.Forward{}).Error; err != nil {
-			return err
-		}
-		return tx.Delete(&model.ForwardUserTunnel{}, record.ID).Error
-	})
-}
-
-func (s *PanelForwardService) UpdateUserTunnel(input PanelUserTunnelUpdateInput) error {
-	record, err := s.getUserTunnelByID(input.ID)
-	if err != nil {
-		return err
-	}
-
-	if input.Status != model.ForwardUserTunnelStatusActive && input.Status != model.ForwardUserTunnelStatusDisabled {
-		return errors.New("status must be 0 or 1")
-	}
-
-	speedLimit, err := s.resolveTunnelSpeedLimit(record.TunnelID, input.SpeedID)
-	if err != nil {
-		return err
-	}
-
-	var speedID *uint
-	if speedLimit != nil {
-		speedID = &speedLimit.ID
-	}
-	speedChanged := !sameUintPointer(record.SpeedID, speedID)
-
-	record.Flow = input.Flow
-	record.Num = input.Num
-	record.FlowResetTime = input.FlowResetTime
-	record.ExpTime = input.ExpTime
-	record.Status = input.Status
-	record.SpeedID = speedID
-	if err := s.db.Save(record).Error; err != nil {
-		return err
-	}
-	if err := s.reconcileUserTunnelForwards(record); err != nil {
-		return err
-	}
-	if speedChanged {
-		return s.syncActiveUserTunnelForwards(record, model.ForwardRuntimeJobActionUpdate)
-	}
-	return nil
-}
-
 func (s *PanelForwardService) ResetUserTunnelTraffic(id uint) error {
 	record, err := s.getUserTunnelByID(id)
 	if err != nil {
@@ -1040,93 +580,6 @@ func (s *PanelForwardService) ResetUserTunnelTraffic(id uint) error {
 				"out_flow": 0,
 			}).Error
 	})
-}
-
-func (s *PanelForwardService) getActiveTunnel(tunnelID uint) (*model.ForwardTunnel, error) {
-	var tunnel model.ForwardTunnel
-	if err := s.db.First(&tunnel, tunnelID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("隧道不存在")
-		}
-		return nil, err
-	}
-	if tunnel.Status != model.ForwardTunnelStatusActive {
-		return nil, errors.New("隧道已禁用")
-	}
-	return &tunnel, nil
-}
-
-func (s *PanelForwardService) validateForwardPermission(userID, tunnelID uint, opts panelForwardPermissionOptions) (*model.User, *model.ForwardUserTunnel, error) {
-	user, err := s.getActiveUser(userID)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	permission, err := s.getActiveUserTunnelPermission(userID, tunnelID)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	if opts.CheckUserTraffic && !user.HasTraffic() {
-		return nil, nil, errors.New("user total traffic exhausted")
-	}
-
-	if opts.CheckTunnelTraffic && permission.Flow > 0 {
-		totalTraffic, err := s.sumUserTunnelTraffic(userID, tunnelID)
-		if err != nil {
-			return nil, nil, err
-		}
-		if totalTraffic >= permission.Flow*bytesPerGiB {
-			return nil, nil, errors.New("tunnel traffic exhausted")
-		}
-	}
-
-	if opts.CheckTunnelForwardQuota && permission.Num > 0 {
-		forwardCount, err := s.countUserTunnelForwards(userID, tunnelID, opts.ExcludeForwardID)
-		if err != nil {
-			return nil, nil, err
-		}
-		if forwardCount >= int64(permission.Num) {
-			return nil, nil, fmt.Errorf("tunnel forward quota exceeded: %d", permission.Num)
-		}
-	}
-
-	return user, permission, nil
-}
-
-func (s *PanelForwardService) getActiveUser(userID uint) (*model.User, error) {
-	var user model.User
-	if err := s.db.First(&user, userID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("user not found")
-		}
-		return nil, err
-	}
-	if !user.IsValid() {
-		return nil, errors.New("invalid user status")
-	}
-	return &user, nil
-}
-
-func (s *PanelForwardService) getActiveUserTunnelPermission(userID, tunnelID uint) (*model.ForwardUserTunnel, error) {
-	if userID == 0 || tunnelID == 0 {
-		return nil, errors.New("no active tunnel permission")
-	}
-
-	var permission model.ForwardUserTunnel
-	if err := s.db.Where("user_id = ? AND tunnel_id = ?", userID, tunnelID).First(&permission).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("no active tunnel permission")
-		}
-		return nil, err
-	}
-	if permission.Status != model.ForwardUserTunnelStatusActive {
-		return nil, errors.New("tunnel permission is disabled")
-	}
-	if permission.ExpTime > 0 && permission.ExpTime <= time.Now().UnixMilli() {
-		return nil, errors.New("tunnel permission expired")
-	}
-	return &permission, nil
 }
 
 func (s *PanelForwardService) getForwardForActor(forwardID, userID uint, isAdmin bool) (*model.Forward, error) {
@@ -1213,105 +666,6 @@ func (s *PanelForwardService) listSpeedLimitsByIDs(ids []uint) (map[uint]model.S
 	return result, nil
 }
 
-func (s *PanelForwardService) resolvePortTx(tx *gorm.DB, tunnel *model.ForwardTunnel, backend string, requested *int, excludeForwardID uint) (int, error) {
-	start, end := tunnelPortRange(tunnel)
-	usedPorts, err := s.usedPortsForTunnelTx(tx, tunnel, backend, excludeForwardID)
-	if err != nil {
-		return 0, err
-	}
-
-	if requested != nil && *requested > 0 {
-		if *requested < start || *requested > end {
-			return 0, fmt.Errorf("端口号必须在 %d-%d 范围内", start, end)
-		}
-		if usedPorts[*requested] {
-			return 0, errors.New("入口端口已被占用")
-		}
-		return *requested, nil
-	}
-
-	for port := start; port <= end; port++ {
-		if !usedPorts[port] {
-			return port, nil
-		}
-	}
-	return 0, errors.New("没有可用的入口端口")
-}
-
-func (s *PanelForwardService) usedPortsForTunnelTx(tx *gorm.DB, tunnel *model.ForwardTunnel, backend string, excludeForwardID uint) (map[int]bool, error) {
-	if tunnel == nil {
-		return nil, errors.New("隧道不存在")
-	}
-	start, end := tunnelPortRange(tunnel)
-	currentScope := buildPanelForwardPortScope(tunnel, backend)
-	var records []model.Forward
-	query := tx.
-		Preload("Tunnel").
-		Select("id", "tunnel_id", "in_port", "runtime_backend").
-		Where("in_port BETWEEN ? AND ?", start, end)
-	if excludeForwardID > 0 {
-		query = query.Where("id <> ?", excludeForwardID)
-	}
-	if err := query.Find(&records).Error; err != nil {
-		return nil, err
-	}
-
-	used := make(map[int]bool, len(records))
-	for _, record := range records {
-		if record.Tunnel == nil {
-			if record.TunnelID == tunnel.ID {
-				used[record.InPort] = true
-			}
-			continue
-		}
-		existingBackend := backend
-		if normalized, ok := normalizeForwardRuntimeBackend(record.RuntimeBackend); ok {
-			existingBackend = normalized
-		}
-		existingScope := buildPanelForwardPortScope(record.Tunnel, existingBackend)
-		if !panelForwardPortScopesOverlap(currentScope, existingScope) {
-			continue
-		}
-		used[record.InPort] = true
-	}
-	return used, nil
-}
-
-func (s *PanelForwardService) replaceForwardPortBindingsTx(tx *gorm.DB, forwardID uint, tunnel *model.ForwardTunnel, backend string, inPort int) error {
-	bindings := buildForwardPortBindings(forwardID, tunnel, backend, inPort)
-	if err := s.ensureForwardPortBindingsAvailableTx(tx, bindings, forwardID); err != nil {
-		return err
-	}
-	if err := tx.Where("forward_id = ?", forwardID).Delete(&model.ForwardPortBinding{}).Error; err != nil {
-		return err
-	}
-	if len(bindings) == 0 {
-		return nil
-	}
-	if err := tx.Create(&bindings).Error; err != nil {
-		return fmt.Errorf("入口端口已被占用: %w", err)
-	}
-	return nil
-}
-
-func (s *PanelForwardService) rebuildActiveTunnelForwardPortBindingsTx(tx *gorm.DB, tunnelID uint) error {
-	var forwards []model.Forward
-	if err := tx.Preload("Tunnel").Where("tunnel_id = ? AND status = ?", tunnelID, model.ForwardStatusActive).Order("id ASC").Find(&forwards).Error; err != nil {
-		return err
-	}
-
-	for i := range forwards {
-		backend, err := s.resolveEffectiveForwardRuntimeBackend(&forwards[i])
-		if err != nil {
-			return err
-		}
-		if err := s.replaceForwardPortBindingsTx(tx, forwards[i].ID, forwards[i].Tunnel, backend, forwards[i].InPort); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
 func buildForwardPortBindings(forwardID uint, tunnel *model.ForwardTunnel, backend string, inPort int) []model.ForwardPortBinding {
 	if forwardID == 0 || tunnel == nil || inPort <= 0 {
 		return nil
@@ -1381,25 +735,6 @@ func buildPanelForwardPortScope(tunnel *model.ForwardTunnel, backend string) pan
 	}
 }
 
-func panelForwardPortScopesOverlap(left, right panelForwardPortScope) bool {
-	if left.NodeID == 0 || right.NodeID == 0 || left.NodeID != right.NodeID {
-		return false
-	}
-
-	for _, transport := range []string{"tcp", "udp"} {
-		if !panelForwardProtocolIncludes(left.Protocol, transport) || !panelForwardProtocolIncludes(right.Protocol, transport) {
-			continue
-		}
-		if panelForwardListenAddrsOverlap(
-			panelForwardListenAddrForTransport(left, transport),
-			panelForwardListenAddrForTransport(right, transport),
-		) {
-			return true
-		}
-	}
-	return false
-}
-
 func panelForwardProtocolIncludes(protocol, transport string) bool {
 	switch normalizePanelRuntimeProtocol(protocol) {
 	case "both":
@@ -1442,33 +777,6 @@ func isPanelForwardWildcardListenAddr(addr string) bool {
 	}
 }
 
-func (s *PanelForwardService) nextIndexForUserTx(tx *gorm.DB, userID uint) (int, error) {
-	var records []model.Forward
-	if err := tx.Select("inx").Where("user_id = ?", userID).Find(&records).Error; err != nil {
-		return 0, err
-	}
-	if len(records) == 0 {
-		return 0, nil
-	}
-	sort.Slice(records, func(i, j int) bool {
-		return records[i].Inx < records[j].Inx
-	})
-	return records[len(records)-1].Inx + 1, nil
-}
-
-func (s *PanelForwardService) countUserTunnelForwards(userID, tunnelID, excludeForwardID uint) (int64, error) {
-	query := s.db.Model(&model.Forward{}).Where("user_id = ? AND tunnel_id = ?", userID, tunnelID)
-	if excludeForwardID != 0 {
-		query = query.Where("id <> ?", excludeForwardID)
-	}
-
-	var count int64
-	if err := query.Count(&count).Error; err != nil {
-		return 0, err
-	}
-	return count, nil
-}
-
 func (s *PanelForwardService) sumUserTunnelTraffic(userID, tunnelID uint) (int64, error) {
 	var permission model.ForwardUserTunnel
 	if err := s.db.Where("user_id = ? AND tunnel_id = ?", userID, tunnelID).First(&permission).Error; err != nil {
@@ -1497,19 +805,6 @@ func (s *PanelForwardService) listUserTunnelForwards(userID, tunnelID uint, stat
 	return forwards, nil
 }
 
-func collectForwardIDs(records []model.Forward) []uint {
-	if len(records) == 0 {
-		return nil
-	}
-	ids := make([]uint, 0, len(records))
-	for _, record := range records {
-		if record.ID != 0 {
-			ids = append(ids, record.ID)
-		}
-	}
-	return ids
-}
-
 func (s *PanelForwardService) reconcileUserTunnelForwards(permission *model.ForwardUserTunnel) error {
 	if permission == nil {
 		return nil
@@ -1531,33 +826,6 @@ func (s *PanelForwardService) reconcileUserTunnelForwards(permission *model.Forw
 	var firstErr error
 	for i := range forwards {
 		if err := s.pauseManagedForward(&forwards[i]); err != nil && firstErr == nil {
-			firstErr = err
-		}
-	}
-	return firstErr
-}
-
-func (s *PanelForwardService) syncActiveUserTunnelForwards(permission *model.ForwardUserTunnel, action string) error {
-	if permission == nil {
-		return nil
-	}
-
-	shouldPause, err := s.userTunnelRequiresPause(permission)
-	if err != nil {
-		return err
-	}
-	if shouldPause {
-		return nil
-	}
-
-	forwards, err := s.listUserTunnelForwards(permission.UserID, permission.TunnelID, model.ForwardStatusActive)
-	if err != nil {
-		return err
-	}
-
-	var firstErr error
-	for i := range forwards {
-		if _, err := s.syncForwardRuntime(&forwards[i], action); err != nil && firstErr == nil {
 			firstErr = err
 		}
 	}
@@ -1711,28 +979,6 @@ func validateForwardNodeType(node *model.ForwardNode, expectedType, label string
 	return fmt.Errorf("%s必须是转发出口节点", label)
 }
 
-func (s *PanelForwardService) syncActiveTunnelForwards(tunnelID uint) error {
-	var forwards []model.Forward
-	if err := s.db.Preload("Tunnel").Where("tunnel_id = ? AND status = ?", tunnelID, model.ForwardStatusActive).Order("id ASC").Find(&forwards).Error; err != nil {
-		return err
-	}
-
-	var firstErr error
-	for i := range forwards {
-		if _, err := s.syncForwardRuntime(&forwards[i], model.ForwardRuntimeJobActionUpdate); err != nil {
-			forwards[i].Status = model.ForwardStatusError
-			if saveErr := s.db.Model(&model.Forward{}).Where("id = ?", forwards[i].ID).Update("status", model.ForwardStatusError).Error; saveErr != nil && firstErr == nil {
-				firstErr = saveErr
-				continue
-			}
-			if firstErr == nil {
-				firstErr = err
-			}
-		}
-	}
-	return firstErr
-}
-
 func (s *PanelForwardService) getAccessibleTunnels(userID uint, isAdmin bool) ([]model.ForwardTunnel, error) {
 	var tunnels []model.ForwardTunnel
 	if isAdmin {
@@ -1774,34 +1020,6 @@ func (s *PanelForwardService) getAccessibleTunnels(userID uint, isAdmin bool) ([
 		return nil, err
 	}
 	return tunnels, nil
-}
-
-func (s *PanelForwardService) ListRuntimeJobs(filter PanelRuntimeJobFilter) ([]model.ForwardRuntimeJob, error) {
-	query := s.db.Model(&model.ForwardRuntimeJob{}).Order("id DESC")
-	if strings.TrimSpace(filter.Backend) != "" {
-		query = query.Where("backend = ?", strings.TrimSpace(filter.Backend))
-	}
-	if filter.Status != nil {
-		query = query.Where("status = ?", *filter.Status)
-	}
-	if filter.ForwardID != nil {
-		query = query.Where("forward_id = ?", *filter.ForwardID)
-	}
-
-	limit := filter.Limit
-	if limit <= 0 {
-		limit = defaultRuntimeJobLimit
-	}
-	if limit > maxRuntimeJobLimit {
-		limit = maxRuntimeJobLimit
-	}
-
-	var jobs []model.ForwardRuntimeJob
-	err := query.Limit(limit).Find(&jobs).Error
-	// Payloads written before NO-7 carry a node token until the start-up
-	// pass has rewritten them; the answer never does.
-	scrubForwardRuntimeJobs(jobs)
-	return jobs, err
 }
 
 func buildPanelAdminTunnelItem(record *model.ForwardTunnel) PanelAdminTunnelItem {
@@ -1947,18 +1165,6 @@ func (s *PanelForwardService) syncForwardRuntimeContext(ctx context.Context, rec
 	return result, nil
 }
 
-func tunnelPortRange(tunnel *model.ForwardTunnel) (int, int) {
-	start := defaultTunnelPortStart
-	end := defaultTunnelPortEnd
-	if tunnel.InNodePortSta != nil && *tunnel.InNodePortSta > 0 {
-		start = *tunnel.InNodePortSta
-	}
-	if tunnel.InNodePortEnd != nil && *tunnel.InNodePortEnd >= start {
-		end = *tunnel.InNodePortEnd
-	}
-	return start, end
-}
-
 func validatePanelTunnelCreateInput(input PanelTunnelInput, trafficRatio float64, backend string) error {
 	if strings.TrimSpace(input.Name) == "" {
 		return errors.New("请输入隧道名称")
@@ -1995,28 +1201,6 @@ func validatePanelTunnelCreateInput(input PanelTunnelInput, trafficRatio float64
 	return nil
 }
 
-func validatePanelTunnelUpdateInput(input PanelTunnelUpdateInput, trafficRatio float64, requireProtocol bool) error {
-	if strings.TrimSpace(input.Name) == "" {
-		return errors.New("请输入隧道名称")
-	}
-	if input.Flow != 1 && input.Flow != 2 {
-		return errors.New("流量计算方式必须是 1 或 2")
-	}
-	if trafficRatio <= 0 || trafficRatio > 100 {
-		return errors.New("流量倍率必须在 0.0-100.0 之间")
-	}
-	if requireProtocol && strings.TrimSpace(input.Protocol) == "" {
-		return errors.New("请选择协议类型")
-	}
-	if strings.TrimSpace(input.TCPListenAddr) == "" {
-		return errors.New("请输入 TCP 监听地址")
-	}
-	if strings.TrimSpace(input.UDPListenAddr) == "" {
-		return errors.New("请输入 UDP 监听地址")
-	}
-	return nil
-}
-
 func normalizePanelTunnelTrafficRatio(value *float64) float64 {
 	if value == nil || *value == 0 {
 		return 1
@@ -2045,61 +1229,6 @@ func resolvePanelTunnelTypeName(tunnelType int) string {
 	default:
 		return "端口转发"
 	}
-}
-
-func validatePanelForwardInput(input PanelForwardInput) error {
-	if strings.TrimSpace(input.Name) == "" {
-		return errors.New("请输入转发名称")
-	}
-	if input.TunnelID == 0 {
-		return errors.New("请选择关联隧道")
-	}
-	if strings.TrimSpace(input.RemoteAddr) == "" {
-		return errors.New("请输入远程地址")
-	}
-	for _, raw := range strings.Split(normalizeRemoteAddr(input.RemoteAddr), ",") {
-		target := strings.TrimSpace(raw)
-		if target == "" {
-			continue
-		}
-		if _, _, err := splitTarget(target); err != nil {
-			return fmt.Errorf("目标地址格式错误: %s", target)
-		}
-	}
-	if input.InPort != nil && (*input.InPort < 1 || *input.InPort > 65535) {
-		return errors.New("端口号必须在 1-65535 范围内")
-	}
-	return nil
-}
-
-// validateUserForwardTargets refuses a user's forward targets that are not
-// public. A forward runs on its tunnel's nodes, and the node connects to the
-// target: a loopback, private (RFC 1918 or ULA), link-local, unspecified,
-// multicast, carrier-grade NAT or other special-purpose address, or a name
-// that resolves to one, reaches the node's own services or the network
-// behind it. A name that does not resolve is refused too, since the node may
-// resolve it to a private address (an internal or metadata name). Names are
-// resolved on Control when the forward is written, and DNS can answer
-// differently later on the node, so this does not stop DNS rebinding.
-// Administrators' forwards are not checked.
-func validateUserForwardTargets(remoteAddr string) error {
-	for _, raw := range strings.Split(normalizeRemoteAddr(remoteAddr), ",") {
-		target := strings.TrimSpace(raw)
-		if target == "" {
-			continue
-		}
-		host, _, err := splitTarget(target)
-		if err != nil {
-			return fmt.Errorf("目标地址格式错误: %s", target)
-		}
-		if _, err := resolvePublicAddress(host); err != nil {
-			if errors.Is(err, errNotPublicAddress) {
-				return fmt.Errorf("不能转发到内网或本机地址: %s", target)
-			}
-			return fmt.Errorf("无法解析目标地址: %s", target)
-		}
-	}
-	return nil
 }
 
 func normalizeRemoteAddr(raw string) string {
@@ -2132,16 +1261,6 @@ func normalizeStrategy(strategy, remoteAddr string) string {
 	default:
 		return "fifo"
 	}
-}
-
-func resolveForwardUserName(user *model.User) string {
-	if user == nil {
-		return ""
-	}
-	if strings.TrimSpace(user.Email) != "" {
-		return user.Email
-	}
-	return fmt.Sprintf("user-%d", user.ID)
 }
 
 func resolveTunnelName(tunnel *model.ForwardTunnel) string {
@@ -2195,17 +1314,6 @@ func validatePanelForwardTunnelCompatibility(tunnel *model.ForwardTunnel, backen
 		return fmt.Errorf("unsupported forward runtime backend: %s", backend)
 	}
 	return nil
-}
-
-func sameUintPointer(left, right *uint) bool {
-	switch {
-	case left == nil && right == nil:
-		return true
-	case left == nil || right == nil:
-		return false
-	default:
-		return *left == *right
-	}
 }
 
 func splitTarget(target string) (string, int, error) {

@@ -118,15 +118,3 @@ func TestScrubForwardRuntimeJobPayloads(t *testing.T) {
 	require.NoError(t, err)
 	require.Zero(t, scrubbed)
 }
-
-// The job list serves old rows scrubbed until the pass rewrote them.
-func TestListRuntimeJobsServesNoToken(t *testing.T) {
-	db := openScrubDB(t)
-	forward := uint(40)
-	require.NoError(t, db.Create(&model.ForwardRuntimeJob{Backend: "clean_agent", Action: "create", ForwardID: &forward, Payload: oldPayload}).Error)
-	jobs, err := NewPanelForwardService(db).ListRuntimeJobs(PanelRuntimeJobFilter{})
-	require.NoError(t, err)
-	require.Len(t, jobs, 1)
-	require.NotContains(t, jobs[0].Payload, "relay-token-10")
-	require.Contains(t, jobs[0].Payload, `"host":"198.51.100.10"`)
-}

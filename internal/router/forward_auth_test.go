@@ -34,7 +34,6 @@ func TestSetup_ForwardCompatAdminEndpoints_RequireAdmin(t *testing.T) {
 	}{
 		{method: http.MethodPost, path: "/api/v2/user/reset", body: "{}", adminStatus: http.StatusServiceUnavailable},
 		{method: http.MethodPost, path: "/api/v2/tunnel/user/list", body: "{}", adminStatus: http.StatusServiceUnavailable},
-		{method: http.MethodGet, path: "/api/v2/admin/forward/runtime/jobs", adminStatus: http.StatusServiceUnavailable},
 		{method: http.MethodGet, path: "/api/v2/admin/forward/runtime/status", adminStatus: http.StatusServiceUnavailable},
 		{method: http.MethodGet, path: "/api/v2/admin/forward/runtime/doctor", adminStatus: http.StatusServiceUnavailable},
 		{method: http.MethodGet, path: "/api/v2/admin/forward/local/status", adminStatus: http.StatusServiceUnavailable},
@@ -142,5 +141,38 @@ func TestSetup_ForwardUserEndpoints_RequireJWT(t *testing.T) {
 				assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 			})
 		})
+	}
+}
+
+// The flux forwarding API was removed in v4.2 (F5d): its v2 routes are not
+// registered, and /api/v4/forward/* replaces them.
+func TestFluxForwardRoutesAreRemoved(t *testing.T) {
+	r, cfg := setupTestRouter(t)
+	defer teardownTestRouter(t)
+	adminToken := testRouterJWT(t, cfg.JWT.Secret, true)
+
+	for _, ep := range []struct{ method, path string }{
+		{http.MethodPost, "/api/v2/admin/forward/create"},
+		{http.MethodGet, "/api/v2/admin/forward/rules"},
+		{http.MethodPost, "/api/v2/admin/forward/sync-backend"},
+		{http.MethodGet, "/api/v2/admin/forward/runtime/jobs"},
+		{http.MethodPost, "/api/v2/admin/tunnel/update"},
+		{http.MethodPost, "/api/v2/forward/create"},
+		{http.MethodPost, "/api/v2/speed-limit/update"},
+		{http.MethodPost, "/api/v2/tunnel/user/remove"},
+		{http.MethodPost, "/api/v2/user/forward/rules"},
+		{http.MethodGet, "/api/v2/admin/forward/nodes"},
+		{http.MethodGet, "/api/v2/admin/forward/ansible-machines"},
+		{http.MethodGet, "/api/v2/admin/forward/observability/topology"},
+		{http.MethodGet, "/api/v2/admin/forward/agents"},
+		{http.MethodGet, "/api/v2/forward-agent/install.sh"},
+	} {
+		req, err := http.NewRequest(ep.method, ep.path, strings.NewReader("{}"))
+		require.NoError(t, err)
+		req.Header.Set("Authorization", "Bearer "+adminToken)
+		req.Header.Set("Content-Type", "application/json")
+		w := httptest.NewRecorder()
+		r.ServeHTTP(w, req)
+		assert.Equal(t, http.StatusNotFound, w.Code, "%s %s", ep.method, ep.path)
 	}
 }

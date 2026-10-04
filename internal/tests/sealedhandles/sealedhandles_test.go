@@ -12,7 +12,6 @@ import (
 
 	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-	configtables "github.com/AnixOps/anix-control/v4/config"
 	"github.com/AnixOps/anix-control/v4/internal/sealedsecrets"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/stretchr/testify/assert"
@@ -21,7 +20,8 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-const updateForwardNode = "forward.admin.forward.nodes.id.put"
+// updateForwardNode is a fixture route (harness_test.go, fieldTable).
+const updateForwardNode = "forward.fixture.nodes.id.put"
 const createProxyNode = "proxy.admin.nodes.post"
 
 // tokenUpdate is a fake native PUT /admin/forward/nodes/:id: it stores the
@@ -271,7 +271,7 @@ func TestUnsealableRequestsFallBackToLegacy(t *testing.T) {
 	require.Len(t, h.viaLegacy, 1)
 	var rendered strings.Builder
 	require.NoError(t, h.metrics.WritePrometheus(&rendered))
-	assert.Contains(t, rendered.String(), `route="forward.admin.forward.nodes.id.put",stage="request",result="legacy_fallback",reason="value_not_string"} 1`)
+	assert.Contains(t, rendered.String(), `route="forward.fixture.nodes.id.put",stage="request",result="legacy_fallback",reason="value_not_string"} 1`)
 }
 
 // A shadow run is never bound: the router gives it no binding, and the
@@ -319,8 +319,7 @@ func TestShadowRunsAreNeverBound(t *testing.T) {
 // package on any listed route, in any document form or depth.
 func TestNoNodeSecretReachesAPackageOnAnyListedRoute(t *testing.T) {
 	h := newHarness(t)
-	table, err := sealedsecrets.ParseTable(configtables.NodeSecretFields)
-	require.NoError(t, err)
+	table := fieldTable(t)
 	ids := table.RouteIDs()
 	sort.Strings(ids)
 	modes := map[string]string{}
@@ -389,7 +388,7 @@ func TestNoNodeSecretReachesAPackageOnAnyListedRoute(t *testing.T) {
 		}
 		assert.Contains(t, string(received.Body), `pub`, id)
 	}
-	assert.Len(t, walked, 9)
+	assert.Len(t, walked, 8, "the listed request routes and the fixture route")
 	assert.Zero(t, h.store.Pending())
 	assert.Empty(t, h.viaLegacy, "every walked request was sealed, none fell back")
 }

@@ -8,7 +8,6 @@ import (
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"gorm.io/gorm"
-	"gorm.io/gorm/clause"
 )
 
 // ForwardRuleService handles forward rule persistence and runtime sync.
@@ -32,26 +31,6 @@ func NewForwardRuleServiceWithProvider(db *gorm.DB, nodeService *ForwardNodeServ
 	}
 }
 
-// Create creates a rule and syncs it to the runtime when enabled.
-func (s *ForwardRuleService) Create(rule *model.ForwardRule) error {
-	if err := s.validateRule(rule); err != nil {
-		return err
-	}
-
-	if err := s.db.Create(rule).Error; err != nil {
-		return err
-	}
-
-	if rule.Enabled {
-		if err := s.ApplyRuntime(context.Background(), rule, model.ForwardRuntimeJobActionCreate); err != nil {
-			// Keep DB persistence compatible with current behavior even if runtime sync fails.
-			fmt.Printf("sync rule %d failed: %v\n", rule.ID, err)
-		}
-	}
-
-	return nil
-}
-
 // ApplyRuntime pushes a rule to its relay and exit nodes through the
 // runtime provider (NodeX): create, update or sync apply the row as it is,
 // delete removes it. The legacy routes and the KernelNodeOps
@@ -73,40 +52,6 @@ func (s *ForwardRuleService) ApplyRuntime(ctx context.Context, rule *model.Forwa
 	return fmt.Errorf("unsupported forward rule action: %s", action)
 }
 
-// Update updates a rule and syncs it to the runtime backend.
-func (s *ForwardRuleService) Update(rule *model.ForwardRule) error {
-	if err := s.validateRule(rule); err != nil {
-		return err
-	}
-
-	// The rule may carry preloaded associations (RelayNode/ExitNode/User).
-	// Persist only rule fields, otherwise GORM may upsert stale associations
-	// and overwrite updated foreign keys with old relation IDs.
-	if err := s.db.Omit(clause.Associations).Save(rule).Error; err != nil {
-		return err
-	}
-
-	if err := s.ApplyRuntime(context.Background(), rule, model.ForwardRuntimeJobActionUpdate); err != nil {
-		fmt.Printf("sync rule %d failed: %v\n", rule.ID, err)
-	}
-
-	return nil
-}
-
-// Delete deletes a rule from the runtime backend and then removes it from the database.
-func (s *ForwardRuleService) Delete(id uint) error {
-	rule, err := s.GetByID(id)
-	if err != nil {
-		return err
-	}
-
-	if err := s.ApplyRuntime(context.Background(), rule, model.ForwardRuntimeJobActionDelete); err != nil {
-		fmt.Printf("delete rule %d failed: %v\n", id, err)
-	}
-
-	return s.db.Delete(&model.ForwardRule{}, id).Error
-}
-
 // GetByID fetches a rule by ID.
 func (s *ForwardRuleService) GetByID(id uint) (*model.ForwardRule, error) {
 	var rule model.ForwardRule
@@ -115,25 +60,6 @@ func (s *ForwardRuleService) GetByID(id uint) (*model.ForwardRule, error) {
 		return nil, err
 	}
 	return &rule, nil
-}
-
-// List fetches a paginated rule list.
-func (s *ForwardRuleService) List(page, pageSize int, userID *uint) ([]*model.ForwardRule, int64, error) {
-	var rules []*model.ForwardRule
-	var total int64
-
-	query := s.db.Model(&model.ForwardRule{}).Preload("RelayNode").Preload("ExitNode")
-	if userID != nil {
-		query = query.Where("user_id = ?", *userID)
-	}
-
-	if err := query.Count(&total).Error; err != nil {
-		return nil, 0, err
-	}
-
-	offset := (page - 1) * pageSize
-	err := query.Order("id DESC").Offset(offset).Limit(pageSize).Find(&rules).Error
-	return rules, total, err
 }
 
 // GetUserRules fetches rules owned by a user, for the user. Their relay and
@@ -156,129 +82,8 @@ func (s *ForwardRuleService) GetUserRules(userID uint) ([]*model.ForwardRule, er
 	return rules, err
 }
 
-// Toggle updates the enabled state and syncs it to the runtime backend.
-func (s *ForwardRuleService) Toggle(id uint, enabled bool) error {
-	rule, err := s.GetByID(id)
-	if err != nil {
-		return err
-	}
-
-	if err := s.db.Model(&model.ForwardRule{}).Where("id = ?", id).
-		Update("enabled", enabled).Error; err != nil {
-		return err
-	}
-
-	rule.Enabled = enabled
-
-	if err := s.ApplyRuntime(context.Background(), rule, model.ForwardRuntimeJobActionSync); err != nil {
-		fmt.Printf("sync rule %d failed: %v\n", id, err)
-	}
-
-	return nil
-}
-
-// validateRule validates rule topology and port uniqueness.
-func (s *ForwardRuleService) validateRule(rule *model.ForwardRule) error {
-	relayNode, err := s.nodeService.GetByID(rule.RelayNodeID)
-	if err != nil {
-		return fmt.Errorf("relay node not found")
-	}
-	if relayNode.Type != model.ForwardNodeTypeRelay {
-		return fmt.Errorf("node is not a relay node")
-	}
-
-	exitNode, err := s.nodeService.GetByID(rule.ExitNodeID)
-	if err != nil {
-		return fmt.Errorf("exit node not found")
-	}
-	if exitNode.Type != model.ForwardNodeTypeExit {
-		return fmt.Errorf("node is not an exit node")
-	}
-
-	var count int64
-	s.db.Model(&model.ForwardRule{}).
-		Where("relay_node_id = ? AND listen_port = ? AND id != ?",
-			rule.RelayNodeID, rule.ListenPort, rule.ID).
-		Count(&count)
-	if count > 0 {
-		return fmt.Errorf("listen port %d is already in use on this relay node", rule.ListenPort)
-	}
-
-	return nil
-}
-
-// GetFreePort finds a free relay port in the given range.
-func (s *ForwardRuleService) GetFreePort(relayNodeID uint, startPort, endPort int) (int, error) {
-	usedPorts, err := s.getUsedPorts(relayNodeID)
-	if err != nil {
-		return 0, err
-	}
-
-	for port := startPort; port <= endPort; port++ {
-		if !usedPorts[port] {
-			return port, nil
-		}
-	}
-	return 0, fmt.Errorf("no available port in range %d-%d", startPort, endPort)
-}
-
-// getUsedPorts returns the used ports for a relay node.
-func (s *ForwardRuleService) getUsedPorts(relayNodeID uint) (map[int]bool, error) {
-	var rules []*model.ForwardRule
-	err := s.db.Where("relay_node_id = ?", relayNodeID).Find(&rules).Error
-	if err != nil {
-		return nil, err
-	}
-
-	used := make(map[int]bool)
-	for _, r := range rules {
-		used[r.ListenPort] = true
-	}
-	return used, nil
-}
-
 // ErrForwardRuleAdminOnly refuses a user's write of a legacy forward rule.
 var ErrForwardRuleAdminOnly = errors.New("only administrators can create or change legacy forward rules; forward through your tunnels instead")
-
-// CreateRuleForUser creates a rule owned by the caller, who must be an
-// administrator (ErrForwardRuleAdminOnly).
-//
-// Legacy rules are administrator-only. A rule runs on the relay and exit
-// nodes it names, and no user entitlement covers them: users are entitled
-// to tunnels (v2_forward_user_tunnel), and a rule is neither counted in a
-// tunnel permission's forward or traffic quota nor paused when the
-// permission is disabled, expires or is removed. Users forward through
-// their tunnels (PanelForwardService.CreateForward).
-func (s *ForwardRuleService) CreateRuleForUser(userID uint, isAdmin bool, req *CreateRuleRequest) (*model.ForwardRule, error) {
-	if !isAdmin {
-		return nil, ErrForwardRuleAdminOnly
-	}
-	port, err := s.GetFreePort(req.RelayNodeID, 10000, 65535)
-	if err != nil {
-		return nil, fmt.Errorf("no available port: %w", err)
-	}
-
-	rule := &model.ForwardRule{
-		Name:         req.Name,
-		Enabled:      true,
-		RelayNodeID:  req.RelayNodeID,
-		ListenPort:   port,
-		Protocol:     req.Protocol,
-		ExitNodeID:   req.ExitNodeID,
-		TargetHost:   req.TargetHost,
-		TargetPort:   req.TargetPort,
-		UserID:       &userID,
-		SpeedLimit:   req.SpeedLimit,
-		TrafficLimit: req.TrafficLimit,
-		ExpireTime:   req.ExpireTime,
-	}
-
-	if err := s.Create(rule); err != nil {
-		return nil, err
-	}
-
-	return rule, nil
-}
 
 // CreateRuleRequest is the request payload for user-owned rule creation.
 type CreateRuleRequest struct {

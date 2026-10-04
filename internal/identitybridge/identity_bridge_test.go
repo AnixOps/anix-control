@@ -199,7 +199,7 @@ func (s *movedRouteResolverStub) Resolve(packageID, routeID, operation string) (
 func TestMovedRouteOperationsRunTheNewOwnersHandler(t *testing.T) {
 	resolver := &movedRouteResolverStub{}
 	operations := movedRouteOperations(resolver)
-	require.Len(t, operations, 28)
+	require.Len(t, operations, 27)
 
 	var configs, reset packagebridge.Operation
 	fromPlan := 0
@@ -216,7 +216,7 @@ func TestMovedRouteOperationsRunTheNewOwnersHandler(t *testing.T) {
 			reset = operation
 		}
 	}
-	require.Equal(t, 5, fromPlan, "the speed-limit routes moved from plan")
+	require.Equal(t, 4, fromPlan, "the speed-limit routes moved from plan (the update was removed in F5d)")
 
 	response, err := configs.Handler(context.Background(), packagebridge.Call{})
 	require.NoError(t, err)

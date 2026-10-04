@@ -162,10 +162,3 @@ func RunForwardRuntimeJobPayloadScrub(ctx context.Context, db *gorm.DB) {
 		log.Printf("Forward runtime jobs: removed the node tokens from %d stored payloads", scrubbed)
 	}
 }
-
-// scrubForwardRuntimeJobs scrubs the payloads of jobs about to be answered.
-func scrubForwardRuntimeJobs(jobs []model.ForwardRuntimeJob) {
-	for i := range jobs {
-		jobs[i].Payload, _ = ScrubForwardRuntimeJobPayload(jobs[i].Payload)
-	}
-}

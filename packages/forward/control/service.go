@@ -154,80 +154,12 @@ var forwardRoutes = map[string]struct{}{
 }
 
 // bridgedRoutes are the package's compatibility routes without a native
-// handler; they always relay to the kernel's legacy handler.
+// handler; they always relay to the kernel's legacy handler. The flux
+// forwarding routes that changed what nodes run (forwards, legacy rules,
+// tunnel and permission updates, node and Ansible machine management, the
+// clean agent tokens) were removed in v4.2 (F5d): /api/v4/forward/* replaces
+// them.
 var bridgedRoutes = map[string]struct{}{
-	// Forward nodes and Ansible machines are rows of v2_forward_node, which
-	// holds each node's API token. The token authenticates the node's agent
-	// (WebSocket, gRPC and REST), so the table is a protected kernel table
-	// no package may adopt; the answers show the tokens to administrators,
-	// the kernel's gost manager keeps each node's address and token in
-	// memory, the checks dial the node, the statistics sync calls the
-	// node's gost metrics, and the Ansible list writes the machine tag.
-	"forward.admin.forward.nodes.get":                           {},
-	"forward.admin.forward.nodes.post":                          {},
-	"forward.admin.forward.nodes.id.get":                        {},
-	"forward.admin.forward.nodes.id.put":                        {},
-	"forward.admin.forward.nodes.id.delete":                     {},
-	"forward.admin.forward.nodes.id.check.post":                 {},
-	"forward.admin.forward.nodes.id.toggle.post":                {},
-	"forward.admin.forward.nodes.id.sync_stats.post":            {},
-	"forward.admin.forward.ansible_machines.get":                {},
-	"forward.admin.forward.ansible_machines.post":               {},
-	"forward.admin.forward.ansible_machines.id.get":             {},
-	"forward.admin.forward.ansible_machines.id.put":             {},
-	"forward.admin.forward.ansible_machines.id.delete":          {},
-	"forward.admin.forward.ansible_machines.id.check.post":      {},
-	"forward.admin.forward.ansible_machines.id.toggle.post":     {},
-	"forward.admin.forward.ansible_machines.id.sync_stats.post": {},
-	// Panel forward changes apply the forward on its node (NodeX, a local
-	// Ansible job or a clean agent job, whose payload carries the node's
-	// API token) and record the runtime result; the port bindings and the
-	// quota checks belong to the same flow. The diagnoses dial the
-	// targets and nodes from Control, and the backend sync re-applies every
-	// active forward.
-	"forward.forward.create.post":             {},
-	"forward.admin.forward.create.post":       {},
-	"forward.forward.update.post":             {},
-	"forward.admin.forward.update.post":       {},
-	"forward.forward.delete.post":             {},
-	"forward.admin.forward.delete.post":       {},
-	"forward.forward.force_delete.post":       {},
-	"forward.admin.forward.force_delete.post": {},
-	"forward.forward.pause.post":              {},
-	"forward.admin.forward.pause.post":        {},
-	"forward.forward.resume.post":             {},
-	"forward.admin.forward.resume.post":       {},
-	"forward.forward.diagnose.post":           {},
-	"forward.admin.forward.diagnose.post":     {},
-	"forward.admin.tunnel.diagnose.post":      {},
-	"forward.admin.forward.sync_backend.post": {},
-	// A tunnel update rebuilds its forwards' port bindings and re-applies
-	// them on their node when the protocol, listen addresses or interface
-	// change.
-	"forward.admin.tunnel.update.post": {},
-	// Removing a permission deletes its forwards from their node first;
-	// updating one pauses its forwards when it lapses and re-applies them
-	// when the speed limit changes.
-	"forward.tunnel.user.remove.post":       {},
-	"forward.admin.tunnel.user.remove.post": {},
-	"forward.tunnel.user.update.post":       {},
-	"forward.admin.tunnel.user.update.post": {},
-	// A speed limit update re-applies the forwards of every permission that
-	// names the limit on their nodes; it waits for KernelNodeOps.
-	"forward.speed_limit.update.post": {},
-	// Legacy rules: every change is pushed to NodeX with the nodes' API
-	// tokens. The administrator's answers embed the full node rows, tokens
-	// included, which kapi_forward_node_v1 does not show.
-	"forward.admin.forward.rules.get":            {},
-	"forward.admin.forward.rules.post":           {},
-	"forward.admin.forward.rules.id.get":         {},
-	"forward.admin.forward.rules.id.put":         {},
-	"forward.admin.forward.rules.id.delete":      {},
-	"forward.admin.forward.rules.id.toggle.post": {},
-	"forward.user.forward.rules.post":            {},
-	// The job list shows job payloads, which carry node API tokens
-	// (v2_forward_runtime_job is protected).
-	"forward.admin.forward.runtime.jobs.get": {},
 	// Kernel-owned (D4): runtime status and diagnosis describe the kernel's
 	// own executors. They read the protected v2_system_config (NodeX address
 	// and token, Ansible settings), call NodeX and inspect files on
@@ -236,22 +168,6 @@ var bridgedRoutes = map[string]struct{}{
 	"forward.admin.forward.runtime.doctor.get": {},
 	"forward.admin.forward.local.status.get":   {},
 	"forward.admin.forward.local.doctor.get":   {},
-	// The target catalog, latency trend and topology also read the proxy
-	// nodes of v2_node (status, parent, load), the proxy-node package's
-	// table, which no kernel view shows yet.
-	"forward.admin.forward.observability.targets.get":  {},
-	"forward.admin.forward.observability.trend.get":    {},
-	"forward.admin.forward.observability.topology.get": {},
-	// Clean agents: v2_forward_clean_agent holds each agent's token, which
-	// authenticates it (a protected table). The install script's panel URL
-	// is Control's forward_runtime.clean_agent.public_url when it is set,
-	// process configuration no package can read, else the request's scheme
-	// and host (which the kernel now sends): without the setting a native
-	// script could differ from the kernel's.
-	"forward.admin.forward.agents.get":            {},
-	"forward.admin.forward.agents.post":           {},
-	"forward.admin.forward.agents.id.revoke.post": {},
-	"forward.forward_agent.install_sh.get":        {},
 	// Kernel-owned (D3): the agent channel. Registration, heartbeat and
 	// report authenticate a clean agent, claim runtime jobs and record
 	// their results and traffic; the agents' rule list authenticates a

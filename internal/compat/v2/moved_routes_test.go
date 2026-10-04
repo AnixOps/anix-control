@@ -46,21 +46,21 @@ func TestMovedRouteResolvesToTheNewOwnerWhileBothDeclareIt(t *testing.T) {
 // own host: an old plan release and the new forward release both declare
 // them, and forward serves them.
 func TestSpeedLimitMovedFromPlanResolvesToForward(t *testing.T) {
-	const path = "/api/v2/speed-limit/update"
+	const path = "/api/v2/speed-limit/delete"
 	route := func(packageID, routeID string) string {
 		return `{"api_version":"v2","package_id":"` + packageID + `","routes":[{"method":"POST","legacy_path":"` +
 			path + `","package_route":"` + routeID + `","envelope":"panel"}]}`
 	}
 	fixture := newSignedRouteFixture(t, false)
-	fixture.addRelease(t, "plan", "4.0.0", route("plan", "plan.speed_limit.update.post"), 0)
+	fixture.addRelease(t, "plan", "4.0.0", route("plan", "plan.speed_limit.delete.post"), 0)
 	fixture.install(t, "plan", "4.0.0", 2)
-	fixture.addRelease(t, "forward", "4.1.0", route("forward", "forward.speed_limit.update.post"), 0)
+	fixture.addRelease(t, "forward", "4.1.0", route("forward", "forward.speed_limit.delete.post"), 0)
 	fixture.install(t, "forward", "4.1.0", 1)
 
 	resolved, err := NewVerifiedRouteSource(fixture.db, fixture.encodedKey).ResolveV2Route(context.Background(), http.MethodPost, path)
 	require.NoError(t, err)
 	require.Equal(t, "forward", resolved.PackageID)
-	require.Equal(t, "forward.speed_limit.update.post", resolved.PackageRoute)
+	require.Equal(t, "forward.speed_limit.delete.post", resolved.PackageRoute)
 }
 
 // Only the declared move is preferred: any other package declaring the same
@@ -90,5 +90,5 @@ func TestMovedRoutesAreUniqueAndLeaveTheirOwner(t *testing.T) {
 			require.NoError(t, route.Validate(), route.PackageRoute)
 		}
 	}
-	require.Len(t, seen, 28)
+	require.Len(t, seen, 27)
 }

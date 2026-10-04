@@ -276,23 +276,6 @@ func CollectForwardNodeTraffic(ctx context.Context, manager *gost.Manager, node 
 	return &ForwardNodeTraffic{Services: services}, nil
 }
 
-// DiagnoseForward diagnoses an actor's forward from Control. It is
-// DiagnoseForwardContext without a deadline.
-func (s *PanelForwardService) DiagnoseForward(userID uint, isAdmin bool, forwardID uint) (*DiagnosisReport, error) {
-	return s.DiagnoseForwardContext(context.Background(), DiagnosisProbes{}, userID, isAdmin, forwardID)
-}
-
-// DiagnoseForwardContext diagnoses the actor's forward from Control: it
-// dials each of the forward's targets. A user's diagnosis dials public
-// targets only (publicProbeAddress); an administrator's dials every target.
-func (s *PanelForwardService) DiagnoseForwardContext(ctx context.Context, probes DiagnosisProbes, userID uint, isAdmin bool, forwardID uint) (*DiagnosisReport, error) {
-	record, err := s.getForwardForActor(forwardID, userID, isAdmin)
-	if err != nil {
-		return nil, err
-	}
-	return s.diagnoseForward(ctx, probes, record, !isAdmin)
-}
-
 // DiagnoseForwardTargets diagnoses forward forwardID from Control for the
 // kernel: the forward is not scoped to an actor, and with publicOnly only
 // public targets are dialled, as for a user.

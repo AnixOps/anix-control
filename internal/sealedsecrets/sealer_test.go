@@ -104,7 +104,9 @@ func TestEveryListedRouteAndFieldIsSubstituted(t *testing.T) {
 		if len(route.Request) == 0 {
 			continue
 		}
-		requestRoutes++
+		if !strings.HasPrefix(id, "fixture.") {
+			requestRoutes++
+		}
 		body, values := requestFor(t, route)
 		sealed, _ := f.seal(id, "req-"+id, string(body), map[string]string{"id": "7", "protocol_id": "9"})
 		for _, value := range values {
@@ -140,7 +142,7 @@ func TestEveryListedRouteAndFieldIsSubstituted(t *testing.T) {
 		}
 		assert.Equal(t, len(handles(sealed.Body)), sealed.Count, id)
 	}
-	assert.Equal(t, 9, requestRoutes, "the request routes of node-ops-service.md sections 3.7 and 6")
+	assert.Equal(t, 7, requestRoutes, "the request routes of node-ops-service.md sections 3.7 and 6 (the forward node routes removed in F5d)")
 }
 
 // The placeholder keeps the stored secret, and empty values carry none:
@@ -148,8 +150,8 @@ func TestEveryListedRouteAndFieldIsSubstituted(t *testing.T) {
 func TestThePlaceholderAndEmptyValuesPassUnchanged(t *testing.T) {
 	f := newFixture(t)
 	bodies := map[string]string{
-		"forward.admin.forward.nodes.id.put":                `{"name":"n","api_token":"********"}`,
-		"forward.admin.forward.nodes.post":                  `{"name":"n","api_token":"","x":null}`,
+		fixtureNodeUpdate:                                   `{"name":"n","api_token":"********"}`,
+		fixtureNodeCreate:                                   `{"name":"n","api_token":"","x":null}`,
 		"proxy.admin.nodes.id.raw_config.put":               `{"raw_config":{"private_key":"********","preshared_key":"","peers":[],"secret":null}}`,
 		"proxy.admin.nodes.id.put":                          `{"raw_config":"********","name":"n"}`,
 		"proxy.admin.nodes.post":                            `{"raw_config":"","name":"n"}`,
@@ -166,7 +168,7 @@ func TestThePlaceholderAndEmptyValuesPassUnchanged(t *testing.T) {
 func TestSubstitutionKeepsEveryOtherByte(t *testing.T) {
 	f := newFixture(t)
 	body := "{ \"z\" : 1,\n  \"api_token\":\"t\\u00e9st\", \"a\":[ 1 , 2 ],\"b\":\"<&>\" }"
-	sealed, binding := f.seal("forward.admin.forward.nodes.id.put", "req-1", body, map[string]string{"id": "7"})
+	sealed, binding := f.seal(fixtureNodeUpdate, "req-1", body, map[string]string{"id": "7"})
 	handle := handles(sealed.Body)[0]
 	assert.Equal(t, strings.Replace(body, `"t\u00e9st"`, `"`+handle+`"`, 1), string(sealed.Body))
 	secrets, err := f.store.Resolve(binding, Use{Handle: handle, Target: forward(7), Field: "/api_token"})
@@ -187,7 +189,7 @@ func TestSubstitutionKeepsEveryOtherByte(t *testing.T) {
 func TestListedFieldsMatchEverySpelling(t *testing.T) {
 	f := newFixture(t)
 	for _, body := range []string{`{"API_TOKEN":"tok"}`, `{"ApiToken":"tok"}`, `{"apitoken":"tok","api_token":"tok2"}`} {
-		sealed, _ := f.seal("forward.admin.forward.nodes.id.put", "req-"+body, body, map[string]string{"id": "7"})
+		sealed, _ := f.seal(fixtureNodeUpdate, "req-"+body, body, map[string]string{"id": "7"})
 		assert.NotContains(t, string(sealed.Body), `"tok`, body)
 	}
 	sealed, _ := f.seal("proxy.admin.nodes.id.put", "req-raw", `{"RawConfig":"{\"private_key\":\"k\"}"}`, map[string]string{"id": "7"})
@@ -209,22 +211,22 @@ func TestSubstitutionFailsClosed(t *testing.T) {
 		input RequestInput
 		err   error
 	}{
-		"a body that is not JSON":         {input("forward.admin.forward.nodes.id.put", `api_token=tok`, id), ErrNotJSON},
-		"a truncated body":                {input("forward.admin.forward.nodes.id.put", `{"api_token":"tok"`, id), ErrNotJSON},
+		"a body that is not JSON":         {input(fixtureNodeUpdate, `api_token=tok`, id), ErrNotJSON},
+		"a truncated body":                {input(fixtureNodeUpdate, `{"api_token":"tok"`, id), ErrNotJSON},
 		"a document that is not JSON":     {input("proxy.admin.nodes.id.raw_config.put", `{"raw_config":"private_key=k"}`, id), ErrNotJSON},
-		"a value that is not a string":    {input("forward.admin.forward.nodes.id.put", `{"api_token":12345}`, id), ErrValueNotString},
-		"an object at a value field":      {input("forward.admin.forward.nodes.id.put", `{"api_token":{"v":"tok"}}`, id), ErrValueNotString},
-		"a target that is not an id":      {input("forward.admin.forward.nodes.id.put", `{"api_token":"tok"}`, map[string]string{"id": "7 OR 1=1"}), ErrTargetInvalid},
-		"a zero target":                   {input("forward.admin.forward.nodes.id.put", `{"api_token":"tok"}`, map[string]string{"id": "0"}), ErrTargetInvalid},
-		"a missing target":                {input("forward.admin.forward.nodes.id.put", `{"api_token":"tok"}`, nil), ErrTargetInvalid},
-		"a nesting deeper than the limit": {input("forward.admin.forward.nodes.id.put", strings.Repeat("[", maxDepth+2)+strings.Repeat("]", maxDepth+2), id), ErrNotJSON},
+		"a value that is not a string":    {input(fixtureNodeUpdate, `{"api_token":12345}`, id), ErrValueNotString},
+		"an object at a value field":      {input(fixtureNodeUpdate, `{"api_token":{"v":"tok"}}`, id), ErrValueNotString},
+		"a target that is not an id":      {input(fixtureNodeUpdate, `{"api_token":"tok"}`, map[string]string{"id": "7 OR 1=1"}), ErrTargetInvalid},
+		"a zero target":                   {input(fixtureNodeUpdate, `{"api_token":"tok"}`, map[string]string{"id": "0"}), ErrTargetInvalid},
+		"a missing target":                {input(fixtureNodeUpdate, `{"api_token":"tok"}`, nil), ErrTargetInvalid},
+		"a nesting deeper than the limit": {input(fixtureNodeUpdate, strings.Repeat("[", maxDepth+2)+strings.Repeat("]", maxDepth+2), id), ErrNotJSON},
 	}
 	for name, test := range cases {
 		_, err := f.sealer.SealRequest(test.input)
 		require.ErrorIs(t, err, test.err, name)
 		assert.NotContains(t, err.Error(), "tok", name)
 	}
-	tooLarge := input("forward.admin.forward.nodes.id.put", `{"api_token":"t"}`, id)
+	tooLarge := input(fixtureNodeUpdate, `{"api_token":"t"}`, id)
 	tooLarge.BodyLimit = int64(len(tooLarge.Body))
 	_, err := f.sealer.SealRequest(tooLarge)
 	require.ErrorIs(t, err, ErrTooLarge, "a handle is longer than the secret it stands for")

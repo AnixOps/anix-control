@@ -6,7 +6,6 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/assert"
@@ -32,43 +31,6 @@ func serveForOrigin(t *testing.T, request *http.Request, handler gin.HandlerFunc
 	recorder := httptest.NewRecorder()
 	router.ServeHTTP(recorder, request)
 	return recorder
-}
-
-func withCleanAgentPublicURL(t *testing.T, publicURL string) {
-	t.Helper()
-	previous := config.Get()
-	t.Cleanup(func() { config.Set(previous) })
-	cfg := &config.Config{}
-	cfg.ForwardRuntime.CleanAgent.PublicURL = publicURL
-	config.Set(cfg)
-}
-
-func TestCleanAgentInstallScriptIgnoresForgedForwardingHeaders(t *testing.T) {
-	withCleanAgentPublicURL(t, "")
-	handler := (&ForwardCleanAgentHandler{}).InstallScript
-
-	body := serveForOrigin(t, forgedOriginRequest("/api/v2/forward-agent/install.sh", "203.0.113.9:40000"), handler).Body.String()
-	assert.Contains(t, body, `PANEL_URL="${PANEL_URL:-http://panel.example.test}"`)
-	assert.NotContains(t, body, "evil.example")
-
-	// A reverse proxy on loopback (the default trusted proxy) is honoured.
-	body = serveForOrigin(t, forgedOriginRequest("/api/v2/forward-agent/install.sh", "127.0.0.1:40000"), handler).Body.String()
-	assert.Contains(t, body, `PANEL_URL="${PANEL_URL:-https://evil.example}"`)
-
-	// An invalid Host leaves the placeholder rather than a broken URL.
-	request := forgedOriginRequest("/api/v2/forward-agent/install.sh", "203.0.113.9:40000")
-	request.Host = "panel.example.test/x"
-	body = serveForOrigin(t, request, handler).Body.String()
-	assert.Contains(t, body, `PANEL_URL="${PANEL_URL:-https://panel.example.com}"`)
-}
-
-func TestCleanAgentInstallScriptPrefersConfiguredPublicURL(t *testing.T) {
-	withCleanAgentPublicURL(t, "https://control.example.org/")
-	handler := (&ForwardCleanAgentHandler{}).InstallScript
-	for _, peer := range []string{"203.0.113.9:40000", "127.0.0.1:40000"} {
-		body := serveForOrigin(t, forgedOriginRequest("/api/v2/forward-agent/install.sh", peer), handler).Body.String()
-		assert.Contains(t, body, `PANEL_URL="${PANEL_URL:-https://control.example.org}"`, peer)
-	}
 }
 
 func TestSubscribeURLIgnoresForgedForwardingHeaders(t *testing.T) {

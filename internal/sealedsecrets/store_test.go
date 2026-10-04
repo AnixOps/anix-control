@@ -31,7 +31,34 @@ func (c *clock) advance(d time.Duration) {
 	c.now = c.now.Add(d)
 }
 
-// fixture is a sealer on the embedded field list and its own store.
+// fixtureRoutes are field list rows the tests add to the embedded list: a
+// value field of a forward node, by path parameter and new. The routes that
+// listed it (/api/v2/admin/forward/nodes*) were removed in v4.2 (F5d), and
+// the sealer keeps the target kind.
+const (
+	fixtureNodeUpdate = "fixture.forward.nodes.id.put"
+	fixtureNodeCreate = "fixture.forward.nodes.post"
+)
+
+const fixtureRoutes = `,
+    {"route_id": "` + fixtureNodeUpdate + `", "target": {"kind": "forward", "path_param": "id"}, "request": [{"pointer": "/api_token", "kind": "value"}]},
+    {"route_id": "` + fixtureNodeCreate + `", "target": {"kind": "forward", "new": true}, "request": [{"pointer": "/api_token", "kind": "value"}], "answer": [{"pointer": "/data/api_token", "name": "api_token"}]}
+  ]
+}`
+
+// fixtureTable is the embedded field list with fixtureRoutes.
+func fixtureTable(t *testing.T) *Table {
+	t.Helper()
+	list := strings.TrimRight(string(configtables.NodeSecretFields), " \n")
+	end := strings.LastIndex(list, "]")
+	require.Positive(t, end)
+	table, err := ParseTable([]byte(strings.TrimRight(list[:end], " \n") + fixtureRoutes))
+	require.NoError(t, err)
+	return table
+}
+
+// fixture is a sealer on the embedded field list (with fixtureRoutes) and
+// its own store.
 type fixture struct {
 	t      *testing.T
 	clock  *clock
@@ -41,8 +68,7 @@ type fixture struct {
 
 func newFixture(t *testing.T) *fixture {
 	t.Helper()
-	table, err := ParseTable(configtables.NodeSecretFields)
-	require.NoError(t, err)
+	table := fixtureTable(t)
 	c := newClock()
 	store := NewStore(c.Now)
 	return &fixture{t: t, clock: c, store: store, sealer: NewSealer(table, nil, store)}
@@ -80,13 +106,13 @@ func forward(id uint64) Target { return Target{Kind: TargetForward, ID: id} }
 // sealed for, once, and all of a resolution or nothing.
 func TestResolveIsBoundToRequestRouteTargetAndField(t *testing.T) {
 	f := newFixture(t)
-	sealed, binding := f.seal("forward.admin.forward.nodes.id.put", "req-1", `{"name":"edge","api_token":"tok-1"}`, map[string]string{"id": "7"})
+	sealed, binding := f.seal(fixtureNodeUpdate, "req-1", `{"name":"edge","api_token":"tok-1"}`, map[string]string{"id": "7"})
 	require.Equal(t, 1, sealed.Count)
 	handle := handles(sealed.Body)[0]
 	assert.NotContains(t, string(sealed.Body), "tok-1")
 	use := Use{Handle: handle, Target: forward(7), Field: "/api_token"}
 
-	other, otherBinding := f.seal("forward.admin.forward.nodes.id.put", "req-2", `{"api_token":"tok-2"}`, map[string]string{"id": "7"})
+	other, otherBinding := f.seal(fixtureNodeUpdate, "req-2", `{"api_token":"tok-2"}`, map[string]string{"id": "7"})
 	otherHandle := handles(other.Body)[0]
 
 	refusals := map[string]struct {
@@ -96,7 +122,7 @@ func TestResolveIsBoundToRequestRouteTargetAndField(t *testing.T) {
 		"another request's handle":          {binding, Use{Handle: otherHandle, Target: forward(7), Field: "/api_token"}},
 		"this handle in another request":    {otherBinding, use},
 		"another request id":                {Binding{Key: binding.Key, PackageID: "pkg", Generation: 3, RequestID: "req-x", RouteID: binding.RouteID}, use},
-		"another route":                     {Binding{Key: binding.Key, PackageID: "pkg", Generation: 3, RequestID: "req-1", RouteID: "forward.admin.forward.nodes.post"}, use},
+		"another route":                     {Binding{Key: binding.Key, PackageID: "pkg", Generation: 3, RequestID: "req-1", RouteID: fixtureNodeCreate}, use},
 		"another package":                   {Binding{Key: binding.Key, PackageID: "other", Generation: 3, RequestID: "req-1", RouteID: binding.RouteID}, use},
 		"another generation":                {Binding{Key: binding.Key, PackageID: "pkg", Generation: 4, RequestID: "req-1", RouteID: binding.RouteID}, use},
 		"another target":                    {binding, Use{Handle: handle, Target: forward(8), Field: "/api_token"}},
@@ -143,7 +169,7 @@ func TestResolveIsAllOrNothing(t *testing.T) {
 // A request that creates its target binds it at the first resolution.
 func TestANewTargetIsBoundByItsFirstResolution(t *testing.T) {
 	f := newFixture(t)
-	sealed, binding := f.seal("forward.admin.forward.nodes.post", "req-1", `{"api_token":"tok","name":"n","nested":{"secret":"s"}}`, nil)
+	sealed, binding := f.seal(fixtureNodeCreate, "req-1", `{"api_token":"tok","name":"n","nested":{"secret":"s"}}`, nil)
 	found := handles(sealed.Body)
 	require.Len(t, found, 2)
 	_, err := f.store.Resolve(binding, Use{Handle: found[0], Target: forward(0), Field: "/api_token"})
@@ -169,17 +195,17 @@ func TestHandlesOfAValidationNeverResolve(t *testing.T) {
 // Handles die with their request: released, or past its deadline.
 func TestHandlesExpireWithTheirRequest(t *testing.T) {
 	f := newFixture(t)
-	sealed, binding := f.seal("forward.admin.forward.nodes.id.put", "req-1", `{"api_token":"tok"}`, map[string]string{"id": "7"})
+	sealed, binding := f.seal(fixtureNodeUpdate, "req-1", `{"api_token":"tok"}`, map[string]string{"id": "7"})
 	use := Use{Handle: handles(sealed.Body)[0], Target: forward(7), Field: "/api_token"}
 	f.clock.advance(time.Minute)
 	_, err := f.store.Resolve(binding, use)
 	require.ErrorIs(t, err, ErrRequestEnded)
 	assert.True(t, f.store.Live(use.Handle), "still held until it is released or purged")
 
-	f.seal("forward.admin.forward.nodes.id.put", "req-2", `{}`, map[string]string{"id": "7"})
+	f.seal(fixtureNodeUpdate, "req-2", `{}`, map[string]string{"id": "7"})
 	assert.False(t, f.store.Live(use.Handle), "a later request purges the expired ones")
 
-	sealed, binding = f.seal("forward.admin.forward.nodes.id.put", "req-3", `{"api_token":"tok"}`, map[string]string{"id": "7"})
+	sealed, binding = f.seal(fixtureNodeUpdate, "req-3", `{"api_token":"tok"}`, map[string]string{"id": "7"})
 	use = Use{Handle: handles(sealed.Body)[0], Target: forward(7), Field: "/api_token"}
 	f.sealer.Release(sealed.Key)
 	assert.False(t, f.store.Live(use.Handle))

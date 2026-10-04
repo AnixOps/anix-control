@@ -17,63 +17,6 @@ const (
 	forwardRuntimeBenchmarkClaimBatch  = 10
 )
 
-func BenchmarkForwardRuntimeJobListing(b *testing.B) {
-	db := setupForwardRuntimeBenchmarkDB(b, &model.ForwardRuntimeJob{})
-	seedForwardRuntimeJobListingBenchmark(b, db)
-
-	svc := NewPanelForwardService(db)
-	pendingStatus := model.ForwardRuntimeJobStatusPending
-	historyForwardID := uint(4242)
-
-	b.Run("latest_limit_200", func(b *testing.B) {
-		b.ReportAllocs()
-		for i := 0; i < b.N; i++ {
-			jobs, err := svc.ListRuntimeJobs(PanelRuntimeJobFilter{Limit: 200})
-			if err != nil {
-				b.Fatal(err)
-			}
-			if len(jobs) != 200 {
-				b.Fatalf("jobs = %d, want 200", len(jobs))
-			}
-		}
-	})
-
-	b.Run("backend_status_limit_200", func(b *testing.B) {
-		b.ReportAllocs()
-		filter := PanelRuntimeJobFilter{
-			Backend: model.ForwardRuntimeBackendCleanAgent,
-			Status:  &pendingStatus,
-			Limit:   200,
-		}
-		for i := 0; i < b.N; i++ {
-			jobs, err := svc.ListRuntimeJobs(filter)
-			if err != nil {
-				b.Fatal(err)
-			}
-			if len(jobs) != 200 {
-				b.Fatalf("jobs = %d, want 200", len(jobs))
-			}
-		}
-	})
-
-	b.Run("forward_history_limit_200", func(b *testing.B) {
-		b.ReportAllocs()
-		filter := PanelRuntimeJobFilter{
-			ForwardID: &historyForwardID,
-			Limit:     200,
-		}
-		for i := 0; i < b.N; i++ {
-			jobs, err := svc.ListRuntimeJobs(filter)
-			if err != nil {
-				b.Fatal(err)
-			}
-			if len(jobs) != 200 {
-				b.Fatalf("jobs = %d, want 200", len(jobs))
-			}
-		}
-	})
-}
-
 func BenchmarkForwardRuntimeJobCleanAgentClaiming(b *testing.B) {
 	db := setupForwardRuntimeBenchmarkDB(
 		b,
@@ -140,70 +83,6 @@ func setupForwardRuntimeBenchmarkDB(b *testing.B, models ...any) *gorm.DB {
 	}
 
 	return db
-}
-
-func seedForwardRuntimeJobListingBenchmark(b *testing.B, db *gorm.DB) {
-	b.Helper()
-
-	jobs := make([]model.ForwardRuntimeJob, 0, forwardRuntimeBenchmarkHistoryJobs+forwardRuntimeBenchmarkActiveJobs)
-	backends := []string{
-		model.ForwardRuntimeBackendGost,
-		model.ForwardRuntimeBackendNftablesAnsible,
-		model.ForwardRuntimeBackendIptablesAnsible,
-		model.ForwardRuntimeBackendCleanAgent,
-	}
-	actions := []string{
-		model.ForwardRuntimeJobActionCreate,
-		model.ForwardRuntimeJobActionUpdate,
-		model.ForwardRuntimeJobActionDelete,
-		model.ForwardRuntimeJobActionPause,
-		model.ForwardRuntimeJobActionResume,
-		model.ForwardRuntimeJobActionSync,
-	}
-
-	historyForwardID := uint(4242)
-	for i := 0; i < 300; i++ {
-		jobs = append(jobs, model.ForwardRuntimeJob{
-			Backend:   backends[i%len(backends)],
-			Action:    actions[i%len(actions)],
-			ForwardID: &historyForwardID,
-			Status:    model.ForwardRuntimeJobStatusSuccess,
-			Payload:   fmt.Sprintf(`{"history":%d}`, i),
-		})
-	}
-	for i := 300; i < forwardRuntimeBenchmarkHistoryJobs; i++ {
-		forwardID := uint(i%1000 + 1)
-		status := model.ForwardRuntimeJobStatusSuccess
-		if i%5 == 0 {
-			status = model.ForwardRuntimeJobStatusFailed
-		}
-		jobs = append(jobs, model.ForwardRuntimeJob{
-			Backend:   backends[i%len(backends)],
-			Action:    actions[i%len(actions)],
-			ForwardID: &forwardID,
-			Status:    status,
-			Payload:   fmt.Sprintf(`{"history":%d}`, i),
-		})
-	}
-
-	for i := 0; i < forwardRuntimeBenchmarkActiveJobs; i++ {
-		forwardID := uint(100000 + i)
-		backend := model.ForwardRuntimeBackendCleanAgent
-		if i%3 == 0 {
-			backend = model.ForwardRuntimeBackendNftablesAnsible
-		}
-		jobs = append(jobs, model.ForwardRuntimeJob{
-			Backend:   backend,
-			Action:    actions[i%len(actions)],
-			ForwardID: &forwardID,
-			Status:    model.ForwardRuntimeJobStatusPending,
-			Payload:   fmt.Sprintf(`{"active":%d}`, i),
-		})
-	}
-
-	if err := db.CreateInBatches(&jobs, 500).Error; err != nil {
-		b.Fatal(err)
-	}
 }
 
 func seedForwardRuntimeJobClaimBenchmark(b *testing.B, db *gorm.DB) (uint, string, []uint) {

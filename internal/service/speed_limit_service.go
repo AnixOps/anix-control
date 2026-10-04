@@ -76,53 +76,6 @@ func (s *SpeedLimitService) List() ([]model.SpeedLimit, error) {
 	return records, nil
 }
 
-func (s *SpeedLimitService) Update(input SpeedLimitUpdateInput) (*model.SpeedLimit, error) {
-	if input.ID == 0 {
-		return nil, errors.New("id is required")
-	}
-	tunnel, err := s.validateTunnel(input.TunnelID, input.TunnelName)
-	if err != nil {
-		return nil, err
-	}
-	if err := validateSpeedLimitInput(input.Name, input.Speed); err != nil {
-		return nil, err
-	}
-
-	var record model.SpeedLimit
-	if err := s.db.First(&record, input.ID).Error; err != nil {
-		if errors.Is(err, gorm.ErrRecordNotFound) {
-			return nil, errors.New("speed limit not found")
-		}
-		return nil, err
-	}
-	if record.TunnelID != tunnel.ID {
-		var assigned int64
-		if err := s.db.Model(&model.ForwardUserTunnel{}).Where("speed_id = ?", record.ID).Count(&assigned).Error; err != nil {
-			return nil, err
-		}
-		if assigned > 0 {
-			return nil, errors.New("cannot change tunnel of assigned speed limit")
-		}
-	}
-
-	record.Name = strings.TrimSpace(input.Name)
-	record.Speed = input.Speed
-	record.TunnelID = tunnel.ID
-	record.TunnelName = tunnel.Name
-	record.UpdatedTime = time.Now().UnixMilli()
-	if record.Status != speedLimitStatusActive && record.Status != speedLimitStatusInactive {
-		record.Status = speedLimitStatusActive
-	}
-
-	if err := s.db.Save(&record).Error; err != nil {
-		return nil, err
-	}
-	if err := s.resyncAssignedForwards(record.ID); err != nil {
-		return &record, err
-	}
-	return &record, nil
-}
-
 func (s *SpeedLimitService) Delete(id uint) error {
 	if id == 0 {
 		return errors.New("id is required")
@@ -178,23 +131,4 @@ func validateSpeedLimitInput(name string, speed int64) error {
 		return errors.New("speed must be greater than 0")
 	}
 	return nil
-}
-
-func (s *SpeedLimitService) resyncAssignedForwards(speedID uint) error {
-	if speedID == 0 || s.forwardService == nil {
-		return nil
-	}
-
-	var permissions []model.ForwardUserTunnel
-	if err := s.db.Where("speed_id = ?", speedID).Order("id ASC").Find(&permissions).Error; err != nil {
-		return err
-	}
-
-	var firstErr error
-	for i := range permissions {
-		if err := s.forwardService.syncActiveUserTunnelForwards(&permissions[i], model.ForwardRuntimeJobActionUpdate); err != nil && firstErr == nil {
-			firstErr = err
-		}
-	}
-	return firstErr
 }

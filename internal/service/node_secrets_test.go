@@ -97,13 +97,6 @@ func TestRedactNodeMasksProtocolsAndRawConfig(t *testing.T) {
 	require.Contains(t, *node.Protocols[0].RealitySettings, "reality-public")
 	require.Nil(t, node.Protocols[0].Settings)
 
-	token := &model.ForwardNode{APIToken: "relay-token"}
-	MaskForwardNodeToken(token)
-	require.Equal(t, NodeSecretPlaceholder, token.APIToken)
-	empty := &model.ForwardNode{}
-	MaskForwardNodeToken(empty)
-	require.Equal(t, "", empty.APIToken, "a node without a token shows none")
-
 	keys := []model.AuthorizedKey{{Key: "registration-key"}, {}}
 	MaskAuthorizedKeys(keys)
 	require.Equal(t, NodeSecretPlaceholder, keys[0].Key)

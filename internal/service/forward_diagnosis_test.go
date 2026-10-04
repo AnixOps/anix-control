@@ -93,7 +93,7 @@ func (s *PanelForwardServiceTestSuite) TestDiagnosisStopsWhenItsContextEnds() {
 		return nil, fmt.Errorf("dial tcp %s: connect: connection refused", address)
 	}}
 
-	report, err := s.svc.DiagnoseForwardContext(ctx, probes, 1, true, forward.ID)
+	report, err := s.svc.DiagnoseForwardTargets(ctx, probes, forward.ID, false)
 	s.Require().ErrorIs(err, context.Canceled)
 	s.Require().Len(report.Results, 1)
 	s.Equal("203.0.113.62", report.Results[0].TargetIP)

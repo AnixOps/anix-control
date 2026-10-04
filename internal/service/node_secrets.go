@@ -183,27 +183,6 @@ func KeepNodeRawConfig(incoming string, stored *string) string {
 	return KeepNodeSecretsJSON(incoming, previous)
 }
 
-// MaskForwardNodeToken masks a forward node's API token for an
-// administrator's answer. The token authenticates the node's agent and the
-// relay's gost API; it is shown once, in the answer that creates the node.
-// It changes the node it is given, so it is for a row read for that answer
-// only.
-func MaskForwardNodeToken(node *model.ForwardNode) {
-	if node != nil && node.APIToken != "" {
-		node.APIToken = NodeSecretPlaceholder
-	}
-}
-
-// MaskForwardRuleNodeTokens masks the API tokens of a forward rule's relay
-// and exit nodes for an administrator's answer (see MaskForwardNodeToken).
-func MaskForwardRuleNodeTokens(rule *model.ForwardRule) {
-	if rule == nil {
-		return
-	}
-	MaskForwardNodeToken(rule.RelayNode)
-	MaskForwardNodeToken(rule.ExitNode)
-}
-
 // MaskAuthorizedKeys masks registration keys for an administrator's
 // answer. A key is shown once, in the answer that generates it; a node
 // registers with it by its hash.

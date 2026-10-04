@@ -71,65 +71,6 @@ func (s *ForwardPanelHandlerTestSuite) TestCreatePanelTunnel_WorksWithValidNode(
 	assert.Equal(s.T(), "Create Tunnel", data["name"])
 }
 
-func (s *ForwardPanelHandlerTestSuite) TestUpdatePanelTunnel_AllowsRuntimeFieldsToChange() {
-	configSvc := service.NewSystemConfigService(database.Get())
-	assert.NoError(s.T(), configSvc.Set("forward.runtime.nodex_mode", "true", "bool", "forward", "enable NodeX mode for tunnel updates"))
-
-	node := model.ForwardNode{
-		Name:    "Init Relay",
-		Type:    model.ForwardNodeTypeRelay,
-		Host:    "10.0.0.2",
-		Status:  model.ForwardNodeStatusOnline,
-		Enabled: true,
-	}
-	assert.NoError(s.T(), database.Get().Create(&node).Error)
-	exitNode := model.ForwardNode{
-		Name:    "Init Exit",
-		Type:    model.ForwardNodeTypeExit,
-		Host:    "10.0.0.5",
-		Status:  model.ForwardNodeStatusOnline,
-		Enabled: true,
-	}
-	assert.NoError(s.T(), database.Get().Create(&exitNode).Error)
-	tunnel := model.ForwardTunnel{
-		Name:          "Update Tunnel",
-		InNodeID:      node.ID,
-		OutNodeID:     &exitNode.ID,
-		InIP:          node.Host,
-		OutIP:         exitNode.Host,
-		Type:          2,
-		Flow:          1,
-		Protocol:      "tcp",
-		TCPListenAddr: "[::]",
-		UDPListenAddr: "[::]",
-		Status:        model.ForwardTunnelStatusActive,
-	}
-	assert.NoError(s.T(), database.Get().Create(&tunnel).Error)
-
-	payload := map[string]any{
-		"id":            tunnel.ID,
-		"name":          "Updated Name",
-		"flow":          2,
-		"trafficRatio":  2.5,
-		"protocol":      "ws",
-		"tcpListenAddr": "0.0.0.0",
-		"udpListenAddr": "[::1]",
-		"interfaceName": "eth1",
-	}
-	ctx, w := s.newAdminContext("POST", "/admin/tunnel/update", payload)
-	s.handler.UpdatePanelTunnel(ctx)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-	var resp map[string]any
-	assert.NoError(s.T(), json.Unmarshal(w.Body.Bytes(), &resp))
-	assert.Equal(s.T(), float64(0), resp["code"])
-	var updated model.ForwardTunnel
-	assert.NoError(s.T(), database.Get().First(&updated, tunnel.ID).Error)
-	assert.Equal(s.T(), "Updated Name", updated.Name)
-	assert.Equal(s.T(), 2, updated.Flow)
-	assert.Equal(s.T(), "ws", updated.Protocol)
-}
-
 func (s *ForwardPanelHandlerTestSuite) TestDeletePanelTunnel_RemovesRecord() {
 	node := model.ForwardNode{
 		Name:    "Delete Relay",
@@ -161,38 +102,6 @@ func (s *ForwardPanelHandlerTestSuite) TestDeletePanelTunnel_RemovesRecord() {
 	var count int64
 	assert.NoError(s.T(), database.Get().Model(&model.ForwardTunnel{}).Where("id = ?", tunnel.ID).Count(&count).Error)
 	assert.Zero(s.T(), count)
-}
-
-func (s *ForwardPanelHandlerTestSuite) TestDiagnosePanelTunnel_ReturnsReport() {
-	node := model.ForwardNode{
-		Name:    "Diag Relay",
-		Type:    model.ForwardNodeTypeRelay,
-		Host:    "10.0.0.4",
-		Status:  model.ForwardNodeStatusOnline,
-		Enabled: true,
-		Port:    9000,
-	}
-	assert.NoError(s.T(), database.Get().Create(&node).Error)
-	tunnel := model.ForwardTunnel{
-		Name:          "Diag Tunnel",
-		InNodeID:      node.ID,
-		InIP:          node.Host,
-		Type:          1,
-		Flow:          1,
-		TCPListenAddr: "[::]",
-		UDPListenAddr: "[::]",
-		Status:        model.ForwardTunnelStatusActive,
-	}
-	assert.NoError(s.T(), database.Get().Create(&tunnel).Error)
-
-	ctx, w := s.newAdminContext("POST", "/admin/tunnel/diagnose", map[string]any{"tunnelId": tunnel.ID})
-	s.handler.DiagnosePanelTunnel(ctx)
-
-	assert.Equal(s.T(), http.StatusOK, w.Code)
-	var resp map[string]any
-	assert.NoError(s.T(), json.Unmarshal(w.Body.Bytes(), &resp))
-	data := resp["data"].(map[string]any)
-	assert.Equal(s.T(), float64(tunnel.ID), data["tunnelId"])
 }
 
 func (s *ForwardPanelHandlerTestSuite) TestGetPanelRuntimeStatus_ProxiesNodeXStatus() {

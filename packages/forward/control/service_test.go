@@ -94,12 +94,19 @@ func TestForwardHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) {
 	service, err := newForwardService(bridge, "lease-1")
 	require.NoError(t, err)
 	for _, route := range []string{
-		"forward.forward.list.post", native.ResetRouteID, "forward.forward.create.post", "forward.admin.forward.nodes.get",
-		native.SpeedLimitCreateRouteID, "forward.speed_limit.update.post",
+		"forward.forward.list.post", native.ResetRouteID, "forward.admin.forward.runtime.status.get", "forward.forward_agent.report.post",
+		native.SpeedLimitCreateRouteID,
 	} {
 		response := dispatch(t, service, route, pluginhostsdk.DispatchRequest{})
 		require.EqualValues(t, 200, response.StatusCode)
 		require.Equal(t, route, bridge.operation)
+	}
+	// The flux routes removed in v4.2 (F5d) are no longer the package's.
+	for _, route := range []string{"forward.forward.create.post", "forward.admin.forward.nodes.get", "forward.speed_limit.update.post"} {
+		_, err = service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
+			RouteID: route, BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
+		})
+		require.Error(t, err, route)
 	}
 
 	_, err = service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
@@ -141,7 +148,7 @@ func TestForwardHostRoutesAreThePackageRoutes(t *testing.T) {
 	sort.Strings(want)
 	sort.Strings(got)
 	require.Equal(t, want, got)
-	require.Len(t, want, 85)
+	require.Len(t, want, 32)
 }
 
 // The package adopts the forward tables its native routes use, reads the

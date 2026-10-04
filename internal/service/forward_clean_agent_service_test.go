@@ -51,7 +51,7 @@ func (s *ForwardCleanAgentServiceTestSuite) TestRegisterHeartbeatAndReportSucces
 	db := database.Get()
 	node, tunnel, forward := s.createCleanAgentForwardFixtures()
 
-	tokenResult, err := s.svc.CreateToken(ForwardCleanAgentCreateInput{
+	tokenResult, err := CreateCleanAgentTokenTx(s.svc.db, ForwardCleanAgentCreateInput{
 		Name:   "relay-agent",
 		NodeID: &node.ID,
 	})
@@ -178,7 +178,7 @@ func (s *ForwardCleanAgentServiceTestSuite) TestReportDeleteSuccessRemovesForwar
 	db := database.Get()
 	node, tunnel, forward := s.createCleanAgentForwardFixtures()
 
-	tokenResult, err := s.svc.CreateToken(ForwardCleanAgentCreateInput{
+	tokenResult, err := CreateCleanAgentTokenTx(s.svc.db, ForwardCleanAgentCreateInput{
 		Name:   "delete-agent",
 		NodeID: &node.ID,
 	})
@@ -250,7 +250,7 @@ func (s *ForwardCleanAgentServiceTestSuite) TestReportDeleteSuccessRemovesForwar
 func (s *ForwardCleanAgentServiceTestSuite) TestRevokedAgentCannotHeartbeat() {
 	node, _, _ := s.createCleanAgentForwardFixtures()
 
-	tokenResult, err := s.svc.CreateToken(ForwardCleanAgentCreateInput{
+	tokenResult, err := CreateCleanAgentTokenTx(s.svc.db, ForwardCleanAgentCreateInput{
 		Name:   "revoked-agent",
 		NodeID: &node.ID,
 	})
@@ -262,7 +262,7 @@ func (s *ForwardCleanAgentServiceTestSuite) TestRevokedAgentCannotHeartbeat() {
 	})
 	assert.NoError(s.T(), err)
 
-	assert.NoError(s.T(), s.svc.RevokeAgent(agent.ID))
+	assert.NoError(s.T(), RevokeCleanAgentTx(s.svc.db, agent.ID))
 	_, err = s.svc.Heartbeat(ForwardCleanAgentHeartbeatInput{
 		AgentID: agent.ID,
 		Token:   tokenResult.Token,
@@ -338,7 +338,7 @@ func (s *ForwardCleanAgentServiceTestSuite) TestAgentIssuedForANodeCannotRegiste
 	jobA := s.pendingCleanAgentJob(nodeA.ID)
 	jobB := s.pendingCleanAgentJob(nodeB.ID)
 
-	issued, err := s.svc.CreateToken(ForwardCleanAgentCreateInput{Name: "agent-a", NodeID: &nodeA.ID})
+	issued, err := CreateCleanAgentTokenTx(s.svc.db, ForwardCleanAgentCreateInput{Name: "agent-a", NodeID: &nodeA.ID})
 	s.Require().NoError(err)
 
 	agent, err := s.svc.Register(ForwardCleanAgentRegisterInput{Token: issued.Token, NodeID: &nodeB.ID, Hostname: "attacker"})
@@ -378,7 +378,7 @@ func (s *ForwardCleanAgentServiceTestSuite) TestCreateTokenRequiresAnExistingNod
 		"node zero":    {Name: "agent", NodeID: &zero},
 		"unknown node": {Name: "agent", NodeID: &unknown},
 	} {
-		result, err := s.svc.CreateToken(input)
+		result, err := CreateCleanAgentTokenTx(s.svc.db, input)
 		s.Nil(result, name)
 		if name == "unknown node" {
 			s.ErrorIs(err, ErrForwardCleanAgentNodeNotFound, name)
@@ -390,7 +390,7 @@ func (s *ForwardCleanAgentServiceTestSuite) TestCreateTokenRequiresAnExistingNod
 	s.Require().NoError(db.Model(&model.ForwardCleanAgent{}).Count(&count).Error)
 	s.Zero(count, "a token was issued without a valid node")
 
-	result, err := s.svc.CreateToken(ForwardCleanAgentCreateInput{Name: "agent", NodeID: &node.ID})
+	result, err := CreateCleanAgentTokenTx(s.svc.db, ForwardCleanAgentCreateInput{Name: "agent", NodeID: &node.ID})
 	s.Require().NoError(err)
 	s.Require().NotNil(result.Agent.NodeID)
 	s.Equal(node.ID, *result.Agent.NodeID)
