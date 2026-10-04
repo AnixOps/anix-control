@@ -270,8 +270,8 @@ func runForwardV4API(t *testing.T, db *gorm.DB) {
 	require.NoError(t, err)
 	_, err = e.kernel.RecordReport(context.Background(), agentcontrol.AgentNode{Kind: agentcontrol.NodeKindForward, ID: 11}, &forwardv1.NodeForwardReport{
 		NodeRef: "forward-11", Generation: entryState.GetGeneration(), StateHash: entryState.GetStateHash(), Applied: true,
-		Counters: []*forwardv1.Counters{{RouteId: id, NodeRef: "forward-11", UpBytes: 1000, DownBytes: 4000, TotalConns: 3, CounterEpoch: "e1"}},
-		Health: []*forwardv1.UpstreamHealth{{RouteId: id, HopIndex: 0, Address: "192.0.2.12", Port: 40000, State: forwardv1.HealthState_HEALTH_STATE_HEALTHY, RttUs: 900}},
+		Counters:         []*forwardv1.Counters{{RouteId: id, NodeRef: "forward-11", UpBytes: 1000, DownBytes: 4000, TotalConns: 3, CounterEpoch: "e1"}},
+		Health:           []*forwardv1.UpstreamHealth{{RouteId: id, HopIndex: 0, Address: "192.0.2.12", Port: 40000, State: forwardv1.HealthState_HEALTH_STATE_HEALTHY, RttUs: 900}},
 		ObservedAtUnixMs: e.now.UnixMilli(),
 	}, e.now, e.now)
 	require.NoError(t, err)

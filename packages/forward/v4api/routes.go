@@ -207,4 +207,3 @@ func (s *Service) routeHealth(ctx context.Context, _ Request, params map[string]
 	}
 	return data(http.StatusOK, map[string]any{"health": pjList(answer.GetHealth())})
 }
-

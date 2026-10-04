@@ -24,8 +24,8 @@ const (
 	// node records, which carry no credential, and are kept redacted like
 	// v2's.
 	auditLogPrefixV4Forward = "/api/v4/forward/"
-	maxBodyLogLength = 512  // bytes to include in slog output
-	maxBodyDBLength  = 4096 // bytes to persist in database
+	maxBodyLogLength        = 512  // bytes to include in slog output
+	maxBodyDBLength         = 4096 // bytes to persist in database
 )
 
 // auditBodyCapture copies at most limit bytes while the downstream handler
