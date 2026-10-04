@@ -902,6 +902,11 @@ type WebUIExtension struct {
 	Menus          []PluginWebUIMenu    `json:"menus"`
 	Routes         []PluginWebUIRoute   `json:"routes"`
 	ConfigSchema   json.RawMessage      `json:"config_schema"`
+	// ControlRoutes are the signed manifest's control routes, listed only
+	// when the actor may call them (the package's api permission). The web
+	// app reads a capability from them, such as the forward package's v4
+	// API (/api/v4/plugins/forward/*), which F5b's pages need.
+	ControlRoutes []string `json:"control_routes,omitempty"`
 }
 
 type WebUIExtensionBundle struct {
@@ -1006,13 +1011,25 @@ func listEnabledWebUIExtensions(db *gorm.DB, publicKey ed25519.PublicKey, actorI
 				SHA256: asset.BundleSHA256,
 				URL:    PluginWebUIAssetURL(asset.PluginID, asset.Version, asset.BundleSHA256, asset.BundlePath),
 			},
-			Permissions:  permissions,
-			Menus:        menus,
-			Routes:       routes,
-			ConfigSchema: append(json.RawMessage(nil), manifest.ConfigSchema...),
+			Permissions:   permissions,
+			Menus:         menus,
+			Routes:        routes,
+			ConfigSchema:  append(json.RawMessage(nil), manifest.ConfigSchema...),
+			ControlRoutes: controlRoutesForActor(installation.PluginID, manifest.ControlRoutes, *access),
 		})
 	}
 	return extensions, nil
+}
+
+// controlRoutesForActor answers a package's control routes when the actor
+// holds its api permission, which every control route needs.
+func controlRoutesForActor(pluginID string, routes []string, access ActorPluginAccess) []string {
+	if len(routes) == 0 || !access.Allows(pluginID, PluginAPIPermission(pluginID)) {
+		return nil
+	}
+	out := append([]string(nil), routes...)
+	sort.Strings(out)
+	return out
 }
 
 func filterPluginWebUIForActor(pluginID string, webUI PluginWebUI, access ActorPluginAccess) ([]string, []PluginWebUIMenu, []PluginWebUIRoute) {

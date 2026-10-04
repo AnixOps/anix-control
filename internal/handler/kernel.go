@@ -336,12 +336,21 @@ func (h *KernelHandler) dispatchPluginControlRoute(c *gin.Context, pluginID, req
 		kernelError(c, http.StatusRequestEntityTooLarge, "plugin_request_too_large", "plugin request body exceeds 1 MiB")
 		return
 	}
+	// super_admin is set only where a gateway resolved it (the forward
+	// package's list answers, F5b D7); other packages never see it.
+	var superAdmin *bool
+	if value, ok := c.Get(pluginPrincipalSuperAdminKey); ok {
+		if allowed, isBool := value.(bool); isBool {
+			superAdmin = &allowed
+		}
+	}
 	principal, err := json.Marshal(struct {
-		ActorID uint   `json:"actor_id"`
-		Admin   bool   `json:"admin"`
-		Plugin  string `json:"plugin_id"`
+		ActorID    uint   `json:"actor_id"`
+		Admin      bool   `json:"admin"`
+		Plugin     string `json:"plugin_id"`
+		SuperAdmin *bool  `json:"super_admin,omitempty"`
 	}{
-		ActorID: kernelActorID(c), Admin: kernelActorIsAdmin(c), Plugin: resolution.PluginID,
+		ActorID: kernelActorID(c), Admin: kernelActorIsAdmin(c), Plugin: resolution.PluginID, SuperAdmin: superAdmin,
 	})
 	if err != nil {
 		kernelError(c, http.StatusInternalServerError, "plugin_host_unavailable", "plugin request principal could not be encoded")

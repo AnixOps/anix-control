@@ -81,6 +81,16 @@ func AuditLog() gin.HandlerFunc {
 			return
 		}
 
+		// A forward route preview stores nothing and the route editor sends
+		// one a second after each pause in typing (F5b D4, D13): it is logged
+		// at debug level and never written to the audit table.
+		if auditExempt(method, c.Request.URL.Path) {
+			c.Next()
+			slog.Debug("admin audit exempt", slog.String("method", method), slog.String("path", c.Request.URL.Path),
+				slog.Int("status_code", c.Writer.Status()), slog.String("user_id", userIDToString(c.Value("user_id"))))
+			return
+		}
+
 		// Kernel payloads can contain large declarative configurations. Preserve
 		// their body exactly and never persist their contents in audit records;
 		// secrets must only be referenced by ID in v3 contracts. An audited
@@ -210,6 +220,19 @@ var auditedUserWrites = map[string]struct{ module, action string }{
 // audit log.
 func auditedUserWrite(method, path string) bool {
 	_, ok := auditedUserWrites[method+" "+strings.TrimSuffix(path, "/")]
+	return ok
+}
+
+// auditExemptWrites are writes under an audited prefix that change
+// nothing: the forward route preview plans a route without storing it.
+var auditExemptWrites = map[string]struct{}{
+	http.MethodPost + " " + auditLogPrefixV4Forward + "routes/preview": {},
+}
+
+// auditExempt reports whether a write under an audited prefix is left out
+// of the audit log.
+func auditExempt(method, path string) bool {
+	_, ok := auditExemptWrites[method+" "+strings.TrimSuffix(path, "/")]
 	return ok
 }
 

@@ -282,7 +282,12 @@ func TestForwardHostServesTheV4APIOnForwardControl(t *testing.T) {
 	response := dispatch(t, host, v4api.RouteID, request)
 	require.EqualValues(t, 200, response.StatusCode, "%s", response.ResponseBody)
 	require.Contains(t, string(response.ResponseBody), `"name":"hk"`)
+	require.Contains(t, string(response.ResponseBody), `"can_delete":false`)
 	require.Empty(t, stub.operation, "the v4 API never reaches a legacy handler")
+
+	// The kernel's super_admin reaches the list answer as can_delete (F5b D7).
+	request.PrincipalJSON = []byte(`{"actor_id":1,"admin":true,"super_admin":true}`)
+	require.Contains(t, string(dispatch(t, host, v4api.RouteID, request).ResponseBody), `"can_delete":true`)
 
 	request.PrincipalJSON = []byte(`{"actor_id":2,"admin":false}`)
 	require.EqualValues(t, 403, dispatch(t, host, v4api.RouteID, request).StatusCode)

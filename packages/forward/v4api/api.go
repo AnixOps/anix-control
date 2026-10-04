@@ -80,6 +80,10 @@ type Request struct {
 	IdempotencyKey string
 	// ActorID is the kernel-authenticated caller.
 	ActorID uint
+	// SuperAdmin is the kernel's word that the caller may DELETE (a super
+	// administrator). The kernel sends it on the list routes, whose answers
+	// carry it as can_delete (F5b D7); it is false elsewhere.
+	SuperAdmin bool
 }
 
 // Response is the HTTP answer.

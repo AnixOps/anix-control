@@ -1547,3 +1547,33 @@ func TestUpdatePluginConfigurationChecksSystemdServicesSettings(t *testing.T) {
 		require.NoError(t, err, "a release without the capability has no such settings: %s", invalid)
 	}
 }
+
+// The catalog lists a package's control routes to an actor who may call
+// them, so the web app can tell the forward package's v4 API is there
+// (F5b D1).
+func TestListEnabledWebUIExtensionsListsControlRoutes(t *testing.T) {
+	db := newKernelTestDB(t)
+	publicKey, privateKey, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	manifest := kernelTestWebUIManifest("routed-ui")
+	manifest.Permissions = append(manifest.Permissions, PluginAPIPermission("routed-ui"))
+	manifest.ControlRoutes = []string{"/api/v4/plugins/routed-ui/*"}
+	artifact := kernelTestWebUIPackage(t, &manifest, `export const anixopsExtension = {}; export default {};`)
+	canonical, err := CanonicalPluginManifest(manifest)
+	require.NoError(t, err)
+	release, err := RegisterPluginRelease(db, string(canonical), base64.StdEncoding.EncodeToString(ed25519.Sign(privateKey, canonical)), publicKey)
+	require.NoError(t, err)
+	_, err = StorePluginArtifact(db, release.ID, artifact)
+	require.NoError(t, err)
+	require.NoError(t, db.Create(&model.PluginInstallation{
+		PluginID: manifest.ID, Target: "control", DesiredVersion: manifest.Version,
+		ObservedVersion: manifest.Version, State: "healthy", Enabled: true,
+	}).Error)
+
+	extensions, err := ListEnabledWebUIExtensionsForActor(db, publicKey, 7, true)
+	require.NoError(t, err)
+	require.Len(t, extensions, 1)
+	require.Equal(t, []string{"/api/v4/plugins/routed-ui/*"}, extensions[0].ControlRoutes)
+
+	require.Nil(t, controlRoutesForActor("routed-ui", nil, ActorPluginAccess{}))
+}

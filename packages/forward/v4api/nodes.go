@@ -41,15 +41,17 @@ func (s *Service) listNodes(ctx context.Context, request Request, _ map[string]s
 	if !ok {
 		return failure(http.StatusBadRequest, "invalid_request", "transport must be agent or ansible", nil)
 	}
-	return s.nodeList(ctx, query(request, "kind"), transport)
+	return s.nodeList(ctx, request, query(request, "kind"), transport)
 }
 
-func (s *Service) nodeList(ctx context.Context, kind string, transport forwardv1.NodeTransport) Response {
+// nodeList answers the nodes with can_delete: whether the caller may
+// DELETE one (a super administrator, as the kernel says; F5b D7).
+func (s *Service) nodeList(ctx context.Context, request Request, kind string, transport forwardv1.NodeTransport) Response {
 	answer, err := s.Forward.ListNodes(ctx, &forwardv1.ListNodesRequest{Kind: kind, Transport: transport})
 	if err != nil {
 		return fromStatus(err)
 	}
-	return data(http.StatusOK, map[string]any{"nodes": pjList(answer.GetNodes())})
+	return data(http.StatusOK, map[string]any{"nodes": pjList(answer.GetNodes()), "can_delete": request.SuperAdmin})
 }
 
 // createNode: the body is {"node": ForwardNodeRecord, "settings":
@@ -241,8 +243,8 @@ func ansibleRef(params map[string]string) (string, *Response) {
 
 const ansible = forwardv1.NodeTransport_NODE_TRANSPORT_ANSIBLE
 
-func (s *Service) listAnsible(ctx context.Context, _ Request, _ map[string]string) Response {
-	return s.nodeList(ctx, "forward", ansible)
+func (s *Service) listAnsible(ctx context.Context, request Request, _ map[string]string) Response {
+	return s.nodeList(ctx, request, "forward", ansible)
 }
 
 func (s *Service) createAnsible(ctx context.Context, request Request, _ map[string]string) Response {
