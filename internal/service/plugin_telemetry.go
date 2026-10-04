@@ -180,7 +180,9 @@ func (s *NodeService) persistPluginTelemetryState(nodeID uint, pluginID string, 
 		result := tx.Clauses(clause.OnConflict{
 			Columns:   []clause.Column{{Name: "node_id"}, {Name: "plugin_id"}},
 			DoUpdates: clause.AssignmentColumns([]string{"metrics_json", "observed_at", "received_at", "updated_at"}),
-			Where:     clause.Where{Exprs: []clause.Expression{clause.Expr{SQL: "excluded.observed_at >= observed_at"}}},
+			// The stored row is named by its table: PostgreSQL refuses a
+			// bare observed_at as ambiguous with excluded's.
+			Where: clause.Where{Exprs: []clause.Expression{clause.Expr{SQL: "excluded.observed_at >= " + model.PluginTelemetryState{}.TableName() + ".observed_at"}}},
 		}).Create(&state)
 		if result.Error != nil {
 			return fmt.Errorf("persist telemetry plugin %s metrics: %w", pluginID, result.Error)
