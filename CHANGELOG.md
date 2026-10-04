@@ -929,6 +929,11 @@
 - `TestForwardCommandDiagnose` no longer flakes: the fake dialer recorded
   addresses from parallel probes without a lock, so one was sometimes lost.
 
+- `TestLifecycleOperationsCancelPendingRestart` no longer flakes: the
+  "newer generation" case wrote its replacement artifact after the host had
+  crashed, and on a slow runner the 150 ms watchdog restart fired first. The
+  artifact is now written up front and the delay is 300 ms.
+
 - **gost link certificate renewals start a new counter epoch.** A
   supervisor reload of gost after the Agent renewed the link certificate
   (H28) re-created every service without the driver recording it, so
