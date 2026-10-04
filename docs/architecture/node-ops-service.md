@@ -217,6 +217,19 @@ in `Operation.kind`.
 | `regkey.issue`, `regkey.revoke` | `IssueRegistrationKey`, `RevokeRegistrationKey` | credentials | kernel | `GenerateAuthKey`, `InternalGenerateAuthKey`, `DeleteAuthKey` |
 | `cleanagent.issue` | `IssueCleanAgent` | credentials | kernel | `ForwardCleanAgentService.CreateToken` |
 
+**Agent upgrades are not a KernelNodeOps kind.** The Agent Control
+operation `agent.upgrade` (O4, `forward-sdk.md` section 9, "Upgrades (O4)")
+is sent only by the kernel's upgrade campaign worker
+(`internal/agentupgrade`), on sessions that negotiated `upgrade.v1`
+(`PROTOCOL.md`, "Agent upgrades"). It is not one of the operations
+`agent.operation` or the legacy
+`POST /admin/nodes/:id/agent-control/operations` accept, so no package
+can upgrade or downgrade an Agent; super administrators start campaigns
+through `/api/v4/kernel/agents/upgrades`. Its loop closes on the next
+`Hello.agent_version`, not on the ledger. A retained `agent.upgrade` is
+dropped instead of replayed when the Agent reconnects without
+`upgrade.v1`.
+
 The kernel keeps its executors. KernelNodeOps is a typed, authorized and
 durable front door to code that already runs. The legacy handlers move onto
 the same functions, as KernelOrder's legacy callbacks did. Native and

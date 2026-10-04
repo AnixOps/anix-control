@@ -1797,6 +1797,27 @@ export default {
     confirm: { deleteGroupTitle: '删除访问组 {name}？', deleteGroup: '组内的成员关系、资源授权和配额策略会一并删除。此操作无法撤销。', deleteGroupAction: '删除访问组', removeGrantTitle: '移除资源授权 #{id}？', removeGrant: '该组成员将失去对 {resource} 的访问权限。此操作无法撤销。', removeGrantAction: '移除授权', removeQuotaTitle: '移除配额策略 {key}？', removeQuota: '该组将不再受这条配额限制。此操作无法撤销。', removeQuotaAction: '移除策略' },
     errors: { load: '无法加载访问控制数据', loadGroups: '无法加载访问组', loadDetail: '无法加载访问组详情', groupRequired: '必须填写服务作用域和组名称', saveGroup: '无法保存访问组', deleteGroup: '无法删除访问组', member: '无法更新用户成员关系', plan: '无法更新套餐成员关系', grant: '无法更新资源授权', quota: '无法更新配额策略', resolve: '无法解析有效授权', invalidID: '{label} 必须为正整数', invalidJSON: '{label} 必须为有效 JSON', scopeRequired: '必须选择服务作用域' }
   },
+  agentUpgrades: {
+    title: 'Agent 升级',
+    description: 'Control 按灰度批次推送 Agent 版本（5%、25%、100%，每批至少 30 分钟）；某一批失败超过 5% 时自动回滚该批。',
+    empty: '尚无 Agent 升级。超级管理员可执行：',
+    target: 'Agent {version}',
+    batchOf: '第 {batch} / {total} 批',
+    batchEnds: '最早 {time} 进入下一批',
+    finished: '结束于 {time}',
+    batch: '第 {batch} 批 · {percent}%',
+    progress: '已完成 {done} / {total}',
+    statuses: { running: '进行中', paused: '已暂停', rolling_back: '回滚中', succeeded: '已完成', rolled_back: '已回滚', aborted: '已中止' },
+    states: { pending: '待升级', offered: '已下发', upgrading: '升级中', succeeded: '已升级', failed: '失败', rolled_back: '已回滚', skipped: '已跳过' },
+    actions: { pause: '暂停', resume: '继续', abort: '中止', rollback: '中止并回滚' },
+    confirm: {
+      abortTitle: '中止升级到 {version}？',
+      abort: '不再向其他节点下发升级。已升级的节点保留新版本。',
+      rollbackTitle: '回滚升级到 {version}？',
+      rollback: '当前批次中已升级的节点将恢复到之前的版本，然后结束本次升级。'
+    },
+    loadFailed: '无法加载 Agent 升级'
+  },
   agentTransports: {
     open: 'Agent 连接方式',
     subtitle: '查看每个节点的 Agent 如何连接 Control：mTLS 流，或 v4.2 将拒绝的旧版通道。',

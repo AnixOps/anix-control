@@ -52,6 +52,14 @@ readonly AGENT_USER="anixops-agent"
 readonly GOST_USER="anixops-gost"
 readonly SERVICE="anix-agent.service"
 readonly GOST_SERVICE="anixops-gost.service"
+# The privileged updater (forward-sdk.md section 9, O4): the Agent runs as
+# its own user under ProtectSystem=strict and cannot replace its binary.
+# For a Control-pushed upgrade it stages the verified release and writes
+# UPDATER_REQUEST; the path unit starts the root oneshot, which runs the
+# installed (root-owned) anix-agent to verify the release again, keep the
+# previous binary for a rollback and restart the Agent.
+readonly UPDATER_SERVICE="anixops-agent-updater.service"
+readonly UPDATER_PATH="anixops-agent-updater.path"
 readonly LIB_DIR="/usr/lib/anixops-agent"
 readonly BIN_LINK="/usr/local/bin/anix-agent"
 readonly CONFIG_DIR="/etc/anixops/agent"
@@ -60,6 +68,8 @@ readonly STATE_DIR="/var/lib/anixops-agent"
 readonly PKI_DIR="${STATE_DIR}/pki"
 readonly STREAM_DIR="${STATE_DIR}/stream"
 readonly CREDENTIAL_FILE="${STATE_DIR}/enroll.credential"
+readonly UPGRADE_DIR="${STATE_DIR}/upgrade"
+readonly UPDATER_REQUEST="${UPGRADE_DIR}/request.json"
 readonly GOST_DIR="/var/lib/anixops-gost"
 readonly UNIT_DIR="/etc/systemd/system"
 readonly POLKIT_RULE="/etc/polkit-1/rules.d/50-anixops-agent.rules"
@@ -885,8 +895,8 @@ install_files() {
   chown "${AGENT_USER}:${AGENT_USER}" "$(path "${STATE_DIR}")"
   # Before pki and stream exist: migrate-paths copies only to new places.
   migrate_root_install
-  install -d -m 0700 "$(path "${PKI_DIR}")" "$(path "${STREAM_DIR}")"
-  chown "${AGENT_USER}:${AGENT_USER}" "$(path "${STATE_DIR}")" "$(path "${PKI_DIR}")" "$(path "${STREAM_DIR}")"
+  install -d -m 0700 "$(path "${PKI_DIR}")" "$(path "${STREAM_DIR}")" "$(path "${UPGRADE_DIR}")"
+  chown "${AGENT_USER}:${AGENT_USER}" "$(path "${STATE_DIR}")" "$(path "${PKI_DIR}")" "$(path "${STREAM_DIR}")" "$(path "${UPGRADE_DIR}")"
   install -d -m 0750 "$(path "${GOST_DIR}")"
   chown "${AGENT_USER}:${GOST_USER}" "$(path "${GOST_DIR}")"
 }
@@ -1178,6 +1188,64 @@ WantedBy=multi-user.target
 EOF
 }
 
+# render_updater_path starts the updater when the Agent writes a request.
+render_updater_path() {
+  cat <<EOF
+# ${UPDATER_PATH}: starts ${UPDATER_SERVICE} when the AnixOps Agent asks
+# for an upgrade or a rollback that Control pushed (agent.upgrade, upgrade.v1).
+# Written by the AnixOps installer; re-running the installer rewrites it.
+[Unit]
+Description=AnixOps Agent updater trigger
+Documentation=https://github.com/AnixOps/anix-control/blob/go_dev/docs/architecture/forward-sdk.md
+
+[Path]
+PathExists=${UPDATER_REQUEST}
+Unit=${UPDATER_SERVICE}
+
+[Install]
+WantedBy=multi-user.target
+EOF
+}
+
+# render_updater_service is the root oneshot that applies the request with
+# the installed anix-agent: it re-verifies the staged release (size,
+# SHA-256, the Ed25519 signature by the key compiled into the installed
+# binary), refuses a downgrade other than a rollback to the kept release,
+# keeps the running binary as anix-agent.prev, swaps the new one in,
+# restarts the Agent, and reinstates the previous one if the new Agent does
+# not start. It consumes the request, so the path unit does not fire again.
+render_updater_service() {
+  cat <<EOF
+# ${UPDATER_SERVICE}: applies a Control-pushed Agent upgrade or rollback.
+# Written by the AnixOps installer; re-running the installer rewrites it.
+[Unit]
+Description=AnixOps Agent updater
+Documentation=https://github.com/AnixOps/anix-control/blob/go_dev/docs/architecture/forward-sdk.md
+ConditionPathExists=${UPDATER_REQUEST}
+
+[Service]
+Type=oneshot
+ExecStart=${LIB_DIR}/anix-agent upgrade apply --request ${UPDATER_REQUEST}
+TimeoutStartSec=300
+UMask=0022
+NoNewPrivileges=yes
+ProtectSystem=strict
+ReadWritePaths=${LIB_DIR} ${STATE_DIR}
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelModules=yes
+ProtectKernelLogs=yes
+ProtectClock=yes
+ProtectHostname=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictNamespaces=yes
+RestrictRealtime=yes
+LockPersonality=yes
+SystemCallArchitectures=native
+EOF
+}
+
 # render_polkit_rule lets the Agent user start, stop and reload
 # anixops-gost.service, and nothing else.
 render_polkit_rule() {
@@ -1202,7 +1270,10 @@ install_units() {
   install -d -m 0755 "$(path "${UNIT_DIR}")"
   render_agent_unit >"$(path "${UNIT_DIR}/${SERVICE}")"
   render_gost_unit >"$(path "${UNIT_DIR}/${GOST_SERVICE}")"
-  chmod 0644 "$(path "${UNIT_DIR}/${SERVICE}")" "$(path "${UNIT_DIR}/${GOST_SERVICE}")"
+  render_updater_service >"$(path "${UNIT_DIR}/${UPDATER_SERVICE}")"
+  render_updater_path >"$(path "${UNIT_DIR}/${UPDATER_PATH}")"
+  chmod 0644 "$(path "${UNIT_DIR}/${SERVICE}")" "$(path "${UNIT_DIR}/${GOST_SERVICE}")" \
+    "$(path "${UNIT_DIR}/${UPDATER_SERVICE}")" "$(path "${UNIT_DIR}/${UPDATER_PATH}")"
   if [[ -d "$(path "$(dirname "${POLKIT_RULE}")")" ]]; then
     render_polkit_rule >"$(path "${POLKIT_RULE}")"
     chmod 0644 "$(path "${POLKIT_RULE}")"
@@ -1212,6 +1283,8 @@ install_units() {
   systemctl daemon-reload
   # gost stays inert until the Agent writes its configuration.
   systemctl enable "${GOST_SERVICE}" >/dev/null 2>&1 || note "cannot enable ${GOST_SERVICE}"
+  # The updater acts only on a request an Agent with upgrade.v1 writes.
+  systemctl enable --now "${UPDATER_PATH}" >/dev/null 2>&1 || note "cannot enable ${UPDATER_PATH}: Control cannot upgrade this Agent until it is"
   systemctl enable "${SERVICE}" >/dev/null
   systemctl restart "${SERVICE}"
 }
@@ -1374,8 +1447,9 @@ uninstall() {
   require_root
   take_lock
   info "Uninstalling the AnixOps Agent$( ((PURGE)) && printf ' (--purge)')"
-  # The Agent first, so that it cannot apply its state again, then gost.
-  for unit in "${SERVICE}" "${GOST_SERVICE}"; do
+  # The updater first, so that nothing replaces the Agent meanwhile, then
+  # the Agent, so that it cannot apply its state again, then gost.
+  for unit in "${UPDATER_PATH}" "${UPDATER_SERVICE}" "${SERVICE}" "${GOST_SERVICE}"; do
     if [[ -f "$(path "${UNIT_DIR}/${unit}")" ]]; then
       if have systemctl; then
         systemctl disable --now "${unit}" >/dev/null 2>&1 || true
@@ -1387,7 +1461,7 @@ uninstall() {
   remove_path "${POLKIT_RULE}"
   if have systemctl; then
     systemctl daemon-reload >/dev/null 2>&1 || true
-    systemctl reset-failed "${SERVICE}" "${GOST_SERVICE}" >/dev/null 2>&1 || true
+    systemctl reset-failed "${SERVICE}" "${GOST_SERVICE}" "${UPDATER_SERVICE}" >/dev/null 2>&1 || true
   fi
   link="$(path "${BIN_LINK}")"
   if [[ -L "${link}" && "$(readlink "${link}")" == "${LIB_DIR}/anix-agent" ]]; then

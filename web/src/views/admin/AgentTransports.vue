@@ -28,6 +28,8 @@
       </p>
     </div>
 
+    <AgentUpgradeCampaign />
+
     <UiErrorState
       v-if="loadError && !inventory && !loading"
       :title="t('agentTransports.loadFailed')"
@@ -110,6 +112,7 @@ import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { ArrowLeft, Cable, RefreshCw, TriangleAlert } from '@lucide/vue'
 import { useAppI18n } from '@/composables/useAppI18n'
+import AgentUpgradeCampaign from '@/components/admin/AgentUpgradeCampaign.vue'
 import UiBadge from '@/ui/UiBadge.vue'
 import UiButton from '@/ui/UiButton.vue'
 import UiDataTable from '@/ui/UiDataTable.vue'

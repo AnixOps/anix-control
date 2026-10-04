@@ -612,6 +612,15 @@ func (m *AgentControlManager) replayDesiredLocked(connection *AgentControlConnec
 		return operations[i].Revision < operations[j].Revision
 	})
 	for _, operation := range operations {
+		if operation.Kind == agentcontrol.OperationKindAgentUpgrade && !connectionSupportsOperation(connection, operation.Kind) {
+			// The Agent that reconnected does not take upgrades (a rollback
+			// to a release without upgrade.v1): the campaign reads its
+			// Hello's version instead, so the operation is dropped.
+			m.mu.Lock()
+			m.removeDesiredLocked(connection.NodeID, operation.OperationId)
+			m.mu.Unlock()
+			continue
+		}
 		replayed, err := rebindKernelDesiredSession(operation, connection.SessionID)
 		if err != nil {
 			return err
@@ -1088,7 +1097,18 @@ func (s *AgentControlGRPCServer) serverCapabilities(node agentcontrol.AgentNode,
 	if s.servesAlive(node, agent) {
 		capabilities = append(capabilities, &agentv1pb.Capability{Name: agentcontrol.CapabilityAlive, Version: agentcontrol.CapabilityVersionV1})
 	}
+	if servesUpgrade(node, agent) {
+		capabilities = append(capabilities, &agentv1pb.Capability{Name: agentcontrol.CapabilityUpgrade, Version: agentcontrol.CapabilityVersionV1})
+	}
 	return capabilities
+}
+
+// servesUpgrade reports whether the session is offered upgrade.v1 (Agent
+// upgrades, PROTOCOL.md): proxy and forward nodes whose Hello lists it.
+// Control then may send agent.upgrade operations (internal/agentupgrade).
+func servesUpgrade(node agentcontrol.AgentNode, agent []*agentv1pb.Capability) bool {
+	return (node.Kind == agentcontrol.NodeKindProxy || node.Kind == agentcontrol.NodeKindForward) &&
+		agentcontrol.HasCapabilityVersion(agent, agentcontrol.CapabilityUpgrade, agentcontrol.CapabilityVersionV1)
 }
 
 // sessionCapabilities is HelloAck.server_capabilities of a session:
@@ -1137,7 +1157,14 @@ func capabilityVersions(capabilities []*agentv1pb.Capability) []string {
 	return names
 }
 
+// connectionSupportsOperation reports whether the session takes an
+// operation of kind: the Agent's Hello lists the kind as a capability, but
+// agent.upgrade needs upgrade.v1 negotiated (both the Hello and the
+// HelloAck list it).
 func connectionSupportsOperation(connection *AgentControlConnection, kind string) bool {
+	if kind == agentcontrol.OperationKindAgentUpgrade {
+		return agentcontrol.Negotiated(connection.Capabilities, connection.ServerCapabilities, agentcontrol.CapabilityUpgrade)
+	}
 	return agentcontrol.HasCapability(connection.Capabilities, kind)
 }
 

@@ -1586,7 +1586,9 @@ enrollment (`internal/agentpki`).
 
 **Status: O1, O2 and O3 implemented** (the command, the token API, the
 signed script; preflight and offline bundles; uninstall; operator guide
-`docs/guide/agent-onboarding.md`). As built:
+`docs/guide/agent-onboarding.md`). **O4 implemented on the Control side**
+(staged upgrades; the Agent's `upgrade.v1` is a follow-up in anix-agent,
+see "Upgrades (O4)" below). As built:
 
 - `POST /api/v4/kernel/agents/install-tokens` (super administrators,
   `service.IsSuperAdmin`): `{node: "proxy-<id>"|"forward-<id>",
@@ -1700,10 +1702,101 @@ signed script; preflight and offline bundles; uninstall; operator guide
   5% → 25% → 100%), with signed artifacts; a node never pulls on its own.
   A batch stops and rolls back automatically when upgraded Agents do not
   reconnect or fail to apply their state (H19). Forwarding continues during
-  an Agent upgrade (kernel rules, separate gost unit).
+  an Agent upgrade (kernel rules, separate gost unit). As built (O4), see
+  "Upgrades (O4)" below.
 - **One Agent per node.** nyanpass starts extra instances for load
   sharing; we do not need that: nftables is in the kernel and gost scales
   across cores.
+
+### Upgrades (O4)
+
+Owner decision H19 (2026-10-04): batches of 5%, 25% and 100%, at least
+30 minutes each; a batch rolls back automatically when more than 5% of its
+Agents fail to reconnect within 10 minutes or fail to apply; the artifacts
+are signed with the official Ed25519 key and the node verifies them; an
+Agent never upgrades on its own. H25: the Agent release is Control's.
+
+- **Campaigns** (`internal/agentupgrade`). Two new protected tables:
+  `v4_kernel_agent_upgrade_campaign` (target version, the verified
+  artifacts per architecture, the batches as cumulative percent and
+  minimum duration, the H19 threshold and reconnect timeout, the
+  exclusions, status, current batch and its start, rollback start, reason,
+  error code, actor; `active_slot`, unique and NULL once terminal, keeps one
+  campaign active on SQLite and PostgreSQL) and
+  `v4_kernel_agent_upgrade_node` (campaign, node kind and id, batch, canary
+  order key, state, the version it ran, the operation and session, the
+  rollback operation, error code and message, offered, handed-off,
+  reconnected, finished and rollback times).
+- **Nodes.** Enabled proxy and forward nodes whose Agent was seen on the
+  Agent Control stream (`v4_kernel_agent_transport`, `mtls-stream` or
+  `apikey-stream`), minus excluded nodes and node tags, ordered by
+  SHA-256 of `anixops-agent-upgrade:<node>`, so the canaries are the same
+  in every campaign. Batch *i* takes the nodes up to its cumulative share,
+  rounded up (the canary batch has at least one node; an empty batch passes
+  at once). Custom batches must start at 5% or less, grow, end at 100% and
+  last 30 minutes or more.
+- **States.** A campaign is `running`, `paused` (nothing is offered and no
+  batch starts, but offered nodes are still judged and a failing batch
+  still rolls back; the paused time does not count towards the batch),
+  `rolling_back`, then `succeeded`, `rolled_back` or `aborted`. A node is
+  `pending`, `offered` (the operation was acknowledged), `upgrading`
+  (progress or hand-off reported), then `succeeded`, `failed`,
+  `rolled_back` or `skipped` (no `upgrade.v1`, offline for the whole
+  batch, or connected but never acknowledging during it: not counted).
+
+  ```text
+  running ──(batch settled ∧ ≥ min duration)──▶ next batch … ──▶ succeeded
+     │ ▲ pause/resume                     failed/offered > 5% (any time)
+     ▼ │                                              │
+  paused ───────────────(failed > 5%)───────────────▶ rolling_back ──▶ rolled_back
+  running/paused ──abort──▶ aborted        abort --rollback ──▶ rolling_back
+  ```
+- **The worker** runs in the singleton-worker process, which holds the
+  Agent streams, every 5 seconds. It offers `agent.upgrade` to the current
+  batch's pending nodes (16 at a time), judges in-flight ones (a session
+  opened after the offer with the target version in `Hello`, and no
+  `failed` `ConfigStatus` after the reconnect; a reconnect with the old
+  version after the hand-off; 10 minutes), applies the threshold on every
+  pass, and advances a settled batch once it has lasted its minimum
+  duration. On rollback it sends `agent.upgrade` with action `rollback` to
+  the batch's nodes that run the target and ends the campaign when they
+  reconnect with another version, or after twice the reconnect timeout
+  (`rollback_unconfirmed`). Automatic transitions are audited as `system`.
+- **Contract.** `upgrade.v1` (offered by the intersection rule to proxy and
+  forward nodes) and the `agent.upgrade` operation, payload
+  `anixops.agent-upgrade/v1` (`sdk/agentcontrol`): `PROTOCOL.md`, "Agent
+  upgrades", has the schema and exactly what the Agent and its updater do.
+  No protobuf change. Packages cannot send it.
+- **Artifacts.** The release must be in `agent_install.artifact_dir/<tag>/`:
+  each architecture's zip with its `.sig`, `SHA256SUMS` and
+  `SHA256SUMS.sig`, both signatures valid with `plugins.official_public_key`
+  and every zip's digest listed (`agentinstall.UpgradeArtifacts`). The
+  operation names the control mirror's URL
+  (`<public_url>/install/agent/<tag>/<asset>`), the SHA-256, size and
+  signature; the Agent verifies them with the key it embeds.
+- **Privileged updater (decision).** The Agent runs as `anixops-agent`
+  under `ProtectSystem=strict` and cannot replace `/usr/lib/anixops-agent`.
+  The installer writes `anixops-agent-updater.path` (`PathExists=` the
+  request file under `/var/lib/anixops-agent/upgrade/`, which the Agent may
+  write) and the root oneshot `anixops-agent-updater.service`, whose
+  `ExecStart` is the installed, root-owned `anix-agent upgrade apply`: it
+  verifies again, keeps `anix-agent.prev` for a rollback, swaps atomically,
+  restarts the Agent and reinstates the previous binary when the new one
+  does not stay up. A path unit rather than polkit, because polkit 0.105
+  hosts cannot scope a rule to one unit (section 9, preflight) and some
+  hosts have no polkit; a path unit needs only systemd. The trust anchor is
+  the installed binary, not the request: a compromised Agent can only ask
+  for a signed official release, or a rollback to the kept one. Agents in
+  the field have neither the units nor `upgrade.v1`: the first move onto
+  this path is an installer re-run.
+- **API and tools.** `POST /api/v4/kernel/agents/upgrades` (super
+  administrators; `target_version` defaults to Control's Agent release,
+  `batches`, `exclude {nodes, tags}`, `reason`), `GET` (list) and
+  `GET /:id` (with every node), `POST /:id/pause`, `/resume`, `/abort`
+  (`{"rollback": true}` rolls the current batch back first); audited in
+  `v2_operation_log` as module `agent_upgrade`.
+  `anix-control agent upgrade start|status|pause|resume|abort`. The Agent
+  transports page shows the latest campaign with its batches.
 
 ## 10. Upgrade from v4.1
 
@@ -2071,7 +2164,7 @@ Agent-repository PRs are marked (agent).
 | | O1 | `install.sh`, group tokens, mirrors | M | H18 |
 | | O2 | preflight and offline package | M | H18 |
 | | O3 | uninstall | S | |
-| | O4 | staged upgrades with canary and rollback | L | H19 |
+| | O4 | staged upgrades with canary and rollback (Control side implemented; (agent) `upgrade.v1` and the updater follow) | L | H19 |
 | F4 | F4a | gost driver: Render, process management (implemented) | L | H20 |
 | | F4b | gost Observe, hot updates, failover (implemented) | M | H20 |
 | | F4c | gost per-service structural changes, mixed-engine end-to-end (implemented) | M | |

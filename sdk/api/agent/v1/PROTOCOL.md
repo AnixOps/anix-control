@@ -90,6 +90,7 @@ are additions to `anix.agent.v1`:
 | Control → Agent | `ControlToAgent.maintenance_ack` (`MaintenanceAck` of `MaintenanceEventResult`) | `maintenance.v1` |
 | Control → Agent | `ControlToAgent.alive_list` (`AliveList` of `UserAlive`) | `alive.v1` |
 | Agent → Control | `AgentArtifacts.GetPluginManifest`, `DownloadPluginArtifact` (`artifacts.proto`; a service, not a stream payload) | `artifacts.v1` |
+| Control → Agent | `DesiredOperation` of kind `agent.upgrade` (an Agent upgrade or rollback; no new message) | `upgrade.v1` |
 
 `Hello` gains `config_revision` and `users_cursor`, and `HelloAck` gains
 `server_capabilities`.
@@ -122,7 +123,8 @@ stream equivalent.
   and version `v1`; `sdk/agentcontrol` names them (`CapabilityConfig`,
   `CapabilityUsers`, `CapabilityReports`, `CapabilityPackageReports`,
   `CapabilityForward`, `CapabilityMaintenance`, `CapabilityAlive`,
-  `CapabilityArtifacts`; `DataPlaneCapabilities` lists them).
+  `CapabilityArtifacts`, `CapabilityUpgrade`; `DataPlaneCapabilities` lists
+  them).
 - The Agent lists the ones it implements in `Hello.capabilities`. Control
   lists the ones it serves in `HelloAck.server_capabilities`.
 - A capability is in use on a session only when both lists have it
@@ -161,6 +163,7 @@ stream equivalent.
   - `artifacts.v1` (see "Plugin artifacts"): proxy nodes, on a session
     authenticated by client certificate (`AgentArtifacts` reads no node
     API key, so a session on the API key is not offered it).
+  - `upgrade.v1` (see "Agent upgrades"): proxy and forward nodes.
 
   `reports.v1` carries one attribute: an Agent that lists it with
   `transient_ack: "v1"` asks for transient report acknowledgements ("Error
@@ -677,6 +680,123 @@ only: `forward.connect` skips a QUIC link (`skipped`, `link_not_tcp`), and
 An Agent without these checks keeps working. Control marks its node steps
 `SKIPPED` (`node_vantage_unavailable`) and dials what it can from its own
 vantage.
+
+## Agent upgrades
+
+`upgrade.v1` lets Control upgrade the Agent (owner decision H19,
+`docs/architecture/forward-sdk.md` section 9, O4). Control pushes; an Agent
+never upgrades on its own, and an Agent version is a Control version (H25).
+Control runs a campaign: the nodes, ordered by the SHA-256 of their name
+(the same canaries every time), are split into batches of 5%, 25% and 100%
+(cumulative), each lasting at least 30 minutes; a batch rolls back when
+more than 5% of its offered nodes fail. The capability adds no message:
+it uses `DesiredOperation`, `OperationAck`, `ObservedState` and the next
+`Hello`.
+
+- **Negotiation.** An Agent lists `upgrade.v1` only when it can apply an
+  upgrade: the privileged updater is installed (`systemctl is-active
+  anixops-agent-updater.path`) and it embeds the official release key.
+  Control offers it to proxy and forward nodes whose `Hello` lists it, and
+  sends `agent.upgrade` only on a session that negotiated it (a capability
+  named `agent.upgrade` in the `Hello` is not enough). A node whose Agent
+  does not negotiate it is skipped by the campaign (`upgrade_unsupported`;
+  re-run the installer to upgrade it) and does not count as a failure.
+- **The operation.** `DesiredOperation.kind` is `agent.upgrade`;
+  `payload_json` is `agentcontrol.UpgradeRequest` (schema
+  `anixops.agent-upgrade/v1`, at most 16 KiB; fields may be added and an
+  Agent ignores the ones it does not know; `agentcontrol.ParseUpgradeRequest`
+  checks it):
+
+  | Field | Meaning |
+  |---|---|
+  | `schema` | `anixops.agent-upgrade/v1` |
+  | `campaign_id` | the campaign, 1 to 64 bytes |
+  | `action` | `upgrade` or `rollback` |
+  | `target_version` | the release to run afterwards (`v4.2.0`) |
+  | `previous_version` | for an upgrade, the release the Agent ran when offered; for a rollback, the release being left |
+  | `artifacts` | for an upgrade, one per architecture (`amd64`, `arm64`): `arch`, `asset` (the release zip's name), `url` (https, Control's control mirror `/install/agent/<tag>/<asset>`), `sha256` (lowercase hex), `size` (bytes, at most 256 MiB), `signature` (base64 Ed25519 over the zip's exact bytes: the release's `.sig`). A rollback carries none. |
+
+  `deadline_unix_ms` is the offer plus 9 minutes: past it the Agent reports
+  `operation deadline exceeded` and does not start.
+- **What the Agent does for `upgrade`**, in order:
+  1. Acknowledge (`OperationAck`), or refuse it with an error when another
+     upgrade is in progress (`upgrade_in_progress`) or the request does not
+     parse (`upgrade_invalid_request`).
+  2. If it already runs `target_version`, report `SUCCEEDED` with
+     `state_json` `{"phase":"current"}` and stop. This is also the answer
+     to a replay: Control replays an operation without a terminal state
+     after a reconnect, so the new Agent receives the upgrade it was
+     restarted by.
+  3. Pick the artifact of its `GOARCH` (else `FAILED`,
+     `upgrade_no_artifact`) and report `APPLYING` `{"phase":"downloading"}`.
+     Download `url` into the staging directory
+     `/var/lib/anixops-agent/upgrade/` (at most `size` bytes).
+  4. Report `APPLYING` `{"phase":"verifying"}`. Check the size, the SHA-256
+     and the Ed25519 signature with the official release key compiled into
+     the Agent (`plugins.official_public_key`, the key `install.sh`
+     embeds), never a key from Control or the mirror. Any mismatch:
+     `FAILED` with `upgrade_digest_mismatch` or `upgrade_signature_invalid`,
+     and the staged file is removed.
+  5. Hand off to the privileged updater: write the request
+     (`/var/lib/anixops-agent/upgrade/request.json`: the operation id, the
+     action, the target and previous versions, the staged file, its size,
+     SHA-256 and signature) to a temporary file, report `SUCCEEDED` with
+     `{"phase":"handed_off"}`, then rename the request into place. The
+     observed state goes first because the updater restarts the Agent.
+     No updater (`anixops-agent-updater.path` not active):
+     `FAILED`, `upgrade_updater_unavailable`.
+- **What the updater does** (`anixops-agent-updater.service`, a root
+  oneshot that the path unit starts when the request appears; it runs the
+  installed, root-owned `/usr/lib/anixops-agent/anix-agent upgrade apply`):
+  consume the request (rename it, so the path unit does not fire again);
+  verify the staged release again (size, SHA-256, signature with the key
+  compiled into the installed binary); refuse a `target_version` older than
+  the running one unless the action is a rollback to the kept release
+  (`upgrade_downgrade_refused`); unpack `anix-agent` and check that its
+  `version` prints `target_version`; copy the running binary to
+  `/usr/lib/anixops-agent/anix-agent.prev` with its version and SHA-256
+  next to it (`anix-agent.prev.json`); install the new binary by an atomic
+  rename; restart `anix-agent.service`. If the new Agent does not stay
+  active for 30 seconds, reinstate `anix-agent.prev` and restart again. It
+  writes the outcome to `/var/lib/anixops-agent/upgrade/result.json`, which
+  the next Agent logs. gost (`anixops-gost.service`) keeps running: the
+  updater never restarts it, so forwarding continues; a gost binary in the
+  release is installed as the next one gost starts with, and only when its
+  SHA-256 is the pinned one.
+- **What the Agent does for `rollback`**: acknowledge; if it already runs
+  `target_version`, `SUCCEEDED` `{"phase":"current"}`; else check that
+  `anix-agent.prev.json` names `target_version` (else `FAILED`,
+  `upgrade_no_previous_release`) and hand off the same way. The updater
+  swaps `anix-agent.prev` back after checking its recorded SHA-256.
+- **Closing the loop.** Control counts a node upgraded when a session that
+  connected after the offer reports `target_version` in
+  `Hello.agent_version` (with or without the leading `v`) and, when the
+  session negotiated `config.v1`, no `ConfigStatus` reported after the
+  reconnect is `failed` (Control waits a minute for one). A node fails when
+  it refuses the operation, reports `FAILED`, reconnects with another
+  version after `handed_off` (the updater kept or reinstated the old one),
+  or has not reconnected with `target_version` 10 minutes after the offer;
+  an upgraded node that later reports another version or a failed
+  configuration during its batch fails too. A node offline for its whole
+  batch is skipped (`node_offline`), and so is a connected one that never
+  acknowledged the operation during its batch (`offer_failed`): neither
+  counts towards the 5%.
+- **Rollback of a batch.** When more than 5% of a batch's offered nodes
+  fail, Control stops the campaign and sends `agent.upgrade` with action
+  `rollback` and `target_version` the node's previous release to every node
+  of that batch that runs the target version; a node that reconnects with
+  another version is rolled back. Earlier batches keep the new release;
+  later batches are never offered it.
+- A host that runs one Agent for two node identities (`proxy-<id>` and
+  `forward-<id>`) is upgraded through whichever is offered first; the other
+  answers `current`, or already reports the target when its turn comes.
+- The `ObservedState.state_json` of an `agent.upgrade` is
+  `agentcontrol.UpgradeState`: `phase`, `version`, and `error_code` with
+  one of the `upgrade_*` codes above when it fails.
+- Packages cannot send `agent.upgrade`: it is not one of the Agent Control
+  operations `agent.operation` (KernelNodeOps) or
+  `POST /admin/nodes/:id/agent-control/operations` accept. Only the kernel's
+  campaign worker sends it.
 
 ## Forward link certificates
 

@@ -38,6 +38,37 @@
     "Forward diagnostic checks"; until an Agent advertises `diag.v1` its
     node steps are `SKIPPED` (`node_vantage_unavailable`).
 
+- **Staged Agent upgrades from Control** (onboarding O4, owner decision H19;
+  `docs/architecture/forward-sdk.md` section 9, `PROTOCOL.md` "Agent
+  upgrades").
+  - A campaign pushes a signed Agent release (from
+    `agent_install.artifact_dir`, both signatures and `SHA256SUMS` verified
+    with `plugins.official_public_key`) to every enabled node whose Agent was
+    seen on the Agent Control stream, in batches of 5%, 25% and 100% of the
+    nodes (canaries first, by node name hash), each lasting at least
+    30 minutes. A batch in which more than 5% of the offered nodes fail —
+    refused, failed to apply, or no reconnect with the new version in
+    `Hello` within 10 minutes — is rolled back automatically: the campaign
+    stops and the batch's upgraded nodes are told to reinstate their
+    previous release. Nodes whose Agent cannot be upgraded, or that stay
+    offline for their batch, are skipped and do not count.
+  - New capability `upgrade.v1` (offered by the intersection rule to proxy
+    and forward nodes) and the `agent.upgrade` operation with the payload
+    `anixops.agent-upgrade/v1` (`sdk/agentcontrol.UpgradeRequest`), sent
+    only on sessions that negotiated it and never by packages. No protobuf
+    change.
+  - `POST /api/v4/kernel/agents/upgrades` (super administrators, audited),
+    `GET` and `GET /:id`, `POST /:id/pause`, `/:id/resume`, `/:id/abort`
+    (`rollback`); `anix-control agent upgrade start|status|pause|resume|abort`;
+    the campaign's batches on the Agent transports page.
+  - New protected tables `v4_kernel_agent_upgrade_campaign` and
+    `v4_kernel_agent_upgrade_node`.
+  - `install.sh` writes the privileged updater
+    (`anixops-agent-updater.path` and the root oneshot
+    `anixops-agent-updater.service`, which runs the installed
+    `anix-agent upgrade apply`) and removes it on uninstall. The Agent side
+    (`upgrade.v1`, `upgrade apply`) follows in anix-agent.
+
 - **Agent installer preflight, offline bundles and uninstall** (onboarding
   O2 and O3, `docs/guide/agent-onboarding.md`).
   - Preflight: before changing anything, `install.sh` checks systemd (240+),

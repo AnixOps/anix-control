@@ -827,5 +827,13 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.POST("/kernel/agents/enrollment-tokens", agents.CreateEnrollmentToken)
 		v4.POST("/kernel/agents/install-tokens", agentInstall.CreateInstallToken)
 		v4.GET("/kernel/agents/transports", handler.NewAgentTransportsHandler(agentPolicy).List)
+		// Staged Agent upgrades (forward-sdk.md section 9, O4; H19).
+		upgrades := handler.NewAgentUpgradesHandler()
+		v4.POST("/kernel/agents/upgrades", upgrades.Start)
+		v4.GET("/kernel/agents/upgrades", upgrades.List)
+		v4.GET("/kernel/agents/upgrades/:id", upgrades.Get)
+		v4.POST("/kernel/agents/upgrades/:id/pause", upgrades.Pause)
+		v4.POST("/kernel/agents/upgrades/:id/resume", upgrades.Resume)
+		v4.POST("/kernel/agents/upgrades/:id/abort", upgrades.Abort)
 	}
 }

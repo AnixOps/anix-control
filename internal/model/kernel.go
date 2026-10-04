@@ -505,6 +505,6 @@ func KernelModels() []any {
 		&RouteModeRevision{}, &AgentTransport{}, &ShadowMismatchSample{}, &PackageReportState{},
 		&KernelForwardRoute{}, &KernelForwardAllocation{}, &KernelForwardNode{}, &KernelForwardNodeState{},
 		&KernelForwardNodeReport{}, &KernelForwardCounter{}, &KernelForwardTraffic{}, &KernelForwardRequest{},
-		&KernelForwardPlan{},
+		&KernelForwardPlan{}, &AgentUpgradeCampaign{}, &AgentUpgradeNode{},
 	}
 }

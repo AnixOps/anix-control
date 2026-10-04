@@ -29,6 +29,10 @@ const agentCommandUsage = `usage:
   anix-control agent link-ca bundle
   anix-control agent link-ca rotate
   anix-control agent offline-bundle -arch <amd64|arm64> -o <file> [-control https://<control>]
+  anix-control agent upgrade start [-version <tag>] [-exclude proxy-1,forward-2] [-exclude-tag <tag>,...] [-reason <text>] [-control https://<control>]
+  anix-control agent upgrade status [-id <campaign>]
+  anix-control agent upgrade pause|resume -id <campaign>
+  anix-control agent upgrade abort -id <campaign> [-rollback]
 
 token create prints a one-time agent enrollment credential (anixagt_...)
 bound to the node, valid for at most 7 days. The agent presents it to
@@ -49,6 +53,15 @@ SHA256SUMS.sig (from agent_install.artifact_dir/<tag>/, verified with
 plugins.official_public_key), and the install script with its signature.
 -control is the address nodes reach (default agent_install.public_url).
 
+upgrade runs staged Agent upgrades (H19): start pushes the Agent release
+(default this Control's, from agent_install.artifact_dir, verified with
+plugins.official_public_key) to every enabled node whose Agent was seen on
+the Agent Control stream, in batches of 5%, 25% and 100% of the nodes, at
+least 30 minutes each, canaries first. A batch in which more than 5% of
+the offered nodes fail, or do not reconnect with the new version within
+10 minutes, is rolled back. The running Control's singleton worker drives
+the campaign; status prints it (the active one, else the latest).
+
 The config file comes from ANIX_CONTROL_CONFIG or config/config.yaml.`
 
 func agentUsageError() error {
@@ -58,6 +71,9 @@ func agentUsageError() error {
 // runAgentCommand administers the agent PKI from the command line. It prints
 // JSON so scripts can pick out the credential.
 func runAgentCommand(ctx context.Context, cfg *config.Config, db *gorm.DB, arguments []string, stdout io.Writer) error {
+	if len(arguments) > 1 && arguments[0] == "upgrade" {
+		return runAgentUpgradeCommand(ctx, cfg, db, arguments[1], arguments[2:], stdout)
+	}
 	if len(arguments) > 0 && arguments[0] == "offline-bundle" {
 		return runOfflineBundleCommand(cfg, arguments[1:], stdout)
 	}

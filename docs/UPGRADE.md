@@ -2199,6 +2199,46 @@ v4.2 adds the forwarding API `/api/v4/forward/*` and the command line
   the kernel's F3a tables. Rolling back to a release without it only removes
   the API and the commands.
 
+## Staged Agent Upgrades (v4.2)
+
+v4.2 lets Control push Agent releases to the nodes in canary batches
+(owner decision H19; design: [`architecture/forward-sdk.md`](architecture/forward-sdk.md),
+section 9, "Upgrades (O4)"; protocol: `sdk/api/agent/v1/PROTOCOL.md`,
+"Agent upgrades").
+
+- **New tables.** `v4_kernel_agent_upgrade_campaign` and
+  `v4_kernel_agent_upgrade_node` are created at startup (protected kernel
+  tables; no existing table changes). Rolling back to a release without
+  them leaves them unused.
+- **Agents must be re-installed once.** Control can upgrade only an Agent
+  that negotiates `upgrade.v1`, which needs the privileged updater units
+  (`anixops-agent-updater.path`, `anixops-agent-updater.service`) that this
+  release's `install.sh` writes. Agents installed before it are skipped by a
+  campaign (`upgrade_unsupported`) and are upgraded by re-running the
+  install command (it keeps the identity, see the
+  [onboarding guide](guide/agent-onboarding.md#running-it-again)).
+- **Put the release in `agent_install.artifact_dir`.** A campaign starts
+  only when `<artifact_dir>/<tag>/` has both architectures' zips with
+  their `.sig`, `SHA256SUMS` and `SHA256SUMS.sig`, all verifying with
+  `plugins.official_public_key`, and `agent_install.public_url` is the
+  https address nodes download from.
+- **Run it.** The Control version and the Agent version are the same
+  (H25): after upgrading Control, upgrade the Agents.
+
+  ```bash
+  anix-control agent upgrade start -reason "v4.2.0"   # or POST /api/v4/kernel/agents/upgrades
+  anix-control agent upgrade status                    # batches and nodes
+  anix-control agent upgrade pause|resume -id <campaign>
+  anix-control agent upgrade abort -id <campaign> [-rollback]
+  ```
+
+  Batches take 5%, 25% and 100% of the nodes, 30 minutes each at least, so a
+  campaign lasts at least 90 minutes. A batch in which more than 5% of the
+  offered nodes fail (refused, failed to apply, or no reconnect with the new
+  version within 10 minutes) is rolled back and the campaign stops; fix the
+  cause shown per node and start a new campaign. Forwarding keeps running
+  during an Agent upgrade.
+
 ## Switching Route Modes
 
 Each v2 route of a Control package runs in one of three modes: `legacy` (the
