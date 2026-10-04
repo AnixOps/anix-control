@@ -1358,9 +1358,55 @@ The target is nyanpass's experience: copy one command, paste it on the
 machine, and the node appears. This is part of F3 and reuses the agent
 enrollment (`internal/agentpki`).
 
+**Status: O1 implemented** (the command, the token API, the signed script;
+operator guide `docs/guide/agent-onboarding.md`). As built:
+
+- `POST /api/v4/kernel/agents/install-tokens` (super administrators,
+  `service.IsSuperAdmin`): `{node: "proxy-<id>"|"forward-<id>",
+  ttl_seconds}` → `{enrollment, credential, node, expires_at,
+  agent_version, commands: [{mirror, command, available, note}], script:
+  {url, signature_url, signed}}`. The token is an AgentPKI one-time
+  credential (`CreateEnrollmentToken`: SHA-256 only, in
+  `v4_kernel_agent_enrollment`, audited as `agent_enrollment_token_issue`),
+  1 hour by default, 60 s to 7 days (H18).
+- **The command carries `--control` and `--node` besides H18's flags.**
+  The script is static so that one release signature covers every copy: it
+  is embedded in Control (`internal/agentinstall/install.sh`), served
+  byte for byte at `GET /install.sh` and published as the release asset
+  `agent-install.sh`. A static script cannot know its Control or node, so
+  the command names them:
+  `curl -fsSL https://<control>/install.sh | sudo bash -s -- --control https://<control> --node forward-41 --token <t> [--mirror cn|github]`.
+- **Signature.** The release job signs the script with the official
+  package root (`plugins.official_public_key`, Ed25519 over the exact
+  bytes, base64: the packages archive's `.sig` format) and publishes
+  `agent-install.sh.sig`; the release image ships it and Control serves it
+  at `/install.sh.sig` only when it verifies the embedded script.
+- **Release metadata.** `GET /install/agent.env` (public, rate limited)
+  tells the script the Agent release (`v` + Control's version, H25), the
+  gRPC target, the mirror bases and, when Control holds the release
+  (`agent_install.artifact_dir`, served at `/install/agent/<tag>/<asset>`),
+  its SHA-256. The checksum comes from Control, else GitHub, never from the
+  mirror; a `.sig` next to an Agent asset is verified with the official key.
+- **Node groups are not implemented.** Tokens bind to an existing node:
+  forward nodes have no group model and creating the node on first use needs
+  a change to `agentpki.Enroll`. `--group` is accepted by the parser and
+  refused with that reason.
+- The script follows the steps below except preflight (O2), `--offline` (O2,
+  refused for now), OpenRC (refused), the sysctl drop-in (O2) and uninstall
+  (O3). It runs the Agent as `anixops-agent` with `SupplementaryGroups=anixops-gost`,
+  ambient `CAP_NET_ADMIN CAP_NET_BIND_SERVICE` and the sandbox of section
+  14, installs `anixops-gost.service` from the contract and a polkit rule for
+  it, writes the token to `/var/lib/anixops-agent/enroll.credential` (0600,
+  owned by the Agent, which removes it), removes the legacy runtime of
+  section 10 (the three tables and the clean agent's `v2forward-agent`
+  unit and files) and reports it, then waits for `anix-agent identity
+  --json` to show a valid certificate. Re-running it upgrades in place and
+  keeps the identity; `--reset` enrolls again.
+
 - **The command.** The node list and the node's "部署" section have a "复制安装命令"
   button:
-  `curl -fsSL https://<control>/install.sh | bash -s -- --token <one-time token> [--group <node group>] [--mirror control|cn|github]`.
+  `curl -fsSL https://<control>/install.sh | bash -s -- --token <one-time token> [--group <node group>] [--mirror control|cn|github]`
+  (as built: plus `--control` and `--node`, see the status above).
   The token is an AgentPKI one-time enrollment credential: single use,
   stored as a hash, bound to a node or (new) to a node group, where first
   use creates the node. Proposed default lifetime 1 hour (today's default
@@ -1406,7 +1452,13 @@ before Control is upgraded:
    Control: the `inet v2b_forward` and `ip v2b_forward` tables (the Ansible
    path), the `ip anixops_forward` table (the canary Agent plugin), and the
    gost services the flux runtime and the clean agent created. Like the
-   uninstaller (section 9), it touches no other table or service.
+   uninstaller (section 9), it touches no other table or service. (O1, as
+   built: the three tables and the clean agent's `v2forward-agent` unit,
+   `/etc/v2board-forward-agent` and `/usr/local/bin/v2forward-agent`. gost
+   services the flux runtime created through gost's API on NodeX hosts live
+   in an operator-installed gost, which the installer does not touch; step 2
+   of the upgrade below cleans them through NodeX's API. Further unit names
+   are added only once confirmed.)
 2. **Switch every forward node to the new Agent**, NodeX nodes included
    (H20). `anix-control agents transports --legacy-only` must list no node.
 3. **Upgrade Control to v4.2**, with `agent_control.mtls` defaulting to
@@ -1810,8 +1862,16 @@ Decided by the owner (2026-10-04):
   root rather than an intermediate, so the module CA's trust bundle never
   admits link certificates); the Agent's is F3b.
 
-H18, H19, H22 and H23 are still open; each is asked before the work it
+H19, H22 and H23 are still open; each is asked before the work it
 gates.
+
+Decided by the owner (H18): as recommended. Flags `--token`,
+`--group`, `--mirror control|cn|github`, `--offline <file>`; tokens
+single-use, bound to a node or a node group, 1 hour by default and at most
+7 days; `install.sh` served by Control at `/install.sh` and mirrored to
+GitHub releases, signed; re-running the command is safe (extra instances
+are not needed). O1 adds `--control` and `--node` (section 9: the signed
+script is static) and binds tokens to nodes only for now.
 
 Smaller questions raised by this design:
 

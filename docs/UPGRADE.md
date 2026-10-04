@@ -2069,6 +2069,37 @@ That Agent release is not out yet. This section will name its version, and
 the v4.2 upgrade notes will repeat the order
 ([design](architecture/forward-sdk.md#10-upgrade-from-v41)).
 
+#### Installing Or Switching A Node With One Command
+
+Control serves the installer for step 1: on the node's page, **复制安装命令**
+issues a single-use enrollment token for the node (super administrators; 1
+hour by default, at most 7 days) and prints the command to paste on the node
+as root:
+
+```sh
+curl -fsSL https://panel.example.com/install.sh | sudo bash -s -- \
+  --control https://panel.example.com --node forward-41 --token anixagt_...
+```
+
+It installs the Agent as the unprivileged `anixops-agent` service, removes
+the legacy forward runtime of that machine (the tables above and the clean
+agent's `v2forward-agent` service) and lists what it removed, then waits for
+the Agent to enroll. On a node that already runs the Agent the same command
+upgrades it in place and keeps its identity. Before the first command:
+
+- Control needs the built-in agent CA and TLS on its gRPC listener (the
+  checklist above), and an https address nodes reach:
+  `agent_install.public_url` unless the request's origin is already right.
+- The node needs systemd, root, `curl`, `sha256sum` and `unzip`.
+- The installer removes only objects it can name: the three tables and the
+  clean agent. gost services the flux runtime created through gost's API on
+  NodeX hosts live in a gost the operator installed; Control's upgrade
+  cleans them through NodeX's API (step 3), and the installer leaves that
+  gost alone.
+
+The [onboarding guide](guide/agent-onboarding.md) has the details: mirrors,
+`--reset`, verifying the signed script and troubleshooting.
+
 ### Forward Link Certificates: A Second CA Under The Same Key
 
 Encrypted links between forward nodes (gost's TLS, WSS, QUIC and gRPC

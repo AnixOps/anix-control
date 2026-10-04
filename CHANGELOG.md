@@ -74,6 +74,43 @@
     `/var/lib/anixops-gost/tls` (group `anixops-gost`, 0640), keeping the
     bundle current and reloading gost. `docs/UPGRADE.md`, "Forward Link
     Certificates"; `docs/architecture/forward-sdk.md` sections 6.2, 14 and 16.
+- **One-command node onboarding (O1, H18;
+  `docs/guide/agent-onboarding.md`, `docs/architecture/forward-sdk.md`
+  section 9).**
+  - `POST /api/v4/kernel/agents/install-tokens` (super administrators):
+    a single-use AgentPKI enrollment token (`anixagt_`, stored as SHA-256,
+    audited) bound to a proxy or forward node, 1 hour by default and at most
+    7 days, with the install command for each mirror (`control`, `cn`,
+    `github`). Node-group tokens are not supported yet.
+  - The node's 部署 section and the forward node page have
+    **复制安装命令**: a sheet that issues the token and shows each command
+    with a copy button.
+  - `GET /install.sh` serves the Agent installer (public, rate limited),
+    byte for byte the new release asset `agent-install.sh`, which the release
+    job signs with the official package root (`agent-install.sh.sig`); the
+    image serves the signature at `/install.sh.sig` when it verifies.
+    `GET /install/agent.env` gives the script the Agent release, the gRPC
+    target, the mirrors and, with `agent_install.artifact_dir`, the digests
+    of the release Control serves at `/install/agent/<tag>/<asset>`.
+  - The installer (`curl -fsSL https://<control>/install.sh | sudo bash -s --
+    --control ... --node ... --token ...`) checks the platform (amd64/arm64,
+    systemd), verifies the release's SHA-256 from Control or GitHub (and its
+    signature when published), runs the Agent as the unprivileged
+    `anixops-agent` with ambient `CAP_NET_ADMIN`/`CAP_NET_BIND_SERVICE` and a
+    systemd sandbox, installs `anixops-gost.service` and its polkit rule,
+    writes the token to a 0600 credential file the Agent removes, removes the
+    legacy forward runtime (`inet v2b_forward`, `ip v2b_forward`,
+    `ip anixops_forward`, the clean agent's `v2forward-agent`) and reports it,
+    and waits until the Agent has enrolled. Re-running it upgrades in place
+    and keeps the identity; `--reset` enrolls again. `--offline`, `--group`
+    and `uninstall` are refused with a reason (later work).
+  - New `agent_install` settings (`public_url`, `grpc_target`,
+    `agent_version`, `artifact_dir`, `cn_mirror_url`, `signature_file`);
+    `app.subscribe_path` may no longer be `install`, `install.sh` or start
+    with `install/`.
+  - CI runs shellcheck and fake-root tests of the installer
+    (`scripts/tests/test_agent_install.sh`).
+
 - **The last Agent contract gaps before `required` (owner approval of
   2026-10-04: additions only to `anix.agent.v1`).** Older Agents are
   unaffected; `contracts/proto/descriptors.golden` only gains lines.

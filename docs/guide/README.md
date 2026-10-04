@@ -46,6 +46,7 @@ Use this folder when you need implementation detail, clone contracts, runtime op
 | Document | Purpose |
 |------|------|
 | [Node Management](node-management.md) | Node registration, heartbeat, protocol config and operations |
+| [Installing The Agent With One Command](agent-onboarding.md) | Single-use install tokens, the signed `install.sh`, mirrors, re-runs and the legacy forward cleanup |
 | [Subscription System](subscription-system.md) | Subscription groups, templates and formatting |
 | [Client Compatibility](client-compatibility.md) | V2bX/XrayR and related compatibility notes |
 | [Loon Subscriptions](loon-subscriptions.md) | User-Agent detection and native Loon node syntax output |
