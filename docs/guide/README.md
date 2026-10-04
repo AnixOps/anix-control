@@ -26,6 +26,7 @@ Use this folder when you need implementation detail, clone contracts, runtime op
 |------|------|
 | [Forwarding (v4.2)](forwarding.md) | The v4.2 forwarding pages: routes, hop chains, the inventory, node settings and diagnosis |
 | [Forward Relay Onboarding](forward-relay-onboarding.md) | Exact operator checklist for making a relay actually join the runtime |
+| [Forward Entry HA Through DNS](forward-entry-ha.md) | Keeping a route's entry name on its healthy entry nodes: provider credentials with the least permissions, DDNS and CNAME bindings, status |
 | [Forward Runtime Operations](forward-tunnel-runtime-ops.md) | Runtime ownership, evidence chain, and what counts as a real relay attachment |
 | [Forward/Tunnel Manual Smoke Tests](forward-tunnel-smoke-test.md) | Manual and real-machine proof steps for `gost`, `nftables_ansible`, and legacy `iptables_ansible` |
 | [NodeX Internal Extension Boundary](nodex-internal-extension.md) | Where the internal NodeX and local ansible execution planes stop and the public Flux surface begins |

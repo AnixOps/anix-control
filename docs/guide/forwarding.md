@@ -86,8 +86,11 @@ Control to plan the route without storing it.
 
 1. **基本信息.** Name and `key=value` labels.
 2. **入口监听.** Address, port (自动 or 指定) and protocol. With more than
-   one entry node, 入口域名 appears: point that DNS name at the entry nodes
-   yourself; Control does not manage it yet.
+   one entry node, 入口域名 appears. The page does not manage DNS yet: point
+   that name at the entry nodes yourself, or bind the route to a DNS
+   provider through the API or `anix-control forward dns` so Control keeps
+   it on the healthy entries
+   ([Forward Entry HA Through DNS](forward-entry-ha.md)).
 3. **跳链.** Hop 1 is the entry, the last hop the exit, the others relays.
    - Add nodes to each hop. With several nodes, their order is the failover
      priority.
