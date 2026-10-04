@@ -2,8 +2,8 @@
 # shellcheck disable=SC2317 # the fakes are called by the sourced installer.
 # Tests of the Agent installer (internal/agentinstall/install.sh) in a fake
 # root: systemctl, curl, nft, tc, sysctl, the preflight probes (uname, ss,
-# ip, iptables, pkaction, modinfo, df), the user tools and chown are shell
-# functions, the Agent is a fake binary that "enrolls" when systemctl
+# ip, iptables, pkaction, modinfo; df is real unless FAKE_DF_KB is set),
+# the user tools and chown are shell functions, the Agent is a fake binary that "enrolls" when systemctl
 # restarts it. Nothing here touches or reads the host's system.
 
 set -Eeuo pipefail

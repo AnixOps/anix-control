@@ -138,7 +138,10 @@ AF_UNIX`. gost runs as `anixops-gost` with `CAP_NET_BIND_SERVICE` only.
 
 The same command is safe to repeat. With a valid identity it upgrades the
 Agent in place, keeps the identity and the configuration, and leaves the
-token unused (it expires). A failed run can be re-run after fixing the cause.
+token unused (it expires). A failed run can be re-run after fixing the cause. Re-runs
+run the preflight checks too: a check that now fails (for example a moved
+gRPC port) stops the upgrade until it is fixed or `--skip-preflight` is
+given.
 
 To move the machine to another node, or to enroll again after its identity
 was revoked, issue a new command for the node and add `--reset`: the script
