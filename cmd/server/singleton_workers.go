@@ -6,6 +6,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/v4/internal/agentstreams"
 	"github.com/AnixOps/anix-control/v4/internal/agentupgrade"
 	"github.com/AnixOps/anix-control/v4/internal/database"
@@ -23,6 +24,17 @@ const (
 	// the leader dies without releasing the lease.
 	singletonWorkerLeaseTTL = 30 * time.Second
 )
+
+// localAgentSession reports whether this process holds node's Agent
+// Control session.
+func localAgentSession(node agentcontrol.AgentNode) bool {
+	streams := grpcserver.GetAgentStreams()
+	if streams == nil {
+		return false
+	}
+	_, ok := streams.Session(node)
+	return ok
+}
 
 // runSingletonWorkers runs the workers that must not run in two processes at
 // once and returns after all of them stopped. The forward job executors
@@ -78,6 +90,9 @@ func runSingletonWorkers(ctx context.Context, bridgeEnabled bool) {
 	// The forwarding state's timed work: expired routes are paused,
 	// request ids are forgotten after a week.
 	run(kernelforward.New(database.Get()).Run)
+	// Entry HA through DNS (forward-sdk.md section 7.4, L2): keeps each
+	// bound route's DNS records on its healthy entry nodes.
+	run((&kernelforward.EntryHA{Service: kernelforward.New(database.Get()), LocalSession: localAgentSession}).Run)
 	// Staged Agent upgrades (forward-sdk.md section 9, O4): the campaign's
 	// batches are offered on, and closed by, this process's Agent streams.
 	run((&agentupgrade.Worker{

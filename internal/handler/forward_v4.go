@@ -15,12 +15,13 @@ import (
 // dispatches it as the package's manifest control route
 // /api/v4/plugins/forward/*, so the package host answers it on
 // ForwardControl (kernel.forward.v1) like any other control route. Two
-// checks stay in the kernel because only it can make them: a DELETE
-// needs a super administrator (as route-mode switches and install tokens
-// do), and the paths config/editions.json reserves for the commercial
-// edition do not exist in the community edition. The list answers
-// (GET /routes, /nodes, /ansible-machines) learn the first rule through the
-// principal's super_admin, so a UI shows delete only to those who may.
+// checks stay in the kernel because only it can make them: a DELETE, and
+// a write of a DNS provider (whose credentials it carries), needs a super
+// administrator (as route-mode switches and install tokens do), and the
+// paths config/editions.json reserves for the commercial edition do not
+// exist in the community edition. The list answers (GET /routes, /nodes,
+// /ansible-machines) learn the first rule through the principal's
+// super_admin, so a UI shows delete only to those who may.
 
 const (
 	// ForwardV4Prefix is the forward package's v4 API.
@@ -54,6 +55,22 @@ func forwardV4ControlPath(requestPath string) (string, bool) {
 	return forwardV4ControlPrefix + rest, true
 }
 
+// forwardV4DNSProviders is where DNS provider credentials are written
+// (entry HA, forward-sdk.md section 7.4, L2).
+const forwardV4DNSProviders = ForwardV4Prefix + "/dns/providers"
+
+// forwardV4NeedsSuperAdmin: every DELETE, and every write of a DNS
+// provider (its credentials), needs a super administrator.
+func forwardV4NeedsSuperAdmin(method, requestPath string) bool {
+	if method == http.MethodDelete {
+		return true
+	}
+	if method == http.MethodGet || method == http.MethodHead || method == http.MethodOptions {
+		return false
+	}
+	return requestPath == forwardV4DNSProviders || strings.HasPrefix(requestPath, forwardV4DNSProviders+"/")
+}
+
 // ForwardGateway serves /api/v4/forward/*.
 func (h *KernelHandler) ForwardGateway(c *gin.Context) {
 	if edition.For(config.Get()).HidesPath(c.Request.URL.Path) {
@@ -67,14 +84,15 @@ func (h *KernelHandler) ForwardGateway(c *gin.Context) {
 	}
 	_, isList := forwardV4ListPaths[strings.TrimSuffix(controlPath, "/")]
 	isList = isList && c.Request.Method == http.MethodGet
-	if c.Request.Method == http.MethodDelete || isList {
+	needsSuperAdmin := forwardV4NeedsSuperAdmin(c.Request.Method, c.Request.URL.Path)
+	if needsSuperAdmin || isList {
 		allowed, err := service.IsSuperAdmin(h.db, kernelActorID(c))
 		if err != nil {
 			kernelDBError(c, err)
 			return
 		}
-		if c.Request.Method == http.MethodDelete && !allowed {
-			kernelError(c, http.StatusForbidden, "super_admin_required", "only a super administrator may delete forward routes and nodes")
+		if needsSuperAdmin && !allowed {
+			kernelError(c, http.StatusForbidden, "super_admin_required", "only a super administrator may delete forward resources or change DNS provider credentials")
 			return
 		}
 		if isList {

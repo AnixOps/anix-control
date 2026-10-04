@@ -149,3 +149,36 @@ func TestForwardGatewayTellsTheListsWhetherTheCallerMayDelete(t *testing.T) {
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 	require.NotContains(t, principal(), "super_admin")
 }
+
+// DNS provider writes carry credentials: they need a super administrator,
+// while reads and binding writes stay with every administrator (L2).
+func TestForwardGatewayDNSProviderWritesNeedSuperAdmin(t *testing.T) {
+	kernel, hosts := installForwardPackage(t, config.EditionCommunity)
+	for _, request := range []struct{ method, path string }{
+		{http.MethodPost, "/api/v4/forward/dns/providers"},
+		{http.MethodPut, "/api/v4/forward/dns/providers/3"},
+		{http.MethodDelete, "/api/v4/forward/dns/providers/3"},
+		{http.MethodDelete, "/api/v4/forward/dns/bindings/3"},
+	} {
+		hosts.input = pluginhost.DispatchInput{}
+		recorder := performKernelHandlerRequestWithSetup(t, request.method, request.path, `{}`, "/api/v4/forward/*route", kernel.ForwardGateway, asAdmin(8))
+		require.Equal(t, http.StatusForbidden, recorder.Code, request.path)
+		require.Contains(t, recorder.Body.String(), "super_admin_required")
+		require.Empty(t, hosts.input.RouteID, "a refused write never reaches the package")
+	}
+	for _, request := range []struct {
+		method, path string
+		user         uint
+	}{
+		{http.MethodGet, "/api/v4/forward/dns/providers", 8},
+		{http.MethodPost, "/api/v4/forward/dns/bindings", 8},
+		{http.MethodGet, "/api/v4/forward/routes/01J/dns", 8},
+		{http.MethodPost, "/api/v4/forward/dns/providers", 7},
+		{http.MethodPut, "/api/v4/forward/dns/providers/3", 7},
+	} {
+		recorder := performKernelHandlerRequestWithSetup(t, request.method, request.path, `{}`, "/api/v4/forward/*route", kernel.ForwardGateway, asAdmin(request.user))
+		require.Equal(t, http.StatusOK, recorder.Code, request.path)
+	}
+	require.False(t, forwardV4NeedsSuperAdmin(http.MethodPost, "/api/v4/forward/dns/providersx"))
+	require.True(t, forwardV4NeedsSuperAdmin(http.MethodPatch, "/api/v4/forward/dns/providers/1"))
+}
