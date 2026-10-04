@@ -17,13 +17,13 @@ const forwardCommandUsage = `usage:
 reset-node moves a node's forwarding generation (node_ref proxy-<id> or
 forward-<id>) above both the one Control stored and the one the node's
 latest report says its Agent holds, keeping the node's hops, so the Agent
-applies the node's state again. Control does this by itself when a node
-reports a generation ahead of the stored one (after its database was reset
-or restored; forward-sdk.md section 8.2); reset-node is for when that is
-not enough, such as a node that has not reported since. The running Control
-sends the node its configuration at its next refresh, within a minute. It
-prints the node's previous, reported and new generation as JSON and writes
-the change to the audit log as system/cli.
+applies the node's current state again (after its rules were changed by
+hand, or to drive a push again). A reset or restored Control database needs
+no command: a node that reports a generation ahead of the stored one is
+recovered on that report, within a minute (forward-sdk.md section 8.2). The
+running Control sends the node its configuration at its next refresh,
+within a minute. It prints the node's previous, reported and new generation
+as JSON and writes the change to the audit log as system/cli.
 
 The config file comes from ANIX_CONTROL_CONFIG or config/config.yaml.`
 
