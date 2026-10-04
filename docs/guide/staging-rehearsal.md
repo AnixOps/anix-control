@@ -36,7 +36,7 @@ The tooling is in `scripts/staging/`:
 | 1 | knowledge, ticket | knowledgecompat, ticketcompat |
 | 2 | notification, platform, machine-telemetry, protocol-runtime | notificationcompat, platformcompat, machinetelemetrycompat, protocolruntimecompat |
 | 3 | plan, order, payment, affiliate | plancompat, ordercompat, paymentcompat, affiliatecompat |
-| 4 | subscription, forward, proxy-node, gost-mesh, wireguard | subscriptioncompat, forwardcompat, proxynodecompat, gostmeshcompat, wireguardcompat |
+| 4 | subscription, forward, proxy-node, gost-mesh, wireguard | subscriptioncompat, proxynodecompat, gostmeshcompat, wireguardcompat (`forwardcompat` was deleted in v4.2, F5d: the forward package serves no v2 route natively) |
 
 The roadmap named twelve packages; the four others with `native-flagged`
 routes go where their routes belong: machine-telemetry (the admin dashboard

@@ -38,7 +38,7 @@ var Batches = []Batch{
 		Parity: []string{"plancompat", "ordercompat", "paymentcompat", "affiliatecompat"}},
 	{Number: 4, Name: "subscription + forward + proxy-node (+ gost-mesh, wireguard)",
 		Packages: []string{"subscription", "forward", "proxy-node", "gost-mesh", "wireguard"},
-		Parity:   []string{"subscriptioncompat", "forwardcompat", "proxynodecompat", "gostmeshcompat", "wireguardcompat"}},
+		Parity:   []string{"subscriptioncompat", "proxynodecompat", "gostmeshcompat", "wireguardcompat"}},
 }
 
 // CatalogRoute is one row of config/package-extraction.json.
