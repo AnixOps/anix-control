@@ -402,7 +402,9 @@ with the API answered from the fixture.
   best-practice rules on 23 admin and user screens, light and dark, 1440 and
   390 px. Serious and critical findings fail. It also checks the skip link,
   the landmarks, one `h1` per page and focus returning to the opener when a
-  dialog closes. Add a screen to `SCREENS` when a page is added.
+  dialog closes, an open row menu and the account menu (no finding of any
+  impact), the plugin drawer's tabs (WAI-ARIA keys) and the topology
+  workspace's field names. Add a screen to `SCREENS` when a page is added.
 - **Visual regression** (`web/e2e/visual/visual.spec.js`,
   `playwright.visual.config.js`): 28 full-page screenshots of 12 key screens
   (sign-in, user home, subscription, dashboard, users, node detail, forward
@@ -448,14 +450,24 @@ takes the left and right insets in landscape. Checked on an emulated
 iPhone 13 with a 47 px notch and a 34 px home indicator
 (`Emulation.setSafeAreaInsetsOverride`).
 
-Known follow-ups: an open `UiMenu` is portalled to `<body>`, outside the
-landmarks (axe "region", moderate, only while a menu is open); moving the
-portal into a landmark would put the fixed-position menu under the top
-bar's `backdrop-filter` or a dialog's transform, so it waits for a menu
-layer design. The plugin detail drawer's install-target tabs are still a
-hand-built tablist without arrow keys (move to `UiTabs`), and the topology
-workspace still has native text inputs and textareas (move to
-`UiTextField` / `UiTextarea`).
+Open menus: Reka renders a drop-down menu in a portal on `<body>`, outside
+every landmark, so axe reported its items as "region" content (moderate).
+Moving the portal into the page's landmark is not an option (a
+fixed-position menu would sit under the top bar's `backdrop-filter` or a
+dialog's transform), so `UiMenu` and the account menu portal into their own
+layer, made by `ui/composables/useMenuLayer.js`: a `region` on `<body>`
+named after the menu (the trigger's `label`, "Menu" without one), attached
+when the menu opens and removed when it closes. It exists only while the menu
+is open, so there is no empty landmark to list and Reka's hide-others pass
+for a modal dialog never marks it `aria-hidden`; a menu opened inside a
+dialog stays readable. `e2e/a11y.spec.js` opens a row menu and the account
+menu and expects no axe finding at all. Not done: the `UiSelect` and
+`UiCombobox` lists are still portalled to `<body>` (axe "region" while open).
+
+Plugin detail drawer: the install targets are `UiTabs variant="segmented"`
+(Left/Right, Home/End, one Tab stop), and the topology workspace's text
+fields are `UiTextField` / `UiTextarea` with real labels; the JSON help is
+the field's description.
 
 ## App shell
 

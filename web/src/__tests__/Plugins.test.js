@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
+import { screen } from '@testing-library/vue'
+import userEvent from '@testing-library/user-event'
 import { inBody } from './helpers/feedback'
 import { nextTick } from 'vue'
 import Plugins from '@/views/admin/Plugins.vue'
@@ -118,12 +120,18 @@ function mountPlugins() {
   return wrapper
 }
 
+// The drawer's install targets are tabs (UiTabs): choose one by its id.
+// No delay between the pointer events: some tests run on fake timers.
+async function chooseTarget(target) {
+  await userEvent.setup({ delay: null }).click(screen.getByRole('tab', { name: target }))
+}
+
 async function openTarget(wrapper, target) {
   const row = bodyGet('[data-testid="plugin-row-protocol-runtime"]')
   row.element.focus()
   await row.trigger('click')
   await flushPromises()
-  await bodyGet(`[data-target="${target}"]`).trigger('click')
+  await chooseTarget(target)
   return bodyGet('[data-testid="plugin-detail-drawer"]')
 }
 
@@ -486,7 +494,7 @@ describe('Plugin Center', () => {
     await nextTick()
     expect(kernelApi.getKernelInstallationConfig).toHaveBeenCalledWith(1)
     await bodyGet('[data-testid="plugin-config-dialog"]').find('button').trigger('click')
-    await bodyGet('[data-target="agent"]').trigger('click')
+    await chooseTarget('agent')
     await drawer.get('[data-action="configure"]').trigger('click')
     await nextTick()
     expect(kernelApi.getKernelInstallationConfig).toHaveBeenCalledWith(2)

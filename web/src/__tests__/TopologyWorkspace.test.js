@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from 'vitest'
 import { flushPromises, mount } from '@vue/test-utils'
 import { inBody } from './helpers/feedback'
 import { nextTick } from 'vue'
+import { screen } from '@testing-library/vue'
 import OperationTimeline from '@/components/admin/OperationTimeline.vue'
 import TopologyWorkspace from '@/components/admin/TopologyWorkspace.vue'
 import UiSegmentedControl from '@/ui/UiSegmentedControl.vue'
@@ -264,6 +265,44 @@ describe('TopologyWorkspace', () => {
     expect(wrapper.emitted('create-topology')).toEqual([[
       { name: 'China egress', service_scope: 'forward', description: 'Regional egress rollout' },
     ]])
+    wrapper.unmount()
+  })
+})
+
+describe('TopologyWorkspace field labels', () => {
+  // Every text control has a real <label> (UiTextField / UiTextarea), so it
+  // has an accessible name and a click on the label focuses it.
+  it('names every text field of the revision editor', async () => {
+    const wrapper = mountWorkspace()
+    await nextTick()
+    await nextTick()
+
+    for (const [name, id] of [['Rollout group', 'topology-rollout-group'], ['Revision message', 'topology-revision-message'], ['Graph JSON', 'topology-editor-json']]) {
+      const field = screen.getByRole('textbox', { name })
+      expect(field.id).toBe(id)
+      const label = document.querySelector(`label[for="${id}"]`)
+      expect(label.textContent.trim()).toBe(name)
+    }
+    // The JSON help is the field's description, not a loose paragraph.
+    const json = screen.getByRole('textbox', { name: 'Graph JSON' })
+    expect(document.getElementById(json.getAttribute('aria-describedby')).textContent).toContain('Secrets must be referenced by secret_id')
+    // The selects keep their labels too.
+    expect(screen.getByRole('combobox', { name: 'Revision' })).toBeTruthy()
+    expect(screen.getByRole('combobox', { name: 'Failure policy' })).toBeTruthy()
+    wrapper.unmount()
+  })
+
+  it('names the fields of the create form and keeps them locked while saving', async () => {
+    const wrapper = mountWorkspace({ topology: null, revisionID: 0, revisionDetail: null })
+    await nextTick()
+
+    expect(screen.getByRole('textbox', { name: 'Name' }).id).toBe('new-topology-name')
+    expect(screen.getByRole('textbox', { name: 'Description' }).id).toBe('new-topology-description')
+    expect(screen.getByRole('combobox', { name: 'Scope' })).toBeTruthy()
+
+    await wrapper.setProps({ saving: true })
+    expect(screen.getByRole('textbox', { name: 'Name' }).disabled).toBe(true)
+    expect(screen.getByRole('textbox', { name: 'Description' }).disabled).toBe(true)
     wrapper.unmount()
   })
 })

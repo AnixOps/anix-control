@@ -12,10 +12,14 @@
     </template>
     <template v-if="createMode">
       <form class="creation-form" @submit.prevent="createTopology">
-        <div class="form-group">
-          <label for="new-topology-name">{{ t('control.topology.name') }}</label>
-          <input id="new-topology-name" v-model.trim="newTopology.name" type="text" maxlength="160" :disabled="saving" />
-        </div>
+        <UiTextField
+          id="new-topology-name"
+          v-model.trim="newTopology.name"
+          size="md"
+          :label="t('control.topology.name')"
+          maxlength="160"
+          :disabled="saving"
+        />
         <UiSelect
           id="new-topology-scope"
           v-model="newTopology.serviceScope"
@@ -25,10 +29,13 @@
           :options="scopeOptions"
           :disabled="saving"
         />
-        <div class="form-group">
-          <label for="new-topology-description">{{ t('control.table.description') }}</label>
-          <textarea id="new-topology-description" v-model.trim="newTopology.description" rows="3" :disabled="saving"></textarea>
-        </div>
+        <UiTextarea
+          id="new-topology-description"
+          v-model.trim="newTopology.description"
+          :label="t('control.table.description')"
+          :rows="3"
+          :disabled="saving"
+        />
         <p v-if="visibleError" class="workspace-error" role="alert">{{ visibleError }}</p>
       </form>
     </template>
@@ -45,10 +52,14 @@
             :disabled="loading || saving || revisions.length === 0"
             @update:model-value="selectRevision"
           />
-          <div class="form-group">
-            <label for="topology-rollout-group">{{ t('control.table.rolloutGroup') }}</label>
-            <input id="topology-rollout-group" v-model.trim="rolloutGroup" type="text" autocomplete="off" :disabled="saving" />
-          </div>
+          <UiTextField
+            id="topology-rollout-group"
+            v-model.trim="rolloutGroup"
+            size="md"
+            :label="t('control.table.rolloutGroup')"
+            autocomplete="off"
+            :disabled="saving"
+          />
           <UiSelect
             id="topology-failure-policy"
             v-model="failurePolicy"
@@ -60,10 +71,14 @@
           />
         </div>
 
-        <div class="form-group">
-          <label for="topology-revision-message">{{ t('control.topology.message') }}</label>
-          <input id="topology-revision-message" v-model.trim="message" type="text" maxlength="500" :disabled="saving" />
-        </div>
+        <UiTextField
+          id="topology-revision-message"
+          v-model.trim="message"
+          size="md"
+          :label="t('control.topology.message')"
+          maxlength="500"
+          :disabled="saving"
+        />
         <UiSegmentedControl
           v-model="graphView"
           class="graph-view-switch"
@@ -72,11 +87,17 @@
           :options="[{ value: 'json', label: t('control.topology.viewJSON') }, { value: 'graph', label: t('control.topology.viewGraph') }]"
           data-testid="topology-view-switch"
         />
-        <div v-show="graphView === 'json'" class="form-group">
-          <label for="topology-editor-json">{{ t('control.topology.graphJSON') }}</label>
-          <textarea id="topology-editor-json" v-model="json" rows="16" spellcheck="false" class="json-textarea" :disabled="saving"></textarea>
-          <p class="field-help">{{ t('control.topology.graphHelp') }}</p>
-        </div>
+        <UiTextarea
+          v-show="graphView === 'json'"
+          id="topology-editor-json"
+          v-model="json"
+          class="json-textarea"
+          :label="t('control.topology.graphJSON')"
+          :help="t('control.topology.graphHelp')"
+          :rows="16"
+          spellcheck="false"
+          :disabled="saving"
+        />
         <TopologyGraph
           v-if="graphView === 'graph'"
           data-testid="topology-graph-preview"
@@ -180,6 +201,8 @@ import UiButton from '@/ui/UiButton.vue'
 import UiDialog from '@/ui/UiDialog.vue'
 import UiSegmentedControl from '@/ui/UiSegmentedControl.vue'
 import UiSelect from '@/ui/UiSelect.vue'
+import UiTextarea from '@/ui/UiTextarea.vue'
+import UiTextField from '@/ui/UiTextField.vue'
 import TopologyGraph from './TopologyGraph.vue'
 
 const props = defineProps({
@@ -459,16 +482,10 @@ function stateClass(state) {
 .workspace-body { display: grid; gap: var(--space-4); }
 .creation-form { display: grid; gap: var(--space-4); }
 .editor-toolbar { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--space-3); }
-.form-group { display: grid; min-width: 0; gap: var(--space-2); }
-.form-group label { color: var(--label-2); font-size: var(--type-caption-size); font-weight: var(--weight-bold); }
-.form-group input, .form-group textarea { box-sizing: border-box; width: 100%; }
 .form-select { min-width: 0; }
-.form-group textarea { resize: vertical; }
-.json-textarea { font-family: var(--font-mono); font-size: var(--type-caption-size); }
+.json-textarea :deep(textarea) { font-family: var(--font-mono); font-size: var(--type-caption-size); }
 .graph-view-switch { justify-self: start; }
-.field-help, .workspace-error { margin: 0; overflow-wrap: anywhere; }
-.field-help { color: var(--label-2); font-size: var(--type-caption-size); }
-.workspace-error { color: var(--danger); }
+.workspace-error { margin: 0; color: var(--danger); overflow-wrap: anywhere; }
 .topology-dirty { margin: 0; padding: var(--space-2) var(--space-3); border-left: 3px solid var(--warning); color: var(--warning); background: var(--warning-soft); font-size: var(--type-caption-size); }
 .topology-validation, .topology-preview, .deployment-status { padding: var(--space-3); border-left: 3px solid var(--warning); background: var(--warning-soft); }
 .topology-validation.is-valid { border-left-color: var(--success); background: var(--success-soft); }
@@ -497,14 +514,5 @@ function stateClass(state) {
 .confirmation-actions { display: flex; justify-content: flex-end; gap: var(--space-2); }
 @media (max-width: 720px) {
   .editor-toolbar { grid-template-columns: 1fr; }
-}
-
-/* Phones: 16 px fields so iOS Safari does not zoom on focus. */
-@media (max-width: 833px) {
-  input,
-  textarea,
-  select {
-    font-size: 16px !important;
-  }
 }
 </style>

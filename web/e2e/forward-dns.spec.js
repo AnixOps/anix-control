@@ -103,6 +103,32 @@ test('binds a new two-entry route’s hostname after creating it', async ({ page
   expect(order).toEqual(['/api/v4/forward/routes', '/api/v4/forward/dns/bindings'])
 })
 
+test('the binding picker shows Required only after a field was left and keeps the zone in step with the hostname', async ({ page }) => {
+  await openScreen(page, 'admin-forward-editor-blank', { clock: true })
+  await page.getByLabel('Name').first().fill('e2e-ha-timing')
+  await chooseNode(page, 0, 'hk-edge-01')
+  await chooseNode(page, 0, 'hk-edge-02')
+  await page.getByLabel('Entry hostname').fill('ha.example.net')
+
+  const picker = page.getByTestId('forward-dns-picker')
+  await picker.getByRole('switch', { name: 'Keep this hostname on the healthy entries' }).click()
+  // A fresh form: nothing is flagged yet, and the zone is the guess.
+  await expect(picker.getByLabel('Zone')).toHaveValue('example.net')
+  await expect(picker.getByText('Required', { exact: true })).toHaveCount(0)
+  // Tabbing through the provider without choosing one flags it.
+  await picker.getByRole('combobox', { name: 'DNS provider' }).focus()
+  await page.keyboard.press('Tab')
+  await expect(picker.getByText('Required', { exact: true })).toBeVisible()
+  await expect(picker.getByRole('combobox', { name: 'DNS provider' })).toHaveAttribute('aria-invalid', 'true')
+
+  // The zone follows the entry domain, until the user types one.
+  await page.getByLabel('Entry hostname').fill('ha.example.org')
+  await expect(picker.getByLabel('Zone')).toHaveValue('example.org')
+  await picker.getByLabel('Zone').fill('typed.example.test')
+  await page.getByLabel('Entry hostname').fill('ha.example.com')
+  await expect(picker.getByLabel('Zone')).toHaveValue('typed.example.test')
+})
+
 test('changes a stored binding with the whole object and shows the CNAME instruction', async ({ page }) => {
   const writes = recordWrites(page)
   await openScreen(page, 'admin-forward-editor-ha', { clock: true })

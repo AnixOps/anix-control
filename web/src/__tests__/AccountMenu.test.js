@@ -44,6 +44,10 @@ describe('AccountMenu.vue', () => {
     expect(trigger.getAttribute('aria-haspopup')).toBe('menu')
     await user.click(trigger)
     const menu = await screen.findByRole('menu')
+    // Portalled out of the page, but inside a region named like the trigger
+    // (no axe "region" finding), which goes away with the menu.
+    const region = screen.getByRole('region', { name: 'Account menu: Administrator' })
+    expect(region.contains(menu)).toBe(true)
     const items = within(menu).getAllByRole('menuitem').map(item => item.querySelector('.shell-menu__label').textContent.trim())
     expect(items).toEqual(['Account', 'Appearance', 'Language', 'About', 'Sign out'])
     // The submenus show the current choice.
@@ -66,7 +70,20 @@ describe('AccountMenu.vue', () => {
     await user.keyboard('{Escape}')
     await waitFor(() => expect(screen.queryByRole('menu')).toBeNull())
     expect(menu.isConnected).toBe(false)
+    await waitFor(() => expect(screen.queryByRole('region', { name: /Account menu/ })).toBeNull())
     expect(document.activeElement).toBe(trigger)
+  })
+
+  it('keeps the submenus in the same region', async () => {
+    const user = userEvent.setup()
+    await renderMenu()
+    await user.click(screen.getByRole('button', { name: /Account menu/ }))
+    const appearance = await screen.findByRole('menuitem', { name: /Appearance/ })
+    appearance.focus()
+    await user.keyboard('{ArrowRight}')
+    const dark = await screen.findByRole('menuitemradio', { name: 'Dark' })
+    expect(screen.getAllByRole('region', { name: /Account menu/ })).toHaveLength(1)
+    expect(screen.getByRole('region', { name: /Account menu/ }).contains(dark)).toBe(true)
   })
 
   it('switches the theme from the appearance submenu (system, light, dark)', async () => {

@@ -45,6 +45,7 @@ const DnsProviders = (await import('@/views/admin/forward/DnsProviders.vue')).de
 const DnsProviderSheet = (await import('@/components/forward/DnsProviderSheet.vue')).default
 const EntryHaCard = (await import('@/components/forward/EntryHaCard.vue')).default
 const RouteEditor = (await import('@/views/admin/forward/RouteEditor.vue')).default
+const DnsBindingPicker = (await import('@/components/forward/DnsBindingPicker.vue')).default
 
 const KINDS = [
   { kind: 'DNS_PROVIDER_KIND_CLOUDFLARE', name: 'Cloudflare', config: ['endpoint'], required_config: [], credentials: ['api_token'] },
@@ -429,6 +430,37 @@ describe('route editor binding picker (D14)', () => {
     expect(wrapper.get('[data-testid="forward-save"]').attributes('disabled')).toBeUndefined()
   })
 
+  it('shows no Required error on a freshly enabled binding, only after the field was left', async () => {
+    const wrapper = await mountEditor()
+    component(wrapper, UiSwitch, 'Keep this hostname on the healthy entries').vm.$emit('update:modelValue', true)
+    await flushPromises()
+    const picker = wrapper.get('[data-testid="forward-dns-picker"]')
+    // The provider is required and empty, so Save waits: but no error yet.
+    expect(wrapper.get('[data-testid="forward-save"]').attributes('disabled')).toBeDefined()
+    expect(picker.find('.ui-field__error').text()).toBe('')
+    expect(picker.text()).not.toContain('Required')
+    // Leaving the provider field untouched shows why.
+    await picker.get('#fwd-f-dns-provider-id').trigger('focusout')
+    expect(picker.get('#fwd-f-dns-provider-id').element.closest('.ui-field').querySelector('.ui-field__error').textContent).toContain('Required')
+  })
+
+  it('moves the zone with the entry hostname until the user types one', async () => {
+    const wrapper = await mountEditor()
+    component(wrapper, UiSwitch, 'Keep this hostname on the healthy entries').vm.$emit('update:modelValue', true)
+    await flushPromises()
+    const zone = () => wrapper.get('#fwd-f-dns-zone').element.value
+    expect(zone()).toBe('example.net')
+
+    await wrapper.get('#fwd-f-listen-entry-hostname').setValue('edge.example.org')
+    await flushPromises()
+    expect(zone()).toBe('example.org')
+
+    await wrapper.get('#fwd-f-dns-zone').setValue('custom.example.test')
+    await wrapper.get('#fwd-f-listen-entry-hostname').setValue('edge.example.com')
+    await flushPromises()
+    expect(zone()).toBe('custom.example.test')
+  })
+
   it('shows the CNAME target to copy in CNAME mode', async () => {
     const wrapper = await mountEditor()
     component(wrapper, UiSwitch, 'Keep this hostname on the healthy entries').vm.$emit('update:modelValue', true)
@@ -453,5 +485,129 @@ describe('route editor binding picker (D14)', () => {
     await flushPromises()
     expect(toastMessages('error')[0]).toContain('The route is saved, but its DNS binding was not')
     expect(router.push).toHaveBeenCalledWith('/admin/forward/routes/01J')
+  })
+})
+
+describe('binding picker: errors wait for the user, the zone follows the hostname', () => {
+  function mountPicker(props = {}) {
+    const wrapper = track(mount(DnsBindingPicker, {
+      attachTo: document.body,
+      props: {
+        modelValue: { ...model.bindingDraft(null, 'edge.example.net'), enabled: true },
+        hostname: 'edge.example.net',
+        errors: { provider_id: 'Required' },
+        'onUpdate:modelValue': value => wrapper.setProps({ modelValue: value }),
+        ...props
+      },
+      global: { stubs: { RouterLink: true } }
+    }))
+    return wrapper
+  }
+  const fieldError = (wrapper, id) => wrapper.get(`#${id}`).element.closest('.ui-field').querySelector('.ui-field__error').textContent.trim()
+  const lastZone = wrapper => wrapper.emitted('update:modelValue').at(-1)[0].zone
+
+  it('hides an empty field’s error until focus has left it', async () => {
+    const wrapper = mountPicker()
+    await flushPromises()
+    expect(fieldError(wrapper, 'fwd-f-dns-provider-id')).toBe('')
+    expect(wrapper.get('#fwd-f-dns-provider-id').attributes('aria-invalid')).toBeUndefined()
+
+    await wrapper.get('#fwd-f-dns-provider-id').trigger('focusout')
+    expect(fieldError(wrapper, 'fwd-f-dns-provider-id')).toBe('Required')
+    expect(wrapper.get('#fwd-f-dns-provider-id').attributes('aria-invalid')).toBe('true')
+  })
+
+  it('does not count focus moving into the open provider list as leaving the field', async () => {
+    const wrapper = mountPicker()
+    await flushPromises()
+    const list = document.createElement('div')
+    list.setAttribute('role', 'listbox')
+    const option = document.createElement('div')
+    list.append(option)
+    document.body.append(list)
+    await wrapper.get('#fwd-f-dns-provider-id').trigger('focusout', { relatedTarget: option })
+    expect(fieldError(wrapper, 'fwd-f-dns-provider-id')).toBe('')
+    list.remove()
+    // Focus leaving for the page does.
+    await wrapper.get('#fwd-f-dns-provider-id').trigger('focusout', { relatedTarget: document.body })
+    expect(fieldError(wrapper, 'fwd-f-dns-provider-id')).toBe('Required')
+  })
+
+  it('holds the CNAME name’s and the zone’s errors back until each field was left', async () => {
+    const wrapper = mountPicker({
+      modelValue: { ...model.bindingDraft(null, 'hk.customer.example'), enabled: true, provider_id: '1', mode: 'DNS_BINDING_MODE_CNAME' },
+      hostname: 'hk.customer.example',
+      errors: { record_name: 'Required', zone: 'The name must be inside the zone.' }
+    })
+    await flushPromises()
+    expect(fieldError(wrapper, 'fwd-f-dns-record-name')).toBe('')
+    expect(fieldError(wrapper, 'fwd-f-dns-zone')).toBe('')
+    await wrapper.get('#fwd-f-dns-record-name').trigger('focusout')
+    expect(fieldError(wrapper, 'fwd-f-dns-record-name')).toBe('Required')
+    expect(fieldError(wrapper, 'fwd-f-dns-zone')).toBe('')
+    await wrapper.get('#fwd-f-dns-zone').trigger('focusout')
+    expect(fieldError(wrapper, 'fwd-f-dns-zone')).toBe('The name must be inside the zone.')
+  })
+
+  it('starts clean again when the binding is turned off and on', async () => {
+    const wrapper = mountPicker()
+    await flushPromises()
+    await wrapper.get('#fwd-f-dns-provider-id').trigger('focusout')
+    expect(fieldError(wrapper, 'fwd-f-dns-provider-id')).toBe('Required')
+    wrapper.findComponent(UiSwitch).vm.$emit('update:modelValue', false)
+    await flushPromises()
+    wrapper.findComponent(UiSwitch).vm.$emit('update:modelValue', true)
+    await flushPromises()
+    expect(fieldError(wrapper, 'fwd-f-dns-provider-id')).toBe('')
+  })
+
+  it('shows the errors that come from the user’s own choices at once', async () => {
+    const wrapper = mountPicker({ errors: { ttl: 'From 1 to 86400 seconds.', record_types: 'Choose at least one record type.' } })
+    await flushPromises()
+    expect(fieldError(wrapper, 'fwd-f-dns-ttl')).toBe('From 1 to 86400 seconds.')
+    expect(wrapper.get('[data-field="dns.record_types"]').find('.ui-field__error').text()).toBe('Choose at least one record type.')
+  })
+
+  it('guesses the zone again when the hostname changes while the binding is on', async () => {
+    const wrapper = mountPicker()
+    await flushPromises()
+    expect(wrapper.get('#fwd-f-dns-zone').element.value).toBe('example.net')
+    await wrapper.setProps({ hostname: 'edge.example.org' })
+    expect(lastZone(wrapper)).toBe('example.org')
+    expect(wrapper.get('#fwd-f-dns-zone').element.value).toBe('example.org')
+
+    // Typed one label at a time, the guess keeps up.
+    for (const typed of ['ha', 'ha.exa', 'ha.example', 'ha.example.net', 'eu.ha.example.net']) {
+      await wrapper.setProps({ hostname: typed })
+    }
+    expect(lastZone(wrapper)).toBe('example.net')
+  })
+
+  it('never overwrites a zone the user typed', async () => {
+    const wrapper = mountPicker()
+    await flushPromises()
+    await wrapper.get('#fwd-f-dns-zone').setValue('custom.example.test')
+    const emitted = wrapper.emitted('update:modelValue').length
+    await wrapper.setProps({ hostname: 'edge.example.org' })
+    expect(wrapper.emitted('update:modelValue')).toHaveLength(emitted)
+    expect(wrapper.get('#fwd-f-dns-zone').element.value).toBe('custom.example.test')
+  })
+
+  it('guesses an emptied zone, and keeps the guess in step while the binding is off', async () => {
+    const wrapper = mountPicker({ modelValue: { ...model.bindingDraft(null, 'edge.example.net'), enabled: false, zone: '' } })
+    await flushPromises()
+    await wrapper.setProps({ hostname: 'edge.example.org' })
+    expect(lastZone(wrapper)).toBe('example.org')
+    // Turning it on later does not bring back the first hostname’s zone.
+    wrapper.findComponent(UiSwitch).vm.$emit('update:modelValue', true)
+    await flushPromises()
+    expect(wrapper.get('#fwd-f-dns-zone').element.value).toBe('example.org')
+  })
+
+  it('leaves a bound route’s zone alone', async () => {
+    const wrapper = mountPicker({ modelValue: model.bindingDraft(BINDING), stored: BINDING, errors: {} })
+    await flushPromises()
+    await wrapper.setProps({ hostname: 'hk.other.example' })
+    expect(wrapper.emitted('update:modelValue')).toBeUndefined()
   })
 })

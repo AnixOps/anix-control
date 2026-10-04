@@ -5,7 +5,7 @@
         <UiIconButton :icon="icon" :label="label" :size="size" v-bind="$attrs" />
       </slot>
     </DropdownMenuTrigger>
-    <DropdownMenuPortal>
+    <DropdownMenuPortal :to="layer">
       <DropdownMenuContent class="ui-menu" :align="align" :side-offset="4" :collision-padding="12" @close-auto-focus="runPending">
         <slot :close="close">
           <template v-for="(item, index) in visibleItems" :key="item.key || index">
@@ -32,12 +32,15 @@
 // typeahead, Esc returns focus to the trigger). Pass `items`
 // ({ key, label, icon, danger, disabled, separatorBefore, hidden, onSelect })
 // or fill the default slot with Reka menu items using the `ui-menu__*`
-// classes. Danger items are red and come last, after a separator.
+// classes. Danger items are red and come last, after a separator. The open
+// menu sits in its own labelled region (useMenuLayer), not loose on <body>.
 import { computed, ref } from 'vue'
+import { useI18n } from 'vue-i18n'
 import { DropdownMenuContent, DropdownMenuItem, DropdownMenuPortal, DropdownMenuRoot, DropdownMenuSeparator, DropdownMenuTrigger } from 'reka-ui'
 import { MoreHorizontal } from '@lucide/vue'
 import UiIcon from './UiIcon.vue'
 import UiIconButton from './UiIconButton.vue'
+import { useMenuLayer } from './composables/useMenuLayer'
 
 defineOptions({ inheritAttrs: false })
 
@@ -50,8 +53,10 @@ const props = defineProps({
   size: { type: String, default: 'sm' }
 })
 
+const { t } = useI18n()
 const open = ref(false)
 const triggerRef = ref(null)
+const layer = useMenuLayer(open, () => props.label || t('ui.menu.region'))
 // An item's action runs once the menu has closed and focus is back on the
 // trigger, so a dialog it opens returns focus there when it closes.
 let pending = null
