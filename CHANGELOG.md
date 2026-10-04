@@ -25,6 +25,12 @@
   Nothing else changes: the migrated database a test shares between its
   cases (`internal/tests/packagecompat/shared.go`) already costs one
   migration per test.
+  - The four shards are re-planned from measured times: the weights in
+    `plan_test_shards.py` dated from before the compatibility harnesses got
+    faster (`plancompat` 48 s, `nodesecrets` 41 s and `gostmeshcompat` 34 s
+    were weighted, 5 to 12 s are measured), so the plan put 128 s of tests
+    in shard 3 and 83 s in shard 4. By the same measured times the new plan
+    puts 96 to 106 s in each.
 
 ### Fixed
 
