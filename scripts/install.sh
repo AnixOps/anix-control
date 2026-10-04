@@ -803,10 +803,20 @@ backup_ca_kek() {
 # enable_agents configures Agent access on an existing install without
 # downloading a release, then restarts the service.
 enable_agents() {
+  local migrated=0
+  # A layout moved by `migrate` keeps its configuration in TARGET_CONFIG_DIR.
+  if [[ ! -f "${CONFIG_FILE}" && -f "${TARGET_CONFIG_DIR}/config.yaml" ]]; then
+    CONFIG_FILE="${TARGET_CONFIG_DIR}/config.yaml"
+    migrated=1
+  fi
   [[ -f "${CONFIG_FILE}" ]] || die "No installation at ${INSTALL_DIR} (missing ${CONFIG_FILE}); run install first."
   preflight_grpc_tls
   configure_agent_access 1
-  write_systemd_unit
+  if [[ "${migrated}" -eq 1 ]]; then
+    write_migration_unit
+  else
+    write_systemd_unit
+  fi
   if [[ "${SKIP_START}" -eq 1 ]]; then
     info "Agent access configured; service restart was skipped."
     return 0
@@ -1239,9 +1249,6 @@ main() {
 
   ensure_app_user
   ensure_layout_and_config
-  # Fresh installs get the CA key; existing ones keep theirs (or are told
-  # how to add one).
-  configure_agent_access "${FRESH_CONFIG}"
 
   local binary_archive
   binary_archive="$(asset_name)"
@@ -1261,6 +1268,10 @@ main() {
   if uses_plugin_only_identity_bootstrap; then
     configure_identity_bootstrap_config
   fi
+  # After the backup, so a failed update restores the previous config. Fresh
+  # installs get the CA key; existing ones keep theirs (or are told how to
+  # add one).
+  configure_agent_access "${FRESH_CONFIG}"
   write_systemd_unit
 
   if [[ "${SKIP_START}" -eq 1 ]]; then

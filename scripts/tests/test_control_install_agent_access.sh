@@ -170,7 +170,21 @@ check "letsencrypt: certificate found" test "${GRPC_TLS_CERT}" = "${LETSENCRYPT_
 configure_agent_access 1 >/dev/null 2>&1
 check "letsencrypt: copied for the service user" cmp -s "${TLS_DIR}/control.key" "${pki}/server.key"
 
-# --- 8. The configuration the installer writes is valid YAML.
+# --- 8. enable-agents on a layout moved by `migrate` (config in TARGET_CONFIG_DIR).
+INSTALL_DIR="${temporary}/migrated"
+set_install_paths
+TARGET_CONFIG_DIR="${temporary}/migrated-etc"
+TARGET_DATA_DIR="${temporary}/migrated-data" TARGET_LOG_DIR="${temporary}/migrated-log"
+mkdir -p "${INSTALL_DIR}" "${TARGET_CONFIG_DIR}"
+cp "${REPO_ROOT}/config/config.yaml.example" "${TARGET_CONFIG_DIR}/config.yaml"
+GRPC_NAME="grpc.test" GRPC_TLS_CERT="${pki}/server.crt" GRPC_TLS_KEY="${pki}/server.key" SKIP_START=1
+enable_agents >/dev/null 2>&1
+check "migrated: key created" test -s "${CA_KEK_FILE}"
+check "migrated: TLS written to the migrated config" grep -qF "tls_cert_file: \"${TLS_DIR}/control.crt\"" "${TARGET_CONFIG_DIR}/config.yaml"
+check "migrated: unit keeps the migrated writable paths" grep -qF "ReadWritePaths=${INSTALL_DIR} ${TARGET_CONFIG_DIR}" "${SYSTEMD_UNIT_DIR}/anix-control.service"
+SKIP_START=0
+
+# --- 9. The configuration the installer writes is valid YAML.
 new_install load
 GRPC_NAME="grpc.test" GRPC_TLS_CERT="${pki}/server.crt" GRPC_TLS_KEY="${pki}/server.key"
 configure_agent_access 1 >/dev/null 2>&1

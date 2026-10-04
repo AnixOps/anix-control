@@ -2067,7 +2067,9 @@ Then `anix-control agents transports --check-required`.
 
 **Replacing the key** is a manual procedure: there is no command that
 re-seals the CA, so a new key means new CAs and every Agent and module
-enrolling again. Do it only when the key is lost or exposed: stop Control,
+enrolling again. Do it only when the key is lost or exposed, and rehearse it
+on a copy of the database first (this is a recovery outline, not a tested
+runbook): stop Control,
 back up the database, delete the sealed roots (`DELETE FROM
 v4_kernel_service_ca; DELETE FROM v4_kernel_forward_link_ca;`), install the
 new key, start Control (it creates new CAs), then issue new enrollment
