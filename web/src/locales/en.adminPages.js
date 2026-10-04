@@ -10,9 +10,11 @@ import adminSupportPages from './modules/en/adminSupportPages'
 import adminNodes from './modules/en/adminNodes'
 import forwardNodesPage from './modules/en/forwardNodesPage'
 import adminSubscriptionGroups from './modules/en/adminSubscriptionGroups'
+import forwardV4 from './modules/en/forwardV4'
 
 export default {
   ...adminSubscriptionGroups,
+  ...forwardV4,
   ...runtimePages,
   ...networkPages,
   ...miscPages,

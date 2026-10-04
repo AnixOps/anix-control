@@ -166,3 +166,36 @@ func TestAuditLogRecordsForwardV4Writes(t *testing.T) {
 	require.Contains(t, logged.String(), `"module":"forward"`)
 	require.Contains(t, logged.String(), `"action":"diagnose"`)
 }
+
+// A forward route preview stores nothing, and the route editor sends one
+// after every pause in typing: it is not audited (F5b D13). Creating the
+// route still is.
+func TestAuditLogExemptsForwardRoutePreview(t *testing.T) {
+	require.True(t, auditExempt(http.MethodPost, "/api/v4/forward/routes/preview"))
+	require.True(t, auditExempt(http.MethodPost, "/api/v4/forward/routes/preview/"))
+	require.False(t, auditExempt(http.MethodPost, "/api/v4/forward/routes"))
+	require.False(t, auditExempt(http.MethodPut, "/api/v4/forward/routes/preview"))
+	require.False(t, auditExempt(http.MethodPost, "/api/v4/forward/routes/01J/diagnose"))
+
+	previousMode := gin.Mode()
+	gin.SetMode(gin.ReleaseMode)
+	t.Cleanup(func() { gin.SetMode(previousMode) })
+	var logged bytes.Buffer
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+	t.Cleanup(func() { slog.SetDefault(previousLogger) })
+
+	router := gin.New()
+	router.Use(AuditLog())
+	router.Any("/api/v4/forward/*route", func(c *gin.Context) {
+		_, _ = io.ReadAll(c.Request.Body)
+		c.Status(http.StatusOK)
+	})
+	recorder := httptest.NewRecorder()
+	router.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/v4/forward/routes/preview", strings.NewReader(`{"route":{}}`)))
+	require.Equal(t, http.StatusOK, recorder.Code)
+	require.Empty(t, logged.String(), "a preview is logged at debug level only")
+
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/api/v4/forward/routes", strings.NewReader(`{}`)))
+	require.Contains(t, logged.String(), `"action":"create"`)
+}

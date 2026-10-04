@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/base64"
 	"encoding/hex"
+	"encoding/json"
 	"net/http"
 	"testing"
 
@@ -121,4 +122,30 @@ func TestForwardGatewayHidesCommercialPathsInCommunity(t *testing.T) {
 	recorder := performKernelHandlerRequestWithSetup(t, http.MethodGet, "/api/v4/forward/self/routes", "", "/api/v4/forward/*route", commercial.ForwardGateway, asAdmin(7))
 	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
 	require.Equal(t, "/api/v4/plugins/forward/self/routes", commercialHosts.input.Metadata.Path)
+}
+
+// The list answers learn the super administrator rule through the
+// principal (F5b D7): super_admin is true for a super administrator, false
+// for staff, and absent on every other request.
+func TestForwardGatewayTellsTheListsWhetherTheCallerMayDelete(t *testing.T) {
+	kernel, hosts := installForwardPackage(t, config.EditionCommunity)
+	principal := func() map[string]any {
+		var decoded map[string]any
+		require.NoError(t, json.Unmarshal(hosts.input.PrincipalJSON, &decoded))
+		return decoded
+	}
+	for _, path := range []string{"/api/v4/forward/routes", "/api/v4/forward/nodes?kind=proxy", "/api/v4/forward/ansible-machines"} {
+		recorder := performKernelHandlerRequestWithSetup(t, http.MethodGet, path, "", "/api/v4/forward/*route", kernel.ForwardGateway, asAdmin(7))
+		require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+		require.Equal(t, true, principal()["super_admin"], path)
+		recorder = performKernelHandlerRequestWithSetup(t, http.MethodGet, path, "", "/api/v4/forward/*route", kernel.ForwardGateway, asAdmin(8))
+		require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+		require.Equal(t, false, principal()["super_admin"], path)
+	}
+	recorder := performKernelHandlerRequestWithSetup(t, http.MethodGet, "/api/v4/forward/routes/01J", "", "/api/v4/forward/*route", kernel.ForwardGateway, asAdmin(7))
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	require.NotContains(t, principal(), "super_admin")
+	recorder = performKernelHandlerRequestWithSetup(t, http.MethodPost, "/api/v4/forward/routes", `{}`, "/api/v4/forward/*route", kernel.ForwardGateway, asAdmin(7))
+	require.Equal(t, http.StatusOK, recorder.Code, recorder.Body.String())
+	require.NotContains(t, principal(), "super_admin")
 }

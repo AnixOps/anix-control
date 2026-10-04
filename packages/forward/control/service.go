@@ -84,7 +84,12 @@ func (h *forwardHost) Dispatch(ctx context.Context, request pluginhostsdk.Dispat
 	if h.Draining() {
 		return pluginhostsdk.DispatchResponse{}, errors.New("package is unavailable")
 	}
-	var principal pluginhostsdk.Principal
+	// super_admin is the kernel's answer to "may this caller delete" on the
+	// list routes (F5b D7); it is absent elsewhere.
+	var principal struct {
+		pluginhostsdk.Principal
+		SuperAdmin bool `json:"super_admin"`
+	}
 	if len(request.PrincipalJSON) > 0 {
 		if err := json.Unmarshal(request.PrincipalJSON, &principal); err != nil {
 			return pluginhostsdk.DispatchResponse{}, errors.New("package request principal is invalid")
@@ -102,7 +107,7 @@ func (h *forwardHost) Dispatch(ctx context.Context, request pluginhostsdk.Dispat
 	}()
 	answer := h.api.Serve(ctx, v4api.Request{
 		Method: strings.ToUpper(request.Method), Path: request.Metadata.Path, Query: request.Metadata.Query, Body: request.RequestBody,
-		IdempotencyKey: request.IdempotencyKey, ActorID: principal.ActorID,
+		IdempotencyKey: request.IdempotencyKey, ActorID: principal.ActorID, SuperAdmin: principal.SuperAdmin,
 	})
 	return pluginhostsdk.DispatchResponse{StatusCode: uint32(answer.StatusCode), ResponseBody: answer.Body, Headers: jsonHeaders}, nil // #nosec G115 -- an HTTP status.
 }

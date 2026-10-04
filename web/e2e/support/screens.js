@@ -8,6 +8,7 @@ import coupons from '../fixtures/coupons.js'
 import dashboard from '../fixtures/dashboard.js'
 import deployments from '../fixtures/deployments.js'
 import forward from '../fixtures/forward.js'
+import forwardV4 from '../fixtures/forwardV4.js'
 import inviteCodes from '../fixtures/inviteCodes.js'
 import monitor from '../fixtures/monitor.js'
 import nodeDetail from '../fixtures/nodeDetail.js'
@@ -47,6 +48,19 @@ export const SCREENS = {
   'admin-node-detail': { fixture: nodeDetail, scenario: 'overview' },
   'admin-node-services': { fixture: nodeDetail, scenario: 'services' },
   'admin-forward': { fixture: forward, scenario: 'list' },
+  // The v4.2 forwarding pages (F5b).
+  'admin-forward-overview': { fixture: forwardV4, scenario: 'overview' },
+  'admin-forward-routes': { fixture: forwardV4, scenario: 'routes' },
+  'admin-forward-routes-bulk': { fixture: forwardV4, scenario: 'routes-bulk' },
+  'admin-forward-routes-empty': { fixture: forwardV4, scenario: 'routes-empty' },
+  'admin-forward-editor': { fixture: forwardV4, scenario: 'editor' },
+  'admin-forward-editor-blank': { fixture: forwardV4, scenario: 'editor-blank' },
+  'admin-forward-editor-preview': { fixture: forwardV4, scenario: 'editor-preview' },
+  'admin-forward-route': { fixture: forwardV4, scenario: 'route' },
+  'admin-forward-diagnose': { fixture: forwardV4, scenario: 'diagnose' },
+  'admin-forward-nodes': { fixture: forwardV4, scenario: 'nodes' },
+  'admin-forward-node': { fixture: forwardV4, scenario: 'node' },
+  'admin-forward-no-capability': { fixture: forwardV4, scenario: 'no-capability' },
   'admin-subscriptions': { fixture: subscriptions, scenario: 'list' },
   'admin-system': { fixture: system, scenario: 'general' },
   'admin-security': { fixture: security, scenario: 'mfa' },
@@ -99,5 +113,7 @@ export async function openScreen(page, name, { theme = 'light', locale = 'en', c
   // Done loading: the main landmark is there and no skeleton is left.
   await page.locator('main').first().waitFor()
   await page.waitForFunction(() => !document.querySelector('.ui-skeleton'), null, { timeout: 10_000 })
+  // A scenario that needs interaction after the load (a selection, a form).
+  if (fixture.after) await fixture.after(page, { scenario })
   return screen
 }

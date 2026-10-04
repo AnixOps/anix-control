@@ -72,6 +72,10 @@ func (f *fakeForward) ListRoutes(context.Context, *forwardv1.ListRoutesRequest, 
 	return &forwardv1.ListRoutesResponse{Routes: []*forwardv1.Route{f.route}, Enforced: map[string]string{"01R": "expired"}}, nil
 }
 
+func (f *fakeForward) ListNodes(context.Context, *forwardv1.ListNodesRequest, ...grpc.CallOption) (*forwardv1.ListNodesResponse, error) {
+	return &forwardv1.ListNodesResponse{Nodes: []*forwardv1.NodeSummary{f.node}}, nil
+}
+
 func (f *fakeForward) GetNode(_ context.Context, in *forwardv1.GetNodeRequest, _ ...grpc.CallOption) (*forwardv1.GetNodeResponse, error) {
 	if in.GetNodeRef() != f.node.GetNodeRef() {
 		return nil, status.Error(codes.NotFound, "forward node not found")
@@ -370,4 +374,25 @@ func TestDiagnoseRoute(t *testing.T) {
 	assert.Equal(t, "rate_limited", errorCode(body))
 	answer := svc.Serve(context.Background(), Request{Method: http.MethodGet, Path: PublicPrefix + "/routes/01R/diagnose"})
 	assert.Equal(t, http.StatusMethodNotAllowed, answer.StatusCode)
+}
+
+// The list answers say whether the caller may DELETE (F5b D7): the kernel
+// passes the super administrator rule as Request.SuperAdmin.
+func TestListAnswersCarryCanDelete(t *testing.T) {
+	fake := newFake()
+	for _, superAdmin := range []bool{false, true} {
+		svc := &Service{Forward: fake}
+		for _, path := range []string{"/routes", "/nodes", "/ansible-machines"} {
+			answer := svc.Serve(context.Background(), Request{Method: http.MethodGet, Path: ControlPrefix + path, SuperAdmin: superAdmin})
+			require.Equal(t, http.StatusOK, answer.StatusCode, string(answer.Body))
+			var decoded struct {
+				Data map[string]any `json:"data"`
+			}
+			require.NoError(t, json.Unmarshal(answer.Body, &decoded))
+			assert.Equal(t, superAdmin, decoded.Data["can_delete"], path)
+		}
+	}
+	// A single route's answer has no can_delete.
+	_, body := serve(t, fake, http.MethodGet, "/routes/01R", "")
+	assert.NotContains(t, body["data"], "can_delete")
 }

@@ -18,7 +18,9 @@ import (
 // checks stay in the kernel because only it can make them: a DELETE
 // needs a super administrator (as route-mode switches and install tokens
 // do), and the paths config/editions.json reserves for the commercial
-// edition do not exist in the community edition.
+// edition do not exist in the community edition. The list answers
+// (GET /routes, /nodes, /ansible-machines) learn the first rule through the
+// principal's super_admin, so a UI shows delete only to those who may.
 
 const (
 	// ForwardV4Prefix is the forward package's v4 API.
@@ -27,7 +29,19 @@ const (
 	// package declares (/api/v4/plugins/forward/*).
 	forwardV4ControlPrefix = "/api/v4/plugins/forward"
 	forwardPackageID       = "forward"
+	// pluginPrincipalSuperAdminKey is the gin context key the forward
+	// gateway sets when the principal it dispatches carries super_admin.
+	pluginPrincipalSuperAdminKey = "plugin_principal_super_admin"
 )
+
+// forwardV4ListPaths are the list answers that carry can_delete (F5b D7):
+// the kernel tells the package whether the caller is a super
+// administrator, the rule every DELETE below them needs.
+var forwardV4ListPaths = map[string]struct{}{
+	forwardV4ControlPrefix + "/routes":           {},
+	forwardV4ControlPrefix + "/nodes":            {},
+	forwardV4ControlPrefix + "/ansible-machines": {},
+}
 
 // forwardV4ControlPath maps a /api/v4/forward path to the package's
 // control route path: /api/v4/forward/routes/x is
@@ -51,15 +65,21 @@ func (h *KernelHandler) ForwardGateway(c *gin.Context) {
 		kernelError(c, http.StatusNotFound, "plugin_route_not_found", "route not found")
 		return
 	}
-	if c.Request.Method == http.MethodDelete {
+	_, isList := forwardV4ListPaths[strings.TrimSuffix(controlPath, "/")]
+	isList = isList && c.Request.Method == http.MethodGet
+	if c.Request.Method == http.MethodDelete || isList {
 		allowed, err := service.IsSuperAdmin(h.db, kernelActorID(c))
 		if err != nil {
 			kernelDBError(c, err)
 			return
 		}
-		if !allowed {
+		if c.Request.Method == http.MethodDelete && !allowed {
 			kernelError(c, http.StatusForbidden, "super_admin_required", "only a super administrator may delete forward routes and nodes")
 			return
+		}
+		if isList {
+			// The package answers can_delete from it (F5b D7).
+			c.Set(pluginPrincipalSuperAdminKey, allowed)
 		}
 	}
 	h.dispatchPluginControlRoute(c, forwardPackageID, controlPath)

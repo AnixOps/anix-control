@@ -1,41 +1,35 @@
-# v4.2 Forwarding UI Mockups (F5b, Gate H16)
+# v4.2 Forwarding UI (F5b, Gate H16)
 
-These are design mockups for owner review. They are not the final UI.
+The owner approved this design on 2026-10-04 (H16) with every decision
+D1–D15 as recommended below, plus one change: the node status dot on the
+route detail reflects only that route. F5b implements it.
 
-- The screens are real Vue views built on the `Ui*` library and the AnixOps
-  Design v1.0.2 tokens, with mocked `/api/v4/forward` data.
-- They make no backend calls.
-- They replace nothing yet. The flux-clone pages under `/admin/forward*` stay
-  until F5b is implemented.
-- The flux page structure does not bind this design, because the owner
-  dropped flux compatibility.
+- **Where it is.** The pages are in the core app, lazy-loaded, under
+  `/admin/forward/overview`, `/admin/forward/routes` (with `/new`, `/{id}`
+  and `/{id}/edit`) and `/admin/forward/inventory` (with `/{node_ref}`).
+  - They open only when the forward package serves the v4 API: the
+    extension catalog (`GET /api/v3/extensions`) lists its control route
+    `/api/v4/plugins/forward/*`. Without it they lead to the flux-clone
+    page.
+  - The sidebar shows 转发 for them and keeps the flux-clone pages as
+    转发（旧版） and 转发节点（旧版） until F5d.
+- **Code.** `web/src/views/admin/forward/{Overview,Routes,RouteEditor,
+  RouteDetail,Nodes,NodeDetail}.vue`, the parts in
+  `web/src/components/forward/`, and the API client
+  `web/src/api/forwardV4.js`. The operator guide is
+  [`docs/guide/forwarding.md`](../../guide/forwarding.md).
+- **The mockups are gone.** The dev-only route
+  `/admin/__mockups/forward` and its mocked data were removed when the real
+  pages landed. The data lives on as the e2e fixture
+  `web/e2e/fixtures/forwardV4.js`, which drives the Playwright flow, the
+  accessibility checks and the visual baselines of the real pages.
+- **Screenshots.** `shots/` keeps the mockup screenshots the owner
+  reviewed; `capture.mjs` took them from the mockup route and is kept for
+  the record. The real pages' baselines are in
+  `web/e2e/visual/__screenshots__/admin-forward-*`.
 
-## How to Open Them
-
-- **Dev server only.** Run `cd web && npm run dev`, sign in as an
-  administrator, and open `/admin/__mockups/forward/<screen>`.
-  - The screens are `overview`, `routes`, `route`, `editor`, `nodes` and
-    `node`.
-  - Add `?state=empty` (routes), `?select=1` (routes) or `?state=valid`
-    (editor) for the other states.
-  - A dashed bar at the top switches screens. The screenshots hide it.
-- **Not in production.** The route is registered under
-  `import.meta.env.DEV` (`web/src/router/index.js`), so `vite build` drops
-  the route and its chunk (`web/src/mockups/forward/`).
-  - It changes no bundle budget, visual baseline or menu.
-  - The code is under `web/src/mockups/forward/`. `mockData.js` holds
-    protojson-shaped answers (enum names, 64-bit integers as strings), and
-    `mockPlanner.js` is a stand-in for `POST /routes/preview` that uses the
-    real `sdk/forward/validate` codes.
-- **Screenshots.** From `web/`, while `npx vite --port 4190` runs, run
-  `node ../docs/design/forward-ui/capture.mjs <png-dir> --webp
-  ../docs/design/forward-ui/shots`.
-  - It uses the host Chromium, because the zh-CN copy needs CJK fonts.
-  - The clock is fixed at 2026-10-04 14:00 CST.
-  - It covers 1440×900 and 390×844, light and dark. Each shot is a full page.
-
-The copy is zh-CN and written inline. It is mockup text: no i18n keys were
-added. The final pages get keys in both locales.
+The sections below describe the screens as reviewed. "Implementation
+notes" at the end lists where the pages differ.
 
 ## Screens
 
@@ -185,10 +179,11 @@ sticky bottom bar shows the status, 查看预览 and 保存.
 - **链路与健康.** One column per hop, then the targets.
   - Each node shows its status dot (hop error / lagging / ok), allocated
     port and generation (applied / desired).
-  - The dot is the node's overall state, not only this route's. In the
-    mockup, sg-relay-01 is red because of a hop error on another route
-    (sg-direct-udp). Whether to scope the dot to the route is part of the
-    review.
+  - The dot reflects only this route (owner decision, H16): red for a hop
+    error of this route, amber for an unhealthy or circuit-open upstream of
+    this route, blue while the node lags its desired generation (a
+    node-wide state, said in words), green otherwise. In the mockup it was
+    the node's overall state.
   - Under each node are its upstreams with 健康 / 不健康 / 熔断 badges, RTT,
     "N 秒后试探 · 不在轮转" for an open breaker, and "连续失败 N 次".
   - The hop's balance strategy is shown underneath.
@@ -270,21 +265,21 @@ sticky bottom bar shows the status, 查看预览 and 保存.
 - **Traffic.** Raw metered bytes from the entry hop, with no multiplier. The
   list note says so.
 
-## Open Design Questions
+## Decisions
 
-Each question has a recommendation; the owner decides.
+The owner approved each recommendation on 2026-10-04 (H16).
 
 - **D1. Where the final UI lives.**
   - The forward package manifest declares its WebUI home at
     `/admin/extensions/forward` (`anixops.webui/v1`).
   - That contract is an `h()` mount with five legacy CSS classes. It has no
     access to `Ui*`, the tokens' components, `UiChart` or the router.
-  - *Recommendation:* build F5b in the core app as `/admin/forward/*`, with
+  - *Decision (approved):* build F5b in the core app as `/admin/forward/*`, with
     pages lazy-loaded behind the forward package being installed. Keep the
     package's WebUI entry as a link to it. Widening the WebUI host contract to
     expose `Ui*` is a larger, separate decision.
 - **D2. Editor as a full page or a sheet.**
-  - *Recommendation:* a full page (as mocked). The hop chain, targets and
+  - *Decision (approved):* a full page (as mocked). The hop chain, targets and
     live preview do not fit a 560–760 px sheet, and on phones the page with a
     sticky bottom bar beats a bottom sheet.
   - Quick edits (pause, labels, limits) stay in the row menu and the detail
@@ -292,26 +287,26 @@ Each question has a recommendation; the owner decides.
 - **D3. List filters the API lacks.**
   - `GET /routes` filters by `owner` and `node_ref` only. Status, engine and
     label filter the loaded page, and the note under the table says so.
-  - *Recommendation:* keep them client-side for v4.2. Admin route counts are
+  - *Decision (approved):* keep them client-side for v4.2. Admin route counts are
     small: 100 per page, at most 1000.
   - Add `status`, `engine` and `label` query filters to F5a only if
     installations above about 500 routes appear.
 - **D4. Preview cadence.**
-  - *Recommendation:* debounce `POST /routes/preview` to 1 s after the last
+  - *Decision (approved):* debounce `POST /routes/preview` to 1 s after the last
     change, plus the explicit refresh icon.
   - Cancel in-flight requests, and never preview while a required field is
     empty.
   - The planner call is cheap for one route (`PlanRoute`), but it audits as
     `preview`. Consider not auditing previews (see D13).
 - **D5. Polling.**
-  - *Recommendation:* node list and route detail every 15 s, overview every
+  - *Decision (approved):* node list and route detail every 15 s, overview every
     30 s, and pause while the tab is hidden. Show "更新于 N 秒前" and a
     refresh button.
   - Nodes report on their own schedule, so faster polling adds no
     information.
   - Traffic (`/stats`) refreshes every 60 s at most.
 - **D6. The 24 h traffic column.**
-  - *Recommendation:* one `GET /stats` (window 24 h, no `route_id`) per list
+  - *Decision (approved):* one `GET /stats` (window 24 h, no `route_id`) per list
     load, joined to the rows by `route_id` on hop 0. Do not make one call per
     row.
   - When an answer says `truncated`, show "数据已截断，仅显示前 2000 条路由 /
@@ -322,7 +317,7 @@ Each question has a recommendation; the owner decides.
     refused while routes use the node (`409 refused` with `node_in_use`).
   - The web app has no super-administrator flag either. Route modes get one
     from their own answer (`can_switch`).
-  - *Recommendation:*
+  - *Decision (approved):*
     - F5a adds a `can_delete` flag to the list answers (`GET /routes`,
       `GET /nodes`), the same pattern as `can_switch`.
     - Until it does, show 删除… to every administrator and turn the 403 into
@@ -331,20 +326,20 @@ Each question has a recommendation; the owner decides.
       the routes (as mocked; the client already knows from the routes).
 
 - **D8. Paused vs enforced.**
-  - *Recommendation:* show enforced (quota or expired) as a different badge
+  - *Decision (approved):* show enforced (quota or expired) as a different badge
     from manual pause, and never offer 恢复 for it. Offer 提高配额… or
     延长到期…, which opens the editor's 限额 section.
   - When a route is both paused and enforced, show enforced. Resuming it
     still needs the operator.
 - **D9. Bulk actions without bulk endpoints.**
-  - *Recommendation:* run per-route pause, resume and delete calls, at most 4
+  - *Decision (approved):* run per-route pause, resume and delete calls, at most 4
     at a time, each with its own `Idempotency-Key`. Report "已暂停 5 条，1 条
     失败" with a retry for the failures, and offer 撤销 for pause and resume.
   - Bulk delete needs a typed confirmation and goes through the super
     administrator check.
   - Ask for bulk endpoints only if this proves slow.
 - **D10. `Idempotency-Key` and `revision_conflict` in the editor.**
-  - *Recommendation:* generate one key when the editor opens and reuse it
+  - *Decision (approved):* generate one key when the editor opens and reuse it
     for retries of the same save, so a double click or a network retry never
     creates two routes. Make a new key after a successful save or an edit.
   - On `409 revision_conflict`, keep the form, show 「此路由已被他人修改（修订
@@ -352,28 +347,57 @@ Each question has a recommendation; the owner decides.
 - **D11. LEAST_CONN on nftables.**
   - Until the Agent supplies conntrack counts (F3b), LEAST_CONN on nftables
     behaves as weighted random.
-  - *Recommendation:* keep the strategy selectable and show the help text
+  - *Decision (approved):* keep the strategy selectable and show the help text
     plus a preview warning, as mocked. Do not hide it.
 - **D12. Showing the anixops engine.**
-  - *Recommendation:* hide ENGINE_ANIXOPS and LINK_SECURITY_ANIXOPS
+  - *Decision (approved):* hide ENGINE_ANIXOPS and LINK_SECURITY_ANIXOPS
     everywhere unless the setting flag (`EnableAnixOps`) is on.
   - When the flag is on, label it 「anixops（实验）」 and list only nodes that
     advertise it. Existing routes that use it always show it, whatever the
     flag.
 - **D13. Audit noise from previews.**
   - The audit middleware records `POST /routes/preview` like a write.
-  - *Recommendation:* exempt `preview` from the audit log, or record it at
+  - *Decision (approved):* exempt `preview` from the audit log, or record it at
     debug level. Otherwise D4's debounced previews flood the audit log.
     This is a small F5a follow-up.
 - **D14. Entry HA hostname.**
   - DDNS provider setup is not in the v4 API yet (section 7.4).
-  - *Recommendation:* in v4.2, show `entry_hostname` as a plain field with a
+  - *Decision (approved):* in v4.2, show `entry_hostname` as a plain field with a
     note that the operator manages DNS. Add the DDNS provider picker when the
     API exists.
 - **D15. Proxy nodes in the inventory.**
   - Proxy nodes join the forwarding inventory through settings.
-  - *Recommendation:* list them in 节点 with a 代理节点 badge, as mocked. Their
+  - *Decision (approved):* list them in 节点 with a 代理节点 badge, as mocked. Their
     settings page offers 转发设置 only; the record fields belong to the proxy
     node page.
   - A proxy node that is not in the inventory appears only behind a
     "加入转发清单…" action on the proxy node page.
+
+## Implementation Notes
+
+Where F5b differs from the screens above, and why.
+
+- **Paths.** The flux-clone pages already own `/admin/forward`,
+  `/admin/forward/nodes` and `/admin/forward/nodes/{id}`, so the node
+  inventory is `/admin/forward/inventory`. The package's own WebUI page
+  (`/admin/extensions/forward`) is a link to the overview, and its menu
+  entry is hidden while 转发 is shown.
+- **List status.** One list load reads `GET /routes`, `GET /nodes`, one
+  `GET /stats` and `GET /observability/targets`, plus `GET /nodes/{ref}`
+  for at most 20 nodes that report hop errors. 降级 therefore comes from the
+  last hop's target health; an unhealthy relay upstream shows on the route
+  detail.
+- **Online.** `NodeSummary` has no Agent session state, so a node counts
+  as online while its latest report is at most 3 minutes old.
+- **anixops (D12).** Control does not serve `forward.anixops_experimental`
+  yet (F6 A1–A5). The pages read one flag (`useForwardFlags`), which is off
+  until that lands; routes that already use anixops always show it.
+- **D7.** `can_delete` is served (`GET /routes`, `/nodes`,
+  `/ansible-machines`). Delete is disabled with 「仅超级管理员」 when it is
+  false; a `403` from an older package still shows inline.
+- **D13.** `POST /routes/preview` is logged at debug level and never
+  written to the audit table.
+- **Left out.** The node list's header 安装 Agent (the install sheet needs a
+  node; it is on each row and node page), 重置节点状态 (no API; the CLI has
+  `forward reset-node`), and the Agent upgrade hint (O4's campaigns own
+  upgrades).

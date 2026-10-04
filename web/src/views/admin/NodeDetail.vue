@@ -11,6 +11,7 @@
         <UiBadge :status="statusName(status)" :label="t(`admin.nodes.statusText.${statusName(status)}`)" data-testid="node-status" />
       </template>
       <template v-if="node" #actions>
+        <ForwardInventoryAction v-if="hasForwardV4" :node-ref="`proxy-${node.id}`" :name="node.name" />
         <UiButton :icon="Pencil" data-testid="edit-node" @click="openEdit">{{ t('admin.nodes.actions.edit') }}</UiButton>
         <UiButton
           variant="primary"
@@ -93,6 +94,7 @@ import UiSkeleton from '@/ui/UiSkeleton.vue'
 import UiTabs from '@/ui/UiTabs.vue'
 import { useDelayedLoading } from '@/ui/composables/useDelayedLoading'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { adminCapabilities, FORWARD_V4_CAPABILITY } from '@/extensions/runtime'
 import NodeCredentialsSection from './nodes/NodeCredentialsSection.vue'
 import NodeDangerSection from './nodes/NodeDangerSection.vue'
 import NodeDeploySection from './nodes/NodeDeploySection.vue'
@@ -125,6 +127,9 @@ const candidates = ref([])
 const showSkeleton = useDelayedLoading(computed(() => loading.value && !node.value))
 
 const nodeId = computed(() => String(route.params.id || ''))
+// 加入转发清单… (F5b D15), with the forward package's v4 API only.
+const hasForwardV4 = computed(() => adminCapabilities.value.includes(FORWARD_V4_CAPABILITY))
+const ForwardInventoryAction = defineAsyncComponent(() => import('@/components/forward/ForwardInventoryAction.vue'))
 const backTo = computed(() => ({ path: '/admin/nodes', query: listQuery() }))
 const status = computed(() => (node.value ? displayStatus(node.value) : 0))
 const headerTitle = computed(() => node.value?.name || (notFound.value || error.value ? t('admin.nodes.detail.title') : t('admin.nodes.detail.loading')))

@@ -36,7 +36,7 @@ func (s *Service) listRoutes(ctx context.Context, request Request, _ map[string]
 	for _, route := range answer.GetRoutes() {
 		routes = append(routes, routeView{Route: pj(route), Enforced: answer.GetEnforced()[route.GetId()]})
 	}
-	return data(http.StatusOK, map[string]any{"routes": routes, "next_page_token": answer.GetNextPageToken()})
+	return data(http.StatusOK, map[string]any{"routes": routes, "next_page_token": answer.GetNextPageToken(), "can_delete": request.SuperAdmin})
 }
 
 // createRoute: the body is a Route (protojson). Control assigns its id,

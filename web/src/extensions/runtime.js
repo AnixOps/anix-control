@@ -438,13 +438,40 @@ function extensionRouteHost(component) {
   })
 }
 
-function snapshot(menus, errors, skipped, plugins, extensions) {
+// Capabilities the core app reads from the catalog: a package that declares
+// one of these control routes (and that the actor may call) lights up core
+// pages. forward.v4 is the forward package's v4 API, which the F5b
+// forwarding pages need (docs/design/forward-ui, D1). They come from the
+// raw catalog entries, apart from WebUI bundle verification: a package
+// whose bundle fails to load still serves its API.
+export const FORWARD_V4_CAPABILITY = 'forward.v4'
+const CAPABILITY_ROUTES = Object.freeze({
+  [FORWARD_V4_CAPABILITY]: Object.freeze({ pluginID: 'forward', route: '/api/v4/plugins/forward/*' })
+})
+
+export function catalogCapabilities(catalog) {
+  const out = new Set()
+  for (const item of Array.isArray(catalog) ? catalog : []) {
+    if (!item || typeof item !== 'object' || item.publisher !== 'AnixOps' || !EXTENSION_STATES.has(item.state) || !Array.isArray(item.control_routes)) {
+      continue
+    }
+    for (const [name, wanted] of Object.entries(CAPABILITY_ROUTES)) {
+      if (item.plugin_id === wanted.pluginID && item.control_routes.includes(wanted.route)) {
+        out.add(name)
+      }
+    }
+  }
+  return [...out].sort()
+}
+
+function snapshot(menus, errors, skipped, plugins, extensions, capabilities) {
   return {
     menus: [...menus.value],
     errors: [...errors.value],
     skipped: [...skipped.value],
     pluginIDs: [...plugins.value],
-    extensions: [...extensions.value]
+    extensions: [...extensions.value],
+    capabilities: [...(capabilities?.value || [])]
   }
 }
 
@@ -464,6 +491,7 @@ export function createAdminExtensionRuntime(options = {}) {
   const skipped = shallowRef([])
   const plugins = shallowRef([])
   const extensions = shallowRef([])
+  const capabilities = shallowRef([])
   const routeRemovers = new Map()
   let initialized = false
   let lastAttempt = 0
@@ -484,6 +512,7 @@ export function createAdminExtensionRuntime(options = {}) {
     skipped.value = []
     plugins.value = []
     extensions.value = []
+    capabilities.value = []
   }
 
   async function prepareExtension(raw, duplicateIDs) {
@@ -542,7 +571,7 @@ export function createAdminExtensionRuntime(options = {}) {
         errors.value = [runtimeError('catalog_unavailable', error instanceof Error ? error.message : 'extension catalog is unavailable')]
         initialized = true
       }
-      return snapshot(menus, errors, skipped, plugins, extensions)
+      return snapshot(menus, errors, skipped, plugins, extensions, capabilities)
     }
 
     const counts = new Map()
@@ -554,10 +583,11 @@ export function createAdminExtensionRuntime(options = {}) {
     const duplicateIDs = new Set([...counts].filter(([, count]) => count > 1).map(([id]) => id))
     const prepared = await Promise.all(catalog.map(item => prepareExtension(item, duplicateIDs)))
     if (refreshGeneration !== generation) {
-      return snapshot(menus, errors, skipped, plugins, extensions)
+      return snapshot(menus, errors, skipped, plugins, extensions, capabilities)
     }
 
     removeExtensionRoutes()
+    capabilities.value = catalogCapabilities(catalog)
     const nextErrors = prepared.flatMap(item => item.error ? [item.error] : [])
     const nextSkipped = prepared.flatMap(item => item.skipped ? [item.skipped] : [])
     const occupiedPaths = new Set(
@@ -641,7 +671,7 @@ export function createAdminExtensionRuntime(options = {}) {
     plugins.value = nextPlugins.sort()
     extensions.value = nextExtensions.sort((left, right) => left.pluginID.localeCompare(right.pluginID))
     initialized = true
-    return snapshot(menus, errors, skipped, plugins, extensions)
+    return snapshot(menus, errors, skipped, plugins, extensions, capabilities)
   }
 
   function refresh(router) {
@@ -659,7 +689,7 @@ export function createAdminExtensionRuntime(options = {}) {
 
   function ensure(router) {
     if (initialized && now() - lastAttempt < refreshInterval) {
-      return Promise.resolve(snapshot(menus, errors, skipped, plugins, extensions))
+      return Promise.resolve(snapshot(menus, errors, skipped, plugins, extensions, capabilities))
     }
     return refresh(router)
   }
@@ -679,6 +709,7 @@ export function createAdminExtensionRuntime(options = {}) {
     skipped: readonly(skipped),
     plugins: readonly(plugins),
     extensions: readonly(extensions),
+    capabilities: readonly(capabilities),
     ensure,
     refresh,
     reset
@@ -689,6 +720,11 @@ const adminExtensionRuntime = createAdminExtensionRuntime()
 
 export const adminExtensionMenus = adminExtensionRuntime.menus
 export const adminExtensionErrors = adminExtensionRuntime.errors
+export const adminCapabilities = adminExtensionRuntime.capabilities
+
+export function hasAdminCapability(name) {
+  return adminCapabilities.value.includes(name)
+}
 
 export function ensureAdminExtensions(router) {
   return adminExtensionRuntime.ensure(router)

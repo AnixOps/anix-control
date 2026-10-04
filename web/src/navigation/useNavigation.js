@@ -3,7 +3,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { useUserStore } from '@/stores/user'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { editionAllows, extensionMenuAllowed } from '@/composables/useEdition'
-import { adminExtensionMenus } from '@/extensions/runtime'
+import { adminCapabilities, adminExtensionMenus } from '@/extensions/runtime'
 import { normalizeWebUIMenuParent } from '@/extensions/menuRegistry'
 import { activeMenuItem, buildAdminMenu, buildUserMenu } from './menu'
 
@@ -29,8 +29,12 @@ export function useAdminMenu() {
     editionAllows,
     hasPermission: permission => userStore.hasPermission(permission),
     routeExists,
+    hasCapability: name => adminCapabilities.value.includes(name),
     extensionMenus: adminExtensionMenus.value,
-    extensionMenuAllowed,
+    // The forward package's own menu entry only links to the core pages
+    // (F5b D1): with them in the sidebar it is left out.
+    extensionMenuAllowed: menu => extensionMenuAllowed(menu) &&
+      !(menu?.pluginID === 'forward' && adminCapabilities.value.includes('forward.v4')),
     normalizeParent: normalizeWebUIMenuParent
   }))
 

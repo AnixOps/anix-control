@@ -6,7 +6,7 @@ F5a). The forward package serves it on the kernel's `ForwardControl`
 carries a node credential. The flux-compatible `/api/v2/forward/*` routes
 in [`api.md`](api.md) stay until F5d removes them.
 
-- The new UI is F5b.
+- The new UI is F5b ([`docs/guide/forwarding.md`](../guide/forwarding.md)).
 - The command line is `anix-control forward ...`, described at the end of
   this page.
 
@@ -27,10 +27,24 @@ in [`api.md`](api.md) stay until F5d removes them.
     staff (`service.IsSuperAdmin`, the rule route-mode switches and install
     tokens follow). Others get `403 super_admin_required`, and the request
     never reaches the package.
+  - The list answers (`GET /routes`, `GET /nodes`, `GET /ansible-machines`)
+    carry `can_delete`: whether the caller may `DELETE` (F5b, D7). The
+    kernel resolves the rule and passes it to the package as the
+    principal's `super_admin`, the way route modes answer `can_switch`.
+    Only the `/api/v4/forward/` spelling resolves it; the same lists under
+    `/api/v4/plugins/forward/` answer `can_delete` false.
+- **Discovery.** `GET /api/v3/extensions` lists each package's
+  `control_routes` to an actor who holds the package's `api` permission. The
+  web app shows the forwarding pages when the forward package lists
+  `/api/v4/plugins/forward/*`.
 - **Audit.** Every `POST`, `PUT` and `DELETE` under `/api/v4/forward/` is
   written to the audit log as module `forward`, with the action derived
   from the path (`create`, `update`, `delete`, `pause`, `resume`, `toggle`,
-  `preview`, `diagnose`) and the redacted body.
+  `diagnose`) and the redacted body.
+  - `POST /routes/preview` is the exception: it stores nothing and the
+    route editor sends one a second after each pause in typing, so it is
+    logged at debug level only and never written to the audit table (F5b,
+    D13).
 - **Package version.** The routes exist once the forward package of a
   release that declares the control route is installed. Before that they
   answer `404 plugin_route_not_found`.
@@ -123,7 +137,7 @@ All paths are under `/api/v4/forward`.
 
 | Method and path | Does | Body and answer |
 |---|---|---|
-| `GET /routes` | list routes | query `owner`, `node_ref`, `page_size` (100, at most 1000), `page_token`; `{routes: [{route, enforced}], next_page_token}` |
+| `GET /routes` | list routes | query `owner`, `node_ref`, `page_size` (100, at most 1000), `page_token`; `{routes: [{route, enforced}], next_page_token, can_delete}` |
 | `POST /routes` | create a route | body a `Route` without id; Control assigns id, revision 1 and the times, and `owner` defaults to `admin` (`user:<id>` is refused: self-service is v4.3); `201 {route}` |
 | `POST /routes/preview` | plan without storing | body a `PlanRouteRequest` (`{"route": ..., "nodes": [...]}`); `{states, allocations, violations, warnings}` |
 | `GET /routes/{id}` | one route | `{route, enforced}`; `enforced` is `quota` or `expired` when Control itself pauses the route |
@@ -199,7 +213,7 @@ A node is `forward-<id>` (a forward node, `v2_forward_node`) or `proxy-<id>`
 
 | Method and path | Does | Body and answer |
 |---|---|---|
-| `GET /nodes` | the inventory | query `kind` (`forward`, `proxy`), `transport` (`agent`, `ansible`); `{nodes: [NodeSummary]}`: every forward node and the proxy nodes in the inventory, with stored settings, the planner's view (`info`, `reserved_ports`), capabilities, the desired generation and hop count, the latest report's generation, `applied` and `hop_errors` |
+| `GET /nodes` | the inventory | query `kind` (`forward`, `proxy`), `transport` (`agent`, `ansible`); `{nodes: [NodeSummary], can_delete}`: every forward node and the proxy nodes in the inventory, with stored settings, the planner's view (`info`, `reserved_ports`), capabilities, the desired generation and hop count, the latest report's generation, `applied` and `hop_errors` |
 | `POST /nodes` | add a forward node | body `{"node": ForwardNodeRecord, "settings": NodeSettings}`, settings optional (with settings the node joins the inventory at once); `201 {node}` |
 | `GET /nodes/{ref}` | the node view | `{node, state, report}`: the desired `NodeForwardState`, and the latest `NodeForwardReport` without counters (applied generation and state hash, hop errors, upstream health with latency) |
 | `PUT /nodes/{ref}` | replace a forward node's fields | body the whole `ForwardNodeRecord`; an unset `transport` keeps the node's; `{node, violations}` |

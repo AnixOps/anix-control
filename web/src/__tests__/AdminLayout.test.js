@@ -11,6 +11,7 @@ import { usePalette } from '@/components/shell/usePalette'
 const mockGetSystemInfo = vi.hoisted(() => vi.fn())
 const mockGetUserList = vi.hoisted(() => vi.fn())
 const mockAdminExtensionMenus = vi.hoisted(() => ({ value: [] }))
+const mockAdminCapabilities = vi.hoisted(() => ({ value: [] }))
 
 vi.mock('@/api/admin', () => ({
   getSystemInfo: (...args) => mockGetSystemInfo(...args),
@@ -18,7 +19,8 @@ vi.mock('@/api/admin', () => ({
 }))
 
 vi.mock('@/extensions/runtime', () => ({
-  adminExtensionMenus: mockAdminExtensionMenus
+  adminExtensionMenus: mockAdminExtensionMenus,
+  adminCapabilities: mockAdminCapabilities
 }))
 
 function stubViewport({ narrow = false } = {}) {
@@ -157,6 +159,39 @@ describe('AdminLayout.vue', () => {
     await router.push('/admin/users')
     await flushPromises()
     expect(wrapper.find('[data-forward-suite-nav]').exists()).toBe(false)
+  })
+
+  // F5b: with the forward package's v4 API the sidebar gets the new 转发
+  // area, the flux-clone pages stay as 转发（旧版）, the package's own menu
+  // entry is left out, and the v4 pages show no forward suite navigation.
+  it('adds the v4 forwarding area when the forward package provides it', async () => {
+    mockAdminCapabilities.value = ['forward.v4']
+    mockAdminExtensionMenus.value = [{ pluginID: 'forward', id: 'forward.main', parent: 'operations', label: 'Forward', icon: 'network', to: '/admin/extensions/forward', permission: 'forward.view', order: 150 }]
+    try {
+      const { wrapper, router } = await mountLayout('/admin/forward/routes/01J')
+      mounted = wrapper
+      const paths = sidebarPaths(wrapper)
+      expect(paths).toContain('/admin/forward/overview')
+      expect(paths).toContain('/admin/forward')
+      expect(paths).not.toContain('/admin/extensions/forward')
+      expect(wrapper.get('#admin-sidebar a[href="/admin/forward"]').text()).toContain('Forwarding (legacy)')
+      expect(wrapper.get('#admin-sidebar a[href="/admin/forward/overview"]').attributes('aria-current')).toBe('page')
+      expect(wrapper.find('[data-forward-suite-nav]').exists()).toBe(false)
+      await router.push('/admin/forward/inventory/forward-41')
+      await flushPromises()
+      expect(wrapper.get('#admin-sidebar a[href="/admin/forward/overview"]').attributes('aria-current')).toBe('page')
+    } finally {
+      mockAdminCapabilities.value = []
+      mockAdminExtensionMenus.value = []
+    }
+  })
+
+  it('keeps the flux-clone forwarding pages as 转发 without the v4 API', async () => {
+    const { wrapper } = await mountLayout('/admin/dashboard')
+    mounted = wrapper
+    const paths = sidebarPaths(wrapper)
+    expect(paths).not.toContain('/admin/forward/overview')
+    expect(wrapper.get('#admin-sidebar a[href="/admin/forward"]').text()).not.toContain('legacy')
   })
 
   it('keeps content to the admin width unless the route is wide', async () => {

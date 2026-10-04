@@ -1,45 +1,48 @@
 <template>
   <ol class="hop-chain" :class="{ 'is-compact': compact }" :aria-label="ariaLabel">
-    <template v-for="(hop, index) in route.hops" :key="index">
+    <template v-for="(hop, index) in hops" :key="index">
       <li v-if="index > 0" class="hop-chain__link" aria-hidden="true">
         <ArrowRight :size="12" :stroke-width="1.75" />
         <span v-if="!compact || linkLabel(hop) !== 'RAW'" class="hop-chain__security">{{ linkLabel(hop) }}</span>
       </li>
-      <li class="hop-chain__hop">
-        <EngineChip :engine="hop.engine" :suffix="hop.node_refs.length > 1 ? `×${hop.node_refs.length}` : ''" />
-        <span v-if="!compact" class="hop-chain__nodes">{{ hop.node_refs.map(nodeName).join(' / ') }}</span>
+      <li class="hop-chain__hop" aria-hidden="true">
+        <EngineChip :engine="hop.engine" :suffix="(hop.node_refs || []).length > 1 ? `×${hop.node_refs.length}` : ''" />
+        <span v-if="!compact" class="hop-chain__nodes">{{ (hop.node_refs || []).map(nodeName).join(' / ') }}</span>
       </li>
     </template>
     <template v-if="!compact">
       <li class="hop-chain__link" aria-hidden="true"><ArrowRight :size="12" :stroke-width="1.75" /></li>
-      <li class="hop-chain__targets">{{ route.targets.length }} 个目标</li>
+      <li class="hop-chain__targets" aria-hidden="true">{{ t('forwardV4.chain.targets', { n: targetCount }) }}</li>
     </template>
   </ol>
 </template>
 
 <script setup>
 // The hop chain in one line: engine chips joined by the link security of
-// the next hop's ingress (RAW is left out in the compact form).
+// the next hop's ingress (RAW is left out in the compact form). Screen
+// readers get one sentence instead of the chips.
 import { computed } from 'vue'
 import { ArrowRight } from '@lucide/vue'
+import { useAppI18n } from '@/composables/useAppI18n'
 import EngineChip from './EngineChip.vue'
-import { SECURITIES, ENGINES, nodeName } from '../mockData'
+import { ENGINES, linkLabel } from './routeModel'
 
 const props = defineProps({
   route: { type: Object, required: true },
-  compact: { type: Boolean, default: false }
+  compact: { type: Boolean, default: false },
+  nodeName: { type: Function, default: ref => ref }
 })
+const { t } = useAppI18n()
+const hops = computed(() => props.route?.hops || [])
+const targetCount = computed(() => (props.route?.targets || []).length)
 
-function linkLabel(hop) {
-  const security = SECURITIES[hop.ingress?.security || 'LINK_SECURITY_RAW']
-  return hop.ingress?.mux ? `${security}·mux` : security
-}
-
-const ariaLabel = computed(() => props.route.hops.map((hop, index) => {
+const ariaLabel = computed(() => hops.value.map((hop, index) => {
   const engine = ENGINES[hop.engine]?.label || hop.engine
-  const link = index > 0 ? `经 ${linkLabel(hop)} ` : ''
-  return `${link}${engine} ${hop.node_refs.map(nodeName).join('、')}`
-}).join('，') + `，${props.route.targets.length} 个目标`)
+  const nodes = (hop.node_refs || []).map(props.nodeName).join(', ')
+  return index > 0
+    ? t('forwardV4.chain.hopVia', { link: linkLabel(hop), engine, nodes })
+    : t('forwardV4.chain.hop', { engine, nodes })
+}).join('; ') + `; ${t('forwardV4.chain.targets', { n: targetCount.value })}`)
 </script>
 
 <style scoped>
@@ -70,7 +73,7 @@ const ariaLabel = computed(() => props.route.hops.map((hop, index) => {
   display: inline-flex;
   gap: 2px;
   align-items: center;
-  color: var(--label-3);
+  color: var(--label-2);
 }
 
 .hop-chain__security {
