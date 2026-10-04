@@ -930,7 +930,11 @@ executes `node.sync` (nodeconfig), `agent.operation` (agents) and
   the durable record of these dispatches: `v3_kernel_operation` stays the
   plugin operations' (its rows and `v3_kernel_node_operation_revision` key
   by proxy node id only, and the kernel never alters a table), so
-  `kernel_operation_id` stays empty for them. After a kernel restart the
+  `kernel_operation_id` stays empty for them. A proxy node's stream
+  revisions come from that same cursor, so they and the plugin
+  operations' revisions increase together; an Agent's Hello raises the
+  cursor to the revision it reports. Forward nodes keep the manager's
+  in-memory counter. After a kernel restart the
   engine's recovery applies: `node.sync` runs again, the others end
   `FAILED` (retryable).
 - **`node.sync`.** `kernelnodeops.SyncNode` rebuilds the node's desired
@@ -2537,12 +2541,6 @@ it up to A2-3.
       with a new credential.
   - **Known issues the suite found**, reported as skips with the evidence
     until fixed:
-    - Stream-only operations (`agent.diagnostic`, the forward checks,
-      `node.reload`, `agent.ping`, `users.reload`) take revisions from the session's in-memory
-      counter, while durable operations take the next revision of
-      `v3_kernel_node_operation_revision`. A durable operation at or below
-      a revision a stream-only one used is refused ("revision N is not
-      newer than M") and stays `dispatching`.
     - On the Agent, a configuration revision that only changed the
       forwarding state reloads the proxy core. A reload can fail with
       `address already in use` and leave the node without its inbound.

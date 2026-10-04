@@ -151,6 +151,10 @@ func (s *Server) Start() error {
 	pb.RegisterTrafficServiceServer(s.grpcServer, NewTrafficGRPCServer())
 	pb.RegisterHealthServiceServer(s.grpcServer, NewHealthGRPCServer())
 	agents := s.agentAuthenticator()
+	// Proxy node operations take their revisions from the durable per-node
+	// cursor that plugin operations use; forward nodes keep the in-memory
+	// counter (their ids overlap proxy node ids).
+	GetAgentControlManager().UseRevisionStore(NewDatabaseRevisionStore(databaseForAgentChecks))
 	agentv1pb.RegisterAgentControlServiceServer(s.grpcServer, NewAgentControlGRPCServer(nil).WithAuthenticator(agents))
 	agentv1pb.RegisterAgentEnrollmentServer(s.grpcServer, NewAgentEnrollmentGRPCServer(agents))
 	agentv1pb.RegisterAgentArtifactsServer(s.grpcServer, NewAgentArtifactsGRPCServer(agents))

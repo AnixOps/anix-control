@@ -66,7 +66,8 @@ func startAgentListenerWith(t *testing.T, mode string, withPKI bool, configure f
 	requireInMemoryDatabase(t)
 	requireAutoMigrate(t, &model.Node{}, &model.NodeProtocol{}, &model.AuthorizedKey{}, &model.ForwardNode{},
 		&model.ServiceCA{}, &model.AgentEnrollment{}, &model.AgentCertificate{}, &model.OperationLog{},
-		&model.NodeServiceAssignment{}, &model.PluginTelemetryState{}, &model.NodePluginObservedState{}, &model.AgentTransport{})
+		&model.NodeServiceAssignment{}, &model.PluginTelemetryState{}, &model.NodePluginObservedState{}, &model.AgentTransport{},
+		&model.NodeOperationRevision{})
 	db := database.Get()
 	// A fresh transport recorder: its throttle must not carry sightings of
 	// an earlier test's node with the same id.

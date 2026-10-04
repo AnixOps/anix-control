@@ -165,10 +165,8 @@
     report sent twice); a revoked certificate (`agent_cert_revoked`, then
     re-enrollment with a new credential); the #179 forward generation
     reset; clock-skew bounds checked on Control's side.
-  - **Known issues** the suite reports as skips until they are fixed:
-    durable plugin operations refused after stream-only operations on the
-    same node, and an Agent proxy core reload that fails with
-    `address already in use`.
+  - **Known issues** the suite reports as skips until they are fixed: an
+    Agent proxy core reload that fails with `address already in use`.
   - **CI:** the new job "Cross-Repo E2E" runs it in the full lane and
     nightly. The main lane runs on PostgreSQL; the forward lane runs as root
     in a throwaway network namespace. It uploads its logs on failure and is
@@ -1050,6 +1048,25 @@
     archived under `docs/archive/`.
 
 ### Fixed
+
+- **Plugin operations are no longer refused after stream operations on the
+  same node.** The one-off stream operations (`agent.diagnostic`, the
+  forward checks, `node.reload`, `agent.ping`, `users.reload`) took their
+  revisions from the session's in-memory counter, while durable plugin
+  operations took the next revision of the node's cursor
+  (`v3_kernel_node_operation_revision`). Once a stream operation had used a
+  revision at or above the next stored one, the durable operation was
+  refused ("revision 4 is not newer than 8") and stayed `dispatching`. Proxy
+  node operations of both kinds now allocate from that cursor (one per
+  node, a locked read-and-update on SQLite and PostgreSQL), and an Agent's
+  Hello raises the cursor to the revision it reports, which after a
+  Control restart can be above the stored one. The manager's in-memory
+  check stays as a guard; forward nodes, whose ids overlap proxy node ids,
+  keep the in-memory counter. No schema change. Found by the A2-7 suite,
+  whose scenario now asserts it.
+  - Still open: a durable operation created before a stream operation but
+    dispatched after it (a later step of a plugin lifecycle chain waiting
+    for the step before it) is still refused.
 
 - `TestForwardCommandDiagnose` no longer flakes: the fake dialer recorded
   addresses from parallel probes without a lock, so one was sometimes lost.
