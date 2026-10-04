@@ -959,10 +959,29 @@ driver writes gost's configuration and runs the unmodified binary.
   the exit's link certificate, so the dialler's verification fails; it
   stays unsupported. The Agent's half (F3b: the key, the files under
   `/var/lib/anixops-gost/tls`, the reload) is specified in
-  `sdk/api/agent/v1/PROTOCOL.md`, "Forward link certificates". Open for
-  the driver: a certificate-reload entry point that records the reload, so
-  the counter epoch moves with it (a supervisor reload outside `Apply`
-  does not).
+  `sdk/api/agent/v1/PROTOCOL.md`, "Forward link certificates".
+- **Certificate reload.** gost 3.2.6 has no certificate hot-reload: it
+  reads a certificate only when it creates the service (listener) or hop
+  (dialer) that uses it, and a renewal leaves the configuration file, which
+  names the files, unchanged. After every renewal the Agent calls
+  `(*gost.Driver).ReloadCredentials`, serialised with Apply: it checks
+  that the files load, then re-creates through the web API every service
+  with an encrypted listener (TLS, WSS, gRPC) and replaces every hop with
+  encrypted dialers (keeping a `SetUpstreams` selection). The re-created
+  services' hops start a new `counter_epoch`, recorded in `state.json` as
+  Apply's per-service changes are, and `WithRetiredCounters` gets their
+  last counters; every other hop keeps its epoch, and established
+  connections run on with the old certificate. A mux (mtls, mwss) or QUIC
+  listener cannot be re-created in place (measured: a deleted mux listener
+  leaves the carriers it accepted running, so a peer's new streams on them
+  are never accepted; a QUIC listener keeps its UDP port while its
+  connections live), so a node with one restarts gost instead, as when the
+  web API does not answer: every connection ends, every hop starts a new
+  epoch and hands its counters over, and a peer's QUIC carrier recovers
+  at its idle timeout (30 s). A supervisor reload outside the driver would
+  leave the epoch unmoved. Re-creating a mux listener's service in an
+  Apply (a changed exit hop, or the reload fallback) strands its peers'
+  carriers the same way; that is open for the driver.
 - **Web API (F4b).** gost's web API listens on `api.sock` in the runtime
   directory, without authentication: the socket's permissions are its only
   key. Under the unit, gost creates it with `UMask=0007` in its
@@ -985,16 +1004,18 @@ driver writes gost's configuration and runs the unmodified binary.
   (UDP sessions and the streams inside a mux carrier are not); gost counts
   no packets, so packets are 0. The `counter_epoch` names the statistics
   objects: a hash of the gost instance (the unit's InvocationID), the
-  starts and reloads Apply made (recorded in `state.json`), a per-hop
-  sequence number Apply records in `state.json` whenever it deletes or
-  creates one of the hop's services through the web API (gost's creation
+  starts and reloads Apply and `ReloadCredentials` made (recorded in
+  `state.json`), a per-hop sequence number Apply and `ReloadCredentials`
+  record in `state.json` whenever they delete or create one of the hop's
+  services through the web API (gost's creation
   times have a resolution of one second, too coarse to tell two
   re-creations apart), and the creation time of each of the hop's
   services. A start, a reload, or creating or deleting one of the hop's
   services ends it, for that hop only; hot changes, structural changes of
   other hops, `SetUpstreams` and the soft quota keep it. The
   `WithRetiredCounters` hook gets the last counters of every hop whose
-  epoch an Apply ended, read just before its first change. While gost does not run every hop reports 0 in the epoch `stopped`.
+  epoch an Apply or a `ReloadCredentials` ended, read just before its
+  first change. While gost does not run every hop reports 0 in the epoch `stopped`.
   gost's fail marking is not exposed, so `Health` stays empty and the
   Agent's checks are the source of truth.
 - **Failover (F4b).** `SetUpstreams` replaces the running hop through the
@@ -1049,8 +1070,11 @@ driver writes gost's configuration and runs the unmodified binary.
   epoch; a paused hop refuses new connections; the exit refuses a
   client without a certificate), failover through the API with a held TCP
   connection and UDP session, the soft quota and a pause
-  (`TestNetnsHotChanges`), and least-connections re-weighting
-  (`TestNetnsLeastConn`). CI runs them under sudo in Backend Tests shard 1
+  (`TestNetnsHotChanges`), least-connections re-weighting
+  (`TestNetnsLeastConn`), and link certificates renewed in place over TLS,
+  WSS, gRPC, QUIC and TLS-with-mux links (`TestNetnsReloadCredentials`:
+  the new certificate served, the epochs and retired counters, traffic
+  resuming, and over TLS an established connection kept). CI runs them under sudo in Backend Tests shard 1
   with the pinned release, after the nftables driver's real-kernel tests:
   every change runs them, as for nftables. The netns conformance Env fails
   an apply through the web API by refusing its first service creation

@@ -199,9 +199,10 @@ func (s *syncBuffer) String() string {
 	return s.b.String()
 }
 
-// linkPKI writes a CA and, per node name, a link certificate with the
-// name as DNS SAN and SPIFFE URI and both server and client auth, as the
-// gost driver needs them (doc.go, "Link certificates").
+// linkPKI writes a CA (ca.crt, and its key ca.key for renewLink) and,
+// per node name, a link certificate with the name as DNS SAN and SPIFFE
+// URI and both server and client auth, as the gost driver needs them
+// (doc.go, "Link certificates").
 func linkPKI(t testing.TB, dir string, nodes ...string) map[string][3]string {
 	t.Helper()
 	caKey, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
@@ -218,37 +219,76 @@ func linkPKI(t testing.TB, dir string, nodes ...string) map[string][3]string {
 	if err != nil {
 		t.Fatal(err)
 	}
-	ca, _ := x509.ParseCertificate(caDER)
 	caPath := filepath.Join(dir, "ca.crt")
 	writePEM(t, caPath, "CERTIFICATE", caDER)
+	caKDER, err := x509.MarshalECPrivateKey(caKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	writePEM(t, filepath.Join(dir, "ca.key"), "EC PRIVATE KEY", caKDER)
 	out := map[string][3]string{}
 	for i, n := range nodes {
-		key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
-		if err != nil {
-			t.Fatal(err)
-		}
-		u, _ := url.Parse("spiffe://anixops/example/agent/" + n)
-		tmpl := &x509.Certificate{
-			SerialNumber: big.NewInt(int64(i) + 2), Subject: pkix.Name{CommonName: n},
-			NotBefore: now.Add(-time.Hour), NotAfter: now.Add(24 * time.Hour),
-			DNSNames: []string{n}, URIs: []*url.URL{u},
-			KeyUsage:    x509.KeyUsageDigitalSignature,
-			ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
-		}
-		der, err := x509.CreateCertificate(rand.Reader, tmpl, ca, &key.PublicKey, caKey)
-		if err != nil {
-			t.Fatal(err)
-		}
-		kder, err := x509.MarshalECPrivateKey(key)
-		if err != nil {
-			t.Fatal(err)
-		}
 		crt, kf := filepath.Join(dir, n+".crt"), filepath.Join(dir, n+".key")
-		writePEM(t, crt, "CERTIFICATE", der)
-		writePEM(t, kf, "EC PRIVATE KEY", kder)
 		out[n] = [3]string{crt, kf, caPath}
+		issueLink(t, out[n], n, int64(i)+2)
 	}
 	return out
+}
+
+// issueLink writes a link certificate for name with serial, signed by the
+// CA next to files[2] (linkPKI), to files[0] and its key to files[1], each
+// replaced by a rename, as an Agent renewing them would.
+func issueLink(t testing.TB, files [3]string, name string, serial int64) {
+	t.Helper()
+	read := func(p string) []byte {
+		b, err := os.ReadFile(p) // #nosec G304 -- the test's own PKI
+		if err != nil {
+			t.Fatal(err)
+		}
+		blk, _ := pem.Decode(b)
+		if blk == nil {
+			t.Fatalf("%s: no PEM", p)
+		}
+		return blk.Bytes
+	}
+	ca, err := x509.ParseCertificate(read(files[2]))
+	if err != nil {
+		t.Fatal(err)
+	}
+	caKey, err := x509.ParseECPrivateKey(read(filepath.Join(filepath.Dir(files[2]), "ca.key")))
+	if err != nil {
+		t.Fatal(err)
+	}
+	key, err := ecdsa.GenerateKey(elliptic.P256(), rand.Reader)
+	if err != nil {
+		t.Fatal(err)
+	}
+	now := time.Now()
+	u, _ := url.Parse("spiffe://anixops/example/agent/" + name)
+	tmpl := &x509.Certificate{
+		SerialNumber: big.NewInt(serial), Subject: pkix.Name{CommonName: name},
+		NotBefore: now.Add(-time.Hour), NotAfter: now.Add(24 * time.Hour),
+		DNSNames: []string{name}, URIs: []*url.URL{u},
+		KeyUsage:    x509.KeyUsageDigitalSignature,
+		ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth, x509.ExtKeyUsageClientAuth},
+	}
+	der, err := x509.CreateCertificate(rand.Reader, tmpl, ca, &key.PublicKey, caKey)
+	if err != nil {
+		t.Fatal(err)
+	}
+	kder, err := x509.MarshalECPrivateKey(key)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, f := range []struct {
+		path, typ string
+		der       []byte
+	}{{files[1], "EC PRIVATE KEY", kder}, {files[0], "CERTIFICATE", der}} {
+		writePEM(t, f.path+".new", f.typ, f.der)
+		if err := os.Rename(f.path+".new", f.path); err != nil {
+			t.Fatal(err)
+		}
+	}
 }
 
 func writePEM(t testing.TB, path, typ string, der []byte) {

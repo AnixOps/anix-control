@@ -15,7 +15,7 @@
 // (ActiveConns, sdk/forward/leastconn). F4c makes structural changes
 // through the web API too, service by service, so adding, changing or
 // removing a route re-creates no other route's services; a reload is the
-// fallback.
+// fallback. ReloadCredentials makes gost use renewed link certificates.
 //
 // # Configuration
 //
@@ -116,7 +116,32 @@
 // (client auth only, URI name only) does not qualify, and gost never holds
 // its key. Owner decision H28 (forward-sdk.md section 16): a dedicated
 // forward link CA issues them, requested and renewed alongside the Agent
-// certificate; it is built after F4a (Control, and the Agent in F3b).
+// certificate (implemented on Control's side; the Agent's in F3b). The
+// Agent writes them to Config.LinkCert, LinkKey and LinkCA
+// (/var/lib/anixops-gost/tls/link.crt, link.key and link-ca.crt by
+// default), each replaced by a rename, and calls ReloadCredentials after
+// every renewal.
+//
+// gost 3.2.6 has no certificate hot-reload: it reads a certificate only
+// when it creates the service (listener) or the hop (dialer) that uses
+// it, and the configuration file, which names the files, does not change
+// on a renewal. ReloadCredentials therefore re-creates every service with
+// an encrypted listener (tls, wss, grpc) through the web API and replaces
+// every hop with encrypted dialers (keeping a SetUpstreams selection), as
+// Apply's per-service changes do: the re-created services' hops start a
+// new counter epoch, recorded in the state file, and the
+// WithRetiredCounters hook gets their last counters; every other hop
+// keeps its epoch, and established connections run on with the old
+// certificate. A mux (mtls, mwss) or QUIC listener cannot be re-created
+// in place (measured: a deleted mux listener leaves the carriers it
+// accepted running, so peers' new streams on them are never accepted; a
+// QUIC listener keeps its UDP port while its connections live), so a node
+// with one restarts gost instead, as when the web API does not answer:
+// every connection ends, every hop starts a new epoch and hands its
+// counters over, and a peer's QUIC carrier recovers at its idle timeout
+// (30 s). The stranding is not particular to renewals: re-creating a mux
+// listener's service, as an Apply that changes such a hop or reloads gost
+// does, strands its peers' carriers too until they close.
 //
 // # Process and files
 //
@@ -124,7 +149,8 @@
 // state.json, its own record (OwnerMark, node, generation, state_hash,
 // digest, the applied hops, the starts and reloads it made gost do, the
 // metrics path gost loaded last, and per hop the sequence number of the
-// last apply that deleted or created one of its services).
+// last apply or credential reload that deleted or created one of its
+// services).
 // The state file is written before the
 // first configuration and after every apply that succeeded. A
 // configuration without the driver's state file, or a state file without
@@ -206,13 +232,14 @@
 // streams inside a mux carrier are not connections); gost counts no
 // packets, so packets are 0. The counter epoch names the statistics
 // objects: a hash of the gost instance (the unit's InvocationID), the
-// starts and reloads Apply made (recorded in the state file), the
-// sequence number of the last apply that deleted or created one of the
-// hop's services through the web API (the state file), and the creation
-// time of each of the hop's services. A start, a reload, or deleting or
-// creating one of the hop's services ends it, for that hop only; Apply's
-// hot changes, structural changes of other hops, SetUpstreams and
-// EnforceQuotas keep it. gost's creation times have a resolution of a
+// starts and reloads Apply and ReloadCredentials made (recorded in the
+// state file), the sequence number of the last apply or credential reload
+// that deleted or created one of the hop's services through the web API
+// (the state file), and the creation time of each of the hop's services.
+// A start, a reload, or deleting or creating one of the hop's services
+// ends it, for that hop only; Apply's hot changes, structural changes of
+// other hops, SetUpstreams, EnforceQuotas and replacing a hop's dialers
+// keep it. gost's creation times have a resolution of a
 // second, which is why the driver numbers its own re-creations; nothing
 // but the driver re-creates services. While
 // gost does not run, every hop reports 0 in the epoch "stopped". gost's

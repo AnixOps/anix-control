@@ -626,19 +626,22 @@ addresses from its peers' `ingress_sources` and upstreams.
    `IssueLinkCertificate` answer, and call `GetLinkTrustBundle` at least
    hourly and at start-up; rewrite it whenever the set of CAs changes, not
    only at renewal.
-5. **Reload gost.** gost reads the files when it creates its services.
-   After any of the three files changed, reload gost (the gost driver's
-   supervisor reload, `systemctl reload anixops-gost` under the unit). A
-   reload re-creates gost's services: established TCP connections survive,
-   UDP sessions and mux carriers may restart, and every gost hop's counters
-   start again. Today the driver records reloads (and so starts a new
-   `counter_epoch`) only inside `Apply`; a reload outside it leaves the
-   epoch as it was, so Control sees the counters fall and counts nothing for
-   that observation interval. The gost driver needs a certificate-reload
-   entry point that records the reload (a follow-up of the driver work);
-   until then the Agent uses the supervisor's reload and accepts that one
-   lost interval per renewal. Without the three files the gost driver
-   carries RAW links only.
+5. **Reload gost.** gost reads the files when it creates its services and
+   hops. After any of the three files changed, call the gost driver's
+   `ReloadCredentials` (`(*gost.Driver).ReloadCredentials(ctx)`), not the
+   supervisor's reload: it checks that the files load, re-creates through
+   gost's web API the services with encrypted listeners and replaces the
+   hops with encrypted dialers, and records the hops whose services it
+   re-created as starting a new `counter_epoch`, handing their last
+   counters to the `WithRetiredCounters` hook (report them as for any
+   ended epoch). Other hops keep their epochs; established connections run
+   on with the old certificate. A node with a mux or QUIC listener
+   restarts gost instead: every connection ends and every hop starts a new
+   epoch. It does nothing while gost is stopped (a start reads the files)
+   and is serialised with `Apply`. A supervisor reload outside the driver
+   would leave the epoch unmoved, so Control would see the counters fall
+   and count nothing for that interval. Without the three files the gost
+   driver carries RAW links only.
 6. **On revocation.** When the agent certificate is revoked
    (`agent_cert_revoked`), delete the link key and certificate along with
    it and reload gost; ask again after enrolling anew.
