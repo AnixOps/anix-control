@@ -2171,7 +2171,7 @@ Agent-repository PRs are marked (agent).
 | | L1 | least-connections re-weighting (implemented) | S | H21 |
 | | L2 | entry HA via DDNS and CNAME | M | H21 |
 | F5 | F5a | Control forward package: `ForwardControl`, `/api/v4/forward/*`, `anix-control forward` (implemented) | L | H23 |
-| | F5b | new forwarding UI | L | H16 |
+| | F5b | new forwarding UI: `/admin/forward/{overview,routes,inventory}` in the core app, shown with the forward package's v4 API; `can_delete` on the list answers, previews left out of the audit log (implemented; [`docs/design/forward-ui`](../design/forward-ui/README.md), [`docs/guide/forwarding.md`](../guide/forwarding.md)) | L | H16 |
 | | F5c | upgrade: archive, check the nodes are clean (Control cleans NodeX and Ansible hosts), drop tables | M | H15 |
 | | F5d | remove flux routes, `forwardcompat`, catalog entries; rewrite AGENTS.md rules; archive the flux docs | M | H17 |
 | F6 | A0 | AnixOps relay transport design (`anixops-protocol.md`; secure transport only, approved 2026-10-04; camouflage reserved for the owner) | M | H22 |

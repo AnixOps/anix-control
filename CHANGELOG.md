@@ -4,6 +4,41 @@
 
 ### Added
 
+- **v4.2 forwarding admin UI** (F5b, H16 approved 2026-10-04 with D1–D15).
+  New pages in the core app, lazy-loaded and shown only when the forward
+  package serves the v4 API: 概览 (`/admin/forward/overview`), 路由
+  (`/admin/forward/routes`, with the full-page editor and the route
+  detail) and 节点 (`/admin/forward/inventory`). The flux-clone pages stay
+  as 转发（旧版） and 转发节点（旧版） until F5d.
+  - Route list with client-side status, engine, node and label filters,
+    24-hour entry traffic from one `GET /stats`, bulk pause, resume and
+    delete (per-route calls, four at a time, each with its own
+    `Idempotency-Key`, retry and undo), and JSON import and export.
+  - Route editor: hop chain builder (keyboard reordering, link and engine
+    options explained, link fix actions), targets, policy, limits, labels,
+    violations mapped to their fields, and a plan preview 1 s after typing
+    stops (in-flight previews cancelled). One `Idempotency-Key` per save
+    attempt is reused on retry; `409 revision_conflict` keeps the form and
+    offers a diff and reapply.
+  - Route detail: per-hop health, breakers and ports, a node dot scoped to
+    the route, hourly traffic, node states, configuration, and 诊断, which
+    shows `POST /routes/{id}/diagnose` by stage.
+  - Node inventory and node page: health, hosted hops, engines, forwarding
+    settings (`PUT /nodes/{ref}/settings`), the Agent install sheet,
+    disable and delete. Proxy nodes show 「代理节点」, and the proxy node page
+    offers 加入转发清单….
+  - The anixops engine is offered only with the experimental flag, which
+    Control does not serve yet (F6), so it stays hidden except on routes
+    that use it.
+  - Operator guide: `docs/guide/forwarding.md`. The dev-only mockups are
+    removed; their data is the e2e fixture.
+- **Forward v4 API: `can_delete` and quiet previews** (F5b D7, D13).
+  `GET /api/v4/forward/routes`, `/nodes` and `/ansible-machines` answer
+  `can_delete` (the super administrator rule, passed by the kernel as the
+  principal's `super_admin`). `POST /routes/preview` is no longer written
+  to the audit log. The extension catalog (`GET /api/v3/extensions`) lists a
+  package's `control_routes` to actors who may call them.
+
 - **Forward route diagnosis** (F3c, forward-sdk.md section 7.6).
   `ForwardControl.DiagnoseRoute` now answers instead of `UNIMPLEMENTED`;
   `POST /api/v4/forward/routes/{id}/diagnose` (administrators, audited as

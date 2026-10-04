@@ -61,6 +61,7 @@ Use this tree like NodeX:
 
 - Runtime mode entrypoint: [`reference/runtime.md`](reference/runtime.md)
 - Runtime config migration: [`reference/forward-runtime-migration.md`](reference/forward-runtime-migration.md)
+- The v4.2 forwarding pages (operator guide): [`guide/forwarding.md`](guide/forwarding.md)
 - Relay onboarding: [`guide/forward-relay-onboarding.md`](guide/forward-relay-onboarding.md)
 - Forwarding module design, API, security, and compatibility:
   [`forwarding/design.md`](forwarding/design.md),
