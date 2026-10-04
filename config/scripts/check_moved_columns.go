@@ -71,8 +71,6 @@ var allowed = map[string]string{
 		"nodesecrets.ForwardNodeToken",
 	"internal/service/node_credential_ops.go IssueForwardNodeTokenTx": "selects api_token only to hand the row to " +
 		"nodesecrets.ForwardNodeToken",
-	"internal/service/node_secrets.go MaskForwardNodeToken": "masks the column for an answer: any value, a tombstone " +
-		"too, is shown as the placeholder",
 	"internal/service/node_secrets.go MaskAuthorizedKeys": "masks the column for an answer: any value, a tombstone " +
 		"too, is shown as the placeholder",
 	"internal/service/wireguard_peer.go applyWireGuardPeer": "the peer comes from GetOrCreateWireGuardPeer, which " +
