@@ -34,6 +34,14 @@
 
 ### Added
 
+- **AnixOps relay transport design, for review (H22).**
+  `docs/architecture/anixops-protocol.md` specifies the secure transport
+  between forward nodes (TLS 1.3 mutual authentication with the H28 link
+  certificates and identity pinning, framing and multiplexing, TLS, QUIC
+  and trusted-link plaintext carriers, the `anixops` driver and its own
+  unit, the v4.2 experimental flag `forward.anixops_experimental`), with
+  open questions P1–P10. Camouflage is reserved for the owner (owner
+  decision of 2026-10-04). Documentation only.
 - **Forward link certificates, Control side (owner decision H28).** A
   dedicated forward link CA issues each node whose Agent negotiated
   `forward.v1` the certificate its forward engines (gost) present to each
