@@ -669,6 +669,11 @@ upstreams. A check names a hop, never an address to dial.
 | `forward.connect` | A TCP connect to each upstream within `timeout_ms`, all at once. For an encrypted link the carrier's TCP connect is enough; no handshake is needed. | one per upstream: `ok` `reachable` with `rtt_us`; `failed` `unreachable` or `timeout`; `skipped` `target_not_allowed` |
 | `forward.udp_probe` | For each upstream, one datagram of at most 64 bytes (`anixops-diag <task id>`), from a connected UDP socket, and a wait of `timeout_ms` for any datagram back. | `ok` `reply` with `rtt_us`; `failed` `port_unreachable` (ICMP port unreachable); `inconclusive` `no_reply`, never `failed`: a UDP service need not answer; `skipped` `target_not_allowed` |
 
+A next hop (an upstream with `node_ref`) is probed on its link's carrier
+only: `forward.connect` skips a QUIC link (`skipped`, `link_not_tcp`), and
+`forward.udp_probe` skips a TLS, WSS or gRPC link (`skipped`,
+`link_not_udp`).
+
 An Agent without these checks keeps working. Control marks its node steps
 `SKIPPED` (`node_vantage_unavailable`) and dials what it can from its own
 vantage.
