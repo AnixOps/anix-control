@@ -4,6 +4,37 @@
 
 ### Added
 
+- **Fresh Control installs are ready for enrolled Agents** (owner decision
+  2026-10-04). Every shipped install path generates the built-in CA's
+  key-encryption key (`module_runtime.ca_kek`, 32 random bytes) on a fresh
+  install, prints only its fingerprint and never replaces an existing one,
+  and enables gRPC with TLS when it has a publicly trusted certificate.
+  Agents verify Control's certificate against the node's system roots and
+  accept no private CA, so no self-signed certificate is generated: the
+  installers check a certificate the way an Agent does and refuse one that
+  fails, and without one they print the steps.
+  - `scripts/install.sh` (systemd): `config/secrets/module_ca_kek` (0600,
+    passed as `ANIX_CONTROL_MODULE_RUNTIME_CA_KEK_FILE`; kept out of
+    `config.yaml`); `--grpc-name`, `--grpc-tls-cert`, `--grpc-tls-key`
+    (Let's Encrypt found by name), copied to `config/tls/`; new
+    `enable-agents` command for existing installs, without a download.
+    `config/deploy/grpc_tls/setup_certbot.sh`'s renewal hook copies the
+    renewed certificate into `config/tls/` before restarting Control.
+  - Compose: `config/deploy/compose/init-secrets.sh` creates
+    `secrets/jwt_secret` and `secrets/module_ca_kek` and, with a
+    certificate, `tls/` and the gRPC settings in `control.env`;
+    `docker-compose.prod.yml` now passes `secrets/module_ca_kek` (it must
+    exist before `up`) and mounts `tls/`.
+  - Helm chart 0.3.0: `caKek` (a generated `<fullname>-ca-kek` Secret kept
+    with `lookup`, `immutable` and `helm.sh/resource-policy: keep`, or
+    `caKek.existingSecret`); `grpc.enabled` turns the listener on and
+    `grpc.tls.secretName` mounts a TLS Secret (cert-manager example in the
+    chart README); `helm install` notes say what Agents still lack.
+  - Existing installs: `docs/UPGRADE.md`, "Fresh Installs Are Ready; Adding
+    The CA Key And gRPC TLS". Install guides: `docs/guide/release-installation.md`
+    ("Agent access"), `docs/DEPLOYMENT.md` 2.0.2. Fake-root tests:
+    `scripts/tests/test_control_install_agent_access.sh`,
+    `scripts/tests/test_compose_init_secrets.sh`.
 - **Forward entry high availability through DNS** (L2, forward-sdk.md
   section 7.4; owner decision H21). Control keeps a route's
   `entry_hostname` on its healthy entry nodes' public addresses through a

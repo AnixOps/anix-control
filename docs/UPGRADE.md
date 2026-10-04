@@ -39,6 +39,8 @@ API-key Agents are refused on the AnixOps Agent channels. Run
 `anix-control agents transports --check-required` (exit status 0) before you
 upgrade, and read
 ["Agent Transports: v4.2 Requires Enrolled Agents"](#agent-transports-v42-requires-enrolled-agents).
+Fresh installs now generate the CA key and enable gRPC TLS; existing ones add
+them first (Compose: `secrets/module_ca_kek` must exist before `up`).
 
 ## Fixed Legacy Native Layout
 
@@ -1997,16 +1999,80 @@ selectable.
      listener, its TLS or the built-in CA is missing: no Agent can connect
      at all. The default still starts (an install without Agents, or with
      third-party node software only, needs nothing); an explicit
-     `mtls: "required"` refuses to start without them, as in 4.1. A fresh
-     install from `install.sh` or the Compose templates is in this state
-     until you add the gRPC TLS files and `module_runtime.ca_kek`
-     (`openssl rand -base64 32`); the
-     [onboarding guide](guide/agent-onboarding.md) lists them.
+     `mtls: "required"` refuses to start without them, as in 4.1. Fresh
+     installs now generate `module_runtime.ca_kek` and, given a publicly
+     trusted certificate, enable gRPC TLS; an existing install adds them
+     as described in
+     ["Fresh Installs Are Ready; Adding The CA Key And gRPC TLS"](#fresh-installs-are-ready-adding-the-ca-key-and-grpc-tls).
 4. **Watch** `anixops_agent_legacy_refused_total{path}` on `/metrics`.
    Refused requests are not recorded in the transport inventory, so a
    refused node keeps its last legacy sighting and drops out of the 7-day
    window after a week; it stays in `--check-required` until it enrolls or
    is disabled.
+
+### Fresh Installs Are Ready; Adding The CA Key And gRPC TLS
+
+Every shipped install path now prepares what enrolled Agents need on a fresh
+install (owner decision, 2026-10-04):
+
+| Path | CA key (`module_runtime.ca_kek`) | gRPC TLS |
+|------|----------------------------------|----------|
+| `scripts/install.sh` (systemd) | `config/secrets/module_ca_kek`, 0600, passed as `ANIX_CONTROL_MODULE_RUNTIME_CA_KEK_FILE` | `--grpc-tls-cert`/`--grpc-tls-key`, or `/etc/letsencrypt/live/<--grpc-name>/` |
+| Compose (`init-secrets.sh`) | `secrets/module_ca_kek`, 0400 uid 10001 | the same flags; `tls/` mounted at `/run/anix-control/tls` |
+| Helm chart 0.3.0 | Secret `<fullname>-ca-kek` (generated once, `lookup`, immutable, kept on uninstall), or `caKek.existingSecret` | `grpc.enabled` + `grpc.tls.secretName` (cert-manager) |
+
+The key is never printed (only `sha256sum <file> | cut -c1-16`) and never
+replaced. **Agents verify Control's gRPC certificate against the node's
+system CA roots and cannot be given a private CA**, so the installers do not
+generate a self-signed certificate: they check the certificate the way an
+Agent does and refuse one that fails. Without a certificate they finish,
+print the next steps, and Control logs that no Agent can connect.
+
+**Existing installs, before v4.2.** First check whether the database already
+holds a CA (a key was set once, even if it is not configured now):
+
+```sql
+SELECT cluster, state, key_id FROM v4_kernel_service_ca;
+```
+
+If it returns rows, find the key that sealed them and configure that one;
+a new key cannot unseal them (`module CA … key cannot be unsealed: wrong
+key-encryption key`, when Control first signs). With no rows, a new key is
+safe:
+
+- **systemd.** `sudo bash install.sh enable-agents --grpc-name grpc.example.com`
+  (or `--grpc-tls-cert`/`--grpc-tls-key`). It creates the key unless
+  `config.yaml` or a drop-in sets one, installs the certificate, rewrites the
+  unit and restarts Control; nothing is downloaded. `update` keeps both and
+  reports a missing key.
+- **Compose.** The v4.2 `docker-compose.prod.yml` reads
+  `secrets/module_ca_kek`; `docker compose up` fails while the file is
+  missing. Run `sudo bash init-secrets.sh [--grpc-name grpc.example.com]`
+  before `up`. If `control.env` sets `ANIX_CONTROL_MODULE_RUNTIME_CA_KEK`
+  (or `_FILE`), the script stops: move the value into
+  `secrets/module_ca_kek` (`printf '%s' "$key" | install -m 0400 -o 10001 -g
+  10001 /dev/stdin secrets/module_ca_kek`) and delete the line; Control
+  refuses to start with both. With the modules overlay, the file is the one
+  you already have.
+- **Helm.** `helm upgrade` creates `<fullname>-ca-kek` when no key is
+  configured. A key in `secrets.files` (`ANIX_CONTROL_MODULE_RUNTIME_CA_KEK`)
+  keeps precedence and no Secret is created. A key passed any other way
+  (`config.ANIX_CONTROL_MODULE_RUNTIME_CA_KEK`, extra environment) now
+  collides with the chart's `_FILE` variable and Control refuses to start:
+  move it into a Secret and set `caKek.existingSecret`, or
+  `caKek.generate: false`. GitOps renders (Argo CD, Flux) have no `lookup`:
+  use `caKek.existingSecret`. For TLS, see the chart README.
+
+Then `anix-control agents transports --check-required`.
+
+**Replacing the key** is a manual procedure: there is no command that
+re-seals the CA, so a new key means new CAs and every Agent and module
+enrolling again. Do it only when the key is lost or exposed: stop Control,
+back up the database, delete the sealed roots (`DELETE FROM
+v4_kernel_service_ca; DELETE FROM v4_kernel_forward_link_ca;`), install the
+new key, start Control (it creates new CAs), then issue new enrollment
+tokens for every Agent and redo the module bootstrap (trust bundle and
+enrollment credential, `docs/architecture/module-runtime.md`).
 
 ### Keeping `preferred` For A While
 

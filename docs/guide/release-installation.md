@@ -19,8 +19,8 @@ with systemd. Upgrades are in [`../UPGRADE.md`](../UPGRADE.md).
    when needed, `50051` are available.
 2. Put the panel behind Nginx or Caddy for public TLS. Do not expose the admin
    API directly to the Internet without a reverse proxy and firewall policy.
-   The fresh development template binds gRPC to `127.0.0.1:50051`; remote
-   Agents require an explicit TLS/proxy setup and a deliberate bind-address change.
+   gRPC stays on `127.0.0.1:50051` until it has a TLS certificate; with one
+   the installer opens it for Agents ([Agent access](#agent-access)).
 3. Decide the exact version to install. Pinning a tag makes the operation
    reproducible. The `v4.0.0` package-only release is installable only when
    its release assets include a verified `v4-release-evidence.tar.gz`;
@@ -41,9 +41,15 @@ curl -fsSL \
   -o /tmp/anix-control-install.sh
 sudo bash /tmp/anix-control-install.sh install \
   --version "${VERSION}" \
-  --admin-email "admin@example.com"
+  --admin-email "admin@example.com" \
+  --grpc-name grpc.example.com
 rm -f /tmp/anix-control-install.sh
 ```
+
+`--grpc-name` is the host name Agents dial for gRPC. When
+`/etc/letsencrypt/live/<name>/` holds a certificate (or you pass
+`--grpc-tls-cert` and `--grpc-tls-key`), the install is ready for Agents at
+once; see [Agent access](#agent-access).
 
 The installer will:
 
@@ -61,8 +67,12 @@ The installer will:
    serve login.
 6. Download the configuration template that matches the selected tag.
 7. Generate the JWT secret, node API token, and first administrator password.
-8. Install and enable `anix-control.service`.
-9. Start the service and require `http://127.0.0.1:8080/health` to succeed;
+8. Generate the CA key-encryption key (`module_runtime.ca_kek`) in
+   `config/secrets/module_ca_kek` (mode 0600, printed only as a fingerprint)
+   and, given a publicly trusted certificate, enable gRPC with TLS
+   ([Agent access](#agent-access)).
+9. Install and enable `anix-control.service`.
+10. Start the service and require `http://127.0.0.1:8080/health` to succeed;
    a fresh V4 install also verifies the identity package gateway and login.
 
 The normal configuration template keeps package execution, Agent dispatch, and
@@ -91,6 +101,8 @@ not put secrets in shell history on shared hosts.
 | `/opt/anixops/control/bin/v2board` | Compatibility symlink to the primary binary |
 | `/opt/anixops/control/web/public` | GitHub Actions-built frontend files |
 | `/opt/anixops/control/config/config.yaml` | Persistent control-plane configuration |
+| `/opt/anixops/control/config/secrets/module_ca_kek` | CA key-encryption key (service user, 0600); never replaced; back it up with the database |
+| `/opt/anixops/control/config/tls/control.crt`, `control.key` | gRPC certificate (0644) and key (0600) for Agents |
 | `/opt/anixops/control/config/data/v2board.db` | Default SQLite database; filename retained for compatibility |
 | `/opt/anixops/control/runtime/plugin-hosts/` | Service-user-private Control package host sockets and process state |
 | `/opt/anixops/control/data/plugin-artifacts/` | Service-user-private materialized Control package artifacts |
@@ -116,11 +128,72 @@ sudo systemctl restart anix-control
 sudo systemctl status anix-control --no-pager
 ```
 
-For a remote Agent, terminate TLS either in Control or in an HTTP/2-capable
-gRPC proxy before changing the listener bind. Configure the Agent with
-`Transport: "http"` to preserve the legacy data-plane fallback, and explicitly
-enable both `AgentControlEnabled` and `PluginSupervisorEnabled` with the same
-official public key.
+## Agent access
+
+AnixOps Agents enroll (AgentEnrollment) and connect over gRPC with TLS, and
+Control signs their certificates with its built-in CA. From v4.2
+`agent_control.mtls` defaults to `required`, so this is the only way Agents
+connect. Two things are needed, and the installer sets up both:
+
+1. **The CA key-encryption key** (`module_runtime.ca_kek`). A fresh install
+   writes 32 random bytes (base64) to
+   `/opt/anixops/control/config/secrets/module_ca_kek`, owned by the service
+   user with mode 0600, and the unit passes it as
+   `ANIX_CONTROL_MODULE_RUNTIME_CA_KEK_FILE`. Only its fingerprint is printed
+   (`sudo sha256sum /opt/anixops/control/config/secrets/module_ca_kek | cut -c1-16`).
+   The installer never replaces it, and leaves it alone when `config.yaml`
+   (or a systemd drop-in) sets the key already. Back it up with the database:
+   the CA is sealed with it, and with another key Control cannot sign Agent
+   certificates (`module CA … key cannot be unsealed: wrong key-encryption
+   key`) and every Agent must enroll again. Changing it is a manual
+   procedure ([`../UPGRADE.md`](../UPGRADE.md), "Agent Transports").
+2. **A gRPC certificate Agents trust.** Agents verify Control's certificate
+   against the node's system CA roots, for the host they dial
+   (`agent_install.grpc_target`, else `agent_install.public_url`'s host).
+   They have no option to trust a private CA, so **a self-signed certificate
+   does not work** and the installer never creates one. Use a publicly
+   trusted certificate:
+   - Let's Encrypt over DNS-01:
+     `DOMAIN=grpc.example.com CLOUDFLARE_API_TOKEN=<token> sudo -E bash config/deploy/grpc_tls/setup_certbot.sh`,
+     then `--grpc-name grpc.example.com`. Its renewal hook copies renewed
+     certificates into `config/tls/` and restarts Control.
+   - The certificate your reverse proxy already has for the same name:
+     `--grpc-tls-cert <fullchain.pem> --grpc-tls-key <privkey.pem>`.
+
+   The installer checks the certificate the way an Agent will (chain to the
+   system roots, the name, the key) and refuses one that fails, before it
+   changes anything. It copies it to `config/tls/` (the service user cannot
+   read `/etc/letsencrypt`), sets `grpc.enabled: true`, `grpc.host:
+   "0.0.0.0"` (when it was loopback), `grpc.tls_cert_file`/`tls_key_file`,
+   and with `--grpc-name` `agent_install.grpc_target: "<name>:<grpc.port>"`.
+   Open that port from the nodes.
+
+Without a certificate the install still finishes, gRPC stays on loopback
+without TLS, and the installer prints these steps; Control's startup log
+also says no Agent can connect.
+
+For an existing install, or once you have the certificate:
+
+```bash
+sudo bash /tmp/anix-control-install.sh enable-agents --grpc-name grpc.example.com
+# or: ... enable-agents --grpc-tls-cert /path/fullchain.pem --grpc-tls-key /path/privkey.pem
+sudo /opt/anixops/control/bin/anix-control -config /opt/anixops/control/config/config.yaml \
+  agents transports --check-required
+```
+
+`enable-agents` downloads nothing: it creates the CA key when none is
+configured (keeping an existing one), installs the certificate, rewrites the
+unit and restarts Control. Before running it on an install that ever had a
+`module_runtime.ca_kek`, read [`../UPGRADE.md`](../UPGRADE.md) ("Adding the
+CA key to an existing install"). `update` keeps both the key and the
+certificate; pass `--grpc-tls-cert`/`--grpc-tls-key` to it to replace the
+certificate.
+
+Then install Agents from the node page ([`agent-onboarding.md`](agent-onboarding.md)).
+A legacy Agent configured by hand (only while `agent_control.mtls` is
+`preferred` or `optional`) uses `Transport: "http"` to preserve the legacy
+data-plane fallback, and enables both `AgentControlEnabled` and
+`PluginSupervisorEnabled` with the same official public key.
 
 ## Import The Signed Official Packages
 
@@ -243,6 +316,8 @@ For older panel products or a coordinated panel/node cutover, follow
 - Do not use the legacy `install.sh` source/Docker path unless
   `ANIX_CONTROL_LEGACY_SOURCE_INSTALL=1` is intentionally set for a controlled
   recovery. It is not the stable release path.
+- `config/secrets/module_ca_kek` is a secret: keep it out of tickets and
+  shell history, and in the same backups as the database.
 - Release artifacts are built and tested by GitHub Actions. Do not compile a
   replacement binary or frontend bundle on the panel host.
 
