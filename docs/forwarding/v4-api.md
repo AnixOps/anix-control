@@ -31,6 +31,8 @@ in [`api.md`](api.md) stay until F5d removes them.
     carry `can_delete`: whether the caller may `DELETE` (F5b, D7). The
     kernel resolves the rule and passes it to the package as the
     principal's `super_admin`, the way route modes answer `can_switch`.
+    Only the `/api/v4/forward/` spelling resolves it; the same lists under
+    `/api/v4/plugins/forward/` answer `can_delete` false.
 - **Discovery.** `GET /api/v3/extensions` lists each package's
   `control_routes` to an actor who holds the package's `api` permission. The
   web app shows the forwarding pages when the forward package lists
