@@ -27,9 +27,9 @@ These are design mockups for owner review. They are not the final UI.
     protojson-shaped answers (enum names, 64-bit integers as strings), and
     `mockPlanner.js` is a stand-in for `POST /routes/preview` that uses the
     real `sdk/forward/validate` codes.
-- **Screenshots.** Run `node docs/design/forward-ui/capture.mjs <png-dir>
-  --webp docs/design/forward-ui/shots` from `web/` while a dev server runs on
-  port 4190.
+- **Screenshots.** From `web/`, while `npx vite --port 4190` runs, run
+  `node ../docs/design/forward-ui/capture.mjs <png-dir> --webp
+  ../docs/design/forward-ui/shots`.
   - It uses the host Chromium, because the zh-CN copy needs CJK fonts.
   - The clock is fixed at 2026-10-04 14:00 CST.
   - It covers 1440×900 and 390×844, light and dark. Each shot is a full page.
@@ -95,6 +95,9 @@ Every file in `shots/` is named `<screen>-<desktop|phone>-<light|dark>.webp`.
   endpoint, so each runs the per-route calls (see D9).
 - **Empty state** (`01c`): explains what a route is, with 查看节点 and
   新建路由. Toolbar and note are hidden.
+- **Full-page captures.** The floating bulk bar (`01b`) and the editor's
+  sticky phone bar appear mid-page or at the page end. They are fixed to the
+  viewport in the browser.
 - **Phone.** `UiDataTable` cards show the name, the listen address, the hop
   chain, the status and the traffic.
 
@@ -182,6 +185,10 @@ sticky bottom bar shows the status, 查看预览 and 保存.
 - **链路与健康.** One column per hop, then the targets.
   - Each node shows its status dot (hop error / lagging / ok), allocated
     port and generation (applied / desired).
+  - The dot is the node's overall state, not only this route's. In the
+    mockup, sg-relay-01 is red because of a hop error on another route
+    (sg-direct-udp). Whether to scope the dot to the route is part of the
+    review.
   - Under each node are its upstreams with 健康 / 不健康 / 熔断 badges, RTT,
     "N 秒后试探 · 不在轮转" for an open breaker, and "连续失败 N 次".
   - The hop's balance strategy is shown underneath.
