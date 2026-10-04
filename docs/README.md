@@ -65,6 +65,7 @@ Use this tree like NodeX:
 - Forwarding module design, API, security, and compatibility:
   [`forwarding/design.md`](forwarding/design.md),
   [`forwarding/api.md`](forwarding/api.md),
+  [`forwarding/v4-api.md`](forwarding/v4-api.md) (the v4.2 API),
   [`forwarding/security.md`](forwarding/security.md),
   [`forwarding/compatibility.md`](forwarding/compatibility.md)
 - Clean-room forward agent: [`forward-clean-room/spec.md`](forward-clean-room/spec.md),

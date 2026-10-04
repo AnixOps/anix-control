@@ -45,6 +45,38 @@
   `link=iepl|iplc` nodes; nftables RAW handover in v4.3). H23 is recorded
   as decided (the protocol in both editions). Camouflage stays reserved for
   the owner. Documentation only.
+- **Forward v4 API and command line (F5a, owner decision H23).** The forward
+  package serves `/api/v4/forward/*` on the kernel's `ForwardControl`
+  (`kernel.forward.v1`), as its manifest control route
+  `/api/v4/plugins/forward/*` (`packages/forward/v4api`). Reference:
+  `docs/forwarding/v4-api.md`.
+  - **Routes.** List, get, create, preview, update at a revision, delete,
+    pause, resume, statistics and health. A refusal carries violations with
+    the stable codes of `sdk/forward/validate`, and `Idempotency-Key` makes
+    a retried write apply once.
+  - **Nodes.** The node inventory with forwarding settings (port range,
+    reserved ports, addresses, labels) and the node view (desired state,
+    latest report, hop errors, health).
+  - **The 19 v2 node management routes, rewritten.** Forward node and
+    Ansible machine CRUD and toggle, and the observability targets,
+    topology and trend.
+  - **Statistics.** Traffic totals and hourly series from the ledger.
+  - **Not served.** No answer carries a node credential. The v2 routes stay
+    until F5d.
+  - **Contract.** `ForwardControl` gains, additions only, `ListNodes`,
+    `GetNode`, `SetNodeSettings`, `CreateForwardNode`, `UpdateForwardNode`,
+    `DeleteForwardNode`, `GetTraffic` and `enforced` on route answers; the
+    validate code `node_in_use` is new. The module listener forwards the
+    new methods.
+  - **Kernel checks.** Every `DELETE` needs a super administrator. Writes
+    are audited as module `forward`.
+  - **Editions.** `config/editions.json` `commercial_api_prefixes` reserves
+    `/api/v4/forward/self/`, `/plans/` and `/multipliers/` for the
+    commercial edition (v4.3). The community edition answers them as
+    unknown routes.
+  - **Command line.** `anix-control forward routes list|get|create -f|delete
+    --yes|pause|resume`, `forward nodes list|set` and `forward stats` run
+    beside `forward reset-node` and audit as `system/cli`.
 - **Forward link certificates, Control side (owner decision H28).** A
   dedicated forward link CA issues each node whose Agent negotiated
   `forward.v1` the certificate its forward engines (gost) present to each

@@ -14,7 +14,12 @@ generations, the node state over the Agent Control stream, the reports and
 the traffic ledger, and `ForwardControl` for official packages. F4a is
 implemented: the gost driver's Render and process management
 (`sdk/forward/driver/gost`) with golden configurations in
-`contracts/forward/v1/gost` (section 6.2). The contract is
+`contracts/forward/v1/gost` (section 6.2). F5a is implemented: the
+forward package serves `/api/v4/forward/*` on `ForwardControl`
+(`packages/forward/v4api`, reference in
+[`../forwarding/v4-api.md`](../forwarding/v4-api.md)), and
+`anix-control forward` administers routes, nodes and statistics. The
+contract is
 `sdk/api/forward/v1` (`anixops.forward.v1`), binding since F3a: additions
 only (section 15); the planner goldens are in `contracts/forward/v1`. This
 is the v4.2 forwarding redesign. It replaces the flux-panel clone
@@ -151,7 +156,7 @@ Everything lives in the existing `sdk/` module
 | Model and validation | `sdk/forward/model`, `sdk/forward/validate` | Go domain types with lossless conversion to and from the contract and the defaults (`model/defaults.go`); one set of validation rules used by Control, the planner and the Agent (F1b, implemented) |
 | Planner | `sdk/forward/planner` | routes and node inventory in, per-node states, port and mark allocations and generations out; pure functions (F1c, implemented) |
 | Drivers | `sdk/forward/driver`, `.../driver/fake`, `.../driver/conformance`, `.../driver/nftables`, `.../driver/gost`, `.../driver/ansible` | the driver interface, registry, fake driver and conformance suite (F2a, implemented), the nftables driver (Render F2b, Apply, Observe, failover and tc F2c, implemented), the gost driver (Render and process management F4a; Observe, hot updates over gost's web API, failover and the soft quota F4b; per-service structural changes over the web API F4c; implemented), least-connections re-weighting (`sdk/forward/leastconn`, L1, implemented) and the Ansible fallback |
-| Client | `sdk/forward/forwardctl` | a Go client for `ForwardControl` (F5) |
+| Client | `sdk/api/forward/v1` | the generated `ForwardControlClient`, which the forward package's v4 API uses directly (F5a); a higher-level `sdk/forward/forwardctl` waits for a second caller |
 
 Consumers:
 
@@ -160,9 +165,10 @@ Consumers:
   (section 8), both through `sdk/forward/wire`.
 - **Control**: the kernel's forwarding state (`internal/kernelforward`,
   F3a) runs the planner and serves `ForwardControl` to official packages
-  (section 8); a new forward package builds on it a native API under
-  `/api/v4/forward/*`, the operator CLI `anix-control forward ...` and a
-  new UI (F5).
+  (section 8). The forward package builds on it a native API under
+  `/api/v4/forward/*` (F5a, implemented: `packages/forward/v4api`). The
+  operator CLI `anix-control forward ...` runs on the kernel's state
+  directly (F5a). A new UI follows (F5b).
 - **Other AnixOps products**: import `sdk/forward` and call
   `ForwardControl`.
 
@@ -1300,7 +1306,9 @@ by `internal/kernelforward`:
   violations (`Service.PlanStatus`, gauge `anixops_forward_plan_refused`).
 - **Internal Go API** (`kernelforward.Service`): route writes and reads,
   `PlanRoute`, `RouteStats`, `RouteHealth`, `Traffic` (the hourly ledger),
-  `State`, `Nodes`, `SetNodeSettings`, `RecordHello`, `RecordReport`,
+  `State`, `Nodes`, `SetNodeSettings`, F5a's `ListNodes`, `GetNode`,
+  `SetNodeSettingsAnswer`, `CreateForwardNode`, `UpdateForwardNode`,
+  `DeleteForwardNode`, `TrafficBuckets` and `Enforcement`, `RecordHello`, `RecordReport`,
   `Replan`, `PlanStatus`, `Maintain` (the singleton worker's minute tick:
   expiry, request-id retention), `ResetNode` (the operator's generation
   bump, `anix-control forward reset-node`; never served on
@@ -1433,7 +1441,7 @@ The kernel serves `ForwardControl` to official packages that declare the
 kernel capability `kernel.forward.v1`, on local bridge sessions and the
 module listener, authorized on every call against the host's generation
 (as `KernelNodeOps`). The forward package (F5a) builds `/api/v4/forward/*`
-and the CLI on it.
+on it ([`../forwarding/v4-api.md`](../forwarding/v4-api.md)).
 
 - Writes take a `request_id` (1 to 128 bytes): a retry answers the recorded
   response once; the same id with another request is
@@ -1450,6 +1458,32 @@ and the CLI on it.
 - `PlanRoute` previews without storing; `GetRouteStats` answers the
   ledger's totals per hop and node; `GetRouteHealth` the upstream health of
   the route's nodes' latest reports.
+- **Added in F5a** (additions only):
+  - `GetRoute` and `ListRoutes` answer `enforced`, the reason Control
+    itself pauses a route (`quota`, `expired`).
+  - `ListNodes` and `GetNode` answer the inventory as `NodeSummary`: every
+    forward node, plus the proxy nodes in the inventory. Each carries the
+    node's stored `NodeSettings`, the planner's `NodeInfo`, the reserved
+    ports, the capabilities, the desired generation and hop count, the
+    latest report's generation, `applied` and hop errors, and a forward
+    node's `ForwardNodeRecord`. `GetNode` adds the desired state and the
+    latest report.
+  - `SetNodeSettings` is `Service.SetNodeSettings`. A replan the settings
+    make impossible stores them anyway and answers the violations.
+  - `CreateForwardNode`, `UpdateForwardNode` and `DeleteForwardNode` write
+    the forward node registry (`v2_forward_node`, the Agent identity
+    `forward-<id>`).
+    - They go through `service.ForwardNodeService`, so the credential split
+      and Agent certificate revocation follow, and they use the plan lock
+      and the request ledger.
+    - A node a stored route uses cannot be disabled or deleted:
+      `FAILED_PRECONDITION`, with violations of the new code `node_in_use`
+      naming the routes.
+    - Control assigns a new Agent node the legacy credential the v2 paths
+      read until F5d. No answer carries it, and an update never changes it.
+    - `NodeTransport` tells Agent nodes from Ansible machines (section 6.3).
+  - `GetTraffic` answers the ledger's hourly buckets by route and node, over
+    at most 31 days and at most 20000 buckets.
 
 ## 9. Node onboarding
 
@@ -1623,7 +1657,15 @@ cancelled. They split three ways:
   forward nodes (`/admin/forward/nodes`, 8), Ansible machines
   (`/admin/forward/ansible-machines`, 8) and observability
   (`/admin/forward/observability/targets`, `topology` and `trend`, 3). The
-  v2 routes go with F5d.
+  v2 routes go with F5d. As built (F5a,
+  [`../forwarding/v4-api.md`](../forwarding/v4-api.md)):
+  - list, create, get, update, delete and toggle map one to one onto
+    `/nodes` and `/ansible-machines`;
+  - `check` is the node view (`GET /nodes/{ref}`): the Agent's report
+    replaces Control dialling the node;
+  - `sync-stats` is the traffic ledger (`GET /stats?node_ref=`): the
+    nodes push their counters;
+  - the trend is hourly traffic, since the kernel keeps no latency history.
 - **4 clean agent routes, retired with the switch to the new Agent:**
   `GET`/`POST /admin/forward/agents`,
   `POST /admin/forward/agents/:id/revoke` and
@@ -1671,6 +1713,18 @@ features go into which edition was decided by the owner on 2026-10-04
 | User self-service forwarding page (v4.3) | no | yes |
 | Forwarding plans, auto-renewal, billing multipliers (v4.3) | no | yes |
 | Resellers and panel federation (v4.4) | no | yes |
+
+As built (F5a):
+
+- Every `/api/v4/forward/*` endpoint is in both editions.
+- `config/editions.json` `commercial_api_prefixes` reserves
+  `/api/v4/forward/self/`, `/plans/` and `/multipliers/` for v4.3. The
+  community edition answers them as routes that do not exist, in the kernel,
+  before the package (`edition.Policy.HidesPath`).
+- Each endpoint of the package carries an edition (`v4api.Endpoints`), and a
+  commercial one must sit under a reserved prefix.
+- User self-service needs a user-facing route group in v4.3, since `/api/v4`
+  is administrator-only.
 
 ## 13. Testing
 
@@ -1893,7 +1947,7 @@ Agent-repository PRs are marked (agent).
 | | F4c | gost per-service structural changes, mixed-engine end-to-end (implemented) | M | |
 | | L1 | least-connections re-weighting (implemented) | S | H21 |
 | | L2 | entry HA via DDNS and CNAME | M | H21 |
-| F5 | F5a | Control forward package: `ForwardControl`, `/api/v4/forward/*`, `anix-control forward` | L | H23 |
+| F5 | F5a | Control forward package: `ForwardControl`, `/api/v4/forward/*`, `anix-control forward` (implemented) | L | H23 |
 | | F5b | new forwarding UI | L | H16 |
 | | F5c | upgrade: archive, check the nodes are clean (Control cleans NodeX and Ansible hosts), drop tables | M | H15 |
 | | F5d | remove flux routes, `forwardcompat`, catalog entries; rewrite AGENTS.md rules; archive the flux docs | M | H17 |
@@ -1914,7 +1968,9 @@ field, message, RPC or enum value is never removed, renumbered or retyped.
 `internal/tests/protocompat` rejects an element that disappears, and
 `config/scripts/check_proto_golden.py` (Documentation Sync Check job)
 rejects a golden file that lost or rewrote a line of the base revision;
-its `DRAFT_PACKAGES` is empty. F3a added only `Violation.route_id`.
+its `DRAFT_PACKAGES` is empty. F3a added only `Violation.route_id`; F5a
+added the node, registry and traffic RPCs and messages of section 8.6 and
+the `enforced` answers, and changed nothing else.
 
 ## 16. Open questions for owner review
 
@@ -1986,7 +2042,8 @@ Decided by the owner (2026-10-04):
 - **H23:** as recommended (section 12). Core forwarding, load balancing,
   failover and onboarding in both editions; user self-service, forwarding
   plans, billing multipliers and resellers commercial; the AnixOps relay
-  protocol in both editions.
+  protocol in both editions. F5a builds the community side and reserves the
+  commercial API prefixes (section 12).
 
 H19 is still open; it is asked before the work it gates.
 
