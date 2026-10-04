@@ -192,7 +192,10 @@ X-AnixOps-Signature: sha256=<hex HMAC-SHA256(secret, "1759579200" + "." + body)>
 2. **Bind the route.** Open the route's editor. With two or more entry
    nodes, 入口域名 has a binding section under it: turn on
    **让此主机名始终指向健康的入口**, then choose:
-   - the provider and the zone (guessed from the hostname);
+   - the provider and the zone (guessed from the hostname, and guessed
+     again when you change the hostname, unless you typed a zone yourself).
+     A field left empty is flagged "Required" only after you have been in
+     it and left it, not as soon as you turn the section on;
    - the mode: DDNS writes the entry hostname itself; CNAME asks for a
      managed name inside the zone and shows the CNAME to create, with a
      copy button;

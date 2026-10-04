@@ -88,6 +88,9 @@ export default {
     copy: {
       failed: 'Could not copy automatically. The text is selected; press Ctrl+C or ⌘C to copy it.'
     },
+    menu: {
+      region: 'Menu'
+    },
     toast: {
       region: 'Notifications',
       hotkeyHint: 'Press F8 to go to notifications.'

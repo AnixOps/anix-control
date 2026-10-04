@@ -15,7 +15,7 @@
       <UiIcon v-if="variant === 'row' && !compact" :icon="ChevronsUpDown" class="account-trigger__chevron" />
     </DropdownMenuTrigger>
 
-    <DropdownMenuPortal>
+    <DropdownMenuPortal :to="layer">
       <DropdownMenuContent
         class="shell-menu"
         :side="variant === 'row' ? 'top' : 'bottom'"
@@ -90,7 +90,7 @@
               <span class="shell-menu__value">{{ t(`shell.account.themes.${themePreference}`) }}</span>
               <UiIcon :icon="ChevronRight" />
             </DropdownMenuSubTrigger>
-            <DropdownMenuPortal>
+            <DropdownMenuPortal :to="layer">
               <DropdownMenuSubContent class="shell-menu shell-menu--sub" :side-offset="4" :collision-padding="12">
                 <DropdownMenuRadioGroup :model-value="themePreference" @update:model-value="setThemePreference">
                   <DropdownMenuRadioItem
@@ -118,7 +118,7 @@
               <span class="shell-menu__value">{{ currentLocaleLabel }}</span>
               <UiIcon :icon="ChevronRight" />
             </DropdownMenuSubTrigger>
-            <DropdownMenuPortal>
+            <DropdownMenuPortal :to="layer">
               <DropdownMenuSubContent class="shell-menu shell-menu--sub" :side-offset="4" :collision-padding="12">
                 <DropdownMenuRadioGroup :model-value="currentLocale" @update:model-value="switchLocale">
                   <DropdownMenuRadioItem
@@ -177,6 +177,7 @@ import { useTheme } from '@/composables/useTheme'
 import { useMediaQuery, NARROW_QUERY } from '@/composables/useMediaQuery'
 import { navIcon } from '@/navigation/icons'
 import UiIcon from '@/ui/UiIcon.vue'
+import { useMenuLayer } from '@/ui/composables/useMenuLayer'
 import ShellAvatar from './ShellAvatar.vue'
 
 const props = defineProps({
@@ -197,6 +198,8 @@ const userStore = useUserStore()
 const { t, currentLocale, localeOptions, switchLocale } = useAppI18n()
 const { themePreference, setThemePreference } = useTheme()
 const open = ref(false)
+// The open menu and its submenus sit in one labelled region, not on <body>.
+const layer = useMenuLayer(open, () => t('shell.account.menuLabel', { name: displayName.value }))
 // Flyout submenus are awkward on a phone: show the choices inline there.
 const inlineChoices = useMediaQuery(NARROW_QUERY)
 

@@ -1,5 +1,5 @@
 <template>
-  <div class="dns-picker" data-testid="forward-dns-picker" data-field="dns">
+  <div class="dns-picker" data-testid="forward-dns-picker" data-field="dns" @focusout="onFocusOut">
     <div class="dns-picker__head">
       <UiSwitch
         v-if="!stored"
@@ -37,7 +37,7 @@
             :label="t('forwardDns.binding.provider')"
             :placeholder="t('forwardDns.binding.providerPlaceholder')"
             :options="providerOptions"
-            :error="errors.provider_id"
+            :error="fieldErrors.provider_id"
             required
             @update:model-value="value => patch({ provider_id: value })"
           />
@@ -48,7 +48,7 @@
             :label="t('forwardDns.binding.zone')"
             placeholder="example.com"
             :help="t('forwardDns.binding.zoneHelp')"
-            :error="errors.zone"
+            :error="fieldErrors.zone"
             required
             @update:model-value="value => patch({ zone: value })"
           />
@@ -71,7 +71,7 @@
           :label="t('forwardDns.binding.recordName')"
           :placeholder="t('forwardDns.binding.recordNamePlaceholder')"
           :help="t('forwardDns.binding.recordNameHelp')"
-          :error="errors.record_name"
+          :error="fieldErrors.record_name"
           required
           @update:model-value="value => patch({ record_name: value })"
         />
@@ -81,7 +81,7 @@
       </template>
 
       <div class="dns-picker__grid">
-        <UiField :label="t('forwardDns.binding.recordTypes')" label-tag="span" :error="errors.record_types" :help="t('forwardDns.binding.recordTypesHelp')" data-field="dns.record_types">
+        <UiField :label="t('forwardDns.binding.recordTypes')" label-tag="span" :error="fieldErrors.record_types" :help="t('forwardDns.binding.recordTypesHelp')" data-field="dns.record_types">
           <template #default="{ labelId }">
             <span class="dns-picker__types" role="group" :aria-labelledby="labelId">
               <UiCheckbox
@@ -105,7 +105,7 @@
           :max="MAX_TTL"
           :placeholder="String(DEFAULT_TTL)"
           :help="t('forwardDns.binding.ttlHelp')"
-          :error="errors.ttl"
+          :error="fieldErrors.ttl"
           @update:model-value="value => patch({ ttl: value })"
         />
       </div>
@@ -139,7 +139,10 @@
 // needs the stored route and its entry_hostname): POST for a new one, the
 // whole binding on PUT for a change. Provider, zone, name and mode cannot
 // change once bound (delete with purge and bind again, on the route page).
-import { computed, onMounted, ref } from 'vue'
+// A field that starts out empty shows no error until the user has been in it
+// and left it (touched); the zone follows the entry hostname while it is
+// still the guess.
+import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { UiBadge, UiCheckbox, UiCopyField, UiField, UiGroupedList, UiGroupedListRow, UiNumberField, UiRadioGroup, UiSelect, UiSwitch, UiTextField } from '@/ui'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { listDnsKinds, listDnsProviders } from '@/api/forwardV4'
@@ -192,12 +195,48 @@ function patch(change) {
   emit('update:modelValue', { ...props.modelValue, ...change })
 }
 
-// Turning the binding on guesses the zone from the hostname.
+// Fields that start out empty: their error waits until the user has left
+// the field once, so turning the binding on (or switching to CNAME) does not
+// greet an untouched form with "Required".
+const GATED_FIELDS = ['provider_id', 'zone', 'record_name']
+const FIELD_IDS = Object.fromEntries(GATED_FIELDS.map(field => [fieldId(`dns.${field}`), field]))
+const touched = reactive({})
+const fieldErrors = computed(() => {
+  const out = { ...props.errors }
+  for (const field of GATED_FIELDS) if (!touched[field]) delete out[field]
+  return out
+})
+
+// One listener for the whole picker: focus leaving a gated field touches it.
+// Focus moving into the open provider list is not leaving the field (the
+// error would flash under the trigger while the user is choosing).
+function onFocusOut(event) {
+  const field = FIELD_IDS[event.target?.id]
+  if (!field || event.relatedTarget?.closest?.('[role="listbox"]')) return
+  touched[field] = true
+}
+
+// Turning the binding on starts a clean form and guesses the zone from the
+// hostname.
 function enable(value) {
   const change = { enabled: value }
-  if (value && !String(props.modelValue.zone || '').trim()) change.zone = zoneOf(props.hostname)
+  if (value) {
+    for (const field of GATED_FIELDS) delete touched[field]
+    if (!String(props.modelValue.zone || '').trim()) change.zone = zoneOf(props.hostname)
+  }
   patch(change)
 }
+
+// The zone follows the entry hostname while it is still a guess: empty, or
+// what the previous hostname gave. One the user typed stays. (A bound
+// route's zone is fixed.)
+watch(() => props.hostname, (next, previous) => {
+  if (props.stored) return
+  const zone = String(props.modelValue.zone || '').trim()
+  if (zone && zone !== zoneOf(previous)) return
+  const guess = zoneOf(next)
+  if (guess !== props.modelValue.zone) patch({ zone: guess })
+})
 
 function toggleType(type, on) {
   const set = new Set(props.modelValue.record_types)

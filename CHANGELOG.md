@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+### Changed
+
+- **The plugin drawer's install targets are real tabs.** The hand-built
+  tablist became `UiTabs` (segmented), so it follows the WAI-ARIA tabs
+  pattern: Left/Right move and select, Home/End jump to the first and last
+  tab, and the row is one Tab stop that lands on the selected tab (roving
+  tabindex). A plugin without targets no longer renders an empty tablist.
+
+### Fixed
+
+- **Forwarding editor, DNS binding (#196 follow-ups).** A fresh binding no
+  longer opens with "Required" under every empty field: the provider, zone
+  and managed-name errors wait until the field has been left once, and
+  turning the binding off and on starts clean again. The zone is guessed
+  again when the entry hostname changes (also while the binding is off, so
+  switching it on later does not bring back the first hostname's zone),
+  and a zone the user typed is kept. A bound route's zone stays fixed.
+- **Open menus are inside a landmark.** An open row action menu or the
+  account menu was axe "region" content (moderate) because Reka portals it
+  to `<body>`. Each now portals into its own labelled `region` that exists
+  only while the menu is open (`useMenuLayer`), so there is no empty
+  landmark and a menu inside a dialog is not hidden from screen readers.
+  `e2e/a11y.spec.js` checks both menus for any axe finding.
+- **Topology workspace text fields use `UiTextField` / `UiTextarea`.**
+  The name, description, rollout group, revision message and graph JSON
+  were native inputs with a hand-made label; they are now labelled design
+  system fields, and the graph JSON help is the field's description
+  (`aria-describedby`). The phone 16 px rule comes from the component.
+
 ## 4.2.0-rc.1 - 2026-10-04
 
 ### Added

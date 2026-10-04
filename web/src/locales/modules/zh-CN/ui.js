@@ -88,6 +88,9 @@ export default {
     copy: {
       failed: '无法自动复制，已选中内容，请按 Ctrl+C 或 ⌘C 复制。'
     },
+    menu: {
+      region: '菜单'
+    },
     toast: {
       region: '通知',
       hotkeyHint: '按 F8 前往通知。'

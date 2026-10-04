@@ -142,15 +142,70 @@ describe('PluginDetailDrawer', () => {
     expect(dialog.attributes('aria-modal')).toBe('true')
     expect(dialog.classes()).toContain('ui-sheet')
 
-    await bodyGet('[data-target="control"]').trigger('click')
+    const user = userEvent.setup()
+    await user.click(screen.getByRole('tab', { name: 'control' }))
     expect(dialog.text()).toContain('1.1.0')
     expect(dialog.text()).toContain('1.0.0')
     await bodyGet('[data-action="configure"]').trigger('click')
     expect(wrapper.emitted('configure')[0]).toEqual([row.targets[1]])
 
-    await bodyGet('[data-target="agent"]').trigger('click')
+    await user.click(screen.getByRole('tab', { name: 'agent' }))
     await bodyGet('[data-action="install"]').trigger('click')
     expect(wrapper.emitted('install')[0]).toEqual([row.targets[0]])
+  })
+
+  it('is a WAI-ARIA tablist: one tab stop, Left/Right/Home/End move and select', async () => {
+    const user = userEvent.setup()
+    const wrapper = mount(PluginDetailDrawer, { attachTo: document.body, props: { row, open: true } })
+    mounted.push(wrapper)
+    await nextTick()
+
+    const list = screen.getByRole('tablist', { name: 'Runtime target' })
+    const [agent, control] = within(list).getAllByRole('tab')
+    const panelText = () => screen.getByRole('tabpanel').textContent
+
+    expect(agent.getAttribute('aria-selected')).toBe('true')
+    expect(control.getAttribute('aria-selected')).toBe('false')
+    expect(screen.getByRole('tabpanel').getAttribute('aria-labelledby')).toBe(agent.id)
+    expect(panelText()).toContain('Install')
+
+    // Tab enters the tablist once, on the selected tab: roving tabindex.
+    for (let step = 0; step < 8 && document.activeElement?.getAttribute('role') !== 'tab'; step += 1) await user.tab()
+    expect(document.activeElement).toBe(agent)
+    expect(agent.tabIndex).toBe(0)
+    expect(control.tabIndex).toBe(-1)
+
+    await user.keyboard('{ArrowRight}')
+    expect(document.activeElement).toBe(control)
+    expect(control.getAttribute('aria-selected')).toBe('true')
+    expect(control.tabIndex).toBe(0)
+    expect(agent.tabIndex).toBe(-1)
+    expect(screen.getByRole('tabpanel').getAttribute('aria-labelledby')).toBe(control.id)
+    expect(panelText()).toContain('Configure')
+
+    // The row wraps around.
+    await user.keyboard('{ArrowRight}')
+    expect(document.activeElement).toBe(agent)
+    await user.keyboard('{ArrowLeft}')
+    expect(document.activeElement).toBe(control)
+    await user.keyboard('{Home}')
+    expect(document.activeElement).toBe(agent)
+    expect(agent.getAttribute('aria-selected')).toBe('true')
+    await user.keyboard('{End}')
+    expect(document.activeElement).toBe(control)
+    expect(control.getAttribute('aria-selected')).toBe('true')
+
+    // Tab leaves the tablist (the panel is next), it does not step to another tab.
+    await user.tab()
+    expect(list.contains(document.activeElement)).toBe(false)
+  })
+
+  it('shows no tablist for a plugin without targets', async () => {
+    const wrapper = mount(PluginDetailDrawer, { attachTo: document.body, props: { row: { ...row, targets: [] }, open: true } })
+    mounted.push(wrapper)
+    await nextTick()
+    expect(screen.queryByRole('tablist')).toBeNull()
+    expect(screen.queryByRole('tabpanel')).toBeNull()
   })
 
   it('moves focus to its close control and lets the route restore the trigger after close', async () => {
