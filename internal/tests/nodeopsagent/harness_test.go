@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -37,6 +38,9 @@ import (
 )
 
 const postgresDSNEnvironment = "ANIX_TEST_POSTGRES_DSN"
+
+// nodeIDs counts the node ids the fixtures took in this process.
+var nodeIDs atomic.Uint32
 
 // Fake credentials: a proxy node's API key, a forward node's token, and a
 // Reality private key in the proxy node's protocol. No answer may carry
@@ -119,11 +123,10 @@ func newFixture(t *testing.T, cfg *config.DatabaseConfig) *fixture {
 	f := &fixture{t: t, db: db, websockets: newFakeWebSockets(), timeout: 20 * time.Second}
 	// The Agent Control managers are the process's: a node id of its own
 	// keeps this fixture's revisions and retained operations apart from
-	// the other tests' nodes.
-	var idBytes [2]byte
-	_, err := rand.Read(idBytes[:])
-	require.NoError(t, err)
-	nodeID := uint(1000) + uint(idBytes[0])<<8 + uint(idBytes[1])
+	// the other tests' nodes. The ids are counted, not drawn at random:
+	// two fixtures that drew the same one (about 2% of the runs, 52
+	// fixtures over 65536 ids) saw each other's observed operations.
+	nodeID := uint(1000) + uint(nodeIDs.Add(1))
 	f.proxy = model.Node{ID: nodeID, Name: "proxy", Host: "198.51.100.1", Port: 443, APIKey: proxyKey, APIKeyHash: fakeagent.APIKeyHash(proxyKey), Status: model.NodeStatusOnline}
 	require.NoError(t, db.Create(&f.proxy).Error)
 	settings, reality := `{"flow":"xtls-rprx-vision"}`, `{"private_key":"`+realityKey+`","short_id":"abcd"}`

@@ -2,6 +2,7 @@ package kernelnodeops
 
 import (
 	"context"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -151,9 +152,27 @@ func TestFailuresEndWithAReasonCode(t *testing.T) {
 // A started operation that passes its deadline ends TIMED_OUT and its
 // executor is stopped; a success that arrives later is evidence only and
 // does not reverse the decision.
+//
+// The ledger's clock stands still at the submission until the executor has
+// seen its context end. The sweep compares the ledger's deadlines with
+// that clock, so it cannot end the operation, nor pass the executor a
+// cancellation (passCancellations stops what the ledger has ended), before
+// the run context's own deadline timer fired. With a clock that moves on,
+// a loaded machine let the sweep run in the instants between the deadline
+// and the timer's goroutine, and the executor saw context.Canceled.
 func TestDeadlinesEndStartedOperationsTimedOut(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
-		h := newHarness(t, db, func(e *Engine) { e.Timeout = 300 * time.Millisecond })
+		var clockMoves atomic.Bool
+		submitted := time.Now()
+		h := newHarness(t, db, func(e *Engine) {
+			e.Timeout = 300 * time.Millisecond
+			e.Now = func() time.Time {
+				if clockMoves.Load() {
+					return time.Now()
+				}
+				return submitted
+			}
+		})
 		lateRelease := make(chan struct{})
 		stopped := make(chan error, 1)
 		stubborn := newScript(func(ctx context.Context, run *Run) Outcome {
@@ -169,6 +188,7 @@ func TestDeadlinesEndStartedOperationsTimedOut(t *testing.T) {
 		first := submit(t, client, "node.sync:proxy-1:slow", syncNode(proxyKind, 1, true)).GetOperation()
 		<-stubborn.started
 		require.ErrorIs(t, <-stopped, context.DeadlineExceeded)
+		clockMoves.Store(true)
 		ended := eventually(t, get(t, client, first.GetOperationId()), inState(timedOut))
 		require.Equal(t, kernelnodeopsv1.ErrorCode_ERROR_CODE_DEADLINE_EXCEEDED, ended.GetError().GetCode())
 		require.True(t, ended.GetError().GetRetryable())

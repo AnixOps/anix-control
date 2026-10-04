@@ -38,6 +38,27 @@
 
 ### Fixed
 
+- Two flaky Go tests no longer fail under CPU load or by chance (tests
+  only, no change to Control).
+  - `TestDeadlinesEndStartedOperationsTimedOut` (`internal/kernelnodeops`)
+    failed in about 5 of 90 loaded runs: the executor was handed
+    `context.Canceled` instead of `context.DeadlineExceeded`. The engine's
+    sweep ends an operation TIMED_OUT and, in the same tick, its
+    cancellation pass stops the executor of every operation the ledger has
+    ended; when that ran in the instants between the deadline and the
+    context's own timer, the cancellation won. The test now holds the
+    ledger's clock (`Engine.Now`) at the submission until the executor has
+    seen its context end, so the context's deadline always fires first. The
+    engine itself is unchanged: the ledger state is right either way, and
+    only the evidence an expired operation's late outcome records can read
+    "cancelled" instead of a deadline (reported separately).
+  - `TestAgentSessionRPCs` and the other `internal/tests/nodeopsagent` tests
+    drew each fixture's node id at random from 65 536 values, and the Agent
+    Control managers they run against are the process's, so two fixtures
+    that drew the same id saw each other's observed operations (one run in
+    about fifty with PostgreSQL, CI run 37193575692). The ids are now
+    counted.
+
 - **Forwarding editor, DNS binding (#196 follow-ups).** A fresh binding no
   longer opens with "Required" under every empty field: the provider, zone
   and managed-name errors wait until the field has been left once, and
