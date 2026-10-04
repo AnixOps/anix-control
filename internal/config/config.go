@@ -4,8 +4,13 @@ import (
 	_ "embed"
 	"fmt"
 	"log"
+	"net"
+	"net/url"
 	"os"
 	"path"
+	"path/filepath"
+	"regexp"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -45,7 +50,39 @@ type Config struct {
 	ModuleRuntime  ModuleRuntimeConfig  `yaml:"module_runtime"`
 	Identity       IdentityConfig       `yaml:"identity"`
 	AgentControl   AgentControlConfig   `yaml:"agent_control"`
+	AgentInstall   AgentInstallConfig   `yaml:"agent_install"`
 	PackageRoutes  PackageRoutesConfig  `yaml:"package_routes"`
+}
+
+// AgentInstallConfig configures one-command node onboarding (forward-sdk.md,
+// section 9): the signed install script Control serves at /install.sh, the
+// release metadata it reads from /install/agent.json, and where the Agent
+// release is downloaded from.
+type AgentInstallConfig struct {
+	// PublicURL is the Control address nodes reach, as https://host[:port];
+	// empty uses the request's origin (server.trusted_proxies decides
+	// whether X-Forwarded-* count).
+	PublicURL string `yaml:"public_url"`
+	// GRPCTarget is the host:port of the gRPC listener nodes dial (TLS);
+	// empty uses PublicURL's host and grpc.port.
+	GRPCTarget string `yaml:"grpc_target"`
+	// AgentVersion is the Agent release tag installed; empty uses
+	// "v" + app.version (Control and the Agent share version numbers, H25).
+	AgentVersion string `yaml:"agent_version"`
+	// ArtifactDir holds Agent release assets as <dir>/<tag>/<asset> with
+	// their .dgst (and .sig) files; Control then serves them at
+	// /install/agent/<tag>/<asset> (the "control" mirror) and publishes their
+	// SHA-256 in /install/agent.json. Empty: the control mirror falls back to
+	// GitHub releases.
+	ArtifactDir string `yaml:"artifact_dir"`
+	// CNMirrorURL is the base URL of a mainland mirror laid out like GitHub
+	// release downloads (<base>/<tag>/<asset>). The script never trusts a
+	// checksum from the mirror: it takes it from Control or GitHub.
+	CNMirrorURL string `yaml:"cn_mirror_url"`
+	// SignatureFile is the release signature of the embedded install
+	// script (base64 Ed25519 by plugins.official_public_key), served at
+	// /install.sh.sig after Control checks it. The release image sets it.
+	SignatureFile string `yaml:"signature_file"`
 }
 
 // PackageRoutesConfig sets the route modes the kernel hands v2 Control
@@ -115,6 +152,42 @@ type AgentControlConfig struct {
 	// stream). Empty sends no Sunset: the 4.2 release date is not fixed.
 	LegacySunset string `yaml:"legacy_sunset"`
 }
+
+// Validate checks agent_install: absolute http(s) URLs without a query, a
+// host:port gRPC target and absolute file paths.
+func (a AgentInstallConfig) Validate() error {
+	for name, value := range map[string]string{"public_url": a.PublicURL, "cn_mirror_url": a.CNMirrorURL} {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		parsed, err := url.Parse(value)
+		if err != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") || parsed.Host == "" ||
+			parsed.RawQuery != "" || parsed.Fragment != "" || parsed.User != nil {
+			return fmt.Errorf("invalid agent_install.%s %q: use an absolute http(s) URL without credentials, query or fragment", name, value)
+		}
+	}
+	if target := strings.TrimSpace(a.GRPCTarget); target != "" {
+		host, port, err := net.SplitHostPort(target)
+		number, portErr := strconv.Atoi(port)
+		if err != nil || host == "" || portErr != nil || number < 1 || number > 65535 {
+			return fmt.Errorf("invalid agent_install.grpc_target %q: use host:port", target)
+		}
+	}
+	if version := strings.TrimSpace(a.AgentVersion); version != "" && !agentReleaseTagPattern.MatchString(version) {
+		return fmt.Errorf("invalid agent_install.agent_version %q: use a release tag such as v4.2.0 or v4.2.0-rc.1", version)
+	}
+	for name, value := range map[string]string{"artifact_dir": a.ArtifactDir, "signature_file": a.SignatureFile} {
+		if value = strings.TrimSpace(value); value != "" && !filepath.IsAbs(value) {
+			return fmt.Errorf("invalid agent_install.%s %q: use an absolute path", name, value)
+		}
+	}
+	return nil
+}
+
+// agentReleaseTagPattern matches the release tags the Agent is published
+// with.
+var agentReleaseTagPattern = regexp.MustCompile(`^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+)?)?$`)
 
 // Agent listener client certificate modes (agent_control.mtls).
 const (
@@ -581,6 +654,9 @@ func load(path string, environ []string) (*Config, error) {
 	if err := loaded.PackageRoutes.validate(); err != nil {
 		return nil, err
 	}
+	if err := loaded.AgentInstall.Validate(); err != nil {
+		return nil, err
+	}
 	switch loaded.Log.Format {
 	case "", "text", "json":
 	default:
@@ -803,6 +879,9 @@ func NormalizeSubscribePath(value string) (string, error) {
 	}
 	if normalized == "api/v2" || strings.HasPrefix(normalized, "api/v2/") {
 		return "", fmt.Errorf("subscription path must not overlap /api/v2")
+	}
+	if normalized == "install" || normalized == "install.sh" || strings.HasPrefix(normalized, "install/") {
+		return "", fmt.Errorf("subscription path must not overlap the Agent installer's /install.sh and /install/")
 	}
 
 	return normalized, nil

@@ -17,6 +17,9 @@ func TestLoadRejectsSubscribePathsThatNormalizeToV2(t *testing.T) {
 		"api/v2/../v2/hidden",
 		"api/:segment",
 		"api/*rest",
+		"install",
+		"/install/agent/",
+		"install.sh",
 	}
 
 	for _, subscribePath := range unsafePaths {

@@ -119,6 +119,16 @@ agent_control:
   # Sunset date of the legacy agent transports (YYYY-MM-DD); empty sends no
   # Sunset header.
   legacy_sunset: ""
+agent_install:
+  # One-command node onboarding (GET /install.sh, POST
+  # /api/v4/kernel/agents/install-tokens). Empty public_url uses the
+  # request's origin; empty agent_version uses "v" + app.version.
+  public_url: ""
+  grpc_target: ""
+  agent_version: ""
+  artifact_dir: ""
+  cn_mirror_url: ""
+  signature_file: ""
 package_routes:
   # Route modes of v2 Control packages whose installation stores none:
   # rehearsed (the 4.1 default) runs the routes that passed the staging

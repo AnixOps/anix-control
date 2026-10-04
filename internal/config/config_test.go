@@ -568,3 +568,24 @@ func TestAppEditionDefaultsToCommunityAndRejectsUnknownValues(t *testing.T) {
 	require.Equal(t, EditionCommunity, AppConfig{Edition: "bogus"}.EditionOrDefault())
 	require.Equal(t, EditionCommercial, AppConfig{Edition: " Commercial "}.EditionOrDefault())
 }
+
+func TestAgentInstallConfigValidate(t *testing.T) {
+	require.NoError(t, AgentInstallConfig{}.Validate())
+	require.NoError(t, AgentInstallConfig{
+		PublicURL: "https://ctl.example.com:8443", GRPCTarget: "[2001:db8::1]:50051", AgentVersion: "v4.2.0-rc.1",
+		ArtifactDir: "/srv/agent", CNMirrorURL: "https://mirror.example.cn/anix-agent", SignatureFile: "/app/bootstrap/agent-install/agent-install.sh.sig",
+	}.Validate())
+	for name, broken := range map[string]AgentInstallConfig{
+		"relative URL":     {PublicURL: "ctl.example.com"},
+		"query":            {PublicURL: "https://ctl.example.com/?a=1"},
+		"credentials":      {CNMirrorURL: "https://user:pw@mirror.example.cn"},
+		"ftp":              {CNMirrorURL: "ftp://mirror.example.cn"},
+		"no port":          {GRPCTarget: "ctl.example.com"},
+		"port range":       {GRPCTarget: "ctl.example.com:70000"},
+		"version":          {AgentVersion: "latest"},
+		"relative dir":     {ArtifactDir: "agent"},
+		"relative sigfile": {SignatureFile: "install.sh.sig"},
+	} {
+		assert.Error(t, broken.Validate(), name)
+	}
+}
