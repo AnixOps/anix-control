@@ -2109,6 +2109,48 @@ affected. This is also the rollback if the upgrade cut off nodes by
 surprise: no data changes with the mode. Plan to return to the default: the
 legacy agent routes themselves are removed in a later release.
 
+## v4.2: The Systemd Services Panel
+
+The node page's 服务 section (the read-only systemd services table, owner
+decision H24) is new in v4.2. Nothing is collected after the upgrade until
+an administrator turns it on, node by node.
+
+- **It needs the matching Agent.** Control 4.2, the machine-telemetry
+  package from 4.1 (its release declares `telemetry.systemd.read`), and the
+  Agent released with Control 4.2. That Agent collects the report in the
+  plugin and sends it on the Agent Control stream (`package-reports.v1`).
+  An older Agent refuses the `systemd_services` setting, and an Agent that
+  is not enrolled has no stream to send it on. Upgrade and enroll the
+  Agents first ([v4.2 Requires Enrolled Agents](#agent-transports-v42-requires-enrolled-agents)),
+  then upgrade the machine-telemetry package and its Agent assignment.
+- **Turn it on per node.** On the node page, or in the Agent installation's
+  configuration of machine-telemetry:
+
+  ```json
+  {"systemd_services": {"nodes": {"12": {"enabled": true, "include": [], "exclude": ["*-debug.service"]}}}}
+  ```
+
+  The first report arrives with the Agent's next package report: within 5
+  minutes, or at once when the Agent reconnects. A node without systemd or
+  cgroup v2 reports `supported: false` with the reason.
+- **What is collected and kept.** Per `.service` unit: the name, its
+  states, CPU averaged over 10 minutes and its peak, memory and its peak.
+  No descriptions, command lines, environments, paths or logs. Only the
+  latest report per node is kept, and it shows as stale after 25 minutes.
+  The privacy rules in full are in
+  [`architecture/package-reports.md`](architecture/package-reports.md#privacy-the-systemd-services-report).
+- **Turning it off** (`"enabled": false`, or removing the node's entry)
+  stops collection on the node at the next configuration. The panel then
+  answers "not enabled"; the last stored report stays in the database
+  until a newer one replaces it.
+- **Checking it.** The node's session in
+  `GET /api/v4/kernel/agents/transports` lists `package-reports.v1` among
+  its negotiated capabilities. Control counts reports in
+  `anixops_agent_package_reports_total{result}` and refusals in
+  `anixops_agent_package_reports_refused_total{reason}`; `not_assigned`,
+  `version_mismatch` and `missing_capability` point to the package release
+  or its assignment.
+
 ## Agent Transports: Preparing For v4.2
 
 From 4.1.0, `agent_control.mtls` defaults to `preferred`; from v4.2 it

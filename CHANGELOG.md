@@ -142,6 +142,37 @@
   `IsNodeSecretKey` (the kernel's node secret rule, which
   `internal/nodesecrets` now calls). Not in `package-route-defaults.json`:
   the routes stay legacy by default until rehearsed.
+- **Cross-repository end-to-end and chaos suite with the real Agent**
+  (A2-7, `docs/architecture/node-ops-service.md` section 9;
+  `internal/tests/agente2e`, opt-in with `ANIXOPS_AGENT_E2E=1`). The real
+  Control binary and the real Agent, built from the pinned anix-agent
+  commit, run against each other under `agent_control.mtls: required`, on
+  PostgreSQL or SQLite. The Agent is the credential-only node Control's
+  installer writes; it enrolls with a one-time `anixagt_` credential.
+  - **Scenarios:** the configuration snapshot applied; a users delta; user
+    traffic through the node's VLESS inbound counted once (`v2_user`, the
+    report ledger); NodeStatus heartbeat and runtime health; the
+    machine-telemetry package installed over AgentArtifacts (mTLS, signed
+    with a test key by `build_package.py`); the systemd services
+    PackageReport and the services panel route; maintenance events (a
+    tampered plugin signature); the alive list; `agent.diagnostic` on the
+    stream; forward.v1 state push and report with the pinned gost (the
+    real nftables driver in the namespace lane), the route diagnosis from
+    the node, and the link certificate.
+  - **Chaos:** Control killed mid-stream (the spool replays, counted
+    once); a partition with an Agent crash (it runs from its stored state,
+    the spool survives); a graceful Agent restart (no re-enrollment, no
+    report sent twice); a revoked certificate (`agent_cert_revoked`, then
+    re-enrollment with a new credential); the #179 forward generation
+    reset; clock-skew bounds checked on Control's side.
+  - **Known issues** the suite reports as skips until they are fixed:
+    durable plugin operations refused after stream-only operations on the
+    same node, and an Agent proxy core reload that fails with
+    `address already in use`.
+  - **CI:** the new job "Cross-Repo E2E" runs it in the full lane and
+    nightly. The main lane runs on PostgreSQL; the forward lane runs as root
+    in a throwaway network namespace. It uploads its logs on failure and is
+    not a required check yet.
 - **Fresh Control installs are ready for enrolled Agents** (owner decision
   2026-10-04). Every shipped install path generates the built-in CA's
   key-encryption key (`module_runtime.ca_kek`, 32 random bytes) on a fresh
@@ -957,6 +988,10 @@
   accepts the machine-telemetry `systemd_services` setting and collects the
   systemd services report (anix-agent #5). Older Agents refuse that setting,
   so the services panel needs this Agent.
+- CI builds the Agent from anix-agent `6c3b5d6e` (was `1b155dee`): the
+  Agent line AG-1 to AG-5b, forwarding (F3b), the O1 installer layout
+  (#13), diagnostics (#14) and staged upgrades (#15).
+  `config/scripts/check_release_workflow.sh` checks the new pin.
 - **Release branches and the v4.2 upgrade order** (owner decisions of
   2026-10-04; documentation and CI triggers only).
   - A release may now be cut from a maintenance branch `release/vX.Y` started
@@ -1023,7 +1058,13 @@
   "newer generation" case wrote its replacement artifact after the host had
   crashed, and on a slow runner the 150 ms watchdog restart fired first. The
   artifact is now written up front and the delay is 300 ms.
-
+- **Machine telemetry is stored on PostgreSQL again.** The upserts of
+  `v3_kernel_plugin_telemetry_state` and
+  `v3_kernel_node_plugin_observed_state` compared a bare `observed_at`,
+  which PostgreSQL refuses as ambiguous with `excluded.observed_at`
+  (SQLSTATE 42702): every machine-telemetry sample and plugin observation
+  was dropped with a warning. The condition now names the table. Found by
+  the A2-7 suite.
 - **gost link certificate renewals start a new counter epoch.** A
   supervisor reload of gost after the Agent renewed the link certificate
   (H28) re-created every service without the driver recording it, so
