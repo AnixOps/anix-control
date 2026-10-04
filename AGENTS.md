@@ -115,7 +115,10 @@ duplicate it here); the docs landing page is `docs/README.md`.
       package tests by measured time, each shard with its own PostgreSQL.
       Inside a shard they run one at a time (`-p 1`): package schemas and
       roles are named after package ids, so two test binaries on one
-      database would collide.
+      database would collide. The shard's PostgreSQL runs without
+      `fsync`, `synchronous_commit` and `full_page_writes`: the harnesses
+      commit tens of thousands of single statements, so a slow runner disk
+      doubled the run time. No test crashes that database.
     - When a test package gets much slower or faster, update its seconds in
       `WEIGHTS` in `plan_test_shards.py` (`--summary` prints the split).
     - "Build Smoke Images" builds the Control image and the identity-platform

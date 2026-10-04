@@ -10,6 +10,22 @@
   tab, and the row is one Tab stop that lands on the selected tab (roving
   tabindex). A plugin without targets no longer renders an empty tablist.
 
+- **The PostgreSQL package tests run on a database that does not flush to
+  disk.** "Package Storage PostgreSQL (n/4)" started its PostgreSQL service
+  with the default durability settings, and the compatibility harnesses
+  commit once per statement (`ordercompat` alone about 25 000 times: every
+  seed row, kernel API view, sequence reset and emptied table), so on a slow
+  runner disk the commits were most of the run: `ordercompat` and
+  `paymentcompat` took 45 to 63 s in some CI runs and 22 to 28 s in others.
+  The job now sets `fsync`, `synchronous_commit` and `full_page_writes` off
+  before the tests (the database is thrown away with the job and no test
+  crashes it; the SQL behaviour is the same). Locally, on a disk that
+  flushes in 1.5 ms: `ordercompat` 54 -> 10 s and `paymentcompat` 44 -> 10 s
+  in the slowest paired run, medians 34 -> 10 s and 30 -> 10 s.
+  Nothing else changes: the migrated database a test shares between its
+  cases (`internal/tests/packagecompat/shared.go`) already costs one
+  migration per test.
+
 ### Fixed
 
 - **Forwarding editor, DNS binding (#196 follow-ups).** A fresh binding no

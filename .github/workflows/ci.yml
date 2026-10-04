@@ -1249,6 +1249,27 @@ jobs:
             -c "CREATE ROLE anix_kernel LOGIN CREATEROLE PASSWORD 'kernel'" \
             -c "ALTER DATABASE anix_package_test OWNER TO anix_kernel"
 
+      # The harnesses seed, migrate and empty a database for every case, and
+      # each statement is a transaction of its own: ordercompat alone commits
+      # about 25 000 times. On a runner whose disk flushes slowly the
+      # commits were most of the run (ordercompat and paymentcompat took
+      # 45 to 55 s in a slow run and 22 to 28 s in a fast one). This
+      # database is thrown away with the job and no test crashes it, so it
+      # runs without flushing (PostgreSQL's documented non-durable
+      # settings); the SQL behaviour the tests check is the same.
+      - name: Run the test PostgreSQL without flushing to disk
+        run: |
+          docker run --rm --network host -e PGPASSWORD=postgres postgres:16 \
+            psql -h 127.0.0.1 -U postgres -d anix_package_test -v ON_ERROR_STOP=1 \
+            -c "ALTER SYSTEM SET fsync = off" \
+            -c "ALTER SYSTEM SET synchronous_commit = off" \
+            -c "ALTER SYSTEM SET full_page_writes = off" \
+            -c "SELECT pg_reload_conf()"
+          sleep 2
+          docker run --rm --network host -e PGPASSWORD=postgres postgres:16 \
+            psql -h 127.0.0.1 -U postgres -d anix_package_test -At -c \
+            "SELECT name || ' = ' || setting FROM pg_settings WHERE name IN ('fsync', 'synchronous_commit', 'full_page_writes') ORDER BY name"
+
       - name: Run package storage, rollout and compatibility harness PostgreSQL tests
         shell: bash
         env:
