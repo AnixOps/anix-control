@@ -22,6 +22,7 @@ Use this tree like NodeX:
 - Order completion contract for the payment callbacks: [`architecture/order-service.md`](architecture/order-service.md)
 - Node operations contract, node credential split and Agent A2 (design, draft): [`architecture/node-ops-service.md`](architecture/node-ops-service.md)
 - Forward SDK: routes, hops, engines and drivers for v4.2 (design, draft for review): [`architecture/forward-sdk.md`](architecture/forward-sdk.md)
+- AnixOps relay protocol: secure transport between forward nodes (design approved, H22): [`architecture/anixops-protocol.md`](architecture/anixops-protocol.md)
 - Package reports on the Agent Control stream, and the privacy of the systemd services report: [`architecture/package-reports.md`](architecture/package-reports.md)
 - Network module runtime (mTLS, module PKI, remote runtime): [`architecture/module-runtime.md`](architecture/module-runtime.md)
 - Identity service design (login and credentials as a module): [`architecture/identity-service.md`](architecture/identity-service.md)
