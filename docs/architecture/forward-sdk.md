@@ -1490,8 +1490,14 @@ operator guide `docs/guide/agent-onboarding.md`). As built:
   (or a proxy node with `--forward`) it writes the sysctl drop-in
   `/etc/sysctl.d/90-anixops-forward.conf` (`net.ipv4.ip_forward = 1`,
   `net.ipv6.conf.all.forwarding = 1`, the file the Agent's nftables
-  driver check names) and applies it with `sysctl -e -p`; one that cannot
-  apply now is noted and applies at the next boot. It runs the Agent as `anixops-agent` with `SupplementaryGroups=anixops-gost`,
+  driver check names, from `anix-agent forward sysctl-dropin` when the
+  Agent has it) and applies it with `sysctl -e -p`; one that cannot apply
+  now is noted and applies at the next boot. The Agent unit has
+  `RuntimeDirectory=anixops-agent` (0750) for the plugins' sockets. A host
+  switching from anix-agent's root install (a unit without
+  `User=anixops-agent`, or `/var/lib/anix-agent`,
+  `/var/lib/anixops/plugins`) runs `anix-agent migrate-paths --chown
+  anixops-agent` before the new unit starts. It runs the Agent as `anixops-agent` with `SupplementaryGroups=anixops-gost`,
   ambient `CAP_NET_ADMIN CAP_NET_BIND_SERVICE` and the sandbox of section
   14, installs `anixops-gost.service` from the contract and a polkit rule for
   it, writes the token to `/var/lib/anixops-agent/enroll.credential` (0600,

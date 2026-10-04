@@ -36,9 +36,24 @@ build_release() {
 #!/usr/bin/env bash
 # Fake AnixOps Agent: `identity --json` prints what the fake systemctl
 # recorded when it "enrolled".
-if [[ "${1:-}" == "identity" ]]; then
-  cat "${ANIX_INSTALL_ROOT}/var/lib/anixops-agent/pki/identity.json" 2>/dev/null || printf '[]\n'
-fi
+# `forward sysctl-dropin` and `migrate-paths` follow FAKE_DROPIN,
+# FAKE_MIGRATE_HELP and FAKE_MIGRATE; migrate-paths logs its arguments.
+case "${1:-}" in
+  identity)
+    cat "${ANIX_INSTALL_ROOT}/var/lib/anixops-agent/pki/identity.json" 2>/dev/null || printf '[]\n'
+    ;;
+  forward)
+    [[ "${FAKE_DROPIN:-1}" == "1" && "${2:-}" == "sysctl-dropin" ]] || exit 1
+    printf '# fake agent drop-in\nnet.ipv4.ip_forward = 1\nnet.ipv6.conf.all.forwarding = 1\n'
+    ;;
+  migrate-paths)
+    if [[ "${2:-}" == "--help" ]]; then
+      exit "${FAKE_MIGRATE_HELP:-0}"
+    fi
+    printf 'agent %s\n' "$*" >>"${FAKE_AGENT_LOG}"
+    exit "${FAKE_MIGRATE:-0}"
+    ;;
+esac
 EOF
   chmod 0755 "${dir}/content/anix-agent"
   printf 'readme\n' >"${dir}/content/README.md"
@@ -81,6 +96,7 @@ run_installer() {
   (
     set -Eeuo pipefail
     export ANIX_INSTALL_ROOT="${ROOT_DIR}"
+    export FAKE_AGENT_LOG="${STATE}/log"
     # shellcheck source=/dev/null
     source "${SCRIPT}"
     id() { if [[ "${1:-}" == "-u" ]]; then printf '0\n'; else command id "$@"; fi; }
@@ -209,6 +225,10 @@ grep -qxF 'net.ipv4.ip_forward = 1' "${sysctl_file}" || fail "sysctl file lacks 
 grep -qxF 'net.ipv6.conf.all.forwarding = 1' "${sysctl_file}" || fail "sysctl file lacks IPv6 forwarding"
 [[ "$(stat -c '%a' "${sysctl_file}")" == "644" ]] || fail "sysctl file mode"
 grep -qxF "sysctl -e -q -p ${sysctl_file}" "${STATE}/log" || fail "forwarding not applied"
+[[ "$(head -n 1 "${sysctl_file}")" == "# fake agent drop-in" ]] || fail "the Agent's drop-in was not used"
+grep -qxF "RuntimeDirectory=anixops-agent" "${unit}" || fail "agent unit lacks RuntimeDirectory"
+grep -qxF "RuntimeDirectoryMode=0750" "${unit}" || fail "agent unit lacks RuntimeDirectoryMode"
+! grep -q '^agent migrate-paths' "${STATE}/log" || fail "a fresh install ran migrate-paths"
 [[ "$(grep -n '^sysctl ' "${STATE}/log" | cut -d: -f1)" -lt "$(grep -n '^systemctl restart anix-agent.service' "${STATE}/log" | cut -d: -f1)" ]] ||
   fail "forwarding must be on before the Agent starts"
 expect_out "forwarding:  wrote /etc/sysctl.d/90-anixops-forward.conf (net.ipv4.ip_forward=1 net.ipv6.conf.all.forwarding=1); applied"
@@ -280,12 +300,49 @@ grep -qxF 'net.ipv4.ip_forward = 1' "${ROOT_DIR}/etc/sysctl.d/90-anixops-forward
 expect_out "; applied"
 new_root sysctlfail
 metadata
-FAKE_SYSCTL=fail run_installer --control "${CONTROL}" --node forward-41 --token "${TOKEN_A}"
+FAKE_DROPIN=0 FAKE_SYSCTL=fail run_installer --control "${CONTROL}" --node forward-41 --token "${TOKEN_A}"
 expect_status 0 "sysctl failure is not fatal"
 [[ -f "${ROOT_DIR}/etc/sysctl.d/90-anixops-forward.conf" ]] || fail "sysctl failure removed the file"
+grep -qF 'Written by the AnixOps installer' "${ROOT_DIR}/etc/sysctl.d/90-anixops-forward.conf" ||
+  fail "an Agent without sysctl-dropin did not get the installer's drop-in"
+grep -qxF 'net.ipv6.conf.all.forwarding = 1' "${ROOT_DIR}/etc/sysctl.d/90-anixops-forward.conf" || fail "installer drop-in lacks IPv6"
 expect_out "sysctl could not apply /etc/sysctl.d/90-anixops-forward.conf now"
 expect_out "; applies at the next boot"
 ok "IP forwarding for forward nodes"
+
+# 5c. Switching from anix-agent's root install: migrate-paths copies its
+# directories, owned by anixops-agent, before the new unit starts.
+root_switch() {
+  new_root "$1"
+  metadata
+  printf '[Unit]\nDescription=anix-agent (root)\n[Service]\nExecStart=/usr/local/bin/anix-agent server\n' \
+    >"${ROOT_DIR}/etc/systemd/system/anix-agent.service"
+}
+root_switch rootunit
+run_installer --control "${CONTROL}" --node forward-41 --token "${TOKEN_A}"
+expect_status 0 "switch from a root unit"
+grep -qxF "agent migrate-paths --chown anixops-agent --root ${ROOT_DIR}" "${STATE}/log" || fail "migrate-paths not run: $(grep agent "${STATE}/log")"
+[[ "$(grep -n '^agent migrate-paths' "${STATE}/log" | cut -d: -f1)" -lt "$(grep -n '^systemctl restart anix-agent.service' "${STATE}/log" | cut -d: -f1)" ]] ||
+  fail "migrate-paths must run before the new unit starts"
+grep -qxF "User=anixops-agent" "${ROOT_DIR}/etc/systemd/system/anix-agent.service" || fail "the root unit was not replaced"
+expect_out "migration:   copied the root install's directories to /var/lib/anixops-agent"
+new_root rootdirs
+metadata
+mkdir -p "${ROOT_DIR}/var/lib/anixops/plugins"
+run_installer --control "${CONTROL}" --node proxy-7 --token "${TOKEN_A}"
+expect_status 0 "switch with the root install's directories"
+grep -q '^agent migrate-paths --chown anixops-agent' "${STATE}/log" || fail "old directories did not trigger migrate-paths"
+root_switch rootfail
+FAKE_MIGRATE=1 run_installer --control "${CONTROL}" --node forward-41 --token "${TOKEN_A}"
+expect_status 1 "migrate-paths failure"
+expect_out "anix-agent migrate-paths could not copy"
+! grep -q '^systemctl restart anix-agent.service' "${STATE}/log" || fail "the Agent started after a failed migration"
+root_switch rootold
+FAKE_MIGRATE_HELP=1 run_installer --control "${CONTROL}" --node forward-41 --token "${TOKEN_A}"
+expect_status 0 "an Agent without migrate-paths"
+expect_out "cannot migrate a root install's directories"
+! grep -q '^agent migrate-paths' "${STATE}/log" || fail "migrate-paths ran on an Agent without it"
+ok "switching from a root install"
 
 # 6. Signatures: a valid release signature verifies, a wrong one aborts.
 if openssl pkeyutl -help 2>&1 | grep -q -- '-rawin'; then

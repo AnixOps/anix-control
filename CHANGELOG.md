@@ -625,6 +625,16 @@
   (`net.ipv4.ip_forward = 1`, `net.ipv6.conf.all.forwarding = 1`), applies
   it with `sysctl -e -p` and reports it in its summary. Without it nftables
   forwarding dropped every packet on a host that did not forward already.
+  The drop-in comes from `anix-agent forward sysctl-dropin` when the Agent
+  has it (anix-agent #13).
+- The Agent unit the installer writes has `RuntimeDirectory=anixops-agent`
+  (0750): plugin sockets live in `/run/anixops-agent`, which
+  `ProtectSystem=strict` otherwise keeps read-only. A host switching from
+  anix-agent's root install (its unit without `User=anixops-agent`, or
+  `/var/lib/anix-agent` or `/var/lib/anixops/plugins`) now runs
+  `anix-agent migrate-paths --chown anixops-agent` before the new unit
+  starts, so the sandboxed Agent keeps its identity and state; a failed
+  copy stops the installer before the Agent starts.
 - UniProxy `alivelist` answered an empty list with the built-in memory
   cache (its key pattern matched nothing there), so device limits counted
   only each node's own connections. It now counts the online sets of every
