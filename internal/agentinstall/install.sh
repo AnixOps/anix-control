@@ -374,7 +374,7 @@ migrate_root_install() {
   info "Migrating the root-installed Agent's directories to ${STATE_DIR}"
   "${bin}" "${args[@]}" ||
     die "anix-agent migrate-paths could not copy the root install's directories (see above); nothing was started, fix the cause and re-run"
-  MIGRATION_STATE="copied the root install's directories to ${STATE_DIR} (the old ones are left in place)"
+  MIGRATION_STATE="ran anix-agent migrate-paths for a root install (copied or kept: see above; the old directories are left in place)"
 }
 
 ensure_users() {

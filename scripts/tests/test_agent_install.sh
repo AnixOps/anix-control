@@ -325,7 +325,7 @@ grep -qxF "agent migrate-paths --chown anixops-agent --root ${ROOT_DIR}" "${STAT
 [[ "$(grep -n '^agent migrate-paths' "${STATE}/log" | cut -d: -f1)" -lt "$(grep -n '^systemctl restart anix-agent.service' "${STATE}/log" | cut -d: -f1)" ]] ||
   fail "migrate-paths must run before the new unit starts"
 grep -qxF "User=anixops-agent" "${ROOT_DIR}/etc/systemd/system/anix-agent.service" || fail "the root unit was not replaced"
-expect_out "migration:   copied the root install's directories to /var/lib/anixops-agent"
+expect_out "migration:   ran anix-agent migrate-paths for a root install"
 new_root rootdirs
 metadata
 mkdir -p "${ROOT_DIR}/var/lib/anixops/plugins"
