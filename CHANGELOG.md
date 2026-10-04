@@ -55,6 +55,42 @@
   desired records, each entry's reason, the last error and the next
   attempt, and 解除绑定 with purge. zh-CN and English, unit, e2e and
   visual tests ([`docs/guide/forward-entry-ha.md`](docs/guide/forward-entry-ha.md)).
+- **Protocol runtime: node protocols and the agent routes run natively
+  (M3-1).** All 11 bridged protocol-runtime routes are `native-flagged`
+  (187 native-flagged, 78 bridged, 31 kernel-owned of 296); the six agent
+  channel routes stay kernel-owned. Byte parity on SQLite and PostgreSQL
+  (`internal/tests/protocolruntimecompat`, through the real gateway, bridge
+  and KernelNodeOps engine, with scripted Agent Control and WebSocket
+  agents).
+  - A node's protocols, their creation, update and deletion work on
+    `v2_node_protocol`, which the manifest now adopts and the kernel grants
+    only once the node credential split finalized it; until then they answer
+    from the legacy handler (restart Control after `node-secrets finalize`).
+    Typed secrets reach the kernel only, as sealed handles
+    (`PutSecretDocument`); a deletion retires the protocol's peers, links and
+    secrets (`RetireProtocol`).
+  - Node sync, Agent Control status and operations, the agent list and
+    monitor, task creation and command execution go through KernelNodeOps
+    (`kernel.nodeops.nodeconfig.v1`, `agents.v1` and `diagnose.v1` in the
+    manifest).
+  - KernelNodeOps, additive: an executor records the result so far at
+    acceptance, so an ACCEPTED wait answers the agent's acknowledgement;
+    `NodeSyncResult.snapshot`, `AgentOperationResult.deadline_unix_ms`,
+    `AgentDiagnosticResult.ack_json` and `task_json`,
+    `AgentSession.admin_json`, `GetAgentSessionResponse.connection_json` and
+    `observed_state_json`, `GetAgentMonitorResponse.monitor_json` (the kernel
+    renders what the legacy routes show), and `PutSecretDocument.protocol_json`
+    (the kernel validates a protocol's settings with the typed secrets).
+  - Legacy routes: the agent list, monitor, Agent Control status and
+    diagnostic task answers are now scrubbed like KernelNodeOps results (a
+    value an agent reported under a secret key reads `********`), and the
+    agent list is sorted by node kind and id. The protocol update of a
+    finalized `v2_node_protocol` resolves the stored secrets first, so a
+    WireGuard update that keeps its private key validates again.
+  - `v2compat.KeepNodeSecrets` (the kernel's placeholder rule, which
+    `service.KeepNodeSecretsJSON` now calls); `packagecompat.RunKernelRead`,
+    `RunKernelWrite`, `StartKernel` and `ForEachKernelDatabase` for parity
+    tests on the kernel's path.
 - **Subscription: a group's protocols and the protocol pool run natively
   (M3-3).** `GET /api/v2/admin/subscription/groups/:id/protocols` and
   `GET /api/v2/admin/subscription/protocols/available` are `native-flagged`

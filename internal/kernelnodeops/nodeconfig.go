@@ -174,7 +174,7 @@ func (x nodeSyncExecutor) Execute(ctx context.Context, run *Run) Outcome {
 		Changed: sync.Changed, ExcludedProtocols: sync.Stored.ExcludedProtocols,
 	}}}
 	if !sync.Pushed {
-		if err := run.Accept(ctx, Acceptance{Channel: sync.Channel}); err != nil {
+		if err := run.Accept(ctx, Acceptance{Channel: sync.Channel, Result: result}); err != nil {
 			return ended(err)
 		}
 		return Succeeded(result)
@@ -188,7 +188,7 @@ func (x nodeSyncExecutor) Execute(ctx context.Context, run *Run) Outcome {
 	}
 	nodeSync := result.GetNodeSync()
 	nodeSync.AgentOperationId, nodeSync.Revision, nodeSync.Ack = sync.Desired.GetOperationId(), sync.Ack.GetRevision(), agentAck(sync.Ack)
-	if err := run.Accept(ctx, Acceptance{Channel: sync.Channel, NodeRevision: sync.Ack.GetRevision()}); err != nil {
+	if err := run.Accept(ctx, Acceptance{Channel: sync.Channel, NodeRevision: sync.Ack.GetRevision(), Result: result}); err != nil {
 		return ended(err)
 	}
 	if !sync.Ack.GetAccepted() {
@@ -209,8 +209,8 @@ func (x nodeSyncExecutor) Execute(ctx context.Context, run *Run) Outcome {
 // applied, with the session and revision that answered.
 func awaitSnapshotStatus(ctx context.Context, run *Run, sync *NodeSync, result *kernelnodeopsv1.OperationResult) Outcome {
 	nodeSync := result.GetNodeSync()
-	nodeSync.Revision = sync.Snapshot.GetConfigRevision()
-	if err := run.Accept(ctx, Acceptance{Channel: sync.Channel, NodeRevision: sync.Snapshot.GetConfigRevision()}); err != nil {
+	nodeSync.Revision, nodeSync.Snapshot = sync.Snapshot.GetConfigRevision(), true
+	if err := run.Accept(ctx, Acceptance{Channel: sync.Channel, NodeRevision: sync.Snapshot.GetConfigRevision(), Result: result}); err != nil {
 		return ended(err)
 	}
 	report, err := sync.config.awaitStatus(ctx)

@@ -55,6 +55,21 @@ func (s *AgentStreams) Session(node agentcontrol.AgentNode) (agentstreams.Sessio
 	return connection.session(node.Kind), true
 }
 
+// StatusConnection is the node's session as the administrator's Agent
+// Control status shows it (agentstreams.StatusConnections): its manager's
+// snapshot.
+func (s *AgentStreams) StatusConnection(node agentcontrol.AgentNode) (any, bool) {
+	manager := s.manager(node)
+	if manager == nil {
+		return nil, false
+	}
+	snapshot, ok := manager.Connection(node.ID)
+	if !ok {
+		return nil, false
+	}
+	return snapshot, true
+}
+
 // Sessions lists every stream session of both kinds.
 func (s *AgentStreams) Sessions() []agentstreams.Session {
 	var sessions []agentstreams.Session

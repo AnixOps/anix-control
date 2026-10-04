@@ -14,6 +14,7 @@ import (
 	"unicode/utf8"
 
 	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
+	"github.com/AnixOps/anix-control/v4/internal/sealedsecrets"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -497,6 +498,51 @@ func checkSecretDocument(raw []byte) error {
 	return checkSecretValues(value, "")
 }
 
+// checkProtocolDocument checks PutSecretDocument.protocol_json: only with a
+// node protocol's settings, a JSON object of at most a document's size,
+// whose secret columns hold no secret in clear and no handle (the ledger
+// keeps the operation): the package sends them redacted.
+func checkProtocolDocument(op *kernelnodeopsv1.PutSecretDocument) error {
+	raw := op.GetProtocolJson()
+	if len(raw) == 0 {
+		return nil
+	}
+	if op.GetScope() != kernelnodeopsv1.SecretScope_SECRET_SCOPE_NODE_PROTOCOL || op.GetColumn() != "settings" {
+		return invalid("protocol_json goes only with a node protocol's settings")
+	}
+	if err := checkJSON(raw, "protocol_json", maxDocumentBytes); err != nil {
+		return err
+	}
+	if sealedsecrets.ContainsHandle(string(raw)) {
+		return invalid("protocol_json holds a sealed handle: send the protocol's columns redacted")
+	}
+	value, err := decodeJSON(raw)
+	if err != nil {
+		return invalid("protocol_json is not JSON")
+	}
+	row, ok := value.(map[string]any)
+	if !ok {
+		return invalid("protocol_json is not a JSON object")
+	}
+	for column := range protocolSecretColumns {
+		document, ok := row[column].(string)
+		if !ok || strings.TrimSpace(document) == "" {
+			continue
+		}
+		if document == service.NodeSecretPlaceholder {
+			continue
+		}
+		inner, err := decodeJSON([]byte(document))
+		if err != nil {
+			return invalid("protocol_json.%s is not redacted: send the protocol's columns redacted", column)
+		}
+		if err := checkSecretValues(inner, ""); err != nil {
+			return invalid("protocol_json.%s carries a secret in clear: send the protocol's columns redacted", column)
+		}
+	}
+	return nil
+}
+
 func checkSecretValues(value any, key string) error {
 	switch typed := value.(type) {
 	case map[string]any:
@@ -687,7 +733,10 @@ func init() {
 			default:
 				return invalid("scope is required")
 			}
-			return checkSecretDocument(op.GetDocumentJson())
+			if err := checkSecretDocument(op.GetDocumentJson()); err != nil {
+				return err
+			}
+			return checkProtocolDocument(op)
 		},
 		resolve: func(db *gorm.DB, spec *kernelnodeopsv1.OperationSpec) (resolution, error) {
 			op := spec.GetPutSecretDocument()

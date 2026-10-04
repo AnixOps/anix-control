@@ -1205,7 +1205,7 @@ func (h *AgentHandler) CreateTask(c *gin.Context) {
 				"task_id":      run.Task.ID,
 				"message_id":   dispatch.MessageID,
 				"dispatch_err": dispatch.DispatchError.Error(),
-				"data":         run.Row,
+				"data":         json.RawMessage(kernelnodeops.AgentTaskJSON(run.Row)),
 			})
 			return
 		}
@@ -1220,7 +1220,7 @@ func (h *AgentHandler) CreateTask(c *gin.Context) {
 			"message_id":   dispatch.MessageID,
 			"ack_received": false,
 			"dispatch_err": dispatch.DispatchError.Error(),
-			"data":         run.Row,
+			"data":         json.RawMessage(kernelnodeops.AgentTaskJSON(run.Row)),
 		})
 		return
 	}
@@ -1234,8 +1234,8 @@ func (h *AgentHandler) CreateTask(c *gin.Context) {
 		"duration_ms":  int64(0),
 		"message_id":   dispatch.MessageID,
 		"ack_received": true,
-		"ack":          dispatch.RawAck,
-		"data":         run.Row,
+		"ack":          json.RawMessage(kernelnodeops.AgentAckJSON(dispatch.RawAck)),
+		"data":         json.RawMessage(kernelnodeops.AgentTaskJSON(run.Row)),
 	})
 }
 
@@ -1256,14 +1256,14 @@ func answerStreamDiagnostic(c *gin.Context, nodeID uint, run *kernelnodeops.Agen
 	if dispatch.DispatchError != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "send failed", "task_id": run.Task.ID, "message_id": dispatch.MessageID,
-			"dispatch_err": dispatch.DispatchError.Error(), "channel": "agent_control", "data": run.Row,
+			"dispatch_err": dispatch.DispatchError.Error(), "channel": "agent_control", "data": json.RawMessage(kernelnodeops.AgentTaskJSON(run.Row)),
 		})
 		return
 	}
 	panelSuccess(c, gin.H{
 		"message": "task sent", "task_id": run.Task.ID, "node_id": nodeID, "success": true, "output": "task dispatched",
-		"duration_ms": int64(0), "message_id": dispatch.MessageID, "ack_received": true, "ack": dispatch.RawAck,
-		"channel": "agent_control", "data": run.Row,
+		"duration_ms": int64(0), "message_id": dispatch.MessageID, "ack_received": true, "ack": json.RawMessage(kernelnodeops.AgentAckJSON(dispatch.RawAck)),
+		"channel": "agent_control", "data": json.RawMessage(kernelnodeops.AgentTaskJSON(run.Row)),
 	})
 }
 
@@ -1371,20 +1371,15 @@ type CreateTaskRequest struct {
 // @Success 200 {object} map[string]any
 // @Router /admin/agent/list [get]
 func (h *AgentHandler) ListAgents(c *gin.Context) {
-	agents := make([]map[string]any, 0)
-
-	h.connections.Range(func(key, value any) bool {
-		conn := value.(*AgentConnection)
-		agents = append(agents, map[string]any{
-			"node_id":      conn.NodeID,
-			"last_seen":    conn.LastSeen,
-			"version":      conn.Version,
-			"system":       conn.SystemInfo,
-			"capabilities": conn.Capabilities,
-			"online":       time.Since(conn.LastSeen) < 60*time.Second,
-		})
-		return true
-	})
+	// The KernelNodeOps session RPCs render the same entries
+	// (AgentSession.admin_json), in the same order, scrubbed.
+	sessions := h.WebSockets().Sessions()
+	kernelnodeops.SortAgentSessions(sessions)
+	now := time.Now()
+	agents := make([]json.RawMessage, 0, len(sessions))
+	for _, session := range sessions {
+		agents = append(agents, kernelnodeops.AgentListEntryJSON(session, now))
+	}
 
 	panelSuccess(c, gin.H{"agents": agents})
 }
@@ -1481,7 +1476,8 @@ func (h *AgentHandler) GetMonitor(c *gin.Context) {
 		return
 	}
 
-	panelSuccess(c, monitor)
+	// GetAgentMonitor renders the same snapshot (monitor_json), scrubbed.
+	panelSuccess(c, json.RawMessage(kernelnodeops.AgentMonitorJSON(uint(nodeID), monitor.System, monitor.UpdatedAt)))
 }
 
 // ExecuteCommand godoc

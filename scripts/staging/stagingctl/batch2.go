@@ -59,6 +59,7 @@ func init() {
 	registerSpecs(b2PlatformSpecs()...)
 	registerSpecs(b2TelemetrySpecs()...)
 	registerSpecs(b2ProtocolSpecs()...)
+	registerSpecs(b2ProtocolNodeSpecs()...)
 }
 
 // ---------------------------------------------------------------- seeds
@@ -845,6 +846,106 @@ func b2ProtocolSpecs() []RouteSpec {
 				{Persona: Admin, Path: path, Label: "templates"},
 				{Persona: Staff, Path: path, Label: "staff"},
 			}, forbidden(path)...)
+		}},
+	}
+}
+
+// b2ProtocolNodeSpecs are the protocol-runtime routes of M3-1. The node
+// protocol routes answer natively only once v2_node_protocol is finalized
+// (staging-rehearsal.md, "Limits"); the staging nodes have no agent, so the
+// agent routes answer what a node without one gets.
+func b2ProtocolNodeSpecs() []RouteSpec {
+	node := func(w *World, i int) uint { return w.ID("node", i) }
+	nodePath := func(id any, rest string) string { return fmt.Sprintf("/api/v2/admin/nodes/%v%s", id, rest) }
+	protocolPath := func(w *World, i int) string {
+		return fmt.Sprintf("/api/v2/admin/nodes/%d/protocols/%d", node(w, 0), w.ID("node_protocol", i))
+	}
+	stamped := []string{"data.created_at", "data.updated_at", "data.id"}
+	return []RouteSpec{
+		{RouteID: "protocol.admin.nodes.id.protocols.get", Reads: func(w *World) []Req {
+			return append([]Req{
+				{Persona: Admin, Path: nodePath(node(w, 0), "/protocols"), Label: "a node's protocols, secrets masked"},
+				{Persona: Admin, Path: nodePath(node(w, 7), "/protocols"), Label: "another node"},
+				{Persona: Admin, Path: nodePath(Missing, "/protocols"), Label: "an unknown node"},
+				{Persona: Admin, Path: nodePath("x", "/protocols"), Label: "invalid id"},
+			}, forbidden(nodePath(node(w, 0), "/protocols"))...)
+		}},
+		{RouteID: "protocol.admin.nodes.id.protocols.post", Writes: func(w *World) []Req {
+			path := nodePath(node(w, 1), "/protocols")
+			return []Req{
+				{Persona: Admin, Path: path, Mask: stamped, Label: "reality with a typed key",
+					Body: `{"name":"staging reality","type":"vless","port":24443,"tls":2,"reality_settings":"{\"dest\":\"www.example.com:443\",\"private_key\":\"staging-typed-private\",\"short_ids\":[\"ab\"]}"}`},
+				{Persona: Admin, Path: path, Mask: stamped, Label: "a placeholder stores nothing",
+					Body: `{"name":"staging masked","type":"trojan","port":24444,"tls_settings":"{\"private_key\":\"********\"}"}`},
+				{Persona: Admin, Path: nodePath(Missing, "/protocols"), Body: `{"name":"x","type":"vless","port":1}`, Label: "an unknown node"},
+				{Persona: Admin, Path: path, Body: `{"name":"x","port":"443"}`, Label: "a port of the wrong type"},
+				{Persona: Admin, Path: path, Body: `{"name":`, Label: "invalid JSON"},
+			}
+		}},
+		{RouteID: "protocol.admin.nodes.id.protocols.protocol_id.put", Writes: func(w *World) []Req {
+			return []Req{
+				{Persona: Admin, Path: protocolPath(w, 0), Body: `{"name":"staging renamed","sort":7}`, Label: "fields without secrets"},
+				{Persona: Admin, Path: protocolPath(w, 1), Body: `{"reality_settings":"{\"dest\":\"other.example.com:443\",\"private_key\":\"********\"}"}`, Label: "the placeholder keeps a key"},
+				{Persona: Admin, Path: protocolPath(w, 2), Body: `{"name":"a","Name":"b"}`, Label: "a key named twice"},
+				{Persona: Admin, Path: fmt.Sprintf("/api/v2/admin/nodes/%d/protocols/%d", node(w, 0), Missing), Body: `{"name":"x"}`, Label: "an unknown protocol"},
+			}
+		}},
+		{RouteID: "protocol.admin.nodes.id.protocols.protocol_id.delete", Writes: func(w *World) []Req {
+			return []Req{
+				{Persona: Admin, Path: protocolPath(w, 9), Label: "a protocol with its links"},
+				{Persona: Admin, Path: fmt.Sprintf("/api/v2/admin/nodes/%d/protocols/%d", node(w, 0), Missing), Label: "an unknown protocol"},
+				{Persona: Admin, Path: fmt.Sprintf("/api/v2/admin/nodes/%d/protocols/x", node(w, 0)), Label: "invalid id"},
+			}
+		}},
+		{RouteID: "protocol.admin.nodes.id.sync.post", Writes: func(w *World) []Req {
+			return []Req{
+				{Persona: Admin, Path: nodePath(node(w, 2), "/sync"), Label: "a node on the legacy transports"},
+				{Persona: Admin, Path: nodePath(Missing, "/sync"), Label: "an unknown node"},
+				{Persona: Admin, Path: nodePath("x", "/sync"), Label: "invalid id"},
+			}
+		}},
+		{RouteID: "protocol.admin.nodes.id.agent_control.get", Reads: func(w *World) []Req {
+			return append([]Req{
+				{Persona: Admin, Path: nodePath(node(w, 0), "/agent-control"), Label: "not connected"},
+				{Persona: Admin, Path: nodePath(Missing, "/agent-control"), Label: "an unknown node"},
+				{Persona: Admin, Path: nodePath("x", "/agent-control"), Label: "invalid id"},
+			}, forbidden(nodePath(node(w, 0), "/agent-control"))...)
+		}},
+		{RouteID: "protocol.admin.nodes.id.agent_control.operations.post", Writes: func(w *World) []Req {
+			path := nodePath(node(w, 3), "/agent-control/operations")
+			return []Req{
+				{Persona: Admin, Path: path, Body: `{"kind":"agent.ping"}`, Label: "a node without a stream"},
+				{Persona: Admin, Path: path, Body: `{"kind":"agent.upgrade"}`, Label: "an operation the route does not send"},
+				{Persona: Admin, Path: path, Body: `{}`, Label: "no kind"},
+				{Persona: Admin, Path: nodePath(Missing, "/agent-control/operations"), Body: `{"kind":"agent.ping"}`, Label: "an unknown node"},
+			}
+		}},
+		{RouteID: "protocol.admin.agent.list.get", Reads: func(w *World) []Req {
+			path := "/api/v2/admin/agent/list"
+			return append([]Req{{Persona: Admin, Path: path, Label: "WebSocket agents"}}, forbidden(path)...)
+		}},
+		{RouteID: "protocol.admin.agent.monitor.get", Reads: func(w *World) []Req {
+			path := "/api/v2/admin/agent/monitor"
+			return append([]Req{
+				{Persona: Admin, Path: path, Query: q("node_id", fmt.Sprint(node(w, 0))), Label: "no snapshot"},
+				{Persona: Admin, Path: path, Query: q("node_id", "0"), Label: "node zero"},
+				{Persona: Admin, Path: path, Label: "no node"},
+			}, forbidden(path)...)
+		}},
+		{RouteID: "protocol.admin.agent.tasks.post", Writes: func(w *World) []Req {
+			path := "/api/v2/admin/agent/tasks"
+			return []Req{
+				{Persona: Admin, Path: path, Body: fmt.Sprintf(`{"node_id":%d,"type":"diagnostic","action":"service_status","params":{"service":"gost"}}`, node(w, 0)), Label: "an offline node"},
+				{Persona: Admin, Path: path, Body: `{"node_id":1,"type":"shell","action":"service_status"}`, Label: "a type that is not diagnostic"},
+				{Persona: Admin, Path: path, Body: `{"node_id":1}`, Label: "no action"},
+			}
+		}},
+		{RouteID: "protocol.admin.agent.execute.post", Writes: func(w *World) []Req {
+			path := "/api/v2/admin/agent/execute"
+			return []Req{
+				{Persona: Admin, Path: path, Body: fmt.Sprintf(`{"node_id":%d,"action":"service_status","params":{"service":"gost"}}`, node(w, 0)), Label: "an offline node"},
+				{Persona: Admin, Path: path, Body: `{"action":"service_status"}`, Label: "no node"},
+			}
 		}},
 	}
 }

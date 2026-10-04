@@ -36,6 +36,7 @@ func TestSyncNodeOnTheControlStream(t *testing.T) {
 		assert.Equal(t, uint64(1), result.GetConfigRevision())
 		assert.Len(t, result.GetConfigHash(), 64)
 		assert.NotEmpty(t, result.GetAgentOperationId())
+		assert.False(t, result.GetSnapshot(), "a node.reload")
 		assert.Equal(t, uint64(1), result.GetRevision(), "the stream's first revision")
 		assert.Equal(t, uint64(1), first.GetNodeRevision())
 		require.NotNil(t, result.GetAck())

@@ -7,6 +7,7 @@ import (
 	"io"
 	"strings"
 
+	"github.com/AnixOps/anix-control/sdk/v2compat"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 )
@@ -59,56 +60,7 @@ func RedactNodeSecretsJSON(config string) string {
 // without retyping its secrets. A placeholder sent for the whole value keeps
 // the whole stored value. Arrays are matched by position.
 func KeepNodeSecretsJSON(incoming, stored string) string {
-	if incoming == NodeSecretPlaceholder {
-		return stored
-	}
-	if !strings.Contains(incoming, NodeSecretPlaceholder) {
-		return incoming
-	}
-	value, ok := decodeNodeSecretJSON(incoming)
-	if !ok {
-		return incoming
-	}
-	previous, _ := decodeNodeSecretJSON(stored)
-	restored, changed := restoreNodeSecretValue(value, previous)
-	if !changed {
-		return incoming
-	}
-	return encodeNodeSecretJSON(restored)
-}
-
-func restoreNodeSecretValue(value, stored any) (any, bool) {
-	changed := false
-	switch typed := value.(type) {
-	case map[string]any:
-		previous, _ := stored.(map[string]any)
-		for key, item := range typed {
-			if item == NodeSecretPlaceholder && IsNodeSecretKey(key) {
-				if old, ok := previous[key]; ok {
-					typed[key] = old
-				} else {
-					typed[key] = ""
-				}
-				changed = true
-				continue
-			}
-			if _, nested := restoreNodeSecretValue(item, previous[key]); nested {
-				changed = true
-			}
-		}
-	case []any:
-		previous, _ := stored.([]any)
-		for index, item := range typed {
-			var old any
-			if index < len(previous) {
-				old = previous[index]
-			}
-			if _, nested := restoreNodeSecretValue(item, old); nested {
-				changed = true
-			}
-		}
-	}
-	return value, changed
+	return v2compat.KeepNodeSecrets(incoming, stored)
 }
 
 // decodeNodeSecretJSON decodes one JSON value, keeping numbers as written.

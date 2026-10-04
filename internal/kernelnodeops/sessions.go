@@ -103,6 +103,21 @@ func (h *hostServer) ListAgentSessions(ctx context.Context, request *kernelnodeo
 	if sources.WebSockets != nil && transport != kernelnodeopsv1.AgentTransport_AGENT_TRANSPORT_CONTROL_STREAM {
 		sessions = append(sessions, sources.WebSockets.Sessions()...)
 	}
+	sortSessions(sessions)
+	now := time.Now()
+	response := &kernelnodeopsv1.ListAgentSessionsResponse{}
+	for _, session := range sessions {
+		rendered := sessionProto(session)
+		if session.Transport == agentstreams.TransportWebSocket {
+			rendered.AdminJson = AgentListEntryJSON(session, now)
+		}
+		response.Sessions = append(response.Sessions, rendered)
+	}
+	return response, nil
+}
+
+// sortSessions orders sessions by node kind, node id and transport.
+func sortSessions(sessions []agentstreams.Session) {
 	sort.SliceStable(sessions, func(i, j int) bool {
 		a, b := sessions[i], sessions[j]
 		if a.Node.Kind != b.Node.Kind {
@@ -113,11 +128,6 @@ func (h *hostServer) ListAgentSessions(ctx context.Context, request *kernelnodeo
 		}
 		return a.Transport < b.Transport
 	})
-	response := &kernelnodeopsv1.ListAgentSessionsResponse{}
-	for _, session := range sessions {
-		response.Sessions = append(response.Sessions, sessionProto(session))
-	}
-	return response, nil
 }
 
 // proxyNodeOf checks a session request's proxy node id and that the node
@@ -154,8 +164,14 @@ func (h *hostServer) GetAgentSession(ctx context.Context, request *kernelnodeops
 		response.Connected = true
 		response.Session = sessionProto(session)
 	}
+	if connections, ok := streams.(agentstreams.StatusConnections); ok {
+		if connection, ok := connections.StatusConnection(node); ok {
+			response.ConnectionJson = AgentControlConnectionJSON(connection)
+		}
+	}
 	if observed, ok := streams.Observed(node); ok {
 		response.Observed = observedProto(observed)
+		response.ObservedStateJson = AgentObservedStateJSON(observed)
 	}
 	return response, nil
 }
@@ -189,5 +205,6 @@ func (h *hostServer) GetAgentMonitor(ctx context.Context, request *kernelnodeops
 	response.Found = true
 	response.SnapshotJson = scrubBytes(encoded, nil)
 	response.ReceivedAtUnixMs = unixMillisOf(receivedAt)
+	response.MonitorJson = AgentMonitorJSON(uint(node.ID), system, receivedAt)
 	return response, nil
 }

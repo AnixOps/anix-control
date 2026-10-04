@@ -96,6 +96,7 @@ func TestConfigPushNegotiation(t *testing.T) {
 		result := synced.GetResult().GetNodeSync()
 		assert.Equal(t, kernelnodeopsv1.Channel_CHANNEL_AGENT_CONTROL, result.GetChannel())
 		assert.Empty(t, result.GetAgentOperationId(), "no node.reload")
+		assert.True(t, result.GetSnapshot(), "the configuration went out as a snapshot")
 		assert.Equal(t, row.Revision, result.GetRevision())
 		assert.Equal(t, row.Revision, synced.GetNodeRevision())
 		require.NotNil(t, result.GetAck())

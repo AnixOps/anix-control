@@ -105,8 +105,9 @@ func (x agentOperationExecutor) Execute(ctx context.Context, run *Run) Outcome {
 	defer operation.Release()
 	result := &kernelnodeopsv1.OperationResult{Result: &kernelnodeopsv1.OperationResult_AgentOperation{AgentOperation: &kernelnodeopsv1.AgentOperationResult{
 		AgentOperationId: operation.Desired.GetOperationId(), Revision: operation.Ack.GetRevision(), Ack: agentAck(operation.Ack),
+		DeadlineUnixMs: operation.Desired.GetDeadlineUnixMs(),
 	}}}
-	if err := run.Accept(ctx, Acceptance{Channel: kernelnodeopsv1.Channel_CHANNEL_AGENT_CONTROL, NodeRevision: operation.Ack.GetRevision()}); err != nil {
+	if err := run.Accept(ctx, Acceptance{Channel: kernelnodeopsv1.Channel_CHANNEL_AGENT_CONTROL, NodeRevision: operation.Ack.GetRevision(), Result: result}); err != nil {
 		return ended(err)
 	}
 	if !operation.Ack.GetAccepted() {
