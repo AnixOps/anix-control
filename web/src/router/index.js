@@ -370,6 +370,17 @@ const routes = [
         component: Account,
         meta: ACCOUNT_META
       },
+      // F5b design mockups (docs/design/forward-ui): mocked data, dev server
+      // only. import.meta.env.DEV is false in `vite build`, so the route and
+      // its chunk are dropped from the production bundle.
+      ...(import.meta.env.DEV
+        ? [{
+            path: '__mockups/forward/:screen?',
+            name: 'admin-mockups-forward',
+            component: () => import('@/mockups/forward/ForwardMockups.vue'),
+            meta: { ...WIDE, titleKey: 'pageTitles.admin.forward' }
+          }]
+        : []),
       {
         // Named so the parent's name ('admin', which extensions add their
         // pages under) does not trigger Vue Router's empty-path warning.
