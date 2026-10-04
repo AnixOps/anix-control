@@ -261,14 +261,12 @@ func prettyJSON(raw string) string {
 // stream (agent.diagnostic, the forward checks) ran on the node: the
 // durable plugin operation must still reach the Agent.
 //
-// Known issue (found by this suite): the stream-only operations take their
-// revisions from the session's in-memory counter, while durable operations
-// take the next revision of the node's durable cursor
-// (v3_kernel_node_operation_revision). Once a stream-only operation has used
-// a revision at or above the next durable one, AgentControlManager refuses
-// the durable operation ("revision N is not newer than M") and the bridge
-// retries it forever. The scenario reports it as a known issue rather than
-// failing until the revision spaces are reconciled.
+// This suite found that the stream-only operations took their revisions
+// from the session's in-memory counter while durable operations took the
+// next revision of the node's durable cursor
+// (v3_kernel_node_operation_revision), so the durable operation was refused
+// ("revision N is not newer than M") and stayed dispatching. Both now
+// allocate from the durable cursor; a refusal fails the scenario.
 func (s *suite) scenarioPluginOperationAfterStreamOperations(t *testing.T) string {
 	if s.pluginReadyAt.IsZero() {
 		return skipped + ":machine-telemetry is not installed (previous scenario failed)"
@@ -312,7 +310,7 @@ func (s *suite) scenarioPluginOperationAfterStreamOperations(t *testing.T) strin
 	}
 	for _, op := range ops {
 		if strings.Contains(op.LastError, "is not newer than") {
-			s.skip(t, "KNOWN ISSUE: durable %s at revision %d is refused after stream-only operations: %q (state %s)", op.Kind, op.Revision, op.LastError, op.State)
+			t.Fatalf("durable %s at revision %d is refused after stream-only operations: %q (state %s)", op.Kind, op.Revision, op.LastError, op.State)
 		}
 	}
 	if len(ops) == 0 {

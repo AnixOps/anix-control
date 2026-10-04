@@ -152,6 +152,11 @@ type AgentControlManager struct {
 	pending          map[agentOperationKey]chan *agentv1pb.OperationAck
 	observedHandlers []ObservedStateHandler
 	configHandlers   []configStatusHandler
+	// revisionStore, when set, allocates the revisions of operations
+	// dispatched without one (agent_operation_revisions.go); allocLocks
+	// serialize that allocation per node.
+	revisionStore NodeRevisionStore
+	allocLocks    map[uint32]*sync.Mutex
 }
 
 func NewAgentControlManager() *AgentControlManager {
@@ -323,6 +328,39 @@ func (m *AgentControlManager) dispatchOperation(ctx context.Context, nodeID uint
 	key := agentOperationKey{nodeID: nodeID, operationID: cloned.OperationId}
 	waiter := make(chan *agentv1pb.OperationAck, 1)
 
+	// A one-off operation takes its revision from the durable per-node
+	// allocator, which durable plugin operations share. The allocation
+	// lock is held until the revision is registered below, so the
+	// in-memory guard sees one node's allocations in order.
+	var allocation *sync.Mutex
+	defer func() {
+		if allocation != nil {
+			allocation.Unlock()
+		}
+	}()
+	if cloned.Revision == 0 {
+		if store := m.currentRevisionStore(); store != nil {
+			m.mu.RLock()
+			connected := m.connections[nodeID] != nil
+			m.mu.RUnlock()
+			if !connected {
+				return nil, fmt.Errorf("agent node %d is not connected", nodeID)
+			}
+			allocation = m.allocationLock(nodeID)
+			allocation.Lock()
+			m.mu.RLock()
+			floor := m.desiredRevision[nodeID]
+			m.mu.RUnlock()
+			revision, ok, err := store.AllocateRevision(ctx, nodeID, floor)
+			if err != nil {
+				return nil, err
+			}
+			if ok {
+				cloned.Revision = revision
+			}
+		}
+	}
+
 	var connection *AgentControlConnection
 	for {
 		if err := ctx.Err(); err != nil {
@@ -398,6 +436,10 @@ func (m *AgentControlManager) dispatchOperation(ctx context.Context, nodeID uint
 		m.pending[key] = waiter
 		m.mu.Unlock()
 		break
+	}
+	if allocation != nil {
+		allocation.Unlock()
+		allocation = nil
 	}
 
 	requestID := newAgentControlID("request")
@@ -774,6 +816,14 @@ func (s *AgentControlGRPCServer) controlStream(stream agentv1pb.AgentControlServ
 		return status.Error(codes.InvalidArgument, err.Error())
 	}
 
+	// The Hello revision is the revision the Agent last applied. After a
+	// Control restart it can be above the durable cursor; raise the cursor
+	// so the next allocated revision is newer than anything the Agent has
+	// seen. A session that cannot record it would refuse or strand the
+	// node's next operations, so it is refused and the Agent reconnects.
+	if err := manager.raiseStoredRevision(stream.Context(), nodeID, first.Revision); err != nil {
+		return status.Errorf(codes.Unavailable, "record agent revision: %v", err)
+	}
 	now := time.Now()
 	desiredRevision := manager.reconcileDesiredRevision(nodeID, first.Revision)
 	connection := &AgentControlConnection{
