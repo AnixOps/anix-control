@@ -1285,7 +1285,8 @@ by `internal/kernelforward`:
   `planner.Plan` over every stored route with the inventory, the active
   allocations as previous and the held ones as `Options.Taken`, under the
   lock row (one plan at a time across Control processes), then
-  `planner.Stamp` from the stored generations. Nodes whose generation moved
+  `planner.Stamp` from the stored generations (or a node's reported one
+  when its report is ahead, 8.2 "Generation recovery"). Nodes whose generation moved
   are written and their sessions pushed (8.1); a node that left the
   inventory with hops gets an empty state, so it never keeps a deleted
   route. Any violation refuses the whole plan: a route write is refused
@@ -1296,7 +1297,9 @@ by `internal/kernelforward`:
   `PlanRoute`, `RouteStats`, `RouteHealth`, `Traffic` (the hourly ledger),
   `State`, `Nodes`, `SetNodeSettings`, `RecordHello`, `RecordReport`,
   `Replan`, `PlanStatus`, `Maintain` (the singleton worker's minute tick:
-  expiry, request-id retention), and the package functions
+  expiry, request-id retention), `ResetNode` (the operator's generation
+  bump, `anix-control forward reset-node`; never served on
+  `ForwardControl`), and the package functions
   `NodeConfigMember`, `NodeConvergence`, `OnStateChange` and
   `WritePrometheus`.
 
@@ -1353,6 +1356,38 @@ report added for the systemd services panel, `systemd-services-v4.2`):
   `anixops_forward_lagging_nodes` (reported generation behind the desired
   one, or never reported), `anixops_forward_unreported_nodes`,
   `anixops_forward_generation_lag_max`, `anixops_forward_hop_errors`.
+- **Generation recovery** (`internal/kernelforward/generation.go`). The
+  Agent applies only a generation newer than the one it holds, and refuses
+  the one it holds with another `state_hash`; its report carries the
+  generation and `state_hash` it holds. After Control's database is reset
+  or restored from a backup, `v4_kernel_forward_node_state` restarts below
+  that, and every state Control sends would be ignored (the drivers answer
+  `ErrStaleGeneration`). Control recovers from the reports alone, with no
+  Agent change:
+  - A node's report is *ahead* of its stored state (`g`, `h`) when its
+    generation `G` is higher than `g`, or `G == g > 0` with another
+    non-empty `state_hash`.
+  - When `RecordReport` stores a report that is ahead, it moves the node's
+    stored generation, under the plan lock, to `G` when the report's
+    `state_hash` equals `h` (the node already runs those hops), else to
+    `G + 1`, keeping the hops (the stored `state_json` is re-encoded with
+    the new generation), and pushes the node's snapshot at once.
+  - Every plan stamps from the larger of the stored and the reported
+    generation, so a node whose report is ahead and that has no stored
+    state yet (its plans were refused since the reset) gets a generation
+    above the report with its first accepted plan. A report never creates
+    a state: a refused plan still leaves every node on what it runs.
+  - `anix-control forward reset-node <node_ref>` (`Service.ResetNode`,
+    admin-only: the command line on Control's database, never
+    `ForwardControl`) moves a node with a stored state to
+    `max(g, G) + 1`, keeping its hops, and writes the audit log as
+    `system/cli`; the running Control sends it at its next configuration
+    refresh, within a minute.
+  - Each recovery is logged (warning `forward generation recovered`) and
+    counted by `anixops_forward_generation_recoveries_total{reason}`
+    (`report`, `plan`, `operator`; per Control process).
+  - Until the node's first report after the reset (at most 60 s) its Agent
+    ignores the lower generation and keeps running the state it holds.
 
 ### 8.3 Probes
 
@@ -1451,8 +1486,12 @@ operator guide `docs/guide/agent-onboarding.md`). As built:
   a change to `agentpki.Enroll`. `--group` is accepted by the parser and
   refused with that reason.
 - The script follows the steps below except preflight (O2), `--offline` (O2,
-  refused for now), OpenRC (refused), the sysctl drop-in (O2) and uninstall
-  (O3). It runs the Agent as `anixops-agent` with `SupplementaryGroups=anixops-gost`,
+  refused for now), OpenRC (refused) and uninstall (O3). On a forward node
+  (or a proxy node with `--forward`) it writes the sysctl drop-in
+  `/etc/sysctl.d/90-anixops-forward.conf` (`net.ipv4.ip_forward = 1`,
+  `net.ipv6.conf.all.forwarding = 1`, the file the Agent's nftables
+  driver check names) and applies it with `sysctl -e -p`; one that cannot
+  apply now is noted and applies at the next boot. It runs the Agent as `anixops-agent` with `SupplementaryGroups=anixops-gost`,
   ambient `CAP_NET_ADMIN CAP_NET_BIND_SERVICE` and the sandbox of section
   14, installs `anixops-gost.service` from the contract and a polkit rule for
   it, writes the token to `/var/lib/anixops-agent/enroll.credential` (0600,

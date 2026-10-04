@@ -387,6 +387,21 @@ stream equivalent.
     decrease counts nothing, and a report observed before the stored one
     is dropped whole. A lost or repeated report therefore loses or doubles
     nothing.
+  - **Generation recovery.** The report's `generation` and `state_hash`
+    are those of the state the Agent holds (the last one it accepted, even
+    when hops failed). After Control's database is reset or restored, the
+    generations Control stamps can be lower than that, and the Agent
+    ignores them. So a report is *ahead* of the node's stored state when
+    its `generation` is higher, or equal with another non-empty
+    `state_hash`; Control then moves the node's generation to the reported
+    one when the `state_hash` is the same, else to the reported one plus
+    one, keeping the node's hops, and pushes a new snapshot at once. Every
+    later plan stamps above it. The operator command
+    `anix-control forward reset-node <node_ref>` forces a generation above
+    both. Agents need no change: they only have to keep reporting the
+    generation and `state_hash` they hold, and keep ignoring older
+    generations. Until the first report after a reset (at most 60 s) the
+    Agent ignores the lower generation and keeps running what it runs.
   - **Heartbeat.** `HelloAck.heartbeat_interval_seconds` is 60 for a
     forward node's session that negotiated `forward.v1` (20 otherwise). A
     certificate revoked while the stream is open ends it at the next

@@ -182,7 +182,7 @@ func runReportsAndConvergence(t *testing.T, db *gorm.DB) {
 
 	at = at.Add(time.Minute)
 	f.report(entry, at, 2)
-	f.report(exit, at, 3)
+	f.report(exit, at, 2)
 	nodes, err = NodeConvergence(f.ctx, db)
 	require.NoError(t, err)
 	for _, node := range nodes {

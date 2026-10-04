@@ -307,8 +307,8 @@ func writeAllocations(tx *gorm.DB, allocations planner.Allocations, now time.Tim
 	return nil
 }
 
-// writeStates stamps states from the stored generations and stores the
-// ones that moved. A node with a stored state that the plan does not cover
+// writeStates stamps states from the stored generations (or the reported
+// ones where a node's report is ahead) and stores the ones that moved. A node with a stored state that the plan does not cover
 // (it left the inventory) gets an empty state, so it never keeps a deleted
 // route's hops. It answers the nodes whose generation moved.
 func writeStates(tx *gorm.DB, states map[string]*forwardv1.NodeForwardState, now time.Time) ([]string, error) {
@@ -316,14 +316,37 @@ func writeStates(tx *gorm.DB, states map[string]*forwardv1.NodeForwardState, now
 	if err := tx.Find(&rows).Error; err != nil {
 		return nil, fmt.Errorf("kernel forward: load node states: %w", err)
 	}
-	previous := make(map[string]planner.Generation, len(rows))
+	reported, err := loadReported(tx)
+	if err != nil {
+		return nil, err
+	}
+	stored := make(map[string]planner.Generation, len(rows))
 	for _, row := range rows {
-		previous[row.NodeRef] = planner.Generation{Generation: row.Generation, StateHash: row.StateHash}
+		stored[row.NodeRef] = planner.Generation{Generation: row.Generation, StateHash: row.StateHash}
 		if _, ok := states[row.NodeRef]; !ok {
 			states[row.NodeRef] = &forwardv1.NodeForwardState{NodeRef: row.NodeRef}
 		}
 	}
+	// A node whose report is ahead of its stored generation (Control's
+	// database was reset or restored) is stamped from the reported one, so
+	// its Agent never ignores the state (generation.go).
+	previous := make(map[string]planner.Generation, len(stored))
+	for ref, g := range stored {
+		previous[ref] = g
+	}
+	var recoveredRefs []string
+	for ref := range states {
+		if report, ok := reported[ref]; ok && reportAhead(stored[ref], report) {
+			previous[ref] = report
+			recoveredRefs = append(recoveredRefs, ref)
+		}
+	}
 	next := planner.Stamp(states, previous)
+	sort.Strings(recoveredRefs)
+	for _, ref := range recoveredRefs {
+		countRecovery(RecoveryPlan)
+		logRecovery(RecoveryPlan, ref, stored[ref].Generation, reported[ref].Generation, next[ref].Generation)
+	}
 	refs := make([]string, 0, len(states))
 	for ref := range states {
 		refs = append(refs, ref)
@@ -331,7 +354,7 @@ func writeStates(tx *gorm.DB, states map[string]*forwardv1.NodeForwardState, now
 	sort.Strings(refs)
 	var changed []string
 	for _, ref := range refs {
-		old, had := previous[ref]
+		old, had := stored[ref]
 		if had && old == next[ref] {
 			continue
 		}
