@@ -52,6 +52,26 @@ The Agent collector reads its own node's entry with
 `sdk/telemetry/systemdreport.ParseConfig`. Details, the response and the
 privacy rules: `docs/architecture/package-reports.md`.
 
+### Privacy
+
+The services report is opt-in per node (owner decision H24) and keeps only
+the latest value:
+
+- **Sent, per `.service` unit:** the name, `ActiveState`, `SubState`, CPU
+  averaged over 10 minutes and its peak, current memory and its peak; per
+  report, whether the node supports collection and, if not, why.
+- **Never sent:** `Description`, `ExecStart` or any other unit property,
+  command line, environment, PID, path or log line. `user@*` and `run-*`
+  units are left out, at most 512 units are sent, and names are at most 256
+  bytes. Control refuses a payload with `Description` or `ExecStart` and
+  drops every unknown field.
+- **Kept:** the latest report per node only, no history; stale after 25
+  minutes. Administrators read it in the panel; on PostgreSQL only this
+  package's role can read `kapi_package_report_v1`.
+
+Upgrade notes (the matching Agent, enabling it per node):
+`docs/UPGRADE.md`, "v4.2: The Systemd Services Panel".
+
 ## Build
 
 The input binary must be a non-empty regular executable file. The package

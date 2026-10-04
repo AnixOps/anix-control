@@ -205,7 +205,9 @@ func (s *NodeService) persistNodePluginObservedState(nodeID uint, snapshot NodeP
 				"version", "desired_revision", "observed_revision", "config_hash", "health", "ruleset_sha256",
 				"counters_json", "observed_at", "received_at", "updated_at",
 			}),
-			Where: clause.Where{Exprs: []clause.Expression{clause.Expr{SQL: "excluded.observed_at >= observed_at"}}},
+			// Named by its table: PostgreSQL refuses a bare observed_at as
+			// ambiguous with excluded's.
+			Where: clause.Where{Exprs: []clause.Expression{clause.Expr{SQL: "excluded.observed_at >= " + model.NodePluginObservedState{}.TableName() + ".observed_at"}}},
 		}).Create(&state)
 		if result.Error != nil {
 			return fmt.Errorf("persist plugin observation %s: %w", snapshot.PluginID, result.Error)

@@ -2363,7 +2363,7 @@ handlers ship `native-flagged`, and operators choose the runtime mode.
 | A2-5 | Reports: traffic, online, logs and status with batch ids, `ReportAck`, `diag.*` for the node vantage | A2-2 | control | M |
 | A2-6 | Transition: transport inventory, deprecation headers and metrics, the `agent_control.mtls` modes | A2-1 to A2-5 | control | S |
 | A2-6b | The `required` prerequisites on Control (section 5.6): stream equivalents of the refused paths (`maintenance.v1`; `NodeStatus` for the heartbeat and runtime-health reports), certificate refusal codes, the capability offer as an intersection, session identity in the snapshot and the inventory. Done | A2-6 | control | M |
-| A2-7 | Cross-repo E2E and chaos suite with the real agent (section 9) | AG-2 to AG-5 | control | M |
+| A2-7 | Cross-repo E2E and chaos suite with the real agent (section 9). Done: `internal/tests/agente2e`, CI "Cross-Repo E2E" | AG-2 to AG-5 | control | M |
 | AG-1 | anix-agent on the Control SDK with the A2 messages (after an `sdk/v*` tag or pseudo-version) | A2-1, A2-2 | agent | S |
 | AG-2 | Identity: enroll, store, renew, mTLS dial, no API key once enrolled | AG-1 | agent | M |
 | AG-3 | Configuration from the stream | AG-1, A2-3 | agent | M |
@@ -2467,15 +2467,94 @@ it up to A2-3.
     - Shadow comparison with handles masked.
     - A walk proves that no value under an `IsNodeSecretKey` key reaches a
       package on any listed route.
-- **Cross-repo E2E** (`ANIXOPS_CROSS_REPO_E2E=1`, the existing harness in
-  `internal/grpc/*cross_repo_e2e_test.go`). A pinned anix-agent build:
-  - enrolls with its API key and reconnects with mTLS;
-  - applies a configuration snapshot and reports `ConfigStatus`;
-  - follows user deltas across a reconnect and a resync;
-  - reports traffic that is counted once.
-
-  A v1.1.0-SDK agent keeps working on every legacy path, and on the stream
-  for operations only.
+- **Cross-repo E2E with the real Agent** (A2-7, implemented:
+  `internal/tests/agente2e`). The real Control binary (`./cmd/server`) and
+  the real Agent, built from the commit Control's CI pins, run as processes
+  against each other under `agent_control.mtls: required`; the test reads
+  what Control recorded from the same database.
+  - **Opt-in.** `ANIXOPS_AGENT_E2E=1` and an anix-agent checkout
+    (`ANIXOPS_AGENT_ROOT`; `ANIXOPS_AGENT_GO` for its toolchain).
+    `ANIXOPS_AGENT_E2E_POSTGRES_DSN` runs Control on a throwaway PostgreSQL
+    database (SQLite otherwise). `ANIXOPS_GOST_BIN` gives the gost forward
+    driver the pinned gost. `ANIXOPS_AGENT_E2E_LOGDIR` keeps the logs and
+    `summary-*.json` (pass, fail or skip per scenario, with evidence).
+    `ANIXOPS_AGENT_E2E_NETNS=1` is the privileged lane: run as root under
+    `unshare --net`, which the test checks, with the real nftables driver.
+  - **Set-up.** A test CA for the gRPC listener (the Agent trusts it
+    through `SSL_CERT_FILE`); the built-in CA for agent certificates; an
+    Ed25519 test key that signs the official packages
+    (`packages/shared/build_package.py --formal-release`) and is Control's
+    and the Agent's official key. The installed packages are
+    identity-platform, protocol-runtime, forward and machine-telemetry.
+  - **The Agent.** The credential-only node Control's installer writes: no
+    API key, a one-time `anixagt_` credential, every compiled-in core. It
+    runs the plugin supervisor and the forward component of a proxy node.
+    Its GRPCHost is a TCP proxy owned by the test, which is how the suite
+    partitions it. `systemctl`, `journalctl`, `ss` and `gost` on its PATH
+    are stand-ins: the Agent never touches the host's units, and with
+    `ANIXOPS_GOST_BIN` the stand-in runs the real gost as a detached
+    process.
+  - **Scenarios** (`TestRealAgentEndToEnd`, in order):
+    - enrollment with the one-time credential, which the Agent then
+      deletes;
+    - the configuration snapshot applied, with the verdict in
+      `v4_kernel_node_config_status` and the VLESS inbound serving;
+    - a users delta on the open stream;
+    - the NodeStatus heartbeat and runtime health;
+    - machine-telemetry installed with `plugin.install` over AgentArtifacts
+      (the client certificate);
+    - the systemd services PackageReport and
+      `GET /api/v3/plugins/machine-telemetry/nodes/:id/services`, with
+      units on a host with systemd and cgroup v2;
+    - the link certificate (H28);
+    - forward.v1: a route is planned, pushed, applied and reported at the
+      same generation, and traffic flows through gost;
+    - user traffic through the inbound counted once in `v2_user` and the
+      report ledger;
+    - the alive list;
+    - `agent.diagnostic` on the stream;
+    - the route diagnosis with the node's checks;
+    - a durable plugin operation after stream-only operations (a known
+      issue, below);
+    - maintenance events from a tampered plugin signature;
+    - chaos (next item);
+    - clock-skew bounds on Control's side: reports observed at most a
+      minute ahead, none refused as `future`;
+    - the inbound still serving after every reload.
+  - **Chaos.**
+    - A graceful Agent restart: no re-enrollment, the forwarding state is
+      reapplied, no report is sent twice.
+    - Control killed (SIGKILL) right after traffic: the report is spooled,
+      replayed on the new session and counted once. A user created after
+      the restart is served.
+    - A partition, then an Agent crash while it lasts: the Agent runs from
+      its stored configuration and users and keeps the spool; when the
+      partition heals the spool is replayed and counted once.
+    - The #179 reset: the node's stored generation falls behind the
+      Agent's. Control recovers it from the report, and the next plan
+      stamps above it and is applied.
+    - A revoked certificate: `agent_cert_revoked`; the Agent re-enrolls
+      with a new credential.
+  - **Known issues the suite found**, reported as skips with the evidence
+    until fixed:
+    - Stream-only operations (`agent.diagnostic`, the forward checks,
+      `node.reload`, `agent.ping`, `users.reload`) take revisions from the session's in-memory
+      counter, while durable operations take the next revision of
+      `v3_kernel_node_operation_revision`. A durable operation at or below
+      a revision a stream-only one used is refused ("revision N is not
+      newer than M") and stays `dispatching`.
+    - On the Agent, a configuration revision that only changed the
+      forwarding state reloads the proxy core. A reload can fail with
+      `address already in use` and leave the node without its inbound.
+  - **CI.** The "Cross-Repo E2E" job runs in the full lane and nightly.
+    The main lane runs on PostgreSQL; the forward lane runs under sudo in
+    a network namespace (H14). The job uploads its logs on failure and is
+    not a required check yet.
+  - **The older process gates.** `internal/grpc/*cross_repo_e2e_test.go`
+    (`ANIXOPS_CROSS_REPO_E2E=1`, CI "Control to Agent Process E2E") drive
+    the agent-control-fixture and the plugin package lifecycle in process.
+    A v1.1.0-SDK agent keeps working on every legacy path, and on the
+    stream for operations only.
 - **Chaos**, in the fake-agent suite and in A2-7 with the real agent:
   - an agent disconnects mid-operation: before the acknowledgement, after
     it but before the terminal state, and during replay;
