@@ -293,6 +293,15 @@ done
 diff -u "${REPO_ROOT}/contracts/forward/v1/gost/anixops-gost.service" "${ROOT_DIR}/etc/systemd/system/anixops-gost.service" >/dev/null ||
   fail "gost unit differs from the contract"
 grep -qF '"anixops-gost.service"' "${ROOT_DIR}/etc/polkit-1/rules.d/50-anixops-agent.rules" || fail "polkit rule"
+updater="${ROOT_DIR}/etc/systemd/system/anixops-agent-updater.service"
+for line in "Type=oneshot" "ExecStart=/usr/lib/anixops-agent/anix-agent upgrade apply --request /var/lib/anixops-agent/upgrade/request.json" \
+  "ProtectSystem=strict" "ReadWritePaths=/usr/lib/anixops-agent /var/lib/anixops-agent"; do
+  grep -qxF "${line}" "${updater}" || fail "updater unit lacks ${line}"
+done
+! grep -q '^User=' "${updater}" || fail "the updater runs as root"
+grep -qxF "PathExists=/var/lib/anixops-agent/upgrade/request.json" "${ROOT_DIR}/etc/systemd/system/anixops-agent-updater.path" || fail "updater path unit"
+grep -qF 'systemctl enable --now anixops-agent-updater.path' "${STATE}/log" || fail "updater path not enabled"
+[[ "$(stat -c '%a' "${ROOT_DIR}/var/lib/anixops-agent/upgrade")" == "700" ]] || fail "upgrade dir mode"
 grep -qF 'useradd --system --gid anixops-agent --groups anixops-gost' "${STATE}/log" || fail "agent user not in the gost group"
 grep -qF 'systemctl enable anix-agent.service' "${STATE}/log" || fail "service not enabled"
 [[ "$(cat "${STATE}/nft-tables")" == "inet filter" ]] || fail "legacy tables left or foreign table removed: $(cat "${STATE}/nft-tables")"
@@ -724,7 +733,8 @@ printf 'qdisc htb 1: root refcnt 2 r2q 10 default 0x10\n' >"${STATE}/tc-eth1"
 run_installer uninstall
 expect_status 0 "uninstall"
 for gone in etc/systemd/system/anix-agent.service etc/systemd/system/anixops-gost.service usr/lib/anixops-agent \
-  usr/local/bin/anix-agent etc/polkit-1/rules.d/50-anixops-agent.rules; do
+  usr/local/bin/anix-agent etc/polkit-1/rules.d/50-anixops-agent.rules \
+  etc/systemd/system/anixops-agent-updater.service etc/systemd/system/anixops-agent-updater.path; do
   [[ ! -e "${ROOT_DIR}/${gone}" && ! -L "${ROOT_DIR}/${gone}" ]] || fail "uninstall left ${gone}"
 done
 for kept in etc/anixops/agent/config.json var/lib/anixops-agent/pki/identity.json var/lib/anixops-gost etc/sysctl.d/90-anixops-forward.conf; do
@@ -735,6 +745,8 @@ grep -qx 'inet anixops_fwd' "${STATE}/nft-tables" || fail "uninstall without --p
 grep -qx anixops-agent "${STATE}/passwd" || fail "uninstall without --purge removed the user"
 [[ "$(grep -n 'systemctl disable --now anix-agent.service' "${STATE}/log" | cut -d: -f1)" -lt "$(grep -n 'systemctl disable --now anixops-gost.service' "${STATE}/log" | cut -d: -f1)" ]] ||
   fail "the Agent must stop before gost"
+[[ "$(grep -n 'systemctl disable --now anixops-agent-updater.path' "${STATE}/log" | cut -d: -f1)" -lt "$(grep -n 'systemctl disable --now anix-agent.service' "${STATE}/log" | cut -d: -f1)" ]] ||
+  fail "the updater must stop before the Agent"
 expect_out "they stay in the kernel until a reboot or uninstall --purge"
 expect_out "revoke its credentials or delete the node there"
 run_installer --control "${CONTROL}" --node forward-41
