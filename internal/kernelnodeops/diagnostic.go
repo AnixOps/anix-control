@@ -258,11 +258,8 @@ func (x agentDiagnosticExecutor) Execute(ctx context.Context, run *Run) Outcome 
 			result.GetAgentDiagnostic().Ack.AcceptedAtUnixMs = dispatch.Ack.AcceptedAt.UnixMilli()
 		}
 	}
-	if dispatch.RawAck != nil {
-		if encoded, err := json.Marshal(dispatch.RawAck); err == nil {
-			result.GetAgentDiagnostic().AckJson = scrubBytes(encoded, nil)
-		}
-	}
+	result.GetAgentDiagnostic().AckJson = AgentAckJSON(dispatch.RawAck)
+	result.GetAgentDiagnostic().TaskJson = AgentTaskJSON(diagnostic.Row)
 	if !dispatch.Sent() {
 		err := dispatch.DispatchError
 		if dispatch.FallbackError != nil {

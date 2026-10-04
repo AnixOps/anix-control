@@ -240,3 +240,73 @@ func TestSecretDocumentsAgreeInBothPhases(t *testing.T) {
 		}
 	})
 }
+
+// With protocol_json, the settings a package stores are validated with the
+// typed secrets, as the protocol routes validate a write: a WireGuard
+// private key that does not match its public key fails VALIDATION_FAILED
+// and stores nothing, where ValidateNodeConfig's stand-ins pass. The
+// columns sent with it must be redacted.
+func TestPutProtocolSettingsValidatesTheTypedSecrets(t *testing.T) {
+	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
+		h := newCredentialHarness(t, db)
+		client := h.client(protocolHost, allFamilies())
+		private, public, err := service.GenerateWireGuardKeypair()
+		require.NoError(t, err)
+		_, otherPublic, err := service.GenerateWireGuardKeypair()
+		require.NoError(t, err)
+		settings := func(publicKey string) string {
+			return `{"settings":{"cidr":"10.8.0.0/24","server_address":"10.8.0.1/24","server_private_key":"` + private +
+				`","server_public_key":"` + publicKey + `","tunnel_type":"quic"}}`
+		}
+		row := func(document map[string]any) []byte {
+			encoded, err := json.Marshal(document)
+			require.NoError(t, err)
+			return mustJSON(t, map[string]any{"type": "wireguard", "enable": 0, "port": 51820, "settings": service.RedactNodeSecretsJSON(string(encoded))})
+		}
+		spec := func(document map[string]any, protocol []byte) *kernelnodeopsv1.OperationSpec {
+			spec := putSecretSpec(kernelnodeopsv1.SecretScope_SECRET_SCOPE_NODE_PROTOCOL, 5, "settings", document)
+			spec.GetPutSecretDocument().ProtocolJson = protocol
+			return spec
+		}
+
+		mismatched := h.bindings.open(protocolHost, protocolUpdateRoute, map[string]string{"protocol_id": "5"}, settings(otherPublic))
+		document := mismatched.sealedDocument("settings")
+		operation, _ := submitBound(t, client, "secrets.put:5:mismatched", spec(document, row(document)), mismatched)
+		require.Equal(t, kernelnodeopsv1.OperationState_OPERATION_STATE_FAILED, operation.GetState())
+		require.Equal(t, kernelnodeopsv1.ErrorCode_ERROR_CODE_VALIDATION_FAILED, operation.GetError().GetCode())
+		require.Contains(t, operation.GetError().GetMessage(), "server_public_key 与 server_private_key 不匹配")
+		require.Empty(t, protocolColumn(t, db, 5, "settings"), "a refused document stores nothing")
+		_, ok := protocolSecret(t, db, 5, "settings", "/server_private_key")
+		require.False(t, ok)
+		requireNoSecret(t, db, operation, private)
+
+		matching := h.bindings.open(protocolHost, protocolUpdateRoute, map[string]string{"protocol_id": "5"}, settings(public))
+		document = matching.sealedDocument("settings")
+		operation, _ = submitBound(t, client, "secrets.put:5:matching", spec(document, row(document)), matching)
+		require.Equal(t, kernelnodeopsv1.OperationState_OPERATION_STATE_SUCCEEDED, operation.GetState(), operation.GetError())
+		require.Contains(t, protocolColumn(t, db, 5, "settings"), private)
+
+		// protocol_json carries the columns redacted, never a handle or a
+		// secret in clear, and only with a protocol's settings.
+		for name, protocol := range map[string][]byte{
+			"a handle":        mustJSON(t, map[string]any{"type": "wireguard", "settings": mustJSONString(t, document)}),
+			"a clear secret":  mustJSON(t, map[string]any{"type": "wireguard", "settings": `{"server_private_key":"` + private + `"}`}),
+			"not an object":   []byte(`[1]`),
+			"not JSON inside": mustJSON(t, map[string]any{"type": "wireguard", "settings": "not json"}),
+		} {
+			_, err := client.SubmitOperation(context.Background(), &kernelnodeopsv1.SubmitOperationRequest{
+				RequestId: "secrets.put:5:" + name, Request: matching.binding(), Operation: spec(map[string]any{"cidr": "10.8.0.0/24"}, protocol),
+			})
+			require.Equal(t, codes.InvalidArgument, status.Code(err), name)
+		}
+		other := putSecretSpec(kernelnodeopsv1.SecretScope_SECRET_SCOPE_NODE_PROTOCOL, 5, "reality_settings", map[string]any{"dest": "x"})
+		other.GetPutSecretDocument().ProtocolJson = row(map[string]any{})
+		_, err = client.SubmitOperation(context.Background(), &kernelnodeopsv1.SubmitOperationRequest{RequestId: "secrets.put:5:reality-with-row", Operation: other})
+		require.Equal(t, codes.InvalidArgument, status.Code(err), "only with settings")
+	})
+}
+
+func mustJSONString(t *testing.T, value any) string {
+	t.Helper()
+	return string(mustJSON(t, value))
+}

@@ -242,7 +242,8 @@ reports are uploaded as the artifact `staging-rehearsal-batch-1`.
   are compared.
 - Routes on the node credential split's remainder answer natively only once
   the split is finalized (`docs/architecture/node-ops-service.md` sections
-  4.3 and 6): the protocol pool of batch 4 (M3-3). The seed does not
+  4.3 and 6): the node protocols of batch 2 (M3-1) and the protocol pool
+  of batch 4 (M3-3). The seed does not
   finalize, so on a fresh stack their shadow runs are skipped (the host
   answers from the legacy handler) and the batch reports them not
   compared. To rehearse them, finalize the staging database after `up` and
@@ -257,5 +258,10 @@ reports are uploaded as the artifact `staging-rehearsal-batch-1`.
   docker compose -p <project> exec control /app/anix-control node-secrets finalize -confirm -by staging all
   ```
 
-  These routes are not in `config/package-route-defaults.json`; they stay
-  legacy by default until such a rehearsal and the owner's sign-off.
+  The write twins start from `staging_seed`, the copy `up` takes before
+  that, so their protocol writes are served by the legacy handler unless
+  the template is taken again after the finalize (stop Control, then
+  `DROP DATABASE staging_seed` and `CREATE DATABASE staging_seed TEMPLATE
+  staging` as `rehearse.sh` does). These routes are not in
+  `config/package-route-defaults.json`; they stay legacy by default until
+  such a rehearsal and the owner's sign-off.

@@ -6,7 +6,7 @@
       "path": "/api/v2/admin/agent/execute",
       "package_id": "protocol-runtime",
       "route_id": "protocol.admin.agent.execute.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -14,7 +14,7 @@
       "path": "/api/v2/admin/agent/list",
       "package_id": "protocol-runtime",
       "route_id": "protocol.admin.agent.list.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -22,7 +22,7 @@
       "path": "/api/v2/admin/agent/monitor",
       "package_id": "protocol-runtime",
       "route_id": "protocol.admin.agent.monitor.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -38,7 +38,7 @@
       "path": "/api/v2/admin/agent/tasks",
       "package_id": "protocol-runtime",
       "route_id": "protocol.admin.agent.tasks.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -706,7 +706,7 @@
       "path": "/api/v2/admin/nodes/:id/agent-control",
       "package_id": "protocol-runtime",
       "route_id": "protocol.admin.nodes.id.agent_control.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -714,7 +714,7 @@
       "path": "/api/v2/admin/nodes/:id/agent-control/operations",
       "package_id": "protocol-runtime",
       "route_id": "protocol.admin.nodes.id.agent_control.operations.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -739,7 +739,7 @@
       "path": "/api/v2/admin/nodes/:id/protocols",
       "package_id": "protocol-runtime",
       "route_id": "protocol.admin.nodes.id.protocols.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -747,7 +747,7 @@
       "path": "/api/v2/admin/nodes/:id/protocols",
       "package_id": "protocol-runtime",
       "route_id": "protocol.admin.nodes.id.protocols.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -755,7 +755,7 @@
       "path": "/api/v2/admin/nodes/:id/protocols/:protocol_id",
       "package_id": "protocol-runtime",
       "route_id": "protocol.admin.nodes.id.protocols.protocol_id.delete",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -763,7 +763,7 @@
       "path": "/api/v2/admin/nodes/:id/protocols/:protocol_id",
       "package_id": "protocol-runtime",
       "route_id": "protocol.admin.nodes.id.protocols.protocol_id.put",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -787,7 +787,7 @@
       "path": "/api/v2/admin/nodes/:id/sync",
       "package_id": "protocol-runtime",
       "route_id": "protocol.admin.nodes.id.sync.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {

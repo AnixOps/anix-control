@@ -1867,8 +1867,17 @@ type PutSecretDocument struct {
 	// owner_id is the protocol id or the node id.
 	OwnerId uint64 `protobuf:"varint,2,opt,name=owner_id,json=ownerId,proto3" json:"owner_id,omitempty"`
 	// column is the document's column, for example "reality_settings".
-	Column        string `protobuf:"bytes,3,opt,name=column,proto3" json:"column,omitempty"`
-	DocumentJson  []byte `protobuf:"bytes,4,opt,name=document_json,json=documentJson,proto3" json:"document_json,omitempty"`
+	Column       string `protobuf:"bytes,3,opt,name=column,proto3" json:"column,omitempty"`
+	DocumentJson []byte `protobuf:"bytes,4,opt,name=document_json,json=documentJson,proto3" json:"document_json,omitempty"`
+	// protocol_json, for a node protocol's settings column, is the protocol
+	// as the package writes it (the v2_node_protocol columns, as the row's
+	// JSON). The kernel then validates the protocol with the settings it
+	// stores, as the protocol routes validate a write
+	// (service.ValidateNodeProtocol), and fails the operation
+	// VALIDATION_FAILED with the validator's message, storing nothing, when
+	// it is refused: unlike ValidateNodeConfig, which stands in for the
+	// secrets, the validator sees the typed ones (a WireGuard key pair).
+	ProtocolJson  []byte `protobuf:"bytes,5,opt,name=protocol_json,json=protocolJson,proto3" json:"protocol_json,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -1927,6 +1936,13 @@ func (x *PutSecretDocument) GetColumn() string {
 func (x *PutSecretDocument) GetDocumentJson() []byte {
 	if x != nil {
 		return x.DocumentJson
+	}
+	return nil
+}
+
+func (x *PutSecretDocument) GetProtocolJson() []byte {
+	if x != nil {
+		return x.ProtocolJson
 	}
 	return nil
 }
@@ -4475,7 +4491,12 @@ type AgentDiagnosticResult struct {
 	// ack_json is the transport's own acknowledgement as the administrator's
 	// task routes show it (the WebSocket's ack message, or the stream's
 	// OperationAck), scrubbed like a result; empty without one.
-	AckJson       []byte `protobuf:"bytes,7,opt,name=ack_json,json=ackJson,proto3" json:"ack_json,omitempty"`
+	AckJson []byte `protobuf:"bytes,7,opt,name=ack_json,json=ackJson,proto3" json:"ack_json,omitempty"`
+	// task_json is the task's row (v2_agent_diagnostic_task) as the
+	// administrator's task routes show it ("data"): as recorded after the
+	// dispatch, or as created when the task could not be sent; scrubbed like
+	// a result.
+	TaskJson      []byte `protobuf:"bytes,8,opt,name=task_json,json=taskJson,proto3" json:"task_json,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -4555,6 +4576,13 @@ func (x *AgentDiagnosticResult) GetLegacyFallback() bool {
 func (x *AgentDiagnosticResult) GetAckJson() []byte {
 	if x != nil {
 		return x.AckJson
+	}
+	return nil
+}
+
+func (x *AgentDiagnosticResult) GetTaskJson() []byte {
+	if x != nil {
+		return x.TaskJson
 	}
 	return nil
 }
@@ -6192,12 +6220,13 @@ const file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDesc = "" +
 	"\x04node\x18\x01 \x01(\v2!.anixops.kernelnodeops.v1.NodeRefR\x04node\"1\n" +
 	"\x0eRetireProtocol\x12\x1f\n" +
 	"\vprotocol_id\x18\x01 \x01(\x04R\n" +
-	"protocolId\"\xa8\x01\n" +
+	"protocolId\"\xcd\x01\n" +
 	"\x11PutSecretDocument\x12;\n" +
 	"\x05scope\x18\x01 \x01(\x0e2%.anixops.kernelnodeops.v1.SecretScopeR\x05scope\x12\x19\n" +
 	"\bowner_id\x18\x02 \x01(\x04R\aownerId\x12\x16\n" +
 	"\x06column\x18\x03 \x01(\tR\x06column\x12#\n" +
-	"\rdocument_json\x18\x04 \x01(\fR\fdocumentJson\"\xab\x01\n" +
+	"\rdocument_json\x18\x04 \x01(\fR\fdocumentJson\x12#\n" +
+	"\rprotocol_json\x18\x05 \x01(\fR\fprotocolJson\"\xab\x01\n" +
 	"\x0eCheckEndpoints\x127\n" +
 	"\x05nodes\x18\x01 \x03(\v2!.anixops.kernelnodeops.v1.NodeRefR\x05nodes\x12#\n" +
 	"\rrecord_status\x18\x02 \x01(\bR\frecordStatus\x12;\n" +
@@ -6390,7 +6419,7 @@ const file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDesc = "" +
 	"\amessage\x18\t \x01(\tR\amessage\"\x9c\x01\n" +
 	"\x0fDiagnosisResult\x12F\n" +
 	"\boutcomes\x18\x01 \x03(\v2*.anixops.kernelnodeops.v1.DiagnosisOutcomeR\boutcomes\x12A\n" +
-	"\avantage\x18\x02 \x01(\v2'.anixops.kernelnodeops.v1.VantageReportR\avantage\"\x93\x02\n" +
+	"\avantage\x18\x02 \x01(\v2'.anixops.kernelnodeops.v1.VantageReportR\avantage\"\xb0\x02\n" +
 	"\x15AgentDiagnosticResult\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x1d\n" +
 	"\n" +
@@ -6399,7 +6428,8 @@ const file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDesc = "" +
 	"\x03ack\x18\x04 \x01(\v2\".anixops.kernelnodeops.v1.AgentAckR\x03ack\x12%\n" +
 	"\x0edispatch_error\x18\x05 \x01(\tR\rdispatchError\x12'\n" +
 	"\x0flegacy_fallback\x18\x06 \x01(\bR\x0elegacyFallback\x12\x19\n" +
-	"\back_json\x18\a \x01(\fR\aackJson\"\xc0\x01\n" +
+	"\back_json\x18\a \x01(\fR\aackJson\x12\x1b\n" +
+	"\ttask_json\x18\b \x01(\fR\btaskJson\"\xc0\x01\n" +
 	"\x14AgentOperationResult\x12,\n" +
 	"\x12agent_operation_id\x18\x01 \x01(\tR\x10agentOperationId\x12\x1a\n" +
 	"\brevision\x18\x02 \x01(\x04R\brevision\x124\n" +

@@ -10,8 +10,8 @@ open work in [`../../TODO.md`](../../TODO.md).
 
 > 中文摘要：v4.0.0 的「插件化」只到路由层；本文定义「一个领域真正住在插件里」
 > 的验收标准、目标机制（存储租约 + 按路由模式 + 类型化内核操作，均已实现）、
-> 保留下来的旧计划约束，以及 M0–M4 里程碑。296 条 v2 路由中，176 条
-> `native-flagged`，89 条 `bridged`（待契约），31 条 `kernel-owned`（按设计留在内核）。
+> 保留下来的旧计划约束，以及 M0–M4 里程碑。296 条 v2 路由中，187 条
+> `native-flagged`，78 条 `bridged`（待契约），31 条 `kernel-owned`（按设计留在内核）。
 
 Markers used below: **CURRENT** = true in the tree today; **PLANNED** = accepted
 design, not implemented yet; **HISTORICAL** = preserved from a retired plan for
@@ -31,14 +31,14 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
 - `config/package-extraction.json` records each route's extraction mode
   (`bridged`, `kernel-owned`, `native-flagged` or `native`; section 3.2) and
   where its legacy handler lives
-  (`router`, `identity-bridge` or `none`). 176 routes are `native-flagged`:
+  (`router`, `identity-bridge` or `none`). 187 routes are `native-flagged`:
   identity-platform (23: group A's 16, the profile, dashboard, user detail,
   user list and user statistics, and the traffic and subscription resets),
   affiliate (10), forward (21), gost-mesh (3), knowledge (6),
   machine-telemetry (3), notification (23), order (13), payment (20), plan
-  (7), platform (5), protocol-runtime (3), proxy-node (7), subscription (23),
+  (7), platform (5), protocol-runtime (14), proxy-node (7), subscription (23),
   ticket (8) and wireguard (1). 31 routes are `kernel-owned`: they stay in the
-  kernel by design, and each row says why. The other 89 are `bridged` until a
+  kernel by design, and each row says why. The other 78 are `bridged` until a
   kernel contract lets their package serve them (section 3.2 lists what
   unblocks them). None is `native` yet. The identity routes are
   `identity-bridge`. `check_plugin_only_routes.py` enforces the map against
@@ -97,12 +97,12 @@ Route modes per package (2026-10-01):
 | payment | 20 | 0 | 0 |
 | plan | 7 | 0 | 0 |
 | platform | 5 | 0 | 7 |
-| protocol-runtime | 3 | 11 | 6 |
+| protocol-runtime | 14 | 0 | 6 |
 | proxy-node | 7 | 19 | 5 |
 | subscription | 23 | 2 | 0 |
 | ticket | 8 | 0 | 0 |
 | wireguard | 1 | 0 | 0 |
-| **all** | **176** | **89** | **31** |
+| **all** | **187** | **78** | **31** |
 
 Reusable pieces that already exist:
 
@@ -214,9 +214,9 @@ by `check_plugin_only_routes.py` (counts in section 1).
 
 | Mode | Meaning | Routes |
 |---|---|---|
-| `native-flagged` | the package host has a native handler, proved by a parity test; the legacy handler stays, so every runtime mode works | 176 |
+| `native-flagged` | the package host has a native handler, proved by a parity test; the legacy handler stays, so every runtime mode works | 187 |
 | `native` | the legacy handler is deleted and the host answers alone | 0 |
-| `bridged` | the host only relays, until a kernel contract lets the package serve the route | 89 |
+| `bridged` | the host only relays, until a kernel contract lets the package serve the route | 78 |
 | `kernel-owned` | the host only relays, by design: the route stays in the kernel, and the row's `reason` says why | 31 |
 
 A `bridged` or `kernel-owned` route is registered and relayed alike: it is
@@ -248,7 +248,7 @@ What unblocks the `bridged` routes:
 
 | Unblocked by | Routes | Count |
 |---|---|---|
-| KernelNodeOps and the node credential split (section 3.3) | forward: nodes, Ansible machines, clean agent tokens, every change applied on a node (a speed limit update included), runtime jobs; proxy-node: node administration, raw configuration, authorization keys, load balancer checks; protocol-runtime: node protocols, sync, Agent Control and agent operations | 74 |
+| KernelNodeOps and the node credential split (section 3.3) | forward: nodes, Ansible machines, clean agent tokens, every change applied on a node (a speed limit update included), runtime jobs; proxy-node: node administration, raw configuration, authorization keys, load balancer checks | 63 |
 | Open decision: whether UniProxy and the subscription renderer stay in the kernel | UniProxy (5) and the subscription preview | 6 |
 | A proxy node view with parent and load | forward observability targets, trend and topology | 3 |
 | A read of Control's process configuration `forward_runtime.clean_agent.public_url` (a KernelSettings-style namespace, or the host's environment) | the clean agent install script: its panel URL is that setting when set, else the request's scheme and host | 1 |
@@ -293,7 +293,7 @@ legacy handler or package, serves it.
 | KernelSettings ([`settings-service.md`](settings-service.md)): settings per namespace, secrets masked without the namespace's `secrets` capability | `kernel.settings.<namespace>.<read\|write\|secrets>.v1` | notification (`mail`), affiliate (`invite`), gost-mesh (`nodex`), platform (`backup`) |
 | KernelOrder ([`order-service.md`](order-service.md)): a paid payment record completes its order | `kernel.order.complete.v1` | payment |
 | KernelTelemetry ([`kernel-caches.md`](kernel-caches.md)): the administrator dashboard's snapshot from the kernel's cache, the online users as a count | `kernel.telemetry.dashboard.v1` | machine-telemetry |
-| KernelNodeOps ([`node-ops-service.md`](node-ops-service.md)): typed, idempotent node operations with a ledger, polling and a watch stream; no operation kind executes yet | `kernel.nodeops.<forward\|nodeconfig\|diagnose\|agents\|credentials>.v1` | none yet (planned: forward, proxy-node, protocol-runtime) |
+| KernelNodeOps ([`node-ops-service.md`](node-ops-service.md)): typed, idempotent node operations with a ledger, polling and a watch stream | `kernel.nodeops.<forward\|nodeconfig\|diagnose\|agents\|credentials>.v1` | gost-mesh (diagnose), protocol-runtime (nodeconfig, agents, diagnose) |
 
 The planned `kernel.entitlement.apply.v1` became
 `KernelSubscriber.ApplyEntitlement`.
@@ -877,54 +877,53 @@ The planned `kernel.entitlement.apply.v1` became
       counters, the subscriber's traffic and the permission's traffic
       change in one kernel transaction under a per-forward lock in
       Control's memory, and exhaustion pauses forwards on their nodes.
-- **Protocol runtime (in place).** 3 of protocol-runtime's 20 routes run
+- **Protocol runtime (in place).** 14 of protocol-runtime's 20 routes run
   natively, proved by `internal/tests/protocolruntimecompat`: the protocol
-  templates (static data) and the administrator's diagnostic task history
-  and detail on the adopted `v2_agent_diagnostic_task`.
-  - The kernel keeps writing that table: creating a task, the agents' polls
-    and results. Since a package may now write it too, the agents' HTTP poll
-    checks every pending task against the diagnostic whitelist again before
-    an agent gets it (`AgentDiagnosticTaskService.PullPendingTasks`); a task
-    off the whitelist fails.
-  - **Reality and WireGuard keys stay in the kernel.** `v2_node_protocol`
-    and `v2_wireguard_peer` are protected kernel tables
-    (`service.protectedTables`), and the protocol routes stay bridged.
-    - `v2_node_protocol` holds each protocol's Reality private key,
-      WireGuard server private key and custom configuration, and
-      `v2_wireguard_peer` every user's WireGuard private and preshared keys.
-      Whoever holds them can impersonate a node to its clients.
-    - The kernel builds every node's configuration (UniProxy, the gRPC node
-      service) and every subscription from `v2_node_protocol`, and validates
-      a protocol only when its own routes write it. A package that could
-      write the table could push unvalidated configuration (WireGuard relay
-      files, interfaces, routing tables) to every node.
-    - Column-level grants (section 3.1) do not exist, so the secrets cannot
-      be withheld from an adopting package. Payment holds its gateways'
-      secrets because the payment domain uses them; the protocol keys are
-      used by the kernel's node configuration and subscription rendering,
-      not by these routes.
-    - A bridged answer still passes through the package host, so the host
-      sees the keys of the protocols an administrator opens or saves. The
-      protection removes standing access to every key and every write, not
-      that relay.
-  - **Stay bridged** (11) or **kernel-owned** (the 6 agent routes), with
-    the reason in the host's route map:
-    - the node protocol list, creation, update and deletion: the protected
-      `v2_node_protocol`; the list answers the keys in clear (the
-      administrator's editor round-trips them), and a deletion also deletes
-      the protocol's WireGuard peers and subscription group links;
-    - node synchronization, Agent Control status and operations: the gRPC
-      control streams the kernel's Agent Control manager holds, and the
-      protected `v2_node`;
-    - the administrator's agent list, monitoring data, task creation and
-      command execution: the agents' live WebSocket connections and reports
-      in the kernel's memory; creating a task sends it over the connection
-      and waits for the acknowledgement;
-    - the agent routes (registration, heartbeat, task poll, result, monitor,
-      WebSocket; `kernel-owned`): node credentials checked in the kernel,
-      node status in `v2_node` and `v2_forward_node`, connections in the
-      kernel's memory, and the forward package's bridge tasks and runtime
-      jobs.
+  templates (static data), the administrator's diagnostic task history and
+  detail on the adopted `v2_agent_diagnostic_task`, and since M3-1 the node
+  protocols and every administrator route of the agents
+  ([`node-ops-service.md`](node-ops-service.md) section 6.3).
+  - The kernel keeps writing `v2_agent_diagnostic_task`: creating a task,
+    the agents' polls and results. Since a package may write it too, the
+    agents' HTTP poll checks every pending task against the diagnostic
+    whitelist again before an agent gets it
+    (`AgentDiagnosticTaskService.PullPendingTasks`); a task off the
+    whitelist fails.
+  - **Node protocols, once the split is finalized.** The package declares
+    `kernel.storage.adopt:v2_node_protocol`, which the kernel honours only
+    once the node credential split finalized the table: its secret
+    positions then hold the placeholder, and the Reality, TLS and WireGuard
+    keys are the kernel's (`v4_kernel_protocol_secret`). Until the lease
+    adopts it, the list, creation, update and deletion answer from the
+    legacy handler in every mode, SQLite included.
+    - The secrets an administrator types reach the host as sealed handles
+      (`config/node-secret-fields.json`); the host passes them to
+      `PutSecretDocument`, and the kernel stores them. With the settings it
+      sends the protocol (`protocol_json`), which the kernel validates with
+      the typed secrets, so a WireGuard key pair is checked as the legacy
+      route checks it; `ValidateNodeConfig` checks the rest first, with
+      stand-ins for the secrets.
+    - A deletion retires what goes with the protocol (`RetireProtocol`: its
+      users' WireGuard peers, its subscription group links and its secrets),
+      then the host deletes the row.
+    - A document that is not JSON in a secret column is a secret whole,
+      which only the kernel's writers store: such a request is served by
+      the legacy handler.
+  - **Agents through KernelNodeOps.** Node synchronization (`node.sync`),
+    Agent Control status (`GetAgentSession`) and operations
+    (`agent.operation`), the agent list (`ListAgentSessions`), the monitoring
+    data (`GetAgentMonitor`), task creation and command execution
+    (`agent.diagnostic`) reach the agents the kernel holds. The kernel
+    renders what the legacy routes show of a session, a snapshot, an
+    acknowledgement and a task row, and records an operation's
+    acknowledgement when the agent gives it, so the routes answer at the
+    acknowledgement, as the legacy ones do.
+  - **Kernel-owned** (the 6 agent routes), with the reason in the host's
+    route map: registration, heartbeat, task poll, result, monitor and the
+    WebSocket authenticate node credentials in the kernel, mark nodes
+    online in `v2_node` and `v2_forward_node`, keep connections in the
+    kernel's memory, and hand out the forward package's bridge tasks and
+    runtime jobs.
 - **Machine telemetry (in place).** 3 of machine-telemetry's 5 routes run
   natively, proved by `internal/tests/machinetelemetrycompat`: the
   administrator's hourly traffic series, the user traffic ranking and the

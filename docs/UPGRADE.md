@@ -1515,8 +1515,8 @@ anix-control node-secrets verify                    # finalized tables compare b
 - A package host leases its storage when it first opens it, so restart
   Control (which starts the package hosts again) after finalize. Until
   then the routes on these views and tables answer from the legacy handler,
-  whatever their mode: subscription's group protocols and protocol pool
-  (M3-3).
+  whatever their mode: protocol-runtime's node protocol routes (M3-1) and
+  subscription's group protocols and protocol pool (M3-3).
 
 **Rollback: `unsplit`.**
 

@@ -52,6 +52,8 @@ WEIGHTS: dict[str, dict[str, float]] = {
         "internal/tests/plancompat": 2.9,
         "internal/tests/machinetelemetrycompat": 2.8,
         "internal/tests/proxynodecompat": 2.3,
+        # Not measured in CI yet: M3-1's protocol and agent routes (local).
+        "internal/tests/protocolruntimecompat": 3.0,
         "internal/tests/nodesecretsplit": 2.1,
         "internal/kernelidentity": 1.6,
         "internal/tests/platformcompat": 1.2,
@@ -83,7 +85,8 @@ WEIGHTS: dict[str, dict[str, float]] = {
         "internal/tests/ticketcompat": 3.5,
         "internal/agentpki": 2.8,
         "internal/tests/bridgecontract": 1.8,
-        "internal/tests/protocolruntimecompat": 1.6,
+        # A local run of M3-1's protocol and agent routes, doubled.
+        "internal/tests/protocolruntimecompat": 38.0,
         "internal/tests/packagecompat": 0.6,
         "internal/tests/wireguardcompat": 0.1,
         "internal/agentreports": 0.1,

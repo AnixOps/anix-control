@@ -86,6 +86,11 @@ type Case struct {
 	TLS  bool
 	// Warmup bodies are sent, in order, before the compared request.
 	Warmup [][]byte
+	// Fallback is set when the native side must answer from the legacy
+	// handler (RunKernelRead, RunKernelWrite): the route cannot serve the
+	// request natively, for example before the node credential split is
+	// finalized.
+	Fallback bool
 }
 
 // noRouteHeader marks the harness's own answer to a path no route matches.

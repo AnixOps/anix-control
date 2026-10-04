@@ -36,3 +36,21 @@ func TestIsNodeSecretKey(t *testing.T) {
 		}
 	}
 }
+
+func TestKeepNodeSecretsRestoresPlaceholders(t *testing.T) {
+	stored := `{"private_key":"k","peers":[{"preshared_key":"p"}],"name":"n"}`
+	cases := []struct{ incoming, stored, want string }{
+		{NodeSecretPlaceholder, stored, stored},
+		{`{"name":"m"}`, stored, `{"name":"m"}`},
+		{`{"private_key":"********","name":"m"}`, stored, `{"name":"m","private_key":"k"}`},
+		{`{"peers":[{"preshared_key":"********"}]}`, stored, `{"peers":[{"preshared_key":"p"}]}`},
+		{`{"private_key":"********"}`, "", `{"private_key":""}`},
+		{`{"token":"********"}`, stored, `{"token":""}`},
+		{`not json ********`, stored, `not json ********`},
+	}
+	for _, c := range cases {
+		if got := KeepNodeSecrets(c.incoming, c.stored); got != c.want {
+			t.Fatalf("KeepNodeSecrets(%q, %q) = %q, want %q", c.incoming, c.stored, got, c.want)
+		}
+	}
+}

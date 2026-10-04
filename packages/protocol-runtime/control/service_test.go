@@ -8,6 +8,7 @@ import (
 	"testing"
 	"time"
 
+	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
 	"github.com/AnixOps/anix-control/sdk/packagebridgesdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/AnixOps/anix-control/v4/packages/protocol-runtime/native"
@@ -48,7 +49,7 @@ func TestProtocolRuntimeHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.
 		RouteID: "ticket.user.ticket.get", BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
 	})
 	require.Error(t, err)
-	handlers := (&native.Service{}).Handlers()
+	handlers := (&native.Service{NodeOps: kernelnodeopsv1.NewKernelNodeOpsClient(nil)}).Handlers()
 	require.Len(t, handlers, len(protocolRuntimeRoutes))
 	for route := range protocolRuntimeRoutes {
 		require.Contains(t, handlers, route, "every native route has a handler")
@@ -57,6 +58,43 @@ func TestProtocolRuntimeHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.
 		require.NotContains(t, handlers, route, "a bridged route has no native handler")
 		require.NotContains(t, protocolRuntimeRoutes, route)
 	}
+	withoutNodeOps := (&native.Service{}).Handlers()
+	for _, route := range []string{
+		native.CreateProtocolRouteID, native.UpdateProtocolRouteID, native.DeleteProtocolRouteID, native.SyncRouteID,
+		native.AgentControlRouteID, native.AgentControlOpsRouteID, native.AgentListRouteID, native.AgentMonitorRouteID,
+		native.AgentTasksCreateRouteID, native.AgentExecuteRouteID,
+	} {
+		require.NotContains(t, withoutNodeOps, route, "without KernelNodeOps the route stays legacy")
+	}
+}
+
+// In native mode, a node's protocols answer from the legacy handler while
+// the lease does not adopt v2_node_protocol: the node credential split is
+// not finalized, or the host has no storage.
+func TestProtocolRuntimeHostKeepsProtocolsLegacyWithoutTheAdoption(t *testing.T) {
+	bridge := &modesStub{modes: map[string]string{native.ProtocolsRouteID: "native"}}
+	service, err := newProtocolRuntimeService(bridge, "lease-1")
+	require.NoError(t, err)
+	service.Refresh(context.Background())
+	_, effective := service.Mode(native.ProtocolsRouteID)
+	require.Equal(t, "native", effective)
+	response, err := service.Dispatch(context.Background(), pluginhostsdk.DispatchRequest{
+		RouteID: native.ProtocolsRouteID, Method: "GET", BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
+		Metadata: pluginhostsdk.RequestMetadata{PathParams: map[string]string{"id": "1"}},
+	})
+	require.NoError(t, err)
+	require.EqualValues(t, 200, response.StatusCode)
+	require.Equal(t, native.ProtocolsRouteID, bridge.operation)
+}
+
+// modesStub is bridgeStub with route modes.
+type modesStub struct {
+	bridgeStub
+	modes map[string]string
+}
+
+func (s *modesStub) GetPackageConfig(context.Context) (packagebridgesdk.PackageConfig, error) {
+	return packagebridgesdk.PackageConfig{Revision: 1, RouteModes: s.modes}, nil
 }
 
 // The host accepts exactly the package's declared compatibility routes.
@@ -102,9 +140,15 @@ func TestProtocolRuntimeHostRelaysTheAgentWebSocket(t *testing.T) {
 	require.EqualError(t, err, `package route "proxy.node.ws.get" is unsupported`)
 }
 
-// The package adopts the diagnostic task table only: never the node
-// protocols with their Reality and WireGuard keys, the WireGuard peers or
-// the node credentials, which are protected kernel tables.
+// The package adopts the diagnostic task table, and v2_node_protocol,
+// which the kernel grants only once the node credential split finalized it
+// (its secret positions then hold the placeholder). It never adopts the
+// WireGuard peers or the node credentials, which stay protected kernel
+// tables, and reads a node's existence through kapi_node_status_v1. Of
+// KernelNodeOps it holds the families its routes use: nodeconfig (secrets,
+// protocol retirement, node sync, validation), agents (Agent Control and
+// the session RPCs) and diagnose (agent diagnostics); never credentials or
+// forward.
 func TestProtocolRuntimeManifestCapabilities(t *testing.T) {
 	raw, err := os.ReadFile("../manifest.template.json")
 	require.NoError(t, err)
@@ -112,5 +156,8 @@ func TestProtocolRuntimeManifestCapabilities(t *testing.T) {
 		Capabilities []string `json:"capabilities"`
 	}
 	require.NoError(t, json.Unmarshal(raw, &manifest))
-	require.ElementsMatch(t, []string{"kernel.storage.v1", "kernel.storage.adopt:v2_agent_diagnostic_task"}, manifest.Capabilities)
+	require.ElementsMatch(t, []string{
+		"kernel.storage.v1", "kernel.storage.adopt:v2_agent_diagnostic_task", "kernel.storage.adopt:v2_node_protocol",
+		"kernel.view:kapi_node_status_v1", "kernel.nodeops.nodeconfig.v1", "kernel.nodeops.agents.v1", "kernel.nodeops.diagnose.v1",
+	}, manifest.Capabilities)
 }

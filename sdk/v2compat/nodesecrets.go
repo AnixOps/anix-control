@@ -78,6 +78,73 @@ func RedactNodeSecrets(document string) string {
 	return encoded
 }
 
+// KeepNodeSecrets returns an incoming node protocol setting or raw
+// configuration (JSON text) in which every secret sent as
+// NodeSecretPlaceholder has its stored value (an empty string when nothing
+// is stored), so an administrator can save what a masked answer showed
+// without retyping its secrets. A placeholder sent for the whole value
+// keeps the whole stored value. Arrays are matched by position.
+//
+// It is the kernel's rule (service.KeepNodeSecretsJSON calls it). With an
+// empty stored value it is what a write that creates a protocol does with
+// a placeholder: nothing is stored yet, so the secret is stored empty.
+func KeepNodeSecrets(incoming, stored string) string {
+	if incoming == NodeSecretPlaceholder {
+		return stored
+	}
+	if !strings.Contains(incoming, NodeSecretPlaceholder) {
+		return incoming
+	}
+	value, ok := decodeNodeSecretDocument(incoming)
+	if !ok {
+		return incoming
+	}
+	previous, _ := decodeNodeSecretDocument(stored)
+	restored, changed := restoreNodeSecretValue(value, previous)
+	if !changed {
+		return incoming
+	}
+	encoded := encodeNodeSecretDocument(restored)
+	if encoded == "" {
+		return NodeSecretPlaceholder
+	}
+	return encoded
+}
+
+func restoreNodeSecretValue(value, stored any) (any, bool) {
+	changed := false
+	switch typed := value.(type) {
+	case map[string]any:
+		previous, _ := stored.(map[string]any)
+		for key, item := range typed {
+			if item == NodeSecretPlaceholder && IsNodeSecretKey(key) {
+				if old, ok := previous[key]; ok {
+					typed[key] = old
+				} else {
+					typed[key] = ""
+				}
+				changed = true
+				continue
+			}
+			if _, nested := restoreNodeSecretValue(item, previous[key]); nested {
+				changed = true
+			}
+		}
+	case []any:
+		previous, _ := stored.([]any)
+		for index, item := range typed {
+			var old any
+			if index < len(previous) {
+				old = previous[index]
+			}
+			if _, nested := restoreNodeSecretValue(item, old); nested {
+				changed = true
+			}
+		}
+	}
+	return value, changed
+}
+
 // redactNodeSecretValue replaces the secrets of value in place; it reports
 // whether it replaced any.
 func redactNodeSecretValue(value any) bool {

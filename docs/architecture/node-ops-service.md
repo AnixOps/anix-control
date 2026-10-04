@@ -10,8 +10,9 @@ executes the forward family and the gost API connection test, runtime job
 payloads carry no token, and forward node tokens are pinned to their
 endpoints (sections 3.8, 3.11 and 6.1). M3-4 and M3-5 are cancelled
 (2026-10-04): v4.2's forwarding redesign deletes or rewrites their routes
-(section 7). M3-3 is implemented: subscription's two protocol pool
-routes read the split's public views once finalized (section 6.4). This is
+(section 7). M3-1 and M3-3 are implemented: protocol-runtime's 11 routes
+and subscription's two protocol pool routes run natively, the protocols
+and the pool once the split is finalized (sections 6.3 and 6.4). This is
 phase 3 of the 2026-10 plan, done together with Agent line A2.
 
 > 中文摘要：剩余桥接路由里，有 83 条在等“内核代办节点操作”和“节点凭据外置”，
@@ -2160,6 +2161,81 @@ Protocol-runtime adopts `v2_node_protocol` once it is finalized.
 | `POST /admin/agent/tasks` | `RunAgentDiagnostic` (wait A): the kernel validates the whitelist, writes the task row, dispatches and waits for the acknowledgement, with the legacy fallback | native |
 | `POST /admin/agent/execute` | `RunAgentDiagnostic` | native |
 
+**As M3-1 built them.** All 11 routes are `native-flagged`
+(`packages/protocol-runtime/native`, `internal/tests/protocolruntimecompat`).
+The protocol routes run through the whole path a deployment runs
+(`packagecompat.RunKernelRead`, `RunKernelWrite`: the gateway sealing the
+typed secrets, a real bridge session serving KernelNodeOps, the engine with
+its executors); the agent routes run both sides on one database against the
+same scripted agents (`internal/tests/fakeagent` on the stream, a legacy
+WebSocket agent on the kernel's agent handler). Byte parity holds on SQLite
+and PostgreSQL. What differs from the rows above, and what the kernel gained:
+
+- **The protocols wait for the finalize.** The routes answer natively only
+  when the lease adopts `v2_node_protocol` (`packagestoresdk.Store.Leased`);
+  otherwise they return `ErrNativeUnavailable` and the router answers from
+  the legacy handler, SQLite included. A host started before the finalize
+  keeps them legacy until Control restarts. The agent routes need no
+  finalize: a missing node is the kernel's `NOT_FOUND`.
+- **No `SyncNode` on protocol writes.** The legacy creation, update and
+  deletion do not sync the node, so the native ones do not either; the
+  administrator's sync button does.
+- **The order of a write.** Creation: bind; the node exists
+  (`kapi_node_status_v1`); a placeholder stands for nothing yet, so it is
+  stored empty (`v2compat.KeepNodeSecrets` with nothing stored);
+  `ValidateNodeConfig` (stand-ins for the handles); insert the row with its
+  secret columns masked; `PutSecretDocument` for each column with a handle,
+  the settings first. Update: resolve the update's keys as the kernel does,
+  merge and validate as above, write the columns without secrets, then
+  `PutSecretDocument` for each secret column whose new or stored document
+  has a secret position (a column set to null first stores `{}`, which
+  drops its secrets). A failed `PutSecretDocument` undoes what the route
+  wrote: a created row is retired and deleted; an update's columns without
+  secrets get their previous values back (a column it set to null has
+  already dropped its secrets).
+- **The settings are validated with the typed secrets.** Stand-ins cannot
+  tell a WireGuard private key from the public key it must match, so
+  `PutSecretDocument` takes the protocol the package writes
+  (`protocol_json`, its columns masked; added) with the settings: the kernel
+  runs the protocol validator on it with the settings it stores and fails
+  `VALIDATION_FAILED`, storing nothing, when it refuses them. The route
+  answers that as the legacy route answers its validator (400).
+- **A secret document that is not JSON** is a secret whole, which only the
+  kernel's writers store: such a request is answered by the legacy handler.
+- **Results at acceptance (added).** An executor may record the result so
+  far when the channel accepts the operation (`Acceptance.Result`); an
+  ACCEPTED wait answers it. `node.sync`, `agent.operation` and
+  `agent.diagnostic` record the acknowledgement there, which is what the
+  legacy routes answer, at once. `NodeSyncResult.snapshot` (added) says
+  whether the configuration went out as a snapshot; `AgentOperationResult`
+  carries the operation's `deadline_unix_ms` (added).
+- **The kernel renders what the routes show (added).**
+  `AgentSession.admin_json`, `GetAgentSessionResponse.connection_json` and
+  `observed_state_json`, `GetAgentMonitorResponse.monitor_json`,
+  `AgentDiagnosticResult.ack_json` and `task_json`: the session, snapshot,
+  acknowledgement and task row as the legacy routes show them, scrubbed like
+  a result. The legacy agent list, monitor, Agent Control status and task
+  routes use the same renderings, so they are scrubbed too now, and the
+  agent list is sorted by node kind and id (it was in `sync.Map` order).
+- **Request ids** are `node.sync:proxy-<id>:<token>`, `agent.op:<id>:<token>`
+  and `agent.diag:<id>:<token>` (the request's Idempotency-Key, else its
+  X-Request-ID, else a random one), `secrets.put:protocol-<id>:<column>:...`
+  with a fresh part (a typed secret is stored once per request), and
+  `protocol.retire:<id>`. The legacy routes call the kernel's functions
+  directly, without the ledger, so a retry is recognized in native mode
+  only.
+- **Two corners differ.** A diagnostic task for a node whose agent holds
+  both a WebSocket and a stream that advertises `agent.diagnostic` goes on
+  the stream natively and on the WebSocket in the legacy route; and the
+  monitoring data of a node deleted since its agent posted it is not found
+  natively (`GetAgentMonitor` checks the node), while the legacy route
+  still shows it.
+- **A legacy fix on the way.** The legacy protocol update of a finalized
+  table took the stored documents from the legacy columns, which hold the
+  placeholder, so a WireGuard update that kept the private key failed
+  validation. It now resolves them from the split table first
+  (`nodesecrets.ResolveProtocol`), as every reader does.
+
 ### 6.4 subscription (2): native
 
 | Route | Planned calls | Mode |
@@ -2215,7 +2291,7 @@ handlers ship `native-flagged`, and operators choose the runtime mode.
 | NO-7 | Forward operations: `ApplyForward`, `ApplyTunnel`, `SyncForwardBackend`, `ApplyLegacyRule` over the existing executors; job payloads without tokens and the payload scrub; endpoint pinning | NO-1, NO-3 | control | L |
 | NO-8 | Diagnosis: `CheckEndpoints`, `CollectNodeStats`, `DiagnoseForward`, `DiagnoseTunnel` (Control vantage; node vantage after A2-5) | NO-1 | control | M |
 | NO-9 | Split P3: `node-secrets finalize` and `unsplit`, conditional adoption, the new views, the static gate on moved columns. Done: section 4.3 | NO-3, NO-5, NO-7 | control | M |
-| M3-1 | protocol-runtime: 11 routes native, `protocolruntimecompat` with fake agents | NO-4, NO-5, NO-6, NO-9 | control | M |
+| M3-1 | protocol-runtime: 11 routes native, `protocolruntimecompat` with fake agents. Done: section 6.3 | NO-4, NO-5, NO-6, NO-9 | control | M |
 | M3-2 | proxy-node: 14 routes native | NO-4, NO-5, NO-6, NO-8, NO-9 | control | L |
 | M3-3 | subscription: 2 routes native. Done: section 6.4 | NO-9 | control | S |
 | M3-4 | ~~forward: nodes, Ansible machines, clean agents, runtime jobs (20 routes)~~ **Cancelled** (2026-10-04, superseded by forward F5a/F5d) | NO-4, NO-5, NO-7, NO-8, NO-9 | control | L |

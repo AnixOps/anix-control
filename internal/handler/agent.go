@@ -1205,7 +1205,7 @@ func (h *AgentHandler) CreateTask(c *gin.Context) {
 				"task_id":      run.Task.ID,
 				"message_id":   dispatch.MessageID,
 				"dispatch_err": dispatch.DispatchError.Error(),
-				"data":         run.Row,
+				"data":         json.RawMessage(kernelnodeops.AgentTaskJSON(run.Row)),
 			})
 			return
 		}
@@ -1220,7 +1220,7 @@ func (h *AgentHandler) CreateTask(c *gin.Context) {
 			"message_id":   dispatch.MessageID,
 			"ack_received": false,
 			"dispatch_err": dispatch.DispatchError.Error(),
-			"data":         run.Row,
+			"data":         json.RawMessage(kernelnodeops.AgentTaskJSON(run.Row)),
 		})
 		return
 	}
@@ -1235,7 +1235,7 @@ func (h *AgentHandler) CreateTask(c *gin.Context) {
 		"message_id":   dispatch.MessageID,
 		"ack_received": true,
 		"ack":          json.RawMessage(kernelnodeops.AgentAckJSON(dispatch.RawAck)),
-		"data":         run.Row,
+		"data":         json.RawMessage(kernelnodeops.AgentTaskJSON(run.Row)),
 	})
 }
 
@@ -1256,14 +1256,14 @@ func answerStreamDiagnostic(c *gin.Context, nodeID uint, run *kernelnodeops.Agen
 	if dispatch.DispatchError != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error": "send failed", "task_id": run.Task.ID, "message_id": dispatch.MessageID,
-			"dispatch_err": dispatch.DispatchError.Error(), "channel": "agent_control", "data": run.Row,
+			"dispatch_err": dispatch.DispatchError.Error(), "channel": "agent_control", "data": json.RawMessage(kernelnodeops.AgentTaskJSON(run.Row)),
 		})
 		return
 	}
 	panelSuccess(c, gin.H{
 		"message": "task sent", "task_id": run.Task.ID, "node_id": nodeID, "success": true, "output": "task dispatched",
 		"duration_ms": int64(0), "message_id": dispatch.MessageID, "ack_received": true, "ack": json.RawMessage(kernelnodeops.AgentAckJSON(dispatch.RawAck)),
-		"channel": "agent_control", "data": run.Row,
+		"channel": "agent_control", "data": json.RawMessage(kernelnodeops.AgentTaskJSON(run.Row)),
 	})
 }
 

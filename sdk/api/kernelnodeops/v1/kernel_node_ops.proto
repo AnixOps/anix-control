@@ -301,6 +301,15 @@ message PutSecretDocument {
   // column is the document's column, for example "reality_settings".
   string column = 3;
   bytes document_json = 4;
+  // protocol_json, for a node protocol's settings column, is the protocol
+  // as the package writes it (the v2_node_protocol columns, as the row's
+  // JSON). The kernel then validates the protocol with the settings it
+  // stores, as the protocol routes validate a write
+  // (service.ValidateNodeProtocol), and fails the operation
+  // VALIDATION_FAILED with the validator's message, storing nothing, when
+  // it is refused: unlike ValidateNodeConfig, which stands in for the
+  // secrets, the validator sees the typed ones (a WireGuard key pair).
+  bytes protocol_json = 5;
 }
 
 // Vantage is where a check or diagnosis dials from.
@@ -765,6 +774,11 @@ message AgentDiagnosticResult {
   // task routes show it (the WebSocket's ack message, or the stream's
   // OperationAck), scrubbed like a result; empty without one.
   bytes ack_json = 7;
+  // task_json is the task's row (v2_agent_diagnostic_task) as the
+  // administrator's task routes show it ("data"): as recorded after the
+  // dispatch, or as created when the task could not be sent; scrubbed like
+  // a result.
+  bytes task_json = 8;
 }
 
 message AgentOperationResult {

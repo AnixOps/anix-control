@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
+	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v4/internal/sealedsecrets"
 	"github.com/AnixOps/anix-control/v4/internal/service"
@@ -156,7 +157,10 @@ func (s *SecretDocuments) put(ctx context.Context, run *Run) Outcome {
 		if errors.Is(err, gorm.ErrRecordNotFound) {
 			return fail(kernelnodeopsv1.ErrorCode_ERROR_CODE_TARGET_GONE, fmt.Sprintf("the document's owner %d not found", id), false)
 		}
-		return err
+		if err != nil {
+			return err
+		}
+		return validateStoredProtocol(op, outcome.Full)
 	})
 	if !ok {
 		return failed
@@ -170,6 +174,25 @@ func (s *SecretDocuments) put(ctx context.Context, run *Run) Outcome {
 	return Succeeded(&kernelnodeopsv1.OperationResult{Result: &kernelnodeopsv1.OperationResult_SecretDocument{SecretDocument: &kernelnodeopsv1.SecretDocumentResult{
 		RedactedJson: []byte(outcome.Redacted), Stored: counter32(int64(len(resolved))), Kept: counter32(int64(outcome.Kept)), Cleared: counter32(int64(outcome.Cleared)),
 	}}})
+}
+
+// validateStoredProtocol validates the protocol a package writes with the
+// settings the operation stores (PutSecretDocument.protocol_json), as the
+// protocol routes validate a write: the validator sees the typed secrets.
+// A refusal fails the operation, and its transaction stores nothing.
+func validateStoredProtocol(op *kernelnodeopsv1.PutSecretDocument, settings string) error {
+	if op.GetScope() != kernelnodeopsv1.SecretScope_SECRET_SCOPE_NODE_PROTOCOL || op.GetColumn() != "settings" || len(op.GetProtocolJson()) == 0 {
+		return nil
+	}
+	var protocol model.NodeProtocol
+	if err := json.Unmarshal(op.GetProtocolJson(), &protocol); err != nil {
+		return fail(kernelnodeopsv1.ErrorCode_ERROR_CODE_VALIDATION_FAILED, "protocol_json is not a node protocol: "+err.Error(), false)
+	}
+	protocol.Settings = &settings
+	if err := service.ValidateNodeProtocol(&protocol); err != nil {
+		return fail(kernelnodeopsv1.ErrorCode_ERROR_CODE_VALIDATION_FAILED, err.Error(), false)
+	}
+	return nil
 }
 
 // unresolved reports whether a document still holds the bare prefix at a

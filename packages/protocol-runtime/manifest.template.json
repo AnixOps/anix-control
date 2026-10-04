@@ -7,7 +7,7 @@
   "targets": ["control"],
   "architectures": [],
   "artifact_sha256": "GENERATED_AT_BUILD",
-  "capabilities": ["kernel.storage.v1", "kernel.storage.adopt:v2_agent_diagnostic_task"],
+  "capabilities": ["kernel.storage.v1", "kernel.storage.adopt:v2_agent_diagnostic_task", "kernel.storage.adopt:v2_node_protocol", "kernel.view:kapi_node_status_v1", "kernel.nodeops.nodeconfig.v1", "kernel.nodeops.agents.v1", "kernel.nodeops.diagnose.v1"],
   "dependencies": [],
   "conflicts": [],
   "permissions": ["protocol-runtime.view", "protocol-runtime.api"],

@@ -826,6 +826,10 @@ func (s *NodeService) UpdateProtocol(id uint, updates map[string]any) error {
 	if err := s.db.First(&current, id).Error; err != nil {
 		return err
 	}
+	// The stored secrets, from the split table where the legacy columns
+	// hold placeholders (a finalized table): a placeholder sent back keeps
+	// them, and the protocol is validated with them.
+	nodesecrets.ResolveProtocol(s.db, &current)
 
 	updates, err := columnUpdates(s.db, &model.NodeProtocol{}, updates, "id", "node_id")
 	if err != nil {

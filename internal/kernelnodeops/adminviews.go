@@ -6,6 +6,7 @@ import (
 
 	agentv1pb "github.com/AnixOps/anix-control/sdk/api/agent/v1"
 	"github.com/AnixOps/anix-control/v4/internal/agentstreams"
+	"github.com/AnixOps/anix-control/v4/internal/model"
 	"google.golang.org/protobuf/proto"
 )
 
@@ -93,6 +94,15 @@ func AgentAckJSON(ack any) []byte {
 		return nil
 	}
 	return scrubbedJSON(ack)
+}
+
+// AgentTaskJSON renders a diagnostic task's row as the administrator's task
+// routes show it ("data"), scrubbed; nil without one.
+func AgentTaskJSON(row *model.AgentDiagnosticTask) []byte {
+	if row == nil {
+		return nil
+	}
+	return scrubbedJSON(row)
 }
 
 // scrubbedJSON encodes value and scrubs it like a result.
