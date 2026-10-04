@@ -352,6 +352,22 @@ func runDrop(t *testing.T, db *gorm.DB) {
 	_, err = WriteArchive(ctx, db, WriteOptions{Dir: t.TempDir(), Trigger: "cli", Now: now})
 	require.NoError(t, err)
 
+	// An installed forward package release that still adopts flux tables
+	// (before F5d) would lose its storage lease; one without them is fine.
+	require.NoError(t, db.AutoMigrate(&model.PluginRelease{}, &model.PluginInstallation{}))
+	for version, capabilities := range map[string]string{
+		"4.1.0": `["kernel.storage.v1","kernel.storage.adopt:v2_forward","kernel.storage.adopt:v2_forward_latency_bucket","kernel.storage.adopt:v2_speed_limit"]`,
+		"4.2.0": `["kernel.storage.v1","kernel.storage.adopt:v2_forward_latency_bucket"]`,
+	} {
+		require.NoError(t, db.Create(&model.PluginRelease{PluginID: "forward", Version: version, APIVersion: "v1",
+			ManifestJSON: `{"id":"forward","capabilities":` + capabilities + `}`, ArtifactSHA256: "x", Signature: "x"}).Error)
+	}
+	installation := model.PluginInstallation{PluginID: "forward", Target: "control", DesiredVersion: "4.1.0", ObservedVersion: "4.1.0", State: "healthy", Enabled: true}
+	require.NoError(t, db.Create(&installation).Error)
+	_, err = drop(ConfirmPhrase, backup)
+	assert.Contains(t, refusal(err), "the installed package forward 4.1.0 (control) still adopts v2_forward, v2_speed_limit")
+	require.NoError(t, db.Model(&installation).Updates(map[string]any{"desired_version": "4.2.0", "observed_version": "4.2.0"}).Error)
+
 	// A running Control holds the singleton lease.
 	require.NoError(t, db.Exec("CREATE TABLE v4_kernel_lease (name varchar(100) PRIMARY KEY, holder varchar(200), expires_at timestamp, acquired_at timestamp, renewed_at timestamp)").Error)
 	require.NoError(t, db.Exec("INSERT INTO v4_kernel_lease (name, holder, expires_at) VALUES (?, ?, ?)", SingletonLease, "control-1", now.Add(20*time.Second)).Error)

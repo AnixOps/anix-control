@@ -41,6 +41,9 @@ type Preconditions struct {
 	Archive *model.ForwardLegacyArchive `json:"archive"`
 	Nodes   []NodeStatus                `json:"nodes"`
 	Backup  *Backup                     `json:"backup"`
+	// Packages are installed package releases that still adopt a flux
+	// table.
+	Packages []PackageAdoption `json:"packages"`
 	// Present and Missing split DropTables by whether they exist now.
 	Present []string `json:"present"`
 	Missing []string `json:"missing"`
@@ -114,6 +117,18 @@ func CheckPreconditions(ctx context.Context, db *gorm.DB, options PreconditionOp
 	}
 	if len(waiting) > 0 {
 		result.Blockers = append(result.Blockers, fmt.Sprintf("%d forward node(s) neither clean nor abandoned: %s", len(waiting), strings.Join(waiting, ", ")))
+	}
+
+	// No installed package still adopts a flux table: its storage lease
+	// would fail without it.
+	adoptions, err := packagesAdoptingDropTables(ctx, db)
+	if err != nil {
+		return nil, err
+	}
+	result.Packages = adoptions
+	for _, adoption := range adoptions {
+		result.Blockers = append(result.Blockers, fmt.Sprintf("the installed package %s %s (%s) still adopts %s: its storage lease would fail without them; install the release without the flux routes (F5d) first",
+			adoption.PluginID, adoption.Version, adoption.Target, strings.Join(adoption.Tables, ", ")))
 	}
 
 	// No Control running on the database.

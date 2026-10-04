@@ -48,7 +48,8 @@ drop then no longer waits for it. Its old runtime, if any, stays on it.
 drop is IRREVERSIBLE (gate H15). It drops the flux tables in one
 transaction and refuses unless: the phrase is exact; the latest archive is
 readable, unchanged and current; every forward node is clean or abandoned;
-no Control process runs on the database; and a database backup of the last
+no installed package release still adopts one of the tables (its storage
+lease would fail); no Control process runs on the database; and a database backup of the last
 24 hours exists (Control's own on SQLite, or --backup-taken <path>, a
 pg_dump file on PostgreSQL). v2_forward_node and v2_forward_clean_agent
 are kept. After the drop, rolling back to 4.1 needs that backup. There is

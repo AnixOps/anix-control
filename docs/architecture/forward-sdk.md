@@ -1964,7 +1964,7 @@ Drop The Old Tables").
   `anixops.forward.legacy-archive.v1`, mode 0600 in a 0700 directory: by
   default `forward-legacy/` under the data directory (the SQLite
   database's directory, else `config/data`), written at the first v4.2
-  start (under the bootstrap lock) and by `forward legacy archive [-o]`.
+  start or `migrate` (under the bootstrap lock) and by `forward legacy archive [-o]`.
   An archive never overwrites a file (timestamped names, exclusive
   create). Secret columns (`api_token`, `token`, any `*token*`, `*secret*`,
   `*password*`) are left out and listed per table; JSON documents (runtime
@@ -1994,8 +1994,11 @@ Drop The Old Tables").
   irreversible and must run with Control stopped. It refuses, listing
   every reason, unless the phrase `DROP v4.1 FORWARDING TABLES` is exact;
   the latest archive is readable, matches its SHA-256 and has the current
-  row counts; every forward node is clean or abandoned; no Control holds
-  the singleton-worker lease; and a database backup of the last 24 hours
+  row counts; every forward node is clean or abandoned; no installed package release
+  adopts a dropped table (`kernel.storage.adopt:`; a storage lease fails
+  as a whole when an adopted table is missing, so the forward package
+  release without the flux routes, F5d, must be installed first); no
+  Control holds the singleton-worker lease; and a database backup of the last 24 hours
   exists (a successful database or full backup of Control's backup
   service, SQLite only, or `--backup-taken <path>`). Then it drops the
   present tables in one transaction (PostgreSQL with a `lock_timeout`,

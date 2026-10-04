@@ -2395,7 +2395,8 @@ the command line, drops the old tables
 Do this after the order above (the new Agent on every forward node, then
 Control v4.2). Step by step:
 
-1. **The archive.** The first v4.2 start writes one to the data directory
+1. **The archive.** The first v4.2 start (or the first `anix-control
+   migrate`) writes one to the data directory
    (`config/data/forward-legacy/`, or next to the SQLite database) and logs
    its path and SHA-256. Write another, anywhere, at any time:
 
@@ -2426,7 +2427,11 @@ Control v4.2). Step by step:
      and runs `config/deploy/ansible/playbooks/forward_legacy_cleanup.yml`
      on Ansible hosts with the Ansible settings forwarding used;
    - a node still on the clean agent or another legacy channel is
-     unreachable: install the new Agent and check again.
+     unreachable: install the new Agent and check again;
+   - a node with no enrolled Agent, no clean agent, not an Ansible machine
+     and referenced by no old forward or rule is reported clean ("no legacy
+     forward runtime was placed on this node") without being contacted:
+     check such hosts yourself if they ever ran forwarding by hand.
 
    A `dirty` node still has old rules: fix the cause in the detail and
    check again. A node you cannot reach any more (returned, broken) can be
@@ -2449,7 +2454,10 @@ Control v4.2). Step by step:
 
    It refuses, listing every reason, unless the newest archive is readable,
    unchanged and current (archive again if the old data changed), every
-   forward node is clean or abandoned, no Control holds the lease, and the
+   forward node is clean or abandoned, no installed package release still
+   adopts one of the old tables (the forward package of this release no
+   longer does; an older one would lose its storage, so upgrade the package
+   first), no Control holds the lease, and the
    backup exists (`--backup-taken` may be left out on SQLite when Control's
    own backup of the last 24 hours exists). It then drops, in one
    transaction: `v2_forward_port_binding`, `v2_forward_traffic_cursor`,

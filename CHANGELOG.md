@@ -28,7 +28,8 @@
     Control stopped: `forward legacy drop --confirm "DROP v4.1 FORWARDING
     TABLES" [--backup-taken <path>]` refuses unless the newest archive is
     readable, unchanged and current, every forward node is clean or
-    abandoned, no Control holds the singleton lease and a database backup of
+    abandoned, no installed package release still adopts an old table, no
+    Control holds the singleton lease and a database backup of
     the last 24 hours exists. It drops `v2_forward`, `v2_forward_tunnel`,
     `v2_forward_user_tunnel`, `v2_speed_limit`, `v2_forward_rule`,
     `v2_forward_runtime_job`, `v2_forward_port_binding`,
