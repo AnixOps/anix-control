@@ -1833,7 +1833,8 @@ What changes, exactly:
 
 - Take the defaults: nothing to do. The startup log states the policy:
   `package route defaults: policy rehearsed (package_routes.default_mode):
-  151 routes of 15 packages default to native ...`.
+  151 routes of 15 packages default to native ...` (from v4.2, 130 routes
+  of 14 packages: the forward package left the set, F5d).
 
 **See what runs where** and why. `SOURCE` (`source` in the API) is `stored`
 (set explicitly), `default` (native by default), `kill-switch` (default off
@@ -2532,6 +2533,15 @@ archives the old tables and then drops them
   it up (F5c, [`architecture/forward-sdk.md`](architecture/forward-sdk.md)
   section 10); nothing can change them from the UI or the removed routes.
   Recreate them as v4 routes.
+- **Install the forward package of this release before the legacy cleanup
+  (F5c).** It adopts no table and reads no kernel view any more (its
+  manifest declares only `kernel.forward.v1`); the remaining forward v2
+  routes, `POST /api/v2/user/reset` (用户 → 重置流量) among them, are served
+  by the kernel whatever route mode is stored for them, and the forward
+  package left `config/package-route-defaults.json`. A 4.1 forward package
+  adopts the flux tables, and a storage lease fails as a whole when an
+  adopted table is missing, so after F5c's drop it would not start and
+  `/api/v4/forward/*` would go down with it.
 - **Rollback.** No table changes in F5d: rolling back to 4.1 brings the
   routes and pages back over the same data, as long as F5c has not dropped
   the tables.

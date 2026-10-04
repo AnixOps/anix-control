@@ -2013,12 +2013,17 @@ Drop The Old Tables").
 
 The flux v2 routes, the route catalog entries and the flux guardrails in
 AGENTS.md go in the same release (F5, H17). Done in F5d: the 53 routes
-below are removed, `config/package-extraction.json` has 243 routes (no
-`bridged` forward route; the forward package keeps 21 `native-flagged`
-and 11 `kernel-owned` routes until the legacy runtime goes, F5c), and
-AGENTS.md's "Forwarding" section replaces the flux guardrails.
-`internal/tests/forwardcompat` stays: it proves the native-flagged routes
-the forward package still serves.
+below are removed, `config/package-extraction.json` has 243 routes, and
+AGENTS.md's "Forwarding (v4.2)" section replaces the flux guardrails. The
+forward package adopts no table and reads no kernel view any more (its
+manifest declares only `kernel.forward.v1`); its other 32 v2 routes (the
+21 that ran natively until v4.1 and the 11 `kernel-owned` ones) are all
+`kernel-owned`, served by the kernel until F5c, and
+`internal/tests/forwardcompat` is deleted. **F5c's drop requires the
+forward package release from F5d to be installed first:** a v4.1 forward
+package adopts the flux tables, and a storage lease fails as a whole when
+an adopted table is missing (`packagestore.ErrGrantTargetMissing`), which
+would take `/api/v4/forward/*` down with it.
 
 **The 53 bridged forward routes (removed in F5d).** `config/package-extraction.json`
 had 53 `bridged` routes in the `forward` package (its `native-flagged` and

@@ -906,6 +906,18 @@
   and their old aliases) and `/admin/monitor/forward` open it too; without
   the forward package's v4 API the forwarding area leads to 插件中心, and
   the sidebar shows no forwarding entry.
+- **The forward package adopts no table and serves no v2 route natively**
+  (F5d). Its manifest declares only `kernel.forward.v1` (the v4 API): the
+  `kernel.storage.adopt:` capabilities on the flux tables, the kernel views
+  and `kernel.subscriber.traffic.v1` are gone, with `packages/forward/native`
+  and `internal/tests/forwardcompat`. Its 21 formerly native routes (the
+  forward and tunnel lists, tunnel create/delete, permission assign/list,
+  speed limits, multi-ingress, statistics, the user's rules and
+  `POST /api/v2/user/reset`) are `kernel-owned` and left
+  `config/package-route-defaults.json` (151 → 130 routes of 14 packages);
+  a stored native mode for them relays to the kernel. **F5c's drop requires
+  this forward package release to be installed first**: a 4.1 forward
+  package's storage lease fails when an adopted table is missing.
 - **AGENTS.md: the forwarding rules are rewritten for the v4.2 model** (F5d,
   H17): routes of hops with per-hop engines, SDK-first, everything through
   Control, the `forward.v1` contract freeze, H13 privileges, H28 link

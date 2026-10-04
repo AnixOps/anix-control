@@ -1,6 +1,6 @@
 {
   "format": "anixops.package-route-defaults/v1",
-  "comment": "Routes that run natively by default (package_routes.default_mode: rehearsed) when the Control installation stores no mode for them and the installed package release is at least min_version. Each package passed the staging rehearsal (R5, 2026-10-03: every read route at least 200 shadow comparisons with 0 mismatches over at least 2 hours; every write route reconciled with 0 differences) and was signed off by the owner (H7, H8). A route enters this list only by an explicit change here and in internal/service/testdata/rehearsed-routes.json; being native-flagged in package-extraction.json is not enough.",
+  "comment": "Routes that run natively by default (package_routes.default_mode: rehearsed) when the Control installation stores no mode for them and the installed package release is at least min_version. Each package passed the staging rehearsal (R5, 2026-10-03: every read route at least 200 shadow comparisons with 0 mismatches over at least 2 hours; every write route reconciled with 0 differences) and was signed off by the owner (H7, H8). A route enters this list only by an explicit change here and in internal/service/testdata/rehearsed-routes.json; being native-flagged in package-extraction.json is not enough. The forward package left the set in v4.2 (F5d): it serves no v2 route natively.",
   "default_mode": "native",
   "packages": [
     {
@@ -197,34 +197,6 @@
         "subscription.admin.subscription.users.user_id.groups.group_id.delete",
         "subscription.admin.subscription.users.user_id.groups.post",
         "subscription.user.subscription.get"
-      ]
-    },
-    {
-      "package_id": "forward",
-      "batch": 4,
-      "min_version": "4.1.0-rc.5",
-      "routes": [
-        "forward.admin.forward.list.post",
-        "forward.admin.forward.observability.multi_ingress.get",
-        "forward.admin.forward.stats.get",
-        "forward.admin.forward.update_order.post",
-        "forward.admin.tunnel.create.post",
-        "forward.admin.tunnel.delete.post",
-        "forward.admin.tunnel.list.post",
-        "forward.admin.tunnel.user.assign.post",
-        "forward.admin.tunnel.user.list.post",
-        "forward.admin.tunnel.user.tunnel.post",
-        "forward.forward.list.post",
-        "forward.forward.update_order.post",
-        "forward.speed_limit.create.post",
-        "forward.speed_limit.delete.post",
-        "forward.speed_limit.list.post",
-        "forward.speed_limit.tunnels.post",
-        "forward.tunnel.user.assign.post",
-        "forward.tunnel.user.list.post",
-        "forward.tunnel.user.tunnel.post",
-        "forward.user.forward.rules.get",
-        "forward.user.reset.post"
       ]
     },
     {

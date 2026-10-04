@@ -341,11 +341,12 @@ do not cite the archived flux documents (`docs/archive/`) as requirements.
 - **The legacy runtime is frozen.** The v4.1 flux tables (`v2_forward`,
   `v2_forward_tunnel`, `v2_forward_user_tunnel`, `v2_speed_limit`,
   `v2_forward_rule`, `v2_forward_runtime_job`, ...), their GORM models, the
-  NodeX, local Ansible and clean agent runtimes and the remaining
-  `native-flagged` and `kernel-owned` forward v2 routes exist only until the
+  NodeX, local Ansible and clean agent runtimes and the remaining forward v2
+  routes (all `kernel-owned`, served by the kernel) exist only until the
   legacy cleanup (F5c) archives the data and drops the tables (IRREVERSIBLE,
-  gate H15). Add no feature, route, page or column to them, and do not
-  migrate their data into the new model. `Node` (`/admin/nodes`, proxy
+  gate H15). Add no feature, route, page or column to them, do not migrate
+  their data into the new model, and never let the forward package adopt or
+  read a flux table again (its manifest declares only `kernel.forward.v1`). `Node` (`/admin/nodes`, proxy
   service) and the forwarding inventory (`/admin/forward/inventory`) are
   different resources; never mix them in copy, validation or docs.
 - **Docs to update together.** A forwarding change updates

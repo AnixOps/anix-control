@@ -7,7 +7,7 @@
   "targets": ["control"],
   "architectures": [],
   "artifact_sha256": "GENERATED_AT_BUILD",
-  "capabilities": ["kernel.storage.v1", "kernel.storage.adopt:v2_forward", "kernel.storage.adopt:v2_forward_tunnel", "kernel.storage.adopt:v2_forward_user_tunnel", "kernel.storage.adopt:v2_speed_limit", "kernel.storage.adopt:v2_forward_rule", "kernel.storage.adopt:v2_forward_latency_bucket", "kernel.view:kapi_forward_node_v1", "kernel.view:kapi_forward_runtime_settings_v1", "kernel.view:kapi_user_directory_v1", "kernel.view:kapi_subscriber_entitlement_v1", "kernel.subscriber.traffic.v1", "kernel.forward.v1"],
+  "capabilities": ["kernel.forward.v1"],
   "dependencies": [],
   "conflicts": [],
   "permissions": ["forward.view", "forward.api"],

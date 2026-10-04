@@ -9,58 +9,35 @@ import (
 	"strings"
 
 	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
-	kernelsubscriberv1 "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1"
-	"github.com/AnixOps/anix-control/sdk/packagestoresdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-	"github.com/AnixOps/anix-control/v4/packages/forward/native"
 	"github.com/AnixOps/anix-control/v4/packages/forward/v4api"
 	"google.golang.org/grpc"
-	"gorm.io/gorm"
 )
 
-// forwardBridge is what the forward host needs from the package bridge.
-type forwardBridge interface {
-	pluginhostsdk.RouterBridge
-	packagestoresdk.Leaser
-}
-
-// newForwardService returns the forward host's router. The routes in
-// forwardRoutes have a native handler on the adopted forward tables and the
-// forward node, runtime settings, user directory and entitlement views;
-// such a route serves natively once the kernel sets its mode, and falls
-// back to the legacy handler otherwise. The traffic reset of a subscriber
-// goes through the kernel's KernelSubscriber over the bridge connection
-// (local socket or module listener); a bridge without one leaves it legacy.
-// The routes in bridgedRoutes always relay to the legacy handler.
+// newForwardService returns the forward host's router. Since v4.2 (F5d)
+// the package serves no v2 route natively and adopts no table: every v2
+// route it declares (bridgedRoutes) relays to the kernel's legacy handler,
+// whatever mode is stored for it, until the legacy cleanup (F5c) drops the
+// flux tables and removes the routes.
 //
 // The package's own control route, v4api.Route (/api/v4/forward/* to its
 // callers), is the v4 administrator API on the kernel's ForwardControl
-// over the same bridge connection (v4api). It has no legacy handler and no
-// route mode: the host always answers it, 503 without the connection.
-func newForwardService(bridge forwardBridge, leaseID string) (*forwardHost, error) {
-	storage := packagestoresdk.SharedOpener(bridge)
-	service := &native.Service{Open: func(ctx context.Context) (*gorm.DB, error) {
-		store, err := storage(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return store.DB.WithContext(ctx), nil
-	}}
+// over the bridge connection (local socket or module listener; v4api). It
+// has no legacy handler and no route mode: the host always answers it, 503
+// without the connection.
+func newForwardService(bridge pluginhostsdk.RouterBridge, leaseID string) (*forwardHost, error) {
 	api := &v4api.Service{}
 	if conn, ok := bridge.(interface {
 		Conn() grpc.ClientConnInterface
 	}); ok && conn.Conn() != nil {
-		service.Subscriber = kernelsubscriberv1.NewKernelSubscriberClient(conn.Conn())
 		api.Forward = forwardv1.NewForwardControlClient(conn.Conn())
 	}
 	router, err := pluginhostsdk.NewRouter(pluginhostsdk.RouterConfig{
 		PackageID: "forward", LeaseID: leaseID, Bridge: bridge, Logf: log.Printf,
 		AllowRoute: func(routeID string) bool {
-			_, nativeRoute := forwardRoutes[routeID]
 			_, bridgedRoute := bridgedRoutes[routeID]
-			return nativeRoute || bridgedRoute || routeID == v4api.RouteID
+			return bridgedRoute || routeID == v4api.RouteID
 		},
-		Native: service.Handlers(),
 	})
 	if err != nil {
 		return nil, err
@@ -114,52 +91,43 @@ func (h *forwardHost) Dispatch(ctx context.Context, request pluginhostsdk.Dispat
 
 var jsonHeaders = []pluginhostsdk.Header{{Name: "Content-Type", Value: "application/json; charset=utf-8"}}
 
-// forwardRoutes are the package's compatibility routes with a native
-// handler. None of them changes what a node runs or state the kernel keeps
-// in memory.
-var forwardRoutes = map[string]struct{}{
-	// Panel forwards: the lists, and the display order, which no node runs.
-	"forward.forward.list.post":               {},
-	"forward.admin.forward.list.post":         {},
-	"forward.forward.update_order.post":       {},
-	"forward.admin.forward.update_order.post": {},
-	// Tunnels: the list, creation and deletion of an unused tunnel. A
-	// tunnel runs nothing until a forward uses it.
-	"forward.admin.tunnel.list.post":   {},
-	"forward.admin.tunnel.create.post": {},
-	"forward.admin.tunnel.delete.post": {},
-	// The tunnels a forward may use, for the caller.
-	"forward.tunnel.user.tunnel.post":       {},
-	"forward.admin.tunnel.user.tunnel.post": {},
-	// Tunnel permissions: granting one, and the list.
-	"forward.tunnel.user.assign.post":       {},
-	"forward.admin.tunnel.user.assign.post": {},
-	"forward.tunnel.user.list.post":         {},
-	"forward.admin.tunnel.user.list.post":   {},
-	// Reads: a forward's ingress latencies, the node statistics and the
-	// caller's legacy rules (their nodes without API tokens).
+// bridgedRoutes are the package's compatibility routes. None has a native
+// handler: each relays to the kernel's legacy handler. The flux forwarding
+// routes that changed what nodes run (forwards, legacy rules, tunnel and
+// permission updates, node and Ansible machine management, the clean agent
+// tokens) were removed in v4.2 (F5d), and /api/v4/forward/* replaces them.
+// The routes below go with the legacy runtime (F5c).
+var bridgedRoutes = map[string]struct{}{
+	// Legacy flux reads and writes on the flux tables, which the package
+	// no longer adopts (F5d), so the kernel serves them until F5c drops the
+	// tables: the forward lists and display order, tunnels (list, create,
+	// delete, the tunnels a forward may use), tunnel permissions (assign,
+	// list), the multi-ingress comparison, the node statistics, the user's
+	// legacy rules and the speed limits (create, list, delete, tunnels).
+	"forward.forward.list.post":                             {},
+	"forward.admin.forward.list.post":                       {},
+	"forward.forward.update_order.post":                     {},
+	"forward.admin.forward.update_order.post":               {},
+	"forward.admin.tunnel.list.post":                        {},
+	"forward.admin.tunnel.create.post":                      {},
+	"forward.admin.tunnel.delete.post":                      {},
+	"forward.tunnel.user.tunnel.post":                       {},
+	"forward.admin.tunnel.user.tunnel.post":                 {},
+	"forward.tunnel.user.assign.post":                       {},
+	"forward.admin.tunnel.user.assign.post":                 {},
+	"forward.tunnel.user.list.post":                         {},
+	"forward.admin.tunnel.user.list.post":                   {},
 	"forward.admin.forward.observability.multi_ingress.get": {},
 	"forward.admin.forward.stats.get":                       {},
 	"forward.user.forward.rules.get":                        {},
-	// The administrator's traffic reset (KernelSubscriber.ResetTraffic, or
-	// a tunnel permission's traffic).
+	"forward.speed_limit.create.post":                       {},
+	"forward.speed_limit.list.post":                         {},
+	"forward.speed_limit.delete.post":                       {},
+	"forward.speed_limit.tunnels.post":                      {},
+	// The administrator's traffic reset (POST /api/v2/user/reset, the Users
+	// page's 重置流量): type 1 resets a subscriber's traffic, type 2 a tunnel
+	// permission's. The kernel serves it.
 	"forward.user.reset.post": {},
-	// Speed limits (v2_speed_limit), moved from plan: creation, the list,
-	// the deletion of an unused limit and the tunnels a limit may name. A
-	// limit runs nothing until a permission names it.
-	"forward.speed_limit.create.post":  {},
-	"forward.speed_limit.list.post":    {},
-	"forward.speed_limit.delete.post":  {},
-	"forward.speed_limit.tunnels.post": {},
-}
-
-// bridgedRoutes are the package's compatibility routes without a native
-// handler; they always relay to the kernel's legacy handler. The flux
-// forwarding routes that changed what nodes run (forwards, legacy rules,
-// tunnel and permission updates, node and Ansible machine management, the
-// clean agent tokens) were removed in v4.2 (F5d): /api/v4/forward/* replaces
-// them.
-var bridgedRoutes = map[string]struct{}{
 	// Kernel-owned (D4): runtime status and diagnosis describe the kernel's
 	// own executors. They read the protected v2_system_config (NodeX address
 	// and token, Ansible settings), call NodeX and inspect files on
