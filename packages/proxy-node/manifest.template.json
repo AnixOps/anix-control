@@ -7,7 +7,7 @@
   "targets": ["control"],
   "architectures": [],
   "artifact_sha256": "GENERATED_AT_BUILD",
-  "capabilities": ["kernel.storage.v1", "kernel.storage.adopt:v2_load_balancer", "kernel.storage.adopt:v2_node_log", "kernel.view:kapi_node_status_v1"],
+  "capabilities": ["kernel.storage.v1", "kernel.storage.adopt:v2_load_balancer", "kernel.storage.adopt:v2_node_log", "kernel.storage.adopt:v2_node", "kernel.view:kapi_node_status_v1", "kernel.view:kapi_node_protocol_public_v1", "kernel.view:kapi_registration_key_v1", "kernel.view:kapi_forward_node_v1", "kernel.nodeops.nodeconfig.v1", "kernel.nodeops.credentials.v1", "kernel.nodeops.diagnose.v1"],
   "dependencies": [],
   "conflicts": [],
   "permissions": ["proxy-node.view", "proxy-node.api"],

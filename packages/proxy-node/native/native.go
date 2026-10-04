@@ -1,24 +1,37 @@
-// Package native implements seven of the proxy-node package's v2 routes in
-// the package itself. Legacy handlers and native routes share the rows, so a
-// route can switch between them at any time, and the answers are
-// byte-compatible with the legacy handlers (internal/tests/proxynodecompat).
+// Package native implements the proxy-node package's v2 routes in the
+// package itself, but for the node channel and three routes that need what
+// no kernel contract offers yet. Legacy handlers and native routes share
+// the rows, so a route can switch between them at any time, and the answers
+// are byte-compatible with the legacy handlers
+// (internal/tests/proxynodecompat).
 //
 //   - The load balancer list, detail, creation, update and deletion work on
 //     the kernel's v2_load_balancer table, adopted in place
-//     (kernel.storage.adopt). Only these routes use it.
+//     (kernel.storage.adopt). A load balancer's statistics read the forward
+//     nodes through kapi_forward_node_v1, and its health check is the
+//     kernel's (CheckEndpoints with record_status).
 //   - A node's runtime logs come from the adopted v2_node_log table, which
 //     the kernel's agent control writes when nodes report logs.
 //   - The node statistics, and whether a node exists, come from the kernel
 //     view kapi_node_status_v1: each node's id, status, last check and
 //     traffic counters.
+//   - The node list, detail, deletion and raw configuration work on
+//     v2_node, which the package adopts once the node credential split
+//     finalized it (a grant the kernel honours only then): its API key, key
+//     hash and shared secret hold tombstones, and its raw configuration the
+//     placeholder at every secret position. A node's protocols are read
+//     through kapi_node_protocol_public_v1. A deletion retires what the
+//     kernel holds for the node (RetireNode); a raw configuration is stored
+//     by the kernel (PutSecretDocument), its typed secrets as sealed handles
+//     the package never resolves. Until the lease grants them, these routes
+//     answer from the legacy handler.
+//   - Registration keys are the kernel's: listed through
+//     kapi_registration_key_v1 (never a key), issued and revoked through
+//     KernelNodeOps, a new key answered as a sealed handle.
 //
-// The package never reads v2_node or v2_node_protocol. v2_node holds each
-// node's API key, key hash and shared secret, which the kernel's node
-// authentication checks (UniProxy, the node API, the agent WebSocket and
-// gRPC control stream, agent package downloads): a package that could read
-// or write them could act as any node, and so read every subscriber's proxy
-// credentials. Both are protected kernel tables. The other 24 routes stay
-// bridged; packages/proxy-node/control lists why for each.
+// The package never reads a node's credentials, and never reads or writes
+// v2_node_protocol, which is protocol-runtime's. The other routes stay in
+// the kernel; packages/proxy-node/control lists why for each.
 package native
 
 import (
@@ -27,6 +40,7 @@ import (
 	"strconv"
 	"time"
 
+	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/AnixOps/anix-control/sdk/v2compat"
 	"gorm.io/gorm"
@@ -41,15 +55,43 @@ const (
 // Service holds what the native routes need.
 type Service struct {
 	// Open returns the package's storage connection, on which the adopted
-	// tables and the kapi_node_status_v1 view are visible.
+	// tables and the granted views are visible.
 	Open func(ctx context.Context) (*gorm.DB, error)
+	// Leased reports whether the package's storage lease adopts the kernel
+	// table, or grants the kernel view, called name
+	// (packagestoresdk.Store.Leased); nil leaves the node and registration
+	// key routes that need a conditional grant legacy.
+	Leased func(ctx context.Context, name string) bool
+	// NodeOps is the kernel's KernelNodeOps; without it the routes that
+	// need it stay legacy.
+	NodeOps kernelnodeopsv1.KernelNodeOpsClient
 	// Now defaults to time.Now.
 	Now func() time.Time
+	// NewToken names a request that carries neither an Idempotency-Key nor
+	// an X-Request-ID, in its operations' request ids; it defaults to a
+	// random UUID.
+	NewToken func() string
 }
 
-// Handlers returns the native handlers by route id.
+// Route ids of the native routes of M3-2.
+const (
+	NodesRouteID             = "proxy.admin.nodes.get"
+	NodeRouteID              = "proxy.admin.nodes.id.get"
+	DeleteNodeRouteID        = "proxy.admin.nodes.id.delete"
+	RawConfigRouteID         = "proxy.admin.nodes.id.raw_config.get"
+	UpdateRawConfigRouteID   = "proxy.admin.nodes.id.raw_config.put"
+	AuthKeysRouteID          = "proxy.admin.auth_keys.get"
+	GenerateAuthKeyRouteID   = "proxy.admin.auth_keys.post"
+	DeleteAuthKeyRouteID     = "proxy.admin.auth_keys.id.delete"
+	InternalAuthKeyRouteID   = "proxy.internal.auth_keys.post"
+	LoadBalancerStatsRouteID = "proxy.loadbalancer.id.stats.get"
+	LoadBalancerCheckRouteID = "proxy.loadbalancer.id.check.post"
+)
+
+// Handlers returns the native handlers by route id. A host without
+// KernelNodeOps has none for the routes that need it.
 func (s *Service) Handlers() map[string]pluginhostsdk.NativeHandler {
-	return map[string]pluginhostsdk.NativeHandler{
+	handlers := map[string]pluginhostsdk.NativeHandler{
 		"proxy.loadbalancer.get":        s.ListLoadBalancers,
 		"proxy.loadbalancer.post":       s.CreateLoadBalancer,
 		"proxy.loadbalancer.id.get":     s.GetLoadBalancer,
@@ -57,7 +99,21 @@ func (s *Service) Handlers() map[string]pluginhostsdk.NativeHandler {
 		"proxy.loadbalancer.id.delete":  s.DeleteLoadBalancer,
 		"proxy.admin.nodes.stats.get":   s.GetNodeStats,
 		"proxy.admin.nodes.id.logs.get": s.GetNodeLogs,
+		NodesRouteID:                    s.ListNodes,
+		NodeRouteID:                     s.GetNode,
+		RawConfigRouteID:                s.GetRawConfig,
+		AuthKeysRouteID:                 s.ListAuthKeys,
+		LoadBalancerStatsRouteID:        s.LoadBalancerStats,
 	}
+	if s.NodeOps != nil {
+		handlers[DeleteNodeRouteID] = s.DeleteNode
+		handlers[UpdateRawConfigRouteID] = s.UpdateRawConfig
+		handlers[GenerateAuthKeyRouteID] = s.GenerateAuthKey
+		handlers[DeleteAuthKeyRouteID] = s.DeleteAuthKey
+		handlers[InternalAuthKeyRouteID] = s.InternalGenerateAuthKey
+		handlers[LoadBalancerCheckRouteID] = s.RunHealthCheck
+	}
+	return handlers
 }
 
 func (s *Service) now() time.Time {

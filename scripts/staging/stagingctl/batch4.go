@@ -127,6 +127,7 @@ func init() {
 	registerSpecs(subscriptionSpecs()...)
 	registerSpecs(forwardSpecs()...)
 	registerSpecs(proxyNodeSpecs()...)
+	registerSpecs(proxyNodeAdminSpecs()...)
 	registerSpecs(gostMeshSpecs()...)
 	registerSpecs(wireguardSpecs()...)
 }
@@ -1367,6 +1368,105 @@ func forwardSpecs() []RouteSpec {
 				{Persona: Expired, Path: path, Label: "expired member, none"},
 				{Persona: Admin, Path: path, Label: "an administrator's own (none)"},
 				{Persona: Anon, Path: path, Label: "anonymous"},
+			}
+		}},
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Proxy nodes of M3-2. The node routes answer natively only once v2_node
+// (and, for the list and detail, v2_node_protocol) is finalized, and the
+// registration key list once v2_authorized_key is (staging-rehearsal.md,
+// "Limits").
+
+func proxyNodeAdminSpecs() []RouteSpec {
+	node := func(w *World, i int) uint { return w.ID("node", i) }
+	nodePath := func(id any, rest string) string { return fmt.Sprintf("/api/v2/admin/nodes/%v%s", id, rest) }
+	lb := func(id any, rest string) string { return fmt.Sprintf("/api/v2/admin/loadbalancers/%v%s", id, rest) }
+	return []RouteSpec{
+		{RouteID: "proxy.admin.nodes.get", Reads: func(w *World) []Req {
+			path := "/api/v2/admin/nodes"
+			return append([]Req{
+				{Persona: Admin, Path: path, Label: "first page, masked"},
+				{Persona: Admin, Path: path, Query: q("page", "2", "page_size", "5"), Label: "page 2"},
+				{Persona: Admin, Path: path, Query: q("status", "1"), Label: "a status"},
+				{Persona: Admin, Path: path, Query: q("group_id", fmt.Sprint(w.ID("node_group", 0))), Label: "a group"},
+				{Persona: Staff, Path: path, Query: q("search", "hk"), Label: "a search"},
+				{Persona: Admin, Path: path, Query: q("status", "x", "group_id", "y"), Label: "filters that are not numbers"},
+			}, forbidden(path)...)
+		}},
+		{RouteID: "proxy.admin.nodes.id.get", Reads: func(w *World) []Req {
+			return append([]Req{
+				{Persona: Admin, Path: nodePath(node(w, 0), ""), Label: "a node with its protocols, masked"},
+				{Persona: Admin, Path: nodePath(node(w, 7), ""), Label: "another node"},
+				{Persona: Admin, Path: nodePath(Missing, ""), Label: "not found"},
+				{Persona: Admin, Path: nodePath("x", ""), Label: "invalid id"},
+			}, forbidden(nodePath(node(w, 0), ""))...)
+		}},
+		{RouteID: "proxy.admin.nodes.id.raw_config.get", Reads: func(w *World) []Req {
+			return append([]Req{
+				{Persona: Admin, Path: nodePath(node(w, 0), "/raw-config"), Label: "a raw configuration, masked"},
+				{Persona: Admin, Path: nodePath(Missing, "/raw-config"), Label: "not found"},
+				{Persona: Admin, Path: nodePath("x", "/raw-config"), Label: "invalid id"},
+			}, forbidden(nodePath(node(w, 0), "/raw-config"))...)
+		}},
+		{RouteID: "proxy.admin.nodes.id.raw_config.put", Writes: func(w *World) []Req {
+			path := nodePath(node(w, 4), "/raw-config")
+			return []Req{
+				{Persona: Admin, Path: path, Body: `{"raw_config":{"log":{"level":"warning"},"api":{"token":"staging-typed-token"}}}`, Label: "a typed secret"},
+				{Persona: Admin, Path: path, Body: `{"raw_config":{"log":{"level":"info"},"api":{"token":"********"}}}`, Label: "the placeholder keeps it"},
+				{Persona: Admin, Path: path, Body: `{"raw_config":[1]}`, Label: "not an object"},
+				{Persona: Admin, Path: path, Body: `{}`, Label: "no configuration"},
+				{Persona: Admin, Path: nodePath(Missing, "/raw-config"), Body: `{"raw_config":{"log":{}}}`, Label: "an unknown node"},
+			}
+		}},
+		{RouteID: "proxy.admin.nodes.id.delete", Writes: func(w *World) []Req {
+			return []Req{
+				{Persona: Admin, Path: nodePath(node(w, 9), ""), Label: "a node with its protocols"},
+				{Persona: Admin, Path: nodePath(Missing, ""), Label: "an unknown node"},
+				{Persona: Admin, Path: nodePath("x", ""), Label: "invalid id"},
+			}
+		}},
+		{RouteID: "proxy.admin.auth_keys.get", Reads: func(w *World) []Req {
+			path := "/api/v2/admin/auth-keys"
+			return append([]Req{{Persona: Admin, Path: path, Label: "keys, masked"}}, forbidden(path)...)
+		}},
+		{RouteID: "proxy.admin.auth_keys.post", Writes: func(w *World) []Req {
+			path := "/api/v2/admin/auth-keys"
+			return []Req{
+				{Persona: Admin, Path: path, Body: `{"name":"staging key"}`, Mask: []string{"data.key"}, Label: "a key shown once"},
+				{Persona: Admin, Path: path, Body: `{"name":"staging week","expire_days":7}`, Mask: []string{"data.key", "data.expire_at"}, Label: "a key for a week"},
+				{Persona: Admin, Path: path, Body: `{"expire_days":1}`, Label: "no name"},
+			}
+		}},
+		{RouteID: "proxy.admin.auth_keys.id.delete", Writes: func(w *World) []Req {
+			path := "/api/v2/admin/auth-keys"
+			return []Req{
+				{Persona: Admin, Path: fmt.Sprintf("%s/%d", path, Missing), Label: "an unknown key"},
+				{Persona: Admin, Path: path + "/x", Label: "invalid id"},
+			}
+		}},
+		{RouteID: "proxy.internal.auth_keys.post", Writes: func(w *World) []Req {
+			// The route authenticates automation by Control's API token,
+			// which the rehearsal does not hold: the kernel refuses these
+			// before the package, on both twins.
+			path := "/api/v2/internal/auth-keys"
+			return []Req{
+				{Persona: Admin, Path: path, Body: `{"name":"staging automation"}`, Label: "an administrator's token is not the API token"},
+				{Persona: Anon, Path: path, Body: `{"name":"x"}`, Label: "anonymous"},
+			}
+		}},
+		{RouteID: "proxy.loadbalancer.id.stats.get", Reads: func(w *World) []Req {
+			return append([]Req{
+				{Persona: Admin, Path: lb(w.ID("loadbalancer", 0), "/stats"), Label: "every forward node"},
+				{Persona: Admin, Path: lb(Missing, "/stats"), Label: "not found"},
+				{Persona: Admin, Path: lb("x", "/stats"), Label: "invalid id"},
+			}, forbidden(lb(w.ID("loadbalancer", 0), "/stats"))...)
+		}},
+		{RouteID: "proxy.loadbalancer.id.check.post", Writes: func(w *World) []Req {
+			return []Req{
+				{Persona: Admin, Path: lb(Missing, "/check"), Label: "not found"},
+				{Persona: Admin, Path: lb("x", "/check"), Label: "invalid id"},
 			}
 		}},
 	}

@@ -248,6 +248,7 @@ func (s *NodeService) keepNodeRawConfigUpdate(id uint, updates map[string]any) e
 	if err := s.db.Select("id", "raw_config").Where("id = ?", id).Limit(1).Find(&stored).Error; err != nil {
 		return err
 	}
+	nodesecrets.ResolveNodeRawConfig(s.db, &stored)
 	updates["raw_config"] = KeepNodeRawConfig(text, stored.RawConfig)
 	return nil
 }

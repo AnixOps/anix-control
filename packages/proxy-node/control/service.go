@@ -4,9 +4,11 @@ import (
 	"context"
 	"log"
 
+	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
 	"github.com/AnixOps/anix-control/sdk/packagestoresdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/AnixOps/anix-control/v4/packages/proxy-node/native"
+	"google.golang.org/grpc"
 	"gorm.io/gorm"
 )
 
@@ -19,20 +21,37 @@ type proxyNodeBridge interface {
 }
 
 // newProxyNodeService returns the proxy-node host's router. The routes in
-// proxyNodeRoutes have a native handler on the adopted v2_load_balancer and
-// v2_node_log tables and the kapi_node_status_v1 view; such a route serves
-// natively once the kernel sets its mode, and falls back to the legacy
-// handler otherwise. The routes in bridgedRoutes always relay to the legacy
-// handler, the agent WebSocket included.
+// proxyNodeRoutes have a native handler; such a route serves natively once
+// the kernel sets its mode, and falls back to the legacy handler otherwise.
+// The node routes on v2_node and the registration key list need grants the
+// kernel gives only once the node credential split is finalized: until the
+// lease has them they answer from the legacy handler, and a host started
+// before the finalize keeps them legacy until it restarts. The routes that
+// reach the kernel's KernelNodeOps (a node's deletion and raw
+// configuration, registration keys, the load balancer check) use the
+// bridge connection (local socket or module listener); a bridge without one
+// leaves them legacy. The routes in bridgedRoutes always relay to the
+// legacy handler, the agent WebSocket included.
 func newProxyNodeService(bridge proxyNodeBridge, leaseID string) (*pluginhostsdk.Router, error) {
 	storage := packagestoresdk.SharedOpener(bridge)
-	service := &native.Service{Open: func(ctx context.Context) (*gorm.DB, error) {
-		store, err := storage(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return store.DB.WithContext(ctx), nil
-	}}
+	service := &native.Service{
+		Open: func(ctx context.Context) (*gorm.DB, error) {
+			store, err := storage(ctx)
+			if err != nil {
+				return nil, err
+			}
+			return store.DB.WithContext(ctx), nil
+		},
+		Leased: func(ctx context.Context, name string) bool {
+			store, err := storage(ctx)
+			return err == nil && store.Leased(name)
+		},
+	}
+	if conn, ok := bridge.(interface {
+		Conn() grpc.ClientConnInterface
+	}); ok && conn.Conn() != nil {
+		service.NodeOps = kernelnodeopsv1.NewKernelNodeOpsClient(conn.Conn())
+	}
 	return pluginhostsdk.NewRouter(pluginhostsdk.RouterConfig{
 		PackageID: "proxy-node", LeaseID: leaseID, Bridge: bridge, Logf: log.Printf,
 		AllowRoute: func(routeID string) bool {
@@ -47,75 +66,61 @@ func newProxyNodeService(bridge proxyNodeBridge, leaseID string) (*pluginhostsdk
 // proxyNodeRoutes are the package's compatibility routes with a native
 // handler.
 var proxyNodeRoutes = map[string]struct{}{
-	"proxy.loadbalancer.get":        {},
-	"proxy.loadbalancer.post":       {},
-	"proxy.loadbalancer.id.get":     {},
-	"proxy.loadbalancer.id.put":     {},
-	"proxy.loadbalancer.id.delete":  {},
-	"proxy.admin.nodes.stats.get":   {},
-	"proxy.admin.nodes.id.logs.get": {},
+	"proxy.loadbalancer.get":              {},
+	"proxy.loadbalancer.post":             {},
+	"proxy.loadbalancer.id.get":           {},
+	"proxy.loadbalancer.id.put":           {},
+	"proxy.loadbalancer.id.delete":        {},
+	"proxy.loadbalancer.id.stats.get":     {},
+	"proxy.loadbalancer.id.check.post":    {},
+	"proxy.admin.nodes.stats.get":         {},
+	"proxy.admin.nodes.id.logs.get":       {},
+	"proxy.admin.nodes.get":               {},
+	"proxy.admin.nodes.id.get":            {},
+	"proxy.admin.nodes.id.delete":         {},
+	"proxy.admin.nodes.id.raw_config.get": {},
+	"proxy.admin.nodes.id.raw_config.put": {},
+	"proxy.admin.auth_keys.get":           {},
+	"proxy.admin.auth_keys.post":          {},
+	"proxy.admin.auth_keys.id.delete":     {},
+	"proxy.internal.auth_keys.post":       {},
 }
 
 // bridgedRoutes are the package's compatibility routes without a native
 // handler; they always relay to the kernel's legacy handler.
 //
-// v2_node holds each node's API key, key hash and shared secret, which the
-// kernel's node authentication checks: the node API, UniProxy, the agent
-// WebSocket and gRPC control stream, and agent package downloads. A package
-// that could read or write those columns could act as any node, and so read
-// every subscriber's proxy credentials from the UniProxy user list, or let
-// in a node of its choosing. Until column-level grants can withhold them,
-// v2_node is a protected kernel table, and so is v2_authorized_key, whose
-// registration keys mint node credentials. v2_node_protocol, with each
-// protocol's Reality private key, settings and custom configuration, is the
-// protocol-runtime package's.
-//
-//   - Node list and detail: their answers embed each node's protocols, Reality
-//     private keys and custom configurations included, which no kernel view
-//     may carry.
-//   - Node creation issues the node's API key and secret into v2_node.
-//   - Node update writes v2_node and clears the kernel's in-memory node
-//     cache.
-//   - Node deletion removes the node's protocols and WireGuard peers in one
-//     kernel transaction.
-//   - Node credentials answer the API key and secret. Kernel-owned (D4): no
-//     contract call reveals a stored secret.
-//   - The raw configuration is the node's runtime configuration, WireGuard
-//     private keys included; its update writes v2_node.
-//   - Configuration validation reads no table, but it runs the kernel's
-//     WireGuard protocol validator, which the protocol routes and the raw
-//     configuration update share.
-//   - Authorization keys (list, creation, deletion and the internal
-//     creation for automation): v2_authorized_key holds each registration
-//     key in clear, the list answers it, and the kernel's HTTP and gRPC
-//     registration read the table.
-//   - Node registration, heartbeat and runtime health: a registration mints
-//     node credentials; the others are authenticated by the node's API key
-//     in the kernel and write v2_node, the heartbeat also adding traffic up
-//     the node's parent chain. Kernel-owned (D3): A2 replaces them with
+//   - Node creation (bridged) also creates the node's default protocol in
+//     v2_node_protocol, protocol-runtime's table, in the kernel's
+//     transaction; no KernelNodeOps call creates a protocol.
+//   - Node update (bridged) also records a group change in the subscriber
+//     change log (subscriber.RecordNodeGroupChangeTx), revokes the node's
+//     agent certificates when it is disabled, and drops the kernel's node
+//     cache, in the kernel's transaction; no KernelNodeOps call records a
+//     node's group change, and SyncNode would also store and push the
+//     desired configuration, which the legacy update does not.
+//   - Configuration validation (kernel-owned): its answer's size is the
+//     length of the configuration with its secrets, which the gateway
+//     seals into handles that never resolve for this route, so neither the
+//     package nor ValidateNodeConfig can compute it.
+//   - Node credentials (kernel-owned, D4): the answer is the stored API key
+//     and secret, and no contract call reveals a stored secret.
+//   - Node registration, heartbeat and runtime health (kernel-owned, D3): a
+//     registration mints node credentials; the others are authenticated by
+//     the node's API key in the kernel and write v2_node, the heartbeat
+//     also adding traffic up the node's parent chain. A2 replaces them with
 //     enrollment and stream reports, and 5.0 removes them (D8).
-//   - The agent WebSocket is a live connection the kernel holds and pushes
-//     to.
-//   - UniProxy: node-authenticated; the user list carries every eligible
-//     subscriber's UUID, a traffic push records subscriber traffic, and the
-//     online list lives in the kernel's in-memory cache.
-//   - Load balancer statistics and health check: they read the forward
-//     package's v2_forward_node, and the check probes each forward node over
-//     the network and writes its status.
+//   - The agent WebSocket (kernel-owned) is a live connection the kernel
+//     holds and pushes to.
+//   - UniProxy (bridged): node-authenticated; the user list carries every
+//     eligible subscriber's UUID, a traffic push records subscriber
+//     traffic, and the online list lives in the kernel's in-memory cache.
+//     Whether UniProxy stays in the kernel is an open decision
+//     (package-extraction.md section 3.2).
 var bridgedRoutes = map[string]struct{}{
-	"proxy.admin.nodes.get":                  {},
 	"proxy.admin.nodes.post":                 {},
-	"proxy.admin.nodes.id.get":               {},
 	"proxy.admin.nodes.id.put":               {},
-	"proxy.admin.nodes.id.delete":            {},
-	"proxy.admin.nodes.id.credentials.get":   {},
-	"proxy.admin.nodes.id.raw_config.get":    {},
-	"proxy.admin.nodes.id.raw_config.put":    {},
 	"proxy.admin.nodes.validate_config.post": {},
-	"proxy.admin.auth_keys.get":              {},
-	"proxy.admin.auth_keys.post":             {},
-	"proxy.admin.auth_keys.id.delete":        {},
-	"proxy.internal.auth_keys.post":          {},
+	"proxy.admin.nodes.id.credentials.get":   {},
 	"proxy.node.register.post":               {},
 	"proxy.node.heartbeat.post":              {},
 	"proxy.node.runtime_health.post":         {},
@@ -125,6 +130,4 @@ var bridgedRoutes = map[string]struct{}{
 	"proxy.server.uniproxy.alivelist.get":    {},
 	"proxy.server.uniproxy.push.post":        {},
 	"proxy.server.uniproxy.alive.post":       {},
-	"proxy.loadbalancer.id.stats.get":        {},
-	"proxy.loadbalancer.id.check.post":       {},
 }

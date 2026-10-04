@@ -4,6 +4,40 @@
 
 ### Added
 
+- **Proxy node: node, registration key and load balancer routes run
+  natively (M3-2).** 11 of proxy-node's 14 bridged administrator routes are
+  `native-flagged` (198 native-flagged, 66 bridged, 32 kernel-owned of 296):
+  the node list, detail, deletion and raw configuration (read and update),
+  the registration keys (list, issue, revoke, and the internal issue for
+  automation), and a load balancer's statistics and health check. Byte
+  parity on SQLite and PostgreSQL (`internal/tests/proxynodecompat`, through
+  the real gateway, bridge and KernelNodeOps engine).
+  - The node routes work on `v2_node`, which the manifest now adopts and the
+    kernel grants only once the node credential split finalized it; a
+    node's protocols are read through `kapi_node_protocol_public_v1`, the
+    registration keys through `kapi_registration_key_v1`. Until the lease
+    grants them they answer from the legacy handler (restart Control after
+    `node-secrets finalize`). Deletion retires the node in the kernel
+    (`RetireNode`); a raw configuration is stored by the kernel
+    (`PutSecretDocument`), typed secrets as sealed handles; registration
+    keys are issued and revoked through KernelNodeOps, a new key shown once
+    as a handle the gateway expands (`kernel.nodeops.nodeconfig.v1`,
+    `credentials.v1`, `diagnose.v1` in the manifest).
+  - Stay in the kernel: node creation and update (bridged: creation also
+    writes the default protocol into protocol-runtime's table, an update
+    also records a group change in the subscriber change log; no contract
+    call does either), configuration validation (now `kernel-owned`: its
+    answer's size is that of the configuration with its secrets), and
+    UniProxy (an open owner decision).
+  - KernelNodeOps: `PutSecretDocument` validates a raw configuration with
+    the secrets it stores (`VALIDATION_FAILED`, storing nothing) and drops
+    the kernel's node cache.
+  - Fixed: the load balancer health check marked unreachable forward nodes
+    online and overwrote the latency its check recorded (it saved the row
+    it had loaded before the check). It now records the forward node
+    check's result, as `CheckEndpoints` does. The raw configuration update
+    of a finalized `v2_node` resolves the stored secrets first, so a
+    WireGuard configuration that keeps its private key validates again.
 - **The v4.2 forwarding upgrade: archive, node cleanup check and an
   explicit drop of the v4.1 flux tables** (F5c, forward-sdk.md section 10,
   gate H15). **IRREVERSIBLE: `anix-control forward legacy drop` deletes

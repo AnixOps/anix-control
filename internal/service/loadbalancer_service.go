@@ -247,23 +247,21 @@ func (s *LoadBalancerService) RunHealthCheck(lbID uint) error {
 	if err != nil {
 		return err
 	}
-
-	// 对每个节点执行健康检查
-	for i := range nodes {
-		_, err := s.nodeSvc.HealthCheck(context.TODO(), nodes[i].ID)
-		if err != nil {
-			// 标记节点离线
-			nodes[i].Status = 0
-		} else {
-			// 标记节点在线
-			nodes[i].Status = 1
-		}
-		if err := s.nodeSvc.Update(&nodes[i]); err != nil {
-			return err
-		}
+	if len(nodes) == 0 {
+		return nil
 	}
 
-	return nil
+	// Each node's endpoint is checked and the result recorded on its row,
+	// as the forward node check records it: the function the KernelNodeOps
+	// diagnose.endpoints executor runs with record_status. (The check used
+	// to save the row it loaded before the check afterwards, which marked
+	// an unreachable node online and overwrote the check's latency.)
+	ids := make([]uint, len(nodes))
+	for i := range nodes {
+		ids[i] = nodes[i].ID
+	}
+	_, err = s.nodeSvc.CheckEndpoints(context.TODO(), DiagnosisProbes{}, ids, true)
+	return err
 }
 
 // GetStats 获取负载均衡统计

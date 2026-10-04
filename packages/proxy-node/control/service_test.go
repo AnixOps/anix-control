@@ -9,6 +9,7 @@ import (
 	"testing"
 	"time"
 
+	kernelnodeopsv1 "github.com/AnixOps/anix-control/sdk/api/kernelnodeops/v1"
 	"github.com/AnixOps/anix-control/sdk/packagebridgesdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/AnixOps/anix-control/v4/packages/proxy-node/native"
@@ -63,7 +64,7 @@ func TestProxyNodeHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) {
 		RouteID: "protocol.admin.nodes.id.protocols.get", BridgeCapability: make([]byte, 32), DeadlineUnixMillis: time.Now().Add(time.Second).UnixMilli(),
 	})
 	require.Error(t, err)
-	handlers := (&native.Service{}).Handlers()
+	handlers := (&native.Service{NodeOps: kernelnodeopsv1.NewKernelNodeOpsClient(nil)}).Handlers()
 	require.Len(t, handlers, len(proxyNodeRoutes))
 	for route := range proxyNodeRoutes {
 		require.Contains(t, handlers, route, "every native route has a handler")
@@ -71,6 +72,13 @@ func TestProxyNodeHostRelaysRoutesUntilTheyAreSwitchedToNative(t *testing.T) {
 	for route := range bridgedRoutes {
 		require.NotContains(t, handlers, route, "a bridged route has no native handler")
 		require.NotContains(t, proxyNodeRoutes, route)
+	}
+	withoutNodeOps := (&native.Service{}).Handlers()
+	for _, route := range []string{
+		native.DeleteNodeRouteID, native.UpdateRawConfigRouteID, native.GenerateAuthKeyRouteID, native.DeleteAuthKeyRouteID,
+		native.InternalAuthKeyRouteID, native.LoadBalancerCheckRouteID,
+	} {
+		require.NotContains(t, withoutNodeOps, route, "without KernelNodeOps the route stays legacy")
 	}
 }
 
@@ -116,9 +124,15 @@ func TestProxyNodeHostRoutesAreThePackageRoutes(t *testing.T) {
 	require.Equal(t, want, got)
 }
 
-// The package reads node status only through the kernel view and adopts
-// only the tables its native routes use; it never declares the tables that
-// hold node credentials.
+// The package adopts v2_node only as the kernel grants it, once the node
+// credential split finalized it: its API key, key hash and shared secret
+// then hold tombstones, and the credentials live in the kernel's protected
+// split tables, which no grant reaches. It never adopts v2_authorized_key
+// (registration keys) or v2_node_protocol (protocol-runtime's): it reads
+// them through views that show no key. Of KernelNodeOps it holds the
+// families its routes use: nodeconfig (raw configuration secrets, node
+// retirement), credentials (registration keys) and diagnose (the load
+// balancer check); never agents or forward.
 func TestProxyNodeManifestGrantsNoNodeCredentials(t *testing.T) {
 	raw, err := os.ReadFile("../manifest.template.json")
 	require.NoError(t, err)
@@ -130,6 +144,13 @@ func TestProxyNodeManifestGrantsNoNodeCredentials(t *testing.T) {
 		"kernel.storage.v1",
 		"kernel.storage.adopt:v2_load_balancer",
 		"kernel.storage.adopt:v2_node_log",
+		"kernel.storage.adopt:v2_node",
 		"kernel.view:kapi_node_status_v1",
+		"kernel.view:kapi_node_protocol_public_v1",
+		"kernel.view:kapi_registration_key_v1",
+		"kernel.view:kapi_forward_node_v1",
+		"kernel.nodeops.nodeconfig.v1",
+		"kernel.nodeops.credentials.v1",
+		"kernel.nodeops.diagnose.v1",
 	}, manifest.Capabilities)
 }
