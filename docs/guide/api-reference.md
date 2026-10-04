@@ -349,6 +349,13 @@ v4.2（F5d）删除了 flux 兼容的 v2 转发接口，这些路径现在返回
 干净代理的注册、心跳与上报，以及内部流量上报。旧版接口的契约存档在
 [`../archive/forwarding-v2-api.md`](../archive/forwarding-v2-api.md)。
 
+### Scheduled reset semantics
+
+- `flowResetTime = 0` 表示不参与自动月重置。
+- `flowResetTime = 1..31` 表示每月对应日期重置；当月没有该日时，按月末补执行。
+- 当前本地实现会在应用启动时执行一次补扫，然后每天本地时间 `00:00:05` 扫描。
+- 扫描会重置用户流量；对已过期用户会暂停其旧版转发。
+
 ---
 
 ## 节点接口
