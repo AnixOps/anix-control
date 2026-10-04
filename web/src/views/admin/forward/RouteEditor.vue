@@ -349,7 +349,7 @@ const dns = ref(bindingDraft(null))
 // The picker shows, and its binding is written, only while the entry has
 // several nodes (draftToRoute drops entry_hostname otherwise).
 const dnsActive = computed(() => Boolean(draft.value) && dnsReady.value && draft.value.hops[0]?.node_refs.length > 1)
-const dnsErrors = computed(() => (dnsActive.value ? bindingErrors(dns.value, draft.value.listen.entry_hostname, t) : {}))
+const dnsErrors = computed(() => (dnsActive.value ? bindingErrors(dns.value, draft.value.listen.entry_hostname, t, storedBinding.value) : {}))
 const dnsDirty = computed(() => dnsActive.value && bindingChanged(dns.value, storedBinding.value))
 
 // applyBinding writes the binding once the route is stored. A failure is a

@@ -148,9 +148,12 @@ export function bindingDraft(binding, hostname = '') {
   }
 }
 
-// bindingErrors checks a binding draft that is on.
-export function bindingErrors(draft, hostname, t) {
+// bindingErrors checks a binding draft that is on. A stored binding's
+// provider, zone, name and mode cannot change, so only what PUT changes is
+// checked (a moved hostname is the picker's mismatch note, not an error).
+export function bindingErrors(draft, hostname, t, stored = null) {
   if (!draft?.enabled) return {}
+  if (stored) return changeableErrors(draft, t)
   const errors = {}
   const required = t('forwardDns.binding.required')
   if (!String(hostname || '').trim()) errors.hostname = t('forwardDns.binding.needsHostname')
@@ -162,6 +165,11 @@ export function bindingErrors(draft, hostname, t) {
     : String(hostname || '').trim().replace(/\.$/, '').toLowerCase()
   if (draft.mode === 'DNS_BINDING_MODE_CNAME' && !name) errors.record_name = required
   else if (zone && name && name !== zone && !name.endsWith(`.${zone}`)) errors[draft.mode === 'DNS_BINDING_MODE_CNAME' ? 'record_name' : 'zone'] = t('forwardDns.binding.outsideZone')
+  return { ...errors, ...changeableErrors(draft, t) }
+}
+
+function changeableErrors(draft, t) {
+  const errors = {}
   if (!draft.record_types?.length) errors.record_types = t('forwardDns.binding.typeRequired')
   const ttl = Number(draft.ttl)
   if (draft.ttl !== null && draft.ttl !== '' && (!Number.isInteger(ttl) || ttl < 1 || ttl > MAX_TTL)) errors.ttl = t('forwardDns.binding.ttlRange', { max: MAX_TTL })

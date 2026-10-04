@@ -419,6 +419,16 @@ describe('route editor binding picker (D14)', () => {
     expect(api.updateDnsBinding).toHaveBeenCalledWith('4', { ...BINDING, paused: true }, expect.anything())
   })
 
+  it('keeps saving possible when a bound route’s hostname moves, with the mismatch note', async () => {
+    api.listDnsBindings.mockResolvedValue([BINDING])
+    const wrapper = await mountEditor()
+    await wrapper.get('#fwd-f-listen-entry-hostname').setValue('hk.other.example')
+    await new Promise(resolve => setTimeout(resolve, 1100))
+    await flushPromises()
+    expect(wrapper.get('[data-testid="forward-dns-mismatch"]').text()).toContain('edge.example.net')
+    expect(wrapper.get('[data-testid="forward-save"]').attributes('disabled')).toBeUndefined()
+  })
+
   it('shows the CNAME target to copy in CNAME mode', async () => {
     const wrapper = await mountEditor()
     component(wrapper, UiSwitch, 'Keep this hostname on the healthy entries').vm.$emit('update:modelValue', true)
