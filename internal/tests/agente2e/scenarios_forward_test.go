@@ -202,7 +202,10 @@ func (s *suite) scenarioForwardDiagnose(t *testing.T) string {
 	for _, step := range answer.Data.Steps {
 		steps = append(steps, fmt.Sprintf("%s/%s ok=%t %s", strings.TrimPrefix(step.Kind, "PROBE_KIND_"), strings.TrimPrefix(step.Vantage, "DIAGNOSE_VANTAGE_"), step.Result.OK, step.Result.Code))
 		if step.Vantage == "DIAGNOSE_VANTAGE_NODE" {
-			nodeSteps[step.Kind] = step.Result.OK
+			// Without root (the main CI lane) the Agent cannot read
+			// nftables; the port-conflict check reports that instead of
+			// a result.
+			nodeSteps[step.Kind] = step.Result.OK || (step.Kind == "PROBE_KIND_PORT_CONFLICT" && step.Result.Code == "nft_unavailable")
 		}
 	}
 	for _, kind := range []string{"PROBE_KIND_LISTEN", "PROBE_KIND_PORT_CONFLICT", "PROBE_KIND_DELIVERY"} {
