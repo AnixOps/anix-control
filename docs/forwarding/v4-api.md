@@ -19,7 +19,10 @@ in [`api.md`](api.md) stay until F5d removes them.
   `GET /api/v4/plugins/forward/routes` are the same call.
 - **Who may call.** The routes are in the `/api/v4` group: a JWT, an
   administrator (`AdminAuth`) and the package's `forward.api` permission.
-  - Any administrator may read and write.
+  - The package permission works as for every package control route. While
+    no access group grants anything for the forward package, every
+    administrator may read and write. Once a group with a `forward.api`
+    grant exists, only its members may.
   - Every `DELETE` needs a super administrator: an administrator who is not
     staff (`service.IsSuperAdmin`, the rule route-mode switches and install
     tokens follow). Others get `403 super_admin_required`, and the request

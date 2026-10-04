@@ -2153,8 +2153,10 @@ v4.2 adds the forwarding API `/api/v4/forward/*` and the command line
   - Until the package of this release is installed and healthy,
     `/api/v4/forward/*` answers `404 plugin_route_not_found`.
 - **Permissions.**
-  - Administrators with the package's `forward.api` permission may read and
-    write.
+  - Administrators may read and write as on every package control route.
+    While no access group grants anything for the forward package, every
+    administrator may. Once a group with a `forward.api` grant exists, only
+    its members may.
   - Every `DELETE` (a route, a forward node, an Ansible machine) needs a
     super administrator.
   - Writes are audited as module `forward`.

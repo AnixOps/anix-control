@@ -1870,6 +1870,11 @@ As built (F5a):
   alone; the primary exit's gost dies and the relay fails over to the
   other exit through `SetUpstreams`. A gost entry before an nftables exit
   carries TCP and UDP with exact counters on both.
+- **The v4 API** (F5a, implemented): handler tests in
+  `packages/forward/v4api` and `packages/forward/control`, the kernel
+  gateway's in `internal/handler`, and `internal/tests/forwardv4`, which
+  runs the API against the real `ForwardControl` over gRPC on SQLite and
+  PostgreSQL.
 - **Cross-repository E2E** with anix-agent (the A2-7 suite): config.v1 with
   `forward.v1`, reports, probes.
 - **Chaos**: stop Control and check forwarding, failover and counters
