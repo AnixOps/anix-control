@@ -236,13 +236,15 @@ func TestShutdownCancelsPendingRestart(t *testing.T) {
 
 func TestLifecycleOperationsCancelPendingRestart(t *testing.T) {
 	tests := []struct {
-		name    string
-		operate func(t *testing.T, manager *Supervisor, ref ArtifactRef)
+		name string
+		// operate gets next, a 4.1.0 artifact written before the host is
+		// killed, so no file I/O widens the window before the restart fires.
+		operate func(t *testing.T, manager *Supervisor, ref, next ArtifactRef)
 		check   func(t *testing.T, manager *Supervisor, ref ArtifactRef)
 	}{
 		{
 			name: "stop",
-			operate: func(t *testing.T, manager *Supervisor, ref ArtifactRef) {
+			operate: func(t *testing.T, manager *Supervisor, ref, _ ArtifactRef) {
 				require.NoError(t, manager.Stop(context.Background(), ref.PackageID, ref.Version, 8))
 			},
 			check: func(t *testing.T, manager *Supervisor, ref ArtifactRef) {
@@ -251,7 +253,7 @@ func TestLifecycleOperationsCancelPendingRestart(t *testing.T) {
 		},
 		{
 			name: "drain",
-			operate: func(t *testing.T, manager *Supervisor, ref ArtifactRef) {
+			operate: func(t *testing.T, manager *Supervisor, ref, _ ArtifactRef) {
 				require.NoError(t, manager.Drain(context.Background(), ref.PackageID, ref.Version, 8, time.Now().Add(time.Second)))
 			},
 			check: func(t *testing.T, manager *Supervisor, ref ArtifactRef) {
@@ -262,9 +264,8 @@ func TestLifecycleOperationsCancelPendingRestart(t *testing.T) {
 		},
 		{
 			name: "newer generation",
-			operate: func(t *testing.T, manager *Supervisor, _ ArtifactRef) {
-				replacement := writeHostArtifactRef(t, "knowledge", "4.1.0")
-				require.NoError(t, manager.Start(context.Background(), replacement, 8))
+			operate: func(t *testing.T, manager *Supervisor, _, next ArtifactRef) {
+				require.NoError(t, manager.Start(context.Background(), next, 8))
 			},
 			check: func(t *testing.T, manager *Supervisor, ref ArtifactRef) {
 				host := currentTestHost(manager, ref.PackageID)
@@ -278,14 +279,15 @@ func TestLifecycleOperationsCancelPendingRestart(t *testing.T) {
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			manager, _ := newSupervisedTestManager(t)
-			manager.restartBaseDelay = 150 * time.Millisecond
+			manager.restartBaseDelay = 300 * time.Millisecond
 			ref := writeHostArtifactRef(t, "knowledge", "4.0.0")
+			next := writeHostArtifactRef(t, "knowledge", "4.1.0")
 			require.NoError(t, manager.Start(context.Background(), ref, 7))
 			host := currentTestHost(manager, ref.PackageID)
 
 			killTestHostGroup(t, host)
 			waitForTestHostState(t, manager, ref.PackageID, HostStateRestarting)
-			test.operate(t, manager, ref)
+			test.operate(t, manager, ref, next)
 
 			time.Sleep(3 * manager.restartBaseDelay)
 			require.Zero(t, hostStatsFor(t, manager, ref.PackageID).Restarts)
