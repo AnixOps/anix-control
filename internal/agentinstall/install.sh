@@ -3,10 +3,16 @@
 #
 #   curl -fsSL https://<control>/install.sh | sudo bash -s -- \
 #     --control https://<control> --node forward-41 --token anixagt_... \
-#     [--mirror control|cn|github] [--reset] [--forward] [--timeout 180]
+#     [--mirror control|cn|github] [--reset] [--forward] [--timeout 180] \
+#     [--offline bundle.tar.gz] [--port-range 20000-30000] [--accept-ra] \
+#     [--skip-preflight]
+#   sudo bash install.sh uninstall [--purge]
 #
 # Copy the command from the node page in Control ("复制安装命令"): it carries a
-# single-use enrollment token bound to the node. The script installs the
+# single-use enrollment token bound to the node. The script first checks the
+# host (preflight: systemd, kernel, nftables, polkit, firewalls, disk, clock
+# skew and Control's https and gRPC addresses) and changes nothing when a
+# check fails. It then installs the
 # AnixOps Agent as a systemd service running as the unprivileged user
 # anixops-agent (ambient CAP_NET_ADMIN and CAP_NET_BIND_SERVICE, sandboxed),
 # removes the legacy forward runtime of this host (the nftables tables
@@ -16,7 +22,10 @@
 # migrates the directories of an earlier root install of the Agent, starts
 # the Agent and waits until it has enrolled with Control. Running the same
 # command again is safe: it upgrades the Agent in place and keeps its
-# identity unless --reset is given.
+# identity unless --reset is given. --offline installs from a bundle made by
+# 'anix-control agent offline-bundle' (no downloads; enrolling still needs
+# Control). 'uninstall' removes the Agent and keeps its identity; --purge
+# also removes its state, users and the forwarding objects it owns.
 #
 # This file is byte for byte the release asset agent-install.sh. Verify it
 # before running it:
@@ -69,6 +78,24 @@ readonly LEGACY_PATHS=("/etc/v2board-forward-agent" "/usr/local/bin/v2forward-ag
 # (scripts/install.sh): 'anix-agent migrate-paths' copies them to STATE_DIR.
 readonly ROOT_INSTALL_DIRS=("/var/lib/anix-agent" "/var/lib/anixops/plugins")
 
+# What the forward drivers create on a host (sdk/forward/driver/nftables):
+# one nftables table, which carries the ownership comment, and one HTB root
+# qdisc with a fixed handle per rate-limited interface. uninstall --purge
+# removes only these, never a table or qdisc without the mark.
+readonly FWD_TABLE="inet anixops_fwd"
+readonly FWD_TABLE_COMMENT="anixops-forward-driver v1"
+readonly FWD_TC_HANDLE="af00:"
+
+# Preflight limits (forward-sdk.md, section 9).
+readonly MIN_KERNEL="5.10"   # the nftables driver's table, counter and set element comments
+readonly MIN_NFT="0.9.7"     # the same comments in nft
+readonly MIN_SYSTEMD=240     # Type=exec in the units
+readonly SANDBOX_SYSTEMD=247 # ProtectProc= and ProcSubset= in the gost unit
+readonly MIN_POLKIT="0.106"  # JavaScript rules (/etc/polkit-1/rules.d)
+readonly SKEW_WARN=30        # seconds
+readonly SKEW_FAIL=300       # seconds: TLS certificates stop verifying
+readonly MIN_FREE_KB=$((200 * 1024))
+
 CONTROL_URL=""
 NODE=""
 TOKEN="${ANIX_AGENT_TOKEN:-}"
@@ -77,6 +104,13 @@ RESET=0
 FORWARD=0
 TIMEOUT=180
 TMP_DIR=""
+ACTION="install"
+PURGE=0
+OFFLINE=""
+SKIP_PREFLIGHT=0
+ACCEPT_RA=0
+PORT_RANGE=""
+PREFLIGHT_FAILS=0
 
 META_VERSION=""
 META_GRPC=""
@@ -93,7 +127,9 @@ CONFIG_STATE=""
 CREDENTIAL_STATE=""
 FORWARDING_STATE=""
 MIGRATION_STATE=""
+FORWARDING_NOTE=""
 REMOVED=()
+KEPT=()
 NOTES=()
 
 info() { printf '[anixops] %s\n' "$*"; }
@@ -111,29 +147,56 @@ die() {
 # path prints a system path under ROOT.
 path() { printf '%s%s' "${ROOT}" "$1"; }
 
+# have tells whether a command is available.
+have() { command -v "$1" >/dev/null 2>&1; }
+
+# version_ge tells whether version $1 is at least $2.
+version_ge() {
+  [[ "$(printf '%s\n%s\n' "$2" "$1" | sort -V | head -n 1)" == "$2" ]]
+}
+
+# forward_node tells whether this host forwards: a forward node, or a proxy
+# node installed with --forward.
+forward_node() { [[ "${NODE}" == forward-* ]] || ((FORWARD)); }
+
 usage() {
   cat <<'EOF'
 Usage: install.sh --control <https://control> --node <proxy-<id>|forward-<id>> --token <anixagt_...> [options]
+       install.sh uninstall [--purge]
 
-  --control URL      the Control address nodes reach (from the copied command)
-  --node NODE        the node the token is bound to: proxy-<id> or forward-<id>
-  --token TOKEN      the single-use enrollment token (or ANIX_AGENT_TOKEN)
-  --mirror M         where the Agent is downloaded from: control (default), cn, github
-  --reset            discard this host's Agent identity and enroll again (needs --token)
-  --forward          turn on IP forwarding on a proxy node too (always on for forward-<id>)
-  --timeout SECONDS  how long to wait for the Agent to enroll (default 180)
-  --group GROUP      node-group tokens (not supported by this Control yet)
-  --offline FILE     install from a downloaded package (not in this release)
-  -h, --help         show this help
+  --control URL         the Control address nodes reach (from the copied command)
+  --node NODE           the node the token is bound to: proxy-<id> or forward-<id>
+  --token TOKEN         the single-use enrollment token (or ANIX_AGENT_TOKEN)
+  --mirror M            where the Agent is downloaded from: control (default), cn, github
+  --offline FILE        install from an offline bundle (anix-control agent offline-bundle);
+                        nothing is downloaded, enrolling still needs Control
+  --reset               discard this host's Agent identity and enroll again (needs --token)
+  --forward             turn on IP forwarding on a proxy node too (always on for forward-<id>)
+  --accept-ra           keep accepting IPv6 router advertisements on SLAAC interfaces
+                        with forwarding on (net.ipv6.conf.<if>.accept_ra = 2)
+  --port-range FROM-TO  the node's forward port range: preflight lists ports in use there
+  --skip-preflight      install although a preflight check fails (not recommended)
+  --timeout SECONDS     how long to wait for the Agent to enroll (default 180)
+  --group GROUP         node-group tokens (not supported by this Control yet)
+  -h, --help            show this help
 
 Running the same command again upgrades the Agent in place and keeps its
 identity; the token is then not needed and stays unused.
+
+uninstall stops and removes the Agent, anixops-gost.service and their files
+and keeps the identity, configuration and state for a later install;
+--purge also removes those, the users, the sysctl drop-in and the forwarding
+objects the drivers created (the nftables table inet anixops_fwd and the tc
+root qdiscs af00:, only when they carry the drivers' marks).
 EOF
 }
 
 parse_args() {
   if [[ "${1:-}" == "uninstall" ]]; then
-    die 2 "uninstall is not part of this installer release; it comes with 'anix-agent uninstall [--purge]' (forward-sdk.md, section 9)"
+    ACTION="uninstall"
+    shift
+    parse_uninstall_args "$@"
+    return 0
   fi
   local flag value
   while (($# > 0)); do
@@ -144,13 +207,13 @@ parse_args() {
         usage
         exit 0
         ;;
-      --reset)
-        RESET=1
-        shift
-        continue
-        ;;
-      --forward)
-        FORWARD=1
+      --reset | --forward | --accept-ra | --skip-preflight)
+        case "${flag}" in
+          --reset) RESET=1 ;;
+          --forward) FORWARD=1 ;;
+          --accept-ra) ACCEPT_RA=1 ;;
+          --skip-preflight) SKIP_PREFLIGHT=1 ;;
+        esac
         shift
         continue
         ;;
@@ -159,7 +222,7 @@ parse_args() {
         flag="${flag%%=*}"
         shift
         ;;
-      --control | --node | --token | --mirror | --timeout | --group | --offline)
+      --control | --node | --token | --mirror | --timeout | --group | --offline | --port-range)
         (($# >= 2)) || die 2 "${flag} needs a value"
         value="$2"
         shift 2
@@ -174,12 +237,27 @@ parse_args() {
       --token) TOKEN="${value}" ;;
       --mirror) MIRROR="${value}" ;;
       --timeout) TIMEOUT="${value}" ;;
+      --offline) OFFLINE="${value}" ;;
+      --port-range) PORT_RANGE="${value}" ;;
       --group) die 2 "node-group tokens are not supported by this Control yet; copy the command from the node's page (a node-bound token)" ;;
-      --offline) die 2 "offline packages are not part of this installer release; download the Agent release on a connected machine or use --mirror cn" ;;
       *) die 2 "unknown argument: ${flag} (see --help)" ;;
     esac
   done
   validate_args
+}
+
+parse_uninstall_args() {
+  while (($# > 0)); do
+    case "$1" in
+      --purge) PURGE=1 ;;
+      -h | --help)
+        usage
+        exit 0
+        ;;
+      *) die 2 "unknown argument to uninstall: $1 (uninstall [--purge])" ;;
+    esac
+    shift
+  done
 }
 
 validate_args() {
@@ -197,6 +275,14 @@ validate_args() {
   if ((RESET)) && [[ -z "${TOKEN}" ]]; then
     die 2 "--reset needs --token: the Agent enrolls again"
   fi
+  if [[ -n "${OFFLINE}" && ! -f "${OFFLINE}" ]]; then
+    die 2 "--offline ${OFFLINE}: no such file (copy the bundle to this host first)"
+  fi
+  if [[ -n "${PORT_RANGE}" ]]; then
+    if [[ ! "${PORT_RANGE}" =~ ^[1-9][0-9]{0,4}-[1-9][0-9]{0,4}$ ]] || ((${PORT_RANGE%-*} > ${PORT_RANGE#*-} || ${PORT_RANGE#*-} > 65535)); then
+      die 2 "--port-range must be FROM-TO with 1 <= FROM <= TO <= 65535"
+    fi
+  fi
 }
 
 require_root() {
@@ -210,8 +296,8 @@ detect_platform() {
     aarch64 | arm64) ARCH="arm64" ;;
     *) die "unsupported architecture $(uname -m): the Agent is released for amd64 and arm64" ;;
   esac
-  if [[ ! -d "$(path /run/systemd/system)" ]] || ! command -v systemctl >/dev/null 2>&1; then
-    if command -v rc-service >/dev/null 2>&1 || [[ -e "$(path /sbin/openrc-run)" ]]; then
+  if [[ ! -d "$(path /run/systemd/system)" ]] || ! have systemctl; then
+    if have rc-service || [[ -e "$(path /sbin/openrc-run)" ]]; then
       die "OpenRC is not supported by this installer release yet: the Agent needs systemd"
     fi
     die "systemd is required: /run/systemd/system is missing"
@@ -221,22 +307,316 @@ detect_platform() {
 require_tools() {
   local tool missing=()
   for tool in curl sha256sum install mktemp getent groupadd useradd usermod; do
-    command -v "${tool}" >/dev/null 2>&1 || missing+=("${tool}")
+    have "${tool}" || missing+=("${tool}")
   done
-  if ! command -v unzip >/dev/null 2>&1 && ! command -v python3 >/dev/null 2>&1; then
+  if ! have unzip && ! have python3; then
     missing+=("unzip")
+  fi
+  if [[ -n "${OFFLINE}" ]]; then
+    # An offline bundle is trusted only through its signatures.
+    have tar || missing+=("tar")
+    have openssl || missing+=("openssl")
   fi
   ((${#missing[@]} == 0)) || die "missing tools: ${missing[*]} (Debian/Ubuntu: apt-get install -y ${missing[*]}; RHEL: dnf install -y ${missing[*]})"
 }
 
-# preflight is where the O2 checks (kernel, nftables, ports, clock skew,
-# Control reachability) run before anything is changed.
-preflight() { :; }
+# Preflight (forward-sdk.md, section 9): checks that run after Control's
+# metadata is read and before anything on the host changes. A failed check
+# prints its reason and a fix and stops the installer once every check ran;
+# a warning goes to the summary.
 
-# fetch downloads a URL over https; curl's URL globbing is off for IPv6
-# literals.
+pf_ok() { info "preflight: ok    $*"; }
+pf_skip() { info "preflight: skip  $*"; }
+pf_warn() { note "preflight: $*"; }
+pf_fail() {
+  PREFLIGHT_FAILS=$((PREFLIGHT_FAILS + 1))
+  printf '[anixops] preflight: FAIL  %s\n' "$1" >&2
+  if [[ -n "${2:-}" ]]; then
+    printf '[anixops]   fix: %s\n' "$2" >&2
+  fi
+}
+
+check_systemd() {
+  local version
+  version="$(systemctl --version 2>/dev/null | awk 'NR == 1 {print $2}')" || version=""
+  version="${version%%[!0-9]*}"
+  if [[ -z "${version}" ]]; then
+    pf_warn "cannot read the systemd version (systemctl --version)"
+  elif ((version < MIN_SYSTEMD)); then
+    pf_fail "systemd ${version} is older than ${MIN_SYSTEMD}: the Agent's units use Type=exec" \
+      "use a distribution with systemd ${MIN_SYSTEMD} or later (Debian 11, Ubuntu 20.04, RHEL 9 or later)"
+  elif ((version < SANDBOX_SYSTEMD)); then
+    pf_warn "systemd ${version} ignores ProtectProc= and ProcSubset= (systemd ${SANDBOX_SYSTEMD}): gost runs with a weaker sandbox"
+  else
+    pf_ok "systemd ${version}"
+  fi
+}
+
+check_kernel() {
+  local release version
+  release="$(uname -r)" || release=""
+  if [[ ! "${release}" =~ ^([0-9]+)\.([0-9]+) ]]; then
+    pf_warn "cannot read the kernel version (uname -r: ${release})"
+    return 0
+  fi
+  version="${BASH_REMATCH[1]}.${BASH_REMATCH[2]}"
+  if version_ge "${version}" "${MIN_KERNEL}"; then
+    pf_ok "Linux ${release}"
+  elif forward_node; then
+    pf_fail "Linux ${release} is older than ${MIN_KERNEL}: the nftables forward driver needs ${MIN_KERNEL} or later" \
+      "upgrade the kernel (Debian 11 backports, Ubuntu 22.04 or later), or forward with gost only (ask the Control administrator)"
+  else
+    pf_warn "Linux ${release} is older than ${MIN_KERNEL}: this node cannot forward with nftables later"
+  fi
+}
+
+check_nftables() {
+  local version
+  if ! have nft; then
+    pf_fail "nft is missing: the nftables forward driver needs it" "apt-get install -y nftables (RHEL: dnf install -y nftables)"
+  else
+    version="$(nft --version 2>/dev/null)" || version=""
+    if [[ "${version}" =~ v([0-9]+(\.[0-9]+)+) ]]; then
+      version="${BASH_REMATCH[1]}"
+      if version_ge "${version}" "${MIN_NFT}"; then
+        pf_ok "nftables ${version}"
+      else
+        pf_fail "nftables ${version} is older than ${MIN_NFT}: the forward driver needs table, counter and set element comments" \
+          "install nftables ${MIN_NFT} or later (Debian 11, Ubuntu 22.04 or later)"
+      fi
+    else
+      pf_warn "cannot read the nftables version (nft --version)"
+    fi
+  fi
+  if ! have tc; then
+    pf_warn "tc is missing: bandwidth limits are off on this node (apt-get install -y iproute2)"
+  fi
+  if [[ -e "$(path /proc/sys/net/netfilter/nf_conntrack_max)" ]]; then
+    pf_ok "conntrack (nf_conntrack loaded)"
+  elif have modinfo && modinfo nf_conntrack >/dev/null 2>&1; then
+    pf_ok "conntrack (nf_conntrack loads on first use)"
+  else
+    pf_warn "conntrack (nf_conntrack) is neither loaded nor installed as a module: nftables DNAT needs it"
+  fi
+}
+
+check_polkit() {
+  local version
+  if ! have pkaction; then
+    pf_warn "polkit is not installed: the Agent cannot start or reload ${GOST_SERVICE}, so gost hops fail (apt-get install -y polkitd)"
+    return 0
+  fi
+  version="$(pkaction --version 2>/dev/null)" || version=""
+  if [[ ! "${version}" =~ ([0-9]+(\.[0-9]+)*) ]]; then
+    pf_warn "cannot read the polkit version (pkaction --version)"
+    return 0
+  fi
+  version="${BASH_REMATCH[1]}"
+  if version_ge "${version}" "${MIN_POLKIT}"; then
+    pf_ok "polkit ${version}"
+  else
+    # A .pkla file grants an action for every unit; the installer writes
+    # none rather than let the Agent manage any unit.
+    pf_warn "polkit ${version} reads no rules from /etc/polkit-1/rules.d (${MIN_POLKIT} or later): the Agent cannot start or reload ${GOST_SERVICE}, so gost hops fail; nftables hops work. Upgrade polkit (Ubuntu 24.04, Debian 12) to forward with gost"
+  fi
+}
+
+check_firewalls() {
+  local policy warned=0
+  if systemctl is-active --quiet firewalld 2>/dev/null; then
+    pf_warn "firewalld is active: its zone must forward the traffic (firewall-cmd --permanent --zone=<zone> --add-forward; firewall-cmd --reload)"
+    warned=1
+  fi
+  if grep -qsx 'ENABLED=yes' "$(path /etc/ufw/ufw.conf)" &&
+    grep -qsx 'DEFAULT_FORWARD_POLICY="DROP"' "$(path /etc/default/ufw)"; then
+    pf_warn "ufw is active with DEFAULT_FORWARD_POLICY=\"DROP\": forwarded traffic is dropped (set DEFAULT_FORWARD_POLICY=\"ACCEPT\" in /etc/default/ufw and run ufw reload, or add ufw route rules)"
+    warned=1
+  fi
+  if have iptables; then
+    policy="$(iptables -S FORWARD 2>/dev/null | awk 'NR == 1')" || policy=""
+    if [[ "${policy}" == "-P FORWARD DROP" ]]; then
+      pf_warn "the iptables FORWARD policy is DROP (Docker sets it): forwarded packets are dropped (accept them in DOCKER-USER, or iptables -P FORWARD ACCEPT)"
+      warned=1
+    fi
+  fi
+  ((warned)) || pf_ok "no firewall manager drops forwarded traffic"
+}
+
+# slaac_interfaces prints the interfaces with an IPv6 default route learned
+# from router advertisements.
+slaac_interfaces() {
+  have ip || return 0
+  { ip -6 route show default proto ra 2>/dev/null || true; } |
+    awk '{for (i = 1; i < NF; i++) if ($i == "dev") print $(i + 1)}' | sort -u
+}
+
+check_ipv6_ra() {
+  local iface value pending=()
+  [[ -d "$(path /proc/sys/net/ipv6)" ]] || return 0
+  while IFS= read -r iface; do
+    [[ -n "${iface}" ]] || continue
+    value="$(cat "$(path "/proc/sys/net/ipv6/conf/${iface}/accept_ra")" 2>/dev/null)" || value=""
+    [[ "${value}" == "2" ]] || pending+=("${iface}")
+  done < <(slaac_interfaces)
+  if ((${#pending[@]} == 0)); then
+    pf_ok "IPv6 router advertisements (no SLAAC interface needs accept_ra = 2)"
+  elif ((ACCEPT_RA)); then
+    pf_ok "IPv6 router advertisements: the drop-in sets accept_ra = 2 on ${pending[*]} (--accept-ra)"
+  else
+    pf_warn "IPv6 forwarding makes the kernel ignore router advertisements on ${pending[*]} (accept_ra is not 2): the IPv6 default route learned by SLAAC expires. Re-run with --accept-ra to write net.ipv6.conf.<if>.accept_ra = 2 to ${SYSCTL_FILE}"
+  fi
+}
+
+check_ports() {
+  local from to used=()
+  if [[ -z "${PORT_RANGE}" ]]; then
+    pf_skip "ports (the Agent listens on no port; --port-range checks the node's forward port range)"
+    return 0
+  fi
+  if ! have ss; then
+    pf_warn "ss is missing: the forward port range ${PORT_RANGE} was not checked (apt-get install -y iproute2)"
+    return 0
+  fi
+  from="${PORT_RANGE%-*}"
+  to="${PORT_RANGE#*-}"
+  mapfile -t used < <({ ss -Htuln 2>/dev/null || true; } |
+    awk -v from="${from}" -v to="${to}" '{n = split($5, a, ":"); p = a[n] + 0; if (p >= from && p <= to) print p}' | sort -nu)
+  if ((${#used[@]} == 0)); then
+    pf_ok "no listener in the forward port range ${PORT_RANGE}"
+  else
+    pf_warn "ports ${used[*]} of the forward port range ${PORT_RANGE} are in use on this host: forwards on them fail; stop those services or narrow the node's port range in Control"
+  fi
+}
+
+# free_kb prints the free space, in KiB, of the file system that holds the
+# nearest existing directory of $1.
+free_kb() {
+  local dir="$1"
+  while [[ ! -d "${dir}" && "${dir}" != "/" && -n "${dir}" ]]; do
+    dir="$(dirname "${dir}")"
+  done
+  df -Pk "${dir:-/}" 2>/dev/null | awk 'NR == 2 {print $4}'
+}
+
+check_disk() {
+  local label dir free
+  for label in "${LIB_DIR}" "download directory"; do
+    dir="$(path "${LIB_DIR}")"
+    [[ "${label}" == "${LIB_DIR}" ]] || dir="${TMP_DIR}"
+    free="$(free_kb "${dir}")" || free=""
+    if [[ ! "${free}" =~ ^[0-9]+$ ]]; then
+      pf_warn "cannot read the free space for ${label} (df)"
+    elif ((free < MIN_FREE_KB)); then
+      pf_fail "only $((free / 1024)) MiB free for ${label}: the Agent needs about $((MIN_FREE_KB / 1024)) MiB" \
+        "free space on that file system (apt-get clean; journalctl --vacuum-size=100M)"
+    else
+      pf_ok "$((free / 1024)) MiB free for ${label}"
+    fi
+  done
+}
+
+# check_control checks Control's https address (online it was read already)
+# and the gRPC target the Agent enrolls at, both with TLS verification.
+check_control() {
+  local args=(-sS -g -o /dev/null --connect-timeout 10 -m 20) rc=0 http2=0 host="${META_GRPC%:*}"
+  if [[ -n "${OFFLINE}" ]]; then
+    if fetch "${CONTROL_URL}/install/agent.env" /dev/null "${TMP_DIR}/control.headers" 2>/dev/null; then
+      pf_ok "Control ${CONTROL_URL} reachable over https"
+    else
+      pf_warn "cannot reach ${CONTROL_URL} over https: clock skew is not checked; the Agent enrolls over gRPC, checked next"
+    fi
+  else
+    pf_ok "Control ${CONTROL_URL} reachable over https (certificate verified)"
+  fi
+  if curl -V 2>/dev/null | grep -qw HTTP2; then
+    args+=(--http2)
+    http2=1
+  fi
+  curl "${args[@]}" "https://${META_GRPC}/" 2>/dev/null || rc=$?
+  case "${rc}" in
+    0 | 16 | 52 | 56 | 92)
+      pf_ok "gRPC target ${META_GRPC} reachable over TLS (certificate verified)"
+      ;;
+    6)
+      pf_fail "cannot resolve ${host}, the gRPC target the Agent enrolls at" \
+        "check DNS on this host, or set agent_install.grpc_target on Control to an address nodes resolve"
+      ;;
+    7 | 28)
+      pf_fail "cannot connect to the gRPC target ${META_GRPC}: the Agent enrolls and connects there" \
+        "open the port from this host to Control (grpc.port), or set agent_install.grpc_target on Control"
+      ;;
+    35)
+      if ((http2)); then
+        pf_fail "the TLS handshake with the gRPC target ${META_GRPC} failed" \
+          "check that the gRPC listener has TLS (grpc.tls_cert_file) and that nothing intercepts the connection"
+      else
+        pf_warn "could not finish a TLS handshake with the gRPC target ${META_GRPC} (this curl has no HTTP/2, which gRPC needs): it was not checked"
+      fi
+      ;;
+    51 | 58 | 60 | 77 | 83 | 90 | 91)
+      pf_fail "the certificate of the gRPC target ${META_GRPC} does not verify: the Agent checks it against the system CAs" \
+        "give the gRPC listener a certificate for ${host} from a public CA (grpc.tls_cert_file), or add its CA to this host's trust store (update-ca-certificates)"
+      ;;
+    *)
+      pf_warn "the gRPC target ${META_GRPC} check was inconclusive (curl exit ${rc})"
+      ;;
+  esac
+}
+
+# check_clock compares this host's clock with the Date header of Control's
+# answer: certificates stop verifying when they differ by minutes.
+check_clock() {
+  local headers date control now skew
+  headers="${TMP_DIR}/control.headers"
+  [[ -n "${OFFLINE}" ]] || headers="${TMP_DIR}/agent.env.headers"
+  date="$(grep -i '^date:' "${headers}" 2>/dev/null | tail -n 1 | cut -d ' ' -f 2- | tr -d '\r')" || date=""
+  control="$(date -u -d "${date}" +%s 2>/dev/null)" || control=""
+  if [[ -z "${date}" || ! "${control}" =~ ^[0-9]+$ ]]; then
+    pf_warn "Control sent no readable Date header: the clock skew was not checked"
+    return 0
+  fi
+  now="$(date -u +%s)"
+  skew=$((now - control))
+  ((skew >= 0)) || skew=$((-skew))
+  if ((skew > SKEW_FAIL)); then
+    pf_fail "this host's clock is ${skew}s off Control's: TLS certificates and the Agent's certificate do not verify" \
+      "synchronize the clock (timedatectl set-ntp true, or chrony/ntpd), then check it with: date -u"
+  elif ((skew > SKEW_WARN)); then
+    pf_warn "this host's clock is ${skew}s off Control's: synchronize it (timedatectl set-ntp true)"
+  else
+    pf_ok "clock within ${skew}s of Control's"
+  fi
+}
+
+preflight() {
+  if ((SKIP_PREFLIGHT)); then
+    note "preflight checks were skipped (--skip-preflight): the install may fail later or forward nothing"
+    return 0
+  fi
+  info "Preflight checks"
+  check_systemd
+  check_kernel
+  if forward_node; then
+    check_nftables
+    check_polkit
+    check_firewalls
+    check_ipv6_ra
+  fi
+  check_ports
+  check_disk
+  check_control
+  check_clock
+  if ((PREFLIGHT_FAILS > 0)); then
+    die "preflight found ${PREFLIGHT_FAILS} problem(s), see above; nothing on this host was changed. Fix them and re-run the command, or add --skip-preflight to install anyway"
+  fi
+}
+
+# fetch downloads a URL over https, with the response headers in $3 when
+# given; curl's URL globbing is off for IPv6 literals.
 fetch() {
-  curl -fsSL -g --proto '=https' --retry 3 --connect-timeout 15 -o "$2" "$1"
+  local args=(-fsSL -g --proto '=https' --retry 3 --connect-timeout 15 -o "$2")
+  [[ -z "${3:-}" ]] || args+=(-D "$3")
+  curl "${args[@]}" "$1"
 }
 
 read_metadata() {
@@ -262,8 +642,8 @@ read_metadata() {
 
 fetch_metadata() {
   info "Reading the Agent release from ${CONTROL_URL}"
-  fetch "${CONTROL_URL}/install/agent.env" "${TMP_DIR}/agent.env" ||
-    die "cannot reach ${CONTROL_URL}/install/agent.env: check the address and that this host reaches Control over https"
+  fetch "${CONTROL_URL}/install/agent.env" "${TMP_DIR}/agent.env" "${TMP_DIR}/agent.env.headers" ||
+    die "cannot reach ${CONTROL_URL}/install/agent.env: check the address, DNS, the firewall and Control's https certificate (curl -v ${CONTROL_URL}/install/agent.env)"
   read_metadata "${TMP_DIR}/agent.env"
 }
 
@@ -297,27 +677,73 @@ expected_digest() {
   EXPECTED_DIGEST="${digest}"
 }
 
+# offline_entry tells whether a name may be in an offline bundle.
+offline_entry() {
+  case "$1" in
+    agent.env | install.sh | install.sh.sig | SHA256SUMS | SHA256SUMS.sig) return 0 ;;
+  esac
+  [[ "$1" =~ ^anix-agent-linux-[a-z0-9-]+\.zip(\.sig)?$ ]]
+}
+
+# load_offline unpacks an offline bundle (a tar.gz of flat files: agent.env,
+# the Agent zips with their .sig, SHA256SUMS and SHA256SUMS.sig, install.sh
+# and its .sig) into TMP_DIR and reads its agent.env. Nothing in it is
+# trusted before verify_offline.
+load_offline() {
+  local dir="${TMP_DIR}/offline" names name
+  info "Reading the offline bundle ${OFFLINE}"
+  names="$(tar -tzf "${OFFLINE}" 2>/dev/null)" || die "${OFFLINE} is not a tar.gz offline bundle (make one with: anix-control agent offline-bundle)"
+  while IFS= read -r name; do
+    name="${name#./}"
+    [[ -n "${name}" ]] || continue
+    offline_entry "${name}" || die "the offline bundle holds an unexpected entry ${name}: make it with 'anix-control agent offline-bundle'"
+  done <<<"${names}"
+  mkdir -p "${dir}"
+  tar -xzf "${OFFLINE}" -C "${dir}" --no-same-owner --no-same-permissions || die "cannot unpack ${OFFLINE}"
+  if [[ -n "$(find "${dir}" -mindepth 1 ! -type f -print -quit)" ]]; then
+    die "the offline bundle holds something other than plain files"
+  fi
+  [[ -f "${dir}/agent.env" ]] || die "the offline bundle has no agent.env (Control's /install/agent.env)"
+  read_metadata "${dir}/agent.env"
+  [[ -f "${dir}/${ASSET}" ]] || die "the offline bundle has no ${ASSET}: it is not for ${ARCH} (anix-control agent offline-bundle --arch ${ARCH})"
+  SOURCE="offline bundle ${OFFLINE}"
+}
+
 # verify_signature checks file against a base64 raw Ed25519 signature by
-# the official release key.
+# the official release key; label names the file in messages. With strict
+# set, a host that cannot check the signature stops the install.
 verify_signature() {
-  local file="$1" signature="$2" key="${ANIX_INSTALL_PUBLIC_KEY:-${OFFICIAL_PUBLIC_KEY}}"
-  command -v openssl >/dev/null 2>&1 || {
-    note "openssl is missing: the release signature of ${ASSET} is not checked (the SHA-256 is)"
+  local file="$1" signature="$2" label="${3:-${ASSET}}" strict="${4:-0}" key="${ANIX_INSTALL_PUBLIC_KEY:-${OFFICIAL_PUBLIC_KEY}}"
+  if ! have openssl; then
+    ((strict == 0)) || die "openssl is required to verify the offline bundle (apt-get install -y openssl)"
+    note "openssl is missing: the release signature of ${label} is not checked (the SHA-256 is)"
     return 0
-  }
+  fi
   if ! openssl pkeyutl -help 2>&1 | grep -q -- '-rawin'; then
-    note "this OpenSSL cannot verify Ed25519 signatures (OpenSSL 3 needed): the SHA-256 of ${ASSET} is checked, its signature is not"
+    ((strict == 0)) || die "this OpenSSL cannot verify Ed25519 signatures (OpenSSL 3 needed), which the offline bundle requires; install from the network instead"
+    note "this OpenSSL cannot verify Ed25519 signatures (OpenSSL 3 needed): the SHA-256 of ${label} is checked, its signature is not"
     return 0
   fi
   {
     printf '\x30\x2a\x30\x05\x06\x03\x2b\x65\x70\x03\x21\x00'
     printf '%s' "${key}" | base64 -d
   } >"${TMP_DIR}/release-key.der" || die "the release key is not valid base64"
-  tr -d ' \t\r\n' <"${signature}" | base64 -d >"${TMP_DIR}/signature.bin" 2>/dev/null || die "the signature of ${ASSET} is not base64"
+  tr -d ' \t\r\n' <"${signature}" | base64 -d >"${TMP_DIR}/signature.bin" 2>/dev/null || die "the signature of ${label} is not base64"
   openssl pkeyutl -verify -pubin -keyform DER -inkey "${TMP_DIR}/release-key.der" -rawin \
     -in "${file}" -sigfile "${TMP_DIR}/signature.bin" >/dev/null 2>&1 ||
-    die "the release signature of ${ASSET} does not verify: the download was altered; nothing was installed"
-  info "Release signature verified"
+    die "the release signature of ${label} does not verify: it was altered; nothing was installed"
+  info "Release signature of ${label} verified"
+}
+
+unpack_agent() {
+  local zip="$1"
+  mkdir -p "${TMP_DIR}/agent"
+  if have unzip; then
+    unzip -q -o "${zip}" -d "${TMP_DIR}/agent" || die "cannot unpack ${ASSET}"
+  else
+    python3 -m zipfile -e "${zip}" "${TMP_DIR}/agent" || die "cannot unpack ${ASSET}"
+  fi
+  [[ -f "${TMP_DIR}/agent/anix-agent" && ! -L "${TMP_DIR}/agent/anix-agent" ]] || die "${ASSET} holds no anix-agent binary"
 }
 
 download_agent() {
@@ -333,13 +759,28 @@ download_agent() {
   else
     note "the Agent release has no signature yet: only its SHA-256 was checked"
   fi
-  mkdir -p "${TMP_DIR}/agent"
-  if command -v unzip >/dev/null 2>&1; then
-    unzip -q -o "${zip}" -d "${TMP_DIR}/agent" || die "cannot unpack ${ASSET}"
-  else
-    python3 -m zipfile -e "${zip}" "${TMP_DIR}/agent" || die "cannot unpack ${ASSET}"
-  fi
-  [[ -f "${TMP_DIR}/agent/anix-agent" && ! -L "${TMP_DIR}/agent/anix-agent" ]] || die "${ASSET} holds no anix-agent binary"
+  unpack_agent "${zip}"
+}
+
+# verify_offline checks an offline bundle like a download, but every check
+# is required: SHA256SUMS signed by the official release key lists the
+# Agent zip's digest, and the zip's own signature verifies. The bundle's
+# agent.env is not signed and never supplies a digest.
+verify_offline() {
+  local dir="${TMP_DIR}/offline" zip actual
+  zip="${dir}/${ASSET}"
+  [[ -f "${dir}/SHA256SUMS" && -f "${dir}/SHA256SUMS.sig" ]] ||
+    die "the offline bundle has no SHA256SUMS and SHA256SUMS.sig: it cannot be verified; nothing was installed"
+  verify_signature "${dir}/SHA256SUMS" "${dir}/SHA256SUMS.sig" "SHA256SUMS" 1
+  EXPECTED_DIGEST="$(awk -v asset="${ASSET}" '$2 == asset || $2 == "*" asset {print tolower($1); exit}' "${dir}/SHA256SUMS")"
+  [[ "${EXPECTED_DIGEST}" =~ ^[0-9a-f]{64}$ ]] || die "SHA256SUMS of the offline bundle does not list ${ASSET}; nothing was installed"
+  actual="$(sha256sum "${zip}" | awk '{print $1}')"
+  [[ "${actual}" == "${EXPECTED_DIGEST}" ]] || die "checksum mismatch for ${ASSET}: expected ${EXPECTED_DIGEST}, got ${actual}; nothing was installed"
+  info "Checksum verified (sha256 ${actual})"
+  [[ -f "${zip}.sig" ]] || die "the offline bundle has no ${ASSET}.sig; nothing was installed"
+  verify_signature "${zip}" "${zip}.sig" "${ASSET}" 1
+  info "Installing the AnixOps Agent ${META_VERSION} (${ARCH}) from the offline bundle"
+  unpack_agent "${zip}"
 }
 
 # root_install tells whether this host runs, or ran, the Agent of
@@ -523,7 +964,7 @@ write_credential() {
 # and the clean agent's unit and files. Nothing else is touched.
 cleanup_legacy() {
   local table unit legacy_path
-  if command -v nft >/dev/null 2>&1; then
+  if have nft; then
     for table in "${LEGACY_NFT_TABLES[@]}"; do
       # shellcheck disable=SC2086 # "family name" is two words on purpose.
       if nft list table ${table} >/dev/null 2>&1; then
@@ -559,6 +1000,30 @@ render_sysctl() {
   done
 }
 
+# append_accept_ra adds accept_ra = 2 for the SLAAC interfaces to the new
+# drop-in $2: with forwarding on, the kernel ignores router advertisements
+# on an interface whose accept_ra is 1. It does so with --accept-ra, and
+# keeps the lines an earlier run with --accept-ra wrote to $1.
+append_accept_ra() {
+  local old="$1" new="$2" iface lines=()
+  if [[ -f "${old}" ]]; then
+    mapfile -t lines < <(grep -E '^net\.ipv6\.conf\.[^ =]+\.accept_ra *= *2$' "${old}" || true)
+  fi
+  if ((ACCEPT_RA)); then
+    while IFS= read -r iface; do
+      [[ "${iface}" =~ ^[A-Za-z0-9_.@-]{1,15}$ ]] || continue
+      # sysctl writes a dot in an interface name as a slash.
+      lines+=("net.ipv6.conf.${iface//./\/}.accept_ra = 2")
+    done < <(slaac_interfaces)
+  fi
+  ((${#lines[@]} > 0)) || return 0
+  {
+    printf '# SLAAC interfaces keep accepting router advertisements with forwarding on (--accept-ra).\n'
+    printf '%s\n' "${lines[@]}" | sed -E 's/ *= */ = /' | sort -u
+  } >>"${new}"
+  FORWARDING_NOTE="; accept_ra = 2 on $(printf '%s\n' "${lines[@]}" | sed -E 's/^net\.ipv6\.conf\.([^ =]+)\.accept_ra.*/\1/' | sort -u | tr '\n' ' ' | sed 's/ $//')"
+}
+
 # enable_forwarding turns on IPv4 and IPv6 forwarding for a forward node, or
 # a proxy node installed with --forward, now and at every boot. A failure
 # to apply is a note, not an error: the file applies at the next boot.
@@ -576,10 +1041,11 @@ enable_forwarding() {
     ! grep -q '^net\.ipv4\.ip_forward *= *1' "${file}.new"; then
     render_sysctl >"${file}.new"
   fi
+  append_accept_ra "${file}" "${file}.new"
   chmod 0644 "${file}.new"
   mv -f "${file}.new" "${file}"
-  FORWARDING_STATE="wrote ${SYSCTL_FILE} (${SYSCTL_SETTINGS[*]})"
-  if ! command -v sysctl >/dev/null 2>&1; then
+  FORWARDING_STATE="wrote ${SYSCTL_FILE} (${SYSCTL_SETTINGS[*]}${FORWARDING_NOTE})"
+  if ! have sysctl; then
     note "sysctl is missing: IP forwarding turns on at the next boot (${SYSCTL_FILE})"
     FORWARDING_STATE+="; applies at the next boot"
     return 0
@@ -770,6 +1236,9 @@ print_summary() {
   local status item
   status="$(identity_status)"
   info "AnixOps Agent ${META_VERSION} is running (${INSTALL_MODE})"
+  if [[ -n "${OFFLINE}" ]]; then
+    printf '  source:      %s\n' "${SOURCE}"
+  fi
   printf '  node:        %s\n' "${NODE}"
   printf '  identity:    %s (serial %s, expires %s)\n' "$(identity_field "${status}" spiffe_id)" \
     "$(identity_field "${status}" serial)" "$(identity_field "${status}" not_after)"
@@ -805,7 +1274,7 @@ on_error() {
 }
 
 take_lock() {
-  command -v flock >/dev/null 2>&1 || return 0
+  have flock || return 0
   mkdir -p "$(path "$(dirname "${LOCK_FILE}")")"
   exec 9>"$(path "${LOCK_FILE}")"
   flock -n 9 || die "another installer run is in progress"
@@ -819,20 +1288,178 @@ require_token() {
   fi
 }
 
+# Uninstall (forward-sdk.md, section 9, O3). The Agent's own 'uninstall'
+# command predates this layout, so the script does the work itself.
+
+# limit_interfaces prints the interfaces the drivers may have shaped: the
+# configured LimitInterfaces, and every interface of the host, since the
+# installer's configuration names none and the qdisc's handle is the mark.
+limit_interfaces() {
+  local config dev
+  config="$(path "${CONFIG_FILE}")"
+  {
+    if [[ -f "${config}" ]]; then
+      tr -d '\n' <"${config}" | grep -o '"LimitInterfaces"[[:space:]]*:[[:space:]]*\[[^]]*\]' |
+        sed 's/^"LimitInterfaces"//' | grep -o '"[^"]*"' | tr -d '"' || true
+    fi
+    for dev in "$(path /sys/class/net)"/*; do
+      [[ -e "${dev}" ]] && basename "${dev}"
+    done
+  } | grep -E '^[A-Za-z0-9_.@:-]{1,15}$' | sort -u
+}
+
+# purge_forwarding removes what the forward drivers created: the nftables
+# table inet anixops_fwd when it carries the driver's ownership comment, and
+# root HTB qdiscs with the driver's handle. Anything without the mark is
+# foreign and left alone.
+purge_forwarding() {
+  local listing dev qdiscs
+  if have nft; then
+    # shellcheck disable=SC2086 # "family name" is two words on purpose.
+    listing="$(nft list table ${FWD_TABLE} 2>/dev/null)" || listing=""
+    if [[ -n "${listing}" ]]; then
+      if grep -qF "comment \"${FWD_TABLE_COMMENT}\"" <<<"${listing}"; then
+        # shellcheck disable=SC2086
+        if nft delete table ${FWD_TABLE}; then
+          REMOVED+=("nftables table ${FWD_TABLE}")
+        else
+          note "cannot delete the nftables table ${FWD_TABLE}: delete it with 'nft delete table ${FWD_TABLE}'"
+        fi
+      else
+        KEPT+=("nftables table ${FWD_TABLE}: it has no '${FWD_TABLE_COMMENT}' comment, so it is not the Agent's")
+      fi
+    fi
+  fi
+  if have tc; then
+    while IFS= read -r dev; do
+      qdiscs="$(tc qdisc show dev "${dev}" 2>/dev/null)" || qdiscs=""
+      grep -qE "^qdisc htb ${FWD_TC_HANDLE} root" <<<"${qdiscs}" || continue
+      if tc qdisc del dev "${dev}" root; then
+        REMOVED+=("tc root qdisc ${FWD_TC_HANDLE} on ${dev}")
+      else
+        note "cannot delete the tc qdisc ${FWD_TC_HANDLE} on ${dev}: tc qdisc del dev ${dev} root"
+      fi
+    done < <(limit_interfaces)
+  fi
+}
+
+# remove_path removes a system path and records it.
+remove_path() {
+  if [[ -e "$(path "$1")" || -L "$(path "$1")" ]]; then
+    rm -rf "$(path "$1")"
+    REMOVED+=("$1")
+  fi
+}
+
+remove_users() {
+  local user
+  for user in "${AGENT_USER}" "${GOST_USER}"; do
+    if getent passwd "${user}" >/dev/null; then
+      if userdel "${user}"; then
+        REMOVED+=("user ${user}")
+      else
+        note "cannot delete the user ${user}: userdel ${user}"
+      fi
+    fi
+  done
+  for user in "${AGENT_USER}" "${GOST_USER}"; do
+    if getent group "${user}" >/dev/null; then
+      groupdel "${user}" || note "cannot delete the group ${user}: groupdel ${user}"
+    fi
+  done
+}
+
+uninstall() {
+  local unit item link
+  require_root
+  take_lock
+  info "Uninstalling the AnixOps Agent$( ((PURGE)) && printf ' (--purge)')"
+  # The Agent first, so that it cannot apply its state again, then gost.
+  for unit in "${SERVICE}" "${GOST_SERVICE}"; do
+    if [[ -f "$(path "${UNIT_DIR}/${unit}")" ]]; then
+      if have systemctl; then
+        systemctl disable --now "${unit}" >/dev/null 2>&1 || true
+      fi
+      rm -f "$(path "${UNIT_DIR}/${unit}")"
+      REMOVED+=("systemd unit ${unit}")
+    fi
+  done
+  remove_path "${POLKIT_RULE}"
+  if have systemctl; then
+    systemctl daemon-reload >/dev/null 2>&1 || true
+    systemctl reset-failed "${SERVICE}" "${GOST_SERVICE}" >/dev/null 2>&1 || true
+  fi
+  link="$(path "${BIN_LINK}")"
+  if [[ -L "${link}" && "$(readlink "${link}")" == "${LIB_DIR}/anix-agent" ]]; then
+    rm -f "${link}"
+    REMOVED+=("${BIN_LINK}")
+  fi
+  remove_path "${LIB_DIR}"
+  if ((PURGE)); then
+    purge_forwarding
+    remove_path "${STATE_DIR}"
+    remove_path "${GOST_DIR}"
+    remove_path "${CONFIG_DIR}"
+    rmdir "$(path /etc/anixops)" 2>/dev/null || true
+    remove_path "${SYSCTL_FILE}"
+    remove_users
+  else
+    KEPT+=("${CONFIG_DIR} and ${STATE_DIR}: the identity and configuration, for a later install (uninstall --purge removes them)")
+    KEPT+=("the users ${AGENT_USER} and ${GOST_USER}, ${GOST_DIR} and ${SYSCTL_FILE}")
+    KEPT+=("the forwarding rules in the nftables table ${FWD_TABLE} and the tc qdiscs ${FWD_TC_HANDLE}: they stay in the kernel until a reboot or uninstall --purge")
+  fi
+  info "The AnixOps Agent is uninstalled"
+  if ((${#REMOVED[@]} == 0)); then
+    printf '  removed:     nothing (the Agent was not installed)\n'
+  else
+    printf '  removed:\n'
+    for item in "${REMOVED[@]}"; do
+      printf '                 - %s\n' "${item}"
+    done
+  fi
+  if ((${#KEPT[@]} > 0)); then
+    printf '  kept:\n'
+    for item in "${KEPT[@]}"; do
+      printf '                 - %s\n' "${item}"
+    done
+  fi
+  if ((PURGE)) && [[ "$(cat "$(path /proc/sys/net/ipv4/ip_forward)" 2>/dev/null)" == "1" ]]; then
+    printf '  forwarding:  IP forwarding stays on until the next boot (sysctl -w net.ipv4.ip_forward=0 turns it off now)\n'
+  fi
+  printf '  control:     the node still exists in Control: revoke its credentials or delete the node there, which revokes the Agent certificate\n'
+  for item in "${NOTES[@]}"; do
+    printf '  note:        %s\n' "${item}"
+  done
+}
+
 main() {
   parse_args "$@"
+  if [[ "${ACTION}" == "uninstall" ]]; then
+    uninstall
+    return 0
+  fi
   require_root
   detect_platform
   require_tools
   require_token
   take_lock
-  preflight
   TMP_DIR="$(mktemp -d)"
   trap cleanup_tmp EXIT
   trap 'on_error "${LINENO}"' ERR
-  fetch_metadata
-  select_source
-  download_agent
+  # Reading the metadata or the bundle changes nothing; preflight needs it
+  # (the gRPC target, Control's clock).
+  if [[ -n "${OFFLINE}" ]]; then
+    load_offline
+  else
+    fetch_metadata
+    select_source
+  fi
+  preflight
+  if [[ -n "${OFFLINE}" ]]; then
+    verify_offline
+  else
+    download_agent
+  fi
   ensure_users
   stop_running_agent
   install_files

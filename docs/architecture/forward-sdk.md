@@ -1457,8 +1457,9 @@ The target is nyanpass's experience: copy one command, paste it on the
 machine, and the node appears. This is part of F3 and reuses the agent
 enrollment (`internal/agentpki`).
 
-**Status: O1 implemented** (the command, the token API, the signed script;
-operator guide `docs/guide/agent-onboarding.md`). As built:
+**Status: O1, O2 and O3 implemented** (the command, the token API, the
+signed script; preflight and offline bundles; uninstall; operator guide
+`docs/guide/agent-onboarding.md`). As built:
 
 - `POST /api/v4/kernel/agents/install-tokens` (super administrators,
   `service.IsSuperAdmin`): `{node: "proxy-<id>"|"forward-<id>",
@@ -1490,8 +1491,39 @@ operator guide `docs/guide/agent-onboarding.md`). As built:
   forward nodes have no group model and creating the node on first use needs
   a change to `agentpki.Enroll`. `--group` is accepted by the parser and
   refused with that reason.
-- The script follows the steps below except preflight (O2), `--offline` (O2,
-  refused for now), OpenRC (refused) and uninstall (O3). On a forward node
+- **Preflight (O2).** After reading `/install/agent.env` (or the bundle)
+  and before changing anything the script checks: systemd ≥ 240 (fail;
+  < 247 warns about the gost sandbox), the kernel ≥ 5.10 and nft ≥ 0.9.7 on
+  forward nodes (fail), `tc` and `nf_conntrack` (warn), polkit ≥ 0.106
+  (warn: 0.105 reads only `.pkla`, which cannot be limited to one unit, so
+  no `.pkla` is written and gost hops cannot run there), firewalld, ufw's
+  forward policy and the iptables `FORWARD DROP` policy (warn), SLAAC
+  interfaces whose `accept_ra` is not 2 (warn; `--accept-ra` writes
+  `net.ipv6.conf.<if>.accept_ra = 2` to the drop-in), listeners in
+  `--port-range` (warn; skipped without it: the Agent listens on no port),
+  200 MiB free (fail), Control's https address and the gRPC target with TLS
+  verified against the system CAs (fail), and the clock against Control's
+  `Date` header (warn > 30 s, fail > 5 min). Every failure prints a fix;
+  the script stops after all checks, and `--skip-preflight` overrides it.
+- **Offline (O2).** `--offline <bundle>` installs from a tar.gz of flat
+  files: `agent.env`, the Agent zip of one architecture and its `.sig`,
+  `SHA256SUMS` and `SHA256SUMS.sig`, `install.sh` (and its `.sig`).
+  `anix-control agent offline-bundle -arch amd64|arm64 -o <file>` writes it
+  from `agent_install.artifact_dir`, after checking the signatures. The
+  script accepts no other entry and requires both signatures by the
+  embedded official key and the zip's digest in `SHA256SUMS`; the bundle's
+  `agent.env` is unsigned and never supplies a digest. Enrolling still
+  needs the gRPC target.
+- **Uninstall (O3).** `install.sh uninstall [--purge]` (the Agent's own
+  `uninstall` predates this layout): stops and removes `anix-agent.service`,
+  then `anixops-gost.service`, the polkit rule and the binaries, and keeps
+  the identity, configuration, state, users and the forwarding objects.
+  `--purge` also deletes `inet anixops_fwd` only when it carries the
+  ownership comment, root HTB qdiscs with the handle `af00:` (configured
+  `LimitInterfaces` and every interface), the state and configuration
+  directories, the sysctl drop-in and the users. It cannot reach Control:
+  the administrator revokes the node's credentials (`agentpki.RevokeNode`).
+- The script follows the steps below except OpenRC (refused). On a forward node
   (or a proxy node with `--forward`) it writes the sysctl drop-in
   `/etc/sysctl.d/90-anixops-forward.conf` (`net.ipv4.ip_forward = 1`,
   `net.ipv6.conf.all.forwarding = 1`, the file the Agent's nftables

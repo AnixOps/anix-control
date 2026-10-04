@@ -2100,8 +2100,27 @@ upgrades it in place and keeps its identity. Before the first command:
   cleans them through NodeX's API (step 3), and the installer leaves that
   gost alone.
 
+- The installer checks the node first (preflight) and changes nothing when
+  a check fails: systemd 240 or later; on forward nodes Linux 5.10 and
+  nftables 0.9.7 or later; free disk space; the clock within 5 minutes of
+  Control's; and Control's https address and gRPC target with verified TLS.
+  It warns about polkit older than 0.106 (Ubuntu 22.04: gost hops cannot
+  run there), firewalld, ufw or a Docker `FORWARD DROP` policy, and IPv6
+  SLAAC interfaces (`--accept-ra`). Fix a failure, or add `--skip-preflight`.
+- Nodes without internet access install from an offline bundle:
+  `anix-control agent offline-bundle -arch amd64 -o agent-offline-amd64.tar.gz`
+  (needs the Agent release with `SHA256SUMS` and the `.sig` files in
+  `agent_install.artifact_dir`), copied to the node and installed with
+  `--offline <file>`. Enrolling still needs the node to reach Control's gRPC
+  target.
+- `install.sh uninstall` removes the Agent and keeps its identity;
+  `uninstall --purge` also removes its state, users and the forwarding
+  objects the drivers created. Revoke the node's credentials (or delete
+  the node) in Control afterwards.
+
 The [onboarding guide](guide/agent-onboarding.md) has the details: mirrors,
-`--reset`, verifying the signed script and troubleshooting.
+`--reset`, preflight, offline bundles, uninstalling, verifying the signed
+script and troubleshooting.
 
 ### Forward Link Certificates: A Second CA Under The Same Key
 

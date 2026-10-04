@@ -2,6 +2,30 @@
 
 ## Unreleased
 
+### Added
+
+- **Agent installer preflight, offline bundles and uninstall** (onboarding
+  O2 and O3, `docs/guide/agent-onboarding.md`).
+  - Preflight: before changing anything, `install.sh` checks systemd (240+),
+    the kernel (5.10+) and nftables (0.9.7+) on forward nodes, `tc`,
+    conntrack, polkit (0.106+), firewalld, ufw and a Docker `FORWARD DROP`
+    policy, IPv6 SLAAC interfaces, an optional `--port-range`, free disk
+    space, Control's https address and gRPC target with verified TLS, and the
+    clock against Control's `Date` header (warns past 30 s, fails past
+    5 minutes). Each failure prints a fix; `--skip-preflight` installs
+    anyway. `--accept-ra` writes `accept_ra = 2` for SLAAC interfaces to
+    the sysctl drop-in.
+  - `--offline <bundle>` installs from a signed tar.gz without downloads.
+    `anix-control agent offline-bundle -arch amd64|arm64 -o <file>` writes it
+    from `agent_install.artifact_dir` (the Agent zip and `.sig`,
+    `SHA256SUMS` and `SHA256SUMS.sig`, `agent.env`, `install.sh`); the script
+    requires every signature.
+  - `install.sh uninstall [--purge]` removes the Agent and gost units, the
+    polkit rule and the binaries and keeps the identity; `--purge` also
+    removes the state, configuration, sysctl drop-in, users, and the
+    `inet anixops_fwd` table and `af00:` tc qdiscs only when they carry the
+    drivers' marks.
+
 ### Changed
 
 - CI builds the Agent from anix-agent `1b155dee` (was `c459383`), which

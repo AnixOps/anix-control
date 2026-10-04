@@ -3,6 +3,11 @@ package main
 import (
 	"bytes"
 	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"crypto/sha256"
+	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"os"
@@ -165,4 +170,68 @@ func TestAgentLinkCACommand(t *testing.T) {
 
 	require.Error(t, runAgentCommand(ctx, cfg, db, []string{"link-ca", "bogus"}, &output))
 	require.ErrorIs(t, runAgentCommand(ctx, &config.Config{}, db, []string{"link-ca", "list"}, &output), agentpki.ErrLinkDisabled)
+}
+
+func TestAgentOfflineBundleCommand(t *testing.T) {
+	public, private, err := ed25519.GenerateKey(rand.Reader)
+	require.NoError(t, err)
+	sign := func(data []byte) []byte {
+		return []byte(base64.StdEncoding.EncodeToString(ed25519.Sign(private, data)) + "\n")
+	}
+	artifacts := t.TempDir()
+	release := filepath.Join(artifacts, "v4.2.0")
+	require.NoError(t, os.MkdirAll(release, 0o750))
+	zip := []byte("fake agent zip")
+	digest := sha256.Sum256(zip)
+	sums := []byte(hex.EncodeToString(digest[:]) + "  anix-agent-linux-64.zip\n")
+	for name, data := range map[string][]byte{
+		"anix-agent-linux-64.zip": zip, "anix-agent-linux-64.zip.sig": sign(zip), "SHA256SUMS": sums, "SHA256SUMS.sig": sign(sums),
+	} {
+		require.NoError(t, os.WriteFile(filepath.Join(release, name), data, 0o600))
+	}
+	cfg := &config.Config{}
+	cfg.Plugins.OfficialPublicKey = base64.StdEncoding.EncodeToString(public)
+	cfg.AgentInstall.ArtifactDir = artifacts
+	cfg.AgentInstall.AgentVersion = "v4.2.0"
+	cfg.GRPC.Port = 50051
+	out := filepath.Join(t.TempDir(), "agent-offline-amd64.tar.gz")
+	ctx := context.Background()
+
+	var output bytes.Buffer
+	err = runAdminCommand(ctx, cfg, nil, []string{"agent", "offline-bundle", "-arch", "amd64", "-o", out}, &output)
+	require.ErrorContains(t, err, "agent_install.public_url", "no address nodes reach")
+
+	output.Reset()
+	require.NoError(t, runAdminCommand(ctx, cfg, nil, []string{"agent", "offline-bundle", "-arch", "amd64", "-o", out, "-control", "https://panel.example.com"}, &output))
+	var written struct {
+		File       string   `json:"file"`
+		Asset      string   `json:"asset"`
+		GRPCTarget string   `json:"grpc_target"`
+		Files      []string `json:"files"`
+		Install    string   `json:"install"`
+	}
+	require.NoError(t, json.Unmarshal(output.Bytes(), &written))
+	require.Equal(t, out, written.File)
+	require.Equal(t, "anix-agent-linux-64.zip", written.Asset)
+	require.Equal(t, "panel.example.com:50051", written.GRPCTarget)
+	require.Contains(t, written.Files, "SHA256SUMS.sig")
+	require.Contains(t, written.Install, "--offline agent-offline-amd64.tar.gz --control https://panel.example.com")
+	info, err := os.Stat(out)
+	require.NoError(t, err)
+	require.Equal(t, os.FileMode(0o644), info.Mode().Perm())
+	entries, err := os.ReadDir(filepath.Dir(out))
+	require.NoError(t, err)
+	require.Len(t, entries, 1, "no temporary file is left")
+
+	cfg.AgentInstall.PublicURL = "https://panel.example.com"
+	for _, arguments := range [][]string{
+		{"offline-bundle"}, {"offline-bundle", "-arch", "amd64"}, {"offline-bundle", "-o", out},
+		{"offline-bundle", "-arch", "riscv64", "-o", out}, {"offline-bundle", "-arch", "arm64", "-o", out},
+		{"offline-bundle", "-arch", "amd64", "-o", out, "extra"},
+	} {
+		require.Error(t, runAgentCommand(ctx, cfg, nil, arguments, &output), arguments)
+	}
+	entries, err = os.ReadDir(filepath.Dir(out))
+	require.NoError(t, err)
+	require.Len(t, entries, 1, "a failed bundle leaves no file behind")
 }
