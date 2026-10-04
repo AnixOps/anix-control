@@ -54,7 +54,7 @@
       "path": "/api/v2/admin/auth-keys",
       "package_id": "proxy-node",
       "route_id": "proxy.admin.auth_keys.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -62,7 +62,7 @@
       "path": "/api/v2/admin/auth-keys",
       "package_id": "proxy-node",
       "route_id": "proxy.admin.auth_keys.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -70,7 +70,7 @@
       "path": "/api/v2/admin/auth-keys/:id",
       "package_id": "proxy-node",
       "route_id": "proxy.admin.auth_keys.id.delete",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -634,7 +634,7 @@
       "path": "/api/v2/admin/loadbalancers/:id/check",
       "package_id": "proxy-node",
       "route_id": "proxy.loadbalancer.id.check.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -642,7 +642,7 @@
       "path": "/api/v2/admin/loadbalancers/:id/stats",
       "package_id": "proxy-node",
       "route_id": "proxy.loadbalancer.id.stats.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -666,7 +666,7 @@
       "path": "/api/v2/admin/nodes",
       "package_id": "proxy-node",
       "route_id": "proxy.admin.nodes.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -682,7 +682,7 @@
       "path": "/api/v2/admin/nodes/:id",
       "package_id": "proxy-node",
       "route_id": "proxy.admin.nodes.id.delete",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -690,7 +690,7 @@
       "path": "/api/v2/admin/nodes/:id",
       "package_id": "proxy-node",
       "route_id": "proxy.admin.nodes.id.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -771,7 +771,7 @@
       "path": "/api/v2/admin/nodes/:id/raw-config",
       "package_id": "proxy-node",
       "route_id": "proxy.admin.nodes.id.raw_config.get",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -779,7 +779,7 @@
       "path": "/api/v2/admin/nodes/:id/raw-config",
       "package_id": "proxy-node",
       "route_id": "proxy.admin.nodes.id.raw_config.put",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {
@@ -803,8 +803,9 @@
       "path": "/api/v2/admin/nodes/validate-config",
       "package_id": "proxy-node",
       "route_id": "proxy.admin.nodes.validate_config.post",
-      "mode": "bridged",
-      "legacy": "router"
+      "mode": "kernel-owned",
+      "legacy": "router",
+      "reason": "answers the size of the configuration with its secrets, which reach the package as handles that never resolve (node-ops-service.md 6.2)"
     },
     {
       "method": "GET",
@@ -1790,7 +1791,7 @@
       "path": "/api/v2/internal/auth-keys",
       "package_id": "proxy-node",
       "route_id": "proxy.internal.auth_keys.post",
-      "mode": "bridged",
+      "mode": "native-flagged",
       "legacy": "router"
     },
     {

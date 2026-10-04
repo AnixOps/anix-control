@@ -160,10 +160,18 @@ func (s *SecretDocuments) put(ctx context.Context, run *Run) Outcome {
 		if err != nil {
 			return err
 		}
+		if op.GetScope() == kernelnodeopsv1.SecretScope_SECRET_SCOPE_NODE_RAW_CONFIG {
+			return validateStoredRawConfig(outcome.Full)
+		}
 		return validateStoredProtocol(op, outcome.Full)
 	})
 	if !ok {
 		return failed
+	}
+	if op.GetScope() == kernelnodeopsv1.SecretScope_SECRET_SCOPE_NODE_RAW_CONFIG {
+		// The node's row changed: the kernel's node cache forgets it, as
+		// the legacy update does.
+		service.DropNodeCache(id)
 	}
 	for _, position := range nodesecrets.SecretPositions(outcome.Full) {
 		var value string
@@ -190,6 +198,25 @@ func validateStoredProtocol(op *kernelnodeopsv1.PutSecretDocument, settings stri
 	}
 	protocol.Settings = &settings
 	if err := service.ValidateNodeProtocol(&protocol); err != nil {
+		return fail(kernelnodeopsv1.ErrorCode_ERROR_CODE_VALIDATION_FAILED, err.Error(), false)
+	}
+	return nil
+}
+
+// validateStoredRawConfig validates a raw configuration with the secrets it
+// stores, as the raw configuration route validates it
+// (service.ValidateWireGuardRuntimeConfig): the validator sees the typed
+// secrets. A refusal fails the operation, and its transaction stores
+// nothing.
+func validateStoredRawConfig(document string) error {
+	if strings.TrimSpace(document) == "" {
+		return nil
+	}
+	var config map[string]any
+	if err := json.Unmarshal([]byte(document), &config); err != nil || config == nil {
+		return fail(kernelnodeopsv1.ErrorCode_ERROR_CODE_VALIDATION_FAILED, "原始配置必须是 JSON 对象", false)
+	}
+	if err := service.ValidateWireGuardRuntimeConfig(config); err != nil {
 		return fail(kernelnodeopsv1.ErrorCode_ERROR_CODE_VALIDATION_FAILED, err.Error(), false)
 	}
 	return nil

@@ -11,6 +11,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/kernelnodeops"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/gin-gonic/gin"
 	"gorm.io/gorm"
@@ -554,6 +555,9 @@ func (h *NodeHandler) UpdateNodeRawConfig(c *gin.Context) {
 				c.JSON(http.StatusNotFound, gin.H{"message": "节点不存在"})
 				return
 			}
+			// The stored secrets, from the split table where the legacy
+			// column holds placeholders (a finalized table).
+			nodesecrets.ResolveNodeRawConfig(database.Get(), node)
 			config, jsonBytes, err = decodeRawConfigObject(service.KeepNodeRawConfig(string(jsonBytes), node.RawConfig))
 			if err != nil {
 				c.JSON(http.StatusBadRequest, gin.H{"message": "原始配置必须是 JSON 对象"})

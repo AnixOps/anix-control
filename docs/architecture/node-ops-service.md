@@ -10,9 +10,10 @@ executes the forward family and the gost API connection test, runtime job
 payloads carry no token, and forward node tokens are pinned to their
 endpoints (sections 3.8, 3.11 and 6.1). M3-4 and M3-5 are cancelled
 (2026-10-04): v4.2's forwarding redesign deletes or rewrites their routes
-(section 7). M3-1 and M3-3 are implemented: protocol-runtime's 11 routes
-and subscription's two protocol pool routes run natively, the protocols
-and the pool once the split is finalized (sections 6.3 and 6.4). This is
+(section 7). M3-1 to M3-3 are implemented: protocol-runtime's 11 routes,
+11 of proxy-node's 14 and subscription's two protocol pool routes run
+natively, those on the split's tables and views once it is finalized
+(sections 6.2 to 6.4). This is
 phase 3 of the 2026-10 plan, done together with Agent line A2.
 
 > 中文摘要：剩余桥接路由里，有 83 条在等“内核代办节点操作”和“节点凭据外置”，
@@ -2143,6 +2144,60 @@ Proxy-node adopts `v2_node` once it is finalized.
 | `POST /admin/loadbalancers/:id/check` | `CheckEndpoints{forward nodes of the group, record_status}`: the kernel writes the status columns of forward's table (wait T) | native |
 | `POST /node/register`, `/node/heartbeat`, `/node/runtime-health` | none | **kernel-owned (decided D3)**: registration mints node credentials, and the others are authenticated by them. With A2 they become enrollment and stream reports, and 5.0 removes them |
 
+**As M3-2 built them.** 11 of the 14 routes are `native-flagged`
+(`packages/proxy-node/native`, `internal/tests/proxynodecompat`, through
+the whole path a deployment runs, on SQLite and PostgreSQL); three are not:
+
+| Route | Outcome | Why |
+|---|---|---|
+| `POST /admin/nodes` | **bridged** | The legacy creation also writes the node's default VMess protocol into `v2_node_protocol`, protocol-runtime's table, in its transaction (the row above leaves it out). No KernelNodeOps call creates a protocol; a kernel operation that does would unblock it |
+| `PUT /admin/nodes/:id` | **bridged** | Besides the row and the cache, the legacy update records a group change in the subscriber change log (`subscriber.RecordNodeGroupChangeTx`) and revokes a disabled node's agent certificates, in its transaction. No KernelNodeOps call records a node's group change; `SyncNode` would drop the cache but also store and push the desired configuration, which the legacy update does not |
+| `POST /admin/nodes/validate-config` | **kernel-owned** | Its answer's `size` is the length of the configuration with its secret values. The gateway seals this route's secrets into handles that never resolve, so neither the package nor `ValidateNodeConfig` can compute it |
+
+What the native routes do, and what the kernel gained:
+
+- **The node routes wait for the finalize.** The list and detail answer
+  natively once the lease adopts `v2_node` and grants
+  `kapi_node_protocol_public_v1`; the deletion and the raw configuration
+  once it adopts `v2_node`; the registration key list once it grants
+  `kapi_registration_key_v1`. Until then they answer from the legacy
+  handler, SQLite included; a host started before the finalize keeps them
+  legacy until Control restarts. Issuing and revoking registration keys and
+  the load balancer routes need no finalize.
+- **The raw configuration is validated with the typed secrets.** The
+  `secrets.put` executor now validates a raw configuration with the
+  secrets it stores (`service.ValidateWireGuardRuntimeConfig`, as the
+  legacy route does) and fails `VALIDATION_FAILED`, storing nothing, when
+  it refuses it; the route answers that as the legacy one (400, `WireGuard
+  配置无效`). It also drops the kernel's node cache, as the legacy update
+  does. Null clears the configuration: the kernel stores `{}` (which drops
+  its secrets), then the package writes null.
+- **The load balancer check is the forward node check (decided here).**
+  The legacy check saved, after each node's check, the row it had loaded
+  before it, with status 1 unless the check returned an error, and an
+  unreachable node is not an error: it marked unreachable nodes online and
+  overwrote the latency the check had recorded. The legacy route now runs
+  `ForwardNodeService.CheckEndpoints` with record, the function the
+  `diagnose.endpoints` executor runs with `record_status`, and the native
+  route submits `CheckEndpoints{every forward node, record_status}` (wait
+  T). Both look at every forward node, as the legacy statistics and check
+  always did, whatever the load balancer's group. A load balancer with
+  health checks off checks nothing.
+- **Registration keys.** `IssueRegistrationKey` with the expiry the route
+  computes; the key is answered as a handle the gateway expands at
+  `/data/key`. The internal route answers its own envelope. The list shows
+  the placeholder where `has_key` is set. A revocation of a key that does
+  not exist succeeds, as the legacy deletion does.
+- **Two legacy fixes on the way.** The legacy raw configuration update
+  (route and service) took the stored document from the legacy column,
+  which holds placeholders in a finalized table, so a WireGuard
+  configuration that kept its private key failed validation. Both now
+  resolve it from the split table first (`nodesecrets.ResolveNodeRawConfig`).
+- **One corner differs.** An invalid configuration for a node that does not
+  exist, without a placeholder: the legacy route validates it and answers
+  400; the native one gets `NOT_FOUND` from `PutSecretDocument` before any
+  validation and answers the legacy success for a missing node.
+
 ### 6.3 protocol-runtime (11): all native
 
 Protocol-runtime adopts `v2_node_protocol` once it is finalized.
@@ -2292,7 +2347,7 @@ handlers ship `native-flagged`, and operators choose the runtime mode.
 | NO-8 | Diagnosis: `CheckEndpoints`, `CollectNodeStats`, `DiagnoseForward`, `DiagnoseTunnel` (Control vantage; node vantage after A2-5) | NO-1 | control | M |
 | NO-9 | Split P3: `node-secrets finalize` and `unsplit`, conditional adoption, the new views, the static gate on moved columns. Done: section 4.3 | NO-3, NO-5, NO-7 | control | M |
 | M3-1 | protocol-runtime: 11 routes native, `protocolruntimecompat` with fake agents. Done: section 6.3 | NO-4, NO-5, NO-6, NO-9 | control | M |
-| M3-2 | proxy-node: 14 routes native | NO-4, NO-5, NO-6, NO-8, NO-9 | control | L |
+| M3-2 | proxy-node: 14 routes native. Done: 11 native, 2 bridged and 1 kernel-owned for want of a contract call (section 6.2) | NO-4, NO-5, NO-6, NO-8, NO-9 | control | L |
 | M3-3 | subscription: 2 routes native. Done: section 6.4 | NO-9 | control | S |
 | M3-4 | ~~forward: nodes, Ansible machines, clean agents, runtime jobs (20 routes)~~ **Cancelled** (2026-10-04, superseded by forward F5a/F5d) | NO-4, NO-5, NO-7, NO-8, NO-9 | control | L |
 | M3-5 | ~~forward: changes, tunnels, permissions, legacy rules (28 routes)~~ **Cancelled** (2026-10-04, superseded by forward F5d) | NO-7, NO-8 | control | L |

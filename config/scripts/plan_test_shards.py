@@ -51,7 +51,7 @@ WEIGHTS: dict[str, dict[str, float]] = {
         "internal/router": 3.0,
         "internal/tests/plancompat": 2.9,
         "internal/tests/machinetelemetrycompat": 2.8,
-        "internal/tests/proxynodecompat": 2.3,
+        "internal/tests/proxynodecompat": 4.5,
         # Not measured in CI yet: M3-1's protocol and agent routes (local).
         "internal/tests/protocolruntimecompat": 3.0,
         "internal/tests/nodesecretsplit": 2.1,
@@ -76,7 +76,9 @@ WEIGHTS: dict[str, dict[str, float]] = {
         "internal/tests/integration": 31.0,
         "internal/tests/nodeopsagent": 20.9,
         "internal/subscriber": 10.0,
-        "internal/tests/proxynodecompat": 10.2,
+        # M3-2 added the node, registration key and check routes on the
+        # kernel's path: a local run, doubled.
+        "internal/tests/proxynodecompat": 60.0,
         "internal/tests/machinetelemetrycompat": 10.0,
         "internal/tests/nodesecretsplit": 9.6,
         "internal/tests/platformcompat": 5.3,

@@ -242,8 +242,9 @@ reports are uploaded as the artifact `staging-rehearsal-batch-1`.
   are compared.
 - Routes on the node credential split's remainder answer natively only once
   the split is finalized (`docs/architecture/node-ops-service.md` sections
-  4.3 and 6): the node protocols of batch 2 (M3-1) and the protocol pool
-  of batch 4 (M3-3). The seed does not
+  4.3 and 6): the node protocols of batch 2 (M3-1), and in batch 4 the
+  proxy-node node routes and registration key list (M3-2) and the
+  protocol pool (M3-3). The seed does not
   finalize, so on a fresh stack their shadow runs are skipped (the host
   answers from the legacy handler) and the batch reports them not
   compared. To rehearse them, finalize the staging database after `up` and
