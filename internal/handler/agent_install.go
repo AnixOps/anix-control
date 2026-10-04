@@ -2,11 +2,8 @@ package handler
 
 import (
 	"errors"
-	"net"
 	"net/http"
-	"net/url"
 	"os"
-	"strconv"
 	"strings"
 	"time"
 
@@ -220,31 +217,9 @@ func (h *AgentInstallHandler) settings(c *gin.Context, cfg *config.Config) (agen
 	if controlURL == "" {
 		controlURL = requestorigin.Resolve(c.Request).BaseURL()
 	}
-	parsed, err := url.Parse(controlURL)
-	if controlURL == "" || err != nil || parsed.Host == "" {
-		return agentinstall.Settings{}, errors.New("set agent_install.public_url: Control cannot tell the address nodes reach it at")
-	}
-	if parsed.Scheme != "https" {
-		return agentinstall.Settings{}, errors.New("nodes must reach Control over https: set agent_install.public_url to its https:// address")
-	}
-	controlVersion := "v" + strings.TrimPrefix(strings.TrimSpace(ReleaseVersion), "v")
-	agentVersion := strings.TrimSpace(install.AgentVersion)
-	if agentVersion == "" {
-		agentVersion = controlVersion
-	}
-	if !agentinstall.ReleaseTagPattern.MatchString(agentVersion) {
-		return agentinstall.Settings{}, errors.New("this Control is not a release build: set agent_install.agent_version to the Agent release tag")
-	}
-	grpcTarget := strings.TrimSpace(install.GRPCTarget)
-	if grpcTarget == "" {
-		port := cfg.GRPC.Port
-		if port <= 0 {
-			port = 50051
-		}
-		grpcTarget = net.JoinHostPort(parsed.Hostname(), strconv.Itoa(port))
-	}
-	return agentinstall.Settings{
-		ControlURL: controlURL, GRPCTarget: grpcTarget, AgentVersion: agentVersion, ControlVersion: controlVersion,
+	return agentinstall.ResolveSettings(agentinstall.SettingsInput{
+		ControlURL: controlURL, GRPCTarget: install.GRPCTarget, GRPCPort: cfg.GRPC.Port,
+		AgentVersion: install.AgentVersion, ReleaseVersion: ReleaseVersion,
 		ArtifactDir: install.ArtifactDir, CNMirrorURL: install.CNMirrorURL,
-	}, nil
+	})
 }

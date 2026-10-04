@@ -9,13 +9,17 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"os"
+	"path/filepath"
 	"strings"
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
+	"github.com/AnixOps/anix-control/v4/internal/agentinstall"
 	"github.com/AnixOps/anix-control/v4/internal/agentpki"
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	grpcserver "github.com/AnixOps/anix-control/v4/internal/grpc"
+	"github.com/AnixOps/anix-control/v4/internal/handler"
 	"gorm.io/gorm"
 )
 
@@ -24,6 +28,7 @@ const agentCommandUsage = `usage:
   anix-control agent link-ca list
   anix-control agent link-ca bundle
   anix-control agent link-ca rotate
+  anix-control agent offline-bundle -arch <amd64|arm64> -o <file> [-control https://<control>]
 
 token create prints a one-time agent enrollment credential (anixagt_...)
 bound to the node, valid for at most 7 days. The agent presents it to
@@ -37,6 +42,13 @@ bundle the PEM trust bundle nodes verify their peers with, and rotate
 creates the next CA, which signs once it has been trusted for one link
 certificate lifetime (7 days).
 
+offline-bundle writes the offline install bundle of one architecture for
+"install.sh --offline <file>": a tar.gz with this Control's
+/install/agent.env, the Agent release zip with its .sig, SHA256SUMS and
+SHA256SUMS.sig (from agent_install.artifact_dir/<tag>/, verified with
+plugins.official_public_key), and the install script with its signature.
+-control is the address nodes reach (default agent_install.public_url).
+
 The config file comes from ANIX_CONTROL_CONFIG or config/config.yaml.`
 
 func agentUsageError() error {
@@ -46,6 +58,9 @@ func agentUsageError() error {
 // runAgentCommand administers the agent PKI from the command line. It prints
 // JSON so scripts can pick out the credential.
 func runAgentCommand(ctx context.Context, cfg *config.Config, db *gorm.DB, arguments []string, stdout io.Writer) error {
+	if len(arguments) > 0 && arguments[0] == "offline-bundle" {
+		return runOfflineBundleCommand(cfg, arguments[1:], stdout)
+	}
 	if len(arguments) == 2 && arguments[0] == "link-ca" {
 		return runLinkCACommand(ctx, cfg, db, arguments[1], stdout)
 	}
@@ -77,6 +92,68 @@ func runAgentCommand(ctx context.Context, cfg *config.Config, db *gorm.DB, argum
 	encoder := json.NewEncoder(stdout)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(map[string]any{"enrollment": row, "credential": credential})
+}
+
+// runOfflineBundleCommand runs "agent offline-bundle": it writes the bundle
+// to a temporary file next to -o and renames it into place, then prints
+// what it wrote as JSON.
+func runOfflineBundleCommand(cfg *config.Config, arguments []string, stdout io.Writer) error {
+	flags := flag.NewFlagSet("agent offline-bundle", flag.ContinueOnError)
+	flags.SetOutput(io.Discard)
+	arch := flags.String("arch", "", "the node's architecture: amd64 or arm64")
+	output := flags.String("o", "", "the bundle file to write (.tar.gz)")
+	controlURL := flags.String("control", "", "the Control address nodes reach (default agent_install.public_url)")
+	if err := flags.Parse(arguments); err != nil {
+		return fmt.Errorf("%w\n%s", err, agentCommandUsage)
+	}
+	if flags.NArg() != 0 || *arch == "" || *output == "" {
+		return agentUsageError()
+	}
+	install := cfg.AgentInstall
+	address := *controlURL
+	if address == "" {
+		address = install.PublicURL
+	}
+	settings, err := agentinstall.ResolveSettings(agentinstall.SettingsInput{
+		ControlURL: address, GRPCTarget: install.GRPCTarget, GRPCPort: cfg.GRPC.Port,
+		AgentVersion: install.AgentVersion, ReleaseVersion: handler.ReleaseVersion,
+		ArtifactDir: install.ArtifactDir, CNMirrorURL: install.CNMirrorURL,
+	})
+	if err != nil {
+		return fmt.Errorf("%w (or pass -control https://<control>)", err)
+	}
+	// The script's signature is optional: the bundle's own checks do not
+	// depend on it; operators use it to verify install.sh.
+	scriptSignature, _ := agentinstall.LoadSignature(install.SignatureFile, cfg.Plugins.OfficialPublicKey)
+	target := filepath.Clean(*output)
+	tmp, err := os.CreateTemp(filepath.Dir(target), "."+filepath.Base(target)+".*")
+	if err != nil {
+		return err
+	}
+	defer func() { _ = os.Remove(tmp.Name()) }()
+	bundle, err := agentinstall.WriteOfflineBundle(tmp, settings, *arch, cfg.Plugins.OfficialPublicKey, scriptSignature)
+	if err == nil {
+		err = tmp.Chmod(0o644)
+	}
+	if closeErr := tmp.Close(); err == nil {
+		err = closeErr
+	}
+	if err != nil {
+		return err
+	}
+	if err := os.Rename(tmp.Name(), target); err != nil {
+		return err
+	}
+	encoder := json.NewEncoder(stdout)
+	encoder.SetIndent("", "  ")
+	return encoder.Encode(struct {
+		File string `json:"file"`
+		agentinstall.OfflineBundle
+		Install string `json:"install"`
+	}{
+		File: target, OfflineBundle: bundle,
+		Install: "sudo bash install.sh --offline " + filepath.Base(target) + " --control " + settings.ControlURL + " --node <proxy-<id>|forward-<id>> --token <anixagt_...>",
+	})
 }
 
 // runLinkCACommand runs "agent link-ca <command>".
