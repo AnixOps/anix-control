@@ -187,7 +187,8 @@ func (h *AgentInstallHandler) Metadata(c *gin.Context) {
 		kernelError(c, http.StatusServiceUnavailable, "agent_install_unconfigured", err.Error())
 		return
 	}
-	c.Header("Cache-Control", "no-cache")
+	// The answer depends on the request's origin when public_url is unset.
+	c.Header("Cache-Control", "no-store")
 	c.Data(http.StatusOK, "text/plain; charset=utf-8", []byte(env))
 }
 
