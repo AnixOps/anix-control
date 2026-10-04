@@ -209,6 +209,7 @@ export default {
       forwardV4RouteEdit: '编辑路由',
       forwardV4Nodes: '转发节点清单',
       forwardV4Node: '节点详情',
+      forwardV4Dns: 'DNS 服务商',
       agentTransports: 'Agent 连接方式',
       control: '控制内核',
       plugins: '插件中心',

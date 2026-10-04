@@ -11,10 +11,12 @@ import adminNodes from './modules/en/adminNodes'
 import forwardNodesPage from './modules/en/forwardNodesPage'
 import adminSubscriptionGroups from './modules/en/adminSubscriptionGroups'
 import forwardV4 from './modules/en/forwardV4'
+import forwardDns from './modules/en/forwardDns'
 
 export default {
   ...adminSubscriptionGroups,
   ...forwardV4,
+  ...forwardDns,
   ...runtimePages,
   ...networkPages,
   ...miscPages,

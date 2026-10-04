@@ -397,6 +397,12 @@ Where F5b differs from the screens above, and why.
   false; a `403` from an older package still shows inline.
 - **D13.** `POST /routes/preview` is logged at debug level and never
   written to the audit table.
+- **D14.** With the L2 DNS API, the entry hostname has the binding picker
+  (provider, zone, DDNS or CNAME, A/AAAA, TTL, paused), the area has a
+  fourth section, DNS (providers), and the route page an 入口高可用 card
+  polled every 30 s. Provider writes and unbinding follow D7's
+  super-administrator signal; a `403` is shown inline. The kind is a radio
+  group (five kinds, each with what its credential needs).
 - **Left out.** The node list's header 安装 Agent (the install sheet needs a
   node; it is on each row and node page), 重置节点状态 (no API; the CLI has
   `forward reset-node`), and the Agent upgrade hint (O4's campaigns own

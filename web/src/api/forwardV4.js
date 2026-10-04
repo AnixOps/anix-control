@@ -312,3 +312,93 @@ export function trafficStats({ since, until, routeId = '', nodeRef = '', signal 
 export function observabilityTargets({ nodeRef = '', signal } = {}) {
   return call({ url: '/observability/targets', params: nodeRef ? { node_ref: nodeRef } : undefined, signal })
 }
+
+// ---------------------------------------------------------------------------
+// Entry HA through DNS (L2): provider kinds, providers, bindings, status
+// ---------------------------------------------------------------------------
+
+// providerBody is a DnsProvider as POST and PUT /dns/providers take it:
+// name, kind and the non-secret config. The credentials travel beside it.
+export function providerBody(provider) {
+  return pick(provider, { name: 'str', kind: 'enum', config: 'map' }) || {}
+}
+
+// credentialsBody keeps the credentials that carry a value. On an update a
+// credential left out, or sent as "********", keeps its stored value.
+export function credentialsBody(credentials) {
+  const out = {}
+  for (const [name, value] of Object.entries(credentials || {})) {
+    const text = String(value ?? '')
+    if (name && text) out[name] = text
+  }
+  return out
+}
+
+// bindingBody is a DnsBinding. PUT replaces record_types, ttl and paused
+// and refuses a change to the others (immutable), so an update sends the
+// binding as GET answered it with those three changed.
+export function bindingBody(binding) {
+  return pick(binding, {
+    id: 'int64',
+    route_id: 'str',
+    provider_id: 'int64',
+    zone: 'str',
+    record_name: 'str',
+    mode: 'enum',
+    record_types: 'strs',
+    ttl: 'num',
+    paused: 'bool'
+  }) || {}
+}
+
+export async function listDnsKinds({ signal } = {}) {
+  const answer = await call({ url: '/dns/kinds', signal })
+  return answer?.kinds || []
+}
+
+export async function listDnsProviders({ signal } = {}) {
+  const answer = await call({ url: '/dns/providers', signal })
+  return answer?.providers || []
+}
+
+export function createDnsProvider(provider, credentials, { idempotencyKey } = {}) {
+  return call({ method: 'post', url: '/dns/providers', data: { provider: providerBody(provider), credentials: credentialsBody(credentials) }, idempotencyKey, timeout: WRITE_TIMEOUT_MS })
+}
+
+export function updateDnsProvider(id, provider, credentials, { idempotencyKey } = {}) {
+  return call({ method: 'put', url: `/dns/providers/${encodeURIComponent(id)}`, data: { provider: providerBody(provider), credentials: credentialsBody(credentials) }, idempotencyKey, timeout: WRITE_TIMEOUT_MS })
+}
+
+export function deleteDnsProvider(id, { idempotencyKey } = {}) {
+  return call({ method: 'delete', url: `/dns/providers/${encodeURIComponent(id)}`, idempotencyKey, timeout: WRITE_TIMEOUT_MS })
+}
+
+export async function listDnsBindings({ routeId = '', providerId = '', signal } = {}) {
+  const params = {}
+  if (routeId) params.route_id = routeId
+  if (providerId) params.provider_id = String(providerId)
+  const answer = await call({ url: '/dns/bindings', params, signal })
+  return answer?.bindings || []
+}
+
+export function createDnsBinding(binding, { idempotencyKey } = {}) {
+  const body = bindingBody(binding)
+  delete body.id
+  return call({ method: 'post', url: '/dns/bindings', data: body, idempotencyKey, timeout: WRITE_TIMEOUT_MS })
+}
+
+export function updateDnsBinding(id, binding, { idempotencyKey } = {}) {
+  return call({ method: 'put', url: `/dns/bindings/${encodeURIComponent(id)}`, data: bindingBody({ ...binding, id }), idempotencyKey, timeout: WRITE_TIMEOUT_MS })
+}
+
+// deleteDnsBinding with purge deletes the published records first; when the
+// provider refuses, 502 dns_purge_failed and the binding stays.
+export function deleteDnsBinding(id, { purge = false, idempotencyKey } = {}) {
+  return call({ method: 'delete', url: `/dns/bindings/${encodeURIComponent(id)}`, params: purge ? { purge: 'true' } : undefined, idempotencyKey, timeout: WRITE_TIMEOUT_MS })
+}
+
+// routeDns is the route's entry HA status (RouteDnsStatus).
+export async function routeDns(id, { signal } = {}) {
+  const answer = await call({ url: `/routes/${encodeURIComponent(id)}/dns`, signal })
+  return answer?.status || null
+}

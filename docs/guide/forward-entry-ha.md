@@ -7,7 +7,8 @@ entry nodes that are healthy right now, through your DNS provider (L2,
 7.4). This guide covers:
 
 - the credentials to create at each provider, with the least permissions;
-- how to bind a route;
+- the web pages (转发 → DNS, the route editor and the route page);
+- how to bind a route through the API or the command line;
 - how to read the status.
 
 The API is in [`../forwarding/v4-api.md`](../forwarding/v4-api.md), "Entry
@@ -179,6 +180,39 @@ X-AnixOps-Signature: sha256=<hex HMAC-SHA256(secret, "1759579200" + "." + body)>
 - Generate the secret with `openssl rand -hex 32`. Create the provider with
   `kind` `DNS_PROVIDER_KIND_WEBHOOK`, `config.url`, and the credential
   `secret`.
+
+## In The Web App
+
+1. **Add the provider.** 转发 → **DNS** → **添加服务商** (super
+   administrator). Pick the kind; the form shows that kind's settings and
+   credentials (`GET /api/v4/forward/dns/kinds`). Credentials are
+   write-only: after saving, the list shows only their names, and editing a
+   provider shows a stored one as `********`. Leave it to keep the stored
+   value, or type a new one to replace it. A provider's kind cannot change.
+2. **Bind the route.** Open the route's editor. With two or more entry
+   nodes, 入口域名 has a binding section under it: turn on
+   **让此主机名始终指向健康的入口**, then choose:
+   - the provider and the zone (guessed from the hostname);
+   - the mode: DDNS writes the entry hostname itself; CNAME asks for a
+     managed name inside the zone and shows the CNAME to create, with a
+     copy button;
+   - the record types (A, AAAA), the TTL and 暂停.
+
+   Saving writes the route, then the binding (`POST /dns/bindings`, or
+   the whole binding on `PUT /dns/bindings/{id}` for a change). If the
+   route saved but the binding did not, a message says why and the route
+   page shows it as not bound. Once bound, the provider, zone, name and
+   mode are shown read-only.
+3. **Watch it.** The route page's **入口高可用** card reads
+   `GET /routes/{id}/dns` every 30 seconds: the state, the published and
+   desired values of each record type, every entry node with its reason
+   and whether it is in rotation, the last error and the next attempt. In
+   CNAME mode it repeats the CNAME target.
+4. **Move or remove it.** **解除绑定…** on the card (super administrator)
+   deletes the binding; **同时删除 Control 发布的记录** (on by default)
+   deletes the published records first. If the provider refuses
+   (`dns_purge_failed`) the binding stays: retry, or unbind without
+   deleting the records. Then bind again.
 
 ## Binding A Route
 

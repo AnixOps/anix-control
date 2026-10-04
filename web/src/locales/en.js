@@ -207,6 +207,7 @@ export default {
       forwardV4RouteEdit: 'Edit route',
       forwardV4Nodes: 'Forwarding nodes',
       forwardV4Node: 'Forwarding node',
+      forwardV4Dns: 'DNS providers',
       agentTransports: 'Agent transports',
       control: 'Control Kernel',
       plugins: 'Plugin Center',
