@@ -183,6 +183,6 @@ func KernelForwardModels() []any {
 	return []any{
 		&KernelForwardRoute{}, &KernelForwardAllocation{}, &KernelForwardNode{}, &KernelForwardNodeState{},
 		&KernelForwardNodeReport{}, &KernelForwardCounter{}, &KernelForwardTraffic{}, &KernelForwardRequest{},
-		&KernelForwardPlan{},
+		&KernelForwardPlan{}, &KernelForwardDNSProvider{}, &KernelForwardDNSBinding{}, &KernelForwardDNSNode{},
 	}
 }

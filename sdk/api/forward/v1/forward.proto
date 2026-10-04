@@ -162,7 +162,9 @@ service ForwardControl {
   // CreateDnsBinding binds a route to a provider's zone. One binding per
   // route, and per provider, zone and record name.
   rpc CreateDnsBinding(CreateDnsBindingRequest) returns (CreateDnsBindingResponse);
-  // UpdateDnsBinding replaces a binding's fields; the route stays.
+  // UpdateDnsBinding replaces a binding's record_types, ttl and paused;
+  // the route, provider, zone, record_name and mode stay (delete with
+  // purge and create to move a binding).
   rpc UpdateDnsBinding(UpdateDnsBindingRequest) returns (UpdateDnsBindingResponse);
   // DeleteDnsBinding removes a binding. With purge, Control first deletes
   // the records it published (UNAVAILABLE when the provider refuses, and
@@ -1186,9 +1188,9 @@ message DnsBinding {
   repeated DnsRecordType record_types = 7;
   // ttl in seconds; 60 when 0.
   uint32 ttl = 8;
-  // enabled false keeps the binding and the published records but makes
-  // no change.
-  bool enabled = 9;
+  // paused keeps the binding and the published records but makes no
+  // change.
+  bool paused = 9;
   int64 created_at_unix_ms = 10;
   int64 updated_at_unix_ms = 11;
 }
@@ -1216,7 +1218,8 @@ message CreateDnsBindingResponse {
 
 message UpdateDnsBindingRequest {
   string request_id = 1;
-  // binding.id names the binding; its route_id cannot change.
+  // binding.id names the binding; only record_types, ttl and paused
+  // change.
   DnsBinding binding = 2;
 }
 
@@ -1277,9 +1280,10 @@ message RouteDnsStatus {
   // cname_target is, in CNAME mode, the name the operator points
   // entry_hostname at (record_name).
   string cname_target = 4;
-  // state: unbound, disabled, pending (nothing published yet), ok,
+  // state: unbound, paused (the binding or the route is paused or
+  // enforced: nothing changes), pending (nothing published yet), ok,
   // degraded (no entry is healthy: the last published records are kept),
-  // paused (the route is paused or enforced: nothing changes), error (the
+  // error (the
   // provider refused or failed; see last_error), rate_limited,
   // route_missing, hostname_mismatch (DDNS mode and record_name is not
   // the route's entry_hostname).

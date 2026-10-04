@@ -18,6 +18,18 @@ enum anixops.forward.v1.DirectMode.DIRECT_MODE_FORCED = 3
 enum anixops.forward.v1.DirectMode.DIRECT_MODE_OFF = 1
 enum anixops.forward.v1.DirectMode.DIRECT_MODE_PREFERRED = 2
 enum anixops.forward.v1.DirectMode.DIRECT_MODE_UNSPECIFIED = 0
+enum anixops.forward.v1.DnsBindingMode.DNS_BINDING_MODE_CNAME = 2
+enum anixops.forward.v1.DnsBindingMode.DNS_BINDING_MODE_DDNS = 1
+enum anixops.forward.v1.DnsBindingMode.DNS_BINDING_MODE_UNSPECIFIED = 0
+enum anixops.forward.v1.DnsProviderKind.DNS_PROVIDER_KIND_ALIDNS = 2
+enum anixops.forward.v1.DnsProviderKind.DNS_PROVIDER_KIND_CLOUDFLARE = 1
+enum anixops.forward.v1.DnsProviderKind.DNS_PROVIDER_KIND_DNSPOD = 3
+enum anixops.forward.v1.DnsProviderKind.DNS_PROVIDER_KIND_HUAWEICLOUD = 4
+enum anixops.forward.v1.DnsProviderKind.DNS_PROVIDER_KIND_UNSPECIFIED = 0
+enum anixops.forward.v1.DnsProviderKind.DNS_PROVIDER_KIND_WEBHOOK = 5
+enum anixops.forward.v1.DnsRecordType.DNS_RECORD_TYPE_A = 1
+enum anixops.forward.v1.DnsRecordType.DNS_RECORD_TYPE_AAAA = 2
+enum anixops.forward.v1.DnsRecordType.DNS_RECORD_TYPE_UNSPECIFIED = 0
 enum anixops.forward.v1.Engine.ENGINE_ANIXOPS = 3
 enum anixops.forward.v1.Engine.ENGINE_GOST = 2
 enum anixops.forward.v1.Engine.ENGINE_NFTABLES = 1
@@ -445,6 +457,17 @@ field anixops.forward.v1.Counters.route_id = 1 optional string
 field anixops.forward.v1.Counters.total_conns = 9 optional uint64
 field anixops.forward.v1.Counters.up_bytes = 4 optional uint64
 field anixops.forward.v1.Counters.up_packets = 6 optional uint64
+field anixops.forward.v1.CreateDnsBindingRequest.binding = 2 optional anixops.forward.v1.DnsBinding
+field anixops.forward.v1.CreateDnsBindingRequest.request_id = 1 optional string
+field anixops.forward.v1.CreateDnsBindingResponse.binding = 1 optional anixops.forward.v1.DnsBinding
+field anixops.forward.v1.CreateDnsBindingResponse.violations = 2 repeated anixops.forward.v1.Violation
+field anixops.forward.v1.CreateDnsProviderRequest.CredentialsEntry.key = 1 optional string
+field anixops.forward.v1.CreateDnsProviderRequest.CredentialsEntry.value = 2 optional string
+field anixops.forward.v1.CreateDnsProviderRequest.credentials = 3 repeated map<string,string>
+field anixops.forward.v1.CreateDnsProviderRequest.provider = 2 optional anixops.forward.v1.DnsProvider
+field anixops.forward.v1.CreateDnsProviderRequest.request_id = 1 optional string
+field anixops.forward.v1.CreateDnsProviderResponse.provider = 1 optional anixops.forward.v1.DnsProvider
+field anixops.forward.v1.CreateDnsProviderResponse.violations = 2 repeated anixops.forward.v1.Violation
 field anixops.forward.v1.CreateForwardNodeRequest.node = 2 optional anixops.forward.v1.ForwardNodeRecord
 field anixops.forward.v1.CreateForwardNodeRequest.request_id = 1 optional string
 field anixops.forward.v1.CreateForwardNodeRequest.settings = 3 optional anixops.forward.v1.NodeSettings
@@ -453,6 +476,13 @@ field anixops.forward.v1.CreateRouteRequest.request_id = 1 optional string
 field anixops.forward.v1.CreateRouteRequest.route = 2 optional anixops.forward.v1.Route
 field anixops.forward.v1.CreateRouteResponse.route = 1 optional anixops.forward.v1.Route
 field anixops.forward.v1.CreateRouteResponse.violations = 2 repeated anixops.forward.v1.Violation
+field anixops.forward.v1.DeleteDnsBindingRequest.id = 2 optional uint64
+field anixops.forward.v1.DeleteDnsBindingRequest.purge = 3 optional bool
+field anixops.forward.v1.DeleteDnsBindingRequest.request_id = 1 optional string
+field anixops.forward.v1.DeleteDnsBindingResponse.violations = 1 repeated anixops.forward.v1.Violation
+field anixops.forward.v1.DeleteDnsProviderRequest.id = 2 optional uint64
+field anixops.forward.v1.DeleteDnsProviderRequest.request_id = 1 optional string
+field anixops.forward.v1.DeleteDnsProviderResponse.violations = 1 repeated anixops.forward.v1.Violation
 field anixops.forward.v1.DeleteForwardNodeRequest.id = 2 optional uint64
 field anixops.forward.v1.DeleteForwardNodeRequest.request_id = 1 optional string
 field anixops.forward.v1.DeleteForwardNodeResponse.violations = 1 repeated anixops.forward.v1.Violation
@@ -478,6 +508,37 @@ field anixops.forward.v1.DiagnoseStep.protocol = 7 optional anixops.forward.v1.L
 field anixops.forward.v1.DiagnoseStep.result = 4 optional anixops.forward.v1.ProbeResult
 field anixops.forward.v1.DiagnoseStep.target = 6 optional string
 field anixops.forward.v1.DiagnoseStep.vantage = 5 optional anixops.forward.v1.DiagnoseVantage
+field anixops.forward.v1.DnsBinding.created_at_unix_ms = 10 optional int64
+field anixops.forward.v1.DnsBinding.id = 1 optional uint64
+field anixops.forward.v1.DnsBinding.mode = 6 optional anixops.forward.v1.DnsBindingMode
+field anixops.forward.v1.DnsBinding.paused = 9 optional bool
+field anixops.forward.v1.DnsBinding.provider_id = 3 optional uint64
+field anixops.forward.v1.DnsBinding.record_name = 5 optional string
+field anixops.forward.v1.DnsBinding.record_types = 7 repeated anixops.forward.v1.DnsRecordType
+field anixops.forward.v1.DnsBinding.route_id = 2 optional string
+field anixops.forward.v1.DnsBinding.ttl = 8 optional uint32
+field anixops.forward.v1.DnsBinding.updated_at_unix_ms = 11 optional int64
+field anixops.forward.v1.DnsBinding.zone = 4 optional string
+field anixops.forward.v1.DnsEntryNode.addresses = 2 repeated string
+field anixops.forward.v1.DnsEntryNode.bad_streak = 6 optional uint32
+field anixops.forward.v1.DnsEntryNode.good_streak = 5 optional uint32
+field anixops.forward.v1.DnsEntryNode.healthy = 3 optional bool
+field anixops.forward.v1.DnsEntryNode.in_rotation = 4 optional bool
+field anixops.forward.v1.DnsEntryNode.node_ref = 1 optional string
+field anixops.forward.v1.DnsEntryNode.reason = 7 optional string
+field anixops.forward.v1.DnsProvider.ConfigEntry.key = 1 optional string
+field anixops.forward.v1.DnsProvider.ConfigEntry.value = 2 optional string
+field anixops.forward.v1.DnsProvider.bindings = 6 optional uint32
+field anixops.forward.v1.DnsProvider.config = 4 repeated map<string,string>
+field anixops.forward.v1.DnsProvider.created_at_unix_ms = 7 optional int64
+field anixops.forward.v1.DnsProvider.credential_names = 5 repeated string
+field anixops.forward.v1.DnsProvider.id = 1 optional uint64
+field anixops.forward.v1.DnsProvider.kind = 3 optional anixops.forward.v1.DnsProviderKind
+field anixops.forward.v1.DnsProvider.name = 2 optional string
+field anixops.forward.v1.DnsProvider.updated_at_unix_ms = 8 optional int64
+field anixops.forward.v1.DnsRecordStatus.desired = 3 repeated string
+field anixops.forward.v1.DnsRecordStatus.published = 2 repeated string
+field anixops.forward.v1.DnsRecordStatus.type = 1 optional anixops.forward.v1.DnsRecordType
 field anixops.forward.v1.EngineCapabilities.available = 3 optional bool
 field anixops.forward.v1.EngineCapabilities.bandwidth_limit = 9 optional bool
 field anixops.forward.v1.EngineCapabilities.engine = 1 optional anixops.forward.v1.Engine
@@ -505,10 +566,14 @@ field anixops.forward.v1.ForwardNodeRecord.role = 4 optional string
 field anixops.forward.v1.ForwardNodeRecord.transport = 5 optional anixops.forward.v1.NodeTransport
 field anixops.forward.v1.ForwardNodeRecord.updated_at_unix_ms = 16 optional int64
 field anixops.forward.v1.ForwardNodeRecord.weight = 12 optional uint32
+field anixops.forward.v1.GetDnsProviderRequest.id = 1 optional uint64
+field anixops.forward.v1.GetDnsProviderResponse.provider = 1 optional anixops.forward.v1.DnsProvider
 field anixops.forward.v1.GetNodeRequest.node_ref = 1 optional string
 field anixops.forward.v1.GetNodeResponse.node = 1 optional anixops.forward.v1.NodeSummary
 field anixops.forward.v1.GetNodeResponse.report = 3 optional anixops.forward.v1.NodeForwardReport
 field anixops.forward.v1.GetNodeResponse.state = 2 optional anixops.forward.v1.NodeForwardState
+field anixops.forward.v1.GetRouteDnsRequest.route_id = 1 optional string
+field anixops.forward.v1.GetRouteDnsResponse.status = 1 optional anixops.forward.v1.RouteDnsStatus
 field anixops.forward.v1.GetRouteHealthRequest.route_id = 1 optional string
 field anixops.forward.v1.GetRouteHealthResponse.health = 1 repeated anixops.forward.v1.UpstreamHealth
 field anixops.forward.v1.GetRouteRequest.route_id = 1 optional string
@@ -543,6 +608,10 @@ field anixops.forward.v1.LinkTransport.mux = 2 optional bool
 field anixops.forward.v1.LinkTransport.path = 4 optional string
 field anixops.forward.v1.LinkTransport.security = 1 optional anixops.forward.v1.LinkSecurity
 field anixops.forward.v1.LinkTransport.server_name = 3 optional string
+field anixops.forward.v1.ListDnsBindingsRequest.provider_id = 2 optional uint64
+field anixops.forward.v1.ListDnsBindingsRequest.route_id = 1 optional string
+field anixops.forward.v1.ListDnsBindingsResponse.bindings = 1 repeated anixops.forward.v1.DnsBinding
+field anixops.forward.v1.ListDnsProvidersResponse.providers = 1 repeated anixops.forward.v1.DnsProvider
 field anixops.forward.v1.ListNodesRequest.kind = 1 optional string
 field anixops.forward.v1.ListNodesRequest.transport = 2 optional anixops.forward.v1.NodeTransport
 field anixops.forward.v1.ListNodesResponse.nodes = 1 repeated anixops.forward.v1.NodeSummary
@@ -673,6 +742,18 @@ field anixops.forward.v1.Route.policy = 7 optional anixops.forward.v1.Policy
 field anixops.forward.v1.Route.revision = 11 optional uint64
 field anixops.forward.v1.Route.targets = 6 repeated anixops.forward.v1.Target
 field anixops.forward.v1.Route.updated_at_unix_ms = 13 optional int64
+field anixops.forward.v1.RouteDnsStatus.binding = 3 optional anixops.forward.v1.DnsBinding
+field anixops.forward.v1.RouteDnsStatus.cname_target = 4 optional string
+field anixops.forward.v1.RouteDnsStatus.entry_hostname = 2 optional string
+field anixops.forward.v1.RouteDnsStatus.evaluated_at_unix_ms = 9 optional int64
+field anixops.forward.v1.RouteDnsStatus.last_error = 10 optional string
+field anixops.forward.v1.RouteDnsStatus.last_error_at_unix_ms = 11 optional int64
+field anixops.forward.v1.RouteDnsStatus.next_attempt_at_unix_ms = 12 optional int64
+field anixops.forward.v1.RouteDnsStatus.nodes = 7 repeated anixops.forward.v1.DnsEntryNode
+field anixops.forward.v1.RouteDnsStatus.published_at_unix_ms = 8 optional int64
+field anixops.forward.v1.RouteDnsStatus.records = 6 repeated anixops.forward.v1.DnsRecordStatus
+field anixops.forward.v1.RouteDnsStatus.route_id = 1 optional string
+field anixops.forward.v1.RouteDnsStatus.state = 5 optional string
 field anixops.forward.v1.SetNodeSettingsRequest.node_ref = 1 optional string
 field anixops.forward.v1.SetNodeSettingsRequest.settings = 2 optional anixops.forward.v1.NodeSettings
 field anixops.forward.v1.SetNodeSettingsResponse.node = 1 optional anixops.forward.v1.NodeSummary
@@ -690,6 +771,17 @@ field anixops.forward.v1.TrafficBucket.node_ref = 3 optional string
 field anixops.forward.v1.TrafficBucket.route_id = 1 optional string
 field anixops.forward.v1.TrafficBucket.up_bytes = 5 optional uint64
 field anixops.forward.v1.TrafficBucket.up_packets = 7 optional uint64
+field anixops.forward.v1.UpdateDnsBindingRequest.binding = 2 optional anixops.forward.v1.DnsBinding
+field anixops.forward.v1.UpdateDnsBindingRequest.request_id = 1 optional string
+field anixops.forward.v1.UpdateDnsBindingResponse.binding = 1 optional anixops.forward.v1.DnsBinding
+field anixops.forward.v1.UpdateDnsBindingResponse.violations = 2 repeated anixops.forward.v1.Violation
+field anixops.forward.v1.UpdateDnsProviderRequest.CredentialsEntry.key = 1 optional string
+field anixops.forward.v1.UpdateDnsProviderRequest.CredentialsEntry.value = 2 optional string
+field anixops.forward.v1.UpdateDnsProviderRequest.credentials = 3 repeated map<string,string>
+field anixops.forward.v1.UpdateDnsProviderRequest.provider = 2 optional anixops.forward.v1.DnsProvider
+field anixops.forward.v1.UpdateDnsProviderRequest.request_id = 1 optional string
+field anixops.forward.v1.UpdateDnsProviderResponse.provider = 1 optional anixops.forward.v1.DnsProvider
+field anixops.forward.v1.UpdateDnsProviderResponse.violations = 2 repeated anixops.forward.v1.Violation
 field anixops.forward.v1.UpdateForwardNodeRequest.node = 2 optional anixops.forward.v1.ForwardNodeRecord
 field anixops.forward.v1.UpdateForwardNodeRequest.request_id = 1 optional string
 field anixops.forward.v1.UpdateForwardNodeResponse.node = 1 optional anixops.forward.v1.NodeSummary
@@ -1438,20 +1530,30 @@ rpc anix.pluginhost.v1.ControlPackageHost.Health(anix.pluginhost.v1.HealthReques
 rpc anix.pluginhost.v1.ControlPackageHost.Migrate(anix.pluginhost.v1.MigrationRequest) returns (anix.pluginhost.v1.MigrationResponse)
 rpc anix.pluginhost.v1.ControlPackageHost.OpenWebSocket(stream anix.pluginhost.v1.WebSocketFrame) returns (stream anix.pluginhost.v1.WebSocketFrame)
 rpc anix.pluginhost.v1.ControlPackageHost.Resume(anix.pluginhost.v1.ResumeRequest) returns (anix.pluginhost.v1.ResumeResponse)
+rpc anixops.forward.v1.ForwardControl.CreateDnsBinding(anixops.forward.v1.CreateDnsBindingRequest) returns (anixops.forward.v1.CreateDnsBindingResponse)
+rpc anixops.forward.v1.ForwardControl.CreateDnsProvider(anixops.forward.v1.CreateDnsProviderRequest) returns (anixops.forward.v1.CreateDnsProviderResponse)
 rpc anixops.forward.v1.ForwardControl.CreateForwardNode(anixops.forward.v1.CreateForwardNodeRequest) returns (anixops.forward.v1.CreateForwardNodeResponse)
 rpc anixops.forward.v1.ForwardControl.CreateRoute(anixops.forward.v1.CreateRouteRequest) returns (anixops.forward.v1.CreateRouteResponse)
+rpc anixops.forward.v1.ForwardControl.DeleteDnsBinding(anixops.forward.v1.DeleteDnsBindingRequest) returns (anixops.forward.v1.DeleteDnsBindingResponse)
+rpc anixops.forward.v1.ForwardControl.DeleteDnsProvider(anixops.forward.v1.DeleteDnsProviderRequest) returns (anixops.forward.v1.DeleteDnsProviderResponse)
 rpc anixops.forward.v1.ForwardControl.DeleteForwardNode(anixops.forward.v1.DeleteForwardNodeRequest) returns (anixops.forward.v1.DeleteForwardNodeResponse)
 rpc anixops.forward.v1.ForwardControl.DeleteRoute(anixops.forward.v1.DeleteRouteRequest) returns (anixops.forward.v1.DeleteRouteResponse)
 rpc anixops.forward.v1.ForwardControl.DiagnoseRoute(anixops.forward.v1.DiagnoseRouteRequest) returns (anixops.forward.v1.DiagnoseRouteResponse)
+rpc anixops.forward.v1.ForwardControl.GetDnsProvider(anixops.forward.v1.GetDnsProviderRequest) returns (anixops.forward.v1.GetDnsProviderResponse)
 rpc anixops.forward.v1.ForwardControl.GetNode(anixops.forward.v1.GetNodeRequest) returns (anixops.forward.v1.GetNodeResponse)
 rpc anixops.forward.v1.ForwardControl.GetRoute(anixops.forward.v1.GetRouteRequest) returns (anixops.forward.v1.GetRouteResponse)
+rpc anixops.forward.v1.ForwardControl.GetRouteDns(anixops.forward.v1.GetRouteDnsRequest) returns (anixops.forward.v1.GetRouteDnsResponse)
 rpc anixops.forward.v1.ForwardControl.GetRouteHealth(anixops.forward.v1.GetRouteHealthRequest) returns (anixops.forward.v1.GetRouteHealthResponse)
 rpc anixops.forward.v1.ForwardControl.GetRouteStats(anixops.forward.v1.GetRouteStatsRequest) returns (anixops.forward.v1.GetRouteStatsResponse)
 rpc anixops.forward.v1.ForwardControl.GetTraffic(anixops.forward.v1.GetTrafficRequest) returns (anixops.forward.v1.GetTrafficResponse)
+rpc anixops.forward.v1.ForwardControl.ListDnsBindings(anixops.forward.v1.ListDnsBindingsRequest) returns (anixops.forward.v1.ListDnsBindingsResponse)
+rpc anixops.forward.v1.ForwardControl.ListDnsProviders(anixops.forward.v1.ListDnsProvidersRequest) returns (anixops.forward.v1.ListDnsProvidersResponse)
 rpc anixops.forward.v1.ForwardControl.ListNodes(anixops.forward.v1.ListNodesRequest) returns (anixops.forward.v1.ListNodesResponse)
 rpc anixops.forward.v1.ForwardControl.ListRoutes(anixops.forward.v1.ListRoutesRequest) returns (anixops.forward.v1.ListRoutesResponse)
 rpc anixops.forward.v1.ForwardControl.PlanRoute(anixops.forward.v1.PlanRouteRequest) returns (anixops.forward.v1.PlanRouteResponse)
 rpc anixops.forward.v1.ForwardControl.SetNodeSettings(anixops.forward.v1.SetNodeSettingsRequest) returns (anixops.forward.v1.SetNodeSettingsResponse)
+rpc anixops.forward.v1.ForwardControl.UpdateDnsBinding(anixops.forward.v1.UpdateDnsBindingRequest) returns (anixops.forward.v1.UpdateDnsBindingResponse)
+rpc anixops.forward.v1.ForwardControl.UpdateDnsProvider(anixops.forward.v1.UpdateDnsProviderRequest) returns (anixops.forward.v1.UpdateDnsProviderResponse)
 rpc anixops.forward.v1.ForwardControl.UpdateForwardNode(anixops.forward.v1.UpdateForwardNodeRequest) returns (anixops.forward.v1.UpdateForwardNodeResponse)
 rpc anixops.forward.v1.ForwardControl.UpdateRoute(anixops.forward.v1.UpdateRouteRequest) returns (anixops.forward.v1.UpdateRouteResponse)
 rpc anixops.forward.v1.ForwardNode.Apply(anixops.forward.v1.NodeForwardState) returns (anixops.forward.v1.ApplyResult)

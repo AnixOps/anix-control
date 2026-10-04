@@ -164,7 +164,9 @@ type ForwardControlClient interface {
 	// CreateDnsBinding binds a route to a provider's zone. One binding per
 	// route, and per provider, zone and record name.
 	CreateDnsBinding(ctx context.Context, in *CreateDnsBindingRequest, opts ...grpc.CallOption) (*CreateDnsBindingResponse, error)
-	// UpdateDnsBinding replaces a binding's fields; the route stays.
+	// UpdateDnsBinding replaces a binding's record_types, ttl and paused;
+	// the route, provider, zone, record_name and mode stay (delete with
+	// purge and create to move a binding).
 	UpdateDnsBinding(ctx context.Context, in *UpdateDnsBindingRequest, opts ...grpc.CallOption) (*UpdateDnsBindingResponse, error)
 	// DeleteDnsBinding removes a binding. With purge, Control first deletes
 	// the records it published (UNAVAILABLE when the provider refuses, and
@@ -561,7 +563,9 @@ type ForwardControlServer interface {
 	// CreateDnsBinding binds a route to a provider's zone. One binding per
 	// route, and per provider, zone and record name.
 	CreateDnsBinding(context.Context, *CreateDnsBindingRequest) (*CreateDnsBindingResponse, error)
-	// UpdateDnsBinding replaces a binding's fields; the route stays.
+	// UpdateDnsBinding replaces a binding's record_types, ttl and paused;
+	// the route, provider, zone, record_name and mode stay (delete with
+	// purge and create to move a binding).
 	UpdateDnsBinding(context.Context, *UpdateDnsBindingRequest) (*UpdateDnsBindingResponse, error)
 	// DeleteDnsBinding removes a binding. With purge, Control first deletes
 	// the records it published (UNAVAILABLE when the provider refuses, and

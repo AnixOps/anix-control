@@ -30,6 +30,7 @@ import (
 	"github.com/AnixOps/anix-control/sdk/forward/planner"
 	"github.com/AnixOps/anix-control/sdk/forward/validate"
 	"github.com/AnixOps/anix-control/v4/internal/config"
+	"github.com/AnixOps/anix-control/v4/internal/forwardddns"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/service"
 	"google.golang.org/protobuf/encoding/protojson"
@@ -143,6 +144,12 @@ type Service struct {
 	// Probes are DiagnoseRoute's dials from Control; the zero value dials
 	// with the system resolver.
 	Probes service.DiagnosisProbes
+	// DNSKEK answers the key-encryption key that seals DNS provider
+	// credentials (L2); module_runtime.ca_kek when nil.
+	DNSKEK func() string
+	// NewDNSProvider builds a DNS provider client; forwardddns.New when
+	// nil.
+	NewDNSProvider func(kind string, config, credentials map[string]string) (forwardddns.Provider, error)
 }
 
 // New returns the service on db with the configured cluster.

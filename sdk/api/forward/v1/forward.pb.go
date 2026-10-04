@@ -6342,9 +6342,9 @@ type DnsBinding struct {
 	RecordTypes []DnsRecordType `protobuf:"varint,7,rep,packed,name=record_types,json=recordTypes,proto3,enum=anixops.forward.v1.DnsRecordType" json:"record_types,omitempty"`
 	// ttl in seconds; 60 when 0.
 	Ttl uint32 `protobuf:"varint,8,opt,name=ttl,proto3" json:"ttl,omitempty"`
-	// enabled false keeps the binding and the published records but makes
-	// no change.
-	Enabled         bool  `protobuf:"varint,9,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	// paused keeps the binding and the published records but makes no
+	// change.
+	Paused          bool  `protobuf:"varint,9,opt,name=paused,proto3" json:"paused,omitempty"`
 	CreatedAtUnixMs int64 `protobuf:"varint,10,opt,name=created_at_unix_ms,json=createdAtUnixMs,proto3" json:"created_at_unix_ms,omitempty"`
 	UpdatedAtUnixMs int64 `protobuf:"varint,11,opt,name=updated_at_unix_ms,json=updatedAtUnixMs,proto3" json:"updated_at_unix_ms,omitempty"`
 	unknownFields   protoimpl.UnknownFields
@@ -6437,9 +6437,9 @@ func (x *DnsBinding) GetTtl() uint32 {
 	return 0
 }
 
-func (x *DnsBinding) GetEnabled() bool {
+func (x *DnsBinding) GetPaused() bool {
 	if x != nil {
-		return x.Enabled
+		return x.Paused
 	}
 	return false
 }
@@ -6663,7 +6663,8 @@ func (x *CreateDnsBindingResponse) GetViolations() []*Violation {
 type UpdateDnsBindingRequest struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	RequestId string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	// binding.id names the binding; its route_id cannot change.
+	// binding.id names the binding; only record_types, ttl and paused
+	// change.
 	Binding       *DnsBinding `protobuf:"bytes,2,opt,name=binding,proto3" json:"binding,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
@@ -7088,9 +7089,10 @@ type RouteDnsStatus struct {
 	// cname_target is, in CNAME mode, the name the operator points
 	// entry_hostname at (record_name).
 	CnameTarget string `protobuf:"bytes,4,opt,name=cname_target,json=cnameTarget,proto3" json:"cname_target,omitempty"`
-	// state: unbound, disabled, pending (nothing published yet), ok,
+	// state: unbound, paused (the binding or the route is paused or
+	// enforced: nothing changes), pending (nothing published yet), ok,
 	// degraded (no entry is healthy: the last published records are kept),
-	// paused (the route is paused or enforced: nothing changes), error (the
+	// error (the
 	// provider refused or failed; see last_error), rate_limited,
 	// route_missing, hostname_mismatch (DDNS mode and record_name is not
 	// the route's entry_hostname).
@@ -7733,7 +7735,7 @@ const file_api_forward_v1_forward_proto_rawDesc = "" +
 	"\x19DeleteDnsProviderResponse\x12=\n" +
 	"\n" +
 	"violations\x18\x01 \x03(\v2\x1d.anixops.forward.v1.ViolationR\n" +
-	"violations\"\x91\x03\n" +
+	"violations\"\x8f\x03\n" +
 	"\n" +
 	"DnsBinding\x12\x0e\n" +
 	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x19\n" +
@@ -7745,8 +7747,8 @@ const file_api_forward_v1_forward_proto_rawDesc = "" +
 	"recordName\x126\n" +
 	"\x04mode\x18\x06 \x01(\x0e2\".anixops.forward.v1.DnsBindingModeR\x04mode\x12D\n" +
 	"\frecord_types\x18\a \x03(\x0e2!.anixops.forward.v1.DnsRecordTypeR\vrecordTypes\x12\x10\n" +
-	"\x03ttl\x18\b \x01(\rR\x03ttl\x12\x18\n" +
-	"\aenabled\x18\t \x01(\bR\aenabled\x12+\n" +
+	"\x03ttl\x18\b \x01(\rR\x03ttl\x12\x16\n" +
+	"\x06paused\x18\t \x01(\bR\x06paused\x12+\n" +
 	"\x12created_at_unix_ms\x18\n" +
 	" \x01(\x03R\x0fcreatedAtUnixMs\x12+\n" +
 	"\x12updated_at_unix_ms\x18\v \x01(\x03R\x0fupdatedAtUnixMs\"T\n" +
