@@ -3,7 +3,7 @@
 #
 #   curl -fsSL https://<control>/install.sh | sudo bash -s -- \
 #     --control https://<control> --node forward-41 --token anixagt_... \
-#     [--mirror control|cn|github] [--reset] [--timeout 180]
+#     [--mirror control|cn|github] [--reset] [--forward] [--timeout 180]
 #
 # Copy the command from the node page in Control ("复制安装命令"): it carries a
 # single-use enrollment token bound to the node. The script installs the
@@ -11,9 +11,12 @@
 # anixops-agent (ambient CAP_NET_ADMIN and CAP_NET_BIND_SERVICE, sandboxed),
 # removes the legacy forward runtime of this host (the nftables tables
 # inet v2b_forward, ip v2b_forward and ip anixops_forward, and the clean
-# agent's v2forward-agent service), starts the Agent and waits until it has
-# enrolled with Control. Running the same command again is safe: it upgrades
-# the Agent in place and keeps its identity unless --reset is given.
+# agent's v2forward-agent service), turns on IP forwarding for a forward
+# node (/etc/sysctl.d/90-anixops-forward.conf; a proxy node with --forward),
+# migrates the directories of an earlier root install of the Agent, starts
+# the Agent and waits until it has enrolled with Control. Running the same
+# command again is safe: it upgrades the Agent in place and keeps its
+# identity unless --reset is given.
 #
 # This file is byte for byte the release asset agent-install.sh. Verify it
 # before running it:
@@ -52,18 +55,26 @@ readonly GOST_DIR="/var/lib/anixops-gost"
 readonly UNIT_DIR="/etc/systemd/system"
 readonly POLKIT_RULE="/etc/polkit-1/rules.d/50-anixops-agent.rules"
 readonly LOCK_FILE="/run/anixops-agent-install.lock"
+# IP forwarding for forward nodes: nftables DNAT and gost relays route
+# packets between interfaces.
+readonly SYSCTL_FILE="/etc/sysctl.d/90-anixops-forward.conf"
+readonly SYSCTL_SETTINGS=("net.ipv4.ip_forward=1" "net.ipv6.conf.all.forwarding=1")
 
 # The legacy forward runtime the new Agent replaces (forward-sdk.md,
 # section 10). Only these named objects are removed, never anything else.
 readonly LEGACY_NFT_TABLES=("inet v2b_forward" "ip v2b_forward" "ip anixops_forward")
 readonly LEGACY_UNITS=("v2forward-agent.service")
 readonly LEGACY_PATHS=("/etc/v2board-forward-agent" "/usr/local/bin/v2forward-agent")
+# The directories of an Agent installed by anix-agent's own root installer
+# (scripts/install.sh): 'anix-agent migrate-paths' copies them to STATE_DIR.
+readonly ROOT_INSTALL_DIRS=("/var/lib/anix-agent" "/var/lib/anixops/plugins")
 
 CONTROL_URL=""
 NODE=""
 TOKEN="${ANIX_AGENT_TOKEN:-}"
 MIRROR="control"
 RESET=0
+FORWARD=0
 TIMEOUT=180
 TMP_DIR=""
 
@@ -80,6 +91,8 @@ SOURCE=""
 INSTALL_MODE="install"
 CONFIG_STATE=""
 CREDENTIAL_STATE=""
+FORWARDING_STATE=""
+MIGRATION_STATE=""
 REMOVED=()
 NOTES=()
 
@@ -107,6 +120,7 @@ Usage: install.sh --control <https://control> --node <proxy-<id>|forward-<id>> -
   --token TOKEN      the single-use enrollment token (or ANIX_AGENT_TOKEN)
   --mirror M         where the Agent is downloaded from: control (default), cn, github
   --reset            discard this host's Agent identity and enroll again (needs --token)
+  --forward          turn on IP forwarding on a proxy node too (always on for forward-<id>)
   --timeout SECONDS  how long to wait for the Agent to enroll (default 180)
   --group GROUP      node-group tokens (not supported by this Control yet)
   --offline FILE     install from a downloaded package (not in this release)
@@ -132,6 +146,11 @@ parse_args() {
         ;;
       --reset)
         RESET=1
+        shift
+        continue
+        ;;
+      --forward)
+        FORWARD=1
         shift
         continue
         ;;
@@ -323,6 +342,41 @@ download_agent() {
   [[ -f "${TMP_DIR}/agent/anix-agent" && ! -L "${TMP_DIR}/agent/anix-agent" ]] || die "${ASSET} holds no anix-agent binary"
 }
 
+# root_install tells whether this host runs, or ran, the Agent of
+# anix-agent's root installer: a unit without User=anixops-agent, or its
+# directories.
+root_install() {
+  local unit dir
+  unit="$(path "${UNIT_DIR}/${SERVICE}")"
+  if [[ -f "${unit}" ]] && ! grep -qxF "User=${AGENT_USER}" "${unit}"; then
+    return 0
+  fi
+  for dir in "${ROOT_INSTALL_DIRS[@]}"; do
+    [[ -d "$(path "${dir}")" ]] && return 0
+  done
+  return 1
+}
+
+# migrate_root_install copies a root install's identity, stream state and
+# plugins to the sandboxed Agent's directories, owned by its user, before
+# the new unit starts: the Agent as anixops-agent cannot read the old
+# root-owned directories. The old ones are left in place.
+migrate_root_install() {
+  local bin args=(migrate-paths --chown "${AGENT_USER}")
+  root_install || return 0
+  bin="$(path "${LIB_DIR}/anix-agent")"
+  if ! "${bin}" migrate-paths --help >/dev/null 2>&1; then
+    note "the Agent ${META_VERSION} cannot migrate a root install's directories (no migrate-paths); it enrolls again with the token"
+    MIGRATION_STATE="not migrated (the Agent has no migrate-paths)"
+    return 0
+  fi
+  [[ -z "${ROOT}" ]] || args+=(--root "${ROOT}")
+  info "Migrating the root-installed Agent's directories to ${STATE_DIR}"
+  "${bin}" "${args[@]}" ||
+    die "anix-agent migrate-paths could not copy the root install's directories (see above); nothing was started, fix the cause and re-run"
+  MIGRATION_STATE="ran anix-agent migrate-paths for a root install (copied or kept: see above; the old directories are left in place)"
+}
+
 ensure_users() {
   if ! getent group "${GOST_USER}" >/dev/null; then
     groupadd --system "${GOST_USER}"
@@ -386,7 +440,11 @@ install_files() {
 
   install -d -m 0750 "$(path "${CONFIG_DIR}")"
   chown "root:${AGENT_USER}" "$(path "${CONFIG_DIR}")"
-  install -d -m 0700 "$(path "${STATE_DIR}")" "$(path "${PKI_DIR}")" "$(path "${STREAM_DIR}")"
+  install -d -m 0700 "$(path "${STATE_DIR}")"
+  chown "${AGENT_USER}:${AGENT_USER}" "$(path "${STATE_DIR}")"
+  # Before pki and stream exist: migrate-paths copies only to new places.
+  migrate_root_install
+  install -d -m 0700 "$(path "${PKI_DIR}")" "$(path "${STREAM_DIR}")"
   chown "${AGENT_USER}:${AGENT_USER}" "$(path "${STATE_DIR}")" "$(path "${PKI_DIR}")" "$(path "${STREAM_DIR}")"
   install -d -m 0750 "$(path "${GOST_DIR}")"
   chown "${AGENT_USER}:${GOST_USER}" "$(path "${GOST_DIR}")"
@@ -492,6 +550,49 @@ cleanup_legacy() {
   done
 }
 
+render_sysctl() {
+  local setting
+  printf '# Written by the AnixOps installer (agent-install.sh): IP forwarding for\n'
+  printf '# the forward drivers of the AnixOps Agent. Re-running the installer rewrites it.\n'
+  for setting in "${SYSCTL_SETTINGS[@]}"; do
+    printf '%s\n' "${setting/=/ = }"
+  done
+}
+
+# enable_forwarding turns on IPv4 and IPv6 forwarding for a forward node, or
+# a proxy node installed with --forward, now and at every boot. A failure
+# to apply is a note, not an error: the file applies at the next boot.
+enable_forwarding() {
+  if [[ "${NODE}" != forward-* ]] && ((FORWARD == 0)); then
+    FORWARDING_STATE="unchanged (a proxy node; --forward turns IP forwarding on)"
+    return 0
+  fi
+  local file
+  file="$(path "${SYSCTL_FILE}")"
+  install -d -m 0755 "$(dirname "${file}")"
+  # The Agent prints the drop-in it expects; an Agent without the command
+  # gets the same settings from the installer.
+  if ! "$(path "${LIB_DIR}/anix-agent")" forward sysctl-dropin >"${file}.new" 2>/dev/null ||
+    ! grep -q '^net\.ipv4\.ip_forward *= *1' "${file}.new"; then
+    render_sysctl >"${file}.new"
+  fi
+  chmod 0644 "${file}.new"
+  mv -f "${file}.new" "${file}"
+  FORWARDING_STATE="wrote ${SYSCTL_FILE} (${SYSCTL_SETTINGS[*]})"
+  if ! command -v sysctl >/dev/null 2>&1; then
+    note "sysctl is missing: IP forwarding turns on at the next boot (${SYSCTL_FILE})"
+    FORWARDING_STATE+="; applies at the next boot"
+    return 0
+  fi
+  # -e: a host without IPv6 has no net.ipv6 keys; IPv4 still applies.
+  if sysctl -e -q -p "${file}" >/dev/null 2>&1; then
+    FORWARDING_STATE+="; applied"
+  else
+    note "sysctl could not apply ${SYSCTL_FILE} now: IP forwarding turns on at the next boot (sysctl -p ${SYSCTL_FILE})"
+    FORWARDING_STATE+="; applies at the next boot"
+  fi
+}
+
 render_agent_unit() {
   cat <<EOF
 # ${SERVICE}: the AnixOps Agent. Written by the AnixOps installer
@@ -513,6 +614,9 @@ Group=${AGENT_USER}
 SupplementaryGroups=${GOST_USER}
 UMask=0077
 LimitNOFILE=1048576
+# /run/anixops-agent: the plugins' sockets (ProtectSystem=strict).
+RuntimeDirectory=anixops-agent
+RuntimeDirectoryMode=0750
 
 # Privileges (H13): nftables and tc over netlink, low ports; nothing else.
 AmbientCapabilities=CAP_NET_ADMIN CAP_NET_BIND_SERVICE
@@ -672,6 +776,10 @@ print_summary() {
   printf '  control:     %s (gRPC %s)\n' "${CONTROL_URL}" "${META_GRPC}"
   printf '  config:      %s\n' "${CONFIG_STATE}"
   printf '  credential:  %s\n' "${CREDENTIAL_STATE}"
+  printf '  forwarding:  %s\n' "${FORWARDING_STATE}"
+  if [[ -n "${MIGRATION_STATE}" ]]; then
+    printf '  migration:   %s\n' "${MIGRATION_STATE}"
+  fi
   printf '  service:     %s (systemctl status %s; journalctl -u %s)\n' "${SERVICE}" "${SERVICE}" "${SERVICE}"
   if ((${#REMOVED[@]} == 0)); then
     printf '  legacy:      nothing to remove\n'
@@ -731,6 +839,7 @@ main() {
   write_config
   write_credential
   cleanup_legacy
+  enable_forwarding
   install_units
   wait_enrolled
   print_summary

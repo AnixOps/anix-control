@@ -60,6 +60,7 @@ On the node: Linux on amd64 or arm64 with systemd, root (sudo), `curl`,
    [anixops] AnixOps Agent v4.2.0 is running (install)
      node:        forward-41
      identity:    spiffe://anixops/prod/agent/forward-41 (serial ..., expires ...)
+     forwarding:  wrote /etc/sysctl.d/90-anixops-forward.conf (net.ipv4.ip_forward=1 net.ipv6.conf.all.forwarding=1); applied
      legacy:      removed
                     - nftables table inet v2b_forward
                     - systemd unit v2forward-agent.service
@@ -89,20 +90,38 @@ The Agent then shows as connected over mTLS on **Agent 连接方式**
    the Agent, which removes it after use). The Agent's state is in
    `/var/lib/anixops-agent` (0700), its key and certificate in
    `/var/lib/anixops-agent/pki`, the gost driver's files in
-   `/var/lib/anixops-gost` (0750).
+   `/var/lib/anixops-gost` (0750). A machine that runs, or ran, the Agent
+   of anix-agent's own root installer (a unit without
+   `User=anixops-agent`, or `/var/lib/anix-agent` or
+   `/var/lib/anixops/plugins`) first gets
+   `anix-agent migrate-paths --chown anixops-agent`: the Agent's identity,
+   stream state and plugins are copied to `/var/lib/anixops-agent`, owned
+   by the Agent's user, which cannot read the old root-owned directories.
+   The old directories stay. A failed copy stops the script before the
+   Agent starts.
 7. Removes the legacy forward runtime of this machine: the nftables tables
    `inet v2b_forward`, `ip v2b_forward` and `ip anixops_forward`, and the
    clean agent (`v2forward-agent.service`, `/etc/v2board-forward-agent`,
    `/usr/local/bin/v2forward-agent`). It touches no other table or service.
-8. Writes `anix-agent.service` and `anixops-gost.service`, and a polkit rule
+8. On a forward node (`forward-<id>`, or a proxy node with `--forward`)
+   turns on IP forwarding, which nftables DNAT and gost relays need: writes
+   `/etc/sysctl.d/90-anixops-forward.conf` (`net.ipv4.ip_forward = 1`,
+   `net.ipv6.conf.all.forwarding = 1`, as `anix-agent forward
+   sysctl-dropin` prints it) and applies it with
+   `sysctl -e -p` (`-e`: a host without IPv6 still gets IPv4). When it
+   cannot apply now, the summary notes it and the file applies at the next
+   boot. A proxy node without `--forward` is left as it is.
+9. Writes `anix-agent.service` and `anixops-gost.service`, and a polkit rule
    that lets `anixops-agent` start, stop and reload `anixops-gost.service`
    only; enables and starts the Agent.
-9. Waits (up to `--timeout`, 180 s by default) until `anix-agent identity`
-   shows a valid certificate for the node.
+10. Waits (up to `--timeout`, 180 s by default) until `anix-agent identity`
+    shows a valid certificate for the node.
 
 The Agent runs as `anixops-agent`, not root, with only `CAP_NET_ADMIN` and
 `CAP_NET_BIND_SERVICE`, `NoNewPrivileges`, `ProtectSystem=strict` (writable:
-`/var/lib/anixops-agent`, `/var/lib/anixops-gost`), `ProtectHome`,
+`/var/lib/anixops-agent`, `/var/lib/anixops-gost`, and its
+`RuntimeDirectory` `/run/anixops-agent` (0750) for the plugins' sockets),
+`ProtectHome`,
 `PrivateTmp` and `RestrictAddressFamilies=AF_INET AF_INET6 AF_NETLINK
 AF_UNIX`. gost runs as `anixops-gost` with `CAP_NET_BIND_SERVICE` only.
 

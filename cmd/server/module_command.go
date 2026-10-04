@@ -31,11 +31,11 @@ func moduleUsageError() error {
 	return fmt.Errorf("invalid module command\n%s", moduleCommandUsage)
 }
 
-// takeAdminCommand removes a leading "module", "agent", "agents" or
-// "routes" command and returns it with its arguments; nil means the process
+// takeAdminCommand removes a leading "module", "agent", "agents", "routes"
+// or "forward" command and returns it with its arguments; nil means the process
 // is not running one.
 func takeAdminCommand() []string {
-	if len(os.Args) > 1 && (os.Args[1] == "module" || os.Args[1] == "agent" || os.Args[1] == "agents" || os.Args[1] == "routes") {
+	if len(os.Args) > 1 && (os.Args[1] == "module" || os.Args[1] == "agent" || os.Args[1] == "agents" || os.Args[1] == "routes" || os.Args[1] == "forward") {
 		arguments := append([]string{}, os.Args[1:]...)
 		os.Args = os.Args[:1]
 		return arguments
@@ -53,6 +53,9 @@ func runAdminCommand(ctx context.Context, cfg *config.Config, db *gorm.DB, argum
 	}
 	if len(arguments) > 0 && arguments[0] == "routes" {
 		return runRoutesCommand(ctx, cfg, db, arguments[1:], stdout)
+	}
+	if len(arguments) > 0 && arguments[0] == "forward" {
+		return runForwardCommand(ctx, db, arguments[1:], stdout)
 	}
 	if len(arguments) > 0 && arguments[0] == "module" {
 		return runModuleCommand(ctx, cfg, db, arguments[1:], stdout)

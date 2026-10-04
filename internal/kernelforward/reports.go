@@ -10,6 +10,7 @@ import (
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
+	"github.com/AnixOps/anix-control/sdk/forward/planner"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"google.golang.org/protobuf/proto"
 	"gorm.io/gorm"
@@ -48,6 +49,9 @@ type ReportResult struct {
 	// Replanned is true when the report's traffic used up a route's quota
 	// and a plan paused it.
 	Replanned bool
+	// Recovered is true when the report was ahead of the node's stored
+	// generation and moved it (generation.go).
+	Recovered bool
 }
 
 // counterKey names one epoch row.
@@ -84,6 +88,7 @@ func (s *Service) RecordReport(ctx context.Context, node agentcontrol.AgentNode,
 	}
 	var result ReportResult
 	var quotaRoutes []string
+	var ahead bool
 	err = db.Transaction(func(tx *gorm.DB) error {
 		var rows []model.KernelForwardNodeReport
 		if err := tx.Where("node_ref = ?", ref).Limit(1).Find(&rows).Error; err != nil {
@@ -118,12 +123,24 @@ func (s *Service) RecordReport(ctx context.Context, node agentcontrol.AgentNode,
 				}
 			}
 		}
-		var err error
+		state, found, err := loadStateRow(tx, ref)
+		if err != nil {
+			return err
+		}
+		ahead = found && reportAhead(planner.Generation{Generation: state.Generation, StateHash: state.StateHash},
+			planner.Generation{Generation: report.GetGeneration(), StateHash: report.GetStateHash()})
 		quotaRoutes, err = quotaCandidates(tx, entryGrew)
 		return err
 	})
 	if err != nil {
 		return ReportResult{}, err
+	}
+	if ahead {
+		// The node holds a generation Control did not stamp: Control's
+		// database was reset or restored (generation.go).
+		if result.Recovered, err = s.recoverGeneration(ctx, ref); err != nil {
+			return result, err
+		}
 	}
 	if len(quotaRoutes) > 0 {
 		outcome, err := s.Replan(ctx, "quota")
