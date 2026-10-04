@@ -737,9 +737,10 @@ func (d *diagnosis) runCheck(ctx context.Context, p *probe) []*forwardv1.Diagnos
 	steps := make([]*forwardv1.DiagnoseStep, 0, len(answer.Items))
 	for _, item := range answer.Items {
 		step := base(item.Target)
-		if item.Protocol == "udp" {
+		switch item.Protocol {
+		case "udp":
 			step.Protocol = protoUDP
-		} else if item.Protocol == "tcp" {
+		case "tcp":
 			step.Protocol = protoTCP
 		}
 		message := item.Message
