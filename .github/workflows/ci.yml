@@ -1393,7 +1393,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: 6c3b5d6e8623761bb8d426417c5dca68a4947664
+          ref: c6b5e34e6edc9e449ac3871e3151b392f33864a1
           path: V2bX_AnixOps
 
       - name: Setup Go
@@ -1504,7 +1504,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: 6c3b5d6e8623761bb8d426417c5dca68a4947664
+          ref: c6b5e34e6edc9e449ac3871e3151b392f33864a1
           path: V2bX_AnixOps
 
       - name: Setup Go
@@ -1821,7 +1821,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: 6c3b5d6e8623761bb8d426417c5dca68a4947664
+          ref: c6b5e34e6edc9e449ac3871e3151b392f33864a1
           path: V2bX_AnixOps
 
       - name: Setup Go
@@ -1889,7 +1889,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: 6c3b5d6e8623761bb8d426417c5dca68a4947664
+          ref: c6b5e34e6edc9e449ac3871e3151b392f33864a1
           path: V2bX_AnixOps
 
       - name: Setup Go
@@ -2078,7 +2078,7 @@ jobs:
         uses: actions/checkout@v7
         with:
           repository: AnixOps/anix-agent
-          ref: 6c3b5d6e8623761bb8d426417c5dca68a4947664
+          ref: c6b5e34e6edc9e449ac3871e3151b392f33864a1
           path: V2bX_AnixOps
 
       # The live Control WebUI gate builds a temporary Control binary and a

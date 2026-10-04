@@ -986,9 +986,11 @@
   accepts the machine-telemetry `systemd_services` setting and collects the
   systemd services report (anix-agent #5). Older Agents refuse that setting,
   so the services panel needs this Agent.
-- CI builds the Agent from anix-agent `6c3b5d6e` (was `1b155dee`): the
+- CI builds the Agent from anix-agent `c6b5e34e` (was `1b155dee`): the
   Agent line AG-1 to AG-5b, forwarding (F3b), the O1 installer layout
-  (#13), diagnostics (#14) and staged upgrades (#15).
+  (#13), diagnostics (#14), staged upgrades (#15), and the reload fixes
+  (#16: a failed reload restores the previous node; a forwarding-only
+  change no longer reloads the proxy inbound).
   `config/scripts/check_release_workflow.sh` checks the new pin.
 - **Release branches and the v4.2 upgrade order** (owner decisions of
   2026-10-04; documentation and CI triggers only).
