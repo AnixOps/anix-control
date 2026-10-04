@@ -214,7 +214,7 @@ originate it and hop *i+1* to terminate it.
 |---|---|---|---|
 | `NFTABLES` | `RAW` only | kernel DNAT, near-zero CPU, survives Agent restarts | IEPL/IPLC private lines, same-provider intranets, plain public forwarding |
 | `GOST` | `RAW`, `TLS`, `WSS`, `QUIC`, `GRPC`, with optional mux | encryption, obfuscation, multiplexing | cross-border public internet |
-| `ANIXOPS` | `ANIXOPS` (v4.3) | mux with 0-RTT, TLS/REALITY-like, QUIC and plain carriers, per node-pair keys | v4.3 |
+| `ANIXOPS` | `ANIXOPS` (v4.3) | mux with stream-level zero round trip, TLS, QUIC and trusted-link plain carriers, per-identity pinning with the H28 link certificates (`anixops-protocol.md`) | v4.3 |
 
 So `entry NFTABLES → relay GOST(ingress RAW) → exit GOST(ingress TLS)` is
 valid: the entry DNATs raw traffic to the relay, which wraps it in TLS to
@@ -1929,7 +1929,7 @@ when decided.
 | H19 | Agent auto-upgrade: batch sizes, rollback conditions, signature checks | 5% → 25% → 100% with at least 30 minutes per batch; roll back a batch when over 5% of its Agents do not reconnect within 10 minutes or fail to apply; artifacts signed with the release key (cosign) and verified by the Agent and the updater |
 | H20 | gost version pinning and process management; impact of dropping NodeX | Pin one gost v3 release per Agent release, shipped with the Agent; run it as `anixops-gost.service` owned by the Agent; announce NodeX's removal in v4.2's release notes and UPGRADE (NodeX nodes need the Agent installed) |
 | H21 | LB and failover defaults: circuit breaker, check interval, DDNS providers | Breaker 3 failures → skip 30 s; checks every 5 s with a 2 s timeout; least-conn re-weighting every 10 s; DDNS: Cloudflare, Alibaba Cloud DNS, DNSPod, Huawei Cloud DNS, generic webhook |
-| H22 | AnixOps protocol design review (threat model, cryptography, transport) | Transport design written: [`anixops-protocol.md`](anixops-protocol.md), with its open questions P1–P10; camouflage reserved for the owner (its section 8). Prototype off by default and marked experimental in v4.2 |
+| H22 | AnixOps protocol design review (threat model, cryptography, REALITY-like fallback) | Transport design written: [`anixops-protocol.md`](anixops-protocol.md), with its open questions P1–P10; camouflage reserved for the owner (its section 8). Prototype off by default and marked experimental in v4.2 |
 | H23 | Community vs commercial boundary for forwarding | Section 12: core forwarding, LB, failover and onboarding in both; self-service, plans, multipliers and resellers commercial |
 | H28 | Forward link certificates for encrypted gost links (F3b, AgentPKI): gost verifies a certificate chain and the dialled server name, not SPIFFE URIs, and must not hold the Agent's Control key | AgentPKI issues each forward node a separate link certificate: DNS name = the node's identity name (`forward-41`, the planner's default `server_name`), URI = its SPIFFE identity, serverAuth and clientAuth, from a link CA (a separate root) that signs nothing else, with the same lifetime and rotation as the Agent certificate. The Agent writes it, its own key and the link CA bundle to `/var/lib/anixops-gost/tls` and reloads gost on rotation. An operator-chosen `server_name` (a CDN name on WSS) then needs that name in the exit's link certificate, or stays unsupported. Per-identity matching of `ingress_peers` would need a gost plugin; source admission plus the link CA is the v4.2 boundary |
 

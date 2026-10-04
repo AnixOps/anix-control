@@ -233,12 +233,18 @@ The listener (next hop):
 2. requires exactly one URI SAN and that it is in the listener's
    `NodeHop.ingress_peers`.
 
-Steps 2 to 4 run in `tls.Config.VerifyConnection`, which Go calls on full
-and resumed handshakes alike (unlike `VerifyPeerCertificate`), with
-`InsecureSkipVerify` only so that the trust pool and expected identity can
-be swapped atomically per listener and per upstream. A failure ends the
-handshake with a `bad_certificate` alert and is counted by reason
-(section 7.3).
+Chain and DNS-name verification are `crypto/tls`'s own: the dialler's
+`tls.Config` has the link trust bundle as `RootCAs` and the expected name
+as `ServerName`; the listener's has it as `ClientCAs` with
+`RequireAndVerifyClientCert`. `VerifyConnection` adds only the identity
+checks (dialler step 4, listener step 2); Go calls it on full and resumed
+handshakes alike (unlike `VerifyPeerCertificate`). Verification is never
+disabled. The trust pool and the expected identities change without
+re-creating anything: the listener builds its configuration per handshake
+with `GetConfigForClient` from the current bundle and `ingress_peers`, and
+the dialler builds a `tls.Config` per upstream from the current bundle and
+`peer_identity` for each new carrier. A failure ends the handshake with a
+`bad_certificate` alert and is counted by reason (section 7.3).
 
 `server_name` on an ANIXOPS link must be empty or the next node's identity
 name: any other value is refused by validation (code
@@ -255,9 +261,8 @@ the link certificate carries only that name.
   AES-256-GCM, ChaCha20-Poly1305; X25519 and the hybrid post-quantum
   X25519MLKEM768 that recent Go releases enable by default). The relay does
   not narrow them, so a toolchain upgrade brings Go's current defaults.
-- No `crypto/tls` settings that weaken it: no `InsecureSkipVerify` without
-  the `VerifyConnection` checks above, no TLS 1.2, no renegotiation, no
-  custom `Rand` or `Time` outside tests.
+- No `crypto/tls` settings that weaken it: no `InsecureSkipVerify`, no TLS
+  1.2, no renegotiation, no custom `Rand` or `Time` outside tests.
 - Session tickets are encrypted by `crypto/tls`'s own rotating keys.
 
 ### 3.4 Session resumption and 0-RTT
@@ -313,8 +318,8 @@ datagrams (RFC 9221); the frames below that QUIC already provides (data,
 flow control, reset, ping, close) are not used. On TCP carriers the relay
 uses its own framing, specified here. Existing libraries were considered:
 `hashicorp/yamux` is MPL-2.0, outside `forward-sdk.md` section 1's
-MIT/Apache/BSD rule, and none of the permissive ones offers half-close,
-in-band open results and the bounds below together (P6).
+MIT/Apache/BSD rule, and none examined offered half-close, in-band open
+results and the bounds below together; a fuller survey is part of P6.
 
 ### 4.2 Frame format (TCP carriers)
 
@@ -523,8 +528,9 @@ The link's carrier is a new `LinkTransport` field (section 6.5):
 | `PLAIN` | plaintext TCP only (section 5.3) |
 
 The listener of an `AUTO` link listens on the hop's port for both: TCP for
-`TLS_TCP` and UDP for QUIC (the planner already allocates ports free in
-both protocols for `TCP_UDP` listeners). Fallback is only ever between the
+`TLS_TCP` and UDP for QUIC. The planner already holds each port per node
+for TCP and UDP together (`forward-sdk.md` section 5.2); Apply's pre-bind
+(section 6.1) refuses a port another process holds in either protocol. Fallback is only ever between the
 two authenticated carriers; nothing falls back to plaintext. A typical
 reason for the fallback is a firewall that blocks UDP between the nodes;
 the fallback count is a metric (section 7.3).
@@ -830,7 +836,7 @@ for links the anixops engine does not cover.
 | P3 | TLS session resumption | Off in v4.2 and by default in v4.3; revisit only if benchmarks show handshake cost matters. TLS early data never |
 | P4 | When the plaintext carrier is allowed | Only on administrator routes whose two nodes both carry `link=iepl` or `link=iplc`; refused on user routes |
 | P5 | Should the anixops engine also terminate and originate `LINK_SECURITY_RAW`, for nftables entries handing over to anixops relays and anixops exits dialling raw | Yes, in v4.3: it lets the kernel do the entry while anixops carries the long link; v4.2's prototype stays anixops-to-anixops |
-| P6 | Own framing or an existing multiplexer | Own framing as specified in section 4.2 (small, half-close, in-band results, bounds); permissive libraries were not a fit and `yamux` is MPL-2.0 |
+| P6 | Own framing or an existing multiplexer | Own framing as specified in section 4.2 (small, half-close, in-band results, bounds), unless a survey in A1 finds an MIT, Apache or BSD library with all three; `yamux` is MPL-2.0 |
 | P7 | PROXY protocol v2 for UDP targets | Not in the first version; TCP only, revisit on demand |
 | P8 | Emergency link CA rotation (drop a compromised CA without the normal overlap) | Add `anix-control agent link-ca rotate --emergency`, which drops the old CA from the bundle at once and makes every node renew; links recover as nodes renew |
 | P9 | Revocation checks (CRL or OCSP) on links | None: identity pinning plus state changes remove a peer at once (section 3.5), and certificates live 7 days |
