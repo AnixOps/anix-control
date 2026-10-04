@@ -2163,8 +2163,15 @@ jobs:
           # The release signature of the embedded Agent installer, served
           # at /install.sh.sig.
           mkdir -p image-artifacts/bootstrap/agent-install
-          install -m 0644 release-packages/agent-install.sh.sig image-artifacts/bootstrap/agent-install/
-          cmp release-packages/agent-install.sh internal/agentinstall/install.sh
+          for name in agent-install.sh agent-install.sh.sig; do
+            mapfile -t matches < <(find release-packages -type f -name "${name}")
+            test "${#matches[@]}" = 1 || { echo "expected one ${name}, found ${#matches[@]}"; exit 1; }
+            if [[ "${name}" == agent-install.sh ]]; then
+              cmp "${matches[0]}" internal/agentinstall/install.sh
+            else
+              install -m 0644 "${matches[0]}" image-artifacts/bootstrap/agent-install/
+            fi
+          done
           ls -lR image-artifacts/bootstrap
 
       - name: Set up QEMU

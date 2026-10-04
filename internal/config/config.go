@@ -153,7 +153,7 @@ type AgentControlConfig struct {
 	LegacySunset string `yaml:"legacy_sunset"`
 }
 
-// Validate checks agent_install: absolute http(s) URLs without a query, a
+// Validate checks agent_install: absolute https URLs without a query, a
 // host:port gRPC target and absolute file paths.
 func (a AgentInstallConfig) Validate() error {
 	for name, value := range map[string]string{"public_url": a.PublicURL, "cn_mirror_url": a.CNMirrorURL} {
@@ -162,9 +162,9 @@ func (a AgentInstallConfig) Validate() error {
 			continue
 		}
 		parsed, err := url.Parse(value)
-		if err != nil || (parsed.Scheme != "https" && parsed.Scheme != "http") || parsed.Host == "" ||
+		if err != nil || parsed.Scheme != "https" || parsed.Host == "" ||
 			parsed.RawQuery != "" || parsed.Fragment != "" || parsed.User != nil {
-			return fmt.Errorf("invalid agent_install.%s %q: use an absolute http(s) URL without credentials, query or fragment", name, value)
+			return fmt.Errorf("invalid agent_install.%s %q: use an absolute https URL without credentials, query or fragment (nodes download over https only)", name, value)
 		}
 	}
 	if target := strings.TrimSpace(a.GRPCTarget); target != "" {

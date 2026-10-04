@@ -110,6 +110,9 @@
     with `install/`.
   - CI runs shellcheck and fake-root tests of the installer
     (`scripts/tests/test_agent_install.sh`).
+  - End to end it needs the next anix-agent release, which accepts the
+    credential-only configuration the script writes (no node API key, no
+    proxy cores, `forward-<id>` nodes); today's Agent starts and refuses it.
 
 - **The last Agent contract gaps before `required` (owner approval of
   2026-10-04: additions only to `anix.agent.v1`).** Older Agents are

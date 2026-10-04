@@ -580,6 +580,7 @@ func TestAgentInstallConfigValidate(t *testing.T) {
 		"query":            {PublicURL: "https://ctl.example.com/?a=1"},
 		"credentials":      {CNMirrorURL: "https://user:pw@mirror.example.cn"},
 		"ftp":              {CNMirrorURL: "ftp://mirror.example.cn"},
+		"http":             {PublicURL: "http://ctl.example.com"},
 		"no port":          {GRPCTarget: "ctl.example.com"},
 		"port range":       {GRPCTarget: "ctl.example.com:70000"},
 		"version":          {AgentVersion: "latest"},

@@ -8,6 +8,13 @@ machine and waits until the Agent has enrolled
 
 ## Before You Start
 
+> **Needs the next anix-agent release.** The script writes a credential-only
+> configuration (Control's address, the node and the enrollment token; no
+> node API key and no proxy cores). The anix-agent release that accepts it
+> is not out yet: today's Agent starts and refuses that configuration
+> (`ApiKey is required`) and the script stops at "did not enroll". Until
+> then, keep installing nodes the way `docs/UPGRADE.md` describes.
+
 On Control:
 
 - The built-in agent CA is on (`module_runtime.ca_kek` with `pki: builtin`)
@@ -169,3 +176,7 @@ GitHub release downloads: `<base>/<tag>/<asset>`.
 - Preflight checks (kernel, nftables, ports, clock skew) and offline packages
   (`--offline`) come next; the uninstaller is `anix-agent uninstall`.
 - OpenRC.
+- polkit older than 0.106 (Ubuntu 22.04 ships 0.105, which reads `.pkla`
+  files instead of `/etc/polkit-1/rules.d`): the script then installs no
+  rule and says so, and the Agent cannot start or reload
+  `anixops-gost.service` itself. Preflight (O2) will check it.

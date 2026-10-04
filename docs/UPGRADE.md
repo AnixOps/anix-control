@@ -2091,6 +2091,9 @@ upgrades it in place and keeps its identity. Before the first command:
   checklist above), and an https address nodes reach:
   `agent_install.public_url` unless the request's origin is already right.
 - The node needs systemd, root, `curl`, `sha256sum` and `unzip`.
+- It needs the anix-agent release that accepts the credential-only
+  configuration the script writes; today's Agent refuses it (no node API
+  key). That release is the one step 1 names.
 - The installer removes only objects it can name: the three tables and the
   clean agent. gost services the flux runtime created through gost's API on
   NodeX hosts live in a gost the operator installed; Control's upgrade
