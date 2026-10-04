@@ -31,6 +31,12 @@ This table is generated from the code and checked by
 | `ANIX_CONTROL_ADMIN_PASSWORD` | `admin.password` | string | secret, no default |
 | `ANIX_CONTROL_AGENT_CONTROL_LEGACY_SUNSET` | `agent_control.legacy_sunset` | string |  |
 | `ANIX_CONTROL_AGENT_CONTROL_MTLS` | `agent_control.mtls` | string | `preferred` |
+| `ANIX_CONTROL_AGENT_INSTALL_AGENT_VERSION` | `agent_install.agent_version` | string |  |
+| `ANIX_CONTROL_AGENT_INSTALL_ARTIFACT_DIR` | `agent_install.artifact_dir` | string |  |
+| `ANIX_CONTROL_AGENT_INSTALL_CN_MIRROR_URL` | `agent_install.cn_mirror_url` | string |  |
+| `ANIX_CONTROL_AGENT_INSTALL_GRPC_TARGET` | `agent_install.grpc_target` | string |  |
+| `ANIX_CONTROL_AGENT_INSTALL_PUBLIC_URL` | `agent_install.public_url` | string |  |
+| `ANIX_CONTROL_AGENT_INSTALL_SIGNATURE_FILE` | `agent_install.signature_file` | string |  |
 | `ANIX_CONTROL_APP_API_TOKEN` | `app.api_token` | string | secret, no default |
 | `ANIX_CONTROL_APP_EDITION` | `app.edition` | string | `community` |
 | `ANIX_CONTROL_APP_NAME` | `app.name` | string | `AnixOps Control` |

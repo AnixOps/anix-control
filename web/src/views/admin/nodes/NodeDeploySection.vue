@@ -5,6 +5,12 @@
         <NodeAuthKeyPanel :deploy="deploy" />
       </UiCard>
       <div class="node-deploy-section__side">
+        <UiCard :title="t('admin.nodes.deploySection.installCommand')" heading-tag="h3">
+          <p class="node-deploy-section__text">{{ t('admin.nodes.deploySection.installCommandText') }}</p>
+          <template #actions>
+            <UiButton size="sm" variant="primary" :icon="Terminal" data-testid="open-agent-install" @click="installOpen = true">{{ t('admin.nodes.deploySection.openInstall') }}</UiButton>
+          </template>
+        </UiCard>
         <UiCard :title="t('admin.nodes.deploySection.connection')" :description="t('admin.nodes.deploySection.connectionHint')" heading-tag="h3">
           <NodeDeploySettings :deploy="deploy" />
         </UiCard>
@@ -19,18 +25,21 @@
       </div>
     </div>
     <NodeDeploySheet v-if="isRoot" v-model:open="deployOpen" :nodes="[node]" :deploy="deploy" />
+    <AgentInstallSheet v-model:open="installOpen" :node="`proxy-${node.id}`" :node-label="node.name" />
   </UiSection>
 </template>
 
 <script setup>
-// 部署 section of the node page: the Agent registration key with its
-// config.json, the connection settings it uses, and, for a parent node, the
-// Ansible helper for this node.
+// 部署 section of the node page: the one-command install (a single-use
+// enrollment token), the Agent registration key with its config.json, the
+// connection settings it uses, and, for a parent node, the Ansible helper
+// for this node.
 import { computed, onMounted, ref } from 'vue'
 import { Terminal } from '@lucide/vue'
 import UiButton from '@/ui/UiButton.vue'
 import UiCard from '@/ui/UiCard.vue'
 import UiSection from '@/ui/UiSection.vue'
+import AgentInstallSheet from '@/components/admin/AgentInstallSheet.vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import NodeAuthKeyPanel from './NodeAuthKeyPanel.vue'
 import NodeDeploySettings from './NodeDeploySettings.vue'
@@ -43,6 +52,7 @@ const props = defineProps({
 })
 const { t } = useAppI18n()
 const deployOpen = ref(false)
+const installOpen = ref(false)
 const isRoot = computed(() => !props.node.parent_id)
 
 onMounted(() => props.deploy.loadAuthKeysPreview())

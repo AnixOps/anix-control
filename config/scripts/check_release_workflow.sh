@@ -308,6 +308,8 @@ check_release_workflow() {
   require_job_text docker "sbom: true" "release image SBOM attestation" || failed=1
   require_job_text docker "cosign sign" "signed release image digest" || failed=1
   require_job_text docker "identity-platform" "identity bootstrap package in the image" || failed=1
+  require_job_text docker "bootstrap/agent-install" "Agent installer signature in the image" || failed=1
+  require_job_text plugin-package-publish "release-assets/agent-install.sh.sig" "signed Agent installer" || failed=1
   reject_job_text docker "DOCKER_PASSWORD" "Docker Hub release credentials" || failed=1
   require_text "digest=\${{ steps.build.outputs.digest }}" "Docker digest metadata" || failed=1
 
@@ -327,6 +329,8 @@ check_release_workflow() {
     '"identity-platform-${version}.anxp"' \
     '"identity-platform-${version}.manifest.json"' \
     '"identity-platform-${version}.manifest.sig"' \
+    agent-install.sh \
+    agent-install.sh.sig \
     anix-control-frontend.tar.gz \
     anix-control-linux-amd64.tar.gz \
     anix-control-linux-arm64.tar.gz \

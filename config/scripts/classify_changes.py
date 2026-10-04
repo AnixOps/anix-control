@@ -132,6 +132,8 @@ CLASS_PATTERNS: dict[str, tuple[str, ...]] = {
         "api/*",
         "contracts/agent/*",
         "internal/handler/agent*",
+        # One-command onboarding: the install script and its metadata.
+        "internal/agentinstall/*",
         "internal/service/agent*",
         "internal/plugincontrol/*",
         "packages/machine-telemetry/*",

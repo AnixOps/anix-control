@@ -119,6 +119,17 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	r.GET("/"+subscribePath+"/:token", subscribeHandler.GetSubscription)
 	r.GET("/api/v1/client/subscribe", subscribeHandler.GetLegacySubscription)
 
+	// One-command node onboarding (forward-sdk.md, section 9): the signed
+	// install script, its signature, the release metadata it reads and the
+	// Agent release when Control holds it. Public downloads, rate limited.
+	agentInstall := handler.NewAgentInstallHandler()
+	installPublic := r.Group("")
+	installPublic.Use(publicLimiter.Middleware())
+	installPublic.GET("/install.sh", agentInstall.Script)
+	installPublic.GET("/install.sh.sig", agentInstall.Signature)
+	installPublic.GET("/install/agent.env", agentInstall.Metadata)
+	installPublic.GET("/install/agent/:tag/:asset", agentInstall.Artifact)
+
 	forwardFlowHandler := handler.NewForwardHandler()
 	r.POST("/flow/upload", middleware.AppTokenAuth(), forwardFlowHandler.UploadPanelFlowData)
 
@@ -811,6 +822,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.GET("/kernel/route-modes/mismatches", routeModes.Mismatches)
 		agents := handler.NewAgentPKIHandler()
 		v4.POST("/kernel/agents/enrollment-tokens", agents.CreateEnrollmentToken)
+		v4.POST("/kernel/agents/install-tokens", agentInstall.CreateInstallToken)
 		v4.GET("/kernel/agents/transports", handler.NewAgentTransportsHandler(agentPolicy).List)
 	}
 }

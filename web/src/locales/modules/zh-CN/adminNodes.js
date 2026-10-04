@@ -198,6 +198,38 @@ export default {
       privateKey: '~/.ssh/id_ed25519'
     }
   },
+  install: {
+    title: '复制安装命令',
+    description: '在节点 {node} 上用一条命令安装并接入 Agent。',
+    intro: '生成一个绑定这个节点的一次性注册令牌，以及每个下载源的安装命令。以 root（sudo）在节点上粘贴运行：脚本安装 Agent、清理这台机器上的旧转发运行时，并等待 Agent 完成注册。再次运行同一条命令是安全的。',
+    ttl: '令牌有效期',
+    ttlOptions: {
+      hour: '1 小时（默认）',
+      sixHours: '6 小时',
+      day: '24 小时',
+      week: '7 天（最长）'
+    },
+    generate: '生成安装命令',
+    regenerate: '重新生成',
+    commandTitle: '安装命令',
+    once: '令牌只在这里显示一次，只能使用一次，{time} 失效。关闭后无法再次查看。',
+    mirror: '下载源',
+    mirrors: {
+      control: '控制面',
+      cn: '国内镜像',
+      github: 'GitHub',
+      controlHelp: '脚本和 Agent 从这个控制面下载。',
+      cnHelp: '脚本从这个控制面下载，Agent 从国内镜像下载；校验和始终来自控制面或 GitHub。',
+      githubHelp: '脚本和 Agent 从 GitHub Releases 下载；令牌仍向这个控制面注册。'
+    },
+    commandLabel: '在节点上以 root 运行',
+    copy: '复制命令',
+    fallback: '这个下载源尚未配置：{note}',
+    signed: '安装脚本已签名：可用 /install.sh.sig 和官方发布公钥校验后再运行。',
+    unsigned: '这个控制面没有安装脚本的发布签名；需要校验时请使用 GitHub Releases 中的 agent-install.sh 及其 .sig。',
+    legacy: '安装时会删除这台机器上的旧转发运行时（nftables 表 inet v2b_forward、ip v2b_forward、ip anixops_forward 和 v2forward-agent 服务），并在结束时列出删除的内容。',
+    failed: '无法生成安装命令'
+  },
   deploySection: {
     title: '部署',
     description: `安装并连接这个节点的 ${AGENT_NAME}。`,
@@ -207,6 +239,9 @@ export default {
     ansible: 'Ansible',
     ansibleRoot: '生成用 Ansible 部署这个节点的清单、group_vars 和命令。',
     ansibleChild: 'Ansible 部署助手只覆盖父节点。这个子节点请单独部署。',
+    installCommand: '一条命令安装',
+    installCommandText: '复制一条命令，在节点上粘贴运行，即可安装 Agent 并完成注册（一次性令牌）。',
+    openInstall: '复制安装命令',
     openHelper: '打开部署助手'
   },
   credentials: {

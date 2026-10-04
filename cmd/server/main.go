@@ -177,6 +177,7 @@ func formatDisplayVersion(baseVersion, code string) string {
 
 func syncBuildInfo() {
 	handler.BuildVersion = formatDisplayVersion(version, buildCode)
+	handler.ReleaseVersion = version
 	handler.BuildTime = buildTime
 	handler.BuildCode = buildCode
 	handler.BuildCommit = commit

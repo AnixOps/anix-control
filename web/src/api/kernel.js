@@ -303,6 +303,15 @@ export async function getKernelAgentTransports(legacyOnly = false) {
   return unwrap(await v4(config))
 }
 
+// One-command node onboarding: a single-use enrollment token bound to the
+// node ("proxy-<id>" or "forward-<id>") and the install command for every
+// mirror. Super administrators only; the token is shown once.
+export async function createKernelAgentInstallToken(node, ttlSeconds) {
+  const data = { node }
+  if (ttlSeconds) data.ttl_seconds = ttlSeconds
+  return unwrap(await v4({ url: '/kernel/agents/install-tokens', method: 'post', data }))
+}
+
 // Sanitized shadow-mode mismatch samples (newest first, at most 100):
 // { samples, retention_days, max_per_route }.
 export async function getKernelRouteModeMismatches({ packageID, routeID, limit } = {}) {

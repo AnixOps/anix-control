@@ -257,6 +257,22 @@ agent_control:
   # Optional Sunset date announced to legacy agents (YYYY-MM-DD).
   legacy_sunset: ""
 
+# One-command node onboarding: the node page's "复制安装命令" issues a
+# single-use enrollment token and prints
+#   curl -fsSL https://<control>/install.sh | sudo bash -s -- --control ... --node ... --token ...
+# public_url is the address nodes reach (empty: the request's origin);
+# grpc_target the gRPC listener they dial (empty: public_url's host and
+# grpc.port). artifact_dir (<dir>/<tag>/<asset>) lets Control serve the Agent
+# release itself; cn_mirror_url is a mainland mirror of the GitHub release
+# downloads. signature_file is set by the release image.
+agent_install:
+  public_url: ""
+  grpc_target: ""
+  agent_version: ""
+  artifact_dir: ""
+  cn_mirror_url: ""
+  signature_file: ""
+
 # Route modes of v2 Control packages (anix-control routes list/set/rollback).
 # rehearsed (default since 4.1.0): the 151 routes of the 15 packages that
 # passed the staging rehearsal (config/package-route-defaults.json) run their

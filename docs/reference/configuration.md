@@ -351,6 +351,37 @@ agent_control:
   and [`../architecture/node-ops-service.md`](../architecture/node-ops-service.md)
   section 5.6.
 
+## Agent Install (One-Command Onboarding)
+
+`agent_install` configures the install command the node page copies
+(`POST /api/v4/kernel/agents/install-tokens`, super administrators) and the
+public downloads it uses: `GET /install.sh`, `/install.sh.sig`,
+`/install/agent.env` and `/install/agent/<tag>/<asset>`
+([guide](../guide/agent-onboarding.md)).
+
+```yaml
+agent_install:
+  public_url: ""      # https address nodes reach; empty: the request's origin
+  grpc_target: ""     # host:port nodes dial; empty: public_url's host and grpc.port
+  agent_version: ""   # Agent release tag; empty: "v" + Control's version (H25)
+  artifact_dir: ""    # <dir>/<tag>/<asset> (+ .dgst/.sig): Control serves the Agent
+  cn_mirror_url: ""   # mainland mirror of the GitHub release downloads
+  signature_file: ""  # release signature of the install script (set by the image)
+```
+
+- Nodes must reach Control over https: without `public_url` the request's
+  origin is used, which behind a reverse proxy is only right when the proxy
+  is in `server.trusted_proxies`; an http origin refuses to issue tokens
+  (`agent_install_unconfigured`).
+- Tokens are AgentPKI one-time enrollment credentials (`anixagt_`, stored as
+  SHA-256 in `v4_kernel_agent_enrollment`), bound to a node, valid 1 hour by
+  default and at most 7 days.
+- `/install.sh.sig` is served only when `signature_file` verifies the
+  embedded script with `plugins.official_public_key`; the release image sets
+  `ANIX_CONTROL_AGENT_INSTALL_SIGNATURE_FILE`.
+- The subscription path (`app.subscribe_path`) may not be `install`,
+  `install.sh` or start with `install/`.
+
 ## Package Route Defaults
 
 `package_routes.default_mode` (`ANIX_CONTROL_PACKAGE_ROUTES_DEFAULT_MODE`)

@@ -47,6 +47,7 @@
       <UiGroupedList heading-tag="h2" :title="t('forwardNodesPage.detail.actions')">
         <UiGroupedListRow :label="actions.isPending(node.id, 'sync') ? t('runtime.nodeXTopology.actions.syncing') : t('runtime.nodeXTopology.actions.syncStats')" data-test="node-detail-sync" @click="runIfIdle(actions.sync)" />
         <UiGroupedListRow :label="t('runtime.nodeXTopology.actions.testConnection')" data-test="node-detail-test" @click="connectionOpen = true" />
+        <UiGroupedListRow :label="t('admin.nodes.deploySection.openInstall')" data-test="node-detail-install" @click="installOpen = true" />
       </UiGroupedList>
     </template>
 
@@ -92,6 +93,7 @@
 
   <NodeXNodeDialog v-if="node" v-model:open="editorOpen" :node-id="node.id" @saved="load" />
   <NodeXConnectionDialog v-model:open="connectionOpen" :node="node" />
+  <AgentInstallSheet v-if="node" v-model:open="installOpen" :node="`forward-${node.id}`" :node-label="node.name" />
 </template>
 
 <script setup>
@@ -108,6 +110,7 @@ import UiButton from '@/ui/UiButton.vue'
 import UiGroupedList from '@/ui/UiGroupedList.vue'
 import UiGroupedListRow from '@/ui/UiGroupedListRow.vue'
 import { useFormat } from '@/ui/composables/useFormat'
+import AgentInstallSheet from '@/components/admin/AgentInstallSheet.vue'
 import NodeDetailLayout from './NodeDetailLayout.vue'
 import NodeXConnectionDialog from './NodeXConnectionDialog.vue'
 import NodeXNodeDialog from './NodeXNodeDialog.vue'
@@ -129,6 +132,7 @@ const error = ref(null)
 const notFound = ref(false)
 const editorOpen = ref(false)
 const connectionOpen = ref(false)
+const installOpen = ref(false)
 
 const tab = useDetailTab(['overview', 'config', 'danger'])
 const tabs = computed(() => [

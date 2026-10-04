@@ -198,6 +198,38 @@ export default {
       privateKey: '~/.ssh/id_ed25519'
     }
   },
+  install: {
+    title: 'Copy install command',
+    description: 'Install and connect the Agent on node {node} with one command.',
+    intro: 'Generates a single-use enrollment token bound to this node and the install command for each download source. Paste it on the node as root (sudo): the script installs the Agent, removes this machine’s legacy forward runtime and waits until the Agent has enrolled. Running the same command again is safe.',
+    ttl: 'Token lifetime',
+    ttlOptions: {
+      hour: '1 hour (default)',
+      sixHours: '6 hours',
+      day: '24 hours',
+      week: '7 days (maximum)'
+    },
+    generate: 'Generate install command',
+    regenerate: 'Generate again',
+    commandTitle: 'Install command',
+    once: 'The token is shown only here, works once and expires {time}. It cannot be shown again after you close this sheet.',
+    mirror: 'Download source',
+    mirrors: {
+      control: 'Control',
+      cn: 'Mainland mirror',
+      github: 'GitHub',
+      controlHelp: 'The script and the Agent are downloaded from this Control.',
+      cnHelp: 'The script comes from this Control and the Agent from the mainland mirror; checksums always come from Control or GitHub.',
+      githubHelp: 'The script and the Agent come from GitHub releases; the token still enrolls with this Control.'
+    },
+    commandLabel: 'Run on the node as root',
+    copy: 'Copy command',
+    fallback: 'This download source is not set up: {note}',
+    signed: 'The install script is signed: verify it with /install.sh.sig and the official release key before running it.',
+    unsigned: 'This Control has no release signature for the install script; to verify it, use agent-install.sh and its .sig from GitHub releases.',
+    legacy: 'The install removes this machine’s legacy forward runtime (the nftables tables inet v2b_forward, ip v2b_forward and ip anixops_forward, and the v2forward-agent service) and lists what it removed.',
+    failed: 'Could not generate the install command'
+  },
   deploySection: {
     title: 'Deployment',
     description: `Install and connect this node’s ${AGENT_NAME}.`,
@@ -207,6 +239,9 @@ export default {
     ansible: 'Ansible',
     ansibleRoot: 'Generate the inventory, group vars and commands to deploy this node with Ansible.',
     ansibleChild: 'The Ansible helper covers parent nodes only. Deploy this child node separately.',
+    installCommand: 'One-command install',
+    installCommandText: 'Copy one command and paste it on the node to install the Agent and enroll it (single-use token).',
+    openInstall: 'Copy install command',
     openHelper: 'Open deployment helper'
   },
   credentials: {
