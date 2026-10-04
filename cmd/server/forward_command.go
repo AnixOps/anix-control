@@ -38,6 +38,15 @@ const forwardCommandUsage = `usage:
   anix-control forward nodes set <node_ref> (-f <settings.json> | [--port-range <first>-<last>] [--reserved <port,...>] [--address <ip>]... [--label <key=value>]... | --defaults)
   anix-control forward stats [--route <route_id>] [--node <node_ref>] [--since <time>] [--until <time>] [--json]
   anix-control forward reset-node <node_ref>
+  anix-control forward dns providers list [--json]
+  anix-control forward dns providers create -f <provider.json> [--request-id <id>]
+  anix-control forward dns providers update <id> -f <provider.json> [--request-id <id>]
+  anix-control forward dns providers delete <id> --yes
+  anix-control forward dns bindings list [--route <route_id>] [--json]
+  anix-control forward dns bindings create -f <binding.json> [--request-id <id>]
+  anix-control forward dns bindings update <id> -f <binding.json> [--request-id <id>]
+  anix-control forward dns bindings delete <id> --yes [--purge]
+  anix-control forward dns status <route_id> [--json]
 
 The commands run on Control's database through the kernel's forwarding
 state (forward-sdk.md section 8), as /api/v4/forward/* does through
@@ -63,6 +72,15 @@ applies the node's current state again (after its rules were changed by
 hand, or to drive a push again). A reset or restored Control database needs
 no command: a node that reports a generation ahead of the stored one is
 recovered on that report, within a minute (forward-sdk.md section 8.2).
+
+dns administers entry HA through DNS (forward-sdk.md section 7.4): a
+provider file is {"provider": DnsProvider, "credentials": {...}}, a binding
+file a DnsBinding. Credentials are sealed with module_runtime.ca_kek and
+never printed; on update a credential left out, or "********", keeps the
+stored value. bindings delete --purge first deletes the records Control
+published. dns status shows the published and desired records and each
+entry node's health; the running Control evaluates the bindings every 10
+seconds.
 
 Writes are written to the audit log as system/cli. The running Control
 sends the nodes their new state at its next configuration refresh, within a
@@ -125,6 +143,8 @@ func runForwardCommand(ctx context.Context, db *gorm.DB, arguments []string, std
 		return cli.nodes(arguments[1], arguments[2:])
 	case "stats":
 		return cli.stats(arguments[1:])
+	case "dns":
+		return cli.dns(arguments[1:])
 	}
 	return forwardUsageError()
 }
