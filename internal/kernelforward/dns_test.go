@@ -205,6 +205,18 @@ func runDNSProviderCredentials(t *testing.T, db *gorm.DB) {
 	d.seenKEK = &other
 	_, err = d.service.dnsProvider(db, provider.GetId())
 	require.ErrorContains(t, err, "wrong key-encryption key")
+	// Under another key the placeholder cannot keep anything: every
+	// credential must be sent again, and then the provider opens.
+	_, err = d.service.UpdateDNSProvider(d.ctx, "provider-2b", &forwardv1.DnsProvider{Id: provider.GetId(), Name: "cf-main"},
+		map[string]string{forwardddns.CredentialAPIToken: service.SensitiveSystemConfigPlaceholder})
+	var missing *DNSRefusedError
+	require.ErrorAs(t, err, &missing)
+	require.Equal(t, CodeRequired, missing.Violations[0].GetCode())
+	_, err = d.service.UpdateDNSProvider(d.ctx, "provider-2c", &forwardv1.DnsProvider{Id: provider.GetId(), Name: "cf-main"},
+		map[string]string{forwardddns.CredentialAPIToken: cfSecret})
+	require.NoError(t, err)
+	_, err = d.service.dnsProvider(db, provider.GetId())
+	require.NoError(t, err)
 
 	// Without a key-encryption key nothing is stored.
 	empty := ""

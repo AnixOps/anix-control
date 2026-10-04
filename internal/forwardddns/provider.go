@@ -58,7 +58,7 @@ const (
 const (
 	CredentialAPIToken        = "api_token"
 	CredentialAccessKeyID     = "access_key_id"
-	CredentialAccessKeySecret = "access_key_secret"
+	CredentialAccessKeySecret = "access_key_secret" // #nosec G101 -- a credential's field name, not a credential.
 	CredentialSecretID        = "secret_id"
 	CredentialSecretKey       = "secret_key"
 	CredentialAccessKey       = "access_key"
@@ -290,12 +290,16 @@ func ValidName(name string) bool {
 			return false
 		}
 		for _, r := range label {
-			if !(r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_') {
+			if !nameRune(r) {
 				return false
 			}
 		}
 	}
 	return true
+}
+
+func nameRune(r rune) bool {
+	return r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '-' || r == '_'
 }
 
 // NormalizeName lowercases a DNS name and drops its trailing dot.

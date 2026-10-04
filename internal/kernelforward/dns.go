@@ -441,7 +441,9 @@ func (s *Service) UpdateDNSProvider(ctx context.Context, requestID string, provi
 		}
 		merged, err := sealer.open(row)
 		if err != nil {
-			return err
+			// Sealed under another key (a database restored with a new
+			// ca_kek): the update must then send every credential again.
+			merged = map[string]string{}
 		}
 		for key, value := range credentials {
 			key, value = strings.TrimSpace(key), strings.TrimSpace(value)
