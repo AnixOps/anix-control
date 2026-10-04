@@ -47,6 +47,7 @@ const forwardCommandUsage = `usage:
   anix-control forward dns bindings update <id> -f <binding.json> [--request-id <id>]
   anix-control forward dns bindings delete <id> --yes [--purge]
   anix-control forward dns status <route_id> [--json]
+  anix-control forward legacy archive|check|status|abandon|drop (the v4.2 upgrade; forward legacy for its usage)
 
 The commands run on Control's database through the kernel's forwarding
 state (forward-sdk.md section 8), as /api/v4/forward/* does through

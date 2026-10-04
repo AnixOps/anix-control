@@ -2239,7 +2239,8 @@ this order:
    `anix-control agents transports --check-required` exits 0).
 3. **Then upgrade Control to v4.2.** Its upgrade checks that every forward
    node is clean before it drops the old tables, and asks you to confirm that
-   step on its own: it cannot be undone. Control cleans NodeX hosts through
+   step on its own: it cannot be undone ("Forwarding: Archive, Clean The
+   Nodes, Drop The Old Tables" below). Control cleans NodeX hosts through
    NodeX's HTTP API and Ansible hosts over SSH; neither depends on
    `agent_control.mtls`.
 
@@ -2376,6 +2377,104 @@ v4.2 adds the forwarding API `/api/v4/forward/*` and the command line
 - **Rollback.** The API adds no table: the routes, inventory and ledger are
   the kernel's F3a tables. Rolling back to a release without it only removes
   the API and the commands.
+
+## Forwarding: Archive, Clean The Nodes, Drop The Old Tables (v4.2)
+
+v4.2 does not migrate the v4.1 flux forwarding (forwards, tunnels, user
+tunnel grants, speed limits, legacy rules, runtime jobs): you reconfigure
+forwarding as v4 routes. The upgrade archives the old data, checks that no
+forward node still runs the old runtime, and, only when you confirm it on
+the command line, drops the old tables
+([design](architecture/forward-sdk.md#10-upgrade-from-v41), F5c).
+
+> **The drop is IRREVERSIBLE.** After it, rolling back to 4.1 needs the
+> database backup you took before it, and forwarding must be reconfigured
+> either way. There is no button for it in the web UI on purpose: it runs
+> only from the command line, with Control stopped.
+
+Do this after the order above (the new Agent on every forward node, then
+Control v4.2). Step by step:
+
+1. **The archive.** The first v4.2 start (or the first `anix-control
+   migrate`) writes one to the data directory
+   (`config/data/forward-legacy/`, or next to the SQLite database) and logs
+   its path and SHA-256. Write another, anywhere, at any time:
+
+   ```bash
+   anix-control forward legacy archive -o /root/forward-legacy/
+   ```
+
+   It is one JSON file (mode 0600) with every row of the old forwarding
+   tables and, for reference, the forward nodes and clean agents; node
+   tokens and other secrets are left out. It never overwrites a file (a
+   directory gets a timestamped name). A super administrator can also
+   download the newest one: `GET /api/v4/forward/legacy/archive` (audited).
+   On Docker the data directory is inside the container: pass `-o` a
+   mounted path, or download it.
+2. **Check the nodes.**
+
+   ```bash
+   anix-control forward legacy check        # or --node <name|forward-id>
+   anix-control forward legacy status
+   ```
+
+   Each forward node is `clean`, `dirty` or `unreachable`:
+   - a node running the enrolled Agent is clean: its installer removed the
+     old tables and the clean agent. An Agent installed another way: run
+     the node's install command again (it keeps the node's identity);
+   - Control deletes the old gost services of NodeX hosts through NodeX's
+     API (`forward.runtime.nodex.base_url` and `token` must still be set),
+     and runs `config/deploy/ansible/playbooks/forward_legacy_cleanup.yml`
+     on Ansible hosts with the Ansible settings forwarding used;
+   - a node still on the clean agent or another legacy channel is
+     unreachable: install the new Agent and check again;
+   - a node with no enrolled Agent, no clean agent, not an Ansible machine
+     and referenced by no old forward or rule is reported clean ("no legacy
+     forward runtime was placed on this node") without being contacted:
+     check such hosts yourself if they ever ran forwarding by hand.
+
+   A `dirty` node still has old rules: fix the cause in the detail and
+   check again. A node you cannot reach any more (returned, broken) can be
+   abandoned by name, with a reason; its old rules, if any, stay on it:
+
+   ```bash
+   anix-control forward legacy abandon jp-exit-2 --reason "returned to the provider"
+   ```
+3. **Back up the database.** On PostgreSQL `pg_dump`; on SQLite a backup of
+   type database or full in Control's backup settings (or a copy of the
+   file). It must be at most 24 hours old.
+4. **Stop every Control process** (all replicas) and wait 30 seconds (the
+   singleton lease expires).
+5. **Drop.** The phrase must be exact:
+
+   ```bash
+   anix-control forward legacy drop --confirm "DROP v4.1 FORWARDING TABLES" \
+     --backup-taken /root/backup/anix-control-20261004.dump
+   ```
+
+   It refuses, listing every reason, unless the newest archive is readable,
+   unchanged and current (archive again if the old data changed), every
+   forward node is clean or abandoned, no installed package release still
+   adopts one of the old tables (the forward package of this release no
+   longer does; an older one would lose its storage, so upgrade the package
+   first), no Control holds the lease, and the
+   backup exists (`--backup-taken` may be left out on SQLite when Control's
+   own backup of the last 24 hours exists). It then drops, in one
+   transaction: `v2_forward_port_binding`, `v2_forward_traffic_cursor`,
+   `v2_forward_agent_bridge_task`, `v2_forward_runtime_job`,
+   `v2_forward_user_tunnel`, `v2_speed_limit`, `v2_forward`,
+   `v2_forward_tunnel`, `v2_forward_rule`, `v2_forward_route`,
+   `v2_forward_log` and `v2_forward_stats`. A table already gone is
+   reported. `v2_forward_node` (the node inventory) and
+   `v2_forward_clean_agent` are kept.
+6. **Start Control.** It no longer creates the dropped tables or runs the
+   old forwarding workers. `forward legacy status` shows when the drop ran.
+
+**Rollback.** Before the drop, rolling back to 4.1 is the usual binary
+rollback: the old tables are untouched (the upgrade adds only
+`v4_forward_legacy_archive`, `v4_forward_legacy_node` and
+`v4_forward_legacy_drop`). After it, 4.1 needs the database restored from
+the backup of step 3; anything changed since then is lost.
 
 ## Staged Agent Upgrades (v4.2)
 
@@ -2563,7 +2662,9 @@ curl -fsS http://127.0.0.1:8080/health
 ```
 
 If the upgrade changed database state, restore the database backup only when the
-approved rollback plan says so. Keep the failed-upgrade logs and the final
+approved rollback plan says so. After `anix-control forward legacy drop`
+(v4.2), a rollback to 4.1 always needs the database backup taken before the
+drop: the old forwarding tables are gone. Keep the failed-upgrade logs and the final
 database driver/config in the maintenance record.
 
 ## Post-Upgrade Record

@@ -65,6 +65,9 @@ func runAdminCommand(ctx context.Context, cfg *config.Config, db *gorm.DB, argum
 	if len(arguments) > 0 && arguments[0] == "routes" {
 		return runRoutesCommand(ctx, cfg, db, arguments[1:], stdout)
 	}
+	if len(arguments) > 1 && arguments[0] == "forward" && arguments[1] == "legacy" {
+		return runForwardLegacyCommand(ctx, cfg, db, arguments[2:], stdout)
+	}
 	if len(arguments) > 0 && arguments[0] == "forward" {
 		return runForwardCommand(ctx, db, arguments[1:], stdout)
 	}

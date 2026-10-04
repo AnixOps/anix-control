@@ -158,10 +158,13 @@ func (w *ForwardLatencyProber) enumerateTargets(ctx context.Context) ([]probeTar
 		}
 	}
 
-	// 1. forward -> remote_addr targets
+	// 1. forward -> remote_addr targets. The flux tables are gone once the
+	// v4.2 upgrade dropped them (forwardlegacy); the nodes are still probed.
 	var forwards []model.Forward
-	if err := db.Where("status = ?", model.ForwardStatusActive).Order("id ASC").Find(&forwards).Error; err != nil {
-		return nil, err
+	if db.Migrator().HasTable(&model.Forward{}) {
+		if err := db.Where("status = ?", model.ForwardStatusActive).Order("id ASC").Find(&forwards).Error; err != nil {
+			return nil, err
+		}
 	}
 	for i := range forwards {
 		for _, raw := range strings.FieldsFunc(forwards[i].RemoteAddr, func(r rune) bool { return r == ',' || r == '\n' || r == '\r' }) {
@@ -175,8 +178,10 @@ func (w *ForwardLatencyProber) enumerateTargets(ctx context.Context) ([]probeTar
 
 	// 2. tunnel relay/exit node endpoints
 	var tunnels []model.ForwardTunnel
-	if err := db.Where("status = ?", model.ForwardTunnelStatusActive).Order("id ASC").Find(&tunnels).Error; err != nil {
-		return nil, err
+	if db.Migrator().HasTable(&model.ForwardTunnel{}) {
+		if err := db.Where("status = ?", model.ForwardTunnelStatusActive).Order("id ASC").Find(&tunnels).Error; err != nil {
+			return nil, err
+		}
 	}
 	for i := range tunnels {
 		if host, port, ok := w.resolveNodeEndpoint(db, tunnels[i].InNodeID, tunnels[i].InIP); ok {

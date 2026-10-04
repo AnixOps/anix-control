@@ -73,6 +73,11 @@ func forwardV4NeedsSuperAdmin(method, requestPath string) bool {
 
 // ForwardGateway serves /api/v4/forward/*.
 func (h *KernelHandler) ForwardGateway(c *gin.Context) {
+	// The v4.1 forwarding archive is the kernel's own (F5c).
+	if c.Request.URL.Path == forwardLegacyArchivePath {
+		h.ForwardLegacyArchive(c)
+		return
+	}
 	if edition.For(config.Get()).HidesPath(c.Request.URL.Path) {
 		kernelError(c, http.StatusNotFound, "plugin_route_not_found", "route not found")
 		return
