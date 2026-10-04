@@ -290,11 +290,15 @@ func (d *Driver) status(ctx context.Context) (Status, error) {
 //     address), change it through the web API object by object
 //     (applyAPI): the services, chains, admissions and limiters that
 //     changed are created, re-created or deleted, every hop is put, and
-//     every other service runs on untouched;
+//     every other service runs on untouched; unless that would delete or
+//     re-create a running mux or QUIC service (applyStrands), which goes
+//     to 6;
 //  6. otherwise write the configuration (temporary file and rename),
 //     reload a running gost (restart it when it serves the artifact's
-//     structure already, since a reload could not be told from none) or
-//     start it, and wait until it serves the content;
+//     structure already, since a reload could not be told from none, or
+//     when the configuration it loaded has a mux or QUIC listener, whose
+//     carriers a reload would strand: hasMuxListener) or start it, and
+//     wait until it serves the content;
 //  7. when 5 fails, put the objects it changed back through the web API
 //     (or, when that fails too, the previous configuration back with a
 //     restart); when 6 fails, put the previous configuration back and
@@ -388,7 +392,7 @@ func (d *Driver) Apply(ctx context.Context, a driver.Artifact) (driver.ApplyResu
 		if err := ctx.Err(); err != nil {
 			return driver.ApplyResult{}, err
 		}
-		if live != nil {
+		if live != nil && !applyStrands(prev, a.Content, live) {
 			if err := d.applyAPI(ctx, h, prev, a, next, live, status.Instance); err != nil {
 				return driver.ApplyResult{}, err
 			}
@@ -417,6 +421,16 @@ func (d *Driver) Apply(ctx context.Context, a driver.Artifact) (driver.ApplyResu
 		// gost serves this structure already (an earlier apply was cut
 		// short, or the recorded state is gone): a reload would not move
 		// the metrics path, so whether it took could not be seen.
+		started = true
+		if err = d.sup.Stop(ctx); err == nil {
+			d.removeStaleSocket()
+			err = d.sup.Start(ctx)
+		}
+	case hasMuxListener(h.config):
+		// gost runs, or may run, a mux or QUIC listener: a reload
+		// re-creates every service, which would strand the carriers it
+		// accepted (or fail to bind a QUIC port they hold). A restart
+		// closes them, and the peers dial new ones.
 		started = true
 		if err = d.sup.Stop(ctx); err == nil {
 			d.removeStaleSocket()

@@ -234,3 +234,50 @@ func (d *Driver) rollback(ctx context.Context, prev []apiObject, done, log *sync
 	}
 	return nil
 }
+
+// applyStrands reports whether taking the running gost from prev to
+// content through the web API would delete or re-create a running
+// service whose listener is a mux or QUIC carrier (muxCarrier): its
+// accepted carriers would outlive it, so its peers would keep opening
+// streams nothing accepts (or, for QUIC, the new service could not bind
+// while they live). Apply restarts gost instead. A service only added
+// has no carriers yet and is created through the web API.
+func applyStrands(prev *gostConfig, content []byte, live *liveConfig) bool {
+	next, err := decodeConfig(content)
+	if err != nil {
+		return true
+	}
+	from, err1 := objects(prev)
+	to, err2 := objects(next)
+	if err1 != nil || err2 != nil {
+		return true
+	}
+	running := live.names()
+	touched := changes(from, to)
+	for _, s := range prev.Services {
+		k := kindServices + "/" + s.Name
+		if touched[k] && running[k] && muxCarrier(s.Listener.Type) {
+			return true
+		}
+	}
+	return false
+}
+
+// hasMuxListener reports whether the configuration content, the file a
+// running gost loaded, has a mux or QUIC listener, or cannot be read (so
+// what gost runs is unknown).
+func hasMuxListener(content []byte) bool {
+	if content == nil {
+		return true
+	}
+	c, err := decodeConfig(content)
+	if err != nil {
+		return true
+	}
+	for _, s := range c.Services {
+		if muxCarrier(s.Listener.Type) {
+			return true
+		}
+	}
+	return false
+}

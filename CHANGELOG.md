@@ -583,6 +583,31 @@
   hang; a QUIC listener keeps its port while its connections live): every
   hop starts a new epoch and hands its counters over. A real-gost test
   (`TestNetnsReloadCredentials`) covers each link type.
+- **gost no longer strands mux and QUIC carriers on structural changes.**
+  Deleting a gost mux (`mtcp`, `mtls`, `mwss`) service through the web API,
+  or reloading gost with SIGHUP, closed only its listening socket: the
+  carriers it had accepted stayed up, the relay kept opening streams on
+  them that nothing accepted, and new connections through the relay hung
+  until the carrier closed (over 40 s, without end, measured); a QUIC
+  listener could not be created again while its connections held the port.
+  This hit an Apply that changed or removed such an exit hop and the reload
+  fallback on any node with a mux listener. Apply now restarts gost
+  instead whenever it would delete or re-create a running mux or QUIC
+  service (adding one still goes through the web API), and its fallback
+  restarts rather than reloads a gost whose loaded configuration has a mux
+  or QUIC listener: the restart closes every carrier and peers dial new
+  ones (over mux new connections pass within about 0.1 s; over QUIC at the
+  peer's 30 s idle timeout), at the cost of that node's established
+  connections and counter epochs (`Loads` counted, every hop's counters
+  retired). `ReloadCredentials` shares the rule's predicate (unchanged
+  behaviour: `mtcp` holds no certificate, so it never touches one). A
+  running gost with no recorded configuration is restarted rather than
+  reloaded, since what it runs is unknown. Both ends of mux and QUIC links now render their
+  keepalives explicitly (10 s interval, 30 s timeout; gost's defaults), so
+  a carrier whose peer vanished without a close is dropped; the `links`
+  and planner goldens in `contracts/forward/v1/gost` change accordingly. A
+  real-gost test (`TestNetnsMuxRestart`, about 6 s of CI) covers the web
+  API path and the fallback.
 - UniProxy `alivelist` answered an empty list with the built-in memory
   cache (its key pattern matched nothing there), so device limits counted
   only each node's own connections. It now counts the online sets of every

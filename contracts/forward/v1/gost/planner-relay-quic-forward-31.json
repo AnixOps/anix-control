@@ -95,6 +95,11 @@
               "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
               "secure": true,
               "serverName": "forward-41"
+            },
+            "metadata": {
+              "keepAlive": "true",
+              "maxIdleTimeout": "30s",
+              "ttl": "10s"
             }
           }
         },
@@ -115,6 +120,11 @@
               "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
               "secure": true,
               "serverName": "forward-42"
+            },
+            "metadata": {
+              "keepAlive": "true",
+              "maxIdleTimeout": "30s",
+              "ttl": "10s"
             }
           }
         }

@@ -103,6 +103,10 @@
               "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
               "secure": true,
               "serverName": "forward-41"
+            },
+            "metadata": {
+              "mux.keepaliveInterval": "10s",
+              "mux.keepaliveTimeout": "30s"
             }
           }
         },
@@ -123,6 +127,10 @@
               "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
               "secure": true,
               "serverName": "forward-42"
+            },
+            "metadata": {
+              "mux.keepaliveInterval": "10s",
+              "mux.keepaliveTimeout": "30s"
             }
           }
         }

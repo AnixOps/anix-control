@@ -816,8 +816,12 @@ driver writes gost's configuration and runs the unmodified binary.
     half-close (FIN with the reverse direction still open) arrives as a
     full close over relayed links, since gost cannot half-close a TLS or
     mux stream; RAW links keep it. UDP listeners keep a client's session for
-    60 s after its last datagram. Every service keeps gost's statistics
-    (`enableStats`, F4b);
+    60 s after its last datagram. Both ends of a mux or QUIC link render
+    keepalives: one every 10 s, the carrier closed after 30 s without data
+    (`mux.keepaliveInterval`/`mux.keepaliveTimeout`; QUIC `keepAlive`,
+    `ttl`, `maxIdleTimeout`), gost's defaults written out, so a carrier
+    whose peer vanished without a close is dropped and dialled again.
+    Every service keeps gost's statistics (`enableStats`, F4b);
   - upstreams: the nodes of a top-level gost hop `r<route>-h<hop>` (F4b),
     which the service names, so it can be replaced alone. `RAW` upstreams
     are dialled directly: the service's forwarder names the hop. Relayed
@@ -888,7 +892,10 @@ driver writes gost's configuration and runs the unmodified binary.
   connections, UDP sessions, mux carriers and statistics: adding,
   changing or removing a route re-creates nothing of the node's other
   routes (tested end to end with a held TCP connection and UDP session).
-  gost answers a refusal before it changes anything; when it refuses one
+  Mux and QUIC listeners are the exception (see "Mux and QUIC carriers"
+  below): an apply that would delete or re-create a running `mtcp`,
+  `mtls`, `mwss` or `quic` service restarts gost instead; adding one goes
+  through the web API. gost answers a refusal before it changes anything; when it refuses one
   call (a port taken meanwhile, a certificate it cannot read), Apply puts
   back, through the web API, exactly the objects it had changed as the
   previous configuration has them, writes the previous file back and
@@ -896,14 +903,16 @@ driver writes gost's configuration and runs the unmodified binary.
   configuration (or stop it after a first apply).
 
   Otherwise (gost stopped, its web API silent, a configuration file that
-  is not the recorded one, or other globals) Apply writes the
-  configuration and reloads gost with SIGHUP (or starts it, or restarts it
-  when gost already serves that structure, since a reload would not move
-  the metrics path) and waits until gost serves the new metrics path with
-  every listener bound. A reload keeps the process, so established TCP
-  connections survive it (tested); it re-creates every service of the
-  node, so UDP sessions and mux carriers may restart and every hop's
-  counters start a new epoch (the `WithRetiredCounters` hook gets every
+  is not the recorded one, other globals, or a mux or QUIC service to
+  delete or re-create) Apply writes the configuration and reloads gost
+  with SIGHUP (or starts it, or restarts it when gost already serves that
+  structure, since a reload would not move the metrics path, or when the
+  configuration gost loaded has a mux or QUIC listener or cannot be read)
+  and waits until gost serves the new metrics path with every listener
+  bound. A reload keeps the process, so established TCP connections
+  survive it (tested); it re-creates every service of the node, so UDP
+  sessions may restart and every hop's counters start a new epoch (a
+  restart ends every connection as well) (the `WithRetiredCounters` hook gets every
   hop's counters read just before, when the web API answers). gost's
   reload is not atomic (a listener it cannot bind closes the old services
   first), so when the new configuration is not served within
@@ -914,6 +923,28 @@ driver writes gost's configuration and runs the unmodified binary.
   What an established connection of a deleted or re-created service moves
   afterwards goes to the closed service's statistics, which nothing reads
   any more: like a reload, but limited to the hops Apply changed.
+- **Mux and QUIC carriers.** A mux (`mtcp`, `mtls`, `mwss`) or QUIC
+  listener accepts long-lived carriers on which the previous hop's dialer
+  opens a stream per connection. gost 3.2.6 ties them to its process, not
+  to the service (measured): deleting the service through the web API, or
+  a SIGHUP reload re-creating it, closes the listening socket only; the
+  accepted carriers stay up and keep answering keepalives, so the peer
+  keeps opening streams on them that nothing accepts and every new
+  connection through it hangs (over 40 s, with no end, in
+  `TestNetnsMuxRestart` before the rule); a QUIC listener keeps its UDP
+  port bound while its connections live, so the new service cannot bind.
+  The driver therefore never deletes, re-creates or reloads such a service
+  on a running gost: Apply (per-service sync and the reload fallback) and
+  `ReloadCredentials` restart gost, whose exit closes every carrier
+  (`Loads` counted, every hop's epoch ends, `WithRetiredCounters` gets
+  every hop's counters when the web API answers), and peers dial new ones:
+  over mux new connections pass within about a second (the peer sees the
+  TCP close), over QUIC at the peer's idle timeout (30 s; gost sends no
+  stateless reset). The price is that such a structural change ends every
+  established connection of the node; hot changes, changes to other
+  services and added services do not restart it, and nodes without a mux
+  or QUIC listener keep the SIGHUP fallback, which keeps established TCP
+  connections.
 - **TLS and peer identities.** Links between nodes are mutual TLS with the
   node's link certificate (`Config.LinkCert`, `LinkKey`, `LinkCA`). The
   listener requires a client certificate `LinkCA` signed; the dialler
@@ -979,9 +1010,8 @@ driver writes gost's configuration and runs the unmodified binary.
   web API does not answer: every connection ends, every hop starts a new
   epoch and hands its counters over, and a peer's QUIC carrier recovers
   at its idle timeout (30 s). A supervisor reload outside the driver would
-  leave the epoch unmoved. Re-creating a mux listener's service in an
-  Apply (a changed exit hop, or the reload fallback) strands its peers'
-  carriers the same way; that is open for the driver.
+  leave the epoch unmoved. Apply follows the same rule ("Mux and QUIC
+  carriers").
 - **Web API (F4b).** gost's web API listens on `api.sock` in the runtime
   directory, without authentication: the socket's permissions are its only
   key. Under the unit, gost creates it with `UMask=0007` in its
@@ -1074,7 +1104,12 @@ driver writes gost's configuration and runs the unmodified binary.
   (`TestNetnsLeastConn`), and link certificates renewed in place over TLS,
   WSS, gRPC, QUIC and TLS-with-mux links (`TestNetnsReloadCredentials`:
   the new certificate served, the epochs and retired counters, traffic
-  resuming, and over TLS an established connection kept). CI runs them under sudo in Backend Tests shard 1
+  resuming, and over TLS an established connection kept), and a relay
+  dialling an exit over TLS with mux whose mux service changes
+  structurally, through the web API path and the fallback
+  (`TestNetnsMuxRestart`: the exit restarts, the relay does not, and new
+  connections through the relay pass again well within the 30 s keepalive
+  timeout plus slack, measured about 0.1 s). CI runs them under sudo in Backend Tests shard 1
   with the pinned release, after the nftables driver's real-kernel tests:
   every change runs them, as for nftables. The netns conformance Env fails
   an apply through the web API by refusing its first service creation

@@ -48,7 +48,11 @@
         }
       },
       "listener": {
-        "type": "mtcp"
+        "type": "mtcp",
+        "metadata": {
+          "mux.keepaliveInterval": "10s",
+          "mux.keepaliveTimeout": "30s"
+        }
       },
       "forwarder": {
         "hop": "r01JF1B000000000000000000B1-h2"
@@ -95,6 +99,6 @@
   },
   "metrics": {
     "addr": "unix:///run/anixops-gost/metrics.sock",
-    "path": "/anixops-3c049482567a7bbd"
+    "path": "/anixops-0ecb35f1bd326e90"
   }
 }

@@ -15,24 +15,32 @@ import (
 	"github.com/AnixOps/anix-control/sdk/forward/driver/conformance"
 )
 
-// walkKeys calls f with every object key of a JSON document.
-func walkKeys(v any, f func(string)) {
+// walkKeys calls f with every object key of a JSON document and the key
+// of the object that holds it ("" at the top).
+func walkKeys(v any, parent string, f func(parent, key string)) {
 	switch x := v.(type) {
 	case map[string]any:
 		for k, e := range x {
-			f(k)
-			walkKeys(e, f)
+			f(parent, k)
+			walkKeys(e, k, f)
 		}
 	case []any:
 		for _, e := range x {
-			walkKeys(e, f)
+			walkKeys(e, parent, f)
 		}
 	}
 }
 
+// muxKeys are the dotted keys gost reads a mux carrier's keepalives from.
+// Inside the metadata of a listener or dialer (in the services' or hops'
+// arrays) gost's file loader keeps them whole: viper does not descend
+// into arrays (gost -O json shows them as loaded).
+var muxKeys = map[string]bool{"mux.keepaliveInterval": true, "mux.keepaliveTimeout": true}
+
 // TestRenderIsPlainJSON: every rendered configuration is JSON whose keys
 // hold no dot (gost's loader would split such a key into nested objects)
-// and that names no file but the configured link certificate and socket.
+// but the mux keepalives in a metadata object, and that names no file but
+// the configured link certificate and socket.
 func TestRenderIsPlainJSON(t *testing.T) {
 	for _, c := range goldenCases(t) {
 		d := newDriver(t, c.cfg)
@@ -41,9 +49,9 @@ func TestRenderIsPlainJSON(t *testing.T) {
 		if err := json.Unmarshal(a.Content, &v); err != nil {
 			t.Fatalf("%s: %v", c.name, err)
 		}
-		walkKeys(v, func(k string) {
-			if strings.Contains(k, ".") {
-				t.Errorf("%s: key %q", c.name, k)
+		walkKeys(v, "", func(parent, k string) {
+			if strings.Contains(k, ".") && (parent != "metadata" || !muxKeys[k]) {
+				t.Errorf("%s: key %q in %q", c.name, k, parent)
 			}
 		})
 		if bytes.Contains(a.Content, []byte("preUp")) || bytes.Contains(a.Content, []byte("postUp")) {

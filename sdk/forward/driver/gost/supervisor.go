@@ -32,8 +32,9 @@ type Supervisor interface {
 	// process is started, not once it serves.
 	Start(ctx context.Context) error
 	// Reload makes the running gost read its configuration file again
-	// (SIGHUP): established TCP connections survive; UDP sessions and mux
-	// carriers of a re-created service may not.
+	// (SIGHUP): established TCP connections survive; UDP sessions may
+	// not, and the carriers a mux or QUIC listener accepted are stranded
+	// (the driver restarts a gost that has one instead).
 	Reload(ctx context.Context) error
 	// Stop stops gost; stopping a stopped gost succeeds.
 	Stop(ctx context.Context) error

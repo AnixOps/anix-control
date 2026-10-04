@@ -7,7 +7,6 @@ import (
 	"errors"
 	"fmt"
 	"os"
-	"slices"
 	"time"
 
 	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
@@ -38,7 +37,7 @@ import (
 // certificate keep theirs.
 //
 // A mux (mtls, mwss) or QUIC listener cannot be re-created that way
-// (linkObjects), so when the node has one ReloadCredentials restarts gost
+// (linkObjects, muxCarrier, the rule Apply follows too), so when the node has one ReloadCredentials restarts gost
 // on the recorded file instead, as it does when the web API does not
 // answer or gost refuses a change: every established connection ends,
 // every hop starts a new counter epoch (the state file records the
@@ -250,7 +249,8 @@ func (d *Driver) waitAPI(ctx context.Context, st *hostState, p *parsed) error {
 // (or a forwarder node with an encrypted dialer) and the hops with an
 // encrypted dialer. restart is set when re-creating one of those services
 // through the web API would not do (measured with gost 3.2.6): a mux
-// listener (mtls, mwss) closes its listening socket only, so the carriers
+// listener (mtls, mwss; mtcp holds no certificate and is never touched)
+// closes its listening socket only, so the carriers
 // it accepted run on, peers keep opening streams on them that nothing
 // accepts any more, and only a new gost process closes them; a QUIC
 // listener keeps its UDP socket while its connections live, so the new
@@ -268,7 +268,7 @@ func linkObjects(c *gostConfig) (touched map[string]bool, restart bool) {
 	for _, s := range c.Services {
 		if s.Listener.TLS != nil || tlsNode(s.Forwarder.Nodes) {
 			touched[kindServices+"/"+s.Name] = true
-			if s.Listener.TLS != nil && slices.Contains([]string{"mtls", "mwss", "quic"}, s.Listener.Type) {
+			if muxCarrier(s.Listener.Type) {
 				restart = true
 			}
 		}
