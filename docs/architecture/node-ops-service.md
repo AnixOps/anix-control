@@ -10,8 +10,9 @@ executes the forward family and the gost API connection test, runtime job
 payloads carry no token, and forward node tokens are pinned to their
 endpoints (sections 3.8, 3.11 and 6.1). M3-4 and M3-5 are cancelled
 (2026-10-04): v4.2's forwarding redesign deletes or rewrites their routes
-(section 7). This is phase 3 of the 2026-10 plan, done together with Agent
-line A2.
+(section 7). M3-3 is implemented: subscription's two protocol pool
+routes read the split's public views once finalized (section 6.4). This is
+phase 3 of the 2026-10 plan, done together with Agent line A2.
 
 > 中文摘要：剩余桥接路由里，有 83 条在等“内核代办节点操作”和“节点凭据外置”，
 > 另有 7 条在等节点/Agent 通道的决定。本文给出三件事的设计：
@@ -2166,6 +2167,31 @@ Protocol-runtime adopts `v2_node_protocol` once it is finalized.
 | `GET /admin/subscription/groups/:id/protocols` | none; `kapi_node_protocol_public_v1` and `kapi_node_public_v1` (redacted, as masked since #92) | native |
 | `GET /admin/subscription/protocols/available` | none; the same views | native |
 
+**As M3-3 built them.** Both routes are `native-flagged`
+(`packages/subscription/native/pool.go`, `internal/tests/subscriptioncompat`
+`pool_test.go`).
+
+- **The lease is the gate.** The manifest declares
+  `kernel.view:kapi_node_protocol_public_v1` and
+  `kernel.view:kapi_node_public_v1`; the kernel grants them only once both
+  tables are finalized (section 4.3). A route answers natively only when
+  the lease grants both (`packagestoresdk.Store.Leased`), and otherwise
+  returns `ErrNativeUnavailable`, so the router answers from the legacy
+  handler in every mode. On SQLite the package shares the kernel's database
+  file, where the tables are there either way; the lease, not the
+  database, decides. The parity tests take the lease the kernel would give
+  the manifest on the test database (`service.EffectiveStorageGrants`), and
+  prove the routes legacy before finalize and with only one table
+  finalized.
+- **A restart after finalize.** The host leases its storage when it first
+  opens it, so a host started before the finalize keeps both routes legacy
+  until it restarts.
+- **Masking.** The views show the redacted documents. The routes mask
+  every secret position again with the kernel's rule
+  (`v2compat.RedactNodeSecrets`, which `internal/nodesecrets` now calls),
+  so a value written past the kernel's writers is masked as the legacy
+  answer masks it. Redacting a redacted document answers the same bytes.
+
 Not counted here, but unblocked on the way: `kapi_node_public_v1` is the
 "proxy node view with parent and load" that the 3 forward observability
 routes wait on.
@@ -2191,7 +2217,7 @@ handlers ship `native-flagged`, and operators choose the runtime mode.
 | NO-9 | Split P3: `node-secrets finalize` and `unsplit`, conditional adoption, the new views, the static gate on moved columns. Done: section 4.3 | NO-3, NO-5, NO-7 | control | M |
 | M3-1 | protocol-runtime: 11 routes native, `protocolruntimecompat` with fake agents | NO-4, NO-5, NO-6, NO-9 | control | M |
 | M3-2 | proxy-node: 14 routes native | NO-4, NO-5, NO-6, NO-8, NO-9 | control | L |
-| M3-3 | subscription: 2 routes native | NO-9 | control | S |
+| M3-3 | subscription: 2 routes native. Done: section 6.4 | NO-9 | control | S |
 | M3-4 | ~~forward: nodes, Ansible machines, clean agents, runtime jobs (20 routes)~~ **Cancelled** (2026-10-04, superseded by forward F5a/F5d) | NO-4, NO-5, NO-7, NO-8, NO-9 | control | L |
 | M3-5 | ~~forward: changes, tunnels, permissions, legacy rules (28 routes)~~ **Cancelled** (2026-10-04, superseded by forward F5d) | NO-7, NO-8 | control | L |
 | A2-1 | Agent PKI: `v4_kernel_agent_enrollment` and `_certificate`, the `AgentEnrollment` service, optional client certificates on the agent listener, the SAN as node identity (including forward nodes on the stream), enrollment admin API and CLI | none | control | L |

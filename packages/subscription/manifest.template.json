@@ -7,7 +7,7 @@
   "targets": ["control"],
   "architectures": [],
   "artifact_sha256": "GENERATED_AT_BUILD",
-  "capabilities": ["kernel.storage.v1", "kernel.storage.adopt:v2_subscription_group", "kernel.storage.adopt:v2_subscription_template", "kernel.storage.adopt:v2_plan_subscription_group", "kernel.storage.adopt:v2_subscription_group_node_protocols", "kernel.view:kapi_plan_catalog_v1", "kernel.view:kapi_subscriber_entitlement_v1", "kernel.view:kapi_user_subscription_group_v1", "kernel.view:kapi_node_protocol_v1", "kernel.view:kapi_node_heartbeat_v1", "kernel.subscriber.groups.v1", "kernel.subscriber.summary.v1"],
+  "capabilities": ["kernel.storage.v1", "kernel.storage.adopt:v2_subscription_group", "kernel.storage.adopt:v2_subscription_template", "kernel.storage.adopt:v2_plan_subscription_group", "kernel.storage.adopt:v2_subscription_group_node_protocols", "kernel.view:kapi_plan_catalog_v1", "kernel.view:kapi_subscriber_entitlement_v1", "kernel.view:kapi_user_subscription_group_v1", "kernel.view:kapi_node_protocol_v1", "kernel.view:kapi_node_heartbeat_v1", "kernel.view:kapi_node_protocol_public_v1", "kernel.view:kapi_node_public_v1", "kernel.subscriber.groups.v1", "kernel.subscriber.summary.v1"],
   "dependencies": [],
   "conflicts": [],
   "permissions": ["subscription.view", "subscription.api"],

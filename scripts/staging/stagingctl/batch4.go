@@ -780,6 +780,24 @@ func subscriptionSpecs() []RouteSpec {
 				{Persona: Admin, Path: group("4294967297"), Label: "beyond 32 bits"},
 			}, forbidden(group(sg(w, sgDefault)))...)
 		}},
+		// The protocol pool answers natively only once v2_node and
+		// v2_node_protocol are finalized (node-ops-service.md section 4.3);
+		// before that the host answers from the legacy handler and the
+		// shadow comparison is skipped.
+		{RouteID: "subscription.admin.subscription.groups.id.protocols.get", Reads: func(w *World) []Req {
+			protocols := func(id any) string { return fmt.Sprintf("/api/v2/admin/subscription/groups/%v/protocols", id) }
+			return append([]Req{
+				{Persona: Admin, Path: protocols(sg(w, sgDefault)), Label: "linked protocols, secrets redacted"},
+				{Persona: Admin, Path: protocols(sg(w, sgPremium)), Label: "several nodes"},
+				{Persona: Admin, Path: protocols(sg(w, sgEmpty)), Label: "none"},
+				{Persona: Admin, Path: protocols(Missing), Label: "unknown group"},
+				{Persona: Admin, Path: protocols("x"), Label: "invalid id"},
+			}, forbidden(protocols(sg(w, sgDefault)))...)
+		}},
+		{RouteID: "subscription.admin.subscription.protocols.available.get", Reads: func(w *World) []Req {
+			path := "/api/v2/admin/subscription/protocols/available"
+			return append([]Req{{Persona: Admin, Path: path, Label: "the pool with nodes and groups"}}, forbidden(path)...)
+		}},
 		{RouteID: "subscription.admin.subscription.groups.id.templates.get", Reads: func(w *World) []Req {
 			return append([]Req{
 				{Persona: Admin, Path: templates(sg(w, sgDefault)), Label: "by sort then id"},

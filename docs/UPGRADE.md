@@ -1512,6 +1512,11 @@ anix-control node-secrets verify                    # finalized tables compare b
   declare them, or `kernel.storage.adopt:` for `v2_node`,
   `v2_node_protocol` or `v2_forward_node`, get them at their next storage
   lease. Before finalize the lease leaves them out.
+- A package host leases its storage when it first opens it, so restart
+  Control (which starts the package hosts again) after finalize. Until
+  then the routes on these views and tables answer from the legacy handler,
+  whatever their mode: subscription's group protocols and protocol pool
+  (M3-3).
 
 **Rollback: `unsplit`.**
 
