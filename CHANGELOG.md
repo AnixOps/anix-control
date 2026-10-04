@@ -1049,6 +1049,11 @@
 
 ### Fixed
 
+- `TestAgentListenerEnrollsWithEachBootstrapAndStreamsByCertificate` and
+  the required-mTLS end-to-end test no longer flake: the server sends the
+  HelloAck before it registers the connection, so the tests now wait for
+  the registration instead of reading it right after the ack.
+
 - **Plugin operations are no longer refused after stream operations on the
   same node.** The one-off stream operations (`agent.diagnostic`, the
   forward checks, `node.reload`, `agent.ping`, `users.reload`) took their
