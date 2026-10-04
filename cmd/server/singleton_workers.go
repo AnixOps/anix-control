@@ -6,7 +6,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/AnixOps/anix-control/v4/internal/agentstreams"
+	"github.com/AnixOps/anix-control/v4/internal/agentupgrade"
 	"github.com/AnixOps/anix-control/v4/internal/database"
+	grpcserver "github.com/AnixOps/anix-control/v4/internal/grpc"
 	"github.com/AnixOps/anix-control/v4/internal/kernelforward"
 	"github.com/AnixOps/anix-control/v4/internal/kernelnodeops"
 	"github.com/AnixOps/anix-control/v4/internal/service"
@@ -75,5 +78,11 @@ func runSingletonWorkers(ctx context.Context, bridgeEnabled bool) {
 	// The forwarding state's timed work: expired routes are paused,
 	// request ids are forgotten after a week.
 	run(kernelforward.New(database.Get()).Run)
+	// Staged Agent upgrades (forward-sdk.md section 9, O4): the campaign's
+	// batches are offered on, and closed by, this process's Agent streams.
+	run((&agentupgrade.Worker{
+		Service: &agentupgrade.Service{DB: database.Get()},
+		Streams: func() agentstreams.Streams { return grpcserver.GetAgentStreams() },
+	}).Run)
 	wg.Wait()
 }
