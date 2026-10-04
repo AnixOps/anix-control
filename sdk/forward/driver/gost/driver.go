@@ -35,8 +35,8 @@ const recoverTimeout = 30 * time.Second
 
 // Driver is the gost forward driver. It keeps no state besides its
 // configuration: what it applied is read back from its directory and from
-// the gost process. Apply, SetUpstreams and Remove are serialised; Observe
-// runs between them.
+// the gost process. Apply, SetUpstreams, ReloadCredentials and Remove are
+// serialised; Observe runs between them.
 type Driver struct {
 	cfg    Config
 	runner Runner
@@ -66,13 +66,14 @@ func WithRunner(r Runner) Option { return func(d *Driver) { d.runner = r } }
 // the driver's runner.
 func WithSupervisor(s Supervisor) Option { return func(d *Driver) { d.sup = s } }
 
-// WithRetiredCounters calls f after an Apply that reloaded or restarted a
-// running gost, with every hop's counters read just before: a reload
-// re-creates every service, so their counter epochs end there, and f
-// gets their last values (the Agent reports them, as for the nftables
-// driver's removed hops). Traffic between that read and the reload, and
-// what connections that survive the reload move afterwards, is not
-// counted.
+// WithRetiredCounters calls f after an Apply or a ReloadCredentials that
+// ended counter epochs, with the counters of the hops whose epochs ended,
+// read just before: a reload or restart of a running gost re-creates
+// every service, and Apply and ReloadCredentials re-create some through
+// the web API, so those hops' epochs end there, and f gets their last
+// values (the Agent reports them, as for the nftables driver's removed
+// hops). Traffic between that read and the change, and what connections
+// that survive it move afterwards, is not counted.
 func WithRetiredCounters(f func([]*forwardv1.Counters)) Option {
 	return func(d *Driver) { d.retired = f }
 }
@@ -618,19 +619,28 @@ func (d *Driver) recoverPrevious(ctx context.Context, h *host) error {
 	if err := writeFileAtomic(d.cfg.configPath(), h.config, 0o640); err != nil {
 		return fmt.Errorf("gost driver: recover: %w", err)
 	}
-	if err := d.sup.Stop(rctx); err != nil {
-		return fmt.Errorf("gost driver: recover: %w", err)
-	}
-	d.removeStaleSocket()
-	if err := d.sup.Start(rctx); err != nil {
-		return fmt.Errorf("gost driver: recover: %w", err)
-	}
 	prev, err := parseContent(driver.Artifact{Content: h.config, Hops: keysOf(h.state.Hops)})
 	if err != nil {
 		return fmt.Errorf("gost driver: recover: %w", err)
 	}
-	if err := d.waitServing(rctx, prev); err != nil {
+	if err := d.restart(rctx, prev); err != nil {
 		return fmt.Errorf("gost driver: recover the previous configuration: %w", err)
+	}
+	return nil
+}
+
+// restart stops gost, starts it on the configuration file, which holds p,
+// and waits until it serves p.
+func (d *Driver) restart(ctx context.Context, p *parsed) error {
+	if err := d.sup.Stop(ctx); err != nil {
+		return err
+	}
+	d.removeStaleSocket()
+	if err := d.sup.Start(ctx); err != nil {
+		return err
+	}
+	if err := d.waitServing(ctx, p); err != nil {
+		return err
 	}
 	time.Sleep(startSettle)
 	return nil
@@ -683,10 +693,12 @@ func (d *Driver) applyEmpty(ctx context.Context, h *host, res driver.ApplyResult
 // total_conns and active_conns the accepted connections (UDP sessions
 // and mux streams are not connections). gost counts no packets: they are
 // 0. The counter epoch names the services' statistics objects: the gost
-// instance, the starts and reloads Apply made, and the services' creation
-// times. A start, a reload or the re-creation of a service ends it; a hot
-// change (applyHot, SetUpstreams, EnforceQuotas) keeps it. While gost
-// does not run, every hop reports 0 in the epoch "stopped".
+// instance, the starts and reloads Apply and ReloadCredentials made, the
+// last re-creation of one of the hop's services through the web API, and
+// the services' creation times. A start, a reload or the re-creation of a
+// service ends it; a hot change (applyHot, SetUpstreams, EnforceQuotas)
+// keeps it. While gost does not run, every hop reports 0 in the epoch
+// "stopped".
 //
 // The rotation is the one gost runs: a SetUpstreams selection stays in
 // the hop's metadata until a start, a reload or a changing Apply puts the

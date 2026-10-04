@@ -561,6 +561,28 @@
 
 ### Fixed
 
+- **gost link certificate renewals start a new counter epoch.** A
+  supervisor reload of gost after the Agent renewed the link certificate
+  (H28) re-created every service without the driver recording it, so
+  Control saw the counters fall within one `counter_epoch`, lost that
+  observation interval, and the last counters went unreported. The gost
+  driver has a new entry point, `(*gost.Driver).ReloadCredentials(ctx)`,
+  which the Agent calls after every renewal instead (`PROTOCOL.md`
+  "Forward link certificates", step 5). gost 3.2.6 has no certificate
+  hot-reload: it reads a certificate when it creates the service or hop
+  that uses it. So, serialised with Apply, the driver checks that the
+  files load, re-creates through gost's web API only the services with an
+  encrypted listener (TLS, WSS, gRPC) and replaces the hops with encrypted
+  dialers (keeping a `SetUpstreams` selection), waits until every listener
+  is back, records the re-created services' hops in `state.json` so their
+  epoch advances (the F4c per-hop sequence), and hands their last counters
+  to `WithRetiredCounters`. Other hops keep their epochs; established
+  connections run on with the old certificate. A node with a mux (mtls,
+  mwss) or QUIC listener restarts gost instead (measured: a re-created mux
+  listener strands its peers' carriers, so new connections through them
+  hang; a QUIC listener keeps its port while its connections live): every
+  hop starts a new epoch and hands its counters over. A real-gost test
+  (`TestNetnsReloadCredentials`) covers each link type.
 - UniProxy `alivelist` answered an empty list with the built-in memory
   cache (its key pattern matched nothing there), so device limits counted
   only each node's own connections. It now counts the online sets of every
