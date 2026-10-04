@@ -150,7 +150,9 @@ func (f *fakeStreams) Session(node agentcontrol.AgentNode) (agentstreams.Session
 
 func (f *fakeStreams) Sessions() []agentstreams.Session { return nil }
 
-func (f *fakeStreams) Observed(agentcontrol.AgentNode) (*agentv1pb.ObservedState, bool) { return nil, false }
+func (f *fakeStreams) Observed(agentcontrol.AgentNode) (*agentv1pb.ObservedState, bool) {
+	return nil, false
+}
 
 func (f *fakeStreams) Dispatch(_ context.Context, node agentcontrol.AgentNode, operation *agentv1pb.DesiredOperation) (*agentv1pb.OperationAck, error) {
 	f.mu.Lock()
@@ -177,7 +179,9 @@ func (f *fakeStreams) Dispatch(_ context.Context, node agentcontrol.AgentNode, o
 	return &agentv1pb.OperationAck{OperationId: operation.GetOperationId(), Accepted: true, SessionId: session.SessionID, Revision: 1}, nil
 }
 
-func (f *fakeStreams) Cancel(context.Context, agentcontrol.AgentNode, string, uint64) error { return nil }
+func (f *fakeStreams) Cancel(context.Context, agentcontrol.AgentNode, string, uint64) error {
+	return nil
+}
 
 func (f *fakeStreams) OnObserved(handler agentstreams.ObservedHandler) { f.handler = handler }
 

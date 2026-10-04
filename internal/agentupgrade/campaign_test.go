@@ -88,11 +88,11 @@ func TestStartRefuses(t *testing.T) {
 	assert.ErrorIs(t, err, ErrNoNodes)
 	f.addProxy(1, "")
 	for name, request := range map[string]StartRequest{
-		"not a tag":         {TargetVersion: "4.2.0", Artifacts: testArtifacts()},
+		"not a tag":          {TargetVersion: "4.2.0", Artifacts: testArtifacts()},
 		"newer than Control": {TargetVersion: "v4.3.0", ControlVersion: "v4.2.0", Artifacts: testArtifacts()},
-		"no artifacts":      {TargetVersion: "v4.2.0"},
-		"bad batches":       {TargetVersion: "v4.2.0", Artifacts: testArtifacts(), Batches: []Batch{{Percent: 100, MinDurationSeconds: 60}}},
-		"bad exclusion":     {TargetVersion: "v4.2.0", Artifacts: testArtifacts(), Exclude: Exclude{Nodes: []string{"node-1"}}},
+		"no artifacts":       {TargetVersion: "v4.2.0"},
+		"bad batches":        {TargetVersion: "v4.2.0", Artifacts: testArtifacts(), Batches: []Batch{{Percent: 100, MinDurationSeconds: 60}}},
+		"bad exclusion":      {TargetVersion: "v4.2.0", Artifacts: testArtifacts(), Exclude: Exclude{Nodes: []string{"node-1"}}},
 	} {
 		_, err := f.service.Start(ctx, request)
 		assert.ErrorIs(t, err, ErrInvalid, name)
