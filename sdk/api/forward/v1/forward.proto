@@ -131,6 +131,47 @@ service ForwardControl {
   // GetTraffic answers the traffic ledger's hourly buckets (raw bytes, no
   // multiplier), filtered by route and node, over at most 31 days.
   rpc GetTraffic(GetTrafficRequest) returns (GetTrafficResponse);
+
+  // Added in L2 (forward-sdk.md section 7.4): entry high availability
+  // through DNS. Control keeps a route's entry_hostname (or, in CNAME mode,
+  // a Control-managed name the operator's entry_hostname points at) on the
+  // healthy entry nodes' public addresses, through a DNS provider. Provider
+  // credentials are write-only: Control seals them with its key-encryption
+  // key and no answer carries them. Writes take request_id as CreateRoute.
+  // A refusal carries the method's response with violations in the
+  // status's details.
+
+  // ListDnsProviders answers every DNS provider account, without
+  // credentials.
+  rpc ListDnsProviders(ListDnsProvidersRequest) returns (ListDnsProvidersResponse);
+  // GetDnsProvider answers one provider; NOT_FOUND for an unknown id.
+  rpc GetDnsProvider(GetDnsProviderRequest) returns (GetDnsProviderResponse);
+  // CreateDnsProvider stores a provider with its credentials, sealed.
+  // INVALID_ARGUMENT for a malformed provider (violations name the
+  // fields); FAILED_PRECONDITION (violation code secret_store_unavailable)
+  // when Control has no key-encryption key (module_runtime.ca_kek).
+  rpc CreateDnsProvider(CreateDnsProviderRequest) returns (CreateDnsProviderResponse);
+  // UpdateDnsProvider replaces a provider's name and configuration. A
+  // credential left out, or sent as "********", keeps the stored value.
+  rpc UpdateDnsProvider(UpdateDnsProviderRequest) returns (UpdateDnsProviderResponse);
+  // DeleteDnsProvider removes a provider; FAILED_PRECONDITION (violation
+  // code provider_in_use) while a binding uses it.
+  rpc DeleteDnsProvider(DeleteDnsProviderRequest) returns (DeleteDnsProviderResponse);
+  // ListDnsBindings answers the routes' DNS bindings.
+  rpc ListDnsBindings(ListDnsBindingsRequest) returns (ListDnsBindingsResponse);
+  // CreateDnsBinding binds a route to a provider's zone. One binding per
+  // route, and per provider, zone and record name.
+  rpc CreateDnsBinding(CreateDnsBindingRequest) returns (CreateDnsBindingResponse);
+  // UpdateDnsBinding replaces a binding's fields; the route stays.
+  rpc UpdateDnsBinding(UpdateDnsBindingRequest) returns (UpdateDnsBindingResponse);
+  // DeleteDnsBinding removes a binding. With purge, Control first deletes
+  // the records it published (UNAVAILABLE when the provider refuses, and
+  // the binding stays).
+  rpc DeleteDnsBinding(DeleteDnsBindingRequest) returns (DeleteDnsBindingResponse);
+  // GetRouteDns answers a route's entry HA status: its binding, the
+  // published and desired records, and each entry node's health.
+  // NOT_FOUND for an unknown route.
+  rpc GetRouteDns(GetRouteDnsRequest) returns (GetRouteDnsResponse);
 }
 
 // ForwardNode is the node side: what an Agent's forwarding component does
@@ -1020,4 +1061,238 @@ message GetTrafficResponse {
   // truncated is true when more buckets matched than one answer holds
   // (20000): narrow the filter or the window.
   bool truncated = 2;
+}
+
+// ---------------------------------------------------------------------------
+// Entry HA through DNS (L2, forward-sdk.md section 7.4)
+
+// DnsProviderKind is the DNS provider API Control calls (H21).
+enum DnsProviderKind {
+  DNS_PROVIDER_KIND_UNSPECIFIED = 0;
+  // CLOUDFLARE: the Cloudflare API v4 with an API token (credential
+  // api_token).
+  DNS_PROVIDER_KIND_CLOUDFLARE = 1;
+  // ALIDNS: Alibaba Cloud DNS (API 2015-01-09, signature V3; credentials
+  // access_key_id and access_key_secret).
+  DNS_PROVIDER_KIND_ALIDNS = 2;
+  // DNSPOD: DNSPod on the Tencent Cloud API 3.0 (TC3-HMAC-SHA256;
+  // credentials secret_id and secret_key).
+  DNS_PROVIDER_KIND_DNSPOD = 3;
+  // HUAWEICLOUD: Huawei Cloud DNS (API v2, AK/SK signing; credentials
+  // access_key and secret_key).
+  DNS_PROVIDER_KIND_HUAWEICLOUD = 4;
+  // WEBHOOK: an HMAC-signed JSON POST to the operator's URL (config url,
+  // credential secret).
+  DNS_PROVIDER_KIND_WEBHOOK = 5;
+}
+
+// DnsProvider is a DNS provider account without its credentials.
+message DnsProvider {
+  uint64 id = 1;
+  string name = 2;
+  DnsProviderKind kind = 3;
+  // config holds the settings that are not secret: endpoint (an API host
+  // other than the provider's default) for the provider APIs, url for a
+  // webhook.
+  map<string, string> config = 4;
+  // credential_names are the credentials stored for the provider; their
+  // values are never answered.
+  repeated string credential_names = 5;
+  // bindings counts the bindings that use the provider.
+  uint32 bindings = 6;
+  int64 created_at_unix_ms = 7;
+  int64 updated_at_unix_ms = 8;
+}
+
+message ListDnsProvidersRequest {}
+
+message ListDnsProvidersResponse {
+  repeated DnsProvider providers = 1;
+}
+
+message GetDnsProviderRequest {
+  uint64 id = 1;
+}
+
+message GetDnsProviderResponse {
+  DnsProvider provider = 1;
+}
+
+message CreateDnsProviderRequest {
+  string request_id = 1;
+  // provider's id, credential_names, bindings and times are Control's.
+  DnsProvider provider = 2;
+  // credentials are write-only.
+  map<string, string> credentials = 3;
+}
+
+message CreateDnsProviderResponse {
+  DnsProvider provider = 1;
+  repeated Violation violations = 2;
+}
+
+message UpdateDnsProviderRequest {
+  string request_id = 1;
+  // provider.id names the provider; its kind cannot change.
+  DnsProvider provider = 2;
+  // credentials replace the stored ones by name; a name left out, or
+  // the value "********", keeps the stored value.
+  map<string, string> credentials = 3;
+}
+
+message UpdateDnsProviderResponse {
+  DnsProvider provider = 1;
+  repeated Violation violations = 2;
+}
+
+message DeleteDnsProviderRequest {
+  string request_id = 1;
+  uint64 id = 2;
+}
+
+message DeleteDnsProviderResponse {
+  repeated Violation violations = 1;
+}
+
+// DnsBindingMode is how a binding keeps clients on the healthy entries.
+enum DnsBindingMode {
+  DNS_BINDING_MODE_UNSPECIFIED = 0;
+  // DDNS: Control writes the A/AAAA records of the route's
+  // entry_hostname, which must be record_name.
+  DNS_BINDING_MODE_DDNS = 1;
+  // CNAME: Control writes the A/AAAA records of record_name, a name it
+  // manages; the operator points entry_hostname at it with a CNAME.
+  DNS_BINDING_MODE_CNAME = 2;
+}
+
+// DnsRecordType is an address record type Control publishes.
+enum DnsRecordType {
+  DNS_RECORD_TYPE_UNSPECIFIED = 0;
+  DNS_RECORD_TYPE_A = 1;
+  DNS_RECORD_TYPE_AAAA = 2;
+}
+
+// DnsBinding binds a route's entry nodes to a name in a provider's zone.
+message DnsBinding {
+  uint64 id = 1;
+  string route_id = 2;
+  uint64 provider_id = 3;
+  // zone is the provider's zone ("example.com").
+  string zone = 4;
+  // record_name is the fully qualified name Control writes, inside zone.
+  string record_name = 5;
+  DnsBindingMode mode = 6;
+  // record_types are the address records published; A when empty.
+  repeated DnsRecordType record_types = 7;
+  // ttl in seconds; 60 when 0.
+  uint32 ttl = 8;
+  // enabled false keeps the binding and the published records but makes
+  // no change.
+  bool enabled = 9;
+  int64 created_at_unix_ms = 10;
+  int64 updated_at_unix_ms = 11;
+}
+
+message ListDnsBindingsRequest {
+  // route_id and provider_id filter; empty or 0 for all.
+  string route_id = 1;
+  uint64 provider_id = 2;
+}
+
+message ListDnsBindingsResponse {
+  repeated DnsBinding bindings = 1;
+}
+
+message CreateDnsBindingRequest {
+  string request_id = 1;
+  // binding's id and times are Control's.
+  DnsBinding binding = 2;
+}
+
+message CreateDnsBindingResponse {
+  DnsBinding binding = 1;
+  repeated Violation violations = 2;
+}
+
+message UpdateDnsBindingRequest {
+  string request_id = 1;
+  // binding.id names the binding; its route_id cannot change.
+  DnsBinding binding = 2;
+}
+
+message UpdateDnsBindingResponse {
+  DnsBinding binding = 1;
+  repeated Violation violations = 2;
+}
+
+message DeleteDnsBindingRequest {
+  string request_id = 1;
+  uint64 id = 2;
+  // purge deletes the published records first.
+  bool purge = 3;
+}
+
+message DeleteDnsBindingResponse {
+  repeated Violation violations = 1;
+}
+
+message GetRouteDnsRequest {
+  string route_id = 1;
+}
+
+// DnsRecordStatus is one record type of a binding.
+message DnsRecordStatus {
+  DnsRecordType type = 1;
+  // published are the values Control last wrote; desired the values of
+  // the entry nodes in rotation now (empty when none is: Control then
+  // keeps the published values).
+  repeated string published = 2;
+  repeated string desired = 3;
+}
+
+// DnsEntryNode is one entry node as the entry HA controller sees it.
+message DnsEntryNode {
+  string node_ref = 1;
+  // addresses are the node's public addresses (its forwarding settings,
+  // else its host when an IP address).
+  repeated string addresses = 2;
+  // healthy is the latest evaluation; in_rotation whether the node's
+  // addresses are published (it changes after 3 evaluations in a row).
+  bool healthy = 3;
+  bool in_rotation = 4;
+  uint32 good_streak = 5;
+  uint32 bad_streak = 6;
+  // reason is the latest evaluation's code: healthy, converging,
+  // not_in_inventory, no_address, never_reported, report_stale, offline,
+  // hop_error, upstreams_down.
+  string reason = 7;
+}
+
+// RouteDnsStatus is a route's entry HA status.
+message RouteDnsStatus {
+  string route_id = 1;
+  string entry_hostname = 2;
+  // binding is unset when the route has none.
+  DnsBinding binding = 3;
+  // cname_target is, in CNAME mode, the name the operator points
+  // entry_hostname at (record_name).
+  string cname_target = 4;
+  // state: unbound, disabled, pending (nothing published yet), ok,
+  // degraded (no entry is healthy: the last published records are kept),
+  // paused (the route is paused or enforced: nothing changes), error (the
+  // provider refused or failed; see last_error), rate_limited,
+  // route_missing, hostname_mismatch (DDNS mode and record_name is not
+  // the route's entry_hostname).
+  string state = 5;
+  repeated DnsRecordStatus records = 6;
+  repeated DnsEntryNode nodes = 7;
+  int64 published_at_unix_ms = 8;
+  int64 evaluated_at_unix_ms = 9;
+  string last_error = 10;
+  int64 last_error_at_unix_ms = 11;
+  int64 next_attempt_at_unix_ms = 12;
+}
+
+message GetRouteDnsResponse {
+  RouteDnsStatus status = 1;
 }
