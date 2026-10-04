@@ -303,6 +303,35 @@ export async function getKernelAgentTransports(legacyOnly = false) {
   return unwrap(await v4(config))
 }
 
+// Staged Agent upgrades (O4, H19): campaigns push an Agent release in canary
+// batches and roll a batch back when more than 5% of it fails. Reads are for
+// administrators; start, pause, resume and abort for super administrators.
+export async function listKernelAgentUpgrades(limit) {
+  const config = { url: '/kernel/agents/upgrades', method: 'get' }
+  if (limit) config.params = { limit }
+  return unwrap(await v4(config))
+}
+
+export async function getKernelAgentUpgrade(id) {
+  return unwrap(await v4({ url: `/kernel/agents/upgrades/${encodeURIComponent(id)}`, method: 'get' }))
+}
+
+export async function startKernelAgentUpgrade(input = {}) {
+  return unwrap(await v4({ url: '/kernel/agents/upgrades', method: 'post', data: input }))
+}
+
+export async function pauseKernelAgentUpgrade(id) {
+  return unwrap(await v4({ url: `/kernel/agents/upgrades/${encodeURIComponent(id)}/pause`, method: 'post' }))
+}
+
+export async function resumeKernelAgentUpgrade(id) {
+  return unwrap(await v4({ url: `/kernel/agents/upgrades/${encodeURIComponent(id)}/resume`, method: 'post' }))
+}
+
+export async function abortKernelAgentUpgrade(id, rollback = false) {
+  return unwrap(await v4({ url: `/kernel/agents/upgrades/${encodeURIComponent(id)}/abort`, method: 'post', data: { rollback } }))
+}
+
 // One-command node onboarding: a single-use enrollment token bound to the
 // node ("proxy-<id>" or "forward-<id>") and the install command for every
 // mirror. Super administrators only; the token is shown once.

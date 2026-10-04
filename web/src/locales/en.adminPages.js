@@ -1798,6 +1798,27 @@ export default {
     confirm: { deleteGroupTitle: 'Delete access group {name}?', deleteGroup: 'Its memberships, resource grants and quota policies are deleted with it. This can’t be undone.', deleteGroupAction: 'Delete group', removeGrantTitle: 'Remove resource grant #{id}?', removeGrant: 'Members of this group lose access to {resource}. This can’t be undone.', removeGrantAction: 'Remove grant', removeQuotaTitle: 'Remove quota policy {key}?', removeQuota: 'The group is no longer limited by this quota. This can’t be undone.', removeQuotaAction: 'Remove policy' },
     errors: { load: 'Unable to load access control data', loadGroups: 'Unable to load access groups', loadDetail: 'Unable to load access group details', groupRequired: 'A service scope and group name are required', saveGroup: 'Unable to save access group', deleteGroup: 'Unable to delete access group', member: 'Unable to update user membership', plan: 'Unable to update plan membership', grant: 'Unable to update resource grant', quota: 'Unable to update quota policy', resolve: 'Unable to resolve effective access', invalidID: '{label} must be a positive integer', invalidJSON: '{label} must be valid JSON', scopeRequired: 'A service scope is required' }
   },
+  agentUpgrades: {
+    title: 'Agent upgrades',
+    description: 'Control pushes Agent releases in canary batches (5%, 25%, 100%, at least 30 minutes each) and rolls a batch back when more than 5% of it fails.',
+    empty: 'No Agent upgrade yet. A super administrator starts one with:',
+    target: 'Agent {version}',
+    batchOf: 'batch {batch} of {total}',
+    batchEnds: 'next batch at {time} at the earliest',
+    finished: 'ended {time}',
+    batch: 'Batch {batch} · {percent}%',
+    progress: '{done} / {total} settled',
+    statuses: { running: 'Running', paused: 'Paused', rolling_back: 'Rolling back', succeeded: 'Succeeded', rolled_back: 'Rolled back', aborted: 'Aborted' },
+    states: { pending: 'Pending', offered: 'Offered', upgrading: 'Upgrading', succeeded: 'Upgraded', failed: 'Failed', rolled_back: 'Rolled back', skipped: 'Skipped' },
+    actions: { pause: 'Pause', resume: 'Resume', abort: 'Abort', rollback: 'Abort and roll back' },
+    confirm: {
+      abortTitle: 'Abort the upgrade to {version}?',
+      abort: 'No further node is offered the upgrade. Nodes already upgraded keep the new release.',
+      rollbackTitle: 'Roll back the upgrade to {version}?',
+      rollback: 'The upgraded nodes of the current batch are told to reinstate their previous release, then the campaign ends.'
+    },
+    loadFailed: 'Unable to load Agent upgrades'
+  },
   agentTransports: {
     open: 'Agent transports',
     subtitle: 'How each node’s agent reaches Control: the mTLS stream, or a legacy channel that v4.2 will refuse.',

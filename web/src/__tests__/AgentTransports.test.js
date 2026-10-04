@@ -3,7 +3,7 @@ import { flushPromises, mount } from '@vue/test-utils'
 import AgentTransports from '@/views/admin/AgentTransports.vue'
 import { setLocale } from '@/i18n'
 
-const kernelApi = vi.hoisted(() => ({ getKernelAgentTransports: vi.fn() }))
+const kernelApi = vi.hoisted(() => ({ getKernelAgentTransports: vi.fn(), listKernelAgentUpgrades: vi.fn() }))
 const router = vi.hoisted(() => ({ push: vi.fn() }))
 
 vi.mock('@/api/kernel', () => kernelApi)
@@ -51,6 +51,7 @@ async function mountPage() {
 describe('Agent transports', () => {
   beforeEach(async () => {
     vi.resetAllMocks()
+    kernelApi.listKernelAgentUpgrades.mockResolvedValue({ campaigns: [] })
     await setLocale('en')
   })
 
