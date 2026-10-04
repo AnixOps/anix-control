@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"encoding/pem"
 	"errors"
 	"flag"
 	"fmt"
@@ -20,12 +21,21 @@ import (
 
 const agentCommandUsage = `usage:
   anix-control agent token create -node <proxy-<id>|forward-<id>> [-ttl 24h]
+  anix-control agent link-ca list
+  anix-control agent link-ca bundle
+  anix-control agent link-ca rotate
 
 token create prints a one-time agent enrollment credential (anixagt_...)
 bound to the node, valid for at most 7 days. The agent presents it to
 AgentEnrollment.Enroll on the gRPC listener. Agent enrollment needs the
 built-in CA (module_runtime.ca_kek with pki: builtin); the module runtime
 need not be enabled.
+
+link-ca administers the forward link CA (H28), which signs the link
+certificates forward engines present to each other: list prints its CAs,
+bundle the PEM trust bundle nodes verify their peers with, and rotate
+creates the next CA, which signs once it has been trusted for one link
+certificate lifetime (7 days).
 
 The config file comes from ANIX_CONTROL_CONFIG or config/config.yaml.`
 
@@ -36,6 +46,9 @@ func agentUsageError() error {
 // runAgentCommand administers the agent PKI from the command line. It prints
 // JSON so scripts can pick out the credential.
 func runAgentCommand(ctx context.Context, cfg *config.Config, db *gorm.DB, arguments []string, stdout io.Writer) error {
+	if len(arguments) == 2 && arguments[0] == "link-ca" {
+		return runLinkCACommand(ctx, cfg, db, arguments[1], stdout)
+	}
 	if len(arguments) < 2 || arguments[0]+" "+arguments[1] != "token create" {
 		return agentUsageError()
 	}
@@ -64,6 +77,43 @@ func runAgentCommand(ctx context.Context, cfg *config.Config, db *gorm.DB, argum
 	encoder := json.NewEncoder(stdout)
 	encoder.SetIndent("", "  ")
 	return encoder.Encode(map[string]any{"enrollment": row, "credential": credential})
+}
+
+// runLinkCACommand runs "agent link-ca <command>".
+func runLinkCACommand(ctx context.Context, cfg *config.Config, db *gorm.DB, command string, stdout io.Writer) error {
+	link, err := agentpki.LinkAuthorityFromConfig(cfg, db)
+	if err != nil {
+		return err
+	}
+	encoder := json.NewEncoder(stdout)
+	encoder.SetIndent("", "  ")
+	switch command {
+	case "list":
+		rows, err := link.CAs(ctx)
+		if err != nil {
+			return err
+		}
+		return encoder.Encode(rows)
+	case "bundle":
+		bundle, err := link.TrustBundle(ctx)
+		if err != nil {
+			return err
+		}
+		for _, certificate := range bundle {
+			if err := pem.Encode(stdout, &pem.Block{Type: "CERTIFICATE", Bytes: certificate.Raw}); err != nil {
+				return err
+			}
+		}
+		return nil
+	case "rotate":
+		next, err := link.Rotate(ctx)
+		if err != nil {
+			return err
+		}
+		return encoder.Encode(next)
+	default:
+		return agentUsageError()
+	}
 }
 
 // agentPKIMaintenanceInterval is how often expired agent certificate

@@ -24,7 +24,7 @@ func TestAgentEnrollmentDescriptor(t *testing.T) {
 	if service == nil {
 		t.Fatal("AgentEnrollment service is missing")
 	}
-	for _, method := range []string{"Enroll", "Renew", "GetTrustBundle"} {
+	for _, method := range []string{"Enroll", "Renew", "GetTrustBundle", "IssueLinkCertificate", "GetLinkTrustBundle"} {
 		descriptor := service.Methods().ByName(protoreflect.Name(method))
 		if descriptor == nil {
 			t.Fatalf("AgentEnrollment.%s is missing", method)

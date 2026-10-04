@@ -32,7 +32,10 @@ are renewed after `renew_after_unix`, two thirds of the lifetime. With a
 certificate the stream's node comes from it, every envelope's `node_id`
 must name it, and `x-api-key` is not needed. `sdk/agentcontrol` has the
 identity helpers and metadata keys. Every refusal names its reason in the
-`x-anix-error-code` trailer ("Error codes" below).
+`x-anix-error-code` trailer ("Error codes" below). `IssueLinkCertificate`
+and `GetLinkTrustBundle` serve a node that negotiated `forward.v1` its
+forward link certificate, from a separate CA ("Forward link certificates"
+below).
 
 The client declares capabilities in `Hello`, sends application heartbeats,
 automatically reconnects with jittered exponential backoff, acknowledges
@@ -388,6 +391,9 @@ stream equivalent.
     forward node's session that negotiated `forward.v1` (20 otherwise). A
     certificate revoked while the stream is open ends it at the next
     heartbeat, so within a minute on such a session.
+  - **Link certificates.** Encrypted links between nodes use the node's
+    forward link certificate, never the Agent certificate; see "Forward
+    link certificates".
 - **Package reports** (`package-reports.v1`). A `PackageReport` is the latest
   observation of one `kind` that an Agent plugin package makes on the node,
   such as the systemd services table of `machine-telemetry`
@@ -534,6 +540,99 @@ stream equivalent.
     it with the node API key. An enrolled Agent no longer holds the key and
     uses `AgentArtifacts`.
 
+## Forward link certificates
+
+Encrypted links between forward nodes (gost's TLS, WSS, QUIC and gRPC
+links) are mutual TLS with each node's link certificate (owner decision H28,
+`docs/architecture/forward-sdk.md` sections 6.2 and 14). gost verifies a
+certificate chain and the dialled server name, not SPIFFE URIs, and must
+never hold the Agent's Control key, so Control runs a dedicated forward link
+CA: a self-signed root, separate from the CA of agent, module and kernel
+certificates, that signs nothing but link certificates.
+
+**Profile.** A link certificate names exactly one node:
+
+| Field | Value |
+|---|---|
+| Subject CN and the only DNS SAN | the node's identity name, `proxy-<id>` or `forward-<id>`: the `server_name` the planner gives an encrypted link by default |
+| The only URI SAN | the node's SPIFFE ID, `spiffe://anixops/<cluster>/agent/forward-<id>`: the `peer_identity` and `ingress_peers` of the state |
+| Extended key usage | `serverAuth` and `clientAuth` |
+| Key usage | digital signature (and key encipherment for RSA) |
+| Lifetime | 7 days, like the agent certificate; renew after `renew_after_unix`, two thirds of it |
+| Issuer | the current forward link CA (ECDSA P-256, name-constrained to `spiffe://anixops` URIs) |
+
+**Authorization.** Both RPCs need a valid agent client certificate: a call
+without one, or with only the node API key or forward token, answers
+`agent_cert_invalid`; a revoked, expired or foreign certificate answers its
+`agent_cert_*` code. `IssueLinkCertificate` also needs the node enabled and
+its Agent's last `Hello` to have negotiated `forward.v1` (proxy and forward
+nodes alike): otherwise `link_cert_not_negotiated`. The CSR may name only the
+node's DNS name and SPIFFE ID (both may be left out; Control assigns both),
+no IP address or e-mail name, and its key must not be the agent
+certificate's key: otherwise `link_cert_request_invalid`. Control copies
+nothing from the CSR but its public key.
+
+**Trust bundle.** `LinkCertificate.trust_bundle_der` and
+`GetLinkTrustBundle` answer every link CA a peer may present a certificate
+from: the current CA, a next CA (trusted at once, signing only one link
+certificate lifetime after the rotation) and a retired CA until the last
+link certificate it signed has expired. A node that refreshes the bundle at
+least at every renewal therefore trusts a new CA before any peer presents a
+certificate it signed.
+
+**Revocation.** Revoking, replacing or disabling a node's credentials,
+deleting the node or `RetireNode` revokes its link certificates with its
+agent certificates (`v4_kernel_forward_link_certificate.revoked_at`), and
+the node gets no new one. Peers do not check revocation (gost has no CRL or
+OCSP check): a revoked link certificate verifies until its `not_after`, at
+most 7 days later. Until then what keeps a removed node out is its peers'
+state: their listeners admit only the `ingress_sources` addresses of the
+routes' previous hops. A disabled or deleted node leaves Control's
+forwarding inventory, and a plan that still names it is refused, so the
+administrator removes it from its routes, whose next plan drops its
+addresses from its peers' `ingress_sources` and upstreams.
+
+**What the Agent does (F3b).**
+
+1. **A key of its own.** Generate a separate key pair for the link
+   certificate (ECDSA P-256 recommended; P-384, Ed25519 and RSA of at least
+   2048 bits are accepted). Never reuse the agent identity key, and never
+   give gost the agent key or certificate.
+2. **When to ask.** After the agent certificate is enrolled or renewed and
+   a `HelloAck` lists `forward.v1`, call `IssueLinkCertificate` over the
+   mTLS connection with a CSR for the link key (its SANs, if any, the node's
+   DNS name and SPIFFE ID). Renew at `renew_after_unix` with a new key, and
+   whenever the node has no valid link certificate. A node whose
+   `forward.v1` is not negotiated has no link certificate to ask for: on
+   `link_cert_not_negotiated` wait for the next `HelloAck` that lists it; on
+   `link_cert_unavailable` keep what it has and retry with backoff; on
+   `link_cert_request_invalid` fix the request (an Agent bug); on an
+   `agent_cert_*` code handle the agent certificate first.
+3. **Where to store it.** Not in the Agent's PKI directory: in gost's
+   directory, `/var/lib/anixops-gost/tls` (the gost driver's
+   `DefaultLinkCert`, `DefaultLinkKey` and `DefaultLinkCA`):
+   `link.crt` (the certificate, PEM), `link.key` (the link key, PKCS#8
+   PEM) and `link-ca.crt` (the whole link trust bundle, PEM). The directory
+   is owned by the Agent's user with group `anixops-gost`, mode 0750; the
+   files are owned by the Agent's user, group `anixops-gost`, mode 0640, so
+   only the Agent writes them and only gost reads them. Write each file to
+   a temporary file in the same directory and rename it; write the key and
+   the certificate before the bundle that must verify the peers.
+4. **Keep the bundle current.** Rewrite `link-ca.crt` from every
+   `IssueLinkCertificate` answer, and call `GetLinkTrustBundle` at least
+   hourly and at start-up; rewrite it whenever the set of CAs changes, not
+   only at renewal.
+5. **Reload gost.** gost reads the files when it creates its services. After
+   any of the three files changed, reload gost through the gost driver (its
+   supervisor's reload, `systemctl reload anixops-gost` under the unit), so
+   the driver records the reload: a reload re-creates gost's services, which
+   keeps established TCP connections but may restart UDP sessions and mux
+   carriers and starts a new counter epoch for every gost hop. Without the
+   three files the gost driver carries RAW links only.
+6. **On revocation.** When the agent certificate is revoked
+   (`agent_cert_revoked`), delete the link key and certificate along with
+   it and reload gost; ask again after enrolling anew.
+
 ## Agent health metrics
 
 `Heartbeat.metrics` carries plugin telemetry (`plugin.*`, persisted per
@@ -556,10 +655,13 @@ their JSON body.
 | `agent_mtls_required` | `Unauthenticated` | `ControlStream`, `Enroll`, the legacy HTTP and WebSocket agent paths (HTTP 403) | `agent_control.mtls: required` refuses the node API key (and its `Enroll` bootstrap): enroll with a one-time credential and present the certificate |
 | `agent_cert_revoked` | `Unauthenticated` (`PermissionDenied` when the node was found disabled or deleted after the certificate check) | `ControlStream` (at connection, and on an open stream at the next `Heartbeat`), `Renew`, `GetTrustBundle`, the v2board services | the certificate, its enrollment or its node's credentials were revoked, or the node was disabled or deleted, which revokes them: discard it and enroll again |
 | `agent_cert_expired` | `Unauthenticated` | the same | the certificate's `not_after` has passed: discard it and enroll again |
-| `agent_cert_invalid` | `Unauthenticated` | the same; `Renew` and `GetTrustBundle` without a certificate | not an agent certificate of this Control: unparsable, not chaining to the agent trust bundle, not yet valid, without client-auth usage or exactly one agent SPIFFE ID, or presented to a Control without the agent PKI: enroll again |
+| `agent_cert_invalid` | `Unauthenticated` | the same; `Renew`, `GetTrustBundle`, `IssueLinkCertificate` and `GetLinkTrustBundle` without a certificate | not an agent certificate of this Control: unparsable, not chaining to the agent trust bundle, not yet valid, without client-auth usage or exactly one agent SPIFFE ID, or presented to a Control without the agent PKI: enroll again |
 | `agent_cert_wrong_cluster` | `Unauthenticated` | the same | an agent certificate of another cluster: enroll with this Control |
 | `agent_cert_wrong_node` | `Unauthenticated`, or `PermissionDenied` for an envelope or the v2board services | `ControlStream`, the v2board services | the certificate names another node than `x-node-id` or `x-node-kind`, an envelope's `node_id`, or is a forward node's on the proxy-only v2board services: a configuration error of the Agent; keep the certificate |
 | `agent_enrollment_rejected` | `Unauthenticated` | `Enroll` | the bootstrap is unusable (unknown, used, expired or revoked enrollment credential, wrong node key or token, malformed `x-node-id` or `x-node-kind`, none given); one answer for all, so credentials cannot be probed |
+| `link_cert_not_negotiated` | `FailedPrecondition` | `IssueLinkCertificate` | the node's Agent did not negotiate `forward.v1` in its last `Hello`: ask again after a `HelloAck` that lists it |
+| `link_cert_request_invalid` | `InvalidArgument` | `IssueLinkCertificate` | the CSR is malformed, uses an unsupported key or the agent certificate's key, or names anything but the node's DNS name and SPIFFE ID: an Agent bug; fix the request, with a fresh key |
+| `link_cert_unavailable` | `FailedPrecondition` | `IssueLinkCertificate`, `GetLinkTrustBundle` | this Control issues no link certificates (no built-in CA, an external PKI, `agent_control.mtls: off`) or has no link CA yet: keep the current link certificate and retry later |
 
 | `agent_capability_not_negotiated` | `InvalidArgument` | `ControlStream` | a data-plane payload whose capability the session did not negotiate; the stream ends: an Agent bug |
 | `invalid_plugin_release_address` | `InvalidArgument` | `AgentArtifacts` | the address lacks `plugin_id`, `version`, a 64-hex `sha256` or a positive `size` |

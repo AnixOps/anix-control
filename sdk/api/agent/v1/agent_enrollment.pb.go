@@ -406,6 +406,289 @@ func (x *AgentCertificate) GetRenewAfterUnix() int64 {
 	return 0
 }
 
+type IssueLinkCertificateRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// csr_der is a PKCS#10 request in DER for the link key pair (ECDSA P-256
+	// recommended; P-384, Ed25519 and RSA of at least 2048 bits are accepted).
+	// Its SANs may only be the node's DNS name and its SPIFFE ID; Control
+	// assigns both whether or not the request names them.
+	CsrDer        []byte `protobuf:"bytes,1,opt,name=csr_der,json=csrDer,proto3" json:"csr_der,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IssueLinkCertificateRequest) Reset() {
+	*x = IssueLinkCertificateRequest{}
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[7]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IssueLinkCertificateRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IssueLinkCertificateRequest) ProtoMessage() {}
+
+func (x *IssueLinkCertificateRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[7]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IssueLinkCertificateRequest.ProtoReflect.Descriptor instead.
+func (*IssueLinkCertificateRequest) Descriptor() ([]byte, []int) {
+	return file_api_grpc_agent_v1_agent_enrollment_proto_rawDescGZIP(), []int{7}
+}
+
+func (x *IssueLinkCertificateRequest) GetCsrDer() []byte {
+	if x != nil {
+		return x.CsrDer
+	}
+	return nil
+}
+
+type IssueLinkCertificateResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Certificate   *LinkCertificate       `protobuf:"bytes,1,opt,name=certificate,proto3" json:"certificate,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *IssueLinkCertificateResponse) Reset() {
+	*x = IssueLinkCertificateResponse{}
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[8]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *IssueLinkCertificateResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*IssueLinkCertificateResponse) ProtoMessage() {}
+
+func (x *IssueLinkCertificateResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[8]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use IssueLinkCertificateResponse.ProtoReflect.Descriptor instead.
+func (*IssueLinkCertificateResponse) Descriptor() ([]byte, []int) {
+	return file_api_grpc_agent_v1_agent_enrollment_proto_rawDescGZIP(), []int{8}
+}
+
+func (x *IssueLinkCertificateResponse) GetCertificate() *LinkCertificate {
+	if x != nil {
+		return x.Certificate
+	}
+	return nil
+}
+
+type GetLinkTrustBundleRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetLinkTrustBundleRequest) Reset() {
+	*x = GetLinkTrustBundleRequest{}
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[9]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetLinkTrustBundleRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetLinkTrustBundleRequest) ProtoMessage() {}
+
+func (x *GetLinkTrustBundleRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[9]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetLinkTrustBundleRequest.ProtoReflect.Descriptor instead.
+func (*GetLinkTrustBundleRequest) Descriptor() ([]byte, []int) {
+	return file_api_grpc_agent_v1_agent_enrollment_proto_rawDescGZIP(), []int{9}
+}
+
+type GetLinkTrustBundleResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// trust_bundle_der holds every forward link CA certificate that may have
+	// signed a valid link certificate: the current and next link CAs, and
+	// retired ones until the link certificates they signed have expired.
+	TrustBundleDer [][]byte `protobuf:"bytes,1,rep,name=trust_bundle_der,json=trustBundleDer,proto3" json:"trust_bundle_der,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *GetLinkTrustBundleResponse) Reset() {
+	*x = GetLinkTrustBundleResponse{}
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[10]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetLinkTrustBundleResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetLinkTrustBundleResponse) ProtoMessage() {}
+
+func (x *GetLinkTrustBundleResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[10]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetLinkTrustBundleResponse.ProtoReflect.Descriptor instead.
+func (*GetLinkTrustBundleResponse) Descriptor() ([]byte, []int) {
+	return file_api_grpc_agent_v1_agent_enrollment_proto_rawDescGZIP(), []int{10}
+}
+
+func (x *GetLinkTrustBundleResponse) GetTrustBundleDer() [][]byte {
+	if x != nil {
+		return x.TrustBundleDer
+	}
+	return nil
+}
+
+type LinkCertificate struct {
+	state          protoimpl.MessageState `protogen:"open.v1"`
+	CertificateDer []byte                 `protobuf:"bytes,1,opt,name=certificate_der,json=certificateDer,proto3" json:"certificate_der,omitempty"`
+	// trust_bundle_der is the link trust bundle (GetLinkTrustBundleResponse).
+	TrustBundleDer [][]byte `protobuf:"bytes,2,rep,name=trust_bundle_der,json=trustBundleDer,proto3" json:"trust_bundle_der,omitempty"`
+	// spiffe_id is the certificate's URI SAN: the node's agent identity.
+	SpiffeId string `protobuf:"bytes,3,opt,name=spiffe_id,json=spiffeId,proto3" json:"spiffe_id,omitempty"`
+	// node is "proxy-<id>" or "forward-<id>".
+	Node string `protobuf:"bytes,4,opt,name=node,proto3" json:"node,omitempty"`
+	// dns_name is the certificate's only DNS name and its subject common
+	// name: the node's identity name, which peers dial as the server name.
+	DnsName string `protobuf:"bytes,5,opt,name=dns_name,json=dnsName,proto3" json:"dns_name,omitempty"`
+	// serial is the certificate serial number, lowercase hex.
+	Serial       string `protobuf:"bytes,6,opt,name=serial,proto3" json:"serial,omitempty"`
+	NotAfterUnix int64  `protobuf:"varint,7,opt,name=not_after_unix,json=notAfterUnix,proto3" json:"not_after_unix,omitempty"`
+	// renew_after_unix is when the Agent should request a new link
+	// certificate: two thirds of the lifetime.
+	RenewAfterUnix int64 `protobuf:"varint,8,opt,name=renew_after_unix,json=renewAfterUnix,proto3" json:"renew_after_unix,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
+}
+
+func (x *LinkCertificate) Reset() {
+	*x = LinkCertificate{}
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[11]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *LinkCertificate) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*LinkCertificate) ProtoMessage() {}
+
+func (x *LinkCertificate) ProtoReflect() protoreflect.Message {
+	mi := &file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes[11]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use LinkCertificate.ProtoReflect.Descriptor instead.
+func (*LinkCertificate) Descriptor() ([]byte, []int) {
+	return file_api_grpc_agent_v1_agent_enrollment_proto_rawDescGZIP(), []int{11}
+}
+
+func (x *LinkCertificate) GetCertificateDer() []byte {
+	if x != nil {
+		return x.CertificateDer
+	}
+	return nil
+}
+
+func (x *LinkCertificate) GetTrustBundleDer() [][]byte {
+	if x != nil {
+		return x.TrustBundleDer
+	}
+	return nil
+}
+
+func (x *LinkCertificate) GetSpiffeId() string {
+	if x != nil {
+		return x.SpiffeId
+	}
+	return ""
+}
+
+func (x *LinkCertificate) GetNode() string {
+	if x != nil {
+		return x.Node
+	}
+	return ""
+}
+
+func (x *LinkCertificate) GetDnsName() string {
+	if x != nil {
+		return x.DnsName
+	}
+	return ""
+}
+
+func (x *LinkCertificate) GetSerial() string {
+	if x != nil {
+		return x.Serial
+	}
+	return ""
+}
+
+func (x *LinkCertificate) GetNotAfterUnix() int64 {
+	if x != nil {
+		return x.NotAfterUnix
+	}
+	return 0
+}
+
+func (x *LinkCertificate) GetRenewAfterUnix() int64 {
+	if x != nil {
+		return x.RenewAfterUnix
+	}
+	return 0
+}
+
 var File_api_grpc_agent_v1_agent_enrollment_proto protoreflect.FileDescriptor
 
 const file_api_grpc_agent_v1_agent_enrollment_proto_rawDesc = "" +
@@ -433,11 +716,29 @@ const file_api_grpc_agent_v1_agent_enrollment_proto_rawDesc = "" +
 	"\x04node\x18\x04 \x01(\tR\x04node\x12\x16\n" +
 	"\x06serial\x18\x05 \x01(\tR\x06serial\x12$\n" +
 	"\x0enot_after_unix\x18\x06 \x01(\x03R\fnotAfterUnix\x12(\n" +
-	"\x10renew_after_unix\x18\a \x01(\x03R\x0erenewAfterUnix2\xaf\x02\n" +
+	"\x10renew_after_unix\x18\a \x01(\x03R\x0erenewAfterUnix\"6\n" +
+	"\x1bIssueLinkCertificateRequest\x12\x17\n" +
+	"\acsr_der\x18\x01 \x01(\fR\x06csrDer\"`\n" +
+	"\x1cIssueLinkCertificateResponse\x12@\n" +
+	"\vcertificate\x18\x01 \x01(\v2\x1e.anix.agent.v1.LinkCertificateR\vcertificate\"\x1b\n" +
+	"\x19GetLinkTrustBundleRequest\"F\n" +
+	"\x1aGetLinkTrustBundleResponse\x12(\n" +
+	"\x10trust_bundle_der\x18\x01 \x03(\fR\x0etrustBundleDer\"\x98\x02\n" +
+	"\x0fLinkCertificate\x12'\n" +
+	"\x0fcertificate_der\x18\x01 \x01(\fR\x0ecertificateDer\x12(\n" +
+	"\x10trust_bundle_der\x18\x02 \x03(\fR\x0etrustBundleDer\x12\x1b\n" +
+	"\tspiffe_id\x18\x03 \x01(\tR\bspiffeId\x12\x12\n" +
+	"\x04node\x18\x04 \x01(\tR\x04node\x12\x19\n" +
+	"\bdns_name\x18\x05 \x01(\tR\adnsName\x12\x16\n" +
+	"\x06serial\x18\x06 \x01(\tR\x06serial\x12$\n" +
+	"\x0enot_after_unix\x18\a \x01(\x03R\fnotAfterUnix\x12(\n" +
+	"\x10renew_after_unix\x18\b \x01(\x03R\x0erenewAfterUnix2\x8b\x04\n" +
 	"\x0fAgentEnrollment\x12O\n" +
 	"\x06Enroll\x12!.anix.agent.v1.EnrollAgentRequest\x1a\".anix.agent.v1.EnrollAgentResponse\x12b\n" +
 	"\x05Renew\x12+.anix.agent.v1.RenewAgentCertificateRequest\x1a,.anix.agent.v1.RenewAgentCertificateResponse\x12g\n" +
-	"\x0eGetTrustBundle\x12).anix.agent.v1.GetAgentTrustBundleRequest\x1a*.anix.agent.v1.GetAgentTrustBundleResponseB<Z:github.com/AnixOps/anix-control/sdk/api/agent/v1;agentv1pbb\x06proto3"
+	"\x0eGetTrustBundle\x12).anix.agent.v1.GetAgentTrustBundleRequest\x1a*.anix.agent.v1.GetAgentTrustBundleResponse\x12o\n" +
+	"\x14IssueLinkCertificate\x12*.anix.agent.v1.IssueLinkCertificateRequest\x1a+.anix.agent.v1.IssueLinkCertificateResponse\x12i\n" +
+	"\x12GetLinkTrustBundle\x12(.anix.agent.v1.GetLinkTrustBundleRequest\x1a).anix.agent.v1.GetLinkTrustBundleResponseB<Z:github.com/AnixOps/anix-control/sdk/api/agent/v1;agentv1pbb\x06proto3"
 
 var (
 	file_api_grpc_agent_v1_agent_enrollment_proto_rawDescOnce sync.Once
@@ -451,7 +752,7 @@ func file_api_grpc_agent_v1_agent_enrollment_proto_rawDescGZIP() []byte {
 	return file_api_grpc_agent_v1_agent_enrollment_proto_rawDescData
 }
 
-var file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes = make([]protoimpl.MessageInfo, 7)
+var file_api_grpc_agent_v1_agent_enrollment_proto_msgTypes = make([]protoimpl.MessageInfo, 12)
 var file_api_grpc_agent_v1_agent_enrollment_proto_goTypes = []any{
 	(*EnrollAgentRequest)(nil),            // 0: anix.agent.v1.EnrollAgentRequest
 	(*EnrollAgentResponse)(nil),           // 1: anix.agent.v1.EnrollAgentResponse
@@ -460,21 +761,31 @@ var file_api_grpc_agent_v1_agent_enrollment_proto_goTypes = []any{
 	(*GetAgentTrustBundleRequest)(nil),    // 4: anix.agent.v1.GetAgentTrustBundleRequest
 	(*GetAgentTrustBundleResponse)(nil),   // 5: anix.agent.v1.GetAgentTrustBundleResponse
 	(*AgentCertificate)(nil),              // 6: anix.agent.v1.AgentCertificate
+	(*IssueLinkCertificateRequest)(nil),   // 7: anix.agent.v1.IssueLinkCertificateRequest
+	(*IssueLinkCertificateResponse)(nil),  // 8: anix.agent.v1.IssueLinkCertificateResponse
+	(*GetLinkTrustBundleRequest)(nil),     // 9: anix.agent.v1.GetLinkTrustBundleRequest
+	(*GetLinkTrustBundleResponse)(nil),    // 10: anix.agent.v1.GetLinkTrustBundleResponse
+	(*LinkCertificate)(nil),               // 11: anix.agent.v1.LinkCertificate
 }
 var file_api_grpc_agent_v1_agent_enrollment_proto_depIdxs = []int32{
-	6, // 0: anix.agent.v1.EnrollAgentResponse.certificate:type_name -> anix.agent.v1.AgentCertificate
-	6, // 1: anix.agent.v1.RenewAgentCertificateResponse.certificate:type_name -> anix.agent.v1.AgentCertificate
-	0, // 2: anix.agent.v1.AgentEnrollment.Enroll:input_type -> anix.agent.v1.EnrollAgentRequest
-	2, // 3: anix.agent.v1.AgentEnrollment.Renew:input_type -> anix.agent.v1.RenewAgentCertificateRequest
-	4, // 4: anix.agent.v1.AgentEnrollment.GetTrustBundle:input_type -> anix.agent.v1.GetAgentTrustBundleRequest
-	1, // 5: anix.agent.v1.AgentEnrollment.Enroll:output_type -> anix.agent.v1.EnrollAgentResponse
-	3, // 6: anix.agent.v1.AgentEnrollment.Renew:output_type -> anix.agent.v1.RenewAgentCertificateResponse
-	5, // 7: anix.agent.v1.AgentEnrollment.GetTrustBundle:output_type -> anix.agent.v1.GetAgentTrustBundleResponse
-	5, // [5:8] is the sub-list for method output_type
-	2, // [2:5] is the sub-list for method input_type
-	2, // [2:2] is the sub-list for extension type_name
-	2, // [2:2] is the sub-list for extension extendee
-	0, // [0:2] is the sub-list for field type_name
+	6,  // 0: anix.agent.v1.EnrollAgentResponse.certificate:type_name -> anix.agent.v1.AgentCertificate
+	6,  // 1: anix.agent.v1.RenewAgentCertificateResponse.certificate:type_name -> anix.agent.v1.AgentCertificate
+	11, // 2: anix.agent.v1.IssueLinkCertificateResponse.certificate:type_name -> anix.agent.v1.LinkCertificate
+	0,  // 3: anix.agent.v1.AgentEnrollment.Enroll:input_type -> anix.agent.v1.EnrollAgentRequest
+	2,  // 4: anix.agent.v1.AgentEnrollment.Renew:input_type -> anix.agent.v1.RenewAgentCertificateRequest
+	4,  // 5: anix.agent.v1.AgentEnrollment.GetTrustBundle:input_type -> anix.agent.v1.GetAgentTrustBundleRequest
+	7,  // 6: anix.agent.v1.AgentEnrollment.IssueLinkCertificate:input_type -> anix.agent.v1.IssueLinkCertificateRequest
+	9,  // 7: anix.agent.v1.AgentEnrollment.GetLinkTrustBundle:input_type -> anix.agent.v1.GetLinkTrustBundleRequest
+	1,  // 8: anix.agent.v1.AgentEnrollment.Enroll:output_type -> anix.agent.v1.EnrollAgentResponse
+	3,  // 9: anix.agent.v1.AgentEnrollment.Renew:output_type -> anix.agent.v1.RenewAgentCertificateResponse
+	5,  // 10: anix.agent.v1.AgentEnrollment.GetTrustBundle:output_type -> anix.agent.v1.GetAgentTrustBundleResponse
+	8,  // 11: anix.agent.v1.AgentEnrollment.IssueLinkCertificate:output_type -> anix.agent.v1.IssueLinkCertificateResponse
+	10, // 12: anix.agent.v1.AgentEnrollment.GetLinkTrustBundle:output_type -> anix.agent.v1.GetLinkTrustBundleResponse
+	8,  // [8:13] is the sub-list for method output_type
+	3,  // [3:8] is the sub-list for method input_type
+	3,  // [3:3] is the sub-list for extension type_name
+	3,  // [3:3] is the sub-list for extension extendee
+	0,  // [0:3] is the sub-list for field type_name
 }
 
 func init() { file_api_grpc_agent_v1_agent_enrollment_proto_init() }
@@ -488,7 +799,7 @@ func file_api_grpc_agent_v1_agent_enrollment_proto_init() {
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_grpc_agent_v1_agent_enrollment_proto_rawDesc), len(file_api_grpc_agent_v1_agent_enrollment_proto_rawDesc)),
 			NumEnums:      0,
-			NumMessages:   7,
+			NumMessages:   12,
 			NumExtensions: 0,
 			NumServices:   1,
 		},

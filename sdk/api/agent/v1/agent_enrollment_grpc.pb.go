@@ -19,9 +19,11 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	AgentEnrollment_Enroll_FullMethodName         = "/anix.agent.v1.AgentEnrollment/Enroll"
-	AgentEnrollment_Renew_FullMethodName          = "/anix.agent.v1.AgentEnrollment/Renew"
-	AgentEnrollment_GetTrustBundle_FullMethodName = "/anix.agent.v1.AgentEnrollment/GetTrustBundle"
+	AgentEnrollment_Enroll_FullMethodName               = "/anix.agent.v1.AgentEnrollment/Enroll"
+	AgentEnrollment_Renew_FullMethodName                = "/anix.agent.v1.AgentEnrollment/Renew"
+	AgentEnrollment_GetTrustBundle_FullMethodName       = "/anix.agent.v1.AgentEnrollment/GetTrustBundle"
+	AgentEnrollment_IssueLinkCertificate_FullMethodName = "/anix.agent.v1.AgentEnrollment/IssueLinkCertificate"
+	AgentEnrollment_GetLinkTrustBundle_FullMethodName   = "/anix.agent.v1.AgentEnrollment/GetLinkTrustBundle"
 )
 
 // AgentEnrollmentClient is the client API for AgentEnrollment service.
@@ -54,6 +56,21 @@ type AgentEnrollmentClient interface {
 	// GetTrustBundle returns the CA certificates that sign agent certificates.
 	// It requires a valid agent client certificate.
 	GetTrustBundle(ctx context.Context, in *GetAgentTrustBundleRequest, opts ...grpc.CallOption) (*GetAgentTrustBundleResponse, error)
+	// IssueLinkCertificate issues the node of the presented agent client
+	// certificate a forward link certificate (owner decision H28): the
+	// certificate a forward engine such as gost presents to the node's peers
+	// on encrypted links, signed by the forward link CA, a root separate from
+	// the CA of agent certificates. It requires a valid agent client
+	// certificate (never the node credential) of a node whose Agent negotiated
+	// forward.v1 in its last Hello. The CSR's key must be a key of its own,
+	// never the agent certificate's; the CSR may name only the node's DNS
+	// name ("forward-7") and SPIFFE ID. Renewal is the same call with a new
+	// key, at renew_after_unix. See PROTOCOL.md "Forward link certificates".
+	IssueLinkCertificate(ctx context.Context, in *IssueLinkCertificateRequest, opts ...grpc.CallOption) (*IssueLinkCertificateResponse, error)
+	// GetLinkTrustBundle returns the forward link CAs a node trusts to verify
+	// its peers' link certificates. It requires a valid agent client
+	// certificate.
+	GetLinkTrustBundle(ctx context.Context, in *GetLinkTrustBundleRequest, opts ...grpc.CallOption) (*GetLinkTrustBundleResponse, error)
 }
 
 type agentEnrollmentClient struct {
@@ -94,6 +111,26 @@ func (c *agentEnrollmentClient) GetTrustBundle(ctx context.Context, in *GetAgent
 	return out, nil
 }
 
+func (c *agentEnrollmentClient) IssueLinkCertificate(ctx context.Context, in *IssueLinkCertificateRequest, opts ...grpc.CallOption) (*IssueLinkCertificateResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(IssueLinkCertificateResponse)
+	err := c.cc.Invoke(ctx, AgentEnrollment_IssueLinkCertificate_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *agentEnrollmentClient) GetLinkTrustBundle(ctx context.Context, in *GetLinkTrustBundleRequest, opts ...grpc.CallOption) (*GetLinkTrustBundleResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetLinkTrustBundleResponse)
+	err := c.cc.Invoke(ctx, AgentEnrollment_GetLinkTrustBundle_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // AgentEnrollmentServer is the server API for AgentEnrollment service.
 // All implementations must embed UnimplementedAgentEnrollmentServer
 // for forward compatibility.
@@ -124,6 +161,21 @@ type AgentEnrollmentServer interface {
 	// GetTrustBundle returns the CA certificates that sign agent certificates.
 	// It requires a valid agent client certificate.
 	GetTrustBundle(context.Context, *GetAgentTrustBundleRequest) (*GetAgentTrustBundleResponse, error)
+	// IssueLinkCertificate issues the node of the presented agent client
+	// certificate a forward link certificate (owner decision H28): the
+	// certificate a forward engine such as gost presents to the node's peers
+	// on encrypted links, signed by the forward link CA, a root separate from
+	// the CA of agent certificates. It requires a valid agent client
+	// certificate (never the node credential) of a node whose Agent negotiated
+	// forward.v1 in its last Hello. The CSR's key must be a key of its own,
+	// never the agent certificate's; the CSR may name only the node's DNS
+	// name ("forward-7") and SPIFFE ID. Renewal is the same call with a new
+	// key, at renew_after_unix. See PROTOCOL.md "Forward link certificates".
+	IssueLinkCertificate(context.Context, *IssueLinkCertificateRequest) (*IssueLinkCertificateResponse, error)
+	// GetLinkTrustBundle returns the forward link CAs a node trusts to verify
+	// its peers' link certificates. It requires a valid agent client
+	// certificate.
+	GetLinkTrustBundle(context.Context, *GetLinkTrustBundleRequest) (*GetLinkTrustBundleResponse, error)
 	mustEmbedUnimplementedAgentEnrollmentServer()
 }
 
@@ -142,6 +194,12 @@ func (UnimplementedAgentEnrollmentServer) Renew(context.Context, *RenewAgentCert
 }
 func (UnimplementedAgentEnrollmentServer) GetTrustBundle(context.Context, *GetAgentTrustBundleRequest) (*GetAgentTrustBundleResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetTrustBundle not implemented")
+}
+func (UnimplementedAgentEnrollmentServer) IssueLinkCertificate(context.Context, *IssueLinkCertificateRequest) (*IssueLinkCertificateResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method IssueLinkCertificate not implemented")
+}
+func (UnimplementedAgentEnrollmentServer) GetLinkTrustBundle(context.Context, *GetLinkTrustBundleRequest) (*GetLinkTrustBundleResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetLinkTrustBundle not implemented")
 }
 func (UnimplementedAgentEnrollmentServer) mustEmbedUnimplementedAgentEnrollmentServer() {}
 func (UnimplementedAgentEnrollmentServer) testEmbeddedByValue()                         {}
@@ -218,6 +276,42 @@ func _AgentEnrollment_GetTrustBundle_Handler(srv interface{}, ctx context.Contex
 	return interceptor(ctx, in, info, handler)
 }
 
+func _AgentEnrollment_IssueLinkCertificate_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(IssueLinkCertificateRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentEnrollmentServer).IssueLinkCertificate(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentEnrollment_IssueLinkCertificate_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentEnrollmentServer).IssueLinkCertificate(ctx, req.(*IssueLinkCertificateRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _AgentEnrollment_GetLinkTrustBundle_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetLinkTrustBundleRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(AgentEnrollmentServer).GetLinkTrustBundle(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: AgentEnrollment_GetLinkTrustBundle_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(AgentEnrollmentServer).GetLinkTrustBundle(ctx, req.(*GetLinkTrustBundleRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // AgentEnrollment_ServiceDesc is the grpc.ServiceDesc for AgentEnrollment service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -236,6 +330,14 @@ var AgentEnrollment_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetTrustBundle",
 			Handler:    _AgentEnrollment_GetTrustBundle_Handler,
+		},
+		{
+			MethodName: "IssueLinkCertificate",
+			Handler:    _AgentEnrollment_IssueLinkCertificate_Handler,
+		},
+		{
+			MethodName: "GetLinkTrustBundle",
+			Handler:    _AgentEnrollment_GetLinkTrustBundle_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

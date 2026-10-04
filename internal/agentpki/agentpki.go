@@ -14,6 +14,12 @@
 // node's credentials, or deleting the node, revokes its certificates
 // (RevokeNode), and the agent listener refuses revoked serials through a
 // cache of at most RevocationCacheTTL.
+//
+// The package also runs the forward link CA (link.go, owner decision H28):
+// a separate root that issues nodes whose Agent negotiated forward.v1 the
+// link certificates their forward engines present to each other, recorded
+// in v4_kernel_forward_link_certificate and revoked with the node's Agent
+// credentials.
 package agentpki
 
 import (
@@ -86,6 +92,9 @@ type Options struct {
 	RevocationCacheTTL time.Duration
 	// Now defaults to time.Now.
 	Now func() time.Time
+	// Link is the forward link CA (link.go); nil serves no link
+	// certificates (ErrLinkDisabled).
+	Link *LinkAuthority
 }
 
 // Service is the agent PKI of one cluster.
@@ -96,6 +105,7 @@ type Service struct {
 	lifetime    time.Duration
 	now         func() time.Time
 	revocations *revocationCache
+	link        *LinkAuthority
 
 	rootsMu       sync.Mutex
 	roots         *x509.CertPool
@@ -124,7 +134,7 @@ func New(opts Options) (*Service, error) {
 	}
 	return &Service{
 		db: opts.DB, authority: opts.Authority, cluster: opts.Authority.Cluster(), lifetime: lifetime, now: now,
-		revocations: newRevocationCache(cacheTTL, now),
+		revocations: newRevocationCache(cacheTTL, now), link: opts.Link,
 	}, nil
 }
 
@@ -145,7 +155,26 @@ func FromConfig(cfg *config.Config, db *gorm.DB) (*Service, error) {
 	if err != nil {
 		return nil, err
 	}
-	return New(Options{DB: db, Authority: authority})
+	link, err := LinkAuthorityFromConfig(cfg, db)
+	if err != nil {
+		return nil, err
+	}
+	return New(Options{DB: db, Authority: authority, Link: link})
+}
+
+// LinkAuthorityFromConfig returns the forward link CA of the built-in CA's
+// configuration: module_runtime.ca_kek seals its keys and the module
+// runtime's cluster names it. ErrLinkDisabled without the built-in CA or
+// with an external PKI.
+func LinkAuthorityFromConfig(cfg *config.Config, db *gorm.DB) (*LinkAuthority, error) {
+	if cfg == nil || !cfg.ModuleRuntime.BuiltinCA() {
+		return nil, ErrLinkDisabled
+	}
+	kek, err := modulepki.ParseKEK(cfg.ModuleRuntime.CAKEK)
+	if err != nil {
+		return nil, err
+	}
+	return NewLinkAuthority(LinkAuthorityOptions{DB: db, Cluster: cfg.ModuleRuntime.ClusterOrDefault(), KEK: kek})
 }
 
 // Cluster returns the cluster named in every agent SPIFFE ID.

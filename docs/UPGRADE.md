@@ -2069,6 +2069,42 @@ That Agent release is not out yet. This section will name its version, and
 the v4.2 upgrade notes will repeat the order
 ([design](architecture/forward-sdk.md#10-upgrade-from-v41)).
 
+### Forward Link Certificates: A Second CA Under The Same Key
+
+Encrypted links between forward nodes (gost's TLS, WSS, QUIC and gRPC
+links) use per-node link certificates from a dedicated forward link CA
+(owner decision H28; `sdk/api/agent/v1/PROTOCOL.md`, "Forward link
+certificates").
+
+- **What is new.** The tables `v4_kernel_forward_link_ca` (the link CAs,
+  each key sealed with AES-256-GCM) and
+  `v4_kernel_forward_link_certificate` (every issued link certificate),
+  created at startup; the RPCs `AgentEnrollment.IssueLinkCertificate` and
+  `GetLinkTrustBundle` on the agent listener; and
+  `anix-control agent link-ca list|bundle|rotate`.
+- **Key material.** Nothing to configure. Wherever the built-in CA runs
+  (`module_runtime.ca_kek` with `module_runtime.pki: builtin`), the first
+  start creates the link CA, an ECDSA P-256 root separate from the module
+  CA, and seals its key with the same `module_runtime.ca_kek`. The key
+  therefore now protects two CAs: keep it secret and backed up as before,
+  and restore it with the database. Changing it leaves both CAs unusable
+  (`wrong key-encryption key` on the first issuance). With an external PKI
+  the kernel holds no CA key and issues no link certificates
+  (`link_cert_unavailable`).
+- **Who gets one.** Only an enrolled Agent (client certificate, never the
+  node API key or token) of an enabled node whose Agent negotiated
+  `forward.v1`. Older Agents never ask; nothing changes for them.
+- **Rotation.** `anix-control agent link-ca rotate` creates the next link
+  CA. It is in the link trust bundle at once and signs from 7 days later
+  (the kernel promotes it within the hour after that); the retired CA
+  stays trusted for 7 more days. Rotate well before the CA's 5-year
+  validity ends.
+- **Revocation.** Disabling, deleting or retiring a node, or replacing its
+  credentials, revokes its link certificates with its agent certificates.
+  gost does not check revocation, so a revoked link certificate verifies at
+  its peers until it expires (at most 7 days); remove the node from its
+  routes to drop its addresses from its peers' admission at once.
+
 ## Switching Route Modes
 
 Each v2 route of a Control package runs in one of three modes: `legacy` (the

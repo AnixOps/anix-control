@@ -34,6 +34,46 @@
 
 ### Added
 
+- **Forward link certificates, Control side (owner decision H28).** A
+  dedicated forward link CA issues each node whose Agent negotiated
+  `forward.v1` the certificate its forward engines (gost) present to each
+  other on encrypted links, so gost never holds the Agent's Control key.
+  Additions only to `anix.agent.v1` (`agent_enrollment.proto`);
+  `contracts/proto/descriptors.golden` only gains lines.
+  - **CA.** A self-signed ECDSA P-256 root, separate from the module,
+    kernel and Agent CA and name-constrained to `spiffe://anixops` URIs,
+    created at startup wherever the built-in CA runs, its key sealed with
+    `module_runtime.ca_kek` under additional data of its own. New table
+    `v4_kernel_forward_link_ca`. Rotation mirrors the module CA's with the
+    link lifetime as overlap: `anix-control agent link-ca rotate` adds the
+    next CA to the link trust bundle at once, it signs 7 days later, and the
+    retired CA stays trusted 7 more days (`agent link-ca list|bundle`).
+  - **Issuance.** `AgentEnrollment.IssueLinkCertificate`
+    (`IssueLinkCertificateRequest`: `csr_der = 1`;
+    `IssueLinkCertificateResponse`: `certificate = 1`) and
+    `GetLinkTrustBundle` (`GetLinkTrustBundleResponse.trust_bundle_der = 1`);
+    `LinkCertificate`: `certificate_der = 1`, `trust_bundle_der = 2`,
+    `spiffe_id = 3`, `node = 4`, `dns_name = 5`, `serial = 6`,
+    `not_after_unix = 7`, `renew_after_unix = 8`. The certificate's CN and
+    only DNS name are the node's identity name (`forward-7`, the planner's
+    default `server_name`), its only URI the node's SPIFFE ID (the state's
+    `peer_identity`), with serverAuth and clientAuth, for 7 days, renewed at
+    two thirds by asking again with a new key. Only an Agent client
+    certificate authenticates the call, only for an enabled node whose
+    Agent negotiated `forward.v1`; the CSR may name only the node's DNS name
+    and SPIFFE ID and must not reuse the Agent's key. New codes
+    `link_cert_not_negotiated`, `link_cert_request_invalid`,
+    `link_cert_unavailable` (`sdk/agentcontrol`).
+  - **Records and revocation.** Every link certificate is recorded in the
+    new table `v4_kernel_forward_link_certificate` (serial, node, the Agent
+    certificate that asked, issuer, `not_after`, `revoked_at`) and revoked
+    with the node's Agent credentials (disable, credential replacement,
+    deletion, `RetireNode`); expired records are pruned with the Agent's.
+  - **Agent contract.** `PROTOCOL.md` "Forward link certificates" specifies
+    the Agent's side (F3b): a separate key, the files under
+    `/var/lib/anixops-gost/tls` (group `anixops-gost`, 0640), keeping the
+    bundle current and reloading gost. `docs/UPGRADE.md`, "Forward Link
+    Certificates"; `docs/architecture/forward-sdk.md` sections 6.2, 14 and 16.
 - **The last Agent contract gaps before `required` (owner approval of
   2026-10-04: additions only to `anix.agent.v1`).** Older Agents are
   unaffected; `contracts/proto/descriptors.golden` only gains lines.

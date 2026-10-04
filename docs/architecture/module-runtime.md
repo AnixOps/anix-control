@@ -139,6 +139,14 @@ gRPC listener (`grpc.*`, port 50051), not on the module listener.
   two thirds of the lifetime with `AgentEnrollment.Renew`, authenticated by
   the current certificate. Retired CAs stay trusted for agent certificates
   until the last one they signed has expired.
+- **Forward link CA (H28).** The same `module_runtime.ca_kek` also seals
+  a second, separate root: the forward link CA
+  (`v4_kernel_forward_link_ca`, `internal/agentpki/link.go`), created at
+  startup with the module CA. It signs only the link certificates forward
+  engines present to each other (`AgentEnrollment.IssueLinkCertificate`),
+  never module, kernel or agent certificates, and the module CA never signs
+  link certificates. `anix-control agent link-ca list|bundle|rotate`
+  administers it (`forward-sdk.md` section 6.2).
 - **Bootstrap** (`AgentEnrollment.Enroll`, without a client certificate):
   1. *Agents in the field* use the credential they have: metadata
      `x-node-id` and `x-api-key` (a proxy node's API key), with

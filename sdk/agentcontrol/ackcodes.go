@@ -115,6 +115,26 @@ const (
 	ErrorCodePluginReleaseBusy = "plugin_release_download_busy"
 )
 
+// Forward link certificate refusals (AgentEnrollment.IssueLinkCertificate
+// and GetLinkTrustBundle, owner decision H28), in the MetadataErrorCode
+// trailer. Calls without a valid agent client certificate answer the
+// agent_cert_* codes.
+const (
+	// ErrorCodeLinkNotNegotiated (FailedPrecondition): the node's Agent did
+	// not negotiate forward.v1 in its last Hello. Ask again after a HelloAck
+	// that lists forward.v1.
+	ErrorCodeLinkNotNegotiated = "link_cert_not_negotiated"
+	// ErrorCodeLinkRequestInvalid (InvalidArgument): the CSR is malformed,
+	// uses an unsupported key or the agent certificate's own key, or names
+	// anything but the node's DNS name and SPIFFE ID. An Agent bug: fix the
+	// request, with a fresh key.
+	ErrorCodeLinkRequestInvalid = "link_cert_request_invalid"
+	// ErrorCodeLinkUnavailable (FailedPrecondition): this Control issues no
+	// link certificates (no built-in CA, or an external PKI) or has no link
+	// CA yet. Keep the current link certificate and retry later.
+	ErrorCodeLinkUnavailable = "link_cert_unavailable"
+)
+
 // ErrMaintenanceEventWrongNode reports an event of another node; it also
 // matches ErrInvalidMaintenanceEvent.
 var ErrMaintenanceEventWrongNode = errors.New("maintenance event of another node")

@@ -217,6 +217,7 @@ field anix.agent.v1.EnrollAgentRequest.enrollment_credential = 2 optional string
 field anix.agent.v1.EnrollAgentRequest.instance_id = 4 optional string
 field anix.agent.v1.EnrollAgentResponse.certificate = 1 optional anix.agent.v1.AgentCertificate
 field anix.agent.v1.GetAgentTrustBundleResponse.trust_bundle_der = 1 repeated bytes
+field anix.agent.v1.GetLinkTrustBundleResponse.trust_bundle_der = 1 repeated bytes
 field anix.agent.v1.GetPluginManifestRequest.manifest = 1 optional anix.agent.v1.PluginReleaseAddress
 field anix.agent.v1.GetPluginManifestResponse.manifest_json = 2 optional bytes
 field anix.agent.v1.GetPluginManifestResponse.release = 1 optional anix.agent.v1.PluginRelease
@@ -244,6 +245,16 @@ field anix.agent.v1.HelloAck.heartbeat_interval_seconds = 3 optional uint32
 field anix.agent.v1.HelloAck.server_capabilities = 5 repeated anix.agent.v1.Capability
 field anix.agent.v1.HelloAck.server_time_unix_ms = 2 optional int64
 field anix.agent.v1.HelloAck.session_id = 1 optional string
+field anix.agent.v1.IssueLinkCertificateRequest.csr_der = 1 optional bytes
+field anix.agent.v1.IssueLinkCertificateResponse.certificate = 1 optional anix.agent.v1.LinkCertificate
+field anix.agent.v1.LinkCertificate.certificate_der = 1 optional bytes
+field anix.agent.v1.LinkCertificate.dns_name = 5 optional string
+field anix.agent.v1.LinkCertificate.node = 4 optional string
+field anix.agent.v1.LinkCertificate.not_after_unix = 7 optional int64
+field anix.agent.v1.LinkCertificate.renew_after_unix = 8 optional int64
+field anix.agent.v1.LinkCertificate.serial = 6 optional string
+field anix.agent.v1.LinkCertificate.spiffe_id = 3 optional string
+field anix.agent.v1.LinkCertificate.trust_bundle_der = 2 repeated bytes
 field anix.agent.v1.LogBatch.batch_id = 1 optional string
 field anix.agent.v1.LogBatch.entries = 2 repeated anix.agent.v1.LogEntry
 field anix.agent.v1.LogEntry.fields_json = 5 optional bytes
@@ -1305,7 +1316,9 @@ rpc anix.agent.v1.AgentArtifacts.DownloadPluginArtifact(anix.agent.v1.DownloadPl
 rpc anix.agent.v1.AgentArtifacts.GetPluginManifest(anix.agent.v1.GetPluginManifestRequest) returns (anix.agent.v1.GetPluginManifestResponse)
 rpc anix.agent.v1.AgentControlService.ControlStream(stream anix.agent.v1.AgentToControl) returns (stream anix.agent.v1.ControlToAgent)
 rpc anix.agent.v1.AgentEnrollment.Enroll(anix.agent.v1.EnrollAgentRequest) returns (anix.agent.v1.EnrollAgentResponse)
+rpc anix.agent.v1.AgentEnrollment.GetLinkTrustBundle(anix.agent.v1.GetLinkTrustBundleRequest) returns (anix.agent.v1.GetLinkTrustBundleResponse)
 rpc anix.agent.v1.AgentEnrollment.GetTrustBundle(anix.agent.v1.GetAgentTrustBundleRequest) returns (anix.agent.v1.GetAgentTrustBundleResponse)
+rpc anix.agent.v1.AgentEnrollment.IssueLinkCertificate(anix.agent.v1.IssueLinkCertificateRequest) returns (anix.agent.v1.IssueLinkCertificateResponse)
 rpc anix.agent.v1.AgentEnrollment.Renew(anix.agent.v1.RenewAgentCertificateRequest) returns (anix.agent.v1.RenewAgentCertificateResponse)
 rpc anix.pluginhost.v1.ControlPackageHost.Dispatch(anix.pluginhost.v1.DispatchRequest) returns (anix.pluginhost.v1.DispatchResponse)
 rpc anix.pluginhost.v1.ControlPackageHost.Drain(anix.pluginhost.v1.DrainRequest) returns (anix.pluginhost.v1.DrainResponse)

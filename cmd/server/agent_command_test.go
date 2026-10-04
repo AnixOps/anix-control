@@ -91,7 +91,7 @@ func TestAgentPKIWithTheCAAlone(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "kernel.db")), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
 	require.NoError(t, db.AutoMigrate(&model.ServiceCA{}, &model.ModuleCertificate{}, &model.AgentEnrollment{}, &model.AgentCertificate{},
-		&model.Node{}, &model.ForwardNode{}, &model.OperationLog{}))
+		&model.Node{}, &model.ForwardNode{}, &model.OperationLog{}, &model.ForwardLinkCA{}))
 	cfg := &config.Config{ModuleRuntime: config.ModuleRuntimeConfig{
 		Cluster: "edge", CAKEK: "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8=",
 	}}
@@ -99,6 +99,11 @@ func TestAgentPKIWithTheCAAlone(t *testing.T) {
 	require.NoError(t, ensureModulePKI(ctx, cfg, db), "the CA is created without the module runtime")
 	var cas int64
 	require.NoError(t, db.Model(&model.ServiceCA{}).Count(&cas).Error)
+	require.Equal(t, int64(1), cas)
+	require.NoError(t, db.Model(&model.ForwardLinkCA{}).Where("state = ?", model.ForwardLinkCAStateCurrent).Count(&cas).Error)
+	require.Equal(t, int64(1), cas, "the forward link CA is created with it")
+	require.NoError(t, ensureModulePKI(ctx, cfg, db), "ensuring again creates nothing")
+	require.NoError(t, db.Model(&model.ForwardLinkCA{}).Count(&cas).Error)
 	require.Equal(t, int64(1), cas)
 
 	pki, err := agentPKIForGRPC(cfg, db)
@@ -132,4 +137,32 @@ func TestAgentPKIWithTheCAAlone(t *testing.T) {
 	_, err = agentPKIForGRPC(external, db)
 	require.ErrorIs(t, err, agentpki.ErrExternalPKI)
 	require.NoError(t, (&serverRuntime{}).startKernelCAMaintenance(&config.Config{}, db), "no CA, no maintenance")
+}
+
+// TestAgentLinkCACommand lists, prints and rotates the forward link CA.
+func TestAgentLinkCACommand(t *testing.T) {
+	cfg, db := moduleCommandFixture(t)
+	ctx := context.Background()
+
+	var output bytes.Buffer
+	require.NoError(t, runAdminCommand(ctx, cfg, db, []string{"agent", "link-ca", "list"}, &output))
+	var rows []model.ForwardLinkCA
+	require.NoError(t, json.Unmarshal(output.Bytes(), &rows))
+	require.Len(t, rows, 1)
+	require.Equal(t, model.ForwardLinkCAStateCurrent, rows[0].State)
+	require.Contains(t, rows[0].CertificatePEM, "BEGIN CERTIFICATE")
+	require.NotContains(t, output.String(), "sealed_key", "the sealed key is never printed")
+
+	output.Reset()
+	require.NoError(t, runAgentCommand(ctx, cfg, db, []string{"link-ca", "rotate"}, &output))
+	var next model.ForwardLinkCA
+	require.NoError(t, json.Unmarshal(output.Bytes(), &next))
+	require.Equal(t, model.ForwardLinkCAStateNext, next.State)
+
+	output.Reset()
+	require.NoError(t, runAgentCommand(ctx, cfg, db, []string{"link-ca", "bundle"}, &output))
+	require.Equal(t, 2, strings.Count(output.String(), "BEGIN CERTIFICATE"), "current and next")
+
+	require.Error(t, runAgentCommand(ctx, cfg, db, []string{"link-ca", "bogus"}, &output))
+	require.ErrorIs(t, runAgentCommand(ctx, &config.Config{}, db, []string{"link-ca", "list"}, &output), agentpki.ErrLinkDisabled)
 }

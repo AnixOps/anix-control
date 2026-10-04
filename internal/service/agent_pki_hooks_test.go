@@ -125,8 +125,41 @@ func TestNodeWritersWorkWithoutAgentPKITables(t *testing.T) {
 	require.NoError(t, forwards.Delete(forward.ID))
 }
 
+// TestRetireNodeRevokesLinkCertificates: RetireNode (and every other path
+// through RevokeNode) revokes the node's forward link certificates with its
+// Agent certificates.
+func TestRetireNodeRevokesLinkCertificates(t *testing.T) {
+	db := agentPKIHookDB(t)
+	require.NoError(t, db.AutoMigrate(&model.ForwardLinkCertificate{}))
+	forwards := NewForwardNodeService(db)
+	node := &model.ForwardNode{Name: "forward", Host: "198.51.100.32", Port: 8443, APIToken: "forward-token", Enabled: true}
+	require.NoError(t, forwards.Create(node))
+	seedAgentCertificate(t, db, agentcontrol.NodeKindForward, node.ID, "forward-cert")
+	for _, link := range []model.ForwardLinkCertificate{
+		{Serial: "forward-link", NodeKind: agentcontrol.NodeKindForward, NodeID: node.ID},
+		{Serial: "proxy-link", NodeKind: agentcontrol.NodeKindProxy, NodeID: node.ID},
+	} {
+		link.Cluster, link.AgentSerial, link.IssuerKeyID, link.DNSName, link.SPIFFEID = "default", "forward-cert", "link-ca", "x", "x"
+		link.NotAfter, link.CreatedAt = time.Now().Add(time.Hour), time.Now()
+		require.NoError(t, db.Create(&link).Error)
+	}
+
+	require.NoError(t, db.Transaction(func(tx *gorm.DB) error {
+		_, err := RetireForwardNodeTx(tx, node.ID)
+		return err
+	}))
+	var retired, kept model.ForwardLinkCertificate
+	require.NoError(t, db.First(&retired, "serial = ?", "forward-link").Error)
+	require.NotNil(t, retired.RevokedAt)
+	assert.Equal(t, agentpki.RevokeReasonNodeDeleted, retired.RevokeReason)
+	require.NoError(t, db.First(&kept, "serial = ?", "proxy-link").Error)
+	assert.Nil(t, kept.RevokedAt, "a proxy node with the same id keeps its link certificate")
+	assert.Equal(t, agentpki.RevokeReasonNodeDeleted, agentCertificateRevocation(t, db, "forward-cert"))
+}
+
 func TestAgentPKITablesAreProtected(t *testing.T) {
-	for _, table := range []string{"v4_kernel_agent_enrollment", "v4_kernel_agent_certificate"} {
+	for _, table := range []string{"v4_kernel_agent_enrollment", "v4_kernel_agent_certificate",
+		"v4_kernel_forward_link_ca", "v4_kernel_forward_link_certificate"} {
 		assert.True(t, protectedKernelTable(table), table)
 		assert.Error(t, validateManifestCapabilities([]string{CapabilityStorage, "kernel.storage.adopt:" + table}), table)
 	}

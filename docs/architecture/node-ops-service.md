@@ -1468,6 +1468,19 @@ One mTLS stream per node carries everything:
     deleting it (`RetireNode`) revokes its certificates.
   - The listener refuses revoked serials, with a cache of at most 30 s, as
     the module listener does.
+- **Forward link certificates (H28).** A node whose Agent negotiated
+  `forward.v1` also gets a link certificate for its forward engines
+  (`AgentEnrollment.IssueLinkCertificate`, `GetLinkTrustBundle`), from a
+  forward link CA that is a separate root (`v4_kernel_forward_link_ca`,
+  sealed with the same `module_runtime.ca_kek`), for a key of its own:
+  the node's identity name as its DNS name, its SPIFFE ID as its URI,
+  serverAuth and clientAuth, 7 days. Only an agent certificate
+  authenticates the call. Issued certificates are recorded in
+  `v4_kernel_forward_link_certificate` and revoked with the node's agent
+  credentials (every path above, `RetireNode` included). The link key and
+  certificate live in gost's directory, never in the Agent's PKI
+  directory (`docs/architecture/forward-sdk.md` section 6.2;
+  `PROTOCOL.md`, "Forward link certificates").
 - **Refusal codes.** Every refusal of a certificate or a bootstrap names
   its reason in the `x-anix-error-code` trailer, as `agent_mtls_required`
   does: `agent_cert_revoked` (also a node disabled or deleted, which revokes
