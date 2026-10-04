@@ -6,6 +6,7 @@ import (
 	"crypto/rand"
 	"encoding/base64"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"regexp"
 	"strings"
@@ -262,4 +263,32 @@ func TestScriptIsEmbeddedVerbatim(t *testing.T) {
 	require.NoError(t, err)
 	assert.True(t, bytes.Equal(data, Script))
 	assert.True(t, bytes.HasPrefix(Script, []byte("#!/usr/bin/env bash\n")))
+}
+
+// The release job signs with `openssl pkeyutl -sign -rawin` (as
+// packages/shared/build_package.py does); Control must accept that format.
+func TestVerifySignatureAcceptsOpenSSLSignatures(t *testing.T) {
+	if _, err := exec.LookPath("openssl"); err != nil {
+		t.Skip("openssl is not installed")
+	}
+	if help, _ := exec.Command("openssl", "pkeyutl", "-help").CombinedOutput(); !strings.Contains(string(help), "-rawin") {
+		t.Skip("this OpenSSL cannot sign raw Ed25519 input")
+	}
+	dir := t.TempDir()
+	key := filepath.Join(dir, "key.pem")
+	script := filepath.Join(dir, "agent-install.sh")
+	signature := filepath.Join(dir, "signature.bin")
+	require.NoError(t, os.WriteFile(script, Script, 0o600))
+	run := func(args ...string) []byte {
+		output, err := exec.Command("openssl", args...).Output() // #nosec G204 -- fixed test arguments.
+		require.NoError(t, err, args)
+		return output
+	}
+	run("genpkey", "-algorithm", "ED25519", "-out", key)
+	der := run("pkey", "-in", key, "-pubout", "-outform", "DER")
+	public := base64.StdEncoding.EncodeToString(der[len(der)-ed25519.PublicKeySize:])
+	run("pkeyutl", "-sign", "-inkey", key, "-rawin", "-in", script, "-out", signature)
+	raw, err := os.ReadFile(signature)
+	require.NoError(t, err)
+	require.NoError(t, VerifySignature(Script, []byte(base64.StdEncoding.EncodeToString(raw)+"\n"), public))
 }

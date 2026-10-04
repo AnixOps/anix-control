@@ -10,6 +10,7 @@
 #             artifacts/anix-control-linux-<arch>
 #             artifacts/web/public/
 #             artifacts/bootstrap/identity-platform/  (signed package, 3 files)
+#             artifacts/bootstrap/agent-install/      (agent-install.sh.sig)
 #
 # The image runs as uid 10001 without a config file: configure it with
 # ANIX_CONTROL_* environment variables (anix-control -print-env) or mount a
@@ -91,6 +92,9 @@ COPY --from=artifacts web/public/ /app/web/public/
 COPY --from=artifacts bootstrap/identity-platform/ /app/bootstrap/identity-platform/
 # A fresh database imports the signed identity package on first start.
 ENV ANIX_CONTROL_PLUGINS_IDENTITY_BOOTSTRAP_PACKAGE_DIR=/app/bootstrap/identity-platform
+# The release signature of the install script served at /install.sh.sig.
+COPY --from=artifacts bootstrap/agent-install/ /app/bootstrap/agent-install/
+ENV ANIX_CONTROL_AGENT_INSTALL_SIGNATURE_FILE=/app/bootstrap/agent-install/agent-install.sh.sig
 
 # Source image (default target).
 FROM runtime-base AS source

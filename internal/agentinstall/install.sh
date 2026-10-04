@@ -75,6 +75,7 @@ declare -A META_SHA256=()
 
 ARCH=""
 ASSET=""
+EXPECTED_DIGEST=""
 SOURCE=""
 INSTALL_MODE="install"
 CONFIG_STATE=""
@@ -234,7 +235,7 @@ read_metadata() {
   done <"${file}"
   [[ "${META_VERSION}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+)?)?$ ]] || die "Control's install metadata names no Agent release"
   [[ -n "${META_GRPC}" ]] || die "Control's install metadata names no gRPC target (agent_install.grpc_target)"
-  [[ "${META_GRPC}" =~ ^[A-Za-z0-9.:\[\]-]+:[0-9]{1,5}$ ]] || die "Control's gRPC target ${META_GRPC} is not host:port"
+  [[ "${META_GRPC}" =~ ^[][A-Za-z0-9.:-]+:[0-9]{1,5}$ ]] || die "Control's gRPC target ${META_GRPC} is not host:port"
   ASSET="${META_ASSET[${ARCH}]:-}"
   [[ -n "${ASSET}" ]] || die "the Agent release ${META_VERSION} has no ${ARCH} build"
   [[ -n "${META_SOURCE[github]:-}" ]] || die "Control's install metadata has no GitHub source"
@@ -261,12 +262,12 @@ select_source() {
   fi
 }
 
-# expected_digest prints the asset's SHA-256 from a trusted origin: Control's
-# metadata, else the release's .dgst on GitHub. A mirror's own checksum is
-# never trusted.
+# expected_digest sets EXPECTED_DIGEST, the asset's SHA-256 from a trusted
+# origin: Control's metadata, else the release's .dgst on GitHub. A mirror's
+# own checksum is never trusted.
 expected_digest() {
   if [[ -n "${META_SHA256[${ASSET}]:-}" ]]; then
-    printf '%s\n' "${META_SHA256[${ASSET}]}"
+    EXPECTED_DIGEST="${META_SHA256[${ASSET}]}"
     return 0
   fi
   local dgst="${TMP_DIR}/${ASSET}.dgst" digest
@@ -274,7 +275,7 @@ expected_digest() {
     die "cannot get the checksum of ${ASSET} from Control or GitHub; put the Agent release in Control's agent_install.artifact_dir so Control publishes it"
   digest="$(sed -nE 's/^SHA(2-)?256(\([^)]*\))?=[[:space:]]*([0-9a-fA-F]{64})[[:space:]]*$/\3/p' "${dgst}" | head -n 1 | tr 'A-F' 'a-f')"
   [[ "${digest}" =~ ^[0-9a-f]{64}$ ]] || die "the checksum file of ${ASSET} has no SHA-256"
-  printf '%s\n' "${digest}"
+  EXPECTED_DIGEST="${digest}"
 }
 
 # verify_signature checks file against a base64 raw Ed25519 signature by
@@ -301,12 +302,12 @@ verify_signature() {
 }
 
 download_agent() {
-  local zip="${TMP_DIR}/${ASSET}" expected actual
-  expected="$(expected_digest)"
+  local zip="${TMP_DIR}/${ASSET}" actual
+  expected_digest
   info "Downloading the AnixOps Agent ${META_VERSION} (${ARCH}) from ${SOURCE}"
   fetch "${SOURCE}/${META_VERSION}/${ASSET}" "${zip}" || die "cannot download ${SOURCE}/${META_VERSION}/${ASSET}; try another --mirror"
   actual="$(sha256sum "${zip}" | awk '{print $1}')"
-  [[ "${actual}" == "${expected}" ]] || die "checksum mismatch for ${ASSET}: expected ${expected}, got ${actual}; nothing was installed"
+  [[ "${actual}" == "${EXPECTED_DIGEST}" ]] || die "checksum mismatch for ${ASSET}: expected ${EXPECTED_DIGEST}, got ${actual}; nothing was installed"
   info "Checksum verified (sha256 ${actual})"
   if fetch "${SOURCE}/${META_VERSION}/${ASSET}.sig" "${zip}.sig" 2>/dev/null; then
     verify_signature "${zip}" "${zip}.sig"
@@ -702,11 +703,20 @@ take_lock() {
   flock -n 9 || die "another installer run is in progress"
 }
 
+# require_token stops a first install without a token before anything is
+# changed.
+require_token() {
+  if [[ -z "${TOKEN}" && ! -f "$(path "${CONFIG_FILE}")" ]]; then
+    die "this host's Agent is not enrolled: --token is required (copy the command from the node page)"
+  fi
+}
+
 main() {
   parse_args "$@"
   require_root
   detect_platform
   require_tools
+  require_token
   take_lock
   preflight
   TMP_DIR="$(mktemp -d)"

@@ -111,6 +111,14 @@ jobs:
       - name: Test identity bootstrap installer configuration
         run: bash scripts/tests/test_identity_bootstrap_install.sh
 
+      # The Agent installer Control serves at /install.sh (one-command node
+      # onboarding): shellcheck, then the fake-root tests.
+      - name: Lint the Agent installer
+        run: shellcheck internal/agentinstall/install.sh scripts/tests/test_agent_install.sh
+
+      - name: Test the Agent installer in a fake root
+        run: bash scripts/tests/test_agent_install.sh
+
       - name: Validate PostgreSQL restore rehearsal syntax
         run: bash -n scripts/postgres_restore_rehearsal.sh
 
@@ -1595,6 +1603,19 @@ jobs:
             --signing-key "${key_file}" \
             --official-public-key "${root_file}"
           cp "${root_file}" release-assets/official-public-key.raw
+          # The Agent installer every Control serves at /install.sh, signed
+          # with the same key (base64 raw Ed25519 over its exact bytes): the
+          # github mirror's script, and the signature the image serves at
+          # /install.sh.sig.
+          install -m 0644 internal/agentinstall/install.sh release-assets/agent-install.sh
+          signature_bin="$(mktemp)"
+          official_der="$(mktemp)"
+          openssl pkeyutl -sign -inkey "${key_file}" -rawin -in release-assets/agent-install.sh -out "${signature_bin}"
+          { printf '%s\n' "$(base64 -w0 "${signature_bin}")"; } >release-assets/agent-install.sh.sig
+          { printf '\x30\x2a\x30\x05\x06\x03\x2b\x65\x70\x03\x21\x00'; base64 -d "${root_file}"; } >"${official_der}"
+          openssl pkeyutl -verify -pubin -keyform DER -inkey "${official_der}" -rawin \
+            -in release-assets/agent-install.sh -sigfile "${signature_bin}"
+          rm -f "${signature_bin}" "${official_der}"
           # scripts/install.sh (frozen) and the docker job read the identity
           # bootstrap package by name, so it also stays a separate asset.
           for suffix in anxp manifest.json manifest.sig; do
@@ -2139,6 +2160,11 @@ jobs:
             test "${#matches[@]}" = 1 || { echo "expected one identity-platform .${suffix}, found ${#matches[@]}"; exit 1; }
             install -m 0644 "${matches[0]}" image-artifacts/bootstrap/identity-platform/
           done
+          # The release signature of the embedded Agent installer, served
+          # at /install.sh.sig.
+          mkdir -p image-artifacts/bootstrap/agent-install
+          install -m 0644 release-packages/agent-install.sh.sig image-artifacts/bootstrap/agent-install/
+          cmp release-packages/agent-install.sh internal/agentinstall/install.sh
           ls -lR image-artifacts/bootstrap
 
       - name: Set up QEMU
@@ -2434,6 +2460,8 @@ jobs:
             --require "identity-platform-${version}.manifest.json" \
             --require "identity-platform-${version}.manifest.sig" \
             --require official-public-key.raw \
+            --require agent-install.sh \
+            --require agent-install.sh.sig \
             --require RELEASE_NOTES.md \
             --require RELEASE_MANIFEST.json \
             --require SHA256SUMS.txt \
