@@ -34,14 +34,17 @@
 
 ### Added
 
-- **AnixOps relay transport design, for review (H22).**
+- **AnixOps relay transport design (H22, approved 2026-10-04).**
   `docs/architecture/anixops-protocol.md` specifies the secure transport
   between forward nodes (TLS 1.3 mutual authentication with the H28 link
   certificates and identity pinning, framing and multiplexing, TLS, QUIC
   and trusted-link plaintext carriers, the `anixops` driver and its own
   unit, the v4.2 experimental flag `forward.anixops_experimental`), with
-  open questions P1–P10. Camouflage is reserved for the owner (owner
-  decision of 2026-10-04). Documentation only.
+  questions P1–P10, all decided by the owner on 2026-10-04 (separate
+  `anixops-relay.service`; plaintext only on administrator routes between
+  `link=iepl|iplc` nodes; nftables RAW handover in v4.3). H23 is recorded
+  as decided (the protocol in both editions). Camouflage stays reserved for
+  the owner. Documentation only.
 - **Forward link certificates, Control side (owner decision H28).** A
   dedicated forward link CA issues each node whose Agent negotiated
   `forward.v1` the certificate its forward engines (gost) present to each

@@ -1,8 +1,9 @@
 # AnixOps relay protocol: secure transport between nodes
 
-Status: DRAFT FOR REVIEW (H22). Scope set by the owner on 2026-10-04: this
-document covers only the secure transport between AnixOps nodes. Section 8
-is reserved for the owner. Nothing here is implemented; the contract slots
+Status: DESIGN APPROVED (H22, owner decision of 2026-10-04; open
+questions P1–P10 decided, section 9.3). Scope set by the owner on
+2026-10-04: this document covers only the secure transport between
+AnixOps nodes. Section 8 is still reserved for the owner. Nothing here is implemented; the contract slots
 it builds on (`ENGINE_ANIXOPS`, `LINK_SECURITY_ANIXOPS`) exist in
 `sdk/api/forward/v1` and are refused by `sdk/forward/validate` until
 `Options.EnableAnixOps` is set (`docs/architecture/forward-sdk.md`
@@ -24,7 +25,7 @@ section 6.4).
 >   `anixops-relay.service`（仅 `CAP_NET_BIND_SERVICE`，不持有 Agent 密钥），经 unix 套接字热更新。
 >   契约只做加法（载体枚举、PROXY v2、能力字段）。
 > - **计划**：v4.2 实验原型默认关闭（Control 与 Agent 两侧开关 `forward.anixops_experimental`），
->   v4.3 正式版。文末 P1–P10 为待定问题，各附推荐答案。
+>   v4.3 正式版。设计已于 2026-10-04 由 owner 批准，P1–P10 已拍板（第 9.3 节）。
 
 ## Contents
 
@@ -36,7 +37,7 @@ section 6.4).
 6. [Integration](#6-integration)
 7. [Performance, observability and operations](#7-performance-observability-and-operations)
 8. [Reserved: camouflage (owner to author)](#8-reserved-camouflage-owner-to-author)
-9. [Plan, risks and open questions](#9-plan-risks-and-open-questions)
+9. [Plan, risks and decisions](#9-plan-risks-and-decisions)
 
 ## 1. Goals, non-goals and deployment
 
@@ -93,12 +94,13 @@ client --TCP/UDP--> entry --anixops--> relay --anixops--> exit --TCP/UDP--> targ
   originates the protocol; that next hop terminates it. Both must run
   `ENGINE_ANIXOPS` (`validate.CanCarry`). Mixing engines across a link
   (an nftables entry handing raw traffic to an anixops relay) needs the
-  anixops engine to also terminate `LINK_SECURITY_RAW`; that is P5.
+  anixops engine to also terminate `LINK_SECURITY_RAW`: decided for v4.3
+  (P5); the v4.2 prototype is anixops-to-anixops only.
 - Control configures everything: which nodes listen, on which port, which
   identities may dial them, which identity each upstream must present.
   Credentials are the nodes' forward link certificates (H28); the state
   carries identities, never keys.
-- Both editions (H23 recommendation, still open): the engine is core
+- Both editions (H23, decided 2026-10-04): the engine is core
   forwarding, like gost.
 
 ## 2. Security model
@@ -575,7 +577,7 @@ the fallback count is a metric (section 7.3).
 
 ### 6.2 Process model
 
-**Recommendation: a separate unit, `anixops-relay.service`** (P1), built
+**Decided: a separate unit, `anixops-relay.service`** (P1), built
 like `anixops-gost.service`:
 
 - its own user `anixops-relay` with `CAP_NET_BIND_SERVICE` only, and the
@@ -686,8 +688,8 @@ exits.
   without the trusted-link label.
 - **Fuzzing** of the frame decoder, `OPEN` parameters and `SETTINGS`
   (Go fuzz tests, run in CI for a bounded time).
-- **Forward Netns E2E** gains anixops chains and, once P5 is decided,
-  mixed nftables/anixops chains.
+- **Forward Netns E2E** gains anixops chains and, in v4.3 (P5), mixed
+  nftables/anixops chains.
 
 ### 6.7 Version negotiation
 
@@ -777,7 +779,7 @@ meet them.
 
 This section is intentionally left for the owner to specify.
 
-## 9. Plan, risks and open questions
+## 9. Plan, risks and decisions
 
 ### 9.1 Plan
 
@@ -827,17 +829,20 @@ for links the anixops engine does not cover.
 - **Pre-authentication exhaustion** of handshake slots; mitigated by
   source admission before the handshake, bounded queues and QUIC Retry.
 
-### 9.3 Open questions
+### 9.3 Decisions
 
-| # | Question | Recommendation |
+The owner decided every question on 2026-10-04: P1, P4 and P5 as stated
+below, the others as recommended.
+
+| # | Question | Decision (2026-10-04) |
 |---|---|---|
-| P1 | Run the relay in the Agent or as its own unit | Its own unit, `anixops-relay.service`, user `anixops-relay`, `CAP_NET_BIND_SERVICE` only, controlled over a unix socket (section 6.2) |
-| P2 | QUIC implementation | `quic-go`, after checking its licence against `forward-sdk.md` section 1 and pinning one version per Agent release; QUIC lands in A2, after the TLS carrier works |
-| P3 | TLS session resumption | Off in v4.2 and by default in v4.3; revisit only if benchmarks show handshake cost matters. TLS early data never |
-| P4 | When the plaintext carrier is allowed | Only on administrator routes whose two nodes both carry `link=iepl` or `link=iplc`; refused on user routes |
-| P5 | Should the anixops engine also terminate and originate `LINK_SECURITY_RAW`, for nftables entries handing over to anixops relays and anixops exits dialling raw | Yes, in v4.3: it lets the kernel do the entry while anixops carries the long link; v4.2's prototype stays anixops-to-anixops |
-| P6 | Own framing or an existing multiplexer | Own framing as specified in section 4.2 (small, half-close, in-band results, bounds), unless a survey in A1 finds an MIT, Apache or BSD library with all three; `yamux` is MPL-2.0 |
-| P7 | PROXY protocol v2 for UDP targets | Not in the first version; TCP only, revisit on demand |
-| P8 | Emergency link CA rotation (drop a compromised CA without the normal overlap) | Add `anix-control agent link-ca rotate --emergency`, which drops the old CA from the bundle at once and makes every node renew; links recover as nodes renew |
-| P9 | Revocation checks (CRL or OCSP) on links | None: identity pinning plus state changes remove a peer at once (section 3.5), and certificates live 7 days |
-| P10 | Keep established connections across relay binary upgrades | Not in v4.3; consider passing listening sockets to the new process later. Upgrades are rare and announced |
+| P1 | Run the relay in the Agent or as its own unit | Decided: its own unit, `anixops-relay.service`, user `anixops-relay`, `CAP_NET_BIND_SERVICE` only, controlled over a unix socket (section 6.2) |
+| P2 | QUIC implementation | As recommended: `quic-go`, after checking its licence against `forward-sdk.md` section 1 and pinning one version per Agent release; QUIC lands in A2, after the TLS carrier works |
+| P3 | TLS session resumption | As recommended: off in v4.2 and by default in v4.3; revisit only if benchmarks show handshake cost matters. TLS early data never |
+| P4 | When the plaintext carrier is allowed | Decided: only on administrator routes whose two nodes both carry `link=iepl` or `link=iplc`; refused on user routes |
+| P5 | Should the anixops engine also terminate and originate `LINK_SECURITY_RAW`, for nftables entries handing over to anixops relays and anixops exits dialling raw | Decided: yes, in v4.3 (nftables `RAW` handover to anixops); the v4.2 prototype is anixops-to-anixops only |
+| P6 | Own framing or an existing multiplexer | As recommended: own framing as specified in section 4.2 (small, half-close, in-band results, bounds), unless a survey in A1 finds an MIT, Apache or BSD library with all three; `yamux` is MPL-2.0 |
+| P7 | PROXY protocol v2 for UDP targets | As recommended: not in the first version; TCP only, revisit on demand |
+| P8 | Emergency link CA rotation (drop a compromised CA without the normal overlap) | As recommended: add `anix-control agent link-ca rotate --emergency`, which drops the old CA from the bundle at once and makes every node renew; links recover as nodes renew |
+| P9 | Revocation checks (CRL or OCSP) on links | As recommended: none: identity pinning plus state changes remove a peer at once (section 3.5), and certificates live 7 days |
+| P10 | Keep established connections across relay binary upgrades | As recommended: not in v4.3; consider passing listening sockets to the new process later. Upgrades are rare and announced |
