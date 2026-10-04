@@ -410,11 +410,14 @@ func buildNodes(balance forwardv1.BalanceStrategy, ups []nodeUpstream) []node {
 // carrier with the node's link certificate and the CA its peers' client
 // certificates must chain to (mutual TLS) otherwise.
 func (d *Driver) listenerEndpoint(l listener, in link) endpoint {
-	e := endpoint{Type: l.gostType}
+	e := endpoint{Type: l.gostType, Metadata: keepalive(l.gostType)}
 	if in.encrypted() {
 		e.TLS = &tlsConfig{CertFile: d.cfg.LinkCert, KeyFile: d.cfg.LinkKey, CAFile: d.cfg.LinkCA}
 		if in.path != "" {
-			e.Metadata = map[string]string{"path": in.path}
+			if e.Metadata == nil {
+				e.Metadata = map[string]string{}
+			}
+			e.Metadata["path"] = in.path
 		}
 	}
 	if l.gostType == "udp" {
@@ -430,18 +433,65 @@ func (d *Driver) listenerEndpoint(l listener, in link) endpoint {
 // and for encrypted links the node's link certificate as client
 // certificate and verification of the server's for the server name.
 func (d *Driver) dialerEndpoint(out link) *endpoint {
-	e := &endpoint{Type: out.gostType()}
+	e := &endpoint{Type: out.gostType(), Metadata: keepalive(out.gostType())}
 	if out.encrypted() {
 		e.TLS = &tlsConfig{CertFile: d.cfg.LinkCert, KeyFile: d.cfg.LinkKey, CAFile: d.cfg.LinkCA, Secure: true, ServerName: out.serverName}
 		switch out.security {
 		case forwardv1.LinkSecurity_LINK_SECURITY_WSS, forwardv1.LinkSecurity_LINK_SECURITY_GRPC:
-			e.Metadata = map[string]string{"host": out.serverName}
+			if e.Metadata == nil {
+				e.Metadata = map[string]string{}
+			}
+			e.Metadata["host"] = out.serverName
 			if out.path != "" {
 				e.Metadata["path"] = out.path
 			}
 		}
 	}
 	return e
+}
+
+// Link keepalives (forward-sdk.md section 6.2): a mux carrier (smux) and
+// a QUIC connection send a keepalive every linkKeepalive and are closed
+// when nothing arrived for linkIdleTimeout, so an end whose peer vanished
+// without closing (a host or path gone, a QUIC peer restarted: gost sends
+// no stateless reset) drops the carrier and dials a new one. A peer gost
+// that stops closes its mux carriers (TCP) at once; these bound only the
+// silent case. They are gost's own defaults (smux 10 s / 30 s, quic-go
+// 30 s idle), rendered on both ends so the configuration states them and
+// both ends agree (QUIC negotiates the lower idle timeout; gost's QUIC
+// listener sends no keepalive unless told to). gost's file loader keeps
+// the dotted mux keys whole inside a service's or hop's metadata (gost -O
+// json shows them as loaded); TestRenderIsPlainJSON allows those alone.
+const (
+	linkKeepalive   = "10s"
+	linkIdleTimeout = "30s"
+)
+
+// muxCarrier reports whether a gost listener or dialer type carries many
+// streams on one long-lived carrier: smux over TCP, TLS or WSS, and
+// QUIC. A carrier a listener accepted outlives the service: deleting the
+// service through the web API closes its listening socket only (and a
+// QUIC listener's UDP socket stays bound while its connections live), so
+// such a service is never re-created or deleted on a running gost
+// (applyStrands).
+func muxCarrier(typ string) bool {
+	switch typ {
+	case "mtcp", "mtls", "mwss", "quic":
+		return true
+	}
+	return false
+}
+
+// keepalive answers the keepalive metadata of a mux or QUIC listener or
+// dialer, nil for any other type.
+func keepalive(typ string) map[string]string {
+	switch typ {
+	case "mtcp", "mtls", "mwss":
+		return map[string]string{"mux.keepaliveInterval": linkKeepalive, "mux.keepaliveTimeout": linkIdleTimeout}
+	case "quic":
+		return map[string]string{"keepAlive": "true", "ttl": linkKeepalive, "maxIdleTimeout": linkIdleTimeout}
+	}
+	return nil
 }
 
 // prefixText formats an admission matcher: a bare address for a single

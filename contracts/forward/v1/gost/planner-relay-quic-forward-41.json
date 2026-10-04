@@ -53,6 +53,11 @@
           "certFile": "/var/lib/anixops-gost/tls/link.crt",
           "keyFile": "/var/lib/anixops-gost/tls/link.key",
           "caFile": "/var/lib/anixops-gost/tls/link-ca.crt"
+        },
+        "metadata": {
+          "keepAlive": "true",
+          "maxIdleTimeout": "30s",
+          "ttl": "10s"
         }
       },
       "forwarder": {
@@ -100,6 +105,6 @@
   },
   "metrics": {
     "addr": "unix:///run/anixops-gost/metrics.sock",
-    "path": "/anixops-071e53f433517111"
+    "path": "/anixops-3c1137dcd8be0013"
   }
 }

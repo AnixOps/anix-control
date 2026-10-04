@@ -486,6 +486,10 @@
           "certFile": "/var/lib/anixops-gost/tls/link.crt",
           "keyFile": "/var/lib/anixops-gost/tls/link.key",
           "caFile": "/var/lib/anixops-gost/tls/link-ca.crt"
+        },
+        "metadata": {
+          "mux.keepaliveInterval": "10s",
+          "mux.keepaliveTimeout": "30s"
         }
       },
       "forwarder": {
@@ -641,6 +645,10 @@
           "certFile": "/var/lib/anixops-gost/tls/link.crt",
           "keyFile": "/var/lib/anixops-gost/tls/link.key",
           "caFile": "/var/lib/anixops-gost/tls/link-ca.crt"
+        },
+        "metadata": {
+          "mux.keepaliveInterval": "10s",
+          "mux.keepaliveTimeout": "30s"
         }
       },
       "forwarder": {
@@ -717,6 +725,11 @@
           "certFile": "/var/lib/anixops-gost/tls/link.crt",
           "keyFile": "/var/lib/anixops-gost/tls/link.key",
           "caFile": "/var/lib/anixops-gost/tls/link-ca.crt"
+        },
+        "metadata": {
+          "keepAlive": "true",
+          "maxIdleTimeout": "30s",
+          "ttl": "10s"
         }
       },
       "forwarder": {
@@ -867,7 +880,11 @@
         }
       },
       "listener": {
-        "type": "mtcp"
+        "type": "mtcp",
+        "metadata": {
+          "mux.keepaliveInterval": "10s",
+          "mux.keepaliveTimeout": "30s"
+        }
       },
       "forwarder": {
         "hop": "r01JF2A00000000000000000L60-h1"
@@ -1107,6 +1124,10 @@
               "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
               "secure": true,
               "serverName": "forward-41"
+            },
+            "metadata": {
+              "mux.keepaliveInterval": "10s",
+              "mux.keepaliveTimeout": "30s"
             }
           }
         },
@@ -1127,6 +1148,10 @@
               "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
               "secure": true,
               "serverName": "forward-40"
+            },
+            "metadata": {
+              "mux.keepaliveInterval": "10s",
+              "mux.keepaliveTimeout": "30s"
             }
           }
         },
@@ -1147,6 +1172,10 @@
               "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
               "secure": true,
               "serverName": "forward-41"
+            },
+            "metadata": {
+              "mux.keepaliveInterval": "10s",
+              "mux.keepaliveTimeout": "30s"
             }
           }
         }
@@ -1289,7 +1318,9 @@
               "serverName": "forward-41"
             },
             "metadata": {
-              "host": "forward-41"
+              "host": "forward-41",
+              "mux.keepaliveInterval": "10s",
+              "mux.keepaliveTimeout": "30s"
             }
           }
         },
@@ -1312,7 +1343,9 @@
               "serverName": "forward-40"
             },
             "metadata": {
-              "host": "forward-40"
+              "host": "forward-40",
+              "mux.keepaliveInterval": "10s",
+              "mux.keepaliveTimeout": "30s"
             }
           }
         },
@@ -1335,7 +1368,9 @@
               "serverName": "forward-41"
             },
             "metadata": {
-              "host": "forward-41"
+              "host": "forward-41",
+              "mux.keepaliveInterval": "10s",
+              "mux.keepaliveTimeout": "30s"
             }
           }
         }
@@ -1380,6 +1415,11 @@
               "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
               "secure": true,
               "serverName": "forward-41"
+            },
+            "metadata": {
+              "keepAlive": "true",
+              "maxIdleTimeout": "30s",
+              "ttl": "10s"
             }
           }
         },
@@ -1400,6 +1440,11 @@
               "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
               "secure": true,
               "serverName": "forward-40"
+            },
+            "metadata": {
+              "keepAlive": "true",
+              "maxIdleTimeout": "30s",
+              "ttl": "10s"
             }
           }
         },
@@ -1420,6 +1465,11 @@
               "caFile": "/var/lib/anixops-gost/tls/link-ca.crt",
               "secure": true,
               "serverName": "forward-41"
+            },
+            "metadata": {
+              "keepAlive": "true",
+              "maxIdleTimeout": "30s",
+              "ttl": "10s"
             }
           }
         }
@@ -1553,7 +1603,11 @@
             }
           },
           "dialer": {
-            "type": "mtcp"
+            "type": "mtcp",
+            "metadata": {
+              "mux.keepaliveInterval": "10s",
+              "mux.keepaliveTimeout": "30s"
+            }
           }
         },
         {
@@ -1566,7 +1620,11 @@
             }
           },
           "dialer": {
-            "type": "mtcp"
+            "type": "mtcp",
+            "metadata": {
+              "mux.keepaliveInterval": "10s",
+              "mux.keepaliveTimeout": "30s"
+            }
           }
         },
         {
@@ -1579,7 +1637,11 @@
             }
           },
           "dialer": {
-            "type": "mtcp"
+            "type": "mtcp",
+            "metadata": {
+              "mux.keepaliveInterval": "10s",
+              "mux.keepaliveTimeout": "30s"
+            }
           }
         }
       ]
@@ -1681,6 +1743,6 @@
   },
   "metrics": {
     "addr": "unix:///run/anixops-gost/metrics.sock",
-    "path": "/anixops-d52c07ea919cc8bd"
+    "path": "/anixops-0c732cfd5821fa39"
   }
 }

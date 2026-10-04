@@ -88,7 +88,11 @@
             }
           },
           "dialer": {
-            "type": "mtcp"
+            "type": "mtcp",
+            "metadata": {
+              "mux.keepaliveInterval": "10s",
+              "mux.keepaliveTimeout": "30s"
+            }
           }
         },
         {
@@ -101,7 +105,11 @@
             }
           },
           "dialer": {
-            "type": "mtcp"
+            "type": "mtcp",
+            "metadata": {
+              "mux.keepaliveInterval": "10s",
+              "mux.keepaliveTimeout": "30s"
+            }
           }
         }
       ]

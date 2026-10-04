@@ -139,9 +139,8 @@
 // with one restarts gost instead, as when the web API does not answer:
 // every connection ends, every hop starts a new epoch and hands its
 // counters over, and a peer's QUIC carrier recovers at its idle timeout
-// (30 s). The stranding is not particular to renewals: re-creating a mux
-// listener's service, as an Apply that changes such a hop or reloads gost
-// does, strands its peers' carriers too until they close.
+// (30 s). The stranding is not particular to renewals, so Apply follows
+// the same rule (see Apply and Mux and QUIC carriers).
 //
 // # Process and files
 //
@@ -194,20 +193,57 @@
 //     connections, UDP sessions, mux carriers and statistics. The hops
 //     whose services were deleted or created start a new counter epoch,
 //     and the WithRetiredCounters hook gets their counters read just
-//     before the first change;
+//     before the first change. When the apply would delete or re-create a
+//     running service whose listener is a mux or QUIC carrier (mtcp,
+//     mtls, mwss, quic), Apply takes the next path instead, which
+//     restarts gost; a service only added is still created through the
+//     web API;
 //   - otherwise (gost stopped, its web API silent, a configuration file
-//     that is not the recorded one, other globals) it writes the
-//     configuration and reloads gost (SIGHUP), or starts it, or restarts
-//     it when gost serves this structure already (a reload would not move
-//     the metrics path, so whether it took could not be seen), and waits
+//     that is not the recorded one, other globals, a mux or QUIC service
+//     to delete or re-create) it writes the configuration and reloads
+//     gost (SIGHUP), or starts it, or restarts it when gost serves this
+//     structure already (a reload would not move the metrics path, so
+//     whether it took could not be seen) or when the configuration gost
+//     loaded has a mux or QUIC listener (or cannot be read), and waits
 //     until gost serves the new metrics path with every listener bound. A
 //     reload keeps the gost process, so established TCP connections
 //     survive it (tested), but it re-creates every service of the node:
-//     UDP sessions and mux carriers may restart and every hop's counters
-//     start a new epoch: the WithRetiredCounters hook gets every hop's
-//     counters read just before, when the web API answers. gost's reload
-//     is not atomic (a listener it cannot bind closes the old services
-//     first).
+//     UDP sessions may restart and every hop's counters start a new
+//     epoch: the WithRetiredCounters hook gets every hop's counters read
+//     just before, when the web API answers. A restart ends every
+//     connection too; the state file counts it as a load either way.
+//     gost's reload is not atomic (a listener it cannot bind closes the
+//     old services first).
+//
+// # Mux and QUIC carriers
+//
+// A mux listener (mtcp, mtls, mwss) or a QUIC listener accepts long-lived
+// carriers from the previous hop's dialer, which opens a stream on its
+// carrier per connection. gost 3.2.6 ties those carriers to its process,
+// not to the service (measured): deleting the service through the web
+// API, or a reload re-creating it, closes the listening socket only; the
+// carriers it accepted stay up and answer keepalives, so the peer keeps
+// opening streams on them that nothing accepts, and every new connection
+// through it hangs (TestNetnsMuxRestart: over 40 s, without end, before
+// this rule); a QUIC listener keeps its UDP port bound while its
+// connections live, so the new service cannot bind. The driver therefore
+// never deletes, re-creates or reloads such a service on a running gost:
+// Apply and ReloadCredentials restart gost, whose exit closes every
+// carrier, and the peers dial new ones at the next connection (a mux
+// peer sees the TCP close at once: new connections pass within about a
+// second; a QUIC peer, which gets no stateless reset, at its idle
+// timeout). A restart ends every established connection of the node and
+// every hop's counter epoch, which a node with mux or QUIC listeners
+// pays on such structural changes; changes that leave its mux and QUIC
+// services alone (hot objects, other services, added services) do not
+// restart it.
+//
+// Carriers that end without a close (a host or path gone) are dropped by
+// keepalives, rendered on both ends of every mux and QUIC link: a
+// keepalive every 10 s and the carrier closed after 30 s without any
+// data (mux.keepaliveInterval and mux.keepaliveTimeout for smux;
+// keepAlive, ttl and maxIdleTimeout for QUIC). They are gost's defaults,
+// written out so the configuration states them and both ends agree.
 //
 // What connections of a deleted or re-created service move afterwards
 // goes to the closed service's statistics, which nothing reads: not
