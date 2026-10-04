@@ -135,7 +135,9 @@ func TestLinkCertificateProfile(t *testing.T) {
 				assert.NotEmpty(t, record.AgentSerial)
 				assert.Nil(t, record.RevokedAt)
 				var audit model.OperationLog
-				require.NoError(t, f.db.Where("action = ? AND target_id = ?", agentpki.AuditActionLinkIssue, node.ID).Last(&audit).Error)
+				targetType := map[string]string{agentcontrol.NodeKindProxy: "proxy_node", agentcontrol.NodeKindForward: "forward_node"}[node.Kind]
+				require.NoError(t, f.db.Where("action = ? AND target_type = ? AND target_id = ?", agentpki.AuditActionLinkIssue, targetType, node.ID).
+					Last(&audit).Error)
 				assert.Contains(t, audit.Content, issued.Serial)
 			})
 		}

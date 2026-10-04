@@ -296,3 +296,40 @@ func TestLinkPKIStatus(t *testing.T) {
 		assert.Equal(t, want, status.Code(linkPKIStatus(err)), err)
 	}
 }
+
+// TestAgentLinkCertificateAfterHelloAck: Control records the forward.v1
+// flag before it sends the HelloAck, so an Agent may ask for its link
+// certificate as soon as a HelloAck lists forward.v1; a later Hello without
+// it withdraws the right.
+func TestAgentLinkCertificateAfterHelloAck(t *testing.T) {
+	l := startLinkListener(t, config.AgentMTLSOptional, true)
+	requireAutoMigrate(t, &model.KernelNodeDesiredConfig{}, &model.KernelNodeConfigStatus{})
+	ctx := testContext(t)
+	node := l.forwardNode()
+	conn, _ := l.enrolledConn(t, ctx, node)
+	client := agentv1pb.NewAgentEnrollmentClient(conn)
+
+	hello := func(capabilities []*agentv1pb.Capability) *agentv1pb.HelloAck {
+		t.Helper()
+		streamCtx, cancel := context.WithCancel(ctx)
+		t.Cleanup(cancel)
+		stream, err := agentv1pb.NewAgentControlServiceClient(conn).ControlStream(streamCtx)
+		require.NoError(t, err)
+		message := validAgentHello(node.ID)
+		message.GetHello().Capabilities = capabilities
+		require.NoError(t, stream.Send(message))
+		reply, err := stream.Recv()
+		require.NoError(t, err)
+		require.NotNil(t, reply.GetHelloAck())
+		return reply.GetHelloAck()
+	}
+	ack := hello(forwardHello(t))
+	assert.True(t, agentcontrol.HasCapabilityVersion(ack.GetServerCapabilities(), agentcontrol.CapabilityForward, agentcontrol.CapabilityVersionV1))
+	_, err := client.IssueLinkCertificate(ctx, linkRequest(t, nil))
+	require.NoError(t, err, "right after the HelloAck")
+
+	hello([]*agentv1pb.Capability{{Name: "agent.ping", Version: agentcontrol.CapabilityVersionV1}})
+	var trailer metadata.MD
+	_, err = client.IssueLinkCertificate(ctx, linkRequest(t, nil), grpc.Trailer(&trailer))
+	requireRefusal(t, err, trailer, codes.FailedPrecondition, agentcontrol.ErrorCodeLinkNotNegotiated)
+}

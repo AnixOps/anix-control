@@ -601,10 +601,14 @@ addresses from its peers' `ingress_sources` and upstreams.
 2. **When to ask.** After the agent certificate is enrolled or renewed and
    a `HelloAck` lists `forward.v1`, call `IssueLinkCertificate` over the
    mTLS connection with a CSR for the link key (its SANs, if any, the node's
-   DNS name and SPIFFE ID). Renew at `renew_after_unix` with a new key, and
-   whenever the node has no valid link certificate. A node whose
-   `forward.v1` is not negotiated has no link certificate to ask for: on
-   `link_cert_not_negotiated` wait for the next `HelloAck` that lists it; on
+   DNS name and SPIFFE ID). Control records the `Hello`'s `forward.v1`
+   before it sends the `HelloAck`, so the call may follow the `HelloAck`
+   at once. Renew at `renew_after_unix` with a new key, and whenever the
+   node has no valid link certificate. A node whose `forward.v1` is not
+   negotiated has no link certificate to ask for: on
+   `link_cert_not_negotiated` (the last `Hello` did not negotiate it, or
+   Control could not record it, which it logs) ask again after the next
+   `HelloAck` that lists it, reconnecting with backoff if needed; on
    `link_cert_unavailable` keep what it has and retry with backoff; on
    `link_cert_request_invalid` fix the request (an Agent bug); on an
    `agent_cert_*` code handle the agent certificate first.
@@ -622,13 +626,19 @@ addresses from its peers' `ingress_sources` and upstreams.
    `IssueLinkCertificate` answer, and call `GetLinkTrustBundle` at least
    hourly and at start-up; rewrite it whenever the set of CAs changes, not
    only at renewal.
-5. **Reload gost.** gost reads the files when it creates its services. After
-   any of the three files changed, reload gost through the gost driver (its
-   supervisor's reload, `systemctl reload anixops-gost` under the unit), so
-   the driver records the reload: a reload re-creates gost's services, which
-   keeps established TCP connections but may restart UDP sessions and mux
-   carriers and starts a new counter epoch for every gost hop. Without the
-   three files the gost driver carries RAW links only.
+5. **Reload gost.** gost reads the files when it creates its services.
+   After any of the three files changed, reload gost (the gost driver's
+   supervisor reload, `systemctl reload anixops-gost` under the unit). A
+   reload re-creates gost's services: established TCP connections survive,
+   UDP sessions and mux carriers may restart, and every gost hop's counters
+   start again. Today the driver records reloads (and so starts a new
+   `counter_epoch`) only inside `Apply`; a reload outside it leaves the
+   epoch as it was, so Control sees the counters fall and counts nothing for
+   that observation interval. The gost driver needs a certificate-reload
+   entry point that records the reload (a follow-up of the driver work);
+   until then the Agent uses the supervisor's reload and accepts that one
+   lost interval per renewal. Without the three files the gost driver
+   carries RAW links only.
 6. **On revocation.** When the agent certificate is revoked
    (`agent_cert_revoked`), delete the link key and certificate along with
    it and reload gost; ask again after enrolling anew.
@@ -653,7 +663,7 @@ their JSON body.
 | Code | Status | Where | Meaning, and what the Agent does |
 |---|---|---|---|
 | `agent_mtls_required` | `Unauthenticated` | `ControlStream`, `Enroll`, the legacy HTTP and WebSocket agent paths (HTTP 403) | `agent_control.mtls: required` refuses the node API key (and its `Enroll` bootstrap): enroll with a one-time credential and present the certificate |
-| `agent_cert_revoked` | `Unauthenticated` (`PermissionDenied` when the node was found disabled or deleted after the certificate check) | `ControlStream` (at connection, and on an open stream at the next `Heartbeat`), `Renew`, `GetTrustBundle`, the v2board services | the certificate, its enrollment or its node's credentials were revoked, or the node was disabled or deleted, which revokes them: discard it and enroll again |
+| `agent_cert_revoked` | `Unauthenticated` (`PermissionDenied` when the node was found disabled or deleted after the certificate check) | `ControlStream` (at connection, and on an open stream at the next `Heartbeat`), `Renew`, `GetTrustBundle`, `IssueLinkCertificate`, `GetLinkTrustBundle`, the v2board services | the certificate, its enrollment or its node's credentials were revoked, or the node was disabled or deleted, which revokes them: discard it and enroll again |
 | `agent_cert_expired` | `Unauthenticated` | the same | the certificate's `not_after` has passed: discard it and enroll again |
 | `agent_cert_invalid` | `Unauthenticated` | the same; `Renew`, `GetTrustBundle`, `IssueLinkCertificate` and `GetLinkTrustBundle` without a certificate | not an agent certificate of this Control: unparsable, not chaining to the agent trust bundle, not yet valid, without client-auth usage or exactly one agent SPIFFE ID, or presented to a Control without the agent PKI: enroll again |
 | `agent_cert_wrong_cluster` | `Unauthenticated` | the same | an agent certificate of another cluster: enroll with this Control |

@@ -959,7 +959,10 @@ driver writes gost's configuration and runs the unmodified binary.
   the exit's link certificate, so the dialler's verification fails; it
   stays unsupported. The Agent's half (F3b: the key, the files under
   `/var/lib/anixops-gost/tls`, the reload) is specified in
-  `sdk/api/agent/v1/PROTOCOL.md`, "Forward link certificates".
+  `sdk/api/agent/v1/PROTOCOL.md`, "Forward link certificates". Open for
+  the driver: a certificate-reload entry point that records the reload, so
+  the counter epoch moves with it (a supervisor reload outside `Apply`
+  does not).
 - **Web API (F4b).** gost's web API listens on `api.sock` in the runtime
   directory, without authentication: the socket's permissions are its only
   key. Under the unit, gost creates it with `UMask=0007` in its
