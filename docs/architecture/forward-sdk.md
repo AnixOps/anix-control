@@ -1734,7 +1734,8 @@ see "Upgrades (O4)" below). As built:
   `agent.env` is unsigned and never supplies a digest. Enrolling still
   needs the gRPC target.
 - **Uninstall (O3).** `install.sh uninstall [--purge]` (the Agent's own
-  `uninstall` predates this layout): stops and removes `anix-agent.service`,
+  `uninstall`, 4.2.0-rc.1 and later, removes the same files but never the
+  users or the forwarding objects): stops and removes `anix-agent.service`,
   then `anixops-gost.service`, the polkit rule and the binaries, and keeps
   the identity, configuration, state, users and the forwarding objects.
   `--purge` also deletes `inet anixops_fwd` only when it carries the

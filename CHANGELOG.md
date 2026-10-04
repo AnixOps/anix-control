@@ -2,80 +2,6 @@
 
 ## Unreleased
 
-### Changed
-
-- **The plugin drawer's install targets are real tabs.** The hand-built
-  tablist became `UiTabs` (segmented), so it follows the WAI-ARIA tabs
-  pattern: Left/Right move and select, Home/End jump to the first and last
-  tab, and the row is one Tab stop that lands on the selected tab (roving
-  tabindex). A plugin without targets no longer renders an empty tablist.
-
-- **The PostgreSQL package tests run on a database that does not flush to
-  disk.** "Package Storage PostgreSQL (n/4)" started its PostgreSQL service
-  with the default durability settings, and the compatibility harnesses
-  commit once per statement (`ordercompat` alone about 25 000 times: every
-  seed row, kernel API view, sequence reset and emptied table), so on a slow
-  runner disk the commits were most of the run: `ordercompat` and
-  `paymentcompat` took 45 to 63 s in some CI runs and 22 to 28 s in others.
-  The job now sets `fsync`, `synchronous_commit` and `full_page_writes` off
-  before the tests (the database is thrown away with the job and no test
-  crashes it; the SQL behaviour is the same). Locally, on a disk that
-  flushes in 1.5 ms (four paired rounds): `ordercompat` 30.6 -> 10.0 s and
-  `paymentcompat` 26.1 -> 10.1 s. On CI's fast runners the gain is smaller
-  (`ordercompat` 22.9 and 24.2 s, `paymentcompat` 21.5 and 22.5 s in the two
-  first runs, against means of 27.5 and 24.9 s over the 11 before) and
-  the slow-disk runs of 51 and 44 s should go away. Nothing else changes:
-  the migrated database a test shares between its cases
-  (`internal/tests/packagecompat/shared.go`) already costs one migration per
-  test.
-  - The four shards are re-planned from measured times: the weights in
-    `plan_test_shards.py` dated from before the compatibility harnesses got
-    faster (`plancompat` 48 s, `nodesecrets` 41 s and `gostmeshcompat` 34 s
-    were weighted, 5 to 12 s are measured), so the old plan ran 118 s of
-    tests in shard 3 and 72 s in shard 4 (CI run 37229103569), the new one
-    85 to 102 s per shard (run 37229598173). A shard's job is dominated by
-    a 55 to 92 s compile before its first test, which this does not change.
-
-### Fixed
-
-- Two flaky Go tests no longer fail under CPU load or by chance.
-  - **NodeOps deadline sweep (Control).** An operation the sweep ended
-    TIMED_OUT could hand its executor `context.Canceled` instead of
-    `context.DeadlineExceeded` (`TestDeadlinesEndStartedOperationsTimedOut`
-    failed in about 5 of 90 loaded runs): in the same tick,
-    `passCancellations` stopped every running operation whose ledger state
-    was no longer started, including the one just timed out, and could win
-    the race against the context's own deadline timer. A timed-out operation
-    without a cancel request now goes through `stopExpired`, as in the sweep
-    itself. The ledger state was right either way; only the evidence of an
-    expired operation's late outcome could read "cancelled" instead of a
-    deadline.
-  - `TestAgentSessionRPCs` and the other `internal/tests/nodeopsagent` tests
-    drew each fixture's node id at random from 65 536 values, and the Agent
-    Control managers they run against are the process's, so two fixtures
-    that drew the same id saw each other's observed operations (one run in
-    about fifty with PostgreSQL, CI run 37193575692). The ids are now
-    counted.
-
-- **Forwarding editor, DNS binding (#196 follow-ups).** A fresh binding no
-  longer opens with "Required" under every empty field: the provider, zone
-  and managed-name errors wait until the field has been left once, and
-  turning the binding off and on starts clean again. The zone is guessed
-  again when the entry hostname changes (also while the binding is off, so
-  switching it on later does not bring back the first hostname's zone),
-  and a zone the user typed is kept. A bound route's zone stays fixed.
-- **Open menus are inside a landmark.** An open row action menu or the
-  account menu was axe "region" content (moderate) because Reka portals it
-  to `<body>`. Each now portals into its own labelled `region` that exists
-  only while the menu is open (`useMenuLayer`), so there is no empty
-  landmark and a menu inside a dialog is not hidden from screen readers.
-  `e2e/a11y.spec.js` checks both menus for any axe finding.
-- **Topology workspace text fields use `UiTextField` / `UiTextarea`.**
-  The name, description, rollout group, revision message and graph JSON
-  were native inputs with a hand-made label; they are now labelled design
-  system fields, and the graph JSON help is the field's description
-  (`aria-describedby`). The phone 16 px rule comes from the component.
-
 ## 4.2.0-rc.1 - 2026-10-04
 
 ### Added
@@ -1063,11 +989,13 @@
   accepts the machine-telemetry `systemd_services` setting and collects the
   systemd services report (anix-agent #5). Older Agents refuse that setting,
   so the services panel needs this Agent.
-- CI builds the Agent from anix-agent `b32b90a` (was `1b155dee`): the
+- CI builds the Agent from anix-agent `54150d83` (was `1b155dee`): the
   Agent line AG-1 to AG-5b, forwarding (F3b), the O1 installer layout
-  (#13), diagnostics (#14), staged upgrades (#15), and the reload fixes
-  (#16: a failed reload restores the previous node; a forwarding-only
-  change no longer reloads the proxy inbound).
+  (#13), diagnostics (#14), staged upgrades (#15), the reload fixes (#16:
+  a failed reload restores the previous node; a forwarding-only change no
+  longer reloads the proxy inbound), the alive-list race and the
+  `uninstall` that follows the O1 layout (#18), the 4.2.0-rc.1 version
+  surfaces (#17, #19) and three flaky-test fixes (#20, #21).
   `config/scripts/check_release_workflow.sh` checks the new pin.
 - **Release branches and the v4.2 upgrade order** (owner decisions of
   2026-10-04; documentation and CI triggers only).
@@ -1091,6 +1019,38 @@
   - M3-4 and M3-5 are cancelled (`docs/architecture/node-ops-service.md`
     section 7), and anix-agent releases follow Control's version numbers,
     with Control's CI pinning the same Agent commit (H25).
+
+- **The plugin drawer's install targets are real tabs.** The hand-built
+  tablist became `UiTabs` (segmented), so it follows the WAI-ARIA tabs
+  pattern: Left/Right move and select, Home/End jump to the first and last
+  tab, and the row is one Tab stop that lands on the selected tab (roving
+  tabindex). A plugin without targets no longer renders an empty tablist.
+
+- **The PostgreSQL package tests run on a database that does not flush to
+  disk.** "Package Storage PostgreSQL (n/4)" started its PostgreSQL service
+  with the default durability settings, and the compatibility harnesses
+  commit once per statement (`ordercompat` alone about 25 000 times: every
+  seed row, kernel API view, sequence reset and emptied table), so on a slow
+  runner disk the commits were most of the run: `ordercompat` and
+  `paymentcompat` took 45 to 63 s in some CI runs and 22 to 28 s in others.
+  The job now sets `fsync`, `synchronous_commit` and `full_page_writes` off
+  before the tests (the database is thrown away with the job and no test
+  crashes it; the SQL behaviour is the same). Locally, on a disk that
+  flushes in 1.5 ms (four paired rounds): `ordercompat` 30.6 -> 10.0 s and
+  `paymentcompat` 26.1 -> 10.1 s. On CI's fast runners the gain is smaller
+  (`ordercompat` 22.9 and 24.2 s, `paymentcompat` 21.5 and 22.5 s in the two
+  first runs, against means of 27.5 and 24.9 s over the 11 before) and
+  the slow-disk runs of 51 and 44 s should go away. Nothing else changes:
+  the migrated database a test shares between its cases
+  (`internal/tests/packagecompat/shared.go`) already costs one migration per
+  test.
+  - The four shards are re-planned from measured times: the weights in
+    `plan_test_shards.py` dated from before the compatibility harnesses got
+    faster (`plancompat` 48 s, `nodesecrets` 41 s and `gostmeshcompat` 34 s
+    were weighted, 5 to 12 s are measured), so the old plan ran 118 s of
+    tests in shard 3 and 72 s in shard 4 (CI run 37229103569), the new one
+    85 to 102 s per shard (run 37229598173). A shard's job is dominated by
+    a 55 to 92 s compile before its first test, which this does not change.
 
 ### Removed
 
@@ -1245,6 +1205,44 @@
   only each node's own connections. It now counts the online sets of every
   node, through the reader `alive.v1` shares.
 
+- Two flaky Go tests no longer fail under CPU load or by chance.
+  - **NodeOps deadline sweep (Control).** An operation the sweep ended
+    TIMED_OUT could hand its executor `context.Canceled` instead of
+    `context.DeadlineExceeded` (`TestDeadlinesEndStartedOperationsTimedOut`
+    failed in about 5 of 90 loaded runs): in the same tick,
+    `passCancellations` stopped every running operation whose ledger state
+    was no longer started, including the one just timed out, and could win
+    the race against the context's own deadline timer. A timed-out operation
+    without a cancel request now goes through `stopExpired`, as in the sweep
+    itself. The ledger state was right either way; only the evidence of an
+    expired operation's late outcome could read "cancelled" instead of a
+    deadline.
+  - `TestAgentSessionRPCs` and the other `internal/tests/nodeopsagent` tests
+    drew each fixture's node id at random from 65 536 values, and the Agent
+    Control managers they run against are the process's, so two fixtures
+    that drew the same id saw each other's observed operations (one run in
+    about fifty with PostgreSQL, CI run 37193575692). The ids are now
+    counted.
+
+- **Forwarding editor, DNS binding (#196 follow-ups).** A fresh binding no
+  longer opens with "Required" under every empty field: the provider, zone
+  and managed-name errors wait until the field has been left once, and
+  turning the binding off and on starts clean again. The zone is guessed
+  again when the entry hostname changes (also while the binding is off, so
+  switching it on later does not bring back the first hostname's zone),
+  and a zone the user typed is kept. A bound route's zone stays fixed.
+- **Open menus are inside a landmark.** An open row action menu or the
+  account menu was axe "region" content (moderate) because Reka portals it
+  to `<body>`. Each now portals into its own labelled `region` that exists
+  only while the menu is open (`useMenuLayer`), so there is no empty
+  landmark and a menu inside a dialog is not hidden from screen readers.
+  `e2e/a11y.spec.js` checks both menus for any axe finding.
+- **Topology workspace text fields use `UiTextField` / `UiTextarea`.**
+  The name, description, rollout group, revision message and graph JSON
+  were native inputs with a hand-made label; they are now labelled design
+  system fields, and the graph JSON help is the field's description
+  (`aria-describedby`). The phone 16 px rule comes from the component.
+
 ### Known issues
 
 - A plugin operation created before a one-off Agent operation (a diagnostic,
@@ -1254,11 +1252,6 @@
   before it while someone runs a diagnostic. Retry the plugin operation.
 - Plugin lifecycle operations on a node can take up to about 40 seconds to be
   dispatched in the cross-repository end-to-end suite (a latency, not a loss).
-- An existing Agent data race, not fixed in this release: `startWith`
-  (`controller.go`) writes `aliveMap` without the reconcile lock that the
-  stream's alive-list handler holds, and `go test -race ./node` sometimes
-  reports it. The Agent's CI race step runs a filtered set of tests and does
-  not catch it.
 
 ## 4.1.0 - 2026-10-04
 

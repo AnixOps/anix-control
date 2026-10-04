@@ -374,5 +374,10 @@ Per-node results in `status`:
   which reads `.pkla` files instead of `/etc/polkit-1/rules.d`): preflight
   warns, the script installs no rule, and the Agent cannot start or reload
   `anixops-gost.service` itself (see [preflight](#preflight-checks)).
-- `anix-agent uninstall`: the Agent's own command predates this layout;
-  use `install.sh uninstall [--purge]`.
+- `anix-agent uninstall --purge` removing the `anixops-agent` and
+  `anixops-gost` users and the forwarding objects (`inet anixops_fwd`, the
+  `af00:` qdiscs). The Agent's own command (4.2.0-rc.1 and later) removes
+  what the installer wrote, like `install.sh uninstall [--purge]`, and with
+  `--purge` also the configuration, identity and state, but it lists those
+  users and objects as kept; use `install.sh uninstall --purge` to remove
+  them.
