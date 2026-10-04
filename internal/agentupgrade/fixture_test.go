@@ -129,12 +129,6 @@ func (f *fakeStreams) connect(node agentcontrol.AgentNode, version string, at ti
 	}
 }
 
-func (f *fakeStreams) disconnect(node agentcontrol.AgentNode) {
-	f.mu.Lock()
-	defer f.mu.Unlock()
-	delete(f.sessions, node)
-}
-
 func (f *fakeStreams) operations() []sentOperation {
 	f.mu.Lock()
 	defer f.mu.Unlock()
