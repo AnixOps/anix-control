@@ -192,67 +192,6 @@
     `inet anixops_fwd` table and `af00:` tc qdiscs only when they carry the
     drivers' marks.
 
-### Changed
-
-- **WARNING: `agent_control.mtls` now defaults to `required` (v4.2, owner
-  decision H5). Legacy API-key Agents are refused on the AnixOps Agent
-  channels unless you set `agent_control.mtls: preferred`.** Before
-  upgrading, run `anix-control agents transports --check-required`; it must
-  exit 0 ([UPGRADE](docs/UPGRADE.md#agent-transports-v42-requires-enrolled-agents)).
-  - An empty `agent_control.mtls` (`ANIX_CONTROL_AGENT_CONTROL_MTLS`) is
-    `required`; `defaults.yaml`, `config.yaml.example` and
-    `config.prod.yaml` leave it empty. A config file that sets
-    `mtls: "preferred"`, as the 4.1 template did, keeps `preferred`.
-    `preferred`, `optional` and `off` stay selectable.
-  - `required` refuses the API key on the Agent Control stream and the API
-    key bootstrap of `Enroll`, `/api/v2/agent/*`, `/api/v2/node/*`,
-    `/api/v2/forward/agent/rules` and the clean agent endpoints (403 /
-    `Unauthenticated`, code `agent_mtls_required`). UniProxy, the v2board
-    gRPC services and the plugin release download stay open.
-  - Startup: an explicit `required` still refuses to start without the gRPC
-    listener, its TLS and the built-in CA. The default `required` starts
-    without them and logs `WARNING: Agent transports: ...`: no Agent can
-    connect until they are set.
-  - Readiness: `GET /api/v4/kernel/agents/transports` adds
-    `summary.ready_for_required`, `summary.required_reasons` and
-    `summary.required_blockers` (enabled nodes on a legacy channel, and
-    enabled nodes that never enrolled). `anix-control agents transports
-    --check-required [--json]` lists them and exits with status 3 while
-    there is one (0 when none, 2 on errors). Under `required` the startup
-    log warns with the counts (legacy nodes, those seen within the last 7
-    days, never enrolled) and up to ten node names, and starts anyway.
-  - The staging rehearsal runs the new default (`STAGING_AGENT_CONTROL_MTLS`
-    selects another mode); the v2 package router tests that drive legacy
-    agent paths set `preferred` explicitly.
-- CI builds the Agent from anix-agent `1b155dee` (was `c459383`), which
-  accepts the machine-telemetry `systemd_services` setting and collects the
-  systemd services report (anix-agent #5). Older Agents refuse that setting,
-  so the services panel needs this Agent.
-- **Release branches and the v4.2 upgrade order** (owner decisions of
-  2026-10-04; documentation and CI triggers only).
-  - A release may now be cut from a maintenance branch `release/vX.Y` started
-    at an earlier release's tag or commit: the version bump PR targets the
-    branch, the tag goes on the branch's commit, and a follow-up PR merges
-    the bump and CHANGELOG section back to `go_dev`. Patch releases of that
-    line use the same branch (`docs/RELEASING.md`). `ci.yml` now runs on pull
-    requests to and pushes on `release/**`, with the same required checks;
-    the intended `release/**` ruleset is in `.github/BRANCH_PROTECTION.md`.
-    v4.1.0 is to be cut this way, from the v4.1.0-rc.6 commit.
-  - The v4.2 forward upgrade order (`docs/architecture/forward-sdk.md`
-    section 10, `docs/UPGRADE.md`): first the new Agent, which removes the
-    legacy forward runtime locally on install; then every forward node
-    switches to it; then Control v4.2 with `agent_control.mtls: required`.
-    The upgrade (F5c) then verifies the nodes are clean, cleans NodeX hosts
-    through NodeX's API and Ansible hosts over SSH, and drops the tables
-    after H15. Of the 53 bridged forward routes, F5d deletes the 30 flux
-    routes, F5a rewrites the 19 node management routes as
-    `/api/v4/forward/*`, and the 4 clean agent routes retire with the switch.
-  - M3-4 and M3-5 are cancelled (`docs/architecture/node-ops-service.md`
-    section 7), and anix-agent releases follow Control's version numbers,
-    with Control's CI pinning the same Agent commit (H25).
-
-
-### Added
 
 - **AnixOps relay transport design (H22, approved 2026-10-04).**
   `docs/architecture/anixops-protocol.md` specifies the secure transport
@@ -822,6 +761,65 @@
   disturbing a held connection or UDP session), and a gost entry before an
   nftables exit.
 
+### Changed
+
+- **WARNING: `agent_control.mtls` now defaults to `required` (v4.2, owner
+  decision H5). Legacy API-key Agents are refused on the AnixOps Agent
+  channels unless you set `agent_control.mtls: preferred`.** Before
+  upgrading, run `anix-control agents transports --check-required`; it must
+  exit 0 ([UPGRADE](docs/UPGRADE.md#agent-transports-v42-requires-enrolled-agents)).
+  - An empty `agent_control.mtls` (`ANIX_CONTROL_AGENT_CONTROL_MTLS`) is
+    `required`; `defaults.yaml`, `config.yaml.example` and
+    `config.prod.yaml` leave it empty. A config file that sets
+    `mtls: "preferred"`, as the 4.1 template did, keeps `preferred`.
+    `preferred`, `optional` and `off` stay selectable.
+  - `required` refuses the API key on the Agent Control stream and the API
+    key bootstrap of `Enroll`, `/api/v2/agent/*`, `/api/v2/node/*`,
+    `/api/v2/forward/agent/rules` and the clean agent endpoints (403 /
+    `Unauthenticated`, code `agent_mtls_required`). UniProxy, the v2board
+    gRPC services and the plugin release download stay open.
+  - Startup: an explicit `required` still refuses to start without the gRPC
+    listener, its TLS and the built-in CA. The default `required` starts
+    without them and logs `WARNING: Agent transports: ...`: no Agent can
+    connect until they are set.
+  - Readiness: `GET /api/v4/kernel/agents/transports` adds
+    `summary.ready_for_required`, `summary.required_reasons` and
+    `summary.required_blockers` (enabled nodes on a legacy channel, and
+    enabled nodes that never enrolled). `anix-control agents transports
+    --check-required [--json]` lists them and exits with status 3 while
+    there is one (0 when none, 2 on errors). Under `required` the startup
+    log warns with the counts (legacy nodes, those seen within the last 7
+    days, never enrolled) and up to ten node names, and starts anyway.
+  - The staging rehearsal runs the new default (`STAGING_AGENT_CONTROL_MTLS`
+    selects another mode); the v2 package router tests that drive legacy
+    agent paths set `preferred` explicitly.
+- CI builds the Agent from anix-agent `1b155dee` (was `c459383`), which
+  accepts the machine-telemetry `systemd_services` setting and collects the
+  systemd services report (anix-agent #5). Older Agents refuse that setting,
+  so the services panel needs this Agent.
+- **Release branches and the v4.2 upgrade order** (owner decisions of
+  2026-10-04; documentation and CI triggers only).
+  - A release may now be cut from a maintenance branch `release/vX.Y` started
+    at an earlier release's tag or commit: the version bump PR targets the
+    branch, the tag goes on the branch's commit, and a follow-up PR merges
+    the bump and CHANGELOG section back to `go_dev`. Patch releases of that
+    line use the same branch (`docs/RELEASING.md`). `ci.yml` now runs on pull
+    requests to and pushes on `release/**`, with the same required checks;
+    the intended `release/**` ruleset is in `.github/BRANCH_PROTECTION.md`.
+    v4.1.0 is to be cut this way, from the v4.1.0-rc.6 commit.
+  - The v4.2 forward upgrade order (`docs/architecture/forward-sdk.md`
+    section 10, `docs/UPGRADE.md`): first the new Agent, which removes the
+    legacy forward runtime locally on install; then every forward node
+    switches to it; then Control v4.2 with `agent_control.mtls: required`.
+    The upgrade (F5c) then verifies the nodes are clean, cleans NodeX hosts
+    through NodeX's API and Ansible hosts over SSH, and drops the tables
+    after H15. Of the 53 bridged forward routes, F5d deletes the 30 flux
+    routes, F5a rewrites the 19 node management routes as
+    `/api/v4/forward/*`, and the 4 clean agent routes retire with the switch.
+  - M3-4 and M3-5 are cancelled (`docs/architecture/node-ops-service.md`
+    section 7), and anix-agent releases follow Control's version numbers,
+    with Control's CI pinning the same Agent commit (H25).
+
 ### Fixed
 
 - **gost link certificate renewals start a new counter epoch.** A
@@ -902,6 +900,53 @@
   cache (its key pattern matched nothing there), so device limits counted
   only each node's own connections. It now counts the online sets of every
   node, through the reader `alive.v1` shares.
+
+## 4.1.0 - 2026-10-04
+
+### Highlights since 4.0.0
+
+This is the first stable 4.1 release. It rolls up 4.1.0-rc.1 to rc.6 (CHANGELOG.md
+has a section for each with every change) plus the additions listed after
+this summary. Read docs/UPGRADE.md before upgrading.
+
+- **Modular Control.** Core domains run as signed, separately versioned
+  packages behind contracts. 174 of 296 v2 routes have native package
+  implementations with byte-level parity tests; 151 rehearsed routes in 15
+  packages default to `native` (kill switch `package_routes.default_mode:
+  legacy`; per-package rollback `anix-control routes rollback`).
+- **Route-mode tooling.** Admin API, CLI and page to switch routes between
+  `legacy`, `shadow` and `native`, with audit, revisions, sanitized shadow
+  mismatch samples and a local staging rehearsal kit.
+- **Identity module.** Login, registration and MFA in their own module;
+  Ed25519 tokens, JWKS and token-version revocation.
+- **Node operations and Agent control.** KernelNodeOps typed node
+  operations, split node secrets, built-in Agent PKI (enrollment, renewal,
+  mTLS stream), config/users/reports over the stream; `agent_control.mtls`
+  defaults to `preferred`, with a transport inventory and deprecation
+  signals ahead of v4.2.
+- **New admin and user UI** on AnixOps Design v1.0.2: component library,
+  accessible light/dark themes, mobile layouts, visual regression and
+  bundle budgets.
+- **Community edition** by default; commercial packages build separately.
+- **Security fixes** across payments, withdrawals, forwarding, agent routes,
+  audit redaction and forwarded-header trust (see the rc sections).
+
+
+### Added
+
+- `anix-control agents transports --check-required [--json]`, the v4.2
+  readiness gate, backported from v4.2 so operators can run it on 4.1
+  before upgrading (v4.2 makes `agent_control.mtls` default to `required`).
+  It lists every enabled node `required` would refuse — `legacy` (its newest
+  AnixOps Agent channel is legacy; seen within 7 days counts as recent) or
+  `never_enrolled` (never seen, no valid agent certificate) — and exits 0
+  when there is none, 3 when there is one and 2 on any other error. The
+  transport inventory API adds `summary.ready_for_required`,
+  `required_reasons` and `required_blockers` (additive). The 4.1 default
+  stays `preferred`. See docs/UPGRADE.md, "Before Upgrading To v4.2".
+
+### Fixed
+
 - The live Control WebUI E2E gate defaults to ports 24175 and 28080 instead
   of 34175 and 38080. The old ports sat in Linux's ephemeral range, so an
   outgoing connection left open by an earlier CI step could hold one and fail
