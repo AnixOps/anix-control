@@ -298,6 +298,48 @@ their SHA-256 in `/install/agent.env`, which also lets the `cn` mirror work
 without GitHub. A mainland mirror (`agent_install.cn_mirror_url`) mirrors the
 GitHub release downloads: `<base>/<tag>/<asset>`.
 
+## Upgrading Agents From Control
+
+Control upgrades the Agents it installed: a super administrator starts a
+campaign, and Control pushes the release to the nodes in batches (5%, then
+25%, then all of them, at least 30 minutes each, the same canary nodes
+every time). A batch in which more than 5% of the nodes fail is rolled
+back: those nodes go back to their previous Agent and the campaign stops.
+A node never upgrades on its own.
+
+```bash
+# The release of this Control, from agent_install.artifact_dir (verified):
+anix-control agent upgrade start -reason "v4.2.0" [-exclude forward-3] [-exclude-tag edge]
+anix-control agent upgrade status
+anix-control agent upgrade pause -id <campaign>
+anix-control agent upgrade resume -id <campaign>
+anix-control agent upgrade abort -id <campaign> [-rollback]
+```
+
+The same is `POST /api/v4/kernel/agents/upgrades` (and `GET`, `/:id`,
+`/:id/pause`, `/:id/resume`, `/:id/abort`); the **NodeX Agents → Agent
+transports** page shows the latest campaign. Requirements:
+
+- the release in `agent_install.artifact_dir/<tag>/` with its signatures
+  (see [serving the Agent from Control](#serving-the-agent-from-control-or-a-mirror));
+- `agent_install.public_url`: nodes download the release from Control;
+- Agents installed by this release's script (it writes
+  `anixops-agent-updater.path` and `anixops-agent-updater.service`, the root
+  updater the Agent hands the verified release to). Older Agents are
+  skipped (`upgrade_unsupported`): re-run the install command on them once.
+
+Per-node results in `status`:
+
+| State or code | Meaning |
+|---|---|
+| `skipped` `upgrade_unsupported` | the Agent cannot be upgraded by Control: re-run the installer |
+| `skipped` `node_offline` | the node was offline for its whole batch; the next campaign retries it |
+| `failed` `rejected`, `apply_failed` | the Agent refused or failed (the message carries its `upgrade_*` code: download, digest, signature, updater) |
+| `failed` `reconnect_timeout` | no reconnect with the new version within 10 minutes: `journalctl -u anixops-agent-updater.service -u anix-agent.service` |
+| `failed` `reverted` | the Agent came back with its old version: the updater could not start the new one and reinstated the old |
+| `failed` `config_apply_failed` | the new Agent could not apply the node's configuration |
+| `rolled_back` | the batch failed and this node returned to its previous Agent |
+
 ## Troubleshooting
 
 | Message | Cause and fix |
