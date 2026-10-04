@@ -2,12 +2,12 @@ package kernelforward
 
 import (
 	"context"
-	"errors"
-	"net"
-	"net/netip"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"net"
+	"net/netip"
 	"os"
 	"strings"
 	"sync"

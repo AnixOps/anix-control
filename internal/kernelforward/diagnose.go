@@ -329,7 +329,7 @@ func (s *Service) diagnose(ctx context.Context, routeID string) (*forwardv1.Diag
 	}
 	for index, hop := range route.GetHops() {
 		for _, ref := range uniqueRefs(hop.GetNodeRefs()) {
-			d.configStep(uint32(index), ref) // #nosec G115 -- validate bounds hops to MaxHops.
+			d.configStep(uint32(index), ref)  // #nosec G115 -- validate bounds hops to MaxHops.
 			d.healthSteps(uint32(index), ref) // #nosec G115 -- as above.
 		}
 	}

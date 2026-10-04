@@ -117,7 +117,9 @@ func TestForwardChecksRefusalsAndFailures(t *testing.T) {
 			_, err := checks.Check(context.Background(), f.forwardNode(), "forward.listen", params)
 			done <- err
 		}()
-		held, err = agent.Await(awaitTimeout, func(operation *agentv1pb.DesiredOperation) bool { return operation.GetOperationId() != held.GetOperationId() })
+		held, err = agent.Await(awaitTimeout, func(operation *agentv1pb.DesiredOperation) bool {
+			return operation.GetOperationId() != held.GetOperationId()
+		})
 		require.NoError(t, err)
 		require.NoError(t, agent.Complete(held, agentv1pb.ObservedPhase_OBSERVED_PHASE_SUCCEEDED, "", map[string]any{"success": true, "output": "active"}))
 		require.ErrorContains(t, <-done, "without a forward check result")
