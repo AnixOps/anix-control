@@ -416,6 +416,11 @@ A package learns everything it needs and never a secret.
      | `POST /admin/forward/agents` | | `/data/token` | new clean agent |
      | `POST /admin/forward/test-connection` | `/api_token` (value) | | `dial`: no resource (NO-7) |
 
+     The three forward rows (`/admin/forward/nodes` and
+     `/admin/forward/agents`) left `config/node-secret-fields.json` with
+     their routes in v4.2 (F5d); the `forward` and `clean_agent` target
+     kinds stay in the sealer.
+
    - **Handles.**
      - **Format.** A handle is `anix-sealed:v1:` followed by 43 unpadded
        base64url characters, 32 random bytes (`v2compat.IsSealedHandle`).
@@ -2023,11 +2028,11 @@ router answers from the legacy handler.
 ### 6.1 forward (59)
 
 **Superseded (2026-10-04).** The native modes below are not built: M3-4
-and M3-5 are cancelled (section 7). v4.2's forwarding redesign deletes the
-flux routes in F5d, rewrites the node management routes as
-`/api/v4/forward/*` in F5a, and retires the clean agent routes with the
-switch to the new Agent (`forward-sdk.md` section 10). The tables are kept
-as the record of the plan.
+and M3-5 are cancelled (section 7). v4.2's forwarding redesign rewrote the
+node management routes as `/api/v4/forward/*` (F5a) and removed the flux
+routes, the v2 node management routes and the clean agent routes (F5d;
+`forward-sdk.md` section 10). The tables are kept as the record of the
+plan.
 
 **Forward nodes (8): native.** These are rows of `v2_forward_node`. Forward
 adopts the table once it is finalized; the token is pinned in the kernel.

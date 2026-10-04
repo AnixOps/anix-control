@@ -31,7 +31,6 @@ describe('pageMeta helpers', () => {
     expect(resolveRoutePageTitle(t, '/user/dashboard', 'Fallback')).toBe('Dashboard')
     expect(resolveRoutePageTitle(t, '/admin/monitor', 'Fallback')).toBe('Traffic & Monitoring')
     expect(resolveRoutePageTitle(t, '/admin/monitor/traffic', 'Fallback')).toBe('User traffic')
-    expect(resolveRoutePageTitle(t, '/admin/forward/nodex', 'Fallback')).toBe('NodeX Runtime')
     expect(resolveRoutePageTitle(t, '/admin/control', 'Fallback')).toBe('Control Kernel')
     expect(resolveRoutePageTitle(t, '/admin/plugins', 'Fallback')).toBe('Plugins')
     expect(resolveRoutePageTitle(t, '/admin/plugins/route-modes', 'Fallback')).toBe('Route modes')

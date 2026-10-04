@@ -258,7 +258,7 @@ rm -f /tmp/anix-control-install.sh
 - 如果 NodeX 与 AnixOps Control 不在同一个网络命名空间，`forward_runtime.nodex.base_url` 不能写成容器内的 `127.0.0.1`，应写成可达的宿主机地址或 Compose service 名。
 - 如果没有 SSH 私钥，调整 `config/deploy/ansible/inventory.ini` 或所选本地 ansible block 下的 `extra_vars` 来提供目标主机的账户信息。
 - 容器启动时会基于 `config/config.yaml.forward_runtime` 写入 runtime 配置；非 root 用户可以直接在 YAML 中设置 `forward_runtime.nftables_ansible.become=true`，sudo 凭据则放在 inventory 或其他 ansible 变量里。若使用 legacy path，则对应改 `forward_runtime.iptables_ansible.become=true`。
-- 后端切换、运行时任务观测和部署引导应停留在系统/部署文档范围内，不应并入 Flux 克隆的 `/admin/forward` 页面。
+- v4.2（F5d）删除了 Flux 克隆的转发页面和运行时任务列表；旧运行时只读，直到旧版清理（F5c）。
 - 公开边界说明见 [`guide/nodex-internal-extension.md`](guide/nodex-internal-extension.md)。
 
 ---
@@ -369,6 +369,8 @@ bash config/deploy/clean_local_build_artifacts.sh --include-deploy-backups
   - `/admin/system` 编辑的也是这一层
 
 ### NodeX 控制面（当前 `forward` 运行时调用路径）
+
+> v4.1 的旧转发运行时。v4.2（F5d）删除了 `/admin/forward` 旧页面和改动转发的 v2 接口，已有转发仍按此路径运行，直到旧版清理（F5c）；新转发使用 `/api/v4/forward/*` 与新 Agent。
 
 | 配置项 | 说明 |
 |--------|------|
@@ -554,8 +556,10 @@ helm upgrade control config/deploy/helm/anix-control -n anix --reuse-values \
 
 ```bash
 curl -s -H 'X-Forwarded-Host: evil.example' -H 'X-Forwarded-Proto: https' \
-  http://<control 地址>:8080/api/v2/forward-agent/install.sh | grep PANEL_URL
-# 期望：PANEL_URL 为 public_url 或你访问时使用的地址，而不是 https://evil.example
+  http://<control 地址>:8080/install/agent.env | grep '^source control'
+# 期望：地址为 agent_install.public_url 或你访问时使用的地址，而不是 https://evil.example
+# （需要 agent_install.artifact_dir 中有 Agent 发布；v4.2 删除了旧的
+#  /api/v2/forward-agent/install.sh）
 ```
 
 经由代理访问时链接变成 `http://` 或内部地址，说明代理的地址不在

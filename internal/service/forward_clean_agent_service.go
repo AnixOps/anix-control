@@ -102,22 +102,6 @@ func NewForwardCleanAgentService(db *gorm.DB) *ForwardCleanAgentService {
 	return &ForwardCleanAgentService{db: db}
 }
 
-// CreateToken issues a clean agent token bound to the forward node it names.
-// The node is required and must exist: a token issued without one would be
-// bound by its first registration, so whoever registered it first would
-// choose the node, and take that node's jobs (Register). Tokens issued
-// without a node by earlier builds still bind on their first registration.
-func (s *ForwardCleanAgentService) CreateToken(input ForwardCleanAgentCreateInput) (*ForwardCleanAgentTokenResult, error) {
-	var result *ForwardCleanAgentTokenResult
-	if err := s.db.Transaction(func(tx *gorm.DB) (err error) {
-		result, err = CreateCleanAgentTokenTx(tx, input)
-		return err
-	}); err != nil {
-		return nil, err
-	}
-	return result, nil
-}
-
 // CreateCleanAgentTokenTx is CreateToken in the caller's transaction: the
 // agent row and its split row are written in it, and IssueCleanAgent runs
 // it in the operation's transaction. A token that collides with another
@@ -166,18 +150,6 @@ func CreateCleanAgentTokenTx(tx *gorm.DB, input ForwardCleanAgentCreateInput) (*
 	}
 
 	return nil, errors.New("failed to generate unique clean agent token")
-}
-
-func (s *ForwardCleanAgentService) ListAgents() ([]model.ForwardCleanAgent, error) {
-	var agents []model.ForwardCleanAgent
-	err := s.db.Order("status DESC").Order("last_seen DESC").Order("id ASC").Find(&agents).Error
-	return agents, err
-}
-
-func (s *ForwardCleanAgentService) RevokeAgent(id uint) error {
-	return s.db.Transaction(func(tx *gorm.DB) error {
-		return RevokeCleanAgentTx(tx, id)
-	})
 }
 
 // RevokeCleanAgentTx is RevokeAgent in the caller's transaction: the agent

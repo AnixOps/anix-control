@@ -503,7 +503,7 @@ func TestAllCataloguedV2RoutesResolveThroughTheirPackageBridge(t *testing.T) {
 		})
 	}
 	require.Equal(t, 26, identityRoutes)
-	require.Equal(t, 270, bridgedRoutes)
+	require.Equal(t, 217, bridgedRoutes)
 }
 
 // Old identity-platform and plan releases still declare the routes that
@@ -518,7 +518,7 @@ func TestMovedV2RoutesKeepTheirOldIdentityRouteIDs(t *testing.T) {
 		catalog[route.Method+" "+route.Path] = route
 	}
 	moved := compatv2.MovedRoutes()
-	require.Len(t, moved, 28)
+	require.Len(t, moved, 27)
 	for _, route := range moved {
 		entry, ok := catalog[route.Method+" "+route.LegacyPath]
 		require.True(t, ok, route.LegacyPath)
@@ -1168,9 +1168,6 @@ func TestSetup_AdminForwardEndpoints(t *testing.T) {
 		method string
 		path   string
 	}{
-		{"GET", "/api/v2/admin/forward/ansible-machines"},
-		{"GET", "/api/v2/admin/forward/nodes"},
-		{"GET", "/api/v2/admin/forward/rules"},
 		{"GET", "/api/v2/admin/forward/stats"},
 	}
 

@@ -92,13 +92,12 @@ source of truth.
 | Payment | X402 create/check/callback | Partial (commercial edition, internal play coin) | `/payment/x402/*`; `/payment/methods` reports x402 enabled, and `/payment/x402/create` accepts a payment, only with an enabled x402 payment configuration | Not for stable releases. Current chain/provider behavior needs production integration evidence. A callback pays only in the payment's token and at least its amount; the token amount is a placeholder conversion (total / 10^8), and a payment created without a token cannot be paid. |
 | Payment | Stripe and PayPal webhooks | Partial | `/payment/stripe/webhook`, `/payment/paypal/webhook` | Checkout/order creation is still mocked/stubbed. |
 | Payment | Alipay, WeChat, USDT live callbacks | Planned | Config structs and gateway type constants exist; service blocks enable/use until implementations exist | Add callback implementations and tests before enabling. |
-| Forwarding | Flux-compatible forward CRUD and ordering | Partial | `/api/v2/forward/*`, admin Forward page | Remaining Flux parity and runtime edge cases. |
-| Forwarding | Tunnel CRUD and user assignment | Partial | `/api/v2/tunnel/*`, admin Tunnel/Users surfaces | Relation-backed flow counters and enforcement gaps remain. |
-| Forwarding | Speed-limit management | Partial | `/api/v2/speed-limit/*`, admin Limit page | Runtime-side speed-limit enforcement is not fully proven. |
-| Forwarding | Forward node and Ansible machine management | Implemented | `/api/v2/admin/forward/nodes*`, `/ansible-machines*` | Keep operator setup docs current. |
+| Forwarding | v4.2 routes (hops with per-hop engines), nodes, Ansible machines, statistics, observability, diagnosis | Implemented | `/api/v4/forward/*` (forward package), admin 转发 area | See `docs/forwarding/v4-api.md`. |
+| Forwarding | Flux-compatible forward, rule, node and clean agent management | Removed (v4.2, F5d) | — | Old data is archived, not migrated (F5c). |
+| Forwarding | Legacy forward and tunnel lists, tunnel create/delete, permissions assign/list, speed limits (no update) | API only, legacy (until F5c) | `/api/v2/forward/list`, `/api/v2/tunnel/*`, `/api/v2/speed-limit/*` | No UI since v4.2. |
 | Forwarding | Local, NodeX, and runtime diagnostics | Partial | `/forward/*/doctor`, runtime job/status APIs | Need more end-to-end runtime smoke evidence. |
 | Forwarding | Traffic upload/report/snapshot | Implemented | `/flow/upload`, `/api/v2/internal/forward/traffic/*` | Keep app-token auth and stats tests current. |
-| Forwarding | Observability targets, trend, topology, multi-ingress | Implemented | `/api/v2/admin/forward/observability/*` | Add more real runtime data sources if needed. |
+| Forwarding | Legacy multi-ingress comparison and statistics | API only, legacy (until F5c) | `/api/v2/admin/forward/observability/multi-ingress`, `/api/v2/admin/forward/stats` | The v4 observability is `/api/v4/forward/observability/*`. |
 | Forwarding | Complex load balancing, failover, chain orchestration | Deferred | None | Deferred by product scope for simplicity and auditability. |
 | WireGuard | WireGuard user access over dual-node relay | Partial/P0 | `ProtocolWireGuard`, `v2_wireguard_peer`, native `.conf` formatter, sing-box 1.13 endpoint output, UniProxy/gRPC runtime peer fields, relay TUN contract fields, secure WSS certificate configuration, admin WireGuard visual protocol form, server keypair endpoint, API validation, IPv4-only runtime guard, runtime health/self-healing, and V2bX GOST/TUN/tc runtime tests | Panel peer custody, subscription output, node runtime peer contract, admin configuration, API validation, dynamic speed-limit convergence, runtime health reporting, relay process restart, exit-role peer/subscription exclusion, and RC/tag-gated V2bX QUIC/WSS route acceptance jobs are implemented. `v2.5.0-rc.6` passed the namespace acceptance jobs; real cross-region relay and real-client import evidence are still required before marking production-complete. |
 | WireGuard | WireGuard subscription output for Shadowrocket/Loon/v2rayN | Partial | Native WireGuard `.conf` output, link-only user-agent fallback to `.conf`, and sing-box 1.13 WireGuard endpoints are implemented and unit-tested | Verify Shadowrocket, Loon, and v2rayN import behavior against real client formats before marking fully implemented. |
@@ -155,8 +154,8 @@ Do not normalize these responses blindly, because external clients depend on the
 - `CHANGELOG.md`: delivered changes by commit slice.
 - `docs/audit/test-gap.md`: verification evidence and remaining test gaps.
 - `docs/forwarding/design.md`: forwarding module design.
-- `docs/forwarding/api.md`: forwarding API contract.
+- `docs/forwarding/v4-api.md`: forwarding API contract (`/api/v4/forward/*`).
 - `docs/forwarding/security.md`: forwarding security constraints.
 - `docs/guide/wireguard-relay.md`: P0 WireGuard dual-node relay plan.
-- `docs/guide/flux-panel-clone.md`: Flux clone status, remaining gaps, and parity requirements.
+- `docs/archive/`: the archived Flux clone guide and flux v2 forwarding contract (removed in v4.2, F5d).
 - `docs/DEPLOYMENT.md`: deployment command and prerequisites.

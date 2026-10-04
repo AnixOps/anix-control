@@ -17,24 +17,17 @@ const mockResetUserSubscribe = vi.fn()
 const mockGetAdminUser = vi.fn()
 
 vi.mock('@/api/admin', () => ({
-  assignAdminUserTunnel: vi.fn(),
   banUser: (...args) => mockBanUser(...args),
   createUser: (...args) => mockCreateUser(...args),
   getAdminUser: (...args) => mockGetAdminUser(...args),
-  getAdminUserTunnelList: vi.fn(),
-  getForwardTunnels: vi.fn(),
-  getSpeedLimitList: vi.fn(),
   getSubscriptionGroups: (...args) => mockGetSubscriptionGroups(...args),
   getSubscriptionSettings: (...args) => mockGetSubscriptionSettings(...args),
   getTrafficHourly: (...args) => mockGetTrafficHourly(...args),
   getUserList: (...args) => mockGetUserList(...args),
   getUserStats: (...args) => mockGetUserStats(...args),
-  removeAdminUserTunnel: vi.fn(),
   resetUserSubscribe: (...args) => mockResetUserSubscribe(...args),
   resetUserTraffic: vi.fn(),
-  resetUserTunnelTraffic: vi.fn(),
   unbanUser: vi.fn(),
-  updateAdminUserTunnel: vi.fn(),
   updateUser: (...args) => mockUpdateUser(...args),
 }))
 

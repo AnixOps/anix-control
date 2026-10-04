@@ -1,5 +1,14 @@
 # Forwarding Compatibility
 
+> **Archived (v4.2, F5d, 2026-10-04).** v4.2 drops flux compatibility: the
+> flux v2 forwarding routes and the flux-clone pages this document describes
+> were removed, and old forwarding data is archived, not migrated (F5c).
+> Use the v4 forwarding API, [`../forwarding/v4-api.md`](../forwarding/v4-api.md)
+> (`/api/v4/forward/*`), the model in
+> [`../architecture/forward-sdk.md`](../architecture/forward-sdk.md) and the
+> forwarding rules in [`../../AGENTS.md`](../../AGENTS.md). Kept as a record;
+> links below may point at files that moved or no longer exist.
+
 This document records compatibility boundaries for the forwarding module. It is
 not a claim that the upstream product is fully cloned.
 

@@ -28,9 +28,6 @@ export default {
         knowledge: 'Help Center content',
         nodes: 'Nodes',
         forward: 'Forwarding',
-        forwardNodes: 'Forward nodes',
-        forwardLegacy: 'Forwarding (legacy)',
-        forwardNodesLegacy: 'Forward nodes (legacy)',
         agents: 'NodeX Agents',
         plugins: 'Plugin Center',
         deployments: 'Deployments',
@@ -57,11 +54,6 @@ export default {
         plans: 'Plans',
         orders: 'Orders'
       }
-    },
-    forwardNav: {
-      label: 'Forward suite',
-      more: 'More',
-      moreLabel: 'More forwarding tools'
     },
     search: {
       button: 'Search or jump to…',
@@ -112,7 +104,6 @@ export default {
       actions: {
         addNode: 'Add a node',
         addUser: 'Add a user',
-        forwardWizard: 'Forward setup wizard',
         newForwardRoute: 'New forwarding route',
         themeLight: 'Use light appearance',
         themeDark: 'Use dark appearance',

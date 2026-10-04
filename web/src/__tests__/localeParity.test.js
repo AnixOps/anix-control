@@ -42,7 +42,7 @@ describe('locale messages', () => {
   })
 
   it('the admin shell group holds only what the shell and dashboard read', () => {
-    expect(Object.keys(zhAdmin).sort()).toEqual(['adminDashboard', 'adminMonitor', 'adminNotify', 'adminSecurity', 'adminSettings', 'forwardSuite', 'settingsForm'])
+    expect(Object.keys(zhAdmin).sort()).toEqual(['adminDashboard', 'adminMonitor', 'adminNotify', 'adminSecurity', 'adminSettings', 'settingsForm'])
   })
 
   it('the sign-in and user pages need only the core group', () => {

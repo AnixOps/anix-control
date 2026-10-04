@@ -10,26 +10,5 @@ import adminSettingsPages from './modules/en/adminSettingsPages'
 export default {
   ...adminSettingsPages,
   ...adminDashboard,
-  ...adminMonitor,
-  forwardSuite: {
-    nav: {
-      setupWizard: 'Setup Wizard',
-      forwards: 'Forwards',
-      tunnels: 'Tunnels',
-      limits: 'Limits',
-      ansibleMachines: 'Ansible Machines',
-      localRuntime: 'Local Runtime',
-      nodeXTopology: 'NodeX Topology',
-      nodeXRuntime: 'NodeX Runtime',
-      nodeXAgents: 'NodeX Agents'
-    },
-    hints: {
-      setupWizard: 'Configure nodes, tunnels and forwards step by step',
-      ansibleMachines: 'Stateless execution machines',
-      localRuntime: 'Stateless panel-host executor',
-      nodeXTopology: 'Stateful relay/exit topology',
-      nodeXRuntime: 'Stateful gost control-plane',
-      nodeXAgents: 'Stateful agent task channel'
-    }
-  }
+  ...adminMonitor
 }

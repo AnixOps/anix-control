@@ -168,7 +168,7 @@ bash config/scripts/check_docs_updated.sh --self-test
 bash config/scripts/check_release_workflow.sh
 python3 config/scripts/check_mojibake.py                            # GBK mojibake, U+FFFD, private-use, BOM
 python3 config/scripts/check_release_version.py --self-test
-GOWORK=off python3 config/scripts/check_plugin_only_routes.py      # 296 /api/v2 routes vs catalog and packages
+GOWORK=off python3 config/scripts/check_plugin_only_routes.py      # 243 /api/v2 routes vs catalog and packages
 GOWORK=off python3 -m unittest discover -s config/scripts -p '*_test.py'
 for c in pluginhost packagebridge modulepki identity kernelidentity kernelsubscriber kernelsettings kernelorder kerneltelemetry kernelnodeops forward agent; do bash sdk/api/$c/gen.sh; done  # needs protoc 29.2; then git diff must be empty
 GOWORK=off go test ./internal/tests/protocompat                     # contracts may only grow
@@ -254,63 +254,115 @@ A release tag `vX.Y.Z[-alpha|-beta|-rc.N]` must match every surface checked by
   docs: `docs/DEPLOYMENT.md`, `docs/UPGRADE.md`,
   `docs/guide/release-installation.md`.
 
-## Flux-panel Clone Guardrails
+## Forwarding (v4.2)
 
-The `/admin/forward*` pages clone upstream
-[flux-panel](https://github.com/bqlpfy/flux-panel).
+Forwarding is the v4.2 model in `docs/architecture/forward-sdk.md` (the
+design and the owner's decisions H11–H28) with the API in
+`docs/forwarding/v4-api.md`. Flux compatibility was dropped in v4.2 (F5d):
+do not reintroduce flux-panel routes, DTOs, envelopes or page layouts, and
+do not cite the archived flux documents (`docs/archive/`) as requirements.
 
-- Read `docs/guide/flux-panel-clone.md` (workflow, status, gaps) and
-  `docs/guide/flux-forward-contract.md` (endpoints, envelopes, DTOs) before
-  touching forward, tunnel, user-tunnel, or speed-limit pages or APIs.
-- Keep 1:1 parity: path, method, auth scope, request field names, the
-  `code/msg/ts/data` envelope, and DTO field names and casing. Do not drop DTO
-  fields the current page does not use. Flux user-scope endpoints need JWT user
-  routes; do not move them under `/api/v2/admin/*` (admin mirrors are
-  compatibility only).
-- Keep `web/src/views/admin/Forward.vue` aligned with upstream `forward.tsx`:
-  no runtime backend selectors, runtime job tables, installer, or inventory
-  controls. Put those in `web/src/views/admin/System.vue` or operator docs.
-- Do not call anything a "1:1 clone" while runtime side effects, diagnose
-  paths, or quota/expiry/reset-flow gaps are undocumented.
-- When forward, tunnel, or user-tunnel behavior changes, update
-  `docs/guide/flux-panel-clone.md`, `docs/guide/flux-forward-contract.md`, and
-  `docs/guide/api-reference.md` in the same PR; refresh
-  `docs/control-boundary.md` if user-facing entry points change.
-- Validate with `GOWORK=off go test ./internal/router ./internal/handler ./internal/service`
-  and `cd web && npm run build`.
-
-## Proprietary Runtime And Dual-Mode Rules
-
-- The Flux clone is the public control plane. The execution plane is an
-  internal differentiator: `internal/service/forward_nodex_client.go`,
-  `internal/service/forward_panel_runtime_service.go`,
-  `internal/service/forward_runtime_*.go`, `install.sh`, `panel_install.sh`,
-  `config/deploy/ansible/`, and `GET /api/v2/admin/forward/runtime/jobs`.
-- `forward_runtime.backend` in `config/config.yaml` is persisted as the system
-  config key `forward.runtime_backend`:
-  - `gost`: NodeX mode. Stateful; requires `forward_runtime.nodex.base_url`
-    and `forward_runtime.nodex.token`. Entry/ingress-node language belongs only
-    to this mode. `ForwardNode.api_token` is the relay gost API credential, not
-    the NodeX token.
-  - `nftables_ansible` (recommended local ansible mode): stateless; executor on
-    the panel host plus SSH inventory and playbooks from
-    `forward_runtime.nftables_ansible`. No ingress node.
-  - `iptables_ansible`: legacy value, normalized to `nftables_ansible`.
-  - `clean_agent`: clean-room pull agent (`docs/forward-clean-room/`).
-  - optional `forward_runtime.nodex_mode` forces `gost` (true) or local ansible (false).
-- SSH credentials come from the ansible inventory, never from `ForwardNode`
-  fields. `/admin/forward/nodes` "online" means only `host:port` TCP
-  reachability, not gost, NodeX, or SSH health.
-- `Node` (`/admin/nodes`, proxy service) and `ForwardNode`
-  (`/admin/forward/nodes`, forward execution) are different resources; never
-  mix them in copy, validation, or docs.
-- When the execution surface changes, update together:
-  `docs/guide/forward-relay-onboarding.md` (source of truth for "relay really
-  joined"), `docs/guide/nodex-internal-extension.md`,
-  `docs/guide/forward-tunnel-runtime-ops.md`,
-  `docs/guide/forward-tunnel-smoke-test.md`, and `docs/reference/runtime.md`.
-- In PR descriptions, state whether a change affects the Flux-compatible
-  control plane, NodeX runtime behavior, or ansible execution behavior.
+- **The model.** A route is an ordered chain of hops (entry, optional
+  relays, exit, targets), and every hop picks its own engine: `NFTABLES`
+  (kernel DNAT, unencrypted, for trusted private links such as IEPL/IPLC),
+  `GOST` (gost v3: TLS, WSS, QUIC, gRPC, multiplexing, for the public
+  internet) or `ANIXOPS` (the AnixOps relay protocol; the slot exists, the
+  engine ships in v4.3). Limits (bandwidth, quota, connections, expiry) sit
+  on the entry hop; traffic is counted per hop and per direction. The
+  planner is a pure function: routes and the node inventory in, one
+  `NodeForwardState` per node with sticky port and mark allocations and a
+  per-node generation out. Do not add per-engine special cases outside the
+  planner and the drivers.
+- **SDK first.** A forwarding change starts in `sdk/` and flows outwards:
+  the contract (`sdk/api/forward/v1`, `anixops.forward.v1`), the model and
+  validation (`sdk/forward/model`, `sdk/forward/validate`, one rule set for
+  Control, the planner and the Agent), the planner (`sdk/forward/planner`,
+  golden fixtures in `contracts/forward/v1`), the drivers
+  (`sdk/forward/driver/*`, conformance suite and netns end-to-end tests in
+  `sdk/forward/e2e`), then the kernel's forwarding state
+  (`internal/kernelforward`, `ForwardControl`), the forward package's v4 API
+  (`packages/forward/v4api`, `/api/v4/forward/*`), the operator CLI
+  (`anix-control forward`) and the UI (`web/src/views/admin/forward/`).
+  Other products import `sdk/forward` and call `ForwardControl`; nothing in
+  `sdk/` may import the kernel (`check_package_boundaries.sh`).
+- **Everything goes through Control.** Routes, nodes, settings and
+  diagnoses are changed only through `ForwardControl` (the v4 API, the CLI
+  or a package), where they are authorized and audited. A node never
+  accepts routes from anywhere else: the Agent applies the desired state
+  Control pushes on the Agent Control stream (`sdk/forward/wire`) and
+  reports back; Ansible is only the fallback for hosts without an Agent and
+  ships the same nftables artifacts. There is no standalone forwarding CLI
+  or node-local configuration. Do not dial nodes from request handlers: a
+  node's health, applied generation and hop errors come from its Agent's
+  report, and its traffic from the counters the nodes push.
+- **Contract freeze (`forward.v1`).** `anixops.forward.v1` has been binding
+  since F3a: additions only. Never remove, renumber or retype a field,
+  message, RPC or enum value, never edit a line of
+  `contracts/proto/descriptors.golden` by hand, and keep
+  `internal/tests/protocompat` and `config/scripts/check_proto_golden.py`
+  green (its `DRAFT_PACKAGES` stays empty). The `forward.v1` Hello attribute
+  and the `anixops.nodeconfig/v2` member are wire contracts with deployed
+  Agents: change them only additively, with both sides' checks in
+  `sdk/forward/wire`. Regenerate with `bash sdk/api/forward/gen.sh` and
+  update the planner goldens only for an intended plan change, saying why in
+  the PR.
+- **Privileges and ownership (H13).** A driver touches only objects it owns
+  and marks: the nftables driver the `inet anixops_fwd` table, its tc
+  handles and its sysctl drop-in; the gost driver the `anixops-gost` unit
+  and its files. A foreign object is never changed (`ErrNotOwned`,
+  `ErrConflict`). The Agent runs as a dedicated user with ambient
+  `CAP_NET_ADMIN` and `CAP_NET_BIND_SERVICE` in the systemd sandbox of
+  forward-sdk.md section 14; gost runs as its own user with
+  `CAP_NET_BIND_SERVICE` only; root is only for the installer and the
+  signed-artifact updater unit. Uninstall and the v4.2 cleanup remove
+  exactly what we installed plus the named legacy tables.
+- **Link certificates (H28).** Node-to-node encryption uses per-node link
+  certificates from a dedicated forward link CA, a separate root that signs
+  nothing else (DNS name = the node's identity name such as `forward-41`,
+  URI = its SPIFFE identity, serverAuth and clientAuth, 7 days, renewed
+  with the Agent certificate). gost holds only the link certificate and the
+  key the Agent generates for it, never the Agent's Control key; a link
+  certificate never authenticates to Control. The desired state names
+  identities, never keys or other secrets, and no v4 answer carries a node
+  credential.
+- **Editions (H23).** Routes, hops, the nftables, gost and AnixOps engines,
+  limits, counters, load balancing, two-level failover, the circuit
+  breaker, latency, diagnosis, entry HA via DNS, one-command onboarding and
+  staged upgrades are in both editions. User self-service forwarding,
+  forwarding plans, auto-renewal, billing multipliers and resellers are
+  commercial (v4.3 and later); their API prefixes
+  (`/api/v4/forward/self/`, `/plans/`, `/multipliers/`) are reserved in
+  `config/editions.json` and must not appear in the community edition.
+- **Security defaults.** Targets are `PUBLIC_ONLY` unless an administrator
+  route says `ALLOW_PRIVATE` (never loopback, never on a user's route);
+  Control checks at save time and the Agent re-checks every DNS answer.
+  Relay and exit listeners admit only `ingress_sources`; the planner never
+  allocates reserved ports (SSH, the Agent's, the node's list).
+- **The legacy runtime is frozen.** The v4.1 flux tables (`v2_forward`,
+  `v2_forward_tunnel`, `v2_forward_user_tunnel`, `v2_speed_limit`,
+  `v2_forward_rule`, `v2_forward_runtime_job`, ...), their GORM models, the
+  NodeX, local Ansible and clean agent runtimes and the remaining forward v2
+  routes (all `kernel-owned`, served by the kernel) exist only until the
+  legacy cleanup (F5c) archives the data and drops the tables (IRREVERSIBLE,
+  gate H15). Add no feature, route, page or column to them, do not migrate
+  their data into the new model, and never let the forward package adopt or
+  read a flux table again (its manifest declares only `kernel.forward.v1`). `Node` (`/admin/nodes`, proxy
+  service) and the forwarding inventory (`/admin/forward/inventory`) are
+  different resources; never mix them in copy, validation or docs.
+- **Docs to update together.** A forwarding change updates
+  `docs/architecture/forward-sdk.md` (the design and its status),
+  `docs/forwarding/v4-api.md` (API changes), `docs/guide/forwarding.md` (the
+  pages) and `docs/UPGRADE.md` (operator-visible changes) in the same PR;
+  Agent-side behaviour also updates `sdk/api/agent/v1/PROTOCOL.md` (the
+  data plane, the forward diagnostic checks and the forward link
+  certificates). In the PR description, say whether the change affects the
+  `forward.v1` contract, the planner's output (goldens), a driver, or the
+  legacy runtime.
+- **Validate** with `GOWORK=off go -C sdk test ./forward/... ./api/forward/...`,
+  `GOWORK=off go test ./internal/kernelforward ./packages/forward/...
+  ./internal/tests/protocompat`,
+  `python3 config/scripts/check_proto_golden.py --base origin/go_dev`, and
+  for UI changes `cd web && npm test && npm run build`.
 
 ## Operator Experience And Root Hygiene
 
@@ -367,9 +419,8 @@ The `/admin/forward*` pages clone upstream
 - Re-check UTF-8 after editing Chinese copy in `web/src/views/`,
   `web/src/components/`, `web/src/layouts/`, `internal/handler/` (Swagger
   annotations flow into `docs/swagger.*`), `docs/`, and `AGENTS.md`. For a UI
-  sweep start with `web/src/layouts/AdminLayout.vue`,
-  `web/src/components/admin/ForwardSuiteNav.vue`, and the forward pages in
-  `web/src/views/admin/` (`Forward.vue`, `Tunnel.vue`, `Limit.vue`, `ForwardNodes.vue`).
+  sweep start with `web/src/layouts/AdminLayout.vue`, the locale modules in
+  `web/src/locales/`, and the forwarding pages in `web/src/views/admin/forward/`.
 - 对话框关闭按钮统一使用 `×` 或 `✕`。
 - In change notes, separate terminal display problems from real corruption.
 - `python3 config/scripts/check_mojibake.py` (CI "Documentation Sync Check")

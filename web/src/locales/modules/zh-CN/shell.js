@@ -28,9 +28,6 @@ export default {
         knowledge: '帮助中心内容',
         nodes: '节点',
         forward: '转发',
-        forwardNodes: '转发节点',
-        forwardLegacy: '转发（旧版）',
-        forwardNodesLegacy: '转发节点（旧版）',
         agents: 'NodeX Agents',
         plugins: '插件中心',
         deployments: '部署编排',
@@ -57,11 +54,6 @@ export default {
         plans: '套餐',
         orders: '订单'
       }
-    },
-    forwardNav: {
-      label: '转发套件',
-      more: '更多',
-      moreLabel: '更多转发工具'
     },
     search: {
       button: '搜索或跳转…',
@@ -112,7 +104,6 @@ export default {
       actions: {
         addNode: '添加节点',
         addUser: '添加用户',
-        forwardWizard: '转发快速向导',
         newForwardRoute: '新建转发路由',
         themeLight: '切换到浅色外观',
         themeDark: '切换到深色外观',

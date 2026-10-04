@@ -1,14 +1,12 @@
 // Messages for the admin pages other than the dashboard (src/views/admin
-// and the forward suite). src/i18n.js loads them before the first such
+// and the forwarding area). src/i18n.js loads them before the first such
 // page opens (router/index.js), so an admin's first visit, the
 // dashboard, does not download them. The shell's messages are in
 // src/locales/zh-CN.admin.js; the two groups share no message key.
-import runtimePages from './modules/zh-CN/runtimePages'
 import networkPages from './modules/zh-CN/networkPages'
 import miscPages from './modules/zh-CN/miscPages'
 import adminSupportPages from './modules/zh-CN/adminSupportPages'
 import adminNodes from './modules/zh-CN/adminNodes'
-import forwardNodesPage from './modules/zh-CN/forwardNodesPage'
 import adminSubscriptionGroups from './modules/zh-CN/adminSubscriptionGroups'
 import forwardV4 from './modules/zh-CN/forwardV4'
 import forwardDns from './modules/zh-CN/forwardDns'
@@ -17,87 +15,12 @@ export default {
   ...adminSubscriptionGroups,
   ...forwardV4,
   ...forwardDns,
-  ...runtimePages,
   ...networkPages,
   ...miscPages,
   ...adminSupportPages,
-  ...forwardNodesPage,
-  forwardWizard: {
-    title: '转发配置向导',
-    subtitle: '按步骤创建节点、隧道和转发，不用在多个页面之间来回跳转',
-    loading: '正在加载运行模式…',
-    stepsLabel: '配置步骤',
-    stepCount: '第 {current} 步，共 {total} 步',
-    stepDone: '（已完成）',
-    back: '上一步',
-    next: '下一步',
-    shared: {
-      existingLabel: '已有可复用的记录',
-      useExisting: '使用现有'
-    },
-    steps: {
-      mode: {
-        title: '选择转发方式',
-        chooseLabel: '转发方式',
-        intro: '选一种转发方式，系统会自动配置好对应的运行时后端和隧道类型，无需分别理解这两个概念。',
-        cards: {
-          local: {
-            label: '本地端口转发',
-            description: '直接在 Ansible 管理的机器上转发，无需中转节点。'
-          },
-          gostSingle: {
-            label: '中转 · 单节点转发',
-            description: '通过一个 NodeX 节点转发，不做协议封装。'
-          },
-          gostTunnel: {
-            label: '中转 · 隧道转发',
-            description: '跨入口/出口两个节点转发，支持协议隐藏(tls/ws/grpc 等)。'
-          }
-        },
-        currentBadge: '当前生效',
-        nodeXSetupHint: '首次使用中转转发，需要先填写 NodeX 控制面信息才能继续。',
-        confirmAndContinue: '确认并继续'
-      },
-      machine: {
-        title: '机器或节点',
-        intro: '先注册一台执行机器或节点，后面的隧道会用到它。',
-        createAndContinue: '创建并继续'
-      },
-      node: {
-        intro: '先注册一个 NodeX 节点，后面的隧道会用到它。',
-        createAndContinue: '创建并继续',
-        tokenNotice: '这是节点「{name}」的 API Token，只显示这一次，请立即复制。'
-      },
-      tunnel: {
-        title: '隧道',
-        intro: '基于上一步的节点创建隧道，隧道是转发条目的必选项。',
-        inheritedNodeHint: '已自动带入上一步创建的节点，无需重复选择。',
-        createAndContinue: '创建并继续'
-      },
-      forward: {
-        title: '转发',
-        intro: '基于上一步的隧道创建实际的转发条目，填好目标地址即可生效。',
-        inheritedTunnelHint: '已自动带入上一步创建的隧道，无需重复选择。',
-        createAndFinish: '创建并完成'
-      },
-      done: {
-        title: '完成',
-        summary: '转发「{name}」已创建成功，链路已打通。',
-        nextTitle: '接下来',
-        gotoForward: '前往流量转发管理',
-        gotoTunnel: '前往隧道管理',
-        gotoNode: '前往机器/节点管理',
-        createAnother: '再建一条转发'
-      }
-    }
-  },
   runtime: {
     shared: {
-      panelConfig: '\u9762\u677f\u914d\u7f6e',
       reachability: '\u53ef\u8fde\u901a\u6027',
-      runtimeReady: '\u8fd0\u884c\u65f6\u5c31\u7eea',
-      executor: '\u6267\u884c\u5668',
-      files: '\u6587\u4ef6',
       warnings: '\u8b66\u544a',
       powerShell: 'PowerShell',
       bash: 'Bash',
@@ -106,606 +29,62 @@ export default {
       doctorOutput: 'Doctor \u8f93\u51fa',
       doctorNotExecuted: '\u5c1a\u672a\u6267\u884c Doctor\u3002',
       refreshStatus: '\u5237\u65b0\u72b6\u6001',
-      runDoctor: '\u8fd0\u884c Doctor',
       runningDoctor: '\u6267\u884c\u4e2d...',
       loading: '\u52a0\u8f7d\u4e2d...',
       yes: '\u662f',
       no: '\u5426',
       present: '\u5b58\u5728',
       missing: '\u7f3a\u5931',
-      reachable: '\u53ef\u8fde\u901a',
       notReady: '\u672a\u5c31\u7eea',
       ready: '\u5c31\u7eea',
       unavailable: '\u4e0d\u53ef\u7528',
-      pending: '\u5f85\u5904\u7406',
-      running: '\u8fd0\u884c\u4e2d',
-      success: '\u6210\u529f',
-      failed: '\u5931\u8d25',
-      unknown: '\u672a\u77e5',
-      online: '\u5728\u7ebf',
-      offline: '\u79bb\u7ebf',
       enabled: '\u5df2\u542f\u7528',
       disabled: '\u5df2\u7981\u7528'
     },
     localRuntime: {
-      heroTextPrimary: '\u8be5\u9875\u9762\u53ea\u7ba1\u7406\u9762\u677f\u4e3b\u673a\u4e0a\u7684 Ansible \u6267\u884c\u5668\u3002\u5b83\u662f\u9762\u677f\u4fa7\u8f6c\u53d1\u7684\u65e0\u72b6\u6001\u8fd0\u884c\u65f6\u8def\u5f84\uff0c\u4e0d\u9700\u8981\u6301\u7eed\u7684 NodeX \u63a7\u5236\u9762\u6216 Node-Agent \u8fde\u63a5\u3002',
-      heroTextSecondary: '\u540e\u7aef\u4e3a nftables / Ansible\uff0c\u9762\u677f\u4fa7\u8f6c\u53d1\u7684\u65e0\u72b6\u6001\u63a7\u5236\u8def\u5f84\u3002',
-      saveActivate: '\u4fdd\u5b58\u5e76\u542f\u7528\u672c\u5730\u8fd0\u884c\u65f6',
-      activeBannerTitle: '\u672c\u5730\u8fd0\u884c\u65f6\u5df2\u542f\u7528',
-      standbyBannerTitle: '\u672c\u5730\u8fd0\u884c\u65f6\u5904\u4e8e\u5f85\u547d',
-      activeBannerText: '\u5f53\u524d\u8f6c\u53d1\u4efb\u52a1\u4f7f\u7528 {backend}\u3002SSH \u4f20\u8f93\u548c\u63d0\u6743\u7b56\u7565\u90fd\u4ece\u8fd9\u4efd Ansible \u8fd0\u884c\u65f6\u914d\u7f6e\u89e3\u6790\u3002',
-      standbyBannerText: 'NodeX/gost \u4ecd\u7136\u662f\u5168\u5c40\u6d3b\u8dc3\u8fd0\u884c\u65f6\u3002\u4f60\u4ecd\u53ef\u5148\u5728\u8fd9\u91cc\u9884\u6f14\u548c\u9a8c\u8bc1\u672c\u5730 Ansible \u8fd0\u884c\u65f6\uff0c\u518d\u5207\u6362\u56de\u53bb\u3002',
-      configTitle: '\u9762\u677f\u4e3b\u673a Ansible \u6267\u884c\u5668',
-      configCopy: 'Ansible \u6a21\u5f0f\u662f\u65e0\u72b6\u6001\u7684\uff1a\u9762\u677f\u53ea\u5728 tunnel \u548c forward \u8bb0\u5f55\u4e2d\u4fdd\u5b58\u6267\u884c\u8282\u70b9\u6807\u8bc6\uff0cinventory\u3001playbook\u3001sudo \u548c SSH \u884c\u4e3a\u90fd\u5728\u8fd9\u91cc\u914d\u7f6e\u3002',
-      recommended: '\u63a8\u8350',
-      legacy: '\u65e7\u517c\u5bb9',
-      executorEyebrow: '\u6267\u884c\u5668',
-      defaultsAction: '\u4f7f\u7528\u540e\u7aef\u9ed8\u8ba4\u503c',
-      executorHint: '\u4fdd\u5b58\u540e\u4f1a\u5c06 {backend} \u8bbe\u4e3a\u5f53\u524d\u672c\u5730 runtime\uff0c\u5e76\u5199\u5165 `forward.runtime_backend={backendKey}`\u3001`forward.runtime.ansible.backend={backendKey}` \u4ee5\u53ca `forward.runtime.nodex_mode=false`\u3002',
       fields: {
         inventory: 'Inventory',
-        applyPlaybook: '\u4e0b\u53d1 Playbook',
-        removePlaybook: '\u79fb\u9664 Playbook',
         command: '\u547d\u4ee4',
-        workingDir: '\u5de5\u4f5c\u76ee\u5f55',
-        targetPattern: '\u76ee\u6807\u6a21\u5f0f',
-        timeoutSeconds: '\u8d85\u65f6\uff08\u79d2\uff09',
-        ansibleConfig: 'ANSIBLE_CONFIG',
-        useBecome: '\u5728\u6267\u884c\u8282\u70b9\u4e0a\u4f7f\u7528 sudo / become',
-        extraVarsJson: '\u989d\u5916 vars JSON',
-        environmentJson: '\u73af\u5883\u53d8\u91cf JSON',
-        generatedJson: '\u751f\u6210\u7684\u8fd0\u884c\u65f6 JSON'
-      },
-      extraVarsHint: '\u540e\u7aef\u76f8\u5173\u5b57\u6bb5\uff08\u6bd4\u5982 firewall driver\uff09\u4f1a\u7531\u6240\u9009 backend \u81ea\u52a8\u6ce8\u5165\u3002',
-      environmentHint: '\u9762\u677f\u4e3b\u673a\u6267\u884c\u5668\u8fdb\u7a0b\u7684\u989d\u5916\u73af\u5883\u53d8\u91cf\u3002',
-      generatedHint: 'JSON \u8d1f\u8f7d\u7531\u4e0a\u9762\u7684\u7ed3\u6784\u5316\u5b57\u6bb5\u751f\u6210\uff0c\u5e76\u5b58\u5165 `forward.runtime.ansible.config`\u3002',
-      probeTitle: '\u6267\u884c\u5668\u53ef\u8fde\u901a\u6027\u4e0e\u8fd0\u884c\u65f6\u5c31\u7eea\u5ea6',
-      noStatus: '\u8fd8\u672a\u52a0\u8f7d\u672c\u5730\u8fd0\u884c\u65f6\u72b6\u6001\u3002',
-      cards: {
-        localActiveValue: '\u672c\u5730\u8fd0\u884c\u65f6\u5df2\u542f\u7528',
-        standbyValue: '\u5f85\u547d\u914d\u7f6e',
-        backend: '\u540e\u7aef',
-        preferredLocalBackend: '\u9996\u9009\u672c\u5730 backend',
-        attachment: '\u6302\u8f7d\u6a21\u5f0f',
-        runtimeReady: '\u8fd0\u884c\u65f6\u5c31\u7eea',
-        firewallDriver: 'Firewall driver',
-        commandFound: '\u627e\u5230\u547d\u4ee4',
-        become: 'Become',
-        inventory: 'Inventory',
-        applyPlaybook: '\u4e0b\u53d1 Playbook',
-        removePlaybook: '\u79fb\u9664 Playbook',
         workingDir: '\u5de5\u4f5c\u76ee\u5f55'
       },
-      latestJobs: '\u6700\u65b0 {backend} \u4efb\u52a1',
-      noJobs: '\u6682\u65e0\u672c\u5730\u8fd0\u884c\u65f6\u4efb\u52a1\u3002',
+      cards: {
+        commandFound: '\u627e\u5230\u547d\u4ee4'
+      },
       backends: {
         nftables: {
-          label: 'nftables / Ansible',
-          description: '\u73b0\u4ee3 Linux \u4e3b\u673a\u5e94\u4f18\u5148\u4f7f\u7528 nftables\u3002'
+          label: 'nftables / Ansible'
         }
-      },
-      errors: {
-        savedConfigInvalid: '\u5df2\u4fdd\u5b58\u7684\u672c\u5730\u8fd0\u884c\u65f6\u914d\u7f6e\u65e0\u6548\uff0c\u5df2\u56de\u9000\u5230\u9ed8\u8ba4\u503c\uff0c\u8bf7\u91cd\u65b0\u4fdd\u5b58\u4ee5\u4fee\u590d\u3002',
-        invalidJson: '{label} \u5fc5\u987b\u662f\u6709\u6548 JSON',
-        invalidObject: '{label} \u5fc5\u987b\u662f JSON \u5bf9\u8c61',
-        invalidPreview: '\u8fd0\u884c\u65f6\u914d\u7f6e\u65e0\u6548\uff1a{message}',
-        invalidRuntimeJson: '\u672c\u5730\u8fd0\u884c\u65f6 JSON \u65e0\u6548',
-        saveFailed: '\u4fdd\u5b58\u672c\u5730\u8fd0\u884c\u65f6\u914d\u7f6e\u5931\u8d25',
-        fetchStatusFailed: '\u83b7\u53d6\u672c\u5730\u8fd0\u884c\u65f6\u72b6\u6001\u5931\u8d25',
-        doctorFailed: '\u672c\u5730\u8fd0\u884c\u65f6 Doctor \u6267\u884c\u5931\u8d25'
       }
     },
     nodeX: {
-      heroTextPrimary: '\u8fd9\u662f\u7ed9\u6709\u72b6\u6001 NodeX/gost \u8def\u5f84\u7684\u4e13\u7528\u64cd\u4f5c\u5165\u53e3\u3002\u5373\u4f7f\u5168\u5c40 runtime backend \u4ecd\u662f\u672c\u5730 Ansible\uff0c\u8fd9\u4e2a\u9875\u9762\u4e5f\u4f1a\u76f4\u63a5\u63a2\u6d4b\u5df2\u914d\u7f6e\u7684 NodeX \u63a7\u5236\u9762\u3002',
-      heroTextSecondary: '\u672c\u5730 Ansible \u6267\u884c\u73b0\u5728\u653e\u5728 Local Runtime \u548c Ansible Machines \u4e0b\u3002\u8282\u70b9\u201c\u5728\u7ebf\u201d\u4ecd\u7136\u53ea\u8868\u793a TCP \u53ef\u8fde\u901a\uff0c\u4e0d\u4ee3\u8868 NodeX \u6216 relay gost API \u5df2\u7ecf\u6302\u8f7d\u6210\u529f\u3002',
       saveLoading: '\u4fdd\u5b58\u4e2d...',
       save: '\u4fdd\u5b58 NodeX \u914d\u7f6e',
-      enabledBannerTitle: 'NodeX \u6a21\u5f0f\u5df2\u542f\u7528',
-      disabledBannerTitle: 'NodeX \u6a21\u5f0f\u672a\u542f\u7528',
-      enabledBannerText: '\u9762\u677f\u8f6c\u53d1\u4efb\u52a1\u53ef\u4ee5\u7ecf\u7531 NodeX/gost\uff0c\u4f46\u6bcf\u4e2a runtime \u4efb\u52a1\u4ecd\u7136\u5fc5\u987b\u6210\u529f\u624d\u4ee3\u8868 relay \u771f\u6b63\u6302\u8f7d\u5b8c\u6210\u3002',
-      disabledBannerText: '\u4f60\u53ef\u4ee5\u5148\u5728\u8fd9\u91cc\u9a8c\u8bc1\u5df2\u914d\u7f6e\u7684 NodeX \u63a7\u5236\u9762\uff0c\u51c6\u5907\u597d\u540e\u518d\u5207\u6362\u5168\u5c40 backend\u3002',
-      configTitle: 'NodeX \u63a7\u5236\u9762',
-      enableModeTitle: '\u542f\u7528 NodeX \u6a21\u5f0f',
-      enableModeHint: '\u4f1a\u5199\u5165 `forward.runtime.nodex_mode=true` \u548c `forward.runtime_backend=gost`\u3002',
-      fields: {
-        baseUrl: 'NodeX Base URL',
-        baseUrlHint: '\u8fd9\u91cc\u5fc5\u987b\u6307\u5411 NodeX \u63a7\u5236\u9762\uff0c\u4e0d\u662f relay gost API \u672c\u8eab\u3002',
-        token: 'NodeX Token',
-        tokenHint: '\u9700\u4e0e NodeX \u63a7\u5236\u9762 `--forward-api-token` \u7684\u503c\u4e00\u81f4\u3002',
-        timeout: '\u8d85\u65f6\uff08\u79d2\uff09',
-        timeoutHint: '\u9762\u677f\u63a2\u6d4b\u6216\u6267\u884c NodeX runtime \u8bf7\u6c42\u65f6\u4f1a\u4f7f\u7528\u8be5\u8d85\u65f6\u503c\u3002'
-      },
-      probeTitle: '\u5065\u5eb7\u5ea6\u4e0e\u8fd0\u884c\u65f6\u72b6\u6001',
-      probeCopy: '\u8fd9\u4e9b\u68c0\u67e5\u603b\u662f\u76f4\u63a5\u6307\u5411\u5df2\u914d\u7f6e\u7684 NodeX \u63a7\u5236\u9762\uff0c\u4e0d\u4f9d\u8d56\u5f53\u524d\u5168\u5c40 runtime backend\u3002',
-      noStatus: '\u8fd8\u672a\u52a0\u8f7d NodeX \u8fd0\u884c\u65f6\u72b6\u6001\u3002',
       cards: {
-        modeOn: 'NodeX \u6a21\u5f0f\u5df2\u5f00',
-        modeOff: 'NodeX \u6a21\u5f0f\u5df2\u5173',
-        backend: '\u540e\u7aef',
         baseUrl: 'Base URL',
         tokenConfigured: 'Token \u5df2\u914d\u7f6e',
-        timeout: '\u8d85\u65f6',
-        health: '\u5065\u5eb7\u68c0\u67e5',
-        http: 'HTTP',
-        version: '\u7248\u672c',
-        executePath: '\u6267\u884c\u8def\u5f84'
+        health: '\u5065\u5eb7\u68c0\u67e5'
       },
-      jobsTitle: '\u6700\u65b0 gost \u4efb\u52a1',
-      jobsCopy: '\u6700\u8fd1\u7684\u9762\u677f\u4fa7 runtime \u5ba1\u8ba1\u8bb0\u5f55\uff0c\u5df2\u6309 `gost` backend \u8fc7\u6ee4\u3002',
-      noJobs: '\u6682\u65e0 gost \u8fd0\u884c\u65f6\u4efb\u52a1\u3002',
       backends: {
         gost: 'gost / NodeX'
-      },
-      errors: {
-        baseUrlRequired: '\u542f\u7528 NodeX \u6a21\u5f0f\u65f6\u5fc5\u987b\u586b\u5199 NodeX Base URL',
-        tokenRequired: '\u542f\u7528 NodeX \u6a21\u5f0f\u65f6\u5fc5\u987b\u586b\u5199 NodeX Token',
-        saveFailed: '\u4fdd\u5b58 NodeX \u914d\u7f6e\u5931\u8d25',
-        fetchStatusFailed: '\u83b7\u53d6 NodeX \u8fd0\u884c\u65f6\u72b6\u6001\u5931\u8d25',
-        doctorFailed: 'NodeX runtime Doctor \u6267\u884c\u5931\u8d25'
       }
     },
     ansibleMachines: {
-      heroText: '\u8fd9\u4e2a\u9875\u9762\u53ea\u7528\u4e8e\u65e0\u72b6\u6001 Ansible \u6267\u884c\u673a\u5668\u3002\u8fd9\u4e9b\u4e3b\u673a\u4e0d\u9700\u8981 Node-Agent\uff0c\u4e5f\u4e0d\u9700\u8981\u6301\u7eed\u63a7\u5236\u9762\u8fde\u63a5\u3002',
-      addMachine: '\u6dfb\u52a0\u673a\u5668',
-      table: {
-        reachability: '\u53ef\u8fbe\u6027',
-        lastResult: '\u6700\u8fd1\u7ed3\u679c'
-      },
-      stats: {
-        machines: '\u673a\u5668',
-        online: '\u5728\u7ebf',
-        enabled: '\u5df2\u542f\u7528'
-      },
-      sectionTitle: '\u6267\u884c\u76ee\u6807',
-      sectionCopy: '\u8fd9\u4e9b\u8bb0\u5f55\u53ea\u7528\u4e8e\u672c\u5730 Ansible \u8fd0\u884c\u65f6\u8bc6\u522b\u6267\u884c\u76ee\u6807\u4e3b\u673a\uff0c\u4e0d\u5c5e\u4e8e NodeX \u63a7\u5236\u9762\u8282\u70b9\u3002',
-      inventoryHint: 'SSH \u7528\u6237\u540d\u3001\u5bc6\u7801\u548c\u79c1\u94a5\u4e0d\u5728\u6b64\u9875\u9762\u4fdd\u5b58\uff0c\u8bf7\u5728 Ansible inventory\u3001playbook \u6216 Local Runtime \u73af\u5883\u914d\u7f6e\u4e2d\u63d0\u4f9b\u3002',
-      filterLabel: '\u72b6\u6001',
-      filters: {
-        online: '\u5728\u7ebf',
-        offline: '\u79bb\u7ebf'
-      },
-      empty: '\u8fd8\u6ca1\u6709 Ansible \u6267\u884c\u673a\u5668',
-      meta: {
-        regionIsp: '\u533a\u57df / ISP',
-        currentConn: '\u5f53\u524d\u8fde\u63a5',
-        traffic: '\u6d41\u91cf'
-      },
-      actions: {
-        edit: '\u7f16\u8f91',
-        check: '\u5065\u5eb7\u68c0\u67e5',
-        checking: '\u68c0\u67e5\u4e2d...',
-        sync: '\u540c\u6b65\u7edf\u8ba1',
-        syncing: '\u540c\u6b65\u4e2d...',
-        disable: '\u7981\u7528',
-        enable: '\u542f\u7528',
-        delete: '\u5220\u9664',
-        updating: '\u6b63\u5728\u66f4\u65b0 {name}\u2026'
-      },
       modal: {
-        titleEdit: '\u7f16\u8f91 Ansible \u673a\u5668',
-        titleAdd: '\u6dfb\u52a0 Ansible \u673a\u5668',
-        deleteTitle: '\u5220\u9664 Ansible \u673a\u5668 {name}\uff1f',
-        deleteConfirm: '\u5b83\u5c06\u4ece Ansible \u6267\u884c\u673a\u7fa4\u4e2d\u79fb\u9664\u3002\u6b64\u64cd\u4f5c\u65e0\u6cd5\u64a4\u9500\u3002',
-        deleteAction: '\u5220\u9664\u673a\u5668',
-        saveLoading: '\u4fdd\u5b58\u4e2d...',
-        save: '\u4fdd\u5b58',
-        cancel: '\u53d6\u6d88'
-      },
-      messages: {
-        saved: '\u5df2\u4fdd\u5b58 {name}',
-        deleted: '\u5df2\u5220\u9664 {name}'
-      },
-      fields: {
-        name: '\u540d\u79f0',
-        host: '\u4e3b\u673a',
-        reachabilityPort: '\u8fde\u901a\u6027\u7aef\u53e3',
-        reachabilityHelp: '\u63a7\u5236\u9762\u53ea\u68c0\u67e5 host:port \u80fd\u5426\u5efa\u7acb TCP \u8fde\u63a5\u3002',
-        weight: '\u6743\u91cd',
-        region: '\u533a\u57df',
-        isp: 'ISP'
-      },
-      placeholders: {
-        name: 'relay-exec-01',
-        host: '1.2.3.4',
-        region: 'HK / JP / US',
-        isp: 'CMI / NTT / Cogent'
-      },
-      results: {
-        latency: '\u5ef6\u8fdf {value} ms',
-        reachable: '\u673a\u5668\u53ef\u8fde\u901a',
-        unavailable: '\u673a\u5668\u4e0d\u53ef\u7528',
-        synced: '\u7edf\u8ba1\u5df2\u540c\u6b65'
-      },
-      errors: {
-        required: '\u540d\u79f0\u3001\u4e3b\u673a\u548c\u8fde\u901a\u6027\u7aef\u53e3\u4e3a\u5fc5\u586b\u9879\u3002',
-        saveFailed: '\u4fdd\u5b58\u673a\u5668\u5931\u8d25',
-        loadFailed: '\u52a0\u8f7d Ansible \u673a\u5668\u5931\u8d25',
-        detailFailed: '\u52a0\u8f7d\u673a\u5668\u8be6\u60c5\u5931\u8d25',
-        deleteFailed: '\u5220\u9664\u673a\u5668\u5931\u8d25',
-        checkFailed: '\u5065\u5eb7\u68c0\u67e5\u5931\u8d25',
-        syncFailed: '\u540c\u6b65\u673a\u5668\u7edf\u8ba1\u5931\u8d25',
-        toggleFailed: '\u5207\u6362\u673a\u5668\u72b6\u6001\u5931\u8d25'
-      }
-    },
-    forward: {
-      title: '流量转发管理',
-      modeLabelNodeX: '\u5f53\u524d\u8fd0\u884c\u65f6\uff1aNodeX / gost',
-      modeLabelLocal: '当前运行时：本地 / {backend}',
-      modeSummaryNodeX: '请在「NodeX 运行时」页面配置 NodeX 控制面地址、令牌和 gost 运行检查。',
-      modeSummaryLocal: '请在「本地运行时」页面配置 Ansible 主机清单、Playbook 和面板主机上的执行器。',
-      modeCompatibilityHint: '编辑转发时，可选的隧道会按当前运行时自动筛选：本地 Ansible 运行时只能使用端口转发隧道，NodeX/gost 运行时可以使用兼容的端口转发和隧道转发。',
-      nftablesHint: '当前运行时为 nftables / Ansible：「主备」和「Hash」策略只转发到第一个目标，限速不会生效。要在多个目标间分流请用「轮询」或「随机」，需要限速请使用 NodeX 运行时。',
-      nftablesStrategyHint: '在 nftables / Ansible 运行时上，「主备」和「Hash」只使用第一个目标。',
-      modeHintNodeX: 'NodeX/gost \u6a21\u5f0f\u4fdd\u7559 ingress \u548c exit \u8bed\u4e49\u3002\u5373\u4f7f\u5df2\u9009\u62e9 tunnel\uff0c\u4e5f\u4ecd\u9700 NodeX runtime \u4efb\u52a1\u6267\u884c\u6210\u529f\uff0c\u8f6c\u53d1\u624d\u7b97\u771f\u6b63\u6302\u8f7d\u3002',
-      modeHintLocal: '\u672c\u5730 Ansible \u6a21\u5f0f\u53ea\u8bb0\u5f55\u6267\u884c\u8282\u70b9\u3002SSH \u8bbf\u95ee\u4f9d\u8d56\u5df2\u914d\u7f6e\u7684 ansible inventory \u548c local runtime \u53c2\u6570\uff0c\u4e0d\u6765\u81ea NodeX \u62d3\u6251\u8bb0\u5f55\u3002',
-      tunnelHintNodeX: '{name} \u5c06\u901a\u8fc7 NodeX/gost \u6302\u8f7d\u3002\u9762\u677f\u4fa7\u201c\u5728\u7ebf\u201d\u6216\u72b6\u6001\u68c0\u67e5\u4e0d\u80fd\u8bc1\u660e\u8fdc\u7a0b relay \u5df2\u5b8c\u6210\u6302\u8f7d\u3002',
-      tunnelHintLocal: '{name} \u53ea\u4f1a\u5728\u6267\u884c\u8282\u70b9\u4e0a\u88ab\u5e94\u7528\u3002\u8be5\u8def\u5f84\u4fdd\u6301\u65e0\u72b6\u6001\uff0c\u76f4\u5230\u6392\u961f\u7684 ansible \u4efb\u52a1\u6210\u529f\u7ed3\u675f\u3002',
-      tunnelHintLocalIncompatible: '{name} \u662f Tunnel Forward \u96a7\u9053\uff0c\u53ea\u80fd\u7531 NodeX/gost \u6302\u8f7d\uff0c\u672c\u5730 Ansible runtime \u4e0d\u80fd\u76f4\u63a5\u9644\u7740\u5b83\u3002',
-      portRange: '\u53ef\u7528\u7aef\u53e3\u8303\u56f4\uff1a{start} - {end}',
-      portHintNodeX: '\u7aef\u53e3\u7559\u7a7a\u65f6\uff0c\u9762\u677f\u4f1a\u4ece tunnel \u5165\u53e3\u8282\u70b9\u7aef\u53e3\u6bb5\u4e2d\u81ea\u52a8\u5206\u914d\u3002',
-      portHintLocal: '\u7aef\u53e3\u7559\u7a7a\u65f6\uff0c\u9762\u677f\u4f1a\u5728\u6240\u9009\u6267\u884c\u8282\u70b9\u4e0a\u81ea\u52a8\u5206\u914d\u3002',
-      runtimeLinks: '运行时页面',
-      loading: '\u6b63\u5728\u52a0\u8f7d\u8f6c\u53d1\u4e0e\u96a7\u9053\u6570\u636e...',
-      view: {
-        label: '视图',
-        directLabel: '直连',
-        groupedLabel: '分组'
-      },
-      actions: {
-        import: '\u5bfc\u5165',
-        export: '\u5bfc\u51fa',
-        add: '\u65b0\u589e',
-        edit: '\u7f16\u8f91',
-        diagnose: '\u8bca\u65ad',
-        delete: '\u5220\u9664',
-        copyAll: '\u590d\u5236\u5168\u90e8',
-        more: '更多操作',
-        moveUp: '上移',
-        moveDown: '下移'
-      },
-      bulk: {
-        resume: '恢复',
-        pause: '暂停',
-        export: '导出',
-        delete: '删除'
-      },
-      filters: {
-        search: '搜索',
-        searchPlaceholder: '规则、隧道、用户、地址或端口',
-        tunnel: '隧道',
-        allTunnels: '全部隧道',
-        status: '状态',
-        running: '运行中',
-        paused: '已暂停',
-        error: '错误'
-      },
-      table: {
-        label: '转发规则',
-        ruleName: '规则',
-        tunnel: '隧道',
-        ingress: '入口',
-        target: '目标',
-        policy: '策略',
-        status: '状态',
-        traffic: '流量',
-        copyAddress: '复制{title}：{address}',
-        toggleService: '{name} 的转发服务'
-      },
-      group: {
-        userTag: '用户',
-        summary: '{tunnels} 个隧道，{forwards} 个转发',
-        tunnelMeta: 'Tunnel #{id}',
-        runningCount: '{running}/{total} 运行中'
-      },
-      emptyGroupedTitle: '\u6682\u65e0\u8f6c\u53d1\u914d\u7f6e',
-      emptyGroupedText: '\u5f53\u524d\u7cfb\u7edf\u91cc\u8fd8\u6ca1\u6709\u4efb\u4f55\u517c\u5bb9 flux-panel \u7684\u8f6c\u53d1\u8bb0\u5f55\u3002',
-      emptyDirectTitle: '\u6682\u65e0\u8f6c\u53d1\u914d\u7f6e',
-      emptyDirectText: '\u521b\u5efa\u7b2c\u4e00\u6761\u8f6c\u53d1\u540e\uff0c\u8fd9\u91cc\u4f1a\u663e\u793a\u5f53\u524d\u8f6c\u53d1\u7684\u76f4\u8fde\u8868\u683c\u89c6\u56fe\u3002',
-      editor: {
-        titleEdit: '\u7f16\u8f91\u8f6c\u53d1',
-        titleAdd: '\u65b0\u589e\u8f6c\u53d1',
-        description: '流量从隧道入口进入，转到下面的目标地址。',
-        fields: {
-          name: '\u8f6c\u53d1\u540d\u79f0',
-          tunnel: '\u5173\u8054\u96a7\u9053',
-          ingressPort: '\u5165\u53e3\u7aef\u53e3',
-          interfaceName: '\u7f51\u5361\u540d\u79f0',
-          remoteAddress: '\u76ee\u6807\u5730\u5740',
-          strategy: '\u8c03\u5ea6\u7b56\u7565'
-        },
-        placeholders: {
-          name: '\u4f8b\u5982\uff1aHK-Web-01',
-          tunnel: '\u8bf7\u9009\u62e9\u96a7\u9053',
-          ingressPort: '\u7559\u7a7a\u81ea\u52a8\u5206\u914d',
-          interfaceName: '\u53ef\u9009\uff0c\u4f8b\u5982 eth0',
-          remoteAddress: '\u6bcf\u884c\u4e00\u4e2a\u76ee\u6807\uff0c\u4f8b\u5982\uff1a\n1.1.1.1:443\nexample.com:8443\n[2001:db8::1]:443'
-        },
-        remoteHint: '\u652f\u6301 IPv4:port\u3001domain:port\u3001[\u5b8c\u6574 IPv6]:port\u3002\u591a\u5730\u5740\u8bf7\u6bcf\u884c\u4e00\u4e2a\u3002',
-        submitUpdate: '\u4fdd\u5b58\u4fee\u6539',
-        submitCreate: '\u521b\u5efa\u8f6c\u53d1'
-      },
-      deleteModal: {
-        confirmText: '删除转发 {name}？',
-        hint: '常规删除失败时，会再询问是否强制删除。此操作无法撤销。',
-        confirmDelete: '删除转发',
-        forceDeleteTitle: '强制删除 {name}？',
-        forceDeleteAction: '强制删除',
-        forceDeleteMessage: '常规删除失败（{message}）。强制删除不会确认节点上的转发服务是否已移除。'
-      },
-      addressModal: {
-        copy: '\u590d\u5236',
-        titleWithCount: '{title} ({count})'
-      },
-      exportModal: {
-        title: '\u5bfc\u51fa\u8f6c\u53d1\u6570\u636e',
-        subtitle: '格式：兼容 relay-panel 的 JSON：{\'[{ "dest": ["host:port"], "listen_port": 10086, "name": "规则" }\'}]',
-        tunnelLabel: '\u9009\u62e9\u5bfc\u51fa\u96a7\u9053',
-        tunnelPlaceholder: '\u8bf7\u9009\u62e9\u96a7\u9053',
-        regenerate: '\u91cd\u65b0\u751f\u6210',
-        generate: '\u751f\u6210\u5bfc\u51fa\u6570\u636e',
-        selectionHint: '正在导出已选择的 {count} 条转发。',
-        dataLabel: '导出数据'
-      },
-      importModal: {
-        title: '\u5bfc\u5165\u8f6c\u53d1\u6570\u636e',
-        subtitle: '支持 relay-panel JSON 和旧格式 remoteAddr{\'|\'}name{\'|\'}inPort，inPort 可留空。',
-        subtitleSecondary: 'JSON 示例：{\'[{ "dest": ["3.3.3.3:3", "4.4.4.4:4"], "listen_port": 10086, "name": "业务入口" }\'}]',
-        tunnelLabel: '\u9009\u62e9\u5bfc\u5165\u96a7\u9053',
-        tunnelPlaceholder: '\u8bf7\u9009\u62e9\u96a7\u9053',
-        dataLabel: '\u5bfc\u5165\u6570\u636e',
-        placeholder: '{\'[{"dest":["example.com:8080"],"listen_port":10086,"name":"业务入口"}]\'}',
-        resultTitle: '\u5bfc\u5165\u7ed3\u679c',
-        resultSummary: '\u6210\u529f\uff1a{success} / \u603b\u8ba1\uff1a{total}',
-        statusSuccess: '\u6210\u529f',
-        statusFailed: '\u5931\u8d25',
-        startImport: '\u5f00\u59cb\u5bfc\u5165'
-      },
-      diagnosis: {
-        title: '\u8f6c\u53d1\u8bca\u65ad\u7ed3\u679c',
-        loading: '\u6b63\u5728\u8bca\u65ad\u8f6c\u53d1\u8fde\u63a5...',
-        connectionSuccess: '\u8fde\u63a5\u6210\u529f',
-        connectionFailed: '\u8fde\u63a5\u5931\u8d25',
-        nodeMeta: '{name} · {node}',
-        nodeMeta: '{name} · {node}',
-        nodeMeta: '{name} / {node}',
-        targetAddress: '\u76ee\u6807\u5730\u5740',
-        averageLatency: '\u5e73\u5747\u5ef6\u8fdf',
-        packetLoss: '\u4e22\u5305\u7387',
-        quality: '\u8d28\u91cf',
-        failedFallback: '\u8bca\u65ad\u5931\u8d25',
-        emptyTitle: '\u6682\u65e0\u8bca\u65ad\u6570\u636e',
-        emptyText: '\u53d1\u8d77\u4e00\u6b21\u8bca\u65ad\u540e\uff0c\u8fd9\u91cc\u4f1a\u5c55\u793a\u4e0e\u53c2\u8003\u9875\u4e00\u81f4\u7684\u7ed3\u679c\u5361\u7247\u3002',
-        rerun: '\u91cd\u65b0\u8bca\u65ad',
-        summary: '{passed}/{total} 项通过'
-      },
-      status: {
-        normal: '\u6b63\u5e38',
-        paused: '\u6682\u505c',
-        error: '\u5f02\u5e38',
-        unknown: '\u672a\u77e5'
-      },
-      runtimeStatus: {
-        pending: '\u5f85\u4e0b\u53d1',
-        running: '\u6267\u884c\u4e2d',
-        synced: '\u5df2\u540c\u6b65',
-        applied: '\u5df2\u5e94\u7528',
-        failed: '\u540c\u6b65\u5931\u8d25',
-        queuedSummary: '\u8fd0\u884c\u65f6\u4efb\u52a1\u5df2\u5165\u961f\uff0c\u7b49\u5f85\u6267\u884c\u5668\u5b8c\u6210\u3002',
-        runningSummary: '\u8fd0\u884c\u65f6\u4efb\u52a1\u6b63\u5728\u6267\u884c\u3002'
-      },
-      strategy: {
-        fifo: '\u4e3b\u5907',
-        round: '\u8f6e\u8be2',
-        rand: '\u968f\u673a',
-        hash: 'Hash',
-        unknown: '\u672a\u77e5'
-      },
-      quality: {
-        unknown: '\u672a\u77e5',
-        excellent: '\u4f18\u79c0',
-        veryGood: '\u5f88\u597d',
-        good: '\u826f\u597d',
-        fair: '\u4e00\u822c',
-        poor: '\u8f83\u5dee',
-        veryPoor: '\u5f88\u5dee'
-      },
-      labels: {
-        inbound: '\u5165',
-        outbound: '\u51fa'
-      },
-      references: {
-        tunnel: '\u96a7\u9053 #{id}',
-        node: '\u8282\u70b9 {id}',
-        node: '\u8282\u70b9 #{id}'
-      },
-      messages: {
-        loadForwardsFailed: '\u83b7\u53d6\u8f6c\u53d1\u5217\u8868\u5931\u8d25',
-        loadTunnelsFailed: '\u83b7\u53d6\u96a7\u9053\u5217\u8868\u5931\u8d25',
-        loadDataFailed: '\u52a0\u8f7d\u6570\u636e\u5931\u8d25',
-        unknownUser: '\u672a\u77e5\u7528\u6237',
-        nameRequired: '\u8bf7\u8f93\u5165\u8f6c\u53d1\u540d\u79f0',
-        nameLength: '\u8f6c\u53d1\u540d\u79f0\u957f\u5ea6\u5e94\u5728 2-50 \u4e2a\u5b57\u7b26\u4e4b\u95f4',
-        tunnelRequired: '\u8bf7\u9009\u62e9\u5173\u8054\u96a7\u9053',
-        remoteAddrRequired: '\u8bf7\u8f93\u5165\u8fdc\u7a0b\u5730\u5740',
-        remoteAddrLineInvalid: '\u7b2c {line} \u884c\u5730\u5740\u683c\u5f0f\u9519\u8bef',
-        portRange: '\u7aef\u53e3\u53f7\u5fc5\u987b\u5728 1-65535 \u4e4b\u95f4',
-        portRangeTunnel: '\u7aef\u53e3\u53f7\u5fc5\u987b\u5728 {start}-{end} \u8303\u56f4\u5185',
-        updated: '\u4fee\u6539\u6210\u529f',
-        created: '\u521b\u5efa\u6210\u529f',
-        actionFailed: '\u64cd\u4f5c\u5931\u8d25',
-        runtimeBusy: '\u5f53\u524d\u8fd0\u884c\u65f6\u4efb\u52a1\u4ecd\u5728\u6392\u961f\u6216\u6267\u884c\u4e2d\uff0c\u8bf7\u7b49\u5f85\u5b8c\u6210\u540e\u518d\u64cd\u4f5c',
-        invalidStatus: '\u8f6c\u53d1\u72b6\u6001\u5f02\u5e38\uff0c\u65e0\u6cd5\u64cd\u4f5c',
-        serviceChanged: '\u670d\u52a1\u53d8\u66f4\u5df2\u63d0\u4ea4',
-        servicePaused: '\u6682\u505c\u8bf7\u6c42\u5df2\u63d0\u4ea4',
-        networkActionFailed: '\u7f51\u7edc\u9519\u8bef\uff0c\u64cd\u4f5c\u5931\u8d25',
-        bulkActionComplete: '批量操作完成：成功 {success} 条，失败 {failed} 条',
-        bulkDeleteTitle: '删除选中的 {count} 条转发？',
-        bulkDeleteMessage: '批量模式下，常规删除失败的转发不会被强制删除。此操作无法撤销。',
-        bulkDeleteAction: '删除转发',
-        deleted: '\u5220\u9664\u6210\u529f',
-        forceDeleted: '\u5f3a\u5236\u5220\u9664\u6210\u529f',
-        forceDeleteFailed: '\u5f3a\u5236\u5220\u9664\u5931\u8d25',
-        deleteFailed: '\u5220\u9664\u5931\u8d25',
-        diagnosisFailed: '\u8bca\u65ad\u5931\u8d25',
-        diagnosisProcessingFailed: '\u8bca\u65ad\u8fc7\u7a0b\u4e2d\u53d1\u751f\u9519\u8bef',
-        diagnosisNetworkFailed: '\u7f51\u7edc\u9519\u8bef\uff0c\u8bca\u65ad\u5931\u8d25',
-        unableConnectServer: '\u65e0\u6cd5\u8fde\u63a5\u5230\u670d\u52a1\u5668',
-        contentCopied: '{label}\u5df2\u590d\u5236',
-        copyFailedHttp: '\u590d\u5236\u5931\u8d25\uff1aHTTP \u4e0b\u65e0\u6cd5\u590d\u5236\uff0c\u9700 HTTPS/\u53cd\u4ee3',
-        selectExportTunnel: '\u8bf7\u9009\u62e9\u8981\u5bfc\u51fa\u7684\u96a7\u9053',
-        noExportData: '\u6240\u9009\u96a7\u9053\u6ca1\u6709\u8f6c\u53d1\u6570\u636e',
-        exportFailed: '\u5bfc\u51fa\u5931\u8d25',
-        enterImportData: '\u8bf7\u8f93\u5165\u8981\u5bfc\u5165\u7684\u6570\u636e',
-        selectImportTunnel: '\u8bf7\u9009\u62e9\u8981\u5bfc\u5165\u7684\u96a7\u9053',
-        importCompleted: '\u5bfc\u5165\u6267\u884c\u5b8c\u6210',
-        importFailed: '\u5bfc\u5165\u8fc7\u7a0b\u4e2d\u53d1\u751f\u9519\u8bef',
-        importFormatError: '\u683c\u5f0f\u9519\u8bef\uff1a\u81f3\u5c11\u9700\u8981\u5305\u542b\u76ee\u6807\u5730\u5740\u548c\u8f6c\u53d1\u540d\u79f0',
-        importRequiredFields: '\u76ee\u6807\u5730\u5740\u548c\u8f6c\u53d1\u540d\u79f0\u4e0d\u80fd\u4e3a\u7a7a',
-        importAddressInvalid: '\u76ee\u6807\u5730\u5740\u683c\u5f0f\u9519\u8bef\uff0c\u5e94\u4e3a host:port\uff0c\u591a\u4e2a\u5730\u5740\u7528\u9017\u53f7\u5206\u9694',
-        importPortInvalid: '\u5165\u53e3\u7aef\u53e3\u683c\u5f0f\u9519\u8bef\uff0c\u5e94\u4e3a 1-65535 \u4e4b\u95f4\u7684\u6570\u5b57',
-        importCreateSuccess: '\u521b\u5efa\u6210\u529f',
-        importCreateFailed: '\u521b\u5efa\u5931\u8d25',
-        importNetworkCreateFailed: '\u7f51\u7edc\u9519\u8bef\uff0c\u521b\u5efa\u5931\u8d25',
-        orderSaveFailed: '\u4fdd\u5b58\u6392\u5e8f\u5931\u8d25\uff1a{message}',
-        orderSaveRetry: '\u4fdd\u5b58\u6392\u5e8f\u5931\u8d25\uff0c\u8bf7\u91cd\u8bd5',
-        unknownError: '\u672a\u77e5\u9519\u8bef',
-        localRuntimeTunnelForwardUnsupported: '\u672c\u5730 Ansible runtime \u4e0d\u80fd\u9644\u7740 Tunnel Forward \u96a7\u9053\uff0c\u8bf7\u5207\u6362\u5230 NodeX Runtime \u6216\u6539\u9009 Port Forward \u96a7\u9053'
-      },
-      card: {
-        dragHandleTitle: '\u62d6\u62fd\u6392\u5e8f',
-        ingressAddressTitle: '\u5165\u53e3\u5730\u5740',
-        targetAddressTitle: '\u76ee\u6807\u5730\u5740',
-        targetLabel: '\u76ee\u6807'
-      }
-    },
-    tunnel: {
-      note: 'NodeX \u6a21\u5f0f\u4f1a\u62c6\u5206 ingress \u548c\u6267\u884c\u8282\u70b9\uff1b\u672c\u5730 Ansible \u6a21\u5f0f\u53ea\u9700\u8981 inventory \u4e2d\u6620\u5c04\u7684\u6267\u884c\u8282\u70b9\u3002\u96a7\u9053\u201c\u5728\u7ebf\u201d\u53ea\u68c0\u67e5 host:port \u53ef\u8fde\u901a\u6027\uff0c\u4e0d\u80fd\u786e\u8ba4\u8fdc\u7a0b\u6302\u8f7d\u6216\u9632\u706b\u5899\u72b6\u6001\u5df2\u7ecf\u5c31\u4f4d\u3002',
-      modeLabelNodeX: '\u5f53\u524d\u8fd0\u884c\u65f6\uff1aNodeX / gost',
-      modeLabelLocal: '\u5f53\u524d\u8fd0\u884c\u65f6\uff1aLocal / {backend}',
-      modeSummaryNodeX: 'ingress \u4e0e egress \u8bed\u4e49\u7531 NodeX/gost \u63a7\u5236\u3002NodeX Runtime \u9875\u9762\u8d1f\u8d23\u63a7\u5236\u9762 URL\u3001Token \u548c gost \u5c31\u7eea\u6027\u3002',
-      modeSummaryLocal: '\u8fd9\u91cc\u53ea\u5b58\u50a8\u6267\u884c\u8282\u70b9\u8eab\u4efd\u3002inventory\u3001playbook \u548c\u9762\u677f\u5bbf\u4e3b ansible \u6267\u884c\u5668\u8bf7\u5230 Local Runtime \u9875\u9762\u7ba1\u7406\u3002',
-      modeCompatibilityHint: '下方隧道列表\u662f\u6309\u201c\u5f53\u524d\u8fd0\u884c\u65f6\u80fd\u5426\u6267\u884c\u201d\u6765\u6807\u8bb0\u7684\u3002\u4e00\u4e9b\u5386\u53f2 type-1 \u96a7\u9053\u5728\u8868\u7ed3\u6784\u4e0a\u53ef\u80fd\u540c\u65f6\u517c\u5bb9\u4e24\u79cd\u8fd0\u884c\u65f6\uff0c\u4e0d\u8981\u4ec5\u51ed\u5b58\u50a8\u5b57\u6bb5\u63a8\u65ad\u5b83\u5c5e\u4e8e NodeX \u8fd8\u662f Ansible\u3002',
-      runtimeLinks: '运行时页面',
-      emptyTitle: '\u6682\u65e0\u96a7\u9053\u914d\u7f6e',
-      emptyText: '\u8bf7\u5148\u5b8c\u6210\u6240\u9700\u62d3\u6251\uff0c\u518d\u521b\u5efa\u7b2c\u4e00\u4e2a\u53ef\u88ab\u8f6c\u53d1\u5f15\u7528\u7684\u96a7\u9053\u3002',
-      actions: {
-        add: '\u65b0\u589e\u96a7\u9053',
-        edit: '\u7f16\u8f91',
-        diagnose: '\u8bca\u65ad',
-        delete: '\u5220\u9664'
-      },
-      table: {
-        label: '隧道列表',
-        compatibility: '运行时兼容性',
-        status: '状态'
-      },
-      meta: {
-        ingressNode: '\u8f6c\u53d1\u5165\u53e3\u8282\u70b9',
-        egressNode: '\u8f6c\u53d1\u51fa\u53e3\u8282\u70b9',
-        executionNode: '\u4e2d\u8f6c\u6267\u884c\u8282\u70b9',
-        flowAccounting: '\u6d41\u91cf\u8ba1\u7b97',
-        trafficRatio: '\u6d41\u91cf\u500d\u7387'
-      },
-      modal: {
-        titleEdit: '\u7f16\u8f91\u96a7\u9053',
-        titleAdd: '\u65b0\u589e\u96a7\u9053',
-        deleteConfirmMessage: '删除隧道 {name}？',
-        deleteHint: '如果该隧道仍被转发规则或用户授权引用，将无法删除。此操作无法撤销。',
-        submitUpdate: '\u66f4\u65b0',
-        submitCreate: '\u521b\u5efa',
-        confirmDelete: '删除隧道'
-      },
-      fields: {
-        name: '\u96a7\u9053\u540d\u79f0',
-        tunnelType: '\u96a7\u9053\u7c7b\u578b',
-        flowAccounting: '\u6d41\u91cf\u8ba1\u7b97',
-        trafficRatio: '\u6d41\u91cf\u500d\u7387',
-        ingressNode: 'NodeX \u5165\u53e3\u8282\u70b9',
-        executionNode: '\u4e2d\u8f6c\u6267\u884c\u8282\u70b9',
-        tcpListenAddr: 'TCP \u76d1\u542c\u5730\u5740',
-        udpListenAddr: 'UDP \u76d1\u542c\u5730\u5740',
-        interfaceName: '\u51fa\u53e3\u7f51\u5361\u540d\u6216 IP',
-        protocol: '\u534f\u8bae\u7c7b\u578b',
-        egressNode: '\u8f6c\u53d1\u51fa\u53e3\u8282\u70b9'
-      },
-      placeholders: {
-        name: 'HK-Tunnel-01',
-        interfaceName: 'eth0 / 192.0.2.10'
-      },
-      options: {
-        portForward: '\u7aef\u53e3\u8f6c\u53d1',
-        tunnelForward: '\u96a7\u9053\u8f6c\u53d1',
-        oneWayAccounting: '\u5355\u5411\u8ba1\u7b97',
-        twoWayAccounting: '\u53cc\u5411\u8ba1\u7b97'
-      },
-      hints: {
-        ingressNode: '\u53ea\u6709 NodeX/gost \u6a21\u5f0f\u4f1a\u5728\u8fd9\u91cc\u4f7f\u7528 ingress \u8282\u70b9\u3002\u8fd9\u662f\u8f6c\u53d1 relay \u89d2\u8272\uff0c\u4e0e\u4ee3\u7406\u8282\u70b9\u4fdd\u6301\u5206\u79bb\u3002',
-        executionNode: '\u672c\u5730 Ansible \u6a21\u5f0f\u53ea\u9700\u8981\u6267\u884c\u8282\u70b9\u8eab\u4efd\u3002SSH \u8bbf\u95ee\u4ecd\u7136\u6765\u81ea\u5df2\u914d\u7f6e\u7684 inventory \u548c local runtime \u53c2\u6570\u3002',
-        egressNode: '\u51fa\u53e3\u8282\u70b9\u53ea\u7528\u4e8e NodeX/gost \u96a7\u9053\u8f6c\u53d1\u3002\u9762\u677f\u4fdd\u5b58\u6210\u529f\u540e\uff0c\u4ecd\u7136\u9700\u8981 runtime \u4efb\u52a1\u5728\u8fdc\u7a0b\u5b8c\u6210\u6302\u8f7d\u3002'
-      },
-      compatibility: {
-        nodeXReady: '\u53ef\u7528\u4e8e NodeX Runtime',
-        nodeXNeedsIngress: 'NodeX Runtime \u9700\u8981\u5165\u53e3\u8282\u70b9',
-        nodeXNeedsEgress: 'NodeX \u96a7\u9053\u8f6c\u53d1\u7f3a\u5c11\u51fa\u53e3\u8282\u70b9',
-        localReady: '\u53ef\u7528\u4e8e Local Runtime',
-        localNeedsExecution: 'Local Runtime \u9700\u8981\u6267\u884c\u8282\u70b9',
-        localOnlyPortForward: 'Local Runtime \u53ea\u652f\u6301\u7aef\u53e3\u8f6c\u53d1\u96a7\u9053'
-      },
-      messages: {
-        loadListFailed: '\u83b7\u53d6\u96a7\u9053\u5217\u8868\u5931\u8d25',
-        loadDataFailed: '\u52a0\u8f7d\u6570\u636e\u5931\u8d25',
-        created: '\u96a7\u9053\u521b\u5efa\u6210\u529f',
-        updated: '\u96a7\u9053\u66f4\u65b0\u6210\u529f',
-        actionFailed: '\u64cd\u4f5c\u5931\u8d25',
-        deleted: '\u96a7\u9053\u5220\u9664\u6210\u529f',
-        deleteFailed: '\u5220\u9664\u5931\u8d25',
-        diagnosis: '\u96a7\u9053\u8bca\u65ad',
-        diagnosisFailed: '\u8bca\u65ad\u5931\u8d25',
-        diagnosisRequestFailed: '\u8bca\u65ad\u8bf7\u6c42\u5931\u8d25'
-      },
-      diagnosis: {
-        title: '\u96a7\u9053\u8bca\u65ad\u7ed3\u679c',
-        loading: '\u6b63\u5728\u8bca\u65ad\u96a7\u9053\u8fde\u901a\u6027...',
-        targetAddress: '\u76ee\u6807\u5730\u5740',
-        duration: '\u8017\u65f6',
-        emptyTitle: '\u6682\u65e0\u8bca\u65ad\u7ed3\u679c',
-        emptyText: '\u5f53\u524d\u6ca1\u6709\u53ef\u5c55\u793a\u7684\u8282\u70b9\u8bca\u65ad\u6570\u636e\u3002',
-        rerun: '\u91cd\u65b0\u8bca\u65ad',
-        summary: '{passed}/{total} 项通过'
-      },
-      validation: {
-        nameRequired: '\u8bf7\u8f93\u5165\u96a7\u9053\u540d\u79f0',
-        nameLength: '\u96a7\u9053\u540d\u79f0\u957f\u5ea6\u5e94\u5728 2-50 \u4e2a\u5b57\u7b26\u4e4b\u95f4',
-        typeInvalid: '\u8bf7\u9009\u62e9\u6709\u6548\u7684\u96a7\u9053\u7c7b\u578b',
-        ingressRequired: '\u8bf7\u9009\u62e9\u8f6c\u53d1\u5165\u53e3\u8282\u70b9',
-        ingressMustRelay: '\u5165\u53e3\u8282\u70b9\u5fc5\u987b\u662f\u8f6c\u53d1\u4e2d\u7ee7\u8282\u70b9',
-        trafficRatio: '\u6d41\u91cf\u500d\u7387\u5fc5\u987b\u5728 0.1-100.0 \u4e4b\u95f4',
-        tcpListenRequired: '\u8bf7\u8f93\u5165 TCP \u76d1\u542c\u5730\u5740',
-        udpListenRequired: '\u8bf7\u8f93\u5165 UDP \u76d1\u542c\u5730\u5740',
-        egressRequired: '\u8bf7\u9009\u62e9\u8f6c\u53d1\u51fa\u53e3\u8282\u70b9',
-        ingressEgressDifferent: '\u8f6c\u53d1\u5165\u53e3\u8282\u70b9\u548c\u8f6c\u53d1\u51fa\u53e3\u8282\u70b9\u4e0d\u80fd\u76f8\u540c',
-        egressMustExit: '\u51fa\u53e3\u8282\u70b9\u5fc5\u987b\u662f\u8f6c\u53d1\u51fa\u53e3\u8282\u70b9',
-        protocolRequired: '\u8bf7\u9009\u62e9\u534f\u8bae\u7c7b\u578b',
-        executionRequired: '\u8bf7\u9009\u62e9\u4e2d\u8f6c\u6267\u884c\u8282\u70b9',
-        executionMustRelay: '\u4e2d\u8f6c\u6267\u884c\u8282\u70b9\u5fc5\u987b\u662f\u8f6c\u53d1\u4e2d\u7ee7\u8282\u70b9'
+        saveLoading: '\u4fdd\u5b58\u4e2d...'
       }
     },
     workbench: {
       actions: {
-        refreshJobs: '\u5237\u65b0\u4efb\u52a1',
-        openAnsibleMachines: '\u6253\u5f00 Ansible Machines',
         runDoctorActiveRuntime: '\u5bf9\u5f53\u524d\u8fd0\u884c\u65f6\u8fd0\u884c Doctor'
       },
       localCard: {
         title: '\u672c\u5730 Ansible \u6267\u884c\u5668',
         description: '\u9762\u677f\u4e3b\u673a\u65e0\u72b6\u6001\u6267\u884c\u3002Inventory\u3001playbook \u548c SSH \u8bbf\u95ee\u72ec\u7acb\u4e8e NodeX \u7ba1\u7406\u3002',
-        currentState: '\u5f53\u524d\u72b6\u6001',
-        manage: '\u7ba1\u7406 Local Runtime / Ansible'
+        currentState: '\u5f53\u524d\u72b6\u6001'
       },
       nodeXCard: {
         title: '\u6709\u72b6\u6001 gost \u63a7\u5236\u9762',
-        description: '\u9762\u677f\u4f1a\u76f4\u63a5\u8fde\u63a5\u5185\u90e8 NodeX \u63a7\u5236\u9762\u3002\u53ea\u6709 gost runtime \u4efb\u52a1\u6210\u529f\u540e\uff0crelay \u624d\u7b97\u771f\u6b63\u6302\u8f7d\u3002',
-        manage: '\u7ba1\u7406 NodeX Runtime'
+        description: '\u9762\u677f\u4f1a\u76f4\u63a5\u8fde\u63a5\u5185\u90e8 NodeX \u63a7\u5236\u9762\u3002\u53ea\u6709 gost runtime \u4efb\u52a1\u6210\u529f\u540e\uff0crelay \u624d\u7b97\u771f\u6b63\u6302\u8f7d\u3002'
       },
       state: {
         activeBackend: '\u5df2\u6fc0\u6d3b',
@@ -717,10 +96,6 @@ export default {
         nodeXRepo: 'NodeX \u4ed3\u5e93: https://github.com/zdwtest/NodeX',
         panelNodeXOnboarding: '\u9762\u677f\u6587\u6863: docs/forward-runtime-relay-onboarding.md'
       },
-      recentJobsTitle: '\u6700\u8fd1\u8fd0\u884c\u65f6\u4efb\u52a1',
-      recentJobsSubtitle: '\u663e\u793a Local Runtime \u548c NodeX Runtime \u4e13\u7528\u9875\u9762\u6700\u8fd1\u6392\u961f\u6216\u5df2\u6267\u884c\u7684\u52a8\u4f5c\u3002',
-      noJobs: '\u6682\u65e0\u8fd0\u884c\u65f6\u4efb\u52a1\u3002',
-      jobMeta: '{backend} / forward {forwardId} / tunnel {tunnelId} / node {nodeId}',
       doctor: {
         title: '\u5f53\u524d\u8fd0\u884c\u65f6\u5feb\u7167',
         description: '\u53ef\u8fde\u901a\u53ea\u80fd\u8bf4\u660e\u63a7\u5236\u9762\u6216\u672c\u5730\u6267\u884c\u5668\u53ef\u4ee5\u8bbf\u95ee\uff0c\u5e76\u4e0d\u80fd\u8bc1\u660e relay \u5df2\u6302\u8f7d\u6210\u529f\uff0c\u4e5f\u4e0d\u4ee3\u8868 iptables \u89c4\u5219\u5df2\u5b58\u5728\u3002',
@@ -745,285 +120,11 @@ export default {
       }
     },
     nodeXTopology: {
-      emptyTitle: '\u6682\u65e0 NodeX \u62d3\u6251\u8282\u70b9',
-      emptyText: '\u8bf7\u5148\u521b\u5efa relay / exit \u8282\u70b9\u7528\u4e8e NodeX \u6a21\u5f0f\u3002\u82e5\u53ea\u505a\u65e0\u72b6\u6001\u6267\u884c\uff0c\u8bf7\u6539\u5230 Ansible Machines \u9875\u9762\u3002',
-      legacyText: '\u8fd9\u4e2a\u533a\u5757\u5bf9\u5e94 `/admin/forward/rules*` \u517c\u5bb9\u63a5\u53e3\u3002\u5b83\u53ea\u4fdd\u7559 Legacy \u89c4\u5219\u80fd\u529b\uff0c\u4e0d\u4ee3\u8868 NodeX \u6216 Ansible \u7684\u5f53\u524d\u4e3b\u8fd0\u884c\u8def\u5f84\u3002',
-      actions: {
-        refresh: '\u5237\u65b0',
-        testConnection: '\u6d4b\u8bd5\u8fde\u63a5',
-        addNode: '\u65b0\u589e\u8282\u70b9',
-        clear: '\u6e05\u7a7a',
-        addRule: '\u65b0\u589e\u89c4\u5219',
-        edit: '\u7f16\u8f91',
-        healthCheck: '\u5065\u5eb7\u68c0\u67e5',
-        checking: '\u68c0\u6d4b\u4e2d...',
-        syncStats: '\u540c\u6b65\u7edf\u8ba1',
-        syncing: '\u540c\u6b65\u4e2d...',
-        enable: '\u542f\u7528',
-        disable: '\u7981\u7528',
-        delete: '\u5220\u9664',
-        startTest: '\u5f00\u59cb\u68c0\u6d4b',
-        cancel: '\u53d6\u6d88',
-        saveChanges: '\u4fdd\u5b58\u4fee\u6539',
-        createNode: '\u521b\u5efa\u8282\u70b9',
-        createRule: '\u521b\u5efa\u89c4\u5219'
-      },
-      filters: {
-        online: '\u5728\u7ebf',
-        offline: '\u79bb\u7ebf',
-        userId: '\u7528\u6237 ID',
-        userIdPlaceholder: '\u6309\u7528\u6237 ID \u8fc7\u6ee4',
-        relay: '中继',
-        exit: '出口'
-      },
-      status: {
-        enabled: '\u5df2\u542f\u7528',
-        disabled: '\u5df2\u7981\u7528',
-        online: '\u5728\u7ebf',
-        offline: '\u79bb\u7ebf'
-      },
       meta: {
-        latency: '\u5ef6\u8fdf',
-        currentConnections: '\u5f53\u524d\u8fde\u63a5',
-        traffic: '\u4e0a\u884c / \u4e0b\u884c',
-        lastCheck: '\u6700\u540e\u68c0\u6d4b',
-        uptime: '\u5728\u7ebf\u7387',
-        rateLimit: '\u901f\u7387',
-        trafficLimit: '\u6d41\u91cf',
-        expire: '\u8fc7\u671f',
-        upload: '\u4e0a\u884c',
-        download: '\u4e0b\u884c',
-        connections: '\u8fde\u63a5',
-        serviceCount: '\u670d\u52a1\u6570\u91cf'
-      },
-      legacy: {
-        title: '旧版端口转发规则',
-        emptyTitle: '\u6682\u65e0 Legacy \u89c4\u5219',
-        emptyText: '\u5982\u679c\u9700\u8981\u517c\u5bb9 relay + exit \u7aef\u53e3\u7ea7\u8f6c\u53d1\uff0c\u53ef\u5148\u5728\u8fd9\u91cc\u65b0\u589e\u89c4\u5219\u3002'
+        traffic: '\u4e0a\u884c / \u4e0b\u884c'
       },
       nodeModal: {
-        titleEdit: '\u7f16\u8f91\u4e2d\u8f6c\u8282\u70b9',
-        titleAdd: '\u65b0\u589e\u4e2d\u8f6c\u8282\u70b9',
-        loading: '\u6b63\u5728\u52a0\u8f7d\u8282\u70b9\u8be6\u60c5...',
-        saveLoading: '\u4fdd\u5b58\u4e2d...',
-        fields: {
-          name: '\u8282\u70b9\u540d\u79f0',
-          type: '\u8282\u70b9\u7c7b\u578b',
-          host: '\u4e3b\u673a\u5730\u5740',
-          servicePort: '\u4e1a\u52a1\u7aef\u53e3',
-          apiPort: 'API \u7aef\u53e3',
-          apiToken: 'API Token',
-          metricsPort: 'Metrics \u7aef\u53e3',
-          region: '\u5730\u533a',
-          isp: 'ISP',
-          bandwidth: '\u5e26\u5bbd (Mbps)',
-          maxConnections: '\u6700\u5927\u8fde\u63a5',
-          weight: '\u6743\u91cd'
-        },
-        placeholders: {
-          name: '\u4f8b\u5982 relay-hk-01',
-          host: '1.2.3.4',
-          apiToken: '\u7559\u7a7a\u5219\u540e\u7aef\u81ea\u52a8\u751f\u6210',
-          apiTokenKept: '\u5df2\u4fdd\u5b58\u7684\u4ee4\u724c\u4e0d\u518d\u663e\u793a\uff1b\u7559\u7a7a\u5373\u4fdd\u7559',
-          region: 'HK / JP / US',
-          isp: 'CMI / NTT / Cogent'
-        },
-        hints: {
-          apiPort: 'NodeX \u7ba1\u7406 API \u7684\u5065\u5eb7\u68c0\u67e5\u3001\u7edf\u8ba1\u540c\u6b65\u548c\u8fde\u901a\u6d4b\u8bd5\u90fd\u9700\u8981\u8be5\u7aef\u53e3\u3002',
-          metricsPort: 'gost Prometheus /metrics \u7aef\u53e3\uff0c\u7528\u4e8e\u91c7\u96c6\u8f6c\u53d1\u6d41\u91cf\u7edf\u8ba1\uff0c\u7559\u7a7a\u8868\u793a\u4e0d\u91c7\u96c6\u3002',
-          apiTokenKept: 'API Token \u53ea\u5728\u521b\u5efa\u8282\u70b9\u65f6\u663e\u793a\u4e00\u6b21\u3002\u7559\u7a7a\u5373\u4fdd\u7559\u539f\u4ee4\u724c\uff0c\u586b\u5199\u65b0\u4ee4\u724c\u5219\u66ff\u6362\u3002'
-        }
-      },
-      ruleModal: {
-        titleEdit: '\u7f16\u8f91 Legacy \u89c4\u5219',
-        titleAdd: '\u65b0\u589e Legacy \u89c4\u5219',
-        loading: '\u6b63\u5728\u52a0\u8f7d\u89c4\u5219\u8be6\u60c5...',
-        ownerReadOnlyHint: '\u5f53\u524d\u540e\u7aef\u66f4\u65b0\u63a5\u53e3\u4e0d\u652f\u6301\u4fee\u6539\u5f52\u5c5e\u5b57\u6bb5\uff0c\u7f16\u8f91\u65f6\u53ea\u8bfb\u3002',
-        fields: {
-          name: '\u89c4\u5219\u540d\u79f0',
-          protocol: '\u534f\u8bae',
-          relayNode: '\u5165\u53e3 Relay \u8282\u70b9',
-          listenPort: '\u76d1\u542c\u7aef\u53e3',
-          exitNode: '\u51fa\u53e3 Exit \u8282\u70b9',
-          targetPort: '\u76ee\u6807\u7aef\u53e3',
-          targetHost: '\u76ee\u6807\u4e3b\u673a',
-          userId: '\u7528\u6237 ID',
-          userGroupId: '\u7528\u6237\u7ec4 ID',
-          speedLimit: '\u901f\u7387\u4e0a\u9650 (KB/s)',
-          trafficLimit: '\u6d41\u91cf\u4e0a\u9650 (Bytes)',
-          expireTime: '\u8fc7\u671f\u65f6\u95f4',
-          remark: '\u5907\u6ce8'
-        },
-        placeholders: {
-          name: '\u4f8b\u5982 tcp-11111-hk',
-          relayNode: '\u8bf7\u9009\u62e9 Relay \u8282\u70b9',
-          exitNode: '\u8bf7\u9009\u62e9 Exit \u8282\u70b9',
-          targetHost: '127.0.0.1 \u6216\u76ee\u6807\u4e3b\u673a',
-          userId: '\u7559\u7a7a\u8868\u793a\u516c\u5171\u89c4\u5219',
-          userGroupId: '\u4e0e\u7528\u6237 ID \u4e8c\u9009\u4e00',
-          remark: '\u53ef\u8bb0\u5f55\u4e1a\u52a1\u7528\u9014\u6216\u7ef4\u62a4\u8bf4\u660e'
-        }
-      },
-      connectionModal: {
-        title: '\u6d4b\u8bd5\u8282\u70b9\u8fde\u63a5',
-        fields: {
-          host: '\u4e3b\u673a\u5730\u5740',
-          apiPort: 'API \u7aef\u53e3',
-          apiToken: 'API Token'
-        },
-        placeholders: {
-          host: '127.0.0.1',
-          apiToken: '\u5982\u672a\u542f\u7528\u9274\u6743\u53ef\u7559\u7a7a',
-          apiTokenHidden: '\u5df2\u4fdd\u5b58\u7684\u4ee4\u724c\u4e0d\u518d\u663e\u793a\uff1b\u8bf7\u586b\u5199\u4ee4\u724c\u540e\u6d4b\u8bd5'
-        },
-        success: '\u8fde\u63a5\u6210\u529f',
-        failed: '\u8fde\u63a5\u5931\u8d25'
-      },
-      deleteModal: {
-        titleNode: '删除转发节点 {name}？',
-        titleRule: '删除转发规则 {name}？',
-        deleteNode: '删除转发节点',
-        deleteRule: '删除规则',
-        warning: '\u5220\u9664\u540e\u65e0\u6cd5\u81ea\u52a8\u6062\u590d\uff0c\u8bf7\u786e\u8ba4\u6ca1\u6709\u4ecd\u5728\u4f7f\u7528\u7684\u8f6c\u53d1\u5173\u7cfb\u3002'
-      },
-      validation: {
-        requestFailed: '\u8bf7\u6c42\u5931\u8d25',
-        nodeNameRequired: '\u8282\u70b9\u540d\u79f0\u4e0d\u80fd\u4e3a\u7a7a',
-        nodeHostRequired: '\u4e3b\u673a\u5730\u5740\u4e0d\u80fd\u4e3a\u7a7a',
-        nodePortRange: '\u4e1a\u52a1\u7aef\u53e3\u5fc5\u987b\u5728 1 \u5230 65535 \u4e4b\u95f4',
-        nodeApiPortRequired: 'NodeX \u7ba1\u7406 API \u7aef\u53e3\u4e0d\u80fd\u4e3a\u7a7a',
-        nodeApiPortRange: 'API \u7aef\u53e3\u5fc5\u987b\u5728 1 \u5230 65535 \u4e4b\u95f4',
-        ruleNameRequired: '\u89c4\u5219\u540d\u79f0\u4e0d\u80fd\u4e3a\u7a7a',
-        relayNodeRequired: '\u8bf7\u9009\u62e9\u5165\u53e3 Relay \u8282\u70b9',
-        exitNodeRequired: '\u8bf7\u9009\u62e9\u51fa\u53e3 Exit \u8282\u70b9',
-        listenPortRange: '\u76d1\u542c\u7aef\u53e3\u5fc5\u987b\u5728 1 \u5230 65535 \u4e4b\u95f4',
-        targetHostRequired: '\u76ee\u6807\u4e3b\u673a\u4e0d\u80fd\u4e3a\u7a7a',
-        targetPortRange: '\u76ee\u6807\u7aef\u53e3\u5fc5\u987b\u5728 1 \u5230 65535 \u4e4b\u95f4',
-        ownerConflict: '\u7528\u6237 ID \u4e0e\u7528\u6237\u7ec4 ID \u53ea\u80fd\u586b\u5199\u4e00\u4e2a',
-        connectionHostRequired: '\u4e3b\u673a\u5730\u5740\u4e0d\u80fd\u4e3a\u7a7a',
-        connectionApiPortRange: 'API \u7aef\u53e3\u5fc5\u987b\u5728 1 \u5230 65535 \u4e4b\u95f4',
-        userIdPositive: '\u7528\u6237 ID \u5fc5\u987b\u4e3a\u6b63\u6574\u6570'
-      },
-      messages: {
-        loadStatsFailed: '\u52a0\u8f7d\u8f6c\u53d1\u7edf\u8ba1\u5931\u8d25',
-        loadNodesFailed: '\u52a0\u8f7d\u4e2d\u8f6c\u8282\u70b9\u5931\u8d25',
-        loadNodeOptionsFailed: '\u52a0\u8f7d\u8282\u70b9\u9009\u9879\u5931\u8d25',
-        loadRulesFailed: '\u52a0\u8f7d\u8f6c\u53d1\u89c4\u5219\u5931\u8d25',
-        loadNodeDetailFailed: '\u52a0\u8f7d\u8282\u70b9\u8be6\u60c5\u5931\u8d25',
-        saveNodeFailed: '\u4fdd\u5b58\u4e2d\u8f6c\u8282\u70b9\u5931\u8d25',
-        nodeUpdated: '\u4e2d\u8f6c\u8282\u70b9\u5df2\u66f4\u65b0',
-        nodeCreated: '\u4e2d\u8f6c\u8282\u70b9\u5df2\u521b\u5efa',
-        nodeCreatedWithToken: '\u4e2d\u8f6c\u8282\u70b9\u5df2\u521b\u5efa\u3002\u8bf7\u7acb\u5373\u590d\u5236\u5176 API Token\uff0c\u4e4b\u540e\u4e0d\u518d\u663e\u793a\uff1a{token}',
-        nodeDeleted: '\u4e2d\u8f6c\u8282\u70b9\u5df2\u5220\u9664',
-        nodeCheckFailed: '\u5065\u5eb7\u68c0\u6d4b\u5931\u8d25',
-        nodeSyncFailed: '\u540c\u6b65\u7edf\u8ba1\u5931\u8d25',
-        nodeToggleFailed: '\u5207\u6362\u8282\u70b9\u72b6\u6001\u5931\u8d25',
-        loadRuleDetailFailed: '\u52a0\u8f7d\u89c4\u5219\u8be6\u60c5\u5931\u8d25',
-        saveRuleFailed: '\u4fdd\u5b58\u8f6c\u53d1\u89c4\u5219\u5931\u8d25',
-        ruleUpdated: '\u8f6c\u53d1\u89c4\u5219\u5df2\u66f4\u65b0',
-        ruleCreated: '\u8f6c\u53d1\u89c4\u5219\u5df2\u521b\u5efa',
-        ruleDeleted: '\u8f6c\u53d1\u89c4\u5219\u5df2\u5220\u9664',
-        ruleToggleFailed: '\u5207\u6362\u89c4\u5219\u72b6\u6001\u5931\u8d25',
-        connectionFailed: '\u8fde\u63a5\u68c0\u6d4b\u5931\u8d25',
-        deleteFailed: '\u5220\u9664\u5931\u8d25',
-        nodeReachable: '\u8282\u70b9\u53ef\u8fbe',
-        nodeUnavailable: '\u8282\u70b9\u4e0d\u53ef\u8fbe',
-        syncSuccess: '\u7edf\u8ba1\u540c\u6b65\u6210\u529f',
-        connectionSuccess: '\u8fde\u63a5\u6210\u529f',
-        connectionError: '\u8fde\u63a5\u5931\u8d25',
-        nodeEnabled: '{name} \u5df2\u542f\u7528',
-        nodeDisabled: '{name} \u5df2\u7981\u7528',
-        ruleEnabled: '{name} \u5df2\u542f\u7528',
-        ruleDisabled: '{name} \u5df2\u7981\u7528',
-        latency: '\u5ef6\u8fdf {value} ms',
-        currentConnectionsSuffix: '\uff0c\u5f53\u524d\u8fde\u63a5 {value}'
-      },
-      owner: {
-        user: '\u7528\u6237 #{id}',
-        userGroup: '\u7528\u6237\u7ec4 #{id}',
-        public: '\u516c\u5171\u89c4\u5219'
-      },
-      protocols: {
-        tcp: 'TCP',
-        udp: 'UDP',
-        both: 'TCP + UDP'
-      },
-      labels: {
-        none: '\u4e0d\u9650',
-        neverExpires: '\u6c38\u4e0d\u8fc7\u671f'
-      }
-    },
-    limitPage: {
-      heroEyebrow: '限速管理',
-      title: '限速管理',
-      note: '限速规则由当前转发运行时强制执行，更改可能需要短暂时间生效。',
-      actions: {
-        create: '新增',
-        createNow: '立即创建',
-        edit: '编辑',
-        delete: '删除'
-      },
-      runtimeLinks: '运行时页面',
-      table: {
-        label: '限速规则',
-        status: '状态'
-      },
-      empty: {
-        title: '暂无限速规则',
-        text: '还没有创建任何限速规则，点击上方按钮开始创建。'
-      },
-      status: {
-        active: '运行',
-        error: '异常'
-      },
-      cards: {
-        speed: '速度限制',
-        updatedAt: '更新时间'
-      },
-      formModal: {
-        titleCreate: '新增限速规则',
-        titleEdit: '编辑限速规则',
-        fields: {
-          name: '规则名称',
-          speed: '速度限制',
-          tunnel: '绑定隧道'
-        },
-        placeholders: {
-          name: '请输入限速规则名称',
-          speed: '请输入速度限制（Mbps）',
-          tunnel: '请选择要绑定的隧道'
-        },
-        submitCreate: '创建规则',
-        submitUpdate: '保存修改'
-      },
-      deleteModal: {
-        title: '删除限速规则 {name}？',
-        hint: '此操作无法撤销，删除后该规则将永久消失。',
-        confirmDelete: '删除规则'
-      },
-      values: {
-        unlimited: '不限速',
-        tunnelFallback: '隧道 #{id}',
-        ruleFallback: '规则 #{id}'
-      },
-      modeLabelNodeX: 'NodeX 模式',
-      modeSummaryNodeX: '限速由 NodeX Agent 同步并强制执行。',
-      modeLabelLocal: '本地模式',
-      modeSummaryLocal: '限速通过本地 {backend} 运行时应用。',
-      messages: {
-        fetchTunnelsFailed: '获取隧道列表失败',
-        fetchRulesFailed: '获取限速规则失败',
-        loadFailed: '加载失败',
-        nameRequired: '规则名称不能为空',
-        nameLength: '规则名称长度应在 2-50 个字符之间',
-        speedInvalid: '请输入有效的速度限制（>= 1 Mbps）',
-        tunnelRequired: '请选择要绑定的隧道',
-        tunnelMissing: '隧道名称不存在，请刷新后重试',
-        submitFailed: '提交失败',
-        deleteFailed: '删除限速规则失败',
-        created: '限速规则创建成功',
-        updated: '限速规则更新成功',
-        deleted: '限速规则删除成功'
+        saveLoading: '\u4fdd\u5b58\u4e2d...'
       }
     },
     nodeXAgents: {
@@ -1438,7 +539,6 @@ export default {
     actions: {
       addUser: '新建用户',
       editUser: '编辑用户',
-      manageTunnel: '管理隧道授权',
       ban: '封禁',
       unban: '解封',
       resetTraffic: '重置流量',
@@ -1500,54 +600,10 @@ export default {
         admin: '管理员'
       }
     },
-    tunnelModal: {
-      title: '隧道授权 - {email}',
-      sections: {
-        form: '新增授权',
-        editForm: '编辑授权 #{id}',
-        list: '当前授权列表'
-      },
-      fields: {
-        tunnel: '隧道',
-        tunnelReadonlyHint: '编辑授权时不能更换隧道。',
-        status: '状态',
-        flowQuota: '流量配额',
-        numQuota: '数量配额',
-        expTime: '到期时间',
-        flowResetTime: '流量重置时间',
-        rateLimit: '限速规则'
-      },
-      options: {
-        noAssignableTunnel: '暂无可分配隧道',
-        selectTunnel: '请选择隧道',
-        selectTunnelFirst: '请先选择隧道',
-        noRateLimitRules: '当前隧道暂无限速规则'
-      },
-      actions: {
-        cancelEdit: '取消编辑',
-        updateGrant: '更新授权',
-        addGrant: '新增授权'
-      },
-      table: {
-        id: 'ID',
-        tunnel: '隧道',
-        status: '状态',
-        flow: '流量',
-        num: '数量',
-        expireAt: '到期',
-        reset: '重置',
-        usedFlow: '已用流量',
-        rateLimit: '限速'
-      },
-      empty: '暂无授权'
-    },
     confirm: {
       resetSubscribeTitle: '重置 {email} 的订阅链接？',
       resetSubscribeMessage: '旧链接会立即失效，用户需要重新导入订阅。此操作无法撤销。',
-      resetSubscribeAction: '重置订阅链接',
-      deleteGrantTitle: '删除隧道授权 #{id}？',
-      deleteGrantMessage: '该用户将不能再使用隧道 {tunnel}。此操作无法撤销。',
-      deleteGrantAction: '删除授权'
+      resetSubscribeAction: '重置订阅链接'
     },
     copyDialog: {
       title: '复制订阅链接',
@@ -1557,8 +613,6 @@ export default {
     resetFlow: {
       userTitle: '重置 {email} 的流量？',
       userMessage: '已用流量将清零。此操作无法撤销。',
-      tunnelTitle: '重置隧道授权 #{id} 的流量？',
-      tunnelMessage: '这条授权的已用流量将清零。此操作无法撤销。',
       usedFlow: '当前已用',
       quota: '当前配额',
       confirmAction: '重置流量'
@@ -1584,7 +638,6 @@ export default {
     },
     labels: {
       admin: '管理员',
-      noLimit: '不限速',
       noSpeedLimit: '不限速',
       noDeviceLimit: '不限设备',
       speedLimitMbps: '{value} Mbps',
@@ -1609,21 +662,8 @@ export default {
       userSaved: '已保存 {email}',
       userBanned: '已封禁 {email}',
       userUnbanned: '已解封 {email}',
-      fetchTunnelListFailed: '获取隧道列表失败',
-      fetchSpeedLimitFailed: '获取限速规则失败',
-      fetchTunnelGrantFailed: '获取隧道授权失败',
-      selectTunnelFirst: '请选择隧道',
-      tunnelAlreadyAssigned: '该隧道已授权给当前用户',
-      grantUpdateFailed: '授权更新失败',
-      grantCreateFailed: '授权创建失败',
-      grantUpdated: '授权更新成功',
-      grantCreated: '授权创建成功',
-      grantActionFailed: '授权操作失败',
-      grantDeleted: '已删除隧道授权 #{id}',
-      grantDeleteFailed: '删除授权失败',
       resetFailed: '重置失败',
       userFlowReset: '用户流量已重置',
-      tunnelFlowReset: '隧道流量已重置',
       fetchUserFailed: '获取用户详情失败',
       noToken: '该用户没有订阅 token',
       subscribeCopied: '订阅链接已复制到剪贴板',

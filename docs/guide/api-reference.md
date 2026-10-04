@@ -323,231 +323,38 @@ DELETE /api/v2/admin/auth-keys/:id
 授权密钥只在 `POST /api/v2/admin/auth-keys` 的应答中返回一次，请当场复制；
 列表中的 `key` 显示为 `********`，节点注册按密钥哈希校验，不受影响。
 
-### Flux user/tunnel compatibility
+### 转发（v4.2）
 
-这些接口用于对齐 `flux-panel` 的用户页与隧道授权页，响应包统一保持：
+转发接口是 forward 软件包的 `/api/v4/forward/*`，见
+[`../forwarding/v4-api.md`](../forwarding/v4-api.md)。
 
-```json
-{
-  "code": 0,
-  "msg": "操作成功",
-  "ts": 1712300000000,
-  "data": null
-}
-```
+v4.2（F5d）删除了 flux 兼容的 v2 转发接口，这些路径现在返回 404：
 
-错误时：
+- 用户与管理员的转发增删改、强制删除、暂停、恢复、诊断
+  （`/api/v2/forward/*`、`/api/v2/admin/forward/{create,update,delete,force-delete,pause,resume,diagnose}`）；
+- 旧版规则（`/api/v2/admin/forward/rules*`、`POST /api/v2/user/forward/rules`）、
+  `POST /api/v2/admin/forward/sync-backend`、`GET /api/v2/admin/forward/runtime/jobs`；
+- 隧道诊断与更新、隧道授权的删除与更新
+  （`/api/v2/admin/tunnel/{diagnose,update}`、`/api/v2/{admin/,}tunnel/user/{remove,update}`）、
+  `POST /api/v2/speed-limit/update`；
+- 转发节点与 Ansible 机器（`/api/v2/admin/forward/nodes*`、`/api/v2/admin/forward/ansible-machines*`，
+  由 `/api/v4/forward/nodes`、`/ansible-machines` 取代）、可观测性
+  `targets`/`trend`/`topology`（由 `/api/v4/forward/observability/*` 取代）；
+- 干净代理的令牌接口与安装脚本（`/api/v2/admin/forward/agents*`、
+  `GET /api/v2/forward-agent/install.sh`）。
 
-```json
-{
-  "code": -1,
-  "msg": "请求失败",
-  "ts": 1712300000000,
-  "data": null
-}
-```
-
-说明：
-
-- 路径沿用 Flux 形状，但 `POST /api/v2/user/reset` 与 `POST /api/v2/tunnel/user/assign|list|remove|update` 仍受管理员权限保护。
-- `POST /api/v2/tunnel/user/tunnel` 是 JWT 用户作用域，可同时被普通用户和管理员使用。
-- 当前 `/api/v2/tunnel/user/list` 的字段名已对齐，但 `inFlow/outFlow` 与限速展示值仍是本地兼容实现，不应误标为完全复刻。
-
-```http
-# 重置用户/隧道授权流量
-POST /api/v2/user/reset
-Authorization: Bearer <admin_token>
-Content-Type: application/json
-
-{
-  "id": 1,
-  "type": 1
-}
-```
-
-`type = 1` 重置用户流量，`type = 2` 重置用户隧道授权流量。
-
-```http
-# 获取当前用户可选隧道
-POST /api/v2/tunnel/user/tunnel
-Authorization: Bearer <token>
-Content-Type: application/json
-```
-
-```http
-# 分配隧道授权
-POST /api/v2/tunnel/user/assign
-Authorization: Bearer <admin_token>
-Content-Type: application/json
-
-{
-  "userId": 2,
-  "tunnelId": 1,
-  "flow": 100,
-  "num": 10,
-  "flowResetTime": 0,
-  "expTime": 1712300000000,
-  "speedId": null
-}
-```
-
-```http
-# 获取某个用户的隧道授权列表
-POST /api/v2/tunnel/user/list
-Authorization: Bearer <admin_token>
-Content-Type: application/json
-
-{
-  "userId": 2
-}
-```
-
-```http
-# 删除隧道授权
-POST /api/v2/tunnel/user/remove
-Authorization: Bearer <admin_token>
-Content-Type: application/json
-
-{
-  "id": 1
-}
-```
-
-```http
-# 更新隧道授权
-POST /api/v2/tunnel/user/update
-Authorization: Bearer <admin_token>
-Content-Type: application/json
-
-{
-  "id": 1,
-  "flow": 100,
-  "num": 10,
-  "flowResetTime": 0,
-  "expTime": 1712300000000,
-  "status": 1,
-  "speedId": null
-}
-```
-
-### Speed-limit compatibility
-
-```http
-# 限速规则列表
-POST /api/v2/speed-limit/list
-Authorization: Bearer <admin_token>
-Content-Type: application/json
-
-{}
-```
-
-```http
-# 创建限速规则
-POST /api/v2/speed-limit/create
-Authorization: Bearer <admin_token>
-Content-Type: application/json
-
-{
-  "name": "10M",
-  "speed": 10,
-  "tunnelId": 1,
-  "tunnelName": "Tunnel-A"
-}
-```
-
-```http
-# 更新限速规则
-POST /api/v2/speed-limit/update
-Authorization: Bearer <admin_token>
-Content-Type: application/json
-
-{
-  "id": 1,
-  "name": "20M",
-  "speed": 20,
-  "tunnelId": 1,
-  "tunnelName": "Tunnel-A"
-}
-```
-
-```http
-# 删除限速规则
-POST /api/v2/speed-limit/delete
-Authorization: Bearer <admin_token>
-Content-Type: application/json
-
-{
-  "id": 1
-}
-```
-
-```http
-# 可选隧道列表（供 speed-limit 页面使用）
-POST /api/v2/speed-limit/tunnels
-Authorization: Bearer <admin_token>
-Content-Type: application/json
-
-{}
-```
-
-说明:
-
-- 这些接口使用与 Flux 相同的 `code/msg/ts/data` 包装。
-- `tunnelName` 不是可省略的本地扩展字段，Flux 对应 DTO 也会提交它；后续复刻不要擅自删掉。
-- 当前 `/admin/limit` 已接上这些接口，但文档仍需把它视为 `Partial`，因为运行时侧限速传播与精确页面复刻还没完成。
+仍保留、但已没有页面的 v2 接口（只读或旧运行时，随旧版清理 F5c 一起移除）：转发与隧道列表、
+排序、隧道创建与删除、隧道授权的分配与列表、限速规则的增删查、`POST /api/v2/user/reset`、
+多入口对比与统计、运行时状态与诊断（`/admin/forward/{runtime,local,nodex}/*`）、
+干净代理的注册、心跳与上报，以及内部流量上报。旧版接口的契约存档在
+[`../archive/forwarding-v2-api.md`](../archive/forwarding-v2-api.md)。
 
 ### Scheduled reset semantics
 
 - `flowResetTime = 0` 表示不参与自动月重置。
 - `flowResetTime = 1..31` 表示每月对应日期重置；当月没有该日时，按月末补执行。
 - 当前本地实现会在应用启动时执行一次补扫，然后每天本地时间 `00:00:05` 扫描。
-- 扫描会重置用户流量和用户隧道授权流量；对已过期用户会暂停活跃转发，对已过期授权会先暂停活跃转发再禁用授权。
-- 这仍不代表已经完整复刻 Flux `FlowController` 的所有配额、副作用和禁用语义。
-
-### Forward runtime backend compatibility
-
-```http
-# Runtime job list
-GET /api/v2/admin/forward/runtime/jobs?backend=&status=&forward_id=&limit=50
-
-# Runtime backend selector
-PUT /api/v2/admin/system/configs/forward.runtime_backend
-{
-  "value": "gost",
-  "type": "string",
-  "group": "forward",
-  "description": "Forward runtime backend"
-}
-
-# local ansible runtime backend selector
-PUT /api/v2/admin/system/configs/forward.runtime.ansible.backend
-{
-  "value": "nftables_ansible",
-  "type": "string",
-  "group": "forward",
-  "description": "Preferred local ansible backend"
-}
-
-# local ansible runtime config
-PUT /api/v2/admin/system/configs/forward.runtime.ansible.config
-{
-  "value": "{\"inventory\":\"hosts.ini\",\"playbookApply\":\"apply.yml\",\"playbookRemove\":\"remove.yml\"}",
-  "type": "json",
-  "group": "forward",
-  "description": "Forward runtime ansible config"
-}
-```
-
-Notes:
-
-- This section documents compatibility controls for two internal execution paths: stateful `NodeX/gost` and stateless local ansible executor. It is not part of the Flux `/admin/forward` contract.
-- Recommended local backend is `nftables_ansible`; `iptables_ansible` is legacy compatibility only.
-- Keep the Flux-compatible `/admin/forward` page free of extra runtime panels; use `System.vue` and deployment surfaces for backend switching and runtime job observability.
-- Optional JSON keys inside `forward.runtime.ansible.config`: `command`, `workingDir`, `targetPattern`, `timeoutSeconds`, `environment`.
-- Legacy compatibility readers still support `forward.runtime.iptables_ansible.config` and `forward.ansible.*` keys.
-- Docker and one-click installs now write the canonical runtime values into `config/config.yaml.forward_runtime`.
-- Current `gost` runtime for `panel_forward` and `legacy_rule` depends on `forward_runtime.nodex.base_url`; this base URL must point at the NodeX control-plane because the client no longer guesses `host:apiPort` from the ingress/relay node for the outer control-plane hop.
-- Public docs intentionally avoid internal executor topology; see `docs/guide/nodex-internal-extension.md` for the contract boundary.
+- 扫描会重置用户流量；对已过期用户会暂停其旧版转发。
 
 ---
 
@@ -761,35 +568,3 @@ POST /api/v2/payment/notify/:method
 | < 2.0.0 | v1 only | ❌ 已弃用 |
 
 **注意**: v1 API 已完全移除，所有客户端必须使用 v2 API。
-
-## Flux-panel Compat Endpoints
-
-### Response Envelope
-
-Compat endpoints wrap replies in `{ "code": <int>, "msg": "<string>", "ts": <ms>, "data": {...} }`, mirroring the flux-panel reference. Timestamps stay in milliseconds so the cloned UI avoids extra conversions, and error branches keep the same envelope so the page always unwraps `data`.
-
-### Forward & Tunnel Endpoint Mapping
-
-| Flux Reference | Local Route | Auth Scope | Notes |
-|------|------|------|------|
-| `POST /api/v1/forward/create` | `POST /api/v2/forward/create` + `/api/v2/admin/forward/create` | JWT user | Identical payload and response; admin mirror exists for compatibility. |
-| `POST /api/v1/forward/list` | `POST /api/v2/forward/list` + `/api/v2/admin/forward/list` | JWT user | Returns the `PanelForwardListItem` used by the cloned Forward view. |
-| `POST /api/v1/forward/update` | `POST /api/v2/forward/update` + `/api/v2/admin/forward/update` | JWT user | Keeps the `ForwardUserTunnel` check for non-admins. |
-| `POST /api/v1/forward/delete` | `POST /api/v2/forward/delete` + `/api/v2/admin/forward/delete` | JWT user | Matches reference semantics. |
-| `POST /api/v1/forward/force-delete` | `POST /api/v2/forward/force-delete` + `/api/v2/admin/forward/force-delete` | JWT user | Same request/response bodies. |
-| `POST /api/v1/forward/pause` | `POST /api/v2/forward/pause` + `/api/v2/admin/forward/pause` | JWT user | Local handler persists status while the reference also touches remote runtime. |
-| `POST /api/v1/forward/resume` | `POST /api/v2/forward/resume` + `/api/v2/admin/forward/resume` | JWT user | Mirrors pause/resume contract. |
-| `POST /api/v1/forward/diagnose` | `POST /api/v2/forward/diagnose` + `/api/v2/admin/forward/diagnose` | JWT user | Diagnoses still run from the panel side; flux-panel traces node chains. |
-| `POST /api/v1/forward/update-order` | `POST /api/v2/forward/update-order` + `/api/v2/admin/forward/update-order` | JWT user | Uses the same `{ "forwards": [{ "id": id, "inx": idx }] }` payload. |
-| `POST /api/v1/tunnel/user/tunnel` | `POST /api/v2/tunnel/user/tunnel` + `/api/v2/admin/tunnel/user/tunnel` | JWT user | Supplies the tunnel list consumed by the Forward UI. |
-
-### DTO Expectations
-
-Tunnel DTOs preserve the reference fields: `id`, `name`, `ip`, `inNodePortSta`, `inNodePortEnd`, `type`, `protocol`. The local service may also include `inIp` and `status`, but UI code must continue reading the flux field names only. Forward DTOs keep the original names (`tunnelId`, `strategy`, `inPort`, `remoteAddr`, `interfaceName`, `status`, `inFlow`, `outFlow`, `createdTime`, `updatedTime`, etc.) under the standard envelope.
-
-### Current Known Gaps
-
-- **Runtime side effects**: flux-panel triggers remote runtime updates on forward create/update/delete/pause/resume, while our handler currently updates database entries only; document this shortfall before claiming full parity.
-- **Diagnose semantics**: the reference traces relay→exit node chains, whereas ours still uses panel-side dialing; log the divergence in clone docs.
-- **UserTunnel lifecycle**: the list honors `ForwardUserTunnel`, but the remaining quota/expire/flow reset flows still need flux-level implementation.
-- **DTO casing**: keep camelCase names intact and avoid removing fields that exist in the flux reference.

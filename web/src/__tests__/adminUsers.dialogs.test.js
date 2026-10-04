@@ -10,24 +10,17 @@ import { toastMessages, toasts } from './helpers/feedback'
 import { runAction } from '@/ui/composables/useToast'
 
 const api = vi.hoisted(() => ({
-  assignAdminUserTunnel: vi.fn(),
   banUser: vi.fn(),
   createUser: vi.fn(),
   getAdminUser: vi.fn(),
-  getAdminUserTunnelList: vi.fn(),
-  getForwardTunnels: vi.fn(),
-  getSpeedLimitList: vi.fn(),
   getSubscriptionGroups: vi.fn(),
   getSubscriptionSettings: vi.fn(),
   getTrafficHourly: vi.fn(),
   getUserList: vi.fn(),
   getUserStats: vi.fn(),
-  removeAdminUserTunnel: vi.fn(),
   resetUserSubscribe: vi.fn(),
   resetUserTraffic: vi.fn(),
-  resetUserTunnelTraffic: vi.fn(),
   unbanUser: vi.fn(),
-  updateAdminUserTunnel: vi.fn(),
   updateUser: vi.fn()
 }))
 
@@ -67,9 +60,6 @@ describe('Users dialogs and feedback', () => {
     api.getSubscriptionGroups.mockResolvedValue({ data: [] })
     api.getSubscriptionSettings.mockResolvedValue({ data: { subscribe_path: '/s', subscribe_domains: [] } })
     api.getAdminUser.mockResolvedValue({ code: 0, data: { ...user, token: 'tok' } })
-    api.getForwardTunnels.mockResolvedValue({ code: 0, data: [{ id: 3, name: 'hk-relay' }] })
-    api.getSpeedLimitList.mockResolvedValue({ code: 0, data: [] })
-    api.getAdminUserTunnelList.mockResolvedValue({ code: 0, data: [{ id: 41, tunnelId: 3, tunnelName: 'hk-relay', status: 1, flow: 10 }] })
   })
 
   afterEach(() => {
@@ -148,27 +138,6 @@ describe('Users dialogs and feedback', () => {
     await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
     expect(api.updateUser).toHaveBeenCalledWith(7, expect.objectContaining({ email: 'lin@example.test' }))
     expect(toastMessages('success')).toEqual(['lin@example.test saved'])
-  })
-
-  it('validates the tunnel grant form inline and confirms deleting a grant', async () => {
-    const userEv = userEvent.setup()
-    api.removeAdminUserTunnel.mockResolvedValue({ code: 0 })
-    await renderPage()
-
-    await rowAction(userEv, 'Manage tunnel grants')
-    const dialog = await screen.findByRole('dialog', { name: /lin@example.test/ })
-    await within(dialog).findByText('hk-relay')
-    await userEv.click(within(dialog).getByRole('button', { name: 'Add grant' }))
-    expect(within(dialog).getByRole('alert').textContent).toBe('Please select a tunnel')
-
-    await userEv.click(within(dialog).getByRole('button', { name: 'Actions for hk-relay' }))
-    await userEv.click(within(await screen.findByRole('menu')).getByRole('menuitem', { name: 'Delete' }))
-    const confirm = await screen.findByRole('alertdialog', { name: 'Delete tunnel grant #41?' })
-    await userEv.click(within(confirm).getByRole('button', { name: 'Delete grant' }))
-    await waitFor(() => expect(api.removeAdminUserTunnel).toHaveBeenCalledWith({ id: 41 }))
-    await waitFor(() => expect(toastMessages('success')).toEqual(['Tunnel grant #41 deleted']))
-    // The grants dialog is still open behind the confirmation.
-    expect(screen.getByRole('dialog', { name: /lin@example.test/ })).toBeTruthy()
   })
 
   it('resets traffic through a confirmation that shows the usage', async () => {

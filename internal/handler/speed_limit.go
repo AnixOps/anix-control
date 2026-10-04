@@ -46,20 +46,6 @@ func (h *SpeedLimitHandler) ListPanelSpeedLimits(c *gin.Context) {
 	panelSuccess(c, items)
 }
 
-func (h *SpeedLimitHandler) UpdatePanelSpeedLimit(c *gin.Context) {
-	var req service.SpeedLimitUpdateInput
-	if err := c.ShouldBindJSON(&req); err != nil {
-		panelError(c, "参数错误")
-		return
-	}
-
-	if _, err := h.service.Update(req); err != nil {
-		panelError(c, err.Error())
-		return
-	}
-	panelSuccess(c, "限速规则更新成功")
-}
-
 func (h *SpeedLimitHandler) DeletePanelSpeedLimit(c *gin.Context) {
 	var req panelSpeedLimitDeleteRequest
 	if err := c.ShouldBindJSON(&req); err != nil {

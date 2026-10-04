@@ -47,7 +47,7 @@ func TestPackageRouteDefaultsGate(t *testing.T) {
 	require.NoError(t, err)
 	var rehearsed [][3]string
 	require.NoError(t, json.Unmarshal(raw, &rehearsed))
-	require.Len(t, rehearsed, 151)
+	require.Len(t, rehearsed, 130)
 	want := make([]string, 0, len(rehearsed))
 	for _, row := range rehearsed {
 		require.Contains(t, []string{"read", "write"}, row[2], row[1])
@@ -62,11 +62,11 @@ func TestPackageRouteDefaultsGate(t *testing.T) {
 	sort.Strings(want)
 	sort.Strings(got)
 	assert.Equal(t, want, got, "config/package-route-defaults.json must list exactly the rehearsed routes")
-	assert.Equal(t, 151, defaults.RouteCount())
+	assert.Equal(t, 130, defaults.RouteCount())
 
 	// The packages and batches the owner signed off, at the rehearsed
 	// release.
-	require.Len(t, defaults.Packages, 15)
+	require.Len(t, defaults.Packages, 14)
 	for _, pkg := range defaults.Packages {
 		require.GreaterOrEqual(t, pkg.Batch, 1, pkg.PackageID)
 		require.LessOrEqual(t, pkg.Batch, len(rehearsedPackages), pkg.PackageID)
@@ -145,7 +145,7 @@ func TestPackageRouteDefaultPolicy(t *testing.T) {
 	summary, err := PackageRouteDefaultsSummary()
 	require.NoError(t, err)
 	assert.Contains(t, summary, "policy rehearsed")
-	assert.Contains(t, summary, "151 routes of 15 packages default to native")
+	assert.Contains(t, summary, "130 routes of 14 packages default to native")
 
 	SetPackageRouteDefaultPolicy(" Legacy ")
 	assert.Equal(t, PackageRouteDefaultLegacy, PackageRouteDefaultPolicy())
@@ -160,7 +160,7 @@ func TestPackageRouteDefaultPolicy(t *testing.T) {
 
 // TestResolveEffectivePackageRouteModesOnlyDefaultsTheSet resolves every
 // package of the extraction map at a new release with nothing stored:
-// exactly the 151 rehearsed routes come out native; every other
+// exactly the 130 rehearsed routes come out native; every other
 // native-flagged route (identity's among them) stays legacy.
 func TestResolveEffectivePackageRouteModesOnlyDefaultsTheSet(t *testing.T) {
 	useRouteDefaultPolicy(t, PackageRouteDefaultRehearsed)
@@ -185,7 +185,7 @@ func TestResolveEffectivePackageRouteModesOnlyDefaultsTheSet(t *testing.T) {
 			native++
 		}
 	}
-	assert.Equal(t, 151, native)
+	assert.Equal(t, 130, native)
 
 	// Identity group A follows the authority only.
 	modes, _, err := ResolveEffectivePackageRouteModes(db, IdentityPlatformPackageID, "9.9.9", map[string]string{})

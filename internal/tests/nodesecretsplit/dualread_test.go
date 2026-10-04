@@ -89,7 +89,7 @@ func newFleet(t *testing.T, db *gorm.DB) *fleet {
 	// so the forward node's id stays clear of the proxy nodes'.
 	f.forward = model.ForwardNode{ID: 900, Name: "relay", Type: "relay", Host: "198.51.100.50", Port: 443, APIPort: 9000, APIToken: "fake-fleet-forward-token", Enabled: true}
 	require.NoError(t, service.NewForwardNodeService(db).Create(&f.forward))
-	issued, err := service.NewForwardCleanAgentService(db).CreateToken(service.ForwardCleanAgentCreateInput{Name: "agent", NodeID: &f.forward.ID})
+	issued, err := service.CreateCleanAgentTokenTx(db, service.ForwardCleanAgentCreateInput{Name: "agent", NodeID: &f.forward.ID})
 	require.NoError(t, err)
 	f.agent, f.agentToken = *issued.Agent, issued.Token
 

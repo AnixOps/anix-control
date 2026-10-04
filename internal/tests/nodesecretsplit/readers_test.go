@@ -71,7 +71,7 @@ func TestOlderReadersAuthenticateEveryNode(t *testing.T) {
 		forward := &model.ForwardNode{Name: "relay", Type: "relay", Host: "198.51.100.30", Port: 443, APIPort: 9000, APIToken: "fake-forward-token", Enabled: true}
 		require.NoError(t, service.NewForwardNodeService(db).Create(forward))
 		agents := service.NewForwardCleanAgentService(db)
-		agent, err := agents.CreateToken(service.ForwardCleanAgentCreateInput{Name: "agent", NodeID: &forward.ID})
+		agent, err := service.CreateCleanAgentTokenTx(db, service.ForwardCleanAgentCreateInput{Name: "agent", NodeID: &forward.ID})
 		require.NoError(t, err)
 
 		columns := legacyColumns(t, db)

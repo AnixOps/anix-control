@@ -148,13 +148,12 @@ func TestEveryWriterDualWrites(t *testing.T) {
 		requireVerified(t, db)
 
 		// Clean agents: a token for the forward node, then its revocation.
-		agents := service.NewForwardCleanAgentService(db)
-		issued, err := agents.CreateToken(service.ForwardCleanAgentCreateInput{Name: "agent", NodeID: &forward.ID})
+		issued, err := service.CreateCleanAgentTokenTx(db, service.ForwardCleanAgentCreateInput{Name: "agent", NodeID: &forward.ID})
 		require.NoError(t, err)
 		agentToken := current(t, db, nodesecrets.SubjectCleanAgent, issued.Agent.ID, nodesecrets.KindCleanAgentToken)
 		require.Equal(t, issued.Token, agentToken.Value)
 		require.Equal(t, nodesecrets.StatusActive, agentToken.Status)
-		require.NoError(t, agents.RevokeAgent(issued.Agent.ID))
+		require.NoError(t, service.RevokeCleanAgentTx(db, issued.Agent.ID))
 		agentToken = current(t, db, nodesecrets.SubjectCleanAgent, issued.Agent.ID, nodesecrets.KindCleanAgentToken)
 		require.Equal(t, nodesecrets.StatusRevoked, agentToken.Status)
 		require.NotNil(t, agentToken.RevokedAt)

@@ -34,7 +34,6 @@ WEIGHTS: dict[str, dict[str, float]] = {
     "backend": {
         "internal/moduleruntime": 31.3,
         "internal/service": 31.0,
-        "internal/tests/forwardcompat": 29.3,
         "internal/pluginhost": 29.0,
         "internal/tests/identitycompat": 21.1,
         "internal/handler": 17.0,
@@ -64,7 +63,6 @@ WEIGHTS: dict[str, dict[str, float]] = {
         # and paymentcompat from PR #156 (shared migrated databases).
         "internal/tests/ordercompat": 24.1,
         "internal/tests/paymentcompat": 22.7,
-        "internal/tests/forwardcompat": 100.5,
         "internal/tests/identitycompat": 61.6,
         "internal/tests/subscriptioncompat": 60.2,
         "internal/tests/plancompat": 48.0,

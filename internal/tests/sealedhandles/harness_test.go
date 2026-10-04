@@ -45,6 +45,26 @@ type extractionRoute struct {
 	RouteID string `json:"route_id"`
 }
 
+// The tests' forward node token update: PUT /api/v2/admin/forward/nodes/:id
+// was removed with the flux routes in v4.2 (F5d), and the tests keep it as
+// a fixture route of the forward package, with its node secret field, to
+// walk a typed value through IssueCredential.
+const fixtureSecretFields = `,
+    {"route_id": "` + updateForwardNode + `", "target": {"kind": "forward", "path_param": "id"}, "request": [{"pointer": "/api_token", "kind": "value"}]}
+  ]
+}`
+
+// fieldTable is the embedded node secret field list with the fixture route.
+func fieldTable(t *testing.T) *sealedsecrets.Table {
+	t.Helper()
+	list := strings.TrimRight(string(configtables.NodeSecretFields), " \n")
+	end := strings.LastIndex(list, "]")
+	require.Positive(t, end)
+	table, err := sealedsecrets.ParseTable([]byte(strings.TrimRight(list[:end], " \n") + fixtureSecretFields))
+	require.NoError(t, err)
+	return table
+}
+
 func extraction(t *testing.T) map[string]extractionRoute {
 	t.Helper()
 	raw, err := os.ReadFile(filepath.Join("..", "..", "..", "config", "package-extraction.json"))
@@ -57,6 +77,7 @@ func extraction(t *testing.T) map[string]extractionRoute {
 	for _, row := range document.Routes {
 		rows[row.RouteID] = row
 	}
+	rows[updateForwardNode] = extractionRoute{Method: http.MethodPut, Path: "/api/v2/admin/forward/nodes/:id", Package: "forward", RouteID: updateForwardNode}
 	return rows
 }
 
@@ -167,8 +188,7 @@ func newHarnessWith(t *testing.T, register func(h *harness, registry *kernelnode
 	})
 	h.server = &kernelnodeops.Server{Engine: engine, Authorizer: grants{}}
 
-	table, err := sealedsecrets.ParseTable(configtables.NodeSecretFields)
-	require.NoError(t, err)
+	table := fieldTable(t)
 	gateway := &compatv2.Gateway{
 		Registry: compatv2.NewRegistry(routeSource{h: h}), Dispatcher: supervisor{h: h}, Metrics: h.metrics,
 		Sealer: sealedsecrets.NewSealer(table, nil, h.store),

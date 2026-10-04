@@ -17,25 +17,15 @@ export const DATA_TABLE_PAGES = [
   'src/views/admin/InviteCodes.vue',
   'src/views/admin/AccessGroups.vue',
   'src/views/admin/Invite.vue',
-  'src/views/admin/AnsibleMachines.vue',
   // U7: nodes (list, node page and its table sections)
   'src/views/admin/Nodes.vue',
   'src/views/admin/NodeDetail.vue',
   'src/views/admin/nodes/NodeProtocolsSection.vue',
   'src/views/admin/nodes/NodeLogsSection.vue',
   'src/views/admin/nodes/NodeServicesSection.vue',
-  // U7: forward nodes
-  'src/views/admin/ForwardNodes.vue',
-  'src/views/admin/forward-nodes/NodeXRulesPanel.vue',
-  'src/views/admin/forward-nodes/RuntimeJobsTable.vue',
-  // U7: forward suite
-  'src/views/admin/Forward.vue',
-  'src/views/admin/Tunnel.vue',
-  'src/views/admin/LimitI18n.vue',
   // U7: settings, subscription groups, notifications, security
   'src/views/admin/System.vue',
   'src/views/admin/system/SettingsGeneral.vue',
-  'src/views/admin/system/SettingsRuntime.vue',
   'src/views/admin/system/SettingsBackup.vue',
   'src/views/admin/system/SettingsBalancer.vue',
   'src/views/admin/system/SettingsAudit.vue',

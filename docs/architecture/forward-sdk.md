@@ -1640,8 +1640,8 @@ on it ([`../forwarding/v4-api.md`](../forwarding/v4-api.md)).
     - A node a stored route uses cannot be disabled or deleted:
       `FAILED_PRECONDITION`, with violations of the new code `node_in_use`
       naming the routes.
-    - Control assigns a new Agent node the legacy credential the v2 paths
-      read until F5d. No answer carries it, and an update never changes it.
+    - Control assigns a new Agent node the legacy credential the remaining
+      v2 agent paths read until the legacy runtime goes (F5c). No answer carries it, and an update never changes it.
     - `NodeTransport` tells Agent nodes from Ansible machines (section 6.3).
   - `GetTraffic` answers the ledger's hourly buckets by route and node, over
     at most 31 days and at most 20000 buckets.
@@ -2011,12 +2011,23 @@ Drop The Old Tables").
   stats) no longer start. The latency prober and a forward node's legacy
   desired configuration treat the missing tables as empty.
 
-The flux v2 routes, `forwardcompat`, the route catalog entries and the
-flux guardrails in AGENTS.md go in the same release (F5, H17).
+The flux v2 routes, the route catalog entries and the flux guardrails in
+AGENTS.md go in the same release (F5, H17). Done in F5d: the 53 routes
+below are removed, `config/package-extraction.json` has 243 routes, and
+AGENTS.md's "Forwarding (v4.2)" section replaces the flux guardrails. The
+forward package adopts no table and reads no kernel view any more (its
+manifest declares only `kernel.forward.v1`); its other 32 v2 routes (the
+21 that ran natively until v4.1 and the 11 `kernel-owned` ones) are all
+`kernel-owned`, served by the kernel until F5c, and
+`internal/tests/forwardcompat` is deleted. **F5c's drop requires the
+forward package release from F5d to be installed first:** a v4.1 forward
+package adopts the flux tables, and a storage lease fails as a whole when
+an adopted table is missing (`packagestore.ErrGrantTargetMissing`), which
+would take `/api/v4/forward/*` down with it.
 
-**The 53 bridged forward routes.** `config/package-extraction.json` has 53
-`bridged` routes in the `forward` package (its `native-flagged` and
-`kernel-owned` routes are not counted here). None of them is moved to a
+**The 53 bridged forward routes (removed in F5d).** `config/package-extraction.json`
+had 53 `bridged` routes in the `forward` package (its `native-flagged` and
+`kernel-owned` routes are not counted here). None of them was moved to a
 native handler: M3-4 and M3-5 (`node-ops-service.md` section 7) are
 cancelled. They split three ways:
 
@@ -2037,7 +2048,7 @@ cancelled. They split three ways:
   forward nodes (`/admin/forward/nodes`, 8), Ansible machines
   (`/admin/forward/ansible-machines`, 8) and observability
   (`/admin/forward/observability/targets`, `topology` and `trend`, 3). The
-  v2 routes go with F5d. As built (F5a,
+  v2 routes went with F5d. As built (F5a,
   [`../forwarding/v4-api.md`](../forwarding/v4-api.md)):
   - list, create, get, update, delete and toggle map one to one onto
     `/nodes` and `/ansible-machines`;
@@ -2046,7 +2057,8 @@ cancelled. They split three ways:
   - `sync-stats` is the traffic ledger (`GET /stats?node_ref=`): the
     nodes push their counters;
   - the trend is hourly traffic, since the kernel keeps no latency history.
-- **4 clean agent routes, retired with the switch to the new Agent:**
+- **4 clean agent routes, retired with the switch to the new Agent (removed
+  in F5d):**
   `GET`/`POST /admin/forward/agents`,
   `POST /admin/forward/agents/:id/revoke` and
   `GET /forward-agent/install.sh`.

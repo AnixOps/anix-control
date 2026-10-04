@@ -13,13 +13,6 @@ Use this folder when you need implementation detail, clone contracts, runtime op
 
 ## Documents
 
-### Flux-panel Clone
-
-| Document | Purpose |
-|------|------|
-| [Flux-panel Clone Guide](flux-panel-clone.md) | Source-of-truth workflow, current clone status, remaining gaps, and next clone order for `flux-panel` 1:1 cloning work |
-| [Flux Forward Contract](flux-forward-contract.md) | Concrete forward/tunnel endpoint mapping, DTO fields, auth scope and known gaps |
-
 ### Forwarding Runtime
 
 | Document | Purpose |
@@ -66,14 +59,12 @@ Use this folder when you need implementation detail, clone contracts, runtime op
 
 ## Recommended Reading Order
 
-If the task is to continue cloning `flux-panel`:
-
-1. Read [Flux-panel Clone Guide](flux-panel-clone.md), including its current status and gap sections.
-2. Read [Flux Forward Contract](flux-forward-contract.md).
-3. Inspect the upstream reference repository at <https://github.com/bqlpfy/flux-panel>.
-4. Only then start changing routes, services, DTOs or pages.
-
-If the task is not related to `flux-panel`, use the other topic-specific guides.
+If the task is about forwarding, read the forwarding rules in
+[`../../AGENTS.md`](../../AGENTS.md), then
+[`../architecture/forward-sdk.md`](../architecture/forward-sdk.md) and
+[`../forwarding/v4-api.md`](../forwarding/v4-api.md). The flux-panel clone
+and its contract were removed in v4.2 (F5d); their guides are in
+[`../archive/`](../archive/README.md).
 
 If the task is to validate or operate forwarding runtime:
 

@@ -80,13 +80,6 @@ export default {
         title: '运行方式',
         description: '转发的执行面：NodeX 有状态控制面，或面板主机上的本地 Ansible 执行器。在对应页面修改配置。'
       },
-      jobsLoadFailed: '无法加载运行任务',
-      jobsEmptyDescription: '转发规则下发到运行时后，任务会出现在这里。',
-      jobColumns: {
-        job: '任务',
-        status: '状态',
-        time: '时间'
-      },
       commands: {
         title: '运维命令'
       }

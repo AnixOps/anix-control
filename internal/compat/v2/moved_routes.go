@@ -28,7 +28,6 @@ var movedRoutes = []MovedRoute{
 	{Method: "POST", LegacyPath: "/api/v2/speed-limit/delete", FromPackage: "plan", FromRoute: "plan.speed_limit.delete.post", ToPackage: "forward", ToRoute: "forward.speed_limit.delete.post"},
 	{Method: "POST", LegacyPath: "/api/v2/speed-limit/list", FromPackage: "plan", FromRoute: "plan.speed_limit.list.post", ToPackage: "forward", ToRoute: "forward.speed_limit.list.post"},
 	{Method: "POST", LegacyPath: "/api/v2/speed-limit/tunnels", FromPackage: "plan", FromRoute: "plan.speed_limit.tunnels.post", ToPackage: "forward", ToRoute: "forward.speed_limit.tunnels.post"},
-	{Method: "POST", LegacyPath: "/api/v2/speed-limit/update", FromPackage: "plan", FromRoute: "plan.speed_limit.update.post", ToPackage: "forward", ToRoute: "forward.speed_limit.update.post"},
 	{Method: "GET", LegacyPath: "/api/v2/user/invite", FromPackage: "identity-platform", FromRoute: "identity.user.invite.get", ToPackage: "affiliate", ToRoute: "affiliate.user.invite.get"},
 	{Method: "POST", LegacyPath: "/api/v2/user/invite/generate", FromPackage: "identity-platform", FromRoute: "identity.user.invite.generate.post", ToPackage: "affiliate", ToRoute: "affiliate.user.invite.generate.post"},
 	{Method: "GET", LegacyPath: "/api/v2/admin/invite/config", FromPackage: "identity-platform", FromRoute: "identity.admin.invite.config.get", ToPackage: "affiliate", ToRoute: "affiliate.admin.invite.config.get"},

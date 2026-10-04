@@ -84,15 +84,6 @@ func isNumericHostName(name string) bool {
 // probeLookupFunc resolves a host name to its addresses.
 type probeLookupFunc func(ctx context.Context, host string) ([]netip.Addr, error)
 
-// resolvePublicAddress returns the public address host names: host itself
-// when it is an address, else the first address it resolves to. It fails
-// with errNotPublicAddress when host is, or resolves to any, address that
-// is not public, including loopback names and numeric IPv4 forms, which it
-// refuses without asking DNS.
-func resolvePublicAddress(host string) (netip.Addr, error) {
-	return resolvePublicAddressWith(context.Background(), probeLookup, host)
-}
-
 // resolvePublicAddressWith is resolvePublicAddress with lookup asking DNS,
 // for at most diagnosisTimeout and until ctx ends.
 func resolvePublicAddressWith(ctx context.Context, lookup probeLookupFunc, host string) (netip.Addr, error) {

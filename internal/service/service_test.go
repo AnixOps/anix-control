@@ -1937,25 +1937,6 @@ func (s *ForwardNodeServiceTestSuite) TestGenerateAPIToken() {
 	assert.Len(s.T(), token, 32) // hex encoding of 16 bytes
 }
 
-func (s *ForwardNodeServiceTestSuite) TestParseTags() {
-	// Empty tags
-	tags := s.svc.ParseTags("")
-	assert.Empty(s.T(), tags)
-
-	// Valid JSON tags
-	tags = s.svc.ParseTags(`["tag1","tag2"]`)
-	assert.Len(s.T(), tags, 2)
-	assert.Equal(s.T(), "tag1", tags[0])
-}
-
-func (s *ForwardNodeServiceTestSuite) TestParseTagsWithErrorRejectsInvalidJSON() {
-	tags, err := s.svc.ParseTagsWithError(`["tag1"`)
-
-	assert.Nil(s.T(), tags)
-	assert.Error(s.T(), err)
-	assert.Empty(s.T(), s.svc.ParseTags(`["tag1"`))
-}
-
 // Skip: HealthCheck tests timeout and cause instability
 // func (s *ForwardNodeServiceTestSuite) TestHealthCheck() { ... }
 // func (s *ForwardNodeServiceTestSuite) TestHealthCheckAll() { ... }
@@ -3556,20 +3537,6 @@ func (s *ForwardRuleServiceTestSuite) TestGetByID_NotFound() {
 	assert.Error(s.T(), err)
 }
 
-func (s *ForwardRuleServiceTestSuite) TestList() {
-	rules, total, err := s.svc.List(1, 10, nil)
-	assert.NoError(s.T(), err)
-	assert.GreaterOrEqual(s.T(), total, int64(0))
-	assert.NotNil(s.T(), rules)
-}
-
-func (s *ForwardRuleServiceTestSuite) TestGetFreePort() {
-	port, err := s.svc.GetFreePort(s.relayNode.ID, 10000, 20000)
-	assert.NoError(s.T(), err)
-	assert.GreaterOrEqual(s.T(), port, 10000)
-	assert.LessOrEqual(s.T(), port, 20000)
-}
-
 func TestForwardRuleService(t *testing.T) {
 	suite.Run(t, new(ForwardRuleServiceTestSuite))
 }
@@ -4060,65 +4027,6 @@ func (s *ForwardNodeServiceTestSuite) SkipTestHealthCheck() {
 	assert.NotZero(s.T(), found.ID)
 }
 
-// Additional ForwardRuleService Tests
-func (s *ForwardRuleServiceTestSuite) TestCreate() {
-	rule := &model.ForwardRule{
-		Name:        "Create Test Rule",
-		Enabled:     true,
-		RelayNodeID: s.relayNode.ID,
-		ListenPort:  10010,
-		Protocol:    "tcp",
-		ExitNodeID:  s.exitNode.ID,
-		TargetHost:  "example.com",
-		TargetPort:  443,
-	}
-
-	err := s.svc.Create(rule)
-	assert.NoError(s.T(), err)
-	assert.NotZero(s.T(), rule.ID)
-}
-
-func (s *ForwardRuleServiceTestSuite) TestUpdate() {
-	rule := &model.ForwardRule{
-		Name:        "Update Test Rule",
-		Enabled:     true,
-		RelayNodeID: s.relayNode.ID,
-		ListenPort:  10011,
-		Protocol:    "tcp",
-		ExitNodeID:  s.exitNode.ID,
-		TargetHost:  "example.com",
-		TargetPort:  443,
-	}
-	database.Get().Create(rule)
-
-	rule.TargetHost = "updated.example.com"
-	err := s.svc.Update(rule)
-	assert.NoError(s.T(), err)
-
-	found, _ := s.svc.GetByID(rule.ID)
-	assert.Equal(s.T(), "updated.example.com", found.TargetHost)
-}
-
-func (s *ForwardRuleServiceTestSuite) TestDelete() {
-	rule := &model.ForwardRule{
-		Name:        "Delete Test Rule",
-		Enabled:     true,
-		RelayNodeID: s.relayNode.ID,
-		ListenPort:  10012,
-		Protocol:    "tcp",
-		ExitNodeID:  s.exitNode.ID,
-		TargetHost:  "example.com",
-		TargetPort:  443,
-	}
-	database.Get().Create(rule)
-
-	err := s.svc.Delete(rule.ID)
-	assert.NoError(s.T(), err)
-
-	_, err = s.svc.GetByID(rule.ID)
-	assert.Error(s.T(), err)
-}
-
 func (s *ForwardRuleServiceTestSuite) TestGetUserRules() {
 	userID := uint(1)
 	rule := &model.ForwardRule{
@@ -4137,61 +4045,6 @@ func (s *ForwardRuleServiceTestSuite) TestGetUserRules() {
 	rules, err := s.svc.GetUserRules(1)
 	assert.NoError(s.T(), err)
 	assert.Len(s.T(), rules, 1)
-}
-
-func (s *ForwardRuleServiceTestSuite) TestToggle() {
-	rule := &model.ForwardRule{
-		Name:        "Toggle Test Rule",
-		Enabled:     true,
-		RelayNodeID: s.relayNode.ID,
-		ListenPort:  10014,
-		Protocol:    "tcp",
-		ExitNodeID:  s.exitNode.ID,
-		TargetHost:  "example.com",
-		TargetPort:  443,
-	}
-	database.Get().Create(rule)
-
-	err := s.svc.Toggle(rule.ID, false)
-	assert.NoError(s.T(), err)
-
-	found, _ := s.svc.GetByID(rule.ID)
-	assert.False(s.T(), found.Enabled)
-}
-
-func (s *ForwardRuleServiceTestSuite) TestCreateRuleForUser() {
-	userID := uint(1)
-	rule, err := s.svc.CreateRuleForUser(userID, true, &CreateRuleRequest{
-		RelayNodeID: s.relayNode.ID,
-		ExitNodeID:  s.exitNode.ID,
-		Protocol:    "tcp",
-		TargetHost:  "example.com",
-		TargetPort:  443,
-	})
-	assert.NoError(s.T(), err)
-	assert.NotNil(s.T(), rule)
-	assert.Equal(s.T(), userID, *rule.UserID)
-}
-
-// Any user created legacy rules on any relay and exit node, to any target.
-// No user entitlement covers a legacy rule's nodes, so only administrators
-// create them.
-func (s *ForwardRuleServiceTestSuite) TestCreateRuleForUserRefusesUsers() {
-	var before int64
-	s.Require().NoError(database.Get().Model(&model.ForwardRule{}).Count(&before).Error)
-	rule, err := s.svc.CreateRuleForUser(2, false, &CreateRuleRequest{
-		Name:        "user rule",
-		RelayNodeID: s.relayNode.ID,
-		ExitNodeID:  s.exitNode.ID,
-		Protocol:    "tcp",
-		TargetHost:  "203.0.113.5",
-		TargetPort:  443,
-	})
-	s.Require().ErrorIs(err, ErrForwardRuleAdminOnly)
-	s.Nil(rule)
-	var after int64
-	s.Require().NoError(database.Get().Model(&model.ForwardRule{}).Count(&after).Error)
-	s.Equal(before, after, "a user's rule was stored")
 }
 
 // Additional InviteService Tests
@@ -6525,173 +6378,6 @@ func (s *ForwardNodeServiceTestSuite) TestRandBytes() {
 // =====================================================
 // ForwardRuleService Comprehensive Tests
 // =====================================================
-
-func (s *ForwardRuleServiceTestSuite) TestValidateRule_NotRelayNode() {
-	// Create a node that is NOT a relay node
-	notRelayNode := &model.ForwardNode{
-		Name:    "Not Relay",
-		Type:    model.ForwardNodeTypeExit,
-		Host:    "10.99.0.1",
-		Status:  model.ForwardNodeStatusOnline,
-		Enabled: true,
-	}
-	database.Get().Create(notRelayNode)
-
-	rule := &model.ForwardRule{
-		Name:        "Invalid Relay Rule",
-		Enabled:     true,
-		RelayNodeID: notRelayNode.ID,
-		ExitNodeID:  s.exitNode.ID,
-		ListenPort:  9191,
-		Protocol:    "tcp",
-		TargetHost:  "test.example.com",
-		TargetPort:  443,
-	}
-
-	err := s.svc.Create(rule)
-	assert.Error(s.T(), err)
-	assert.Contains(s.T(), err.Error(), "not a relay node")
-}
-
-func (s *ForwardRuleServiceTestSuite) TestValidateRule_NotExitNode() {
-	// Create a node that is NOT an exit node
-	notExitNode := &model.ForwardNode{
-		Name:    "Not Exit",
-		Type:    model.ForwardNodeTypeRelay,
-		Host:    "10.99.0.2",
-		Status:  model.ForwardNodeStatusOnline,
-		Enabled: true,
-	}
-	database.Get().Create(notExitNode)
-
-	rule := &model.ForwardRule{
-		Name:        "Invalid Exit Rule",
-		Enabled:     true,
-		RelayNodeID: s.relayNode.ID,
-		ExitNodeID:  notExitNode.ID,
-		ListenPort:  9192,
-		Protocol:    "tcp",
-		TargetHost:  "test.example.com",
-		TargetPort:  443,
-	}
-
-	err := s.svc.Create(rule)
-	assert.Error(s.T(), err)
-	assert.Contains(s.T(), err.Error(), "not an exit node")
-}
-
-func (s *ForwardRuleServiceTestSuite) TestValidateRule_RelayNodeNotFound() {
-	rule := &model.ForwardRule{
-		Name:        "Missing Relay Rule",
-		Enabled:     true,
-		RelayNodeID: 99999,
-		ExitNodeID:  s.exitNode.ID,
-		ListenPort:  9193,
-		Protocol:    "tcp",
-		TargetHost:  "test.example.com",
-		TargetPort:  443,
-	}
-
-	err := s.svc.Create(rule)
-	assert.Error(s.T(), err)
-	assert.Contains(s.T(), err.Error(), "relay node not found")
-}
-
-func (s *ForwardRuleServiceTestSuite) TestValidateRule_ExitNodeNotFound() {
-	rule := &model.ForwardRule{
-		Name:        "Missing Exit Rule",
-		Enabled:     true,
-		RelayNodeID: s.relayNode.ID,
-		ExitNodeID:  99999,
-		ListenPort:  9194,
-		Protocol:    "tcp",
-		TargetHost:  "test.example.com",
-		TargetPort:  443,
-	}
-
-	err := s.svc.Create(rule)
-	assert.Error(s.T(), err)
-	assert.Contains(s.T(), err.Error(), "exit node not found")
-}
-
-func (s *ForwardRuleServiceTestSuite) TestGetFreePort_NoAvailablePort() {
-	// Create rules that occupy the entire range
-	for port := 10000; port <= 10005; port++ {
-		rule := &model.ForwardRule{
-			Name:        fmt.Sprintf("Port Rule %d", port),
-			Enabled:     true,
-			RelayNodeID: s.relayNode.ID,
-			ExitNodeID:  s.exitNode.ID,
-			ListenPort:  port,
-			Protocol:    "tcp",
-			TargetHost:  "test.example.com",
-			TargetPort:  443,
-		}
-		database.Get().Create(rule)
-	}
-
-	// Try to get a free port in the occupied range
-	port, err := s.svc.GetFreePort(s.relayNode.ID, 10000, 10005)
-	assert.Error(s.T(), err)
-	assert.Equal(s.T(), 0, port)
-}
-
-func (s *ForwardRuleServiceTestSuite) TestUpdate_ValidationError() {
-	// Create a valid rule first
-	rule := &model.ForwardRule{
-		Name:        "Update Test Rule",
-		Enabled:     true,
-		RelayNodeID: s.relayNode.ID,
-		ExitNodeID:  s.exitNode.ID,
-		ListenPort:  22000,
-		Protocol:    "tcp",
-		TargetHost:  "update.example.com",
-		TargetPort:  443,
-	}
-	database.Get().Create(rule)
-
-	// Try to update with invalid exit node
-	rule.ExitNodeID = 99999
-	err := s.svc.Update(rule)
-	assert.Error(s.T(), err)
-	assert.Contains(s.T(), err.Error(), "exit node not found")
-}
-
-func (s *ForwardRuleServiceTestSuite) TestCreate_DatabaseError() {
-	// Create a rule with duplicate port on same relay node
-	rule1 := &model.ForwardRule{
-		Name:        "Duplicate Port Rule 1",
-		Enabled:     true,
-		RelayNodeID: s.relayNode.ID,
-		ExitNodeID:  s.exitNode.ID,
-		ListenPort:  23000,
-		Protocol:    "tcp",
-		TargetHost:  "dup1.example.com",
-		TargetPort:  443,
-	}
-	err := s.svc.Create(rule1)
-	assert.NoError(s.T(), err)
-
-	// Try to create another rule with same port on same relay node
-	rule2 := &model.ForwardRule{
-		Name:        "Duplicate Port Rule 2",
-		Enabled:     true,
-		RelayNodeID: s.relayNode.ID,
-		ExitNodeID:  s.exitNode.ID,
-		ListenPort:  23000, // Same port
-		Protocol:    "tcp",
-		TargetHost:  "dup2.example.com",
-		TargetPort:  443,
-	}
-	err = s.svc.Create(rule2)
-	assert.Error(s.T(), err)
-	assert.Contains(s.T(), err.Error(), "already in use")
-}
-
-func (s *ForwardRuleServiceTestSuite) TestDelete_NonExistent() {
-	err := s.svc.Delete(99999)
-	assert.Error(s.T(), err)
-}
 
 // =====================================================
 // LoadBalancerService Comprehensive Tests

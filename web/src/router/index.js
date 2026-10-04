@@ -30,16 +30,6 @@ const AdminPlans = () => import('@/views/admin/Plans.vue')
 const AdminTickets = () => import('@/views/admin/Tickets.vue')
 const AdminCoupons = () => import('@/views/admin/Coupons.vue')
 const AdminKnowledge = () => import('@/views/admin/Knowledge.vue')
-const AdminForward = () => import('@/views/admin/Forward.vue')
-const AdminForwardWizard = () => import('@/views/admin/ForwardWizard.vue')
-const AdminTunnel = () => import('@/views/admin/Tunnel.vue')
-const AdminLimit = () => import('@/views/admin/Limit.vue')
-const AdminAnsibleMachines = () => import('@/views/admin/AnsibleMachines.vue')
-const AdminForwardNodes = () => import('@/views/admin/ForwardNodes.vue')
-const AdminLocalRuntime = () => import('@/views/admin/LocalRuntime.vue')
-const AdminNodeX = () => import('@/views/admin/NodeX.vue')
-const AdminForwardNodeDetail = () => import('@/views/admin/forward-nodes/ForwardNodeDetail.vue')
-const AdminAnsibleMachineDetail = () => import('@/views/admin/forward-nodes/AnsibleMachineDetail.vue')
 const AdminPayment = () => import('@/views/admin/Payment.vue')
 const AdminSecurity = () => import('@/views/admin/Security.vue')
 const AdminNotifications = () => import('@/views/admin/Notifications.vue')
@@ -163,8 +153,14 @@ const routes = [
         component: AdminDashboard
       },
       {
-        // 流量与监控 (UI U8): live nodes, user traffic, node latency and
-        // forwards as sections in the path; the old pages redirect.
+        // The 转发 section of 流量与监控 went with the flux observability API
+        // (F5d): the forwarding area's overview shows forwarding now.
+        path: 'monitor/forward',
+        redirect: '/admin/forward/overview'
+      },
+      {
+        // 流量与监控 (UI U8): live nodes and user traffic as sections in the
+        // path; the old pages redirect.
         path: 'monitor/:section?',
         component: AdminMonitor
       },
@@ -219,17 +215,13 @@ const routes = [
         path: 'knowledge',
         component: AdminKnowledge
       },
+      // The forwarding area (F5b, docs/design/forward-ui): 概览, 路由 and
+      // 节点. /admin/forward opens 概览; the flux-clone pages were removed in
+      // v4.2 (F5d), and their paths open 概览 too.
       {
         path: 'forward',
-        component: AdminForward,
-        meta: WIDE
+        redirect: '/admin/forward/overview'
       },
-      {
-        path: 'forward/setup',
-        component: AdminForwardWizard
-      },
-      // The v4.2 forwarding area (F5b, docs/design/forward-ui): 概览, 路由
-      // and 节点, on paths the flux-clone pages above never used.
       {
         path: 'forward/overview',
         component: ForwardOverview,
@@ -274,82 +266,15 @@ const routes = [
         meta: forwardMeta('pageTitles.admin.forwardV4Dns')
       },
       {
-        path: 'forward/tunnel',
-        component: AdminTunnel,
-        meta: WIDE
+        // The removed flux-clone pages (转发（旧版）, 转发节点（旧版）, the
+        // wizard, tunnels, limits, Ansible machines, the runtimes, the clean
+        // agents and the old observability page) and their old aliases.
+        path: 'forward/:legacy(setup|tunnel|tunnels|limit|limits|nodes|ansible|ansible-machines|local|nodex|agents|observability)/:rest(.*)*',
+        redirect: '/admin/forward/overview'
       },
       {
-        path: 'forward/limit',
-        component: AdminLimit,
-        meta: WIDE
-      },
-      {
-        path: 'forward/ansible-machines',
-        component: AdminAnsibleMachines,
-        meta: WIDE
-      },
-      {
-        path: 'forward/nodes',
-        component: AdminForwardNodes,
-        meta: WIDE
-      },
-      // Detail pages of 转发节点 (UI U7); the ids are numbers.
-      {
-        path: 'forward/nodes/:id(\\d+)',
-        component: AdminForwardNodeDetail,
-        props: route => ({ id: Number(route.params.id) }),
-        meta: { titleKey: 'forwardNodesPage.detail.sections' }
-      },
-      {
-        path: 'forward/ansible-machines/:id(\\d+)',
-        component: AdminAnsibleMachineDetail,
-        props: route => ({ id: Number(route.params.id) }),
-        meta: { titleKey: 'forwardNodesPage.detail.sections' }
-      },
-      {
-        path: 'forward/local',
-        component: AdminLocalRuntime
-      },
-      {
-        path: 'forward/nodex',
-        component: AdminNodeX
-      },
-      {
-        // 转发可观测性 is the 转发 section of 流量与监控 now (UI U8).
-        path: 'forward/observability',
-        redirect: to => ({ path: '/admin/monitor/forward', query: to.query })
-      },
-      {
-        path: 'forward/agents',
-        component: AdminAgent
-      },
-      {
-        path: 'forward/tunnels',
-        redirect: '/admin/forward/tunnel'
-      },
-      {
-        path: 'forward/limits',
-        redirect: '/admin/forward/limit'
-      },
-      {
-        path: 'forward/ansible',
-        redirect: '/admin/forward/ansible-machines'
-      },
-      {
-        path: 'local',
-        redirect: '/admin/forward/local'
-      },
-      {
-        path: 'nodex',
-        redirect: '/admin/forward/nodex'
-      },
-      {
-        path: 'tunnel',
-        redirect: '/admin/forward/tunnel'
-      },
-      {
-        path: 'limit',
-        redirect: '/admin/forward/limit'
+        path: ':legacy(local|nodex|tunnel|limit)',
+        redirect: '/admin/forward/overview'
       },
       {
         path: 'payment',
@@ -576,11 +501,11 @@ router.beforeEach(async (to, from, next) => {
       }
       // A page that needs a package capability (the forwarding area needs
       // the forward package's v4 API) waits for the catalog; without the
-      // capability it leads to the flux-clone forwarding page.
+      // capability it leads to 插件中心, where the package is installed.
       if (to.meta.capability) {
         const snapshot = await ensureAdminExtensions(router).catch(() => null)
         if (!snapshot?.capabilities?.includes(to.meta.capability)) {
-          next({ path: '/admin/forward', replace: true })
+          next({ path: '/admin/plugins', replace: true })
           return
         }
         next()

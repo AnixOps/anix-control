@@ -99,16 +99,6 @@ describe('admin routes', () => {
     }
   })
 
-  it('gives forward nodes and Ansible machines numeric detail routes (UI U7)', () => {
-    const node = router.resolve('/admin/forward/nodes/5')
-    expect(node.matched.at(-1).path).toBe('/admin/forward/nodes/:id(\\d+)')
-    expect(node.matched.at(-1).props.default(node)).toEqual({ id: 5 })
-    expect(node.meta.titleKey).toBe('forwardNodesPage.detail.sections')
-    const machine = router.resolve('/admin/forward/ansible-machines/7')
-    expect(machine.matched.at(-1).props.default(machine)).toEqual({ id: 7 })
-    expect(router.resolve('/admin/forward/nodes/abc').matched.at(-1).path).not.toBe('/admin/forward/nodes/:id(\\d+)')
-  })
-
   it('blocks plugin extension routes when the admin lacks the route permission', async () => {
     const removeRoute = router.addRoute('admin', {
       path: 'extensions/example',

@@ -96,6 +96,6 @@ test('saves a node’s forwarding settings', async ({ page }) => {
 
 test('the forwarding area needs the forward package’s v4 API', async ({ page }) => {
   await openScreen(page, 'admin-forward-no-capability', { clock: true })
-  await expect(page).toHaveURL(/\/admin\/forward$/)
+  await expect(page).toHaveURL(/\/admin\/plugins$/)
   await expect(page.locator('#admin-sidebar a[href="/admin/forward/overview"]')).toHaveCount(0)
 })

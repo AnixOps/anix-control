@@ -85,19 +85,17 @@ describe('404, 无权限 and account routes', () => {
     expect(router.currentRoute.value.path).toBe('/admin/account')
   })
 
-  it('keeps the seven legacy forward redirects', () => {
-    const redirects = {
-      '/admin/forward/tunnels': '/admin/forward/tunnel',
-      '/admin/forward/limits': '/admin/forward/limit',
-      '/admin/forward/ansible': '/admin/forward/ansible-machines',
-      '/admin/local': '/admin/forward/local',
-      '/admin/nodex': '/admin/forward/nodex',
-      '/admin/tunnel': '/admin/forward/tunnel',
-      '/admin/limit': '/admin/forward/limit'
+  // The flux-clone pages were removed in v4.2 (F5d): their paths, and the
+  // old aliases of them, open the forwarding area's overview.
+  it('sends the removed flux-clone forward pages to the forwarding overview', () => {
+    for (const from of ['/admin/forward', '/admin/forward/setup', '/admin/forward/tunnel', '/admin/forward/tunnels', '/admin/forward/limit',
+      '/admin/forward/limits', '/admin/forward/ansible', '/admin/forward/ansible-machines', '/admin/forward/ansible-machines/7',
+      '/admin/forward/nodes', '/admin/forward/nodes/5', '/admin/forward/local', '/admin/forward/nodex', '/admin/forward/agents',
+      '/admin/forward/observability', '/admin/local', '/admin/nodex', '/admin/tunnel', '/admin/limit', '/admin/monitor/forward']) {
+      expect(router.resolve(from).matched.at(-1).redirect, from).toBe('/admin/forward/overview')
     }
-    const records = router.getRoutes()
-    for (const [from, to] of Object.entries(redirects)) {
-      expect(records.find(record => record.path === from)?.redirect).toBe(to)
+    for (const path of ['/admin/forward/overview', '/admin/forward/routes', '/admin/forward/routes/new', '/admin/forward/inventory', '/admin/forward/inventory/forward-41']) {
+      expect(router.resolve(path).matched.at(-1).redirect, path).toBeUndefined()
     }
   })
 })

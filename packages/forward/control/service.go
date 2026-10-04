@@ -9,58 +9,35 @@ import (
 	"strings"
 
 	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
-	kernelsubscriberv1 "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1"
-	"github.com/AnixOps/anix-control/sdk/packagestoresdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
-	"github.com/AnixOps/anix-control/v4/packages/forward/native"
 	"github.com/AnixOps/anix-control/v4/packages/forward/v4api"
 	"google.golang.org/grpc"
-	"gorm.io/gorm"
 )
 
-// forwardBridge is what the forward host needs from the package bridge.
-type forwardBridge interface {
-	pluginhostsdk.RouterBridge
-	packagestoresdk.Leaser
-}
-
-// newForwardService returns the forward host's router. The routes in
-// forwardRoutes have a native handler on the adopted forward tables and the
-// forward node, runtime settings, user directory and entitlement views;
-// such a route serves natively once the kernel sets its mode, and falls
-// back to the legacy handler otherwise. The traffic reset of a subscriber
-// goes through the kernel's KernelSubscriber over the bridge connection
-// (local socket or module listener); a bridge without one leaves it legacy.
-// The routes in bridgedRoutes always relay to the legacy handler.
+// newForwardService returns the forward host's router. Since v4.2 (F5d)
+// the package serves no v2 route natively and adopts no table: every v2
+// route it declares (bridgedRoutes) relays to the kernel's legacy handler,
+// whatever mode is stored for it, until the legacy cleanup (F5c) drops the
+// flux tables and removes the routes.
 //
 // The package's own control route, v4api.Route (/api/v4/forward/* to its
 // callers), is the v4 administrator API on the kernel's ForwardControl
-// over the same bridge connection (v4api). It has no legacy handler and no
-// route mode: the host always answers it, 503 without the connection.
-func newForwardService(bridge forwardBridge, leaseID string) (*forwardHost, error) {
-	storage := packagestoresdk.SharedOpener(bridge)
-	service := &native.Service{Open: func(ctx context.Context) (*gorm.DB, error) {
-		store, err := storage(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return store.DB.WithContext(ctx), nil
-	}}
+// over the bridge connection (local socket or module listener; v4api). It
+// has no legacy handler and no route mode: the host always answers it, 503
+// without the connection.
+func newForwardService(bridge pluginhostsdk.RouterBridge, leaseID string) (*forwardHost, error) {
 	api := &v4api.Service{}
 	if conn, ok := bridge.(interface {
 		Conn() grpc.ClientConnInterface
 	}); ok && conn.Conn() != nil {
-		service.Subscriber = kernelsubscriberv1.NewKernelSubscriberClient(conn.Conn())
 		api.Forward = forwardv1.NewForwardControlClient(conn.Conn())
 	}
 	router, err := pluginhostsdk.NewRouter(pluginhostsdk.RouterConfig{
 		PackageID: "forward", LeaseID: leaseID, Bridge: bridge, Logf: log.Printf,
 		AllowRoute: func(routeID string) bool {
-			_, nativeRoute := forwardRoutes[routeID]
 			_, bridgedRoute := bridgedRoutes[routeID]
-			return nativeRoute || bridgedRoute || routeID == v4api.RouteID
+			return bridgedRoute || routeID == v4api.RouteID
 		},
-		Native: service.Handlers(),
 	})
 	if err != nil {
 		return nil, err
@@ -114,120 +91,43 @@ func (h *forwardHost) Dispatch(ctx context.Context, request pluginhostsdk.Dispat
 
 var jsonHeaders = []pluginhostsdk.Header{{Name: "Content-Type", Value: "application/json; charset=utf-8"}}
 
-// forwardRoutes are the package's compatibility routes with a native
-// handler. None of them changes what a node runs or state the kernel keeps
-// in memory.
-var forwardRoutes = map[string]struct{}{
-	// Panel forwards: the lists, and the display order, which no node runs.
-	"forward.forward.list.post":               {},
-	"forward.admin.forward.list.post":         {},
-	"forward.forward.update_order.post":       {},
-	"forward.admin.forward.update_order.post": {},
-	// Tunnels: the list, creation and deletion of an unused tunnel. A
-	// tunnel runs nothing until a forward uses it.
-	"forward.admin.tunnel.list.post":   {},
-	"forward.admin.tunnel.create.post": {},
-	"forward.admin.tunnel.delete.post": {},
-	// The tunnels a forward may use, for the caller.
-	"forward.tunnel.user.tunnel.post":       {},
-	"forward.admin.tunnel.user.tunnel.post": {},
-	// Tunnel permissions: granting one, and the list.
-	"forward.tunnel.user.assign.post":       {},
-	"forward.admin.tunnel.user.assign.post": {},
-	"forward.tunnel.user.list.post":         {},
-	"forward.admin.tunnel.user.list.post":   {},
-	// Reads: a forward's ingress latencies, the node statistics and the
-	// caller's legacy rules (their nodes without API tokens).
+// bridgedRoutes are the package's compatibility routes. None has a native
+// handler: each relays to the kernel's legacy handler. The flux forwarding
+// routes that changed what nodes run (forwards, legacy rules, tunnel and
+// permission updates, node and Ansible machine management, the clean agent
+// tokens) were removed in v4.2 (F5d), and /api/v4/forward/* replaces them.
+// The routes below go with the legacy runtime (F5c).
+var bridgedRoutes = map[string]struct{}{
+	// Legacy flux reads and writes on the flux tables, which the package
+	// no longer adopts (F5d), so the kernel serves them until F5c drops the
+	// tables: the forward lists and display order, tunnels (list, create,
+	// delete, the tunnels a forward may use), tunnel permissions (assign,
+	// list), the multi-ingress comparison, the node statistics, the user's
+	// legacy rules and the speed limits (create, list, delete, tunnels).
+	"forward.forward.list.post":                             {},
+	"forward.admin.forward.list.post":                       {},
+	"forward.forward.update_order.post":                     {},
+	"forward.admin.forward.update_order.post":               {},
+	"forward.admin.tunnel.list.post":                        {},
+	"forward.admin.tunnel.create.post":                      {},
+	"forward.admin.tunnel.delete.post":                      {},
+	"forward.tunnel.user.tunnel.post":                       {},
+	"forward.admin.tunnel.user.tunnel.post":                 {},
+	"forward.tunnel.user.assign.post":                       {},
+	"forward.admin.tunnel.user.assign.post":                 {},
+	"forward.tunnel.user.list.post":                         {},
+	"forward.admin.tunnel.user.list.post":                   {},
 	"forward.admin.forward.observability.multi_ingress.get": {},
 	"forward.admin.forward.stats.get":                       {},
 	"forward.user.forward.rules.get":                        {},
-	// The administrator's traffic reset (KernelSubscriber.ResetTraffic, or
-	// a tunnel permission's traffic).
+	"forward.speed_limit.create.post":                       {},
+	"forward.speed_limit.list.post":                         {},
+	"forward.speed_limit.delete.post":                       {},
+	"forward.speed_limit.tunnels.post":                      {},
+	// The administrator's traffic reset (POST /api/v2/user/reset, the Users
+	// page's 重置流量): type 1 resets a subscriber's traffic, type 2 a tunnel
+	// permission's. The kernel serves it.
 	"forward.user.reset.post": {},
-	// Speed limits (v2_speed_limit), moved from plan: creation, the list,
-	// the deletion of an unused limit and the tunnels a limit may name. A
-	// limit runs nothing until a permission names it.
-	"forward.speed_limit.create.post":  {},
-	"forward.speed_limit.list.post":    {},
-	"forward.speed_limit.delete.post":  {},
-	"forward.speed_limit.tunnels.post": {},
-}
-
-// bridgedRoutes are the package's compatibility routes without a native
-// handler; they always relay to the kernel's legacy handler.
-var bridgedRoutes = map[string]struct{}{
-	// Forward nodes and Ansible machines are rows of v2_forward_node, which
-	// holds each node's API token. The token authenticates the node's agent
-	// (WebSocket, gRPC and REST), so the table is a protected kernel table
-	// no package may adopt; the answers show the tokens to administrators,
-	// the kernel's gost manager keeps each node's address and token in
-	// memory, the checks dial the node, the statistics sync calls the
-	// node's gost metrics, and the Ansible list writes the machine tag.
-	"forward.admin.forward.nodes.get":                           {},
-	"forward.admin.forward.nodes.post":                          {},
-	"forward.admin.forward.nodes.id.get":                        {},
-	"forward.admin.forward.nodes.id.put":                        {},
-	"forward.admin.forward.nodes.id.delete":                     {},
-	"forward.admin.forward.nodes.id.check.post":                 {},
-	"forward.admin.forward.nodes.id.toggle.post":                {},
-	"forward.admin.forward.nodes.id.sync_stats.post":            {},
-	"forward.admin.forward.ansible_machines.get":                {},
-	"forward.admin.forward.ansible_machines.post":               {},
-	"forward.admin.forward.ansible_machines.id.get":             {},
-	"forward.admin.forward.ansible_machines.id.put":             {},
-	"forward.admin.forward.ansible_machines.id.delete":          {},
-	"forward.admin.forward.ansible_machines.id.check.post":      {},
-	"forward.admin.forward.ansible_machines.id.toggle.post":     {},
-	"forward.admin.forward.ansible_machines.id.sync_stats.post": {},
-	// Panel forward changes apply the forward on its node (NodeX, a local
-	// Ansible job or a clean agent job, whose payload carries the node's
-	// API token) and record the runtime result; the port bindings and the
-	// quota checks belong to the same flow. The diagnoses dial the
-	// targets and nodes from Control, and the backend sync re-applies every
-	// active forward.
-	"forward.forward.create.post":             {},
-	"forward.admin.forward.create.post":       {},
-	"forward.forward.update.post":             {},
-	"forward.admin.forward.update.post":       {},
-	"forward.forward.delete.post":             {},
-	"forward.admin.forward.delete.post":       {},
-	"forward.forward.force_delete.post":       {},
-	"forward.admin.forward.force_delete.post": {},
-	"forward.forward.pause.post":              {},
-	"forward.admin.forward.pause.post":        {},
-	"forward.forward.resume.post":             {},
-	"forward.admin.forward.resume.post":       {},
-	"forward.forward.diagnose.post":           {},
-	"forward.admin.forward.diagnose.post":     {},
-	"forward.admin.tunnel.diagnose.post":      {},
-	"forward.admin.forward.sync_backend.post": {},
-	// A tunnel update rebuilds its forwards' port bindings and re-applies
-	// them on their node when the protocol, listen addresses or interface
-	// change.
-	"forward.admin.tunnel.update.post": {},
-	// Removing a permission deletes its forwards from their node first;
-	// updating one pauses its forwards when it lapses and re-applies them
-	// when the speed limit changes.
-	"forward.tunnel.user.remove.post":       {},
-	"forward.admin.tunnel.user.remove.post": {},
-	"forward.tunnel.user.update.post":       {},
-	"forward.admin.tunnel.user.update.post": {},
-	// A speed limit update re-applies the forwards of every permission that
-	// names the limit on their nodes; it waits for KernelNodeOps.
-	"forward.speed_limit.update.post": {},
-	// Legacy rules: every change is pushed to NodeX with the nodes' API
-	// tokens. The administrator's answers embed the full node rows, tokens
-	// included, which kapi_forward_node_v1 does not show.
-	"forward.admin.forward.rules.get":            {},
-	"forward.admin.forward.rules.post":           {},
-	"forward.admin.forward.rules.id.get":         {},
-	"forward.admin.forward.rules.id.put":         {},
-	"forward.admin.forward.rules.id.delete":      {},
-	"forward.admin.forward.rules.id.toggle.post": {},
-	"forward.user.forward.rules.post":            {},
-	// The job list shows job payloads, which carry node API tokens
-	// (v2_forward_runtime_job is protected).
-	"forward.admin.forward.runtime.jobs.get": {},
 	// Kernel-owned (D4): runtime status and diagnosis describe the kernel's
 	// own executors. They read the protected v2_system_config (NodeX address
 	// and token, Ansible settings), call NodeX and inspect files on
@@ -236,22 +136,6 @@ var bridgedRoutes = map[string]struct{}{
 	"forward.admin.forward.runtime.doctor.get": {},
 	"forward.admin.forward.local.status.get":   {},
 	"forward.admin.forward.local.doctor.get":   {},
-	// The target catalog, latency trend and topology also read the proxy
-	// nodes of v2_node (status, parent, load), the proxy-node package's
-	// table, which no kernel view shows yet.
-	"forward.admin.forward.observability.targets.get":  {},
-	"forward.admin.forward.observability.trend.get":    {},
-	"forward.admin.forward.observability.topology.get": {},
-	// Clean agents: v2_forward_clean_agent holds each agent's token, which
-	// authenticates it (a protected table). The install script's panel URL
-	// is Control's forward_runtime.clean_agent.public_url when it is set,
-	// process configuration no package can read, else the request's scheme
-	// and host (which the kernel now sends): without the setting a native
-	// script could differ from the kernel's.
-	"forward.admin.forward.agents.get":            {},
-	"forward.admin.forward.agents.post":           {},
-	"forward.admin.forward.agents.id.revoke.post": {},
-	"forward.forward_agent.install_sh.get":        {},
 	// Kernel-owned (D3): the agent channel. Registration, heartbeat and
 	// report authenticate a clean agent, claim runtime jobs and record
 	// their results and traffic; the agents' rule list authenticates a

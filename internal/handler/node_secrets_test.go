@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"strings"
 	"testing"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
@@ -377,110 +376,6 @@ func (s *ForwardNodeTokenTestSuite) SetupTest() {
 	s.rule = &model.ForwardRule{Name: "rule", Enabled: true, RelayNodeID: s.relay.ID, ExitNodeID: s.exit.ID,
 		ListenPort: 20001, Protocol: "tcp", TargetHost: "203.0.113.5", TargetPort: 8443}
 	s.Require().NoError(s.db.Create(s.rule).Error)
-}
-
-func (s *ForwardNodeTokenTestSuite) serve(method, pattern, path, body string, headers map[string]string, handler gin.HandlerFunc) *httptest.ResponseRecorder {
-	router := gin.New()
-	router.Handle(method, pattern, handler)
-	req := httptest.NewRequest(method, path, bytes.NewReader([]byte(body)))
-	if body != "" {
-		req.Header.Set("Content-Type", "application/json")
-	}
-	for name, value := range headers {
-		req.Header.Set(name, value)
-	}
-	w := httptest.NewRecorder()
-	router.ServeHTTP(w, req)
-	return w
-}
-
-func (s *ForwardNodeTokenTestSuite) token(id uint) string {
-	var node model.ForwardNode
-	s.Require().NoError(s.db.First(&node, id).Error)
-	return node.APIToken
-}
-
-// The node and rule answers mask the nodes' tokens.
-func (s *ForwardNodeTokenTestSuite) TestAnswersMaskTokens() {
-	handler := NewForwardHandler()
-	for name, w := range map[string]*httptest.ResponseRecorder{
-		"node list":   s.serve("GET", "/forward/nodes", "/forward/nodes", "", nil, handler.ListNodes),
-		"node detail": s.serve("GET", "/forward/nodes/:id", fmt.Sprintf("/forward/nodes/%d", s.relay.ID), "", nil, handler.GetNode),
-		"rule list":   s.serve("GET", "/forward/rules", "/forward/rules", "", nil, handler.ListRules),
-		"rule detail": s.serve("GET", "/forward/rules/:id", fmt.Sprintf("/forward/rules/%d", s.rule.ID), "", nil, handler.GetRule),
-	} {
-		s.Require().Equal(http.StatusOK, w.Code, "%s: %s", name, w.Body.String())
-		s.NotContains(w.Body.String(), "relay-secret-token", name)
-		s.Contains(w.Body.String(), `"api_token":"`+service.NodeSecretPlaceholder+`"`, name)
-	}
-	s.Equal("relay-secret-token", s.token(s.relay.ID), "the node keeps its token")
-}
-
-// The token is shown once, in the answer that creates the node; a placeholder
-// sent to create a node is no token, and one is generated.
-func (s *ForwardNodeTokenTestSuite) TestCreateShowsTheTokenOnce() {
-	handler := NewForwardHandler()
-	for _, body := range []string{
-		`{"name":"chosen","type":"exit","host":"198.51.100.30","port":443,"api_token":"chosen-token"}`,
-		`{"name":"generated","type":"exit","host":"198.51.100.31","port":443}`,
-		`{"name":"placeholder","type":"exit","host":"198.51.100.32","port":443,"api_token":"********"}`,
-	} {
-		w := s.serve("POST", "/forward/nodes", "/forward/nodes", body, nil, handler.CreateNode)
-		s.Require().Equal(http.StatusOK, w.Code, w.Body.String())
-		data := decodePanelTestResponse(s.T(), w)["data"].(map[string]any)
-		token := data["api_token"].(string)
-		s.NotEmpty(token, body)
-		s.NotEqual(service.NodeSecretPlaceholder, token, body)
-		s.Equal(token, s.token(uint(data["id"].(float64))), body)
-		if strings.Contains(body, "chosen-token") {
-			s.Equal("chosen-token", token)
-		}
-	}
-}
-
-// The node form sends back the placeholder, or nothing: the stored token
-// stays, and the node's agent still authenticates with it. A new token
-// replaces it.
-func (s *ForwardNodeTokenTestSuite) TestUpdateKeepsTheMaskedToken() {
-	handler := NewForwardHandler()
-	path := fmt.Sprintf("/forward/nodes/%d", s.relay.ID)
-	for _, body := range []string{
-		`{"name":"renamed","api_token":"********"}`,
-		`{"name":"renamed","api_token":""}`,
-		`{"name":"renamed"}`,
-	} {
-		w := s.serve("PUT", "/forward/nodes/:id", path, body, nil, handler.UpdateNode)
-		s.Require().Equal(http.StatusOK, w.Code, w.Body.String())
-		s.NotContains(w.Body.String(), "relay-secret-token", body)
-		s.Equal("relay-secret-token", s.token(s.relay.ID), body)
-	}
-
-	rules := s.serve("GET", "/api/v2/forward/agent/rules", fmt.Sprintf("/api/v2/forward/agent/rules?node_id=%d", s.relay.ID), "",
-		map[string]string{"X-API-Key": "relay-secret-token"}, NewAgentHandler().AgentGetForwardRules)
-	s.Equal(http.StatusOK, rules.Code, rules.Body.String())
-	s.Contains(rules.Body.String(), "203.0.113.5")
-
-	w := s.serve("PUT", "/forward/nodes/:id", path, `{"api_token":"rotated-token"}`, nil, handler.UpdateNode)
-	s.Require().Equal(http.StatusOK, w.Code, w.Body.String())
-	s.NotContains(w.Body.String(), "rotated-token")
-	s.Equal("rotated-token", s.token(s.relay.ID))
-}
-
-// A clean agent's token is answered once, by the route that creates it; the
-// agent list never shows it.
-func (s *ForwardNodeTokenTestSuite) TestCleanAgentTokenIsShownOnce() {
-	s.Require().NoError(s.db.AutoMigrate(&model.ForwardCleanAgent{}))
-	handler := NewForwardCleanAgentHandler()
-	// A clean agent token is issued for one forward node.
-	created := s.serve("POST", "/forward/agents", "/forward/agents", fmt.Sprintf(`{"name":"edge-agent","nodeId":%d}`, s.relay.ID), nil, handler.CreateAgentToken)
-	s.Require().Equal(http.StatusOK, created.Code, created.Body.String())
-	token := decodePanelTestResponse(s.T(), created)["data"].(map[string]any)["token"].(string)
-	s.Require().NotEmpty(token)
-
-	listed := s.serve("GET", "/forward/agents", "/forward/agents", "", nil, handler.ListAgents)
-	s.Require().Equal(http.StatusOK, listed.Code, listed.Body.String())
-	s.Contains(listed.Body.String(), "edge-agent")
-	s.NotContains(listed.Body.String(), token)
 }
 
 func TestForwardNodeTokens(t *testing.T) {

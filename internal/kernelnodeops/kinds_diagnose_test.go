@@ -523,8 +523,8 @@ func TestDiagnoseForwardDialsPublicTargetsOnly(t *testing.T) {
 			Selected: kernelnodeopsv1.Vantage_VANTAGE_CONTROL, Used: kernelnodeopsv1.Vantage_VANTAGE_CONTROL,
 		}, diagnosis.GetVantage()))
 
-		// The legacy route computes the same for the forward's owner.
-		legacy, err := service.NewPanelForwardService(db).DiagnoseForwardContext(context.Background(), network.probes(), 1, false, 40)
+		// The service computes the same for the forward's owner (public targets only).
+		legacy, err := service.NewPanelForwardService(db).DiagnoseForwardTargets(context.Background(), network.probes(), 40, true)
 		require.NoError(t, err)
 		requireProtoEqual(t, legacyOutcomes(legacy.Results), withoutTimings(diagnosis.GetOutcomes()))
 

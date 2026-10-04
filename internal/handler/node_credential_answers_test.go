@@ -315,41 +315,6 @@ func (s *NodeCredentialAnswersTestSuite) TestRegistrationKeys() {
 	s.pin("delete auth key, bad id", code, body)
 }
 
-func (s *NodeCredentialAnswersTestSuite) TestCleanAgents() {
-	h := NewForwardCleanAgentHandler()
-	s.Require().NoError(s.db.Create(&model.ForwardNode{ID: 10, Name: "relay", Host: "198.51.100.10", Port: 443}).Error)
-	code, body := s.serve(http.MethodPost, "/admin/forward/agents", "/admin/forward/agents", `{"name":"relay-agent","nodeId":10}`, h.CreateAgentToken)
-	s.pin("create clean agent", code, body)
-	var agent model.ForwardCleanAgent
-	s.Require().NoError(s.db.First(&agent, 1).Error)
-	s.True(strings.HasPrefix(agent.Token, "v2fa_"))
-	s.Equal(int64(1), s.count(&model.NodeCredential{}, "subject_kind = ? AND subject_id = ?", nodesecrets.SubjectCleanAgent, agent.ID))
-
-	code, body = s.serve(http.MethodPost, "/admin/forward/agents", "/admin/forward/agents", `{"nodeId":10}`, h.CreateAgentToken)
-	s.pin("create clean agent without a name", code, body)
-	code, body = s.serve(http.MethodPost, "/admin/forward/agents", "/admin/forward/agents", `{"name":"x"}`, h.CreateAgentToken)
-	s.pin("create clean agent without a node", code, body)
-	code, body = s.serve(http.MethodPost, "/admin/forward/agents", "/admin/forward/agents", `{"name":"x","nodeId":99}`, h.CreateAgentToken)
-	s.pin("create clean agent for a missing node", code, body)
-	code, body = s.serve(http.MethodPost, "/admin/forward/agents", "/admin/forward/agents", `[`, h.CreateAgentToken)
-	s.pin("create clean agent, bad body", code, body)
-
-	code, body = s.serve(http.MethodPost, "/admin/forward/agents/:id/revoke", "/admin/forward/agents/1/revoke", "", h.RevokeAgent)
-	s.pin("revoke clean agent", code, body)
-	s.Require().NoError(s.db.First(&agent, 1).Error)
-	s.Equal(model.ForwardCleanAgentStatusRevoked, agent.Status)
-	s.NotNil(agent.RevokedAt)
-	var credential model.NodeCredential
-	s.Require().NoError(s.db.Where("subject_kind = ? AND subject_id = ?", nodesecrets.SubjectCleanAgent, agent.ID).First(&credential).Error)
-	s.Equal(nodesecrets.StatusRevoked, credential.Status)
-	code, body = s.serve(http.MethodPost, "/admin/forward/agents/:id/revoke", "/admin/forward/agents/1/revoke", "", h.RevokeAgent)
-	s.pin("revoke clean agent again", code, body)
-	code, body = s.serve(http.MethodPost, "/admin/forward/agents/:id/revoke", "/admin/forward/agents/99/revoke", "", h.RevokeAgent)
-	s.pin("revoke clean agent that does not exist", code, body)
-	code, body = s.serve(http.MethodPost, "/admin/forward/agents/:id/revoke", "/admin/forward/agents/0/revoke", "", h.RevokeAgent)
-	s.pin("revoke clean agent, bad id", code, body)
-}
-
 func (s *NodeCredentialAnswersTestSuite) count(value any, query string, args ...any) int64 {
 	s.T().Helper()
 	var n int64

@@ -4,7 +4,6 @@ import (
 	"context"
 	"crypto/rand"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"time"
 
@@ -122,25 +121,4 @@ func (s *ForwardNodeService) GenerateAPIToken() (string, error) {
 		return "", err
 	}
 	return hex.EncodeToString(b), nil
-}
-
-// ParseTags 解析标签
-func (s *ForwardNodeService) ParseTags(tags string) []string {
-	result, err := s.ParseTagsWithError(tags)
-	if err != nil {
-		return []string{}
-	}
-	return result
-}
-
-// ParseTagsWithError 解析标签并返回无效 JSON 错误
-func (s *ForwardNodeService) ParseTagsWithError(tags string) ([]string, error) {
-	if tags == "" {
-		return []string{}, nil
-	}
-	var result []string
-	if err := json.Unmarshal([]byte(tags), &result); err != nil {
-		return nil, err
-	}
-	return result, nil
 }

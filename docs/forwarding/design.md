@@ -1,5 +1,7 @@
 # Forwarding Design
 
+> **v4.2 (F5d):** the flux-clone forward pages and the v2 routes that changed forwards, nodes, Ansible machines, rules and clean agents (`/api/v2/forward/*`, `/api/v2/admin/forward/{create,...,nodes,ansible-machines,rules,agents,sync-backend,runtime/jobs}`, `/api/v2/forward-agent/install.sh`) were removed. This page describes the v4.1 legacy runtime, which keeps running read-only until the legacy cleanup (F5c); new forwarding is [`/api/v4/forward/*`](v4-api.md) on the new Agent.
+
 ## Purpose
 
 The forwarding module is a small, auditable control plane for TCP and UDP
@@ -38,7 +40,6 @@ Core files:
 
 Related operator guides:
 
-- `docs/guide/flux-forward-contract.md`
 - `docs/guide/forward-tunnel-runtime-ops.md`
 - `docs/guide/forward-relay-onboarding.md`
 - `docs/guide/forward-tunnel-smoke-test.md`

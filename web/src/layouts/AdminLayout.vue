@@ -100,7 +100,6 @@
 
       <main id="app-main-content" class="admin-main" tabindex="-1" :aria-label="pageTitle">
         <div class="admin-content" :class="{ 'is-wide': route.meta?.layout === 'wide' }">
-          <ForwardSuiteNav v-if="forwardSuite" class="admin-content__suite-nav" />
           <ShellRouterView />
         </div>
       </main>
@@ -130,9 +129,8 @@ import { loadEdition } from '@/composables/useEdition'
 import { resolveRoutePageTitle } from '@/utils/pageMeta'
 import { adminExtensionMenus } from '@/extensions/runtime'
 import { useAdminMenu } from '@/navigation/useNavigation'
-import { ADMIN_ACCOUNT_PATH, showsForwardSuiteNav } from '@/navigation/menu'
+import { ADMIN_ACCOUNT_PATH } from '@/navigation/menu'
 import AdminNavigation from '@/components/admin/AdminNavigation.vue'
-import ForwardSuiteNav from '@/components/admin/ForwardSuiteNav.vue'
 import BrandLockup from '@/components/common/BrandLockup.vue'
 import AccountMenu from '@/components/shell/AccountMenu.vue'
 import AboutDialog from '@/components/shell/AboutDialog.vue'
@@ -161,7 +159,6 @@ const shortcutLabel = paletteShortcutLabel()
 
 const railActive = computed(() => !drawerMode.value && sidebarCollapsed.value)
 const drawerInactive = computed(() => drawerMode.value && !sidebarOpen.value)
-const forwardSuite = computed(() => showsForwardSuiteNav(route.path))
 
 const toggleIcon = computed(() => {
   if (drawerMode.value) return Menu
@@ -550,10 +547,6 @@ onBeforeUnmount(() => {
 
 .admin-content.is-wide {
   max-width: var(--size-content-wide);
-}
-
-.admin-content__suite-nav {
-  align-self: flex-start;
 }
 
 /* Drawer below 834 px */

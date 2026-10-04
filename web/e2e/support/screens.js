@@ -7,7 +7,6 @@ import agent from '../fixtures/agent.js'
 import coupons from '../fixtures/coupons.js'
 import dashboard from '../fixtures/dashboard.js'
 import deployments from '../fixtures/deployments.js'
-import forward from '../fixtures/forward.js'
 import forwardV4 from '../fixtures/forwardV4.js'
 import inviteCodes from '../fixtures/inviteCodes.js'
 import monitor from '../fixtures/monitor.js'
@@ -47,7 +46,6 @@ export const SCREENS = {
   'admin-nodes': { fixture: nodes, scenario: 'list' },
   'admin-node-detail': { fixture: nodeDetail, scenario: 'overview' },
   'admin-node-services': { fixture: nodeDetail, scenario: 'services' },
-  'admin-forward': { fixture: forward, scenario: 'list' },
   // The v4.2 forwarding pages (F5b).
   'admin-forward-overview': { fixture: forwardV4, scenario: 'overview' },
   'admin-forward-routes': { fixture: forwardV4, scenario: 'routes' },

@@ -10,8 +10,10 @@ open work in [`../../TODO.md`](../../TODO.md).
 
 > 中文摘要：v4.0.0 的「插件化」只到路由层；本文定义「一个领域真正住在插件里」
 > 的验收标准、目标机制（存储租约 + 按路由模式 + 类型化内核操作，均已实现）、
-> 保留下来的旧计划约束，以及 M0–M4 里程碑。296 条 v2 路由中，198 条
-> `native-flagged`，66 条 `bridged`（待契约），32 条 `kernel-owned`（按设计留在内核）。
+> 保留下来的旧计划约束，以及 M0–M4 里程碑。243 条 v2 路由中，177 条
+> `native-flagged`，13 条 `bridged`（待契约），53 条 `kernel-owned`（按设计留在内核）。
+> v4.2（F5d）删除了 forward 包的 53 条 `bridged` flux 路由；forward 包不再接管任何表，
+> 其余 32 条 v2 路由全部交给内核处理，直到 F5c 删表。
 
 Markers used below: **CURRENT** = true in the tree today; **PLANNED** = accepted
 design, not implemented yet; **HISTORICAL** = preserved from a retired plan for
@@ -21,8 +23,9 @@ context, not a commitment.
 
 v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
 
-- All 296 `/api/v2` routes in `config/v2-package-route-catalog.json` enter the
-  package gateway. 267 are registered with `registeredPackageRoute`
+- All 243 `/api/v2` routes in `config/v2-package-route-catalog.json` enter the
+  package gateway (v4.2 removed the forward package's 53 `bridged` flux
+  routes, F5d; [`forward-sdk.md`](forward-sdk.md) section 10). 214 are registered with `registeredPackageRoute`
   (`internal/router/router.go`), which registers the legacy gin handler into
   `packagebridge.DefaultRouteRegistry()` and returns the gateway; the 26
   `identity-platform` routes use the bare `v2PackageGateway.Serve` (their
@@ -31,14 +34,14 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
 - `config/package-extraction.json` records each route's extraction mode
   (`bridged`, `kernel-owned`, `native-flagged` or `native`; section 3.2) and
   where its legacy handler lives
-  (`router`, `identity-bridge` or `none`). 198 routes are `native-flagged`:
+  (`router`, `identity-bridge` or `none`). 177 routes are `native-flagged`:
   identity-platform (23: group A's 16, the profile, dashboard, user detail,
   user list and user statistics, and the traffic and subscription resets),
-  affiliate (10), forward (21), gost-mesh (3), knowledge (6),
+  affiliate (10), gost-mesh (3), knowledge (6),
   machine-telemetry (3), notification (23), order (13), payment (20), plan
   (7), platform (5), protocol-runtime (14), proxy-node (18), subscription (23),
-  ticket (8) and wireguard (1). 32 routes are `kernel-owned`: they stay in the
-  kernel by design, and each row says why. The other 66 are `bridged` until a
+  ticket (8) and wireguard (1). 53 routes are `kernel-owned`: they stay in the
+  kernel by design, and each row says why. The other 13 are `bridged` until a
   kernel contract lets their package serve them (section 3.2 lists what
   unblocks them). None is `native` yet. The identity routes are
   `identity-bridge`. `check_plugin_only_routes.py` enforces the map against
@@ -82,12 +85,12 @@ v4.0.0 (published 2026-07-20) is plugin-only at the routing level only.
 - Outside the package gate, kernel handlers serve `/api/v1/server/UniProxy/*`,
   `/{subscribe_path}/:token`, `/api/v1/client/subscribe`, and `/flow/upload`.
 
-Route modes per package (2026-10-01):
+Route modes per package (2026-10-04, after F5d):
 
 | Package | `native-flagged` | `bridged` | `kernel-owned` |
 |---|---|---|---|
 | affiliate | 10 | 0 | 0 |
-| forward | 21 | 53 | 11 |
+| forward | 0 | 0 | 32 |
 | gost-mesh | 3 | 0 | 0 |
 | identity-platform | 23 | 3 | 0 |
 | knowledge | 6 | 0 | 0 |
@@ -102,7 +105,7 @@ Route modes per package (2026-10-01):
 | subscription | 23 | 2 | 0 |
 | ticket | 8 | 0 | 0 |
 | wireguard | 1 | 0 | 0 |
-| **all** | **198** | **66** | **32** |
+| **all** | **177** | **13** | **53** |
 
 Reusable pieces that already exist:
 
@@ -180,7 +183,8 @@ every 5 s through the bridge RPC `GetPackageConfig`
 - `legacy` (the default for a route without a stored mode): the host relays
   the request through the bridge to the legacy handler.
 - Rehearsed default (4.1.0, decision H8): the 151 routes of
-  `config/package-route-defaults.json`, the 15 packages that passed the
+  `config/package-route-defaults.json` (130 of 14 packages from v4.2: the
+  forward package's 21 left with F5d), the 15 packages that passed the
   staging rehearsal (R5) and were signed off (H7), run `native` when no mode
   is stored for them, the installed release is at least the package's
   `min_version` (`4.1.0-rc.5`) and `package_routes.default_mode` is
@@ -214,10 +218,10 @@ by `check_plugin_only_routes.py` (counts in section 1).
 
 | Mode | Meaning | Routes |
 |---|---|---|
-| `native-flagged` | the package host has a native handler, proved by a parity test; the legacy handler stays, so every runtime mode works | 198 |
+| `native-flagged` | the package host has a native handler, proved by a parity test; the legacy handler stays, so every runtime mode works | 177 |
 | `native` | the legacy handler is deleted and the host answers alone | 0 |
-| `bridged` | the host only relays, until a kernel contract lets the package serve the route | 66 |
-| `kernel-owned` | the host only relays, by design: the route stays in the kernel, and the row's `reason` says why | 32 |
+| `bridged` | the host only relays, until a kernel contract lets the package serve the route | 13 |
+| `kernel-owned` | the host only relays, by design: the route stays in the kernel, and the row's `reason` says why | 53 |
 
 A `bridged` or `kernel-owned` route is registered and relayed alike: it is
 in its host's `bridgedRoutes`, and no other source of its package names it,
@@ -821,10 +825,17 @@ The planned `kernel.entitlement.apply.v1` became
       subscriber's UUID in the user list, subscriber traffic in a push and
       the online list in the kernel's in-memory cache; whether it stays in
       the kernel is an open decision.
-- **Forward (in place).** 21 of 85 routes run on the adopted `v2_forward`,
-  `v2_forward_tunnel`, `v2_forward_user_tunnel`, `v2_speed_limit`,
-  `v2_forward_rule` and `v2_forward_latency_bucket` tables, proved by
-  `internal/tests/forwardcompat`:
+- **Forward (withdrawn in v4.2, F5d).** Until v4.1, 21 of 85 routes ran
+  natively on the adopted `v2_forward`, `v2_forward_tunnel`,
+  `v2_forward_user_tunnel`, `v2_speed_limit`, `v2_forward_rule` and
+  `v2_forward_latency_bucket` tables, proved by
+  `internal/tests/forwardcompat`. F5d withdrew them: the forward package
+  adopts no table and reads no view (its manifest declares only
+  `kernel.forward.v1`, for the v4 API), so the legacy cleanup (F5c) can drop
+  the flux tables without breaking the package's storage lease; the 21
+  routes are `kernel-owned` (the kernel serves them until F5c), they left
+  `config/package-route-defaults.json`, and `forwardcompat` is deleted. They
+  were:
   - the forward lists and their display order (user and administrator);
   - the tunnel list, creation and the deletion of an unused tunnel, and the
     tunnels a forward may use;
@@ -840,9 +851,8 @@ The planned `kernel.entitlement.apply.v1` became
   - the speed limits, moved from plan (`forward.speed_limit.*`): creation,
     the list, the deletion of a limit no permission names, and the tunnels
     a limit may name (every active one, for any caller, as the kernel
-    answers). The update stays bridged: it re-applies the forwards of every
-    permission that names the limit on their nodes, which waits for
-    KernelNodeOps.
+    answers). The update, which re-applied the forwards of every permission
+    that names the limit on their nodes, was removed in v4.2 (F5d).
 
   None of them changes what a node runs: a tunnel, a permission or a speed
   limit alone runs nothing, the display order is not part of a forward's
@@ -860,34 +870,27 @@ The planned `kernel.entitlement.apply.v1` became
     gRPC and REST), a clean agent's token authenticates it, and clean agent
     jobs carry the node's API token in their payloads: a package holding
     them could act as any forward node or agent.
-  - **Stay bridged (53) or kernel-owned (11: D3 and D4 in
+  - **Removed in v4.2 (F5d):** the 53 `bridged` forward routes — the 30
+    flux routes (every forward change, pause, resume, deletion and
+    diagnosis, the backend sync, the tunnel update and diagnosis,
+    permission removal and updates, the speed limit update, the legacy
+    rules other than the user's list, and the runtime job list), the 19
+    node management routes F5a rewrote as `/api/v4/forward/*` (forward
+    nodes, Ansible machines, the observability targets, trend and
+    topology) and the 4 clean agent routes (list, create, revoke and the
+    install script). [`forward-sdk.md`](forward-sdk.md) section 10 lists
+    them; [`../forwarding/v4-api.md`](../forwarding/v4-api.md) is the
+    replacement.
+  - **Kernel-owned (11: D3 and D4 in
     [`node-ops-service.md`](node-ops-service.md#6-route-mapping)):**
-    - forward nodes and Ansible machines (`v2_forward_node`; the answers
-      show tokens to administrators, the kernel's gost manager caches each
-      node's address and token, the checks and statistics sync reach the
-      node over the network);
-    - every forward change, pause, resume, deletion and diagnosis, the
-      backend sync, the tunnel update and diagnosis, permission removal and
-      updates, and the speed limit update: they apply forwards on their
-      nodes (NodeX, a local Ansible job or a clean agent job) or dial from
-      Control;
-    - the legacy rules other than the user's list (pushed to NodeX with the
-      nodes' tokens; the administrator's answers embed the nodes' tokens)
-      and the agents' rule list (node token authentication; `kernel-owned`);
-    - runtime status, diagnosis and jobs (the protected NodeX and Ansible
-      settings, NodeX calls, Control's disk, job payloads with tokens); the
-      status and diagnosis are `kernel-owned`;
-    - the observability targets, trend and topology, which read the proxy
-      nodes of `v2_node`;
-    - clean agents and their registration, heartbeat, report and install
-      script (agent tokens, job claims; the script's panel URL is Control's
-      `forward_runtime.clean_agent.public_url` when set, process
-      configuration no package can read, else the request's scheme and
-      host); registration, heartbeat and report are `kernel-owned`;
-    - flow upload, report and snapshot (`kernel-owned`): the forward's
-      counters, the subscriber's traffic and the permission's traffic
-      change in one kernel transaction under a per-forward lock in
-      Control's memory, and exhaustion pauses forwards on their nodes.
+    runtime status and diagnosis, local and NodeX (the protected NodeX and
+    Ansible settings, NodeX calls, Control's disk); the agents' rule list
+    (node token authentication); clean agent registration, heartbeat and
+    report (agent tokens, job claims); and flow upload, report and snapshot:
+    the forward's counters, the subscriber's traffic and the permission's
+    traffic change in one kernel transaction under a per-forward lock in
+    Control's memory, and exhaustion pauses forwards on their nodes. They
+    go with the legacy runtime (F5c, 5.0).
 - **Protocol runtime (in place).** 14 of protocol-runtime's 20 routes run
   natively, proved by `internal/tests/protocolruntimecompat`: the protocol
   templates (static data), the administrator's diagnostic task history and
@@ -1137,7 +1140,7 @@ shapes; the first extraction step adopts the existing `v2_*` tables in place.
 | payment (T9) | 20 | `payment.initiate`, `payment.callback`, `payment.reconcile` | `v4_payment_record`, `_callback`, `_outbox` | Receipt stored before transition; exactly-once per gateway event; one-time secret lease |
 | subscription (T10) | 25 | `subscription.render`, `subscription.usage.read` | `v4_subscription_group`, `_template`, `_usage` | Byte-identical output incl. content type and cache headers |
 | proxy-node (T10) | 31 | `proxy-node.register`, `.config.deliver`, `.user.deliver`, `.traffic.report` | `v4_proxy_node`, `_config`, `_user`, `_usage` | Delivery becomes a versioned Agent operation; kernel gRPC transport-only |
-| forward (T11) | 85 | `forward.rule.create/update`, `forward.tunnel.assign`, `forward.observation.read`, `forward.agent.apply` | `v4_forward_rule`, `_tunnel`, `_assignment`, `_observation`, `_outbox` | Assignment + Agent op atomic, rolled back on Agent reject; 6 kernel workers move to the package; 21 native-flagged (section 3.4), the rest bridged |
+| forward (T11) | 32 | `forward.rule.create/update`, `forward.tunnel.assign`, `forward.observation.read`, `forward.agent.apply` | `v4_forward_rule`, `_tunnel`, `_assignment`, `_observation`, `_outbox` | Assignment + Agent op atomic, rolled back on Agent reject; 6 kernel workers move to the package; superseded by v4.2: the 53 bridged flux routes were removed and the other 32 are kernel-owned (F5d) |
 | wireguard (T12) | 1 | peer lifecycle, generated config | package migration (names not fixed) | Needs anix-agent revival |
 | protocol-runtime (T12) | 20 | protocol composition, runtime-adapter selection, Agent task/monitor | package migration (names not fixed) | Needs anix-agent revival |
 | machine-telemetry, nftables-forward, gost-mesh, nat-egress (T12) | 5 / 0 / 3 / 0 | keep runtime semantics; add v2 entrypoint, generation, `RuntimeStatus` reports | — | Agent-target runtime packages |

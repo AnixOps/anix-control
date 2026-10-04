@@ -10,7 +10,7 @@ Use this section first when you need to understand what `anix-control` owns and 
 - panel API
 - user, plan, order, knowledge, ticket, and subscription data
 - public proxy-node inventory and UniProxy-compatible APIs
-- Flux-compatible `/admin/forward*` control pages
+- the forwarding control plane (`/admin/forward/*` on the forward package's `/api/v4/forward/*`; the flux-compatible pages were removed in v4.2)
 
 It is not the private execution plane.
 
@@ -108,7 +108,7 @@ Forward runtime has these distinct modes:
 Do not mix proxy-node language and forward-node language.
 
 - `Node` under `/admin/nodes` is the public proxy-node concept.
-- `ForwardNode` under `/admin/forward/nodes` is the forward execution concept.
+- forwarding nodes under `/admin/forward/inventory` (`/api/v4/forward/nodes`) are the forward execution concept.
 
 ## Read Next
 

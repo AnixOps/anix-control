@@ -6,15 +6,16 @@ package's v4 API ([`../forwarding/v4-api.md`](../forwarding/v4-api.md)).
 The design and its decisions are in
 [`../design/forward-ui/README.md`](../design/forward-ui/README.md).
 
-The flux-clone forwarding pages stay under 转发（旧版） until F5d removes
-them. See [`flux-panel-clone.md`](flux-panel-clone.md) for those.
+The flux-clone forwarding pages (转发（旧版）, 转发节点（旧版）) were removed in
+v4.2 (F5d); their paths, and `/admin/forward`, open 概览. Their old guide
+is archived in [`../archive/flux-panel-clone.md`](../archive/flux-panel-clone.md).
 
 ## Before You Start
 
 - **The forward package.** The pages appear when the installed forward
-  package serves `/api/v4/forward/*`. The sidebar then shows 转发 (the new
-  pages), 转发（旧版） and 转发节点（旧版）. Without it, a link to the new pages
-  leads to the flux-clone page.
+  package serves `/api/v4/forward/*`. The sidebar then shows 转发. Without
+  it, the sidebar has no forwarding entry and a link to the pages leads to
+  插件中心, where the package is installed.
 - **Permissions.** Any administrator may read and write, subject to the
   package's `forward.api` access group grants. Deleting a route or a node
   needs a super administrator (an administrator who is not staff). Others see

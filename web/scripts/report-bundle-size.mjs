@@ -10,13 +10,10 @@ const assetsDir = path.join(publicDir, 'assets')
 const reportDir = path.resolve(process.env.BUNDLE_REPORT_DIR || path.join(webRoot, 'bundle-reports'))
 
 const trackedChunkPatterns = [
-  ['Forward', /^Forward-/],
-  ['Tunnel', /^Tunnel-/],
+  ['Overview (forwarding)', /^Overview-/],
+  ['Routes (forwarding)', /^Routes-/],
   ['Users', /^Users-/],
   ['Nodes', /^Nodes-/],
-  ['NodeX', /^NodeX-/],
-  ['LocalRuntime', /^LocalRuntime-/],
-  ['AnsibleMachines', /^AnsibleMachines-/],
   ['TrafficHourly', /^TrafficHourly-/],
   ['Observability', /^Observability-/],
   ['System', /^System-/],

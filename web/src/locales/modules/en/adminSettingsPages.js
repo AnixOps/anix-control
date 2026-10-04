@@ -81,13 +81,6 @@ export default {
         title: 'Execution mode',
         description: 'Where forwards run: the stateful NodeX control plane, or the local Ansible executor on the panel host. Change them on their own pages.'
       },
-      jobsLoadFailed: 'Couldn’t load the runtime jobs',
-      jobsEmptyDescription: 'Jobs appear here when forward rules are sent to the runtime.',
-      jobColumns: {
-        job: 'Job',
-        status: 'Status',
-        time: 'Time'
-      },
       commands: {
         title: 'Operator commands'
       }

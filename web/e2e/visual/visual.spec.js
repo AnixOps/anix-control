@@ -19,7 +19,6 @@ const SHOTS = [
   ['admin-users', [DESKTOP, PHONE]],
   ['admin-node-detail', [DESKTOP]],
   ['admin-node-services', [DESKTOP]],
-  ['admin-forward', [DESKTOP]],
   // The v4.2 forwarding pages (F5b).
   ['admin-forward-overview', [DESKTOP]],
   ['admin-forward-routes', [DESKTOP, PHONE]],
