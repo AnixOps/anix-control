@@ -38,6 +38,9 @@ enum anixops.forward.v1.LinkSecurity.LINK_SECURITY_RAW = 1
 enum anixops.forward.v1.LinkSecurity.LINK_SECURITY_TLS = 2
 enum anixops.forward.v1.LinkSecurity.LINK_SECURITY_UNSPECIFIED = 0
 enum anixops.forward.v1.LinkSecurity.LINK_SECURITY_WSS = 3
+enum anixops.forward.v1.NodeTransport.NODE_TRANSPORT_AGENT = 1
+enum anixops.forward.v1.NodeTransport.NODE_TRANSPORT_ANSIBLE = 2
+enum anixops.forward.v1.NodeTransport.NODE_TRANSPORT_UNSPECIFIED = 0
 enum anixops.forward.v1.ProbeKind.PROBE_KIND_DELIVERY = 4
 enum anixops.forward.v1.ProbeKind.PROBE_KIND_LISTEN = 1
 enum anixops.forward.v1.ProbeKind.PROBE_KIND_TCP_CONNECT = 2
@@ -431,10 +434,17 @@ field anixops.forward.v1.Counters.route_id = 1 optional string
 field anixops.forward.v1.Counters.total_conns = 9 optional uint64
 field anixops.forward.v1.Counters.up_bytes = 4 optional uint64
 field anixops.forward.v1.Counters.up_packets = 6 optional uint64
+field anixops.forward.v1.CreateForwardNodeRequest.node = 2 optional anixops.forward.v1.ForwardNodeRecord
+field anixops.forward.v1.CreateForwardNodeRequest.request_id = 1 optional string
+field anixops.forward.v1.CreateForwardNodeRequest.settings = 3 optional anixops.forward.v1.NodeSettings
+field anixops.forward.v1.CreateForwardNodeResponse.node = 1 optional anixops.forward.v1.NodeSummary
 field anixops.forward.v1.CreateRouteRequest.request_id = 1 optional string
 field anixops.forward.v1.CreateRouteRequest.route = 2 optional anixops.forward.v1.Route
 field anixops.forward.v1.CreateRouteResponse.route = 1 optional anixops.forward.v1.Route
 field anixops.forward.v1.CreateRouteResponse.violations = 2 repeated anixops.forward.v1.Violation
+field anixops.forward.v1.DeleteForwardNodeRequest.id = 2 optional uint64
+field anixops.forward.v1.DeleteForwardNodeRequest.request_id = 1 optional string
+field anixops.forward.v1.DeleteForwardNodeResponse.violations = 1 repeated anixops.forward.v1.Violation
 field anixops.forward.v1.DeleteRouteRequest.request_id = 1 optional string
 field anixops.forward.v1.DeleteRouteRequest.route_id = 2 optional string
 field anixops.forward.v1.DiagnoseRouteRequest.route_id = 1 optional string
@@ -456,12 +466,39 @@ field anixops.forward.v1.EngineCapabilities.strategies = 7 repeated anixops.forw
 field anixops.forward.v1.EngineCapabilities.udp = 6 optional bool
 field anixops.forward.v1.EngineCapabilities.unavailable_reason = 4 optional string
 field anixops.forward.v1.EngineCapabilities.version = 2 optional string
+field anixops.forward.v1.ForwardNodeRecord.api_port = 7 optional uint32
+field anixops.forward.v1.ForwardNodeRecord.bandwidth_mbps = 11 optional uint64
+field anixops.forward.v1.ForwardNodeRecord.created_at_unix_ms = 15 optional int64
+field anixops.forward.v1.ForwardNodeRecord.enabled = 14 optional bool
+field anixops.forward.v1.ForwardNodeRecord.host = 3 optional string
+field anixops.forward.v1.ForwardNodeRecord.id = 1 optional uint64
+field anixops.forward.v1.ForwardNodeRecord.isp = 10 optional string
+field anixops.forward.v1.ForwardNodeRecord.max_conns = 13 optional uint32
+field anixops.forward.v1.ForwardNodeRecord.metrics_port = 8 optional uint32
+field anixops.forward.v1.ForwardNodeRecord.name = 2 optional string
+field anixops.forward.v1.ForwardNodeRecord.port = 6 optional uint32
+field anixops.forward.v1.ForwardNodeRecord.region = 9 optional string
+field anixops.forward.v1.ForwardNodeRecord.role = 4 optional string
+field anixops.forward.v1.ForwardNodeRecord.transport = 5 optional anixops.forward.v1.NodeTransport
+field anixops.forward.v1.ForwardNodeRecord.updated_at_unix_ms = 16 optional int64
+field anixops.forward.v1.ForwardNodeRecord.weight = 12 optional uint32
+field anixops.forward.v1.GetNodeRequest.node_ref = 1 optional string
+field anixops.forward.v1.GetNodeResponse.node = 1 optional anixops.forward.v1.NodeSummary
+field anixops.forward.v1.GetNodeResponse.report = 3 optional anixops.forward.v1.NodeForwardReport
+field anixops.forward.v1.GetNodeResponse.state = 2 optional anixops.forward.v1.NodeForwardState
 field anixops.forward.v1.GetRouteHealthRequest.route_id = 1 optional string
 field anixops.forward.v1.GetRouteHealthResponse.health = 1 repeated anixops.forward.v1.UpstreamHealth
 field anixops.forward.v1.GetRouteRequest.route_id = 1 optional string
+field anixops.forward.v1.GetRouteResponse.enforced = 2 optional string
 field anixops.forward.v1.GetRouteResponse.route = 1 optional anixops.forward.v1.Route
 field anixops.forward.v1.GetRouteStatsRequest.route_id = 1 optional string
 field anixops.forward.v1.GetRouteStatsResponse.counters = 1 repeated anixops.forward.v1.Counters
+field anixops.forward.v1.GetTrafficRequest.node_ref = 2 optional string
+field anixops.forward.v1.GetTrafficRequest.route_id = 1 optional string
+field anixops.forward.v1.GetTrafficRequest.since_unix_ms = 3 optional int64
+field anixops.forward.v1.GetTrafficRequest.until_unix_ms = 4 optional int64
+field anixops.forward.v1.GetTrafficResponse.buckets = 1 repeated anixops.forward.v1.TrafficBucket
+field anixops.forward.v1.GetTrafficResponse.truncated = 2 optional bool
 field anixops.forward.v1.HealthCheck.disabled = 3 optional bool
 field anixops.forward.v1.HealthCheck.interval_ms = 1 optional uint32
 field anixops.forward.v1.HealthCheck.timeout_ms = 2 optional uint32
@@ -483,10 +520,16 @@ field anixops.forward.v1.LinkTransport.mux = 2 optional bool
 field anixops.forward.v1.LinkTransport.path = 4 optional string
 field anixops.forward.v1.LinkTransport.security = 1 optional anixops.forward.v1.LinkSecurity
 field anixops.forward.v1.LinkTransport.server_name = 3 optional string
+field anixops.forward.v1.ListNodesRequest.kind = 1 optional string
+field anixops.forward.v1.ListNodesRequest.transport = 2 optional anixops.forward.v1.NodeTransport
+field anixops.forward.v1.ListNodesResponse.nodes = 1 repeated anixops.forward.v1.NodeSummary
 field anixops.forward.v1.ListRoutesRequest.node_ref = 2 optional string
 field anixops.forward.v1.ListRoutesRequest.owner = 1 optional string
 field anixops.forward.v1.ListRoutesRequest.page_size = 3 optional uint32
 field anixops.forward.v1.ListRoutesRequest.page_token = 4 optional string
+field anixops.forward.v1.ListRoutesResponse.EnforcedEntry.key = 1 optional string
+field anixops.forward.v1.ListRoutesResponse.EnforcedEntry.value = 2 optional string
+field anixops.forward.v1.ListRoutesResponse.enforced = 3 repeated map<string,string>
 field anixops.forward.v1.ListRoutesResponse.next_page_token = 2 optional string
 field anixops.forward.v1.ListRoutesResponse.routes = 1 repeated anixops.forward.v1.Route
 field anixops.forward.v1.Listen.address = 1 optional string
@@ -534,6 +577,33 @@ field anixops.forward.v1.NodeInfo.engines = 4 repeated anixops.forward.v1.Engine
 field anixops.forward.v1.NodeInfo.labels = 5 repeated map<string,string>
 field anixops.forward.v1.NodeInfo.node_ref = 1 optional string
 field anixops.forward.v1.NodeInfo.port_range = 3 optional anixops.forward.v1.PortRange
+field anixops.forward.v1.NodeSettings.LabelsEntry.key = 1 optional string
+field anixops.forward.v1.NodeSettings.LabelsEntry.value = 2 optional string
+field anixops.forward.v1.NodeSettings.addresses = 3 repeated string
+field anixops.forward.v1.NodeSettings.labels = 4 repeated map<string,string>
+field anixops.forward.v1.NodeSettings.port_range = 1 optional anixops.forward.v1.PortRange
+field anixops.forward.v1.NodeSettings.reserved_ports = 2 repeated uint32
+field anixops.forward.v1.NodeSummary.applied = 18 optional bool
+field anixops.forward.v1.NodeSummary.capabilities = 11 optional anixops.forward.v1.NodeCapabilities
+field anixops.forward.v1.NodeSummary.desired_generation = 12 optional uint64
+field anixops.forward.v1.NodeSummary.desired_hops = 14 optional uint32
+field anixops.forward.v1.NodeSummary.desired_state_hash = 13 optional string
+field anixops.forward.v1.NodeSummary.enabled = 5 optional bool
+field anixops.forward.v1.NodeSummary.hop_errors = 19 optional uint32
+field anixops.forward.v1.NodeSummary.host = 4 optional string
+field anixops.forward.v1.NodeSummary.in_inventory = 6 optional bool
+field anixops.forward.v1.NodeSummary.info = 9 optional anixops.forward.v1.NodeInfo
+field anixops.forward.v1.NodeSummary.kind = 2 optional string
+field anixops.forward.v1.NodeSummary.name = 3 optional string
+field anixops.forward.v1.NodeSummary.negotiated = 7 optional bool
+field anixops.forward.v1.NodeSummary.node_ref = 1 optional string
+field anixops.forward.v1.NodeSummary.record = 21 optional anixops.forward.v1.ForwardNodeRecord
+field anixops.forward.v1.NodeSummary.reported = 15 optional bool
+field anixops.forward.v1.NodeSummary.reported_at_unix_ms = 20 optional int64
+field anixops.forward.v1.NodeSummary.reported_generation = 16 optional uint64
+field anixops.forward.v1.NodeSummary.reported_state_hash = 17 optional string
+field anixops.forward.v1.NodeSummary.reserved_ports = 10 repeated uint32
+field anixops.forward.v1.NodeSummary.settings = 8 optional anixops.forward.v1.NodeSettings
 field anixops.forward.v1.PlanRouteRequest.nodes = 2 repeated anixops.forward.v1.NodeInfo
 field anixops.forward.v1.PlanRouteRequest.route = 1 optional anixops.forward.v1.Route
 field anixops.forward.v1.PlanRouteResponse.allocations = 2 repeated anixops.forward.v1.PortAllocation
@@ -578,10 +648,27 @@ field anixops.forward.v1.Route.policy = 7 optional anixops.forward.v1.Policy
 field anixops.forward.v1.Route.revision = 11 optional uint64
 field anixops.forward.v1.Route.targets = 6 repeated anixops.forward.v1.Target
 field anixops.forward.v1.Route.updated_at_unix_ms = 13 optional int64
+field anixops.forward.v1.SetNodeSettingsRequest.node_ref = 1 optional string
+field anixops.forward.v1.SetNodeSettingsRequest.settings = 2 optional anixops.forward.v1.NodeSettings
+field anixops.forward.v1.SetNodeSettingsResponse.node = 1 optional anixops.forward.v1.NodeSummary
+field anixops.forward.v1.SetNodeSettingsResponse.violations = 2 repeated anixops.forward.v1.Violation
 field anixops.forward.v1.Target.host = 1 optional string
 field anixops.forward.v1.Target.port = 2 optional uint32
 field anixops.forward.v1.Target.priority = 4 optional uint32
 field anixops.forward.v1.Target.weight = 3 optional uint32
+field anixops.forward.v1.TrafficBucket.down_bytes = 6 optional uint64
+field anixops.forward.v1.TrafficBucket.down_packets = 8 optional uint64
+field anixops.forward.v1.TrafficBucket.hop_index = 2 optional uint32
+field anixops.forward.v1.TrafficBucket.hour_start_unix_ms = 4 optional int64
+field anixops.forward.v1.TrafficBucket.new_conns = 9 optional uint64
+field anixops.forward.v1.TrafficBucket.node_ref = 3 optional string
+field anixops.forward.v1.TrafficBucket.route_id = 1 optional string
+field anixops.forward.v1.TrafficBucket.up_bytes = 5 optional uint64
+field anixops.forward.v1.TrafficBucket.up_packets = 7 optional uint64
+field anixops.forward.v1.UpdateForwardNodeRequest.node = 2 optional anixops.forward.v1.ForwardNodeRecord
+field anixops.forward.v1.UpdateForwardNodeRequest.request_id = 1 optional string
+field anixops.forward.v1.UpdateForwardNodeResponse.node = 1 optional anixops.forward.v1.NodeSummary
+field anixops.forward.v1.UpdateForwardNodeResponse.violations = 2 repeated anixops.forward.v1.Violation
 field anixops.forward.v1.UpdateRouteRequest.expected_revision = 3 optional uint64
 field anixops.forward.v1.UpdateRouteRequest.request_id = 1 optional string
 field anixops.forward.v1.UpdateRouteRequest.route = 2 optional anixops.forward.v1.Route
@@ -1326,14 +1413,21 @@ rpc anix.pluginhost.v1.ControlPackageHost.Health(anix.pluginhost.v1.HealthReques
 rpc anix.pluginhost.v1.ControlPackageHost.Migrate(anix.pluginhost.v1.MigrationRequest) returns (anix.pluginhost.v1.MigrationResponse)
 rpc anix.pluginhost.v1.ControlPackageHost.OpenWebSocket(stream anix.pluginhost.v1.WebSocketFrame) returns (stream anix.pluginhost.v1.WebSocketFrame)
 rpc anix.pluginhost.v1.ControlPackageHost.Resume(anix.pluginhost.v1.ResumeRequest) returns (anix.pluginhost.v1.ResumeResponse)
+rpc anixops.forward.v1.ForwardControl.CreateForwardNode(anixops.forward.v1.CreateForwardNodeRequest) returns (anixops.forward.v1.CreateForwardNodeResponse)
 rpc anixops.forward.v1.ForwardControl.CreateRoute(anixops.forward.v1.CreateRouteRequest) returns (anixops.forward.v1.CreateRouteResponse)
+rpc anixops.forward.v1.ForwardControl.DeleteForwardNode(anixops.forward.v1.DeleteForwardNodeRequest) returns (anixops.forward.v1.DeleteForwardNodeResponse)
 rpc anixops.forward.v1.ForwardControl.DeleteRoute(anixops.forward.v1.DeleteRouteRequest) returns (anixops.forward.v1.DeleteRouteResponse)
 rpc anixops.forward.v1.ForwardControl.DiagnoseRoute(anixops.forward.v1.DiagnoseRouteRequest) returns (anixops.forward.v1.DiagnoseRouteResponse)
+rpc anixops.forward.v1.ForwardControl.GetNode(anixops.forward.v1.GetNodeRequest) returns (anixops.forward.v1.GetNodeResponse)
 rpc anixops.forward.v1.ForwardControl.GetRoute(anixops.forward.v1.GetRouteRequest) returns (anixops.forward.v1.GetRouteResponse)
 rpc anixops.forward.v1.ForwardControl.GetRouteHealth(anixops.forward.v1.GetRouteHealthRequest) returns (anixops.forward.v1.GetRouteHealthResponse)
 rpc anixops.forward.v1.ForwardControl.GetRouteStats(anixops.forward.v1.GetRouteStatsRequest) returns (anixops.forward.v1.GetRouteStatsResponse)
+rpc anixops.forward.v1.ForwardControl.GetTraffic(anixops.forward.v1.GetTrafficRequest) returns (anixops.forward.v1.GetTrafficResponse)
+rpc anixops.forward.v1.ForwardControl.ListNodes(anixops.forward.v1.ListNodesRequest) returns (anixops.forward.v1.ListNodesResponse)
 rpc anixops.forward.v1.ForwardControl.ListRoutes(anixops.forward.v1.ListRoutesRequest) returns (anixops.forward.v1.ListRoutesResponse)
 rpc anixops.forward.v1.ForwardControl.PlanRoute(anixops.forward.v1.PlanRouteRequest) returns (anixops.forward.v1.PlanRouteResponse)
+rpc anixops.forward.v1.ForwardControl.SetNodeSettings(anixops.forward.v1.SetNodeSettingsRequest) returns (anixops.forward.v1.SetNodeSettingsResponse)
+rpc anixops.forward.v1.ForwardControl.UpdateForwardNode(anixops.forward.v1.UpdateForwardNodeRequest) returns (anixops.forward.v1.UpdateForwardNodeResponse)
 rpc anixops.forward.v1.ForwardControl.UpdateRoute(anixops.forward.v1.UpdateRouteRequest) returns (anixops.forward.v1.UpdateRouteResponse)
 rpc anixops.forward.v1.ForwardNode.Apply(anixops.forward.v1.NodeForwardState) returns (anixops.forward.v1.ApplyResult)
 rpc anixops.forward.v1.ForwardNode.GetCapabilities(anixops.forward.v1.GetNodeCapabilitiesRequest) returns (anixops.forward.v1.NodeCapabilities)

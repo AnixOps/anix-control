@@ -84,6 +84,46 @@ service ForwardControl {
   // reachability of each next hop, delivery proved on the last hop, and a
   // real UDP exchange for UDP routes. UNIMPLEMENTED until F3c.
   rpc DiagnoseRoute(DiagnoseRouteRequest) returns (DiagnoseRouteResponse);
+
+  // Added in F5a (forward-sdk.md section 8.6): the node inventory, the
+  // forward node registry and the hourly traffic ledger, which the forward
+  // package's /api/v4/forward/* serves. No answer carries a node
+  // credential.
+
+  // ListNodes answers every forward node (v2_forward_node) and every proxy
+  // node in the forwarding inventory, by node_ref, with its settings, the
+  // planner's view and its desired and reported generations.
+  rpc ListNodes(ListNodesRequest) returns (ListNodesResponse);
+  // GetNode answers one node with its desired state and latest report.
+  // NOT_FOUND for a node that neither ListNodes nor the node rows know.
+  rpc GetNode(GetNodeRequest) returns (GetNodeResponse);
+  // SetNodeSettings replaces a node's forwarding settings (port range,
+  // reserved ports, addresses, labels), which puts the node in the
+  // inventory, and replans. INVALID_ARGUMENT for malformed settings,
+  // NOT_FOUND when the node's row does not exist. A replan the settings
+  // make impossible is not an error: the settings are stored, every node
+  // keeps its generation, and the response's violations say why.
+  rpc SetNodeSettings(SetNodeSettingsRequest) returns (SetNodeSettingsResponse);
+  // CreateForwardNode adds a forward node row (the Agent identity
+  // forward-<id>). Control assigns id and the node's legacy credential,
+  // which no answer carries; the node enrolls its Agent with an install
+  // token. request_id as CreateRoute. With settings the node joins the
+  // inventory at once.
+  rpc CreateForwardNode(CreateForwardNodeRequest) returns (CreateForwardNodeResponse);
+  // UpdateForwardNode replaces a forward node row's editable fields.
+  // NOT_FOUND for an unknown id; request_id as CreateRoute.
+  // FAILED_PRECONDITION when it disables a node that a stored route uses,
+  // with an UpdateForwardNodeResponse in the status's details whose
+  // violations (code node_in_use) name the routes.
+  rpc UpdateForwardNode(UpdateForwardNodeRequest) returns (UpdateForwardNodeResponse);
+  // DeleteForwardNode removes a forward node row, its inventory entry and
+  // its Agent certificates. NOT_FOUND for an unknown id; request_id as
+  // CreateRoute; FAILED_PRECONDITION while a stored route uses the node,
+  // with a DeleteForwardNodeResponse in the status's details.
+  rpc DeleteForwardNode(DeleteForwardNodeRequest) returns (DeleteForwardNodeResponse);
+  // GetTraffic answers the traffic ledger's hourly buckets (raw bytes, no
+  // multiplier), filtered by route and node, over at most 31 days.
+  rpc GetTraffic(GetTrafficRequest) returns (GetTrafficResponse);
 }
 
 // ForwardNode is the node side: what an Agent's forwarding component does
@@ -624,6 +664,10 @@ message GetRouteRequest {
 
 message GetRouteResponse {
   Route route = 1;
+  // enforced is why Control itself pauses the route on its nodes: "quota"
+  // or "expired"; empty when it does not (forward-sdk.md section 5.3).
+  // Added in F5a.
+  string enforced = 2;
 }
 
 message ListRoutesRequest {
@@ -637,6 +681,9 @@ message ListRoutesRequest {
 message ListRoutesResponse {
   repeated Route routes = 1;
   string next_page_token = 2;
+  // enforced maps the id of each listed route that Control pauses to why,
+  // as GetRouteResponse.enforced. Added in F5a.
+  map<string, string> enforced = 3;
 }
 
 message PlanRouteRequest {
@@ -700,4 +747,191 @@ message DiagnoseStep {
 message DiagnoseRouteResponse {
   bool ok = 1;
   repeated DiagnoseStep steps = 2;
+}
+
+// ---------------------------------------------------------------------------
+// ForwardControl: nodes and traffic (added in F5a)
+// ---------------------------------------------------------------------------
+
+// NodeTransport is how Control reaches a forward node.
+enum NodeTransport {
+  NODE_TRANSPORT_UNSPECIFIED = 0;
+  // AGENT: the node runs anix-agent and gets its state over the Agent
+  // Control stream.
+  NODE_TRANSPORT_AGENT = 1;
+  // ANSIBLE: a host without an Agent, driven over SSH by the Ansible
+  // fallback (forward-sdk.md section 6.3).
+  NODE_TRANSPORT_ANSIBLE = 2;
+}
+
+// NodeSettings are an administrator's forwarding settings for one node.
+// Unset or empty values mean the defaults: the port range 30000-39999, no
+// reserved port beyond SSH and the node's own service ports, the node row's
+// host when it is an IP address, no labels.
+message NodeSettings {
+  PortRange port_range = 1;
+  repeated uint32 reserved_ports = 2;
+  // addresses are IP addresses, primary first.
+  repeated string addresses = 3;
+  map<string, string> labels = 4;
+}
+
+// ForwardNodeRecord is a forward node's row without its credentials.
+message ForwardNodeRecord {
+  // id is assigned by Control; the node's reference is "forward-<id>".
+  uint64 id = 1;
+  string name = 2;
+  // host is the node's address or DNS name.
+  string host = 3;
+  // role is the legacy type, "relay" or "exit"; routes give roles to hops,
+  // not nodes (forward-sdk.md section 4.3).
+  string role = 4;
+  NodeTransport transport = 5;
+  // port, api_port and metrics_port are the node's own service ports, which
+  // the planner never allocates; 0 for none.
+  uint32 port = 6;
+  uint32 api_port = 7;
+  uint32 metrics_port = 8;
+  string region = 9;
+  string isp = 10;
+  uint64 bandwidth_mbps = 11;
+  uint32 weight = 12;
+  uint32 max_conns = 13;
+  bool enabled = 14;
+  int64 created_at_unix_ms = 15;
+  int64 updated_at_unix_ms = 16;
+}
+
+// NodeSummary is one node as the forwarding inventory sees it.
+message NodeSummary {
+  string node_ref = 1;
+  // kind is "forward" or "proxy".
+  string kind = 2;
+  string name = 3;
+  string host = 4;
+  bool enabled = 5;
+  // in_inventory is true when the planner places hops on the node: it has
+  // forwarding settings or negotiated forward.v1, and its row is enabled.
+  bool in_inventory = 6;
+  // negotiated is true when the node's last Hello negotiated forward.v1.
+  bool negotiated = 7;
+  // settings are the stored settings; unset when the node has none.
+  NodeSettings settings = 8;
+  // info is the planner's view of the node; unset when it is left out.
+  NodeInfo info = 9;
+  // reserved_ports are every port the planner never allocates on the node.
+  repeated uint32 reserved_ports = 10;
+  NodeCapabilities capabilities = 11;
+  // desired_generation and desired_hops are the stored state's; 0 before
+  // the node has one.
+  uint64 desired_generation = 12;
+  string desired_state_hash = 13;
+  uint32 desired_hops = 14;
+  // reported is false before the node's first report; the next fields are
+  // its latest report's.
+  bool reported = 15;
+  uint64 reported_generation = 16;
+  string reported_state_hash = 17;
+  bool applied = 18;
+  uint32 hop_errors = 19;
+  int64 reported_at_unix_ms = 20;
+  // record is the forward node's row; unset for a proxy node.
+  ForwardNodeRecord record = 21;
+}
+
+message ListNodesRequest {
+  // kind keeps "forward" or "proxy" nodes; empty for both.
+  string kind = 1;
+  // transport keeps the forward nodes reached so; UNSPECIFIED for all.
+  NodeTransport transport = 2;
+}
+
+message ListNodesResponse {
+  repeated NodeSummary nodes = 1;
+}
+
+message GetNodeRequest {
+  string node_ref = 1;
+}
+
+message GetNodeResponse {
+  NodeSummary node = 1;
+  // state is the node's desired state; unset before it has one.
+  NodeForwardState state = 2;
+  // report is the node's latest report without its counters; unset before
+  // its first.
+  NodeForwardReport report = 3;
+}
+
+message SetNodeSettingsRequest {
+  string node_ref = 1;
+  NodeSettings settings = 2;
+}
+
+message SetNodeSettingsResponse {
+  NodeSummary node = 1;
+  // violations are set when the replan was refused: the settings are
+  // stored and every node keeps its generation.
+  repeated Violation violations = 2;
+}
+
+message CreateForwardNodeRequest {
+  string request_id = 1;
+  // node's id, times and enabled flag are Control's; a new node is enabled.
+  ForwardNodeRecord node = 2;
+  NodeSettings settings = 3;
+}
+
+message CreateForwardNodeResponse {
+  NodeSummary node = 1;
+}
+
+message UpdateForwardNodeRequest {
+  string request_id = 1;
+  // node.id names the node; every editable field is replaced.
+  ForwardNodeRecord node = 2;
+}
+
+message UpdateForwardNodeResponse {
+  NodeSummary node = 1;
+  repeated Violation violations = 2;
+}
+
+message DeleteForwardNodeRequest {
+  string request_id = 1;
+  uint64 id = 2;
+}
+
+message DeleteForwardNodeResponse {
+  repeated Violation violations = 1;
+}
+
+message GetTrafficRequest {
+  // route_id and node_ref filter; empty for every route or node.
+  string route_id = 1;
+  string node_ref = 2;
+  // since_unix_ms (inclusive) and until_unix_ms (exclusive) default to the
+  // last 24 hours; at most 31 days apart.
+  int64 since_unix_ms = 3;
+  int64 until_unix_ms = 4;
+}
+
+// TrafficBucket is one hour of one route hop's metered traffic on one node.
+message TrafficBucket {
+  string route_id = 1;
+  uint32 hop_index = 2;
+  string node_ref = 3;
+  int64 hour_start_unix_ms = 4;
+  uint64 up_bytes = 5;
+  uint64 down_bytes = 6;
+  uint64 up_packets = 7;
+  uint64 down_packets = 8;
+  uint64 new_conns = 9;
+}
+
+message GetTrafficResponse {
+  repeated TrafficBucket buckets = 1;
+  // truncated is true when more buckets matched than one answer holds
+  // (20000): narrow the filter or the window.
+  bool truncated = 2;
 }

@@ -110,10 +110,17 @@ func (s *Service) SetNodeSettings(ctx context.Context, node agentcontrol.AgentNo
 	} else if !exists {
 		return PlanOutcome{}, fmt.Errorf("%w: %s", ErrNodeNotFound, node)
 	}
+	if err := storeSettings(db, node, settings, s.now()); err != nil {
+		return PlanOutcome{}, err
+	}
+	return s.Replan(ctx, "node_settings")
+}
+
+// storeSettings upserts node's settings into its inventory row.
+func storeSettings(db *gorm.DB, node agentcontrol.AgentNode, settings NodeSettings, now time.Time) error {
 	reserved, _ := json.Marshal(sortedPorts(settings.ReservedPorts))
 	addresses, _ := json.Marshal(settings.Addresses)
 	labels, _ := json.Marshal(settings.Labels)
-	now := s.now()
 	row := model.KernelForwardNode{
 		NodeRef: node.String(), NodeKind: node.Kind, NodeID: uint64(node.ID),
 		PortFirst: settings.PortFirst, PortLast: settings.PortLast,
@@ -127,9 +134,9 @@ func (s *Service) SetNodeSettings(ctx context.Context, node agentcontrol.AgentNo
 			"addresses_json": row.AddressesJSON, "labels_json": row.LabelsJSON, "updated_at": now,
 		}),
 	}).Create(&row).Error; err != nil {
-		return PlanOutcome{}, fmt.Errorf("kernel forward: store node settings: %w", err)
+		return fmt.Errorf("kernel forward: store node settings: %w", err)
 	}
-	return s.Replan(ctx, "node_settings")
+	return nil
 }
 
 // RecordHello records what a node's Agent said in its Hello. caps is nil

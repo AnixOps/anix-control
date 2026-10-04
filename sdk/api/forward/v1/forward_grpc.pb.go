@@ -19,15 +19,22 @@ import (
 const _ = grpc.SupportPackageIsVersion9
 
 const (
-	ForwardControl_CreateRoute_FullMethodName    = "/anixops.forward.v1.ForwardControl/CreateRoute"
-	ForwardControl_UpdateRoute_FullMethodName    = "/anixops.forward.v1.ForwardControl/UpdateRoute"
-	ForwardControl_DeleteRoute_FullMethodName    = "/anixops.forward.v1.ForwardControl/DeleteRoute"
-	ForwardControl_GetRoute_FullMethodName       = "/anixops.forward.v1.ForwardControl/GetRoute"
-	ForwardControl_ListRoutes_FullMethodName     = "/anixops.forward.v1.ForwardControl/ListRoutes"
-	ForwardControl_PlanRoute_FullMethodName      = "/anixops.forward.v1.ForwardControl/PlanRoute"
-	ForwardControl_GetRouteStats_FullMethodName  = "/anixops.forward.v1.ForwardControl/GetRouteStats"
-	ForwardControl_GetRouteHealth_FullMethodName = "/anixops.forward.v1.ForwardControl/GetRouteHealth"
-	ForwardControl_DiagnoseRoute_FullMethodName  = "/anixops.forward.v1.ForwardControl/DiagnoseRoute"
+	ForwardControl_CreateRoute_FullMethodName       = "/anixops.forward.v1.ForwardControl/CreateRoute"
+	ForwardControl_UpdateRoute_FullMethodName       = "/anixops.forward.v1.ForwardControl/UpdateRoute"
+	ForwardControl_DeleteRoute_FullMethodName       = "/anixops.forward.v1.ForwardControl/DeleteRoute"
+	ForwardControl_GetRoute_FullMethodName          = "/anixops.forward.v1.ForwardControl/GetRoute"
+	ForwardControl_ListRoutes_FullMethodName        = "/anixops.forward.v1.ForwardControl/ListRoutes"
+	ForwardControl_PlanRoute_FullMethodName         = "/anixops.forward.v1.ForwardControl/PlanRoute"
+	ForwardControl_GetRouteStats_FullMethodName     = "/anixops.forward.v1.ForwardControl/GetRouteStats"
+	ForwardControl_GetRouteHealth_FullMethodName    = "/anixops.forward.v1.ForwardControl/GetRouteHealth"
+	ForwardControl_DiagnoseRoute_FullMethodName     = "/anixops.forward.v1.ForwardControl/DiagnoseRoute"
+	ForwardControl_ListNodes_FullMethodName         = "/anixops.forward.v1.ForwardControl/ListNodes"
+	ForwardControl_GetNode_FullMethodName           = "/anixops.forward.v1.ForwardControl/GetNode"
+	ForwardControl_SetNodeSettings_FullMethodName   = "/anixops.forward.v1.ForwardControl/SetNodeSettings"
+	ForwardControl_CreateForwardNode_FullMethodName = "/anixops.forward.v1.ForwardControl/CreateForwardNode"
+	ForwardControl_UpdateForwardNode_FullMethodName = "/anixops.forward.v1.ForwardControl/UpdateForwardNode"
+	ForwardControl_DeleteForwardNode_FullMethodName = "/anixops.forward.v1.ForwardControl/DeleteForwardNode"
+	ForwardControl_GetTraffic_FullMethodName        = "/anixops.forward.v1.ForwardControl/GetTraffic"
 )
 
 // ForwardControlClient is the client API for ForwardControl service.
@@ -85,6 +92,40 @@ type ForwardControlClient interface {
 	// reachability of each next hop, delivery proved on the last hop, and a
 	// real UDP exchange for UDP routes. UNIMPLEMENTED until F3c.
 	DiagnoseRoute(ctx context.Context, in *DiagnoseRouteRequest, opts ...grpc.CallOption) (*DiagnoseRouteResponse, error)
+	// ListNodes answers every forward node (v2_forward_node) and every proxy
+	// node in the forwarding inventory, by node_ref, with its settings, the
+	// planner's view and its desired and reported generations.
+	ListNodes(ctx context.Context, in *ListNodesRequest, opts ...grpc.CallOption) (*ListNodesResponse, error)
+	// GetNode answers one node with its desired state and latest report.
+	// NOT_FOUND for a node that neither ListNodes nor the node rows know.
+	GetNode(ctx context.Context, in *GetNodeRequest, opts ...grpc.CallOption) (*GetNodeResponse, error)
+	// SetNodeSettings replaces a node's forwarding settings (port range,
+	// reserved ports, addresses, labels), which puts the node in the
+	// inventory, and replans. INVALID_ARGUMENT for malformed settings,
+	// NOT_FOUND when the node's row does not exist. A replan the settings
+	// make impossible is not an error: the settings are stored, every node
+	// keeps its generation, and the response's violations say why.
+	SetNodeSettings(ctx context.Context, in *SetNodeSettingsRequest, opts ...grpc.CallOption) (*SetNodeSettingsResponse, error)
+	// CreateForwardNode adds a forward node row (the Agent identity
+	// forward-<id>). Control assigns id and the node's legacy credential,
+	// which no answer carries; the node enrolls its Agent with an install
+	// token. request_id as CreateRoute. With settings the node joins the
+	// inventory at once.
+	CreateForwardNode(ctx context.Context, in *CreateForwardNodeRequest, opts ...grpc.CallOption) (*CreateForwardNodeResponse, error)
+	// UpdateForwardNode replaces a forward node row's editable fields.
+	// NOT_FOUND for an unknown id; request_id as CreateRoute.
+	// FAILED_PRECONDITION when it disables a node that a stored route uses,
+	// with an UpdateForwardNodeResponse in the status's details whose
+	// violations (code node_in_use) name the routes.
+	UpdateForwardNode(ctx context.Context, in *UpdateForwardNodeRequest, opts ...grpc.CallOption) (*UpdateForwardNodeResponse, error)
+	// DeleteForwardNode removes a forward node row, its inventory entry and
+	// its Agent certificates. NOT_FOUND for an unknown id; request_id as
+	// CreateRoute; FAILED_PRECONDITION while a stored route uses the node,
+	// with a DeleteForwardNodeResponse in the status's details.
+	DeleteForwardNode(ctx context.Context, in *DeleteForwardNodeRequest, opts ...grpc.CallOption) (*DeleteForwardNodeResponse, error)
+	// GetTraffic answers the traffic ledger's hourly buckets (raw bytes, no
+	// multiplier), filtered by route and node, over at most 31 days.
+	GetTraffic(ctx context.Context, in *GetTrafficRequest, opts ...grpc.CallOption) (*GetTrafficResponse, error)
 }
 
 type forwardControlClient struct {
@@ -185,6 +226,76 @@ func (c *forwardControlClient) DiagnoseRoute(ctx context.Context, in *DiagnoseRo
 	return out, nil
 }
 
+func (c *forwardControlClient) ListNodes(ctx context.Context, in *ListNodesRequest, opts ...grpc.CallOption) (*ListNodesResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListNodesResponse)
+	err := c.cc.Invoke(ctx, ForwardControl_ListNodes_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *forwardControlClient) GetNode(ctx context.Context, in *GetNodeRequest, opts ...grpc.CallOption) (*GetNodeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetNodeResponse)
+	err := c.cc.Invoke(ctx, ForwardControl_GetNode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *forwardControlClient) SetNodeSettings(ctx context.Context, in *SetNodeSettingsRequest, opts ...grpc.CallOption) (*SetNodeSettingsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(SetNodeSettingsResponse)
+	err := c.cc.Invoke(ctx, ForwardControl_SetNodeSettings_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *forwardControlClient) CreateForwardNode(ctx context.Context, in *CreateForwardNodeRequest, opts ...grpc.CallOption) (*CreateForwardNodeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateForwardNodeResponse)
+	err := c.cc.Invoke(ctx, ForwardControl_CreateForwardNode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *forwardControlClient) UpdateForwardNode(ctx context.Context, in *UpdateForwardNodeRequest, opts ...grpc.CallOption) (*UpdateForwardNodeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateForwardNodeResponse)
+	err := c.cc.Invoke(ctx, ForwardControl_UpdateForwardNode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *forwardControlClient) DeleteForwardNode(ctx context.Context, in *DeleteForwardNodeRequest, opts ...grpc.CallOption) (*DeleteForwardNodeResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteForwardNodeResponse)
+	err := c.cc.Invoke(ctx, ForwardControl_DeleteForwardNode_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *forwardControlClient) GetTraffic(ctx context.Context, in *GetTrafficRequest, opts ...grpc.CallOption) (*GetTrafficResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetTrafficResponse)
+	err := c.cc.Invoke(ctx, ForwardControl_GetTraffic_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ForwardControlServer is the server API for ForwardControl service.
 // All implementations must embed UnimplementedForwardControlServer
 // for forward compatibility.
@@ -240,6 +351,40 @@ type ForwardControlServer interface {
 	// reachability of each next hop, delivery proved on the last hop, and a
 	// real UDP exchange for UDP routes. UNIMPLEMENTED until F3c.
 	DiagnoseRoute(context.Context, *DiagnoseRouteRequest) (*DiagnoseRouteResponse, error)
+	// ListNodes answers every forward node (v2_forward_node) and every proxy
+	// node in the forwarding inventory, by node_ref, with its settings, the
+	// planner's view and its desired and reported generations.
+	ListNodes(context.Context, *ListNodesRequest) (*ListNodesResponse, error)
+	// GetNode answers one node with its desired state and latest report.
+	// NOT_FOUND for a node that neither ListNodes nor the node rows know.
+	GetNode(context.Context, *GetNodeRequest) (*GetNodeResponse, error)
+	// SetNodeSettings replaces a node's forwarding settings (port range,
+	// reserved ports, addresses, labels), which puts the node in the
+	// inventory, and replans. INVALID_ARGUMENT for malformed settings,
+	// NOT_FOUND when the node's row does not exist. A replan the settings
+	// make impossible is not an error: the settings are stored, every node
+	// keeps its generation, and the response's violations say why.
+	SetNodeSettings(context.Context, *SetNodeSettingsRequest) (*SetNodeSettingsResponse, error)
+	// CreateForwardNode adds a forward node row (the Agent identity
+	// forward-<id>). Control assigns id and the node's legacy credential,
+	// which no answer carries; the node enrolls its Agent with an install
+	// token. request_id as CreateRoute. With settings the node joins the
+	// inventory at once.
+	CreateForwardNode(context.Context, *CreateForwardNodeRequest) (*CreateForwardNodeResponse, error)
+	// UpdateForwardNode replaces a forward node row's editable fields.
+	// NOT_FOUND for an unknown id; request_id as CreateRoute.
+	// FAILED_PRECONDITION when it disables a node that a stored route uses,
+	// with an UpdateForwardNodeResponse in the status's details whose
+	// violations (code node_in_use) name the routes.
+	UpdateForwardNode(context.Context, *UpdateForwardNodeRequest) (*UpdateForwardNodeResponse, error)
+	// DeleteForwardNode removes a forward node row, its inventory entry and
+	// its Agent certificates. NOT_FOUND for an unknown id; request_id as
+	// CreateRoute; FAILED_PRECONDITION while a stored route uses the node,
+	// with a DeleteForwardNodeResponse in the status's details.
+	DeleteForwardNode(context.Context, *DeleteForwardNodeRequest) (*DeleteForwardNodeResponse, error)
+	// GetTraffic answers the traffic ledger's hourly buckets (raw bytes, no
+	// multiplier), filtered by route and node, over at most 31 days.
+	GetTraffic(context.Context, *GetTrafficRequest) (*GetTrafficResponse, error)
 	mustEmbedUnimplementedForwardControlServer()
 }
 
@@ -276,6 +421,27 @@ func (UnimplementedForwardControlServer) GetRouteHealth(context.Context, *GetRou
 }
 func (UnimplementedForwardControlServer) DiagnoseRoute(context.Context, *DiagnoseRouteRequest) (*DiagnoseRouteResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method DiagnoseRoute not implemented")
+}
+func (UnimplementedForwardControlServer) ListNodes(context.Context, *ListNodesRequest) (*ListNodesResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListNodes not implemented")
+}
+func (UnimplementedForwardControlServer) GetNode(context.Context, *GetNodeRequest) (*GetNodeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetNode not implemented")
+}
+func (UnimplementedForwardControlServer) SetNodeSettings(context.Context, *SetNodeSettingsRequest) (*SetNodeSettingsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method SetNodeSettings not implemented")
+}
+func (UnimplementedForwardControlServer) CreateForwardNode(context.Context, *CreateForwardNodeRequest) (*CreateForwardNodeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateForwardNode not implemented")
+}
+func (UnimplementedForwardControlServer) UpdateForwardNode(context.Context, *UpdateForwardNodeRequest) (*UpdateForwardNodeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateForwardNode not implemented")
+}
+func (UnimplementedForwardControlServer) DeleteForwardNode(context.Context, *DeleteForwardNodeRequest) (*DeleteForwardNodeResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteForwardNode not implemented")
+}
+func (UnimplementedForwardControlServer) GetTraffic(context.Context, *GetTrafficRequest) (*GetTrafficResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetTraffic not implemented")
 }
 func (UnimplementedForwardControlServer) mustEmbedUnimplementedForwardControlServer() {}
 func (UnimplementedForwardControlServer) testEmbeddedByValue()                        {}
@@ -460,6 +626,132 @@ func _ForwardControl_DiagnoseRoute_Handler(srv interface{}, ctx context.Context,
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ForwardControl_ListNodes_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListNodesRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ForwardControlServer).ListNodes(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ForwardControl_ListNodes_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ForwardControlServer).ListNodes(ctx, req.(*ListNodesRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ForwardControl_GetNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetNodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ForwardControlServer).GetNode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ForwardControl_GetNode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ForwardControlServer).GetNode(ctx, req.(*GetNodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ForwardControl_SetNodeSettings_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(SetNodeSettingsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ForwardControlServer).SetNodeSettings(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ForwardControl_SetNodeSettings_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ForwardControlServer).SetNodeSettings(ctx, req.(*SetNodeSettingsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ForwardControl_CreateForwardNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateForwardNodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ForwardControlServer).CreateForwardNode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ForwardControl_CreateForwardNode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ForwardControlServer).CreateForwardNode(ctx, req.(*CreateForwardNodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ForwardControl_UpdateForwardNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateForwardNodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ForwardControlServer).UpdateForwardNode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ForwardControl_UpdateForwardNode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ForwardControlServer).UpdateForwardNode(ctx, req.(*UpdateForwardNodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ForwardControl_DeleteForwardNode_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteForwardNodeRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ForwardControlServer).DeleteForwardNode(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ForwardControl_DeleteForwardNode_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ForwardControlServer).DeleteForwardNode(ctx, req.(*DeleteForwardNodeRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ForwardControl_GetTraffic_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetTrafficRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ForwardControlServer).GetTraffic(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ForwardControl_GetTraffic_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ForwardControlServer).GetTraffic(ctx, req.(*GetTrafficRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ForwardControl_ServiceDesc is the grpc.ServiceDesc for ForwardControl service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -502,6 +794,34 @@ var ForwardControl_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "DiagnoseRoute",
 			Handler:    _ForwardControl_DiagnoseRoute_Handler,
+		},
+		{
+			MethodName: "ListNodes",
+			Handler:    _ForwardControl_ListNodes_Handler,
+		},
+		{
+			MethodName: "GetNode",
+			Handler:    _ForwardControl_GetNode_Handler,
+		},
+		{
+			MethodName: "SetNodeSettings",
+			Handler:    _ForwardControl_SetNodeSettings_Handler,
+		},
+		{
+			MethodName: "CreateForwardNode",
+			Handler:    _ForwardControl_CreateForwardNode_Handler,
+		},
+		{
+			MethodName: "UpdateForwardNode",
+			Handler:    _ForwardControl_UpdateForwardNode_Handler,
+		},
+		{
+			MethodName: "DeleteForwardNode",
+			Handler:    _ForwardControl_DeleteForwardNode_Handler,
+		},
+		{
+			MethodName: "GetTraffic",
+			Handler:    _ForwardControl_GetTraffic_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

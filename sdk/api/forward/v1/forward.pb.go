@@ -551,6 +551,60 @@ func (ProbeKind) EnumDescriptor() ([]byte, []int) {
 	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{8}
 }
 
+// NodeTransport is how Control reaches a forward node.
+type NodeTransport int32
+
+const (
+	NodeTransport_NODE_TRANSPORT_UNSPECIFIED NodeTransport = 0
+	// AGENT: the node runs anix-agent and gets its state over the Agent
+	// Control stream.
+	NodeTransport_NODE_TRANSPORT_AGENT NodeTransport = 1
+	// ANSIBLE: a host without an Agent, driven over SSH by the Ansible
+	// fallback (forward-sdk.md section 6.3).
+	NodeTransport_NODE_TRANSPORT_ANSIBLE NodeTransport = 2
+)
+
+// Enum value maps for NodeTransport.
+var (
+	NodeTransport_name = map[int32]string{
+		0: "NODE_TRANSPORT_UNSPECIFIED",
+		1: "NODE_TRANSPORT_AGENT",
+		2: "NODE_TRANSPORT_ANSIBLE",
+	}
+	NodeTransport_value = map[string]int32{
+		"NODE_TRANSPORT_UNSPECIFIED": 0,
+		"NODE_TRANSPORT_AGENT":       1,
+		"NODE_TRANSPORT_ANSIBLE":     2,
+	}
+)
+
+func (x NodeTransport) Enum() *NodeTransport {
+	p := new(NodeTransport)
+	*p = x
+	return p
+}
+
+func (x NodeTransport) String() string {
+	return protoimpl.X.EnumStringOf(x.Descriptor(), protoreflect.EnumNumber(x))
+}
+
+func (NodeTransport) Descriptor() protoreflect.EnumDescriptor {
+	return file_api_forward_v1_forward_proto_enumTypes[9].Descriptor()
+}
+
+func (NodeTransport) Type() protoreflect.EnumType {
+	return &file_api_forward_v1_forward_proto_enumTypes[9]
+}
+
+func (x NodeTransport) Number() protoreflect.EnumNumber {
+	return protoreflect.EnumNumber(x)
+}
+
+// Deprecated: Use NodeTransport.Descriptor instead.
+func (NodeTransport) EnumDescriptor() ([]byte, []int) {
+	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{9}
+}
+
 // Route is one forwarding route as Control stores it.
 type Route struct {
 	state protoimpl.MessageState `protogen:"open.v1"`
@@ -3143,8 +3197,12 @@ func (x *GetRouteRequest) GetRouteId() string {
 }
 
 type GetRouteResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Route         *Route                 `protobuf:"bytes,1,opt,name=route,proto3" json:"route,omitempty"`
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Route *Route                 `protobuf:"bytes,1,opt,name=route,proto3" json:"route,omitempty"`
+	// enforced is why Control itself pauses the route on its nodes: "quota"
+	// or "expired"; empty when it does not (forward-sdk.md section 5.3).
+	// Added in F5a.
+	Enforced      string `protobuf:"bytes,2,opt,name=enforced,proto3" json:"enforced,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3184,6 +3242,13 @@ func (x *GetRouteResponse) GetRoute() *Route {
 		return x.Route
 	}
 	return nil
+}
+
+func (x *GetRouteResponse) GetEnforced() string {
+	if x != nil {
+		return x.Enforced
+	}
+	return ""
 }
 
 type ListRoutesRequest struct {
@@ -3259,6 +3324,9 @@ type ListRoutesResponse struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	Routes        []*Route               `protobuf:"bytes,1,rep,name=routes,proto3" json:"routes,omitempty"`
 	NextPageToken string                 `protobuf:"bytes,2,opt,name=next_page_token,json=nextPageToken,proto3" json:"next_page_token,omitempty"`
+	// enforced maps the id of each listed route that Control pauses to why,
+	// as GetRouteResponse.enforced. Added in F5a.
+	Enforced      map[string]string `protobuf:"bytes,3,rep,name=enforced,proto3" json:"enforced,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -3305,6 +3373,13 @@ func (x *ListRoutesResponse) GetNextPageToken() string {
 		return x.NextPageToken
 	}
 	return ""
+}
+
+func (x *ListRoutesResponse) GetEnforced() map[string]string {
+	if x != nil {
+		return x.Enforced
+	}
+	return nil
 }
 
 type PlanRouteRequest struct {
@@ -3861,6 +3936,1318 @@ func (x *DiagnoseRouteResponse) GetSteps() []*DiagnoseStep {
 	return nil
 }
 
+// NodeSettings are an administrator's forwarding settings for one node.
+// Unset or empty values mean the defaults: the port range 30000-39999, no
+// reserved port beyond SSH and the node's own service ports, the node row's
+// host when it is an IP address, no labels.
+type NodeSettings struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	PortRange     *PortRange             `protobuf:"bytes,1,opt,name=port_range,json=portRange,proto3" json:"port_range,omitempty"`
+	ReservedPorts []uint32               `protobuf:"varint,2,rep,packed,name=reserved_ports,json=reservedPorts,proto3" json:"reserved_ports,omitempty"`
+	// addresses are IP addresses, primary first.
+	Addresses     []string          `protobuf:"bytes,3,rep,name=addresses,proto3" json:"addresses,omitempty"`
+	Labels        map[string]string `protobuf:"bytes,4,rep,name=labels,proto3" json:"labels,omitempty" protobuf_key:"bytes,1,opt,name=key" protobuf_val:"bytes,2,opt,name=value"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NodeSettings) Reset() {
+	*x = NodeSettings{}
+	mi := &file_api_forward_v1_forward_proto_msgTypes[46]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NodeSettings) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NodeSettings) ProtoMessage() {}
+
+func (x *NodeSettings) ProtoReflect() protoreflect.Message {
+	mi := &file_api_forward_v1_forward_proto_msgTypes[46]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NodeSettings.ProtoReflect.Descriptor instead.
+func (*NodeSettings) Descriptor() ([]byte, []int) {
+	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{46}
+}
+
+func (x *NodeSettings) GetPortRange() *PortRange {
+	if x != nil {
+		return x.PortRange
+	}
+	return nil
+}
+
+func (x *NodeSettings) GetReservedPorts() []uint32 {
+	if x != nil {
+		return x.ReservedPorts
+	}
+	return nil
+}
+
+func (x *NodeSettings) GetAddresses() []string {
+	if x != nil {
+		return x.Addresses
+	}
+	return nil
+}
+
+func (x *NodeSettings) GetLabels() map[string]string {
+	if x != nil {
+		return x.Labels
+	}
+	return nil
+}
+
+// ForwardNodeRecord is a forward node's row without its credentials.
+type ForwardNodeRecord struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// id is assigned by Control; the node's reference is "forward-<id>".
+	Id   uint64 `protobuf:"varint,1,opt,name=id,proto3" json:"id,omitempty"`
+	Name string `protobuf:"bytes,2,opt,name=name,proto3" json:"name,omitempty"`
+	// host is the node's address or DNS name.
+	Host string `protobuf:"bytes,3,opt,name=host,proto3" json:"host,omitempty"`
+	// role is the legacy type, "relay" or "exit"; routes give roles to hops,
+	// not nodes (forward-sdk.md section 4.3).
+	Role      string        `protobuf:"bytes,4,opt,name=role,proto3" json:"role,omitempty"`
+	Transport NodeTransport `protobuf:"varint,5,opt,name=transport,proto3,enum=anixops.forward.v1.NodeTransport" json:"transport,omitempty"`
+	// port, api_port and metrics_port are the node's own service ports, which
+	// the planner never allocates; 0 for none.
+	Port            uint32 `protobuf:"varint,6,opt,name=port,proto3" json:"port,omitempty"`
+	ApiPort         uint32 `protobuf:"varint,7,opt,name=api_port,json=apiPort,proto3" json:"api_port,omitempty"`
+	MetricsPort     uint32 `protobuf:"varint,8,opt,name=metrics_port,json=metricsPort,proto3" json:"metrics_port,omitempty"`
+	Region          string `protobuf:"bytes,9,opt,name=region,proto3" json:"region,omitempty"`
+	Isp             string `protobuf:"bytes,10,opt,name=isp,proto3" json:"isp,omitempty"`
+	BandwidthMbps   uint64 `protobuf:"varint,11,opt,name=bandwidth_mbps,json=bandwidthMbps,proto3" json:"bandwidth_mbps,omitempty"`
+	Weight          uint32 `protobuf:"varint,12,opt,name=weight,proto3" json:"weight,omitempty"`
+	MaxConns        uint32 `protobuf:"varint,13,opt,name=max_conns,json=maxConns,proto3" json:"max_conns,omitempty"`
+	Enabled         bool   `protobuf:"varint,14,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	CreatedAtUnixMs int64  `protobuf:"varint,15,opt,name=created_at_unix_ms,json=createdAtUnixMs,proto3" json:"created_at_unix_ms,omitempty"`
+	UpdatedAtUnixMs int64  `protobuf:"varint,16,opt,name=updated_at_unix_ms,json=updatedAtUnixMs,proto3" json:"updated_at_unix_ms,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *ForwardNodeRecord) Reset() {
+	*x = ForwardNodeRecord{}
+	mi := &file_api_forward_v1_forward_proto_msgTypes[47]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ForwardNodeRecord) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ForwardNodeRecord) ProtoMessage() {}
+
+func (x *ForwardNodeRecord) ProtoReflect() protoreflect.Message {
+	mi := &file_api_forward_v1_forward_proto_msgTypes[47]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ForwardNodeRecord.ProtoReflect.Descriptor instead.
+func (*ForwardNodeRecord) Descriptor() ([]byte, []int) {
+	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{47}
+}
+
+func (x *ForwardNodeRecord) GetId() uint64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+func (x *ForwardNodeRecord) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *ForwardNodeRecord) GetHost() string {
+	if x != nil {
+		return x.Host
+	}
+	return ""
+}
+
+func (x *ForwardNodeRecord) GetRole() string {
+	if x != nil {
+		return x.Role
+	}
+	return ""
+}
+
+func (x *ForwardNodeRecord) GetTransport() NodeTransport {
+	if x != nil {
+		return x.Transport
+	}
+	return NodeTransport_NODE_TRANSPORT_UNSPECIFIED
+}
+
+func (x *ForwardNodeRecord) GetPort() uint32 {
+	if x != nil {
+		return x.Port
+	}
+	return 0
+}
+
+func (x *ForwardNodeRecord) GetApiPort() uint32 {
+	if x != nil {
+		return x.ApiPort
+	}
+	return 0
+}
+
+func (x *ForwardNodeRecord) GetMetricsPort() uint32 {
+	if x != nil {
+		return x.MetricsPort
+	}
+	return 0
+}
+
+func (x *ForwardNodeRecord) GetRegion() string {
+	if x != nil {
+		return x.Region
+	}
+	return ""
+}
+
+func (x *ForwardNodeRecord) GetIsp() string {
+	if x != nil {
+		return x.Isp
+	}
+	return ""
+}
+
+func (x *ForwardNodeRecord) GetBandwidthMbps() uint64 {
+	if x != nil {
+		return x.BandwidthMbps
+	}
+	return 0
+}
+
+func (x *ForwardNodeRecord) GetWeight() uint32 {
+	if x != nil {
+		return x.Weight
+	}
+	return 0
+}
+
+func (x *ForwardNodeRecord) GetMaxConns() uint32 {
+	if x != nil {
+		return x.MaxConns
+	}
+	return 0
+}
+
+func (x *ForwardNodeRecord) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *ForwardNodeRecord) GetCreatedAtUnixMs() int64 {
+	if x != nil {
+		return x.CreatedAtUnixMs
+	}
+	return 0
+}
+
+func (x *ForwardNodeRecord) GetUpdatedAtUnixMs() int64 {
+	if x != nil {
+		return x.UpdatedAtUnixMs
+	}
+	return 0
+}
+
+// NodeSummary is one node as the forwarding inventory sees it.
+type NodeSummary struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	NodeRef string                 `protobuf:"bytes,1,opt,name=node_ref,json=nodeRef,proto3" json:"node_ref,omitempty"`
+	// kind is "forward" or "proxy".
+	Kind    string `protobuf:"bytes,2,opt,name=kind,proto3" json:"kind,omitempty"`
+	Name    string `protobuf:"bytes,3,opt,name=name,proto3" json:"name,omitempty"`
+	Host    string `protobuf:"bytes,4,opt,name=host,proto3" json:"host,omitempty"`
+	Enabled bool   `protobuf:"varint,5,opt,name=enabled,proto3" json:"enabled,omitempty"`
+	// in_inventory is true when the planner places hops on the node: it has
+	// forwarding settings or negotiated forward.v1, and its row is enabled.
+	InInventory bool `protobuf:"varint,6,opt,name=in_inventory,json=inInventory,proto3" json:"in_inventory,omitempty"`
+	// negotiated is true when the node's last Hello negotiated forward.v1.
+	Negotiated bool `protobuf:"varint,7,opt,name=negotiated,proto3" json:"negotiated,omitempty"`
+	// settings are the stored settings; unset when the node has none.
+	Settings *NodeSettings `protobuf:"bytes,8,opt,name=settings,proto3" json:"settings,omitempty"`
+	// info is the planner's view of the node; unset when it is left out.
+	Info *NodeInfo `protobuf:"bytes,9,opt,name=info,proto3" json:"info,omitempty"`
+	// reserved_ports are every port the planner never allocates on the node.
+	ReservedPorts []uint32          `protobuf:"varint,10,rep,packed,name=reserved_ports,json=reservedPorts,proto3" json:"reserved_ports,omitempty"`
+	Capabilities  *NodeCapabilities `protobuf:"bytes,11,opt,name=capabilities,proto3" json:"capabilities,omitempty"`
+	// desired_generation and desired_hops are the stored state's; 0 before
+	// the node has one.
+	DesiredGeneration uint64 `protobuf:"varint,12,opt,name=desired_generation,json=desiredGeneration,proto3" json:"desired_generation,omitempty"`
+	DesiredStateHash  string `protobuf:"bytes,13,opt,name=desired_state_hash,json=desiredStateHash,proto3" json:"desired_state_hash,omitempty"`
+	DesiredHops       uint32 `protobuf:"varint,14,opt,name=desired_hops,json=desiredHops,proto3" json:"desired_hops,omitempty"`
+	// reported is false before the node's first report; the next fields are
+	// its latest report's.
+	Reported           bool   `protobuf:"varint,15,opt,name=reported,proto3" json:"reported,omitempty"`
+	ReportedGeneration uint64 `protobuf:"varint,16,opt,name=reported_generation,json=reportedGeneration,proto3" json:"reported_generation,omitempty"`
+	ReportedStateHash  string `protobuf:"bytes,17,opt,name=reported_state_hash,json=reportedStateHash,proto3" json:"reported_state_hash,omitempty"`
+	Applied            bool   `protobuf:"varint,18,opt,name=applied,proto3" json:"applied,omitempty"`
+	HopErrors          uint32 `protobuf:"varint,19,opt,name=hop_errors,json=hopErrors,proto3" json:"hop_errors,omitempty"`
+	ReportedAtUnixMs   int64  `protobuf:"varint,20,opt,name=reported_at_unix_ms,json=reportedAtUnixMs,proto3" json:"reported_at_unix_ms,omitempty"`
+	// record is the forward node's row; unset for a proxy node.
+	Record        *ForwardNodeRecord `protobuf:"bytes,21,opt,name=record,proto3" json:"record,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *NodeSummary) Reset() {
+	*x = NodeSummary{}
+	mi := &file_api_forward_v1_forward_proto_msgTypes[48]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *NodeSummary) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*NodeSummary) ProtoMessage() {}
+
+func (x *NodeSummary) ProtoReflect() protoreflect.Message {
+	mi := &file_api_forward_v1_forward_proto_msgTypes[48]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use NodeSummary.ProtoReflect.Descriptor instead.
+func (*NodeSummary) Descriptor() ([]byte, []int) {
+	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{48}
+}
+
+func (x *NodeSummary) GetNodeRef() string {
+	if x != nil {
+		return x.NodeRef
+	}
+	return ""
+}
+
+func (x *NodeSummary) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *NodeSummary) GetName() string {
+	if x != nil {
+		return x.Name
+	}
+	return ""
+}
+
+func (x *NodeSummary) GetHost() string {
+	if x != nil {
+		return x.Host
+	}
+	return ""
+}
+
+func (x *NodeSummary) GetEnabled() bool {
+	if x != nil {
+		return x.Enabled
+	}
+	return false
+}
+
+func (x *NodeSummary) GetInInventory() bool {
+	if x != nil {
+		return x.InInventory
+	}
+	return false
+}
+
+func (x *NodeSummary) GetNegotiated() bool {
+	if x != nil {
+		return x.Negotiated
+	}
+	return false
+}
+
+func (x *NodeSummary) GetSettings() *NodeSettings {
+	if x != nil {
+		return x.Settings
+	}
+	return nil
+}
+
+func (x *NodeSummary) GetInfo() *NodeInfo {
+	if x != nil {
+		return x.Info
+	}
+	return nil
+}
+
+func (x *NodeSummary) GetReservedPorts() []uint32 {
+	if x != nil {
+		return x.ReservedPorts
+	}
+	return nil
+}
+
+func (x *NodeSummary) GetCapabilities() *NodeCapabilities {
+	if x != nil {
+		return x.Capabilities
+	}
+	return nil
+}
+
+func (x *NodeSummary) GetDesiredGeneration() uint64 {
+	if x != nil {
+		return x.DesiredGeneration
+	}
+	return 0
+}
+
+func (x *NodeSummary) GetDesiredStateHash() string {
+	if x != nil {
+		return x.DesiredStateHash
+	}
+	return ""
+}
+
+func (x *NodeSummary) GetDesiredHops() uint32 {
+	if x != nil {
+		return x.DesiredHops
+	}
+	return 0
+}
+
+func (x *NodeSummary) GetReported() bool {
+	if x != nil {
+		return x.Reported
+	}
+	return false
+}
+
+func (x *NodeSummary) GetReportedGeneration() uint64 {
+	if x != nil {
+		return x.ReportedGeneration
+	}
+	return 0
+}
+
+func (x *NodeSummary) GetReportedStateHash() string {
+	if x != nil {
+		return x.ReportedStateHash
+	}
+	return ""
+}
+
+func (x *NodeSummary) GetApplied() bool {
+	if x != nil {
+		return x.Applied
+	}
+	return false
+}
+
+func (x *NodeSummary) GetHopErrors() uint32 {
+	if x != nil {
+		return x.HopErrors
+	}
+	return 0
+}
+
+func (x *NodeSummary) GetReportedAtUnixMs() int64 {
+	if x != nil {
+		return x.ReportedAtUnixMs
+	}
+	return 0
+}
+
+func (x *NodeSummary) GetRecord() *ForwardNodeRecord {
+	if x != nil {
+		return x.Record
+	}
+	return nil
+}
+
+type ListNodesRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// kind keeps "forward" or "proxy" nodes; empty for both.
+	Kind string `protobuf:"bytes,1,opt,name=kind,proto3" json:"kind,omitempty"`
+	// transport keeps the forward nodes reached so; UNSPECIFIED for all.
+	Transport     NodeTransport `protobuf:"varint,2,opt,name=transport,proto3,enum=anixops.forward.v1.NodeTransport" json:"transport,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListNodesRequest) Reset() {
+	*x = ListNodesRequest{}
+	mi := &file_api_forward_v1_forward_proto_msgTypes[49]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListNodesRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListNodesRequest) ProtoMessage() {}
+
+func (x *ListNodesRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_forward_v1_forward_proto_msgTypes[49]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListNodesRequest.ProtoReflect.Descriptor instead.
+func (*ListNodesRequest) Descriptor() ([]byte, []int) {
+	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{49}
+}
+
+func (x *ListNodesRequest) GetKind() string {
+	if x != nil {
+		return x.Kind
+	}
+	return ""
+}
+
+func (x *ListNodesRequest) GetTransport() NodeTransport {
+	if x != nil {
+		return x.Transport
+	}
+	return NodeTransport_NODE_TRANSPORT_UNSPECIFIED
+}
+
+type ListNodesResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Nodes         []*NodeSummary         `protobuf:"bytes,1,rep,name=nodes,proto3" json:"nodes,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *ListNodesResponse) Reset() {
+	*x = ListNodesResponse{}
+	mi := &file_api_forward_v1_forward_proto_msgTypes[50]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *ListNodesResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*ListNodesResponse) ProtoMessage() {}
+
+func (x *ListNodesResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_forward_v1_forward_proto_msgTypes[50]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use ListNodesResponse.ProtoReflect.Descriptor instead.
+func (*ListNodesResponse) Descriptor() ([]byte, []int) {
+	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{50}
+}
+
+func (x *ListNodesResponse) GetNodes() []*NodeSummary {
+	if x != nil {
+		return x.Nodes
+	}
+	return nil
+}
+
+type GetNodeRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeRef       string                 `protobuf:"bytes,1,opt,name=node_ref,json=nodeRef,proto3" json:"node_ref,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetNodeRequest) Reset() {
+	*x = GetNodeRequest{}
+	mi := &file_api_forward_v1_forward_proto_msgTypes[51]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetNodeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetNodeRequest) ProtoMessage() {}
+
+func (x *GetNodeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_forward_v1_forward_proto_msgTypes[51]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetNodeRequest.ProtoReflect.Descriptor instead.
+func (*GetNodeRequest) Descriptor() ([]byte, []int) {
+	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{51}
+}
+
+func (x *GetNodeRequest) GetNodeRef() string {
+	if x != nil {
+		return x.NodeRef
+	}
+	return ""
+}
+
+type GetNodeResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Node  *NodeSummary           `protobuf:"bytes,1,opt,name=node,proto3" json:"node,omitempty"`
+	// state is the node's desired state; unset before it has one.
+	State *NodeForwardState `protobuf:"bytes,2,opt,name=state,proto3" json:"state,omitempty"`
+	// report is the node's latest report without its counters; unset before
+	// its first.
+	Report        *NodeForwardReport `protobuf:"bytes,3,opt,name=report,proto3" json:"report,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetNodeResponse) Reset() {
+	*x = GetNodeResponse{}
+	mi := &file_api_forward_v1_forward_proto_msgTypes[52]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetNodeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetNodeResponse) ProtoMessage() {}
+
+func (x *GetNodeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_forward_v1_forward_proto_msgTypes[52]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetNodeResponse.ProtoReflect.Descriptor instead.
+func (*GetNodeResponse) Descriptor() ([]byte, []int) {
+	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{52}
+}
+
+func (x *GetNodeResponse) GetNode() *NodeSummary {
+	if x != nil {
+		return x.Node
+	}
+	return nil
+}
+
+func (x *GetNodeResponse) GetState() *NodeForwardState {
+	if x != nil {
+		return x.State
+	}
+	return nil
+}
+
+func (x *GetNodeResponse) GetReport() *NodeForwardReport {
+	if x != nil {
+		return x.Report
+	}
+	return nil
+}
+
+type SetNodeSettingsRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	NodeRef       string                 `protobuf:"bytes,1,opt,name=node_ref,json=nodeRef,proto3" json:"node_ref,omitempty"`
+	Settings      *NodeSettings          `protobuf:"bytes,2,opt,name=settings,proto3" json:"settings,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetNodeSettingsRequest) Reset() {
+	*x = SetNodeSettingsRequest{}
+	mi := &file_api_forward_v1_forward_proto_msgTypes[53]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetNodeSettingsRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetNodeSettingsRequest) ProtoMessage() {}
+
+func (x *SetNodeSettingsRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_forward_v1_forward_proto_msgTypes[53]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetNodeSettingsRequest.ProtoReflect.Descriptor instead.
+func (*SetNodeSettingsRequest) Descriptor() ([]byte, []int) {
+	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{53}
+}
+
+func (x *SetNodeSettingsRequest) GetNodeRef() string {
+	if x != nil {
+		return x.NodeRef
+	}
+	return ""
+}
+
+func (x *SetNodeSettingsRequest) GetSettings() *NodeSettings {
+	if x != nil {
+		return x.Settings
+	}
+	return nil
+}
+
+type SetNodeSettingsResponse struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	Node  *NodeSummary           `protobuf:"bytes,1,opt,name=node,proto3" json:"node,omitempty"`
+	// violations are set when the replan was refused: the settings are
+	// stored and every node keeps its generation.
+	Violations    []*Violation `protobuf:"bytes,2,rep,name=violations,proto3" json:"violations,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *SetNodeSettingsResponse) Reset() {
+	*x = SetNodeSettingsResponse{}
+	mi := &file_api_forward_v1_forward_proto_msgTypes[54]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *SetNodeSettingsResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*SetNodeSettingsResponse) ProtoMessage() {}
+
+func (x *SetNodeSettingsResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_forward_v1_forward_proto_msgTypes[54]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use SetNodeSettingsResponse.ProtoReflect.Descriptor instead.
+func (*SetNodeSettingsResponse) Descriptor() ([]byte, []int) {
+	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{54}
+}
+
+func (x *SetNodeSettingsResponse) GetNode() *NodeSummary {
+	if x != nil {
+		return x.Node
+	}
+	return nil
+}
+
+func (x *SetNodeSettingsResponse) GetViolations() []*Violation {
+	if x != nil {
+		return x.Violations
+	}
+	return nil
+}
+
+type CreateForwardNodeRequest struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	RequestId string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	// node's id, times and enabled flag are Control's; a new node is enabled.
+	Node          *ForwardNodeRecord `protobuf:"bytes,2,opt,name=node,proto3" json:"node,omitempty"`
+	Settings      *NodeSettings      `protobuf:"bytes,3,opt,name=settings,proto3" json:"settings,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateForwardNodeRequest) Reset() {
+	*x = CreateForwardNodeRequest{}
+	mi := &file_api_forward_v1_forward_proto_msgTypes[55]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateForwardNodeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateForwardNodeRequest) ProtoMessage() {}
+
+func (x *CreateForwardNodeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_forward_v1_forward_proto_msgTypes[55]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateForwardNodeRequest.ProtoReflect.Descriptor instead.
+func (*CreateForwardNodeRequest) Descriptor() ([]byte, []int) {
+	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{55}
+}
+
+func (x *CreateForwardNodeRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *CreateForwardNodeRequest) GetNode() *ForwardNodeRecord {
+	if x != nil {
+		return x.Node
+	}
+	return nil
+}
+
+func (x *CreateForwardNodeRequest) GetSettings() *NodeSettings {
+	if x != nil {
+		return x.Settings
+	}
+	return nil
+}
+
+type CreateForwardNodeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Node          *NodeSummary           `protobuf:"bytes,1,opt,name=node,proto3" json:"node,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *CreateForwardNodeResponse) Reset() {
+	*x = CreateForwardNodeResponse{}
+	mi := &file_api_forward_v1_forward_proto_msgTypes[56]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *CreateForwardNodeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*CreateForwardNodeResponse) ProtoMessage() {}
+
+func (x *CreateForwardNodeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_forward_v1_forward_proto_msgTypes[56]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use CreateForwardNodeResponse.ProtoReflect.Descriptor instead.
+func (*CreateForwardNodeResponse) Descriptor() ([]byte, []int) {
+	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{56}
+}
+
+func (x *CreateForwardNodeResponse) GetNode() *NodeSummary {
+	if x != nil {
+		return x.Node
+	}
+	return nil
+}
+
+type UpdateForwardNodeRequest struct {
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	RequestId string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	// node.id names the node; every editable field is replaced.
+	Node          *ForwardNodeRecord `protobuf:"bytes,2,opt,name=node,proto3" json:"node,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateForwardNodeRequest) Reset() {
+	*x = UpdateForwardNodeRequest{}
+	mi := &file_api_forward_v1_forward_proto_msgTypes[57]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateForwardNodeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateForwardNodeRequest) ProtoMessage() {}
+
+func (x *UpdateForwardNodeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_forward_v1_forward_proto_msgTypes[57]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateForwardNodeRequest.ProtoReflect.Descriptor instead.
+func (*UpdateForwardNodeRequest) Descriptor() ([]byte, []int) {
+	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{57}
+}
+
+func (x *UpdateForwardNodeRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *UpdateForwardNodeRequest) GetNode() *ForwardNodeRecord {
+	if x != nil {
+		return x.Node
+	}
+	return nil
+}
+
+type UpdateForwardNodeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Node          *NodeSummary           `protobuf:"bytes,1,opt,name=node,proto3" json:"node,omitempty"`
+	Violations    []*Violation           `protobuf:"bytes,2,rep,name=violations,proto3" json:"violations,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *UpdateForwardNodeResponse) Reset() {
+	*x = UpdateForwardNodeResponse{}
+	mi := &file_api_forward_v1_forward_proto_msgTypes[58]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *UpdateForwardNodeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*UpdateForwardNodeResponse) ProtoMessage() {}
+
+func (x *UpdateForwardNodeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_forward_v1_forward_proto_msgTypes[58]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use UpdateForwardNodeResponse.ProtoReflect.Descriptor instead.
+func (*UpdateForwardNodeResponse) Descriptor() ([]byte, []int) {
+	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{58}
+}
+
+func (x *UpdateForwardNodeResponse) GetNode() *NodeSummary {
+	if x != nil {
+		return x.Node
+	}
+	return nil
+}
+
+func (x *UpdateForwardNodeResponse) GetViolations() []*Violation {
+	if x != nil {
+		return x.Violations
+	}
+	return nil
+}
+
+type DeleteForwardNodeRequest struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	RequestId     string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
+	Id            uint64                 `protobuf:"varint,2,opt,name=id,proto3" json:"id,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteForwardNodeRequest) Reset() {
+	*x = DeleteForwardNodeRequest{}
+	mi := &file_api_forward_v1_forward_proto_msgTypes[59]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteForwardNodeRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteForwardNodeRequest) ProtoMessage() {}
+
+func (x *DeleteForwardNodeRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_forward_v1_forward_proto_msgTypes[59]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteForwardNodeRequest.ProtoReflect.Descriptor instead.
+func (*DeleteForwardNodeRequest) Descriptor() ([]byte, []int) {
+	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{59}
+}
+
+func (x *DeleteForwardNodeRequest) GetRequestId() string {
+	if x != nil {
+		return x.RequestId
+	}
+	return ""
+}
+
+func (x *DeleteForwardNodeRequest) GetId() uint64 {
+	if x != nil {
+		return x.Id
+	}
+	return 0
+}
+
+type DeleteForwardNodeResponse struct {
+	state         protoimpl.MessageState `protogen:"open.v1"`
+	Violations    []*Violation           `protobuf:"bytes,1,rep,name=violations,proto3" json:"violations,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *DeleteForwardNodeResponse) Reset() {
+	*x = DeleteForwardNodeResponse{}
+	mi := &file_api_forward_v1_forward_proto_msgTypes[60]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *DeleteForwardNodeResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*DeleteForwardNodeResponse) ProtoMessage() {}
+
+func (x *DeleteForwardNodeResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_forward_v1_forward_proto_msgTypes[60]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use DeleteForwardNodeResponse.ProtoReflect.Descriptor instead.
+func (*DeleteForwardNodeResponse) Descriptor() ([]byte, []int) {
+	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{60}
+}
+
+func (x *DeleteForwardNodeResponse) GetViolations() []*Violation {
+	if x != nil {
+		return x.Violations
+	}
+	return nil
+}
+
+type GetTrafficRequest struct {
+	state protoimpl.MessageState `protogen:"open.v1"`
+	// route_id and node_ref filter; empty for every route or node.
+	RouteId string `protobuf:"bytes,1,opt,name=route_id,json=routeId,proto3" json:"route_id,omitempty"`
+	NodeRef string `protobuf:"bytes,2,opt,name=node_ref,json=nodeRef,proto3" json:"node_ref,omitempty"`
+	// since_unix_ms (inclusive) and until_unix_ms (exclusive) default to the
+	// last 24 hours; at most 31 days apart.
+	SinceUnixMs   int64 `protobuf:"varint,3,opt,name=since_unix_ms,json=sinceUnixMs,proto3" json:"since_unix_ms,omitempty"`
+	UntilUnixMs   int64 `protobuf:"varint,4,opt,name=until_unix_ms,json=untilUnixMs,proto3" json:"until_unix_ms,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetTrafficRequest) Reset() {
+	*x = GetTrafficRequest{}
+	mi := &file_api_forward_v1_forward_proto_msgTypes[61]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetTrafficRequest) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetTrafficRequest) ProtoMessage() {}
+
+func (x *GetTrafficRequest) ProtoReflect() protoreflect.Message {
+	mi := &file_api_forward_v1_forward_proto_msgTypes[61]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetTrafficRequest.ProtoReflect.Descriptor instead.
+func (*GetTrafficRequest) Descriptor() ([]byte, []int) {
+	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{61}
+}
+
+func (x *GetTrafficRequest) GetRouteId() string {
+	if x != nil {
+		return x.RouteId
+	}
+	return ""
+}
+
+func (x *GetTrafficRequest) GetNodeRef() string {
+	if x != nil {
+		return x.NodeRef
+	}
+	return ""
+}
+
+func (x *GetTrafficRequest) GetSinceUnixMs() int64 {
+	if x != nil {
+		return x.SinceUnixMs
+	}
+	return 0
+}
+
+func (x *GetTrafficRequest) GetUntilUnixMs() int64 {
+	if x != nil {
+		return x.UntilUnixMs
+	}
+	return 0
+}
+
+// TrafficBucket is one hour of one route hop's metered traffic on one node.
+type TrafficBucket struct {
+	state           protoimpl.MessageState `protogen:"open.v1"`
+	RouteId         string                 `protobuf:"bytes,1,opt,name=route_id,json=routeId,proto3" json:"route_id,omitempty"`
+	HopIndex        uint32                 `protobuf:"varint,2,opt,name=hop_index,json=hopIndex,proto3" json:"hop_index,omitempty"`
+	NodeRef         string                 `protobuf:"bytes,3,opt,name=node_ref,json=nodeRef,proto3" json:"node_ref,omitempty"`
+	HourStartUnixMs int64                  `protobuf:"varint,4,opt,name=hour_start_unix_ms,json=hourStartUnixMs,proto3" json:"hour_start_unix_ms,omitempty"`
+	UpBytes         uint64                 `protobuf:"varint,5,opt,name=up_bytes,json=upBytes,proto3" json:"up_bytes,omitempty"`
+	DownBytes       uint64                 `protobuf:"varint,6,opt,name=down_bytes,json=downBytes,proto3" json:"down_bytes,omitempty"`
+	UpPackets       uint64                 `protobuf:"varint,7,opt,name=up_packets,json=upPackets,proto3" json:"up_packets,omitempty"`
+	DownPackets     uint64                 `protobuf:"varint,8,opt,name=down_packets,json=downPackets,proto3" json:"down_packets,omitempty"`
+	NewConns        uint64                 `protobuf:"varint,9,opt,name=new_conns,json=newConns,proto3" json:"new_conns,omitempty"`
+	unknownFields   protoimpl.UnknownFields
+	sizeCache       protoimpl.SizeCache
+}
+
+func (x *TrafficBucket) Reset() {
+	*x = TrafficBucket{}
+	mi := &file_api_forward_v1_forward_proto_msgTypes[62]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *TrafficBucket) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*TrafficBucket) ProtoMessage() {}
+
+func (x *TrafficBucket) ProtoReflect() protoreflect.Message {
+	mi := &file_api_forward_v1_forward_proto_msgTypes[62]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use TrafficBucket.ProtoReflect.Descriptor instead.
+func (*TrafficBucket) Descriptor() ([]byte, []int) {
+	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{62}
+}
+
+func (x *TrafficBucket) GetRouteId() string {
+	if x != nil {
+		return x.RouteId
+	}
+	return ""
+}
+
+func (x *TrafficBucket) GetHopIndex() uint32 {
+	if x != nil {
+		return x.HopIndex
+	}
+	return 0
+}
+
+func (x *TrafficBucket) GetNodeRef() string {
+	if x != nil {
+		return x.NodeRef
+	}
+	return ""
+}
+
+func (x *TrafficBucket) GetHourStartUnixMs() int64 {
+	if x != nil {
+		return x.HourStartUnixMs
+	}
+	return 0
+}
+
+func (x *TrafficBucket) GetUpBytes() uint64 {
+	if x != nil {
+		return x.UpBytes
+	}
+	return 0
+}
+
+func (x *TrafficBucket) GetDownBytes() uint64 {
+	if x != nil {
+		return x.DownBytes
+	}
+	return 0
+}
+
+func (x *TrafficBucket) GetUpPackets() uint64 {
+	if x != nil {
+		return x.UpPackets
+	}
+	return 0
+}
+
+func (x *TrafficBucket) GetDownPackets() uint64 {
+	if x != nil {
+		return x.DownPackets
+	}
+	return 0
+}
+
+func (x *TrafficBucket) GetNewConns() uint64 {
+	if x != nil {
+		return x.NewConns
+	}
+	return 0
+}
+
+type GetTrafficResponse struct {
+	state   protoimpl.MessageState `protogen:"open.v1"`
+	Buckets []*TrafficBucket       `protobuf:"bytes,1,rep,name=buckets,proto3" json:"buckets,omitempty"`
+	// truncated is true when more buckets matched than one answer holds
+	// (20000): narrow the filter or the window.
+	Truncated     bool `protobuf:"varint,2,opt,name=truncated,proto3" json:"truncated,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
+}
+
+func (x *GetTrafficResponse) Reset() {
+	*x = GetTrafficResponse{}
+	mi := &file_api_forward_v1_forward_proto_msgTypes[63]
+	ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+	ms.StoreMessageInfo(mi)
+}
+
+func (x *GetTrafficResponse) String() string {
+	return protoimpl.X.MessageStringOf(x)
+}
+
+func (*GetTrafficResponse) ProtoMessage() {}
+
+func (x *GetTrafficResponse) ProtoReflect() protoreflect.Message {
+	mi := &file_api_forward_v1_forward_proto_msgTypes[63]
+	if x != nil {
+		ms := protoimpl.X.MessageStateOf(protoimpl.Pointer(x))
+		if ms.LoadMessageInfo() == nil {
+			ms.StoreMessageInfo(mi)
+		}
+		return ms
+	}
+	return mi.MessageOf(x)
+}
+
+// Deprecated: Use GetTrafficResponse.ProtoReflect.Descriptor instead.
+func (*GetTrafficResponse) Descriptor() ([]byte, []int) {
+	return file_api_forward_v1_forward_proto_rawDescGZIP(), []int{63}
+}
+
+func (x *GetTrafficResponse) GetBuckets() []*TrafficBucket {
+	if x != nil {
+		return x.Buckets
+	}
+	return nil
+}
+
+func (x *GetTrafficResponse) GetTruncated() bool {
+	if x != nil {
+		return x.Truncated
+	}
+	return false
+}
+
 var File_api_forward_v1_forward_proto protoreflect.FileDescriptor
 
 const file_api_forward_v1_forward_proto_rawDesc = "" +
@@ -4094,18 +5481,23 @@ const file_api_forward_v1_forward_proto_rawDesc = "" +
 	"\broute_id\x18\x02 \x01(\tR\arouteId\"\x15\n" +
 	"\x13DeleteRouteResponse\",\n" +
 	"\x0fGetRouteRequest\x12\x19\n" +
-	"\broute_id\x18\x01 \x01(\tR\arouteId\"C\n" +
+	"\broute_id\x18\x01 \x01(\tR\arouteId\"_\n" +
 	"\x10GetRouteResponse\x12/\n" +
-	"\x05route\x18\x01 \x01(\v2\x19.anixops.forward.v1.RouteR\x05route\"\x80\x01\n" +
+	"\x05route\x18\x01 \x01(\v2\x19.anixops.forward.v1.RouteR\x05route\x12\x1a\n" +
+	"\benforced\x18\x02 \x01(\tR\benforced\"\x80\x01\n" +
 	"\x11ListRoutesRequest\x12\x14\n" +
 	"\x05owner\x18\x01 \x01(\tR\x05owner\x12\x19\n" +
 	"\bnode_ref\x18\x02 \x01(\tR\anodeRef\x12\x1b\n" +
 	"\tpage_size\x18\x03 \x01(\rR\bpageSize\x12\x1d\n" +
 	"\n" +
-	"page_token\x18\x04 \x01(\tR\tpageToken\"o\n" +
+	"page_token\x18\x04 \x01(\tR\tpageToken\"\xfe\x01\n" +
 	"\x12ListRoutesResponse\x121\n" +
 	"\x06routes\x18\x01 \x03(\v2\x19.anixops.forward.v1.RouteR\x06routes\x12&\n" +
-	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\"w\n" +
+	"\x0fnext_page_token\x18\x02 \x01(\tR\rnextPageToken\x12P\n" +
+	"\benforced\x18\x03 \x03(\v24.anixops.forward.v1.ListRoutesResponse.EnforcedEntryR\benforced\x1a;\n" +
+	"\rEnforcedEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"w\n" +
 	"\x10PlanRouteRequest\x12/\n" +
 	"\x05route\x18\x01 \x01(\v2\x19.anixops.forward.v1.RouteR\x05route\x122\n" +
 	"\x05nodes\x18\x02 \x03(\v2\x1c.anixops.forward.v1.NodeInfoR\x05nodes\"\x8b\x01\n" +
@@ -4141,7 +5533,123 @@ const file_api_forward_v1_forward_proto_rawDesc = "" +
 	"\x06result\x18\x04 \x01(\v2\x1f.anixops.forward.v1.ProbeResultR\x06result\"_\n" +
 	"\x15DiagnoseRouteResponse\x12\x0e\n" +
 	"\x02ok\x18\x01 \x01(\bR\x02ok\x126\n" +
-	"\x05steps\x18\x02 \x03(\v2 .anixops.forward.v1.DiagnoseStepR\x05steps*Z\n" +
+	"\x05steps\x18\x02 \x03(\v2 .anixops.forward.v1.DiagnoseStepR\x05steps\"\x92\x02\n" +
+	"\fNodeSettings\x12<\n" +
+	"\n" +
+	"port_range\x18\x01 \x01(\v2\x1d.anixops.forward.v1.PortRangeR\tportRange\x12%\n" +
+	"\x0ereserved_ports\x18\x02 \x03(\rR\rreservedPorts\x12\x1c\n" +
+	"\taddresses\x18\x03 \x03(\tR\taddresses\x12D\n" +
+	"\x06labels\x18\x04 \x03(\v2,.anixops.forward.v1.NodeSettings.LabelsEntryR\x06labels\x1a9\n" +
+	"\vLabelsEntry\x12\x10\n" +
+	"\x03key\x18\x01 \x01(\tR\x03key\x12\x14\n" +
+	"\x05value\x18\x02 \x01(\tR\x05value:\x028\x01\"\xec\x03\n" +
+	"\x11ForwardNodeRecord\x12\x0e\n" +
+	"\x02id\x18\x01 \x01(\x04R\x02id\x12\x12\n" +
+	"\x04name\x18\x02 \x01(\tR\x04name\x12\x12\n" +
+	"\x04host\x18\x03 \x01(\tR\x04host\x12\x12\n" +
+	"\x04role\x18\x04 \x01(\tR\x04role\x12?\n" +
+	"\ttransport\x18\x05 \x01(\x0e2!.anixops.forward.v1.NodeTransportR\ttransport\x12\x12\n" +
+	"\x04port\x18\x06 \x01(\rR\x04port\x12\x19\n" +
+	"\bapi_port\x18\a \x01(\rR\aapiPort\x12!\n" +
+	"\fmetrics_port\x18\b \x01(\rR\vmetricsPort\x12\x16\n" +
+	"\x06region\x18\t \x01(\tR\x06region\x12\x10\n" +
+	"\x03isp\x18\n" +
+	" \x01(\tR\x03isp\x12%\n" +
+	"\x0ebandwidth_mbps\x18\v \x01(\x04R\rbandwidthMbps\x12\x16\n" +
+	"\x06weight\x18\f \x01(\rR\x06weight\x12\x1b\n" +
+	"\tmax_conns\x18\r \x01(\rR\bmaxConns\x12\x18\n" +
+	"\aenabled\x18\x0e \x01(\bR\aenabled\x12+\n" +
+	"\x12created_at_unix_ms\x18\x0f \x01(\x03R\x0fcreatedAtUnixMs\x12+\n" +
+	"\x12updated_at_unix_ms\x18\x10 \x01(\x03R\x0fupdatedAtUnixMs\"\xc6\x06\n" +
+	"\vNodeSummary\x12\x19\n" +
+	"\bnode_ref\x18\x01 \x01(\tR\anodeRef\x12\x12\n" +
+	"\x04kind\x18\x02 \x01(\tR\x04kind\x12\x12\n" +
+	"\x04name\x18\x03 \x01(\tR\x04name\x12\x12\n" +
+	"\x04host\x18\x04 \x01(\tR\x04host\x12\x18\n" +
+	"\aenabled\x18\x05 \x01(\bR\aenabled\x12!\n" +
+	"\fin_inventory\x18\x06 \x01(\bR\vinInventory\x12\x1e\n" +
+	"\n" +
+	"negotiated\x18\a \x01(\bR\n" +
+	"negotiated\x12<\n" +
+	"\bsettings\x18\b \x01(\v2 .anixops.forward.v1.NodeSettingsR\bsettings\x120\n" +
+	"\x04info\x18\t \x01(\v2\x1c.anixops.forward.v1.NodeInfoR\x04info\x12%\n" +
+	"\x0ereserved_ports\x18\n" +
+	" \x03(\rR\rreservedPorts\x12H\n" +
+	"\fcapabilities\x18\v \x01(\v2$.anixops.forward.v1.NodeCapabilitiesR\fcapabilities\x12-\n" +
+	"\x12desired_generation\x18\f \x01(\x04R\x11desiredGeneration\x12,\n" +
+	"\x12desired_state_hash\x18\r \x01(\tR\x10desiredStateHash\x12!\n" +
+	"\fdesired_hops\x18\x0e \x01(\rR\vdesiredHops\x12\x1a\n" +
+	"\breported\x18\x0f \x01(\bR\breported\x12/\n" +
+	"\x13reported_generation\x18\x10 \x01(\x04R\x12reportedGeneration\x12.\n" +
+	"\x13reported_state_hash\x18\x11 \x01(\tR\x11reportedStateHash\x12\x18\n" +
+	"\aapplied\x18\x12 \x01(\bR\aapplied\x12\x1d\n" +
+	"\n" +
+	"hop_errors\x18\x13 \x01(\rR\thopErrors\x12-\n" +
+	"\x13reported_at_unix_ms\x18\x14 \x01(\x03R\x10reportedAtUnixMs\x12=\n" +
+	"\x06record\x18\x15 \x01(\v2%.anixops.forward.v1.ForwardNodeRecordR\x06record\"g\n" +
+	"\x10ListNodesRequest\x12\x12\n" +
+	"\x04kind\x18\x01 \x01(\tR\x04kind\x12?\n" +
+	"\ttransport\x18\x02 \x01(\x0e2!.anixops.forward.v1.NodeTransportR\ttransport\"J\n" +
+	"\x11ListNodesResponse\x125\n" +
+	"\x05nodes\x18\x01 \x03(\v2\x1f.anixops.forward.v1.NodeSummaryR\x05nodes\"+\n" +
+	"\x0eGetNodeRequest\x12\x19\n" +
+	"\bnode_ref\x18\x01 \x01(\tR\anodeRef\"\xc1\x01\n" +
+	"\x0fGetNodeResponse\x123\n" +
+	"\x04node\x18\x01 \x01(\v2\x1f.anixops.forward.v1.NodeSummaryR\x04node\x12:\n" +
+	"\x05state\x18\x02 \x01(\v2$.anixops.forward.v1.NodeForwardStateR\x05state\x12=\n" +
+	"\x06report\x18\x03 \x01(\v2%.anixops.forward.v1.NodeForwardReportR\x06report\"q\n" +
+	"\x16SetNodeSettingsRequest\x12\x19\n" +
+	"\bnode_ref\x18\x01 \x01(\tR\anodeRef\x12<\n" +
+	"\bsettings\x18\x02 \x01(\v2 .anixops.forward.v1.NodeSettingsR\bsettings\"\x8d\x01\n" +
+	"\x17SetNodeSettingsResponse\x123\n" +
+	"\x04node\x18\x01 \x01(\v2\x1f.anixops.forward.v1.NodeSummaryR\x04node\x12=\n" +
+	"\n" +
+	"violations\x18\x02 \x03(\v2\x1d.anixops.forward.v1.ViolationR\n" +
+	"violations\"\xb2\x01\n" +
+	"\x18CreateForwardNodeRequest\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\x129\n" +
+	"\x04node\x18\x02 \x01(\v2%.anixops.forward.v1.ForwardNodeRecordR\x04node\x12<\n" +
+	"\bsettings\x18\x03 \x01(\v2 .anixops.forward.v1.NodeSettingsR\bsettings\"P\n" +
+	"\x19CreateForwardNodeResponse\x123\n" +
+	"\x04node\x18\x01 \x01(\v2\x1f.anixops.forward.v1.NodeSummaryR\x04node\"t\n" +
+	"\x18UpdateForwardNodeRequest\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\x129\n" +
+	"\x04node\x18\x02 \x01(\v2%.anixops.forward.v1.ForwardNodeRecordR\x04node\"\x8f\x01\n" +
+	"\x19UpdateForwardNodeResponse\x123\n" +
+	"\x04node\x18\x01 \x01(\v2\x1f.anixops.forward.v1.NodeSummaryR\x04node\x12=\n" +
+	"\n" +
+	"violations\x18\x02 \x03(\v2\x1d.anixops.forward.v1.ViolationR\n" +
+	"violations\"I\n" +
+	"\x18DeleteForwardNodeRequest\x12\x1d\n" +
+	"\n" +
+	"request_id\x18\x01 \x01(\tR\trequestId\x12\x0e\n" +
+	"\x02id\x18\x02 \x01(\x04R\x02id\"Z\n" +
+	"\x19DeleteForwardNodeResponse\x12=\n" +
+	"\n" +
+	"violations\x18\x01 \x03(\v2\x1d.anixops.forward.v1.ViolationR\n" +
+	"violations\"\x91\x01\n" +
+	"\x11GetTrafficRequest\x12\x19\n" +
+	"\broute_id\x18\x01 \x01(\tR\arouteId\x12\x19\n" +
+	"\bnode_ref\x18\x02 \x01(\tR\anodeRef\x12\"\n" +
+	"\rsince_unix_ms\x18\x03 \x01(\x03R\vsinceUnixMs\x12\"\n" +
+	"\runtil_unix_ms\x18\x04 \x01(\x03R\vuntilUnixMs\"\xa8\x02\n" +
+	"\rTrafficBucket\x12\x19\n" +
+	"\broute_id\x18\x01 \x01(\tR\arouteId\x12\x1b\n" +
+	"\thop_index\x18\x02 \x01(\rR\bhopIndex\x12\x19\n" +
+	"\bnode_ref\x18\x03 \x01(\tR\anodeRef\x12+\n" +
+	"\x12hour_start_unix_ms\x18\x04 \x01(\x03R\x0fhourStartUnixMs\x12\x19\n" +
+	"\bup_bytes\x18\x05 \x01(\x04R\aupBytes\x12\x1d\n" +
+	"\n" +
+	"down_bytes\x18\x06 \x01(\x04R\tdownBytes\x12\x1d\n" +
+	"\n" +
+	"up_packets\x18\a \x01(\x04R\tupPackets\x12!\n" +
+	"\fdown_packets\x18\b \x01(\x04R\vdownPackets\x12\x1b\n" +
+	"\tnew_conns\x18\t \x01(\x04R\bnewConns\"o\n" +
+	"\x12GetTrafficResponse\x12;\n" +
+	"\abuckets\x18\x01 \x03(\v2!.anixops.forward.v1.TrafficBucketR\abuckets\x12\x1c\n" +
+	"\ttruncated\x18\x02 \x01(\bR\ttruncated*Z\n" +
 	"\x06Engine\x12\x16\n" +
 	"\x12ENGINE_UNSPECIFIED\x10\x00\x12\x13\n" +
 	"\x0fENGINE_NFTABLES\x10\x01\x12\x0f\n" +
@@ -4193,7 +5701,11 @@ const file_api_forward_v1_forward_proto_rawDesc = "" +
 	"\x11PROBE_KIND_LISTEN\x10\x01\x12\x1a\n" +
 	"\x16PROBE_KIND_TCP_CONNECT\x10\x02\x12\x1b\n" +
 	"\x17PROBE_KIND_UDP_EXCHANGE\x10\x03\x12\x17\n" +
-	"\x13PROBE_KIND_DELIVERY\x10\x042\xf3\x06\n" +
+	"\x13PROBE_KIND_DELIVERY\x10\x04*e\n" +
+	"\rNodeTransport\x12\x1e\n" +
+	"\x1aNODE_TRANSPORT_UNSPECIFIED\x10\x00\x12\x18\n" +
+	"\x14NODE_TRANSPORT_AGENT\x10\x01\x12\x1a\n" +
+	"\x16NODE_TRANSPORT_ANSIBLE\x10\x022\xc0\f\n" +
 	"\x0eForwardControl\x12^\n" +
 	"\vCreateRoute\x12&.anixops.forward.v1.CreateRouteRequest\x1a'.anixops.forward.v1.CreateRouteResponse\x12^\n" +
 	"\vUpdateRoute\x12&.anixops.forward.v1.UpdateRouteRequest\x1a'.anixops.forward.v1.UpdateRouteResponse\x12^\n" +
@@ -4204,7 +5716,15 @@ const file_api_forward_v1_forward_proto_rawDesc = "" +
 	"\tPlanRoute\x12$.anixops.forward.v1.PlanRouteRequest\x1a%.anixops.forward.v1.PlanRouteResponse\x12d\n" +
 	"\rGetRouteStats\x12(.anixops.forward.v1.GetRouteStatsRequest\x1a).anixops.forward.v1.GetRouteStatsResponse\x12g\n" +
 	"\x0eGetRouteHealth\x12).anixops.forward.v1.GetRouteHealthRequest\x1a*.anixops.forward.v1.GetRouteHealthResponse\x12d\n" +
-	"\rDiagnoseRoute\x12(.anixops.forward.v1.DiagnoseRouteRequest\x1a).anixops.forward.v1.DiagnoseRouteResponse2\xe8\x02\n" +
+	"\rDiagnoseRoute\x12(.anixops.forward.v1.DiagnoseRouteRequest\x1a).anixops.forward.v1.DiagnoseRouteResponse\x12X\n" +
+	"\tListNodes\x12$.anixops.forward.v1.ListNodesRequest\x1a%.anixops.forward.v1.ListNodesResponse\x12R\n" +
+	"\aGetNode\x12\".anixops.forward.v1.GetNodeRequest\x1a#.anixops.forward.v1.GetNodeResponse\x12j\n" +
+	"\x0fSetNodeSettings\x12*.anixops.forward.v1.SetNodeSettingsRequest\x1a+.anixops.forward.v1.SetNodeSettingsResponse\x12p\n" +
+	"\x11CreateForwardNode\x12,.anixops.forward.v1.CreateForwardNodeRequest\x1a-.anixops.forward.v1.CreateForwardNodeResponse\x12p\n" +
+	"\x11UpdateForwardNode\x12,.anixops.forward.v1.UpdateForwardNodeRequest\x1a-.anixops.forward.v1.UpdateForwardNodeResponse\x12p\n" +
+	"\x11DeleteForwardNode\x12,.anixops.forward.v1.DeleteForwardNodeRequest\x1a-.anixops.forward.v1.DeleteForwardNodeResponse\x12[\n" +
+	"\n" +
+	"GetTraffic\x12%.anixops.forward.v1.GetTrafficRequest\x1a&.anixops.forward.v1.GetTrafficResponse2\xe8\x02\n" +
 	"\vForwardNode\x12g\n" +
 	"\x0fGetCapabilities\x12..anixops.forward.v1.GetNodeCapabilitiesRequest\x1a$.anixops.forward.v1.NodeCapabilities\x12N\n" +
 	"\x05Apply\x12$.anixops.forward.v1.NodeForwardState\x1a\x1f.anixops.forward.v1.ApplyResult\x12T\n" +
@@ -4223,8 +5743,8 @@ func file_api_forward_v1_forward_proto_rawDescGZIP() []byte {
 	return file_api_forward_v1_forward_proto_rawDescData
 }
 
-var file_api_forward_v1_forward_proto_enumTypes = make([]protoimpl.EnumInfo, 9)
-var file_api_forward_v1_forward_proto_msgTypes = make([]protoimpl.MessageInfo, 48)
+var file_api_forward_v1_forward_proto_enumTypes = make([]protoimpl.EnumInfo, 10)
+var file_api_forward_v1_forward_proto_msgTypes = make([]protoimpl.MessageInfo, 68)
 var file_api_forward_v1_forward_proto_goTypes = []any{
 	(Engine)(0),                        // 0: anixops.forward.v1.Engine
 	(HopRole)(0),                       // 1: anixops.forward.v1.HopRole
@@ -4235,148 +5755,207 @@ var file_api_forward_v1_forward_proto_goTypes = []any{
 	(TargetPolicy)(0),                  // 6: anixops.forward.v1.TargetPolicy
 	(HealthState)(0),                   // 7: anixops.forward.v1.HealthState
 	(ProbeKind)(0),                     // 8: anixops.forward.v1.ProbeKind
-	(*Route)(nil),                      // 9: anixops.forward.v1.Route
-	(*Listen)(nil),                     // 10: anixops.forward.v1.Listen
-	(*Hop)(nil),                        // 11: anixops.forward.v1.Hop
-	(*LinkTransport)(nil),              // 12: anixops.forward.v1.LinkTransport
-	(*Target)(nil),                     // 13: anixops.forward.v1.Target
-	(*Policy)(nil),                     // 14: anixops.forward.v1.Policy
-	(*HealthCheck)(nil),                // 15: anixops.forward.v1.HealthCheck
-	(*CircuitBreaker)(nil),             // 16: anixops.forward.v1.CircuitBreaker
-	(*Limits)(nil),                     // 17: anixops.forward.v1.Limits
-	(*Counters)(nil),                   // 18: anixops.forward.v1.Counters
-	(*NodeInfo)(nil),                   // 19: anixops.forward.v1.NodeInfo
-	(*PortRange)(nil),                  // 20: anixops.forward.v1.PortRange
-	(*NodeForwardState)(nil),           // 21: anixops.forward.v1.NodeForwardState
-	(*NodeHop)(nil),                    // 22: anixops.forward.v1.NodeHop
-	(*Upstream)(nil),                   // 23: anixops.forward.v1.Upstream
-	(*EngineCapabilities)(nil),         // 24: anixops.forward.v1.EngineCapabilities
-	(*GetNodeCapabilitiesRequest)(nil), // 25: anixops.forward.v1.GetNodeCapabilitiesRequest
-	(*NodeCapabilities)(nil),           // 26: anixops.forward.v1.NodeCapabilities
-	(*ApplyResult)(nil),                // 27: anixops.forward.v1.ApplyResult
-	(*HopError)(nil),                   // 28: anixops.forward.v1.HopError
-	(*ObserveRequest)(nil),             // 29: anixops.forward.v1.ObserveRequest
-	(*NodeForwardReport)(nil),          // 30: anixops.forward.v1.NodeForwardReport
-	(*UpstreamHealth)(nil),             // 31: anixops.forward.v1.UpstreamHealth
-	(*ProbeRequest)(nil),               // 32: anixops.forward.v1.ProbeRequest
-	(*ProbeResult)(nil),                // 33: anixops.forward.v1.ProbeResult
-	(*Violation)(nil),                  // 34: anixops.forward.v1.Violation
-	(*CreateRouteRequest)(nil),         // 35: anixops.forward.v1.CreateRouteRequest
-	(*CreateRouteResponse)(nil),        // 36: anixops.forward.v1.CreateRouteResponse
-	(*UpdateRouteRequest)(nil),         // 37: anixops.forward.v1.UpdateRouteRequest
-	(*UpdateRouteResponse)(nil),        // 38: anixops.forward.v1.UpdateRouteResponse
-	(*DeleteRouteRequest)(nil),         // 39: anixops.forward.v1.DeleteRouteRequest
-	(*DeleteRouteResponse)(nil),        // 40: anixops.forward.v1.DeleteRouteResponse
-	(*GetRouteRequest)(nil),            // 41: anixops.forward.v1.GetRouteRequest
-	(*GetRouteResponse)(nil),           // 42: anixops.forward.v1.GetRouteResponse
-	(*ListRoutesRequest)(nil),          // 43: anixops.forward.v1.ListRoutesRequest
-	(*ListRoutesResponse)(nil),         // 44: anixops.forward.v1.ListRoutesResponse
-	(*PlanRouteRequest)(nil),           // 45: anixops.forward.v1.PlanRouteRequest
-	(*PortAllocation)(nil),             // 46: anixops.forward.v1.PortAllocation
-	(*PlanRouteResponse)(nil),          // 47: anixops.forward.v1.PlanRouteResponse
-	(*GetRouteStatsRequest)(nil),       // 48: anixops.forward.v1.GetRouteStatsRequest
-	(*GetRouteStatsResponse)(nil),      // 49: anixops.forward.v1.GetRouteStatsResponse
-	(*GetRouteHealthRequest)(nil),      // 50: anixops.forward.v1.GetRouteHealthRequest
-	(*GetRouteHealthResponse)(nil),     // 51: anixops.forward.v1.GetRouteHealthResponse
-	(*DiagnoseRouteRequest)(nil),       // 52: anixops.forward.v1.DiagnoseRouteRequest
-	(*DiagnoseStep)(nil),               // 53: anixops.forward.v1.DiagnoseStep
-	(*DiagnoseRouteResponse)(nil),      // 54: anixops.forward.v1.DiagnoseRouteResponse
-	nil,                                // 55: anixops.forward.v1.Route.LabelsEntry
-	nil,                                // 56: anixops.forward.v1.NodeInfo.LabelsEntry
+	(NodeTransport)(0),                 // 9: anixops.forward.v1.NodeTransport
+	(*Route)(nil),                      // 10: anixops.forward.v1.Route
+	(*Listen)(nil),                     // 11: anixops.forward.v1.Listen
+	(*Hop)(nil),                        // 12: anixops.forward.v1.Hop
+	(*LinkTransport)(nil),              // 13: anixops.forward.v1.LinkTransport
+	(*Target)(nil),                     // 14: anixops.forward.v1.Target
+	(*Policy)(nil),                     // 15: anixops.forward.v1.Policy
+	(*HealthCheck)(nil),                // 16: anixops.forward.v1.HealthCheck
+	(*CircuitBreaker)(nil),             // 17: anixops.forward.v1.CircuitBreaker
+	(*Limits)(nil),                     // 18: anixops.forward.v1.Limits
+	(*Counters)(nil),                   // 19: anixops.forward.v1.Counters
+	(*NodeInfo)(nil),                   // 20: anixops.forward.v1.NodeInfo
+	(*PortRange)(nil),                  // 21: anixops.forward.v1.PortRange
+	(*NodeForwardState)(nil),           // 22: anixops.forward.v1.NodeForwardState
+	(*NodeHop)(nil),                    // 23: anixops.forward.v1.NodeHop
+	(*Upstream)(nil),                   // 24: anixops.forward.v1.Upstream
+	(*EngineCapabilities)(nil),         // 25: anixops.forward.v1.EngineCapabilities
+	(*GetNodeCapabilitiesRequest)(nil), // 26: anixops.forward.v1.GetNodeCapabilitiesRequest
+	(*NodeCapabilities)(nil),           // 27: anixops.forward.v1.NodeCapabilities
+	(*ApplyResult)(nil),                // 28: anixops.forward.v1.ApplyResult
+	(*HopError)(nil),                   // 29: anixops.forward.v1.HopError
+	(*ObserveRequest)(nil),             // 30: anixops.forward.v1.ObserveRequest
+	(*NodeForwardReport)(nil),          // 31: anixops.forward.v1.NodeForwardReport
+	(*UpstreamHealth)(nil),             // 32: anixops.forward.v1.UpstreamHealth
+	(*ProbeRequest)(nil),               // 33: anixops.forward.v1.ProbeRequest
+	(*ProbeResult)(nil),                // 34: anixops.forward.v1.ProbeResult
+	(*Violation)(nil),                  // 35: anixops.forward.v1.Violation
+	(*CreateRouteRequest)(nil),         // 36: anixops.forward.v1.CreateRouteRequest
+	(*CreateRouteResponse)(nil),        // 37: anixops.forward.v1.CreateRouteResponse
+	(*UpdateRouteRequest)(nil),         // 38: anixops.forward.v1.UpdateRouteRequest
+	(*UpdateRouteResponse)(nil),        // 39: anixops.forward.v1.UpdateRouteResponse
+	(*DeleteRouteRequest)(nil),         // 40: anixops.forward.v1.DeleteRouteRequest
+	(*DeleteRouteResponse)(nil),        // 41: anixops.forward.v1.DeleteRouteResponse
+	(*GetRouteRequest)(nil),            // 42: anixops.forward.v1.GetRouteRequest
+	(*GetRouteResponse)(nil),           // 43: anixops.forward.v1.GetRouteResponse
+	(*ListRoutesRequest)(nil),          // 44: anixops.forward.v1.ListRoutesRequest
+	(*ListRoutesResponse)(nil),         // 45: anixops.forward.v1.ListRoutesResponse
+	(*PlanRouteRequest)(nil),           // 46: anixops.forward.v1.PlanRouteRequest
+	(*PortAllocation)(nil),             // 47: anixops.forward.v1.PortAllocation
+	(*PlanRouteResponse)(nil),          // 48: anixops.forward.v1.PlanRouteResponse
+	(*GetRouteStatsRequest)(nil),       // 49: anixops.forward.v1.GetRouteStatsRequest
+	(*GetRouteStatsResponse)(nil),      // 50: anixops.forward.v1.GetRouteStatsResponse
+	(*GetRouteHealthRequest)(nil),      // 51: anixops.forward.v1.GetRouteHealthRequest
+	(*GetRouteHealthResponse)(nil),     // 52: anixops.forward.v1.GetRouteHealthResponse
+	(*DiagnoseRouteRequest)(nil),       // 53: anixops.forward.v1.DiagnoseRouteRequest
+	(*DiagnoseStep)(nil),               // 54: anixops.forward.v1.DiagnoseStep
+	(*DiagnoseRouteResponse)(nil),      // 55: anixops.forward.v1.DiagnoseRouteResponse
+	(*NodeSettings)(nil),               // 56: anixops.forward.v1.NodeSettings
+	(*ForwardNodeRecord)(nil),          // 57: anixops.forward.v1.ForwardNodeRecord
+	(*NodeSummary)(nil),                // 58: anixops.forward.v1.NodeSummary
+	(*ListNodesRequest)(nil),           // 59: anixops.forward.v1.ListNodesRequest
+	(*ListNodesResponse)(nil),          // 60: anixops.forward.v1.ListNodesResponse
+	(*GetNodeRequest)(nil),             // 61: anixops.forward.v1.GetNodeRequest
+	(*GetNodeResponse)(nil),            // 62: anixops.forward.v1.GetNodeResponse
+	(*SetNodeSettingsRequest)(nil),     // 63: anixops.forward.v1.SetNodeSettingsRequest
+	(*SetNodeSettingsResponse)(nil),    // 64: anixops.forward.v1.SetNodeSettingsResponse
+	(*CreateForwardNodeRequest)(nil),   // 65: anixops.forward.v1.CreateForwardNodeRequest
+	(*CreateForwardNodeResponse)(nil),  // 66: anixops.forward.v1.CreateForwardNodeResponse
+	(*UpdateForwardNodeRequest)(nil),   // 67: anixops.forward.v1.UpdateForwardNodeRequest
+	(*UpdateForwardNodeResponse)(nil),  // 68: anixops.forward.v1.UpdateForwardNodeResponse
+	(*DeleteForwardNodeRequest)(nil),   // 69: anixops.forward.v1.DeleteForwardNodeRequest
+	(*DeleteForwardNodeResponse)(nil),  // 70: anixops.forward.v1.DeleteForwardNodeResponse
+	(*GetTrafficRequest)(nil),          // 71: anixops.forward.v1.GetTrafficRequest
+	(*TrafficBucket)(nil),              // 72: anixops.forward.v1.TrafficBucket
+	(*GetTrafficResponse)(nil),         // 73: anixops.forward.v1.GetTrafficResponse
+	nil,                                // 74: anixops.forward.v1.Route.LabelsEntry
+	nil,                                // 75: anixops.forward.v1.NodeInfo.LabelsEntry
+	nil,                                // 76: anixops.forward.v1.ListRoutesResponse.EnforcedEntry
+	nil,                                // 77: anixops.forward.v1.NodeSettings.LabelsEntry
 }
 var file_api_forward_v1_forward_proto_depIdxs = []int32{
-	10, // 0: anixops.forward.v1.Route.listen:type_name -> anixops.forward.v1.Listen
-	11, // 1: anixops.forward.v1.Route.hops:type_name -> anixops.forward.v1.Hop
-	13, // 2: anixops.forward.v1.Route.targets:type_name -> anixops.forward.v1.Target
-	14, // 3: anixops.forward.v1.Route.policy:type_name -> anixops.forward.v1.Policy
-	17, // 4: anixops.forward.v1.Route.limits:type_name -> anixops.forward.v1.Limits
-	55, // 5: anixops.forward.v1.Route.labels:type_name -> anixops.forward.v1.Route.LabelsEntry
-	2,  // 6: anixops.forward.v1.Listen.protocol:type_name -> anixops.forward.v1.L4Protocol
-	1,  // 7: anixops.forward.v1.Hop.role:type_name -> anixops.forward.v1.HopRole
-	0,  // 8: anixops.forward.v1.Hop.engine:type_name -> anixops.forward.v1.Engine
-	12, // 9: anixops.forward.v1.Hop.ingress:type_name -> anixops.forward.v1.LinkTransport
-	3,  // 10: anixops.forward.v1.LinkTransport.security:type_name -> anixops.forward.v1.LinkSecurity
-	4,  // 11: anixops.forward.v1.Policy.next_hop:type_name -> anixops.forward.v1.BalanceStrategy
-	4,  // 12: anixops.forward.v1.Policy.target:type_name -> anixops.forward.v1.BalanceStrategy
-	15, // 13: anixops.forward.v1.Policy.health:type_name -> anixops.forward.v1.HealthCheck
-	16, // 14: anixops.forward.v1.Policy.circuit_breaker:type_name -> anixops.forward.v1.CircuitBreaker
-	5,  // 15: anixops.forward.v1.Policy.direct:type_name -> anixops.forward.v1.DirectMode
-	6,  // 16: anixops.forward.v1.Policy.target_policy:type_name -> anixops.forward.v1.TargetPolicy
-	20, // 17: anixops.forward.v1.NodeInfo.port_range:type_name -> anixops.forward.v1.PortRange
-	24, // 18: anixops.forward.v1.NodeInfo.engines:type_name -> anixops.forward.v1.EngineCapabilities
-	56, // 19: anixops.forward.v1.NodeInfo.labels:type_name -> anixops.forward.v1.NodeInfo.LabelsEntry
-	22, // 20: anixops.forward.v1.NodeForwardState.hops:type_name -> anixops.forward.v1.NodeHop
-	1,  // 21: anixops.forward.v1.NodeHop.role:type_name -> anixops.forward.v1.HopRole
-	0,  // 22: anixops.forward.v1.NodeHop.engine:type_name -> anixops.forward.v1.Engine
-	10, // 23: anixops.forward.v1.NodeHop.listen:type_name -> anixops.forward.v1.Listen
-	12, // 24: anixops.forward.v1.NodeHop.ingress:type_name -> anixops.forward.v1.LinkTransport
-	23, // 25: anixops.forward.v1.NodeHop.upstreams:type_name -> anixops.forward.v1.Upstream
-	4,  // 26: anixops.forward.v1.NodeHop.balance:type_name -> anixops.forward.v1.BalanceStrategy
-	15, // 27: anixops.forward.v1.NodeHop.health:type_name -> anixops.forward.v1.HealthCheck
-	16, // 28: anixops.forward.v1.NodeHop.circuit_breaker:type_name -> anixops.forward.v1.CircuitBreaker
-	17, // 29: anixops.forward.v1.NodeHop.limits:type_name -> anixops.forward.v1.Limits
-	6,  // 30: anixops.forward.v1.NodeHop.target_policy:type_name -> anixops.forward.v1.TargetPolicy
-	12, // 31: anixops.forward.v1.Upstream.egress:type_name -> anixops.forward.v1.LinkTransport
-	0,  // 32: anixops.forward.v1.EngineCapabilities.engine:type_name -> anixops.forward.v1.Engine
-	4,  // 33: anixops.forward.v1.EngineCapabilities.strategies:type_name -> anixops.forward.v1.BalanceStrategy
-	3,  // 34: anixops.forward.v1.EngineCapabilities.link_securities:type_name -> anixops.forward.v1.LinkSecurity
-	24, // 35: anixops.forward.v1.NodeCapabilities.engines:type_name -> anixops.forward.v1.EngineCapabilities
-	28, // 36: anixops.forward.v1.ApplyResult.errors:type_name -> anixops.forward.v1.HopError
-	0,  // 37: anixops.forward.v1.HopError.engine:type_name -> anixops.forward.v1.Engine
-	28, // 38: anixops.forward.v1.NodeForwardReport.errors:type_name -> anixops.forward.v1.HopError
-	18, // 39: anixops.forward.v1.NodeForwardReport.counters:type_name -> anixops.forward.v1.Counters
-	31, // 40: anixops.forward.v1.NodeForwardReport.health:type_name -> anixops.forward.v1.UpstreamHealth
-	7,  // 41: anixops.forward.v1.UpstreamHealth.state:type_name -> anixops.forward.v1.HealthState
-	8,  // 42: anixops.forward.v1.ProbeRequest.kind:type_name -> anixops.forward.v1.ProbeKind
-	9,  // 43: anixops.forward.v1.CreateRouteRequest.route:type_name -> anixops.forward.v1.Route
-	9,  // 44: anixops.forward.v1.CreateRouteResponse.route:type_name -> anixops.forward.v1.Route
-	34, // 45: anixops.forward.v1.CreateRouteResponse.violations:type_name -> anixops.forward.v1.Violation
-	9,  // 46: anixops.forward.v1.UpdateRouteRequest.route:type_name -> anixops.forward.v1.Route
-	9,  // 47: anixops.forward.v1.UpdateRouteResponse.route:type_name -> anixops.forward.v1.Route
-	34, // 48: anixops.forward.v1.UpdateRouteResponse.violations:type_name -> anixops.forward.v1.Violation
-	9,  // 49: anixops.forward.v1.GetRouteResponse.route:type_name -> anixops.forward.v1.Route
-	9,  // 50: anixops.forward.v1.ListRoutesResponse.routes:type_name -> anixops.forward.v1.Route
-	9,  // 51: anixops.forward.v1.PlanRouteRequest.route:type_name -> anixops.forward.v1.Route
-	19, // 52: anixops.forward.v1.PlanRouteRequest.nodes:type_name -> anixops.forward.v1.NodeInfo
-	21, // 53: anixops.forward.v1.PlanRouteResponse.states:type_name -> anixops.forward.v1.NodeForwardState
-	46, // 54: anixops.forward.v1.PlanRouteResponse.allocations:type_name -> anixops.forward.v1.PortAllocation
-	34, // 55: anixops.forward.v1.PlanRouteResponse.violations:type_name -> anixops.forward.v1.Violation
-	18, // 56: anixops.forward.v1.GetRouteStatsResponse.counters:type_name -> anixops.forward.v1.Counters
-	31, // 57: anixops.forward.v1.GetRouteHealthResponse.health:type_name -> anixops.forward.v1.UpstreamHealth
-	8,  // 58: anixops.forward.v1.DiagnoseStep.kind:type_name -> anixops.forward.v1.ProbeKind
-	33, // 59: anixops.forward.v1.DiagnoseStep.result:type_name -> anixops.forward.v1.ProbeResult
-	53, // 60: anixops.forward.v1.DiagnoseRouteResponse.steps:type_name -> anixops.forward.v1.DiagnoseStep
-	35, // 61: anixops.forward.v1.ForwardControl.CreateRoute:input_type -> anixops.forward.v1.CreateRouteRequest
-	37, // 62: anixops.forward.v1.ForwardControl.UpdateRoute:input_type -> anixops.forward.v1.UpdateRouteRequest
-	39, // 63: anixops.forward.v1.ForwardControl.DeleteRoute:input_type -> anixops.forward.v1.DeleteRouteRequest
-	41, // 64: anixops.forward.v1.ForwardControl.GetRoute:input_type -> anixops.forward.v1.GetRouteRequest
-	43, // 65: anixops.forward.v1.ForwardControl.ListRoutes:input_type -> anixops.forward.v1.ListRoutesRequest
-	45, // 66: anixops.forward.v1.ForwardControl.PlanRoute:input_type -> anixops.forward.v1.PlanRouteRequest
-	48, // 67: anixops.forward.v1.ForwardControl.GetRouteStats:input_type -> anixops.forward.v1.GetRouteStatsRequest
-	50, // 68: anixops.forward.v1.ForwardControl.GetRouteHealth:input_type -> anixops.forward.v1.GetRouteHealthRequest
-	52, // 69: anixops.forward.v1.ForwardControl.DiagnoseRoute:input_type -> anixops.forward.v1.DiagnoseRouteRequest
-	25, // 70: anixops.forward.v1.ForwardNode.GetCapabilities:input_type -> anixops.forward.v1.GetNodeCapabilitiesRequest
-	21, // 71: anixops.forward.v1.ForwardNode.Apply:input_type -> anixops.forward.v1.NodeForwardState
-	29, // 72: anixops.forward.v1.ForwardNode.Observe:input_type -> anixops.forward.v1.ObserveRequest
-	32, // 73: anixops.forward.v1.ForwardNode.Probe:input_type -> anixops.forward.v1.ProbeRequest
-	36, // 74: anixops.forward.v1.ForwardControl.CreateRoute:output_type -> anixops.forward.v1.CreateRouteResponse
-	38, // 75: anixops.forward.v1.ForwardControl.UpdateRoute:output_type -> anixops.forward.v1.UpdateRouteResponse
-	40, // 76: anixops.forward.v1.ForwardControl.DeleteRoute:output_type -> anixops.forward.v1.DeleteRouteResponse
-	42, // 77: anixops.forward.v1.ForwardControl.GetRoute:output_type -> anixops.forward.v1.GetRouteResponse
-	44, // 78: anixops.forward.v1.ForwardControl.ListRoutes:output_type -> anixops.forward.v1.ListRoutesResponse
-	47, // 79: anixops.forward.v1.ForwardControl.PlanRoute:output_type -> anixops.forward.v1.PlanRouteResponse
-	49, // 80: anixops.forward.v1.ForwardControl.GetRouteStats:output_type -> anixops.forward.v1.GetRouteStatsResponse
-	51, // 81: anixops.forward.v1.ForwardControl.GetRouteHealth:output_type -> anixops.forward.v1.GetRouteHealthResponse
-	54, // 82: anixops.forward.v1.ForwardControl.DiagnoseRoute:output_type -> anixops.forward.v1.DiagnoseRouteResponse
-	26, // 83: anixops.forward.v1.ForwardNode.GetCapabilities:output_type -> anixops.forward.v1.NodeCapabilities
-	27, // 84: anixops.forward.v1.ForwardNode.Apply:output_type -> anixops.forward.v1.ApplyResult
-	30, // 85: anixops.forward.v1.ForwardNode.Observe:output_type -> anixops.forward.v1.NodeForwardReport
-	33, // 86: anixops.forward.v1.ForwardNode.Probe:output_type -> anixops.forward.v1.ProbeResult
-	74, // [74:87] is the sub-list for method output_type
-	61, // [61:74] is the sub-list for method input_type
-	61, // [61:61] is the sub-list for extension type_name
-	61, // [61:61] is the sub-list for extension extendee
-	0,  // [0:61] is the sub-list for field type_name
+	11,  // 0: anixops.forward.v1.Route.listen:type_name -> anixops.forward.v1.Listen
+	12,  // 1: anixops.forward.v1.Route.hops:type_name -> anixops.forward.v1.Hop
+	14,  // 2: anixops.forward.v1.Route.targets:type_name -> anixops.forward.v1.Target
+	15,  // 3: anixops.forward.v1.Route.policy:type_name -> anixops.forward.v1.Policy
+	18,  // 4: anixops.forward.v1.Route.limits:type_name -> anixops.forward.v1.Limits
+	74,  // 5: anixops.forward.v1.Route.labels:type_name -> anixops.forward.v1.Route.LabelsEntry
+	2,   // 6: anixops.forward.v1.Listen.protocol:type_name -> anixops.forward.v1.L4Protocol
+	1,   // 7: anixops.forward.v1.Hop.role:type_name -> anixops.forward.v1.HopRole
+	0,   // 8: anixops.forward.v1.Hop.engine:type_name -> anixops.forward.v1.Engine
+	13,  // 9: anixops.forward.v1.Hop.ingress:type_name -> anixops.forward.v1.LinkTransport
+	3,   // 10: anixops.forward.v1.LinkTransport.security:type_name -> anixops.forward.v1.LinkSecurity
+	4,   // 11: anixops.forward.v1.Policy.next_hop:type_name -> anixops.forward.v1.BalanceStrategy
+	4,   // 12: anixops.forward.v1.Policy.target:type_name -> anixops.forward.v1.BalanceStrategy
+	16,  // 13: anixops.forward.v1.Policy.health:type_name -> anixops.forward.v1.HealthCheck
+	17,  // 14: anixops.forward.v1.Policy.circuit_breaker:type_name -> anixops.forward.v1.CircuitBreaker
+	5,   // 15: anixops.forward.v1.Policy.direct:type_name -> anixops.forward.v1.DirectMode
+	6,   // 16: anixops.forward.v1.Policy.target_policy:type_name -> anixops.forward.v1.TargetPolicy
+	21,  // 17: anixops.forward.v1.NodeInfo.port_range:type_name -> anixops.forward.v1.PortRange
+	25,  // 18: anixops.forward.v1.NodeInfo.engines:type_name -> anixops.forward.v1.EngineCapabilities
+	75,  // 19: anixops.forward.v1.NodeInfo.labels:type_name -> anixops.forward.v1.NodeInfo.LabelsEntry
+	23,  // 20: anixops.forward.v1.NodeForwardState.hops:type_name -> anixops.forward.v1.NodeHop
+	1,   // 21: anixops.forward.v1.NodeHop.role:type_name -> anixops.forward.v1.HopRole
+	0,   // 22: anixops.forward.v1.NodeHop.engine:type_name -> anixops.forward.v1.Engine
+	11,  // 23: anixops.forward.v1.NodeHop.listen:type_name -> anixops.forward.v1.Listen
+	13,  // 24: anixops.forward.v1.NodeHop.ingress:type_name -> anixops.forward.v1.LinkTransport
+	24,  // 25: anixops.forward.v1.NodeHop.upstreams:type_name -> anixops.forward.v1.Upstream
+	4,   // 26: anixops.forward.v1.NodeHop.balance:type_name -> anixops.forward.v1.BalanceStrategy
+	16,  // 27: anixops.forward.v1.NodeHop.health:type_name -> anixops.forward.v1.HealthCheck
+	17,  // 28: anixops.forward.v1.NodeHop.circuit_breaker:type_name -> anixops.forward.v1.CircuitBreaker
+	18,  // 29: anixops.forward.v1.NodeHop.limits:type_name -> anixops.forward.v1.Limits
+	6,   // 30: anixops.forward.v1.NodeHop.target_policy:type_name -> anixops.forward.v1.TargetPolicy
+	13,  // 31: anixops.forward.v1.Upstream.egress:type_name -> anixops.forward.v1.LinkTransport
+	0,   // 32: anixops.forward.v1.EngineCapabilities.engine:type_name -> anixops.forward.v1.Engine
+	4,   // 33: anixops.forward.v1.EngineCapabilities.strategies:type_name -> anixops.forward.v1.BalanceStrategy
+	3,   // 34: anixops.forward.v1.EngineCapabilities.link_securities:type_name -> anixops.forward.v1.LinkSecurity
+	25,  // 35: anixops.forward.v1.NodeCapabilities.engines:type_name -> anixops.forward.v1.EngineCapabilities
+	29,  // 36: anixops.forward.v1.ApplyResult.errors:type_name -> anixops.forward.v1.HopError
+	0,   // 37: anixops.forward.v1.HopError.engine:type_name -> anixops.forward.v1.Engine
+	29,  // 38: anixops.forward.v1.NodeForwardReport.errors:type_name -> anixops.forward.v1.HopError
+	19,  // 39: anixops.forward.v1.NodeForwardReport.counters:type_name -> anixops.forward.v1.Counters
+	32,  // 40: anixops.forward.v1.NodeForwardReport.health:type_name -> anixops.forward.v1.UpstreamHealth
+	7,   // 41: anixops.forward.v1.UpstreamHealth.state:type_name -> anixops.forward.v1.HealthState
+	8,   // 42: anixops.forward.v1.ProbeRequest.kind:type_name -> anixops.forward.v1.ProbeKind
+	10,  // 43: anixops.forward.v1.CreateRouteRequest.route:type_name -> anixops.forward.v1.Route
+	10,  // 44: anixops.forward.v1.CreateRouteResponse.route:type_name -> anixops.forward.v1.Route
+	35,  // 45: anixops.forward.v1.CreateRouteResponse.violations:type_name -> anixops.forward.v1.Violation
+	10,  // 46: anixops.forward.v1.UpdateRouteRequest.route:type_name -> anixops.forward.v1.Route
+	10,  // 47: anixops.forward.v1.UpdateRouteResponse.route:type_name -> anixops.forward.v1.Route
+	35,  // 48: anixops.forward.v1.UpdateRouteResponse.violations:type_name -> anixops.forward.v1.Violation
+	10,  // 49: anixops.forward.v1.GetRouteResponse.route:type_name -> anixops.forward.v1.Route
+	10,  // 50: anixops.forward.v1.ListRoutesResponse.routes:type_name -> anixops.forward.v1.Route
+	76,  // 51: anixops.forward.v1.ListRoutesResponse.enforced:type_name -> anixops.forward.v1.ListRoutesResponse.EnforcedEntry
+	10,  // 52: anixops.forward.v1.PlanRouteRequest.route:type_name -> anixops.forward.v1.Route
+	20,  // 53: anixops.forward.v1.PlanRouteRequest.nodes:type_name -> anixops.forward.v1.NodeInfo
+	22,  // 54: anixops.forward.v1.PlanRouteResponse.states:type_name -> anixops.forward.v1.NodeForwardState
+	47,  // 55: anixops.forward.v1.PlanRouteResponse.allocations:type_name -> anixops.forward.v1.PortAllocation
+	35,  // 56: anixops.forward.v1.PlanRouteResponse.violations:type_name -> anixops.forward.v1.Violation
+	19,  // 57: anixops.forward.v1.GetRouteStatsResponse.counters:type_name -> anixops.forward.v1.Counters
+	32,  // 58: anixops.forward.v1.GetRouteHealthResponse.health:type_name -> anixops.forward.v1.UpstreamHealth
+	8,   // 59: anixops.forward.v1.DiagnoseStep.kind:type_name -> anixops.forward.v1.ProbeKind
+	34,  // 60: anixops.forward.v1.DiagnoseStep.result:type_name -> anixops.forward.v1.ProbeResult
+	54,  // 61: anixops.forward.v1.DiagnoseRouteResponse.steps:type_name -> anixops.forward.v1.DiagnoseStep
+	21,  // 62: anixops.forward.v1.NodeSettings.port_range:type_name -> anixops.forward.v1.PortRange
+	77,  // 63: anixops.forward.v1.NodeSettings.labels:type_name -> anixops.forward.v1.NodeSettings.LabelsEntry
+	9,   // 64: anixops.forward.v1.ForwardNodeRecord.transport:type_name -> anixops.forward.v1.NodeTransport
+	56,  // 65: anixops.forward.v1.NodeSummary.settings:type_name -> anixops.forward.v1.NodeSettings
+	20,  // 66: anixops.forward.v1.NodeSummary.info:type_name -> anixops.forward.v1.NodeInfo
+	27,  // 67: anixops.forward.v1.NodeSummary.capabilities:type_name -> anixops.forward.v1.NodeCapabilities
+	57,  // 68: anixops.forward.v1.NodeSummary.record:type_name -> anixops.forward.v1.ForwardNodeRecord
+	9,   // 69: anixops.forward.v1.ListNodesRequest.transport:type_name -> anixops.forward.v1.NodeTransport
+	58,  // 70: anixops.forward.v1.ListNodesResponse.nodes:type_name -> anixops.forward.v1.NodeSummary
+	58,  // 71: anixops.forward.v1.GetNodeResponse.node:type_name -> anixops.forward.v1.NodeSummary
+	22,  // 72: anixops.forward.v1.GetNodeResponse.state:type_name -> anixops.forward.v1.NodeForwardState
+	31,  // 73: anixops.forward.v1.GetNodeResponse.report:type_name -> anixops.forward.v1.NodeForwardReport
+	56,  // 74: anixops.forward.v1.SetNodeSettingsRequest.settings:type_name -> anixops.forward.v1.NodeSettings
+	58,  // 75: anixops.forward.v1.SetNodeSettingsResponse.node:type_name -> anixops.forward.v1.NodeSummary
+	35,  // 76: anixops.forward.v1.SetNodeSettingsResponse.violations:type_name -> anixops.forward.v1.Violation
+	57,  // 77: anixops.forward.v1.CreateForwardNodeRequest.node:type_name -> anixops.forward.v1.ForwardNodeRecord
+	56,  // 78: anixops.forward.v1.CreateForwardNodeRequest.settings:type_name -> anixops.forward.v1.NodeSettings
+	58,  // 79: anixops.forward.v1.CreateForwardNodeResponse.node:type_name -> anixops.forward.v1.NodeSummary
+	57,  // 80: anixops.forward.v1.UpdateForwardNodeRequest.node:type_name -> anixops.forward.v1.ForwardNodeRecord
+	58,  // 81: anixops.forward.v1.UpdateForwardNodeResponse.node:type_name -> anixops.forward.v1.NodeSummary
+	35,  // 82: anixops.forward.v1.UpdateForwardNodeResponse.violations:type_name -> anixops.forward.v1.Violation
+	35,  // 83: anixops.forward.v1.DeleteForwardNodeResponse.violations:type_name -> anixops.forward.v1.Violation
+	72,  // 84: anixops.forward.v1.GetTrafficResponse.buckets:type_name -> anixops.forward.v1.TrafficBucket
+	36,  // 85: anixops.forward.v1.ForwardControl.CreateRoute:input_type -> anixops.forward.v1.CreateRouteRequest
+	38,  // 86: anixops.forward.v1.ForwardControl.UpdateRoute:input_type -> anixops.forward.v1.UpdateRouteRequest
+	40,  // 87: anixops.forward.v1.ForwardControl.DeleteRoute:input_type -> anixops.forward.v1.DeleteRouteRequest
+	42,  // 88: anixops.forward.v1.ForwardControl.GetRoute:input_type -> anixops.forward.v1.GetRouteRequest
+	44,  // 89: anixops.forward.v1.ForwardControl.ListRoutes:input_type -> anixops.forward.v1.ListRoutesRequest
+	46,  // 90: anixops.forward.v1.ForwardControl.PlanRoute:input_type -> anixops.forward.v1.PlanRouteRequest
+	49,  // 91: anixops.forward.v1.ForwardControl.GetRouteStats:input_type -> anixops.forward.v1.GetRouteStatsRequest
+	51,  // 92: anixops.forward.v1.ForwardControl.GetRouteHealth:input_type -> anixops.forward.v1.GetRouteHealthRequest
+	53,  // 93: anixops.forward.v1.ForwardControl.DiagnoseRoute:input_type -> anixops.forward.v1.DiagnoseRouteRequest
+	59,  // 94: anixops.forward.v1.ForwardControl.ListNodes:input_type -> anixops.forward.v1.ListNodesRequest
+	61,  // 95: anixops.forward.v1.ForwardControl.GetNode:input_type -> anixops.forward.v1.GetNodeRequest
+	63,  // 96: anixops.forward.v1.ForwardControl.SetNodeSettings:input_type -> anixops.forward.v1.SetNodeSettingsRequest
+	65,  // 97: anixops.forward.v1.ForwardControl.CreateForwardNode:input_type -> anixops.forward.v1.CreateForwardNodeRequest
+	67,  // 98: anixops.forward.v1.ForwardControl.UpdateForwardNode:input_type -> anixops.forward.v1.UpdateForwardNodeRequest
+	69,  // 99: anixops.forward.v1.ForwardControl.DeleteForwardNode:input_type -> anixops.forward.v1.DeleteForwardNodeRequest
+	71,  // 100: anixops.forward.v1.ForwardControl.GetTraffic:input_type -> anixops.forward.v1.GetTrafficRequest
+	26,  // 101: anixops.forward.v1.ForwardNode.GetCapabilities:input_type -> anixops.forward.v1.GetNodeCapabilitiesRequest
+	22,  // 102: anixops.forward.v1.ForwardNode.Apply:input_type -> anixops.forward.v1.NodeForwardState
+	30,  // 103: anixops.forward.v1.ForwardNode.Observe:input_type -> anixops.forward.v1.ObserveRequest
+	33,  // 104: anixops.forward.v1.ForwardNode.Probe:input_type -> anixops.forward.v1.ProbeRequest
+	37,  // 105: anixops.forward.v1.ForwardControl.CreateRoute:output_type -> anixops.forward.v1.CreateRouteResponse
+	39,  // 106: anixops.forward.v1.ForwardControl.UpdateRoute:output_type -> anixops.forward.v1.UpdateRouteResponse
+	41,  // 107: anixops.forward.v1.ForwardControl.DeleteRoute:output_type -> anixops.forward.v1.DeleteRouteResponse
+	43,  // 108: anixops.forward.v1.ForwardControl.GetRoute:output_type -> anixops.forward.v1.GetRouteResponse
+	45,  // 109: anixops.forward.v1.ForwardControl.ListRoutes:output_type -> anixops.forward.v1.ListRoutesResponse
+	48,  // 110: anixops.forward.v1.ForwardControl.PlanRoute:output_type -> anixops.forward.v1.PlanRouteResponse
+	50,  // 111: anixops.forward.v1.ForwardControl.GetRouteStats:output_type -> anixops.forward.v1.GetRouteStatsResponse
+	52,  // 112: anixops.forward.v1.ForwardControl.GetRouteHealth:output_type -> anixops.forward.v1.GetRouteHealthResponse
+	55,  // 113: anixops.forward.v1.ForwardControl.DiagnoseRoute:output_type -> anixops.forward.v1.DiagnoseRouteResponse
+	60,  // 114: anixops.forward.v1.ForwardControl.ListNodes:output_type -> anixops.forward.v1.ListNodesResponse
+	62,  // 115: anixops.forward.v1.ForwardControl.GetNode:output_type -> anixops.forward.v1.GetNodeResponse
+	64,  // 116: anixops.forward.v1.ForwardControl.SetNodeSettings:output_type -> anixops.forward.v1.SetNodeSettingsResponse
+	66,  // 117: anixops.forward.v1.ForwardControl.CreateForwardNode:output_type -> anixops.forward.v1.CreateForwardNodeResponse
+	68,  // 118: anixops.forward.v1.ForwardControl.UpdateForwardNode:output_type -> anixops.forward.v1.UpdateForwardNodeResponse
+	70,  // 119: anixops.forward.v1.ForwardControl.DeleteForwardNode:output_type -> anixops.forward.v1.DeleteForwardNodeResponse
+	73,  // 120: anixops.forward.v1.ForwardControl.GetTraffic:output_type -> anixops.forward.v1.GetTrafficResponse
+	27,  // 121: anixops.forward.v1.ForwardNode.GetCapabilities:output_type -> anixops.forward.v1.NodeCapabilities
+	28,  // 122: anixops.forward.v1.ForwardNode.Apply:output_type -> anixops.forward.v1.ApplyResult
+	31,  // 123: anixops.forward.v1.ForwardNode.Observe:output_type -> anixops.forward.v1.NodeForwardReport
+	34,  // 124: anixops.forward.v1.ForwardNode.Probe:output_type -> anixops.forward.v1.ProbeResult
+	105, // [105:125] is the sub-list for method output_type
+	85,  // [85:105] is the sub-list for method input_type
+	85,  // [85:85] is the sub-list for extension type_name
+	85,  // [85:85] is the sub-list for extension extendee
+	0,   // [0:85] is the sub-list for field type_name
 }
 
 func init() { file_api_forward_v1_forward_proto_init() }
@@ -4389,8 +5968,8 @@ func file_api_forward_v1_forward_proto_init() {
 		File: protoimpl.DescBuilder{
 			GoPackagePath: reflect.TypeOf(x{}).PkgPath(),
 			RawDescriptor: unsafe.Slice(unsafe.StringData(file_api_forward_v1_forward_proto_rawDesc), len(file_api_forward_v1_forward_proto_rawDesc)),
-			NumEnums:      9,
-			NumMessages:   48,
+			NumEnums:      10,
+			NumMessages:   68,
 			NumExtensions: 0,
 			NumServices:   2,
 		},
