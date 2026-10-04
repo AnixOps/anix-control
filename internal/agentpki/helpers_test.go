@@ -32,7 +32,7 @@ const testCluster = "test"
 
 var testModels = []any{
 	&model.ServiceCA{}, &model.AgentEnrollment{}, &model.AgentCertificate{}, &model.Node{}, &model.ForwardNode{},
-	&model.OperationLog{},
+	&model.OperationLog{}, &model.ForwardLinkCA{}, &model.ForwardLinkCertificate{}, &model.KernelForwardNode{},
 }
 
 // clock is a settable time source shared by the authority and the service.
@@ -59,6 +59,7 @@ type fixture struct {
 	db           *gorm.DB
 	clock        *clock
 	authority    *modulepki.Authority
+	link         *agentpki.LinkAuthority
 	pki          *agentpki.Service
 	proxy        model.Node
 	proxyKey     string
@@ -136,10 +137,13 @@ func newFixture(t *testing.T, db *gorm.DB) *fixture {
 	authority, err := modulepki.New(modulepki.Options{DB: db, Cluster: testCluster, KEK: kek, Now: now.Now})
 	require.NoError(t, err)
 	require.NoError(t, authority.Ensure(t.Context()))
-	pki, err := agentpki.New(agentpki.Options{DB: db, Authority: authority, Now: now.Now})
+	link, err := agentpki.NewLinkAuthority(agentpki.LinkAuthorityOptions{DB: db, Cluster: testCluster, KEK: kek, Now: now.Now})
+	require.NoError(t, err)
+	require.NoError(t, link.Ensure(t.Context()))
+	pki, err := agentpki.New(agentpki.Options{DB: db, Authority: authority, Now: now.Now, Link: link})
 	require.NoError(t, err)
 
-	f := &fixture{db: db, clock: now, authority: authority, pki: pki, proxyKey: randomSecret(t), forwardToken: randomSecret(t)}
+	f := &fixture{db: db, clock: now, authority: authority, link: link, pki: pki, proxyKey: randomSecret(t), forwardToken: randomSecret(t)}
 	f.proxy = model.Node{Name: "proxy", Host: "198.51.100.10", APIKey: f.proxyKey, APIKeyHash: sha256Hex(f.proxyKey), Status: model.NodeStatusOnline}
 	require.NoError(t, db.Create(&f.proxy).Error)
 	f.forward = model.ForwardNode{ID: f.proxy.ID, Name: "forward", Host: "198.51.100.20", Port: 8443, APIToken: f.forwardToken, Enabled: true}

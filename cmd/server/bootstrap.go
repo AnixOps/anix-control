@@ -8,6 +8,7 @@ import (
 	"log"
 	"strings"
 
+	"github.com/AnixOps/anix-control/v4/internal/agentpki"
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/lease"
@@ -256,7 +257,8 @@ func releaseBootstrapLock(conn *sql.Conn) {
 	_ = conn.Close()
 }
 
-// ensureModulePKI creates the built-in module CA on first start. It runs
+// ensureModulePKI creates the built-in module CA and the forward link CA on
+// first start. It runs
 // under the bootstrap lock, so concurrent kernels create one CA.
 func ensureModulePKI(ctx context.Context, cfg *config.Config, db *gorm.DB) error {
 	authority, err := modulepki.FromConfig(cfg.ModuleRuntime, db)
@@ -268,6 +270,15 @@ func ensureModulePKI(ctx context.Context, cfg *config.Config, db *gorm.DB) error
 	}
 	if err := authority.Ensure(ctx); err != nil {
 		return fmt.Errorf("create the module CA: %w", err)
+	}
+	// The forward link CA (H28) is a separate root sealed with the same
+	// key-encryption key.
+	link, err := agentpki.LinkAuthorityFromConfig(cfg, db)
+	if err != nil {
+		return fmt.Errorf("forward link PKI: %w", err)
+	}
+	if err := link.Ensure(ctx); err != nil {
+		return fmt.Errorf("create the forward link CA: %w", err)
 	}
 	return nil
 }

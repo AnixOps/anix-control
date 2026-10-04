@@ -27,7 +27,8 @@ const (
 var revocationEpoch atomic.Uint64
 
 // RevokeNode revokes every certificate and every enrollment (including
-// unused enrollment credentials) of node, in db, which may be a
+// unused enrollment credentials) of node, and its forward link
+// certificates, in db, which may be a
 // transaction. It is the hook of the kernel paths that revoke, replace or
 // disable a node's credentials or delete the node. A database without the
 // agent PKI tables has nothing to revoke.
@@ -52,6 +53,15 @@ func RevokeNode(ctx context.Context, db *gorm.DB, node agentcontrol.AgentNode, r
 		Where("node_kind = ? AND node_id = ? AND revoked_at IS NULL", node.Kind, node.ID).
 		Updates(updates).Error; err != nil {
 		return err
+	}
+	// The node's forward link certificates (link.go) go with its Agent
+	// credentials. A database without the link table has none.
+	if migrator.HasTable(&model.ForwardLinkCertificate{}) {
+		if err := db.Model(&model.ForwardLinkCertificate{}).
+			Where("node_kind = ? AND node_id = ? AND revoked_at IS NULL", node.Kind, node.ID).
+			Updates(updates).Error; err != nil {
+			return err
+		}
 	}
 	// A reader that cached "not revoked" between the first bump and these
 	// writes is dropped again.
@@ -132,12 +142,18 @@ func (c *revocationCache) put(serial string, node agentcontrol.AgentNode, revoke
 	c.entries[revocationKey{serial: serial, node: node}] = revocationEntry{revoked: revoked, checkedAt: now, epoch: epoch}
 }
 
-// Prune deletes the records of certificates that expired before cutoff and
-// of enrollment credentials that expired unused before it.
+// Prune deletes the records of certificates (Agent and, with the link CA,
+// forward link certificates) that expired before cutoff and of enrollment
+// credentials that expired unused before it.
 func (s *Service) Prune(ctx context.Context, cutoff time.Time) error {
 	db := s.db.WithContext(ctx)
 	if err := db.Where("not_after < ?", cutoff).Delete(&model.AgentCertificate{}).Error; err != nil {
 		return err
+	}
+	if s.link != nil {
+		if err := db.Where("not_after < ?", cutoff).Delete(&model.ForwardLinkCertificate{}).Error; err != nil {
+			return err
+		}
 	}
 	return db.Where("method = ? AND used_at IS NULL AND expires_at < ?", model.AgentEnrollmentMethodCredential, cutoff).
 		Delete(&model.AgentEnrollment{}).Error

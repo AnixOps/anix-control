@@ -929,9 +929,40 @@ driver writes gost's configuration and runs the unmodified binary.
   the CA that also signs module and kernel certificates) do not qualify,
   and gost must not hold the Agent's Control key. Decided (H28): a
   dedicated forward link CA issues them, requested and renewed alongside
-  the Agent certificate; until it exists (Control after F3a, the Agent in
-  F3b) encrypted gost links cannot be set up on real nodes. No key material
-  travels in the state.
+  the Agent certificate. No key material travels in the state.
+- **Link certificates (H28, Control side implemented).** Control's forward
+  link CA (`internal/agentpki/link.go`) is a self-signed ECDSA P-256 root,
+  separate from the CA of modules, the kernel and Agents, name-constrained
+  to `spiffe://anixops` URIs, its key sealed with `module_runtime.ca_kek`
+  under additional data of its own (`v4_kernel_forward_link_ca`). It exists
+  wherever the built-in CA does (created at startup; an external PKI has no
+  key in the kernel and issues none). `AgentEnrollment.IssueLinkCertificate`
+  issues a node a link certificate for a key the Agent generates for it
+  alone (never the Agent key, which Control refuses): CN and the only DNS
+  name the node's identity name (`forward-41`, the default `server_name`),
+  the only URI its SPIFFE ID (the state's `peer_identity` and
+  `ingress_peers`), serverAuth and clientAuth, 7 days, renewed at two
+  thirds. Only an Agent certificate authenticates the call (never a node
+  credential), only for an enabled node whose Agent negotiated forward.v1,
+  and the CSR may name nothing but the node's DNS name and SPIFFE ID.
+  Every certificate is recorded in `v4_kernel_forward_link_certificate`
+  and revoked with the node's Agent credentials (`agentpki.RevokeNode`:
+  disable, credential replacement, deletion, `RetireNode`). The answer and
+  `GetLinkTrustBundle` carry the link trust bundle. Rotation
+  (`anix-control agent link-ca rotate`) mirrors the module CA's with the
+  link lifetime as overlap: the next CA joins the bundle at once and signs
+  only 7 days later, by when every node renewing at two thirds (4.7 days)
+  has fetched it; a retired CA stays in the bundle for 7 days more. The
+  planner needs nothing new: `server_name` defaults to the node's ref and
+  `peer_identity` is its SPIFFE ID, both names the link certificate
+  carries. An operator-chosen `server_name` (a CDN name on WSS) is not in
+  the exit's link certificate, so the dialler's verification fails; it
+  stays unsupported. The Agent's half (F3b: the key, the files under
+  `/var/lib/anixops-gost/tls`, the reload) is specified in
+  `sdk/api/agent/v1/PROTOCOL.md`, "Forward link certificates". Open for
+  the driver: a certificate-reload entry point that records the reload, so
+  the counter epoch moves with it (a supervisor reload outside `Apply`
+  does not).
 - **Web API (F4b).** gost's web API listens on `api.sock` in the runtime
   directory, without authentication: the socket's permissions are its only
   key. Under the unit, gost creates it with `UMask=0007` in its
@@ -1655,7 +1686,16 @@ features go into which edition is open (H23). The proposal:
 - **Reserved ports.** The planner never allocates, and validation refuses,
   the node's SSH port, the Agent's ports and a per-node reserved list.
 - **No secrets in state.** Node-to-node TLS uses the nodes' own link
-  certificates and keys (H28); the state names identities, not keys. gost's
+  certificates and keys (H28); the state names identities, not keys. The
+  link CA is a separate root that signs only link certificates, so a link
+  certificate never authenticates to Control and an Agent certificate never
+  authenticates a link; gost holds only the link key, which the Agent
+  generates for it, never the Agent's Control key. gost checks no
+  revocation: a revoked link certificate (its node disabled, deleted,
+  retired or its credentials replaced) verifies at peers until it expires,
+  at most 7 days, while the peers' `ingress_sources` admission still
+  admits only the routes' previous hops; removing the node from its routes
+  removes its addresses there. gost's
   web API (F4b) and metrics listen on unix sockets in its runtime
   directory, guarded by file permissions (the unit's `UMask=0007` in a
   `RuntimeDirectory` of mode 0750: the gost user and its group, which only
@@ -1678,7 +1718,8 @@ Agent-repository PRs are marked (agent).
 | | F2c | nftables Apply, Observe, `SetUpstreams`, tc HTB, host probe, real-kernel conformance (implemented) | L | H13 |
 | | F2d | netns end-to-end suite and CI job (implemented) | M | H14 |
 | F3 | F3a | Control: `forward.v1`, `nodeconfig/v2`, the `forward` report and traffic ledger (implemented) | L | H25 |
-| | F3b | (agent) forward component: drivers, persisted state, apply at boot, health loop, reports | L | H25 |
+| | F3a-L | Control: forward link CA and per-node link certificates (`IssueLinkCertificate`, `GetLinkTrustBundle`, implemented) | M | H28 |
+| | F3b | (agent) forward component: drivers, persisted state, apply at boot, health loop, reports, link certificates | L | H25, H28 |
 | | F3c | probes and diagnosis plumbing | M | |
 | | O1 | `install.sh`, group tokens, mirrors | M | H18 |
 | | O2 | preflight and offline package | M | H18 |
@@ -1726,7 +1767,7 @@ when decided.
 | H21 | LB and failover defaults: circuit breaker, check interval, DDNS providers | Breaker 3 failures → skip 30 s; checks every 5 s with a 2 s timeout; least-conn re-weighting every 10 s; DDNS: Cloudflare, Alibaba Cloud DNS, DNSPod, Huawei Cloud DNS, generic webhook |
 | H22 | AnixOps protocol design review (threat model, cryptography, REALITY-like fallback) | Separate design document before any prototype; prototype off by default and marked experimental in v4.2 |
 | H23 | Community vs commercial boundary for forwarding | Section 12: core forwarding, LB, failover and onboarding in both; self-service, plans, multipliers and resellers commercial |
-| H28 | Forward link certificates for encrypted gost links (F3b, AgentPKI): gost verifies a certificate chain and the dialled server name, not SPIFFE URIs, and must not hold the Agent's Control key | AgentPKI issues each forward node a separate link certificate: DNS name = the node's identity name (`forward-41`, the planner's default `server_name`), URI = its SPIFFE identity, serverAuth and clientAuth, from a link CA (an intermediate) that signs nothing else, with the same lifetime and rotation as the Agent certificate. The Agent writes it, its own key and the link CA bundle to `/var/lib/anixops-gost/tls` and reloads gost on rotation. An operator-chosen `server_name` (a CDN name on WSS) then needs that name in the exit's link certificate, or stays unsupported. Per-identity matching of `ingress_peers` would need a gost plugin; source admission plus the link CA is the v4.2 boundary |
+| H28 | Forward link certificates for encrypted gost links (F3b, AgentPKI): gost verifies a certificate chain and the dialled server name, not SPIFFE URIs, and must not hold the Agent's Control key | AgentPKI issues each forward node a separate link certificate: DNS name = the node's identity name (`forward-41`, the planner's default `server_name`), URI = its SPIFFE identity, serverAuth and clientAuth, from a link CA (a separate root) that signs nothing else, with the same lifetime and rotation as the Agent certificate. The Agent writes it, its own key and the link CA bundle to `/var/lib/anixops-gost/tls` and reloads gost on rotation. An operator-chosen `server_name` (a CDN name on WSS) then needs that name in the exit's link certificate, or stays unsupported. Per-identity matching of `ingress_peers` would need a gost plugin; source admission plus the link CA is the v4.2 boundary |
 
 Decided by the owner (2026-10-02; H20 and H21 2026-10-03):
 
@@ -1764,8 +1805,10 @@ Decided by the owner (2026-10-04):
   each forward node a link certificate (DNS name = the node's identity
   name, its SPIFFE identity as URI, serverAuth and clientAuth), requested
   and renewed alongside the Agent certificate. gost holds only the link
-  certificate and its key, never the Agent's Control key. The link CA is
-  built later (Control after F3a, the Agent in F3b), not in F4a.
+  certificate and its key, never the Agent's Control key. Control's side
+  is implemented (section 6.2, "Link certificates": a separate self-signed
+  root rather than an intermediate, so the module CA's trust bundle never
+  admits link certificates); the Agent's is F3b.
 
 H18, H19, H22 and H23 are still open; each is asked before the work it
 gates.

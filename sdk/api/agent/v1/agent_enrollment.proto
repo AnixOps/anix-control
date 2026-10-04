@@ -30,6 +30,21 @@ service AgentEnrollment {
   // GetTrustBundle returns the CA certificates that sign agent certificates.
   // It requires a valid agent client certificate.
   rpc GetTrustBundle(GetAgentTrustBundleRequest) returns (GetAgentTrustBundleResponse);
+  // IssueLinkCertificate issues the node of the presented agent client
+  // certificate a forward link certificate (owner decision H28): the
+  // certificate a forward engine such as gost presents to the node's peers
+  // on encrypted links, signed by the forward link CA, a root separate from
+  // the CA of agent certificates. It requires a valid agent client
+  // certificate (never the node credential) of a node whose Agent negotiated
+  // forward.v1 in its last Hello. The CSR's key must be a key of its own,
+  // never the agent certificate's; the CSR may name only the node's DNS
+  // name ("forward-7") and SPIFFE ID. Renewal is the same call with a new
+  // key, at renew_after_unix. See PROTOCOL.md "Forward link certificates".
+  rpc IssueLinkCertificate(IssueLinkCertificateRequest) returns (IssueLinkCertificateResponse);
+  // GetLinkTrustBundle returns the forward link CAs a node trusts to verify
+  // its peers' link certificates. It requires a valid agent client
+  // certificate.
+  rpc GetLinkTrustBundle(GetLinkTrustBundleRequest) returns (GetLinkTrustBundleResponse);
 }
 
 message EnrollAgentRequest {
@@ -78,4 +93,44 @@ message AgentCertificate {
   // renew_after_unix is when the agent should renew: two thirds of the
   // lifetime.
   int64 renew_after_unix = 7;
+}
+
+message IssueLinkCertificateRequest {
+  // csr_der is a PKCS#10 request in DER for the link key pair (ECDSA P-256
+  // recommended; P-384, Ed25519 and RSA of at least 2048 bits are accepted).
+  // Its SANs may only be the node's DNS name and its SPIFFE ID; Control
+  // assigns both whether or not the request names them.
+  bytes csr_der = 1;
+}
+
+message IssueLinkCertificateResponse {
+  LinkCertificate certificate = 1;
+}
+
+message GetLinkTrustBundleRequest {}
+
+message GetLinkTrustBundleResponse {
+  // trust_bundle_der holds every forward link CA certificate that may have
+  // signed a valid link certificate: the current and next link CAs, and
+  // retired ones until the link certificates they signed have expired.
+  repeated bytes trust_bundle_der = 1;
+}
+
+message LinkCertificate {
+  bytes certificate_der = 1;
+  // trust_bundle_der is the link trust bundle (GetLinkTrustBundleResponse).
+  repeated bytes trust_bundle_der = 2;
+  // spiffe_id is the certificate's URI SAN: the node's agent identity.
+  string spiffe_id = 3;
+  // node is "proxy-<id>" or "forward-<id>".
+  string node = 4;
+  // dns_name is the certificate's only DNS name and its subject common
+  // name: the node's identity name, which peers dial as the server name.
+  string dns_name = 5;
+  // serial is the certificate serial number, lowercase hex.
+  string serial = 6;
+  int64 not_after_unix = 7;
+  // renew_after_unix is when the Agent should request a new link
+  // certificate: two thirds of the lifetime.
+  int64 renew_after_unix = 8;
 }
