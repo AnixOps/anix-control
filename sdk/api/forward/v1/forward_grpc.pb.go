@@ -87,10 +87,17 @@ type ForwardControlClient interface {
 	// GetRouteHealth answers the health of every upstream of every hop, with
 	// the latest per-hop latency probes.
 	GetRouteHealth(ctx context.Context, in *GetRouteHealthRequest, opts ...grpc.CallOption) (*GetRouteHealthResponse, error)
-	// DiagnoseRoute runs an end-to-end check through the route's nodes:
-	// listen ownership and port conflicts on each hop (nat table included),
-	// reachability of each next hop, delivery proved on the last hop, and a
-	// real UDP exchange for UDP routes. UNIMPLEMENTED until F3c.
+	// DiagnoseRoute runs a staged check of a stored route (F3c,
+	// forward-sdk.md section 7.6): Control's own view first (each node's
+	// planned against applied generation, hop errors, upstream health and
+	// circuit breakers from the latest reports), then probes from the nodes
+	// through the agent.diagnostic operation where the node's Agent offers
+	// them (listen ownership and port conflicts on each hop, nat table
+	// included; each hop's connect to its next hop; delivery from the last
+	// hop to the targets, with a real UDP exchange for UDP routes), and
+	// Control-vantage reachability of the entries and public targets for the
+	// nodes that cannot probe. Bounded in time; answers a recent diagnosis of
+	// the same route again (cached) and RESOURCE_EXHAUSTED when too many run.
 	DiagnoseRoute(ctx context.Context, in *DiagnoseRouteRequest, opts ...grpc.CallOption) (*DiagnoseRouteResponse, error)
 	// ListNodes answers every forward node (v2_forward_node) and every proxy
 	// node in the forwarding inventory, by node_ref, with its settings, the
@@ -346,10 +353,17 @@ type ForwardControlServer interface {
 	// GetRouteHealth answers the health of every upstream of every hop, with
 	// the latest per-hop latency probes.
 	GetRouteHealth(context.Context, *GetRouteHealthRequest) (*GetRouteHealthResponse, error)
-	// DiagnoseRoute runs an end-to-end check through the route's nodes:
-	// listen ownership and port conflicts on each hop (nat table included),
-	// reachability of each next hop, delivery proved on the last hop, and a
-	// real UDP exchange for UDP routes. UNIMPLEMENTED until F3c.
+	// DiagnoseRoute runs a staged check of a stored route (F3c,
+	// forward-sdk.md section 7.6): Control's own view first (each node's
+	// planned against applied generation, hop errors, upstream health and
+	// circuit breakers from the latest reports), then probes from the nodes
+	// through the agent.diagnostic operation where the node's Agent offers
+	// them (listen ownership and port conflicts on each hop, nat table
+	// included; each hop's connect to its next hop; delivery from the last
+	// hop to the targets, with a real UDP exchange for UDP routes), and
+	// Control-vantage reachability of the entries and public targets for the
+	// nodes that cannot probe. Bounded in time; answers a recent diagnosis of
+	// the same route again (cached) and RESOURCE_EXHAUSTED when too many run.
 	DiagnoseRoute(context.Context, *DiagnoseRouteRequest) (*DiagnoseRouteResponse, error)
 	// ListNodes answers every forward node (v2_forward_node) and every proxy
 	// node in the forwarding inventory, by node_ref, with its settings, the
