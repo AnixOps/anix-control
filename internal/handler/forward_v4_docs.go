@@ -458,3 +458,183 @@ func (ForwardV4Docs) ObservabilityTopology(*gin.Context) {}
 // @Failure 503 {object} map[string]any
 // @Router /api/v4/forward/observability/trend [get]
 func (ForwardV4Docs) ObservabilityTrend(*gin.Context) {}
+
+// Entry HA through DNS (forward-sdk.md section 7.4, L2).
+
+// RouteDNS godoc
+// @Summary A route's entry HA DNS status
+// @Description Entry HA through DNS (forward-sdk.md section 7.4, L2): the route's binding, the published and desired A/AAAA records, each entry node's health (healthy, in_rotation, good and bad streaks, reason), state (unbound, pending, ok, degraded, error, rate_limited, paused, route_missing, hostname_mismatch), cname_target in CNAME mode and the last provider error.
+// @Tags Forward v4
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Route id"
+// @Success 200 {object} map[string]any
+// @Failure 404 {object} map[string]any
+// @Failure 503 {object} map[string]any
+// @Router /api/v4/forward/routes/{id}/dns [get]
+func (ForwardV4Docs) RouteDNS(*gin.Context) {}
+
+// DNSKinds godoc
+// @Summary DNS provider kinds
+// @Description The provider kinds (Cloudflare, Alibaba Cloud DNS, DNSPod, Huawei Cloud DNS, webhook) with their settings and credential names, for a form.
+// @Tags Forward v4
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]any
+// @Failure 503 {object} map[string]any
+// @Router /api/v4/forward/dns/kinds [get]
+func (ForwardV4Docs) DNSKinds(*gin.Context) {}
+
+// ListDNSProviders godoc
+// @Summary List DNS providers
+// @Description DNS provider accounts with credential_names and the number of bindings; credentials are never answered.
+// @Tags Forward v4
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Success 200 {object} map[string]any
+// @Failure 503 {object} map[string]any
+// @Router /api/v4/forward/dns/providers [get]
+func (ForwardV4Docs) ListDNSProviders(*gin.Context) {}
+
+// CreateDNSProvider godoc
+// @Summary Add a DNS provider (super administrator)
+// @Description Body: {provider: DnsProvider, credentials: {name: value}}. Credentials are sealed with module_runtime.ca_kek and never answered; 409 refused (secret_store_unavailable) without it. Audited with the credentials redacted.
+// @Tags Forward v4
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "{provider, credentials}"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 403 {object} map[string]any
+// @Failure 409 {object} map[string]any
+// @Failure 503 {object} map[string]any
+// @Router /api/v4/forward/dns/providers [post]
+func (ForwardV4Docs) CreateDNSProvider(*gin.Context) {}
+
+// GetDNSProvider godoc
+// @Summary A DNS provider
+// @Description Without credentials.
+// @Tags Forward v4
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Provider id"
+// @Success 200 {object} map[string]any
+// @Failure 404 {object} map[string]any
+// @Failure 503 {object} map[string]any
+// @Router /api/v4/forward/dns/providers/{id} [get]
+func (ForwardV4Docs) GetDNSProvider(*gin.Context) {}
+
+// UpdateDNSProvider godoc
+// @Summary Replace a DNS provider (super administrator)
+// @Description Body: {provider: DnsProvider, credentials: {name: value}}; a credential left out, or "********", keeps the stored value. The kind cannot change.
+// @Tags Forward v4
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Provider id"
+// @Param body body object true "{provider, credentials}"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 403 {object} map[string]any
+// @Failure 404 {object} map[string]any
+// @Failure 409 {object} map[string]any
+// @Failure 503 {object} map[string]any
+// @Router /api/v4/forward/dns/providers/{id} [put]
+func (ForwardV4Docs) UpdateDNSProvider(*gin.Context) {}
+
+// DeleteDNSProvider godoc
+// @Summary Delete a DNS provider (super administrator)
+// @Description 409 refused (provider_in_use) while a binding uses it.
+// @Tags Forward v4
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Provider id"
+// @Success 200 {object} map[string]any
+// @Failure 403 {object} map[string]any
+// @Failure 404 {object} map[string]any
+// @Failure 409 {object} map[string]any
+// @Failure 503 {object} map[string]any
+// @Router /api/v4/forward/dns/providers/{id} [delete]
+func (ForwardV4Docs) DeleteDNSProvider(*gin.Context) {}
+
+// ListDNSBindings godoc
+// @Summary List route DNS bindings
+// @Description Query: route_id, provider_id.
+// @Tags Forward v4
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param route_id query string false "Route filter"
+// @Param provider_id query string false "Provider filter"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 503 {object} map[string]any
+// @Router /api/v4/forward/dns/bindings [get]
+func (ForwardV4Docs) ListDNSBindings(*gin.Context) {}
+
+// CreateDNSBinding godoc
+// @Summary Bind a route's entries to a DNS name
+// @Description Body: a DnsBinding (route_id, provider_id, zone, record_name, mode DNS_BINDING_MODE_DDNS or _CNAME, record_types, ttl, paused). In DDNS mode record_name is the route's entry_hostname; in CNAME mode a Control-managed name the operator points entry_hostname at.
+// @Tags Forward v4
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param body body object true "DnsBinding"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 409 {object} map[string]any
+// @Failure 503 {object} map[string]any
+// @Router /api/v4/forward/dns/bindings [post]
+func (ForwardV4Docs) CreateDNSBinding(*gin.Context) {}
+
+// GetDNSBinding godoc
+// @Summary A route DNS binding
+// @Tags Forward v4
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Binding id"
+// @Success 200 {object} map[string]any
+// @Failure 404 {object} map[string]any
+// @Failure 503 {object} map[string]any
+// @Router /api/v4/forward/dns/bindings/{id} [get]
+func (ForwardV4Docs) GetDNSBinding(*gin.Context) {}
+
+// UpdateDNSBinding godoc
+// @Summary Replace a binding's record types, TTL and paused flag
+// @Description Body: the DnsBinding; route, provider, zone, record_name and mode cannot change (409 immutable).
+// @Tags Forward v4
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Binding id"
+// @Param body body object true "DnsBinding"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 404 {object} map[string]any
+// @Failure 503 {object} map[string]any
+// @Router /api/v4/forward/dns/bindings/{id} [put]
+func (ForwardV4Docs) UpdateDNSBinding(*gin.Context) {}
+
+// DeleteDNSBinding godoc
+// @Summary Delete a route DNS binding (super administrator)
+// @Description Query purge=true first deletes the records Control published; 502 dns_purge_failed when the provider refuses, and the binding stays.
+// @Tags Forward v4
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Binding id"
+// @Param purge query bool false "Delete the published records first"
+// @Success 200 {object} map[string]any
+// @Failure 403 {object} map[string]any
+// @Failure 404 {object} map[string]any
+// @Failure 502 {object} map[string]any
+// @Failure 503 {object} map[string]any
+// @Router /api/v4/forward/dns/bindings/{id} [delete]
+func (ForwardV4Docs) DeleteDNSBinding(*gin.Context) {}
