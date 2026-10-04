@@ -283,14 +283,22 @@ func (e *Engine) passCancellations(ctx context.Context) error {
 	if len(ids) == 0 {
 		return nil
 	}
-	var cancelled []string
-	if err := e.DB.WithContext(ctx).Model(&model.KernelNodeOperation{}).
+	var ended []model.KernelNodeOperation
+	if err := e.DB.WithContext(ctx).Select("operation_id", "state", "cancel_requested_at").
 		Where("operation_id IN ? AND (cancel_requested_at IS NOT NULL OR state NOT IN ?)", ids, startedStates).
-		Pluck("operation_id", &cancelled).Error; err != nil {
+		Find(&ended).Error; err != nil {
 		return err
 	}
-	for _, id := range cancelled {
-		e.stop(id)
+	for _, operation := range ended {
+		// An operation the sweep ended TIMED_OUT goes through stopExpired:
+		// its context carries the deadline and ends DeadlineExceeded by
+		// itself. A cancel here, in the same tick, could win the race
+		// against that timer and hand the executor context.Canceled.
+		if operation.State == stateTimedOut && operation.CancelRequestedAt == nil {
+			e.stopExpired(operation.OperationID)
+			continue
+		}
+		e.stop(operation.OperationID)
 	}
 	return nil
 }
