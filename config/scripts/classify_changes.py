@@ -82,6 +82,7 @@ CLASS_PATTERNS: dict[str, tuple[str, ...]] = {
         "internal/kernelnodeops/*",
         "internal/kernelforward/*",
         "internal/agentpki/*",
+        "internal/agentupgrade/*",
         "sdk/v2compat/*",
         "packages/identity-platform/*",
         "identity/*",
@@ -134,6 +135,8 @@ CLASS_PATTERNS: dict[str, tuple[str, ...]] = {
         "internal/handler/agent*",
         # One-command onboarding: the install script and its metadata.
         "internal/agentinstall/*",
+        # Staged Agent upgrades (O4).
+        "internal/agentupgrade/*",
         "internal/service/agent*",
         "internal/plugincontrol/*",
         "packages/machine-telemetry/*",
@@ -311,6 +314,7 @@ def self_test() -> None:
     check(["sdk/agentcontrol/identity.go"], {"code", "modules"})
     check(["internal/grpc/node_server.go"], {"code", "agent"})
     check(["internal/agentpki/enrollment.go"], {"code", "db", "agent"})
+    check(["internal/agentupgrade/worker.go"], {"code", "db", "agent"})
     check(["packages/knowledge/compat/v2-routes.json"], {"code", "packages"})
     check(["packages/order/native/orders.go"], {"code", "db", "packages"})
     check(["packages/identity-platform/native/auth.go"], {"code", "db", "modules", "packages"})

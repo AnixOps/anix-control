@@ -92,6 +92,8 @@ WEIGHTS: dict[str, dict[str, float]] = {
         "internal/kernelforward": 3.0,
         # Not measured in CI yet: F5a's v4 API over ForwardControl.
         "internal/tests/forwardv4": 1.0,
+        # Not measured in CI yet: O4's Agent upgrade campaigns.
+        "internal/agentupgrade": 1.0,
     },
 }
 
