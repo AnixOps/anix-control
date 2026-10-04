@@ -184,12 +184,12 @@ const flagOptions = computed(() => [
 const columns = computed(() => [
   { key: 'name', label: t('forwardV4.nodes.columns.node'), primary: true, sortable: true },
   { key: 'status', label: t('forwardV4.nodes.columns.status'), secondary: true },
-  { key: 'kind', label: t('forwardV4.nodes.columns.kind') },
-  { key: 'agent', label: t('forwardV4.nodes.columns.agent'), breakpoint: 'md' },
+  { key: 'kind', label: t('forwardV4.nodes.columns.kind'), breakpoint: 'lg' },
+  { key: 'agent', label: t('forwardV4.nodes.columns.agent'), breakpoint: 'lg' },
   { key: 'engines', label: t('forwardV4.nodes.columns.engines') },
   { key: 'desired_hops', label: t('forwardV4.nodes.columns.hops'), align: 'end', numeric: true, sortable: true, breakpoint: 'lg', sortValue: row => num(row.desired_hops) },
   { key: 'generation', label: t('forwardV4.nodes.columns.generation'), align: 'end', sortable: true, sortValue: row => row.lag },
-  { key: 'errors', label: t('forwardV4.nodes.columns.errors'), sortable: true, sortValue: row => num(row.hop_errors) }
+  { key: 'errors', label: t('forwardV4.nodes.columns.errors'), sortable: true, breakpoint: 'md', sortValue: row => num(row.hop_errors) }
 ])
 
 // ---------------------------------------------------------------------------

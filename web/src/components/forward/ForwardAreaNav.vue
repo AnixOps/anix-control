@@ -53,7 +53,7 @@ function go(value) {
 
 .fwd-area-nav__updated {
   margin-left: auto;
-  color: var(--label-3);
+  color: var(--label-2);
   font-size: var(--type-caption-size);
 }
 </style>

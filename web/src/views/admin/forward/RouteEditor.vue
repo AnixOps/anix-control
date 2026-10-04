@@ -522,6 +522,7 @@ function discardMine() {
 <style scoped>
 .editor-summary,
 .editor-conflict {
+  min-width: 0;
   padding: var(--space-3) var(--space-4);
   border: 1px solid var(--danger);
   border-radius: var(--radius-sm);
@@ -559,6 +560,7 @@ function discardMine() {
 
 .editor-summary__list {
   display: grid;
+  grid-template-columns: minmax(0, 1fr);
   gap: var(--space-1);
   margin: 0;
   padding: 0;
@@ -567,6 +569,9 @@ function discardMine() {
 
 .editor-summary__item {
   display: flex;
+  min-width: 0;
+  white-space: normal;
+  max-width: 100%;
   flex-wrap: wrap;
   gap: var(--space-1) var(--space-3);
   align-items: baseline;
@@ -576,6 +581,11 @@ function discardMine() {
   color: var(--label-1);
   text-align: left;
   cursor: pointer;
+}
+
+.editor-summary__item > span {
+  min-width: 0;
+  overflow-wrap: anywhere;
 }
 
 .editor-summary__item:hover span:nth-child(2) {
@@ -588,12 +598,9 @@ function discardMine() {
   outline-offset: var(--focus-ring-offset);
 }
 
-.editor-summary__field {
-  color: var(--label-2);
-}
-
+.editor-summary__field,
 .editor-summary__code {
-  color: var(--label-3);
+  color: var(--label-1);
 }
 
 .editor-layout {
@@ -754,8 +761,8 @@ function discardMine() {
     display: flex;
     gap: var(--space-3);
     align-items: center;
-    margin: 0 calc(var(--space-4) * -1);
-    padding: var(--space-2) var(--space-4) calc(var(--space-2) + env(safe-area-inset-bottom));
+    margin: 0;
+    padding: var(--space-2) var(--space-3) calc(var(--space-2) + env(safe-area-inset-bottom));
     border-top: 1px solid var(--separator);
     background: var(--material);
     backdrop-filter: blur(20px);

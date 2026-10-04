@@ -87,8 +87,8 @@ export default {
       hour: 'Time'
     },
     status: {
-      quota: 'Paused by Control · quota used up',
-      expired: 'Paused by Control · expired',
+      quota: 'Quota used up',
+      expired: 'Expired',
       paused: 'Paused',
       error: 'Hop error',
       degraded: 'Degraded',
@@ -343,7 +343,7 @@ export default {
       cannotOriginate: '{engine} cannot originate it',
       cannotTerminate: '{engine} cannot terminate it',
       entryNote: 'The entry address and port are under Entry; limits apply at the entry only.',
-      previousEngine: 'hop {n}’s {engine}',
+      previousEngine: 'Hop {n}’s {engine}',
       linkFix: '{prev} cannot originate {link}. You can:',
       insertRelay: 'Insert a gost relay before',
       useRaw: 'Use RAW',

@@ -206,7 +206,8 @@ const { loading, secondsAgo, refresh } = usePolling(async () => {
     routes.value = routeAnswer.routes
     canDelete.value = routeAnswer.canDelete
     loadError.value = ''
-    if (!settingsDirty.value) fillForm()
+    // The form follows the node until the operator edits it.
+    if (!baseSettings.value || !settingsDirty.value) fillForm()
   } catch (error) {
     loadError.value = forwardErrorMessage(t, error)
     throw error
@@ -311,7 +312,7 @@ function formSettings() {
   }
 }
 
-const settingsDirty = computed(() => Boolean(node.value) && JSON.stringify(settingsBody(formSettings())) !== baseSettings.value)
+const settingsDirty = computed(() => Boolean(node.value) && Boolean(baseSettings.value) && JSON.stringify(settingsBody(formSettings())) !== baseSettings.value)
 useUnsavedChanges(settingsDirty, { discard: () => {} })
 
 function settingsError(field) {
@@ -402,7 +403,7 @@ async function remove() {
 
 <style scoped>
 .node-ref {
-  color: var(--label-3);
+  color: var(--label-2);
 }
 
 .node-updated {
@@ -433,8 +434,8 @@ async function remove() {
   justify-items: start;
   gap: var(--space-1);
   padding: var(--space-3);
+  border: 1px solid var(--separator);
   border-radius: var(--radius-sm);
-  background: var(--fill-1);
 }
 
 .node-health__value {

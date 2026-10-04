@@ -381,7 +381,7 @@ function setIngress(patch) {
 }
 
 .hop-node__prio {
-  color: var(--label-3);
+  color: var(--label-2);
   font-family: var(--font-mono);
   font-size: var(--type-caption-size);
 }

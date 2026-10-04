@@ -507,7 +507,7 @@ async function removeRoute() {
 
 <style scoped>
 .detail-id {
-  color: var(--label-3);
+  color: var(--label-2);
 }
 
 .detail-updated {

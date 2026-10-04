@@ -8,7 +8,8 @@ import {
   buildUserMenu,
   isForwardSuitePath,
   matchesQuery,
-  paletteEntries
+  paletteEntries,
+  showsForwardSuiteNav
 } from '@/navigation/menu'
 import { normalizeWebUIMenuParent } from '@/extensions/menuRegistry'
 import router from '@/router'
@@ -259,5 +260,32 @@ describe('navigation/menu.js: buildUserMenu', () => {
     const items = buildUserMenu({ t, editionAllows: commercial })
     expect(items.map(item => item.id)).toEqual(['dashboard', 'subscribe', 'knowledge', 'tickets', 'plans', 'orders', 'account'])
     expect(items.filter(item => !item.tab).map(item => item.to)).toEqual(['/user/plans', '/user/orders'])
+  })
+})
+
+// F5b: the v4.2 forwarding area needs the forward package's v4 API.
+describe('forwarding area capability', () => {
+  it('shows 转发 for the v4 pages only with the capability, and renames the flux-clone item', () => {
+    const without = buildAdminMenu({ t, editionAllows: () => true })
+    const network = groups => groups.find(group => group.id === 'network').items
+    expect(network(without).map(item => item.id)).not.toContain('forward-v4')
+    expect(network(without).find(item => item.id === 'forward').label).toBe('shell.admin.items.forward')
+
+    const withV4 = buildAdminMenu({ t, editionAllows: () => true, hasCapability: name => name === 'forward.v4' })
+    const items = network(withV4)
+    expect(items.map(item => item.id)).toContain('forward-v4')
+    expect(items.find(item => item.id === 'forward').label).toBe('shell.admin.items.forwardLegacy')
+    expect(items.find(item => item.id === 'forward-nodes').label).toBe('shell.admin.items.forwardNodesLegacy')
+    for (const path of ['/admin/forward/overview', '/admin/forward/routes/01J/edit', '/admin/forward/inventory/forward-41']) {
+      expect(activeMenuItem(withV4, path)?.item.id).toBe('forward-v4')
+    }
+    expect(activeMenuItem(withV4, '/admin/forward')?.item.id).toBe('forward')
+  })
+
+  it('keeps the flux-clone suite navigation off the v4 pages', () => {
+    expect(isForwardSuitePath('/admin/forward/routes')).toBe(true)
+    expect(showsForwardSuiteNav('/admin/forward/routes')).toBe(false)
+    expect(showsForwardSuiteNav('/admin/forward/inventory/forward-41')).toBe(false)
+    expect(showsForwardSuiteNav('/admin/forward/tunnel')).toBe(true)
   })
 })

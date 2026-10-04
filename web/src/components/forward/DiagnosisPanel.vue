@@ -146,8 +146,8 @@ const duration = computed(() => {
   gap: var(--space-2) var(--space-3);
   align-items: start;
   padding: var(--space-2) var(--space-3);
+  border: 1px solid var(--separator);
   border-radius: var(--radius-sm);
-  background: var(--fill-1);
 }
 
 .diag__step[data-status='PROBE_STATUS_FAILED'] {

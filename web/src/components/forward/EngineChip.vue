@@ -49,11 +49,11 @@ const meta = computed(() => ENGINES[props.engine] || { short: String(props.engin
 .engine-chip--anixops .engine-chip__dot { background: var(--chart-5); }
 
 .engine-chip__suffix {
-  color: var(--label-2);
+  color: var(--label-1);
 }
 
 .engine-chip.is-off {
-  color: var(--label-3);
+  color: var(--label-1);
   text-decoration: line-through;
 }
 

@@ -73,7 +73,7 @@ const ariaLabel = computed(() => hops.value.map((hop, index) => {
   display: inline-flex;
   gap: 2px;
   align-items: center;
-  color: var(--label-3);
+  color: var(--label-2);
 }
 
 .hop-chain__security {

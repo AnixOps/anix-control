@@ -70,7 +70,7 @@
       </template>
       <template #cell-targets="{ row }">
         <span class="fwd-cell-stack">
-          <span class="fwd-mono">{{ row.targetText }}</span>
+          <span class="fwd-mono routes-ellipsis" :title="row.targetText">{{ row.targetText }}</span>
           <span v-if="row.targetCount > 1" class="fwd-muted">{{ t('forwardV4.routes.moreTargets', { n: row.targetCount - 1 }) }}</span>
         </span>
       </template>
@@ -86,7 +86,7 @@
       <template #cell-traffic="{ row }">
         <span class="fwd-cell-stack routes-traffic">
           <span>{{ fmt.bytes(row.traffic, { precision: 1, empty: '—' }) }}</span>
-          <span v-if="row.traffic" class="fwd-muted routes-nowrap">↑{{ fmt.bytes(row.up, { precision: 1 }) }} ↓{{ fmt.bytes(row.down, { precision: 1 }) }}</span>
+          <span v-if="row.traffic" class="fwd-muted">↑{{ fmt.bytes(row.up, { precision: 1 }) }} ↓{{ fmt.bytes(row.down, { precision: 1 }) }}</span>
         </span>
       </template>
 
@@ -244,8 +244,8 @@ const labelOptions = computed(() => [
 const columns = computed(() => [
   { key: 'name', label: t('forwardV4.routes.columns.name'), primary: true, sortable: true, minWidth: '160px' },
   { key: 'listen', label: t('forwardV4.routes.columns.listen'), secondary: true, sortable: true, sortValue: row => Number(row.route.listen?.port || 0) },
-  { key: 'hops', label: t('forwardV4.routes.columns.hops'), minWidth: '200px' },
-  { key: 'targets', label: t('forwardV4.routes.columns.targets'), breakpoint: 'lg', maxWidth: '200px', card: false },
+  { key: 'hops', label: t('forwardV4.routes.columns.hops'), minWidth: '150px' },
+  { key: 'targets', label: t('forwardV4.routes.columns.targets'), breakpoint: 'lg', minWidth: '150px', maxWidth: '190px', card: false },
   { key: 'strategy', label: t('forwardV4.routes.columns.strategy'), breakpoint: 'lg', card: false },
   { key: 'status', label: t('forwardV4.routes.columns.status'), sortable: true, sortValue: row => row.status },
   { key: 'traffic', label: t('forwardV4.routes.columns.traffic'), align: 'end', numeric: true, sortable: true, firstDirection: 'desc', sortValue: row => row.traffic }
@@ -463,7 +463,7 @@ const headerMenu = computed(() => [
 }
 
 .routes-label {
-  white-space: nowrap;
+  overflow-wrap: anywhere;
   color: var(--label-2);
   font-family: var(--font-mono);
   font-size: var(--type-caption-size);
@@ -474,6 +474,13 @@ const headerMenu = computed(() => [
 }
 
 .routes-nowrap {
+  white-space: nowrap;
+}
+
+.routes-ellipsis {
+  overflow: hidden;
+  max-width: 180px;
+  text-overflow: ellipsis;
   white-space: nowrap;
 }
 

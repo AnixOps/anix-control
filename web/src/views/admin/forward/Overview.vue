@@ -231,7 +231,7 @@ const chartTable = computed(() => ({
 
 .overview-top__rank {
   width: 20px;
-  color: var(--label-3);
+  color: var(--label-2);
   font-variant-numeric: tabular-nums;
 }
 

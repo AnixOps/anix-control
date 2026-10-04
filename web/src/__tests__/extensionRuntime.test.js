@@ -672,3 +672,16 @@ describe('admin extension runtime', () => {
     expect(result.pluginIDs).toEqual([])
   })
 })
+
+describe('catalog capabilities', () => {
+  it('reads forward.v4 from the forward package’s control routes, apart from its bundle', async () => {
+    const { catalogCapabilities } = await import('@/extensions/runtime')
+    const entry = { plugin_id: 'forward', publisher: 'AnixOps', state: 'healthy', control_routes: ['/api/v4/plugins/forward/*'] }
+    expect(catalogCapabilities([entry])).toEqual(['forward.v4'])
+    expect(catalogCapabilities([{ ...entry, control_routes: [] }])).toEqual([])
+    expect(catalogCapabilities([{ ...entry, state: 'disabled' }])).toEqual([])
+    expect(catalogCapabilities([{ ...entry, publisher: 'Example Labs' }])).toEqual([])
+    expect(catalogCapabilities([{ ...entry, plugin_id: 'other' }])).toEqual([])
+    expect(catalogCapabilities(null)).toEqual([])
+  })
+})

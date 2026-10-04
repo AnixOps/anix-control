@@ -3,7 +3,7 @@ import { isCanceled, previewRoute } from '@/api/forwardV4'
 
 // useRoutePreview runs POST /routes/preview for the editor (D4): 1 s after
 // the draft stops changing, or at once on refresh(). A newer preview
-// cancels the one in flight, and nothing is asked while a required field
+// change cancels the one in flight, and nothing is asked while a required field
 // is empty (missing() answers a non-empty list).
 export function useRoutePreview(source, { delay = 1000, missing = () => [], request = previewRoute } = {}) {
   const result = shallowRef(null)
@@ -61,8 +61,9 @@ export function useRoutePreview(source, { delay = 1000, missing = () => [], requ
     }
   }
 
+  // A change makes the preview in flight stale: it is cancelled at once.
   function schedule() {
-    clearTimeout(timer)
+    cancel()
     timer = setTimeout(() => { void run() }, delay)
   }
 
