@@ -2,6 +2,9 @@ package kernelforward
 
 import (
 	"context"
+	"errors"
+	"net"
+	"net/netip"
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
@@ -14,6 +17,7 @@ import (
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
 	"gorm.io/driver/postgres"
@@ -136,7 +140,7 @@ func openBare(t *testing.T) *gorm.DB {
 func newFixture(t *testing.T, db *gorm.DB) *fixture {
 	t.Helper()
 	f := &fixture{t: t, db: db, clock: &clock{now: start}, ctx: context.Background()}
-	f.service = &Service{DB: db, Cluster: func() string { return "test" }, Now: f.clock.Now}
+	f.service = &Service{DB: db, Cluster: func() string { return "test" }, Now: f.clock.Now, Probes: noDials()}
 	require.NoError(t, db.Create(&[]model.ForwardNode{
 		{ID: 11, Name: "entry", Type: "relay", Host: "192.0.2.11", Port: 7000, APIPort: 7001, Enabled: true},
 		{ID: 12, Name: "exit", Type: "exit", Host: "192.0.2.12", Port: 7000, Enabled: true},
@@ -239,4 +243,15 @@ func (r *recordedListener) take() []string {
 	nodes := r.nodes
 	r.nodes = nil
 	return nodes
+}
+
+// noDials are diagnosis probes that never reach the network: every dial
+// is refused and every name fails to resolve.
+func noDials() service.DiagnosisProbes {
+	return service.DiagnosisProbes{
+		Dial: func(context.Context, string, string, time.Duration) (net.Conn, error) {
+			return nil, errors.New("connection refused (test)")
+		},
+		Lookup: func(context.Context, string) ([]netip.Addr, error) { return nil, errors.New("no such host (test)") },
+	}
 }

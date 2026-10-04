@@ -82,7 +82,10 @@ func NewKernelForward(cfg *config.Config) (packagebridge.KernelForwardProvider, 
 }
 
 func kernelForward(operations service.PackageHostOperations) packagebridge.KernelForwardProvider {
-	server := &kernelforward.Server{Service: kernelforward.New(operations.DB), Authorizer: operations}
+	forward := kernelforward.New(operations.DB)
+	// DiagnoseRoute's node probes ride the process's Agent Control streams.
+	forward.Checks = kernelnodeops.ForwardChecks{}
+	server := &kernelforward.Server{Service: forward, Authorizer: operations}
 	return server.For
 }
 

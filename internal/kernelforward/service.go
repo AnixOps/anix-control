@@ -31,6 +31,7 @@ import (
 	"github.com/AnixOps/anix-control/sdk/forward/validate"
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/service"
 	"google.golang.org/protobuf/encoding/protojson"
 	"gorm.io/gorm"
 	"gorm.io/gorm/clause"
@@ -136,6 +137,12 @@ type Service struct {
 	Cluster func() string
 	// Now defaults to time.Now.
 	Now func() time.Time
+	// Checks runs the forward checks of agent.diagnostic on the nodes'
+	// Agents for DiagnoseRoute; nil (the command line) runs none.
+	Checks NodeChecker
+	// Probes are DiagnoseRoute's dials from Control; the zero value dials
+	// with the system resolver.
+	Probes service.DiagnosisProbes
 }
 
 // New returns the service on db with the configured cluster.

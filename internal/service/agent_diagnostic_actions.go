@@ -36,6 +36,11 @@ var agentDiagnosticAllowedServices = map[string]bool{
 // 仅包含该 action 允许的字段（多余字段被丢弃，数值做范围裁剪）。
 // 返回的 error 可直接展示给管理员。
 func ValidateAgentDiagnosticTask(action string, params map[string]any) (map[string]any, error) {
+	if IsForwardDiagnosticCheck(action) {
+		// Forward checks probe a route's hop; only the kernel's route
+		// diagnosis sends them (ValidateForwardDiagnosticCheck).
+		return nil, fmt.Errorf("action %q is sent only by the forward route diagnosis", action)
+	}
 	spec, ok := AgentDiagnosticActions[action]
 	if !ok {
 		return nil, fmt.Errorf("action %q is not in the diagnostic whitelist", action)
