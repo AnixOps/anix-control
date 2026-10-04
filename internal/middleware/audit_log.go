@@ -19,6 +19,11 @@ import (
 const (
 	auditLogPrefixV2 = "/api/v2/admin/"
 	auditLogPrefixV3 = "/api/v3/"
+	// auditLogPrefixV4Forward is the forward package's v4 administrator API
+	// (/api/v4/forward/*, forward-sdk.md F5a). Its bodies are routes and
+	// node records, which carry no credential, and are kept redacted like
+	// v2's.
+	auditLogPrefixV4Forward = "/api/v4/forward/"
 	maxBodyLogLength = 512  // bytes to include in slog output
 	maxBodyDBLength  = 4096 // bytes to persist in database
 )
@@ -47,15 +52,16 @@ func (r *auditBodyCapture) Read(p []byte) (int, error) {
 
 // AuditLog returns a gin middleware that records all admin API operations
 // to both structured slog output and the v2_audit_log database table.
-// It applies to requests whose path starts with /api/v2/admin/ or /api/v3/,
-// and to the user writes in auditedUserWrites.
+// It applies to requests whose path starts with /api/v2/admin/, /api/v3/ or
+// /api/v4/forward/, and to the user writes in auditedUserWrites.
 func AuditLog() gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// The v3 control kernel is administrator-only at the router boundary.
 		// Keep v2's narrower admin prefix so public and user APIs remain out of
 		// the audit stream.
 		userWrite := auditedUserWrite(c.Request.Method, c.Request.URL.Path)
-		if !userWrite && !strings.HasPrefix(c.Request.URL.Path, auditLogPrefixV2) && !strings.HasPrefix(c.Request.URL.Path, auditLogPrefixV3) {
+		if !userWrite && !strings.HasPrefix(c.Request.URL.Path, auditLogPrefixV2) && !strings.HasPrefix(c.Request.URL.Path, auditLogPrefixV3) &&
+			!strings.HasPrefix(c.Request.URL.Path, auditLogPrefixV4Forward) {
 			c.Next()
 			return
 		}
@@ -220,8 +226,12 @@ func extractModuleAndAction(path, method string) (module, action string) {
 	}
 	// Strip the relevant administrator API prefix.
 	prefix := auditLogPrefixV2
-	if strings.HasPrefix(path, auditLogPrefixV3) {
+	switch {
+	case strings.HasPrefix(path, auditLogPrefixV3):
 		prefix = auditLogPrefixV3
+	case strings.HasPrefix(path, auditLogPrefixV4Forward):
+		// The module is "forward".
+		prefix = "/api/v4/"
 	}
 	trimmed := strings.TrimPrefix(path, prefix)
 	if trimmed == "" {

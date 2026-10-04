@@ -14,6 +14,7 @@ import (
 	"github.com/AnixOps/anix-control/sdk/forward/validate"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/service"
+	"google.golang.org/protobuf/proto"
 	"gorm.io/gorm"
 )
 
@@ -155,17 +156,29 @@ func recordOf(node model.ForwardNode, ansible bool) *forwardv1.ForwardNodeRecord
 // forwardRef is a forward node's reference.
 func forwardRef(id uint) string { return fmt.Sprintf("forward-%d", id) }
 
-// ansibleIDs are the forward nodes of the Ansible inventory, as the v2
-// handlers scope them (a relay tagged so, or without an API port and
-// credential).
+// ansibleIDs are the forward nodes on the Ansible transport: those the v2
+// handlers scope so (a relay tagged so, or a relay without an API port and
+// credential), except an untagged one whose Agent negotiated forward.v1,
+// which runs an Agent.
 func ansibleIDs(db *gorm.DB) (map[uint]bool, error) {
 	nodes, _, err := service.NewForwardNodeService(db).ListByInventoryScope(service.ForwardNodeInventoryScopeAnsible, model.ForwardNodeTypeRelay, nil, 1, 1<<20)
 	if err != nil {
 		return nil, fmt.Errorf("kernel forward: ansible inventory: %w", err)
 	}
+	var negotiated []uint64
+	if err := db.Model(&model.KernelForwardNode{}).Where("node_kind = ? AND negotiated = ?", agentcontrol.NodeKindForward, true).
+		Pluck("node_id", &negotiated).Error; err != nil {
+		return nil, fmt.Errorf("kernel forward: ansible inventory: %w", err)
+	}
+	agents := make(map[uint64]bool, len(negotiated))
+	for _, id := range negotiated {
+		agents[id] = true
+	}
 	out := make(map[uint]bool, len(nodes))
 	for _, node := range nodes {
-		out[node.ID] = true
+		if hasTag(node.Tags, ansibleTag) || !agents[uint64(node.ID)] {
+			out[node.ID] = true
+		}
 	}
 	return out, nil
 }
@@ -316,7 +329,7 @@ func nodeSummaries(db *gorm.DB, filter NodeFilter) ([]*forwardv1.NodeSummary, er
 
 	out := make([]*forwardv1.NodeSummary, 0, len(forwards)+len(proxies))
 	for _, node := range forwards {
-		isAnsible := ansible[node.ID] || hasTag(node.Tags, ansibleTag)
+		isAnsible := ansible[node.ID]
 		switch filter.Transport {
 		case forwardv1.NodeTransport_NODE_TRANSPORT_AGENT:
 			if isAnsible {
@@ -674,7 +687,20 @@ func (s *Service) UpdateForwardNode(ctx context.Context, requestID string, nodeR
 				return false, &RefusedError{Violations: using, Precondition: true}
 			}
 		}
-		if err := applyRecord(&node, nodeRecord); err != nil {
+		effective := nodeRecord
+		if nodeRecord.GetTransport() == forwardv1.NodeTransport_NODE_TRANSPORT_UNSPECIFIED {
+			// UNSPECIFIED keeps the node's transport.
+			ansible, err := ansibleIDs(tx)
+			if err != nil {
+				return false, err
+			}
+			effective = proto.Clone(nodeRecord).(*forwardv1.ForwardNodeRecord)
+			effective.Transport = forwardv1.NodeTransport_NODE_TRANSPORT_AGENT
+			if ansible[node.ID] {
+				effective.Transport = forwardv1.NodeTransport_NODE_TRANSPORT_ANSIBLE
+			}
+		}
+		if err := applyRecord(&node, effective); err != nil {
 			return false, err
 		}
 		if node.Enabled != nodeRecord.GetEnabled() {

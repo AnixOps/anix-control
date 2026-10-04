@@ -888,7 +888,8 @@ message CreateForwardNodeResponse {
 
 message UpdateForwardNodeRequest {
   string request_id = 1;
-  // node.id names the node; every editable field is replaced.
+  // node.id names the node; every editable field is replaced, but an
+  // UNSPECIFIED transport keeps the node's.
   ForwardNodeRecord node = 2;
 }
 

@@ -4816,7 +4816,8 @@ func (x *CreateForwardNodeResponse) GetNode() *NodeSummary {
 type UpdateForwardNodeRequest struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	RequestId string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	// node.id names the node; every editable field is replaced.
+	// node.id names the node; every editable field is replaced, but an
+	// UNSPECIFIED transport keeps the node's.
 	Node          *ForwardNodeRecord `protobuf:"bytes,2,opt,name=node,proto3" json:"node,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
