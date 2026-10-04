@@ -97,3 +97,43 @@ func (m *moduleKernelForward) DeleteForwardNode(ctx context.Context, request *fo
 func (m *moduleKernelForward) GetTraffic(ctx context.Context, request *forwardv1.GetTrafficRequest) (*forwardv1.GetTrafficResponse, error) {
 	return callForward(m, ctx, request, forwardv1.ForwardControlServer.GetTraffic)
 }
+
+func (m *moduleKernelForward) ListDnsProviders(ctx context.Context, request *forwardv1.ListDnsProvidersRequest) (*forwardv1.ListDnsProvidersResponse, error) {
+	return callForward(m, ctx, request, forwardv1.ForwardControlServer.ListDnsProviders)
+}
+
+func (m *moduleKernelForward) GetDnsProvider(ctx context.Context, request *forwardv1.GetDnsProviderRequest) (*forwardv1.GetDnsProviderResponse, error) {
+	return callForward(m, ctx, request, forwardv1.ForwardControlServer.GetDnsProvider)
+}
+
+func (m *moduleKernelForward) CreateDnsProvider(ctx context.Context, request *forwardv1.CreateDnsProviderRequest) (*forwardv1.CreateDnsProviderResponse, error) {
+	return callForward(m, ctx, request, forwardv1.ForwardControlServer.CreateDnsProvider)
+}
+
+func (m *moduleKernelForward) UpdateDnsProvider(ctx context.Context, request *forwardv1.UpdateDnsProviderRequest) (*forwardv1.UpdateDnsProviderResponse, error) {
+	return callForward(m, ctx, request, forwardv1.ForwardControlServer.UpdateDnsProvider)
+}
+
+func (m *moduleKernelForward) DeleteDnsProvider(ctx context.Context, request *forwardv1.DeleteDnsProviderRequest) (*forwardv1.DeleteDnsProviderResponse, error) {
+	return callForward(m, ctx, request, forwardv1.ForwardControlServer.DeleteDnsProvider)
+}
+
+func (m *moduleKernelForward) ListDnsBindings(ctx context.Context, request *forwardv1.ListDnsBindingsRequest) (*forwardv1.ListDnsBindingsResponse, error) {
+	return callForward(m, ctx, request, forwardv1.ForwardControlServer.ListDnsBindings)
+}
+
+func (m *moduleKernelForward) CreateDnsBinding(ctx context.Context, request *forwardv1.CreateDnsBindingRequest) (*forwardv1.CreateDnsBindingResponse, error) {
+	return callForward(m, ctx, request, forwardv1.ForwardControlServer.CreateDnsBinding)
+}
+
+func (m *moduleKernelForward) UpdateDnsBinding(ctx context.Context, request *forwardv1.UpdateDnsBindingRequest) (*forwardv1.UpdateDnsBindingResponse, error) {
+	return callForward(m, ctx, request, forwardv1.ForwardControlServer.UpdateDnsBinding)
+}
+
+func (m *moduleKernelForward) DeleteDnsBinding(ctx context.Context, request *forwardv1.DeleteDnsBindingRequest) (*forwardv1.DeleteDnsBindingResponse, error) {
+	return callForward(m, ctx, request, forwardv1.ForwardControlServer.DeleteDnsBinding)
+}
+
+func (m *moduleKernelForward) GetRouteDns(ctx context.Context, request *forwardv1.GetRouteDnsRequest) (*forwardv1.GetRouteDnsResponse, error) {
+	return callForward(m, ctx, request, forwardv1.ForwardControlServer.GetRouteDns)
+}

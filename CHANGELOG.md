@@ -4,6 +4,41 @@
 
 ### Added
 
+- **Forward entry high availability through DNS** (L2, forward-sdk.md
+  section 7.4; owner decision H21). Control keeps a route's
+  `entry_hostname` on its healthy entry nodes' public addresses through a
+  DNS provider.
+  - Providers: Cloudflare (API token), Alibaba Cloud DNS (AccessKey,
+    signature V3), DNSPod (Tencent Cloud API 3.0, TC3-HMAC-SHA256), Huawei
+    Cloud DNS (AK/SK) and a generic HMAC-signed webhook
+    (`internal/forwardddns`). Standard library only, with the request
+    signing written by hand and pinned to the vendors' published examples.
+    New values are added before old ones are deleted.
+  - Modes: DDNS (Control writes `entry_hostname`'s A/AAAA records) and
+    CNAME (Control writes a name it manages, and the operator points
+    `entry_hostname` at it).
+  - Health: a fresh forward report, an online Agent, no hop error and a
+    live upstream on the entry hop. A node leaves rotation after 3 bad
+    evaluations and rejoins after 3 good ones (every 10 s). An empty set is
+    never published: the last records are kept and the binding is
+    `degraded`. Provider calls are rate limited per provider, backed off
+    after failures, repeated hourly against drift, audited as
+    `system/forward-dns` and counted
+    (`anixops_forward_dns_bindings{state}`,
+    `anixops_forward_dns_updates_total`).
+  - Credentials are sealed with AES-256-GCM under `module_runtime.ca_kek`
+    in the new protected table `v4_kernel_forward_dns_provider`, and are
+    never answered. Bindings and node streaks are in
+    `v4_kernel_forward_dns_binding` and `v4_kernel_forward_dns_node`.
+  - API: `/api/v4/forward/dns/kinds`, `/dns/providers` (writes need a super
+    administrator), `/dns/bindings` and `GET /routes/{id}/dns`. Command line:
+    `anix-control forward dns providers|bindings|status`.
+  - Contract additions only: ten `ForwardControl` RPCs for providers,
+    bindings and the route DNS status, with their messages and the enums
+    `DnsProviderKind`, `DnsBindingMode` and `DnsRecordType`.
+  - Setup and least-privilege credentials per provider:
+    `docs/guide/forward-entry-ha.md`.
+
 - **v4.2 forwarding admin UI** (F5b, H16 approved 2026-10-04 with D1–D15).
   New pages in the core app, lazy-loaded and shown only when the forward
   package serves the v4 API: 概览 (`/admin/forward/overview`), 路由

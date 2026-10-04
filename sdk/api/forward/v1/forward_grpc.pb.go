@@ -35,6 +35,16 @@ const (
 	ForwardControl_UpdateForwardNode_FullMethodName = "/anixops.forward.v1.ForwardControl/UpdateForwardNode"
 	ForwardControl_DeleteForwardNode_FullMethodName = "/anixops.forward.v1.ForwardControl/DeleteForwardNode"
 	ForwardControl_GetTraffic_FullMethodName        = "/anixops.forward.v1.ForwardControl/GetTraffic"
+	ForwardControl_ListDnsProviders_FullMethodName  = "/anixops.forward.v1.ForwardControl/ListDnsProviders"
+	ForwardControl_GetDnsProvider_FullMethodName    = "/anixops.forward.v1.ForwardControl/GetDnsProvider"
+	ForwardControl_CreateDnsProvider_FullMethodName = "/anixops.forward.v1.ForwardControl/CreateDnsProvider"
+	ForwardControl_UpdateDnsProvider_FullMethodName = "/anixops.forward.v1.ForwardControl/UpdateDnsProvider"
+	ForwardControl_DeleteDnsProvider_FullMethodName = "/anixops.forward.v1.ForwardControl/DeleteDnsProvider"
+	ForwardControl_ListDnsBindings_FullMethodName   = "/anixops.forward.v1.ForwardControl/ListDnsBindings"
+	ForwardControl_CreateDnsBinding_FullMethodName  = "/anixops.forward.v1.ForwardControl/CreateDnsBinding"
+	ForwardControl_UpdateDnsBinding_FullMethodName  = "/anixops.forward.v1.ForwardControl/UpdateDnsBinding"
+	ForwardControl_DeleteDnsBinding_FullMethodName  = "/anixops.forward.v1.ForwardControl/DeleteDnsBinding"
+	ForwardControl_GetRouteDns_FullMethodName       = "/anixops.forward.v1.ForwardControl/GetRouteDns"
 )
 
 // ForwardControlClient is the client API for ForwardControl service.
@@ -133,6 +143,39 @@ type ForwardControlClient interface {
 	// GetTraffic answers the traffic ledger's hourly buckets (raw bytes, no
 	// multiplier), filtered by route and node, over at most 31 days.
 	GetTraffic(ctx context.Context, in *GetTrafficRequest, opts ...grpc.CallOption) (*GetTrafficResponse, error)
+	// ListDnsProviders answers every DNS provider account, without
+	// credentials.
+	ListDnsProviders(ctx context.Context, in *ListDnsProvidersRequest, opts ...grpc.CallOption) (*ListDnsProvidersResponse, error)
+	// GetDnsProvider answers one provider; NOT_FOUND for an unknown id.
+	GetDnsProvider(ctx context.Context, in *GetDnsProviderRequest, opts ...grpc.CallOption) (*GetDnsProviderResponse, error)
+	// CreateDnsProvider stores a provider with its credentials, sealed.
+	// INVALID_ARGUMENT for a malformed provider (violations name the
+	// fields); FAILED_PRECONDITION (violation code secret_store_unavailable)
+	// when Control has no key-encryption key (module_runtime.ca_kek).
+	CreateDnsProvider(ctx context.Context, in *CreateDnsProviderRequest, opts ...grpc.CallOption) (*CreateDnsProviderResponse, error)
+	// UpdateDnsProvider replaces a provider's name and configuration. A
+	// credential left out, or sent as "********", keeps the stored value.
+	UpdateDnsProvider(ctx context.Context, in *UpdateDnsProviderRequest, opts ...grpc.CallOption) (*UpdateDnsProviderResponse, error)
+	// DeleteDnsProvider removes a provider; FAILED_PRECONDITION (violation
+	// code provider_in_use) while a binding uses it.
+	DeleteDnsProvider(ctx context.Context, in *DeleteDnsProviderRequest, opts ...grpc.CallOption) (*DeleteDnsProviderResponse, error)
+	// ListDnsBindings answers the routes' DNS bindings.
+	ListDnsBindings(ctx context.Context, in *ListDnsBindingsRequest, opts ...grpc.CallOption) (*ListDnsBindingsResponse, error)
+	// CreateDnsBinding binds a route to a provider's zone. One binding per
+	// route, and per provider, zone and record name.
+	CreateDnsBinding(ctx context.Context, in *CreateDnsBindingRequest, opts ...grpc.CallOption) (*CreateDnsBindingResponse, error)
+	// UpdateDnsBinding replaces a binding's record_types, ttl and paused;
+	// the route, provider, zone, record_name and mode stay (delete with
+	// purge and create to move a binding).
+	UpdateDnsBinding(ctx context.Context, in *UpdateDnsBindingRequest, opts ...grpc.CallOption) (*UpdateDnsBindingResponse, error)
+	// DeleteDnsBinding removes a binding. With purge, Control first deletes
+	// the records it published (UNAVAILABLE when the provider refuses, and
+	// the binding stays).
+	DeleteDnsBinding(ctx context.Context, in *DeleteDnsBindingRequest, opts ...grpc.CallOption) (*DeleteDnsBindingResponse, error)
+	// GetRouteDns answers a route's entry HA status: its binding, the
+	// published and desired records, and each entry node's health.
+	// NOT_FOUND for an unknown route.
+	GetRouteDns(ctx context.Context, in *GetRouteDnsRequest, opts ...grpc.CallOption) (*GetRouteDnsResponse, error)
 }
 
 type forwardControlClient struct {
@@ -303,6 +346,106 @@ func (c *forwardControlClient) GetTraffic(ctx context.Context, in *GetTrafficReq
 	return out, nil
 }
 
+func (c *forwardControlClient) ListDnsProviders(ctx context.Context, in *ListDnsProvidersRequest, opts ...grpc.CallOption) (*ListDnsProvidersResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListDnsProvidersResponse)
+	err := c.cc.Invoke(ctx, ForwardControl_ListDnsProviders_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *forwardControlClient) GetDnsProvider(ctx context.Context, in *GetDnsProviderRequest, opts ...grpc.CallOption) (*GetDnsProviderResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetDnsProviderResponse)
+	err := c.cc.Invoke(ctx, ForwardControl_GetDnsProvider_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *forwardControlClient) CreateDnsProvider(ctx context.Context, in *CreateDnsProviderRequest, opts ...grpc.CallOption) (*CreateDnsProviderResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateDnsProviderResponse)
+	err := c.cc.Invoke(ctx, ForwardControl_CreateDnsProvider_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *forwardControlClient) UpdateDnsProvider(ctx context.Context, in *UpdateDnsProviderRequest, opts ...grpc.CallOption) (*UpdateDnsProviderResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateDnsProviderResponse)
+	err := c.cc.Invoke(ctx, ForwardControl_UpdateDnsProvider_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *forwardControlClient) DeleteDnsProvider(ctx context.Context, in *DeleteDnsProviderRequest, opts ...grpc.CallOption) (*DeleteDnsProviderResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteDnsProviderResponse)
+	err := c.cc.Invoke(ctx, ForwardControl_DeleteDnsProvider_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *forwardControlClient) ListDnsBindings(ctx context.Context, in *ListDnsBindingsRequest, opts ...grpc.CallOption) (*ListDnsBindingsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(ListDnsBindingsResponse)
+	err := c.cc.Invoke(ctx, ForwardControl_ListDnsBindings_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *forwardControlClient) CreateDnsBinding(ctx context.Context, in *CreateDnsBindingRequest, opts ...grpc.CallOption) (*CreateDnsBindingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(CreateDnsBindingResponse)
+	err := c.cc.Invoke(ctx, ForwardControl_CreateDnsBinding_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *forwardControlClient) UpdateDnsBinding(ctx context.Context, in *UpdateDnsBindingRequest, opts ...grpc.CallOption) (*UpdateDnsBindingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(UpdateDnsBindingResponse)
+	err := c.cc.Invoke(ctx, ForwardControl_UpdateDnsBinding_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *forwardControlClient) DeleteDnsBinding(ctx context.Context, in *DeleteDnsBindingRequest, opts ...grpc.CallOption) (*DeleteDnsBindingResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(DeleteDnsBindingResponse)
+	err := c.cc.Invoke(ctx, ForwardControl_DeleteDnsBinding_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *forwardControlClient) GetRouteDns(ctx context.Context, in *GetRouteDnsRequest, opts ...grpc.CallOption) (*GetRouteDnsResponse, error) {
+	cOpts := append([]grpc.CallOption{grpc.StaticMethod()}, opts...)
+	out := new(GetRouteDnsResponse)
+	err := c.cc.Invoke(ctx, ForwardControl_GetRouteDns_FullMethodName, in, out, cOpts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // ForwardControlServer is the server API for ForwardControl service.
 // All implementations must embed UnimplementedForwardControlServer
 // for forward compatibility.
@@ -399,6 +542,39 @@ type ForwardControlServer interface {
 	// GetTraffic answers the traffic ledger's hourly buckets (raw bytes, no
 	// multiplier), filtered by route and node, over at most 31 days.
 	GetTraffic(context.Context, *GetTrafficRequest) (*GetTrafficResponse, error)
+	// ListDnsProviders answers every DNS provider account, without
+	// credentials.
+	ListDnsProviders(context.Context, *ListDnsProvidersRequest) (*ListDnsProvidersResponse, error)
+	// GetDnsProvider answers one provider; NOT_FOUND for an unknown id.
+	GetDnsProvider(context.Context, *GetDnsProviderRequest) (*GetDnsProviderResponse, error)
+	// CreateDnsProvider stores a provider with its credentials, sealed.
+	// INVALID_ARGUMENT for a malformed provider (violations name the
+	// fields); FAILED_PRECONDITION (violation code secret_store_unavailable)
+	// when Control has no key-encryption key (module_runtime.ca_kek).
+	CreateDnsProvider(context.Context, *CreateDnsProviderRequest) (*CreateDnsProviderResponse, error)
+	// UpdateDnsProvider replaces a provider's name and configuration. A
+	// credential left out, or sent as "********", keeps the stored value.
+	UpdateDnsProvider(context.Context, *UpdateDnsProviderRequest) (*UpdateDnsProviderResponse, error)
+	// DeleteDnsProvider removes a provider; FAILED_PRECONDITION (violation
+	// code provider_in_use) while a binding uses it.
+	DeleteDnsProvider(context.Context, *DeleteDnsProviderRequest) (*DeleteDnsProviderResponse, error)
+	// ListDnsBindings answers the routes' DNS bindings.
+	ListDnsBindings(context.Context, *ListDnsBindingsRequest) (*ListDnsBindingsResponse, error)
+	// CreateDnsBinding binds a route to a provider's zone. One binding per
+	// route, and per provider, zone and record name.
+	CreateDnsBinding(context.Context, *CreateDnsBindingRequest) (*CreateDnsBindingResponse, error)
+	// UpdateDnsBinding replaces a binding's record_types, ttl and paused;
+	// the route, provider, zone, record_name and mode stay (delete with
+	// purge and create to move a binding).
+	UpdateDnsBinding(context.Context, *UpdateDnsBindingRequest) (*UpdateDnsBindingResponse, error)
+	// DeleteDnsBinding removes a binding. With purge, Control first deletes
+	// the records it published (UNAVAILABLE when the provider refuses, and
+	// the binding stays).
+	DeleteDnsBinding(context.Context, *DeleteDnsBindingRequest) (*DeleteDnsBindingResponse, error)
+	// GetRouteDns answers a route's entry HA status: its binding, the
+	// published and desired records, and each entry node's health.
+	// NOT_FOUND for an unknown route.
+	GetRouteDns(context.Context, *GetRouteDnsRequest) (*GetRouteDnsResponse, error)
 	mustEmbedUnimplementedForwardControlServer()
 }
 
@@ -456,6 +632,36 @@ func (UnimplementedForwardControlServer) DeleteForwardNode(context.Context, *Del
 }
 func (UnimplementedForwardControlServer) GetTraffic(context.Context, *GetTrafficRequest) (*GetTrafficResponse, error) {
 	return nil, status.Error(codes.Unimplemented, "method GetTraffic not implemented")
+}
+func (UnimplementedForwardControlServer) ListDnsProviders(context.Context, *ListDnsProvidersRequest) (*ListDnsProvidersResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListDnsProviders not implemented")
+}
+func (UnimplementedForwardControlServer) GetDnsProvider(context.Context, *GetDnsProviderRequest) (*GetDnsProviderResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetDnsProvider not implemented")
+}
+func (UnimplementedForwardControlServer) CreateDnsProvider(context.Context, *CreateDnsProviderRequest) (*CreateDnsProviderResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateDnsProvider not implemented")
+}
+func (UnimplementedForwardControlServer) UpdateDnsProvider(context.Context, *UpdateDnsProviderRequest) (*UpdateDnsProviderResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateDnsProvider not implemented")
+}
+func (UnimplementedForwardControlServer) DeleteDnsProvider(context.Context, *DeleteDnsProviderRequest) (*DeleteDnsProviderResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteDnsProvider not implemented")
+}
+func (UnimplementedForwardControlServer) ListDnsBindings(context.Context, *ListDnsBindingsRequest) (*ListDnsBindingsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method ListDnsBindings not implemented")
+}
+func (UnimplementedForwardControlServer) CreateDnsBinding(context.Context, *CreateDnsBindingRequest) (*CreateDnsBindingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method CreateDnsBinding not implemented")
+}
+func (UnimplementedForwardControlServer) UpdateDnsBinding(context.Context, *UpdateDnsBindingRequest) (*UpdateDnsBindingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method UpdateDnsBinding not implemented")
+}
+func (UnimplementedForwardControlServer) DeleteDnsBinding(context.Context, *DeleteDnsBindingRequest) (*DeleteDnsBindingResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method DeleteDnsBinding not implemented")
+}
+func (UnimplementedForwardControlServer) GetRouteDns(context.Context, *GetRouteDnsRequest) (*GetRouteDnsResponse, error) {
+	return nil, status.Error(codes.Unimplemented, "method GetRouteDns not implemented")
 }
 func (UnimplementedForwardControlServer) mustEmbedUnimplementedForwardControlServer() {}
 func (UnimplementedForwardControlServer) testEmbeddedByValue()                        {}
@@ -766,6 +972,186 @@ func _ForwardControl_GetTraffic_Handler(srv interface{}, ctx context.Context, de
 	return interceptor(ctx, in, info, handler)
 }
 
+func _ForwardControl_ListDnsProviders_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListDnsProvidersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ForwardControlServer).ListDnsProviders(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ForwardControl_ListDnsProviders_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ForwardControlServer).ListDnsProviders(ctx, req.(*ListDnsProvidersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ForwardControl_GetDnsProvider_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetDnsProviderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ForwardControlServer).GetDnsProvider(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ForwardControl_GetDnsProvider_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ForwardControlServer).GetDnsProvider(ctx, req.(*GetDnsProviderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ForwardControl_CreateDnsProvider_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateDnsProviderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ForwardControlServer).CreateDnsProvider(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ForwardControl_CreateDnsProvider_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ForwardControlServer).CreateDnsProvider(ctx, req.(*CreateDnsProviderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ForwardControl_UpdateDnsProvider_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateDnsProviderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ForwardControlServer).UpdateDnsProvider(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ForwardControl_UpdateDnsProvider_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ForwardControlServer).UpdateDnsProvider(ctx, req.(*UpdateDnsProviderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ForwardControl_DeleteDnsProvider_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteDnsProviderRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ForwardControlServer).DeleteDnsProvider(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ForwardControl_DeleteDnsProvider_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ForwardControlServer).DeleteDnsProvider(ctx, req.(*DeleteDnsProviderRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ForwardControl_ListDnsBindings_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListDnsBindingsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ForwardControlServer).ListDnsBindings(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ForwardControl_ListDnsBindings_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ForwardControlServer).ListDnsBindings(ctx, req.(*ListDnsBindingsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ForwardControl_CreateDnsBinding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(CreateDnsBindingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ForwardControlServer).CreateDnsBinding(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ForwardControl_CreateDnsBinding_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ForwardControlServer).CreateDnsBinding(ctx, req.(*CreateDnsBindingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ForwardControl_UpdateDnsBinding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateDnsBindingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ForwardControlServer).UpdateDnsBinding(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ForwardControl_UpdateDnsBinding_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ForwardControlServer).UpdateDnsBinding(ctx, req.(*UpdateDnsBindingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ForwardControl_DeleteDnsBinding_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(DeleteDnsBindingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ForwardControlServer).DeleteDnsBinding(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ForwardControl_DeleteDnsBinding_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ForwardControlServer).DeleteDnsBinding(ctx, req.(*DeleteDnsBindingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _ForwardControl_GetRouteDns_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetRouteDnsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(ForwardControlServer).GetRouteDns(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: ForwardControl_GetRouteDns_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(ForwardControlServer).GetRouteDns(ctx, req.(*GetRouteDnsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // ForwardControl_ServiceDesc is the grpc.ServiceDesc for ForwardControl service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -836,6 +1222,46 @@ var ForwardControl_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetTraffic",
 			Handler:    _ForwardControl_GetTraffic_Handler,
+		},
+		{
+			MethodName: "ListDnsProviders",
+			Handler:    _ForwardControl_ListDnsProviders_Handler,
+		},
+		{
+			MethodName: "GetDnsProvider",
+			Handler:    _ForwardControl_GetDnsProvider_Handler,
+		},
+		{
+			MethodName: "CreateDnsProvider",
+			Handler:    _ForwardControl_CreateDnsProvider_Handler,
+		},
+		{
+			MethodName: "UpdateDnsProvider",
+			Handler:    _ForwardControl_UpdateDnsProvider_Handler,
+		},
+		{
+			MethodName: "DeleteDnsProvider",
+			Handler:    _ForwardControl_DeleteDnsProvider_Handler,
+		},
+		{
+			MethodName: "ListDnsBindings",
+			Handler:    _ForwardControl_ListDnsBindings_Handler,
+		},
+		{
+			MethodName: "CreateDnsBinding",
+			Handler:    _ForwardControl_CreateDnsBinding_Handler,
+		},
+		{
+			MethodName: "UpdateDnsBinding",
+			Handler:    _ForwardControl_UpdateDnsBinding_Handler,
+		},
+		{
+			MethodName: "DeleteDnsBinding",
+			Handler:    _ForwardControl_DeleteDnsBinding_Handler,
+		},
+		{
+			MethodName: "GetRouteDns",
+			Handler:    _ForwardControl_GetRouteDns_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

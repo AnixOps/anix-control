@@ -63,6 +63,7 @@ Use this tree like NodeX:
 - Runtime config migration: [`reference/forward-runtime-migration.md`](reference/forward-runtime-migration.md)
 - The v4.2 forwarding pages (operator guide): [`guide/forwarding.md`](guide/forwarding.md)
 - Relay onboarding: [`guide/forward-relay-onboarding.md`](guide/forward-relay-onboarding.md)
+- Forward entry HA through DNS (DDNS providers, least-privilege credentials): [`guide/forward-entry-ha.md`](guide/forward-entry-ha.md)
 - Forwarding module design, API, security, and compatibility:
   [`forwarding/design.md`](forwarding/design.md),
   [`forwarding/api.md`](forwarding/api.md),

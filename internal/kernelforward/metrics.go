@@ -60,4 +60,5 @@ func WritePrometheus(body *strings.Builder, db *gorm.DB) {
 	for _, reason := range []string{RecoveryOperator, RecoveryPlan, RecoveryReport} {
 		body.WriteString(name + `{reason="` + reason + `"} ` + strconv.FormatUint(recoveries[reason].Load(), 10) + "\n")
 	}
+	writeDNSPrometheus(body, db)
 }

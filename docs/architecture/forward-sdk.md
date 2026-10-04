@@ -1226,16 +1226,89 @@ works while Control is down.
 ### 7.4 Entry HA
 
 A route with several entry nodes has an `entry_hostname`. Control keeps it
-pointed at the healthy entries:
+pointed at the healthy entries. This is the one failover that needs
+Control, and it changes DNS only, so entries keep serving clients that
+still resolve them.
 
-- DDNS: Control updates A/AAAA records through a DNS provider (proposed:
-  Cloudflare, Alibaba Cloud DNS, DNSPod, Huawei Cloud DNS, and a generic
-  webhook; H21). Provider credentials stay in Control's secret store.
-- CNAME: the operator points their own name at a Control-managed name.
+L2 (implemented): a route is bound to a name in a DNS provider's zone
+(`v4_kernel_forward_dns_binding`), in one of two modes:
 
-Entry health comes from the entries' reports and Control's own checks.
-This is the one failover that needs Control, and it changes DNS only, so
-entries keep serving clients that still resolve them.
+- **DDNS:** Control writes the A/AAAA records of the route's
+  `entry_hostname` itself, which must be the binding's `record_name`.
+- **CNAME:** Control writes the A/AAAA records of a name it manages
+  (`record_name`, for example `r1.ha.example.net`), and the operator points
+  `entry_hostname` at it with a CNAME. The route's DNS status answers the
+  name as `cname_target`.
+
+**Providers** (H21; `internal/forwardddns`, standard library only, signing
+written by hand):
+
+| Kind | API | Credentials |
+|---|---|---|
+| Cloudflare | API v4, Bearer token | `api_token` |
+| Alibaba Cloud DNS | Alidns 2015-01-09, signature V3 (`ACS3-HMAC-SHA256`) | `access_key_id`, `access_key_secret` |
+| DNSPod | Tencent Cloud API 3.0, `dnspod` 2021-03-23 (`TC3-HMAC-SHA256`) | `secret_id`, `secret_key` |
+| Huawei Cloud DNS | DNS API v2, AK/SK (`SDK-HMAC-SHA256`) | `access_key`, `secret_key` |
+| Webhook | HTTPS POST of JSON, `X-AnixOps-Signature: sha256=HMAC(secret, timestamp "." body)` | `secret` |
+
+- A provider sets a whole record set (one name and type). It adds the new
+  values before it deletes the old ones, so the name never resolves to
+  nothing while it changes. An `endpoint` setting overrides the API host
+  (a regional endpoint); a webhook takes `url`.
+- The signatures are pinned to the vendors' published worked examples, and
+  each provider's calls run against a test server that checks the
+  signature on the wire. No test reaches a real provider.
+- **Credentials** (`v4_kernel_forward_dns_provider`) are sealed with
+  AES-256-GCM under `module_runtime.ca_kek`, with additional data naming
+  the provider row, so neither a CA key nor another provider's credentials
+  open them. Without `ca_kek` a provider is refused
+  (`secret_store_unavailable`). No answer, log line, metric label or audit
+  entry carries a credential; on update a credential left out, or sent as
+  `********`, keeps its stored value.
+
+**Controller** (`kernelforward.EntryHA`, the singleton worker, every 10 s):
+
+- An entry node is **healthy** when:
+  - it is in the inventory with a public address of a published family
+    (its settings' addresses, else its host when that is an IP address;
+    private, loopback and link-local addresses are never published);
+  - its latest report arrived within 150 s;
+  - its Agent is online: a session in this process, or an Agent Control
+    stream seen within 180 s (`v4_kernel_agent_transport`) by any process;
+  - its report has no hop error on the route's entry hop;
+  - not every upstream of the entry hop is unhealthy or open.
+- A node whose report is behind its desired generation, or not applied, is
+  *converging*: neither healthy nor unhealthy, so a replan does not pull
+  it out.
+- **Hysteresis:** a node leaves rotation after 3 unhealthy evaluations in
+  a row and rejoins after 3 healthy ones (about 30 s each way). Before a
+  binding's first publication a healthy node joins at once.
+- **Never empty:** when no node is in rotation for a record type, Control
+  keeps the published values, the binding becomes `degraded`, a warning is
+  logged and `forward.dns_degraded` audited (`forward.dns_recovered` when
+  it ends).
+- **Provider calls:**
+  - only when the desired values or the TTL differ from what was
+    published, and at least 30 s after the binding's last publication;
+  - again every hour, to undo drift made by hand;
+  - per provider at most a burst of 10, refilled one every 6 s;
+  - after a failure, retried with back-off from 30 s doubling to 15
+    minutes.
+- Every publication is audited as `system/forward-dns`
+  (`forward.dns_publish`, with the values before and after).
+- Metrics: `anixops_forward_dns_bindings{state}` and
+  `anixops_forward_dns_updates_total{provider,result}`.
+- The state (published values, streaks, back-off) is in the binding and
+  node tables (`v4_kernel_forward_dns_node`), so a new lease holder carries
+  on.
+- A paused binding, or a paused or enforced route, changes nothing.
+  Deleting a binding with `purge` deletes the records Control published.
+
+The API is in [`../forwarding/v4-api.md`](../forwarding/v4-api.md) ("Entry
+HA through DNS"). How to create provider credentials with the least
+permissions is in [`../guide/forward-entry-ha.md`](../guide/forward-entry-ha.md).
+Control does not dial the entries itself for entry HA: a route's entries
+are judged by their own reports and sessions.
 
 ### 7.5 Latency probes
 
@@ -1336,7 +1409,9 @@ stream) and `sdk/forward/wire` (the wire rules both sides share);
 ### 8.0 The kernel's forwarding state
 
 Nine new kernel tables, protected (no package can adopt them), written only
-by `internal/kernelforward`:
+by `internal/kernelforward` (L2 adds three for entry HA, section 7.4:
+`v4_kernel_forward_dns_provider`, `v4_kernel_forward_dns_binding` and
+`v4_kernel_forward_dns_node`):
 
 | Table | Holds |
 |---|---|
@@ -1577,6 +1652,21 @@ on it ([`../forwarding/v4-api.md`](../forwarding/v4-api.md)).
   `DiagnoseRouteResponse.route_id`, `started_at_unix_ms`,
   `finished_at_unix_ms`, `cached` and `nodes`, and the message
   `DiagnoseNode`. Too many diagnoses at once is `RESOURCE_EXHAUSTED`.
+- **Added in L2** (additions only): entry HA through DNS (7.4).
+  `ListDnsProviders`, `GetDnsProvider`, `CreateDnsProvider`,
+  `UpdateDnsProvider`, `DeleteDnsProvider`, `ListDnsBindings`,
+  `CreateDnsBinding`, `UpdateDnsBinding`, `DeleteDnsBinding` and
+  `GetRouteDns`, with the messages `DnsProvider`, `DnsBinding`,
+  `RouteDnsStatus`, `DnsRecordStatus`, `DnsEntryNode` and the enums
+  `DnsProviderKind`, `DnsBindingMode`, `DnsRecordType`.
+  - Credentials travel only in the create and update requests
+    (`credentials`, write-only); `DnsProvider` has no field for them.
+  - Refusals carry the method's response with violations (codes
+    `secret_store_unavailable`, `provider_in_use`, `binding_exists`,
+    `name_taken`, `unknown_route`, `unknown_provider`,
+    `entry_hostname_required`, `hostname_mismatch`, `immutable`,
+    `invalid_format`, `required`, `unknown_field`).
+  - A purge the provider refuses is `UNAVAILABLE`.
 
 ## 9. Node onboarding
 
@@ -2171,7 +2261,7 @@ Agent-repository PRs are marked (agent).
 | | F4b | gost Observe, hot updates, failover (implemented) | M | H20 |
 | | F4c | gost per-service structural changes, mixed-engine end-to-end (implemented) | M | |
 | | L1 | least-connections re-weighting (implemented) | S | H21 |
-| | L2 | entry HA via DDNS and CNAME | M | H21 |
+| | L2 | entry HA via DDNS and CNAME (implemented) | L | H21 |
 | F5 | F5a | Control forward package: `ForwardControl`, `/api/v4/forward/*`, `anix-control forward` (implemented) | L | H23 |
 | | F5b | new forwarding UI: `/admin/forward/{overview,routes,inventory}` in the core app, shown with the forward package's v4 API; `can_delete` on the list answers, previews left out of the audit log (implemented; [`docs/design/forward-ui`](../design/forward-ui/README.md), [`docs/guide/forwarding.md`](../guide/forwarding.md)) | L | H16 |
 | | F5c | upgrade: archive, check the nodes are clean (Control cleans NodeX and Ansible hosts), drop tables | M | H15 |
@@ -2196,7 +2286,8 @@ rejects a golden file that lost or rewrote a line of the base revision;
 its `DRAFT_PACKAGES` is empty. F3a added only `Violation.route_id`; F5a
 added the node, registry and traffic RPCs and messages of section 8.6 and
 the `enforced` answers, and changed nothing else; F3c added the diagnosis
-fields, enum values and `DiagnoseNode` of section 8.6.
+fields, enum values and `DiagnoseNode` of section 8.6; L2 added the DNS
+provider, binding and route DNS RPCs and messages of section 8.6.
 
 ## 16. Open questions for owner review
 
@@ -2232,7 +2323,11 @@ Decided by the owner (2026-10-02; H20 and H21 2026-10-03):
 - **H21** (defaults part, 2026-10-03): health checks every 5 s with a 2 s
   timeout, the breaker opens after 3 failures in a row for 30 s,
   least-connections re-weights every 10 s
-  (`sdk/forward/model/defaults.go`). The DDNS providers settle with L2.
+  (`sdk/forward/model/defaults.go`). The DDNS providers settled with L2:
+  Cloudflare, Alibaba Cloud DNS, DNSPod, Huawei Cloud DNS and a generic
+  webhook, implemented in L2 (section 7.4); entry HA judges the entry nodes
+  by their reports with the H21 health defaults and the same hysteresis
+  of 3.
 - **H20** (2026-10-03): one pinned gost v3 release per Agent release
   (3.2.6, MIT), shipped with the Agent and run as `anixops-gost.service`, a
   unit the Agent owns and manages, so Agent upgrades keep forwarding; NodeX

@@ -59,7 +59,26 @@ func (h *hostServer) begin(ctx context.Context) (*Service, error) {
 // carries answer, with its violations, as the status's details.
 func failure(err error, answer func(violations []*forwardv1.Violation) protoadapt.MessageV1) error {
 	var refusal *RefusedError
+	var dnsRefused *DNSRefusedError
 	switch {
+	case errors.As(err, &dnsRefused):
+		code := codes.InvalidArgument
+		if dnsRefused.Precondition {
+			code = codes.FailedPrecondition
+		}
+		st := status.New(code, dnsRefused.Error())
+		if answer != nil {
+			if detailed, detailErr := st.WithDetails(answer(dnsRefused.Violations)); detailErr == nil {
+				st = detailed
+			}
+		}
+		return st.Err()
+	case errors.Is(err, ErrDNSProviderNotFound):
+		return status.Error(codes.NotFound, err.Error())
+	case errors.Is(err, ErrDNSBindingNotFound):
+		return status.Error(codes.NotFound, err.Error())
+	case errors.Is(err, ErrDNSPurge):
+		return status.Error(codes.Unavailable, err.Error())
 	case errors.As(err, &refusal):
 		code := codes.InvalidArgument
 		if refusal.Precondition {
@@ -317,4 +336,137 @@ func (h *hostServer) GetTraffic(ctx context.Context, request *forwardv1.GetTraff
 		return nil, failure(err, nil)
 	}
 	return &forwardv1.GetTrafficResponse{Buckets: buckets, Truncated: truncated}, nil
+}
+
+// Entry HA through DNS (L2, dns.go): providers, bindings and the route
+// status. No answer carries a credential.
+
+func (h *hostServer) ListDnsProviders(ctx context.Context, _ *forwardv1.ListDnsProvidersRequest) (*forwardv1.ListDnsProvidersResponse, error) {
+	svc, err := h.begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	providers, err := svc.ListDNSProviders(ctx)
+	if err != nil {
+		return nil, failure(err, nil)
+	}
+	return &forwardv1.ListDnsProvidersResponse{Providers: providers}, nil
+}
+
+func (h *hostServer) GetDnsProvider(ctx context.Context, request *forwardv1.GetDnsProviderRequest) (*forwardv1.GetDnsProviderResponse, error) {
+	svc, err := h.begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	provider, err := svc.GetDNSProvider(ctx, request.GetId())
+	if err != nil {
+		return nil, failure(err, nil)
+	}
+	return &forwardv1.GetDnsProviderResponse{Provider: provider}, nil
+}
+
+func (h *hostServer) CreateDnsProvider(ctx context.Context, request *forwardv1.CreateDnsProviderRequest) (*forwardv1.CreateDnsProviderResponse, error) {
+	svc, err := h.begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	provider, err := svc.CreateDNSProvider(ctx, request.GetRequestId(), request.GetProvider(), request.GetCredentials())
+	if err != nil {
+		return nil, failure(err, func(violations []*forwardv1.Violation) protoadapt.MessageV1 {
+			return &forwardv1.CreateDnsProviderResponse{Violations: violations}
+		})
+	}
+	return &forwardv1.CreateDnsProviderResponse{Provider: provider}, nil
+}
+
+func (h *hostServer) UpdateDnsProvider(ctx context.Context, request *forwardv1.UpdateDnsProviderRequest) (*forwardv1.UpdateDnsProviderResponse, error) {
+	svc, err := h.begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	provider, err := svc.UpdateDNSProvider(ctx, request.GetRequestId(), request.GetProvider(), request.GetCredentials())
+	if err != nil {
+		return nil, failure(err, func(violations []*forwardv1.Violation) protoadapt.MessageV1 {
+			return &forwardv1.UpdateDnsProviderResponse{Violations: violations}
+		})
+	}
+	return &forwardv1.UpdateDnsProviderResponse{Provider: provider}, nil
+}
+
+func (h *hostServer) DeleteDnsProvider(ctx context.Context, request *forwardv1.DeleteDnsProviderRequest) (*forwardv1.DeleteDnsProviderResponse, error) {
+	svc, err := h.begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := svc.DeleteDNSProvider(ctx, request.GetRequestId(), request.GetId()); err != nil {
+		return nil, failure(err, func(violations []*forwardv1.Violation) protoadapt.MessageV1 {
+			return &forwardv1.DeleteDnsProviderResponse{Violations: violations}
+		})
+	}
+	return &forwardv1.DeleteDnsProviderResponse{}, nil
+}
+
+func (h *hostServer) ListDnsBindings(ctx context.Context, request *forwardv1.ListDnsBindingsRequest) (*forwardv1.ListDnsBindingsResponse, error) {
+	svc, err := h.begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	bindings, err := svc.ListDNSBindings(ctx, request.GetRouteId(), request.GetProviderId())
+	if err != nil {
+		return nil, failure(err, nil)
+	}
+	return &forwardv1.ListDnsBindingsResponse{Bindings: bindings}, nil
+}
+
+func (h *hostServer) CreateDnsBinding(ctx context.Context, request *forwardv1.CreateDnsBindingRequest) (*forwardv1.CreateDnsBindingResponse, error) {
+	svc, err := h.begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	binding, err := svc.CreateDNSBinding(ctx, request.GetRequestId(), request.GetBinding())
+	if err != nil {
+		return nil, failure(err, func(violations []*forwardv1.Violation) protoadapt.MessageV1 {
+			return &forwardv1.CreateDnsBindingResponse{Violations: violations}
+		})
+	}
+	return &forwardv1.CreateDnsBindingResponse{Binding: binding}, nil
+}
+
+func (h *hostServer) UpdateDnsBinding(ctx context.Context, request *forwardv1.UpdateDnsBindingRequest) (*forwardv1.UpdateDnsBindingResponse, error) {
+	svc, err := h.begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	binding, err := svc.UpdateDNSBinding(ctx, request.GetRequestId(), request.GetBinding())
+	if err != nil {
+		return nil, failure(err, func(violations []*forwardv1.Violation) protoadapt.MessageV1 {
+			return &forwardv1.UpdateDnsBindingResponse{Violations: violations}
+		})
+	}
+	return &forwardv1.UpdateDnsBindingResponse{Binding: binding}, nil
+}
+
+func (h *hostServer) DeleteDnsBinding(ctx context.Context, request *forwardv1.DeleteDnsBindingRequest) (*forwardv1.DeleteDnsBindingResponse, error) {
+	svc, err := h.begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := svc.DeleteDNSBinding(ctx, request.GetRequestId(), request.GetId(), request.GetPurge()); err != nil {
+		return nil, failure(err, func(violations []*forwardv1.Violation) protoadapt.MessageV1 {
+			return &forwardv1.DeleteDnsBindingResponse{Violations: violations}
+		})
+	}
+	return &forwardv1.DeleteDnsBindingResponse{}, nil
+}
+
+func (h *hostServer) GetRouteDns(ctx context.Context, request *forwardv1.GetRouteDnsRequest) (*forwardv1.GetRouteDnsResponse, error) {
+	svc, err := h.begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	answer, err := svc.RouteDNS(ctx, request.GetRouteId())
+	if err != nil {
+		return nil, failure(err, nil)
+	}
+	return &forwardv1.GetRouteDnsResponse{Status: answer}, nil
 }

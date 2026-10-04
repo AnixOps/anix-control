@@ -126,6 +126,8 @@ CLASS_PATTERNS: dict[str, tuple[str, ...]] = {
         "contracts/forward/*",
         # The kernel's forwarding state, served to packages and Agents (F3a).
         "internal/kernelforward/*",
+        # Entry HA's DNS provider clients (L2).
+        "internal/forwardddns/*",
     ),
     "agent": (
         "internal/grpc/*",
@@ -311,6 +313,7 @@ def self_test() -> None:
     check(["sdk/api/forward/v1/forward.pb.go"], {"code", "modules", "forward"})
     check(["contracts/forward/v1/nft/plan-single-hop-nftables-iepl-forward-11.nft"], {"code", "forward"})
     check(["internal/kernelforward/plan.go"], {"code", "db", "forward"})
+    check(["internal/forwardddns/alidns.go"], {"code", "forward"})
     check(["sdk/agentcontrol/identity.go"], {"code", "modules"})
     check(["internal/grpc/node_server.go"], {"code", "agent"})
     check(["internal/agentpki/enrollment.go"], {"code", "db", "agent"})

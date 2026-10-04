@@ -157,6 +157,11 @@ var (
 		// push a release to every Agent or hide a failed batch. Protected
 		// by the prefix; named so the rule survives a prefix change.
 		"v4_kernel_agent_upgrade_campaign": true, "v4_kernel_agent_upgrade_node": true,
+		// Entry HA through DNS (forward-sdk.md section 7.4, L2): DNS
+		// provider accounts with sealed credentials, the routes' bindings
+		// and the entry nodes' health streaks. A package that could write
+		// them could point a route's clients anywhere.
+		"v4_kernel_forward_dns_provider": true, "v4_kernel_forward_dns_binding": true, "v4_kernel_forward_dns_node": true,
 	}
 )
 

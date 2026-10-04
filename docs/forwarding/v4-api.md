@@ -27,6 +27,10 @@ in [`api.md`](api.md) stay until F5d removes them.
     staff (`service.IsSuperAdmin`, the rule route-mode switches and install
     tokens follow). Others get `403 super_admin_required`, and the request
     never reaches the package.
+  - So does every write (`POST`, `PUT`) under `/dns/providers`, which
+    carries DNS provider credentials (L2).
+  - The kernel applies these rules, and hides the commercial prefixes, on
+    the package's own spelling `/api/v4/plugins/forward/*` too.
   - The list answers (`GET /routes`, `GET /nodes`, `GET /ansible-machines`)
     carry `can_delete`: whether the caller may `DELETE` (F5b, D7). The
     kernel resolves the rule and passes it to the package as the
@@ -117,15 +121,16 @@ edition's v4.3 features:
 |---|---|---|
 | 400 | `invalid_request` | malformed body or query, malformed settings or node fields (`INVALID_ARGUMENT` without violations) |
 | 400 | `invalid_route` | the route fails validation (`INVALID_ARGUMENT` with violations) |
-| 403 | `super_admin_required` | a `DELETE` by an administrator who is not a super administrator (kernel) |
+| 403 | `super_admin_required` | a `DELETE`, or a write under `/dns/providers`, by an administrator who is not a super administrator (kernel) |
 | 404 | `not_found` | unknown route or node, or an unknown path |
 | 404 | `plugin_route_not_found` | a commercial prefix in the community edition, or no installed package declares the route (kernel) |
 | 405 | `method_not_allowed` | known path, other method |
-| 409 | `refused` | the nodes cannot host the route, another route no longer plans, or a node is in use (`FAILED_PRECONDITION` with violations) |
+| 409 | `refused` | the nodes cannot host the route, another route no longer plans, a node or DNS provider is in use, a DNS binding exists, or Control cannot seal credentials (`FAILED_PRECONDITION` with violations) |
 | 409 | `idempotency_conflict` | `Idempotency-Key` reused for another request |
 | 409 | `revision_conflict` | `PUT /routes/{id}` with a stale `revision`, or a concurrent change during pause or resume (`ABORTED`) |
 | 429 | `rate_limited` | too many route diagnoses run at once (`RESOURCE_EXHAUSTED`) |
 | 501 | `not_implemented` | `UNIMPLEMENTED` |
+| 502 | `dns_purge_failed` | `DELETE /dns/bindings/{id}?purge=true` and the DNS provider did not delete the records; the binding stays |
 | 503 | `forward_unavailable` | the package has no `ForwardControl` connection, or the kernel refused or could not answer (`UNAVAILABLE`, `PERMISSION_DENIED`) |
 | 504 | `timeout` | the kernel did not answer in time |
 
@@ -147,6 +152,7 @@ All paths are under `/api/v4/forward`.
 | `POST /routes/{id}/resume` | resume | as pause |
 | `GET /routes/{id}/stats` | traffic of one route | query `since`, `until`; `{counters, series, truncated}`: the ledger's totals per hop and node over all time (`Counters`), and the hourly buckets of the window (`TrafficBucket`) |
 | `GET /routes/{id}/health` | upstream health | `{health: [UpstreamHealth]}` from the latest reports of the route's nodes |
+| `GET /routes/{id}/dns` | entry HA status | `{status}`: the `RouteDnsStatus`. See "Entry HA through DNS" below |
 | `POST /routes/{id}/diagnose` | diagnose the route | optional body `{"timeout_ms": n}` (15000, at most 25000); the `DiagnoseRouteResponse`: `ok`, `steps`, `nodes`, `route_id`, `started_at_unix_ms`, `finished_at_unix_ms`, `cached`. See "Route diagnosis" below |
 
 ### Route diagnosis
@@ -205,6 +211,81 @@ The answer:
   still running, is answered again with `cached` true. At most 4
   diagnoses run at once per Control process; another is
   `429 rate_limited`.
+
+### Entry HA through DNS
+
+L2, forward-sdk.md section 7.4. A route with several entry nodes has a
+`listen.entry_hostname`. Bound to a DNS provider's zone, Control keeps the
+name's A/AAAA records on the healthy entries' public addresses. Setting up
+provider credentials with the least permissions:
+[`../guide/forward-entry-ha.md`](../guide/forward-entry-ha.md).
+
+| Method and path | Does | Body and answer |
+|---|---|---|
+| `GET /dns/kinds` | the provider kinds | `{kinds: [{kind, name, config, required_config, credentials}]}`, for a form |
+| `GET /dns/providers` | list providers | `{providers: [DnsProvider]}` |
+| `POST /dns/providers` | add a provider (super administrator) | body `{"provider": DnsProvider, "credentials": {name: value}}`; `201 {provider}` |
+| `GET /dns/providers/{id}` | one provider | `{provider}` |
+| `PUT /dns/providers/{id}` | replace a provider (super administrator) | body as `POST`; a credential left out, or `"********"`, keeps its stored value; the kind cannot change; `{provider}` |
+| `DELETE /dns/providers/{id}` | delete a provider (super administrator) | `{deleted}`; `409 refused` (`provider_in_use`) while a binding uses it |
+| `GET /dns/bindings` | list bindings | query `route_id`, `provider_id`; `{bindings: [DnsBinding]}` |
+| `POST /dns/bindings` | bind a route | body a `DnsBinding`; `201 {binding}` |
+| `GET /dns/bindings/{id}` | one binding | `{binding}` |
+| `PUT /dns/bindings/{id}` | change a binding | body the whole `DnsBinding`, as `GET` answers it: it replaces `record_types`, `ttl` and `paused`, and an omitted one takes its default (A, 60, false), so dropping AAAA deletes the AAAA records. The other fields cannot change (`immutable`); `{binding}` |
+| `DELETE /dns/bindings/{id}` | delete a binding (super administrator) | query `purge=true` deletes the published records first; `{deleted}` |
+
+- **Providers.** `DnsProvider` is `{id, name, kind, config, credential_names,
+  bindings, created_at_unix_ms, updated_at_unix_ms}`.
+  - `kind` is `DNS_PROVIDER_KIND_CLOUDFLARE` (credential `api_token`),
+    `_ALIDNS` (`access_key_id`, `access_key_secret`), `_DNSPOD`
+    (`secret_id`, `secret_key`), `_HUAWEICLOUD` (`access_key`,
+    `secret_key`) or `_WEBHOOK` (`secret`, with `config.url` an `https`
+    URL).
+  - `config.endpoint` overrides the provider's API host, for a regional
+    endpoint.
+  - Credentials are write-only: Control seals them with
+    `module_runtime.ca_kek` (without it: `409 refused`,
+    `secret_store_unavailable`). No answer carries them; `credential_names`
+    lists the stored ones. The audit log redacts the request's
+    `credentials`.
+- **Bindings.** `DnsBinding` is `{id, route_id, provider_id, zone,
+  record_name, mode, record_types, ttl, paused, created_at_unix_ms,
+  updated_at_unix_ms}`.
+  - The route must have an `entry_hostname`. One binding per route, and per
+    provider, zone and name (`binding_exists`).
+  - `mode` `DNS_BINDING_MODE_DDNS` (the default): Control writes
+    `entry_hostname` itself, which must be `record_name` (empty takes it;
+    `hostname_mismatch` otherwise).
+  - `mode` `DNS_BINDING_MODE_CNAME`: `record_name` is a name Control
+    manages, inside `zone`. The operator creates the CNAME `entry_hostname`
+    → `record_name`.
+  - `record_types` are `DNS_RECORD_TYPE_A` and/or `_AAAA` (A by default);
+    `ttl` 60 by default, at most 86400.
+  - A paused binding keeps its records and changes nothing.
+- **Status.** `GET /routes/{id}/dns` answers:
+
+  ```json
+  {"data": {"status": {
+    "route_id": "01J...", "entry_hostname": "hk.example.com", "state": "degraded",
+    "binding": {"id": "4", "mode": "DNS_BINDING_MODE_DDNS", "record_name": "hk.example.com", "...": "..."},
+    "records": [{"type": "DNS_RECORD_TYPE_A", "published": ["203.0.113.11"], "desired": []}],
+    "nodes": [{"node_ref": "forward-11", "addresses": ["203.0.113.11"], "healthy": false, "in_rotation": false,
+               "bad_streak": 4, "reason": "offline"}],
+    "published_at_unix_ms": "1759579200000", "evaluated_at_unix_ms": "1759579260000"
+  }}}
+  ```
+
+  - `state`: `unbound`, `pending` (nothing published yet), `ok`,
+    `degraded` (no entry is healthy, so the last records are kept),
+    `error` (`last_error`, retried at `next_attempt_at_unix_ms`),
+    `rate_limited`, `paused`, `route_missing`, `hostname_mismatch`.
+  - `nodes[].reason`: `healthy`, `converging`, `not_in_inventory`,
+    `no_address`, `never_reported`, `report_stale`, `offline`,
+    `hop_error`, `upstreams_down`.
+  - In CNAME mode `cname_target` is the name to point `entry_hostname` at.
+- **Timing.** Control evaluates every 10 s. A node leaves rotation after 3
+  unhealthy evaluations and rejoins after 3 healthy ones. Control never
+  publishes an empty set.
 
 ### Nodes
 
@@ -300,11 +381,25 @@ anix-control forward nodes list [--kind forward|proxy] [--json]
 anix-control forward nodes set <node_ref> (-f <settings.json> | [--port-range 30000-39999] [--reserved 80,443] [--address <ip>]... [--label key=value]... | --defaults)
 anix-control forward stats [--route <route_id>] [--node <node_ref>] [--since <RFC 3339 or ms>] [--until ...] [--json]
 anix-control forward reset-node <node_ref>
+anix-control forward dns providers list [--json]
+anix-control forward dns providers create -f <provider.json> [--request-id <id>]
+anix-control forward dns providers update <id> -f <provider.json> [--request-id <id>]
+anix-control forward dns providers delete <id> --yes
+anix-control forward dns bindings list [--route <route_id>] [--json]
+anix-control forward dns bindings create -f <binding.json> [--request-id <id>]
+anix-control forward dns bindings update <id> -f <binding.json> [--request-id <id>]
+anix-control forward dns bindings delete <id> --yes [--purge]
+anix-control forward dns status <route_id> [--json]
 ```
 
 - **Input.** `routes create` reads a `Route` and `nodes set -f` a
   `NodeSettings`, both protojson.
 - **Refusals** print each violation with its code.
+- **`dns`.** A provider file is `{"provider": DnsProvider, "credentials":
+  {...}}`, a binding file a `DnsBinding`. Credentials come only from the
+  file, never from the command line, and are never printed. The command
+  needs the same `module_runtime.ca_kek` as the running Control. `dns
+  status` prints the records and each entry node's health.
 - **`nodes set`** replaces the node's settings.
 - **`routes diagnose`** prints the steps and the nodes, and exits non-zero
   when a step failed. The command line holds no Agent sessions, so it
@@ -313,6 +408,9 @@ anix-control forward reset-node <node_ref>
   Control runs them.
 - **Audit.** Writes and diagnoses go to the audit log as `system/cli`
   (`forward.route_*` including `forward.route_diagnose`,
-  `forward.node_settings`, `forward.reset_node`).
+  `forward.node_settings`, `forward.reset_node`, `forward.dns_provider_*`,
+  `forward.dns_binding_*`). The controller's own changes are audited as
+  `system/forward-dns` (`forward.dns_publish`, `forward.dns_degraded`,
+  `forward.dns_recovered`, `forward.dns_binding_delete`).
 - **When nodes see a change.** The running Control sends the nodes their new
   state at its next configuration refresh, within a minute.

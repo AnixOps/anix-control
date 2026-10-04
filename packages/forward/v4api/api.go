@@ -174,6 +174,19 @@ var endpoints = []Endpoint{
 	{http.MethodGet, "/observability/targets", EditionAll, "Every route target with its health", "GET /api/v2/admin/forward/observability/targets", (*Service).observabilityTargets},
 	{http.MethodGet, "/observability/topology", EditionAll, "Nodes, hops and targets as a graph with health", "GET /api/v2/admin/forward/observability/topology", (*Service).observabilityTopology},
 	{http.MethodGet, "/observability/trend", EditionAll, "Hourly traffic trend", "GET /api/v2/admin/forward/observability/trend", (*Service).observabilityTrend},
+
+	{http.MethodGet, "/routes/{id}/dns", EditionAll, "A route's entry HA DNS status", "", (*Service).routeDNS},
+	{http.MethodGet, "/dns/kinds", EditionAll, "The DNS provider kinds with their settings and credentials", "", (*Service).dnsKinds},
+	{http.MethodGet, "/dns/providers", EditionAll, "List DNS providers (without credentials)", "", (*Service).listDNSProviders},
+	{http.MethodPost, "/dns/providers", EditionAll, "Add a DNS provider (super administrator)", "", (*Service).createDNSProvider},
+	{http.MethodGet, "/dns/providers/{id}", EditionAll, "A DNS provider (without credentials)", "", (*Service).getDNSProvider},
+	{http.MethodPut, "/dns/providers/{id}", EditionAll, "Replace a DNS provider (super administrator)", "", (*Service).updateDNSProvider},
+	{http.MethodDelete, "/dns/providers/{id}", EditionAll, "Delete a DNS provider (super administrator)", "", (*Service).deleteDNSProvider},
+	{http.MethodGet, "/dns/bindings", EditionAll, "List route DNS bindings", "", (*Service).listDNSBindings},
+	{http.MethodPost, "/dns/bindings", EditionAll, "Bind a route's entries to a DNS name", "", (*Service).createDNSBinding},
+	{http.MethodGet, "/dns/bindings/{id}", EditionAll, "A route DNS binding", "", (*Service).getDNSBinding},
+	{http.MethodPut, "/dns/bindings/{id}", EditionAll, "Replace a binding's record types, TTL and paused flag", "", (*Service).updateDNSBinding},
+	{http.MethodDelete, "/dns/bindings/{id}", EditionAll, "Delete a route DNS binding (super administrator)", "", (*Service).deleteDNSBinding},
 }
 
 // match finds the endpoint of method and the path under the prefix.
@@ -312,6 +325,16 @@ func detailViolations(st *status.Status) []Violation {
 		case *forwardv1.UpdateForwardNodeResponse:
 			return violationsOf(answer.GetViolations())
 		case *forwardv1.DeleteForwardNodeResponse:
+			return violationsOf(answer.GetViolations())
+		case *forwardv1.CreateDnsProviderResponse:
+			return violationsOf(answer.GetViolations())
+		case *forwardv1.UpdateDnsProviderResponse:
+			return violationsOf(answer.GetViolations())
+		case *forwardv1.DeleteDnsProviderResponse:
+			return violationsOf(answer.GetViolations())
+		case *forwardv1.CreateDnsBindingResponse:
+			return violationsOf(answer.GetViolations())
+		case *forwardv1.UpdateDnsBindingResponse:
 			return violationsOf(answer.GetViolations())
 		}
 	}
