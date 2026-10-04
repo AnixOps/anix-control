@@ -23,7 +23,7 @@ them. See [`flux-panel-clone.md`](flux-panel-clone.md) for those.
   forward nodes, and proxy nodes added with 加入转发清单… on the proxy node's
   page.
 
-## The Three Sections
+## The Sections
 
 The segmented control at the top switches between them. Each page says when
 it last refreshed. Pages refresh by themselves while the tab is visible:
@@ -86,10 +86,11 @@ Control to plan the route without storing it.
 
 1. **基本信息.** Name and `key=value` labels.
 2. **入口监听.** Address, port (自动 or 指定) and protocol. With more than
-   one entry node, 入口域名 appears. The page does not manage DNS yet: point
-   that name at the entry nodes yourself, or bind the route to a DNS
-   provider through the API or `anix-control forward dns` so Control keeps
-   it on the healthy entries
+   one entry node, 入口域名 appears. Point that name at the entry nodes
+   yourself, or turn on 让此主机名始终指向健康的入口 below it and pick a
+   DNS provider, zone, mode (DDNS or CNAME), record types, TTL and 暂停:
+   Control then keeps the name on the healthy entries. The binding is
+   written after the route is saved
    ([Forward Entry HA Through DNS](forward-entry-ha.md)).
 3. **跳链.** Hop 1 is the entry, the last hop the exit, the others relays.
    - Add nodes to each hop. With several nodes, their order is the failover
@@ -121,7 +122,22 @@ the editor keeps your form and says 「此路由已被他人修改（修订 7 �
 latest revision; 放弃我的修改 loads the latest revision. A retried save of
 the same form never applies twice.
 
+### DNS
+
+- **DNS 服务商** (`/admin/forward/dns`) lists the DNS accounts that entry
+  high availability writes through: kind, endpoint, the names of the stored
+  credentials (never their values) and how many bindings use each.
+- Adding, editing and deleting a provider needs a super administrator;
+  other administrators see the list read-only. A provider in use cannot be
+  deleted. Setup per provider: [Forward Entry HA Through DNS](forward-entry-ha.md).
+
 ## Route Detail and Diagnosis
+
+- **入口高可用** (on a route with an entry hostname or several entries)
+  shows the DNS state, the published and desired records, each entry
+  node's reason, the last error and the next attempt. It refreshes every
+  30 seconds; 解除绑定 (super administrator) can delete the published
+  records too.
 
 - The chain shows every hop's nodes with their port, generation and
   upstreams (健康, 不健康, 熔断 with the time to the next probe). The dot

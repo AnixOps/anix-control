@@ -18,7 +18,10 @@ const api = vi.hoisted(() => ({
   resumeRoute: vi.fn(),
   deleteRoute: vi.fn(),
   trafficStats: vi.fn(),
-  observabilityTargets: vi.fn()
+  observabilityTargets: vi.fn(),
+  listDnsBindings: vi.fn(),
+  listDnsProviders: vi.fn(),
+  listDnsKinds: vi.fn()
 }))
 const router = vi.hoisted(() => ({ push: vi.fn() }))
 const route = vi.hoisted(() => ({ query: {}, hash: '', params: {}, path: '/' }))
@@ -69,6 +72,9 @@ beforeEach(() => {
   api.trafficStats.mockResolvedValue({ totals: [], series: [], truncated: false })
   api.observabilityTargets.mockResolvedValue({ targets: [] })
   api.previewRoute.mockResolvedValue({ states: [], allocations: [], violations: [], warnings: [] })
+  api.listDnsBindings.mockResolvedValue([])
+  api.listDnsProviders.mockResolvedValue([])
+  api.listDnsKinds.mockResolvedValue([])
 })
 
 afterEach(() => {

@@ -59,6 +59,7 @@ const ForwardRouteEditor = () => import('@/views/admin/forward/RouteEditor.vue')
 const ForwardRouteDetail = () => import('@/views/admin/forward/RouteDetail.vue')
 const ForwardNodes = () => import('@/views/admin/forward/Nodes.vue')
 const ForwardNodeView = () => import('@/views/admin/forward/NodeDetail.vue')
+const ForwardDnsProviders = () => import('@/views/admin/forward/DnsProviders.vue')
 const Account = () => import('@/views/Account.vue')
 const StatusPage = () => import('@/views/StatusPage.vue')
 
@@ -266,6 +267,11 @@ const routes = [
         component: ForwardNodeView,
         props: true,
         meta: forwardMeta('pageTitles.admin.forwardV4Node')
+      },
+      {
+        path: 'forward/dns',
+        component: ForwardDnsProviders,
+        meta: forwardMeta('pageTitles.admin.forwardV4Dns')
       },
       {
         path: 'forward/tunnel',

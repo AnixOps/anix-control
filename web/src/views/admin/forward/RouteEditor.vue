@@ -85,8 +85,15 @@
               size="md"
               :label="t('forwardV4.editor.entryHostname')"
               placeholder="edge.example.net"
-              :help="t('forwardV4.editor.entryHostnameHelp')"
+              :help="t('forwardDns.binding.hostnameHelp')"
               :error="errorText('listen.entry_hostname')"
+            />
+            <DnsBindingPicker
+              v-if="draft.hops[0]?.node_refs.length > 1 && dnsReady"
+              v-model="dns"
+              :stored="storedBinding"
+              :hostname="draft.listen.entry_hostname"
+              :errors="dnsErrors"
             />
           </UiCard>
 
@@ -233,7 +240,9 @@ import {
 } from '@/ui'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
-import { createRoute, getRoute, listNodes, newIdempotencyKey, routeBody, updateRoute } from '@/api/forwardV4'
+import { createDnsBinding, createRoute, getRoute, listDnsBindings, listNodes, newIdempotencyKey, routeBody, updateDnsBinding, updateRoute } from '@/api/forwardV4'
+import DnsBindingPicker from '@/components/forward/DnsBindingPicker.vue'
+import { bindingChanged, bindingDraft, bindingErrors, bindingRequest, dnsErrorMessage } from '@/components/forward/dnsModel'
 import HopCard from '@/components/forward/HopCard.vue'
 import PreviewPanel from '@/components/forward/PreviewPanel.vue'
 import { forwardErrorMessage, violationText } from '@/components/forward/messages'
@@ -283,11 +292,15 @@ async function load() {
   loadError.value = null
   try {
     const sourceId = props.id || String(currentRoute.query.from || '')
-    const [nodeAnswer, routeAnswer] = await Promise.all([
+    const [nodeAnswer, routeAnswer, bindings] = await Promise.all([
       listNodes(),
-      sourceId ? getRoute(sourceId) : Promise.resolve(null)
+      sourceId ? getRoute(sourceId) : Promise.resolve(null),
+      // An older package has no DNS API: the editor then has no picker.
+      props.id ? listDnsBindings({ routeId: props.id }).catch(() => null) : Promise.resolve([])
     ])
     nodes.value = nodeAnswer.nodes
+    storedBinding.value = bindings?.find(item => item.route_id === props.id) || null
+    dnsReady.value = Array.isArray(bindings)
     let route = routeAnswer?.route || null
     if (route && !props.id) {
       // 复制为新路由: the copy has no identity and plans its own ports.
@@ -305,6 +318,7 @@ async function load() {
 
 function setDraft(route) {
   draft.value = reactive(routeToDraft(route))
+  dns.value = bindingDraft(storedBinding.value, route?.listen?.entry_hostname || '')
   baseRoute.value = route
   baseBody.value = JSON.stringify(routeBody(draftToRoute(draft.value)))
   serverViolations.value = []
@@ -325,9 +339,38 @@ watch(() => draft.value && JSON.stringify(routeBody(draftToRoute(draft.value))),
   saveError.value = ''
 })
 
+// ---------------------------------------------------------------------------
+// The entry hostname's DNS binding (L2, D14)
+// ---------------------------------------------------------------------------
+
+const storedBinding = ref(null)
+const dnsReady = ref(false)
+const dns = ref(bindingDraft(null))
+// The picker shows, and its binding is written, only while the entry has
+// several nodes (draftToRoute drops entry_hostname otherwise).
+const dnsActive = computed(() => Boolean(draft.value) && dnsReady.value && draft.value.hops[0]?.node_refs.length > 1)
+const dnsErrors = computed(() => (dnsActive.value ? bindingErrors(dns.value, draft.value.listen.entry_hostname, t, storedBinding.value) : {}))
+const dnsDirty = computed(() => dnsActive.value && bindingChanged(dns.value, storedBinding.value))
+
+// applyBinding writes the binding once the route is stored. A failure is a
+// toast: the route is saved, and its page shows the binding state.
+async function applyBinding(routeId, hostname) {
+  if (!dnsDirty.value) return
+  const body = bindingRequest(dns.value, routeId, hostname, storedBinding.value)
+  try {
+    if (storedBinding.value) await updateDnsBinding(storedBinding.value.id, body, { idempotencyKey: newIdempotencyKey() })
+    else await createDnsBinding(body, { idempotencyKey: newIdempotencyKey() })
+  } catch (error) {
+    toast.error(t('forwardDns.binding.saveFailed', { message: dnsErrorMessage(t, te, error) }))
+  }
+}
+
 const violations = computed(() => (serverViolations.value.length ? serverViolations.value : (preview.result.value?.violations || [])))
-const dirty = computed(() => Boolean(draft.value) && JSON.stringify(routeBody(draftToRoute(draft.value))) !== baseBody.value)
-const canSave = computed(() => Boolean(draft.value) && !saving.value && !conflict.value &&
+const routeDirty = computed(() => Boolean(draft.value) && JSON.stringify(routeBody(draftToRoute(draft.value))) !== baseBody.value)
+// leaving: the save went through, the page navigates without asking.
+const leaving = ref(false)
+const dirty = computed(() => !leaving.value && (routeDirty.value || dnsDirty.value))
+const canSave = computed(() => Boolean(draft.value) && !saving.value && !conflict.value && !Object.keys(dnsErrors.value).length &&
   !missingRequired(draft.value).length && !violations.value.length && !preview.loading.value && !preview.error.value)
 
 useUnsavedChanges(dirty, { discard: () => {} })
@@ -459,15 +502,21 @@ async function save() {
   saving.value = true
   saveError.value = ''
   try {
-    const answer = editing.value
-      ? await updateRoute(props.id, route, { idempotencyKey: attempt.key })
-      : await createRoute(route, { idempotencyKey: attempt.key })
+    // Only the binding changed: no route write (and no new revision).
+    const answer = editing.value && body === baseBody.value && dnsDirty.value
+      ? { route: { ...route, id: props.id } }
+      : await (editing.value
+        ? updateRoute(props.id, route, { idempotencyKey: attempt.key })
+        : createRoute(route, { idempotencyKey: attempt.key }))
     attempt.key = newIdempotencyKey()
     attempt.body = null
     const saved = answer?.route || {}
     baseBody.value = body
+    const savedId = saved.id || props.id
+    await applyBinding(savedId, route.listen?.entry_hostname || '')
     toast.success(t(editing.value ? 'forwardV4.toast.saved' : 'forwardV4.toast.created', { name: saved.name || route.name }))
-    router.push(`/admin/forward/routes/${saved.id || props.id}`)
+    leaving.value = true
+    router.push(`/admin/forward/routes/${savedId}`)
   } catch (error) {
     if (error.code === 'revision_conflict') {
       await loadConflict()

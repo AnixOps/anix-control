@@ -28,7 +28,7 @@ import { ADMIN_PAGE_SECTIONS } from './sections'
 
 // The v4.2 forwarding area (F5b): its sections live beside the flux-clone
 // pages under /admin/forward/ on paths those never used.
-export const FORWARD_V4_PATHS = Object.freeze(['/admin/forward/overview', '/admin/forward/routes', '/admin/forward/inventory'])
+export const FORWARD_V4_PATHS = Object.freeze(['/admin/forward/overview', '/admin/forward/routes', '/admin/forward/inventory', '/admin/forward/dns'])
 
 export function isForwardV4Path(path) {
   const value = String(path || '')

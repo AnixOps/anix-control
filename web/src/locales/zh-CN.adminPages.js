@@ -11,10 +11,12 @@ import adminNodes from './modules/zh-CN/adminNodes'
 import forwardNodesPage from './modules/zh-CN/forwardNodesPage'
 import adminSubscriptionGroups from './modules/zh-CN/adminSubscriptionGroups'
 import forwardV4 from './modules/zh-CN/forwardV4'
+import forwardDns from './modules/zh-CN/forwardDns'
 
 export default {
   ...adminSubscriptionGroups,
   ...forwardV4,
+  ...forwardDns,
   ...runtimePages,
   ...networkPages,
   ...miscPages,

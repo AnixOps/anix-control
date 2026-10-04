@@ -81,6 +81,8 @@
         <p class="fwd-muted detail-dot-note">{{ t('forwardV4.detail.dotNote') }}</p>
       </UiCard>
 
+      <EntryHaCard v-if="showEntryHa" :route-id="route.id" :can-delete="canDelete" :node-name="nodeName" />
+
       <UiCard :title="t('forwardV4.detail.trafficTitle')">
         <template #actions>
           <UiSegmentedControl v-model="range" size="sm" :aria-label="t('forwardV4.detail.range')" :options="ranges" />
@@ -172,6 +174,7 @@ import { useAppI18n } from '@/composables/useAppI18n'
 import { deleteRoute, diagnoseRoute, getNode, getRoute, listNodes, newIdempotencyKey, pauseRoute, resumeRoute, routeStats } from '@/api/forwardV4'
 import DiagnosisPanel from '@/components/forward/DiagnosisPanel.vue'
 import EngineChip from '@/components/forward/EngineChip.vue'
+import EntryHaCard from '@/components/forward/EntryHaCard.vue'
 import HopChain from '@/components/forward/HopChain.vue'
 import RouteStatusBadge from '@/components/forward/RouteStatusBadge.vue'
 import { forwardErrorMessage } from '@/components/forward/messages'
@@ -223,6 +226,8 @@ const { secondsAgo, refresh } = usePolling(async () => {
 const nodesByRef = computed(() => new Map(nodes.value.map(node => [node.node_ref, node])))
 const nodeOf = ref => nodesByRef.value.get(ref)
 const nodeName = ref => nodeOf(ref)?.name || ref
+// 入口高可用 (L2) for a route with an entry hostname or several entries.
+const showEntryHa = computed(() => Boolean(route.value?.listen?.entry_hostname) || (route.value?.hops?.[0]?.node_refs || []).length > 1)
 const nodeRefs = computed(() => Array.from(new Set((route.value?.hops || []).flatMap(hop => hop.node_refs || []))))
 
 // This route's hop errors and upstream health, per node.

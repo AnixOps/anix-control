@@ -40,6 +40,21 @@
     creates those tables or starts the flux workers. Steps:
     `docs/UPGRADE.md`, "Forwarding: Archive, Clean The Nodes, Drop The Old
     Tables".
+
+- **Entry high availability in the forwarding UI** (L2, D14). A fourth
+  section, 转发 → **DNS** (`/admin/forward/dns`), lists the DNS providers
+  and adds, edits and deletes them in a sheet built from
+  `GET /dns/kinds`; credentials are write-only (a stored one shows as
+  `********` and is not sent back unless replaced), and writes are gated
+  on the super-administrator signal with the `403 super_admin_required`
+  shown inline. The route editor's 入口域名 gets a binding picker
+  (provider, zone, DDNS or CNAME with the CNAME target to copy, A/AAAA,
+  TTL, paused) that writes the binding after the route, a change as the
+  whole binding on `PUT`. The route page gets an 入口高可用 card from
+  `GET /routes/{id}/dns`, polled every 30 s: state, published against
+  desired records, each entry's reason, the last error and the next
+  attempt, and 解除绑定 with purge. zh-CN and English, unit, e2e and
+  visual tests ([`docs/guide/forward-entry-ha.md`](docs/guide/forward-entry-ha.md)).
 - **Fresh Control installs are ready for enrolled Agents** (owner decision
   2026-10-04). Every shipped install path generates the built-in CA's
   key-encryption key (`module_runtime.ca_kek`, 32 random bytes) on a fresh

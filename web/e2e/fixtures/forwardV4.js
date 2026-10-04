@@ -423,6 +423,87 @@ export const DIAGNOSIS = {
 }
 
 // ---------------------------------------------------------------------------
+// Entry HA through DNS (L2): GET /dns/kinds, providers, bindings and the
+// route DNS status. web-edge-ha (two entries, edge.example.net) is bound to
+// cloudflare-main; hk-edge-02's report is stale, so it is out of rotation.
+// ---------------------------------------------------------------------------
+
+export const EDGE = '01JB7Q4C5D6E7F8G9H0J1K2L3M'
+
+export const DNS_KINDS = [
+  { kind: 'DNS_PROVIDER_KIND_CLOUDFLARE', name: 'Cloudflare', config: ['endpoint'], required_config: [], credentials: ['api_token'] },
+  { kind: 'DNS_PROVIDER_KIND_ALIDNS', name: 'Alibaba Cloud DNS', config: ['endpoint'], required_config: [], credentials: ['access_key_id', 'access_key_secret'] },
+  { kind: 'DNS_PROVIDER_KIND_DNSPOD', name: 'DNSPod (Tencent Cloud)', config: ['endpoint'], required_config: [], credentials: ['secret_id', 'secret_key'] },
+  { kind: 'DNS_PROVIDER_KIND_HUAWEICLOUD', name: 'Huawei Cloud DNS', config: ['endpoint'], required_config: [], credentials: ['access_key', 'secret_key'] },
+  { kind: 'DNS_PROVIDER_KIND_WEBHOOK', name: 'Webhook', config: ['url'], required_config: ['url'], credentials: ['secret'] }
+]
+
+export const DNS_PROVIDERS = [
+  { id: '1', name: 'cloudflare-main', kind: 'DNS_PROVIDER_KIND_CLOUDFLARE', credential_names: ['api_token'], bindings: 1, created_at_unix_ms: String(NOW - 9 * DAY), updated_at_unix_ms: String(NOW - 3 * DAY) },
+  { id: '2', name: 'alidns-cn', kind: 'DNS_PROVIDER_KIND_ALIDNS', config: { endpoint: 'alidns.cn-hangzhou.aliyuncs.com' }, credential_names: ['access_key_id', 'access_key_secret'], created_at_unix_ms: String(NOW - 6 * DAY), updated_at_unix_ms: String(NOW - 6 * DAY) },
+  { id: '3', name: 'ops-webhook', kind: 'DNS_PROVIDER_KIND_WEBHOOK', config: { url: 'https://dns-hook.example.com/anixops' }, credential_names: ['secret'], created_at_unix_ms: String(NOW - 2 * DAY), updated_at_unix_ms: String(NOW - 5 * HOUR) }
+]
+
+export const DNS_BINDINGS = [
+  {
+    id: '1', route_id: EDGE, provider_id: '1', zone: 'example.net', record_name: 'edge.example.net', mode: 'DNS_BINDING_MODE_DDNS',
+    record_types: ['DNS_RECORD_TYPE_A'], ttl: 60, created_at_unix_ms: String(NOW - 3 * DAY), updated_at_unix_ms: String(NOW - 3 * DAY)
+  }
+]
+
+function dnsStatus(id) {
+  const item = routeById(id)
+  const binding = DNS_BINDINGS.find(entry => entry.route_id === id)
+  const hostname = item?.route?.listen?.entry_hostname || ''
+  if (!binding) return { route_id: id, ...(hostname ? { entry_hostname: hostname } : {}), state: 'unbound' }
+  return {
+    route_id: id,
+    entry_hostname: hostname,
+    binding,
+    state: 'ok',
+    records: [{ type: 'DNS_RECORD_TYPE_A', published: ['203.0.113.41'], desired: ['203.0.113.41'] }],
+    nodes: [
+      { node_ref: 'forward-41', addresses: ['203.0.113.41'], healthy: true, in_rotation: true, good_streak: 42, reason: 'healthy' },
+      { node_ref: 'forward-42', addresses: ['203.0.113.42'], bad_streak: 9, reason: 'report_stale' }
+    ],
+    published_at_unix_ms: String(NOW - 14 * MIN),
+    evaluated_at_unix_ms: String(NOW - 6_000)
+  }
+}
+
+function dnsApi(rest, { method, query, body }) {
+  const data = value => ({ data: value })
+  if (rest === '/dns/kinds') return data({ kinds: DNS_KINDS })
+  if (rest === '/dns/providers' && method === 'GET') return data({ providers: DNS_PROVIDERS })
+  if (rest === '/dns/providers' && method === 'POST') {
+    const provider = { ...body.provider, id: '9', credential_names: Object.keys(body.credentials || {}), created_at_unix_ms: String(NOW), updated_at_unix_ms: String(NOW) }
+    return { __status: 201, body: data({ provider }) }
+  }
+  let match = rest.match(/^\/dns\/providers\/(\d+)$/)
+  if (match) {
+    const provider = DNS_PROVIDERS.find(item => item.id === match[1])
+    if (!provider) return { __status: 404, body: { error: { code: 'not_found', message: 'forward dns provider not found' } } }
+    if (method === 'GET') return data({ provider })
+    if (method === 'PUT') return data({ provider: { ...provider, ...body.provider, credential_names: provider.credential_names } })
+    if (method === 'DELETE') {
+      if (Number(provider.bindings || 0) > 0) return { __status: 409, body: { error: { code: 'refused', message: 'in use', violations: [{ field: 'bindings[1]', code: 'provider_in_use' }] } } }
+      return data({ deleted: provider.id })
+    }
+  }
+  if (rest === '/dns/bindings' && method === 'GET') return data({ bindings: DNS_BINDINGS.filter(item => !query.route_id || item.route_id === query.route_id) })
+  if (rest === '/dns/bindings' && method === 'POST') return { __status: 201, body: data({ binding: { ...body, id: '7', created_at_unix_ms: String(NOW), updated_at_unix_ms: String(NOW) } }) }
+  match = rest.match(/^\/dns\/bindings\/(\d+)$/)
+  if (match) {
+    const binding = DNS_BINDINGS.find(item => item.id === match[1])
+    if (!binding) return { __status: 404, body: { error: { code: 'not_found', message: 'forward dns binding not found' } } }
+    if (method === 'GET') return data({ binding })
+    if (method === 'PUT') return data({ binding: { ...binding, record_types: body.record_types || ['DNS_RECORD_TYPE_A'], ttl: body.ttl || 60, paused: Boolean(body.paused) } })
+    if (method === 'DELETE') return data({ deleted: binding.id })
+  }
+  return undefined
+}
+
+// ---------------------------------------------------------------------------
 // The fixture
 // ---------------------------------------------------------------------------
 
@@ -454,6 +535,9 @@ const PATHS = {
   diagnose: `/admin/forward/routes/${GAME}?diagnose=1`,
   nodes: '/admin/forward/inventory',
   node: '/admin/forward/inventory/forward-51',
+  dns: '/admin/forward/dns',
+  'route-ha': `/admin/forward/routes/${EDGE}`,
+  'editor-ha': `/admin/forward/routes/${EDGE}/edit`,
   'no-capability': '/admin/forward/overview'
 }
 
@@ -463,6 +547,10 @@ export function forwardApi(path, { method, query = {}, body, scenario }) {
   const rest = path.slice('/api/v4/forward'.length)
   const data = value => ({ data: value })
   const empty = scenario === 'routes-empty'
+  if (rest.startsWith('/dns/')) {
+    const answer = dnsApi(rest, { method, query, body })
+    if (answer !== undefined) return answer
+  }
   if (rest === '/routes' && method === 'GET') {
     const routes = empty ? [] : ROUTES.filter(item => !query.node_ref || item.route.hops.some(entry => entry.node_refs.includes(query.node_ref)))
     return data({ routes, can_delete: true })
@@ -491,6 +579,7 @@ export function forwardApi(path, { method, query = {}, body, scenario }) {
     }
     if (action === 'health') return data({ health: Object.values(HEALTH).flat().filter(entry => entry.route_id === id) })
     if (action === 'diagnose') return data(DIAGNOSIS)
+    if (action === 'dns') return data({ status: dnsStatus(id) })
   }
   match = rest.match(/^\/nodes\/([^/]+)(?:\/(\w+))?$/)
   if (match) {
