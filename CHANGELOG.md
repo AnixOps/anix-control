@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 4.2.0-rc.1 - 2026-10-04
+
 ### Added
 
 - **Proxy node: node, registration key and load balancer routes run
@@ -165,8 +167,9 @@
     report sent twice); a revoked certificate (`agent_cert_revoked`, then
     re-enrollment with a new credential); the #179 forward generation
     reset; clock-skew bounds checked on Control's side.
-  - **Known issues** the suite reports as skips until they are fixed: an
-    Agent proxy core reload that fails with `address already in use`.
+  - The suite found two Agent reload problems, since fixed in Agent 4.2.0-rc.1
+    (anix-agent #16): a failed reload now restores the previous node, and a
+    forwarding-only change no longer reloads the proxy inbound.
   - **CI:** the new job "Cross-Repo E2E" runs it in the full lane and
     nightly. The main lane runs on PostgreSQL; the forward lane runs as root
     in a throwaway network namespace. It uploads its logs on failure and is
@@ -986,7 +989,7 @@
   accepts the machine-telemetry `systemd_services` setting and collects the
   systemd services report (anix-agent #5). Older Agents refuse that setting,
   so the services panel needs this Agent.
-- CI builds the Agent from anix-agent `c6b5e34e` (was `1b155dee`): the
+- CI builds the Agent from anix-agent `b32b90a` (was `1b155dee`): the
   Agent line AG-1 to AG-5b, forwarding (F3b), the O1 installer layout
   (#13), diagnostics (#14), staged upgrades (#15), and the reload fixes
   (#16: a failed reload restores the previous node; a forwarding-only
@@ -1167,6 +1170,21 @@
   cache (its key pattern matched nothing there), so device limits counted
   only each node's own connections. It now counts the online sets of every
   node, through the reader `alive.v1` shares.
+
+### Known issues
+
+- A plugin operation created before a one-off Agent operation (a diagnostic,
+  a reload, a ping) but sent after it can still be refused with "revision N
+  is not newer than M" and stay `dispatching`. The likely case is a later step
+  of a plugin install, configure and enable chain that waits on the step
+  before it while someone runs a diagnostic. Retry the plugin operation.
+- Plugin lifecycle operations on a node can take up to about 40 seconds to be
+  dispatched in the cross-repository end-to-end suite (a latency, not a loss).
+- An existing Agent data race, not fixed in this release: `startWith`
+  (`controller.go`) writes `aliveMap` without the reconcile lock that the
+  stream's alive-list handler holds, and `go test -race ./node` sometimes
+  reports it. The Agent's CI race step runs a filtered set of tests and does
+  not catch it.
 
 ## 4.1.0 - 2026-10-04
 
