@@ -989,13 +989,14 @@
   accepts the machine-telemetry `systemd_services` setting and collects the
   systemd services report (anix-agent #5). Older Agents refuse that setting,
   so the services panel needs this Agent.
-- CI builds the Agent from anix-agent `54150d83` (was `1b155dee`): the
+- CI builds the Agent from anix-agent `60d5749f` (was `1b155dee`): the
   Agent line AG-1 to AG-5b, forwarding (F3b), the O1 installer layout
   (#13), diagnostics (#14), staged upgrades (#15), the reload fixes (#16:
   a failed reload restores the previous node; a forwarding-only change no
   longer reloads the proxy inbound), the alive-list race and the
   `uninstall` that follows the O1 layout (#18), the 4.2.0-rc.1 version
-  surfaces (#17, #19) and three flaky-test fixes (#20, #21).
+  surfaces (#17, #19), three flaky-test fixes (#20, #21) and the new
+  official signing root (#22).
   `config/scripts/check_release_workflow.sh` checks the new pin.
 - **Release branches and the v4.2 upgrade order** (owner decisions of
   2026-10-04; documentation and CI triggers only).
@@ -1051,6 +1052,20 @@
     tests in shard 3 and 72 s in shard 4 (CI run 37229103569), the new one
     85 to 102 s per shard (run 37229598173). A shard's job is dominated by
     a 55 to 92 s compile before its first test, which this does not change.
+
+- **The official release signing key is replaced (4.2.0-rc.1).** The previous
+  key could not be recovered, so 4.2.0 is signed with a new Ed25519 key:
+  public root `jW26nr2tbthASoeq6RmIpx8Ah+uhPNIv9V1ewRVb1VE=` (SHA-256 of the
+  raw key `83fe4c1bed0bb2ed1b9f31ba873b799ead676835b6086a8c2bc2d272a96ae5de`).
+  `plugins.official_public_key` in the templates and defaults, the
+  `OFFICIAL_PUBLIC_KEY` and the verification commands of the Agent installer
+  (`install.sh`, the release asset `agent-install.sh`) and the documentation
+  use it. **Upgrading is a root rotation:** a Control that starts with the new
+  root retires the old one, and package releases signed with the old root stop
+  verifying until the 4.2 packages are imported (a maintenance window); the
+  Agents are upgraded first with the 4.2 `agent-install.sh`, not with the
+  `/install.sh` of a 4.1 Control, which pins the old root. See docs/UPGRADE.md,
+  "The Official Signing Root Changes (v4.2)".
 
 ### Removed
 

@@ -150,7 +150,7 @@ This table is generated from the code and checked by
 | `ANIX_CONTROL_PLUGINS_DISPATCH_ENABLED` | `plugins.dispatch_enabled` | bool | `false` |
 | `ANIX_CONTROL_PLUGINS_DISPATCH_POLL_INTERVAL` | `plugins.dispatch_poll_interval` | string | `5s` |
 | `ANIX_CONTROL_PLUGINS_IDENTITY_BOOTSTRAP_PACKAGE_DIR` | `plugins.identity_bootstrap_package_dir` | string |  |
-| `ANIX_CONTROL_PLUGINS_OFFICIAL_PUBLIC_KEY` | `plugins.official_public_key` | string | `lvbhRmhzVbSAbrw3vm0k7vYqpEu4/dF/ZqVbp2gS7uM=` |
+| `ANIX_CONTROL_PLUGINS_OFFICIAL_PUBLIC_KEY` | `plugins.official_public_key` | string | `jW26nr2tbthASoeq6RmIpx8Ah+uhPNIv9V1ewRVb1VE=` |
 | `ANIX_CONTROL_PLUGINS_TOPOLOGY_EXECUTION_ENABLED` | `plugins.topology_execution_enabled` | bool | `false` |
 | `ANIX_CONTROL_PLUGINS_TOPOLOGY_POLL_INTERVAL` | `plugins.topology_poll_interval` | string | `5s` |
 | `ANIX_CONTROL_SERVER_CORS_ALLOWED_HEADERS` | `server.cors.allowed_headers` | list | `Content-Type,Authorization,X-API-Key` |

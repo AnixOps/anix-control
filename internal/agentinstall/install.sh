@@ -31,7 +31,7 @@
 # before running it:
 #   curl -fsSLO https://<control>/install.sh
 #   curl -fsSLO https://<control>/install.sh.sig
-#   printf '%s' 'MCowBQYDK2VwAyEAlvbhRmhzVbSAbrw3vm0k7vYqpEu4/dF/ZqVbp2gS7uM=' | base64 -d >official.der
+#   printf '%s' 'MCowBQYDK2VwAyEAjW26nr2tbthASoeq6RmIpx8Ah+uhPNIv9V1ewRVb1VE=' | base64 -d >official.der
 #   base64 -d install.sh.sig >install.sh.sig.bin
 #   openssl pkeyutl -verify -pubin -keyform DER -inkey official.der -rawin \
 #     -in install.sh -sigfile install.sh.sig.bin
@@ -42,7 +42,7 @@ set -Eeuo pipefail
 
 # The official AnixOps release key (plugins.official_public_key): base64 of
 # the raw Ed25519 public key. It verifies Agent release signatures.
-readonly OFFICIAL_PUBLIC_KEY="lvbhRmhzVbSAbrw3vm0k7vYqpEu4/dF/ZqVbp2gS7uM="
+readonly OFFICIAL_PUBLIC_KEY="jW26nr2tbthASoeq6RmIpx8Ah+uhPNIv9V1ewRVb1VE="
 
 # ROOT prefixes every path the script writes; tests set it to a temporary
 # directory. Paths written into configuration and units never carry it.

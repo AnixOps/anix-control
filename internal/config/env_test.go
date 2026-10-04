@@ -106,7 +106,7 @@ func TestLoadWithoutConfigFileUsesBuiltInDefaultsAndEnvironment(t *testing.T) {
 	assert.Equal(t, "container-secret", loaded.JWT.Secret)
 	assert.True(t, loaded.Plugins.ControlExecutionEnabled)
 	assert.Empty(t, loaded.Plugins.ControlHostRuntimeDir, "container defaults use private temporary host directories")
-	assert.Equal(t, "lvbhRmhzVbSAbrw3vm0k7vYqpEu4/dF/ZqVbp2gS7uM=", loaded.Plugins.OfficialPublicKey)
+	assert.Equal(t, "jW26nr2tbthASoeq6RmIpx8Ah+uhPNIv9V1ewRVb1VE=", loaded.Plugins.OfficialPublicKey)
 	require.NoError(t, loaded.ValidateForServer())
 }
 
