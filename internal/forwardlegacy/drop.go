@@ -220,7 +220,7 @@ func describeBackup(path string, now time.Time) (*Backup, error) {
 	if err != nil {
 		return nil, fmt.Errorf("not readable: %w", err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	digest := sha256.New()
 	if _, err := io.Copy(digest, file); err != nil {
 		return nil, fmt.Errorf("not readable: %w", err)

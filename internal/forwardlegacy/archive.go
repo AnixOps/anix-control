@@ -170,7 +170,7 @@ func readTable(db *gorm.DB, table string, secrets []string) ([]map[string]any, [
 	if err != nil {
 		return nil, nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 	columns, err := rows.Columns()
 	if err != nil {
 		return nil, nil, err
@@ -397,7 +397,7 @@ func VerifyArchive(record *model.ForwardLegacyArchive) (*Archive, error) {
 	if err != nil {
 		return nil, fmt.Errorf("archive %s is not readable: %w", record.Path, err)
 	}
-	defer file.Close()
+	defer func() { _ = file.Close() }()
 	content, err := io.ReadAll(file)
 	if err != nil {
 		return nil, fmt.Errorf("archive %s is not readable: %w", record.Path, err)
