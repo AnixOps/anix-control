@@ -4,7 +4,7 @@
 # Control. Guide: config/deploy/compose/modules.md. In short:
 #
 #   c="docker compose -f docker-compose.prod.yml -f docker-compose.modules.yml"
-#   openssl rand -base64 32 | install -m 0400 -o 10001 -g 10001 /dev/stdin secrets/module_ca_kek
+#   # secrets/module_ca_kek: created by init-secrets.sh (docker-compose.prod.yml)
 #   $c run --rm -T migrate                                       # creates the module CA
 #   $c run --rm -T --no-deps migrate module ca bundle \
 #     | install -m 0444 /dev/stdin secrets/module_ca_bundle

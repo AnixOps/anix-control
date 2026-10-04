@@ -20,7 +20,11 @@ On Control:
 - The built-in agent CA is on (`module_runtime.ca_kek` with `pki: builtin`)
   and the gRPC listener has TLS (`grpc.enabled`, `grpc.tls_cert_file`):
   the Agent enrolls there (`docs/UPGRADE.md`,
-  "Agent Transports: Preparing For v4.2").
+  "Agent Transports: Preparing For v4.2"). Fresh installs generate the key;
+  the certificate must be publicly trusted for the gRPC target, because the
+  Agent verifies it against the node's system CAs and accepts no private CA
+  ([release installation](release-installation.md#agent-access),
+  `docs/DEPLOYMENT.md` 2.0.2).
 - Nodes reach Control over **https**. Set `agent_install.public_url` to the
   address nodes use (for example `https://panel.example.com`) unless the
   request's origin is already right (behind a reverse proxy it only is when

@@ -9,3 +9,25 @@ ANIX_CONTROL_ADMIN_PASSWORD_FILE, the migrate init container prints a generated 
 
 UI and API (the UI server also proxies /api):
   kubectl -n {{ .Release.Namespace }} port-forward svc/{{ include "anix-control.fullname" . }} 3000:{{ .Values.service.webPort }}
+
+AnixOps Agents (they enroll and connect over gRPC with TLS, using the built-in CA):
+{{- if eq (include "anix-control.caKekEnabled" .) "true" }}
+{{- if .Values.caKek.existingSecret }}
+  CA key: Secret {{ .Values.caKek.existingSecret }} (key ca_kek).
+{{- else }}
+  CA key: Secret {{ include "anix-control.caKekSecretName" . }}, generated on first install and kept across
+  upgrades and uninstall. Back it up with the database; never change it:
+    kubectl -n {{ .Release.Namespace }} get secret {{ include "anix-control.caKekSecretName" . }} -o jsonpath='{.data.ca_kek}' | base64 -d | sha256sum | cut -c1-16   # fingerprint
+{{- end }}
+{{- else if eq (include "anix-control.caKekMapped" .) "true" }}
+  CA key: from secrets.files (ANIX_CONTROL_MODULE_RUNTIME_CA_KEK).
+{{- else }}
+  WARNING: no CA key (caKek.generate=false): Agents cannot enroll.
+{{- end }}
+{{- if not .Values.grpc.enabled }}
+  WARNING: gRPC is off (grpc.enabled=false): Agents cannot connect.
+{{- else if not .Values.grpc.tls.secretName }}
+  WARNING: gRPC has no TLS certificate (grpc.tls.secretName): Agents cannot connect. Agents verify it
+  against their system CA roots, so use a publicly trusted certificate (cert-manager with Let's
+  Encrypt: see the chart README), not a self-signed one.
+{{- end }}

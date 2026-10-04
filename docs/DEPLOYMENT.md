@@ -101,6 +101,7 @@ export VERSION=v4.0.1
 mkdir -p /opt/anix-control && cd /opt/anix-control
 base="https://raw.githubusercontent.com/AnixOps/anix-control/${VERSION}"
 curl -fsSLO "${base}/docker-compose.prod.yml"
+curl -fsSLO "${base}/config/deploy/compose/init-secrets.sh"
 curl -fsSL "${base}/config/deploy/compose/control.env.example" -o control.env
 curl -fsSL "${base}/.env.example" -o .env
 
@@ -112,8 +113,10 @@ cosign verify ghcr.io/anixops/anix-control@sha256:<digest> \
 
 # 3) 编辑 control.env（数据库地址、管理员邮箱等），创建 secrets（容器 uid 10001 可读）
 install -d -m 0750 secrets
-openssl rand -hex 32 | install -m 0400 -o 10001 -g 10001 /dev/stdin secrets/jwt_secret
 printf '%s' '数据库密码' | install -m 0400 -o 10001 -g 10001 /dev/stdin secrets/db_password
+#    生成 jwt_secret 与 CA 密钥 secrets/module_ca_kek（已存在则保留，只打印指纹）；
+#    有公网可信证书时同时开启 gRPC TLS（见 2.0.2）
+sudo bash init-secrets.sh --grpc-name grpc.example.com
 
 # 4) 启动：migrate 一次性服务先准备库结构，control 随后启动
 docker compose -f docker-compose.prod.yml up -d
@@ -158,6 +161,38 @@ kubectl -n anix rollout status deploy/control-anix-control
 
 多副本（HA）尚未支持：chart 会拒绝 `replicaCount` 大于 1。
 
+### 2.0.2 Agent access：CA 密钥与 gRPC TLS
+
+AnixOps Agent 通过 gRPC（TLS）注册（AgentEnrollment）并连接，证书由 Control 内置
+CA 签发；v4.2 起 `agent_control.mtls` 默认 `required`，这是 Agent 唯一的连接方式。
+全新安装开箱即就绪，需要两样东西：
+
+1. **CA 密钥**（`module_runtime.ca_kek`，32 字节随机值，base64）。Compose：
+   `init-secrets.sh` 生成 `secrets/module_ca_kek`（0400，uid 10001），Compose 文件以
+   `ANIX_CONTROL_MODULE_RUNTIME_CA_KEK_FILE` 传入；Helm：chart 首次安装时生成
+   `<fullname>-ca-kek` Secret（`lookup` 保持升级不变、`immutable`、卸载时保留）；
+   systemd：安装器生成 `config/secrets/module_ca_kek`（0600）。三者都只打印指纹、
+   **从不覆盖已有密钥**。数据库里的 CA 由它加密：换成别的密钥后 Control 无法再签发
+   Agent 证书（`wrong key-encryption key`），所有 Agent 需重新注册。请与数据库一起备份；
+   轮换是手动流程（[`UPGRADE.md`](UPGRADE.md)）。
+2. **Agent 信任的 gRPC 证书。** Agent 用节点的系统根证书校验 Control 的证书（主机名为
+   `agent_install.grpc_target`，否则 `agent_install.public_url` 的主机），**不能**
+   配置私有 CA，所以**自签名证书不可用**，安装器也不会生成。请使用公网可信证书
+   （Let's Encrypt，或反向代理已有的同名证书）：
+   - Compose：`sudo bash init-secrets.sh --grpc-name grpc.example.com`（自动使用
+     `/etc/letsencrypt/live/<name>/`，或加 `--grpc-tls-cert`/`--grpc-tls-key`），再在
+     `.env` 设置 `ANIX_CONTROL_GRPC_BIND=0.0.0.0`。证书续期后重跑同一命令并
+     `restart control`。详见 [`config/deploy/compose/secrets.README.md`](../config/deploy/compose/secrets.README.md)。
+   - Helm：`grpc.enabled=true`、`grpc.tls.secretName=<kubernetes.io/tls Secret>`（cert-manager
+     示例见 chart README），`config.ANIX_CONTROL_AGENT_INSTALL_GRPC_TARGET=<name>:50051`。
+   - systemd：`install.sh install|enable-agents --grpc-name <name>`（见
+     [`guide/release-installation.md`](guide/release-installation.md#agent-access)）。
+
+   脚本会像 Agent 一样校验证书（系统根证书链、主机名、私钥匹配），不通过即拒绝。
+   没有证书时安装照常完成，但会打印上述步骤，Control 启动日志也会提示没有 Agent 能连接。
+
+检查：`anix-control agents transports --check-required`。
+
 ### 2.1 一键安装脚本（systemd，已冻结）
 
 生产环境默认使用 GitHub Release 安装器。它只下载版本匹配的发布二进制、前端包、校验和和单个配置模板，不 clone 仓库，也不在服务器构建 Go、前端或 Docker 镜像。对 `v4.*`，它还会下载并校验签名身份包三件套，暂存到 root 所有的引导目录后验证登录路径：
@@ -167,9 +202,12 @@ export VERSION=v4.0.0
 curl -fsSL \
   "https://raw.githubusercontent.com/AnixOps/anix-control/${VERSION}/scripts/install.sh" \
   -o /tmp/anix-control-install.sh
-sudo bash /tmp/anix-control-install.sh install --version "${VERSION}" --admin-email "admin@example.com"
+sudo bash /tmp/anix-control-install.sh install --version "${VERSION}" --admin-email "admin@example.com" \
+  --grpc-name grpc.example.com
 rm -f /tmp/anix-control-install.sh
 ```
+
+全新安装会生成 CA 密钥，并在有公网可信证书时开启 gRPC TLS（2.0.2）。
 
 安装器会验证 Release 中的 SHA-256，保留已有配置和数据库，更新失败时恢复上一个二进制/前端快照。完整步骤、反向代理、升级与回滚说明见 [`guide/release-installation.md`](guide/release-installation.md)。
 

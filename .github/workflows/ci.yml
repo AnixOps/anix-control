@@ -111,6 +111,19 @@ jobs:
       - name: Test identity bootstrap installer configuration
         run: bash scripts/tests/test_identity_bootstrap_install.sh
 
+      # Fresh Control installs generate the CA key and enable gRPC TLS for
+      # Agents (systemd installer, Compose init-secrets.sh): shellcheck, then
+      # the fake-root tests.
+      - name: Lint the Control installers
+        run: |
+          shellcheck -x scripts/install.sh config/deploy/compose/init-secrets.sh config/deploy/grpc_tls/setup_certbot.sh \
+            scripts/tests/test_control_install_agent_access.sh scripts/tests/test_compose_init_secrets.sh
+
+      - name: Test Control installer Agent access in a fake root
+        run: |
+          bash scripts/tests/test_control_install_agent_access.sh
+          bash scripts/tests/test_compose_init_secrets.sh
+
       # The Agent installer Control serves at /install.sh (one-command node
       # onboarding): shellcheck, then the fake-root tests.
       - name: Lint the Agent installer
@@ -717,8 +730,10 @@ jobs:
           sed -i -e 's/^ANIX_CONTROL_DATABASE_USERNAME=.*/ANIX_CONTROL_DATABASE_USERNAME=postgres/' \
                  -e 's/^ANIX_CONTROL_DATABASE_DATABASE=.*/ANIX_CONTROL_DATABASE_DATABASE=anix_control_compose/' "${work}/control.env"
           install -d -m 0755 "${work}/secrets"
-          openssl rand -hex 32 | sudo install -m 0400 -o 10001 -g 10001 /dev/stdin "${work}/secrets/jwt_secret"
           printf '%s' postgres | sudo install -m 0400 -o 10001 -g 10001 /dev/stdin "${work}/secrets/db_password"
+          # The documented fresh-install step: jwt_secret and the CA key.
+          sudo bash config/deploy/compose/init-secrets.sh --dir "${work}"
+          test "$(sudo stat -c '%a %u' "${work}/secrets/module_ca_kek")" = "400 10001"
           cd "${work}"
           export ANIX_CONTROL_IMAGE=anix-control:ci
           compose=(docker compose -f docker-compose.prod.yml)
@@ -795,8 +810,27 @@ jobs:
             --set modules.identity-platform.trustBundleConfigMap=ca --set modules.identity-platform.enrollmentSecret=enrollment)
           helm lint --strict "${chart}" "${secrets[@]}" "${modules[@]}"
           helm template ci "${chart}" "${secrets[@]}" "${modules[@]}" | kubeconform -strict -summary -kubernetes-version 1.30.0
-          if helm template ci "${chart}" "${secrets[@]}" --set moduleRuntime.enabled=true >/dev/null 2>&1; then
+          if helm template ci "${chart}" "${secrets[@]}" --set caKek.generate=false --set moduleRuntime.enabled=true >/dev/null 2>&1; then
             echo "moduleRuntime without a CA key must be rejected"; exit 1
+          fi
+          # Fresh installs: the chart generates the CA key (an immutable Secret
+          # kept on uninstall) and mounts it; gRPC TLS comes from a TLS Secret.
+          rendered="$(helm template ci "${chart}" "${secrets[@]}" --set grpc.enabled=true --set grpc.tls.secretName=grpc-tls)"
+          kubeconform -strict -summary -kubernetes-version 1.30.0 <<<"${rendered}"
+          grep -q 'name: ci-anix-control-ca-kek' <<<"${rendered}"
+          grep -q 'helm.sh/resource-policy: keep' <<<"${rendered}"
+          grep -q '^immutable: true' <<<"${rendered}"
+          grep -q 'value: /run/secrets/anix-control-ca-kek/ca_kek' <<<"${rendered}"
+          grep -q 'value: /run/secrets/anix-control-grpc-tls/tls.crt' <<<"${rendered}"
+          key="$(helm template ci "${chart}" "${secrets[@]}" -s templates/ca-kek-secret.yaml | sed -n 's/^  ca_kek: "\(.*\)"$/\1/p')"
+          test "$(printf '%s' "${key}" | base64 -d | base64 -d | wc -c)" -eq 32
+          # An existing Secret or the older secrets.files mapping: no generated Secret.
+          if helm template ci "${chart}" "${secrets[@]}" --set caKek.existingSecret=kek | grep -q 'ca-kek-secret.yaml'; then
+            echo "caKek.existingSecret must not render a CA key Secret"; exit 1
+          fi
+          mapped="$(helm template ci "${chart}" "${secrets[@]}" --set secrets.files.module_ca_kek=ANIX_CONTROL_MODULE_RUNTIME_CA_KEK --set secrets.values.module_ca_kek=z)"
+          if grep -q 'ca-kek-secret.yaml\|anix-control-ca-kek' <<<"${mapped}"; then
+            echo "a secrets.files CA key must take precedence over the generated one"; exit 1
           fi
           if helm template ci "${chart}" "${secrets[@]}" "${modules[@]}" --set moduleRuntime.enabled=false >/dev/null 2>&1; then
             echo "modules without moduleRuntime must be rejected"; exit 1
