@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # shellcheck disable=SC2317 # the fakes are called by the sourced installer.
 # Tests of the Agent installer (internal/agentinstall/install.sh) in a fake
-# root: systemctl, curl, nft, the user tools and chown are shell functions,
+# root: systemctl, curl, nft, sysctl, the user tools and chown are shell functions,
 # the Agent is a fake binary that "enrolls" when systemctl restarts it.
 # Nothing here touches the host's system.
 
@@ -105,6 +105,10 @@ run_installer() {
         mv "${STATE}/nft-tables.new" "${STATE}/nft-tables"
       fi
     }
+    sysctl() {
+      printf 'sysctl %s\n' "$*" >>"${STATE}/log"
+      [[ "${FAKE_SYSCTL:-ok}" == "ok" ]]
+    }
     systemctl() {
       printf 'systemctl %s\n' "$*" >>"${STATE}/log"
       if [[ "$1" == "restart" && "$2" == "anix-agent.service" ]]; then
@@ -200,6 +204,14 @@ expect_out "nftables table inet v2b_forward"
 expect_out "nftables table ip anixops_forward"
 expect_out "systemd unit v2forward-agent.service"
 expect_out "AnixOps Agent v4.2.0 is running (install)"
+sysctl_file="${ROOT_DIR}/etc/sysctl.d/90-anixops-forward.conf"
+grep -qxF 'net.ipv4.ip_forward = 1' "${sysctl_file}" || fail "sysctl file lacks IPv4 forwarding"
+grep -qxF 'net.ipv6.conf.all.forwarding = 1' "${sysctl_file}" || fail "sysctl file lacks IPv6 forwarding"
+[[ "$(stat -c '%a' "${sysctl_file}")" == "644" ]] || fail "sysctl file mode"
+grep -qxF "sysctl -e -q -p ${sysctl_file}" "${STATE}/log" || fail "forwarding not applied"
+[[ "$(grep -n '^sysctl ' "${STATE}/log" | cut -d: -f1)" -lt "$(grep -n '^systemctl restart anix-agent.service' "${STATE}/log" | cut -d: -f1)" ]] ||
+  fail "forwarding must be on before the Agent starts"
+expect_out "forwarding:  wrote /etc/sysctl.d/90-anixops-forward.conf (net.ipv4.ip_forward=1 net.ipv6.conf.all.forwarding=1); applied"
 expect_out "serial abc123"
 ! grep -qF "${TOKEN_A}" "${STATE}/out" || fail "the token was printed"
 grep -qF "curl ${GITHUB}/v4.2.0/anix-agent-linux-64.zip.dgst" "${STATE}/log" || fail "checksum not from GitHub"
@@ -247,6 +259,9 @@ metadata "source cn https://mirror.example.cn/anix-agent" "source control ${CONT
 run_installer --control "${CONTROL}" --node proxy-7 --token "${TOKEN_A}" --mirror cn
 expect_status 0 "cn mirror"
 grep -qF 'curl https://mirror.example.cn/anix-agent/v4.2.0/anix-agent-linux-64.zip' "${STATE}/log" || fail "cn mirror not used"
+[[ ! -e "${ROOT_DIR}/etc/sysctl.d/90-anixops-forward.conf" ]] || fail "a proxy node got IP forwarding without --forward"
+! grep -q '^sysctl ' "${STATE}/log" || fail "sysctl ran for a proxy node without --forward"
+expect_out "forwarding:  unchanged (a proxy node; --forward turns IP forwarding on)"
 ! grep -q '\.dgst' "${STATE}/log" || fail "a .dgst was fetched although Control published the digest"
 new_root fallback
 metadata
@@ -254,6 +269,23 @@ run_installer --control "${CONTROL}" --node proxy-7 --token "${TOKEN_A}" --mirro
 expect_status 0 "cn fallback"
 expect_out "the cn mirror is not set up on Control; downloading from GitHub releases"
 ok "mirror selection and trusted digests"
+
+# 5b. IP forwarding: a proxy node with --forward gets it; a sysctl that
+# cannot apply leaves the file for the next boot and only notes it.
+new_root proxyforward
+metadata
+run_installer --control "${CONTROL}" --node proxy-7 --token "${TOKEN_A}" --forward
+expect_status 0 "proxy --forward"
+grep -qxF 'net.ipv4.ip_forward = 1' "${ROOT_DIR}/etc/sysctl.d/90-anixops-forward.conf" || fail "--forward wrote no sysctl file"
+expect_out "; applied"
+new_root sysctlfail
+metadata
+FAKE_SYSCTL=fail run_installer --control "${CONTROL}" --node forward-41 --token "${TOKEN_A}"
+expect_status 0 "sysctl failure is not fatal"
+[[ -f "${ROOT_DIR}/etc/sysctl.d/90-anixops-forward.conf" ]] || fail "sysctl failure removed the file"
+expect_out "sysctl could not apply /etc/sysctl.d/90-anixops-forward.conf now"
+expect_out "; applies at the next boot"
+ok "IP forwarding for forward nodes"
 
 # 6. Signatures: a valid release signature verifies, a wrong one aborts.
 if openssl pkeyutl -help 2>&1 | grep -q -- '-rawin'; then

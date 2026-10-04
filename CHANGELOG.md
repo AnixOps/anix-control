@@ -608,6 +608,23 @@
   and planner goldens in `contracts/forward/v1/gost` change accordingly. A
   real-gost test (`TestNetnsMuxRestart`, about 6 s of CI) covers the web
   API path and the fallback.
+- **Forwarding recovers after a Control database reset or restore.** Per-node
+  forward generations restarted below the ones the Agents held, and Agents
+  ignore an older generation forever (the drivers answer
+  `ErrStaleGeneration`). A node's `NodeForwardReport` carries the generation
+  and `state_hash` its Agent holds: when that is ahead of the stored state
+  (higher, or equal with another hash), Control moves the node's generation
+  to the reported one (same hash) or one above it, keeping its hops, pushes
+  the node, and every later plan stamps above it. Recoveries are logged and
+  counted (`anixops_forward_generation_recoveries_total{reason}`). The new
+  operator command `anix-control forward reset-node <node_ref>` forces a
+  generation above both (audit log `system/cli`). Agents need no change
+  (`forward-sdk.md` section 8.2, PROTOCOL.md "Forwarding").
+- The Agent installer turns on IP forwarding on forward nodes (and on proxy
+  nodes with `--forward`): it writes `/etc/sysctl.d/90-anixops-forward.conf`
+  (`net.ipv4.ip_forward = 1`, `net.ipv6.conf.all.forwarding = 1`), applies
+  it with `sysctl -e -p` and reports it in its summary. Without it nftables
+  forwarding dropped every packet on a host that did not forward already.
 - UniProxy `alivelist` answered an empty list with the built-in memory
   cache (its key pattern matched nothing there), so device limits counted
   only each node's own connections. It now counts the online sets of every
