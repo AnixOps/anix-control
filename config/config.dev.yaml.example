@@ -134,6 +134,11 @@ forward_runtime:
     concurrency: 4
     retention_days: 1
 
+# Development: serve local API-key agents. Production templates leave
+# agent_control.mtls empty, which is required from v4.2.
+agent_control:
+  mtls: "preferred"
+
 grpc:
   enabled: true
   host: "127.0.0.1"

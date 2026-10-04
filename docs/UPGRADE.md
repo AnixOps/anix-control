@@ -1952,7 +1952,9 @@ selectable.
 - **Who is affected.** Only kernels that leave `agent_control.mtls` unset.
   A config file that sets `mtls: "preferred"` (the 4.1 `config.yaml.example`
   did) keeps `preferred` after the upgrade: delete the line, or set
-  `required`, once the check below passes. The 4.2 templates leave it empty.
+  `required`, once the check below passes. The 4.2 templates leave it empty,
+  except `config.dev.yaml.example`, which sets `preferred` for local
+  API-key agents.
 
 ### Order Of Operations
 
@@ -1995,7 +1997,11 @@ selectable.
      listener, its TLS or the built-in CA is missing: no Agent can connect
      at all. The default still starts (an install without Agents, or with
      third-party node software only, needs nothing); an explicit
-     `mtls: "required"` refuses to start without them, as in 4.1.
+     `mtls: "required"` refuses to start without them, as in 4.1. A fresh
+     install from `install.sh` or the Compose templates is in this state
+     until you add the gRPC TLS files and `module_runtime.ca_kek`
+     (`openssl rand -base64 32`); the
+     [onboarding guide](guide/agent-onboarding.md) lists them.
 4. **Watch** `anixops_agent_legacy_refused_total{path}` on `/metrics`.
    Refused requests are not recorded in the transport inventory, so a
    refused node keeps its last legacy sighting and drops out of the 7-day

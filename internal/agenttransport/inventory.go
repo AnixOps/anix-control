@@ -133,7 +133,8 @@ type RequiredBlocker struct {
 	Node   string `json:"node"`
 	Name   string `json:"name"`
 	Reason string `json:"reason"`
-	// Transport is the latest legacy transport, empty for never_enrolled.
+	// Transport and LastSeenAt are the newest legacy sighting; empty and
+	// nil for never_enrolled.
 	Transport  string     `json:"transport,omitempty"`
 	LastSeenAt *time.Time `json:"last_seen_at"`
 	// Recent: a legacy node seen within RecentLegacyWindow.
@@ -165,14 +166,16 @@ func requiredBlocker(node NodeTransports, now time.Time) (RequiredBlocker, bool)
 	if !node.Enabled {
 		return RequiredBlocker{}, false
 	}
-	blocker := RequiredBlocker{Node: node.Node, Name: node.Name, LastSeenAt: node.LastSeenAt}
+	blocker := RequiredBlocker{Node: node.Node, Name: node.Name}
 	switch {
 	case node.Status == StatusLegacy:
 		blocker.Reason = BlockerLegacy
+		// The newest legacy sighting, not a later third-party one.
 		for _, transport := range node.Transports {
 			if transport.Legacy {
-				blocker.Transport = transport.Transport
-				blocker.Recent = now.Sub(transport.LastSeenAt) <= RecentLegacyWindow
+				lastSeen := transport.LastSeenAt
+				blocker.Transport, blocker.LastSeenAt = transport.Transport, &lastSeen
+				blocker.Recent = now.Sub(lastSeen) <= RecentLegacyWindow
 				break
 			}
 		}

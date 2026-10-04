@@ -434,6 +434,7 @@ func TestRequiredReadiness(t *testing.T) {
 	require.NoError(t, db.Create(&[]model.AgentTransport{
 		{NodeKind: "proxy", NodeID: 1, Transport: model.AgentTransportMTLSStream, FirstSeenAt: days(3), LastSeenAt: days(0)},
 		{NodeKind: "proxy", NodeID: 2, Transport: model.AgentTransportAPIKeyStream, FirstSeenAt: days(30), LastSeenAt: days(1)},
+		{NodeKind: "proxy", NodeID: 2, Transport: model.AgentTransportUniProxy, FirstSeenAt: days(30), LastSeenAt: days(0)},
 		{NodeKind: "proxy", NodeID: 3, Transport: model.AgentTransportHTTPLegacy, FirstSeenAt: days(30), LastSeenAt: days(10)},
 		{NodeKind: "proxy", NodeID: 4, Transport: model.AgentTransportWebSocket, FirstSeenAt: days(30), LastSeenAt: days(1)},
 		{NodeKind: "proxy", NodeID: 5, Transport: model.AgentTransportUniProxy, FirstSeenAt: days(30), LastSeenAt: days(0)},
@@ -450,6 +451,7 @@ func TestRequiredReadiness(t *testing.T) {
 	require.Len(t, blockers, 4, "%+v", summary.RequiredBlockers)
 	require.Equal(t, RequiredBlocker{Node: "proxy-2", Name: "recent-legacy", Reason: BlockerLegacy, Transport: model.AgentTransportAPIKeyStream,
 		LastSeenAt: blockers["proxy-2"].LastSeenAt, Recent: true}, blockers["proxy-2"])
+	require.True(t, blockers["proxy-2"].LastSeenAt.Equal(days(1)), "the legacy sighting's time, not the later UniProxy one")
 	require.Equal(t, BlockerLegacy, blockers["proxy-3"].Reason)
 	require.False(t, blockers["proxy-3"].Recent, "seen 10 days ago")
 	require.Equal(t, BlockerNeverEnrolled, blockers["proxy-7"].Reason)

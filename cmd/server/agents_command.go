@@ -217,17 +217,16 @@ func requiredReadinessWarning(inventory agenttransport.Inventory) string {
 		return ""
 	}
 	legacy, recent, never := summary.RequiredBlockerCounts()
-	var named []string
+	// Recent legacy Agents first: they were in use until the upgrade.
+	var named, rest []string
 	for _, blocker := range summary.RequiredBlockers {
 		if blocker.Reason == agenttransport.BlockerLegacy && blocker.Recent {
 			named = append(named, blocker.Node+" ("+blocker.Transport+")")
+		} else {
+			rest = append(rest, blocker.Node+" ("+blocker.Reason+")")
 		}
 	}
-	for _, blocker := range summary.RequiredBlockers {
-		if !(blocker.Reason == agenttransport.BlockerLegacy && blocker.Recent) {
-			named = append(named, blocker.Node+" ("+blocker.Reason+")")
-		}
-	}
+	named = append(named, rest...)
 	more := ""
 	if len(named) > requiredReadinessWarningLimit {
 		more = fmt.Sprintf(", and %d more", len(named)-requiredReadinessWarningLimit)

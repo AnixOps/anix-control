@@ -111,4 +111,8 @@ func TestShippedConfigsLeaveTheAgentModeToTheDefault(t *testing.T) {
 		require.NoError(t, loaded.validateAgentControl(), name)
 	}
 	resetConfig()
+	loaded, err := Load(filepath.Join("..", "..", "config", "config.dev.yaml.example"))
+	require.NoError(t, err)
+	require.Equal(t, AgentMTLSPreferred, loaded.AgentControl.MTLSOrDefault(), "the development template serves local API-key agents")
+	resetConfig()
 }
