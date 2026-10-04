@@ -184,6 +184,13 @@ func runDNSProviderCredentials(t *testing.T, db *gorm.DB) {
 	require.NotEmpty(t, row.SealedCredentials)
 	require.NotContains(t, row.SealedCredentials, cfSecret)
 	require.NotContains(t, row.ConfigJSON+row.CredentialNames, cfSecret)
+	var ledger model.KernelForwardRequest
+	require.NoError(t, db.First(&ledger, "request_id = ?", "provider-1").Error)
+	require.NotEqual(t, requestHash(methodCreateDNSProvider, &forwardv1.CreateDnsProviderRequest{
+		Provider:    &forwardv1.DnsProvider{Name: "cf", Kind: forwardv1.DnsProviderKind_DNS_PROVIDER_KIND_CLOUDFLARE},
+		Credentials: map[string]string{forwardddns.CredentialAPIToken: cfSecret},
+	}), ledger.RequestHash, "the ledger never hashes a plain credential")
+	require.NotContains(t, ledger.ResponseJSON, cfSecret)
 
 	// A retry answers the same provider once.
 	again, err := d.service.CreateDNSProvider(d.ctx, "provider-1", &forwardv1.DnsProvider{

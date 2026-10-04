@@ -1218,8 +1218,9 @@ message CreateDnsBindingResponse {
 
 message UpdateDnsBindingRequest {
   string request_id = 1;
-  // binding.id names the binding; only record_types, ttl and paused
-  // change.
+  // binding.id names the binding; record_types, ttl and paused are
+  // replaced (an empty one takes its default), the other fields must be
+  // unset or unchanged.
   DnsBinding binding = 2;
 }
 

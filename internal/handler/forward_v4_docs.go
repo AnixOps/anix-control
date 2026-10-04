@@ -608,7 +608,7 @@ func (ForwardV4Docs) GetDNSBinding(*gin.Context) {}
 
 // UpdateDNSBinding godoc
 // @Summary Replace a binding's record types, TTL and paused flag
-// @Description Body: the DnsBinding; route, provider, zone, record_name and mode cannot change (409 immutable).
+// @Description Body: the whole DnsBinding, as GET answers it. It replaces record_types, ttl and paused (an omitted one takes its default: A, 60, false; a record type dropped has its records deleted); route, provider, zone, record_name and mode cannot change (400 immutable).
 // @Tags Forward v4
 // @Accept json
 // @Produce json

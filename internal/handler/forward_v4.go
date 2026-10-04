@@ -102,3 +102,32 @@ func (h *KernelHandler) ForwardGateway(c *gin.Context) {
 	}
 	h.dispatchPluginControlRoute(c, forwardPackageID, controlPath)
 }
+
+// forwardKernelChecks applies ForwardGateway's kernel checks to the forward
+// package's own spelling, /api/v{3,4}/plugins/forward/*, so neither the
+// super administrator rule nor the community edition's hidden prefixes can
+// be bypassed through it. It answers false after refusing the request.
+func (h *KernelHandler) forwardKernelChecks(c *gin.Context) bool {
+	rest := c.Param("route")
+	if rest == "" {
+		rest = "/"
+	}
+	publicPath := ForwardV4Prefix + rest
+	if edition.For(config.Get()).HidesPath(publicPath) {
+		kernelError(c, http.StatusNotFound, "plugin_route_not_found", "route not found")
+		return false
+	}
+	if !forwardV4NeedsSuperAdmin(c.Request.Method, publicPath) {
+		return true
+	}
+	allowed, err := service.IsSuperAdmin(h.db, kernelActorID(c))
+	if err != nil {
+		kernelDBError(c, err)
+		return false
+	}
+	if !allowed {
+		kernelError(c, http.StatusForbidden, "super_admin_required", "only a super administrator may delete forward resources or change DNS provider credentials")
+		return false
+	}
+	return true
+}

@@ -9,8 +9,11 @@ import (
 	"context"
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/hmac"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/base64"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -152,7 +155,10 @@ func recordTypeOf(name string) forwardv1.DnsRecordType {
 // credentialSealer seals provider credentials with AES-256-GCM under the
 // key-encryption key module_runtime.ca_kek (as the module and forward link
 // CAs seal their keys), with additional data naming the provider row.
-type credentialSealer struct{ aead cipher.AEAD }
+type credentialSealer struct {
+	aead cipher.AEAD
+	kek  []byte
+}
 
 func (s *Service) credentialSealer() (*credentialSealer, error) {
 	var raw string
@@ -176,11 +182,24 @@ func (s *Service) credentialSealer() (*credentialSealer, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &credentialSealer{aead: aead}, nil
+	return &credentialSealer{aead: aead, kek: kek}, nil
 }
 
 func additionalData(providerID uint64) []byte {
 	return []byte(dnsAdditionalData + strconv.FormatUint(providerID, 10))
+}
+
+// fingerprints replaces each credential value with its HMAC under the
+// key-encryption key, so the request ledger's hash of a write never
+// derives from a plain credential.
+func (c *credentialSealer) fingerprints(credentials map[string]string) map[string]string {
+	out := make(map[string]string, len(credentials))
+	for name, value := range credentials {
+		mac := hmac.New(sha256.New, c.kek)
+		mac.Write([]byte("anixops-forward-dns-credential:" + name + "\x00" + value))
+		out[name] = hex.EncodeToString(mac.Sum(nil))
+	}
+	return out
 }
 
 func (c *credentialSealer) seal(providerID uint64, credentials map[string]string) (string, error) {
@@ -369,7 +388,7 @@ func (s *Service) CreateDNSProvider(ctx context.Context, requestID string, provi
 	if err != nil {
 		return nil, err
 	}
-	hash := requestHash(methodCreateDNSProvider, &forwardv1.CreateDnsProviderRequest{Provider: provider, Credentials: credentials})
+	hash := requestHash(methodCreateDNSProvider, &forwardv1.CreateDnsProviderRequest{Provider: provider, Credentials: sealer.fingerprints(credentials)})
 	answer := &forwardv1.CreateDnsProviderResponse{}
 	err = db.Transaction(func(tx *gorm.DB) error {
 		now := s.now()
@@ -425,7 +444,7 @@ func (s *Service) UpdateDNSProvider(ctx context.Context, requestID string, provi
 	if err != nil {
 		return nil, err
 	}
-	hash := requestHash(methodUpdateDNSProvider, &forwardv1.UpdateDnsProviderRequest{Provider: provider, Credentials: credentials})
+	hash := requestHash(methodUpdateDNSProvider, &forwardv1.UpdateDnsProviderRequest{Provider: provider, Credentials: sealer.fingerprints(credentials)})
 	answer := &forwardv1.UpdateDnsProviderResponse{}
 	err = db.Transaction(func(tx *gorm.DB) error {
 		now := s.now()

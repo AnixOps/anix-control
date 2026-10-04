@@ -276,6 +276,9 @@ func (h *KernelHandler) ListExtensions(c *gin.Context) {
 }
 
 func (h *KernelHandler) PluginRouteGateway(c *gin.Context) {
+	if c.Param("plugin_id") == forwardPackageID && !h.forwardKernelChecks(c) {
+		return
+	}
 	h.dispatchPluginControlRoute(c, c.Param("plugin_id"), c.Request.URL.Path)
 }
 

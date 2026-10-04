@@ -6663,8 +6663,9 @@ func (x *CreateDnsBindingResponse) GetViolations() []*Violation {
 type UpdateDnsBindingRequest struct {
 	state     protoimpl.MessageState `protogen:"open.v1"`
 	RequestId string                 `protobuf:"bytes,1,opt,name=request_id,json=requestId,proto3" json:"request_id,omitempty"`
-	// binding.id names the binding; only record_types, ttl and paused
-	// change.
+	// binding.id names the binding; record_types, ttl and paused are
+	// replaced (an empty one takes its default), the other fields must be
+	// unset or unchanged.
 	Binding       *DnsBinding `protobuf:"bytes,2,opt,name=binding,proto3" json:"binding,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache

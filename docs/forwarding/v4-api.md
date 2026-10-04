@@ -29,6 +29,8 @@ in [`api.md`](api.md) stay until F5d removes them.
     never reaches the package.
   - So does every write (`POST`, `PUT`) under `/dns/providers`, which
     carries DNS provider credentials (L2).
+  - The kernel applies these rules, and hides the commercial prefixes, on
+    the package's own spelling `/api/v4/plugins/forward/*` too.
   - The list answers (`GET /routes`, `GET /nodes`, `GET /ansible-machines`)
     carry `can_delete`: whether the caller may `DELETE` (F5b, D7). The
     kernel resolves the rule and passes it to the package as the
@@ -229,7 +231,7 @@ provider credentials with the least permissions:
 | `GET /dns/bindings` | list bindings | query `route_id`, `provider_id`; `{bindings: [DnsBinding]}` |
 | `POST /dns/bindings` | bind a route | body a `DnsBinding`; `201 {binding}` |
 | `GET /dns/bindings/{id}` | one binding | `{binding}` |
-| `PUT /dns/bindings/{id}` | change a binding | body the `DnsBinding`; only `record_types`, `ttl` and `paused` change (`immutable` otherwise); `{binding}` |
+| `PUT /dns/bindings/{id}` | change a binding | body the whole `DnsBinding`, as `GET` answers it: it replaces `record_types`, `ttl` and `paused`, and an omitted one takes its default (A, 60, false), so dropping AAAA deletes the AAAA records. The other fields cannot change (`immutable`); `{binding}` |
 | `DELETE /dns/bindings/{id}` | delete a binding (super administrator) | query `purge=true` deletes the published records first; `{deleted}` |
 
 - **Providers.** `DnsProvider` is `{id, name, kind, config, credential_names,
