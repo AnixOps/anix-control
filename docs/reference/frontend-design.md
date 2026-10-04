@@ -846,6 +846,20 @@ endpoints and flows.
   `submit`, `busy`, `canSubmit` and `primaryLabel` for the footer. Records
   a step can reuse are a `WizardExistingList` with "使用现有".
 
+### v4.2 forwarding mockups (F5b, H16)
+
+The proposed v4.2 forwarding screens are dev-only prototypes under
+`web/src/mockups/forward/`, at `/admin/__mockups/forward/<screen>`. They use
+the `Ui*` components with mocked `/api/v4/forward` data and call nothing.
+
+- The route is registered only when `import.meta.env.DEV` is set, so
+  `vite build` drops it and its chunk. Bundle budgets, visual baselines and
+  the menu are unchanged.
+- The copy is inline zh-CN mockup text, with no i18n keys.
+- The screens, the screenshots and the open design questions are in
+  [`docs/design/forward-ui/README.md`](../design/forward-ui/README.md).
+- The final F5b pages replace this directory.
+
 ## Settings pages (U7)
 
 Settings-style admin pages use the settings template (plan §7.3):
