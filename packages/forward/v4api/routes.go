@@ -207,3 +207,21 @@ func (s *Service) routeHealth(ctx context.Context, _ Request, params map[string]
 	}
 	return data(http.StatusOK, map[string]any{"health": pjList(answer.GetHealth())})
 }
+
+// diagnoseRoute runs ForwardControl.DiagnoseRoute. The body is optional:
+// {"timeout_ms": n} bounds the diagnosis (15000 by default, at most
+// 25000). The answer is the DiagnoseRouteResponse: ok, the steps with
+// their stage, vantage, target and verdict, and the nodes that could
+// probe.
+func (s *Service) diagnoseRoute(ctx context.Context, request Request, params map[string]string) Response {
+	diagnose := &forwardv1.DiagnoseRouteRequest{}
+	if answer := decode(request.Body, diagnose, true); answer != nil {
+		return *answer
+	}
+	diagnose.RouteId = params["id"]
+	answer, err := s.Forward.DiagnoseRoute(ctx, diagnose)
+	if err != nil {
+		return fromStatus(err)
+	}
+	return data(http.StatusOK, pj(answer))
+}

@@ -149,6 +149,7 @@ var endpoints = []Endpoint{
 	{http.MethodPost, "/routes/{id}/resume", EditionAll, "Resume a route", "", (*Service).resumeRoute},
 	{http.MethodGet, "/routes/{id}/stats", EditionAll, "A route's counters per hop and node, and its hourly series", "", (*Service).routeStats},
 	{http.MethodGet, "/routes/{id}/health", EditionAll, "A route's upstream health", "", (*Service).routeHealth},
+	{http.MethodPost, "/routes/{id}/diagnose", EditionAll, "Diagnose a route: config, hop reachability, delivery and port conflicts", "", (*Service).diagnoseRoute},
 
 	{http.MethodGet, "/nodes", EditionAll, "List the node inventory", "GET /api/v2/admin/forward/nodes", (*Service).listNodes},
 	{http.MethodPost, "/nodes", EditionAll, "Add a forward node", "POST /api/v2/admin/forward/nodes", (*Service).createNode},
@@ -323,6 +324,7 @@ func detailViolations(st *status.Status) []Violation {
 //	PERMISSION_DENIED,
 //	UNAVAILABLE          503 forward_unavailable
 //	DEADLINE_EXCEEDED    504 timeout
+//	RESOURCE_EXHAUSTED   429 rate_limited
 //	anything else        502 forward_failed
 func fromStatus(err error) Response {
 	st, ok := status.FromError(err)
@@ -354,6 +356,8 @@ func fromStatus(err error) Response {
 		return failure(http.StatusServiceUnavailable, "forward_unavailable", st.Message(), nil)
 	case codes.DeadlineExceeded:
 		return failure(http.StatusGatewayTimeout, "timeout", st.Message(), nil)
+	case codes.ResourceExhausted:
+		return failure(http.StatusTooManyRequests, "rate_limited", st.Message(), nil)
 	default:
 		return failure(http.StatusBadGateway, "forward_failed", st.Message(), nil)
 	}

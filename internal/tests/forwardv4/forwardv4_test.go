@@ -9,6 +9,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"os"
@@ -121,7 +122,10 @@ type env struct {
 func newEnv(t *testing.T, db *gorm.DB) *env {
 	t.Helper()
 	e := &env{t: t, db: db, now: time.Date(2026, 10, 4, 12, 0, 0, 0, time.UTC)}
-	e.kernel = &kernelforward.Service{DB: db, Cluster: func() string { return "test" }, Now: func() time.Time { return e.now }}
+	e.kernel = &kernelforward.Service{DB: db, Cluster: func() string { return "test" }, Now: func() time.Time { return e.now },
+		Checks: probingNodes{}, Probes: service.DiagnosisProbes{Dial: func(context.Context, string, string, time.Duration) (net.Conn, error) {
+			return nil, errors.New("connection refused (test)")
+		}}}
 	require.NoError(t, db.Create(&[]model.ForwardNode{
 		{ID: 11, Name: "hk-entry", Type: "relay", Host: "192.0.2.11", Port: 7000, Enabled: true},
 		{ID: 12, Name: "jp-exit", Type: "exit", Host: "192.0.2.12", Port: 7000, Enabled: true},
@@ -229,6 +233,27 @@ func runForwardV4API(t *testing.T, db *gorm.DB) {
 	assert.Equal(t, http.StatusConflict, taken.status, taken.raw)
 	assert.Equal(t, "refused", taken.errorCode())
 	assert.Contains(t, taken.violationCodes(), "port_in_use")
+	// The diagnosis: the nodes have not reported, their checks pass.
+	diagnosis := e.call("POST", "/routes/"+id+"/diagnose", `{"timeout_ms":3000}`, "")
+	require.Equal(t, http.StatusOK, diagnosis.status, diagnosis.raw)
+	assert.Equal(t, id, diagnosis.data()["route_id"])
+	assert.Nil(t, diagnosis.data()["ok"], "never reported: the config steps fail")
+	assert.Nil(t, diagnosis.data()["cached"])
+	var nodeSteps int
+	for _, raw := range diagnosis.data()["steps"].([]any) {
+		step := raw.(map[string]any)
+		if step["vantage"] == "DIAGNOSE_VANTAGE_NODE" {
+			nodeSteps++
+			assert.Equal(t, "PROBE_STATUS_OK", step["result"].(map[string]any)["status"], step)
+		}
+	}
+	assert.Equal(t, 6, nodeSteps, "listen, port conflict and connect on each node")
+	again := e.call("POST", "/routes/"+id+"/diagnose", "", "")
+	require.Equal(t, http.StatusOK, again.status, again.raw)
+	assert.Equal(t, true, again.data()["cached"])
+	missing := e.call("POST", "/routes/01JF1A000000000000000000ZZ/diagnose", "", "")
+	assert.Equal(t, http.StatusNotFound, missing.status)
+
 	preview := e.call("POST", "/routes/preview", `{"route":`+route("31005", "LINK_SECURITY_RAW")+`}`, "")
 	require.Equal(t, http.StatusOK, preview.status, preview.raw)
 	assert.Len(t, preview.data()["states"], 2)
@@ -381,4 +406,16 @@ func TestManifestAndEditions(t *testing.T) {
 			t.Errorf("%s has edition %q", path, endpoint.Edition)
 		}
 	}
+}
+
+// probingNodes is a NodeChecker whose every node runs the forward checks
+// and passes them.
+type probingNodes struct{}
+
+func (probingNodes) Vantage(agentcontrol.AgentNode) kernelforward.NodeVantage {
+	return kernelforward.NodeVantage{Connected: true, Capable: true}
+}
+
+func (probingNodes) Check(_ context.Context, _ agentcontrol.AgentNode, action string, _ map[string]any) (*kernelforward.CheckResult, error) {
+	return &kernelforward.CheckResult{Check: action, Status: kernelforward.CheckOK, Message: "ok"}, nil
 }

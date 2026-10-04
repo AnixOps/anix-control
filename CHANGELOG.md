@@ -4,6 +4,40 @@
 
 ### Added
 
+- **Forward route diagnosis** (F3c, forward-sdk.md section 7.6).
+  `ForwardControl.DiagnoseRoute` now answers instead of `UNIMPLEMENTED`;
+  `POST /api/v4/forward/routes/{id}/diagnose` (administrators, audited as
+  `forward/diagnose`) and `anix-control forward routes diagnose <id>` serve
+  it.
+  - Stages: Control's records (each node's desired against reported
+    generation, applied, hop errors; upstream health and circuit breakers
+    from the latest reports), then node probes through the
+    `agent.diagnostic` operation on the Agent Control stream for nodes whose
+    Agent advertises `agent.diagnostic` and `diag.v1` (`forward.listen`,
+    `forward.port_conflict` including foreign nat-table rules,
+    `forward.connect` to the next hop, delivery from the last hop to the
+    targets, and `forward.udp_probe` for UDP routes, where no reply is
+    inconclusive), then dials from Control to the entries and public
+    targets for the nodes that cannot probe. Each step carries its stage,
+    vantage, target, verdict (`OK`, `FAILED`, `INCONCLUSIVE`, `SKIPPED`) and
+    a stable code.
+  - Public targets only: Control never dials a private target, and a last
+    hop is asked to dial a private target only on an administrator's
+    `TARGET_POLICY_ALLOW_PRIVATE` route.
+  - 15 s by default (`timeout_ms`, at most 25 s). A diagnosis of the same
+    route from the last 10 seconds is answered again (`cached`), and at most
+    4 run at once per Control process (`429 rate_limited`).
+  - Contract additions only: `ProbeKind` `CONFIG`, `HEALTH`,
+    `PORT_CONFLICT`; `ProbeStatus` and `DiagnoseVantage`;
+    `ProbeResult.status` and `code`; `DiagnoseStep.vantage`, `target` and
+    `protocol`; `DiagnoseRouteResponse.route_id`, times, `cached` and
+    `nodes` (`DiagnoseNode`).
+  - The forward checks are refused by the administrator diagnostic routes
+    and the KernelNodeOps `agent.diagnostic` kind. The Agent side, which
+    must run them, is described in `sdk/api/agent/v1/PROTOCOL.md`,
+    "Forward diagnostic checks"; until an Agent advertises `diag.v1` its
+    node steps are `SKIPPED` (`node_vantage_unavailable`).
+
 - **Agent installer preflight, offline bundles and uninstall** (onboarding
   O2 and O3, `docs/guide/agent-onboarding.md`).
   - Preflight: before changing anything, `install.sh` checks systemd (240+),

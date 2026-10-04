@@ -1245,17 +1245,86 @@ it in the UI, with history.
 
 ### 7.6 End-to-end diagnosis
 
-`DiagnoseRoute` runs probes hop by hop, following fluxlite's method of
-proving each step rather than inferring it:
+**Status: implemented in F3c** (`internal/kernelforward/diagnose.go`,
+`internal/kernelnodeops/forward_checks.go`). `DiagnoseRoute` follows
+fluxlite's method of proving each step rather than inferring it. It reads
+and probes; it never takes the plan lock or changes a node. Served as
+`POST /api/v4/forward/routes/{id}/diagnose`
+([`../forwarding/v4-api.md`](../forwarding/v4-api.md)) and
+`anix-control forward routes diagnose <id>`.
 
-1. `LISTEN` on every hop: the port is ours and no other rule or process
-   holds it, including nat-table rules of other tables;
-2. `TCP_CONNECT` from every hop to its upstreams;
-3. `UDP_EXCHANGE` for UDP routes, a real datagram through the route;
-4. `DELIVERY`: the entry sends a nonce flow, and the last hop's counters
-   prove it arrived and left towards the target.
+The stages, in order:
 
-Probes travel as Agent desired operations (section 8.3).
+1. **Control's records** (vantage `CONTROL`):
+   - a route-wide `CONFIG` step when the route is paused (`route_paused`)
+     or Control pauses it (`route_enforced`);
+   - one `CONFIG` step per node of each hop. It fails when the node's
+     desired state does not hold the hop (`not_planned`), the node never
+     reported (`never_reported`), its report runs an older generation
+     (`not_applied`), the report names an error for the hop (`hop_error`),
+     or the report is not applied (`apply_failed`);
+   - one `HEALTH` step per upstream of the node's hop, from the latest
+     report: `healthy`, or failed as `unhealthy` or `circuit_open` (with
+     the failures in a row and the time the breaker reopens). Without data
+     the step is inconclusive (`no_health`).
+2. **Node vantage** (vantage `NODE`), for each node whose Agent holds an
+   Agent Control session advertising `agent.diagnostic` and `diag.v1`. The
+   forward checks of the `agent.diagnostic` operation run on each of its
+   hops (`sdk/api/agent/v1/PROTOCOL.md`, "Forward diagnostic checks"):
+
+   | Check | Step kind | Proves |
+   |---|---|---|
+   | `forward.listen` | `LISTEN` | the hop's own listener holds its port: the nftables rule in `inet anixops_fwd`, or the gost service bound to it |
+   | `forward.port_conflict` | `PORT_CONFLICT` | no foreign process listens on the port and no other table's dnat, redirect or tproxy rule (nat table included) claims it |
+   | `forward.connect` | `TCP_CONNECT`, `DELIVERY` on the last hop | a TCP connect from the node to each upstream: the next hop's nodes, or the targets |
+   | `forward.udp_probe` | `UDP_EXCHANGE`, `DELIVERY` on the last hop | for UDP routes, a short datagram to each upstream and any reply; no reply is `INCONCLUSIVE` (`no_reply`), never a failure |
+
+   - The Agent probes only what its applied state holds for the hop, so a
+     check names a hop, never an address.
+   - On the last hop, a literal target the route's policy refuses is not
+     probed (`SKIPPED`, `target_not_allowed`), and the check is narrowed to
+     the others. A private target is probed only on an administrator's
+     route with `TARGET_POLICY_ALLOW_PRIVATE`. The Agent repeats the check
+     on every address a target name resolves to.
+   - An Agent runs its operations one at a time, so a node's checks go out
+     in sequence and the nodes in parallel (at most 8 at once).
+   - A node that cannot probe gets its node steps `SKIPPED`:
+     `node_offline` when its Agent is not connected,
+     `node_vantage_unavailable` when it does not advertise the checks or
+     the process holds no Agent sessions (the command line).
+     `DiagnoseRouteResponse.nodes` says, per node, whether it was connected
+     and could probe.
+3. **Control vantage** (vantage `CONTROL`), for what no node probed:
+   - a TCP connect to the entry listeners, at the route's listen address or
+     the entry node's primary address (`LISTEN`);
+   - a TCP connect to the targets when a last hop's node cannot probe
+     (`TCP_CONNECT`, no node).
+
+   Control dials public addresses only, whatever the route's policy
+   (`not_public` otherwise): it is not on the exit's network. It never
+   dials relay or exit listeners, which admit only the previous hop
+   (`ingress_sources`), and does not probe UDP (`control_udp_not_probed`).
+
+Each step is a `DiagnoseStep`: node, hop, `ProbeKind`, vantage, target
+(`host:port`), protocol, and a `ProbeResult` with its `ProbeStatus`
+(`OK`, `FAILED`, `INCONCLUSIVE`, `SKIPPED`), stable `code`, message, round
+trip and time. `ok` is true when no step failed.
+
+**Bounds.**
+
+- Budget: 15 s by default (`timeout_ms`, 1 to 25 s, never past the
+  caller's deadline less a second). A check that the Agent does not answer
+  in its timeout plus 2 s is `INCONCLUSIVE` (`agent_timeout`); one the
+  budget leaves no time for is `SKIPPED` (`deadline`).
+- Cache: a diagnosis of the same route that finished within 10 s, or that
+  is running, is answered again with `cached` true. This also rate-limits
+  each route.
+- Concurrency: at most 4 routes are diagnosed at once per Control process;
+  one more is `RESOURCE_EXHAUSTED` (`429 rate_limited`).
+
+**Not yet.** Proving delivery from the entry's counters with a nonce flow
+(the last hop's counters showing the flow arrived and left) is not built.
+The last hop's connect or UDP exchange to the targets stands in for it.
 
 ## 8. Control and Agent transport
 
@@ -1404,10 +1473,27 @@ report added for the systemd services panel, `systemd-services-v4.2`):
 
 ### 8.3 Probes
 
-`ForwardNode.Probe` is a `DesiredOperation` of kind `forward.probe` with a
-`ProbeRequest` as payload; the `ObservedState` carries the `ProbeResult`.
-F3c implements it; until then `ForwardControl.DiagnoseRoute` answers
-`UNIMPLEMENTED`.
+Implemented in F3c. The node probes of `DiagnoseRoute` (7.6) ride the
+existing `agent.diagnostic` operation on the Agent Control stream, with the
+forward actions `forward.listen`, `forward.port_conflict`, `forward.connect`
+and `forward.udp_probe`. There is no `forward.probe` operation kind.
+
+- Their parameters mirror `ProbeRequest`: `route_id`, `hop_index` and
+  `timeout_ms`, with `generation`, `upstream` and `target_policy`.
+- The Agent's `ObservedState` carries the generic diagnostic answer with
+  the check's structured `result`.
+- Control sends them only to a session that advertises `agent.diagnostic`
+  and `diag.v1`, from `kernelnodeops.ForwardChecks` directly on the stream.
+  They are probes, not administrator tasks: neither
+  `v2_agent_diagnostic_task` nor the KernelNodeOps ledger records them. The
+  diagnosis endpoint is audited.
+- The administrator diagnostic routes and the KernelNodeOps
+  `agent.diagnostic` kind refuse the forward actions
+  (`service.ValidateAgentDiagnosticTask`).
+
+`ForwardNode.Probe` remains the in-process shape of one step.
+`sdk/api/agent/v1/PROTOCOL.md`, "Forward diagnostic checks", is the Agent's
+reference.
 
 ### 8.4 Connection
 
@@ -1484,6 +1570,13 @@ on it ([`../forwarding/v4-api.md`](../forwarding/v4-api.md)).
     - `NodeTransport` tells Agent nodes from Ansible machines (section 6.3).
   - `GetTraffic` answers the ledger's hourly buckets by route and node, over
     at most 31 days and at most 20000 buckets.
+- **Added in F3c** (additions only): `DiagnoseRoute` answers (7.6). It
+  added the `ProbeKind` values `CONFIG`, `HEALTH` and `PORT_CONFLICT`, the
+  enums `ProbeStatus` and `DiagnoseVantage`, `ProbeResult.status` and
+  `code`, `DiagnoseStep.vantage`, `target` and `protocol`,
+  `DiagnoseRouteResponse.route_id`, `started_at_unix_ms`,
+  `finished_at_unix_ms`, `cached` and `nodes`, and the message
+  `DiagnoseNode`. Too many diagnoses at once is `RESOURCE_EXHAUSTED`.
 
 ## 9. Node onboarding
 
@@ -1974,7 +2067,7 @@ Agent-repository PRs are marked (agent).
 | F3 | F3a | Control: `forward.v1`, `nodeconfig/v2`, the `forward` report and traffic ledger (implemented) | L | H25 |
 | | F3a-L | Control: forward link CA and per-node link certificates (`IssueLinkCertificate`, `GetLinkTrustBundle`, implemented) | M | H28 |
 | | F3b | (agent) forward component: drivers, persisted state, apply at boot, health loop, reports, link certificates | L | H25, H28 |
-| | F3c | probes and diagnosis plumbing | M | |
+| | F3c | probes and diagnosis plumbing: `DiagnoseRoute`, the `agent.diagnostic` forward checks, `POST /routes/{id}/diagnose`, `forward routes diagnose` (implemented; the Agent's checks are an Agent PR) | M | |
 | | O1 | `install.sh`, group tokens, mirrors | M | H18 |
 | | O2 | preflight and offline package | M | H18 |
 | | O3 | uninstall | S | |
@@ -2007,7 +2100,8 @@ field, message, RPC or enum value is never removed, renumbered or retyped.
 rejects a golden file that lost or rewrote a line of the base revision;
 its `DRAFT_PACKAGES` is empty. F3a added only `Violation.route_id`; F5a
 added the node, registry and traffic RPCs and messages of section 8.6 and
-the `enforced` answers, and changed nothing else.
+the `enforced` answers, and changed nothing else; F3c added the diagnosis
+fields, enum values and `DiagnoseNode` of section 8.6.
 
 ## 16. Open questions for owner review
 

@@ -307,5 +307,67 @@ func TestEndpointsAreCommunityAdminEndpoints(t *testing.T) {
 		assert.NotContains(t, endpoint.Pattern, "/self", "user self-service is commercial (v4.3)")
 		assert.NotEmpty(t, endpoint.Summary, key)
 	}
-	assert.Len(t, seen, 27)
+	assert.Len(t, seen, 28)
+}
+
+// diagnoseForward answers DiagnoseRoute; err refuses it.
+type diagnoseForward struct {
+	*fakeForward
+	diagnosed []*forwardv1.DiagnoseRouteRequest
+}
+
+func (f *diagnoseForward) DiagnoseRoute(_ context.Context, in *forwardv1.DiagnoseRouteRequest, _ ...grpc.CallOption) (*forwardv1.DiagnoseRouteResponse, error) {
+	f.diagnosed = append(f.diagnosed, in)
+	if f.err != nil {
+		return nil, f.err
+	}
+	if in.GetRouteId() != f.route.GetId() {
+		return nil, status.Error(codes.NotFound, "forward route not found")
+	}
+	return &forwardv1.DiagnoseRouteResponse{RouteId: in.GetRouteId(), StartedAtUnixMs: 1700000000000, Steps: []*forwardv1.DiagnoseStep{{
+		NodeRef: "forward-7", HopIndex: 1, Kind: forwardv1.ProbeKind_PROBE_KIND_DELIVERY, Vantage: forwardv1.DiagnoseVantage_DIAGNOSE_VANTAGE_NODE,
+		Target: "198.51.100.10:443", Protocol: forwardv1.L4Protocol_L4_PROTOCOL_TCP,
+		Result: &forwardv1.ProbeResult{Status: forwardv1.ProbeStatus_PROBE_STATUS_FAILED, Code: "unreachable", Message: "connection refused"},
+	}}, Nodes: []*forwardv1.DiagnoseNode{{NodeRef: "forward-7", Connected: true, NodeVantage: true}}}, nil
+}
+
+func TestDiagnoseRoute(t *testing.T) {
+	fake := &diagnoseForward{fakeForward: newFake()}
+	svc := &Service{Forward: fake}
+	post := func(path, body string) (int, map[string]any) {
+		answer := svc.Serve(context.Background(), Request{Method: http.MethodPost, Path: PublicPrefix + path, Body: []byte(body)})
+		var decoded map[string]any
+		require.NoError(t, json.Unmarshal(answer.Body, &decoded), string(answer.Body))
+		return answer.StatusCode, decoded
+	}
+	code, body := post("/routes/01R/diagnose", "")
+	require.Equal(t, http.StatusOK, code, body)
+	data := body["data"].(map[string]any)
+	assert.Equal(t, "01R", data["route_id"])
+	assert.Equal(t, "1700000000000", data["started_at_unix_ms"], "64-bit integers are strings")
+	step := data["steps"].([]any)[0].(map[string]any)
+	assert.Equal(t, "PROBE_KIND_DELIVERY", step["kind"])
+	assert.Equal(t, "DIAGNOSE_VANTAGE_NODE", step["vantage"])
+	assert.Equal(t, "PROBE_STATUS_FAILED", step["result"].(map[string]any)["status"])
+	assert.Equal(t, true, data["nodes"].([]any)[0].(map[string]any)["node_vantage"])
+	assert.Nil(t, data["ok"], "false is left out")
+
+	code, _ = post("/routes/01R/diagnose", `{"timeout_ms": 5000, "route_id": "other"}`)
+	require.Equal(t, http.StatusOK, code)
+	last := fake.diagnosed[len(fake.diagnosed)-1]
+	assert.EqualValues(t, 5000, last.GetTimeoutMs())
+	assert.Equal(t, "01R", last.GetRouteId(), "the path names the route")
+
+	code, body = post("/routes/01R/diagnose", `{"timeout": 1}`)
+	assert.Equal(t, http.StatusBadRequest, code)
+	assert.Equal(t, "invalid_request", errorCode(body))
+	code, body = post("/routes/missing/diagnose", "")
+	assert.Equal(t, http.StatusNotFound, code)
+	assert.Equal(t, "not_found", errorCode(body))
+	fake.err = status.Error(codes.ResourceExhausted, "too many route diagnoses are running; retry shortly")
+	code, body = post("/routes/01R/diagnose", "")
+	assert.Equal(t, http.StatusTooManyRequests, code)
+	assert.Equal(t, "rate_limited", errorCode(body))
+	answer := svc.Serve(context.Background(), Request{Method: http.MethodGet, Path: PublicPrefix + "/routes/01R/diagnose"})
+	assert.Equal(t, http.StatusMethodNotAllowed, answer.StatusCode)
 }

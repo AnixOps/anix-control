@@ -182,10 +182,11 @@ stream equivalent.
   the trailer, and the stream ends. A Control built before these payloads existed answers
   them the same way, as an unknown payload ("control message payload is
   required").
-- `diag.v1` is reserved for node-side diagnostics (`diag.*` operations). It
-  adds no payload; its rules come with those operations. Control records
-  that the Agent advertised it on the session, so a diagnostic may run from
-  the node's vantage once those operations exist.
+- `diag.v1` means the Agent runs node-side diagnostics: the forward checks
+  of the `agent.diagnostic` operation (see "Diagnostic operation"). It adds
+  no payload. Control records it on the session and sends the forward
+  checks only to a session that lists both `agent.diagnostic` and
+  `diag.v1`. No separate `diag.*` operation kinds exist.
 
 ### Delivery
 
@@ -554,6 +555,123 @@ stream equivalent.
     enrolled yet, or a Control without `artifacts.v1`, still installs over
     it with the node API key. An enrolled Agent no longer holds the key and
     uses `AgentArtifacts`.
+
+## Diagnostic operation
+
+`agent.diagnostic` is a desired operation an Agent runs when it lists the
+capability of the same name. It replaces the WebSocket's `task.assign`.
+
+**Payload.** `payload_json` is `{"task": task}`, the WebSocket's
+`task.assign` payload:
+
+```json
+{"task": {"id": "fwdiag-4f1c...", "type": "diagnostic", "action": "forward.connect",
+          "params": {"route_id": "01J...", "hop_index": 1, "generation": 7, "timeout_ms": 2000,
+                     "target_policy": "public_only"},
+          "timeout": 2}}
+```
+
+- `timeout` is in seconds.
+- `deadline_unix_ms` is set. Past it, the Agent answers
+  `operation deadline exceeded`, as for every operation.
+- The Agent refuses an action it does not know: `FAILED`, with a message
+  naming it.
+
+**Answer.** The terminal state is `SUCCEEDED` with `state_json`:
+
+```json
+{"success": true, "output": "1 of 1 upstreams reachable", "error": "", "duration_ms": 14, "result": {...}}
+```
+
+- Control records `success`, `output`, `error` and `duration_ms` for the
+  generic actions.
+- A forward check also carries `result` (below).
+- A check that ran is `SUCCEEDED` whatever it found. `FAILED` means the
+  check could not run at all: an unknown action, or malformed parameters.
+
+### Generic actions
+
+The generic actions are those of the administrator routes
+(`internal/service/agent_diagnostic_actions.go`). `service` is `gost`, and
+nothing else.
+
+| Action | Params | Does |
+|---|---|---|
+| `service_status` | `service` | the unit's status |
+| `service_restart` | `service` | restarts the unit |
+| `log_tail` | `service`, `lines` (1 to 1000, default 100) | the unit's last lines |
+
+On a forward node, gost belongs to the forward component (its own unit and
+hot updates). An Agent may refuse `service_restart` there as `FAILED`:
+`managed by the forward component`.
+
+### Forward diagnostic checks
+
+Since F3c, Control's route diagnosis (`ForwardControl.DiagnoseRoute`,
+`docs/architecture/forward-sdk.md` section 7.6) sends four more actions,
+one hop of one route each. Only the kernel sends them: the administrator
+routes and the KernelNodeOps `agent.diagnostic` kind refuse them
+(`service.ForwardDiagnosticChecks`, `ValidateForwardDiagnosticCheck`).
+Control sends them only to a session that lists `agent.diagnostic` and
+`diag.v1`, and one at a time per node. An Agent lists `diag.v1` only when
+it implements all four.
+
+**Parameters**, normalized by Control:
+
+| Param | Meaning |
+|---|---|
+| `route_id` | the route (1 to 64 printable characters) |
+| `hop_index` | the hop, 0 to 7 |
+| `generation` | optional: the generation Control wants the node to run |
+| `timeout_ms` | each dial or wait, 100 to 10000 (default 3000) |
+| `upstream` | `forward.connect` and `forward.udp_probe` only, optional: `host:port` of one upstream of the hop; probe only that one |
+| `target_policy` | `forward.connect` and `forward.udp_probe` only: `public_only` (default) or `allow_private`, the most the check may dial among targets |
+
+**The safety rule, mandatory.** The Agent resolves the hop from the
+`NodeForwardState` it has applied, the `NodeHop` with that `route_id` and
+`hop_index`, and probes only what that hop holds: its listener, and its
+upstreams. A check names a hop, never an address to dial.
+
+- When the hop is not in the applied state, the result is `failed` with
+  code `hop_not_applied`.
+- An `upstream` that is not one of the hop's upstreams (`address:port` as
+  rendered) is `failed` with `unknown_upstream`, and nothing is dialled.
+- For a target (an upstream without `node_ref`), every address its host
+  resolves to passes `validate.CheckTargetAddress` under the stricter of
+  the hop's `target_policy` and the `target_policy` parameter, the check
+  the forwarding path already makes. A refused address is an item
+  `skipped` with `target_not_allowed`, and is not dialled.
+- A check never changes the node.
+
+**`result`:**
+
+```json
+{"check": "forward.connect", "route_id": "01J...", "hop_index": 1, "generation": 7,
+ "status": "failed", "code": "", "message": "1 of 2 upstreams unreachable",
+ "items": [
+   {"target": "198.51.100.10:443", "protocol": "tcp", "status": "ok", "rtt_us": 912},
+   {"target": "198.51.100.11:443", "protocol": "tcp", "status": "failed", "code": "unreachable", "message": "connect: connection refused"}
+ ]}
+```
+
+- `generation` is the generation the node runs.
+- `status` and each item's `status` are `ok`, `failed`, `inconclusive` or
+  `skipped`. The result is `failed` when an item failed, else
+  `inconclusive` when one is, else `ok` (`skipped` when every item was).
+- `code` is a stable reason. Control shows each item as one step;
+  without items, the result itself.
+- At most 64 items. `state_json` stays under 64 KiB.
+
+| Action | Checks | Items and codes |
+|---|---|---|
+| `forward.listen` | The hop's own listener holds its port. On `ENGINE_NFTABLES`: the hop's rules are in the driver's table (`inet anixops_fwd`) and Observe reports no error for the hop. On `ENGINE_GOST`: a socket of the managed gost process is bound to the port (TCP listening, UDP bound), per protocol of `listen.protocol`. | one per protocol, target `address:port` (`*` for every address): `ok` `listening`; `failed` `not_listening` or `hop_error` |
+| `forward.port_conflict` | No foreign object claims the port: a socket of another process bound to it, and a rule of another nftables table (any family, iptables-nft included, nat table included) that rewrites destinations (`dnat`, `redirect`, `tproxy`, or the `DNAT`, `REDIRECT` and `TPROXY` targets) and matches the port, as the nftables driver's conflict detection (`sdk/forward/driver/nftables`) reads the ruleset. Read only. | one per conflict: `failed` `foreign_listener` (message names the process) or `foreign_nat_rule` (message names the table and chain); none: result `ok`; `nft` missing: item `inconclusive` `nft_unavailable` |
+| `forward.connect` | A TCP connect to each upstream within `timeout_ms`, all at once. For an encrypted link the carrier's TCP connect is enough; no handshake is needed. | one per upstream: `ok` `reachable` with `rtt_us`; `failed` `unreachable` or `timeout`; `skipped` `target_not_allowed` |
+| `forward.udp_probe` | For each upstream, one datagram of at most 64 bytes (`anixops-diag <task id>`), from a connected UDP socket, and a wait of `timeout_ms` for any datagram back. | `ok` `reply` with `rtt_us`; `failed` `port_unreachable` (ICMP port unreachable); `inconclusive` `no_reply`, never `failed`: a UDP service need not answer; `skipped` `target_not_allowed` |
+
+An Agent without these checks keeps working. Control marks its node steps
+`SKIPPED` (`node_vantage_unavailable`) and dials what it can from its own
+vantage.
 
 ## Forward link certificates
 

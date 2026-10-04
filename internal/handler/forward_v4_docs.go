@@ -171,6 +171,24 @@ func (ForwardV4Docs) RouteStats(*gin.Context) {}
 // @Router /api/v4/forward/routes/{id}/health [get]
 func (ForwardV4Docs) RouteHealth(*gin.Context) {}
 
+// DiagnoseRoute godoc
+// @Summary Diagnose a route
+// @Description Staged diagnosis (forward-sdk.md section 7.6): Control's records (generations, hop errors, health and breakers), node probes through agent.diagnostic where the Agent offers them (listen, port conflicts, next-hop connect, delivery to the targets, UDP exchange), and dials from Control for the rest. Optional body {"timeout_ms": n} (15000 by default, at most 25000). A diagnosis of the same route from the last 10 seconds is answered with cached true; 429 rate_limited when too many run. Audited as forward/diagnose.
+// @Tags Forward v4
+// @Accept json
+// @Produce json
+// @Security BearerAuth
+// @Param id path string true "Route id"
+// @Param body body object false "Optional timeout_ms"
+// @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
+// @Failure 404 {object} map[string]any
+// @Failure 429 {object} map[string]any
+// @Failure 503 {object} map[string]any
+// @Failure 504 {object} map[string]any
+// @Router /api/v4/forward/routes/{id}/diagnose [post]
+func (ForwardV4Docs) DiagnoseRoute(*gin.Context) {}
+
 // ListNodes godoc
 // @Summary List the node inventory
 // @Description Every forward node and the proxy nodes in the forwarding inventory, with settings, the planner's view and desired and reported generations. Replaces GET /api/v2/admin/forward/nodes.
