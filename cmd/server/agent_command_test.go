@@ -175,7 +175,9 @@ func TestAgentLinkCACommand(t *testing.T) {
 func TestAgentOfflineBundleCommand(t *testing.T) {
 	public, private, err := ed25519.GenerateKey(rand.Reader)
 	require.NoError(t, err)
-	sign := func(data []byte) []byte { return []byte(base64.StdEncoding.EncodeToString(ed25519.Sign(private, data)) + "\n") }
+	sign := func(data []byte) []byte {
+		return []byte(base64.StdEncoding.EncodeToString(ed25519.Sign(private, data)) + "\n")
+	}
 	artifacts := t.TempDir()
 	release := filepath.Join(artifacts, "v4.2.0")
 	require.NoError(t, os.MkdirAll(release, 0o750))
