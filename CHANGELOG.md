@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Added
+
+- `anix-control agents transports --check-required [--json]`, the v4.2
+  readiness gate, backported from v4.2 so operators can run it on 4.1
+  before upgrading (v4.2 makes `agent_control.mtls` default to `required`).
+  It lists every enabled node `required` would refuse — `legacy` (its newest
+  AnixOps Agent channel is legacy; seen within 7 days counts as recent) or
+  `never_enrolled` (never seen, no valid agent certificate) — and exits 0
+  when there is none, 3 when there is one and 2 on any other error. The
+  transport inventory API adds `summary.ready_for_required`,
+  `required_reasons` and `required_blockers` (additive). The 4.1 default
+  stays `preferred`. See docs/UPGRADE.md, "Before Upgrading To v4.2".
+
 ### Fixed
 
 - The live Control WebUI E2E gate defaults to ports 24175 and 28080 instead
