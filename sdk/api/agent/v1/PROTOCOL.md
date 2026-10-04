@@ -778,7 +778,9 @@ it uses `DesiredOperation`, `OperationAck`, `ObservedState` and the next
   or has not reconnected with `target_version` 10 minutes after the offer;
   an upgraded node that later reports another version or a failed
   configuration during its batch fails too. A node offline for its whole
-  batch is skipped (`node_offline`).
+  batch is skipped (`node_offline`), and so is a connected one that never
+  acknowledged the operation during its batch (`offer_failed`): neither
+  counts towards the 5%.
 - **Rollback of a batch.** When more than 5% of a batch's offered nodes
   fail, Control stops the campaign and sends `agent.upgrade` with action
   `rollback` and `target_version` the node's previous release to every node

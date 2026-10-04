@@ -97,6 +97,7 @@ const (
 	CodeConfigFailed      = "config_apply_failed"
 	CodeUnsupported       = "upgrade_unsupported"
 	CodeOffline           = "node_offline"
+	CodeOfferFailed       = "offer_failed"
 	CodeRollbackFailed    = "rollback_failed"
 	CodeRollbackUnconfirm = "rollback_unconfirmed"
 )

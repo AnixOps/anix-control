@@ -334,6 +334,7 @@ Per-node results in `status`:
 |---|---|
 | `skipped` `upgrade_unsupported` | the Agent cannot be upgraded by Control: re-run the installer |
 | `skipped` `node_offline` | the node was offline for its whole batch; the next campaign retries it |
+| `skipped` `offer_failed` | the Agent was connected but never acknowledged the upgrade during its batch: check its stream (`journalctl -u anix-agent.service`) |
 | `failed` `rejected`, `apply_failed` | the Agent refused or failed (the message carries its `upgrade_*` code: download, digest, signature, updater) |
 | `failed` `reconnect_timeout` | no reconnect with the new version within 10 minutes: `journalctl -u anixops-agent-updater.service -u anix-agent.service` |
 | `failed` `reverted` | the Agent came back with its old version: the updater could not start the new one and reinstated the old |

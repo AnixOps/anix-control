@@ -292,6 +292,7 @@ func (w *Worker) offer(ctx context.Context, campaign *model.AgentUpgradeCampaign
 	}
 	semaphore := make(chan struct{}, maxConcurrentOffers)
 	var wg sync.WaitGroup
+	var attempted []*model.AgentUpgradeNode
 	for index := range nodes {
 		node := &nodes[index]
 		if node.State != model.AgentUpgradeNodePending {
@@ -322,6 +323,7 @@ func (w *Worker) offer(ctx context.Context, campaign *model.AgentUpgradeCampaign
 		if releaseTag(session.AgentVersion) != "" {
 			request.PreviousVersion = releaseTag(session.AgentVersion)
 		}
+		attempted = append(attempted, node)
 		semaphore <- struct{}{}
 		wg.Add(1)
 		go func() {
@@ -331,6 +333,16 @@ func (w *Worker) offer(ctx context.Context, campaign *model.AgentUpgradeCampaign
 		}()
 	}
 	wg.Wait()
+	// A connected node that never acknowledges (lost acknowledgements, a
+	// session that keeps closing) must not hold the batch open: once the
+	// batch's minimum duration has passed it is skipped.
+	if !now.Before(batchEnd) {
+		for _, node := range attempted {
+			if node.State == model.AgentUpgradeNodePending {
+				w.logged(w.skip(ctx, node, now, CodeOfferFailed, "the Agent did not acknowledge the upgrade during its batch"))
+			}
+		}
+	}
 }
 
 // releaseTag returns version as a v-prefixed release tag, or "".
@@ -447,8 +459,9 @@ func (w *Worker) rollBack(ctx context.Context, campaign *model.AgentUpgradeCampa
 	}
 	if pending > 0 {
 		if err := w.Service.DB.WithContext(ctx).Model(&model.AgentUpgradeNode{}).
-			Where("campaign_id = ? AND batch = ? AND state IN ? AND rollback_sent_at IS NOT NULL AND error_code <> ?", campaign.ID, campaign.CurrentBatch,
-				[]string{model.AgentUpgradeNodeSucceeded, model.AgentUpgradeNodeFailed}, CodeRollbackFailed).
+			Where("campaign_id = ? AND batch = ? AND error_code <> ? AND ((state IN ? AND rollback_sent_at IS NOT NULL) OR (state = ? AND rollback_sent_at IS NULL))",
+				campaign.ID, campaign.CurrentBatch, CodeRollbackFailed,
+				[]string{model.AgentUpgradeNodeSucceeded, model.AgentUpgradeNodeFailed}, model.AgentUpgradeNodeSucceeded).
 			Updates(map[string]any{"error_code": CodeRollbackUnconfirm, "error": "the Agent did not reconnect with its previous release in time", "updated_at": now}).Error; err != nil {
 			return err
 		}

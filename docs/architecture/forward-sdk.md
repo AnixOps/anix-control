@@ -1741,8 +1741,8 @@ Agent never upgrades on its own. H25: the Agent release is Control's.
   `rolling_back`, then `succeeded`, `rolled_back` or `aborted`. A node is
   `pending`, `offered` (the operation was acknowledged), `upgrading`
   (progress or hand-off reported), then `succeeded`, `failed`,
-  `rolled_back` or `skipped` (no `upgrade.v1`, or offline for the whole
-  batch: not counted).
+  `rolled_back` or `skipped` (no `upgrade.v1`, offline for the whole
+  batch, or connected but never acknowledging during it: not counted).
 
   ```text
   running ──(batch settled ∧ ≥ min duration)──▶ next batch … ──▶ succeeded

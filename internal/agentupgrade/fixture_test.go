@@ -103,6 +103,7 @@ type fakeStreams struct {
 	sessions map[agentcontrol.AgentNode]agentstreams.Session
 	sent     []sentOperation
 	refuse   map[agentcontrol.AgentNode]string
+	hang     map[agentcontrol.AgentNode]bool
 	handler  agentstreams.ObservedHandler
 	sequence int
 }
@@ -114,7 +115,7 @@ type sentOperation struct {
 }
 
 func newFakeStreams() *fakeStreams {
-	return &fakeStreams{sessions: map[agentcontrol.AgentNode]agentstreams.Session{}, refuse: map[agentcontrol.AgentNode]string{}}
+	return &fakeStreams{sessions: map[agentcontrol.AgentNode]agentstreams.Session{}, refuse: map[agentcontrol.AgentNode]string{}, hang: map[agentcontrol.AgentNode]bool{}}
 }
 
 // connect opens a new session of node with version; upgrade says whether
@@ -154,6 +155,9 @@ func (f *fakeStreams) Dispatch(_ context.Context, node agentcontrol.AgentNode, o
 	session, ok := f.sessions[node]
 	if !ok {
 		return nil, agentstreams.ErrNotConnected
+	}
+	if f.hang[node] {
+		return nil, context.DeadlineExceeded
 	}
 	upgrade := false
 	for _, name := range session.NegotiatedCapabilities {

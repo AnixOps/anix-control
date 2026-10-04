@@ -510,3 +510,44 @@ func TestPostgresOneActiveCampaign(t *testing.T) {
 		Status: model.AgentUpgradeRunning, ActiveSlot: &slot, CreatedAt: start, UpdatedAt: start}).Error
 	assert.Error(t, err)
 }
+
+// A connected Agent that never acknowledges does not hold its batch open:
+// it is skipped once the batch's minimum duration has passed.
+func TestUnacknowledgedOfferDoesNotStall(t *testing.T) {
+	f := newFixture(t, openSQLite(t))
+	node := f.addProxy(1, "")
+	f.streams.connect(node, "v4.1.0", start, "upgrade.v1")
+	f.streams.hang[node] = true
+	campaign := f.start(StartRequest{})
+	f.tick()
+	assert.Equal(t, model.AgentUpgradeNodePending, f.nodeState(campaign.ID, node).State)
+	f.clock.Advance(MinBatchDuration)
+	f.tick()
+	row := f.nodeState(campaign.ID, node)
+	assert.Equal(t, model.AgentUpgradeNodeSkipped, row.State)
+	assert.Equal(t, CodeOfferFailed, row.ErrorCode)
+	for range 3 { // the canary batch, then the two empty ones
+		f.tick()
+	}
+	assert.Equal(t, model.AgentUpgradeSucceeded, f.campaign(campaign.ID).Status, "the empty remaining batches pass")
+}
+
+// A rollback that cannot be delivered still ends the campaign and marks the
+// node.
+func TestUndeliveredRollbackIsMarked(t *testing.T) {
+	f := newFixture(t, openSQLite(t))
+	node := f.addProxy(1, "")
+	f.streams.connect(node, "v4.1.0", start, "upgrade.v1")
+	campaign := f.start(StartRequest{})
+	f.tick()
+	f.upgrade(node, "v4.2.0")
+	f.tick()
+	_, err := f.service.Abort(context.Background(), campaign.ID, Actor{}, true)
+	require.NoError(t, err)
+	f.streams.hang[node] = true
+	f.tick()
+	f.clock.Advance(2*ReconnectTimeout + time.Second)
+	f.tick()
+	assert.Equal(t, model.AgentUpgradeRolledBack, f.campaign(campaign.ID).Status)
+	assert.Equal(t, CodeRollbackUnconfirm, f.nodeState(campaign.ID, node).ErrorCode)
+}
