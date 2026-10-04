@@ -310,7 +310,7 @@ legacy agent HTTP and WebSocket paths.
 
 ```yaml
 agent_control:
-  mtls: "preferred"     # off | optional | preferred | required
+  mtls: ""              # off | optional | preferred | required; empty: required (v4.2)
   legacy_sunset: ""     # optional YYYY-MM-DD, announced to legacy agents
 ```
 
@@ -318,8 +318,8 @@ agent_control:
 |------|------|
 | `off` | authenticate with their node API key; certificates are neither requested nor accepted and `Enroll` is unavailable (a rollback switch) |
 | `optional` | authenticate with their node API key, silently |
-| `preferred` (default from 4.1.0) | still authenticate, and get deprecation signals: `Deprecation: true`, `Link` to the upgrade guide and, with `legacy_sunset`, `Sunset` on the legacy HTTP paths; `x-anix-auth-deprecated` (with `x-anix-auth-deprecation-link`, `x-anix-auth-sunset`) on the control stream |
-| `required` (default from 4.2) | are refused on the AnixOps Agent channels: HTTP 403 with `"code": "agent_mtls_required"`, gRPC `Unauthenticated` with the trailer `x-anix-error-code: agent_mtls_required`; `Enroll` takes only one-time enrollment credentials |
+| `preferred` (the 4.1 default) | still authenticate, and get deprecation signals: `Deprecation: true`, `Link` to the upgrade guide and, with `legacy_sunset`, `Sunset` on the legacy HTTP paths; `x-anix-auth-deprecated` (with `x-anix-auth-deprecation-link`, `x-anix-auth-sunset`) on the control stream |
+| `required` (default from 4.2, also when empty) | are refused on the AnixOps Agent channels: HTTP 403 with `"code": "agent_mtls_required"`, gRPC `Unauthenticated` with the trailer `x-anix-error-code: agent_mtls_required`; `Enroll` takes only one-time enrollment credentials |
 
 - **Scope.** The AnixOps Agent channels are the control stream's API key
   authentication, `/api/v2/agent/*`, `/api/v2/node/*`,
@@ -336,12 +336,26 @@ agent_control:
   `optional` and `preferred` start, but agents cannot enroll (the startup log
   line `Agent transports: ...` says so).
 - `required` needs `grpc.enabled`, `grpc.tls_cert_file`,
-  `grpc.tls_key_file` and the built-in CA; startup fails otherwise.
+  `grpc.tls_key_file` and the built-in CA for agents to enroll and connect.
+  Set explicitly, startup fails without them. Left empty (the v4.2
+  default), Control starts and logs a `WARNING: Agent transports: ...` line
+  that no Agent can connect until they are set; legacy Agents are refused
+  either way.
+- Under `required`, startup also warns (`WARNING: Agent transports:
+  agent_control.mtls=required refuses N enabled node(s) ...`) when the
+  transport inventory still has enabled nodes on a legacy channel (counting
+  those seen within the last 7 days) or nodes that never enrolled. It never
+  stops the start.
 - `legacy_sunset` (`ANIX_CONTROL_AGENT_CONTROL_LEGACY_SUNSET`) is empty by
   default, so no `Sunset` header is sent until an operator fixes a date.
-- Before switching to `required`, run `anix-control agents transports
-  --legacy-only` (or open NodeX Agents → Agent 连接方式): every node it
-  lists must first run an enrolled agent. `/metrics` has
+- Before switching to `required` or upgrading to v4.2, run `anix-control
+  agents transports --check-required` (exit status 3 while an enabled node
+  would be refused: `legacy` or `never_enrolled`; 0 when none;
+  `summary.ready_for_required` in `GET /api/v4/kernel/agents/transports`),
+  or open NodeX Agents → Agent 连接方式. Every node it lists must first run
+  an enrolled agent, or be disabled. To keep serving legacy Agents for a
+  while, set `preferred`
+  ([UPGRADE](../UPGRADE.md#agent-transports-v42-requires-enrolled-agents)). `/metrics` has
   `anixops_agent_legacy_requests_total{path}`,
   `anixops_agent_legacy_refused_total{path}` and
   `anixops_agent_mtls_mode{mode}`.

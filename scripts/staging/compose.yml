@@ -47,6 +47,11 @@ x-control: &control
     # Route defaults (package_routes.default_mode): rehearsed, as shipped,
     # or legacy to rehearse from the 4.0 baseline.
     ANIX_CONTROL_PACKAGE_ROUTES_DEFAULT_MODE: ${STAGING_ROUTE_DEFAULT_MODE:-rehearsed}
+    # agent_control.mtls: empty is the shipped default, required (v4.2). The
+    # stack has no gRPC listener and no agents, so Control starts with a
+    # warning that no Agent can enroll; set preferred to rehearse the 4.1
+    # behaviour (an explicit required needs gRPC TLS and the CA).
+    ANIX_CONTROL_AGENT_CONTROL_MTLS: ${STAGING_AGENT_CONTROL_MTLS:-}
     ANIX_CONTROL_PLUGINS_IDENTITY_BOOTSTRAP_PACKAGE_DIR: /app/bootstrap/identity-platform
     ANIX_CONTROL_PLUGINS_CONTROL_HOST_RUNTIME_DIR: /var/lib/anixops/hosts
     ANIX_CONTROL_PLUGINS_CONTROL_HOST_ARTIFACT_DIR: /var/lib/anixops/artifacts

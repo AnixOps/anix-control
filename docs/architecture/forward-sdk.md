@@ -1821,9 +1821,11 @@ before Control is upgraded:
    of the upgrade below cleans them through NodeX's API. Further unit names
    are added only once confirmed.)
 2. **Switch every forward node to the new Agent**, NodeX nodes included
-   (H20). `anix-control agents transports --legacy-only` must list no node.
+   (H20). `anix-control agents transports --legacy-only` must list no node
+   (`--check-required`, from v4.2, must exit 0: it also catches enabled
+   nodes that never enrolled).
 3. **Upgrade Control to v4.2**, with `agent_control.mtls` defaulting to
-   `required` (H5).
+   `required` (H5; done: an empty `agent_control.mtls` is `required`).
 
 **The upgrade itself (F5c)** then runs three steps in this order. The last
 one is **IRREVERSIBLE** and is gate **H15**, confirmed on its own.

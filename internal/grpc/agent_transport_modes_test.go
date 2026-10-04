@@ -121,6 +121,27 @@ func TestAgentListenerTransitionModes(t *testing.T) {
 		assert.True(t, ok)
 	})
 
+	t.Run("the 4.2 default without a CA", func(t *testing.T) {
+		// agent_control.mtls left empty is required. Without the built-in
+		// CA the kernel still starts (config validation lets the default
+		// through, with a startup warning): legacy credentials are refused,
+		// and enrollment is unavailable rather than failing open.
+		l := startAgentListener(t, "", false)
+		ctx := testContext(t)
+		anonymous := l.dial(t, nil)
+		assert.Nil(t, l.server.agentAuthenticator().pki())
+		refused := agenttransport.RefusedRequests(controlStreamMethod)
+		stream, err := agentv1pb.NewAgentControlServiceClient(anonymous).ControlStream(legacyCredentials(ctx, l.proxy.ID, l.proxyKey))
+		require.NoError(t, err)
+		_ = stream.Send(validAgentHello(uint32(l.proxy.ID)))
+		_, err = stream.Recv()
+		require.Equal(t, codes.Unauthenticated, status.Code(err))
+		assert.Equal(t, []string{agentcontrol.ErrorCodeMTLSRequired}, stream.Trailer().Get(agentcontrol.MetadataErrorCode))
+		assert.Equal(t, refused+1, agenttransport.RefusedRequests(controlStreamMethod))
+		_, _, err = enrollForTest(t, nodeCredentials(ctx, l.proxyNode(), l.proxyKey), anonymous, "")
+		assert.Equal(t, codes.FailedPrecondition, status.Code(err), "no enrollment without the CA: %v", err)
+	})
+
 	t.Run("required", func(t *testing.T) {
 		l := startAgentListener(t, config.AgentMTLSRequired, true)
 		ctx := testContext(t)
@@ -176,15 +197,18 @@ func TestAgentListenerTransitionModes(t *testing.T) {
 }
 
 // TestAgentAuthenticatorDefaults: a nil authenticator is optional, an
-// empty mode is the configuration default (preferred), and a stream
+// empty mode is the configuration default (required from 4.2), and a stream
 // authenticated by certificate is recorded as mtls-stream.
 func TestAgentAuthenticatorDefaults(t *testing.T) {
 	var none *AgentAuthenticator
 	assert.Equal(t, config.AgentMTLSOptional, none.mode())
 	assert.Nil(t, none.deprecationHeader())
-	assert.Equal(t, config.AgentMTLSPreferred, (&AgentAuthenticator{}).mode())
-	assert.NotNil(t, (&AgentAuthenticator{}).deprecationHeader())
-	assert.Empty(t, (&AgentAuthenticator{}).deprecationHeader().Get(agentcontrol.MetadataAuthSunset), "no sunset unless configured")
+	assert.Equal(t, config.AgentMTLSRequired, (&AgentAuthenticator{}).mode())
+	assert.Equal(t, config.AgentMTLSPreferred, (&AgentAuthenticator{Mode: config.AgentMTLSPreferred}).mode(), "preferred stays selectable")
+	assert.Nil(t, (&AgentAuthenticator{}).deprecationHeader(), "required refuses legacy credentials rather than signalling them")
+	preferred := &AgentAuthenticator{Mode: config.AgentMTLSPreferred}
+	assert.NotNil(t, preferred.deprecationHeader())
+	assert.Empty(t, preferred.deprecationHeader().Get(agentcontrol.MetadataAuthSunset), "no sunset unless configured")
 
 	certificate := agentPrincipal{Node: agentcontrol.AgentNode{Kind: agentcontrol.NodeKindForward, ID: 3}, Certificate: true,
 		Serial: "01", NotAfter: time.Now().Add(time.Hour), SPIFFEID: "spiffe://anixops/test/agent/forward-3"}

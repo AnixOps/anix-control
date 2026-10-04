@@ -2,6 +2,7 @@ package agenttransport
 
 import (
 	"context"
+	"fmt"
 	"sort"
 	"time"
 
@@ -92,13 +93,108 @@ type LiveSession struct {
 	AgentMetricsAt *time.Time         `json:"agent_metrics_at"`
 }
 
-// Summary counts the inventory's nodes by status.
+// Summary counts the inventory's nodes by status, and tells whether
+// agent_control.mtls: required would refuse any enabled node.
 type Summary struct {
 	Total      int `json:"total"`
 	MTLS       int `json:"mtls"`
 	Legacy     int `json:"legacy"`
 	ThirdParty int `json:"third_party"`
 	Unseen     int `json:"unseen"`
+	// ReadyForRequired is true when required refuses no enabled node:
+	// none is on a legacy AnixOps Agent channel and none is unseen without
+	// an agent certificate. It is computed over every node, also with
+	// legacy_only.
+	ReadyForRequired bool `json:"ready_for_required"`
+	// RequiredReasons explains a false ReadyForRequired, empty otherwise.
+	RequiredReasons []string `json:"required_reasons"`
+	// RequiredBlockers lists the enabled nodes required would refuse.
+	RequiredBlockers []RequiredBlocker `json:"required_blockers"`
+}
+
+// Why agent_control.mtls: required would refuse a node (RequiredBlocker).
+const (
+	// BlockerLegacy: the node's newest AnixOps Agent channel is legacy.
+	BlockerLegacy = "legacy"
+	// BlockerNeverEnrolled: the node was never seen and holds no valid
+	// agent certificate, so its agent never enrolled.
+	BlockerNeverEnrolled = "never_enrolled"
+)
+
+// RecentLegacyWindow is how far back a legacy sighting counts as recent:
+// the agent was still in use shortly before the upgrade. Under required
+// a refused request records no sighting, so legacy nodes age out of this
+// window after the switch.
+const RecentLegacyWindow = 7 * 24 * time.Hour
+
+// RequiredBlocker is an enabled node agent_control.mtls: required would
+// refuse.
+type RequiredBlocker struct {
+	Node   string `json:"node"`
+	Name   string `json:"name"`
+	Reason string `json:"reason"`
+	// Transport is the latest legacy transport, empty for never_enrolled.
+	Transport  string     `json:"transport,omitempty"`
+	LastSeenAt *time.Time `json:"last_seen_at"`
+	// Recent: a legacy node seen within RecentLegacyWindow.
+	Recent bool `json:"recent"`
+}
+
+// RequiredBlockerCounts counts blockers: legacy nodes, those seen within
+// RecentLegacyWindow, and nodes that never enrolled.
+func (s Summary) RequiredBlockerCounts() (legacy, recentLegacy, neverEnrolled int) {
+	for _, blocker := range s.RequiredBlockers {
+		switch blocker.Reason {
+		case BlockerLegacy:
+			legacy++
+			if blocker.Recent {
+				recentLegacy++
+			}
+		case BlockerNeverEnrolled:
+			neverEnrolled++
+		}
+	}
+	return legacy, recentLegacy, neverEnrolled
+}
+
+// requiredBlocker tells whether required would refuse node, and why. Only
+// enabled nodes count: a disabled node's agent is refused in every mode.
+// Third-party nodes are not refused (UniProxy and v2board gRPC stay open);
+// an unseen node with a valid certificate has enrolled.
+func requiredBlocker(node NodeTransports, now time.Time) (RequiredBlocker, bool) {
+	if !node.Enabled {
+		return RequiredBlocker{}, false
+	}
+	blocker := RequiredBlocker{Node: node.Node, Name: node.Name, LastSeenAt: node.LastSeenAt}
+	switch {
+	case node.Status == StatusLegacy:
+		blocker.Reason = BlockerLegacy
+		for _, transport := range node.Transports {
+			if transport.Legacy {
+				blocker.Transport = transport.Transport
+				blocker.Recent = now.Sub(transport.LastSeenAt) <= RecentLegacyWindow
+				break
+			}
+		}
+	case node.Status == StatusUnseen && node.Certificate == nil:
+		blocker.Reason = BlockerNeverEnrolled
+	default:
+		return RequiredBlocker{}, false
+	}
+	return blocker, true
+}
+
+// requiredReasons explains the blockers.
+func requiredReasons(summary Summary) []string {
+	legacy, recent, never := summary.RequiredBlockerCounts()
+	reasons := []string{}
+	if legacy > 0 {
+		reasons = append(reasons, fmt.Sprintf("%d enabled node(s) still on a legacy AnixOps Agent channel (%d seen within the last %d days): upgrade their Agents and let them enroll", legacy, recent, int(RecentLegacyWindow/(24*time.Hour))))
+	}
+	if never > 0 {
+		reasons = append(reasons, fmt.Sprintf("%d enabled node(s) never enrolled (no agent certificate, never seen): install or enroll their Agents, or disable the nodes", never))
+	}
+	return reasons
 }
 
 // Inventory is the transport inventory.
@@ -152,7 +248,8 @@ func Build(ctx context.Context, db *gorm.DB, policy Policy, options Options) (In
 		now = time.Now()
 	}
 	now = now.UTC()
-	inventory := Inventory{Mode: policy.Mode, GeneratedAt: now, UpgradeGuide: UpgradeGuideURL, Nodes: []NodeTransports{}}
+	inventory := Inventory{Mode: policy.Mode, GeneratedAt: now, UpgradeGuide: UpgradeGuideURL, Nodes: []NodeTransports{},
+		Summary: Summary{RequiredReasons: []string{}, RequiredBlockers: []RequiredBlocker{}}}
 	if !policy.Sunset.IsZero() {
 		sunset := policy.Sunset
 		inventory.Sunset = &sunset
@@ -245,6 +342,9 @@ func Build(ctx context.Context, db *gorm.DB, policy Policy, options Options) (In
 			node.Transports = []TransportSeen{}
 		}
 		classify(&node, fallbackVersion)
+		if blocker, ok := requiredBlocker(node, now); ok {
+			inventory.Summary.RequiredBlockers = append(inventory.Summary.RequiredBlockers, blocker)
+		}
 		if options.LegacyOnly && node.Status != StatusLegacy {
 			return
 		}
@@ -273,6 +373,8 @@ func Build(ctx context.Context, db *gorm.DB, policy Policy, options Options) (In
 			inventory.Summary.Unseen++
 		}
 	}
+	inventory.Summary.RequiredReasons = requiredReasons(inventory.Summary)
+	inventory.Summary.ReadyForRequired = len(inventory.Summary.RequiredBlockers) == 0
 	return inventory, nil
 }
 

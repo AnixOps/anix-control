@@ -245,6 +245,12 @@ func PathFromEnv() string {
 	return strings.TrimSpace(value)
 }
 
+// emptyDefaultMeanings explains the built-in defaults that are empty on
+// purpose because the code resolves them.
+var emptyDefaultMeanings = map[string]string{
+	"agent_control.mtls": "empty: `" + AgentMTLSDefault + "`",
+}
+
 // EnvMarkdownTable renders the variable reference table of
 // docs/reference/environment-variables.md from cfg (the built-in defaults).
 func EnvMarkdownTable(cfg *Config) string {
@@ -256,6 +262,8 @@ func EnvMarkdownTable(cfg *Config) string {
 		switch {
 		case variable.Secret:
 			value = "secret, no default"
+		case variable.Default == "" && emptyDefaultMeanings[variable.Path] != "":
+			value = emptyDefaultMeanings[variable.Path]
 		case variable.Default == "":
 			value = ""
 		}

@@ -192,6 +192,14 @@ grpc:
   tls_cert_file: "config/tls/control.crt"
   tls_key_file: "config/tls/control.key"
 
+# AnixOps Agent client certificates (docs/reference/configuration.md). Empty
+# means required, the default from v4.2: only enrolled (mTLS) agents connect,
+# which needs grpc.enabled with the TLS files above and module_runtime.ca_kek.
+# Set "preferred" to keep serving legacy agents while nodes migrate; check with
+# `anix-control agents transports --check-required`.
+agent_control:
+  mtls: ""
+
 # 默认管理员配置
 admin:
   email: "admin@your-domain.com"

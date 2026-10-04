@@ -30,7 +30,7 @@ This table is generated from the code and checked by
 | `ANIX_CONTROL_ADMIN_EMAIL` | `admin.email` | string |  |
 | `ANIX_CONTROL_ADMIN_PASSWORD` | `admin.password` | string | secret, no default |
 | `ANIX_CONTROL_AGENT_CONTROL_LEGACY_SUNSET` | `agent_control.legacy_sunset` | string |  |
-| `ANIX_CONTROL_AGENT_CONTROL_MTLS` | `agent_control.mtls` | string | `preferred` |
+| `ANIX_CONTROL_AGENT_CONTROL_MTLS` | `agent_control.mtls` | string | empty: `required` |
 | `ANIX_CONTROL_AGENT_INSTALL_AGENT_VERSION` | `agent_install.agent_version` | string |  |
 | `ANIX_CONTROL_AGENT_INSTALL_ARTIFACT_DIR` | `agent_install.artifact_dir` | string |  |
 | `ANIX_CONTROL_AGENT_INSTALL_CN_MIRROR_URL` | `agent_install.cn_mirror_url` | string |  |

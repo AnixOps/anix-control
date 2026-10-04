@@ -236,13 +236,14 @@ func (rt *serverRuntime) startAgentPKIMaintenance() {
 
 // agentPKIForGRPC returns the agent PKI the gRPC listener verifies client
 // certificates with: nil when the built-in CA is off (or the PKI is
-// external), which every agent_control.mtls but required allows. It needs the CA
-// only, not the module runtime or its listener.
+// external), which every agent_control.mtls but an explicit required allows
+// (the default required starts and warns, agentTransportPolicyLog). It needs
+// the CA only, not the module runtime or its listener.
 func agentPKIForGRPC(cfg *config.Config, db *gorm.DB) (*agentpki.Service, error) {
 	pki, err := agentpki.FromConfig(cfg, db)
 	switch {
 	case errors.Is(err, agentpki.ErrDisabled):
-		if mode := cfg.AgentControl.MTLSOrDefault(); mode == config.AgentMTLSRequired {
+		if mode := cfg.AgentControl.MTLSOrDefault(); mode == config.AgentMTLSRequired && cfg.AgentControl.MTLSExplicit() {
 			return nil, fmt.Errorf("agent_control.mtls %q: %w", mode, err)
 		}
 		if errors.Is(err, agentpki.ErrExternalPKI) {
@@ -289,6 +290,18 @@ func agentTransportPolicyLog(cfg *config.Config, grpcSrv *grpcserver.Server) str
 	case strings.TrimSpace(cfg.GRPC.TLSCertFile) == "":
 		enrollment = "unavailable for client certificates: no TLS on the gRPC listener (grpc.tls_cert_file)"
 	}
-	return fmt.Sprintf("Agent transports: agent_control.mtls=%s: %s; legacy sunset: %s; agent enrollment: %s. Check `anix-control agents transports --legacy-only` before v4.2 makes required the default.",
-		mode, effect, sunset, enrollment)
+	if mode == config.AgentMTLSRequired && enrollment != "available" {
+		origin := "set"
+		if !cfg.AgentControl.MTLSExplicit() {
+			origin = "the default since v4.2"
+		}
+		return fmt.Sprintf("WARNING: Agent transports: agent_control.mtls=required (%s): %s; legacy sunset: %s; agent enrollment: %s. No AnixOps Agent can connect: give the kernel grpc.enabled, grpc.tls_cert_file/tls_key_file and module_runtime.ca_kek, or set agent_control.mtls: preferred while nodes migrate (docs/UPGRADE.md, \"Agent Transports: v4.2 Requires Enrolled Agents\").",
+			origin, effect, sunset, enrollment)
+	}
+	next := "Check `anix-control agents transports --check-required` before setting required (the default from v4.2)."
+	if mode == config.AgentMTLSRequired {
+		next = "`anix-control agents transports --check-required` lists the nodes it refuses."
+	}
+	return fmt.Sprintf("Agent transports: agent_control.mtls=%s: %s; legacy sunset: %s; agent enrollment: %s. %s",
+		mode, effect, sunset, enrollment, next)
 }

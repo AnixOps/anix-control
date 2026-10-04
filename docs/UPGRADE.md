@@ -34,6 +34,12 @@ legacy` keeps the 4.0 behaviour exactly; `anix-control routes rollback
 ["Upgrading To 4.1.0: Packages Now Default To Native Routes"](#upgrading-to-410-packages-now-default-to-native-routes)
 before you upgrade.
 
+**Upgrading to v4.2: `agent_control.mtls` defaults to `required`.** Legacy
+API-key Agents are refused on the AnixOps Agent channels. Run
+`anix-control agents transports --check-required` (exit status 0) before you
+upgrade, and read
+["Agent Transports: v4.2 Requires Enrolled Agents"](#agent-transports-v42-requires-enrolled-agents).
+
 ## Fixed Legacy Native Layout
 
 For the specific legacy layout discovered on the old native host
@@ -73,6 +79,10 @@ Before touching production:
 - **Upgrading past 4.1.0-rc.4 with forwards on the `nftables_ansible`
   backend: relays need Linux 5.2+ and nft 0.9.1+, and traffic numbers jump
   to their real values** ([rc.4 → rc.5 Checklist](#rc4--rc5-checklist)).
+- **Upgrading to v4.2: every enabled node must run an enrolled Agent, since
+  `agent_control.mtls` now defaults to `required`; `anix-control agents
+  transports --check-required` must exit 0**
+  ([v4.2 Requires Enrolled Agents](#agent-transports-v42-requires-enrolled-agents)).
 
 Evidence to keep:
 
@@ -1918,6 +1928,95 @@ Run it after at least a day on identity, once no rollback is expected:
 - Control no longer creates a default administrator. Create administrators
   through the admin API.
 
+## Agent Transports: v4.2 Requires Enrolled Agents
+
+**From v4.2, `agent_control.mtls` defaults to `required`** (owner decision
+H5): a kernel that leaves it unset accepts only enrolled (mTLS) Agents on
+the AnixOps Agent channels. `preferred`, `optional` and `off` stay
+selectable.
+
+- **What `required` refuses.** API key authentication on the Agent Control
+  stream and the API key bootstrap of `AgentEnrollment.Enroll` (one-time
+  enrollment credentials still work); `/api/v2/agent/*`; `/api/v2/node/*`
+  (register, heartbeat, runtime-health, ws); `/api/v2/forward/agent/rules`;
+  the clean agent endpoints `/api/v2/forward-agent/register|heartbeat|report`.
+  They answer HTTP 403 `{"code": "agent_mtls_required"}`, or gRPC
+  `Unauthenticated` with the trailer `x-anix-error-code: agent_mtls_required`.
+  An enrolled Agent that still sent heartbeats or maintenance events over
+  REST or the WebSocket loses them: it must also negotiate the data plane
+  (see "Enrolled is not enough" below).
+- **What it leaves open.** UniProxy (`/api/v1|v2/server/UniProxy/*`), the
+  v2board gRPC services (XrayR, V2bX and other third-party node software),
+  the plugin release download `/api/v3/agent/plugin-releases/...`,
+  `install.sh`, and the admin APIs.
+- **Who is affected.** Only kernels that leave `agent_control.mtls` unset.
+  A config file that sets `mtls: "preferred"` (the 4.1 `config.yaml.example`
+  did) keeps `preferred` after the upgrade: delete the line, or set
+  `required`, once the check below passes. The 4.2 templates leave it empty.
+
+### Order Of Operations
+
+1. **On 4.1, upgrade every node's Agent and let it enroll** (the checklist
+   in "Preparing For v4.2" below; forward nodes: "The New Agent First, Then
+   Control"). Control needs `grpc.enabled`, `grpc.tls_cert_file` /
+   `grpc.tls_key_file` and `module_runtime.ca_kek` for that.
+2. **Run the gate** against the database Control uses:
+
+   ```bash
+   anix-control agents transports --check-required          # table and reasons
+   anix-control agents transports --check-required --json   # for scripts
+   echo $?   # 0: required refuses no enabled node; 3: it would; 2: an error
+   ```
+
+   It lists every enabled node `required` would refuse: `legacy` (its
+   newest AnixOps Agent channel is a legacy one, however long ago) and
+   `never_enrolled` (never seen and no valid agent certificate). Disabled
+   nodes and third-party nodes (UniProxy or v2board gRPC only) do not
+   count. Upgrade and enroll the listed Agents, or disable nodes you are
+   retiring, until it exits 0. `GET /api/v4/kernel/agents/transports`
+   answers the same in `summary.ready_for_required`,
+   `summary.required_reasons` and `summary.required_blockers`.
+   The flag ships with v4.2: on a 4.1 release without it, require that
+   `anix-control agents transports --legacy-only` prints "refuses none" and
+   that no enabled node shows `unseen` without a certificate in
+   `anix-control agents transports`. Do not run the v4.2 binary against the
+   4.1 database just for the check: admin commands migrate the schema
+   first.
+3. **Upgrade Control to v4.2.** Its startup log states the mode, and under
+   `required`:
+   - `WARNING: Agent transports: agent_control.mtls=required refuses N enabled
+     node(s): ...` when the inventory still holds blockers: the counts (legacy
+     nodes, those seen within the last 7 days, which are cut off now, and
+     nodes that never enrolled), up to ten node names, and the command
+     above. Control **starts anyway**: you may be retiring those nodes on
+     purpose.
+   - `WARNING: Agent transports: agent_control.mtls=required (the default
+     since v4.2): ... agent enrollment: unavailable ...` when the gRPC
+     listener, its TLS or the built-in CA is missing: no Agent can connect
+     at all. The default still starts (an install without Agents, or with
+     third-party node software only, needs nothing); an explicit
+     `mtls: "required"` refuses to start without them, as in 4.1.
+4. **Watch** `anixops_agent_legacy_refused_total{path}` on `/metrics`.
+   Refused requests are not recorded in the transport inventory, so a
+   refused node keeps its last legacy sighting and drops out of the 7-day
+   window after a week; it stays in `--check-required` until it enrolls or
+   is disabled.
+
+### Keeping `preferred` For A While
+
+If nodes cannot move before the upgrade, keep serving them:
+
+```yaml
+agent_control:
+  mtls: "preferred"
+```
+
+or `ANIX_CONTROL_AGENT_CONTROL_MTLS=preferred`, and restart. Legacy Agents
+are served again with the deprecation signals; enrolled Agents are not
+affected. This is also the rollback if the upgrade cut off nodes by
+surprise: no data changes with the mode. Plan to return to the default: the
+legacy agent routes themselves are removed in a later release.
+
 ## Agent Transports: Preparing For v4.2
 
 From 4.1.0, `agent_control.mtls` defaults to `preferred`; from v4.2 it
@@ -2005,6 +2104,10 @@ anix-control agents transports
 # upgrade (or before you set agent_control.mtls: required yourself).
 anix-control agents transports --legacy-only
 
+# From v4.2: the upgrade gate, legacy and never-enrolled enabled nodes;
+# exit status 3 while there is one.
+anix-control agents transports --check-required
+
 # The same for scripts.
 anix-control agents transports --legacy-only --json
 ```
@@ -2058,7 +2161,8 @@ this order:
    table, and the gost services the flux runtime or the clean agent created.
    It touches no other table or service.
 2. **Check** that `anix-control agents transports --legacy-only` prints
-   "refuses none".
+   "refuses none" (with the v4.2 command line,
+   `anix-control agents transports --check-required` exits 0).
 3. **Then upgrade Control to v4.2.** Its upgrade checks that every forward
    node is clean before it drops the old tables, and asks you to confirm that
    step on its own: it cannot be undone. Control cleans NodeX hosts through

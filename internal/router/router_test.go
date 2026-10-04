@@ -299,6 +299,9 @@ func setupV2PackageRouterWithEdition(t *testing.T, edition string) (*gin.Engine,
 		Env: "test",
 		JWT: config.JWTConfig{Secret: "test-jwt-secret", Expire: 86400},
 		App: config.AppConfig{APIToken: "test-api-token", SubscribePath: "s", TrafficLogEnable: true, Edition: edition},
+		// The v2 package fixtures drive the legacy agent paths with node API
+		// keys, which the 4.2 default (required) refuses.
+		AgentControl: config.AgentControlConfig{MTLS: config.AgentMTLSPreferred},
 	}
 	host := testHost(t)
 	publicKey, privateKey := seedV2KnowledgePackage(t, cfg)
