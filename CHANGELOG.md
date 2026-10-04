@@ -38,6 +38,25 @@
 
 ### Fixed
 
+- Two flaky Go tests no longer fail under CPU load or by chance.
+  - **NodeOps deadline sweep (Control).** An operation the sweep ended
+    TIMED_OUT could hand its executor `context.Canceled` instead of
+    `context.DeadlineExceeded` (`TestDeadlinesEndStartedOperationsTimedOut`
+    failed in about 5 of 90 loaded runs): in the same tick,
+    `passCancellations` stopped every running operation whose ledger state
+    was no longer started, including the one just timed out, and could win
+    the race against the context's own deadline timer. A timed-out operation
+    without a cancel request now goes through `stopExpired`, as in the sweep
+    itself. The ledger state was right either way; only the evidence of an
+    expired operation's late outcome could read "cancelled" instead of a
+    deadline.
+  - `TestAgentSessionRPCs` and the other `internal/tests/nodeopsagent` tests
+    drew each fixture's node id at random from 65 536 values, and the Agent
+    Control managers they run against are the process's, so two fixtures
+    that drew the same id saw each other's observed operations (one run in
+    about fifty with PostgreSQL, CI run 37193575692). The ids are now
+    counted.
+
 - **Forwarding editor, DNS binding (#196 follow-ups).** A fresh binding no
   longer opens with "Required" under every empty field: the provider, zone
   and managed-name errors wait until the field has been left once, and
