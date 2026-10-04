@@ -10,6 +10,32 @@
   tab, and the row is one Tab stop that lands on the selected tab (roving
   tabindex). A plugin without targets no longer renders an empty tablist.
 
+- **The PostgreSQL package tests run on a database that does not flush to
+  disk.** "Package Storage PostgreSQL (n/4)" started its PostgreSQL service
+  with the default durability settings, and the compatibility harnesses
+  commit once per statement (`ordercompat` alone about 25 000 times: every
+  seed row, kernel API view, sequence reset and emptied table), so on a slow
+  runner disk the commits were most of the run: `ordercompat` and
+  `paymentcompat` took 45 to 63 s in some CI runs and 22 to 28 s in others.
+  The job now sets `fsync`, `synchronous_commit` and `full_page_writes` off
+  before the tests (the database is thrown away with the job and no test
+  crashes it; the SQL behaviour is the same). Locally, on a disk that
+  flushes in 1.5 ms (four paired rounds): `ordercompat` 30.6 -> 10.0 s and
+  `paymentcompat` 26.1 -> 10.1 s. On CI's fast runners the gain is smaller
+  (`ordercompat` 22.9 and 24.2 s, `paymentcompat` 21.5 and 22.5 s in the two
+  first runs, against means of 27.5 and 24.9 s over the 11 before) and
+  the slow-disk runs of 51 and 44 s should go away. Nothing else changes:
+  the migrated database a test shares between its cases
+  (`internal/tests/packagecompat/shared.go`) already costs one migration per
+  test.
+  - The four shards are re-planned from measured times: the weights in
+    `plan_test_shards.py` dated from before the compatibility harnesses got
+    faster (`plancompat` 48 s, `nodesecrets` 41 s and `gostmeshcompat` 34 s
+    were weighted, 5 to 12 s are measured), so the old plan ran 118 s of
+    tests in shard 3 and 72 s in shard 4 (CI run 37229103569), the new one
+    85 to 102 s per shard (run 37229598173). A shard's job is dominated by
+    a 55 to 92 s compile before its first test, which this does not change.
+
 ### Fixed
 
 - **Forwarding editor, DNS binding (#196 follow-ups).** A fresh binding no

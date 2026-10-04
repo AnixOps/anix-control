@@ -28,8 +28,9 @@ import sys
 MODULE = "github.com/AnixOps/anix-control/v4/"
 
 # Seconds per package, the mean of five go_dev and pull request runs
-# (2026-10-02). backend: "Backend Tests" with coverage; postgres: "Package
-# Storage PostgreSQL". Keys are relative to MODULE.
+# (2026-10-02) for backend ("Backend Tests" with coverage); postgres:
+# "Package Storage PostgreSQL", see its comment. Keys are relative to
+# MODULE.
 WEIGHTS: dict[str, dict[str, float]] = {
     "backend": {
         "internal/moduleruntime": 31.3,
@@ -59,44 +60,38 @@ WEIGHTS: dict[str, dict[str, float]] = {
         "internal/kernelsubscriber": 1.1,
     },
     "postgres": {
-        # Sharded CI run of PR #149 (fresh PostgreSQL per shard); ordercompat
-        # and paymentcompat from PR #156 (shared migrated databases).
-        "internal/tests/ordercompat": 24.1,
-        "internal/tests/paymentcompat": 22.7,
-        "internal/tests/identitycompat": 61.6,
-        "internal/tests/subscriptioncompat": 60.2,
-        "internal/tests/plancompat": 48.0,
-        "internal/nodesecrets": 40.6,
-        "internal/tests/affiliatecompat": 37.3,
-        "internal/tests/gostmeshcompat": 34.4,
-        "internal/kernelnodeops": 34.1,
-        "internal/tests/notificationcompat": 33.4,
-        "internal/tests/integration": 31.0,
-        "internal/tests/nodeopsagent": 20.9,
-        "internal/subscriber": 10.0,
-        # M3-2 added the node, registration key and check routes on the
-        # kernel's path: a local run, doubled.
-        "internal/tests/proxynodecompat": 60.0,
-        "internal/tests/machinetelemetrycompat": 10.0,
-        "internal/tests/nodesecretsplit": 9.6,
-        "internal/tests/platformcompat": 5.3,
-        "internal/tests/knowledgecompat": 4.4,
-        "internal/packagestore": 3.7,
-        "internal/tests/ticketcompat": 3.5,
-        "internal/agentpki": 2.8,
-        "internal/tests/bridgecontract": 1.8,
-        # A local run of M3-1's protocol and agent routes, doubled.
-        "internal/tests/protocolruntimecompat": 38.0,
+        # The mean of 12 runs of 2026-10-04 (11 pull request and go_dev runs,
+        # then the first run with the job's PostgreSQL on fsync off).
+        "internal/tests/proxynodecompat": 44.5,
+        "internal/tests/identitycompat": 42.3,
+        "internal/kernelnodeops": 39.7,
+        "internal/tests/subscriptioncompat": 37.9,
+        "internal/tests/nodeopsagent": 30.0,
+        "internal/tests/integration": 28.1,
+        "internal/tests/ordercompat": 27.1,
+        "internal/tests/protocolruntimecompat": 26.4,
+        "internal/tests/paymentcompat": 24.6,
+        "internal/tests/affiliatecompat": 19.8,
+        "internal/tests/notificationcompat": 16.4,
+        "internal/tests/gostmeshcompat": 11.7,
+        "internal/nodesecrets": 10.4,
+        "internal/tests/nodesecretsplit": 10.3,
+        "internal/tests/machinetelemetrycompat": 6.1,
+        "internal/tests/plancompat": 5.3,
+        "internal/packagestore": 4.4,
+        "internal/kernelforward": 4.3,
+        "internal/agentpki": 2.3,
+        "internal/tests/platformcompat": 2.3,
+        "internal/tests/bridgecontract": 1.7,
+        "internal/tests/ticketcompat": 1.2,
+        "internal/subscriber": 1.1,
+        "internal/agentupgrade": 0.7,
+        "internal/tests/knowledgecompat": 0.6,
         "internal/tests/packagecompat": 0.6,
-        "internal/tests/wireguardcompat": 0.1,
+        "internal/tests/forwardv4": 0.5,
+        "internal/shadowsamples": 0.3,
         "internal/agentreports": 0.1,
-        "internal/shadowsamples": 0.2,
-        # Not measured in CI yet: the local PostgreSQL run of F3a.
-        "internal/kernelforward": 3.0,
-        # Not measured in CI yet: F5a's v4 API over ForwardControl.
-        "internal/tests/forwardv4": 1.0,
-        # Not measured in CI yet: O4's Agent upgrade campaigns.
-        "internal/agentupgrade": 1.0,
+        "internal/tests/wireguardcompat": 0.1,
     },
 }
 
