@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"slices"
 	"strings"
 	"testing"
 
@@ -43,6 +44,12 @@ func (m *mutant) Apply(ctx context.Context, a driver.Artifact) (driver.ApplyResu
 		ctx = context.Background()
 	case "forgets-generation":
 		_ = m.Driver.Remove(ctx)
+	case "recreates-every-hop":
+		// A structural change re-creates every hop, as a reload of the
+		// whole engine would.
+		if o, err := m.Driver.Observe(ctx); err == nil && o.Applied && !slices.Equal(keysOf(o), a.Hops) {
+			_ = m.Driver.Remove(ctx)
+		}
 	}
 	r, err := m.Driver.Apply(ctx, a)
 	if m.kind == "always-changed" && err == nil {
@@ -74,6 +81,14 @@ func (m *mutant) SetUpstreams(ctx context.Context, routeID string, hopIndex uint
 		return nil
 	}
 	return m.Driver.SetUpstreams(ctx, routeID, hopIndex, active)
+}
+
+func keysOf(o driver.Observation) []driver.HopKey {
+	out := make([]driver.HopKey, 0, len(o.Counters))
+	for _, c := range o.Counters {
+		out = append(out, driver.HopKey{RouteID: c.GetRouteId(), HopIndex: c.GetHopIndex()})
+	}
+	return out
 }
 
 type mutantEnv struct {
@@ -111,6 +126,7 @@ func TestMutants(t *testing.T) {
 		"counters-go-down":           "observe-monotonic",
 		"remove-touches-foreign":     "remove",
 		"set-upstreams-ignored":      "set-upstreams-failover",
+		"recreates-every-hop":        "apply-leaves-unrelated-hops",
 	} {
 		t.Run(kind, func(t *testing.T) {
 			t.Parallel()

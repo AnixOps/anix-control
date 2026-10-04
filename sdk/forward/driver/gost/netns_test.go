@@ -12,8 +12,10 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"math/big"
+	"net/http"
 	"net/url"
 	"os"
 	"os/exec"
@@ -327,13 +329,28 @@ func (n *node) driver(t testing.TB) *gost.Driver {
 	if err != nil {
 		t.Fatal(err)
 	}
+	// FailNextApply also fails an apply that changes gost through its
+	// web API: gost refuses the first service it is asked to create.
+	gost.SetAPIFault(d, func(method, path string) error {
+		if method != http.MethodPost || path != "/config/services" {
+			return nil
+		}
+		n.sup.mu.Lock()
+		defer n.sup.mu.Unlock()
+		if n.sup.failNext {
+			n.sup.failNext = false
+			return errors.New("injected failure: service refused")
+		}
+		return nil
+	})
 	return d
 }
 
 // countingSupervisor counts the starts and reloads (full applies) and can
 // make the next one fail inside gost: it overwrites the configuration
 // with one gost cannot parse just before, so gost refuses it as it would
-// a bad configuration.
+// a bad configuration. An apply through the web API fails instead at the
+// first service it creates (node.driver).
 type countingSupervisor struct {
 	*gost.ProcessSupervisor
 	config string

@@ -46,6 +46,9 @@ type Driver struct {
 	now     func() time.Time
 	client  *http.Client // the metrics socket
 	api     *http.Client // the web API socket
+	// apiFault, set by tests only (export_test.go), refuses a changing
+	// web API request when it answers an error.
+	apiFault func(method, path string) error
 
 	mu sync.RWMutex
 }
@@ -178,6 +181,50 @@ func (d *Driver) runs(ctx context.Context, p *parsed) (bool, error) {
 	return bound(socks, listenerSet(p.hops)), nil
 }
 
+// serves reports whether gost runs the configuration p as st recorded
+// it, and answers the running configuration when it does: gost serves
+// p's metrics path, or the one it loaded at the last start or reload when
+// Apply changed services through the web API since (st.Served); it holds
+// every listener of p; and it runs exactly p's services and hops. A web
+// API that does not answer counts as not running p.
+func (d *Driver) serves(ctx context.Context, st *hostState, p *parsed) (bool, *liveConfig, error) {
+	path := d.live(ctx, p.metricsPath)
+	if !path && st != nil && st.Served != "" && st.Served != p.metricsPath {
+		path = d.live(ctx, st.Served)
+	}
+	if !path {
+		return false, nil, ctx.Err()
+	}
+	socks, err := listSockets(ctx, d.runner)
+	if err != nil {
+		return false, nil, err
+	}
+	if !bound(socks, listenerSet(p.hops)) {
+		return false, nil, nil
+	}
+	// gost starts its web API before it serves metrics: one request.
+	var live liveConfig
+	if err := d.call(ctx, http.MethodGet, "/config", nil, &live); err != nil {
+		return false, nil, ctx.Err()
+	}
+	var want, got []string
+	for _, h := range p.hops {
+		want = append(want, h.Services...)
+		if live.hop(hopName(h.key())) == nil {
+			return false, nil, nil
+		}
+	}
+	for _, s := range live.Services {
+		got = append(got, s.Name)
+	}
+	slices.Sort(want)
+	slices.Sort(got)
+	if !slices.Equal(want, got) {
+		return false, nil, nil
+	}
+	return true, &live, nil
+}
+
 // waitServing waits until gost serves p, or fails: gost stopped, or the
 // ready timeout passed.
 func (d *Driver) waitServing(ctx context.Context, p *parsed) error {
@@ -233,20 +280,24 @@ func (d *Driver) status(ctx context.Context) (Status, error) {
 //     file are ErrNotOwned, and so is a unit without OwnerMark;
 //  2. check the generation against the recorded one;
 //  3. compare: the recorded digest, the configuration file with the
-//     content, and gost serving the content's metrics path and holding
-//     every listener. All equal is a no-op that at most records the new
-//     generation and state_hash;
+//     content, and gost running it (serves). All equal is a no-op that at
+//     most records the new generation and state_hash;
 //  4. refuse a listener whose port a socket the driver does not run holds
 //     (ErrConflict);
-//  5. when gost runs the recorded configuration and the artifact has its
-//     structure (the same metrics path), change the hot objects through
-//     the web API (applyHot): no service is re-created;
+//  5. when gost runs the recorded configuration, its web API answers and
+//     the artifact keeps the configuration's globals (log, API, metrics
+//     address), change it through the web API object by object
+//     (applyAPI): the services, chains, admissions and limiters that
+//     changed are created, re-created or deleted, every hop is put, and
+//     every other service runs on untouched;
 //  6. otherwise write the configuration (temporary file and rename),
 //     reload a running gost (restart it when it serves the artifact's
 //     structure already, since a reload could not be told from none) or
 //     start it, and wait until it serves the content;
-//  7. when 5 or 6 fails, put the previous configuration back and restart
-//     gost on it (or stop it after a first apply), and fail;
+//  7. when 5 fails, put the objects it changed back through the web API
+//     (or, when that fails too, the previous configuration back with a
+//     restart); when 6 fails, put the previous configuration back and
+//     restart gost on it (or stop it after a first apply); and fail;
 //  8. record the state.
 func (d *Driver) Apply(ctx context.Context, a driver.Artifact) (driver.ApplyResult, error) {
 	if err := ctx.Err(); err != nil {
@@ -290,7 +341,7 @@ func (d *Driver) Apply(ctx context.Context, a driver.Artifact) (driver.ApplyResu
 	}
 
 	if st := h.state; st.applied() && st.Digest == a.Digest && bytes.Equal(h.config, a.Content) && status.Running {
-		ok, err := d.runs(ctx, p)
+		ok, _, err := d.serves(ctx, st, p)
 		if err != nil {
 			return driver.ApplyResult{}, err
 		}
@@ -323,7 +374,7 @@ func (d *Driver) Apply(ctx context.Context, a driver.Artifact) (driver.ApplyResu
 	}
 	next := &hostState{Owner: OwnerMark, Node: a.NodeRef, Generation: a.Generation, StateHash: a.StateHash, Digest: a.Digest, Hops: p.hops}
 	if h.owned {
-		next.Loads = h.state.Loads
+		next.carry(h.state)
 	} else {
 		// Mark the directory before the first configuration lands in it.
 		if err := d.writeState(&hostState{Owner: OwnerMark}); err != nil {
@@ -331,15 +382,18 @@ func (d *Driver) Apply(ctx context.Context, a driver.Artifact) (driver.ApplyResu
 		}
 	}
 
-	if status.Running && d.hot(ctx, h, p) {
-		if err := d.applyHot(ctx, h.config, a.Content); err != nil {
-			return driver.ApplyResult{}, errors.Join(fmt.Errorf("gost driver: apply generation %d: %w", a.Generation, err), d.recoverPrevious(ctx, h))
-		}
-		if err := d.writeState(next); err != nil {
+	if status.Running {
+		prev, live := d.apiReady(ctx, h, a.Content)
+		if err := ctx.Err(); err != nil {
 			return driver.ApplyResult{}, err
 		}
-		res.Changed = true
-		return res, nil
+		if live != nil {
+			if err := d.applyAPI(ctx, h, prev, a, next, live, status.Instance); err != nil {
+				return driver.ApplyResult{}, err
+			}
+			res.Changed = true
+			return res, nil
+		}
 	}
 
 	var last []*forwardv1.Counters
@@ -380,6 +434,7 @@ func (d *Driver) Apply(ctx context.Context, a driver.Artifact) (driver.ApplyResu
 		time.Sleep(startSettle)
 	}
 	next.Loads++
+	next.Served = p.metricsPath
 	if err := d.writeState(next); err != nil {
 		return driver.ApplyResult{}, err
 	}
@@ -390,21 +445,149 @@ func (d *Driver) Apply(ctx context.Context, a driver.Artifact) (driver.ApplyResu
 	return res, nil
 }
 
-// hot reports whether Apply may take the artifact p through the web API:
+// apiReady answers the previous configuration's objects and the running
+// configuration when Apply may take gost to content through the web API:
 // gost runs the configuration the driver recorded (the file is the
-// applied one, gost serves its metrics path and holds its listeners) and
-// p has the same structure (the same metrics path).
-func (d *Driver) hot(ctx context.Context, h *host, p *parsed) bool {
+// applied one and serves finds it running) and content keeps its
+// globals. live is nil otherwise, and Apply reloads.
+func (d *Driver) apiReady(ctx context.Context, h *host, content []byte) (prev *gostConfig, live *liveConfig) {
 	st := h.state
 	if !h.owned || !st.applied() || h.config == nil || driver.Digest(h.config) != st.Digest {
-		return false
+		return nil, nil
 	}
-	prev, err := parseContent(driver.Artifact{Content: h.config, Hops: keysOf(st.Hops)})
-	if err != nil || prev.metricsPath != p.metricsPath {
-		return false
+	pp, err := parseContent(driver.Artifact{Content: h.config, Hops: keysOf(st.Hops)})
+	if err != nil {
+		return nil, nil
 	}
-	ok, err := d.runs(ctx, prev)
-	return ok && err == nil
+	prev, err = decodeConfig(h.config)
+	if err != nil {
+		return nil, nil
+	}
+	next, err := decodeConfig(content)
+	if err != nil {
+		return nil, nil
+	}
+	g1, err1 := globals(prev)
+	g2, err2 := globals(next)
+	if err1 != nil || err2 != nil || !bytes.Equal(g1, g2) {
+		return nil, nil
+	}
+	ok, live, err := d.serves(ctx, st, pp)
+	if !ok || err != nil {
+		return nil, nil
+	}
+	if st.Served == "" {
+		// A state recorded before F4c: gost serves the file's path.
+		st.Served = pp.metricsPath
+	}
+	return prev, live
+}
+
+// applyAPI takes the running gost, which runs the recorded configuration
+// prev (live is its running state), to the artifact a through the web
+// API, and records next (sync.go): it writes the configuration first, so
+// a restart loads it; it creates, re-creates and deletes the services,
+// chains, admissions and limiters that changed and puts every hop. Every
+// other service keeps its listener, connections, UDP sessions, mux
+// carriers and statistics. The hops whose services it deleted or created
+// start a new counter epoch, and the WithRetiredCounters hook gets their
+// counters read just before.
+//
+// When gost refuses a change, applyAPI puts the objects it changed back
+// as prev has them, and the previous configuration file; when that fails
+// too, it restarts gost on the previous configuration. Either way it
+// fails, and the state records the previous artifact.
+func (d *Driver) applyAPI(ctx context.Context, h *host, prev *gostConfig, a driver.Artifact, next *hostState, live *liveConfig, instance string) error {
+	nextCfg, err := decodeConfig(a.Content)
+	if err != nil {
+		return err
+	}
+	from, err := objects(prev)
+	if err != nil {
+		return err
+	}
+	to, err := objects(nextCfg)
+	if err != nil {
+		return err
+	}
+	// hopOf maps every service of either configuration to its hop.
+	hopOf := map[string]string{}
+	for _, hops := range [][]manifestHop{h.state.Hops, next.Hops} {
+		for _, mh := range hops {
+			for _, s := range mh.Services {
+				hopOf[s] = hopName(mh.key())
+			}
+		}
+	}
+	var before []*forwardv1.Counters
+	if d.retired != nil {
+		before = d.hopCounters(h.state, live, instance)
+	}
+	hopsOf := func(services map[string]bool) map[string]bool {
+		out := map[string]bool{}
+		for s := range services {
+			if hop, ok := hopOf[s]; ok {
+				out[hop] = true
+			}
+		}
+		return out
+	}
+	// retire hands the counters read before the first change of the
+	// recorded hops whose epochs end to the hook.
+	retire := func(services map[string]bool) {
+		hops := hopsOf(services)
+		if d.retired == nil || len(hops) == 0 {
+			return
+		}
+		var out []*forwardv1.Counters
+		for i, mh := range h.state.Hops {
+			if hops[hopName(mh.key())] {
+				out = append(out, before[i])
+			}
+		}
+		if len(out) > 0 {
+			d.retired(out)
+		}
+	}
+
+	if err := writeFileAtomic(d.cfg.configPath(), a.Content, 0o640); err != nil {
+		return fmt.Errorf("gost driver: write configuration: %w", err)
+	}
+	log := newSyncLog()
+	err = d.sync(ctx, to, changes(from, to), live.names(), log)
+	if err == nil {
+		next.Served = h.state.Served
+		next.recreated(hopsOf(log.services))
+		if err := d.writeState(next); err != nil {
+			return err
+		}
+		retire(log.services)
+		return nil
+	}
+	err = fmt.Errorf("gost driver: apply generation %d: %w", a.Generation, err)
+
+	// Roll back, whatever the caller's context says, bounded.
+	rctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), recoverTimeout)
+	defer cancel()
+	back := newSyncLog()
+	rerr := d.rollback(rctx, from, log, back)
+	if rerr == nil {
+		rerr = writeFileAtomic(d.cfg.configPath(), h.config, 0o640)
+	}
+	if rerr != nil {
+		return errors.Join(err, rerr, d.recoverPrevious(ctx, h))
+	}
+	services := log.services
+	for s := range back.services {
+		services[s] = true
+	}
+	kept := *h.state
+	kept.recreated(hopsOf(services))
+	if werr := d.writeState(&kept); werr != nil {
+		return errors.Join(err, werr)
+	}
+	retire(services)
+	return err
 }
 
 // recoverPrevious puts the configuration h held back after a failed
@@ -584,7 +767,7 @@ func (d *Driver) hopCounters(st *hostState, live *liveConfig, instance string) [
 			}
 		}
 		c.ActiveConns = uint32(min(active, math.MaxUint32)) // #nosec G115 -- clamped
-		c.CounterEpoch = counterEpoch(instance, st.Loads, created)
+		c.CounterEpoch = counterEpoch(instance, st.Loads, st.Created[hopName(mh.key())], created)
 		out = append(out, c)
 	}
 	return out
@@ -592,11 +775,15 @@ func (d *Driver) hopCounters(st *hostState, live *liveConfig, instance string) [
 
 // counterEpoch names the statistics objects of a hop's services: they
 // start from zero when gost starts (a new instance), when Apply reloads it
-// (loads) and when a service is re-created (its creation time; -1 for a
-// service gost does not run).
-func counterEpoch(instance string, loads uint64, created []int64) string {
+// (loads), when Apply deletes or creates one of the hop's services through
+// the web API (seq, hostState.Created) and when a service is re-created
+// otherwise (its creation time; -1 for a service gost does not run).
+func counterEpoch(instance string, loads, seq uint64, created []int64) string {
 	sum := sha256.New()
 	_, _ = fmt.Fprintf(sum, "%s\n%d", instance, loads)
+	if seq > 0 {
+		_, _ = fmt.Fprintf(sum, "\ns%d", seq)
+	}
 	for _, c := range created {
 		_, _ = fmt.Fprintf(sum, "\n%d", c)
 	}

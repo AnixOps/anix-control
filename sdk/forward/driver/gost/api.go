@@ -10,7 +10,6 @@ import (
 	"net"
 	"net/http"
 	"net/url"
-	"slices"
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/forward/driver"
@@ -31,7 +30,15 @@ import (
 //   - PUT /config/hops/<name>, /config/admissions/<name>,
 //     /config/limiters/<name>, /config/climiters/<name>: replace one hot
 //     object (gost resolves them by name at every connection, so no
-//     service is re-created, no listener closes and no counter restarts).
+//     service is re-created, no listener closes and no counter restarts);
+//   - POST /config/<kind> and DELETE /config/<kind>/<name> for services,
+//     chains and the hot objects (F4c): Apply adds, re-creates and
+//     deletes the objects of the hops it changes one by one (sync.go), so
+//     every other service, its listener, connections, UDP sessions, mux
+//     carriers and statistics stay. A changed service is deleted and
+//     created again, never replaced with PUT: gost's PUT closes the old
+//     service before it builds the new one and keeps a closed service
+//     registered when that fails.
 //
 // The API decodes bodies with encoding/json, so a duration is an integer
 // of nanoseconds there (the configuration file takes "30s").
@@ -60,9 +67,32 @@ type apiError struct {
 	Msg  string `json:"msg"`
 }
 
+// refusedError is gost's answer to a request it refused (any status but
+// 200): gost checks a request before it changes anything, so a refused
+// request changed nothing. A transport error, by contrast, leaves it
+// unknown whether gost acted.
+type refusedError struct {
+	method, path, status, msg string
+}
+
+func (e *refusedError) Error() string {
+	return fmt.Sprintf("gost driver: api %s %s: %s: %s", e.method, e.path, e.status, e.msg)
+}
+
+// refused reports whether err is gost refusing a request.
+func refused(err error) bool {
+	var r *refusedError
+	return errors.As(err, &r)
+}
+
 // call sends one API request with body as JSON (nil for none) and decodes
 // the answer into out (nil to discard it).
 func (d *Driver) call(ctx context.Context, method, path string, body, out any) error {
+	if d.apiFault != nil && method != http.MethodGet {
+		if err := d.apiFault(method, path); err != nil {
+			return &refusedError{method: method, path: path, status: "injected", msg: err.Error()}
+		}
+	}
 	var rd io.Reader
 	if body != nil {
 		b, err := json.Marshal(body)
@@ -93,7 +123,7 @@ func (d *Driver) call(ctx context.Context, method, path string, body, out any) e
 	if resp.StatusCode != http.StatusOK {
 		var e apiError
 		_ = json.Unmarshal(data, &e)
-		return fmt.Errorf("gost driver: api %s %s: %s: %s", method, path, resp.Status, clip(e.Msg))
+		return &refusedError{method: method, path: path, status: resp.Status, msg: clip(e.Msg)}
 	}
 	if out != nil {
 		if err := json.Unmarshal(data, out); err != nil {
@@ -112,8 +142,42 @@ func (d *Driver) put(ctx context.Context, kind, name string, body any) error {
 // liveConfig is what GET /config answers, reduced to what the driver reads.
 type liveConfig struct {
 	Services   []liveService   `json:"services"`
+	Chains     []liveNamed     `json:"chains"`
 	Hops       []liveHop       `json:"hops"`
 	Admissions []liveAdmission `json:"admissions"`
+	Limiters   []liveNamed     `json:"limiters"`
+	CLimiters  []liveNamed     `json:"climiters"`
+}
+
+// liveNamed is a running object of which the driver reads the name only.
+type liveNamed struct {
+	Name string `json:"name"`
+}
+
+// names answers the running objects of every kind sync changes, as
+// "kind/name".
+func (c *liveConfig) names() map[string]bool {
+	out := map[string]bool{}
+	add := func(kind, name string) { out[kind+"/"+name] = true }
+	for _, o := range c.Services {
+		add(kindServices, o.Name)
+	}
+	for _, o := range c.Chains {
+		add(kindChains, o.Name)
+	}
+	for _, o := range c.Hops {
+		add(kindHops, o.Name)
+	}
+	for _, o := range c.Admissions {
+		add(kindAdmissions, o.Name)
+	}
+	for _, o := range c.Limiters {
+		add(kindLimiters, o.Name)
+	}
+	for _, o := range c.CLimiters {
+		add(kindCLimiters, o.Name)
+	}
+	return out
 }
 
 type liveService struct {
@@ -244,63 +308,6 @@ func (c *gostConfig) admission(name string) *admission {
 	for i := range c.Admissions {
 		if c.Admissions[i].Name == name {
 			return &c.Admissions[i]
-		}
-	}
-	return nil
-}
-
-// applyHot makes a running gost, which serves prev, run next when the two
-// differ in hot objects only (the same structure, so the same metrics
-// path): it writes the configuration, so a restart loads it, then puts
-// every hop (which also puts back every upstream a SetUpstreams took out
-// of rotation, as a changing apply must) and every admission and limiter
-// that changed. No service is re-created: listeners, established
-// connections, UDP sessions, mux carriers and counters stay. An admission
-// EnforceQuotas closed stays closed unless the apply changed it.
-func (d *Driver) applyHot(ctx context.Context, prevContent, content []byte) error {
-	prev, err := decodeConfig(prevContent)
-	if err != nil {
-		return err
-	}
-	next, err := decodeConfig(content)
-	if err != nil {
-		return err
-	}
-	if err := writeFileAtomic(d.cfg.configPath(), content, 0o640); err != nil {
-		return fmt.Errorf("gost driver: write configuration: %w", err)
-	}
-	for _, h := range next.Hops {
-		body, err := toAPIHop(h)
-		if err != nil {
-			return err
-		}
-		if err := d.put(ctx, "hops", h.Name, body); err != nil {
-			return err
-		}
-	}
-	changed := func(a, b any) bool {
-		x, _ := json.Marshal(a)
-		y, _ := json.Marshal(b)
-		return !bytes.Equal(x, y)
-	}
-	for _, a := range next.Admissions {
-		if old := prev.admission(a.Name); old == nil || changed(*old, a) {
-			if err := d.put(ctx, "admissions", a.Name, a); err != nil {
-				return err
-			}
-		}
-	}
-	for _, k := range []struct {
-		kind       string
-		prev, next []limiter
-	}{{"limiters", prev.Limiters, next.Limiters}, {"climiters", prev.CLimiters, next.CLimiters}} {
-		for _, l := range k.next {
-			i := slices.IndexFunc(k.prev, func(o limiter) bool { return o.Name == l.Name })
-			if i < 0 || changed(k.prev[i], l) {
-				if err := d.put(ctx, k.kind, l.Name, l); err != nil {
-					return err
-				}
-			}
 		}
 	}
 	return nil

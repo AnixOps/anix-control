@@ -75,7 +75,10 @@
           "name": "u0",
           "addr": "203.0.113.41:20017",
           "connector": {
-            "type": "relay"
+            "type": "relay",
+            "metadata": {
+              "nodelay": "true"
+            }
           },
           "dialer": {
             "type": "tls",

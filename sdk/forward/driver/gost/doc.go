@@ -12,7 +12,10 @@
 // re-weights in place, Observe reads every service's statistics, and the
 // driver keeps a soft quota (EnforceQuotas) and answers each upstream's
 // established connections for least-connections re-weighting
-// (ActiveConns, sdk/forward/leastconn).
+// (ActiveConns, sdk/forward/leastconn). F4c makes structural changes
+// through the web API too, service by service, so adding, changing or
+// removing a route re-creates no other route's services; a reload is the
+// fallback.
 //
 // # Configuration
 //
@@ -27,7 +30,11 @@
 //     and udp listeners (both for TCP_UDP) whose tcp and udp handlers
 //     forward the client's bytes; every other ingress is one carrier
 //     listener (tls, mtls for TLS with mux, wss, mwss, quic, grpc; mtcp for
-//     RAW with mux) whose relay handler carries TCP and UDP. An encrypted
+//     RAW with mux) whose relay handler carries TCP and UDP, with nodelay
+//     (the relay request and its answer cross the link when the
+//     connection is dialled, so protocols whose server speaks first work;
+//     a client's half-close arrives as a full close over such a link,
+//     since gost cannot half-close a TLS or mux stream). An encrypted
 //     listener is mutual TLS: the node's link certificate (Config.LinkCert,
 //     LinkKey) and the CA its peers' client certificates must chain to
 //     (LinkCA). UDP listeners keep a client's session for 60 s after its
@@ -36,7 +43,8 @@
 //   - hop r<route>-h<hop>: a top-level gost hop holding the upstreams.
 //     RAW upstreams (targets, a RAW next hop) are dialled directly: the
 //     service's forwarder names the hop. Relayed upstreams (an encrypted
-//     or multiplexed next hop) are nodes with gost's relay connector and
+//     or multiplexed next hop) are nodes with gost's relay connector
+//     (nodelay) and
 //     the link's dialer, which verifies the next node's certificate for its
 //     server name (Upstream.egress server_name, else its node reference)
 //     against LinkCA and presents the link certificate; the service's
@@ -76,14 +84,18 @@
 //   - metrics on another unix socket there, under a path named by a hash
 //     of the configuration's structure (services, chains, log, API): it
 //     answers only once gost loaded this structure, which is how Apply
-//     knows a start or a reload took.
+//     knows a start or a reload took. No API call moves it, so after
+//     Apply changed services through the web API gost serves the path of
+//     the structure it loaded last, which the state file records.
 //
 // Services, chains, the log and the API are the configuration's
-// structure: changing them needs gost to re-create every service (a
-// reload). Hops, admissions and limiters are hot objects: gost resolves
-// them by name at every connection, so the driver replaces them through
-// the web API and no service, listener, established connection, UDP
-// session, mux carrier or counter is touched.
+// structure: a reload re-creates every service. Hops, admissions and
+// limiters are hot objects: gost resolves them by name at every
+// connection, so the driver replaces them through the web API and no
+// service, listener, established connection, UDP session, mux carrier or
+// counter is touched. Services and chains are created and deleted
+// through the web API one by one (F4c); only the log, the API and the
+// metrics address need a reload.
 //
 // Targets must be IP literals (the Agent resolves names before Render,
 // and re-checks the target policy on every answer); Render re-checks
@@ -110,7 +122,9 @@
 //
 // The driver owns Config.Dir: gost.json, the configuration gost runs, and
 // state.json, its own record (OwnerMark, node, generation, state_hash,
-// digest, the applied hops and the starts and reloads it made gost do).
+// digest, the applied hops, the starts and reloads it made gost do, the
+// metrics path gost loaded last, and per hop the sequence number of the
+// last apply that deleted or created one of its services).
 // The state file is written before the
 // first configuration and after every apply that succeeded. A
 // configuration without the driver's state file, or a state file without
@@ -130,39 +144,54 @@
 // # Apply
 //
 // Apply checks ownership and the generation, then compares the host with
-// the artifact: the recorded digest, the configuration file's bytes, gost
-// serving the configuration's metrics path and every manifest listener
-// bound. All equal is a no-op that at most records a newer generation.
-// Otherwise it reads the listening sockets with ss and refuses a listener
-// whose port a socket holds that the running, applied configuration does
-// not declare (ErrConflict, before anything changes). Then:
+// the artifact: the recorded digest, the configuration file's bytes, and
+// gost running it (it serves the configuration's metrics path or the
+// recorded one it loaded last, holds every manifest listener, and runs
+// exactly the configuration's services and hops). All equal is a no-op
+// that at most records a newer generation. Otherwise it reads the
+// listening sockets with ss and refuses a listener whose port a socket
+// holds that the running, applied configuration does not declare
+// (ErrConflict, before anything changes). Then:
 //
-//   - when gost runs the recorded configuration and the artifact has its
-//     structure (the same metrics path), Apply writes the configuration
-//     (temporary file and rename, so a restart loads it) and replaces the
-//     hot objects through the web API: every hop (which also puts back
-//     every upstream a SetUpstreams took out of rotation), and the
-//     admissions and limiters that changed. Upstreams, weights, strategy,
-//     sources, a pause, limits' values and quotas change this way;
-//   - otherwise it writes the configuration and reloads gost (SIGHUP), or
-//     starts it, or restarts it when gost serves this structure already
-//     (a reload would not move the metrics path, so whether it took could
-//     not be seen), and waits until gost serves the new metrics path with
-//     every listener bound. A reload keeps the gost process, so
-//     established TCP connections survive it (tested), but it re-creates
-//     every service of the node: UDP sessions and mux carriers may
-//     restart and every hop's counters start a new epoch: the
-//     WithRetiredCounters hook gets every hop's counters read just before
-//     (what moves between that read and the reload, and what connections
-//     that survive the reload move afterwards, is not counted). gost's
-//     reload is not atomic (a listener it cannot bind closes the old
-//     services first).
+//   - when gost runs the recorded configuration, its web API answers and
+//     the artifact keeps the globals (log, API, metrics address), Apply
+//     writes the configuration (temporary file and rename, so a restart
+//     loads it) and changes gost through the web API object by object
+//     (sync.go): it deletes the services that were removed or changed,
+//     creates or replaces the admissions, limiters and chains that were
+//     added or changed and every hop (which also puts back every upstream
+//     a SetUpstreams took out of rotation), creates the added and changed
+//     services, and deletes the objects no longer rendered. A changed
+//     service is deleted and created again (gost's PUT closes the old
+//     service first and leaves it registered, closed, when the new one
+//     fails). Every other service keeps its listener, established
+//     connections, UDP sessions, mux carriers and statistics. The hops
+//     whose services were deleted or created start a new counter epoch,
+//     and the WithRetiredCounters hook gets their counters read just
+//     before the first change;
+//   - otherwise (gost stopped, its web API silent, a configuration file
+//     that is not the recorded one, other globals) it writes the
+//     configuration and reloads gost (SIGHUP), or starts it, or restarts
+//     it when gost serves this structure already (a reload would not move
+//     the metrics path, so whether it took could not be seen), and waits
+//     until gost serves the new metrics path with every listener bound. A
+//     reload keeps the gost process, so established TCP connections
+//     survive it (tested), but it re-creates every service of the node:
+//     UDP sessions and mux carriers may restart and every hop's counters
+//     start a new epoch: the WithRetiredCounters hook gets every hop's
+//     counters read just before, when the web API answers. gost's reload
+//     is not atomic (a listener it cannot bind closes the old services
+//     first).
 //
-// When either fails (an API change refused, gost not serving the new
-// configuration in Config.ReadyTimeout), Apply writes the previous
-// configuration back and restarts gost on it, or stops gost after a first
-// apply, and fails. Applying an empty artifact stops gost and deletes both
-// files.
+// What connections of a deleted or re-created service move afterwards
+// goes to the closed service's statistics, which nothing reads: not
+// counted. When gost refuses a web API change (it checks a request before
+// changing anything), Apply puts back, through the web API, the objects
+// it had changed as the previous configuration has them, and the previous
+// file; when that fails too, or a reload is not served within
+// Config.ReadyTimeout, Apply writes the previous configuration back and
+// restarts gost on it, or stops gost after a first apply. Either way it
+// fails. Applying an empty artifact stops gost and deletes both files.
 //
 // # Observe
 //
@@ -177,12 +206,15 @@
 // streams inside a mux carrier are not connections); gost counts no
 // packets, so packets are 0. The counter epoch names the statistics
 // objects: a hash of the gost instance (the unit's InvocationID), the
-// starts and reloads Apply made (recorded in the state file) and the
-// creation time of each of the hop's services. A start, a reload or the
-// re-creation of a service ends it; Apply's hot changes, SetUpstreams and
-// EnforceQuotas keep it. A service re-created within the same second as
-// its predecessor, by anything but the driver's own start or reload,
-// would keep the epoch; nothing but the driver re-creates them. While
+// starts and reloads Apply made (recorded in the state file), the
+// sequence number of the last apply that deleted or created one of the
+// hop's services through the web API (the state file), and the creation
+// time of each of the hop's services. A start, a reload, or deleting or
+// creating one of the hop's services ends it, for that hop only; Apply's
+// hot changes, structural changes of other hops, SetUpstreams and
+// EnforceQuotas keep it. gost's creation times have a resolution of a
+// second, which is why the driver numbers its own re-creations; nothing
+// but the driver re-creates services. While
 // gost does not run, every hop reports 0 in the epoch "stopped". gost's
 // fail marking is not exposed, so Health is empty: the Agent's checks are
 // the source of truth.

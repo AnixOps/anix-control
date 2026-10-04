@@ -40,7 +40,10 @@
 //     engine's change bumped it) only the recorded generation and
 //     state_hash move;
 //   - applying after a crash or onto partial or damaged owned state
-//     repairs it (Changed true).
+//     repairs it (Changed true);
+//   - hops the artifact does not change are left alone: adding, changing
+//     or removing other hops keeps their objects, established connections
+//     and counter epochs (conformance scenario apply-leaves-unrelated-hops).
 //
 // The driver records the applied generation, state_hash and digest on the
 // host (a set in its own table, a config file), so a new driver instance after an

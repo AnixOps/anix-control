@@ -12,7 +12,12 @@
 // failover, admission, limits, pausing, Agent restarts and removal. The
 // TestGost tests put a gost entry in the star instead (the gost driver,
 // gost running in the entry's namespace): exact payload counters and
-// failover through gost's web API (F4b; mixed-engine chains are F4c).
+// failover through gost's web API (F4b). The TestMixed tests chain the
+// engines (F4c): an nftables entry, a gost relay and gost exits over RAW
+// and mutual-TLS mux links, and a gost entry before an nftables exit,
+// with per-hop counters, failover at the gost relay, UDP, and routes added
+// and removed on a gost node without disturbing another route's
+// established connection.
 //
 // The tests need root (CAP_NET_ADMIN, and CAP_SYS_ADMIN for `ip netns
 // add`), nft, tc, iproute2 and gost (ANIXOPS_GOST_BIN, or gost on PATH),

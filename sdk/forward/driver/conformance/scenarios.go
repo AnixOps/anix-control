@@ -39,6 +39,7 @@ func Scenarios() []Scenario {
 		{"apply-not-owned", "an object with the driver's name but not its mark is ErrNotOwned and left alone", scApplyNotOwned},
 		{"apply-empty-removes", "applying an empty artifact removes every owned object", scApplyEmpty},
 		{"counters-kept-across-reapply", "hops kept by a changing apply keep their counter epoch and values", scCountersKept},
+		{"apply-leaves-unrelated-hops", "adding, changing and removing other hops keeps a hop's counter epoch, values and traffic", scUnrelatedHops},
 		{"counters-recreated-hop", "a hop removed and added again never reports lower counters in the same epoch", scCountersRecreated},
 		{"observe-monotonic", "counters never go down within an epoch across observations and restarts", scObserveMonotonic},
 		{"set-upstreams-failover", "SetUpstreams changes rotation without a full apply", scSetUpstreamsFailover},
@@ -599,6 +600,35 @@ func scCountersKept(t *testing.T, h *H) {
 	o2 := h.Observe() // CheckObservation proves values did not go down
 	if e1, e2 := epochs(o1), epochs(o2); !mapsEqual(e1, e2) {
 		t.Fatalf("a re-apply re-created counters: epochs %v -> %v", e1, e2)
+	}
+}
+
+func scUnrelatedHops(t *testing.T, h *H) {
+	a, b := h.B.Simple(RouteA, 0), h.B.Simple(RouteB, 1)
+	ka := keyOf(a)
+	h.RenderApply(h.State(1, a, b))
+	h.Traffic(ka)
+	h.Traffic(keyOf(b))
+	epoch := epochs(h.Observe())[ka]
+	moved := proto.Clone(b).(*forwardv1.NodeHop) // route B moves to another port
+	moved.Listen.Port = h.B.Top.ListenPorts[3]
+	for i, step := range []struct {
+		what string
+		hops []*forwardv1.NodeHop
+	}{
+		{"route C added", []*forwardv1.NodeHop{a, b, h.B.Simple(RouteC, 2)}},
+		{"route B moved to another port", []*forwardv1.NodeHop{a, moved, h.B.Simple(RouteC, 2)}},
+		{"route C removed", []*forwardv1.NodeHop{a, moved}},
+		{"route B removed", []*forwardv1.NodeHop{a}},
+	} {
+		if _, r := h.RenderApply(h.State(uint64(i)+2, step.hops...)); !r.Changed { // #nosec G115 -- a few steps
+			t.Fatalf("%s: the apply reported no change", step.what)
+		}
+		o := h.Observe() // CheckObservation proves values did not go down
+		if got := epochs(o)[ka]; got != epoch {
+			t.Fatalf("%s: route A's counter epoch changed from %s to %s", step.what, epoch, got)
+		}
+		h.Traffic(ka)
 	}
 }
 

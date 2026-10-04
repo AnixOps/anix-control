@@ -16,6 +16,7 @@ import (
 
 	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
 	"github.com/AnixOps/anix-control/sdk/forward/driver"
+	"github.com/AnixOps/anix-control/sdk/forward/driver/gost"
 	"github.com/AnixOps/anix-control/sdk/forward/driver/nftables"
 	"github.com/AnixOps/anix-control/sdk/forward/model"
 	"github.com/AnixOps/anix-control/sdk/forward/planner"
@@ -203,6 +204,8 @@ type node struct {
 	drv   driver.Driver
 	// mk makes a driver instance on the node.
 	mk func(testing.TB) driver.Driver
+	// gost supervises a gost node's gost; nil on an nftables node.
+	gost *gost.ProcessSupervisor
 }
 
 // node makes ns a forwarding node. addrs are its NodeInfo addresses: the
@@ -288,7 +291,8 @@ func (l *lab) deploy(t testing.TB, routes ...model.Route) deployment {
 		}
 		protos = append(protos, routes[i].ToProto())
 	}
-	res, err := planner.Plan(protos, inv, l.alloc, planner.Options{})
+	// The cluster names the Agent identities pinned on encrypted links.
+	res, err := planner.Plan(protos, inv, l.alloc, planner.Options{Cluster: "e2e"})
 	if err != nil {
 		t.Fatalf("plan: %v", err)
 	}
