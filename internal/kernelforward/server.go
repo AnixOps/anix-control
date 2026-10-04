@@ -207,12 +207,22 @@ func (h *hostServer) GetRouteHealth(ctx context.Context, request *forwardv1.GetR
 	return &forwardv1.GetRouteHealthResponse{Health: health}, nil
 }
 
-// DiagnoseRoute is F3c's: probes travel as Agent desired operations.
-func (h *hostServer) DiagnoseRoute(ctx context.Context, _ *forwardv1.DiagnoseRouteRequest) (*forwardv1.DiagnoseRouteResponse, error) {
-	if _, err := h.begin(ctx); err != nil {
+// DiagnoseRoute diagnoses a stored route (F3c, diagnose.go): Control's
+// records, the forward checks of agent.diagnostic on the nodes that run
+// them, and dials from Control for the rest.
+func (h *hostServer) DiagnoseRoute(ctx context.Context, request *forwardv1.DiagnoseRouteRequest) (*forwardv1.DiagnoseRouteResponse, error) {
+	svc, err := h.begin(ctx)
+	if err != nil {
 		return nil, err
 	}
-	return nil, status.Error(codes.Unimplemented, "DiagnoseRoute is not served yet (forward-sdk.md F3c)")
+	answer, err := svc.DiagnoseRoute(ctx, request.GetRouteId(), time.Duration(request.GetTimeoutMs())*time.Millisecond)
+	if errors.Is(err, ErrDiagnoseBusy) {
+		return nil, status.Error(codes.ResourceExhausted, err.Error())
+	}
+	if err != nil {
+		return nil, failure(err, nil)
+	}
+	return answer, nil
 }
 
 func (h *hostServer) ListNodes(ctx context.Context, request *forwardv1.ListNodesRequest) (*forwardv1.ListNodesResponse, error) {

@@ -204,8 +204,16 @@ func TestForwardControlServer(t *testing.T) {
 	_, err = server.GetRouteHealth(ctx, &forwardv1.GetRouteHealthRequest{RouteId: "missing"})
 	assert.Equal(t, codes.NotFound, status.Code(err))
 
-	_, err = server.DiagnoseRoute(ctx, &forwardv1.DiagnoseRouteRequest{RouteId: id})
-	assert.Equal(t, codes.Unimplemented, status.Code(err))
+	// Without node checks the diagnosis answers Control's records and its
+	// own dials (refused in tests).
+	diagnosis, err := server.DiagnoseRoute(ctx, &forwardv1.DiagnoseRouteRequest{RouteId: id, TimeoutMs: 2000})
+	require.NoError(t, err)
+	assert.False(t, diagnosis.GetOk())
+	assert.Equal(t, id, diagnosis.GetRouteId())
+	_, err = server.DiagnoseRoute(ctx, &forwardv1.DiagnoseRouteRequest{RouteId: "missing"})
+	assert.Equal(t, codes.NotFound, status.Code(err))
+	_, err = server.DiagnoseRoute(ctx, &forwardv1.DiagnoseRouteRequest{})
+	assert.Equal(t, codes.InvalidArgument, status.Code(err))
 
 	// A delete the other routes' plan refuses names them.
 	other := f.create("c4", twoHop(0))

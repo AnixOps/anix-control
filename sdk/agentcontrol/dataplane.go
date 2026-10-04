@@ -17,9 +17,11 @@ const (
 	// CapabilityReports: the Agent sends TrafficReport, LogBatch and
 	// NodeStatus, and Control answers reports with ReportAck.
 	CapabilityReports = "reports"
-	// CapabilityDiag: the Agent runs node-side diagnostics (diag.*
-	// operations), so Control may choose the node as a vantage. It adds no
-	// payload; Control records it on the session.
+	// CapabilityDiag: the Agent runs node-side diagnostics, the forward
+	// checks of the agent.diagnostic operation (PROTOCOL.md, "Diagnostic
+	// operation"), so Control may choose the node as a vantage. It adds no
+	// payload; Control records it on the session and sends the checks only
+	// with agent.diagnostic listed too.
 	CapabilityDiag = "diag"
 	// CapabilityPackageReports: the Agent sends PackageReport, the latest
 	// observation of a plugin package; Control does not acknowledge it.

@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
+	"net"
 	"os"
 	"path/filepath"
 	"testing"
@@ -13,6 +15,7 @@ import (
 	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
 	"github.com/AnixOps/anix-control/v4/internal/kernelforward"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/service"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -183,4 +186,57 @@ func TestForwardCommandRoutesNodesAndStats(t *testing.T) {
 	require.NoError(t, db.Model(&model.OperationLog{}).Where("username = ?", "system/cli").Order("id").Pluck("action", &actions).Error)
 	assert.Equal(t, []string{"forward.route_create", "forward.route_create", "forward.route_pause", "forward.route_resume",
 		"forward.node_settings", "forward.node_settings", "forward.route_delete"}, actions)
+}
+
+// routes diagnose prints Control's view of a route; with no Agent sessions
+// in the command line the node probes are SKIPPED and say where they run.
+func TestForwardCommandDiagnose(t *testing.T) {
+	db := newForwardCommandDB(t)
+	ctx := context.Background()
+	previous := forwardCommandProbes
+	var dialled []string
+	forwardCommandProbes = service.DiagnosisProbes{Dial: func(_ context.Context, _, address string, _ time.Duration) (net.Conn, error) {
+		dialled = append(dialled, address)
+		return nil, errors.New("connection refused")
+	}}
+	t.Cleanup(func() { forwardCommandProbes = previous })
+	run := func(arguments ...string) (string, error) {
+		var output bytes.Buffer
+		err := runAdminCommand(ctx, nil, db, append([]string{"forward"}, arguments...), &output)
+		return output.String(), err
+	}
+	route := &forwardv1.Route{Owner: "admin", Name: "diag", Listen: &forwardv1.Listen{Port: 31010, Protocol: forwardv1.L4Protocol_L4_PROTOCOL_TCP},
+		Hops: []*forwardv1.Hop{
+			{Role: forwardv1.HopRole_HOP_ROLE_ENTRY, Engine: forwardv1.Engine_ENGINE_NFTABLES, NodeRefs: []string{"forward-11"}},
+			{Role: forwardv1.HopRole_HOP_ROLE_EXIT, Engine: forwardv1.Engine_ENGINE_NFTABLES, NodeRefs: []string{"forward-12"},
+				Ingress: &forwardv1.LinkTransport{Security: forwardv1.LinkSecurity_LINK_SECURITY_RAW}},
+		},
+		Targets: []*forwardv1.Target{{Host: "198.51.100.10", Port: 443}},
+	}
+	created, err := kernelforward.New(db).CreateRoute(ctx, "diag-1", route)
+	require.NoError(t, err)
+
+	_, err = run("routes", "diagnose")
+	require.ErrorContains(t, err, "invalid forward command")
+	output, err := run("routes", "diagnose", created.GetId(), "--timeout", "3000")
+	require.ErrorIs(t, err, errDiagnosisFailed, "never reported: the config steps fail")
+	assert.Contains(t, output, "HOP  NODE")
+	assert.Contains(t, output, "never_reported")
+	assert.Contains(t, output, "node_vantage_unavailable")
+	assert.Contains(t, output, "POST /api/v4/forward/routes/{id}/diagnose")
+	assert.Contains(t, output, "route "+created.GetId()+": FAILED")
+	assert.ElementsMatch(t, []string{"192.0.2.11:31010", "198.51.100.10:443"}, dialled)
+
+	output, err = run("routes", "diagnose", created.GetId(), "--json")
+	require.ErrorIs(t, err, errDiagnosisFailed)
+	answer := &forwardv1.DiagnoseRouteResponse{}
+	require.NoError(t, protojson.Unmarshal([]byte(output), answer))
+	assert.True(t, answer.GetCached(), "moments later the diagnosis is answered again")
+	assert.Equal(t, created.GetId(), answer.GetRouteId())
+
+	_, err = run("routes", "diagnose", "01JF1A000000000000000000ZZ")
+	require.ErrorIs(t, err, kernelforward.ErrNotFound)
+	var actions []string
+	require.NoError(t, db.Model(&model.OperationLog{}).Where("username = ?", "system/cli").Order("id").Pluck("action", &actions).Error)
+	assert.Equal(t, []string{"forward.route_diagnose", "forward.route_diagnose"}, actions)
 }

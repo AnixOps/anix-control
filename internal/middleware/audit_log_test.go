@@ -160,4 +160,9 @@ func TestAuditLogRecordsForwardV4Writes(t *testing.T) {
 	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodDelete, "/api/v4/forward/nodes/forward-7", nil))
 	require.Contains(t, logged.String(), `"path":"/api/v4/forward/nodes/forward-7"`)
 	require.Contains(t, logged.String(), `"action":"delete"`)
+
+	logged.Reset()
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/api/v4/forward/routes/01J/diagnose", nil))
+	require.Contains(t, logged.String(), `"module":"forward"`)
+	require.Contains(t, logged.String(), `"action":"diagnose"`)
 }

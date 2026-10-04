@@ -33,6 +33,7 @@ const forwardCommandUsage = `usage:
   anix-control forward routes delete <route_id> --yes [--request-id <id>]
   anix-control forward routes pause <route_id>
   anix-control forward routes resume <route_id>
+  anix-control forward routes diagnose <route_id> [--timeout <ms>] [--json]
   anix-control forward nodes list [--kind forward|proxy] [--json]
   anix-control forward nodes set <node_ref> (-f <settings.json> | [--port-range <first>-<last>] [--reserved <port,...>] [--address <ip>]... [--label <key=value>]... | --defaults)
   anix-control forward stats [--route <route_id>] [--node <node_ref>] [--since <time>] [--until <time>] [--json]
@@ -46,6 +47,14 @@ NodeSettings. A refused write prints each violation with its code
 (sdk/forward/validate). nodes set replaces the node's settings: the flags
 it is not given go back to the defaults. Times are RFC 3339 or Unix
 milliseconds; stats defaults to the last 24 hours, at most 31 days.
+
+routes diagnose runs the route diagnosis (forward-sdk.md section 7.6):
+each node's planned against applied generation, hop errors, upstream health
+and circuit breakers from the latest reports, and dials from Control to the
+entries and the public targets. The command line holds no Agent sessions,
+so the node probes (listen, port conflicts, next-hop connect, delivery) are
+SKIPPED; POST /api/v4/forward/routes/{id}/diagnose on the running Control
+runs them. It exits non-zero when a step failed.
 
 reset-node moves a node's forwarding generation (node_ref proxy-<id> or
 forward-<id>) above both the one Control stored and the one the node's
@@ -76,6 +85,10 @@ var (
 	forwardJSONIn  = protojson.UnmarshalOptions{}
 )
 
+// forwardCommandProbes are routes diagnose's dials from Control; tests
+// replace them.
+var forwardCommandProbes service.DiagnosisProbes
+
 // forwardCLI runs the forward commands on one database.
 type forwardCLI struct {
 	ctx     context.Context
@@ -88,7 +101,9 @@ type forwardCLI struct {
 
 // runForwardCommand administers the kernel's forwarding state.
 func runForwardCommand(ctx context.Context, db *gorm.DB, arguments []string, stdout io.Writer) error {
-	cli := &forwardCLI{ctx: ctx, db: db, service: kernelforward.New(db), stdout: stdout, readFile: os.ReadFile}
+	forward := kernelforward.New(db)
+	forward.Probes = forwardCommandProbes
+	cli := &forwardCLI{ctx: ctx, db: db, service: forward, stdout: stdout, readFile: os.ReadFile}
 	if len(arguments) == 0 {
 		return forwardUsageError()
 	}
@@ -204,6 +219,7 @@ func (c *forwardCLI) routes(command string, arguments []string) error {
 	file := set.String("f", "", "")
 	requestID := set.String("request-id", "", "")
 	yes := set.Bool("yes", false, "")
+	timeout := set.Uint("timeout", 0, "")
 	positionals, err := parseFlags(set, arguments)
 	if err != nil {
 		return err
@@ -242,8 +258,76 @@ func (c *forwardCLI) routes(command string, arguments []string) error {
 		return c.printJSON(map[string]any{"deleted": routeID, "audited": audited})
 	case "pause", "resume":
 		return c.setPaused(routeID, command == "pause")
+	case "diagnose":
+		return c.diagnoseRoute(routeID, time.Duration(min(*timeout, 60000))*time.Millisecond, *asJSON)
 	}
 	return forwardUsageError()
+}
+
+// errDiagnosisFailed ends routes diagnose when a step failed.
+var errDiagnosisFailed = errors.New("the diagnosis found failures")
+
+func (c *forwardCLI) diagnoseRoute(routeID string, timeout time.Duration, asJSON bool) error {
+	answer, err := c.service.DiagnoseRoute(c.ctx, routeID, timeout)
+	if err != nil {
+		return err
+	}
+	c.audit("forward.route_diagnose", "forward_route", map[string]any{"route_id": routeID, "ok": answer.GetOk(), "steps": len(answer.GetSteps())})
+	if asJSON {
+		if err := c.printMessage(answer); err != nil {
+			return err
+		}
+	} else if err := c.printDiagnosis(answer); err != nil {
+		return err
+	}
+	if !answer.GetOk() {
+		return errDiagnosisFailed
+	}
+	return nil
+}
+
+// printDiagnosis prints a diagnosis as a table of steps, then the nodes.
+func (c *forwardCLI) printDiagnosis(answer *forwardv1.DiagnoseRouteResponse) error {
+	writer := tabwriter.NewWriter(c.stdout, 0, 0, 2, ' ', 0)
+	_, _ = fmt.Fprintln(writer, "HOP\tNODE\tKIND\tVANTAGE\tTARGET\tSTATUS\tCODE\tMESSAGE")
+	for _, step := range answer.GetSteps() {
+		node := step.GetNodeRef()
+		if node == "" {
+			node = "-"
+		}
+		target := step.GetTarget()
+		if target == "" {
+			target = "-"
+		}
+		if protocol := step.GetProtocol(); protocol == forwardv1.L4Protocol_L4_PROTOCOL_UDP {
+			target += "/udp"
+		}
+		result := step.GetResult()
+		_, _ = fmt.Fprintf(writer, "%d\t%s\t%s\t%s\t%s\t%s\t%s\t%s\n", step.GetHopIndex(), node,
+			strings.TrimPrefix(step.GetKind().String(), "PROBE_KIND_"), strings.TrimPrefix(step.GetVantage().String(), "DIAGNOSE_VANTAGE_"),
+			target, strings.TrimPrefix(result.GetStatus().String(), "PROBE_STATUS_"), result.GetCode(), result.GetMessage())
+	}
+	if err := writer.Flush(); err != nil {
+		return err
+	}
+	_, _ = fmt.Fprintln(c.stdout)
+	writer = tabwriter.NewWriter(c.stdout, 0, 0, 2, ' ', 0)
+	_, _ = fmt.Fprintln(writer, "NODE\tCONNECTED\tNODE PROBES\tNOTE")
+	for _, node := range answer.GetNodes() {
+		_, _ = fmt.Fprintf(writer, "%s\t%t\t%t\t%s\n", node.GetNodeRef(), node.GetConnected(), node.GetNodeVantage(), node.GetNote())
+	}
+	if err := writer.Flush(); err != nil {
+		return err
+	}
+	verdict := "ok"
+	if !answer.GetOk() {
+		verdict = "FAILED"
+	}
+	if answer.GetCached() {
+		verdict += " (cached)"
+	}
+	_, err := fmt.Fprintf(c.stdout, "\nroute %s: %s\n", answer.GetRouteId(), verdict)
+	return err
 }
 
 func (c *forwardCLI) listRoutes(owner, node string, asJSON bool) error {

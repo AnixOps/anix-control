@@ -79,10 +79,17 @@ service ForwardControl {
   // GetRouteHealth answers the health of every upstream of every hop, with
   // the latest per-hop latency probes.
   rpc GetRouteHealth(GetRouteHealthRequest) returns (GetRouteHealthResponse);
-  // DiagnoseRoute runs an end-to-end check through the route's nodes:
-  // listen ownership and port conflicts on each hop (nat table included),
-  // reachability of each next hop, delivery proved on the last hop, and a
-  // real UDP exchange for UDP routes. UNIMPLEMENTED until F3c.
+  // DiagnoseRoute runs a staged check of a stored route (F3c,
+  // forward-sdk.md section 7.6): Control's own view first (each node's
+  // planned against applied generation, hop errors, upstream health and
+  // circuit breakers from the latest reports), then probes from the nodes
+  // through the agent.diagnostic operation where the node's Agent offers
+  // them (listen ownership and port conflicts on each hop, nat table
+  // included; each hop's connect to its next hop; delivery from the last
+  // hop to the targets, with a real UDP exchange for UDP routes), and
+  // Control-vantage reachability of the entries and public targets for the
+  // nodes that cannot probe. Bounded in time; answers a recent diagnosis of
+  // the same route again (cached) and RESOURCE_EXHAUSTED when too many run.
   rpc DiagnoseRoute(DiagnoseRouteRequest) returns (DiagnoseRouteResponse);
 
   // Added in F5a (forward-sdk.md section 8.6): the node inventory, the
@@ -589,9 +596,46 @@ enum ProbeKind {
   PROBE_KIND_TCP_CONNECT = 2;
   // UDP_EXCHANGE sends a datagram and waits for an answer.
   PROBE_KIND_UDP_EXCHANGE = 3;
-  // DELIVERY watches the hop's counters for a nonce flow sent from the
-  // entry, proving the traffic reached the last hop and left it.
+  // DELIVERY proves the last hop reaches the targets: a TCP connect, or a
+  // UDP exchange, from the last hop's node to each target (F3c). Watching
+  // the hop's counters for a nonce flow sent from the entry is reserved for
+  // later.
   PROBE_KIND_DELIVERY = 4;
+  // Added in F3c. CONFIG is Control's check of one node's hop: the node's
+  // desired state holds the hop, and its latest report runs the desired
+  // generation, applied, without an error for the hop.
+  PROBE_KIND_CONFIG = 5;
+  // HEALTH is one upstream's health and circuit breaker as the node's
+  // latest report states them.
+  PROBE_KIND_HEALTH = 6;
+  // PORT_CONFLICT checks that no foreign process or nftables rule (another
+  // table's dnat, redirect or tproxy, nat table included) claims the hop's
+  // listen port. LISTEN checks that the hop's own listener holds it.
+  PROBE_KIND_PORT_CONFLICT = 7;
+}
+
+// ProbeStatus is a probe's verdict (added in F3c).
+enum ProbeStatus {
+  PROBE_STATUS_UNSPECIFIED = 0;
+  // OK: the probe proved what it checks.
+  PROBE_STATUS_OK = 1;
+  // FAILED: the probe proved a fault.
+  PROBE_STATUS_FAILED = 2;
+  // INCONCLUSIVE: the probe ran but proved nothing either way (a UDP
+  // probe without a reply, a hop without health data).
+  PROBE_STATUS_INCONCLUSIVE = 3;
+  // SKIPPED: the probe did not run; code says why (the node's Agent cannot
+  // probe, a private target, the time budget ran out).
+  PROBE_STATUS_SKIPPED = 4;
+}
+
+// DiagnoseVantage is where a diagnosis step ran (added in F3c).
+enum DiagnoseVantage {
+  DIAGNOSE_VANTAGE_UNSPECIFIED = 0;
+  // CONTROL: Control's own records or a dial from Control.
+  DIAGNOSE_VANTAGE_CONTROL = 1;
+  // NODE: the step's node, through its Agent.
+  DIAGNOSE_VANTAGE_NODE = 2;
 }
 
 message ProbeRequest {
@@ -604,10 +648,18 @@ message ProbeRequest {
 
 message ProbeResult {
   string probe_id = 1;
+  // ok is true when status is PROBE_STATUS_OK.
   bool ok = 2;
   string message = 3;
   uint32 rtt_us = 4;
   int64 observed_at_unix_ms = 5;
+  // Added in F3c. status is the verdict; code names the reason for
+  // programs ("not_applied", "circuit_open", "no_reply", "conflict",
+  // "node_vantage_unavailable", "target_not_allowed", "deadline", ...;
+  // forward-sdk.md section 7.6 lists them). A code keeps its meaning once
+  // used.
+  ProbeStatus status = 6;
+  string code = 7;
 }
 
 // ---------------------------------------------------------------------------
@@ -733,20 +785,53 @@ message GetRouteHealthResponse {
 
 message DiagnoseRouteRequest {
   string route_id = 1;
+  // timeout_ms bounds the whole diagnosis: 0 for the default (15000), at
+  // most 25000.
   uint32 timeout_ms = 2;
 }
 
 // DiagnoseStep is one probe on one node.
 message DiagnoseStep {
+  // node_ref is the node the step concerns; empty for a route-wide step
+  // and for a dial from Control to a target.
   string node_ref = 1;
   uint32 hop_index = 2;
   ProbeKind kind = 3;
   ProbeResult result = 4;
+  // Added in F3c. vantage is where the step ran; target is what it dialled
+  // or checked ("host:port"), empty for a node's own check; protocol is
+  // L4_PROTOCOL_TCP or L4_PROTOCOL_UDP for a dial or listener.
+  DiagnoseVantage vantage = 5;
+  string target = 6;
+  L4Protocol protocol = 7;
 }
 
 message DiagnoseRouteResponse {
+  // ok is true when no step FAILED. Steps SKIPPED or INCONCLUSIVE do not
+  // fail a diagnosis; nodes says which nodes could probe.
   bool ok = 1;
   repeated DiagnoseStep steps = 2;
+  // Added in F3c.
+  string route_id = 3;
+  int64 started_at_unix_ms = 4;
+  int64 finished_at_unix_ms = 5;
+  // cached is true when the answer is a diagnosis of the same route that
+  // finished moments ago (forward-sdk.md section 7.6).
+  bool cached = 6;
+  repeated DiagnoseNode nodes = 7;
+}
+
+// DiagnoseNode is one node of a diagnosed route and whether it could probe
+// from its own vantage (added in F3c).
+message DiagnoseNode {
+  string node_ref = 1;
+  // connected: the node's Agent holds an Agent Control session.
+  bool connected = 2;
+  // node_vantage: the session advertises agent.diagnostic and diag.v1, so
+  // the node ran its probes; otherwise its node steps are SKIPPED and
+  // Control dialled what it could.
+  bool node_vantage = 3;
+  string note = 4;
 }
 
 // ---------------------------------------------------------------------------

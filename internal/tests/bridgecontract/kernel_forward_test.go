@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"crypto/tls"
 	"crypto/x509"
+	"errors"
 	"net"
 	"sync"
 	"testing"
@@ -58,7 +59,10 @@ func newForwardKernel(t *testing.T, db *gorm.DB, grants *forwardGrants) *kernelf
 		{ID: 11, Name: "entry", Host: "192.0.2.11", Port: 7000, Enabled: true},
 		{ID: 12, Name: "exit", Host: "192.0.2.12", Port: 7000, Enabled: true},
 	}).Error)
-	forward := &kernelforward.Service{DB: db, Cluster: func() string { return "prod" }}
+	forward := &kernelforward.Service{DB: db, Cluster: func() string { return "prod" },
+		Probes: service.DiagnosisProbes{Dial: func(context.Context, string, string, time.Duration) (net.Conn, error) {
+			return nil, errors.New("connection refused (test)")
+		}}}
 	caps := &forwardv1.NodeCapabilities{Engines: []*forwardv1.EngineCapabilities{{
 		Engine: forwardv1.Engine_ENGINE_NFTABLES, Available: true, Udp: true,
 		Strategies:     []forwardv1.BalanceStrategy{forwardv1.BalanceStrategy_BALANCE_STRATEGY_ROUND_ROBIN},
@@ -114,8 +118,10 @@ func exerciseForward(t *testing.T, connection grpc.ClientConnInterface) {
 	require.Equal(t, codes.InvalidArgument, st.Code())
 	require.Len(t, st.Details(), 1, "the violations cross the bridge as a detail")
 	require.NotEmpty(t, st.Details()[0].(*forwardv1.CreateRouteResponse).GetViolations())
-	_, err = client.DiagnoseRoute(ctx, &forwardv1.DiagnoseRouteRequest{RouteId: id})
-	require.Equal(t, codes.Unimplemented, status.Code(err))
+	diagnosis, err := client.DiagnoseRoute(ctx, &forwardv1.DiagnoseRouteRequest{RouteId: id, TimeoutMs: 2000})
+	require.NoError(t, err)
+	require.Equal(t, id, diagnosis.GetRouteId())
+	require.NotEmpty(t, diagnosis.GetSteps())
 	_, err = client.DeleteRoute(ctx, &forwardv1.DeleteRouteRequest{RequestId: "delete-1", RouteId: id})
 	require.NoError(t, err)
 }

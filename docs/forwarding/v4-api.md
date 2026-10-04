@@ -30,7 +30,7 @@ in [`api.md`](api.md) stay until F5d removes them.
 - **Audit.** Every `POST`, `PUT` and `DELETE` under `/api/v4/forward/` is
   written to the audit log as module `forward`, with the action derived
   from the path (`create`, `update`, `delete`, `pause`, `resume`, `toggle`,
-  `preview`) and the redacted body.
+  `preview`, `diagnose`) and the redacted body.
 - **Package version.** The routes exist once the forward package of a
   release that declares the control route is installed. Before that they
   answer `404 plugin_route_not_found`.
@@ -110,6 +110,7 @@ edition's v4.3 features:
 | 409 | `refused` | the nodes cannot host the route, another route no longer plans, or a node is in use (`FAILED_PRECONDITION` with violations) |
 | 409 | `idempotency_conflict` | `Idempotency-Key` reused for another request |
 | 409 | `revision_conflict` | `PUT /routes/{id}` with a stale `revision`, or a concurrent change during pause or resume (`ABORTED`) |
+| 429 | `rate_limited` | too many route diagnoses run at once (`RESOURCE_EXHAUSTED`) |
 | 501 | `not_implemented` | `UNIMPLEMENTED` |
 | 503 | `forward_unavailable` | the package has no `ForwardControl` connection, or the kernel refused or could not answer (`UNAVAILABLE`, `PERMISSION_DENIED`) |
 | 504 | `timeout` | the kernel did not answer in time |
@@ -132,6 +133,64 @@ All paths are under `/api/v4/forward`.
 | `POST /routes/{id}/resume` | resume | as pause |
 | `GET /routes/{id}/stats` | traffic of one route | query `since`, `until`; `{counters, series, truncated}`: the ledger's totals per hop and node over all time (`Counters`), and the hourly buckets of the window (`TrafficBucket`) |
 | `GET /routes/{id}/health` | upstream health | `{health: [UpstreamHealth]}` from the latest reports of the route's nodes |
+| `POST /routes/{id}/diagnose` | diagnose the route | optional body `{"timeout_ms": n}` (15000, at most 25000); the `DiagnoseRouteResponse`: `ok`, `steps`, `nodes`, `route_id`, `started_at_unix_ms`, `finished_at_unix_ms`, `cached`. See "Route diagnosis" below |
+
+### Route diagnosis
+
+`POST /routes/{id}/diagnose` runs `ForwardControl.DiagnoseRoute`
+(forward-sdk.md section 7.6). It checks in three stages:
+
+1. Control's own records.
+2. Probes from the route's nodes, through the `agent.diagnostic`
+   operation, where the node's Agent offers them.
+3. Dials from Control for what no node could probe.
+
+The answer:
+
+```json
+{"data": {
+  "ok": false, "route_id": "01J...", "started_at_unix_ms": "1759579200000", "finished_at_unix_ms": "1759579201250",
+  "steps": [
+    {"node_ref": "forward-11", "kind": "PROBE_KIND_CONFIG", "vantage": "DIAGNOSE_VANTAGE_CONTROL",
+     "result": {"ok": true, "status": "PROBE_STATUS_OK", "message": "generation 4 applied", "observed_at_unix_ms": "..."}},
+    {"node_ref": "forward-12", "hop_index": 1, "kind": "PROBE_KIND_DELIVERY", "vantage": "DIAGNOSE_VANTAGE_NODE",
+     "target": "198.51.100.10:443", "protocol": "L4_PROTOCOL_TCP",
+     "result": {"status": "PROBE_STATUS_FAILED", "code": "unreachable", "message": "connect: connection refused", "probe_id": "fwdiag-..."}}
+  ],
+  "nodes": [{"node_ref": "forward-11", "connected": true, "node_vantage": true},
+            {"node_ref": "forward-12", "connected": true, "node_vantage": true}]
+}}
+```
+
+- **Steps.**
+  - `kind` is the stage:
+    - `CONFIG`: generations, applied, hop errors, the route paused;
+    - `HEALTH`: one upstream's health and breaker;
+    - `LISTEN`, `PORT_CONFLICT`;
+    - `TCP_CONNECT`, `UDP_EXCHANGE`: to the next hop;
+    - `DELIVERY`: from the last hop to the targets.
+  - `vantage` is where the step ran: Control or the node.
+  - `status` is `OK`, `FAILED`, `INCONCLUSIVE` (it ran and proved nothing,
+    such as a UDP probe without a reply) or `SKIPPED` (it did not run).
+  - `code` is stable, for a UI to act on: `not_planned`, `never_reported`,
+    `not_applied`, `apply_failed`, `hop_error`, `route_paused`,
+    `route_enforced`, `healthy`, `unhealthy`, `circuit_open`, `no_health`,
+    `node_offline`, `node_vantage_unavailable`, `target_not_allowed`,
+    `not_public`, `deadline`, `agent_timeout`, `agent_error`, `reachable`,
+    `unreachable`, `control_udp_not_probed`. The Agent adds its own codes
+    for node steps, such as `no_reply`, `conflict` and `not_listening`.
+- **`ok`** is true when no step `FAILED`. A step `SKIPPED` or
+  `INCONCLUSIVE` does not fail a diagnosis, so read `nodes`. A node with
+  `node_vantage` false ran no probes: its Agent is offline, or does not
+  advertise `agent.diagnostic` and `diag.v1`. Its node steps are `SKIPPED`,
+  and Control dialled the entries and the public targets in its place.
+- **Public targets only.** Control never dials a private address. A last
+  hop is asked to dial a private target only on an administrator's route
+  with `TARGET_POLICY_ALLOW_PRIVATE`.
+- **Rate.** A diagnosis of the same route from the last 10 seconds, or one
+  still running, is answered again with `cached` true. At most 4
+  diagnoses run at once per Control process; another is
+  `429 rate_limited`.
 
 ### Nodes
 
@@ -222,6 +281,7 @@ anix-control forward routes create -f <route.json> [--request-id <id>]
 anix-control forward routes delete <route_id> --yes [--request-id <id>]
 anix-control forward routes pause <route_id>
 anix-control forward routes resume <route_id>
+anix-control forward routes diagnose <route_id> [--timeout <ms>] [--json]
 anix-control forward nodes list [--kind forward|proxy] [--json]
 anix-control forward nodes set <node_ref> (-f <settings.json> | [--port-range 30000-39999] [--reserved 80,443] [--address <ip>]... [--label key=value]... | --defaults)
 anix-control forward stats [--route <route_id>] [--node <node_ref>] [--since <RFC 3339 or ms>] [--until ...] [--json]
@@ -232,7 +292,13 @@ anix-control forward reset-node <node_ref>
   `NodeSettings`, both protojson.
 - **Refusals** print each violation with its code.
 - **`nodes set`** replaces the node's settings.
-- **Audit.** Writes go to the audit log as `system/cli` (`forward.route_*`,
+- **`routes diagnose`** prints the steps and the nodes, and exits non-zero
+  when a step failed. The command line holds no Agent sessions, so it
+  answers Control's records and Control's own dials. The node probes are
+  `SKIPPED` (`node_vantage_unavailable`); the HTTP endpoint on the running
+  Control runs them.
+- **Audit.** Writes and diagnoses go to the audit log as `system/cli`
+  (`forward.route_*` including `forward.route_diagnose`,
   `forward.node_settings`, `forward.reset_node`).
 - **When nodes see a change.** The running Control sends the nodes their new
   state at its next configuration refresh, within a minute.
