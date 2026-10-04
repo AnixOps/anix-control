@@ -245,8 +245,7 @@ func TestAgentListenerEnrollsWithEachBootstrapAndStreamsByCertificate(t *testing
 	_, helloAck, err := openStream(t, ctx, conn, uint32(l.proxy.ID))
 	require.NoError(t, err)
 	require.NotNil(t, helloAck)
-	snapshot, connected := GetAgentControlManager().Connection(uint32(l.proxy.ID))
-	require.True(t, connected)
+	snapshot := waitConnection(t, GetAgentControlManager(), uint32(l.proxy.ID))
 	assert.Equal(t, helloAck.SessionId, snapshot.SessionID)
 
 	// Renew and GetTrustBundle need the certificate.
@@ -274,10 +273,9 @@ func TestAgentListenerEnrollsWithEachBootstrapAndStreamsByCertificate(t *testing
 	forwardConn := l.dial(t, forwardCertificate)
 	_, helloAck, err = openStream(t, ctx, forwardConn, uint32(l.forward.ID))
 	require.NoError(t, err)
-	forwardSnapshot, connected := GetForwardAgentControlManager().Connection(uint32(l.forward.ID))
-	require.True(t, connected)
+	forwardSnapshot := waitConnection(t, GetForwardAgentControlManager(), uint32(l.forward.ID))
 	assert.Equal(t, helloAck.SessionId, forwardSnapshot.SessionID)
-	proxySnapshot, _ := GetAgentControlManager().Connection(uint32(l.proxy.ID))
+	proxySnapshot := waitConnection(t, GetAgentControlManager(), uint32(l.proxy.ID))
 	assert.Equal(t, snapshot.SessionID, proxySnapshot.SessionID, "the forward stream must not replace the proxy stream")
 	var forward model.ForwardNode
 	require.NoError(t, database.Get().First(&forward, l.forward.ID).Error)
@@ -486,4 +484,18 @@ func TestAgentListenerRefusesRevokedAndForeignCertificates(t *testing.T) {
 	selfSigned := &tls.Certificate{Certificate: [][]byte{der}, PrivateKey: otherKey}
 	_, _, err = openStream(t, legacyCredentials(ctx, l.proxy.ID, l.proxyKey), l.dial(t, selfSigned), uint32(l.proxy.ID))
 	assert.Equal(t, codes.Unauthenticated, status.Code(err))
+}
+
+// waitConnection returns the node's registered connection. The server sends
+// the HelloAck before it registers the connection, so a test that has just
+// read the ack must wait for the registration.
+func waitConnection(t *testing.T, manager *AgentControlManager, nodeID uint32) AgentControlSnapshot {
+	t.Helper()
+	var snapshot AgentControlSnapshot
+	require.Eventually(t, func() bool {
+		var connected bool
+		snapshot, connected = manager.Connection(nodeID)
+		return connected
+	}, 5*time.Second, 5*time.Millisecond, "node %d is not registered", nodeID)
+	return snapshot
 }

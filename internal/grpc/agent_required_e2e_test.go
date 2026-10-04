@@ -313,8 +313,7 @@ func TestAgentStreamUnderRequiredNeedsNoLegacyPath(t *testing.T) {
 	assert.Equal(t, snapshot.GetConfigRevision(), configStatus.AppliedRevision)
 
 	// The session shows how it authenticated and what it negotiated.
-	session, ok := GetAgentControlManager().Connection(nodeID)
-	require.True(t, ok)
+	session := waitConnection(t, GetAgentControlManager(), nodeID)
 	assert.Equal(t, agentstreams.AuthenticationMTLS, session.Authentication)
 	assert.Equal(t, model.AgentTransportMTLSStream, session.Transport)
 	assert.Equal(t, issued.GetSpiffeId(), session.Identity)
