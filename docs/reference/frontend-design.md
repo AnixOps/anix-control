@@ -816,7 +816,9 @@ template and the first detail page (plan §7.2). Page-local parts live in
 
 ## Forward suite and the wizard template (U7)
 
-The flux-panel clone pages (`docs/guide/flux-panel-clone.md`) moved to the
+**Removed in v4.2 (F5d).** The pages below were deleted with the flux v2
+forwarding API; the section is kept as a record. The flux-panel clone pages
+(`docs/archive/flux-panel-clone.md`) moved to the
 list page template with visual and interaction changes only: same fields,
 endpoints and flows.
 

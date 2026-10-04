@@ -9,10 +9,10 @@ route detail reflects only that route. F5b implements it.
   and `/{id}/edit`) and `/admin/forward/inventory` (with `/{node_ref}`).
   - They open only when the forward package serves the v4 API: the
     extension catalog (`GET /api/v3/extensions`) lists its control route
-    `/api/v4/plugins/forward/*`. Without it they lead to the flux-clone
-    page.
-  - The sidebar shows 转发 for them and keeps the flux-clone pages as
-    转发（旧版） and 转发节点（旧版） until F5d.
+    `/api/v4/plugins/forward/*`. Without it they lead to 插件中心.
+  - The sidebar shows 转发 for them. F5d removed the flux-clone pages
+    (转发（旧版）, 转发节点（旧版）); `/admin/forward` and their paths open
+    the overview.
 - **Code.** `web/src/views/admin/forward/{Overview,Routes,RouteEditor,
   RouteDetail,Nodes,NodeDetail}.vue`, the parts in
   `web/src/components/forward/`, and the API client

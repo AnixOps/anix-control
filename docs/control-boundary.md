@@ -9,7 +9,8 @@ It owns:
   that serve `packages/*`
 - user, plan, order, ticket, knowledge, and subscription data
 - public proxy-node inventory and UniProxy-compatible APIs
-- Flux-compatible `/admin/forward*` control pages
+- the forwarding control plane: the v4.2 forwarding area (`/admin/forward/*`)
+  on the forward package's `/api/v4/forward/*` API
 
 It does not own the private execution plane.
 
@@ -24,7 +25,7 @@ Boundary:
 - [`docs/README.md`](README.md): top-level docs entrypoint
 - [`docs/intro/README.md`](intro/README.md): repository role, v4 architecture, and deployment boundary
 - [`docs/reference/README.md`](reference/README.md): startup, config, repository layout, and runtime references
-- [`docs/guide/README.md`](guide/README.md): Flux-clone and implementation deep dives
+- [`docs/guide/README.md`](guide/README.md): implementation deep dives and runbooks
 
 ## Exact Startup Truth
 
@@ -61,6 +62,11 @@ Current verified deployment truth:
 
 ## Runtime Modes
 
+These are the v4.1 (legacy) forward runtimes. v4.2 removed their pages and
+their v2 management API (F5d); they run read-only until the legacy cleanup
+(F5c) archives their data and the new Agent replaces them
+([`architecture/forward-sdk.md`](architecture/forward-sdk.md) section 10).
+
 `config/config.yaml.forward_runtime.backend` selects the forward execution
 plane; startup persists it as the system config key `forward.runtime_backend`.
 
@@ -78,15 +84,19 @@ plane; startup persists it as the system config key `forward.runtime_backend`.
 
 Keep the resource split explicit:
 - `/admin/nodes` manages proxy nodes
-- `/admin/forward/nodes` manages forward execution nodes
+- `/admin/forward/inventory` (`/api/v4/forward/nodes`) manages forwarding nodes
 
-## Flux-panel
+## Forwarding
 
-The `/admin/forward*` pages clone the upstream
-[`flux-panel`](https://github.com/bqlpfy/flux-panel) forward/tunnel/user-tunnel
-surface. Clone status and remaining gaps live in
-[`guide/flux-panel-clone.md`](guide/flux-panel-clone.md); the endpoint and DTO
-contract lives in [`guide/flux-forward-contract.md`](guide/flux-forward-contract.md).
+v4.2 drops flux compatibility (F5d): the flux-panel clone pages, their v2
+forwarding routes (user and administrator forwards, legacy rules, tunnel and
+permission updates, node and Ansible machine management, observability, clean
+agent tokens) are removed and answer 404. Forwarding is the v4.2 model
+([`architecture/forward-sdk.md`](architecture/forward-sdk.md)): routes of
+hops with per-hop engines, served by the forward package at
+`/api/v4/forward/*` ([`forwarding/v4-api.md`](forwarding/v4-api.md)) and
+the pages in [`guide/forwarding.md`](guide/forwarding.md). The flux clone's
+guide and contract are archived in [`archive/`](archive/README.md).
 
 ## Repository Index
 

@@ -106,23 +106,17 @@ tunnel mode.
 
 ## P2: Forwarding (Flux Clone)
 
-Status and ordering live in
-[`docs/guide/flux-panel-clone.md`](docs/guide/flux-panel-clone.md).
-
-- [ ] Replace the `v2_forward` backfill with native runtime writes into `ForwardUserTunnel.inFlow/outFlow`.
-- [ ] Propagate and enforce speed-limit rules on the runtime side, not only in the resource/API/UI.
-- [ ] Close the user disable-state parity gap with Flux `ResetFlowAsync` / `FlowController`.
-- [ ] Finish exact `user.tsx` / `limit.tsx` layout and interaction parity.
+Closed: v4.2 removed the flux clone and its API (F5d; the guide is archived
+in [`docs/archive/flux-panel-clone.md`](docs/archive/flux-panel-clone.md)).
+Its open parity items (the `v2_forward` traffic backfill, runtime speed
+limits, the disable-state parity, the user and limit page layouts) are
+dropped; the v4.2 forwarding model replaces them.
 
 ## P3: API And UI Consistency
 
 - [ ] Normalize API error envelopes module by module.
 - [ ] Add handler tests before changing response shapes.
 - [ ] Keep frontend build/test/audit green for admin and user workflows.
-- [ ] `GET /api/v2/admin/forward/observability/targets` returns targets in a
-  random order: `ForwardObservabilityService.ListTargets`
-  (`internal/service/forward_observability_service.go`) iterates a map. Sort
-  the list, for example by `targetKey`.
 
 ## Implemented But Not Wired (keep; wire later)
 

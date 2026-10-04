@@ -42,6 +42,12 @@ upgrade, and read
 Fresh installs now generate the CA key and enable gRPC TLS; existing ones add
 them first (Compose: `secrets/module_ca_kek` must exist before `up`).
 
+**Upgrading to v4.2: the flux forwarding API and pages are removed.** The
+v2 routes that change forwards, rules, tunnels, nodes, Ansible machines and
+clean agents answer 404; use `/api/v4/forward/*`. Old forwarding data is not
+migrated (F5c archives it). Read
+["Flux Forwarding API Removed (v4.2)"](#flux-forwarding-api-removed-v42).
+
 ## Fixed Legacy Native Layout
 
 For the specific legacy layout discovered on the old native host
@@ -85,6 +91,10 @@ Before touching production:
   `agent_control.mtls` now defaults to `required`; `anix-control agents
   transports --check-required` must exit 0**
   ([v4.2 Requires Enrolled Agents](#agent-transports-v42-requires-enrolled-agents)).
+- **Upgrading to v4.2: the flux forwarding API (`/api/v2/forward/*` and the
+  administrator's forward, rule, node, Ansible machine and clean agent
+  routes) is removed; scripts and clients must move to `/api/v4/forward/*`**
+  ([Flux Forwarding API Removed](#flux-forwarding-api-removed-v42)).
 
 Evidence to keep:
 
@@ -2365,14 +2375,10 @@ v4.2 adds the forwarding API `/api/v4/forward/*` and the command line
   - Every `DELETE` (a route, a forward node, an Ansible machine) needs a
     super administrator.
   - Writes are audited as module `forward`.
-- **The flux v2 routes still work.** `/api/v2/forward/*` and
-  `/api/v2/admin/forward/*`, the clone UI and the old runtime are unchanged
-  until F5d removes them.
-  - The 19 v2 node management routes (forward nodes, Ansible machines,
-    observability) have v4 equivalents now: check is the node view, and
-    sync-stats is the traffic ledger.
-  - Both write the same `v2_forward_node` rows, so a node added on either
-    side shows on the other.
+- **The flux v2 routes are gone** (F5d, below). The 19 v2 node management
+  routes (forward nodes, Ansible machines, observability) map to the v4 API:
+  check is the node view, and sync-stats is the traffic ledger. Forward
+  nodes stay rows of `v2_forward_node`.
 - **Credentials.** No v4 answer shows a forward node's API token. A node
   added through the v4 API enrolls its Agent with an install token.
 - **Node writes and routes.** A node that a v4 route uses cannot be disabled
@@ -2482,6 +2488,53 @@ rollback: the old tables are untouched (the upgrade adds only
 `v4_forward_legacy_archive`, `v4_forward_legacy_node` and
 `v4_forward_legacy_drop`). After it, 4.1 needs the database restored from
 the backup of step 3; anything changed since then is lost.
+
+## Flux Forwarding API Removed (v4.2)
+
+**v4.2 drops flux compatibility (F5d, owner decision).** The flux v2
+forwarding API and the flux-clone pages are removed; `/api/v4/forward/*`
+([`forwarding/v4-api.md`](forwarding/v4-api.md)) and the 转发 area replace
+them. Old forwarding data is not migrated: the legacy cleanup (F5c)
+archives the old tables and then drops them
+(["Forwarding: Archive, Clean The Nodes, Drop The Old Tables"](#forwarding-archive-clean-the-nodes-drop-the-old-tables-v42)).
+
+- **Removed (53 routes, they answer 404):**
+  - forwards: `POST /api/v2/forward/{create,update,delete,force-delete,pause,resume,diagnose}`
+    and the same seven under `/api/v2/admin/forward/`;
+  - legacy rules: `/api/v2/admin/forward/rules` and `/rules/:id` (list,
+    create, get, update, delete, toggle) and `POST /api/v2/user/forward/rules`;
+  - `POST /api/v2/admin/forward/sync-backend`, `GET /api/v2/admin/forward/runtime/jobs`;
+  - tunnels and permissions: `POST /api/v2/admin/tunnel/{diagnose,update}`,
+    `POST /api/v2/tunnel/user/{remove,update}` and
+    `/api/v2/admin/tunnel/user/{remove,update}`, `POST /api/v2/speed-limit/update`;
+  - forward nodes and Ansible machines: `/api/v2/admin/forward/nodes*` and
+    `/api/v2/admin/forward/ansible-machines*` (8 each); use
+    `/api/v4/forward/nodes` and `/api/v4/forward/ansible-machines`;
+  - observability: `GET /api/v2/admin/forward/observability/{targets,trend,topology}`;
+    use `/api/v4/forward/observability/*` (the trend is now hourly traffic);
+  - clean agents: `GET`/`POST /api/v2/admin/forward/agents`,
+    `POST /api/v2/admin/forward/agents/:id/revoke` and
+    `GET /api/v2/forward-agent/install.sh`; nodes enrol the new Agent
+    instead (`/install.sh`, install tokens).
+- **Still served, without pages, until the legacy runtime goes (F5c):** the
+  forward and tunnel lists and order, tunnel creation and deletion,
+  permission assignment and list, speed limit create/list/delete/tunnels,
+  `POST /api/v2/user/reset`, multi-ingress and statistics, the runtime,
+  local and NodeX status and doctor, the clean agent register, heartbeat
+  and report, and the internal traffic upload/report/snapshot.
+- **UI.** `/admin/forward` opens the forwarding overview; every removed page
+  (转发（旧版）, 转发节点（旧版）, the setup wizard, tunnels, speed limits,
+  Ansible machines, the local and NodeX runtimes) opens it too. Without the
+  forward package's v4 API the forwarding area leads to 插件中心. 流量与监控
+  no longer has 节点延迟 or 转发, 用户 no longer has the tunnel grant
+  dialog, and 系统设置 → 转发运行时 no longer lists runtime jobs.
+- **Existing forwards** keep running on their old runtime until you clean
+  it up (F5c, [`architecture/forward-sdk.md`](architecture/forward-sdk.md)
+  section 10); nothing can change them from the UI or the removed routes.
+  Recreate them as v4 routes.
+- **Rollback.** No table changes in F5d: rolling back to 4.1 brings the
+  routes and pages back over the same data, as long as F5c has not dropped
+  the tables.
 
 ## Staged Agent Upgrades (v4.2)
 

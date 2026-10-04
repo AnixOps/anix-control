@@ -901,6 +901,16 @@
 
 ### Changed
 
+- **`/admin/forward` opens the forwarding overview** (F5d). The removed
+  flux-clone paths (`/admin/forward/{setup,tunnel,limit,nodes,ansible-machines,local,nodex,agents,observability}`
+  and their old aliases) and `/admin/monitor/forward` open it too; without
+  the forward package's v4 API the forwarding area leads to 插件中心, and
+  the sidebar shows no forwarding entry.
+- **AGENTS.md: the forwarding rules are rewritten for the v4.2 model** (F5d,
+  H17): routes of hops with per-hop engines, SDK-first, everything through
+  Control, the `forward.v1` contract freeze, H13 privileges, H28 link
+  certificates and the H23 editions replace the Flux-panel clone guardrails
+  and the dual-mode runtime rules.
 - **WARNING: `agent_control.mtls` now defaults to `required` (v4.2, owner
   decision H5). Legacy API-key Agents are refused on the AnixOps Agent
   channels unless you set `agent_control.mtls: preferred`.** Before
@@ -957,6 +967,40 @@
   - M3-4 and M3-5 are cancelled (`docs/architecture/node-ops-service.md`
     section 7), and anix-agent releases follow Control's version numbers,
     with Control's CI pinning the same Agent commit (H25).
+
+### Removed
+
+- **BREAKING: the flux v2 forwarding API and the flux-clone pages are
+  removed (v4.2, F5d; owner decision: no flux compatibility in v4.2). The
+  53 `bridged` forward routes answer 404; use `/api/v4/forward/*`. Old
+  forwarding data is not migrated (F5c archives it)**
+  ([UPGRADE](docs/UPGRADE.md#flux-forwarding-api-removed-v42)).
+  - 30 flux routes: forward create, update, delete, force-delete, pause,
+    resume and diagnose for users and administrators (14), legacy rules
+    (6) and `POST /api/v2/user/forward/rules`, `sync-backend`, the runtime
+    job list, tunnel diagnose and update, permission remove and update for
+    users and administrators (4) and the speed limit update.
+  - 19 node management routes that F5a rewrote as `/api/v4/forward/*`:
+    forward nodes (8), Ansible machines (8) and the observability targets,
+    trend and topology (3).
+  - 4 clean agent routes: the agent list, token creation and revocation, and
+    `GET /api/v2/forward-agent/install.sh`.
+  - Their handlers, the service methods only they reached and their tests;
+    the catalog rows (`config/package-extraction.json` 296 → 243 routes,
+    `config/v2-package-route-catalog.json`, the forward package's
+    compatibility list and bridged map, `config/node-secret-fields.json`,
+    the moved speed limit update) and the committed swagger paths. The GORM
+    models and tables stay for F5c's archive.
+  - Pages: 转发（旧版） (the forward list), 转发节点（旧版） (forward nodes,
+    Ansible machines and their detail pages, the local and NodeX runtimes),
+    the forward setup wizard, tunnels, speed limits and the forward suite
+    navigation; 流量与监控's 节点延迟 and 转发 sections (they read the
+    removed observability API); the tunnel grant dialog on 用户; the
+    runtime job list on 系统设置 → 转发运行时. Their messages, tests, e2e
+    fixtures and visual baselines go with them.
+  - Docs: `docs/guide/flux-panel-clone.md`, `docs/guide/flux-forward-contract.md`,
+    `docs/forwarding/api.md` and `docs/forwarding/compatibility.md` are
+    archived under `docs/archive/`.
 
 ### Fixed
 

@@ -9,7 +9,7 @@ Use this tree like NodeX:
 - [`reference/README.md`](reference/README.md)
   - use this for exact startup steps, config ownership, runtime mode references, and repository layout
 - [`guide/README.md`](guide/README.md)
-  - use this for deep implementation details, Flux-clone contracts, runtime operations, and runbooks
+  - use this for deep implementation details, runtime operations, and runbooks
 
 ## Status And Planning
 
@@ -64,12 +64,12 @@ Use this tree like NodeX:
 - The v4.2 forwarding pages (operator guide): [`guide/forwarding.md`](guide/forwarding.md)
 - Relay onboarding: [`guide/forward-relay-onboarding.md`](guide/forward-relay-onboarding.md)
 - Forward entry HA through DNS (DDNS providers, least-privilege credentials): [`guide/forward-entry-ha.md`](guide/forward-entry-ha.md)
-- Forwarding module design, API, security, and compatibility:
-  [`forwarding/design.md`](forwarding/design.md),
-  [`forwarding/api.md`](forwarding/api.md),
-  [`forwarding/v4-api.md`](forwarding/v4-api.md) (the v4.2 API),
-  [`forwarding/security.md`](forwarding/security.md),
-  [`forwarding/compatibility.md`](forwarding/compatibility.md)
+- Forwarding: the v4.2 model [`architecture/forward-sdk.md`](architecture/forward-sdk.md),
+  the API [`forwarding/v4-api.md`](forwarding/v4-api.md),
+  [`forwarding/security.md`](forwarding/security.md), and the legacy runtime
+  design [`forwarding/design.md`](forwarding/design.md). The flux v2 API and
+  compatibility docs were removed with the flux routes in v4.2 (F5d) and are
+  in [`archive/`](archive/README.md).
 - Clean-room forward agent: [`forward-clean-room/spec.md`](forward-clean-room/spec.md),
   [`forward-clean-room/provenance.md`](forward-clean-room/provenance.md)
 

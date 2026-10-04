@@ -4,7 +4,8 @@
 F5a). The forward package serves it on the kernel's `ForwardControl`
 (`kernel.forward.v1`). It reads and writes no table itself, and no answer
 carries a node credential. The flux-compatible `/api/v2/forward/*` routes
-in [`api.md`](api.md) stay until F5d removes them.
+were removed in v4.2 (F5d); their contract is archived in
+[`../archive/forwarding-v2-api.md`](../archive/forwarding-v2-api.md).
 
 - The new UI is F5b ([`docs/guide/forwarding.md`](../guide/forwarding.md)).
 - The command line is `anix-control forward ...`, described at the end of
@@ -310,8 +311,8 @@ A node is `forward-<id>` (a forward node, `v2_forward_node`) or `proxy-<id>`
     stored routes no longer plan are still stored; the answer's
     `violations` say why, and every node keeps its generation until the
     routes plan again.
-- **Credentials.** A new Agent node gets the legacy credential the v2 paths
-  still read until F5d, but no answer ever carries it, and an update never
+- **Credentials.** A new Agent node gets the legacy credential the remaining
+  v2 agent paths read until the legacy runtime goes (F5c), but no answer ever carries it, and an update never
   changes it. The node enrolls its Agent with an install token
   (`POST /api/v4/kernel/agents/install-tokens`, `install.sh`).
 
@@ -363,7 +364,7 @@ line only: `anix-control forward legacy`, in
 ## The 19 Rewritten v2 Routes
 
 forward-sdk.md section 10 lists the 19 v2 node management routes. They map
-as follows; the v2 routes stay until F5d.
+as follows; the v2 routes were removed in v4.2 (F5d) and answer 404.
 
 | v2 route | v4 |
 |---|---|

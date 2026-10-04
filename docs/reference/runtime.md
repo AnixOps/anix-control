@@ -1,5 +1,7 @@
 # Runtime Modes
 
+> **v4.2 (F5d):** the flux-clone forward pages and the v2 routes that changed forwards, nodes, Ansible machines, rules and clean agents (`/api/v2/forward/*`, `/api/v2/admin/forward/{create,...,nodes,ansible-machines,rules,agents,sync-backend,runtime/jobs}`, `/api/v2/forward-agent/install.sh`) were removed. This page describes the v4.1 legacy runtime, which keeps running read-only until the legacy cleanup (F5c); new forwarding is [`/api/v4/forward/*`](../forwarding/v4-api.md) on the new Agent.
+
 This page is the runtime reference for the forward split in `anix-control`.
 
 ## Core Rule
