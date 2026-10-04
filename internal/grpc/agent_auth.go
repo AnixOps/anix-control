@@ -43,7 +43,7 @@ type AgentAuthenticator struct {
 	// the built-in module PKI is off.
 	PKI *agentpki.Service
 	// Mode is agent_control.mtls; empty means the configuration default
-	// (preferred). A nil authenticator is optional.
+	// (required from 4.2). A nil authenticator is optional.
 	Mode string
 	// Sunset is agent_control.legacy_sunset, announced with the deprecation
 	// header; zero announces none.

@@ -41,8 +41,8 @@ type ServerConfig struct {
 	// AgentEnrollment; nil when the built-in module PKI is off. Client
 	// certificates need TLS (TLSCertFile).
 	AgentPKI *agentpki.Service
-	// AgentMTLS is agent_control.mtls: off, optional, preferred (the
-	// configuration default) or required.
+	// AgentMTLS is agent_control.mtls: off, optional, preferred or
+	// required (the configuration default from 4.2).
 	AgentMTLS string
 	// AgentLegacySunset is agent_control.legacy_sunset, announced to legacy
 	// agents in preferred mode; zero announces none.

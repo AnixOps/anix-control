@@ -1688,8 +1688,9 @@ advertised them.
 
 Owner decision H5 (2026-10-02) supersedes the earlier plan, which kept
 legacy agents until 5.0: 4.1.0 makes `preferred` the default, and 4.2 makes
-`required` the default. Before upgrading to 4.2, every node must run an
-Agent that has enrolled (mTLS); legacy API-key agents are refused.
+`required` the default (done: an empty `agent_control.mtls` is `required`).
+Before upgrading to 4.2, every node must run an Agent that has enrolled
+(mTLS); legacy API-key agents are refused.
 
 | Agent \ Control | 4.1.0-rc (`optional`) | 4.1.0 (`preferred`, default) | 4.2 (`required`, default) |
 |---|---|---|---|
@@ -1703,13 +1704,31 @@ Agent that has enrolled (mTLS); legacy API-key agents are refused.
 |---|---|---|---|
 | `off` | neither requested nor accepted; `Enroll` answers `FailedPrecondition` | served | none |
 | `optional` | verified when presented | served | none |
-| `preferred` (4.1.0 default) | verified when presented | served | `Deprecation`, `Sunset`, `Link` headers; `x-anix-auth-deprecated` on the stream |
+| `preferred` (the 4.1 default) | verified when presented | served | `Deprecation`, `Sunset`, `Link` headers; `x-anix-auth-deprecated` on the stream |
 | `required` (4.2 default) | required | refused: HTTP 403 `{"code":"agent_mtls_required"}`, gRPC `Unauthenticated` with the trailer `x-anix-error-code: agent_mtls_required`; `Enroll` takes only one-time enrollment credentials | the refusal carries the deprecation headers |
 
-- Only `required` needs, at startup, the gRPC listener with TLS and the
-  built-in CA: an enrolled agent could not connect otherwise. `preferred`
-  and `optional` start without them; agents then cannot enroll yet, which
-  the startup log says (`Agent transports: agent_control.mtls=...`).
+- Only an explicit `required` needs, at startup, the gRPC listener with TLS
+  and the built-in CA: an enrolled agent could not connect otherwise.
+  `preferred` and `optional` start without them; agents then cannot enroll
+  yet, which the startup log says (`Agent transports:
+  agent_control.mtls=...`). The default `required` (4.2, the key left
+  empty) also starts without them, refusing legacy agents, with a
+  `WARNING: Agent transports: ...` line: an install without AnixOps Agents,
+  or with third-party node software only, needs no gRPC TLS.
+- **Readiness for `required`** (4.2). The inventory's
+  `summary.ready_for_required` is false while an enabled node would be
+  refused: `legacy` (its newest AnixOps Agent channel is legacy) or
+  `never_enrolled` (never seen, no valid certificate);
+  `summary.required_reasons` explains it and `summary.required_blockers`
+  lists the nodes. Disabled and third-party nodes do not count; it is
+  computed over every node, also with `legacy_only`.
+  `anix-control agents transports --check-required` is the upgrade gate
+  (exit status 3 while a node blocks, 0 when none, 2 on errors). Under
+  `required`, startup logs a warning with the counts (legacy nodes, those
+  seen within the last 7 days, never enrolled), up to ten node names and
+  the command, and starts anyway: an operator may cut legacy nodes on
+  purpose. A refused request records no sighting, so cut-off nodes keep
+  their last legacy sighting.
 - **Scope of `required`.** The AnixOps Agent channels only:
   - API key authentication on `AgentControlService.ControlStream`, and the
     API key bootstrap of `AgentEnrollment.Enroll`;
@@ -1848,12 +1867,17 @@ Stages:
 
 - **T1, the 4.1 release candidates with A2-1 to A2-5.** Additions only, in
   `optional`.
-- **T2, 4.1.0 (A2-6).** `preferred` is the default; the inventory, the
-  signals and the counters above. The release notes and `docs/UPGRADE.md`
-  ("Agent transports: preparing for v4.2") announce `required` for 4.2.
-- **T3, 4.2.** `required` becomes the default: the AnixOps Agent channels
-  accept enrolled agents only. An operator may still set `preferred` for a
-  while; the removal of the legacy agent routes themselves (the agent and
+- **T2, 4.1.0 (A2-6), done.** `preferred` is the default; the inventory,
+  the signals and the counters above. The release notes and
+  `docs/UPGRADE.md` ("Agent transports: preparing for v4.2") announce
+  `required` for 4.2.
+- **T3, 4.2, done (Control).** `required` is the default (an empty
+  `agent_control.mtls`): the AnixOps Agent channels accept enrolled agents
+  only. The readiness check above (`ready_for_required`,
+  `--check-required`, the startup warning) and `docs/UPGRADE.md` ("Agent
+  Transports: v4.2 Requires Enrolled Agents") go with it; the upgrade order
+  is the new Agent first, then the nodes switched, then Control 4.2. An
+  operator may still set `preferred` for a while; the removal of the legacy agent routes themselves (the agent and
   node WebSocket, `/api/v2/agent/*`, `/api/v2/node/*`, the clean agent
   endpoints, API key authentication on the stream; the 7 agent-channel
   routes section 6 marks `kernel-owned` and the 7 agent routes that are

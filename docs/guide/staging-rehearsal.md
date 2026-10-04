@@ -188,6 +188,12 @@ the write reconciliation's legacy twin always runs with
 an explicit change of that file and of
 `internal/service/testdata/rehearsed-routes.json`, after its batch passed.
 
+The rehearsal Control runs the shipped `agent_control.mtls` default:
+`required` from v4.2. The stack has no gRPC listener and no agents, so the
+log carries a warning that no Agent can enroll; the rehearsed routes do not
+use the legacy agent paths. `STAGING_AGENT_CONTROL_MTLS=preferred
+scripts/staging/rehearse.sh up` rehearses with the 4.1 behaviour.
+
 ## Roll Back
 
 ```bash

@@ -128,6 +128,36 @@
 
 ### Changed
 
+- **WARNING: `agent_control.mtls` now defaults to `required` (v4.2, owner
+  decision H5). Legacy API-key Agents are refused on the AnixOps Agent
+  channels unless you set `agent_control.mtls: preferred`.** Before
+  upgrading, run `anix-control agents transports --check-required`; it must
+  exit 0 ([UPGRADE](docs/UPGRADE.md#agent-transports-v42-requires-enrolled-agents)).
+  - An empty `agent_control.mtls` (`ANIX_CONTROL_AGENT_CONTROL_MTLS`) is
+    `required`; `defaults.yaml`, `config.yaml.example` and
+    `config.prod.yaml` leave it empty. A config file that sets
+    `mtls: "preferred"`, as the 4.1 template did, keeps `preferred`.
+    `preferred`, `optional` and `off` stay selectable.
+  - `required` refuses the API key on the Agent Control stream and the API
+    key bootstrap of `Enroll`, `/api/v2/agent/*`, `/api/v2/node/*`,
+    `/api/v2/forward/agent/rules` and the clean agent endpoints (403 /
+    `Unauthenticated`, code `agent_mtls_required`). UniProxy, the v2board
+    gRPC services and the plugin release download stay open.
+  - Startup: an explicit `required` still refuses to start without the gRPC
+    listener, its TLS and the built-in CA. The default `required` starts
+    without them and logs `WARNING: Agent transports: ...`: no Agent can
+    connect until they are set.
+  - Readiness: `GET /api/v4/kernel/agents/transports` adds
+    `summary.ready_for_required`, `summary.required_reasons` and
+    `summary.required_blockers` (enabled nodes on a legacy channel, and
+    enabled nodes that never enrolled). `anix-control agents transports
+    --check-required [--json]` lists them and exits with status 3 while
+    there is one (0 when none, 2 on errors). Under `required` the startup
+    log warns with the counts (legacy nodes, those seen within the last 7
+    days, never enrolled) and up to ten node names, and starts anyway.
+  - The staging rehearsal runs the new default (`STAGING_AGENT_CONTROL_MTLS`
+    selects another mode); the v2 package router tests that drive legacy
+    agent paths set `preferred` explicitly.
 - CI builds the Agent from anix-agent `1b155dee` (was `c459383`), which
   accepts the machine-telemetry `systemd_services` setting and collects the
   systemd services report (anix-agent #5). Older Agents refuse that setting,

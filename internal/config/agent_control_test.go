@@ -1,6 +1,7 @@
 package config
 
 import (
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -14,10 +15,14 @@ func TestAgentControlMTLSValidation(t *testing.T) {
 			ModuleRuntime: ModuleRuntimeConfig{Enabled: true, CAKEK: "AAECAwQFBgcICQoLDA0ODxAREhMUFRYXGBkaGxwdHh8="},
 		}
 	}
-	require.Equal(t, AgentMTLSPreferred, AgentControlConfig{}.MTLSOrDefault(), "4.1 defaults to preferred (H5)")
+	require.Equal(t, AgentMTLSRequired, AgentControlConfig{}.MTLSOrDefault(), "4.2 defaults to required (H5)")
+	require.Equal(t, AgentMTLSPreferred, AgentControlConfig{MTLS: "preferred"}.MTLSOrDefault(), "preferred stays selectable")
+	require.False(t, AgentControlConfig{MTLS: "  "}.MTLSExplicit())
+	require.True(t, AgentControlConfig{MTLS: "required"}.MTLSExplicit())
 	require.Equal(t, AgentMTLSRequired, AgentControlConfig{MTLS: " Required "}.MTLSOrDefault())
 	require.Equal(t, AgentMTLSOff, AgentControlConfig{MTLS: "OFF"}.MTLSOrDefault())
-	require.Equal(t, AgentMTLSPreferred, Defaults().AgentControl.MTLSOrDefault())
+	require.Equal(t, AgentMTLSRequired, Defaults().AgentControl.MTLSOrDefault(), "the container defaults leave the mode to the code")
+	require.False(t, Defaults().AgentControl.MTLSExplicit())
 	require.False(t, Defaults().ModuleRuntime.BuiltinCA(), "no CA without a key")
 	require.True(t, ModuleRuntimeConfig{CAKEK: "key"}.BuiltinCA())
 	require.True(t, ModuleRuntimeConfig{Enabled: true}.BuiltinCA())
@@ -32,15 +37,21 @@ func TestAgentControlMTLSValidation(t *testing.T) {
 	cfg.AgentControl.MTLS = "strict"
 	require.ErrorContains(t, cfg.ValidateForServer(), "agent_control.mtls must be")
 
-	// off, optional and preferred (the default) need nothing: a kernel
-	// without gRPC TLS or the CA keeps starting.
+	// off, optional, preferred and the default required need nothing: a
+	// kernel without gRPC TLS or the CA keeps starting (the default required
+	// then refuses legacy agents and warns that none can enroll).
 	for _, mode := range []string{"", AgentMTLSOff, AgentMTLSOptional, AgentMTLSPreferred} {
 		bare := &Config{GRPC: GRPCConfig{Enable: true}, AgentControl: AgentControlConfig{MTLS: mode}}
 		require.NoError(t, bare.ValidateForServer(), mode)
 		bare = &Config{AgentControl: AgentControlConfig{MTLS: mode}}
 		require.NoError(t, bare.ValidateForServer(), mode)
 	}
-	// required needs the gRPC listener, its TLS and the built-in CA.
+	bare := &Config{}
+	require.Equal(t, AgentMTLSRequired, bare.AgentControl.MTLSOrDefault())
+	require.ErrorContains(t, bare.RequiredPrerequisitesError(), "grpc.enabled", "the startup warning names what is missing")
+	require.NoError(t, valid().RequiredPrerequisitesError())
+	// An explicit required needs the gRPC listener, its TLS and the built-in
+	// CA, or refuses to start.
 	mode := AgentMTLSRequired
 	cfg = valid()
 	cfg.AgentControl.MTLS = mode
@@ -85,4 +96,23 @@ func TestAgentControlLegacySunset(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, AgentMTLSRequired, cfg.AgentControl.MTLSOrDefault())
 	require.Equal(t, "2027-03-31", cfg.AgentControl.LegacySunset)
+}
+
+// TestShippedConfigsLeaveTheAgentModeToTheDefault: the templates leave
+// agent_control.mtls empty, so they follow the v4.2 default (required) and
+// start without gRPC TLS or the CA (a warning, not a refusal).
+func TestShippedConfigsLeaveTheAgentModeToTheDefault(t *testing.T) {
+	for _, name := range []string{"config.yaml.example", "config.prod.yaml"} {
+		resetConfig()
+		loaded, err := Load(filepath.Join("..", "..", "config", name))
+		require.NoError(t, err, name)
+		require.False(t, loaded.AgentControl.MTLSExplicit(), name)
+		require.Equal(t, AgentMTLSRequired, loaded.AgentControl.MTLSOrDefault(), name)
+		require.NoError(t, loaded.validateAgentControl(), name)
+	}
+	resetConfig()
+	loaded, err := Load(filepath.Join("..", "..", "config", "config.dev.yaml.example"))
+	require.NoError(t, err)
+	require.Equal(t, AgentMTLSPreferred, loaded.AgentControl.MTLSOrDefault(), "the development template serves local API-key agents")
+	resetConfig()
 }

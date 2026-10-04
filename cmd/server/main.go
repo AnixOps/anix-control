@@ -455,7 +455,7 @@ func run() int {
 	if adminArguments != nil {
 		if err := runAdminCommand(context.Background(), cfg, database.Get(), adminArguments, os.Stdout); err != nil {
 			log.Printf("%s: %v", adminArguments[0], err)
-			return 2
+			return adminCommandExitCode(err)
 		}
 		return 0
 	}
@@ -496,6 +496,9 @@ func run() int {
 	}
 	agenttransport.SetMode(cfg.AgentControl.MTLSOrDefault())
 	log.Print(agentTransportPolicyLog(cfg, grpcSrv))
+	// Under required, warn about the enabled nodes it refuses (legacy
+	// Agents, nodes that never enrolled). It never stops the start.
+	logRequiredReadiness(rootCtx, cfg, database.Get(), log.Printf)
 	// KernelNodeOps dispatches node operations on the Agent Control streams
 	// of both node kinds (node-ops-service.md section 3.8) and serves the
 	// node configuration and agent kinds (section 3.11, NO-6).

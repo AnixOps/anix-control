@@ -36,7 +36,7 @@ func TestLegacyAgentPathsFollowAgentControlMTLS(t *testing.T) {
 		return recorder
 	}
 
-	// The default: preferred.
+	// preferred, which the fixture sets explicitly (the 4.1 default).
 	served := agenttransport.LegacyRequests("/api/v2/agent/tasks")
 	answer := send(router, http.MethodGet, "/api/v2/agent/tasks")
 	require.Equal(t, http.StatusOK, answer.Code, answer.Body.String())
@@ -47,6 +47,15 @@ func TestLegacyAgentPathsFollowAgentControlMTLS(t *testing.T) {
 	require.NoError(t, database.GetDB().Where("node_kind = ? AND node_id = ? AND transport = ?", "proxy", node.ID, model.AgentTransportHTTPLegacy).First(&row).Error)
 	answer = send(router, http.MethodGet, "/api/v2/server/UniProxy/config?node_id="+nodeID+"&token=edge-api-key")
 	require.Empty(t, answer.Header().Get("Deprecation"), "UniProxy is not an AnixOps-only channel")
+
+	// The 4.2 default (agent_control.mtls empty) is required.
+	defaulted := *cfg
+	defaulted.AgentControl = config.AgentControlConfig{}
+	byDefault := gin.New()
+	Setup(byDefault, &defaulted)
+	answer = send(byDefault, http.MethodGet, "/api/v2/agent/tasks")
+	require.Equal(t, http.StatusForbidden, answer.Code, answer.Body.String())
+	require.Contains(t, answer.Body.String(), `"code":"agent_mtls_required"`)
 
 	// required, with a sunset date.
 	required := *cfg

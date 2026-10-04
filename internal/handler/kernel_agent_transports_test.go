@@ -39,8 +39,15 @@ func TestAgentTransportsHandlerListsTheInventory(t *testing.T) {
 		Data agenttransport.Inventory `json:"data"`
 	}
 	require.NoError(t, json.Unmarshal(recorder.Body.Bytes(), &body))
-	require.Equal(t, config.AgentMTLSPreferred, body.Data.Mode)
-	require.Equal(t, agenttransport.Summary{Total: 2, MTLS: 1, Legacy: 1}, body.Data.Summary)
+	require.Equal(t, config.AgentMTLSRequired, body.Data.Mode, "the 4.2 default")
+	summary := body.Data.Summary
+	require.Equal(t, [3]int{2, 1, 1}, [3]int{summary.Total, summary.MTLS, summary.Legacy})
+	require.False(t, summary.ReadyForRequired)
+	require.Len(t, summary.RequiredReasons, 1)
+	require.Contains(t, summary.RequiredReasons[0], "1 enabled node(s) still on a legacy AnixOps Agent channel (1 seen within the last 7 days)")
+	require.Len(t, summary.RequiredBlockers, 1)
+	require.Equal(t, "proxy-2", summary.RequiredBlockers[0].Node)
+	require.Contains(t, recorder.Body.String(), `"ready_for_required":false`)
 
 	recorder = performKernelHandlerRequest(t, http.MethodGet, route+"?legacy_only=true", "", route, handler.List)
 	require.Equal(t, http.StatusOK, recorder.Code)

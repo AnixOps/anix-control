@@ -112,10 +112,10 @@ grpc:
   port: 50051
 agent_control:
   # Client certificates on the AnixOps Agent channels: off, optional,
-  # preferred or required. preferred (the 4.1 default) keeps every legacy
-  # agent working and answers it with deprecation signals; required is the
-  # planned 4.2 default.
-  mtls: "preferred"
+  # preferred or required. Empty means required, the default from 4.2: the
+  # AnixOps Agent channels accept enrolled (mTLS) agents only. preferred
+  # (the 4.1 default) keeps legacy agents working with deprecation signals.
+  mtls: ""
   # Sunset date of the legacy agent transports (YYYY-MM-DD); empty sends no
   # Sunset header.
   legacy_sunset: ""
