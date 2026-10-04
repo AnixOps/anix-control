@@ -7,10 +7,15 @@
 #
 #   cp config/deploy/compose/control.env.example control.env   # then edit
 #   install -d -m 0750 secrets
-#   openssl rand -hex 32 | install -m 0400 -o 10001 -g 10001 /dev/stdin secrets/jwt_secret
 #   printf '%s' 'database-password' | install -m 0400 -o 10001 -g 10001 /dev/stdin secrets/db_password
+#   sudo bash init-secrets.sh --grpc-name grpc.example.com   # config/deploy/compose/init-secrets.sh
 #   export ANIX_CONTROL_IMAGE=ghcr.io/anixops/anix-control@sha256:<digest from docker-image.txt>
 #   docker compose -f docker-compose.prod.yml up -d
+#
+# init-secrets.sh creates secrets/jwt_secret and secrets/module_ca_kek (the
+# key that seals the CA signing Agent certificates; never replaced once
+# created) and, given a publicly trusted certificate, tls/ with gRPC TLS
+# enabled in control.env.
 #
 # Guide: docs/DEPLOYMENT.md. Every setting: docker run --rm "$ANIX_CONTROL_IMAGE" -print-env
 name: anix-control
@@ -22,12 +27,15 @@ x-control: &control
   environment:
     ANIX_CONTROL_JWT_SECRET_FILE: /run/secrets/jwt_secret
     ANIX_CONTROL_DATABASE_PASSWORD_FILE: /run/secrets/db_password
+    # Seals the built-in CA that signs Agent (and module) certificates.
+    ANIX_CONTROL_MODULE_RUNTIME_CA_KEK_FILE: /run/secrets/module_ca_kek
     # Verified package copies (about 0.5 GB for the official package set) live
     # on the plugin-artifacts volume, not in the RAM-backed /tmp.
     ANIX_CONTROL_PLUGINS_CONTROL_HOST_ARTIFACT_DIR: /var/lib/anixops/artifacts
   secrets:
     - jwt_secret
     - db_password
+    - module_ca_kek
   read_only: true
   tmpfs:
     # Plugin host sockets and entrypoint copies, and ansible state; must allow exec.
@@ -78,6 +86,9 @@ services:
       start_period: 60s
       retries: 3
     volumes:
+      # gRPC TLS certificate and key for Agents (init-secrets.sh writes them;
+      # control.env names them under /run/anix-control/tls).
+      - ${ANIX_CONTROL_TLS_DIR:-./tls}:/run/anix-control/tls:ro
       # Verified package copies, rebuilt from the database on demand; copies
       # left by an earlier container are removed at start.
       - plugin-artifacts:/var/lib/anixops
@@ -94,3 +105,5 @@ secrets:
     file: ${ANIX_CONTROL_SECRETS_DIR:-./secrets}/jwt_secret
   db_password:
     file: ${ANIX_CONTROL_SECRETS_DIR:-./secrets}/db_password
+  module_ca_kek:
+    file: ${ANIX_CONTROL_SECRETS_DIR:-./secrets}/module_ca_kek

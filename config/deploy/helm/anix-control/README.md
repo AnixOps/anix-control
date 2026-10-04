@@ -40,8 +40,62 @@ What the chart does:
   directly while they are trusted (`docs/DEPLOYMENT.md` section 6.1).
 - `ansible.existingSecret` mounts `inventory.ini` and SSH material for the
   local-ansible forward runtime.
+- CA key: a fresh install creates `<fullname>-ca-kek` (see below), so Agents
+  can enroll as soon as gRPC has TLS.
 
 `values.yaml` documents every value.
+
+## AnixOps Agents: the CA key and gRPC TLS
+
+Agents enroll (AgentEnrollment) and connect over gRPC with TLS, and Control
+signs their certificates with its built-in CA, sealed by
+`module_runtime.ca_kek`.
+
+- **CA key.** Without `caKek.existingSecret`, the chart creates the Secret
+  `<fullname>-ca-kek` (key `ca_kek`, 32 random bytes, base64) on the first
+  install, reads it back with `lookup` on every upgrade, marks it
+  `immutable`, and keeps it on `helm uninstall`
+  (`helm.sh/resource-policy: keep`). Back it up with the database and never
+  change it: the CA is sealed with it, and with another key every Agent must
+  enroll again. `helm template` and GitOps tools (Argo CD, Flux) render
+  without `lookup`; give them a Secret you manage instead:
+
+  ```bash
+  kubectl -n anix create secret generic anix-control-ca-kek \
+    --from-literal=ca_kek="$(openssl rand -base64 32)"
+  # values: caKek.existingSecret: anix-control-ca-kek
+  ```
+
+  A key mapped with `secrets.files.<key>: ANIX_CONTROL_MODULE_RUNTIME_CA_KEK`
+  (the 4.1 way) takes precedence, and the chart then creates none.
+- **gRPC TLS.** Agents verify Control's certificate against their system CA
+  roots and cannot be given a private CA, so use a publicly trusted
+  certificate for the name they dial. With cert-manager and a Let's Encrypt
+  issuer:
+
+  ```yaml
+  apiVersion: cert-manager.io/v1
+  kind: Certificate
+  metadata:
+    name: control-grpc
+    namespace: anix
+  spec:
+    secretName: control-grpc-tls
+    dnsNames: [grpc.example.com]
+    issuerRef: {kind: ClusterIssuer, name: letsencrypt}
+  ```
+
+  ```bash
+  helm upgrade control config/deploy/helm/anix-control -n anix --reuse-values \
+    --set grpc.enabled=true --set grpc.tls.secretName=control-grpc-tls \
+    --set config.ANIX_CONTROL_AGENT_INSTALL_GRPC_TARGET=grpc.example.com:50051
+  ```
+
+  Point `grpc.example.com` at the `grpc` Service (a TCP load balancer: TLS
+  passes through to Control). Control loads the certificate at start:
+  restart it after cert-manager renews (`kubectl -n anix rollout restart
+  deploy/control-anix-control`, or a reloader). `helm install` prints what is
+  still missing.
 
 ## Network modules
 
@@ -50,13 +104,9 @@ process of Control; see `docs/architecture/module-runtime.md`. The chart runs
 `identity-platform` this way:
 
 ```bash
-# 1. Control with the module runtime: a 32-byte CA key in the Secret and
-#    moduleRuntime.enabled. Control then listens for modules on port 7443
-#    (mTLS) behind its Service.
-kubectl -n anix patch secret anix-control --type merge \
-  -p "{\"stringData\":{\"module_ca_kek\":\"$(openssl rand -base64 32)\"}}"
+# 1. Control with the module runtime (it uses the CA key above). Control then
+#    listens for modules on port 7443 (mTLS) behind its Service.
 helm upgrade control config/deploy/helm/anix-control -n anix --reuse-values \
-  --set secrets.files.module_ca_kek=ANIX_CONTROL_MODULE_RUNTIME_CA_KEK \
   --set moduleRuntime.enabled=true
 
 # 2. Trust bundle and a reusable enrollment credential for the module pods.
@@ -97,8 +147,8 @@ What the chart does for modules:
   - ingress to the host port only from Control pods, plus probes;
   - egress only to Control's module port, DNS and PostgreSQL (narrowed by
     `databaseCIDR`).
-- **Guards.** Rendering fails without a CA key mapping, or with a module
-  enabled while `moduleRuntime` is off.
+- **Guards.** Rendering fails without a CA key (`caKek.generate=false` and
+  no other source), or with a module enabled while `moduleRuntime` is off.
 
 `config/scripts/modules_kind_smoke.sh` runs these steps on kind in CI: two
 replicas, NetworkPolicy on, login through the module, and pod replacement.

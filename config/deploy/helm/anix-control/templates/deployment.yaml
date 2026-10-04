@@ -127,6 +127,26 @@ spec:
               - key: {{ $key }}
                 path: {{ $key }}
               {{- end }}
+        {{- if eq (include "anix-control.caKekEnabled" .) "true" }}
+        - name: ca-kek
+          secret:
+            secretName: {{ include "anix-control.caKekSecretName" . }}
+            defaultMode: 0440
+            items:
+              - key: ca_kek
+                path: ca_kek
+        {{- end }}
+        {{- if and .Values.grpc.enabled .Values.grpc.tls.secretName }}
+        - name: grpc-tls
+          secret:
+            secretName: {{ .Values.grpc.tls.secretName }}
+            defaultMode: 0440
+            items:
+              - key: tls.crt
+                path: tls.crt
+              - key: tls.key
+                path: tls.key
+        {{- end }}
         {{- if .Values.ansible.existingSecret }}
         - name: ansible
           secret:

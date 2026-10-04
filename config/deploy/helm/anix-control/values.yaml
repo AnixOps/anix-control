@@ -55,6 +55,26 @@ secrets:
     jwt_secret: ""
     db_password: ""
 
+# The key-encryption key of Control's built-in CA (module_runtime.ca_kek),
+# which signs AnixOps Agent certificates (AgentEnrollment) and module
+# certificates. A fresh install gets one, so Agents can enroll at once.
+# It cannot change afterwards: the CA in the database is sealed with it, and
+# with another key every Agent must enroll again.
+caKek:
+  # An existing Secret holding the key `ca_kek` (32 random bytes, base64:
+  # openssl rand -base64 32). Use it with GitOps tools (Argo CD, Flux) and
+  # `helm template`, which render without access to the cluster.
+  existingSecret: ""
+  # Without existingSecret, the chart creates <fullname>-ca-kek once with a
+  # random key and reads it back on every upgrade (`lookup`). The Secret is
+  # immutable (a render that would change the key fails instead of rotating
+  # it) and kept on `helm uninstall` (helm.sh/resource-policy: keep). Back it
+  # up with the database. false: no key (Agents cannot enroll).
+  generate: true
+  # A key mapped the older way, `secrets.files.<key>:
+  # ANIX_CONTROL_MODULE_RUNTIME_CA_KEK`, takes precedence and the chart then
+  # creates none.
+
 # Run `anix-control migrate` as an init container before the server starts. It
 # holds a PostgreSQL advisory lock and is idempotent.
 migrate:
@@ -67,11 +87,18 @@ service:
   httpPort: 8080
   webPort: 3000
 
-# Node-facing gRPC (set ANIX_CONTROL_GRPC_ENABLED: "true" in config too).
-# Nodes hold long-lived streams: expose it with an L4 or HTTP/2-aware load
-# balancer.
+# Node-facing gRPC: enables the listener (ANIX_CONTROL_GRPC_ENABLED) and its
+# Service. Nodes hold long-lived streams: expose it with an L4 load balancer
+# (TLS passthrough). AnixOps Agents enroll and connect here only with TLS.
 grpc:
   enabled: false
+  tls:
+    # A kubernetes.io/tls Secret (tls.crt, tls.key) for the listener, for
+    # example from a cert-manager Certificate (README). Agents verify it
+    # against their system CA roots and cannot be given a private CA: use a
+    # publicly trusted issuer (Let's Encrypt) for the name Agents dial
+    # (config.ANIX_CONTROL_AGENT_INSTALL_GRPC_TARGET: <name>:<port>).
+    secretName: ""
   service:
     type: LoadBalancer
     port: 50051
@@ -80,9 +107,7 @@ grpc:
 
 # Network modules (docs/architecture/module-runtime.md): packages that run as
 # their own Deployments and talk to Control over gRPC with mTLS on a module
-# listener. Control must then also have its CA key: add
-#   secrets.files.module_ca_kek: ANIX_CONTROL_MODULE_RUNTIME_CA_KEK
-# with a 32-byte base64 value (openssl rand -base64 32).
+# listener. pki: builtin uses Control's CA key (caKek above).
 moduleRuntime:
   enabled: false
   port: 7443

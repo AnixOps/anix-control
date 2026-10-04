@@ -53,5 +53,7 @@ spec:
       port: {{ .Values.grpc.service.port }}
       targetPort: grpc
       protocol: TCP
+      {{- if not .Values.grpc.tls.secretName }}
       appProtocol: kubernetes.io/h2c
+      {{- end }}
 {{- end }}
