@@ -26,7 +26,7 @@ func (s *Service) listRoutes(ctx context.Context, request Request, _ map[string]
 		if err != nil {
 			return failure(http.StatusBadRequest, "invalid_request", "page_size must be a number", nil)
 		}
-		listRequest.PageSize = uint32(size)
+		listRequest.PageSize = uint32(size) // #nosec G115 -- ParseUint bounds it to 32 bits.
 	}
 	answer, err := s.Forward.ListRoutes(ctx, listRequest)
 	if err != nil {

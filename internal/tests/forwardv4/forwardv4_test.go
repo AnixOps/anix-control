@@ -139,7 +139,7 @@ func newEnv(t *testing.T, db *gorm.DB) *env {
 		grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) { return listener.Dial() }))
 	require.NoError(t, err)
 	t.Cleanup(func() { _ = conn.Close() })
-	e.api = &v4api.Service{Forward: forwardv1.NewForwardControlClient(conn), Now: func() time.Time { return e.now }}
+	e.api = &v4api.Service{Forward: forwardv1.NewForwardControlClient(conn)}
 	return e
 }
 
@@ -362,7 +362,9 @@ func TestManifestAndEditions(t *testing.T) {
 		Capabilities  []string `json:"capabilities"`
 	}
 	require.NoError(t, json.Unmarshal(raw, &manifest))
-	assert.Equal(t, []string{v4api.ControlPrefix + "/*"}, manifest.ControlRoutes)
+	assert.Equal(t, []string{v4api.Route}, manifest.ControlRoutes)
+	assert.Equal(t, service.PluginControlBridgeRouteID("forward", v4api.Route), v4api.RouteID,
+		"the host recognizes the route id the kernel dispatches the API with")
 	assert.Contains(t, manifest.Capabilities, service.CapabilityForward)
 
 	community := edition.New("community")

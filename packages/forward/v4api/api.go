@@ -28,12 +28,12 @@ package v4api
 import (
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
-	"time"
 
 	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
 	"google.golang.org/grpc/codes"
@@ -48,6 +48,18 @@ const (
 	ControlPrefix = "/api/v4/plugins/forward"
 	PublicPrefix  = "/api/v4/forward"
 )
+
+// Route is the package's manifest control route; the kernel serves it at
+// /api/v4/forward/* too, and dispatches both with RouteID.
+const Route = ControlPrefix + "/*"
+
+// RouteID is the route id the kernel gives Route: the package id,
+// ".control." and the hex SHA-256 of the package id, a NUL byte and the
+// route (the kernel's service.PluginControlBridgeRouteID).
+var RouteID = func() string {
+	digest := sha256.Sum256([]byte("forward\x00" + Route))
+	return "forward.control." + hex.EncodeToString(digest[:])
+}()
 
 // Editions an endpoint is served in.
 const (
@@ -82,15 +94,6 @@ type Service struct {
 	// NewRequestID names a write without an Idempotency-Key; a random id by
 	// default.
 	NewRequestID func() string
-	// Now defaults to time.Now.
-	Now func() time.Time
-}
-
-func (s *Service) now() time.Time {
-	if s.Now != nil {
-		return s.Now()
-	}
-	return time.Now()
 }
 
 func (s *Service) requestID(request Request, suffix string) string {

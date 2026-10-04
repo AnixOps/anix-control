@@ -2,8 +2,6 @@ package main
 
 import (
 	"context"
-	"crypto/sha256"
-	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -35,7 +33,7 @@ type forwardBridge interface {
 // (local socket or module listener); a bridge without one leaves it legacy.
 // The routes in bridgedRoutes always relay to the legacy handler.
 //
-// The package's own control route, V4Route (/api/v4/forward/* to its
+// The package's own control route, v4api.Route (/api/v4/forward/* to its
 // callers), is the v4 administrator API on the kernel's ForwardControl
 // over the same bridge connection (v4api). It has no legacy handler and no
 // route mode: the host always answers it, 503 without the connection.
@@ -60,7 +58,7 @@ func newForwardService(bridge forwardBridge, leaseID string) (*forwardHost, erro
 		AllowRoute: func(routeID string) bool {
 			_, nativeRoute := forwardRoutes[routeID]
 			_, bridgedRoute := bridgedRoutes[routeID]
-			return nativeRoute || bridgedRoute || routeID == V4RouteID
+			return nativeRoute || bridgedRoute || routeID == v4api.RouteID
 		},
 		Native: service.Handlers(),
 	})
@@ -69,18 +67,6 @@ func newForwardService(bridge forwardBridge, leaseID string) (*forwardHost, erro
 	}
 	return &forwardHost{Router: router, api: api}, nil
 }
-
-// V4Route is the package's manifest control route: the kernel serves it at
-// /api/v4/forward/* too, and dispatches both with V4RouteID.
-const V4Route = "/api/v4/plugins/forward/*"
-
-// V4RouteID is the route id the kernel gives V4Route: the package id,
-// ".control." and the hex SHA-256 of the package id, a NUL byte and the
-// route (the kernel's service.PluginControlBridgeRouteID).
-var V4RouteID = func() string {
-	digest := sha256.Sum256([]byte("forward\x00" + V4Route))
-	return "forward.control." + hex.EncodeToString(digest[:])
-}()
 
 // forwardHost is the router plus the v4 API, which the package owns
 // outright.
@@ -92,7 +78,7 @@ type forwardHost struct {
 // Dispatch answers the v4 API itself and hands every other route to the
 // router.
 func (h *forwardHost) Dispatch(ctx context.Context, request pluginhostsdk.DispatchRequest) (response pluginhostsdk.DispatchResponse, err error) {
-	if request.RouteID != V4RouteID {
+	if request.RouteID != v4api.RouteID {
 		return h.Router.Dispatch(ctx, request)
 	}
 	if h.Draining() {

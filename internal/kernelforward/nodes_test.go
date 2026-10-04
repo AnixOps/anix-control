@@ -131,6 +131,20 @@ func runNodeRegistry(t *testing.T, db *gorm.DB) {
 	err = f.service.DeleteForwardNode(ctx, "node-4", 12)
 	require.True(t, errors.As(err, &refusal))
 
+	// An edit never changes an Agent node's credential (a change would
+	// revoke its Agent certificates).
+	require.NoError(t, db.Model(&model.ForwardNode{}).Where("id = ?", 11).Update("api_token", "entry-token").Error)
+	entryRecord := summaryByRef(t, mustList(t, f.service), "forward-11").GetRecord()
+	entryRecord.Name = "hk-entry"
+	_, err = f.service.UpdateForwardNode(ctx, "node-rename", entryRecord)
+	require.NoError(t, err)
+	var entryRow model.ForwardNode
+	require.NoError(t, db.First(&entryRow, 11).Error)
+	assert.Equal(t, "entry-token", entryRow.APIToken)
+	assert.Equal(t, "hk-entry", entryRow.Name)
+	var exitToken string
+	require.NoError(t, db.Model(&model.ForwardNode{}).Where("id = ?", 12).Pluck("api_token", &exitToken).Error)
+
 	// Other edits replan: a new host moves the node's address.
 	exitRecord.Enabled = true
 	exitRecord.Host = "192.0.2.112"
@@ -138,6 +152,9 @@ func runNodeRegistry(t *testing.T, db *gorm.DB) {
 	require.NoError(t, err)
 	assert.Empty(t, updated.GetViolations())
 	assert.Equal(t, []string{"192.0.2.112"}, updated.GetNode().GetInfo().GetAddresses())
+	var exitTokenAfter string
+	require.NoError(t, db.Model(&model.ForwardNode{}).Where("id = ?", 12).Pluck("api_token", &exitTokenAfter).Error)
+	assert.Equal(t, exitToken, exitTokenAfter, "an Agent node without a credential is not given one")
 	entryState := f.state(entry)
 	require.Len(t, entryState.GetHops(), 1)
 	assert.Equal(t, "192.0.2.112", entryState.GetHops()[0].GetUpstreams()[0].GetAddress())

@@ -17,6 +17,7 @@ import (
 	"github.com/AnixOps/anix-control/sdk/packagebridgesdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/AnixOps/anix-control/v4/packages/forward/native"
+	"github.com/AnixOps/anix-control/v4/packages/forward/v4api"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -278,19 +279,19 @@ func TestForwardHostServesTheV4APIOnForwardControl(t *testing.T) {
 		Method: "GET", PrincipalJSON: []byte(`{"actor_id":1,"admin":true}`),
 		Metadata: pluginhostsdk.RequestMetadata{Path: "/api/v4/plugins/forward/routes"},
 	}
-	response := dispatch(t, host, V4RouteID, request)
+	response := dispatch(t, host, v4api.RouteID, request)
 	require.EqualValues(t, 200, response.StatusCode, "%s", response.ResponseBody)
 	require.Contains(t, string(response.ResponseBody), `"name":"hk"`)
 	require.Empty(t, stub.operation, "the v4 API never reaches a legacy handler")
 
 	request.PrincipalJSON = []byte(`{"actor_id":2,"admin":false}`)
-	require.EqualValues(t, 403, dispatch(t, host, V4RouteID, request).StatusCode)
+	require.EqualValues(t, 403, dispatch(t, host, v4api.RouteID, request).StatusCode)
 
 	unconnected, err := newForwardService(&bridgeStub{}, "lease-1")
 	require.NoError(t, err)
 	request.PrincipalJSON = []byte(`{"actor_id":1,"admin":true}`)
-	require.EqualValues(t, 503, dispatch(t, unconnected, V4RouteID, request).StatusCode)
+	require.EqualValues(t, 503, dispatch(t, unconnected, v4api.RouteID, request).StatusCode)
 
-	require.True(t, strings.HasPrefix(V4RouteID, "forward.control."))
-	require.Len(t, V4RouteID, len("forward.control.")+64)
+	require.True(t, strings.HasPrefix(v4api.RouteID, "forward.control."))
+	require.Len(t, v4api.RouteID, len("forward.control.")+64)
 }

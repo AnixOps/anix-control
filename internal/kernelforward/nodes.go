@@ -482,9 +482,11 @@ func checkRecord(record *forwardv1.ForwardNodeRecord) error {
 
 // applyRecord copies a record's editable fields onto a node row. An
 // Ansible machine is a relay tagged so, without an API port or credential
-// (as the v2 handlers keep it); an Agent node keeps or gets a credential
-// for the v2 paths that still read one until F5d.
-func applyRecord(node *model.ForwardNode, record *forwardv1.ForwardNodeRecord) error {
+// (as the v2 handlers keep it). A new Agent node gets a credential for the
+// v2 paths that still read one until F5d (as the v2 create does); an
+// update never changes an Agent node's credential, since a changed one
+// revokes the node's Agent certificates.
+func applyRecord(node *model.ForwardNode, record *forwardv1.ForwardNodeRecord, create bool) error {
 	node.Name, node.Host = strings.TrimSpace(record.GetName()), strings.TrimSpace(record.GetHost())
 	node.Type = record.GetRole()
 	if node.Type == "" {
@@ -500,7 +502,7 @@ func applyRecord(node *model.ForwardNode, record *forwardv1.ForwardNodeRecord) e
 		node.Type, node.APIPort, node.APIToken = model.ForwardNodeTypeRelay, 0, ""
 		return nil
 	}
-	if node.APIToken == "" || node.APIToken == service.NodeSecretPlaceholder {
+	if create {
 		token, err := service.NewForwardNodeService(nil).GenerateAPIToken()
 		if err != nil {
 			return err
@@ -607,7 +609,7 @@ func (s *Service) CreateForwardNode(ctx context.Context, requestID string, nodeR
 			return found, err
 		}
 		created = model.ForwardNode{Enabled: true, Status: model.ForwardNodeStatusOffline, CreatedAt: now, UpdatedAt: now}
-		if err := applyRecord(&created, nodeRecord); err != nil {
+		if err := applyRecord(&created, nodeRecord, true); err != nil {
 			return false, err
 		}
 		if err := service.NewForwardNodeService(tx).Create(&created); err != nil {
@@ -700,7 +702,7 @@ func (s *Service) UpdateForwardNode(ctx context.Context, requestID string, nodeR
 				effective.Transport = forwardv1.NodeTransport_NODE_TRANSPORT_ANSIBLE
 			}
 		}
-		if err := applyRecord(&node, effective); err != nil {
+		if err := applyRecord(&node, effective, false); err != nil {
 			return false, err
 		}
 		if node.Enabled != nodeRecord.GetEnabled() {
