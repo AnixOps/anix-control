@@ -50,10 +50,11 @@ const (
 
 // DataPlaneCapabilities are the capabilities of the data plane, the ones
 // Control lists in HelloAck.server_capabilities when it serves them and the
-// Agent's Hello lists them.
+// Agent's Hello lists them. upgrade.v1 (CapabilityUpgrade, upgrade.go)
+// adds no payload but is offered by the same rule.
 var DataPlaneCapabilities = []string{
 	CapabilityConfig, CapabilityUsers, CapabilityReports, CapabilityPackageReports, CapabilityForward, CapabilityMaintenance,
-	CapabilityAlive, CapabilityArtifacts,
+	CapabilityAlive, CapabilityArtifacts, CapabilityUpgrade,
 }
 
 // Negotiated reports whether a data-plane capability is in use on a session:

@@ -151,6 +151,12 @@ var (
 		"v4_kernel_forward_node_state": true, "v4_kernel_forward_node_report": true,
 		"v4_kernel_forward_counter": true, "v4_kernel_forward_traffic": true,
 		"v4_kernel_forward_request": true, "v4_kernel_forward_plan": true,
+		// Agent upgrade campaigns (forward-sdk.md section 9, O4): the
+		// release every node is told to install, its verified artifacts
+		// and each node's progress. A package that could write them could
+		// push a release to every Agent or hide a failed batch. Protected
+		// by the prefix; named so the rule survives a prefix change.
+		"v4_kernel_agent_upgrade_campaign": true, "v4_kernel_agent_upgrade_node": true,
 	}
 )
 

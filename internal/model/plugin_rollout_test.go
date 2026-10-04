@@ -24,6 +24,8 @@ func TestPackageRolloutModelsUseKernelOwnedTables(t *testing.T) {
 		KernelForwardTraffic{}:    "v4_kernel_forward_traffic",
 		KernelForwardRequest{}:    "v4_kernel_forward_request",
 		KernelForwardPlan{}:       "v4_kernel_forward_plan",
+		AgentUpgradeCampaign{}:    "v4_kernel_agent_upgrade_campaign",
+		AgentUpgradeNode{}:        "v4_kernel_agent_upgrade_node",
 	}
 
 	registered := make(map[reflect.Type]bool)
