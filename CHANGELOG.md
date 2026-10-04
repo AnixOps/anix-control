@@ -2,6 +2,37 @@
 
 ## Unreleased
 
+## 4.1.0 - 2026-10-04
+
+### Highlights since 4.0.0
+
+This is the first stable 4.1 release. It rolls up 4.1.0-rc.1 to rc.6 (CHANGELOG.md
+has a section for each with every change) plus the additions listed after
+this summary. Read docs/UPGRADE.md before upgrading.
+
+- **Modular Control.** Core domains run as signed, separately versioned
+  packages behind contracts. 174 of 296 v2 routes have native package
+  implementations with byte-level parity tests; 151 rehearsed routes in 15
+  packages default to `native` (kill switch `package_routes.default_mode:
+  legacy`; per-package rollback `anix-control routes rollback`).
+- **Route-mode tooling.** Admin API, CLI and page to switch routes between
+  `legacy`, `shadow` and `native`, with audit, revisions, sanitized shadow
+  mismatch samples and a local staging rehearsal kit.
+- **Identity module.** Login, registration and MFA in their own module;
+  Ed25519 tokens, JWKS and token-version revocation.
+- **Node operations and Agent control.** KernelNodeOps typed node
+  operations, split node secrets, built-in Agent PKI (enrollment, renewal,
+  mTLS stream), config/users/reports over the stream; `agent_control.mtls`
+  defaults to `preferred`, with a transport inventory and deprecation
+  signals ahead of v4.2.
+- **New admin and user UI** on AnixOps Design v1.0.2: component library,
+  accessible light/dark themes, mobile layouts, visual regression and
+  bundle budgets.
+- **Community edition** by default; commercial packages build separately.
+- **Security fixes** across payments, withdrawals, forwarding, agent routes,
+  audit redaction and forwarded-header trust (see the rc sections).
+
+
 ### Added
 
 - `anix-control agents transports --check-required [--json]`, the v4.2
