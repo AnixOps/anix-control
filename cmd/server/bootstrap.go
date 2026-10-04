@@ -7,10 +7,12 @@ import (
 	"fmt"
 	"log"
 	"strings"
+	"time"
 
 	"github.com/AnixOps/anix-control/v4/internal/agentpki"
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
+	"github.com/AnixOps/anix-control/v4/internal/forwardlegacy"
 	"github.com/AnixOps/anix-control/v4/internal/lease"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/modulepki"
@@ -123,6 +125,11 @@ func bootstrapDatabase(ctx context.Context, cfg *config.Config, env string) erro
 	}
 	defer release()
 
+	// The v4.2 forwarding upgrade's tables come first: once it dropped the
+	// flux tables, the schema steps below must not create them again.
+	if err := forwardlegacy.EnsureSchema(db); err != nil {
+		return fmt.Errorf("ensure forward legacy upgrade schema: %w", err)
+	}
 	if err := migrateSchema(db, env); err != nil {
 		return err
 	}
@@ -170,9 +177,9 @@ func bootstrapDatabase(ctx context.Context, cfg *config.Config, env string) erro
 	}{
 		{"observability schema", service.EnsureObservabilitySchema},
 		{"stats schema", service.EnsureStatsSchema},
-		{"forward bridge schema", service.EnsureForwardBridgeSchema},
-		{"forward runtime job schema", service.EnsureForwardRuntimeJobSchema},
-		{"forward port binding schema", service.EnsureForwardPortBindingSchema},
+		{"forward bridge schema", forwardlegacy.UnlessDropped(service.EnsureForwardBridgeSchema)},
+		{"forward runtime job schema", forwardlegacy.UnlessDropped(service.EnsureForwardRuntimeJobSchema)},
+		{"forward port binding schema", forwardlegacy.UnlessDropped(service.EnsureForwardPortBindingSchema)},
 		{"forward node metrics_port column", service.EnsureForwardNodeMetricsPortColumn},
 		{"agent diagnostic task schema", service.EnsureAgentDiagnosticTaskSchema},
 	} {
@@ -180,7 +187,22 @@ func bootstrapDatabase(ctx context.Context, cfg *config.Config, env string) erro
 			return fmt.Errorf("ensure %s: %w", step.name, err)
 		}
 	}
+	startupForwardLegacyArchive(ctx, db, cfg)
 	return nil
+}
+
+// startupForwardLegacyArchive archives the flux forwarding data at the
+// first v4.2 start (forward-sdk.md section 10, F5c), under the bootstrap
+// lock so two processes never both write one. A failure is logged loudly
+// but does not stop Control: the drop refuses without an archive anyway.
+func startupForwardLegacyArchive(ctx context.Context, db *gorm.DB, cfg *config.Config) {
+	written, err := forwardlegacy.StartupArchive(ctx, db, forwardLegacyArchiveDir(cfg), version, time.Now())
+	switch {
+	case err != nil:
+		log.Printf("WARNING: the v4.1 forwarding data was not archived: %v. Run `anix-control forward legacy archive -o <file>`; the old tables stay until `forward legacy drop`.", err)
+	case written != nil:
+		log.Printf("Archived the v4.1 forwarding data to %s (mode 0600, SHA-256 %s). The old tables stay until `anix-control forward legacy drop` (docs/UPGRADE.md).", written.Record.Path, written.Record.SHA256)
+	}
 }
 
 // migrateSchema creates the application tables. Development and test run a
@@ -188,7 +210,8 @@ func bootstrapDatabase(ctx context.Context, cfg *config.Config, env string) erro
 // database (a fresh install) gets the full schema, and an existing one only
 // gets tables it does not have yet.
 func migrateSchema(db *gorm.DB, env string) error {
-	models := schemaModels()
+	// Once the v4.2 upgrade dropped the flux tables they stay dropped.
+	models := forwardlegacy.KeepModels(db, schemaModels())
 	if env == "development" || env == "test" {
 		if err := db.AutoMigrate(models...); err != nil {
 			return fmt.Errorf("migrate database: %w", err)

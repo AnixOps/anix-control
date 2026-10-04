@@ -347,6 +347,19 @@ latency probe, not their history, so the trend is traffic.
 The observability views read at most 2000 routes (`truncated`). A traffic
 answer holds at most 20000 buckets.
 
+### The v4.1 forwarding archive
+
+| Method and path | Does | Answer |
+|---|---|---|
+| `GET /legacy/archive` | the newest archive of the v4.1 flux forwarding data (F5c, forward-sdk.md section 10) | the JSON file as an attachment, header `X-Archive-SHA256`; `404 legacy_archive_not_found` before one was written, `409 legacy_archive_unreadable` when the recorded file is gone or changed |
+
+The kernel answers it, not the package (the archive is a file on Control's
+host); only a super administrator may download it, and every attempt is in
+the audit log (module `forward`, action `legacy_archive_download`). The
+rest of the upgrade (check, abandon and the irreversible drop) is command
+line only: `anix-control forward legacy`, in
+[`../UPGRADE.md`](../UPGRADE.md).
+
 ## The 19 Rewritten v2 Routes
 
 forward-sdk.md section 10 lists the 19 v2 node management routes. They map

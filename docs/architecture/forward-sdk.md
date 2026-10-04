@@ -1941,6 +1941,73 @@ one is **IRREVERSIBLE** and is gate **H15**, confirmed on its own.
    needs a database backup; UPGRADE.md says so prominently and says that
    forwarding must be reconfigured.
 
+**As built (F5c).** `internal/forwardlegacy`, the command line
+`anix-control forward legacy archive|check|status|abandon|drop` and the
+download `GET /api/v4/forward/legacy/archive`; the operator's steps are in
+[`../UPGRADE.md`](../UPGRADE.md) ("Forwarding: Archive, Clean The Nodes,
+Drop The Old Tables").
+
+- **The F5 audit.** The drop removes twelve tables, dependents first:
+  `v2_forward_port_binding`, `v2_forward_traffic_cursor`,
+  `v2_forward_agent_bridge_task`, `v2_forward_runtime_job`,
+  `v2_forward_user_tunnel`, `v2_speed_limit`, `v2_forward`,
+  `v2_forward_tunnel`, `v2_forward_rule`, and the pre-flux
+  `v2_forward_route`, `v2_forward_log` and `v2_forward_stats`, which
+  nothing reads any more. It keeps `v2_forward_node` (inventory and Agent
+  identity) and `v2_forward_clean_agent`: the latter is a table of the
+  node credential split (`internal/nodesecrets`) and the source of
+  `kapi_forward_clean_agent_v1`, so it goes with the clean agent's code,
+  not with the flux data. Both kept tables are archived too, without their
+  tokens. `v2_forward_latency_bucket` is not flux data: its probes also
+  cover proxy nodes.
+- **Archive.** One JSON file, schema
+  `anixops.forward.legacy-archive.v1`, mode 0600 in a 0700 directory: by
+  default `forward-legacy/` under the data directory (the SQLite
+  database's directory, else `config/data`), written at the first v4.2
+  start (under the bootstrap lock) and by `forward legacy archive [-o]`.
+  An archive never overwrites a file (timestamped names, exclusive
+  create). Secret columns (`api_token`, `token`, any `*token*`, `*secret*`,
+  `*password*`) are left out and listed per table; JSON documents (runtime
+  job payloads written before NO-7) lose their secret keys; and every
+  known node token, clean agent token and node credential value is
+  replaced in free text. Each archive is recorded with its SHA-256 and row
+  counts (`v4_forward_legacy_archive`).
+- **Node check.** `forward legacy check` records each forward node's result
+  in `v4_forward_legacy_node`: clean, dirty or unreachable, from three
+  paths. *Agent*: verify-only, as decided; an enrolled Agent (mTLS, or a
+  valid agent certificate) was installed by `install.sh`, which removes the
+  old runtime before it enrolls. The Agent reports nothing about it, so no
+  `forward.legacy_cleanup` operation was added (it would need an Agent
+  release); an Agent installed another way is cleaned by running the
+  node's install command again, which keeps its identity. A node still on
+  the clean agent or another legacy channel is unreachable. *NodeX*:
+  Control sends NodeX a delete for each flux forward on gost entering at
+  the node and each legacy rule it relays or exits; NodeX has no listing
+  call, so the idempotent delete, run again, is the re-check. *Ansible*:
+  the playbook `forward_legacy_cleanup.yml` on Ansible machines and the
+  execution nodes of Ansible-backend forwards deletes the three tables, the
+  `V2B_FWD_*` chains with their jumps, the forwards' `MASQUERADE` rules and
+  the clean agent's unit and files, then lists them again and fails when
+  one is left. `forward legacy abandon <node> --reason` accepts an
+  unreachable node for good (a dirty one must be cleaned).
+- **Drop.** Command line only, never automatic, and no UI button: it is
+  irreversible and must run with Control stopped. It refuses, listing
+  every reason, unless the phrase `DROP v4.1 FORWARDING TABLES` is exact;
+  the latest archive is readable, matches its SHA-256 and has the current
+  row counts; every forward node is clean or abandoned; no Control holds
+  the singleton-worker lease; and a database backup of the last 24 hours
+  exists (a successful database or full backup of Control's backup
+  service, SQLite only, or `--backup-taken <path>`). Then it drops the
+  present tables in one transaction (PostgreSQL with a `lock_timeout`,
+  plain `DROP TABLE` so a dependent object aborts it) and records the drop
+  in `v4_forward_legacy_drop`. A table already gone (F5d or a later release
+  removed it first) is reported, not an error.
+- **After the drop.** The record keeps the schema migration and the flux
+  schema steps from creating the tables again, by table name, and the
+  flux workers (runtime job executor, bridge, flow reset, gost and Ansible
+  stats) no longer start. The latency prober and a forward node's legacy
+  desired configuration treat the missing tables as empty.
+
 The flux v2 routes, `forwardcompat`, the route catalog entries and the
 flux guardrails in AGENTS.md go in the same release (F5, H17).
 
@@ -2264,7 +2331,7 @@ Agent-repository PRs are marked (agent).
 | | L2 | entry HA via DDNS and CNAME (implemented) | L | H21 |
 | F5 | F5a | Control forward package: `ForwardControl`, `/api/v4/forward/*`, `anix-control forward` (implemented) | L | H23 |
 | | F5b | new forwarding UI: `/admin/forward/{overview,routes,inventory}` in the core app, shown with the forward package's v4 API; `can_delete` on the list answers, previews left out of the audit log (implemented; [`docs/design/forward-ui`](../design/forward-ui/README.md), [`docs/guide/forwarding.md`](../guide/forwarding.md)) | L | H16 |
-| | F5c | upgrade: archive, check the nodes are clean (Control cleans NodeX and Ansible hosts), drop tables | M | H15 |
+| | F5c | upgrade: archive, check the nodes are clean (Control cleans NodeX and Ansible hosts), drop tables (implemented) | M | H15 |
 | | F5d | remove flux routes, `forwardcompat`, catalog entries; rewrite AGENTS.md rules; archive the flux docs | M | H17 |
 | F6 | A0 | AnixOps relay transport design (`anixops-protocol.md`; secure transport only, approved 2026-10-04; camouflage reserved for the owner) | M | H22 |
 | | A1–A5 | v4.2 experimental prototype, off by default (`forward.anixops_experimental` on Control and Agent): relay library, QUIC, driver and `anixops-relay` unit (agent), contract additions, benchmarks (`anixops-protocol.md` section 9) | L | H22 |
@@ -2384,7 +2451,8 @@ Smaller questions raised by this design:
   remainder (section 5.3): decided by default with F3a, the owner may
   revisit; the local remainder's rendering is deferred.
 - Forward nodes (`v2_forward_node`) kept through the v4.2 upgrade as node
-  inventory (section 10; H15)? Still open; F3a's inventory uses them.
+  inventory (section 10; H15)? Kept, as section 10 records: F5c never
+  drops it, and F3a's inventory uses it.
 
 ## 17. Not in scope
 

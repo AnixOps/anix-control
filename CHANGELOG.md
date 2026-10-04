@@ -4,6 +4,41 @@
 
 ### Added
 
+- **The v4.2 forwarding upgrade: archive, node cleanup check and an
+  explicit drop of the v4.1 flux tables** (F5c, forward-sdk.md section 10,
+  gate H15). **IRREVERSIBLE: `anix-control forward legacy drop` deletes
+  the v4.1 forwarding data (twelve tables); after it, rolling back to 4.1
+  needs the database backup taken before it.** The old data is not
+  migrated; forwarding is reconfigured as v4 routes.
+  - **Archive.** The first v4.2 start writes the flux forwarding data to
+    one JSON file (`anixops.forward.legacy-archive.v1`, mode 0600) under
+    the data directory's `forward-legacy/`; `anix-control forward legacy
+    archive [-o <file|dir>]` writes another. Node tokens and other secrets
+    are left out, in columns, in stored JSON and in free text. An archive
+    never overwrites a file. Super administrators download the newest one
+    from `GET /api/v4/forward/legacy/archive` (audited).
+  - **Node check.** `forward legacy check` records each forward node as
+    clean, dirty or unreachable (new table `v4_forward_legacy_node`):
+    enrolled Agents are verified (their installer removed the old runtime),
+    NodeX hosts are cleaned through NodeX's delete calls, Ansible hosts by
+    the new playbook `forward_legacy_cleanup.yml`. `forward legacy status`
+    shows the nodes and what the drop still needs; `forward legacy abandon
+    <node> --reason` accepts an unreachable node.
+  - **Drop.** Command line only (no UI button), never automatic, with
+    Control stopped: `forward legacy drop --confirm "DROP v4.1 FORWARDING
+    TABLES" [--backup-taken <path>]` refuses unless the newest archive is
+    readable, unchanged and current, every forward node is clean or
+    abandoned, no Control holds the singleton lease and a database backup of
+    the last 24 hours exists. It drops `v2_forward`, `v2_forward_tunnel`,
+    `v2_forward_user_tunnel`, `v2_speed_limit`, `v2_forward_rule`,
+    `v2_forward_runtime_job`, `v2_forward_port_binding`,
+    `v2_forward_traffic_cursor`, `v2_forward_agent_bridge_task`,
+    `v2_forward_route`, `v2_forward_log` and `v2_forward_stats` in one
+    transaction and records it (`v4_forward_legacy_drop`); `v2_forward_node`
+    and `v2_forward_clean_agent` are kept. Afterwards Control no longer
+    creates those tables or starts the flux workers. Steps:
+    `docs/UPGRADE.md`, "Forwarding: Archive, Clean The Nodes, Drop The Old
+    Tables".
 - **Fresh Control installs are ready for enrolled Agents** (owner decision
   2026-10-04). Every shipped install path generates the built-in CA's
   key-encryption key (`module_runtime.ca_kek`, 32 random bytes) on a fresh

@@ -10,6 +10,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/agentstreams"
 	"github.com/AnixOps/anix-control/v4/internal/agentupgrade"
 	"github.com/AnixOps/anix-control/v4/internal/database"
+	"github.com/AnixOps/anix-control/v4/internal/forwardlegacy"
 	grpcserver "github.com/AnixOps/anix-control/v4/internal/grpc"
 	"github.com/AnixOps/anix-control/v4/internal/kernelforward"
 	"github.com/AnixOps/anix-control/v4/internal/kernelnodeops"
@@ -50,24 +51,33 @@ func runSingletonWorkers(ctx context.Context, bridgeEnabled bool) {
 		}()
 	}
 
-	// Runtime job payloads written before NO-7 carry node tokens: they are
-	// scrubbed before the executors serve a row (docs/UPGRADE.md).
-	service.RunForwardRuntimeJobPayloadScrub(ctx, database.Get())
-	run(func(ctx context.Context) {
-		service.NewPanelForwardRuntimeJobExecutor(database.Get()).Start(ctx)
-	})
-	if bridgeEnabled {
+	// Once the v4.2 upgrade dropped the flux tables (forward-sdk.md section
+	// 10), the flux runtime's workers have nothing left to run on.
+	fluxDropped := forwardlegacy.Dropped(database.Get())
+	if fluxDropped {
+		log.Println("The v4.1 forwarding tables were dropped: the flux forward workers do not run")
+	} else {
+		// Runtime job payloads written before NO-7 carry node tokens: they
+		// are scrubbed before the executors serve a row (docs/UPGRADE.md).
+		service.RunForwardRuntimeJobPayloadScrub(ctx, database.Get())
+		run(func(ctx context.Context) {
+			service.NewPanelForwardRuntimeJobExecutor(database.Get()).Start(ctx)
+		})
+	}
+	if bridgeEnabled && !fluxDropped {
 		run(func(ctx context.Context) {
 			service.NewForwardAgentBridgeWorker(database.Get()).Start(ctx)
 		})
 	}
-	run(func(ctx context.Context) {
-		worker := service.NewForwardFlowResetWorker(database.Get())
-		if err := worker.RunOnce(time.Now()); err != nil {
-			log.Printf("Initial forward flow reset run failed: %v", err)
-		}
-		worker.Start(ctx)
-	})
+	if !fluxDropped {
+		run(func(ctx context.Context) {
+			worker := service.NewForwardFlowResetWorker(database.Get())
+			if err := worker.RunOnce(time.Now()); err != nil {
+				log.Printf("Initial forward flow reset run failed: %v", err)
+			}
+			worker.Start(ctx)
+		})
+	}
 	run(func(ctx context.Context) {
 		worker := service.NewNodeMonthlyResetWorker(database.Get())
 		if err := worker.RunOnce(time.Now()); err != nil {
@@ -75,12 +85,14 @@ func runSingletonWorkers(ctx context.Context, bridgeEnabled bool) {
 		}
 		worker.Start(ctx)
 	})
-	run(func(ctx context.Context) {
-		service.NewForwardGostStatsWorker(database.Get()).Start(ctx)
-	})
-	run(func(ctx context.Context) {
-		service.NewForwardAnsibleStatsWorker(database.Get()).Start(ctx)
-	})
+	if !fluxDropped {
+		run(func(ctx context.Context) {
+			service.NewForwardGostStatsWorker(database.Get()).Start(ctx)
+		})
+		run(func(ctx context.Context) {
+			service.NewForwardAnsibleStatsWorker(database.Get()).Start(ctx)
+		})
+	}
 	run(func(ctx context.Context) {
 		service.NewForwardLatencyProber(database.Get()).Start(ctx)
 	})

@@ -1,0 +1,23 @@
+# Remove the legacy forward runtime of a host on the Ansible fallback and
+# verify it is gone (v4.2 upgrade, F5c; docs/architecture/forward-sdk.md
+# section 10). Control runs it once per host with --limit when an
+# administrator runs `anix-control forward legacy check`.
+#
+# It removes only named objects: the nftables tables inet v2b_forward,
+# ip v2b_forward and ip anixops_forward; the iptables nat chains
+# V2B_FWD_<id>_<TCP|UDP> and the PREROUTING rules that jump to them; the
+# MASQUERADE rules Control lists in legacy_masquerade (the flux forwards'
+# targets, which carry no marker of their own); and the clean agent's
+# v2forward-agent unit and files. It then lists the tables and chains again
+# and fails when one is still there.
+- name: Remove the legacy forward runtime (v4.2 upgrade)
+  hosts: all
+  gather_facts: false
+  become: true
+  vars:
+    legacy_masquerade: []
+  tasks:
+    - name: Remove and verify the legacy tables, chains and clean agent
+      ansible.builtin.script:
+        cmd: "files/forward_legacy_cleanup.sh {{ legacy_masquerade | map('quote') | join(' ') }}"
+        executable: /bin/bash

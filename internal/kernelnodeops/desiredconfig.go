@@ -187,13 +187,19 @@ func buildForwardDesiredConfig(db *gorm.DB, id uint) (map[string]any, error) {
 		return nil, ErrNodeGone
 	}
 	node := nodes[0]
+	// Once the v4.2 upgrade dropped the flux tables (forwardlegacy), a
+	// forward node has no legacy rules or tunnels left.
 	var rules []model.ForwardRule
-	if err := db.Where("relay_node_id = ? OR exit_node_id = ?", id, id).Order("id ASC").Find(&rules).Error; err != nil {
-		return nil, err
+	if db.Migrator().HasTable(&model.ForwardRule{}) {
+		if err := db.Where("relay_node_id = ? OR exit_node_id = ?", id, id).Order("id ASC").Find(&rules).Error; err != nil {
+			return nil, err
+		}
 	}
 	var tunnels []model.ForwardTunnel
-	if err := db.Where("in_node_id = ? OR out_node_id = ?", id, id).Order("id ASC").Find(&tunnels).Error; err != nil {
-		return nil, err
+	if db.Migrator().HasTable(&model.ForwardTunnel{}) {
+		if err := db.Where("in_node_id = ? OR out_node_id = ?", id, id).Order("id ASC").Find(&tunnels).Error; err != nil {
+			return nil, err
+		}
 	}
 	renderedRules := make([]map[string]any, 0, len(rules))
 	for _, rule := range rules {

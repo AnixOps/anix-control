@@ -413,6 +413,8 @@ func run() int {
 			cfg.Database.Host, cfg.Database.Port, cfg.Database.Database, cfg.Database.Username)
 	}
 
+	forwardLegacyDataDir = resolveDataDir(cfg, resolvedConfigPath)
+
 	frontendPath := cfg.Frontend.Path
 	if frontendPath == "" {
 		frontendPath = "web/public"
