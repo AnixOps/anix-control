@@ -27,6 +27,13 @@ func TestAgentOperationOnTheStream(t *testing.T) {
 			accepted.GetOperation().GetState(), "ACCEPTED answers once the agent acknowledged")
 		assert.Equal(t, kernelnodeopsv1.Channel_CHANNEL_AGENT_CONTROL, accepted.GetOperation().GetChannel())
 		assert.Equal(t, uint64(1), accepted.GetOperation().GetNodeRevision())
+		// The result so far is recorded with the acceptance: the
+		// acknowledgement the legacy route answers at once.
+		soFar := accepted.GetOperation().GetResult().GetAgentOperation()
+		require.NotNil(t, soFar, "an ACCEPTED wait answers the acknowledgement")
+		assert.Equal(t, "manual-ping-1", soFar.GetAgentOperationId())
+		assert.True(t, soFar.GetAck().GetAccepted())
+		assert.NotZero(t, soFar.GetDeadlineUnixMs())
 
 		ended := awaitState(t, client, accepted.GetOperation().GetOperationId(), kernelnodeopsv1.OperationState_OPERATION_STATE_SUCCEEDED)
 		result := ended.GetResult().GetAgentOperation()

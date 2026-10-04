@@ -153,6 +153,11 @@ type Acceptance struct {
 	NodeRevision        uint64
 	KernelOperationID   string
 	ForwardRuntimeJobID uint64
+	// Result is the result so far, recorded with the acceptance (scrubbed
+	// like a final result, without handles): what an ACCEPTED wait
+	// answers, such as the agent's acknowledgement, which the legacy
+	// routes answer at once. The operation's outcome replaces it.
+	Result *kernelnodeopsv1.OperationResult
 }
 
 // Accept records that the channel took the operation: it moves to RUNNING

@@ -125,6 +125,15 @@ type Streams interface {
 	OnObserved(handler ObservedHandler)
 }
 
+// StatusConnections is implemented by streams that can show a node's
+// session as the administrator's Agent Control status
+// (GET /api/v2/admin/nodes/:id/agent-control) shows it: the stream
+// manager's own snapshot (internal/grpc.AgentControlSnapshot), which the
+// kernel renders for both the legacy route and the session RPC.
+type StatusConnections interface {
+	StatusConnection(node agentcontrol.AgentNode) (any, bool)
+}
+
 // ConfigStatusReport is one ConfigStatus an agent sent on its stream
 // (config.v1), with the kernel's verdict on it (model.ConfigVerdict*):
 // empty when the status could not be recorded.

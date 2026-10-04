@@ -2887,12 +2887,16 @@ type Operation struct {
 	// dispatched at, on revisioned channels.
 	NodeRevision uint64 `protobuf:"varint,15,opt,name=node_revision,json=nodeRevision,proto3" json:"node_revision,omitempty"`
 	// parent_operation_id is set on the operations a fan-out created.
-	ParentOperationId string           `protobuf:"bytes,16,opt,name=parent_operation_id,json=parentOperationId,proto3" json:"parent_operation_id,omitempty"`
-	FanOut            *FanOut          `protobuf:"bytes,17,opt,name=fan_out,json=fanOut,proto3" json:"fan_out,omitempty"`
-	Result            *OperationResult `protobuf:"bytes,18,opt,name=result,proto3" json:"result,omitempty"`
-	Error             *OperationError  `protobuf:"bytes,19,opt,name=error,proto3" json:"error,omitempty"`
-	unknownFields     protoimpl.UnknownFields
-	sizeCache         protoimpl.SizeCache
+	ParentOperationId string  `protobuf:"bytes,16,opt,name=parent_operation_id,json=parentOperationId,proto3" json:"parent_operation_id,omitempty"`
+	FanOut            *FanOut `protobuf:"bytes,17,opt,name=fan_out,json=fanOut,proto3" json:"fan_out,omitempty"`
+	// result is the operation's outcome. A running operation may carry the
+	// result so far, recorded when the channel accepted it (for example the
+	// agent's acknowledgement, which an ACCEPTED wait answers); the outcome
+	// replaces it.
+	Result        *OperationResult `protobuf:"bytes,18,opt,name=result,proto3" json:"result,omitempty"`
+	Error         *OperationError  `protobuf:"bytes,19,opt,name=error,proto3" json:"error,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *Operation) Reset() {
@@ -3684,8 +3688,12 @@ type NodeSyncResult struct {
 	// config_revision is the desired configuration's revision
 	// (v4_kernel_node_desired_config): it grows when config_hash changes.
 	ConfigRevision uint64 `protobuf:"varint,8,opt,name=config_revision,json=configRevision,proto3" json:"config_revision,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// snapshot is true when the configuration went out as a ConfigSnapshot
+	// (the agent negotiated config.v1): ack is then its ConfigStatus, and
+	// agent_operation_id is empty. Otherwise a pushed sync is a node.reload.
+	Snapshot      bool `protobuf:"varint,9,opt,name=snapshot,proto3" json:"snapshot,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *NodeSyncResult) Reset() {
@@ -3772,6 +3780,13 @@ func (x *NodeSyncResult) GetConfigRevision() uint64 {
 		return x.ConfigRevision
 	}
 	return 0
+}
+
+func (x *NodeSyncResult) GetSnapshot() bool {
+	if x != nil {
+		return x.Snapshot
+	}
+	return false
 }
 
 type RetireResult struct {
@@ -4457,8 +4472,12 @@ type AgentDiagnosticResult struct {
 	// legacy_fallback is true when the task went out in the legacy task
 	// message after the acknowledged dispatch failed.
 	LegacyFallback bool `protobuf:"varint,6,opt,name=legacy_fallback,json=legacyFallback,proto3" json:"legacy_fallback,omitempty"`
-	unknownFields  protoimpl.UnknownFields
-	sizeCache      protoimpl.SizeCache
+	// ack_json is the transport's own acknowledgement as the administrator's
+	// task routes show it (the WebSocket's ack message, or the stream's
+	// OperationAck), scrubbed like a result; empty without one.
+	AckJson       []byte `protobuf:"bytes,7,opt,name=ack_json,json=ackJson,proto3" json:"ack_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *AgentDiagnosticResult) Reset() {
@@ -4533,13 +4552,22 @@ func (x *AgentDiagnosticResult) GetLegacyFallback() bool {
 	return false
 }
 
+func (x *AgentDiagnosticResult) GetAckJson() []byte {
+	if x != nil {
+		return x.AckJson
+	}
+	return nil
+}
+
 type AgentOperationResult struct {
 	state            protoimpl.MessageState `protogen:"open.v1"`
 	AgentOperationId string                 `protobuf:"bytes,1,opt,name=agent_operation_id,json=agentOperationId,proto3" json:"agent_operation_id,omitempty"`
 	Revision         uint64                 `protobuf:"varint,2,opt,name=revision,proto3" json:"revision,omitempty"`
 	Ack              *AgentAck              `protobuf:"bytes,3,opt,name=ack,proto3" json:"ack,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// deadline_unix_ms is the deadline the stream operation was sent with.
+	DeadlineUnixMs int64 `protobuf:"varint,4,opt,name=deadline_unix_ms,json=deadlineUnixMs,proto3" json:"deadline_unix_ms,omitempty"`
+	unknownFields  protoimpl.UnknownFields
+	sizeCache      protoimpl.SizeCache
 }
 
 func (x *AgentOperationResult) Reset() {
@@ -4591,6 +4619,13 @@ func (x *AgentOperationResult) GetAck() *AgentAck {
 		return x.Ack
 	}
 	return nil
+}
+
+func (x *AgentOperationResult) GetDeadlineUnixMs() int64 {
+	if x != nil {
+		return x.DeadlineUnixMs
+	}
+	return 0
 }
 
 type CredentialResult struct {
@@ -5396,7 +5431,11 @@ type AgentSession struct {
 	SystemJson []byte `protobuf:"bytes,11,opt,name=system_json,json=systemJson,proto3" json:"system_json,omitempty"`
 	// identity is the session's authenticated identity: the agent's SPIFFE ID
 	// ("spiffe://anixops/<cluster>/agent/<node>") or "api-key".
-	Identity      string `protobuf:"bytes,12,opt,name=identity,proto3" json:"identity,omitempty"`
+	Identity string `protobuf:"bytes,12,opt,name=identity,proto3" json:"identity,omitempty"`
+	// admin_json is a WebSocket session as the administrator's agent list
+	// (GET /api/v2/admin/agent/list) shows it, rendered by the kernel and
+	// scrubbed like a result; empty for a stream session.
+	AdminJson     []byte `protobuf:"bytes,13,opt,name=admin_json,json=adminJson,proto3" json:"admin_json,omitempty"`
 	unknownFields protoimpl.UnknownFields
 	sizeCache     protoimpl.SizeCache
 }
@@ -5513,6 +5552,13 @@ func (x *AgentSession) GetIdentity() string {
 		return x.Identity
 	}
 	return ""
+}
+
+func (x *AgentSession) GetAdminJson() []byte {
+	if x != nil {
+		return x.AdminJson
+	}
+	return nil
 }
 
 type ListAgentSessionsRequest struct {
@@ -5742,12 +5788,18 @@ func (x *ObservedOperation) GetSessionId() string {
 }
 
 type GetAgentSessionResponse struct {
-	state         protoimpl.MessageState `protogen:"open.v1"`
-	Connected     bool                   `protobuf:"varint,1,opt,name=connected,proto3" json:"connected,omitempty"`
-	Session       *AgentSession          `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
-	Observed      *ObservedOperation     `protobuf:"bytes,3,opt,name=observed,proto3" json:"observed,omitempty"`
-	unknownFields protoimpl.UnknownFields
-	sizeCache     protoimpl.SizeCache
+	state     protoimpl.MessageState `protogen:"open.v1"`
+	Connected bool                   `protobuf:"varint,1,opt,name=connected,proto3" json:"connected,omitempty"`
+	Session   *AgentSession          `protobuf:"bytes,2,opt,name=session,proto3" json:"session,omitempty"`
+	Observed  *ObservedOperation     `protobuf:"bytes,3,opt,name=observed,proto3" json:"observed,omitempty"`
+	// connection_json and observed_state_json are the session and the last
+	// observed state as the administrator's Agent Control status
+	// (GET /api/v2/admin/nodes/:id/agent-control) shows them, rendered by the
+	// kernel and scrubbed like a result; empty when there is none.
+	ConnectionJson    []byte `protobuf:"bytes,4,opt,name=connection_json,json=connectionJson,proto3" json:"connection_json,omitempty"`
+	ObservedStateJson []byte `protobuf:"bytes,5,opt,name=observed_state_json,json=observedStateJson,proto3" json:"observed_state_json,omitempty"`
+	unknownFields     protoimpl.UnknownFields
+	sizeCache         protoimpl.SizeCache
 }
 
 func (x *GetAgentSessionResponse) Reset() {
@@ -5801,6 +5853,20 @@ func (x *GetAgentSessionResponse) GetObserved() *ObservedOperation {
 	return nil
 }
 
+func (x *GetAgentSessionResponse) GetConnectionJson() []byte {
+	if x != nil {
+		return x.ConnectionJson
+	}
+	return nil
+}
+
+func (x *GetAgentSessionResponse) GetObservedStateJson() []byte {
+	if x != nil {
+		return x.ObservedStateJson
+	}
+	return nil
+}
+
 type GetAgentMonitorRequest struct {
 	state         protoimpl.MessageState `protogen:"open.v1"`
 	NodeId        uint64                 `protobuf:"varint,1,opt,name=node_id,json=nodeId,proto3" json:"node_id,omitempty"`
@@ -5850,8 +5916,12 @@ type GetAgentMonitorResponse struct {
 	Found            bool                   `protobuf:"varint,1,opt,name=found,proto3" json:"found,omitempty"`
 	SnapshotJson     []byte                 `protobuf:"bytes,2,opt,name=snapshot_json,json=snapshotJson,proto3" json:"snapshot_json,omitempty"`
 	ReceivedAtUnixMs int64                  `protobuf:"varint,3,opt,name=received_at_unix_ms,json=receivedAtUnixMs,proto3" json:"received_at_unix_ms,omitempty"`
-	unknownFields    protoimpl.UnknownFields
-	sizeCache        protoimpl.SizeCache
+	// monitor_json is the snapshot as the administrator's monitor route
+	// (GET /api/v2/admin/agent/monitor) shows it, rendered by the kernel and
+	// scrubbed like a result; empty when not found.
+	MonitorJson   []byte `protobuf:"bytes,4,opt,name=monitor_json,json=monitorJson,proto3" json:"monitor_json,omitempty"`
+	unknownFields protoimpl.UnknownFields
+	sizeCache     protoimpl.SizeCache
 }
 
 func (x *GetAgentMonitorResponse) Reset() {
@@ -5903,6 +5973,13 @@ func (x *GetAgentMonitorResponse) GetReceivedAtUnixMs() int64 {
 		return x.ReceivedAtUnixMs
 	}
 	return 0
+}
+
+func (x *GetAgentMonitorResponse) GetMonitorJson() []byte {
+	if x != nil {
+		return x.MonitorJson
+	}
+	return nil
 }
 
 type GetCapabilitiesRequest struct {
@@ -6249,7 +6326,7 @@ const file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDesc = "" +
 	"\x13accepted_at_unix_ms\x18\x03 \x01(\x03R\x10acceptedAtUnixMs\x12\x1d\n" +
 	"\n" +
 	"session_id\x18\x04 \x01(\tR\tsessionId\x12\x1a\n" +
-	"\brevision\x18\x05 \x01(\x04R\brevision\"\xe0\x02\n" +
+	"\brevision\x18\x05 \x01(\x04R\brevision\"\xfc\x02\n" +
 	"\x0eNodeSyncResult\x12;\n" +
 	"\achannel\x18\x01 \x01(\x0e2!.anixops.kernelnodeops.v1.ChannelR\achannel\x12,\n" +
 	"\x12agent_operation_id\x18\x02 \x01(\tR\x10agentOperationId\x12\x1a\n" +
@@ -6259,7 +6336,8 @@ const file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDesc = "" +
 	"configHash\x12\x18\n" +
 	"\achanged\x18\x06 \x01(\bR\achanged\x12-\n" +
 	"\x12excluded_protocols\x18\a \x01(\rR\x11excludedProtocols\x12'\n" +
-	"\x0fconfig_revision\x18\b \x01(\x04R\x0econfigRevision\"\x8b\x02\n" +
+	"\x0fconfig_revision\x18\b \x01(\x04R\x0econfigRevision\x12\x1a\n" +
+	"\bsnapshot\x18\t \x01(\bR\bsnapshot\"\x8b\x02\n" +
 	"\fRetireResult\x12/\n" +
 	"\x13credentials_revoked\x18\x01 \x01(\rR\x12credentialsRevoked\x12'\n" +
 	"\x0fsecrets_deleted\x18\x02 \x01(\rR\x0esecretsDeleted\x126\n" +
@@ -6312,7 +6390,7 @@ const file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDesc = "" +
 	"\amessage\x18\t \x01(\tR\amessage\"\x9c\x01\n" +
 	"\x0fDiagnosisResult\x12F\n" +
 	"\boutcomes\x18\x01 \x03(\v2*.anixops.kernelnodeops.v1.DiagnosisOutcomeR\boutcomes\x12A\n" +
-	"\avantage\x18\x02 \x01(\v2'.anixops.kernelnodeops.v1.VantageReportR\avantage\"\xf8\x01\n" +
+	"\avantage\x18\x02 \x01(\v2'.anixops.kernelnodeops.v1.VantageReportR\avantage\"\x93\x02\n" +
 	"\x15AgentDiagnosticResult\x12\x17\n" +
 	"\atask_id\x18\x01 \x01(\tR\x06taskId\x12\x1d\n" +
 	"\n" +
@@ -6320,11 +6398,13 @@ const file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDesc = "" +
 	"\fack_received\x18\x03 \x01(\bR\vackReceived\x124\n" +
 	"\x03ack\x18\x04 \x01(\v2\".anixops.kernelnodeops.v1.AgentAckR\x03ack\x12%\n" +
 	"\x0edispatch_error\x18\x05 \x01(\tR\rdispatchError\x12'\n" +
-	"\x0flegacy_fallback\x18\x06 \x01(\bR\x0elegacyFallback\"\x96\x01\n" +
+	"\x0flegacy_fallback\x18\x06 \x01(\bR\x0elegacyFallback\x12\x19\n" +
+	"\back_json\x18\a \x01(\fR\aackJson\"\xc0\x01\n" +
 	"\x14AgentOperationResult\x12,\n" +
 	"\x12agent_operation_id\x18\x01 \x01(\tR\x10agentOperationId\x12\x1a\n" +
 	"\brevision\x18\x02 \x01(\x04R\brevision\x124\n" +
-	"\x03ack\x18\x03 \x01(\v2\".anixops.kernelnodeops.v1.AgentAckR\x03ack\"\x8c\x02\n" +
+	"\x03ack\x18\x03 \x01(\v2\".anixops.kernelnodeops.v1.AgentAckR\x03ack\x12(\n" +
+	"\x10deadline_unix_ms\x18\x04 \x01(\x03R\x0edeadlineUnixMs\"\x8c\x02\n" +
 	"\x10CredentialResult\x12;\n" +
 	"\asubject\x18\x01 \x01(\v2!.anixops.kernelnodeops.v1.NodeRefR\asubject\x12<\n" +
 	"\x04kind\x18\x02 \x01(\x0e2(.anixops.kernelnodeops.v1.CredentialKindR\x04kind\x12#\n" +
@@ -6378,7 +6458,7 @@ const file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDesc = "" +
 	"\x1aValidateNodeConfigResponse\x12\x14\n" +
 	"\x05valid\x18\x01 \x01(\bR\x05valid\x12\x18\n" +
 	"\amessage\x18\x02 \x01(\tR\amessage\x12A\n" +
-	"\x06issues\x18\x03 \x03(\v2).anixops.kernelnodeops.v1.ValidationIssueR\x06issues\"\x87\x04\n" +
+	"\x06issues\x18\x03 \x03(\v2).anixops.kernelnodeops.v1.ValidationIssueR\x06issues\"\xa6\x04\n" +
 	"\fAgentSession\x125\n" +
 	"\x04node\x18\x01 \x01(\v2!.anixops.kernelnodeops.v1.NodeRefR\x04node\x12F\n" +
 	"\ttransport\x18\x02 \x01(\x0e2(.anixops.kernelnodeops.v1.AgentTransportR\ttransport\x12\x1d\n" +
@@ -6395,7 +6475,9 @@ const file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDesc = "" +
 	" \x01(\x04R\x10observedRevision\x12\x1f\n" +
 	"\vsystem_json\x18\v \x01(\fR\n" +
 	"systemJson\x12\x1a\n" +
-	"\bidentity\x18\f \x01(\tR\bidentity\"b\n" +
+	"\bidentity\x18\f \x01(\tR\bidentity\x12\x1d\n" +
+	"\n" +
+	"admin_json\x18\r \x01(\fR\tadminJson\"b\n" +
 	"\x18ListAgentSessionsRequest\x12F\n" +
 	"\ttransport\x18\x01 \x01(\x0e2(.anixops.kernelnodeops.v1.AgentTransportR\ttransport\"_\n" +
 	"\x19ListAgentSessionsResponse\x12B\n" +
@@ -6411,17 +6493,20 @@ const file_api_kernelnodeops_v1_kernel_node_ops_proto_rawDesc = "" +
 	"state_json\x18\x05 \x01(\fR\tstateJson\x12-\n" +
 	"\x13observed_at_unix_ms\x18\x06 \x01(\x03R\x10observedAtUnixMs\x12\x1d\n" +
 	"\n" +
-	"session_id\x18\a \x01(\tR\tsessionId\"\xc2\x01\n" +
+	"session_id\x18\a \x01(\tR\tsessionId\"\x9b\x02\n" +
 	"\x17GetAgentSessionResponse\x12\x1c\n" +
 	"\tconnected\x18\x01 \x01(\bR\tconnected\x12@\n" +
 	"\asession\x18\x02 \x01(\v2&.anixops.kernelnodeops.v1.AgentSessionR\asession\x12G\n" +
-	"\bobserved\x18\x03 \x01(\v2+.anixops.kernelnodeops.v1.ObservedOperationR\bobserved\"1\n" +
+	"\bobserved\x18\x03 \x01(\v2+.anixops.kernelnodeops.v1.ObservedOperationR\bobserved\x12'\n" +
+	"\x0fconnection_json\x18\x04 \x01(\fR\x0econnectionJson\x12.\n" +
+	"\x13observed_state_json\x18\x05 \x01(\fR\x11observedStateJson\"1\n" +
 	"\x16GetAgentMonitorRequest\x12\x17\n" +
-	"\anode_id\x18\x01 \x01(\x04R\x06nodeId\"\x83\x01\n" +
+	"\anode_id\x18\x01 \x01(\x04R\x06nodeId\"\xa6\x01\n" +
 	"\x17GetAgentMonitorResponse\x12\x14\n" +
 	"\x05found\x18\x01 \x01(\bR\x05found\x12#\n" +
 	"\rsnapshot_json\x18\x02 \x01(\fR\fsnapshotJson\x12-\n" +
-	"\x13received_at_unix_ms\x18\x03 \x01(\x03R\x10receivedAtUnixMs\"\x18\n" +
+	"\x13received_at_unix_ms\x18\x03 \x01(\x03R\x10receivedAtUnixMs\x12!\n" +
+	"\fmonitor_json\x18\x04 \x01(\fR\vmonitorJson\"\x18\n" +
 	"\x16GetCapabilitiesRequest\"i\n" +
 	"\x0fTableSplitState\x12\x14\n" +
 	"\x05table\x18\x01 \x01(\tR\x05table\x12@\n" +

@@ -594,6 +594,12 @@ func (e *Engine) accept(ctx context.Context, run *Run, acceptance Acceptance) er
 		if acceptance.ForwardRuntimeJobID != 0 {
 			updates["forward_runtime_job_id"] = acceptance.ForwardRuntimeJobID
 		}
+		if acceptance.Result != nil {
+			stored, _ := withoutHandles(scrubResult(acceptance.Result, run.usedSecrets()))
+			if encoded, err := storeJSON.Marshal(stored); err == nil && len(encoded) <= maxResultBytes {
+				updates["result"] = string(encoded)
+			}
+		}
 		result := tx.Model(&model.KernelNodeOperation{}).Where("operation_id = ? AND state IN ?", op.OperationID, startedStates).Updates(updates)
 		if result.Error != nil {
 			return result.Error

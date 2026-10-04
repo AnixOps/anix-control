@@ -562,6 +562,10 @@ message Operation {
   // parent_operation_id is set on the operations a fan-out created.
   string parent_operation_id = 16;
   FanOut fan_out = 17;
+  // result is the operation's outcome. A running operation may carry the
+  // result so far, recorded when the channel accepted it (for example the
+  // agent's acknowledgement, which an ACCEPTED wait answers); the outcome
+  // replaces it.
   OperationResult result = 18;
   OperationError error = 19;
 }
@@ -646,6 +650,10 @@ message NodeSyncResult {
   // config_revision is the desired configuration's revision
   // (v4_kernel_node_desired_config): it grows when config_hash changes.
   uint64 config_revision = 8;
+  // snapshot is true when the configuration went out as a ConfigSnapshot
+  // (the agent negotiated config.v1): ack is then its ConfigStatus, and
+  // agent_operation_id is empty. Otherwise a pushed sync is a node.reload.
+  bool snapshot = 9;
 }
 
 message RetireResult {
@@ -753,12 +761,18 @@ message AgentDiagnosticResult {
   // legacy_fallback is true when the task went out in the legacy task
   // message after the acknowledged dispatch failed.
   bool legacy_fallback = 6;
+  // ack_json is the transport's own acknowledgement as the administrator's
+  // task routes show it (the WebSocket's ack message, or the stream's
+  // OperationAck), scrubbed like a result; empty without one.
+  bytes ack_json = 7;
 }
 
 message AgentOperationResult {
   string agent_operation_id = 1;
   uint64 revision = 2;
   AgentAck ack = 3;
+  // deadline_unix_ms is the deadline the stream operation was sent with.
+  int64 deadline_unix_ms = 4;
 }
 
 message CredentialResult {
@@ -885,6 +899,10 @@ message AgentSession {
   // identity is the session's authenticated identity: the agent's SPIFFE ID
   // ("spiffe://anixops/<cluster>/agent/<node>") or "api-key".
   string identity = 12;
+  // admin_json is a WebSocket session as the administrator's agent list
+  // (GET /api/v2/admin/agent/list) shows it, rendered by the kernel and
+  // scrubbed like a result; empty for a stream session.
+  bytes admin_json = 13;
 }
 
 message ListAgentSessionsRequest {
@@ -915,6 +933,12 @@ message GetAgentSessionResponse {
   bool connected = 1;
   AgentSession session = 2;
   ObservedOperation observed = 3;
+  // connection_json and observed_state_json are the session and the last
+  // observed state as the administrator's Agent Control status
+  // (GET /api/v2/admin/nodes/:id/agent-control) shows them, rendered by the
+  // kernel and scrubbed like a result; empty when there is none.
+  bytes connection_json = 4;
+  bytes observed_state_json = 5;
 }
 
 message GetAgentMonitorRequest {
@@ -925,6 +949,10 @@ message GetAgentMonitorResponse {
   bool found = 1;
   bytes snapshot_json = 2;
   int64 received_at_unix_ms = 3;
+  // monitor_json is the snapshot as the administrator's monitor route
+  // (GET /api/v2/admin/agent/monitor) shows it, rendered by the kernel and
+  // scrubbed like a result; empty when not found.
+  bytes monitor_json = 4;
 }
 
 message GetCapabilitiesRequest {}

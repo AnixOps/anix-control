@@ -258,6 +258,11 @@ func (x agentDiagnosticExecutor) Execute(ctx context.Context, run *Run) Outcome 
 			result.GetAgentDiagnostic().Ack.AcceptedAtUnixMs = dispatch.Ack.AcceptedAt.UnixMilli()
 		}
 	}
+	if dispatch.RawAck != nil {
+		if encoded, err := json.Marshal(dispatch.RawAck); err == nil {
+			result.GetAgentDiagnostic().AckJson = scrubBytes(encoded, nil)
+		}
+	}
 	if !dispatch.Sent() {
 		err := dispatch.DispatchError
 		if dispatch.FallbackError != nil {
@@ -265,7 +270,7 @@ func (x agentDiagnosticExecutor) Execute(ctx context.Context, run *Run) Outcome 
 		}
 		return streamFailure(err).WithResult(result).WithChannel(channel)
 	}
-	if err := run.Accept(ctx, Acceptance{Channel: channel, NodeRevision: dispatch.Ack.Revision}); err != nil {
+	if err := run.Accept(ctx, Acceptance{Channel: channel, NodeRevision: dispatch.Ack.Revision, Result: result}); err != nil {
 		return ended(err)
 	}
 	if stream == nil || stream.dispatch == nil {

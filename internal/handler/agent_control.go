@@ -116,6 +116,15 @@ func (s proxyNodeStreams) Session(node agentcontrol.AgentNode) (agentstreams.Ses
 
 func (s proxyNodeStreams) Sessions() []agentstreams.Session { return nil }
 
+// StatusConnection is the proxy node's session as the Agent Control status
+// shows it (agentstreams.StatusConnections).
+func (s proxyNodeStreams) StatusConnection(node agentcontrol.AgentNode) (any, bool) {
+	if node.Kind != agentcontrol.NodeKindProxy {
+		return nil, false
+	}
+	return s.control.Connection(node.ID)
+}
+
 func (s proxyNodeStreams) Observed(node agentcontrol.AgentNode) (*agentv1pb.ObservedState, bool) {
 	if node.Kind != agentcontrol.NodeKindProxy {
 		return nil, false
@@ -183,14 +192,16 @@ func (h *NodeHandler) GetAgentControlStatus(c *gin.Context) {
 		return
 	}
 
+	// GetAgentSession renders the same session and observed state
+	// (connection_json, observed_state_json), scrubbed.
 	data := gin.H{"connected": false, "node_id": nodeID}
 	if h.agentControl != nil {
 		if connection, ok := h.agentControl.Connection(uint32(nodeID)); ok {
 			data["connected"] = true
-			data["connection"] = connection
+			data["connection"] = json.RawMessage(kernelnodeops.AgentControlConnectionJSON(connection))
 		}
 		if observed, ok := h.agentControl.ObservedState(uint32(nodeID)); ok {
-			data["observed_state"] = observed
+			data["observed_state"] = json.RawMessage(kernelnodeops.AgentObservedStateJSON(observed))
 		}
 	}
 	panelSuccess(c, data)
