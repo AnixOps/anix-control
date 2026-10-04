@@ -381,6 +381,11 @@ agent_install:
   `ANIX_CONTROL_AGENT_INSTALL_SIGNATURE_FILE`.
 - The subscription path (`app.subscribe_path`) may not be `install`,
   `install.sh` or start with `install/`.
+- `anix-control agent offline-bundle -arch amd64|arm64 -o <file>
+  [-control https://<control>]` writes an offline install bundle from
+  `artifact_dir/<tag>/` (the zip and its `.sig`, `SHA256SUMS` and
+  `SHA256SUMS.sig`, checked with `plugins.official_public_key`) for
+  `install.sh --offline`.
 
 ## Package Route Defaults
 
