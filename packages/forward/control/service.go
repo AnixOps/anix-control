@@ -2,12 +2,18 @@ package main
 
 import (
 	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
 	"log"
+	"strings"
 
+	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
 	kernelsubscriberv1 "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1"
 	"github.com/AnixOps/anix-control/sdk/packagestoresdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/AnixOps/anix-control/v4/packages/forward/native"
+	"github.com/AnixOps/anix-control/v4/packages/forward/v4api"
 	"google.golang.org/grpc"
 	"gorm.io/gorm"
 )
@@ -26,7 +32,12 @@ type forwardBridge interface {
 // goes through the kernel's KernelSubscriber over the bridge connection
 // (local socket or module listener); a bridge without one leaves it legacy.
 // The routes in bridgedRoutes always relay to the legacy handler.
-func newForwardService(bridge forwardBridge, leaseID string) (*pluginhostsdk.Router, error) {
+//
+// The package's own control route, v4api.Route (/api/v4/forward/* to its
+// callers), is the v4 administrator API on the kernel's ForwardControl
+// over the same bridge connection (v4api). It has no legacy handler and no
+// route mode: the host always answers it, 503 without the connection.
+func newForwardService(bridge forwardBridge, leaseID string) (*forwardHost, error) {
 	storage := packagestoresdk.SharedOpener(bridge)
 	service := &native.Service{Open: func(ctx context.Context) (*gorm.DB, error) {
 		store, err := storage(ctx)
@@ -35,21 +46,68 @@ func newForwardService(bridge forwardBridge, leaseID string) (*pluginhostsdk.Rou
 		}
 		return store.DB.WithContext(ctx), nil
 	}}
+	api := &v4api.Service{}
 	if conn, ok := bridge.(interface {
 		Conn() grpc.ClientConnInterface
 	}); ok && conn.Conn() != nil {
 		service.Subscriber = kernelsubscriberv1.NewKernelSubscriberClient(conn.Conn())
+		api.Forward = forwardv1.NewForwardControlClient(conn.Conn())
 	}
-	return pluginhostsdk.NewRouter(pluginhostsdk.RouterConfig{
+	router, err := pluginhostsdk.NewRouter(pluginhostsdk.RouterConfig{
 		PackageID: "forward", LeaseID: leaseID, Bridge: bridge, Logf: log.Printf,
 		AllowRoute: func(routeID string) bool {
 			_, nativeRoute := forwardRoutes[routeID]
 			_, bridgedRoute := bridgedRoutes[routeID]
-			return nativeRoute || bridgedRoute
+			return nativeRoute || bridgedRoute || routeID == v4api.RouteID
 		},
 		Native: service.Handlers(),
 	})
+	if err != nil {
+		return nil, err
+	}
+	return &forwardHost{Router: router, api: api}, nil
 }
+
+// forwardHost is the router plus the v4 API, which the package owns
+// outright.
+type forwardHost struct {
+	*pluginhostsdk.Router
+	api *v4api.Service
+}
+
+// Dispatch answers the v4 API itself and hands every other route to the
+// router.
+func (h *forwardHost) Dispatch(ctx context.Context, request pluginhostsdk.DispatchRequest) (response pluginhostsdk.DispatchResponse, err error) {
+	if request.RouteID != v4api.RouteID {
+		return h.Router.Dispatch(ctx, request)
+	}
+	if h.Draining() {
+		return pluginhostsdk.DispatchResponse{}, errors.New("package is unavailable")
+	}
+	var principal pluginhostsdk.Principal
+	if len(request.PrincipalJSON) > 0 {
+		if err := json.Unmarshal(request.PrincipalJSON, &principal); err != nil {
+			return pluginhostsdk.DispatchResponse{}, errors.New("package request principal is invalid")
+		}
+	}
+	if !principal.Admin {
+		// The kernel admits only administrators to /api/v4; a request that
+		// says otherwise is refused here too.
+		return pluginhostsdk.DispatchResponse{StatusCode: 403, ResponseBody: []byte(`{"error":{"code":"forbidden","message":"administrators only"}}`), Headers: jsonHeaders}, nil
+	}
+	defer func() {
+		if recovered := recover(); recovered != nil {
+			err = fmt.Errorf("v4 forward API panicked: %v", recovered)
+		}
+	}()
+	answer := h.api.Serve(ctx, v4api.Request{
+		Method: strings.ToUpper(request.Method), Path: request.Metadata.Path, Query: request.Metadata.Query, Body: request.RequestBody,
+		IdempotencyKey: request.IdempotencyKey, ActorID: principal.ActorID,
+	})
+	return pluginhostsdk.DispatchResponse{StatusCode: uint32(answer.StatusCode), ResponseBody: answer.Body, Headers: jsonHeaders}, nil // #nosec G115 -- an HTTP status.
+}
+
+var jsonHeaders = []pluginhostsdk.Header{{Name: "Content-Type", Value: "application/json; charset=utf-8"}}
 
 // forwardRoutes are the package's compatibility routes with a native
 // handler. None of them changes what a node runs or state the kernel keeps

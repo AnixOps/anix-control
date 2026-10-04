@@ -12,10 +12,12 @@ import (
 	"testing"
 	"time"
 
+	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
 	kernelsubscriberv1 "github.com/AnixOps/anix-control/sdk/api/kernelsubscriber/v1"
 	"github.com/AnixOps/anix-control/sdk/packagebridgesdk"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/AnixOps/anix-control/v4/packages/forward/native"
+	"github.com/AnixOps/anix-control/v4/packages/forward/v4api"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
@@ -75,7 +77,7 @@ func (r *resetRecorder) ResetTraffic(_ context.Context, request *kernelsubscribe
 	return &kernelsubscriberv1.ResetTrafficResponse{Applied: true, ResetUsers: 1}, nil
 }
 
-func dispatch(t *testing.T, service *pluginhostsdk.Router, route string, request pluginhostsdk.DispatchRequest) pluginhostsdk.DispatchResponse {
+func dispatch(t *testing.T, service pluginhostsdk.Package, route string, request pluginhostsdk.DispatchRequest) pluginhostsdk.DispatchResponse {
 	t.Helper()
 	request.RouteID = route
 	request.BridgeCapability = make([]byte, 32)
@@ -144,7 +146,7 @@ func TestForwardHostRoutesAreThePackageRoutes(t *testing.T) {
 
 // The package adopts the forward tables its native routes use, reads the
 // forward node, runtime settings, directory and entitlement views, and may
-// reset traffic. It adopts none of the tables that hold agent credentials
+// reset traffic, and calls ForwardControl for its v4 API. It adopts none of the tables that hold agent credentials
 // (v2_forward_node, v2_forward_clean_agent, v2_forward_runtime_job), nor
 // v2_user or v2_system_config.
 func TestForwardManifestCapabilities(t *testing.T) {
@@ -159,6 +161,7 @@ func TestForwardManifestCapabilities(t *testing.T) {
 		"kernel.storage.adopt:v2_forward_user_tunnel", "kernel.storage.adopt:v2_speed_limit", "kernel.storage.adopt:v2_forward_rule",
 		"kernel.storage.adopt:v2_forward_latency_bucket", "kernel.view:kapi_forward_node_v1", "kernel.view:kapi_forward_runtime_settings_v1",
 		"kernel.view:kapi_user_directory_v1", "kernel.view:kapi_subscriber_entitlement_v1", "kernel.subscriber.traffic.v1",
+		"kernel.forward.v1",
 	}, manifest.Capabilities)
 	for _, capability := range manifest.Capabilities {
 		for _, table := range []string{"v2_forward_node", "v2_forward_clean_agent", "v2_forward_runtime_job", "v2_user", "v2_system_config"} {
@@ -244,4 +247,51 @@ func TestForwardHostResetsTrafficThroughKernelSubscriberOverTheBridge(t *testing
 	var forward native.Forward
 	require.NoError(t, db.Take(&forward, 1).Error)
 	require.Zero(t, forward.InFlow+forward.OutFlow)
+}
+
+// listOnly is a ForwardControl server that answers ListRoutes.
+type listOnly struct {
+	forwardv1.UnimplementedForwardControlServer
+}
+
+func (listOnly) ListRoutes(context.Context, *forwardv1.ListRoutesRequest) (*forwardv1.ListRoutesResponse, error) {
+	return &forwardv1.ListRoutesResponse{Routes: []*forwardv1.Route{{Id: "01R", Owner: "admin", Name: "hk"}}}, nil
+}
+
+// The v4 API is the package's own control route: the host answers it on
+// ForwardControl over the bridge connection whatever the route modes, to
+// administrators only, and 503 without the connection.
+func TestForwardHostServesTheV4APIOnForwardControl(t *testing.T) {
+	listener := bufconn.Listen(1 << 20)
+	server := grpc.NewServer()
+	forwardv1.RegisterForwardControlServer(server, listOnly{})
+	go func() { _ = server.Serve(listener) }()
+	t.Cleanup(server.Stop)
+	conn, err := grpc.NewClient("passthrough:///kernel", grpc.WithTransportCredentials(insecure.NewCredentials()),
+		grpc.WithContextDialer(func(context.Context, string) (net.Conn, error) { return listener.Dial() }))
+	require.NoError(t, err)
+	t.Cleanup(func() { _ = conn.Close() })
+
+	stub := &bridgeStub{}
+	host, err := newForwardService(connectedBridge{bridgeStub: stub, conn: conn}, "lease-1")
+	require.NoError(t, err)
+	request := pluginhostsdk.DispatchRequest{
+		Method: "GET", PrincipalJSON: []byte(`{"actor_id":1,"admin":true}`),
+		Metadata: pluginhostsdk.RequestMetadata{Path: "/api/v4/plugins/forward/routes"},
+	}
+	response := dispatch(t, host, v4api.RouteID, request)
+	require.EqualValues(t, 200, response.StatusCode, "%s", response.ResponseBody)
+	require.Contains(t, string(response.ResponseBody), `"name":"hk"`)
+	require.Empty(t, stub.operation, "the v4 API never reaches a legacy handler")
+
+	request.PrincipalJSON = []byte(`{"actor_id":2,"admin":false}`)
+	require.EqualValues(t, 403, dispatch(t, host, v4api.RouteID, request).StatusCode)
+
+	unconnected, err := newForwardService(&bridgeStub{}, "lease-1")
+	require.NoError(t, err)
+	request.PrincipalJSON = []byte(`{"actor_id":1,"admin":true}`)
+	require.EqualValues(t, 503, dispatch(t, unconnected, v4api.RouteID, request).StatusCode)
+
+	require.True(t, strings.HasPrefix(v4api.RouteID, "forward.control."))
+	require.Len(t, v4api.RouteID, len("forward.control.")+64)
 }

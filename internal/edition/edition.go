@@ -2,7 +2,11 @@
 // (app.edition) serves. The commercial packages and routes are listed once,
 // in config/editions.json; the community edition answers their /api/v2
 // routes exactly as it answers a route that is not declared, and its
-// release leaves the packages out (packages/shared/build_package.py).
+// release leaves the packages out (packages/shared/build_package.py). The
+// commercial API prefixes reserve parts of a package's v4 API for the
+// commercial edition (forward-sdk.md section 12: the forward package's user
+// self-service, plans and multipliers, v4.3): the community edition answers
+// a request under one as a route that does not exist.
 package edition
 
 import (
@@ -24,6 +28,9 @@ type Table struct {
 	Default            string   `json:"default"`
 	CommercialPackages []string `json:"commercial_packages"`
 	CommercialRoutes   []string `json:"commercial_routes"`
+	// CommercialAPIPrefixes are /api/v4/ path prefixes, each ending in "/",
+	// that only the commercial edition serves.
+	CommercialAPIPrefixes []string `json:"commercial_api_prefixes"`
 }
 
 type extractionRoute struct {
@@ -48,6 +55,7 @@ type Policy struct {
 	edition        string
 	hiddenPackages map[string]bool
 	hiddenRoutes   map[string]bool
+	hiddenPrefixes []string
 	routes         map[string]Route // "METHOD path" -> route
 }
 
@@ -75,6 +83,11 @@ func parse(editions, extraction []byte) (Table, map[string]Route, error) {
 	if _, err := config.NormalizeEdition(table.Default); err != nil || strings.TrimSpace(table.Default) == "" {
 		return Table{}, nil, fmt.Errorf("config/editions.json default %q is not an edition", table.Default)
 	}
+	for _, prefix := range table.CommercialAPIPrefixes {
+		if !strings.HasPrefix(prefix, "/api/v4/") || !strings.HasSuffix(prefix, "/") || strings.Contains(prefix, "//") || strings.ContainsAny(prefix, "*?#% ") {
+			return Table{}, nil, fmt.Errorf("config/editions.json commercial API prefix %q is not an /api/v4/ path prefix ending in /", prefix)
+		}
+	}
 	var routes extractionMap
 	if err := json.Unmarshal(extraction, &routes); err != nil {
 		return Table{}, nil, fmt.Errorf("parse config/package-extraction.json: %w", err)
@@ -98,10 +111,11 @@ func Commercial() Table {
 		panic(loadedErr)
 	}
 	return Table{
-		Format:             tableValue.Format,
-		Default:            tableValue.Default,
-		CommercialPackages: append([]string(nil), tableValue.CommercialPackages...),
-		CommercialRoutes:   append([]string(nil), tableValue.CommercialRoutes...),
+		Format:                tableValue.Format,
+		Default:               tableValue.Default,
+		CommercialPackages:    append([]string(nil), tableValue.CommercialPackages...),
+		CommercialRoutes:      append([]string(nil), tableValue.CommercialRoutes...),
+		CommercialAPIPrefixes: append([]string(nil), tableValue.CommercialAPIPrefixes...),
 	}
 }
 
@@ -131,6 +145,7 @@ func New(name string) *Policy {
 	for _, id := range table.CommercialRoutes {
 		policy.hiddenRoutes[id] = true
 	}
+	policy.hiddenPrefixes = table.CommercialAPIPrefixes
 	return policy
 }
 
@@ -143,6 +158,17 @@ func (p *Policy) Commercial() bool { return p.edition == config.EditionCommercia
 // Hides reports whether the edition hides a package route.
 func (p *Policy) Hides(packageID, routeID string) bool {
 	return p.hiddenPackages[packageID] || p.hiddenRoutes[routeID]
+}
+
+// HidesPath reports whether the edition hides an /api/v4/ request path: one
+// under a commercial API prefix, or the prefix itself without its slash.
+func (p *Policy) HidesPath(requestPath string) bool {
+	for _, prefix := range p.hiddenPrefixes {
+		if strings.HasPrefix(requestPath, prefix) || requestPath == strings.TrimSuffix(prefix, "/") {
+			return true
+		}
+	}
+	return false
 }
 
 // HidesPackage reports whether the edition hides a whole package.

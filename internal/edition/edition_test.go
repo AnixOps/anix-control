@@ -33,6 +33,9 @@ func TestEmbeddedTablesAreValid(t *testing.T) {
 	// Plans stay in community as subscription templates: only the purchase
 	// side is commercial.
 	require.NotContains(t, table.CommercialPackages, "plan")
+	// The forward package's commercial v4 surface (H23) is reserved by
+	// prefix: user self-service, plans and multipliers.
+	require.Contains(t, table.CommercialAPIPrefixes, "/api/v4/forward/self/")
 }
 
 func TestParseRejectsInvalidTables(t *testing.T) {
@@ -42,6 +45,10 @@ func TestParseRejectsInvalidTables(t *testing.T) {
 	require.Error(t, err)
 	_, _, err = parse([]byte(`{"format":"anixops.editions/v1","default":""}`), configtables.PackageExtraction)
 	require.Error(t, err)
+	for _, prefix := range []string{"/api/v2/x/", "/api/v4/forward/self", "/api/v4//x/", "/api/v4/x/*/"} {
+		_, _, err = parse([]byte(`{"format":"anixops.editions/v1","default":"community","commercial_api_prefixes":["`+prefix+`"]}`), configtables.PackageExtraction)
+		require.Error(t, err, prefix)
+	}
 }
 
 func TestPolicyFollowsTheConfiguredEdition(t *testing.T) {
@@ -60,4 +67,12 @@ func TestPolicyFollowsTheConfiguredEdition(t *testing.T) {
 	require.True(t, community.HidesRequest("get", "/api/v2/user/order"))
 	require.False(t, community.HidesRequest("GET", "/api/v2/user/subscription"))
 	require.False(t, community.HidesRequest("GET", ""))
+
+	// v4 paths under a commercial API prefix.
+	require.True(t, community.HidesPath("/api/v4/forward/self/routes"))
+	require.True(t, community.HidesPath("/api/v4/forward/self"))
+	require.True(t, community.HidesPath("/api/v4/forward/plans/7"))
+	require.False(t, community.HidesPath("/api/v4/forward/routes"))
+	require.False(t, community.HidesPath("/api/v4/forward/selfish"))
+	require.False(t, commercial.HidesPath("/api/v4/forward/self/routes"))
 }

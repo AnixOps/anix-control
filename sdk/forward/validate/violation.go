@@ -91,6 +91,14 @@ const (
 	// CodeNoAddress: the previous hop must dial a node that has no address
 	// and no dial_address.
 	CodeNoAddress Code = "no_address"
+
+	// Control raises the code below on node writes (ForwardControl's
+	// UpdateForwardNode and DeleteForwardNode), never on a route.
+
+	// CodeNodeInUse: a node that a stored route uses cannot be disabled or
+	// deleted; the violation names the route (Violation.route_id) and the
+	// hop's node field.
+	CodeNodeInUse Code = "node_in_use"
 )
 
 // Violation is one reason a route is refused.

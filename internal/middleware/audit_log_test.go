@@ -130,3 +130,34 @@ func TestAuditLogRecordsAUsersSubscriptionReset(t *testing.T) {
 	require.False(t, auditedUserWrite(http.MethodGet, "/api/v2/user/subscription/reset"))
 	require.False(t, auditedUserWrite(http.MethodPost, "/api/v2/user/subscription"))
 }
+
+// The forward package's v4 administrator API is recorded like v2's
+// administrator writes, as module forward; its reads are not.
+func TestAuditLogRecordsForwardV4Writes(t *testing.T) {
+	previousMode := gin.Mode()
+	gin.SetMode(gin.ReleaseMode)
+	t.Cleanup(func() { gin.SetMode(previousMode) })
+	var logged bytes.Buffer
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+	t.Cleanup(func() { slog.SetDefault(previousLogger) })
+
+	router := gin.New()
+	router.Use(AuditLog())
+	router.Any("/api/v4/forward/*route", func(c *gin.Context) {
+		_, _ = io.ReadAll(c.Request.Body)
+		c.Status(http.StatusOK)
+	})
+
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api/v4/forward/routes", nil))
+	require.Empty(t, logged.String(), "a read is not recorded")
+
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/api/v4/forward/routes/01J/pause", strings.NewReader(`{}`)))
+	require.Contains(t, logged.String(), `"module":"forward"`)
+	require.Contains(t, logged.String(), `"action":"pause"`)
+
+	logged.Reset()
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodDelete, "/api/v4/forward/nodes/forward-7", nil))
+	require.Contains(t, logged.String(), `"path":"/api/v4/forward/nodes/forward-7"`)
+	require.Contains(t, logged.String(), `"action":"delete"`)
+}

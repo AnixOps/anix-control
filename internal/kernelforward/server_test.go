@@ -75,6 +75,34 @@ func TestForwardControlAuthorization(t *testing.T) {
 			_, err := s.DiagnoseRoute(f.ctx, &forwardv1.DiagnoseRouteRequest{RouteId: "x"})
 			return err
 		},
+		"ListNodes": func(s forwardv1.ForwardControlServer) error {
+			_, err := s.ListNodes(f.ctx, &forwardv1.ListNodesRequest{})
+			return err
+		},
+		"GetNode": func(s forwardv1.ForwardControlServer) error {
+			_, err := s.GetNode(f.ctx, &forwardv1.GetNodeRequest{NodeRef: "forward-11"})
+			return err
+		},
+		"SetNodeSettings": func(s forwardv1.ForwardControlServer) error {
+			_, err := s.SetNodeSettings(f.ctx, &forwardv1.SetNodeSettingsRequest{NodeRef: "forward-11"})
+			return err
+		},
+		"CreateForwardNode": func(s forwardv1.ForwardControlServer) error {
+			_, err := s.CreateForwardNode(f.ctx, &forwardv1.CreateForwardNodeRequest{RequestId: "n", Node: &forwardv1.ForwardNodeRecord{Name: "n", Host: "h"}})
+			return err
+		},
+		"UpdateForwardNode": func(s forwardv1.ForwardControlServer) error {
+			_, err := s.UpdateForwardNode(f.ctx, &forwardv1.UpdateForwardNodeRequest{RequestId: "n", Node: &forwardv1.ForwardNodeRecord{Id: 11, Name: "n", Host: "h"}})
+			return err
+		},
+		"DeleteForwardNode": func(s forwardv1.ForwardControlServer) error {
+			_, err := s.DeleteForwardNode(f.ctx, &forwardv1.DeleteForwardNodeRequest{RequestId: "n", Id: 13})
+			return err
+		},
+		"GetTraffic": func(s forwardv1.ForwardControlServer) error {
+			_, err := s.GetTraffic(f.ctx, &forwardv1.GetTrafficRequest{})
+			return err
+		},
 	}
 	refusals := []struct {
 		name       string
@@ -97,6 +125,9 @@ func TestForwardControlAuthorization(t *testing.T) {
 	var routes int64
 	require.NoError(t, f.db.Table("v4_kernel_forward_route").Count(&routes).Error)
 	assert.Zero(t, routes, "a refused call writes nothing")
+	var nodes int64
+	require.NoError(t, f.db.Table("v2_forward_node").Count(&nodes).Error)
+	assert.Equal(t, int64(3), nodes, "a refused node write writes nothing")
 }
 
 // The contract's answers and codes over the service.

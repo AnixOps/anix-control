@@ -3,6 +3,7 @@ package kernelforward
 import (
 	"context"
 	"errors"
+	"time"
 
 	forwardv1 "github.com/AnixOps/anix-control/sdk/api/forward/v1"
 	"github.com/AnixOps/anix-control/v4/internal/packagebridge"
@@ -73,6 +74,8 @@ func failure(err error, answer func(violations []*forwardv1.Violation) protoadap
 		return st.Err()
 	case errors.Is(err, ErrInvalidRequest), errors.Is(err, ErrInvalidReport):
 		return status.Error(codes.InvalidArgument, err.Error())
+	case errors.Is(err, ErrNodeNotFound):
+		return status.Error(codes.NotFound, "forward node not found")
 	case errors.Is(err, ErrNotFound):
 		return status.Error(codes.NotFound, "forward route not found")
 	case errors.Is(err, ErrRevisionMismatch):
@@ -139,7 +142,11 @@ func (h *hostServer) GetRoute(ctx context.Context, request *forwardv1.GetRouteRe
 	if err != nil {
 		return nil, failure(err, nil)
 	}
-	return &forwardv1.GetRouteResponse{Route: route}, nil
+	enforced, err := svc.Enforcement(ctx, []string{route.GetId()})
+	if err != nil {
+		return nil, failure(err, nil)
+	}
+	return &forwardv1.GetRouteResponse{Route: route, Enforced: enforced[route.GetId()]}, nil
 }
 
 func (h *hostServer) ListRoutes(ctx context.Context, request *forwardv1.ListRoutesRequest) (*forwardv1.ListRoutesResponse, error) {
@@ -153,7 +160,15 @@ func (h *hostServer) ListRoutes(ctx context.Context, request *forwardv1.ListRout
 	if err != nil {
 		return nil, failure(err, nil)
 	}
-	return &forwardv1.ListRoutesResponse{Routes: routes, NextPageToken: next}, nil
+	ids := make([]string, 0, len(routes))
+	for _, route := range routes {
+		ids = append(ids, route.GetId())
+	}
+	enforced, err := svc.Enforcement(ctx, ids)
+	if err != nil {
+		return nil, failure(err, nil)
+	}
+	return &forwardv1.ListRoutesResponse{Routes: routes, NextPageToken: next, Enforced: enforced}, nil
 }
 
 func (h *hostServer) PlanRoute(ctx context.Context, request *forwardv1.PlanRouteRequest) (*forwardv1.PlanRouteResponse, error) {
@@ -198,4 +213,98 @@ func (h *hostServer) DiagnoseRoute(ctx context.Context, _ *forwardv1.DiagnoseRou
 		return nil, err
 	}
 	return nil, status.Error(codes.Unimplemented, "DiagnoseRoute is not served yet (forward-sdk.md F3c)")
+}
+
+func (h *hostServer) ListNodes(ctx context.Context, request *forwardv1.ListNodesRequest) (*forwardv1.ListNodesResponse, error) {
+	svc, err := h.begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	nodes, err := svc.ListNodes(ctx, NodeFilter{Kind: request.GetKind(), Transport: request.GetTransport()})
+	if err != nil {
+		return nil, failure(err, nil)
+	}
+	return &forwardv1.ListNodesResponse{Nodes: nodes}, nil
+}
+
+func (h *hostServer) GetNode(ctx context.Context, request *forwardv1.GetNodeRequest) (*forwardv1.GetNodeResponse, error) {
+	svc, err := h.begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	response, err := svc.GetNode(ctx, request.GetNodeRef())
+	if err != nil {
+		return nil, failure(err, nil)
+	}
+	return response, nil
+}
+
+func (h *hostServer) SetNodeSettings(ctx context.Context, request *forwardv1.SetNodeSettingsRequest) (*forwardv1.SetNodeSettingsResponse, error) {
+	svc, err := h.begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	response, err := svc.SetNodeSettingsAnswer(ctx, request.GetNodeRef(), SettingsFromProto(request.GetSettings()))
+	if err != nil {
+		return nil, failure(err, nil)
+	}
+	return response, nil
+}
+
+func (h *hostServer) CreateForwardNode(ctx context.Context, request *forwardv1.CreateForwardNodeRequest) (*forwardv1.CreateForwardNodeResponse, error) {
+	svc, err := h.begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	node, err := svc.CreateForwardNode(ctx, request.GetRequestId(), request.GetNode(), request.GetSettings())
+	if err != nil {
+		return nil, failure(err, nil)
+	}
+	return &forwardv1.CreateForwardNodeResponse{Node: node}, nil
+}
+
+func (h *hostServer) UpdateForwardNode(ctx context.Context, request *forwardv1.UpdateForwardNodeRequest) (*forwardv1.UpdateForwardNodeResponse, error) {
+	svc, err := h.begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	response, err := svc.UpdateForwardNode(ctx, request.GetRequestId(), request.GetNode())
+	if err != nil {
+		return nil, failure(err, func(violations []*forwardv1.Violation) protoadapt.MessageV1 {
+			return &forwardv1.UpdateForwardNodeResponse{Violations: violations}
+		})
+	}
+	return response, nil
+}
+
+func (h *hostServer) DeleteForwardNode(ctx context.Context, request *forwardv1.DeleteForwardNodeRequest) (*forwardv1.DeleteForwardNodeResponse, error) {
+	svc, err := h.begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if err := svc.DeleteForwardNode(ctx, request.GetRequestId(), request.GetId()); err != nil {
+		return nil, failure(err, func(violations []*forwardv1.Violation) protoadapt.MessageV1 {
+			return &forwardv1.DeleteForwardNodeResponse{Violations: violations}
+		})
+	}
+	return &forwardv1.DeleteForwardNodeResponse{}, nil
+}
+
+func (h *hostServer) GetTraffic(ctx context.Context, request *forwardv1.GetTrafficRequest) (*forwardv1.GetTrafficResponse, error) {
+	svc, err := h.begin(ctx)
+	if err != nil {
+		return nil, err
+	}
+	var since, until time.Time
+	if ms := request.GetSinceUnixMs(); ms > 0 {
+		since = time.UnixMilli(ms)
+	}
+	if ms := request.GetUntilUnixMs(); ms > 0 {
+		until = time.UnixMilli(ms)
+	}
+	buckets, truncated, err := svc.TrafficBuckets(ctx, request.GetRouteId(), request.GetNodeRef(), since, until)
+	if err != nil {
+		return nil, failure(err, nil)
+	}
+	return &forwardv1.GetTrafficResponse{Buckets: buckets, Truncated: truncated}, nil
 }

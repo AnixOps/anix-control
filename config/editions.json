@@ -2,5 +2,6 @@
   "format": "anixops.editions/v1",
   "default": "community",
   "commercial_packages": ["affiliate", "order", "payment"],
-  "commercial_routes": ["plan.user.plan.get"]
+  "commercial_routes": ["plan.user.plan.get"],
+  "commercial_api_prefixes": ["/api/v4/forward/self/", "/api/v4/forward/plans/", "/api/v4/forward/multipliers/"]
 }

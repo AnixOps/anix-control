@@ -69,3 +69,31 @@ func (m *moduleKernelForward) GetRouteHealth(ctx context.Context, request *forwa
 func (m *moduleKernelForward) DiagnoseRoute(ctx context.Context, request *forwardv1.DiagnoseRouteRequest) (*forwardv1.DiagnoseRouteResponse, error) {
 	return callForward(m, ctx, request, forwardv1.ForwardControlServer.DiagnoseRoute)
 }
+
+func (m *moduleKernelForward) ListNodes(ctx context.Context, request *forwardv1.ListNodesRequest) (*forwardv1.ListNodesResponse, error) {
+	return callForward(m, ctx, request, forwardv1.ForwardControlServer.ListNodes)
+}
+
+func (m *moduleKernelForward) GetNode(ctx context.Context, request *forwardv1.GetNodeRequest) (*forwardv1.GetNodeResponse, error) {
+	return callForward(m, ctx, request, forwardv1.ForwardControlServer.GetNode)
+}
+
+func (m *moduleKernelForward) SetNodeSettings(ctx context.Context, request *forwardv1.SetNodeSettingsRequest) (*forwardv1.SetNodeSettingsResponse, error) {
+	return callForward(m, ctx, request, forwardv1.ForwardControlServer.SetNodeSettings)
+}
+
+func (m *moduleKernelForward) CreateForwardNode(ctx context.Context, request *forwardv1.CreateForwardNodeRequest) (*forwardv1.CreateForwardNodeResponse, error) {
+	return callForward(m, ctx, request, forwardv1.ForwardControlServer.CreateForwardNode)
+}
+
+func (m *moduleKernelForward) UpdateForwardNode(ctx context.Context, request *forwardv1.UpdateForwardNodeRequest) (*forwardv1.UpdateForwardNodeResponse, error) {
+	return callForward(m, ctx, request, forwardv1.ForwardControlServer.UpdateForwardNode)
+}
+
+func (m *moduleKernelForward) DeleteForwardNode(ctx context.Context, request *forwardv1.DeleteForwardNodeRequest) (*forwardv1.DeleteForwardNodeResponse, error) {
+	return callForward(m, ctx, request, forwardv1.ForwardControlServer.DeleteForwardNode)
+}
+
+func (m *moduleKernelForward) GetTraffic(ctx context.Context, request *forwardv1.GetTrafficRequest) (*forwardv1.GetTrafficResponse, error) {
+	return callForward(m, ctx, request, forwardv1.ForwardControlServer.GetTraffic)
+}

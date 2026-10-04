@@ -2158,6 +2158,47 @@ certificates").
   its peers until it expires (at most 7 days); remove the node from its
   routes to drop its addresses from its peers' admission at once.
 
+## Forward v4 API (v4.2)
+
+v4.2 adds the forwarding API `/api/v4/forward/*` and the command line
+`anix-control forward routes|nodes|stats`. The reference is
+[`forwarding/v4-api.md`](forwarding/v4-api.md); the design is
+[`architecture/forward-sdk.md`](architecture/forward-sdk.md) (F5a).
+
+- **Install the forward package of the same release.**
+  - The API is the forward package's control route on the kernel's
+    `ForwardControl`. The package's manifest gains the `kernel.forward.v1`
+    capability and the control route `/api/v4/plugins/forward/*`.
+  - Until the package of this release is installed and healthy,
+    `/api/v4/forward/*` answers `404 plugin_route_not_found`.
+- **Permissions.**
+  - Administrators may read and write as on every package control route.
+    While no access group grants anything for the forward package, every
+    administrator may. Once a group with a `forward.api` grant exists, only
+    its members may.
+  - Every `DELETE` (a route, a forward node, an Ansible machine) needs a
+    super administrator.
+  - Writes are audited as module `forward`.
+- **The flux v2 routes still work.** `/api/v2/forward/*` and
+  `/api/v2/admin/forward/*`, the clone UI and the old runtime are unchanged
+  until F5d removes them.
+  - The 19 v2 node management routes (forward nodes, Ansible machines,
+    observability) have v4 equivalents now: check is the node view, and
+    sync-stats is the traffic ledger.
+  - Both write the same `v2_forward_node` rows, so a node added on either
+    side shows on the other.
+- **Credentials.** No v4 answer shows a forward node's API token. A node
+  added through the v4 API enrolls its Agent with an install token.
+- **Node writes and routes.** A node that a v4 route uses cannot be disabled
+  or deleted until the route moves off it (`409`, code `node_in_use`).
+- **Editions.** The community edition serves the whole API (H23). The
+  prefixes `/api/v4/forward/self/`, `/plans/` and `/multipliers/` are
+  reserved for the commercial edition's v4.3 features and do not exist in
+  the community edition.
+- **Rollback.** The API adds no table: the routes, inventory and ledger are
+  the kernel's F3a tables. Rolling back to a release without it only removes
+  the API and the commands.
+
 ## Switching Route Modes
 
 Each v2 route of a Control package runs in one of three modes: `legacy` (the

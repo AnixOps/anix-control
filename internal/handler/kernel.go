@@ -276,6 +276,13 @@ func (h *KernelHandler) ListExtensions(c *gin.Context) {
 }
 
 func (h *KernelHandler) PluginRouteGateway(c *gin.Context) {
+	h.dispatchPluginControlRoute(c, c.Param("plugin_id"), c.Request.URL.Path)
+}
+
+// dispatchPluginControlRoute resolves requestPath among pluginID's manifest
+// control routes, checks the caller's permission and dispatches the
+// request to the package host with requestPath as its path.
+func (h *KernelHandler) dispatchPluginControlRoute(c *gin.Context, pluginID, requestPath string) {
 	cfg := config.Get()
 	if cfg == nil || strings.TrimSpace(cfg.Plugins.OfficialPublicKey) == "" {
 		kernelError(c, http.StatusServiceUnavailable, "plugin_trust_root_unconfigured", "official plugin public key is not configured")
@@ -289,8 +296,8 @@ func (h *KernelHandler) PluginRouteGateway(c *gin.Context) {
 	resolution, err := service.ResolvePluginControlRoute(
 		h.db,
 		publicKey,
-		c.Param("plugin_id"),
-		c.Request.URL.Path,
+		pluginID,
+		requestPath,
 		kernelActorID(c),
 		kernelActorIsAdmin(c),
 	)
@@ -350,7 +357,7 @@ func (h *KernelHandler) PluginRouteGateway(c *gin.Context) {
 		PackageID: resolution.PluginID, Version: resolution.Version, Generation: resolution.Generation,
 		RequestID: kernelRequestID(c), IdempotencyKey: c.GetHeader("Idempotency-Key"), RouteID: bridgeRouteID,
 		Method: c.Request.Method, Body: body, PrincipalJSON: principal,
-		Metadata: pluginhost.RequestMetadata{Path: c.Request.URL.Path, Query: cloneKernelQuery(c.Request.URL.Query())}, Deadline: deadline,
+		Metadata: pluginhost.RequestMetadata{Path: requestPath, Query: cloneKernelQuery(c.Request.URL.Query())}, Deadline: deadline,
 	})
 	if err != nil {
 		switch {

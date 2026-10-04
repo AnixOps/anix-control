@@ -800,6 +800,9 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	{
 		kernel := handler.NewKernelHandler()
 		v4.Any("/plugins/:plugin_id/*route", kernel.PluginRouteGateway)
+		// The forward package's v4 administrator API (forward-sdk.md F5a),
+		// served as its control route /api/v4/plugins/forward/*.
+		v4.Any("/forward/*route", kernel.ForwardGateway)
 		modules := handler.NewModuleHandler()
 		v4.POST("/kernel/modules/enrollment-tokens", modules.CreateEnrollment)
 		v4.GET("/kernel/modules/enrollment-tokens", modules.ListEnrollments)
