@@ -10,9 +10,11 @@ import adminSupportPages from './modules/zh-CN/adminSupportPages'
 import adminNodes from './modules/zh-CN/adminNodes'
 import forwardNodesPage from './modules/zh-CN/forwardNodesPage'
 import adminSubscriptionGroups from './modules/zh-CN/adminSubscriptionGroups'
+import forwardV4 from './modules/zh-CN/forwardV4'
 
 export default {
   ...adminSubscriptionGroups,
+  ...forwardV4,
   ...runtimePages,
   ...networkPages,
   ...miscPages,

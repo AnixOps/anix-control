@@ -51,6 +51,14 @@ const AdminAgentTransports = () => import('@/views/admin/AgentTransports.vue')
 const AdminPlugins = () => import('@/views/admin/Plugins.vue')
 const AdminRouteModes = () => import('@/views/admin/RouteModes.vue')
 const AdminDeployments = () => import('@/views/admin/Deployments.vue')
+// The v4.2 forwarding area (F5b): lazy chunks, opened only with the
+// forward package's v4 API (meta.capability, checked in the guard).
+const ForwardOverview = () => import('@/views/admin/forward/Overview.vue')
+const ForwardRoutes = () => import('@/views/admin/forward/Routes.vue')
+const ForwardRouteEditor = () => import('@/views/admin/forward/RouteEditor.vue')
+const ForwardRouteDetail = () => import('@/views/admin/forward/RouteDetail.vue')
+const ForwardNodes = () => import('@/views/admin/forward/Nodes.vue')
+const ForwardNodeView = () => import('@/views/admin/forward/NodeDetail.vue')
 const Account = () => import('@/views/Account.vue')
 const StatusPage = () => import('@/views/StatusPage.vue')
 
@@ -59,6 +67,9 @@ const NOT_FOUND_META = Object.freeze({ titleKey: 'shell.status.notFound.title' }
 // Pages with wide tables keep to --size-content-wide instead of
 // --size-content-admin (AdminLayout).
 const WIDE = Object.freeze({ layout: 'wide' })
+// The forwarding area's pages need the forward package's v4 API.
+const FORWARD_V4 = 'forward.v4'
+const forwardMeta = titleKey => Object.freeze({ layout: 'wide', capability: FORWARD_V4, titleKey })
 
 // The extension runtime (and the kernel API it calls) is admin-only: it loads
 // with the first admin route, so the sign-in page does not carry it.
@@ -216,6 +227,46 @@ const routes = [
         path: 'forward/setup',
         component: AdminForwardWizard
       },
+      // The v4.2 forwarding area (F5b, docs/design/forward-ui): 概览, 路由
+      // and 节点, on paths the flux-clone pages above never used.
+      {
+        path: 'forward/overview',
+        component: ForwardOverview,
+        meta: forwardMeta('pageTitles.admin.forwardV4Overview')
+      },
+      {
+        path: 'forward/routes',
+        component: ForwardRoutes,
+        meta: forwardMeta('pageTitles.admin.forwardV4Routes')
+      },
+      {
+        path: 'forward/routes/new',
+        component: ForwardRouteEditor,
+        meta: forwardMeta('pageTitles.admin.forwardV4RouteNew')
+      },
+      {
+        path: 'forward/routes/:id',
+        component: ForwardRouteDetail,
+        props: true,
+        meta: forwardMeta('pageTitles.admin.forwardV4Route')
+      },
+      {
+        path: 'forward/routes/:id/edit',
+        component: ForwardRouteEditor,
+        props: true,
+        meta: forwardMeta('pageTitles.admin.forwardV4RouteEdit')
+      },
+      {
+        path: 'forward/inventory',
+        component: ForwardNodes,
+        meta: forwardMeta('pageTitles.admin.forwardV4Nodes')
+      },
+      {
+        path: 'forward/inventory/:nodeRef',
+        component: ForwardNodeView,
+        props: true,
+        meta: forwardMeta('pageTitles.admin.forwardV4Node')
+      },
       {
         path: 'forward/tunnel',
         component: AdminTunnel,
@@ -370,17 +421,6 @@ const routes = [
         component: Account,
         meta: ACCOUNT_META
       },
-      // F5b design mockups (docs/design/forward-ui): mocked data, dev server
-      // only. import.meta.env.DEV is false in `vite build`, so the route and
-      // its chunk are dropped from the production bundle.
-      ...(import.meta.env.DEV
-        ? [{
-            path: '__mockups/forward/:screen?',
-            name: 'admin-mockups-forward',
-            component: () => import('@/mockups/forward/ForwardMockups.vue'),
-            meta: { ...WIDE, titleKey: 'pageTitles.admin.forward' }
-          }]
-        : []),
       {
         // Named so the parent's name ('admin', which extensions add their
         // pages under) does not trigger Vue Router's empty-path warning.
@@ -525,6 +565,18 @@ router.beforeEach(async (to, from, next) => {
         return
       }
       if (to.meta.extension) {
+        next()
+        return
+      }
+      // A page that needs a package capability (the forwarding area needs
+      // the forward package's v4 API) waits for the catalog; without the
+      // capability it leads to the flux-clone forwarding page.
+      if (to.meta.capability) {
+        const snapshot = await ensureAdminExtensions(router).catch(() => null)
+        if (!snapshot?.capabilities?.includes(to.meta.capability)) {
+          next({ path: '/admin/forward', replace: true })
+          return
+        }
         next()
         return
       }

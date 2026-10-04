@@ -1,0 +1,114 @@
+/* Shared by the forwarding pages (F5b). */
+.fwd-page {
+  display: grid;
+  gap: var(--space-5);
+  min-width: 0;
+}
+
+.fwd-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: var(--space-4);
+}
+
+.fwd-two {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  gap: var(--space-4);
+  align-items: start;
+}
+
+.fwd-muted {
+  color: var(--label-2);
+  font-size: var(--type-caption-size);
+}
+
+.fwd-mono {
+  font-family: var(--font-mono);
+  font-size: var(--type-caption-size);
+}
+
+.fwd-cell-stack {
+  display: grid;
+  gap: 2px;
+  min-width: 0;
+}
+
+.fwd-note {
+  margin: 0;
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-sm);
+  background: var(--fill-1);
+  color: var(--label-2);
+  font-size: var(--type-callout-size);
+}
+
+.fwd-note.is-warning {
+  background: var(--warning-soft);
+  color: var(--label-1);
+}
+
+.fwd-note.is-danger {
+  background: var(--danger-soft);
+  color: var(--label-1);
+}
+
+.fwd-list {
+  display: grid;
+  gap: var(--space-2);
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.fwd-list__item {
+  display: flex;
+  gap: var(--space-3);
+  align-items: flex-start;
+  justify-content: space-between;
+  padding: var(--space-3) 0;
+  border-bottom: 1px solid var(--separator);
+}
+
+.fwd-list__item:last-child {
+  border-bottom: 0;
+}
+
+.fwd-link,
+.fwd-back {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+  color: var(--accent);
+  text-decoration: none;
+}
+
+.fwd-link:hover,
+.fwd-back:hover {
+  text-decoration: underline;
+}
+
+.fwd-link:focus-visible,
+.fwd-back:focus-visible {
+  border-radius: var(--radius-xs);
+  outline: var(--focus-ring);
+  outline-offset: var(--focus-ring-offset);
+}
+
+.fwd-label-chip {
+  display: inline-flex;
+  gap: var(--space-1);
+  align-items: center;
+  height: 24px;
+  padding: 0 var(--space-1) 0 var(--space-2);
+  border-radius: var(--radius-pill);
+  background: var(--fill-1);
+  font-family: var(--font-mono);
+  font-size: var(--type-caption-size);
+}
+
+@media (max-width: 833.98px) {
+  .fwd-two {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

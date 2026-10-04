@@ -16,11 +16,24 @@ import { ADMIN_PAGE_SECTIONS } from './sections'
 //              ending in '/'); `to` and its sub-paths always match
 //   optional   true: shown only when the router has the route (for a page
 //              whose route lands in a separate pull request)
+//   capability shown only when a package provides it (extensions/runtime.js
+//              catalogCapabilities, e.g. forward.v4)
+//   capabilityLabelKeys  { capability: labelKey }: the label while that
+//              capability is present (转发 → 转发（旧版）)
 //
 // Plugin menus (extensions/runtime.js, signed WebUI contract) are merged in
 // by their `parent`: services and operations go to 扩展 (Extensions),
 // system to 系统 (System), unknown parents to 扩展. Each plugin menu needs
 // its permission and must not belong to a package the edition hides.
+
+// The v4.2 forwarding area (F5b): its sections live beside the flux-clone
+// pages under /admin/forward/ on paths those never used.
+export const FORWARD_V4_PATHS = Object.freeze(['/admin/forward/overview', '/admin/forward/routes', '/admin/forward/inventory'])
+
+export function isForwardV4Path(path) {
+  const value = String(path || '')
+  return FORWARD_V4_PATHS.some(base => value === base || value.startsWith(`${base}/`))
+}
 
 export const ADMIN_MENU = Object.freeze([
   {
@@ -51,13 +64,24 @@ export const ADMIN_MENU = Object.freeze([
     labelKey: 'shell.admin.groups.network',
     // Node (proxy service, /admin/nodes) and ForwardNode (forward execution,
     // /admin/forward/nodes) are different resources: separate items.
+    // With the forward package's v4 API (F5b) 转发 is the new forwarding
+    // area; the flux-clone pages stay reachable as 转发（旧版） until F5d.
     items: [
       { id: 'nodes', to: '/admin/nodes', icon: 'nodes', labelKey: 'shell.admin.items.nodes' },
+      {
+        id: 'forward-v4',
+        to: '/admin/forward/overview',
+        icon: 'forward',
+        labelKey: 'shell.admin.items.forward',
+        capability: 'forward.v4',
+        match: FORWARD_V4_PATHS.map(path => `${path}/`).concat(FORWARD_V4_PATHS)
+      },
       {
         id: 'forward',
         to: '/admin/forward',
         icon: 'forward',
         labelKey: 'shell.admin.items.forward',
+        capabilityLabelKeys: { 'forward.v4': 'shell.admin.items.forwardLegacy' },
         exact: true,
         match: ['/admin/forward/setup', '/admin/forward/tunnel', '/admin/forward/limit']
       },
@@ -66,6 +90,7 @@ export const ADMIN_MENU = Object.freeze([
         to: '/admin/forward/nodes',
         icon: 'forward-nodes',
         labelKey: 'shell.admin.items.forwardNodes',
+        capabilityLabelKeys: { 'forward.v4': 'shell.admin.items.forwardNodesLegacy' },
         match: ['/admin/forward/ansible-machines', '/admin/forward/ansible-machines/', '/admin/forward/local', '/admin/forward/nodex']
       },
       { id: 'agents', to: '/admin/agent', icon: 'agents', labelKey: 'shell.admin.items.agents', match: ['/admin/forward/agents'] }
@@ -151,7 +176,7 @@ export function isForwardNodesPath(path) {
 }
 
 export function showsForwardSuiteNav(path) {
-  return isForwardSuitePath(path) && !isForwardNodesPath(path)
+  return isForwardSuitePath(path) && !isForwardNodesPath(path) && !isForwardV4Path(path)
 }
 
 // Quick actions in the command palette open an existing create flow. Each is
@@ -159,7 +184,8 @@ export function showsForwardSuiteNav(path) {
 export const ADMIN_QUICK_ACTIONS = Object.freeze([
   { id: 'add-node', page: 'nodes', icon: 'nodes', labelKey: 'shell.palette.actions.addNode', to: { path: '/admin/nodes', query: { create: '1' } } },
   { id: 'add-user', page: 'users', icon: 'users', labelKey: 'shell.palette.actions.addUser', to: { path: '/admin/users', query: { create: '1' } } },
-  { id: 'forward-wizard', page: 'forward', icon: 'setup', labelKey: 'shell.palette.actions.forwardWizard', to: { path: '/admin/forward/setup' } }
+  { id: 'forward-wizard', page: 'forward', icon: 'setup', labelKey: 'shell.palette.actions.forwardWizard', to: { path: '/admin/forward/setup' } },
+  { id: 'forward-route', page: 'forward-v4', icon: 'forward', labelKey: 'shell.palette.actions.newForwardRoute', to: { path: '/admin/forward/routes/new' } }
 ])
 
 export const ADMIN_ACCOUNT_PATH = '/admin/account'
@@ -177,11 +203,17 @@ export const USER_MENU = Object.freeze([
   { id: 'account', to: USER_ACCOUNT_PATH, icon: 'account', labelKey: 'shell.user.items.account', tab: true }
 ])
 
-function itemVisible(item, { editionAllows, hasPermission, routeExists }) {
+function itemVisible(item, { editionAllows, hasPermission, routeExists, hasCapability }) {
   if (item.edition && !editionAllows(item.edition)) return false
   if (item.permission && !hasPermission(item.permission)) return false
+  if (item.capability && !hasCapability(item.capability)) return false
   if (item.optional && routeExists && !routeExists(item.to)) return false
   return true
+}
+
+function capabilityLabelKey(item, hasCapability) {
+  const entry = Object.entries(item.capabilityLabelKeys || {}).find(([capability]) => hasCapability(capability))
+  return entry ? entry[1] : item.labelKey
 }
 
 function compareExtensionMenus(left, right) {
@@ -206,11 +238,12 @@ export function buildAdminMenu({
   editionAllows = () => true,
   hasPermission = () => true,
   routeExists = null,
+  hasCapability = () => false,
   extensionMenus = [],
   extensionMenuAllowed = () => true,
   normalizeParent = value => value
 }) {
-  const context = { editionAllows, hasPermission, routeExists }
+  const context = { editionAllows, hasPermission, routeExists, hasCapability }
   const groups = menu.map(group => ({
     id: group.id,
     label: t(group.labelKey),
@@ -219,7 +252,7 @@ export function buildAdminMenu({
       .map(item => ({
         id: item.id,
         to: item.to,
-        label: t(item.labelKey),
+        label: t(capabilityLabelKey(item, hasCapability)),
         icon: item.icon,
         match: item.match || [],
         exact: Boolean(item.exact),
