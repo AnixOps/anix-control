@@ -240,7 +240,7 @@ check_release_workflow() {
   require_named_step_text go-quality "Install pinned protoc" "sha256sum -c" "pinned protoc checksum verification" || failed=1
   require_text "GOST_VERSION: '3.2.6'" "pinned GOST runtime version" || failed=1
   require_text "GOST_LINUX_ARM64_BINARY_SHA256" "pinned arm64 GOST binary checksum" || failed=1
-  require_text "ref: b32b90a53529449515886d0a46a89c424f77cab2" "pinned Agent source commit" || failed=1
+  require_text "ref: 54150d83b6f43d453eec6d818c894c73ebc76dc1" "pinned Agent source commit" || failed=1
   require_text "-exclude-dir=config/scripts/testdata" "full gosec excludes the non-compiling AST fixture directory" || failed=1
   require_text "scripts/tests/test_identity_bootstrap_install.sh" "identity bootstrap installer regression test" || failed=1
 
