@@ -8,6 +8,7 @@ import (
 	"net"
 	"os"
 	"path/filepath"
+	"sync"
 	"testing"
 	"time"
 
@@ -194,9 +195,13 @@ func TestForwardCommandDiagnose(t *testing.T) {
 	db := newForwardCommandDB(t)
 	ctx := context.Background()
 	previous := forwardCommandProbes
+	// Probes dial in parallel, so the fake records under a lock.
+	var dialMu sync.Mutex
 	var dialled []string
 	forwardCommandProbes = service.DiagnosisProbes{Dial: func(_ context.Context, _, address string, _ time.Duration) (net.Conn, error) {
+		dialMu.Lock()
 		dialled = append(dialled, address)
+		dialMu.Unlock()
 		return nil, errors.New("connection refused")
 	}}
 	t.Cleanup(func() { forwardCommandProbes = previous })
@@ -225,7 +230,9 @@ func TestForwardCommandDiagnose(t *testing.T) {
 	assert.Contains(t, output, "node_vantage_unavailable")
 	assert.Contains(t, output, "POST /api/v4/forward/routes/{id}/diagnose")
 	assert.Contains(t, output, "route "+created.GetId()+": FAILED")
+	dialMu.Lock()
 	assert.ElementsMatch(t, []string{"192.0.2.11:31010", "198.51.100.10:443"}, dialled)
+	dialMu.Unlock()
 
 	output, err = run("routes", "diagnose", created.GetId(), "--json")
 	require.ErrorIs(t, err, errDiagnosisFailed)

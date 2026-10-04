@@ -926,6 +926,9 @@
 
 ### Fixed
 
+- `TestForwardCommandDiagnose` no longer flakes: the fake dialer recorded
+  addresses from parallel probes without a lock, so one was sometimes lost.
+
 - **gost link certificate renewals start a new counter epoch.** A
   supervisor reload of gost after the Agent renewed the link certificate
   (H28) re-created every service without the driver recording it, so
