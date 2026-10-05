@@ -38,6 +38,7 @@ export const DATA_TABLE_PAGES = [
   'src/views/admin/notifications/NotifyTemplates.vue',
   'src/views/admin/notifications/NotifyLogs.vue',
   'src/views/admin/Security.vue',
+  'src/views/admin/security/ApiTokens.vue',
   // U8: deployments (the operation timeline is a list, shared with Plugins)
   'src/views/admin/Deployments.vue',
   'src/views/admin/deployments/DeploymentTopologiesPanel.vue',

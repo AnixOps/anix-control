@@ -38,11 +38,14 @@ let timer = null
 
 const message = computed(() => errorMessage(props.error))
 
+// The kernel's routes (/api/v3, /api/v4) answer { error: { code, message } };
+// the v2 panel { msg } or { message }; a bare string in `error` is a message.
 function errorMessage(error) {
   if (!error) return ''
   if (typeof error === 'string') return error
   const data = error.response?.data
-  return data?.msg || data?.message || data?.error || error.message || ''
+  const failure = data?.error
+  return data?.msg || data?.message || (typeof failure === 'string' ? failure : failure?.message) || error.message || ''
 }
 
 async function copyDetails() {

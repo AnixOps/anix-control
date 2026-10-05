@@ -71,6 +71,7 @@ describe('admin routes', () => {
       '/admin/security',
       '/admin/security/mfa',
       '/admin/security/access-groups',
+      '/admin/security/api-tokens',
       '/admin/system/general',
       '/admin/system/audit',
       '/admin/notifications/telegram',

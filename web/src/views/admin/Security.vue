@@ -10,19 +10,21 @@
     >
       <MFA v-if="current === 'mfa'" key="mfa" />
       <AccessGroups v-else-if="current === 'access-groups'" key="access-groups" embedded />
+      <ApiTokens v-else-if="current === 'api-tokens'" key="api-tokens" />
     </SettingsLayout>
   </div>
 </template>
 
 <script setup>
-// 安全 (plan §8.2): the MFA policy and the access groups as sections of one
-// page (/admin/security/:section), on the settings template. Both sections
-// are the existing pages (MFA.vue, AccessGroups.vue) with their own requests,
-// unchanged; /admin/mfa and /admin/access-groups redirect here. The API has
-// no administrator API tokens, so there is no third section.
-import { computed, watch } from 'vue'
+// 安全 (plan §8.2): the MFA policy, the access groups and the administrators'
+// API tokens as sections of one page (/admin/security/:section), on the
+// settings template. The first two are the existing pages (MFA.vue,
+// AccessGroups.vue) with their own requests, unchanged; /admin/mfa and
+// /admin/access-groups redirect here. API tokens (security/ApiTokens.vue) are
+// their own lazy chunk: the section loads only when it is opened.
+import { computed, defineAsyncComponent, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
-import { KeyRound, ShieldCheck } from '@lucide/vue'
+import { KeyRound, KeySquare, ShieldCheck } from '@lucide/vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { NARROW_QUERY, useMediaQuery } from '@/composables/useMediaQuery'
 import { ADMIN_PAGE_SECTIONS } from '@/navigation/menu'
@@ -31,7 +33,9 @@ import UiPageHeader from '@/ui/UiPageHeader.vue'
 import AccessGroups from './AccessGroups.vue'
 import MFA from './MFA.vue'
 
-const SECTION_ICONS = { mfa: ShieldCheck, 'access-groups': KeyRound }
+const ApiTokens = defineAsyncComponent(() => import('./security/ApiTokens.vue'))
+
+const SECTION_ICONS = { mfa: ShieldCheck, 'access-groups': KeyRound, 'api-tokens': KeySquare }
 
 const { t } = useAppI18n()
 const route = useRoute()

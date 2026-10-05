@@ -684,6 +684,26 @@ describe('request auth handling', () => {
     expect(replaceSpy).toHaveBeenCalledWith('/login')
   })
 
+  it('logs a failed request that carries a credential without its body, and strips the body from the error', async () => {
+    const logged = vi.spyOn(console, 'error').mockImplementation(() => {})
+    const { responseInterceptors } = await loadActualRequestModule()
+    const error = {
+      response: { status: 403 },
+      config: { url: '/kernel/api-tokens', method: 'post', sensitive: true, data: '{"name":"probe","password":"correct horse","code":"123456"}' },
+    }
+    await expect(responseInterceptors.rejected(error)).rejects.toBe(error)
+    expect(error.config.data).toBeUndefined()
+    expect(logged).toHaveBeenCalledWith('Request error:', 'post', '/kernel/api-tokens', 403)
+    expect(JSON.stringify(logged.mock.calls)).not.toMatch(/correct horse|123456/)
+
+    // Any other failure is logged as before.
+    logged.mockClear()
+    const plain = { response: { status: 500 }, config: { url: '/admin/users', method: 'get' } }
+    await expect(responseInterceptors.rejected(plain)).rejects.toBe(plain)
+    expect(logged).toHaveBeenCalledWith('Request error:', plain)
+    logged.mockRestore()
+  })
+
   it('does not force redirect on login endpoint 401 responses', async () => {
     window.history.replaceState({}, '', '/login')
     const replaceSpy = vi.spyOn(window.location, 'replace').mockImplementation(() => {})

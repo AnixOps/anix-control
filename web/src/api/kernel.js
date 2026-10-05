@@ -388,6 +388,55 @@ export async function getKernelNodeTraffic(nodeId, { granularity, since, until }
   return unwrap(await v4(config))
 }
 
+// Admin API tokens (docs/reference/admin-api-tokens.md): an administrator's
+// personal access tokens for automation. All three routes need the signed-in
+// session, which the console always has.
+//
+// List: the caller's active tokens, `includeInactive` adds revoked and expired
+// ones; a super administrator may pass `all` (everyone's) or `userId` (one
+// administrator's), anyone else gets 403 super_admin_required. Rows are
+// { id, user_id, name, scope, hint, expires_at, last_used_at, last_used_ip,
+// created_at, revoked_at, revoke_reason }, never a secret.
+export async function listKernelApiTokens({ all = false, userId, includeInactive = false } = {}) {
+  const params = {}
+  if (includeInactive) params.include_inactive = true
+  if (all) params.all = true
+  else if (userId) params.user_id = userId
+  const config = { url: '/kernel/api-tokens', method: 'get' }
+  if (Object.keys(params).length) config.params = params
+  return unwrap(await v4(config))
+}
+
+// Create: `name` (1 to 100 characters), `scope` ('read' or 'admin'), optional
+// `expiresInDays` (1 to 730; none or 0 never expires) and the administrator's
+// re-authentication: `password`, or with two-step verification on `code` and
+// `method` ('totp' or 'backup'). Only the fields that are set are sent. The
+// answer is { token, api_token } with Cache-Control: no-store: `token` is the
+// `anixadm_` secret, shown once, and the caller keeps it only as long as it
+// shows it and never writes it anywhere. The request is marked `sensitive`
+// (utils/request.js), so a failed one logs no body. Refusals: 400
+// invalid_request, 403 step_up_required (the message says password, MFA code
+// or "sign in again": identity holds the credential), step_up_failed,
+// not_an_administrator, 409 too_many_tokens (25 active), 429
+// step_up_rate_limited with Retry-After.
+export async function createKernelApiToken({ name, scope, expiresInDays, password, code, method }) {
+  const data = { name: String(name ?? '').trim(), scope }
+  if (expiresInDays) data.expires_in_days = expiresInDays
+  if (password) data.password = password
+  if (code) {
+    data.code = code
+    data.method = method || 'totp'
+  }
+  return unwrap(await v4({ url: '/kernel/api-tokens', method: 'post', data, timeout: 30_000, sensitive: true }))
+}
+
+// Revoke: ends a token at once. The owner revokes their own, a super
+// administrator anyone's; a token that is not yours or does not exist is 404.
+// The answer is { api_token, changed } (changed false: it was revoked already).
+export async function revokeKernelApiToken(id) {
+  return unwrap(await v4({ url: `/kernel/api-tokens/${encodeURIComponent(id)}`, method: 'delete' }))
+}
+
 // Sanitized shadow-mode mismatch samples (newest first, at most 100):
 // { samples, retention_days, max_per_route }.
 export async function getKernelRouteModeMismatches({ packageID, routeID, limit } = {}) {

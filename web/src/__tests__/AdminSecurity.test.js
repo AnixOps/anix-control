@@ -4,6 +4,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { enableAutoUnmount, flushPromises, mount } from '@vue/test-utils'
 import { createMemoryHistory, createRouter } from 'vue-router'
+import { createPinia, setActivePinia } from 'pinia'
 import Security from '@/views/admin/Security.vue'
 import MFA from '@/views/admin/MFA.vue'
 import { setLocale } from '@/i18n'
@@ -15,7 +16,8 @@ const adminApi = vi.hoisted(() => ({
 }))
 const kernelApi = vi.hoisted(() => ({
   getKernelScopes: vi.fn(),
-  getKernelAccessGroups: vi.fn()
+  getKernelAccessGroups: vi.fn(),
+  listKernelApiTokens: vi.fn()
 }))
 
 vi.mock('@/api/admin', () => adminApi)
@@ -43,6 +45,7 @@ async function mountAt(path) {
 describe('Admin security page', () => {
   beforeEach(async () => {
     vi.resetAllMocks()
+    setActivePinia(createPinia())
     vi.spyOn(console, 'error').mockImplementation(() => {})
     vi.stubGlobal('matchMedia', vi.fn(() => ({ matches: false, addEventListener: vi.fn(), removeEventListener: vi.fn() })))
     await setLocale('en')
@@ -52,6 +55,7 @@ describe('Admin security page', () => {
     adminApi.updateMFAConfig.mockResolvedValue({})
     kernelApi.getKernelScopes.mockResolvedValue([{ id: 'forward', name: 'Forward' }])
     kernelApi.getKernelAccessGroups.mockResolvedValue([{ id: 7, scope_id: 'forward', name: 'Canary operators', enabled: true }])
+    kernelApi.listKernelApiTokens.mockResolvedValue([])
   })
 
   afterEach(() => {
@@ -59,13 +63,27 @@ describe('Admin security page', () => {
     vi.restoreAllMocks()
   })
 
-  it('shows the two sections and the MFA policy at /admin/security', async () => {
+  it('shows the three sections and the MFA policy at /admin/security', async () => {
     const { wrapper } = await mountAt('/admin/security')
     const links = wrapper.findAll('[data-settings-section]')
-    expect(links.map(link => link.text())).toEqual(['Two-factor authentication', 'Access groups'])
-    expect(links.map(link => link.attributes('href'))).toEqual(['/admin/security/mfa', '/admin/security/access-groups'])
+    expect(links.map(link => link.text())).toEqual(['Two-factor authentication', 'Access groups', 'API tokens'])
+    expect(links.map(link => link.attributes('href'))).toEqual(['/admin/security/mfa', '/admin/security/access-groups', '/admin/security/api-tokens'])
     expect(wrapper.find('[data-security-panel="mfa"]').exists()).toBe(true)
     expect(wrapper.text()).toContain('Recovery codes')
+    expect(kernelApi.getKernelAccessGroups).not.toHaveBeenCalled()
+    // The tokens section is a lazy chunk: nothing of it loads until it opens.
+    expect(kernelApi.listKernelApiTokens).not.toHaveBeenCalled()
+  })
+
+  it('opens the API tokens section under the page heading, with one H1', async () => {
+    const { wrapper } = await mountAt('/admin/security/api-tokens')
+    await vi.waitFor(() => expect(wrapper.find('[data-security-panel="api-tokens"]').exists()).toBe(true))
+    await flushPromises()
+    expect(wrapper.findAll('h1').map(h => h.text())).toEqual(['Security'])
+    expect(wrapper.find('h2').text()).toBe('API tokens')
+    expect(wrapper.get('[data-settings-section="api-tokens"]').attributes('aria-current')).toBe('page')
+    expect(kernelApi.listKernelApiTokens).toHaveBeenCalledTimes(1)
+    expect(adminApi.getMFAConfig).not.toHaveBeenCalled()
     expect(kernelApi.getKernelAccessGroups).not.toHaveBeenCalled()
   })
 

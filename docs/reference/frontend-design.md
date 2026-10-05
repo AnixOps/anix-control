@@ -427,25 +427,29 @@ gives a fixed-locale set; `formatBytes()` is a plain helper.
 
 Both run against mocked screens: `web/e2e/support/screens.js` names each
 screen (fixture from `web/e2e/fixtures/` plus a scenario such as `empty` or
-`error`) and `openScreen(page, name, { theme, locale, clock })` opens it
-with the API answered from the fixture.
+`error`) and `openScreen(page, name, { theme, locale, clock, scenario })` opens it
+with the API answered from the fixture. `scenario` answers with another
+scenario of the screen's fixture (a refusal, a state the sweeps do not need a
+screen for): a spec uses it for the variants of a flow without adding a screen to
+the sweeps. A fixture answer may carry `headers` (`Retry-After` of a 429).
 
 - **Accessibility** (`web/e2e/a11y.spec.js`, part of `npm run test:e2e` in
   the Frontend Build job): `@axe-core/playwright` with the WCAG 2.2 AA and
-  best-practice rules on 45 admin and user screens, light and dark, 1440 and
+  best-practice rules on 51 admin and user screens, light and dark, 1440 and
   390 px. Serious and critical findings fail. It also checks the skip link,
   the landmarks, one `h1` per page and focus returning to the opener when a
   dialog closes, an open row menu and the account menu (no finding of any
   impact), the plugin drawer's tabs (WAI-ARIA keys) and the topology
   workspace's field names. Add a screen to `SCREENS` when a page is added.
 - **Visual regression** (`web/e2e/visual/visual.spec.js`,
-  `playwright.visual.config.js`): 70 full-page screenshots of 29 screens
+  `playwright.visual.config.js`): 83 full-page screenshots of 34 screens
   (sign-in, user home, subscription, dashboard, users, nodes with their Agent
   connection, node detail, a node's traffic (and its empty state), the
   rotate-credentials confirmation and result, a subscription group's members,
-  the forwarding pages, settings, monitoring (and a node's traffic in its
-  sheet), plugin center, an empty and an error state), light and dark at
-  1440 px and a few at 390 px. Deterministic by design:
+  the forwarding pages, the API tokens list (also with ended and everyone's
+  tokens, and empty), its create form and one-time token dialog, settings,
+  monitoring (and a node's traffic in its sheet), plugin center, an empty and
+  an error state), light and dark at 1440 px and a few at 390 px. Deterministic by design:
   mocked data with fixed timestamps, `Date.now()` fixed with
   `page.clock.setFixedTime`, UTC, English (text in the bundled Inter),
   reduced motion and `animations: 'disabled'` (charts and graphs turn their
@@ -796,7 +800,9 @@ UiDialog          create / edit forms with Ui fields in a .form-grid
   rows emit `row-activate` on click (not on controls inside) and Enter; ↑/↓,
   Home and End move between rows (one tab stop); Space toggles selection.
   `rowLabel(row)` names the row for "选择 {name}" and "{name} 的操作".
-- **States**: `error` (+ `errorTitle`, `retry` event) shows `UiErrorState`;
+- **States**: `error` (+ `errorTitle`, `retry` event) shows `UiErrorState`
+  (it reads the message of an axios error from `msg`, `message`, the kernel's
+  `{ error: { code, message } }` or the error itself);
   `loading` with no rows shows skeleton rows after 300 ms, with rows it dims
   them; no rows shows the empty state (`emptyTitle`, `emptyDescription`,
   `emptyIcon`, slot `#empty-actions`), or "没有结果" + 清除筛选
@@ -1091,7 +1097,7 @@ command palette.
 | Page | Path | Sections |
 |---|---|---|
 | 系统设置 | `/admin/system/:section` | 通用 (subscription domains, configuration keys), 转发运行时 (backend status, doctor, jobs, operator commands), 备份, 负载均衡, 审计日志, 关于 |
-| 安全 | `/admin/security/:section` | 两步验证 (`MFA.vue`), 访问组 (`AccessGroups.vue` with `embedded`: its header becomes an H2) |
+| 安全 | `/admin/security/:section` | 两步验证 (`MFA.vue`), 访问组 (`AccessGroups.vue` with `embedded`: its header becomes an H2), API 令牌 (`security/ApiTokens.vue`, a lazy chunk: see "API tokens") |
 | 通知 | `/admin/notifications/:channel` | 邮件, Telegram, 模板, 发送记录 as segmented tabs (`UiTabs variant="segmented"`) |
 
 Old URLs redirect: `/admin/mfa`, `/admin/access-groups`, `/admin/telegram`.
@@ -1106,6 +1112,92 @@ no credential) with its loading, empty and error states and cards on a phone;
 the table keeps its own state (the page's URL names the section only). Users
 who reach the group through a plan or their primary group are not members of
 this list, as the counts do not count them.
+
+### API tokens (安全 → API 令牌)
+
+The administrators' personal access tokens
+([guide](../guide/admin-api-tokens.md), [reference](admin-api-tokens.md)):
+`GET`, `POST` and `DELETE /api/v4/kernel/api-tokens`. It sits in 安全 next to the
+two-factor policy because creating a token needs the same re-authentication; the
+section is `defineAsyncComponent` in `Security.vue`, so its code (and the
+`adminApiTokens` messages, in the `adminPages` group; only the section's label is
+in `adminSecurity`, which the palette reads) loads when it is opened. The pieces
+are in `web/src/views/admin/security/`:
+
+| File | What it holds |
+|---|---|
+| `ApiTokens.vue` | The section: `UiSection` with *Create token*, the quota line, a `UiDataTable` (cards on a phone), the revoke confirmation |
+| `ApiTokenCreate.vue` | The button, the form dialog and the one-time token dialog |
+| `useApiTokens.js` | List state: the two chips, a stale answer dropped, the count against 25, revoking |
+| `useApiTokenCreate.js` | Create state: the form, the re-authentication step, the refusals, the token |
+| `apiTokens.js` | Plain readers and rules: the row, the state of a token, the name and expiry checks, `classifyTokenRefusal` |
+
+- **The table.** Name with `anixadm_…<last four>` and the creation date (the
+  date only, the exact time on hover: seven columns do not fit the 876 px a
+  1440 px screen leaves the section), scope badge (Read info, Admin warning),
+  status (`tokenState`: Active, Expires soon within 7 days, Expired, Revoked; the
+  two ended states are neutral and the words tell them apart), expiry as a
+  relative time with the exact one under it ("No expiry" for none; "Revoked 20
+  days ago" with the `revoke_reason` for a revoked one), last use as a relative
+  time with `last_used_ip` ("Never used"), and the row menu: *Copy token ID* (the
+  id the operation log carries) and, for an active token, a danger *Revoke
+  token…* `UiConfirmDialog` that names the token and says that its next request is
+  refused (`onConfirm`: a failure, or a 404 "gone or not yours", shows inside it).
+  The chips *Revoked and expired* (`include_inactive=true`) and *All
+  administrators* (`all=true`, adds the Owner column) ask the route again.
+  The list is newest first, at most 500 rows.
+- **Who is a super administrator.** The profile has no such field, so (as for
+  rotating credentials) *All administrators* is offered to everyone and a
+  `403 super_admin_required` turns it off for the page's lifetime and shows a
+  sentence. The rows carry only `user_id`, so another administrator's token reads
+  "Administrator #7" and the quota line counts only the caller's own active
+  tokens (`ownActive`); at 25, *Create token* is disabled with that line saying why.
+- **The form.** Name (1 to 100 characters, counted as characters), scope as a
+  `UiRadioGroup` whose option texts say what each can do (Read: `GET` and `HEAD`,
+  never the two reads that answer a secret in clear, a node's credentials and the
+  Telegram bot token; Admin: what you may do, except manage tokens), expiry as a
+  `UiSelect` (30, 90 (recommended, the default), 180, 365, 730 days, *Custom…*
+  with a 1 to 730 field, *No expiry* with a warning) and the re-authentication,
+  which follows the subscription reset in `Subscribe.vue`: `getMfaStatus()` picks
+  the password or a six-digit `UiOtpField` (sent as `{ code, method: 'totp' }`),
+  with a switch to a recovery code (`{ code: 'XXXX-XXXX', method: 'backup' }`). The
+  form is `novalidate`: the same checks run in `useApiTokenCreate.submit` and the
+  field to focus comes back.
+- **Refusals** (`classifyTokenRefusal` reads the kernel's `{ error: { code,
+  message } }`): `step_up_failed` on the credential field (and the credential is
+  cleared), `step_up_required` split by its message (`password is required`
+  switches to the password, `an MFA code is required` to the code, `sign in again
+  and retry within 10 minutes`, which is what the kernel says once identity holds
+  the credentials, is a form-level alert with a *Sign in again* button that signs
+  out and goes to `/login`), `409 too_many_tokens`, `429` (`step_up_rate_limited`,
+  or any 429; the wait from `Retry-After` in whole minutes), `400
+  invalid_request`, and anything else with the route's own message.
+- **The token is shown once** in a `UiDialog` whose scrim does not close it (Esc,
+  × and Done do): a warning that it will not be shown again, the token in a
+  masked `UiCopyField` (reveal toggle, copy with the clipboard fallback that
+  selects the text), the name, scope and expiry, and a usage hint, a
+  `UiCodeBlock` with `curl … -H "Authorization: Bearer $ANIXOPS_TOKEN"` on this
+  origin and the rule never to put it in a URL. The hint never contains the
+  token, so the secret is in one place on screen. `useApiTokenCreate` keeps it in
+  `result` (a `shallowRef`) only: `dismiss`, `cancel`, `open` and the end of the
+  scope clear it, a request that answers after that is dropped, `onCreated`
+  carries the stored record (id, name, scope, `hint`) and never the token, and
+  the form's password and codes are cleared on success, on a refused credential
+  and on close. `src/__tests__/apiTokenCreate.test.js` and the e2e spec check the
+  DOM (markup, text and field values), storage, the URL, the console and every
+  later request after each way of closing.
+- **No credential in the console.** `utils/request.js` logs the whole axios error
+  of a failed request, and that error holds the request body. A request marked
+  `sensitive: true` (`createKernelApiToken`) logs only its method, URL and status
+  and has its `data` removed from the error. Other requests are logged as before
+  (the subscription reset's password still is: mark it when that page is next
+  changed).
+- **Fixtures.** `e2e/fixtures/apiTokens.js` answers the three routes from a little
+  per-screen state (tokens created and revoked in it), accepts one password, one
+  code and one recovery code, and has scenarios for the refusals (`mfa`,
+  `cutover`, `tooMany`, `rateLimited`, `notSuper`, `full`, `revokeFails`,
+  `revokeGone`). The create flows work a Select inside a dialog, so they run on the
+  real clock (see "The screens' fixed clock and Vue's events").
 
 ## Dashboards and monitoring (U8)
 

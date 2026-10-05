@@ -434,11 +434,12 @@ export default {
   },
   adminSecurity: {
     title: '安全',
-    subtitle: '两步验证策略与访问组。',
+    subtitle: '两步验证策略、访问组与 API 令牌。',
     navLabel: '安全分区',
     sections: {
       mfa: '两步验证',
-      accessGroups: '访问组'
+      accessGroups: '访问组',
+      apiTokens: 'API 令牌'
     },
     mfa: {
       title: '两步验证',

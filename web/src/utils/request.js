@@ -110,7 +110,14 @@ function createClient(axios) {
       return response.config?.rawResponse ? response : response.data
     },
     error => {
-      console.error('Request error:', error)
+      if (error?.config?.sensitive) {
+        // A request that carries a credential (a password or a one-time code
+        // for a step-up): log what failed, never the body the error holds.
+        if (error.config) error.config.data = undefined
+        console.error('Request error:', error.config?.method, error.config?.url, error.response?.status ?? error.code ?? '')
+      } else {
+        console.error('Request error:', error)
+      }
       if (error?.response?.status === 401 && !isAuthEndpoint(error.config)) {
         clearAuthState()
         redirectToLogin()

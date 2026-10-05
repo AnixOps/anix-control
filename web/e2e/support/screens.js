@@ -4,6 +4,7 @@
 // plus the scenario it answers with ('empty', 'error', ...). The API answers
 // come from the fixture first, then COMMON, then an empty success envelope.
 import agent from '../fixtures/agent.js'
+import apiTokens from '../fixtures/apiTokens.js'
 import coupons from '../fixtures/coupons.js'
 import dashboard from '../fixtures/dashboard.js'
 import deployments from '../fixtures/deployments.js'
@@ -75,6 +76,14 @@ export const SCREENS = {
   'admin-system': { fixture: system, scenario: 'general' },
   'admin-security': { fixture: security, scenario: 'mfa' },
   'admin-access-groups': { fixture: security, scenario: 'groups' },
+  // Security → API tokens: the list, with ended and everyone's tokens, empty
+  // and failed; the create form and the dialog that shows the token once.
+  'admin-api-tokens': { fixture: apiTokens, scenario: 'list' },
+  'admin-api-tokens-all': { fixture: apiTokens, scenario: 'all' },
+  'admin-api-tokens-empty': { fixture: apiTokens, scenario: 'empty' },
+  'admin-api-tokens-error': { fixture: apiTokens, scenario: 'error' },
+  'admin-api-token-create': { fixture: apiTokens, scenario: 'create' },
+  'admin-api-token-created': { fixture: apiTokens, scenario: 'created' },
   'admin-notifications': { fixture: notifications, scenario: 'email' },
   'admin-monitor': { fixture: monitor, scenario: 'live' },
   'admin-monitor-node-traffic': { fixture: monitor, scenario: 'traffic' },
@@ -93,11 +102,14 @@ const ADMIN = { id: 1, email: 'admin@example.com', is_admin: true }
 const MEMBER = { id: 7, email: 'lin.xiao@example.com', is_admin: false, token: '7f3k9q2m8x4v2c6b' }
 
 // Opens a screen with its API mocked. `clock` fixes Date.now() (timers keep
-// running) so relative times and charts are the same on every run.
-export async function openScreen(page, name, { theme = 'light', locale = 'en', clock = false } = {}) {
+// running) so relative times and charts are the same on every run. `scenario`
+// answers with another scenario of the screen's fixture (a refusal, a state
+// the sweeps do not need a screen for).
+export async function openScreen(page, name, { theme = 'light', locale = 'en', clock = false, scenario: variant = '' } = {}) {
   const screen = SCREENS[name]
   if (!screen) throw new Error(`unknown screen ${name}`)
-  const { fixture, scenario } = screen
+  const { fixture } = screen
+  const scenario = variant || screen.scenario
   const signedOut = Boolean(fixture.signedOut?.(scenario))
   await page.addInitScript(({ theme, locale, signedOut, profile }) => {
     localStorage.setItem('app.locale', locale)
@@ -116,7 +128,7 @@ export async function openScreen(page, name, { theme = 'light', locale = 'en', c
     const ctx = { method: request.method(), query: Object.fromEntries(url.searchParams), body, scenario, now: clock ? FIXED_NOW_MS : Date.now() }
     let answer = fixture.api ? await fixture.api(url.pathname, ctx) : undefined
     if (answer === undefined && COMMON[url.pathname]) answer = COMMON[url.pathname](fixture)
-    if (answer?.__status) return route.fulfill({ status: answer.__status, contentType: 'application/json', body: JSON.stringify(answer.body || {}) })
+    if (answer?.__status) return route.fulfill({ status: answer.__status, contentType: 'application/json', headers: answer.headers, body: JSON.stringify(answer.body || {}) })
     if (answer?.__text) return route.fulfill({ status: 200, contentType: 'text/plain', body: answer.__text })
     if (answer === undefined) answer = { code: 0, data: null }
     return route.fulfill({ status: 200, contentType: 'application/json', body: JSON.stringify(answer) })

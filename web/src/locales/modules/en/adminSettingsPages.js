@@ -435,11 +435,12 @@ export default {
   },
   adminSecurity: {
     title: 'Security',
-    subtitle: 'The two-factor policy and access groups.',
+    subtitle: 'The two-factor policy, access groups and API tokens.',
     navLabel: 'Security sections',
     sections: {
       mfa: 'Two-factor authentication',
-      accessGroups: 'Access groups'
+      accessGroups: 'Access groups',
+      apiTokens: 'API tokens'
     },
     mfa: {
       title: 'Two-factor authentication',
