@@ -28,15 +28,14 @@
 //   - links: hop i's engine originates and hop i+1's engine terminates
 //     hops[i+1].ingress (NFTABLES: RAW; GOST: RAW, TLS, WSS, QUIC, GRPC;
 //     ANIXOPS: ANIXOPS); mux needs gost or anixops on both ends.
-//   - anixops (phase A4; the carrier, PROXY and server-name rules for ANIXOPS
-//     links run only with Options.EnableAnixOps): a link's carrier is a known
-//     value and only on an ANIXOPS link (CodeNotApplicable); server_name on
-//     an ANIXOPS link is empty or the identity name of its hop's only node
-//     (CodeServerNameUnsupported); the PLAIN carrier only on an
-//     administrator's route (CodePlainUntrusted); policy.proxy_protocol is a
+//   - anixops (phase A4). Always: a link's carrier is a known value and only
+//     on an ANIXOPS link (CodeNotApplicable); policy.proxy_protocol is a
 //     known value, and PROXY_PROTOCOL_V2 needs an exit whose engine writes it
 //     (ANIXOPS only, else CodeProxyProtocolUnsupported), a route with TCP, and
-//     no DIRECT_MODE_PREFERRED on a chain (CodeInvalidRelation).
+//     no DIRECT_MODE_PREFERRED on a chain (CodeInvalidRelation). Only with
+//     Options.EnableAnixOps: server_name on an ANIXOPS link is empty or the
+//     identity name of its hop's only node (CodeServerNameUnsupported), and
+//     the PLAIN carrier is for an administrator's route (CodePlainUntrusted).
 //   - targets: 1..MaxTargets, host an IP literal or DNS name (no port, no
 //     numeric IPv4 forms), port 1..65535, weight at most MaxWeight, no
 //     duplicate host and port; the target policy (CheckTargetAddress), with

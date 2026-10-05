@@ -64,9 +64,10 @@
   `EngineCapabilities.carriers = 12`, `.proxy_protocol = 13` and
   `.protocol_versions = 14`. `sdk/forward/validate` gains the rules and the codes
   `carrier_unsupported`, `plain_untrusted`, `server_name_unsupported` and
-  `proxy_protocol_unsupported`, all for ANIXOPS links only with
-  `Options.EnableAnixOps` (off by default; a gost or nftables exit asking for
-  PROXY protocol is refused); the planner renders ANIXOPS links multiplexed and
+  `proxy_protocol_unsupported`: field sanity and the refusal of PROXY protocol
+  on a gost or nftables exit are unconditional, the ANIXOPS link and inventory
+  rules need `Options.EnableAnixOps` (off by default); the planner renders
+  ANIXOPS links multiplexed and
   sets `NodeHop.proxy_protocol` on the last hop only. New fixture
   `contracts/forward/v1/plan-anixops-experimental.json`; no existing fixture or
   descriptor line changed, and a route that uses none of the new fields plans

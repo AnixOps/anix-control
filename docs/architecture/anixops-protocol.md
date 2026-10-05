@@ -899,8 +899,11 @@ material and no secrets are added to the state. The gost engine could
 adopt `proxy_protocol` later; until then validation refuses it on gost
 exits.
 
-Validation (`sdk/forward/validate`, A4; every ANIXOPS rule only with
-`Options.EnableAnixOps`): a carrier on a link that is not ANIXOPS is
+Validation (`sdk/forward/validate`, A4). Unconditional: the enum values are
+known, a carrier is only on an ANIXOPS link and `PROXY_PROTOCOL_V2` only on
+an exit whose engine writes it. With `Options.EnableAnixOps` only:
+`server_name`, `PLAIN` ownership and the inventory rules (carrier, labels,
+wire version, exit capability). In detail: a carrier on a link that is not ANIXOPS is
 `not_applicable`; a node of the link that does not list the carrier
 (`AUTO` needs `TLS_TCP`) is `carrier_unsupported`; `PLAIN` on a user's
 route, or on a node without `link=iepl` or `link=iplc`, is
