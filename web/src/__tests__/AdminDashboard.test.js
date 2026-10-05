@@ -8,7 +8,8 @@ const adminApi = vi.hoisted(() => ({
   getTrafficHourly: vi.fn(),
   getTickets: vi.fn(),
   getNodes: vi.fn(),
-  getSystemAuditLogs: vi.fn()
+  getSystemAuditLogs: vi.fn(),
+  getKernelAlerts: vi.fn()
 }))
 
 const engine = vi.hoisted(() => ({
@@ -80,6 +81,7 @@ describe('Admin Dashboard', () => {
         total: 2
       }
     })
+    adminApi.getKernelAlerts.mockResolvedValue({ alerts: [], summary: { active: 0, critical: 0, warning: 0 } })
     adminApi.getSystemAuditLogs.mockResolvedValue({
       data: { data: { list: [{ id: 91, action: 'delete', module: 'nodes', username: 'root', content: 'Deleted node sg-03', status: 'success', created_at: NOW - 120 }], total: 1 } }
     })
@@ -98,6 +100,7 @@ describe('Admin Dashboard', () => {
     expect(adminApi.getTickets).toHaveBeenCalledTimes(1)
     expect(adminApi.getNodes).toHaveBeenCalledWith({ page: 1, page_size: 200 })
     expect(adminApi.getSystemAuditLogs).toHaveBeenCalledWith({ page: 1, page_size: 6 })
+    expect(adminApi.getKernelAlerts).toHaveBeenCalledWith({ status: 'active' })
     wrapper.unmount()
   })
 
@@ -207,5 +210,127 @@ describe('Admin Dashboard', () => {
     expect(wrapper.get('[data-metric="users"] [data-metric-value]').text()).toBe('42')
     expect(wrapper.get('[data-dashboard-activity]').text()).toContain('Couldn’t load the audit log')
     wrapper.unmount()
+  })
+
+  describe('kernel alerts', () => {
+    const certificate = {
+      id: 7,
+      key: 'agent_certificate_expiring/proxy-12',
+      kind: 'agent_certificate_expiring',
+      severity: 'warning',
+      status: 'active',
+      subject_kind: 'node',
+      subject: 'proxy-12',
+      message: 'English message for notifications',
+      detail: { node: 'proxy-12', node_name: 'hk-1', not_after: '2026-10-08T10:00:00Z', expired: false },
+      resolved_at: null
+    }
+    const critical = {
+      id: 8,
+      key: 'ca_expiring/service_ca:k1',
+      kind: 'ca_expiring',
+      severity: 'critical',
+      status: 'active',
+      subject_kind: 'ca',
+      subject: 'service_ca:k1',
+      message: 'The current module CA ends',
+      detail: { ca: 'module', not_after: '2026-10-08T10:00:00Z', expired: false, next_staged: false },
+      resolved_at: null
+    }
+
+    it('merges the server alerts with the browser-built ones: critical first, links, badge from the summary', async () => {
+      adminApi.getKernelAlerts.mockResolvedValue({ alerts: [critical, certificate], summary: { active: 5, critical: 1, warning: 4 } })
+      const wrapper = mountDashboard()
+      await flushPromises()
+
+      const alerts = wrapper.get('[data-dashboard-alerts]')
+      const keys = alerts.findAll('[data-alert]').map(item => item.attributes('data-alert'))
+      // Danger (the offline node, the critical CA) before warnings (tickets, certificate).
+      expect(keys).toEqual(['node-8', 'kernel-8', 'tickets', 'kernel-7'])
+      expect(alerts.get('[data-alert="kernel-8"]').text()).toContain('The current module CA is about to end')
+      expect(alerts.get('[data-alert="kernel-8"]').text()).toContain('No next CA is staged')
+      expect(alerts.get('[data-alert="kernel-7"]').text()).toContain('The Agent certificate of hk-1 is about to expire')
+      expect(alerts.get('[data-alert="kernel-7"]').text()).not.toContain('English message')
+      expect(alerts.get('[data-alert="kernel-7"] .dashboard-alerts__icon').classes()).toContain('is-warning')
+      expect(alerts.get('[data-alert="kernel-8"] .dashboard-alerts__icon').classes()).toContain('is-danger')
+      const links = wrapper.findAllComponents(RouterLinkStub).map(link => link.props('to'))
+      expect(links).toContain('/admin/nodes/12')
+      expect(alerts.get('[data-alerts-summary]').text()).toBe('5 active, 1 critical')
+      wrapper.unmount()
+    })
+
+    it('shows the resolved history from a toggle, and back', async () => {
+      const resolved = { ...certificate, id: 9, status: 'resolved', resolved_at: '2026-10-04T08:00:00Z' }
+      adminApi.getKernelAlerts.mockImplementation(async ({ status }) => (status === 'resolved'
+        ? { alerts: [resolved], summary: { active: 1, critical: 0, warning: 1 } }
+        : { alerts: [certificate], summary: { active: 1, critical: 0, warning: 1 } }))
+      const wrapper = mountDashboard()
+      await flushPromises()
+      expect(wrapper.get('[data-alerts-summary]').text()).toBe('1 active alerts')
+
+      await wrapper.findAll('[data-alerts-view] button').find(button => button.text() === 'Resolved').trigger('click')
+      await flushPromises()
+      expect(adminApi.getKernelAlerts).toHaveBeenLastCalledWith({ status: 'resolved', limit: 30 })
+      const alerts = wrapper.get('[data-dashboard-alerts]')
+      expect(alerts.findAll('[data-alert]').map(item => item.attributes('data-alert'))).toEqual(['kernel-9'])
+      expect(alerts.get('[data-alert="kernel-9"]').text()).toContain('Resolved')
+      expect(alerts.get('[data-alert="kernel-9"] .dashboard-alerts__icon').classes()).toContain('is-neutral')
+      // The browser-built alerts are the active view's.
+      expect(alerts.find('[data-alert="node-8"]').exists()).toBe(false)
+      expect(alerts.find('[data-alerts-summary]').exists()).toBe(false)
+
+      await wrapper.findAll('[data-alerts-view] button').find(button => button.text() === 'Active').trigger('click')
+      await flushPromises()
+      expect(alerts.find('[data-alert="node-8"]').exists()).toBe(true)
+      wrapper.unmount()
+    })
+
+    it('says so when nothing resolved lately', async () => {
+      const wrapper = mountDashboard()
+      await flushPromises()
+      await wrapper.findAll('[data-alerts-view] button').find(button => button.text() === 'Resolved').trigger('click')
+      await flushPromises()
+      expect(wrapper.get('[data-dashboard-alerts]').text()).toContain('No resolved alerts')
+      wrapper.unmount()
+    })
+
+    it('fails on its own: one item with Try again, the rest of the dashboard and its alerts stay', async () => {
+      adminApi.getKernelAlerts.mockRejectedValueOnce(new Error('alerts down'))
+      const wrapper = mountDashboard()
+      await flushPromises()
+
+      const alerts = wrapper.get('[data-dashboard-alerts]')
+      expect(alerts.get('[data-alert="alerts-failed"]').text()).toContain('Couldn’t load certificate and rollout alerts')
+      expect(alerts.find('[data-alert="node-8"]').exists()).toBe(true)
+      expect(wrapper.get('[data-metric="users"] [data-metric-value]').text()).toBe('42')
+      expect(wrapper.find('[data-dashboard-refresh]').attributes('disabled')).toBeUndefined()
+
+      adminApi.getKernelAlerts.mockResolvedValue({ alerts: [certificate], summary: { active: 1, critical: 0, warning: 1 } })
+      await alerts.get('[data-alert="alerts-failed"] button').trigger('click')
+      await flushPromises()
+      expect(alerts.find('[data-alert="alerts-failed"]').exists()).toBe(false)
+      expect(alerts.find('[data-alert="kernel-7"]').exists()).toBe(true)
+      wrapper.unmount()
+    })
+
+    it('treats a server without the route (404) as having no alerts', async () => {
+      adminApi.getKernelAlerts.mockRejectedValue(Object.assign(new Error('not found'), { response: { status: 404 } }))
+      const wrapper = mountDashboard()
+      await flushPromises()
+      expect(wrapper.find('[data-alert="alerts-failed"]').exists()).toBe(false)
+      wrapper.unmount()
+    })
+
+    it('refreshes the alerts with 刷新 and keeps an unknown kind readable', async () => {
+      const future = { ...certificate, id: 12, kind: 'future_kind', subject_kind: 'thing', subject: 'x', message: 'Something new needs you' }
+      adminApi.getKernelAlerts.mockResolvedValue({ alerts: [future], summary: { active: 1, critical: 0, warning: 1 } })
+      const wrapper = mountDashboard()
+      await flushPromises()
+      expect(wrapper.get('[data-alert="kernel-12"]').text()).toContain('Something new needs you')
+      await wrapper.get('[data-dashboard-refresh]').trigger('click')
+      await flushPromises()
+      expect(adminApi.getKernelAlerts).toHaveBeenCalledTimes(2)
+      wrapper.unmount()
+    })
   })
 })

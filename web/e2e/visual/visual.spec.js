@@ -50,6 +50,16 @@ const SHOTS = [
   ['admin-api-tokens-empty', [DESKTOP]],
   ['admin-api-token-create', [DESKTOP, PHONE]],
   ['admin-api-token-created', [DESKTOP, PHONE]],
+  // Notifications → Telegram: the page with its test message section, and
+  // the answers (delivered, blocked bot as a warning, unreachable as danger).
+  ['admin-telegram', [DESKTOP, PHONE]],
+  ['admin-telegram-test-ok', [DESKTOP]],
+  ['admin-telegram-test-blocked', [DESKTOP, PHONE]],
+  ['admin-telegram-test-network', [DESKTOP]],
+  // The kernel's alerts in the dashboard: the resolved history, none, a failed load.
+  ['admin-dashboard-alerts-resolved', [DESKTOP, PHONE]],
+  ['admin-dashboard-alerts-none', [DESKTOP]],
+  ['admin-dashboard-alerts-failed', [DESKTOP]],
   ['admin-system', [DESKTOP]],
   ['admin-monitor', [DESKTOP]],
   ['admin-plugins', [DESKTOP]],

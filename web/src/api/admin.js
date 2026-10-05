@@ -1003,6 +1003,36 @@ export async function getSubscriptionGroupMembers(groupId, { page = 1, pageSize 
   }))
 }
 
+// POST /api/v4/kernel/notifications/telegram/test: sends one fixed test
+// message through the configured bot and answers what Telegram said:
+// { class, ok, message, target, error_code?, reason? }, class one of ok,
+// invalid_token, chat_not_found, bot_blocked, rate_limited, not_configured,
+// network_error (+ reason), unknown. No chat_id (the default) is the caller's
+// own bound chat. Refusals are thrown: 409 telegram_not_bound, 403
+// chat_not_allowed, 429 rate_limited with Retry-After. The answer holds no
+// token, and `sensitive` keeps the failed request out of the console log.
+export async function testTelegramBot(chatId) {
+  const data = chatId ? { chat_id: chatId } : {}
+  return dataOf(await adminV4({ url: '/kernel/notifications/telegram/test', method: 'post', data, sensitive: true }))
+}
+
+// GET /api/v4/kernel/alerts: the kernel's alerts (certificates that were not
+// renewed, CAs close to their end, phased processes that stalled). Answers
+// { alerts: [...], summary: { active, critical, warning } }; the summary
+// counts every active alert whatever the filters. status is active (default),
+// resolved or all.
+export async function getKernelAlerts({ status = 'active', kind = '', severity = '', limit = 0, signal } = {}) {
+  const params = { status }
+  if (kind) params.kind = kind
+  if (severity) params.severity = severity
+  if (limit) params.limit = limit
+  const data = dataOf(await adminV4({ url: '/kernel/alerts', method: 'get', params, signal }))
+  return {
+    alerts: Array.isArray(data?.alerts) ? data.alerts : [],
+    summary: { active: 0, critical: 0, warning: 0, ...(data?.summary || {}) }
+  }
+}
+
 export default {
   getDashboard,
   createUser,
@@ -1039,6 +1069,8 @@ export default {
   updateSubscriptionGroup,
   deleteSubscriptionGroup,
   getSubscriptionGroupMembers,
+  testTelegramBot,
+  getKernelAlerts,
   getSubscriptionTemplates,
   getSubscriptionProtocols,
   updateGroupProtocols,

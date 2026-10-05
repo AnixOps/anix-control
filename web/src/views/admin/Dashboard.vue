@@ -58,8 +58,15 @@
           :tickets-error="ticketsError"
           :pending-orders="isCommercial ? Number(stats.pending_orders || 0) : 0"
           :latest-report-at="latestReportAt"
+          :kernel-alerts="kernelAlerts"
+          :alerts-summary="alertsSummary"
+          :alerts-error="alertsError"
+          :alerts-loading="alertsLoading"
+          :view="alertsView"
           @retry-nodes="loadNodes"
           @retry-tickets="loadTickets"
+          @retry-alerts="loadAlerts"
+          @update:view="setAlertsView"
         />
         <DashboardActivity
           :entries="activity"
@@ -88,12 +95,13 @@
 // the recent audit log. Every number comes from an existing endpoint:
 // GET /admin/dashboard (cached 60 s; 刷新 asks refresh=true),
 // /admin/traffic/hourly (24 h), /admin/ticket, /admin/nodes (offline ones)
-// and /admin/system/audit-logs. Each block loads, fails and retries on its
+// /admin/system/audit-logs and GET /api/v4/kernel/alerts (certificates and
+// stalled phases, merged into 需要处理). Each block loads, fails and retries on its
 // own. Revenue and orders stay commercial-only.
 import { computed, onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
 import { Activity, CircleDollarSign, LifeBuoy, ReceiptText, RotateCw, Server, Users } from '@lucide/vue'
-import { getDashboard, getNodes, getSystemAuditLogs, getTickets, getTrafficHourly } from '@/api/admin'
+import { getDashboard, getKernelAlerts, getNodes, getSystemAuditLogs, getTickets, getTrafficHourly } from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useEdition } from '@/composables/useEdition'
 import UiButton from '@/ui/UiButton.vue'
@@ -134,6 +142,17 @@ const ticketsError = ref(null)
 const nodes = ref([])
 const nodesLoading = ref(false)
 const nodesError = ref(null)
+
+// The kernel's alerts: the active ones, or the resolved history. They load
+// apart from the rest and never keep the page busy; a server without the route
+// (404) just has none.
+const RESOLVED_SIZE = 30
+const kernelAlerts = ref([])
+const alertsSummary = ref({ active: 0, critical: 0, warning: 0 })
+const alertsLoading = ref(false)
+const alertsError = ref(null)
+const alertsView = ref('active')
+let alertsRequest = 0
 
 const activity = ref([])
 const activityLoading = ref(false)
@@ -327,8 +346,34 @@ async function loadActivity() {
   }
 }
 
+async function loadAlerts() {
+  const request = ++alertsRequest
+  const status = alertsView.value
+  alertsLoading.value = true
+  try {
+    const page = await getKernelAlerts(status === 'resolved' ? { status, limit: RESOLVED_SIZE } : { status })
+    if (request !== alertsRequest) return
+    kernelAlerts.value = page.alerts
+    alertsSummary.value = page.summary
+    alertsError.value = null
+  } catch (error) {
+    if (request !== alertsRequest) return
+    kernelAlerts.value = []
+    alertsError.value = error?.response?.status === 404 ? null : error
+  } finally {
+    if (request === alertsRequest) alertsLoading.value = false
+  }
+}
+
+function setAlertsView(view) {
+  if (view === alertsView.value || !['active', 'resolved'].includes(view)) return
+  alertsView.value = view
+  kernelAlerts.value = []
+  return loadAlerts()
+}
+
 function loadAll(refreshCache = false) {
-  return Promise.all([loadStats(refreshCache), loadTraffic(), loadTickets(), loadNodes(), loadActivity()])
+  return Promise.all([loadStats(refreshCache), loadTraffic(), loadTickets(), loadNodes(), loadActivity(), loadAlerts()])
 }
 
 function refresh() {

@@ -12,8 +12,10 @@ operation log rows (below).
 
 > `POST /api/v2/admin/notification/test` with `type: "telegram"` is a stub: it
 > logs that Telegram delivery is not implemented and still answers success.
-> It is a v2board-compatible route and is left as it is. The UI calls this
-> endpoint for the Telegram test instead.
+> It is a v2board-compatible route and is left as it is. The console's
+> Notifications, Telegram, **Send test message** button calls this endpoint
+> (`{}`, the administrator's own chat) and shows the class, `message` and
+> `reason`; 409 says to link Telegram first and 429 counts down `Retry-After`.
 
 ## Request
 

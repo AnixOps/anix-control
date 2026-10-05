@@ -442,7 +442,7 @@ the sweeps. A fixture answer may carry `headers` (`Retry-After` of a 429).
   impact), the plugin drawer's tabs (WAI-ARIA keys) and the topology
   workspace's field names. Add a screen to `SCREENS` when a page is added.
 - **Visual regression** (`web/e2e/visual/visual.spec.js`,
-  `playwright.visual.config.js`): 83 full-page screenshots of 34 screens
+  `playwright.visual.config.js`): 100 full-page screenshots of 41 screens
   (sign-in, user home, subscription, dashboard, users, nodes with their Agent
   connection, node detail, a node's traffic (and its empty state), the
   rotate-credentials confirmation and result, a subscription group's members,
@@ -1199,6 +1199,31 @@ are in `web/src/views/admin/security/`:
   `revokeGone`). The create flows work a Select inside a dialog, so they run on the
   real clock (see "The screens' fixed clock and Vue's events").
 
+### Telegram test message (通知 → Telegram → 测试消息)
+
+`views/admin/notifications/TelegramTestPanel.vue`, a section of the Telegram
+channel above 发送消息. The button posts `{}` to `POST /api/v4/kernel/notifications/telegram/test`
+(`testTelegramBot()` in `api/admin.js`, the v4 base with `sensitive: true`, so a
+failed request is logged by method, URL and status only) and shows
+`data.class` in the tone of `utils/telegramTest.js`: success for `ok`, warning for
+`chat_not_found`, `bot_blocked`, `rate_limited` and `not_configured`, danger for
+`invalid_token`, `network_error` and `unknown` (a class the server adds later is
+`unknown`). The result is a `role="status"` block with a badge (the class in
+words), the server's fixed `message` and a fix hint; for `network_error` the hint
+is the `reason` (timeout, dns, tls, connect, canceled, other).
+
+- 409 `telegram_not_bound`: "Telegram not linked" with the way to link it
+  (the bot's `/bind` command; the console has no binding page of its own).
+- 429: the button is disabled and shows "Try again in N s" from `Retry-After`
+  (seconds or a date; 60 s when missing; at most an hour). The countdown counts
+  timer ticks, not `Date.now()`, so a frozen clock cannot stall it.
+- The button is `loading` during the request and ignores a second click.
+- An unsaved bot form gets a note: the test uses the saved settings.
+- The token is never read, shown or logged here; the route neither takes nor
+  returns it. Tests: `TelegramTestPanel.test.js`, `telegramTest.test.js`, the
+  `admin-telegram*` screens and `e2e/admin-wired-apis-4.spec.js`. The Telegram
+  flows run on the real clock (the countdown is a timer).
+
 ## Dashboards and monitoring (U8)
 
 The dashboard template (plan §7.4): 3–4 metric cards → one main chart →
@@ -1207,7 +1232,7 @@ fails and retries on its own, so one failing endpoint never blanks the page.
 
 | Page | Path | Content |
 |---|---|---|
-| 仪表盘 | `/admin/dashboard` | 用户, 在线节点 / 总数, 今日流量, 待处理工单 cards; 24 h traffic (`/admin/traffic/hourly`); 需要处理 (offline nodes, tickets waiting for a reply, stalled traffic reports, pending orders in the commercial edition); 最近操作 (audit log) |
+| 仪表盘 | `/admin/dashboard` | 用户, 在线节点 / 总数, 今日流量, 待处理工单 cards; 24 h traffic (`/admin/traffic/hourly`); 需要处理 (offline nodes, tickets waiting for a reply, stalled traffic reports, pending orders in the commercial edition, and the kernel's alerts: see "Kernel alerts in 需要处理"); 最近操作 (audit log) |
 | 流量与监控 | `/admin/monitor/:section` | 实时节点 (default, `/admin/monitor`: the monitor WebSocket in a `UiDataTable`), `traffic` 用户流量, `latency` 节点延迟, `forward` 转发 (topology, ingress comparison, runtime jobs) |
 | 部署编排 | `/admin/deployments` | Topologies and node roles (tabs), the operation timeline, the topology workspace (dialog) and the node-role sheet |
 
@@ -1230,6 +1255,38 @@ fails and retries on its own, so one failing endpoint never blanks the page.
 - 部署编排 keeps its state and API calls in
   `views/admin/deployments/useDeploymentCenter.js`; the panels next to it
   only render.
+
+### Kernel alerts in 需要处理
+
+`DashboardAlerts.vue` merges `GET /api/v4/kernel/alerts` (`getKernelAlerts()`;
+`docs/reference/kernel-alerts.md`) into the items it builds in the browser.
+`Dashboard.vue` loads them with the other blocks (and on 刷新) but apart from
+them: they never keep the page busy, and a failure is one item with 重试 (a 404,
+a server without the route, shows none).
+
+- **Tone and order.** `critical` is danger, everything else warning; danger
+  items (offline nodes, critical alerts) come first, otherwise the order is the
+  server's (critical, then the soonest to end).
+- **Text** comes from `kind` and `detail` in `views/admin/dashboard/kernelAlerts.js`
+  (`alerts.kinds.*` in both locale files): Agent, forward link and module
+  certificates (about to expire or expired, with the end date), the module and
+  forward link CAs (and whether a next CA is staged), the node credential split
+  (stalled in a phase, or a finalize that was interrupted), the identity import
+  and the cutover. The server's `message` is English, for notifications, and
+  is only the fallback for a kind this build does not know. Dates use `useFormat`.
+- **Links.** Node subjects `proxy-<id>` go to `/admin/nodes/<id>`, `forward-<id>`
+  to `/admin/forward/inventory/forward-<id>`; the other subjects have no page.
+- **Badge** from `summary`: "N active" (warning), "N active, M critical" (danger);
+  the summary counts every active alert whatever the list shows.
+- **Resolved history.** `UiSegmentedControl` "Alert status": Active (default) and
+  Resolved (`status=resolved&limit=30`, the server keeps 30 days), each item
+  saying when it resolved; the browser-built alerts belong to Active. A reply
+  that arrives after the view changed is dropped.
+- **Phones.** The toggle and badge wrap above the list; items wrap like the
+  others and keep their 44 px touch area.
+- **Tests.** `AdminDashboard.test.js`, `kernelAlerts.test.js`, the
+  `admin-dashboard*` screens and `e2e/admin-wired-apis-4.spec.js` (axe,
+  light and dark, desktop and phone).
 
 ## Bundle
 

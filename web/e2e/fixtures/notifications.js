@@ -8,10 +8,24 @@ const LOGS = [
   { id: 30, type: 'telegram', recipient: '123456789', title: '订阅即将到期', status: 'failed', created_at: '2026-10-02T07:00:00Z' },
   { id: 29, type: 'email', recipient: 'ops@example.com', title: '测试邮件', status: 'pending', created_at: '2026-10-02T06:00:00Z' }
 ]
-const PATHS = { email: 'email', emailDirty: 'email', testDialog: 'email', emailError: 'email', telegram: 'telegram', telegramNoToken: 'telegram', templates: 'templates', templatesEmpty: 'templates', templateDialog: 'templates', logs: 'logs', logsError: 'logs', legacy: null }
+const PATHS = { email: 'email', emailDirty: 'email', testDialog: 'email', emailError: 'email', telegram: 'telegram', telegramNoToken: 'telegram', telegramTestOk: 'telegram', telegramTestBlocked: 'telegram', telegramTestNetwork: 'telegram', telegramTestNotBound: 'telegram', telegramTestLimited: 'telegram', templates: 'templates', templatesEmpty: 'templates', templateDialog: 'templates', logs: 'logs', logsError: 'logs', legacy: null }
+// POST /api/v4/kernel/notifications/telegram/test: what the fixture answers for
+// each telegramTest* scenario (the page sends {} and shows the class).
+const TELEGRAM_TESTS = {
+  telegramTestOk: { class: 'ok', ok: true, message: 'Telegram accepted the test message.', target: 'self' },
+  telegramTestBlocked: { class: 'bot_blocked', ok: false, error_code: 403, message: 'Telegram refused the message: the chat blocked the bot or never started it.', target: 'self' },
+  telegramTestNetwork: { class: 'network_error', ok: false, reason: 'dns', message: 'Telegram could not be reached from this server.', target: 'self' }
+}
+export const TELEGRAM_TEST_PATH = '/api/v4/kernel/notifications/telegram/test'
+
 export default {
   pathFor: s => (s === 'legacy' ? '/admin/telegram' : `/admin/notifications/${PATHS[s]}`),
-  api(path, { scenario }) {
+  api(path, { scenario, method }) {
+    if (path === TELEGRAM_TEST_PATH && method === 'POST') {
+      if (scenario === 'telegramTestNotBound') return { __status: 409, body: { error: { code: 'telegram_not_bound', message: 'bind a Telegram account first' } } }
+      if (scenario === 'telegramTestLimited') return { __status: 429, headers: { 'Retry-After': '42' }, body: { error: { code: 'rate_limited', message: 'too many tests' } } }
+      return { data: TELEGRAM_TESTS[scenario] || TELEGRAM_TESTS.telegramTestOk }
+    }
     if (path === '/api/v2/admin/notification/email/config') {
       if (scenario === 'emailError') return { __status: 502, body: { msg: '通知服务没有响应' } }
       return { code: 0, data: { host: 'smtp.example.com', port: 465, username: 'noreply@example.com', password: '********', from_name: 'AnixOps', from_address: 'noreply@example.com', encryption: true } }
@@ -42,5 +56,11 @@ export default {
     logs: async () => {},
     logsError: async () => {},
     legacy: async () => {}
+  },
+  // The telegramTest* scenarios click 发送测试消息 and wait for the answer.
+  async after(page, { scenario }) {
+    if (!scenario.startsWith('telegramTest')) return
+    await page.getByTestId('telegram-test-send').click()
+    await page.getByTestId('telegram-test-result').waitFor()
   }
 }

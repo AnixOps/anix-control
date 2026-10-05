@@ -648,6 +648,26 @@ describe('admin v4 api (/api/v4/admin)', () => {
       params: { page: 1, page_size: 20 }
     })
   })
+
+  it('sends the Telegram test with an empty body on the kernel route and marks it sensitive', async () => {
+    request.mockResolvedValueOnce({ data: { class: 'ok', ok: true, message: 'Telegram accepted the test message.', target: 'self' } })
+    const answer = await adminApi.testTelegramBot()
+    expect(request).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/notifications/telegram/test', method: 'post', data: {}, sensitive: true })
+    expect(answer.class).toBe('ok')
+    request.mockResolvedValueOnce({ data: { class: 'ok', ok: true } })
+    await adminApi.testTelegramBot(10001)
+    expect(request.mock.calls.at(-1)[0].data).toEqual({ chat_id: 10001 })
+  })
+
+  it('reads the kernel alerts with their filters and a summary, tolerating a short answer', async () => {
+    const page = { alerts: [{ id: 1, kind: 'ca_expiring' }], summary: { active: 1, critical: 0, warning: 1 } }
+    request.mockResolvedValueOnce({ data: page })
+    expect(await adminApi.getKernelAlerts({ status: 'all', kind: 'ca_expiring', severity: 'critical', limit: 20 })).toEqual(page)
+    expect(request).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/alerts', method: 'get', params: { status: 'all', kind: 'ca_expiring', severity: 'critical', limit: 20 }, signal: undefined })
+    request.mockResolvedValueOnce({ data: {} })
+    expect(await adminApi.getKernelAlerts()).toEqual({ alerts: [], summary: { active: 0, critical: 0, warning: 0 } })
+    expect(request.mock.calls.at(-1)[0].params).toEqual({ status: 'active' })
+  })
 })
 
 describe('request auth handling', () => {
