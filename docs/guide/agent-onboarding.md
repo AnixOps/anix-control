@@ -8,12 +8,14 @@ machine and waits until the Agent has enrolled
 
 ## Before You Start
 
-> **Needs the next anix-agent release.** The script writes a credential-only
-> configuration (Control's address, the node and the enrollment token; no
-> node API key and no proxy cores). The anix-agent release that accepts it
-> is not out yet: today's Agent starts and refuses that configuration
-> (`ApiKey is required`) and the script stops at "did not enroll". Until
-> then, keep installing nodes the way `docs/UPGRADE.md` describes.
+> **Needs anix-agent v4.2.0-rc.1 or later.** The script writes a
+> credential-only configuration (Control's address, the node and the
+> enrollment token; no node API key and no proxy cores). v4.2.0-rc.1 accepts
+> it: in a rehearsal against Control 4.2.0-rc.1 the Agent enrolled with the
+> token, opened its control stream with the client certificate and showed as
+> `mtls` in `anix-control agents transports`. Earlier Agents start and refuse
+> that configuration (`ApiKey is required`) and the script stops at "did not
+> enroll": keep installing those nodes the way `docs/UPGRADE.md` describes.
 
 On Control:
 

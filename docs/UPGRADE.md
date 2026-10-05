@@ -48,6 +48,16 @@ clean agents answer 404; use `/api/v4/forward/*`. Old forwarding data is not
 migrated (F5c archives it). Read
 ["Flux Forwarding API Removed (v4.2)"](#flux-forwarding-api-removed-v42).
 
+**Upgrading to v4.2: the official signing root changes, and nobody can log
+in until you import the 4.2 packages.** The first start with the new root
+retires the old one, so every installed package, `identity-platform` among
+them, fails closed: `POST /api/v2/login` and every `/api/v2` business route
+answer `404 package_route_not_found` until the 4.2 packages are imported.
+**Open an administrator session before you restart and keep its token**
+(`data.token` of `POST /api/v2/login`, valid for 24 hours): it is the only
+way into the admin API during the window. Read
+["The Official Signing Root Changes (v4.2)"](#the-official-signing-root-changes-v42).
+
 ## Fixed Legacy Native Layout
 
 For the specific legacy layout discovered on the old native host
@@ -95,6 +105,13 @@ Before touching production:
   administrator's forward, rule, node, Ansible machine and clean agent
   routes) is removed; scripts and clients must move to `/api/v4/forward/*`**
   ([Flux Forwarding API Removed](#flux-forwarding-api-removed-v42)).
+- **Upgrading to v4.2: the official signing root changes. Take an
+  administrator session token before the restart, set
+  `plugins.official_public_key` to the new root (or remove the old value),
+  and plan the window until the 4.2 packages are imported. The commercial
+  packages (`order`, `payment`, `affiliate`) are not in the release, so an
+  installation that runs them loses them with the old root**
+  ([The Official Signing Root Changes](#the-official-signing-root-changes-v42)).
 
 Evidence to keep:
 
@@ -467,8 +484,35 @@ production host.
    curl -fsS http://127.0.0.1:8080/readyz
    ```
 
-Rollback: set the previous digest in `.env` and run `up -d` again. Restore the
-database backup only when the approved rollback plan says so.
+   Two things stop the move to v4.2 before `control` starts (both rehearsed
+   from 4.1.0 to 4.2.0-rc.1):
+
+   - **`secrets/module_ca_kek` is missing.** The v4.2 Compose file mounts
+     it, so `up -d` fails at once with `invalid mount config for type
+     "bind": bind source path does not exist: .../secrets/module_ca_kek`,
+     before it touches the running containers (4.1 keeps serving). Run
+     `sudo bash init-secrets.sh` first
+     (["Fresh Installs Are Ready; Adding The CA Key And gRPC TLS"](#fresh-installs-are-ready-adding-the-ca-key-and-grpc-tls)).
+   - **`control.env` still names the old root.** The v4.2 image carries the
+     identity package signed with the new root, so with
+     `ANIX_CONTROL_PLUGINS_OFFICIAL_PUBLIC_KEY` set to the 4.1 value `migrate`
+     exits 1 (`Failed to prepare database: bootstrap identity platform
+     package: verify identity bootstrap package: plugin signature
+     verification failed`) and `control` is never created: Control is down
+     from the `up -d` that recreated it until you correct the value and run
+     `up -d` again. Set the new root, or delete the line to take the 4.2
+     default.
+
+   A start that succeeds begins the signing-root window: no login, no
+   business routes, until the 4.2 packages are imported. Have an
+   administrator session token ready and follow
+   ["The Official Signing Root Changes (v4.2)"](#the-official-signing-root-changes-v42).
+
+Rollback: restore the previous `.env`, `docker-compose.prod.yml` and
+`control.env` (the root is part of the configuration) and run `up -d` again;
+the root change adds a step once the 4.2 packages are imported
+(["Rolling Back After The Import"](#rolling-back-after-the-import)). Restore
+the database backup only when the approved rollback plan says so.
 
 ## Database And Migration Notes
 
@@ -1798,6 +1842,16 @@ The packages, by rehearsal batch (route counts in brackets; the exact list is
 | 3 | `plan` (7), `order` (13), `payment` (20), `affiliate` (10) |
 | 4 | `subscription` (21), `forward` (21), `proxy-node` (7), `gost-mesh` (3), `wireguard` (1) |
 
+**What an installation sees depends on the packages it has.** The 151 routes
+include the 43 of the commercial packages `affiliate` (10), `order` (13) and
+`payment` (20), which the release no longer ships
+([Community Edition By Default](#community-edition-by-default-set-commercial-before-upgrading)).
+With the 15 packages of the published 4.1.0 archive, 108 routes of 12
+packages are native by default (`GET /api/v4/kernel/route-modes`, `source`
+`default`); the startup log still states the policy's 151. From v4.2 the
+forward package leaves the set: 130 routes of 14 packages by policy, 87
+routes of 11 packages with the packages of the published archive.
+
 Each batch passed the R5 rehearsal on the local staging stack (every read
 route at least 200 shadow comparisons with 0 mismatches over at least 2
 hours; every write route reconciled against the database with 0 differences;
@@ -2430,9 +2484,10 @@ v4.2 adds the forwarding API `/api/v4/forward/*` and the command line
   prefixes `/api/v4/forward/self/`, `/plans/` and `/multipliers/` are
   reserved for the commercial edition's v4.3 features and do not exist in
   the community edition.
-- **Rollback.** The API adds no table: the routes, inventory and ledger are
-  the kernel's F3a tables. Rolling back to a release without it only removes
-  the API and the commands.
+- **Rollback.** The API adds no table of its own: the routes, inventory and
+  ledger are the kernel's F3a tables (`v4_kernel_forward_*`), which the first
+  v4.2 start creates. Rolling back to a release without it only removes the
+  API and the commands.
 
 ## Forwarding: Archive, Clean The Nodes, Drop The Old Tables (v4.2)
 
@@ -2462,11 +2517,29 @@ Control v4.2). Step by step:
 
    It is one JSON file (mode 0600) with every row of the old forwarding
    tables and, for reference, the forward nodes and clean agents; node
-   tokens and other secrets are left out. It never overwrites a file (a
-   directory gets a timestamped name). A super administrator can also
-   download the newest one: `GET /api/v4/forward/legacy/archive` (audited).
-   On Docker the data directory is inside the container: pass `-o` a
-   mounted path, or download it.
+   tokens and other secrets are left out. It never overwrites a file: a
+   directory (a path ending in `/` is created when missing) gets a
+   timestamped name. A super administrator can also download the newest
+   one: `GET /api/v4/forward/legacy/archive` (audited).
+
+   **On the Compose deployment the startup archive is not written.** The
+   container's root file system is read-only, so the first start logs
+   `WARNING: the v4.1 forwarding data was not archived: create the archive
+   directory: mkdir config/data: read-only file system` and goes on. Write
+   the archive yourself with `-o` (without it the command tries
+   `config/data/forward-legacy` and fails the same way), into a place that
+   outlives the container, since `forward legacy drop` reads the recorded
+   file again from its own container:
+
+   ```bash
+   docker compose -f docker-compose.prod.yml exec control \
+     /app/anix-control forward legacy archive -o /var/lib/anixops/forward-legacy/
+   ```
+
+   `/var/lib/anixops` is the writable `plugin-artifacts` volume (`/tmp` is
+   a RAM disk). The volume is meant to be disposable, so also copy the file
+   out now with the download above, or bind-mount a host directory in a
+   Compose override and pass that to `-o`.
 2. **Check the nodes.**
 
    ```bash
@@ -2644,24 +2717,38 @@ Control Treats The Root") too. What it means for an upgrade:
 
 - **Control.** A Control has exactly one active root. The first start with
   the new root records it and retires the old one; every package release
-  admitted under the old root then fails closed (`503 package_unavailable`
-  on its `/api/v2` routes) until the 4.2 packages, signed with the new root,
-  are imported and enabled (Control > Plugins > Import release). Plan a
+  admitted under the old root then fails closed until the 4.2 packages,
+  signed with the new root, are imported and enabled. **`identity-platform`
+  is one of them, so login is down too** ("The Window", below). Plan a
   maintenance window from the restart until the import finishes.
 - **Configuration.** The 4.2 templates carry the new root in
   `plugins.official_public_key` (`ANIX_CONTROL_PLUGINS_OFFICIAL_PUBLIC_KEY`).
-  A configuration that copied the 4.1 value must be changed; one that leaves
-  the key out takes the new default. If `plugins.identity_bootstrap_package_dir`
-  is set, replace the bootstrap `identity-platform` package there with the
-  4.2 build before restarting.
-- **Agents.** Upgrade the Agents first, as before, but not with the
-  `/install.sh` of a 4.1 Control: that script pins the old root and refuses
-  an Agent signed with the new one. Use the `agent-install.sh` release asset
-  of 4.2, after verifying it against the new root (the commands are in the
-  script's header). An Agent built before 4.2 cannot verify the new root; a
-  node that enables the plugin supervisor sets `PluginOfficialPublicKey`
-  itself and must change it to the new root before it takes packages signed
-  with it.
+  A configuration that copied the 4.1 value must be changed: the 4.2 image
+  then refuses to start (`migrate` exits 1 with `bootstrap identity platform
+  package: verify identity bootstrap package: plugin signature verification
+  failed`; [Docker Compose Upgrade](#docker-compose-upgrade)). One that leaves
+  the key out takes the new default. If
+  `plugins.identity_bootstrap_package_dir` is set, replace the bootstrap
+  `identity-platform` package there with the 4.2 build before restarting.
+- **Commercial packages.** `affiliate`, `order` and `payment` are not in the
+  release archive (the 4.2.0-rc.1 archive holds 15 packages, none of them).
+  An installation that runs them has releases signed with the old root,
+  which stop verifying once the new root is active, and the release brings
+  none signed with the new one: orders, payments, plan purchase and the
+  invite commission stay down until commercial packages signed with the new
+  root exist. Decide before upgrading; the rehearsal ran the community
+  package set and did not cover this.
+- **Agents.** Upgrade the Agents first, as before, with the `agent-install.sh`
+  release asset of 4.2 (the `/install.sh` of a 4.2 Control is the same file),
+  after verifying it against the new root (the commands are in the script's
+  header). A 4.1 release has no one-command installer to use instead
+  (`/install.sh` answers 404), and an Agent built before 4.2 cannot verify
+  the new root; a node that
+  enables the plugin supervisor sets `PluginOfficialPublicKey` itself and
+  must change it to the new root before it takes packages signed with it.
+  Verified for v4.2.0-rc.1: the script and the Agent zip verify against the
+  new root and fail against the old one, `SHA256SUMS` verifies against the
+  new root, and the Agent enrolls with a credential-only configuration.
 - **Pinned roots.** If you pin the root outside Control
   (`ANIXOPS_TRUSTED_OFFICIAL_PUBLIC_KEY` in
   [`guide/release-installation.md`](guide/release-installation.md)), change it
@@ -2669,7 +2756,116 @@ Control Treats The Root") too. What it means for an upgrade:
 - **Rollback.** Redeploy the previous release and configuration. Startup
   re-activates the old root's record and retires the new one, so packages
   signed with the old root verify again and those signed with the new root
-  stop verifying.
+  stop verifying. Once the 4.2 packages are installed, the installations
+  must also be pointed back at 4.1.0
+  ([Rolling Back After The Import](#rolling-back-after-the-import)).
+
+### The Window
+
+From the first start with the new root until `identity-platform` runs again
+(rehearsed on Compose and PostgreSQL, 4.1.0 to 4.2.0-rc.1, all 15 packages of
+the community archive installed):
+
+| What | Answer |
+|---|---|
+| `/readyz`, `/health` | 200 |
+| `/s/<token>`, `/api/v1/client/subscribe` | 200, unchanged: the kernel serves them |
+| `POST /api/v2/login` | `404 package_route_not_found` ("package route is not declared"): there is no login |
+| every other `/api/v2` business route, with a session token issued before the restart | `404 package_route_not_found`, not `503 package_unavailable`: the installations are `failed` (`plugin host unavailable: verified artifact reference is unavailable`) and declare no routes |
+| `/api/v4/forward/*` | `404 plugin_route_not_found` until the 4.2 forward package runs |
+| `/api/v3/*` and `/api/v4/kernel/*`, with that token | work: the kernel verifies the token with `jwt.secret` |
+| `anix-control routes list` | `error: verify plugin release: official plugin trust root is required` per package, no routes |
+| Agent channels | `agent_control.mtls: required` answers as ever (403 `agent_mtls_required`) |
+
+**The window has no login.** A token issued before the restart keeps working
+for `jwt.expire` seconds (24 hours by default). Nothing else reaches the
+admin API: Control has no command-line way to import a release or to sign in.
+With the 4.2 bootstrap, the image registers its `identity-platform` release
+on start but leaves an existing installation on the old version (as
+[rc.3 → rc.4 Checklist](#rc3--rc4-checklist) step 3 already says), so login
+comes back only when an administrator moves the installation. The session
+token path was rehearsed before the identity cutover ("Moving Logins To The
+Identity Module"), when the kernel signs and verifies the tokens itself
+(HS256). After the cutover, identity signs them (EdDSA) and publishes the
+keys that verify them, and it is down in the window (`Identity token keys
+not refreshed: plugin host unavailable`): that path was not rehearsed and may
+not work, which leaves the rollback or the database backup.
+
+### Upgrade Procedure
+
+1. **Before the restart**, as a super administrator, take a session token
+   and keep it where the person doing the upgrade can reach it, never in a
+   ticket:
+
+   ```bash
+   curl -fsS -X POST "$PANEL/api/v2/login" -H 'Content-Type: application/json' \
+     -d '{"email":"admin@example.com","password":"..."}' | jq -r .data.token
+   ```
+
+2. Back up the database, then upgrade
+   ([Docker Compose Upgrade](#docker-compose-upgrade): `init-secrets.sh`, the
+   new root in `control.env`). Control starts; the window begins.
+3. **Move `identity-platform` first**, with the token. Login works again a
+   few seconds later (3 s in the rehearsal):
+
+   ```bash
+   TOKEN=...            # from step 1
+   VERSION=4.2.0        # the release you install, as in the image's bootstrap package
+   curl -fsS -X PUT "$PANEL/api/v3/plugin-installations" \
+     -H "Authorization: Bearer $TOKEN" -H 'Content-Type: application/json' \
+     -d "{\"plugin_id\":\"identity-platform\",\"target\":\"control\",\"desired_version\":\"${VERSION}\",\"enabled\":true}"
+   ```
+
+4. **Import the other packages** from the verified archive
+   ([Getting A Package From The Release](#getting-a-package-from-the-release)):
+   per package `POST /api/v3/plugin-releases` (`manifest`, `signature`),
+   `POST /api/v3/plugin-releases/<id>/artifact` (`artifact_base64`) and
+   `PUT /api/v3/plugin-installations` as above with `"desired_version"` set
+   to the release version, exactly the calls of
+   [Package Install Window](#package-install-window), step 3. Fourteen
+   packages took 30 seconds. Control > Plugins > Import release does the
+   same once you can sign in.
+5. Check `GET /api/v3/plugin-installations`: every package at the 4.2
+   version, `healthy`, then the smoke checks of
+   [Post-Upgrade Record](#post-upgrade-record). Rehearsed with the calls
+   scripted: 96 seconds from the old Control's shutdown to the last
+   installation healthy (login back after 65, the import itself 34); the
+   operator's pause between the restart and the first call was 53 of them.
+
+Without a token (never taken, or expired), the way out is the rollback below
+or restoring the database backup.
+
+### Rolling Back After The Import
+
+- **Before the import** (still in the window): redeploy the previous image
+  and configuration. Rehearsed: 33 seconds from `docker compose down` to
+  every route answering; the old root is active again, the installations
+  still point at the 4.1.0 releases and are healthy.
+- **After the import** the installations point at the 4.2 releases, which
+  the old root does not verify. After the redeploy login and every route
+  answer `503 package_unavailable` until `forward` and `identity-platform` are
+  moved back, the other routes `404 package_route_not_found` until their own
+  package is. Moving them needs a session token from before the upgrade (24
+  hours). Order matters:
+  1. `forward` first. The 4.2 forward manifest declares
+     `kernel.forward.v1`, which 4.1 does not know, so any other
+     `PUT /api/v3/plugin-installations` is refused with `409 release_invalid`
+     (`enabled plugin forward is invalid: ... unknown kernel capability
+     "kernel.forward.v1"`) until `forward` is back on 4.1.0;
+  2. then `identity-platform` (login returns);
+  3. then the other installations, `"desired_version": "4.1.0"`.
+
+  Rehearsed: 2 minutes 11 seconds with the calls made by hand.
+- **No token:** restore the pre-upgrade database backup (rehearsed:
+  `pg_restore` of the Compose backup into a fresh database, 30 seconds, then
+  4.1.0 started on it, login and all 15 packages healthy after 38 seconds)
+  and lose what changed since.
+- The 4.2 start adds 20 tables and 2 views to the database (the
+  `v4_forward_legacy_*`, `v4_kernel_agent_upgrade_*`, `v4_kernel_forward_*`
+  and `v4_kernel_package_report_state` tables, `kapi_package_report_v1` and
+  `kapi_plugin_configuration_v1`) and drops no table; the row counts of the
+  existing tables were unchanged. 4.1.0 ignores the new ones, so a rollback
+  needs no schema step.
 
 ## Switching Route Modes
 

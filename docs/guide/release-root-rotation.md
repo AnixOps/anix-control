@@ -13,8 +13,18 @@ root-rotation plan and design (`git show 57c62541:docs/superpowers/plans/2026-07
   `v3_kernel_plugin_trust_root` and retires every other root.
 - Each admitted release is bound to the fingerprint of the root that signed
   it. A release bound to a retired root no longer verifies
-  (`ErrPluginTrustRootRequired`), so its `/api/v2` routes fail closed with
-  `503 package_unavailable` and it cannot be installed or updated.
+  (`ErrPluginTrustRootRequired`) and it cannot be installed or updated. Its
+  installation fails (`plugin host unavailable: verified artifact reference
+  is unavailable`) and its `/api/v2` routes fail closed: `404
+  package_route_not_found` once the installation has failed (rehearsed,
+  4.1.0 to 4.2.0-rc.1), `503 package_unavailable` for as long as it still
+  reads `healthy`.
+- **`identity-platform` is a package too.** `POST /api/v2/login` answers
+  `404 package_route_not_found` after the restart, and the image's bootstrap
+  registers the new identity release without moving the installation. The
+  admin API is reachable only with a session token issued before the restart
+  (24 hours by default): take one first
+  ([`../UPGRADE.md`](../UPGRADE.md#the-official-signing-root-changes-v42)).
 - Releases are immutable per `(plugin_id, version)`. Re-signed packages must
   be registered under a **new package version**; the same version cannot be
   registered twice.
@@ -208,10 +218,13 @@ pushed.
    The `plugin-package-publish` job signs every package with the new root at
    the tag version; the builder stamps that version into each manifest and
    host binary.
-2. On each running Control, in the maintenance window: set
-   `plugins.official_public_key` in the deployed configuration to the new
-   root, deploy the release, then import every package with the new version (**Control > Plugins > Import release**, see
-   [`release-installation.md`](release-installation.md)) and update each
+2. On each running Control, in the maintenance window: take an administrator
+   session token, set `plugins.official_public_key` in the deployed
+   configuration to the new root, deploy the release, move `identity-platform`
+   to the new version first (login returns), then import every other package
+   with the new version (**Control > Plugins > Import release**, see
+   [`release-installation.md`](release-installation.md), or the API calls in
+   [`../UPGRADE.md`](../UPGRADE.md#upgrade-procedure)) and update each
    installation to it.
 3. If `plugins.identity_bootstrap_package_dir` is set, replace the bootstrap
    `identity-platform` package there with the new-root build before
@@ -226,7 +239,8 @@ pushed.
 - `--formal-release` and `--verify-release` succeed with the new pair.
 - `gh secret list` shows both key secret names.
 - After import: every installation is enabled at the new version and
-  `/api/v2` business routes answer (no `503` `package_unavailable` responses).
+  `healthy`, login works, and `/api/v2` business routes answer (no `404`
+  `package_route_not_found` or `503` `package_unavailable` from them).
 
 ## Rollback
 
@@ -236,7 +250,13 @@ pushed.
 - **A Control restarted with the new root, old key still trustworthy:**
   redeploy the previous release/configuration. Startup re-activates the old
   root's existing record and retires the new one, so old-root releases verify
-  again; new-root releases stop verifying.
+  again; new-root releases stop verifying. Before the new packages were
+  imported that is all (rehearsed: every route back 33 seconds after
+  `docker compose down`). After the import the installations still point at
+  the new-root releases: move `forward`, then `identity-platform`, then the
+  rest back to the old version with a session token from before the upgrade,
+  or restore the database backup
+  ([`../UPGRADE.md`](../UPGRADE.md#rolling-back-after-the-import)).
 - **After a compromise or after a new-root release:** there is no dual-root
   mode. Recovery is re-signing the selected package set with the active root
   and importing it as a new version; never re-enable a compromised root.
