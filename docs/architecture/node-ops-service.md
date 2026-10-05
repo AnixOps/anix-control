@@ -1491,6 +1491,14 @@ One mTLS stream per node carries everything:
   `v4_kernel_agent_enrollment`.
   - Revoking or replacing a node's credentials, disabling the node, or
     deleting it (`RetireNode`) revokes its certificates.
+  - An administrator's credential rotation
+    (`POST /api/v4/kernel/agents/rotate-credentials`, super administrators,
+    `docs/reference/node-credential-rotation.md`) does the revocation and
+    issues a fresh enrollment credential in one transaction
+    (`agentpki.Service.RotateCredentials`, reason `credentials_rotated`);
+    for a proxy node it can also replace the node's API key with the
+    function the `IssueCredential` executor uses
+    (`service.IssueProxyNodeCredentialsTx`).
   - The listener refuses revoked serials, with a cache of at most 30 s, as
     the module listener does.
 - **Forward link certificates (H28).** A node whose Agent negotiated

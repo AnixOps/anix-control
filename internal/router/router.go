@@ -779,6 +779,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		agents := handler.NewAgentPKIHandler()
 		v4.POST("/kernel/agents/enrollment-tokens", agents.CreateEnrollmentToken)
 		v4.POST("/kernel/agents/install-tokens", agentInstall.CreateInstallToken)
+		v4.POST("/kernel/agents/rotate-credentials", agents.RotateCredentials)
 		v4.GET("/kernel/agents/transports", handler.NewAgentTransportsHandler(agentPolicy).List)
 		// Staged Agent upgrades (forward-sdk.md section 9, O4; H19).
 		upgrades := handler.NewAgentUpgradesHandler()

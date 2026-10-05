@@ -114,6 +114,21 @@
   Packages built before this change ignore the two parameters; they ship
   with Control, so a normal upgrade replaces them together. API reference:
   `docs/guide/api-reference.md`.
+- **Admin API: rotate a node's Agent credentials.** `POST
+  /api/v4/kernel/agents/rotate-credentials` (super administrators) revokes
+  every Agent certificate, enrollment (unused enrollment tokens included) and
+  forward link certificate of a proxy or forward node, optionally replaces a
+  proxy node's API key (`rotate_api_key`, off by default: the old key keeps
+  enrolling Agents until replaced, and replacing it breaks whatever still
+  polls with it), and issues a fresh one-time `anixagt_` enrollment
+  credential that the answer shows once. One transaction with the node row
+  locked, the code paths of the enrollment token and `IssueCredential` (no
+  new cryptography), nothing dials the node (an offline node works), a
+  repeated call leaves only the last credential valid, and the operation log
+  gets `agent_credentials_rotate` and `agent_enrollment_token_issue` entries
+  without any secret. Reference: `docs/reference/node-credential-rotation.md`;
+  operator steps: "Rotating A Node's Credentials" in
+  `docs/guide/agent-onboarding.md`.
 
 - **Last online per user: `GET /api/v4/admin/users/activity?ids=...`.**
   Administrators want to see when each user was last online. Control kept no

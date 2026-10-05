@@ -18,6 +18,7 @@ const (
 	RevokeReasonNodeDeleted           = "node_deleted"
 	RevokeReasonCredentialsReplaced   = "credentials_replaced"
 	RevokeReasonCredentialsRevoked    = "credentials_revoked"
+	RevokeReasonCredentialsRotated    = "credentials_rotated"
 	maxRevocationCacheEntriesBeforeGC = 4096
 )
 
@@ -67,6 +68,51 @@ func RevokeNode(ctx context.Context, db *gorm.DB, node agentcontrol.AgentNode, r
 	// writes is dropped again.
 	revocationEpoch.Add(1)
 	return nil
+}
+
+// ForgetRevocations drops every cached revocation answer of this process.
+// RevokeNode does it too, but inside the caller's transaction: a reader
+// between it and the commit caches "not revoked". A caller that revoked in a
+// transaction calls this after the commit, so open Agent streams see the
+// revocation at their next heartbeat instead of after the cache lifetime.
+func ForgetRevocations() { revocationEpoch.Add(1) }
+
+// ActiveCredentials counts what a revocation of a node's Agent credentials
+// would revoke: certificates, enrollments (including unused enrollment
+// credentials) and forward link certificates that are not revoked yet.
+type ActiveCredentials struct {
+	Certificates     int64 `json:"certificates"`
+	Enrollments      int64 `json:"enrollments"`
+	LinkCertificates int64 `json:"link_certificates"`
+}
+
+// CountActive counts node's unrevoked Agent credentials in db, which may be
+// a transaction. A database without the agent PKI tables has none.
+func CountActive(ctx context.Context, db *gorm.DB, node agentcontrol.AgentNode) (ActiveCredentials, error) {
+	var counts ActiveCredentials
+	if db == nil || !node.Valid() {
+		return counts, nil
+	}
+	db = db.WithContext(ctx)
+	migrator := db.Migrator()
+	if !migrator.HasTable(&model.AgentCertificate{}) || !migrator.HasTable(&model.AgentEnrollment{}) {
+		return counts, nil
+	}
+	count := func(into *int64, table any) error {
+		return db.Model(table).Where("node_kind = ? AND node_id = ? AND revoked_at IS NULL", node.Kind, node.ID).Count(into).Error
+	}
+	if err := count(&counts.Certificates, &model.AgentCertificate{}); err != nil {
+		return ActiveCredentials{}, err
+	}
+	if err := count(&counts.Enrollments, &model.AgentEnrollment{}); err != nil {
+		return ActiveCredentials{}, err
+	}
+	if migrator.HasTable(&model.ForwardLinkCertificate{}) {
+		if err := count(&counts.LinkCertificates, &model.ForwardLinkCertificate{}); err != nil {
+			return ActiveCredentials{}, err
+		}
+	}
+	return counts, nil
 }
 
 // IsRevoked reports whether the agent certificate serial of node may no

@@ -154,6 +154,63 @@ was revoked, issue a new command for the node and add `--reset`: the script
 discards the identity, rewrites the configuration (the old one is kept as
 `config.json.bak.<time>`) and enrolls with the new token.
 
+## Rotating A Node's Credentials
+
+When a node's identity may have leaked (a stolen disk, a key left on a build
+host) rotate its credentials instead of waiting for the certificate to
+expire. One call, for super administrators only
+([reference](../reference/node-credential-rotation.md)):
+
+```sh
+curl -fsS -X POST https://panel.example.com/api/v4/kernel/agents/rotate-credentials \
+  -H "Authorization: Bearer $ADMIN_TOKEN" -H 'Content-Type: application/json' \
+  -d '{"node":"proxy-12","rotate_api_key":true,"reason":"disk of the host was stolen"}'
+```
+
+Control, in one transaction:
+
+1. revokes every Agent certificate, enrollment (an unused enrollment token
+   included) and forward link certificate of the node;
+2. with `rotate_api_key` on a proxy node, replaces the node's API key;
+3. issues a fresh single-use enrollment credential (`anixagt_...`), valid
+   for one hour unless `ttl_seconds` says otherwise (at most 7 days), and
+   shows it in the answer, once.
+
+It never contacts the node, so it works while the node is offline. A
+running Agent loses its stream at its next heartbeat
+(`agent_cert_revoked`); an Agent that is off finds out when it next
+connects. Repeating the call revokes the previous credential and issues
+another: only the last one enrolls.
+
+Give the credential to the machine and enroll it again with the install
+command of the node, adding `--reset` (the old identity is discarded):
+
+```sh
+curl -fsSL https://panel.example.com/install.sh | sudo bash -s -- \
+  --control https://panel.example.com --node proxy-12 --token anixagt_... --reset
+```
+
+**The node's API key.** The Agent holds a certificate, not the key, but the
+node's configuration may still hold it, and an Agent configured with it
+(the way Agents were installed before the credential-only configuration)
+enrolls again by itself with it after its certificate is revoked. That is
+the recovery of a healthy node, and also why a rotation without
+`rotate_api_key` does not lock out whoever holds the key: the old key keeps
+working, so it can still enroll an Agent. If the key may be exposed, set
+`rotate_api_key`. It is opt-in because replacing the key breaks every
+process that still polls Control with it until it is given the new one, and
+an Agent that holds only the old key can then enroll only with the new
+credential (the install command with `--reset` needs the anix-agent release
+named in [Before You Start](#before-you-start)). Read the new key with the
+audited `GET /api/v2/admin/nodes/<id>/credentials` (action `reveal`); the
+rotation answer never carries it. `rotate_api_key` is not accepted for a
+forward node: its token belongs to the frozen legacy forward runtime.
+
+Every rotation is in the operation log as `agent_credentials_rotate` (with
+your reason and what was revoked) and `agent_enrollment_token_issue`,
+without any credential. A disabled node answers `node_disabled`: enable it
+first.
+
 ## Preflight Checks
 
 After reading Control's metadata (or the offline bundle) and before it
@@ -353,6 +410,7 @@ Per-node results in `status`:
 |---|---|
 | `agent_install_unconfigured` on the node page | Control does not know an https address nodes reach: set `agent_install.public_url`; on a development build also `agent_install.agent_version` |
 | `agent_pki_disabled` | the built-in agent CA is off: set `module_runtime.ca_kek` |
+| `node_disabled` on a rotation | enable the node first ([rotation](#rotating-a-nodes-credentials)) |
 | `cannot reach .../install/agent.env` | the node cannot reach Control over https (DNS, firewall, certificate) |
 | `cannot get the checksum of ...` | `--mirror cn` without GitHub access: put the release in `agent_install.artifact_dir` |
 | `did not enroll within 180s` | `journalctl -u anix-agent.service -n 50`: a used or expired token needs a new command; the gRPC target must be reachable with TLS |
