@@ -35,6 +35,21 @@
   with the intended material, and sits above dialogs. `e2e/a11y.spec.js`
   opens a Select in the Add user dialog and chooses with the pointer and the
   keyboard.
+- **A menu opened from a sheet, a dialog or the phone navigation drawer
+  opened under it.** `UiMenu` (the "…" menu of a table row or a toolbar) and
+  the account menu used `--z-dropdown` (100), which is below a sheet (200),
+  the phone navigation drawer (201) and a dialog (300): the row menu of a
+  grant or quota policy in an access group's sheet, and the account menu
+  opened from the navigation drawer on a phone, rendered beneath the scrim,
+  unseen and not clickable. Menus and option lists now share one layer,
+  `--z-popover` (just above `--z-modal`, under the toasts), defined in
+  `styles/base.css` because AnixOps Design 1.0.2 has no such token, and
+  `.ui-menu`, `.shell-menu` and `.ui-listbox` are `position: relative` so the
+  z-index counts. stylelint now rejects a `z-index` that is not a `--z-*`
+  token (or 0, 1, -1, auto). `e2e/layers.spec.js` asks the browser
+  (`elementFromPoint`) what is at the centre of each layer, and
+  `layerOrder.test.js` pins the scale. See "Layer order" in
+  `docs/reference/frontend-design.md`.
 
 ## 4.2.0-rc.1 - 2026-10-04
 

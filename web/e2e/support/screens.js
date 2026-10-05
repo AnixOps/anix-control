@@ -66,6 +66,7 @@ export const SCREENS = {
   'admin-subscriptions': { fixture: subscriptions, scenario: 'list' },
   'admin-system': { fixture: system, scenario: 'general' },
   'admin-security': { fixture: security, scenario: 'mfa' },
+  'admin-access-groups': { fixture: security, scenario: 'groups' },
   'admin-notifications': { fixture: notifications, scenario: 'email' },
   'admin-monitor': { fixture: monitor, scenario: 'live' },
   'admin-deployments': { fixture: deployments, scenario: 'topologies' }

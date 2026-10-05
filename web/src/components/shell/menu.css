@@ -5,7 +5,8 @@
    with an opaque fallback, radius-md, shadow-2, 32 px items; the highlighted
    item is an accent fill (keyboard and pointer alike). */
 .shell-menu {
-  z-index: var(--z-dropdown);
+  position: relative;
+  z-index: var(--z-popover);
   min-width: 224px;
   max-width: min(320px, calc(100vw - 2 * var(--space-4)));
   max-height: var(--reka-dropdown-menu-content-available-height, 480px);

@@ -6,13 +6,22 @@
  * Use tokens only; see docs/reference/frontend-design.md.
  */
 
-/* Token gaps: AnixOps Design 1.0.2 has no scrim or focus-ring tokens yet.
-   Defined here once, so pages use a variable rather than a literal. */
+/* Token gaps: AnixOps Design 1.0.2 has no scrim, focus-ring or popover
+   tokens yet. Defined here once, so pages use a variable rather than a
+   literal. */
 :root {
   /* stylelint-disable-next-line function-disallowed-list -- token gap: a scrim behind dialogs and drawers, black in both themes */
   --scrim: rgb(0 0 0 / 0.4);
   --focus-ring: 2px solid var(--accent);
   --focus-ring-offset: 2px;
+
+  /* Menus and option lists are opened from a trigger and can be opened from
+     inside a dialog, a sheet or the navigation drawer, so they stack just
+     above the modal layer (--z-modal 300) and under the toasts (--z-toast
+     400). The scale is: sticky 10 < dropdown 100 < drawer 200 < modal 300 <
+     popover < toast 400 < tooltip 500 (the skip link). --z-dropdown is below
+     the drawers and the dialogs and is for nothing that is portalled. */
+  --z-popover: calc(var(--z-modal) + 1);
 }
 
 /* prefers-contrast: more strengthens separators and secondary text

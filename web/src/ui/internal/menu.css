@@ -5,7 +5,8 @@
    fallback, radius-md, shadow-2, 32 px items (44 px on touch), the
    highlighted item an accent fill. */
 .ui-menu {
-  z-index: var(--z-dropdown);
+  position: relative;
+  z-index: var(--z-popover);
   min-width: 200px;
   max-width: min(320px, calc(100vw - 2 * var(--space-4)));
   max-height: var(--reka-dropdown-menu-content-available-height, 480px);
