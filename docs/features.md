@@ -73,7 +73,7 @@ source of truth.
 | Admin | Knowledge management | Implemented | list/create/update/delete | None known. |
 | Admin | Payment gateway management and payment records | Implemented (commercial edition) | gateway CRUD/toggle, stats, records, unified success/error envelopes | Provider-specific live payment creation is not complete for every provider. |
 | Admin | Notification template/log/email config management | Implemented | `/api/v2/admin/notification/*`, unified success/error envelopes | Add more event emitters as needed. |
-| Admin | Telegram bot management | Implemented | bot config, webhook, users, notify, broadcast, unified success/error envelopes | Requires live bot credentials for production. |
+| Admin | Telegram bot management | Implemented | bot config, webhook, users, notify, broadcast, unified success/error envelopes, test message with a result class (`POST /api/v4/kernel/notifications/telegram/test`) | Requires live bot credentials for production. |
 | Admin | MFA global config | Implemented | `/api/v2/admin/mfa/config` | Global policy now affects login; user-facing enrollment UI remains tracked under Auth. |
 | Admin | System config and audit logs | Implemented | `/api/v2/admin/system/configs*`, `/audit-logs`, unified config/audit success/error envelopes | Keep sensitive config masking tests current. |
 | Admin | Backup config, create/list/delete/restore, stats | Implemented | `/api/v2/admin/system/backup*`, unified backup success-error envelopes | Production backup storage and restore are operator-controlled. |
