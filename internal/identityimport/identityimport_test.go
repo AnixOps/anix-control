@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"errors"
+	"io"
 	"net"
 	"os"
 	"testing"
@@ -267,4 +268,27 @@ func TestRunnerStartsOneImportAtATime(t *testing.T) {
 	cancel()
 	<-served
 	require.ErrorIs(t, (*Runner)(nil).Start(false), ErrNotInitialized)
+}
+
+type endedStream struct{ cause error }
+
+func (s endedStream) CloseAndRecv() (*identityv1.ImportAccountsResponse, error) { return nil, s.cause }
+
+// A Send that fails with a bare EOF means the identity module ended the
+// stream: the reason is the status CloseAndRecv returns, and it must be the
+// one the checkpoint records.
+func TestSendFailureReportsTheStatusBehindAnEOF(t *testing.T) {
+	cause := status.Error(codes.Unavailable, "identity restarted")
+	err := sendFailure(endedStream{cause: cause}, "send account 3", io.EOF)
+	require.ErrorContains(t, err, "send account 3")
+	require.ErrorContains(t, err, "identity restarted")
+	require.Equal(t, codes.Unavailable, status.Code(errors.Unwrap(err)))
+
+	other := errors.New("connection reset")
+	err = sendFailure(endedStream{cause: cause}, "send account 3", other)
+	require.ErrorIs(t, err, other, "only EOF hides a status")
+	require.NotContains(t, err.Error(), "identity restarted")
+
+	err = sendFailure(endedStream{}, "send account 3", io.EOF)
+	require.ErrorIs(t, err, io.EOF, "an EOF without a status stays an EOF")
 }

@@ -581,6 +581,16 @@
   `layerOrder.test.js` pins the scale. See "Layer order" in
   `docs/reference/frontend-design.md`.
 
+- **A failed identity import records why it failed.** When the identity
+  module ended the import stream with an error, the kernel's importer saw a
+  bare `EOF` from `Send`, recorded `send account N: EOF` in the checkpoint's
+  `LastError` and never read the real status that `CloseAndRecv` returns, so
+  an operator could not tell a restart from a rejected account. The importer
+  now reads it at each of its four send sites (`sendFailure`). This also removes
+  a rare flake of `TestAnInterruptedImportResumesFromItsCheckpoint` (seen once
+  on go_dev: `"send account 3: EOF" does not contain "identity restarted"`).
+
+
 ## 4.2.0-rc.1 - 2026-10-04
 
 ### Added
