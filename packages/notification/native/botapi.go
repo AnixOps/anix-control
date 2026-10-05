@@ -2,8 +2,13 @@ package native
 
 import (
 	"bytes"
+	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"time"
 
@@ -20,7 +25,11 @@ const telegramAPIBase = "https://api.telegram.org"
 
 // botAPIClient is the kernel service's HTTP client: a 30 second timeout and
 // no request context.
-var botAPIClient = &http.Client{Timeout: 30 * time.Second}
+// The Bot API host is fixed; a redirect is never followed.
+var botAPIClient = &http.Client{
+	Timeout:       30 * time.Second,
+	CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
+}
 
 // firstBot is TelegramBotService.GetBot: the first bot row.
 func firstBot(db *gorm.DB) (*Bot, error) {
@@ -104,7 +113,8 @@ func botAPIRequest(url string, payload any) (map[string]any, error) {
 
 	resp, err := botAPIClient.Post(url, "application/json", &body)
 	if err != nil {
-		return nil, err
+		// err is a *url.Error whose text quotes the URL, and with it the bot token.
+		return nil, telegramTransportError(err)
 	}
 
 	var result map[string]any
@@ -119,4 +129,44 @@ func botAPIRequest(url string, payload any) (map[string]any, error) {
 	}
 
 	return result, nil
+}
+
+// telegramTransportError is the error the Bot API calls return when the HTTP
+// client fails: the reason class only, never the client's error text, which
+// quotes the request URL and so the bot token. It is the same text as the
+// kernel's (internal/service telegramTransportError), which the route-mode
+// shadow comparison checks byte for byte.
+func telegramTransportError(err error) error {
+	return fmt.Errorf("telegram API request failed: %s", telegramNetworkReason(err))
+}
+
+// telegramNetworkReason reduces a transport error to a reason from a fixed
+// list (a copy of the kernel's helper of the same name).
+func telegramNetworkReason(err error) string {
+	var (
+		dnsError     *net.DNSError
+		netError     net.Error
+		opError      *net.OpError
+		unknownCA    x509.UnknownAuthorityError
+		hostname     x509.HostnameError
+		invalid      x509.CertificateInvalidError
+		verification *tls.CertificateVerificationError
+		recordHeader tls.RecordHeaderError
+	)
+	switch {
+	case errors.Is(err, context.Canceled):
+		return "canceled"
+	case errors.Is(err, context.DeadlineExceeded):
+		return "timeout"
+	case errors.As(err, &dnsError):
+		return "dns"
+	case errors.As(err, &unknownCA), errors.As(err, &hostname), errors.As(err, &invalid), errors.As(err, &verification), errors.As(err, &recordHeader):
+		return "tls"
+	case errors.As(err, &netError) && netError.Timeout():
+		return "timeout"
+	case errors.As(err, &opError):
+		return "connect"
+	default:
+		return "other"
+	}
 }
