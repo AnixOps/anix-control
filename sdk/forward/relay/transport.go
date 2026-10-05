@@ -139,9 +139,10 @@ type Listener struct {
 	wg      sync.WaitGroup
 	unwatch func()
 
-	mu       sync.Mutex
-	carriers map[*Carrier]struct{}
-	closed   bool
+	mu         sync.Mutex
+	carriers   map[*Carrier]struct{}
+	exchanging map[*link.Conn]struct{} // admitted connections in their SETTINGS exchange
+	closed     bool
 
 	accepted       atomic.Uint64
 	settingsFailed atomic.Uint64
@@ -185,14 +186,15 @@ func ListenPlain(address string, lcfg link.PlainListenerConfig, ccfg Config) (*L
 
 func newListener(ll *link.Listener, creds *link.Credentials, cfg Config, ctype CarrierType) *Listener {
 	l := &Listener{
-		link:     ll,
-		creds:    creds,
-		cfg:      cfg,
-		ctype:    ctype,
-		slots:    make(chan struct{}, cfg.MaxPending),
-		ready:    make(chan *Carrier),
-		carriers: make(map[*Carrier]struct{}),
-		unwatch:  func() {},
+		link:       ll,
+		creds:      creds,
+		cfg:        cfg,
+		ctype:      ctype,
+		slots:      make(chan struct{}, cfg.MaxPending),
+		ready:      make(chan *Carrier),
+		carriers:   make(map[*Carrier]struct{}),
+		exchanging: make(map[*link.Conn]struct{}),
+		unwatch:    func() {},
 	}
 	l.ctx, l.cancel = context.WithCancel(context.Background())
 	if creds != nil {
@@ -246,10 +248,22 @@ func (l *Listener) SetPeers(ids []string) (removed []string, err error) {
 		}
 	}
 	l.mu.Unlock()
-	for _, c := range doomed {
-		_ = c.CloseWithReason(GoAwayPeerNotAllowed)
-	}
+	closeAll(doomed, GoAwayPeerNotAllowed)
 	return removed, nil
+}
+
+// closeAll closes the carriers concurrently (each close may wait up to the
+// grace period for a wedged writer) and returns when all have ended.
+func closeAll(carriers []*Carrier, reason GoAwayReason) {
+	var wg sync.WaitGroup
+	for _, c := range carriers {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			_ = c.CloseWithReason(reason)
+		}()
+	}
+	wg.Wait()
 }
 
 // recheckTrust closes the carriers whose peer no longer verifies under the
@@ -263,9 +277,7 @@ func (l *Listener) recheckTrust() {
 		}
 	}
 	l.mu.Unlock()
-	for _, c := range doomed {
-		_ = c.CloseWithReason(GoAwayCredentials)
-	}
+	closeAll(doomed, GoAwayCredentials)
 }
 
 // ListenerStats are a listener's counters.
@@ -296,8 +308,9 @@ func (l *Listener) Stats() ListenerStats {
 // Close stops the listener and everything it accepted (L1): handshakes in
 // flight are abandoned, every carrier gets a GOAWAY of GoAwayListenerClosed
 // and is closed when its streams have ended or after Config.DrainTimeout,
-// whichever comes first. It returns when they have all ended. A carrier never
-// outlives the listener that accepted it.
+// whichever comes first. SETTINGS exchanges in flight are abandoned. It
+// returns when everything has ended, so it is bounded by the drain timeout.
+// A carrier never outlives the listener that accepted it.
 func (l *Listener) Close() error {
 	l.mu.Lock()
 	if l.closed {
@@ -308,6 +321,11 @@ func (l *Listener) Close() error {
 	carriers := make([]*Carrier, 0, len(l.carriers))
 	for c := range l.carriers {
 		carriers = append(carriers, c)
+	}
+	// Connections still in their SETTINGS exchange belong to no carrier yet:
+	// abandon them, so Close does not wait for the handshake timeout.
+	for c := range l.exchanging {
+		_ = c.Close()
 	}
 	l.mu.Unlock()
 	l.unwatch()
@@ -339,6 +357,15 @@ func (l *Listener) acceptLoop() {
 			_ = conn.Close()
 			continue
 		}
+		l.mu.Lock()
+		if l.closed {
+			l.mu.Unlock()
+			<-l.slots
+			_ = conn.Close()
+			return
+		}
+		l.exchanging[conn] = struct{}{}
+		l.mu.Unlock()
 		l.wg.Add(1)
 		go l.serve(conn)
 	}
@@ -350,6 +377,9 @@ func (l *Listener) serve(conn *link.Conn) {
 	defer l.wg.Done()
 	defer func() { <-l.slots }()
 	c, err := NewCarrier(conn, RoleAcceptor, l.cfg)
+	l.mu.Lock()
+	delete(l.exchanging, conn)
+	l.mu.Unlock()
 	if err != nil {
 		l.settingsFailed.Add(1)
 		return

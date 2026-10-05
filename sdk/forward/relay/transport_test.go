@@ -94,9 +94,10 @@ func TestTLSCarrierEndToEnd(t *testing.T) {
 		data := pattern(n, byte(n))
 		eqBytes(t, roundTrip(t, d, data), data)
 	}
-	if st := e.l.Stats(); st.Carriers != 1 || st.Accepted != 1 || st.Link.Accepted != 1 {
-		t.Fatalf("stats %+v", st)
-	}
+	waitFor(t, "the counters to settle", func() bool {
+		st := e.l.Stats()
+		return st.Carriers == 1 && st.Accepted == 1 && st.Link.Accepted == 1
+	})
 	if e.l.Link() == nil || e.l.Addr() == nil {
 		t.Fatal("accessors")
 	}
@@ -224,6 +225,30 @@ func TestListenerCloseDrainsItsCarriers(t *testing.T) {
 		waitDone(t, a)
 		if _, err := s.Read(make([]byte, 1)); !errors.Is(err, ErrCarrierClosed) {
 			t.Fatalf("stream = %v", err)
+		}
+	})
+	t.Run("a connection still in its SETTINGS exchange is abandoned, not waited for", func(t *testing.T) {
+		e := newTLSEnv(t, Config{DrainTimeout: 200 * time.Millisecond, HandshakeTimeout: time.Minute})
+		// A dialler that completes TLS and then says nothing: the listener
+		// is waiting for its SETTINGS.
+		ctx, cancel := context.WithTimeout(context.Background(), testWait)
+		defer cancel()
+		conn, err := link.DialTLS(ctx, e.l.Addr().String(), link.DialConfig{Credentials: linkCreds(t, e.ca, e.ca.CAPEM(), "forward-1"), ServerName: "forward-2", PeerIdentity: nodeID("forward-2"), Protocol: ALPN})
+		if err != nil {
+			t.Fatal(err)
+		}
+		defer func() { _ = conn.Close() }()
+		waitFor(t, "the exchange to start", func() bool {
+			e.l.mu.Lock()
+			defer e.l.mu.Unlock()
+			return len(e.l.exchanging) == 1
+		})
+		start := time.Now()
+		if err := e.l.Close(); err != nil {
+			t.Fatal(err)
+		}
+		if took := time.Since(start); took > 3*time.Second {
+			t.Fatalf("Close took %v: it waited for the SETTINGS exchange", took)
 		}
 	})
 	t.Run("a carrier that is accepted but never taken is closed too", func(t *testing.T) {
@@ -442,56 +467,6 @@ func TestSettingsExchangesAreBounded(t *testing.T) {
 		t.Fatal(err)
 	}
 	_ = silent
-}
-
-// A TLS Close tries to send close_notify, which blocks for seconds when the
-// peer is dead and the socket is full: closing a carrier must not wait for it.
-func TestCloseDoesNotWaitForADeadPeer(t *testing.T) {
-	ca, err := relaytest.New("a")
-	if err != nil {
-		t.Fatal(err)
-	}
-	ll, err := link.Listen("127.0.0.1:0", link.ListenerConfig{Credentials: linkCreds(t, ca, ca.CAPEM(), "forward-2"), Protocol: ALPN, Sources: []string{"127.0.0.1"}, Peers: []string{nodeID("forward-1")}})
-	if err != nil {
-		t.Fatal(err)
-	}
-	defer func() { _ = ll.Close() }()
-	// The "peer" completes the SETTINGS exchange by hand, announcing huge
-	// windows, and then never reads again.
-	go func() {
-		conn, err := ll.Accept()
-		if err != nil {
-			return
-		}
-		defer func() { _ = conn.Close() }()
-		huge := Settings{MaxStreams: 8, MaxFrame: MaxMaxFrame, StreamWindow: MaxStreamWindow, CarrierWindow: MaxCarrierWindow}
-		_ = WriteFrame(conn, Frame{Type: TypeSettings, Payload: huge.Marshal()})
-		_, _ = ReadFrame(conn, MaxMaxFrame)
-		time.Sleep(30 * time.Second)
-	}()
-	d, err := DialTLS(t.Context(), ll.Addr().String(), link.DialConfig{Credentials: linkCreds(t, ca, ca.CAPEM(), "forward-1"), ServerName: "forward-2", PeerIdentity: nodeID("forward-2")}, Config{SendBuffer: 1 << 20})
-	if err != nil {
-		t.Fatal(err)
-	}
-	s, err := d.Open(testParams())
-	if err != nil {
-		t.Fatal(err)
-	}
-	// Fill the socket: the writer ends up blocked in a TLS write.
-	go func() {
-		buf := make([]byte, 64*1024)
-		for {
-			if _, err := s.Write(buf); err != nil {
-				return
-			}
-		}
-	}()
-	time.Sleep(500 * time.Millisecond)
-	start := time.Now()
-	_ = d.Close()
-	if took := time.Since(start); took > 3*time.Second {
-		t.Fatalf("Close took %v with a dead peer", took)
-	}
 }
 
 // stuckClose models a TLS connection whose Close blocks sending close_notify
