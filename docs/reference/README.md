@@ -15,6 +15,7 @@ This section is the operator/developer reference index for `anix-control`.
 - [repository-layout.md](repository-layout.md): root and directory ownership, plus root hygiene rules
 - [frontend-design.md](frontend-design.md): the vendored AnixOps Design system in `web/` (tokens, brand assets, theme, legacy variable bridge, design sync and lint rules)
 - [node-credential-rotation.md](node-credential-rotation.md): the admin API that rotates a node's Agent credentials (`POST /api/v4/kernel/agents/rotate-credentials`)
+- [admin-api-tokens.md](admin-api-tokens.md): administrators' personal access tokens for automation: format, scopes, endpoints, audit and threat model
 - [runtime.md](runtime.md): NodeX mode vs local Ansible mode, recommended `nftables_ansible` defaults, and where to operate each path
 
 ## Runtime And Boundary References

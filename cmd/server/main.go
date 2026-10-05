@@ -66,7 +66,7 @@ import (
 // @securityDefinitions.apikey BearerAuth
 // @in header
 // @name Authorization
-// @description Type "Bearer" followed by a space and JWT token.
+// @description Type "Bearer" followed by a space and a JWT, or, on the administrator APIs, an admin API token (anixadm_..., see docs/reference/admin-api-tokens.md).
 
 // @tag.name 认证
 // @tag.description 用户登录、注册等认证相关接口

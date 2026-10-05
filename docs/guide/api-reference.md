@@ -16,6 +16,18 @@
 Authorization: Bearer <token>
 ```
 
+### 管理员 API Token
+
+自动化脚本可在管理员接口（`/api/v2/admin`、`/api/v3`、`/api/v4`）上使用个人访问令牌，
+格式 `anixadm_...`，只能放在 `Authorization: Bearer` 头里，不能放在 URL 中：
+
+```
+Authorization: Bearer anixadm_<token>
+```
+
+创建、范围（`read` / `admin`）、撤销和审计见 [Admin API Tokens](admin-api-tokens.md)
+和 [参考](../reference/admin-api-tokens.md)。用户接口不接受它。
+
 ### 节点认证
 
 UniProxy 鉴权使用 `node_id` 查询参数 + `X-API-Key` 请求头。

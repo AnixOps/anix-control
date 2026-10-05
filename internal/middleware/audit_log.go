@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/AnixOps/anix-control/v4/internal/adminapitoken"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/gin-gonic/gin"
@@ -171,6 +172,13 @@ func AuditLog() gin.HandlerFunc {
 			slog.Int("status_code", statusCode),
 			slog.Int64("duration_ms", duration),
 			slog.String("request_id", requestID),
+		}
+
+		// A request an admin API token authenticated says so, with the
+		// token's id (never the token).
+		if c.GetString(adminapitoken.ContextKeyAuthMethod) == adminapitoken.AuthMethodAPIToken {
+			logAttrs = append(logAttrs, slog.String("auth_method", adminapitoken.AuthMethodAPIToken),
+				slog.String("api_token_id", c.GetString(adminapitoken.ContextKeyTokenID)))
 		}
 
 		if reqBody != "" {

@@ -48,6 +48,7 @@ Use this folder when you need implementation detail, clone contracts, runtime op
 | [Loon WireGuard](loon-wireguard.md) | Loon-specific WireGuard endpoint compatibility handling |
 | [Mihomo WireGuard](mihomo-wireguard.md) | Mihomo/Clash WireGuard output differences such as omitted `persistent-keepalive` |
 | [API Reference](api-reference.md) | Existing project API overview |
+| [Admin API Tokens](admin-api-tokens.md) | Personal access tokens for automation on the administrator APIs: create, use, list, revoke, leaks and departed administrators |
 
 ### WireGuard
 

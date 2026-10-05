@@ -30,6 +30,12 @@ func NewUserService() *UserService {
 	}
 }
 
+// NewUserServiceFor creates a user service over db instead of the process
+// database: for callers that already hold their handle.
+func NewUserServiceFor(db *gorm.DB) *UserService {
+	return &UserService{db: db}
+}
+
 // GetByID 根据ID获取用户
 func (s *UserService) GetByID(id uint) (*model.User, error) {
 	var user model.User
