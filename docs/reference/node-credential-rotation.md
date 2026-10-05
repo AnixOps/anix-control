@@ -112,7 +112,15 @@ The revoked certificates and enrollments carry `revoke_reason`
 
 ## Notes for the UI
 
-The node page's "rotate credentials" action calls this route, shows
-`credential` once with the copyable `--reset` install command (the same
-token form the install token sheet shows) and warns that, without
-`rotate_api_key`, the old node API key keeps working.
+The node page's Credentials section (and a forwarding node's Agent card) call
+this route from "Rotate credentials…": a danger confirmation with the reason
+(counted in UTF-8 bytes, because the route's limit of 200 is `len(reason)` in
+bytes), the lifetime and, for a proxy node, `rotate_api_key` (with the
+consequence spelled out: without it the old key keeps working), then a dialog
+that shows `credential` once, masked, with a copy button, the expiry with a
+countdown, the `revoked` counts and whether the API key was replaced. It keeps
+the credential only in that dialog's state and clears it on close. It shows no
+`--reset` install command: that form is not in an Agent release yet, so the
+dialog links to the guide instead. The console does not know the administrator
+is a super administrator; it offers the action and shows the `403
+super_admin_required` inside the confirmation.

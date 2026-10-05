@@ -73,7 +73,11 @@ const BYTE_UNITS = ['B', 'KB', 'MB', 'GB', 'TB', 'PB']
 // The unit the axis counts in: the largest that keeps the peak ≥ 1, so the
 // ticks are round numbers of it (0, 1, 2 GB…) rather than of bytes.
 export function axisUnit(points) {
-  const max = Math.max(0, ...points.map(point => point.traffic))
+  return axisUnitFor(Math.max(0, ...points.map(point => point.traffic)))
+}
+
+// The same, for a peak in bytes (the node traffic chart has two series).
+export function axisUnitFor(max) {
   let index = 0
   while (max >= 1024 ** (index + 1) && index < BYTE_UNITS.length - 1) index += 1
   return { unit: BYTE_UNITS[index], scale: 1024 ** index }

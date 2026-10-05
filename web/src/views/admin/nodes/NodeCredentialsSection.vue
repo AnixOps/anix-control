@@ -21,6 +21,15 @@
       />
       <p v-if="error" class="form-error" role="alert" data-testid="credentials-error">{{ error }}</p>
 
+      <UiGroupedList :title="t('admin.nodes.rotate.title')" :footer="t('admin.nodes.rotate.footer')">
+        <UiGroupedListRow
+          :label="t('admin.nodes.rotate.row')"
+          :description="agentDisabled ? t('admin.nodes.rotate.disabledHint') : t('admin.nodes.rotate.rowHint')"
+        >
+          <NodeRotateCredentials :node="`proxy-${node.id}`" :node-label="node.name" :disabled="agentDisabled" />
+        </UiGroupedListRow>
+      </UiGroupedList>
+
       <UiGroupedList :title="t('admin.nodes.credentials.protocolSecrets')" :footer="t('admin.nodes.credentials.protocolSecretsFooter')">
         <UiGroupedListRow :label="t('admin.nodes.credentials.protocolSecretsRow')" @click="emit('open-protocols')" />
       </UiGroupedList>
@@ -33,8 +42,9 @@
 // (GET /admin/nodes/:id/credentials writes a "reveal" audit entry), then
 // shown masked with a reveal toggle and copy. The shared secret is never
 // shown, as before the redesign; protocol secrets stay masked (********)
-// in the protocol editor.
-import { ref } from 'vue'
+// in the protocol editor. 轮换 Agent 凭据 revokes what the node's Agent holds
+// and issues a one-time credential (NodeRotateCredentials).
+import { computed, ref } from 'vue'
 import { Eye } from '@lucide/vue'
 import { getNodeCredentials } from '@/api/admin'
 import UiButton from '@/ui/UiButton.vue'
@@ -43,13 +53,18 @@ import UiGroupedList from '@/ui/UiGroupedList.vue'
 import UiGroupedListRow from '@/ui/UiGroupedListRow.vue'
 import UiSection from '@/ui/UiSection.vue'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { readNodeApiError, readNodePayload } from './nodeData'
+import NodeRotateCredentials from './NodeRotateCredentials.vue'
+import { NODE_STATUS, readNodeApiError, readNodePayload } from './nodeData'
 
 const props = defineProps({
   node: { type: Object, required: true }
 })
 const emit = defineEmits(['open-protocols'])
 const { t } = useAppI18n()
+
+// A disabled node's Agent credentials were revoked when it was disabled, and
+// the route refuses to issue new ones (409 node_disabled): enable it first.
+const agentDisabled = computed(() => Number(props.node.status) === NODE_STATUS.disabled)
 
 const apiKey = ref('')
 const loading = ref(false)

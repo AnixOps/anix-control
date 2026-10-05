@@ -250,6 +250,60 @@
   and pages; a Playwright spec records the requests; the screens' fixtures
   answer the new routes; the accessibility sweeps cover the members page.
 
+- **Admin console: a node's traffic over time and rotating its Agent
+  credentials.** Two more screens use routes the kernel already serves.
+  **节点 → 流量** (a new section of the node page, after 概览) draws the
+  node's upload and download over a range with `GET
+  /api/v4/kernel/nodes/:id/traffic`: 24 h, 7 d and 30 d by the hour (whole
+  UTC hours, 24, 168 and 720 buckets, the most the route allows) and 90 d and
+  1 y by the day (the Control host's calendar days; 90 and 365 buckets, one
+  fewer than the 366 allowed, so a host midnight a day earlier than the
+  browser's cannot make the window too long). It shows the range's upload,
+  download and total as metric cards, two lines on one axis in the unit of the
+  peak (`0 GB`, `2 GB`…), a tooltip with exact values, the data as a table
+  behind 以表格查看 and for screen readers, a named plot with a summary
+  sentence (range, totals, busiest hour or day), and a note on where the
+  numbers come from (the hourly series ends where the traffic log was purged).
+  It loads when the section opens, a late answer to an earlier range is
+  dropped, and it has its own loading, empty ("no traffic in this range") and
+  error states (the route's own message, 重试). A day is labelled by its noon, so
+  the date is right in a browser up to twelve hours from the host. **流量与监控
+  → 实时节点** had no history of a node, only its load now: a row (or its
+  row menu, 查看流量) opens that node's traffic in a sheet with the same chart,
+  and a link to the node page. **节点 → 凭据** has *Rotate Agent credentials*
+  (`POST /api/v4/kernel/agents/rotate-credentials`, super administrators):
+  a danger confirmation says what happens (every Agent certificate, enrollment
+  and forward link certificate of the node is revoked, a running Agent loses its
+  stream at its next heartbeat, an earlier unused credential stops working, an
+  offline node is fine) and takes a reason (counted in bytes, as the server
+  does: at most 200, so about 66 Chinese characters), the credential's lifetime
+  (1 hour, 6 hours, 24 hours, 7 days) and, for proxy nodes, *also replace the
+  node's API key*, which says that without it the old key keeps working (so
+  whoever holds it can still enroll an Agent) and that with it every process
+  that polls Control with the old key stops until it is given the new one. The
+  result dialog shows the one-time `anixagt_` credential masked, with a
+  copy button (clipboard with the select-and-press-Ctrl+C fallback), a warning
+  not to share it, how long it is valid with a live countdown, what was revoked,
+  whether the API key was replaced, and a link to the guide; it shows no
+  install command, because the `--reset` variant does not exist yet. The
+  credential lives only in the dialog's state: closing it (Done, Esc, ×) or
+  leaving the page clears it, it is never written to storage, the URL, a log or
+  an event, and a request that answers after that is dropped. The console does
+  not know who is a super administrator: the action is offered to every
+  administrator, a 403 shows its reason inside the confirmation and turns the
+  button into a sentence, a disabled node's button is off and says why (the
+  route answers 409 `node_disabled`), and the forwarding node page (an Agent
+  node, not an Ansible machine or a proxy node) offers it too, hidden when the
+  forward API reports `can_delete: false`, without the API key option (a
+  forward node answers 400 for it). Vitest for the API wrappers, the
+  window arithmetic, the chart, the rotation (including that the credential is
+  cleared on every way out) and the pages; a Playwright spec records the
+  requests; the accessibility sweeps cover the new screens (traffic with its
+  empty and error states, the credentials section, both rotation dialogs and the
+  monitor sheet) in both themes at 1440 and 390 px; new visual baselines for
+  them and refreshed ones for the screens whose layout changed (the node page's
+  tab bar, the live monitor's row menu column, the forwarding node's Agent card).
+
 ### Changed
 
 - **Admin lists sort on the server and the bulk bars make one request.**
@@ -284,6 +338,12 @@
   shows "DNS binding incomplete". The fields themselves still flag nothing
   until they were left once. The notes inside the picker use the primary
   label colour (the secondary one was 4.3:1 on the grouped background).
+
+- **The live monitor's rows open a node's traffic.** 实时节点 rows are
+  clickable now (Enter on a focused row too) and have a "…" menu with 查看流量
+  and 打开节点页面, which adds a narrow actions column to the table. The node
+  page has one more section, 流量, between 概览 and 协议; a link to
+  `?section=traffic` works like the other sections.
 
 ### Fixed
 

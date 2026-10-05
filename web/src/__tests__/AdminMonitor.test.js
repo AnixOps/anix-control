@@ -9,10 +9,12 @@ const adminApi = vi.hoisted(() => ({
   getTrafficHourly: vi.fn(),
   getUserTrafficRanking: vi.fn()
 }))
+const kernelApi = vi.hoisted(() => ({ getKernelNodeTraffic: vi.fn() }))
 
 const engine = vi.hoisted(() => ({ charts: [], init: vi.fn(), registerTheme: vi.fn() }))
 
 vi.mock('@/api/admin', () => adminApi)
+vi.mock('@/api/kernel', () => kernelApi)
 vi.mock('@/ui/internal/echarts.js', () => ({ init: engine.init, registerTheme: engine.registerTheme }))
 
 function deferred() {
@@ -163,6 +165,64 @@ describe('实时节点 (WebSocket)', () => {
     expect(names()).toEqual(['offline-a', 'online-b', 'new-d'])
     wrapper.unmount()
     expect(socket.closed).toBe(true)
+  })
+
+  describe('a node\'s traffic', () => {
+    const SNAPSHOT = {
+      overview: { total_nodes: 2 },
+      nodes: [
+        { id: 1, name: 'hk-01', host: '10.0.0.1', status: 'online', cpu_usage: 10 },
+        { id: 2, name: 'jp-02', host: '10.0.0.2', status: 'online', cpu_usage: 20 }
+      ]
+    }
+    const traffic = { node_id: 1, granularity: 'hour', since_unix_ms: 1_790_000_000_000, until_unix_ms: 1_790_003_600_000, points: [{ start_unix_ms: 1_790_000_000_000, up_bytes: 1024 ** 3, down_bytes: 2 * 1024 ** 3 }], total: { up_bytes: 1024 ** 3, down_bytes: 2 * 1024 ** 3 } }
+
+    async function mountLive() {
+      localStorage.setItem('token', 'admin-token')
+      vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
+      const mounted = await mountWithRouter(MonitorLive, '/admin/monitor')
+      FakeSocket.instances[0].onopen()
+      FakeSocket.instances[0].emit(SNAPSHOT)
+      await flushPromises()
+      return mounted
+    }
+
+    it('opens the history of the row in a sheet, from the node\'s id, and draws it with the node page\'s chart', async () => {
+      kernelApi.getKernelNodeTraffic.mockResolvedValue(traffic)
+      const { wrapper } = await mountLive()
+      expect(kernelApi.getKernelNodeTraffic).not.toHaveBeenCalled()
+
+      await wrapper.findAll('[data-monitor-nodes] tbody tr')[0].trigger('click')
+      // The sheet is a lazy chunk: it arrives a moment after the click.
+      await vi.waitFor(() => expect(document.body.querySelector('[data-testid="monitor-node-traffic"]')).toBeTruthy())
+      await flushPromises()
+      const sheet = document.body.querySelector('[data-testid="monitor-node-traffic"]')
+      expect(sheet.getAttribute('role')).toBe('dialog')
+      expect(sheet.textContent).toContain('Traffic of hk-01')
+      expect(kernelApi.getKernelNodeTraffic).toHaveBeenCalledTimes(1)
+      expect(kernelApi.getKernelNodeTraffic).toHaveBeenCalledWith(1, expect.objectContaining({ granularity: 'hour' }))
+      expect(sheet.querySelector('[data-summary="total"]').textContent).toContain('3.0 GB')
+      expect(sheet.querySelector('[data-testid="monitor-node-open"]').getAttribute('href')).toBe('/admin/nodes/1?section=traffic')
+      expect(engine.charts.length).toBeGreaterThan(0)
+      wrapper.unmount()
+    })
+
+    it('is also in the row menu, next to opening the node page', async () => {
+      kernelApi.getKernelNodeTraffic.mockResolvedValue({ ...traffic, node_id: 2 })
+      const { wrapper, router } = await mountLive()
+      const trigger = wrapper.findAll('button').find(button => button.attributes('aria-label') === 'Actions for jp-02')
+      await trigger.trigger('click')
+      await flushPromises()
+      const items = [...document.body.querySelectorAll('[role="menuitem"]')]
+      expect(items.map(item => item.textContent.trim())).toEqual(['View traffic', 'Open node page'])
+      items[0].click()
+      await vi.waitFor(() => expect(document.body.querySelector('[data-testid="monitor-node-traffic"]')).toBeTruthy())
+      await flushPromises()
+      expect(kernelApi.getKernelNodeTraffic).toHaveBeenCalledWith(2, expect.anything())
+      expect(document.body.querySelector('[data-testid="monitor-node-traffic"]').textContent).toContain('Traffic of jp-02')
+      expect(router.currentRoute.value.path).toBe('/admin/monitor')
+      wrapper.unmount()
+    })
   })
 
   it('reconnects after 3 s when the socket closes and offers 立即重连', async () => {

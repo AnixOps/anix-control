@@ -306,4 +306,35 @@ describe('kernel API', () => {
     await kernelApi.abortKernelAgentUpgrade('c1', true)
     expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/agents/upgrades/c1/abort', method: 'post', data: { rollback: true } })
   })
+  it('reads a proxy node\'s traffic series through the v4 kernel, leaving out what is not given', async () => {
+    mockRequest.mockResolvedValue({ data: { node_id: 7, granularity: 'hour', points: [], total: { up_bytes: 0, down_bytes: 0 } } })
+    // The answer is the route's {data}, unwrapped like its siblings.
+    await expect(kernelApi.getKernelNodeTraffic(7)).resolves.toMatchObject({ node_id: 7, granularity: 'hour' })
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/nodes/7/traffic', method: 'get' })
+    await kernelApi.getKernelNodeTraffic(7, { granularity: 'day' })
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/nodes/7/traffic', method: 'get', params: { granularity: 'day' } })
+    await kernelApi.getKernelNodeTraffic('12', { granularity: 'hour', since: 1_790_000_000_000, until: 1_790_086_400_000 })
+    expect(mockRequest).toHaveBeenLastCalledWith({
+      baseURL: '/api/v4', url: '/kernel/nodes/12/traffic', method: 'get', params: { granularity: 'hour', since: 1_790_000_000_000, until: 1_790_086_400_000 }
+    })
+    // An id with a slash cannot change the path.
+    await kernelApi.getKernelNodeTraffic('1/../2')
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/nodes/1%2F..%2F2/traffic', method: 'get' })
+  })
+
+  it('rotates a node\'s Agent credentials with only the fields that were asked for', async () => {
+    mockRequest.mockResolvedValue({ data: { node: 'proxy-12', credential: 'anixagt_x' } })
+    await expect(kernelApi.rotateKernelAgentCredentials({ node: 'proxy-12' })).resolves.toEqual({ node: 'proxy-12', credential: 'anixagt_x' })
+    expect(mockRequest).toHaveBeenLastCalledWith({
+      baseURL: '/api/v4', url: '/kernel/agents/rotate-credentials', method: 'post', data: { node: 'proxy-12' }, timeout: 30_000
+    })
+    await kernelApi.rotateKernelAgentCredentials({ node: 'proxy-12', rotateApiKey: true, ttlSeconds: 86400, reason: '  disk of the host was stolen  ' })
+    expect(mockRequest).toHaveBeenLastCalledWith({
+      baseURL: '/api/v4', url: '/kernel/agents/rotate-credentials', method: 'post',
+      data: { node: 'proxy-12', rotate_api_key: true, ttl_seconds: 86400, reason: 'disk of the host was stolen' }, timeout: 30_000
+    })
+    // A blank reason and a false flag are not sent.
+    await kernelApi.rotateKernelAgentCredentials({ node: 'forward-3', rotateApiKey: false, reason: '   ' })
+    expect(mockRequest.mock.lastCall[0].data).toEqual({ node: 'forward-3' })
+  })
 })

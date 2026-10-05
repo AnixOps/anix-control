@@ -74,6 +74,12 @@ nodes and route detail every 15 seconds, overview and routes every
   **转发设置**: port range, reserved ports, addresses (dial order) and
   labels. Saving replans every route. Routes that no longer plan are listed;
   the nodes keep their generation until they plan again.
+- **Rotate credentials…** on a forward node's Agent card (an Agent node, not
+  an Ansible machine, and only for a super administrator) revokes the node's
+  Agent certificates, enrollments and link certificates and shows a new
+  one-time credential once, so its Agent can enroll again
+  ([the guide](agent-onboarding.md#rotating-a-nodes-credentials)). A disabled
+  node has to be enabled first. A forward node has no API key to replace here.
 - A node used by a route cannot be disabled or deleted; the page names the
   routes.
 - A proxy node's page here has only its forwarding settings. Its name,

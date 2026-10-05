@@ -23,6 +23,14 @@ const SHOTS = [
   ['admin-subscription-members', [DESKTOP, PHONE]],
   ['admin-node-detail', [DESKTOP]],
   ['admin-node-services', [DESKTOP]],
+  // The node's traffic over time (and its empty state), the credentials
+  // section's rotate action as a confirmation and as its one-time result,
+  // and a node's traffic in the live monitor's sheet.
+  ['admin-node-traffic', [DESKTOP, PHONE]],
+  ['admin-node-traffic-empty', [DESKTOP]],
+  ['admin-node-rotate', [DESKTOP]],
+  ['admin-node-rotated', [DESKTOP]],
+  ['admin-monitor-node-traffic', [DESKTOP]],
   // The v4.2 forwarding pages (F5b).
   ['admin-forward-overview', [DESKTOP]],
   ['admin-forward-routes', [DESKTOP, PHONE]],

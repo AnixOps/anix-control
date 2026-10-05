@@ -432,18 +432,20 @@ with the API answered from the fixture.
 
 - **Accessibility** (`web/e2e/a11y.spec.js`, part of `npm run test:e2e` in
   the Frontend Build job): `@axe-core/playwright` with the WCAG 2.2 AA and
-  best-practice rules on 38 admin and user screens, light and dark, 1440 and
+  best-practice rules on 45 admin and user screens, light and dark, 1440 and
   390 px. Serious and critical findings fail. It also checks the skip link,
   the landmarks, one `h1` per page and focus returning to the opener when a
   dialog closes, an open row menu and the account menu (no finding of any
   impact), the plugin drawer's tabs (WAI-ARIA keys) and the topology
   workspace's field names. Add a screen to `SCREENS` when a page is added.
 - **Visual regression** (`web/e2e/visual/visual.spec.js`,
-  `playwright.visual.config.js`): 59 full-page screenshots of 24 screens
+  `playwright.visual.config.js`): 70 full-page screenshots of 29 screens
   (sign-in, user home, subscription, dashboard, users, nodes with their Agent
-  connection, node detail, a subscription group's members, the forwarding
-  pages, settings, monitoring, plugin center, an empty and an error state),
-  light and dark at 1440 px and a few at 390 px. Deterministic by design:
+  connection, node detail, a node's traffic (and its empty state), the
+  rotate-credentials confirmation and result, a subscription group's members,
+  the forwarding pages, settings, monitoring (and a node's traffic in its
+  sheet), plugin center, an empty and an error state), light and dark at
+  1440 px and a few at 390 px. Deterministic by design:
   mocked data with fixed timestamps, `Date.now()` fixed with
   `page.clock.setFixedTime`, UTC, English (text in the bundled Inter),
   reduced motion and `animations: 'disabled'` (charts and graphs turn their
@@ -469,6 +471,17 @@ with the API answered from the fixture.
   developer machines: `scripts/visual-docker.sh` pulls it on first use, and
   `docker rmi mcr.microsoft.com/playwright:v<version>-noble` frees the
   space again.
+
+**The screens' fixed clock and Vue's events.** `openScreen(..., { clock: true })`
+uses `page.clock.setFixedTime`, which freezes `Date.now()`. Vue skips an event
+handler that was attached at or after the event's own timestamp, so with a
+frozen clock every handler after the first one on an event's path is skipped.
+Most controls have only one (a button's `click`), but a Reka Select trigger's
+`pointerdown` sits under the dialog's own capture listener, and the keys of an
+open list under the list's: the Select of a dialog neither opens with the
+mouse nor moves with the arrows. A flow that works such a control (the
+rotation confirmation's lifetime) runs on the real clock, and the fixture
+reads `ctx.now` (the time the page's clock reads) where it dates a value.
 
 Touch targets: on coarse pointers every control is at least 44 × 44 px,
 through its own size or an `::after` hit area that keeps the look; medium
@@ -916,7 +929,7 @@ template and the first detail page (plan §7.2). Page-local parts live in
                         row → node page; "…" → 打开 / 协议 / 日志 / 同步 / 编辑 / 删除
 /admin/nodes/:id        back link · name · status badge · 编辑 · 同步并重载 (primary)
   ?section=             UiTabs variant="segmented":
-                        overview | protocols | credentials | deploy | logs | danger
+                        overview | traffic | protocols | credentials | deploy | logs | danger
 ```
 
 - **Detail page template.** `UiPageHeader` with the `#back` slot (a link
@@ -951,6 +964,56 @@ template and the first detail page (plan §7.2). Page-local parts live in
   The columns are not sortable: the API has no sort for them. To make room
   at 1440 px 版本 and 负载 start hidden (the node page has both; the table
   settings bring them back).
+- **Traffic.** 流量 (`nodes/NodeTrafficSection.vue`, a lazy chunk, loaded
+  when the section opens) draws `GET /api/v4/kernel/nodes/:id/traffic`
+  through `nodes/NodeTrafficChart.vue`, which the live monitor's sheet reuses.
+  The range switch is 24 h, 7 d and 30 d by the hour (whole UTC hours: 24,
+  168 and 720 buckets, the route's maximum) and 90 d and 1 y by the day (the
+  host's calendar days; `since` is `buckets - 1` days back and `until` is left
+  out, 90 and 365 buckets, so a host midnight a day earlier than the browser's
+  stays inside the 366 the route allows); `nodeTraffic.js` has the windows
+  (`trafficQuery`), the reader of the answer and the chart option, and
+  `useNodeTraffic.js` the state (a late answer to an earlier range or node is
+  dropped; the series of the previous range stays on screen, dimmed, while the
+  next loads). The metric cards are the range's upload, download and total
+  (`format.bytes`, one decimal); the chart is two `UiChart` lines (download with
+  a soft area) on one axis in the unit of the peak (`axisUnitFor`, shared with
+  the user-traffic chart), its tooltip uses `format.bytes`, and the plot is
+  named with a summary sentence (range, totals, busiest hour or day) and has
+  the numbers as the chart's data table. An hour is labelled in the viewer's
+  time zone; a day by its noon (`bucketLabelTime`), so its date is right for a
+  browser up to twelve hours from the host. The loading skeleton (after 300 ms),
+  the empty state (nothing moved: it says hourly history ends where the traffic
+  log was purged) and the error state (the route's own message, 重试) are
+  `UiChart`'s; a note under the chart says whether the numbers are hours from
+  the log or days from the daily statistics. The range is local state, not in
+  the URL.
+- **Rotating Agent credentials.** 凭据 has an *Agent credentials* group with
+  `nodes/NodeRotateCredentials.vue` (also on the forwarding node page's Agent
+  card, for an Agent node that is not a proxy node, hidden when the forward
+  API reports `can_delete: false`; the forward page passes `size="md"`). The
+  button opens a danger `UiConfirmDialog` (its default slot holds the fields,
+  which `useConfirm()` cannot carry) that names the node, lists what happens,
+  and takes the credential's lifetime (a `UiSelect`: 1 h, 6 h, 24 h, 7 d), a
+  reason (a `UiTextarea`, counted in UTF-8 bytes with its 200 limit because the
+  server counts bytes) and, for a proxy node only, a `UiCheckbox` to also
+  replace the API key, with a danger notice when it is ticked. The result is a
+  `UiDialog` (the scrim does not close it; focus starts on the copy button and
+  returns to the trigger) with a warning, the credential in a masked
+  `UiCopyField` (copy with the library's fallback that selects the text), the
+  expiry with a once-a-second countdown (a `<time>`, not a live region) or an
+  "expired" notice, what was revoked, whether the API key was replaced, and a
+  link to `docs/guide/agent-onboarding.md#rotating-a-nodes-credentials`. It
+  shows no install command: the `--reset` variant the guide describes does not
+  exist yet. `useCredentialRotation.js` keeps the state (`stage`, `form`,
+  `busy`, `error`, `result`): the credential is in `result` only, `dismiss`,
+  `cancel` and the end of the scope clear it, a request that answers after that
+  is dropped, and `rotated` carries the node and whether the key was replaced,
+  never the secret. The console does not know who is a super administrator
+  (the forwarding pages learn it from `can_delete`), so the proxy node page
+  offers the action to every administrator; a 403 shows the reason inside the
+  confirmation and turns the button into a sentence, and a disabled node's
+  button is off with its reason (the route answers 409 `node_disabled`).
 - **Secrets.** 凭据 calls `GET /admin/nodes/:id/credentials` only on 读取 API
   密钥 (the server audits every read) and shows the API key in a masked
   `UiCopyField`; the shared secret is never shown. Registration keys are
@@ -1061,6 +1124,12 @@ fails and retries on its own, so one failing endpoint never blanks the page.
   (`views/admin/monitor/useMonitorRange.js`: 1h, 24h, 7d, 30d) is in
   `?range=` (24h leaves it out) and is offered only by the sections whose
   API takes one (用户流量, 节点延迟). Only 实时节点 opens the WebSocket.
+- 实时节点 has no history of a node, only its load now, so a row (Enter on a
+  focused row too, or 查看流量 in its "…" menu, which also has 打开节点页面)
+  opens a `UiSheet` (`monitor/MonitorNodeTraffic.vue`, a lazy chunk) with the
+  node page's traffic chart (`GET /api/v4/kernel/nodes/:id/traffic` by the
+  node's id from the WebSocket) and a link to the node page's 流量 section.
+  The user-traffic section keeps `/admin/traffic/hourly`.
 - Old URLs redirect: `/admin/traffic-hourly` → `/admin/monitor/traffic`,
   `/admin/forward/observability` → `/admin/monitor/forward` (query kept).
 - `components/admin/OperationTimeline.vue` (部署编排 and 插件中心) is an

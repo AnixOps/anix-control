@@ -38,8 +38,19 @@ const telemetry = vi.hoisted(() => ({
 vi.mock('@/api/machineTelemetry', async importOriginal => ({ ...(await importOriginal()), ...telemetry }))
 
 // The node's Agent connection and certificate (GET /api/v4/kernel/agents/transports?node=proxy-5).
-const kernelApi = vi.hoisted(() => ({ getKernelAgentTransports: vi.fn() }))
+const kernelApi = vi.hoisted(() => ({ getKernelAgentTransports: vi.fn(), getKernelNodeTraffic: vi.fn(), rotateKernelAgentCredentials: vi.fn() }))
 vi.mock('@/api/kernel', async importOriginal => ({ ...(await importOriginal()), ...kernelApi }))
+
+// The traffic chart draws with ECharts; the engine is not needed to see what it is given.
+const engine = vi.hoisted(() => ({ charts: [] }))
+vi.mock('@/ui/internal/echarts.js', () => ({
+  registerTheme: vi.fn(),
+  init: vi.fn(() => {
+    const chart = { setOption: vi.fn(), setTheme: vi.fn(), resize: vi.fn(), dispose: vi.fn() }
+    engine.charts.push(chart)
+    return chart
+  })
+}))
 
 const Harness = {
   components: { NodeDetail, UiHost },
@@ -97,6 +108,10 @@ describe('NodeDetail', () => {
     telemetry.nodeHasServicesTable.mockResolvedValue(false)
     kernelApi.getKernelAgentTransports.mockReset()
     kernelApi.getKernelAgentTransports.mockResolvedValue({ nodes: [] })
+    kernelApi.getKernelNodeTraffic.mockReset()
+    kernelApi.rotateKernelAgentCredentials.mockReset()
+    engine.charts.length = 0
+    vi.stubGlobal('ResizeObserver', class { observe() {} disconnect() {} })
   })
 
   afterEach(() => {
@@ -174,6 +189,81 @@ describe('NodeDetail', () => {
       kernelApi.getKernelAgentTransports.mockResolvedValueOnce(entry())
       await user.click(within(failed).getByRole('button', { name: 'Retry' }))
       await waitFor(() => expect(screen.getByTestId('node-connection').textContent).toBe('mTLS stream'))
+    })
+  })
+
+  describe('Traffic', () => {
+    const answer = {
+      node_id: 5, granularity: 'hour', since_unix_ms: 1_790_000_000_000, until_unix_ms: 1_790_000_000_000 + 2 * 3_600_000,
+      points: [
+        { start_unix_ms: 1_790_000_000_000, up_bytes: 1024 ** 3, down_bytes: 2 * 1024 ** 3 },
+        { start_unix_ms: 1_790_000_000_000 + 3_600_000, up_bytes: 0, down_bytes: 0 }
+      ],
+      total: { up_bytes: 1024 ** 3, down_bytes: 2 * 1024 ** 3 }
+    }
+
+    it('is the second section, after Overview, and loads nothing until it opens', async () => {
+      const user = userEvent.setup()
+      const { router } = await renderPage()
+      await screen.findByRole('heading', { level: 1, name: 'hk-01' })
+      expect(screen.getAllByRole('tab').map(tab => tab.textContent).slice(0, 3)).toEqual(['Overview', 'Traffic', 'Protocols'])
+      expect(kernelApi.getKernelNodeTraffic).not.toHaveBeenCalled()
+
+      kernelApi.getKernelNodeTraffic.mockResolvedValue(answer)
+      await user.click(screen.getByRole('tab', { name: 'Traffic' }))
+      await waitFor(() => expect(router.currentRoute.value.query).toEqual({ section: 'traffic' }))
+      expect(await screen.findByRole('heading', { level: 2, name: 'Traffic' })).toBeTruthy()
+      await waitFor(() => expect(kernelApi.getKernelNodeTraffic).toHaveBeenCalledTimes(1))
+      expect(kernelApi.getKernelNodeTraffic).toHaveBeenCalledWith(5, expect.objectContaining({ granularity: 'hour' }))
+      await waitFor(() => expect(screen.getByRole('img', { name: /Traffic of hk-01, the last 24 hours/ })).toBeTruthy())
+      expect(screen.getByRole('region', { name: 'Traffic totals' }).textContent).toContain('3.0 GB')
+    })
+
+    it('opens from the URL and switches range', async () => {
+      const user = userEvent.setup()
+      kernelApi.getKernelNodeTraffic.mockResolvedValue(answer)
+      await renderPage('/admin/nodes/5?section=traffic')
+      expect(await screen.findByRole('tab', { name: 'Traffic', selected: true })).toBeTruthy()
+      await waitFor(() => expect(kernelApi.getKernelNodeTraffic).toHaveBeenCalledTimes(1))
+      await user.click(screen.getByRole('button', { name: '1 y' }))
+      await waitFor(() => expect(kernelApi.getKernelNodeTraffic).toHaveBeenCalledTimes(2))
+      expect(kernelApi.getKernelNodeTraffic.mock.lastCall[1].granularity).toBe('day')
+    })
+
+    it('does not break the page when the traffic cannot be read', async () => {
+      kernelApi.getKernelNodeTraffic.mockRejectedValue({ response: { status: 404, data: { error: { code: 'not_found', message: 'node not found' } } } })
+      await renderPage('/admin/nodes/5?section=traffic')
+      expect(await screen.findByText('Couldn’t load the traffic')).toBeTruthy()
+      expect(screen.getByText('node not found')).toBeTruthy()
+      expect(screen.getByRole('heading', { level: 1, name: 'hk-01' })).toBeTruthy()
+    })
+  })
+
+  describe('Rotate Agent credentials', () => {
+    it('is in Credentials, calls the route for this proxy node and shows the credential once', async () => {
+      const user = userEvent.setup()
+      kernelApi.rotateKernelAgentCredentials.mockResolvedValue({
+        node: 'proxy-5', revoked: { certificates: 1, enrollments: 0, link_certificates: 0 }, api_key_rotated: false,
+        expires_at: new Date(Date.now() + 3_600_000).toISOString(), credential: 'anixagt_NodePageCredentialNeverRealAbCd0123456789'
+      })
+      await renderPage('/admin/nodes/5?section=credentials')
+      expect(await screen.findByRole('heading', { level: 2, name: 'Credentials' })).toBeTruthy()
+      expect(screen.getByText('Rotate Agent credentials')).toBeTruthy()
+      await user.click(screen.getByRole('button', { name: 'Rotate credentials…' }))
+      const confirm = await screen.findByRole('alertdialog', { name: 'Rotate the credentials of hk-01?' })
+      await user.click(within(confirm).getByRole('button', { name: 'Rotate credentials' }))
+      const result = await screen.findByRole('dialog', { name: 'New credential for hk-01' })
+      expect(kernelApi.rotateKernelAgentCredentials).toHaveBeenCalledWith({ node: 'proxy-5', rotateApiKey: false, ttlSeconds: 3600, reason: '' })
+      await user.click(within(result).getByRole('button', { name: 'Done' }))
+      await waitFor(() => expect(screen.queryByRole('dialog')).toBeNull())
+      expect(document.body.innerHTML).not.toContain('anixagt_NodePageCredential')
+    })
+
+    it('is disabled, with the reason, for a disabled node', async () => {
+      api.getNode.mockResolvedValue({ code: 0, data: { ...node, status: 3 } })
+      await renderPage('/admin/nodes/5?section=credentials')
+      expect((await screen.findByRole('button', { name: 'Rotate credentials…' })).disabled).toBe(true)
+      expect(screen.getByText('This node is disabled. Enable it first, then rotate its credentials.')).toBeTruthy()
     })
   })
 
