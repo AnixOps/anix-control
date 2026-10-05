@@ -305,7 +305,7 @@ func TestRotateCredentialsAuditsWithoutSecrets(t *testing.T) {
 // connection in these tests; the check is the PostgreSQL run's.
 func TestConcurrentRotationsLeaveOneCredential(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, f *fixture) {
-		if f.db.Dialector.Name() != "postgres" {
+		if f.db.Name() != "postgres" {
 			t.Skip("needs concurrent connections")
 		}
 		const callers = 6

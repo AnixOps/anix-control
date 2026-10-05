@@ -16,7 +16,7 @@ import (
 // AuditActionCredentialsRotate is the operation log action of a credential
 // rotation (RotateCredentials). Its entry carries the node, the reason and
 // what was revoked; never a credential.
-const AuditActionCredentialsRotate = "agent_credentials_rotate"
+const AuditActionCredentialsRotate = "agent_credentials_rotate" // #nosec G101 -- names an operation log action, not a credential.
 
 // MaxRotationReasonLength bounds the free-text reason an administrator
 // gives for a rotation.
