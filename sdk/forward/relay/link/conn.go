@@ -29,6 +29,16 @@ type Conn struct {
 	peer Peer
 }
 
+// NetConn returns the underlying TCP connection (below TLS on an encrypted
+// link), the way crypto/tls.Conn.NetConn does. The carrier layer uses it to
+// close a dead link without waiting for TLS's close_notify.
+func (c *Conn) NetConn() net.Conn {
+	if u, ok := c.Conn.(interface{ NetConn() net.Conn }); ok {
+		return u.NetConn()
+	}
+	return c.Conn
+}
+
 // Peer returns the node at the other end.
 func (c *Conn) Peer() Peer { return c.peer }
 

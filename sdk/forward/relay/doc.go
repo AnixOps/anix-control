@@ -13,11 +13,22 @@
 //
 // A Carrier is one authenticated connection between two nodes for one hop of
 // one route. NewCarrier runs the SETTINGS exchange over any net.Conn and
-// multiplexes streams on it; how the connection was made (TLS 1.3 with mutual
-// authentication and identity pinning, or a trusted plain link) is outside
-// this package's core, so the multiplexer is tested on its own over loopback
-// TCP and net.Pipe. A Stream is one client TCP connection (it implements
-// net.Conn and CloseWrite) or one client UDP association (datagrams).
+// multiplexes streams on it, so the multiplexer is tested on its own over
+// loopback TCP and net.Pipe. A Stream is one client TCP connection (it
+// implements net.Conn and CloseWrite) or one client UDP association
+// (datagrams).
+//
+// How the connection is made is package link's business: TLS 1.3 with mutual
+// authentication and per-identity pinning (CarrierTLS), or a trusted plain
+// link with source admission only (CarrierPlain). DialTLS, DialPlain, Listen
+// and ListenPlain join the two: they make a verified link connection and run
+// a carrier on it. A Listener owns the carriers it accepted (L1): closing it
+// sends GOAWAY on all of them and closes them when their streams end or after
+// the drain; SetPeers closes the carriers of an identity removed from
+// ingress_peers with GOAWAY peer_not_allowed; a trust bundle change closes the
+// carriers whose peer lost its CA (WatchCredentials does the same for a
+// dialler's carriers). A SETTINGS exchange that never finishes is bounded by
+// the handshake timeout and by Config.MaxPending per listener.
 //
 // Only the dialling end (the previous hop) opens streams. The listening end
 // answers each one exactly once and never opens any, so a peer can never make

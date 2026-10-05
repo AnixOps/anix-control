@@ -3,10 +3,11 @@
 Status: DESIGN APPROVED (H22, owner decision of 2026-10-04; open
 questions P1–P10 decided, section 9.3). Scope set by the owner on
 2026-10-04: this document covers only the secure transport between
-AnixOps nodes. Section 8 is still reserved for the owner. Phase A1 is
-being built in `sdk/forward/relay`: the frame format and the multiplexer of
-sections 4.2 to 4.7 are implemented there (section 4.10); the rest is not
-implemented yet. The contract slots
+AnixOps nodes. Section 8 is still reserved for the owner. Phase A1 (the
+relay transport library: framing, the TLS and plaintext carriers, identity
+verification, admission and fuzzing) is implemented in `sdk/forward/relay`
+(sections 3.6, 4.10 and 5.5); the rest, from QUIC on, is not implemented
+yet. The contract slots
 it builds on (`ENGINE_ANIXOPS`, `LINK_SECURITY_ANIXOPS`) exist in
 `sdk/api/forward/v1` and are refused by `sdk/forward/validate` until
 `Options.EnableAnixOps` is set (`docs/architecture/forward-sdk.md`
@@ -586,6 +587,31 @@ per-hop payload counters, health-checked failover and UDP aggregation.
   already uses) and the route is an administrator's; validation refuses it
   otherwise (code `plain_untrusted`, P4).
 - Never selected by `AUTO` and never a fallback.
+
+### 5.5 Implementation notes (A1)
+
+`sdk/forward/relay` joins the link connections of `sdk/forward/relay/link`
+with the multiplexer: `DialTLS` and `DialPlain` return a carrier whose
+SETTINGS exchange has finished (so a dialler refused by the listener's
+`ingress_peers` learns it as a `remote_rejected` dial error, not later),
+`Listen` and `ListenPlain` return a listener whose carriers it owns:
+
+- **L1**: `Listener.Close` sends `GOAWAY listener_closed` on every carrier and
+  closes them when their streams end or after `DrainTimeout` (5 s), whichever
+  is first, and returns when they have ended.
+- **Peer removal** (section 3.5): `Listener.SetPeers` closes every carrier
+  authenticated as a removed identity with `GOAWAY peer_not_allowed`; a carrier
+  that was being set up concurrently is closed when it registers.
+- **Trust bundle change**: a reload of the credentials closes the listener's
+  carriers whose peer chain no longer verifies (`GOAWAY credentials_changed`);
+  `WatchCredentials` does the same for the carriers a dialler opened.
+- **Bounds**: admitted connections whose SETTINGS exchange is in flight are
+  limited (`Config.MaxPending`, 64) on top of the link layer's handshake
+  limit, and closing a carrier never waits for TLS's `close_notify` (the frame
+  protocol ends with `GOAWAY`).
+- A carrier reports `Type()` (`tls_tcp` or `plain`) and `Peer()` (identity and
+  verified chain). The carrier pool per upstream, the 7-day carrier age and
+  the choice among carriers are the driver's (A3).
 
 ### 5.4 Selection and fallback
 

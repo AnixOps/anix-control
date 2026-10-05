@@ -22,8 +22,7 @@
   credit bounds, rationed answers). Tested with a raw frame peer for every
   violation, a randomized model of streams (integrity, exact credit
   accounting, no hang), seven fuzz targets with seed corpora, and benchmark
-  stubs. Not a driver: nothing in the planner or the Agent uses it yet, TLS
-  and plaintext carriers and identity verification follow.
+  stubs. Not a driver: nothing in the planner or the Agent uses it yet.
 - **AnixOps relay transport, A1: link connections with identity pinning
   (`sdk/forward/relay/link`, prototype).** The second library of the
   owner-approved H22 design (`docs/architecture/anixops-protocol.md`
@@ -43,7 +42,20 @@
   link CAs (with the `spiffe://anixops` name constraint) and node
   certificates. Tests break one rule at a time and hammer reloads and peer
   changes concurrently; five fuzz targets with seed corpora.
-  Not wired to anything yet: the carrier glue and the driver follow.
+
+- **AnixOps relay transport, A1: TLS and plaintext carriers (`sdk/forward/relay`).**
+  `DialTLS`, `DialPlain`, `Listen` and `ListenPlain` join the two libraries
+  above: a carrier runs on a verified link connection, and a listener owns
+  the carriers it accepted, so none outlives it (closing it sends GOAWAY on
+  all and closes them after their streams or a 5 s drain). Removing an
+  identity from `ingress_peers` closes its carriers with `GOAWAY
+  peer_not_allowed` at once, and a trust bundle change closes the carriers
+  whose peer lost its CA, with no restart and no new counter epoch.
+  Closing a carrier never waits for TLS's `close_notify` on a dead peer.
+  End-to-end tests over real TLS and plaintext links complete phase A1 of the
+  H22 design; the QUIC carrier (A2), the `anixops` driver and relay binary
+  (A3), the contract additions (A4) and the benchmarks (A5) follow. Not
+  used by the planner or the Agent yet.
 
 - **Admin lists sort on the server: `sort` and `order` on the user, order and
   node lists.** The console sorted each list over the page it had loaded, so

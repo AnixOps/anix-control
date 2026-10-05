@@ -1151,12 +1151,17 @@ PROXY v2 toward targets, and an `anixops-relay` unit of its own. By the
 owner's scoping decision (2026-10-04) camouflage is not part of it: its
 section 8 is reserved for the owner.
 
-Phase A1 of that plan is in progress in `sdk/forward/relay` (a pure Go
-library, ALPN `anixops/0`, prototype): the frame format and the stream
+Phase A1 of that plan is implemented in `sdk/forward/relay` (pure Go
+libraries, ALPN `anixops/0`, prototype): the frame format and the stream
 multiplexer (`Carrier`, `Stream`) with flow control, half-close, liveness and
-hard limits, tested against a randomized model and fuzzed
-(`anixops-protocol.md` section 4.10). It is not a driver and nothing in the
-planner or the Agent uses it yet.
+hard limits; `sdk/forward/relay/link`, the TLS 1.3 connection with the H28
+link certificates, per-identity pinning of `peer_identity` and
+`ingress_peers`, source admission and handshake limits, and the plaintext
+connection of a trusted link; and the glue (`DialTLS`, `Listen`, ...) that
+runs carriers on them, owns them per listener and closes the carriers of a
+removed peer or a dropped CA. All of it is tested against a randomized model
+and fuzzed (`anixops-protocol.md` sections 3.6, 4.10 and 5.5). It is not a
+driver and nothing in the planner or the Agent uses it yet.
 
 ### 6.5 Capability matrix (v4.2 target)
 
