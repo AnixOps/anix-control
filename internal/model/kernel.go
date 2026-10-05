@@ -498,7 +498,7 @@ func KernelModels() []any {
 		&PackageMigrationRun{}, &PackageValidationResult{}, &PackageRouteGeneration{}, &PackageBackupReference{}, &PackageRolloutLock{},
 		&PackageStorage{}, &ServiceCA{}, &ModuleEnrollment{}, &ModuleCertificate{}, &PluginRuntime{},
 		&IdentityRevocation{}, &IdentitySessionRevocation{}, &IdentityAccountLink{}, &IdentityAuthority{},
-		&IdentityTokenKey{}, &IdentityCutoverEvent{}, &SubscriberRequest{}, &SubscriberChange{}, &SettingsRequest{},
+		&IdentityTokenKey{}, &IdentityCutoverEvent{}, &SubscriberRequest{}, &SubscriberChange{}, &UserActivity{}, &SettingsRequest{},
 		&NodeCredential{}, &ProtocolSecret{}, &NodeSecretSplit{},
 		&KernelNodeOperation{}, &KernelNodeOperationTarget{}, &KernelNodeOperationEvent{},
 		&AgentEnrollment{}, &AgentCertificate{}, &ForwardLinkCA{}, &ForwardLinkCertificate{}, &AgentReportBatch{}, &KernelNodeDesiredConfig{}, &KernelNodeConfigStatus{},

@@ -4479,6 +4479,158 @@ paths:
       summary: 获取转发规则
       tags:
       - Agent
+  /api/v4/admin/invite-codes/bulk:
+    post:
+      consumes:
+      - application/json
+      description: '对 ids 中的每个邀请码逐个执行单个接口 (撤销 DELETE /admin/invite/codes/{id}), 语义同批量用户操作:
+        ids 最多 200 个, 每个 id 独立生效, 总是 HTTP 200 并返回逐个结果。已使用的邀请码保留并报告 conflict, 已撤销或不存在的报告
+        not_found (重试一次部分成功的批量时, 已撤销的会报 not_found)。'
+      parameters:
+      - description: '{action: revoke, ids: [邀请码ID...]}'
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 批量操作邀请码
+      tags:
+      - admin-invite-codes
+  /api/v4/admin/subscription-groups/{id}/members:
+    get:
+      description: 分页列出被直接授予该订阅分组的用户 (v2_user_subscription_group), 与分组统计的 user_count
+        / enabled_users 同口径; 通过套餐或主分组到达该分组的用户不在其中。按授予时间倒序。不含订阅 token 与 uuid。
+      parameters:
+      - description: 订阅分组 ID
+        in: path
+        name: id
+        required: true
+        type: integer
+      - default: 1
+        description: 页码
+        in: query
+        name: page
+        type: integer
+      - default: 20
+        description: 每页数量 (最多 100)
+        in: query
+        name: page_size
+        type: integer
+      - description: 邮箱包含
+        in: query
+        name: q
+        type: string
+      - description: '成员资格: active (未过期) 或 expired'
+        enum:
+        - active
+        - expired
+        in: query
+        name: status
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 订阅分组成员
+      tags:
+      - 管理端-订阅
+  /api/v4/admin/users/activity:
+    get:
+      description: 按 ids 返回用户最近一次在线的 Unix 时间 (秒)。在线指节点上报了该用户的流量或在线连接, 时间滞后上报不超过一分钟;
+        从未在线的用户 last_online_at 为 null。ids 最多 200 个, 按请求顺序去重返回。
+      parameters:
+      - description: 用户 ID, 逗号分隔, 最多 200 个
+        in: query
+        name: ids
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 用户最近在线时间
+      tags:
+      - 管理端-用户
+  /api/v4/admin/users/bulk:
+    post:
+      consumes:
+      - application/json
+      description: '对 ids 中的每个用户逐个执行单用户接口 (封禁 POST /admin/users/{id}/ban, 解封 .../unban,
+        重置流量 .../reset-traffic), 经同一个 /api/v2 网关, 所以与单个请求走同一套处理和路由模式。ids 最多 200 个,
+        去重后按请求顺序处理。不是全有或全无: 每个 id 独立生效、独立失败, 总是 HTTP 200 并返回逐个结果 {id, ok, error{code,
+        message}} (请求本身无效才是 400)。封禁与解封可重复执行 (已处于目标状态也算成功); 重置流量在请求带 Idempotency-Key
+        时重试只生效一次。管理员不能在批量中封禁自己 (forbidden_self)。请求按 bulk_<action> 记入审计日志, 每个 id 另记一条与单个请求相同的审计记录。不提供删除用户与重置订阅链接。'
+      parameters:
+      - description: 重试同一批量请求时使用同一个键
+        in: header
+        name: Idempotency-Key
+        type: string
+      - description: '{action: ban|unban|reset_traffic, ids: [用户ID...]}'
+        in: body
+        name: request
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: 批量操作用户
+      tags:
+      - 管理端-用户
   /api/v4/forward/ansible-machines:
     get:
       consumes:

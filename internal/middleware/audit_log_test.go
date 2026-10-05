@@ -9,6 +9,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/AnixOps/anix-control/v4/internal/database"
+	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/gin-gonic/gin"
 	"github.com/stretchr/testify/require"
 )
@@ -198,4 +200,91 @@ func TestAuditLogExemptsForwardRoutePreview(t *testing.T) {
 
 	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/api/v4/forward/routes", strings.NewReader(`{}`)))
 	require.Contains(t, logged.String(), `"action":"create"`)
+}
+
+// The console's kernel API (/api/v4/admin/*) is audited like the /api/v2
+// admin routes: its writes are recorded under the first path segment as the
+// module, with the action a handler names (a bulk request's bulk_<action>)
+// or the one the method gives; its reads are not recorded.
+func TestAuditLogRecordsV4AdminWrites(t *testing.T) {
+	previousMode := gin.Mode()
+	gin.SetMode(gin.ReleaseMode)
+	t.Cleanup(func() { gin.SetMode(previousMode) })
+	var logged bytes.Buffer
+	previousLogger := slog.Default()
+	slog.SetDefault(slog.New(slog.NewJSONHandler(&logged, nil)))
+	t.Cleanup(func() { slog.SetDefault(previousLogger) })
+
+	router := gin.New()
+	router.Use(AuditLog())
+	router.POST("/api/v4/admin/users/bulk", func(c *gin.Context) {
+		_, _ = io.ReadAll(c.Request.Body)
+		c.Set(AuditActionKey, "bulk_ban")
+		c.Status(http.StatusOK)
+	})
+	router.POST("/api/v4/admin/invite-codes/bulk", func(c *gin.Context) { c.Status(http.StatusOK) })
+	router.GET("/api/v4/admin/users/activity", func(c *gin.Context) { c.Status(http.StatusOK) })
+	router.POST("/api/v4/adminx/users", func(c *gin.Context) { c.Status(http.StatusOK) })
+
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodGet, "/api/v4/admin/users/activity?ids=1", nil))
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/api/v4/adminx/users", nil))
+	require.Empty(t, logged.String(), "a read, and a path outside the prefix, are not recorded")
+
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/api/v4/admin/users/bulk", strings.NewReader(`{"action":"ban","ids":[3,4]}`)))
+	require.Contains(t, logged.String(), `"module":"users"`)
+	require.Contains(t, logged.String(), `"action":"bulk_ban"`)
+	require.Contains(t, logged.String(), `"request_body":"{\"action\":\"ban\",\"ids\":[3,4]}"`)
+
+	logged.Reset()
+	router.ServeHTTP(httptest.NewRecorder(), httptest.NewRequest(http.MethodPost, "/api/v4/admin/invite-codes/bulk", strings.NewReader(`{"action":"revoke","ids":[1]}`)))
+	require.Contains(t, logged.String(), `"module":"invite-codes"`)
+	require.Contains(t, logged.String(), `"action":"create"`, "without a named action the method's applies")
+}
+
+// RecordAuditItems writes the rows a bulk request's items would have left had
+// they been requested alone, with the administrator, address and request id
+// of the bulk request.
+func TestRecordAuditItems(t *testing.T) {
+	cleanup := setupTestDB(t)
+	defer cleanup()
+	require.NoError(t, database.GetDB().AutoMigrate(&model.AuditLog{}))
+
+	recorder := httptest.NewRecorder()
+	c, _ := gin.CreateTestContext(recorder)
+	c.Request = httptest.NewRequest(http.MethodPost, "/api/v4/admin/users/bulk", nil)
+	c.Request.RemoteAddr = "198.51.100.7:4711"
+	c.Request.Header.Set("User-Agent", "console/1")
+	c.Request.Header.Set("X-Request-ID", "req-1")
+	c.Set("user_id", uint(1))
+	c.Set("email", "admin@example.test")
+
+	RecordAuditItems(c, nil)
+	RecordAuditItems(c, []AuditItem{
+		{Method: http.MethodPost, Path: "/api/v2/admin/users/12/ban", Status: http.StatusOK},
+		{Method: http.MethodPost, Path: "/api/v2/admin/users/13/ban", Status: http.StatusNotFound, Error: "not_found: 用户不存在"},
+		{Method: http.MethodDelete, Path: "/api/v2/admin/invite/codes/5", Status: http.StatusOK},
+	})
+
+	var rows []model.AuditLog
+	require.NoError(t, database.GetDB().Order("id").Find(&rows).Error)
+	require.Len(t, rows, 3)
+	require.NotNil(t, rows[0].UserID)
+	require.Equal(t, uint(1), *rows[0].UserID)
+	for _, row := range rows {
+		require.Equal(t, "admin@example.test", row.Email)
+		require.Equal(t, "198.51.100.7", row.IP)
+		require.Equal(t, "console/1", row.UserAgent)
+		require.Equal(t, "req-1", row.RequestID)
+		require.Empty(t, row.RequestBody)
+	}
+	require.Equal(t, "POST", rows[0].Method)
+	require.Equal(t, "/api/v2/admin/users/12/ban", rows[0].Path)
+	require.Equal(t, "users", rows[0].Module)
+	require.Equal(t, "ban", rows[0].Action)
+	require.Equal(t, 200, rows[0].StatusCode)
+	require.Empty(t, rows[0].ErrorMessage)
+	require.Equal(t, 404, rows[1].StatusCode)
+	require.Equal(t, "not_found: 用户不存在", rows[1].ErrorMessage)
+	require.Equal(t, "invite", rows[2].Module)
+	require.Equal(t, "delete", rows[2].Action)
 }

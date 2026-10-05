@@ -184,6 +184,14 @@ package and generation.
   - Rows are kept for 7 days; an older cursor gets `RESYNC`.
   - Expiry is time-based and emits nothing. Consumers compare `expires_at`
     with their clock and re-list periodically.
+- **Last online.** `v4_kernel_user_activity` holds each subscriber's last
+  time seen online. The kernel's traffic and alive report paths write it
+  through `subscriber.RecordOnline` after their own transaction (best effort,
+  one write per user per minute, forward only); it is read by
+  `GET /api/v4/admin/users/activity`. It is not part of the KernelSubscriber
+  contract, which does not carry it, and a traffic report that arrives through
+  `RecordTraffic` does not write it
+  (`docs/reference/traffic-stats-operations.md`).
 
 ## Delivery
 

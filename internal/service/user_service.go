@@ -446,6 +446,9 @@ func DeleteUserTx(tx *gorm.DB, id uint) (authn.Revocation, error) {
 	if err := subscriber.RecordChangesTx(tx, []uint{id}, true, time.Now()); err != nil {
 		return revocation, err
 	}
+	if err := subscriber.ForgetActivityTx(tx, id); err != nil {
+		return revocation, err
+	}
 	return revocation, authn.Write(tx, revocation)
 }
 

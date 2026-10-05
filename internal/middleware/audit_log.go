@@ -24,8 +24,12 @@ const (
 	// node records, which carry no credential, and are kept redacted like
 	// v2's.
 	auditLogPrefixV4Forward = "/api/v4/forward/"
-	maxBodyLogLength        = 512  // bytes to include in slog output
-	maxBodyDBLength         = 4096 // bytes to persist in database
+	// auditLogPrefixV4Admin is the console's administrator API owned by the
+	// kernel (/api/v4/admin/*): its writes are audited like the /api/v2
+	// admin routes'. A bulk request carries ids and an action, no credential.
+	auditLogPrefixV4Admin = "/api/v4/admin/"
+	maxBodyLogLength      = 512  // bytes to include in slog output
+	maxBodyDBLength       = 4096 // bytes to persist in database
 )
 
 // auditBodyCapture copies at most limit bytes while the downstream handler
@@ -50,6 +54,11 @@ func (r *auditBodyCapture) Read(p []byte) (int, error) {
 	return n, err
 }
 
+// AuditActionKey is the gin context key under which a handler names the
+// action of its audit row ("bulk_ban"), instead of the one the method and
+// path give.
+const AuditActionKey = "audit_action"
+
 // AuditLog returns a gin middleware that records all admin API operations
 // to both structured slog output and the v2_audit_log database table.
 // It applies to requests whose path starts with /api/v2/admin/, /api/v3/ or
@@ -61,7 +70,7 @@ func AuditLog() gin.HandlerFunc {
 		// the audit stream.
 		userWrite := auditedUserWrite(c.Request.Method, c.Request.URL.Path)
 		if !userWrite && !strings.HasPrefix(c.Request.URL.Path, auditLogPrefixV2) && !strings.HasPrefix(c.Request.URL.Path, auditLogPrefixV3) &&
-			!strings.HasPrefix(c.Request.URL.Path, auditLogPrefixV4Forward) {
+			!strings.HasPrefix(c.Request.URL.Path, auditLogPrefixV4Forward) && !strings.HasPrefix(c.Request.URL.Path, auditLogPrefixV4Admin) {
 			c.Next()
 			return
 		}
@@ -134,8 +143,14 @@ func AuditLog() gin.HandlerFunc {
 		duration := time.Since(startTime).Milliseconds()
 		statusCode := c.Writer.Status()
 
-		// Derive module and action from the path
+		// Derive module and action from the path; a handler that did more
+		// than the method says (a bulk action) names its action.
 		module, action := extractModuleAndAction(c.Request.URL.Path, method)
+		if named, ok := c.Get(AuditActionKey); ok {
+			if name, ok := named.(string); ok && name != "" {
+				action = name
+			}
+		}
 
 		// Build error message for failed requests
 		var errMsg string
@@ -177,6 +192,54 @@ func AuditLog() gin.HandlerFunc {
 		if db := database.GetDB(); db != nil {
 			go persistAuditLog(db, uidPtr, emailStr(email), method, c.Request.URL.Path, module, action, clientIP, userAgent, requestID, reqBody, statusCode, duration, errMsg)
 		}
+	}
+}
+
+// AuditItem is one of the things a single request did: the single-item
+// request it stands for.
+type AuditItem struct {
+	Method string
+	Path   string
+	// Status is the HTTP status the single-item request would have had.
+	Status int
+	// Error is why it failed; empty when it did not.
+	Error string
+}
+
+// RecordAuditItems writes an audit row for each item, as the audit log would
+// have written it had the item been requested alone: the item's method and
+// path (so module and action follow the same rules), with the acting
+// administrator, address, user agent and request id of c, which ties the rows
+// to the request that did them. A bulk request is audited as a whole by the
+// middleware; this keeps each target findable by its own path. It is
+// synchronous, a single batch insert, and best effort like the middleware's
+// row: an error is logged, not returned.
+func RecordAuditItems(c *gin.Context, items []AuditItem) {
+	db := database.GetDB()
+	if db == nil || len(items) == 0 {
+		return
+	}
+	userID, _ := c.Get("user_id")
+	email, _ := c.Get("email")
+	var actor *uint
+	if id, ok := userID.(uint); ok {
+		actor = &id
+	}
+	requestID := c.Writer.Header().Get("X-Request-ID")
+	if requestID == "" {
+		requestID = c.GetHeader("X-Request-ID")
+	}
+	rows := make([]model.AuditLog, 0, len(items))
+	for _, item := range items {
+		module, action := extractModuleAndAction(item.Path, item.Method)
+		rows = append(rows, model.AuditLog{
+			UserID: actor, Email: emailStr(email), Method: item.Method, Path: item.Path, Module: module, Action: action,
+			IP: c.ClientIP(), UserAgent: c.GetHeader("User-Agent"), RequestID: requestID,
+			StatusCode: item.Status, ErrorMessage: truncate(item.Error, maxBodyDBLength),
+		})
+	}
+	if err := db.CreateInBatches(&rows, 100).Error; err != nil {
+		slog.Warn("admin audit items were not recorded", slog.Int("items", len(items)), slog.String("error", err.Error()))
 	}
 }
 
@@ -255,6 +318,8 @@ func extractModuleAndAction(path, method string) (module, action string) {
 	case strings.HasPrefix(path, auditLogPrefixV4Forward):
 		// The module is "forward".
 		prefix = "/api/v4/"
+	case strings.HasPrefix(path, auditLogPrefixV4Admin):
+		prefix = auditLogPrefixV4Admin
 	}
 	trimmed := strings.TrimPrefix(path, prefix)
 	if trimmed == "" {

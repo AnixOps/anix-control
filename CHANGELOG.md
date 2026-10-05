@@ -83,6 +83,60 @@
   with Control, so a normal upgrade replaces them together. API reference:
   `docs/guide/api-reference.md`.
 
+- **Last online per user: `GET /api/v4/admin/users/activity?ids=...`.**
+  Administrators want to see when each user was last online. Control kept no
+  durable value for it (`v2_user` has no `t` column and Control never wrote
+  one, `last_login_at` is the sign-in, the online set is a five minute cache,
+  the traffic log is purged by the operator), so a table of its own,
+  `v4_kernel_user_activity` (`user_id`, `last_online_at`), is created at
+  start-up (a new table; no existing table or column changes). The UniProxy
+  `push` and `alive` reports, the gRPC node reports and the Agent Control
+  traffic report write it after they committed, throttled to one write per
+  user per minute in multi-row upserts that only move a time forward, and only
+  for ids that are subscribers; a failed write is logged and never affects the
+  report. The route answers an entry per id (at most 200), in the order asked,
+  with `last_online_at` as a Unix time or `null` for a user never seen; there
+  is no backfill (`docs/reference/traffic-stats-operations.md` has the SQL to
+  seed it from the traffic log). It is a kernel route outside the `/api/v2`
+  catalog because the user list and detail answers must stay byte-identical
+  to the identity package's native handlers, which read the kernel API views
+  and cannot see a new table. Deleting a user deletes their row.
+
+- **Subscription group members: `GET
+  /api/v4/admin/subscription-groups/:id/members`.** The subscription group
+  page showed the member counts only ("the API has no member list"). The
+  route pages the users granted the group directly
+  (`v2_user_subscription_group`, the rows `user_count` and `enabled_users` of
+  the group stats count), newest grant first, with each membership's expiry,
+  quota override and renewal price and the user's e-mail, ban flag and plan,
+  filtered by `q` (a substring of the e-mail) and `status` (`active` or
+  `expired`) and paged with `page` and `page_size` (at most 100). Users the
+  group reaches through their plan or primary group are not members here.
+  No credential is returned. It is a kernel route under `/api/v4/admin`
+  (administrators, outside the `/api/v2` package catalog): an unknown group is
+  404 `not_found`, a bad id or status 400. `docs/guide/subscription-system.md`
+  has the shape.
+
+- **Bulk actions for the console's tables: `POST /api/v4/admin/users/bulk`
+  and `POST /api/v4/admin/invite-codes/bulk`.** The console banned, unbanned
+  and revoked a selection by calling the single-item route once per row (four
+  at a time). One request now takes `{"action", "ids"}` (at most 200 ids):
+  `ban`, `unban` and `reset_traffic` for users, `revoke` for invite codes. Each
+  id is the single-item `/api/v2` request, run through the same package
+  gateway, so it runs wherever the route's mode puts it (the identity
+  package or the kernel's handler) and keeps one implementation. The answer is
+  always HTTP 200 with `{id, ok, error{code, message}}` per id, in order
+  (`not_found`, `conflict`, `forbidden_self`, `not_attempted`, a gateway code
+  or `failed`); only an invalid request is 400. Items are independent, nothing
+  is rolled back. `ban` and `unban` are idempotent, `reset_traffic` applies once
+  per `Idempotency-Key` and user, and an administrator cannot ban themselves
+  in a bulk request. The request is audited under the new `/api/v4/admin`
+  prefix (`bulk_<action>`), and every item leaves the audit row of its
+  single-item route, so a user is still found by path. Nodes, orders and
+  tickets have no bulk action in the console, so they get no endpoint;
+  deleting users and resetting subscription links are not bulk actions
+  (`docs/guide/api-reference.md`).
+
 ### Changed
 
 - **Forwarding editor, DNS binding: Save says why it is disabled.** With
