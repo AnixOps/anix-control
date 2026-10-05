@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 
@@ -444,5 +445,37 @@ func TestReloadCredentials(t *testing.T) {
 	// Running without link files: the relay says so.
 	if err := d.ReloadCredentials(t.Context()); err == nil {
 		t.Fatal("a reload on a relay without link credentials succeeded")
+	}
+}
+
+// The relay runs as its own user: the configuration and the reset key the
+// Agent writes take the group of their directory, which is the relay's.
+func TestGroupReadableFilesTakeTheirDirectorysGroup(t *testing.T) {
+	if os.Geteuid() != 0 {
+		t.Skip("changing a file's group to one the process is not in needs root")
+	}
+	dir := t.TempDir()
+	const relayGroup = 31337
+	if err := os.Chown(dir, 0, relayGroup); err != nil {
+		t.Fatal(err)
+	}
+	group := func(name string) int {
+		info, err := os.Stat(filepath.Join(dir, name))
+		if err != nil {
+			t.Fatal(err)
+		}
+		return int(info.Sys().(*syscall.Stat_t).Gid)
+	}
+	if err := anixops.WriteFileAtomic(filepath.Join(dir, "relay.json"), []byte("{}"), 0o640); err != nil {
+		t.Fatal(err)
+	}
+	if err := anixops.WriteFileAtomic(filepath.Join(dir, "state.json"), []byte("{}"), 0o600); err != nil {
+		t.Fatal(err)
+	}
+	if g := group("relay.json"); g != relayGroup {
+		t.Fatalf("relay.json has group %d, want the directory's %d", g, relayGroup)
+	}
+	if g := group("state.json"); g == relayGroup {
+		t.Fatalf("state.json is the Agent's own and group-private, but has the directory's group %d", g)
 	}
 }

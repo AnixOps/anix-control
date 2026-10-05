@@ -243,7 +243,12 @@ func (p *ProcessSupervisor) Kill() {
 }
 
 // writeFileAtomic writes data to path through a temporary file in the same
-// directory and a rename, so a reader sees the old or the new file.
+// directory and a rename, so a reader sees the old or the new file. A file
+// that is group readable takes the group of its directory (the relay's group,
+// which the installer gives the directory): the relay runs as its own user and
+// reads the configuration and the stateless reset key the Agent writes. The
+// change is best effort, since only a member of the group, or root, may make
+// it; a host whose Agent is neither keeps the file in the Agent's group.
 func writeFileAtomic(path string, data []byte, mode os.FileMode) error {
 	tmp, err := os.CreateTemp(dirOf(path), ".tmp-*")
 	if err != nil {
@@ -259,6 +264,11 @@ func writeFileAtomic(path string, data []byte, mode os.FileMode) error {
 		_ = tmp.Close()
 		return err
 	}
+	if mode&0o040 != 0 {
+		if gid, ok := dirGroup(dirOf(path)); ok && gid != os.Getegid() {
+			_ = tmp.Chown(-1, gid)
+		}
+	}
 	if err := tmp.Sync(); err != nil {
 		_ = tmp.Close()
 		return err
@@ -267,6 +277,19 @@ func writeFileAtomic(path string, data []byte, mode os.FileMode) error {
 		return err
 	}
 	return os.Rename(name, path)
+}
+
+// dirGroup answers the group of a directory.
+func dirGroup(dir string) (int, bool) {
+	info, err := os.Stat(dir)
+	if err != nil {
+		return 0, false
+	}
+	st, ok := info.Sys().(*syscall.Stat_t)
+	if !ok {
+		return 0, false
+	}
+	return int(st.Gid), true // #nosec G115 -- a group id
 }
 
 func dirOf(path string) string {
