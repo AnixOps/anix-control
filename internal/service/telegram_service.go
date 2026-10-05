@@ -29,6 +29,8 @@ func NewTelegramBotService(db *gorm.DB) *TelegramBotService {
 		db: db,
 		client: &http.Client{
 			Timeout: 30 * time.Second,
+			// The Bot API host is fixed; a redirect is never followed.
+			CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 		},
 	}
 }
@@ -435,7 +437,8 @@ func (s *TelegramBotService) apiRequest(url string, payload any) (map[string]any
 
 	resp, err := s.client.Post(url, "application/json", &body)
 	if err != nil {
-		return nil, err
+		// err is a *url.Error whose text quotes the URL, and with it the bot token.
+		return nil, telegramTransportError(err)
 	}
 
 	var result map[string]any

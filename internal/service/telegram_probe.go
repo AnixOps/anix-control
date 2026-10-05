@@ -7,6 +7,7 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"net"
 	"net/http"
@@ -235,4 +236,13 @@ func telegramNetworkReason(err error) string {
 	default:
 		return TelegramReasonOther
 	}
+}
+
+// telegramTransportError is the error SendMessage and apiRequest return when
+// the HTTP client fails. It carries only the reason class (see
+// telegramNetworkReason), never the client's error text, which quotes the
+// request URL and so the bot token. The notification package's botapi.go
+// returns the same text, which the route-mode shadow comparison checks.
+func telegramTransportError(err error) error {
+	return fmt.Errorf("telegram API request failed: %s", telegramNetworkReason(err))
 }

@@ -1,9 +1,12 @@
 package service
 
 import (
+	"bytes"
 	"encoding/json"
 	"errors"
 	"io"
+	"log"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -318,7 +321,8 @@ func TestTelegramBotService_BroadcastReturnsSendErrors(t *testing.T) {
 
 	require.Error(t, err)
 	assert.Contains(t, err.Error(), "send telegram message to 12345")
-	assert.Contains(t, err.Error(), "telegram unavailable")
+	assert.Contains(t, err.Error(), "telegram API request failed: other")
+	assert.NotContains(t, err.Error(), "telegram unavailable")
 }
 
 func TestTelegramBotService_BroadcastSuccess(t *testing.T) {
@@ -417,4 +421,72 @@ func TestTelegramBotService_GetTelegramUserService(t *testing.T) {
 	svc := NewTelegramBotService(db)
 	userSvc := svc.GetTelegramUserService()
 	assert.NotNil(t, userSvc)
+}
+
+// failingTransport fails every request the way a dead network does.
+type failingTransport struct{ err error }
+
+func (f failingTransport) RoundTrip(*http.Request) (*http.Response, error) { return nil, f.err }
+
+const leakTestToken = "123456789:FAKEtokenMustNeverLeak-0123456789abc"
+
+// A transport failure must reach callers as a fixed reason, never as the
+// *url.Error text that quotes the Bot API URL and with it the bot token.
+func TestTelegramBotServiceTransportErrorsCarryNoToken(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		fail error
+		want string
+	}{
+		{"connect", &net.OpError{Op: "dial", Net: "tcp", Err: errors.New("connection refused")}, "telegram API request failed: connect"},
+		{"dns", &net.DNSError{Err: "no such host", Name: "api.telegram.org"}, "telegram API request failed: dns"},
+		{"other", errors.New("proxyconnect tcp: weird"), "telegram API request failed: other"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			db := setupTelegramTestDB(t)
+			require.NoError(t, db.Create(&model.TelegramBot{Token: leakTestToken, Name: "b"}).Error)
+			svc := NewTelegramBotService(db)
+			svc.client.Transport = failingTransport{err: tc.fail}
+
+			var logs bytes.Buffer
+			previous := log.Writer()
+			log.SetOutput(&logs)
+			defer log.SetOutput(previous)
+
+			for name, err := range map[string]error{
+				"SendMessage":   svc.SendMessage(1, "hi"),
+				"SetWebhook":    svc.SetWebhook("https://panel.example.test/hook"),
+				"DeleteWebhook": svc.DeleteWebhook(),
+			} {
+				require.Error(t, err, name)
+				assert.Equal(t, tc.want, err.Error(), name)
+				assert.NotContains(t, err.Error(), "FAKEtoken", name)
+				assert.NotContains(t, err.Error(), "api.telegram.org", name)
+			}
+			assert.NotContains(t, logs.String(), "FAKEtoken")
+		})
+	}
+}
+
+// A token that makes the URL unparseable fails inside http.Client.Post with a
+// *url.Error that quotes the URL; it must be reduced too.
+func TestTelegramBotServiceUnparseableURLErrorCarriesNoToken(t *testing.T) {
+	db := setupTelegramTestDB(t)
+	require.NoError(t, db.Create(&model.TelegramBot{Token: "FAKEtoken\x7fMustNeverLeak", Name: "b"}).Error)
+	err := NewTelegramBotService(db).SendMessage(1, "hi")
+	require.Error(t, err)
+	assert.Equal(t, "telegram API request failed: other", err.Error())
+}
+
+// Broadcast joins the per-chat errors; none may carry the token.
+func TestTelegramBotServiceBroadcastErrorsCarryNoToken(t *testing.T) {
+	db := setupTelegramTestDB(t)
+	require.NoError(t, db.Create(&model.TelegramBot{Token: leakTestToken, Name: "b"}).Error)
+	require.NoError(t, db.Create(&model.TelegramUser{UserID: 1, TelegramID: 77}).Error)
+	svc := NewTelegramBotService(db)
+	svc.client.Transport = failingTransport{err: &net.OpError{Op: "dial", Err: errors.New("refused")}}
+	err := svc.Broadcast("hi")
+	require.Error(t, err)
+	assert.NotContains(t, err.Error(), "FAKEtoken")
+	assert.Contains(t, err.Error(), "telegram API request failed: connect")
 }

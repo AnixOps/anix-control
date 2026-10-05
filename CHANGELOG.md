@@ -509,6 +509,18 @@
   filter chip still fading read as a contrast failure), so it now settles
   transitions and the hover left by the click first. The whole API tokens spec
   ran 20 times in a row, 500 tests, green.
+- **The Telegram bot token no longer appears in error text.** The kernel's
+  `TelegramBotService` (`SendMessage`, `SetWebhook`, `DeleteWebhook`,
+  `Broadcast`) and the notification package's Bot API copy
+  (`packages/notification/native/botapi.go`) returned Go's `*url.Error` text,
+  which quotes the whole request URL including the token
+  (`https://api.telegram.org/bot<TOKEN>/sendMessage`), to API answers, logs and
+  `v2_notification_log.error`. A failed Bot API call now returns
+  `telegram API request failed: <reason>` (`timeout`, `dns`, `tls`, `connect`,
+  `canceled`, `other`), identical in both copies so the route-mode shadow
+  comparison still matches, and neither client follows redirects. This changes
+  error strings only; no response shape, status code or fixture changes.
+
 - **`identity-platform` recovers by itself after the official signing root
   changed.** Found by the 4.1.0 to 4.2.0-rc.1 staging rehearsal: after the
   first start with the new root, `POST /api/v2/login` and every business route
