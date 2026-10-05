@@ -317,7 +317,7 @@ definitions:
       method:
         type: string
       name:
-        description: Name says what the token is for; 1 to 100 characters.
+        description: Name says what the token is for; 1 to 100 bytes (UTF-8), printable.
         type: string
       password:
         description: |-
@@ -337,7 +337,7 @@ definitions:
         description: Node is "proxy-<id>" or "forward-<id>".
         type: string
       reason:
-        description: Reason is recorded in the audit entry; at most 200 characters.
+        description: Reason is recorded in the audit entry; at most 200 bytes (UTF-8).
         type: string
       rotate_api_key:
         description: |-
@@ -6440,7 +6440,7 @@ paths:
       parameters:
       - description: node (proxy-<id> or forward-<id>), rotate_api_key (proxy nodes
           only, default false), ttl_seconds (60 to 604800, default 3600), reason (at
-          most 200 characters)
+          most 200 bytes, UTF-8)
         in: body
         name: request
         required: true

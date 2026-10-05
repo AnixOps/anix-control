@@ -112,7 +112,7 @@ type rotateAgentCredentialsRequest struct {
 	// TTLSeconds is the new enrollment credential's lifetime: one hour by
 	// default, from 60 to 604800 (7 days).
 	TTLSeconds int64 `json:"ttl_seconds"`
-	// Reason is recorded in the audit entry; at most 200 characters.
+	// Reason is recorded in the audit entry; at most 200 bytes (UTF-8).
 	Reason string `json:"reason"`
 }
 
@@ -144,7 +144,7 @@ type rotatedAgentCredentials struct {
 // @Accept json
 // @Produce json
 // @Security BearerAuth
-// @Param request body rotateAgentCredentialsRequest true "node (proxy-<id> or forward-<id>), rotate_api_key (proxy nodes only, default false), ttl_seconds (60 to 604800, default 3600), reason (at most 200 characters)"
+// @Param request body rotateAgentCredentialsRequest true "node (proxy-<id> or forward-<id>), rotate_api_key (proxy nodes only, default false), ttl_seconds (60 to 604800, default 3600), reason (at most 200 bytes, UTF-8)"
 // @Success 201 {object} map[string]any "data.credential is shown once"
 // @Failure 400 {object} map[string]any
 // @Failure 403 {object} map[string]any

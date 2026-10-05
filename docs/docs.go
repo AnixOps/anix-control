@@ -8141,7 +8141,7 @@ const docTemplate = `{
                 "summary": "Rotate a node's Agent credentials",
                 "parameters": [
                     {
-                        "description": "node (proxy-\u003cid\u003e or forward-\u003cid\u003e), rotate_api_key (proxy nodes only, default false), ttl_seconds (60 to 604800, default 3600), reason (at most 200 characters)",
+                        "description": "node (proxy-\u003cid\u003e or forward-\u003cid\u003e), rotate_api_key (proxy nodes only, default false), ttl_seconds (60 to 604800, default 3600), reason (at most 200 bytes, UTF-8)",
                         "name": "request",
                         "in": "body",
                         "required": true,
@@ -10746,7 +10746,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "name": {
-                    "description": "Name says what the token is for; 1 to 100 characters.",
+                    "description": "Name says what the token is for; 1 to 100 bytes (UTF-8), printable.",
                     "type": "string"
                 },
                 "password": {
@@ -10770,7 +10770,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "reason": {
-                    "description": "Reason is recorded in the audit entry; at most 200 characters.",
+                    "description": "Reason is recorded in the audit entry; at most 200 bytes (UTF-8).",
                     "type": "string"
                 },
                 "rotate_api_key": {
