@@ -70,7 +70,7 @@ app:
 
 plugins:
   # Official AnixOps Ed25519 release trust root (raw public key, base64).
-  official_public_key: "lvbhRmhzVbSAbrw3vm0k7vYqpEu4/dF/ZqVbp2gS7uM="
+  official_public_key: "jW26nr2tbthASoeq6RmIpx8Ah+uhPNIv9V1ewRVb1VE="
   # Point this at a local signed identity package trio to prove clean-database
   # plugin-only startup. Leave empty after the identity package is installed.
   identity_bootstrap_package_dir: ""

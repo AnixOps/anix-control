@@ -13,7 +13,7 @@ vi.mock('@/api/admin', () => ({
   getNodeCredentials: vi.fn()
 }))
 
-const KEY = 'lvbhRmhzVbSAbrw3vm0k7vYqpEu4/dF/ZqVbp2gS7uM='
+const KEY = 'jW26nr2tbthASoeq6RmIpx8Ah+uhPNIv9V1ewRVb1VE='
 const config = deploy => JSON.parse(deploy.configSnippet.value.slice(deploy.configSnippet.value.indexOf('\n') + 1)).Nodes[0]
 
 describe('useNodeDeploy', () => {

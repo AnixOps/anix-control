@@ -195,7 +195,7 @@ func TestLoadRejectsOversizedPluginPayloadLimit(t *testing.T) {
 }
 
 func TestOfficialPluginAlphaProfiles(t *testing.T) {
-	const officialPublicKey = "lvbhRmhzVbSAbrw3vm0k7vYqpEu4/dF/ZqVbp2gS7uM="
+	const officialPublicKey = "jW26nr2tbthASoeq6RmIpx8Ah+uhPNIv9V1ewRVb1VE="
 
 	decoded, err := base64.StdEncoding.DecodeString(officialPublicKey)
 	require.NoError(t, err)

@@ -271,7 +271,7 @@ release key (Ed25519, the key of `plugins.official_public_key`):
 ```sh
 curl -fsSLO https://panel.example.com/install.sh
 curl -fsSLO https://panel.example.com/install.sh.sig
-printf '%s' 'MCowBQYDK2VwAyEAlvbhRmhzVbSAbrw3vm0k7vYqpEu4/dF/ZqVbp2gS7uM=' | base64 -d >official.der
+printf '%s' 'MCowBQYDK2VwAyEAjW26nr2tbthASoeq6RmIpx8Ah+uhPNIv9V1ewRVb1VE=' | base64 -d >official.der
 base64 -d install.sh.sig >install.sh.sig.bin
 openssl pkeyutl -verify -pubin -keyform DER -inkey official.der -rawin \
   -in install.sh -sigfile install.sh.sig.bin

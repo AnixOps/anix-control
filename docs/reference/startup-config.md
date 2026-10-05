@@ -62,7 +62,7 @@ app:
   subscribe_path: "s"
 
 plugins:
-  official_public_key: "lvbhRmhzVbSAbrw3vm0k7vYqpEu4/dF/ZqVbp2gS7uM="
+  official_public_key: "jW26nr2tbthASoeq6RmIpx8Ah+uhPNIv9V1ewRVb1VE="
   # Required for a new plugin-only database before package execution is enabled.
   identity_bootstrap_package_dir: "/var/lib/anixops/bootstrap"
   control_execution_enabled: true

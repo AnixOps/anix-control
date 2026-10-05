@@ -2628,6 +2628,49 @@ section 9, "Upgrades (O4)"; protocol: `sdk/api/agent/v1/PROTOCOL.md`,
   cause shown per node and start a new campaign. Forwarding keeps running
   during an Agent upgrade.
 
+## The Official Signing Root Changes (v4.2)
+
+The previous official release key could not be recovered, so **4.2.0 is
+signed with a new Ed25519 key**. The new public root is
+`jW26nr2tbthASoeq6RmIpx8Ah+uhPNIv9V1ewRVb1VE=`; the SHA-256 of the raw key is
+`83fe4c1bed0bb2ed1b9f31ba873b799ead676835b6086a8c2bc2d272a96ae5de`. Take the
+key from this document or the release notes and keep your own copy: it is
+the value to pin, and a release asset cannot vouch for itself. Releases up to
+4.1 stay signed by the old key and verify only against it.
+
+This is a root rotation, so read
+[`guide/release-root-rotation.md`](guide/release-root-rotation.md) ("How
+Control Treats The Root") too. What it means for an upgrade:
+
+- **Control.** A Control has exactly one active root. The first start with
+  the new root records it and retires the old one; every package release
+  admitted under the old root then fails closed (`503 package_unavailable`
+  on its `/api/v2` routes) until the 4.2 packages, signed with the new root,
+  are imported and enabled (Control > Plugins > Import release). Plan a
+  maintenance window from the restart until the import finishes.
+- **Configuration.** The 4.2 templates carry the new root in
+  `plugins.official_public_key` (`ANIX_CONTROL_PLUGINS_OFFICIAL_PUBLIC_KEY`).
+  A configuration that copied the 4.1 value must be changed; one that leaves
+  the key out takes the new default. If `plugins.identity_bootstrap_package_dir`
+  is set, replace the bootstrap `identity-platform` package there with the
+  4.2 build before restarting.
+- **Agents.** Upgrade the Agents first, as before, but not with the
+  `/install.sh` of a 4.1 Control: that script pins the old root and refuses
+  an Agent signed with the new one. Use the `agent-install.sh` release asset
+  of 4.2, after verifying it against the new root (the commands are in the
+  script's header). An Agent built before 4.2 cannot verify the new root; a
+  node that enables the plugin supervisor sets `PluginOfficialPublicKey`
+  itself and must change it to the new root before it takes packages signed
+  with it.
+- **Pinned roots.** If you pin the root outside Control
+  (`ANIXOPS_TRUSTED_OFFICIAL_PUBLIC_KEY` in
+  [`guide/release-installation.md`](guide/release-installation.md)), change it
+  to the new value.
+- **Rollback.** Redeploy the previous release and configuration. Startup
+  re-activates the old root's record and retires the new one, so packages
+  signed with the old root verify again and those signed with the new root
+  stop verifying.
+
 ## Switching Route Modes
 
 Each v2 route of a Control package runs in one of three modes: `legacy` (the
