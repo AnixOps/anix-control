@@ -154,6 +154,26 @@
   additive; no v2 route, table or contract changes. `modulepki.RenewAfter` is
   now the one definition of the renewal instant. The UI joins the rows with
   `/api/v2/admin/nodes` by `proxy-<id>`.
+- **A proxy node's traffic series for the admin charts.**
+  `GET /api/v4/kernel/nodes/:id/traffic` (admin) answers one node's traffic
+  as ascending buckets with the empty ones as zeros: `granularity=hour` (the
+  default; UTC hours, the last 24 by default, at most 720) sums the node's
+  rows of the raw traffic log `v2_server_log`, `granularity=day` (local
+  calendar days, 30 by default, at most 366) reads the node's daily
+  statistics `v2_stat_server`, which nothing read before. `since` and `until`
+  are Unix milliseconds, rounded out to whole buckets; a longer window is
+  `400 invalid_request`, an unknown node `404 not_found`. Bytes are the
+  panel's metered bytes, as `/api/v2/admin/traffic/hourly` counts them (the
+  node's traffic rate applied), up and down apart, over every protocol the
+  node reported under. No table, no write on the report path and no job is
+  added: the hourly query reads one node's rows and was measured at 40 to
+  125 ms for 24 hours to 14 days on 8.4 million synthetic rows, against
+  1.5 s for the existing all-node hourly query over 7 days
+  (`docs/reference/traffic-stats-operations.md`); the hourly history ends
+  where the operator's raw-log retention does. The forwarding side already
+  has hourly series per route and per node
+  (`GET /api/v4/forward/stats`, `/routes/{id}/stats`,
+  `/observability/trend`); they are unchanged. No v2 route changes.
 
 ### Changed
 

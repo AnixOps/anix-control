@@ -405,6 +405,23 @@ DELETE /api/v2/admin/nodes/:id/protocols/:protocol_id
 （本列表一贯的错误形状）。显示状态由最近一次心跳推算、协议数来自另一张表，二者不是排序列。
 proxy-node 包的原生列表给出同样的顺序。
 
+```http
+# 单个代理节点的流量曲线（管理员，v4）
+GET /api/v4/kernel/nodes/:id/traffic                                  # 默认 hour：最近 24 小时
+GET /api/v4/kernel/nodes/:id/traffic?granularity=hour&since=<毫秒>&until=<毫秒>
+GET /api/v4/kernel/nodes/:id/traffic?granularity=day                  # 最近 30 天，按日
+```
+
+应答 `{"data": {"node_id", "granularity", "since_unix_ms", "until_unix_ms", "points": [{"start_unix_ms",
+"up_bytes", "down_bytes"}], "total": {"up_bytes", "down_bytes"}}}`，按时间升序，没有流量的桶补 0。
+`hour` 汇总该节点在 `v2_server_log` 中的行（UTC 整点，最多 720 个桶，只到原始日志保留的时间为止）；
+`day` 读该节点的每日统计 `v2_stat_server`（按 Control 主机本地日历日，最多 366 个桶，不受原始日志清理影响）。
+字节数与 `/api/v2/admin/traffic/hourly` 一致，已按节点流量倍率计，并汇总该节点上报过的所有协议。
+`since` / `until` 为毫秒时间，向外取整到完整的桶，超出上限返回 `400 invalid_request`，节点不存在返回
+`404 not_found`。这是代理节点的用户流量；转发流量见 `/api/v4/forward/stats` 与
+`/api/v4/forward/routes/{id}/stats`。设计与成本见
+[`../reference/traffic-stats-operations.md`](../reference/traffic-stats-operations.md)。
+
 管理端应答不再明文返回节点密钥：协议 `settings`、`tls_settings`、
 `transport_settings`、`reality_settings`、`custom_config` 中名称表示密钥的字段
 （Reality/TLS `private_key`、WireGuard `server_private_key`、`server_key`、
