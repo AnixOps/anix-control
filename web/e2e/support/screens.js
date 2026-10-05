@@ -36,6 +36,10 @@ export const SCREENS = {
   'user-account': { fixture: user, scenario: 'account' },
   'admin-dashboard': { fixture: dashboard, scenario: 'default' },
   'admin-dashboard-error': { fixture: dashboard, scenario: 'error' },
+  // The kernel's alerts in 需要处理: the resolved history, none, and a failed load.
+  'admin-dashboard-alerts-resolved': { fixture: dashboard, scenario: 'alertsResolved' },
+  'admin-dashboard-alerts-none': { fixture: dashboard, scenario: 'alertsNone' },
+  'admin-dashboard-alerts-failed': { fixture: dashboard, scenario: 'alertsFailed' },
   'admin-users': { fixture: users, scenario: 'list' },
   'admin-users-empty': { fixture: users, scenario: 'empty' },
   'admin-orders': { fixture: orders, scenario: 'list' },
@@ -85,6 +89,14 @@ export const SCREENS = {
   'admin-api-token-create': { fixture: apiTokens, scenario: 'create' },
   'admin-api-token-created': { fixture: apiTokens, scenario: 'created' },
   'admin-notifications': { fixture: notifications, scenario: 'email' },
+  // Notifications → Telegram: the page, and the test message's answers (a
+  // delivered one, a blocked bot, an unreachable Telegram, no linked account).
+  'admin-telegram': { fixture: notifications, scenario: 'telegram' },
+  'admin-telegram-test-ok': { fixture: notifications, scenario: 'telegramTestOk' },
+  'admin-telegram-test-blocked': { fixture: notifications, scenario: 'telegramTestBlocked' },
+  'admin-telegram-test-network': { fixture: notifications, scenario: 'telegramTestNetwork' },
+  'admin-telegram-test-not-bound': { fixture: notifications, scenario: 'telegramTestNotBound' },
+  'admin-telegram-test-limited': { fixture: notifications, scenario: 'telegramTestLimited' },
   'admin-monitor': { fixture: monitor, scenario: 'live' },
   'admin-monitor-node-traffic': { fixture: monitor, scenario: 'traffic' },
   'admin-deployments': { fixture: deployments, scenario: 'topologies' }

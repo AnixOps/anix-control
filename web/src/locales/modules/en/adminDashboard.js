@@ -41,7 +41,7 @@ export default {
     },
     alerts: {
       title: 'Needs attention',
-      description: 'Offline nodes, tickets waiting for a reply and stalled traffic reports.',
+      description: 'Offline nodes, tickets waiting for a reply, stalled traffic reports, and certificate and rollout alerts.',
       allClear: 'All clear',
       allClearDescription: 'No node is offline and no ticket is waiting.',
       offlineNode: '{name} is offline',
@@ -53,6 +53,59 @@ export default {
       pendingOrders: '{count} orders awaiting payment',
       trafficStale: 'Traffic reports have stopped',
       trafficStaleHint: 'The last report was {time}. Check the node processes and the report path.',
+      view: 'Alert status',
+      viewActive: 'Active',
+      viewResolved: 'Resolved',
+      summary: '{count} active alerts',
+      summaryCritical: '{count} active, {critical} critical',
+      alertsFailed: 'Couldn’t load certificate and rollout alerts',
+      noResolved: 'No resolved alerts',
+      noResolvedDescription: 'Alerts that cleared in the last 30 days are listed here.',
+      resolvedAt: 'Resolved {date}',
+      kinds: {
+        agentCertificate: {
+          ending: 'The Agent certificate of {name} is about to expire',
+          ended: 'The Agent certificate of {name} has expired',
+          endingHint: 'Ends {date}. The Agent has not renewed it: check that it is running and can reach Control.',
+          endedHint: 'Ended {date}. The Agent can’t connect: enroll it again with a new install command.'
+        },
+        linkCertificate: {
+          ending: 'The forward link certificate of {name} is about to expire',
+          ended: 'The forward link certificate of {name} has expired',
+          endingHint: 'Ends {date}. It renews with the Agent certificate: check the Agent.',
+          endedHint: 'Ended {date}. Bring the Agent back, or enroll it again.'
+        },
+        moduleCertificate: {
+          ending: 'The certificate of module {name} is about to expire',
+          ended: 'The certificate of module {name} has expired',
+          endingHint: 'Ends {date}. Check that the module is running and reaches Control.',
+          endedHint: 'Ended {date}. Restart the module, enroll it again, or revoke its enrollment.'
+        },
+        ca: {
+          module: 'module',
+          forwardLink: 'forward link',
+          ending: 'The current {ca} CA is about to end',
+          ended: 'The current {ca} CA has ended',
+          staged: 'Ends {date}. A next CA is staged and takes over by itself.',
+          notStaged: 'Ends {date}. No next CA is staged: rotate the CA now.'
+        },
+        nodeSecretsStalled: {
+          title: 'The credential split of {table} has stalled in {phase}',
+          hint: 'Not touched since {date}. Verify and finalize it, or turn the reminder off.'
+        },
+        nodeSecretsInterrupted: {
+          title: 'Finalizing the credential split of {table} was interrupted',
+          hint: 'Started {date}. Run the finalize again: it resumes.'
+        },
+        identityImport: {
+          title: 'The identity import has stalled',
+          hint: 'No progress since {date}. Resume the import or start the cutover.'
+        },
+        identityCutover: {
+          title: 'The identity cutover is not finalized',
+          hint: 'Identity has handled sign-ins since {date}. Finalize it, or roll back.'
+        }
+      },
       nodesFailed: 'Couldn’t load node status',
       ticketsFailed: 'Couldn’t load tickets'
     },

@@ -1,5 +1,16 @@
 <template>
   <UiCard :title="t('adminDashboard.alerts.title')" :description="t('adminDashboard.alerts.description')" as="section" data-dashboard-alerts>
+    <div class="dashboard-alerts__bar">
+      <UiSegmentedControl
+        :model-value="view"
+        size="sm"
+        :aria-label="t('adminDashboard.alerts.view')"
+        :options="viewOptions"
+        data-alerts-view
+        @update:model-value="emit('update:view', $event)"
+      />
+      <UiBadge v-if="showSummary" :tone="summaryTone" :label="summaryLabel" data-alerts-summary />
+    </div>
     <UiSkeleton v-if="showSkeleton" :lines="3" />
     <ul v-else-if="items.length" class="dashboard-alerts" role="list">
       <li v-for="item in items" :key="item.key" class="dashboard-alerts__item" :data-alert="item.key">
@@ -12,6 +23,13 @@
         <UiButton v-if="item.retry" size="sm" :icon="RotateCw" @click="item.retry()">{{ t('ui.error.retry') }}</UiButton>
       </li>
     </ul>
+    <UiEmptyState
+      v-else-if="view === 'resolved'"
+      compact
+      :icon="History"
+      :title="t('adminDashboard.alerts.noResolved')"
+      :description="t('adminDashboard.alerts.noResolvedDescription')"
+    />
     <UiEmptyState
       v-else
       compact
@@ -27,18 +45,25 @@
 // tickets waiting for a reply, orders awaiting payment (commercial), and
 // traffic reports that stopped (the hourly API's latest_log_at). A block
 // that failed to load says so with 重试 instead of looking all clear.
-// Certificates and the credential split are not here: no API reports them.
+// The kernel's own alerts (GET /api/v4/kernel/alerts: certificates that were
+// not renewed, CAs near their end, a credential split or identity cutover left
+// half done) join the list, critical ones first; 已解决 shows the resolved
+// history. They load on their own in Dashboard.vue: a failure shows one item
+// with 重试 and never blocks the rest.
 import { computed } from 'vue'
 import { RouterLink } from 'vue-router'
-import { CircleAlert, CircleCheck, CloudOff, LifeBuoy, ReceiptText, RotateCw, ServerOff } from '@lucide/vue'
+import { CircleAlert, CircleCheck, CloudOff, History, LifeBuoy, ReceiptText, RotateCw, ServerOff } from '@lucide/vue'
 import { useAppI18n } from '@/composables/useAppI18n'
+import UiBadge from '@/ui/UiBadge.vue'
 import UiButton from '@/ui/UiButton.vue'
 import UiCard from '@/ui/UiCard.vue'
 import UiEmptyState from '@/ui/UiEmptyState.vue'
 import UiIcon from '@/ui/UiIcon.vue'
+import UiSegmentedControl from '@/ui/UiSegmentedControl.vue'
 import UiSkeleton from '@/ui/UiSkeleton.vue'
 import { useDelayedLoading } from '@/ui/composables/useDelayedLoading'
 import { useFormat } from '@/ui/composables/useFormat'
+import { alertIcon, alertRoute, alertText, alertTone } from './kernelAlerts'
 
 const SHOWN_NODES = 4
 // No report for two hours while reports exist: the report path stalled.
@@ -52,15 +77,57 @@ const props = defineProps({
   ticketsError: { type: [Object, String, null], default: null },
   pendingOrders: { type: Number, default: 0 },
   latestReportAt: { type: Number, default: 0 },
-  now: { type: Number, default: 0 }
+  now: { type: Number, default: 0 },
+  // The kernel's alerts of the current view (active or resolved).
+  kernelAlerts: { type: Array, default: () => [] },
+  alertsSummary: { type: Object, default: () => ({ active: 0, critical: 0, warning: 0 }) },
+  alertsError: { type: [Object, String, null], default: null },
+  alertsLoading: { type: Boolean, default: false },
+  view: { type: String, default: 'active' }
 })
 
-const emit = defineEmits(['retry-nodes', 'retry-tickets'])
+const emit = defineEmits(['retry-nodes', 'retry-tickets', 'retry-alerts', 'update:view'])
 const { t } = useAppI18n()
 const format = useFormat()
-const showSkeleton = useDelayedLoading(() => props.nodesLoading && !props.offlineNodes.length && !props.nodesError)
+const resolvedView = computed(() => props.view === 'resolved')
+const showSkeleton = useDelayedLoading(() => (resolvedView.value
+  ? props.alertsLoading && !props.kernelAlerts.length && !props.alertsError
+  : (props.nodesLoading && !props.offlineNodes.length && !props.nodesError) || (props.alertsLoading && !props.kernelAlerts.length && !props.alertsError)))
+
+const viewOptions = computed(() => [
+  { value: 'active', label: t('adminDashboard.alerts.viewActive') },
+  { value: 'resolved', label: t('adminDashboard.alerts.viewResolved') }
+])
+
+// The count badge comes from the server's summary, which counts every active
+// alert whatever the list shows.
+const showSummary = computed(() => !resolvedView.value && Number(props.alertsSummary?.active) > 0)
+const summaryTone = computed(() => (Number(props.alertsSummary?.critical) > 0 ? 'danger' : 'warning'))
+const summaryLabel = computed(() => (Number(props.alertsSummary?.critical) > 0
+  ? t('adminDashboard.alerts.summaryCritical', { count: format.number(Number(props.alertsSummary.active)), critical: format.number(Number(props.alertsSummary.critical)) })
+  : t('adminDashboard.alerts.summary', { count: format.number(Number(props.alertsSummary.active)) })))
+
+function kernelItem(alert) {
+  const { title, hint } = alertText(alert, { t, format })
+  const resolved = alert.status === 'resolved'
+  return {
+    key: `kernel-${alert.id ?? alert.key}`,
+    icon: alertIcon(alert),
+    tone: resolved ? 'neutral' : alertTone(alert),
+    title,
+    hint,
+    to: alertRoute(alert) || undefined
+  }
+}
+
+const alertsFailedItem = computed(() => (props.alertsError
+  ? { key: 'alerts-failed', icon: CircleAlert, tone: 'warning', title: t('adminDashboard.alerts.alertsFailed'), retry: () => emit('retry-alerts') }
+  : null))
 
 const items = computed(() => {
+  if (resolvedView.value) {
+    return alertsFailedItem.value ? [alertsFailedItem.value] : props.kernelAlerts.map(kernelItem)
+  }
   const list = []
   if (props.nodesError) {
     list.push({ key: 'nodes-failed', icon: CircleAlert, tone: 'danger', title: t('adminDashboard.alerts.nodesFailed'), retry: () => emit('retry-nodes') })
@@ -119,7 +186,11 @@ const items = computed(() => {
       to: '/admin/monitor/traffic'
     })
   }
-  return list
+  // Kernel alerts join the list: danger first, the rest in the order given.
+  const kernel = props.kernelAlerts.map(kernelItem)
+  if (alertsFailedItem.value) kernel.push(alertsFailedItem.value)
+  const merged = [...list, ...kernel]
+  return [...merged.filter(item => item.tone === 'danger'), ...merged.filter(item => item.tone !== 'danger')]
 })
 </script>
 
@@ -160,6 +231,19 @@ const items = computed(() => {
 
 .dashboard-alerts__icon.is-warning {
   color: var(--warning);
+}
+
+.dashboard-alerts__icon.is-neutral {
+  color: var(--label-2);
+}
+
+.dashboard-alerts__bar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: var(--space-3);
 }
 
 .dashboard-alerts__text {

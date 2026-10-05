@@ -4,6 +4,29 @@
 
 ### Added
 
+- **Console: a "Send test message" button for the Telegram bot, and the
+  kernel's alerts in the dashboard.** Notifications → Telegram has a **Test
+  message** section: the button posts `{}` to
+  `POST /api/v4/kernel/notifications/telegram/test` (the administrator's own
+  bound chat) and shows the answer's class as a tone, success (`ok`), warning
+  (`chat_not_found`, `bot_blocked`, `rate_limited`, `not_configured`) or danger
+  (`invalid_token`, `network_error` with its reason, `unknown`), with the
+  server's fixed sentence and what to do next. A `409 telegram_not_bound` says
+  to link Telegram first (`/bind`), a `429` disables the button and counts down
+  `Retry-After`, and the button is busy during the request. The page never
+  reads, sends or logs the bot token (the request is `sensitive`). The
+  dashboard's **Needs attention** list merges `GET /api/v4/kernel/alerts`:
+  critical alerts as danger, the rest as warning, critical first, with text
+  composed from `kind` and `detail` in both languages (Agent, forward link and
+  module certificates, CAs, the node credential split, the identity import and
+  cutover), dates through `useFormat`, node subjects linking to the node page,
+  a count badge from `summary`, and an **Active / Resolved** toggle for the
+  30-day history. The alerts load on their own: a failure is one item with
+  **Try again** (a server without the route has none), and the browser-built
+  alerts stay. Vitest, Playwright and axe cover both
+  (`web/e2e/admin-wired-apis-4.spec.js`); `docs/reference/frontend-design.md`,
+  `docs/guide/notifications-telegram.md` and `docs/reference/kernel-alerts.md`
+  describe them.
 - **AnixOps relay transport, A2: the QUIC carrier, native UDP and carrier
   selection (`sdk/forward/relay`, prototype).** The next library of the
   owner-approved H22 design (`docs/architecture/anixops-protocol.md` sections

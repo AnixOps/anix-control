@@ -41,7 +41,7 @@ export default {
     },
     alerts: {
       title: '需要处理',
-      description: '离线节点、待回复的工单和停止的流量上报。',
+      description: '离线节点、待回复的工单、停止的流量上报，以及证书和发布流程告警。',
       allClear: '一切正常',
       allClearDescription: '没有离线节点，也没有待回复的工单。',
       offlineNode: '{name} 离线',
@@ -53,6 +53,59 @@ export default {
       pendingOrders: '{count} 个订单待支付',
       trafficStale: '流量上报已停止',
       trafficStaleHint: '最近一次上报是 {time}，请检查节点进程或上报链路。',
+      view: '告警状态',
+      viewActive: '进行中',
+      viewResolved: '已解决',
+      summary: '{count} 条进行中的告警',
+      summaryCritical: '{count} 条进行中，{critical} 条严重',
+      alertsFailed: '无法加载证书和发布流程告警',
+      noResolved: '没有已解决的告警',
+      noResolvedDescription: '最近 30 天内已恢复的告警会列在这里。',
+      resolvedAt: '{date} 已解决',
+      kinds: {
+        agentCertificate: {
+          ending: '{name} 的 Agent 证书即将到期',
+          ended: '{name} 的 Agent 证书已过期',
+          endingHint: '{date} 到期。Agent 没有续期：请确认它在运行并能连上 Control。',
+          endedHint: '{date} 已到期。Agent 无法连接：请用新的安装命令重新注册。'
+        },
+        linkCertificate: {
+          ending: '{name} 的转发链路证书即将到期',
+          ended: '{name} 的转发链路证书已过期',
+          endingHint: '{date} 到期。它随 Agent 证书一起续期：请检查 Agent。',
+          endedHint: '{date} 已到期。请让 Agent 恢复连接，或重新注册。'
+        },
+        moduleCertificate: {
+          ending: '模块 {name} 的证书即将到期',
+          ended: '模块 {name} 的证书已过期',
+          endingHint: '{date} 到期。请确认模块在运行并能连上 Control。',
+          endedHint: '{date} 已到期。请重启模块、重新注册，或吊销其注册。'
+        },
+        ca: {
+          module: '模块',
+          forwardLink: '转发链路',
+          ending: '当前{ca} CA 即将到期',
+          ended: '当前{ca} CA 已到期',
+          staged: '{date} 到期。下一个 CA 已就绪，会自动接替签发。',
+          notStaged: '{date} 到期。尚无下一个 CA：请立即轮换 CA。'
+        },
+        nodeSecretsStalled: {
+          title: '{table} 的凭据拆分停在 {phase} 阶段',
+          hint: '自 {date} 起没有操作。请校验并完成它，或关闭此提醒。'
+        },
+        nodeSecretsInterrupted: {
+          title: '{table} 的凭据拆分在收尾时被中断',
+          hint: '{date} 开始。再运行一次收尾即可继续。'
+        },
+        identityImport: {
+          title: '身份导入已停滞',
+          hint: '自 {date} 起没有进展。请继续导入或开始切换。'
+        },
+        identityCutover: {
+          title: '身份切换尚未收尾',
+          hint: '身份服务自 {date} 起处理登录。请完成收尾，或回滚。'
+        }
+      },
       nodesFailed: '无法加载节点状态',
       ticketsFailed: '无法加载工单'
     },

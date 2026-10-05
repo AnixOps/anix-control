@@ -67,6 +67,8 @@
       </template>
     </UiSection>
 
+    <TelegramTestPanel :dirty="botDirty" />
+
     <UiSection :title="t('adminNotify.telegram.send.title')" :description="t('adminNotify.telegram.send.description')">
       <form class="send-form" novalidate @submit.prevent="sendNotification">
         <UiSegmentedControl
@@ -163,7 +165,9 @@
 // notification switch, and the bot's commands. Endpoints unchanged:
 // GET/PUT /admin/telegram/bot, POST/DELETE /admin/telegram/webhook,
 // POST /admin/telegram/notify, POST /admin/telegram/broadcast,
-// GET /admin/telegram/users, PUT /admin/telegram/users/:id/notify.
+// GET /admin/telegram/users, PUT /admin/telegram/users/:id/notify. The test
+// message button (TelegramTestPanel) calls the kernel route
+// POST /api/v4/kernel/notifications/telegram/test.
 import { computed, onMounted, ref, watch } from 'vue'
 import { Send, Users } from '@lucide/vue'
 import {
@@ -198,6 +202,7 @@ import { useDelayedLoading } from '@/ui/composables/useDelayedLoading'
 import { useFormat } from '@/ui/composables/useFormat'
 import { useToast } from '@/ui/composables/useToast'
 import { ensureNotifySuccess, notifyErrorText, readNotifyPayload } from './notifyResponse'
+import TelegramTestPanel from './TelegramTestPanel.vue'
 
 const { t } = useAppI18n()
 const format = useFormat()

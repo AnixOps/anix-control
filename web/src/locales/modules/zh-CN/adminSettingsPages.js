@@ -355,6 +355,48 @@ export default {
         failed: '发送失败：{message}',
         failedShort: '无法发送消息'
       },
+      test: {
+        title: '测试消息',
+        description: '向你自己已绑定的 Telegram 账号发送一条测试消息，检查机器人令牌和网络连接。',
+        dirty: '测试使用已保存的机器人设置。先保存修改再测试。',
+        send: '发送测试消息',
+        wait: '{seconds} 秒后可再试',
+        classes: {
+          ok: '已送达',
+          chat_not_found: '找不到聊天',
+          bot_blocked: '机器人被屏蔽',
+          rate_limited: 'Telegram 正在限制机器人',
+          not_configured: '机器人尚未设置',
+          invalid_token: '机器人令牌无效',
+          network_error: '无法连接 Telegram',
+          unknown: '意外的响应'
+        },
+        hints: {
+          chat_not_found: '确认你的 Telegram 账号仍处于绑定状态，并且已启动机器人。',
+          bot_blocked: '在 Telegram 中打开机器人并点击“开始”，或取消屏蔽。',
+          rate_limited: '稍等片刻后再次发送测试。',
+          not_configured: '在上方填写机器人令牌并保存机器人设置。',
+          invalid_token: '重新从 BotFather 复制令牌并保存机器人设置。',
+          unknown: '稍后再试。如果一直失败，请查看 Control 日志。'
+        },
+        reasons: {
+          timeout: 'Telegram 没有及时响应。请检查 Control 服务器的网络。',
+          dns: '无法解析 api.telegram.org。请检查 Control 服务器的 DNS。',
+          tls: 'TLS 连接失败。拦截 TLS 的代理或错误的 CA 证书库可能导致此问题。',
+          connect: '连接被拒绝或中断。请检查 Control 服务器的防火墙和代理。',
+          canceled: '请求在完成前被取消。请再次发送测试。',
+          other: '网络因其他原因失败。请检查 Control 服务器的网络连接。'
+        },
+        tooMany: '测试过于频繁',
+        tooManyMessage: '测试每分钟只能发送几次。',
+        notBound: '尚未绑定 Telegram',
+        notBoundMessage: '你的管理员账号没有绑定 Telegram，无处发送测试消息。',
+        notBoundHint: '请先绑定：在 Telegram 中打开机器人，发送 /bind 和你的订阅令牌（见下方“机器人命令”），然后再测试。',
+        notAllowed: '不允许该聊天',
+        notAllowedMessage: '该聊天不是你的聊天，也不在机器人的管理员 ID 中。',
+        failed: '测试失败',
+        failedShort: '无法发送测试消息'
+      },
       users: {
         title: '已绑定用户',
         description: '绑定了机器人的用户，以及是否接收提醒。',

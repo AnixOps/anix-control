@@ -356,6 +356,48 @@ export default {
         failed: 'Couldn’t send: {message}',
         failedShort: 'Couldn’t send the message'
       },
+      test: {
+        title: 'Test message',
+        description: 'Send a test message to your own linked Telegram account to check the bot token and the connection.',
+        dirty: 'The test uses the saved bot settings. Save your changes first to test them.',
+        send: 'Send test message',
+        wait: 'Try again in {seconds} s',
+        classes: {
+          ok: 'Delivered',
+          chat_not_found: 'Chat not found',
+          bot_blocked: 'Bot blocked',
+          rate_limited: 'Telegram is limiting the bot',
+          not_configured: 'Bot not set up',
+          invalid_token: 'Invalid bot token',
+          network_error: 'Telegram not reachable',
+          unknown: 'Unexpected answer'
+        },
+        hints: {
+          chat_not_found: 'Check that your Telegram account is still linked and that you started the bot.',
+          bot_blocked: 'Open the bot in Telegram and press Start, or unblock it.',
+          rate_limited: 'Wait a moment and send the test again.',
+          not_configured: 'Enter the bot token above and save the bot settings.',
+          invalid_token: 'Copy the token from BotFather again and save the bot settings.',
+          unknown: 'Send the test again later. If it keeps failing, check the Control logs.'
+        },
+        reasons: {
+          timeout: 'Telegram did not answer in time. Check the network of the Control server.',
+          dns: 'The name api.telegram.org did not resolve. Check DNS on the Control server.',
+          tls: 'The TLS connection failed. A proxy that intercepts TLS or a wrong CA store can cause it.',
+          connect: 'The connection was refused or dropped. Check the firewall and proxy of the Control server.',
+          canceled: 'The request was cancelled before it finished. Send the test again.',
+          other: 'The network failed for another reason. Check the Control server’s connection.'
+        },
+        tooMany: 'Too many tests',
+        tooManyMessage: 'Tests are limited to a few a minute.',
+        notBound: 'Telegram not linked',
+        notBoundMessage: 'Your administrator account has no linked Telegram account, so there is nowhere to send the test.',
+        notBoundHint: 'Link it first: open the bot in Telegram and send /bind with your subscription token (see Bot commands below), then test again.',
+        notAllowed: 'Chat not allowed',
+        notAllowedMessage: 'This chat is neither yours nor one of the bot’s administrator IDs.',
+        failed: 'Test failed',
+        failedShort: 'Couldn’t send the test message'
+      },
       users: {
         title: 'Linked users',
         description: 'Users who linked the bot, and whether they get reminders.',

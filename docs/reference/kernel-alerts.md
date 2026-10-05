@@ -153,13 +153,16 @@ Critical alerts come first, then the soonest to end (or first seen). The
 summary counts every active alert whatever the filters. `message` is English
 for notifications; a UI composes its own text from `kind` and `detail`.
 
-**What the admin UI should call.** The dashboard's alert list
-(`DashboardAlerts.vue`) builds its items in the browser from other answers
-today. It can merge `GET /api/v4/kernel/alerts?status=active` into the same
-list: one item per alert (icon by `subject_kind`, tone `danger` for
-`critical` and `warning` otherwise, link `/admin/nodes/<id>` for node
-subjects), and the count badge from `summary`. Nothing else changes: there is
-no write endpoint, alerts clear themselves.
+**In the admin console.** The dashboard's **Needs attention** list
+(`DashboardAlerts.vue`) merges `GET /api/v4/kernel/alerts?status=active` with
+the items it builds in the browser: one item per alert (icon by kind, tone
+`danger` for `critical` and `warning` otherwise, critical first, a link to
+`/admin/nodes/<id>` for `proxy-<id>` subjects and to the forward node page for
+`forward-<id>`, text composed from `kind` and `detail` in both languages, dates
+in the viewer's locale), and a count badge from `summary`. **Resolved** shows
+`status=resolved` (`limit=30`). The alerts load apart from the dashboard: a
+failure is one item with **Try again**. Nothing else changes: there is no write
+endpoint, alerts clear themselves.
 
 ## Configuration
 
