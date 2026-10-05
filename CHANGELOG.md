@@ -16,6 +16,14 @@
 
 ### Fixed
 
+- **`anix-control forward legacy archive -o <dir>/` makes the directory.**
+  A path ending in `/` that did not exist was taken for a file name, so
+  the documented `-o /root/forward-legacy/` wrote a 0600 file called
+  `forward-legacy` and the next run refused with "an archive never
+  overwrites a file". The trailing separator now names a directory: it is
+  created (0700) and the archive gets a timestamped name inside it.
+  Without the separator the path is the file name, as before. Found in the
+  4.1.0 to 4.2.0-rc.1 staging rehearsal.
 - **Select and Combobox lists are inside a landmark and leave nothing
   hidden focusable.** An open list was axe "region" content (moderate), and
   an open Select made the page `aria-hidden` while it still held focusable

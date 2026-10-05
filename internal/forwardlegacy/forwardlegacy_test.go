@@ -205,6 +205,40 @@ func runArchive(t *testing.T, db *gorm.DB) {
 	require.ErrorContains(t, err, "SHA-256 mismatch")
 }
 
+// "-o /root/forward-legacy/" (the form UPGRADE.md shows) names a directory:
+// it is created and the archive gets a timestamped name inside it. Without
+// the trailing separator the path is the file name, as before.
+func TestArchivePathTrailingSeparatorNamesADirectory(t *testing.T) {
+	root := t.TempDir()
+
+	missing := filepath.Join(root, "new-dir") + string(filepath.Separator)
+	path, err := archivePath(WriteOptions{Output: missing}, start)
+	require.NoError(t, err)
+	assert.Equal(t, filepath.Join(root, "new-dir", ArchiveFileName(start)), path)
+	info, err := os.Stat(filepath.Join(root, "new-dir"))
+	require.NoError(t, err)
+	assert.True(t, info.IsDir())
+	assert.Equal(t, os.FileMode(0o700), info.Mode().Perm())
+
+	// A second run into the same directory writes another file, not an error.
+	again, err := archivePath(WriteOptions{Output: missing}, start.Add(time.Second))
+	require.NoError(t, err)
+	assert.NotEqual(t, path, again)
+
+	// No trailing separator and nothing there: the path is the file.
+	plain := filepath.Join(root, "plain-file")
+	path, err = archivePath(WriteOptions{Output: plain}, start)
+	require.NoError(t, err)
+	assert.Equal(t, plain, path)
+	_, err = os.Stat(plain)
+	assert.ErrorIs(t, err, os.ErrNotExist, "only the path is resolved: nothing is created for a file")
+
+	// An existing file is never taken for a directory.
+	require.NoError(t, os.WriteFile(plain, []byte("{}"), 0o600))
+	_, err = archivePath(WriteOptions{Output: plain + string(filepath.Separator)}, start)
+	require.ErrorContains(t, err, "never overwrites")
+}
+
 func TestStartupArchiveWithoutFluxTables(t *testing.T) {
 	db, err := gorm.Open(sqlite.Open(":memory:"), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
