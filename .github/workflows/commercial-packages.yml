@@ -1,0 +1,113 @@
+name: Commercial Packages
+
+# Builds and signs the commercial packages (order, payment, affiliate; the
+# list lives in config/editions.json) with the official key, at the version of
+# an existing release tag. The community release leaves them out, so an
+# installation that runs them imports these. Manual only; it releases nothing
+# unless `attach` is set, and then it only adds assets to that release.
+
+on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Release tag to build at, for example v4.2.0-rc.2"
+        required: true
+        type: string
+      attach:
+        description: "Also upload the packages and a checksum file to that GitHub release"
+        required: false
+        default: false
+        type: boolean
+
+permissions:
+  contents: read
+
+jobs:
+  commercial-packages:
+    name: Build and Sign Commercial Packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - name: Check the tag
+        env:
+          TAG: ${{ inputs.tag }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "${TAG}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[0-9A-Za-z.]+)?$ ]] || { echo "tag must look like v4.2.0 or v4.2.0-rc.2" >&2; exit 1; }
+
+      - name: Check out the tag
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.tag }}
+
+      - name: Set up Go
+        uses: actions/setup-go@v6
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build, sign and verify
+        env:
+          TAG: ${{ inputs.tag }}
+          ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY: ${{ secrets.ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY }}
+          ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY: ${{ secrets.ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ -n "${ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY}" ]] || { echo "ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY is not available to this repository" >&2; exit 1; }
+          [[ -n "${ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY}" ]] || { echo "ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY is not available to this repository" >&2; exit 1; }
+          key_file="$(mktemp)"
+          root_file="$(mktemp)"
+          trap 'rm -f "${key_file}" "${root_file}"' EXIT
+          printf '%s\n' "${ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY}" >"${key_file}"
+          chmod 0600 "${key_file}"
+          printf '%s\n' "${ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY}" >"${root_file}"
+          configured_root="$(sed -n 's/^[[:space:]]*official_public_key:[[:space:]]*"\([^"]*\)".*/\1/p' config/config.prod.yaml)"
+          [[ -n "${configured_root}" && "${configured_root}" == "${ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY}" ]] || {
+            echo "the public-key secret does not equal official_public_key at ${TAG}" >&2
+            exit 1
+          }
+          unset ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY
+          version="${TAG#v}"
+          mapfile -t packages < <(python3 -c 'import json; print("\n".join(json.load(open("config/editions.json"))["commercial_packages"]))')
+          [[ "${#packages[@]}" -gt 0 ]] || { echo "config/editions.json lists no commercial packages" >&2; exit 1; }
+          mkdir -p commercial-packages
+          for package_id in "${packages[@]}"; do
+            python3 packages/shared/build_package.py \
+              --package "${package_id}" \
+              --version "${version}" \
+              --out commercial-packages \
+              --formal-release \
+              --signing-key "${key_file}" \
+              --official-public-key "${root_file}" \
+              --platform linux/amd64 \
+              --platform linux/arm64
+            python3 packages/shared/build_package.py \
+              --package "${package_id}" \
+              --version "${version}" \
+              --out commercial-packages \
+              --verify-release \
+              --official-public-key "${root_file}"
+          done
+          (cd commercial-packages && sha256sum *.anxp *.manifest.json *.manifest.sig >SHA256SUMS-commercial.txt)
+          ls -l commercial-packages
+
+      - name: Upload the signed packages
+        uses: actions/upload-artifact@v7
+        with:
+          name: commercial-packages-${{ inputs.tag }}
+          path: commercial-packages/
+
+      - name: Attach to the release
+        if: ${{ inputs.attach }}
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ inputs.tag }}
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          gh release view "${TAG}" >/dev/null
+          gh release upload "${TAG}" commercial-packages/*.anxp commercial-packages/*.manifest.json commercial-packages/*.manifest.sig commercial-packages/SHA256SUMS-commercial.txt

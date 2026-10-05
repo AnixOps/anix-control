@@ -2780,14 +2780,18 @@ Control Treats The Root") too. What it means for an upgrade:
 > with the new root and nothing replaces them, so orders, payments, plan
 > purchase and the invite commission stay down after the upgrade, and the
 > automatic recovery below does not cover them. They must be rebuilt and
-> signed with the new official key by whoever builds them: the published
-> release builds the community package set only, and signing needs the
-> release key, which only the release owner holds. How the commercial set is
-> built and signed with the new key is the release owner's decision and is
-> not defined yet. **Do not upgrade a Control that runs them until such
-> builds exist and you can import them** (the same import as the other
-> packages, at a version newer than the old one). The staging rehearsal ran
-> the community package set and did not cover this.
+> signed with the new official key: the published release builds the
+> community package set only, and signing needs the release key, which only
+> the release owner holds. The release owner builds them with the manual
+> **Commercial Packages** workflow (`.github/workflows/commercial-packages.yml`):
+> give it a release tag and it builds `order`, `payment` and `affiliate` at
+> that tag's version, signs them with the official key, verifies them against
+> the configured root, and publishes them as a workflow artifact (and, with
+> `attach`, as release assets next to a `SHA256SUMS-commercial.txt`). Import
+> them the same way as the other packages, at a version newer than the old
+> one, **before** the first start of a Control that runs them; until you have
+> them, do not upgrade that Control. The staging rehearsal ran the community
+> package set and did not cover this.
 
 ### Identity-Platform Recovers By Itself
 

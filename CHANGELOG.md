@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Release:** a manual `Commercial Packages` workflow builds and signs the
+  commercial packages (`order`, `payment`, `affiliate`) with the official key
+  at a given release tag, so installations that run them have a build signed
+  with the new root (docs/UPGRADE.md).
+
 ## 4.2.0-rc.2 - 2026-10-05
 
 ### Highlights since 4.2.0-rc.1
