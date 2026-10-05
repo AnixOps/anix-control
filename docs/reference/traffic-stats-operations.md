@@ -10,7 +10,14 @@ traffic pages backed by `v2_server_log`.
 - admin dashboard `today_traffic`
 - `/api/v2/admin/traffic/hourly`
 - `/api/v2/admin/traffic/user-ranking`
+- `/api/v4/kernel/nodes/:id/traffic` with `granularity=hour` (one node's hourly series)
 - diagnostics for the admin hourly traffic page
+
+`v2_stat_server` keeps one row per node, server type and day (`record_type`
+`d`) and per month (`m`), written in the transaction of each traffic report
+with the node's traffic rate applied. `/api/v4/kernel/nodes/:id/traffic` with
+`granularity=day` reads its day rows. Nothing purges it: a node adds about 365
+rows a year per server type, so it needs no maintenance.
 
 Quota counters are stored separately on `v2_user.u` and `v2_user.d`. Purging old
 `v2_server_log` rows removes historical charts and rankings for that period, but
@@ -72,6 +79,43 @@ database:
 - `include_zero_users=true` ranking limits clamp to 1000 rows
 
 The admin UI currently requests up to 720 hours for the 30 day view.
+
+## Per-Node Traffic Series
+
+`GET /api/v4/kernel/nodes/:id/traffic` (administrator) answers one proxy node's
+traffic for the admin charts. It adds no table and no write: the traffic
+reports already fill both tables it reads.
+
+| `granularity` | Reads | Bounds | Buckets |
+| --- | --- | --- | --- |
+| `hour` (default) | `v2_server_log` rows of the node, `(u * rate)` up and `(d * rate)` down | 24 hours by default, at most 720 hourly buckets | UTC hours |
+| `day` | `v2_stat_server` day rows of the node (already rate-applied) | 30 days by default, at most 366 daily buckets | local calendar days of the Control host, where the rows are recorded |
+
+- `since` and `until` are Unix milliseconds; the window is rounded out to
+  whole buckets and a longer one is `400 invalid_request`, not clamped.
+  Buckets without traffic are zeros, so the series draws as it is.
+- The node id is the key of both tables for every server type: agent and
+  legacy node reports write `server_type` `node`, UniProxy the protocol name;
+  the series sums them. Rows imported from a v2board database that keyed
+  `server_id` by the per-type server tables, not by node id, can alias an
+  unrelated node in old windows.
+- **Hourly history ends where the raw log does.** After a purge (below) the
+  early hours of the window are zeros, not data; the daily series is not
+  affected by a purge.
+- **Cost.** The hourly query reads one node's rows in the window, through
+  `idx_v2_server_log_server_id` or both single-column indexes, and no
+  composite `(server_id, log_at)` index exists: its cost follows the node's
+  retained rows, so the retention below also bounds it. On a throwaway
+  PostgreSQL 16 with 8.4 million synthetic rows (30 nodes, 14 days, about
+  20 000 rows per node and day), one node's hourly series took about 40 ms
+  for 24 hours, 90 ms for 7 days and 125 ms for 14 days, against 1.5 s for
+  the existing all-node `/api/v2/admin/traffic/hourly` over 7 days on the
+  same data. A busier node costs proportionally more; that is why there is
+  no per-report rollup write, and a rollup table is the next step only if a
+  deployment's retained rows make this query slow.
+- The forwarding traffic of a node or route is a different ledger
+  (`v4_kernel_forward_traffic`): `GET /api/v4/forward/stats`,
+  `/api/v4/forward/routes/{id}/stats` and `/api/v4/forward/observability/trend`.
 
 ## Indexes
 

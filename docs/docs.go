@@ -8388,6 +8388,73 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v4/kernel/nodes/{id}/traffic": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "One proxy node's traffic over time for the admin charts, ascending, buckets without traffic as zeros. granularity=hour (the default) sums the node's rows of the raw traffic log v2_server_log in UTC hours: the last 24 hours by default, at most 720 hourly buckets, and only as far back as the operator keeps the raw log (docs/reference/traffic-stats-operations.md). granularity=day reads the node's daily server statistics (v2_stat_server): the last 30 days by default, at most 366 daily buckets, aligned to the Control host's local midnight, kept regardless of the raw log's retention. since and until are Unix milliseconds (since inclusive, until exclusive); they are rounded out to whole buckets, and the answer's since_unix_ms and until_unix_ms are the window actually returned. Bytes are the panel's metered bytes: up and down with the node's traffic rate applied, as /api/v2/admin/traffic/hourly counts them, summed over every protocol the node reported under. This is the proxy node's user traffic; forwarding traffic is /api/v4/forward/stats and /api/v4/forward/routes/{id}/stats.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Proxy node traffic series",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "proxy node id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    },
+                    {
+                        "type": "string",
+                        "description": "hour (default) or day",
+                        "name": "granularity",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "window start, Unix milliseconds",
+                        "name": "since",
+                        "in": "query"
+                    },
+                    {
+                        "type": "integer",
+                        "description": "window end (exclusive), Unix milliseconds",
+                        "name": "until",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/route-modes": {
             "get": {
                 "security": [
