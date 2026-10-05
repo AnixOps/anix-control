@@ -371,7 +371,39 @@ DELETE /api/v2/admin/subscription/plans/:plan_id/groups/:group_id
 
 # 查看套餐分组
 GET /api/v2/admin/subscription/plans/:plan_id/groups
+
+# 分组成员 (v4, 仅管理员): 被直接授予该分组的用户, 分页
+GET /api/v4/admin/subscription-groups/:id/members?page=1&page_size=20&q=&status=active
 ```
+
+**分组成员列表.** `GET /api/v4/admin/subscription-groups/:id/members` lists
+the users granted the group directly (the `v2_user_subscription_group` rows
+that `POST /api/v2/admin/subscription/users/:user_id/groups` creates), the
+same rows that `GET /api/v2/admin/subscription/stats` counts as `user_count`
+(all members) and `enabled_users` (`status=active`). Users who reach the
+group through their plan or their primary group (`v2_user.group_id`) are not
+members here; the users list's `plan_id` filter lists a plan's users.
+`page` (default 1) and `page_size` (default 20, at most 100) page the list,
+`q` keeps the e-mails that contain it (`%` and `_` match themselves) and
+`status` is `active` (the membership has no expiry or one in the future) or
+`expired`; anything else is HTTP 400 `invalid_request`. An unknown group is
+HTTP 404 `not_found`, an id that is not a positive integer HTTP 400
+`invalid_id`.
+
+```json
+{"data": {"total": 42, "page": 1, "page_size": 20, "members": [
+  {"user_id": 3, "email": "user@example.com", "banned": 0, "plan_id": 2,
+   "expire_at": 1798761600, "transfer_enable": null, "next_renew_price": null,
+   "created_at": "2026-09-01T08:00:00Z", "active": true}
+]}}
+```
+
+Members come newest grant first, members granted in the same instant by id,
+newest first, so pages neither repeat nor skip one. `expire_at` ends the
+membership (Unix seconds, null for never), `transfer_enable` is the quota
+override in bytes (null for none), `next_renew_price` is in cents, `active`
+is `expire_at` unset or in the future. The answer carries no credential:
+never the subscription token or the proxy uuid.
 
 #### 工具接口
 

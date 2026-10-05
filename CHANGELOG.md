@@ -90,6 +90,21 @@
   to the identity package's native handlers, which read the kernel API views
   and cannot see a new table. Deleting a user deletes their row.
 
+- **Subscription group members: `GET
+  /api/v4/admin/subscription-groups/:id/members`.** The subscription group
+  page showed the member counts only ("the API has no member list"). The
+  route pages the users granted the group directly
+  (`v2_user_subscription_group`, the rows `user_count` and `enabled_users` of
+  the group stats count), newest grant first, with each membership's expiry,
+  quota override and renewal price and the user's e-mail, ban flag and plan,
+  filtered by `q` (a substring of the e-mail) and `status` (`active` or
+  `expired`) and paged with `page` and `page_size` (at most 100). Users the
+  group reaches through their plan or primary group are not members here.
+  No credential is returned. It is a kernel route under `/api/v4/admin`
+  (administrators, outside the `/api/v2` package catalog): an unknown group is
+  404 `not_found`, a bad id or status 400. `docs/guide/subscription-system.md`
+  has the shape.
+
 ### Changed
 
 - **Forwarding editor, DNS binding: Save says why it is disabled.** With

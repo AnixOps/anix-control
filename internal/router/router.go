@@ -766,6 +766,9 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.POST("/kernel/route-modes/rollback", routeModes.Rollback)
 		v4.GET("/kernel/route-modes/revisions", routeModes.Revisions)
 		v4.GET("/kernel/route-modes/mismatches", routeModes.Mismatches)
+		// The members of a subscription group: a kernel-owned administrator
+		// route under /api/v4/admin, outside the /api/v2 catalog.
+		v4.GET("/admin/subscription-groups/:id/members", handler.NewAdminGroupMembersHandler().List)
 		agents := handler.NewAgentPKIHandler()
 		v4.POST("/kernel/agents/enrollment-tokens", agents.CreateEnrollmentToken)
 		v4.POST("/kernel/agents/install-tokens", agentInstall.CreateInstallToken)
