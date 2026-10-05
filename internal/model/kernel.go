@@ -507,5 +507,6 @@ func KernelModels() []any {
 		&KernelForwardNodeReport{}, &KernelForwardCounter{}, &KernelForwardTraffic{}, &KernelForwardRequest{},
 		&KernelForwardPlan{}, &AgentUpgradeCampaign{}, &AgentUpgradeNode{},
 		&KernelForwardDNSProvider{}, &KernelForwardDNSBinding{}, &KernelForwardDNSNode{},
+		&AdminAPIToken{},
 	}
 }

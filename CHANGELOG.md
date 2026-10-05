@@ -249,6 +249,29 @@
   in the node page. Vitest for the API wrappers, models, composables
   and pages; a Playwright spec records the requests; the screens' fixtures
   answer the new routes; the accessibility sweeps cover the members page.
+- **Admin API tokens: personal access tokens for automation.** An
+  administrator creates `anixadm_...` tokens (`POST /api/v4/kernel/api-tokens`)
+  and calls the administrator APIs (`/api/v2/admin`, `/api/v3`, `/api/v4`) with
+  `Authorization: Bearer <token>`, in the header only (a token in a URL is
+  refused and audited). The token is shown once; only its SHA-256 is stored
+  (new table `v4_kernel_admin_api_token`, no existing table changed). Scope
+  `read` makes `GET` and `HEAD` requests and never the secret-revealing reads;
+  `admin` does what the owner may do, except manage tokens. An expiry is
+  optional, the last use is recorded (at most every 5 minutes), and tokens are
+  listed (`GET`, never a secret) and revoked (`DELETE`; a super administrator
+  can revoke anyone's). Creating needs a signed-in session and the same
+  re-authentication as a user's own subscription reset (password, or an MFA
+  code when MFA is on); the token endpoints refuse API tokens. The owner's
+  rights are read on every use, so a banned, demoted or deleted administrator's
+  tokens stop at once and stay revoked if the owner is restored. Refused tokens
+  are one answer, rate limited per client address, and creation, revocation,
+  writes and refusals are audited (`v2_operation_log`, module
+  `admin_api_token`), never with the token. JWT verification (algorithm pinning,
+  revocation) is unchanged, and user routes do not accept tokens. See
+  `docs/reference/admin-api-tokens.md` and `docs/guide/admin-api-tokens.md`.
+  For the UI: a Settings > API tokens page calls `POST`, `GET` and `DELETE
+  /api/v4/kernel/api-tokens`, shows `data.token` once, and asks for the
+  password (or the MFA code).
 
 - **Admin console: a node's traffic over time and rotating its Agent
   credentials.** Two more screens use routes the kernel already serves.

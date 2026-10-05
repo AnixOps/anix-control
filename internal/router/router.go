@@ -83,6 +83,13 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	publicLimiter.StartCleanup(1 * time.Minute)
 	agentPackageLimiter.StartCleanup(1 * time.Minute)
 
+	// Admin API tokens ("Authorization: Bearer anixadm_...", docs/reference/
+	// admin-api-tokens.md) authenticate the administrator APIs in front of
+	// JWTAuth: /api/v2/admin, /api/v2/admin/agent, /api/v3 and /api/v4. User
+	// routes and the compatibility group below do not have it, so a token
+	// is refused there like any other string that is not a JWT.
+	adminAPIToken := middleware.AdminAPIToken()
+
 	// Swagger API 文档
 	// 自定义 handler 来正确处理 doc.json
 	r.GET("/swagger/*any", func(c *gin.Context) {
@@ -214,6 +221,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		// 管理员接口
 		admin := v2.Group("/admin")
 		admin.Use(adminLimiter.Middleware())
+		admin.Use(adminAPIToken)
 		admin.Use(middleware.JWTAuth())
 		admin.Use(middleware.AdminAuth())
 		admin.Use(middleware.AuditLog())
@@ -611,6 +619,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		// Agent 管理接口 (管理员)
 		agentAdmin := v2.Group("/admin/agent")
 		agentAdmin.Use(adminLimiter.Middleware())
+		agentAdmin.Use(adminAPIToken)
 		agentAdmin.Use(middleware.JWTAuth())
 		agentAdmin.Use(middleware.AdminAuth())
 		{
@@ -652,6 +661,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 	// /api/v2 while services are migrated behind plugin compatibility adapters.
 	v3 := r.Group("/api/v3")
 	v3.Use(adminLimiter.Middleware())
+	v3.Use(adminAPIToken)
 	v3.Use(middleware.JWTAuth())
 	v3.Use(middleware.AdminAuth())
 	v3.Use(middleware.AuditLog())
@@ -734,6 +744,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 
 	v4 := r.Group("/api/v4")
 	v4.Use(adminLimiter.Middleware())
+	v4.Use(adminAPIToken)
 	v4.Use(middleware.JWTAuth())
 	v4.Use(middleware.AdminAuth())
 	v4.Use(middleware.AuditLog())
@@ -776,6 +787,12 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.POST("/kernel/route-modes/rollback", routeModes.Rollback)
 		v4.GET("/kernel/route-modes/revisions", routeModes.Revisions)
 		v4.GET("/kernel/route-modes/mismatches", routeModes.Mismatches)
+		// Personal access tokens for automation: managed from a signed-in
+		// session only (the middleware refuses API tokens on this prefix).
+		apiTokens := handler.NewAdminAPITokensHandler()
+		v4.POST("/kernel/api-tokens", apiTokens.Create)
+		v4.GET("/kernel/api-tokens", apiTokens.List)
+		v4.DELETE("/kernel/api-tokens/:id", apiTokens.Revoke)
 		agents := handler.NewAgentPKIHandler()
 		v4.POST("/kernel/agents/enrollment-tokens", agents.CreateEnrollmentToken)
 		v4.POST("/kernel/agents/install-tokens", agentInstall.CreateInstallToken)

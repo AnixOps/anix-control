@@ -8454,6 +8454,125 @@
                 }
             }
         },
+        "/api/v4/kernel/api-tokens": {
+            "get": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Lists the caller's active API tokens (add include_inactive=true for revoked and expired ones): id, name, scope, last four characters, expiry, last use. Never a secret. A super administrator may list another administrator's tokens with user_id, or everyone's with all=true. Needs a signed-in session.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "List admin API tokens",
+                "parameters": [
+                    {
+                        "type": "integer",
+                        "description": "another administrator (super administrators only)",
+                        "name": "user_id",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "every administrator's tokens (super administrators only)",
+                        "name": "all",
+                        "in": "query"
+                    },
+                    {
+                        "type": "boolean",
+                        "description": "also revoked and expired tokens",
+                        "name": "include_inactive",
+                        "in": "query"
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            },
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Issues a personal access token for automation: `anixadm_` and 43 characters, shown once in this answer; only its SHA-256 is stored. Scope `read` allows GET and HEAD on the administrator APIs except the reads that answer a secret in clear; `admin` allows what the owner may do except managing tokens. Needs a signed-in session (never an API token) and a re-authentication: the current password, or a TOTP or recovery code when the account has a second factor (when the kernel cannot check a credential because identity holds it, the sign-in must be at most 10 minutes old). Up to 25 active tokens per administrator; the owner's rights are read on every use. Audited. Send the token as `Authorization: Bearer \u003ctoken\u003e` only, never in a URL.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Create an admin API token",
+                "parameters": [
+                    {
+                        "description": "name, scope (read or admin), optional expires_in_days, and password or code (+ method)",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.createAdminAPITokenRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "data.token is shown once; data.api_token is the stored record",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
+        "/api/v4/kernel/api-tokens/{id}": {
+            "delete": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Ends a token at once. An administrator revokes their own tokens; a super administrator revokes anyone's (for example a departed administrator's). Revoking a revoked token is not an error. Needs a signed-in session. Audited.",
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Revoke an admin API token",
+                "parameters": [
+                    {
+                        "type": "string",
+                        "description": "token id",
+                        "name": "id",
+                        "in": "path",
+                        "required": true
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/nodes/{id}/traffic": {
             "get": {
                 "security": [
@@ -10538,6 +10657,39 @@
                 }
             }
         },
+        "handler.createAdminAPITokenRequest": {
+            "type": "object",
+            "required": [
+                "name",
+                "scope"
+            ],
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "expires_in_days": {
+                    "description": "ExpiresInDays ends the token after that many days (at most 730); 0 or\nabsent never.",
+                    "type": "integer",
+                    "maximum": 730,
+                    "minimum": 1
+                },
+                "method": {
+                    "type": "string"
+                },
+                "name": {
+                    "description": "Name says what the token is for; 1 to 100 characters.",
+                    "type": "string"
+                },
+                "password": {
+                    "description": "Password re-authenticates the administrator; with a second factor on,\nCode and Method (totp or backup) do instead.",
+                    "type": "string"
+                },
+                "scope": {
+                    "description": "Scope is \"read\" or \"admin\".",
+                    "type": "string"
+                }
+            }
+        },
         "handler.rotateAgentCredentialsRequest": {
             "type": "object",
             "required": [
@@ -11527,7 +11679,7 @@
     },
     "securityDefinitions": {
         "BearerAuth": {
-            "description": "Type \"Bearer\" followed by a space and JWT token.",
+            "description": "Type \"Bearer\" followed by a space and a JWT, or, on the administrator APIs, an admin API token (anixadm_..., see docs/reference/admin-api-tokens.md).",
             "type": "apiKey",
             "name": "Authorization",
             "in": "header"

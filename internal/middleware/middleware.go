@@ -3,6 +3,7 @@ package middleware
 import (
 	"crypto/sha256"
 	"encoding/hex"
+	"github.com/AnixOps/anix-control/v4/internal/adminapitoken"
 	"github.com/AnixOps/anix-control/v4/internal/authn"
 	"github.com/AnixOps/anix-control/v4/internal/logging"
 	"net/http"
@@ -161,6 +162,14 @@ func sha256Hash(s string) string {
 // JWTAuth JWT 认证中间件
 func JWTAuth() gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// AdminAPIToken, in front of this middleware on the administrator
+		// APIs, already authenticated an admin API token; the context key is
+		// set on the server side only. A JWT is checked as always, and an
+		// API token on any other route is no JWT and fails below.
+		if c.GetString(adminapitoken.ContextKeyAuthMethod) == adminapitoken.AuthMethodAPIToken {
+			c.Next()
+			return
+		}
 		authHeader := c.GetHeader("Authorization")
 
 		// WebSocket 握手无法自定义 header, 允许从 query 参数 token 回退获取
@@ -198,6 +207,9 @@ func JWTAuth() gin.HandlerFunc {
 		c.Set("session_id", claims.SessionID)
 		if claims.ExpiresAt != nil {
 			c.Set("token_expires_at", claims.ExpiresAt.Time)
+		}
+		if claims.IssuedAt != nil {
+			c.Set("token_issued_at", claims.IssuedAt.Time)
 		}
 
 		c.Next()
