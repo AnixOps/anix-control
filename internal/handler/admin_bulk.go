@@ -400,10 +400,12 @@ func (w *bulkCapture) Write(data []byte) (int, error) { return w.body.Write(data
 // Idempotency-Key and request id. The router's middleware (rate limit,
 // authentication, audit) is not run again: the bulk request passed it once,
 // and the bulk handler audits each item itself.
-func GatewayBulkRunner(engine *gin.Engine, gateway gin.HandlerFunc) BulkRunner {
+func GatewayBulkRunner(gateway gin.HandlerFunc) BulkRunner {
 	return func(ctx context.Context, parent *gin.Context, call BulkCall) BulkAnswer {
 		capture := &bulkCapture{header: http.Header{}}
-		sub := gin.CreateTestContextOnly(capture, engine)
+		// As the package bridge does for a bridged handler: a context of its
+		// own, on an engine nothing is registered on.
+		sub, _ := gin.CreateTestContext(capture)
 		request := parent.Request.Clone(ctx)
 		request.Method = call.Method
 		request.URL = &url.URL{Path: call.Path}

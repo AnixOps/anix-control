@@ -764,7 +764,7 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		// runs wherever its route's mode puts it.
 		v4.GET("/admin/users/activity", handler.NewAdminUserActivityHandler().List)
 		v4.GET("/admin/subscription-groups/:id/members", handler.NewAdminGroupMembersHandler().List)
-		bulk := handler.NewAdminBulkHandler(handler.GatewayBulkRunner(r, v2PackageGateway.Serve))
+		bulk := handler.NewAdminBulkHandler(handler.GatewayBulkRunner(v2PackageGateway.Serve))
 		v4.POST("/admin/users/bulk", bulk.Users)
 		v4.POST("/admin/invite-codes/bulk", bulk.InviteCodes)
 		v4.GET("/kernel/node-operations", handler.NewKernelNodeOperationsHandler().List)
