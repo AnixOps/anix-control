@@ -1,0 +1,53 @@
+{
+  "format": "anixops.relay/v1",
+  "owner": "anixops-forward-driver anixops v1",
+  "note": "Rendered by sdk/forward/driver/anixops; do not edit. The anixops relay runs it.",
+  "link": {
+    "cert": "/var/lib/anixops-relay/tls/link.crt",
+    "key": "/var/lib/anixops-relay/tls/link.key",
+    "ca": "/var/lib/anixops-relay/tls/link-ca.crt"
+  },
+  "stateless_reset_key_file": "/var/lib/anixops-relay/stateless-reset.key",
+  "hops": [
+    {
+      "route": "01JF1D000000000000000000D1",
+      "hop": 1,
+      "role": "relay",
+      "listen": {
+        "port": 40000,
+        "tcp": true
+      },
+      "ingress": {
+        "security": "anixops",
+        "carrier": "plain"
+      },
+      "sources": [
+        "192.0.2.71/32"
+      ],
+      "peers": [
+        "spiffe://anixops/example/agent/forward-71"
+      ],
+      "upstreams": [
+        {
+          "address": "192.0.2.73",
+          "port": 40000,
+          "weight": 1,
+          "priority": 0,
+          "egress": {
+            "security": "anixops",
+            "carrier": "plain",
+            "server_name": "forward-73"
+          },
+          "node_ref": "forward-73",
+          "peer_identity": "spiffe://anixops/example/agent/forward-73"
+        }
+      ],
+      "balance": "round_robin",
+      "breaker": {
+        "max_fails": 3,
+        "open_ms": 30000
+      },
+      "limits": {}
+    }
+  ]
+}

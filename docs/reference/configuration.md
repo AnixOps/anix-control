@@ -68,6 +68,12 @@ PostgreSQL connection settings:
 | `database.timezone` | `Asia/Shanghai` | session `TimeZone`; must be a valid IANA name |
 | `database.dsn` | empty | full connection string used verbatim instead of the fields above |
 
+## Experimental Forwarding Engine
+
+| Key | Default | Notes |
+|------|------|------|
+| `forward.anixops_experimental` (`ANIX_CONTROL_FORWARD_ANIXOPS_EXPERIMENTAL`) | `false` | Lets routes use the experimental AnixOps engine and link (`ENGINE_ANIXOPS`, `LINK_SECURITY_ANIXOPS`), the secure relay between forward nodes (`docs/architecture/anixops-protocol.md`). Off, validation and the planner refuse them (`engine_not_enabled`). The Agents need their own `forward.anixops_experimental` to advertise the engine, or the planner refuses their nodes. v4.2 ships it as a prototype whose wire format (ALPN `anixops/0`) may change without notice; v4.3 freezes it. |
+
 ## Product Edition
 
 | Key | Default | Notes |

@@ -1,0 +1,87 @@
+{
+  "format": "anixops.relay/v1",
+  "owner": "anixops-forward-driver anixops v1",
+  "note": "Rendered by sdk/forward/driver/anixops; do not edit. The anixops relay runs it.",
+  "hops": [
+    {
+      "route": "01JF2A000000000000000000A1",
+      "hop": 0,
+      "role": "entry",
+      "listen": {
+        "port": 30001,
+        "tcp": true
+      },
+      "ingress": {
+        "security": "raw"
+      },
+      "upstreams": [
+        {
+          "address": "192.0.2.20",
+          "port": 443,
+          "weight": 1,
+          "priority": 0,
+          "egress": {
+            "security": "raw"
+          }
+        },
+        {
+          "address": "192.0.2.21",
+          "port": 443,
+          "weight": 2,
+          "priority": 10,
+          "egress": {
+            "security": "raw"
+          }
+        },
+        {
+          "address": "192.0.2.22",
+          "port": 443,
+          "weight": 3,
+          "priority": 20,
+          "egress": {
+            "security": "raw"
+          }
+        }
+      ],
+      "balance": "failover",
+      "breaker": {
+        "max_fails": 3,
+        "open_ms": 30000
+      },
+      "limits": {}
+    },
+    {
+      "route": "01JF2A000000000000000000B1",
+      "hop": 1,
+      "role": "relay",
+      "listen": {
+        "port": 30002,
+        "tcp": true
+      },
+      "ingress": {
+        "security": "anixops",
+        "carrier": "plain"
+      },
+      "sources": [
+        "198.51.100.7/32"
+      ],
+      "upstreams": [
+        {
+          "address": "192.0.2.20",
+          "port": 443,
+          "weight": 1,
+          "priority": 0,
+          "egress": {
+            "security": "raw"
+          }
+        }
+      ],
+      "balance": "round_robin",
+      "breaker": {
+        "max_fails": 3,
+        "open_ms": 30000
+      },
+      "limits": {}
+    }
+  ]
+}

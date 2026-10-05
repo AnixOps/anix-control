@@ -1,0 +1,2 @@
+route 01JF2A000000000000000000B3 hop 1 (ENGINE_ANIXOPS): forward driver: unsupported: ingress: the ANIXOPS_CARRIER_QUIC carrier needs the node's link certificate, which is not configured
+route 01JF2A000000000000000000C1 hop 1 (ENGINE_ANIXOPS): forward driver: unsupported: ingress: the ANIXOPS_CARRIER_TLS_TCP carrier needs the node's link certificate, which is not configured

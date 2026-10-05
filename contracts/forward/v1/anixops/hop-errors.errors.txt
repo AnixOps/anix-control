@@ -1,0 +1,14 @@
+route 01JF2A000000000000000000B2 hop 0 (ENGINE_ANIXOPS): forward driver: unsupported: ingress: the anixops relay does not carry LINK_SECURITY_TLS
+route 01JF2A000000000000000000C2 hop 0 (ENGINE_ANIXOPS): forward driver: unsupported: upstreams[0]: "target.example.com" is a name; the Agent resolves names before Render
+route 01JF2A000000000000000000E1 hop 0 (ENGINE_ANIXOPS): forward driver: invalid state: upstreams[0]: 127.0.0.1 cannot be forwarded to
+route 01JF2A000000000000000000F1 hop 0 (ENGINE_ANIXOPS): forward driver: invalid state: listener tcp port 30006 overlaps another hop's
+route 01JF2A000000000000000000F2 hop 0 (ENGINE_ANIXOPS): forward driver: invalid state: listener tcp port 30006 overlaps another hop's
+route 01JF2A000000000000000000F4 hop 0 (ENGINE_ANIXOPS): forward driver: unsupported: the hop mixes RAW upstreams with AnixOps ones; the relay balances one kind per hop
+route 01JF2A000000000000000000F5 hop 1 (ENGINE_ANIXOPS): forward driver: invalid state: HOP_ROLE_RELAY hop without ingress sources would be an open relay
+route 01JF2A000000000000000000F6 hop 1 (ENGINE_ANIXOPS): forward driver: invalid state: encrypted ingress without ingress_peers
+route 01JF2A000000000000000000F7 hop 0 (ENGINE_ANIXOPS): forward driver: invalid state: upstreams[0]: encrypted link without a valid peer_identity: link: invalid agent identity: ""
+route 01JF2A000000000000000000F8 hop 0 (ENGINE_ANIXOPS): forward driver: invalid state: ingress: a path needs WSS or GRPC
+route 01JF2A000000000000000000F9 hop 0 (ENGINE_ANIXOPS): forward driver: unsupported: ingress: a RAW link carries one connection per connection; mux needs an engine with a multiplexer link
+route 01JF2A000000000000000000FA hop 0 (ENGINE_ANIXOPS): forward driver: unsupported: PROXY protocol PROXY_PROTOCOL_V2 is not implemented by the anixops relay yet
+route 01JF2A000000000000000000FB hop 0 (ENGINE_ANIXOPS): forward driver: invalid state: ingress: a carrier needs LINK_SECURITY_ANIXOPS
+route x"; "hops": [], "y": " hop 0 (ENGINE_ANIXOPS): forward driver: invalid state: route id must be 1 to 64 letters and digits

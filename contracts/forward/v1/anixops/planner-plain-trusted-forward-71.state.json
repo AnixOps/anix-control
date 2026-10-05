@@ -1,0 +1,43 @@
+{
+  "node_ref": "forward-71",
+  "hops": [
+    {
+      "route_id": "01JF1D000000000000000000D1",
+      "role": "HOP_ROLE_ENTRY",
+      "engine": "ENGINE_ANIXOPS",
+      "listen": {
+        "port": 40001,
+        "protocol": "L4_PROTOCOL_TCP"
+      },
+      "ingress": {
+        "security": "LINK_SECURITY_RAW"
+      },
+      "upstreams": [
+        {
+          "address": "192.0.2.72",
+          "port": 40000,
+          "weight": 1,
+          "egress": {
+            "security": "LINK_SECURITY_ANIXOPS",
+            "mux": true,
+            "server_name": "forward-72",
+            "carrier": "ANIXOPS_CARRIER_PLAIN"
+          },
+          "node_ref": "forward-72",
+          "peer_identity": "spiffe://anixops/example/agent/forward-72"
+        }
+      ],
+      "balance": "BALANCE_STRATEGY_ROUND_ROBIN",
+      "health": {
+        "interval_ms": 5000,
+        "timeout_ms": 2000
+      },
+      "circuit_breaker": {
+        "failure_threshold": 3,
+        "open_ms": 30000
+      },
+      "target_policy": "TARGET_POLICY_PUBLIC_ONLY",
+      "mark": 1
+    }
+  ]
+}

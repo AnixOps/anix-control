@@ -569,6 +569,16 @@ func TestAppEditionDefaultsToCommunityAndRejectsUnknownValues(t *testing.T) {
 	require.Equal(t, EditionCommercial, AppConfig{Edition: " Commercial "}.EditionOrDefault())
 }
 
+func TestForwardAnixOpsExperimentalDefaultsOff(t *testing.T) {
+	loaded, err := load("", nil)
+	require.NoError(t, err)
+	require.False(t, loaded.Forward.AnixOpsExperimental)
+
+	loaded, err = load("", []string{"ANIX_CONTROL_FORWARD_ANIXOPS_EXPERIMENTAL=true"})
+	require.NoError(t, err)
+	require.True(t, loaded.Forward.AnixOpsExperimental)
+}
+
 func TestAgentInstallConfigValidate(t *testing.T) {
 	require.NoError(t, AgentInstallConfig{}.Validate())
 	require.NoError(t, AgentInstallConfig{

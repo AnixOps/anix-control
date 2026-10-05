@@ -11,8 +11,11 @@ P2): the QUIC carrier with native UDP datagrams and carrier selection
 (`AUTO`, `TLS_TCP`, `QUIC`, `PLAIN`) (sections 3.7, 4.11 and 5.6); phase A4 (the
 contract additions of section 6.5, additions only, numbers fixed) is merged
 in `sdk/api/forward/v1`, with their validation behind
-`Options.EnableAnixOps`; the rest, from the `anixops` driver on, is not
-implemented yet. The contract slots it builds on (`ENGINE_ANIXOPS`,
+`Options.EnableAnixOps`; phase A3 (the `anixops` driver, the relay runtime
+and the Control flag) is implemented in `sdk/forward/driver/anixops`
+(section 6.8) and its Agent side (the `anixops-relay` binary and unit) ships
+with the Agent; the benchmarks (A5) and the freeze (A6) are not done. The
+contract slots it builds on (`ENGINE_ANIXOPS`,
 `LINK_SECURITY_ANIXOPS`) exist in `sdk/api/forward/v1` and are refused by
 `sdk/forward/validate` until `Options.EnableAnixOps` is set
 (`docs/architecture/forward-sdk.md` section 6.4).
@@ -953,6 +956,79 @@ enable before.
   version and the previous one, so the upgrade order of
   `forward-sdk.md` section 10 (Agents node by node) never breaks a link.
 
+### 6.8 Implementation notes (A3)
+
+`sdk/forward/driver/anixops` is the driver of section 6.1; its package
+documentation is normative for the prototype. The parts:
+
+- **`anixops`** (the driver: `Render`, `Apply`, `Observe`, `SetUpstreams`,
+  `Remove`, `Probe`, the `Supervisor`s and `UnitFile`) links neither the
+  transport library nor QUIC, so the Agent's driver import stays small.
+- **`anixops/relayctl`** is the relay's configuration document (`relay.json`,
+  rendered deterministically, goldens in `contracts/forward/v1/anixops`) and the
+  control API (HTTP and JSON on `control.sock`: status, config, observe,
+  rotation, credentials) with its client.
+- **`anixops/relayd`** is the relay process: the hop runtime of section 6.2
+  around `sdk/forward/relay`, and `Main`, the whole of `anixops-relay`
+  (`-config`, `-socket`, `-V`). The Agent's `cmd/anixops-relay` is a few lines
+  around it. `-V` prints `anixops-relay <version> wire=<n,...>`; the probe takes
+  the capability's `protocol_versions` from it.
+- **`anixops/anixopstest`** runs the relay in the test process on real sockets
+  and real files, which is how the conformance suite runs without privileges.
+
+Decisions the text above left open:
+
+- **RAW hops.** The relay terminates RAW at any hop, not only the entry: the
+  listener is the entry's, with `ingress_sources` admission, and the conformance
+  suite's relay hops are RAW. The driver reports the `RAW` and `ANIXOPS` link
+  securities (the entry's clients and the targets are RAW by nature). Section 9.3
+  P5 (a nftables `RAW` hand-over to an anixops relay) is therefore possible at
+  the driver but is not a Control feature yet: `sdk/forward/validate` has no rule
+  that refuses a RAW link between an anixops hop and another engine's, and the
+  v4.2 planner plans anixops to anixops only. Closing that gap, or deliberately
+  opening it, is a v4.3 decision.
+- **A connection waits for its next hop.** A relay or entry opens the stream
+  and waits for the next hop's `RESULT` before it moves bytes (and a relay
+  answers the previous hop only then), so a refusal keeps its code and a next hop
+  that refuses is failed over to another upstream. The cost is one round trip per
+  hop and new connection, where section 7.1 wants none; sending the first bytes
+  behind the `OPEN` is an optimisation A5 decides with measurements. UDP does not
+  wait on an entry (its first datagrams ride the stream behind the `OPEN`, as
+  section 4.11 says) and does on a relay.
+- **Quota.** The relay counts payload bytes up plus down per hop and epoch and
+  ends the hop's connections once the sum reached `quota_bytes`, within one copy
+  buffer (32 KiB) per direction, and admits again when the quota is raised above
+  the count: exact in the sense of section 6.3, `QuotaEnforcer` is not needed.
+- **Pause** admits nobody new (a RAW connection is closed at once, a stream
+  answered `paused`) and leaves what runs, with its counters and epoch.
+- **Epochs** are a hash of the relay instance and the listener's creation number;
+  the final counters of an ended epoch wait in the relay's retired list (256
+  entries) until an Observe with a `WithRetiredCounters` hook drains them.
+- **Carrier pool.** Per upstream up to four carriers, a new one when the least
+  loaded has 256 streams; a carrier that cannot take a stream is retired and the
+  stream goes to another; a reload of the link files closes the carriers whose
+  peer is no longer trusted.
+- **First apply.** The unit needs a configuration file to start, so a first apply
+  writes an empty document, starts the relay, and sends the real one; if that
+  fails the relay is stopped and the files removed. The stateless reset key
+  (`stateless-reset.key`) is the driver's file, since the relay cannot write its
+  directory.
+
+What the prototype does not do yet, and says so: PROXY protocol v2 (the driver
+reports `proxy_protocol` false, so validation refuses it and a hop that asks for
+it is `ErrUnsupported`), the Prometheus socket of section 7.3, the 7-day carrier
+age, `LEAST_CONN` re-weighting by the Agent (the relay balances it itself), and
+a handover of listening sockets on a binary upgrade (P10).
+
+Tests: the conformance suite (`conformance.Run`, nothing skipped) against the
+driver with the relay in the test process; goldens for 69 files of cases, hop
+errors and the planner's states for the fixture's route; the relay on loopback
+over TLS_TCP, QUIC, AUTO and PLAIN with three hops, UDP, strategies, admission,
+pause, `max_conns`, quota, bandwidth, hot and structural applies, conflicts,
+peer removal, credential reload and 120 concurrent connections, all under the
+race detector; and the privileged suite of section 6.6 in network namespaces
+(`ANIXOPS_RELAY_E2E=1`, root).
+
 ## 7. Performance, observability and operations
 
 ### 7.1 Targets
@@ -1037,7 +1113,7 @@ This section is intentionally left for the owner to specify.
 | A0 | v4.2 | this document | H22 |
 | A1 | v4.2 | `sdk/forward/relay`: framing, TLS and plaintext carriers, verification, fuzzing | H22 |
 | A2 | v4.2 | QUIC carrier and native UDP | P2 |
-| A3 | v4.2 | `anixops` driver, the relay binary and unit (agent), goldens, conformance and netns tests | P1 |
+| A3 | v4.2 | `anixops` driver, the relay binary and unit (agent), goldens, conformance and netns tests | P1; done (section 6.8) |
 | A4 | v4.2 | contract additions of section 6.5 | owner review |
 | A5 | v4.2 | benchmarks of section 7.2 | |
 | A6 | v4.3 | freeze wire version 1, production defaults, runbook | owner sign-off, section 8 |

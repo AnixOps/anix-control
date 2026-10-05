@@ -45,6 +45,7 @@ type Config struct {
 	Admin          AdminConfig          `yaml:"admin"`
 	TLS            TLSConfig            `yaml:"tls"`
 	ForwardRuntime ForwardRuntimeConfig `yaml:"forward_runtime"`
+	Forward        ForwardConfig        `yaml:"forward"`
 	Plugins        PluginConfig         `yaml:"plugins"`
 	GRPC           GRPCConfig           `yaml:"grpc"`
 	ModuleRuntime  ModuleRuntimeConfig  `yaml:"module_runtime"`
@@ -53,6 +54,18 @@ type Config struct {
 	AgentInstall   AgentInstallConfig   `yaml:"agent_install"`
 	PackageRoutes  PackageRoutesConfig  `yaml:"package_routes"`
 	Alerts         AlertsConfig         `yaml:"alerts"`
+}
+
+// ForwardConfig holds the switches of the v4.2 forwarding engines
+// (docs/architecture/forward-sdk.md, anixops-protocol.md).
+type ForwardConfig struct {
+	// AnixOpsExperimental lets routes use the experimental AnixOps engine and
+	// link (ENGINE_ANIXOPS, LINK_SECURITY_ANIXOPS): it sets the planner's and
+	// the validation's EnableAnixOps. Off by default; the Agents need their own
+	// forward.anixops_experimental to advertise the engine, since the planner
+	// refuses a node that does not. The wire format of the prototype (ALPN
+	// anixops/0) may change without notice.
+	AnixOpsExperimental bool `yaml:"anixops_experimental"`
 }
 
 // AlertsConfig configures the kernel alert monitor (internal/kernelalerts):

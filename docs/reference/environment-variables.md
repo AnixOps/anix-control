@@ -80,6 +80,7 @@ This table is generated from the code and checked by
 | `ANIX_CONTROL_DATABASE_TIMEZONE` | `database.timezone` | string | `Asia/Shanghai` |
 | `ANIX_CONTROL_DATABASE_USERNAME` | `database.username` | string | `anix_control` |
 | `ANIX_CONTROL_ENV` | `env` | string | `production` |
+| `ANIX_CONTROL_FORWARD_ANIXOPS_EXPERIMENTAL` | `forward.anixops_experimental` | bool | `false` |
 | `ANIX_CONTROL_FORWARD_RUNTIME_BACKEND` | `forward_runtime.backend` | string |  |
 | `ANIX_CONTROL_FORWARD_RUNTIME_CLEAN_AGENT_ACTION_TIMEOUT_SECONDS` | `forward_runtime.clean_agent.action_timeout_seconds` | int | `0` |
 | `ANIX_CONTROL_FORWARD_RUNTIME_CLEAN_AGENT_HEARTBEAT_INTERVAL_SECONDS` | `forward_runtime.clean_agent.heartbeat_interval_seconds` | int | `0` |
