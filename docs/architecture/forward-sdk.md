@@ -1151,6 +1151,13 @@ PROXY v2 toward targets, and an `anixops-relay` unit of its own. By the
 owner's scoping decision (2026-10-04) camouflage is not part of it: its
 section 8 is reserved for the owner.
 
+Phase A1 of that plan is in progress in `sdk/forward/relay` (a pure Go
+library, ALPN `anixops/0`, prototype): the frame format and the stream
+multiplexer (`Carrier`, `Stream`) with flow control, half-close, liveness and
+hard limits, tested against a randomized model and fuzzed
+(`anixops-protocol.md` section 4.10). It is not a driver and nothing in the
+planner or the Agent uses it yet.
+
 ### 6.5 Capability matrix (v4.2 target)
 
 | Feature | nftables | gost | Ansible fallback |
