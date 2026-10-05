@@ -10,6 +10,8 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
+	"github.com/AnixOps/anix-control/sdk/forward/relay/link"
 )
 
 // Role is which end of a carrier this is. Only the dialler opens streams:
@@ -74,6 +76,11 @@ type Carrier struct {
 	local Settings
 	peer  Settings
 	start time.Time
+
+	// Set by the transport glue before the carrier is shared; zero for a
+	// carrier made with NewCarrier over a connection of the caller's own.
+	linkPeer link.Peer
+	ctype    CarrierType
 
 	// mu guards everything below it, and the mutable state of every stream.
 	mu      sync.Mutex
@@ -245,6 +252,15 @@ func (c *Carrier) PeerGoAway() (GoAwayReason, bool) {
 	return c.goAwayRecvReason, c.goAwayRecv
 }
 
+// Peer returns the node at the other end as the link layer verified it: its
+// SPIFFE identity and certificate chain on a TLS carrier, the zero value on
+// a plaintext carrier or one made with NewCarrier over the caller's own
+// connection.
+func (c *Carrier) Peer() link.Peer { return c.linkPeer }
+
+// Type returns how the carrier's connection was made.
+func (c *Carrier) Type() CarrierType { return c.ctype }
+
 // RTT returns the latest PING round trip, zero before the first. It is a
 // free latency sample for the health checks (anixops-protocol.md section
 // 6.4).
@@ -357,12 +373,17 @@ func (c *Carrier) Shutdown(ctx context.Context) error {
 	return nil
 }
 
-// Close ends the carrier at once: every stream fails, a GOAWAY is sent if
-// the writer can, and the connection is closed. It returns when the carrier
-// has released its goroutines.
-func (c *Carrier) Close() error {
+// Close ends the carrier at once: every stream fails, a GOAWAY of
+// GoAwayShutdown is sent if the writer can, and the connection is closed. It
+// returns when the carrier has released its goroutines.
+func (c *Carrier) Close() error { return c.CloseWithReason(GoAwayShutdown) }
+
+// CloseWithReason is Close with the reason the GOAWAY names: a listener that
+// removed the carrier's peer from its ingress_peers closes it with
+// GoAwayPeerNotAllowed (anixops-protocol.md section 3.5).
+func (c *Carrier) CloseWithReason(reason GoAwayReason) error {
 	c.mu.Lock()
-	c.failLocked(errLocalClose, GoAwayShutdown, true)
+	c.failLocked(errLocalClose, reason, true)
 	c.mu.Unlock()
 	<-c.done
 	return nil
@@ -438,12 +459,33 @@ func (c *Carrier) failLocked(cause error, reason GoAwayReason, sendGoAway bool) 
 	if c.drainTimer != nil {
 		c.drainTimer.Stop()
 	}
-	c.closeTimer = time.AfterFunc(closeGrace, c.closeConn)
+	c.closeTimer = time.AfterFunc(closeGrace, c.abortConn)
 	c.wakeWriterLocked()
 }
 
 func (c *Carrier) closeConn() {
 	c.connOnce.Do(func() { _ = c.conn.Close() })
+}
+
+// abortConn closes the connection below any TLS layer, at once. The grace
+// timer uses it: a TLS Close first tries to send close_notify, which blocks
+// for seconds when the peer is dead and its socket full, and a Close that is
+// stuck there is released when the TCP connection under it goes away. The
+// frame protocol ends with GOAWAY, so nothing depends on close_notify.
+func (c *Carrier) abortConn() {
+	conn := c.conn
+	for {
+		u, ok := conn.(interface{ NetConn() net.Conn })
+		if !ok {
+			break
+		}
+		next := u.NetConn()
+		if next == nil || next == conn {
+			break
+		}
+		conn = next
+	}
+	_ = conn.Close()
 }
 
 // protoErr builds a carrier-ending protocol error.

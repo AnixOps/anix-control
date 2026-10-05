@@ -3,6 +3,8 @@ package relay
 import (
 	"fmt"
 	"time"
+
+	"github.com/AnixOps/anix-control/sdk/forward/relay/link"
 )
 
 // Defaults of the timers (anixops-protocol.md sections 2.5 and 4.6).
@@ -53,6 +55,11 @@ type Config struct {
 	// bytes it buffers: 4 KiB to 64 MiB, default 1 MiB.
 	CarrierWindow uint32
 
+	// MaxPending is used by listeners: the number of admitted connections
+	// whose SETTINGS exchange may be in flight at once; one more is closed
+	// at once. Default 64.
+	MaxPending int
+
 	// AcceptQueue bounds the streams opened by the peer and not yet taken
 	// with Accept; further OPENs are refused. Default 128.
 	AcceptQueue int
@@ -85,6 +92,9 @@ func (c Config) withDefaults(role Role) (Config, error) {
 	if c.CarrierWindow == 0 {
 		c.CarrierWindow = DefaultCarrierWindow
 	}
+	if c.MaxPending == 0 {
+		c.MaxPending = link.DefaultMaxPending
+	}
 	if c.AcceptQueue == 0 {
 		c.AcceptQueue = DefaultAcceptQueue
 	}
@@ -113,7 +123,7 @@ func (c Config) withDefaults(role Role) (Config, error) {
 		return c, fmt.Errorf("relay: config: %w", err)
 	}
 	switch {
-	case c.AcceptQueue < 0 || c.SendBuffer < 0:
+	case c.AcceptQueue < 0 || c.SendBuffer < 0 || c.MaxPending < 0:
 		return c, fmt.Errorf("relay: config: queue and buffer sizes cannot be negative")
 	case c.HandshakeTimeout < 0 || c.PingInterval < 0 || c.IdleTimeout < 0 || c.DrainTimeout < 0:
 		return c, fmt.Errorf("relay: config: timeouts cannot be negative")

@@ -267,3 +267,29 @@ func mustParse(t testing.TB, caPEM []byte) *x509.Certificate {
 	}
 	return c
 }
+
+func TestNetConnIsTheTCPConnectionBelowTLS(t *testing.T) {
+	f := newFixture(t)
+	l := listen(t, f.creds("forward-2"), []string{id("forward-1")})
+	c, err := dial(t, l, f.creds("forward-1"), "forward-2", id("forward-2"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = c.Close() }()
+	if _, ok := c.NetConn().(*net.TCPConn); !ok {
+		t.Fatalf("NetConn = %T, want the TCP connection", c.NetConn())
+	}
+	plain, err := ListenPlain("127.0.0.1:0", PlainListenerConfig{TrustedLink: true, Sources: []string{"127.0.0.1"}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = plain.Close() }()
+	pc, err := DialPlain(t.Context(), plain.Addr().String(), PlainDialConfig{TrustedLink: true})
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer func() { _ = pc.Close() }()
+	if _, ok := pc.NetConn().(*net.TCPConn); !ok {
+		t.Fatalf("plain NetConn = %T", pc.NetConn())
+	}
+}
