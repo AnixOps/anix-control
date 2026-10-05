@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 import { openScreen } from './support/screens.js'
+import { expectToast } from './support/toasts.js'
 import { FIXTURE_CODE, FIXTURE_PASSWORD, FIXTURE_RECOVERY, FIXTURE_TOKEN } from './fixtures/apiTokens.js'
 
 // Security → API tokens (docs/guide/admin-api-tokens.md): the table of the
@@ -55,7 +56,18 @@ async function openForm(page) {
   return form
 }
 
+// Axe reads colours as they are at that moment: a chip or a button still
+// fading to its new state (a transition, or the hover left by the click that
+// switched the list) reads as a contrast failure. Settle first.
+async function settled(page) {
+  await page.mouse.move(0, 0)
+  await page.evaluate(() => Promise.all(document.getAnimations()
+    .filter(animation => animation.effect?.getTiming().iterations !== Infinity)
+    .map(animation => animation.finished.catch(() => {}))))
+}
+
 async function axeFindings(page, include) {
+  await settled(page)
   const builder = new AxeBuilder({ page }).withTags(['wcag2a', 'wcag2aa', 'wcag21a', 'wcag21aa', 'wcag22aa', 'best-practice'])
   if (include) builder.include(include)
   const results = await builder.analyze()
@@ -452,7 +464,7 @@ test.describe('revoking a token', () => {
     expect(requests.to(`${TOKENS}/6b0e1c52-0002`, 'DELETE')).toHaveLength(1)
     await expect(page.getByRole('row', { name: /deploy bot/ })).toHaveCount(0)
     await expect(page.getByTestId('api-tokens-quota')).toHaveText('3 of 25 active tokens in use.')
-    await expect(page.getByText('Revoked “deploy bot”.')).toBeVisible()
+    await expectToast(page, 'Revoked “deploy bot”.')
     // It is in the list of ended tokens, revoked by its owner.
     await page.getByRole('button', { name: 'Revoked and expired' }).click()
     await expect(page.getByRole('row', { name: /deploy bot/ })).toContainText('Revoked by its owner')

@@ -1,5 +1,6 @@
 import { test, expect } from '@playwright/test'
 import { openScreen } from './support/screens.js'
+import { expectToast } from './support/toasts.js'
 import { chooseNode } from './fixtures/forwardV4.js'
 
 // The v4.2 forwarding pages (F5b) against the mocked /api/v4/forward
@@ -82,7 +83,7 @@ test('saves a node’s forwarding settings', async ({ page }) => {
   await form.getByLabel('Reserved ports').fill('22, 80, 443, 8443')
   await form.getByLabel('Addresses').fill('198.51.100.51\n10.0.0.51')
   await page.getByTestId('forward-node-settings-save').click()
-  await expect(page.getByText('Forwarding settings saved; every route was replanned.')).toBeVisible()
+  await expectToast(page, 'Forwarding settings saved; every route was replanned.')
   const save = writes.find(write => write.method === 'PUT')
   expect(save.path).toBe('/api/v4/forward/nodes/forward-51/settings')
   expect(save.key).toMatch(/^fwd-/)

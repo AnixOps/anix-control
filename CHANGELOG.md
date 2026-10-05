@@ -473,7 +473,19 @@
   limit of 100 is also `len()` in bytes; the reference and guide pages, the
   Swagger annotations and the generated Swagger now say so. Wording only, no
   behavior changed.
-
+- **The API tokens e2e no longer fails on a toast read twice.** A toast shows its
+  text in the toast list and, 100 ms later, in the one polite live region that
+  announces it, so `page.getByText('Revoked “deploy bot”.')` resolved to two
+  elements and failed with a Playwright strict-mode violation when the
+  announcement arrived first (seen once in CI, green on rerun). The specs now
+  assert the toast once, scoped to its named "Notifications" region, and its
+  announcement separately (`expectToast()` in `web/e2e/support/toasts.js`); the
+  other wired-API specs that matched a toast with a bare `getByText` or
+  `.first()` (forwarding settings, DNS providers) use it too. The 20-run proof
+  also showed the page's axe sweep failing about one run in three under load (a
+  filter chip still fading read as a contrast failure), so it now settles
+  transitions and the hover left by the click first. The whole API tokens spec
+  ran 20 times in a row, 500 tests, green.
 - **`identity-platform` recovers by itself after the official signing root
   changed.** Found by the 4.1.0 to 4.2.0-rc.1 staging rehearsal: after the
   first start with the new root, `POST /api/v2/login` and every business route

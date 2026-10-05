@@ -476,6 +476,15 @@ the sweeps. A fixture answer may carry `headers` (`Retry-After` of a 429).
   `docker rmi mcr.microsoft.com/playwright:v<version>-noble` frees the
   space again.
 
+**Asserting a toast.** A toast's text is in the page twice by design: in the toast
+list (a region named "Notifications") and, 100 ms later, in the single polite
+`role="status"` live region that announces it. A bare `page.getByText(message)`
+therefore matches two elements and fails with a strict-mode violation as soon as
+the announcement arrives. Use `expectToast(page, message)` from
+`e2e/support/toasts.js`: it asserts the toast once, scoped to the region, and the
+announcement separately (`toastLocator()` and `announcementLocator()` for a
+single check). Do not use `.first()` to get around it.
+
 **The screens' fixed clock and Vue's events.** `openScreen(..., { clock: true })`
 uses `page.clock.setFixedTime`, which freezes `Date.now()`. Vue skips an event
 handler that was attached at or after the event's own timestamp, so with a
