@@ -124,6 +124,7 @@ func LinkTransportFromProto(p *forwardv1.LinkTransport) LinkTransport {
 		Mux:        p.GetMux(),
 		ServerName: p.GetServerName(),
 		Path:       p.GetPath(),
+		Carrier:    AnixOpsCarrier(p.GetCarrier()),
 	}
 }
 
@@ -134,6 +135,7 @@ func (t LinkTransport) ToProto() *forwardv1.LinkTransport {
 		Mux:        t.Mux,
 		ServerName: t.ServerName,
 		Path:       t.Path,
+		Carrier:    forwardv1.AnixOpsCarrier(t.Carrier),
 	})
 }
 
@@ -156,6 +158,7 @@ func PolicyFromProto(p *forwardv1.Policy) Policy {
 		CircuitBreaker: CircuitBreakerFromProto(p.GetCircuitBreaker()),
 		Direct:         DirectMode(p.GetDirect()),
 		TargetPolicy:   TargetPolicy(p.GetTargetPolicy()),
+		ProxyProtocol:  ProxyProtocol(p.GetProxyProtocol()),
 	}
 }
 
@@ -168,6 +171,7 @@ func (p Policy) ToProto() *forwardv1.Policy {
 		CircuitBreaker: p.CircuitBreaker.ToProto(),
 		Direct:         forwardv1.DirectMode(p.Direct),
 		TargetPolicy:   forwardv1.TargetPolicy(p.TargetPolicy),
+		ProxyProtocol:  forwardv1.ProxyProtocol(p.ProxyProtocol),
 	})
 }
 
@@ -309,6 +313,14 @@ func EngineCapabilitiesFromProto(p *forwardv1.EngineCapabilities) EngineCapabili
 		BandwidthLimit:    p.GetBandwidthLimit(),
 		Quota:             p.GetQuota(),
 		MaxConns:          p.GetMaxConns(),
+		ProxyProtocol:     p.GetProxyProtocol(),
+		ProtocolVersions:  cloneSlice(p.GetProtocolVersions()),
+	}
+	if s := p.GetCarriers(); s != nil {
+		c.Carriers = make([]AnixOpsCarrier, len(s))
+		for i, v := range s {
+			c.Carriers[i] = AnixOpsCarrier(v)
+		}
 	}
 	if s := p.GetStrategies(); s != nil {
 		c.Strategies = make([]BalanceStrategy, len(s))
@@ -337,6 +349,14 @@ func (c *EngineCapabilities) ToProto() *forwardv1.EngineCapabilities {
 		BandwidthLimit:    c.BandwidthLimit,
 		Quota:             c.Quota,
 		MaxConns:          c.MaxConns,
+		ProxyProtocol:     c.ProxyProtocol,
+		ProtocolVersions:  cloneSlice(c.ProtocolVersions),
+	}
+	if c.Carriers != nil {
+		p.Carriers = make([]forwardv1.AnixOpsCarrier, len(c.Carriers))
+		for i, v := range c.Carriers {
+			p.Carriers[i] = forwardv1.AnixOpsCarrier(v)
+		}
 	}
 	if c.Strategies != nil {
 		p.Strategies = make([]forwardv1.BalanceStrategy, len(c.Strategies))

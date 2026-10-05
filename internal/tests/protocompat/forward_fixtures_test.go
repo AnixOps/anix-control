@@ -66,6 +66,41 @@ func TestForwardPlanFixturesAreConsistent(t *testing.T) {
 	}
 }
 
+// TestForwardAnixOpsFixture keeps the A4 fixture parseable and consistent:
+// ANIXOPS links are planned multiplexed, the carrier survives onto both
+// ends of a link, and PROXY protocol v2 is set on the exit hop only. The
+// fixture needs validate.Options.EnableAnixOps.
+func TestForwardAnixOpsFixture(t *testing.T) {
+	name := "plan-anixops-experimental.json"
+	fixture := readForwardFixture(t, name)
+	request := &forwardv1.PlanRouteRequest{}
+	response := &forwardv1.PlanRouteResponse{}
+	unmarshalForward(t, fixture["request"], request, name+": request")
+	unmarshalForward(t, fixture["response"], response, name+": response")
+	checkForwardPlan(t, request, response)
+	require.NotEmpty(t, validate.PlanRequest(request, validate.Options{}), "refused without the experimental flag")
+	require.Empty(t, validate.PlanRequest(request, validate.Options{EnableAnixOps: true}))
+	require.Equal(t, forwardv1.ProxyProtocol_PROXY_PROTOCOL_V2, request.GetRoute().GetPolicy().GetProxyProtocol())
+	last := uint32(len(request.GetRoute().GetHops()) - 1)
+	for _, state := range response.GetStates() {
+		for _, hop := range state.GetHops() {
+			want := forwardv1.ProxyProtocol_PROXY_PROTOCOL_UNSPECIFIED
+			if hop.GetHopIndex() == last {
+				want = forwardv1.ProxyProtocol_PROXY_PROTOCOL_V2
+			}
+			require.Equal(t, want, hop.GetProxyProtocol(), "hop %d", hop.GetHopIndex())
+			if hop.GetHopIndex() > 0 {
+				require.True(t, hop.GetIngress().GetMux())
+			}
+			for _, upstream := range hop.GetUpstreams() {
+				if upstream.GetNodeRef() != "" {
+					require.True(t, upstream.GetEgress().GetMux())
+				}
+			}
+		}
+	}
+}
+
 func checkForwardPlan(t *testing.T, request *forwardv1.PlanRouteRequest, response *forwardv1.PlanRouteResponse) {
 	t.Helper()
 	route := request.GetRoute()

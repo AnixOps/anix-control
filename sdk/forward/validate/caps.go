@@ -82,3 +82,21 @@ func CanCarry(e model.Engine, s model.LinkSecurity) bool {
 func CanMux(e model.Engine) bool {
 	return e == model.EngineGost || e == model.EngineAnixOps
 }
+
+// CanProxyProtocol reports whether engine e can write a PROXY protocol
+// header toward targets: only the AnixOps engine for now (the gost engine
+// may adopt it later; anixops-protocol.md section 6.5).
+func CanProxyProtocol(e model.Engine) bool {
+	return e == model.EngineAnixOps
+}
+
+// TrustedLinkLabel is the node label that marks a trusted private line
+// (forward-sdk.md section 4.3); its values below allow the PLAIN carrier.
+const TrustedLinkLabel = "link"
+
+// IsTrustedLink reports whether a node's labels mark it as on an IEPL or
+// IPLC private line.
+func IsTrustedLink(labels map[string]string) bool {
+	v := labels[TrustedLinkLabel]
+	return v == "iepl" || v == "iplc"
+}

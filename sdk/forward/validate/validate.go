@@ -47,6 +47,8 @@ func Route(r *model.Route, opts Options) Violations {
 	checkLinks(c, r)
 	checkTargets(c, r)
 	checkPolicy(c, r)
+	checkProxyProtocol(c, r)
+	checkPlainOwner(c, r, opts)
 	checkLimits(c, r, opts)
 	checkLabels(c, r)
 	checkPorts(c, r, opts)

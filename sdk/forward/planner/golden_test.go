@@ -33,6 +33,7 @@ var planRouteFixtures = []string{
 	"plan-multi-entry-hostname-failover.json",
 	"plan-sticky-replan-added-target.json",
 	"plan-port-exhausted.json",
+	"plan-anixops-experimental.json",
 }
 
 // planFixtures are Plan goldens: several routes merged into node states,
@@ -74,6 +75,8 @@ type fixture struct {
 	TakenAllocations    []allocationJSON          `json:"taken_allocations,omitempty"`
 	ReservedPorts       map[string][]uint32       `json:"reserved_ports,omitempty"`
 	PreviousGenerations map[string]generationJSON `json:"previous_generations,omitempty"`
+	// EnableAnixOps is Options.EnableAnixOps (the v4.2 experimental flag).
+	EnableAnixOps bool `json:"enable_anixops,omitempty"`
 
 	// PlanRoute output.
 	Response json.RawMessage `json:"response,omitempty"`
@@ -219,7 +222,7 @@ func firstDifference(want, got []byte) string {
 }
 
 func goldenOptions(f fixture) Options {
-	return Options{Cluster: goldenCluster, ReservedPorts: f.ReservedPorts, Taken: allocationsFromJSON(f.TakenAllocations)}
+	return Options{Cluster: goldenCluster, ReservedPorts: f.ReservedPorts, Taken: allocationsFromJSON(f.TakenAllocations), EnableAnixOps: f.EnableAnixOps}
 }
 
 func TestGoldenPlanRoute(t *testing.T) {

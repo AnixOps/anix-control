@@ -58,6 +58,9 @@ func checkInventory(c *collector, r *model.Route, opts Options) {
 		return
 	}
 	checkInventoryLinks(c, r, served)
+	if opts.EnableAnixOps {
+		checkInventoryAnixOps(c, r, served, nodeIndex(opts.Nodes))
+	}
 	policy := r.Policy.WithDefaults()
 	for i := 0; i < n-1; i++ {
 		requireStrategy(c, "policy.next_hop", policy.NextHop, served[i])
@@ -144,6 +147,61 @@ func checkInventoryLinks(c *collector, r *model.Route, served [][]hopNode) {
 		for _, hn := range served[i] {
 			if !hn.caps.SupportsLink(sec) {
 				c.add(field, CodeCapabilityMissing, "%s (%s) cannot terminate %s", hn.ref, hn.caps.Engine, sec)
+			}
+		}
+	}
+}
+
+// checkInventoryAnixOps applies the carrier, wire version and PROXY
+// protocol rules of anixops-protocol.md sections 6.5 and 6.7 to the nodes
+// that serve an ANIXOPS link or exit. Every node of the dialling hop may
+// dial every node of the listening hop, so every pair must agree.
+func checkInventoryAnixOps(c *collector, r *model.Route, served [][]hopNode, nodes map[string]*model.NodeInfo) {
+	for i := 1; i < len(r.Hops); i++ {
+		t := r.Hops[i].Ingress
+		if t.Security != model.LinkSecurityAnixOps || !t.Carrier.IsKnown() {
+			continue
+		}
+		carrierField := hopField(i, "ingress.carrier")
+		// AUTO falls back to TLS_TCP, so both ends must offer it; a QUIC
+		// listener or dialler only makes AUTO faster.
+		need := t.Carrier.Effective()
+		if need == model.CarrierAuto {
+			need = model.CarrierTLSTCP
+		}
+		for j, side := range [][]hopNode{served[i-1], served[i]} {
+			verb := "dial"
+			if j == 1 {
+				verb = "terminate"
+			}
+			for _, hn := range side {
+				if hn.caps.Engine == model.EngineAnixOps && !hn.caps.SupportsCarrier(need) {
+					c.add(carrierField, CodeCarrierUnsupported, "%s (%s) cannot %s the %s carrier", hn.ref, hn.caps.Engine, verb, need)
+				}
+			}
+		}
+		if t.Carrier == model.CarrierPlain {
+			for _, h := range []int{i - 1, i} {
+				for _, ref := range r.Hops[h].NodeRefs {
+					if n, ok := nodes[ref]; ok && !IsTrustedLink(n.Labels) {
+						c.add(carrierField, CodePlainUntrusted, "%s is not labelled link=iepl or link=iplc", ref)
+					}
+				}
+			}
+		}
+		for _, d := range served[i-1] {
+			for _, l := range served[i] {
+				if !d.caps.SharesProtocolVersion(l.caps) {
+					c.add(hopField(i, "ingress.security"), CodeCapabilityMissing,
+						"%s and %s share no wire protocol version (%v, %v)", d.ref, l.ref, d.caps.ProtocolVersions, l.caps.ProtocolVersions)
+				}
+			}
+		}
+	}
+	if n := len(r.Hops); n > 0 && r.Policy.ProxyProtocol.Enabled() {
+		for _, hn := range served[n-1] {
+			if !hn.caps.ProxyProtocol {
+				c.add("policy.proxy_protocol", CodeProxyProtocolUnsupported, "%s (%s) cannot write a PROXY protocol header", hn.ref, hn.caps.Engine)
 			}
 		}
 	}

@@ -127,3 +127,46 @@ func (t TargetPolicy) String() string { return forwardv1.TargetPolicy(t).String(
 
 // IsKnown reports whether t is one of the contract's values.
 func (t TargetPolicy) IsKnown() bool { _, ok := forwardv1.TargetPolicy_name[int32(t)]; return ok }
+
+// AnixOpsCarrier is the transport carrier of a LINK_SECURITY_ANIXOPS link
+// (forwardv1.AnixOpsCarrier). Unspecified means CarrierAuto.
+type AnixOpsCarrier int32
+
+const (
+	CarrierUnspecified AnixOpsCarrier = AnixOpsCarrier(forwardv1.AnixOpsCarrier_ANIXOPS_CARRIER_UNSPECIFIED)
+	CarrierAuto        AnixOpsCarrier = AnixOpsCarrier(forwardv1.AnixOpsCarrier_ANIXOPS_CARRIER_AUTO)
+	CarrierTLSTCP      AnixOpsCarrier = AnixOpsCarrier(forwardv1.AnixOpsCarrier_ANIXOPS_CARRIER_TLS_TCP)
+	CarrierQUIC        AnixOpsCarrier = AnixOpsCarrier(forwardv1.AnixOpsCarrier_ANIXOPS_CARRIER_QUIC)
+	CarrierPlain       AnixOpsCarrier = AnixOpsCarrier(forwardv1.AnixOpsCarrier_ANIXOPS_CARRIER_PLAIN)
+)
+
+func (c AnixOpsCarrier) String() string { return forwardv1.AnixOpsCarrier(c).String() }
+
+// IsKnown reports whether c is one of the contract's values.
+func (c AnixOpsCarrier) IsKnown() bool { _, ok := forwardv1.AnixOpsCarrier_name[int32(c)]; return ok }
+
+// Effective answers the carrier a link uses: Unspecified is Auto.
+func (c AnixOpsCarrier) Effective() AnixOpsCarrier {
+	if c == CarrierUnspecified {
+		return CarrierAuto
+	}
+	return c
+}
+
+// ProxyProtocol says whether the last hop writes a PROXY protocol header
+// toward the targets (forwardv1.ProxyProtocol). Unspecified means off.
+type ProxyProtocol int32
+
+const (
+	ProxyProtocolUnspecified ProxyProtocol = ProxyProtocol(forwardv1.ProxyProtocol_PROXY_PROTOCOL_UNSPECIFIED)
+	ProxyProtocolOff         ProxyProtocol = ProxyProtocol(forwardv1.ProxyProtocol_PROXY_PROTOCOL_OFF)
+	ProxyProtocolV2          ProxyProtocol = ProxyProtocol(forwardv1.ProxyProtocol_PROXY_PROTOCOL_V2)
+)
+
+func (p ProxyProtocol) String() string { return forwardv1.ProxyProtocol(p).String() }
+
+// IsKnown reports whether p is one of the contract's values.
+func (p ProxyProtocol) IsKnown() bool { _, ok := forwardv1.ProxyProtocol_name[int32(p)]; return ok }
+
+// Enabled reports whether a header is written.
+func (p ProxyProtocol) Enabled() bool { return p == ProxyProtocolV2 }

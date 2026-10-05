@@ -28,6 +28,14 @@
 //   - links: hop i's engine originates and hop i+1's engine terminates
 //     hops[i+1].ingress (NFTABLES: RAW; GOST: RAW, TLS, WSS, QUIC, GRPC;
 //     ANIXOPS: ANIXOPS); mux needs gost or anixops on both ends.
+//   - anixops (phase A4). Always: a link's carrier is a known value and only
+//     on an ANIXOPS link (CodeNotApplicable); policy.proxy_protocol is a
+//     known value, and PROXY_PROTOCOL_V2 needs an exit whose engine writes it
+//     (ANIXOPS only, else CodeProxyProtocolUnsupported), a route with TCP, and
+//     no DIRECT_MODE_PREFERRED on a chain (CodeInvalidRelation). Only with
+//     Options.EnableAnixOps: server_name on an ANIXOPS link is empty or the
+//     identity name of its hop's only node (CodeServerNameUnsupported), and
+//     the PLAIN carrier is for an administrator's route (CodePlainUntrusted).
 //   - targets: 1..MaxTargets, host an IP literal or DNS name (no port, no
 //     numeric IPv4 forms), port 1..65535, weight at most MaxWeight, no
 //     duplicate host and port; the target policy (CheckTargetAddress), with
@@ -48,7 +56,13 @@
 // hops offer the policy's strategies; every hop forwards UDP for a UDP
 // listener; IPv6 for IPv6 targets and listen address; the entry nodes
 // support the limits that are set; explicit ports are inside each node's
-// range.
+// range. With Options.EnableAnixOps: the nodes of an ANIXOPS link list its
+// carrier (AUTO needs TLS_TCP; CodeCarrierUnsupported), the PLAIN carrier's
+// nodes are labelled link=iepl or link=iplc (CodePlainUntrusted), every
+// dialling node shares a wire protocol version with every listening node
+// (CodeCapabilityMissing; a node that reports none shares none), and the
+// exit node writes PROXY protocol v2 when the route asks for it
+// (CodeProxyProtocolUnsupported).
 //
 // Rules the planner (sdk/forward/planner) adds, because they need every
 // route on a node: a route's explicit ports are not held by another route,
