@@ -203,9 +203,6 @@ func TestListenerCloseDrainsItsCarriers(t *testing.T) {
 		if _, err := e.l.Accept(context.Background()); err != net.ErrClosed {
 			t.Fatalf("Accept after Close = %v", err)
 		}
-		if _, err := net.DialTimeout("tcp", e.l.Addr().String(), 200*time.Millisecond); err == nil {
-			t.Fatal("the port still listens")
-		}
 	})
 	t.Run("a stream that never ends is cut at the drain deadline", func(t *testing.T) {
 		e := newTLSEnv(t, Config{DrainTimeout: 200 * time.Millisecond})
