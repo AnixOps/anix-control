@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
+	"github.com/AnixOps/anix-control/sdk/v2compat"
 )
 
 // Route ids of the administrator's user directory.
@@ -22,15 +23,20 @@ const (
 
 // AdminUsers is GET /api/v2/admin/users: one page of the user directory
 // (UserDirectory.Search), filtered by e-mail, plan and status as the v2
-// handler reads them, newest first. Each user carries the account and the
+// handler reads them, newest first unless sort and order say otherwise (the
+// columns of UserSortColumns). Each user carries the account and the
 // subscription summary, never the subscription token or proxy uuid.
 func (s *Service) AdminUsers(ctx context.Context, request pluginhostsdk.NativeRequest) (pluginhostsdk.NativeResponse, error) {
 	page, _ := strconv.Atoi(defaultQuery(request, "page", "1"))
 	pageSize, _ := strconv.Atoi(defaultQuery(request, "page_size", "20"))
 	page, pageSize = clampPagination(page, pageSize)
+	orderBy, err := v2compat.ParseListSort(queryValue(request, "sort"), queryValue(request, "order"), UserSortColumns, UserSortTiebreaker)
+	if err != nil {
+		return s.panelError(err.Error())
+	}
 	query := UserQuery{
 		Email: queryValue(request, "email"), Status: queryValue(request, "status"), Now: s.now(),
-		Offset: (page - 1) * pageSize, Limit: pageSize,
+		OrderBy: orderBy, Offset: (page - 1) * pageSize, Limit: pageSize,
 	}
 	if raw := queryValue(request, "plan_id"); raw != "" {
 		// As v2: an id that does not parse is what ParseUint returns.

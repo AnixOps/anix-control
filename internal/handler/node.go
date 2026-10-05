@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
+	"github.com/AnixOps/anix-control/sdk/v2compat"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/kernelnodeops"
 	"github.com/AnixOps/anix-control/v4/internal/model"
@@ -163,7 +164,10 @@ func (h *NodeHandler) RuntimeHealth(c *gin.Context) {
 // @Param search query string false "搜索关键词"
 // @Param status query int false "节点状态"
 // @Param group_id query int false "分组ID"
+// @Param sort query string false "排序字段: id, name, host, sort, created_at, last_check_at, cpu_usage, online_users; 缺省为管理员排序 (sort 升序, id 倒序)" Enums(id, name, host, sort, created_at, last_check_at, cpu_usage, online_users)
+// @Param order query string false "排序方向, 仅与 sort 同用" Enums(asc, desc) default(asc)
 // @Success 200 {object} map[string]any
+// @Failure 400 {object} map[string]any
 // @Failure 500 {object} map[string]any
 // @Router /admin/nodes [get]
 func (h *NodeHandler) GetNodes(c *gin.Context) {
@@ -171,6 +175,11 @@ func (h *NodeHandler) GetNodes(c *gin.Context) {
 	pageSize, _ := strconv.Atoi(c.DefaultQuery("page_size", "20"))
 	page, pageSize = ClampPagination(page, pageSize)
 	search := c.Query("search")
+	orderBy, err := v2compat.ParseListSort(c.Query("sort"), c.Query("order"), service.NodeSortColumns, service.NodeSortTiebreaker)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"message": err.Error()})
+		return
+	}
 
 	var status *model.NodeStatus
 	if s := c.Query("status"); s != "" {
@@ -192,6 +201,7 @@ func (h *NodeHandler) GetNodes(c *gin.Context) {
 		Status:   status,
 		GroupID:  groupID,
 		Search:   search,
+		OrderBy:  orderBy,
 	})
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"message": "获取节点列表失败"})

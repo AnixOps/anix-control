@@ -185,6 +185,7 @@ Authorization: Bearer <admin_token>
 ```http
 # 获取用户列表
 GET /api/v2/admin/users?page=1&page_size=20&email=&status=
+GET /api/v2/admin/users?sort=traffic&order=desc
 
 # 创建用户
 POST /api/v2/admin/users
@@ -218,6 +219,21 @@ has no plan or the plan no longer exists), never the subscription token or
 proxy UUID; read those, the remark and the plan row from
 `GET /api/v2/admin/users/:id`, one user at a time (`docs/UPGRADE.md`).
 
+**Sorting (`sort`, `order`).** Without them the list keeps the order above.
+`sort` names the column: `id`, `email`, `created_at`, `expired_at`,
+`traffic` (used traffic, `u + d`) or `transfer_enable`; `order` is `asc` (the
+default) or `desc`, in any case, and is read only with `sort`. Users that
+share a value come by id, newest first, so pages neither repeat nor skip a
+user; a user without an expiry sorts as the largest value (last ascending,
+first descending, on SQLite and PostgreSQL alike). An empty `sort` is no
+sort. Any other `sort` or `order` is refused as this list refuses every bad
+input, HTTP 200 with the panel error envelope (`code` -1 and a `msg` naming
+the accepted values). The same two parameters sort the order and node
+lists below, each with its own columns. The identity package's native list
+answers the same order (`internal/tests/identitycompat`). The user's
+status is derived (banned, expired, exhausted) and the plan's name comes
+from another table, so neither is a sort column.
+
 ```json
 {
   "id": 3, "email": "user@example.com", "balance": 0, "commission_balance": 0,
@@ -234,6 +250,7 @@ proxy UUID; read those, the remark and the plan row from
 ```http
 # 获取订单列表
 GET /api/v2/admin/orders?page=1&page_size=20&trade_no=&email=
+GET /api/v2/admin/orders?sort=total_amount&order=desc
 
 # 订单详情
 GET /api/v2/admin/orders/:id
@@ -249,6 +266,14 @@ a plan or buyer that no longer exists is left out. The user's routes
 own orders the same way, without `user`. No answer carries the buyer's
 subscription token or UUID (`docs/UPGRADE.md`).
 
+The admin list sorts with `sort` and `order` as the user list does (see
+"Sorting" there): `sort` is `id`, `trade_no`, `status`, `type`,
+`total_amount`, `created_at` or `paid_at` (an unpaid order, `NULL`, sorts as
+the largest value), orders that share a value come by id, newest first, and
+without `sort` the list stays newest first. The buyer's e-mail and the
+plan's name are other tables' and are not sort columns. The order package's
+native list answers the same order.
+
 ```json
 {
   "id": 12, "user_id": 3, "plan_id": 2, "trade_no": "20261001120000ABCD1234",
@@ -263,6 +288,7 @@ subscription token or UUID (`docs/UPGRADE.md`).
 ```http
 # 获取节点列表
 GET /api/v2/admin/nodes?page=1&size=20
+GET /api/v2/admin/nodes?sort=last_check_at&order=desc
 
 # 节点统计
 GET /api/v2/admin/nodes/stats
@@ -287,6 +313,13 @@ PUT /api/v2/admin/nodes/:id/protocols/:protocol_id
 # 删除协议
 DELETE /api/v2/admin/nodes/:id/protocols/:protocol_id
 ```
+
+节点列表默认按管理员排序（`sort` 升序，`id` 倒序）。`sort` / `order` 与用户列表同规则
+（见「用户管理」中的 Sorting）：`sort` 取 `id`、`name`、`host`、`sort`（管理员权重）、
+`created_at`、`last_check_at`（从未上报心跳的节点视为最大值）、`cpu_usage`、`online_users`，
+并列的节点按 `id` 倒序；非法的 `sort` / `order` 返回 HTTP 400 `{"message": ...}`
+（本列表一贯的错误形状）。显示状态由最近一次心跳推算、协议数来自另一张表，二者不是排序列。
+proxy-node 包的原生列表给出同样的顺序。
 
 管理端应答不再明文返回节点密钥：协议 `settings`、`tls_settings`、
 `transport_settings`、`reality_settings`、`custom_config` 中名称表示密钥的字段

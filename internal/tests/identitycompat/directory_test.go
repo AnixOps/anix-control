@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"sort"
 	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -159,6 +160,27 @@ func TestAdminUserListParity(t *testing.T) {
 		{Name: "expired e-mail", Path: list("?status=expired&email=example")},
 		{Name: "banned on a plan", Path: list("?status=banned&plan_id=8")},
 		{Name: "every filter paged", Path: list("?status=active&plan_id=7&email=example&page=2&page_size=1")},
+		{Name: "sorted by e-mail", Path: list("?sort=email")},
+		{Name: "sorted by e-mail descending", Path: list("?sort=email&order=desc")},
+		{Name: "sorted by creation time", Path: list("?sort=created_at&order=asc")},
+		{Name: "sorted by creation time descending", Path: list("?sort=created_at&order=desc")},
+		{Name: "sorted by expiry, users without one last", Path: list("?sort=expired_at&order=asc&page_size=50")},
+		{Name: "sorted by expiry descending, users without one first", Path: list("?sort=expired_at&order=desc&page_size=50")},
+		{Name: "sorted by used traffic", Path: list("?sort=traffic&order=desc")},
+		{Name: "sorted by used traffic ascending", Path: list("?sort=traffic")},
+		{Name: "sorted by quota", Path: list("?sort=transfer_enable&order=desc")},
+		{Name: "sorted by id", Path: list("?sort=id")},
+		{Name: "sorted by id descending", Path: list("?sort=id&order=desc")},
+		{Name: "order in capitals", Path: list("?sort=email&order=DESC")},
+		{Name: "a second sorted page", Path: list("?sort=traffic&order=desc&page=2&page_size=3")},
+		{Name: "sorted and filtered", Path: list("?sort=email&order=desc&status=active&email=example")},
+		{Name: "empty sort keeps the default order", Path: list("?sort=&order=desc")},
+		{Name: "order without sort keeps the default order", Path: list("?order=asc")},
+		{Name: "a column that is not sortable", Path: list("?sort=password")},
+		{Name: "a column that is an expression", Path: list("?sort=u%2Bd")},
+		{Name: "a column that is an injection", Path: list("?sort=email%3B%20DROP%20TABLE%20v2_user")},
+		{Name: "a direction that is not asc or desc", Path: list("?sort=email&order=up")},
+		{Name: "sorted many users, a full page", Path: list("?sort=email&order=desc&page_size=100&page=2"), Seed: seedUsers(nil, withManyUsers)},
 		{Name: "many users, first page", Path: list(""), Seed: seedUsers(nil, withManyUsers)},
 		{Name: "many users, page size zero is the default", Path: list("?page_size=0&page=2"), Seed: seedUsers(nil, withManyUsers)},
 		{Name: "many users, page size above the maximum", Path: list("?page_size=500"), Seed: seedUsers(nil, withManyUsers)},
@@ -293,4 +315,72 @@ func TestDirectoryPagesAreStable(t *testing.T) {
 		seen = append(seen, ids(users)...)
 	}
 	require.Equal(t, []float64{5, 4, 3, 2, 1}, seen)
+}
+
+// sort and order list the directory by one column: the answer is the order
+// the users have by that column, users that share a value by id, newest
+// first, and a user without an expiry (NULL) last ascending and first
+// descending on every database. The legacy list is the same by
+// TestAdminUserListParity.
+func TestDirectorySortsByTheColumnsAsked(t *testing.T) {
+	db, service, _ := controlWithIdentitySeeded(t, seedUsers(nil, withDirectory))
+	var rows []model.User
+	require.NoError(t, db.Order("id").Find(&rows).Error)
+	expected := func(less func(a, b model.User) int, descending bool) []float64 {
+		sorted := append([]model.User(nil), rows...)
+		sort.SliceStable(sorted, func(i, j int) bool {
+			if c := less(sorted[i], sorted[j]); c != 0 {
+				if descending {
+					return c > 0
+				}
+				return c < 0
+			}
+			return sorted[i].ID > sorted[j].ID
+		})
+		out := make([]float64, 0, len(sorted))
+		for _, user := range sorted {
+			out = append(out, float64(user.ID))
+		}
+		return out
+	}
+	compareInt := func(a, b int64) int {
+		switch {
+		case a < b:
+			return -1
+		case a > b:
+			return 1
+		}
+		return 0
+	}
+	// NULL is the largest value.
+	expiry := func(user model.User) int64 {
+		if user.ExpiredAt == nil {
+			return 1 << 62
+		}
+		return *user.ExpiredAt
+	}
+	cases := []struct {
+		query      string
+		less       func(a, b model.User) int
+		descending bool
+	}{
+		{"sort=traffic&order=desc", func(a, b model.User) int { return compareInt(a.U+a.D, b.U+b.D) }, true},
+		{"sort=traffic", func(a, b model.User) int { return compareInt(a.U+a.D, b.U+b.D) }, false},
+		{"sort=transfer_enable&order=desc", func(a, b model.User) int { return compareInt(a.TransferEnable, b.TransferEnable) }, true},
+		{"sort=expired_at", func(a, b model.User) int { return compareInt(expiry(a), expiry(b)) }, false},
+		{"sort=expired_at&order=desc", func(a, b model.User) int { return compareInt(expiry(a), expiry(b)) }, true},
+		{"sort=created_at&order=asc", func(a, b model.User) int { return compareInt(a.CreatedAt.UnixNano(), b.CreatedAt.UnixNano()) }, false},
+		{"sort=id&order=desc", func(a, b model.User) int { return compareInt(int64(a.ID), int64(b.ID)) }, true},
+		{"sort=email&order=desc", func(a, b model.User) int { return strings.Compare(a.Email, b.Email) }, true},
+	}
+	for _, c := range cases {
+		total, users := search(t, service, c.query+"&page_size=100")
+		require.EqualValues(t, len(rows), total, c.query)
+		require.Equal(t, expected(c.less, c.descending), ids(users), c.query)
+	}
+	// A page of a sorted list continues the order.
+	_, first := search(t, service, "sort=traffic&order=desc&page_size=4&page=1")
+	_, second := search(t, service, "sort=traffic&order=desc&page_size=4&page=2")
+	_, whole := search(t, service, "sort=traffic&order=desc&page_size=8")
+	require.Equal(t, ids(whole), append(ids(first), ids(second)...))
 }

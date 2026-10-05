@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/AnixOps/anix-control/sdk/v2compat"
 	"github.com/AnixOps/anix-control/v4/internal/authn"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
@@ -151,8 +152,29 @@ type UserListParams struct {
 	Email    string
 	PlanID   *uint
 	Status   string // all, active, expired, banned
-	OrderBy  string
+	// OrderBy is an ORDER BY clause from v2compat.ParseListSort over
+	// UserSortColumns, never request text; empty keeps the default order.
+	OrderBy string
 }
+
+// UserSortColumns are the columns GET /api/v2/admin/users sorts by (the
+// sort and order query values, v2compat.ParseListSort). The identity
+// package's native list sorts by the same keys
+// (packages/identity-platform/native), so both answer the same order.
+// "traffic" is the used traffic, u + d; a user without an expiry (NULL) sorts
+// last ascending.
+var UserSortColumns = map[string]v2compat.SortColumn{
+	"id":              {Expr: "id", Unique: true},
+	"email":           {Expr: "email", Unique: true},
+	"created_at":      {Expr: "created_at"},
+	"expired_at":      {Expr: "expired_at", Nullable: true},
+	"traffic":         {Expr: "(u + d)"},
+	"transfer_enable": {Expr: "transfer_enable"},
+}
+
+// UserSortTiebreaker orders users that share a sorted value, so pages
+// neither repeat nor skip a user.
+const UserSortTiebreaker = "id DESC"
 
 // UserListResult 用户列表结果
 type UserListResult struct {

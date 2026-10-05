@@ -1,5 +1,23 @@
 basePath: /api/v2
 definitions:
+  agentupgrade.Batch:
+    properties:
+      min_duration_seconds:
+        type: integer
+      percent:
+        type: integer
+    type: object
+  agentupgrade.Exclude:
+    properties:
+      nodes:
+        items:
+          type: string
+        type: array
+      tags:
+        items:
+          type: string
+        type: array
+    type: object
   handler.AgentHeartbeatRequest:
     properties:
       node_id:
@@ -106,43 +124,6 @@ definitions:
     - name
     - type
     type: object
-  handler.CreateNodeRequest:
-    properties:
-      api_port:
-        type: integer
-      api_token:
-        type: string
-      bandwidth:
-        type: integer
-      host:
-        type: string
-      isp:
-        type: string
-      max_conn:
-        type: integer
-      metrics_port:
-        type: integer
-      name:
-        type: string
-      port:
-        maximum: 65535
-        minimum: 1
-        type: integer
-      region:
-        type: string
-      type:
-        enum:
-        - relay
-        - exit
-        type: string
-      weight:
-        type: integer
-    required:
-    - host
-    - name
-    - port
-    - type
-    type: object
   handler.CreatePaymentRequest:
     properties:
       amount:
@@ -155,50 +136,6 @@ definitions:
     required:
     - amount
     - gateway_id
-    type: object
-  handler.CreateRuleRequest:
-    properties:
-      exit_node_id:
-        type: integer
-      expire_time:
-        type: string
-      listen_port:
-        maximum: 65535
-        minimum: 1
-        type: integer
-      name:
-        type: string
-      protocol:
-        enum:
-        - tcp
-        - udp
-        - both
-        type: string
-      relay_node_id:
-        type: integer
-      remark:
-        type: string
-      speed_limit:
-        type: integer
-      target_host:
-        type: string
-      target_port:
-        maximum: 65535
-        minimum: 1
-        type: integer
-      traffic_limit:
-        type: integer
-      user_group_id:
-        type: integer
-      user_id:
-        type: integer
-    required:
-    - exit_node_id
-    - listen_port
-    - name
-    - relay_node_id
-    - target_host
-    - target_port
     type: object
   handler.CreateTaskRequest:
     properties:
@@ -241,6 +178,33 @@ definitions:
         type: boolean
       notify_traffic:
         type: boolean
+    type: object
+  handler.RouteModeChangeBody:
+    properties:
+      confirm:
+        type: boolean
+      mode:
+        type: string
+      package_id:
+        type: string
+      reason:
+        type: string
+      routes:
+        items:
+          type: string
+        type: array
+    required:
+    - mode
+    - package_id
+    type: object
+  handler.RouteModeRollbackBody:
+    properties:
+      package_id:
+        type: string
+      reason:
+        type: string
+    required:
+    - package_id
     type: object
   handler.SendNotificationRequest:
     properties:
@@ -333,62 +297,25 @@ definitions:
         - epay
         type: string
     type: object
-  handler.UpdateNodeRequest:
+  handler.abortAgentUpgradeRequest:
     properties:
-      api_port:
-        type: integer
-      api_token:
-        type: string
-      bandwidth:
-        type: integer
-      enabled:
+      rollback:
+        description: Rollback rolls the current batch back before the campaign ends.
         type: boolean
-      host:
-        type: string
-      isp:
-        type: string
-      max_conn:
-        type: integer
-      metrics_port:
-        type: integer
-      name:
-        type: string
-      port:
-        type: integer
-      region:
-        type: string
-      type:
-        enum:
-        - relay
-        - exit
-        type: string
-      weight:
-        type: integer
     type: object
-  handler.UpdateRuleRequest:
+  handler.startAgentUpgradeRequest:
     properties:
-      exit_node_id:
-        type: integer
-      expire_time:
+      batches:
+        items:
+          $ref: '#/definitions/agentupgrade.Batch'
+        type: array
+      exclude:
+        $ref: '#/definitions/agentupgrade.Exclude'
+      reason:
         type: string
-      listen_port:
-        type: integer
-      name:
+      target_version:
+        description: TargetVersion defaults to this Control's Agent release (H25).
         type: string
-      protocol:
-        type: string
-      relay_node_id:
-        type: integer
-      remark:
-        type: string
-      speed_limit:
-        type: integer
-      target_host:
-        type: string
-      target_port:
-        type: integer
-      traffic_limit:
-        type: integer
     type: object
   handler.subscriptionResetRequest:
     properties:
@@ -994,27 +921,6 @@ definitions:
         type: string
       updated_at:
         type: string
-    type: object
-  service.CreateRuleRequest:
-    properties:
-      exit_node_id:
-        type: integer
-      expire_time:
-        type: string
-      name:
-        type: string
-      protocol:
-        type: string
-      relay_node_id:
-        type: integer
-      speed_limit:
-        type: integer
-      target_host:
-        type: string
-      target_port:
-        type: integer
-      traffic_limit:
-        type: integer
     type: object
   service.TelegramCallback:
     properties:
@@ -1881,11 +1787,38 @@ paths:
         in: query
         name: group_id
         type: integer
+      - description: '排序字段: id, name, host, sort, created_at, last_check_at, cpu_usage,
+          online_users; 缺省为管理员排序 (sort 升序, id 倒序)'
+        enum:
+        - id
+        - name
+        - host
+        - sort
+        - created_at
+        - last_check_at
+        - cpu_usage
+        - online_users
+        in: query
+        name: sort
+        type: string
+      - default: asc
+        description: 排序方向, 仅与 sort 同用
+        enum:
+        - asc
+        - desc
+        in: query
+        name: order
+        type: string
       produces:
       - application/json
       responses:
         "200":
           description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
           schema:
             additionalProperties: true
             type: object
@@ -2732,6 +2665,27 @@ paths:
         in: query
         name: user_id
         type: integer
+      - description: '排序字段: id, trade_no, status, type, total_amount, created_at,
+          paid_at; 缺省为 created_at 倒序'
+        enum:
+        - id
+        - trade_no
+        - status
+        - type
+        - total_amount
+        - created_at
+        - paid_at
+        in: query
+        name: sort
+        type: string
+      - default: asc
+        description: 排序方向, 仅与 sort 同用
+        enum:
+        - asc
+        - desc
+        in: query
+        name: order
+        type: string
       produces:
       - application/json
       responses:
@@ -4038,6 +3992,26 @@ paths:
         in: query
         name: plan_id
         type: integer
+      - description: '排序字段: id, email, created_at, expired_at, traffic, transfer_enable;
+          缺省为 created_at 倒序'
+        enum:
+        - id
+        - email
+        - created_at
+        - expired_at
+        - traffic
+        - transfer_enable
+        in: query
+        name: sort
+        type: string
+      - default: asc
+        description: 排序方向, 仅与 sort 同用
+        enum:
+        - asc
+        - desc
+        in: query
+        name: order
+        type: string
       produces:
       - application/json
       responses:
@@ -4505,6 +4479,2105 @@ paths:
       summary: 获取转发规则
       tags:
       - Agent
+  /api/v4/forward/ansible-machines:
+    get:
+      consumes:
+      - application/json
+      description: Forward nodes on the Ansible transport. Replaces GET /api/v2/admin/forward/ansible-machines.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List the Ansible machines
+      tags:
+      - Forward v4
+    post:
+      consumes:
+      - application/json
+      description: Body as POST /nodes; the transport is NODE_TRANSPORT_ANSIBLE.
+      parameters:
+      - description: CreateForwardNodeRequest (protojson)
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Add an Ansible machine
+      tags:
+      - Forward v4
+  /api/v4/forward/ansible-machines/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Super administrators only.
+      parameters:
+      - description: Forward node id
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete an Ansible machine
+      tags:
+      - Forward v4
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: Forward node id
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: An Ansible machine
+      tags:
+      - Forward v4
+    put:
+      consumes:
+      - application/json
+      parameters:
+      - description: Forward node id
+        in: path
+        name: id
+        required: true
+        type: integer
+      - description: ForwardNodeRecord (protojson)
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Replace an Ansible machine's fields
+      tags:
+      - Forward v4
+  /api/v4/forward/ansible-machines/{id}/toggle:
+    post:
+      consumes:
+      - application/json
+      description: 'Body: {enabled: bool}.'
+      parameters:
+      - description: Forward node id
+        in: path
+        name: id
+        required: true
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Enable or disable an Ansible machine
+      tags:
+      - Forward v4
+  /api/v4/forward/dns/bindings:
+    get:
+      consumes:
+      - application/json
+      description: 'Query: route_id, provider_id.'
+      parameters:
+      - description: Route filter
+        in: query
+        name: route_id
+        type: string
+      - description: Provider filter
+        in: query
+        name: provider_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List route DNS bindings
+      tags:
+      - Forward v4
+    post:
+      consumes:
+      - application/json
+      description: 'Body: a DnsBinding (route_id, provider_id, zone, record_name,
+        mode DNS_BINDING_MODE_DDNS or _CNAME, record_types, ttl, paused). In DDNS
+        mode record_name is the route''s entry_hostname; in CNAME mode a Control-managed
+        name the operator points entry_hostname at.'
+      parameters:
+      - description: DnsBinding
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Bind a route's entries to a DNS name
+      tags:
+      - Forward v4
+  /api/v4/forward/dns/bindings/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Query purge=true first deletes the records Control published; 502
+        dns_purge_failed when the provider refuses, and the binding stays.
+      parameters:
+      - description: Binding id
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Delete the published records first
+        in: query
+        name: purge
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "502":
+          description: Bad Gateway
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete a route DNS binding (super administrator)
+      tags:
+      - Forward v4
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: Binding id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: A route DNS binding
+      tags:
+      - Forward v4
+    put:
+      consumes:
+      - application/json
+      description: 'Body: the whole DnsBinding, as GET answers it. It replaces record_types,
+        ttl and paused (an omitted one takes its default: A, 60, false; a record type
+        dropped has its records deleted); route, provider, zone, record_name and mode
+        cannot change (400 immutable).'
+      parameters:
+      - description: Binding id
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: DnsBinding
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Replace a binding's record types, TTL and paused flag
+      tags:
+      - Forward v4
+  /api/v4/forward/dns/kinds:
+    get:
+      consumes:
+      - application/json
+      description: The provider kinds (Cloudflare, Alibaba Cloud DNS, DNSPod, Huawei
+        Cloud DNS, webhook) with their settings and credential names, for a form.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: DNS provider kinds
+      tags:
+      - Forward v4
+  /api/v4/forward/dns/providers:
+    get:
+      consumes:
+      - application/json
+      description: DNS provider accounts with credential_names and the number of bindings;
+        credentials are never answered.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List DNS providers
+      tags:
+      - Forward v4
+    post:
+      consumes:
+      - application/json
+      description: 'Body: {provider: DnsProvider, credentials: {name: value}}. Credentials
+        are sealed with module_runtime.ca_kek and never answered; 409 refused (secret_store_unavailable)
+        without it. Audited with the credentials redacted.'
+      parameters:
+      - description: '{provider, credentials}'
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Add a DNS provider (super administrator)
+      tags:
+      - Forward v4
+  /api/v4/forward/dns/providers/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: 409 refused (provider_in_use) while a binding uses it.
+      parameters:
+      - description: Provider id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete a DNS provider (super administrator)
+      tags:
+      - Forward v4
+    get:
+      consumes:
+      - application/json
+      description: Without credentials.
+      parameters:
+      - description: Provider id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: A DNS provider
+      tags:
+      - Forward v4
+    put:
+      consumes:
+      - application/json
+      description: 'Body: {provider: DnsProvider, credentials: {name: value}}; a credential
+        left out, or "********", keeps the stored value. The kind cannot change.'
+      parameters:
+      - description: Provider id
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: '{provider, credentials}'
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Replace a DNS provider (super administrator)
+      tags:
+      - Forward v4
+  /api/v4/forward/nodes:
+    get:
+      consumes:
+      - application/json
+      description: Every forward node and the proxy nodes in the forwarding inventory,
+        with settings, the planner's view and desired and reported generations. Replaces
+        GET /api/v2/admin/forward/nodes.
+      parameters:
+      - description: forward or proxy
+        in: query
+        name: kind
+        type: string
+      - description: agent or ansible
+        in: query
+        name: transport
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List the node inventory
+      tags:
+      - Forward v4
+    post:
+      consumes:
+      - application/json
+      description: 'Body: {node: ForwardNodeRecord, settings?: NodeSettings}. No answer
+        carries a node credential; the node enrolls its Agent with an install token.'
+      parameters:
+      - description: CreateForwardNodeRequest (protojson)
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Add a forward node
+      tags:
+      - Forward v4
+  /api/v4/forward/nodes/{ref}:
+    delete:
+      consumes:
+      - application/json
+      description: Super administrators only. 409 refused (node_in_use) while a route
+        uses it.
+      parameters:
+      - description: forward-<id>
+        in: path
+        name: ref
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete a forward node
+      tags:
+      - Forward v4
+    get:
+      consumes:
+      - application/json
+      description: The applied generation, hop errors and upstream health. Replaces
+        the v2 node detail and check.
+      parameters:
+      - description: forward-<id> or proxy-<id>
+        in: path
+        name: ref
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: A node with its desired state and latest report
+      tags:
+      - Forward v4
+    put:
+      consumes:
+      - application/json
+      description: 'Body: ForwardNodeRecord. Disabling a node a route uses is 409
+        refused (node_in_use).'
+      parameters:
+      - description: forward-<id>
+        in: path
+        name: ref
+        required: true
+        type: string
+      - description: ForwardNodeRecord (protojson)
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Replace a forward node's fields
+      tags:
+      - Forward v4
+  /api/v4/forward/nodes/{ref}/settings:
+    put:
+      consumes:
+      - application/json
+      description: 'Body: NodeSettings (port range, reserved ports, addresses, labels).
+        A replan the settings make impossible still stores them; violations say why.'
+      parameters:
+      - description: forward-<id> or proxy-<id>
+        in: path
+        name: ref
+        required: true
+        type: string
+      - description: NodeSettings (protojson)
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Replace a node's forwarding settings
+      tags:
+      - Forward v4
+  /api/v4/forward/nodes/{ref}/toggle:
+    post:
+      consumes:
+      - application/json
+      description: 'Body: {enabled: bool}.'
+      parameters:
+      - description: forward-<id>
+        in: path
+        name: ref
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Enable or disable a forward node
+      tags:
+      - Forward v4
+  /api/v4/forward/observability/targets:
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: Routes with a hop on this node
+        in: query
+        name: node_ref
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Every route target with its health
+      tags:
+      - Forward v4
+  /api/v4/forward/observability/topology:
+    get:
+      consumes:
+      - application/json
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Nodes, hops and targets as a graph
+      tags:
+      - Forward v4
+  /api/v4/forward/observability/trend:
+    get:
+      consumes:
+      - application/json
+      description: 'The kernel keeps no latency history: the trend is traffic.'
+      parameters:
+      - description: Route filter
+        in: query
+        name: route_id
+        type: string
+      - description: Node filter
+        in: query
+        name: node_ref
+        type: string
+      - description: Unix milliseconds
+        in: query
+        name: since
+        type: integer
+      - description: Unix milliseconds
+        in: query
+        name: until
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Hourly traffic trend
+      tags:
+      - Forward v4
+  /api/v4/forward/routes:
+    get:
+      consumes:
+      - application/json
+      description: 'Routes with Control''s enforcement reason. Query: owner, node_ref,
+        page_size, page_token.'
+      parameters:
+      - description: Owner filter (admin)
+        in: query
+        name: owner
+        type: string
+      - description: Routes with a hop on this node
+        in: query
+        name: node_ref
+        type: string
+      - description: Page size (100, at most 1000)
+        in: query
+        name: page_size
+        type: integer
+      - description: next_page_token of the previous page
+        in: query
+        name: page_token
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List routes
+      tags:
+      - Forward v4
+    post:
+      consumes:
+      - application/json
+      description: 'Body: a Route (protojson, proto field names). Control assigns
+        id, revision and times. 400 invalid_route or 409 refused carry violations
+        with sdk/forward/validate codes. Idempotency-Key makes a retry apply once.'
+      parameters:
+      - description: Route (protojson)
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Create a route
+      tags:
+      - Forward v4
+  /api/v4/forward/routes/{id}:
+    delete:
+      consumes:
+      - application/json
+      description: Super administrators only.
+      parameters:
+      - description: Route id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Delete a route
+      tags:
+      - Forward v4
+    get:
+      consumes:
+      - application/json
+      parameters:
+      - description: Route id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get a route
+      tags:
+      - Forward v4
+    put:
+      consumes:
+      - application/json
+      description: 'Body: the whole Route; its revision is the revision it replaces
+        (409 revision_conflict when stale).'
+      parameters:
+      - description: Route id
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Route (protojson)
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Replace a route
+      tags:
+      - Forward v4
+  /api/v4/forward/routes/{id}/diagnose:
+    post:
+      consumes:
+      - application/json
+      description: 'Staged diagnosis (forward-sdk.md section 7.6): Control''s records
+        (generations, hop errors, health and breakers), node probes through agent.diagnostic
+        where the Agent offers them (listen, port conflicts, next-hop connect, delivery
+        to the targets, UDP exchange), and dials from Control for the rest. Optional
+        body {"timeout_ms": n} (15000 by default, at most 25000). A diagnosis of the
+        same route from the last 10 seconds is answered with cached true; 429 rate_limited
+        when too many run. Audited as forward/diagnose.'
+      parameters:
+      - description: Route id
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Optional timeout_ms
+        in: body
+        name: body
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "429":
+          description: Too Many Requests
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+        "504":
+          description: Gateway Timeout
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Diagnose a route
+      tags:
+      - Forward v4
+  /api/v4/forward/routes/{id}/dns:
+    get:
+      consumes:
+      - application/json
+      description: 'Entry HA through DNS (forward-sdk.md section 7.4, L2): the route''s
+        binding, the published and desired A/AAAA records, each entry node''s health
+        (healthy, in_rotation, good and bad streaks, reason), state (unbound, pending,
+        ok, degraded, error, rate_limited, paused, route_missing, hostname_mismatch),
+        cname_target in CNAME mode and the last provider error.'
+      parameters:
+      - description: Route id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: A route's entry HA DNS status
+      tags:
+      - Forward v4
+  /api/v4/forward/routes/{id}/health:
+    get:
+      consumes:
+      - application/json
+      description: The latest health and latency probe of every upstream, from the
+        nodes' reports.
+      parameters:
+      - description: Route id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: A route's upstream health
+      tags:
+      - Forward v4
+  /api/v4/forward/routes/{id}/pause:
+    post:
+      consumes:
+      - application/json
+      description: Keeps the route's ports, marks, counters and quota; the drivers
+        drop its traffic.
+      parameters:
+      - description: Route id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Pause a route
+      tags:
+      - Forward v4
+  /api/v4/forward/routes/{id}/resume:
+    post:
+      consumes:
+      - application/json
+      parameters:
+      - description: Route id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Resume a route
+      tags:
+      - Forward v4
+  /api/v4/forward/routes/{id}/stats:
+    get:
+      consumes:
+      - application/json
+      description: Ledger totals per hop and node, and the hourly series over since/until
+        (Unix milliseconds).
+      parameters:
+      - description: Route id
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: Unix milliseconds
+        in: query
+        name: since
+        type: integer
+      - description: Unix milliseconds
+        in: query
+        name: until
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: A route's traffic
+      tags:
+      - Forward v4
+  /api/v4/forward/routes/preview:
+    post:
+      consumes:
+      - application/json
+      description: 'Body: a PlanRouteRequest. Answers the per-node states, allocations,
+        violations and warnings.'
+      parameters:
+      - description: PlanRouteRequest (protojson)
+        in: body
+        name: body
+        required: true
+        schema:
+          type: object
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Plan a route without storing it
+      tags:
+      - Forward v4
+  /api/v4/forward/stats:
+    get:
+      consumes:
+      - application/json
+      description: Raw metered bytes (no multiplier) per route, hop and node, per
+        node, and the hourly buckets. Replaces the v2 sync-stats.
+      parameters:
+      - description: Route filter
+        in: query
+        name: route_id
+        type: string
+      - description: Node filter
+        in: query
+        name: node_ref
+        type: string
+      - description: 'Unix milliseconds (default: 24 hours ago)'
+        in: query
+        name: since
+        type: integer
+      - description: Unix milliseconds
+        in: query
+        name: until
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "503":
+          description: Service Unavailable
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Traffic totals and the hourly series
+      tags:
+      - Forward v4
+  /api/v4/kernel/agents/transports:
+    get:
+      description: 'Lists every proxy and forward node with the transport its agent
+        was last seen on (mtls-stream, apikey-stream, http-legacy, websocket, clean-agent,
+        uniproxy, v2board-grpc), its agent version, its newest valid agent certificate,
+        when it was last seen and its live Agent Control stream session (authentication
+        mtls or api-key, certificate serial, expiry and SAN, negotiated capabilities).
+        legacy_only=true keeps the nodes on a legacy AnixOps Agent channel. summary.ready_for_required
+        (with required_reasons and required_blockers, computed over every node) is
+        false while agent_control.mtls: required, the default from v4.2, would refuse
+        an enabled node: a legacy one or one that never enrolled.'
+      parameters:
+      - description: only nodes on a legacy AnixOps Agent channel
+        in: query
+        name: legacy_only
+        type: boolean
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Agent transport inventory
+      tags:
+      - Kernel
+  /api/v4/kernel/agents/upgrades:
+    get:
+      description: The latest Agent upgrade campaigns, newest first, each with its
+        batches and nodes counted by state (pending, offered, upgrading, succeeded,
+        failed, rolled_back, skipped).
+      parameters:
+      - description: at most 100, default 20
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List Agent upgrade campaigns
+      tags:
+      - Kernel
+    post:
+      consumes:
+      - application/json
+      description: Pushes an Agent release to every enabled node whose Agent was seen
+        on the Agent Control stream, in batches (default 5%, 25%, 100% of the nodes,
+        at least 30 minutes each; canaries first by node name hash), as the agent.upgrade
+        operation to Agents that negotiated upgrade.v1. A batch rolls back when more
+        than 5% of its offered nodes fail or do not reconnect with the target version
+        within 10 minutes (H19). The release must be in agent_install.artifact_dir
+        with its .sig files and SHA256SUMS(.sig), verified with plugins.official_public_key.
+        Super administrators only; one campaign at a time.
+      parameters:
+      - description: target_version (default this Control's Agent release), batches,
+          exclude {nodes, tags}, reason
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/handler.startAgentUpgradeRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Start a staged Agent upgrade
+      tags:
+      - Kernel
+  /api/v4/kernel/agents/upgrades/{id}:
+    get:
+      description: One campaign with its artifacts, batches and every node in canary
+        order with its state, versions, timestamps and error code.
+      parameters:
+      - description: campaign id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Get an Agent upgrade campaign
+      tags:
+      - Kernel
+  /api/v4/kernel/agents/upgrades/{id}/abort:
+    post:
+      consumes:
+      - application/json
+      description: Ends the campaign. With rollback the upgraded nodes of the current
+        batch are told to reinstate their previous release first. Super administrators
+        only.
+      parameters:
+      - description: campaign id
+        in: path
+        name: id
+        required: true
+        type: string
+      - description: rollback
+        in: body
+        name: request
+        schema:
+          $ref: '#/definitions/handler.abortAgentUpgradeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Abort an Agent upgrade campaign
+      tags:
+      - Kernel
+  /api/v4/kernel/agents/upgrades/{id}/pause:
+    post:
+      description: No node is offered the upgrade and no batch starts; nodes already
+        offered are still evaluated and a failing batch still rolls back. Super administrators
+        only.
+      parameters:
+      - description: campaign id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Pause an Agent upgrade campaign
+      tags:
+      - Kernel
+  /api/v4/kernel/agents/upgrades/{id}/resume:
+    post:
+      description: Continues a paused campaign; the paused time does not count towards
+        the batch's minimum duration. Super administrators only.
+      parameters:
+      - description: campaign id
+        in: path
+        name: id
+        required: true
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Resume an Agent upgrade campaign
+      tags:
+      - Kernel
+  /api/v4/kernel/route-modes:
+    get:
+      description: Every v2 Control package's compatibility routes with their configured
+        and effective mode, the modes each may switch to, the running host's native
+        and shadow counters with the mismatch rate, and how many sanitized shadow
+        mismatch samples are stored. can_switch tells whether the caller may switch
+        them.
+      parameters:
+      - description: Package id
+        in: query
+        name: package_id
+        type: string
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List package route modes
+      tags:
+      - Kernel route modes
+    post:
+      consumes:
+      - application/json
+      description: 'Switches the named routes of a package, or every route that may
+        switch, to legacy, shadow or native. Super administrators only. Switching
+        to native needs confirm: true and a reason. Every switch is audited and recorded
+        in the revision history.'
+      parameters:
+      - description: Route mode change
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.RouteModeChangeBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+        "409":
+          description: Conflict
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Switch package route modes
+      tags:
+      - Kernel route modes
+  /api/v4/kernel/route-modes/mismatches:
+    get:
+      description: 'The newest sanitized shadow-mode mismatch samples, of one package
+        or route or of all: the route, method, path template with masked query values,
+        legacy and native status, and a structural diff whose values are masked (tokens,
+        passwords, UUIDs, keys and other secrets fully; e-mail addresses keep their
+        first character and domain, IPv4 addresses two octets, IPv6 addresses two
+        hextets). Samples are kept for 7 days and at most 100 per route. Any administrator
+        may read them.'
+      parameters:
+      - description: Package id
+        in: query
+        name: package_id
+        type: string
+      - description: Route id
+        in: query
+        name: route_id
+        type: string
+      - description: At most this many samples (default 50, at most 100)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List shadow mismatch samples
+      tags:
+      - Kernel route modes
+  /api/v4/kernel/route-modes/revisions:
+    get:
+      description: The latest route mode switches, newest first, of one package or
+        of all.
+      parameters:
+      - description: Package id
+        in: query
+        name: package_id
+        type: string
+      - description: At most this many revisions (default 100, at most 1000)
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List route mode revisions
+      tags:
+      - Kernel route modes
+  /api/v4/kernel/route-modes/rollback:
+    post:
+      consumes:
+      - application/json
+      description: Returns every route of a package to legacy in one change, except
+        identity group A, which the identity rollback switches. Super administrators
+        only; no confirmation is needed and the reason is optional.
+      parameters:
+      - description: Rollback
+        in: body
+        name: body
+        required: true
+        schema:
+          $ref: '#/definitions/handler.RouteModeRollbackBody'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties: true
+            type: object
+        "403":
+          description: Forbidden
+          schema:
+            additionalProperties: true
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: Roll a package back to legacy route modes
+      tags:
+      - Kernel route modes
   /api/v4/public/config:
     get:
       description: 产品版本 (community / commercial)、该版本隐藏的包，以及注册是否需要邀请码

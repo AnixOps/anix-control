@@ -45,6 +45,32 @@
   changes concurrently; five fuzz targets with seed corpora.
   Not wired to anything yet: the carrier glue and the driver follow.
 
+- **Admin lists sort on the server: `sort` and `order` on the user, order and
+  node lists.** The console sorted each list over the page it had loaded, so
+  a column showed the order of 20 rows, not of the list. `GET
+  /api/v2/admin/users` sorts by `id`, `email`, `created_at`, `expired_at`,
+  `traffic` (used, `u + d`) or `transfer_enable`; `GET /api/v2/admin/orders`
+  by `id`, `trade_no`, `status`, `type`, `total_amount`, `created_at` or
+  `paid_at`; `GET /api/v2/admin/nodes` by `id`, `name`, `host`, `sort`,
+  `created_at`, `last_check_at`, `cpu_usage` or `online_users`. `order` is
+  `asc` (the default) or `desc`. Without `sort` every list answers exactly as
+  before, and the envelopes are unchanged. Values that share a sorted value
+  come by id (newest first) so pages neither repeat nor skip a row, and a
+  `NULL` (no expiry, never paid, never checked in) sorts as the largest
+  value on SQLite and PostgreSQL alike. Any other `sort` or `order` is
+  refused in each list's own error shape (users, orders: HTTP 200, panel
+  `code` -1; nodes: HTTP 400 `{"message"}`). The kernel's legacy handlers and
+  the identity, order and proxy-node packages' native lists share one parser
+  (`sdk/v2compat.ParseListSort`) and sort the same way: the parity suites
+  (`identitycompat`, `ordercompat`, `proxynodecompat`) run the sort cases on
+  SQLite and PostgreSQL. Not sortable, because the value is derived or from
+  another table: a user's status and plan name, an order's buyer and plan, a
+  node's shown status and protocol count. The admin ticket list is not
+  paginated on the server and has no sortable columns, so it has no `sort`.
+  Packages built before this change ignore the two parameters; they ship
+  with Control, so a normal upgrade replaces them together. API reference:
+  `docs/guide/api-reference.md`.
+
 ### Changed
 
 - **Forwarding editor, DNS binding: Save says why it is disabled.** With

@@ -78,15 +78,44 @@ func redactNode(node *model.Node) {
 	}
 }
 
-// ListNodes is GET /api/v2/admin/nodes: a page of nodes by sort order,
-// filtered by status, group and a search in the name and host, each with
-// its protocols, masked; a node's status shows whether it checked in
-// recently, unless it is disabled.
+// NodeSortColumns are the columns the node list sorts by: the keys and the
+// meaning of the kernel's service.NodeSortColumns. "sort" is the
+// administrator's own order weight. A node's shown status is derived from
+// its last check and its protocol count from another table, so neither is
+// sortable; a node that never checked in (NULL last_check_at) sorts last
+// ascending.
+var NodeSortColumns = map[string]v2compat.SortColumn{
+	"id":            {Expr: "id", Unique: true},
+	"name":          {Expr: "name"},
+	"host":          {Expr: "host"},
+	"sort":          {Expr: "sort"},
+	"created_at":    {Expr: "created_at"},
+	"last_check_at": {Expr: "last_check_at", Nullable: true},
+	"cpu_usage":     {Expr: "cpu_usage"},
+	"online_users":  {Expr: "online_users"},
+}
+
+// NodeSortTiebreaker orders nodes that share a sorted value, so pages
+// neither repeat nor skip a node.
+const NodeSortTiebreaker = "id DESC"
+
+// ListNodes is GET /api/v2/admin/nodes: a page of nodes by sort order (or by
+// the sort and order query, the columns of NodeSortColumns), filtered by
+// status, group and a search in the name and host, each with its protocols,
+// masked; a node's status shows whether it checked in recently, unless it
+// is disabled.
 func (s *Service) ListNodes(ctx context.Context, request pluginhostsdk.NativeRequest) (pluginhostsdk.NativeResponse, error) {
 	if !s.leased(ctx, nodeTable, nodeProtocolView) {
 		return pluginhostsdk.NativeResponse{}, pluginhostsdk.ErrNativeUnavailable
 	}
 	page, pageSize := pagination(request)
+	orderBy, err := v2compat.ParseListSort(query(request, "sort"), query(request, "order"), NodeSortColumns, NodeSortTiebreaker)
+	if err != nil {
+		return message(http.StatusBadRequest, err.Error())
+	}
+	if orderBy == "" {
+		orderBy = "sort ASC, id DESC"
+	}
 	db, err := s.Open(ctx)
 	if err != nil {
 		return pluginhostsdk.NativeResponse{}, pluginhostsdk.ErrNativeUnavailable
@@ -108,7 +137,7 @@ func (s *Service) ListNodes(ctx context.Context, request pluginhostsdk.NativeReq
 		return message(http.StatusInternalServerError, "获取节点列表失败")
 	}
 	var nodes []model.Node
-	if err := rows.Preload("Protocols").Order("sort ASC, id DESC").Offset((page - 1) * pageSize).Limit(pageSize).Find(&nodes).Error; err != nil {
+	if err := rows.Preload("Protocols").Order(orderBy).Offset((page - 1) * pageSize).Limit(pageSize).Find(&nodes).Error; err != nil {
 		return message(http.StatusInternalServerError, "获取节点列表失败")
 	}
 	now := s.now()

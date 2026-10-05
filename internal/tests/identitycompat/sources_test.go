@@ -20,6 +20,12 @@ import (
 // identity's, imported from them, with the native service on it.
 func controlWithIdentity(t *testing.T) (*gorm.DB, *native.Service, *native.Stores) {
 	t.Helper()
+	return controlWithIdentitySeeded(t, seedUsers(nil, withSubscription))
+}
+
+// controlWithIdentitySeeded is controlWithIdentity with the given users.
+func controlWithIdentitySeeded(t *testing.T, seed func(t testing.TB, db *gorm.DB)) (*gorm.DB, *native.Service, *native.Stores) {
+	t.Helper()
 	db, err := gorm.Open(sqlite.Open(filepath.Join(t.TempDir(), "control.db")), &gorm.Config{Logger: logger.Default.LogMode(logger.Silent)})
 	require.NoError(t, err)
 	t.Cleanup(func() {
@@ -28,7 +34,7 @@ func controlWithIdentity(t *testing.T) (*gorm.DB, *native.Service, *native.Store
 		}
 	})
 	require.NoError(t, db.AutoMigrate(Models...))
-	seedUsers(nil, withSubscription)(t, db)
+	seed(t, db)
 	service := nativeService(db)
 	stores, err := service.Open(context.Background())
 	require.NoError(t, err)
