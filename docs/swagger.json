@@ -8126,7 +8126,7 @@
                         "BearerAuth": []
                     }
                 ],
-                "description": "Lists every proxy and forward node with the transport its agent was last seen on (mtls-stream, apikey-stream, http-legacy, websocket, clean-agent, uniproxy, v2board-grpc), its agent version, its newest valid agent certificate, when it was last seen and its live Agent Control stream session (authentication mtls or api-key, certificate serial, expiry and SAN, negotiated capabilities). legacy_only=true keeps the nodes on a legacy AnixOps Agent channel. summary.ready_for_required (with required_reasons and required_blockers, computed over every node) is false while agent_control.mtls: required, the default from v4.2, would refuse an enabled node: a legacy one or one that never enrolled.",
+                "description": "Lists every proxy and forward node with the transport its agent was last seen on (mtls-stream, apikey-stream, http-legacy, websocket, clean-agent, uniproxy, v2board-grpc), its agent version, its newest valid agent certificate, when it was last seen and its live Agent Control stream session (authentication mtls or api-key, certificate serial, expiry and SAN, negotiated capabilities). Each node also carries certificate_state (valid, revoked, expired or none), last_certificate (its newest certificate in any state: serial, issued_at, not_after, renew_after, revoked_at and revoke_reason) and connection (type mtls_stream, apikey_stream, legacy, third_party or offline, the transport and when it was last seen). legacy_only=true keeps the nodes on a legacy AnixOps Agent channel; node=proxy-7 (repeatable or comma separated, at most 200) keeps the named nodes. summary.ready_for_required (with required_reasons and required_blockers, computed over every node) is false while agent_control.mtls: required, the default from v4.2, would refuse an enabled node: a legacy one or one that never enrolled.",
                 "produces": [
                     "application/json"
                 ],
@@ -8139,6 +8139,16 @@
                         "type": "boolean",
                         "description": "only nodes on a legacy AnixOps Agent channel",
                         "name": "legacy_only",
+                        "in": "query"
+                    },
+                    {
+                        "type": "array",
+                        "items": {
+                            "type": "string"
+                        },
+                        "collectionFormat": "multi",
+                        "description": "only these nodes (proxy-\u003cid\u003e or forward-\u003cid\u003e), repeatable or comma separated",
+                        "name": "node",
                         "in": "query"
                     }
                 ],

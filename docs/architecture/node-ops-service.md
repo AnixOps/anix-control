@@ -1783,6 +1783,30 @@ Before upgrading to 4.2, every node must run an Agent that has enrolled
   agent), its newest valid certificate (serial, expiry) and when it was last
   seen. A node's status follows its newest AnixOps Agent channel: `mtls`,
   `legacy`, `third-party` (UniProxy or v2board gRPC only) or `unseen`.
+  - **Certificate and connection (additive, for the admin node pages).**
+    Each node also carries `certificate_state` (`valid`, `revoked`,
+    `expired` or `none`), `last_certificate` (its newest certificate record
+    in any state: `serial`, `issued_at`, `not_after`, `renew_after`,
+    `revoked_at`, `revoke_reason`) and `connection` (`type`, `transport`,
+    `last_seen_at`). `certificate` keeps meaning the newest *valid*
+    certificate (nil when there is none), which the required-mode readiness
+    check reads. `renew_after` is not stored: it is derived from the
+    record's `created_at` and `not_after` as two thirds of the lifetime
+    (`modulepki.RenewAfter`, the one definition the Agent's
+    `renew_after_unix` also uses). The PKI prunes a record a day after it
+    expired, so `expired` shows for a day and `none` then means no record.
+  - `connection.type` is `mtls_stream` or `apikey_stream` while a live Agent
+    Control stream session of this process exists (by how it authenticated;
+    sessions are in memory, so this holds while one Control process serves
+    the streams); else the newest transport seen within five minutes
+    (`ConnectionWindow`, the node heartbeat's freshness): `legacy` for the
+    REST paths, the WebSocket and the clean agent, `third_party` when only
+    UniProxy or v2board gRPC was seen, and `offline` otherwise. The CLI,
+    which reads no sessions, reads a stream sighting instead. A node with a
+    closed stream and no other recent sighting is `offline`, not `mtls_stream`.
+  - `?node=proxy-7` (repeatable or comma separated, at most 200) returns the
+    named nodes only; the counts of `summary` follow the list, the readiness
+    fields cover every node.
   - Sightings live in memory and in the new table
     `v4_kernel_agent_transport` (one row per node kind, id and transport;
     protected). A row is written at most once a minute per node and

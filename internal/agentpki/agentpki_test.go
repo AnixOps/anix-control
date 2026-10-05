@@ -253,6 +253,9 @@ func TestRenewAtTwoThirdsOfTheLifetime(t *testing.T) {
 		lifetime := agentpki.DefaultCertificateLifetime
 		assert.Equal(t, 7*24*time.Hour, lifetime)
 		assert.Equal(t, f.clock.Now().Add(lifetime*2/3), issued.RenewAfter)
+		// The recorded issue and expiry times give the same instant: the
+		// transport inventory derives renew_after from the record.
+		requireRecordedRenewAfter(t, f, issued)
 
 		f.clock.Advance(lifetime * 2 / 3)
 		leaf := leafOf(t, issued)
@@ -263,6 +266,7 @@ func TestRenewAtTwoThirdsOfTheLifetime(t *testing.T) {
 		assert.Equal(t, issued.EnrollmentID, renewed.EnrollmentID)
 		assert.NotEqual(t, issued.Serial, renewed.Serial)
 		assert.Equal(t, f.clock.Now().Add(lifetime*2/3), renewed.RenewAfter)
+		requireRecordedRenewAfter(t, f, renewed)
 
 		// The old certificate is still valid until it expires, then refused.
 		_, _, err = f.pki.VerifyPeer(t.Context(), [][]byte{issued.CertificateDER})
@@ -525,4 +529,14 @@ func TestEnrollReadsNodeCredentialsByPhase(t *testing.T) {
 		require.Equal(t, keyFallbacks+1, nodesecrets.FallbackCount(nodesecrets.TableNode, nodesecrets.KindNodeAPIKey, nodesecrets.FallbackMissing))
 		require.Equal(t, tokenFallbacks+1, nodesecrets.FallbackCount(nodesecrets.TableForwardNode, nodesecrets.KindForwardNodeToken, nodesecrets.FallbackMissing))
 	})
+}
+
+// requireRecordedRenewAfter: the certificate's record (issued_at, not_after)
+// yields the renew_after the agent was told.
+func requireRecordedRenewAfter(t *testing.T, f *fixture, issued agentpki.Issued) {
+	t.Helper()
+	var record model.AgentCertificate
+	require.NoError(t, f.db.Where("serial = ?", issued.Serial).First(&record).Error)
+	assert.True(t, modulepki.RenewAfter(record.CreatedAt, record.NotAfter).Equal(issued.RenewAfter),
+		"record %s %s, told %s", record.CreatedAt, record.NotAfter, issued.RenewAfter)
 }

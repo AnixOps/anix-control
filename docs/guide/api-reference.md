@@ -420,6 +420,32 @@ SMTP 密码同样不再明文返回：`GET /api/v2/admin/notification/email/conf
 值里的 `password` 字段，已设置时显示为 `********`（未设置为空）。更新时提交
 `********`（或在邮件配置接口中留空）即保留已存的密码，提交新值则替换。测试邮件仍使用已存的密码。
 
+### Agent 证书与连接方式
+
+```http
+# 所有代理节点和转发节点的 Agent 连接方式与证书（管理员，v4）
+GET /api/v4/kernel/agents/transports
+GET /api/v4/kernel/agents/transports?node=proxy-7          # 只看指定节点（可重复或逗号分隔，最多 200 个）
+GET /api/v4/kernel/agents/transports?legacy_only=true      # 只看仍在旧通道上的节点
+```
+
+应答 `{"data": {"mode", "summary", "nodes": [...]}}`。每个节点除原有字段外还有（均为新增字段，
+`/api/v2/admin/nodes` 的应答不变，管理端页面用 `proxy-<节点ID>` 把两者对上）：
+
+- `certificate_state`：`valid`（有未过期且未吊销的证书）、`revoked`（没有有效证书，最新一条已吊销，
+  Agent 必须重新注册）、`expired`（没有有效证书，最新一条已过期）、`none`（没有记录：从未注册，
+  或记录已在过期一天后清理）。
+- `certificate`：最新的有效证书，没有则为 `null`；`last_certificate`：最新的一条证书记录（任何状态，
+  `certificate` 存在时与它相同）。字段 `serial`、`issued_at`、`not_after`、`renew_after`（签发后寿命的
+  三分之二，Agent 在此之后续期；有效证书已过 `renew_after` 说明 Agent 没有按时续期）、`revoked_at`、
+  `revoke_reason`。
+- `connection`：`type` 为 `mtls_stream`（mTLS 控制流）、`apikey_stream`（API Key 控制流）、
+  `legacy`（旧版 REST / WebSocket / 干净代理）、`third_party`（只有 UniProxy 或 v2board gRPC）或
+  `offline`；`transport` 是依据的通道名；`last_seen_at` 是它最近一次出现的时间。有本进程的控制流会话时
+  以会话为准，否则取五分钟内最近出现的通道。
+
+单个节点的实时控制流快照仍是 `GET /api/v2/admin/nodes/:id/agent-control`。
+
 ### 授权密钥管理
 
 ```http
