@@ -756,26 +756,24 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.POST("/kernel/identity/finalize", handler.FinalizeIdentity)
 		v4.GET("/kernel/modules/runtimes", modules.ListRuntimes)
 		v4.PUT("/kernel/modules/runtimes/:plugin_id", modules.SetRuntime)
-		// Bulk actions of the console's tables: kernel-owned routes under
-		// /api/v4/admin that repeat the single-item /api/v2 route per id
-		// through the same package gateway, so each item runs wherever its
-		// route's mode puts it.
+		// The console's administrator API that the kernel owns, under
+		// /api/v4/admin and outside the /api/v2 package catalog: when each user
+		// was last online, the members of a subscription group, and the bulk
+		// actions of the tables. A bulk action repeats the single-item /api/v2
+		// route for each id through the same package gateway, so each item
+		// runs wherever its route's mode puts it.
+		v4.GET("/admin/users/activity", handler.NewAdminUserActivityHandler().List)
+		v4.GET("/admin/subscription-groups/:id/members", handler.NewAdminGroupMembersHandler().List)
 		bulk := handler.NewAdminBulkHandler(handler.GatewayBulkRunner(r, v2PackageGateway.Serve))
 		v4.POST("/admin/users/bulk", bulk.Users)
 		v4.POST("/admin/invite-codes/bulk", bulk.InviteCodes)
 		v4.GET("/kernel/node-operations", handler.NewKernelNodeOperationsHandler().List)
-		// Administrator API of the console's user pages: kernel-owned
-		// routes under /api/v4/admin, outside the /api/v2 catalog.
-		v4.GET("/admin/users/activity", handler.NewAdminUserActivityHandler().List)
 		routeModes := handler.NewRouteModeHandler()
 		v4.GET("/kernel/route-modes", routeModes.List)
 		v4.POST("/kernel/route-modes", routeModes.Set)
 		v4.POST("/kernel/route-modes/rollback", routeModes.Rollback)
 		v4.GET("/kernel/route-modes/revisions", routeModes.Revisions)
 		v4.GET("/kernel/route-modes/mismatches", routeModes.Mismatches)
-		// The members of a subscription group: a kernel-owned administrator
-		// route under /api/v4/admin, outside the /api/v2 catalog.
-		v4.GET("/admin/subscription-groups/:id/members", handler.NewAdminGroupMembersHandler().List)
 		agents := handler.NewAgentPKIHandler()
 		v4.POST("/kernel/agents/enrollment-tokens", agents.CreateEnrollmentToken)
 		v4.POST("/kernel/agents/install-tokens", agentInstall.CreateInstallToken)
