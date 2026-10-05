@@ -86,7 +86,7 @@ administrator route.
 }
 ```
 
-- `name`: 1 to 100 printable characters; `scope`: `read` or `admin`.
+- `name`: 1 to 100 printable bytes (UTF-8, so fewer characters for non-ASCII names); `scope`: `read` or `admin`.
 - Re-authentication, as the user's own subscription reset requires
   (`VerifyStepUp`): with a second factor enabled, `code` and `method`
   (`totp` or `backup`; a recovery code works once) instead of `password`.

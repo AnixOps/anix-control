@@ -35,7 +35,7 @@ the design of the Agent PKI is in
 | `node` | required: `proxy-<id>` or `forward-<id>` |
 | `rotate_api_key` | proxy nodes only, default `false`: also replace the node's API key (`400` for a forward node, whose token belongs to the frozen legacy forward runtime) |
 | `ttl_seconds` | lifetime of the new enrollment credential: 60 to 604800, default 3600 |
-| `reason` | optional, at most 200 characters, recorded in the audit entry |
+| `reason` | optional, at most 200 bytes (UTF-8), recorded in the audit entry |
 
 ## Answer
 

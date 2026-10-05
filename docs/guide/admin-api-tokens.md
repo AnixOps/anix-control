@@ -23,7 +23,7 @@ this page is the way to do it by hand.
   25; at 25, *Create token* is off until you revoke one. A token you did not
   expect to be used lately, or used from an unknown address, should be revoked.
 - **Create token.**
-  1. *Name*: what it is for (up to 100 characters).
+  1. *Name*: what it is for (up to 100 bytes in UTF-8: 100 ASCII characters, fewer for non-ASCII text).
   2. *Scope*: **Read** is `GET` and `HEAD` on the administrator APIs; it cannot
      read a node's API key or the Telegram bot token and cannot change anything.
      **Admin** does what you may do, except manage tokens. Prefer Read.

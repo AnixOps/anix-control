@@ -467,6 +467,13 @@
 
 ### Fixed
 
+- **Docs: the credential-rotation `reason` and the admin API token `name` limits
+  are bytes, not characters.** `POST /api/v4/kernel/agents/rotate-credentials`
+  rejects a `reason` longer than 200 UTF-8 bytes, and the admin API token `name`
+  limit of 100 is also `len()` in bytes; the reference and guide pages, the
+  Swagger annotations and the generated Swagger now say so. Wording only, no
+  behavior changed.
+
 - **`identity-platform` recovers by itself after the official signing root
   changed.** Found by the 4.1.0 to 4.2.0-rc.1 staging rehearsal: after the
   first start with the new root, `POST /api/v2/login` and every business route

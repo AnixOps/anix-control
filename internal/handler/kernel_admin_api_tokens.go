@@ -46,7 +46,7 @@ func NewAdminAPITokensHandler() *AdminAPITokensHandler {
 }
 
 type createAdminAPITokenRequest struct {
-	// Name says what the token is for; 1 to 100 characters.
+	// Name says what the token is for; 1 to 100 bytes (UTF-8), printable.
 	Name string `json:"name" binding:"required"`
 	// Scope is "read" or "admin".
 	Scope string `json:"scope" binding:"required"`
