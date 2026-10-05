@@ -2,6 +2,35 @@
 
 ## Unreleased
 
+## 4.2.0-rc.2 - 2026-10-05
+
+### Highlights since 4.2.0-rc.1
+
+- **Upgrading from 4.1.0 straight to rc.2 is the recommended path.** rc.1
+  leaves nobody able to sign in after the signing root changes (the
+  identity-platform installation stays on a release bound to the retired
+  root). rc.2 recovers it by itself on the first start with the new root
+  (docs/UPGRADE.md, "Identity-Platform Recovers By Itself"); the rest of the
+  rotation is unchanged: the other packages are imported signed with the new
+  root, and the **commercial packages (order, payment, affiliate) need a build
+  signed with the new key** by whoever builds them.
+- **The v4.2 console APIs the admin UI was missing**, with the console wired to
+  them: server-side sort, last online, bulk actions, group members, Agent
+  certificate and connection type, per-node traffic, credential rotation,
+  administrator API tokens, a Telegram test message, and certificate-expiry and
+  stuck-phase alerts.
+- **Prototype, off by default, not a supported feature:** the AnixOps relay
+  transport libraries (`sdk/forward/relay`: frames and streams, TLS and trusted
+  plaintext carriers, QUIC and native UDP) of the H22 design. Nothing in the
+  planner or the Agent uses them yet.
+- **Fixes:** a failed identity import records the real reason; the bot token no
+  longer reaches error text; the NodeOps deadline sweep no longer hands an
+  expired operation `context.Canceled`; menus, lists and Select inside
+  dialogs stack and read correctly; the Agent's `uninstall` keeps `data/`
+  without `--purge`.
+- **CI:** the Agent is pinned to anix-agent `57c2dc5d` (4.2.0-rc.2), and the
+  PostgreSQL package tests run on a database that does not flush.
+
 ### Added
 
 - **Console: a "Send test message" button for the Telegram bot, and the
@@ -637,6 +666,24 @@
   a rare flake of `TestAnInterruptedImportResumesFromItsCheckpoint` (seen once
   on go_dev: `"send account 3: EOF" does not contain "identity restarted"`).
 
+### Known issues
+
+- A plugin operation created before a one-off Agent operation (a diagnostic, a
+  reload, a ping) but sent after it can still be refused with "revision N is not
+  newer than M" and stay `dispatching`; retry it (unchanged since rc.1).
+- Rolling back from rc.2 to 4.1.0 after the packages were imported needs the
+  installations moved back in order by hand (docs/UPGRADE.md, "Rollback"):
+  4.1.0 does not know the `forward` package's `kernel.forward.v1`.
+- The commercial packages (order, payment, affiliate) have no build signed with
+  the new root, so a commercial installation loses them until they are rebuilt
+  and signed with the new key (docs/UPGRADE.md, "Commercial Packages Have No
+  New-Root Build").
+- Creating an administrator API token after the identity cutover is finalized
+  needs a sign-in at most ten minutes old, because the kernel then holds no
+  password or MFA record to re-check; an identity-module step-up call would
+  remove this.
+- `x/crypto` stays at v0.55.0: the fixed releases need Go 1.26, which would raise
+  the SDK and the Agent with it; the three findings are not reachable.
 
 ## 4.2.0-rc.1 - 2026-10-04
 
