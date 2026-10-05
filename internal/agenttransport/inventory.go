@@ -9,6 +9,7 @@ import (
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/v4/internal/agentstreams"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/modulepki"
 	"gorm.io/gorm"
 )
 
@@ -41,11 +42,73 @@ type TransportSeen struct {
 	LastSeenAt   time.Time `json:"last_seen_at"`
 }
 
-// Certificate is a node's newest valid agent certificate.
+// Certificate is an agent certificate of a node, from the record the agent
+// PKI keeps of every certificate it issued (no key, no certificate bytes).
 type Certificate struct {
 	Serial   string    `json:"serial"`
 	NotAfter time.Time `json:"not_after"`
 	SPIFFEID string    `json:"spiffe_id,omitempty"`
+	// IssuedAt is when the PKI issued it, and RenewAfter when its Agent
+	// renews it: two thirds of the lifetime, the renew_after_unix the Agent
+	// was told (modulepki.RenewAfter). A valid certificate past RenewAfter
+	// means the Agent did not renew in time.
+	IssuedAt   time.Time `json:"issued_at"`
+	RenewAfter time.Time `json:"renew_after"`
+	// RevokedAt and RevokeReason are set on a revoked certificate: a
+	// disabled or deleted node, replaced or revoked credentials.
+	RevokedAt    *time.Time `json:"revoked_at"`
+	RevokeReason string     `json:"revoke_reason,omitempty"`
+}
+
+// Certificate states of a node (NodeTransports.CertificateState).
+const (
+	// CertificateValid: the node holds an unexpired, unrevoked certificate.
+	CertificateValid = "valid"
+	// CertificateRevoked: it holds none, and its newest record is revoked.
+	// The Agent must enroll again.
+	CertificateRevoked = "revoked"
+	// CertificateExpired: it holds none, and its newest record expired
+	// without being revoked (the Agent was away longer than the lifetime).
+	CertificateExpired = "expired"
+	// CertificateNone: no record. The node never enrolled, or its records
+	// were pruned (a day after they expired).
+	CertificateNone = "none"
+)
+
+// Connection types of a node (Connection.Type).
+const (
+	// ConnectionMTLSStream: an Agent Control stream authenticated by the
+	// agent client certificate.
+	ConnectionMTLSStream = "mtls_stream"
+	// ConnectionAPIKeyStream: an Agent Control stream authenticated by the
+	// node API key or forward token.
+	ConnectionAPIKeyStream = "apikey_stream"
+	// ConnectionLegacy: a legacy AnixOps Agent channel, the REST paths, the
+	// WebSocket or a clean agent.
+	ConnectionLegacy = "legacy"
+	// ConnectionThirdParty: only third-party node software (UniProxy or the
+	// v2board gRPC services) was seen lately.
+	ConnectionThirdParty = "third_party"
+	// ConnectionOffline: nothing was seen within ConnectionWindow.
+	ConnectionOffline = "offline"
+)
+
+// ConnectionWindow is how recent the last sighting of a transport must be
+// for a node to count as connected on it: the five minutes that make a
+// node's heartbeat current (model.Node.IsOnline).
+const ConnectionWindow = 5 * time.Minute
+
+// Connection is how a node's agent reaches Control right now.
+type Connection struct {
+	// Type is ConnectionMTLSStream, ConnectionAPIKeyStream,
+	// ConnectionLegacy, ConnectionThirdParty or ConnectionOffline.
+	Type string `json:"type"`
+	// Transport is the transport the type was read from (mtls-stream,
+	// apikey-stream, http-legacy, websocket, clean-agent, uniproxy,
+	// v2board-grpc), empty when offline.
+	Transport string `json:"transport,omitempty"`
+	// LastSeenAt is when that transport was last seen; nil when offline.
+	LastSeenAt *time.Time `json:"last_seen_at"`
 }
 
 // NodeTransports is one node of the inventory.
@@ -59,10 +122,21 @@ type NodeTransports struct {
 	// Status is StatusMTLS, StatusLegacy, StatusThirdParty or StatusUnseen.
 	Status string `json:"status"`
 	// Transport is the transport of the latest sighting, empty if unseen.
-	Transport    string       `json:"transport"`
-	AgentVersion string       `json:"agent_version,omitempty"`
-	LastSeenAt   *time.Time   `json:"last_seen_at"`
-	Certificate  *Certificate `json:"certificate"`
+	Transport    string     `json:"transport"`
+	AgentVersion string     `json:"agent_version,omitempty"`
+	LastSeenAt   *time.Time `json:"last_seen_at"`
+	// Certificate is the newest valid certificate, nil when there is none:
+	// nil also means never enrolled to the readiness check.
+	Certificate *Certificate `json:"certificate"`
+	// CertificateState is CertificateValid, CertificateRevoked,
+	// CertificateExpired or CertificateNone.
+	CertificateState string `json:"certificate_state"`
+	// LastCertificate is the newest certificate record in any state, so a
+	// revoked or expired one still shows its expiry and why it ended; it is
+	// Certificate while that exists. Nil with CertificateNone.
+	LastCertificate *Certificate `json:"last_certificate"`
+	// Connection is how the agent is connected now.
+	Connection Connection `json:"connection"`
 	// Transports lists every transport seen, newest first.
 	Transports []TransportSeen `json:"transports"`
 	// Session is the node's live Agent Control stream session in this
@@ -241,6 +315,11 @@ type Options struct {
 	// Control stream sessions are shown with their nodes. Nil shows none
 	// (the CLI, another process).
 	Sessions func() []agentstreams.Session
+	// Nodes keeps the listed nodes only (the detail page asks for one);
+	// empty keeps every node. Like LegacyOnly it narrows the list and its
+	// counts, not the readiness fields of the summary, which cover every
+	// node.
+	Nodes []agentcontrol.AgentNode
 }
 
 // Build reads the transport inventory: every proxy and forward node with
@@ -272,8 +351,10 @@ func Build(ctx context.Context, db *gorm.DB, policy Policy, options Options) (In
 		return Inventory{}, err
 	}
 	rows = overlay(rows, options.Live.Snapshot())
+	// Every record, valid or not: the PKI prunes them a day after they
+	// expired, so the table holds a few per node.
 	var certificates []model.AgentCertificate
-	if err := db.Where("revoked_at IS NULL AND not_after > ?", now).Order("not_after DESC").Find(&certificates).Error; err != nil {
+	if err := db.Order("not_after DESC, created_at DESC").Find(&certificates).Error; err != nil {
 		return Inventory{}, err
 	}
 	var cleanAgents []model.ForwardCleanAgent
@@ -306,16 +387,18 @@ func Build(ctx context.Context, db *gorm.DB, policy Policy, options Options) (In
 			FirstSeenAt: first.UTC(), LastSeenAt: agent.LastSeen.UTC(),
 		})
 	}
+	// The records come newest expiry first: the first valid one of a node is
+	// its certificate, the first of any state its latest one.
 	newestCertificate := map[nodeKey]*Certificate{}
-	for _, certificate := range certificates {
-		key := nodeKey{certificate.NodeKind, certificate.NodeID}
-		if _, ok := newestCertificate[key]; ok {
-			continue
+	latestCertificate := map[nodeKey]*Certificate{}
+	for _, record := range certificates {
+		key := nodeKey{record.NodeKind, record.NodeID}
+		certificate := certificateOf(record)
+		if _, ok := latestCertificate[key]; !ok {
+			latestCertificate[key] = certificate
 		}
-		node := agentcontrol.AgentNode{Kind: certificate.NodeKind, ID: uint32(certificate.NodeID)} // #nosec G115 -- node ids are uint32 on every agent channel.
-		newestCertificate[key] = &Certificate{
-			Serial: certificate.Serial, NotAfter: certificate.NotAfter.UTC(),
-			SPIFFEID: agentcontrol.AgentIdentity{Cluster: certificate.Cluster, Node: node}.String(),
+		if _, ok := newestCertificate[key]; !ok && record.RevokedAt == nil && record.NotAfter.After(now) {
+			newestCertificate[key] = certificate
 		}
 	}
 
@@ -335,20 +418,30 @@ func Build(ctx context.Context, db *gorm.DB, policy Policy, options Options) (In
 		}
 	}
 
+	wanted := map[nodeKey]bool{}
+	for _, node := range options.Nodes {
+		wanted[nodeKey{node.Kind, uint(node.ID)}] = true
+	}
 	add := func(kind string, id uint, name string, enabled bool, fallbackVersion string) {
 		key := nodeKey{kind, id}
 		node := NodeTransports{
 			Node: agentcontrol.AgentNode{Kind: kind, ID: uint32(id)}.String(), Kind: kind, ID: id, Name: name, // #nosec G115 -- node ids are uint32 on every agent channel.
-			Enabled: enabled, Certificate: newestCertificate[key], Transports: seen[key], Session: liveSessions[key],
+			Enabled: enabled, Certificate: newestCertificate[key], LastCertificate: latestCertificate[key],
+			Transports: seen[key], Session: liveSessions[key],
 		}
 		if node.Transports == nil {
 			node.Transports = []TransportSeen{}
 		}
 		classify(&node, fallbackVersion)
+		node.CertificateState = certificateState(node.Certificate, node.LastCertificate)
+		node.Connection = connectionOf(node, now, options.Sessions != nil)
 		if blocker, ok := requiredBlocker(node, now); ok {
 			inventory.Summary.RequiredBlockers = append(inventory.Summary.RequiredBlockers, blocker)
 		}
 		if options.LegacyOnly && node.Status != StatusLegacy {
+			return
+		}
+		if len(wanted) > 0 && !wanted[key] {
 			return
 		}
 		inventory.Nodes = append(inventory.Nodes, node)
@@ -379,6 +472,94 @@ func Build(ctx context.Context, db *gorm.DB, policy Policy, options Options) (In
 	inventory.Summary.RequiredReasons = requiredReasons(inventory.Summary)
 	inventory.Summary.ReadyForRequired = len(inventory.Summary.RequiredBlockers) == 0
 	return inventory, nil
+}
+
+// certificateOf renders a certificate record. RenewAfter is derived from the
+// recorded issue and expiry times, as the Agent was told it.
+func certificateOf(record model.AgentCertificate) *Certificate {
+	node := agentcontrol.AgentNode{Kind: record.NodeKind, ID: uint32(record.NodeID)} // #nosec G115 -- node ids are uint32 on every agent channel.
+	issuedAt := record.CreatedAt.UTC()
+	certificate := &Certificate{
+		Serial: record.Serial, NotAfter: record.NotAfter.UTC(),
+		SPIFFEID: agentcontrol.AgentIdentity{Cluster: record.Cluster, Node: node}.String(),
+		IssuedAt: issuedAt, RenewAfter: modulepki.RenewAfter(issuedAt, record.NotAfter.UTC()),
+		RevokeReason: record.RevokeReason,
+	}
+	if record.RevokedAt != nil {
+		revokedAt := record.RevokedAt.UTC()
+		certificate.RevokedAt = &revokedAt
+	}
+	return certificate
+}
+
+// certificateState names where a node stands: valid when it holds a valid
+// certificate, else by its newest record.
+func certificateState(valid, latest *Certificate) string {
+	switch {
+	case valid != nil:
+		return CertificateValid
+	case latest == nil:
+		return CertificateNone
+	case latest.RevokedAt != nil:
+		return CertificateRevoked
+	default:
+		return CertificateExpired
+	}
+}
+
+// connectionOf tells how node's agent is connected at now.
+//   - A live Agent Control stream session of this process decides: mTLS or
+//     API key by how it authenticated.
+//   - Otherwise the newest transport seen within ConnectionWindow does: a
+//     stream transport counts only when no session provider was read (the
+//     CLI), since with one the stream is not connected; a legacy channel is
+//     legacy, UniProxy and v2board gRPC (only when no AnixOps Agent channel
+//     was seen lately) third_party.
+//   - Else the node is offline.
+//
+// Sessions are in memory of the process that holds the stream, as the
+// inventory's session already is: the Control behind the API serves every
+// stream today (one replica, container-deployment.md).
+func connectionOf(node NodeTransports, now time.Time, sessionsRead bool) Connection {
+	if session := node.Session; session != nil {
+		connection := Connection{Type: ConnectionAPIKeyStream, Transport: model.AgentTransportAPIKeyStream}
+		if session.Authentication == agentstreams.AuthenticationMTLS {
+			connection = Connection{Type: ConnectionMTLSStream, Transport: model.AgentTransportMTLSStream}
+		}
+		lastSeen := session.LastSeenAt
+		connection.LastSeenAt = &lastSeen
+		return connection
+	}
+	var thirdParty *TransportSeen
+	for i := range node.Transports {
+		seen := node.Transports[i]
+		if now.Sub(seen.LastSeenAt) > ConnectionWindow {
+			// Newest first: the rest is older.
+			break
+		}
+		lastSeen := seen.LastSeenAt
+		switch {
+		case seen.ThirdParty:
+			if thirdParty == nil {
+				thirdParty = &node.Transports[i]
+			}
+		case seen.Transport == model.AgentTransportMTLSStream:
+			if !sessionsRead {
+				return Connection{Type: ConnectionMTLSStream, Transport: seen.Transport, LastSeenAt: &lastSeen}
+			}
+		case seen.Transport == model.AgentTransportAPIKeyStream:
+			if !sessionsRead {
+				return Connection{Type: ConnectionAPIKeyStream, Transport: seen.Transport, LastSeenAt: &lastSeen}
+			}
+		default:
+			return Connection{Type: ConnectionLegacy, Transport: seen.Transport, LastSeenAt: &lastSeen}
+		}
+	}
+	if thirdParty != nil {
+		lastSeen := thirdParty.LastSeenAt
+		return Connection{Type: ConnectionThirdParty, Transport: thirdParty.Transport, LastSeenAt: &lastSeen}
+	}
+	return Connection{Type: ConnectionOffline}
 }
 
 // classify orders a node's transports newest first and derives its status,

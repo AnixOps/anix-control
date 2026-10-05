@@ -398,11 +398,19 @@ func (a *Authority) signURI(tx *gorm.DB, uri *url.URL, lifetime, retention time.
 	for _, certificate := range bundle {
 		bundleDER = append(bundleDER, certificate.Raw)
 	}
-	valid := notAfter.Sub(now)
 	return SignedLeaf{
 		CertificateDER: der, TrustBundleDER: bundleDER, Serial: SerialString(serial),
-		NotAfter: notAfter, RenewAfter: now.Add(valid * 2 / 3), IssuerKeyID: current.row.KeyID,
+		NotAfter: notAfter, RenewAfter: RenewAfter(now, notAfter), IssuerKeyID: current.row.KeyID,
 	}, current, nil
+}
+
+// RenewAfter is when the holder of a leaf issued at issuedAt that expires at
+// notAfter renews it: two thirds of its lifetime. It is the one definition
+// of the Agent contract's renew_after_unix, so a reader that only has the
+// recorded issue and expiry times (the transport inventory) derives the
+// same instant the Agent was told.
+func RenewAfter(issuedAt, notAfter time.Time) time.Time {
+	return issuedAt.Add(notAfter.Sub(issuedAt) * 2 / 3)
 }
 
 // SerialString is the recorded form of a certificate serial.

@@ -136,6 +136,24 @@
   tickets have no bulk action in the console, so they get no endpoint;
   deleting users and resetting subscription links are not bulk actions
   (`docs/guide/api-reference.md`).
+- **Agent certificate and connection type in the transport inventory.**
+  `GET /api/v4/kernel/agents/transports` (admin; the route the node pages
+  already read) now also tells, per node, `certificate_state` (`valid`,
+  `revoked`, `expired`, `none`), `last_certificate` (the newest certificate
+  record in any state: `serial`, `issued_at`, `not_after`, `renew_after`
+  (two thirds of the lifetime, derived from the record: no new column),
+  `revoked_at`, `revoke_reason`) and `connection` (`type`: `mtls_stream`,
+  `apikey_stream`, `legacy` for the REST paths, WebSocket and clean agent,
+  `third_party` for UniProxy and v2board gRPC only, or `offline`; the
+  `transport` it was read from and `last_seen_at`). A live Agent Control
+  stream session of the process decides; otherwise the newest transport
+  seen within five minutes. `certificate` still means the newest valid
+  certificate, so `ready_for_required` is unchanged, and `issued_at` and
+  `renew_after` are added to it. `?node=proxy-7` (repeatable or comma
+  separated, at most 200) returns only the named nodes. All fields are
+  additive; no v2 route, table or contract changes. `modulepki.RenewAfter` is
+  now the one definition of the renewal instant. The UI joins the rows with
+  `/api/v2/admin/nodes` by `proxy-<id>`.
 
 ### Changed
 

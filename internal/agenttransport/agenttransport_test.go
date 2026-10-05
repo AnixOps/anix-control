@@ -17,6 +17,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/agentws"
 	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/model"
+	"github.com/AnixOps/anix-control/v4/internal/modulepki"
 	"github.com/gin-gonic/gin"
 	"github.com/glebarez/sqlite"
 	"github.com/stretchr/testify/require"
@@ -622,4 +623,230 @@ func TestContextNodeID(t *testing.T) {
 	}
 	c.Set("node_id", -1)
 	require.Zero(t, contextNodeID(c))
+}
+
+// seedCertificates records the agent certificates of the inventory's nodes:
+// proxy-1 holds two valid ones (the newest was issued two days ago, with the
+// seven-day lifetime), proxy-2 only a revoked one, proxy-3 only an expired
+// one, proxy-4 none; proxy-5 was revoked after a valid one expired; forward-1
+// has one valid certificate that its credentials revocation then revoked.
+func seedCertificates(t *testing.T, db *gorm.DB, now time.Time) {
+	t.Helper()
+	day := 24 * time.Hour
+	revokedAt := now.Add(-time.Hour)
+	require.NoError(t, db.Create(&[]model.AgentCertificate{
+		{Serial: "old", NodeKind: "proxy", NodeID: 1, Cluster: "prod", EnrollmentID: "e", IssuerKeyID: "k", CreatedAt: now.Add(-6 * day), NotAfter: now.Add(day)},
+		{Serial: "new", NodeKind: "proxy", NodeID: 1, Cluster: "prod", EnrollmentID: "e", IssuerKeyID: "k", CreatedAt: now.Add(-2 * day), NotAfter: now.Add(5 * day)},
+		{Serial: "revoked", NodeKind: "proxy", NodeID: 2, Cluster: "prod", EnrollmentID: "e", IssuerKeyID: "k", CreatedAt: now.Add(-3 * day), NotAfter: now.Add(4 * day), RevokedAt: &revokedAt, RevokeReason: "credentials_replaced"},
+		{Serial: "expired", NodeKind: "proxy", NodeID: 3, Cluster: "prod", EnrollmentID: "e", IssuerKeyID: "k", CreatedAt: now.Add(-8 * day), NotAfter: now.Add(-time.Hour)},
+		{Serial: "gone", NodeKind: "proxy", NodeID: 5, Cluster: "prod", EnrollmentID: "e", IssuerKeyID: "k", CreatedAt: now.Add(-9 * day), NotAfter: now.Add(-2 * day)},
+		{Serial: "newer-revoked", NodeKind: "proxy", NodeID: 5, Cluster: "prod", EnrollmentID: "e", IssuerKeyID: "k", CreatedAt: now.Add(-day), NotAfter: now.Add(6 * day), RevokedAt: &revokedAt, RevokeReason: "node_disabled"},
+		{Serial: "relay", NodeKind: "forward", NodeID: 1, Cluster: "prod", EnrollmentID: "e", IssuerKeyID: "k", CreatedAt: now.Add(-day), NotAfter: now.Add(6 * day)},
+	}).Error)
+}
+
+func inventoryByNode(inventory Inventory) map[string]NodeTransports {
+	byNode := map[string]NodeTransports{}
+	for _, node := range inventory.Nodes {
+		byNode[node.Node] = node
+	}
+	return byNode
+}
+
+// TestInventoryCertificateStateAndRenewal: the inventory tells each node's
+// certificate state, the certificate's issue, expiry and renewal times, and
+// why a revoked one ended, while Certificate keeps meaning the newest valid
+// certificate (the readiness check depends on it).
+func TestInventoryCertificateStateAndRenewal(t *testing.T) {
+	for name, open := range map[string]func(*testing.T) *gorm.DB{"sqlite": openSQLite, "postgres": openPostgres} {
+		t.Run(name, func(t *testing.T) {
+			db := open(t)
+			now := time.Now().UTC().Truncate(time.Microsecond)
+			seedInventory(t, db, now)
+			require.NoError(t, db.Where("1 = 1").Delete(&model.AgentCertificate{}).Error)
+			seedCertificates(t, db, now)
+			require.NoError(t, db.Create(&model.Node{ID: 5, Name: "disabled-after-expiry", APIKey: "k5", Status: model.NodeStatusDisabled}).Error)
+
+			inventory, err := Build(context.Background(), db, Policy{Mode: config.AgentMTLSRequired}, Options{Now: now})
+			require.NoError(t, err)
+			byNode := inventoryByNode(inventory)
+
+			valid := byNode["proxy-1"]
+			require.Equal(t, CertificateValid, valid.CertificateState)
+			require.NotNil(t, valid.Certificate)
+			require.Equal(t, "new", valid.Certificate.Serial, "the newest expiry")
+			require.True(t, valid.Certificate.NotAfter.Equal(now.Add(5*24*time.Hour)))
+			require.True(t, valid.Certificate.IssuedAt.Equal(now.Add(-2*24*time.Hour)))
+			// Seven days of lifetime: renew after four days and sixteen hours.
+			require.True(t, valid.Certificate.RenewAfter.Equal(valid.Certificate.IssuedAt.Add(7*24*time.Hour*2/3)), valid.Certificate.RenewAfter)
+			require.True(t, valid.Certificate.RenewAfter.Equal(modulepki.RenewAfter(valid.Certificate.IssuedAt, valid.Certificate.NotAfter)))
+			require.Nil(t, valid.Certificate.RevokedAt)
+			require.Equal(t, valid.Certificate, valid.LastCertificate, "a valid certificate is the latest one")
+
+			revoked := byNode["proxy-2"]
+			require.Equal(t, CertificateRevoked, revoked.CertificateState)
+			require.Nil(t, revoked.Certificate, "a revoked certificate is no identity")
+			require.NotNil(t, revoked.LastCertificate)
+			require.Equal(t, "revoked", revoked.LastCertificate.Serial)
+			require.NotNil(t, revoked.LastCertificate.RevokedAt)
+			require.Equal(t, "credentials_replaced", revoked.LastCertificate.RevokeReason)
+			require.True(t, revoked.LastCertificate.NotAfter.Equal(now.Add(4*24*time.Hour)))
+
+			expired := byNode["proxy-3"]
+			require.Equal(t, CertificateExpired, expired.CertificateState)
+			require.Nil(t, expired.Certificate)
+			require.Equal(t, "expired", expired.LastCertificate.Serial)
+			require.Nil(t, expired.LastCertificate.RevokedAt)
+
+			none := byNode["proxy-4"]
+			require.Equal(t, CertificateNone, none.CertificateState)
+			require.Nil(t, none.Certificate)
+			require.Nil(t, none.LastCertificate)
+
+			// Revoked after an older certificate expired: the newest expiry wins.
+			require.Equal(t, CertificateRevoked, byNode["proxy-5"].CertificateState)
+			require.Equal(t, "newer-revoked", byNode["proxy-5"].LastCertificate.Serial)
+			require.Equal(t, "node_disabled", byNode["proxy-5"].LastCertificate.RevokeReason)
+
+			require.Equal(t, CertificateValid, byNode["forward-1"].CertificateState, "forward and proxy nodes of one id are told apart")
+			require.Equal(t, "relay", byNode["forward-1"].Certificate.Serial)
+
+			// The readiness check still reads Certificate: proxy-4 never enrolled
+			// and is disabled (not a blocker); revoked proxy-2 is on a legacy channel.
+			blockers := map[string]string{}
+			for _, blocker := range inventory.Summary.RequiredBlockers {
+				blockers[blocker.Node] = blocker.Reason
+			}
+			require.Equal(t, BlockerLegacy, blockers["proxy-2"])
+			require.NotContains(t, blockers, "proxy-1")
+		})
+	}
+}
+
+// TestInventoryNodeFilter: Options.Nodes narrows the list, not the summary.
+func TestInventoryNodeFilter(t *testing.T) {
+	db := openSQLite(t)
+	now := time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC)
+	seedInventory(t, db, now)
+	policy := PolicyFrom(config.AgentControlConfig{})
+	all, err := Build(context.Background(), db, policy, Options{Now: now})
+	require.NoError(t, err)
+
+	one, err := Build(context.Background(), db, policy, Options{Now: now, Nodes: []agentcontrol.AgentNode{{Kind: "proxy", ID: 2}}})
+	require.NoError(t, err)
+	require.Len(t, one.Nodes, 1)
+	require.Equal(t, "proxy-2", one.Nodes[0].Node)
+	require.Equal(t, Summary{Total: 1, Legacy: 1}, Summary{Total: one.Summary.Total, MTLS: one.Summary.MTLS, Legacy: one.Summary.Legacy,
+		ThirdParty: one.Summary.ThirdParty, Unseen: one.Summary.Unseen}, "the counts follow the list")
+	require.Equal(t, all.Summary.RequiredBlockers, one.Summary.RequiredBlockers, "readiness covers every node, also for one")
+	require.Equal(t, all.Summary.ReadyForRequired, one.Summary.ReadyForRequired)
+	require.Equal(t, all.Summary.RequiredReasons, one.Summary.RequiredReasons)
+
+	several, err := Build(context.Background(), db, policy, Options{Now: now, LegacyOnly: true, Nodes: []agentcontrol.AgentNode{
+		{Kind: "forward", ID: 1}, {Kind: "proxy", ID: 1}, {Kind: "proxy", ID: 77},
+	}})
+	require.NoError(t, err)
+	require.Len(t, several.Nodes, 1, "legacy_only and node both narrow; an unknown node is not listed")
+	require.Equal(t, "forward-1", several.Nodes[0].Node)
+}
+
+// TestConnectionOf: the connection type from a live session, else from the
+// transports seen within the window.
+func TestConnectionOf(t *testing.T) {
+	now := time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC)
+	ago := func(d time.Duration) time.Time { return now.Add(-d) }
+	seen := func(transport string, d time.Duration) TransportSeen {
+		return TransportSeen{
+			Transport: transport, Legacy: model.AgentTransportLegacy(transport),
+			ThirdParty: model.AgentTransportThirdParty(transport), LastSeenAt: ago(d),
+		}
+	}
+	live := func(authentication string) *LiveSession {
+		return &LiveSession{Authentication: authentication, LastSeenAt: ago(10 * time.Second)}
+	}
+	cases := []struct {
+		name         string
+		node         NodeTransports
+		sessionsRead bool
+		want         string
+		transport    string
+	}{
+		{name: "an mTLS stream session", node: NodeTransports{Session: live(agentstreams.AuthenticationMTLS)}, sessionsRead: true, want: ConnectionMTLSStream, transport: model.AgentTransportMTLSStream},
+		{name: "an API key stream session", node: NodeTransports{Session: live(agentstreams.AuthenticationAPIKey)}, sessionsRead: true, want: ConnectionAPIKeyStream, transport: model.AgentTransportAPIKeyStream},
+		{name: "a session without an authentication is an API key one", node: NodeTransports{Session: live("")}, sessionsRead: true, want: ConnectionAPIKeyStream, transport: model.AgentTransportAPIKeyStream},
+		{name: "the session beats a newer legacy sighting", node: NodeTransports{Session: live(agentstreams.AuthenticationMTLS), Transports: []TransportSeen{seen(model.AgentTransportHTTPLegacy, time.Second)}}, sessionsRead: true, want: ConnectionMTLSStream, transport: model.AgentTransportMTLSStream},
+		{name: "a legacy REST sighting", node: NodeTransports{Transports: []TransportSeen{seen(model.AgentTransportHTTPLegacy, time.Minute)}}, sessionsRead: true, want: ConnectionLegacy, transport: model.AgentTransportHTTPLegacy},
+		{name: "a legacy WebSocket sighting", node: NodeTransports{Transports: []TransportSeen{seen(model.AgentTransportWebSocket, time.Minute)}}, sessionsRead: true, want: ConnectionLegacy, transport: model.AgentTransportWebSocket},
+		{name: "a clean agent", node: NodeTransports{Transports: []TransportSeen{seen(model.AgentTransportCleanAgent, 2*time.Minute)}}, sessionsRead: true, want: ConnectionLegacy, transport: model.AgentTransportCleanAgent},
+		{name: "the window is inclusive", node: NodeTransports{Transports: []TransportSeen{seen(model.AgentTransportWebSocket, ConnectionWindow)}}, sessionsRead: true, want: ConnectionLegacy, transport: model.AgentTransportWebSocket},
+		{name: "a stale sighting is offline", node: NodeTransports{Transports: []TransportSeen{seen(model.AgentTransportWebSocket, ConnectionWindow+time.Second)}}, sessionsRead: true, want: ConnectionOffline},
+		{name: "never seen", node: NodeTransports{}, sessionsRead: true, want: ConnectionOffline},
+		{name: "a closed stream is not connected when sessions were read", node: NodeTransports{Transports: []TransportSeen{seen(model.AgentTransportMTLSStream, time.Minute)}}, sessionsRead: true, want: ConnectionOffline},
+		{name: "a stream sighting counts without sessions (the CLI)", node: NodeTransports{Transports: []TransportSeen{seen(model.AgentTransportMTLSStream, time.Minute)}}, want: ConnectionMTLSStream, transport: model.AgentTransportMTLSStream},
+		{name: "an API key stream sighting without sessions", node: NodeTransports{Transports: []TransportSeen{seen(model.AgentTransportAPIKeyStream, time.Minute)}}, want: ConnectionAPIKeyStream, transport: model.AgentTransportAPIKeyStream},
+		{name: "UniProxy only is third party", node: NodeTransports{Transports: []TransportSeen{seen(model.AgentTransportUniProxy, time.Minute)}}, sessionsRead: true, want: ConnectionThirdParty, transport: model.AgentTransportUniProxy},
+		{name: "an AnixOps channel beats a newer UniProxy sighting", node: NodeTransports{Transports: []TransportSeen{seen(model.AgentTransportUniProxy, time.Second), seen(model.AgentTransportHTTPLegacy, time.Minute)}}, sessionsRead: true, want: ConnectionLegacy, transport: model.AgentTransportHTTPLegacy},
+		{name: "a stale UniProxy sighting is offline", node: NodeTransports{Transports: []TransportSeen{seen(model.AgentTransportV2boardGRPC, time.Hour)}}, sessionsRead: true, want: ConnectionOffline},
+		{name: "the newest recent legacy transport is named", node: NodeTransports{Transports: []TransportSeen{seen(model.AgentTransportHTTPLegacy, time.Minute), seen(model.AgentTransportWebSocket, 2*time.Minute)}}, sessionsRead: true, want: ConnectionLegacy, transport: model.AgentTransportHTTPLegacy},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := connectionOf(tc.node, now, tc.sessionsRead)
+			require.Equal(t, tc.want, got.Type)
+			require.Equal(t, tc.transport, got.Transport)
+			if tc.want == ConnectionOffline {
+				require.Nil(t, got.LastSeenAt)
+			} else {
+				require.NotNil(t, got.LastSeenAt)
+			}
+		})
+	}
+}
+
+// TestInventoryConnection: the connection of each node of the seeded
+// inventory, read with and without a session provider.
+func TestInventoryConnection(t *testing.T) {
+	db := openSQLite(t)
+	now := time.Date(2026, 10, 2, 12, 0, 0, 0, time.UTC)
+	seedInventory(t, db, now)
+	policy := PolicyFrom(config.AgentControlConfig{})
+
+	// The CLI reads no sessions: node 1's stream sighting (five minutes old,
+	// inside the window) decides, over its newer UniProxy pulls.
+	inventory, err := Build(context.Background(), db, policy, Options{Now: now})
+	require.NoError(t, err)
+	byNode := inventoryByNode(inventory)
+	require.Equal(t, ConnectionMTLSStream, byNode["proxy-1"].Connection.Type)
+	require.Equal(t, ConnectionLegacy, byNode["proxy-2"].Connection.Type)
+	require.Equal(t, model.AgentTransportHTTPLegacy, byNode["proxy-2"].Connection.Transport, "the newest legacy transport")
+	require.Equal(t, ConnectionThirdParty, byNode["proxy-3"].Connection.Type)
+	require.Equal(t, ConnectionOffline, byNode["proxy-4"].Connection.Type)
+	require.Equal(t, ConnectionLegacy, byNode["forward-1"].Connection.Type, "a clean agent seen two minutes ago")
+
+	// The API reads this process's sessions: with none, proxy-1's closed
+	// stream is no connection (it still pulls UniProxy); a live API key
+	// stream on the forward node beats its clean agent.
+	inventory, err = Build(context.Background(), db, policy, Options{Now: now, Sessions: func() []agentstreams.Session {
+		return []agentstreams.Session{{
+			Node: agentcontrol.AgentNode{Kind: "forward", ID: 1}, Transport: agentstreams.TransportControlStream,
+			Identity: agentstreams.IdentityAPIKey, Authentication: agentstreams.AuthenticationAPIKey, LastSeen: now.Add(-time.Second),
+		}}
+	}})
+	require.NoError(t, err)
+	byNode = inventoryByNode(inventory)
+	require.Equal(t, ConnectionThirdParty, byNode["proxy-1"].Connection.Type)
+	require.Equal(t, ConnectionAPIKeyStream, byNode["forward-1"].Connection.Type)
+	require.Equal(t, model.AgentTransportAPIKeyStream, byNode["forward-1"].Connection.Transport)
+	require.True(t, byNode["forward-1"].Connection.LastSeenAt.Equal(now.Add(-time.Second)))
+	require.Equal(t, ConnectionOffline, byNode["proxy-4"].Connection.Type)
+
+	// An mTLS session.
+	inventory, err = Build(context.Background(), db, policy, Options{Now: now, Sessions: func() []agentstreams.Session {
+		return []agentstreams.Session{{
+			Node: agentcontrol.AgentNode{Kind: "proxy", ID: 1}, Transport: agentstreams.TransportControlStream,
+			Identity: "spiffe://anixops/prod/agent/proxy-1", Authentication: agentstreams.AuthenticationMTLS, LastSeen: now,
+		}}
+	}})
+	require.NoError(t, err)
+	require.Equal(t, ConnectionMTLSStream, inventoryByNode(inventory)["proxy-1"].Connection.Type)
 }
