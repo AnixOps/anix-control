@@ -1161,7 +1161,7 @@ codes `carrier_unsupported`, `plain_untrusted`, `server_name_unsupported`
 and `proxy_protocol_unsupported`. Their validation rules in
 `sdk/forward/validate` run only with `Options.EnableAnixOps` (Control's
 `forward.anixops_experimental` flag, wired with the driver in A3, default
-off), the planner renders ANIXOPS links multiplexed and sets
+off: `forward.anixops_experimental` in `config.yaml`), the planner renders ANIXOPS links multiplexed and sets
 `NodeHop.proxy_protocol` on the last hop only, and the fixture
 `contracts/forward/v1/plan-anixops-experimental.json` records an example.
 No existing fixture changed, and a plan without the new fields is
@@ -1187,8 +1187,14 @@ carrying `SETTINGS` and `GOAWAY`, UDP rides QUIC DATAGRAM frames with oversize
 datagrams falling back to the association's stream, the QUIC handshake runs the
 same identity pinning, admission and handshake limits as TLS (plus Retry), and a
 `Selector` does `AUTO`'s QUIC probe and fallback to `TLS_TCP` (sections 3.7,
-4.11 and 5.6). Still not here: the driver and its carrier pool, the UDP
-association timeout (A3), the contract fields (A4), the benchmarks (A5).
+4.11 and 5.6). Phase A3 adds the `anixops` driver and its relay
+(`sdk/forward/driver/anixops`, `anixops-protocol.md` section 6.8): the relay
+process `anixops-relay` runs the hops over the library (carrier pool per
+upstream, UDP association table with its 60 s idle timeout, strategies,
+counters in epochs, exact quota, limits), the driver controls it over a unix
+socket, and the Agent ships the binary and the unit; the Control flag
+`forward.anixops_experimental` turns the engine and link on. The benchmarks
+(A5) and the wire freeze (A6) are still to do.
 
 ### 6.5 Capability matrix (v4.2 target)
 

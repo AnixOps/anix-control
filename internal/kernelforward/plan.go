@@ -185,7 +185,7 @@ func (s *Service) replanTx(tx *gorm.DB, routes []storedRoute, now time.Time) (Pl
 		effective = append(effective, route)
 	}
 	result, err := planner.Plan(effective, inv.nodes, previous, planner.Options{
-		Cluster: s.cluster(), ReservedPorts: inv.reserved, Taken: taken, Now: now,
+		Cluster: s.cluster(), ReservedPorts: inv.reserved, Taken: taken, Now: now, EnableAnixOps: s.anixOpsEnabled(),
 	})
 	if err != nil {
 		return PlanOutcome{}, fmt.Errorf("kernel forward: plan: %w", err)

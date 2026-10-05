@@ -136,6 +136,9 @@ type Service struct {
 	// links (planner.Options.Cluster); the module runtime's cluster
 	// (module_runtime.cluster, "default") when nil.
 	Cluster func() string
+	// AnixOps answers whether routes may use the experimental AnixOps engine
+	// (forward.anixops_experimental); the configuration's value when nil.
+	AnixOps func() bool
 	// Now defaults to time.Now.
 	Now func() time.Time
 	// Checks runs the forward checks of agent.diagnostic on the nodes'
@@ -172,6 +175,18 @@ func (s *Service) cluster() string {
 		return cfg.ModuleRuntime.ClusterOrDefault()
 	}
 	return "default"
+}
+
+// anixOpsEnabled reports the forward.anixops_experimental switch: it sets the
+// planner's and the validation's EnableAnixOps.
+func (s *Service) anixOpsEnabled() bool {
+	if s.AnixOps != nil {
+		return s.AnixOps()
+	}
+	if cfg := config.Get(); cfg != nil {
+		return cfg.Forward.AnixOpsExperimental
+	}
+	return false
 }
 
 func (s *Service) db(ctx context.Context) (*gorm.DB, error) {

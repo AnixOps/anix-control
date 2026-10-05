@@ -97,6 +97,12 @@ app:
   # BEFORE upgrading an install that uses payments, orders or affiliate.
   edition: "community"
 
+# Forwarding engines (docs/reference/configuration.md). The experimental
+# AnixOps engine and link are off by default.
+forward:
+  # ANIX_CONTROL_FORWARD_ANIXOPS_EXPERIMENTAL
+  anixops_experimental: false
+
 # Base64-encoded Ed25519 public key used to verify official AnixOps plugin
 # manifests before a release can be registered through /api/v3.
 plugins:

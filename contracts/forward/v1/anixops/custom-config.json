@@ -1,0 +1,81 @@
+{
+  "format": "anixops.relay/v1",
+  "owner": "anixops-forward-driver anixops v1",
+  "note": "Rendered by sdk/forward/driver/anixops; do not edit. The anixops relay runs it.",
+  "link": {
+    "cert": "/etc/anixops/link.pem",
+    "key": "/etc/anixops/link-key.pem",
+    "ca": "/etc/anixops/ca.pem"
+  },
+  "stateless_reset_key_file": "/var/lib/relay-custom/stateless-reset.key",
+  "hops": [
+    {
+      "route": "01JF2A000000000000000000A1",
+      "hop": 0,
+      "role": "entry",
+      "listen": {
+        "port": 30001,
+        "tcp": true,
+        "udp": true
+      },
+      "ingress": {
+        "security": "raw"
+      },
+      "upstreams": [
+        {
+          "address": "192.0.2.20",
+          "port": 443,
+          "weight": 1,
+          "priority": 0,
+          "egress": {
+            "security": "raw"
+          }
+        },
+        {
+          "address": "192.0.2.21",
+          "port": 443,
+          "weight": 2,
+          "priority": 10,
+          "egress": {
+            "security": "raw"
+          }
+        },
+        {
+          "address": "192.0.2.22",
+          "port": 443,
+          "weight": 3,
+          "priority": 20,
+          "egress": {
+            "security": "raw"
+          }
+        },
+        {
+          "address": "2001:db8::20",
+          "port": 443,
+          "weight": 1,
+          "priority": 0,
+          "egress": {
+            "security": "raw"
+          }
+        },
+        {
+          "address": "2001:db8::21",
+          "port": 443,
+          "weight": 2,
+          "priority": 10,
+          "egress": {
+            "security": "raw"
+          }
+        }
+      ],
+      "balance": "ip_hash",
+      "breaker": {
+        "max_fails": 3,
+        "open_ms": 30000
+      },
+      "limits": {
+        "bandwidth_bps": 10000000
+      }
+    }
+  ]
+}

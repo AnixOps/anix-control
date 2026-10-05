@@ -6,6 +6,32 @@
   commercial packages (`order`, `payment`, `affiliate`) with the official key
   at a given release tag, so installations that run them have a build signed
   with the new root (docs/UPGRADE.md).
+- **AnixOps relay, A3: the `anixops` forward driver and the relay process
+  (`sdk/forward/driver/anixops`, prototype, off by default).** The next phase of
+  the owner-approved H22 design (`docs/architecture/anixops-protocol.md` sections
+  6.1, 6.2 and 6.8). `anixops` is the `driver.Driver` for `ENGINE_ANIXOPS`
+  (Render, Apply, Observe, SetUpstreams, Remove, Probe, the systemd and process
+  supervisors, `anixops-relay.service`) and passes the conformance suite with
+  nothing skipped; `relayd` is the relay it controls over a unix socket: RAW
+  client listeners and AnixOps carrier listeners (TLS_TCP, QUIC, AUTO, PLAIN),
+  one Selector and a small carrier pool per upstream, TCP proxying with
+  half-close, a UDP association table (60 s idle), the five strategies with
+  breakers, `max_conns`, bandwidth, an exact quota, pause, counter epochs, hot
+  per-hop applies that bind every new listener before they change anything, and
+  the retired counters of ended epochs. `relayctl` is their shared document and
+  control API. Goldens are in `contracts/forward/v1/anixops` (cases, hop errors,
+  the planner's states of the fixture's route, the unit file). Capabilities
+  report the RAW and ANIXOPS links, the carriers the host serves, the wire
+  versions of the binary (`anixops-relay -V`) and `proxy_protocol` false: PROXY
+  protocol v2, the Prometheus socket, the 7-day carrier age and `LEAST_CONN`
+  re-weighting by the Agent are not implemented yet. New setting
+  `forward.anixops_experimental` (`ANIXOPS` engine and link allowed in routes;
+  default `false`) sets the planner's and the validation's `EnableAnixOps`.
+  The Agent's `anixops-relay` binary and unit ship in the Agent repository.
+  Tested with the conformance suite, the relay on loopback (all carriers, under
+  the race detector), a fuzz test of the document parser, and a privileged suite
+  in network namespaces (`ANIXOPS_RELAY_E2E=1`, run by CI under sudo) that runs
+  the real relay on three nodes through the driver.
 
 ## 4.2.0-rc.2 - 2026-10-05
 

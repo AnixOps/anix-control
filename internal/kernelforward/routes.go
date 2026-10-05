@@ -148,7 +148,7 @@ func (s *Service) CreateRoute(ctx context.Context, requestID string, route *forw
 		candidateID = newULID(now)
 		candidate.Id, candidate.Revision = candidateID, 1
 		candidate.CreatedAtUnixMs, candidate.UpdatedAtUnixMs = now.UnixMilli(), now.UnixMilli()
-		if violations := validate.Proto(candidate, validate.Options{OnCreate: true, Now: now}); len(violations) > 0 {
+		if violations := validate.Proto(candidate, validate.Options{OnCreate: true, Now: now, EnableAnixOps: s.anixOpsEnabled()}); len(violations) > 0 {
 			return "", false, refused(routeViolations(candidate.GetId(), violations), candidate.GetId())
 		}
 		encoded, err := encodeRoute(candidate)
@@ -379,6 +379,7 @@ func (s *Service) PlanRoute(ctx context.Context, request *forwardv1.PlanRouteReq
 	}
 	response, err := planner.PlanRoute(request, inv.nodes, own, planner.Options{
 		Cluster: s.cluster(), ReservedPorts: inv.reserved, Taken: taken, Now: now, OnCreate: routeID == "",
+		EnableAnixOps: s.anixOpsEnabled(),
 	})
 	if err != nil {
 		if errors.Is(err, planner.ErrNoCluster) {
