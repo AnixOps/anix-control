@@ -85,6 +85,36 @@
 
 ### Fixed
 
+- **`identity-platform` recovers by itself after the official signing root
+  changed.** Found by the 4.1.0 to 4.2.0-rc.1 staging rehearsal: after the
+  first start with the new root, `POST /api/v2/login` and every business route
+  answered `404 package_route_not_found`, because the identity bootstrap
+  registered the new `identity-platform` release but never moved an existing
+  installation, which stayed on the 4.1.0 release bound to the retired root
+  (`failed`, `verified artifact reference is unavailable`); only a session
+  token issued before the restart reached the admin API. The bootstrap now
+  moves that installation to the bootstrap release when (1) its desired
+  release is bound to a root that is not the active one, (2) the package in
+  `plugins.identity_bootstrap_package_dir` verifies under the active root
+  through the first bootstrap's checks, (3) the installation is enabled and
+  the bootstrap version is strictly newer. The move is an administrator's
+  update (the same validation, previous version, pending state, lifecycle
+  generation + 1 so the migration ledger runs a new generation), in one
+  transaction with an operation-log entry (`bootstrap_installation_update`,
+  actor `system/bootstrap`) and a `WARNING` naming both versions and roots;
+  the lifecycle worker starts the host on the same boot. Unchanged: the same
+  root (a bootstrap never upgrades a healthy installation), a package that
+  does not verify (the start stops as before), a disabled installation, an
+  older or not provably newer bootstrap version (logged, no change, the start
+  goes on), and every other package (the operator imports them). Tests on
+  SQLite and PostgreSQL plus a gateway test (login `404` before, `200` after).
+  4.2.0-rc.1 does not have it: its fallback stays the saved-token procedure.
+  `docs/UPGRADE.md` and `docs/guide/release-root-rotation.md` say what the
+  other packages need and warn that the commercial packages (`order`,
+  `payment`, `affiliate`) have no build signed with the new root. A rollback
+  across the root is not repaired by this (it would be a downgrade) and stays
+  as documented.
+
 - **The 4.1.0 to 4.2.0-rc.1 upgrade documentation is corrected from a
   staging rehearsal** (Compose, PostgreSQL, synthetic data; the published
   4.1.0 and 4.2.0-rc.1 artifacts; `docs/UPGRADE.md`,
