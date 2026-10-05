@@ -59,31 +59,8 @@ func TestEncryptedLink(t *testing.T) {
 // reason.
 func TestDiallerPinsTheListener(t *testing.T) {
 	f := newFixture(t)
-	foreign := mustPKI(t, "foreign")
 	client := f.creds("forward-1")
-	now := time.Now()
-
-	tests := []struct {
-		name   string
-		server *Credentials
-		want   Reason
-	}{
-		{"another node of the same CA", f.creds("forward-3"), ReasonIdentityMismatch},
-		{"right identity, other DNS name", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-2", DNSNames: []string{"forward-9"}}), ReasonIdentityMismatch},
-		{"right identity and name plus another name", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-2", DNSNames: []string{"forward-2", "forward-9"}}), ReasonIdentityMismatch},
-		{"wildcard name", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-2", DNSNames: []string{"*.example"}}), ReasonIdentityMismatch},
-		{"no URI name", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-2", URIs: []string{}}), ReasonIdentityMismatch},
-		{"two URI names", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-2", URIs: []string{id("forward-2"), id("forward-3")}}), ReasonIdentityMismatch},
-		{"an extra IP name", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-2", IPAddresses: []net.IP{net.ParseIP("127.0.0.1")}}), ReasonIdentityMismatch},
-		{"another cluster's identity", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-2", URIs: []string{relaytest.Identity("other", "forward-2")}}), ReasonIdentityMismatch},
-		{"another trust domain: the CA's name constraint refuses it", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-2", URIs: []string{"spiffe://example.org/test/agent/forward-2"}}), ReasonCertificate},
-		{"a CA the dialler does not trust", unchecked(t, foreign, foreign.CAPEM(), relaytest.Cert{Node: "forward-2"}), ReasonUnknownCA},
-		{"an expired certificate", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-2", NotBefore: now.Add(-48 * time.Hour), NotAfter: now.Add(-time.Hour)}), ReasonCertificate},
-		{"not yet valid", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-2", NotBefore: now.Add(time.Hour), NotAfter: now.Add(2 * time.Hour)}), ReasonCertificate},
-		{"clientAuth only", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-2", ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}}), ReasonCertificate},
-		{"no key usage stated", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-2", NoExtKeyUsage: true}), ReasonCertificate},
-	}
-	for _, tc := range tests {
+	for _, tc := range diallerPinCases(t, f) {
 		t.Run(tc.name, func(t *testing.T) {
 			l := listen(t, tc.server, []string{id("forward-1")})
 			c, err := dial(t, l, client, "forward-2", id("forward-2"))
@@ -99,29 +76,43 @@ func TestDiallerPinsTheListener(t *testing.T) {
 	}
 }
 
+// diallerCase is a listener's credentials and the reason a dialler pinning
+// forward-2 refuses them for.
+type diallerCase struct {
+	name   string
+	server *Credentials
+	want   Reason
+}
+
+// diallerPinCases are the listeners a dialler of forward-2 must refuse, one
+// rule broken each. Both link types run them.
+func diallerPinCases(t *testing.T, f *fixture) []diallerCase {
+	foreign := mustPKI(t, "foreign")
+	now := time.Now()
+	return []diallerCase{
+		{"another node of the same CA", f.creds("forward-3"), ReasonIdentityMismatch},
+		{"right identity, other DNS name", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-2", DNSNames: []string{"forward-9"}}), ReasonIdentityMismatch},
+		{"right identity and name plus another name", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-2", DNSNames: []string{"forward-2", "forward-9"}}), ReasonIdentityMismatch},
+		{"wildcard name", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-2", DNSNames: []string{"*.example"}}), ReasonIdentityMismatch},
+		{"no URI name", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-2", URIs: []string{}}), ReasonIdentityMismatch},
+		{"two URI names", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-2", URIs: []string{id("forward-2"), id("forward-3")}}), ReasonIdentityMismatch},
+		{"an extra IP name", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-2", IPAddresses: []net.IP{net.ParseIP("127.0.0.1")}}), ReasonIdentityMismatch},
+		{"another cluster's identity", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-2", URIs: []string{relaytest.Identity("other", "forward-2")}}), ReasonIdentityMismatch},
+		{"another trust domain: the CA's name constraint refuses it", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-2", URIs: []string{"spiffe://example.org/test/agent/forward-2"}}), ReasonCertificate},
+		{"a CA the dialler does not trust", unchecked(t, foreign, foreign.CAPEM(), relaytest.Cert{Node: "forward-2"}), ReasonUnknownCA},
+		{"an expired certificate", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-2", NotBefore: now.Add(-48 * time.Hour), NotAfter: now.Add(-time.Hour)}), ReasonCertificate},
+		{"not yet valid", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-2", NotBefore: now.Add(time.Hour), NotAfter: now.Add(2 * time.Hour)}), ReasonCertificate},
+		{"clientAuth only", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-2", ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageClientAuth}}), ReasonCertificate},
+		{"no key usage stated", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-2", NoExtKeyUsage: true}), ReasonCertificate},
+	}
+}
+
 // The listener admits only the nodes the state lists, however genuine their
 // certificates.
 func TestListenerPinsTheDiallers(t *testing.T) {
 	f := newFixture(t)
-	foreign := mustPKI(t, "foreign")
 	server := f.creds("forward-2")
-	now := time.Now()
-
-	tests := []struct {
-		name   string
-		client *Credentials
-		want   Reason
-	}{
-		{"a genuine node that is not listed", f.creds("forward-3"), ReasonPeerNotAllowed},
-		{"another trust domain: the CA's name constraint refuses it", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-1", URIs: []string{"spiffe://example.org/test/agent/forward-1"}}), ReasonCertificate},
-		{"a CA the listener does not trust", unchecked(t, foreign, relaytest.Bundle(foreign, f.ca), relaytest.Cert{Node: "forward-1"}), ReasonUnknownCA},
-		{"an expired certificate", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-1", NotBefore: now.Add(-48 * time.Hour), NotAfter: now.Add(-time.Hour)}), ReasonCertificate},
-		{"serverAuth only", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-1", ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}}), ReasonCertificate},
-		{"no key usage stated", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-1", NoExtKeyUsage: true}), ReasonCertificate},
-		{"two URI names", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-1", URIs: []string{id("forward-1"), id("forward-3")}}), ReasonCertificate},
-		{"an extra email name", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-1", EmailAddresses: []string{"a@example.com"}}), ReasonCertificate},
-	}
-	for _, tc := range tests {
+	for _, tc := range listenerPinCases(t, f) {
 		t.Run(tc.name, func(t *testing.T) {
 			l := listen(t, server, []string{id("forward-1")})
 			c, err := dial(t, l, tc.client, "forward-2", id("forward-2"))
@@ -140,6 +131,31 @@ func TestListenerPinsTheDiallers(t *testing.T) {
 			}
 			expectNoAccept(t, l, 50*time.Millisecond)
 		})
+	}
+}
+
+// listenerCase is a dialler's credentials and the reason a listener of
+// forward-2 that lists only forward-1 refuses them for.
+type listenerCase struct {
+	name   string
+	client *Credentials
+	want   Reason
+}
+
+// listenerPinCases are the diallers a listener of forward-2 listing only
+// forward-1 must refuse, one rule broken each. Both link types run them.
+func listenerPinCases(t *testing.T, f *fixture) []listenerCase {
+	foreign := mustPKI(t, "foreign")
+	now := time.Now()
+	return []listenerCase{
+		{"a genuine node that is not listed", f.creds("forward-3"), ReasonPeerNotAllowed},
+		{"another trust domain: the CA's name constraint refuses it", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-1", URIs: []string{"spiffe://example.org/test/agent/forward-1"}}), ReasonCertificate},
+		{"a CA the listener does not trust", unchecked(t, foreign, relaytest.Bundle(foreign, f.ca), relaytest.Cert{Node: "forward-1"}), ReasonUnknownCA},
+		{"an expired certificate", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-1", NotBefore: now.Add(-48 * time.Hour), NotAfter: now.Add(-time.Hour)}), ReasonCertificate},
+		{"serverAuth only", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-1", ExtKeyUsage: []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth}}), ReasonCertificate},
+		{"no key usage stated", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-1", NoExtKeyUsage: true}), ReasonCertificate},
+		{"two URI names", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-1", URIs: []string{id("forward-1"), id("forward-3")}}), ReasonCertificate},
+		{"an extra email name", unchecked(t, f.ca, f.ca.CAPEM(), relaytest.Cert{Node: "forward-1", EmailAddresses: []string{"a@example.com"}}), ReasonCertificate},
 	}
 }
 

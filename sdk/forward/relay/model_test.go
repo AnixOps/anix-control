@@ -135,9 +135,9 @@ func (sc scenario) run(t *testing.T) {
 
 // creditsBalanced reports whether, with nothing in flight and nothing unread,
 // each end's view of the other's credit agrees and the whole window is back.
-func creditsBalanced(d, a *Carrier) bool {
+func creditsBalanced(d, a *ConnCarrier) bool {
 	type view struct{ send, recv, consumed, window int64 }
-	get := func(c *Carrier) view {
+	get := func(c *ConnCarrier) view {
 		c.mu.Lock()
 		defer c.mu.Unlock()
 		return view{c.sendCredit, c.recvCredit, c.recvConsumed, int64(c.local.CarrierWindow)}
@@ -147,7 +147,7 @@ func creditsBalanced(d, a *Carrier) bool {
 		dv.send == av.recv && av.send == dv.recv
 }
 
-func serveEchoOnce(t *testing.T, a *Carrier) { serveEcho(t, a) }
+func serveEchoOnce(t *testing.T, a *ConnCarrier) { serveEcho(t, a) }
 
 func chunks(rng *rand.Rand, total int, f func(n int) bool) {
 	for left := total; left > 0; {
@@ -159,7 +159,7 @@ func chunks(rng *rand.Rand, total int, f func(n int) bool) {
 	}
 }
 
-func (sc scenario) dialerSide(t *testing.T, d *Carrier, i int) {
+func (sc scenario) dialerSide(t *testing.T, d *ConnCarrier, i int) {
 	plan := sc.streams[i]
 	rng := rand.New(rand.NewPCG(uint64(plan.seed), uint64(i)))
 	readSize := 1 + rng.IntN(7000)
@@ -239,7 +239,7 @@ func (sc scenario) dialerSide(t *testing.T, d *Carrier, i int) {
 	wg.Wait()
 }
 
-func (sc scenario) acceptorSide(t *testing.T, s *Stream, i int) {
+func (sc scenario) acceptorSide(t *testing.T, s Stream, i int) {
 	plan := sc.streams[i]
 	rng := rand.New(rand.NewPCG(uint64(plan.seed), uint64(i)+1<<20))
 	readSize := 1 + rng.IntN(7000)
@@ -403,7 +403,7 @@ func scenarioFromBytes(data []byte) (scenario, bool) {
 }
 
 // dump describes a carrier's streams and credit for a failing test.
-func (c *Carrier) dump() string {
+func (c *ConnCarrier) dump() string {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	out := fmt.Sprintf("%s: sendCredit=%d recvCredit=%d recvConsumed=%d active=%d ctrl=%d ring=%d goAway=%v/%v err=%v\n",

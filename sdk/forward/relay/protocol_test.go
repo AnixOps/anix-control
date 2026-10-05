@@ -152,7 +152,7 @@ func asProtocolError(err error, target **ProtocolError) bool {
 
 // A dialler sees violations by the listener on streams it opened.
 func TestListenerViolationsOnADiallerStream(t *testing.T) {
-	setup := func(t *testing.T) (*Carrier, *rawPeer, *Stream) {
+	setup := func(t *testing.T) (*ConnCarrier, *rawPeer, Stream) {
 		c, p := newRawPeer(t, "tcp", RoleDialer, Config{}, withSettings(func(s *Settings) { s.MaxStreams = 10 }))
 		s, err := c.Open(testParams())
 		if err != nil {

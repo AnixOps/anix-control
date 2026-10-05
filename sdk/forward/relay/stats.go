@@ -35,6 +35,19 @@ type Stats struct {
 	// DatagramsDropped counts datagrams WriteDatagram dropped for want of
 	// credit (anixops-protocol.md section 4.8).
 	DatagramsDropped uint64
+	// DatagramsOnStream counts datagrams sent in DATAGRAM frames on their
+	// association's stream (UDP over a stream): all of them on a TCP carrier,
+	// and on a QUIC carrier the ones that could not ride a QUIC DATAGRAM frame.
+	DatagramsOnStream uint64
+	// DatagramsOversize counts the datagrams of a QUIC carrier that were
+	// larger than the connection's maximum DATAGRAM size and were sent on the
+	// association's stream instead (udp_oversize_fallback, section 4.8).
+	DatagramsOversize uint64
+	// DatagramsRecvDropped counts datagrams a QUIC carrier received and
+	// dropped: for a stream that is not an open UDP association here (usually
+	// one that finished while they were in flight), malformed ones, and ones
+	// that found the association's receive queue full.
+	DatagramsRecvDropped uint64
 
 	// StreamStalls and CarrierStalls count the times a stream with data to
 	// send had to wait for stream or carrier credit.
@@ -52,28 +65,32 @@ type counters struct {
 	resultFailures, resetsSent, resetsRecv                    [numCodes]atomic.Uint64
 	framesSent, framesRecv, bytesSent, bytesRecv              atomic.Uint64
 	datagramsSent, datagramsRecv, datagramsDropped            atomic.Uint64
+	datagramsOnStream, datagramsOversize, datagramsRecvDrop   atomic.Uint64
 	streamStalls, carrierStalls, pingsSent, keepaliveTimeouts atomic.Uint64
 	rtt                                                       atomic.Int64
 }
 
 func (n *counters) snapshot(active int) Stats {
 	s := Stats{
-		StreamsOpened:    n.streamsOpened.Load(),
-		StreamsAccepted:  n.streamsAccepted.Load(),
-		StreamsRefused:   n.streamsRefused.Load(),
-		StreamsActive:    active,
-		FramesSent:       n.framesSent.Load(),
-		FramesRecv:       n.framesRecv.Load(),
-		BytesSent:        n.bytesSent.Load(),
-		BytesRecv:        n.bytesRecv.Load(),
-		DatagramsSent:    n.datagramsSent.Load(),
-		DatagramsRecv:    n.datagramsRecv.Load(),
-		DatagramsDropped: n.datagramsDropped.Load(),
-		StreamStalls:     n.streamStalls.Load(),
-		CarrierStalls:    n.carrierStalls.Load(),
-		PingsSent:        n.pingsSent.Load(),
-		KeepaliveTimeout: n.keepaliveTimeouts.Load(),
-		RTT:              time.Duration(n.rtt.Load()),
+		StreamsOpened:        n.streamsOpened.Load(),
+		StreamsAccepted:      n.streamsAccepted.Load(),
+		StreamsRefused:       n.streamsRefused.Load(),
+		StreamsActive:        active,
+		FramesSent:           n.framesSent.Load(),
+		FramesRecv:           n.framesRecv.Load(),
+		BytesSent:            n.bytesSent.Load(),
+		BytesRecv:            n.bytesRecv.Load(),
+		DatagramsSent:        n.datagramsSent.Load(),
+		DatagramsRecv:        n.datagramsRecv.Load(),
+		DatagramsDropped:     n.datagramsDropped.Load(),
+		DatagramsOnStream:    n.datagramsOnStream.Load(),
+		DatagramsOversize:    n.datagramsOversize.Load(),
+		DatagramsRecvDropped: n.datagramsRecvDrop.Load(),
+		StreamStalls:         n.streamStalls.Load(),
+		CarrierStalls:        n.carrierStalls.Load(),
+		PingsSent:            n.pingsSent.Load(),
+		KeepaliveTimeout:     n.keepaliveTimeouts.Load(),
+		RTT:                  time.Duration(n.rtt.Load()),
 	}
 	for i := range numCodes {
 		s.ResultFailures[i] = n.resultFailures[i].Load()

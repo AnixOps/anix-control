@@ -1,12 +1,14 @@
 // Package link makes the connections of the AnixOps relay protocol
 // (docs/architecture/anixops-protocol.md, owner decision H22): the TLS 1.3
 // connection between two nodes with mutual authentication and per-identity
-// pinning, the plaintext connection of a trusted link, and what guards a
-// listener before and during the handshake. It returns plain net.Conns with
-// the peer's verified identity attached; the stream multiplexer that runs on
-// them is the sibling package relay. It is standard library only (crypto/tls,
-// crypto/x509; golang.org/x/sys for TCP_USER_TIMEOUT on Linux), does not
-// import the kernel, and does not depend on package relay.
+// pinning, over TCP or inside QUIC, the plaintext connection of a trusted link,
+// and what guards a listener before and during the handshake. It returns plain
+// net.Conns (or, for QUIC, quic.Conns) with the peer's verified identity
+// attached; the stream multiplexer that runs on them is the sibling package
+// relay. Its cryptography is crypto/tls's alone (crypto/x509 for the
+// certificates; golang.org/x/sys for TCP_USER_TIMEOUT on Linux); QUIC is
+// quic-go (MIT, one pinned version, decision P2), which adds none of its own. It
+// does not import the kernel, and does not depend on package relay.
 //
 // # Credentials
 //
@@ -71,6 +73,49 @@
 // has accepted yet keeps its handshake slot, so connections cannot pile up
 // beyond the limit.
 //
+// # QUIC links (anixops-protocol.md section 5.2)
+//
+// DialQUIC and QUICListener make the same connection inside QUIC version 1
+// (RFC 9000): the handshake is crypto/tls's own through its QUIC API (quic-go
+// carries it), with the very configurations of the TCP link, so every check of
+// the table above runs on a QUIC handshake as well, by construction: the
+// dialler's and the listener's tls.Config, VerifyConnection and the ALPN check
+// are the same code, and the listeners share one admission state (credentials,
+// ingress_sources, ingress_peers), so SetSources, SetPeers and Credentials.Reload
+// mean the same thing. Each refusal carries the same bounded Reason; the tests
+// run the certificate cases of the TCP link through QUIC and assert the same
+// reasons.
+//
+//	check                              QUIC
+//	source in ingress_sources          on the first Initial of an attempt (quic-go's ConnContext): refused with one
+//	                                   small CONNECTION_REFUSED packet, before any TLS state exists or a signature is made
+//	handshakes in flight               ListenerConfig.MaxPending (64): the next attempt is refused the same way
+//	address validation                 QUIC's Retry, asked of an admitted address when over half of the slots are taken
+//	handshake deadline                 10 s, hard (quic-go aborts at twice HandshakeIdleTimeout, which is set to half)
+//	QUIC version                       1 only: others get no answer (no version negotiation packets are sent)
+//	0-RTT                              never accepted by the listener, never sent by the dialler; no session tickets, no token store
+//	after the handshake                QUIC version 1, TLS 1.3, the ALPN protocol, no resumption, no 0-RTT, checked on both ends
+//
+// Differences from TCP that the carrier layer sees: a refused source or a full
+// queue is a refusal the dialler sees as the peer's close during its handshake
+// (remote_rejected); the dialler's handshake completes before the listener has
+// verified it, as with TLS 1.3 over TCP, so a listener that refuses the node
+// closes the connection a moment later; quic-go reports a failed handshake as a
+// TLS alert and its text, so the listener keeps the typed refusal of its own
+// VerifyConnection in the context of the attempt and classifies by it, and by
+// the alert or the text for what crypto/tls refused first (an unknown CA, an
+// expired certificate). Retry and the slot bound together mean that spoofed
+// Initials from an admitted address cannot hold more than half of the slots: past
+// that only an address that answers its Retry gets one.
+//
+// QUICListener.StopAccepting stops accepting and abandons the handshakes while
+// leaving the established connections up, so the carrier layer can drain them;
+// Close then closes the transport and the UDP socket. QUICListenerConfig's
+// StatelessResetKey is the caller's: kept in its state directory it lets a
+// restarted listener end its predecessor's connections at once; this package
+// never generates or stores a key. QUIC needs large UDP socket buffers (see
+// package relay).
+//
 // # Plaintext links (anixops-protocol.md section 5.3)
 //
 // ListenPlain and DialPlain make plain TCP connections for trusted links
@@ -88,9 +133,11 @@
 // Package relaytest issues link CAs and node certificates of the H28 shape
 // (including the spiffe://anixops name constraint) and every deviation a test
 // needs. The tests cover each check above with a certificate that breaks
-// exactly that rule, the TLS version and ALPN requirements, resumption,
-// source admission, the handshake deadline and limit, reloads and peer
-// changes under concurrent use, and the Linux socket option; the fuzz
-// targets (FuzzParseIdentity, FuzzParseSources, FuzzVerifyConnection,
-// FuzzHandshake, FuzzCredentialsPEM) run with their seed corpus under go test.
+// exactly that rule, over TCP and over QUIC, the TLS version and ALPN
+// requirements, resumption and early data, source admission, the handshake
+// deadline and limit, Retry, reloads and peer changes under concurrent use,
+// stateless resets, and the Linux socket option; the fuzz targets
+// (FuzzParseIdentity, FuzzParseSources, FuzzVerifyConnection, FuzzHandshake,
+// FuzzCredentialsPEM, and FuzzQUICListenerPackets, which throws arbitrary UDP
+// datagrams at a QUIC listener) run with their seed corpus under go test.
 package link

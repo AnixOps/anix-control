@@ -60,19 +60,19 @@ func connPair(t testing.TB, kind string) (net.Conn, net.Conn) {
 
 // newPair returns a dialler and an acceptor carrier joined by conns of kind
 // ("tcp" or "pipe"), closed when the test ends.
-func newPair(t testing.TB, kind string, dcfg, acfg Config) (d, a *Carrier) {
+func newPair(t testing.TB, kind string, dcfg, acfg Config) (d, a *ConnCarrier) {
 	t.Helper()
 	dc, ac := connPair(t, kind)
 	type res struct {
-		c   *Carrier
+		c   *ConnCarrier
 		err error
 	}
 	ch := make(chan res, 1)
 	go func() {
-		c, err := NewCarrier(ac, RoleAcceptor, acfg)
+		c, err := NewConnCarrier(ac, RoleAcceptor, acfg)
 		ch <- res{c, err}
 	}()
-	d, err := NewCarrier(dc, RoleDialer, dcfg)
+	d, err := NewConnCarrier(dc, RoleDialer, dcfg)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -101,7 +101,7 @@ func ctxTimeout(t testing.TB) context.Context {
 
 // serveEcho accepts streams on a and echoes every byte back, honouring
 // half-close (it closes its write side when the peer's ends).
-func serveEcho(t testing.TB, a *Carrier) {
+func serveEcho(t testing.TB, a Carrier) {
 	t.Helper()
 	go func() {
 		for {
@@ -123,7 +123,7 @@ func serveEcho(t testing.TB, a *Carrier) {
 
 // roundTrip writes data on a new stream of d, half-closes, and reads the
 // echo to the end.
-func roundTrip(t testing.TB, d *Carrier, data []byte) []byte {
+func roundTrip(t testing.TB, d Carrier, data []byte) []byte {
 	t.Helper()
 	s, err := d.Open(testParams())
 	if err != nil {
@@ -177,16 +177,16 @@ func (b *bytesReader) Read(p []byte) (int, error) {
 
 // newRawPeer connects a raw peer to a carrier of the given role with the
 // given config, returning both. The peer announces peerSettings.
-func newRawPeer(t testing.TB, kind string, role Role, cfg Config, peerSettings Settings) (*Carrier, *rawPeer) {
+func newRawPeer(t testing.TB, kind string, role Role, cfg Config, peerSettings Settings) (*ConnCarrier, *rawPeer) {
 	t.Helper()
 	cc, pc := connPair(t, kind)
 	type res struct {
-		c   *Carrier
+		c   *ConnCarrier
 		err error
 	}
 	ch := make(chan res, 1)
 	go func() {
-		c, err := NewCarrier(cc, role, cfg)
+		c, err := NewConnCarrier(cc, role, cfg)
 		ch <- res{c, err}
 	}()
 	p := &rawPeer{t: t, conn: pc, br: &bytesReader{conn: pc}}
@@ -274,7 +274,7 @@ func (p *rawPeer) expectGoAway() GoAwayReason {
 	return reason
 }
 
-func waitDone(t testing.TB, c *Carrier) {
+func waitDone(t testing.TB, c Carrier) {
 	t.Helper()
 	select {
 	case <-c.Done():

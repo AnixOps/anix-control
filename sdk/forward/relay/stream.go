@@ -17,8 +17,8 @@ import (
 //
 // A stream may be used by one reader and one writer goroutine at a time (and
 // any goroutine may call Close, Reset or set a deadline), as a net.Conn may.
-type Stream struct {
-	c      *Carrier
+type ConnStream struct {
+	c      *ConnCarrier
 	id     uint32
 	kind   StreamKind
 	params OpenParams
@@ -54,10 +54,10 @@ type Stream struct {
 	rdl, wdl                        deadline
 }
 
-var _ net.Conn = (*Stream)(nil)
+var _ net.Conn = (*ConnStream)(nil)
 
-func (c *Carrier) newStreamLocked(id uint32, p OpenParams) *Stream {
-	s := &Stream{
+func (c *ConnCarrier) newStreamLocked(id uint32, p OpenParams) *ConnStream {
+	s := &ConnStream{
 		c:          c,
 		id:         id,
 		kind:       p.Kind,
@@ -71,35 +71,35 @@ func (c *Carrier) newStreamLocked(id uint32, p OpenParams) *Stream {
 }
 
 // ID returns the stream id, unique within the carrier.
-func (s *Stream) ID() uint32 { return s.id }
+func (s *ConnStream) ID() uint64 { return uint64(s.id) }
 
 // Kind returns whether the stream carries a TCP connection or UDP datagrams.
-func (s *Stream) Kind() StreamKind { return s.kind }
+func (s *ConnStream) Kind() StreamKind { return s.kind }
 
 // Params returns the OPEN parameters: the ones the dialler sent, or the ones
 // this side sent.
-func (s *Stream) Params() OpenParams { return s.params }
+func (s *ConnStream) Params() OpenParams { return s.params }
 
 // Answered reports whether the listener's RESULT reached a dialler-side
 // stream. A stream that failed without one (its carrier ended, or it was
 // refused) never started as far as the dialler knows: nothing came back, and
 // the caller may retry it on another carrier or upstream with the bytes it
 // kept.
-func (s *Stream) Answered() bool {
+func (s *ConnStream) Answered() bool {
 	s.c.mu.Lock()
 	defer s.c.mu.Unlock()
 	return s.answered
 }
 
 // Carrier returns the carrier the stream runs on.
-func (s *Stream) Carrier() *Carrier { return s.c }
+func (s *ConnStream) Carrier() Carrier { return s.c }
 
 // LocalAddr and RemoteAddr are the carrier connection's addresses.
-func (s *Stream) LocalAddr() net.Addr  { return s.c.conn.LocalAddr() }
-func (s *Stream) RemoteAddr() net.Addr { return s.c.conn.RemoteAddr() }
+func (s *ConnStream) LocalAddr() net.Addr  { return s.c.conn.LocalAddr() }
+func (s *ConnStream) RemoteAddr() net.Addr { return s.c.conn.RemoteAddr() }
 
 // wakeLocked wakes everyone waiting on ch.
-func (s *Stream) wakeLocked(ch *chan struct{}) {
+func (s *ConnStream) wakeLocked(ch *chan struct{}) {
 	if *ch != nil {
 		close(*ch)
 		*ch = nil
@@ -108,14 +108,14 @@ func (s *Stream) wakeLocked(ch *chan struct{}) {
 
 // waitLocked returns the channel a waiter blocks on until the next wakeLocked
 // of ch.
-func (s *Stream) waitLocked(ch *chan struct{}) <-chan struct{} {
+func (s *ConnStream) waitLocked(ch *chan struct{}) <-chan struct{} {
 	if *ch == nil {
 		*ch = make(chan struct{})
 	}
 	return *ch
 }
 
-func (s *Stream) wakeAllLocked() {
+func (s *ConnStream) wakeAllLocked() {
 	s.wakeLocked(&s.readWake)
 	s.wakeLocked(&s.writeWake)
 	s.wakeLocked(&s.resultWake)
@@ -124,7 +124,7 @@ func (s *Stream) wakeAllLocked() {
 // wantsSendLocked reports whether the writer could still make progress on
 // the stream if credit allows: data in the queue with stream credit left, or
 // a FIN to send.
-func (s *Stream) wantsSendLocked() bool {
+func (s *ConnStream) wantsSendLocked() bool {
 	if s.err != nil || s.removed {
 		return false
 	}
@@ -136,7 +136,7 @@ func (s *Stream) wantsSendLocked() bool {
 
 // nextFrameLocked takes the next frame the stream has to send, within its
 // own and the carrier's credit, and spends that credit.
-func (s *Stream) nextFrameLocked() (outFrame, bool) {
+func (s *ConnStream) nextFrameLocked() (outFrame, bool) {
 	c := s.c
 	if s.err != nil || s.removed {
 		return outFrame{}, false
@@ -197,7 +197,7 @@ func (s *Stream) nextFrameLocked() (outFrame, bool) {
 }
 
 // noteStallLocked counts the first time the stream waits for credit.
-func (s *Stream) noteStallLocked() {
+func (s *ConnStream) noteStallLocked() {
 	if s.stalled {
 		return
 	}
@@ -211,7 +211,7 @@ func (s *Stream) noteStallLocked() {
 
 // afterFinLocked finishes the stream once both directions have: its FIN sent
 // and the peer's received.
-func (s *Stream) afterFinLocked() {
+func (s *ConnStream) afterFinLocked() {
 	if s.finSent && s.remoteFin {
 		s.finishLocked()
 	}
@@ -220,7 +220,7 @@ func (s *Stream) afterFinLocked() {
 // finishLocked takes the stream out of the carrier: it no longer counts
 // against the stream limit, and the carrier ends if it was only draining.
 // Data the application has not read yet stays readable.
-func (s *Stream) finishLocked() {
+func (s *ConnStream) finishLocked() {
 	if s.removed {
 		return
 	}
@@ -234,7 +234,7 @@ func (s *Stream) finishLocked() {
 
 // discardLocked drops what the application will never read or send and gives
 // the carrier the credit the unread bytes held.
-func (s *Stream) discardLocked() {
+func (s *ConnStream) discardLocked() {
 	n := s.recvLen
 	s.recvQ, s.recvLen = nil, 0
 	s.sendQ, s.sendLen = nil, 0
@@ -245,7 +245,7 @@ func (s *Stream) discardLocked() {
 
 // abortLocked ends both directions at once: err is what the stream's
 // callers see (the first error wins), and a nonzero reset sends RESET.
-func (s *Stream) abortLocked(err error, reset ResetReason) {
+func (s *ConnStream) abortLocked(err error, reset ResetReason) {
 	if s.err == nil {
 		s.err = err
 	}
@@ -258,7 +258,7 @@ func (s *Stream) abortLocked(err error, reset ResetReason) {
 
 // ensureAnsweredLocked sends the stream's RESULT if it is a listener-side
 // stream the application has not answered yet.
-func (s *Stream) ensureAnsweredLocked() {
+func (s *ConnStream) ensureAnsweredLocked() {
 	if s.c.role == RoleAcceptor && !s.answered {
 		s.answered = true
 		s.c.queueLocked(outFrame{typ: TypeResult, id: s.id, payload: marshalResult(ResultOK)})
@@ -266,7 +266,7 @@ func (s *Stream) ensureAnsweredLocked() {
 }
 
 // writeErrLocked returns the error a write on the stream gets, or nil.
-func (s *Stream) writeErrLocked() error {
+func (s *ConnStream) writeErrLocked() error {
 	switch {
 	case s.err != nil:
 		return s.err
@@ -278,7 +278,7 @@ func (s *Stream) writeErrLocked() error {
 
 // readErrLocked returns the error a read gets once the buffered data is
 // gone: the end of the stream, an abort, or the application's own Close.
-func (s *Stream) readErrLocked() error {
+func (s *ConnStream) readErrLocked() error {
 	switch {
 	case s.closedByApp:
 		return ErrStreamClosed
@@ -294,7 +294,7 @@ func (s *Stream) readErrLocked() error {
 // returns the carrier's credit at once and the stream's once half the window
 // is back, so a slow reader slows only its own stream until the carrier's
 // window, shared by all streams, runs out.
-func (s *Stream) consumedLocked(n int) {
+func (s *ConnStream) consumedLocked(n int) {
 	c := s.c
 	if !s.remoteFin && s.err == nil {
 		s.recvConsumed += int64(n)
@@ -311,7 +311,7 @@ func (s *Stream) consumedLocked(n int) {
 // Read reads received bytes of a TCP stream. It returns io.EOF after the
 // peer's FIN once the data is read, and the stream's error after a reset, a
 // refusal or the loss of the carrier.
-func (s *Stream) Read(p []byte) (int, error) {
+func (s *ConnStream) Read(p []byte) (int, error) {
 	if s.kind != StreamTCP {
 		return 0, ErrStreamKind
 	}
@@ -366,7 +366,7 @@ func (s *Stream) Read(p []byte) (int, error) {
 
 // ReadDatagram returns the next datagram of a UDP stream, which the caller
 // owns. It returns io.EOF after the peer's FIN once the queue is empty.
-func (s *Stream) ReadDatagram() ([]byte, error) {
+func (s *ConnStream) ReadDatagram() ([]byte, error) {
 	if s.kind != StreamUDP {
 		return nil, ErrStreamKind
 	}
@@ -406,7 +406,7 @@ func (s *Stream) ReadDatagram() ([]byte, error) {
 // full, which is while the peer's credit is spent. It returns when all of p
 // is queued. Writing to a listener-side stream the application has not
 // answered answers it with success.
-func (s *Stream) Write(p []byte) (int, error) {
+func (s *ConnStream) Write(p []byte) (int, error) {
 	if s.kind != StreamTCP {
 		return 0, ErrStreamKind
 	}
@@ -449,7 +449,7 @@ func (s *Stream) Write(p []byte) (int, error) {
 
 // appendSendLocked copies p into the send queue as chunks no larger than the
 // peer's frame limit, filling the last chunk first.
-func (s *Stream) appendSendLocked(p []byte) {
+func (s *ConnStream) appendSendLocked(p []byte) {
 	maxChunk := int(s.c.peer.MaxFrame)
 	for len(p) > 0 {
 		if n := len(s.sendQ); n > 0 {
@@ -475,7 +475,7 @@ func (s *Stream) appendSendLocked(p []byte) {
 // the stream's window or send buffer cannot take the datagram it is dropped
 // and counted, as a full socket buffer would drop it, and ErrDatagramDropped
 // is returned (anixops-protocol.md section 4.8).
-func (s *Stream) WriteDatagram(p []byte) error {
+func (s *ConnStream) WriteDatagram(p []byte) error {
 	if s.kind != StreamUDP {
 		return ErrStreamKind
 	}
@@ -502,7 +502,7 @@ func (s *Stream) WriteDatagram(p []byte) error {
 // CloseWrite ends this side's direction: the peer reads the queued data and
 // then io.EOF, and can keep sending. It is the half-close of the protocol
 // (anixops-protocol.md section 4.7).
-func (s *Stream) CloseWrite() error {
+func (s *ConnStream) CloseWrite() error {
 	c := s.c
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -525,7 +525,7 @@ func (s *Stream) CloseWrite() error {
 // has finished, the FIN follows the queued data. Unread data is dropped and
 // its credit returned. A listener-side stream not yet answered is answered
 // with ResultInternal, so no stream is left unanswered.
-func (s *Stream) Close() error {
+func (s *ConnStream) Close() error {
 	c := s.c
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -564,7 +564,7 @@ func (s *Stream) Close() error {
 // Reset aborts both directions at once with the given reason; the peer's
 // reads and writes fail with it. A proxy resets a stream whose client or
 // target reset its connection (ResetPeerReset).
-func (s *Stream) Reset(reason ResetReason) error {
+func (s *ConnStream) Reset(reason ResetReason) error {
 	if reason == 0 {
 		reason = ResetCancel
 	}
@@ -592,7 +592,7 @@ func (s *Stream) Reset(reason ResetReason) error {
 
 // Accept answers a listener-side stream with success. Writing, closing the
 // write side or closing the stream answers it implicitly.
-func (s *Stream) Accept() error {
+func (s *ConnStream) Accept() error {
 	c := s.c
 	c.mu.Lock()
 	defer c.mu.Unlock()
@@ -612,7 +612,7 @@ func (s *Stream) Accept() error {
 // Reject answers a listener-side stream with a failure and ends it. The
 // dialler sees the code with Stream.AwaitResult (and in Read and Write) and
 // may retry on another upstream.
-func (s *Stream) Reject(code ResultCode) error {
+func (s *ConnStream) Reject(code ResultCode) error {
 	if code == ResultOK {
 		return fmt.Errorf("relay: Reject needs a failure code")
 	}
@@ -640,7 +640,7 @@ func (s *Stream) Reject(code ResultCode) error {
 // stream. It returns nil for success, a *ResultError for a refusal, and the
 // stream's error if it was reset, refused by the carrier (errors.Is ErrRefused)
 // or the carrier ended first.
-func (s *Stream) AwaitResult(ctx context.Context) error {
+func (s *ConnStream) AwaitResult(ctx context.Context) error {
 	c := s.c
 	for {
 		c.mu.Lock()
@@ -671,20 +671,20 @@ func (s *Stream) AwaitResult(ctx context.Context) error {
 }
 
 // SetDeadline sets both the read and the write deadline, as net.Conn does.
-func (s *Stream) SetDeadline(t time.Time) error {
+func (s *ConnStream) SetDeadline(t time.Time) error {
 	s.rdl.set(t)
 	s.wdl.set(t)
 	return nil
 }
 
 // SetReadDeadline sets the deadline of Read and ReadDatagram.
-func (s *Stream) SetReadDeadline(t time.Time) error {
+func (s *ConnStream) SetReadDeadline(t time.Time) error {
 	s.rdl.set(t)
 	return nil
 }
 
 // SetWriteDeadline sets the deadline of Write.
-func (s *Stream) SetWriteDeadline(t time.Time) error {
+func (s *ConnStream) SetWriteDeadline(t time.Time) error {
 	s.wdl.set(t)
 	return nil
 }

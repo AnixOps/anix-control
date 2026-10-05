@@ -51,7 +51,7 @@ func TestHandshakeFailures(t *testing.T) {
 					_ = pc.Close()
 				}
 			}()
-			_, err := NewCarrier(cc, RoleAcceptor, Config{HandshakeTimeout: time.Second})
+			_, err := NewConnCarrier(cc, RoleAcceptor, Config{HandshakeTimeout: time.Second})
 			if err == nil {
 				t.Fatal("handshake succeeded")
 			}
@@ -60,7 +60,7 @@ func TestHandshakeFailures(t *testing.T) {
 	t.Run("silent peer times out", func(t *testing.T) {
 		cc, _ := tcpPair(t)
 		start := time.Now()
-		_, err := NewCarrier(cc, RoleDialer, Config{HandshakeTimeout: 50 * time.Millisecond})
+		_, err := NewConnCarrier(cc, RoleDialer, Config{HandshakeTimeout: 50 * time.Millisecond})
 		if err == nil || !isTimeout(errors.Unwrap(err)) && !isTimeout(err) {
 			t.Fatalf("err = %v, want a timeout", err)
 		}
@@ -70,11 +70,11 @@ func TestHandshakeFailures(t *testing.T) {
 	})
 	t.Run("bad config", func(t *testing.T) {
 		cc, _ := tcpPair(t)
-		if _, err := NewCarrier(cc, RoleDialer, Config{MaxFrame: 10}); err == nil {
+		if _, err := NewConnCarrier(cc, RoleDialer, Config{MaxFrame: 10}); err == nil {
 			t.Fatal("accepted a max frame of 10")
 		}
 		cc, _ = tcpPair(t)
-		if _, err := NewCarrier(cc, RoleDialer, Config{PingInterval: time.Minute, IdleTimeout: time.Second}); err == nil {
+		if _, err := NewConnCarrier(cc, RoleDialer, Config{PingInterval: time.Minute, IdleTimeout: time.Second}); err == nil {
 			t.Fatal("accepted a ping interval longer than the idle timeout")
 		}
 	})
@@ -303,7 +303,7 @@ func TestResetPropagates(t *testing.T) {
 
 func TestRefusedAtTheStreamLimit(t *testing.T) {
 	d, a := newPair(t, "tcp", Config{}, Config{MaxStreams: 2})
-	var open []*Stream
+	var open []Stream
 	for range 2 {
 		s, err := d.Open(testParams())
 		if err != nil {
@@ -676,7 +676,7 @@ func TestAcceptHonoursContext(t *testing.T) {
 
 func TestStreamIDsAreOddIncreasingAndExhaust(t *testing.T) {
 	d, a := newPair(t, "tcp", Config{}, Config{})
-	for want := uint32(1); want < 20; want += 2 {
+	for want := uint64(1); want < 20; want += 2 {
 		s, err := d.Open(testParams())
 		if err != nil {
 			t.Fatal(err)
@@ -872,7 +872,7 @@ func TestCloseSemantics(t *testing.T) {
 		waitFor(t, "FIN", func() bool {
 			d.mu.Lock()
 			defer d.mu.Unlock()
-			return s.remoteFin
+			return s.(*ConnStream).remoteFin
 		})
 		_, _ = s.Write([]byte("the last words"))
 		_ = s.Close()

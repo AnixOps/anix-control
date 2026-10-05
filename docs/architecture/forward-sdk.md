@@ -1163,6 +1163,17 @@ removed peer or a dropped CA. All of it is tested against a randomized model
 and fuzzed (`anixops-protocol.md` sections 3.6, 4.10 and 5.5). It is not a
 driver and nothing in the planner or the Agent uses it yet.
 
+Phase A2 adds, in the same packages, the QUIC carrier on `quic-go` (decision
+P2: MIT, one pinned version): `Carrier` and `Stream` become interfaces with
+the multiplexer over a `net.Conn` (`ConnCarrier`) and `QUICCarrier` as their
+implementations, QUIC streams map to native streams with the control stream
+carrying `SETTINGS` and `GOAWAY`, UDP rides QUIC DATAGRAM frames with oversize
+datagrams falling back to the association's stream, the QUIC handshake runs the
+same identity pinning, admission and handshake limits as TLS (plus Retry), and a
+`Selector` does `AUTO`'s QUIC probe and fallback to `TLS_TCP` (sections 3.7,
+4.11 and 5.6). Still not here: the driver and its carrier pool, the UDP
+association timeout (A3), the contract fields (A4), the benchmarks (A5).
+
 ### 6.5 Capability matrix (v4.2 target)
 
 | Feature | nftables | gost | Ansible fallback |
