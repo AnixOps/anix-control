@@ -379,6 +379,23 @@
   monitor sheet) in both themes at 1440 and 390 px; new visual baselines for
   them and refreshed ones for the screens whose layout changed (the node page's
   tab bar, the live monitor's row menu column, the forwarding node's Agent card).
+- **Telegram bot test: `POST /api/v4/kernel/notifications/telegram/test`.**
+  An administrator sends one fixed test message through the configured bot
+  and gets Telegram's answer as a class: `ok`, `invalid_token`,
+  `chat_not_found`, `bot_blocked`, `rate_limited`, `not_configured`,
+  `network_error` (with a reason: `timeout`, `dns`, `tls`, `connect`) or
+  `unknown`. The message goes to the administrator's own bound chat, or to a
+  `chat_id` that is one of the bot's `admin_ids`; any other chat is refused.
+  The answer never carries the bot token, the Bot API URL or Telegram's
+  text (Go's HTTP errors quote the URL, which contains the token, so the
+  probe reduces them to the class). Redirects are not followed, a token that
+  is not shaped like a bot token is never put in a URL, at most 5 tests a
+  minute per administrator and 20 in ten minutes overall (429 with
+  `Retry-After`), and every attempt is an operation log row (module
+  `notification`, action `telegram_test`, class only). The `type: "telegram"`
+  test of `/api/v2/admin/notification/test` is a stub that always succeeds
+  and is left unchanged. See `docs/reference/telegram-test-endpoint.md` and
+  `docs/guide/notifications-telegram.md`.
 
 ### Changed
 

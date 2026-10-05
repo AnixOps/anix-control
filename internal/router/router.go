@@ -793,6 +793,10 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.POST("/kernel/api-tokens", apiTokens.Create)
 		v4.GET("/kernel/api-tokens", apiTokens.List)
 		v4.DELETE("/kernel/api-tokens/:id", apiTokens.Revoke)
+		// The administrator's Telegram test: one fixed message through the
+		// configured bot, answered as a result class (never the token).
+		notifications := handler.NewKernelNotificationsHandler()
+		v4.POST("/kernel/notifications/telegram/test", notifications.TelegramTest)
 		agents := handler.NewAgentPKIHandler()
 		v4.POST("/kernel/agents/enrollment-tokens", agents.CreateEnrollmentToken)
 		v4.POST("/kernel/agents/install-tokens", agentInstall.CreateInstallToken)

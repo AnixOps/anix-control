@@ -58,6 +58,12 @@ Use this folder when you need implementation detail, clone contracts, runtime op
 | [WireGuard Entry Network Policy](wireguard-network-policy.md) | `relay.network_policy` active/standby uplink failover for WSS entry nodes |
 | [WireGuard Peer Key Rotation](wireguard-key-rotation.md) | `cmd/wgrotate` client credential rotation without changing peer IDs or tunnel IPs |
 
+### Notifications
+
+| Document | Purpose |
+|------|------|
+| [Testing The Telegram Bot](notifications-telegram.md) | Sending a test message through the configured bot and reading the result class (`invalid_token`, `chat_not_found`, `network_error`, ...) |
+
 ## Recommended Reading Order
 
 If the task is about forwarding, read the forwarding rules in

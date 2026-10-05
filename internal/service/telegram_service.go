@@ -19,6 +19,8 @@ import (
 type TelegramBotService struct {
 	db     *gorm.DB
 	client *http.Client
+	// apiBase overrides the Bot API address of ProbeSend (tests only).
+	apiBase string
 }
 
 // NewTelegramBotService 创建服务

@@ -8640,6 +8640,73 @@
                 }
             }
         },
+        "/api/v4/kernel/notifications/telegram/test": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Sends one fixed test message through the bot configured in the Telegram bot settings (the v2_telegram_bot row) and answers the result class: ok, invalid_token, chat_not_found, bot_blocked, rate_limited, not_configured, network_error (with a reason: timeout, dns, tls, connect, canceled, other) or unknown. The answer never carries the bot token, a URL or Telegram's own text. The message goes to the calling administrator's own bound Telegram chat; an explicit chat_id is accepted only when it is that chat or one of the bot's admin_ids. An administrator without a bound Telegram account gets 409. At most 5 tests a minute per administrator and 20 in ten minutes for all of them (429 with Retry-After). Every attempt is recorded in the operation log (module notification, action telegram_test) with its class only.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Send a test message through the Telegram bot",
+                "parameters": [
+                    {
+                        "description": "chat_id (optional)",
+                        "name": "request",
+                        "in": "body",
+                        "schema": {
+                            "$ref": "#/definitions/handler.telegramTestRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "data.class, data.ok, data.message, data.target, data.error_code, data.reason",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "429": {
+                        "description": "Too Many Requests",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/route-modes": {
             "get": {
                 "security": [
@@ -10746,6 +10813,15 @@
                 },
                 "password": {
                     "type": "string"
+                }
+            }
+        },
+        "handler.telegramTestRequest": {
+            "type": "object",
+            "properties": {
+                "chat_id": {
+                    "description": "ChatID is the chat to send to: the administrator's own bound chat\n(the default) or one of the bot's admin_ids. Anything else is refused.",
+                    "type": "integer"
                 }
             }
         },
