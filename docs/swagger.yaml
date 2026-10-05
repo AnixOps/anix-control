@@ -6678,6 +6678,52 @@ paths:
       summary: Resume an Agent upgrade campaign
       tags:
       - Kernel
+  /api/v4/kernel/alerts:
+    get:
+      description: 'The alerts of the kernel''s alert monitor: Agent, forward link
+        and module certificates that were not renewed in time (leaf certificates alert
+        inside the smaller of alerts.leaf_expiry_days and a sixth of their lifetime),
+        the current module and forward link CAs inside alerts.ca_expiry_days, and
+        phased processes left untouched in a non-final phase for alerts.phase_stuck_after
+        (the node credential split, an interrupted finalize, the identity import and
+        cutover). Critical alerts come first, then the soonest to end. The summary
+        counts every active alert whatever the filters. Alerts hold no secret: kinds,
+        node names, dates and counts only.'
+      parameters:
+      - description: active (default), resolved or all
+        in: query
+        name: status
+        type: string
+      - description: one alert kind, for example agent_certificate_expiring
+        in: query
+        name: kind
+        type: string
+      - description: warning or critical
+        in: query
+        name: severity
+        type: string
+      - description: 1 to 500, default 100
+        in: query
+        name: limit
+        type: integer
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: data.alerts and data.summary {active, critical, warning}
+          schema:
+            additionalProperties: true
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties: true
+            type: object
+      security:
+      - BearerAuth: []
+      summary: List the kernel alerts
+      tags:
+      - Kernel
   /api/v4/kernel/api-tokens:
     get:
       description: 'Lists the caller''s active API tokens (add include_inactive=true
