@@ -44,6 +44,8 @@ export default {
     monthlyQuota: 'Monthly quota',
     quotaExceeded: 'Over quota',
     lastHeartbeat: 'Last heartbeat',
+    connection: 'Connection',
+    certificate: 'Certificate',
     never: 'Never',
     empty: 'No nodes yet',
     emptyDescription: `A node appears here when its ${AGENT_NAME} starts with a registration key, or when you add it by hand.`,
@@ -101,6 +103,51 @@ export default {
     autoRegistered: `By its ${AGENT_NAME}`,
     manual: 'By hand',
     createdAt: 'Created'
+  },
+  agent: {
+    title: 'Agent connection',
+    retry: 'Retry',
+    loading: 'Loading the Agent connection…',
+    unavailable: 'Unavailable',
+    loadFailed: 'Couldn’t load the Agent connection',
+    noRecord: 'No Agent record yet',
+    noRecordHint: 'This node has not enrolled an Agent. Install one from the Deployment tab.',
+    connectionLabel: 'Connection',
+    transport: 'Last transport',
+    lastSeen: 'Last seen',
+    neverSeen: 'Never',
+    certificateLabel: 'Certificate',
+    notAfter: 'Not valid after',
+    renewAfter: 'Renews after',
+    revokedAt: 'Revoked at',
+    revokeReason: 'Revoked because',
+    overdueNotice: 'The Agent should have renewed its certificate after {date}. The certificate is still valid, but the Agent has not renewed it in time.',
+    revokedNotice: 'This Agent’s certificate is revoked. The Agent has to enroll again.',
+    footer: 'Read from the Agent transport inventory. A live connection is only known to the Control process that holds it.',
+    connection: {
+      mtls_stream: 'mTLS stream',
+      apikey_stream: 'API key stream',
+      legacy: 'Legacy',
+      third_party: 'Third-party',
+      offline: 'Offline'
+    },
+    connectionHint: {
+      mtls_stream: 'Agent Control stream authenticated by the Agent certificate',
+      apikey_stream: 'Agent Control stream authenticated by the node API key',
+      legacy: 'Legacy REST, WebSocket or clean-agent channel; refused once agent_control.mtls is required',
+      third_party: 'Only third-party node software (UniProxy or v2board gRPC) was seen, not an Agent',
+      offline: 'Nothing seen in the last five minutes'
+    },
+    certificate: {
+      valid: 'Valid',
+      overdue: 'Renewal overdue',
+      revoked: 'Revoked',
+      expired: 'Expired',
+      none: 'No certificate',
+      until: 'until {date}',
+      expiredOn: 'expired {date}',
+      revokedOn: 'revoked {date}'
+    }
   },
   form: {
     titleCreate: 'Add node',

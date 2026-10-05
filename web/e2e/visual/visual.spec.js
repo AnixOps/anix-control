@@ -17,6 +17,10 @@ const SHOTS = [
   ['user-subscribe', [DESKTOP]],
   ['admin-dashboard', [DESKTOP, PHONE]],
   ['admin-users', [DESKTOP, PHONE]],
+  // The Agent connection and certificate columns of the node list, and the
+  // subscription group's member table.
+  ['admin-nodes', [DESKTOP, PHONE]],
+  ['admin-subscription-members', [DESKTOP, PHONE]],
   ['admin-node-detail', [DESKTOP]],
   ['admin-node-services', [DESKTOP]],
   // The v4.2 forwarding pages (F5b).

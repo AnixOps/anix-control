@@ -931,10 +931,84 @@ export function runHealthCheck(id) {
   })
 }
 
+// ---------------------------------------------------------------------------
+// Kernel-owned admin routes, /api/v4/admin (docs/guide/api-reference.md):
+// administrators only, answers {data: ...}, refusals {error: {code, message}}.
+// ---------------------------------------------------------------------------
+
+const ADMIN_V4_BASE_URL = '/api/v4'
+// A bulk request has 25 s on the server, over the 5 s default of the client.
+const BULK_TIMEOUT_MS = 30_000
+const ACTIVITY_TIMEOUT_MS = 15_000
+
+function adminV4(config) {
+  return request({ ...config, baseURL: ADMIN_V4_BASE_URL })
+}
+
+function dataOf(body) {
+  return body && typeof body === 'object' && 'data' in body ? body.data : body
+}
+
+function positiveIds(ids) {
+  return [...new Set((Array.isArray(ids) ? ids : []).map(Number).filter(id => Number.isInteger(id) && id > 0))]
+}
+
+// Last online of the users of one page, GET /api/v4/admin/users/activity
+// (at most 200 ids). Answers [{ user_id, last_online_at }] in the order
+// asked; last_online_at is Unix seconds, null for a user never seen. No ids
+// is no request (the route refuses an empty list).
+export async function getUsersActivity(ids, { signal } = {}) {
+  const list = positiveIds(ids)
+  if (!list.length) return []
+  const body = await adminV4({
+    url: '/admin/users/activity',
+    method: 'get',
+    params: { ids: list.join(',') },
+    timeout: ACTIVITY_TIMEOUT_MS,
+    signal
+  })
+  const users = dataOf(body)?.users
+  return Array.isArray(users) ? users : []
+}
+
+// POST /api/v4/admin/users/bulk: ban, unban or reset_traffic for up to 200
+// users, one request instead of one per row. Always answers per item
+// ({ action, requested, succeeded, failed, results: [{ id, ok } | { id, ok:
+// false, error: { code, message } }] }); only an invalid request is refused.
+// reset_traffic applies once per idempotencyKey and user.
+export async function bulkUsers(action, ids, { idempotencyKey } = {}) {
+  const config = { url: '/admin/users/bulk', method: 'post', data: { action, ids: positiveIds(ids) }, timeout: BULK_TIMEOUT_MS }
+  if (idempotencyKey) config.headers = { 'Idempotency-Key': idempotencyKey }
+  return dataOf(await adminV4(config))
+}
+
+// POST /api/v4/admin/invite-codes/bulk: revoke up to 200 invite codes.
+export async function bulkInviteCodes(action, ids) {
+  return dataOf(await adminV4({ url: '/admin/invite-codes/bulk', method: 'post', data: { action, ids: positiveIds(ids) }, timeout: BULK_TIMEOUT_MS }))
+}
+
+// A page of the users granted a subscription group directly,
+// GET /api/v4/admin/subscription-groups/:id/members. Answers
+// { total, page, page_size, members: [{ user_id, email, banned, plan_id,
+// expire_at, transfer_enable, next_renew_price, created_at, active }] };
+// no credential. q is a substring of the e-mail, status active or expired.
+export async function getSubscriptionGroupMembers(groupId, { page = 1, pageSize = 20, q = '', status = '' } = {}) {
+  const params = { page, page_size: pageSize }
+  if (q) params.q = q
+  if (status) params.status = status
+  return dataOf(await adminV4({
+    url: `/admin/subscription-groups/${encodeURIComponent(groupId)}/members`,
+    method: 'get',
+    params
+  }))
+}
+
 export default {
   getDashboard,
   createUser,
   getUserList,
+  getUsersActivity,
+  bulkUsers,
   getUserStats,
   updateUser,
   banUser,
@@ -964,6 +1038,7 @@ export default {
   createSubscriptionGroup,
   updateSubscriptionGroup,
   deleteSubscriptionGroup,
+  getSubscriptionGroupMembers,
   getSubscriptionTemplates,
   getSubscriptionProtocols,
   updateGroupProtocols,
@@ -1025,6 +1100,7 @@ export default {
   getInviteCodes,
   generateInviteCodes,
   revokeInviteCode,
+  bulkInviteCodes,
   getSystemConfigs,
   getSystemConfig,
   getSubscriptionSettings,

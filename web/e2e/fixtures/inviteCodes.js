@@ -10,7 +10,13 @@ const CODES = Array.from({ length: 14 }, (_, i) => ({
 export default {
   path: '/admin/invite-codes',
   edition: 'commercial',
-  api(path, { scenario, method }) {
+  api(path, { scenario, method, body }) {
+    // One request revokes the selection, answered per code.
+    if (path === '/api/v4/admin/invite-codes/bulk' && method === 'POST') {
+      const ids = body?.ids || []
+      const results = ids.map(id => ({ id, ok: true }))
+      return { data: { action: body?.action, requested: ids.length, succeeded: ids.length, failed: 0, results } }
+    }
     if (path === '/api/v2/admin/invite/codes' && method === 'GET') {
       if (scenario === 'empty') return { code: 0, data: { list: [], total: 0 } }
       if (scenario === 'error') return { __status: 502, body: { msg: '上游服务没有响应' } }

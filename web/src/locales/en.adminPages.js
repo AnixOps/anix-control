@@ -528,7 +528,14 @@ export default {
       limits: 'Limits',
       expireAt: 'Expires at',
       status: 'Status',
+      lastOnline: 'Last online',
       createdAt: 'Created at'
+    },
+    lastOnline: {
+      never: 'Never',
+      neverHint: 'No node has reported this user yet.',
+      loading: 'Loading',
+      unavailable: 'Unavailable'
     },
     status: {
       active: 'Active',
@@ -554,6 +561,7 @@ export default {
       description: 'ID {id} · joined {date}',
       subscription: 'Subscription',
       flowReset: 'Traffic resets',
+      activity: 'Activity',
       actions: 'Actions',
       danger: 'Danger zone',
       dangerFooter: 'A new subscription link means every client has to import it again. Reset traffic can’t be undone.'
@@ -647,6 +655,19 @@ export default {
       permanent: 'Permanent',
       trafficUnlimited: '{used} used · no limit'
     },
+    bulk: {
+      requestFailed: 'The bulk request failed: {message}',
+      banPartial: 'Banned {done} of {total} users.',
+      banNone: 'No user was banned.',
+      unbanPartial: 'Unbanned {done} of {total} users.',
+      unbanNone: 'No user was unbanned.',
+      undoPartial: '{count} users could not be restored.',
+      resetTitle: 'Reset the traffic of {count} users?',
+      resetMessage: 'The used traffic of every selected user goes back to zero. This can’t be undone.',
+      resetDone: 'Traffic reset for {count} users',
+      resetPartial: 'Reset the traffic of {done} of {total} users.',
+      resetNone: 'No user’s traffic was reset.'
+    },
     messages: {
       actionFailed: 'Operation failed',
       fillEmailPassword: 'Please fill in email and password',
@@ -656,7 +677,6 @@ export default {
       fetchUsersFailed: 'Users didn’t load',
       bulkBanned: '{count} users banned',
       bulkUnbanned: '{count} users unbanned',
-      bulkPartial: '{done} of {total} users changed. {message}',
       fetchStatsFailed: 'Failed to fetch statistics',
       saveFailed: 'Save failed: {message}',
       userSaved: '{email} saved',

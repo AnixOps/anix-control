@@ -44,6 +44,8 @@ export default {
     monthlyQuota: '月流量限额',
     quotaExceeded: '本月超限',
     lastHeartbeat: '最后心跳',
+    connection: '连接方式',
+    certificate: '证书',
     never: '从未',
     empty: '还没有节点',
     emptyDescription: `${AGENT_NAME} 用注册密钥启动后，节点会自动出现在这里；也可以手动添加。`,
@@ -101,6 +103,51 @@ export default {
     autoRegistered: `${AGENT_NAME} 自动注册`,
     manual: '手动添加',
     createdAt: '创建时间'
+  },
+  agent: {
+    title: 'Agent 连接',
+    retry: '重试',
+    loading: '正在加载 Agent 连接…',
+    unavailable: '暂不可用',
+    loadFailed: '无法加载 Agent 连接',
+    noRecord: '还没有 Agent 记录',
+    noRecordHint: '该节点还没有注册 Agent，可在“部署”页安装。',
+    connectionLabel: '连接方式',
+    transport: '最近通道',
+    lastSeen: '最近出现',
+    neverSeen: '从未',
+    certificateLabel: '证书',
+    notAfter: '有效期至',
+    renewAfter: '续期时间',
+    revokedAt: '吊销时间',
+    revokeReason: '吊销原因',
+    overdueNotice: 'Agent 应在 {date} 之后续期证书。证书仍然有效，但 Agent 没有按时续期。',
+    revokedNotice: '该 Agent 的证书已被吊销，Agent 必须重新注册。',
+    footer: '数据来自 Agent 连接清单。实时连接只有持有该连接的 Control 进程才知道。',
+    connection: {
+      mtls_stream: 'mTLS 流',
+      apikey_stream: 'API 密钥流',
+      legacy: '旧版',
+      third_party: '第三方',
+      offline: '离线'
+    },
+    connectionHint: {
+      mtls_stream: '用 Agent 证书认证的 Agent Control 流',
+      apikey_stream: '用节点 API 密钥认证的 Agent Control 流',
+      legacy: '旧版 REST、WebSocket 或 Clean Agent 通道；agent_control.mtls 设为 required 后会被拒绝',
+      third_party: '只看到第三方节点软件（UniProxy 或 v2board gRPC），不是 Agent',
+      offline: '最近五分钟内没有任何连接'
+    },
+    certificate: {
+      valid: '有效',
+      overdue: '续期逾期',
+      revoked: '已吊销',
+      expired: '已过期',
+      none: '无证书',
+      until: '至 {date}',
+      expiredOn: '{date} 过期',
+      revokedOn: '{date} 吊销'
+    }
   },
   form: {
     titleCreate: '添加节点',

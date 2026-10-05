@@ -26,7 +26,11 @@
       :empty-description="t('adminUsers.empty.description')"
       selectable
       activatable
+      manual-sort
+      :sort="sortState"
+      :card-fields="4"
       :row-actions="userActions"
+      @update:sort="changeSort"
       @update:page="goToPage"
       @row-activate="openDetail"
       @retry="fetchUsers"
@@ -58,9 +62,13 @@
       <template #cell-traffic="{ row }">
         <UiUsageBar :value="usedOf(row)" :max="Number(row.transfer_enable || 0)" :text="trafficText(row)" />
       </template>
+      <template #cell-last_online="{ row }">
+        <UserLastOnline :value="activity.lastOnlineOf(row.id)" :failed="activity.failed.value" />
+      </template>
       <template #bulk-actions="{ rows: chosen }">
         <UiButton size="sm" :icon="Ban" :loading="bulkBusy" data-test="bulk-ban" @click="bulkSetBanned(chosen, true)">{{ t('adminUsers.actions.ban') }}</UiButton>
         <UiButton size="sm" :icon="ShieldCheck" :disabled="bulkBusy" data-test="bulk-unban" @click="bulkSetBanned(chosen, false)">{{ t('adminUsers.actions.unban') }}</UiButton>
+        <UiButton size="sm" variant="danger-soft" :icon="RotateCcw" :disabled="bulkBusy" data-test="bulk-reset-traffic" @click="bulkResetTraffic(chosen)">{{ t('adminUsers.actions.resetTraffic') }}</UiButton>
       </template>
     </UiDataTable>
     <p v-if="statusFilter === 'exhausted'" class="list-page__note" data-test="user-exhausted-note">{{ t('adminUsers.filters.exhaustedHint') }}</p>
@@ -87,6 +95,11 @@
           <UiGroupedListRow :label="t('adminUsers.detail.flowReset')" :value="formatFlowResetDay(detailUser.flowResetTime)" />
           <UiGroupedListRow :label="t('adminUsers.table.limits')" :value="formatUserLimits(detailUser)" />
           <UiGroupedListRow v-if="isCommercial" :label="t('adminUsers.editModal.fields.balance')" :value="String(detailUser.balance ?? 0)" />
+        </UiGroupedList>
+        <UiGroupedList :title="t('adminUsers.detail.activity')">
+          <UiGroupedListRow :label="t('adminUsers.table.lastOnline')" data-testid="user-last-online">
+            <template #value><UserLastOnline :value="activity.lastOnlineOf(detailUser.id)" :failed="activity.failed.value" /></template>
+          </UiGroupedListRow>
         </UiGroupedList>
         <UiGroupedList :title="t('adminUsers.detail.actions')">
           <UiGroupedListRow :label="t('adminUsers.actions.editUser')" @click="runFromDetail(editUser)" />
@@ -235,9 +248,10 @@ import { Ban, Copy, Gauge, KeyRound, Pencil, Plus, RotateCcw, RotateCw, ShieldCh
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useEdition } from '@/composables/useEdition'
 import { useListQuery } from '@/composables/useListQuery'
+import { useBulkReport } from '@/composables/useBulkReport'
 import { useRouteIntent } from '@/composables/useRouteIntent'
 import {
-  banUser, createUser,
+  banUser, bulkUsers, createUser,
   getAdminUser, getTrafficHourly,
   getSubscriptionSettings,
   getUserList, getUserStats, resetUserSubscribe, resetUserTraffic,
@@ -266,6 +280,11 @@ import { copyText } from '@/ui/composables/useClipboard'
 import { useConfirm } from '@/ui/composables/useConfirm'
 import { useFormat } from '@/ui/composables/useFormat'
 import { useToast } from '@/ui/composables/useToast'
+import { adminV4ErrorMessage, newBulkIdempotencyKey } from '@/utils/adminV4'
+import { readBulkResult } from '@/utils/bulkResult'
+import { SORT_ORDERS, createListSort } from '@/utils/listSort'
+import UserLastOnline from './users/UserLastOnline.vue'
+import { useUserActivity } from './users/useUserActivity'
 
 const { t } = useAppI18n()
 // The balance is commercial: the community edition hides the field and
@@ -277,6 +296,18 @@ const subscriptionGroups = ref([])
 // The list state (q, status, page) lives in the URL query (plan §9).
 const listQuery = useListQuery({ omit: ['email', 'create'] })
 const USER_STATUS_FILTERS = ['active', 'expired', 'banned', 'exhausted']
+// Sorting happens on the server (GET /admin/users sort and order), so a
+// header sorts the whole list: only the columns the API can sort by are
+// sortable, keyed by the table's column key. The status is derived and the
+// plan's name is another table's, and sorting the 20 rows of one page says
+// nothing about the list, so those two headers stay plain.
+const USER_SORT = createListSort({ id: 'id', email: 'email', traffic: 'traffic', expired_at: 'expired_at', created_at: 'created_at' })
+const sortState = ref(USER_SORT.fromQuery(
+  listQuery.read('sort', { values: USER_SORT.values }),
+  listQuery.read('order', { values: SORT_ORDERS })
+))
+const activity = useUserActivity()
+const bulkReport = useBulkReport()
 const page = ref(listQuery.readPage())
 const pageSize = ref(20)
 const total = ref(0)
@@ -343,16 +374,19 @@ const trafficText = user => (Number(user?.transfer_enable || 0) > 0
   ? `${formatBytes(usedOf(user))} / ${formatBytes(user.transfer_enable)}`
   : t('adminUsers.labels.trafficUnlimited', { used: formatBytes(usedOf(user)) }))
 
+// Last online takes the room 注册时间 had at 1440 px (it is in the detail
+// sheet's description, and one click away in the table settings).
 const columns = computed(() => [
-  { key: 'email', label: t('adminUsers.table.email'), primary: true, sortable: true },
-  { key: 'status', label: t('adminUsers.table.status'), secondary: true, sortable: true, sortValue: user => statusOf(user).label },
-  { key: 'plan', label: isCommercial.value ? t('adminUsers.table.plan') : t('adminUsers.table.subscriptionTemplate'), value: user => user.plan?.name, sortable: true },
-  { key: 'traffic', label: t('adminUsers.table.traffic'), sortable: true, firstDirection: 'desc', sortValue: usedOf },
-  { key: 'expired_at', label: t('adminUsers.table.expireAt'), sortable: true, numeric: true, nowrap: true, format: value => formatDate(value), sortValue: user => user.expired_at || Number.MAX_SAFE_INTEGER },
+  { key: 'email', label: t('adminUsers.table.email'), primary: true },
+  { key: 'status', label: t('adminUsers.table.status'), secondary: true },
+  { key: 'plan', label: isCommercial.value ? t('adminUsers.table.plan') : t('adminUsers.table.subscriptionTemplate'), value: user => user.plan?.name },
+  { key: 'traffic', label: t('adminUsers.table.traffic'), firstDirection: 'desc' },
+  { key: 'expired_at', label: t('adminUsers.table.expireAt'), numeric: true, nowrap: true, format: value => formatDate(value) },
+  { key: 'last_online', label: t('adminUsers.table.lastOnline'), nowrap: true, breakpoint: 'lg' },
   { key: 'limits', label: t('adminUsers.table.limits'), value: user => formatUserLimits(user), breakpoint: 'lg', hidden: true },
-  { key: 'created_at', label: t('adminUsers.table.createdAt'), sortable: true, numeric: true, nowrap: true, format: value => formatDateTime(value), breakpoint: 'lg' },
-  { key: 'id', label: t('adminUsers.table.id'), numeric: true, sortable: true, hidden: true }
-])
+  { key: 'created_at', label: t('adminUsers.table.createdAt'), numeric: true, nowrap: true, format: value => formatDateTime(value), breakpoint: 'lg', hidden: true },
+  { key: 'id', label: t('adminUsers.table.id'), numeric: true, hidden: true }
+].map(column => (USER_SORT.isSortable(column.key) ? { ...column, sortable: true } : column)))
 const statusChips = computed(() => [
   { value: 'active', label: t('adminUsers.status.active'), count: stats.value.active_users },
   { value: 'expired', label: t('adminUsers.status.expired'), count: stats.value.expired_users },
@@ -388,6 +422,13 @@ const userActions = user => [
 ]
 
 const openDetail = (user) => { detailUser.value = user }
+// A header click sorts the whole list on the server, from the first page.
+const changeSort = (next) => {
+  sortState.value = next
+  page.value = 1
+  selectedIds.value = []
+  fetchUsers()
+}
 const goToPage = (value) => {
   page.value = value
   selectedIds.value = []
@@ -419,38 +460,103 @@ watch(statusFilter, (value, previous) => {
   }
 })
 
-// Bulk ban / unban: there is no bulk endpoint, so each selected user goes
-// through the same per-user endpoint as the row action, one after another.
+// Bulk ban / unban / reset traffic: one request for the whole selection
+// (POST /api/v4/admin/users/bulk), answered per user. The users that could not
+// be changed stay selected, and the toast says why (a count per cause) and
+// offers 重试 for the ones worth another try.
+const runUserBulk = async (action, ids, key = '') => (
+  readBulkResult(await bulkUsers(action, ids, key ? { idempotencyKey: key } : {}), ids)
+)
+const afterBulk = (outcome) => {
+  selectedIds.value = outcome.failedIds
+  fetchUsers()
+  fetchStats()
+}
+
 const bulkSetBanned = async (chosen, banned) => {
   const targets = chosen.filter(user => (banned ? user.banned === 0 : user.banned === 1))
   if (!targets.length || bulkBusy.value) return
+  await applyBulkBan(banned, targets.map(user => user.id))
+}
+const applyBulkBan = async (banned, ids) => {
+  const action = banned ? 'ban' : 'unban'
   bulkBusy.value = true
-  const done = []
-  let failure = null
-  for (const user of targets) {
-    try {
-      assertCompatSuccess(await (banned ? banUser(user.id) : unbanUser(user.id)))
-      done.push(user)
-    } catch (err) {
-      failure = failure || err
-    }
+  let outcome
+  try {
+    outcome = await runUserBulk(action, ids)
+  } catch (err) {
+    toast.error(t('adminUsers.bulk.requestFailed', { message: adminV4ErrorMessage(err, t('adminUsers.messages.actionFailed')) }))
+    return
+  } finally {
+    bulkBusy.value = false
   }
-  bulkBusy.value = false
-  selectedIds.value = []
+  afterBulk(outcome)
+  bulkReport.report(outcome, {
+    success: t(banned ? 'adminUsers.messages.bulkBanned' : 'adminUsers.messages.bulkUnbanned', { count: outcome.done.length }),
+    partial: t(`adminUsers.bulk.${action}Partial`, { done: outcome.done.length, total: ids.length }),
+    none: t(`adminUsers.bulk.${action}None`),
+    undo: () => undoBulkBan(banned, outcome.done),
+    retry: () => applyBulkBan(banned, outcome.retryable)
+  })
+}
+// 撤销 is the inverse action for the users that were changed.
+const undoBulkBan = async (banned, ids) => {
+  try {
+    const outcome = await runUserBulk(banned ? 'unban' : 'ban', ids)
+    if (outcome.failed.length) toast.error(t('adminUsers.bulk.undoPartial', { count: outcome.failed.length }))
+  } catch (err) {
+    toast.error(t('adminUsers.bulk.requestFailed', { message: adminV4ErrorMessage(err, t('adminUsers.messages.actionFailed')) }))
+  }
   fetchUsers()
   fetchStats()
-  if (failure) toast.error(t('adminUsers.messages.bulkPartial', { done: done.length, total: targets.length, message: readApiError(failure) }))
-  if (!done.length) return
-  const message = banned ? t('adminUsers.messages.bulkBanned', { count: done.length }) : t('adminUsers.messages.bulkUnbanned', { count: done.length })
-  toast.success(message, {
-    undo: async () => {
-      for (const user of done) {
-        try { await (banned ? unbanUser(user.id) : banUser(user.id)) } catch { /* the list shows the result */ }
+}
+
+// Reset traffic can't be undone: ask first, once for the selection. Every
+// click of the button makes one Idempotency-Key and the server derives one
+// per user from it, so asking again (a failed request, 重试 for the users that
+// failed) never resets a counter twice.
+const bulkResetTraffic = async (chosen) => {
+  if (!chosen.length || bulkBusy.value) return
+  const ids = chosen.map(user => user.id)
+  const key = newBulkIdempotencyKey()
+  let outcome = null
+  const confirmed = await confirm({
+    title: t('adminUsers.bulk.resetTitle', { count: ids.length }),
+    message: t('adminUsers.bulk.resetMessage'),
+    confirmLabel: t('adminUsers.resetFlow.confirmAction'),
+    tone: 'danger',
+    onConfirm: async () => {
+      bulkBusy.value = true
+      try {
+        outcome = await runUserBulk('reset_traffic', ids, key)
+      } catch (err) {
+        throw new Error(adminV4ErrorMessage(err, t('adminUsers.messages.resetFailed')))
+      } finally {
+        bulkBusy.value = false
       }
-      fetchUsers()
-      fetchStats()
     }
   })
+  if (!confirmed || !outcome) return
+  reportBulkReset(outcome, ids.length, key)
+}
+const reportBulkReset = (outcome, total, key) => {
+  afterBulk(outcome)
+  bulkReport.report(outcome, {
+    success: t('adminUsers.bulk.resetDone', { count: outcome.done.length }),
+    partial: t('adminUsers.bulk.resetPartial', { done: outcome.done.length, total }),
+    none: t('adminUsers.bulk.resetNone'),
+    retry: () => retryBulkReset(outcome.retryable, key)
+  })
+}
+const retryBulkReset = async (ids, key) => {
+  bulkBusy.value = true
+  try {
+    reportBulkReset(await runUserBulk('reset_traffic', ids, key), ids.length, key)
+  } catch (err) {
+    toast.error(t('adminUsers.bulk.requestFailed', { message: adminV4ErrorMessage(err, t('adminUsers.messages.resetFailed')) }))
+  } finally {
+    bulkBusy.value = false
+  }
 }
 
 const dailyColumns = computed(() => [
@@ -527,17 +633,21 @@ const handleCreateUser = async () => {
 
 const fetchUsers = async () => {
   listLoading.value = true
-  listQuery.write({ q: filters.value.email.trim(), status: statusFilter.value, page: page.value })
+  listQuery.write({ q: filters.value.email.trim(), status: statusFilter.value, page: page.value, ...USER_SORT.toQuery(sortState.value) })
   try {
-    const res = await getUserList({ page: page.value, page_size: pageSize.value, email: filters.value.email, status: filters.value.status })
+    const res = await getUserList({ page: page.value, page_size: pageSize.value, email: filters.value.email, status: filters.value.status, ...USER_SORT.toParams(sortState.value) })
     const payload = getResData(res) || {}
     users.value = payload.list || []
     total.value = payload.total || 0
     listError.value = null
+    // When the users of this page were last seen: asked after the list is
+    // shown, for this page's ids only.
+    void activity.load(users.value.map(user => user.id))
     // The open detail follows the reloaded row (ban, edit, reset).
     if (detailUser.value) detailUser.value = users.value.find(item => item.id === detailUser.value.id) || detailUser.value
   } catch (err) {
     listError.value = err
+    activity.reset()
   } finally {
     listLoading.value = false
   }

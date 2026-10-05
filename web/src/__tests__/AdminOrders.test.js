@@ -304,6 +304,24 @@ describe('Admin Orders', () => {
     await waitFor(() => expect(adminApi.getOrderList).toHaveBeenLastCalledWith(expect.objectContaining({ email: '', status: undefined, trade_no: '' })))
   })
 
+  it('sorts on the server by the columns the API supports, from the first page', async () => {
+    const user = userEvent.setup()
+    adminApi.getOrderList.mockResolvedValue({ code: 0, data: { total: 1, list: [{ id: 7, trade_no: 'T-7', total_amount: 1990, status: 0, period: 'month', user: { id: 1, email: 'a@example.test' } }] } })
+    render({ components: { Orders, UiHost }, template: '<div><Orders /><UiHost /></div>' })
+    await screen.findByText('T-7')
+    // The buyer's e-mail and the plan are other tables' columns: plain headers.
+    for (const name of ['Order #', 'Status', 'Amount', 'Created']) {
+      expect(within(screen.getByRole('columnheader', { name: new RegExp(`^${name}`) })).getByRole('button')).toBeTruthy()
+    }
+    for (const name of ['User', 'Plan']) {
+      expect(within(screen.getByRole('columnheader', { name })).queryByRole('button')).toBeNull()
+    }
+    await user.click(within(screen.getByRole('columnheader', { name: /^Amount/ })).getByRole('button'))
+    await waitFor(() => expect(adminApi.getOrderList).toHaveBeenLastCalledWith(expect.objectContaining({ page: 1, sort: 'total_amount', order: 'desc' })))
+    await user.click(within(screen.getByRole('columnheader', { name: /^Order #/ })).getByRole('button'))
+    await waitFor(() => expect(adminApi.getOrderList).toHaveBeenLastCalledWith(expect.objectContaining({ sort: 'trade_no', order: 'asc' })))
+  })
+
   it('shows a load error with retry', async () => {
     const user = userEvent.setup()
     adminApi.getOrderList.mockRejectedValueOnce(new Error('Network Error'))

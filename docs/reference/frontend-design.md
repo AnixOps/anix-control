@@ -333,7 +333,7 @@ written separately for each language. Page text is passed in as props.
   toasts.
 - **Copy.** Short, active, about the result; Chinese and English written
   separately; a space between a number and its unit (`128.4 GB`, `3 分钟前`).
-- **Lists.** Search, filter chips and page live in the URL query, so a
+- **Lists.** Search, filter chips, sort and page live in the URL query, so a
   filtered list can be shared and survives a reload or 返回
   (`composables/useListQuery.js`: `read`, `readPage`, `write` with
   `router.replace`; defaults stay out of the URL). Nodes, users, orders,
@@ -432,16 +432,17 @@ with the API answered from the fixture.
 
 - **Accessibility** (`web/e2e/a11y.spec.js`, part of `npm run test:e2e` in
   the Frontend Build job): `@axe-core/playwright` with the WCAG 2.2 AA and
-  best-practice rules on 23 admin and user screens, light and dark, 1440 and
+  best-practice rules on 38 admin and user screens, light and dark, 1440 and
   390 px. Serious and critical findings fail. It also checks the skip link,
   the landmarks, one `h1` per page and focus returning to the opener when a
   dialog closes, an open row menu and the account menu (no finding of any
   impact), the plugin drawer's tabs (WAI-ARIA keys) and the topology
   workspace's field names. Add a screen to `SCREENS` when a page is added.
 - **Visual regression** (`web/e2e/visual/visual.spec.js`,
-  `playwright.visual.config.js`): 28 full-page screenshots of 12 key screens
-  (sign-in, user home, subscription, dashboard, users, node detail, forward
-  rules, settings, monitoring, plugin center, an empty and an error state),
+  `playwright.visual.config.js`): 59 full-page screenshots of 24 screens
+  (sign-in, user home, subscription, dashboard, users, nodes with their Agent
+  connection, node detail, a subscription group's members, the forwarding
+  pages, settings, monitoring, plugin center, an empty and an error state),
   light and dark at 1440 px and a few at 390 px. Deterministic by design:
   mocked data with fixed timestamps, `Date.now()` fixed with
   `page.clock.setFixedTime`, UTC, English (text in the bundled Inter),
@@ -762,15 +763,20 @@ UiDialog          create / edit forms with Ui fields in a .form-grid
 - **Sorting and pages**: client-side by default (`pageSize` turns pages on);
   `manualSort` and `manualPagination` + `total` for the server, with
   `update:sort` / `update:page`. Header buttons cycle none → ascending →
-  descending and set `aria-sort`.
+  descending and set `aria-sort`. `manualSort` is table-wide (the table sorts
+  no column itself), so a server-sorted list makes only the columns the API
+  sorts by `sortable`: see "Server-side sort" below.
 - **Selection**: `selectable` + `v-model:selected` (row keys, `rowKey`
   default `id`). A header checkbox selects the page (mixed when partly
   selected); the bulk bar (slot `#bulk-actions="{ rows, clear }"`) floats
   up from the bottom (under the overlays; it fades out while a modal Dialog
   or Sheet is open) with the count, "全选所有 N 条" when every row is loaded,
-  and 取消选择 (Esc too). Only offer bulk actions an endpoint supports; a bulk
-  action without a bulk endpoint calls the per-row endpoint for each row (as
-  Users ban / unban does) and offers 撤销.
+  and 取消选择 (Esc too). Only offer bulk actions an endpoint supports. The
+  users (封禁 / 解封 / 重置流量) and invite codes (撤销) have bulk endpoints
+  (`POST /api/v4/admin/users/bulk`, `/api/v4/admin/invite-codes/bulk`) and
+  make one request for the selection; see "Bulk actions" below. A bulk action
+  without a bulk endpoint calls the per-row endpoint for each row and offers
+  撤销 where there is an inverse.
 - **Rows**: `rowActions(row)` gives the "…" menu items (`{ key, label, icon,
   danger, separatorBefore, onSelect }`; the action runs after focus is back
   on the trigger, so a dialog it opens returns focus there). `activatable`
@@ -795,6 +801,47 @@ UiDialog          create / edit forms with Ui fields in a .form-grid
   checkboxes and menus, a polite live region for the selection count, and
   the bulk bar as a named region.
 
+**Server-side sort.** The user, order and node lists pass the sort to the
+server (`sort` and `order` of `GET /api/v2/admin/users|orders|nodes`, the
+whitelists in `docs/guide/api-reference.md`). A page makes the table
+`manual-sort` with `:sort` and `@update:sort`, and keeps the mapping from its
+column keys to the API's names in `createListSort()`
+(`web/src/utils/listSort.js`):
+
+| List | Sortable columns (table key → `sort`) |
+|---|---|
+| 用户 | 邮箱 `email`, 已用 / 总流量 `traffic` (used, newest first), 到期时间 `expired_at`, 注册时间 `created_at`, ID `id` |
+| 订单 | 订单号 `trade_no`, 状态 `status`, 金额 `total_amount`, 创建时间 `created_at` |
+| 节点 | 名称 `name`, 地址 `host`, 负载 `cpu_usage`, 最后心跳 `last_check_at`, ID `id` |
+
+A header click sets the sort, goes back to page 1 (and drops the selection)
+and writes `?sort=<API name>&order=asc|desc` next to the other filters (an
+unknown value in the URL is ignored); the third click is no sort and sends
+neither parameter, so the API's own order applies. A column the API cannot
+sort by (the derived status, a plan name, the buyer's e-mail, the node's
+protocol count and total traffic, the Agent columns) is **not** sortable
+rather than sorted over the loaded page: sorting 20 rows of a long list says
+nothing about the list, and the status and order chips already filter on the
+server.
+
+**Bulk actions.** `useBulkReport()` (`web/src/composables/useBulkReport.js`)
+and `readBulkResult()` (`web/src/utils/bulkResult.js`) read the per-item
+answer of the bulk endpoints (`{ results: [{ id, ok } | { id, ok: false,
+error: { code, message } }] }`; `not_found`, `conflict`, `forbidden_self`,
+`not_attempted`, `failed` or a gateway code). The result is the toast
+pattern of the forwarding bulk bar: all done is a success toast (with 撤销
+where there is an inverse: ban ↔ unban, applied to the users that changed);
+some failed is a warning that stays until dismissed, saying what was done and
+why the rest was not (a count per cause, with the server's text for an
+unnamed code) with 重试 for the ids a second attempt can change (`not_found`,
+`conflict` and `forbidden_self` are final, so never retried); none done is
+the same as an error. The rows that failed stay selected, so which ones they
+are can be read from the table. A request that fails as a whole is a toast,
+or inline in the confirmation when the action has one. The bulk requests have
+a 30 s timeout (the server's budget is 25 s). 重置流量 asks first, makes one
+`Idempotency-Key` per click (the server derives one per user) and sends it
+again for a failed request and for 重试, so a counter is never reset twice.
+
 **Filters and search.** Use the API's filters (the users' `status`, the
 orders' `status`) as chips; a filter the API lacks narrows the loaded page
 only and says so under the table (Users: 流量用尽). Search calls the server
@@ -803,9 +850,19 @@ only and says so under the table (Users: 流量用尽). Search calls the server
 Migrated in U6 (also listed in `web/scripts/data-table-pages.mjs`):
 - **用户** (`Users.vue`): search by email; chips 正常 / 已到期 / 已封禁 (the
   API's `status`, with the counts from the stats) and 流量用尽 (loaded page
-  only); used / total as a `UiUsageBar`; the row opens a detail Sheet
-  (subscription, actions, danger zone); bulk 封禁 / 解封 call the per-user
-  endpoints with one 撤销. The limits and ID columns start hidden.
+  only); used / total as a `UiUsageBar`; 最近在线 (below); the row opens a
+  detail Sheet (subscription, activity, actions, danger zone); sorting on the
+  server; bulk 封禁 / 解封 / 重置流量 are one request each (see "Bulk
+  actions"). The limits, ID and 注册时间 columns start hidden (at 1440 px
+  最近在线 takes the room 注册时间 had; the registration time is in the detail
+  sheet's description).
+  **最近在线** is `GET /api/v4/admin/users/activity?ids=…` for the ids of the
+  page, asked for after the list is shown (`views/admin/users/useUserActivity.js`;
+  an answer for an earlier page is dropped) and never holding it up: a
+  relative time with the exact time on hover (`useFormat().relativeTime`),
+  "从未" for `null`, a dash while loading, "暂不可用" when it fails
+  (`UserLastOnline.vue`, also the 活动 row of the detail). Not sortable: the
+  API has no such sort.
 - **工单** (`Tickets.vue`): an inbox like the user tickets page, the queue on
   the left and the ticket with quick replies on the right (full width on
   phones, with a back button). The admin list has no message thread, so the
@@ -819,7 +876,7 @@ Migrated in U6 (also listed in `web/scripts/data-table-pages.mjs`):
   details Sheet and the install dialog keep their behaviour and test ids.
 - **NodeX Agents** (`Agent.vue`), **Ansible 机器** (`AnsibleMachines.vue`,
   execution plane: visuals only), **邀请码** (`InviteCodes.vue`, bulk copy
-  and revoke), **访问组** (`AccessGroups.vue`, the group opens in a large
+  and revoke: one `POST /api/v4/admin/invite-codes/bulk`), **访问组** (`AccessGroups.vue`, the group opens in a large
   Sheet with members, plans, grants, quotas and a danger zone).
 - Commercial: **订单** (details Sheet, server status chips), **优惠券**,
   **套餐** (details Sheet with groups), **支付** (gateways / records / stats
@@ -855,7 +912,7 @@ template and the first detail page (plan §7.2). Page-local parts live in
 
 ```
 /admin/nodes            UiPageHeader (注册密钥 · 部署父节点 · 添加节点)
-                        UiDataTable: search + status chips (?q= &status= &page=)
+                        UiDataTable: search + status chips + sort (?q= &status= &sort= &order= &page=)
                         row → node page; "…" → 打开 / 协议 / 日志 / 同步 / 编辑 / 删除
 /admin/nodes/:id        back link · name · status badge · 编辑 · 同步并重载 (primary)
   ?section=             UiTabs variant="segmented":
@@ -874,6 +931,26 @@ template and the first detail page (plan §7.2). Page-local parts live in
 - **Status.** The list endpoint reports online/offline from the last
   heartbeat; `GET /admin/nodes/:id` returns the stored column, so
   `nodeData.displayStatus()` applies the same five-minute rule.
+- **Agent connection.** The list and the overview show how each node's Agent
+  reaches Control and the state of its certificate, from the transport
+  inventory (`GET /api/v4/kernel/agents/transports?node=proxy-<id>,…`, at
+  most 200; the nodes are joined by `proxy-<id>`, never `forward-<id>`).
+  The list calls it once per page after the list has loaded
+  (`nodes/useNodeTransports.js`: a late answer for another page is dropped, a
+  failure only turns the two cells into "暂不可用") and has two columns: 连接方式,
+  a `UiBadge` chip (mTLS 流 success, API 密钥流 info, 旧版 warning, 第三方
+  and 离线 neutral: the node's own status badge already says offline), and 证书,
+  a chip (有效 success, 续期逾期 warning, 已吊销 and 已过期 danger, 无证书
+  neutral) with the day that matters (until / expired / revoked). The overview's
+  *Agent connection* group (`NodeAgentConnection.vue`) loads the node's own row
+  and lists the connection, its transport, when it was last seen, the
+  certificate state, `not_after`, `renew_after` and, for a revoked one,
+  `revoked_at` and `revoke_reason`. A valid certificate past `renew_after`
+  is "续期逾期" with a notice (the Agent did not renew in time); a revoked
+  one says the Agent has to enroll again. Neither call holds the page up.
+  The columns are not sortable: the API has no sort for them. To make room
+  at 1440 px 版本 and 负载 start hidden (the node page has both; the table
+  settings bring them back).
 - **Secrets.** 凭据 calls `GET /admin/nodes/:id/credentials` only on 读取 API
   密钥 (the server audits every read) and shows the API key in a masked
   `UiCopyField`; the shared secret is never shown. Registration keys are
@@ -958,6 +1035,14 @@ Old URLs redirect: `/admin/mfa`, `/admin/access-groups`, `/admin/telegram`.
 订阅分组 is a list page with a detail page (plan §7.2,
 `/admin/subscriptions/:id/:section`: 概览, 节点模板, 节点协议, 成员, 订阅输出).
 Its sections are segmented `UiTabs` bound to the path, like the node and forward-node detail pages.
+成员 (`views/admin/subscriptions/GroupMembers.vue`) shows the counts, then a
+paged `UiDataTable` of the users granted the group directly
+(`GET /api/v4/admin/subscription-groups/:id/members`: search by e-mail, a
+有效 / 已过期 chip, 20 per page, membership end, quota override, renewal price,
+no credential) with its loading, empty and error states and cards on a phone;
+the table keeps its own state (the page's URL names the section only). Users
+who reach the group through a plan or their primary group are not members of
+this list, as the counts do not count them.
 
 ## Dashboards and monitoring (U8)
 

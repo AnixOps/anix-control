@@ -37,6 +37,10 @@ const telemetry = vi.hoisted(() => ({
 
 vi.mock('@/api/machineTelemetry', async importOriginal => ({ ...(await importOriginal()), ...telemetry }))
 
+// The node's Agent connection and certificate (GET /api/v4/kernel/agents/transports?node=proxy-5).
+const kernelApi = vi.hoisted(() => ({ getKernelAgentTransports: vi.fn() }))
+vi.mock('@/api/kernel', async importOriginal => ({ ...(await importOriginal()), ...kernelApi }))
+
 const Harness = {
   components: { NodeDetail, UiHost },
   template: '<div><NodeDetail /><UiHost /></div>'
@@ -91,6 +95,8 @@ describe('NodeDetail', () => {
     api.getAuthKeys.mockResolvedValue({ data: [] })
     for (const fn of Object.values(telemetry)) fn.mockReset()
     telemetry.nodeHasServicesTable.mockResolvedValue(false)
+    kernelApi.getKernelAgentTransports.mockReset()
+    kernelApi.getKernelAgentTransports.mockResolvedValue({ nodes: [] })
   })
 
   afterEach(() => {
@@ -105,6 +111,70 @@ describe('NodeDetail', () => {
     expect(screen.getByText('v1.4.2')).toBeTruthy()
     expect(screen.getByRole('link', { name: 'Nodes' }).getAttribute('href')).toBe('/admin/nodes')
     expect(screen.getByRole('tab', { name: 'Overview', selected: true })).toBeTruthy()
+  })
+
+  describe('Agent connection and certificate', () => {
+    const certificate = (extra = {}) => ({
+      serial: 'ab12', issued_at: '2026-10-01T12:00:00Z', not_after: '2999-02-01T12:00:00Z', renew_after: '2999-01-20T12:00:00Z', revoked_at: null, ...extra
+    })
+    const entry = extra => ({ nodes: [{ node: 'proxy-5', certificate_state: 'valid', last_certificate: certificate(), connection: { type: 'mtls_stream', transport: 'mtls-stream', last_seen_at: '2026-10-02T07:59:00Z' }, ...extra }] })
+
+    it('shows the connection, the transport, when it was last seen and the certificate dates for this node', async () => {
+      kernelApi.getKernelAgentTransports.mockResolvedValue(entry())
+      await renderPage()
+      const group = await screen.findByTestId('node-agent')
+      await waitFor(() => expect(within(group).getByTestId('node-connection').textContent).toBe('mTLS stream'))
+      expect(kernelApi.getKernelAgentTransports).toHaveBeenCalledTimes(1)
+      expect(kernelApi.getKernelAgentTransports).toHaveBeenCalledWith({ nodes: ['proxy-5'] })
+      expect(within(group).getByRole('heading', { level: 2, name: 'Agent connection' })).toBeTruthy()
+      expect(group.textContent).toContain('Last transport')
+      expect(group.textContent).toContain('mTLS stream')
+      expect(within(group).getByTestId('node-certificate-state').textContent).toBe('Valid')
+      expect(within(group).getByTestId('node-certificate-not-after').textContent).toContain('2999-02-01')
+      expect(within(group).getByTestId('node-certificate-renew-after').textContent).toContain('2999-01-20')
+      expect(within(group).queryByTestId('node-certificate-revoked-at')).toBeNull()
+      expect(within(group).queryByTestId('node-certificate-overdue')).toBeNull()
+    })
+
+    it('says the Agent did not renew in time when a valid certificate is past renew_after', async () => {
+      kernelApi.getKernelAgentTransports.mockResolvedValue(entry({ last_certificate: certificate({ renew_after: '2000-01-01T00:00:00Z' }) }))
+      await renderPage()
+      const notice = await screen.findByTestId('node-certificate-overdue')
+      expect(notice.textContent).toContain('has not renewed it in time')
+      expect(screen.getByTestId('node-certificate-state').textContent).toBe('Renewal overdue')
+    })
+
+    it('shows when and why a revoked certificate ended', async () => {
+      kernelApi.getKernelAgentTransports.mockResolvedValue(entry({
+        certificate_state: 'revoked',
+        last_certificate: certificate({ not_after: '2026-10-08T12:00:00Z', revoked_at: '2026-10-03T12:00:00Z', revoke_reason: 'node disabled' }),
+        connection: { type: 'legacy', transport: 'http-legacy', last_seen_at: '2026-10-02T07:59:00Z' }
+      }))
+      await renderPage()
+      expect((await screen.findByTestId('node-certificate-state')).textContent).toBe('Revoked')
+      expect(screen.getByTestId('node-certificate-revoked').textContent).toContain('has to enroll again')
+      expect(screen.getByTestId('node-certificate-revoked-at').textContent).toContain('2026-10-03')
+      expect(screen.getByTestId('node-certificate-revoke-reason').textContent).toContain('node disabled')
+      expect(screen.getByTestId('node-connection').textContent).toBe('Legacy')
+    })
+
+    it('says so when Control has no Agent record of the node', async () => {
+      await renderPage()
+      expect((await screen.findByTestId('node-agent-empty')).textContent).toContain('No Agent record yet')
+    })
+
+    it('does not hold the node page up, and a failed call is a row with Retry', async () => {
+      const user = userEvent.setup()
+      kernelApi.getKernelAgentTransports.mockRejectedValueOnce(Object.assign(new Error('forbidden'), { response: { status: 403 } }))
+      await renderPage()
+      expect(await screen.findByRole('heading', { level: 1, name: 'hk-01' })).toBeTruthy()
+      const failed = await screen.findByTestId('node-agent-error')
+      expect(failed.textContent).toContain('Couldn’t load the Agent connection')
+      expect(screen.getByText('v1.4.2')).toBeTruthy()
+      kernelApi.getKernelAgentTransports.mockResolvedValueOnce(entry())
+      await user.click(within(failed).getByRole('button', { name: 'Retry' }))
+      await waitFor(() => expect(screen.getByTestId('node-connection').textContent).toBe('mTLS stream'))
+    })
   })
 
   it('keeps the section in the URL', async () => {

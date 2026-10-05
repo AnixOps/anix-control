@@ -23,6 +23,12 @@ const api = vi.hoisted(() => ({
 
 vi.mock('@/api/admin', () => api)
 
+// The Agent connection of the nodes in view is not what these tests are about.
+vi.mock('@/api/kernel', async importOriginal => ({
+  ...(await importOriginal()),
+  getKernelAgentTransports: vi.fn(async () => ({ nodes: [] }))
+}))
+
 const Harness = {
   components: { Nodes, UiHost },
   template: '<div><Nodes /><UiHost /></div>'

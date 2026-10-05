@@ -562,6 +562,94 @@ async function loadActualRequestModule({ token = '' } = {}) {
   }
 }
 
+describe('admin v4 api (/api/v4/admin)', () => {
+  beforeEach(() => {
+    request.mockReset()
+    request.mockResolvedValue({ data: {} })
+  })
+
+  it('sorts the three lists on the server by passing sort and order through', async () => {
+    await adminApi.getUserList({ page: 1, page_size: 20, sort: 'traffic', order: 'desc' })
+    expect(request).toHaveBeenLastCalledWith({ url: '/admin/users', method: 'get', params: { page: 1, page_size: 20, sort: 'traffic', order: 'desc' } })
+    await adminApi.getOrderList({ sort: 'total_amount', order: 'asc' })
+    expect(request).toHaveBeenLastCalledWith({ url: '/admin/orders', method: 'get', params: { sort: 'total_amount', order: 'asc' } })
+    await adminApi.getNodes({ sort: 'last_check_at', order: 'desc' })
+    expect(request).toHaveBeenLastCalledWith({ url: '/admin/nodes', method: 'get', params: { sort: 'last_check_at', order: 'desc' } })
+  })
+
+  it('asks for the last online of a page of users with their ids, deduplicated, and answers its list', async () => {
+    request.mockResolvedValueOnce({ data: { users: [{ user_id: 3, last_online_at: 1760000000 }, { user_id: 5, last_online_at: null }] } })
+    const rows = await adminApi.getUsersActivity([3, 5, 3, '8', 0, -1, 'x'])
+    expect(request).toHaveBeenCalledTimes(1)
+    expect(request).toHaveBeenLastCalledWith(expect.objectContaining({
+      baseURL: '/api/v4',
+      url: '/admin/users/activity',
+      method: 'get',
+      params: { ids: '3,5,8' }
+    }))
+    expect(rows).toEqual([{ user_id: 3, last_online_at: 1760000000 }, { user_id: 5, last_online_at: null }])
+  })
+
+  it('makes no request for no ids and tolerates an answer without a list', async () => {
+    expect(await adminApi.getUsersActivity([])).toEqual([])
+    expect(await adminApi.getUsersActivity(undefined)).toEqual([])
+    expect(request).not.toHaveBeenCalled()
+    request.mockResolvedValueOnce({ data: null })
+    expect(await adminApi.getUsersActivity([1])).toEqual([])
+  })
+
+  it('posts one bulk request for the users, with a timeout over the server budget and the idempotency key', async () => {
+    const answer = { action: 'reset_traffic', requested: 2, succeeded: 2, failed: 0, results: [{ id: 3, ok: true }, { id: 5, ok: true }] }
+    request.mockResolvedValueOnce({ data: answer })
+    expect(await adminApi.bulkUsers('reset_traffic', [3, 5, 3], { idempotencyKey: 'ub-1' })).toEqual(answer)
+    expect(request).toHaveBeenLastCalledWith({
+      baseURL: '/api/v4',
+      url: '/admin/users/bulk',
+      method: 'post',
+      data: { action: 'reset_traffic', ids: [3, 5] },
+      timeout: 30_000,
+      headers: { 'Idempotency-Key': 'ub-1' }
+    })
+    // The server's budget for a bulk request is 25 s; the client default is 5 s.
+    expect(request.mock.calls[0][0].timeout).toBeGreaterThan(25_000)
+  })
+
+  it('sends no Idempotency-Key header unless asked, and bulk-revokes invite codes', async () => {
+    await adminApi.bulkUsers('ban', [3])
+    expect(request.mock.calls[0][0]).not.toHaveProperty('headers')
+    expect(request.mock.calls[0][0].data).toEqual({ action: 'ban', ids: [3] })
+    request.mockResolvedValueOnce({ data: { action: 'revoke', requested: 1, succeeded: 1, failed: 0, results: [{ id: 11, ok: true }] } })
+    const answer = await adminApi.bulkInviteCodes('revoke', [11, 12])
+    expect(request).toHaveBeenLastCalledWith({
+      baseURL: '/api/v4',
+      url: '/admin/invite-codes/bulk',
+      method: 'post',
+      data: { action: 'revoke', ids: [11, 12] },
+      timeout: 30_000
+    })
+    expect(answer.succeeded).toBe(1)
+  })
+
+  it('pages the members of a subscription group with search and status, leaving empty filters out', async () => {
+    const page = { total: 1, page: 2, page_size: 20, members: [{ user_id: 3, email: 'a@example.test', active: true }] }
+    request.mockResolvedValueOnce({ data: page })
+    expect(await adminApi.getSubscriptionGroupMembers(4, { page: 2, pageSize: 20, q: 'a@', status: 'active' })).toEqual(page)
+    expect(request).toHaveBeenLastCalledWith({
+      baseURL: '/api/v4',
+      url: '/admin/subscription-groups/4/members',
+      method: 'get',
+      params: { page: 2, page_size: 20, q: 'a@', status: 'active' }
+    })
+    await adminApi.getSubscriptionGroupMembers(4)
+    expect(request).toHaveBeenLastCalledWith({
+      baseURL: '/api/v4',
+      url: '/admin/subscription-groups/4/members',
+      method: 'get',
+      params: { page: 1, page_size: 20 }
+    })
+  })
+})
+
 describe('request auth handling', () => {
   beforeEach(() => {
     vi.spyOn(console, 'error').mockImplementation(() => {})

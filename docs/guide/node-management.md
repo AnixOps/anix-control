@@ -194,7 +194,13 @@ POST /api/v2/admin/auth-keys
 
 ```bash
 GET /api/v2/admin/nodes?page=1&size=20
+GET /api/v2/admin/nodes?sort=last_check_at&order=desc   # 服务端排序
 ```
+
+管理端「节点」页的表头排序由服务端完成（`sort` 可取 `id`、`name`、`host`、`cpu_usage`、`last_check_at` 等，
+见 `docs/guide/api-reference.md`），排序写进页面 URL（`?sort=&order=`）；显示状态由最近心跳推算、协议数来自另一张表，
+这两列不能排序。列表还显示每个节点 Agent 的连接方式（mTLS 流 / API 密钥流 / 旧版 / 第三方 / 离线）和证书状态，
+节点页「概览」里有「Agent 连接」分组（连接方式、最近出现、证书到期与续期时间、吊销时间和原因）。
 
 ### 添加协议配置
 

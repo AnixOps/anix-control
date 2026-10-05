@@ -243,7 +243,10 @@ the accepted values). The same two parameters sort the order and node
 lists below, each with its own columns. The identity package's native list
 answers the same order (`internal/tests/identitycompat`). The user's
 status is derived (banned, expired, exhausted) and the plan's name comes
-from another table, so neither is a sort column.
+from another table, so neither is a sort column. The console's user, order
+and node tables send their sort headers as these two parameters (from page 1,
+and in the page's URL as `?sort=&order=`) and make only the columns each list
+sorts by sortable; the third click on a header sends neither parameter.
 
 ```json
 {
@@ -275,7 +278,10 @@ Agent Control alike), accurate to a minute, or `null` for a user never seen
 since Control began recording it (`docs/reference/traffic-stats-operations.md`,
 "User Last Online"). The user list and detail above keep their v2 shape, which
 the identity package's native handlers must answer byte for byte; ask this
-route for the ids of the page shown.
+route for the ids of the page shown. The console does so after the user list
+has loaded, for that page's ids only, and shows a relative time, "Never" for
+`null`, or "Unavailable" when the call fails; it also shows it in the user
+detail.
 
 **Bulk actions (`POST /api/v4/admin/users/bulk`, `/api/v4/admin/invite-codes/bulk`).**
 One request does an action for up to 200 ids instead of the console calling
@@ -328,6 +334,14 @@ subscription links are deliberately not bulk actions.
   request id of the bulk request and, for a refused item, the HTTP status
   (404, 409, 403, 422...) and the code and message, so a user's history is
   found by path whichever way it was changed.
+- **In the console.** The users table's bulk bar (ban, unban, reset traffic)
+  and the invite codes table's (revoke) make one of these requests for the
+  selection, with a client timeout over the 25 second budget. The answer is
+  one toast: what was done and a count per error code; the rows that were not
+  done stay selected; "Retry" sends the ids a second attempt can change (not
+  `not_found`, `conflict` or `forbidden_self`). A reset sends one
+  `Idempotency-Key` per click and the same key again for a failed request and
+  for "Retry".
 
 ### 订单管理
 
@@ -462,6 +476,11 @@ GET /api/v4/kernel/agents/transports?legacy_only=true      # 只看仍在旧通�
   以会话为准，否则取五分钟内最近出现的通道。
 
 单个节点的实时控制流快照仍是 `GET /api/v2/admin/nodes/:id/agent-control`。
+
+管理端「节点」列表在列表加载完之后，对当前页的节点发一次 `?node=proxy-<id>,…` 请求，显示连接方式和证书状态
+（有效 / 续期逾期 / 已过期 / 已吊销 / 无证书，附到期或吊销日期）；节点页概览显示 `connection`、
+`last_certificate` 的 `not_after`、`renew_after`、`revoked_at`、`revoke_reason`，有效证书超过 `renew_after`
+时提示 Agent 没有按时续期。这个请求失败只会让这两列显示「暂不可用」，不影响节点列表。
 
 ### 授权密钥管理
 

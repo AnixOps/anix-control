@@ -1,3 +1,5 @@
+import { FIXED_NOW_MS } from './clock.js'
+
 const GROUPS = [
   { id: 1, name: '亚洲', description: '香港、日本、新加坡节点', priority: 10, enable: 1 },
   { id: 2, name: '欧美', description: '美国与德国', priority: 5, enable: 1 },
@@ -38,6 +40,26 @@ proxy-groups:
   - name: Proxy
     type: select
     proxies: [香港 01, 日本 02]`
+// GET /api/v4/admin/subscription-groups/1/members: the users granted the group
+// directly, newest grant first (no credential in any field).
+const MEMBER_NAMES = ['lin.xiao', 'wang.fang', 'chen.jie', 'zhao.lei', 'sun.li', 'zhou.min', 'wu.hao', 'zheng.yu', 'feng.yi', 'he.ming', 'luo.qi', 'gao.yan', 'xu.ning', 'ma.chao', 'tang.yu', 'han.mei', 'liu.bo', 'deng.xin', 'yan.ru', 'shi.kai', 'jiang.lu', 'fan.hui']
+const MEMBER_DAY = 86400
+const MEMBERS = MEMBER_NAMES.map((name, index) => {
+  const expired = index % 5 === 3
+  const forever = index % 4 === 1
+  return {
+    user_id: 300 + index,
+    email: `${name}@example.com`,
+    banned: index === 6 ? 1 : 0,
+    plan_id: index % 3 === 0 ? null : 1 + (index % 3),
+    expire_at: forever ? null : Math.floor(FIXED_NOW_MS / 1000) + (expired ? -MEMBER_DAY * (3 + index) : MEMBER_DAY * (30 + index * 3)),
+    transfer_enable: index % 6 === 2 ? 500 * 1024 ** 3 : null,
+    next_renew_price: index % 4 === 0 ? 3000 : null,
+    created_at: new Date(FIXED_NOW_MS - index * 36 * 3600 * 1000).toISOString(),
+    active: !expired
+  }
+})
+
 const PATHS = {
   list: '/admin/subscriptions', empty: '/admin/subscriptions', error: '/admin/subscriptions', groupDialog: '/admin/subscriptions', links: '/admin/subscriptions',
   overview: '/admin/subscriptions/1', templates: '/admin/subscriptions/1/templates', templateDialog: '/admin/subscriptions/1/templates',
@@ -46,7 +68,16 @@ const PATHS = {
 }
 export default {
   pathFor: scenario => PATHS[scenario],
-  api(path, { scenario }) {
+  api(path, { scenario, query }) {
+    if (/^\/api\/v4\/admin\/subscription-groups\/\d+\/members$/.test(path)) {
+      let list = MEMBERS
+      if (query.q) list = list.filter(member => member.email.includes(query.q))
+      if (query.status === 'active') list = list.filter(member => member.active)
+      if (query.status === 'expired') list = list.filter(member => !member.active)
+      const size = Number(query.page_size) || 20
+      const page = Number(query.page) || 1
+      return { data: { total: list.length, page, page_size: size, members: list.slice((page - 1) * size, page * size) } }
+    }
     if (path === '/api/v2/admin/subscription/groups') {
       if (scenario === 'error') return { code: 500, msg: '订阅服务没有响应', data: null }
       return { code: 0, data: scenario === 'empty' ? [] : GROUPS }

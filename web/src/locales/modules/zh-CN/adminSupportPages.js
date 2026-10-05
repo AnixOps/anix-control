@@ -148,6 +148,19 @@ export default {
       cancelFailedShort: '取消失败'
     }
   },
+  // 批量操作（用户、邀请码）的结果：接口逐项返回的错误码的说法，以及“重试”。
+  adminBulk: {
+    retry: '重试 {count} 个',
+    list: '{details}。',
+    separator: '；',
+    errors: {
+      not_found: '{count} 个不存在',
+      conflict: '{count} 个已被使用，予以保留',
+      forbidden_self: '不能封禁自己的账号',
+      not_attempted: '{count} 个未执行（请求超时）',
+      failed: '{count} 个失败'
+    }
+  },
   adminInviteCodes: {
     title: '邀请码',
     subtitle: '生成、复制和撤销用于注册的邀请码。',
@@ -216,6 +229,8 @@ export default {
       generateFailed: '生成邀请码失败：{message}',
       revoked: '已撤销邀请码 {code}',
       revokedMany: '已撤销 {count} 个邀请码',
+      revokePartial: '{total} 个邀请码中 {done} 个已撤销。',
+      revokeNone: '没有邀请码被撤销。',
       revokeFailed: '撤销邀请码失败：{message}',
       copied: '已复制',
       copyFailed: '复制失败'

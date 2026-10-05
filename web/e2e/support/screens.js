@@ -64,6 +64,7 @@ export const SCREENS = {
   'admin-forward-editor-ha': { fixture: forwardV4, scenario: 'editor-ha' },
   'admin-forward-no-capability': { fixture: forwardV4, scenario: 'no-capability' },
   'admin-subscriptions': { fixture: subscriptions, scenario: 'list' },
+  'admin-subscription-members': { fixture: subscriptions, scenario: 'members' },
   'admin-system': { fixture: system, scenario: 'general' },
   'admin-security': { fixture: security, scenario: 'mfa' },
   'admin-access-groups': { fixture: security, scenario: 'groups' },
