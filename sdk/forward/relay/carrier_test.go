@@ -492,12 +492,14 @@ func TestLivenessPingsAndIdleTimeout(t *testing.T) {
 		cfg := Config{PingInterval: 20 * time.Millisecond, IdleTimeout: 100 * time.Millisecond}
 		c, p := newRawPeer(t, "tcp", RoleDialer, cfg, DefaultSettings())
 		s, _ := c.Open(testParams())
-		start := time.Now()
 		waitDone(t, c)
 		if !errors.Is(c.Err(), ErrIdleTimeout) {
 			t.Fatalf("Err = %v", c.Err())
 		}
-		if time.Since(start) < 100*time.Millisecond {
+		// nothing was received after the SETTINGS exchange, so the carrier
+		// can only have ended once the idle timeout had run, counted from
+		// its own start
+		if time.Since(c.start) < 100*time.Millisecond {
 			t.Fatal("closed before the idle timeout")
 		}
 		if _, err := s.Read(make([]byte, 1)); !errors.Is(err, ErrCarrierClosed) {
