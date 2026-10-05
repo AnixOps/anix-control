@@ -297,8 +297,8 @@ subscription links are deliberately not bulk actions.
   JSON, an unknown field or action, no ids, an id that is not a positive
   integer, more than 200 ids) is HTTP 400
   `{"error": {"code": "invalid_request", "message": ...}}`, and then nothing
-  runs. A request has a minute; items it has no time left for are
-  `not_attempted`.
+  runs. A request has 25 seconds, under the server's write timeout; the items it
+  has no time left for are `not_attempted`.
 
 ```json
 {"data": {"action": "ban", "requested": 3, "succeeded": 2, "failed": 1, "results": [

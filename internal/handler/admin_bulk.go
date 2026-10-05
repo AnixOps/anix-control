@@ -20,10 +20,11 @@ import (
 	"github.com/google/uuid"
 )
 
-// bulkBudget bounds one bulk request. Each item is the single-item request
-// (the gateway allows one 30 seconds); items the budget leaves no time for
-// are reported as not attempted.
-const bulkBudget = 60 * time.Second
+// bulkBudget bounds one bulk request, under the 30 seconds production
+// configures as the server's write timeout, so the answer still reaches the
+// client. An item takes milliseconds (the gateway allows one 30 seconds); the
+// items the budget leaves no time for are reported as not attempted.
+const bulkBudget = 25 * time.Second
 
 // maxBulkIDs is the most ids one bulk request names.
 const maxBulkIDs = 200
@@ -202,17 +203,12 @@ func (h *AdminBulkHandler) serve(c *gin.Context, resource bulkResource) {
 		item := BulkItemResult{ID: id}
 		path := strings.Replace(action.path, "{id}", strconv.FormatUint(uint64(id), 10), 1)
 		status := http.StatusOK
-		switch refusal := h.attempt(ctx, c, action, actor, id, path, token, fmt.Sprintf("%s.%d", baseRequestID, index+1)); {
-		case refusal == nil:
-			item.OK = true
-		default:
-			item.Error = refusal.error
-			status = refusal.status
-		}
-		if item.OK {
-			result.Succeeded++
-		} else {
+		if refusal := h.attempt(ctx, c, action, actor, id, path, token, fmt.Sprintf("%s.%d", baseRequestID, index+1)); refusal != nil {
+			item.Error, status = refusal.error, refusal.status
 			result.Failed++
+		} else {
+			item.OK = true
+			result.Succeeded++
 		}
 		result.Results = append(result.Results, item)
 		entry := middleware.AuditItem{Method: action.method, Path: path, Status: status}
