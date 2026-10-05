@@ -261,6 +261,7 @@ func (h *hop) connectDgram(ctx context.Context, client netip.AddrPort) (dgramCon
 			c, err := h.r.dial(ctx, "udp", u.id)
 			if err != nil {
 				u.failure(h.r.now(), s.maxFails, s.openFor)
+				h.logUpstreamFailure(u, err)
 				last = err
 				continue
 			}
@@ -271,6 +272,7 @@ func (h *hop) connectDgram(ctx context.Context, client netip.AddrPort) (dgramCon
 		st, err := u.pool.open(ctx, relay.OpenParams{Kind: relay.StreamUDP, RouteID: h.key.Route, HopIndex: u.nextHop, Client: client})
 		if err != nil {
 			u.failure(h.r.now(), s.maxFails, s.openFor)
+			h.logUpstreamFailure(u, err)
 			last = err
 			continue
 		}

@@ -28,6 +28,10 @@
   `forward.anixops_experimental` (`ANIXOPS` engine and link allowed in routes;
   default `false`) sets the planner's and the validation's `EnableAnixOps`.
   The Agent's `anixops-relay` binary and unit ship in the Agent repository.
+  Tested with the conformance suite, the relay on loopback (all carriers, under
+  the race detector), a fuzz test of the document parser, and a privileged suite
+  in network namespaces (`ANIXOPS_RELAY_E2E=1`, run by CI under sudo) that runs
+  the real relay on three nodes through the driver.
 
 ## 4.2.0-rc.2 - 2026-10-05
 

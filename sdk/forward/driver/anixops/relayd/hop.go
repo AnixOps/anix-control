@@ -453,6 +453,7 @@ func (h *hop) serveCarrier(c relay.Carrier) {
 func (h *hop) handleStream(s relay.Stream) {
 	p := s.Params()
 	if p.RouteID != h.key.Route || p.HopIndex != h.key.Hop {
+		h.r.log.Warn("a stream names another route or hop", "route", h.key.Route, "hop", h.key.Hop, "peer_route", p.RouteID, "peer_hop", p.HopIndex)
 		_ = s.Reject(relay.ResultRouteMismatch)
 		return
 	}
@@ -503,6 +504,7 @@ func (h *hop) connect(ctx context.Context, client netip.AddrPort, kind relay.Str
 		out, err := h.dial(ctx, u, client, kind)
 		if err != nil {
 			u.failure(h.r.now(), s.maxFails, s.openFor)
+			h.logUpstreamFailure(u, err)
 			last = err
 			continue
 		}
@@ -514,6 +516,20 @@ func (h *hop) connect(ctx context.Context, client netip.AddrPort, kind relay.Str
 		last = errors.New("no upstream in rotation")
 	}
 	return nil, nil, relay.ResultUpstreamUnreachable, last
+}
+
+// logUpstreamFailure says, at most once in a while per upstream, that it could
+// not be reached and why (the peer's identity and the reason code, never a
+// client's address).
+func (h *hop) logUpstreamFailure(u *upstream, err error) {
+	if !u.shouldLog(h.r.now()) {
+		return
+	}
+	attrs := []any{"route", h.key.Route, "hop", h.key.Hop, "upstream", u.id, "err", err}
+	if u.def.PeerIdentity != "" {
+		attrs = append(attrs, "peer_identity", u.def.PeerIdentity)
+	}
+	h.r.log.Warn("could not reach an upstream", attrs...)
 }
 
 // dial opens one connection to u.

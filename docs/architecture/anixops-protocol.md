@@ -1026,8 +1026,15 @@ errors and the planner's states for the fixture's route; the relay on loopback
 over TLS_TCP, QUIC, AUTO and PLAIN with three hops, UDP, strategies, admission,
 pause, `max_conns`, quota, bandwidth, hot and structural applies, conflicts,
 peer removal, credential reload and 120 concurrent connections, all under the
-race detector; and the privileged suite of section 6.6 in network namespaces
-(`ANIXOPS_RELAY_E2E=1`, root).
+race detector; the document parser's unit and fuzz tests (`FuzzParse`); and the
+privileged suite of section 6.6 in network namespaces (`ANIXOPS_RELAY_E2E=1`,
+root; CI runs it under sudo in Backend Tests shard 1): the real relay binary on
+three nodes behind a bridge, the planner's own states applied through the
+driver, the route over AUTO, TLS_TCP, QUIC and PLAIN with TCP (1 MiB and half-close), UDP, concurrent connections and the
+counters of every hop, a certificate of another identity refused, a peer
+removed from `ingress_peers` losing its carriers, an exit restarted over TLS_TCP
+and QUIC, and AUTO's fallback with UDP blocked. Not covered there yet:
+certificate renewal under load and the benchmarks (A5).
 
 ## 7. Performance, observability and operations
 

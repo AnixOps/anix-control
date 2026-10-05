@@ -27,6 +27,25 @@ type upstream struct {
 	mu        sync.Mutex
 	fails     uint32
 	openUntil time.Time
+	// lastLogged limits the failure log to one line per upstream per
+	// failureLogInterval.
+	lastLogged time.Time
+}
+
+// failureLogInterval is the shortest time between two log lines about the
+// same upstream failing: a dead upstream fails every connection, and the log
+// must not grow with the traffic (section 7.3: no client addresses either).
+const failureLogInterval = 10 * time.Second
+
+// shouldLog reports whether a failure of the upstream is logged now.
+func (u *upstream) shouldLog(now time.Time) bool {
+	u.mu.Lock()
+	defer u.mu.Unlock()
+	if now.Sub(u.lastLogged) < failureLogInterval {
+		return false
+	}
+	u.lastLogged = now
+	return true
 }
 
 // same reports whether the upstream's transport is unchanged, so its state

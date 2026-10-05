@@ -1079,6 +1079,24 @@ jobs:
           cd sdk/forward/driver/gost
           sudo ANIXOPS_GOST_E2E=1 ANIXOPS_GOST_BIN="${RUNNER_TEMP}/gost/gost" "${RUNNER_TEMP}/gost.test" -test.run '^(TestGostParsesGoldens|TestNetns)' -test.v
 
+      # The anixops relay (H22, experimental): the relay binary the driver
+      # controls, in throwaway network namespaces (a bridge of its own, three
+      # node namespaces, the runner as client and target): the three-hop route
+      # the planner plans over AUTO, TLS_TCP, QUIC and PLAIN with TCP, UDP and
+      # counters, identity pinning, peer removal, a restarted exit, and AUTO's
+      # fallback with UDP blocked. Nothing touches the runner's own network or
+      # systemd units.
+      - name: Check the anixops relay driver in network namespaces
+        if: ${{ matrix.shard == 1 }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          command -v nft >/dev/null || { sudo apt-get update -qq && sudo apt-get install -y -qq --no-install-recommends nftables; }
+          go -C sdk build -o "${RUNNER_TEMP}/anixops-relay" ./forward/driver/anixops/testdata/anixops-relay
+          go -C sdk test -c -o "${RUNNER_TEMP}/anixops.test" ./forward/driver/anixops
+          cd sdk/forward/driver/anixops
+          sudo ANIXOPS_RELAY_E2E=1 ANIXOPS_RELAY_BIN="${RUNNER_TEMP}/anixops-relay" "${RUNNER_TEMP}/anixops.test" -test.run '^TestNetns' -test.v
+
       # After the tests, so every shard tests the committed Swagger package;
       # "Go Quality Gates" vets the tree as committed.
       - name: Verify dependencies and vet the generated Swagger docs
