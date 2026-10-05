@@ -101,7 +101,7 @@ type UserQuery struct {
 // expiry (NULL) sorts last ascending.
 var UserSortColumns = map[string]v2compat.SortColumn{
 	"id":              {Expr: "d.id", Unique: true},
-	"email":           {Expr: userEmail, Unique: true},
+	"email":           {Expr: userEmail},
 	"created_at":      {Expr: "d.created_at"},
 	"expired_at":      {Expr: "e.expired_at", Nullable: true},
 	"traffic":         {Expr: "(e.u + e.d)"},
