@@ -12,7 +12,7 @@ import (
 
 // writeAll writes data to s in the background and returns when the writer is
 // done (the channel), and how many bytes were accepted so far.
-func writeAll(s *Stream, data []byte) (done <-chan error, written *atomic.Int64) {
+func writeAll(s Stream, data []byte) (done <-chan error, written *atomic.Int64) {
 	ch := make(chan error, 1)
 	written = new(atomic.Int64)
 	go func() {
@@ -120,7 +120,7 @@ func TestCarrierWindowBoundsBufferedBytes(t *testing.T) {
 		ch, _ := writeAll(s, data[i])
 		done = append(done, ch)
 	}
-	var in []*Stream
+	var in []Stream
 	for range streams {
 		s, err := a.Accept(ctxTimeout(t))
 		if err != nil {
@@ -167,7 +167,7 @@ func TestCarrierWindowBoundsBufferedBytes(t *testing.T) {
 func TestStalledStreamsCanPinTheCarrier(t *testing.T) {
 	acfg := Config{StreamWindow: 32 * 1024, CarrierWindow: 64 * 1024}
 	d, a := newPair(t, "tcp", Config{}, acfg)
-	var stalled []*Stream
+	var stalled []Stream
 	for range 2 {
 		s, _ := d.Open(testParams())
 		writeAll(s, pattern(64*1024, 1))

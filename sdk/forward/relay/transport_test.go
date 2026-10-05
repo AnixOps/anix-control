@@ -56,25 +56,33 @@ func newTLSEnv(t *testing.T, ccfg Config, peers ...string) *tlsEnv {
 	return e
 }
 
-func (e *tlsEnv) dial(creds *link.Credentials, ccfg Config) (*Carrier, error) {
+func (e *tlsEnv) dial(creds *link.Credentials, ccfg Config) (*ConnCarrier, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), testWait)
 	defer cancel()
 	return DialTLS(ctx, e.l.Addr().String(), link.DialConfig{Credentials: creds, ServerName: "forward-2", PeerIdentity: nodeID("forward-2")}, ccfg)
 }
 
 // pair dials as forward-1 and returns both ends of the carrier.
-func (e *tlsEnv) pair(ccfg Config) (d, a *Carrier) {
+func (e *tlsEnv) pair(ccfg Config) (d, a *ConnCarrier) {
 	e.t.Helper()
 	d, err := e.dial(linkCreds(e.t, e.ca, e.ca.CAPEM(), "forward-1"), ccfg)
 	if err != nil {
 		e.t.Fatal(err)
 	}
 	e.t.Cleanup(func() { _ = d.Close() })
-	a, err = e.l.Accept(ctxTimeout(e.t))
-	if err != nil {
-		e.t.Fatal(err)
-	}
+	a = acceptConn(e.t, e.l)
 	return d, a
+}
+
+// acceptConn takes the next carrier of a TLS or plaintext listener, whose
+// carriers are ConnCarriers.
+func acceptConn(t testing.TB, l *Listener) *ConnCarrier {
+	t.Helper()
+	c, err := l.Accept(ctxTimeout(t))
+	if err != nil {
+		t.Fatal(err)
+	}
+	return c.(*ConnCarrier)
 }
 
 func TestTLSCarrierEndToEnd(t *testing.T) {
@@ -375,7 +383,7 @@ func TestTrustBundleChangeClosesCarriers(t *testing.T) {
 		waitDone(t, d)
 		waitDone(t, a)
 		// a plaintext carrier has nothing to watch
-		WatchCredentials(creds, &Carrier{})()
+		WatchCredentials(creds, &ConnCarrier{})()
 		WatchCredentials(nil, d)()
 	})
 }
@@ -503,12 +511,12 @@ func TestAbortClosesBelowTheTLSLayer(t *testing.T) {
 	tcp := &notifyClose{Conn: a, closed: make(chan struct{})}
 	wrapped := &stuckClose{Conn: tcp, inner: tcp}
 	type res struct {
-		c   *Carrier
+		c   *ConnCarrier
 		err error
 	}
 	ch := make(chan res, 1)
-	go func() { c, err := NewCarrier(b, RoleAcceptor, Config{}); ch <- res{c, err} }()
-	d, err := NewCarrier(wrapped, RoleDialer, Config{})
+	go func() { c, err := NewConnCarrier(b, RoleAcceptor, Config{}); ch <- res{c, err} }()
+	d, err := NewConnCarrier(wrapped, RoleDialer, Config{})
 	if err != nil {
 		t.Fatal(err)
 	}

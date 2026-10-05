@@ -152,7 +152,7 @@ func FuzzSmallPayloads(f *testing.F) {
 
 // fuzzApp serves the streams a carrier under fuzzing accepts: some are read
 // to the end, some refused, some written to, some reset.
-func fuzzApp(c *Carrier) {
+func fuzzApp(c *ConnCarrier) {
 	for {
 		s, err := c.Accept(context.Background())
 		if err != nil {
@@ -180,7 +180,7 @@ func fuzzApp(c *Carrier) {
 
 // fuzzPeer feeds arbitrary bytes to a carrier that has completed its
 // SETTINGS exchange, and then makes sure nothing hangs or panics.
-func fuzzPeer(t *testing.T, role Role, data []byte, prepare func(c *Carrier)) {
+func fuzzPeer(t *testing.T, role Role, data []byte, prepare func(c *ConnCarrier)) {
 	cfg := Config{MaxFrame: 1024, StreamWindow: 4096, CarrierWindow: 8192, MaxStreams: 8, AcceptQueue: 4, SendBuffer: 2048,
 		HandshakeTimeout: time.Second, PingInterval: 10 * time.Millisecond, IdleTimeout: 5 * time.Second, ResultTimeout: 100 * time.Millisecond}
 	c, p := newRawPeer(t, "pipe", role, cfg, withSettings(func(s *Settings) { s.MaxStreams = 8 }))
@@ -227,7 +227,7 @@ func FuzzCarrierDialer(f *testing.F) {
 		f.Add(s)
 	}
 	f.Fuzz(func(t *testing.T, data []byte) {
-		fuzzPeer(t, RoleDialer, data, func(c *Carrier) {
+		fuzzPeer(t, RoleDialer, data, func(c *ConnCarrier) {
 			for i := range 3 {
 				s, err := c.Open(OpenParams{Kind: StreamKind(1 + i%2), RouteID: "r", HopIndex: uint32(i)})
 				if err != nil {
