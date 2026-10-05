@@ -1,7 +1,15 @@
-/* Popover list shared by UiSelect and UiCombobox (scoped through
-   <style scoped src>). Frosted material with an opaque fallback, shadow-2,
-   radius-md; items 36 px with a check mark for the selected one. */
+/* Popover list shared by UiSelect and UiCombobox. Global, not scoped (the
+   components import it as a module): Reka renders the list in a portal
+   outside the component, and a scoped rule never reaches its root element
+   (it had no background, radius or z-index). Every selector starts with
+   .ui-listbox. Frosted material with an opaque fallback, shadow-2,
+   radius-md; items 36 px with a check mark for the selected one.
+   `position: relative` is what makes the z-index count: Reka copies the
+   content's computed z-index to its fixed popper wrapper, and a static
+   element computes to `auto`, which left the list under the scrim of a
+   dialog it was opened in. */
 .ui-listbox {
+  position: relative;
   z-index: calc(var(--z-modal) + 1);
   overflow: hidden;
   min-width: var(--reka-select-trigger-width, var(--reka-combobox-trigger-width, 160px));

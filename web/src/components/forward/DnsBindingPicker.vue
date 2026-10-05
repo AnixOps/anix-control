@@ -16,6 +16,9 @@
     </div>
 
     <template v-if="modelValue.enabled">
+      <p v-if="blockers.length" :id="DNS_HINT_ID" class="fwd-note" role="status" data-testid="forward-dns-incomplete">
+        {{ t('forwardDns.binding.saveBlocked', { fields: blockers.join(t('forwardDns.binding.fieldsSeparator')) }) }}
+      </p>
       <p v-if="loadError" class="fwd-note is-danger" role="alert">{{ loadError }}</p>
       <p v-else-if="loaded && !providers.length && !stored" class="fwd-note" role="status" data-testid="forward-dns-no-providers">
         {{ t('forwardDns.binding.noProviders') }}
@@ -141,12 +144,14 @@
 // change once bound (delete with purge and bind again, on the route page).
 // A field that starts out empty shows no error until the user has been in it
 // and left it (touched); the zone follows the entry hostname while it is
-// still the guess.
+// still the guess. One note under the switch says what keeps the editor's
+// Save disabled (all empty or invalid fields, visited or not), so a form
+// nobody has touched yet is not silent about it.
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { UiBadge, UiCheckbox, UiCopyField, UiField, UiGroupedList, UiGroupedListRow, UiNumberField, UiRadioGroup, UiSelect, UiSwitch, UiTextField } from '@/ui'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { listDnsKinds, listDnsProviders } from '@/api/forwardV4'
-import { DEFAULT_TTL, DNS_MODES, MAX_TTL, RECORD_TYPES, kindName, recordTypeLabel, zoneOf } from './dnsModel'
+import { DEFAULT_TTL, DNS_HINT_ID, DNS_MODES, MAX_TTL, RECORD_TYPES, bindingBlockers, kindName, recordTypeLabel, zoneOf } from './dnsModel'
 import { fieldId } from './routeModel'
 import { forwardErrorMessage } from './messages'
 import './forward.css'
@@ -179,6 +184,7 @@ onMounted(async () => {
 })
 
 const cname = computed(() => props.modelValue.mode === 'DNS_BINDING_MODE_CNAME')
+const blockers = computed(() => bindingBlockers(props.errors, t))
 const recordName = computed(() => String(props.hostname || '').trim())
 const providerOptions = computed(() => {
   const options = providers.value.map(provider => ({ value: String(provider.id), label: `${provider.name} · ${kindName(kinds.value, provider.kind)}` }))
@@ -285,6 +291,12 @@ function toggleType(type, on) {
 .dns-picker__line {
   margin: 0;
   overflow-wrap: anywhere;
+}
+
+/* The notes sit on the grouped background under their own fill, where the
+   secondary label colour is 4.3:1 (AA needs 4.5:1): use the primary one. */
+.dns-picker .fwd-note {
+  color: var(--label-1);
 }
 
 .dns-picker__cname {

@@ -9,7 +9,7 @@
       </template>
       <template #actions>
         <UiButton @click="router.push(backTo)">{{ t('forwardV4.common.cancel') }}</UiButton>
-        <UiButton variant="primary" :icon="Check" :loading="saving" :disabled="!canSave" data-testid="forward-save" @click="save">{{ editing ? t('forwardV4.editor.save') : t('forwardV4.editor.create') }}</UiButton>
+        <UiButton variant="primary" :icon="Check" :loading="saving" :disabled="!canSave" :aria-describedby="saveHint" data-testid="forward-save" @click="save">{{ editing ? t('forwardV4.editor.save') : t('forwardV4.editor.create') }}</UiButton>
       </template>
     </UiPageHeader>
 
@@ -197,10 +197,11 @@
 
       <div class="editor-phonebar">
         <UiBadge v-if="violations.length" tone="danger" :label="t('forwardV4.editor.problemsShort', { n: violations.length })" />
+        <UiBadge v-else-if="dnsBlockers.length" tone="warning" :label="t('forwardDns.binding.incompleteShort')" />
         <UiBadge v-else-if="preview.result.value" tone="success" :label="t('forwardV4.preview.ok')" />
         <UiBadge v-else tone="neutral" :label="t('forwardV4.preview.waiting')" />
         <a class="editor-phonebar__link" href="#preview">{{ t('forwardV4.editor.viewPreview') }}</a>
-        <UiButton size="sm" variant="primary" :loading="saving" :disabled="!canSave" @click="save">{{ editing ? t('forwardV4.editor.save') : t('forwardV4.editor.createShort') }}</UiButton>
+        <UiButton size="sm" variant="primary" :loading="saving" :disabled="!canSave" :aria-describedby="saveHint" @click="save">{{ editing ? t('forwardV4.editor.save') : t('forwardV4.editor.createShort') }}</UiButton>
       </div>
     </template>
 
@@ -242,7 +243,7 @@ import { useAppI18n } from '@/composables/useAppI18n'
 import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
 import { createDnsBinding, createRoute, getRoute, listDnsBindings, listNodes, newIdempotencyKey, routeBody, updateDnsBinding, updateRoute } from '@/api/forwardV4'
 import DnsBindingPicker from '@/components/forward/DnsBindingPicker.vue'
-import { bindingChanged, bindingDraft, bindingErrors, bindingRequest, dnsErrorMessage } from '@/components/forward/dnsModel'
+import { DNS_HINT_ID, bindingBlockers, bindingChanged, bindingDraft, bindingErrors, bindingRequest, dnsErrorMessage } from '@/components/forward/dnsModel'
 import HopCard from '@/components/forward/HopCard.vue'
 import PreviewPanel from '@/components/forward/PreviewPanel.vue'
 import { forwardErrorMessage, violationText } from '@/components/forward/messages'
@@ -351,6 +352,10 @@ const dns = ref(bindingDraft(null))
 const dnsActive = computed(() => Boolean(draft.value) && dnsReady.value && draft.value.hops[0]?.node_refs.length > 1)
 const dnsErrors = computed(() => (dnsActive.value ? bindingErrors(dns.value, draft.value.listen.entry_hostname, t, storedBinding.value) : {}))
 const dnsDirty = computed(() => dnsActive.value && bindingChanged(dns.value, storedBinding.value))
+// What is empty or invalid in the binding: it keeps Save disabled, and the
+// picker's note says so. Save's aria-describedby points at that note.
+const dnsBlockers = computed(() => (dnsActive.value ? bindingBlockers(dnsErrors.value, t) : []))
+const saveHint = computed(() => (dnsBlockers.value.length ? DNS_HINT_ID : undefined))
 
 // applyBinding writes the binding once the route is stored. A failure is a
 // toast: the route is saved, and its page shows the binding state.

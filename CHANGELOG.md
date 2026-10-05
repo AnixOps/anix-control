@@ -2,6 +2,40 @@
 
 ## Unreleased
 
+### Changed
+
+- **Forwarding editor, DNS binding: Save says why it is disabled.** With
+  the binding on and the form incomplete (typically the provider never
+  chosen), Save stayed disabled with no message. A note under the switch
+  now lists what is empty or invalid ("Save waits for the DNS binding: DNS
+  provider. Complete it, or turn the binding off.") as a polite status, both
+  Save buttons are described by it (`aria-describedby`), and the phone bar
+  shows "DNS binding incomplete". The fields themselves still flag nothing
+  until they were left once. The notes inside the picker use the primary
+  label colour (the secondary one was 4.3:1 on the grouped background).
+
+### Fixed
+
+- **Select and Combobox lists are inside a landmark and leave nothing
+  hidden focusable.** An open list was axe "region" content (moderate), and
+  an open Select made the page `aria-hidden` while it still held focusable
+  controls (`aria-hidden-focus`, serious): Reka's Select hides everything
+  else with no way to turn that off. Each list now portals into its own
+  labelled `region` ("<field> options") that exists only while it is open
+  (`useMenuLayer`), and the page behind an open Select is `inert`
+  (`useInertBehind`) until it closes, so no hidden control can take focus.
+  Keyboard behaviour is unchanged. The layer no longer stays on the page
+  after a Select closes (a closed Reka Select leaves an empty placeholder in
+  its portal).
+- **A Select or Combobox list had no styling of its own.** The list's CSS
+  was scoped to the component, so it never reached the portalled list
+  element: no background, shadow or radius, and its `z-index` was lost, so a
+  Select opened in a dialog (Add user, Edit user, ...) opened under the
+  dialog's scrim, unseen and not clickable. The list's CSS is now global,
+  with the intended material, and sits above dialogs. `e2e/a11y.spec.js`
+  opens a Select in the Add user dialog and chooses with the pointer and the
+  keyboard.
+
 ## 4.2.0-rc.1 - 2026-10-04
 
 ### Added

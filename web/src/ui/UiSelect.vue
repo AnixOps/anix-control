@@ -11,6 +11,7 @@
     :id="id"
   >
     <SelectRoot
+      v-model:open="open"
       :model-value="modelValue ?? undefined"
       :disabled="disabled"
       :required="required"
@@ -34,7 +35,7 @@
           <UiIcon :icon="ChevronDown" class="ui-select__chevron" />
         </InputBox>
       </SelectTrigger>
-      <SelectPortal>
+      <SelectPortal :to="layer">
         <SelectContent class="ui-listbox" position="popper" :side-offset="6" :collision-padding="16">
           <SelectViewport class="ui-listbox__viewport">
             <SelectItem
@@ -65,14 +66,20 @@
 // role="combobox" and a listbox; Space/Enter/↓ open it, arrows move,
 // typing jumps to a match, Esc closes and returns focus).
 // options: [{ value, label, description?, disabled? }] or plain strings.
-// For long or searchable lists use UiCombobox.
-import { computed, useAttrs } from 'vue'
+// For long or searchable lists use UiCombobox. The open list sits in its own
+// labelled region (useMenuLayer), not loose on <body>, and the page behind it
+// is inert while it is open (useInertBehind): Reka hides the rest of the page
+// from assistive technology, and hidden controls must not stay focusable.
+import { computed, ref, useAttrs } from 'vue'
 import { useI18n } from 'vue-i18n'
 import { SelectContent, SelectItem, SelectItemIndicator, SelectItemText, SelectPortal, SelectRoot, SelectTrigger, SelectValue, SelectViewport } from 'reka-ui'
 import { Check, ChevronDown } from '@lucide/vue'
 import UiField from './UiField.vue'
 import UiIcon from './UiIcon.vue'
 import InputBox from './internal/InputBox.vue'
+import './internal/listbox.css'
+import { useInertBehind } from './composables/useInertBehind'
+import { useMenuLayer } from './composables/useMenuLayer'
 
 defineOptions({ inheritAttrs: false })
 
@@ -95,6 +102,12 @@ const props = defineProps({
 const emit = defineEmits(['update:modelValue'])
 const attrs = useAttrs()
 const { t } = useI18n()
+const open = ref(false)
+const layer = useMenuLayer(open, () => {
+  const name = props.label || props.ariaLabel
+  return name ? t('ui.select.optionsOf', { name }) : t('ui.select.options')
+})
+useInertBehind(open, layer)
 
 const normalizedOptions = computed(() => props.options.map(option => (
   typeof option === 'object' && option !== null
@@ -102,8 +115,6 @@ const normalizedOptions = computed(() => props.options.map(option => (
     : { value: option, label: String(option) }
 )))
 </script>
-
-<style scoped src="./internal/listbox.css"></style>
 
 <style scoped>
 .ui-select__trigger {

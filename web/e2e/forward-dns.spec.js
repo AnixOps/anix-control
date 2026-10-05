@@ -1,4 +1,5 @@
 import { test, expect } from '@playwright/test'
+import AxeBuilder from '@axe-core/playwright'
 import { openScreen } from './support/screens.js'
 import { EDGE, chooseNode } from './fixtures/forwardV4.js'
 
@@ -127,6 +128,46 @@ test('the binding picker shows Required only after a field was left and keeps th
   await picker.getByLabel('Zone').fill('typed.example.test')
   await page.getByLabel('Entry hostname').fill('ha.example.com')
   await expect(picker.getByLabel('Zone')).toHaveValue('typed.example.test')
+})
+
+test('a binding that is on but incomplete says why Save is disabled', async ({ page }) => {
+  await openScreen(page, 'admin-forward-editor-blank', { clock: true })
+  await page.getByLabel('Name').first().fill('e2e-ha-hint')
+  await chooseNode(page, 0, 'hk-edge-01')
+  await chooseNode(page, 0, 'hk-edge-02')
+  await page.getByLabel('Entry hostname').fill('ha.example.net')
+  await page.getByLabel('Target 1 host').fill('origin.example.com')
+  await page.getByLabel('Target 1 port').fill('443')
+  await page.getByLabel('Target 1 port').blur()
+  const save = page.getByTestId('forward-save')
+  await expect(save).toBeEnabled({ timeout: 10_000 })
+  await expect(page.getByTestId('forward-dns-incomplete')).toHaveCount(0)
+  await expect(save).not.toHaveAttribute('aria-describedby')
+
+  // Turn the binding on and never visit the provider: Save waits, and the
+  // note under the switch (a polite status, not an error) says for what.
+  const picker = page.getByTestId('forward-dns-picker')
+  await picker.getByRole('switch', { name: 'Keep this hostname on the healthy entries' }).click()
+  const hint = picker.getByTestId('forward-dns-incomplete')
+  await expect(hint).toHaveText('Save waits for the DNS binding: DNS provider. Complete it, or turn the binding off.')
+  await expect(hint).toHaveAttribute('role', 'status')
+  await expect(save).toBeDisabled()
+  await expect(save).toHaveAccessibleDescription(/Save waits for the DNS binding: DNS provider/)
+  // The phone bar's Save (hidden at this width) is described by it too.
+  await expect(page.locator('.editor-phonebar button').first()).toHaveAttribute('aria-describedby', await hint.getAttribute('id'))
+  // The untouched fields are not flagged.
+  await expect(picker.getByText('Required', { exact: true })).toHaveCount(0)
+  await expect(picker.getByRole('combobox', { name: 'DNS provider' })).not.toHaveAttribute('aria-invalid', 'true')
+  const findings = (await new AxeBuilder({ page }).include('[data-testid="forward-dns-picker"]').analyze()).violations
+    .map(violation => `${violation.id} (${violation.impact}): ${violation.nodes.slice(0, 3).map(node => node.target.join(' ')).join(' | ')}`)
+  expect(findings, findings.join('\n')).toEqual([])
+
+  // Choosing the provider completes the binding: the note goes, Save is back.
+  await picker.getByRole('combobox', { name: 'DNS provider' }).click()
+  await page.getByRole('option', { name: /cloudflare-main/ }).click()
+  await expect(hint).toHaveCount(0)
+  await expect(save).toBeEnabled({ timeout: 10_000 })
+  await expect(save).not.toHaveAttribute('aria-describedby')
 })
 
 test('changes a stored binding with the whole object and shows the CNAME instruction', async ({ page }) => {

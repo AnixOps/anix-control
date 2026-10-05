@@ -30,7 +30,9 @@ export default {
     select: {
       placeholder: '请选择',
       search: '搜索',
-      empty: '没有匹配的选项'
+      empty: '没有匹配的选项',
+      options: '选项',
+      optionsOf: '{name}选项'
     },
     otp: {
       digit: '第 {n} 位，共 {total} 位'
