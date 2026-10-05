@@ -1,6 +1,7 @@
 import { test, expect } from '@playwright/test'
 import AxeBuilder from '@axe-core/playwright'
 import { openScreen } from './support/screens.js'
+import { expectToast } from './support/toasts.js'
 import { EDGE, chooseNode } from './fixtures/forwardV4.js'
 
 // Entry HA through DNS (L2) against the mocked /api/v4/forward
@@ -34,7 +35,7 @@ test('adds a provider from the kind schema and keeps stored credentials', async 
   await sheet.getByLabel('Webhook URL').fill('https://hook.example.com/b')
   await sheet.getByLabel('Signing secret').fill('s3cret')
   await page.getByTestId('forward-dns-provider-save').click()
-  await expect(page.getByText('Added hook-b').first()).toBeVisible()
+  await expectToast(page, 'Added hook-b')
   const create = writes.find(write => write.method === 'POST')
   expect(create.path).toBe('/api/v4/forward/dns/providers')
   expect(create.key).toMatch(/^fwd-/)
@@ -50,7 +51,7 @@ test('adds a provider from the kind schema and keeps stored credentials', async 
   await expect(edit.getByLabel('API token')).toHaveValue('********')
   await edit.getByLabel('API endpoint').fill('api.cloudflare.com')
   await page.getByTestId('forward-dns-provider-save').click()
-  await expect(page.getByText('Saved cloudflare-main').first()).toBeVisible()
+  await expectToast(page, 'Saved cloudflare-main')
   const update = writes.find(write => write.method === 'PUT')
   expect(update.path).toBe('/api/v4/forward/dns/providers/1')
   expect(update.body).toEqual({ provider: { name: 'cloudflare-main', kind: 'DNS_PROVIDER_KIND_CLOUDFLARE', config: { endpoint: 'api.cloudflare.com' } }, credentials: {} })
@@ -204,7 +205,7 @@ test('the route page shows entry high availability and unbinds with purge', asyn
   const dialog = page.getByRole('dialog', { name: 'Unbind edge.example.net?' })
   await expect(dialog.getByRole('checkbox', { name: /Also delete the records/ })).toBeChecked()
   await dialog.getByTestId('forward-entry-ha-unbind-confirm').click()
-  await expect(page.getByText('Unbound edge.example.net').first()).toBeVisible()
+  await expectToast(page, 'Unbound edge.example.net')
   const remove = writes.find(write => write.method === 'DELETE')
   expect(remove.path).toBe('/api/v4/forward/dns/bindings/1')
   expect(remove.query).toEqual({ purge: 'true' })
