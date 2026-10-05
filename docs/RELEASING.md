@@ -98,9 +98,12 @@ only the highest version `latest`.
   with the signed identity bootstrap package inside.
   - It is signed with cosign (keyless).
   - It carries SBOM and provenance attestations.
-- **GitHub Release.** About 18 assets: the six binaries, the frontend,
+- **GitHub Release.** About 20 assets: the six binaries, the frontend,
   `official-public-key.raw`, the source SBOM, `RELEASE_MANIFEST.json`,
-  `RELEASE_NOTES.md`, `SHA256SUMS.txt`, `docker-image.txt`, and the packages:
+  `RELEASE_NOTES.md`, `SHA256SUMS.txt`, `docker-image.txt`, the Agent
+  installer `agent-install.sh` with its signature `agent-install.sh.sig`
+  (the same file Control serves at `/install.sh`; verify it against the
+  official root as in `docs/guide/agent-onboarding.md`), and the packages:
   - `anix-control-packages-<version>.tar.gz` holds every package's `.anxp`,
     `.manifest.json`, `.manifest.sig` and `.sbom.spdx.json`, plus one
     `official-public-key.pem`. `build_package.py --release-archive` writes

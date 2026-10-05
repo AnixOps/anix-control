@@ -240,6 +240,11 @@ tar -xzf "anix-control-packages-${VERSION#v}.tar.gz" --strip-components=1 \
   --wildcards "*/machine-telemetry-${VERSION#v}.*"
 ```
 
+On a Control that runs packages signed by another root (the 4.2 root change),
+login is down until `identity-platform` is moved to the new release, so this
+page cannot be reached without a session token taken before the restart:
+follow [`../UPGRADE.md`](../UPGRADE.md#the-official-signing-root-changes-v42).
+
 After importing a release:
 
 1. Open **Control > Plugins**, install every Control-target package while

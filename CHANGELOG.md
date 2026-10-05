@@ -16,6 +16,48 @@
 
 ### Fixed
 
+- **The 4.1.0 to 4.2.0-rc.1 upgrade documentation is corrected from a
+  staging rehearsal** (Compose, PostgreSQL, synthetic data; the published
+  4.1.0 and 4.2.0-rc.1 artifacts; `docs/UPGRADE.md`,
+  `docs/guide/release-root-rotation.md`, `docs/guide/release-installation.md`,
+  `docs/guide/agent-onboarding.md`, `docs/RELEASING.md`):
+  - **The root change has no login.** After the first start with the new
+    root, `POST /api/v2/login` and every business route answer `404
+    package_route_not_found` (not `503 package_unavailable`): identity-platform
+    is an old-root package too, the image registers its 4.2 release without
+    moving the installation, and nothing but a session token issued before the
+    restart (24 hours) reaches the admin API. The new "Upgrade Procedure"
+    takes the token first, moves `identity-platform` first and imports the rest
+    (96 seconds scripted, 34 of them the import).
+  - **Rollback after the import** needs the installations pointed back at
+    4.1.0 in order (`forward`, `identity-platform`, the rest; any other
+    first is `409 release_invalid ... unknown kernel capability
+    "kernel.forward.v1"`), with a pre-upgrade token, or the database backup.
+    Before the import a plain redeploy was enough (33 seconds).
+  - **Compose upgrade traps:** `up -d` fails while `secrets/module_ca_kek` is
+    missing (run `init-secrets.sh`), and a `control.env` that still names the
+    old root stops `migrate` with "plugin signature verification failed" and
+    leaves `control` uncreated.
+  - **Counts:** 151 (4.1) and 130 (4.2) native-by-default routes include the
+    43 of the commercial packages the release does not ship; the published
+    package set gives 108 and 87. The commercial packages (`order`, `payment`,
+    `affiliate`) have no replacement signed with the new root.
+  - **Forwarding archive on Compose:** the startup archive cannot be written
+    on the read-only root file system (a warning); the section now says to
+    run `forward legacy archive -o` and where to keep the file.
+  - A 4.1 release has no `/install.sh` (404), `RELEASING.md` lists the
+    `agent-install.sh` and `agent-install.sh.sig` assets, the forward v4 API's
+    `v4_kernel_forward_*` tables are new in 4.2, and the Agent
+    v4.2.0-rc.1 does accept the credential-only configuration (the
+    onboarding note said it did not).
+- **`anix-control forward legacy archive -o <dir>/` makes the directory.**
+  A path ending in `/` that did not exist was taken for a file name, so
+  the documented `-o /root/forward-legacy/` wrote a 0600 file called
+  `forward-legacy` and the next run refused with "an archive never
+  overwrites a file". The trailing separator now names a directory: it is
+  created (0700) and the archive gets a timestamped name inside it.
+  Without the separator the path is the file name, as before. Found in the
+  4.1.0 to 4.2.0-rc.1 staging rehearsal.
 - **Select and Combobox lists are inside a landmark and leave nothing
   hidden focusable.** An open list was axe "region" content (moderate), and
   an open Select made the page `aria-hidden` while it still held focusable

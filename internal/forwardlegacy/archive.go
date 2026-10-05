@@ -336,6 +336,9 @@ func archivePath(options WriteOptions, now time.Time) (string, error) {
 		}
 		target = options.Dir
 	}
+	// A trailing separator names a directory ("-o /root/forward-legacy/"):
+	// filepath.Abs would drop it and write a file called forward-legacy.
+	wantsDirectory := strings.HasSuffix(target, "/") || strings.HasSuffix(target, string(filepath.Separator))
 	absolute, err := filepath.Abs(target)
 	if err != nil {
 		return "", err
@@ -346,6 +349,11 @@ func archivePath(options WriteOptions, now time.Time) (string, error) {
 		return filepath.Join(absolute, ArchiveFileName(now)), nil
 	case err == nil:
 		return "", fmt.Errorf("%s exists: an archive never overwrites a file", absolute)
+	case errors.Is(err, os.ErrNotExist) && wantsDirectory:
+		if err := os.MkdirAll(absolute, 0o700); err != nil {
+			return "", fmt.Errorf("create the archive directory: %w", err)
+		}
+		return filepath.Join(absolute, ArchiveFileName(now)), nil
 	case errors.Is(err, os.ErrNotExist):
 		return absolute, nil
 	default:
