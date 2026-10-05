@@ -756,6 +756,13 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.POST("/kernel/identity/finalize", handler.FinalizeIdentity)
 		v4.GET("/kernel/modules/runtimes", modules.ListRuntimes)
 		v4.PUT("/kernel/modules/runtimes/:plugin_id", modules.SetRuntime)
+		// Bulk actions of the console's tables: kernel-owned routes under
+		// /api/v4/admin that repeat the single-item /api/v2 route per id
+		// through the same package gateway, so each item runs wherever its
+		// route's mode puts it.
+		bulk := handler.NewAdminBulkHandler(handler.GatewayBulkRunner(r, v2PackageGateway.Serve))
+		v4.POST("/admin/users/bulk", bulk.Users)
+		v4.POST("/admin/invite-codes/bulk", bulk.InviteCodes)
 		v4.GET("/kernel/node-operations", handler.NewKernelNodeOperationsHandler().List)
 		// Administrator API of the console's user pages: kernel-owned
 		// routes under /api/v4/admin, outside the /api/v2 catalog.

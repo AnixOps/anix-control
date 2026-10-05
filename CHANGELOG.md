@@ -105,6 +105,26 @@
   404 `not_found`, a bad id or status 400. `docs/guide/subscription-system.md`
   has the shape.
 
+- **Bulk actions for the console's tables: `POST /api/v4/admin/users/bulk`
+  and `POST /api/v4/admin/invite-codes/bulk`.** The console banned, unbanned
+  and revoked a selection by calling the single-item route once per row (four
+  at a time). One request now takes `{"action", "ids"}` (at most 200 ids):
+  `ban`, `unban` and `reset_traffic` for users, `revoke` for invite codes. Each
+  id is the single-item `/api/v2` request, run through the same package
+  gateway, so it runs wherever the route's mode puts it (the identity
+  package or the kernel's handler) and keeps one implementation. The answer is
+  always HTTP 200 with `{id, ok, error{code, message}}` per id, in order
+  (`not_found`, `conflict`, `forbidden_self`, `not_attempted`, a gateway code
+  or `failed`); only an invalid request is 400. Items are independent, nothing
+  is rolled back. `ban` and `unban` are idempotent, `reset_traffic` applies once
+  per `Idempotency-Key` and user, and an administrator cannot ban themselves
+  in a bulk request. The request is audited under the new `/api/v4/admin`
+  prefix (`bulk_<action>`), and every item leaves the audit row of its
+  single-item route, so a user is still found by path. Nodes, orders and
+  tickets have no bulk action in the console, so they get no endpoint;
+  deleting users and resetting subscription links are not bulk actions
+  (`docs/guide/api-reference.md`).
+
 ### Changed
 
 - **Forwarding editor, DNS binding: Save says why it is disabled.** With

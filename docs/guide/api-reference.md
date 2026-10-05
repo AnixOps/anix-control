@@ -212,6 +212,14 @@ POST /api/v2/admin/users/:id/reset-subscribe
 
 # 用户最近在线时间（v4，仅管理员）
 GET /api/v4/admin/users/activity?ids=3,5,8
+
+# 批量封禁 / 解封 / 重置流量（v4，仅管理员；见下文 Bulk actions）
+POST /api/v4/admin/users/bulk
+{"action": "ban", "ids": [3, 5, 8]}
+
+# 批量撤销邀请码
+POST /api/v4/admin/invite-codes/bulk
+{"action": "revoke", "ids": [11, 12]}
 ```
 
 The list (`data.list`, with `data.total`) filters by `email` (substring),
@@ -268,6 +276,58 @@ since Control began recording it (`docs/reference/traffic-stats-operations.md`,
 "User Last Online"). The user list and detail above keep their v2 shape, which
 the identity package's native handlers must answer byte for byte; ask this
 route for the ids of the page shown.
+
+**Bulk actions (`POST /api/v4/admin/users/bulk`, `/api/v4/admin/invite-codes/bulk`).**
+One request does an action for up to 200 ids instead of the console calling
+the single-item route once per row. `action` is `ban`, `unban` or
+`reset_traffic` for users and `revoke` for invite codes; `ids` are positive
+integers (repeats are dropped, the order kept). Deleting users and resetting
+subscription links are deliberately not bulk actions.
+
+- **Each item is the single-item request.** The kernel runs
+  `POST /api/v2/admin/users/:id/ban`, `.../unban`, `.../reset-traffic` and
+  `DELETE /api/v2/admin/invite/codes/:id` for each id in turn, through the same
+  package gateway the route is served by, so the item runs wherever that
+  route's mode puts it (the identity package natively, or the kernel's
+  handler) and does exactly what the single request does. There is no second
+  implementation.
+- **Per item, not all or nothing.** Items are independent: a failure stops
+  nothing and nothing is rolled back. A valid request is always HTTP 200 with
+  every outcome, in the order of the request; only an invalid request (not
+  JSON, an unknown field or action, no ids, an id that is not a positive
+  integer, more than 200 ids) is HTTP 400
+  `{"error": {"code": "invalid_request", "message": ...}}`, and then nothing
+  runs. A request has a minute; items it has no time left for are
+  `not_attempted`.
+
+```json
+{"data": {"action": "ban", "requested": 3, "succeeded": 2, "failed": 1, "results": [
+  {"id": 3, "ok": true},
+  {"id": 5, "ok": true},
+  {"id": 8, "ok": false, "error": {"code": "not_found", "message": "用户不存在"}}
+]}}
+```
+
+  Error codes: `not_found` (no such user or invite code), `conflict` (an
+  invite code that was used is kept), `forbidden_self` (an administrator
+  cannot ban their own account in a bulk request, so a page selected whole is
+  safe), `not_attempted`, a code of the package gateway
+  (`package_route_frozen`, `plugin_host_unavailable`, ...) and `failed` for
+  any other refusal of the route, with the route's own message.
+- **Idempotent where it can be.** `ban` and `unban` are: a user already in
+  the target state is `ok`. `reset_traffic` zeroes once per `Idempotency-Key`
+  header and user (as the single route does): a client that retries a bulk
+  request sends the same key and no counter is reset twice; without the
+  header every request is a new reset. A retried `revoke` reports the codes
+  that were revoked the first time as `not_found`.
+- **Audited.** The middleware records the request itself (module `users` or
+  `invite-codes`, action `bulk_ban`, `bulk_unban`, `bulk_reset_traffic` or
+  `bulk_revoke`, with the action and ids as the request body), and each item
+  also leaves the row its single-item route leaves (`POST
+  /api/v2/admin/users/12/ban`, ...), with the administrator, address and
+  request id of the bulk request and, for a refused item, the HTTP status
+  (404, 409, 403, 422...) and the code and message, so a user's history is
+  found by path whichever way it was changed.
 
 ### 订单管理
 
