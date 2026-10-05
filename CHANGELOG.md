@@ -2,6 +2,29 @@
 
 ## Unreleased
 
+### Added
+
+- **AnixOps relay transport, A1: frames and the stream multiplexer
+  (`sdk/forward/relay`, prototype).** The first library of the owner-approved
+  H22 design (`docs/architecture/anixops-protocol.md`): the 8-byte frame
+  format (SETTINGS, OPEN, RESULT, DATA, WINDOW, RESET, PING, GOAWAY,
+  DATAGRAM) and a `Carrier` that multiplexes streams over any `net.Conn`,
+  speaking ALPN `anixops/0` (the wire format may change without notice).
+  Only the dialling end opens streams, and OPEN carries no destination, so a
+  listener can never be made to dial anything. Streams are credit flow
+  controlled per stream and per carrier (a stalled stream stops only
+  itself; a carrier buffers at most its window), keep half-close end to end
+  and answer every OPEN (RESULT, or RESET for a carrier-level refusal);
+  UDP associations ride DATAGRAM frames. Carriers ping after 10 s of
+  silence, close after 30 s, retire themselves when OPENs go unanswered, and
+  end on any rule the peer breaks with a GOAWAY naming it. Hard limits
+  everywhere (frame size checked before the payload is read, stream, queue and
+  credit bounds, rationed answers). Tested with a raw frame peer for every
+  violation, a randomized model of streams (integrity, exact credit
+  accounting, no hang), seven fuzz targets with seed corpora, and benchmark
+  stubs. Not a driver: nothing in the planner or the Agent uses it yet, TLS
+  and plaintext carriers and identity verification follow.
+
 ### Changed
 
 - **Forwarding editor, DNS binding: Save says why it is disabled.** With

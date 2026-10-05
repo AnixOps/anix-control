@@ -3,7 +3,10 @@
 Status: DESIGN APPROVED (H22, owner decision of 2026-10-04; open
 questions P1–P10 decided, section 9.3). Scope set by the owner on
 2026-10-04: this document covers only the secure transport between
-AnixOps nodes. Section 8 is still reserved for the owner. Nothing here is implemented; the contract slots
+AnixOps nodes. Section 8 is still reserved for the owner. Phase A1 is
+being built in `sdk/forward/relay`: the frame format and the multiplexer of
+sections 4.2 to 4.7 are implemented there (section 4.10); the rest is not
+implemented yet. The contract slots
 it builds on (`ENGINE_ANIXOPS`, `LINK_SECURITY_ANIXOPS`) exist in
 `sdk/api/forward/v1` and are refused by `sdk/forward/validate` until
 `Options.EnableAnixOps` is set (`docs/architecture/forward-sdk.md`
@@ -482,6 +485,42 @@ from `OPEN` as the first bytes of every TCP connection to a target. Only
 the entry sets the client address; relays pass it on unchanged, and only a
 peer in `ingress_peers` can send `OPEN`. UDP targets get no header in the
 first version (P7). Contract fields: section 6.5.
+
+### 4.10 Implementation notes (A1, ALPN `anixops/0`)
+
+`sdk/forward/relay` implements sections 4.2 to 4.7 and the stream half of
+4.8 (UDP over a stream). Where the text above leaves a choice or the
+implementation settled one, the package documentation is normative for the
+prototype:
+
+- **SETTINGS keys.** `0x1` `MAX_STREAMS` (what a listening end accepts; a
+  dialling end sends 0), `0x2` `MAX_FRAME` (1 KiB to 65535), `0x3`
+  `STREAM_WINDOW` and `0x4` `CARRIER_WINDOW`: the initial credit the sender
+  grants its peer per stream and per carrier (4 KiB to 16 MiB and 64 MiB).
+  Both ends wait for the other's SETTINGS before the first stream, so no limit
+  is assumed; a second SETTINGS or a value out of range ends the carrier
+  (`settings_error`). Windows are configuration; the growth to the
+  bandwidth-delay product of section 4.4 is left to the benchmarks (A5).
+- **Codes.** `RESULT`: 0 ok, 1 `upstream_unreachable`, 2 `admission_denied`,
+  3 `paused`, 4 `quota_exceeded`, 5 `limit_exceeded`, 6 `route_mismatch`
+  (a listener-level answer, so it is a `RESULT`, not a `RESET`), 7 `no_hop`
+  (the process runs no hop for the stream, L2), 8 `internal`. `RESET`: 1
+  `protocol_error`, 2 `flow_control_error`, 3 `unknown_frame`, 4
+  `refused_stream` (carrier-level: stream limit, accept queue full, draining;
+  retry on another carrier), 5 `peer_reset`, 6 `cancel`, 7 `internal`.
+  `GOAWAY`: 0 `no_error`, 1 `protocol_error`, 2 `flow_control_error`, 3
+  `frame_size_error`, 4 `settings_error`, 5 `listener_closed`, 6
+  `peer_not_allowed`, 7 `stuck`, 8 `enhance_your_calm`, 9 `shutdown`, 10
+  `carrier_age`, 11 `credentials_changed`, 12 `idle_timeout`, 13 `internal`.
+- **Credit** returns when the application reads, so a carrier buffers at most
+  its carrier window; stalled streams hold their buffered bytes of it (see
+  the package documentation for the consequence and its mitigation).
+- **UDP over a stream** carries one datagram per `DATAGRAM` frame, never
+  empty; the datagram is dropped, not queued, when the window cannot take it.
+- **Rationing.** Pings, refused or malformed `OPEN`s and stream errors draw
+  from one budget (a burst of 64, then 64 per second); beyond it the carrier
+  ends with `enhance_your_calm`. An `OPEN` that races a `GOAWAY` is refused
+  without charge.
 
 ## 5. Carriers
 
