@@ -2,6 +2,7 @@ package link
 
 import (
 	"crypto/tls"
+	"errors"
 	"io"
 	"net"
 	"sync"
@@ -219,8 +220,10 @@ func TestListenerCloseAbandonsEverything(t *testing.T) {
 	if err := l.Close(); err != nil {
 		t.Fatal(err)
 	}
-	if _, err := net.DialTimeout("tcp", l.Addr().String(), 200*time.Millisecond); err == nil {
-		t.Fatal("the port is still listening")
+	// the listening socket itself is closed (not merely refusing: a port
+	// number can be reused by another process the moment it is free)
+	if _, err := l.inner.Accept(); !errors.Is(err, net.ErrClosed) {
+		t.Fatalf("the listening socket is still open: %v", err)
 	}
 }
 

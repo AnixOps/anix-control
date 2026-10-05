@@ -44,9 +44,11 @@ func TestEncryptedLink(t *testing.T) {
 		t.Fatalf("session %+v", cs)
 	}
 	roundTrip(t, c, in)
-	if st := l.Stats(); st.Accepted != 1 || st.Pending != 0 {
-		t.Fatalf("stats %+v", st)
-	}
+	// The counters settle just after Accept returns.
+	waitFor(t, "the counters to settle", func() bool {
+		st := l.Stats()
+		return st.Accepted == 1 && st.Pending == 0
+	})
 	if client.Identity() != id("forward-1") || client.Node() != "forward-1" || client.Generation() != 1 || client.NotAfter().Before(time.Now()) {
 		t.Fatalf("credentials: %s %s %d %v", client.Identity(), client.Node(), client.Generation(), client.NotAfter())
 	}
