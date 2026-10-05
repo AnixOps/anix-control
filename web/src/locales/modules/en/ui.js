@@ -30,7 +30,9 @@ export default {
     select: {
       placeholder: 'Choose an option',
       search: 'Search',
-      empty: 'No matching options'
+      empty: 'No matching options',
+      options: 'Options',
+      optionsOf: '{name} options'
     },
     otp: {
       digit: 'Digit {n} of {total}'

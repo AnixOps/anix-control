@@ -1,4 +1,5 @@
-// The layer an open drop-down menu is portalled into (UiMenu, AccountMenu).
+// The layer an open drop-down list is portalled into: UiMenu, AccountMenu,
+// and the lists of UiSelect and UiCombobox.
 //
 // Reka renders menu content in a portal on <body>, outside every landmark,
 // so axe reports its items under "region" (all content belongs in a
@@ -6,7 +7,7 @@
 // option: a fixed-position menu would sit under the top bar's
 // backdrop-filter or a dialog's transform and clip. So each menu gets its
 // own layer, a labelled `region` on <body>, that exists only while the menu
-// is open:
+// (or list) is open:
 //
 // - no empty landmark is left behind for screen readers to list;
 // - it never exists when a modal dialog opens, so Reka's hide-others pass
@@ -15,7 +16,10 @@
 //
 // The element is made once per menu and attached while `open` is true. It
 // stays the Teleport target throughout, so the portal never moves, and it
-// removes itself when Reka has taken the menu content out again.
+// removes itself when Reka has taken the menu content out again. "Content"
+// is an element with a role (menu, listbox): a closed Select keeps an empty
+// placeholder <div> in its portal (it renders its options into a fragment so
+// SelectValue can read them), which must not keep the layer alive.
 import { onBeforeUnmount, watch } from 'vue'
 
 /**
@@ -30,6 +34,13 @@ export function useMenuLayer(open, label) {
   layer.setAttribute('role', 'region')
   let observer = null
 
+  const hasContent = () => Boolean(layer.querySelector('[role]'))
+
+  // Detaches once the menu is closed and Reka has removed its content.
+  function settle() {
+    if (!open.value && !hasContent()) detach()
+  }
+
   function detach() {
     observer?.disconnect()
     observer = null
@@ -41,14 +52,14 @@ export function useMenuLayer(open, label) {
     if (!layer.isConnected) document.body.append(layer)
     if (observer || typeof MutationObserver === 'undefined') return
     // Content mounting is the first change, its removal the last one.
-    observer = new MutationObserver(() => {
-      if (!open.value && !layer.childElementCount) detach()
-    })
+    observer = new MutationObserver(settle)
     observer.observe(layer, { childList: true })
   }
 
-  // Sync: the layer is on <body> before the menu content is rendered.
-  watch(open, value => { if (value) attach() }, { flush: 'sync', immediate: true })
+  // Sync: the layer is on <body> before the menu content is rendered. On
+  // close it goes at once when nothing was ever rendered into it, else when
+  // the observer sees the content leave.
+  watch(open, value => { if (value) attach(); else settle() }, { flush: 'sync', immediate: true })
   onBeforeUnmount(detach)
   return layer
 }

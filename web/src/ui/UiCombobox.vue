@@ -40,7 +40,7 @@
           </span>
         </InputBox>
       </ComboboxAnchor>
-      <ComboboxPortal>
+      <ComboboxPortal :to="layer">
         <ComboboxContent class="ui-listbox" position="popper" :side-offset="6" :collision-padding="16">
           <ComboboxViewport class="ui-listbox__viewport">
             <ComboboxEmpty class="ui-listbox__empty">{{ emptyText || t('ui.select.empty') }}</ComboboxEmpty>
@@ -71,7 +71,8 @@
 // Searchable single choice for long lists (users, nodes, templates). Reka
 // Combobox: an input with role="combobox" filters the listbox as you type;
 // ↓/↑ move, Enter selects, Esc closes, and an unmatched search is reset on
-// blur so the field always shows the chosen option.
+// blur so the field always shows the chosen option. The open list sits in its
+// own labelled region (useMenuLayer), not loose on <body>.
 // options: [{ value, label, description?, disabled? }] or plain strings.
 import { computed, ref, useAttrs } from 'vue'
 import { useI18n } from 'vue-i18n'
@@ -83,6 +84,8 @@ import { Check, ChevronDown, Search } from '@lucide/vue'
 import UiField from './UiField.vue'
 import UiIcon from './UiIcon.vue'
 import InputBox from './internal/InputBox.vue'
+import './internal/listbox.css'
+import { useMenuLayer } from './composables/useMenuLayer'
 
 defineOptions({ inheritAttrs: false })
 
@@ -106,6 +109,10 @@ const emit = defineEmits(['update:modelValue'])
 const attrs = useAttrs()
 const { t } = useI18n()
 const open = ref(false)
+const layer = useMenuLayer(open, () => {
+  const name = props.label || props.ariaLabel
+  return name ? t('ui.select.optionsOf', { name }) : t('ui.select.options')
+})
 
 const normalizedOptions = computed(() => props.options.map(option => (
   typeof option === 'object' && option !== null
@@ -122,8 +129,6 @@ function onSelect(value) {
   emit('update:modelValue', value)
 }
 </script>
-
-<style scoped src="./internal/listbox.css"></style>
 
 <style scoped>
 .ui-combobox {

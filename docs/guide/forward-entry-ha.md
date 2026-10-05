@@ -195,7 +195,12 @@ X-AnixOps-Signature: sha256=<hex HMAC-SHA256(secret, "1759579200" + "." + body)>
    - the provider and the zone (guessed from the hostname, and guessed
      again when you change the hostname, unless you typed a zone yourself).
      A field left empty is flagged "Required" only after you have been in
-     it and left it, not as soon as you turn the section on;
+     it and left it, not as soon as you turn the section on. While the
+     binding is incomplete the save button stays off, and one note under
+     the switch says for what ("Save waits for the DNS binding: DNS provider.
+     Complete it, or turn the binding off."); the save buttons are described
+     by that note for screen readers, and the phone bar shows "DNS binding
+     incomplete";
    - the mode: DDNS writes the entry hostname itself; CNAME asks for a
      managed name inside the zone and shows the CNAME to create, with a
      copy button;

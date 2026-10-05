@@ -168,6 +168,28 @@ export function bindingErrors(draft, hostname, t, stored = null) {
   return { ...errors, ...changeableErrors(draft, t) }
 }
 
+// The id of the note that says why a binding keeps the editor's Save
+// disabled; the Save buttons point at it with aria-describedby.
+export const DNS_HINT_ID = 'forward-dns-save-hint'
+
+// The field labels behind bindingErrors' keys, in form order.
+const BLOCKER_LABELS = Object.freeze([
+  ['hostname', 'forwardV4.editor.entryHostname'],
+  ['provider_id', 'forwardDns.binding.provider'],
+  ['zone', 'forwardDns.binding.zone'],
+  ['record_name', 'forwardDns.binding.recordName'],
+  ['record_types', 'forwardDns.binding.recordTypes'],
+  ['ttl', 'forwardDns.binding.ttl']
+])
+
+// bindingBlockers names what keeps a binding from being saved, from the
+// (ungated) bindingErrors: the labels of the fields that are empty or invalid.
+// The editor's hint lists them, so a Save that stays disabled says why even
+// when no field was visited (the fields themselves flag only after a visit).
+export function bindingBlockers(errors, t) {
+  return BLOCKER_LABELS.filter(([key]) => errors?.[key]).map(([, label]) => t(label))
+}
+
 function changeableErrors(draft, t) {
   const errors = {}
   if (!draft.record_types?.length) errors.record_types = t('forwardDns.binding.typeRequired')

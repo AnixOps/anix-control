@@ -137,6 +137,19 @@ describe('dnsModel', () => {
     expect(model.bindingErrors({ ...draft, enabled: false }, '', t)).toEqual({})
   })
 
+  it('names what keeps a binding from being saved, in form order', () => {
+    const draft = { ...model.bindingDraft(null, ''), enabled: true, record_types: [], ttl: 90000, zone: '' }
+    const errors = model.bindingErrors(draft, '', t)
+    expect(Object.keys(errors).sort()).toEqual(['hostname', 'provider_id', 'record_types', 'ttl', 'zone'])
+    expect(model.bindingBlockers(errors, t)).toEqual([
+      'forwardV4.editor.entryHostname', 'forwardDns.binding.provider', 'forwardDns.binding.zone',
+      'forwardDns.binding.recordTypes', 'forwardDns.binding.ttl'
+    ])
+    expect(model.bindingBlockers({ record_name: 'x', zone: 'y' }, t)).toEqual(['forwardDns.binding.zone', 'forwardDns.binding.recordName'])
+    expect(model.bindingBlockers({}, t)).toEqual([])
+    expect(model.bindingBlockers(undefined, t)).toEqual([])
+  })
+
   it('sends only the binding fields and the credentials that carry a value', () => {
     expect(bindingBody({ ...BINDING, extra: 1 })).toEqual({ id: '4', route_id: '01J', provider_id: '1', zone: 'example.net', record_name: 'edge.example.net', mode: 'DNS_BINDING_MODE_DDNS', record_types: ['DNS_RECORD_TYPE_A'], ttl: 60 })
     expect(credentialsBody({ api_token: 'x', other: '' })).toEqual({ api_token: 'x' })
@@ -444,6 +457,56 @@ describe('route editor binding picker (D14)', () => {
     expect(picker.get('#fwd-f-dns-provider-id').element.closest('.ui-field').querySelector('.ui-field__error').textContent).toContain('Required')
   })
 
+  it('says why Save is disabled while the binding is incomplete, without flagging any field', async () => {
+    const wrapper = await mountEditor()
+    const save = () => wrapper.get('[data-testid="forward-save"]')
+    const phoneSave = () => wrapper.get('.editor-phonebar button')
+    // Off: nothing to explain.
+    expect(wrapper.find('[data-testid="forward-dns-incomplete"]').exists()).toBe(false)
+    expect(save().attributes('aria-describedby')).toBeUndefined()
+
+    component(wrapper, UiSwitch, 'Keep this hostname on the healthy entries').vm.$emit('update:modelValue', true)
+    await flushPromises()
+    // On, the provider never visited: Save waits and the note says for what.
+    const picker = wrapper.get('[data-testid="forward-dns-picker"]')
+    const hint = wrapper.get('[data-testid="forward-dns-incomplete"]')
+    expect(save().attributes('disabled')).toBeDefined()
+    expect(hint.text()).toBe('Save waits for the DNS binding: DNS provider. Complete it, or turn the binding off.')
+    expect(hint.attributes('role')).toBe('status')
+    // Both Save buttons (page header, phone bar) are described by it.
+    for (const button of [save(), phoneSave()]) {
+      expect(button.attributes('disabled')).toBeDefined()
+      expect(button.attributes('aria-describedby')).toBe(hint.attributes('id'))
+    }
+    expect(document.getElementById(hint.attributes('id'))).toBe(hint.element)
+    expect(wrapper.get('.editor-phonebar').text()).toContain('DNS binding incomplete')
+    // Still no "Required" under the untouched field.
+    expect(picker.text()).not.toContain('Required')
+    expect(picker.find('.ui-field__error').text()).toBe('')
+
+    // The note follows the form: a second gap is named too, then it goes.
+    await wrapper.get('#fwd-f-dns-zone').setValue('')
+    await flushPromises()
+    expect(hint.text()).toContain('DNS provider, Zone.')
+    await wrapper.get('#fwd-f-dns-zone').setValue('example.net')
+    component(wrapper, UiSelect, 'DNS provider').vm.$emit('update:modelValue', '1')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="forward-dns-incomplete"]').exists()).toBe(false)
+    expect(save().attributes('disabled')).toBeUndefined()
+    expect(save().attributes('aria-describedby')).toBeUndefined()
+    expect(phoneSave().attributes('aria-describedby')).toBeUndefined()
+    expect(wrapper.get('.editor-phonebar').text()).not.toContain('DNS binding incomplete')
+
+    // Turned off again: no note even though it was incomplete before.
+    component(wrapper, UiSelect, 'DNS provider').vm.$emit('update:modelValue', '')
+    await flushPromises()
+    expect(wrapper.find('[data-testid="forward-dns-incomplete"]').exists()).toBe(true)
+    component(wrapper, UiSwitch, 'Keep this hostname on the healthy entries').vm.$emit('update:modelValue', false)
+    await flushPromises()
+    expect(wrapper.find('[data-testid="forward-dns-incomplete"]').exists()).toBe(false)
+    expect(save().attributes('aria-describedby')).toBeUndefined()
+  })
+
   it('moves the zone with the entry hostname until the user types one', async () => {
     const wrapper = await mountEditor()
     component(wrapper, UiSwitch, 'Keep this hostname on the healthy entries').vm.$emit('update:modelValue', true)
@@ -566,6 +629,31 @@ describe('binding picker: errors wait for the user, the zone follows the hostnam
     await flushPromises()
     expect(fieldError(wrapper, 'fwd-f-dns-ttl')).toBe('From 1 to 86400 seconds.')
     expect(wrapper.get('[data-field="dns.record_types"]').find('.ui-field__error').text()).toBe('Choose at least one record type.')
+  })
+
+  it('lists every blocker in one note, in form order, whether visited or not', async () => {
+    const wrapper = mountPicker({ errors: { ttl: 'From 1 to 86400 seconds.', zone: 'Required', provider_id: 'Required' } })
+    await flushPromises()
+    const hint = wrapper.get('[data-testid="forward-dns-incomplete"]')
+    expect(hint.text()).toBe('Save waits for the DNS binding: DNS provider, Zone, TTL. Complete it, or turn the binding off.')
+    expect(hint.attributes('id')).toBe(model.DNS_HINT_ID)
+    expect(hint.attributes('role')).toBe('status')
+    // No field was visited, so none of them is flagged.
+    expect(fieldError(wrapper, 'fwd-f-dns-zone')).toBe('')
+    await wrapper.setProps({ errors: {} })
+    expect(wrapper.find('[data-testid="forward-dns-incomplete"]').exists()).toBe(false)
+  })
+
+  it('says nothing while the binding is off, and for a stored binding without errors', async () => {
+    const off = mountPicker({ modelValue: { ...model.bindingDraft(null, 'edge.example.net'), enabled: false } })
+    await flushPromises()
+    expect(off.find('[data-testid="forward-dns-incomplete"]').exists()).toBe(false)
+    const stored = mountPicker({ modelValue: model.bindingDraft(BINDING), stored: BINDING, errors: {} })
+    await flushPromises()
+    expect(stored.find('[data-testid="forward-dns-incomplete"]').exists()).toBe(false)
+    // A stored binding's own invalid field is named.
+    await stored.setProps({ errors: { ttl: 'From 1 to 86400 seconds.' } })
+    expect(stored.get('[data-testid="forward-dns-incomplete"]').text()).toContain('TTL')
   })
 
   it('guesses the zone again when the hostname changes while the binding is on', async () => {

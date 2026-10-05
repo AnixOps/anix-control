@@ -352,7 +352,7 @@ components):
 | Component | Behaviour |
 |---|---|
 | Fields | A 1 px `--label-3` border (3:1 or more in both themes, WCAG 1.4.11); `<label for>`; help, units and error in `aria-describedby` (error first); `aria-invalid`; errors in a polite live region; native `required` with a visual-only asterisk. |
-| Select / Combobox | `role="combobox"` + listbox; Space/Enter/↓ open, arrows move, typing jumps or filters, Enter selects, Esc closes and returns focus. |
+| Select / Combobox | `role="combobox"` + listbox; Space/Enter/↓ open, arrows move, typing jumps or filters, Enter selects, Esc closes and returns focus. The open list is a region named "<label> options"; a Select makes the page behind it inert while open. |
 | NumberField | `role="spinbutton"` with min/max; ↑/↓ step, PageUp/PageDown ×10, Home/End; the wheel does not change it. |
 | Switch / Checkbox / Radio | `role="switch"` / `checkbox` (`mixed`) / `radiogroup` named by its label; boundaries at 3:1 or more. |
 | SegmentedControl | Named `group` of `aria-pressed` buttons with roving focus; one selection always. |
@@ -461,8 +461,30 @@ when the menu opens and removed when it closes. It exists only while the menu
 is open, so there is no empty landmark to list and Reka's hide-others pass
 for a modal dialog never marks it `aria-hidden`; a menu opened inside a
 dialog stays readable. `e2e/a11y.spec.js` opens a row menu and the account
-menu and expects no axe finding at all. Not done: the `UiSelect` and
-`UiCombobox` lists are still portalled to `<body>` (axe "region" while open).
+menu and expects no axe finding at all.
+
+Open Select and Combobox lists: the same layer (`useMenuLayer`), named
+"<field label> options" ("Options" without a name), so the list is not axe
+"region" content either. The layer counts a role (`listbox`, `menu`) as
+content, because a closed Reka Select keeps an empty placeholder `<div>` in
+its portal. A `UiSelect` is modal in Reka (outside pointer events are off,
+Tab is swallowed, and every other part of the page gets `aria-hidden`, with
+no prop to turn that off), and axe reports `aria-hidden-focus` (serious) for
+hidden controls that can still be focused. So while its list is open the page
+behind it is `inert` (`useInertBehind`): the same siblings Reka hides (an
+element with an `aria-live` attribute and its ancestors are the one
+exemption, as in Reka's hide-others pass), set once focus is inside the list
+and taken off synchronously when it closes, before Reka returns focus to the
+trigger (an earlier `inert` would blur the trigger with no `relatedTarget`).
+`UiCombobox` keeps focus in its input and hides nothing, so it only gets the
+layer. The one finding left while a Select list is open is
+`page-has-heading-one` (moderate): the heading is hidden on purpose and axe
+cannot tell a listbox is modal, so the e2e check filters that one rule.
+`listbox.css` is global (the components import it as a module): scoped, its
+`.ui-listbox` rules never reached the portalled root, which then had no
+background or radius and, with `z-index` on a static element computing to
+`auto`, sat under the scrim of a dialog it was opened in. It is now
+`position: relative` with a real z-index, above the dialog.
 
 Plugin detail drawer: the install targets are `UiTabs variant="segmented"`
 (Left/Right, Home/End, one Tab stop), and the topology workspace's text
