@@ -136,3 +136,16 @@ package_routes:
   # installed package is at least the rehearsed release; legacy keeps every
   # such route on its legacy handler, as in 4.0 (the kill switch).
   default_mode: "rehearsed"
+alerts:
+  # The alert monitor (GET /api/v4/kernel/alerts): certificates that were not
+  # renewed in time, CAs close to their end, and phased processes (the node
+  # credential split, the identity cutover) left in a non-final phase.
+  enabled: true
+  check_interval: "15m"
+  # Upper bound, in days, for a leaf certificate's alert window; the window
+  # is the smaller of this and a sixth of the certificate's lifetime.
+  leaf_expiry_days: 14
+  ca_expiry_days: 60
+  renotify_interval: "24h"
+  # "0" turns the phase alerts off.
+  phase_stuck_after: "72h"

@@ -37,6 +37,12 @@ This table is generated from the code and checked by
 | `ANIX_CONTROL_AGENT_INSTALL_GRPC_TARGET` | `agent_install.grpc_target` | string |  |
 | `ANIX_CONTROL_AGENT_INSTALL_PUBLIC_URL` | `agent_install.public_url` | string |  |
 | `ANIX_CONTROL_AGENT_INSTALL_SIGNATURE_FILE` | `agent_install.signature_file` | string |  |
+| `ANIX_CONTROL_ALERTS_CA_EXPIRY_DAYS` | `alerts.ca_expiry_days` | int | `60` |
+| `ANIX_CONTROL_ALERTS_CHECK_INTERVAL` | `alerts.check_interval` | string | `15m` |
+| `ANIX_CONTROL_ALERTS_ENABLED` | `alerts.enabled` | bool | `true` |
+| `ANIX_CONTROL_ALERTS_LEAF_EXPIRY_DAYS` | `alerts.leaf_expiry_days` | int | `14` |
+| `ANIX_CONTROL_ALERTS_PHASE_STUCK_AFTER` | `alerts.phase_stuck_after` | string | `72h` |
+| `ANIX_CONTROL_ALERTS_RENOTIFY_INTERVAL` | `alerts.renotify_interval` | string | `24h` |
 | `ANIX_CONTROL_APP_API_TOKEN` | `app.api_token` | string | secret, no default |
 | `ANIX_CONTROL_APP_EDITION` | `app.edition` | string | `community` |
 | `ANIX_CONTROL_APP_NAME` | `app.name` | string | `AnixOps Control` |

@@ -425,7 +425,32 @@ routes default to native; `anix-control routes list` shows each route's
 `identity-authority`, `unset`). Package hosts pick a changed policy up at
 their next configuration poll after the restart.
 
+## Alerts
+
+`alerts.*` (`ANIX_CONTROL_ALERTS_*`) configures the alert monitor: Agent,
+forward link and module certificates that were not renewed in time, CAs near
+their end, and phased processes (the node credential split, the identity
+cutover) left in a non-final phase. Every key has a default, so the block can
+be left out.
+
+```yaml
+alerts:
+  enabled: true
+  check_interval: "15m"
+  leaf_expiry_days: 14
+  ca_expiry_days: 60
+  renotify_interval: "24h"
+  phase_stuck_after: "72h"   # "0" turns the phase alerts off
+```
+
+A leaf certificate alerts inside the smaller of `leaf_expiry_days` and a
+sixth of its own lifetime (healthy holders renew at two thirds, so a fixed
+14 days would fire for every fresh 7-day certificate). Details, the alert
+kinds and the API are in [`kernel-alerts.md`](kernel-alerts.md).
+
 ## Related Docs
+
+- [`kernel-alerts.md`](kernel-alerts.md)
 
 - [`forward-runtime-migration.md`](forward-runtime-migration.md)
 - [`startup-config.md`](startup-config.md)

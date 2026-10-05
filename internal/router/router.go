@@ -781,6 +781,8 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.GET("/kernel/node-operations", handler.NewKernelNodeOperationsHandler().List)
 		// A proxy node's traffic series for the admin charts.
 		v4.GET("/kernel/nodes/:id/traffic", handler.NewNodeTrafficHandler().Get)
+		// Certificate-expiry and phase alerts (internal/kernelalerts).
+		v4.GET("/kernel/alerts", handler.NewKernelAlertsHandler().List)
 		routeModes := handler.NewRouteModeHandler()
 		v4.GET("/kernel/route-modes", routeModes.List)
 		v4.POST("/kernel/route-modes", routeModes.Set)
