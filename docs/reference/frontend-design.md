@@ -72,8 +72,8 @@ Load order (`web/src/main.js`): `design/fonts/inter/inter.css`,
   2 px offset; `.tabular-nums`; `.type-*` utilities for the seven type
   steps; scrollbars per theme; `prefers-reduced-motion` (no movement, short
   fades) and `prefers-contrast: more` (stronger separators). It also defines
-  two values the tokens do not have yet: `--scrim` (dialog and drawer
-  backdrop) and `--focus-ring`.
+  three values the tokens do not have yet: `--scrim` (dialog and drawer
+  backdrop), `--focus-ring` and `--z-popover` (see "Layer order").
 - **`style.css`**: what is left of the pre-redesign global layer (U9): the
   baseline for bare `<button>`, `<input>`, `<textarea>` and `<select>`, the
   skip link, and the classes that signed plugin WebUI bundles
@@ -103,6 +103,38 @@ system preference), always writes it to `data-theme` (older page styles use
 `[data-theme='dark']` selectors), keeps following the system until the user
 picks a theme with the toggle, and points the `theme-color` meta tags at the
 active background.
+
+### Layer order
+
+Layers stack by the `--z-*` tokens, lowest first: `--z-sticky` (10, sticky
+headers and bars), `--z-dropdown` (100), `--z-drawer` (200, `UiSheet` and the
+phone navigation drawer), `--z-modal` (300, `UiDialog`, `UiConfirmDialog`,
+the command palette), `--z-popover`, `--z-toast` (400) and `--z-tooltip`
+(500, the skip link, which has to be reachable over everything; there is no
+tooltip component, hints are `title` attributes).
+
+AnixOps Design 1.0.2 has no layer for what opens from a trigger and can be
+opened from inside a dialog, a sheet or the navigation drawer: a row "…"
+menu in a sheet, the account menu in the phone drawer, a Select or Combobox
+list in a dialog. All of these are portalled to `<body>` (`useMenuLayer`), so
+only z-index decides what covers them, and `--z-dropdown` is below the
+drawers and the dialogs. `styles/base.css` therefore defines
+`--z-popover: calc(var(--z-modal) + 1)`: above every dialog and drawer, under
+the toasts, which stay on top of a menu. `.ui-menu`, `.shell-menu` and
+`.ui-listbox` use it with `position: relative`: Reka copies the content's
+z-index to its fixed popper wrapper, and a static element can compute to
+`auto`. A new floating layer uses `var(--z-popover)` the same way. The
+vendored `tokens.css` is not edited for this. The token belongs in the design
+repository (next to `--z-modal`); until a tag carries it, the line in
+`base.css` is its definition, and it goes when the sync brings it.
+
+No component writes a z-index number: stylelint accepts `var(--z-*)`, a token
+plus or minus 1 or 2 (`calc(var(--z-drawer) + 1)`), and `0`, `1`, `-1` and
+`auto` for ordering siblings inside one component. `e2e/layers.spec.js` opens
+a row menu in a sheet, a Select list in a dialog and the account menu in the
+phone drawer and asks the browser (`elementFromPoint`) whether each is what
+the pointer reaches at its centre, and `src/__tests__/layerOrder.test.js`
+pins the scale.
 
 ### Legacy variable map
 
@@ -194,6 +226,7 @@ pages migrated and became errors in U9, when the count reached 0.
 | `npm run lint:styles` (stylelint, `web/stylelint.config.mjs`) | colour literals (hex, named colours, `rgb()`/`hsl()`…) outside `src/design/` | 512 warnings | 646 warnings for the three rules together (774 before U4) | error, 0 |
 | | `font-size` off the scale (12/13/15/19/24/32/48 px, phone 16/28/34 px, or a variable) | 131 warnings | | error, 0 |
 | | `border-radius` off the scale (6/10/14/20/980 px, 0, 50 %, or a variable) | 132 warnings | | error, 0 |
+| | `z-index` that is not a `--z-*` token (alone or ±1/±2), `0`, `1`, `-1` or `auto` | — | — | error, 0 |
 | | removed legacy variables (`var(--text-color)`, …, see "Legacy variable map") | — | — | error, 0 |
 | `npm run lint` (ESLint, `web/eslint.config.js`) | `no-alert`: `alert`, `confirm`, `prompt` | 117 warnings | error, 0 | error, 0 |
 | | `vue/no-restricted-class`: `.modal*` (U4) and the removed global classes (U9) | — | error, 0 | error, 0 |
@@ -484,7 +517,11 @@ cannot tell a listbox is modal, so the e2e check filters that one rule.
 `.ui-listbox` rules never reached the portalled root, which then had no
 background or radius and, with `z-index` on a static element computing to
 `auto`, sat under the scrim of a dialog it was opened in. It is now
-`position: relative` with a real z-index, above the dialog.
+`position: relative` with `z-index: var(--z-popover)`, above the dialog.
+`UiMenu` and the account menu had the same fault with `--z-dropdown`, which is
+below a sheet (200), the phone navigation drawer (201) and a dialog (300): a
+row menu in a sheet or the account menu in the drawer opened under the scrim.
+They use `--z-popover` and `position: relative` too ("Layer order").
 
 Plugin detail drawer: the install targets are `UiTabs variant="segmented"`
 (Left/Right, Home/End, one Tab stop), and the topology workspace's text

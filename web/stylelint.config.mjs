@@ -13,6 +13,12 @@
 const FONT_SIZES = /(var\(--)|^(inherit|initial|unset|(12|13|15|16|19|24|28|32|34|48)px)$/
 const RADIUS = /(var\(--)|^((0|50%|inherit|(6|10|14|20|980)px)(\s+|$)){1,4}$/
 
+// Layers stack by token (--z-sticky, --z-drawer, --z-modal, --z-popover,
+// --z-toast ...), alone or one or two steps off one, never by a number of
+// their own: a menu opened from a dialog must sit above it, which a literal
+// 100 or 9999 gets wrong. 0, 1 and -1 order siblings inside one component.
+const Z_INDEX = /^(auto|-?[01]|var\(--z-[a-z]+\)|calc\(var\(--z-[a-z]+\) [+-] [12]\))$/
+
 // The pre-redesign aliases removed from style.css in U9. They resolve to
 // nothing now, so a copy-pasted var(--text-color) would render unstyled.
 const LEGACY_VARIABLES = /var\(--(bg-color|bg-accent|surface-(color|muted|hover)|border-(color|strong)|text-(color|secondary|tertiary)|primary-(color|hover|soft)|(success|warning|error)-color|admin-sidebar-(surface|accent|hover|divider|text|text-strong|muted)|shadow-(sm|md|lg)|transition|color-(text-[123]|bg-[12]|border)|background-color|bg-secondary|sidebar-(width|collapsed-width)|header-height)\)/
@@ -36,9 +42,10 @@ export default {
     'declaration-property-value-allowed-list': [
       {
         'font-size': [FONT_SIZES],
+        'z-index': [Z_INDEX],
         '/^border(-(top|bottom|start|end)-(left|right|start|end))?-radius$/': [RADIUS]
       },
-      { message: 'Use the token scale: font-size 12/13/15/19/24/32/48 px (var(--type-*-size)), radius var(--radius-xs|sm|md|lg|pill)' }
+      { message: 'Use the token scale: font-size 12/13/15/19/24/32/48 px (var(--type-*-size)), radius var(--radius-xs|sm|md|lg|pill), z-index var(--z-*)' }
     ],
     'declaration-property-value-disallowed-list': [
       { '/.*/': [LEGACY_VARIABLES] },
