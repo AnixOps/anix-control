@@ -275,6 +275,21 @@ agent_install:
   cn_mirror_url: ""
   signature_file: ""
 
+# Alerts (GET /api/v4/kernel/alerts, and one digest to the administrators):
+# Agent, forward link and module certificates that were not renewed, the
+# current CAs near their end, and phased processes (the node credential
+# split, the identity cutover) left in a non-final phase. A leaf certificate
+# alerts inside the smaller of leaf_expiry_days and a sixth of its own
+# lifetime (healthy ones renew at two thirds). phase_stuck_after "0" turns
+# the phase alerts off. Defaults shown.
+alerts:
+  enabled: true
+  check_interval: "15m"
+  leaf_expiry_days: 14
+  ca_expiry_days: 60
+  renotify_interval: "24h"
+  phase_stuck_after: "72h"
+
 # Route modes of v2 Control packages (anix-control routes list/set/rollback).
 # rehearsed (default since 4.1.0): the 151 routes of the 15 packages that
 # passed the staging rehearsal (config/package-route-defaults.json) run their

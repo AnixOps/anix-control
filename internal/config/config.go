@@ -52,6 +52,124 @@ type Config struct {
 	AgentControl   AgentControlConfig   `yaml:"agent_control"`
 	AgentInstall   AgentInstallConfig   `yaml:"agent_install"`
 	PackageRoutes  PackageRoutesConfig  `yaml:"package_routes"`
+	Alerts         AlertsConfig         `yaml:"alerts"`
+}
+
+// AlertsConfig configures the kernel alert monitor (internal/kernelalerts):
+// certificates that were not renewed in time, CAs close to their end, and
+// phased processes (the node credential split, the identity cutover) that
+// have not moved for too long. Alerts are listed at GET
+// /api/v4/kernel/alerts and sent to the administrators through the
+// notification channels (Telegram for bound administrators, and the
+// notification log).
+type AlertsConfig struct {
+	// Enabled turns the monitor off when false; nil means on.
+	Enabled *bool `yaml:"enabled"`
+	// CheckInterval is how often the certificate stores and the phased
+	// processes are scanned (a duration, at least 1m; default 15m).
+	CheckInterval string `yaml:"check_interval"`
+	// LeafExpiryDays caps, in days, how close to its end a leaf certificate
+	// (Agent, link, module) may get without having been renewed before it
+	// alerts (default 14). The window is the smaller of this and one sixth
+	// of the certificate's own lifetime, because a healthy certificate is
+	// renewed at two thirds of its lifetime.
+	LeafExpiryDays int `yaml:"leaf_expiry_days"`
+	// CAExpiryDays is how many days before its end the current module or
+	// forward link CA alerts (default 60).
+	CAExpiryDays int `yaml:"ca_expiry_days"`
+	// RenotifyInterval is the shortest time between two notifications of
+	// the same alert (a duration, at least 1h; default 24h). Critical alerts
+	// repeat four times as often, phase alerts seven times as rarely.
+	RenotifyInterval string `yaml:"renotify_interval"`
+	// PhaseStuckAfter is how long a phased process may stay untouched in a
+	// non-final phase before it alerts (a duration, at least 1h; default
+	// 72h); "0" turns the phase alerts off.
+	PhaseStuckAfter string `yaml:"phase_stuck_after"`
+}
+
+// Alert monitor defaults.
+const (
+	DefaultAlertCheckInterval    = 15 * time.Minute
+	DefaultAlertLeafExpiryDays   = 14
+	DefaultAlertCAExpiryDays     = 60
+	DefaultAlertRenotifyInterval = 24 * time.Hour
+	DefaultAlertPhaseStuckAfter  = 72 * time.Hour
+)
+
+// AlertSettings are the alert monitor's settings with the defaults applied.
+type AlertSettings struct {
+	Enabled          bool
+	CheckInterval    time.Duration
+	LeafExpiryDays   int
+	CAExpiryDays     int
+	RenotifyInterval time.Duration
+	// PhaseStuckAfter is zero when the phase alerts are off.
+	PhaseStuckAfter time.Duration
+}
+
+// Settings returns the effective alert settings. It assumes a validated
+// configuration; an unparsable duration falls back to its default.
+func (a AlertsConfig) Settings() AlertSettings {
+	settings := AlertSettings{
+		Enabled:          a.Enabled == nil || *a.Enabled,
+		CheckInterval:    alertDuration(a.CheckInterval, DefaultAlertCheckInterval),
+		LeafExpiryDays:   a.LeafExpiryDays,
+		CAExpiryDays:     a.CAExpiryDays,
+		RenotifyInterval: alertDuration(a.RenotifyInterval, DefaultAlertRenotifyInterval),
+		PhaseStuckAfter:  alertDuration(a.PhaseStuckAfter, DefaultAlertPhaseStuckAfter),
+	}
+	if settings.LeafExpiryDays <= 0 {
+		settings.LeafExpiryDays = DefaultAlertLeafExpiryDays
+	}
+	if settings.CAExpiryDays <= 0 {
+		settings.CAExpiryDays = DefaultAlertCAExpiryDays
+	}
+	return settings
+}
+
+// alertDuration parses a duration setting; empty and unparsable values give
+// fallback, and "0" gives zero.
+func alertDuration(raw string, fallback time.Duration) time.Duration {
+	raw = strings.TrimSpace(raw)
+	if raw == "" {
+		return fallback
+	}
+	parsed, err := time.ParseDuration(raw)
+	if err != nil || parsed < 0 {
+		return fallback
+	}
+	return parsed
+}
+
+func (a AlertsConfig) validate() error {
+	for _, check := range []struct {
+		key, raw string
+		min      time.Duration
+		allowOff bool
+	}{
+		{"alerts.check_interval", a.CheckInterval, time.Minute, false},
+		{"alerts.renotify_interval", a.RenotifyInterval, time.Hour, false},
+		{"alerts.phase_stuck_after", a.PhaseStuckAfter, time.Hour, true},
+	} {
+		raw := strings.TrimSpace(check.raw)
+		if raw == "" {
+			continue
+		}
+		parsed, err := time.ParseDuration(raw)
+		if err != nil {
+			return fmt.Errorf("invalid %s %q: use a duration such as 15m or 24h", check.key, check.raw)
+		}
+		if check.allowOff && parsed == 0 {
+			continue
+		}
+		if parsed < check.min {
+			return fmt.Errorf("invalid %s %q: at least %s", check.key, check.raw, check.min)
+		}
+	}
+	if a.LeafExpiryDays < 0 || a.CAExpiryDays < 0 {
+		return fmt.Errorf("alerts.leaf_expiry_days and alerts.ca_expiry_days may not be negative")
+	}
+	return nil
 }
 
 // AgentInstallConfig configures one-command node onboarding (forward-sdk.md,
@@ -665,6 +783,9 @@ func load(path string, environ []string) (*Config, error) {
 		return nil, fmt.Errorf("server.trusted_proxies: %w", err)
 	}
 	if err := loaded.PackageRoutes.validate(); err != nil {
+		return nil, err
+	}
+	if err := loaded.Alerts.validate(); err != nil {
 		return nil, err
 	}
 	if err := loaded.AgentInstall.Validate(); err != nil {

@@ -414,6 +414,33 @@ Per-node results in `status`:
 | `failed` `config_apply_failed` | the new Agent could not apply the node's configuration |
 | `rolled_back` | the batch failed and this node returned to its previous Agent |
 
+## When An Agent Certificate Was Not Renewed
+
+An Agent renews its certificate (7 days) at two thirds of its life, over the
+connection it already has. When a node's Agent has not, Control raises the
+alert `agent_certificate_expiring` (and `link_certificate_expiring` for a
+forward node's link certificate): a notification to the administrators and an
+entry in `GET /api/v4/kernel/alerts`
+([alert reference](../reference/kernel-alerts.md)). The alert comes about 28
+hours before the certificate ends, as a warning, and turns critical in the
+last 7 hours and after the end.
+
+1. **Look at the node first.** The usual cause is a node that is off or
+   cannot reach Control's gRPC target. Once the Agent connects again with a
+   certificate that has not ended, it renews by itself and the alert clears
+   within one scan (15 minutes by default).
+2. **The certificate ended.** An Agent whose certificate ended cannot
+   connect or renew. Enroll it again: issue a new install command on the
+   node's page (or `POST /api/v4/kernel/agents/install-tokens`) and run it on
+   the node with `--reset`, as in [Running It Again](#running-it-again). The
+   alert clears when the new certificate exists.
+3. **The node is gone for good.** Disable or delete the node: its
+   certificates are revoked and the alert resolves. A revoked certificate
+   never alerts.
+
+The same page lists the other alerts (CA near its end, a node credential
+split or an identity cutover left unfinished) with what clears each.
+
 ## Troubleshooting
 
 | Message | Cause and fix |

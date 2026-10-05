@@ -76,6 +76,7 @@ const (
 	// 系统通知
 	EventSystemBroadcast   = "system.broadcast"   // 系统广播
 	EventSystemMaintenance = "system.maintenance" // 维护通知
+	EventSystemAlert       = "system.alert"       // 内核告警摘要 (证书到期, 阶段停滞)
 )
 
 // EmailConfig 邮件配置

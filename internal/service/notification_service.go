@@ -443,6 +443,54 @@ func (s *NotificationService) NotifyNodeOffline(node *model.Node) error {
 	return nil
 }
 
+// NotifyAdministrators sends one notification to every administrator who is
+// not banned: always as an in-app entry in the notification log, by e-mail
+// when the e-mail settings are configured (SetEmailConfig), and by Telegram
+// when the administrator bound an account. It is the delivery of the kernel
+// alert monitor's digests (internal/kernelalerts). The title is cut to the
+// log's width.
+func (s *NotificationService) NotifyAdministrators(event, title, content string, data map[string]any) error {
+	var admins []model.User
+	if err := s.db.Select("id").Where("is_admin = ? AND banned = ?", 1, 0).Order("id").Find(&admins).Error; err != nil {
+		return err
+	}
+	if len(title) > 200 {
+		title = title[:200]
+	}
+	for _, admin := range admins {
+		s.sendAsync(&admin.ID, "inapp", event, title, content, data)
+		if s.emailConfig != nil {
+			s.sendAsync(&admin.ID, "email", event, title, content, data)
+		}
+		var tgUser model.TelegramUser
+		if s.db.Where("user_id = ?", admin.ID).First(&tgUser).Error == nil {
+			s.sendAsync(&admin.ID, "telegram", event, telegramMarkdownSafe(title), telegramMarkdownSafe(content), nil)
+		}
+	}
+	return nil
+}
+
+// telegramMarkdownSafe makes text safe for the Bot API's legacy Markdown
+// mode, which TelegramBotService.SendMessage uses: an unpaired _, *, ` or [
+// (a table name such as v2_node, a setting such as alerts.phase_stuck_after)
+// makes Telegram refuse the whole message with "can't parse entities".
+// Legacy Markdown has no reliable escape, so the characters are replaced.
+func telegramMarkdownSafe(text string) string {
+	return strings.Map(func(r rune) rune {
+		switch r {
+		case '_', '*':
+			return '-'
+		case '`':
+			return '\''
+		case '[':
+			return '('
+		case ']':
+			return ')'
+		}
+		return r
+	}, text)
+}
+
 // Broadcast 广播通知 (所有用户)
 func (s *NotificationService) Broadcast(title, content string) error {
 	// 分批发送，避免内存溢出

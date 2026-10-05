@@ -9,6 +9,7 @@ import (
 	"github.com/AnixOps/anix-control/sdk/agentcontrol"
 	"github.com/AnixOps/anix-control/v4/internal/agentstreams"
 	"github.com/AnixOps/anix-control/v4/internal/agentupgrade"
+	"github.com/AnixOps/anix-control/v4/internal/config"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/forwardlegacy"
 	grpcserver "github.com/AnixOps/anix-control/v4/internal/grpc"
@@ -111,5 +112,10 @@ func runSingletonWorkers(ctx context.Context, bridgeEnabled bool) {
 		Service: &agentupgrade.Service{DB: database.Get()},
 		Streams: func() agentstreams.Streams { return grpcserver.GetAgentStreams() },
 	}).Run)
+	// Certificate-expiry and phase alerts (alerts.*): scans the certificate
+	// stores and the phased processes read-only and sends the administrators
+	// one digest of what needs them. One process only, or they would all
+	// notify.
+	run(kernelAlertMonitor(database.Get(), config.Get()).Run)
 	wg.Wait()
 }

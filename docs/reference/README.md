@@ -13,6 +13,7 @@ This section is the operator/developer reference index for `anix-control`.
 - [sqlite-to-postgres-migration.md](sqlite-to-postgres-migration.md): SQLite to PostgreSQL dry-run, import, verification, and rollback runbook
 - [traffic-stats-operations.md](traffic-stats-operations.md): traffic log indexes, query bounds, and retention runbook
 - [telegram-test-endpoint.md](telegram-test-endpoint.md): `POST /api/v4/kernel/notifications/telegram/test`, the administrator's Telegram bot test and its result classes
+- [kernel-alerts.md](kernel-alerts.md): the alert monitor: certificates that were not renewed, CAs near their end, stuck phases; thresholds, notifications and `GET /api/v4/kernel/alerts`
 - [repository-layout.md](repository-layout.md): root and directory ownership, plus root hygiene rules
 - [frontend-design.md](frontend-design.md): the vendored AnixOps Design system in `web/` (tokens, brand assets, theme, legacy variable bridge, design sync and lint rules)
 - [node-credential-rotation.md](node-credential-rotation.md): the admin API that rotates a node's Agent credentials (`POST /api/v4/kernel/agents/rotate-credentials`)

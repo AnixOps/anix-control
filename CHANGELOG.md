@@ -397,6 +397,33 @@
   and is left unchanged. See `docs/reference/telegram-test-endpoint.md` and
   `docs/guide/notifications-telegram.md`.
 
+- **Alerts for certificates that were not renewed, CAs near their end and
+  stuck rollouts.** A new monitor (`internal/kernelalerts`, on the
+  singleton-worker lease) scans every 15 minutes, read-only, and keeps one
+  row per alert in the new table `v4_kernel_alert` (no existing table
+  changes). It raises `agent_certificate_expiring`,
+  `link_certificate_expiring` and `module_certificate_expiring` when a
+  holder missed its renewal: a leaf certificate alerts inside the smaller of
+  `alerts.leaf_expiry_days` (14) and a sixth of its own lifetime (28 hours
+  for the 7-day Agent and link certificates; a fixed 14 days would fire for
+  every fresh one), critical in the last quarter of that window and after the
+  end, for enabled nodes only. `ca_expiring` is raised for the current module
+  and forward link CA within `alerts.ca_expiry_days` (60). The phase alerts
+  `node_secrets_split_stalled`, `node_secrets_finalize_interrupted`,
+  `identity_import_stalled` and `identity_cutover_not_finalized` fire when a
+  node credential split table or the identity authority was left in a
+  non-final phase for `alerts.phase_stuck_after` (72 hours; `0` turns them
+  off). Route modes are not checked: they are operating modes, not phases.
+  Each scan sends the administrators one digest (an in-app notification,
+  e-mail when configured, Telegram when bound), once per alert, again after
+  `alerts.renotify_interval` (24 hours; critical four times as often, phase
+  alerts seven times as rarely), and at once when an alert turns critical;
+  alerts resolve themselves when the cause is gone. New
+  `GET /api/v4/kernel/alerts` (administrators; `status`, `kind`, `severity`,
+  `limit`) lists them with a summary for the dashboard. Messages hold no
+  secret. New `alerts.*` settings (`ANIX_CONTROL_ALERTS_*`); see
+  `docs/reference/kernel-alerts.md` and `docs/guide/agent-onboarding.md`.
+
 ### Changed
 
 - **Admin lists sort on the server and the bulk bars make one request.**
