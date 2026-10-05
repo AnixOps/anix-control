@@ -19,18 +19,45 @@ root-rotation plan and design (`git show 57c62541:docs/superpowers/plans/2026-07
   package_route_not_found` once the installation has failed (rehearsed,
   4.1.0 to 4.2.0-rc.1), `503 package_unavailable` for as long as it still
   reads `healthy`.
-- **`identity-platform` is a package too.** `POST /api/v2/login` answers
-  `404 package_route_not_found` after the restart, and the image's bootstrap
-  registers the new identity release without moving the installation. The
-  admin API is reachable only with a session token issued before the restart
-  (24 hours by default): take one first
+- **`identity-platform` is a package too, and the only one Control repairs
+  itself.** Its installation points at an old-root release, so after the
+  restart it fails like the others and `POST /api/v2/login` answers `404
+  package_route_not_found`. At startup the identity bootstrap
+  (`plugins.identity_bootstrap_package_dir`, or the one in the image) registers
+  the new identity release; when that package verifies under the new active
+  root, the installation's release is bound to a retired root and the new
+  release is newer, the bootstrap moves the installation to it through the
+  same lifecycle rules as an administrator's update, and login returns on that
+  start ([`../UPGRADE.md`](../UPGRADE.md#identity-platform-recovers-by-itself)
+  has the exact conditions, the audit entry and the log line). A build
+  without this (4.2.0-rc.1 and earlier) leaves the installation on the old
+  release: the admin API is then reachable only with a session token issued
+  before the restart (24 hours by default), so take one first
   ([`../UPGRADE.md`](../UPGRADE.md#the-official-signing-root-changes-v42)).
+- **Nothing else is moved for you.** The bootstrap never touches another
+  package, never moves a healthy installation (same root), never moves an
+  installation an administrator disabled and never moves to an older or not
+  provably newer release. Every other package needs the operator's import of
+  its re-signed build.
 - Releases are immutable per `(plugin_id, version)`. Re-signed packages must
   be registered under a **new package version**; the same version cannot be
-  registered twice.
+  registered twice. This holds for the bootstrap package too: re-signing
+  `identity-platform` under the version already installed fails the start
+  with `existing identity release uses a different trust root`.
 - Rotation is therefore a planned outage for package-served routes on every
   running Control, lasting from the restart with the new root until the
   re-signed package set is imported and enabled.
+
+> **Warning for operators of the commercial edition.** `order`, `payment` and
+> `affiliate` are not shipped in this repository's release and have no build
+> signed with a new root. After a rotation their installations fail closed
+> (orders, payments, plan purchase and the invite commission stay down) and
+> the identity bootstrap does not touch them. They must be rebuilt and signed
+> with the new official key by whoever builds them, and imported like every
+> other package; the release owner decides how that is done and it is not
+> defined yet. Do not rotate or upgrade across a rotation while a Control runs
+> them without such builds
+> ([`../UPGRADE.md`](../UPGRADE.md#commercial-packages-have-no-new-root-build)).
 
 ## When To Rotate
 
@@ -219,16 +246,22 @@ pushed.
    the tag version; the builder stamps that version into each manifest and
    host binary.
 2. On each running Control, in the maintenance window: take an administrator
-   session token, set `plugins.official_public_key` in the deployed
-   configuration to the new root, deploy the release, move `identity-platform`
-   to the new version first (login returns), then import every other package
-   with the new version (**Control > Plugins > Import release**, see
+   session token (the fallback below needs it, a build with the recovery does
+   not), set `plugins.official_public_key` in the deployed configuration to the
+   new root and deploy the release. `identity-platform` moves to the new
+   version by itself on that start (login returns); on 4.2.0-rc.1 or earlier,
+   or when the log says `identity-platform installation ... is not moved`, move
+   it by hand with the token first. Then import **every other package** with
+   the new version (**Control > Plugins > Import release**, see
    [`release-installation.md`](release-installation.md), or the API calls in
    [`../UPGRADE.md`](../UPGRADE.md#upgrade-procedure)) and update each
    installation to it.
 3. If `plugins.identity_bootstrap_package_dir` is set, replace the bootstrap
    `identity-platform` package there with the new-root build before
-   restarting.
+   restarting. It must be a **newer version** than the installed one: the
+   recovery refuses an older or equal version and the start goes on without
+   login. A package that does not verify under the new root stops the start,
+   as before.
 
 ## Verification
 
@@ -238,6 +271,10 @@ pushed.
   longer appears anywhere in the tree.
 - `--formal-release` and `--verify-release` succeed with the new pair.
 - `gh secret list` shows both key secret names.
+- After the start: `identity-platform` is `healthy` at the bootstrap version,
+  login works, and the operation log has one `bootstrap_installation_update`
+  entry (module `kernel`, actor `system/bootstrap`) naming the old and new
+  versions and roots.
 - After import: every installation is enabled at the new version and
   `healthy`, login works, and `/api/v2` business routes answer (no `404`
   `package_route_not_found` or `503` `package_unavailable` from them).
@@ -252,7 +289,9 @@ pushed.
   root's existing record and retires the new one, so old-root releases verify
   again; new-root releases stop verifying. Before the new packages were
   imported that is all (rehearsed: every route back 33 seconds after
-  `docker compose down`). After the import the installations still point at
+  `docker compose down`). The identity recovery never runs backwards: a
+  bootstrap package does not move an installation to an older release, so it
+  does not repair a rollback. After the import the installations still point at
   the new-root releases: move `forward`, then `identity-platform`, then the
   rest back to the old version with a session token from before the upgrade,
   or restore the database backup

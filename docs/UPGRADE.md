@@ -48,15 +48,19 @@ clean agents answer 404; use `/api/v4/forward/*`. Old forwarding data is not
 migrated (F5c archives it). Read
 ["Flux Forwarding API Removed (v4.2)"](#flux-forwarding-api-removed-v42).
 
-**Upgrading to v4.2: the official signing root changes, and nobody can log
-in until you import the 4.2 packages.** The first start with the new root
-retires the old one, so every installed package, `identity-platform` among
-them, fails closed: `POST /api/v2/login` and every `/api/v2` business route
-answer `404 package_route_not_found` until the 4.2 packages are imported.
-**Open an administrator session before you restart and keep its token**
-(`data.token` of `POST /api/v2/login`, valid for 24 hours): it is the only
-way into the admin API during the window. Read
-["The Official Signing Root Changes (v4.2)"](#the-official-signing-root-changes-v42).
+**Upgrading to v4.2: the official signing root changes, and every package
+except `identity-platform` stays down until you import its 4.2 build.** The
+first start with the new root retires the old one, so every installed
+package fails closed and the `/api/v2` business routes answer `404
+package_route_not_found`. `identity-platform` (login) recovers by itself on
+that same start, because the image's bootstrap package is signed with the new
+root ([Identity-Platform Recovers By Itself](#identity-platform-recovers-by-itself));
+**4.2.0-rc.1 does not**: there nobody can log in until an administrator moves
+it, so **open an administrator session before you restart and keep its
+token** (`data.token` of `POST /api/v2/login`, valid for 24 hours). The
+commercial packages (`order`, `payment`, `affiliate`) have no build signed
+with the new root ([the warning](#commercial-packages-have-no-new-root-build)).
+Read ["The Official Signing Root Changes (v4.2)"](#the-official-signing-root-changes-v42).
 
 ## Fixed Legacy Native Layout
 
@@ -105,12 +109,14 @@ Before touching production:
   administrator's forward, rule, node, Ansible machine and clean agent
   routes) is removed; scripts and clients must move to `/api/v4/forward/*`**
   ([Flux Forwarding API Removed](#flux-forwarding-api-removed-v42)).
-- **Upgrading to v4.2: the official signing root changes. Take an
-  administrator session token before the restart, set
+- **Upgrading to v4.2: the official signing root changes. Set
   `plugins.official_public_key` to the new root (or remove the old value),
-  and plan the window until the 4.2 packages are imported. The commercial
-  packages (`order`, `payment`, `affiliate`) are not in the release, so an
-  installation that runs them loses them with the old root**
+  take an administrator session token before the restart (the way in on
+  4.2.0-rc.1, the fallback otherwise), and plan the window until the 4.2
+  packages are imported. `identity-platform` recovers by itself; the other
+  packages need your import. The commercial packages (`order`, `payment`,
+  `affiliate`) are not in the release and have no build signed with the new
+  root: an installation that runs them loses them**
   ([The Official Signing Root Changes](#the-official-signing-root-changes-v42)).
 
 Evidence to keep:
@@ -503,9 +509,10 @@ production host.
      `up -d` again. Set the new root, or delete the line to take the 4.2
      default.
 
-   A start that succeeds begins the signing-root window: no login, no
-   business routes, until the 4.2 packages are imported. Have an
-   administrator session token ready and follow
+   A start that succeeds begins the signing-root window: no business routes
+   until the 4.2 packages are imported, and no login on 4.2.0-rc.1 (later
+   builds recover `identity-platform` by themselves). Have an administrator
+   session token ready and follow
    ["The Official Signing Root Changes (v4.2)"](#the-official-signing-root-changes-v42).
 
 Rollback: restore the previous `.env`, `docker-compose.prod.yml` and
@@ -1616,8 +1623,10 @@ After the upgrade:
 
 3. **Move `identity-platform` to this release.** Start-up registers the
    bundled `identity-platform` release (the image and `scripts/install.sh`
-   ship it) but never moves an existing installation to it. As an
-   administrator, `PUT /api/v3/plugin-installations` with
+   ship it) but never moves an existing installation to it (the one
+   exception is an installation whose release is bound to a retired signing
+   root, [Identity-Platform Recovers By Itself](#identity-platform-recovers-by-itself)).
+   As an administrator, `PUT /api/v3/plugin-installations` with
    `{"plugin_id": "identity-platform", "target": "control", "desired_version": "4.1.0-rc.4", "enabled": true}`
    and poll `GET /api/v3/plugin-installations` until it is healthy. A manual
    install without the bootstrap directory first registers the release with
@@ -2719,8 +2728,13 @@ Control Treats The Root") too. What it means for an upgrade:
   the new root records it and retires the old one; every package release
   admitted under the old root then fails closed until the 4.2 packages,
   signed with the new root, are imported and enabled. **`identity-platform`
-  is one of them, so login is down too** ("The Window", below). Plan a
-  maintenance window from the restart until the import finishes.
+  is one of them, so login would be down too**, and it is the one package
+  Control repairs itself: the image's bootstrap package is signed with the new
+  root, and the bootstrap moves the dead installation to it on that start
+  ([Identity-Platform Recovers By Itself](#identity-platform-recovers-by-itself);
+  4.2.0-rc.1 lacks this, see "The Window"). **Every other package needs your
+  import**, signed with the new root and at a new version. Plan a maintenance
+  window from the restart until the import finishes.
 - **Configuration.** The 4.2 templates carry the new root in
   `plugins.official_public_key` (`ANIX_CONTROL_PLUGINS_OFFICIAL_PUBLIC_KEY`).
   A configuration that copied the 4.1 value must be changed: the 4.2 image
@@ -2730,14 +2744,10 @@ Control Treats The Root") too. What it means for an upgrade:
   the key out takes the new default. If
   `plugins.identity_bootstrap_package_dir` is set, replace the bootstrap
   `identity-platform` package there with the 4.2 build before restarting.
-- **Commercial packages.** `affiliate`, `order` and `payment` are not in the
-  release archive (the 4.2.0-rc.1 archive holds 15 packages, none of them).
-  An installation that runs them has releases signed with the old root,
-  which stop verifying once the new root is active, and the release brings
-  none signed with the new one: orders, payments, plan purchase and the
-  invite commission stay down until commercial packages signed with the new
-  root exist. Decide before upgrading; the rehearsal ran the community
-  package set and did not cover this.
+- **Commercial packages.** See the warning
+  [below](#commercial-packages-have-no-new-root-build): `affiliate`, `order`
+  and `payment` are not in the release and have no build signed with the new
+  root.
 - **Agents.** Upgrade the Agents first, as before, with the `agent-install.sh`
   release asset of 4.2 (the `/install.sh` of a 4.2 Control is the same file),
   after verifying it against the new root (the commands are in the script's
@@ -2760,11 +2770,96 @@ Control Treats The Root") too. What it means for an upgrade:
   must also be pointed back at 4.1.0
   ([Rolling Back After The Import](#rolling-back-after-the-import)).
 
+### Commercial Packages Have No New-Root Build
+
+> **Warning for operators of the commercial edition.** `order`, `payment`
+> and `affiliate` are **not shipped** in this repository's release (the
+> 4.2.0-rc.1 archive holds 15 packages, none of them) and there is **no
+> build of them signed with the new root**. An installation that runs them
+> has releases bound to the old root; they stop verifying at the first start
+> with the new root and nothing replaces them, so orders, payments, plan
+> purchase and the invite commission stay down after the upgrade, and the
+> automatic recovery below does not cover them. They must be rebuilt and
+> signed with the new official key by whoever builds them: the published
+> release builds the community package set only, and signing needs the
+> release key, which only the release owner holds. How the commercial set is
+> built and signed with the new key is the release owner's decision and is
+> not defined yet. **Do not upgrade a Control that runs them until such
+> builds exist and you can import them** (the same import as the other
+> packages, at a version newer than the old one). The staging rehearsal ran
+> the community package set and did not cover this.
+
+### Identity-Platform Recovers By Itself
+
+After a root change the installation of `identity-platform` points at a
+release bound to the retired root, so it cannot start and nobody can log in
+(login is served by it). From the build that carries this change
+(4.2.0-rc.1 and earlier do not), the bootstrap import that runs at every
+start repairs exactly that installation when **all** of these hold:
+
+- `plugins.identity_bootstrap_package_dir` holds an `identity-platform`
+  package, as in the 4.2 image and in `scripts/install.sh` installs, and it
+  verifies under the **active** root (the configured
+  `plugins.official_public_key`) with the same checks as a first bootstrap
+  (signature, manifest, v2 Control package without dependencies, artifact
+  hash). A package that does not verify still stops the start with
+  `bootstrap identity platform package: verify identity bootstrap package:
+  plugin signature verification failed`, and changes nothing;
+- the installation exists, is **enabled**, and the release it desires is
+  bound to a root that is not the active one (the "official plugin trust
+  root is required" condition). On the active root a bootstrap never
+  upgrades a healthy installation, as in rc.4;
+- the bootstrap release is **newer** (strictly, by full `X.Y.Z[-pre]`
+  version) than the installed one. Releases are immutable per version, so a
+  package re-signed under the same version is refused with `existing identity
+  release uses a different trust root`: build the bootstrap package at a new
+  version;
+- the move passes the validation of an administrator's update
+  (`PUT /api/v3/plugin-installations`: dependency and conflict rules, stored
+  artifact).
+
+It then does what that update does and nothing more: the installation's
+desired version becomes the bootstrap release, its previous version the one
+it left, its state `pending`, and its lifecycle generation goes up by one
+(the migration ledger runs the new release as a new generation). The lifecycle
+worker that starts with Control brings it up on the same boot, host start and
+package migrations included, and login works as soon as it is healthy. The
+move is one database transaction with its audit entry (`kernel` module,
+action `bootstrap_installation_update`, actor `system/bootstrap`, both
+versions and both root fingerprints) and one log line:
+
+```text
+WARNING: identity-platform installation 1 (target control) moved from release 4.1.0 (trust root a3cec15e..., retired) to the bootstrap release 4.2.0 (trust root 83fe4c1b..., active), lifecycle generation 3 -> 4. ...
+```
+
+A second start finds the installation on the active root and changes
+nothing. **What it never does:** touch any other package (every other
+installation stays on its old-root release until you import it), move an
+installation an administrator disabled, move to an older or not provably
+newer release (the start goes on and logs `WARNING ... the installation is not
+moved`, login stays down, and the fallback below applies), or move anything
+when the validation fails (same warning with the reason). Its audit entry and
+the warning are what to look for if login did not come back.
+
+Verified by service-level tests on SQLite and PostgreSQL (retired root, same
+root, a third key, other packages, idempotence, older and unusable versions,
+a disabled installation, the validation, the audit, the migration ledger) and
+a gateway test (login `404` before, `200` after the worker ran). It has not
+been rehearsed on a staging image yet; the rehearsal of 4.2.0-rc.1 is the one
+that found the lockout.
+
+**Fallback (4.2.0-rc.1 and earlier, or when the recovery did not apply):**
+move the installation by hand with a session token issued before the restart
+([Upgrade Procedure](#upgrade-procedure), step 3).
+
 ### The Window
 
 From the first start with the new root until `identity-platform` runs again
 (rehearsed on Compose and PostgreSQL, 4.1.0 to 4.2.0-rc.1, all 15 packages of
-the community archive installed):
+the community archive installed, **without** the automatic recovery above: on
+a build with it `identity-platform` runs again as soon as the lifecycle worker
+has started it on that boot, and only the rows about the other packages
+remain):
 
 | What | Answer |
 |---|---|
@@ -2777,17 +2872,19 @@ the community archive installed):
 | `anix-control routes list` | `error: verify plugin release: official plugin trust root is required` per package, no routes |
 | Agent channels | `agent_control.mtls: required` answers as ever (403 `agent_mtls_required`) |
 
-**The window has no login.** A token issued before the restart keeps working
-for `jwt.expire` seconds (24 hours by default). Nothing else reaches the
-admin API: Control has no command-line way to import a release or to sign in.
-With the 4.2 bootstrap, the image registers its `identity-platform` release
-on start but leaves an existing installation on the old version (as
+**4.2.0-rc.1 has no login in the window.** A token issued before the restart
+keeps working for `jwt.expire` seconds (24 hours by default). Nothing else
+reaches the admin API: Control has no command-line way to import a release or
+to sign in. The 4.2.0-rc.1 bootstrap registers its `identity-platform`
+release on start but leaves an existing installation on the old version (as
 [rc.3 → rc.4 Checklist](#rc3--rc4-checklist) step 3 already says), so login
-comes back only when an administrator moves the installation. The session
-token path was rehearsed before the identity cutover ("Moving Logins To The
-Identity Module"), when the kernel signs and verifies the tokens itself
-(HS256). After the cutover, identity signs them (EdDSA) and publishes the
-keys that verify them, and it is down in the window (`Identity token keys
+comes back only when an administrator moves the installation. Later builds
+move it themselves
+([Identity-Platform Recovers By Itself](#identity-platform-recovers-by-itself)).
+The session token path was rehearsed before the identity cutover ("Moving
+Logins To The Identity Module"), when the kernel signs and verifies the tokens
+itself (HS256). After the cutover, identity signs them (EdDSA) and publishes
+the keys that verify them, and it is down in the window (`Identity token keys
 not refreshed: plugin host unavailable`): that path was not rehearsed and may
 not work, which leaves the rollback or the database backup.
 
@@ -2795,7 +2892,8 @@ not work, which leaves the rollback or the database backup.
 
 1. **Before the restart**, as a super administrator, take a session token
    and keep it where the person doing the upgrade can reach it, never in a
-   ticket:
+   ticket. It is the way in on 4.2.0-rc.1 and the fallback on later builds
+   (when `identity-platform` did not recover by itself):
 
    ```bash
    curl -fsS -X POST "$PANEL/api/v2/login" -H 'Content-Type: application/json' \
@@ -2805,8 +2903,13 @@ not work, which leaves the rollback or the database backup.
 2. Back up the database, then upgrade
    ([Docker Compose Upgrade](#docker-compose-upgrade): `init-secrets.sh`, the
    new root in `control.env`). Control starts; the window begins.
-3. **Move `identity-platform` first**, with the token. Login works again a
-   few seconds later (3 s in the rehearsal):
+3. **`identity-platform` first.** A build with
+   [the automatic recovery](#identity-platform-recovers-by-itself) moves it
+   on the start of step 2: check that login works (`POST /api/v2/login`)
+   within a minute and, if not, read the `WARNING: identity-platform
+   installation ...` line of the log. On 4.2.0-rc.1, or when the recovery
+   did not apply, move it by hand with the token. Login works again a few
+   seconds later (3 s in the rehearsal):
 
    ```bash
    TOKEN=...            # from step 1
@@ -2816,7 +2919,9 @@ not work, which leaves the rollback or the database backup.
      -d "{\"plugin_id\":\"identity-platform\",\"target\":\"control\",\"desired_version\":\"${VERSION}\",\"enabled\":true}"
    ```
 
-4. **Import the other packages** from the verified archive
+4. **Import the other packages** from the verified archive, each one
+   (nothing but `identity-platform` is moved for you; the commercial
+   packages have [no new-root build](#commercial-packages-have-no-new-root-build))
    ([Getting A Package From The Release](#getting-a-package-from-the-release)):
    per package `POST /api/v3/plugin-releases` (`manifest`, `signature`),
    `POST /api/v3/plugin-releases/<id>/artifact` (`artifact_base64`) and
@@ -2832,8 +2937,8 @@ not work, which leaves the rollback or the database backup.
    installation healthy (login back after 65, the import itself 34); the
    operator's pause between the restart and the first call was 53 of them.
 
-Without a token (never taken, or expired), the way out is the rollback below
-or restoring the database backup.
+Without a token (never taken, or expired) on a build without the automatic
+recovery, the way out is the rollback below or restoring the database backup.
 
 ### Rolling Back After The Import
 
@@ -2842,7 +2947,9 @@ or restoring the database backup.
   every route answering; the old root is active again, the installations
   still point at the 4.1.0 releases and are healthy.
 - **After the import** the installations point at the 4.2 releases, which
-  the old root does not verify. After the redeploy login and every route
+  the old root does not verify. The automatic recovery does not run in this
+  direction: 4.1.0 has no such change, and a bootstrap package never moves an
+  installation to an older release in any case. After the redeploy login and every route
   answer `503 package_unavailable` until `forward` and `identity-platform` are
   moved back, the other routes `404 package_route_not_found` until their own
   package is. Moving them needs a session token from before the upgrade (24

@@ -106,7 +106,12 @@ deployment, place exactly one verified `identity-platform-<version>.anxp`,
 `identity-platform-<version>.manifest.json`, and
 `identity-platform-<version>.manifest.sig` trio in the configured absolute
 directory with the same ownership and mode requirements before starting
-Control. The bootstrap import is root-pinned and idempotent. When package
+Control. The bootstrap import is root-pinned and idempotent. It never moves
+an existing installation, except that after the official signing root
+changed it moves an enabled `identity-platform` installation whose release is
+bound to a retired root to a newer package that verifies under the active
+root, so login comes back by itself
+([`../UPGRADE.md`](../UPGRADE.md#identity-platform-recovers-by-itself)). When package
 execution is enabled manually, create the configured Control host runtime and
 artifact directories as non-symlink `0700` directories owned by the Control
 service user. The loopback gRPC bind makes local Control/Agent acceptance
