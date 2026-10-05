@@ -43,6 +43,27 @@ requires `ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY` to equal `official_public_key` in
 `config/config.prod.yaml` exactly before signing packages. A mismatch fails the
 tag run closed.
 
+The signing secrets can live at the organization level (shared with
+`anix-control` and `anix-agent`, which both sign releases with this one key).
+A repository-level secret with the same name overrides the organization one,
+so delete any stale repository-level copy. `anix-agent` is a public
+repository: an organization secret whose visibility is "Private
+repositories" does not reach it; use "Selected repositories" or "All
+repositories". GitHub never shows a secret again, so **keep your own backup
+of the PEM** (a password manager and one offline copy): a lost key forces a
+rotation like this one.
+
+The root is also pinned in the Agent installer and in `anix-agent`; replace it
+there in the same change:
+
+- `anix-control`: `internal/agentinstall/install.sh` (the raw form and the DER
+  form `MCowBQYDK2VwAyEA` followed by the raw form), `internal/config/defaults.yaml`,
+  `internal/config/env_test.go`, `docs/guide/agent-onboarding.md`,
+  `docs/reference/environment-variables.md`.
+- `anix-agent`: `.github/workflows/release.yml` (`ANIXOPS_OFFICIAL_PUBLIC_KEY`),
+  `upgrade/upgrade.go` (`OfficialPublicKey`), `scripts/check_release_assets.py`,
+  `docs/INSTALL.md`.
+
 Repository surfaces that carry the public root (check with
 `git grep -l "<old root>"`):
 
@@ -78,6 +99,13 @@ install -d -m 0700 "$KEY_DIR"
     | tail -c 32 | base64 | tr -d '\n' > "$KEY_DIR/official-public-key.raw"
 )
 ```
+
+On macOS the system `openssl` is LibreSSL and cannot generate Ed25519 keys.
+Install OpenSSL 3 (`brew install openssl@3`), run the commands with
+`OSSL="$(brew --prefix openssl@3)/bin/openssl"` instead of `openssl`, use
+`"$OSSL" base64 -A` and `"$OSSL" base64 -d -A` for `base64`, and
+`stat -f '%Lp'` for `stat -c '%a'`. Back up `official-ed25519.pem` before
+uploading it anywhere.
 
 ### 2. Verify permissions and pairing without printing the PEM
 
@@ -153,7 +181,26 @@ gh secret set ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY --body "$(cat "$KEY_DIR/officia
 gh secret list | grep -E '^(ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY|ANIXOPS_PLUGIN_OFFICIAL_PUBLIC_KEY)[[:space:]]'
 ```
 
-Never read back or print secret values.
+Never read back or print secret values. For organization-level secrets use
+`gh secret set NAME --org <org> --visibility selected --repos anix-control,anix-agent`
+(same stdin and `--body` forms).
+
+Then prove the pair in both repositories without releasing anything. The
+manual workflow `Signing Key Check` signs a random message with the private
+key, verifies it with the public root, compares the root with
+`config/config.prod.yaml` (`anix-control`) or `release.yml` (`anix-agent`) and
+prints only the public key id:
+
+```bash
+gh workflow run signing-key-check.yml -R <org>/anix-control --ref go_dev
+gh workflow run signing-key-check.yml -R <org>/anix-agent --ref dev_new
+gh run list -R <org>/anix-control --workflow signing-key-check.yml --limit 1
+gh run list -R <org>/anix-agent --workflow signing-key-check.yml --limit 1
+```
+
+Both runs must succeed and report the same key id (the first 16 hex
+characters of the SHA-256 of the raw public key) before a release tag is
+pushed.
 
 ### 6. Produce and import re-signed packages
 
