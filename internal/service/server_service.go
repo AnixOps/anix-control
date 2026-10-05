@@ -185,11 +185,28 @@ func (s *ServerService) RecordNodeTrafficReport(serverType model.ServerType, nod
 	if len(traffics) == 0 {
 		return nil
 	}
-	plan, err := planNodeTrafficReport(serverType, nodeID, traffics, rate, time.Now())
+	now := time.Now()
+	plan, err := planNodeTrafficReport(serverType, nodeID, traffics, rate, now)
 	if err != nil {
 		return err
 	}
-	return s.db.Transaction(plan.applyTx)
+	if err := s.db.Transaction(plan.applyTx); err != nil {
+		return err
+	}
+	subscriber.RecordOnline(s.db, trafficUsers(traffics), now)
+	return nil
+}
+
+// trafficUsers lists the users a traffic report carried traffic for: the ones
+// seen online.
+func trafficUsers(traffics map[uint][2]int64) []uint {
+	users := make([]uint, 0, len(traffics))
+	for userID, traffic := range traffics {
+		if traffic[0]+traffic[1] > 0 {
+			users = append(users, userID)
+		}
+	}
+	return users
 }
 
 // RecordAgentTrafficReport applies a TrafficReport batch from the Agent
@@ -220,6 +237,9 @@ func (s *ServerService) RecordAgentTrafficReport(nodeKind string, nodeID uint, b
 		}
 		return plan.applyTx(tx)
 	})
+	if err == nil && applied {
+		subscriber.RecordOnline(s.db, trafficUsers(traffics), now)
+	}
 	return applied, err
 }
 
@@ -358,6 +378,13 @@ func (s *ServerService) UpdateOnlineStatus(serverType model.ServerType, serverID
 		}
 	}
 
+	online := make([]uint, 0, len(userIPs))
+	for userID, ips := range userIPs {
+		if len(ips) > 0 {
+			online = append(online, userID)
+		}
+	}
+	subscriber.RecordOnline(s.db, online, time.Now())
 	return nil
 }
 

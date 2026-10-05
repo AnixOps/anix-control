@@ -209,6 +209,9 @@ DELETE /api/v2/admin/users/:id
 # 重置流量 / 重置订阅链接（新 token，UUID 不变；用户也可自助重置，见「重置订阅链接」）
 POST /api/v2/admin/users/:id/reset-traffic
 POST /api/v2/admin/users/:id/reset-subscribe
+
+# 用户最近在线时间（v4，仅管理员）
+GET /api/v4/admin/users/activity?ids=3,5,8
 ```
 
 The list (`data.list`, with `data.total`) filters by `email` (substring),
@@ -244,6 +247,27 @@ from another table, so neither is a sort column.
   "plan": {"id": 2, "name": "Pro"}
 }
 ```
+
+**Last online (`GET /api/v4/admin/users/activity`).** `ids` is a comma
+separated list of user ids (at most 200, repeats dropped, HTTP 400
+`{"error": {"code": "invalid_request", "message": ...}}` for an empty list, a
+value that is not a positive id or more than 200). It answers `{"data":
+{"users": [...]}}` with an entry per id, in the order asked:
+
+```json
+{"data": {"users": [
+  {"user_id": 3, "last_online_at": 1760000000},
+  {"user_id": 5, "last_online_at": null}
+]}}
+```
+
+`last_online_at` is a Unix time in seconds: the last time a node reported
+the user's traffic or listed one of their connections (UniProxy, gRPC and
+Agent Control alike), accurate to a minute, or `null` for a user never seen
+since Control began recording it (`docs/reference/traffic-stats-operations.md`,
+"User Last Online"). The user list and detail above keep their v2 shape, which
+the identity package's native handlers must answer byte for byte; ask this
+route for the ids of the page shown.
 
 ### 订单管理
 

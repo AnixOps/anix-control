@@ -757,6 +757,9 @@ func Setup(r *gin.Engine, cfg *config.Config) {
 		v4.GET("/kernel/modules/runtimes", modules.ListRuntimes)
 		v4.PUT("/kernel/modules/runtimes/:plugin_id", modules.SetRuntime)
 		v4.GET("/kernel/node-operations", handler.NewKernelNodeOperationsHandler().List)
+		// Administrator API of the console's user pages: kernel-owned
+		// routes under /api/v4/admin, outside the /api/v2 catalog.
+		v4.GET("/admin/users/activity", handler.NewAdminUserActivityHandler().List)
 		routeModes := handler.NewRouteModeHandler()
 		v4.GET("/kernel/route-modes", routeModes.List)
 		v4.POST("/kernel/route-modes", routeModes.Set)

@@ -71,6 +71,25 @@
   with Control, so a normal upgrade replaces them together. API reference:
   `docs/guide/api-reference.md`.
 
+- **Last online per user: `GET /api/v4/admin/users/activity?ids=...`.**
+  Administrators want to see when each user was last online. Control kept no
+  durable value for it (`v2_user` has no `t` column and Control never wrote
+  one, `last_login_at` is the sign-in, the online set is a five minute cache,
+  the traffic log is purged by the operator), so a table of its own,
+  `v4_kernel_user_activity` (`user_id`, `last_online_at`), is created at
+  start-up (a new table; no existing table or column changes). The UniProxy
+  `push` and `alive` reports, the gRPC node reports and the Agent Control
+  traffic report write it after they committed, throttled to one write per
+  user per minute in multi-row upserts that only move a time forward, and only
+  for ids that are subscribers; a failed write is logged and never affects the
+  report. The route answers an entry per id (at most 200), in the order asked,
+  with `last_online_at` as a Unix time or `null` for a user never seen; there
+  is no backfill (`docs/reference/traffic-stats-operations.md` has the SQL to
+  seed it from the traffic log). It is a kernel route outside the `/api/v2`
+  catalog because the user list and detail answers must stay byte-identical
+  to the identity package's native handlers, which read the kernel API views
+  and cannot see a new table. Deleting a user deletes their row.
+
 ### Changed
 
 - **Forwarding editor, DNS binding: Save says why it is disabled.** With

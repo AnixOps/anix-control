@@ -16,6 +16,51 @@ Quota counters are stored separately on `v2_user.u` and `v2_user.d`. Purging old
 `v2_server_log` rows removes historical charts and rankings for that period, but
 it does not reset user quota counters.
 
+## User Last Online
+
+`v4_kernel_user_activity` (one row per user: `user_id`, `last_online_at` as a
+Unix time in seconds) holds when each user was last seen online. A user is
+seen when a node reports their traffic or lists one of their connections:
+a UniProxy `push` or `alive`, the gRPC node reports and the Agent Control
+traffic report (`reports.v1`), which also carries the online list. Traffic
+that passes through a forwarding route is not counted.
+
+Why a table of its own: Control kept no durable value for it. `v2_user` has
+no `t` column (v2board's last report time; Control never wrote it), `u` and
+`d` carry no time, `last_login_at` is the last sign-in, the online set the
+alive reports fill is a five minute cache, and the traffic log above is purged
+by the operator.
+
+- **Writes.** The traffic and alive reports call `subscriber.RecordOnline`
+  after they committed. It is best effort and throttled: one user is written
+  at most once per minute (`subscriber.ActivityWriteInterval`, remembered in
+  memory per process), in multi-row upserts that move a time forward only
+  and only for ids that are subscribers. The stored time therefore lags a
+  report by less than a minute; a Control restart writes each online user
+  once more. A failed write is logged (`user activity was not recorded`) and
+  does not affect the report.
+- **Size.** One row of two integers per user that was ever online, no
+  retention job needed. Deleting a user deletes their row.
+- **Nothing is backfilled.** The table starts empty at the upgrade: a user
+  shows no last-online time until a node next reports them. To seed it from
+  the traffic log (only as far back as the log was kept), run this once,
+  after taking a backup:
+
+  ```sql
+  INSERT INTO v4_kernel_user_activity (user_id, last_online_at)
+  SELECT l.user_id, MAX(l.log_at) FROM v2_server_log l
+  JOIN v2_user u ON u.id = l.user_id WHERE l.log_at > 0 GROUP BY l.user_id
+  ON CONFLICT (user_id) DO UPDATE SET last_online_at = excluded.last_online_at
+  WHERE excluded.last_online_at > v4_kernel_user_activity.last_online_at;
+  ```
+
+- **Reading.** `GET /api/v4/admin/users/activity?ids=1,2,3` (administrators,
+  at most 200 ids): `{"data":{"users":[{"user_id":1,"last_online_at":1760000000},
+  {"user_id":2,"last_online_at":null}]}}`, in the order asked, null for a
+  user never seen. The user list and detail answers keep their v2 shape; the
+  console asks this route for the ids of the page it shows. See
+  `docs/guide/api-reference.md`.
+
 ## Query Bounds
 
 The current service bounds traffic analytics queries before they reach the
