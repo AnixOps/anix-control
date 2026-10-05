@@ -8,11 +8,13 @@ import miscPages from './modules/en/miscPages'
 import adminSupportPages from './modules/en/adminSupportPages'
 import adminNodes from './modules/en/adminNodes'
 import adminSubscriptionGroups from './modules/en/adminSubscriptionGroups'
+import adminApiTokens from './modules/en/adminApiTokens'
 import forwardV4 from './modules/en/forwardV4'
 import forwardDns from './modules/en/forwardDns'
 
 export default {
   ...adminSubscriptionGroups,
+  ...adminApiTokens,
   ...forwardV4,
   ...forwardDns,
   ...networkPages,

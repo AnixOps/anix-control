@@ -17,7 +17,8 @@ export const ADMIN_PAGE_SECTIONS = Object.freeze({
   ],
   security: [
     { id: 'security-mfa', to: '/admin/security/mfa', labelKey: 'adminSecurity.sections.mfa' },
-    { id: 'security-access-groups', to: '/admin/security/access-groups', labelKey: 'adminSecurity.sections.accessGroups' }
+    { id: 'security-access-groups', to: '/admin/security/access-groups', labelKey: 'adminSecurity.sections.accessGroups' },
+    { id: 'security-api-tokens', to: '/admin/security/api-tokens', labelKey: 'adminSecurity.sections.apiTokens' }
   ],
   notifications: [
     { id: 'notifications-email', to: '/admin/notifications/email', labelKey: 'adminNotify.channels.email' },

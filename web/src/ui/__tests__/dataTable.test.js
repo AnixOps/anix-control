@@ -232,6 +232,14 @@ describe('UiDataTable', () => {
     expect(onClear).toHaveBeenCalledTimes(1)
   })
 
+  it('reads the message of the kernel\'s { error: { code, message } } answers, not the object', async () => {
+    const failure = { response: { status: 503, data: { error: { code: 'database_unavailable', message: 'the database is unavailable' } } }, message: 'Request failed with status code 503' }
+    render(UiDataTable, { props: { columns: COLUMNS, rows: [], label: 'Users', error: failure, errorTitle: 'Users didn’t load' } })
+    expect(screen.getByRole('alert').textContent).toContain('the database is unavailable')
+    expect(screen.getByRole('alert').textContent).not.toContain('database_unavailable')
+    expect(screen.getByRole('alert').textContent).not.toContain('[object Object]')
+  })
+
   it('shows skeleton rows only after 300 ms of loading', async () => {
     vi.useFakeTimers()
     render(UiDataTable, { props: { columns: COLUMNS, rows: [], label: 'users', loading: true } })

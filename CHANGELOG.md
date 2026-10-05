@@ -273,6 +273,59 @@
   /api/v4/kernel/api-tokens`, shows `data.token` once, and asks for the
   password (or the MFA code).
 
+- **Admin console: Security → API tokens.** A third section of 安全
+  (`/admin/security/api-tokens`, its own lazy chunk, also found by ⌘K) manages
+  the administrator API tokens with `GET`, `POST` and `DELETE
+  /api/v4/kernel/api-tokens`. A table lists the caller's active tokens: name and
+  the last four characters (`anixadm_…k3Zq`) with the creation date, a scope
+  badge (Read, Admin), a status badge (Active, Expires soon within a week,
+  Expired, Revoked), the expiry as a relative time with the exact one under it
+  (or "No expiry"; "Revoked 20 days ago" with the reason: by its owner, by a
+  super administrator, or because its owner was banned, demoted or deleted), the
+  last use as a relative time with the address, and a row menu with *Copy token
+  ID* (the id the audit log carries) and a danger *Revoke token…*
+  confirmation that names the token and says anything using it stops at once;
+  a failure shows inside the confirmation. Chips add revoked and expired tokens
+  (`include_inactive`) and, for a super administrator, everyone's (`all`, with
+  an Owner column: the rows carry only the owner's id, so others read
+  "Administrator #7"). The console does not know who is a super administrator,
+  so the chip is offered to everyone and a `403 super_admin_required` turns it
+  into a sentence. A line counts the caller's active tokens against the limit of
+  25 and *Create token* is off, with the reason, at 25. Loading, empty (with a
+  button to create one) and error (the route's message, Try again) states, cards
+  on a phone, sorting by name, expiry and last use in the browser. *Create
+  token* asks for a name, a scope with an explanation of each (Read: `GET` and
+  `HEAD` on the administrator APIs, never a node's API key or the Telegram bot
+  token, the two reads that still answer a secret in clear; Admin: what you may
+  do, except manage tokens), an expiry (30, 90 (recommended), 180, 365 or 730
+  days, a custom 1 to 730, or none, which warns) and the re-authentication the
+  route needs, following the subscription reset: the password, or with
+  two-step verification on (`/user/mfa/status`) the six-digit code with a switch
+  to a recovery code. The route's refusals are said where they belong: a wrong
+  credential on the field (`step_up_failed`), `step_up_required` by what its
+  message asks (password, MFA code, or "sign in again within 10 minutes", the
+  case after the identity cutover, with a *Sign in again* button),
+  `409 too_many_tokens`, `429` with the wait from `Retry-After`, and
+  `invalid_request`. The result dialog shows the token once, masked with a
+  reveal toggle and a copy button (clipboard with the select-and-press-Ctrl+C
+  fallback), a warning that it will not be shown again, its scope and expiry
+  and a usage hint (`curl … -H "Authorization: Bearer $ANIXOPS_TOKEN"`, header
+  only, never in a URL) that never contains the token. The token lives only in
+  the dialog's state: Done, Esc, × or leaving the page clears it, the scrim does
+  not close it, it is never written to storage, the URL, a log or an event (the
+  page learns of the stored record, not the token), and an answer that arrives
+  after that is dropped; the password and codes are cleared too. A request
+  marked `sensitive` (this one) logs no body on failure, so a wrong password
+  never reaches the console (the subscription reset still does, as before).
+  `UiErrorState` now reads the message of the kernel's `{ error: { code,
+  message } }` answers (it showed the object). Vitest for the API wrappers, the
+  readers, the list and create state (including that the token is gone on every
+  way out and that a late answer is dropped) and the page; a Playwright spec
+  records the requests and checks that the token is in no URL, storage, log or
+  later request; the accessibility sweeps cover the list (also with ended and
+  everyone's tokens, empty and failed), the form and the token dialog in both
+  themes at 1440 and 390 px; new visual baselines for them.
+
 - **Admin console: a node's traffic over time and rotating its Agent
   credentials.** Two more screens use routes the kernel already serves.
   **节点 → 流量** (a new section of the node page, after 概览) draws the

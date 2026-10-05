@@ -337,4 +337,48 @@ describe('kernel API', () => {
     await kernelApi.rotateKernelAgentCredentials({ node: 'forward-3', rotateApiKey: false, reason: '   ' })
     expect(mockRequest.mock.lastCall[0].data).toEqual({ node: 'forward-3' })
   })
+
+  it('lists the caller\'s API tokens, and adds only the filters that were asked for', async () => {
+    const rows = [{ id: 'tok-1', name: 'nightly export', hint: 'k3Zq' }]
+    mockRequest.mockResolvedValue({ data: rows })
+    await expect(kernelApi.listKernelApiTokens()).resolves.toEqual(rows)
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/api-tokens', method: 'get' })
+    await kernelApi.listKernelApiTokens({ includeInactive: true })
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/api-tokens', method: 'get', params: { include_inactive: true } })
+    await kernelApi.listKernelApiTokens({ all: true, includeInactive: true })
+    expect(mockRequest).toHaveBeenLastCalledWith({
+      baseURL: '/api/v4', url: '/kernel/api-tokens', method: 'get', params: { include_inactive: true, all: true }
+    })
+    // One administrator's tokens; everyone's wins over it.
+    await kernelApi.listKernelApiTokens({ userId: 9 })
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/api-tokens', method: 'get', params: { user_id: 9 } })
+    await kernelApi.listKernelApiTokens({ userId: 9, all: true })
+    expect(mockRequest.mock.lastCall[0].params).toEqual({ all: true })
+  })
+
+  it('creates an API token with only the fields that are set, marks the request sensitive, and answers the token and its record', async () => {
+    mockRequest.mockResolvedValue({ data: { token: 'anixadm_x', api_token: { id: 'tok-1' } } })
+    await expect(kernelApi.createKernelApiToken({ name: '  nightly export ', scope: 'read', expiresInDays: 90, password: 'pw' }))
+      .resolves.toEqual({ token: 'anixadm_x', api_token: { id: 'tok-1' } })
+    expect(mockRequest).toHaveBeenLastCalledWith({
+      baseURL: '/api/v4', url: '/kernel/api-tokens', method: 'post',
+      data: { name: 'nightly export', scope: 'read', expires_in_days: 90, password: 'pw' }, timeout: 30_000, sensitive: true
+    })
+    // No expiry, no password: a code and its method instead.
+    await kernelApi.createKernelApiToken({ name: 'probe', scope: 'admin', expiresInDays: 0, code: '123456', method: 'totp' })
+    expect(mockRequest.mock.lastCall[0].data).toEqual({ name: 'probe', scope: 'admin', code: '123456', method: 'totp' })
+    await kernelApi.createKernelApiToken({ name: 'probe', scope: 'read', code: 'AB12-CD34', method: 'backup' })
+    expect(mockRequest.mock.lastCall[0].data).toEqual({ name: 'probe', scope: 'read', code: 'AB12-CD34', method: 'backup' })
+    // A code without a method is a TOTP code.
+    await kernelApi.createKernelApiToken({ name: 'probe', scope: 'read', code: '123456' })
+    expect(mockRequest.mock.lastCall[0].data.method).toBe('totp')
+  })
+
+  it('revokes an API token by id, which cannot change the path', async () => {
+    mockRequest.mockResolvedValue({ data: { api_token: { id: 'tok-1' }, changed: true } })
+    await expect(kernelApi.revokeKernelApiToken('6b0e-1')).resolves.toEqual({ api_token: { id: 'tok-1' }, changed: true })
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/api-tokens/6b0e-1', method: 'delete' })
+    await kernelApi.revokeKernelApiToken('1/../2')
+    expect(mockRequest.mock.lastCall[0].url).toBe('/kernel/api-tokens/1%2F..%2F2')
+  })
 })

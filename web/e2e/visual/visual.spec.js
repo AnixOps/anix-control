@@ -43,6 +43,13 @@ const SHOTS = [
   // Entry HA through DNS (L2).
   ['admin-forward-dns', [DESKTOP, PHONE]],
   ['admin-forward-route-ha', [DESKTOP, PHONE]],
+  // Security → API tokens: the list, with ended and everyone's tokens (every
+  // state), the create form and the one-time token dialog.
+  ['admin-api-tokens', [DESKTOP, PHONE]],
+  ['admin-api-tokens-all', [DESKTOP]],
+  ['admin-api-tokens-empty', [DESKTOP]],
+  ['admin-api-token-create', [DESKTOP, PHONE]],
+  ['admin-api-token-created', [DESKTOP, PHONE]],
   ['admin-system', [DESKTOP]],
   ['admin-monitor', [DESKTOP]],
   ['admin-plugins', [DESKTOP]],
