@@ -95,6 +95,10 @@ func (w *wiring) route(r *model.Route) ([]nodeHop, error) {
 				IngressSources: slices.Clone(sources),
 				IngressPeers:   slices.Clone(peers),
 			}
+			if last && policy.ProxyProtocol.Enabled() {
+				// Only the hop that dials the targets writes the header.
+				hop.ProxyProtocol = forwardv1.ProxyProtocol(policy.ProxyProtocol)
+			}
 			if i == 0 {
 				hop.Listen = &forwardv1.Listen{
 					Address: r.Listen.Address, Port: s.Port,
@@ -191,6 +195,11 @@ func (w *wiring) addresses(refs []string) []string {
 // linkFor answers the link to or on node ref: an encrypted link without a
 // server name presents the node's Agent identity name.
 func linkFor(t model.LinkTransport, ref string) *forwardv1.LinkTransport {
+	if t.Security == model.LinkSecurityAnixOps {
+		// ANIXOPS links are always multiplexed (anixops-protocol.md
+		// section 6.5); validation accepts either value.
+		t.Mux = true
+	}
 	if t.Security != model.LinkSecurityRaw && t.ServerName == "" {
 		t.ServerName = ref
 	}

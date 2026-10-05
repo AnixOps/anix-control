@@ -56,6 +56,22 @@
   (`web/e2e/admin-wired-apis-4.spec.js`); `docs/reference/frontend-design.md`,
   `docs/guide/notifications-telegram.md` and `docs/reference/kernel-alerts.md`
   describe them.
+- **forward.v1 contract additions for the AnixOps engine, A4 (additions only;
+  owner review).** The contract additions of `docs/architecture/anixops-protocol.md`
+  section 6.5, with new field numbers only: `enum AnixOpsCarrier` and
+  `LinkTransport.carrier = 5`, `enum ProxyProtocol`, `Policy.proxy_protocol = 7`
+  and `NodeHop.proxy_protocol = 17`, and the capability fields
+  `EngineCapabilities.carriers = 12`, `.proxy_protocol = 13` and
+  `.protocol_versions = 14`. `sdk/forward/validate` gains the rules and the codes
+  `carrier_unsupported`, `plain_untrusted`, `server_name_unsupported` and
+  `proxy_protocol_unsupported`, all for ANIXOPS links only with
+  `Options.EnableAnixOps` (off by default; a gost or nftables exit asking for
+  PROXY protocol is refused); the planner renders ANIXOPS links multiplexed and
+  sets `NodeHop.proxy_protocol` on the last hop only. New fixture
+  `contracts/forward/v1/plan-anixops-experimental.json`; no existing fixture or
+  descriptor line changed, and a route that uses none of the new fields plans
+  byte-identically. There is no driver yet (A3), so nothing is reachable by
+  default.
 - **AnixOps relay transport, A2: the QUIC carrier, native UDP and carrier
   selection (`sdk/forward/relay`, prototype).** The next library of the
   owner-approved H22 design (`docs/architecture/anixops-protocol.md` sections

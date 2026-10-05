@@ -220,7 +220,7 @@ originate it and hop *i+1* to terminate it.
 |---|---|---|---|
 | `NFTABLES` | `RAW` only | kernel DNAT, near-zero CPU, survives Agent restarts | IEPL/IPLC private lines, same-provider intranets, plain public forwarding |
 | `GOST` | `RAW`, `TLS`, `WSS`, `QUIC`, `GRPC`, with optional mux | encryption, obfuscation, multiplexing | cross-border public internet |
-| `ANIXOPS` | `ANIXOPS` (v4.3) | mux with stream-level zero round trip, TLS, QUIC and trusted-link plain carriers, per-identity pinning with the H28 link certificates (`anixops-protocol.md`) | v4.3 |
+| `ANIXOPS` | `ANIXOPS` (v4.3; carrier, PROXY v2 and capability fields in the contract since A4) | mux with stream-level zero round trip, TLS, QUIC and trusted-link plain carriers, per-identity pinning with the H28 link certificates (`anixops-protocol.md`) | v4.3 |
 
 So `entry NFTABLES → relay GOST(ingress RAW) → exit GOST(ingress TLS)` is
 valid: the entry DNATs raw traffic to the relay, which wraps it in TLS to
@@ -1150,6 +1150,22 @@ plaintext carriers, native UDP with UDP-over-stream fallback, half-close,
 PROXY v2 toward targets, and an `anixops-relay` unit of its own. By the
 owner's scoping decision (2026-10-04) camouflage is not part of it: its
 section 8 is reserved for the owner.
+
+Phase A4 of that plan (the contract additions of `anixops-protocol.md`
+section 6.5) is merged into `forward.v1`, additions only, with new field
+numbers: `enum AnixOpsCarrier`, `LinkTransport.carrier = 5`,
+`enum ProxyProtocol`, `Policy.proxy_protocol = 7`,
+`NodeHop.proxy_protocol = 17` and `EngineCapabilities.carriers = 12`,
+`.proxy_protocol = 13` and `.protocol_versions = 14`, plus the violation
+codes `carrier_unsupported`, `plain_untrusted`, `server_name_unsupported`
+and `proxy_protocol_unsupported`. Their validation rules in
+`sdk/forward/validate` run only with `Options.EnableAnixOps` (Control's
+`forward.anixops_experimental` flag, wired with the driver in A3, default
+off), the planner renders ANIXOPS links multiplexed and sets
+`NodeHop.proxy_protocol` on the last hop only, and the fixture
+`contracts/forward/v1/plan-anixops-experimental.json` records an example.
+No existing fixture changed, and a plan without the new fields is
+byte-identical to before.
 
 Phase A1 of that plan is implemented in `sdk/forward/relay` (pure Go
 libraries, ALPN `anixops/0`, prototype): the frame format and the stream

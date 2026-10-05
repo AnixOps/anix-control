@@ -8,12 +8,14 @@ relay transport library: framing, the TLS and plaintext carriers, identity
 verification, admission and fuzzing) is implemented in `sdk/forward/relay`
 (sections 3.6, 4.10 and 5.5), and so is phase A2, on `quic-go` (decision
 P2): the QUIC carrier with native UDP datagrams and carrier selection
-(`AUTO`, `TLS_TCP`, `QUIC`, `PLAIN`) (sections 3.7, 4.11 and 5.6); the rest,
-from the `anixops` driver on, is not implemented yet. The contract slots
-it builds on (`ENGINE_ANIXOPS`, `LINK_SECURITY_ANIXOPS`) exist in
-`sdk/api/forward/v1` and are refused by `sdk/forward/validate` until
-`Options.EnableAnixOps` is set (`docs/architecture/forward-sdk.md`
-section 6.4).
+(`AUTO`, `TLS_TCP`, `QUIC`, `PLAIN`) (sections 3.7, 4.11 and 5.6); phase A4 (the
+contract additions of section 6.5, additions only, numbers fixed) is merged
+in `sdk/api/forward/v1`, with their validation behind
+`Options.EnableAnixOps`; the rest, from the `anixops` driver on, is not
+implemented yet. The contract slots it builds on (`ENGINE_ANIXOPS`,
+`LINK_SECURITY_ANIXOPS`) exist in `sdk/api/forward/v1` and are refused by
+`sdk/forward/validate` until `Options.EnableAnixOps` is set
+(`docs/architecture/forward-sdk.md` section 6.4).
 
 > 中文摘要：AnixOps 中继协议只用于节点之间的转发链路（入口 → 中转 → 出口），由 Control 下发配置，
 > 客户端和目标永远不直接使用它。本文只写安全传输部分，伪装相关内容留给 owner（第 8 节）。
@@ -875,26 +877,44 @@ latency sample for `forward-sdk.md` section 7.5.
 
 ### 6.5 Contract additions (forward.v1, additions only)
 
-`anixops.forward.v1` is binding: elements are only added. Proposed
-(numbers tentative; the contract PR fixes them):
+`anixops.forward.v1` is binding: elements are only added. Implemented in A4
+(`sdk/api/forward/v1/forward.proto`; the numbers below are now permanent;
+enum values carry their enum's prefix, `ANIXOPS_CARRIER_AUTO` and so on):
 
-| Element | Proposal |
+| Element | Contract |
 |---|---|
 | `enum AnixOpsCarrier` | `ANIXOPS_CARRIER_UNSPECIFIED = 0` (means `AUTO`), `AUTO = 1`, `TLS_TCP = 2`, `QUIC = 3`, `PLAIN = 4` |
 | `LinkTransport.carrier` | `AnixOpsCarrier carrier = 5`; only for `LINK_SECURITY_ANIXOPS`, refused otherwise |
 | `enum ProxyProtocol` | `PROXY_PROTOCOL_UNSPECIFIED = 0` (off), `PROXY_PROTOCOL_OFF = 1`, `PROXY_PROTOCOL_V2 = 2` |
 | `Policy.proxy_protocol` | `ProxyProtocol proxy_protocol = 7`; the route's choice |
 | `NodeHop.proxy_protocol` | `ProxyProtocol proxy_protocol = 17`; set by the planner on the last hop only |
-| `EngineCapabilities.carriers` | `repeated AnixOpsCarrier carriers = 12` |
+| `EngineCapabilities.carriers` | `repeated AnixOpsCarrier carriers = 12`; the concrete carriers (`TLS_TCP`, `QUIC`, `PLAIN`) a node serves and dials, never `AUTO` (a selection rule: it needs `TLS_TCP`) |
 | `EngineCapabilities.proxy_protocol` | `bool proxy_protocol = 13` |
 | `EngineCapabilities.protocol_versions` | `repeated uint32 protocol_versions = 14`; wire versions the node speaks |
-| Violation codes | `carrier_unsupported`, `plain_untrusted`, `server_name_unsupported`, `proxy_protocol_unsupported` |
+| Violation codes | `carrier_unsupported`, `plain_untrusted`, `server_name_unsupported`, `proxy_protocol_unsupported` (strings of `Violation.code`, not enum values) |
 
 `LinkTransport.mux` is implied for ANIXOPS links (always multiplexed);
 validation accepts either value and the planner renders `true`. No key
 material and no secrets are added to the state. The gost engine could
 adopt `proxy_protocol` later; until then validation refuses it on gost
 exits.
+
+Validation (`sdk/forward/validate`, A4; every ANIXOPS rule only with
+`Options.EnableAnixOps`): a carrier on a link that is not ANIXOPS is
+`not_applicable`; a node of the link that does not list the carrier
+(`AUTO` needs `TLS_TCP`) is `carrier_unsupported`; `PLAIN` on a user's
+route, or on a node without `link=iepl` or `link=iplc`, is
+`plain_untrusted`; a `server_name` that is not the identity name of the
+hop's single node is `server_name_unsupported`; `PROXY_PROTOCOL_V2` on an
+exit whose engine or node cannot write it, on a UDP-only route, is
+`proxy_protocol_unsupported`, and together with `DIRECT_MODE_PREFERRED` on
+a chain (the entry would dial the targets without the header) is
+`invalid_relation`. Two nodes of a link that share no wire version, or a
+node that reports none, are `capability_missing` (section 6.7). The planner
+renders `mux = true` on ANIXOPS links and sets `NodeHop.proxy_protocol` on
+the last hop only. The Control flag `forward.anixops_experimental` that sets
+`Options.EnableAnixOps` ships with the driver (A3), since it has nothing to
+enable before.
 
 ### 6.6 Testing
 

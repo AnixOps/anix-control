@@ -79,6 +79,8 @@ type LinkTransport struct {
 	ServerName string
 	// Path is the WebSocket path or gRPC service name.
 	Path string
+	// Carrier is the carrier of an ANIXOPS link; unspecified means AUTO.
+	Carrier AnixOpsCarrier
 }
 
 // Target is a destination behind the last hop (forwardv1.Target).
@@ -103,6 +105,9 @@ type Policy struct {
 	CircuitBreaker CircuitBreaker
 	Direct         DirectMode
 	TargetPolicy   TargetPolicy
+	// ProxyProtocol is the PROXY header the last hop writes toward the
+	// targets; unspecified means off.
+	ProxyProtocol ProxyProtocol
 }
 
 // HealthCheck is the active check each node runs against its upstreams
@@ -205,6 +210,15 @@ type EngineCapabilities struct {
 	BandwidthLimit    bool
 	Quota             bool
 	MaxConns          bool
+	// Carriers are the concrete carriers an ANIXOPS driver serves and dials
+	// (TLS_TCP, QUIC, PLAIN); AUTO is never listed.
+	Carriers []AnixOpsCarrier
+	// ProxyProtocol is true when the driver writes PROXY protocol v2
+	// toward targets.
+	ProxyProtocol bool
+	// ProtocolVersions are the wire versions of the engine's link protocol
+	// the node speaks.
+	ProtocolVersions []uint32
 }
 
 // Supports reports whether the driver offers strategy b.
@@ -222,6 +236,29 @@ func (c EngineCapabilities) SupportsLink(s LinkSecurity) bool {
 	for _, l := range c.LinkSecurities {
 		if l == s {
 			return true
+		}
+	}
+	return false
+}
+
+// SupportsCarrier reports whether the driver lists carrier x.
+func (c EngineCapabilities) SupportsCarrier(x AnixOpsCarrier) bool {
+	for _, v := range c.Carriers {
+		if v == x {
+			return true
+		}
+	}
+	return false
+}
+
+// SharesProtocolVersion reports whether c and o speak a common wire
+// version.
+func (c EngineCapabilities) SharesProtocolVersion(o EngineCapabilities) bool {
+	for _, v := range c.ProtocolVersions {
+		for _, w := range o.ProtocolVersions {
+			if v == w {
+				return true
+			}
 		}
 	}
 	return false

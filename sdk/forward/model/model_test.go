@@ -159,6 +159,8 @@ func TestNodeAndCountersRoundTrip(t *testing.T) {
 			Ipv6: true, Udp: true, BandwidthLimit: true, Quota: true, MaxConns: true,
 			Strategies:     []forwardv1.BalanceStrategy{forwardv1.BalanceStrategy_BALANCE_STRATEGY_FAILOVER, 40},
 			LinkSecurities: []forwardv1.LinkSecurity{forwardv1.LinkSecurity_LINK_SECURITY_RAW},
+			Carriers:       []forwardv1.AnixOpsCarrier{forwardv1.AnixOpsCarrier_ANIXOPS_CARRIER_QUIC, 40},
+			ProxyProtocol:  true, ProtocolVersions: []uint32{1, 2},
 		}},
 		Labels: map[string]string{"link": "iepl"},
 	}
@@ -169,6 +171,14 @@ func TestNodeAndCountersRoundTrip(t *testing.T) {
 	caps, ok := n.Engine(EngineNFTables)
 	if !ok || !caps.Supports(BalanceFailover) || caps.Supports(BalanceRandom) || !caps.SupportsLink(LinkSecurityRaw) || caps.SupportsLink(LinkSecurityTLS) {
 		t.Fatalf("capabilities: %+v", caps)
+	}
+	if !caps.SupportsCarrier(CarrierQUIC) || caps.SupportsCarrier(CarrierPlain) || !caps.SharesProtocolVersion(EngineCapabilities{ProtocolVersions: []uint32{2, 3}}) ||
+		caps.SharesProtocolVersion(EngineCapabilities{}) {
+		t.Fatalf("carriers and versions: %+v", caps)
+	}
+	if CarrierUnspecified.Effective() != CarrierAuto || CarrierQUIC.Effective() != CarrierQUIC || !CarrierPlain.IsKnown() || AnixOpsCarrier(9).IsKnown() ||
+		!ProxyProtocolV2.Enabled() || ProxyProtocolUnspecified.Enabled() || ProxyProtocolOff.Enabled() || ProxyProtocol(9).IsKnown() {
+		t.Fatal("enum helpers")
 	}
 	if _, ok := n.Engine(EngineGost); ok {
 		t.Fatalf("gost is not advertised")
@@ -234,7 +244,7 @@ func randomRoute(rng *rand.Rand) *forwardv1.Route {
 			h.NodeRefs = append(h.NodeRefs, str())
 		}
 		if maybe() {
-			h.Ingress = &forwardv1.LinkTransport{Security: forwardv1.LinkSecurity(enum()), Mux: maybe(), ServerName: str(), Path: str()}
+			h.Ingress = &forwardv1.LinkTransport{Security: forwardv1.LinkSecurity(enum()), Mux: maybe(), ServerName: str(), Path: str(), Carrier: forwardv1.AnixOpsCarrier(enum())}
 		}
 		r.Hops = append(r.Hops, h)
 	}
@@ -245,6 +255,7 @@ func randomRoute(rng *rand.Rand) *forwardv1.Route {
 		r.Policy = &forwardv1.Policy{
 			NextHop: forwardv1.BalanceStrategy(enum()), Target: forwardv1.BalanceStrategy(enum()),
 			Direct: forwardv1.DirectMode(enum()), TargetPolicy: forwardv1.TargetPolicy(enum()),
+			ProxyProtocol: forwardv1.ProxyProtocol(enum()),
 		}
 		if maybe() {
 			r.Policy.Health = &forwardv1.HealthCheck{IntervalMs: u32(), TimeoutMs: u32(), Disabled: maybe()}

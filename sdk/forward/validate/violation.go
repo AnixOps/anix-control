@@ -65,6 +65,18 @@ const (
 	// CodeCapabilityMissing: a node's engine lacks a feature the route
 	// needs (link security, strategy, UDP, IPv6, a limit).
 	CodeCapabilityMissing Code = "capability_missing"
+	// CodeCarrierUnsupported: an ANIXOPS link's carrier a node of the link
+	// does not list in its capabilities (anixops-protocol.md section 6.5).
+	CodeCarrierUnsupported Code = "carrier_unsupported"
+	// CodePlainUntrusted: the PLAIN carrier outside a trusted link: a
+	// user's route, or a node without link=iepl or link=iplc.
+	CodePlainUntrusted Code = "plain_untrusted"
+	// CodeServerNameUnsupported: a server_name on an ANIXOPS link other than
+	// the next node's identity name.
+	CodeServerNameUnsupported Code = "server_name_unsupported"
+	// CodeProxyProtocolUnsupported: a PROXY protocol header the route's exit
+	// cannot write (its engine, its node's capabilities, UDP-only routes).
+	CodeProxyProtocolUnsupported Code = "proxy_protocol_unsupported"
 	// CodePortOutOfRange: a port outside the node's allocation range.
 	CodePortOutOfRange Code = "port_out_of_range"
 	// CodePortReserved: a port reserved on the node (SSH, the Agent's own

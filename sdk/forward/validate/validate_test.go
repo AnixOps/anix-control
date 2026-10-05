@@ -115,6 +115,10 @@ type ruleCase struct {
 }
 
 func ruleCases() []ruleCase {
+	return append(baseRuleCases(), anixopsRuleCases()...)
+}
+
+func baseRuleCases() []ruleCase {
 	return []ruleCase{
 		// Route metadata.
 		{"bad id", func(r *model.Route, _ *Options) { r.ID = "route-1" }, "id", CodeInvalidFormat},
@@ -406,7 +410,7 @@ func TestEveryCodeIsTested(t *testing.T) {
 		CodeDuplicate, CodeInvalidRole, CodeEngineNotEnabled, CodeLinkUnsupported, CodeNotApplicable,
 		CodeRequiresSingleNode, CodeForbidden, CodeTargetNotAllowed, CodeInvalidRelation, CodeUnusedHops, CodeExpired,
 		CodeUnknownNode, CodeEngineNotAdvertised, CodeEngineUnavailable, CodeCapabilityMissing, CodePortOutOfRange,
-		CodePortReserved,
+		CodePortReserved, CodeCarrierUnsupported, CodePlainUntrusted, CodeServerNameUnsupported, CodeProxyProtocolUnsupported,
 	} {
 		if !tested[code] {
 			t.Errorf("no case for %s", code)

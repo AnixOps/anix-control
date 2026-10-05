@@ -129,7 +129,7 @@ func checkHops(c *collector, r *model.Route, opts Options) {
 				c.add(hopField(i, "dial_address"), CodeInvalidFormat, "must be an IP address or a DNS name")
 			}
 		}
-		checkIngress(c, i, h.Ingress, opts)
+		checkIngress(c, i, *h, opts)
 	}
 }
 
@@ -182,7 +182,8 @@ func checkHopNodes(c *collector, i int, refs []string) {
 	}
 }
 
-func checkIngress(c *collector, i int, t model.LinkTransport, opts Options) {
+func checkIngress(c *collector, i int, h model.Hop, opts Options) {
+	t := h.Ingress
 	field := hopField(i, "ingress.")
 	switch {
 	case t.Security == model.LinkSecurityUnspecified:
@@ -202,6 +203,69 @@ func checkIngress(c *collector, i int, t model.LinkTransport, opts Options) {
 	}
 	if t.Path != "" {
 		checkLinkPath(c, field+"path", t)
+	}
+	checkCarrier(c, i, h, opts)
+}
+
+// checkCarrier applies the carrier rules of anixops-protocol.md section
+// 6.5. The carrier is meaningful on ANIXOPS links only; the rules for such
+// links run when they are enabled, since they are refused before.
+func checkCarrier(c *collector, i int, h model.Hop, opts Options) {
+	t := h.Ingress
+	field := hopField(i, "ingress.")
+	switch {
+	case !t.Carrier.IsKnown():
+		c.add(field+"carrier", CodeInvalidEnum, "unknown carrier %d", int32(t.Carrier))
+	case t.Carrier != model.CarrierUnspecified && t.Security != model.LinkSecurityAnixOps:
+		c.add(field+"carrier", CodeNotApplicable, "only a LINK_SECURITY_ANIXOPS link has a carrier")
+	}
+	if t.Security != model.LinkSecurityAnixOps || !opts.EnableAnixOps {
+		return
+	}
+	// The link certificate carries only the node's identity name.
+	if t.ServerName != "" && isHostname(t.ServerName) &&
+		(len(h.NodeRefs) != 1 || !strings.EqualFold(t.ServerName, h.NodeRefs[0])) {
+		c.add(field+"server_name", CodeServerNameUnsupported,
+			"must be empty or the node's identity name (a hop with one node)")
+	}
+}
+
+// checkPlainOwner refuses the PLAIN carrier on a user's route (the node
+// labels are checked with the inventory).
+func checkPlainOwner(c *collector, r *model.Route, opts Options) {
+	if !opts.EnableAnixOps || r.IsAdmin() {
+		return
+	}
+	for i := 1; i < len(r.Hops); i++ {
+		t := r.Hops[i].Ingress
+		if t.Security == model.LinkSecurityAnixOps && t.Carrier == model.CarrierPlain {
+			c.add(hopField(i, "ingress.carrier"), CodePlainUntrusted, "the PLAIN carrier is for an administrator's route only")
+		}
+	}
+}
+
+// checkProxyProtocol applies the PROXY protocol rules of section 6.5: the
+// route's exit must be able to write the header, which goes on TCP
+// connections to the targets only.
+func checkProxyProtocol(c *collector, r *model.Route) {
+	p := r.Policy.ProxyProtocol
+	switch {
+	case !p.IsKnown():
+		c.add("policy.proxy_protocol", CodeInvalidEnum, "unknown PROXY protocol %d", int32(p))
+		return
+	case !p.Enabled() || len(r.Hops) == 0:
+		return
+	}
+	last := len(r.Hops) - 1
+	switch {
+	case knownEngine(r.Hops[last].Engine) && !CanProxyProtocol(r.Hops[last].Engine):
+		c.add("policy.proxy_protocol", CodeProxyProtocolUnsupported,
+			"hop %d runs %s, which cannot write a PROXY protocol header", last, r.Hops[last].Engine)
+	case r.Listen.Protocol == model.L4ProtocolUDP:
+		c.add("policy.proxy_protocol", CodeProxyProtocolUnsupported, "the header is written on TCP connections; this route is UDP only")
+	case last > 0 && r.Policy.Direct == model.DirectPreferred:
+		c.add("policy.proxy_protocol", CodeInvalidRelation,
+			"DIRECT_MODE_PREFERRED lets the entry dial the targets without the header; use DIRECT_MODE_OFF")
 	}
 }
 

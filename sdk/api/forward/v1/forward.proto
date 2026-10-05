@@ -252,6 +252,37 @@ enum LinkSecurity {
   LINK_SECURITY_ANIXOPS = 6;
 }
 
+// AnixOpsCarrier is the transport carrier of a LINK_SECURITY_ANIXOPS link
+// (anixops-protocol.md section 5.4): the dialling side's choice, which the
+// listening side serves by listening on the hop's port for every carrier
+// the choice may use. All carriers but PLAIN are authenticated and
+// encrypted. Added to forward.v1 after F3a (additions only).
+enum AnixOpsCarrier {
+  // ANIXOPS_CARRIER_UNSPECIFIED means AUTO.
+  ANIXOPS_CARRIER_UNSPECIFIED = 0;
+  // AUTO tries QUIC first and falls back to TLS_TCP; never to PLAIN.
+  ANIXOPS_CARRIER_AUTO = 1;
+  // TLS_TCP is TLS over TCP only.
+  ANIXOPS_CARRIER_TLS_TCP = 2;
+  // QUIC is QUIC only.
+  ANIXOPS_CARRIER_QUIC = 3;
+  // PLAIN is plaintext TCP between trusted nodes (administrator routes whose
+  // two nodes carry link=iepl or link=iplc); never selected by AUTO.
+  ANIXOPS_CARRIER_PLAIN = 4;
+}
+
+// ProxyProtocol says whether the last hop prefixes its connections to the
+// targets with a PROXY protocol header carrying the client's address.
+// Added to forward.v1 after F3a (additions only).
+enum ProxyProtocol {
+  // PROXY_PROTOCOL_UNSPECIFIED means off.
+  PROXY_PROTOCOL_UNSPECIFIED = 0;
+  PROXY_PROTOCOL_OFF = 1;
+  // PROXY_PROTOCOL_V2 is the binary header of PROXY protocol version 2,
+  // written on TCP connections only.
+  PROXY_PROTOCOL_V2 = 2;
+}
+
 // BalanceStrategy picks an upstream for a new connection.
 enum BalanceStrategy {
   BALANCE_STRATEGY_UNSPECIFIED = 0;
@@ -369,6 +400,9 @@ message LinkTransport {
   string server_name = 3;
   // path is the WebSocket path or gRPC service name.
   string path = 4;
+  // carrier is the transport carrier; only for LINK_SECURITY_ANIXOPS,
+  // refused on other links. Unspecified means ANIXOPS_CARRIER_AUTO.
+  AnixOpsCarrier carrier = 5;
 }
 
 // Target is a destination behind the last hop.
@@ -393,6 +427,9 @@ message Policy {
   CircuitBreaker circuit_breaker = 4;
   DirectMode direct = 5;
   TargetPolicy target_policy = 6;
+  // proxy_protocol is the route's choice of a PROXY protocol header on the
+  // connections the last hop makes to the targets. Unspecified means off.
+  ProxyProtocol proxy_protocol = 7;
 }
 
 // HealthCheck is the active check each node runs against its upstreams.
@@ -518,6 +555,9 @@ message NodeHop {
   // ingress_peers are the Agent identities (SPIFFE ids) allowed to dial an
   // encrypted ingress: the previous hop's nodes.
   repeated string ingress_peers = 16;
+  // proxy_protocol is Policy.proxy_protocol, set by the planner on the last
+  // hop only (the hop that dials the targets); unspecified on other hops.
+  ProxyProtocol proxy_protocol = 17;
 }
 
 // Upstream is where a hop sends traffic.
@@ -552,6 +592,16 @@ message EngineCapabilities {
   bool bandwidth_limit = 9;
   bool quota = 10;
   bool max_conns = 11;
+  // carriers are the concrete carriers the driver can serve and dial
+  // (TLS_TCP, QUIC, PLAIN); AUTO is a selection rule, not a carrier, and is
+  // never listed. Empty for drivers without carriers.
+  repeated AnixOpsCarrier carriers = 12;
+  // proxy_protocol is true when the driver can write PROXY protocol v2
+  // headers toward targets.
+  bool proxy_protocol = 13;
+  // protocol_versions are the wire versions of the engine's own link
+  // protocol the node speaks; empty for engines without one.
+  repeated uint32 protocol_versions = 14;
 }
 
 message GetNodeCapabilitiesRequest {}
