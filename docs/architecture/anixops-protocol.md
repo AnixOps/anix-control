@@ -6,8 +6,10 @@ questions P1–P10 decided, section 9.3). Scope set by the owner on
 AnixOps nodes. Section 8 is still reserved for the owner. Phase A1 (the
 relay transport library: framing, the TLS and plaintext carriers, identity
 verification, admission and fuzzing) is implemented in `sdk/forward/relay`
-(sections 3.6, 4.10 and 5.5); the rest, from QUIC on, is not implemented
-yet. The contract slots
+(sections 3.6, 4.10 and 5.5), and so is phase A2, on `quic-go` (decision
+P2): the QUIC carrier with native UDP datagrams and carrier selection
+(`AUTO`, `TLS_TCP`, `QUIC`, `PLAIN`) (sections 3.7, 4.11 and 5.6); the rest,
+from the `anixops` driver on, is not implemented yet. The contract slots
 it builds on (`ENGINE_ANIXOPS`, `LINK_SECURITY_ANIXOPS`) exist in
 `sdk/api/forward/v1` and are refused by `sdk/forward/validate` until
 `Options.EnableAnixOps` is set (`docs/architecture/forward-sdk.md`
@@ -338,6 +340,38 @@ identities it removed so the carrier layer can close their carriers
 (section 3.5); a trust bundle change is reported to it through
 `Credentials.OnReload` and `PeerStillTrusted`.
 
+### 3.7 Implementation notes (A2, the QUIC handshake)
+
+QUIC (section 5.2) runs the handshake of section 3.2 inside QUIC version 1
+with the same code: `link.DialQUIC` and `link.QUICListener` build the
+`tls.Config` of the TCP link, and a listener shares its admission state
+(credentials, `ingress_sources`, `ingress_peers`, the ALPN protocol) with the
+TCP listener, so a rule cannot hold on one and not the other. The tests run the
+certificate cases of the TCP link through QUIC and assert the same reasons. What
+QUIC adds, all in the direction of refusing:
+
+- QUIC version 1 only, on both ends, with no version negotiation answered
+  (the wire version is ALPN's business, section 6.7), and no 0-RTT: the
+  listener never accepts early data, the dialler never sends it and keeps no
+  token store; there are no session tickets, and a finished handshake is
+  checked for TLS 1.3, the ALPN protocol, no resumption and no early data;
+- the source address is checked on the first Initial of an attempt, with quic-go's
+  `ConnContext` hook: an address outside `ingress_sources` is refused with one
+  small CONNECTION_REFUSED packet, before any TLS state exists and before a
+  signature is made. This is a refusal, not a silent drop: dropping the packet
+  would need a wrapper around the UDP socket that quic-go's batched reads
+  and ECN support bypass;
+- handshakes in flight are bounded (`MaxPending`, 64): the next attempt is refused the
+  same way. When more than half of the slots are taken, an admitted address
+  must answer a Retry before it gets one (quic-go's `VerifySourceAddress`), so
+  Initials spoofed from an admitted address cannot hold more than half of them;
+- the 10 s handshake deadline is hard: quic-go aborts a handshake that has not
+  completed in twice its handshake idle timeout, which is set to half of it;
+- as with TLS 1.3 over TCP, the dialler's handshake completes before the
+  listener has verified it, so a listener that refuses the node closes the
+  connection a moment later; the carrier layer's SETTINGS exchange (section
+  5.6) turns that into a dial error, with the same bounded reason.
+
 ## 4. Framing and multiplexing
 
 ### 4.1 Carriers and streams
@@ -553,6 +587,42 @@ prototype:
   ends with `enhance_your_calm`. An `OPEN` that races a `GOAWAY` is refused
   without charge.
 
+### 4.11 Implementation notes (A2, native UDP)
+
+`sdk/forward/relay` implements section 4.8 for both carrier families. On
+QUIC (section 5.6) an association is a UDP stream whose QUIC stream id names
+it, and its datagrams ride QUIC DATAGRAM frames: the stream id as a QUIC
+variable-length integer in its shortest form, then the payload, which is never
+empty. Where the text leaves a choice, the package documentation is normative
+for the prototype:
+
+- **Oversize.** A datagram larger than the connection's current maximum
+  DATAGRAM size (quic-go reports it as `DatagramTooLargeError`) is sent on the
+  association's stream in a `DATAGRAM` frame of section 4.2 and counted
+  (`Stats.DatagramsOversize`, the document's `udp_oversize_fallback`).
+- **Before the answer.** A dialler's first datagrams go on the stream, behind
+  the `OPEN`, until the listener's `RESULT` arrives: a QUIC datagram can
+  overtake the `OPEN` of its stream and would be dropped by a listener that
+  does not know the stream yet (the first datagram of every association, which
+  is often a handshake or a query). The one cost is the head-of-line behaviour
+  of section 4.8 for about one round trip per association.
+- **Without datagram support** (`DisableDatagrams`, or a peer that did not
+  enable them) every datagram goes on the stream, as on a TCP carrier.
+  `Stats.DatagramsOnStream` counts the datagrams that went on a stream.
+- **Never blocking.** `WriteDatagram` drops and counts when it cannot take a
+  datagram, as a full socket buffer would. QUIC's own send queue blocks when
+  full, so the carrier queues datagrams (256, 256 KiB) for a sender goroutine of
+  its own; a stream's own queue is `Config.SendBuffer`. `CloseWrite` follows
+  every datagram written before it, whichever way it travels.
+- **Receiving.** A datagram for no open UDP association (usually one that
+  finished while it was in flight) is dropped and counted
+  (`Stats.DatagramsRecvDropped`), as is one that finds the association's
+  receive queue (the stream window) full; a malformed one is the peer's
+  mistake and draws on the budget of answers of section 4.10.
+- **The association's idle timeout** (60 s after its last datagram) is not in
+  the library: the driver owns the table of associations (phase A3), as it
+  owns the carrier pool and the carrier age.
+
 ## 5. Carriers
 
 ### 5.1 TLS over TCP (`TLS_TCP`)
@@ -631,6 +701,67 @@ for TCP and UDP together (`forward-sdk.md` section 5.2); Apply's pre-bind
 two authenticated carriers; nothing falls back to plaintext. A typical
 reason for the fallback is a firewall that blocks UDP between the nodes;
 the fallback count is a metric (section 7.3).
+
+### 5.6 Implementation notes (A2, the QUIC carrier and selection)
+
+`sdk/forward/relay` implements `QUIC` and the selection of section 5.4
+(`QUICCarrier`, `DialQUIC`, `QUICListener`, `ListenAuto`, `Selector`); its package
+documentation is normative for the prototype. The document says that QUIC's own
+data, flow control, reset, ping and close replace those frames, and leaves
+`SETTINGS`, `OPEN`, `RESULT` and `GOAWAY` unmapped. The mapping chosen:
+
+- **Control streams.** Each end opens one unidirectional stream first. It carries
+  `SETTINGS` (once, first; both ends wait for the other's, which also tells a
+  dialler that the listener accepted its certificate), then `GOAWAY`, then
+  nothing but a FIN meaning "no streams left". QUIC lets a peer open one such
+  stream, so a second one is a transport error. Frames on QUIC streams use the
+  encoding of section 4.2 with stream id 0.
+- **Streams.** A native bidirectional stream, opened only by the dialler, begins
+  with `OPEN` and then `RESULT`, and after that a TCP stream is raw bytes and a
+  UDP stream `DATAGRAM` frames. Half-close is QUIC's FIN, and `RESET` is
+  RESET_STREAM and STOP_SENDING with the `ResetReason` as the error code;
+  a stream's id is its QUIC stream id (0, 4, 8, ...; at most 2^29 per carrier).
+- **GOAWAY's id** is the first stream id the listening end did not accept (as in
+  HTTP/3), so a dialler fails the streams from there on at once and retries
+  them elsewhere.
+- **Close.** QUIC discards what a peer has received but not read when a connection
+  closes, so a draining carrier closes only when both ends are quiet: each
+  finishes its control stream after its `GOAWAY` once it has no streams left,
+  and the connection closes when both have; a peer that does not is waited for
+  `DrainTimeout`. L3's `CONNECTION_CLOSE` carries the `GoAwayReason` as its
+  application error code; a listener restarted with its stateless reset key
+  (a configuration field: the driver keeps the key, section 6.2) ends its
+  predecessor's carriers at once.
+- **Limits and liveness** map onto QUIC's transport parameters: `MaxStreams` to
+  `MaxIncomingStreams` of the listening end, the windows to QUIC's initial windows
+  with its auto-tuning up to 16 MiB and 64 MiB (a configurable ceiling, so a
+  carrier buffers at most its ceiling, section 4.5), L4 to QUIC's keepalive and
+  idle timeout, L5 as on TCP carriers.
+- **Peer misbehaviour** keeps the rules of section 4.10: a rule of the carrier
+  ends it with the rule as the close code, a stream's mistake resets that
+  stream, and the answers a peer can draw are rationed. A peer cannot end a
+  carrier by what it does to a stream.
+- **QUIC cost**: quic-go asks for 7 MiB of socket buffer per socket, and the
+  relay unit cannot raise the limit itself (no `CAP_NET_ADMIN`): the forward-node
+  sysctl drop-in must set `net.core.rmem_max` and `wmem_max` to at least 7500000,
+  and the driver's capability probe reports them (section 6.1).
+- **Selection.** `AUTO` dials QUIC with a probe of 3 s, and a QUIC dial that
+  fails is made up for at once with `TLS_TCP`, so the dial that found UDP blocked
+  still succeeds; three QUIC dials in a row that fail put the link on the
+  fallback (`TLS_TCP` straight away), and one dial tries QUIC again every 5
+  minutes. Nothing falls back to plaintext and `AUTO` never selects `PLAIN`. The
+  listener of an `AUTO` link listens on TCP and UDP at one port number. The
+  counters are the ones section 7.3 names.
+
+**Dependency (decision P2).** `quic-go` v0.59.1, MIT, pinned in `sdk/go.mod`:
+the version already in the kernel module's requirements, the first one with the
+fixes of all its Go advisories (GO-2026-5676, an HTTP/3 QPACK issue in a package this module
+does not import, was fixed in it), and its `go 1.24` directive keeps the module's
+`go 1.25`. It brings `golang.org/x/crypto`, `x/net` and `x/sys` (BSD-3-Clause)
+into the build; no other module is built. `quic-go/qpack` (MIT) and, for
+quic-go's own tests and tools, `go.uber.org/mock` (Apache-2.0), `gcassert` and
+`kr/pretty` (MIT) appear in the module graph only. `anix-agent` takes the version
+with the SDK pin it adopts.
 
 ## 6. Integration
 

@@ -61,7 +61,7 @@ func DialTLS(ctx context.Context, address string, cfg link.DialConfig, ccfg Conf
 	if err != nil {
 		return nil, err
 	}
-	c, err := NewConnCarrier(conn, RoleDialer, ccfg)
+	c, err := newDiallerCarrier(ctx, conn, ccfg)
 	if err != nil {
 		return nil, handshakeError(err)
 	}
@@ -77,11 +77,31 @@ func DialPlain(ctx context.Context, address string, cfg link.PlainDialConfig, cc
 	if err != nil {
 		return nil, err
 	}
-	c, err := NewConnCarrier(conn, RoleDialer, ccfg)
+	c, err := newDiallerCarrier(ctx, conn, ccfg)
 	if err != nil {
 		return nil, handshakeError(err)
 	}
 	c.attach(conn.Peer(), CarrierPlain)
+	return c, nil
+}
+
+// newDiallerCarrier runs the SETTINGS exchange of a dialled connection, giving
+// up (and closing the connection) when ctx ends before it has finished, so a
+// dial bounded by a deadline is bounded in the exchange too.
+func newDiallerCarrier(ctx context.Context, conn *link.Conn, ccfg Config) (*ConnCarrier, error) {
+	stop := context.AfterFunc(ctx, func() { _ = conn.Close() })
+	c, err := NewConnCarrier(conn, RoleDialer, ccfg)
+	if err != nil {
+		stop()
+		if ctx.Err() != nil {
+			err = fmt.Errorf("%w: %w", ctx.Err(), err)
+		}
+		return nil, err
+	}
+	if !stop() { // ctx ended just now and the connection is closing
+		_ = c.Close()
+		return nil, ctx.Err()
+	}
 	return c, nil
 }
 

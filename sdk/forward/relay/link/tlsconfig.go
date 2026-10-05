@@ -35,17 +35,24 @@ func (c *Credentials) clientTLS(serverName, peerIdentity, protocol string) *tls.
 // trust bundle as they are then, and the identity check reads the peers as
 // they are when it runs, so a reload or a change of ingress_peers applies to
 // the next handshake without anything being re-created.
-func (l *Listener) serverTLS() *tls.Config {
+func (p *policy) serverTLS() *tls.Config {
 	return &tls.Config{
 		MinVersion: tls.VersionTLS13,
 		MaxVersion: tls.VersionTLS13,
-		NextProtos: []string{l.protocol},
-		GetConfigForClient: func(*tls.ClientHelloInfo) (*tls.Config, error) {
-			st := l.creds.state.Load()
+		NextProtos: []string{p.protocol},
+		GetConfigForClient: func(info *tls.ClientHelloInfo) (*tls.Config, error) {
+			st := p.creds.state.Load()
+			// A QUIC handshake carries a record in its context, which keeps
+			// the typed refusal: quic-go reports a failed handshake to the
+			// application as a TLS alert and its text only.
+			var rec *handshakeRecord
+			if ctx := info.Context(); ctx != nil {
+				rec, _ = ctx.Value(handshakeKey{}).(*handshakeRecord)
+			}
 			return &tls.Config{
 				MinVersion:   tls.VersionTLS13,
 				MaxVersion:   tls.VersionTLS13,
-				NextProtos:   []string{l.protocol},
+				NextProtos:   []string{p.protocol},
 				Certificates: []tls.Certificate{st.cert},
 				ClientCAs:    st.roots,
 				ClientAuth:   tls.RequireAndVerifyClientCert,
@@ -53,7 +60,11 @@ func (l *Listener) serverTLS() *tls.Config {
 				// every handshake runs the identity check on a fresh chain.
 				SessionTicketsDisabled: true,
 				VerifyConnection: func(cs tls.ConnectionState) error {
-					return verifyClientConnection(cs, l.peers.Load(), l.protocol)
+					err := verifyClientConnection(cs, p.peers.Load(), p.protocol)
+					if err != nil && rec != nil {
+						rec.set(err)
+					}
+					return err
 				},
 			}, nil
 		},

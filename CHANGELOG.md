@@ -4,6 +4,38 @@
 
 ### Added
 
+- **AnixOps relay transport, A2: the QUIC carrier, native UDP and carrier
+  selection (`sdk/forward/relay`, prototype).** The next library of the
+  owner-approved H22 design (`docs/architecture/anixops-protocol.md` sections
+  3.7, 4.11 and 5.6), on `quic-go` v0.59.1 (MIT; decision P2; promoted from an
+  indirect requirement, one pinned version). `Carrier` and `Stream` are now
+  interfaces with the frame multiplexer over a `net.Conn` and the new
+  `QUICCarrier` as implementations. QUIC streams are native streams (OPEN and
+  RESULT first, half-close is the FIN, resets carry the reason), a control stream
+  carries SETTINGS and GOAWAY, liveness is QUIC's own keepalive and idle timeout,
+  and a drained carrier closes only when both ends are quiet because QUIC drops
+  what a peer has not read when a connection closes. The QUIC handshake is the
+  TLS link's, on the same code: identity pinning of `peer_identity` and
+  `ingress_peers`, source admission on the first Initial before any TLS state or
+  signature, a bound and a hard deadline on handshakes in flight, QUIC Retry
+  when the queue is over half full, QUIC version 1 only, no 0-RTT, no resumption,
+  and a stateless reset key so a restarted listener ends its old carriers at
+  once. UDP associations ride QUIC DATAGRAM frames carrying the stream id;
+  datagrams larger than the connection's maximum, and the first datagrams
+  before the listener has answered, go on the association's stream, and so does
+  everything where either end lacks DATAGRAM support; `WriteDatagram` never
+  blocks, and what is dropped is counted. A `Selector` makes the carriers of one
+  link (`AUTO`, `TLS_TCP`, `QUIC`, `PLAIN`): `AUTO` tries QUIC with a 3 s probe,
+  falls back to `TLS_TCP` (never to plaintext), stops trying QUIC after three
+  failures in a row and retries every 5 minutes, and `ListenAuto` listens for
+  both on one port number. Tested over loopback QUIC with raw peers for every
+  violation (control stream, streams, datagrams, from either end), the same
+  certificate cases as the TCP link, a randomized model of streams and endings,
+  an injectable clock for the selection, and five more fuzz targets with seed
+  corpora; QUIC needs `net.core.rmem_max` and `wmem_max` of at least 7500000
+  (documented). Not a driver: nothing in the planner or the Agent uses it yet; the
+  UDP association timeout, the carrier pool and the contract fields are later
+  phases.
 - **AnixOps relay transport, A1: frames and the stream multiplexer
   (`sdk/forward/relay`, prototype).** The first library of the owner-approved
   H22 design (`docs/architecture/anixops-protocol.md`): the 8-byte frame

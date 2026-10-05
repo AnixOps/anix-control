@@ -49,13 +49,9 @@ type PlainListenerConfig struct {
 // sources, the peers and the credentials change in place (SetSources,
 // SetPeers, Credentials.Reload) without re-creating the listener.
 type Listener struct {
-	inner    net.Listener
-	creds    *Credentials // nil on a plaintext listener
-	protocol string
-	timeout  time.Duration
-
-	sources atomic.Pointer[Sources]
-	peers   atomic.Pointer[peerSet]
+	policy  // credentials, protocol, ingress sources and peers
+	inner   net.Listener
+	timeout time.Duration
 
 	pending chan struct{} // a slot per handshake in flight
 	ready   chan *Conn
@@ -105,15 +101,10 @@ func newListener(cfg ListenerConfig) (*Listener, error) {
 	case cfg.HandshakeTimeout < 0 || cfg.MaxPending < 0:
 		return nil, errors.New("link: negative listener limits")
 	}
-	sources, err := ParseSources(cfg.Sources)
-	if err != nil {
+	l := &Listener{timeout: cfg.HandshakeTimeout}
+	if err := l.init(cfg.Credentials, cfg.Protocol, cfg.Sources, cfg.Peers); err != nil {
 		return nil, err
 	}
-	peers, err := newPeerSet(cfg.Peers)
-	if err != nil {
-		return nil, err
-	}
-	l := &Listener{creds: cfg.Credentials, protocol: cfg.Protocol, timeout: cfg.HandshakeTimeout}
 	if l.timeout == 0 {
 		l.timeout = DefaultHandshakeTimeout
 	}
@@ -122,8 +113,6 @@ func newListener(cfg ListenerConfig) (*Listener, error) {
 		maxPending = DefaultMaxPending
 	}
 	l.pending = make(chan struct{}, maxPending)
-	l.sources.Store(&sources)
-	l.peers.Store(peers)
 	return l, nil
 }
 
@@ -156,12 +145,10 @@ func newPlainListener(cfg PlainListenerConfig) (*Listener, error) {
 	if !cfg.TrustedLink {
 		return nil, errors.New("link: a plaintext link is for trusted links only (PlainListenerConfig.TrustedLink)")
 	}
-	sources, err := ParseSources(cfg.Sources)
-	if err != nil {
+	l := &Listener{}
+	if err := l.init(nil, "", cfg.Sources, nil); err != nil {
 		return nil, err
 	}
-	l := &Listener{}
-	l.sources.Store(&sources)
 	return l, nil
 }
 
@@ -216,14 +203,7 @@ func (l *Listener) Close() error {
 // SetSources replaces the admitted source addresses (the hop's new
 // ingress_sources). It applies to the next connection accepted; connections
 // already established are the carrier layer's to keep or close.
-func (l *Listener) SetSources(items []string) error {
-	s, err := ParseSources(items)
-	if err != nil {
-		return err
-	}
-	l.sources.Store(&s)
-	return nil
-}
+func (l *Listener) SetSources(items []string) error { return l.setSources(items) }
 
 // SetPeers replaces the identities that may dial (the hop's new
 // ingress_peers) and returns the identities that were allowed before and no
@@ -233,19 +213,11 @@ func (l *Listener) SetSources(items []string) error {
 // anixops-protocol.md section 3.5 (no CRL is consulted). It is an error on a
 // plaintext listener, which has no peers.
 func (l *Listener) SetPeers(ids []string) (removed []string, err error) {
-	if l.creds == nil {
-		return nil, errors.New("link: a plaintext listener has no peer identities")
-	}
-	next, err := newPeerSet(ids)
-	if err != nil {
-		return nil, err
-	}
-	prev := l.peers.Swap(next)
-	return prev.without(next), nil
+	return l.setPeers(ids)
 }
 
 // PeerAllowed reports whether id is one of the identities that may dial now.
-func (l *Listener) PeerAllowed(id string) bool { return l.peers.Load().has(id) }
+func (l *Listener) PeerAllowed(id string) bool { return l.peerAllowed(id) }
 
 // ListenerStats are the listener's counters.
 type ListenerStats struct {
@@ -255,6 +227,10 @@ type ListenerStats struct {
 	Pending int
 	// Failures counts the connections refused, by Reason.
 	Failures [NumReasons]uint64
+	// Retries counts the QUIC address validations (Retry packets) a
+	// QUICListener asked for because its handshake queue was over half full;
+	// zero on the TCP listeners.
+	Retries uint64
 }
 
 // Stats returns a snapshot of the counters.

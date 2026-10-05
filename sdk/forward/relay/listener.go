@@ -34,6 +34,7 @@ type CarrierListener interface {
 
 var (
 	_ CarrierListener = (*Listener)(nil)
+	_ CarrierListener = (*QUICListener)(nil)
 )
 
 // ListenerStats are a listener's counters.
@@ -239,10 +240,12 @@ func (r *registry) snapshot() ListenerStats {
 // shutdown stops the listener and everything it accepted (L1): handshakes in
 // flight are abandoned, every carrier gets a GOAWAY of GoAwayListenerClosed and
 // is closed when its streams have ended or after Config.DrainTimeout,
-// whichever comes first. SETTINGS exchanges in flight are abandoned. closeLink
-// closes the link listener (the sockets). It returns when everything has ended,
-// so it is bounded by the drain timeout.
-func (r *registry) shutdown(closeLink func() error) error {
+// whichever comes first. SETTINGS exchanges in flight are abandoned. stop makes
+// the link listener stop accepting (it must leave established connections
+// alone), and finish, if not nil, closes what the carriers still need until
+// they have drained (the UDP socket of a QUIC listener). It returns when
+// everything has ended, so it is bounded by the drain timeout.
+func (r *registry) shutdown(stop, finish func() error) error {
 	r.mu.Lock()
 	if r.closed {
 		r.mu.Unlock()
@@ -260,7 +263,7 @@ func (r *registry) shutdown(closeLink func() error) error {
 	}
 	r.mu.Unlock()
 	r.unwatch()
-	err := closeLink()
+	err := stop()
 	r.cancel()
 	for _, c := range carriers {
 		_ = c.GoAway(GoAwayListenerClosed, r.cfg.DrainTimeout)
@@ -269,6 +272,11 @@ func (r *registry) shutdown(closeLink func() error) error {
 		<-c.Done()
 	}
 	r.wg.Wait()
+	if finish != nil {
+		if ferr := finish(); err == nil {
+			err = ferr
+		}
+	}
 	return err
 }
 
@@ -329,7 +337,7 @@ func ListenPlain(address string, lcfg link.PlainListenerConfig, ccfg Config) (*L
 
 func newListener(ll *link.Listener, creds *link.Credentials, cfg Config, ctype CarrierType) *Listener {
 	l := &Listener{link: ll, ctype: ctype}
-	l.registry.init(cfg, creds, ll.PeerAllowed, ll.Stats)
+	l.init(cfg, creds, ll.PeerAllowed, ll.Stats)
 	l.wg.Add(1)
 	go l.acceptLoop()
 	return l
@@ -374,7 +382,7 @@ func (l *Listener) Stats() ListenerStats { return l.snapshot() }
 // whichever comes first. SETTINGS exchanges in flight are abandoned. It
 // returns when everything has ended, so it is bounded by the drain timeout.
 // A carrier never outlives the listener that accepted it.
-func (l *Listener) Close() error { return l.shutdown(l.link.Close) }
+func (l *Listener) Close() error { return l.shutdown(l.link.Close, nil) }
 
 func (l *Listener) acceptLoop() {
 	defer l.wg.Done()

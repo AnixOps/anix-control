@@ -110,8 +110,7 @@ type ConnCarrier struct {
 	pingSentAt time.Time
 	pingOut    bool
 
-	calmTokens float64
-	calmAt     time.Time
+	calm calmBucket
 
 	acceptCh chan *ConnStream
 	wake     chan struct{} // wakes the writer
@@ -158,8 +157,7 @@ func NewConnCarrier(conn net.Conn, role Role, cfg Config) (*ConnCarrier, error) 
 		sendCredit:   int64(peer.CarrierWindow),
 		recvCredit:   int64(local.CarrierWindow),
 		carrierThres: int64(local.CarrierWindow / 2),
-		calmTokens:   calmBurst,
-		calmAt:       now,
+		calm:         newCalmBucket(now),
 		acceptCh:     make(chan *ConnStream, cfg.AcceptQueue),
 		wake:         make(chan struct{}, 1),
 		dead:         make(chan struct{}),
@@ -517,16 +515,7 @@ func (c *ConnCarrier) wakeWriterLocked() {
 
 // takeCalmLocked spends one answer from the peer's budget and reports whether
 // there was one.
-func (c *ConnCarrier) takeCalmLocked() bool {
-	now := time.Now()
-	c.calmTokens = min(calmBurst, c.calmTokens+now.Sub(c.calmAt).Seconds()*calmRate)
-	c.calmAt = now
-	if c.calmTokens < 1 {
-		return false
-	}
-	c.calmTokens--
-	return true
-}
+func (c *ConnCarrier) takeCalmLocked() bool { return c.calm.take(time.Now()) }
 
 // releaseLocked returns n bytes of carrier credit: the application consumed
 // or discarded n received bytes. WINDOW is sent once half the window is back.
@@ -639,6 +628,7 @@ func (c *ConnCarrier) writeLoop() {
 		c.n.framesSent.Add(frames)
 		c.n.bytesSent.Add(payload)
 		c.n.datagramsSent.Add(datagrams)
+		c.n.datagramsOnStream.Add(datagrams)
 		if dead {
 			return
 		}

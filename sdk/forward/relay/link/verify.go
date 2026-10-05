@@ -98,11 +98,14 @@ func (e *HandshakeError) Unwrap() error { return e.Err }
 
 // ReasonOf classifies an error returned by a dial or a handshake.
 func ReasonOf(err error) Reason {
+	if err == nil {
+		return ReasonOther
+	}
 	var he *HandshakeError
 	if errors.As(err, &he) {
 		return he.Reason
 	}
-	return classify(err, "").Reason
+	return classifyQUIC(err, nil).Reason // QUIC's errors, and everything else as classify
 }
 
 func refuse(reason Reason, identity, format string, args ...any) *HandshakeError {
