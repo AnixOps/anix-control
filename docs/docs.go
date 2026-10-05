@@ -7900,6 +7900,74 @@ const docTemplate = `{
                 }
             }
         },
+        "/api/v4/kernel/agents/rotate-credentials": {
+            "post": {
+                "security": [
+                    {
+                        "BearerAuth": []
+                    }
+                ],
+                "description": "Revokes every Agent certificate, enrollment (unused enrollment credentials included) and forward link certificate of the node, optionally replaces a proxy node's API key (rotate_api_key; the new key is read through the audited GET /api/v2/admin/nodes/{id}/credentials), and returns a fresh one-time anixagt_ enrollment credential, shown once, for the Agent to enroll again (install script with --reset). Never dials the node, so it works while the node is offline; open Agent streams end at their next heartbeat. Repeating it leaves exactly one valid enrollment credential, the last. Super administrators only. Audited as agent_credentials_rotate and agent_enrollment_token_issue.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Kernel"
+                ],
+                "summary": "Rotate a node's Agent credentials",
+                "parameters": [
+                    {
+                        "description": "node (proxy-\u003cid\u003e or forward-\u003cid\u003e), rotate_api_key (proxy nodes only, default false), ttl_seconds (60 to 604800, default 3600), reason (at most 200 characters)",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/handler.rotateAgentCredentialsRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "201": {
+                        "description": "data.credential is shown once",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "403": {
+                        "description": "Forbidden",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "404": {
+                        "description": "Not Found",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    },
+                    "409": {
+                        "description": "Conflict",
+                        "schema": {
+                            "type": "object",
+                            "additionalProperties": true
+                        }
+                    }
+                }
+            }
+        },
         "/api/v4/kernel/agents/transports": {
             "get": {
                 "security": [
@@ -10171,6 +10239,30 @@ const docTemplate = `{
                 "rollback": {
                     "description": "Rollback rolls the current batch back before the campaign ends.",
                     "type": "boolean"
+                }
+            }
+        },
+        "handler.rotateAgentCredentialsRequest": {
+            "type": "object",
+            "required": [
+                "node"
+            ],
+            "properties": {
+                "node": {
+                    "description": "Node is \"proxy-\u003cid\u003e\" or \"forward-\u003cid\u003e\".",
+                    "type": "string"
+                },
+                "reason": {
+                    "description": "Reason is recorded in the audit entry; at most 200 characters.",
+                    "type": "string"
+                },
+                "rotate_api_key": {
+                    "description": "RotateAPIKey also replaces a proxy node's API key (the legacy\ntransports' credential). Off by default: the old key stops working,\nand a node that still polls with it must be given the new one. Not\naccepted for a forward node.",
+                    "type": "boolean"
+                },
+                "ttl_seconds": {
+                    "description": "TTLSeconds is the new enrollment credential's lifetime: one hour by\ndefault, from 60 to 604800 (7 days).",
+                    "type": "integer"
                 }
             }
         },

@@ -45,6 +45,26 @@ type TokenRequest struct {
 // node and returns it. The credential is shown only here; the kernel keeps
 // its SHA-256.
 func (s *Service) CreateEnrollmentToken(ctx context.Context, request TokenRequest) (string, model.AgentEnrollment, error) {
+	var (
+		credential string
+		row        model.AgentEnrollment
+	)
+	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		var err error
+		credential, row, err = s.CreateEnrollmentTokenTx(tx, request)
+		return err
+	})
+	if err != nil {
+		return "", model.AgentEnrollment{}, err
+	}
+	return credential, row, nil
+}
+
+// CreateEnrollmentTokenTx is CreateEnrollmentToken in the caller's
+// transaction: the credential, its row and its audit entry commit with
+// whatever else the caller changed (the credential rotation revokes the
+// node's old credentials in the same transaction).
+func (s *Service) CreateEnrollmentTokenTx(tx *gorm.DB, request TokenRequest) (string, model.AgentEnrollment, error) {
 	if !request.Node.Valid() {
 		return "", model.AgentEnrollment{}, fmt.Errorf("%w: node %q", agentcontrol.ErrInvalidAgentIdentity, request.Node.String())
 	}
@@ -68,26 +88,23 @@ func (s *Service) CreateEnrollmentToken(ctx context.Context, request TokenReques
 		Method: model.AgentEnrollmentMethodCredential, CredentialHash: &hash, ExpiresAt: &expires,
 		CreatedBy: request.CreatedBy, CreatedAt: now,
 	}
-	err := s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireEnabledNode(tx, request.Node); err != nil {
-			return err
-		}
-		if err := tx.Create(&row).Error; err != nil {
-			return err
-		}
-		createdBy := request.CreatedBy
-		var userID *uint
-		if createdBy != 0 {
-			userID = &createdBy
-		}
-		return writeAudit(tx, auditEntry{
-			UserID: userID, Actor: request.Actor, Action: AuditActionTokenIssue, Node: request.Node, IP: request.IP,
-			Content: map[string]any{
-				"node": request.Node.String(), "enrollment_id": row.ID, "expires_at": expires.Format(time.RFC3339),
-			},
-		})
-	})
-	if err != nil {
+	if err := requireEnabledNode(tx, request.Node); err != nil {
+		return "", model.AgentEnrollment{}, err
+	}
+	if err := tx.Create(&row).Error; err != nil {
+		return "", model.AgentEnrollment{}, err
+	}
+	createdBy := request.CreatedBy
+	var userID *uint
+	if createdBy != 0 {
+		userID = &createdBy
+	}
+	if err := writeAudit(tx, auditEntry{
+		UserID: userID, Actor: request.Actor, Action: AuditActionTokenIssue, Node: request.Node, IP: request.IP,
+		Content: map[string]any{
+			"node": request.Node.String(), "enrollment_id": row.ID, "expires_at": expires.Format(time.RFC3339),
+		},
+	}); err != nil {
 		return "", model.AgentEnrollment{}, err
 	}
 	return credential, row, nil
