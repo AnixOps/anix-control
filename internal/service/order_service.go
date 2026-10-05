@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/AnixOps/anix-control/sdk/v2compat"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/subscriber"
@@ -38,8 +39,30 @@ type OrderListParams struct {
 	Type     *int
 	TradeNo  string
 	Email    string
-	OrderBy  string
+	// OrderBy is an ORDER BY clause from v2compat.ParseListSort over
+	// OrderSortColumns, never request text; empty keeps the default order.
+	OrderBy string
 }
+
+// OrderSortColumns are the columns GET /api/v2/admin/orders sorts by (the
+// sort and order query values, v2compat.ParseListSort). The order package's
+// native list sorts by the same keys (packages/order/native), so both answer
+// the same order. The buyer's e-mail and the plan's name come from other
+// tables and are not sortable here; an unpaid order (NULL paid_at) sorts
+// last ascending.
+var OrderSortColumns = map[string]v2compat.SortColumn{
+	"id":           {Expr: "id", Unique: true},
+	"trade_no":     {Expr: "trade_no", Unique: true},
+	"status":       {Expr: "status"},
+	"type":         {Expr: "type"},
+	"total_amount": {Expr: "total_amount"},
+	"created_at":   {Expr: "created_at"},
+	"paid_at":      {Expr: "paid_at", Nullable: true},
+}
+
+// OrderSortTiebreaker orders orders that share a sorted value, so pages
+// neither repeat nor skip an order.
+const OrderSortTiebreaker = "id DESC"
 
 // OrderPlanRef names an order's plan in the order list and detail answers.
 type OrderPlanRef struct {

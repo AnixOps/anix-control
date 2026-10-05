@@ -7,6 +7,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/AnixOps/anix-control/sdk/v2compat"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/AnixOps/anix-control/v4/internal/service"
@@ -136,6 +137,8 @@ func (h *AdminHandler) CreateUser(c *gin.Context) {
 // @Param email query string false "邮箱搜索"
 // @Param status query string false "状态筛选"
 // @Param plan_id query int false "套餐ID筛选"
+// @Param sort query string false "排序字段: id, email, created_at, expired_at, traffic, transfer_enable; 缺省为 created_at 倒序" Enums(id, email, created_at, expired_at, traffic, transfer_enable)
+// @Param order query string false "排序方向, 仅与 sort 同用" Enums(asc, desc) default(asc)
 // @Success 200 {object} map[string]any
 // @Router /admin/users [get]
 func (h *AdminHandler) GetUserList(c *gin.Context) {
@@ -144,6 +147,11 @@ func (h *AdminHandler) GetUserList(c *gin.Context) {
 	page, pageSize = ClampPagination(page, pageSize)
 	email := c.Query("email")
 	status := c.Query("status")
+	orderBy, err := v2compat.ParseListSort(c.Query("sort"), c.Query("order"), service.UserSortColumns, service.UserSortTiebreaker)
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
 
 	var planID *uint
 	if pid := c.Query("plan_id"); pid != "" {
@@ -158,6 +166,7 @@ func (h *AdminHandler) GetUserList(c *gin.Context) {
 		Email:    email,
 		PlanID:   planID,
 		Status:   status,
+		OrderBy:  orderBy,
 	})
 	if err != nil {
 		panelError(c, "获取用户列表失败: "+err.Error())
@@ -694,6 +703,8 @@ func (h *AdminHandler) GetUserStats(c *gin.Context) {
 // @Param status query int false "订单状态"
 // @Param type query int false "订单类型"
 // @Param user_id query int false "用户ID"
+// @Param sort query string false "排序字段: id, trade_no, status, type, total_amount, created_at, paid_at; 缺省为 created_at 倒序" Enums(id, trade_no, status, type, total_amount, created_at, paid_at)
+// @Param order query string false "排序方向, 仅与 sort 同用" Enums(asc, desc) default(asc)
 // @Success 200 {object} map[string]any
 // @Failure 500 {object} map[string]any
 // @Router /admin/orders [get]
@@ -703,6 +714,11 @@ func (h *AdminHandler) GetOrderList(c *gin.Context) {
 	page, pageSize = ClampPagination(page, pageSize)
 	tradeNo := c.Query("trade_no")
 	email := c.Query("email")
+	orderBy, err := v2compat.ParseListSort(c.Query("sort"), c.Query("order"), service.OrderSortColumns, service.OrderSortTiebreaker)
+	if err != nil {
+		panelError(c, err.Error())
+		return
+	}
 
 	var status *int
 	if s := c.Query("status"); s != "" {
@@ -731,6 +747,7 @@ func (h *AdminHandler) GetOrderList(c *gin.Context) {
 		Type:     orderType,
 		TradeNo:  tradeNo,
 		Email:    email,
+		OrderBy:  orderBy,
 	})
 	if err != nil {
 		panelError(c, "获取订单列表失败: "+err.Error())

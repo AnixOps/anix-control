@@ -7,6 +7,7 @@ import (
 	"strconv"
 
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
+	"github.com/AnixOps/anix-control/sdk/v2compat"
 	"gorm.io/gorm"
 )
 
@@ -89,17 +90,44 @@ type listParams struct {
 	userID         *uint
 	status, kind   *int
 	tradeNo, email string
+	// orderBy is an ORDER BY clause from v2compat.ParseListSort over
+	// OrderSortColumns, never request text; empty lists newest first.
+	orderBy string
 }
 
-// AdminOrders is GET /api/v2/admin/orders: every order, newest first, each
-// with its plan and buyer, filtered by buyer, status, type, trade number or
-// part of the buyer's e-mail. A filter that does not parse filters by what
+// OrderSortColumns are the columns the administrator's order list sorts by:
+// the keys and the meaning of the kernel's service.OrderSortColumns. The
+// buyer's e-mail and the plan's name are other tables' and are not
+// sortable; an unpaid order (NULL paid_at) sorts last ascending.
+var OrderSortColumns = map[string]v2compat.SortColumn{
+	"id":           {Expr: "id", Unique: true},
+	"trade_no":     {Expr: "trade_no", Unique: true},
+	"status":       {Expr: "status"},
+	"type":         {Expr: "type"},
+	"total_amount": {Expr: "total_amount"},
+	"created_at":   {Expr: "created_at"},
+	"paid_at":      {Expr: "paid_at", Nullable: true},
+}
+
+// OrderSortTiebreaker orders orders that share a sorted value, so pages
+// neither repeat nor skip an order.
+const OrderSortTiebreaker = "id DESC"
+
+// AdminOrders is GET /api/v2/admin/orders: every order, newest first unless
+// sort and order say otherwise (the columns of OrderSortColumns), each with
+// its plan and buyer, filtered by buyer, status, type, trade number or part
+// of the buyer's e-mail. A filter that does not parse filters by what
 // strconv returns, as in the kernel.
 func (s *Service) AdminOrders(ctx context.Context, request pluginhostsdk.NativeRequest) (pluginhostsdk.NativeResponse, error) {
 	page, _ := strconv.Atoi(defaultQuery(request, "page", "1"))
 	pageSize, _ := strconv.Atoi(defaultQuery(request, "page_size", "20"))
 	params := listParams{tradeNo: defaultQuery(request, "trade_no", ""), email: defaultQuery(request, "email", "")}
 	params.page, params.pageSize = clampPagination(page, pageSize)
+	orderBy, err := v2compat.ParseListSort(defaultQuery(request, "sort", ""), defaultQuery(request, "order", ""), OrderSortColumns, OrderSortTiebreaker)
+	if err != nil {
+		return s.panelError(err.Error())
+	}
+	params.orderBy = orderBy
 	if raw := defaultQuery(request, "status", ""); raw != "" {
 		status, _ := strconv.Atoi(raw)
 		params.status = &status
@@ -165,7 +193,11 @@ func (s *Service) listOrders(ctx context.Context, params listParams, withBuyer b
 	}
 	var orders []Order
 	offset := (params.page - 1) * params.pageSize
-	if err := query.Order("created_at DESC, id DESC").Offset(offset).Limit(params.pageSize).Find(&orders).Error; err != nil {
+	orderBy := "created_at DESC, id DESC"
+	if params.orderBy != "" {
+		orderBy = params.orderBy
+	}
+	if err := query.Order(orderBy).Offset(offset).Limit(params.pageSize).Find(&orders).Error; err != nil {
 		return nil, err
 	}
 	views, err := orderViews(db, orders, withBuyer)

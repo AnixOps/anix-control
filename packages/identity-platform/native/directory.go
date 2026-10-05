@@ -6,6 +6,7 @@ import (
 	"errors"
 	"time"
 
+	"github.com/AnixOps/anix-control/sdk/v2compat"
 	"gorm.io/gorm"
 )
 
@@ -86,10 +87,34 @@ type UserQuery struct {
 	Status string
 	// Now decides expiry.
 	Now time.Time
+	// OrderBy is an ORDER BY clause from v2compat.ParseListSort over
+	// UserSortColumns, never request text; empty lists newest first.
+	OrderBy string
 	// Offset and Limit page the result; a negative Offset is 0.
 	Offset int
 	Limit  int
 }
+
+// UserSortColumns are the columns the directory sorts by: the keys and the
+// meaning of the kernel's service.UserSortColumns, on the directory's
+// joined rows. "traffic" is the used traffic, u + d; a subscriber without an
+// expiry (NULL) sorts last ascending.
+var UserSortColumns = map[string]v2compat.SortColumn{
+	"id":              {Expr: "d.id", Unique: true},
+	"email":           {Expr: userEmail, Unique: true},
+	"created_at":      {Expr: "d.created_at"},
+	"expired_at":      {Expr: "e.expired_at", Nullable: true},
+	"traffic":         {Expr: "(e.u + e.d)"},
+	"transfer_enable": {Expr: "e.transfer_enable"},
+}
+
+// UserSortTiebreaker orders users that share a sorted value, so pages
+// neither repeat nor skip a user.
+const UserSortTiebreaker = "d.id DESC"
+
+// defaultUserOrder lists newest first, users created in the same instant by
+// id.
+const defaultUserOrder = "d.created_at DESC, d.id DESC"
 
 // DirectoryUser is one user of the directory: the v2 list's user. It
 // carries no credential; the subscription token and proxy uuid are read
@@ -197,18 +222,22 @@ func (q UserQuery) where(rows *gorm.DB) *gorm.DB {
 	return rows
 }
 
-// Search returns one page of the users a query matches, newest first, and
-// how many match in all.
+// Search returns one page of the users a query matches, newest first unless
+// the query sorts, and how many match in all.
 func (d UserDirectory) Search(ctx context.Context, q UserQuery) (int64, []DirectoryUser, error) {
 	var total int64
 	users := []DirectoryUser{}
+	orderBy := defaultUserOrder
+	if q.OrderBy != "" {
+		orderBy = q.OrderBy
+	}
 	err := d.read(ctx, func(tx *gorm.DB) error {
 		if err := q.where(d.users(tx)).Count(&total).Error; err != nil {
 			return err
 		}
 		return q.where(withPlans(d.users(tx))).
 			Select(directoryColumns).
-			Order("d.created_at DESC, d.id DESC").
+			Order(orderBy).
 			Offset(max(q.Offset, 0)).
 			Limit(q.Limit).
 			Scan(&users).Error

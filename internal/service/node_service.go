@@ -14,6 +14,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/AnixOps/anix-control/sdk/v2compat"
 	"github.com/AnixOps/anix-control/v4/internal/cache"
 	"github.com/AnixOps/anix-control/v4/internal/database"
 	"github.com/AnixOps/anix-control/v4/internal/model"
@@ -71,9 +72,13 @@ func (s *NodeService) GetNodes(params NodeListParams) (*NodeListResult, error) {
 	}
 
 	// 分页
+	orderBy := "sort ASC, id DESC"
+	if params.OrderBy != "" {
+		orderBy = params.OrderBy
+	}
 	offset := (params.Page - 1) * params.PageSize
 	if err := query.Preload("Protocols").
-		Order("sort ASC, id DESC").
+		Order(orderBy).
 		Offset(offset).
 		Limit(params.PageSize).
 		Find(&nodes).Error; err != nil {
@@ -1082,7 +1087,33 @@ type NodeListParams struct {
 	Status   *model.NodeStatus
 	GroupID  *uint
 	Search   string
+	// OrderBy is an ORDER BY clause from v2compat.ParseListSort over
+	// NodeSortColumns, never request text; empty keeps the administrator's
+	// order ("sort ASC, id DESC").
+	OrderBy string
 }
+
+// NodeSortColumns are the columns GET /api/v2/admin/nodes sorts by (the sort
+// and order query values, v2compat.ParseListSort). The proxy-node package's
+// native list sorts by the same keys (packages/proxy-node/native), so both
+// answer the same order. "sort" is the administrator's own order weight. A
+// node's shown status is derived from its last check and its protocol count
+// from another table, so neither is sortable here; a node that never checked
+// in (NULL last_check_at) sorts last ascending.
+var NodeSortColumns = map[string]v2compat.SortColumn{
+	"id":            {Expr: "id", Unique: true},
+	"name":          {Expr: "name"},
+	"host":          {Expr: "host"},
+	"sort":          {Expr: "sort"},
+	"created_at":    {Expr: "created_at"},
+	"last_check_at": {Expr: "last_check_at", Nullable: true},
+	"cpu_usage":     {Expr: "cpu_usage"},
+	"online_users":  {Expr: "online_users"},
+}
+
+// NodeSortTiebreaker orders nodes that share a sorted value, so pages
+// neither repeat nor skip a node.
+const NodeSortTiebreaker = "id DESC"
 
 type NodeListResult struct {
 	Total int64        `json:"total"`
