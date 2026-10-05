@@ -29,10 +29,10 @@ const (
 	KindCAExpiring = "ca_expiring"
 	// KindNodeSecretsSplitStalled: a node credential split table sits in
 	// dual_write or dual_read and was not touched for phase_stuck_after.
-	KindNodeSecretsSplitStalled = "node_secrets_split_stalled"
+	KindNodeSecretsSplitStalled = "node_secrets_split_stalled" // #nosec G101 -- names an alert kind, not a credential.
 	// KindNodeSecretsFinalizeInterrupted: a table's finalize started and
 	// did not complete.
-	KindNodeSecretsFinalizeInterrupted = "node_secrets_finalize_interrupted"
+	KindNodeSecretsFinalizeInterrupted = "node_secrets_finalize_interrupted" // #nosec G101 -- names an alert kind, not a credential.
 	// KindIdentityImportStalled: the identity authority sits in importing
 	// without progress for phase_stuck_after.
 	KindIdentityImportStalled = "identity_import_stalled"
@@ -47,7 +47,7 @@ const (
 	SubjectNode        = "node"
 	SubjectCA          = "ca"
 	SubjectModule      = "module"
-	SubjectNodeSecrets = "node_secrets"
+	SubjectNodeSecrets = "node_secrets" // #nosec G101 -- names a subject kind, not a credential.
 	SubjectIdentity    = "identity"
 )
 
