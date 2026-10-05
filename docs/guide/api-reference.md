@@ -436,6 +436,12 @@ GET /api/v4/kernel/nodes/:id/traffic?granularity=day                  # 最近 3
 `/api/v4/forward/routes/{id}/stats`。设计与成本见
 [`../reference/traffic-stats-operations.md`](../reference/traffic-stats-operations.md)。
 
+管理端节点页的「流量」分区和「流量与监控 → 实时节点」里点开节点的侧边栏用这个接口画上传、下载曲线：
+24 小时、7 天、30 天按小时（`granularity=hour`，`since` 与 `until` 都是整点，分别 24、168、720 个桶，
+正好是上限），90 天、1 年按日（`granularity=day`，只传 `since`，分别 90、365 个桶，比 366 的上限少一个，
+这样主机的本地午夜比浏览器早一天时窗口也不会超限）。页面显示该范围的上传、下载、合计、一条说明范围与峰值的
+文字摘要和一张数据表；没有流量时说明“小时数据只保留到流量日志的保留期限”，请求失败时显示接口返回的错误信息并可重试。
+
 管理端应答不再明文返回节点密钥：协议 `settings`、`tls_settings`、
 `transport_settings`、`reality_settings`、`custom_config` 中名称表示密钥的字段
 （Reality/TLS `private_key`、WireGuard `server_private_key`、`server_key`、
@@ -481,6 +487,27 @@ GET /api/v4/kernel/agents/transports?legacy_only=true      # 只看仍在旧通�
 （有效 / 续期逾期 / 已过期 / 已吊销 / 无证书，附到期或吊销日期）；节点页概览显示 `connection`、
 `last_certificate` 的 `not_after`、`renew_after`、`revoked_at`、`revoke_reason`，有效证书超过 `renew_after`
 时提示 Agent 没有按时续期。这个请求失败只会让这两列显示「暂不可用」，不影响节点列表。
+
+### 轮换节点的 Agent 凭据
+
+```http
+# 吊销节点 Agent 持有的证书、注册记录和转发链路证书，并签发一个一次性注册凭据（仅超级管理员）
+POST /api/v4/kernel/agents/rotate-credentials
+{"node": "proxy-12", "rotate_api_key": false, "ttl_seconds": 3600, "reason": "硬盘被盗"}
+```
+
+字段、错误码、审计与运维步骤见
+[`../reference/node-credential-rotation.md`](../reference/node-credential-rotation.md) 和
+[Agent 安装](agent-onboarding.md#rotating-a-nodes-credentials)。应答 `201`、`Cache-Control: no-store`，
+`credential`（`anixagt_…`）只在这一次应答里出现；`rotate_api_key` 只适用于代理节点（转发节点返回 400），
+停用的节点返回 `409 node_disabled`，非超级管理员返回 `403 super_admin_required`。
+
+管理端在节点页「凭据」分区（以及转发节点页的 Agent 卡片）提供「轮换凭据…」：先弹出危险确认，说明会吊销什么、
+让你填写原因（按 UTF-8 字节计，最多 200 字节，服务端也按字节计）、选择凭据有效期，并（仅代理节点）可勾选
+「同时更换节点的 API 密钥」；成功后在结果对话框里显示一次凭据（默认遮罩，可复制）、有效期倒计时、吊销了多少
+证书与注册记录，以及指南链接。凭据只保存在这个对话框的状态里，关闭对话框或离开页面即清除，不会写入浏览器存储、
+URL 或日志。控制台不知道当前管理员是不是超级管理员，所以对所有管理员显示这个按钮，收到 403 时在确认框里说明原因。
+不显示 `--reset` 安装命令：这个选项在 Agent 的发布里还没有。
 
 ### 授权密钥管理
 

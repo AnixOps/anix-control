@@ -206,6 +206,16 @@ audited `GET /api/v2/admin/nodes/<id>/credentials` (action `reveal`); the
 rotation answer never carries it. `rotate_api_key` is not accepted for a
 forward node: its token belongs to the frozen legacy forward runtime.
 
+**In the console.** The same action is *Rotate credentials…* in the node
+page's Credentials section (and on a forwarding node's page, for a node with
+an Agent). It asks first, says what is revoked, takes the reason, how long the
+credential lives and, for a proxy node, whether to replace the API key too,
+then shows the new credential once, masked and with a copy button, together
+with when it expires. Closing the dialog clears it. The console does not know
+whether you are a super administrator: a refusal appears in the dialog. It
+shows no install command, because the `--reset` form above is not in an Agent
+release yet; give the credential to the machine as the steps above say.
+
 Every rotation is in the operation log as `agent_credentials_rotate` (with
 your reason and what was revoked) and `agent_enrollment_token_issue`,
 without any credential. A disabled node answers `node_disabled`: enable it

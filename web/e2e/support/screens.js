@@ -46,6 +46,13 @@ export const SCREENS = {
   'admin-nodes': { fixture: nodes, scenario: 'list' },
   'admin-node-detail': { fixture: nodeDetail, scenario: 'overview' },
   'admin-node-services': { fixture: nodeDetail, scenario: 'services' },
+  // The node's traffic over time, and rotating its Agent credentials.
+  'admin-node-traffic': { fixture: nodeDetail, scenario: 'traffic' },
+  'admin-node-traffic-empty': { fixture: nodeDetail, scenario: 'trafficEmpty' },
+  'admin-node-traffic-error': { fixture: nodeDetail, scenario: 'trafficError' },
+  'admin-node-credentials': { fixture: nodeDetail, scenario: 'credentials' },
+  'admin-node-rotate': { fixture: nodeDetail, scenario: 'rotate' },
+  'admin-node-rotated': { fixture: nodeDetail, scenario: 'rotated' },
   // The v4.2 forwarding pages (F5b).
   'admin-forward-overview': { fixture: forwardV4, scenario: 'overview' },
   'admin-forward-routes': { fixture: forwardV4, scenario: 'routes' },
@@ -70,6 +77,7 @@ export const SCREENS = {
   'admin-access-groups': { fixture: security, scenario: 'groups' },
   'admin-notifications': { fixture: notifications, scenario: 'email' },
   'admin-monitor': { fixture: monitor, scenario: 'live' },
+  'admin-monitor-node-traffic': { fixture: monitor, scenario: 'traffic' },
   'admin-deployments': { fixture: deployments, scenario: 'topologies' }
 }
 
@@ -104,7 +112,8 @@ export async function openScreen(page, name, { theme = 'light', locale = 'en', c
     const url = new URL(request.url())
     let body = null
     try { body = request.postDataJSON() } catch { body = null }
-    const ctx = { method: request.method(), query: Object.fromEntries(url.searchParams), body, scenario }
+    // `now` is what the page's clock reads: the fixed time, or the real one.
+    const ctx = { method: request.method(), query: Object.fromEntries(url.searchParams), body, scenario, now: clock ? FIXED_NOW_MS : Date.now() }
     let answer = fixture.api ? await fixture.api(url.pathname, ctx) : undefined
     if (answer === undefined && COMMON[url.pathname]) answer = COMMON[url.pathname](fixture)
     if (answer?.__status) return route.fulfill({ status: answer.__status, contentType: 'application/json', body: JSON.stringify(answer.body || {}) })

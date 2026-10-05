@@ -1,5 +1,6 @@
 import { FIXED_NOW_MS } from './clock.js'
 import { LOGS, NODES, PROTOCOLS, TEMPLATES, envelope } from './nodeData.js'
+import { nodeTrafficAnswer, rotateAnswer } from './nodeTraffic.js'
 import { transportsAnswer } from './transports.js'
 
 // 服务: node 108 runs machine-telemetry 4.1.0, whose release declares the
@@ -30,9 +31,12 @@ const SERVICES = {
 
 const SECTION = {
   overview: '', overviewChild: '', protocols: 'protocols', protocolEdit: 'protocols', protocolNew: 'protocols', protocolVisual: 'protocols',
-  protocolsEmpty: 'protocols', credentials: 'credentials', credentialsShown: 'credentials', deploy: 'deploy', deployHelper: 'deploy',
+  protocolsEmpty: 'protocols', credentialsShown: 'credentials', deploy: 'deploy', deployHelper: 'deploy',
   logs: 'logs', logsEmpty: 'logs', logsError: 'logs', services: 'services', servicesDisabled: 'services', danger: 'danger', disableConfirm: 'danger', deleteConfirm: 'danger', edit: '',
-  notFound: '', error: '', loading: ''
+  notFound: '', error: '', loading: '',
+  // 流量 (the node's traffic over time) and 轮换 Agent 凭据 (in 凭据).
+  traffic: 'traffic', trafficEmpty: 'traffic', trafficError: 'traffic',
+  credentials: 'credentials', rotate: 'credentials', rotated: 'credentials'
 }
 
 export default {
@@ -42,12 +46,16 @@ export default {
     const section = SECTION[scenario]
     return `/admin/nodes/${id}${section ? `?section=${section}` : ''}`
   },
-  api(path, { query, scenario, method }) {
+  api(path, { query, scenario, method, body, now }) {
+    // The node's traffic over time (流量) and the credential rotation (凭据).
+    let m = path.match(/^\/api\/v4\/kernel\/nodes\/(\d+)\/traffic$/)
+    if (m) return nodeTrafficAnswer(m[1], query, { trafficEmpty: 'empty', trafficError: 'error' }[scenario] || 'traffic')
+    if (path === '/api/v4/kernel/agents/rotate-credentials' && method === 'POST') return rotateAnswer(body, now)
     // The node's Agent connection and certificate (?node=proxy-108).
     if (path === '/api/v4/kernel/agents/transports') {
       return transportsAnswer(query)
     }
-    let m = path.match(/^\/api\/v2\/admin\/nodes\/(\d+)$/)
+    m = path.match(/^\/api\/v2\/admin\/nodes\/(\d+)$/)
     if (m && method === 'GET') {
       if (scenario === 'notFound') return { __status: 404, body: { message: '节点不存在' } }
       if (scenario === 'error') return { __status: 502, body: { message: '上游服务没有响应' } }
@@ -75,6 +83,16 @@ export default {
     }
     if (path === '/api/v2/admin/auth-keys') return envelope([{ id: 3, name: 'Panel key', key: '********', used: 12 }])
     return undefined
+  },
+  // 轮换 Agent 凭据: `rotate` stops at the confirmation, `rotated` goes on to
+  // the result dialog with the one-time credential.
+  async after(page, { scenario }) {
+    if (scenario !== 'rotate' && scenario !== 'rotated') return
+    await page.getByTestId('rotate-credentials').click()
+    await page.getByRole('alertdialog').waitFor()
+    if (scenario === 'rotate') return
+    await page.getByRole('alertdialog').getByRole('button', { name: 'Rotate credentials' }).click()
+    await page.getByTestId('rotate-result').waitFor()
   },
   viewportOnly: ['protocolEdit', 'protocolNew', 'protocolVisual', 'deployHelper', 'disableConfirm', 'deleteConfirm', 'edit'],
   scenarios: {

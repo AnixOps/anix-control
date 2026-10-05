@@ -138,6 +138,10 @@
             <template v-if="!ansible">
               <p class="fwd-muted node-install">{{ t('forwardV4.nodeDetail.installHelp') }}</p>
               <UiButton :icon="Terminal" @click="installOpen = true">{{ t('forwardV4.nodeDetail.installCommand') }}</UiButton>
+              <div v-if="!isProxy && canDelete !== false" class="node-rotate" data-testid="forward-node-rotate">
+                <p class="fwd-muted">{{ node.enabled === false ? t('admin.nodes.rotate.disabledHint') : t('admin.nodes.rotate.rowHint') }}</p>
+                <NodeRotateCredentials :node="node.node_ref" :node-label="node.name" :disabled="node.enabled === false" size="md" />
+              </div>
             </template>
           </UiCard>
 
@@ -176,6 +180,7 @@ import {
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useUnsavedChanges } from '@/composables/useUnsavedChanges'
 import AgentInstallSheet from '@/components/admin/AgentInstallSheet.vue'
+import NodeRotateCredentials from '@/views/admin/nodes/NodeRotateCredentials.vue'
 import { deleteNode, getNode, listRoutes, newIdempotencyKey, setNodeSettings, settingsBody, toggleNode } from '@/api/forwardV4'
 import EngineChip from '@/components/forward/EngineChip.vue'
 import { forwardErrorMessage, violationText } from '@/components/forward/messages'
@@ -520,6 +525,20 @@ async function remove() {
 
 .node-install {
   margin: var(--space-3) 0;
+}
+
+.node-rotate {
+  display: grid;
+  justify-items: start;
+  gap: var(--space-3);
+  width: 100%;
+  margin-top: var(--space-4);
+  padding-top: var(--space-4);
+  border-top: 1px solid var(--separator);
+}
+
+.node-rotate p {
+  margin: 0;
 }
 
 @media (max-width: 1099.98px) {

@@ -47,6 +47,12 @@ export default {
         offline: '离线',
         pending: '待激活'
       },
+      traffic: {
+        view: '查看流量',
+        openNode: '打开节点页面',
+        title: '{name} 的流量',
+        description: '上传和下载随时间的变化。协议、凭据和日志在节点页面。'
+      },
       waiting: '正在等待第一份节点快照',
       waitingDescription: '连接建立后，节点的状态会实时出现在这里。',
       empty: '还没有节点',

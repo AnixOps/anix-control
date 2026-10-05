@@ -48,6 +48,9 @@
       <template #overview>
         <NodeOverviewSection :node="node" :protocol-count="protocolCount" :parent-name="parentName" />
       </template>
+      <template #traffic>
+        <NodeTrafficSection :node="node" />
+      </template>
       <template #protocols>
         <NodeProtocolsSection :node="node" @changed="list => { protocolCount = list.length }" />
       </template>
@@ -109,6 +112,8 @@ import { useNodeActions } from './nodes/useNodeActions'
 import { useNodeDeploy } from './nodes/useNodeDeploy'
 
 const NodeServicesSection = defineAsyncComponent(() => import('./nodes/NodeServicesSection.vue'))
+// 流量 draws a chart: its code (and ECharts) load when the section opens.
+const NodeTrafficSection = defineAsyncComponent(() => import('./nodes/NodeTrafficSection.vue'))
 
 const { t } = useAppI18n()
 const route = useRoute()

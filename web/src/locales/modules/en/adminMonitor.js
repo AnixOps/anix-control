@@ -47,6 +47,12 @@ export default {
         offline: 'Offline',
         pending: 'Pending'
       },
+      traffic: {
+        view: 'View traffic',
+        openNode: 'Open node page',
+        title: 'Traffic of {name}',
+        description: 'Upload and download over time. The node page has its protocols, credentials and logs.'
+      },
       waiting: 'Waiting for the first node snapshot',
       waitingDescription: 'Node status shows here in real time once connected.',
       empty: 'No nodes yet',

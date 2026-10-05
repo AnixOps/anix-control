@@ -18,7 +18,10 @@
       :row-label="node => node.name || `#${node.id}`"
       storage-key="admin.monitor.live"
       :sticky-header="true"
+      :row-actions="nodeActions"
+      activatable
       data-monitor-nodes
+      @row-activate="openTraffic"
     >
       <template #empty>
         <UiEmptyState
@@ -54,6 +57,8 @@
         <UiUsageBar :value="Number(row[key] || 0)" :max="100" :text="percentText(row[key])" />
       </template>
     </UiDataTable>
+
+    <MonitorNodeTraffic v-if="trafficNode" v-model:open="trafficOpen" :node="trafficNode" />
   </div>
 </template>
 
@@ -64,8 +69,11 @@
 // reconnects with backoff (3 s, doubling, at most 30 s) and closes on
 // leaving the section. Same protocol and behaviour as the old Monitor page;
 // only the presentation changed (metric cards, UiDataTable, status words).
-import { computed, onBeforeUnmount, onMounted, ref } from 'vue'
-import { Radio, RotateCw, Server, Unplug } from '@lucide/vue'
+// A row opens that node's traffic history in a sheet (MonitorNodeTraffic,
+// GET /api/v4/kernel/nodes/:id/traffic), also from its row menu.
+import { computed, defineAsyncComponent, onBeforeUnmount, onMounted, ref } from 'vue'
+import { useRouter } from 'vue-router'
+import { ChartLine, Radio, RotateCw, Server, SquareArrowOutUpRight, Unplug } from '@lucide/vue'
 import { useAppI18n } from '@/composables/useAppI18n'
 import UiBadge from '@/ui/UiBadge.vue'
 import UiButton from '@/ui/UiButton.vue'
@@ -79,9 +87,15 @@ import { useFormat } from '@/ui/composables/useFormat'
 const USAGE_KEYS = ['cpu_usage', 'memory_usage', 'disk_usage']
 const STATUS_ORDER = { online: 0, pending: 1, offline: 2 }
 
+// The sheet draws a chart: its code (and ECharts) load with the first row asked.
+const MonitorNodeTraffic = defineAsyncComponent(() => import('./MonitorNodeTraffic.vue'))
+
 const { t } = useAppI18n()
 const format = useFormat()
+const router = useRouter()
 
+const trafficNode = ref(null)
+const trafficOpen = ref(false)
 const overview = ref({})
 const nodes = ref([])
 const snapshotReceived = ref(false)
@@ -125,6 +139,18 @@ const columns = computed(() => [
 
 // Online first, then pending, then offline (the old page's order).
 const sortedNodes = computed(() => [...nodes.value].sort((a, b) => (STATUS_ORDER[a.status] ?? 3) - (STATUS_ORDER[b.status] ?? 3)))
+
+// A node that is gone from the table keeps its sheet until it closes.
+function openTraffic(node) {
+  if (!node?.id) return
+  trafficNode.value = { id: node.id, name: node.name || '', host: node.host || '' }
+  trafficOpen.value = true
+}
+
+const nodeActions = node => [
+  { key: 'traffic', label: t('adminMonitor.live.traffic.view'), icon: ChartLine, onSelect: () => openTraffic(node) },
+  { key: 'open', label: t('adminMonitor.live.traffic.openNode'), icon: SquareArrowOutUpRight, onSelect: () => router.push(`/admin/nodes/${node.id}`) }
+]
 
 function statusLabel(status) {
   return STATUS_ORDER[status] === undefined ? (status || '—') : t(`adminMonitor.live.status.${status}`)

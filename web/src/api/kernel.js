@@ -350,6 +350,44 @@ export async function createKernelAgentInstallToken(node, ttlSeconds) {
   return unwrap(await v4({ url: '/kernel/agents/install-tokens', method: 'post', data }))
 }
 
+// Rotate a node's Agent credentials (administrators with the super
+// administrator right only). Revokes every Agent certificate, enrollment and
+// forward link certificate of the node, optionally replaces a proxy node's API
+// key (`rotateApiKey`; a forward node answers 400) and issues a fresh
+// single-use `anixagt_` credential, valid for `ttlSeconds` (60 to 604800,
+// default 3600). `reason` (at most 200 characters) goes to the audit entry.
+// The answer carries the credential once ({ node, revoked, api_key_rotated,
+// enrollment, expires_at, credential }) with Cache-Control: no-store: the
+// caller keeps it only as long as it shows it and never writes it anywhere.
+// Refusals: 400 invalid_request, 403 super_admin_required, 404 node_not_found,
+// 409 node_disabled / agent_pki_disabled.
+export async function rotateKernelAgentCredentials({ node, rotateApiKey = false, ttlSeconds, reason = '' }) {
+  const data = { node }
+  if (rotateApiKey) data.rotate_api_key = true
+  if (ttlSeconds) data.ttl_seconds = ttlSeconds
+  const why = String(reason ?? '').trim()
+  if (why) data.reason = why
+  return unwrap(await v4({ url: '/kernel/agents/rotate-credentials', method: 'post', data, timeout: 30_000 }))
+}
+
+// One proxy node's traffic over time (administrators, v4), for the node page's
+// chart: { node_id, granularity, since_unix_ms, until_unix_ms, points:
+// [{ start_unix_ms, up_bytes, down_bytes }], total: { up_bytes, down_bytes } },
+// ascending, buckets without traffic as zeros. `hour` (UTC hours, from the raw
+// traffic log; at most 720 buckets) or `day` (the Control host's calendar
+// days, from the daily statistics; at most 366). `since` / `until` are Unix
+// milliseconds, rounded out to whole buckets; a longer window is 400
+// invalid_request and an unknown node 404 not_found.
+export async function getKernelNodeTraffic(nodeId, { granularity, since, until } = {}) {
+  const params = {}
+  if (granularity) params.granularity = granularity
+  if (since !== undefined && since !== null) params.since = since
+  if (until !== undefined && until !== null) params.until = until
+  const config = { url: `/kernel/nodes/${encodeURIComponent(nodeId)}/traffic`, method: 'get' }
+  if (Object.keys(params).length) config.params = params
+  return unwrap(await v4(config))
+}
+
 // Sanitized shadow-mode mismatch samples (newest first, at most 100):
 // { samples, retention_days, max_per_route }.
 export async function getKernelRouteModeMismatches({ packageID, routeID, limit } = {}) {
