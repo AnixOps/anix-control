@@ -155,7 +155,58 @@
   now the one definition of the renewal instant. The UI joins the rows with
   `/api/v2/admin/nodes` by `proxy-<id>`.
 
+- **Admin console: last online, subscription group members and the Agent
+  connection of the nodes.** Three screens use routes the kernel already
+  serves. **用户** has a *Last online* column (and a row in the user detail)
+  from `GET /api/v4/admin/users/activity`, asked for once per page, after the
+  list is shown and for that page's ids only: a relative time with the exact
+  time on hover, "Never" for a user no node has reported, a dash while it
+  loads, "Unavailable" when it fails (the list is never held up, and a late
+  answer to an earlier page is dropped). **订阅分组 → 成员** is a paged,
+  searchable table of the users granted the group directly
+  (`GET /api/v4/admin/subscription-groups/:id/members`: e-mail, membership
+  state and end, quota override, renewal price, no credential), with a
+  membership filter, loading, empty and error states, cards on a phone and a
+  row action that finds the user in 用户; it replaces the page that said the
+  API had no member list. **节点** lists each node's Agent *Connection* chip
+  (mTLS stream, API key stream, legacy, third-party, offline) and *Certificate*
+  (valid until a date, renewal overdue, expired, revoked, none), from one
+  batched `GET /api/v4/kernel/agents/transports?node=proxy-<id>,…` per page,
+  and the node page's overview has an *Agent connection* group with the
+  transport, when it was last seen, the certificate's end and renewal time,
+  when and why it was revoked, and a notice when a valid certificate is past
+  `renew_after` (the Agent did not renew in time). Both calls follow the
+  node data and fail alone. To make room at 1440 px, 注册时间 (users) and 版本
+  and 负载 (nodes) start hidden: the table settings bring them back, and the
+  registration time is in the user detail's description, the version and load
+  in the node page. Vitest for the API wrappers, models, composables
+  and pages; a Playwright spec records the requests; the screens' fixtures
+  answer the new routes; the accessibility sweeps cover the members page.
+
 ### Changed
+
+- **Admin lists sort on the server and the bulk bars make one request.**
+  The user, order and node tables send their sort header to the server
+  (`sort` and `order` of `GET /api/v2/admin/users|orders|nodes`), so a header
+  orders the whole list and not the 20 rows of the page; a change goes back to
+  page 1 and `?sort=…&order=…` joins the other filters in the URL, so a
+  reload, a shared link and 返回节点 keep it. Only the columns the API sorts
+  by stay sortable (users: e-mail, used traffic, expiry, created, ID; orders:
+  order number, status, amount, created; nodes: name, address, load, last
+  heartbeat, ID); the derived status, the plan name, the buyer's e-mail, the
+  protocol count and the node's total traffic are plain headers now, because
+  sorting one page of a long list said nothing about the list. With no sort
+  nothing changes. The users and invite-codes bulk bars call
+  `POST /api/v4/admin/users/bulk` and `/api/v4/admin/invite-codes/bulk` once
+  for the selection instead of once per row: the toast says how many were done
+  and why the rest were not (a count of not found, already used, your own
+  account, not attempted, failed), the ones that were not done stay selected,
+  and 重试 asks again for those worth it (never a user that is gone, a used
+  code or your own account). 封禁 / 解封 keep their 撤销, now one request for
+  the users that changed. The users bar also has 重置流量, after one
+  confirmation; every click sends one `Idempotency-Key` that the server
+  derives each user's key from, so a failed request, the retry of the failed
+  users and a second click on the confirmation never reset a counter twice.
 
 - **Forwarding editor, DNS binding: Save says why it is disabled.** With
   the binding on and the form incomplete (typically the provider never

@@ -405,6 +405,13 @@ override in bytes (null for none), `next_renew_price` is in cents, `active`
 is `expire_at` unset or in the future. The answer carries no credential:
 never the subscription token or the proxy uuid.
 
+In the console the group page's 成员 section shows the counts and this list as
+a paged table (20 per page): search by e-mail, a 有效 / 已过期 filter, the
+membership end, the quota override and the renewal price, with loading, empty
+and error states and cards on a phone. A row's menu finds the user in 用户.
+Users who reach the group through a plan or their primary group are not in
+the list, as they are not in the counts.
+
 #### 工具接口
 
 ```http

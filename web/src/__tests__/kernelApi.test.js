@@ -285,6 +285,14 @@ describe('kernel API', () => {
     expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/agents/transports', method: 'get' })
     await kernelApi.getKernelAgentTransports(true)
     expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/agents/transports', method: 'get', params: { legacy_only: true } })
+    // The node list and the node page ask for the nodes in view: one
+    // comma separated `node` value, repeats dropped.
+    await kernelApi.getKernelAgentTransports({ nodes: ['proxy-3', 'proxy-5', 'proxy-3'] })
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/agents/transports', method: 'get', params: { node: 'proxy-3,proxy-5' } })
+    await kernelApi.getKernelAgentTransports({ legacyOnly: true, nodes: ['proxy-7'] })
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/agents/transports', method: 'get', params: { legacy_only: true, node: 'proxy-7' } })
+    await kernelApi.getKernelAgentTransports({ nodes: [] })
+    expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/agents/transports', method: 'get' })
     await kernelApi.listKernelAgentUpgrades(1)
     expect(mockRequest).toHaveBeenLastCalledWith({ baseURL: '/api/v4', url: '/kernel/agents/upgrades', method: 'get', params: { limit: 1 } })
     await kernelApi.getKernelAgentUpgrade('c/1')

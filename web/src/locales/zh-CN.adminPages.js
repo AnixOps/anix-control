@@ -528,7 +528,14 @@ export default {
       limits: '限制',
       expireAt: '到期时间',
       status: '状态',
+      lastOnline: '最近在线',
       createdAt: '注册时间'
+    },
+    lastOnline: {
+      never: '从未在线',
+      neverHint: '还没有任何节点上报过该用户。',
+      loading: '加载中',
+      unavailable: '暂不可用'
     },
     status: {
       active: '正常',
@@ -554,6 +561,7 @@ export default {
       description: 'ID {id} · 注册于 {date}',
       subscription: '订阅',
       flowReset: '流量重置',
+      activity: '活动',
       actions: '操作',
       danger: '危险操作',
       dangerFooter: '重置订阅链接后，所有客户端都要重新导入；重置流量无法撤销。'
@@ -647,6 +655,19 @@ export default {
       permanent: '永久',
       trafficUnlimited: '已用 {used} · 不限'
     },
+    bulk: {
+      requestFailed: '批量操作失败：{message}',
+      banPartial: '{total} 个用户中 {done} 个已封禁。',
+      banNone: '没有用户被封禁。',
+      unbanPartial: '{total} 个用户中 {done} 个已解封。',
+      unbanNone: '没有用户被解封。',
+      undoPartial: '{count} 个用户未能恢复。',
+      resetTitle: '重置 {count} 个用户的流量？',
+      resetMessage: '所选用户的已用流量都会归零，此操作无法撤销。',
+      resetDone: '已重置 {count} 个用户的流量',
+      resetPartial: '{total} 个用户中 {done} 个已重置流量。',
+      resetNone: '没有用户的流量被重置。'
+    },
     messages: {
       actionFailed: '操作失败',
       fillEmailPassword: '请填写邮箱和密码',
@@ -656,7 +677,6 @@ export default {
       fetchUsersFailed: '用户列表没有加载出来',
       bulkBanned: '已封禁 {count} 个用户',
       bulkUnbanned: '已解封 {count} 个用户',
-      bulkPartial: '{total} 个用户中 {done} 个已更改。{message}',
       fetchStatsFailed: '获取统计失败',
       saveFailed: '保存失败：{message}',
       userSaved: '已保存 {email}',

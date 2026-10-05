@@ -295,11 +295,20 @@ export async function getKernelRouteModeRevisions(packageID, limit) {
 }
 
 // The agent transport inventory (A2-6), /api/v4: each node's last agent
-// transport, agent version and certificate. legacyOnly keeps the nodes
-// agent_control.mtls: required would refuse.
-export async function getKernelAgentTransports(legacyOnly = false) {
+// transport, agent version, certificate (state, last_certificate with
+// not_after / renew_after / revoked_at / revoke_reason) and connection type.
+// The argument is legacyOnly (a boolean: the nodes agent_control.mtls:
+// required would refuse) or { legacyOnly, nodes }, where nodes are
+// "proxy-<id>" / "forward-<id>" names (at most 200, one comma separated
+// `node` value) and the answer keeps those nodes only.
+export async function getKernelAgentTransports(options = false) {
+  const { legacyOnly = false, nodes = [] } = typeof options === 'object' && options !== null ? options : { legacyOnly: Boolean(options) }
   const config = { url: '/kernel/agents/transports', method: 'get' }
-  if (legacyOnly) config.params = { legacy_only: true }
+  const params = {}
+  if (legacyOnly) params.legacy_only = true
+  const names = [...new Set((Array.isArray(nodes) ? nodes : []).map(String).filter(Boolean))]
+  if (names.length) params.node = names.join(',')
+  if (Object.keys(params).length) config.params = params
   return unwrap(await v4(config))
 }
 

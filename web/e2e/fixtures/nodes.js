@@ -1,4 +1,5 @@
 import { NODES, envelope } from './nodeData.js'
+import { transportsAnswer } from './transports.js'
 
 export default {
   path: '/admin/nodes',
@@ -12,7 +13,17 @@ export default {
       let list = NODES
       if (query.status) list = list.filter(n => n.status === Number(query.status))
       if (query.search) list = list.filter(n => n.name.includes(query.search) || n.host.includes(query.search))
+      // sort and order, as GET /admin/nodes takes them (whitelist of the API).
+      if (query.sort) {
+        const column = { id: 'id', name: 'name', host: 'host', cpu_usage: 'cpu_usage', last_check_at: 'last_check_at' }[query.sort]
+        const factor = query.order === 'desc' ? -1 : 1
+        if (column) list = [...list].sort((a, b) => factor * (a[column] === b[column] ? 0 : (a[column] ?? Infinity) < (b[column] ?? Infinity) ? -1 : 1))
+      }
       return envelope({ list, total: list.length === NODES.length ? 47 : list.length })
+    }
+    // The Agent connection and certificate of the nodes in view (one call per page).
+    if (path === '/api/v4/kernel/agents/transports') {
+      return transportsAnswer(query)
     }
     if (path === '/api/v2/admin/nodes/stats') return envelope({ total: 47, online: 38, offline: 6, pending: 3 })
     if (path === '/api/v2/admin/auth-keys' && method === 'POST') return envelope({ id: 4, key: 'ak_live_3f9d2c71b0e84a5f9c6d1e2a7b8c4d0f' })

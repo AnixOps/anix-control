@@ -15,6 +15,8 @@
       :label="t('adminOrders.table.label')"
       :row-label="order => order.trade_no"
       storage-key="admin.orders"
+      manual-sort
+      :sort="sortState"
       manual-pagination
       :page="page"
       :page-size="pageSize"
@@ -28,6 +30,7 @@
       :empty-description="t('adminOrders.empty.description')"
       activatable
       :row-actions="orderActions"
+      @update:sort="changeSort"
       @update:page="goToPage"
       @row-activate="viewDetail"
       @retry="fetchOrders"
@@ -99,6 +102,7 @@ import { CircleCheck, CircleX, Eye, Receipt } from '@lucide/vue'
 import { cancelOrder, getOrderList, getOrderStats, markOrderPaid } from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useListQuery } from '@/composables/useListQuery'
+import { SORT_ORDERS, createListSort } from '@/utils/listSort'
 import UiBadge from '@/ui/UiBadge.vue'
 import UiButton from '@/ui/UiButton.vue'
 import UiDataTable from '@/ui/UiDataTable.vue'
@@ -127,6 +131,15 @@ const filters = ref({
   email: listQuery.read('email'),
   status: listQuery.read('status', { values: ['0', '1', '2', '3'] })
 })
+// Sorting happens on the server (GET /admin/orders sort and order). The
+// buyer's e-mail and the plan's name are other tables' columns the API cannot
+// sort by, and the period is no sort column either; sorting the 20 rows of
+// one page would say nothing about the list, so those headers stay plain.
+const ORDER_SORT = createListSort({ trade_no: 'trade_no', status: 'status', total_amount: 'total_amount', created_at: 'created_at' })
+const sortState = ref(ORDER_SORT.fromQuery(
+  listQuery.read('sort', { values: ORDER_SORT.values }),
+  listQuery.read('order', { values: SORT_ORDERS })
+))
 const showDetailModal = ref(false)
 const toast = useToast()
 const confirm = useConfirm()
@@ -136,13 +149,13 @@ const listError = ref(null)
 
 const columns = computed(() => [
   { key: 'trade_no', label: t('adminOrders.table.tradeNo'), primary: true, hideable: false },
-  { key: 'status', label: t('adminOrders.table.status'), secondary: true, sortable: true, sortValue: order => Number(order.status) },
-  { key: 'user', label: t('adminOrders.table.user'), value: order => order.user?.email, sortable: true },
-  { key: 'plan', label: t('adminOrders.table.plan'), value: order => order.plan?.name, sortable: true },
+  { key: 'status', label: t('adminOrders.table.status'), secondary: true },
+  { key: 'user', label: t('adminOrders.table.user'), value: order => order.user?.email },
+  { key: 'plan', label: t('adminOrders.table.plan'), value: order => order.plan?.name },
   { key: 'period', label: t('adminOrders.table.period'), value: order => getPeriodText(order.period), breakpoint: 'lg' },
-  { key: 'total_amount', label: t('adminOrders.table.amount'), numeric: true, align: 'end', sortable: true, firstDirection: 'desc', format: value => formatMoney(value), nowrap: true },
-  { key: 'created_at', label: t('adminOrders.table.createdAt'), numeric: true, nowrap: true, sortable: true, firstDirection: 'desc', format: value => formatTimestamp(value), sortValue: order => String(order.created_at || '') }
-])
+  { key: 'total_amount', label: t('adminOrders.table.amount'), numeric: true, align: 'end', firstDirection: 'desc', format: value => formatMoney(value), nowrap: true },
+  { key: 'created_at', label: t('adminOrders.table.createdAt'), numeric: true, nowrap: true, firstDirection: 'desc', format: value => formatTimestamp(value) }
+].map(column => (ORDER_SORT.isSortable(column.key) ? { ...column, sortable: true } : column)))
 // The order list filters by status on the server (0 待支付 … 3 已完成).
 const statusChips = computed(() => [
   { value: '0', label: t('adminOrders.status.pending'), count: stats.value.pending_orders },
@@ -157,6 +170,12 @@ const orderActions = order => [
   { key: 'cancel', label: t('adminOrders.confirm.cancelAction'), icon: CircleX, danger: true, separatorBefore: true, hidden: Number(order.status) !== 0, onSelect: () => handleCancel(order) }
 ]
 
+// A header click sorts the whole list on the server, from the first page.
+const changeSort = (next) => {
+  sortState.value = next
+  page.value = 1
+  fetchOrders()
+}
 const goToPage = (value) => {
   page.value = value
   fetchOrders()
@@ -199,7 +218,7 @@ const ensureOrderSuccess = (res, fallbackKey) => {
 
 const fetchOrders = async () => {
   listLoading.value = true
-  listQuery.write({ trade_no: filters.value.trade_no.trim(), email: filters.value.email.trim(), status: filters.value.status, page: page.value })
+  listQuery.write({ trade_no: filters.value.trade_no.trim(), email: filters.value.email.trim(), status: filters.value.status, page: page.value, ...ORDER_SORT.toQuery(sortState.value) })
   try {
     const res = ensureOrderSuccess(
       await getOrderList({
@@ -207,7 +226,8 @@ const fetchOrders = async () => {
         page_size: pageSize.value,
         trade_no: filters.value.trade_no,
         email: filters.value.email,
-        status: filters.value.status || undefined
+        status: filters.value.status || undefined,
+        ...ORDER_SORT.toParams(sortState.value)
       }),
       'adminOrders.messages.fetchOrdersFailed'
     )

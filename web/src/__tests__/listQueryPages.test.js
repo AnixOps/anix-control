@@ -33,6 +33,7 @@ const adminApi = vi.hoisted(() => ({
   getTickets: vi.fn(),
   getTrafficHourly: vi.fn(),
   getUserList: vi.fn(),
+  getUsersActivity: vi.fn(),
   getUserStats: vi.fn(),
   listAgentDiagnosticTasks: vi.fn(),
   markOrderPaid: vi.fn(),
@@ -65,6 +66,7 @@ beforeEach(async () => {
   await setLocale('en')
   adminApi.getUserList.mockResolvedValue({ data: { list: [], total: 0 } })
   adminApi.getUserStats.mockResolvedValue({ data: {} })
+  adminApi.getUsersActivity.mockResolvedValue([])
   adminApi.getSubscriptionGroups.mockResolvedValue({ data: [] })
   adminApi.getSubscriptionSettings.mockResolvedValue({ data: { subscribe_path: '/s', subscribe_domains: [] } })
   adminApi.getOrderList.mockResolvedValue({ code: 0, data: { list: [], total: 0 } })
@@ -120,6 +122,46 @@ describe('list filters in the URL query', () => {
     await flushPromises()
     expect(adminApi.getOrderList).toHaveBeenLastCalledWith({ page: 1, page_size: 20, trade_no: '2026', email: 'a@b.c', status: '0' })
     expect(queryOf(router)).toEqual({ trade_no: '2026', email: 'a@b.c', status: '0' })
+  })
+
+  it('Users: restores the sort, sends it to the server and goes back to page 1 when it changes', async () => {
+    const { router, wrapper } = await mountAt(Users, '/admin/users', '/admin/users?sort=traffic&order=desc&page=3')
+    expect(adminApi.getUserList).toHaveBeenLastCalledWith({ page: 3, page_size: 20, email: '', status: '', sort: 'traffic', order: 'desc' })
+    expect(queryOf(router)).toEqual({ sort: 'traffic', order: 'desc', page: '3' })
+
+    wrapper.vm.changeSort({ key: 'email', direction: 'asc' })
+    await flushPromises()
+    expect(adminApi.getUserList).toHaveBeenLastCalledWith({ page: 1, page_size: 20, email: '', status: '', sort: 'email', order: 'asc' })
+    expect(queryOf(router)).toEqual({ sort: 'email', order: 'asc' })
+
+    // No sort: neither parameter is sent and the URL is clean again.
+    wrapper.vm.changeSort({ key: '', direction: '' })
+    await flushPromises()
+    expect(adminApi.getUserList).toHaveBeenLastCalledWith({ page: 1, page_size: 20, email: '', status: '' })
+    expect(queryOf(router)).toEqual({})
+  })
+
+  it('Users: ignores a sort the API does not know (the status is derived)', async () => {
+    const { router } = await mountAt(Users, '/admin/users', '/admin/users?sort=status&order=desc')
+    expect(adminApi.getUserList).toHaveBeenLastCalledWith({ page: 1, page_size: 20, email: '', status: '' })
+    expect(queryOf(router)).toEqual({})
+  })
+
+  it('Orders: keeps the sort in the URL and sends it with the filters', async () => {
+    const { router, wrapper } = await mountAt(Orders, '/admin/orders', '/admin/orders?status=0&sort=total_amount&order=desc&page=2')
+    expect(adminApi.getOrderList).toHaveBeenLastCalledWith({ page: 2, page_size: 20, trade_no: '', email: '', status: '0', sort: 'total_amount', order: 'desc' })
+    expect(queryOf(router)).toEqual({ status: '0', sort: 'total_amount', order: 'desc', page: '2' })
+
+    wrapper.vm.changeSort({ key: 'created_at', direction: 'desc' })
+    await flushPromises()
+    expect(adminApi.getOrderList).toHaveBeenLastCalledWith({ page: 1, page_size: 20, trade_no: '', email: '', status: '0', sort: 'created_at', order: 'desc' })
+    expect(queryOf(router)).toEqual({ status: '0', sort: 'created_at', order: 'desc' })
+  })
+
+  it('Orders: an unknown sort or order is dropped', async () => {
+    const { router } = await mountAt(Orders, '/admin/orders', '/admin/orders?sort=user&order=desc')
+    expect(adminApi.getOrderList).toHaveBeenLastCalledWith({ page: 1, page_size: 20, trade_no: '', email: '', status: undefined })
+    expect(queryOf(router)).toEqual({})
   })
 
   it('Tickets: restores and writes the search and status chip', async () => {

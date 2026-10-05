@@ -18,12 +18,14 @@ const mockGetAdminUser = vi.fn()
 
 vi.mock('@/api/admin', () => ({
   banUser: (...args) => mockBanUser(...args),
+  bulkUsers: vi.fn(),
   createUser: (...args) => mockCreateUser(...args),
   getAdminUser: (...args) => mockGetAdminUser(...args),
   getSubscriptionGroups: (...args) => mockGetSubscriptionGroups(...args),
   getSubscriptionSettings: (...args) => mockGetSubscriptionSettings(...args),
   getTrafficHourly: (...args) => mockGetTrafficHourly(...args),
   getUserList: (...args) => mockGetUserList(...args),
+  getUsersActivity: vi.fn(async () => []),
   getUserStats: (...args) => mockGetUserStats(...args),
   resetUserSubscribe: (...args) => mockResetUserSubscribe(...args),
   resetUserTraffic: vi.fn(),

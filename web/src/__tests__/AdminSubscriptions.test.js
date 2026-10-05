@@ -33,10 +33,12 @@ const adminApiMock = vi.hoisted(() => ({
 }))
 
 const getSubscriptionStatsMock = vi.hoisted(() => vi.fn())
+const getMembersMock = vi.hoisted(() => vi.fn())
 
 vi.mock('@/api/admin', () => ({
   default: adminApiMock,
-  getSubscriptionStats: (...args) => getSubscriptionStatsMock(...args)
+  getSubscriptionStats: (...args) => getSubscriptionStatsMock(...args),
+  getSubscriptionGroupMembers: (...args) => getMembersMock(...args)
 }))
 
 enableAutoUnmount(afterEach)
@@ -90,6 +92,7 @@ describe('Admin subscription groups', () => {
     adminApiMock.deleteSubscriptionTemplate.mockResolvedValue({})
     adminApiMock.updateGroupProtocols.mockResolvedValue({})
     getSubscriptionStatsMock.mockResolvedValue({ data: [] })
+    getMembersMock.mockResolvedValue({ total: 0, page: 1, page_size: 20, members: [] })
   })
 
   afterEach(() => {
@@ -169,6 +172,88 @@ describe('Admin subscription groups', () => {
       const { router } = await mountRoute('/admin/subscriptions/3/nope')
       await flushPromises()
       expect(router.currentRoute.value.path).toBe('/admin/subscriptions/3')
+    })
+  })
+
+  describe('group members (GET /api/v4/admin/subscription-groups/:id/members)', () => {
+    const member = (extra = {}) => ({
+      user_id: 3, email: 'ann@example.test', banned: 0, plan_id: 2, expire_at: 4102488000, transfer_enable: null,
+      next_renew_price: null, created_at: '2026-09-01T08:00:00Z', active: true, ...extra
+    })
+
+    async function renderMembers(path = '/admin/subscriptions/3/members') {
+      adminApiMock.getSubscriptionGroups.mockResolvedValue({ data: [{ id: 3, name: 'Asia', enable: 1 }] })
+      getSubscriptionStatsMock.mockResolvedValue({ data: [{ group_id: 3, user_count: 45, enabled_users: 40, plan_count: 2 }] })
+      const router = makeRouter()
+      await router.push(path)
+      await router.isReady()
+      const result = render({ template: '<router-view />' }, { global: { plugins: [router] } })
+      return { ...result, router }
+    }
+
+    it('pages the users granted the group directly, newest grant first, without any credential', async () => {
+      getMembersMock.mockResolvedValue({
+        total: 2, page: 1, page_size: 20,
+        members: [member(), member({ user_id: 4, email: 'bob@example.test', banned: 1, active: false, expire_at: 1700000000, transfer_enable: 1073741824, token: 'secret-token', uuid: 'secret-uuid' })]
+      })
+      await renderMembers()
+      expect(await screen.findByText('ann@example.test')).toBeTruthy()
+      expect(getMembersMock).toHaveBeenCalledWith(3, { page: 1, pageSize: 20, q: '', status: '' })
+      const table = screen.getByRole('table', { name: 'Group members' })
+      const bob = within(table).getByRole('row', { name: /bob@example.test/ })
+      expect(within(bob).getByText('Expired')).toBeTruthy()
+      expect(within(bob).getByText('Banned')).toBeTruthy()
+      expect(within(bob).getByText('1.00 GB')).toBeTruthy()
+      expect(within(table).getByRole('row', { name: /ann@example.test/ }).textContent).toContain('2100-01-01')
+      expect(document.body.textContent).not.toContain('secret-')
+      // The counts and where the other ways in are managed stay.
+      expect(screen.getByRole('heading', { level: 2, name: 'Members' })).toBeTruthy()
+      expect(screen.getByRole('link', { name: /Users/ })).toBeTruthy()
+    })
+
+    it('searches by email and filters by membership on the server, from the first page', async () => {
+      const user = userEvent.setup()
+      getMembersMock.mockResolvedValue({ total: 45, page: 1, page_size: 20, members: [member()] })
+      await renderMembers()
+      await screen.findByText('ann@example.test')
+      await user.click(screen.getByRole('button', { name: 'Next page' }))
+      await waitFor(() => expect(getMembersMock).toHaveBeenLastCalledWith(3, { page: 2, pageSize: 20, q: '', status: '' }))
+
+      await user.type(screen.getByRole('searchbox', { name: 'Search by email' }), 'ann{Enter}')
+      await waitFor(() => expect(getMembersMock).toHaveBeenLastCalledWith(3, { page: 1, pageSize: 20, q: 'ann', status: '' }))
+
+      await user.click(within(screen.getByRole('group', { name: 'Filter by membership' })).getByRole('button', { name: 'Expired' }))
+      await waitFor(() => expect(getMembersMock).toHaveBeenLastCalledWith(3, { page: 1, pageSize: 20, q: 'ann', status: 'expired' }))
+    })
+
+    it('says there are no direct members, and offers to clear a filter that matched none', async () => {
+      const user = userEvent.setup()
+      await renderMembers()
+      expect(await screen.findByRole('heading', { name: 'No direct members' })).toBeTruthy()
+      await user.type(screen.getByRole('searchbox', { name: 'Search by email' }), 'nobody{Enter}')
+      await user.click(await screen.findByRole('button', { name: 'Clear filters' }))
+      await waitFor(() => expect(getMembersMock).toHaveBeenLastCalledWith(3, { page: 1, pageSize: 20, q: '', status: '' }))
+    })
+
+    it('shows a load error with Try again and keeps the rest of the page', async () => {
+      const user = userEvent.setup()
+      getMembersMock.mockRejectedValueOnce({ message: 'Request failed', response: { status: 404, data: { error: { code: 'not_found', message: 'subscription group not found' } } } })
+      await renderMembers()
+      const alert = await screen.findByRole('alert')
+      expect(alert.textContent).toContain('Couldn’t load the members')
+      expect(screen.getByRole('heading', { level: 1, name: 'Asia' })).toBeTruthy()
+      getMembersMock.mockResolvedValueOnce({ total: 1, page: 1, page_size: 20, members: [member()] })
+      await user.click(within(alert).getByRole('button', { name: 'Try again' }))
+      expect(await screen.findByText('ann@example.test')).toBeTruthy()
+    })
+
+    it('finds a member in Users from the row menu', async () => {
+      const user = userEvent.setup()
+      getMembersMock.mockResolvedValue({ total: 1, page: 1, page_size: 20, members: [member()] })
+      const { router } = await renderMembers()
+      await user.click(await screen.findByRole('button', { name: 'Actions for ann@example.test' }))
+      await user.click(await screen.findByRole('menuitem', { name: 'Find in Users' }))
+      await waitFor(() => expect(router.currentRoute.value.fullPath).toBe('/admin/users?email=ann@example.test'))
     })
   })
 

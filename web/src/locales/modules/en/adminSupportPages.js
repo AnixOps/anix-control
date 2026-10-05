@@ -148,6 +148,20 @@ export default {
       cancelFailedShort: 'Cancel failed'
     }
   },
+  // The result of a bulk action (users, invite codes): the wording of the
+  // codes the bulk routes answer per item, and 重试.
+  adminBulk: {
+    retry: 'Retry {count}',
+    list: '{details}.',
+    separator: '; ',
+    errors: {
+      not_found: '{count} not found',
+      conflict: '{count} already used and kept',
+      forbidden_self: 'your own account can’t be banned',
+      not_attempted: '{count} not attempted (out of time)',
+      failed: '{count} failed'
+    }
+  },
   adminInviteCodes: {
     title: 'Invite codes',
     subtitle: 'Generate, copy and revoke the codes that admit a registration.',
@@ -216,6 +230,8 @@ export default {
       generateFailed: 'Failed to generate codes: {message}',
       revoked: 'Code {code} revoked',
       revokedMany: '{count} codes revoked',
+      revokePartial: 'Revoked {done} of {total} codes.',
+      revokeNone: 'No code was revoked.',
       revokeFailed: 'Failed to revoke the code: {message}',
       copied: 'Copied',
       copyFailed: 'Copy failed'

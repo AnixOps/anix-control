@@ -61,17 +61,7 @@
         <GroupProtocols :group="group" @changed="loadStats" />
       </template>
       <template #members>
-        <div class="detail-sections">
-          <UiGroupedList :title="t('adminSubscriptionGroups.members.title')" heading-tag="h2" :footer="t('adminSubscriptionGroups.members.help')">
-            <UiGroupedListRow :label="t('adminSubscriptionGroups.members.users')" :value="format.number(stat.user_count || 0)" />
-            <UiGroupedListRow :label="t('adminSubscriptionGroups.members.enabledUsers')" :value="format.number(stat.enabled_users || 0)" />
-            <UiGroupedListRow :label="t('adminSubscriptionGroups.members.plans')" :value="format.number(stat.plan_count || 0)" />
-          </UiGroupedList>
-          <UiGroupedList :title="t('adminSubscriptionGroups.members.manage')" heading-tag="h2">
-            <UiGroupedListRow :label="isCommercial ? t('adminSubscriptionGroups.members.openPlansCommercial') : t('adminSubscriptionGroups.members.openPlans')" :description="t('adminSubscriptionGroups.members.openPlansHelp')" href="/admin/plans" @click.prevent="router.push('/admin/plans')" />
-            <UiGroupedListRow :label="t('adminSubscriptionGroups.members.openUsers')" :description="t('adminSubscriptionGroups.members.openUsersHelp')" href="/admin/users" @click.prevent="router.push('/admin/users')" />
-          </UiGroupedList>
-        </div>
+        <GroupMembers :group="group" :stat="stat" />
       </template>
       <template #output>
         <GroupOutput :group="group" />
@@ -87,15 +77,14 @@
 // 订阅分组 → one group (plan §7.2 detail template, §8.2): back link, name,
 // state and actions, then sections in the URL (/admin/subscriptions/:id/
 // :section): 概览, 模板, 节点协议, 成员, 订阅输出. The group comes from the
-// group list and its numbers from the stats endpoint (no new endpoint);
-// the API has no member list, so 成员 shows the counts and where membership
-// is managed (plans and users).
+// group list and its numbers from the stats endpoint; 成员 pages the users
+// granted the group directly (GET /api/v4/admin/subscription-groups/:id/
+// members), see subscriptions/GroupMembers.vue.
 import { computed, onMounted, ref, watch } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { ChevronLeft, Copy, Layers, Link2, Pencil, Trash2 } from '@lucide/vue'
 import adminApi, { getSubscriptionStats } from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
-import { useEdition } from '@/composables/useEdition'
 import UiBadge from '@/ui/UiBadge.vue'
 import UiButton from '@/ui/UiButton.vue'
 import UiEmptyState from '@/ui/UiEmptyState.vue'
@@ -108,6 +97,7 @@ import UiSkeleton from '@/ui/UiSkeleton.vue'
 import UiTabs from '@/ui/UiTabs.vue'
 import { useDelayedLoading } from '@/ui/composables/useDelayedLoading'
 import { useFormat } from '@/ui/composables/useFormat'
+import GroupMembers from './subscriptions/GroupMembers.vue'
 import GroupOutput from './subscriptions/GroupOutput.vue'
 import GroupProtocols from './subscriptions/GroupProtocols.vue'
 import GroupTemplates from './subscriptions/GroupTemplates.vue'
@@ -120,7 +110,6 @@ const SECTIONS = ['overview', 'templates', 'protocols', 'members', 'output']
 
 const { t } = useAppI18n()
 const format = useFormat()
-const { isCommercial } = useEdition()
 const route = useRoute()
 const router = useRouter()
 const { copyGroupCombined, deleteGroup } = useGroupActions()

@@ -110,12 +110,14 @@
 // (identity-platform). Codes as a server-paged list with status chips, a
 // "…" menu (copy, revoke), bulk copy / revoke, and a dialog that generates
 // a batch and shows it. Commissions, withdrawals and statistics are the
-// commercial 邀请返佣 page. Endpoints unchanged: GET/POST
-// /admin/invite/codes, DELETE /admin/invite/codes/:id.
+// commercial 邀请返佣 page. Endpoints: GET/POST /admin/invite/codes, DELETE
+// /admin/invite/codes/:id, and POST /api/v4/admin/invite-codes/bulk for the
+// bulk revoke.
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { ArrowRight, Ban, Copy, Plus, Ticket } from '@lucide/vue'
-import { generateInviteCodes, getInviteCodes, revokeInviteCode } from '@/api/admin'
+import { bulkInviteCodes, generateInviteCodes, getInviteCodes, revokeInviteCode } from '@/api/admin'
 import { useAppI18n } from '@/composables/useAppI18n'
+import { useBulkReport } from '@/composables/useBulkReport'
 import { useListQuery } from '@/composables/useListQuery'
 import { useEdition } from '@/composables/useEdition'
 import UiBadge from '@/ui/UiBadge.vue'
@@ -129,11 +131,14 @@ import { copyText } from '@/ui/composables/useClipboard'
 import { useConfirm } from '@/ui/composables/useConfirm'
 import { useFormat } from '@/ui/composables/useFormat'
 import { useToast } from '@/ui/composables/useToast'
+import { adminV4ErrorMessage } from '@/utils/adminV4'
+import { readBulkResult } from '@/utils/bulkResult'
 
 const { t } = useAppI18n()
 const format = useFormat()
 const toast = useToast()
 const confirm = useConfirm()
+const bulkReport = useBulkReport()
 const { isCommercial, requireInvite, loadEdition } = useEdition()
 
 const maxBatch = 50
@@ -277,32 +282,52 @@ async function revoke(item) {
   }
 }
 
-// Bulk revoke: there is no bulk endpoint, so each unused code goes through
-// the same DELETE as the row action, after one confirmation.
+// Bulk revoke: one request for the selected unused codes (POST
+// /api/v4/admin/invite-codes/bulk) after one confirmation, answered per code.
+// A code that was used is kept (conflict) and one that is gone is not found;
+// the codes that could not be revoked stay selected and the toast says why,
+// with 重试 for those worth another try.
 async function revokeMany(chosen) {
   const targets = chosen.filter(item => item.status === 0)
   if (!targets.length) return
+  const ids = targets.map(item => item.id)
+  let outcome = null
   const confirmed = await confirm({
     title: t('adminInviteCodes.confirm.revokeManyTitle', { count: targets.length }),
     message: t('adminInviteCodes.confirm.revokeMessage'),
     confirmLabel: t('adminInviteCodes.actions.revoke'),
-    tone: 'danger'
-  })
-  if (!confirmed) return
-  let done = 0
-  let failure = null
-  for (const item of targets) {
-    try {
-      readPanel(await revokeInviteCode(item.id))
-      done += 1
-    } catch (error) {
-      failure = failure || error
+    tone: 'danger',
+    onConfirm: async () => {
+      try {
+        outcome = await runRevoke(ids)
+      } catch (error) {
+        throw new Error(adminV4ErrorMessage(error, t('adminInviteCodes.messages.failed')))
+      }
     }
-  }
-  selectedIds.value = []
+  })
+  if (!confirmed || !outcome) return
+  await reportRevoke(outcome, ids.length)
+}
+
+const runRevoke = async ids => readBulkResult(await bulkInviteCodes('revoke', ids), ids)
+
+async function reportRevoke(outcome, total) {
+  selectedIds.value = outcome.failedIds
   await fetchCodes()
-  if (done) toast.success(t('adminInviteCodes.messages.revokedMany', { count: done }))
-  if (failure) toast.error(t('adminInviteCodes.messages.revokeFailed', { message: errorMessage(failure) }))
+  bulkReport.report(outcome, {
+    success: t('adminInviteCodes.messages.revokedMany', { count: outcome.done.length }),
+    partial: t('adminInviteCodes.messages.revokePartial', { done: outcome.done.length, total }),
+    none: t('adminInviteCodes.messages.revokeNone'),
+    retry: () => retryRevoke(outcome.retryable)
+  })
+}
+
+async function retryRevoke(ids) {
+  try {
+    await reportRevoke(await runRevoke(ids), ids.length)
+  } catch (error) {
+    toast.error(t('adminInviteCodes.messages.revokeFailed', { message: adminV4ErrorMessage(error, t('adminInviteCodes.messages.failed')) }))
+  }
 }
 
 async function copy(text) {

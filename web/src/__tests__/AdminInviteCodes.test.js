@@ -6,9 +6,11 @@ import InviteCodes from '@/views/admin/InviteCodes.vue'
 import UiHost from '@/ui/UiHost.vue'
 import { setLocale } from '@/i18n'
 import { resetEdition, setEdition } from '@/composables/useEdition'
-import { answerConfirms, inBody, toastMessages } from './helpers/feedback'
+import { runAction } from '@/ui/composables/useToast'
+import { answerConfirms, inBody, toastMessages, toasts } from './helpers/feedback'
 
 const adminApi = vi.hoisted(() => ({
+  bulkInviteCodes: vi.fn(),
   getInviteCodes: vi.fn(),
   generateInviteCodes: vi.fn(),
   revokeInviteCode: vi.fn()
@@ -158,19 +160,65 @@ describe('Admin invite codes', () => {
     await waitFor(() => expect(toastMessages('error')).toContain('Failed to revoke the code: invite code already used'))
   })
 
-  it('revokes the selected unused codes one by one from the bulk bar', async () => {
-    const user = userEvent.setup()
-    setEdition('community')
-    answerConfirms(true)
-    adminApi.revokeInviteCode.mockResolvedValue(panel({}))
-    renderPage()
-    await screen.findByText('a1b2c3d4')
-    await user.click(screen.getByRole('checkbox', { name: 'Select all rows on this page' }))
-    const bar = await screen.findByRole('region', { name: 'Actions for the selected rows' })
-    await user.click(within(bar).getByRole('button', { name: 'Revoke' }))
-    // The used code is skipped.
-    await waitFor(() => expect(adminApi.revokeInviteCode.mock.calls).toEqual([[3], [1]]))
-    await waitFor(() => expect(toastMessages('success')).toContain('2 codes revoked'))
+  describe('bulk revoke (POST /api/v4/admin/invite-codes/bulk)', () => {
+    const answer = results => ({
+      action: 'revoke',
+      requested: results.length,
+      succeeded: results.filter(item => item.ok).length,
+      failed: results.filter(item => !item.ok).length,
+      results
+    })
+
+    async function selectAllAndRevoke(user) {
+      await screen.findByText('a1b2c3d4')
+      await user.click(screen.getByRole('checkbox', { name: 'Select all rows on this page' }))
+      const bar = await screen.findByRole('region', { name: 'Actions for the selected rows' })
+      await user.click(within(bar).getByRole('button', { name: 'Revoke' }))
+    }
+
+    it('revokes the selected unused codes in one request after one confirmation', async () => {
+      const user = userEvent.setup()
+      setEdition('community')
+      const confirms = answerConfirms(true)
+      adminApi.bulkInviteCodes.mockResolvedValue(answer([{ id: 3, ok: true }, { id: 1, ok: true }]))
+      renderPage()
+      await selectAllAndRevoke(user)
+      // The used code is not sent; there is no per-code request.
+      await waitFor(() => expect(adminApi.bulkInviteCodes.mock.calls).toEqual([['revoke', [3, 1]]]))
+      expect(adminApi.revokeInviteCode).not.toHaveBeenCalled()
+      expect(confirms.last()).toMatchObject({ tone: 'danger', title: 'Revoke 2 invite codes?' })
+      await waitFor(() => expect(toastMessages('success')).toContain('2 codes revoked'))
+    })
+
+    it('says why a code was kept, keeps it selected and retries only what can change', async () => {
+      const user = userEvent.setup()
+      setEdition('community')
+      answerConfirms(true)
+      adminApi.bulkInviteCodes
+        .mockResolvedValueOnce(answer([{ id: 3, ok: false, error: { code: 'conflict', message: 'invite code already used' } }, { id: 1, ok: false, error: { code: 'failed', message: 'plugin host unavailable' } }]))
+        .mockResolvedValueOnce(answer([{ id: 1, ok: true }]))
+      renderPage()
+      await selectAllAndRevoke(user)
+      await waitFor(() => expect(toastMessages('error')).toEqual(['No code was revoked. 1 already used and kept; 1 failed (plugin host unavailable).']))
+      const [toast] = toasts('error')
+      expect(toast.action.label).toBe('Retry 1')
+      // Both codes stay selected so the failed ones can be told apart.
+      expect(within(await screen.findByRole('region', { name: 'Actions for the selected rows' })).getByText('2 selected')).toBeTruthy()
+      await runAction(toast.id)
+      await waitFor(() => expect(adminApi.bulkInviteCodes.mock.calls[1]).toEqual(['revoke', [1]]))
+      await waitFor(() => expect(toastMessages('success')).toContain('1 codes revoked'))
+    })
+
+    it('shows a refused bulk request inside the confirmation', async () => {
+      const user = userEvent.setup()
+      setEdition('community')
+      const confirms = answerConfirms(true)
+      adminApi.bulkInviteCodes.mockRejectedValue({ response: { status: 400, data: { error: { code: 'invalid_request', message: 'ids must be positive' } } } })
+      renderPage()
+      await selectAllAndRevoke(user)
+      await waitFor(() => expect(confirms.errors.map(error => error.message)).toEqual(['ids must be positive']))
+      expect(toastMessages('success')).toEqual([])
+    })
   })
 
   it('filters by status from the first page', async () => {

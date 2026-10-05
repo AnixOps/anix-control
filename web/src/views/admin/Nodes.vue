@@ -18,6 +18,8 @@
       :label="t('admin.nodes.table.label')"
       :row-label="node => node.name"
       storage-key="admin.nodes"
+      manual-sort
+      :sort="sortState"
       manual-pagination
       :page="pagination.page"
       :page-size="pagination.size"
@@ -31,6 +33,7 @@
       :empty-description="t('admin.nodes.table.emptyDescription')"
       :row-actions="nodeActions"
       activatable
+      @update:sort="changeSort"
       @update:page="changePage"
       @row-activate="openDetail"
       @retry="reload"
@@ -81,6 +84,12 @@
           <UiBadge v-if="isOverQuota(row)" tone="warning" :label="t('admin.nodes.table.quotaExceeded')" />
         </span>
       </template>
+      <template #cell-connection="{ row }">
+        <NodeConnectionBadge :entry="transportEntries.get(nodeRef(row.id))" :status="transportStatus" />
+      </template>
+      <template #cell-certificate="{ row }">
+        <NodeCertificateCell :entry="transportEntries.get(nodeRef(row.id))" :status="transportStatus" />
+      </template>
       <template #cell-lastHeartbeat="{ row }">
         <time v-if="row.last_check_at" :title="format.dateTime(row.last_check_at)">{{ format.relativeTime(row.last_check_at) }}</time>
         <span v-else>{{ t('admin.nodes.table.never') }}</span>
@@ -113,8 +122,10 @@
 
 <script setup>
 // Nodes (plan §7.1, §8.2): the proxy nodes in a UiDataTable with server
-// search, status chips and pages (all three in the URL), a row opens the
-// node page (/admin/nodes/:id). The list keeps add, edit, sync and delete in
+// search, status chips, sort and pages (all four in the URL), a row opens the
+// node page (/admin/nodes/:id). The Agent connection type and certificate of
+// the nodes in view come from one batched inventory call after the list has
+// loaded (it never holds the list up). The list keeps add, edit, sync and delete in
 // the row menu, and the Agent registration key and the parent-node Ansible
 // helper as page actions. Node (proxy service) is not ForwardNode.
 import { computed, onBeforeUnmount, onMounted, reactive, ref, watch } from 'vue'
@@ -132,16 +143,21 @@ import UiUsageBar from '@/ui/UiUsageBar.vue'
 import { useFormat } from '@/ui/composables/useFormat'
 import { useAppI18n } from '@/composables/useAppI18n'
 import { useRouteIntent } from '@/composables/useRouteIntent'
+import { SORT_ORDERS, createListSort } from '@/utils/listSort'
 import NodeAuthKeyPanel from './nodes/NodeAuthKeyPanel.vue'
+import NodeCertificateCell from './nodes/NodeCertificateCell.vue'
+import NodeConnectionBadge from './nodes/NodeConnectionBadge.vue'
 import NodeDeploySheet from './nodes/NodeDeploySheet.vue'
 import NodeFormSheet from './nodes/NodeFormSheet.vue'
 import NodeNotice from './nodes/NodeNotice.vue'
+import { nodeRef } from './nodes/agentConnection'
 import {
   NODE_STATUS, isOverQuota, monthlyUsed, normalizeNode, readNodePage, readNodePayload,
   rememberListQuery, rememberNodeNames, splitTags, statusName
 } from './nodes/nodeData'
 import { useNodeActions } from './nodes/useNodeActions'
 import { useNodeDeploy } from './nodes/useNodeDeploy'
+import { useNodeTransports } from './nodes/useNodeTransports'
 
 const { t } = useAppI18n()
 const format = useFormat()
@@ -151,6 +167,12 @@ const { syncingNodeIds, syncNode, confirmDelete } = useNodeActions()
 const deploy = reactive(useNodeDeploy())
 
 const STATUS_VALUES = Object.keys(NODE_STATUS)
+// Sorting happens on the server (GET /admin/nodes sort and order): only the
+// columns the API sorts by are sortable, keyed here by the table's column key.
+// The shown status and the protocol count are derived (the API has no sort
+// for them), and sorting the 20 rows of one page would say nothing about the
+// list, so those headers stay plain.
+const NODE_SORT = createListSort({ id: 'id', name: 'name', address: 'host', load: 'cpu_usage', lastHeartbeat: 'last_check_at' })
 const firstQuery = (key) => {
   const value = route?.query?.[key]
   return String(Array.isArray(value) ? value[0] : value ?? '')
@@ -163,6 +185,11 @@ const stats = reactive({ total: 0, online: 0, offline: 0, pending: 0 })
 const pagination = reactive({ page: Math.max(1, Number(firstQuery('page')) || 1), size: 20, total: 0 })
 const search = ref(firstQuery('q'))
 const statusFilter = ref(STATUS_VALUES.includes(firstQuery('status')) ? firstQuery('status') : '')
+const sortState = ref(NODE_SORT.fromQuery(
+  NODE_SORT.values.includes(firstQuery('sort')) ? firstQuery('sort') : '',
+  SORT_ORDERS.includes(firstQuery('order')) ? firstQuery('order') : ''
+))
+const { entries: transportEntries, status: transportStatus, load: loadTransports, reset: resetTransports } = useNodeTransports()
 
 const formOpen = ref(false)
 const editingNode = ref(null)
@@ -192,19 +219,23 @@ const loadText = (node) => {
   })
 }
 
+// Connection and Certificate take the room of 版本 and 负载 at 1440 px: those
+// start hidden (the node page has both, and the table settings bring them back).
 const columns = computed(() => [
-  { key: 'id', label: t('admin.nodes.table.id'), numeric: true, sortable: true, hidden: true, width: 72 },
-  { key: 'name', label: t('admin.nodes.table.name'), primary: true, sortable: true, hideable: false },
+  { key: 'id', label: t('admin.nodes.table.id'), numeric: true, hidden: true, width: 72 },
+  { key: 'name', label: t('admin.nodes.table.name'), primary: true, hideable: false },
   { key: 'address', label: t('admin.nodes.table.address'), secondary: true, nowrap: true },
-  { key: 'protocols', label: t('admin.nodes.table.protocols'), numeric: true, align: 'end', nowrap: true, sortable: true, value: node => node.protocols?.length || 0, card: false },
-  { key: 'status', label: t('admin.nodes.table.status'), sortable: true, sortValue: node => node.status },
-  { key: 'agentVersion', label: t('admin.nodes.table.agentVersion'), nowrap: true, value: node => node.server_version || '', breakpoint: 'lg', card: false },
-  { key: 'load', label: t('admin.nodes.table.load'), nowrap: true, numeric: true, value: loadText, sortValue: node => Number(node.cpu_usage || 0), sortable: true, firstDirection: 'desc', breakpoint: 'lg', card: false },
-  { key: 'lastHeartbeat', label: t('admin.nodes.table.lastHeartbeat'), nowrap: true, sortable: true, firstDirection: 'desc', sortValue: node => Number(node.last_check_at || 0) },
+  { key: 'protocols', label: t('admin.nodes.table.protocols'), numeric: true, align: 'end', nowrap: true, value: node => node.protocols?.length || 0, card: false },
+  { key: 'status', label: t('admin.nodes.table.status') },
+  { key: 'connection', label: t('admin.nodes.table.connection'), nowrap: true, breakpoint: 'lg' },
+  { key: 'agentVersion', label: t('admin.nodes.table.agentVersion'), nowrap: true, value: node => node.server_version || '', breakpoint: 'lg', hidden: true, card: false },
+  { key: 'certificate', label: t('admin.nodes.table.certificate'), nowrap: true, breakpoint: 'lg', card: false },
+  { key: 'load', label: t('admin.nodes.table.load'), nowrap: true, numeric: true, value: loadText, firstDirection: 'desc', breakpoint: 'lg', hidden: true, card: false },
+  { key: 'lastHeartbeat', label: t('admin.nodes.table.lastHeartbeat'), nowrap: true, firstDirection: 'desc' },
   { key: 'parent', label: t('admin.nodes.table.parent'), value: node => parentName(node.parent_id), hidden: true },
-  { key: 'traffic', label: t('admin.nodes.table.traffic'), numeric: true, align: 'end', nowrap: true, hidden: true, value: node => format.bytes(node.traffic_today || 0), sortValue: node => node.traffic_today || 0, sortable: true, firstDirection: 'desc' },
-  { key: 'monthlyQuota', label: t('admin.nodes.table.monthlyQuota'), hidden: true, card: false, sortValue: monthlyUsed }
-])
+  { key: 'traffic', label: t('admin.nodes.table.traffic'), numeric: true, align: 'end', nowrap: true, hidden: true, value: node => format.bytes(node.traffic_today || 0) },
+  { key: 'monthlyQuota', label: t('admin.nodes.table.monthlyQuota'), hidden: true, card: false }
+].map(column => (NODE_SORT.isSortable(column.key) ? { ...column, sortable: true } : column)))
 
 const nodeActions = node => [
   { key: 'open', label: t('admin.nodes.actions.open'), icon: SquareArrowOutUpRight, onSelect: () => openDetail(node) },
@@ -219,21 +250,28 @@ function listParams() {
   const params = { page: pagination.page, page_size: pagination.size }
   if (search.value.trim()) params.search = search.value.trim()
   if (statusFilter.value) params.status = NODE_STATUS[statusFilter.value]
-  return params
+  return { ...params, ...NODE_SORT.toParams(sortState.value) }
 }
 
-// The list state in the URL (q, status, page), so a reload, a shared link
-// or 返回节点 from a node page shows the same list.
+// The list state in the URL (q, status, sort, order, page), so a reload, a
+// shared link or 返回节点 from a node page shows the same list.
 function syncQuery({ url = true } = {}) {
   const query = {}
   if (search.value.trim()) query.q = search.value.trim()
   if (statusFilter.value) query.status = statusFilter.value
+  const { sort, order } = NODE_SORT.toQuery(sortState.value)
+  if (sort) {
+    query.sort = sort
+    query.order = order
+  }
   if (pagination.page > 1) query.page = String(pagination.page)
   rememberListQuery(query)
   if (!url || !router || !route) return
   const current = { ...route.query }
   delete current.q
   delete current.status
+  delete current.sort
+  delete current.order
   delete current.page
   router.replace({ path: route.path, query: { ...current, ...query } })
 }
@@ -246,11 +284,14 @@ const loadNodes = async () => {
     nodes.value = (payload.list || []).map(normalizeNode)
     pagination.total = payload.total || 0
     rememberNodeNames(nodes.value)
+    // The Agent connection of the nodes in view: one call, after the list.
+    void loadTransports(nodes.value.map(node => node.id))
     return true
   } catch (e) {
     console.error('Failed to load nodes:', e)
     loadError.value = e
     nodes.value = []
+    resetTransports()
     return false
   } finally {
     loading.value = false
@@ -268,6 +309,14 @@ const loadStats = async () => {
 
 async function reload() {
   if (await loadNodes()) await loadStats()
+}
+
+// A header click sorts the whole list on the server, from the first page.
+function changeSort(next) {
+  sortState.value = next
+  pagination.page = 1
+  syncQuery()
+  loadNodes()
 }
 
 function changePage(page) {

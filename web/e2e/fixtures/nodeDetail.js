@@ -1,5 +1,6 @@
 import { FIXED_NOW_MS } from './clock.js'
 import { LOGS, NODES, PROTOCOLS, TEMPLATES, envelope } from './nodeData.js'
+import { transportsAnswer } from './transports.js'
 
 // 服务: node 108 runs machine-telemetry 4.1.0, whose release declares the
 // services table, and reported it two minutes ago.
@@ -41,7 +42,11 @@ export default {
     const section = SECTION[scenario]
     return `/admin/nodes/${id}${section ? `?section=${section}` : ''}`
   },
-  api(path, { scenario, method }) {
+  api(path, { query, scenario, method }) {
+    // The node's Agent connection and certificate (?node=proxy-108).
+    if (path === '/api/v4/kernel/agents/transports') {
+      return transportsAnswer(query)
+    }
     let m = path.match(/^\/api\/v2\/admin\/nodes\/(\d+)$/)
     if (m && method === 'GET') {
       if (scenario === 'notFound') return { __status: 404, body: { message: '节点不存在' } }
