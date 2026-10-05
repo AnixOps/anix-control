@@ -16,6 +16,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"io"
 	"strconv"
 	"strings"
 	"sync"
@@ -243,7 +244,7 @@ func (i *Importer) userBatch(ctx context.Context, client identityv1.IdentityServ
 		return false, fmt.Errorf("open import: %w", err)
 	}
 	if err := stream.Send(header(checkpoint)); err != nil {
-		return false, fmt.Errorf("send import header: %w", err)
+		return false, sendFailure(stream, "send import header", err)
 	}
 	newLinks := make([]model.IdentityAccountLink, 0, len(users))
 	for _, user := range users {
@@ -257,7 +258,7 @@ func (i *Importer) userBatch(ctx context.Context, client identityv1.IdentityServ
 			return false, err
 		}
 		if err := stream.Send(&identityv1.ImportAccountsRequest{Value: &identityv1.ImportAccountsRequest_Account{Account: imported}}); err != nil {
-			return false, fmt.Errorf("send account %d: %w", user.ID, err)
+			return false, sendFailure(stream, fmt.Sprintf("send account %d", user.ID), err)
 		}
 	}
 	response, err := stream.CloseAndRecv()
@@ -295,11 +296,11 @@ func (i *Importer) deletionBatch(ctx context.Context, client identityv1.Identity
 		return false, fmt.Errorf("open import: %w", err)
 	}
 	if err := stream.Send(header(checkpoint)); err != nil {
-		return false, fmt.Errorf("send import header: %w", err)
+		return false, sendFailure(stream, "send import header", err)
 	}
 	for _, id := range ids {
 		if err := stream.Send(&identityv1.ImportAccountsRequest{Value: &identityv1.ImportAccountsRequest_DeletedUserId{DeletedUserId: uint64(id)}}); err != nil {
-			return false, fmt.Errorf("send deletion of %d: %w", id, err)
+			return false, sendFailure(stream, fmt.Sprintf("send deletion of %d", id), err)
 		}
 	}
 	response, err := stream.CloseAndRecv()
@@ -439,4 +440,20 @@ func Default() (*Runner, *gorm.DB) {
 	defaultRunner.RLock()
 	defer defaultRunner.RUnlock()
 	return defaultRunner.runner, defaultRunner.db
+}
+
+// sendFailure explains a failed Send on the ImportAccounts client stream.
+// When the identity module ends the stream with an error, gRPC reports it to
+// the sender as a bare io.EOF and keeps the real status for CloseAndRecv:
+// without reading it, the checkpoint would record "EOF" and the operator
+// would never learn why the import stopped.
+func sendFailure(stream interface {
+	CloseAndRecv() (*identityv1.ImportAccountsResponse, error)
+}, what string, err error) error {
+	if errors.Is(err, io.EOF) {
+		if _, cause := stream.CloseAndRecv(); cause != nil {
+			return fmt.Errorf("%s: %w", what, cause)
+		}
+	}
+	return fmt.Errorf("%s: %w", what, err)
 }
