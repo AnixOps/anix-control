@@ -24,6 +24,26 @@
   accounting, no hang), seven fuzz targets with seed corpora, and benchmark
   stubs. Not a driver: nothing in the planner or the Agent uses it yet, TLS
   and plaintext carriers and identity verification follow.
+- **AnixOps relay transport, A1: link connections with identity pinning
+  (`sdk/forward/relay/link`, prototype).** The second library of the
+  owner-approved H22 design (`docs/architecture/anixops-protocol.md`
+  sections 3 and 5): TLS 1.3 connections between nodes with mutual
+  authentication under the H28 link certificates, where a dialler accepts
+  only the node its state names (`peer_identity` as the only URI name,
+  `server_name` as the only DNS name) and a listener only the nodes it lists
+  (`ingress_peers`), which gost cannot do. Standard library cryptography only:
+  TLS 1.3 only, the ALPN protocol checked on both ends, no session tickets,
+  no early data, no `InsecureSkipVerify`, no trust on first use. A listener
+  checks the source address before reading a byte (`ingress_sources`), bounds
+  its handshakes (64 in flight, 10 s) and reports every refusal under a
+  bounded reason. Credentials, sources and peers change in place without
+  re-creating anything, and `SetPeers` names the identities it revoked.
+  The plaintext connection of a trusted link needs source admission and an
+  explicit `TrustedLink` assertion. `sdk/forward/relay/relaytest` issues test
+  link CAs (with the `spiffe://anixops` name constraint) and node
+  certificates. Tests break one rule at a time and hammer reloads and peer
+  changes concurrently; five fuzz targets with seed corpora.
+  Not wired to anything yet: the carrier glue and the driver follow.
 
 ### Changed
 

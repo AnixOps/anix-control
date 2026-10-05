@@ -307,6 +307,36 @@ the link certificate carries only that name.
   `peer_not_allowed`, then close). This is the revocation path; peers do not
   fetch CRLs (P9).
 
+### 3.6 Implementation notes (A1, `sdk/forward/relay/link`)
+
+The link connections of sections 3.2 to 3.5 and 5.3 are implemented in
+`sdk/forward/relay/link` (`DialTLS`, `Listener`, `ListenPlain`, `DialPlain`,
+`Credentials`); its package documentation is normative for the prototype.
+The checks go slightly beyond the text, all in the direction of refusing:
+
+- the peer's certificate must state the key usage of its role (serverAuth for
+  a listener, clientAuth for a dialler) explicitly, since Go accepts a
+  certificate with no extended key usage for any use;
+- a dialler requires exactly one DNS name equal to the link's `server_name`
+  (no wildcard, no second name) and a certificate with no IP or email names;
+- a node's own certificate must itself be a link certificate when loaded (DNS
+  name equal to the node name of its identity, both usages, valid now,
+  chaining to its bundle), so a node never runs with credentials its peers
+  would refuse;
+- both ends check the negotiated ALPN protocol themselves, because
+  `crypto/tls` does not fail a handshake whose client offered none.
+
+Failures carry one of ten bounded reasons (`unknown_ca`, `certificate`,
+`identity_mismatch`, `peer_not_allowed`, `source_not_allowed`,
+`handshake_limit`, `timeout`, `protocol`, `remote_rejected`, `other`), the
+labels of section 7.3. A listener takes at least one `ingress_sources` entry
+(and, encrypted, one `ingress_peers` entry) or does not start; the plaintext
+constructors refuse to run unless the caller asserts the trusted-link rule of
+section 5.3 (`TrustedLink`), which validation checks. `SetPeers` returns the
+identities it removed so the carrier layer can close their carriers
+(section 3.5); a trust bundle change is reported to it through
+`Credentials.OnReload` and `PeerStillTrusted`.
+
 ## 4. Framing and multiplexing
 
 ### 4.1 Carriers and streams
