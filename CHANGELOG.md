@@ -931,6 +931,13 @@
   disturbing a held connection or UDP session), and a gost entry before an
   nftables exit.
 
+- **`Signing Key Check` workflow** (`.github/workflows/signing-key-check.yml`,
+  manual only). It signs a random message with the organization secret
+  `ANIXOPS_PLUGIN_SIGNING_PRIVATE_KEY`, verifies it with the public root and
+  compares that root with `plugins.official_public_key` in
+  `config/config.prod.yaml`, printing only the public key id. Run it after
+  rotating the release key and before pushing a release tag.
+
 ### Changed
 
 - **`/admin/forward` opens the forwarding overview** (F5d). The removed
