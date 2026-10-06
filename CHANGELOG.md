@@ -70,6 +70,13 @@
   stayed valid until it expired (24 hours by default). The renewal now holds
   the enrollment's row until it commits, so the revocation waits for it and
   covers its certificate. No operator action is needed.
+- **Rollback to 4.1.0:** `config/scripts/rollback_installations.py` moves the
+  installations back after an import in the order 4.1.0 needs (`forward`, then
+  `identity-platform`, then the rest). It is a dry run unless `--apply` is given,
+  keeps each installation's target and enabled flag, stops at the first refusal
+  and is safe to run again (docs/UPGRADE.md, "Rolling Back After The Import").
+  It is a script because the rolled-back Control is 4.1.0, which cannot carry new
+  code.
 
 - **Security:** the web app moves to Vue 3.5.43 and source-map-js 1.2.2, which fix
   GHSA-g2v6-rqmx-r4w6 (`@vue/server-renderer`, XSS) and GHSA-68fv-2mgg-jv7q
