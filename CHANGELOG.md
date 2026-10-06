@@ -5,6 +5,10 @@
 - **Tests:** `TestListenAutoRefusesBadConfigs` no longer fails when another
   process on the CI machine holds the picked port for TCP; a real leak of the
   TCP listener still fails every attempt.
+- **Security (control-center web):** the control-center web app also moves its lockfile past
+  GHSA-g2v6-rqmx-r4w6 (`@vue/server-renderer`) and GHSA-68fv-2mgg-jv7q (`source-map-js`), and its
+  workflow installs golangci-lint v2 built with the module's Go, since the v1 release binary
+  (built with Go 1.24) refuses a Go 1.26 target; its config is migrated to the v2 format.
 - **Security (Go dependencies):** `govulncheck` now reports no reachable
   vulnerability in any module. The root module moves to `golang.org/x/crypto`
   v0.56.0 (GO-2026-6354, GO-2026-6355) and `golang.org/x/mod` v0.40.0
