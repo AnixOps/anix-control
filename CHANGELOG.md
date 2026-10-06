@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Security:** the web app moves to Vue 3.5.43 and source-map-js 1.2.2, which fix
+  GHSA-g2v6-rqmx-r4w6 (`@vue/server-renderer`, XSS) and GHSA-68fv-2mgg-jv7q
+  (`source-map-js`, denial of service) that `npm audit` began reporting for the
+  shipped dependencies.
+
 - **Admin API tokens:** a token's name is limited to 100 characters on the
   server too (it counted bytes, so a 34-character Chinese name was refused
   while the form accepted it), and the list answers each token's owner email
