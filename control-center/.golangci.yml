@@ -1,25 +1,37 @@
-run:
-  timeout: 5m
-
+version: "2"
 linters:
-  disable-all: true
+  default: none
+  enable:
+    - govet
+    - ineffassign
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
+    rules:
+      - linters:
+          - errcheck
+        path: .*
+      - linters:
+          - unused
+        path: .*
+    paths:
+      - third_party$
+      - builtin$
+      - examples$
+issues:
+  max-issues-per-linter: 0
+  max-same-issues: 0
+formatters:
   enable:
     - gofmt
     - goimports
-    - govet
-    - ineffassign
-    - typecheck
-
-issues:
-  exclude-rules:
-    # 排除所有 errcheck 警告
-    - linters:
-        - errcheck
-      path: ".*"
-    # 排除所有 unused 警告
-    - linters:
-        - unused
-      path: ".*"
-
-  max-issues-per-linter: 0
-  max-same-issues: 0
+  exclusions:
+    generated: lax
+    paths:
+      - third_party$
+      - builtin$
+      - examples$

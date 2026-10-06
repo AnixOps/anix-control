@@ -1,0 +1,25 @@
+run:
+  timeout: 5m
+
+linters:
+  disable-all: true
+  enable:
+    - gofmt
+    - goimports
+    - govet
+    - ineffassign
+    - typecheck
+
+issues:
+  exclude-rules:
+    # 排除所有 errcheck 警告
+    - linters:
+        - errcheck
+      path: ".*"
+    # 排除所有 unused 警告
+    - linters:
+        - unused
+      path: ".*"
+
+  max-issues-per-linter: 0
+  max-same-issues: 0

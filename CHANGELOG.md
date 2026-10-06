@@ -5,6 +5,24 @@
 - **Tests:** `TestListenAutoRefusesBadConfigs` no longer fails when another
   process on the CI machine holds the picked port for TCP; a real leak of the
   TCP listener still fails every attempt.
+- **Security (control-center web):** the control-center web app also moves its lockfile past
+  GHSA-g2v6-rqmx-r4w6 (`@vue/server-renderer`) and GHSA-68fv-2mgg-jv7q (`source-map-js`), and its
+  workflow installs golangci-lint v2 built with the module's Go, since the v1 release binary
+  (built with Go 1.24) refuses a Go 1.26 target; its config is migrated to the v2 format.
+- **Security (Go dependencies):** `govulncheck` now reports no reachable
+  vulnerability in any module. The root module moves to `golang.org/x/crypto`
+  v0.56.0 (GO-2026-6354, GO-2026-6355) and `golang.org/x/mod` v0.40.0
+  (GO-2026-6179, GO-2026-6180) and its `go` directive to 1.26.0, which the CI
+  and release toolchain (1.26.8) already used. The Control Center module
+  (`control-center/`) moves from Go 1.24 to 1.26 (its workflows and Dockerfile
+  too) and from x/crypto v0.23.0, x/net v0.25.0, x/text v0.15.0, x/sys,
+  golang-jwt v5.2.0 and gorilla/websocket v1.5.1 to current releases; that
+  cleared 35 reachable advisories, most of them in the Go 1.24 standard
+  library. Left as is: the `sdk` module keeps `golang.org/x/crypto` v0.55.0
+  (GO-2026-6354 and GO-2026-6355 are in `x/crypto/ssh`, which it does not
+  call): v0.56.0 needs Go 1.26 and the Agent builds with Go 1.25, so raising
+  the SDK would stop the Agent from building. GO-2026-5932 (the unmaintained
+  `x/crypto/openpgp`) has no fixed version and nothing here imports it.
 
 - **Security:** the web app moves to Vue 3.5.43 and source-map-js 1.2.2, which fix
   GHSA-g2v6-rqmx-r4w6 (`@vue/server-renderer`, XSS) and GHSA-68fv-2mgg-jv7q
