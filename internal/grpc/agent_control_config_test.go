@@ -388,6 +388,12 @@ func TestAgentControlConfigRefresh(t *testing.T) {
 	setConfigRefreshInterval(20 * time.Millisecond)
 	t.Cleanup(func() { setConfigRefreshInterval(defaultConfigRefreshInterval) })
 	row := env.desiredConfig(t)
+	// The agent runs the desired revision and the kernel recorded it applied,
+	// so the Hello is answered with nothing and the first snapshot is the
+	// refresher's.
+	_, err := kernelnodeops.RecordConfigStatus(context.Background(), database.GetDB(), env.agentNode(), "earlier-session",
+		&agentv1pb.ConfigStatus{ConfigRevision: row.Revision, ConfigHash: row.ConfigHash, Applied: true}, time.Now())
+	require.NoError(t, err)
 	session := openConfigSession(t, env, row.Revision)
 	before := snapshotsSent(configTriggerRefresh)
 	require.NoError(t, database.GetDB().Model(&model.Node{}).Where("id = ?", env.node.ID).Update("host", "192.0.2.10").Error)
