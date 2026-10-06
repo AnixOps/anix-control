@@ -46,7 +46,7 @@
           </span>
         </template>
         <template #cell-owner="{ row }">
-          <span :class="{ 'api-token-owner--you': isMine(row) }">{{ ownerText(row) }}</span>
+          <span :class="{ 'api-token-owner--you': isMine(row) }" :title="row.ownerEmail ? t('adminApiTokens.owner.admin', { id: row.userId }) : undefined">{{ ownerText(row) }}</span>
         </template>
         <template #cell-scope="{ row }">
           <UiBadge :tone="row.scope === 'admin' ? 'warning' : 'info'" :dot="false" :label="t(`adminApiTokens.scopes.${row.scope}`)" />
@@ -154,7 +154,8 @@ const filters = computed({
 })
 
 function ownerText(row) {
-  return isMine(row) ? t('adminApiTokens.owner.you') : t('adminApiTokens.owner.admin', { id: row.userId })
+  if (isMine(row)) return t('adminApiTokens.owner.you')
+  return row.ownerEmail || t('adminApiTokens.owner.admin', { id: row.userId })
 }
 
 function revokeReason(row) {

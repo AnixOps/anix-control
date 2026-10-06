@@ -26,9 +26,14 @@ function refusal(status, code, message, headers) {
 }
 
 describe('reading the list', () => {
+  it('keeps the owner\'s email when the route sends it', () => {
+    expect(readApiToken({ ...ROW, owner_email: 'ops@example.com' }).ownerEmail).toBe('ops@example.com')
+  })
+
+
   it('turns a row into times in milliseconds and keeps nothing that is not in the route', () => {
     expect(readApiToken(ROW)).toEqual({
-      id: ROW.id, userId: 7, name: 'nightly export', scope: 'read', hint: 'k3Zq',
+      id: ROW.id, userId: 7, ownerEmail: '', name: 'nightly export', scope: 'read', hint: 'k3Zq',
       expiresAt: Date.UTC(2027, 0, 3, 12), lastUsedAt: Date.UTC(2026, 9, 5, 8), lastUsedIp: '203.0.113.9',
       createdAt: Date.UTC(2026, 9, 1, 12), revokedAt: null, revokeReason: ''
     })

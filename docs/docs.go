@@ -10805,7 +10805,7 @@ const docTemplate = `{
                     "type": "string"
                 },
                 "name": {
-                    "description": "Name says what the token is for; 1 to 100 bytes (UTF-8), printable.",
+                    "description": "Name says what the token is for; 1 to 100 printable characters.",
                     "type": "string"
                 },
                 "password": {

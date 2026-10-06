@@ -40,7 +40,7 @@ const ADMIN = row(2, { name: 'deploy bot', scope: 'admin', expires_at: iso(3 * D
 const FOREVER = row(3, { name: 'archive probe', expires_at: null })
 const EXPIRED = row(4, { name: 'last year', expires_at: iso(-2 * DAY) })
 const REVOKED = row(5, { name: 'leaked one', revoked_at: iso(-DAY), revoke_reason: 'owner_revoked' })
-const BANNED = row(6, { name: 'ex-admin', user_id: 9, revoked_at: iso(-DAY), revoke_reason: 'owner_not_admin' })
+const BANNED = row(6, { name: 'ex-admin', user_id: 9, owner_email: 'gone@example.com', revoked_at: iso(-DAY), revoke_reason: 'owner_not_admin' })
 
 function refusal(status, code, message) {
   return { response: { status, data: { error: { code, message } } }, message: `Request failed with status code ${status}` }
@@ -146,7 +146,7 @@ describe('Admin API tokens', () => {
     await screen.findByRole('columnheader', { name: 'Owner' })
     expect(within(rowOf('nightly export')).getByText('You')).toBeTruthy()
     const banned = rowOf('ex-admin')
-    expect(within(banned).getByText('Administrator #9')).toBeTruthy()
+    expect(within(banned).getByText('gone@example.com')).toBeTruthy()
     expect(within(banned).getByText('Revoked: its owner was banned, demoted or deleted')).toBeTruthy()
     // Only the caller's own active token counts toward the limit.
     expect(screen.getByTestId('api-tokens-quota').textContent).toBe('1 of 25 active tokens in use.')

@@ -30,6 +30,7 @@ import (
 	"sync"
 	"time"
 	"unicode"
+	"unicode/utf8"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/google/uuid"
@@ -46,7 +47,8 @@ const (
 	encodedLength = 43
 	// TokenLength is the length of every token.
 	TokenLength = len(Prefix) + encodedLength
-	// MaxNameLength bounds a token's name.
+	// MaxNameLength bounds a token's name, counted in characters (runes), as the
+	// web form counts them and as the column (varchar 100) does.
 	MaxNameLength = 100
 	// MaxActivePerUser bounds the unrevoked, unexpired tokens of one owner.
 	MaxActivePerUser = 25
@@ -212,7 +214,7 @@ type CreateInput struct {
 // time it exists in clear. The audit entry is written with the row.
 func (s *Service) Create(ctx context.Context, input CreateInput) (string, model.AdminAPIToken, error) {
 	name := strings.TrimSpace(input.Name)
-	if name == "" || len(name) > MaxNameLength || strings.IndexFunc(name, unicode.IsControl) >= 0 {
+	if name == "" || utf8.RuneCountInString(name) > MaxNameLength || strings.IndexFunc(name, unicode.IsControl) >= 0 {
 		return "", model.AdminAPIToken{}, fmt.Errorf("%w: a name of 1 to %d printable characters is required", ErrInvalidRequest, MaxNameLength)
 	}
 	if !ValidScope(input.Scope) {
@@ -290,7 +292,38 @@ func (s *Service) List(ctx context.Context, filter ListFilter) ([]model.AdminAPI
 	if err := query.Find(&rows).Error; err != nil {
 		return nil, err
 	}
+	if err := s.fillOwnerEmails(ctx, rows); err != nil {
+		return nil, err
+	}
 	return rows, nil
+}
+
+// fillOwnerEmails sets each row's OwnerEmail from v2_user in one query. An
+// owner who no longer exists leaves it empty.
+func (s *Service) fillOwnerEmails(ctx context.Context, rows []model.AdminAPIToken) error {
+	if len(rows) == 0 {
+		return nil
+	}
+	seen := map[uint]struct{}{}
+	ids := make([]uint, 0, len(rows))
+	for _, row := range rows {
+		if _, ok := seen[row.UserID]; !ok {
+			seen[row.UserID] = struct{}{}
+			ids = append(ids, row.UserID)
+		}
+	}
+	var owners []model.User
+	if err := s.db.WithContext(ctx).Select("id", "email").Where("id IN ?", ids).Find(&owners).Error; err != nil {
+		return err
+	}
+	emails := make(map[uint]string, len(owners))
+	for _, owner := range owners {
+		emails[owner.ID] = owner.Email
+	}
+	for i := range rows {
+		rows[i].OwnerEmail = emails[rows[i].UserID]
+	}
+	return nil
 }
 
 // Actor is the administrator who revokes a token.
