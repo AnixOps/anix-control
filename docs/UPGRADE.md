@@ -2967,6 +2967,20 @@ recovery, the way out is the rollback below or restoring the database backup.
   3. then the other installations, `"desired_version": "4.1.0"`.
 
   Rehearsed: 2 minutes 11 seconds with the calls made by hand.
+
+  `config/scripts/rollback_installations.py` makes the same calls in that
+  order, with the same token (`ANIX_CONTROL_TOKEN`; the redeployed 4.1.0 has
+  no command of its own for this). It lists the installations, prints the
+  plan, and changes nothing until `--apply`; it keeps each installation's
+  `target` and `enabled`, stops at the first refusal (the `409` above means
+  `forward` did not move), is safe to run again, and waits until every moved
+  installation is on the version and healthy:
+
+  ```bash
+  export ANIX_CONTROL_TOKEN=...   # the session token from before the upgrade
+  python3 config/scripts/rollback_installations.py --panel "$PANEL" --version 4.1.0          # dry run
+  python3 config/scripts/rollback_installations.py --panel "$PANEL" --version 4.1.0 --apply
+  ```
 - **No token:** restore the pre-upgrade database backup (rehearsed:
   `pg_restore` of the Compose backup into a fresh database, 30 seconds, then
   4.1.0 started on it, login and all 15 packages healthy after 38 seconds)
