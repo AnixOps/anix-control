@@ -24,6 +24,10 @@
   address, so someone who knew a password could try one-time codes from many addresses without
   a lockout. A sign-in's own session can no longer guess the password through the MFA disable
   endpoint either (it is limited like the login). Defaults are 5 failures and 15 minutes.
+- **Security (identity):** the unauthenticated login and registration answers no longer carry the text of
+  an infrastructure failure (a database host, a table, a driver message) to the client; it reads
+  "服务暂时不可用，请稍后重试" while the real error stays with the host. Refusals meant for the
+  caller (wrong password, taken e-mail, registration policy, an invalid invite code) read as before.
 
 - **Security (identity):** login, registration and the subscription-link reset now count an
   attempt before the guarded check runs, in one transaction on the throttle row. Before, the limit was
