@@ -34,7 +34,7 @@ defaults:
     working-directory: control-center
 
 env:
-  GO_VERSION: '1.24'
+  GO_VERSION: '1.26'
   NODE_VERSION: '20'
   FLUTTER_VERSION: '3.41.5'
 
