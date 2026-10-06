@@ -21,6 +21,10 @@
   start consumed it, so the previous artifact was not running again. The context now ends when the
   fake gost has loaded the file, and a second test covers a context that ends before gost is asked.
   The driver was correct in both cases.
+- **Tests:** the Cross-Repo E2E suite no longer picks the same port for the API and gRPC
+  listeners of a Control. `freePort` closed each probe at once, so the kernel could
+  hand the same port to the next call, and Control failed to start with
+  `address already in use`.
 
 - **Tests:** `TestListenAutoRefusesBadConfigs` no longer fails when another
   process on the CI machine holds the picked port for TCP; a real leak of the

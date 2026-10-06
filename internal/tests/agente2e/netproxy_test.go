@@ -132,11 +132,37 @@ func (p *tcpProxy) Restore(t *testing.T) {
 	p.serve(listener)
 }
 
-// freePort answers a TCP port that was free a moment ago.
+// freePort answers a TCP port that was free a moment ago and that no earlier
+// call of this test process handed out: the kernel may give a just-closed
+// port to the very next request, and two services of one test (the API and
+// gRPC ports of a Control) must not share it.
 func freePort(t *testing.T) int {
 	t.Helper()
-	listener, err := net.Listen("tcp", "127.0.0.1:0")
-	require.NoError(t, err)
-	defer func() { _ = listener.Close() }()
-	return listener.Addr().(*net.TCPAddr).Port
+	for attempt := 0; attempt < 50; attempt++ {
+		listener, err := net.Listen("tcp", "127.0.0.1:0")
+		require.NoError(t, err)
+		port := listener.Addr().(*net.TCPAddr).Port
+		_ = listener.Close()
+		if handOutPort(port) {
+			return port
+		}
+	}
+	t.Fatal("no free port that was not handed out before")
+	return 0
+}
+
+var (
+	handedOutPortsMu sync.Mutex
+	handedOutPorts   = map[int]bool{}
+)
+
+// handOutPort records the port and reports whether it was new.
+func handOutPort(port int) bool {
+	handedOutPortsMu.Lock()
+	defer handedOutPortsMu.Unlock()
+	if handedOutPorts[port] {
+		return false
+	}
+	handedOutPorts[port] = true
+	return true
 }
