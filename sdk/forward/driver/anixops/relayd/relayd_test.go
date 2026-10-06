@@ -113,13 +113,13 @@ func TestUDPThroughTheChain(t *testing.T) {
 					t.Fatalf("echo %q, want %q", got, msg)
 				}
 			}
-			o := entry.hopObs(route, 0)
-			if o.UpPackets < 5 || o.DownPackets < 5 || o.UpBytes == 0 || o.DownBytes == 0 {
-				t.Fatalf("entry counters %+v", o)
-			}
-			if x := exit.hopObs(route, 2); x.UpPackets < 5 || x.DownPackets < 5 {
-				t.Fatalf("exit counters %+v", x)
-			}
+			// The client holds its fifth echo as soon as the datagram is written,
+			// and a hop counts the packet a moment around that write, so the
+			// counters are awaited rather than read at once.
+			waitFor(t, "the packet counters of the entry and the exit", func() bool {
+				o, x := entry.hopObs(route, 0), exit.hopObs(route, 2)
+				return o.UpPackets >= 5 && o.DownPackets >= 5 && o.UpBytes != 0 && o.DownBytes != 0 && x.UpPackets >= 5 && x.DownPackets >= 5
+			})
 		})
 	}
 }
