@@ -533,13 +533,14 @@ func (s *Service) IssueLinkCertificate(ctx context.Context, peer *x509.Certifica
 	agentSerial := modulepki.SerialString(peer.SerialNumber)
 	var issued LinkIssued
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
-		if err := requireLiveAgentCertificate(tx, s.cluster, agentSerial, identity.Node); err != nil {
-			return err
-		}
-		if err := requireEnabledNode(tx, identity.Node); err != nil {
+		// The node's row first (see lockEnabledNode), then the records.
+		if err := lockEnabledNode(tx, identity.Node); err != nil {
 			if errors.Is(err, ErrInvalidNode) {
 				return ErrCertificateRevoked
 			}
+			return err
+		}
+		if err := requireLiveAgentCertificate(tx, s.cluster, agentSerial, identity.Node); err != nil {
 			return err
 		}
 		if err := requireForwardNegotiated(tx, identity.Node); err != nil {
