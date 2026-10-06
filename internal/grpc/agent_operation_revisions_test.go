@@ -228,3 +228,44 @@ func TestDatabaseRevisionStoreWithoutDatabaseFallsBack(t *testing.T) {
 	assert.Zero(t, revision)
 	require.NoError(t, store.RaiseRevision(context.Background(), 1, 9))
 }
+
+// A durable operation takes its revision when it is created, a one-off
+// operation when it is sent. A one-off operation sent between the two used to
+// leave the durable one behind the manager's last revision: it was refused as
+// "revision N is not newer than M", stayed dispatching and every retry failed
+// the same way. The bridge now renumbers the operation (and the pending ones
+// behind it, keeping their order) above the cursor and sends it.
+func TestAgentControlDurableOperationCreatedBeforeOneOffOperationIsRenumbered(t *testing.T) {
+	environment := newRevisionTestEnvironment(t)
+	ctx, cancel := context.WithTimeout(environment.authContext(context.Background()), 10*time.Second)
+	defer cancel()
+	nodeID := uint32(environment.node.ID)
+	agent := connectRevisionTestAgent(t, environment, ctx, 0, "plugin.configure")
+
+	first := createDurableTestOperation(t, environment, "5a7e2c90-3b1d-4f6a-8c24-9d0e1b3a5f71")
+	second := createDurableTestOperation(t, environment, "6b8f3da1-4c2e-4a7b-9d35-0e1f2c4b6a82")
+	require.Equal(t, int64(1), first.Revision)
+	require.Equal(t, int64(2), second.Revision)
+
+	ack, err := environment.manager.DispatchOperation(ctx, nodeID, &agentv1pb.DesiredOperation{OperationId: "ping-between", Kind: "agent.ping"})
+	require.NoError(t, err)
+	require.True(t, ack.GetAccepted())
+	require.Equal(t, uint64(3), agent.next("ping-between").GetRevision(), "the one-off operation is sent after both durable ones were created")
+
+	bridge, err := NewKernelOperationBridge(database.GetDB(), environment.manager)
+	require.NoError(t, err)
+	count, err := bridge.RunOnce(ctx)
+	require.NoError(t, err)
+	require.Equal(t, 1, count, "the first durable operation is dispatched")
+	assert.Equal(t, uint64(4), agent.next(first.ID).GetRevision(), "it is renumbered above the one-off operation")
+
+	var storedFirst, storedSecond model.KernelOperation
+	require.NoError(t, database.GetDB().First(&storedFirst, "id = ?", first.ID).Error)
+	require.NoError(t, database.GetDB().First(&storedSecond, "id = ?", second.ID).Error)
+	assert.Equal(t, "running", storedFirst.State)
+	assert.Equal(t, int64(4), storedFirst.Revision)
+	assert.Empty(t, storedFirst.LastError)
+	assert.Equal(t, "pending", storedSecond.State, "the second waits for the first")
+	assert.Equal(t, int64(5), storedSecond.Revision, "the pending operation behind it keeps its order")
+	assert.Equal(t, int64(5), storedNodeRevision(t, environment.node.ID))
+}

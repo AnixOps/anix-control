@@ -2,6 +2,7 @@ package service
 
 import (
 	"errors"
+	"fmt"
 
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"gorm.io/gorm"
@@ -75,4 +76,73 @@ func lockNodeOperationRevisionTx(tx *gorm.DB, nodeID uint) (*model.NodeOperation
 		return nil, err
 	}
 	return cursor, nil
+}
+
+// RenumberPendingNodeOperations moves the durable operation operationID, which
+// the Agent control stream refused because its revision is not above the last
+// revision sent on the node, and the pending operations behind it onto
+// revisions above both the stored cursor and floor, keeping their order, and
+// returns the operation's new revision. A durable operation takes its revision
+// when it is created; a one-off stream operation sent after that takes a
+// higher one, and the Agent supersedes anything at or below the revision it
+// observed, so the older number can never be sent again. The operation goes
+// back to pending so the dispatcher sends it with its new revision. Only an
+// operation with no earlier active operation on the node qualifies, which
+// means every pending operation behind it has never been sent.
+func RenumberPendingNodeOperations(db *gorm.DB, nodeID uint, operationID string, floor int64) (int64, error) {
+	if db == nil {
+		return 0, errors.New("node operation renumbering requires a database")
+	}
+	if floor < 0 {
+		return 0, errors.New("node operation revision floor is negative")
+	}
+	var revision int64
+	err := db.Transaction(func(tx *gorm.DB) error {
+		cursor, err := lockNodeOperationRevisionTx(tx, nodeID)
+		if err != nil {
+			return err
+		}
+		var stuck model.KernelOperation
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&stuck, "id = ? AND node_id = ?", operationID, nodeID).Error; err != nil {
+			return err
+		}
+		if stuck.State != "pending" && stuck.State != "dispatching" {
+			return fmt.Errorf("operation %s is %s and cannot be renumbered", operationID, stuck.State)
+		}
+		var earlierActive int64
+		if err := tx.Model(&model.KernelOperation{}).
+			Where("node_id = ? AND revision < ? AND state NOT IN ?", nodeID, stuck.Revision,
+				[]string{"succeeded", "completed", "failed", "superseded", "cancelled", "timed_out"}).
+			Count(&earlierActive).Error; err != nil {
+			return err
+		}
+		if earlierActive > 0 {
+			return fmt.Errorf("operation %s has an earlier active operation and cannot be renumbered", operationID)
+		}
+		var behind []model.KernelOperation
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).
+			Where("node_id = ? AND state = ? AND revision > ?", nodeID, "pending", stuck.Revision).
+			Order("revision, created_at, id").Find(&behind).Error; err != nil {
+			return err
+		}
+		next := max(cursor.DesiredRevision, floor)
+		next++
+		revision = next
+		if err := tx.Model(&stuck).Updates(map[string]any{
+			"revision": next, "state": "pending", "session_id": "", "dispatched_at": nil,
+		}).Error; err != nil {
+			return err
+		}
+		for _, operation := range behind {
+			next++
+			if err := tx.Model(&model.KernelOperation{}).Where("id = ?", operation.ID).Update("revision", next).Error; err != nil {
+				return err
+			}
+		}
+		return tx.Model(cursor).Update("desired_revision", next).Error
+	})
+	if err != nil {
+		return 0, err
+	}
+	return revision, nil
 }
