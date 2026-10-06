@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Tests:** the relay driver tests pick their ports below the kernel's ephemeral range
+  (`relaytest.FreePort`). A port taken with `:0` and released lies inside that range, where
+  another process's outbound connection may take it as its source port before the test
+  listens; `TestConformance` and the relayd tests then failed with `address already in use`
+  (2 of 120 runs with a parallel test process, none of 200 and 150 after).
+
 - **Security:** the server logs a startup `WARNING` for each weak shared secret (`jwt.secret`,
   `app.api_token`, `grpc.api_token`): set but shorter than 32 bytes, a template value, or only a few
   distinct characters. It names the setting and how to rotate it and never prints the value; nothing

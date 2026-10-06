@@ -15,27 +15,19 @@ import (
 	"github.com/AnixOps/anix-control/sdk/forward/driver/anixops"
 	"github.com/AnixOps/anix-control/sdk/forward/driver/anixops/anixopstest"
 	"github.com/AnixOps/anix-control/sdk/forward/driver/conformance"
+	"github.com/AnixOps/anix-control/sdk/forward/relay/relaytest"
 )
 
-// freePort answers a port free for TCP and UDP on every address.
+// freePort answers a port that is free for TCP and UDP and was not answered
+// before (relaytest.FreePort: below the ephemeral range, so no other process's
+// outbound connection takes it between the answer and the bind).
 func freePort(t testing.TB) uint32 {
 	t.Helper()
-	for range 50 {
-		l, err := net.Listen("tcp", ":0")
-		if err != nil {
-			t.Fatal(err)
-		}
-		port := l.Addr().(*net.TCPAddr).Port
-		pc, err := net.ListenPacket("udp", ":"+strconv.Itoa(port))
-		_ = l.Close()
-		if err != nil {
-			continue
-		}
-		_ = pc.Close()
-		return uint32(port) // #nosec G115 -- a port
+	port, err := relaytest.FreePort()
+	if err != nil {
+		t.Fatal(err)
 	}
-	t.Fatal("no free port")
-	return 0
+	return port
 }
 
 // echo serves TCP and UDP echo servers and answers their addresses.
