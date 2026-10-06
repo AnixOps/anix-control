@@ -146,6 +146,7 @@ describe('telling the route\'s refusals apart', () => {
     expect(classifyTokenRefusal(refusal(403, 'step_up_required', 'password is required')).kind).toBe('password_required')
     expect(classifyTokenRefusal(refusal(403, 'step_up_required', 'an MFA code is required')).kind).toBe('code_required')
     expect(classifyTokenRefusal(refusal(403, 'step_up_required', 'sign in again and retry within 10 minutes')).kind).toBe('sign_in_again')
+    expect(classifyTokenRefusal(refusal(403, 'step_up_sign_in_stale', 'sign in again and retry within 10 minutes')).kind).toBe('sign_in_again')
   })
 
   it('names the other refusals of the create route', () => {

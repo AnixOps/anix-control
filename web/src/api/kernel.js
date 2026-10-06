@@ -415,8 +415,9 @@ export async function listKernelApiTokens({ all = false, userId, includeInactive
 // `anixadm_` secret, shown once, and the caller keeps it only as long as it
 // shows it and never writes it anywhere. The request is marked `sensitive`
 // (utils/request.js), so a failed one logs no body. Refusals: 400
-// invalid_request, 403 step_up_required (the message says password, MFA code
-// or "sign in again": identity holds the credential), step_up_failed,
+// invalid_request, 403 step_up_required (the message says password or MFA code),
+// step_up_sign_in_stale (identity holds the credential and the sign-in is older
+// than 10 minutes; older Controls said step_up_required with "sign in again"), step_up_failed,
 // not_an_administrator, 409 too_many_tokens (25 active), 429
 // step_up_rate_limited with Retry-After.
 export async function createKernelApiToken({ name, scope, expiresInDays, password, code, method }) {

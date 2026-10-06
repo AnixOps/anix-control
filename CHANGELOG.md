@@ -7,7 +7,20 @@
   while the form accepted it), and the list answers each token's owner email
   as `owner_email`, which the page shows in the owner column instead of
   "Administrator #id".
-
+- **Fix: a stale sign-in has its own refusal code when an administrator creates
+  an API token.** When identity holds the credentials and the sign-in is older
+  than 10 minutes, `POST /api/v4/kernel/api-tokens` answers `403
+  step_up_sign_in_stale` (message unchanged); it used to share
+  `step_up_required` with "a password is required", which a client could only
+  tell apart by the message text. The web app understands both codes, so a
+  newer web on an older Control, or the reverse, still shows the *Sign in again*
+  prompt. Clients that match `step_up_required` for this case must also match
+  the new code (docs/reference/admin-api-tokens.md).
+- **Fix: the `gost` forward driver's configuration takes the group of its
+  directory,** as the `anixops` driver's files do: `gost.json` is written group
+  readable, and a gost that runs as its own user (the installer's unit) can read
+  it when the directory is that user's group. Best effort: only root or a member
+  of the group can change it.
 - **Release:** a manual `Commercial Packages` workflow builds and signs the
   commercial packages (`order`, `payment`, `affiliate`) with the official key
   at a given release tag, so installations that run them have a build signed

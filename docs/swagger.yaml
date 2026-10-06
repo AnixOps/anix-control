@@ -6766,9 +6766,10 @@ paths:
         tokens. Needs a signed-in session (never an API token) and a re-authentication:
         the current password, or a TOTP or recovery code when the account has a second
         factor (when the kernel cannot check a credential because identity holds it,
-        the sign-in must be at most 10 minutes old). Up to 25 active tokens per administrator;
-        the owner''s rights are read on every use. Audited. Send the token as `Authorization:
-        Bearer <token>` only, never in a URL.'
+        the sign-in must be at most 10 minutes old, or it answers 403 step_up_sign_in_stale).
+        Up to 25 active tokens per administrator; the owner''s rights are read on
+        every use. Audited. Send the token as `Authorization: Bearer <token>` only,
+        never in a URL.'
       parameters:
       - description: name, scope (read or admin), optional expires_in_days, and password
           or code (+ method)

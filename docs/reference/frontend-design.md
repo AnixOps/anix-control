@@ -1175,9 +1175,10 @@ are in `web/src/views/admin/security/`:
 - **Refusals** (`classifyTokenRefusal` reads the kernel's `{ error: { code,
   message } }`): `step_up_failed` on the credential field (and the credential is
   cleared), `step_up_required` split by its message (`password is required`
-  switches to the password, `an MFA code is required` to the code, `sign in again
-  and retry within 10 minutes`, which is what the kernel says once identity holds
-  the credentials, is a form-level alert with a *Sign in again* button that signs
+  switches to the password, `an MFA code is required` to the code, `step_up_sign_in_stale`
+  (older Controls said `step_up_required` with `sign in again and retry within 10
+  minutes`), which is what the kernel says once identity holds
+  the credentials and the sign-in is older than ten minutes, is a form-level alert with a *Sign in again* button that signs
   out and goes to `/login`), `409 too_many_tokens`, `429` (`step_up_rate_limited`,
   or any 429; the wait from `Retry-After` in whole minutes), `400
   invalid_request`, and anything else with the route's own message.

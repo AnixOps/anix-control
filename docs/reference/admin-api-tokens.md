@@ -96,7 +96,8 @@ administrator route.
   unusable marker, after the identity cutover is finalized) the kernel cannot
   check one. It then requires a sign-in at most 10 minutes old, which
   identity's login (with the MFA policy) has just checked; otherwise
-  `403 step_up_required`.
+  `403 step_up_sign_in_stale` (up to 4.2.0-rc.2 this was `step_up_required`
+  with the message `sign in again and retry within 10 minutes`).
 
 ```json
 {
@@ -112,7 +113,8 @@ administrator route.
 ```
 
 `Cache-Control: no-store`. Errors: `400 invalid_request`,
-`403 step_up_required` / `step_up_failed` / `not_an_administrator`,
+`403 step_up_required` / `step_up_sign_in_stale` / `step_up_failed` /
+`not_an_administrator`,
 `409 too_many_tokens`, `429 step_up_rate_limited`.
 
 ### `GET /api/v4/kernel/api-tokens`

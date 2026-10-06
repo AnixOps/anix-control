@@ -322,7 +322,7 @@ describe('useApiTokenCreate', () => {
     })
 
     it('"sign in again" is a form-level error that offers a new sign-in', async () => {
-      const { create, outcome } = await refused(refusal(403, 'step_up_required', 'sign in again and retry within 10 minutes'))
+      const { create, outcome } = await refused(refusal(403, 'step_up_sign_in_stale', 'sign in again and retry within 10 minutes'))
       expect(outcome.focus).toBe('')
       expect(create.error.value).toBe('adminApiTokens.create.errors.signInAgain')
       expect(create.signInAgain.value).toBe(true)
@@ -596,7 +596,7 @@ describe('ApiTokenCreate', () => {
 
   it('says to sign in again, with a button, when identity holds the credentials and the sign-in is old', async () => {
     const user = startUser()
-    kernelApi.createKernelApiToken.mockRejectedValueOnce(refusal(403, 'step_up_required', 'sign in again and retry within 10 minutes'))
+    kernelApi.createKernelApiToken.mockRejectedValueOnce(refusal(403, 'step_up_sign_in_stale', 'sign in again and retry within 10 minutes'))
     render(ApiTokenCreate)
     const form = await openForm(user)
     await user.type(within(form).getByRole('textbox', { name: /^Name/ }), 'probe')
