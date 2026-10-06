@@ -881,7 +881,7 @@ func (s *AgentControlGRPCServer) controlStream(stream agentv1pb.AgentControlServ
 	// Each sender stops before the connection is unregistered.
 	if connection.configNegotiated {
 		// Hello reconcile: the desired configuration, unless the agent
-		// reported its revision.
+		// reported its revision and the kernel recorded it as applied.
 		if err := pushDesiredConfig(stream.Context(), connection, agentNode, configTriggerHello); err != nil {
 			return err
 		}

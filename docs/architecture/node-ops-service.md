@@ -1647,7 +1647,10 @@ advertised them.
     `HelloAck.server_capabilities` for proxy and forward nodes:
     - on `Hello`, when the agent's `config_revision` is not the desired
       revision (none, older, or newer from another database), after the
-      rebuild; the same revision is sent nothing;
+      rebuild; the same revision is sent nothing once the kernel recorded
+      it as applied, and once more when it did not (the agent's
+      `ConfigStatus` can be lost with the session that carried it, and an
+      unchanged snapshot makes the agent report again without a reload);
     - on `node.sync` (the executor and the legacy sync route), when the
       configuration changed, the sync is forced, or the agent has not
       applied the stored revision. Such an agent is not sent

@@ -66,6 +66,10 @@ const (
 	configTriggerForward = "forward"
 )
 
+// configStatusTimeout bounds the recording of a ConfigStatus that outlives
+// its stream.
+const configStatusTimeout = 10 * time.Second
+
 // configStatusUnrecorded labels a ConfigStatus the kernel could not record.
 const configStatusUnrecorded = "unrecorded"
 
@@ -103,15 +107,28 @@ func (c *AgentControlConnection) sendConfig(snapshot *agentv1pb.ConfigSnapshot, 
 // pushDesiredConfig rebuilds the node's desired configuration from its rows
 // (stored when it changed) and sends it unless the agent has it. A database
 // error is logged and nothing is sent; only a send error is returned.
+//
+// At the Hello (configTriggerHello) a snapshot the agent says it already runs
+// is sent again when the kernel never recorded it as applied: the agent's
+// ConfigStatus can be lost with the session that carried it (a session the
+// data plane ends right after applying), and nothing else would ever ask the
+// agent to report that revision again. The agent answers an unchanged
+// snapshot without a reload, with the status the kernel is missing.
 func pushDesiredConfig(ctx context.Context, connection *AgentControlConnection, node agentcontrol.AgentNode, trigger string) error {
-	row, _, err := kernelnodeops.RefreshDesiredConfig(ctx, databaseForAgentChecks(), node, time.Now())
+	db := databaseForAgentChecks()
+	row, _, err := kernelnodeops.RefreshDesiredConfig(ctx, db, node, time.Now())
 	if err != nil {
 		if ctx.Err() == nil {
 			slog.Warn("agent config: the desired configuration could not be built", "component", "agent-control", "node", node.String(), "trigger", trigger, "error", err)
 		}
 		return nil
 	}
-	_, err = connection.sendConfig(kernelnodeops.ConfigSnapshotOf(row), false, trigger)
+	force := false
+	if trigger == configTriggerHello {
+		applied, err := kernelnodeops.ConfigApplied(ctx, db, node, row)
+		force = err == nil && !applied
+	}
+	_, err = connection.sendConfig(kernelnodeops.ConfigSnapshotOf(row), force, trigger)
 	return err
 }
 
@@ -158,6 +175,12 @@ func (s *AgentControlGRPCServer) handleConfigStatus(ctx context.Context, manager
 	if configStatus.GetConfigRevision() == 0 {
 		return status.Error(codes.InvalidArgument, "config_status config_revision is required")
 	}
+	// The status is recorded whole even when the stream ends meanwhile: the
+	// agent sent it before the session ended (the data plane ends a session
+	// right after applying a snapshot it cannot hold users for), and no later
+	// message repeats it.
+	ctx, cancel := context.WithTimeout(context.WithoutCancel(ctx), configStatusTimeout)
+	defer cancel()
 	verdict, err := kernelnodeops.RecordConfigStatus(ctx, databaseForAgentChecks(), node, connection.SessionID, configStatus, time.Now())
 	if err != nil {
 		slog.Warn("agent config: the configuration status could not be recorded", "component", "agent-control", "node", node.String(), "config_revision", configStatus.GetConfigRevision(), "error", err)

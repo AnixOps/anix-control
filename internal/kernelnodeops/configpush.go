@@ -155,6 +155,12 @@ func ConfigLaggingNodes(ctx context.Context, db *gorm.DB) (int64, error) {
 	return count, err
 }
 
+// ConfigApplied reports whether the node's agent applied row, as the kernel
+// verified it (an applied ConfigStatus naming its revision and hash).
+func ConfigApplied(ctx context.Context, db *gorm.DB, node agentcontrol.AgentNode, row model.KernelNodeDesiredConfig) (bool, error) {
+	return appliedDesired(ctx, db, node, row)
+}
+
 // appliedDesired reports whether the node's agent applied row, as the
 // kernel verified it.
 func appliedDesired(ctx context.Context, db *gorm.DB, node agentcontrol.AgentNode, row model.KernelNodeDesiredConfig) (bool, error) {

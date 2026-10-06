@@ -130,22 +130,33 @@ func TestConfigPushNegotiation(t *testing.T) {
 }
 
 // The Hello reconcile: an agent that reports the desired revision is sent
-// nothing; one that reports another revision, or none, is sent exactly one
-// snapshot.
+// nothing once the kernel recorded that revision as applied, and one snapshot
+// before (its ConfigStatus may have been lost with its earlier session); one
+// that reports another revision, or none, is sent exactly one snapshot.
 func TestConfigHelloReconcile(t *testing.T) {
 	forEachBackend(t, func(t *testing.T, f *fixture) {
 		row, _, err := kernelnodeops.RefreshDesiredConfig(context.Background(), f.db, f.proxyNode(), time.Now())
 		require.NoError(t, err)
+		recorded := false
 		for _, test := range []struct {
 			name     string
 			revision uint64
+			applied  bool
 			want     int
 		}{
-			{"same revision", row.Revision, 0},
-			{"older revision", row.Revision - 1, 1},
-			{"newer revision", row.Revision + 5, 1},
-			{"no revision", 0, 1},
+			{"same revision, applied never recorded", row.Revision, false, 1},
+			{"older revision", row.Revision - 1, false, 1},
+			{"newer revision", row.Revision + 5, false, 1},
+			{"no revision", 0, false, 1},
+			{"same revision, recorded as applied", row.Revision, true, 0},
 		} {
+			if test.applied && !recorded {
+				verdict, err := kernelnodeops.RecordConfigStatus(context.Background(), f.db, f.proxyNode(), "earlier-session",
+					&agentv1pb.ConfigStatus{ConfigRevision: row.Revision, ConfigHash: row.ConfigHash, Applied: true}, time.Now())
+				require.NoError(t, err)
+				require.Equal(t, model.ConfigVerdictApplied, verdict)
+				recorded = true
+			}
 			agent := f.proxyAgent(fakeagent.Script{Capabilities: configCapabilities(), ConfigRevision: test.revision, HoldConfig: true})
 			// connect waited for a heartbeat answer, which Control sends
 			// after the reconcile.
