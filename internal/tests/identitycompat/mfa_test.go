@@ -40,6 +40,11 @@ func run(t *testing.T, route packagecompat.Route, cases []packagecompat.Case, pa
 	}
 }
 
+// unfinishedMFA leaves the member's second factor set up but not enabled.
+func unfinishedMFA(t testing.TB, db *gorm.DB) {
+	require.NoError(t, db.Model(&model.UserMFA{}).Where("user_id = ?", 5).Update("enabled", false).Error)
+}
+
 func usedMFA(t testing.TB, db *gorm.DB) {
 	used := time.Now().Add(-time.Hour)
 	require.NoError(t, db.Model(&model.UserMFA{}).Where("user_id = ?", 5).Updates(map[string]any{"last_used": used, "last_method": "totp"}).Error)
@@ -57,7 +62,8 @@ func TestMFASetupAndEnableParity(t *testing.T) {
 	secrets := []string{"data.secret", "data.url", "data.qr_code", "data.backup_codes"}
 	run(t, mfaRoute("POST", "/api/v2/user/mfa/totp/setup", "identity.user.mfa.totp.setup.post", (*handler.MFAHandler).SetupTOTP), []packagecompat.Case{
 		{Name: "new second factor", Principal: member, Mask: secrets},
-		{Name: "replace a second factor", Principal: mfa, Mask: secrets},
+		{Name: "an enabled second factor is not replaced by a session alone", Principal: mfa},
+		{Name: "an unfinished setup is replaced", Principal: mfa, Mask: secrets, Seed: seedUsers(nil, unfinishedMFA)},
 		{Name: "unknown user", Principal: nobody},
 	}, "/api/v2/user/mfa/totp/setup")
 

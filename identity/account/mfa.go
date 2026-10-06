@@ -27,11 +27,16 @@ var (
 	ErrMFANotSetup   = errors.New("MFA not setup")
 	ErrMFANotEnabled = errors.New("MFA not enabled")
 	ErrInvalidCode   = errors.New("invalid code")
+	// ErrMFAAlreadyEnabled refuses a new secret for an account whose second
+	// factor is on: a session alone must not replace the factor that guards
+	// the account; it is disabled first, with the password.
+	ErrMFAAlreadyEnabled = errors.New("MFA already enabled; disable it first")
 )
 
-// SetupTOTP creates a TOTP secret and backup codes for an account. An
-// existing second factor gets them replaced; whether it is enabled stays as
-// it was, and a new one starts disabled until EnableTOTP.
+// SetupTOTP creates a TOTP secret and backup codes for an account. A second
+// factor that was set up but never enabled gets them replaced; an enabled one
+// is refused (ErrMFAAlreadyEnabled), and a new one starts disabled until
+// EnableTOTP.
 func (s *Store) SetupTOTP(ctx context.Context, userID uint64, issuer, accountName string, backupCodes int) (TOTPSetup, error) {
 	if err := s.check(); err != nil {
 		return TOTPSetup{}, err
@@ -64,6 +69,8 @@ func (s *Store) SetupTOTP(ctx context.Context, userID uint64, issuer, accountNam
 			}).Error
 		case err != nil:
 			return err
+		case existing.Enabled == 1:
+			return ErrMFAAlreadyEnabled
 		default:
 			return tx.Table(s.Tables.MFA).Where("user_id = ?", userID).
 				Updates(map[string]any{"sealed_totp_secret": sealed, "backup_code_hashes": hashes, "updated_at": now}).Error
