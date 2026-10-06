@@ -66,15 +66,17 @@ func (s *Service) ResetOwnSubscription(ctx context.Context, request pluginhostsd
 		return s.panelError(err.Error())
 	}
 	key := subscriptionResetKey(userID)
-	if blocked, wait, err := stores.Throttle.Check(ctx, key, subscriptionResetLimit); err != nil {
+	// The attempt is counted before the credential check; one that checked
+	// no credential is given back.
+	if allowed, wait, err := stores.Throttle.Attempt(ctx, key, subscriptionResetLimit); err != nil {
 		return s.panelError(err.Error())
-	} else if blocked {
+	} else if !allowed {
 		return s.panelError(subscriptionResetLimited, retryAfter(wait))
 	}
 	checked, refusal, err := s.stepUp(ctx, stores, userID, req)
-	if checked {
-		if recordErr := stores.Throttle.RecordFailure(ctx, key, subscriptionResetLimit); recordErr != nil {
-			return s.panelError(recordErr.Error())
+	if !checked {
+		if releaseErr := stores.Throttle.Release(ctx, key, subscriptionResetLimit); releaseErr != nil {
+			return s.panelError(releaseErr.Error())
 		}
 	}
 	if err != nil {

@@ -12,6 +12,13 @@
   refused with "MFA already enabled; disable it first" (disabling asks for the password), both in
   the identity module and in the kernel's own handler. A setup that was never enabled is still replaced.
   The web app only offers the setup while the second factor is off.
+- **Security (identity):** login, registration and the subscription-link reset now count an
+  attempt before the guarded check runs, in one transaction on the throttle row. Before, the limit was
+  read first and recorded after the password check, so parallel guesses at one account all passed
+  the check and every one of them was tried; a lockout held only against requests that came one
+  after the other. A correct password that waits for its second factor gives its attempt back, and
+  the first attempt of a key now also counts exactly once (a concurrent first insert used to reset
+  the count). The v2-compatible answers and Retry-After headers are unchanged.
 
 - **Tests:** `TestWebSocketAdapterRelaysFramesToAnExactLegacyHandler` no longer fails when the
   adapter finishes before the test looks: the echo and the completion were both ready and

@@ -81,17 +81,18 @@ func (s *Service) Login(ctx context.Context, request pluginhostsdk.NativeRequest
 	}
 	limit := config.LoginRateLimit.options()
 	key := loginKey(req.Email, request.Metadata.ClientIP)
-	if blocked, wait, err := stores.Throttle.Check(ctx, key, limit); err != nil {
+	// The attempt is counted before the password is checked, so parallel
+	// guesses cannot all pass a lock that none has counted yet; a success
+	// clears the key, and an answer that checked no second factor yet gives
+	// the attempt back.
+	if allowed, wait, err := stores.Throttle.Attempt(ctx, key, limit); err != nil {
 		return s.panelError(err.Error())
-	} else if blocked {
+	} else if !allowed {
 		return s.panelError("too many login attempts, please try again later", retryAfter(wait))
 	}
 
 	user, err := s.authenticate(ctx, stores, req.Email, req.Password)
 	if err != nil {
-		if recordErr := stores.Throttle.RecordFailure(ctx, key, limit); recordErr != nil {
-			return s.panelError(recordErr.Error())
-		}
 		return s.panelError(err.Error())
 	}
 
@@ -160,6 +161,9 @@ func (s *Service) loginMFA(ctx context.Context, stores *Stores, config Settings,
 	}
 	if !enabled {
 		if policyFrom(config.AdminMFA).enforcedFor(user) {
+			if err := stores.Throttle.Release(ctx, key, limit); err != nil {
+				return pluginhostsdk.NativeResponse{}, false, err
+			}
 			enrollment := []string{account.MethodTOTP}
 			response, err := s.panel(map[string]any{
 				"mfa_enrollment_required": true, "mfa_setup_required": true,
@@ -172,6 +176,9 @@ func (s *Service) loginMFA(ctx context.Context, stores *Stores, config Settings,
 	code := strings.TrimSpace(req.MFACode)
 	method := strings.ToLower(strings.TrimSpace(req.MFAMethod))
 	if code == "" {
+		if err := stores.Throttle.Release(ctx, key, limit); err != nil {
+			return pluginhostsdk.NativeResponse{}, false, err
+		}
 		response, err := s.panel(map[string]any{
 			"mfa_required": true, "methods": methods, "mfa_methods": methods, "user_id": user.UserID, "email": user.Email,
 		})
@@ -189,9 +196,7 @@ func (s *Service) loginMFA(ctx context.Context, stores *Stores, config Settings,
 		return pluginhostsdk.NativeResponse{}, false, err
 	}
 	if !valid {
-		if err := stores.Throttle.RecordFailure(ctx, key, limit); err != nil {
-			return pluginhostsdk.NativeResponse{}, false, err
-		}
+		// The attempt is already counted.
 		response, err := s.panelError("invalid mfa code")
 		return response, true, err
 	}
@@ -265,14 +270,12 @@ func (s *Service) Register(ctx context.Context, request pluginhostsdk.NativeRequ
 	}
 	limit := config.RegisterRateLimit.options()
 	key := registerKey(request.Metadata.ClientIP)
-	if blocked, wait, err := stores.Throttle.Check(ctx, key, limit); err != nil {
+	// Every registration counts against the address, successful or not, and
+	// is counted before it runs.
+	if allowed, wait, err := stores.Throttle.Attempt(ctx, key, limit); err != nil {
 		return s.panelError(err.Error())
-	} else if blocked {
+	} else if !allowed {
 		return s.panelError("too many registration attempts, please try again later", retryAfter(wait))
-	}
-	// Every registration counts against the address, successful or not.
-	if err := stores.Throttle.RecordFailure(ctx, key, limit); err != nil {
-		return s.panelError(err.Error())
 	}
 	if len(req.Password) < 6 {
 		return s.panelError("密码长度至少6位")
