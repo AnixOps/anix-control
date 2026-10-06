@@ -52,6 +52,12 @@
   and a 60-second real fuzz run of every relay fuzz target, so a newly
   published advisory or a crash input is found the next morning instead of
   failing an unrelated pull request (docs/RELEASING.md).
+- **Security:** revoking a module's enrollment now also revokes a certificate
+  that was being renewed at that moment. On PostgreSQL a renewal that began
+  before the revocation committed could record a certificate after it, which
+  stayed valid until it expired (24 hours by default). The renewal now holds
+  the enrollment's row until it commits, so the revocation waits for it and
+  covers its certificate. No operator action is needed.
 
 - **Security:** the web app moves to Vue 3.5.43 and source-map-js 1.2.2, which fix
   GHSA-g2v6-rqmx-r4w6 (`@vue/server-renderer`, XSS) and GHSA-68fv-2mgg-jv7q
