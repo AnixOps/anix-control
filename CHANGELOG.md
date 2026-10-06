@@ -12,6 +12,13 @@
   refused with "MFA already enabled; disable it first" (disabling asks for the password), both in
   the identity module and in the kernel's own handler. A setup that was never enabled is still replaced.
   The web app only offers the setup while the second factor is off.
+- **Security (identity):** the second-factor and password re-checks of an account are now limited per
+  account, whichever address they come from. The admin MFA settings `max_attempts` and
+  `lockout_duration` were stored but never applied, and the login limit counts per e-mail and
+  address, so someone who knew a password could try one-time codes from many addresses without
+  a lockout. A sign-in's own session can no longer guess the password through the MFA disable
+  endpoint either (it is limited like the login). Defaults are 5 failures and 15 minutes.
+
 - **Security (identity):** login, registration and the subscription-link reset now count an
   attempt before the guarded check runs, in one transaction on the throttle row. Before, the limit was
   read first and recorded after the password check, so parallel guesses at one account all passed
