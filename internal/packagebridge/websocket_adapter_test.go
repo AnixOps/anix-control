@@ -45,18 +45,34 @@ func TestWebSocketAdapterRelaysFramesToAnExactLegacyHandler(t *testing.T) {
 	}()
 
 	stream.incoming <- WebSocketFrame{Data: []byte("ping")}
+	// The legacy handler closes its connection right after the echo, so the
+	// adapter may finish before this goroutine looks: both the frame and the
+	// completion are then ready, and select picks either. Finishing early is
+	// fine; the echo must already be queued, and the completion is consumed
+	// exactly once.
+	var frame WebSocketFrame
+	finished := false
 	select {
-	case frame := <-stream.outgoing:
-		require.Nil(t, frame.Close)
-		require.Equal(t, []byte("echo:ping"), frame.Data)
+	case frame = <-stream.outgoing:
 	case err := <-upgradeErrors:
 		require.NoError(t, err)
 	case err := <-done:
 		require.NoError(t, err)
+		finished = true
+		select {
+		case frame = <-stream.outgoing:
+		default:
+			t.Fatal("the adapter finished without relaying the legacy handler's frame")
+		}
 	case <-time.After(time.Second):
 		t.Fatal("legacy handler did not emit a bridged WebSocket frame")
 	}
+	require.Nil(t, frame.Close)
+	require.Equal(t, []byte("echo:ping"), frame.Data)
 	stream.incoming <- WebSocketFrame{Close: &WebSocketClose{Code: websocket.CloseNormalClosure, Reason: "done"}}
+	if finished {
+		return
+	}
 	select {
 	case err := <-done:
 		require.NoError(t, err)
