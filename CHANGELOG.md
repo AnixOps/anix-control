@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Tests:** `TestWebSocketAdapterRelaysFramesToAnExactLegacyHandler` no longer fails when the
+  adapter finishes before the test looks: the echo and the completion were both ready and
+  `select` could consume the completion early, so the wait after the close frame timed out.
+
 - **Tests:** `TestUDPThroughTheChain` waits for the entry and exit packet counters instead of
   reading them the moment the client holds its fifth echo, which failed once on CI with
   four counted down packets.
