@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"sync"
 	"time"
@@ -217,6 +218,26 @@ func (b *KernelOperationBridge) Run(ctx context.Context, interval time.Duration,
 }
 
 func (b *KernelOperationBridge) dispatchOne(ctx context.Context, operation model.KernelOperation) (bool, error) {
+	// RunOnce reads its batch once; an earlier operation of the batch may
+	// have renumbered this one, so it is read again before it is judged.
+	var current model.KernelOperation
+	if err := b.db.First(&current, "id = ?", operation.ID).Error; err != nil {
+		if errors.Is(err, gorm.ErrRecordNotFound) {
+			return false, nil
+		}
+		return false, err
+	}
+	if current.State != "pending" {
+		return false, nil
+	}
+	return b.dispatchOperationRow(ctx, current, true)
+}
+
+// dispatchOperationRow sends one pending operation. When the stream refuses
+// its revision as not newer (a one-off operation was sent after the durable
+// operation was created) and renumber is set, the operation is renumbered
+// above the node's cursor and sent once more.
+func (b *KernelOperationBridge) dispatchOperationRow(ctx context.Context, operation model.KernelOperation, renumber bool) (bool, error) {
 	if operation.NodeID == nil {
 		return false, nil
 	}
@@ -239,7 +260,7 @@ func (b *KernelOperationBridge) dispatchOne(ctx context.Context, operation model
 	recovered := operation.DispatchedAt != nil
 	claimedAt := b.now()
 	claim := b.db.Model(&model.KernelOperation{}).
-		Where("id = ? AND state = ?", operation.ID, "pending").
+		Where("id = ? AND state = ? AND revision = ?", operation.ID, "pending", operation.Revision).
 		Updates(map[string]any{"state": "dispatching", "session_id": snapshot.SessionID, "dispatched_at": claimedAt, "last_error": ""})
 	if claim.Error != nil {
 		return false, claim.Error
@@ -265,6 +286,20 @@ func (b *KernelOperationBridge) dispatchOne(ctx context.Context, operation model
 	}
 	ack, err := dispatch(deadlineCtx, nodeID, desired)
 	if err != nil {
+		if latest, stale := staleRevisionLatest(err); stale && renumber {
+			if floor, ok := kernelObservedRevision(latest); ok {
+				renumbered, renumberErr := service.RenumberPendingNodeOperations(b.db, *operation.NodeID, operation.ID, floor)
+				if renumberErr != nil {
+					return false, b.recordDispatchError(operation.ID, err.Error()+"; renumbering failed: "+renumberErr.Error())
+				}
+				var reloaded model.KernelOperation
+				if loadErr := b.db.First(&reloaded, "id = ?", operation.ID).Error; loadErr != nil {
+					return false, loadErr
+				}
+				log.Printf("kernel operation %s was behind the node's last revision %d and was renumbered to %d", operation.ID, latest, renumbered)
+				return b.dispatchOperationRow(ctx, reloaded, false)
+			}
+		}
 		// Retain dispatching state: a reconnect replays the in-memory desired
 		// operation, while a later worker run recovers an interrupted process.
 		return false, b.recordDispatchError(operation.ID, err.Error())

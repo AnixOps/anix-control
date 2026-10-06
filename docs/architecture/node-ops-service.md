@@ -933,7 +933,12 @@ executes `node.sync` (nodeconfig), `agent.operation` (agents) and
   `kernel_operation_id` stays empty for them. A proxy node's stream
   revisions come from that same cursor, so they and the plugin
   operations' revisions increase together; an Agent's Hello raises the
-  cursor to the revision it reports. Forward nodes keep the manager's
+  cursor to the revision it reports. A plugin operation takes its revision
+  when it is created, so a stream operation sent in between leaves it behind
+  the last revision sent; the operation bridge then renumbers it (and the
+  pending operations behind it, in order) above the cursor and sends it,
+  since the Agent supersedes anything at or below the revision it observed.
+  Forward nodes keep the manager's
   in-memory counter. After a kernel restart the
   engine's recovery applies: `node.sync` runs again, the others end
   `FAILED` (retryable).

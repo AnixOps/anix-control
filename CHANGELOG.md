@@ -27,6 +27,18 @@
   readable, and a gost that runs as its own user (the installer's unit) can read
   it when the directory is that user's group. Best effort: only root or a member
   of the group can change it.
+- **Fixed: a plugin operation created before a one-off Agent operation but sent
+  after it is no longer stuck.** A durable plugin operation takes its node
+  revision when it is created; a one-off operation (a diagnostic, a reload, a
+  ping) takes the next one when it is sent. When the one-off operation went out
+  first, the durable operation was refused with "revision N is not newer than
+  M", stayed `dispatching`, and every retry was refused the same way (the Agent
+  supersedes anything at or below the revision it observed, so the old number
+  could never be sent). The operation bridge now renumbers it above the node's
+  cursor and sends it, and moves the pending operations behind it in the same
+  order, so a plugin install, configure and enable chain keeps its sequence. No
+  schema change. This closes the known issue listed under 4.2.0-rc.2 and
+  "Still open" in the rc.1 notes.
 - **Release:** a manual `Commercial Packages` workflow builds and signs the
   commercial packages (`order`, `payment`, `affiliate`) with the official key
   at a given release tag, so installations that run them have a build signed

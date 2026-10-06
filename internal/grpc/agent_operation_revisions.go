@@ -2,6 +2,7 @@ package grpc
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"sync"
 
@@ -72,6 +73,27 @@ func (s databaseRevisionStore) RaiseRevision(ctx context.Context, nodeID uint32,
 		return fmt.Errorf("raise node %d operation revision: %w", nodeID, err)
 	}
 	return nil
+}
+
+// staleOperationRevisionError is the refusal of an operation whose revision
+// is not above the last one sent on its node. Latest is that last revision.
+type staleOperationRevisionError struct {
+	Revision uint64
+	Latest   uint64
+}
+
+func (e *staleOperationRevisionError) Error() string {
+	return fmt.Sprintf("revision %d is not newer than %d", e.Revision, e.Latest)
+}
+
+// staleRevisionLatest returns the last revision sent when err is a stale
+// revision refusal.
+func staleRevisionLatest(err error) (uint64, bool) {
+	var stale *staleOperationRevisionError
+	if errors.As(err, &stale) {
+		return stale.Latest, true
+	}
+	return 0, false
 }
 
 // UseRevisionStore attaches the durable revision allocator. Only the proxy

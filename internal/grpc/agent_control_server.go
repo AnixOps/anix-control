@@ -419,7 +419,7 @@ func (m *AgentControlManager) dispatchOperation(ctx context.Context, nodeID uint
 		} else if existing == nil && cloned.Revision <= m.desiredRevision[nodeID] {
 			m.mu.Unlock()
 			connection.sendMu.Unlock()
-			return nil, fmt.Errorf("revision %d is not newer than %d", cloned.Revision, m.desiredRevision[nodeID])
+			return nil, &staleOperationRevisionError{Revision: cloned.Revision, Latest: m.desiredRevision[nodeID]}
 		}
 		if cloned.Revision > m.desiredRevision[nodeID] {
 			m.desiredRevision[nodeID] = cloned.Revision
