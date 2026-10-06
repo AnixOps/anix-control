@@ -29,6 +29,12 @@
   listeners of a Control. `freePort` closed each probe at once, so the kernel could
   hand the same port to the next call, and Control failed to start with
   `address already in use`.
+- **Security:** after identity's cutover is finalized the gRPC services no
+  longer accept the kernel's own HS256 tokens. Finalizing already refused
+  them on the HTTP APIs and the admin monitor WebSocket, but the gRPC
+  authentication read `jwt.secret` directly, so that secret stayed an
+  administrator credential there. The `grpc.api_token` is a separate
+  credential and is unchanged.
 
 - **Tests:** `TestListenAutoRefusesBadConfigs` no longer fails when another
   process on the CI machine holds the picked port for TCP; a real leak of the

@@ -297,6 +297,11 @@ func v2boardCertificatePrincipal(ctx context.Context, agents *AgentAuthenticator
 	return principal, true, nil
 }
 
+// legacyTokensRefused reports whether the kernel's own HS256 tokens are
+// refused: identity's cutover is finalized and only identity issues tokens
+// (authn.RefuseLegacyTokens). A variable so a test can switch it.
+var legacyTokensRefused = authn.LegacyTokensRefused
+
 // validateToken 验证 token，支持 JWT 和 API Token 两种方式
 // 返回: (是否认证通过, JWT claims(如果不是JWT则为nil), 错误信息)
 //
@@ -307,7 +312,13 @@ func v2boardCertificatePrincipal(ctx context.Context, agents *AgentAuthenticator
 func validateToken(token, apiToken, jwtSecret string) (bool, *utils.Claims, string) {
 	// 优先尝试 JWT 验证（如果 token 看起来像 JWT 且配置了 secret）
 	if jwtSecret != "" && strings.Contains(token, ".") {
-		verifier := authn.Verifier{Secret: func() string { return jwtSecret }, Revocations: authn.DefaultStore(), IdentityKeys: authn.DefaultIdentityKeys()}
+		secretFor := func() string {
+			if legacyTokensRefused() {
+				return ""
+			}
+			return jwtSecret
+		}
+		verifier := authn.Verifier{Secret: secretFor, Revocations: authn.DefaultStore(), IdentityKeys: authn.DefaultIdentityKeys()}
 		claims, err := verifier.Verify(context.Background(), token)
 		if err == nil {
 			if !claims.IsAdmin {
