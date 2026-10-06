@@ -123,6 +123,30 @@ only the highest version `latest`.
 `config/scripts/check_release_workflow.sh` keeps these essentials in the
 workflow. Change it in the same pull request as any release step.
 
+## Nightly Security Scan
+
+The `Nightly Security` workflow (`.github/workflows/nightly-security.yml`)
+runs every night at 03:17 UTC against `go_dev`, and on demand with
+`gh workflow run nightly-security.yml -R AnixOps/anix-control`. It exists
+because advisories are published against code nobody touched: they would
+otherwise fail an unrelated pull request, or be found on release day. A
+failed job fails the run, and the failing job names the finding:
+
+- **govulncheck** over every Go module (root, `sdk`, `identity`,
+  `control-center`), at the version `ci.yml` pins.
+- **gosec**: the production gate exactly as `ci.yml` runs it, plus the `sdk`
+  and `identity` gates.
+- **npm audit** of `web/` through `npm run audit:check`, so the waivers in
+  `web/audit-allowlist.json` and their expiry dates apply.
+- **relay fuzz**: every fuzz target of `sdk/forward/relay` and
+  `sdk/forward/relay/link` for 60 seconds each. The corpus the engine learns
+  is cached from night to night, and a failing input is uploaded as the
+  `relay-fuzz-failures-*` artifact: copy it to `testdata/fuzz/<Target>/` of
+  its package to reproduce it with a plain `go test`.
+
+The pull-request pipeline keeps its own `govulncheck` and `gosec` jobs; this
+workflow does not replace them.
+
 ## Verifying A Release
 
 - **Files.** Run `sha256sum -c SHA256SUMS.txt`, and see

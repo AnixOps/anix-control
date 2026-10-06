@@ -1,0 +1,181 @@
+name: Nightly Security
+
+# The pull-request pipeline checks the code a change touches; advisories are
+# published against code nobody touched. This workflow runs the same security
+# tools every night against go_dev, plus a bounded real fuzz run of the relay,
+# so a new advisory or a crash input shows up the next morning instead of
+# failing an unrelated pull request. Every job fails the run on a finding.
+
+on:
+  schedule:
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nightly-security
+  cancel-in-progress: false
+
+env:
+  GO_VERSION: '1.26.8'
+  NODE_VERSION: '22'
+  FUZZ_TIME: 60s
+
+jobs:
+  govulncheck:
+    name: govulncheck (${{ matrix.module }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        module: [".", "sdk", "identity", "control-center"]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          ref: go_dev
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: ${{ matrix.module }}/go.sum
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@v1.8.0
+
+      - name: Run govulncheck
+        working-directory: ${{ matrix.module }}
+        run: govulncheck ./...
+
+  gosec:
+    name: gosec
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          ref: go_dev
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Install gosec
+        run: go install github.com/securego/gosec/v2/cmd/gosec@v2.29.0
+
+      - name: Run production gosec gate
+        shell: bash
+        run: |
+          mapfile -t production_packages < <(
+            go list -f '{{.Dir}}' ./cmd/server ./api/grpc/v2boardpb ./internal/... \
+              | sed "s#^${PWD}#.#" \
+              | grep -Ev '^\./internal/tests(/|$)' \
+              | sort
+          )
+          gosec -exclude-generated -nosec-require-rules -nosec-require-justification -quiet "${production_packages[@]}"
+
+      - name: Run the sdk and identity gosec gates
+        run: |
+          (cd sdk && gosec -exclude-generated -nosec-require-rules -nosec-require-justification -quiet ./...)
+          (cd identity && gosec -exclude-generated -nosec-require-rules -nosec-require-justification -quiet ./...)
+
+  npm-audit:
+    name: npm audit (web)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          ref: go_dev
+
+      - name: Setup Node
+        uses: actions/setup-node@v6
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+          cache: npm
+          cache-dependency-path: web/package-lock.json
+
+      - name: Install dependencies
+        working-directory: web
+        run: npm ci --ignore-scripts
+
+      - name: Audit shipped and development dependencies
+        working-directory: web
+        run: npm run audit:check
+
+  relay-fuzz:
+    name: relay fuzz (${{ matrix.package }})
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    strategy:
+      fail-fast: false
+      matrix:
+        package: ["./forward/relay", "./forward/relay/link"]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+        with:
+          ref: go_dev
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+          cache-dependency-path: sdk/go.sum
+
+      # The fuzzing engine keeps what it learned in the Go build cache; the
+      # corpus carries over from one night to the next.
+      - name: Locate the fuzz corpus
+        id: corpus
+        working-directory: sdk
+        run: echo "dir=$(go env GOCACHE)/fuzz" >>"${GITHUB_OUTPUT}"
+
+      - name: Restore the fuzz corpus
+        uses: actions/cache@v4
+        with:
+          path: ${{ steps.corpus.outputs.dir }}
+          key: relay-fuzz-${{ matrix.package }}-${{ github.run_id }}
+          restore-keys: |
+            relay-fuzz-${{ matrix.package }}-
+
+      - name: Fuzz every target for a bounded time
+        working-directory: sdk
+        shell: bash
+        env:
+          PACKAGE: ${{ matrix.package }}
+        run: |
+          set -Eeuo pipefail
+          mapfile -t targets < <(go test -list '^Fuzz' "${PACKAGE}" | grep '^Fuzz')
+          [[ "${#targets[@]}" -gt 0 ]] || { echo "no fuzz targets found in ${PACKAGE}" >&2; exit 1; }
+          failed=0
+          for target in "${targets[@]}"; do
+            echo "::group::${PACKAGE} ${target} (${FUZZ_TIME})"
+            if ! go test -run '^$' -fuzz "^${target}\$" -fuzztime "${FUZZ_TIME}" "${PACKAGE}"; then
+              echo "::error::${target} in ${PACKAGE} failed; the input is in the uploaded artifact"
+              failed=1
+            fi
+            echo "::endgroup::"
+          done
+          exit "${failed}"
+
+      # A failing input is written under testdata/fuzz, which holds no
+      # committed seeds, so anything there is a crash to reproduce.
+      - name: Upload the failing inputs
+        if: ${{ failure() }}
+        uses: actions/upload-artifact@v7
+        with:
+          name: relay-fuzz-failures-${{ strategy.job-index }}
+          path: |
+            sdk/forward/relay/testdata/fuzz
+            sdk/forward/relay/link/testdata/fuzz
+          if-no-files-found: warn
