@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Tests:** `TestListenAutoRefusesBadConfigs` no longer fails when another
+  process on the CI machine holds the picked port for TCP; a real leak of the
+  TCP listener still fails every attempt.
+
 - **Security:** the web app moves to Vue 3.5.43 and source-map-js 1.2.2, which fix
   GHSA-g2v6-rqmx-r4w6 (`@vue/server-renderer`, XSS) and GHSA-68fv-2mgg-jv7q
   (`source-map-js`, denial of service) that `npm audit` began reporting for the

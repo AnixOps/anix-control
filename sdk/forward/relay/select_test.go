@@ -629,22 +629,40 @@ func TestListenAutoRefusesBadConfigs(t *testing.T) {
 	if _, err := ListenAuto("127.0.0.1:0", ok, QUICConfig{Config: Config{MaxFrame: 1}}); err == nil {
 		t.Fatal("a bad carrier configuration")
 	}
-	// a port taken for UDP: the TCP listener must not be left behind
+	// A port taken for UDP: the TCP listener must not be left behind. The port
+	// is picked as free for UDP only, so some other process may hold it for TCP;
+	// a leak by ListenAuto repeats on every port, another process's hold does
+	// not, so only a failure on every attempt counts.
+	leaked := ""
+	for attempt := 0; attempt < 5; attempt++ {
+		leaked = listenAutoLeaksTCP(t, ok)
+		if leaked == "" {
+			return
+		}
+	}
+	t.Fatalf("a failed ListenAuto left its TCP listener behind: %s", leaked)
+}
+
+// listenAutoLeaksTCP takes a UDP port, expects ListenAuto to refuse it, and
+// reports why the same TCP port could not be bound afterwards ("" when it can).
+func listenAutoLeaksTCP(t *testing.T, cfg link.ListenerConfig) string {
+	t.Helper()
 	pc, err := net.ListenPacket("udp", "127.0.0.1:0")
 	if err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = pc.Close() }()
 	port := pc.LocalAddr().(*net.UDPAddr).Port
-	if l, err := ListenAuto(net.JoinHostPort("127.0.0.1", itoa(port)), ok, QUICConfig{}); err == nil {
+	if l, err := ListenAuto(net.JoinHostPort("127.0.0.1", itoa(port)), cfg, QUICConfig{}); err == nil {
 		_ = l.Close()
 		t.Fatal("ListenAuto took a UDP port that is in use")
 	}
 	tcp, err := net.Listen("tcp", net.JoinHostPort("127.0.0.1", itoa(port)))
 	if err != nil {
-		t.Fatalf("a failed ListenAuto left its TCP listener behind: %v", err)
+		return err.Error()
 	}
 	_ = tcp.Close()
+	return ""
 }
 
 // A dial is bounded by its context in the SETTINGS exchange too, not only in
