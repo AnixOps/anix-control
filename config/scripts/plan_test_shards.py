@@ -81,6 +81,8 @@ WEIGHTS: dict[str, dict[str, float]] = {
         "internal/packagestore": 4.4,
         "internal/kernelforward": 4.3,
         "internal/agentpki": 2.3,
+        # Not measured in CI yet: the revocation race test (about half a second).
+        "internal/modulepki": 1.5,
         "internal/tests/platformcompat": 2.3,
         "internal/tests/bridgecontract": 1.7,
         "internal/tests/ticketcompat": 1.2,

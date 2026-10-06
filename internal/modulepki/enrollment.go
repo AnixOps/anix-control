@@ -21,6 +21,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/model"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // enrollmentPrefix marks enrollment credentials so they are recognizable in
@@ -200,8 +201,13 @@ func (a *Authority) Renew(ctx context.Context, peer *x509.Certificate, csrDER []
 		if record.RevokedAt != nil || record.PackageID != identity.PackageID || record.Cluster != a.cluster {
 			return ErrCertificateRevoked
 		}
+		// The enrollment row is locked until this renewal commits (PostgreSQL;
+		// SQLite has one writer), so a revocation waits for it and then also
+		// revokes the certificate recorded below. Read unlocked, a renewal
+		// that began before a revocation committed would record a live
+		// certificate after it.
 		var enrollment model.ModuleEnrollment
-		if err := tx.First(&enrollment, "id = ?", record.EnrollmentID).Error; err != nil {
+		if err := tx.Clauses(clause.Locking{Strength: "UPDATE"}).First(&enrollment, "id = ?", record.EnrollmentID).Error; err != nil {
 			return ErrCertificateRevoked
 		}
 		if enrollment.RevokedAt != nil {
