@@ -404,6 +404,10 @@ func TestAdminAPITokenListAndRevoke(t *testing.T) {
 		// the staff administrator may not, and a member is no administrator.
 		assert.Equal(t, []string{staffToken}, listIDs(t, env.call(http.MethodGet, "/api-tokens?user_id=8", "", nil)))
 		assert.ElementsMatch(t, []string{rootToken, staffToken}, listIDs(t, env.call(http.MethodGet, "/api-tokens?all=true", "", nil)))
+		// Each row says whose it is, by the owner's current email.
+		var owners model.User
+		require.NoError(t, db.Select("id", "email").Where("id = ?", 8).Take(&owners).Error)
+		assert.Contains(t, env.call(http.MethodGet, "/api-tokens?all=true", "", nil).Body.String(), `"owner_email":"`+owners.Email+`"`)
 		staff := env.as("8", "staff@example.com")
 		assert.Equal(t, http.StatusForbidden, env.call(http.MethodGet, "/api-tokens?user_id=7", "", staff).Code)
 		assert.Equal(t, http.StatusForbidden, env.call(http.MethodGet, "/api-tokens?all=true", "", staff).Code)

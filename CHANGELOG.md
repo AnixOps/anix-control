@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Admin API tokens:** a token's name is limited to 100 characters on the
+  server too (it counted bytes, so a 34-character Chinese name was refused
+  while the form accepted it), and the list answers each token's owner email
+  as `owner_email`, which the page shows in the owner column instead of
+  "Administrator #id".
+
 - **Release:** a manual `Commercial Packages` workflow builds and signs the
   commercial packages (`order`, `payment`, `affiliate`) with the official key
   at a given release tag, so installations that run them have a build signed

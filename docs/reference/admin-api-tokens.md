@@ -86,7 +86,7 @@ administrator route.
 }
 ```
 
-- `name`: 1 to 100 printable bytes (UTF-8, so fewer characters for non-ASCII names); `scope`: `read` or `admin`.
+- `name`: 1 to 100 printable characters (counted as characters, not bytes); `scope`: `read` or `admin`.
 - Re-authentication, as the user's own subscription reset requires
   (`VerifyStepUp`): with a second factor enabled, `code` and `method`
   (`totp` or `backup`; a recovery code works once) instead of `password`.
@@ -120,7 +120,9 @@ administrator route.
 Lists the caller's active tokens (never a secret): `include_inactive=true`
 adds revoked and expired ones. A super administrator (an administrator who is
 not staff and not banned) may add `user_id=<id>` or `all=true`; anyone else
-gets `403 super_admin_required`.
+gets `403 super_admin_required`. Each row carries `owner_email`, the owner's
+current email (empty if the owner no longer exists), so a list of everyone's
+tokens says whose each is.
 
 ### `DELETE /api/v4/kernel/api-tokens/:id`
 

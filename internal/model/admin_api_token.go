@@ -33,6 +33,10 @@ type AdminAPIToken struct {
 	CreatedIP  string     `gorm:"size:45" json:"created_ip,omitempty"`
 	CreatedAt  time.Time  `json:"created_at"`
 	RevokedAt  *time.Time `json:"revoked_at"`
+	// OwnerEmail is the owner's current email, filled in when tokens are
+	// listed so an administrator who lists everyone's tokens can tell whose
+	// they are. It is not a column.
+	OwnerEmail string `gorm:"-" json:"owner_email,omitempty"`
 	// RevokeReason says why the token ended: owner_revoked, admin_revoked or
 	// owner_not_admin (the owner was banned, demoted or deleted when it was
 	// used).

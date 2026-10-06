@@ -170,6 +170,41 @@ func TestCreateStoresOnlyTheHash(t *testing.T) {
 	})
 }
 
+func TestNameLimitCountsCharactersNotBytes(t *testing.T) {
+	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
+		s, _ := newService(t, db)
+		ctx := context.Background()
+		// 100 characters of 3 bytes each is 300 bytes and must pass; 101 must not.
+		_, _, err := s.Create(ctx, CreateInput{UserID: 7, Name: strings.Repeat("令", MaxNameLength), Scope: "read"})
+		require.NoError(t, err)
+		_, _, err = s.Create(ctx, CreateInput{UserID: 7, Name: strings.Repeat("令", MaxNameLength+1), Scope: "read"})
+		assert.ErrorIs(t, err, ErrInvalidRequest)
+	})
+}
+
+func TestListCarriesTheOwnersEmail(t *testing.T) {
+	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
+		s, _ := newService(t, db)
+		ctx := context.Background()
+		_, _, err := s.Create(ctx, CreateInput{UserID: 7, Name: "ci", Scope: "read"})
+		require.NoError(t, err)
+		var owner model.User
+		require.NoError(t, db.Select("id", "email").Where("id = ?", 7).Take(&owner).Error)
+		require.NotEmpty(t, owner.Email)
+		listed, err := s.List(ctx, ListFilter{})
+		require.NoError(t, err)
+		require.NotEmpty(t, listed)
+		for _, row := range listed {
+			if row.UserID == 7 {
+				assert.Equal(t, owner.Email, row.OwnerEmail)
+			}
+		}
+		raw, err := json.Marshal(listed[0])
+		require.NoError(t, err)
+		assert.Contains(t, string(raw), `"owner_email"`)
+	})
+}
+
 func TestCreateValidation(t *testing.T) {
 	forEachDatabase(t, func(t *testing.T, db *gorm.DB) {
 		s, c := newService(t, db)

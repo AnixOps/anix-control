@@ -35,6 +35,7 @@ export function readApiToken(row) {
   return {
     id: String(value.id || ''),
     userId: Number(value.user_id) || 0,
+    ownerEmail: String(value.owner_email || ''),
     name: String(value.name || ''),
     scope: value.scope === 'admin' ? 'admin' : 'read',
     hint: String(value.hint || ''),
