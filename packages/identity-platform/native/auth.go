@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/AnixOps/anix-control/identity/account"
@@ -141,6 +142,24 @@ func (s *Service) Login(ctx context.Context, request pluginhostsdk.NativeRequest
 	return s.panel(s.sessionData(ctx, user, signed))
 }
 
+// compareHash checks a password against a bcrypt hash; tests count its calls.
+var compareHash = bcrypt.CompareHashAndPassword
+
+var (
+	absentHashOnce sync.Once
+	absentHash     []byte
+)
+
+// absentAccountHash is the hash an unknown e-mail is checked against, so that
+// "no such account" costs the same bcrypt work as "wrong password" and the
+// answer time does not tell which e-mails have an account.
+func absentAccountHash() []byte {
+	absentHashOnce.Do(func() {
+		absentHash, _ = bcrypt.GenerateFromPassword([]byte("anixops-identity-absent-account"), bcrypt.DefaultCost)
+	})
+	return absentHash
+}
+
 // authenticate reproduces the v2 checks in their order: account, password,
 // ban, expiry.
 func (s *Service) authenticate(ctx context.Context, stores *Stores, email, password string) (account.Account, error) {
@@ -148,7 +167,11 @@ func (s *Service) authenticate(ctx context.Context, stores *Stores, email, passw
 	if err != nil {
 		return account.Account{}, err
 	}
-	if !found || bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)) != nil {
+	if !found {
+		_ = compareHash(absentAccountHash(), []byte(password))
+		return account.Account{}, userError("用户不存在或密码错误")
+	}
+	if compareHash([]byte(user.PasswordHash), []byte(password)) != nil {
 		return account.Account{}, userError("用户不存在或密码错误")
 	}
 	if user.Banned {

@@ -41,6 +41,9 @@
   only packets longer than 42 bytes, so an idle dialler's 25-byte keep-alives never trigger one;
   the one larger packet after the restart could land before the new listener held the port.
   The tests now keep sending application data after the restart, like a connection in use.
+- **Security (identity):** an unknown e-mail at login now costs the same bcrypt work as a wrong password.
+  It answered without hashing, so the response time told which e-mails have an account, and the login
+  limit (per e-mail and address) did not slow that down.
 
 - **Tests:** `TestWebSocketAdapterRelaysFramesToAnExactLegacyHandler` no longer fails when the
   adapter finishes before the test looks: the echo and the completion were both ready and
