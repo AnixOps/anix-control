@@ -32,6 +32,11 @@
   after the other. A correct password that waits for its second factor gives its attempt back, and
   the first attempt of a key now also counts exactly once (a concurrent first insert used to reset
   the count). The v2-compatible answers and Retry-After headers are unchanged.
+- **Tests:** `TestQUICStatelessReset` and `TestQUICStatelessResetEndsTheCarrier` no longer fail
+  now and then on a loaded machine (about 1 run in 100 and 1 in 120). A stateless reset answers
+  only packets longer than 42 bytes, so an idle dialler's 25-byte keep-alives never trigger one;
+  the one larger packet after the restart could land before the new listener held the port.
+  The tests now keep sending application data after the restart, like a connection in use.
 
 - **Tests:** `TestWebSocketAdapterRelaysFramesToAnExactLegacyHandler` no longer fails when the
   adapter finishes before the test looks: the echo and the completion were both ready and
