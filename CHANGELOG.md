@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- **Tests:** `TestUDPThroughTheChain` waits for the entry and exit packet counters instead of
+  reading them the moment the client holds its fifth echo, which failed once on CI with
+  four counted down packets.
+
 - **Security:** revoking a node's Agent credentials (rotation, revocation,
   disabling or deleting the node) now also covers an Agent certificate,
   enrollment or forward link certificate that was being issued at that
