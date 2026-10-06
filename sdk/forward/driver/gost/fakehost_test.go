@@ -49,13 +49,17 @@ type fakeGost struct {
 	hidden   []string // foreign sockets ss does not show yet (taken after a check)
 	conns    []string // ss lines of established sockets
 	failNext bool
-	failAPI  int  // the next failAPI changes fail
-	apiDown  bool // the API socket does not answer
-	applies  int
-	puts     int // API changes of hot objects
-	structs  int // API creations and deletions of services
-	created  int64
-	live     *fakeLive
+	// beforeReload and afterReload run inside Reload, the first before its
+	// context check (the context may have ended before gost was asked), the
+	// second once gost has loaded the file (the caller then waits for it).
+	beforeReload, afterReload func()
+	failAPI                   int  // the next failAPI changes fail
+	apiDown                   bool // the API socket does not answer
+	applies                   int
+	puts                      int // API changes of hot objects
+	structs                   int // API creations and deletions of services
+	created                   int64
+	live                      *fakeLive
 }
 
 // fakeLive is the running configuration of a fakeGost.
@@ -417,6 +421,9 @@ func (f *fakeGost) traffic(prefix string, up, down uint64) bool {
 }
 
 func (f *fakeGost) Reload(ctx context.Context) error {
+	if f.beforeReload != nil {
+		f.beforeReload()
+	}
 	if err := ctx.Err(); err != nil {
 		return err
 	}
@@ -434,6 +441,9 @@ func (f *fakeGost) Reload(ctx context.Context) error {
 		f.live.services = nil
 	default:
 		f.path, f.bound, f.live = path, bound, live
+	}
+	if f.afterReload != nil {
+		f.afterReload()
 	}
 	return nil
 }

@@ -11,6 +11,12 @@
   days. Issuing now holds the node's row until it commits and the
   revocation takes the same row, so one waits for the other. No operator
   action is needed.
+- **Tests:** the gost driver's `TestApplyCancelledInFlight` no longer depends on a 100 ms
+  wall-clock deadline. When the deadline fired before the driver asked gost to reload (a loaded CI
+  machine), the failure the test had injected for the reload stayed armed and the recovery's own
+  start consumed it, so the previous artifact was not running again. The context now ends when the
+  fake gost has loaded the file, and a second test covers a context that ends before gost is asked.
+  The driver was correct in both cases.
 
 - **Tests:** `TestListenAutoRefusesBadConfigs` no longer fails when another
   process on the CI machine holds the picked port for TCP; a real leak of the

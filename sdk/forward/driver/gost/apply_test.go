@@ -160,7 +160,10 @@ func TestApplyFirstFailureLeavesNothing(t *testing.T) {
 }
 
 // TestApplyCancelledInFlight: a context that ends while Apply waits for gost
-// leaves the host on the previous artifact.
+// leaves the host on the previous artifact. The context ends when gost has
+// loaded the file and never serves it, not after a wall-clock delay: a
+// deadline that fired earlier on a loaded machine (before gost was asked)
+// left the injected failure armed, and the recovery's own start consumed it.
 func TestApplyCancelledInFlight(t *testing.T) {
 	d, f, _ := fakeDriver(t)
 	b := builder(t)
@@ -168,17 +171,45 @@ func TestApplyCancelledInFlight(t *testing.T) {
 	if _, err := d.Apply(t.Context(), a1); err != nil {
 		t.Fatal(err)
 	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
 	f.with(func() {
 		f.failNext = true // gost never serves the next one, so Apply waits
 		f.apiDown = true  // and takes it with a reload
+		f.afterReload = cancel
 	})
-	ctx, cancel := context.WithTimeout(t.Context(), 100*time.Millisecond)
-	defer cancel()
 	a2 := render(t, d, conformance.State("forward-11", 2, b.Simple(conformance.RouteB, 1)))
-	if _, err := d.Apply(ctx, a2); !errors.Is(err, context.DeadlineExceeded) {
+	if _, err := d.Apply(ctx, a2); !errors.Is(err, context.Canceled) {
 		t.Fatalf("Apply: %v, want the context's error", err)
 	}
-	f.with(func() { f.apiDown = false })
+	f.with(func() { f.apiDown = false; f.afterReload = nil })
+	if r, err := d.Apply(t.Context(), a1); err != nil || r.Changed {
+		t.Fatalf("the host does not run the previous artifact: %+v %v", r, err)
+	}
+}
+
+// TestApplyCancelledBeforeGostIsAsked: a context that ends after the driver
+// wrote the new configuration and before it asked gost to reload (the
+// reload is refused for the context) leaves the host on the previous
+// artifact: the recovery does not depend on the ended context.
+func TestApplyCancelledBeforeGostIsAsked(t *testing.T) {
+	d, f, _ := fakeDriver(t)
+	b := builder(t)
+	a1 := render(t, d, conformance.State("forward-11", 1, b.Simple(conformance.RouteA, 0)))
+	if _, err := d.Apply(t.Context(), a1); err != nil {
+		t.Fatal(err)
+	}
+	ctx, cancel := context.WithCancel(t.Context())
+	defer cancel()
+	f.with(func() {
+		f.apiDown = true // the change goes through a reload
+		f.beforeReload = cancel
+	})
+	a2 := render(t, d, conformance.State("forward-11", 2, b.Simple(conformance.RouteB, 1)))
+	if _, err := d.Apply(ctx, a2); !errors.Is(err, context.Canceled) {
+		t.Fatalf("Apply: %v, want the context's error", err)
+	}
+	f.with(func() { f.apiDown = false; f.beforeReload = nil })
 	if r, err := d.Apply(t.Context(), a1); err != nil || r.Changed {
 		t.Fatalf("the host does not run the previous artifact: %+v %v", r, err)
 	}
