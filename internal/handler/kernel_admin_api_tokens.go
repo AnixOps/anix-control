@@ -23,7 +23,7 @@ const stepUpFreshness = 10 * time.Minute
 // credentials and the caller's sign-in is older than stepUpFreshness. It used
 // to share step_up_required with "a password is required", which clients could
 // tell apart only by the message text.
-const adminAPITokenStepUpStaleCode = "step_up_sign_in_stale"
+const adminAPITokenStepUpStaleCode = "step_up_sign_in_stale" // #nosec G101 -- a response error code, not a credential
 
 // adminAPITokenStepUpLimit bounds the re-authentication attempts of one
 // administrator: the fifth failure in fifteen minutes locks creations out for
