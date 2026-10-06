@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+- **Security:** the server logs a startup `WARNING` for each weak shared secret (`jwt.secret`,
+  `app.api_token`, `grpc.api_token`): set but shorter than 32 bytes, a template value, or only a few
+  distinct characters. It names the setting and how to rotate it and never prints the value; nothing
+  refuses to start, so installations with short secrets keep working (docs/UPGRADE.md).
+
 - **Tests:** `TestWebSocketAdapterRelaysFramesToAnExactLegacyHandler` no longer fails when the
   adapter finishes before the test looks: the echo and the completion were both ready and
   `select` could consume the completion early, so the wait after the close frame timed out.

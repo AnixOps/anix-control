@@ -402,6 +402,9 @@ func run() int {
 	} else if adminArguments == nil {
 		log.Print(summary)
 	}
+	if adminArguments == nil && !migrateOnly && !jsonCommand {
+		logSecretStrength(log.Printf, cfg)
+	}
 
 	// 打印环境信息
 	driver := strings.ToLower(cfg.Database.Driver)

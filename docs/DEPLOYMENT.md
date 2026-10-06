@@ -431,6 +431,8 @@ jwt:
   secret: "your-jwt-secret-at-least-32-characters"
 ```
 
+> 弱密钥提示：`jwt.secret`、`app.api_token`、`grpc.api_token` 只要已设置但短于 32 字节、只由少数几个字符组成或仍是模板值，启动时会记录一条 `WARNING`（只写设置名和轮换方法，不含密钥内容）。它不会阻止启动，已有的较短密钥继续可用；用 `openssl rand -hex 32` 生成新值，在下次重启时通过 `ANIX_CONTROL_JWT_SECRET`（或 `..._FILE`）换上。换 `jwt.secret` 会让所有人重新登录。
+
 > 说明：`/api/v1|v2/server/UniProxy/*` 已强制使用节点级鉴权，必须携带 `node_id` 查询参数与 `X-API-Key` 请求头（值为该节点的 `api_key`）。`app.api_token` 仅保留为历史兼容字段，不用于 UniProxy 鉴权。
 
 ---

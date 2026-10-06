@@ -26,6 +26,14 @@ Do not use it for:
 
 Those operations require their own operator approval and rollback plan.
 
+**Weak shared secrets are reported at startup.** A `jwt.secret`,
+`app.api_token` or `grpc.api_token` that is set but shorter than 32 bytes,
+made of a few repeated characters, or still a template value logs one
+`WARNING` naming the setting and how to rotate it (never the value). Nothing
+refuses to start and short secrets keep working; replace them with
+`openssl rand -hex 32` at a restart you choose (changing `jwt.secret` signs
+everyone out).
+
 **Upgrading to 4.1.0: 15 packages now default to native routes.** After the
 upgrade, 151 rehearsed v2 routes are answered by their packages' native
 handlers unless a mode is stored for them. `package_routes.default_mode:
