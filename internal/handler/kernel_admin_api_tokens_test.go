@@ -341,11 +341,16 @@ func TestAdminAPITokenStepUpWhenIdentityHoldsTheCredentials(t *testing.T) {
 		}
 		// The kernel cannot check a password it does not hold; the sign-in
 		// that identity just checked stands in, when it is recent.
-		assert.Equal(t, http.StatusForbidden, env.call(http.MethodPost, "/api-tokens", body, headers("")).Code, "no issue time")
-		assert.Equal(t, http.StatusForbidden, env.call(http.MethodPost, "/api-tokens", body, headers("601")).Code, "a stale sign-in")
+		stale := func(response *httptest.ResponseRecorder, what string) {
+			t.Helper()
+			assert.Equal(t, http.StatusForbidden, response.Code, what)
+			assert.Equal(t, "step_up_sign_in_stale", decodeAPITokenAnswer(t, response).Error.Code, what)
+		}
+		stale(env.call(http.MethodPost, "/api-tokens", body, headers("")), "no issue time")
+		stale(env.call(http.MethodPost, "/api-tokens", body, headers("601")), "a stale sign-in")
 		assert.Equal(t, http.StatusCreated, env.call(http.MethodPost, "/api-tokens", body, headers("120")).Code)
 		// A password in the body does not matter for such an account.
-		assert.Equal(t, http.StatusForbidden, env.call(http.MethodPost, "/api-tokens", createBody(""), headers("601")).Code)
+		stale(env.call(http.MethodPost, "/api-tokens", createBody(""), headers("601")), "a password does not help")
 	})
 }
 

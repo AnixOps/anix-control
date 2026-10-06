@@ -73,7 +73,7 @@ function list(now, query, scenario) {
 
 // What the route checks before it mints a token, by scenario.
 function create(now, body, scenario) {
-  if (scenario === 'cutover') return refusal(403, 'step_up_required', 'sign in again and retry within 10 minutes')
+  if (scenario === 'cutover') return refusal(403, 'step_up_sign_in_stale', 'sign in again and retry within 10 minutes')
   if (scenario === 'tooMany') return refusal(409, 'too_many_tokens', 'an administrator may hold at most 25 active API tokens: revoke one first')
   if (scenario === 'rateLimited') return refusal(429, 'step_up_rate_limited', 'too many failed re-authentications, try again later', { 'Retry-After': '900' })
   if (!body?.name || !body?.scope) return refusal(400, 'invalid_request', 'name and scope are required; expires_in_days is 1 to 730')

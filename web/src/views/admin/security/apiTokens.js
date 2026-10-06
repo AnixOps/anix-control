@@ -107,11 +107,14 @@ export function isRecoveryCode(value) {
 
 // The refusals of the three routes, by what the page does about them. The
 // kernel answers { error: { code, message } }; the code alone does not tell
-// the cases of `step_up_required` apart (the message does).
+// the cases of `step_up_required` apart (the message does). A stale sign-in has
+// its own code, `step_up_sign_in_stale`; the old `step_up_required` with the
+// "sign in again" message (Control up to 4.2.0-rc.2) is still understood.
 //
 //   password_required   403 step_up_required "password is required"
 //   code_required       403 step_up_required "an MFA code is required"
-//   sign_in_again       403 step_up_required "sign in again and retry within 10 minutes"
+//   sign_in_again       403 step_up_sign_in_stale "sign in again and retry within 10 minutes"
+//                       (before 4.2.0: step_up_required with that message)
 //                       (identity holds the credentials: the kernel only checks
 //                       that the sign-in is at most ten minutes old)
 //   step_up_failed      403 the password or code is not valid
@@ -135,6 +138,8 @@ export function classifyTokenRefusal(error) {
     const raw = typeof headers?.get === 'function' ? headers.get('retry-after') : headers?.['retry-after']
     const seconds = Number.parseInt(String(raw ?? ''), 10)
     out.retryAfter = Number.isFinite(seconds) && seconds > 0 ? seconds : 0
+  } else if (code === 'step_up_sign_in_stale') {
+    out.kind = 'sign_in_again'
   } else if (code === 'step_up_required') {
     if (/mfa code|code is required/i.test(message)) out.kind = 'code_required'
     else if (/password/i.test(message)) out.kind = 'password_required'

@@ -19,6 +19,12 @@ import (
 // check a credential itself (see AdminAPITokensHandler.stepUp).
 const stepUpFreshness = 10 * time.Minute
 
+// adminAPITokenStepUpStaleCode is the refusal code when identity holds the
+// credentials and the caller's sign-in is older than stepUpFreshness. It used
+// to share step_up_required with "a password is required", which clients could
+// tell apart only by the message text.
+const adminAPITokenStepUpStaleCode = "step_up_sign_in_stale"
+
 // adminAPITokenStepUpLimit bounds the re-authentication attempts of one
 // administrator: the fifth failure in fifteen minutes locks creations out for
 // fifteen minutes.
@@ -90,7 +96,7 @@ func (h *AdminAPITokensHandler) actor(c *gin.Context) (*gorm.DB, uint, bool) {
 
 // Create godoc
 // @Summary Create an admin API token
-// @Description Issues a personal access token for automation: `anixadm_` and 43 characters, shown once in this answer; only its SHA-256 is stored. Scope `read` allows GET and HEAD on the administrator APIs except the reads that answer a secret in clear; `admin` allows what the owner may do except managing tokens. Needs a signed-in session (never an API token) and a re-authentication: the current password, or a TOTP or recovery code when the account has a second factor (when the kernel cannot check a credential because identity holds it, the sign-in must be at most 10 minutes old). Up to 25 active tokens per administrator; the owner's rights are read on every use. Audited. Send the token as `Authorization: Bearer <token>` only, never in a URL.
+// @Description Issues a personal access token for automation: `anixadm_` and 43 characters, shown once in this answer; only its SHA-256 is stored. Scope `read` allows GET and HEAD on the administrator APIs except the reads that answer a secret in clear; `admin` allows what the owner may do except managing tokens. Needs a signed-in session (never an API token) and a re-authentication: the current password, or a TOTP or recovery code when the account has a second factor (when the kernel cannot check a credential because identity holds it, the sign-in must be at most 10 minutes old, or it answers 403 step_up_sign_in_stale). Up to 25 active tokens per administrator; the owner's rights are read on every use. Audited. Send the token as `Authorization: Bearer <token>` only, never in a URL.
 // @Tags Kernel
 // @Accept json
 // @Produce json
@@ -173,7 +179,7 @@ func (h *AdminAPITokensHandler) stepUp(c *gin.Context, db *gorm.DB, tokens *admi
 		issued, _ := c.Get("token_issued_at")
 		at, isTime := issued.(time.Time)
 		if !isTime || h.now().Sub(at) > stepUpFreshness {
-			return refuse(http.StatusForbidden, "step_up_required", "sign in again and retry within 10 minutes")
+			return refuse(http.StatusForbidden, adminAPITokenStepUpStaleCode, "sign in again and retry within 10 minutes")
 		}
 		return true
 	}
