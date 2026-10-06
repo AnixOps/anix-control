@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Security:** revoking a node's Agent credentials (rotation, revocation,
+  disabling or deleting the node) now also covers an Agent certificate,
+  enrollment or forward link certificate that was being issued at that
+  moment. On PostgreSQL a renewal, an enrollment or a link certificate
+  request that began before the revocation committed could record a live
+  credential after it; an Agent certificate then stayed valid for up to 7
+  days. Issuing now holds the node's row until it commits and the
+  revocation takes the same row, so one waits for the other. No operator
+  action is needed.
+
 - **Tests:** `TestListenAutoRefusesBadConfigs` no longer fails when another
   process on the CI machine holds the picked port for TCP; a real leak of the
   TCP listener still fails every attempt.

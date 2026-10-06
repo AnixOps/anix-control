@@ -17,6 +17,7 @@ import (
 	"github.com/AnixOps/anix-control/v4/internal/nodesecrets"
 	"github.com/google/uuid"
 	"gorm.io/gorm"
+	"gorm.io/gorm/clause"
 )
 
 // Audit actions written to the operation log (v2_operation_log).
@@ -163,6 +164,9 @@ func (s *Service) Enroll(ctx context.Context, request EnrollRequest) (Issued, er
 			}
 			enrollment, node = consumed, agentcontrol.AgentNode{Kind: consumed.NodeKind, ID: uint32(consumed.NodeID)} // #nosec G115 -- node ids are stored from uint32 values.
 		case model.AgentEnrollmentMethodNodeAPIKey, model.AgentEnrollmentMethodForwardToken:
+			if err := lockEnabledNode(tx, bootstrap.Node); err != nil {
+				return ErrEnrollmentRejected
+			}
 			if err := authenticateNodeCredential(tx, bootstrap); err != nil {
 				return err
 			}
@@ -174,7 +178,7 @@ func (s *Service) Enroll(ctx context.Context, request EnrollRequest) (Issued, er
 		default:
 			return ErrEnrollmentRejected
 		}
-		if err := requireEnabledNode(tx, node); err != nil {
+		if err := lockEnabledNode(tx, node); err != nil {
 			return ErrEnrollmentRejected
 		}
 		enrollment.AgentVersion = truncate(request.AgentVersion, 64)
@@ -223,6 +227,12 @@ func (s *Service) consumeCredential(tx *gorm.DB, bootstrap Bootstrap, now time.T
 		return model.AgentEnrollment{}, ErrEnrollmentRejected
 	}
 	if bootstrap.Node != (agentcontrol.AgentNode{}) && (bootstrap.Node.Kind != row.NodeKind || uint(bootstrap.Node.ID) != row.NodeID) {
+		return model.AgentEnrollment{}, ErrEnrollmentRejected
+	}
+	// The node's row first: a revocation of the node then either finished
+	// (the update below finds the credential revoked) or waits for this
+	// enrollment and revokes what it records.
+	if err := lockEnabledNode(tx, agentcontrol.AgentNode{Kind: row.NodeKind, ID: uint32(row.NodeID)}); err != nil { // #nosec G115 -- node ids are stored from uint32 values.
 		return model.AgentEnrollment{}, ErrEnrollmentRejected
 	}
 	result := tx.Model(&model.AgentEnrollment{}).
@@ -274,6 +284,17 @@ func authenticateNodeCredential(tx *gorm.DB, bootstrap Bootstrap) error {
 	}
 }
 
+// lockEnabledNode is requireEnabledNode that also locks the node's row until
+// tx ends (PostgreSQL row lock; SQLite has one writer). Every transaction
+// that issues a credential of a node takes it first, and RevokeNode takes it
+// too, so a revocation waits for the issuances in flight and sees what they
+// recorded, and an issuance that starts later reads the revocation. Without
+// it, PostgreSQL's per-statement snapshots let an issuance that began before
+// a revocation committed record a live credential after it.
+func lockEnabledNode(tx *gorm.DB, node agentcontrol.AgentNode) error {
+	return requireEnabledNode(tx.Clauses(clause.Locking{Strength: "UPDATE"}), node)
+}
+
 // requireEnabledNode fails unless node exists and is not disabled.
 func requireEnabledNode(tx *gorm.DB, node agentcontrol.AgentNode) error {
 	switch node.Kind {
@@ -318,6 +339,14 @@ func (s *Service) Renew(ctx context.Context, peer *x509.Certificate, csrDER []by
 	}
 	var issued Issued
 	err = s.db.WithContext(ctx).Transaction(func(tx *gorm.DB) error {
+		// The node's row first (see lockEnabledNode): the records below are
+		// read after any revocation in flight has committed.
+		if err := lockEnabledNode(tx, identity.Node); err != nil {
+			if errors.Is(err, ErrInvalidNode) {
+				return ErrCertificateRevoked
+			}
+			return err
+		}
 		var record model.AgentCertificate
 		if err := tx.First(&record, "serial = ?", modulepki.SerialString(peer.SerialNumber)).Error; err != nil {
 			if errors.Is(err, gorm.ErrRecordNotFound) {
@@ -338,12 +367,6 @@ func (s *Service) Renew(ctx context.Context, peer *x509.Certificate, csrDER []by
 		}
 		if enrollment.RevokedAt != nil {
 			return ErrCertificateRevoked
-		}
-		if err := requireEnabledNode(tx, identity.Node); err != nil {
-			if errors.Is(err, ErrInvalidNode) {
-				return ErrCertificateRevoked
-			}
-			return err
 		}
 		signed, err := s.issue(ctx, tx, identity.Node, record.EnrollmentID, csrDER)
 		if err != nil {

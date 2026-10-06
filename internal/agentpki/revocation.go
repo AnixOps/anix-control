@@ -42,27 +42,41 @@ func RevokeNode(ctx context.Context, db *gorm.DB, node agentcontrol.AgentNode, r
 	if !migrator.HasTable(&model.AgentCertificate{}) || !migrator.HasTable(&model.AgentEnrollment{}) {
 		return nil
 	}
+	hasLinkTable := migrator.HasTable(&model.ForwardLinkCertificate{})
 	revocationEpoch.Add(1)
-	now := time.Now().UTC()
-	updates := map[string]any{"revoked_at": now, "revoke_reason": reason}
-	if err := db.Model(&model.AgentCertificate{}).
-		Where("node_kind = ? AND node_id = ? AND revoked_at IS NULL", node.Kind, node.ID).
-		Updates(updates).Error; err != nil {
-		return err
-	}
-	if err := db.Model(&model.AgentEnrollment{}).
-		Where("node_kind = ? AND node_id = ? AND revoked_at IS NULL", node.Kind, node.ID).
-		Updates(updates).Error; err != nil {
-		return err
-	}
-	// The node's forward link certificates (link.go) go with its Agent
-	// credentials. A database without the link table has none.
-	if migrator.HasTable(&model.ForwardLinkCertificate{}) {
-		if err := db.Model(&model.ForwardLinkCertificate{}).
+	// One transaction (a savepoint inside the caller's), holding the node's
+	// row: the transactions that issue a credential of the node hold it too
+	// (lockEnabledNode), so this waits for the ones in flight and then sees
+	// the certificates and enrollments they recorded, and none can record a
+	// live credential after the updates below. A node that is gone or
+	// disabled is revoked all the same.
+	err := db.Transaction(func(tx *gorm.DB) error {
+		if err := lockNode(tx, node); err != nil && !errors.Is(err, ErrInvalidNode) && !errors.Is(err, ErrNodeDisabled) {
+			return err
+		}
+		now := time.Now().UTC()
+		updates := map[string]any{"revoked_at": now, "revoke_reason": reason}
+		if err := tx.Model(&model.AgentCertificate{}).
 			Where("node_kind = ? AND node_id = ? AND revoked_at IS NULL", node.Kind, node.ID).
 			Updates(updates).Error; err != nil {
 			return err
 		}
+		if err := tx.Model(&model.AgentEnrollment{}).
+			Where("node_kind = ? AND node_id = ? AND revoked_at IS NULL", node.Kind, node.ID).
+			Updates(updates).Error; err != nil {
+			return err
+		}
+		// The node's forward link certificates (link.go) go with its Agent
+		// credentials. A database without the link table has none.
+		if hasLinkTable {
+			return tx.Model(&model.ForwardLinkCertificate{}).
+				Where("node_kind = ? AND node_id = ? AND revoked_at IS NULL", node.Kind, node.ID).
+				Updates(updates).Error
+		}
+		return nil
+	})
+	if err != nil {
+		return err
 	}
 	// A reader that cached "not revoked" between the first bump and these
 	// writes is dropped again.
