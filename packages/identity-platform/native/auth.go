@@ -63,6 +63,26 @@ func registerKey(ip string) string {
 	return fmt.Sprintf("register|%s", normalizedIP)
 }
 
+// userError is a refusal the caller is meant to read (a wrong password, a
+// taken e-mail, a policy). Every other error of these unauthenticated
+// handlers is an infrastructure failure, whose text (a database host, a
+// table, a driver message) must not reach the client.
+type userError string
+
+func (e userError) Error() string { return string(e) }
+
+// internalFailure is what a client reads of an infrastructure failure.
+const internalFailure = "服务暂时不可用，请稍后重试"
+
+// failure answers err: a refusal as it is, anything else generically.
+func (s *Service) failure(err error) (pluginhostsdk.NativeResponse, error) {
+	var refusal userError
+	if errors.As(err, &refusal) {
+		return s.panelError(string(refusal))
+	}
+	return s.panelError(internalFailure)
+}
+
 func retryAfter(wait time.Duration) pluginhostsdk.Header {
 	seconds := int(wait.Seconds())
 	if seconds < 1 {
@@ -80,11 +100,11 @@ func (s *Service) Login(ctx context.Context, request pluginhostsdk.NativeRequest
 	}
 	stores, err := s.Open(ctx)
 	if err != nil {
-		return s.panelError(err.Error())
+		return s.failure(err)
 	}
 	config, err := s.settings(ctx, stores)
 	if err != nil {
-		return s.panelError(err.Error())
+		return s.failure(err)
 	}
 	limit := config.LoginRateLimit.options()
 	key := loginKey(req.Email, request.Metadata.ClientIP)
@@ -93,19 +113,19 @@ func (s *Service) Login(ctx context.Context, request pluginhostsdk.NativeRequest
 	// clears the key, and an answer that checked no second factor yet gives
 	// the attempt back.
 	if allowed, wait, err := stores.Throttle.Attempt(ctx, key, limit); err != nil {
-		return s.panelError(err.Error())
+		return s.failure(err)
 	} else if !allowed {
 		return s.panelError("too many login attempts, please try again later", retryAfter(wait))
 	}
 
 	user, err := s.authenticate(ctx, stores, req.Email, req.Password)
 	if err != nil {
-		return s.panelError(err.Error())
+		return s.failure(err)
 	}
 
 	response, handled, err := s.loginMFA(ctx, stores, config, user, req, request.Metadata, key, limit)
 	if err != nil {
-		return s.panelError(err.Error())
+		return s.failure(err)
 	}
 	if handled {
 		return response, nil
@@ -113,10 +133,10 @@ func (s *Service) Login(ctx context.Context, request pluginhostsdk.NativeRequest
 
 	signed, err := s.issue(ctx, config, user)
 	if err != nil {
-		return s.panelError(err.Error())
+		return s.failure(err)
 	}
 	if err := stores.Throttle.RecordSuccess(ctx, key); err != nil {
-		return s.panelError(err.Error())
+		return s.failure(err)
 	}
 	return s.panel(s.sessionData(ctx, user, signed))
 }
@@ -129,17 +149,17 @@ func (s *Service) authenticate(ctx context.Context, stores *Stores, email, passw
 		return account.Account{}, err
 	}
 	if !found || bcrypt.CompareHashAndPassword([]byte(user.PasswordHash), []byte(password)) != nil {
-		return account.Account{}, errors.New("用户不存在或密码错误")
+		return account.Account{}, userError("用户不存在或密码错误")
 	}
 	if user.Banned {
-		return account.Account{}, errors.New("用户已被封禁")
+		return account.Account{}, userError("用户已被封禁")
 	}
 	expiredAt, err := s.Directory.ExpiredAt(ctx, user.UserID)
 	if err != nil {
 		return account.Account{}, err
 	}
 	if expiredAt != nil && *expiredAt > 0 && *expiredAt <= s.now().Unix() {
-		return account.Account{}, errors.New("用户已过期")
+		return account.Account{}, userError("用户已过期")
 	}
 	return user, nil
 }
@@ -279,11 +299,11 @@ func (s *Service) Register(ctx context.Context, request pluginhostsdk.NativeRequ
 	}
 	stores, err := s.Open(ctx)
 	if err != nil {
-		return s.panelError(err.Error())
+		return s.failure(err)
 	}
 	config, err := s.settings(ctx, stores)
 	if err != nil {
-		return s.panelError(err.Error())
+		return s.failure(err)
 	}
 	policy := newPolicy(config.Registration)
 	if !policy.Enabled {
@@ -294,7 +314,7 @@ func (s *Service) Register(ctx context.Context, request pluginhostsdk.NativeRequ
 	// Every registration counts against the address, successful or not, and
 	// is counted before it runs.
 	if allowed, wait, err := stores.Throttle.Attempt(ctx, key, limit); err != nil {
-		return s.panelError(err.Error())
+		return s.failure(err)
 	} else if !allowed {
 		return s.panelError("too many registration attempts, please try again later", retryAfter(wait))
 	}
@@ -305,7 +325,7 @@ func (s *Service) Register(ctx context.Context, request pluginhostsdk.NativeRequ
 		return s.panelError("请输入有效的邮箱地址")
 	}
 	if err := policy.validate(req.Email); err != nil {
-		return s.panelError(err.Error())
+		return s.failure(err)
 	}
 	inviteCode := strings.TrimSpace(req.InviteCode)
 	if policy.RequireInvite && inviteCode == "" {
@@ -314,11 +334,11 @@ func (s *Service) Register(ctx context.Context, request pluginhostsdk.NativeRequ
 
 	user, err := s.register(ctx, stores, strings.ToLower(strings.TrimSpace(req.Email)), req.Password, inviteCode)
 	if err != nil {
-		return s.panelError(err.Error())
+		return s.failure(err)
 	}
 	signed, err := s.issue(ctx, config, user)
 	if err != nil {
-		return s.panelError(err.Error())
+		return s.failure(err)
 	}
 	return s.panel(s.sessionData(ctx, user, signed))
 }
@@ -326,14 +346,14 @@ func (s *Service) Register(ctx context.Context, request pluginhostsdk.NativeRequ
 func (s *Service) register(ctx context.Context, stores *Stores, email, password, inviteCode string) (account.Account, error) {
 	hash, err := bcrypt.GenerateFromPassword([]byte(password), bcrypt.DefaultCost)
 	if err != nil {
-		return account.Account{}, errors.New("密码加密失败")
+		return account.Account{}, userError("密码加密失败")
 	}
 	taken, err := stores.Accounts.EmailTaken(ctx, email)
 	if err != nil {
 		return account.Account{}, err
 	}
 	if taken {
-		return account.Account{}, errors.New("该邮箱已被注册")
+		return account.Account{}, userError("该邮箱已被注册")
 	}
 	accountUUID := uuid.NewString()
 	created, err := s.Kernel.CreateSubscriber(ctx, &kernelidentityv1.CreateSubscriberRequest{
@@ -343,20 +363,20 @@ func (s *Service) register(ctx context.Context, stores *Stores, email, password,
 	switch status.Code(err) {
 	case codes.OK:
 	case codes.AlreadyExists:
-		return account.Account{}, errors.New("该邮箱已被注册")
+		return account.Account{}, userError("该邮箱已被注册")
 	case codes.FailedPrecondition:
-		return account.Account{}, errors.New(status.Convert(err).Message())
+		return account.Account{}, userError(status.Convert(err).Message())
 	default:
-		return account.Account{}, errors.New("注册失败，请稍后重试")
+		return account.Account{}, userError("注册失败，请稍后重试")
 	}
 	user := account.Account{
 		UserID: created.GetUserId(), AccountUUID: accountUUID, Email: email, PasswordHash: string(hash), TokenVersion: 1,
 	}
 	if err := stores.Accounts.Create(ctx, user); err != nil {
 		if errors.Is(err, account.ErrEmailTaken) {
-			return account.Account{}, errors.New("该邮箱已被注册")
+			return account.Account{}, userError("该邮箱已被注册")
 		}
-		return account.Account{}, errors.New("注册失败，请稍后重试")
+		return account.Account{}, userError("注册失败，请稍后重试")
 	}
 	return user, nil
 }
@@ -380,14 +400,14 @@ func (p registrationPolicy) validate(email string) error {
 	normalized := strings.ToLower(strings.TrimSpace(email))
 	parts := strings.Split(normalized, "@")
 	if len(parts) != 2 || strings.TrimSpace(parts[0]) == "" || strings.TrimSpace(parts[1]) == "" {
-		return errors.New("invalid email address")
+		return userError("invalid email address")
 	}
 	domain := strings.TrimPrefix(parts[1], ".")
 	if len(p.Blocked) > 0 && domainMatches(domain, p.Blocked) {
-		return fmt.Errorf("email domain %s is not allowed", domain)
+		return userError(fmt.Sprintf("email domain %s is not allowed", domain))
 	}
 	if len(p.Allowed) > 0 && !domainMatches(domain, p.Allowed) {
-		return fmt.Errorf("email domain %s is not in the allowlist", domain)
+		return userError(fmt.Sprintf("email domain %s is not in the allowlist", domain))
 	}
 	return nil
 }
