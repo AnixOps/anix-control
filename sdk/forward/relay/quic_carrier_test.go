@@ -1147,6 +1147,30 @@ func TestQUICStatelessResetEndsTheCarrier(t *testing.T) {
 		return err == nil
 	})
 	defer func() { _ = l2.Close() }()
+	// A stateless reset answers a packet the new listener cannot place, and
+	// only one longer than the reset itself: quic-go sends none for packets of
+	// 42 bytes or less, such as keep-alive PINGs, so an idle carrier ends in
+	// the idle timeout instead. The dialler's larger packets right after the
+	// restart (a path MTU probe, retransmitted data) may fall into the moment
+	// before the new listener holds the port, so, like a carrier in use, the
+	// dialler keeps sending until it is reset.
+	sendDone := make(chan struct{})
+	var sendWG sync.WaitGroup
+	sendWG.Add(1)
+	go func() {
+		defer sendWG.Done()
+		for {
+			select {
+			case <-d.Done():
+				return
+			case <-sendDone:
+				return
+			case <-time.After(50 * time.Millisecond):
+				_ = d.qc.SendDatagram(make([]byte, 100))
+			}
+		}
+	}()
+	defer func() { close(sendDone); sendWG.Wait() }()
 	waitDone(t, d) // far sooner than the 20 s idle timeout
 	if errors.Is(d.Err(), ErrIdleTimeout) {
 		t.Fatalf("the carrier idled out instead of being reset: %v", d.Err())

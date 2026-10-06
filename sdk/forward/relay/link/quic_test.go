@@ -609,6 +609,30 @@ func TestQUICStatelessReset(t *testing.T) {
 		return err == nil
 	})
 	defer func() { _ = l2.Close() }()
+	// A stateless reset answers a packet the new listener cannot place, and
+	// only one longer than the reset itself (quic-go sends none for packets of
+	// 42 bytes or less, such as the dialler's keep-alive PINGs, which end in
+	// the idle timeout instead). The dialler's own larger packets right after
+	// the restart (a path MTU probe, retransmitted data) may fall into the
+	// moment before the new listener holds the port, so, like a peer that is
+	// in use, the dialler keeps sending application data until it is reset.
+	var sendWG sync.WaitGroup
+	sendDone := make(chan struct{})
+	sendWG.Add(1)
+	go func() {
+		defer sendWG.Done()
+		for {
+			select {
+			case <-c.Context().Done():
+				return
+			case <-sendDone:
+				return
+			case <-time.After(50 * time.Millisecond):
+				_ = c.SendDatagram(make([]byte, 100))
+			}
+		}
+	}()
+	defer func() { close(sendDone); sendWG.Wait() }()
 	select {
 	case <-c.Context().Done():
 	case <-time.After(testWait):
