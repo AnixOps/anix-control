@@ -33,6 +33,11 @@
   call): v0.56.0 needs Go 1.26 and the Agent builds with Go 1.25, so raising
   the SDK would stop the Agent from building. GO-2026-5932 (the unmaintained
   `x/crypto/openpgp`) has no fixed version and nothing here imports it.
+- **Security scanning:** a nightly `Nightly Security` workflow runs `govulncheck`
+  on every Go module, the `gosec` gates, `npm run audit:check` for the web app
+  and a 60-second real fuzz run of every relay fuzz target, so a newly
+  published advisory or a crash input is found the next morning instead of
+  failing an unrelated pull request (docs/RELEASING.md).
 
 - **Security:** the web app moves to Vue 3.5.43 and source-map-js 1.2.2, which fix
   GHSA-g2v6-rqmx-r4w6 (`@vue/server-renderer`, XSS) and GHSA-68fv-2mgg-jv7q
