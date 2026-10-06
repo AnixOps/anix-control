@@ -6,6 +6,12 @@
   `app.api_token`, `grpc.api_token`): set but shorter than 32 bytes, a template value, or only a few
   distinct characters. It names the setting and how to rotate it and never prints the value; nothing
   refuses to start, so installations with short secrets keep working (docs/UPGRADE.md).
+- **Security (identity and kernel):** `POST /user/mfa/totp/setup` no longer replaces the secret and the
+  backup codes of an account whose second factor is already enabled. A stolen session could swap the
+  factor (locking the owner out and learning the new secret and codes) without the password; it is now
+  refused with "MFA already enabled; disable it first" (disabling asks for the password), both in
+  the identity module and in the kernel's own handler. A setup that was never enabled is still replaced.
+  The web app only offers the setup while the second factor is off.
 
 - **Tests:** `TestWebSocketAdapterRelaysFramesToAnExactLegacyHandler` no longer fails when the
   adapter finishes before the test looks: the echo and the completion were both ready and

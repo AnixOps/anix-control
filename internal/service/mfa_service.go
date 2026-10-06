@@ -3,6 +3,7 @@ package service
 import (
 	"crypto/rand"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"strings"
@@ -15,6 +16,10 @@ import (
 	"golang.org/x/crypto/bcrypt"
 	"gorm.io/gorm"
 )
+
+// ErrMFAAlreadyEnabled refuses a new TOTP secret for an account whose second
+// factor is enabled; the identity module says the same.
+var ErrMFAAlreadyEnabled = errors.New("MFA already enabled; disable it first")
 
 // MFAService MFA服务
 type MFAService struct {
@@ -100,6 +105,11 @@ func (s *MFAService) SetupTOTP(userID uint, email string) (*TOTPSetup, error) {
 			return nil, err
 		}
 	} else {
+		if mfa.Enabled {
+			// A session alone must not replace the factor that guards the
+			// account; it is disabled first, with the password.
+			return nil, ErrMFAAlreadyEnabled
+		}
 		mfa.TOTPSecret = key.Secret()
 		mfa.BackupCodes = backupCodes
 		if err := s.db.Save(&mfa).Error; err != nil {

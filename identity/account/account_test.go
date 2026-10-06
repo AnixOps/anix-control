@@ -9,6 +9,7 @@ import (
 
 	"github.com/AnixOps/anix-control/identity/secretbox"
 	"github.com/glebarez/sqlite"
+	"github.com/pquerna/otp/totp"
 	"github.com/stretchr/testify/require"
 	"gorm.io/gorm"
 	"gorm.io/gorm/logger"
@@ -132,4 +133,32 @@ func TestImportRejectsIncompleteAccounts(t *testing.T) {
 	require.Error(t, err)
 	_, err = (&Store{}).Get(context.Background(), []uint64{1})
 	require.ErrorIs(t, err, ErrNotConfigured)
+}
+
+// A second factor that is on is not replaced by a new secret (a session alone
+// must not swap the factor that guards the account); one that was set up and
+// never enabled is.
+func TestSetupTOTPRefusesAnEnabledSecondFactor(t *testing.T) {
+	store, _ := NewTestStore(t)
+	ctx := context.Background()
+
+	first, err := store.SetupTOTP(ctx, 1, "AnixOps", "a@example.test", 2)
+	require.NoError(t, err)
+	again, err := store.SetupTOTP(ctx, 1, "AnixOps", "a@example.test", 2)
+	require.NoError(t, err, "an unfinished setup is replaced")
+	require.NotEqual(t, first.Secret, again.Secret)
+
+	code, err := totp.GenerateCode(again.Secret, time.Now())
+	require.NoError(t, err)
+	require.NoError(t, store.EnableTOTP(ctx, 1, code))
+
+	_, err = store.SetupTOTP(ctx, 1, "AnixOps", "a@example.test", 2)
+	require.ErrorIs(t, err, ErrMFAAlreadyEnabled)
+	status, err := store.Status(ctx, 1)
+	require.NoError(t, err)
+	require.True(t, status.Enabled)
+
+	require.NoError(t, store.DisableMFA(ctx, 1))
+	_, err = store.SetupTOTP(ctx, 1, "AnixOps", "a@example.test", 2)
+	require.NoError(t, err, "after disabling, a new setup is allowed")
 }
