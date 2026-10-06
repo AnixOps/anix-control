@@ -53,6 +53,29 @@ func TestValidateTokenAuthenticationModes(t *testing.T) {
 	}
 }
 
+// Once identity is finalized the kernel's own HS256 tokens stop working, on
+// the gRPC services as everywhere else: the shared JWT secret must not stay
+// an administrator credential there.
+func TestValidateTokenRefusesHS256AfterTheIdentityCutoverIsFinalized(t *testing.T) {
+	const secret = "grpc-test-jwt-secret-with-enough-length"
+	adminToken, err := utils.GenerateToken(7, "admin@example.com", true, secret, 3600)
+	require.NoError(t, err)
+
+	ok, _, reason := validateToken(adminToken, "", secret)
+	require.True(t, ok, "before finalize the kernel's own administrator token works: %s", reason)
+
+	previous := legacyTokensRefused
+	legacyTokensRefused = func() bool { return true }
+	t.Cleanup(func() { legacyTokensRefused = previous })
+	ok, claims, reason := validateToken(adminToken, "", secret)
+	require.False(t, ok, "after finalize an HS256 administrator token is refused")
+	require.Nil(t, claims)
+	require.Equal(t, "invalid or expired JWT token", reason)
+
+	ok, _, _ = validateToken("shared-api-token", "shared-api-token", secret)
+	require.True(t, ok, "the configured grpc.api_token is a different credential and is not part of this refusal")
+}
+
 func TestAnyToInt32ConvertsSupportedNumericTypes(t *testing.T) {
 	got, ok, err := anyToInt32("port", int32(443))
 	require.NoError(t, err)
