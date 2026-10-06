@@ -145,19 +145,32 @@ func TestAgentControlConfigNegotiation(t *testing.T) {
 }
 
 // The Hello reconcile sends one snapshot when the agent's revision is not
-// the desired one, and nothing when it is.
+// the desired one, and, when it is, only until the kernel has recorded it as
+// applied: the agent's ConfigStatus can be lost with the session that carried
+// it, and nothing else would ask the agent to report that revision again.
 func TestAgentControlConfigHelloReconcile(t *testing.T) {
 	env := newConfigTestEnvironment(t)
 	row := env.desiredConfig(t)
+	recordApplied := false
 	for _, test := range []struct {
-		name     string
-		revision uint64
-		want     int
+		name          string
+		revision      uint64
+		appliedBefore bool
+		want          int
 	}{
-		{"same", row.Revision, 0},
-		{"none", 0, 1},
-		{"other", row.Revision + 3, 1},
+		{"same, applied status never recorded", row.Revision, false, 1},
+		{"none", 0, false, 1},
+		{"other", row.Revision + 3, false, 1},
+		{"same, recorded as applied", row.Revision, true, 0},
+		{"none, recorded as applied", 0, true, 1},
 	} {
+		if test.appliedBefore && !recordApplied {
+			verdict, err := kernelnodeops.RecordConfigStatus(context.Background(), database.GetDB(), env.agentNode(), "earlier-session",
+				&agentv1pb.ConfigStatus{ConfigRevision: row.Revision, ConfigHash: row.ConfigHash, Applied: true}, time.Now())
+			require.NoError(t, err)
+			require.Equal(t, model.ConfigVerdictApplied, verdict)
+			recordApplied = true
+		}
 		before := snapshotsSent(configTriggerHello)
 		session := openConfigSession(t, env, test.revision)
 		session.heartbeat()
@@ -312,6 +325,11 @@ func TestAgentStreamsPushConfig(t *testing.T) {
 	assert.ErrorIs(t, err, agentstreams.ErrCapabilityMissing)
 	require.NoError(t, old.stream.CloseSend())
 
+	// The agent runs the desired revision and the kernel recorded it applied,
+	// so the Hello is answered with nothing.
+	_, err = kernelnodeops.RecordConfigStatus(ctx, database.GetDB(), env.agentNode(), "earlier-session",
+		&agentv1pb.ConfigStatus{ConfigRevision: row.Revision, ConfigHash: row.ConfigHash, Applied: true}, time.Now())
+	require.NoError(t, err)
 	session := openConfigSession(t, env, row.Revision)
 	session.heartbeat()
 	require.Empty(t, session.untilHeartbeatAck())
@@ -370,6 +388,12 @@ func TestAgentControlConfigRefresh(t *testing.T) {
 	setConfigRefreshInterval(20 * time.Millisecond)
 	t.Cleanup(func() { setConfigRefreshInterval(defaultConfigRefreshInterval) })
 	row := env.desiredConfig(t)
+	// The agent runs the desired revision and the kernel recorded it applied,
+	// so the Hello is answered with nothing and the first snapshot is the
+	// refresher's.
+	_, err := kernelnodeops.RecordConfigStatus(context.Background(), database.GetDB(), env.agentNode(), "earlier-session",
+		&agentv1pb.ConfigStatus{ConfigRevision: row.Revision, ConfigHash: row.ConfigHash, Applied: true}, time.Now())
+	require.NoError(t, err)
 	session := openConfigSession(t, env, row.Revision)
 	before := snapshotsSent(configTriggerRefresh)
 	require.NoError(t, database.GetDB().Model(&model.Node{}).Where("id = ?", env.node.ID).Update("host", "192.0.2.10").Error)
@@ -412,4 +436,28 @@ func TestWriteAgentConfigPrometheus(t *testing.T) {
 	WriteAgentConfigPrometheus(&body)
 	assert.NotContains(t, body.String(), "anixops_agent_config_lagging_nodes")
 	assert.Contains(t, body.String(), "anixops_agent_config_statuses_total")
+}
+
+// A ConfigStatus the agent sent just before its session ended is still
+// recorded: the data plane ends a session right after applying a snapshot it
+// cannot hold users for, and the status is not repeated, so a status refused
+// because the stream's context ended left the node unapplied for good.
+func TestAgentControlConfigStatusOutlivesItsStream(t *testing.T) {
+	env := newConfigTestEnvironment(t)
+	row := env.desiredConfig(t)
+	capabilities := []*agentv1pb.Capability{{Name: agentcontrol.CapabilityConfig, Version: agentcontrol.CapabilityVersionV1}}
+	connection := &AgentControlConnection{
+		NodeID: uint32(env.node.ID), SessionID: "session-ended-meanwhile",
+		Capabilities: capabilities, ServerCapabilities: capabilities,
+	}
+	server := NewAgentControlGRPCServer(NewAgentControlManager())
+	ended, cancel := context.WithCancel(context.Background())
+	cancel()
+	require.NoError(t, server.handleConfigStatus(ended, NewAgentControlManager(), connection, env.agentNode(),
+		&agentv1pb.ConfigStatus{ConfigRevision: row.Revision, ConfigHash: row.ConfigHash, Applied: true}))
+	recorded, found, err := kernelnodeops.LoadConfigStatus(context.Background(), database.GetDB(), env.agentNode())
+	require.NoError(t, err)
+	require.True(t, found, "the status of a stream that had ended was dropped")
+	assert.Equal(t, model.ConfigVerdictApplied, recorded.Verdict)
+	assert.Equal(t, row.Revision, recorded.AppliedRevision)
 }

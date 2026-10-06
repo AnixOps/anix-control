@@ -5,6 +5,14 @@
 - **Tests:** `TestWebSocketAdapterRelaysFramesToAnExactLegacyHandler` no longer fails when the
   adapter finishes before the test looks: the echo and the completion were both ready and
   `select` could consume the completion early, so the wait after the close frame timed out.
+- **Fixed:** an Agent's `ConfigStatus` is no longer lost when its control session ends right
+  after it (the data plane ends a session after applying a snapshot it cannot hold users
+  for). Control recorded the status with the stream's context, so a session that ended in
+  that moment failed the write ("context canceled"), the status was never repeated, and the
+  node showed as unapplied until the next revision (up to a minute, seen as the
+  `config_snapshot_applied` failures of the Cross-Repo E2E). The status is recorded whole
+  with its own timeout, and a Hello that reports the desired revision is sent that snapshot
+  again when the kernel never recorded it as applied, so the Agent reports it again.
 
 - **Tests:** `TestUDPThroughTheChain` waits for the entry and exit packet counters instead of
   reading them the moment the client holds its fifth echo, which failed once on CI with
