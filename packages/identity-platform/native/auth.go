@@ -48,6 +48,13 @@ func loginKey(email, ip string) string {
 	return fmt.Sprintf("login|%s|%s", strings.ToLower(strings.TrimSpace(email)), normalizedIP)
 }
 
+// mfaKey and reauthKey limit the second-factor and password checks of one
+// account across every address: the per-address login key does not stop
+// guesses spread over many addresses.
+func mfaKey(userID uint64) string { return fmt.Sprintf("mfa|%d", userID) }
+
+func reauthKey(userID uint64) string { return fmt.Sprintf("reauth|%d", userID) }
+
 func registerKey(ip string) string {
 	normalizedIP := strings.TrimSpace(ip)
 	if normalizedIP == "" {
@@ -184,6 +191,17 @@ func (s *Service) loginMFA(ctx context.Context, stores *Stores, config Settings,
 		})
 		return response, true, err
 	}
+	// The account's second-factor guesses are limited by the admin MFA
+	// configuration (max_attempts, lockout_duration), whichever address they
+	// come from; the password is already right here, so this cannot lock an
+	// account out for someone who does not hold it.
+	mfaLimit := loadAdminMFA(config.AdminMFA).attemptLimit()
+	if allowed, wait, err := stores.Throttle.Attempt(ctx, mfaKey(user.UserID), mfaLimit); err != nil {
+		return pluginhostsdk.NativeResponse{}, false, err
+	} else if !allowed {
+		response, err := s.panelError("too many mfa attempts, please try again later", retryAfter(wait))
+		return response, true, err
+	}
 	valid, err := stores.Accounts.VerifyMFA(ctx, user.UserID, code, method)
 	if err != nil {
 		return pluginhostsdk.NativeResponse{}, false, err
@@ -199,6 +217,9 @@ func (s *Service) loginMFA(ctx context.Context, stores *Stores, config Settings,
 		// The attempt is already counted.
 		response, err := s.panelError("invalid mfa code")
 		return response, true, err
+	}
+	if err := stores.Throttle.RecordSuccess(ctx, mfaKey(user.UserID)); err != nil {
+		return pluginhostsdk.NativeResponse{}, false, err
 	}
 	return pluginhostsdk.NativeResponse{}, false, nil
 }

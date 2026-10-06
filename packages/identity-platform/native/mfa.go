@@ -6,8 +6,10 @@ import (
 	"errors"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/AnixOps/anix-control/identity/account"
+	"github.com/AnixOps/anix-control/identity/throttle"
 	"github.com/AnixOps/anix-control/sdk/pluginhostsdk"
 	"github.com/gin-gonic/gin/binding"
 	"golang.org/x/crypto/bcrypt"
@@ -43,6 +45,13 @@ func defaultAdminMFA() adminMFA {
 		Methods: defaultMFAMethods(), AllowedMethods: []string{"totp", "email"}, TOTPIssuer: defaultTOTPIssuer,
 		BackupCodesCount: 10, BackupCodeCount: 10, MaxAttempts: 5, LockoutDuration: 15,
 	}
+}
+
+// attemptLimit is the account's second-factor attempt limit: max_attempts
+// failures lock it for lockout_duration minutes.
+func (c adminMFA) attemptLimit() throttle.Options {
+	lockout := time.Duration(c.LockoutDuration) * time.Minute
+	return throttle.Options{Enabled: true, MaxAttempts: c.MaxAttempts, Window: lockout, Lockout: lockout}
 }
 
 func cloneMFAMethods(methods map[string]bool) map[string]bool {
@@ -386,8 +395,23 @@ func (s *Service) DisableMFA(ctx context.Context, request pluginhostsdk.NativeRe
 	if len(users) == 0 {
 		return s.panelError("record not found")
 	}
+	// A session alone must not be a password-guessing oracle: the guesses
+	// are limited per account like the login's.
+	config, err := s.settings(ctx, stores)
+	if err != nil {
+		return s.panelError(err.Error())
+	}
+	limit := config.LoginRateLimit.options()
+	if allowed, wait, err := stores.Throttle.Attempt(ctx, reauthKey(users[0].UserID), limit); err != nil {
+		return s.panelError(err.Error())
+	} else if !allowed {
+		return s.panelError("too many attempts, please try again later", retryAfter(wait))
+	}
 	if bcrypt.CompareHashAndPassword([]byte(users[0].PasswordHash), []byte(req.Password)) != nil {
 		return s.panelError("invalid password")
+	}
+	if err := stores.Throttle.RecordSuccess(ctx, reauthKey(users[0].UserID)); err != nil {
+		return s.panelError(err.Error())
 	}
 	if err := stores.Accounts.DisableMFA(ctx, users[0].UserID); err != nil {
 		return s.panelError(err.Error())
@@ -411,12 +435,25 @@ func (s *Service) VerifyMFA(ctx context.Context, request pluginhostsdk.NativeReq
 	if err != nil {
 		return s.panelError(err.Error())
 	}
-	valid, err := stores.Accounts.VerifyMFA(ctx, uint64(request.Principal.ActorID), req.Code, req.Method)
+	userID := uint64(request.Principal.ActorID)
+	mfaConfig, err := s.adminMFA(ctx, stores)
+	if err != nil {
+		return s.panelError(err.Error())
+	}
+	if allowed, wait, err := stores.Throttle.Attempt(ctx, mfaKey(userID), mfaConfig.attemptLimit()); err != nil {
+		return s.panelError(err.Error())
+	} else if !allowed {
+		return s.panelError("too many mfa attempts, please try again later", retryAfter(wait))
+	}
+	valid, err := stores.Accounts.VerifyMFA(ctx, userID, req.Code, req.Method)
 	if err != nil {
 		return s.panelError(err.Error())
 	}
 	if !valid {
 		return s.panelError("invalid code")
+	}
+	if err := stores.Throttle.RecordSuccess(ctx, mfaKey(userID)); err != nil {
+		return s.panelError(err.Error())
 	}
 	return s.panel(map[string]any{"message": "verified successfully"})
 }
