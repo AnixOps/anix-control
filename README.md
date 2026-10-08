@@ -16,7 +16,7 @@ truth for implemented, partial, planned, compatibility, and deferred features.
   pinned to Go `1.26.8` in CI.
 - Frontend: Vue 3 + Vite under [`web/`](web), Node.js `22` in CI.
 - Default database: SQLite, with PostgreSQL migration/dry-run tooling.
-- Current release: `v4.2.0-rc.2` (the formal plugin-only Control release). It ships
+- Current release: `v4.2.0-rc.3` (the formal plugin-only Control release). It ships
   a signed sixteen-package cohort, package-host lifecycle controls, immutable
   V4 evidence, and compatibility-gated Agent integration.
 - Product delivery line: `v4.0.0-alpha.*` remains immutable historical preview
