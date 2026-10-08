@@ -2,6 +2,12 @@
 
 ## Unreleased
 
+- **Tests:** the `internal/grpc` agent listener tests no longer depend on test order. The process-wide
+  agent managers retain desired operations per node id, so an earlier test's retained `pending`
+  operation was replayed to the next test's node (every fresh database numbers its first node 1),
+  and `TestAgentListenerBindsEnvelopesAndRequestsToTheCertificate` read it instead of the
+  expected `PermissionDenied` under `-shuffle` (seeds 4 and 6 failed every time with `-v`).
+
 - **Tests:** the relay driver tests pick their ports below the kernel's ephemeral range
   (`relaytest.FreePort`). A port taken with `:0` and released lies inside that range, where
   another process's outbound connection may take it as its source port before the test

@@ -69,6 +69,12 @@ func startAgentListenerWith(t *testing.T, mode string, withPKI bool, configure f
 		&model.NodeServiceAssignment{}, &model.PluginTelemetryState{}, &model.NodePluginObservedState{}, &model.AgentTransport{},
 		&model.NodeOperationRevision{})
 	db := database.Get()
+	// The process-wide managers keep operations desired for a node id until
+	// the agent reports them: an earlier test's retained operation would be
+	// replayed to this test's node, which has the same id in a fresh
+	// database. Start from, and leave, empty managers.
+	resetGlobalAgentManagers()
+	t.Cleanup(resetGlobalAgentManagers)
 	// A fresh transport recorder: its throttle must not carry sightings of
 	// an earlier test's node with the same id.
 	t.Cleanup(agenttransport.SetDefault(agenttransport.NewRecorder(database.Get)))
@@ -498,4 +504,16 @@ func waitConnection(t *testing.T, manager *AgentControlManager, nodeID uint32) A
 		return connected
 	}, 5*time.Second, 5*time.Millisecond, "node %d is not registered", nodeID)
 	return snapshot
+}
+
+// resetGlobalAgentManagers forgets what the process-wide managers retain per
+// node: the desired operations, their revisions and the observed states.
+func resetGlobalAgentManagers() {
+	for _, m := range []*AgentControlManager{agentControlManager, forwardAgentControlManager} {
+		m.mu.Lock()
+		clear(m.desired)
+		clear(m.desiredRevision)
+		clear(m.observed)
+		m.mu.Unlock()
+	}
 }
