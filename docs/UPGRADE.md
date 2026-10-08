@@ -70,6 +70,16 @@ commercial packages (`order`, `payment`, `affiliate`) have no build signed
 with the new root ([the warning](#commercial-packages-have-no-new-root-build)).
 Read ["The Official Signing Root Changes (v4.2)"](#the-official-signing-root-changes-v42).
 
+**Upgrading to 4.2.0-rc.3: the identity security fixes are in a package, and
+nothing moves it for you.** The login, registration, reset and second-factor
+fixes of rc.3 live in the `identity-platform` package, not in the Control
+binary: starting rc.3 registers the new package release but leaves a healthy
+installation on the release it runs. Until you move it
+(`PUT /api/v3/plugin-installations`) the old behaviour stays. The gRPC refusal
+of the kernel's HS256 tokens after identity's cutover is finalized is in the
+binary and applies at once. Read
+["Upgrading From 4.2.0-rc.2 To 4.2.0-rc.3"](#upgrading-from-420-rc2-to-420-rc3).
+
 ## Fixed Legacy Native Layout
 
 For the specific legacy layout discovered on the old native host
@@ -2999,6 +3009,143 @@ recovery, the way out is the rollback below or restoring the database backup.
   `kapi_plugin_configuration_v1`) and drops no table; the row counts of the
   existing tables were unchanged. 4.1.0 ignores the new ones, so a rollback
   needs no schema step.
+
+## Upgrading From 4.2.0-rc.2 To 4.2.0-rc.3
+
+rc.3 changes no table and no signing root: nothing under any `migrations`
+directory differs from rc.2, and the root is the same
+`jW26nr2tbthASoeq6RmIpx8Ah+uhPNIv9V1ewRVb1VE=`. The Agent and Control share a
+version number; upgrade the Agents first as for every 4.2 build. Coming from
+4.1.0, do everything in
+["The Official Signing Root Changes (v4.2)"](#the-official-signing-root-changes-v42)
+with the rc.3 builds in place of rc.2; the notes below are on top of it.
+
+### rc.3 Checklist (4.2)
+
+1. Back up the database and the configuration, as always.
+2. Upgrade the Agents first, with the `agent-install.sh` release asset of
+   rc.3 (see [Staged Agent Upgrades (v4.2)](#staged-agent-upgrades-v42)).
+3. Deploy the rc.3 Control. `identity-platform` keeps running its rc.2 release:
+   the bootstrap moves an installation only when its release can no longer be
+   verified ([Identity-Platform Recovers By Itself](#identity-platform-recovers-by-itself)),
+   and under the same root it can.
+4. **Move `identity-platform` to rc.3** with an administrator session token
+   (the call of step 3 in [Upgrade Procedure](#upgrade-procedure), with
+   `VERSION=4.2.0-rc.3`), then check `GET /api/v3/plugin-installations` for
+   `desired_version` `4.2.0-rc.3` and `healthy`. The package restarts, so
+   login pauses for a few seconds (3 s in the rc.2 rehearsal; rc.3 was not
+   rehearsed again). A deployment that runs `identity-platform` as a module
+   container ([`config/deploy/compose/modules.md`](../config/deploy/compose/modules.md))
+   also points `ANIX_MODULE_IDENTITY_IMAGE` at the module image of the new
+   version.
+5. The other packages did not change since rc.2 (only `identity-platform` has
+   different files); an installation on its rc.2 release keeps working. Import
+   the rc.3 builds from the verified archive when you want the installations on
+   the release version
+   ([Getting A Package From The Release](#getting-a-package-from-the-release)).
+6. If a reverse proxy or CDN caches `index.html`, purge it and reload open tabs:
+   the web app's assets changed (Vue 3.5.43, the API-token page).
+7. Check the new behaviour below with the rc.3 smoke checks.
+
+### What Changes For Operators
+
+- **Identity (needs step 4).** Login, registration and the subscription-link
+  reset count an attempt before the guarded check, so parallel guesses at one
+  account no longer all get tried; the second factor and the password re-check
+  of the MFA disable endpoint are limited per account, whichever address they
+  come from, with the admin MFA settings `max_attempts` and `lockout_duration`
+  (defaults 5 and 15 minutes; they were stored but never applied before, so an
+  installation that set them sees them take effect now); an unknown e-mail
+  costs the same bcrypt work as a wrong password; the unauthenticated login and
+  registration answers no longer carry infrastructure error text (they read
+  `服务暂时不可用，请稍后重试`; refusals meant for the caller are unchanged). The
+  limits use the existing throttle table, so there is no migration; counts are
+  per key and the first attempt of a key now counts exactly once.
+- **`POST /user/mfa/totp/setup` is refused while MFA is enabled**
+  (`MFA already enabled; disable it first`; disabling asks for the password). This
+  is also in the Control binary, so it takes effect on restart, before and after
+  the cutover. A setup that was never enabled can still be replaced. The web app
+  only offers it while the second factor is off; a script that re-runs the setup
+  on an enabled account must disable it first.
+- **gRPC refuses the kernel's HS256 tokens once identity's cutover is
+  finalized.** Finalizing already refused them on the HTTP APIs and the admin
+  monitor WebSocket; gRPC still read `jwt.secret`. A gRPC caller that presented a
+  session token minted before the cutover now gets `invalid or expired JWT
+  token`; EdDSA tokens issued by identity and the configured `grpc.api_token`
+  (a separate credential) keep working, and Agent services use their own
+  mTLS/node credentials. The same gap existed in 4.1.0. Check
+  `legacy_tokens_refused` in `GET /api/v4/kernel/identity`. Before finalize
+  nothing changes; after it there is no switch back, so a caller that must keep
+  working needs an identity token or the `grpc.api_token`.
+- **Credential revocation covers a certificate being issued at that moment.**
+  An Agent certificate, enrollment or forward link certificate (up to 7 days),
+  and a module certificate (24 hours by default), requested while the node or the
+  enrollment was being revoked can no longer be recorded after the revocation on
+  PostgreSQL. No action needed.
+- **A stale sign-in has its own code** when an administrator creates an API
+  token with the identity module holding the credentials: `403
+  step_up_sign_in_stale` (message unchanged) instead of `step_up_required`.
+  Clients that match `step_up_required` for that case must match both. The rc.2
+  web app does not know the new code and shows a generic error; this release's
+  web app handles both. A sign-in at most ten minutes old is still required.
+- **API token names are counted in characters** (limit 100) on the server, as the
+  form did, and the token list carries `owner_email`.
+- **Plugin operations stuck behind a one-off operation** (the rc.2 known issue,
+  `revision N is not newer than M`) are renumbered above the node's cursor and
+  sent when their node is connected and before their `deadline_at`; operations
+  stuck on rc.2 therefore recover by themselves. Revision numbers of pending
+  operations can change after creation. No schema change.
+- **An Agent's configuration status is kept** when its control session ends right
+  after the Agent reports it, and a Hello that reports the desired revision gets
+  the snapshot again if the kernel never recorded it as applied (the Agent only
+  reports it again). Expect one repeated snapshot per such Agent after the
+  upgrade.
+- **Weak shared secrets** log a startup `WARNING` (see the top of this runbook).
+  The development `docker-compose.yml` secret is shorter than 32 bytes and
+  warns; the installers' generated secrets do not.
+- **Source builds need Go 1.26** (the root module's `go` directive and the
+  Control Center module); the `sdk` and `identity` modules stay on Go 1.25 so the
+  Agent keeps building. Release images already used Go 1.26.8.
+
+### For The Release Owner
+
+- **Commercial packages.** After the rc.3 tag exists, run the manual
+  `Commercial Packages` workflow with `tag=v4.2.0-rc.3` and `attach=true`; it
+  builds `order`, `payment` and `affiliate` at that version, signs them with the
+  official key, verifies them against the configured root and adds them with
+  `SHA256SUMS-commercial.txt` to the release (a second `attach` run on the same
+  tag fails, as the upload does not overwrite). rc.2 builds exist too: they were
+  attached to the v4.2.0-rc.2 release the same way. A commercial installation
+  imports them as in [Upgrade Procedure](#upgrade-procedure) before the first
+  start of a Control that runs them.
+- **npm audit waivers expire:** braces on 2026-11-02 and sprintf-js on
+  2026-11-05 (`web/audit-allowlist.json`); the frontend audit fails after that
+  unless they are renewed or fixed.
+- **Nightly security scan** (`Nightly Security`) runs `govulncheck`, the `gosec`
+  gates, the frontend audit and the relay fuzz targets every night
+  ([`RELEASING.md`](RELEASING.md)).
+
+### Rolling Back From rc.3
+
+Redeploy the previous image or binary as in [Rollback](#rollback). The identity
+installation moved in step 4 can stay on rc.3 or go back with the same
+`PUT /api/v3/plugin-installations` call; the rc.3 package and the rc.2 package
+run on the same tables. Going back to 4.1.0 is
+[Rolling Back After The Import](#rolling-back-after-the-import) and
+`config/scripts/rollback_installations.py`. The rc.3 package adds no column to the throttle table, so rows written by
+either package are read by the other.
+
+### Known Limits
+
+- Creating an administrator API token after the identity cutover is finalized
+  still needs a sign-in at most ten minutes old (no identity-module step-up call
+  yet).
+- The identity throttle table is shared by the login, registration and MFA
+  limiters, and each attempt deletes idle rows of the other limiters older than
+  its own window; with the defaults a registration counter that stayed idle for
+  about 20 minutes can be forgotten earlier than its one-hour window.
+- A TOTP code can be used twice inside its roughly 90-second window, and
+  regenerating backup codes asks only for the session; neither changed in rc.3.
 
 ## Switching Route Modes
 

@@ -62,7 +62,7 @@ type ForwardConfig struct {
 	// AnixOpsExperimental lets routes use the experimental AnixOps engine and
 	// link (ENGINE_ANIXOPS, LINK_SECURITY_ANIXOPS): it sets the planner's and
 	// the validation's EnableAnixOps. Off by default; the Agents need their own
-	// forward.anixops_experimental to advertise the engine, since the planner
+	// Forward.AnixOps.Enable (their JSON configuration) to advertise the engine, since the planner
 	// refuses a node that does not. The wire format of the prototype (ALPN
 	// anixops/0) may change without notice.
 	AnixOpsExperimental bool `yaml:"anixops_experimental"`
