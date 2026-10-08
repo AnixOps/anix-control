@@ -254,6 +254,13 @@ func (c *blockingOpenHostClient) OpenWebSocket(ctx context.Context, _ WebSocketI
 	case <-ctx.Done():
 		return nil, fmt.Errorf("%w: %v", ErrHostUnavailable, ctx.Err())
 	case <-c.releaseOpen:
+		// The test cancels the relay (Drain) before it releases the open, but
+		// this goroutine may reach the select only after both happened, and
+		// select then picks either ready case. A real host call that sees a
+		// cancelled context does not open the stream.
+		if err := ctx.Err(); err != nil {
+			return nil, fmt.Errorf("%w: %v", ErrHostUnavailable, err)
+		}
 		c.openReached.Store(true)
 		return noOpWebSocketTransport{}, nil
 	}
