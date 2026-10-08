@@ -35,7 +35,7 @@ contract slots it builds on (`ENGINE_ANIXOPS`,
 > - **集成**：`anixops` 引擎驱动（Render/Apply/Observe/SetUpstreams/Remove），推荐独立的
 >   `anixops-relay.service`（仅 `CAP_NET_BIND_SERVICE`，不持有 Agent 密钥），经 unix 套接字热更新。
 >   契约只做加法（载体枚举、PROXY v2、能力字段）。
-> - **计划**：v4.2 实验原型默认关闭（Control 与 Agent 两侧开关 `forward.anixops_experimental`），
+> - **计划**：v4.2 实验原型默认关闭（Control 侧开关 `forward.anixops_experimental`，Agent 侧开关 `Forward.AnixOps.Enable`），
 >   v4.3 正式版。设计已于 2026-10-04 由 owner 批准，P1–P10 已拍板（第 9.3 节）。
 
 ## Contents
@@ -1130,7 +1130,8 @@ This section is intentionally left for the owner to specify.
 - Control: `forward.anixops_experimental` (default `false`) sets
   `validate.Options.EnableAnixOps`, so routes may use `ENGINE_ANIXOPS` and
   `LINK_SECURITY_ANIXOPS`;
-- Agent: `forward.anixops_experimental` (default `false`) registers the
+- Agent: `Forward.AnixOps.Enable` in its JSON configuration (`"Forward":
+  {"AnixOps": {"Enable": true}}`, default `false`) registers the
   driver, so the node advertises the engine; without it the planner refuses
   the node for anixops hops.
 

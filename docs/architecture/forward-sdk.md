@@ -2395,7 +2395,7 @@ Agent-repository PRs are marked (agent).
 | | F5c | upgrade: archive, check the nodes are clean (Control cleans NodeX and Ansible hosts), drop tables (implemented) | M | H15 |
 | | F5d | remove flux routes, `forwardcompat`, catalog entries; rewrite AGENTS.md rules; archive the flux docs | M | H17 |
 | F6 | A0 | AnixOps relay transport design (`anixops-protocol.md`; secure transport only, approved 2026-10-04; camouflage reserved for the owner) | M | H22 |
-| | A1–A5 | v4.2 experimental prototype, off by default (`forward.anixops_experimental` on Control and Agent): relay library, QUIC, driver and `anixops-relay` unit (agent), contract additions, benchmarks (`anixops-protocol.md` section 9) | L | H22 |
+| | A1–A5 | v4.2 experimental prototype, off by default (`forward.anixops_experimental` on Control, `Forward.AnixOps.Enable` on the Agent): relay library, QUIC, driver and `anixops-relay` unit (agent), contract additions, benchmarks (`anixops-protocol.md` section 9) | L | H22 |
 | | A6 | v4.3 production: wire version 1 frozen | M | H22, owner sign-off |
 
 F1a–F1c and F2 do not depend on the Agent line. F3 needs AG-1. F5c runs

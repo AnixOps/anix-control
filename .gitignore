@@ -111,3 +111,8 @@ v2board.bak.*
 # the root binary (v2board) and logs/ patterns above would otherwise hide.
 !/control-center/internal/plugins/v2board/
 !/control-center/mobile/lib/features/logs/
+
+# Build output of `go build` in the repository root or a package directory
+/control
+/packages/*/control
+*.bck.yml

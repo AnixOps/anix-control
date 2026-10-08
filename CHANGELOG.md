@@ -2,17 +2,43 @@
 
 ## Unreleased
 
-- **Tests:** the `internal/grpc` agent listener tests no longer depend on test order. The process-wide
-  agent managers retain desired operations per node id, so an earlier test's retained `pending`
-  operation was replayed to the next test's node (every fresh database numbers its first node 1),
-  and `TestAgentListenerBindsEnvelopesAndRequestsToTheCertificate` read it instead of the
-  expected `PermissionDenied` under `-shuffle` (seeds 4 and 6 failed every time with `-v`).
+### Highlights since 4.2.0-rc.2
 
-- **Tests:** the relay driver tests pick their ports below the kernel's ephemeral range
-  (`relaytest.FreePort`). A port taken with `:0` and released lies inside that range, where
-  another process's outbound connection may take it as its source port before the test
-  listens; `TestConformance` and the relayd tests then failed with `address already in use`
-  (2 of 120 runs with a parallel test process, none of 200 and 150 after).
+- **The identity security fixes ship in the `identity-platform` package, not in the Control
+  binary.** Login, registration and reset attempts are limited atomically per account, the second
+  factor is limited per account and can no longer be replaced by a session alone, an unknown
+  e-mail costs the same work as a wrong password, and infrastructure error text no longer reaches
+  unauthenticated clients. None of it takes effect until the rc.3 package is imported and the
+  installation is moved to it (docs/UPGRADE.md, "4.2.0-rc.2 To 4.2.0-rc.3").
+- **Credential revocation can no longer lose a race with a renewal:** an Agent or module
+  certificate that was being issued while its credentials were revoked is covered by the
+  revocation. After identity's cutover is finalized gRPC also stops accepting the kernel's HS256
+  tokens.
+- **A plugin operation created before a one-off Agent operation is no longer stuck** (the
+  4.2.0-rc.2 known issue), and an Agent's configuration status survives the end of its control
+  session.
+- **Dependencies and scanning:** no reachable Go vulnerability in any module (the Control Center
+  module moves to Go 1.26), the web apps move past two new npm advisories, and a nightly
+  security workflow runs the scans and the relay fuzz targets.
+- **Experimental, off by default:** the `anixops` forward driver and the relay process
+  (A3); the Agent ships its half in the same release.
+- **Tests:** several tests that failed now and then on a loaded machine were made deterministic.
+
+### Known issues of 4.2.0-rc.2: status
+
+- Plugin operation refused with "revision N is not newer than M": **fixed** (below).
+- Rolling back to 4.1.0 after the import: `config/scripts/rollback_installations.py` does it in
+  order (below).
+- Commercial packages without a new-root build: the signed 4.2.0-rc.2 builds exist (attached to
+  the v4.2.0-rc.2 release); rc.3 builds appear when the `Commercial Packages` workflow is run
+  with the rc.3 tag.
+- API token creation after the identity cutover needs a sign-in at most ten minutes old: **still
+  so**, but a stale sign-in now has its own code, `step_up_sign_in_stale`.
+- `x/crypto`: v0.56.0 in the root and Control Center modules; the `sdk` module stays at v0.55.0
+  because the Agent builds with Go 1.25 (the advisories are in `x/crypto/ssh`, which it does not
+  call).
+
+### Security
 
 - **Security:** the server logs a startup `WARNING` for each weak shared secret (`jwt.secret`,
   `app.api_token`, `grpc.api_token`): set but shorter than 32 bytes, a template value, or only a few
@@ -32,9 +58,8 @@
   endpoint either (it is limited like the login). Defaults are 5 failures and 15 minutes.
 - **Security (identity):** the unauthenticated login and registration answers no longer carry the text of
   an infrastructure failure (a database host, a table, a driver message) to the client; it reads
-  "服务暂时不可用，请稍后重试" while the real error stays with the host. Refusals meant for the
+  "服务暂时不可用，请稍后重试". Refusals meant for the
   caller (wrong password, taken e-mail, registration policy, an invalid invite code) read as before.
-
 - **Security (identity):** login, registration and the subscription-link reset now count an
   attempt before the guarded check runs, in one transaction on the throttle row. Before, the limit was
   read first and recorded after the password check, so parallel guesses at one account all passed
@@ -42,31 +67,9 @@
   after the other. A correct password that waits for its second factor gives its attempt back, and
   the first attempt of a key now also counts exactly once (a concurrent first insert used to reset
   the count). The v2-compatible answers and Retry-After headers are unchanged.
-- **Tests:** `TestQUICStatelessReset` and `TestQUICStatelessResetEndsTheCarrier` no longer fail
-  now and then on a loaded machine (about 1 run in 100 and 1 in 120). A stateless reset answers
-  only packets longer than 42 bytes, so an idle dialler's 25-byte keep-alives never trigger one;
-  the one larger packet after the restart could land before the new listener held the port.
-  The tests now keep sending application data after the restart, like a connection in use.
 - **Security (identity):** an unknown e-mail at login now costs the same bcrypt work as a wrong password.
   It answered without hashing, so the response time told which e-mails have an account, and the login
   limit (per e-mail and address) did not slow that down.
-
-- **Tests:** `TestWebSocketAdapterRelaysFramesToAnExactLegacyHandler` no longer fails when the
-  adapter finishes before the test looks: the echo and the completion were both ready and
-  `select` could consume the completion early, so the wait after the close frame timed out.
-- **Fixed:** an Agent's `ConfigStatus` is no longer lost when its control session ends right
-  after it (the data plane ends a session after applying a snapshot it cannot hold users
-  for). Control recorded the status with the stream's context, so a session that ended in
-  that moment failed the write ("context canceled"), the status was never repeated, and the
-  node showed as unapplied until the next revision (up to a minute, seen as the
-  `config_snapshot_applied` failures of the Cross-Repo E2E). The status is recorded whole
-  with its own timeout, and a Hello that reports the desired revision is sent that snapshot
-  again when the kernel never recorded it as applied, so the Agent reports it again.
-
-- **Tests:** `TestUDPThroughTheChain` waits for the entry and exit packet counters instead of
-  reading them the moment the client holds its fifth echo, which failed once on CI with
-  four counted down packets.
-
 - **Security:** revoking a node's Agent credentials (rotation, revocation,
   disabling or deleting the node) now also covers an Agent certificate,
   enrollment or forward link certificate that was being issued at that
@@ -76,26 +79,12 @@
   days. Issuing now holds the node's row until it commits and the
   revocation takes the same row, so one waits for the other. No operator
   action is needed.
-- **Tests:** the gost driver's `TestApplyCancelledInFlight` no longer depends on a 100 ms
-  wall-clock deadline. When the deadline fired before the driver asked gost to reload (a loaded CI
-  machine), the failure the test had injected for the reload stayed armed and the recovery's own
-  start consumed it, so the previous artifact was not running again. The context now ends when the
-  fake gost has loaded the file, and a second test covers a context that ends before gost is asked.
-  The driver was correct in both cases.
-- **Tests:** the Cross-Repo E2E suite no longer picks the same port for the API and gRPC
-  listeners of a Control. `freePort` closed each probe at once, so the kernel could
-  hand the same port to the next call, and Control failed to start with
-  `address already in use`.
 - **Security:** after identity's cutover is finalized the gRPC services no
   longer accept the kernel's own HS256 tokens. Finalizing already refused
   them on the HTTP APIs and the admin monitor WebSocket, but the gRPC
   authentication read `jwt.secret` directly, so that secret stayed an
   administrator credential there. The `grpc.api_token` is a separate
   credential and is unchanged.
-
-- **Tests:** `TestListenAutoRefusesBadConfigs` no longer fails when another
-  process on the CI machine holds the picked port for TCP; a real leak of the
-  TCP listener still fails every attempt.
 - **Security (control-center web):** the control-center web app also moves its lockfile past
   GHSA-g2v6-rqmx-r4w6 (`@vue/server-renderer`) and GHSA-68fv-2mgg-jv7q (`source-map-js`), and its
   workflow installs golangci-lint v2 built with the module's Go, since the v1 release binary
@@ -114,31 +103,28 @@
   call): v0.56.0 needs Go 1.26 and the Agent builds with Go 1.25, so raising
   the SDK would stop the Agent from building. GO-2026-5932 (the unmaintained
   `x/crypto/openpgp`) has no fixed version and nothing here imports it.
-- **Security scanning:** a nightly `Nightly Security` workflow runs `govulncheck`
-  on every Go module, the `gosec` gates, `npm run audit:check` for the web app
-  and a 60-second real fuzz run of every relay fuzz target, so a newly
-  published advisory or a crash input is found the next morning instead of
-  failing an unrelated pull request (docs/RELEASING.md).
 - **Security:** revoking a module's enrollment now also revokes a certificate
   that was being renewed at that moment. On PostgreSQL a renewal that began
   before the revocation committed could record a certificate after it, which
   stayed valid until it expired (24 hours by default). The renewal now holds
   the enrollment's row until it commits, so the revocation waits for it and
   covers its certificate. No operator action is needed.
-- **Rollback to 4.1.0:** `config/scripts/rollback_installations.py` moves the
-  installations back after an import in the order 4.1.0 needs (`forward`, then
-  `identity-platform`, then the rest). It is a dry run unless `--apply` is given,
-  keeps each installation's target and enabled flag, stops at the first refusal
-  and is safe to run again (docs/UPGRADE.md, "Rolling Back After The Import").
-  It is a script because the rolled-back Control is 4.1.0, which cannot carry new
-  code.
-
 - **Security:** the web app moves to Vue 3.5.43 and source-map-js 1.2.2, which fix
   GHSA-g2v6-rqmx-r4w6 (`@vue/server-renderer`, XSS) and GHSA-68fv-2mgg-jv7q
   (`source-map-js`, denial of service) that `npm audit` began reporting for the
   shipped dependencies. The development-only sprintf-js advisory
   (GHSA-hp3w-g68c-fv3c, no fixed version exists) is waived until 2026-11-05.
 
+### Fixed
+
+- **Fixed:** an Agent's `ConfigStatus` is no longer lost when its control session ends right
+  after it (the data plane ends a session after applying a snapshot it cannot hold users
+  for). Control recorded the status with the stream's context, so a session that ended in
+  that moment failed the write ("context canceled"), the status was never repeated, and the
+  node showed as unapplied until the next revision (up to a minute, seen as the
+  `config_snapshot_applied` failures of the Cross-Repo E2E). The status is recorded whole
+  with its own timeout, and a Hello that reports the desired revision is sent that snapshot
+  again when the kernel never recorded it as applied, so the Agent reports it again.
 - **Admin API tokens:** a token's name is limited to 100 characters on the
   server too (it counted bytes, so a 34-character Chinese name was refused
   while the form accepted it), and the list answers each token's owner email
@@ -149,9 +135,10 @@
   than 10 minutes, `POST /api/v4/kernel/api-tokens` answers `403
   step_up_sign_in_stale` (message unchanged); it used to share
   `step_up_required` with "a password is required", which a client could only
-  tell apart by the message text. The web app understands both codes, so a
-  newer web on an older Control, or the reverse, still shows the *Sign in again*
-  prompt. Clients that match `step_up_required` for this case must also match
+  tell apart by the message text. This release's web app understands both codes and shows the *Sign in again* prompt
+  for either, so a newer web on an older Control works; the rc.2 web app does not know the new
+  code and shows a generic error (only a browser holding the old bundle is affected: the web app
+  is served with Control). Clients that match `step_up_required` for this case must also match
   the new code (docs/reference/admin-api-tokens.md).
 - **Fix: the `gost` forward driver's configuration takes the group of its
   directory,** as the `anixops` driver's files do: `gost.json` is written group
@@ -170,10 +157,26 @@
   order, so a plugin install, configure and enable chain keeps its sequence. No
   schema change. This closes the known issue listed under 4.2.0-rc.2 and
   "Still open" in the rc.1 notes.
-- **Release:** a manual `Commercial Packages` workflow builds and signs the
-  commercial packages (`order`, `payment`, `affiliate`) with the official key
-  at a given release tag, so installations that run them have a build signed
-  with the new root (docs/UPGRADE.md).
+
+### Added
+
+- **forward.v1 contract additions for the AnixOps engine, A4 (additions only;
+  owner review).** The contract additions of `docs/architecture/anixops-protocol.md`
+  section 6.5, with new field numbers only: `enum AnixOpsCarrier` and
+  `LinkTransport.carrier = 5`, `enum ProxyProtocol`, `Policy.proxy_protocol = 7`
+  and `NodeHop.proxy_protocol = 17`, and the capability fields
+  `EngineCapabilities.carriers = 12`, `.proxy_protocol = 13` and
+  `.protocol_versions = 14`. `sdk/forward/validate` gains the rules and the codes
+  `carrier_unsupported`, `plain_untrusted`, `server_name_unsupported` and
+  `proxy_protocol_unsupported`: field sanity and the refusal of PROXY protocol
+  on a gost or nftables exit are unconditional, the ANIXOPS link and inventory
+  rules need `Options.EnableAnixOps` (off by default); the planner renders
+  ANIXOPS links multiplexed and
+  sets `NodeHop.proxy_protocol` on the last hop only. New fixture
+  `contracts/forward/v1/plan-anixops-experimental.json`; no existing fixture or
+  descriptor line changed, and a route that uses none of the new fields plans
+  byte-identically. Nothing is reachable by default: the `anixops` driver that uses it (A3, below)
+  is experimental and off.
 - **AnixOps relay, A3: the `anixops` forward driver and the relay process
   (`sdk/forward/driver/anixops`, prototype, off by default).** The next phase of
   the owner-approved H22 design (`docs/architecture/anixops-protocol.md` sections
@@ -200,6 +203,72 @@
   the race detector), a fuzz test of the document parser, and a privileged suite
   in network namespaces (`ANIXOPS_RELAY_E2E=1`, run by CI under sudo) that runs
   the real relay on three nodes through the driver.
+
+### Tests
+
+- The `internal/grpc` agent listener tests no longer depend on test order. The process-wide
+  agent managers retain desired operations per node id, so an earlier test's retained `pending`
+  operation was replayed to the next test's node (every fresh database numbers its first node 1),
+  and `TestAgentListenerBindsEnvelopesAndRequestsToTheCertificate` read it instead of the
+  expected `PermissionDenied` under `-shuffle` (seeds 4 and 6 failed every time with `-v`).
+
+- **Tests:** the relay driver tests pick their ports below the kernel's ephemeral range
+  (`relaytest.FreePort`). A port taken with `:0` and released lies inside that range, where
+  another process's outbound connection may take it as its source port before the test
+  listens; `TestConformance` and the relayd tests then failed with `address already in use`
+  (2 of 120 runs with a parallel test process, none of 200 and 150 after).
+- **Tests:** `TestQUICStatelessReset` and `TestQUICStatelessResetEndsTheCarrier` no longer fail
+  now and then on a loaded machine (about 1 run in 100 and 1 in 120). A stateless reset answers
+  only packets longer than 42 bytes, so an idle dialler's 25-byte keep-alives never trigger one;
+  the one larger packet after the restart could land before the new listener held the port.
+  The tests now keep sending application data after the restart, like a connection in use.
+- **Tests:** `TestWebSocketAdapterRelaysFramesToAnExactLegacyHandler` no longer fails when the
+  adapter finishes before the test looks: the echo and the completion were both ready and
+  `select` could consume the completion early, so the wait after the close frame timed out.
+- **Tests:** `TestUDPThroughTheChain` waits for the entry and exit packet counters instead of
+  reading them the moment the client holds its fifth echo, which failed once on CI with
+  four counted down packets.
+- **Tests:** the gost driver's `TestApplyCancelledInFlight` no longer depends on a 100 ms
+  wall-clock deadline. When the deadline fired before the driver asked gost to reload (a loaded CI
+  machine), the failure the test had injected for the reload stayed armed and the recovery's own
+  start consumed it, so the previous artifact was not running again. The context now ends when the
+  fake gost has loaded the file, and a second test covers a context that ends before gost is asked.
+  The driver was correct in both cases.
+- **Tests:** the Cross-Repo E2E suite no longer picks the same port for the API and gRPC
+  listeners of a Control. `freePort` closed each probe at once, so the kernel could
+  hand the same port to the next call, and Control failed to start with
+  `address already in use`.
+- **Tests:** `TestListenAutoRefusesBadConfigs` no longer fails when another
+  process on the CI machine holds the picked port for TCP; a real leak of the
+  TCP listener still fails every attempt.
+
+### Tooling
+
+- **Security scanning:** a nightly `Nightly Security` workflow runs `govulncheck`
+  on every Go module, the `gosec` gates, `npm run audit:check` for the web app
+  and a 60-second real fuzz run of every relay fuzz target, so a newly
+  published advisory or a crash input is found the next morning instead of
+  failing an unrelated pull request (docs/RELEASING.md).
+- **Rollback to 4.1.0:** `config/scripts/rollback_installations.py` moves the
+  installations back after an import in the order 4.1.0 needs (`forward`, then
+  `identity-platform`, then the rest). It is a dry run unless `--apply` is given,
+  keeps each installation's target and enabled flag, stops at the first refusal
+  and is safe to run again (docs/UPGRADE.md, "Rolling Back After The Import").
+  It is a script because the rolled-back Control is 4.1.0, which cannot carry new
+  code.
+- **Release tooling:** a manual `Commercial Packages` workflow
+  (`.github/workflows/commercial-packages.yml`) builds the commercial packages (`order`,
+  `payment`, `affiliate`) at a given release tag, signs them with the official key, verifies
+  them against the configured root, uploads them as a workflow artifact and, with `attach`,
+  adds them and `SHA256SUMS-commercial.txt` to that release. It gives the release owner the
+  means; it does not sign anything by itself: the signed 4.2.0-rc.2 builds were attached to the
+  v4.2.0-rc.2 release by running it, and rc.3 has none until it is run with the rc.3 tag
+  (docs/UPGRADE.md).
+- **Repository hygiene:** the 44 MB build output `control` (a `go build` of
+  `packages/proxy-node/control`, committed by mistake with the rollback script) and
+  `control-center/.golangci.bck.yml` are no longer tracked, and `.gitignore` covers them.
+  The blob stays in the git history; purging it would rewrite `go_dev` and is the
+  owner's call.
 
 ## 4.2.0-rc.2 - 2026-10-05
 
@@ -255,23 +324,6 @@
   (`web/e2e/admin-wired-apis-4.spec.js`); `docs/reference/frontend-design.md`,
   `docs/guide/notifications-telegram.md` and `docs/reference/kernel-alerts.md`
   describe them.
-- **forward.v1 contract additions for the AnixOps engine, A4 (additions only;
-  owner review).** The contract additions of `docs/architecture/anixops-protocol.md`
-  section 6.5, with new field numbers only: `enum AnixOpsCarrier` and
-  `LinkTransport.carrier = 5`, `enum ProxyProtocol`, `Policy.proxy_protocol = 7`
-  and `NodeHop.proxy_protocol = 17`, and the capability fields
-  `EngineCapabilities.carriers = 12`, `.proxy_protocol = 13` and
-  `.protocol_versions = 14`. `sdk/forward/validate` gains the rules and the codes
-  `carrier_unsupported`, `plain_untrusted`, `server_name_unsupported` and
-  `proxy_protocol_unsupported`: field sanity and the refusal of PROXY protocol
-  on a gost or nftables exit are unconditional, the ANIXOPS link and inventory
-  rules need `Options.EnableAnixOps` (off by default); the planner renders
-  ANIXOPS links multiplexed and
-  sets `NodeHop.proxy_protocol` on the last hop only. New fixture
-  `contracts/forward/v1/plan-anixops-experimental.json`; no existing fixture or
-  descriptor line changed, and a route that uses none of the new fields plans
-  byte-identically. There is no driver yet (A3), so nothing is reachable by
-  default.
 - **AnixOps relay transport, A2: the QUIC carrier, native UDP and carrier
   selection (`sdk/forward/relay`, prototype).** The next library of the
   owner-approved H22 design (`docs/architecture/anixops-protocol.md` sections

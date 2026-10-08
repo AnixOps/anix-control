@@ -9,8 +9,9 @@
 // carrier pool per upstream, the table of UDP associations, the strategies,
 // the counters in epochs and the quota.
 //
-// The prototype is experimental and off by default: both Control and the
-// Agent need forward.anixops_experimental, and the wire format (ALPN
+// The prototype is experimental and off by default: both Control
+// (forward.anixops_experimental) and the Agent (Forward.AnixOps.Enable in its JSON
+// configuration) need their switch, and the wire format (ALPN
 // anixops/0) may change without notice until A6 freezes it.
 //
 // # Packages
