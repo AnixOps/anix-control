@@ -7,6 +7,39 @@ REPO_ROOT_DEFAULT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 REPO_ROOT="${RELEASE_WORKFLOW_REPO_ROOT:-${REPO_ROOT_DEFAULT}}"
 WORKFLOW_PATH="${RELEASE_WORKFLOW_PATH:-${REPO_ROOT}/.github/workflows/ci.yml}"
 
+# Jobs that must pass before a tag is built, signed or published. Every one
+# must run on a tag push: GitHub skips a job whose need was skipped. Smoke Tests
+# is left out because Backend Tests already runs its packages. E2E Tests is in
+# the list because Backend Tests excludes internal/tests/e2e.
+RELEASE_BINARY_GATES=(
+  go-quality
+  go-lint
+  go-security
+  backend-test
+  postgres-stats-test
+  migration-dry-run-test
+  postgres-restore-rehearsal
+  plugin-package-release-test
+  plugin-package-publish
+  forward-runtime-test
+  grpc-test
+  cross-repository-agent-e2e
+  e2e-test
+  cmd-test
+  tag-gate
+  release-workflow-policy
+  deploy-script-test
+  package-storage-postgres
+  docker-smoke
+  kubernetes-smoke
+)
+# The signing job must not run before the Go gates have passed.
+PLUGIN_PACKAGE_PUBLISH_GATES=(
+  go-quality
+  go-security
+  backend-test
+)
+
 usage() {
   cat <<'EOF'
 Usage: config/scripts/check_release_workflow.sh [--self-test|--help]
@@ -245,22 +278,11 @@ check_release_workflow() {
   require_text "scripts/tests/test_identity_bootstrap_install.sh" "identity bootstrap installer regression test" || failed=1
 
   # Tests gate the release.
-  for dependency in \
-    go-quality \
-    go-lint \
-    go-security \
-    backend-test \
-    postgres-stats-test \
-    migration-dry-run-test \
-    postgres-restore-rehearsal \
-    plugin-package-release-test \
-    plugin-package-publish \
-    forward-runtime-test \
-    grpc-test \
-    cross-repository-agent-e2e \
-    cmd-test \
-    tag-gate; do
+  for dependency in "${RELEASE_BINARY_GATES[@]}"; do
     require_release_job_dependency "${dependency}" || failed=1
+  done
+  for dependency in "${PLUGIN_PACKAGE_PUBLISH_GATES[@]}"; do
+    require_job_dependency plugin-package-publish "${dependency}" || failed=1
   done
   require_live_control_webui_gate || failed=1
   # "Backend Tests" aggregates its shards: it must run when a shard fails and
@@ -355,6 +377,28 @@ check_release_workflow() {
   return "${failed}"
 }
 
+# Renames one entry of a job's needs list to a job that does not exist, in a
+# copy of the real workflow, for each gate in turn. The check must fail for
+# every one, so a removed gate cannot slip through.
+self_test_needs() {
+  local tmpdir="$1"
+  local job_name="$2"
+  shift 2
+  local gate
+
+  for gate in "$@"; do
+    sed "/^  ${job_name}:\$/,/^  [[:alnum:]_-]*:\$/ { /needs: \\[/ s/\\([[ ]\\)${gate}\\([],]\\)/\\1removed-job\\2/; }" "${WORKFLOW_PATH}" > "${tmpdir}/ci.yml"
+    if cmp -s "${WORKFLOW_PATH}" "${tmpdir}/ci.yml"; then
+      echo "self-test failed: ${gate} is not in the needs list of ${job_name}" >&2
+      return 1
+    fi
+    if WORKFLOW_PATH="${tmpdir}/ci.yml" check_release_workflow >/dev/null 2>&1; then
+      echo "self-test failed: dropping ${gate} from ${job_name} should fail the check" >&2
+      return 1
+    fi
+  done
+}
+
 # The self-test breaks one essential at a time in a copy of the real workflow
 # and expects the check to fail.
 run_self_test() {
@@ -393,6 +437,9 @@ run_self_test() {
       return 1
     fi
   done
+
+  self_test_needs "${tmpdir}" release-binaries "${RELEASE_BINARY_GATES[@]}" || return 1
+  self_test_needs "${tmpdir}" plugin-package-publish "${PLUGIN_PACKAGE_PUBLISH_GATES[@]}" || return 1
 
   echo "release workflow self-test passed"
 }
