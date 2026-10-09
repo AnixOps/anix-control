@@ -19,7 +19,7 @@ concurrency:
   cancel-in-progress: false
 
 env:
-  GO_VERSION: '1.26.8'
+  GO_VERSION: '1.26.9'
   NODE_VERSION: '22'
   FUZZ_TIME: 60s
 

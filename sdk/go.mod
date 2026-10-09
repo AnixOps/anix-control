@@ -2,7 +2,7 @@ module github.com/AnixOps/anix-control/sdk
 
 go 1.25.0
 
-toolchain go1.26.8
+toolchain go1.26.9
 
 require (
 	github.com/glebarez/sqlite v1.11.0
