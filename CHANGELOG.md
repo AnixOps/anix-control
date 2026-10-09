@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- `scripts/install.sh` applies the plugin-only identity bootstrap to every major version from v4 on. The gate matched only `v4.*`, so a `v5.x` install would have skipped the identity bootstrap and its login check.
+
 ## 4.2.0-rc.3 - 2026-10-08
 
 ### Highlights since 4.2.0-rc.2
