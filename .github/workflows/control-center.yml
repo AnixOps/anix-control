@@ -44,7 +44,7 @@ jobs:
   # ============================================
   lint:
     name: Control Center Lint
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -68,7 +68,7 @@ jobs:
   # ============================================
   test:
     name: Control Center Go Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       coverage: ${{ steps.coverage.outputs.coverage }}
     steps:
@@ -105,7 +105,7 @@ jobs:
   # ============================================
   critical-tests:
     name: Control Center Critical Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -127,7 +127,7 @@ jobs:
   quality-gate:
     name: Control Center Quality Gate
     needs: [test, critical-tests, lint]
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Check coverage threshold
         working-directory: .
@@ -145,7 +145,7 @@ jobs:
   # ============================================
   web-test:
     name: Control Center Web
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: control-center/web
@@ -194,7 +194,7 @@ jobs:
   # ============================================
   flutter-test:
     name: Control Center Flutter
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: control-center/mobile
@@ -223,7 +223,7 @@ jobs:
     name: Control Center Build (${{ matrix.platform }})
     needs: [test]
     if: github.event_name == 'push'
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     strategy:
       matrix:
         include:
@@ -283,7 +283,7 @@ jobs:
   test-report:
     name: Control Center Test Report
     if: github.event_name == 'workflow_dispatch' && inputs.test_report
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 
@@ -330,7 +330,7 @@ jobs:
   gomobile-android:
     name: Control Center gomobile Android
     if: github.event_name == 'workflow_dispatch' && inputs.gomobile
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - uses: actions/checkout@v4
 

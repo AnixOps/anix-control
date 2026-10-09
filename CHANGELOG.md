@@ -2,6 +2,20 @@
 
 ## Unreleased
 
+### Tooling
+
+- **CI:** every Linux job runs on `ubuntu-24.04` instead of `ubuntu-latest`, which GitHub moves to
+  Ubuntu 26.04 from 2026-10-19 to 2026-11-19. `postgres-restore-rehearsal`, a release gate,
+  installs `postgresql-client-16`, a package Ubuntu 26.04 does not have, so tag builds would start
+  failing with nothing changed in the repository (docs/RELEASING.md, "Runner Image").
+- **CI:** the `Classify Changes` step fails when the classifier crashes. It ran without `pipefail`,
+  so a crash left the job green with empty outputs, every job gated on them was skipped, and a
+  skipped required check counts as passed.
+- **CI:** a push to `go_dev` or `release/**`, the nightly and a manual run no longer share a
+  concurrency group with the next run of the same branch. GitHub dropped the pending push run when
+  a newer one queued (8 `go_dev` pushes between 2026-10-05 and 2026-10-06 had no CI at all). Pull
+  request runs still cancel superseded runs, and a release tag keeps one group per tag.
+
 ## 4.2.0-rc.4 - 2026-10-09
 
 > The `v4.2.0-rc.3` tag was pushed, but its release pipeline failed the Go security gate, so rc.3 was not published. This rc.4 carries the rc.3 changes plus the fixes below.
