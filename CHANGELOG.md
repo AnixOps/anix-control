@@ -2,11 +2,9 @@
 
 ## Unreleased
 
-### Fixed
+## 4.2.0-rc.4 - 2026-10-09
 
-- `scripts/install.sh` applies the plugin-only identity bootstrap to every major version from v4 on. The gate matched only `v4.*`, so a `v5.x` install would have skipped the identity bootstrap and its login check.
-
-## 4.2.0-rc.3 - 2026-10-08
+> The `v4.2.0-rc.3` tag was pushed, but its release pipeline failed the Go security gate, so rc.3 was not published. This rc.4 carries the rc.3 changes plus the fixes below.
 
 ### Highlights since 4.2.0-rc.2
 
@@ -132,6 +130,7 @@
 
 ### Fixed
 
+- `scripts/install.sh` applies the plugin-only identity bootstrap to every major version from v4 on. The gate matched only `v4.*`, so a `v5.x` install would have skipped the identity bootstrap and its login check.
 - **Fixed:** an Agent's `ConfigStatus` is no longer lost when its control session ends right
   after it (the data plane ends a session after applying a snapshot it cannot hold users
   for). Control recorded the status with the stream's context, so a session that ended in
