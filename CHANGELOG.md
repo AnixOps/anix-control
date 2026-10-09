@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+### Changed
+
+- **The systemd installer installs a named release tag.** `scripts/install.sh` requires
+  `--version <tag>` for `install` and `update` and no longer resolves GitHub's
+  `releases/latest`, so publishing a release cannot change what an unpinned command installs. The
+  one-command entry points `install.sh` and `panel_install.sh` fetch the installer at that tag
+  instead of from the `go_dev` branch and refuse a command that names no tag (`INSTALL_REF` still
+  overrides, for a developer who installs another ref). The installer is no longer described as
+  frozen. `scripts/tests/test_install_tag.sh` covers all three scripts.
+
 - **Tests:** the visual-regression captures no longer depend on where the page happens to be
   scrolled. A full-page screenshot paints the sticky admin sidebar and topbar and the fixed skip
   link at the scroll offset, and the offset can change during the capture itself (the viewport

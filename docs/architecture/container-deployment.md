@@ -2,8 +2,8 @@
 
 Date: 2026-09-30
 
-Containers are the primary way to run Control. The systemd installer is frozen
-(it keeps working, gets no new features). Operator steps are in
+Containers are the primary way to run Control. The systemd installer installs
+the release tag you name (it never resolves "latest"). Operator steps are in
 [`../DEPLOYMENT.md`](../DEPLOYMENT.md); this page records the design and what
 still blocks running more than one replica.
 

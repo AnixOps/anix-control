@@ -83,9 +83,10 @@ multi-architecture image `ghcr.io/anixops/anix-control` (digest in the release
 `docker-compose.prod.yml` and an external PostgreSQL, or with the Helm chart in
 `config/deploy/helm/anix-control`. Steps: [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
-The native systemd installer is frozen (it keeps working, without new
-features). It downloads checked GitHub Release assets and does not clone the
-repository or build on the target host. Pin the production tag:
+The native systemd installer downloads checked GitHub Release assets and does
+not clone the repository or build on the target host. It installs the release
+tag you name with `--version` and never resolves a moving "latest". Pin the
+production tag:
 
 ```bash
 export VERSION=v4.0.0

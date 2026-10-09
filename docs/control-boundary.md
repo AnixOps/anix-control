@@ -37,7 +37,7 @@ Before you try to start the panel, keep these rules straight:
 - `InitForwardRuntimeSystemConfig` normalizes the YAML contents and writes them into `v2_system_config`
 - app settings (`jwt.secret`, `app.api_token`, `admin.*`, database) come from the config file or from `ANIX_CONTROL_*` environment variables; containers use only the variables and the built-in defaults ([`reference/environment-variables.md`](reference/environment-variables.md))
 
-The frozen systemd installer [`scripts/install.sh`](../scripts/install.sh) (also reached through [`install.sh`](../install.sh) and [`panel_install.sh`](../panel_install.sh)) generates `config/config.yaml`. Container deployments need no config file.
+The systemd installer [`scripts/install.sh`](../scripts/install.sh) (also reached through [`install.sh`](../install.sh) and [`panel_install.sh`](../panel_install.sh)) generates `config/config.yaml`. Container deployments need no config file.
 
 ## Fixed Entry Points
 
