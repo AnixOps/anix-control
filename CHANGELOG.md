@@ -51,9 +51,9 @@
   (the standard library's `net/http`, `net/textproto`, `crypto/tls`, `html/template` and `os`
   fixed in Go 1.26.9; `x/net/http2` fixed in v0.60.0). The root and Control Center modules, the CI
   and nightly toolchain and the Control and module images (`golang:1.26.9-alpine`, pinned by
-  digest) move to them. The `sdk` and `identity` modules cannot take `x/net` v0.60.0 without
-  raising their `go` directive to 1.26, which the Agent (Go 1.25) cannot build; they keep v0.58.0
-  and gRPC's use of `x/net/http2` still reaches four of the advisories there (see docs/UPGRADE.md).
+  digest) move to them, and the `sdk` and `identity` modules move to `go 1.26.0` with the same
+  `x/net` v0.60.0. The Agent is still on Go 1.25 and `x/net` v0.58.0 in its own module until its
+  Go 1.26 move ships (see docs/UPGRADE.md).
 
 - **Security:** the server logs a startup `WARNING` for each weak shared secret (`jwt.secret`,
   `app.api_token`, `grpc.api_token`): set but shorter than 32 bytes, a template value, or only a few

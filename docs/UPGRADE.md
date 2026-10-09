@@ -3103,14 +3103,12 @@ with the rc.3 builds in place of rc.2; the notes below are on top of it.
 - **Weak shared secrets** log a startup `WARNING` (see the top of this runbook).
   The development `docker-compose.yml` secret is shorter than 32 bytes and
   warns; the installers' generated secrets do not.
-- **Source builds need Go 1.26** (the root module's `go` directive and the
-  Control Center module); the `sdk` and `identity` modules stay on Go 1.25 so the
-  Agent keeps building. Release images already used Go 1.26.8 (1.26.9 from rc.3).
-  Known gap: gRPC uses `golang.org/x/net/http2`, and the fixed `x/net` (v0.59.0 and
-  later) requires Go 1.26, so the `sdk` and `identity` modules stay on v0.58.0 and
-  `govulncheck` reports GO-2026-6603, 6611, 6612 and 6617 as reachable there (the Agent has the
-  same exposure with its own `x/net` v0.58.0 on Go 1.25). Closing it means moving the Agent and
-  the `sdk` module to Go 1.26.
+- **Source builds need Go 1.26** (the root module, the `sdk` and `identity`
+  modules and the Control Center module). Release images already used Go 1.26.8
+  (1.26.9 from rc.3).
+  Known gap: the Agent (`anix-agent`) is still on Go 1.25 with `x/net` v0.58.0,
+  so its binaries keep the advisories that the fixed `x/net` and Go 1.26.9 close
+  until the Agent's Go 1.26 move ships.
 
 ### For The Release Owner
 

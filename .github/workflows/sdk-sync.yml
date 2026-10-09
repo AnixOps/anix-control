@@ -35,7 +35,7 @@ jobs:
 
       - uses: actions/setup-go@v6
         with:
-          go-version: "1.25.0"
+          go-version: "1.26.9"
 
       - name: Capture Agent Go binary
         run: |
@@ -89,7 +89,7 @@ jobs:
           cat > "${dump_dir}/go.mod" <<EOF
           module anixops.local/agentsdkdescriptor
 
-          go 1.25.0
+          go 1.26.0
 
           require github.com/AnixOps/anix-agent/sdk v0.0.0
 
