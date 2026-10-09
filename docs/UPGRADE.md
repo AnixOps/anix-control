@@ -3104,11 +3104,11 @@ with the rc.3 builds in place of rc.2; the notes below are on top of it.
   The development `docker-compose.yml` secret is shorter than 32 bytes and
   warns; the installers' generated secrets do not.
 - **Source builds need Go 1.26** (the root module, the `sdk` and `identity`
-  modules and the Control Center module). Release images already used Go 1.26.8
-  (1.26.9 from rc.3).
-  Known gap: the Agent (`anix-agent`) is still on Go 1.25 with `x/net` v0.58.0,
-  so its binaries keep the advisories that the fixed `x/net` and Go 1.26.9 close
-  until the Agent's Go 1.26 move ships.
+  modules and the Control Center module). Release images use
+  `golang:1.26.9-alpine` from v4.2.0-rc.4.
+  The Agent (`anix-agent`) builds with Go 1.26.9 and `x/net` v0.60.0 from
+  v4.2.0-rc.4. Four reachable advisories in its hysteria and quic-go dependencies
+  are not fixed in that release; the Agent's CHANGELOG lists them.
 
 ### For The Release Owner
 
