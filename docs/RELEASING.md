@@ -123,6 +123,32 @@ only the highest version `latest`.
 `config/scripts/check_release_workflow.sh` keeps these essentials in the
 workflow. Change it in the same pull request as any release step.
 
+## Runner Image
+
+Every Linux job in `.github/workflows/` runs on the pinned label
+`ubuntu-24.04`, not `ubuntu-latest`. GitHub moves `ubuntu-latest` to Ubuntu
+26.04 in a rollout from 2026-10-19 to 2026-11-19, and while it lasts the label
+can resolve to either image from one run to the next, so a release could
+break with nothing changed in the repository. The macOS and Windows jobs
+still use `macos-latest` and `windows-latest`.
+
+Bump the pin in a pull request of its own, never inside a release pull request:
+
+1. Try the new label on a branch (`sed -i 's/ubuntu-24.04/ubuntu-26.04/'` on
+   the workflow files) and run the full lane there: a pull request that edits
+   the `changes` or `tag-gate` job of `ci.yml` runs it, or use
+   `gh workflow run ci.yml --ref <branch>`.
+2. Fix what breaks first. Known today: `postgres-restore-rehearsal` installs
+   `postgresql-client-16` with `apt-get`, and Ubuntu 26.04 has no such
+   package. The rehearsal must keep using the client of the server's major
+   version (16), so take it from the PostgreSQL apt repository rather than
+   switching to the unversioned `postgresql-client`, which is 18 on 26.04.
+   Also watch the jobs that depend on the kernel and on distribution packages
+   (the network namespace, `nft` and `tc` jobs, and the `apt-get` line of the
+   Control Center release build).
+3. Merge the bump before cutting the tag that needs it. A tag run uses the
+   workflow files of the tagged commit.
+
 ## Nightly Security Scan
 
 The `Nightly Security` workflow (`.github/workflows/nightly-security.yml`)
