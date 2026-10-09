@@ -205,7 +205,7 @@ validate_version() {
 }
 
 uses_plugin_only_identity_bootstrap() {
-  [[ "${VERSION}" == v4.* ]]
+  [[ "${VERSION}" =~ ^v([0-9]+)\. ]] && (( 10#${BASH_REMATCH[1]} >= 4 ))
 }
 
 latest_release() {

@@ -195,7 +195,7 @@ CA 签发；v4.2 起 `agent_control.mtls` 默认 `required`，这是 Agent 唯�
 
 ### 2.1 一键安装脚本（systemd，已冻结）
 
-生产环境默认使用 GitHub Release 安装器。它只下载版本匹配的发布二进制、前端包、校验和和单个配置模板，不 clone 仓库，也不在服务器构建 Go、前端或 Docker 镜像。对 `v4.*`，它还会下载并校验签名身份包三件套，暂存到 root 所有的引导目录后验证登录路径：
+生产环境默认使用 GitHub Release 安装器。它只下载版本匹配的发布二进制、前端包、校验和和单个配置模板，不 clone 仓库，也不在服务器构建 Go、前端或 Docker 镜像。对 `v4` 及之后的主版本，它还会下载并校验签名身份包三件套，暂存到 root 所有的引导目录后验证登录路径：
 
 ```bash
 export VERSION=v4.0.0
