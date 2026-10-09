@@ -38,9 +38,7 @@
   with the rc.3 tag.
 - API token creation after the identity cutover needs a sign-in at most ten minutes old: **still
   so**, but a stale sign-in now has its own code, `step_up_sign_in_stale`.
-- `x/crypto`: v0.56.0 in the root and Control Center modules; the `sdk` module stays at v0.55.0
-  because the Agent builds with Go 1.25 (the advisories are in `x/crypto/ssh`, which it does not
-  call).
+- `x/crypto`: v0.57.0 in the root, Control Center and `sdk` modules.
 
 ### Security
 
@@ -50,8 +48,9 @@
   fixed in Go 1.26.9; `x/net/http2` fixed in v0.60.0). The root and Control Center modules, the CI
   and nightly toolchain and the Control and module images (`golang:1.26.9-alpine`, pinned by
   digest) move to them, and the `sdk` and `identity` modules move to `go 1.26.0` with the same
-  `x/net` v0.60.0. The Agent is still on Go 1.25 and `x/net` v0.58.0 in its own module until its
-  Go 1.26 move ships (see docs/UPGRADE.md).
+  `x/net` v0.60.0. The Agent builds with Go 1.26.9 and `x/net` v0.60.0 in its own module from this
+  release; four reachable advisories in its hysteria and quic-go dependencies are not fixed
+  here, and the Agent's CHANGELOG lists them.
 
 - **Security:** the server logs a startup `WARNING` for each weak shared secret (`jwt.secret`,
   `app.api_token`, `grpc.api_token`): set but shorter than 32 bytes, a template value, or only a few
@@ -104,17 +103,15 @@
   (built with Go 1.24) refuses a Go 1.26 target; its config is migrated to the v2 format.
 - **Security (Go dependencies):** `govulncheck` now reports no reachable
   vulnerability in any module. The root module moves to `golang.org/x/crypto`
-  v0.56.0 (GO-2026-6354, GO-2026-6355) and `golang.org/x/mod` v0.40.0
+  v0.57.0 (GO-2026-6354, GO-2026-6355) and `golang.org/x/mod` v0.40.0
   (GO-2026-6179, GO-2026-6180) and its `go` directive to 1.26.0, which the CI
   and release toolchain (1.26.8) already used. The Control Center module
   (`control-center/`) moves from Go 1.24 to 1.26 (its workflows and Dockerfile
   too) and from x/crypto v0.23.0, x/net v0.25.0, x/text v0.15.0, x/sys,
   golang-jwt v5.2.0 and gorilla/websocket v1.5.1 to current releases; that
   cleared 35 reachable advisories, most of them in the Go 1.24 standard
-  library. Left as is: the `sdk` module keeps `golang.org/x/crypto` v0.55.0
-  (GO-2026-6354 and GO-2026-6355 are in `x/crypto/ssh`, which it does not
-  call): v0.56.0 needs Go 1.26 and the Agent builds with Go 1.25, so raising
-  the SDK would stop the Agent from building. GO-2026-5932 (the unmaintained
+  library. The `sdk` module is on `golang.org/x/crypto` v0.57.0 too, with the same `go 1.26.0`
+  directive. GO-2026-5932 (the unmaintained
   `x/crypto/openpgp`) has no fixed version and nothing here imports it.
 - **Security:** revoking a module's enrollment now also revokes a certificate
   that was being renewed at that moment. On PostgreSQL a renewal that began
