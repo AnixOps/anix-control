@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+- **Tests:** the visual-regression captures no longer depend on where the page happens to be
+  scrolled. A full-page screenshot paints the sticky admin sidebar and topbar and the fixed skip
+  link at the scroll offset, and the offset can change during the capture itself (the viewport
+  resize and restore moved it from 345 to 321 px), so `admin-dashboard-alerts-resolved` failed now
+  and then on `go_dev` (CI runs 37544603715 and 37861273822; about 6 of 240 runs with 0-600 ms of API
+  latency). `web/e2e/visual/visual.spec.js` now scrolls to the top before each capture, and the 10
+  baselines that had a non-zero scroll baked in (`admin-dashboard-alerts-resolved` light, dark and
+  phone, and the seven `admin-telegram-test-*` screens) were regenerated in the CI-pinned
+  Playwright image. Retries stay at 0.
+
 ## 4.2.0-rc.4 - 2026-10-09
 
 > The `v4.2.0-rc.3` tag was pushed, but its release pipeline failed the Go security gate, so rc.3 was not published. This rc.4 carries the rc.3 changes plus the fixes below.

@@ -80,6 +80,8 @@ for (const [name, viewports] of SHOTS) {
         await page.setViewportSize(viewport)
         await page.emulateMedia({ colorScheme: theme, reducedMotion: 'reduce' })
         await openScreen(page, name, { theme, clock: true })
+        // A full-page capture resizes and restores the viewport, which can shift a non-zero scroll (345 to 321); start at the top.
+        await page.evaluate(() => window.scrollTo({ top: 0, left: 0, behavior: 'instant' }))
         await page.evaluate(() => document.fonts.ready)
         // Let charts and lazy panels draw their final frame.
         await page.waitForTimeout(600)
