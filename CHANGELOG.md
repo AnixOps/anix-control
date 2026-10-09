@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 4.2.0-rc.3 - 2026-10-08
+
 ### Highlights since 4.2.0-rc.2
 
 - **The identity security fixes ship in the `identity-platform` package, not in the Control
@@ -243,6 +245,9 @@
   TCP listener still fails every attempt.
 
 ### Tooling
+
+- **CI:** the cross-repository jobs pin the Agent at anix-agent `acf54a02` (4.2.0-rc.3), whose
+  Control SDK pin carries the gost configuration-group fix.
 
 - **Security scanning:** a nightly `Nightly Security` workflow runs `govulncheck`
   on every Go module, the `gosec` gates, `npm run audit:check` for the web app
