@@ -20,7 +20,7 @@ on:
 jobs:
   test:
     name: Control Center Workers
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     defaults:
       run:
         working-directory: control-center/workers

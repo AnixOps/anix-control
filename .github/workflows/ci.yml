@@ -15,11 +15,14 @@ on:
     - cron: '17 19 * * *'
   workflow_dispatch:
 
-# Superseded pull-request runs are cancelled; go_dev and release branch pushes,
-# tags and manual runs always finish so release and baseline evidence is never
-# cut short.
+# Superseded pull-request runs are cancelled. Every other run (go_dev and
+# release branch pushes, the nightly, manual runs) gets its own group, because
+# GitHub drops a run that is pending behind a running run of the same group when
+# a newer one queues, and a dropped push run leaves that commit with no CI
+# evidence. Release tags stay on one group per tag so a re-pushed tag cannot run
+# two release pipelines at once.
 concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
+  group: ${{ github.workflow }}-${{ (github.event_name == 'pull_request' || github.ref_type == 'tag') && github.ref || github.run_id }}
   cancel-in-progress: ${{ github.event_name == 'pull_request' }}
 
 env:
@@ -34,7 +37,7 @@ env:
 jobs:
   changes:
     name: Classify Changes
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       full: ${{ steps.classify.outputs.full }}
       code: ${{ steps.classify.outputs.code }}
@@ -56,19 +59,22 @@ jobs:
       # everything.
       - name: Classify the change
         id: classify
+        shell: bash   # pipefail: a crashing classifier must fail the job, not publish empty outputs
         env:
           EVENT_NAME: ${{ github.event_name }}
           BASE_SHA: ${{ github.event.pull_request.base.sha }}
           HEAD_SHA: ${{ github.event.pull_request.head.sha }}
           FULL_LABEL: ${{ contains(github.event.pull_request.labels.*.name, 'ci:full') }}
         run: |
+          set -Eeuo pipefail
           python3 config/scripts/classify_changes.py \
             --event "${EVENT_NAME}" --base "${BASE_SHA}" --head "${HEAD_SHA:-HEAD}" \
             --full-label "${FULL_LABEL}" | tee -a "$GITHUB_OUTPUT"
+          grep -q '^full=' "$GITHUB_OUTPUT" || { echo '::error::the classifier produced no outputs'; exit 1; }
 
   tag-gate:
     name: Validate Release Tag
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     outputs:
       is_release_tag: ${{ steps.check.outputs.is_release_tag }}
     steps:
@@ -92,7 +98,7 @@ jobs:
 
   deploy-script-test:
     name: Deployment Script Checks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -215,7 +221,7 @@ jobs:
 
   docs-sync:
     name: Documentation Sync Check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -288,7 +294,7 @@ jobs:
 
   release-workflow-policy:
     name: Release Workflow Policy Check
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     steps:
       - name: Checkout code
         uses: actions/checkout@v7
@@ -304,7 +310,7 @@ jobs:
 
   go-quality:
     name: Go Quality Gates
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [changes]
     if: ${{ needs.changes.outputs.code == 'true' }}
     steps:
@@ -399,7 +405,7 @@ jobs:
   # requests and tags do not wait for it.
   go-race:
     name: Go Race Detector
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [changes]
     if: ${{ github.event_name == 'schedule' || github.event_name == 'workflow_dispatch' }}
     timeout-minutes: 40
@@ -421,7 +427,7 @@ jobs:
 
   go-benchmark-smoke:
     name: Go Benchmark Smoke
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [changes]
     if: ${{ needs.changes.outputs.full == 'true' }}
     steps:
@@ -439,7 +445,7 @@ jobs:
 
   staging-rehearsal-smoke:
     name: Staging Rehearsal Smoke
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [changes]
     if: ${{ needs.changes.outputs.full == 'true' }}
     timeout-minutes: 20
@@ -491,7 +497,7 @@ jobs:
 
   go-lint:
     name: Go Lint Gate
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [changes]
     if: ${{ needs.changes.outputs.code == 'true' }}
     steps:
@@ -525,7 +531,7 @@ jobs:
 
   go-security:
     name: Go Security Scans
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [changes]
     if: ${{ needs.changes.outputs.code == 'true' }}
     steps:
@@ -582,7 +588,7 @@ jobs:
   # for the Go gates.
   build-images:
     name: Build Smoke Images
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [changes]
     if: ${{ needs.changes.outputs.modules == 'true' }}
     steps:
@@ -637,7 +643,7 @@ jobs:
 
   docker-smoke:
     name: Docker Build Smoke
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [changes, build-images]
     if: ${{ needs.changes.outputs.modules == 'true' }}
     services:
@@ -767,7 +773,7 @@ jobs:
 
   helm-chart:
     name: Helm Chart Checks
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [changes]
     if: ${{ needs.changes.outputs.modules == 'true' }}
     steps:
@@ -838,7 +844,7 @@ jobs:
 
   kubernetes-smoke:
     name: Kubernetes Smoke
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [changes, helm-chart, build-images]
     if: ${{ needs.changes.outputs.modules == 'true' }}
     steps:
@@ -972,7 +978,7 @@ jobs:
   # alone (-p=1).
   backend-test-shard:
     name: Backend Tests (${{ matrix.shard }}/3)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [changes]
     if: ${{ needs.changes.outputs.code == 'true' }}
     strategy:
@@ -1120,7 +1126,7 @@ jobs:
   # merges their coverage profiles and writes the coverage report.
   backend-test:
     name: Backend Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [changes, backend-test-shard]
     if: ${{ !cancelled() && needs.changes.outputs.code == 'true' }}
     steps:
@@ -1187,7 +1193,7 @@ jobs:
 
   postgres-stats-test:
     name: PostgreSQL Stats Regression
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [changes]
     if: ${{ needs.changes.outputs.db == 'true' }}
     services:
@@ -1225,7 +1231,7 @@ jobs:
   # schemas and roles are named after package ids.
   package-storage-postgres:
     name: Package Storage PostgreSQL (${{ matrix.shard }}/4)
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [changes]
     if: ${{ needs.changes.outputs.db == 'true' }}
     strategy:
@@ -1305,7 +1311,7 @@ jobs:
 
   migration-dry-run-test:
     name: SQLite to PostgreSQL Dry Run
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [changes]
     if: ${{ needs.changes.outputs.db == 'true' }}
     services:
@@ -1372,7 +1378,7 @@ jobs:
 
   postgres-restore-rehearsal:
     name: PostgreSQL Restore Rehearsal
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [changes]
     if: ${{ needs.changes.outputs.db == 'true' }}
     services:
@@ -1421,7 +1427,7 @@ jobs:
 
   plugin-package-release-test:
     name: Plugin Package Release Contracts
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [changes]
     if: ${{ needs.changes.outputs.packages == 'true' }}
     steps:
@@ -1532,7 +1538,7 @@ jobs:
 
   plugin-package-publish:
     name: Publish Signed Official Plugin Packages
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [tag-gate, plugin-package-release-test, cross-repository-agent-e2e, go-quality, go-security, backend-test]
     if: ${{ needs.tag-gate.outputs.is_release_tag == 'true' }}
     steps:
@@ -1704,7 +1710,7 @@ jobs:
 
   forward-runtime-test:
     name: Forward Runtime Regression
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [changes]
     if: ${{ needs.changes.outputs.forward == 'true' }}
     steps:
@@ -1747,7 +1753,7 @@ jobs:
   # keeps running the nftables driver's own real-kernel conformance tests.
   forward-netns-e2e:
     name: Forward Netns E2E
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [changes]
     if: ${{ needs.changes.outputs.forward == 'true' }}
     timeout-minutes: 20
@@ -1820,7 +1826,7 @@ jobs:
 
   grpc-test:
     name: gRPC Core Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [changes]
     if: ${{ needs.changes.outputs.agent == 'true' }}
     steps:
@@ -1849,7 +1855,7 @@ jobs:
 
   cross-repository-agent-e2e:
     name: Control to Agent Process E2E
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [changes]
     if: ${{ needs.changes.outputs.agent == 'true' }}
     steps:
@@ -1899,7 +1905,7 @@ jobs:
   # a required check yet.
   cross-repository-agent-chaos-e2e:
     name: Cross-Repo E2E
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [changes]
     if: ${{ needs.changes.outputs.full == 'true' }}
     timeout-minutes: 30
@@ -2047,7 +2053,7 @@ jobs:
 
   cmd-test:
     name: CLI Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [changes]
     if: ${{ needs.changes.outputs.code == 'true' }}
     steps:
@@ -2068,7 +2074,7 @@ jobs:
 
   smoke-test:
     name: Smoke Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [changes]
     if: ${{ needs.changes.outputs.code == 'true' }}
     steps:
@@ -2087,7 +2093,7 @@ jobs:
 
   e2e-test:
     name: E2E Tests
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [changes]
     if: ${{ needs.changes.outputs.code == 'true' }}
     steps:
@@ -2106,7 +2112,7 @@ jobs:
 
   frontend-build:
     name: Frontend Build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [changes]
     if: ${{ needs.changes.outputs.code == 'true' }}
     steps:
@@ -2212,7 +2218,7 @@ jobs:
   # same image (`npm run test:visual:update`, web/scripts/visual-docker.sh).
   frontend-visual:
     name: Frontend Visual Regression
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [changes]
     if: ${{ needs.changes.outputs.web == 'true' }}
     container:
@@ -2250,7 +2256,7 @@ jobs:
 
   backend-build:
     name: Backend Build
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [go-quality, go-lint, go-security, backend-test, postgres-stats-test, migration-dry-run-test, postgres-restore-rehearsal, plugin-package-release-test, forward-runtime-test, grpc-test, cross-repository-agent-e2e, cmd-test]
     steps:
       - name: Checkout code
@@ -2285,7 +2291,7 @@ jobs:
 
   release-binaries:
     name: Build Release Binary (${{ matrix.goos }}-${{ matrix.goarch }})
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # The tag waits for the test jobs. A job named here must run on tags: a
     # skipped need skips this job. Smoke Tests is not listed: Backend Tests
     # runs its packages, since internal/tests/smoke is under ./internal/...
@@ -2353,7 +2359,7 @@ jobs:
 
   docker:
     name: Build Docker Image
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [frontend-build, release-binaries, plugin-package-publish, tag-gate]
     if: ${{ needs.tag-gate.outputs.is_release_tag == 'true' }}
     permissions:
@@ -2504,7 +2510,7 @@ jobs:
 
   docker-edge:
     name: Publish Edge Docker Image
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [docker-smoke, go-quality, go-security, backend-test, frontend-build]
     if: ${{ github.event_name == 'push' && github.ref == 'refs/heads/go_dev' }}
     permissions:
@@ -2598,7 +2604,7 @@ jobs:
 
   release:
     name: Create Release
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     needs: [frontend-build, release-binaries, docker, plugin-package-publish, tag-gate]
     if: ${{ needs.tag-gate.outputs.is_release_tag == 'true' }}
     permissions:
