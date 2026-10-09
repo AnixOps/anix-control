@@ -157,4 +157,20 @@ if [[ "${EUID}" -eq 0 ]]; then
   [[ "$(stat -c '%U' "${PLUGIN_ARTIFACT_DIR}")" == "${APP_USER}" ]]
 fi
 
+for version in v1.0.0 v3.9.9 v3.10.0-rc.1; do
+  VERSION="${version}"
+  if uses_plugin_only_identity_bootstrap; then
+    printf 'identity bootstrap gate must not apply to %s\n' "${version}" >&2
+    exit 1
+  fi
+done
+
+for version in v4.0.0 v4.2.0-rc.3 v5.0.0 v10.0.0; do
+  VERSION="${version}"
+  if ! uses_plugin_only_identity_bootstrap; then
+    printf 'identity bootstrap gate must apply to %s\n' "${version}" >&2
+    exit 1
+  fi
+done
+
 printf '%s\n' 'identity bootstrap installer configuration tests passed'
