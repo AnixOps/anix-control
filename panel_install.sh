@@ -1,10 +1,16 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "$0")" && pwd)"
-
-if [[ -f "${SCRIPT_DIR}/install.sh" ]]; then
-  exec bash "${SCRIPT_DIR}/install.sh" "$@"
+# A local checkout is used only when this file is one: a regular file that sits
+# next to scripts/install.sh. Piped ("curl ... | bash") $0 is "bash" and
+# BASH_SOURCE[0] is empty, so a ./scripts/install.sh in the caller's directory
+# is never taken for the installer and the tag pin below always applies.
+source_file="${BASH_SOURCE[0]:-}"
+if [[ -n "${source_file}" && -f "${source_file}" ]]; then
+  SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "${source_file}")" && pwd)"
+  if [[ -f "${SCRIPT_DIR}/scripts/install.sh" ]]; then
+    exec bash "${SCRIPT_DIR}/scripts/install.sh" "$@"
+  fi
 fi
 
 REPO_OWNER="${REPO_OWNER:-AnixOps}"
@@ -23,6 +29,10 @@ if [[ -z "${INSTALL_REF}" ]]; then
     fi
     previous="${arg}"
   done
+  if [[ "${previous}" == "--version" ]]; then
+    printf '[ERROR] --version needs a release tag: --version vX.Y.Z (for example v4.2.0).\n' >&2
+    exit 1
+  fi
   if [[ ! "${INSTALL_REF}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-(alpha|beta|rc)(\.[0-9]+)?)?$ ]]; then
     printf '[ERROR] Name the release tag to install: --version vX.Y.Z (for example v4.2.0).\n' >&2
     printf '        The installer is fetched at that tag, never from a moving branch.\n' >&2

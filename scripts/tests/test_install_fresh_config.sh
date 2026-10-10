@@ -11,8 +11,11 @@
 #
 # internal/config/installer_config_test.go runs this script with
 # ANIX_INSTALL_FRESH_CONFIG_OUT=<file>, loads the generated file with the real
-# configuration loader and applies the server's production checks to it.
+# configuration loader and applies the server's production checks to it. With
+# ANIX_INSTALL_FRESH_CONFIG_CASES_DIR=<dir> it also writes the config of each
+# awkward-credential case (<name>.yaml, .email, .password) for the same test.
 
+# shellcheck disable=SC1003,SC2016
 set -Eeuo pipefail
 
 REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
@@ -157,6 +160,74 @@ check "ensure: existing config keeps its env" test "$(top_level env "${CONFIG_FI
 check "ensure: existing config reported as preserved" grep -qF "Existing configuration found; preserving" "${temporary}/ensure-existing.log"
 check "ensure: existing config is not marked fresh" test "${FRESH_CONFIG}" -eq 0
 check "ensure: nothing was downloaded for it" test "$(grep -c . "${CURL_URLS}")" -eq "${downloads_before}"
+
+# --- 5. Without --admin-email the bootstrap administrator is an address the
+#        server's `required,email` login check accepts. admin@localhost (the
+#        earlier default) has no dot in its domain and is refused, so the
+#        install's own login check failed and left a running service behind.
+new_install default-admin
+write_fresh_config >/dev/null 2>&1
+default_email="$(config_section_value admin email)"
+check "default admin: the email is admin@anixops.local, the server's own default" \
+  test "${default_email}" = "admin@anixops.local"
+check "default admin: the domain has a dot (a bare host name is refused)" \
+  grep -Eq '^[^@[:space:]]+@[^@[:space:].]+(\.[^@[:space:].]+)+$' <<<"${default_email}"
+
+# --- 6. Credentials with characters that awk, the shell or YAML treat
+#        specially are written verbatim. The value goes into a YAML
+#        double-quoted scalar, so only the backslash and the double quote are
+#        escaped, once. (awk -v interprets escapes: ab\qcd was escaped to
+#        ab\\qcd and then unescaped again to "ab\qcd", which does not load.)
+#        internal/config/installer_config_test.go loads every file written here
+#        with the real loader when ANIX_INSTALL_FRESH_CONFIG_CASES_DIR is set.
+CASES_DIR="${ANIX_INSTALL_FRESH_CONFIG_CASES_DIR:-}"
+[[ -z "${CASES_DIR}" ]] || mkdir -p "${CASES_DIR}"
+
+# yaml_quote is the YAML double-quoted spelling of a value, computed with sed
+# (the installer does it in bash).
+yaml_quote() { printf '%s' "$1" | sed -e 's/\\/\\\\/g' -e 's/"/\\"/g'; }
+
+# awkward_case <name> <email> <password>
+awkward_case() {
+  local name="$1" email="$2" password="$3" status=0
+  new_install "case-${name}"
+  ADMIN_EMAIL="${email}" ADMIN_PASSWORD="${password}"
+  (write_fresh_config) >"${temporary}/case-${name}.log" 2>&1 || status=$?
+  check "${name}: the installer accepts the values" test "${status}" -eq 0
+  check "${name}: email written verbatim" \
+    grep -qxF "  email: \"$(yaml_quote "${email}")\"" "${CONFIG_FILE}"
+  check "${name}: password written verbatim" \
+    grep -qxF "  password: \"$(yaml_quote "${password}")\"" "${CONFIG_FILE}"
+  check "${name}: the bootstrap password file holds the raw password" \
+    test "$(cat "${INSTALL_DIR}/.bootstrap-admin-password")" = "${password}"
+  check "${name}: one admin password line" test "$(grep -c '^  password:' "${CONFIG_FILE}")" -eq 1
+  if [[ -n "${CASES_DIR}" && -s "${CONFIG_FILE}" ]]; then
+    cp "${CONFIG_FILE}" "${CASES_DIR}/${name}.yaml"
+    printf '%s' "${email}" >"${CASES_DIR}/${name}.email"
+    printf '%s' "${password}" >"${CASES_DIR}/${name}.password"
+  fi
+}
+
+# The values are literal on purpose: a lone backslash, and $ and ` that must not
+# expand (SC1003, SC2016 are disabled for the file).
+operator="admin@example.com"
+awkward_case backslash-letter    "${operator}" 'ab\qcd'
+awkward_case double-backslash    "${operator}" 'a\\b'
+awkward_case lone-backslash      "${operator}" '\'
+awkward_case trailing-backslash  "${operator}" 'secret\'
+awkward_case escape-lookalikes   "${operator}" 'line\nbreak\t\x41é\0'
+awkward_case double-quote        "${operator}" 'say "hi" now'
+awkward_case quote-and-backslash "${operator}" 'a\"b"\c'
+awkward_case single-quote        "${operator}" "it's a 'quoted' secret"
+awkward_case dollar              "${operator}" 'p$HOME $(id) `id` ${PATH}'
+awkward_case ampersand           "${operator}" 'a&b && \& \1 &'
+awkward_case hash                "${operator}" 'pa#ss # not a comment'
+awkward_case spaces              "${operator}" '  leading and  inner spaces  '
+awkward_case unicode             "${operator}" 'pässwörd-密码-🔑'
+awkward_case yaml-indicators     "${operator}" '*anchor &x !tag {a: b} [c] | > - ? : , @ % ~'
+awkward_case email-apostrophe    "o'brien@example.com" 'pw-1'
+awkward_case email-ampersand     'r&d@example.com' 'pw-2'
+awkward_case email-backslash     'back\slash@example.com' 'pw-3'
 
 # The Go test loads this file with the real configuration loader.
 if [[ -n "${ANIX_INSTALL_FRESH_CONFIG_OUT:-}" ]]; then

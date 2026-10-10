@@ -289,6 +289,15 @@ validate_config_value() {
     die "Bootstrap values must be non-empty and must not contain a double quote or newline."
 }
 
+# The bootstrap email and password are written as YAML double-quoted scalars
+# with the backslash and the double quote escaped (write_fresh_config), so only
+# an empty value and a line break cannot be carried.
+validate_admin_value() {
+  local value="$1"
+  [[ -n "${value}" && "${value}" != *$'\n'* ]] || \
+    die "The bootstrap admin email and password must be non-empty and must not contain a newline."
+}
+
 validate_install_managed_plugin_dir() {
   local value="$1"
   [[ -n "${value}" && "${value}" == "${INSTALL_DIR}/"* && "${value}" != *$'\n'* && "${value}" != *'"'* && "${value}" != *'..'* ]] || \
@@ -299,14 +308,21 @@ write_fresh_config() {
   local template="${TMP_DIR}/config.yaml.example"
   local jwt_secret api_token escaped_email escaped_password
 
-  [[ -n "${ADMIN_EMAIL}" ]] || ADMIN_EMAIL="admin@localhost"
+  # Control's login check (`required,email`) refuses a host name without a dot,
+  # so the default is the server's own default administrator
+  # (internal/service/init_admin.go), not admin@localhost.
+  [[ -n "${ADMIN_EMAIL}" ]] || ADMIN_EMAIL="admin@anixops.local"
   [[ -n "${ADMIN_PASSWORD}" ]] || ADMIN_PASSWORD="$(random_secret)"
-  validate_config_value "${ADMIN_EMAIL}"
-  validate_config_value "${ADMIN_PASSWORD}"
+  validate_admin_value "${ADMIN_EMAIL}"
+  validate_admin_value "${ADMIN_PASSWORD}"
   jwt_secret="$(random_secret)"
   api_token="$(random_secret)"
+  # The values are YAML double-quoted scalars: escape the backslash first, then
+  # the double quote.
   escaped_email="${ADMIN_EMAIL//\\/\\\\}"
+  escaped_email="${escaped_email//\"/\\\"}"
   escaped_password="${ADMIN_PASSWORD//\\/\\\\}"
+  escaped_password="${escaped_password//\"/\\\"}"
 
   info "Downloading the version-matched configuration template"
   curl -fsSL --retry 3 --connect-timeout 15 \
@@ -317,11 +333,21 @@ write_fresh_config() {
   # guards (the template JWT secret is accepted). A host install is production,
   # as the container defaults are, so the installer sets the env key itself,
   # and adds it when a template has none.
-  awk \
-    -v jwt_secret="${jwt_secret}" \
-    -v api_token="${api_token}" \
-    -v admin_email="${escaped_email}" \
-    -v admin_password="${escaped_password}" '
+  # The values reach awk through the environment, not `awk -v`: -v interprets
+  # backslash escapes in the value a second time, after the escaping above. The
+  # password ab\qcd was escaped to ab\\qcd and unescaped again to "ab\qcd",
+  # which is not valid YAML.
+  ANIX_CFG_JWT_SECRET="${jwt_secret}" \
+  ANIX_CFG_API_TOKEN="${api_token}" \
+  ANIX_CFG_ADMIN_EMAIL="${escaped_email}" \
+  ANIX_CFG_ADMIN_PASSWORD="${escaped_password}" \
+  awk '
+      BEGIN {
+        jwt_secret = ENVIRON["ANIX_CFG_JWT_SECRET"]
+        api_token = ENVIRON["ANIX_CFG_API_TOKEN"]
+        admin_email = ENVIRON["ANIX_CFG_ADMIN_EMAIL"]
+        admin_password = ENVIRON["ANIX_CFG_ADMIN_PASSWORD"]
+      }
       /^env:/ {
         print "env: \"production\""
         env_seen = 1
@@ -1016,7 +1042,10 @@ rollback_migration() {
 }
 
 backup_current_release() {
-  [[ -x "${BINARY_PATH}" || -x "${LEGACY_BINARY_PATH}" || -d "${FRONTEND_DIR}" ]] || return
+  # A fresh install has nothing to back up. A bare `return` would hand the
+  # failed test's status 1 to main, which runs under errexit and would stop
+  # here, before the binary, the unit or the service are installed.
+  [[ -x "${BINARY_PATH}" || -x "${LEGACY_BINARY_PATH}" || -d "${FRONTEND_DIR}" ]] || return 0
   BACKUP_DIR="${BACKUP_ROOT}/$(date -u +%Y%m%dT%H%M%SZ)-${VERSION}"
   install -d -m 0700 -o root -g root "${BACKUP_DIR}"
   if [[ -x "${BINARY_PATH}" ]]; then
@@ -1188,6 +1217,16 @@ parse_args() {
   fi
 
   while [[ "$#" -gt 0 ]]; do
+    # `shift 2` with no value left fails and, under errexit, ended the script
+    # with status 1 and no message.
+    case "$1" in
+      --version)
+        [[ "$#" -ge 2 ]] || die "--version requires a release tag, for example --version v4.2.0"
+        ;;
+      --admin-email|--admin-password|--install-dir|--health-url|--plan|--grpc-name|--grpc-tls-cert|--grpc-tls-key)
+        [[ "$#" -ge 2 ]] || die "$1 requires a value (see --help)"
+        ;;
+    esac
     case "$1" in
       --version) VERSION="${2:-}"; shift 2 ;;
       --admin-email) ADMIN_EMAIL="${2:-}"; shift 2 ;;
@@ -1299,7 +1338,12 @@ main() {
   fi
 
   info "Installed ${VERSION} successfully."
-  [[ "${COMMAND}" == "rollback" ]] && info "Rollback completed by installing the requested release tag."
+  # Not `[[ ... ]] && info ...`: as the last statement of main its status 1 (not
+  # a rollback) became the exit status of a successful install.
+  if [[ "${COMMAND}" == "rollback" ]]; then
+    info "Rollback completed by installing the requested release tag."
+  fi
+  return 0
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

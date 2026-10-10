@@ -11,6 +11,10 @@ REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
 workdir="$(mktemp -d)"
 cleanup() { find "${workdir}" -depth -delete; }
 trap cleanup EXIT
+# The forwarders download the installer into a temporary file; keep it (and
+# whatever the forwarders leave behind) inside the work directory.
+mkdir -p "${workdir}/tmp"
+export TMPDIR="${workdir}/tmp"
 
 fail() {
   printf 'FAIL: %s\n' "$*" >&2
@@ -46,6 +50,28 @@ fail() {
 if grep -nF "releases/latest" "${REPO_ROOT}/scripts/install.sh"; then
   fail "scripts/install.sh must not read releases/latest"
 fi
+
+# A flag that needs a value and gets none says so. `shift 2` with one argument
+# left used to end the script with status 1 and no message. Each run is a
+# separate process under a timeout, with errexit as the installer has it.
+parse_flags() {
+  # shellcheck disable=SC2016  # the program is for the inner shell
+  timeout 20 bash -c 'set -Eeuo pipefail; source "$1"; shift; parse_args "$@"' _ \
+    "${REPO_ROOT}/scripts/install.sh" "$@"
+}
+for flag in --version --admin-email --admin-password --install-dir --health-url --grpc-name; do
+  status=0
+  parse_flags install "${flag}" >/dev/null 2>"${workdir}/bare-flag.err" || status=$?
+  [[ "${status}" -eq 1 ]] || fail "a bare ${flag} must exit 1, got ${status}"
+  grep -F -- "${flag} requires" "${workdir}/bare-flag.err" >/dev/null ||
+    fail "a bare ${flag} must say that it requires a value, got: $(cat "${workdir}/bare-flag.err")"
+done
+parse_flags install --version >/dev/null 2>"${workdir}/bare-flag.err" || true
+grep -F -- "for example --version v4.2.0" "${workdir}/bare-flag.err" >/dev/null ||
+  fail "a bare --version must name an example tag, got: $(cat "${workdir}/bare-flag.err")"
+# A flag with its value still parses.
+parse_flags install --version v4.2.0 --admin-email admin@example.com >/dev/null 2>&1 ||
+  fail "flags with values must still parse"
 
 # The forwarders run in a directory that has no scripts/install.sh next to
 # them, so they take the download path. A stub curl records the URL.
@@ -121,6 +147,61 @@ for forwarder in install.sh panel_install.sh; do
     bash "${script}" enable-agents --grpc-name grpc.example.com >/dev/null
   [[ "$(head -n 1 "${CURL_LOG}")" == "${base}/v4.1.0/scripts/install.sh" ]] ||
     fail "${forwarder}: INSTALL_REF must select the ref, got $(head -n 1 "${CURL_LOG}")"
+
+  # "--version" with no tag is refused before anything is downloaded, even when
+  # the environment names one: the flag is not silently ignored.
+  for tag_env in "" v4.2.0; do
+    : >"${CURL_LOG}"
+    if env -u INSTALL_REF -u ANIX_CONTROL_VERSION -u V2BOARD_VERSION -u REPO_OWNER -u REPO_NAME \
+      PATH="${workdir}/bin:${PATH}" CURL_LOG="${CURL_LOG}" ${tag_env:+ANIX_CONTROL_VERSION="${tag_env}"} \
+      bash "${script}" install --admin-email admin@example.com --version >/dev/null 2>"${workdir}/forwarder.err"; then
+      fail "${forwarder}: a bare --version must fail (ANIX_CONTROL_VERSION='${tag_env}')"
+    fi
+    [[ ! -s "${CURL_LOG}" ]] || fail "${forwarder}: nothing may be downloaded for a bare --version"
+    grep -F -- "--version needs a release tag" "${workdir}/forwarder.err" >/dev/null ||
+      fail "${forwarder}: a bare --version must say what is missing, got: $(cat "${workdir}/forwarder.err")"
+  done
+
+  # Piped ("curl ... | bash") or run from a process substitution, the forwarder
+  # is not a checkout, whatever the caller's directory holds: $0 is "bash" and
+  # dirname is ".", so a ./scripts/install.sh (or ./install.sh) there used to be
+  # executed instead of the installer at the tag.
+  decoy="${workdir}/decoy-${forwarder%.sh}"
+  mkdir -p "${decoy}/scripts"
+  for file in scripts/install.sh install.sh; do
+    printf '#!/usr/bin/env bash\necho "decoy-installer-ran"\n' >"${decoy}/${file}"
+  done
+  : >"${CURL_LOG}"
+  out="$(cd "${decoy}" && env -u INSTALL_REF -u ANIX_CONTROL_VERSION -u V2BOARD_VERSION -u REPO_OWNER -u REPO_NAME \
+    PATH="${workdir}/bin:${PATH}" CURL_LOG="${CURL_LOG}" \
+    bash -s -- install --version v4.2.0 --admin-email admin@example.com <"${script}")"
+  [[ "$(head -n 1 "${CURL_LOG}")" == "${base}/v4.2.0/scripts/install.sh" ]] ||
+    fail "${forwarder}: piped from a directory with scripts/install.sh it must fetch the installer at the tag, got '$(head -n 1 "${CURL_LOG}")', output: ${out}"
+  [[ "${out}" == "stub-installer install --version v4.2.0 --admin-email admin@example.com" ]] ||
+    fail "${forwarder}: piped from a directory with scripts/install.sh it ran the wrong installer: ${out}"
+
+  : >"${CURL_LOG}"
+  out="$(cd "${decoy}" && env -u INSTALL_REF -u ANIX_CONTROL_VERSION -u V2BOARD_VERSION -u REPO_OWNER -u REPO_NAME \
+    PATH="${workdir}/bin:${PATH}" CURL_LOG="${CURL_LOG}" \
+    bash <(cat "${script}") install --version v4.2.0)"
+  [[ "$(head -n 1 "${CURL_LOG}")" == "${base}/v4.2.0/scripts/install.sh" && "${out}" == "stub-installer install --version v4.2.0" ]] ||
+    fail "${forwarder}: run from a process substitution it must fetch the installer at the tag, got: ${out}"
+
+  # A real checkout (this file next to scripts/install.sh) uses its own
+  # installer, however it is invoked, and downloads nothing.
+  checkout="${workdir}/checkout-${forwarder%.sh}"
+  mkdir -p "${checkout}/scripts"
+  cp "${REPO_ROOT}/install.sh" "${REPO_ROOT}/panel_install.sh" "${checkout}/"
+  printf '#!/usr/bin/env bash\necho "local-installer $*"\n' >"${checkout}/scripts/install.sh"
+  for invocation in "${checkout}/${forwarder}" "./${forwarder}" "${forwarder}"; do
+    : >"${CURL_LOG}"
+    out="$(cd "${checkout}" && env -u INSTALL_REF -u ANIX_CONTROL_VERSION -u V2BOARD_VERSION -u REPO_OWNER -u REPO_NAME \
+      PATH="${workdir}/bin:${PATH}" CURL_LOG="${CURL_LOG}" \
+      bash "${invocation}" install --version v4.2.0)"
+    [[ "${out}" == "local-installer install --version v4.2.0" ]] ||
+      fail "${forwarder}: a checkout run as 'bash ${invocation}' must use its scripts/install.sh, got: ${out}"
+    [[ ! -s "${CURL_LOG}" ]] || fail "${forwarder}: a checkout must not download the installer"
+  done
 done
 
 echo "install-by-tag test passed"
