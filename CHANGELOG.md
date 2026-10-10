@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Changed
+
+- **One Agent pin, and a vulnerability scan of the Agent plugins that ship in the signed
+  packages.** Every anix-agent checkout in `ci.yml` (the official packages, the cross-repository
+  E2E, the chaos E2E and the live WebUI gate) takes its ref from one `AGENT_REF`. It moves from
+  the rc.3 commit `acf54a02` to the Agent's `v4.2.0-rc.4` commit `91a045a8`, which carries the
+  circl and utls bumps for GO-2026-4550 and GO-2026-4512: the packages built from the old pin
+  embedded the vulnerable dependencies. `Plugin Package Release Contracts` also runs
+  `govulncheck` over `nftables-forward`, `gost-mesh`, `machine-telemetry` and `nat-egress` and
+  fails for a vulnerability their call graph reaches.
+  `config/scripts/check_release_workflow.sh` enforces the single pin, that every checkout uses
+  it, and that the scan stays.
+
 ## 4.2.0-rc.4 - 2026-10-09
 
 > The `v4.2.0-rc.3` tag was pushed, but its release pipeline failed the Go security gate, so rc.3 was not published. This rc.4 carries the rc.3 changes plus the fixes below.
