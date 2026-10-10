@@ -121,13 +121,20 @@ jobs:
       - name: Test the installers install a named release tag
         run: bash scripts/tests/test_install_tag.sh
 
+      # A fresh host install writes env: "production" (the template says
+      # development); internal/config loads the generated file with the real
+      # loader in Backend Tests.
+      - name: Test a fresh install writes a production configuration
+        run: bash scripts/tests/test_install_fresh_config.sh
+
       # Fresh Control installs generate the CA key and enable gRPC TLS for
       # Agents (systemd installer, Compose init-secrets.sh): shellcheck, then
       # the fake-root tests.
       - name: Lint the Control installers
         run: |
           shellcheck -x scripts/install.sh config/deploy/compose/init-secrets.sh config/deploy/grpc_tls/setup_certbot.sh \
-            scripts/tests/test_control_install_agent_access.sh scripts/tests/test_compose_init_secrets.sh
+            scripts/tests/test_control_install_agent_access.sh scripts/tests/test_compose_init_secrets.sh \
+            scripts/tests/test_install_fresh_config.sh
 
       - name: Test Control installer Agent access in a fake root
         run: |

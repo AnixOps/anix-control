@@ -312,11 +312,21 @@ write_fresh_config() {
   curl -fsSL --retry 3 --connect-timeout 15 \
     "${RAW_BASE}/${VERSION}/config/config.yaml.example" -o "${template}"
 
+  # The template is the local-development file and says `env: "development"`:
+  # Control would run a full AutoMigrate on every start and skip the production
+  # guards (the template JWT secret is accepted). A host install is production,
+  # as the container defaults are, so the installer sets the env key itself,
+  # and adds it when a template has none.
   awk \
     -v jwt_secret="${jwt_secret}" \
     -v api_token="${api_token}" \
     -v admin_email="${escaped_email}" \
     -v admin_password="${escaped_password}" '
+      /^env:/ {
+        print "env: \"production\""
+        env_seen = 1
+        next
+      }
       /^[A-Za-z_][A-Za-z0-9_]*:/ {
         section = $0
         sub(/:.*/, "", section)
@@ -338,6 +348,11 @@ write_fresh_config() {
         next
       }
       { print }
+      END {
+        if (!env_seen) {
+          print "env: \"production\""
+        }
+      }
     ' "${template}" > "${CONFIG_FILE}"
 
   chmod 0640 "${CONFIG_FILE}"

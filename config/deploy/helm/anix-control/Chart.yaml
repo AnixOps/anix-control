@@ -2,10 +2,14 @@ apiVersion: v2
 name: anix-control
 description: AnixOps Control plane (single replica) for Kubernetes, with an external PostgreSQL.
 type: application
-# Chart version; bump on any template or values change.
+# Chart version, its own SemVer (not the Control version); bump on any
+# template or values change.
 version: 0.3.0
-# Control release the default image tag follows.
-appVersion: "4.0.0"
+# Control release this chart ships with, and the default image tag. Do not
+# edit it by hand: config/scripts/prepare_release.py sets it with every other
+# version surface, and config/scripts/check_release_version.py (the tag gate)
+# fails a release whose appVersion differs from the tag.
+appVersion: "4.2.0-rc.4"
 home: https://github.com/AnixOps/anix-control
 sources:
   - https://github.com/AnixOps/anix-control
