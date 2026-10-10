@@ -18,10 +18,17 @@ front, skips them and moves the rest. Any other refusal (a network or
 authorization error, a 5xx, the `409` that means `forward` did not move) stops
 the run. The run ends with a summary of what was rolled back, skipped and failed.
 
+A run that moves nothing while no installation is on --version either is not a
+rollback: a --version that no installation can reach (a typo, a `v` prefix, a
+panel that holds no such release) is an error, and --allow-skipped does not
+change that.
+
 Exit status: 0 everything was moved and is healthy (or there was nothing to do),
-1 an error stopped the run, 2 moved installations are not healthy within --wait,
-3 some installations were skipped (--allow-skipped makes that 0). A dry run
-exits with the status the same run with --apply would end with.
+1 an error stopped the run (including a --version no installation can reach),
+2 moved installations are not healthy within --wait, 3 some installations were
+skipped while others moved or were already on --version (--allow-skipped makes
+that 0). A dry run exits with the status the same run with --apply would end
+with.
 
     python3 config/scripts/rollback_installations.py --panel https://panel.example.com --version 4.1.0
     python3 config/scripts/rollback_installations.py --panel https://panel.example.com --version 4.1.0 --apply
@@ -145,6 +152,14 @@ def split_unavailable(
     return movable, unavailable
 
 
+def unreachable(version: str, releases: dict[str, list[str]], count: int) -> str:
+    """Why none of the count installations can reach version, for the error that ends a run that could move none."""
+    held = sorted({v for versions in releases.values() for v in versions})
+    if version not in held:
+        return f"the panel holds no release of {version} (it holds: {', '.join(held) or 'none'}); is --version right? nothing was changed"
+    return f"none of the {count} installations to move can reach {version} and none is on it yet; nothing was rolled back"
+
+
 def print_summary(
     out,
     version: str,
@@ -178,11 +193,20 @@ def run(panel: str, token: str, version: str, apply: bool, wait: int, out=None, 
     if not todo:
         print(f"every installation is already on {version}; nothing to do", file=out)
         return 0
-    movable, skipped = split_unavailable(todo, registered_releases(panel, token), version)
+    on_version = len(rows) - len(todo)  # installations that are on version already
+    releases = registered_releases(panel, token)
+    movable, skipped = split_unavailable(todo, releases, version)
     if skipped:
         print(f"{len(skipped)} installations cannot be moved to {version} and are skipped:", file=out)
         for row, why in skipped:
             print(f"  {key_of(row)}: {why}", file=out)
+    if not movable and not on_version:
+        # Nothing can move and nothing is there yet: a mistyped --version, or a panel without the releases.
+        # That is no expected skip, so it ends the run whatever --allow-skipped says (the old script
+        # stopped here too, on the first PUT). The idempotent re-run has installations on version.
+        if apply:
+            print_summary(out, version, [], skipped)
+        raise RollbackError(unreachable(version, releases, len(todo)))
     if not movable:
         print(f"no installation can be moved to {version}", file=out)
     else:
@@ -212,6 +236,10 @@ def run(panel: str, token: str, version: str, apply: bool, wait: int, out=None, 
             continue
         moved.append(row)
         print(f"moved {key_of(row)}", file=out)
+    if not moved and not on_version:
+        # every PUT answered release_not_found although the listing held the release: nothing was rolled back
+        print_summary(out, version, moved, skipped)
+        raise RollbackError(f"no installation was moved to {version} and none is on it; nothing was rolled back")
     try:
         pending = wait_until_on(panel, token, moved, version, wait) if moved else []
     except RollbackError:
@@ -236,7 +264,10 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument(
         "--allow-skipped",
         action="store_true",
-        help=f"exit 0 although some installations were skipped because the panel has no release of --version for them (default: exit {SKIPPED_EXIT})",
+        help=(
+            "exit 0 although some installations were skipped because the panel has no release of --version for them "
+            f"(default: exit {SKIPPED_EXIT}); a run that moves nothing and finds nothing on --version is still an error"
+        ),
     )
     args = parser.parse_args(argv)
     token = os.environ.get("ANIX_CONTROL_TOKEN", "").strip()

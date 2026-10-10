@@ -247,14 +247,31 @@ class SkippedInstallationsTest(unittest.TestCase):
         self.assertIn("2 installations cannot be moved to 4.1.0 and are skipped:", text)
         self.assertIn("no installation can be moved to 4.1.0", text)
         self.assertIn("summary: 0 rolled back to 4.1.0, 2 skipped, 0 failed", text)
+        self.assertEqual(self.go(allow_skipped=True)[0], 0)
+        self.assertEqual(len(self.panel.puts), count)
 
-    def test_nothing_movable_is_reported_and_changes_nothing(self):
+    def test_nothing_movable_and_nothing_on_the_version_is_an_error_not_a_skip(self):
+        # only order and payment are installed: nothing can move and nothing is on 4.1.0, so this is no rollback
         self.panel.rows = {k: v for k, v in self.panel.rows.items() if k[0] in ("order", "payment")}
+        for allow_skipped in (False, True):
+            with self.subTest(allow_skipped=allow_skipped):
+                out = io.StringIO()
+                with self.assertRaises(rb.RollbackError) as caught:
+                    rb.run(self.panel.url, "t", "4.1.0", True, 5, out=out, allow_skipped=allow_skipped)
+                self.assertIn("none of the 2 installations to move can reach 4.1.0 and none is on it yet", str(caught.exception))
+                self.assertIn("order/control: no 4.1.0 release of order", out.getvalue())
+                self.assertIn("summary: 0 rolled back to 4.1.0, 2 skipped, 0 failed", out.getvalue())
+                self.assertEqual(self.panel.puts, [])
+
+    def test_skips_next_to_an_installation_already_on_the_version_stay_exit_three(self):
+        # moved by hand earlier: forward is on 4.1.0, the rest cannot move; the re-run is still 3, or 0 when allowed
+        self.panel.rows = {k: v for k, v in self.panel.rows.items() if k[0] in ("forward", "order", "payment")}
+        self.panel.rows[("forward", "control")]["desired_version"] = "4.1.0"
         code, text = self.go()
         self.assertEqual(code, 3)
-        self.assertEqual(self.panel.puts, [])
         self.assertIn("no installation can be moved to 4.1.0", text)
         self.assertEqual(self.go(allow_skipped=True)[0], 0)
+        self.assertEqual(self.panel.puts, [])
 
     def test_a_plugin_with_no_release_at_all_says_so(self):
         movable, skipped = rb.split_unavailable(commercial("4.2.0"), {}, "4.1.0")
@@ -267,6 +284,85 @@ class SkippedInstallationsTest(unittest.TestCase):
         movable, skipped = rb.split_unavailable(todo, {r["plugin_id"]: ["4.1.0"] for r in rows()}, "4.1.0")
         self.assertEqual([r["plugin_id"] for r in movable], [r["plugin_id"] for r in todo if r["plugin_id"] not in ("order", "payment")])
         self.assertEqual([r["plugin_id"] for r, _ in skipped], ["order", "payment"])
+
+
+class UnreachableVersionTest(unittest.TestCase):
+    """A --version that no installation can reach (a typo, a v prefix, no such release) is an error, as it was
+    before skipping existed: exit 1 and nothing changed, with or without --allow-skipped, dry run or not."""
+
+    def setUp(self):
+        self.panel = FakePanel(rows() + commercial(), without=("order", "payment"))
+        self.addCleanup(self.panel.close)
+
+    def go(self, version, apply=True, allow_skipped=False):
+        out = io.StringIO()
+        try:
+            return rb.run(self.panel.url, "t", version, apply, 1, out=out, allow_skipped=allow_skipped), out.getvalue()
+        except rb.RollbackError as err:
+            return err, out.getvalue()
+
+    def unchanged(self):
+        self.assertEqual(self.panel.puts, [])
+        for (plugin, _), row in self.panel.rows.items():
+            self.assertEqual(row["desired_version"], "4.0.3" if plugin in ("order", "payment") else "4.2.0", plugin)
+
+    def test_a_version_the_panel_does_not_hold_is_an_error_with_or_without_allow_skipped(self):
+        for allow_skipped in (False, True):
+            with self.subTest(allow_skipped=allow_skipped):
+                err, text = self.go("4.1.1", allow_skipped=allow_skipped)
+                self.assertIsInstance(err, rb.RollbackError)
+                self.assertIn("the panel holds no release of 4.1.1 (it holds: 4.0.3, 4.1.0, 4.2.0)", str(err))
+                self.assertIn("8 installations cannot be moved to 4.1.1 and are skipped:", text)
+                self.assertIn("summary: 0 rolled back to 4.1.1, 8 skipped, 0 failed", text)
+                self.assertNotIn("no installation can be moved", text)
+                self.unchanged()
+
+    def test_a_v_prefixed_tag_is_an_error(self):
+        err, _ = self.go("v4.1.0")
+        self.assertIsInstance(err, rb.RollbackError)
+        self.assertIn("the panel holds no release of v4.1.0", str(err))
+        self.unchanged()
+
+    def test_the_dry_run_ends_with_the_status_the_run_would(self):
+        for allow_skipped in (False, True):
+            with self.subTest(allow_skipped=allow_skipped):
+                err, text = self.go("4.1.1", apply=False, allow_skipped=allow_skipped)
+                self.assertIsInstance(err, rb.RollbackError)
+                self.assertIn("the panel holds no release of 4.1.1", str(err))
+                self.assertNotIn("dry run: nothing was changed", text)
+                self.assertNotIn("summary:", text)  # a dry run attempts nothing
+                self.unchanged()
+
+    def test_a_panel_that_holds_no_releases_at_all_is_an_error(self):
+        self.panel.releases = set()
+        err, _ = self.go("4.1.0", allow_skipped=True)
+        self.assertIsInstance(err, rb.RollbackError)
+        self.assertIn("the panel holds no release of 4.1.0 (it holds: none)", str(err))
+        self.unchanged()
+
+    def test_every_put_answering_release_not_found_is_an_error_not_a_skip(self):
+        # the listing holds 4.1.0 but the panel refuses every PUT of it: nothing moved, nothing was on 4.1.0
+        for key in self.panel.rows:
+            if key[0] not in ("order", "payment"):
+                self.panel.refuse[key] = (400, "release_not_found")
+        for allow_skipped in (False, True):
+            with self.subTest(allow_skipped=allow_skipped):
+                err, text = self.go("4.1.0", allow_skipped=allow_skipped)
+                self.assertIsInstance(err, rb.RollbackError)
+                self.assertIn("no installation was moved to 4.1.0 and none is on it; nothing was rolled back", str(err))
+                self.assertIn("summary: 0 rolled back to 4.1.0, 8 skipped, 0 failed", text)
+                self.assertTrue(all(row["desired_version"] != "4.1.0" for row in self.panel.rows.values()))
+
+    def test_main_exits_one_for_both_flags(self):
+        base = ["--panel", self.panel.url, "--version", "4.1.1", "--apply", "--wait", "1"]
+        with mock.patch.dict(os.environ, {"ANIX_CONTROL_TOKEN": "t"}):
+            for flags in ([], ["--allow-skipped"]):
+                with self.subTest(flags=flags):
+                    stderr = io.StringIO()
+                    with contextlib.redirect_stdout(io.StringIO()), contextlib.redirect_stderr(stderr):
+                        self.assertEqual(rb.main(base + flags), 1)
+                    self.assertIn("error: the panel holds no release of 4.1.1", stderr.getvalue())
+        self.unchanged()
 
 
 class RefusalTest(unittest.TestCase):

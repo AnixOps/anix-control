@@ -3001,8 +3001,12 @@ recovery, the way out is the rollback below or restoring the database backup.
   `409` above means `forward` did not move). The exit status is `0` when
   everything moved and is healthy, `1` when an error stopped the run, `2` when
   a moved installation is not healthy within `--wait`, and `3` when
-  installations were skipped (the dry run ends with the status the run would);
-  `--allow-skipped` turns that `3` into `0` when the skips are expected:
+  installations were skipped while others moved or were already on the
+  version (the dry run ends with the status the run would); `--allow-skipped`
+  turns that `3` into `0` when the skips are expected. A `--version` that no
+  installation can reach (a typo, a `v` prefix, a release the panel does not
+  hold) moves nothing and ends `1`, with or without `--allow-skipped` and in
+  the dry run too; the error lists the versions the panel does hold:
 
   ```bash
   export ANIX_CONTROL_TOKEN=...   # the session token from before the upgrade

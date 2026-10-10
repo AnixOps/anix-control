@@ -296,8 +296,9 @@ pushed.
   rest back to the old version with a session token from before the upgrade
   (`config/scripts/rollback_installations.py` makes these calls in that order;
   it lists and skips an installation whose package has no release of that
-  version, and then exits `3` unless `--allow-skipped` is given), or restore
-  the database backup
+  version, and then exits `3` unless `--allow-skipped` is given; a version no
+  installation can reach is an error, exit `1`), or restore the database
+  backup
   ([`../UPGRADE.md`](../UPGRADE.md#rolling-back-after-the-import)).
 - **After a compromise or after a new-root release:** there is no dual-root
   mode. Recovery is re-signing the selected package set with the active root
