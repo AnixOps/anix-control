@@ -2377,18 +2377,31 @@ constraint: v4.2 replaces the flux-compatible forwarding, retires the clean
 agent and NodeX, and (once you confirm it) drops the old forwarding tables. A
 clean agent node still on its old agent when Control moves to v4.2 is refused
 (`agent_mtls_required`), and Control can then no longer clean it. Upgrade in
-this order (on 4.1 the installer of step 1 exists only on a 4.2 Control, see
-below):
+this order. The one-command installer is served by a 4.2 Control only, so
+with Control still on 4.1 the nodes that have no anix-agent to update wait
+until Control is upgraded (step 3) and move afterwards ("Step 1 needs the
+installer of a 4.2 Control", after the list):
 
-1. **Install the new anix-agent on every forward node first**, while Control
-   is still on 4.1, clean agent and NodeX nodes included. On install it
-   removes the legacy forward runtime locally, without Control: the
-   `inet v2b_forward` and `ip v2b_forward` tables, the `ip anixops_forward`
-   table, and the gost services the flux runtime or the clean agent created.
-   It touches no other table or service.
+1. **Update the anix-agent first, on every forward node that already runs
+   one**, while Control is still on 4.1: install 4.2.0-rc.1 or later (on a
+   root install `sudo anix-agent update <tag>`) and let it enroll ("To move
+   a `legacy` node" above). A clean agent, NodeX or Ansible node has no
+   anix-agent to update, and a 4.1 Control cannot serve it the one-command
+   installer: it moves after Control is upgraded, as described below the
+   list. Removing the legacy forward runtime locally, without Control, is
+   the one-command installer's work: the `inet v2b_forward` and
+   `ip v2b_forward` tables, the `ip anixops_forward` table, and the gost
+   services the flux runtime or the clean agent created. It touches no other
+   table or service. The Agent's own installer replaces the Agent only, so a
+   node that still has one of them takes the one-command installer as well
+   once Control is on 4.2.
 2. **Check** that `anix-control agents transports --legacy-only` prints
    "refuses none" (with the v4.2 command line,
-   `anix-control agents transports --check-required` exits 0).
+   `anix-control agents transports --check-required` exits 0), except for
+   the nodes that wait for the upgrade: a clean agent node shows as
+   `legacy`, a NodeX or Ansible node as `unseen` without a certificate.
+   Setting `agent_control.mtls: preferred` before the upgrade (below) keeps
+   the clean agents among them served.
 3. **Then upgrade Control to v4.2.** Its upgrade checks that every forward
    node is clean before it drops the old tables, and asks you to confirm that
    step on its own: it cannot be undone ("Forwarding: Archive, Clean The
@@ -2407,8 +2420,8 @@ version number (H25). The same order is in "Order Of Operations" above
 below is served by Control 4.2 (`/install.sh`, with `/install/agent.env`). A
 4.1 Control has neither (its `/install.sh` is the clean agent's, under
 `/api/v2/forward-agent/`), so the script cannot read the Agent release from it
-and stops before it changes anything. On 4.1, step 1 therefore holds for the
-nodes you can update with the Agent's own installer. For the others, which
+and stops before it changes anything. On 4.1, step 1 therefore holds only for
+the nodes you can update with the Agent's own installer. For the others, which
 have no anix-agent to update (clean agent, NodeX and Ansible nodes), keep them
 served while Control moves first:
 
