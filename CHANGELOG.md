@@ -5,6 +5,17 @@
 ### Changed
 
 - **More test and policy jobs gate the tag.** `release-binaries` now also waits for Release Workflow Policy Check, Deployment Script Checks, Package Storage PostgreSQL, Docker Build Smoke, Kubernetes Smoke and E2E Tests, and `plugin-package-publish` waits for Go Quality Gates, Go Security Scans and Backend Tests. Before, a failing E2E, Docker or Kubernetes smoke, package storage, deployment script or release policy job did not stop the tag from being published, and the signed packages did not wait for the Go gates. `config/scripts/check_release_workflow.sh` enforces each gate, and its self-test checks that removing any one of them fails the check.
+- **One Agent pin, and a vulnerability scan of the Agent plugins that ship in the signed
+  packages.** Every anix-agent checkout in `ci.yml` (the official packages, the cross-repository
+  E2E, the chaos E2E and the live WebUI gate) takes its ref from one `AGENT_REF`. It moves from
+  the rc.3 commit `acf54a02` to the Agent's `v4.2.0-rc.4` commit `91a045a8`. Scanned with
+  `govulncheck`, the four plugin commands at the old pin reach four `golang.org/x/net` v0.58.0
+  advisories (GO-2026-6603, GO-2026-6611, GO-2026-6612 and GO-2026-6617); at the new pin they
+  carry x/net v0.60.0 and reach none. The signed packages of 4.2.0-rc.4 were built from the old
+  pin. `Plugin Package Release Contracts` now runs the same scan over `nftables-forward`,
+  `gost-mesh`, `machine-telemetry` and `nat-egress` and fails for a vulnerability their call graph
+  reaches. `config/scripts/check_release_workflow.sh` enforces the single pin, that every checkout
+  uses it, and that the scan stays.
 
 ### Tooling
 

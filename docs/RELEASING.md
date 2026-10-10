@@ -96,6 +96,14 @@ only the highest version `latest`.
     that root.
   - Agent packages embed Agent binaries from the pinned `anix-agent` commit
     and a checksum-pinned GOST runtime.
+  - The pin is `AGENT_REF` in the top-level `env` of `ci.yml`; every
+    anix-agent checkout (packages, cross-repository E2E, live WebUI gate)
+    takes its ref from it. Move it to the Agent's release commit with every
+    Agent tag, in the pull request that prepares the Control release.
+  - `plugin-package-release-test` runs `govulncheck` over the four Agent
+    commands the plugin binaries are built from and fails for a
+    vulnerability their call graph reaches, so a vulnerable Agent
+    dependency cannot reach the signed packages.
 - **Binaries.** Linux, Windows and macOS builds for amd64 and arm64, plus the
   frontend archive (`anix-control-frontend.tar.gz`).
 - **Image.** `ghcr.io/anixops/anix-control` for linux/amd64 and linux/arm64,
