@@ -289,13 +289,67 @@ validate_config_value() {
     die "Bootstrap values must be non-empty and must not contain a double quote or newline."
 }
 
-# The bootstrap email and password are written as YAML double-quoted scalars
-# with the backslash and the double quote escaped (write_fresh_config), so only
-# an empty value and a line break cannot be carried.
+# admin_value_error <value> prints why a bootstrap administrator email or
+# password cannot be carried unchanged, and nothing when it can.
+#
+# The value goes into config.yaml as a YAML double-quoted scalar (the backslash
+# and the double quote escaped by write_fresh_config) and into the JSON of the
+# install's own login check (json_escape escapes the same two characters). Not
+# every character survives both:
+#   - the YAML loader refuses U+0001-U+001F except tab, U+007F, U+0080-U+009F
+#     except U+0085, U+FFFE and U+FFFF, and reads a carriage return, U+0085,
+#     U+2028 and U+2029 as line breaks (folded into a space, or trimmed with
+#     the blanks next to them);
+#   - a raw tab loads, but is not valid in a JSON string;
+#   - bytes that are not UTF-8 make config.yaml unreadable.
+# Accepted, such a value made the install fail late or run with another
+# password, and the next run kept that config.yaml. Everything else is carried
+# exactly: printable ASCII, a space and any other UTF-8 text.
+#
+# It runs in a subshell with LC_ALL=C, so that bash matches bytes whatever the
+# host's locale, and takes one well-formed UTF-8 sequence at a time (RFC 3629:
+# no overlong form, no surrogate, nothing above U+10FFFF), minus the characters
+# listed above.
+admin_value_error() (
+  LC_ALL=C
+  local rest="$1"
+  [[ -n "${rest}" ]] || { printf 'empty'; return 0; }
+  case "${rest}" in
+    *[[:cntrl:]]*) printf 'control'; return 0 ;;
+  esac
+  while [[ -n "${rest}" ]]; do
+    case "${rest}" in
+      # one, two, three and four bytes
+      [$'\040'-$'\176']*) rest="${rest:1}" ;;                      # U+0020-U+007E
+      $'\302'[$'\240'-$'\277']*) rest="${rest:2}" ;;               # U+00A0-U+00BF
+      [$'\303'-$'\337'][$'\200'-$'\277']*) rest="${rest:2}" ;;     # U+00C0-U+07FF
+      $'\340'[$'\240'-$'\277'][$'\200'-$'\277']*) rest="${rest:3}" ;;  # U+0800-U+0FFF
+      [$'\341'$'\343'-$'\354'][$'\200'-$'\277'][$'\200'-$'\277']*) rest="${rest:3}" ;;  # U+1000-U+1FFF, U+3000-U+CFFF
+      $'\342\200'[$'\200'-$'\247'$'\252'-$'\277']*) rest="${rest:3}" ;;  # U+2000-U+203F but U+2028, U+2029
+      $'\342'[$'\201'-$'\277'][$'\200'-$'\277']*) rest="${rest:3}" ;;  # U+2040-U+2FFF
+      $'\355'[$'\200'-$'\237'][$'\200'-$'\277']*) rest="${rest:3}" ;;  # U+D000-U+D7FF
+      $'\356'[$'\200'-$'\277'][$'\200'-$'\277']*) rest="${rest:3}" ;;  # U+E000-U+EFFF
+      $'\357'[$'\200'-$'\276'][$'\200'-$'\277']*) rest="${rest:3}" ;;  # U+F000-U+FFBF
+      $'\357\277'[$'\200'-$'\275']*) rest="${rest:3}" ;;           # U+FFC0-U+FFFD
+      $'\360'[$'\220'-$'\277'][$'\200'-$'\277'][$'\200'-$'\277']*) rest="${rest:4}" ;;  # U+10000-U+3FFFF
+      [$'\361'-$'\363'][$'\200'-$'\277'][$'\200'-$'\277'][$'\200'-$'\277']*) rest="${rest:4}" ;;  # U+40000-U+FFFFF
+      $'\364'[$'\200'-$'\217'][$'\200'-$'\277'][$'\200'-$'\277']*) rest="${rest:4}" ;;  # U+100000-U+10FFFF
+      *) printf 'text'; return 0 ;;
+    esac
+  done
+)
+
+# validate_admin_value <email|password> <value> refuses a bootstrap value that
+# config.yaml and the login check cannot carry (see admin_value_error).
 validate_admin_value() {
-  local value="$1"
-  [[ -n "${value}" && "${value}" != *$'\n'* ]] || \
-    die "The bootstrap admin email and password must be non-empty and must not contain a newline."
+  local what="$1" problem
+  problem="$(admin_value_error "$2")"
+  case "${problem}" in
+    "") ;;
+    empty) die "The bootstrap admin ${what} must not be empty." ;;
+    control) die "The bootstrap admin ${what} must not contain a control character (a line break, a tab or a carriage return, for example)." ;;
+    *) die "The bootstrap admin ${what} must be valid UTF-8 text without control characters or line and paragraph separators (U+2028, U+2029)." ;;
+  esac
 }
 
 validate_install_managed_plugin_dir() {
@@ -313,8 +367,8 @@ write_fresh_config() {
   # (internal/service/init_admin.go), not admin@localhost.
   [[ -n "${ADMIN_EMAIL}" ]] || ADMIN_EMAIL="admin@anixops.local"
   [[ -n "${ADMIN_PASSWORD}" ]] || ADMIN_PASSWORD="$(random_secret)"
-  validate_admin_value "${ADMIN_EMAIL}"
-  validate_admin_value "${ADMIN_PASSWORD}"
+  validate_admin_value email "${ADMIN_EMAIL}"
+  validate_admin_value password "${ADMIN_PASSWORD}"
   jwt_secret="$(random_secret)"
   api_token="$(random_secret)"
   # The values are YAML double-quoted scalars: escape the backslash first, then

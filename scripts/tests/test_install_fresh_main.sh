@@ -115,6 +115,8 @@ curl() {
       ;;
     */api/v2/login)
       printf '%s\n' "${data}" >>"${LOGIN_LOG}"
+      # A JSON string cannot hold a raw control character: the server answers 400.
+      [[ "${data}" != *[[:cntrl:]]* ]] || return 22
       if [[ -n "${write_out}" ]]; then printf '200'; else printf '{"code":0,"data":{"token":"fixture"}}'; fi
       ;;
     */health) ;;
@@ -241,11 +243,50 @@ check "skip-start: the binary is installed" test -x "${SKIPPED}/bin/anix-control
 check "skip-start: the unit is written" test -s "${SYSTEMD_UNIT_DIR}/anix-control.service"
 check "skip-start: says the start was skipped" grep -qF "service start was skipped" "${temporary}/skip.log"
 
+# --- 5. A bootstrap value that config.yaml or the login check cannot carry
+#        unchanged (a control character, bytes that are not UTF-8) is refused
+#        before config.yaml is written, with the reason. It used to be written
+#        as given: a tab made the install's own login check post invalid JSON
+#        ("Installation failed health verification" for a healthy service), a
+#        carriage return was folded into a space, and either way the next run
+#        kept that config.yaml.
+# refused_main <name> <email> <password> <fragment of the message>
+refused_main() {
+  local name="$1" email="$2" password="$3" fragment="$4"
+  local dir="${temporary}/${name}/control"
+  : >"${CURL_LOG}"
+  : >"${SYSTEMCTL_LOG}"
+  run_main "${temporary}/${name}.log" install --version "${VERSION_UNDER_TEST}" \
+    --install-dir "${dir}" --admin-email "${email}" --admin-password "${password}" \
+    --health-url "http://127.0.0.1:18080/health"
+  check "${name}: main exits 1" test "${RUN_STATUS}" -eq 1
+  check "${name}: says why" grep -qF "${fragment}" "${temporary}/${name}.log"
+  check "${name}: no config.yaml is written" test ! -e "${dir}/config/config.yaml"
+  check "${name}: no bootstrap password file is written" test ! -e "${dir}/.bootstrap-admin-password"
+  check "${name}: no binary is installed" test ! -e "${dir}/bin/anix-control"
+  check "${name}: nothing is downloaded" test ! -s "${CURL_LOG}"
+  check "${name}: the service is not touched" test ! -s "${SYSTEMCTL_LOG}"
+}
+refused_main tab-password admin@example.com $'pa\tss' "must not contain a control character"
+refused_main cr-password admin@example.com $'pass\r' "must not contain a control character"
+refused_main cr-email $'admin@example.com\r' secret "must not contain a control character"
+refused_main latin1-password admin@example.com $'p\xe4ssw\xf6rd' "must be valid UTF-8 text"
+
+# The same directory, corrected: the refusal left nothing behind to trip over.
+run_main "${temporary}/corrected.log" install --version "${VERSION_UNDER_TEST}" \
+  --install-dir "${temporary}/tab-password/control" --admin-email admin@example.com \
+  --admin-password "corrected secret" --health-url "http://127.0.0.1:18080/health"
+check "corrected rerun: main exits 0" test "${RUN_STATUS}" -eq 0
+check "corrected rerun: the password is the corrected one" \
+  grep -qxF '  password: "corrected secret"' "${temporary}/tab-password/control/config/config.yaml"
+check "corrected rerun: the login check posted it" \
+  grep -qF '"password":"corrected secret"' "${LOGIN_LOG}"
+
 check "no account or group command was run at all" test ! -s "${TRIPWIRE_LOG}"
 
 if [[ "${failures}" -ne 0 ]]; then
   printf '%d check(s) failed\n' "${failures}"
-  for log in fresh update rollback skip; do
+  for log in fresh update rollback skip corrected; do
     if [[ -f "${temporary}/${log}.log" ]]; then
       printf -- '--- %s.log (last lines)\n' "${log}"
       tail -n 8 "${temporary}/${log}.log"

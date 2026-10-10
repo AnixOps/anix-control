@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -116,6 +117,13 @@ func TestInstallerWritesCredentialsThatLoadVerbatim(t *testing.T) {
 			assert.Equal(t, string(password), loaded.Admin.Password)
 			assert.Equal(t, "production", loaded.Env)
 			assert.NotEmpty(t, loaded.JWT.Secret)
+
+			// The install's own login check posts the same values as JSON.
+			var login struct{ Email, Password string }
+			require.NoError(t, json.Unmarshal(installerLoginPayload(email, password), &login),
+				"the installer's login check would post invalid JSON for these values")
+			assert.Equal(t, string(email), login.Email)
+			assert.Equal(t, string(password), login.Password)
 		})
 	}
 
@@ -123,8 +131,64 @@ func TestInstallerWritesCredentialsThatLoadVerbatim(t *testing.T) {
 	for name, character := range map[string]string{
 		"backslash": `\`, "double quote": `"`, "single quote": `'`, "dollar": `$`,
 		"ampersand": `&`, "hash": `#`, "space": ` `, "non-ASCII": "密",
+		"no-break space": "\u00a0", "zero width no-break space": "\ufeff", "replacement character": "\ufffd",
+		"character beside the line separator": "\u2027", "character after the paragraph separator": "\u202a",
+		"astral plane": "\U00010000", "last code point": "\U0010ffff",
 	} {
 		assert.Contains(t, passwords.String(), character, "no password case contains a %s", name)
 	}
 	assert.Contains(t, emails.String(), `\`, "no email case contains a backslash")
+}
+
+// installerLoginPayload is the body verify_identity_login builds in
+// scripts/install.sh: json_escape escapes only the backslash and the double
+// quote.
+func installerLoginPayload(email, password []byte) []byte {
+	escape := strings.NewReplacer(`\`, `\\`, `"`, `\"`)
+	return []byte(`{"email":"` + escape.Replace(string(email)) + `","password":"` + escape.Replace(string(password)) + `"}`)
+}
+
+// TestInstallerRefusesCredentialsTheConfigCannotCarry: every value the
+// installer refuses (scripts/tests/test_install_fresh_config.sh, section 7)
+// must be one that the loader or the install's own login check really cannot
+// carry. A refusal that protects nothing is a rule an operator has to work
+// around; and the documentation promises that everything else is written
+// exactly as given (TestInstallerWritesCredentialsThatLoadVerbatim).
+//
+// The config is written the way the installer writes an accepted value: a
+// double-quoted scalar with the backslash and the double quote escaped.
+func TestInstallerRefusesCredentialsTheConfigCannotCarry(t *testing.T) {
+	_, casesDir := runInstallerFreshConfigScript(t)
+
+	files, err := filepath.Glob(filepath.Join(casesDir, "refused", "*.password"))
+	require.NoError(t, err)
+	require.GreaterOrEqual(t, len(files), 20, "the script must write the values it refuses")
+
+	escape := strings.NewReplacer(`\`, `\\`, `"`, `\"`)
+	for _, file := range files {
+		name := strings.TrimSuffix(filepath.Base(file), ".password")
+		t.Run(name, func(t *testing.T) {
+			password, err := os.ReadFile(file)
+			require.NoError(t, err)
+			email, err := os.ReadFile(strings.TrimSuffix(file, ".password") + ".email")
+			require.NoError(t, err)
+
+			config := filepath.Join(t.TempDir(), "config.yaml")
+			yaml := "env: \"production\"\nadmin:\n  email: \"" + escape.Replace(string(email)) +
+				"\"\n  password: \"" + escape.Replace(string(password)) + "\"\n"
+			require.NoError(t, os.WriteFile(config, []byte(yaml), 0o600))
+
+			loaded, loadErr := load(config, []string{})
+			carriedByConfig := loadErr == nil &&
+				loaded.Admin.Email == string(email) && loaded.Admin.Password == string(password)
+
+			var login struct{ Email, Password string }
+			jsonErr := json.Unmarshal(installerLoginPayload(email, password), &login)
+			carriedByLogin := jsonErr == nil &&
+				login.Email == string(email) && login.Password == string(password)
+
+			assert.False(t, carriedByConfig && carriedByLogin,
+				"the installer refuses %q / %q, but config.yaml and the login check carry them unchanged", email, password)
+		})
+	}
 }

@@ -1,15 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-# A local checkout is used only when this file is one: a regular file that sits
-# next to scripts/install.sh. Piped ("curl ... | bash") $0 is "bash" and
-# BASH_SOURCE[0] is empty, so a ./scripts/install.sh in the caller's directory
-# is never taken for the installer and the tag pin below always applies.
+# A local checkout is used only when this file is one: a regular file with the
+# repository's install.sh next to it. Piped ("curl ... | bash") $0 is "bash" and
+# BASH_SOURCE[0] is empty, so an ./install.sh in the caller's directory is never
+# taken for the installer and the tag pin below always applies. The sibling
+# install.sh, not scripts/install.sh, is what runs: it refuses the removed
+# source installer (ANIX_CONTROL_LEGACY_SOURCE_INSTALL=1) and then runs the
+# checkout's scripts/install.sh.
 source_file="${BASH_SOURCE[0]:-}"
 if [[ -n "${source_file}" && -f "${source_file}" ]]; then
   SCRIPT_DIR="$(CDPATH='' cd -- "$(dirname -- "${source_file}")" && pwd)"
-  if [[ -f "${SCRIPT_DIR}/scripts/install.sh" ]]; then
-    exec bash "${SCRIPT_DIR}/scripts/install.sh" "$@"
+  if [[ -f "${SCRIPT_DIR}/install.sh" ]]; then
+    exec bash "${SCRIPT_DIR}/install.sh" "$@"
   fi
 fi
 

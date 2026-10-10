@@ -202,6 +202,25 @@ for forwarder in install.sh panel_install.sh; do
       fail "${forwarder}: a checkout run as 'bash ${invocation}' must use its scripts/install.sh, got: ${out}"
     [[ ! -s "${CURL_LOG}" ]] || fail "${forwarder}: a checkout must not download the installer"
   done
+
+  # The removed source installer stays refused in a checkout: install.sh says so
+  # itself, and panel_install.sh reaches scripts/install.sh only through it.
+  # (scripts/install.sh has no such check; running it directly, as panel_install.sh
+  # once did in a checkout, installed from the checkout instead of refusing.)
+  for legacy_variable in ANIX_CONTROL_LEGACY_SOURCE_INSTALL V2BOARD_LEGACY_SOURCE_INSTALL; do
+    : >"${CURL_LOG}"
+    status=0
+    out="$(cd "${checkout}" && env -u INSTALL_REF -u ANIX_CONTROL_VERSION -u V2BOARD_VERSION -u REPO_OWNER -u REPO_NAME \
+      PATH="${workdir}/bin:${PATH}" CURL_LOG="${CURL_LOG}" "${legacy_variable}=1" \
+      bash "${checkout}/${forwarder}" install --version v4.2.0 2>&1)" || status=$?
+    [[ "${status}" -eq 1 ]] ||
+      fail "${forwarder}: ${legacy_variable}=1 in a checkout must exit 1, got ${status}: ${out}"
+    [[ "${out}" == *"installer was removed"* ]] ||
+      fail "${forwarder}: ${legacy_variable}=1 in a checkout must say the source installer was removed, got: ${out}"
+    [[ "${out}" != *local-installer* ]] ||
+      fail "${forwarder}: ${legacy_variable}=1 in a checkout must not run scripts/install.sh, got: ${out}"
+    [[ ! -s "${CURL_LOG}" ]] || fail "${forwarder}: a refused legacy install must not download anything"
+  done
 done
 
 echo "install-by-tag test passed"

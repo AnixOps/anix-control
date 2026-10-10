@@ -115,20 +115,47 @@ no dot (`admin@localhost`), and the installer does not check an address you
 pass, so give a real one: the install's final login check fails otherwise. The
 email and the password are written to `config.yaml` exactly as given; a
 backslash, a quote, `$`, `&`, `#`, a space and non-ASCII text are all kept.
-Only an empty value or one with a line break is refused.
+A value that cannot be carried unchanged is refused, with the reason, before
+`config.yaml` is written: an empty value, a control character (a line break, a
+tab or a carriage return; a password read with `$(cat file)` from a file with
+Windows line endings ends in one), U+2028 or U+2029, and bytes that are not
+UTF-8 (a password typed in a Latin-1 terminal). Run the command again with the
+value corrected; the next run starts from nothing.
 
 ### After an install that stopped without a message
 
 On a host with no previous release, earlier installers stopped with exit 1 and
 no message right after `Staged verified identity bootstrap package`: the service
 user, the directory layout and `config/config.yaml` were written, but no binary,
-unit or service. Running the installer again keeps that `config.yaml` (an
-existing file is never rewritten): its `admin.email` is `admin@localhost`
-unless you passed `--admin-email`, which Control's login check refuses, and no
-CA key is generated. If the service never started on that host, delete
-`config/config.yaml` and `.bootstrap-admin-password` under the installation
-directory and run `install` again; otherwise set `admin.email` to a valid
-address.
+unit or service. That `config.yaml` names `admin@localhost` as the
+administrator unless you passed `--admin-email`, an address Control's login
+check refuses, and the host has no CA key. An existing `config.yaml` is never
+rewritten, so running `install` again keeps those values, starts the service
+and, without `--admin-email` and `--admin-password`, reports success. The first
+start then creates the administrator from the file. Control reads `admin.email`
+and `admin.password` only for that, when the database holds no administrator;
+once one exists, editing them changes nothing.
+
+Remove the leftovers before the next `install`, so that it writes a new
+`config.yaml`:
+
+```bash
+sudo rm -f /opt/anixops/control/config/config.yaml /opt/anixops/control/.bootstrap-admin-password
+```
+
+If you already ran `install` again, the service holds that `admin@localhost`
+administrator, which cannot sign in. On a host where nothing else has been set
+up, stop the service and remove the SQLite database as well, so that the first
+start creates the administrator again from the new file:
+
+```bash
+sudo systemctl stop anix-control
+sudo rm -f /opt/anixops/control/config/data/v2board.db{,-wal,-shm}
+```
+
+That discards everything the database holds. With PostgreSQL, start from an
+empty database instead. Then run `install` again with `--version` and
+`--admin-email`.
 
 ### Environment: production
 
