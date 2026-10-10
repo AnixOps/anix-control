@@ -3007,11 +3007,25 @@ recovery, the way out is the rollback below or restoring the database backup.
 
   `config/scripts/rollback_installations.py` makes the same calls in that
   order, with the same token (`ANIX_CONTROL_TOKEN`; the redeployed 4.1.0 has
-  no command of its own for this). It lists the installations, prints the
-  plan, and changes nothing until `--apply`; it keeps each installation's
-  `target` and `enabled`, stops at the first refusal (the `409` above means
-  `forward` did not move), is safe to run again, and waits until every moved
-  installation is on the version and healthy:
+  no command of its own for this). It lists the installations and the
+  releases the panel holds, prints the plan, and changes nothing until
+  `--apply`; it keeps each installation's `target` and `enabled`, is safe to
+  run again, and waits until every moved installation is on the version and
+  healthy. A package that has no `4.1.0` release on the panel (`order` or
+  `payment` when their last build is a 4.0 one) cannot move to it: the script
+  lists those installations up front with the releases they do have, skips
+  them and moves the rest, and the summary at the end counts what was rolled
+  back, skipped and failed. Move a skipped installation by hand with the same
+  `PUT` to one of the releases listed. Any other refusal stops the run (the
+  `409` above means `forward` did not move). The exit status is `0` when
+  everything moved and is healthy, `1` when an error stopped the run, `2` when
+  a moved installation is not healthy within `--wait`, and `3` when
+  installations were skipped while others moved or were already on the
+  version (the dry run ends with the status the run would); `--allow-skipped`
+  turns that `3` into `0` when the skips are expected. A `--version` that no
+  installation can reach (a typo, a `v` prefix, a release the panel does not
+  hold) moves nothing and ends `1`, with or without `--allow-skipped` and in
+  the dry run too; the error lists the versions the panel does hold:
 
   ```bash
   export ANIX_CONTROL_TOKEN=...   # the session token from before the upgrade
