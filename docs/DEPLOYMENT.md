@@ -185,7 +185,7 @@ CA 签发；v4.2 起 `agent_control.mtls` 默认 `required`，这是 Agent 唯�
      `restart control`。详见 [`config/deploy/compose/secrets.README.md`](../config/deploy/compose/secrets.README.md)。
    - Helm：`grpc.enabled=true`、`grpc.tls.secretName=<kubernetes.io/tls Secret>`（cert-manager
      示例见 chart README），`config.ANIX_CONTROL_AGENT_INSTALL_GRPC_TARGET=<name>:50051`。
-   - systemd：`install.sh install|enable-agents --grpc-name <name>`（见
+   - systemd：`install.sh install --version <tag> --grpc-name <name>` 或 `install.sh enable-agents --grpc-name <name>`（见
      [`guide/release-installation.md`](guide/release-installation.md#agent-access)）。
 
    脚本会像 Agent 一样校验证书（系统根证书链、主机名、私钥匹配），不通过即拒绝。
@@ -193,7 +193,7 @@ CA 签发；v4.2 起 `agent_control.mtls` 默认 `required`，这是 Agent 唯�
 
 检查：`anix-control agents transports --check-required`。
 
-### 2.1 一键安装脚本（systemd，已冻结）
+### 2.1 一键安装脚本（systemd，按 tag 安装）
 
 生产环境默认使用 GitHub Release 安装器。它只下载版本匹配的发布二进制、前端包、校验和和单个配置模板，不 clone 仓库，也不在服务器构建 Go、前端或 Docker 镜像。对 `v4` 及之后的主版本，它还会下载并校验签名身份包三件套，暂存到 root 所有的引导目录后验证登录路径：
 
@@ -211,7 +211,7 @@ rm -f /tmp/anix-control-install.sh
 
 安装器会验证 Release 中的 SHA-256，保留已有配置和数据库，更新失败时恢复上一个二进制/前端快照。完整步骤、反向代理、升级与回滚说明见 [`guide/release-installation.md`](guide/release-installation.md)。
 
-该 systemd 安装路径已冻结：保持可用，但不再增加功能；新部署请使用第 2.0 节的容器方式。历史源码/Docker 安装器（`ANIX_CONTROL_LEGACY_SOURCE_INSTALL=1`）已移除，因为它会在目标主机上构建镜像。
+该 systemd 安装器只安装你用 `--version` 指定的 tag，不再读取 `releases/latest`；`install.sh` 与 `panel_install.sh` 也按该 tag 获取安装脚本，不再从 `go_dev` 分支获取。新部署仍首选第 2.0 节的容器方式。历史源码/Docker 安装器（`ANIX_CONTROL_LEGACY_SOURCE_INSTALL=1`）已移除，因为它会在目标主机上构建镜像。
 
 ### 2.2 Docker 内置 ansible-playbook
 

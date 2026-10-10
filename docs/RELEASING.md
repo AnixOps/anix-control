@@ -74,11 +74,11 @@ and its pull request says so. Then bump, tag and merge back as above.
 
 **`latest` on a superseded line.** An unsuffixed tag becomes the latest GitHub
 Release and moves the image's `latest` tag (`make_latest` and `latest=auto` in
-`ci.yml`), and the frozen `scripts/install.sh` installs `releases/latest` when
-no version is pinned. A patch on a line that a newer release has superseded
-(`v4.1.1` after `v4.2.0`) would move both back to the older line. The pipeline
-does not handle that yet: before tagging such a release, change it to mark
-only the highest version `latest`.
+`ci.yml`). `scripts/install.sh` does not read it: it installs the tag it is
+given. A patch on a line that a newer release has superseded (`v4.1.1` after
+`v4.2.0`) would move both back to the older line. The pipeline does not handle
+that yet: before tagging such a release, change it to mark only the highest
+version `latest`.
 
 ## What The Tag Pipeline Does
 
@@ -117,7 +117,7 @@ only the highest version `latest`.
     signature of the archive bytes, made with the package signing key by the
     same `openssl pkeyutl -sign -rawin` step that signs each manifest.
   - `identity-platform-<version>.anxp`, `.manifest.json` and `.manifest.sig`
-    stay separate assets: the frozen `scripts/install.sh` downloads them by
+    stay separate assets: `scripts/install.sh` downloads them by
     name.
   - `RELEASE_MANIFEST.json` lists each package under `packages` (id,
     version, `.anxp` size and SHA-256, manifest SHA-256).

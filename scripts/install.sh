@@ -6,7 +6,6 @@ set -Eeuo pipefail
 
 REPO_OWNER="${REPO_OWNER:-AnixOps}"
 REPO_NAME="${REPO_NAME:-anix-control}"
-API_BASE="https://api.github.com/repos/${REPO_OWNER}/${REPO_NAME}"
 RELEASE_BASE="https://github.com/${REPO_OWNER}/${REPO_NAME}/releases/download"
 RAW_BASE="https://raw.githubusercontent.com/${REPO_OWNER}/${REPO_NAME}"
 
@@ -83,11 +82,12 @@ usage() {
 Usage:
   install.sh [install|update|rollback|preflight|migrate|enable-agents] [options]
 
-This native systemd installer is frozen: it keeps working but gets no new
-features. Containers are the primary deployment (docs/DEPLOYMENT.md).
+This native systemd installer installs the release tag you name. It never
+resolves a moving "latest" release. Containers are the primary deployment
+(docs/DEPLOYMENT.md).
 
 Options:
-  --version <tag>          Release tag, for example v4.0.0. Defaults to GitHub's latest stable release.
+  --version <tag>          Release tag to install, for example v4.2.0. Required for install and update.
   --admin-email <email>    Bootstrap admin email on a fresh installation.
   --admin-password <text>  Bootstrap admin password on a fresh installation.
   --install-dir <path>     Installation root. Default: /opt/anixops/control.
@@ -208,16 +208,13 @@ uses_plugin_only_identity_bootstrap() {
   [[ "${VERSION}" =~ ^v([0-9]+)\. ]] && (( 10#${BASH_REMATCH[1]} >= 4 ))
 }
 
-latest_release() {
-  local tag
-  tag="$(curl -fsSL --retry 3 --connect-timeout 10 \
-    -H 'Accept: application/vnd.github+json' \
-    -H 'User-Agent: anix-control-installer' \
-    "${API_BASE}/releases/latest" \
-    | sed -n 's/.*"tag_name":[[:space:]]*"\([^"]*\)".*/\1/p' \
-    | head -n 1)"
-  [[ -n "${tag}" ]] || die "Could not resolve the latest stable GitHub Release. Pass --version explicitly."
-  printf '%s\n' "${tag}"
+# The installer installs the tag it is given. It never resolves a moving
+# "latest" release, so publishing a release cannot change what an unpinned
+# command installs. Checked before the installer changes anything on the host.
+require_version() {
+  [[ -n "${VERSION}" ]] || \
+    die "${COMMAND} requires --version <release tag>, for example --version v4.2.0 (releases: https://github.com/${REPO_OWNER}/${REPO_NAME}/releases)"
+  validate_version
 }
 
 asset_name() {
@@ -1233,12 +1230,11 @@ main() {
     enable_agents
     exit 0
   fi
-  warn "The systemd install path is frozen; containers are the primary deployment: https://github.com/AnixOps/anix-control/blob/go_dev/docs/DEPLOYMENT.md"
+  warn "Containers are the primary deployment: https://github.com/AnixOps/anix-control/blob/go_dev/docs/DEPLOYMENT.md"
+  require_version
   detect_legacy_layout
   validate_install_dir
   install_base_tools
-  [[ -n "${VERSION}" ]] || VERSION="$(latest_release)"
-  validate_version
 
   set_install_paths
   TMP_DIR="$(mktemp -d)"

@@ -250,12 +250,13 @@ A release tag `vX.Y.Z[-alpha|-beta|-rc.N]` must match every surface checked by
   (`docs/reference/environment-variables.md`, generated and checked by
   `TestEnvironmentVariableReferenceIsCurrent`). A new config key changes that
   file: regenerate it in the same PR.
-- `scripts/install.sh` (systemd) is frozen: keep it working, add no features.
-  It installs from GitHub Releases and resolves `releases/latest` when no
-  version is pinned, so the latest release must always be a Control release.
-  Control Center tags (`control-center-v*`) are never marked latest. Operator
-  docs: `docs/DEPLOYMENT.md`, `docs/UPGRADE.md`,
-  `docs/guide/release-installation.md`.
+- `scripts/install.sh` (systemd) installs the release tag it is given:
+  `--version vX.Y.Z` is required, and `install.sh` and `panel_install.sh`
+  fetch the installer at that tag. It never reads `releases/latest` or a
+  moving branch, so tagging a release cannot change what an unpinned command
+  installs. Containers stay the primary deployment. Control Center tags
+  (`control-center-v*`) are never marked latest. Operator docs:
+  `docs/DEPLOYMENT.md`, `docs/UPGRADE.md`, `docs/guide/release-installation.md`.
 
 ## Forwarding (v4.2)
 
@@ -392,7 +393,7 @@ do not cite the archived flux documents (`docs/archive/`) as requirements.
 
 - `control-center/` holds the Control Center, imported on 2026-09-29 from the archived `AnixOps/Anixops-control-center` repository. `control-center/workers/` holds its Cloudflare Workers API, imported from the archived `AnixOps/Anixops-control-center-worker` repository. Do not reopen or push to the archived repositories.
 - It is a separate Go module (`github.com/AnixOps/anix-control/control-center`, Go 1.24). Run its checks from inside the directory: `cd control-center && go test ./...`; `cd control-center/web && npm test -- --run && npm run build`; `cd control-center/mobile && flutter test`; `cd control-center/workers && npm run typecheck && npm test`.
-- Its CI lives in `.github/workflows/control-center.yml` and `control-center-workers.yml` (path-filtered to `control-center/**`), and its releases in `control-center-release.yml`. Release tags are `control-center-v*`. Never let a Center release become the repository's latest release, because `scripts/install.sh` reads `releases/latest`.
+- Its CI lives in `.github/workflows/control-center.yml` and `control-center-workers.yml` (path-filtered to `control-center/**`), and its releases in `control-center-release.yml`. Release tags are `control-center-v*`. Never let a Center release become the repository's latest release: the Releases page and the image's `latest` tag follow it, and the latest release must be a Control release.
 - Keep `-exclude-dir=control-center` on gosec, `--exclude control-center` on swag (CI and the Makefile `swagger` target), and `control-center/` in `.dockerignore`.
 - The Workers API deploys through Cloudflare Workers Builds (root `control-center/workers`, branch `go_dev`). A merge to `go_dev` that touches `control-center/workers/**` deploys `api.anixops.com`.
 - `control-center/workers/migrations/` is applied to a production D1 database. Only append new migrations; never edit or delete existing ones.
