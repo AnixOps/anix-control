@@ -52,6 +52,19 @@ rm -f /tmp/anix-control-install.sh
 `--grpc-tls-cert` and `--grpc-tls-key`), the install is ready for Agents at
 once; see [Agent access](#agent-access).
 
+The repository's `install.sh` and `panel_install.sh` do the same in one
+command; they fetch `scripts/install.sh` at the tag named by `--version`:
+
+```bash
+curl -fsSL "https://raw.githubusercontent.com/AnixOps/anix-control/${VERSION}/install.sh" |
+  sudo bash -s -- install --version "${VERSION}" --admin-email "admin@example.com"
+```
+
+Piped from `curl` they never run a `scripts/install.sh` that happens to be in
+the current directory; only an entry script that is itself a file next to
+`scripts/install.sh` (a checkout) runs that copy. `--version` without a tag,
+or any option that needs a value and gets none, is an error that names it.
+
 The installer will:
 
 1. Create the `anixops` service user and `/opt/anixops/control` layout.
@@ -68,7 +81,8 @@ The installer will:
    serve login.
 6. Download the configuration template that matches the selected tag.
 7. Set `env: "production"` and generate the JWT secret, node API token, and
-   first administrator password ([Environment](#environment-production)).
+   first administrator password ([Environment](#environment-production)). The
+   first administrator is `--admin-email`, or `admin@anixops.local` without it.
 8. Generate the CA key-encryption key (`module_runtime.ca_kek`) in
    `config/secrets/module_ca_kek` (mode 0600, printed only as a fingerprint)
    and, given a publicly trusted certificate, enable gRPC with TLS
@@ -94,6 +108,54 @@ sudo rm -f /opt/anixops/control/.bootstrap-admin-password
 
 To supply an initial password non-interactively, use `--admin-password`. Do
 not put secrets in shell history on shared hosts.
+
+Without `--admin-email` the first administrator is `admin@anixops.local`, the
+server's own default. Control's login check refuses an address whose domain has
+no dot (`admin@localhost`), and the installer does not check an address you
+pass, so give a real one: the install's final login check fails otherwise. The
+email and the password are written to `config.yaml` exactly as given; a
+backslash, a quote, `$`, `&`, `#`, a space and non-ASCII text are all kept.
+A value that cannot be carried unchanged is refused, with the reason, before
+`config.yaml` is written: an empty value, a control character (a line break, a
+tab or a carriage return; a password read with `$(cat file)` from a file with
+Windows line endings ends in one), U+2028 or U+2029, and bytes that are not
+UTF-8 (a password typed in a Latin-1 terminal). Run the command again with the
+value corrected; the next run starts from nothing.
+
+### After an install that stopped without a message
+
+On a host with no previous release, earlier installers stopped with exit 1 and
+no message right after `Staged verified identity bootstrap package`: the service
+user, the directory layout and `config/config.yaml` were written, but no binary,
+unit or service. That `config.yaml` names `admin@localhost` as the
+administrator unless you passed `--admin-email`, an address Control's login
+check refuses, and the host has no CA key. An existing `config.yaml` is never
+rewritten, so running `install` again keeps those values, starts the service
+and, without `--admin-email` and `--admin-password`, reports success. The first
+start then creates the administrator from the file. Control reads `admin.email`
+and `admin.password` only for that, when the database holds no administrator;
+once one exists, editing them changes nothing.
+
+Remove the leftovers before the next `install`, so that it writes a new
+`config.yaml`:
+
+```bash
+sudo rm -f /opt/anixops/control/config/config.yaml /opt/anixops/control/.bootstrap-admin-password
+```
+
+If you already ran `install` again, the service holds that `admin@localhost`
+administrator, which cannot sign in. On a host where nothing else has been set
+up, stop the service and remove the SQLite database as well, so that the first
+start creates the administrator again from the new file:
+
+```bash
+sudo systemctl stop anix-control
+sudo rm -f /opt/anixops/control/config/data/v2board.db{,-wal,-shm}
+```
+
+That discards everything the database holds. With PostgreSQL, start from an
+empty database instead. Then run `install` again with `--version` and
+`--admin-email`.
 
 ### Environment: production
 

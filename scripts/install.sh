@@ -289,6 +289,69 @@ validate_config_value() {
     die "Bootstrap values must be non-empty and must not contain a double quote or newline."
 }
 
+# admin_value_error <value> prints why a bootstrap administrator email or
+# password cannot be carried unchanged, and nothing when it can.
+#
+# The value goes into config.yaml as a YAML double-quoted scalar (the backslash
+# and the double quote escaped by write_fresh_config) and into the JSON of the
+# install's own login check (json_escape escapes the same two characters). Not
+# every character survives both:
+#   - the YAML loader refuses U+0001-U+001F except tab, U+007F, U+0080-U+009F
+#     except U+0085, U+FFFE and U+FFFF, and reads a carriage return, U+0085,
+#     U+2028 and U+2029 as line breaks (folded into a space, or trimmed with
+#     the blanks next to them);
+#   - a raw tab loads, but is not valid in a JSON string;
+#   - bytes that are not UTF-8 make config.yaml unreadable.
+# Accepted, such a value made the install fail late or run with another
+# password, and the next run kept that config.yaml. Everything else is carried
+# exactly: printable ASCII, a space and any other UTF-8 text.
+#
+# It runs in a subshell with LC_ALL=C, so that bash matches bytes whatever the
+# host's locale, and takes one well-formed UTF-8 sequence at a time (RFC 3629:
+# no overlong form, no surrogate, nothing above U+10FFFF), minus the characters
+# listed above.
+admin_value_error() (
+  LC_ALL=C
+  local rest="$1"
+  [[ -n "${rest}" ]] || { printf 'empty'; return 0; }
+  case "${rest}" in
+    *[[:cntrl:]]*) printf 'control'; return 0 ;;
+  esac
+  while [[ -n "${rest}" ]]; do
+    case "${rest}" in
+      # one, two, three and four bytes
+      [$'\040'-$'\176']*) rest="${rest:1}" ;;                      # U+0020-U+007E
+      $'\302'[$'\240'-$'\277']*) rest="${rest:2}" ;;               # U+00A0-U+00BF
+      [$'\303'-$'\337'][$'\200'-$'\277']*) rest="${rest:2}" ;;     # U+00C0-U+07FF
+      $'\340'[$'\240'-$'\277'][$'\200'-$'\277']*) rest="${rest:3}" ;;  # U+0800-U+0FFF
+      [$'\341'$'\343'-$'\354'][$'\200'-$'\277'][$'\200'-$'\277']*) rest="${rest:3}" ;;  # U+1000-U+1FFF, U+3000-U+CFFF
+      $'\342\200'[$'\200'-$'\247'$'\252'-$'\277']*) rest="${rest:3}" ;;  # U+2000-U+203F but U+2028, U+2029
+      $'\342'[$'\201'-$'\277'][$'\200'-$'\277']*) rest="${rest:3}" ;;  # U+2040-U+2FFF
+      $'\355'[$'\200'-$'\237'][$'\200'-$'\277']*) rest="${rest:3}" ;;  # U+D000-U+D7FF
+      $'\356'[$'\200'-$'\277'][$'\200'-$'\277']*) rest="${rest:3}" ;;  # U+E000-U+EFFF
+      $'\357'[$'\200'-$'\276'][$'\200'-$'\277']*) rest="${rest:3}" ;;  # U+F000-U+FFBF
+      $'\357\277'[$'\200'-$'\275']*) rest="${rest:3}" ;;           # U+FFC0-U+FFFD
+      $'\360'[$'\220'-$'\277'][$'\200'-$'\277'][$'\200'-$'\277']*) rest="${rest:4}" ;;  # U+10000-U+3FFFF
+      [$'\361'-$'\363'][$'\200'-$'\277'][$'\200'-$'\277'][$'\200'-$'\277']*) rest="${rest:4}" ;;  # U+40000-U+FFFFF
+      $'\364'[$'\200'-$'\217'][$'\200'-$'\277'][$'\200'-$'\277']*) rest="${rest:4}" ;;  # U+100000-U+10FFFF
+      *) printf 'text'; return 0 ;;
+    esac
+  done
+)
+
+# validate_admin_value <email|password> <value> refuses a bootstrap value that
+# config.yaml and the login check cannot carry (see admin_value_error).
+validate_admin_value() {
+  local what="$1" problem
+  problem="$(admin_value_error "$2")"
+  case "${problem}" in
+    "") ;;
+    empty) die "The bootstrap admin ${what} must not be empty." ;;
+    control) die "The bootstrap admin ${what} must not contain a control character (a line break, a tab or a carriage return, for example)." ;;
+    *) die "The bootstrap admin ${what} must be valid UTF-8 text without control characters or line and paragraph separators (U+2028, U+2029)." ;;
+  esac
+}
+
 validate_install_managed_plugin_dir() {
   local value="$1"
   [[ -n "${value}" && "${value}" == "${INSTALL_DIR}/"* && "${value}" != *$'\n'* && "${value}" != *'"'* && "${value}" != *'..'* ]] || \
@@ -299,14 +362,21 @@ write_fresh_config() {
   local template="${TMP_DIR}/config.yaml.example"
   local jwt_secret api_token escaped_email escaped_password
 
-  [[ -n "${ADMIN_EMAIL}" ]] || ADMIN_EMAIL="admin@localhost"
+  # Control's login check (`required,email`) refuses a host name without a dot,
+  # so the default is the server's own default administrator
+  # (internal/service/init_admin.go), not admin@localhost.
+  [[ -n "${ADMIN_EMAIL}" ]] || ADMIN_EMAIL="admin@anixops.local"
   [[ -n "${ADMIN_PASSWORD}" ]] || ADMIN_PASSWORD="$(random_secret)"
-  validate_config_value "${ADMIN_EMAIL}"
-  validate_config_value "${ADMIN_PASSWORD}"
+  validate_admin_value email "${ADMIN_EMAIL}"
+  validate_admin_value password "${ADMIN_PASSWORD}"
   jwt_secret="$(random_secret)"
   api_token="$(random_secret)"
+  # The values are YAML double-quoted scalars: escape the backslash first, then
+  # the double quote.
   escaped_email="${ADMIN_EMAIL//\\/\\\\}"
+  escaped_email="${escaped_email//\"/\\\"}"
   escaped_password="${ADMIN_PASSWORD//\\/\\\\}"
+  escaped_password="${escaped_password//\"/\\\"}"
 
   info "Downloading the version-matched configuration template"
   curl -fsSL --retry 3 --connect-timeout 15 \
@@ -317,11 +387,21 @@ write_fresh_config() {
   # guards (the template JWT secret is accepted). A host install is production,
   # as the container defaults are, so the installer sets the env key itself,
   # and adds it when a template has none.
-  awk \
-    -v jwt_secret="${jwt_secret}" \
-    -v api_token="${api_token}" \
-    -v admin_email="${escaped_email}" \
-    -v admin_password="${escaped_password}" '
+  # The values reach awk through the environment, not `awk -v`: -v interprets
+  # backslash escapes in the value a second time, after the escaping above. The
+  # password ab\qcd was escaped to ab\\qcd and unescaped again to "ab\qcd",
+  # which is not valid YAML.
+  ANIX_CFG_JWT_SECRET="${jwt_secret}" \
+  ANIX_CFG_API_TOKEN="${api_token}" \
+  ANIX_CFG_ADMIN_EMAIL="${escaped_email}" \
+  ANIX_CFG_ADMIN_PASSWORD="${escaped_password}" \
+  awk '
+      BEGIN {
+        jwt_secret = ENVIRON["ANIX_CFG_JWT_SECRET"]
+        api_token = ENVIRON["ANIX_CFG_API_TOKEN"]
+        admin_email = ENVIRON["ANIX_CFG_ADMIN_EMAIL"]
+        admin_password = ENVIRON["ANIX_CFG_ADMIN_PASSWORD"]
+      }
       /^env:/ {
         print "env: \"production\""
         env_seen = 1
@@ -1016,7 +1096,10 @@ rollback_migration() {
 }
 
 backup_current_release() {
-  [[ -x "${BINARY_PATH}" || -x "${LEGACY_BINARY_PATH}" || -d "${FRONTEND_DIR}" ]] || return
+  # A fresh install has nothing to back up. A bare `return` would hand the
+  # failed test's status 1 to main, which runs under errexit and would stop
+  # here, before the binary, the unit or the service are installed.
+  [[ -x "${BINARY_PATH}" || -x "${LEGACY_BINARY_PATH}" || -d "${FRONTEND_DIR}" ]] || return 0
   BACKUP_DIR="${BACKUP_ROOT}/$(date -u +%Y%m%dT%H%M%SZ)-${VERSION}"
   install -d -m 0700 -o root -g root "${BACKUP_DIR}"
   if [[ -x "${BINARY_PATH}" ]]; then
@@ -1188,6 +1271,16 @@ parse_args() {
   fi
 
   while [[ "$#" -gt 0 ]]; do
+    # `shift 2` with no value left fails and, under errexit, ended the script
+    # with status 1 and no message.
+    case "$1" in
+      --version)
+        [[ "$#" -ge 2 ]] || die "--version requires a release tag, for example --version v4.2.0"
+        ;;
+      --admin-email|--admin-password|--install-dir|--health-url|--plan|--grpc-name|--grpc-tls-cert|--grpc-tls-key)
+        [[ "$#" -ge 2 ]] || die "$1 requires a value (see --help)"
+        ;;
+    esac
     case "$1" in
       --version) VERSION="${2:-}"; shift 2 ;;
       --admin-email) ADMIN_EMAIL="${2:-}"; shift 2 ;;
@@ -1299,7 +1392,12 @@ main() {
   fi
 
   info "Installed ${VERSION} successfully."
-  [[ "${COMMAND}" == "rollback" ]] && info "Rollback completed by installing the requested release tag."
+  # Not `[[ ... ]] && info ...`: as the last statement of main its status 1 (not
+  # a rollback) became the exit status of a successful install.
+  if [[ "${COMMAND}" == "rollback" ]]; then
+    info "Rollback completed by installing the requested release tag."
+  fi
+  return 0
 }
 
 if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then

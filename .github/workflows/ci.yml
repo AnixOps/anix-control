@@ -131,6 +131,12 @@ jobs:
       - name: Test a fresh install writes a production configuration
         run: bash scripts/tests/test_install_fresh_config.sh
 
+      # main() on a host with no release installs it and exits 0, and so does
+      # the update after it (backup_current_release is the installer's own here;
+      # the identity test above stubs it).
+      - name: Test a fresh install completes
+        run: bash scripts/tests/test_install_fresh_main.sh
+
       # Fresh Control installs generate the CA key and enable gRPC TLS for
       # Agents (systemd installer, Compose init-secrets.sh): shellcheck, then
       # the fake-root tests.
@@ -138,7 +144,7 @@ jobs:
         run: |
           shellcheck -x scripts/install.sh config/deploy/compose/init-secrets.sh config/deploy/grpc_tls/setup_certbot.sh \
             scripts/tests/test_control_install_agent_access.sh scripts/tests/test_compose_init_secrets.sh \
-            scripts/tests/test_install_fresh_config.sh
+            scripts/tests/test_install_fresh_config.sh scripts/tests/test_install_fresh_main.sh
 
       - name: Test Control installer Agent access in a fake root
         run: |
