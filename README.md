@@ -17,8 +17,11 @@ truth for implemented, partial, planned, compatibility, and deferred features.
 - Frontend: Vue 3 + Vite under [`web/`](web), Node.js `22` in CI.
 - Default database: SQLite, with PostgreSQL migration/dry-run tooling.
 - Current release: `v4.2.0` (the formal plugin-only Control release). It ships
-  a signed sixteen-package cohort, package-host lifecycle controls, immutable
-  V4 evidence, and compatibility-gated Agent integration.
+  the signed community package set (15 of the 18 packages under `packages/`, in
+  one signed `anix-control-packages-<version>.tar.gz`), package-host lifecycle
+  controls, and compatibility-gated Agent integration. Releases after `v4.0.0`
+  carry no evidence bundle: verify them with `SHA256SUMS.txt`, cosign and the
+  pinned official root ([`docs/UPGRADE.md`](docs/UPGRADE.md#artifact-verification)).
 - Product delivery line: `v4.0.0-alpha.*` remains immutable historical preview
   evidence. It is not an alternative trust root or release channel for the
   formal V4 package cohort.
@@ -34,13 +37,14 @@ complete.
 V4 keeps REST/UniProxy, the legacy panel-node gRPC services, and existing
 WebSocket paths available as compatibility surfaces. A fresh plugin-only
 deployment must bootstrap the signed `identity-platform` package from the
-verified release evidence before enabling Control package execution; the
-release container image ships that package and imports it on first start, and
-the V4 release installer performs the same verified bootstrap. Operators
-should retain the documented rollback plan throughout rollout. Package hosts
-may invoke narrowly scoped, kernel-owned compatibility bridge operations to
-preserve established route semantics; there is no direct HTTP fallback when a
-signed package is unavailable.
+release's own assets before enabling Control package execution; the release
+container image ships that package and imports it on first start, and the
+release installer stages the same package after checking it against
+`SHA256SUMS.txt`. Control verifies its signature against the pinned official
+root at import. Operators should retain the documented rollback plan throughout
+rollout. Package hosts may invoke narrowly scoped, kernel-owned compatibility
+bridge operations to preserve established route semantics; there is no direct
+HTTP fallback when a signed package is unavailable.
 
 ## Documentation
 
@@ -53,7 +57,7 @@ signed package is unavailable.
 - Deployment guide (containers first): [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md)
 - Container design and multi-replica status: [`docs/architecture/container-deployment.md`](docs/architecture/container-deployment.md)
 - Upgrade runbook: [`docs/UPGRADE.md`](docs/UPGRADE.md)
-- Native systemd install (frozen): [`docs/guide/release-installation.md`](docs/guide/release-installation.md)
+- Native systemd install (the alternative to containers): [`docs/guide/release-installation.md`](docs/guide/release-installation.md)
 - Legacy migration plan: [`docs/guide/legacy-migration.md`](docs/guide/legacy-migration.md)
 - Manual intervention requirements:
   [`docs/manual-intervention.md`](docs/manual-intervention.md)
@@ -89,7 +93,7 @@ tag you name with `--version` and never resolves a moving "latest". Pin the
 production tag:
 
 ```bash
-export VERSION=v4.0.0
+export VERSION=v4.2.0   # the release tag to install
 curl -fsSL \
   "https://raw.githubusercontent.com/AnixOps/anix-control/${VERSION}/scripts/install.sh" \
   -o /tmp/anix-control-install.sh

@@ -1719,11 +1719,11 @@ The target is nyanpass's experience: copy one command, paste it on the
 machine, and the node appears. This is part of F3 and reuses the agent
 enrollment (`internal/agentpki`).
 
-**Status: O1, O2 and O3 implemented** (the command, the token API, the
+**Status: O1, O2, O3 and O4 implemented** (the command, the token API, the
 signed script; preflight and offline bundles; uninstall; operator guide
-`docs/guide/agent-onboarding.md`). **O4 implemented on the Control side**
-(staged upgrades; the Agent's `upgrade.v1` is a follow-up in anix-agent,
-see "Upgrades (O4)" below). As built:
+`docs/guide/agent-onboarding.md`; staged upgrades, with the Agent's
+`upgrade.v1` and updater in anix-agent from 4.2.0-rc.1, see "Upgrades (O4)"
+below). As built:
 
 - `POST /api/v4/kernel/agents/install-tokens` (super administrators,
   `service.IsSuperAdmin`): `{node: "proxy-<id>"|"forward-<id>",
@@ -1922,9 +1922,9 @@ Agent never upgrades on its own. H25: the Agent release is Control's.
   hosts cannot scope a rule to one unit (section 9, preflight) and some
   hosts have no polkit; a path unit needs only systemd. The trust anchor is
   the installed binary, not the request: a compromised Agent can only ask
-  for a signed official release, or a rollback to the kept one. Agents in
-  the field have neither the units nor `upgrade.v1`: the first move onto
-  this path is an installer re-run.
+  for a signed official release, or a rollback to the kept one. Agents
+  installed before the 4.2 installer have neither the units nor
+  `upgrade.v1`: the first move onto this path is an installer re-run.
 - **API and tools.** `POST /api/v4/kernel/agents/upgrades` (super
   administrators; `target_version` defaults to Control's Agent release,
   `batches`, `exclude {nodes, tags}`, `reason`), `GET` (list) and
@@ -1962,6 +1962,13 @@ before Control is upgraded:
    nodes that never enrolled).
 3. **Upgrade Control to v4.2**, with `agent_control.mtls` defaulting to
    `required` (H5; done: an empty `agent_control.mtls` is `required`).
+
+As built, the installer of step 1 is the script a 4.2 Control serves
+(`/install.sh`, with `/install/agent.env`; section 9), and a 4.1 Control has
+neither. A forward node with no anix-agent to update therefore switches after
+Control is upgraded, with `agent_control.mtls: preferred` set so that its clean
+agent stays served until it has (`docs/UPGRADE.md`, "Forward Nodes: The New
+Agent First, Then Control").
 
 **The upgrade itself (F5c)** then runs three steps in this order. The last
 one is **IRREVERSIBLE** and is gate **H15**, confirmed on its own.
@@ -2402,7 +2409,7 @@ Agent-repository PRs are marked (agent).
 | | O1 | `install.sh`, group tokens, mirrors | M | H18 |
 | | O2 | preflight and offline package | M | H18 |
 | | O3 | uninstall | S | |
-| | O4 | staged upgrades with canary and rollback (Control side implemented; (agent) `upgrade.v1` and the updater follow) | L | H19 |
+| | O4 | staged upgrades with canary and rollback (implemented; the Agent's `upgrade.v1` and updater are in anix-agent from 4.2.0-rc.1) | L | H19 |
 | F4 | F4a | gost driver: Render, process management (implemented) | L | H20 |
 | | F4b | gost Observe, hot updates, failover (implemented) | M | H20 |
 | | F4c | gost per-service structural changes, mixed-engine end-to-end (implemented) | M | |
